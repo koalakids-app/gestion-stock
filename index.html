@@ -3894,10 +3894,65 @@ try {
     console.warn('[Init] Erreur mineure ignorée:', e.message);
   }
 }
-// — LOGO SUPABASE — const LOGO_SUPABASE_URL = 'https://juyrceadazrovlitxceb.supabase.co'; const LOGO_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug'; const LOGO_BUCKET = 'assets'; const LOGO_FILE = 'logo/koalakids-logo';  async function loadLogo() {   const extensions = ['png','jpg','jpeg','webp','svg'];   for (const ext of extensions) {     const url = `${LOGO_SUPABASE_URL}/storage/v1/object/public/${LOGO_BUCKET}/${LOGO_FILE}.${ext}`;     try {       const res = await fetch(url, { method: 'HEAD' });       if (res.ok) {         const img = document.getElementById('logo-img');         const placeholder = document.getElementById('logo-placeholder');         img.src = url + '?t=' + Date.now();         img.style.display = 'block';         if (placeholder) placeholder.style.display = 'none';         img.onclick = () => document.getElementById('logo-input').click();         return;       }     } catch(e) {}   } }  async function uploadLogo(file) {   const ext = file.name.split('.').pop();   const path = `${LOGO_FILE}.${ext}`;   const res = await fetch(`${LOGO_SUPABASE_URL}/storage/v1/object/${LOGO_BUCKET}/${path}`, {     method: 'POST',     headers: {       'Authorization': `Bearer ${LOGO_ANON}`,       'Content-Type': file.type,       'x-upsert': 'true'     },     body: file   });   if (res.ok) {     const url = `${LOGO_SUPABASE_URL}/storage/v1/object/public/${LOGO_BUCKET}/${path}`;     const img = document.getElementById('logo-img');     const placeholder = document.getElementById('logo-placeholder');     img.src = url + '?t=' + Date.now();     img.style.display = 'block';     if (placeholder) placeholder.style.display = 'none';     img.onclick = () => document.getElementById('logo-input').click();     alert('✅ Logo enregistré !');   } else {     alert('❌ Erreur upload logo');   } }  document.addEventListener('DOMContentLoaded', () => {   loadLogo();   const input = document.getElementById('logo-input');   if (input) input.addEventListener('change', (e) => {     const file = e.target.files[0];     if (file) uploadLogo(file);   }); });  </script>
-<!-- ── MODAL IMPORT ── -->
-<div class="modal-overlay" id="modal-import" onclick="closeModalClick(event,'modal-import')">
-  <div class="modal" style="max-width:500px">
+// ─── LOGO SUPABASE ────────────────────────────────────────────────────────
+const LOGO_SUPABASE_URL = 'https://juyrceadazrovlitxceb.supabase.co';
+const LOGO_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug';
+const LOGO_BUCKET = 'assets';
+const LOGO_FILE = 'logo/koalakids-logo';
+
+async function loadLogo() {
+  const extensions = ['png','jpg','jpeg','webp','svg'];
+  for (const ext of extensions) {
+    const url = `${LOGO_SUPABASE_URL}/storage/v1/object/public/${LOGO_BUCKET}/${LOGO_FILE}.${ext}`;
+    try {
+      const res = await fetch(url, { method: 'HEAD' });
+      if (res.ok) {
+        const img = document.getElementById('logo-img');
+        const placeholder = document.getElementById('logo-placeholder');
+        img.src = url + '?t=' + Date.now();
+        img.style.display = 'block';
+        if (placeholder) placeholder.style.display = 'none';
+        img.onclick = () => document.getElementById('logo-input').click();
+        return;
+      }
+    } catch(e) {}
+  }
+}
+
+async function uploadLogo(file) {
+  const ext = file.name.split('.').pop();
+  const path = `${LOGO_FILE}.${ext}`;
+  const res = await fetch(`${LOGO_SUPABASE_URL}/storage/v1/object/${LOGO_BUCKET}/${path}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOGO_ANON}`,
+      'Content-Type': file.type,
+      'x-upsert': 'true'
+    },
+    body: file
+  });
+  if (res.ok) {
+    const url = `${LOGO_SUPABASE_URL}/storage/v1/object/public/${LOGO_BUCKET}/${path}`;
+    const img = document.getElementById('logo-img');
+    const placeholder = document.getElementById('logo-placeholder');
+    img.src = url + '?t=' + Date.now();
+    img.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+    img.onclick = () => document.getElementById('logo-input').click();
+    showNotif('✅ Logo enregistré !');
+  } else {
+    showNotif('❌ Erreur upload logo (' + res.status + ')');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadLogo();
+  const input = document.getElementById('logo-input');
+  if (input) input.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) uploadLogo(file);
+  });
+});
     <div class="modal-header">
       <h2>⬆ Importer depuis Excel</h2>
       <button class="modal-close" onclick="closeModal('modal-import')">✕</button>
