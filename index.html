@@ -1557,17 +1557,16 @@ function renderTable() {
 }
 
 function renderStats() {
-  const data = (typeof currentCreche !== 'undefined' && currentCreche !== 'all') ? ARTICLES.filter(a => a.creche === currentCreche) : ARTICLES;
+  const data = currentCreche !== 'all' ? ARTICLES.filter(a => a.creche === currentCreche) : ARTICLES;
   const el = document.getElementById('stat-total');
   if (el) el.textContent = data.length;
-  // Stock critique supprimé
   const valeur = data.reduce((s,a) => s + a.stock * a.prix, 0);
   const elVal = document.getElementById('stat-valeur');
   if (elVal) elVal.textContent = valeur.toFixed(0)+' €';
   const elCmd = document.getElementById('stat-commandes');
-  if (elCmd) elCmd.textContent = COMMANDES.filter(c=>c.status==='en-cours').length;
+  if (elCmd) elCmd.textContent = COMMANDES.filter(c => c.status === 'en-cours' && (currentCreche === 'all' || c.creche === currentCreche)).length;
 }
-
+  
 function updateCounts() {
   const page = typeof currentPage !== 'undefined' ? currentPage : 'inventaire';
   const el = document.getElementById('cnt-all');
