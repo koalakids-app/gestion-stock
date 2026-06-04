@@ -788,7 +788,16 @@ textarea { resize: vertical; min-height: 72px; }
   </button>
 
   <div class="sidebar-section-title">Structures</div>
-  <div class="creche-badge active" onclick="filterCreche('all', this)">
+  <div class="creche-badge active" onclick="function filterCreche(creche, el) {
+  currentCreche = creche;
+  document.querySelectorAll('.creche-badge').forEach(e => e.classList.remove('active'));
+  if (el) el.classList.add('active');
+  if (currentPage === 'inventaire') { renderTable(); renderStats(); }
+  else if (currentPage === 'commandes') renderCommandes();
+  else if (currentPage === 'univers') renderUnivers();
+  else if (currentPage === 'historique') renderHistorique();
+  else { renderTable(); renderStats(); }
+}('all', this)">
     <span class="creche-dot" style="background:#6366F1"></span>
     <span class="creche-name">Toutes les crèches</span>
     <span class="creche-count" id="cnt-all">0</span>
