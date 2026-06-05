@@ -903,14 +903,14 @@ textarea { resize: vertical; min-height: 72px; }
         <table>
           <thead>
             <tr>
-              <th>Article</th>
-              <th>Structure</th>
-              <th>Catégorie</th>
-              <th>Stock</th>
-              <th>Prix unit.</th>
-              <th style="color:var(--accent)">Montant total</th>
-              <th>Fournisseur</th>
-              <th>Actions</th>
+             <th onclick="toggleSort('nom')" style="cursor:pointer">Article ↕</th>
+<th onclick="toggleSort('creche')" style="cursor:pointer">Structure ↕</th>
+<th onclick="toggleSort('cat')" style="cursor:pointer">Catégorie ↕</th>
+<th onclick="toggleSort('stock')" style="cursor:pointer">Stock ↕</th>
+<th>Prix unit.</th>
+<th style="color:var(--accent)">Montant total</th>
+<th onclick="toggleSort('fourn')" style="cursor:pointer">Fournisseur ↕</th>
+<th>Actions</th>
             </tr>
           </thead>
           <tbody id="tableBody"></tbody>
@@ -1462,8 +1462,14 @@ function renderTable() {
     return matchCat && matchCreche && matchQ;
   });
 
-  const tb = document.getElementById('tableBody');
-
+  let sortCol = window._sortCol || 'nom';
+let sortDir = window._sortDir || 'asc';
+data.sort((a,b) => {
+  const va = String(a[sortCol]||'').toLowerCase();
+  const vb = String(b[sortCol]||'').toLowerCase();
+  return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+});
+const tb = document.getElementById('tableBody');
   // Toujours supprimer l'ancien footer d'abord
   const oldFootEarly = document.getElementById('tableFooter');
   if (oldFootEarly && oldFootEarly.parentNode) oldFootEarly.parentNode.removeChild(oldFootEarly);
@@ -1606,7 +1612,15 @@ function filterCreche(creche, el) {
 }
 
 function filterTable() { renderTable(); }
-
+function toggleSort(col) {
+  if (window._sortCol === col) {
+    window._sortDir = window._sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    window._sortCol = col;
+    window._sortDir = 'asc';
+  }
+  renderTable();
+}
 function filterHisto(type, el) {
   currentHisto = type;
   document.querySelectorAll('#page-historique .filter-chip').forEach(e => e.classList.remove('active'));
