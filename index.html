@@ -1584,8 +1584,11 @@ function renderStats() {
   if (elVal) elVal.textContent = valeur.toFixed(0)+' €';
   const elCmd = document.getElementById('stat-commandes');
   if (elCmd) elCmd.textContent = COMMANDES.filter(c => c.status === 'en-cours' && (currentCreche === 'all' || c.creche === currentCreche)).length;
-  // Tuile "À remplacer"
-  const rem = getArticlesToRemplacer();
+  // Tuile "À remplacer" — filtré par crèche comme les autres stats
+  const rem = ARTICLES.filter(a => {
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    return matchCreche && getArticleEtat(a) === 'À remplacer';
+  });
   const elRem = document.getElementById('stat-remplacer');
   if (elRem) elRem.textContent = rem.length;
   const cardRem = document.getElementById('stat-card-remplacer');
