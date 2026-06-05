@@ -3841,9 +3841,18 @@ function rowToArticle(r) {
            etat: r.etat||'Neuf', depreciable: r.depreciable !== false,
            etat_override: r.etat_override||null };
 }function commandeToRow(c) {
-  return { fourn: c.fourn, creche: c.creche, date: c.date, livraison: c.livraison||null,
-           montant: c.montant, bc: c.bc, status: c.status,
-           articles: c.articles, notes: c.notes||'', url: c.url||'' };
+  return {
+    fourn:    c.fourn || '—',
+    creche:   c.creche || '',
+    date:     c.date || new Date().toISOString().split('T')[0],
+    livraison: c.livraison || '',
+    montant:  parseFloat(c.montant) || 0,
+    bc:       c.bc || '',
+    status:   c.status || 'en-cours',
+    articles: c.articles || '',
+    notes:    c.notes || '',
+    url:      c.url || '',
+  };
 }
 function rowToCommande(r) {
   return { id: r.id, fourn: r.fourn, creche: r.creche, date: r.date,
