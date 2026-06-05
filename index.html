@@ -889,6 +889,22 @@ textarea { resize: vertical; min-height: 72px; }
       <!-- FILTERS + TABLE -->
       <div class="section-header">
         <div class="section-title">Articles en stock</div>
+      </div>
+
+      <!-- Onglets Matériel / Consommables -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px">
+        <button id="inv-tab-materiel" onclick="switchInvTab('materiel')"
+          style="padding:10px 20px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--accent);margin-bottom:-2px;color:var(--accent)">
+          🧸 Matériel pédagogique <span id="inv-count-materiel" style="background:var(--accent-lt);color:var(--accent);font-size:11px;padding:1px 7px;border-radius:20px;margin-left:4px">0</span>
+        </button>
+        <button id="inv-tab-consommable" onclick="switchInvTab('consommable')"
+          style="padding:10px 20px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ink3)">
+          🧴 Consommables <span id="inv-count-consommable" style="background:var(--bg);color:var(--ink3);font-size:11px;padding:1px 7px;border-radius:20px;margin-left:4px">0</span>
+        </button>
+      </div>
+
+      <!-- Filtres catégories (matériel seulement) -->
+      <div id="inv-filters-materiel" style="margin-bottom:16px">
         <div class="filters">
           <div class="filter-chip active" onclick="filterCat('all', this)">Tout</div>
           <div class="filter-chip" onclick="filterCat('Sensoriel', this)">Sensoriel</div>
@@ -903,8 +919,18 @@ textarea { resize: vertical; min-height: 72px; }
           <div class="filter-chip" onclick="filterCat('Rangement', this)">Rangement</div>
         </div>
       </div>
+      <div id="inv-filters-consommable" style="display:none;margin-bottom:16px">
+        <div class="filters">
+          <div class="filter-chip active" onclick="filterCatConso('all', this)">Tout</div>
+          <div class="filter-chip" onclick="filterCatConso('Puériculture', this)">Puériculture</div>
+          <div class="filter-chip" onclick="filterCatConso('Bureautique', this)">Bureautique</div>
+          <div class="filter-chip" onclick="filterCatConso('Sensoriel', this)">Sensoriel</div>
+          <div class="filter-chip" onclick="filterCatConso('Expression artistique', this)">Expression artistique</div>
+        </div>
+      </div>
 
-      <div class="table-wrap">
+      <!-- Tableau matériel pédagogique -->
+      <div id="inv-table-materiel" class="table-wrap">
         <table>
           <thead>
             <tr>
@@ -919,6 +945,26 @@ textarea { resize: vertical; min-height: 72px; }
             </tr>
           </thead>
           <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Tableau consommables -->
+      <div id="inv-table-consommable" class="table-wrap" style="display:none">
+        <table>
+          <thead>
+            <tr>
+             <th onclick="toggleSort('nom')" style="cursor:pointer">Article ↕</th>
+<th onclick="toggleSort('creche')" style="cursor:pointer">Structure ↕</th>
+<th onclick="toggleSort('cat')" style="cursor:pointer">Catégorie ↕</th>
+<th onclick="toggleSort('stock')" style="cursor:pointer">Stock ↕</th>
+<th>Stock min.</th>
+<th>Prix unit.</th>
+<th>Péremption</th>
+<th onclick="toggleSort('fourn')" style="cursor:pointer">Fournisseur ↕</th>
+<th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tableBodyConso"></tbody>
         </table>
       </div>
     </div>
@@ -1456,6 +1502,8 @@ let currentPage = 'inventaire';
 let currentCat = 'all';
 let currentCreche = 'all';
 let currentHisto = 'all';
+let currentInvTab = 'materiel'; // 'materiel' | 'consommable'
+let currentCatConso = 'all';
 let editingId = null;
 let SOUSCATS = [];
 // ─── INIT ─────────────────────────────────────────────────────────────────
@@ -1469,11 +1517,11 @@ function init() {
   loadLocalData();
 
   // Interface immédiate
-  renderTable(); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique();updateCounts();
+  switchInvTab('materiel'); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique();updateCounts();
 
   // Sync Supabase en arrière-plan
   loadData().then(() => {
-    renderTable(); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique(); updateCounts();
+    switchInvTab(currentInvTab); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique(); updateCounts();
     if (typeof startPolling === 'function') startPolling(60);
   }).catch(e => {
     console.warn('Supabase unavailable:', e.message);
@@ -1485,10 +1533,11 @@ function init() {
 function renderTable() {
   const q = document.getElementById('searchInput').value.toLowerCase();
   let data = ARTICLES.filter(a => {
+    const isMateriel = a.depreciable !== false; // exclure consommables
     const matchCat = currentCat === 'all' || a.cat === currentCat;
     const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
     const matchQ = !q || a.nom.toLowerCase().includes(q) || a.ref.toLowerCase().includes(q) || a.fourn.toLowerCase().includes(q);
-    return matchCat && matchCreche && matchQ;
+    return isMateriel && matchCat && matchCreche && matchQ;
   });
 
   let sortCol = window._sortCol || 'nom';
@@ -1583,6 +1632,98 @@ const tb = document.getElementById('tableBody');
 
   renderStats();
   updateCounts();
+  updateInvTabCounts();
+}
+function switchInvTab(tab) {
+  currentInvTab = tab;
+  const isMat = tab === 'materiel';
+  // Onglets
+  const tMat = document.getElementById('inv-tab-materiel');
+  const tCon = document.getElementById('inv-tab-consommable');
+  if (tMat) { tMat.style.borderBottomColor = isMat ? 'var(--accent)' : 'transparent'; tMat.style.color = isMat ? 'var(--accent)' : 'var(--ink3)'; }
+  if (tCon) { tCon.style.borderBottomColor = !isMat ? 'var(--accent)' : 'transparent'; tCon.style.color = !isMat ? 'var(--accent)' : 'var(--ink3)'; }
+  // Filtres
+  const fMat = document.getElementById('inv-filters-materiel');
+  const fCon = document.getElementById('inv-filters-consommable');
+  if (fMat) fMat.style.display = isMat ? 'block' : 'none';
+  if (fCon) fCon.style.display = !isMat ? 'block' : 'none';
+  // Tableaux
+  const tbMat = document.getElementById('inv-table-materiel');
+  const tbCon = document.getElementById('inv-table-consommable');
+  if (tbMat) tbMat.style.display = isMat ? 'block' : 'none';
+  if (tbCon) tbCon.style.display = !isMat ? 'block' : 'none';
+  if (isMat) renderTable();
+  else renderTableConso();
+}
+
+function filterCatConso(cat, el) {
+  currentCatConso = cat;
+  document.querySelectorAll('#inv-filters-consommable .filter-chip').forEach(e => e.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderTableConso();
+}
+
+function renderTableConso() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  let data = ARTICLES.filter(a => {
+    const isConso = a.depreciable === false;
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    const matchCat = currentCatConso === 'all' || a.cat === currentCatConso;
+    const matchQ = !q || a.nom.toLowerCase().includes(q) || (a.ref||'').toLowerCase().includes(q);
+    return isConso && matchCreche && matchCat && matchQ;
+  });
+  const sortCol = window._sortCol || 'nom';
+  const sortDir = window._sortDir || 'asc';
+  data.sort((a,b) => {
+    const va = String(a[sortCol]||'').toLowerCase();
+    const vb = String(b[sortCol]||'').toLowerCase();
+    return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+  const tb = document.getElementById('tableBodyConso');
+  if (!tb) return;
+  if (data.length === 0) {
+    tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink3)">Aucun consommable trouvé</td></tr>`;
+    return;
+  }
+  tb.innerHTML = data.map(a => {
+    const CAT_ICONS_L = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂' };
+    const thumb = a.photo
+      ? `<img class="article-thumb" src="${a.photo}" alt="${a.nom}" loading="lazy">`
+      : `<div class="article-thumb-placeholder">${CAT_ICONS_L[a.cat]||'🧴'}</div>`;
+    const stockAlert = a.min > 0 && a.stock <= a.min;
+    return `<tr onclick="showDetail(${a.id})">
+      <td>
+        <div class="article-name-cell">
+          ${thumb}
+          <div>
+            <div class="item-name">${a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').trim()}</div>
+            <div class="item-ref">${a.ref}</div>
+          </div>
+        </div>
+      </td>
+      <td><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:${CRECHE_COLORS[a.creche]}"></span>${a.creche}</span></td>
+      <td><span class="badge badge-blue">${a.cat}</span></td>
+      <td style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:${stockAlert?'#DC2626':'inherit'}">${a.stock}${stockAlert?` <span style="font-size:10px">⚠</span>`:''}</td>
+      <td style="font-size:12px;color:var(--ink3)">${a.min > 0 ? a.min : '—'}</td>
+      <td style="font-weight:500">${a.prix > 0 ? a.prix.toFixed(2)+' €' : '—'}</td>
+      <td style="font-size:12px">${a.expiry ? `<span style="color:${expiryColor(a.expiry)};font-weight:600">${formatExpiry(a.expiry)}</span>` : '—'}</td>
+      <td style="color:var(--ink2);font-size:12px">${a.fourn || '—'}</td>
+      <td onclick="event.stopPropagation()">
+        <div class="action-btns">
+          <button class="btn btn-secondary btn-sm" onclick="editArticle(${a.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="onDeleteArticle(${a.id})">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function updateInvTabCounts() {
+  const crecheFilter = currentCreche !== 'all' ? currentCreche : null;
+  const mat = ARTICLES.filter(a => a.depreciable !== false && (!crecheFilter || a.creche === crecheFilter)).length;
+  const con = ARTICLES.filter(a => a.depreciable === false && (!crecheFilter || a.creche === crecheFilter)).length;
+  const elM = document.getElementById('inv-count-materiel'); if (elM) elM.textContent = mat;
+  const elC = document.getElementById('inv-count-consommable'); if (elC) elC.textContent = con;
 }
 
 function renderStats() {
@@ -1644,14 +1785,25 @@ function filterCreche(creche, el) {
   currentCreche = creche;
   document.querySelectorAll('.creche-badge').forEach(e => e.classList.remove('active'));
   if (el) el.classList.add('active');
-  if (currentPage === 'inventaire') renderTable();
+  if (currentPage === 'inventaire') {
+    if (currentInvTab === 'consommable') renderTableConso();
+    else renderTable();
+  }
   else if (currentPage === 'commandes') renderCommandes();
   else if (currentPage === 'univers') renderUnivers();
   else if (currentPage === 'historique') renderHistorique();
   else renderTable();
 }
 
-function filterTable() { renderTable(); }
+function filterTable() {
+  if (currentInvTab === 'consommable') renderTableConso();
+  else renderTable();
+}
+
+function renderActiveInvTable() {
+  if (currentInvTab === 'consommable') renderTableConso();
+  else renderTable();
+}
 function toggleSort(col) {
   if (window._sortCol === col) {
     window._sortDir = window._sortDir === 'asc' ? 'desc' : 'asc';
@@ -1659,7 +1811,7 @@ function toggleSort(col) {
     window._sortCol = col;
     window._sortDir = 'asc';
   }
-  renderTable();
+  renderActiveInvTable();
 }
 function filterHisto(type, el) {
   currentHisto = type;
@@ -1925,7 +2077,7 @@ async function saveArticle() {
   currentPhotoName = null;
   resetPhotoUpload();
   closeModal('modal-add');
-  renderTable();
+  renderActiveInvTable();
   renderHistorique();
   updateCounts();
 }
@@ -1942,7 +2094,7 @@ async function deleteArticle(id) {
   }
   addHisto('sortie', a.nom + ' (supprimé)', 0, a.creche, 'Vous');
   await saveHistoDB(HISTORIQUE[0]).catch(()=>{});
-  renderTable();
+  renderActiveInvTable();
   renderHistorique();
   updateCounts();
   showNotif('🗑 ' + a.nom + ' supprimé');
@@ -2116,7 +2268,7 @@ async function confirmerLivraison(id) {
   c.status = 'livrees';
   saveData();
   closeModal('modal-detail');
-  renderTable();
+  renderActiveInvTable();
   renderCommandes();
   renderHistorique();
   renderStats();
@@ -2273,7 +2425,7 @@ function deleteFournisseur(id) {
   saveData();
   if (!IS_LOCAL) sbDelete('fournisseurs', id).catch(e => console.warn(e.message));
   renderFournisseurs();
-  renderTable();
+  renderActiveInvTable();
   showNotif(`🗑 ${f.nom} supprimé`);
 }
 
@@ -2301,7 +2453,7 @@ async function saveFournisseur() {
       // Mettre à jour le nom dans les articles si changé
       if (oldNom && oldNom !== nom) {
         ARTICLES.forEach(a => { if (a.fourn === oldNom) a.fourn = nom; });
-        renderTable();
+        renderActiveInvTable();
       }
     }
     editingFournisseurId = null;
@@ -2405,7 +2557,7 @@ async function quickAdjust(id, delta) {
   a.stock = Math.max(0, a.stock + delta);
   addHisto(delta > 0 ? 'entrée' : 'sortie', a.nom, delta, a.creche, 'Vous', 'Ajustement rapide');
   saveData();
-  renderTable();
+  renderActiveInvTable();
   renderHistorique();
   showNotif(`${delta > 0 ? '📥 +1 entrée' : '📤 -1 sortie'} — ${a.nom} : ${a.stock} en stock`);
 }
@@ -2416,7 +2568,7 @@ async function adjustStock(id, delta) {
   a.stock = Math.max(0, a.stock + delta);
   addHisto(delta > 0 ? 'entrée' : 'sortie', a.nom, delta, a.creche, 'Vous', 'Ajustement manuel');
   saveData();
-  renderTable();
+  renderActiveInvTable();
   renderHistorique();
   showDetail(id);
   showNotif(`${delta > 0 ? '📥' : '📤'} Stock mis à jour : ${a.stock} unité(s)`);
@@ -2450,7 +2602,10 @@ function showPage(page, btn) {
   if (page === 'univers') { renderUnivers(); if(typeof updateSouscatFilters==='function') updateSouscatFilters(); }
   if (page === 'fournisseurs') { renderFournisseurs(); }
   if (page === 'historique') { renderHistorique(); }
-  if (page === 'inventaire') { renderTable(); renderStats(); }
+  if (page === 'inventaire') {
+    switchInvTab(currentInvTab); // réaffiche le bon tableau
+    renderStats();
+  }
 }
 
 function showTab(tab, btn) {
@@ -2908,26 +3063,56 @@ function buildArticlePicker(selectedIds = []) {
     picker.innerHTML = '<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article dans l\'inventaire</div>';
     return;
   }
-  // Group by category
-  const byCat = {};
-  ARTICLES.forEach(a => {
-    if (!byCat[a.cat]) byCat[a.cat] = [];
-    byCat[a.cat].push(a);
-  });
-  picker.innerHTML = Object.entries(byCat).map(([cat, arts]) => `
-    <div style="background:var(--bg);padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--ink3);text-transform:uppercase;position:sticky;top:0">
-      ${CAT_ICONS[cat]||'📦'} ${cat}
+
+  function buildList(articles) {
+    if (articles.length === 0) return '<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article dans cette catégorie</div>';
+    const byCat = {};
+    articles.forEach(a => { if (!byCat[a.cat]) byCat[a.cat] = []; byCat[a.cat].push(a); });
+    return Object.entries(byCat).map(([cat, arts]) => `
+      <div style="background:var(--bg);padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--ink3);text-transform:uppercase;position:sticky;top:0">
+        ${CAT_ICONS[cat]||'📦'} ${cat}
+      </div>
+      ${arts.map(a => {
+        const nom = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+        const checked = selectedIds.includes(a.id) ? 'checked' : '';
+        return `<div class="article-picker-row" onclick="document.getElementById('pick-${a.id}').click()">
+          <input type="checkbox" id="pick-${a.id}" ${checked} onclick="event.stopPropagation()">
+          <div class="article-picker-label">${nom}</div>
+          <span class="article-picker-cat">${a.stock} en stock</span>
+        </div>`;
+      }).join('')}
+    `).join('');
+  }
+
+  const materiel = ARTICLES.filter(a => a.depreciable !== false);
+  const conso = ARTICLES.filter(a => a.depreciable === false);
+
+  picker.innerHTML = `
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface)">
+      <button id="picker-tab-mat" onclick="switchPickerTab('mat')"
+        style="flex:1;padding:8px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--accent);color:var(--accent)">
+        🧸 Matériel (${materiel.length})
+      </button>
+      <button id="picker-tab-conso" onclick="switchPickerTab('conso')"
+        style="flex:1;padding:8px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--ink3)">
+        🧴 Consommables (${conso.length})
+      </button>
     </div>
-    ${arts.map(a => {
-      const nom = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
-      const checked = selectedIds.includes(a.id) ? 'checked' : '';
-      return `<div class="article-picker-row" onclick="document.getElementById('pick-${a.id}').click()">
-        <input type="checkbox" id="pick-${a.id}" ${checked} onclick="event.stopPropagation()">
-        <div class="article-picker-label">${nom}</div>
-        <span class="article-picker-cat">${a.stock} en stock</span>
-      </div>`;
-    }).join('')}
-  `).join('');
+    <div id="picker-list-mat">${buildList(materiel)}</div>
+    <div id="picker-list-conso" style="display:none">${buildList(conso)}</div>
+  `;
+}
+
+function switchPickerTab(tab) {
+  const isMat = tab === 'mat';
+  const tMat = document.getElementById('picker-tab-mat');
+  const tCon = document.getElementById('picker-tab-conso');
+  const lMat = document.getElementById('picker-list-mat');
+  const lCon = document.getElementById('picker-list-conso');
+  if (tMat) { tMat.style.borderBottomColor = isMat ? 'var(--accent)' : 'transparent'; tMat.style.color = isMat ? 'var(--accent)' : 'var(--ink3)'; }
+  if (tCon) { tCon.style.borderBottomColor = !isMat ? 'var(--accent)' : 'transparent'; tCon.style.color = !isMat ? 'var(--accent)' : 'var(--ink3)'; }
+  if (lMat) lMat.style.display = isMat ? 'block' : 'none';
+  if (lCon) lCon.style.display = !isMat ? 'block' : 'none';
 }
 
 function toggleArticlePick(id) {
@@ -3217,7 +3402,7 @@ function importBackup(event) {
         applyNomCreche(data.creche);
       }
       saveData();
-      renderTable(); renderStats(); renderCommandes();
+      renderActiveInvTable(); renderStats(); renderCommandes();
       renderFournisseurs(); renderHistorique(); updateCounts();
       showNotif(`✅ Restauration réussie — ${data.articles.length} articles chargés`);
     } catch(err) {
@@ -3469,7 +3654,7 @@ function handleDetailPhotoUpload(event, id) {
       a.photoName = file.name;
       saveData();
       showNotif('📷 Photo ajoutée');
-      renderTable();
+      renderActiveInvTable();
       showDetail(id);
     }
   };
@@ -3483,7 +3668,7 @@ async function removeArticlePhoto(id) {
     a.photoName = null;
     saveData();
     showNotif('🗑 Photo supprimée');
-    renderTable();
+    renderActiveInvTable();
     showDetail(id);
   }
 }
@@ -3538,7 +3723,7 @@ async function syncFromCloud() {
     const savedCreche = currentCreche;
 saveData();
 currentCreche = savedCreche;
-renderTable(); renderStats(); updateCounts();
+renderActiveInvTable(); renderStats(); updateCounts();
 if (currentPage === 'commandes') renderCommandes();
 else if (currentPage === 'fournisseurs') renderFournisseurs();
 else if (currentPage === 'historique') renderHistorique();
@@ -3855,7 +4040,7 @@ function saveCrecheName() {
   applyNomCreche(nom);
   saveData();
   showNotif(`✅ Nom mis à jour : ${nom}`);
-  renderTable();
+  renderActiveInvTable();
   renderStats();
 }
 const LS_KEY = 'stocks-solo-v1';
@@ -4250,7 +4435,7 @@ function importExcel(event) {
       addHisto('entrée', `Import Excel — ${imported} articles`, imported, 'Toutes', 'Import',
                `Mode : ${mode === 'remplacer' ? 'remplacement total' : 'ajout'}`);
 
-      renderTable();
+      renderActiveInvTable();
       renderHistorique();
       updateCounts();
       renderStats();
