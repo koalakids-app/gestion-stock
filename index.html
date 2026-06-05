@@ -1472,11 +1472,7 @@ let ARTICLES = [
   { id:18, nom:'Marionnettes animaux (lot 4)', ref:'MAT-016', cat:'Imitation', creche:'Brunet', stock:5, min:2, prix:32.00, fourn:'Goki Spielzeug', notes:'' },
 ];
 
-let COMMANDES = [
-  { id:1, fourn:'Nathan Pédagogique', creche:'Brunet', date:'2024-04-02', livraison:'2024-04-09', montant:156.50, bc:'BC-2024-042', status:'en-cours', articles:'3× Livres bain bébé (25,50€)\n4× Gel hydroalcoolique (90,00€)\n3× Albums imagier (41,00€)', notes:'Urgent pour les livres bain — stock épuisé.' },
-  { id:2, fourn:'Wesco France', creche:'Ollioules', date:'2024-04-01', livraison:'2024-04-10', montant:312.00, bc:'BC-2024-041', status:'en-cours', articles:'1× Portique de motricité (189€)\n1× Bac à sable (85€)\n2× Tunnels de gatage (38€)', notes:'' },
-  { id:3, fourn:'Halilit', creche:'Cuers', date:'2024-03-28', livraison:'2024-04-08', montant:97.50, bc:'BC-2024-040', status:'en-cours', articles:'2× Tapis musical (69,80€)\n2× Xylophone bois (27,70€)', notes:'Livraison lundi matin de préférence.' },
-];
+let COMMANDES = [];
 
 let FOURNISSEURS = [
   { id:1, nom:'Nathan Pédagogique', contact:'Marie Dumont', tel:'01 42 55 33 21', email:'commandes@nathan-ped.fr', web:'https://nathan-pedagogique.fr', delai:'3-5 jours', spec:'Général', notes:'Remise 10% dès 200€ HT.' },
@@ -3736,10 +3732,10 @@ async function syncFromCloud() {
       sbGet('historique', 'order=id.desc&limit=200'),
       sbGet('univers', 'order=id.desc').catch(() => []),
     ]);
-    if (Array.isArray(arts))   ARTICLES.splice(0,     ARTICLES.length,     ...arts);
-    if (Array.isArray(cmds))   COMMANDES.splice(0,    COMMANDES.length,    ...cmds);
-    if (Array.isArray(fourns)) FOURNISSEURS.splice(0, FOURNISSEURS.length, ...fourns);
-    if (Array.isArray(histos)) HISTORIQUE.splice(0,   HISTORIQUE.length,   ...histos);
+    if (Array.isArray(arts))   ARTICLES.splice(0,     ARTICLES.length,     ...arts.map(rowToArticle));
+    if (Array.isArray(cmds))   COMMANDES.splice(0,    COMMANDES.length,    ...cmds.map(rowToCommande));
+    if (Array.isArray(fourns)) FOURNISSEURS.splice(0, FOURNISSEURS.length, ...fourns.map(rowToFournisseur));
+    if (Array.isArray(histos)) HISTORIQUE.splice(0,   HISTORIQUE.length,   ...histos.map(rowToHisto));
     if (Array.isArray(univs)) {
       // Map Supabase column 'description' back to 'desc' used in app
       const mapped = univs.map(u => ({ ...u, desc: u.desc || u.description || '' }));
