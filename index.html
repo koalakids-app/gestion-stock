@@ -1445,7 +1445,7 @@ function init() {
   // Sync Supabase en arrière-plan
   loadData().then(() => {
     renderTable(); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique(); updateCounts();
-    if (typeof startPolling === 'function') startPolling(30);
+    if (typeof startPolling === 'function') startPolling(60);
   }).catch(e => {
     console.warn('Supabase unavailable:', e.message);
     setIndicator('💻 Mode local', 'var(--ink3)');
@@ -3480,14 +3480,14 @@ document.addEventListener('visibilitychange', () => {
     stopPolling();
   } else {
     syncFromCloud(); // Sync immédiate au retour en avant-plan
-    startPolling(30);
+    startPolling(60);
   }
 });
 
 // Sync immédiate au retour en ligne
 window.addEventListener('online', () => {
   setIndicator('🔄 Reconnexion…', 'var(--amber)');
-  syncFromCloud().then(() => startPolling(30));
+  syncFromCloud().then(() => startPolling(60));
 });
 
 // ── API helpers ────────────────────────────────────────────────────────────
