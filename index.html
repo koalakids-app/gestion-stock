@@ -2114,17 +2114,30 @@ function generateBC() {
 }
 
 async function saveCommande_db() {
-  const fourn = document.getElementById('c-fourn').value;
-  const creche = document.getElementById('c-creche').value;
   const montant = parseFloat(document.getElementById('c-montant').value) || 0;
   const bc = document.getElementById('c-bc').value.trim() || generateBC();
   const articles = getArticlesFromRows();
+
+  // Crèche = crèche active dans la sidebar (ou première si toutes sélectionnées)
+  const creche = (currentCreche && currentCreche !== 'all') ? currentCreche : CRECHES[0];
+
+  // Fournisseur = extraire du premier article renseigné
+  const rows = document.querySelectorAll('.article-row');
+  let fourn = '';
+  rows.forEach(row => {
+    if (!fourn) {
+      const idx = row.id.replace('article-row-', '');
+      const f = document.getElementById(`row-fourn-${idx}`)?.value?.trim();
+      if (f) fourn = f;
+    }
+  });
+  if (!fourn) fourn = '—';
 
   COMMANDES.push({
     id: Date.now(),
     fourn, creche,
     date: document.getElementById('c-date').value,
-    livraison: document.getElementById('c-livraison').value,
+    livraison: '',
     montant, bc,
     status: 'en-cours',
     articles: articles || '—',
