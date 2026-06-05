@@ -3801,7 +3801,12 @@ async function sbInsert(table, data) {
     headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' },
     body: JSON.stringify(data),
   });
-  if (!r.ok) throw new Error(`INSERT ${table} : ${r.status}`);
+  if (!r.ok) {
+    const errBody = await r.text();
+    console.error(`INSERT ${table} body envoyé:`, JSON.stringify(data));
+    console.error(`INSERT ${table} réponse Supabase:`, errBody);
+    throw new Error(`INSERT ${table} : ${r.status} — ${errBody}`);
+  }
   return r.json();
 }
 
