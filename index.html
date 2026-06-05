@@ -2147,8 +2147,18 @@ async function saveCommande_db() {
 
   addHisto('commande', `Commande ${bc}`, 0, creche, 'Vous', `${fourn} — ${montant.toFixed(2)}€`);
   saveData();
+
+  // Sauvegarder dans Supabase en attendant le résultat
+  if (!IS_LOCAL) {
+    try {
+      await saveCommandeDB(COMMANDES[COMMANDES.length-1]);
+    } catch(e) {
+      console.error('[Supabase] saveCommande:', e);
+      showNotif('⚠ Commande sauvegardée localement — erreur Supabase : ' + e.message);
+    }
+  }
+
   closeModal('modal-commande');
-  if (!IS_LOCAL) saveCommandeDB(COMMANDES[COMMANDES.length-1]).catch(()=>{});
   renderCommandes();
   renderHistorique();
   renderStats();
@@ -3835,9 +3845,9 @@ function rowToArticle(r) {
            etat: r.etat||'Neuf', depreciable: r.depreciable !== false,
            etat_override: r.etat_override||null };
 }function commandeToRow(c) {
-  return { fourn: c.fourn, creche: c.creche, date: c.date, livraison: c.livraison,
+  return { fourn: c.fourn, creche: c.creche, date: c.date, livraison: c.livraison||null,
            montant: c.montant, bc: c.bc, status: c.status,
-           articles: c.articles, notes: c.notes, url: c.url||'' };
+           articles: c.articles, notes: c.notes||'', url: c.url||'' };
 }
 function rowToCommande(r) {
   return { id: r.id, fourn: r.fourn, creche: r.creche, date: r.date,
@@ -3938,9 +3948,17 @@ async function saveCommandeDB(commande) {
   if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
   try {
     const rows = await sbInsert('commandes', commandeToRow(commande));
-    if (rows && rows[0]) commande.id = rows[0].id;
+    if (rows && rows[0] && rows[0].id) {
+      // Remplacer l'id local par l'id Supabase dans COMMANDES
+      const idx = COMMANDES.findIndex(c => c.bc === commande.bc);
+      if (idx >= 0) COMMANDES[idx].id = rows[0].id;
+      commande.id = rows[0].id;
+    }
     setSaved();
-  } catch(e) { console.error('[Supabase] Insert commande :', e); }
+  } catch(e) {
+    console.error('[Supabase] Insert commande :', e);
+    throw e; // remonter l'erreur pour que saveCommande_db puisse l'afficher
+  }
 }
 
 async function updateCommandeDB(commande) {
