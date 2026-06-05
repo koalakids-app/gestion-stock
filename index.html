@@ -1245,6 +1245,16 @@ textarea { resize: vertical; min-height: 72px; }
             <option value="À remplacer">🔴 À remplacer</option>
           </select>
         </div>
+        <div class="form-group">
+          <label>⚠ Stock minimum</label>
+          <input type="number" id="f-min" min="0" placeholder="0" value="0">
+        </div>
+        <div class="form-group" style="justify-content:flex-end;padding-top:8px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:500;font-size:13px">
+            <input type="checkbox" id="f-depreciable" checked style="width:16px;height:16px;cursor:pointer">
+            🔄 Article dépréciable <span style="font-weight:400;color:var(--ink3);font-size:11px">(décocher pour consommable)</span>
+          </label>
+        </div>
         <div class="form-group full">
           <label>🔗 Lien internet (fiche produit, catalogue...)</label>
           <input type="url" id="f-url" placeholder="https://www.fournisseur.fr/produit...">
@@ -1815,6 +1825,7 @@ function openModal(type) {
     document.getElementById('f-url').value = '';
     const fDA = document.getElementById('f-date-achat'); if (fDA) fDA.value = '';
     const fEt = document.getElementById('f-etat'); if (fEt) fEt.value = '';
+    const fDep = document.getElementById('f-depreciable'); if (fDep) fDep.checked = true;
     resetPhotoUpload();
   }
   document.getElementById(`modal-${type}`).classList.add('open');
@@ -1838,6 +1849,8 @@ function editArticle(id) {
   if (fDateAchat) fDateAchat.value = a.date_achat || '';
   const fEtat = document.getElementById('f-etat');
   if (fEtat) fEtat.value = a.etat_override || '';
+  const fDep = document.getElementById('f-depreciable');
+  if (fDep) fDep.checked = a.depreciable !== false;
   // f-min et f-notes supprimés — utiliser les champs cachés si présents
   const fMin = document.getElementById('f-min');
   if (fMin) fMin.value = a.min || 0;
@@ -1888,6 +1901,7 @@ async function saveArticle() {
     url:   document.getElementById('f-url').value.trim(),
     date_achat: (document.getElementById('f-date-achat')||{}).value || null,
     etat_override: (document.getElementById('f-etat')||{}).value || null,
+    depreciable: document.getElementById('f-depreciable')?.checked !== false,
     photo: currentPhotoData || (editingId ? (ARTICLES.find(a=>a.id===editingId)||{}).photo : null),
     photoName: currentPhotoName || null,
   };
@@ -2352,13 +2366,16 @@ function showDetail(id) {
           <tr><td style="color:var(--ink3);padding:3px 0">Valeur stock</td><td style="font-weight:600;color:var(--accent)">${(a.stock*a.prix).toFixed(2)} €</td></tr>
           ${a.url ? `<tr><td style="color:var(--ink3);padding:3px 0">Lien</td><td><a href="${a.url}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px">🔗 Voir</a></td></tr>` : ''}
           ${a.date_achat ? `<tr><td style="color:var(--ink3);padding:3px 0">Date d'achat</td><td style="font-weight:500">${new Date(a.date_achat).toLocaleDateString('fr-FR')}</td></tr>` : ''}
-          ${(() => {
-            const etat = getArticleEtat(a);
-            if (!etat) return '';
-            const annees = a.date_achat ? ((Date.now() - new Date(a.date_achat)) / (365.25*24*3600*1000)).toFixed(1) : null;
-            const residuel = annees ? Math.max(0, Math.round((1 - 0.20 * parseFloat(annees)) * 100)) : null;
-            return `<tr><td style="color:var(--ink3);padding:3px 0">État</td><td>${getEtatBadgeHtml(etat)}${annees ? `<span style="font-size:11px;color:var(--ink3);margin-left:6px">${annees} ans · résiduel ${residuel}%</span>` : ''}</td></tr>`;
-          })()}
+          ${a.depreciable === false
+            ? `<tr><td style="color:var(--ink3);padding:3px 0">Type</td><td><span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:#F0FDF4;color:#065F46">🧴 Consommable</span></td></tr>`
+            : (() => {
+                const etat = getArticleEtat(a);
+                if (!etat) return '';
+                const annees = a.date_achat ? ((Date.now() - new Date(a.date_achat)) / (365.25*24*3600*1000)).toFixed(1) : null;
+                const residuel = annees ? Math.max(0, Math.round((1 - 0.20 * parseFloat(annees)) * 100)) : null;
+                return `<tr><td style="color:var(--ink3);padding:3px 0">État</td><td>${getEtatBadgeHtml(etat)}${annees ? `<span style="font-size:11px;color:var(--ink3);margin-left:6px">${annees} ans · résiduel ${residuel}%</span>` : ''}</td></tr>`;
+              })()
+          }
         </table>
       </div>
     </div>
@@ -3946,6 +3963,7 @@ if (!navigator.onLine) document.getElementById('offlineBadge').classList.add('vi
 // sur certains navigateurs mobiles — on les enveloppe
 // ── DÉPRÉCIATION 20%/AN ──────────────────────────────────────────────────
 function getArticleEtat(a) {
+  if (a.depreciable === false) return null; // consommable → pas d'état
   if (a.etat_override) return a.etat_override;
   if (!a.date_achat) return null;
   const annees = (Date.now() - new Date(a.date_achat)) / (365.25 * 24 * 3600 * 1000);
