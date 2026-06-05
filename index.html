@@ -3452,9 +3452,15 @@ async function syncFromCloud() {
       const mapped = univs.map(u => ({ ...u, desc: u.desc || u.description || '' }));
       UNIVERS.splice(0, UNIVERS.length, ...mapped);
     }
-    saveData();
-    renderTable(); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique(); updateCounts();
-    if (typeof currentPage !== 'undefined' && currentPage === 'univers') renderUnivers();
+    const savedCreche = currentCreche;
+saveData();
+currentCreche = savedCreche;
+renderTable(); renderStats(); updateCounts();
+if (currentPage === 'commandes') renderCommandes();
+else if (currentPage === 'fournisseurs') renderFournisseurs();
+else if (currentPage === 'historique') renderHistorique();
+else if (currentPage === 'univers') renderUnivers();
+    
     const now = new Date();
     setIndicator('☁️ À jour — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}), 'var(--green)');
   } catch(e) {
