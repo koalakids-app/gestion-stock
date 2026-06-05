@@ -2102,7 +2102,9 @@ async function deleteArticle(id) {
 
 // ─── SAVE COMMANDE ────────────────────────────────────────────────────────
 function generateBC() {
-  const nom = getCrecheName().replace(/\s+/g, '').substring(0, 8).toUpperCase();
+  // Utiliser la crèche sélectionnée dans la sidebar, sinon le nom du réseau
+  const crecheActive = (currentCreche && currentCreche !== 'all') ? currentCreche : getCrecheName();
+  const nom = crecheActive.replace(/\s+/g, '').substring(0, 8).toUpperCase();
   const now = new Date();
   const date = String(now.getFullYear()).slice(2) +
     String(now.getMonth()+1).padStart(2,'0') +
@@ -4198,6 +4200,9 @@ function updateAlertBadge() {
 
 function onSaveArticle()       { saveArticle().catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onDeleteArticle(id)   { deleteArticle(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+// Alias pour compatibilité avec onSaveCommande
+const saveCommande = saveCommande_db;
+
 function onSaveCommande()      { saveCommande().catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onMarkLivree(id)      { markLivree(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onAnnulerCommande(id) { annulerCommande(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
