@@ -879,6 +879,11 @@ textarea { resize: vertical; min-height: 72px; }
           <div class="stat-value" style="color:var(--accent)" id="stat-commandes">3</div>
           <div class="stat-sub">en attente livraison</div>
         </div>
+        <div class="stat-card" id="stat-card-remplacer">
+          <div class="stat-label">🔴 À remplacer</div>
+          <div class="stat-value" style="color:#DC2626" id="stat-remplacer">0</div>
+          <div class="stat-sub">dépréciation ≥ 60% (3+ ans)</div>
+        </div>
       </div>
 
       <!-- FILTERS + TABLE -->
@@ -1226,6 +1231,20 @@ textarea { resize: vertical; min-height: 72px; }
             </div>
           </div>
         </div>
+        <div class="form-group">
+          <label>📆 Date d'achat</label>
+          <input type="date" id="f-date-achat">
+        </div>
+        <div class="form-group">
+          <label>🏷 État <span style="font-weight:400;color:var(--ink3)">(auto si date renseignée)</span></label>
+          <select id="f-etat">
+            <option value="">— Auto selon date d'achat —</option>
+            <option value="Neuf">🟢 Neuf</option>
+            <option value="Bon état">🔵 Bon état</option>
+            <option value="Usagé">🟠 Usagé</option>
+            <option value="À remplacer">🔴 À remplacer</option>
+          </select>
+        </div>
         <div class="form-group full">
           <label>🔗 Lien internet (fiche produit, catalogue...)</label>
           <input type="url" id="f-url" placeholder="https://www.fournisseur.fr/produit...">
@@ -1494,6 +1513,7 @@ const tb = document.getElementById('tableBody');
           <div>
             <div class="item-name">${a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim()}</div>
             <div class="item-ref">${a.ref}</div>
+            ${(() => { const e = getArticleEtat(a); return e ? getEtatBadgeHtml(e) : ''; })()}
           </div>
         </div>
       </td>
@@ -1564,6 +1584,13 @@ function renderStats() {
   if (elVal) elVal.textContent = valeur.toFixed(0)+' €';
   const elCmd = document.getElementById('stat-commandes');
   if (elCmd) elCmd.textContent = COMMANDES.filter(c => c.status === 'en-cours' && (currentCreche === 'all' || c.creche === currentCreche)).length;
+  // Tuile "À remplacer"
+  const rem = getArticlesToRemplacer();
+  const elRem = document.getElementById('stat-remplacer');
+  if (elRem) elRem.textContent = rem.length;
+  const cardRem = document.getElementById('stat-card-remplacer');
+  if (cardRem) cardRem.style.borderLeft = rem.length > 0 ? '3px solid #DC2626' : '';
+  updateAlertBadge();
 }
   
 function updateCounts() {
@@ -1783,6 +1810,8 @@ function openModal(type) {
     ['f-min','f-notes'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     ['f-cat','f-creche','f-fourn'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('f-url').value = '';
+    const fDA = document.getElementById('f-date-achat'); if (fDA) fDA.value = '';
+    const fEt = document.getElementById('f-etat'); if (fEt) fEt.value = '';
     resetPhotoUpload();
   }
   document.getElementById(`modal-${type}`).classList.add('open');
@@ -1802,6 +1831,10 @@ function editArticle(id) {
   document.getElementById('f-prix').value = a.prix;
   document.getElementById('f-fourn').value = a.fourn;
   document.getElementById('f-url').value = a.url || '';
+  const fDateAchat = document.getElementById('f-date-achat');
+  if (fDateAchat) fDateAchat.value = a.date_achat || '';
+  const fEtat = document.getElementById('f-etat');
+  if (fEtat) fEtat.value = a.etat_override || '';
   // f-min et f-notes supprimés — utiliser les champs cachés si présents
   const fMin = document.getElementById('f-min');
   if (fMin) fMin.value = a.min || 0;
@@ -1850,6 +1883,8 @@ async function saveArticle() {
     fourn: document.getElementById('f-fourn').value,
     notes: ((document.getElementById('f-notes')||{}).value||'').trim(),
     url:   document.getElementById('f-url').value.trim(),
+    date_achat: (document.getElementById('f-date-achat')||{}).value || null,
+    etat_override: (document.getElementById('f-etat')||{}).value || null,
     photo: currentPhotoData || (editingId ? (ARTICLES.find(a=>a.id===editingId)||{}).photo : null),
     photoName: currentPhotoName || null,
   };
@@ -2043,6 +2078,8 @@ async function confirmerLivraison(id) {
         notes: '',
         url: art.url || '',
         photo: null,
+        date_achat: c.livraison || c.date || new Date().toISOString().split('T')[0],
+        etat_override: null,
       };
       ARTICLES.push(article);
       created++;
@@ -2051,6 +2088,9 @@ async function confirmerLivraison(id) {
       if (art.prix > 0 && article.prix === 0) article.prix = art.prix;
       if (art.url && !article.url) article.url = art.url;
       if (art.fourn && !article.fourn) article.fourn = art.fourn;
+      // Mettre à jour la date d'achat avec la date de livraison
+      article.date_achat = c.livraison || c.date || new Date().toISOString().split('T')[0];
+      article.etat_override = null; // reset l'override — l'état repart de zéro (Neuf)
       updated++;
     }
     addHisto('entrée', article.nom, qty, article.creche, 'Vous', `Réception ${c.bc}`);
@@ -2308,6 +2348,14 @@ function showDetail(id) {
           <tr><td style="color:var(--ink3);padding:3px 0">Fournisseur</td><td style="font-weight:500">${a.fourn || '—'}</td></tr>
           <tr><td style="color:var(--ink3);padding:3px 0">Valeur stock</td><td style="font-weight:600;color:var(--accent)">${(a.stock*a.prix).toFixed(2)} €</td></tr>
           ${a.url ? `<tr><td style="color:var(--ink3);padding:3px 0">Lien</td><td><a href="${a.url}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px">🔗 Voir</a></td></tr>` : ''}
+          ${a.date_achat ? `<tr><td style="color:var(--ink3);padding:3px 0">Date d'achat</td><td style="font-weight:500">${new Date(a.date_achat).toLocaleDateString('fr-FR')}</td></tr>` : ''}
+          ${(() => {
+            const etat = getArticleEtat(a);
+            if (!etat) return '';
+            const annees = a.date_achat ? ((Date.now() - new Date(a.date_achat)) / (365.25*24*3600*1000)).toFixed(1) : null;
+            const residuel = annees ? Math.max(0, Math.round((1 - 0.20 * parseFloat(annees)) * 100)) : null;
+            return `<tr><td style="color:var(--ink3);padding:3px 0">État</td><td>${getEtatBadgeHtml(etat)}${annees ? `<span style="font-size:11px;color:var(--ink3);margin-left:6px">${annees} ans · résiduel ${residuel}%</span>` : ''}</td></tr>`;
+          })()}
         </table>
       </div>
     </div>
@@ -3555,7 +3603,8 @@ function articleToRow(a) {
            stock: a.stock, min: a.min, prix: a.prix, fourn: a.fourn,
            notes: a.notes, photo: a.photo||null, photo_name: a.photoName||null,
            url: a.url||null, date_achat: a.date_achat||null,
-           etat: a.etat||'Neuf', depreciable: a.depreciable !== false };
+           etat: a.etat||'Neuf', depreciable: a.depreciable !== false,
+           etat_override: a.etat_override||null };
 }
 function rowToArticle(r) {
   return { id: r.id, nom: r.nom, ref: r.ref, cat: r.cat, creche: r.creche,
@@ -3563,7 +3612,8 @@ function rowToArticle(r) {
            fourn: r.fourn||'', notes: r.notes||'',
            photo: r.photo||null, photoName: r.photo_name||null,
            url: r.url||null, date_achat: r.date_achat||null,
-           etat: r.etat||'Neuf', depreciable: r.depreciable !== false };
+           etat: r.etat||'Neuf', depreciable: r.depreciable !== false,
+           etat_override: r.etat_override||null };
 }function commandeToRow(c) {
   return { fourn: c.fourn, creche: c.creche, date: c.date, livraison: c.livraison,
            montant: c.montant, bc: c.bc, status: c.status,
@@ -3891,6 +3941,55 @@ if (!navigator.onLine) document.getElementById('offlineBadge').classList.add('vi
 // ─── WRAPPERS SYNCHRONES pour les onclick HTML ────────────────────────────
 // Les fonctions async ne peuvent pas être appelées directement depuis onclick
 // sur certains navigateurs mobiles — on les enveloppe
+// ── DÉPRÉCIATION 20%/AN ──────────────────────────────────────────────────
+function getArticleEtat(a) {
+  if (a.etat_override) return a.etat_override;
+  if (!a.date_achat) return null;
+  const annees = (Date.now() - new Date(a.date_achat)) / (365.25 * 24 * 3600 * 1000);
+  const residuel = Math.max(0, 1 - 0.20 * annees);
+  if (residuel >= 0.80) return 'Neuf';
+  if (residuel >= 0.60) return 'Bon état';
+  if (residuel >= 0.40) return 'Usagé';
+  return 'À remplacer';
+}
+
+function getEtatBadgeHtml(etat) {
+  if (!etat) return '';
+  const map = {
+    'Neuf':        { bg:'#D1FAE5', color:'#065F46', icon:'🟢' },
+    'Bon état':    { bg:'#DBEAFE', color:'#1E40AF', icon:'🔵' },
+    'Usagé':       { bg:'#FEF3C7', color:'#92400E', icon:'🟠' },
+    'À remplacer': { bg:'#FEE2E2', color:'#991B1B', icon:'🔴' },
+  };
+  const s = map[etat] || { bg:'var(--bg)', color:'var(--ink2)', icon:'⚪' };
+  return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${s.bg};color:${s.color}">${s.icon} ${etat}</span>`;
+}
+
+function getArticlesToRemplacer() {
+  return ARTICLES.filter(a => getArticleEtat(a) === 'À remplacer');
+}
+
+function getLowStockArticles() {
+  return ARTICLES.filter(a => a.stock <= a.min && a.min > 0);
+}
+
+function getExpiryAlerts() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  return ARTICLES.filter(a => {
+    if (!a.expiry) return false;
+    const exp = new Date(a.expiry); exp.setHours(0,0,0,0);
+    return Math.round((exp - today) / 86400000) <= 30;
+  }).sort((a,b) => new Date(a.expiry) - new Date(b.expiry));
+}
+
+function updateAlertBadge() {
+  const total = getLowStockArticles().length + getExpiryAlerts().length + getArticlesToRemplacer().length;
+  const badge = document.getElementById('nav-alert-badge');
+  if (!badge) return;
+  badge.style.display = total > 0 ? 'inline-block' : 'none';
+  badge.textContent = total;
+}
+
 function onSaveArticle()       { saveArticle().catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onDeleteArticle(id)   { deleteArticle(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onSaveCommande()      { saveCommande().catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
