@@ -3829,6 +3829,15 @@ async function sbDelete(table, id) {
 
 // ── Map between app object ↔ DB row ───────────────────────────────────────
 
+  // Valeur dépréciée : -20%/an depuis la date d'achat, plancher à 0
+function valeurDepreciee(a) {
+  if (!a.depreciable || !a.date_achat || !a.prix) return a.prix || 0;
+  const achat = new Date(a.date_achat);
+  if (isNaN(achat)) return a.prix;
+  const ans = (Date.now() - achat.getTime()) / (365.25 * 24 * 3600 * 1000);
+  const taux = Math.max(0, 1 - 0.20 * ans);
+  return Math.round(a.prix * taux * 100) / 100;
+}
 function articleToRow(a) {
   return { nom: a.nom, ref: a.ref, cat: a.cat, creche: a.creche,
            stock: a.stock, min: a.min, prix: a.prix, fourn: a.fourn,
