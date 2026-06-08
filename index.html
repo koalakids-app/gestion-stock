@@ -1586,7 +1586,10 @@ const tb = document.getElementById('tableBody');
   })()}
 </td>
       <td style="font-family:'Syne',sans-serif;font-weight:700;color:var(--accent)">
-        ${montant > 0 ? montant.toFixed(2)+' €' : '—'}
+        ${(() => {
+  const vLot = (a.depreciable && a.date_achat) ? valeurDepreciee(a) * a.stock : montant;
+  return vLot > 0 ? vLot.toFixed(2) + ' €' : '—';
+})()}
       </td>
       <td style="color:var(--ink2);font-size:12px">${a.fourn || '—'}</td>
       <td onclick="event.stopPropagation()">
