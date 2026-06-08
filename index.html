@@ -3828,7 +3828,27 @@ async function sbDelete(table, id) {
 }
 
 // ── Map between app object ↔ DB row ───────────────────────────────────────
+// Valeur dépréciée : -20%/an depuis la date d'achat, plancher à 0
+function valeurDepreciee(a) {
+  if (!a.depreciable || !a.date_achat || !a.prix) return a.prix || 0;
+  const achat = new Date(a.date_achat);
+  if (isNaN(achat)) return a.prix;
+  const ans = (Date.now() - achat.getTime()) / (365.25 * 24 * 3600 * 1000);
+  const taux = Math.max(0, 1 - 0.20 * ans);
+  return Math.round(a.prix * taux * 100) / 100;
+}
 
+// État de l'article : manuel si défini, sinon automatique via dépréciation
+function getArticleEtat(a) {
+  if (a.etat_override) return a.etat_override;
+  if (a.depreciable && a.date_achat && a.prix) {
+    const reste = valeurDepreciee(a) / a.prix;
+    if (reste <= 0.20) return 'À remplacer';
+    if (reste <= 0.50) return 'Bon état';
+    return 'Neuf';
+  }
+  return 'Neuf';
+}
   // Valeur dépréciée : -20%/an depuis la date d'achat, plancher à 0
 function valeurDepreciee(a) {
   if (!a.depreciable || !a.date_achat || !a.prix) return a.prix || 0;
