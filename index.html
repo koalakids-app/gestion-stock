@@ -770,34 +770,6 @@ textarea { resize: vertical; min-height: 72px; }
   justify-content: center;
   font-size: 16px;
 }
-/* ── MODE PLEIN ÉCRAN — SIDEBAR AUTO-HIDE ── */
-body.is-fullscreen .app {
-  grid-template-columns: 0px 1fr;
-  transition: grid-template-columns 0.25s ease;
-}
-body.is-fullscreen .sidebar {
-  width: 240px;
-  transform: translateX(-240px);
-  transition: transform 0.25s ease;
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 9100;
-  box-shadow: 4px 0 24px rgba(0,0,0,0.3);
-}
-body.is-fullscreen.sidebar-visible .sidebar {
-  transform: translateX(0);
-}
-/* Zone de détection souris à gauche */
-body.is-fullscreen .sidebar-trigger {
-  display: block;
-  position: fixed;
-  left: 0; top: 0;
-  width: 16px;
-  height: 100vh;
-  z-index: 9050;
-}
-
 /* ── MODE PLEIN ÉCRAN ── */
 body.is-fullscreen {
   overflow: hidden;
@@ -851,6 +823,32 @@ body.is-fullscreen .stat-value {
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .content { padding: 16px; }
 }
+
+/* ── SIDEBAR AUTO-HIDE EN PLEIN ÉCRAN ── */
+body.is-fullscreen .app {
+  grid-template-columns: 1fr;
+}
+body.is-fullscreen .sidebar {
+  position: fixed;
+  left: 0; top: 0;
+  height: 100vh;
+  width: 240px;
+  transform: translateX(-240px);
+  transition: transform 0.25s ease;
+  z-index: 9100;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.35);
+}
+body.is-fullscreen.sidebar-open .sidebar {
+  transform: translateX(0);
+}
+body.is-fullscreen .sidebar-edge {
+  display: block;
+  position: fixed;
+  left: 0; top: 0;
+  width: 20px; height: 100vh;
+  z-index: 9050;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -871,8 +869,8 @@ body.is-fullscreen .stat-value {
 <div class="app">
 
 <!-- ── SIDEBAR ── -->
-<div class="sidebar-trigger" id="sidebar-trigger"></div>
-<aside class="sidebar" id="sidebar">
+<div class="sidebar-edge" id="sidebar-edge"></div>
+<aside class="sidebar" id="main-sidebar">
   <div id="logo-container" style="display:flex;flex-direction:column;align-items:center;padding:16px 16px 0 16px;">   <img id="logo-img" style="display:none;max-height:70px;max-width:160px;object-fit:contain;cursor:pointer;border-radius:8px;opacity:0.95;" title="Cliquer pour changer le logo" />   <div id="logo-placeholder" onclick="document.getElementById('logo-input').click()" style="cursor:pointer;padding:8px 14px;border:2px dashed rgba(255,255,255,0.3);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:4px;">📷 Ajouter logo</div>   <input type="file" id="logo-input" accept="image/*" style="display:none" /> </div> <div class="sidebar-logo">
     <h1></h1>
     <span style="font-size:12px;opacity:0.7;letter-spacing:0.5px">Réseau Micro-Crèches</span>
@@ -4393,38 +4391,10 @@ function toggleFullscreen() {
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement) {
     document.body.classList.remove('is-fullscreen');
-    document.body.classList.remove('sidebar-visible');
     const btn = document.getElementById('fullscreen-btn');
     if (btn) { btn.textContent = '⛶'; btn.title = 'Plein écran'; }
   }
 });
-
-// Sidebar auto-hide en plein écran
-(function() {
-  let sidebarTimer = null;
-  function showSidebar() {
-    if (!document.body.classList.contains('is-fullscreen')) return;
-    document.body.classList.add('sidebar-visible');
-    clearTimeout(sidebarTimer);
-  }
-  function hideSidebar() {
-    clearTimeout(sidebarTimer);
-    sidebarTimer = setTimeout(() => {
-      document.body.classList.remove('sidebar-visible');
-    }, 600);
-  }
-  document.addEventListener('DOMContentLoaded', () => {
-    const trigger = document.getElementById('sidebar-trigger');
-    const sidebar = document.getElementById('sidebar');
-    if (trigger) {
-      trigger.addEventListener('mouseenter', showSidebar);
-    }
-    if (sidebar) {
-      sidebar.addEventListener('mouseenter', showSidebar);
-      sidebar.addEventListener('mouseleave', hideSidebar);
-    }
-  });
-})();
 
 // ─── PAGINATION HELPER ───────────────────────────────────────────────────
 function renderPaginationBar(containerId, totalItems, currentPage, onPageChange) {
@@ -5348,6 +5318,27 @@ function switchNoticeTab(tab, btn) {
   const content = document.getElementById('notice-content');
   if (content) content.innerHTML = NOTICE_CONTENT[tab] || '';
 }
+
+// ── SIDEBAR AUTO-HIDE FULLSCREEN ────────────────────────────────────────
+(function() {
+  let hideTimer = null;
+  function show() {
+    if (!document.body.classList.contains('is-fullscreen')) return;
+    clearTimeout(hideTimer);
+    document.body.classList.add('sidebar-open');
+  }
+  function hide() {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => document.body.classList.remove('sidebar-open'), 500);
+  }
+  document.addEventListener('DOMContentLoaded', function() {
+    const edge = document.getElementById('sidebar-edge');
+    const sb   = document.getElementById('main-sidebar');
+    if (edge) { edge.addEventListener('mouseenter', show); }
+    if (sb)   { sb.addEventListener('mouseenter', show); sb.addEventListener('mouseleave', hide); }
+  });
+})();
+
 </script>
 
 </body>
