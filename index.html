@@ -770,12 +770,27 @@ textarea { resize: vertical; min-height: 72px; }
   justify-content: center;
   font-size: 16px;
 }
-:fullscreen .app { grid-template-columns: 240px 1fr; min-height: 100vh; }
-:fullscreen .sidebar { position: sticky; top: 0; height: 100vh; }
-:-webkit-full-screen .app { grid-template-columns: 240px 1fr; min-height: 100vh; }
-:-webkit-full-screen .sidebar { position: sticky; top: 0; height: 100vh; }
-:-moz-full-screen .app { grid-template-columns: 240px 1fr; min-height: 100vh; }
-:-moz-full-screen .sidebar { position: sticky; top: 0; height: 100vh; }
+.app:fullscreen,
+.app:-webkit-full-screen,
+.app:-moz-full-screen {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+.app:fullscreen .main,
+.app:-webkit-full-screen .main,
+.app:-moz-full-screen .main {
+  overflow-y: auto;
+  height: 100vh;
+}
+.app:fullscreen .sidebar,
+.app:-webkit-full-screen .sidebar,
+.app:-moz-full-screen .sidebar {
+  height: 100vh;
+  overflow-y: auto;
+}
 
 /* ── RESPONSIVE ── */
 @media (max-width: 900px) {
@@ -4311,9 +4326,9 @@ if (!navigator.onLine) document.getElementById('offlineBadge').classList.add('vi
 // ─── FULLSCREEN ──────────────────────────────────────────────────────────
 function toggleFullscreen() {
   const btn = document.getElementById('fullscreen-btn');
+  const appEl = document.querySelector('.app');
   if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(() => {});
-    if (btn) btn.textContent = '⛶';
+    (appEl || document.documentElement).requestFullscreen().catch(() => {});
     if (btn) btn.title = 'Quitter le plein écran';
   } else {
     document.exitFullscreen();
