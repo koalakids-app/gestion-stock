@@ -762,7 +762,59 @@ textarea { resize: vertical; min-height: 72px; }
 }
 
 /* ── FULLSCREEN ── */
+/* ── FULLSCREEN ── */
+@media (display-mode: fullscreen) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: none;
+  }
 
+  .sidebar:hover,
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  /* Languette visible pour déclencher l'ouverture */
+  .sidebar-trigger {
+    display: flex;
+  }
+}
+
+.sidebar-trigger {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  background: var(--ink);
+  color: rgba(255,255,255,0.7);
+  width: 18px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  font-size: 10px;
+  writing-mode: vertical-lr;
+  letter-spacing: 1px;
+  transition: width 0.15s;
+}
+
+.sidebar-trigger:hover {
+  width: 22px;
+  color: #fff;
+}
 /* ── RESPONSIVE ── */
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }
@@ -791,6 +843,7 @@ textarea { resize: vertical; min-height: 72px; }
 <div class="app">
 
 <!-- ── SIDEBAR ── -->
+  <div class="sidebar-trigger" id="sidebarTrigger" onclick="toggleSidebar()">▶</div>
 <aside class="sidebar">
   <div id="logo-container" style="display:flex;flex-direction:column;align-items:center;padding:16px 16px 0 16px;">   <img id="logo-img" style="display:none;max-height:70px;max-width:160px;object-fit:contain;cursor:pointer;border-radius:8px;opacity:0.95;" title="Cliquer pour changer le logo" />   <div id="logo-placeholder" onclick="document.getElementById('logo-input').click()" style="cursor:pointer;padding:8px 14px;border:2px dashed rgba(255,255,255,0.3);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:4px;">📷 Ajouter logo</div>   <input type="file" id="logo-input" accept="image/*" style="display:none" /> </div> <div class="sidebar-logo">
     <h1></h1>
@@ -4435,7 +4488,24 @@ function onAdjustStock(id,d)   { adjustStock(id,d).catch(e => { showNotif('⚠ E
 function onAdjustStockCustom(id){ adjustStockCustom(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onRemoveArticlePhoto(id){ removeArticlePhoto(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onClearData()         { clearData().catch(e => console.error(e)); }
+// ── SIDEBAR AUTO-HIDE EN PLEIN ÉCRAN ──────────────────────────────────────
+function toggleSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  sidebar.classList.toggle('open');
+}
 
+// Ferme la sidebar si on clique en dehors (en plein écran)
+document.addEventListener('click', (e) => {
+  const sidebar = document.querySelector('.sidebar');
+  const trigger = document.getElementById('sidebarTrigger');
+  if (
+    sidebar.classList.contains('open') &&
+    !sidebar.contains(e.target) &&
+    e.target !== trigger
+  ) {
+    sidebar.classList.remove('open');
+  }
+});
 // Lancer l'app
 try {
   init();
