@@ -725,6 +725,54 @@ textarea { resize: vertical; min-height: 72px; }
 }
 .offline-badge.visible { display: block; }
 
+
+/* ── PAGINATION ── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
+}
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px; height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: 'Instrument Sans', sans-serif;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.pagination-btn:hover:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pagination-btn:disabled { opacity: 0.35; cursor: default; }
+.pagination-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pagination-info {
+  font-size: 12px;
+  color: var(--ink3);
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+/* ── FULLSCREEN ── */
+.btn-fullscreen {
+  width: 36px; height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+:fullscreen .sidebar { position: fixed; left: 0; top: 0; height: 100vh; z-index: 50; }
+:fullscreen .topbar { position: sticky; top: 0; z-index: 40; }
+
 /* ── RESPONSIVE ── */
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }
@@ -851,6 +899,8 @@ textarea { resize: vertical; min-height: 72px; }
       <button class="btn btn-secondary" onclick="exportBackup()" title="Sauvegarder toutes les données (JSON)">💾 Sauvegarder</button>
       <button class="btn btn-secondary" onclick="document.getElementById('restoreInput').click()" title="Restaurer une sauvegarde">📂 Restaurer</button>
       <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="importBackup(event)">
+            <button class="btn btn-secondary btn-fullscreen" id="fullscreen-btn"
+              onclick="toggleFullscreen()" title="Plein écran">⛶</button>
       <span id="save-indicator" style="font-size:11px;color:var(--ink3);white-space:nowrap">⏳ Connexion…</span>
       <button class="btn btn-secondary btn-sm" onclick="onClearData()" title="Supprimer toutes les données locales" style="color:var(--red);border-color:#FECACA">🗑 Reset</button>
     </div>
@@ -1494,7 +1544,12 @@ let HISTORIQUE = [
   { id:8, type:'commande', article:'Commande BC-2024-040', qty:0, creche:'Cuers', user:'Admin', date:'2024-03-28 15:00', note:'Halilit — 97,50€' },
 ];
 
-// ─── STATE ────────────────────────────────────────────────────────────────
+// ─── STATE ─────────────────────────────────────────────────────────────
+// ─── PAGINATION ──────────────────────────────────────────────────────────
+const PAGE_SIZE = 10;
+let currentPageMat = 1;
+let currentPageConso = 1;
+───
 let currentPage = 'inventaire';
 let currentCat = 'all';
 let currentCreche = 'all';
@@ -1554,7 +1609,13 @@ const tb = document.getElementById('tableBody');
     return;
   }
 
-  tb.innerHTML = data.map(a => {
+  // Pagination
+  const totalMat = data.length;
+  const totalPagesMat = Math.ceil(totalMat / PAGE_SIZE);
+  if (currentPageMat > totalPagesMat) currentPageMat = 1;
+  const slicedData = data.slice((currentPageMat - 1) * PAGE_SIZE, currentPageMat * PAGE_SIZE);
+
+  tb.innerHTML = slicedData.map(a => {
     const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂' };
     const thumb = a.photo
       ? `<img class="article-thumb" src="${a.photo}" alt="${a.nom}" loading="lazy">`
@@ -1600,6 +1661,12 @@ const tb = document.getElementById('tableBody');
       </td>
     </tr>`;
   }).join('');
+
+  // Barre de pagination matériel
+  renderPaginationBar('inv-table-materiel', totalMat, currentPageMat, (p) => {
+    currentPageMat = p;
+    renderTable();
+  });
 
   // ── FOOTER TOTAL PAR STRUCTURE ──────────────────────────────────────────
   const totalGlobal = data.reduce((s,a) => s + a.stock * a.prix, 0);
@@ -1666,6 +1733,7 @@ function switchInvTab(tab) {
 
 function filterCatConso(cat, el) {
   currentCatConso = cat;
+  currentPageConso = 1;
   document.querySelectorAll('#inv-filters-consommable .filter-chip').forEach(e => e.classList.remove('active'));
   if (el) el.classList.add('active');
   renderTableConso();
@@ -1693,7 +1761,13 @@ function renderTableConso() {
     tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink3)">Aucun consommable trouvé</td></tr>`;
     return;
   }
-  tb.innerHTML = data.map(a => {
+  // Pagination
+  const totalConso = data.length;
+  const totalPagesConso = Math.ceil(totalConso / PAGE_SIZE);
+  if (currentPageConso > totalPagesConso) currentPageConso = 1;
+  const slicedDataConso = data.slice((currentPageConso - 1) * PAGE_SIZE, currentPageConso * PAGE_SIZE);
+
+  tb.innerHTML = slicedDataConso.map(a => {
     const CAT_ICONS_L = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂' };
     const thumb = a.photo
       ? `<img class="article-thumb" src="${a.photo}" alt="${a.nom}" loading="lazy">`
@@ -1724,6 +1798,12 @@ function renderTableConso() {
       </td>
     </tr>`;
   }).join('');
+
+  // Barre de pagination consommables
+  renderPaginationBar('inv-table-consommable', totalConso, currentPageConso, (p) => {
+    currentPageConso = p;
+    renderTableConso();
+  });
 }
 
 function updateInvTabCounts() {
@@ -1784,6 +1864,7 @@ function updateCounts() {
 // ─── FILTERS ──────────────────────────────────────────────────────────────
 function filterCat(cat, el) {
   currentCat = cat;
+  currentPageMat = 1;
   document.querySelectorAll('.filter-chip').forEach(e => e.classList.remove('active'));
   el.classList.add('active');
   renderTable();
@@ -1791,6 +1872,8 @@ function filterCat(cat, el) {
 
 function filterCreche(creche, el) {
   currentCreche = creche;
+  currentPageMat = 1;
+  currentPageConso = 1;
   document.querySelectorAll('.creche-badge').forEach(e => e.classList.remove('active'));
   if (el) el.classList.add('active');
   if (currentPage === 'inventaire') {
@@ -1804,6 +1887,8 @@ function filterCreche(creche, el) {
 }
 
 function filterTable() {
+  currentPageMat = 1;
+  currentPageConso = 1;
   if (currentInvTab === 'consommable') renderTableConso();
   else renderTable();
 }
@@ -4218,6 +4303,97 @@ window.addEventListener('appinstalled', () => {
 window.addEventListener('online',  () => document.getElementById('offlineBadge').classList.remove('visible'));
 window.addEventListener('offline', () => document.getElementById('offlineBadge').classList.add('visible'));
 if (!navigator.onLine) document.getElementById('offlineBadge').classList.add('visible');
+
+
+// ─── FULLSCREEN ──────────────────────────────────────────────────────────
+function toggleFullscreen() {
+  const btn = document.getElementById('fullscreen-btn');
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+    if (btn) btn.textContent = '⛶';
+    if (btn) btn.title = 'Quitter le plein écran';
+  } else {
+    document.exitFullscreen();
+    if (btn) btn.title = 'Plein écran';
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  const btn = document.getElementById('fullscreen-btn');
+  if (btn) btn.textContent = document.fullscreenElement ? '✕' : '⛶';
+});
+
+// ─── PAGINATION HELPER ───────────────────────────────────────────────────
+function renderPaginationBar(containerId, totalItems, currentPage, onPageChange) {
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // Supprimer ancienne barre
+  const old = document.getElementById(containerId + '-pager');
+  if (old) old.remove();
+
+  if (totalPages <= 1) return;
+
+  const bar = document.createElement('div');
+  bar.className = 'pagination';
+  bar.id = containerId + '-pager';
+
+  const start = (currentPage - 1) * PAGE_SIZE + 1;
+  const end = Math.min(currentPage * PAGE_SIZE, totalItems);
+
+  // Bouton précédent
+  const prev = document.createElement('button');
+  prev.className = 'pagination-btn';
+  prev.textContent = '‹';
+  prev.disabled = currentPage === 1;
+  prev.onclick = () => onPageChange(currentPage - 1);
+  bar.appendChild(prev);
+
+  // Pages numérotées (max 5 autour de la page courante)
+  let pages = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages = [1];
+    let lo = Math.max(2, currentPage - 1);
+    let hi = Math.min(totalPages - 1, currentPage + 1);
+    if (lo > 2) pages.push('…');
+    for (let i = lo; i <= hi; i++) pages.push(i);
+    if (hi < totalPages - 1) pages.push('…');
+    pages.push(totalPages);
+  }
+
+  pages.forEach(p => {
+    if (p === '…') {
+      const span = document.createElement('span');
+      span.className = 'pagination-info';
+      span.textContent = '…';
+      bar.appendChild(span);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'pagination-btn' + (p === currentPage ? ' active' : '');
+      btn.textContent = p;
+      btn.onclick = () => onPageChange(p);
+      bar.appendChild(btn);
+    }
+  });
+
+  // Bouton suivant
+  const next = document.createElement('button');
+  next.className = 'pagination-btn';
+  next.textContent = '›';
+  next.disabled = currentPage === totalPages;
+  next.onclick = () => onPageChange(currentPage + 1);
+  bar.appendChild(next);
+
+  // Info
+  const info = document.createElement('span');
+  info.className = 'pagination-info';
+  info.textContent = start + '–' + end + ' / ' + totalItems;
+  bar.appendChild(info);
+
+  container.appendChild(bar);
+}
 
 // ─── WRAPPERS SYNCHRONES pour les onclick HTML ────────────────────────────
 // Les fonctions async ne peuvent pas être appelées directement depuis onclick
