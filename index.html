@@ -761,9 +761,8 @@ textarea { resize: vertical; min-height: 72px; }
   white-space: nowrap;
 }
 
-/* ── FULLSCREEN ── */
+/* ── SIDEBAR MASQUABLE ── */
 .sidebar-trigger {
-  display: none;
   position: fixed;
   left: 0;
   top: 50%;
@@ -773,6 +772,7 @@ textarea { resize: vertical; min-height: 72px; }
   color: rgba(255,255,255,0.7);
   width: 18px;
   height: 56px;
+  display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 0 8px 8px 0;
@@ -782,39 +782,21 @@ textarea { resize: vertical; min-height: 72px; }
 }
 .sidebar-trigger:hover { width: 22px; color: #fff; }
 
-body.fullscreen-mode .sidebar {
+body.sidebar-hidden .sidebar {
   position: fixed;
   left: 0; top: 0;
   z-index: 50;
   transform: translateX(-100%);
   transition: transform 0.25s ease;
 }
-body.fullscreen-mode .sidebar:hover,
-body.fullscreen-mode .sidebar.open {
+body.sidebar-hidden .sidebar:hover,
+body.sidebar-hidden .sidebar.open {
   transform: translateX(0);
   box-shadow: var(--shadow-lg);
 }
-body.fullscreen-mode .app {
+body.sidebar-hidden .app {
   grid-template-columns: 1fr;
 }
-body.fullscreen-mode .sidebar-trigger {
-  display: flex;
-}
-/* ── RESPONSIVE ── */
-@media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; }
-  .stats-grid { grid-template-columns: 1fr 1fr; }
-  .content { padding: 16px; }
-}
-
-</style>
-</head>
-<body>
-
-<div class="offline-badge" id="offlineBadge">📵 Hors ligne</div>
-
-<div class="install-bar" id="installBar">
   <div class="install-bar-text">
     <strong>📱 Installer l'application</strong>
     <span>Accès rapide depuis votre écran d'accueil</span>
@@ -4473,20 +4455,21 @@ function onAdjustStock(id,d)   { adjustStock(id,d).catch(e => { showNotif('⚠ E
 function onAdjustStockCustom(id){ adjustStockCustom(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onRemoveArticlePhoto(id){ removeArticlePhoto(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onClearData()         { clearData().catch(e => console.error(e)); }
-// ── SIDEBAR AUTO-HIDE EN PLEIN ÉCRAN ──────────────────────────────────────
+// ── SIDEBAR AUTO-HIDE ────────────────────────────────────────────────────
 function toggleSidebar() {
-  const sidebar = document.querySelector('.sidebar');
-  sidebar.classList.toggle('open');
+  document.body.classList.toggle('sidebar-hidden');
+  const trigger = document.getElementById('sidebarTrigger');
+  if (trigger) trigger.textContent = document.body.classList.contains('sidebar-hidden') ? '▶' : '◀';
 }
 
-// Ferme la sidebar si on clique en dehors (en plein écran)
 document.addEventListener('click', (e) => {
   const sidebar = document.querySelector('.sidebar');
   const trigger = document.getElementById('sidebarTrigger');
   if (
-    sidebar.classList.contains('open') &&
+    document.body.classList.contains('sidebar-hidden') &&
     !sidebar.contains(e.target) &&
-    e.target !== trigger
+    e.target !== trigger &&
+    !trigger.contains(e.target)
   ) {
     sidebar.classList.remove('open');
   }
