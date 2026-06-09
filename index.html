@@ -771,50 +771,87 @@ textarea { resize: vertical; min-height: 72px; }
   font-size: 16px;
 }
 /* ── MODE PLEIN ÉCRAN ── */
-body.is-fullscreen {
+
+
+
+
+
+
+
+
+
+
+
+/* ── PAGINATION ── */
+.pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 16px;
+  background: var(--surface2); border-top: 1px solid var(--border);
+}
+.pagination-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--ink); cursor: pointer; font-size: 13px;
+  font-family: 'Instrument Sans', sans-serif; font-weight: 600;
+  transition: all 0.15s;
+}
+.pagination-btn:hover:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pagination-btn:disabled { opacity: 0.35; cursor: default; }
+.pagination-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pagination-info { font-size: 12px; color: var(--ink3); padding: 0 8px; white-space: nowrap; }
+
+/* ── PLEIN ÉCRAN ── */
+.btn-fullscreen { width: 36px; height: 36px; padding: 0; font-size: 16px; }
+
+
+/* ── PSEUDO PLEIN ÉCRAN ── */
+body.fs-mode {
   overflow: hidden;
 }
-body.is-fullscreen .app {
+body.fs-mode .app {
   position: fixed;
   inset: 0;
-  display: grid;
-  grid-template-columns: 240px 1fr;
+  z-index: 8000;
+  grid-template-columns: 1fr;
   width: 100vw;
   height: 100vh;
-  z-index: 9000;
-  background: var(--bg);
 }
-body.is-fullscreen .sidebar {
-  height: 100vh;
-  overflow-y: auto;
-  position: relative;
-}
-body.is-fullscreen .main {
+body.fs-mode .main {
   height: 100vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
-body.is-fullscreen .topbar {
-  position: sticky;
-  top: 0;
-  z-index: 9001;
-  flex-shrink: 0;
+body.fs-mode .topbar { flex-shrink: 0; }
+body.fs-mode .content { flex: 1; overflow-y: auto; min-height: 0; }
+
+/* Sidebar en overlay */
+body.fs-mode .sidebar {
+  position: fixed;
+  left: 0; top: 0;
+  height: 100vh;
+  width: 240px;
+  transform: translateX(-240px);
+  transition: transform 0.22s ease;
+  z-index: 8100;
+  box-shadow: 4px 0 32px rgba(0,0,0,0.4);
 }
-body.is-fullscreen .content {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
+body.fs-mode.sb-open .sidebar {
+  transform: translateX(0);
 }
-body.is-fullscreen .stats-grid {
-  margin-bottom: 12px;
+/* Zone de détection 20px à gauche */
+body.fs-mode .fs-trigger {
+  display: block;
+  position: fixed;
+  left: 0; top: 0;
+  width: 20px; height: 100vh;
+  z-index: 8050;
 }
-body.is-fullscreen .stat-card {
-  padding: 10px 14px;
-}
-body.is-fullscreen .stat-value {
-  font-size: 20px;
-}
+/* Compact stats en fs */
+body.fs-mode .stats-grid { margin-bottom: 12px; }
+body.fs-mode .stat-card { padding: 10px 16px; }
+body.fs-mode .stat-value { font-size: 20px; }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 900px) {
@@ -825,30 +862,10 @@ body.is-fullscreen .stat-value {
 }
 
 /* ── SIDEBAR AUTO-HIDE EN PLEIN ÉCRAN ── */
-body.is-fullscreen .app {
-  grid-template-columns: 1fr;
-}
-body.is-fullscreen .sidebar {
-  position: fixed;
-  left: 0; top: 0;
-  height: 100vh;
-  width: 240px;
-  transform: translateX(-240px);
-  transition: transform 0.25s ease;
-  z-index: 9100;
-  box-shadow: 4px 0 24px rgba(0,0,0,0.35);
-}
-body.is-fullscreen.sidebar-open .sidebar {
-  transform: translateX(0);
-}
-body.is-fullscreen .sidebar-edge {
-  display: block;
-  position: fixed;
-  left: 0; top: 0;
-  width: 20px; height: 100vh;
-  z-index: 9050;
-  cursor: pointer;
-}
+
+
+
+
 </style>
 </head>
 <body>
@@ -869,8 +886,8 @@ body.is-fullscreen .sidebar-edge {
 <div class="app">
 
 <!-- ── SIDEBAR ── -->
-<div class="sidebar-edge" id="sidebar-edge"></div>
-<aside class="sidebar" id="main-sidebar">
+<div class="fs-trigger" id="fs-trigger"></div>
+<aside class="sidebar" id="fs-sidebar">
   <div id="logo-container" style="display:flex;flex-direction:column;align-items:center;padding:16px 16px 0 16px;">   <img id="logo-img" style="display:none;max-height:70px;max-width:160px;object-fit:contain;cursor:pointer;border-radius:8px;opacity:0.95;" title="Cliquer pour changer le logo" />   <div id="logo-placeholder" onclick="document.getElementById('logo-input').click()" style="cursor:pointer;padding:8px 14px;border:2px dashed rgba(255,255,255,0.3);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:4px;">📷 Ajouter logo</div>   <input type="file" id="logo-input" accept="image/*" style="display:none" /> </div> <div class="sidebar-logo">
     <h1></h1>
     <span style="font-size:12px;opacity:0.7;letter-spacing:0.5px">Réseau Micro-Crèches</span>
@@ -971,6 +988,7 @@ body.is-fullscreen .sidebar-edge {
       <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="importBackup(event)">
             <button class="btn btn-secondary btn-fullscreen" id="fullscreen-btn"
               onclick="toggleFullscreen()" title="Plein écran">⛶</button>
+      <button class="btn btn-secondary btn-fullscreen" id="fullscreen-btn" onclick="toggleFullscreen()" title="Plein écran">⛶</button>
       <span id="save-indicator" style="font-size:11px;color:var(--ink3);white-space:nowrap">⏳ Connexion…</span>
       <button class="btn btn-secondary btn-sm" onclick="onClearData()" title="Supprimer toutes les données locales" style="color:var(--red);border-color:#FECACA">🗑 Reset</button>
     </div>
@@ -1615,6 +1633,11 @@ let HISTORIQUE = [
 ];
 
 // ─── STATE ─────────────────────────────────────────────────────────────
+// ─── PAGINATION ──────────────────────────────────────────────────────────
+const PAGE_SIZE = 10;
+let currentPageMat = 1;
+let currentPageConso = 1;
+
 // ─── PAGINATION ──────────────────────────────────────────────────────────
 const PAGE_SIZE = 10;
 let currentPageMat = 1;
@@ -3863,7 +3886,7 @@ async function removeArticlePhoto(id) {
 // ─── SUPABASE CLOUD SYNC ──────────────────────────────────────────────────
 
 const SUPA_URL = 'https://juyrceadazrovlitxceb.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug';
+const SUPA_KEY = 'sb_publishable_juEwd3M1wOvOXnM3frvDJA_FIeHQB-Q';
 const SUPA_HEADERS = {
   'Content-Type': 'application/json',
   'apikey': SUPA_KEY,
@@ -4377,24 +4400,37 @@ if (!navigator.onLine) document.getElementById('offlineBadge').classList.add('vi
 // ─── FULLSCREEN ──────────────────────────────────────────────────────────
 function toggleFullscreen() {
   const btn = document.getElementById('fullscreen-btn');
-  const isFs = document.body.classList.contains('is-fullscreen');
-  if (!isFs) {
-    document.documentElement.requestFullscreen().catch(() => {});
-    document.body.classList.add('is-fullscreen');
+  const active = document.body.classList.toggle('fs-mode');
+  if (active) {
     if (btn) { btn.textContent = '✕'; btn.title = 'Quitter le plein écran'; }
   } else {
-    if (document.fullscreenElement) document.exitFullscreen();
-    document.body.classList.remove('is-fullscreen');
+    document.body.classList.remove('sb-open');
     if (btn) { btn.textContent = '⛶'; btn.title = 'Plein écran'; }
   }
 }
-document.addEventListener('fullscreenchange', () => {
-  if (!document.fullscreenElement) {
-    document.body.classList.remove('is-fullscreen');
-    const btn = document.getElementById('fullscreen-btn');
-    if (btn) { btn.textContent = '⛶'; btn.title = 'Plein écran'; }
+
+// Sidebar auto-hide en pseudo-fullscreen
+(function() {
+  let hideTimer = null;
+  function sbShow() {
+    if (!document.body.classList.contains('fs-mode')) return;
+    clearTimeout(hideTimer);
+    document.body.classList.add('sb-open');
   }
-});
+  function sbHide() {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => document.body.classList.remove('sb-open'), 500);
+  }
+  document.addEventListener('DOMContentLoaded', function() {
+    const trigger = document.getElementById('fs-trigger');
+    const sidebar = document.getElementById('fs-sidebar');
+    if (trigger) trigger.addEventListener('mouseenter', sbShow);
+    if (sidebar) {
+      sidebar.addEventListener('mouseenter', sbShow);
+      sidebar.addEventListener('mouseleave', sbHide);
+    }
+  });
+})();
 
 // ─── PAGINATION HELPER ───────────────────────────────────────────────────
 function renderPaginationBar(containerId, totalItems, currentPage, onPageChange) {
@@ -4466,6 +4502,62 @@ function renderPaginationBar(containerId, totalItems, currentPage, onPageChange)
   info.textContent = start + '–' + end + ' / ' + totalItems;
   bar.appendChild(info);
 
+  container.appendChild(bar);
+}
+
+
+// ─── PLEIN ÉCRAN ─────────────────────────────────────────────────────────
+function toggleFullscreen() {
+  const btn = document.getElementById('fullscreen-btn');
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+    if (btn) { btn.textContent = '✕'; btn.title = 'Quitter le plein écran'; }
+  } else {
+    document.exitFullscreen();
+    if (btn) { btn.textContent = '⛶'; btn.title = 'Plein écran'; }
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  const btn = document.getElementById('fullscreen-btn');
+  if (!document.fullscreenElement && btn) { btn.textContent = '⛶'; }
+});
+
+// ─── PAGINATION ───────────────────────────────────────────────────────────
+function renderPaginationBar(containerId, total, current, onPage) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const old = document.getElementById(containerId + '-pager');
+  if (old) old.remove();
+  if (total <= PAGE_SIZE) return;
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const bar = document.createElement('div');
+  bar.className = 'pagination'; bar.id = containerId + '-pager';
+  const prev = document.createElement('button');
+  prev.className = 'pagination-btn'; prev.textContent = '‹';
+  prev.disabled = current === 1; prev.onclick = () => onPage(current - 1);
+  bar.appendChild(prev);
+  let nums = [];
+  if (pages <= 7) { for (let i=1;i<=pages;i++) nums.push(i); }
+  else {
+    nums = [1];
+    let lo = Math.max(2, current-1), hi = Math.min(pages-1, current+1);
+    if (lo > 2) nums.push('…');
+    for (let i=lo;i<=hi;i++) nums.push(i);
+    if (hi < pages-1) nums.push('…');
+    nums.push(pages);
+  }
+  nums.forEach(p => {
+    if (p === '…') { const s=document.createElement('span'); s.className='pagination-info'; s.textContent='…'; bar.appendChild(s); }
+    else { const b=document.createElement('button'); b.className='pagination-btn'+(p===current?' active':''); b.textContent=p; b.onclick=()=>onPage(p); bar.appendChild(b); }
+  });
+  const next = document.createElement('button');
+  next.className = 'pagination-btn'; next.textContent = '›';
+  next.disabled = current === pages; next.onclick = () => onPage(current + 1);
+  bar.appendChild(next);
+  const info = document.createElement('span');
+  info.className = 'pagination-info';
+  info.textContent = ((current-1)*PAGE_SIZE+1) + '–' + Math.min(current*PAGE_SIZE, total) + ' / ' + total;
+  bar.appendChild(info);
   container.appendChild(bar);
 }
 
@@ -4554,7 +4646,7 @@ try {
 }
 // ─── LOGO SUPABASE ────────────────────────────────────────────────────────
 const LOGO_SUPABASE_URL = 'https://juyrceadazrovlitxceb.supabase.co';
-const LOGO_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug';
+const LOGO_ANON = 'sb_publishable_juEwd3M1wOvOXnM3frvDJA_FIeHQB-Q';
 const LOGO_BUCKET = 'assets';
 const LOGO_FILE = 'logo/koalakids-logo';
 
@@ -5319,25 +5411,7 @@ function switchNoticeTab(tab, btn) {
   if (content) content.innerHTML = NOTICE_CONTENT[tab] || '';
 }
 
-// ── SIDEBAR AUTO-HIDE FULLSCREEN ────────────────────────────────────────
-(function() {
-  let hideTimer = null;
-  function show() {
-    if (!document.body.classList.contains('is-fullscreen')) return;
-    clearTimeout(hideTimer);
-    document.body.classList.add('sidebar-open');
-  }
-  function hide() {
-    clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => document.body.classList.remove('sidebar-open'), 500);
-  }
-  document.addEventListener('DOMContentLoaded', function() {
-    const edge = document.getElementById('sidebar-edge');
-    const sb   = document.getElementById('main-sidebar');
-    if (edge) { edge.addEventListener('mouseenter', show); }
-    if (sb)   { sb.addEventListener('mouseenter', show); sb.addEventListener('mouseleave', hide); }
-  });
-})();
+
 
 </script>
 
