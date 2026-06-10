@@ -815,12 +815,82 @@ textarea { resize: vertical; min-height: 72px; }
   width: 22px;
   color: #fff;
 }
-/* ── RESPONSIVE ── */
-@media (max-width: 900px) {
+/* ── HAMBURGER MOBILE (caché desktop) ── */
+.mobile-menu-btn { display: none !important; }
+
+/* ── OVERLAY SIDEBAR MOBILE ── */
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 199; }
+.sidebar-overlay.visible { display: block; }
+
+/* ── RESPONSIVE MOBILE ── */
+@media (max-width: 768px) {
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; }
+  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 270px; box-shadow: none; }
+  .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-lg); }
+  .mobile-menu-btn { display: inline-flex !important; }
+  .sidebar-trigger { display: none !important; }
+  .topbar { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+  .topbar-left { flex: 1; min-width: 0; gap: 8px; }
+  .page-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+  .topbar-right { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; width: 100%; padding-bottom: 2px; }
+  .topbar-right .btn { flex-shrink: 0; font-size: 12px; padding: 7px 10px; }
+  .btn-label-long { display: none; }
+  .btn-label-short { display: inline !important; }
+  .search-box { min-width: unset; width: 100%; order: 10; flex-basis: 100%; }
+  #save-indicator { display: none !important; }
+  .content { padding: 12px; }
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .stat-card { padding: 12px 14px; }
+  .stat-value { font-size: 22px; }
+  .stat-label { font-size: 10px; }
+  .stat-sub { font-size: 11px; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 500px; }
+  #inv-table-materiel thead th:nth-child(6),
+  #inv-table-materiel thead th:nth-child(7),
+  #inv-table-materiel thead th:nth-child(8),
+  #inv-table-materiel tbody td:nth-child(6),
+  #inv-table-materiel tbody td:nth-child(7),
+  #inv-table-materiel tbody td:nth-child(8) { display: none; }
+  #inv-table-consommable thead th:nth-child(7),
+  #inv-table-consommable thead th:nth-child(8),
+  #inv-table-consommable tbody td:nth-child(7),
+  #inv-table-consommable tbody td:nth-child(8) { display: none; }
+  tbody td { padding: 10px; font-size: 12px; }
+  thead th { padding: 10px; }
+  .pagination { padding: 10px 6px; gap: 4px; flex-wrap: wrap; }
+  .pagination-btn { width: 30px; height: 30px; font-size: 12px; }
+  .pagination-info { font-size: 11px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal-overlay.open { padding: 0; align-items: flex-end; }
+  .modal { border-radius: 20px 20px 0 0; max-height: 92vh; width: 100%; max-width: 100% !important; animation: slideUpMobile 0.3s ease; }
+  @keyframes slideUpMobile { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal-body { padding: 16px; }
+  .modal-header { padding: 16px 16px 14px; }
+  .modal-footer { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+  .modal-footer .btn { flex: 1; justify-content: center; min-width: 100px; }
+  .commande-card { grid-template-columns: 1fr; }
+  .commande-total, .commande-total-label { text-align: left; }
+  .filters { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .filter-chip { flex-shrink: 0; }
+  #univers-list { grid-template-columns: 1fr !important; }
+  .notif { bottom: 16px; left: 12px; right: 12px; text-align: center; }
+  button[onclick="openNotice()"] { bottom: 70px !important; right: 16px !important; width: 44px !important; height: 44px !important; font-size: 18px !important; }
+  .section-header { flex-wrap: wrap; gap: 8px; }
+  .section-title { font-size: 14px; }
+  .tab-btn { padding: 7px 10px; font-size: 12px; }
+  #inv-tab-materiel, #inv-tab-consommable { font-size: 12px !important; padding: 8px 12px !important; }
+  .install-bar { padding: 12px 16px; }
+  .fournisseur-card { flex-wrap: wrap; }
+}
+
+/* Tablette */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .app { grid-template-columns: 200px 1fr; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
-  .content { padding: 16px; }
+  .content { padding: 16px 20px; }
+  .search-box { min-width: 180px; }
 }
 
 </style>
@@ -840,11 +910,14 @@ textarea { resize: vertical; min-height: 72px; }
   </div>
 </div>
 
+<!-- Overlay sombre sidebar mobile -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileMenu()"></div>
+
 <div class="app">
 
 <!-- ── SIDEBAR ── -->
   <div class="sidebar-trigger" id="sidebarTrigger" onclick="toggleSidebar()">▶</div>
-<aside class="sidebar">
+<aside class="sidebar" id="mainSidebar">
   <div id="logo-container" style="display:flex;flex-direction:column;align-items:center;padding:16px 16px 0 16px;">   <img id="logo-img" style="display:none;max-height:70px;max-width:160px;object-fit:contain;cursor:pointer;border-radius:8px;opacity:0.95;" title="Cliquer pour changer le logo" />   <div id="logo-placeholder" onclick="document.getElementById('logo-input').click()" style="cursor:pointer;padding:8px 14px;border:2px dashed rgba(255,255,255,0.3);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:4px;">📷 Ajouter logo</div>   <input type="file" id="logo-input" accept="image/*" style="display:none" /> </div> <div class="sidebar-logo">
     <h1></h1>
     <span style="font-size:12px;opacity:0.7;letter-spacing:0.5px">Réseau Micro-Crèches</span>
@@ -930,21 +1003,39 @@ textarea { resize: vertical; min-height: 72px; }
   <!-- TOPBAR -->
   <div class="topbar">
     <div class="topbar-left">
+      <!-- Bouton hamburger — visible uniquement sur mobile via CSS -->
+      <button class="mobile-menu-btn btn btn-secondary btn-sm"
+              onclick="openMobileMenu()"
+              style="padding:8px 11px;font-size:20px;line-height:1;flex-shrink:0">
+        ☰
+      </button>
       <div class="page-title" id="pageTitle">Inventaire</div>
     </div>
-    <div style="display:flex;gap:10px;align-items:center">
+    <div class="topbar-right" style="display:flex;gap:10px;align-items:center">
       <div class="search-box">
         <span>🔍</span>
         <input type="text" id="searchInput" placeholder="Rechercher un article..." oninput="filterTable()">
       </div>
-      <button class="btn btn-secondary" onclick="triggerImport()">⬆ Importer Excel</button>
+      <button class="btn btn-secondary" onclick="triggerImport()">
+        <span class="btn-label-long">⬆ Importer Excel</span>
+        <span class="btn-label-short" style="display:none">⬆ XLS</span>
+      </button>
       <input type="file" id="importInput" accept=".xlsx" style="display:none" onchange="importExcel(event)">
-      <button class="btn btn-secondary" onclick="exportCSV()">⬇ Exporter</button>
-      <button class="btn btn-secondary" onclick="exportBackup()" title="Sauvegarder toutes les données (JSON)">💾 Sauvegarder</button>
-      <button class="btn btn-secondary" onclick="document.getElementById('restoreInput').click()" title="Restaurer une sauvegarde">📂 Restaurer</button>
+      <button class="btn btn-secondary" onclick="exportCSV()">
+        <span class="btn-label-long">⬇ Exporter</span>
+        <span class="btn-label-short" style="display:none">⬇ CSV</span>
+      </button>
+      <button class="btn btn-secondary" onclick="exportBackup()" title="Sauvegarder toutes les données (JSON)">
+        <span class="btn-label-long">💾 Sauvegarder</span>
+        <span class="btn-label-short" style="display:none">💾</span>
+      </button>
+      <button class="btn btn-secondary" onclick="document.getElementById('restoreInput').click()" title="Restaurer une sauvegarde">
+        <span class="btn-label-long">📂 Restaurer</span>
+        <span class="btn-label-short" style="display:none">📂</span>
+      </button>
       <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="importBackup(event)">
       <span id="save-indicator" style="font-size:11px;color:var(--ink3);white-space:nowrap">⏳ Connexion…</span>
-      <button class="btn btn-secondary btn-sm" onclick="onClearData()" title="Supprimer toutes les données locales" style="color:var(--red);border-color:#FECACA">🗑 Reset</button>
+      <button class="btn btn-secondary btn-sm" onclick="onClearData()" title="Supprimer toutes les données locales" style="color:var(--red);border-color:#FECACA;flex-shrink:0">🗑 Reset</button>
     </div>
   </div>
 
@@ -4488,22 +4579,51 @@ function onAdjustStock(id,d)   { adjustStock(id,d).catch(e => { showNotif('⚠ E
 function onAdjustStockCustom(id){ adjustStockCustom(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onRemoveArticlePhoto(id){ removeArticlePhoto(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onClearData()         { clearData().catch(e => console.error(e)); }
-// ── SIDEBAR AUTO-HIDE EN PLEIN ÉCRAN ──────────────────────────────────────
+// ── SIDEBAR : PWA fullscreen + drawer mobile ──────────────────────────────
 function toggleSidebar() {
-  const sidebar = document.querySelector('.sidebar');
-  sidebar.classList.toggle('open');
+  // Mode PWA fullscreen uniquement (languette latérale)
+  const sidebar = document.getElementById('mainSidebar');
+  if (sidebar) sidebar.classList.toggle('open');
 }
 
-// Ferme la sidebar si on clique en dehors (en plein écran)
+function openMobileMenu() {
+  const sidebar = document.getElementById('mainSidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar) sidebar.classList.add('open');
+  if (overlay) overlay.classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMobileMenu() {
+  const sidebar = document.getElementById('mainSidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar) sidebar.classList.remove('open');
+  if (overlay) overlay.classList.remove('visible');
+  document.body.style.overflow = '';
+}
+
+// Ferme la sidebar mobile au clic sur un nav-item ou une crèche
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.nav-item, .creche-badge').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (window.innerWidth <= 768) closeMobileMenu();
+    });
+  });
+});
+
+// Ferme la sidebar si on clique en dehors (PWA plein écran uniquement)
 document.addEventListener('click', (e) => {
-  const sidebar = document.querySelector('.sidebar');
+  const sidebar = document.getElementById('mainSidebar');
   const trigger = document.getElementById('sidebarTrigger');
-  if (
-    sidebar.classList.contains('open') &&
-    !sidebar.contains(e.target) &&
-    e.target !== trigger
-  ) {
-    sidebar.classList.remove('open');
+  if (!sidebar) return;
+  if (window.matchMedia('(display-mode: fullscreen)').matches) {
+    if (
+      sidebar.classList.contains('open') &&
+      !sidebar.contains(e.target) &&
+      e.target !== trigger
+    ) {
+      sidebar.classList.remove('open');
+    }
   }
 });
 // Lancer l'app
