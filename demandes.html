@@ -733,30 +733,29 @@ async function saveFirstPassword(){
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';
 
   try{
-    // 1. Re-connecter avec les credentials provisoires pour garantir une session fraîche
-    if(_loginCredentials.email && _loginCredentials.password){
-      await sb.auth.signInWithPassword({email:_loginCredentials.email,password:_loginCredentials.password});
-    }
-    // 2. Mettre à jour le mot de passe Supabase Auth
-    const{error:authErr}=await sb.auth.updateUser({password:pwd});
-    if(authErr){
-      throw authErr;
-    }
+    // 1. Changer le mot de passe via Edge Function (service_role, pas besoin de session active)
+    const userId=currentUser?.id;
+    if(!userId) throw new Error('Utilisateur non identifié');
+    const ok=await callFn('reset-referent-password',{user_id:userId,password:pwd});
+    if(!ok) throw new Error('Impossible de mettre à jour le mot de passe');
 
     // 2. Marquer must_change_password=false et effacer temp_password en base
-    const{error:dbErr}=await sb.from('referents')
+    await sb.from('referents')
       .update({must_change_password:false,temp_password:null})
       .eq('id',currentProfile.id);
-    if(dbErr)console.warn('Erreur mise à jour referent:',dbErr.message);
     currentProfile.must_change_password=false;
     currentProfile.temp_password=null;
 
-    // 3. Effacer les credentials mémorisés
+    // 3. Effacer les credentials mémorisés et flag
     _loginCredentials={email:'',password:''};
-    // 4. Passer en mode "ne pas re-déclencher showFirstLoginForm sur le prochain onAuthStateChange"
     _skipFirstLogin=true;
 
-    // 4. Afficher l'app
+    // 4. Re-connecter avec le nouveau mot de passe pour actualiser la session
+    if(_loginCredentials.email){
+      await sb.auth.signInWithPassword({email:_loginCredentials.email,password:pwd});
+    }
+
+    // 5. Afficher l'app
     document.getElementById('first-login-form').style.display='none';
     document.getElementById('login-wrap').style.display='none';
     document.getElementById('app-wrap').style.display='block';
