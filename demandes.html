@@ -546,6 +546,7 @@ const LOGO_B64="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAAD8CAYAAABpRJ
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
+let _loginCredentials={email:'',password:''};
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,weekOffset=0,currentPresenceSlot='matin',searchTerm='';
 let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[];
 
@@ -650,6 +651,7 @@ async function doLogin(){
     err.textContent='Délai dépassé. Vérifiez votre connexion et réessayez.';
     err.style.display='block';
   },12000);
+  _loginCredentials={email,password:pwd};
   const{error}=await sb.auth.signInWithPassword({email,password:pwd});
   if(error){
     clearLoginTimeout();
@@ -731,17 +733,14 @@ async function saveFirstPassword(){
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';
 
   try{
-    // 1. Mettre à jour le mot de passe Supabase Auth
+    // 1. Re-connecter avec les credentials provisoires pour garantir une session fraîche
+    if(_loginCredentials.email && _loginCredentials.password){
+      await sb.auth.signInWithPassword({email:_loginCredentials.email,password:_loginCredentials.password});
+    }
+    // 2. Mettre à jour le mot de passe Supabase Auth
     const{error:authErr}=await sb.auth.updateUser({password:pwd});
     if(authErr){
-      // Si erreur de session, tenter une re-connexion silencieuse puis réessayer
-      if(authErr.message.includes('session')||authErr.message.includes('token')||authErr.message.includes('expired')){
-        const{error:reErr}=await sb.auth.refreshSession();
-        if(!reErr){
-          const{error:retryErr}=await sb.auth.updateUser({password:pwd});
-          if(retryErr)throw retryErr;
-        } else throw authErr;
-      } else throw authErr;
+      throw authErr;
     }
 
     // 2. Marquer must_change_password=false et effacer temp_password en base
@@ -752,7 +751,9 @@ async function saveFirstPassword(){
     currentProfile.must_change_password=false;
     currentProfile.temp_password=null;
 
-    // 3. Passer en mode "ne pas re-déclencher showFirstLoginForm sur le prochain onAuthStateChange"
+    // 3. Effacer les credentials mémorisés
+    _loginCredentials={email:'',password:''};
+    // 4. Passer en mode "ne pas re-déclencher showFirstLoginForm sur le prochain onAuthStateChange"
     _skipFirstLogin=true;
 
     // 4. Afficher l'app
