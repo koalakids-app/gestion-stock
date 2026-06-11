@@ -998,7 +998,16 @@ async function saveRef(){
   closeModal('modal-ref-wrap');renderReferents();
 }
 async function deleteRef(id){if(!confirm('Supprimer ce référent ?'))return;await dbDelete('referents',id);cacheReferents=cacheReferents.filter(r=>r.id!==id);renderReferents();}
-async function sendLink(refId){const r=cacheReferents.find(x=>x.id===refId);if(!r?.email){alert('Pas d\'email.');return;}const creche=cacheCreches.find(c=>c.id===r.creche_id);const ok=await callFn('send-referent-link',{referent:{id:r.id,name:r.name,email:r.email,creche:creche?.name||''}});if(ok)showBanner('Lien envoyé à '+r.name+' !');else showBanner('Erreur envoi.','error');}
+async function sendLink(refId){
+  const r=cacheReferents.find(x=>x.id===refId);
+  if(!r?.email){alert('Pas d\'email.');return;}
+  // Utiliser Supabase natif pour envoyer un email de réinitialisation
+  const{error}=await sb.auth.resetPasswordForEmail(r.email,{
+    redirectTo:window.location.origin+window.location.pathname
+  });
+  if(error){showBanner('Erreur envoi : '+error.message,'error');}
+  else{showBanner('Email de connexion envoyé à '+r.name+' ('+r.email+') !');}
+}
 
 async function resetPassword(refId){
   const r=cacheReferents.find(x=>x.id===refId);
