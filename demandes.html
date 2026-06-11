@@ -709,7 +709,8 @@ function showApp(){
   document.getElementById('app-wrap').style.display='block';
   document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
   document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
-  updateBadges();renderCrecheTabs();
+  updateBadges();
+  showMain('demands'); // Activer l'onglet par défaut et déclencher le rendu
 }
 
 function showFirstLoginForm(){
@@ -789,8 +790,8 @@ async function saveFirstPassword(){
     if(unEl)unEl.textContent=currentProfile?.name||currentUser?.email||'';
     const subEl2=document.getElementById('login-sub');
     if(subEl2)subEl2.textContent='Suite de gestion pédagogique';
-    updateBadges();renderCrecheTabs();
-    // Bannière après un court délai pour s'assurer que l'app est affichée
+    updateBadges();
+    showMain('demands'); // Activer l'onglet et déclencher le rendu
     setTimeout(()=>showBanner('✅ Bienvenue '+(currentProfile?.name||'')+' ! Mot de passe sécurisé.'),200);
 
   }catch(e){
