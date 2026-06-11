@@ -541,7 +541,17 @@ window.addEventListener('DOMContentLoaded', function() {
     if(event==='PASSWORD_RECOVERY'){showPasswordResetForm();return;}
     if(session?.user){
       currentUser=session.user;
-      const{data}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
+      // 1) Recherche par user_id (cas normal)
+      let{data}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
+      // 2) Fallback : recherche par email si user_id non trouvé (comptes créés avant liaison)
+      if(!data && currentUser.email){
+        const res=await sb.from('referents').select('*').eq('email',currentUser.email).maybeSingle();
+        if(res.data){
+          data=res.data;
+          // Mise à jour silencieuse du user_id pour les prochaines connexions
+          await sb.from('referents').update({user_id:currentUser.id}).eq('id',data.id);
+        }
+      }
       currentProfile=data;
       isDirection=currentProfile?.role==='direction';
       await loadAllData();
