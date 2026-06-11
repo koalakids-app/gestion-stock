@@ -864,6 +864,8 @@ textarea { resize: vertical; min-height: 72px; }
   .form-grid { grid-template-columns: 1fr; }
   .modal-overlay { padding: 0; align-items: flex-end; }
   .modal-overlay.open { padding: 0; align-items: flex-end; }
+  .modal { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  #modal-add .modal { max-height: 95vh; }
   .modal { border-radius: 20px 20px 0 0; max-height: 92vh; width: 100%; max-width: 100% !important; animation: slideUpMobile 0.3s ease; }
   @keyframes slideUpMobile { from { transform: translateY(100%); } to { transform: translateY(0); } }
   .modal-body { padding: 16px; }
@@ -1446,21 +1448,39 @@ textarea { resize: vertical; min-height: 72px; }
         </div>
         <div class="form-group full">
           <label>Photo de l'article</label>
-          <div id="photo-upload-zone" class="photo-upload-zone" onclick="document.getElementById('f-photo').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
-            <input type="file" id="f-photo" accept="image/*" onchange="handlePhotoUpload(event)">
-            <div id="photo-placeholder">
-              <div class="photo-upload-icon">📷</div>
-              <div class="photo-upload-text">
-                <strong>Cliquez pour choisir une photo</strong>
-                <span>ou glissez-déposez ici · JPG, PNG, WEBP · Max 5 Mo</span>
-              </div>
+          <!-- Inputs fichier séparés : galerie + appareil photo -->
+          <input type="file" id="f-photo" accept="image/*" style="display:none" onchange="handlePhotoUpload(event)">
+          <input type="file" id="f-photo-camera" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoUpload(event)">
+
+          <!-- Aperçu photo si déjà sélectionnée -->
+          <div id="photo-preview-container" style="display:none;margin-bottom:10px">
+            <div class="photo-preview-wrap">
+              <img id="photo-preview-img" class="photo-preview" src="" alt="Aperçu">
+              <button class="photo-preview-remove" onclick="removePhoto(event)" title="Supprimer la photo">✕</button>
             </div>
-            <div id="photo-preview-container" style="display:none">
-              <div class="photo-preview-wrap">
-                <img id="photo-preview-img" class="photo-preview" src="" alt="Aperçu">
-                <button class="photo-preview-remove" onclick="removePhoto(event)" title="Supprimer la photo">✕</button>
-              </div>
-              <div style="margin-top:8px;font-size:11px;color:var(--ink3)" id="photo-filename"></div>
+            <div style="margin-top:6px;font-size:11px;color:var(--ink3)" id="photo-filename"></div>
+          </div>
+
+          <!-- Boutons de sélection -->
+          <div id="photo-placeholder" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" onclick="document.getElementById('f-photo').click()"
+              style="flex:1;min-width:120px;padding:12px 10px;border:2px dashed var(--border);border-radius:10px;background:var(--bg);cursor:pointer;font-size:13px;color:var(--ink2);display:flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;transition:border-color 0.2s"
+              onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+              🖼 Galerie / Fichier
+            </button>
+            <button type="button" onclick="document.getElementById('f-photo-camera').click()"
+              style="flex:1;min-width:120px;padding:12px 10px;border:2px dashed var(--border);border-radius:10px;background:var(--bg);cursor:pointer;font-size:13px;color:var(--ink2);display:flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;transition:border-color 0.2s"
+              onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+              📷 Appareil photo
+            </button>
+          </div>
+
+          <!-- Zone drag & drop desktop -->
+          <div id="photo-upload-zone" class="photo-upload-zone" style="margin-top:8px;display:flex;align-items:center;justify-content:center"
+               ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)"
+               onclick="document.getElementById('f-photo').click()">
+            <div style="font-size:12px;color:var(--ink3);text-align:center;padding:10px">
+              ou <strong style="color:var(--accent)">glissez-déposez</strong> une image ici (desktop)
             </div>
           </div>
         </div>
@@ -2209,7 +2229,8 @@ function openModal(type) {
     resetPhotoUpload();
   }
   document.getElementById(`modal-${type}`).classList.add('open');
-  document.body.style.overflow = 'hidden';
+  // Ne pas bloquer overflow sur body sur mobile (Android bug)
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 function editArticle(id) {
@@ -2245,12 +2266,17 @@ function editArticle(id) {
   }
 
   document.getElementById('modal-add').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
   document.body.style.overflow = '';
+  // Réinitialiser les inputs photo si on ferme le modal-add
+  if (id === 'modal-add') {
+    const fp = document.getElementById('f-photo'); if(fp) fp.value='';
+    const fc = document.getElementById('f-photo-camera'); if(fc) fc.value='';
+  }
 }
 
 function closeModalClick(e, id) {
@@ -3828,6 +3854,10 @@ let currentPhotoName = null;
 function handlePhotoUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
+  // Réinitialiser l'autre input pour éviter les doublons
+  const otherId = event.target.id === 'f-photo' ? 'f-photo-camera' : 'f-photo';
+  const other = document.getElementById(otherId);
+  if (other) other.value = '';
   processPhotoFile(file);
 }
 
@@ -3851,18 +3881,31 @@ function processPhotoFile(file) {
 }
 
 function showPhotoPreview(dataUrl, filename) {
-  document.getElementById('photo-placeholder').style.display = 'none';
-  document.getElementById('photo-preview-container').style.display = 'block';
-  document.getElementById('photo-preview-img').src = dataUrl;
-  document.getElementById('photo-filename').textContent = filename;
+  const ph = document.getElementById('photo-placeholder');
+  if (ph) ph.style.display = 'none';
+  const pz = document.getElementById('photo-upload-zone');
+  if (pz) pz.style.display = 'none';
+  const pc = document.getElementById('photo-preview-container');
+  if (pc) pc.style.display = 'block';
+  const pi = document.getElementById('photo-preview-img');
+  if (pi) pi.src = dataUrl;
+  const pf = document.getElementById('photo-filename');
+  if (pf) pf.textContent = filename;
 }
 
 function resetPhotoUpload() {
-  document.getElementById('photo-placeholder').style.display = 'block';
-  document.getElementById('photo-preview-container').style.display = 'none';
-  document.getElementById('photo-preview-img').src = '';
-  document.getElementById('photo-filename').textContent = '';
-  document.getElementById('f-photo').value = '';
+  const ph = document.getElementById('photo-placeholder');
+  if (ph) ph.style.display = 'flex';
+  const pc = document.getElementById('photo-preview-container');
+  if (pc) pc.style.display = 'none';
+  const pi = document.getElementById('photo-preview-img');
+  if (pi) pi.src = '';
+  const pf = document.getElementById('photo-filename');
+  if (pf) pf.textContent = '';
+  const fp = document.getElementById('f-photo');
+  if (fp) fp.value = '';
+  const fc = document.getElementById('f-photo-camera');
+  if (fc) fc.value = '';
   currentPhotoData = null;
   currentPhotoName = null;
 }
@@ -3870,6 +3913,8 @@ function resetPhotoUpload() {
 function removePhoto(event) {
   event.stopPropagation();
   resetPhotoUpload();
+  const pz = document.getElementById('photo-upload-zone');
+  if (pz) pz.style.display = 'flex';
   showNotif('🗑 Photo supprimée');
 }
 
