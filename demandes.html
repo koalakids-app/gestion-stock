@@ -741,11 +741,44 @@ async function saveFirstPassword(){
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';
 
   try{
-    // 1. Changer le mot de passe via Edge Function (service_role, pas besoin de session active)
+    // 1. Changer le mot de passe : Edge Function d'abord, sinon updateUser direct
     const userId=currentUser?.id;
     if(!userId) throw new Error('Utilisateur non identifié');
-    const ok=await callFn('reset-referent-password',{user_id:userId,password:pwd});
-    if(!ok) throw new Error('Impossible de mettre à jour le mot de passe');
+    
+    let pwdChanged=false;
+    // Stratégie A : Edge Function reset-referent-password
+    const fnResult=await callFn('reset-referent-password',{user_id:userId,password:pwd});
+    if(fnResult){
+      pwdChanged=true;
+      console.log('Mot de passe changé via Edge Function');
+    } else {
+      // Stratégie B : sb.auth.updateUser (nécessite session active)
+      console.log('Edge Function échouée, tentative updateUser...');
+      const{error:authErr}=await sb.auth.updateUser({password:pwd});
+      if(!authErr){
+        pwdChanged=true;
+        console.log('Mot de passe changé via updateUser');
+      } else {
+        // Stratégie C : re-connexion + updateUser
+        console.log('updateUser échoué, tentative re-connexion...',authErr.message);
+        if(_loginCredentials.email && _loginCredentials.password){
+          const{error:signInErr}=await sb.auth.signInWithPassword({
+            email:_loginCredentials.email,
+            password:_loginCredentials.password
+          });
+          if(!signInErr){
+            const{error:retryErr}=await sb.auth.updateUser({password:pwd});
+            if(!retryErr) pwdChanged=true;
+            else throw new Error('Impossible de mettre à jour le mot de passe: '+retryErr.message);
+          } else {
+            throw new Error('Session expirée. Reconnectez-vous et réessayez.');
+          }
+        } else {
+          throw new Error('Impossible de mettre à jour le mot de passe: '+authErr.message);
+        }
+      }
+    }
+    if(!pwdChanged) throw new Error('Impossible de mettre à jour le mot de passe');
 
     // 2. Marquer must_change_password=false et effacer temp_password en base
     await sb.from('referents')
@@ -1139,7 +1172,18 @@ async function importBackup(event){
   event.target.value='';
 }
 
-async function callFn(fn,body){try{const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});return r.ok;}catch{return false;}}
+async function callFn(fn,body){
+  try{
+    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
+      body:JSON.stringify(body)
+    });
+    let data=null;
+    try{data=await r.json();}catch(e){}
+    return r.ok?(data||true):false;
+  }catch(e){console.error('callFn',fn,e);return false;}
+}
 
 function openNotice() {
   document.getElementById('modal-notice').classList.add('open');
