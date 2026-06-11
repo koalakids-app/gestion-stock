@@ -585,9 +585,27 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 
 async function loadAllData(){
-  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants]=await Promise.all([
-    dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants')
-  ]);
+  if(isDirection){
+    // Direction : accès complet à tout
+    [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants]=await Promise.all([
+      dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants')
+    ]);
+  } else {
+    // Référent : accès uniquement à sa crèche
+    const cid=currentProfile?.creche_id;
+    if(!cid){
+      // Pas de crèche associée — accès vide
+      cacheCreches=[];cacheDemandes=[];cacheReferents=[];cacheIncidents=[];cacheEnfants=[];
+      return;
+    }
+    [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants]=await Promise.all([
+      dbSelect('creches',{id:cid}),
+      dbSelect('demandes',{creche_id:cid}),
+      dbSelect('referents',{creche_id:cid}),
+      dbSelect('incidents',{creche_id:cid}),
+      dbSelect('enfants',{creche_id:cid})
+    ]);
+  }
 }
 // SUPABASE HELPERS
 async function dbSelect(table,filters={}){let q=sb.from(table).select('*').order('created_at',{ascending:false});for(const[k,v]of Object.entries(filters))q=q.eq(k,v);const{data,error}=await q;if(error){console.warn(table,error);return[];}return data||[];}
@@ -659,7 +677,11 @@ function weekStart(){const n=new Date();const day=n.getDay();const diff=n.getDat
 function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
-function updateBadges(){const inc=cacheIncidents.filter(i=>!i.treated).length;const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}}
+function updateBadges(){
+  const myInc=isDirection?cacheIncidents:cacheIncidents.filter(i=>i.creche_id===currentProfile?.creche_id);
+  const inc=myInc.filter(i=>!i.treated).length;
+  const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}
+}
 
 function showMain(tab){
   ['demands','incidents','presence','referents','planning','dashboard'].forEach(t=>{
@@ -841,7 +863,10 @@ function renderIncidents(){
   const si={grave:'🔴',leger:'🟠',info:'ℹ️'};
   list.innerHTML=filtered.map(i=>{const creche=cacheCreches.find(c=>c.id===i.creche_id);return'<div class="incident-card '+i.severity+'"><div style="font-size:22px;flex-shrink:0">'+si[i.severity]+'</div><div class="inc-meta"><div class="inc-child"><i class="ti ti-user" style="font-size:11px"></i> '+(i.child_name||'Enfant non précisé')+(creche?' — '+creche.name:'')+'</div><div class="inc-title">'+(i.type||'')+' · '+(i.incident_date||'')+' '+(i.incident_time?'à '+i.incident_time:'')+'</div><div class="inc-body" style="margin-top:4px">'+(i.description||'—')+'</div>'+(i.actions?'<div style="margin-top:6px;font-size:12px;color:var(--green);background:var(--green-light);border-radius:6px;padding:4px 8px"><strong>Actions :</strong> '+i.actions+'</div>':'')+'<div class="inc-foot"><span class="badge" style="background:'+(i.severity==='grave'?'var(--red-light)':i.severity==='leger'?'var(--orange-light)':'var(--blue-light)')+';color:'+(i.severity==='grave'?'#c0392b':i.severity==='leger'?'var(--orange-dark)':'var(--blue)')+'">'+({grave:'Grave',leger:'Léger',info:'Information'}[i.severity]||i.severity)+'</span>'+(i.reporter?'<span class="meta-txt">'+i.reporter+'</span>':'')+(i.treated?'<span class="badge b-traite">✅ Traité</span>':'<span class="badge b-attente">⏳ En cours</span>')+'</div></div><div class="dactions"><button class="ibtn" onclick="toggleIncident(\''+i.id+'\','+i.treated+')"><i class="ti ti-'+(i.treated?'rotate-clockwise':'check')+'"></i></button>'+(isDirection?'<button class="ibtn del" onclick="deleteIncident(\''+i.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';}).join('');
 }
-function openIncidentModal(){document.getElementById('inc-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('inc-date').value=todayStr();document.getElementById('inc-time').value=new Date().toTimeString().slice(0,5);['inc-child','inc-desc','inc-actions','inc-reporter'].forEach(id=>document.getElementById(id).value='');document.getElementById('modal-incident-wrap').classList.add('open');}
+function openIncidentModal(){
+  // Pour les référents : seulement leur crèche dans le select
+  const crechesDispos=isDirection?cacheCreches:cacheCreches.filter(c=>c.id===currentProfile?.creche_id);
+  document.getElementById('inc-creche').innerHTML='<option value="">-- Choisir --</option>'+crechesDispos.map(c=>'<option value="'+c.id+'"'+(c.id===currentProfile?.creche_id?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('inc-date').value=todayStr();document.getElementById('inc-time').value=new Date().toTimeString().slice(0,5);['inc-child','inc-desc','inc-actions','inc-reporter'].forEach(id=>document.getElementById(id).value='');document.getElementById('modal-incident-wrap').classList.add('open');}
 async function saveIncident(){const desc=document.getElementById('inc-desc').value.trim();if(!desc){alert('Description requise.');return;}const row={creche_id:document.getElementById('inc-creche').value,child_name:document.getElementById('inc-child').value.trim(),incident_date:document.getElementById('inc-date').value,incident_time:document.getElementById('inc-time').value,type:document.getElementById('inc-type').value,severity:document.getElementById('inc-severity').value,description:desc,actions:document.getElementById('inc-actions').value.trim(),reporter:document.getElementById('inc-reporter').value.trim(),treated:false};const saved=await dbInsert('incidents',row);if(saved){cacheIncidents.unshift(saved);updateBadges();showBanner('Incident enregistré.');closeModal('modal-incident-wrap');renderIncidents();}else showBanner('Erreur.','error');}
 async function toggleIncident(id,treated){const ok=await dbUpdate('incidents',id,{treated:!treated});if(ok){const i=cacheIncidents.find(x=>x.id===id);if(i)i.treated=!treated;updateBadges();renderIncidents();}}
 async function deleteIncident(id){if(!confirm('Supprimer ?'))return;await dbDelete('incidents',id);cacheIncidents=cacheIncidents.filter(i=>i.id!==id);updateBadges();renderIncidents();}
@@ -921,6 +946,7 @@ function delEvent(id,key){localStorage.setItem(key,JSON.stringify(JSON.parse(loc
 // DASHBOARD
 function renderDashboard(){
   document.getElementById('dash-date').textContent='Mis à jour le '+new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  // Pour les référents, les caches sont déjà filtrés à leur crèche
   const totalD=cacheDemandes.length,urgentD=cacheDemandes.filter(d=>d.priority==='urgent'&&d.status==='attente').length,incNT=cacheIncidents.filter(i=>!i.treated).length,incGrave=cacheIncidents.filter(i=>i.severity==='grave').length;
   let alerts='';
   if(urgentD>0)alerts+='<div class="alert-item"><i class="ti ti-alert-triangle" style="font-size:16px;flex-shrink:0"></i> <strong>'+urgentD+' demande(s) urgente(s)</strong> en attente</div>';
