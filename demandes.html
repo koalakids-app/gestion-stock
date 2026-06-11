@@ -468,7 +468,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fg"><label class="flabel">Crèche rattachée</label><select class="finput" id="r-creche"><option value="">-- Choisir --</option></select></div>
     <div class="fg"><label class="flabel">Poste</label><input class="finput" id="r-poste" placeholder="Éducatrice de jeunes enfants"/></div>
-    <div class="fg"><label class="flabel">Mot de passe provisoire</label><input class="finput" id="r-pwd" type="password" placeholder="Min. 6 caractères"/></div>
+    <div class="fg" id="r-pwd-fg"><label class="flabel">Mot de passe provisoire</label>
+      <div style="position:relative">
+        <input class="finput" id="r-pwd" type="text" placeholder="Min. 6 caractères" autocomplete="off" style="padding-right:38px"/>
+        <span title="Copier" onclick="navigator.clipboard.writeText(document.getElementById('r-pwd').value);showBanner('Copié !');" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:15px;opacity:0.5">📋</span>
+      </div>
+      <div id="r-pwd-hint" style="font-size:11px;color:var(--ink3);margin-top:4px;display:none">Mot de passe provisoire — le référent devra le changer à sa première connexion</div>
+    </div>
     <div class="info-box"><i class="ti ti-mail" style="font-size:15px"></i> Un compte de connexion sera créé pour ce référent.</div>
     <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-ref-wrap')">Annuler</button><button class="btn-primary" onclick="saveRef()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
@@ -716,8 +722,8 @@ async function saveFirstPassword(){
     btn.disabled=false;btn.innerHTML='<i class="ti ti-shield-check"></i> Sécuriser mon compte';
     return;
   }
-  // 2. Marquer must_change_password = false dans referents
-  await sb.from('referents').update({must_change_password:false}).eq('id',currentProfile.id);
+  // 2. Marquer must_change_password = false et effacer temp_password
+  await sb.from('referents').update({must_change_password:false,temp_password:null}).eq('id',currentProfile.id);
   currentProfile.must_change_password=false;
   // 3. Ouvrir l'app normalement
   document.getElementById('first-login-form').style.display='none';
@@ -885,17 +891,43 @@ async function renderReferents(){
   const grid=document.getElementById('ref-grid');if(!grid)return;
   const refs=cacheReferents.filter(r=>r.role==='referent');
   if(!refs.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-users"></i><p>Aucun référent.</p></div>';return;}
-  grid.innerHTML=refs.map(r=>{const creche=cacheCreches.find(c=>c.id===r.creche_id);const initials=r.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);return'<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name">'+r.name+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+(r.poste||'Référent')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div><div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+(r.email||'—')+'</div></div></div><div class="ref-actions"><button class="btn-primary" style="font-size:12px" onclick="sendLink(\''+r.id+'\')"><i class="ti ti-link" style="font-size:12px"></i> Envoyer le lien</button><button class="btn-sm" style="font-size:12px" title="Envoyer un email de réinitialisation du mot de passe" onclick="resetPassword(\''+r.id+'\')"><i class="ti ti-key" style="font-size:12px"></i> Réinitialiser MDP</button><button class="ibtn" onclick="editRef(\''+r.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteRef(\''+r.id+'\')"><i class="ti ti-trash"></i></button></div></div>';}).join('');
+  grid.innerHTML=refs.map(r=>{const creche=cacheCreches.find(c=>c.id===r.creche_id);const initials=r.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);return'<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name">'+r.name+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+(r.poste||'Référent')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div><div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+(r.email||'—')+(r.must_change_password&&r.temp_password?' <span style="font-size:11px;color:#555;background:#f5f5f5;border-radius:4px;padding:1px 5px">🔑 '+r.temp_password+'</span>':'')+'</div></div></div><div class="ref-actions"><button class="btn-primary" style="font-size:12px" onclick="sendLink(\''+r.id+'\')"><i class="ti ti-link" style="font-size:12px"></i> Envoyer le lien</button><button class="btn-sm" style="font-size:12px" title="Envoyer un email de réinitialisation du mot de passe" onclick="resetPassword(\''+r.id+'\')"><i class="ti ti-key" style="font-size:12px"></i> Réinitialiser MDP</button><button class="ibtn" onclick="editRef(\''+r.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteRef(\''+r.id+'\')"><i class="ti ti-trash"></i></button></div></div>';}).join('');
 }
 function openRefModal(){editingRefId=null;['r-name','r-email','r-poste','r-pwd'].forEach(id=>document.getElementById(id).value='');document.getElementById('r-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');document.getElementById('modal-ref-title').textContent='Ajouter un référent';document.getElementById('modal-ref-wrap').classList.add('open');}
-function editRef(id){const r=cacheReferents.find(x=>x.id===id);if(!r)return;editingRefId=id;document.getElementById('r-name').value=r.name;document.getElementById('r-email').value=r.email||'';document.getElementById('r-poste').value=r.poste||'';document.getElementById('r-pwd').value='';document.getElementById('r-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===r.creche_id?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('modal-ref-title').textContent='Modifier le référent';document.getElementById('modal-ref-wrap').classList.add('open');}
+function editRef(id){
+  const r=cacheReferents.find(x=>x.id===id);if(!r)return;
+  editingRefId=id;
+  document.getElementById('r-name').value=r.name;
+  document.getElementById('r-email').value=r.email||'';
+  document.getElementById('r-poste').value=r.poste||'';
+  const pwdField=document.getElementById('r-pwd');
+  const pwdHint=document.getElementById('r-pwd-hint');
+  if(r.must_change_password && r.temp_password){
+    pwdField.value=r.temp_password;
+    pwdField.placeholder='Laisser vide pour garder ce mot de passe';
+    if(pwdHint)pwdHint.style.display='block';
+  } else {
+    pwdField.value='';
+    pwdField.placeholder=r.must_change_password?'Nouveau mot de passe provisoire':'Référent a changé son mot de passe';
+    if(pwdHint)pwdHint.style.display='none';
+  }
+  document.getElementById('r-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===r.creche_id?' selected':'')+'>'+c.name+'</option>').join('');
+  document.getElementById('modal-ref-title').textContent='Modifier le référent';
+  document.getElementById('modal-ref-wrap').classList.add('open');
+}
 async function saveRef(){
   const name=document.getElementById('r-name').value.trim(),email=document.getElementById('r-email').value.trim(),pwd=document.getElementById('r-pwd').value;
   if(!name||!email){alert('Nom et email requis.');return;}
   if(!editingRefId&&(!pwd||pwd.length<6)){alert('Mot de passe requis (min. 6 caractères).');return;}
+  const newPwd=document.getElementById('r-pwd').value.trim();
   const row={name,email,poste:document.getElementById('r-poste').value.trim(),creche_id:document.getElementById('r-creche').value,role:'referent'};
+  if(editingRefId && newPwd && newPwd.length>=6){
+    row.temp_password=newPwd;row.must_change_password=true;
+    const refUserId=cacheReferents.find(x=>x.id===editingRefId)?.user_id;
+    if(refUserId) await callFn('reset-referent-password',{user_id:refUserId,password:newPwd});
+  }
   if(editingRefId){await dbUpdate('referents',editingRefId,row);const r=cacheReferents.find(x=>x.id===editingRefId);if(r)Object.assign(r,row);showBanner('Référent modifié !');}
-  else{const ok=await callFn('create-referent',{email,password:pwd,name,creche_id:row.creche_id,poste:row.poste,must_change_password:true});if(ok){await loadAllData();showBanner('Référent '+name+' créé !');}else showBanner('Erreur création compte.','error');}
+  else{const ok=await callFn('create-referent',{email,password:pwd,name,creche_id:row.creche_id,poste:row.poste,must_change_password:true,temp_password:pwd});if(ok){await loadAllData();showBanner('Référent '+name+' créé !');}else showBanner('Erreur création compte.','error');}
   closeModal('modal-ref-wrap');renderReferents();
 }
 async function deleteRef(id){if(!confirm('Supprimer ce référent ?'))return;await dbDelete('referents',id);cacheReferents=cacheReferents.filter(r=>r.id!==id);renderReferents();}
