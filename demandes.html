@@ -632,6 +632,7 @@ async function dbUpdate(table,id,updates){const{error}=await sb.from(table).upda
 async function dbDelete(table,id){const{error}=await sb.from(table).delete().eq('id',id);if(error){console.warn('delete',table,error);return false;}return true;}
 
 let _loginTimeout=null;
+let _skipFirstLogin=false;
 function clearLoginTimeout(){
   if(_loginTimeout){clearTimeout(_loginTimeout);_loginTimeout=null;}
   const btn=document.getElementById('login-btn');
@@ -689,10 +690,11 @@ async function saveNewPassword(){
 function showApp(){
   document.getElementById('loading-screen').style.display='none';
   // Vérifier si première connexion (must_change_password)
-  if(!isDirection && currentProfile?.must_change_password){
+  if(!isDirection && currentProfile?.must_change_password && !_skipFirstLogin){
     showFirstLoginForm();
     return;
   }
+  _skipFirstLogin=false;
   document.getElementById('login-wrap').style.display='none';
   document.getElementById('app-wrap').style.display='block';
   document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
@@ -722,31 +724,55 @@ async function saveFirstPassword(){
   const pwd=document.getElementById('first-pwd').value;
   const conf=document.getElementById('first-pwd-confirm').value;
   const err=document.getElementById('login-err');
-  err.style.display='none';
+  err.style.display='none';err.textContent='';
   if(pwd.length<6){err.textContent='Le mot de passe doit faire au moins 6 caractères.';err.style.display='block';return;}
   if(pwd!==conf){err.textContent='Les mots de passe ne correspondent pas.';err.style.display='block';return;}
   const btn=document.getElementById('first-pwd-btn');
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';
-  // 1. Mettre à jour le mot de passe dans Supabase Auth
-  const{error}=await sb.auth.updateUser({password:pwd});
-  if(error){
-    err.textContent='Erreur : '+error.message;err.style.display='block';
-    btn.disabled=false;btn.innerHTML='<i class="ti ti-shield-check"></i> Sécuriser mon compte';
-    return;
+
+  try{
+    // 1. Mettre à jour le mot de passe Supabase Auth
+    const{error:authErr}=await sb.auth.updateUser({password:pwd});
+    if(authErr){
+      // Si erreur de session, tenter une re-connexion silencieuse puis réessayer
+      if(authErr.message.includes('session')||authErr.message.includes('token')||authErr.message.includes('expired')){
+        const{error:reErr}=await sb.auth.refreshSession();
+        if(!reErr){
+          const{error:retryErr}=await sb.auth.updateUser({password:pwd});
+          if(retryErr)throw retryErr;
+        } else throw authErr;
+      } else throw authErr;
+    }
+
+    // 2. Marquer must_change_password=false et effacer temp_password en base
+    const{error:dbErr}=await sb.from('referents')
+      .update({must_change_password:false,temp_password:null})
+      .eq('id',currentProfile.id);
+    if(dbErr)console.warn('Erreur mise à jour referent:',dbErr.message);
+    currentProfile.must_change_password=false;
+    currentProfile.temp_password=null;
+
+    // 3. Passer en mode "ne pas re-déclencher showFirstLoginForm sur le prochain onAuthStateChange"
+    _skipFirstLogin=true;
+
+    // 4. Afficher l'app
+    document.getElementById('first-login-form').style.display='none';
+    document.getElementById('login-wrap').style.display='none';
+    document.getElementById('app-wrap').style.display='block';
+    document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
+    const unEl=document.getElementById('user-name');
+    if(unEl)unEl.textContent=currentProfile?.name||currentUser?.email||'';
+    document.getElementById('login-sub').textContent='Suite de gestion pédagogique';
+    updateBadges();renderCrecheTabs();
+    showBanner('✅ Mot de passe sécurisé ! Bienvenue '+(currentProfile?.name||'')+' !');
+
+  }catch(e){
+    console.error('saveFirstPassword erreur:',e);
+    err.textContent='Erreur : '+(e.message||String(e));
+    err.style.display='block';
+    btn.disabled=false;
+    btn.innerHTML='<i class="ti ti-shield-check"></i> Sécuriser mon compte';
   }
-  // 2. Marquer must_change_password = false et effacer temp_password
-  await sb.from('referents').update({must_change_password:false,temp_password:null}).eq('id',currentProfile.id);
-  currentProfile.must_change_password=false;
-  // 3. Ouvrir l'app normalement
-  document.getElementById('first-login-form').style.display='none';
-  document.getElementById('login-wrap').style.display='none';
-  document.getElementById('app-wrap').style.display='block';
-  document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
-  const unEl=document.getElementById('user-name');
-  if(unEl)unEl.textContent=currentProfile?.name||currentUser?.email||'';
-  document.getElementById('login-sub').textContent='Suite de gestion pédagogique';
-  updateBadges();renderCrecheTabs();
-  showBanner('Mot de passe mis à jour ✅ Bienvenue '+(currentProfile?.name||'')+' !');
 }
 
 function todayStr(){return new Date().toISOString().slice(0,10);}
