@@ -393,6 +393,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div><!-- end .app -->
 </div><!-- end #app-wrap -->
 
+<!-- Bouton aide flottant -->
+<button onclick="openNotice()" title="Aide & Notice d'utilisation"
+  style="position:fixed;bottom:24px;right:24px;width:48px;height:48px;border-radius:50%;background:var(--koala);color:#fff;border:none;cursor:pointer;font-size:20px;box-shadow:0 4px 16px rgba(61,53,128,0.35);z-index:90;display:flex;align-items:center;justify-content:center;transition:transform .15s"
+  onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">?</button>
+
+<!-- Modal notice -->
+<div class="modal-overlay" id="modal-notice" onclick="if(event.target===this)closeModal('modal-notice')" style="z-index:1200">
+  <div class="modal" style="max-width:680px;height:82vh;display:flex;flex-direction:column">
+    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:0;overflow-x:auto;flex:1">
+        <button class="notice-tab active" onclick="switchNoticeTab('demandes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--koala);margin-bottom:-1px;color:var(--koala);white-space:nowrap">💬 Demandes</button>
+        <button class="notice-tab" onclick="switchNoticeTab('incidents',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🚨 Incidents</button>
+        <button class="notice-tab" onclick="switchNoticeTab('presences',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👥 Présences</button>
+        <button class="notice-tab" onclick="switchNoticeTab('planning',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📅 Planning</button>
+        <button class="notice-tab" onclick="switchNoticeTab('comptes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👤 Comptes</button>
+      </div>
+      <button onclick="closeModal('modal-notice')" style="width:28px;height:28px;background:#F0EDE8;border:none;border-radius:50%;cursor:pointer;font-size:13px;flex-shrink:0;margin-left:12px">✕</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:22px" id="notice-content-dem"></div>
+    <div style="padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end">
+      <button onclick="closeModal('modal-notice')" style="padding:8px 18px;background:#F0EDE8;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODALS -->
 <div class="overlay" id="modal-demand-wrap">
   <div class="modal">
@@ -915,6 +940,132 @@ async function importBackup(event){
 }
 
 async function callFn(fn,body){try{const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});return r.ok;}catch{return false;}}
+
+function openNotice() {
+  switchNoticeTab('demandes', document.querySelector('.notice-tab'));
+  document.getElementById('modal-notice').classList.add('open');
+}
+function switchNoticeTab(tab, btn) {
+  document.querySelectorAll('.notice-tab').forEach(b => {
+    b.style.borderBottomColor = 'transparent';
+    b.style.color = '#aaa';
+  });
+  if (btn) { btn.style.borderBottomColor = 'var(--koala)'; btn.style.color = 'var(--koala)'; }
+  const el = document.getElementById('notice-content-dem');
+  if (el) el.innerHTML = NOTICE_DEM[tab] || '';
+}
+
+const NOTICE_DEM = {
+
+demandes: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">💬 Demandes et consignes</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
+  💡 Les demandes permettent aux référentes terrain de remonter des besoins, informations ou consignes à la direction.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📝 Créer une demande</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Cliquez sur <strong>+ Nouvelle demande</strong></li>
+  <li>Choisissez votre <strong>crèche</strong> et votre <strong>profil référent</strong></li>
+  <li>Renseignez le <strong>sujet</strong> et la <strong>description</strong> précise</li>
+  <li>Choisissez la <strong>priorité</strong> : 🔴 Urgent, Normal ou ℹ️ Info</li>
+  <li>Sélectionnez un <strong>thème</strong> (Matériel, Pédagogie, Administratif…)</li>
+  <li>Cliquez <strong>Envoyer</strong></li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">✅ Traiter une demande (Direction)</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Cliquez sur l'icône ✓ à droite de la demande pour la marquer <strong>Traitée</strong></li>
+  <li>Une demande traitée peut être réouverte en cliquant sur 🔄</li>
+  <li>Utilisez les <strong>filtres</strong> (Urgent, En attente, Traitées) pour trier l'affichage</li>
+  <li>Filtrez par <strong>crèche</strong> via les onglets en haut de la liste</li>
+</ol>
+<div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A">
+  ⚠ Les demandes <strong>urgentes</strong> apparaissent en tête de liste avec une bordure rouge. Un badge de notification s'affiche dans la navigation.
+</div>`,
+
+incidents: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🚨 Registre des incidents</h3>
+<div style="background:#FEF2F2;border-left:4px solid #DC2626;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#991B1B">
+  ⚠ Tout incident impliquant un enfant doit être consigné le jour même, même s'il semble bénin.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📋 Déclarer un incident</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Cliquez sur <strong>+ Déclarer un incident</strong></li>
+  <li>Indiquez le <strong>prénom de l'enfant</strong> concerné</li>
+  <li>Renseignez la <strong>date</strong> exacte de l'incident</li>
+  <li>Choisissez la <strong>gravité</strong> : 🔴 Grave, 🟠 Léger ou 🔵 Info</li>
+  <li>Décrivez précisément l'incident et les <strong>actions menées</strong></li>
+  <li>Cliquez <strong>Enregistrer</strong></li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔴 Niveaux de gravité</div>
+<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:18px">
+  <div style="background:#FEF2F2;border-radius:8px;padding:10px 14px;font-size:13px"><strong style="color:#DC2626">🔴 Grave</strong> — blessure nécessitant des soins, hospitalisation, déclaration obligatoire</div>
+  <div style="background:#FEF0E6;border-radius:8px;padding:10px 14px;font-size:13px"><strong style="color:#F47920">🟠 Léger</strong> — chute, bosse, morsure légère, parents prévenus</div>
+  <div style="background:#EFF6FF;border-radius:8px;padding:10px 14px;font-size:13px"><strong style="color:#2563EB">🔵 Info</strong> — dégradation matérielle, signalement préventif</div>
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">✅ Clôturer un incident</div>
+<div style="font-size:13px;color:#555;line-height:1.7">Cliquez sur l'icône ✓ pour marquer un incident comme <strong>Traité</strong>. Les incidents non traités restent en tête de liste avec un badge d'alerte dans la navigation.</div>`,
+
+presences: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👥 Feuille de présence</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
+  💡 La feuille de présence se remplit chaque matin et après-midi pour chaque enfant inscrit.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📅 Saisir les présences</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Sélectionnez la <strong>date</strong> en haut de la page</li>
+  <li>Choisissez l'onglet <strong>Matin</strong> ou <strong>Après-midi</strong></li>
+  <li>Pour chaque enfant, cliquez sur :<br>
+    <strong>✓</strong> Présent &nbsp;|&nbsp; <strong>½</strong> Demi-journée &nbsp;|&nbsp; <strong>✗</strong> Absent</li>
+  <li>La saisie est <strong>enregistrée automatiquement</strong></li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Ajouter un enfant</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Cliquez sur l'icône <strong>👤+</strong> en haut à droite pour ajouter un enfant à la liste. Renseignez son prénom, nom, date de naissance et crèche.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📤 Exporter</div>
+<div style="font-size:13px;color:#555;line-height:1.7">Le bouton <strong>Exporter</strong> génère un récapitulatif de présences pour la date sélectionnée, utile pour les transmissions administratives.</div>`,
+
+planning: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📅 Planning des intervenants</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
+  💡 Le planning affiche la semaine courante. Chaque référente peut y noter ses présences, absences, formations et réunions.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Ajouter un événement</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Cliquez directement sur une <strong>case du planning</strong> ou sur <strong>+ Ajouter</strong></li>
+  <li>Le jour et la demi-journée sont <strong>pré-remplis</strong> si vous cliquez sur une case</li>
+  <li>Indiquez le <strong>lieu / crèche</strong> concerné</li>
+  <li>Choisissez le <strong>type</strong> : Présence, Absent, Formation ou Réunion</li>
+  <li>Cliquez <strong>Enregistrer</strong></li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🗓 Navigation</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Utilisez les flèches <strong>← →</strong> pour naviguer d'une semaine à l'autre. La semaine en cours est affichée par défaut.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🎨 Légende des couleurs</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+  <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#3D3580;border-radius:3px;flex-shrink:0"></div> Présence</div>
+  <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#DC2626;border-radius:3px;flex-shrink:0"></div> Absent</div>
+  <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#2563EB;border-radius:3px;flex-shrink:0"></div> Formation</div>
+  <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#7C3AED;border-radius:3px;flex-shrink:0"></div> Réunion</div>
+</div>`,
+
+comptes: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👤 Gestion des comptes</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
+  💡 Chaque membre de l'équipe dispose d'un compte personnel. La direction a accès à toutes les crèches, les référentes uniquement à la leur.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔑 Se connecter</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Ouvrez l'application depuis le portail d'accueil</li>
+  <li>Saisissez votre <strong>email</strong> et <strong>mot de passe</strong></li>
+  <li>Cliquez <strong>Se connecter</strong></li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔒 Mot de passe oublié</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Cliquez sur <strong>Mot de passe oublié ?</strong> sur l'écran de connexion. Un lien de réinitialisation sera envoyé à votre adresse email.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🏠 Navigation entre applications</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:12px">Utilisez le bouton <strong>← Accueil</strong> en haut à gauche pour revenir au portail et accéder à l'application Stock pédagogique.</div>
+<div style="background:#F0FDF4;border-left:4px solid #16A34A;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#065F46">
+  ✅ Votre session reste active pendant 30 jours. Vous n'avez pas besoin de vous reconnecter à chaque visite.
+</div>`
+
+};
 </script>
 </body>
 </html>
