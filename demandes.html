@@ -541,21 +541,42 @@ window.addEventListener('DOMContentLoaded', function() {
     if(event==='PASSWORD_RECOVERY'){showPasswordResetForm();return;}
     if(session?.user){
       currentUser=session.user;
-      // 1) Recherche par user_id (cas normal)
-      let{data}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
-      // 2) Fallback : recherche par email si user_id non trouvé (comptes créés avant liaison)
-      if(!data && currentUser.email){
-        const res=await sb.from('referents').select('*').eq('email',currentUser.email).maybeSingle();
-        if(res.data){
-          data=res.data;
-          // Mise à jour silencieuse du user_id pour les prochaines connexions
-          await sb.from('referents').update({user_id:currentUser.id}).eq('id',data.id);
+      try{
+        // 1) Recherche par user_id (cas normal)
+        let profileData=null;
+        const r1=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
+        if(r1.error) console.warn('RLS/erreur user_id lookup:',r1.error.message);
+        profileData=r1.data||null;
+
+        // 2) Fallback par email si user_id absent
+        if(!profileData && currentUser.email){
+          const r2=await sb.from('referents').select('*').eq('email',currentUser.email).maybeSingle();
+          if(r2.error) console.warn('RLS/erreur email lookup:',r2.error.message);
+          if(r2.data){
+            profileData=r2.data;
+            // Réparer user_id en base silencieusement
+            const upd=await sb.from('referents').update({user_id:currentUser.id}).eq('id',profileData.id);
+            if(upd.error) console.warn('Erreur update user_id:',upd.error.message);
+          }
         }
+
+        currentProfile=profileData;
+        isDirection=currentProfile?.role==='direction';
+        await loadAllData();
+        showApp();
+      }catch(err){
+        console.error('Erreur critique onAuthStateChange:',err);
+        const errEl=document.getElementById('login-err');
+        errEl.textContent='Erreur : '+err.message+' — rechargez la page ou contactez la direction.';
+        errEl.style.display='block';
+        document.getElementById('loading-screen').style.display='none';
+        document.getElementById('login-wrap').style.display='block';
+        document.getElementById('app-wrap').style.display='none';
+        document.getElementById('login-form').style.display='block';
+        const btn=document.getElementById('login-btn');
+        if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';}
+        await sb.auth.signOut();
       }
-      currentProfile=data;
-      isDirection=currentProfile?.role==='direction';
-      await loadAllData();
-      showApp();
     } else {
       currentUser=null;currentProfile=null;isDirection=false;
       showLogin();
@@ -580,8 +601,19 @@ async function doLogin(){
   err.style.display='none';
   if(!email||!pwd){err.textContent='Email et mot de passe requis.';err.style.display='block';return;}
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Connexion…';
-  const{error}=await sb.auth.signInWithPassword({email,password:pwd});
-  if(error){err.textContent='Email ou mot de passe incorrect.';err.style.display='block';btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';}
+  const loginTimeout=setTimeout(()=>{
+    btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
+    err.textContent='Délai dépassé. Vérifiez votre connexion internet et réessayez.';
+    err.style.display='block';
+  },10000);
+  const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
+  if(error){
+    clearTimeout(loginTimeout);
+    err.textContent='Email ou mot de passe incorrect.';
+    err.style.display='block';
+    btn.disabled=false;
+    btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
+  }
 }
 async function doLogout(){if(!confirm('Se déconnecter ?'))return;await sb.auth.signOut();}
 
