@@ -558,6 +558,7 @@ window.addEventListener('DOMContentLoaded', function() {
     if(event==='PASSWORD_RECOVERY'){showPasswordResetForm();return;}
     if(session?.user){
       currentUser=session.user;
+      clearLoginTimeout(); // annuler le timeout dès que l'auth est confirmée
       try{
         // 1) Recherche par user_id (cas normal)
         let profileData=null;
@@ -630,24 +631,29 @@ async function dbInsert(table,row){const{data,error}=await sb.from(table).insert
 async function dbUpdate(table,id,updates){const{error}=await sb.from(table).update(updates).eq('id',id);if(error){console.warn('update',table,error);return false;}return true;}
 async function dbDelete(table,id){const{error}=await sb.from(table).delete().eq('id',id);if(error){console.warn('delete',table,error);return false;}return true;}
 
+let _loginTimeout=null;
+function clearLoginTimeout(){
+  if(_loginTimeout){clearTimeout(_loginTimeout);_loginTimeout=null;}
+  const btn=document.getElementById('login-btn');
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';}
+}
 async function doLogin(){
   const email=document.getElementById('login-email').value.trim(),pwd=document.getElementById('login-pwd').value;
   const btn=document.getElementById('login-btn'),err=document.getElementById('login-err');
   err.style.display='none';
   if(!email||!pwd){err.textContent='Email et mot de passe requis.';err.style.display='block';return;}
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Connexion…';
-  const loginTimeout=setTimeout(()=>{
-    btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
-    err.textContent='Délai dépassé. Vérifiez votre connexion internet et réessayez.';
+  if(_loginTimeout)clearTimeout(_loginTimeout);
+  _loginTimeout=setTimeout(()=>{
+    clearLoginTimeout();
+    err.textContent='Délai dépassé. Vérifiez votre connexion et réessayez.';
     err.style.display='block';
-  },10000);
-  const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
+  },12000);
+  const{error}=await sb.auth.signInWithPassword({email,password:pwd});
   if(error){
-    clearTimeout(loginTimeout);
+    clearLoginTimeout();
     err.textContent='Email ou mot de passe incorrect.';
     err.style.display='block';
-    btn.disabled=false;
-    btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
   }
 }
 async function doLogout(){if(!confirm('Se déconnecter ?'))return;await sb.auth.signOut();}
@@ -695,15 +701,21 @@ function showApp(){
 }
 
 function showFirstLoginForm(){
+  // Masquer tous les formulaires de la login-box
+  document.getElementById('loading-screen').style.display='none';
   document.getElementById('login-wrap').style.display='block';
   document.getElementById('app-wrap').style.display='none';
   document.getElementById('login-form').style.display='none';
   document.getElementById('reset-form').style.display='none';
   document.getElementById('first-login-form').style.display='block';
-  document.getElementById('login-sub').textContent='Bienvenue, '+( currentProfile?.name||'')+'';
-  document.getElementById('login-err').style.display='none';
+  // Masquer toute erreur résiduelle
+  const errEl=document.getElementById('login-err');
+  errEl.style.display='none';errEl.textContent='';
+  // Personnaliser le sous-titre
+  document.getElementById('login-sub').textContent='Bienvenue '+(currentProfile?.name||'')+ ' !';
   document.getElementById('first-pwd').value='';
   document.getElementById('first-pwd-confirm').value='';
+  document.getElementById('first-pwd').focus();
 }
 
 async function saveFirstPassword(){
@@ -730,10 +742,11 @@ async function saveFirstPassword(){
   document.getElementById('login-wrap').style.display='none';
   document.getElementById('app-wrap').style.display='block';
   document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
-  document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
+  const unEl=document.getElementById('user-name');
+  if(unEl)unEl.textContent=currentProfile?.name||currentUser?.email||'';
   document.getElementById('login-sub').textContent='Suite de gestion pédagogique';
   updateBadges();renderCrecheTabs();
-  showBanner('Mot de passe mis à jour ✅ Bienvenue '+( currentProfile?.name||'')+'  !');
+  showBanner('Mot de passe mis à jour ✅ Bienvenue '+(currentProfile?.name||'')+' !');
 }
 
 function todayStr(){return new Date().toISOString().slice(0,10);}
