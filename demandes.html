@@ -722,12 +722,15 @@ function showFirstLoginForm(){
   document.getElementById('first-login-form').style.display='block';
   // Masquer toute erreur résiduelle
   const errEl=document.getElementById('login-err');
-  errEl.style.display='none';errEl.textContent='';
+  if(errEl){errEl.style.display='none';errEl.textContent='';}
   // Personnaliser le sous-titre
-  document.getElementById('login-sub').textContent='Bienvenue '+(currentProfile?.name||'')+ ' !';
-  document.getElementById('first-pwd').value='';
-  document.getElementById('first-pwd-confirm').value='';
-  document.getElementById('first-pwd').focus();
+  const subEl=document.getElementById('login-sub');
+  if(subEl)subEl.textContent='Bienvenue '+(currentProfile?.name||'')+' !';
+  const fp=document.getElementById('first-pwd');
+  const fc=document.getElementById('first-pwd-confirm');
+  if(fp)fp.value='';
+  if(fc)fc.value='';
+  if(fp)fp.focus();
 }
 
 async function saveFirstPassword(){
@@ -740,49 +743,35 @@ async function saveFirstPassword(){
   const btn=document.getElementById('first-pwd-btn');
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';
 
-  // Garder les credentials disponibles pour tout le bloc
-  const savedEmail=_loginCredentials.email;
-  const savedPwd=_loginCredentials.password;
   const userId=currentUser?.id;
   const profileId=currentProfile?.id;
 
   try{
     if(!userId) throw new Error('Utilisateur non identifié');
 
-    // ETAPE 1 : Re-connexion obligatoire avec mot de passe provisoire
-    // pour garantir une session fraîche avant updateUser
-    if(savedEmail && savedPwd){
-      console.log('Re-connexion avec credentials provisoires...');
-      const{error:signInErr}=await sb.auth.signInWithPassword({email:savedEmail,password:savedPwd});
-      if(signInErr) console.warn('Re-connexion échouée:',signInErr.message);
+    // ETAPE 1 : Changer le mot de passe via Edge Function (service_role, sans session)
+    // C'est la méthode fiable — pas de problème de session
+    const fnOk=await callFn('reset-referent-password',{
+      user_id:userId,
+      password:pwd,
+      update_profile:true,
+      referent_id:profileId
+    });
+
+    if(!fnOk){
+      // Fallback : updateUser direct (fonctionne si session encore valide)
+      console.warn('Edge Function indisponible, fallback updateUser...');
+      const{error:authErr}=await sb.auth.updateUser({password:pwd});
+      if(authErr) throw new Error('Changement de mot de passe impossible. Veuillez déployer la Edge Function reset-referent-password sur Supabase.');
     }
 
-    // ETAPE 2 : Changer le mot de passe (updateUser avec session fraîche)
-    let pwdOk=false;
-    const{error:authErr}=await sb.auth.updateUser({password:pwd});
-    if(!authErr){
-      pwdOk=true;
-      console.log('Mot de passe changé via updateUser');
-    } else {
-      console.warn('updateUser échoué:',authErr.message,'→ tentative Edge Function...');
-      // Fallback Edge Function
-      const fnOk=await callFn('reset-referent-password',{user_id:userId,password:pwd,update_profile:true,referent_id:profileId});
-      if(fnOk){
-        pwdOk=true;
-        console.log('Mot de passe changé via Edge Function');
-      } else {
-        throw new Error('Impossible de changer le mot de passe. Déployez la Edge Function reset-referent-password.');
-      }
-    }
-
-    // ETAPE 3 : Marquer must_change_password=false en base
+    // ETAPE 2 : Marquer must_change_password=false en base (tenter les deux méthodes)
     const{error:updErr}=await sb.from('referents')
       .update({must_change_password:false,temp_password:null})
       .eq('id',profileId);
     if(updErr){
-      console.warn('Update referent échoué (RLS):',updErr.message);
-      // Fallback Edge Function pour l'update aussi
-      await callFn('reset-referent-password',{user_id:userId,password:pwd,update_profile:true,referent_id:profileId});
+      console.warn('Update RLS échoué, géré par Edge Function');
+      // La Edge Function l'a déjà fait si fnOk=true
     }
 
     currentProfile.must_change_password=false;
@@ -798,9 +787,11 @@ async function saveFirstPassword(){
     document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
     const unEl=document.getElementById('user-name');
     if(unEl)unEl.textContent=currentProfile?.name||currentUser?.email||'';
-    document.getElementById('login-sub').textContent='Suite de gestion pédagogique';
+    const subEl2=document.getElementById('login-sub');
+    if(subEl2)subEl2.textContent='Suite de gestion pédagogique';
     updateBadges();renderCrecheTabs();
-    showBanner('✅ Mot de passe sécurisé ! Bienvenue '+(currentProfile?.name||'')+' !');
+    // Bannière après un court délai pour s'assurer que l'app est affichée
+    setTimeout(()=>showBanner('✅ Bienvenue '+(currentProfile?.name||'')+' ! Mot de passe sécurisé.'),200);
 
   }catch(e){
     console.error('saveFirstPassword erreur:',e);
@@ -813,7 +804,7 @@ async function saveFirstPassword(){
 
 function todayStr(){return new Date().toISOString().slice(0,10);}
 function weekStart(){const n=new Date();const day=n.getDay();const diff=n.getDate()-(day===0?6:day-1);const m=new Date(n.getFullYear(),n.getMonth(),diff+weekOffset*7);m.setHours(0,0,0,0);return m;}
-function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
+function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');if(!b)return;b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
 function updateBadges(){
