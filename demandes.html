@@ -399,8 +399,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">?</button>
 
 <!-- Modal notice -->
-<div class="modal-overlay" id="modal-notice" onclick="if(event.target===this)closeModal('modal-notice')" style="z-index:1200">
-  <div class="modal" style="max-width:680px;height:82vh;display:flex;flex-direction:column">
+<div class="overlay" id="modal-notice" onclick="if(event.target===this)closeModal('modal-notice')" style="z-index:1200">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:680px;height:82vh;display:flex;flex-direction:column;border:1px solid #e0dff0;border-top:4px solid #3D3580;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px;border-bottom:1px solid var(--border)">
       <div style="display:flex;gap:0;overflow-x:auto;flex:1">
         <button class="notice-tab active" onclick="switchNoticeTab('demandes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--koala);margin-bottom:-1px;color:var(--koala);white-space:nowrap">💬 Demandes</button>
@@ -942,8 +942,8 @@ async function importBackup(event){
 async function callFn(fn,body){try{const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});return r.ok;}catch{return false;}}
 
 function openNotice() {
-  switchNoticeTab('demandes', document.querySelector('.notice-tab'));
   document.getElementById('modal-notice').classList.add('open');
+  switchNoticeTab('demandes', document.querySelector('.notice-tab'));
 }
 function switchNoticeTab(tab, btn) {
   document.querySelectorAll('.notice-tab').forEach(b => {
