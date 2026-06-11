@@ -585,18 +585,25 @@ window.addEventListener('DOMContentLoaded', function() {
         showApp();
       }catch(err){
         console.error('Erreur critique onAuthStateChange:',err);
+        // Si on est en première connexion, ne pas interrompre le flux
+        if(_skipFirstLogin) return;
         const errEl=document.getElementById('login-err');
-        errEl.textContent='Erreur : '+err.message+' — rechargez la page ou contactez la direction.';
-        errEl.style.display='block';
+        if(errEl){
+          errEl.textContent='Erreur : '+err.message+' — rechargez la page ou contactez la direction.';
+          errEl.style.display='block';
+        }
         document.getElementById('loading-screen').style.display='none';
         document.getElementById('login-wrap').style.display='block';
         document.getElementById('app-wrap').style.display='none';
         document.getElementById('login-form').style.display='block';
+        document.getElementById('first-login-form').style.display='none';
         const btn=document.getElementById('login-btn');
         if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';}
         await sb.auth.signOut();
       }
     } else {
+      // Ne pas réinitialiser si on est en cours de changement de mot de passe (première connexion)
+      if(_skipFirstLogin) return;
       currentUser=null;currentProfile=null;isDirection=false;
       showLogin();
     }
@@ -693,6 +700,7 @@ function showApp(){
   document.getElementById('loading-screen').style.display='none';
   // Vérifier si première connexion (must_change_password)
   if(!isDirection && currentProfile?.must_change_password && !_skipFirstLogin){
+    _skipFirstLogin=true; // bloquer immédiatement avant tout re-déclenchement
     showFirstLoginForm();
     return;
   }
@@ -750,12 +758,7 @@ async function saveFirstPassword(){
     _loginCredentials={email:'',password:''};
     _skipFirstLogin=true;
 
-    // 4. Re-connecter avec le nouveau mot de passe pour actualiser la session
-    if(_loginCredentials.email){
-      await sb.auth.signInWithPassword({email:_loginCredentials.email,password:pwd});
-    }
-
-    // 5. Afficher l'app
+    // 4. Afficher l'app
     document.getElementById('first-login-form').style.display='none';
     document.getElementById('login-wrap').style.display='none';
     document.getElementById('app-wrap').style.display='block';
