@@ -741,49 +741,34 @@ async function saveFirstPassword(){
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';
 
   try{
-    // 1. Changer le mot de passe : Edge Function d'abord, sinon updateUser direct
+    // 1. Tout faire via Edge Function (service_role) : change mdp + update profil
     const userId=currentUser?.id;
     if(!userId) throw new Error('Utilisateur non identifié');
-    
-    let pwdChanged=false;
-    // Stratégie A : Edge Function reset-referent-password
-    const fnResult=await callFn('reset-referent-password',{user_id:userId,password:pwd});
-    if(fnResult){
-      pwdChanged=true;
-      console.log('Mot de passe changé via Edge Function');
-    } else {
-      // Stratégie B : sb.auth.updateUser (nécessite session active)
-      console.log('Edge Function échouée, tentative updateUser...');
+
+    const fnResult=await callFn('reset-referent-password',{
+      user_id:userId,
+      password:pwd,
+      update_profile:true,
+      referent_id:currentProfile.id
+    });
+
+    if(!fnResult){
+      // Fallback : sb.auth.updateUser + update direct
+      console.warn('Edge Function indisponible, fallback updateUser...');
       const{error:authErr}=await sb.auth.updateUser({password:pwd});
-      if(!authErr){
-        pwdChanged=true;
-        console.log('Mot de passe changé via updateUser');
-      } else {
-        // Stratégie C : re-connexion + updateUser
-        console.log('updateUser échoué, tentative re-connexion...',authErr.message);
+      if(authErr){
         if(_loginCredentials.email && _loginCredentials.password){
-          const{error:signInErr}=await sb.auth.signInWithPassword({
-            email:_loginCredentials.email,
-            password:_loginCredentials.password
-          });
-          if(!signInErr){
-            const{error:retryErr}=await sb.auth.updateUser({password:pwd});
-            if(!retryErr) pwdChanged=true;
-            else throw new Error('Impossible de mettre à jour le mot de passe: '+retryErr.message);
-          } else {
-            throw new Error('Session expirée. Reconnectez-vous et réessayez.');
-          }
+          await sb.auth.signInWithPassword({email:_loginCredentials.email,password:_loginCredentials.password});
+          const{error:retryErr}=await sb.auth.updateUser({password:pwd});
+          if(retryErr) throw new Error('Impossible de changer le mot de passe: '+retryErr.message);
         } else {
-          throw new Error('Impossible de mettre à jour le mot de passe: '+authErr.message);
+          throw new Error('Session expirée. Reconnectez-vous et réessayez.');
         }
       }
+      // Mettre à jour le profil directement
+      await sb.from('referents').update({must_change_password:false,temp_password:null}).eq('id',currentProfile.id);
     }
-    if(!pwdChanged) throw new Error('Impossible de mettre à jour le mot de passe');
 
-    // 2. Marquer must_change_password=false et effacer temp_password en base
-    await sb.from('referents')
-      .update({must_change_password:false,temp_password:null})
-      .eq('id',currentProfile.id);
     currentProfile.must_change_password=false;
     currentProfile.temp_password=null;
 
