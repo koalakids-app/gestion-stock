@@ -570,8 +570,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label class="flabel">Jour</label><select class="finput" id="e-day"><option value="0">Lundi</option><option value="1">Mardi</option><option value="2">Mercredi</option><option value="3">Jeudi</option><option value="4">Vendredi</option></select></div>
       <div class="fg"><label class="flabel">Demi-journée</label><select class="finput" id="e-slot"><option value="0">Matin</option><option value="1">Après-midi</option></select></div>
     </div>
-    <div class="fg"><label class="flabel">Crèche / Lieu</label><input class="finput" id="e-lieu" placeholder="Nom de la crèche"/></div>
-    <div class="fg"><label class="flabel">Type</label><select class="finput" id="e-type"><option value="presence">Présence crèche</option><option value="absent">Absent / Congé</option><option value="formation">Formation</option><option value="reunion">Réunion</option></select></div>
+    <div class="fg" id="e-lieu-wrap"><label class="flabel">Crèche / Lieu</label><select class="finput" id="e-lieu" onchange="onLieuChange()">
+      <option value="">— Sélectionner —</option>
+      <option value="Brunet">Brunet</option>
+      <option value="Ollioules">Ollioules</option>
+      <option value="St Jean">St Jean</option>
+      <option value="Picot 1">Picot 1</option>
+      <option value="Picot 2">Picot 2</option>
+      <option value="Cuers">Cuers</option>
+      <option value="Autre">Autre (préciser)</option>
+    </select></div>
+    <div class="fg" id="e-lieu-autre-wrap" style="display:none"><label class="flabel">Préciser le lieu</label><input class="finput" id="e-lieu-autre" placeholder="Lieu libre"/></div>
+    <div class="fg"><label class="flabel">Type</label><select class="finput" id="e-type" onchange="toggleLieuField()"><option value="presence">Présence crèche</option><option value="absent">Absent / Congé</option><option value="formation">Formation</option><option value="reunion">Réunion</option></select></div>
     <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-event-wrap')">Annuler</button><button class="btn-primary" onclick="saveEvent()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
 </div>
@@ -965,9 +975,33 @@ function renderPlanning(){
   ['Matin','Après-midi'].forEach((slot,si)=>{html+='<div class="pg-time">'+slot+'</div>';days5.forEach((_,di)=>{const evs=events.filter(e=>e.day===di&&e.slot===si);html+='<div class="pg-cell" onclick="openEventAt('+di+','+si+')">';if(!evs.length)html+='<span style="font-size:10px;color:#ccc">+ ajouter</span>';evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delEvent(\''+e.id+'\',\''+key+'\')">'+e.lieu+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>';});html+='</div>';});});
   grid.innerHTML=html;
 }
-function openEventModal(){document.getElementById('e-day').value='0';document.getElementById('e-slot').value='0';document.getElementById('e-lieu').value='';document.getElementById('e-type').value='presence';document.getElementById('modal-event-wrap').classList.add('open');}
-function openEventAt(d,s){document.getElementById('e-day').value=d;document.getElementById('e-slot').value=s;document.getElementById('e-lieu').value='';document.getElementById('e-type').value='presence';document.getElementById('modal-event-wrap').classList.add('open');}
-function saveEvent(){const lieu=document.getElementById('e-lieu').value.trim();if(!lieu){alert('Indiquez un lieu.');return;}const ws=weekStart();const key='events_'+ws.toISOString().slice(0,10)+'_'+(currentProfile?.id||'dir');const events=JSON.parse(localStorage.getItem(key)||'[]');events.push({id:Date.now().toString(),day:parseInt(document.getElementById('e-day').value),slot:parseInt(document.getElementById('e-slot').value),lieu,type:document.getElementById('e-type').value});localStorage.setItem(key,JSON.stringify(events));closeModal('modal-event-wrap');renderPlanning();}
+function toggleLieuField(){
+  const type=document.getElementById('e-type').value;
+  const needsLieu=['presence','formation'].includes(type);
+  document.getElementById('e-lieu-wrap').style.display=needsLieu?'':'none';
+  document.getElementById('e-lieu-autre-wrap').style.display='none';
+  if(needsLieu&&document.getElementById('e-lieu').value==='Autre'){
+    document.getElementById('e-lieu-autre-wrap').style.display='';
+  }
+}
+function onLieuChange(){
+  const v=document.getElementById('e-lieu').value;
+  document.getElementById('e-lieu-autre-wrap').style.display=v==='Autre'?'':'none';
+}
+function openEventModal(){document.getElementById('e-day').value='0';document.getElementById('e-slot').value='0';document.getElementById('e-lieu').value='';document.getElementById('e-lieu-autre').value='';document.getElementById('e-type').value='presence';toggleLieuField();document.getElementById('modal-event-wrap').classList.add('open');}
+function openEventAt(d,s){document.getElementById('e-day').value=d;document.getElementById('e-slot').value=s;document.getElementById('e-lieu').value='';document.getElementById('e-lieu-autre').value='';document.getElementById('e-type').value='presence';toggleLieuField();document.getElementById('modal-event-wrap').classList.add('open');}
+function saveEvent(){
+  const type=document.getElementById('e-type').value;
+  const needsLieu=['presence','formation'].includes(type);
+  let lieu='';
+  if(needsLieu){
+    const sel=document.getElementById('e-lieu').value;
+    if(sel==='Autre'){lieu=document.getElementById('e-lieu-autre').value.trim();}
+    else{lieu=sel;}
+    if(!lieu){alert('Indiquez un lieu.');return;}
+  } else {
+    lieu=type==='absent'?'Absent':type==='reunion'?'Réunion':type;
+  }const ws=weekStart();const key='events_'+ws.toISOString().slice(0,10)+'_'+(currentProfile?.id||'dir');const events=JSON.parse(localStorage.getItem(key)||'[]');events.push({id:Date.now().toString(),day:parseInt(document.getElementById('e-day').value),slot:parseInt(document.getElementById('e-slot').value),lieu,type:document.getElementById('e-type').value});localStorage.setItem(key,JSON.stringify(events));closeModal('modal-event-wrap');renderPlanning();}
 function delEvent(id,key){localStorage.setItem(key,JSON.stringify(JSON.parse(localStorage.getItem(key)||'[]').filter(e=>e.id!==id)));renderPlanning();}
 
 // DASHBOARD
@@ -1069,12 +1103,28 @@ function ikGetCurrentDist(){
   return dist;
 }
 
+const IK_ALIASES={
+  'saint jean':'St Jean','st-jean':'St Jean','stjean':'St Jean',
+  'saint-jean':'St Jean',
+  'ollioules':'Ollioules',
+  'brunet':'Brunet',
+  'picot 1':'Picot 1','picot1':'Picot 1',
+  'picot 2':'Picot 2','picot2':'Picot 2',
+  'cuers':'Cuers'
+};
+
 function ikDetectCreche(lieu){
   if(!lieu)return null;
-  const l=lieu.trim();
+  const l=lieu.trim().toLowerCase();
   const known=Object.keys(IK_DEFAULT_DIST);
-  for(const c of known){if(l.toLowerCase()===c.toLowerCase())return c;}
-  for(const c of known){if(l.toLowerCase().includes(c.toLowerCase()))return c;}
+  // 1. Correspondance exacte
+  for(const c of known){if(l===c.toLowerCase())return c;}
+  // 2. Alias explicites (exact)
+  for(const[alias,creche] of Object.entries(IK_ALIASES)){if(l===alias)return creche;}
+  // 3. Alias explicites (inclusion)
+  for(const[alias,creche] of Object.entries(IK_ALIASES)){if(l.includes(alias))return creche;}
+  // 4. Inclusion clé standard
+  for(const c of known){if(l.includes(c.toLowerCase()))return c;}
   return null;
 }
 
