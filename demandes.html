@@ -438,17 +438,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <div class="overlay" id="modal-consigne-wrap">
-  <div class="modal" style="max-width:540px">
+  <div class="modal">
     <h3>Envoyer une consigne</h3>
-    <div class="fg">
-      <label class="flabel">Destinataires</label>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <input class="finput" id="c-ref-search" type="text" placeholder="🔍 Filtrer les référents…" style="flex:1;padding:6px 10px;font-size:12.5px" oninput="filterConsigneRefs()"/>
-        <button type="button" onclick="toggleAllConsigneRefs()" id="btn-select-all-refs" style="white-space:nowrap;font-size:12px;padding:6px 10px;border:1.5px solid var(--koala);border-radius:7px;background:var(--koala-light);color:var(--koala);cursor:pointer;font-weight:600">Tout sélectionner</button>
-      </div>
-      <div id="c-ref-list" style="border:1.5px solid var(--border);border-radius:9px;max-height:200px;overflow-y:auto;background:#fff;padding:6px 0"></div>
-      <div id="c-ref-count" style="font-size:11.5px;color:var(--muted);margin-top:5px">0 référent(s) sélectionné(s)</div>
-    </div>
+    <div class="fg"><label class="flabel">Référent destinataire</label><select class="finput" id="c-ref-select"><option value="">-- Choisir --</option></select></div>
     <div class="fg"><label class="flabel">Sujet</label><input class="finput" id="c-subj" placeholder="Ex. : Mise à jour protocole accueil"/></div>
     <div class="fg"><label class="flabel">Message</label><textarea class="finput" id="c-msg" rows="4" style="resize:vertical"></textarea></div>
     <div class="fg"><label class="flabel">Priorité</label><select class="finput" id="c-prio"><option value="normal">Normale</option><option value="urgent">Urgente</option><option value="info">Information</option></select></div>
@@ -629,7 +621,7 @@ function weekStart(){const n=new Date();const day=n.getDay();const diff=n.getDat
 function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
-function updateBadges(){const inc=cacheIncidents.filter(i=>!i.treated).length;const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}}
+function updateBadges(){const myCrecheId=isDirection?null:currentProfile?.creche_id;const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}}
 
 function showMain(tab){
   ['demands','incidents','presence','referents','planning','dashboard'].forEach(t=>{
@@ -739,89 +731,23 @@ async function toggleStatus(id,currentStatus){
 }
 async function deleteDemand(id){if(!confirm('Supprimer ?'))return;await dbDelete('demandes',id);cacheDemandes=cacheDemandes.filter(d=>d.id!==id);renderDemandsOnly();renderCrecheTabs();}
 
-function buildConsigneRefList(filterTerm=''){
-  const list=document.getElementById('c-ref-list');if(!list)return;
-  const refs=cacheReferents.filter(r=>r.role==='referent');
-  // grouper par crèche
-  const groups={};
-  refs.forEach(r=>{
-    const cName=cacheCreches.find(c=>c.id===r.creche_id)?.name||'Sans crèche';
-    if(!groups[cName])groups[cName]=[];
-    groups[cName].push(r);
-  });
-  const term=(filterTerm||'').toLowerCase().trim();
-  let html='';
-  Object.keys(groups).sort().forEach(cName=>{
-    const filtered=groups[cName].filter(r=>!term||r.name.toLowerCase().includes(term)||cName.toLowerCase().includes(term));
-    if(!filtered.length)return;
-    html+='<div style="padding:5px 10px 2px;font-size:11px;font-weight:700;color:var(--koala);background:var(--koala-light);border-bottom:1px solid var(--border);letter-spacing:.5px;text-transform:uppercase">'+cName+'</div>';
-    filtered.forEach(r=>{
-      const checked=document.getElementById('cref-'+r.id)?.checked?'checked':'';
-      html+='<label style="display:flex;align-items:center;gap:9px;padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f2fa;transition:background .1s" onmouseover="this.style.background=\'#f5f4fd\'" onmouseout="this.style.background=\'\'">'
-        +'<input type="checkbox" id="cref-'+r.id+'" data-id="'+r.id+'" data-name="'+r.name+'" data-email="'+(r.email||'')+'" data-creche="'+(r.creche_id||'')+'" '+(checked)+' onchange="updateConsigneCount()" style="width:15px;height:15px;accent-color:var(--koala);cursor:pointer">'
-        +'<span style="flex:1">'+r.name+'</span>'
-        +(r.email?'<span style="font-size:11px;color:var(--muted)">'+r.email+'</span>':'')
-        +'</label>';
-    });
-  });
-  if(!html)html='<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px">Aucun référent trouvé</div>';
-  list.innerHTML=html;
-  updateConsigneCount();
-}
-function filterConsigneRefs(){
-  const term=document.getElementById('c-ref-search')?.value||'';
-  buildConsigneRefList(term);
-}
-function updateConsigneCount(){
-  const checked=document.querySelectorAll('#c-ref-list input[type=checkbox]:checked').length;
-  const el=document.getElementById('c-ref-count');if(el)el.textContent=checked+' référent'+(checked>1?'s':'')+' sélectionné'+(checked>1?'s':'');
-  const btn=document.getElementById('btn-select-all-refs');
-  if(btn){
-    const total=document.querySelectorAll('#c-ref-list input[type=checkbox]').length;
-    btn.textContent=checked===total&&total>0?'Tout désélectionner':'Tout sélectionner';
-  }
-}
-function toggleAllConsigneRefs(){
-  const boxes=document.querySelectorAll('#c-ref-list input[type=checkbox]');
-  const allChecked=[...boxes].every(b=>b.checked);
-  boxes.forEach(b=>b.checked=!allChecked);
-  updateConsigneCount();
-}
 function openConsigneModal(){
-  document.getElementById('c-ref-search').value='';
+  const sel=document.getElementById('c-ref-select');
+  sel.innerHTML='<option value="">-- Choisir --</option>'+cacheReferents.filter(r=>r.role==='referent').map(r=>'<option value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'" data-creche="'+(r.creche_id||'')+'">'+r.name+' ('+(cacheCreches.find(c=>c.id===r.creche_id)?.name||'?')+')</option>').join('');
   ['c-subj','c-msg'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('c-prio').value='normal';
-  buildConsigneRefList();
   document.getElementById('modal-consigne-wrap').classList.add('open');
 }
 async function saveConsigne(){
-  const boxes=[...document.querySelectorAll('#c-ref-list input[type=checkbox]:checked')];
-  const subj=document.getElementById('c-subj').value.trim();
-  const msg=document.getElementById('c-msg').value.trim();
-  const prio=document.getElementById('c-prio').value;
-  if(!boxes.length||!subj||!msg){alert('Sélectionnez au moins un référent, renseignez le sujet et le message.');return;}
+  const refSel=document.getElementById('c-ref-select');const refOpt=refSel?.options[refSel.selectedIndex];
+  const refId=refSel?.value,subj=document.getElementById('c-subj').value.trim(),msg=document.getElementById('c-msg').value.trim();
+  if(!refId||!subj||!msg){alert('Tous les champs sont requis.');return;}
   const btn=document.getElementById('btn-save-consigne');btn.disabled=true;
-  btn.innerHTML='<i class="ti ti-loader ti-spin"></i> Envoi…';
-  let nbOk=0,nbErr=0;
-  for(const box of boxes){
-    const refId=box.getAttribute('data-id');
-    const refName=box.getAttribute('data-name')||'';
-    const refEmail=box.getAttribute('data-email')||'';
-    const crecheId=box.getAttribute('data-creche')||'';
-    const row={creche_id:crecheId,referent_name:refName,referent_email:refEmail,subject:subj,description:msg,priority:prio,status:'envoyee',type:'consigne'};
-    const saved=await dbInsert('demandes',row);
-    if(saved){
-      cacheDemandes.unshift(saved);
-      await callFn('notify-consigne',{consigne:{...row,id:saved.id,message:msg,creche:cacheCreches.find(c=>c.id===crecheId)?.name||''}});
-      nbOk++;
-    } else nbErr++;
-  }
-  if(nbOk>0)showBanner('Consigne envoyée à '+nbOk+' référent'+(nbOk>1?'s':'')+' !'+(nbErr?' ('+nbErr+' erreur(s))':''));
-  else showBanner('Erreur lors de l\'envoi.','error');
-  closeModal('modal-consigne-wrap');
-  renderCrecheTabs();
+  const crecheId=refOpt?.getAttribute('data-creche')||'';
+  const row={creche_id:crecheId,referent_name:refOpt?.getAttribute('data-name')||'',referent_email:refOpt?.getAttribute('data-email')||'',subject:subj,description:msg,priority:document.getElementById('c-prio').value,status:'envoyee',type:'consigne'};
+  const saved=await dbInsert('demandes',row);
+  if(saved){cacheDemandes.unshift(saved);await callFn('notify-consigne',{consigne:{...row,id:saved.id,message:msg,creche:cacheCreches.find(c=>c.id===crecheId)?.name||''}});showBanner('Consigne envoyée !');closeModal('modal-consigne-wrap');renderCrecheTabs();}
+  else showBanner('Erreur.','error');
   btn.disabled=false;
-  btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
 }
 
 // CRECHES
@@ -872,7 +798,10 @@ async function resetPassword(refId){
 function setIncFilter(f,btn){activeIncFilter=f;document.querySelectorAll('#incident-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderIncidents();}
 function renderIncidents(){
   const list=document.getElementById('incidents-list');
-  const filtered=cacheIncidents.filter(i=>{if(activeIncFilter==='grave'&&i.severity!=='grave')return false;if(activeIncFilter==='leger'&&i.severity!=='leger')return false;if(activeIncFilter==='info'&&i.severity!=='info')return false;if(activeIncFilter==='non-traite'&&i.treated)return false;return true;});
+  const myCrecheId=isDirection?null:currentProfile?.creche_id;
+  const filtered=cacheIncidents.filter(i=>{
+    if(myCrecheId&&i.creche_id!==myCrecheId)return false;
+    if(activeIncFilter==='grave'&&i.severity!=='grave')return false;if(activeIncFilter==='leger'&&i.severity!=='leger')return false;if(activeIncFilter==='info'&&i.severity!=='info')return false;if(activeIncFilter==='non-traite'&&i.treated)return false;return true;});
   if(!filtered.length){list.innerHTML='<div class="empty-state"><i class="ti ti-shield-check"></i><p>Aucun incident.</p></div>';return;}
   const si={grave:'🔴',leger:'🟠',info:'ℹ️'};
   list.innerHTML=filtered.map(i=>{const creche=cacheCreches.find(c=>c.id===i.creche_id);return'<div class="incident-card '+i.severity+'"><div style="font-size:22px;flex-shrink:0">'+si[i.severity]+'</div><div class="inc-meta"><div class="inc-child"><i class="ti ti-user" style="font-size:11px"></i> '+(i.child_name||'Enfant non précisé')+(creche?' — '+creche.name:'')+'</div><div class="inc-title">'+(i.type||'')+' · '+(i.incident_date||'')+' '+(i.incident_time?'à '+i.incident_time:'')+'</div><div class="inc-body" style="margin-top:4px">'+(i.description||'—')+'</div>'+(i.actions?'<div style="margin-top:6px;font-size:12px;color:var(--green);background:var(--green-light);border-radius:6px;padding:4px 8px"><strong>Actions :</strong> '+i.actions+'</div>':'')+'<div class="inc-foot"><span class="badge" style="background:'+(i.severity==='grave'?'var(--red-light)':i.severity==='leger'?'var(--orange-light)':'var(--blue-light)')+';color:'+(i.severity==='grave'?'#c0392b':i.severity==='leger'?'var(--orange-dark)':'var(--blue)')+'">'+({grave:'Grave',leger:'Léger',info:'Information'}[i.severity]||i.severity)+'</span>'+(i.reporter?'<span class="meta-txt">'+i.reporter+'</span>':'')+(i.treated?'<span class="badge b-traite">✅ Traité</span>':'<span class="badge b-attente">⏳ En cours</span>')+'</div></div><div class="dactions"><button class="ibtn" onclick="toggleIncident(\''+i.id+'\','+i.treated+')"><i class="ti ti-'+(i.treated?'rotate-clockwise':'check')+'"></i></button>'+(isDirection?'<button class="ibtn del" onclick="deleteIncident(\''+i.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';}).join('');
