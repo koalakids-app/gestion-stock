@@ -780,7 +780,7 @@ async function saveRef(){
   else{const ok=await callFn('create-referent',{email,password:pwd,name,creche_id:row.creche_id,poste:row.poste,role:row.role});if(ok){await loadAllData();showBanner('Référent '+name+' créé !');}else showBanner('Erreur création compte.','error');}
   closeModal('modal-ref-wrap');renderReferents();
 }
-async function deleteRef(id){if(!confirm('Supprimer ce référent ?'))return;await dbDelete('referents',id);cacheReferents=cacheReferents.filter(r=>r.id!==id);renderReferents();}
+async function deleteRef(id){if(!confirm('Supprimer ce référent ?'))return;const ok=await callFn('delete-referent',{referent_id:id});if(ok){cacheReferents=cacheReferents.filter(r=>r.id!==id);renderReferents();showBanner('Référent supprimé.');}else showBanner('Erreur lors de la suppression.','error');}
 async function sendLink(refId){const r=cacheReferents.find(x=>x.id===refId);if(!r?.email){alert('Pas d\'email.');return;}const creche=cacheCreches.find(c=>c.id===r.creche_id);const ok=await callFn('send-referent-link',{referent:{id:r.id,name:r.name,email:r.email,creche:creche?.name||''}});if(ok)showBanner('Lien envoyé à '+r.name+' !');else showBanner('Erreur envoi.','error');}
 
 async function resetPassword(refId){
