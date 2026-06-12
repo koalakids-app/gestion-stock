@@ -777,7 +777,7 @@ async function saveRef(){
   if(!editingRefId&&(!pwd||pwd.length<6)){alert('Mot de passe requis (min. 6 caractères).');return;}
   const row={name,email,poste:document.getElementById('r-poste').value.trim(),creche_id:document.getElementById('r-creche').value,role:document.getElementById('r-is-direction').checked?'direction':'referent'};
   if(editingRefId){await dbUpdate('referents',editingRefId,row);const r=cacheReferents.find(x=>x.id===editingRefId);if(r)Object.assign(r,row);showBanner('Référent modifié !');}
-  else{const ok=await callFn('create-referent',{email,password:pwd,name,creche_id:row.creche_id,poste:row.poste});if(ok){await loadAllData();showBanner('Référent '+name+' créé !');}else showBanner('Erreur création compte.','error');}
+  else{const ok=await callFn('create-referent',{email,password:pwd,name,creche_id:row.creche_id,poste:row.poste,role:row.role});if(ok){await loadAllData();showBanner('Référent '+name+' créé !');}else showBanner('Erreur création compte.','error');}
   closeModal('modal-ref-wrap');renderReferents();
 }
 async function deleteRef(id){if(!confirm('Supprimer ce référent ?'))return;await dbDelete('referents',id);cacheReferents=cacheReferents.filter(r=>r.id!==id);renderReferents();}
