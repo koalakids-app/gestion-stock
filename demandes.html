@@ -438,9 +438,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <div class="overlay" id="modal-consigne-wrap">
-  <div class="modal">
+  <div class="modal" style="max-width:540px">
     <h3>Envoyer une consigne</h3>
-    <div class="fg"><label class="flabel">Référent destinataire</label><select class="finput" id="c-ref-select"><option value="">-- Choisir --</option></select></div>
+    <div class="fg">
+      <label class="flabel">Destinataires</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <input class="finput" id="c-ref-search" type="text" placeholder="🔍 Filtrer les référents…" style="flex:1;padding:6px 10px;font-size:12.5px" oninput="filterConsigneRefs()"/>
+        <button type="button" onclick="toggleAllConsigneRefs()" id="btn-select-all-refs" style="white-space:nowrap;font-size:12px;padding:6px 10px;border:1.5px solid var(--koala);border-radius:7px;background:var(--koala-light);color:var(--koala);cursor:pointer;font-weight:600">Tout sélectionner</button>
+      </div>
+      <div id="c-ref-list" style="border:1.5px solid var(--border);border-radius:9px;max-height:200px;overflow-y:auto;background:#fff;padding:6px 0"></div>
+      <div id="c-ref-count" style="font-size:11.5px;color:var(--muted);margin-top:5px">0 référent(s) sélectionné(s)</div>
+    </div>
     <div class="fg"><label class="flabel">Sujet</label><input class="finput" id="c-subj" placeholder="Ex. : Mise à jour protocole accueil"/></div>
     <div class="fg"><label class="flabel">Message</label><textarea class="finput" id="c-msg" rows="4" style="resize:vertical"></textarea></div>
     <div class="fg"><label class="flabel">Priorité</label><select class="finput" id="c-prio"><option value="normal">Normale</option><option value="urgent">Urgente</option><option value="info">Information</option></select></div>
@@ -731,23 +739,89 @@ async function toggleStatus(id,currentStatus){
 }
 async function deleteDemand(id){if(!confirm('Supprimer ?'))return;await dbDelete('demandes',id);cacheDemandes=cacheDemandes.filter(d=>d.id!==id);renderDemandsOnly();renderCrecheTabs();}
 
+function buildConsigneRefList(filterTerm=''){
+  const list=document.getElementById('c-ref-list');if(!list)return;
+  const refs=cacheReferents.filter(r=>r.role==='referent');
+  // grouper par crèche
+  const groups={};
+  refs.forEach(r=>{
+    const cName=cacheCreches.find(c=>c.id===r.creche_id)?.name||'Sans crèche';
+    if(!groups[cName])groups[cName]=[];
+    groups[cName].push(r);
+  });
+  const term=(filterTerm||'').toLowerCase().trim();
+  let html='';
+  Object.keys(groups).sort().forEach(cName=>{
+    const filtered=groups[cName].filter(r=>!term||r.name.toLowerCase().includes(term)||cName.toLowerCase().includes(term));
+    if(!filtered.length)return;
+    html+='<div style="padding:5px 10px 2px;font-size:11px;font-weight:700;color:var(--koala);background:var(--koala-light);border-bottom:1px solid var(--border);letter-spacing:.5px;text-transform:uppercase">'+cName+'</div>';
+    filtered.forEach(r=>{
+      const checked=document.getElementById('cref-'+r.id)?.checked?'checked':'';
+      html+='<label style="display:flex;align-items:center;gap:9px;padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f2fa;transition:background .1s" onmouseover="this.style.background=\'#f5f4fd\'" onmouseout="this.style.background=\'\'">'
+        +'<input type="checkbox" id="cref-'+r.id+'" data-id="'+r.id+'" data-name="'+r.name+'" data-email="'+(r.email||'')+'" data-creche="'+(r.creche_id||'')+'" '+(checked)+' onchange="updateConsigneCount()" style="width:15px;height:15px;accent-color:var(--koala);cursor:pointer">'
+        +'<span style="flex:1">'+r.name+'</span>'
+        +(r.email?'<span style="font-size:11px;color:var(--muted)">'+r.email+'</span>':'')
+        +'</label>';
+    });
+  });
+  if(!html)html='<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px">Aucun référent trouvé</div>';
+  list.innerHTML=html;
+  updateConsigneCount();
+}
+function filterConsigneRefs(){
+  const term=document.getElementById('c-ref-search')?.value||'';
+  buildConsigneRefList(term);
+}
+function updateConsigneCount(){
+  const checked=document.querySelectorAll('#c-ref-list input[type=checkbox]:checked').length;
+  const el=document.getElementById('c-ref-count');if(el)el.textContent=checked+' référent'+(checked>1?'s':'')+' sélectionné'+(checked>1?'s':'');
+  const btn=document.getElementById('btn-select-all-refs');
+  if(btn){
+    const total=document.querySelectorAll('#c-ref-list input[type=checkbox]').length;
+    btn.textContent=checked===total&&total>0?'Tout désélectionner':'Tout sélectionner';
+  }
+}
+function toggleAllConsigneRefs(){
+  const boxes=document.querySelectorAll('#c-ref-list input[type=checkbox]');
+  const allChecked=[...boxes].every(b=>b.checked);
+  boxes.forEach(b=>b.checked=!allChecked);
+  updateConsigneCount();
+}
 function openConsigneModal(){
-  const sel=document.getElementById('c-ref-select');
-  sel.innerHTML='<option value="">-- Choisir --</option>'+cacheReferents.filter(r=>r.role==='referent').map(r=>'<option value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'" data-creche="'+(r.creche_id||'')+'">'+r.name+' ('+(cacheCreches.find(c=>c.id===r.creche_id)?.name||'?')+')</option>').join('');
+  document.getElementById('c-ref-search').value='';
   ['c-subj','c-msg'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('c-prio').value='normal';
+  buildConsigneRefList();
   document.getElementById('modal-consigne-wrap').classList.add('open');
 }
 async function saveConsigne(){
-  const refSel=document.getElementById('c-ref-select');const refOpt=refSel?.options[refSel.selectedIndex];
-  const refId=refSel?.value,subj=document.getElementById('c-subj').value.trim(),msg=document.getElementById('c-msg').value.trim();
-  if(!refId||!subj||!msg){alert('Tous les champs sont requis.');return;}
+  const boxes=[...document.querySelectorAll('#c-ref-list input[type=checkbox]:checked')];
+  const subj=document.getElementById('c-subj').value.trim();
+  const msg=document.getElementById('c-msg').value.trim();
+  const prio=document.getElementById('c-prio').value;
+  if(!boxes.length||!subj||!msg){alert('Sélectionnez au moins un référent, renseignez le sujet et le message.');return;}
   const btn=document.getElementById('btn-save-consigne');btn.disabled=true;
-  const crecheId=refOpt?.getAttribute('data-creche')||'';
-  const row={creche_id:crecheId,referent_name:refOpt?.getAttribute('data-name')||'',referent_email:refOpt?.getAttribute('data-email')||'',subject:subj,description:msg,priority:document.getElementById('c-prio').value,status:'envoyee',type:'consigne'};
-  const saved=await dbInsert('demandes',row);
-  if(saved){cacheDemandes.unshift(saved);await callFn('notify-consigne',{consigne:{...row,id:saved.id,message:msg,creche:cacheCreches.find(c=>c.id===crecheId)?.name||''}});showBanner('Consigne envoyée !');closeModal('modal-consigne-wrap');renderCrecheTabs();}
-  else showBanner('Erreur.','error');
+  btn.innerHTML='<i class="ti ti-loader ti-spin"></i> Envoi…';
+  let nbOk=0,nbErr=0;
+  for(const box of boxes){
+    const refId=box.getAttribute('data-id');
+    const refName=box.getAttribute('data-name')||'';
+    const refEmail=box.getAttribute('data-email')||'';
+    const crecheId=box.getAttribute('data-creche')||'';
+    const row={creche_id:crecheId,referent_name:refName,referent_email:refEmail,subject:subj,description:msg,priority:prio,status:'envoyee',type:'consigne'};
+    const saved=await dbInsert('demandes',row);
+    if(saved){
+      cacheDemandes.unshift(saved);
+      await callFn('notify-consigne',{consigne:{...row,id:saved.id,message:msg,creche:cacheCreches.find(c=>c.id===crecheId)?.name||''}});
+      nbOk++;
+    } else nbErr++;
+  }
+  if(nbOk>0)showBanner('Consigne envoyée à '+nbOk+' référent'+(nbOk>1?'s':'')+' !'+(nbErr?' ('+nbErr+' erreur(s))':''));
+  else showBanner('Erreur lors de l\'envoi.','error');
+  closeModal('modal-consigne-wrap');
+  renderCrecheTabs();
   btn.disabled=false;
+  btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
 }
 
 // CRECHES
