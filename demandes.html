@@ -535,6 +535,7 @@ const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,weekOffset=0,currentPresenceSlot='matin',searchTerm='';
 let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[];
+let isPasswordRecovery=false;
 
 // Init au chargement complet de la page
 window.addEventListener('DOMContentLoaded', function() {
@@ -542,7 +543,8 @@ window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('app-logo').src=LOGO_B64;
   // Démarrer l'écoute auth
   sb.auth.onAuthStateChange(async(event,session)=>{
-    if(event==='PASSWORD_RECOVERY'){showPasswordResetForm();return;}
+    if(event==='PASSWORD_RECOVERY'){isPasswordRecovery=true;showPasswordResetForm();return;}
+    if(isPasswordRecovery){return;} // bloquer SIGNED_IN qui suit PASSWORD_RECOVERY
     if(session?.user){
       currentUser=session.user;
       const{data}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
@@ -605,7 +607,7 @@ async function saveNewPassword(){
   if(pwd!==confirm){err.textContent='Les mots de passe ne correspondent pas.';err.style.display='block';return;}
   const{error}=await sb.auth.updateUser({password:pwd});
   if(error){err.textContent='Erreur : '+error.message;err.style.display='block';}
-  else{showBanner('Mot de passe mis à jour ✅ — vous pouvez vous connecter.');document.getElementById('login-form').style.display='block';document.getElementById('reset-form').style.display='none';document.getElementById('login-sub').textContent='Suite de gestion pédagogique';}
+  else{isPasswordRecovery=false;showBanner('Mot de passe mis à jour ✅ — vous pouvez vous connecter.');document.getElementById('login-form').style.display='block';document.getElementById('reset-form').style.display='none';document.getElementById('login-sub').textContent='Suite de gestion pédagogique';}
 }
 function showApp(){
   document.getElementById('loading-screen').style.display='none';
@@ -621,7 +623,7 @@ function weekStart(){const n=new Date();const day=n.getDay();const diff=n.getDat
 function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
-function updateBadges(){const myCrecheId=isDirection?null:currentProfile?.creche_id;const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}}
+function updateBadges(){const inc=cacheIncidents.filter(i=>!i.treated).length;const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}}
 
 function showMain(tab){
   ['demands','incidents','presence','referents','planning','dashboard'].forEach(t=>{
@@ -798,10 +800,7 @@ async function resetPassword(refId){
 function setIncFilter(f,btn){activeIncFilter=f;document.querySelectorAll('#incident-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderIncidents();}
 function renderIncidents(){
   const list=document.getElementById('incidents-list');
-  const myCrecheId=isDirection?null:currentProfile?.creche_id;
-  const filtered=cacheIncidents.filter(i=>{
-    if(myCrecheId&&i.creche_id!==myCrecheId)return false;
-    if(activeIncFilter==='grave'&&i.severity!=='grave')return false;if(activeIncFilter==='leger'&&i.severity!=='leger')return false;if(activeIncFilter==='info'&&i.severity!=='info')return false;if(activeIncFilter==='non-traite'&&i.treated)return false;return true;});
+  const filtered=cacheIncidents.filter(i=>{if(activeIncFilter==='grave'&&i.severity!=='grave')return false;if(activeIncFilter==='leger'&&i.severity!=='leger')return false;if(activeIncFilter==='info'&&i.severity!=='info')return false;if(activeIncFilter==='non-traite'&&i.treated)return false;return true;});
   if(!filtered.length){list.innerHTML='<div class="empty-state"><i class="ti ti-shield-check"></i><p>Aucun incident.</p></div>';return;}
   const si={grave:'🔴',leger:'🟠',info:'ℹ️'};
   list.innerHTML=filtered.map(i=>{const creche=cacheCreches.find(c=>c.id===i.creche_id);return'<div class="incident-card '+i.severity+'"><div style="font-size:22px;flex-shrink:0">'+si[i.severity]+'</div><div class="inc-meta"><div class="inc-child"><i class="ti ti-user" style="font-size:11px"></i> '+(i.child_name||'Enfant non précisé')+(creche?' — '+creche.name:'')+'</div><div class="inc-title">'+(i.type||'')+' · '+(i.incident_date||'')+' '+(i.incident_time?'à '+i.incident_time:'')+'</div><div class="inc-body" style="margin-top:4px">'+(i.description||'—')+'</div>'+(i.actions?'<div style="margin-top:6px;font-size:12px;color:var(--green);background:var(--green-light);border-radius:6px;padding:4px 8px"><strong>Actions :</strong> '+i.actions+'</div>':'')+'<div class="inc-foot"><span class="badge" style="background:'+(i.severity==='grave'?'var(--red-light)':i.severity==='leger'?'var(--orange-light)':'var(--blue-light)')+';color:'+(i.severity==='grave'?'#c0392b':i.severity==='leger'?'var(--orange-dark)':'var(--blue)')+'">'+({grave:'Grave',leger:'Léger',info:'Information'}[i.severity]||i.severity)+'</span>'+(i.reporter?'<span class="meta-txt">'+i.reporter+'</span>':'')+(i.treated?'<span class="badge b-traite">✅ Traité</span>':'<span class="badge b-attente">⏳ En cours</span>')+'</div></div><div class="dactions"><button class="ibtn" onclick="toggleIncident(\''+i.id+'\','+i.treated+')"><i class="ti ti-'+(i.treated?'rotate-clockwise':'check')+'"></i></button>'+(isDirection?'<button class="ibtn del" onclick="deleteIncident(\''+i.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';}).join('');
