@@ -535,12 +535,16 @@ const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,weekOffset=0,currentPresenceSlot='matin',searchTerm='';
 let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[];
-let isPasswordRecovery=false;
+// Détection immédiate du lien de récupération AVANT tout événement Supabase
+const _hashParams=new URLSearchParams(window.location.hash.replace('#',''));
+let isPasswordRecovery=_hashParams.get('type')==='recovery';
 
 // Init au chargement complet de la page
 window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('login-logo').src=LOGO_B64;
   document.getElementById('app-logo').src=LOGO_B64;
+  // Si lien de réinitialisation détecté dans l'URL, afficher le formulaire immédiatement
+  if(isPasswordRecovery){showPasswordResetForm();}
   sb.auth.onAuthStateChange(async(event,session)=>{
     if(event==='PASSWORD_RECOVERY'){
       isPasswordRecovery=true;
