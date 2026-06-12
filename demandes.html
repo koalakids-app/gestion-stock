@@ -541,10 +541,23 @@ let isPasswordRecovery=false;
 window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('login-logo').src=LOGO_B64;
   document.getElementById('app-logo').src=LOGO_B64;
-  // Démarrer l'écoute auth
   sb.auth.onAuthStateChange(async(event,session)=>{
-    if(event==='PASSWORD_RECOVERY'){isPasswordRecovery=true;showPasswordResetForm();return;}
-    if(isPasswordRecovery){return;} // bloquer SIGNED_IN qui suit PASSWORD_RECOVERY
+    if(event==='PASSWORD_RECOVERY'){
+      isPasswordRecovery=true;
+      showPasswordResetForm();
+      return;
+    }
+    if(event==='SIGNED_IN'&&isPasswordRecovery){
+      // Supabase émet SIGNED_IN juste après PASSWORD_RECOVERY — on l'ignore
+      return;
+    }
+    if(event==='USER_UPDATED'){
+      // Mot de passe changé avec succès, on repasse en login
+      isPasswordRecovery=false;
+      showLogin();
+      showBanner('Mot de passe mis à jour ✅ — connectez-vous avec votre nouveau mot de passe.');
+      return;
+    }
     if(session?.user){
       currentUser=session.user;
       const{data}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
@@ -605,9 +618,11 @@ async function saveNewPassword(){
   err.style.display='none';
   if(pwd.length<6){err.textContent='Le mot de passe doit faire au moins 6 caractères.';err.style.display='block';return;}
   if(pwd!==confirm){err.textContent='Les mots de passe ne correspondent pas.';err.style.display='block';return;}
+  const btn=document.querySelector('#reset-form .login-btn');if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
   const{error}=await sb.auth.updateUser({password:pwd});
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer le mot de passe';}
   if(error){err.textContent='Erreur : '+error.message;err.style.display='block';}
-  else{isPasswordRecovery=false;showBanner('Mot de passe mis à jour ✅ — vous pouvez vous connecter.');document.getElementById('login-form').style.display='block';document.getElementById('reset-form').style.display='none';document.getElementById('login-sub').textContent='Suite de gestion pédagogique';}
+  // Si succès, USER_UPDATED dans onAuthStateChange gère la suite
 }
 function showApp(){
   document.getElementById('loading-screen').style.display='none';
