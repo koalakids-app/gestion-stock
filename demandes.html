@@ -1160,11 +1160,26 @@ function ikReadPlanning(yearMonth){
   return rows;
 }
 
+function ikReeval(rows){
+  // Réévalue creche et ignored à partir du lieu — corrige les anciennes saisies texte libre
+  return rows.map(r=>{
+    const creche=ikDetectCreche(r.lieu||r.trajet.replace('Cuers/',''));
+    const ignored=!creche||creche==='Cuers';
+    const trajet=creche&&!ignored?`Cuers/${r.lieu||creche}`:r.trajet;
+    return Object.assign({},r,{creche,ignored,trajet:r.trajet||trajet});
+  });
+}
+
 function ikLoad(){
   const month=document.getElementById('ik-month').value;
   if(!month)return;
   const saved=JSON.parse(localStorage.getItem(`ik_rows_${month}`)||'null');
-  if(saved){ikRows=saved;ikRenderTable();document.getElementById('ik-load-info').textContent=`${ikRows.filter(r=>!r.ignored).length} trajet(s) chargés (sauvegardés)`;}
+  if(saved){
+    ikRows=ikReeval(saved);  // réévalue à chaque chargement
+    ikSaveRows();             // resauvegarde avec les valeurs corrigées
+    ikRenderTable();
+    document.getElementById('ik-load-info').textContent=`${ikRows.filter(r=>!r.ignored).length} trajet(s) chargés (sauvegardés)`;
+  }
   else ikLoadFromPlanning();
 }
 
