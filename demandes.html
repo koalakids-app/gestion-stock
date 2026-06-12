@@ -1153,8 +1153,10 @@ function ikReadPlanning(yearMonth){
         if(ev.type==='absent'||ev.type==='reunion')return;
         // Reconstruire la date locale du lundi à partir de keyDate (string YYYY-MM-DD)
         // pour éviter tout décalage UTC. On parse les composantes directement.
+        // keyDate = lundi UTC (décalé -1 par toISOString en UTC+2)
+        // On reconstruit le vrai lundi local en ajoutant 1 jour
         const [ky,km,kd]=keyDate.split('-').map(Number);
-        const evDate=new Date(ky,km-1,kd+ev.day);  // arithmétique locale pure
+        const evDate=new Date(ky,km-1,kd+1+ev.day);  // +1 corrige le décalage UTC+2
         if(evDate.getMonth()+1!==month||evDate.getFullYear()!==year)return;
         const dateStr=ikLocalDate(evDate);
         const creche=ikDetectCreche(ev.lieu);
