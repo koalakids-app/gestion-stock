@@ -1103,6 +1103,11 @@ function ikGetCurrentDist(){
   return dist;
 }
 
+function ikLocalDate(d){
+  const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),j=String(d.getDate()).padStart(2,'0');
+  return`${y}-${m}-${j}`;
+}
+
 const IK_ALIASES={
   'saint jean':'St Jean','st-jean':'St Jean','stjean':'St Jean',
   'saint-jean':'St Jean',
@@ -1139,17 +1144,19 @@ function ikReadPlanning(yearMonth){
   cursor.setDate(cursor.getDate()-(dow===0?6:dow-1));
   const checkedKeys=new Set();
   while(cursor<=lastDay){
-    const keyDate=cursor.toISOString().slice(0,10);
+    const keyDate=cursor.toISOString().slice(0,10);  // cohérent avec weekStart()
     const key=`events_${keyDate}_${userId}`;
     if(!checkedKeys.has(key)){
       checkedKeys.add(key);
       const events=JSON.parse(localStorage.getItem(key)||'[]');
       events.forEach(ev=>{
         if(ev.type==='absent'||ev.type==='reunion')return;
-        const evDate=new Date(cursor);
-        evDate.setDate(cursor.getDate()+ev.day);
+        // Reconstruire la date locale du lundi à partir de keyDate (string YYYY-MM-DD)
+        // pour éviter tout décalage UTC. On parse les composantes directement.
+        const [ky,km,kd]=keyDate.split('-').map(Number);
+        const evDate=new Date(ky,km-1,kd+ev.day);  // arithmétique locale pure
         if(evDate.getMonth()+1!==month||evDate.getFullYear()!==year)return;
-        const dateStr=evDate.toISOString().slice(0,10);
+        const dateStr=ikLocalDate(evDate);
         const creche=ikDetectCreche(ev.lieu);
         rows.push({id:`${ev.id}_${dateStr}`,date:dateStr,trajet:creche&&creche!=='Cuers'?`Cuers/${ev.lieu}`:ev.lieu,creche,nbr:2,lieu:ev.lieu,slot:ev.slot,ignored:!creche||creche==='Cuers'});
       });
