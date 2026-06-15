@@ -1540,6 +1540,17 @@ textarea { resize: vertical; min-height: 72px; }
           <input type="text" id="c-bc" readonly
                  style="background:var(--bg);font-weight:600;cursor:default;color:var(--accent)">
         </div>
+        <div class="form-group">
+          <label>Crèche *</label>
+          <select id="c-creche-select" onchange="onChangeCommandeCreche()">
+            <option>Brunet</option>
+            <option>Cuers</option>
+            <option>Ollioules</option>
+            <option>St Jean</option>
+            <option>Picot 1</option>
+            <option>Picot 2</option>
+          </select>
+        </div>
         <div class="form-group full">
           <label>Articles commandés</label>
           <div id="articles-table" style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
@@ -1561,7 +1572,6 @@ textarea { resize: vertical; min-height: 72px; }
         </div>
         <!-- Champs cachés conservés pour compatibilité -->
         <input type="hidden" id="c-fourn" value="">
-        <input type="hidden" id="c-creche" value="">
         <input type="hidden" id="c-livraison" value="">
       </div>
     </div>
@@ -2356,8 +2366,10 @@ async function deleteArticle(id) {
 
 // ─── SAVE COMMANDE ────────────────────────────────────────────────────────
 function generateBC() {
-  // Utiliser la crèche sélectionnée dans la sidebar, sinon le nom du réseau
-  const crecheActive = (currentCreche && currentCreche !== 'all') ? currentCreche : getCrecheName();
+  // Utiliser la crèche sélectionnée dans le menu déroulant du bon de commande
+  const sel = document.getElementById('c-creche-select');
+  const crecheActive = (sel && sel.value) ? sel.value
+    : ((currentCreche && currentCreche !== 'all') ? currentCreche : getCrecheName());
   const nom = crecheActive.replace(/\s+/g, '').substring(0, 8).toUpperCase();
   const now = new Date();
   const date = String(now.getFullYear()).slice(2) +
@@ -2372,8 +2384,9 @@ async function saveCommande_db() {
   const bc = document.getElementById('c-bc').value.trim() || generateBC();
   const articles = getArticlesFromRows();
 
-  // Crèche = crèche active dans la sidebar (ou première si toutes sélectionnées)
-  const creche = (currentCreche && currentCreche !== 'all') ? currentCreche : CRECHES[0];
+  // Crèche = celle choisie dans le menu déroulant du bon de commande
+  const crecheSel = document.getElementById('c-creche-select')?.value;
+  const creche = crecheSel || (currentCreche && currentCreche !== 'all' ? currentCreche : CRECHES[0]);
 
   // Fournisseur = extraire du premier article renseigné
   const rows = document.querySelectorAll('.article-row');
@@ -2578,6 +2591,17 @@ function resetCommandeModal() {
   // Reset date to today
   const dateField = document.getElementById('c-date');
   if (dateField) dateField.value = new Date().toISOString().split('T')[0];
+  // Pré-sélectionner la crèche (active dans la sidebar si définie, sinon la 1ère)
+  const crecheSel = document.getElementById('c-creche-select');
+  if (crecheSel) {
+    crecheSel.value = (currentCreche && currentCreche !== 'all') ? currentCreche : CRECHES[0];
+  }
+}
+
+// Régénère le N° de bon de commande quand on change de crèche (sauf en modification)
+function onChangeCommandeCreche() {
+  const bcField = document.getElementById('c-bc');
+  if (bcField && !bcField.dataset.editing) bcField.value = generateBC();
 }
 
 function editCommande(id) {
@@ -2596,6 +2620,8 @@ function editCommande(id) {
   if (dateField) dateField.value = c.date || '';
   const notesField = document.getElementById('c-notes');
   if (notesField) notesField.value = c.notes || '';
+  const crecheSel = document.getElementById('c-creche-select');
+  if (crecheSel && c.creche) crecheSel.value = c.creche;
 
   // Reset and fill article rows
   resetArticleRows();
@@ -2644,6 +2670,7 @@ function onUpdateCommande(id) {
   c.articles = getArticlesFromRows();
   c.montant  = parseFloat(document.getElementById('c-montant')?.value) || c.montant;
   c.bc       = document.getElementById('c-bc')?.value.trim() || c.bc;
+  c.creche   = document.getElementById('c-creche-select')?.value || c.creche;
 
   resetCommandeModal();
   saveData();
@@ -3803,9 +3830,13 @@ function commanderArticle(id) {
 
   // Set BC and date
   const bcField = document.getElementById('c-bc');
-  if (bcField) bcField.value = generateBC();
   const dateField = document.getElementById('c-date');
   if (dateField) dateField.value = new Date().toISOString().split('T')[0];
+
+  // Pré-sélectionner la crèche de l'article
+  const crecheSel = document.getElementById('c-creche-select');
+  if (crecheSel && a.creche) crecheSel.value = a.creche;
+  if (bcField) bcField.value = generateBC();
 
   // Pre-fill one article row with article data
   const container = document.getElementById('articles-rows');
@@ -4349,7 +4380,7 @@ function applyNomCreche(nom) {
   // Mettre à jour le titre de la page
   document.title = `Stocks Pédagogiques — ${nom}`;
   // Mettre à jour les selects de structure
-  ['f-creche', 'c-creche'].forEach(id => {
+  ['f-creche', 'c-creche-select'].forEach(id => {
     const sel = document.getElementById(id);
     if (sel) sel.innerHTML = `<option value="${nom}">${nom}</option>`;
   });
