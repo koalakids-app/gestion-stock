@@ -761,30 +761,33 @@ textarea { resize: vertical; min-height: 72px; }
   white-space: nowrap;
 }
 
-/* ── PLEIN ÉCRAN (bouton) ── */
-body.is-fullscreen .app {
-  grid-template-columns: 1fr;
-}
+/* ── FULLSCREEN ── */
+/* ── FULLSCREEN ── */
+@media (display-mode: fullscreen) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: none;
+  }
 
-body.is-fullscreen .sidebar {
-  position: fixed;
-  left: 0;
-  top: 0;
-  height: 100vh;
-  z-index: 250;
-  transform: translateX(-100%);
-  transition: transform 0.25s ease;
-  box-shadow: none;
-}
+  .sidebar:hover,
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-lg);
+  }
 
-body.is-fullscreen .sidebar.open {
-  transform: translateX(0);
-  box-shadow: var(--shadow-lg);
-}
+  .app {
+    grid-template-columns: 1fr;
+  }
 
-/* Languette visible pour rouvrir la sidebar */
-body.is-fullscreen .sidebar-trigger {
-  display: flex;
+  /* Languette visible pour déclencher l'ouverture */
+  .sidebar-trigger {
+    display: flex;
+  }
 }
 
 .sidebar-trigger {
@@ -1014,9 +1017,6 @@ body.is-fullscreen .sidebar-trigger {
       <div class="page-title" id="pageTitle">Inventaire</div>
     </div>
     <div class="topbar-right" style="display:flex;gap:10px;align-items:center">
-      <button class="btn btn-secondary btn-sm" id="fullscreenBtn" onclick="toggleFullscreen()" title="Plein écran" style="flex-shrink:0">
-        <span id="fullscreenIcon">⛶</span>
-      </button>
       <div class="search-box">
         <span>🔍</span>
         <input type="text" id="searchInput" placeholder="Rechercher un article..." oninput="filterTable()">
@@ -1739,7 +1739,7 @@ function init() {
   // Sync Supabase en arrière-plan
   loadData().then(() => {
     switchInvTab(currentInvTab); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique(); updateCounts();
-    if (typeof startPolling === 'function') startPolling(60);
+    if (typeof startPolling === 'function') startPolling(20);
   }).catch(e => {
     console.warn('Supabase unavailable:', e.message);
     setIndicator('💻 Mode local', 'var(--ink3)');
@@ -4117,14 +4117,14 @@ document.addEventListener('visibilitychange', () => {
     stopPolling();
   } else {
     syncFromCloud(); // Sync immédiate au retour en avant-plan
-    startPolling(60);
+    startPolling(20);
   }
 });
 
 // Sync immédiate au retour en ligne
 window.addEventListener('online', () => {
   setIndicator('🔄 Reconnexion…', 'var(--amber)');
-  syncFromCloud().then(() => startPolling(60));
+  syncFromCloud().then(() => startPolling(20));
 });
 
 // ── API helpers ────────────────────────────────────────────────────────────
@@ -4705,36 +4705,10 @@ function onRemoveArticlePhoto(id){ removeArticlePhoto(id).catch(e => { showNotif
 function onClearData()         { clearData().catch(e => console.error(e)); }
 // ── SIDEBAR : PWA fullscreen + drawer mobile ──────────────────────────────
 function toggleSidebar() {
-  // Mode plein écran uniquement (languette latérale)
+  // Mode PWA fullscreen uniquement (languette latérale)
   const sidebar = document.getElementById('mainSidebar');
   if (sidebar) sidebar.classList.toggle('open');
 }
-
-// ── PLEIN ÉCRAN (bouton) ──────────────────────────────────────────────────
-function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(err => {
-      showNotif('⚠ Plein écran impossible : ' + err.message);
-    });
-  } else {
-    document.exitFullscreen();
-  }
-}
-
-document.addEventListener('fullscreenchange', () => {
-  const isFs = !!document.fullscreenElement;
-  document.body.classList.toggle('is-fullscreen', isFs);
-
-  const icon = document.getElementById('fullscreenIcon');
-  if (icon) icon.textContent = isFs ? '⤓' : '⛶';
-
-  // En sortant du plein écran, on referme la sidebar repliée
-  if (!isFs) {
-    const sidebar = document.getElementById('mainSidebar');
-    if (sidebar) sidebar.classList.remove('open');
-  }
-});
-
 
 function openMobileMenu() {
   const sidebar = document.getElementById('mainSidebar');
@@ -4761,12 +4735,12 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
-// Ferme la sidebar si on clique en dehors (plein écran uniquement)
+// Ferme la sidebar si on clique en dehors (PWA plein écran uniquement)
 document.addEventListener('click', (e) => {
   const sidebar = document.getElementById('mainSidebar');
   const trigger = document.getElementById('sidebarTrigger');
   if (!sidebar) return;
-  if (document.body.classList.contains('is-fullscreen')) {
+  if (window.matchMedia('(display-mode: fullscreen)').matches) {
     if (
       sidebar.classList.contains('open') &&
       !sidebar.contains(e.target) &&
