@@ -1739,7 +1739,7 @@ function init() {
   // Sync Supabase en arrière-plan
   loadData().then(() => {
     switchInvTab(currentInvTab); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique(); updateCounts();
-    if (typeof startPolling === 'function') startPolling(15);
+    if (typeof startPolling === 'function') startPolling(60);
   }).catch(e => {
     console.warn('Supabase unavailable:', e.message);
     setIndicator('💻 Mode local', 'var(--ink3)');
@@ -2494,6 +2494,8 @@ async function confirmerLivraison(id) {
 
   const lignes = (c.articles || '').split('\n').filter(Boolean);
   let updated = 0, created = 0;
+  const articlesToSave = []; // { article, isNew }
+  const histoToSave = [];    // entrées d'historique à pousser vers Supabase
 
   for (let i = 0; i < lignes.length; i++) {
     const ligne = lignes[i];
@@ -2525,6 +2527,7 @@ async function confirmerLivraison(id) {
       a.nom.toLowerCase().includes(art.nom.toLowerCase().substring(0, 10))
     );
 
+    let isNew = false;
     if (!article) {
       article = {
         id: Date.now() + i,
@@ -2544,6 +2547,7 @@ async function confirmerLivraison(id) {
       };
       ARTICLES.push(article);
       created++;
+      isNew = true;
     } else {
       article.stock += qty;
       if (art.prix > 0 && article.prix === 0) article.prix = art.prix;
@@ -2554,7 +2558,9 @@ async function confirmerLivraison(id) {
       article.etat_override = null; // reset l'override — l'état repart de zéro (Neuf)
       updated++;
     }
+    articlesToSave.push({ article, isNew });
     addHisto('entrée', article.nom, qty, article.creche, 'Vous', `Réception ${c.bc}`);
+    histoToSave.push(HISTORIQUE[0]);
   }
 
   c.status = 'livrees';
@@ -2565,6 +2571,17 @@ async function confirmerLivraison(id) {
   renderHistorique();
   renderStats();
   updateCounts();
+
+  // Persister dans Supabase : articles créés/mis à jour, statut de la commande, historique
+  if (!IS_LOCAL) {
+    for (const { article, isNew } of articlesToSave) {
+      await saveArticleDB(article, isNew).catch(e => console.warn('[Livraison] article DB:', e.message));
+    }
+    await updateCommandeDB(c).catch(e => console.warn('[Livraison] commande DB:', e.message));
+    for (const h of histoToSave) {
+      await saveHistoDB(h).catch(e => console.warn('[Livraison] histo DB:', e.message));
+    }
+  }
 
   let msg = '✅ Livraison confirmée';
   if (updated > 0) msg += ` — ${updated} stock(s) mis à jour`;
@@ -2692,7 +2709,7 @@ function onUpdateCommande(id) {
   resetCommandeModal();
   saveData();
   closeModal('modal-commande');
-  if (!IS_LOCAL) updateCommandeDB(c).catch(()=>{});
+  if (!IS_LOCAL) updateCommandeDB(c).then(() => saveData()).catch(()=>{});
   renderCommandes();
   showNotif('✅ Commande mise à jour');
 }
@@ -4100,14 +4117,14 @@ document.addEventListener('visibilitychange', () => {
     stopPolling();
   } else {
     syncFromCloud(); // Sync immédiate au retour en avant-plan
-    startPolling(15);
+    startPolling(60);
   }
 });
 
 // Sync immédiate au retour en ligne
 window.addEventListener('online', () => {
   setIndicator('🔄 Reconnexion…', 'var(--amber)');
-  syncFromCloud().then(() => startPolling(15));
+  syncFromCloud().then(() => startPolling(60));
 });
 
 // ── API helpers ────────────────────────────────────────────────────────────
@@ -4138,10 +4155,11 @@ async function sbInsert(table, data) {
 async function sbUpdate(table, id, data) {
   const r = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`, {
     method: 'PATCH',
-    headers: SUPA_HEADERS,
+    headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' },
     body: JSON.stringify(data),
   });
   if (!r.ok) throw new Error(`UPDATE ${table} : ${r.status}`);
+  return r.json();
 }
 
 async function sbDelete(table, id) {
@@ -4319,7 +4337,17 @@ async function saveCommandeDB(commande) {
 
 async function updateCommandeDB(commande) {
   if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
-  try { await sbUpdate('commandes', commande.id, commandeToRow(commande)); setSaved(); }
+  try {
+    const rows = await sbUpdate('commandes', commande.id, commandeToRow(commande));
+    if (Array.isArray(rows) && rows.length === 0) {
+      // Aucune ligne ne correspond à cet id dans Supabase (ex : commande jamais
+      // réellement enregistrée côté serveur) → on la recrée pour ne pas la perdre
+      // au prochain sync.
+      const inserted = await sbInsert('commandes', commandeToRow(commande));
+      if (inserted && inserted[0] && inserted[0].id) commande.id = inserted[0].id;
+    }
+    setSaved();
+  }
   catch(e) { console.error('[Supabase] Update commande :', e); }
 }
 
