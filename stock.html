@@ -761,33 +761,30 @@ textarea { resize: vertical; min-height: 72px; }
   white-space: nowrap;
 }
 
-/* ── FULLSCREEN ── */
-/* ── FULLSCREEN ── */
-@media (display-mode: fullscreen) {
-  .sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    z-index: 50;
-    transform: translateX(-100%);
-    transition: transform 0.25s ease;
-    box-shadow: none;
-  }
+/* ── PLEIN ÉCRAN (bouton) ── */
+body.is-fullscreen .app {
+  grid-template-columns: 1fr;
+}
 
-  .sidebar:hover,
-  .sidebar.open {
-    transform: translateX(0);
-    box-shadow: var(--shadow-lg);
-  }
+body.is-fullscreen .sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  z-index: 250;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+  box-shadow: none;
+}
 
-  .app {
-    grid-template-columns: 1fr;
-  }
+body.is-fullscreen .sidebar.open {
+  transform: translateX(0);
+  box-shadow: var(--shadow-lg);
+}
 
-  /* Languette visible pour déclencher l'ouverture */
-  .sidebar-trigger {
-    display: flex;
-  }
+/* Languette visible pour rouvrir la sidebar */
+body.is-fullscreen .sidebar-trigger {
+  display: flex;
 }
 
 .sidebar-trigger {
@@ -1017,6 +1014,9 @@ textarea { resize: vertical; min-height: 72px; }
       <div class="page-title" id="pageTitle">Inventaire</div>
     </div>
     <div class="topbar-right" style="display:flex;gap:10px;align-items:center">
+      <button class="btn btn-secondary btn-sm" id="fullscreenBtn" onclick="toggleFullscreen()" title="Plein écran" style="flex-shrink:0">
+        <span id="fullscreenIcon">⛶</span>
+      </button>
       <div class="search-box">
         <span>🔍</span>
         <input type="text" id="searchInput" placeholder="Rechercher un article..." oninput="filterTable()">
@@ -4705,10 +4705,36 @@ function onRemoveArticlePhoto(id){ removeArticlePhoto(id).catch(e => { showNotif
 function onClearData()         { clearData().catch(e => console.error(e)); }
 // ── SIDEBAR : PWA fullscreen + drawer mobile ──────────────────────────────
 function toggleSidebar() {
-  // Mode PWA fullscreen uniquement (languette latérale)
+  // Mode plein écran uniquement (languette latérale)
   const sidebar = document.getElementById('mainSidebar');
   if (sidebar) sidebar.classList.toggle('open');
 }
+
+// ── PLEIN ÉCRAN (bouton) ──────────────────────────────────────────────────
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(err => {
+      showNotif('⚠ Plein écran impossible : ' + err.message);
+    });
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+document.addEventListener('fullscreenchange', () => {
+  const isFs = !!document.fullscreenElement;
+  document.body.classList.toggle('is-fullscreen', isFs);
+
+  const icon = document.getElementById('fullscreenIcon');
+  if (icon) icon.textContent = isFs ? '⤓' : '⛶';
+
+  // En sortant du plein écran, on referme la sidebar repliée
+  if (!isFs) {
+    const sidebar = document.getElementById('mainSidebar');
+    if (sidebar) sidebar.classList.remove('open');
+  }
+});
+
 
 function openMobileMenu() {
   const sidebar = document.getElementById('mainSidebar');
@@ -4735,12 +4761,12 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
-// Ferme la sidebar si on clique en dehors (PWA plein écran uniquement)
+// Ferme la sidebar si on clique en dehors (plein écran uniquement)
 document.addEventListener('click', (e) => {
   const sidebar = document.getElementById('mainSidebar');
   const trigger = document.getElementById('sidebarTrigger');
   if (!sidebar) return;
-  if (window.matchMedia('(display-mode: fullscreen)').matches) {
+  if (document.body.classList.contains('is-fullscreen')) {
     if (
       sidebar.classList.contains('open') &&
       !sidebar.contains(e.target) &&
