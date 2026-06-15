@@ -2601,7 +2601,24 @@ function resetCommandeModal() {
 // Régénère le N° de bon de commande quand on change de crèche (sauf en modification)
 function onChangeCommandeCreche() {
   const bcField = document.getElementById('c-bc');
-  if (bcField && !bcField.dataset.editing) bcField.value = generateBC();
+  if (!bcField) return;
+  if (!bcField.dataset.editing) {
+    // Nouvelle commande : on régénère entièrement le numéro
+    bcField.value = generateBC();
+    return;
+  }
+  // Commande existante : on remplace seulement le préfixe (nom de crèche)
+  // tout en gardant la date et le numéro de séquence d'origine
+  const sel = document.getElementById('c-creche-select');
+  const nom = (sel?.value || '').replace(/\s+/g, '').substring(0, 8).toUpperCase();
+  if (!nom) return;
+  const parts = bcField.value.split('-');
+  if (parts.length >= 2) {
+    parts[0] = nom;
+    bcField.value = parts.join('-');
+  } else {
+    bcField.value = nom;
+  }
 }
 
 function editCommande(id) {
