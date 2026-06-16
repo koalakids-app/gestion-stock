@@ -2108,7 +2108,7 @@ function renderCommandes() {
             }).join('')}
           </div>
           ${c.notes ? `<div style="margin-top:8px;font-size:12px;color:var(--amber);background:var(--amber-lt);padding:6px 10px;border-radius:6px">📌 ${c.notes}</div>` : ''}
-          ${c.url ? `<div style="margin-top:8px"><a href="${c.url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);background:var(--accent-lt);padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:500">🔗 Accéder à la commande en ligne</a></div>` : ''}
+          ${c.url ? `<div style="margin-top:8px"><a href="${cleanUrl(c.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);background:var(--accent-lt);padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:500">🔗 Accéder à la commande en ligne</a></div>` : ''}
         </div>
         <div>
           <div class="commande-total-label">Total</div>
@@ -2178,7 +2178,7 @@ function renderFournisseurs() {
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         <span class="badge badge-purple">${f.spec}</span>
         <span style="font-size:12px;color:var(--ink3)">${ARTICLES.filter(a=>a.fourn===f.nom).length} articles</span>
-        ${f.web && f.web !== '—' ? `<a href="${f.web}" target="_blank" class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">🌐 Site</a>` : ''}
+        ${f.web && f.web !== '—' ? `<a href="${cleanUrl(f.web)}" target="_blank" class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">🌐 Site</a>` : ''}
         <div style="display:flex;gap:6px;margin-top:4px">
           <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();editFournisseur(${f.id})">✏️ Modifier</button>
           <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteFournisseur(${f.id})">🗑 Supprimer</button>
@@ -2856,7 +2856,7 @@ function showDetail(id) {
           <tr><td style="color:var(--ink3);padding:3px 0">Prix unitaire</td><td style="font-weight:500">${a.prix > 0 ? a.prix.toFixed(2)+' €' : '—'}</td></tr>
           <tr><td style="color:var(--ink3);padding:3px 0">Fournisseur</td><td style="font-weight:500">${a.fourn || '—'}</td></tr>
           <tr><td style="color:var(--ink3);padding:3px 0">Valeur stock</td><td style="font-weight:600;color:var(--accent)">${(a.stock*a.prix).toFixed(2)} €</td></tr>
-          ${a.url ? `<tr><td style="color:var(--ink3);padding:3px 0">Lien</td><td><a href="${a.url}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px">🔗 Voir</a></td></tr>` : ''}
+          ${a.url ? `<tr><td style="color:var(--ink3);padding:3px 0">Lien</td><td><a href="${cleanUrl(a.url)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px">🔗 Voir</a></td></tr>` : ''}
           ${a.date_achat ? `<tr><td style="color:var(--ink3);padding:3px 0">Date d'achat</td><td style="font-weight:500">${new Date(a.date_achat).toLocaleDateString('fr-FR')}</td></tr>` : ''}
           ${a.depreciable === false
             ? `<tr><td style="color:var(--ink3);padding:3px 0">Type</td><td><span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:#F0FDF4;color:#065F46">🧴 Consommable</span></td></tr>`
@@ -2872,7 +2872,7 @@ function showDetail(id) {
       </div>
     </div>
     ${a.notes ? `<div style="background:var(--amber-lt);border:1px solid #FDE68A;border-radius:8px;padding:12px;font-size:13px;color:#92400E;margin-bottom:16px">📌 ${a.notes}</div>` : ''}
-    ${a.url ? `<div style="margin-bottom:16px"><a href="${a.url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:var(--accent-lt);color:var(--accent);padding:10px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;border:1px solid #BFDBFE">🔗 Voir la fiche produit</a></div>` : ''}
+    ${a.url ? `<div style="margin-bottom:16px"><a href="${cleanUrl(a.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:var(--accent-lt);color:var(--accent);padding:10px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;border:1px solid #BFDBFE">🔗 Voir la fiche produit</a></div>` : ''}
     <div style="margin-bottom:8px;font-weight:600;font-size:13px">Ajuster le stock</div>
     <div style="display:flex;gap:10px;align-items:center">
       <button class="btn btn-secondary" onclick="onAdjustStock(${a.id}, -1)">− Retirer 1</button>
@@ -3131,7 +3131,7 @@ function printBordereau(id) {
 
     // Build print rows HTML (no nested template literals)
     const printRowsHTML = arts.map(a => {
-      const lien = a.url ? '<a href="' + a.url + '" target="_blank" style="color:#2563EB;text-decoration:none">🔗 Voir</a>' : '—';
+      const lien = a.url ? '<a href="' + cleanUrl(a.url) + '" target="_blank" style="color:#2563EB;text-decoration:none">🔗 Voir</a>' : '—';
       const t = ((a.qty||0)*(a.prix||0)).toFixed(2);
       return '<tr><td><strong>' + a.nom + '</strong></td>' +
         '<td style="text-align:center">' + (a.fourn||'—') + '</td>' +
@@ -3801,6 +3801,13 @@ function exportCSV() {
 
 // ─── NOTIFICATION ─────────────────────────────────────────────────────────
 let notifTimer;
+function cleanUrl(raw) {
+  if (!raw) return '';
+  // Extraire la première URL valide (http/https) dans la chaîne
+  const match = raw.match(/https?:\/\/[^\s\]\)"'<>]+/);
+  return match ? match[0] : '';
+}
+
 function showNotif(msg) {
   const el = document.getElementById('notif');
   el.textContent = msg;
