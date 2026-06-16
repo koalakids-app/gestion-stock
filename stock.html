@@ -4170,33 +4170,63 @@ async function syncFromCloud() {
   if (isPolling) return;
   isPolling = true;
   try {
-    const [arts, cmds, fourns, histos, univs] = await Promise.all([
+    // Fetch chaque table indépendamment — une erreur sur l'une ne détruit pas les autres
+    const results = await Promise.allSettled([
       sbGet('articles'),
       sbGet('commandes'),
       sbGet('fournisseurs'),
       sbGet('historique', 'order=id.desc&limit=200'),
-      sbGet('univers', 'order=id.desc').catch(() => []),
+      sbGet('univers', 'order=id.desc'),
     ]);
-    if (Array.isArray(arts))   ARTICLES.splice(0,     ARTICLES.length,     ...arts.map(rowToArticle));
-    if (Array.isArray(cmds))   COMMANDES.splice(0,    COMMANDES.length,    ...cmds.map(rowToCommande));
-    if (Array.isArray(fourns)) FOURNISSEURS.splice(0, FOURNISSEURS.length, ...fourns.map(rowToFournisseur));
-    if (Array.isArray(histos)) HISTORIQUE.splice(0,   HISTORIQUE.length,   ...histos.map(rowToHisto));
-    if (Array.isArray(univs)) {
-      // Map Supabase column 'description' back to 'desc' used in app
-      const mapped = univs.map(u => ({ ...u, desc: u.desc || u.description || '' }));
+
+    const [artsR, cmdsR, fournsR, histosR, univsR] = results;
+
+    // On ne remplace les données en mémoire QUE si le fetch a réussi
+    if (artsR.status === 'fulfilled' && Array.isArray(artsR.value))
+      ARTICLES.splice(0, ARTICLES.length, ...artsR.value.map(rowToArticle));
+    else if (artsR.status === 'rejected')
+      console.warn('[Sync] articles:', artsR.reason?.message);
+
+    if (cmdsR.status === 'fulfilled' && Array.isArray(cmdsR.value)) {
+      // Fusionner : garder les commandes locales non encore persistées (id numérique local > id Supabase)
+      const dbIds = new Set(cmdsR.value.map(r => r.id));
+      const localOnly = COMMANDES.filter(c => !dbIds.has(c.id));
+      COMMANDES.splice(0, COMMANDES.length, ...cmdsR.value.map(rowToCommande), ...localOnly);
+    } else if (cmdsR.status === 'rejected')
+      console.warn('[Sync] commandes:', cmdsR.reason?.message);
+
+    if (fournsR.status === 'fulfilled' && Array.isArray(fournsR.value))
+      FOURNISSEURS.splice(0, FOURNISSEURS.length, ...fournsR.value.map(rowToFournisseur));
+    else if (fournsR.status === 'rejected')
+      console.warn('[Sync] fournisseurs:', fournsR.reason?.message);
+
+    if (histosR.status === 'fulfilled' && Array.isArray(histosR.value))
+      HISTORIQUE.splice(0, HISTORIQUE.length, ...histosR.value.map(rowToHisto));
+    else if (histosR.status === 'rejected')
+      console.warn('[Sync] historique:', histosR.reason?.message);
+
+    if (univsR.status === 'fulfilled' && Array.isArray(univsR.value)) {
+      const mapped = univsR.value.map(u => ({ ...u, desc: u.desc || u.description || '' }));
       UNIVERS.splice(0, UNIVERS.length, ...mapped);
     }
+
     const savedCreche = currentCreche;
-saveData();
-currentCreche = savedCreche;
-renderActiveInvTable(); renderStats(); updateCounts();
-if (currentPage === 'commandes') renderCommandes();
-else if (currentPage === 'fournisseurs') renderFournisseurs();
-else if (currentPage === 'historique') renderHistorique();
-else if (currentPage === 'univers') renderUnivers();
-    
+    saveData();
+    currentCreche = savedCreche;
+    renderActiveInvTable(); renderStats(); updateCounts();
+    if (currentPage === 'commandes') renderCommandes();
+    else if (currentPage === 'fournisseurs') renderFournisseurs();
+    else if (currentPage === 'historique') renderHistorique();
+    else if (currentPage === 'univers') renderUnivers();
+
+    const allOk = results.every(r => r.status === 'fulfilled');
     const now = new Date();
-    setIndicator('☁️ À jour — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}), 'var(--green)');
+    setIndicator(
+      allOk
+        ? '☁️ À jour — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'})
+        : '⚠️ Sync partiel — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}),
+      allOk ? 'var(--green)' : 'var(--amber)'
+    );
   } catch(e) {
     console.warn('[Sync]', e.message);
     setIndicator('⚠️ Hors ligne', 'var(--amber)');
@@ -4313,7 +4343,7 @@ function rowToArticle(r) {
            etat: r.etat||'Neuf', depreciable: r.depreciable !== false,
            etat_override: r.etat_override||null };
 }function commandeToRow(c) {
-  return {
+  const row = {
     fourn:    c.fourn || '—',
     creche:   c.creche || '',
     date:     c.date || new Date().toISOString().split('T')[0],
@@ -4324,8 +4354,10 @@ function rowToArticle(r) {
     articles: c.articles || '',
     notes:    c.notes || '',
     url:      c.url || '',
-    photos_json: c.photos_json || null,
   };
+  // photos_json uniquement si la colonne existe (ajout progressif)
+  if (c.photos_json) row.photos_json = c.photos_json;
+  return row;
 }
 function rowToCommande(r) {
   return { id: r.id, fourn: r.fourn, creche: r.creche, date: r.date,
