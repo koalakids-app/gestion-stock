@@ -3210,11 +3210,29 @@ function printBordereau(id) {
 
 function doPrint() {
   try {
-    const blob = new Blob([_currentBordereauHTML], { type: 'text/html;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-    const win  = window.open(url, '_blank');
-    if (!win) showNotif('⚠ Autorisez les popups dans Chrome');
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    // Utiliser un iframe caché pour l'impression (compatible mobile/Chrome)
+    const existing = document.getElementById('_print-frame');
+    if (existing) existing.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = '_print-frame';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(_currentBordereauHTML);
+    doc.close();
+
+    // Attendre le chargement des images/styles avant d'imprimer
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch(e) {
+        showNotif('⚠ Erreur impression : ' + e.message);
+      }
+    };
   } catch(e) {
     showNotif('⚠ Erreur : ' + e.message);
   }
