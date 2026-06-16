@@ -2400,6 +2400,11 @@ async function saveCommande_db() {
   });
   if (!fourn) fourn = '—';
 
+  // Sérialiser les photos par index de ligne
+  const photosJson = Object.keys(articleRowPhotos).length > 0
+    ? JSON.stringify(articleRowPhotos)
+    : null;
+
   COMMANDES.push({
     id: Date.now(),
     fourn, creche,
@@ -2410,6 +2415,7 @@ async function saveCommande_db() {
     articles: articles || '—',
     notes: document.getElementById('c-notes').value.trim(),
     url: '',
+    photos_json: photosJson,
   });
 
   addHisto('commande', `Commande ${bc}`, 0, creche, 'Vous', `${fourn} — ${montant.toFixed(2)}€`);
@@ -2529,6 +2535,11 @@ async function confirmerLivraison(id) {
 
     let isNew = false;
     if (!article) {
+      // Récupérer la photo de la ligne de commande si disponible
+      let rowPhoto = null;
+      if (c.photos_json) {
+        try { const photos = JSON.parse(c.photos_json); rowPhoto = photos[i] || null; } catch(e) {}
+      }
       article = {
         id: Date.now() + i,
         nom: art.nom,
@@ -2541,7 +2552,7 @@ async function confirmerLivraison(id) {
         fourn: art.fourn || '',
         notes: '',
         url: art.url || '',
-        photo: null,
+        photo: rowPhoto,
         date_achat: c.livraison || c.date || new Date().toISOString().split('T')[0],
         etat_override: null,
       };
@@ -2557,6 +2568,13 @@ async function confirmerLivraison(id) {
       article.date_achat = c.livraison || c.date || new Date().toISOString().split('T')[0];
       article.etat_override = null; // reset l'override — l'état repart de zéro (Neuf)
       updated++;
+    }
+    // Transférer la photo de commande si l'article n'en a pas encore
+    if (!article.photo && c.photos_json) {
+      try {
+        const photos = JSON.parse(c.photos_json);
+        if (photos[i]) article.photo = photos[i];
+      } catch(e) { /* photos_json invalide */ }
     }
     articlesToSave.push({ article, isNew });
     addHisto('entrée', article.nom, qty, article.creche, 'Vous', `Réception ${c.bc}`);
@@ -2659,6 +2677,13 @@ function editCommande(id) {
 
   // Reset and fill article rows
   resetArticleRows();
+  // Recharger les photos existantes de la commande
+  if (c.photos_json) {
+    try {
+      const savedPhotos = JSON.parse(c.photos_json);
+      Object.assign(articleRowPhotos, savedPhotos);
+    } catch(e) {}
+  }
   const lignes = (c.articles || '').split('\n').filter(Boolean);
   if (lignes.length > 0) {
     // Remove the empty row added by resetArticleRows
@@ -2681,6 +2706,15 @@ function editCommande(id) {
         .replace(/\s*\[cat:[^\]]*\]\s*/g,'')
         .replace(/(?:\s*\(\d+[.,]?\d*\s*€?\))+\s*$/,'').replace(/\s*\[.*?\]\s*$/,'').trim();
       addArticleRow(qty, nom, prix, url, fourn, cat);
+    });
+    // Restaurer les aperçus photos dans les rows
+    Object.entries(articleRowPhotos).forEach(([idx, dataUrl]) => {
+      const prev = document.getElementById(`row-photo-prev-${idx}`);
+      const del  = document.getElementById(`row-photo-del-${idx}`);
+      const btn  = document.getElementById(`row-photo-btn-${idx}`);
+      if (prev) { prev.src = dataUrl; prev.style.display = 'block'; }
+      if (del)  del.style.display = 'inline-block';
+      if (btn)  btn.textContent = '📷 Photo ✅';
     });
   }
 
@@ -2705,6 +2739,8 @@ function onUpdateCommande(id) {
   c.montant  = parseFloat(document.getElementById('c-montant')?.value) || c.montant;
   c.bc       = document.getElementById('c-bc')?.value.trim() || c.bc;
   c.creche   = document.getElementById('c-creche-select')?.value || c.creche;
+  c.photos_json = Object.keys(articleRowPhotos).length > 0
+    ? JSON.stringify(articleRowPhotos) : (c.photos_json || null);
 
   resetCommandeModal();
   saveData();
@@ -3819,6 +3855,7 @@ function showNotif(msg) {
 // ─── LIGNES D'ARTICLES DANS FORMULAIRE COMMANDE ──────────────────────────
 
 let articleRowCount = 0;
+const articleRowPhotos = {}; // idx → base64 photo
 
 function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='') {
   const idx = articleRowCount++;
@@ -3847,9 +3884,49 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='') {
     <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00"
            oninput="calcCommandeTotal()" style="text-align:right">
     <button class="del-row" onclick="removeArticleRow(${idx})" title="Supprimer">×</button>
+    <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:4px 8px 6px;border-top:1px solid var(--border);background:var(--bg)">
+      <label style="font-size:11px;color:var(--ink2);cursor:pointer;display:flex;align-items:center;gap:6px;margin:0">
+        <input type="file" accept="image/*" style="display:none"
+               onchange="handleRowPhoto(event,${idx})">
+        <span id="row-photo-btn-${idx}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px dashed var(--border);border-radius:5px;font-size:11px;color:var(--ink2);cursor:pointer;transition:border-color .15s"
+              onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          📷 Photo article
+        </span>
+      </label>
+      <img id="row-photo-prev-${idx}" src="" alt="" style="display:none;height:36px;width:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">
+      <button type="button" id="row-photo-del-${idx}" style="display:none;background:none;border:none;cursor:pointer;font-size:14px;color:var(--red);padding:0 4px" onclick="deleteRowPhoto(${idx})" title="Supprimer la photo">✕</button>
+    </div>
   `;
   container.appendChild(row);
   calcCommandeTotal();
+}
+
+function handleRowPhoto(event, idx) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showNotif('⚠ Photo trop grande — max 5 Mo'); return; }
+  if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    articleRowPhotos[idx] = e.target.result;
+    const prev = document.getElementById(`row-photo-prev-${idx}`);
+    const del  = document.getElementById(`row-photo-del-${idx}`);
+    const btn  = document.getElementById(`row-photo-btn-${idx}`);
+    if (prev) { prev.src = e.target.result; prev.style.display = 'block'; }
+    if (del)  del.style.display = 'inline-block';
+    if (btn)  btn.textContent = '📷 Photo ✅';
+  };
+  reader.readAsDataURL(file);
+}
+
+function deleteRowPhoto(idx) {
+  delete articleRowPhotos[idx];
+  const prev = document.getElementById(`row-photo-prev-${idx}`);
+  const del  = document.getElementById(`row-photo-del-${idx}`);
+  const btn  = document.getElementById(`row-photo-btn-${idx}`);
+  if (prev) { prev.src = ''; prev.style.display = 'none'; }
+  if (del)  del.style.display = 'none';
+  if (btn)  btn.textContent = '📷 Photo article';
 }
 
 function removeArticleRow(idx) {
@@ -3910,6 +3987,7 @@ function resetArticleRows() {
   const container = document.getElementById('articles-rows');
   if (container) container.innerHTML = '';
   articleRowCount = 0;
+  Object.keys(articleRowPhotos).forEach(k => delete articleRowPhotos[k]);
   addArticleRow(); // Toujours au moins une ligne vide
 }
 
@@ -4246,13 +4324,14 @@ function rowToArticle(r) {
     articles: c.articles || '',
     notes:    c.notes || '',
     url:      c.url || '',
+    photos_json: c.photos_json || null,
   };
 }
 function rowToCommande(r) {
   return { id: r.id, fourn: r.fourn, creche: r.creche, date: r.date,
            livraison: r.livraison, montant: parseFloat(r.montant)||0,
            bc: r.bc, status: r.status, articles: r.articles||'',
-           notes: r.notes||'', url: r.url||'' };
+           notes: r.notes||'', url: r.url||'', photos_json: r.photos_json||null };
 }
 function fournisseurToRow(f) {
   return { nom: f.nom, contact: f.contact, tel: f.tel, email: f.email,
