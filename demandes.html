@@ -384,21 +384,54 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <!-- PLANNING -->
   <div id="main-planning" class="tab-content">
+    <!-- Barre navigation semaine -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:8px">
       <div style="display:flex;align-items:center;gap:10px">
         <button class="ibtn" onclick="changeWeek(-1)"><i class="ti ti-chevron-left"></i></button>
         <span id="week-label" style="font-size:14px;font-weight:700;color:var(--koala)">—</span>
         <button class="ibtn" onclick="changeWeek(1)"><i class="ti ti-chevron-right"></i></button>
       </div>
-      <button class="btn-primary" onclick="openEventModal()"><i class="ti ti-plus"></i> Ajouter</button>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="legend" style="margin-bottom:0">
+          <div class="leg-item"><div class="leg-dot" style="background:var(--koala)"></div>Présence</div>
+          <div class="leg-item"><div class="leg-dot" style="background:var(--orange)"></div>Absent</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#378ADD"></div>Formation</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#7B68EE"></div>Réunion</div>
+        </div>
+        <button class="btn-primary" onclick="openEventModal()"><i class="ti ti-plus"></i> Ajouter</button>
+      </div>
     </div>
-    <div class="legend">
-      <div class="leg-item"><div class="leg-dot" style="background:var(--koala)"></div>Présence</div>
-      <div class="leg-item"><div class="leg-dot" style="background:var(--orange)"></div>Absent</div>
-      <div class="leg-item"><div class="leg-dot" style="background:#378ADD"></div>Formation</div>
-      <div class="leg-item"><div class="leg-dot" style="background:#7B68EE"></div>Réunion</div>
+
+    <!-- Planning MON planning (modifiable) -->
+    <div style="margin-bottom:1.25rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:6px">
+        <div style="font-size:13px;font-weight:700;color:var(--koala);display:flex;align-items:center;gap:6px">
+          <i class="ti ti-user"></i> <span id="planning-my-label">Mon planning</span>
+        </div>
+        <span style="font-size:11px;background:var(--koala-light);color:var(--koala);padding:2px 9px;border-radius:10px;font-weight:600">✏️ Modifiable</span>
+      </div>
+      <div class="planning-grid" id="planning-grid-mine"></div>
     </div>
-    <div class="planning-grid" id="planning-grid"></div>
+
+    <!-- Séparateur -->
+    <div style="border-top:2px dashed var(--border);margin:0.75rem 0"></div>
+
+    <!-- Planning du bas : David Bucari (référents) ou menu déroulant (direction) -->
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:6px">
+        <div style="font-size:13px;font-weight:700;color:var(--koala);display:flex;align-items:center;gap:6px">
+          <i class="ti ti-user-circle"></i>
+          <!-- Label fixe pour les référents -->
+          <span id="planning-other-label" style="display:none">Planning du coordinateur</span>
+          <!-- Menu déroulant pour direction -->
+          <select id="planning-ref-select" class="finput" style="display:none;font-size:12px;padding:4px 8px;width:auto;min-width:180px" onchange="renderPlanning()">
+            <option value="">-- Choisir un référent --</option>
+          </select>
+        </div>
+        <span style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
+      </div>
+      <div class="planning-grid" id="planning-grid-other"></div>
+    </div>
   </div>
 
   <!-- TABLEAU DE BORD -->
@@ -764,7 +797,32 @@ function showApp(){
   document.getElementById('app-wrap').style.display='block';
   document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
   document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
+  // Migration des clés planning 'dir' → id réel (si événements sauvegardés avant le login forcé)
+  migratePlanningKeys();
   updateBadges();renderCrecheTabs();
+}
+
+function migratePlanningKeys(){
+  const userId=currentProfile?.id||currentUser?.id;
+  if(!userId||userId==='dir')return;
+  // Parcourir toutes les clés localStorage qui contiennent '_dir'
+  const keysToMigrate=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k&&k.startsWith('events_')&&k.endsWith('_dir'))keysToMigrate.push(k);
+  }
+  keysToMigrate.forEach(oldKey=>{
+    const newKey=oldKey.replace(/_dir$/, '_'+userId);
+    // Ne migrer que si la nouvelle clé n'existe pas encore
+    if(!localStorage.getItem(newKey)){
+      const data=localStorage.getItem(oldKey);
+      if(data&&data!=='[]'){
+        localStorage.setItem(newKey,data);
+        console.log('[Planning] Migration clé:',oldKey,'→',newKey);
+      }
+    }
+    localStorage.removeItem(oldKey);
+  });
 }
 
 function todayStr(){return new Date().toISOString().slice(0,10);}
@@ -1018,17 +1076,98 @@ async function saveEnfant(){const prenom=document.getElementById('enf-prenom').v
 
 // PLANNING (localStorage par utilisateur)
 function changeWeek(d){weekOffset+=d;renderPlanning();}
+// Nom du coordinateur (David Bucari) — identifié par son nom dans les référents
+const COORD_NAME = 'David Bucari';
+
+function getPlanningGrid(events, key, editable) {
+  const ws = weekStart();
+  const fmt = d => d.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'});
+  const days5 = Array.from({length:5}, (_,i) => { const d=new Date(ws); d.setDate(ws.getDate()+i); return d; });
+  let html = '<div class="pg-hd"></div>';
+  days5.forEach((d,i) => { html += '<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>'; });
+  ['Matin','Après-midi'].forEach((slot,si) => {
+    html += '<div class="pg-time">'+slot+'</div>';
+    days5.forEach((_,di) => {
+      const evs = events.filter(e => e.day===di && e.slot===si);
+      if(editable) {
+        html += '<div class="pg-cell" onclick="openEventAt('+di+','+si+')">';
+        if(!evs.length) html += '<span style="font-size:10px;color:#ccc">+ ajouter</span>';
+        evs.forEach(e => { html += '<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delEvent(\''+e.id+'\',\''+key+'\')">'+e.lieu+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>'; });
+      } else {
+        html += '<div class="pg-cell" style="cursor:default;background:#fafafa">';
+        if(!evs.length) html += '<span style="font-size:10px;color:#ddd">—</span>';
+        evs.forEach(e => { html += '<div class="pg-ev '+e.type+'" style="opacity:0.85">'+e.lieu+'</div>'; });
+      }
+      html += '</div>';
+    });
+  });
+  return html;
+}
+
 function renderPlanning(){
-  const ws=weekStart();const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  document.getElementById('week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
-  const key='events_'+ws.toISOString().slice(0,10)+'_'+(currentProfile?.id||'dir');
-  const events=JSON.parse(localStorage.getItem(key)||'[]');
-  const grid=document.getElementById('planning-grid');
-  let html='<div class="pg-hd"></div>';
-  days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
-  ['Matin','Après-midi'].forEach((slot,si)=>{html+='<div class="pg-time">'+slot+'</div>';days5.forEach((_,di)=>{const evs=events.filter(e=>e.day===di&&e.slot===si);html+='<div class="pg-cell" onclick="openEventAt('+di+','+si+')">';if(!evs.length)html+='<span style="font-size:10px;color:#ccc">+ ajouter</span>';evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delEvent(\''+e.id+'\',\''+key+'\')">'+e.lieu+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>';});html+='</div>';});});
-  grid.innerHTML=html;
+  const ws = weekStart();
+  const fmt = d => d.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'});
+  const days5 = Array.from({length:5}, (_,i) => { const d=new Date(ws); d.setDate(ws.getDate()+i); return d; });
+  document.getElementById('week-label').textContent = fmt(days5[0])+' – '+fmt(days5[4]);
+
+  // ── MON planning (modifiable) ──
+  const userId = currentProfile?.id||currentUser?.id||'dir';
+  const myKey  = 'events_'+ws.toISOString().slice(0,10)+'_'+userId;
+  const myEvents = JSON.parse(localStorage.getItem(myKey)||'[]');
+  const myName = currentProfile?.name||'Mon planning';
+  const myLabel = document.getElementById('planning-my-label');
+  if(myLabel) myLabel.textContent = myName;
+  const gridMine = document.getElementById('planning-grid-mine');
+  if(gridMine) gridMine.innerHTML = getPlanningGrid(myEvents, myKey, true);
+
+  // ── PLANNING DU BAS ──
+  const iAmCoord = (currentProfile?.name||'').toLowerCase().includes('david') || (currentProfile?.name||'').toLowerCase().includes('bucari');
+
+  if(iAmCoord) {
+    // Direction/Coordinateur : menu déroulant pour choisir un référent
+    const sel = document.getElementById('planning-ref-select');
+    const lbl = document.getElementById('planning-other-label');
+    if(sel) sel.style.display = '';
+    if(lbl) lbl.style.display = 'none';
+    // Peupler le select si pas encore fait
+    if(sel && sel.options.length <= 1) {
+      const refs = cacheReferents.filter(r => r.role==='referent');
+      sel.innerHTML = '<option value="">-- Choisir un référent --</option>' +
+        refs.map(r => '<option value="'+r.id+'">'+r.name+'</option>').join('');
+    }
+    const selectedId = sel?.value;
+    const gridOther = document.getElementById('planning-grid-other');
+    if(gridOther) {
+      if(!selectedId) {
+        gridOther.innerHTML = '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez un référent pour voir son planning</div>';
+      } else {
+        const otherKey = 'events_'+ws.toISOString().slice(0,10)+'_'+selectedId;
+        const otherEvents = JSON.parse(localStorage.getItem(otherKey)||'[]');
+        gridOther.innerHTML = getPlanningGrid(otherEvents, otherKey, false);
+      }
+    }
+  } else {
+    // Référent : voir le planning de David Bucari (lecture seule)
+    const sel = document.getElementById('planning-ref-select');
+    const lbl = document.getElementById('planning-other-label');
+    if(sel) sel.style.display = 'none';
+    if(lbl) lbl.style.display = '';
+    // Trouver l'id de David Bucari dans les référents
+    const coord = cacheReferents.find(r =>
+      (r.name||'').toLowerCase().includes('david') ||
+      (r.name||'').toLowerCase().includes('bucari')
+    );
+    const gridOther = document.getElementById('planning-grid-other');
+    if(gridOther) {
+      if(!coord) {
+        gridOther.innerHTML = '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Planning du coordinateur non disponible</div>';
+      } else {
+        const coordKey = 'events_'+ws.toISOString().slice(0,10)+'_'+coord.id;
+        const coordEvents = JSON.parse(localStorage.getItem(coordKey)||'[]');
+        gridOther.innerHTML = getPlanningGrid(coordEvents, coordKey, false);
+      }
+    }
+  }
 }
 function toggleLieuField(){
   const type=document.getElementById('e-type').value;
@@ -1056,7 +1195,7 @@ function saveEvent(){
     if(!lieu){alert('Indiquez un lieu.');return;}
   } else {
     lieu=type==='absent'?'Absent':type==='reunion'?'Réunion':type;
-  }const ws=weekStart();const key='events_'+ws.toISOString().slice(0,10)+'_'+(currentProfile?.id||'dir');const events=JSON.parse(localStorage.getItem(key)||'[]');events.push({id:Date.now().toString(),day:parseInt(document.getElementById('e-day').value),slot:parseInt(document.getElementById('e-slot').value),lieu,type:document.getElementById('e-type').value});localStorage.setItem(key,JSON.stringify(events));closeModal('modal-event-wrap');renderPlanning();}
+  }const ws=weekStart();const userId=currentProfile?.id||currentUser?.id||'dir';const key='events_'+ws.toISOString().slice(0,10)+'_'+userId;const events=JSON.parse(localStorage.getItem(key)||'[]');events.push({id:Date.now().toString(),day:parseInt(document.getElementById('e-day').value),slot:parseInt(document.getElementById('e-slot').value),lieu,type:document.getElementById('e-type').value});localStorage.setItem(key,JSON.stringify(events));closeModal('modal-event-wrap');renderPlanning();}
 function delEvent(id,key){localStorage.setItem(key,JSON.stringify(JSON.parse(localStorage.getItem(key)||'[]').filter(e=>e.id!==id)));renderPlanning();}
 
 // DASHBOARD
@@ -1191,7 +1330,7 @@ function ikDetectCreche(lieu){
 function ikReadPlanning(yearMonth){
   const[year,month]=yearMonth.split('-').map(Number);
   const rows=[];
-  const userId=currentProfile?.id||'dir';
+  const userId=currentProfile?.id||currentUser?.id||'dir';
   const firstDay=new Date(year,month-1,1);
   const lastDay=new Date(year,month,0);
   let cursor=new Date(firstDay);
