@@ -4276,12 +4276,22 @@ window.addEventListener('online', () => {
 // ── API helpers ────────────────────────────────────────────────────────────
 
 async function sbGet(table, params='') {
-  // Evite le double order= quand params contient déjà un order (ex: historique, univers)
-  const defaultOrder = params.includes('order=') ? '' : '&order=id.asc';
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}${defaultOrder}`, {
+  // Construire l'URL proprement selon que params est vide ou contient déjà un order
+  let query;
+  if (!params) {
+    query = 'order=id.asc';
+  } else if (params.includes('order=')) {
+    query = params; // déjà un order=, on ne rajoute rien
+  } else {
+    query = params + '&order=id.asc';
+  }
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${query}`, {
     headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' }
   });
-  if (!r.ok) throw new Error(`GET ${table} : ${r.status}`);
+  if (!r.ok) {
+    const body = await r.text().catch(() => '');
+    throw new Error(`GET ${table} : ${r.status} — ${body}`);
+  }
   return r.json();
 }
 
