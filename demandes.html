@@ -645,33 +645,14 @@ window.addEventListener('DOMContentLoaded', async function() {
   if(accessToken && tokenType === 'recovery') {
     // Cas réinitialisation mot de passe : ne pas déconnecter, laisser Supabase gérer
     sb.auth.onAuthStateChange(async(event,session)=>{
-      if(event==='PASSWORD_RECOVERY'){showPasswordResetForm();return;}
+      if(event==='PASSWORD_RECOVERY'){showPasswordResetForm();}
     });
     return;
   }
 
-  // Déconnexion systématique à chaque chargement pour forcer la saisie des identifiants
+  // Déconnexion systématique : forcer l'affichage du login à chaque ouverture
   await sb.auth.signOut();
-
-  sb.auth.onAuthStateChange(async(event,session)=>{
-    if(event==='PASSWORD_RECOVERY'){showPasswordResetForm();return;}
-    if(session?.user){
-      currentUser=session.user;
-      try {
-        const{data}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
-        currentProfile=data;
-        isDirection=currentProfile?.role==='direction';
-        await loadAllData();
-        showApp();
-      } catch(e) {
-        console.error('[Auth] Erreur chargement données:', e);
-        showLogin();
-      }
-    } else {
-      currentUser=null;currentProfile=null;isDirection=false;
-      showLogin();
-    }
-  });
+  showLogin();
 });
 
 async function loadAllData(){
@@ -695,8 +676,29 @@ async function doLogin(){
   err.style.display='none';
   if(!email||!pwd){err.textContent='Email et mot de passe requis.';err.style.display='block';return;}
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Connexion…';
-  const{error}=await sb.auth.signInWithPassword({email,password:pwd});
-  if(error){err.textContent='Email ou mot de passe incorrect.';err.style.display='block';btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';}
+  const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
+  if(error){
+    err.textContent='Email ou mot de passe incorrect.';
+    err.style.display='block';
+    btn.disabled=false;
+    btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
+    return;
+  }
+  // Connexion réussie : charger le profil et les données directement
+  try {
+    currentUser=data.user;
+    const{data:profileData}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
+    currentProfile=profileData;
+    isDirection=currentProfile?.role==='direction';
+    await loadAllData();
+    showApp();
+  } catch(e) {
+    console.error('[Login] Erreur chargement:', e);
+    err.textContent='Erreur de chargement des données. Réessayez.';
+    err.style.display='block';
+    btn.disabled=false;
+    btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
+  }
 }
 async function doLogout(){if(!confirm('Se déconnecter ?'))return;await sb.auth.signOut();window.location.reload();}
 
