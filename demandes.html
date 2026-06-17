@@ -637,20 +637,40 @@ window.addEventListener('DOMContentLoaded', async function() {
   document.getElementById('login-logo').src=LOGO_B64;
   document.getElementById('app-logo').src=LOGO_B64;
 
-  // Vérifier s'il y a un event de récupération de mot de passe dans l'URL
+  // Cas 1 : lien de réinitialisation de mot de passe (hash contient access_token + type=recovery)
   const hashParams = new URLSearchParams(window.location.hash.replace('#','?').slice(1));
   const accessToken = hashParams.get('access_token');
+  const refreshToken = hashParams.get('refresh_token');
   const tokenType   = hashParams.get('type');
 
   if(accessToken && tokenType === 'recovery') {
-    // Cas réinitialisation mot de passe : ne pas déconnecter, laisser Supabase gérer
-    sb.auth.onAuthStateChange(async(event,session)=>{
-      if(event==='PASSWORD_RECOVERY'){showPasswordResetForm();}
-    });
+    // Établir la session avec le token du lien email
+    try {
+      await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken || '' });
+    } catch(e) { console.warn('[Recovery] setSession:', e); }
+    // Nettoyer le hash de l'URL
+    history.replaceState(null, '', window.location.pathname);
+    showPasswordResetForm();
     return;
   }
 
-  // Déconnexion systématique : forcer l'affichage du login à chaque ouverture
+  // Cas 2 : flow PKCE (Supabase v2 moderne) — code dans les query params
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  if(code) {
+    try {
+      await sb.auth.exchangeCodeForSession(code);
+      history.replaceState(null, '', window.location.pathname);
+      showPasswordResetForm();
+    } catch(e) {
+      console.warn('[Recovery] exchangeCode:', e);
+      await sb.auth.signOut();
+      showLogin();
+    }
+    return;
+  }
+
+  // Cas 3 : chargement normal — déconnexion forcée pour afficher le login
   await sb.auth.signOut();
   showLogin();
 });
@@ -678,7 +698,15 @@ async function doLogin(){
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Connexion…';
   const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
   if(error){
-    err.textContent='Email ou mot de passe incorrect.';
+    // Afficher le message exact pour diagnostic
+    const msg = error.message || 'Erreur inconnue';
+    if(msg.toLowerCase().includes('email') && msg.toLowerCase().includes('confirm')) {
+      err.textContent = 'Compte non confirmé — vérifiez votre boîte mail ou contactez la direction.';
+    } else if(msg.toLowerCase().includes('invalid')) {
+      err.textContent = 'Email ou mot de passe incorrect.';
+    } else {
+      err.textContent = 'Erreur : ' + msg;
+    }
     err.style.display='block';
     btn.disabled=false;
     btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
