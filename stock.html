@@ -4276,7 +4276,9 @@ window.addEventListener('online', () => {
 // ── API helpers ────────────────────────────────────────────────────────────
 
 async function sbGet(table, params='') {
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}&order=id.asc`, {
+  // Evite le double order= quand params contient déjà un order (ex: historique, univers)
+  const defaultOrder = params.includes('order=') ? '' : '&order=id.asc';
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}${defaultOrder}`, {
     headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' }
   });
   if (!r.ok) throw new Error(`GET ${table} : ${r.status}`);

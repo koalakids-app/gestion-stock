@@ -636,16 +636,31 @@ let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEn
 window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('login-logo').src=LOGO_B64;
   document.getElementById('app-logo').src=LOGO_B64;
+
+  // Garde-fou : si après 10s rien ne s'est déclenché, on affiche le login
+  const authTimeout = setTimeout(() => {
+    if(document.getElementById('loading-screen').style.display !== 'none') {
+      console.warn('[Auth] Timeout — affichage du login');
+      showLogin();
+    }
+  }, 10000);
+
   // Démarrer l'écoute auth
   sb.auth.onAuthStateChange(async(event,session)=>{
+    clearTimeout(authTimeout);
     if(event==='PASSWORD_RECOVERY'){showPasswordResetForm();return;}
     if(session?.user){
       currentUser=session.user;
-      const{data}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
-      currentProfile=data;
-      isDirection=currentProfile?.role==='direction';
-      await loadAllData();
-      showApp();
+      try {
+        const{data}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
+        currentProfile=data;
+        isDirection=currentProfile?.role==='direction';
+        await loadAllData();
+        showApp();
+      } catch(e) {
+        console.error('[Auth] Erreur chargement données:', e);
+        showLogin();
+      }
     } else {
       currentUser=null;currentProfile=null;isDirection=false;
       showLogin();
@@ -654,8 +669,12 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 
 async function loadAllData(){
-  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants]=await Promise.all([
-    dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants')
+  const timeout = new Promise((_,reject) => setTimeout(()=>reject(new Error('Timeout Supabase')), 10000));
+  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants]=await Promise.race([
+    Promise.all([
+      dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants')
+    ]),
+    timeout
   ]);
 }
 // SUPABASE HELPERS
