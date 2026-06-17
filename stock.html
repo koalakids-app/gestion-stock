@@ -4222,6 +4222,7 @@ async function syncFromCloud() {
       const mapped = univsR.value.map(u => ({ ...u, desc: u.desc || u.description || '' }));
       UNIVERS.splice(0, UNIVERS.length, ...mapped);
     }
+    // Note : univsR.rejected est géré plus bas dans allOk
 
     const savedCreche = currentCreche;
     saveData();
@@ -4232,7 +4233,11 @@ async function syncFromCloud() {
     else if (currentPage === 'historique') renderHistorique();
     else if (currentPage === 'univers') renderUnivers();
 
-    const allOk = results.every(r => r.status === 'fulfilled');
+    // allOk = seulement les tables critiques (univers est optionnelle)
+    const [artsOk, cmdsOk, fournsOk, histosOk] = [artsR, cmdsR, fournsR, histosR].map(r => r.status === 'fulfilled');
+    const allOk = artsOk && cmdsOk && fournsOk && histosOk;
+    if (univsR.status === 'rejected')
+      console.warn('[Sync] univers (non-bloquant):', univsR.reason?.message);
     const now = new Date();
     setIndicator(
       allOk
