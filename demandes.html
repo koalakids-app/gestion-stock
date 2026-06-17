@@ -633,21 +633,27 @@ let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=nu
 let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[];
 
 // Init au chargement complet de la page
-window.addEventListener('DOMContentLoaded', function() {
+window.addEventListener('DOMContentLoaded', async function() {
   document.getElementById('login-logo').src=LOGO_B64;
   document.getElementById('app-logo').src=LOGO_B64;
 
-  // Garde-fou : si après 10s rien ne s'est déclenché, on affiche le login
-  const authTimeout = setTimeout(() => {
-    if(document.getElementById('loading-screen').style.display !== 'none') {
-      console.warn('[Auth] Timeout — affichage du login');
-      showLogin();
-    }
-  }, 10000);
+  // Vérifier s'il y a un event de récupération de mot de passe dans l'URL
+  const hashParams = new URLSearchParams(window.location.hash.replace('#','?').slice(1));
+  const accessToken = hashParams.get('access_token');
+  const tokenType   = hashParams.get('type');
 
-  // Démarrer l'écoute auth
+  if(accessToken && tokenType === 'recovery') {
+    // Cas réinitialisation mot de passe : ne pas déconnecter, laisser Supabase gérer
+    sb.auth.onAuthStateChange(async(event,session)=>{
+      if(event==='PASSWORD_RECOVERY'){showPasswordResetForm();return;}
+    });
+    return;
+  }
+
+  // Déconnexion systématique à chaque chargement pour forcer la saisie des identifiants
+  await sb.auth.signOut();
+
   sb.auth.onAuthStateChange(async(event,session)=>{
-    clearTimeout(authTimeout);
     if(event==='PASSWORD_RECOVERY'){showPasswordResetForm();return;}
     if(session?.user){
       currentUser=session.user;
