@@ -720,7 +720,7 @@ async function loadAllData(){
 // SUPABASE HELPERS
 async function dbSelect(table,filters={}){let q=sb.from(table).select('*').order('created_at',{ascending:false});for(const[k,v]of Object.entries(filters))q=q.eq(k,v);const{data,error}=await q;if(error){console.warn(table,error);return[];}return data||[];}
 async function dbInsert(table,row){const{data,error}=await sb.from(table).insert(row).select().single();if(error){console.warn('insert',table,error);return null;}return data;}
-async function dbUpdate(table,id,updates){const{error}=await sb.from(table).update(updates).eq('id',id);if(error){console.warn('update',table,error);return false;}return true;}
+async function dbUpdate(table,id,updates){const{error}=await sb.from(table).update(updates).eq('id',id);if(error){console.error('[dbUpdate]',table,id,error.message,error.details,error.hint);return false;}return true;}
 async function dbDelete(table,id){const{error}=await sb.from(table).delete().eq('id',id);if(error){console.warn('delete',table,error);return false;}return true;}
 
 async function doLogin(){
@@ -748,10 +748,16 @@ async function doLogin(){
   // Connexion réussie : charger le profil et les données directement
   try {
     currentUser=data.user;
-    const{data:profileData}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
-    currentProfile=profileData;
-    isDirection=currentProfile?.role==='direction';
+    // Charger toutes les données d'abord (version fraîche depuis Supabase)
     await loadAllData();
+    // Resynchroniser currentProfile depuis cacheReferents (données fraîches)
+    currentProfile=cacheReferents.find(r=>r.user_id===currentUser.id)||null;
+    // Fallback : requête directe si pas trouvé dans le cache
+    if(!currentProfile){
+      const{data:profileData}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
+      currentProfile=profileData;
+    }
+    isDirection=currentProfile?.role==='direction';
     showApp();
   } catch(e) {
     console.error('[Login] Erreur chargement:', e);
@@ -985,8 +991,20 @@ async function saveRef(){
   const name=document.getElementById('r-name').value.trim(),email=document.getElementById('r-email').value.trim(),pwd=document.getElementById('r-pwd').value;
   if(!name||!email){alert('Nom et email requis.');return;}
   if(!editingRefId&&(!pwd||pwd.length<6)){alert('Mot de passe requis (min. 6 caractères).');return;}
-  const row={name,email,poste:document.getElementById('r-poste').value.trim(),creche_id:document.getElementById('r-creche').value,role:document.getElementById('r-is-direction').checked?'direction':'referent'};
-  if(editingRefId){await dbUpdate('referents',editingRefId,row);const r=cacheReferents.find(x=>x.id===editingRefId);if(r)Object.assign(r,row);showBanner('Référent modifié !');}
+  // creche_id vide → null (évite les erreurs de contrainte FK pour la direction)
+  const crecheVal=document.getElementById('r-creche').value;
+  const row={name,email,poste:document.getElementById('r-poste').value.trim(),creche_id:crecheVal||null,role:document.getElementById('r-is-direction').checked?'direction':'referent'};
+  if(editingRefId){
+    const ok=await dbUpdate('referents',editingRefId,row);
+    if(ok){
+      const r=cacheReferents.find(x=>x.id===editingRefId);
+      if(r)Object.assign(r,row);
+      showBanner('Référent modifié ✅');
+    } else {
+      showBanner('Erreur lors de la modification — vérifiez la console.','error');
+      return;
+    }
+  }
   else{const ok=await callFn('create-referent',{email,password:pwd,name,creche_id:row.creche_id,poste:row.poste,role:row.role});if(ok){await loadAllData();showBanner('Référent '+name+' créé !');}else showBanner('Erreur création compte.','error');}
   closeModal('modal-ref-wrap');renderReferents();
 }
