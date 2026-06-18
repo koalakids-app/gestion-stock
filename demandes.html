@@ -148,14 +148,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ref-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
 
 /* PLANNING */
-.planning-grid{display:grid;grid-template-columns:110px repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:12px;overflow:hidden}
-.pg-hd{background:var(--koala);color:#fff;padding:9px;font-size:12px;font-weight:700;text-align:center;border-bottom:1px solid rgba(255,255,255,0.2);border-right:1px solid rgba(255,255,255,0.2)}
+.planning-grid{display:grid;grid-template-columns:80px repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.pg-hd{background:var(--koala);color:#fff;padding:8px 6px;font-size:12px;font-weight:700;text-align:center;border-bottom:1px solid rgba(255,255,255,0.2);border-right:1px solid rgba(255,255,255,0.2)}
 .pg-hd:last-child{border-right:none}
 .pg-hd:first-child{background:var(--koala-dark)}
-.pg-time{background:var(--koala-light);padding:9px 7px;font-size:11px;color:var(--koala);border-right:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;font-weight:600}
-.pg-cell{padding:5px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:60px;cursor:pointer;background:#fff}
+.pg-time{background:var(--koala-light);padding:8px 6px;font-size:10px;color:var(--koala);border-right:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:600;text-align:center}
+.pg-cell{padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:110px;background:#fff;vertical-align:top}
 .pg-cell:last-child{border-right:none}
-.pg-cell:hover{background:var(--koala-light)}
+.pg-cell-ro{padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:110px;background:#fafafa;cursor:default}
+.pg-cell-ro:last-child{border-right:none}
+.pg-card{border-radius:8px;padding:6px 8px;font-size:11px;font-weight:600;margin-bottom:3px;position:relative}
+.pg-card.presence{background:#e8f5e9;color:#2e7d32;border-left:3px solid #43a047}
+.pg-card.absent{background:#fce4ec;color:#c62828;border-left:3px solid #e53935}
+.pg-card.conge{background:#fff3e0;color:#e65100;border-left:3px solid #fb8c00}
+.pg-card.formation{background:#e3f2fd;color:#1565c0;border-left:3px solid #1e88e5}
+.pg-card.reunion{background:#f3e5f5;color:#6a1b9a;border-left:3px solid #8e24aa}
+.pg-card.detachement{background:#e8eaf6;color:#283593;border-left:3px solid #3949ab}
+.pg-card .pg-del{position:absolute;top:3px;right:4px;cursor:pointer;opacity:0.5;font-size:10px}
+.pg-card .pg-del:hover{opacity:1}
+.pg-add{display:flex;align-items:center;justify-content:center;min-height:90px;cursor:pointer;color:#d0d0d0;font-size:11px;border-radius:8px;transition:background .15s}
+.pg-add:hover{background:var(--koala-light);color:var(--koala)}
 .pg-ev{border-radius:6px;padding:4px 7px;font-size:11px;margin-bottom:3px;cursor:pointer;font-weight:600}
 .pg-ev.presence{background:var(--koala);color:#fff}
 .pg-ev.absent{background:var(--orange);color:#fff}
@@ -597,25 +609,101 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <div class="overlay" id="modal-event-wrap">
-  <div class="modal">
-    <h3>Ajouter à mon planning</h3>
-    <div class="frow">
-      <div class="fg"><label class="flabel">Jour</label><select class="finput" id="e-day"><option value="0">Lundi</option><option value="1">Mardi</option><option value="2">Mercredi</option><option value="3">Jeudi</option><option value="4">Vendredi</option></select></div>
-      <div class="fg"><label class="flabel">Demi-journée</label><select class="finput" id="e-slot"><option value="0">Matin</option><option value="1">Après-midi</option></select></div>
+  <div class="modal" style="max-width:520px">
+    <h3 id="e-modal-title">Mon planning — Journée</h3>
+
+    <!-- Jour + Application semaine -->
+    <div class="frow" style="align-items:flex-end;gap:10px;margin-bottom:4px">
+      <div class="fg"><label class="flabel">Jour</label>
+        <select class="finput" id="e-day">
+          <option value="0">Lundi</option><option value="1">Mardi</option>
+          <option value="2">Mercredi</option><option value="3">Jeudi</option>
+          <option value="4">Vendredi</option>
+        </select>
+      </div>
+      <div class="fg" style="display:flex;align-items:center;gap:6px;padding-bottom:2px">
+        <input type="checkbox" id="e-full-week" style="width:16px;height:16px;accent-color:var(--koala)"/>
+        <label for="e-full-week" style="font-size:12px;color:var(--ink2);cursor:pointer">Appliquer toute la semaine</label>
+      </div>
     </div>
-    <div class="fg" id="e-lieu-wrap"><label class="flabel">Crèche / Lieu</label><select class="finput" id="e-lieu" onchange="onLieuChange()">
-      <option value="">— Sélectionner —</option>
-      <option value="Brunet">Brunet</option>
-      <option value="Ollioules">Ollioules</option>
-      <option value="St Jean">St Jean</option>
-      <option value="Picot 1">Picot 1</option>
-      <option value="Picot 2">Picot 2</option>
-      <option value="Cuers">Cuers</option>
-      <option value="Autre">Autre (préciser)</option>
-    </select></div>
-    <div class="fg" id="e-lieu-autre-wrap" style="display:none"><label class="flabel">Préciser le lieu</label><input class="finput" id="e-lieu-autre" placeholder="Lieu libre"/></div>
-    <div class="fg"><label class="flabel">Type</label><select class="finput" id="e-type" onchange="toggleLieuField()"><option value="presence">Présence crèche</option><option value="absent">Absent / Congé</option><option value="formation">Formation</option><option value="reunion">Réunion</option></select></div>
-    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-event-wrap')">Annuler</button><button class="btn-primary" onclick="saveEvent()"><i class="ti ti-check"></i> Enregistrer</button></div>
+
+    <!-- Type de journée -->
+    <div class="fg"><label class="flabel">Type de journée</label>
+      <select class="finput" id="e-type" onchange="onTypeChange()">
+        <option value="presence">🏠 Présence crèche</option>
+        <option value="absent">❌ Absent</option>
+        <option value="conge">🌴 Congé</option>
+        <option value="formation">📚 Formation</option>
+        <option value="reunion">👥 Réunion</option>
+        <option value="detachement">🔧 Détachement</option>
+      </select>
+    </div>
+
+    <!-- Horaires (masqués si absent/congé) -->
+    <div id="e-horaires-wrap">
+      <div class="frow">
+        <div class="fg"><label class="flabel">Heure début</label>
+          <select class="finput" id="e-hdebut"></select>
+        </div>
+        <div class="fg"><label class="flabel">Heure fin</label>
+          <select class="finput" id="e-hfin"></select>
+        </div>
+        <div class="fg"><label class="flabel">Pause déjeuner</label>
+          <select class="finput" id="e-pause">
+            <option value="">Aucune</option>
+            <option value="12:00-12:30">12h00 – 12h30 (30 min)</option>
+            <option value="12:00-12:45">12h00 – 12h45 (45 min)</option>
+            <option value="12:00-13:00" selected>12h00 – 13h00 (1h)</option>
+            <option value="12:00-13:30">12h00 – 13h30 (1h30)</option>
+            <option value="12:30-13:00">12h30 – 13h00 (30 min)</option>
+            <option value="12:30-13:30">12h30 – 13h30 (1h)</option>
+            <option value="13:00-14:00">13h00 – 14h00 (1h)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lieu (présence/formation/réunion) -->
+    <div class="fg" id="e-lieu-wrap">
+      <label class="flabel">Crèche / Lieu</label>
+      <select class="finput" id="e-lieu" onchange="onLieuChange()">
+        <option value="">— Sélectionner —</option>
+        <option value="Brunet">Brunet</option>
+        <option value="Ollioules">Ollioules</option>
+        <option value="St Jean">St Jean</option>
+        <option value="Picot 1">Picot 1</option>
+        <option value="Picot 2">Picot 2</option>
+        <option value="Cuers">Cuers</option>
+        <option value="Autre">Autre (préciser)</option>
+      </select>
+    </div>
+    <div class="fg" id="e-lieu-autre-wrap" style="display:none">
+      <label class="flabel">Préciser le lieu</label>
+      <input class="finput" id="e-lieu-autre" placeholder="Lieu libre"/>
+    </div>
+
+    <!-- Détachement -->
+    <div id="e-detach-wrap" style="display:none">
+      <div class="frow">
+        <div class="fg"><label class="flabel">Type de détachement</label>
+          <select class="finput" id="e-detach-type">
+            <option value="Formation">Formation</option>
+            <option value="Réunion">Réunion</option>
+            <option value="Admin">Administratif</option>
+            <option value="Coordination">Coordination</option>
+            <option value="Autre">Autre</option>
+          </select>
+        </div>
+        <div class="fg"><label class="flabel">Description</label>
+          <input class="finput" id="e-detach-desc" placeholder="Ex: préparation réunion pédagogique"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-event-wrap')">Annuler</button>
+      <button class="btn-primary" onclick="saveEvent()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
   </div>
 </div>
 
@@ -1097,27 +1185,41 @@ function changeWeek(d){weekOffset+=d;renderPlanning();}
 // Nom du coordinateur (David Bucari) — identifié par son nom dans les référents
 const COORD_NAME = 'David Bucari';
 
+function formatHeure(h){ return h ? h.replace(':','h') : ''; }
+
 function getPlanningGrid(events, key, editable) {
   const ws = weekStart();
   const fmt = d => d.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'});
   const days5 = Array.from({length:5}, (_,i) => { const d=new Date(ws); d.setDate(ws.getDate()+i); return d; });
+
+  // En-têtes
   let html = '<div class="pg-hd"></div>';
-  days5.forEach((d,i) => { html += '<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>'; });
-  ['Matin','Après-midi'].forEach((slot,si) => {
-    html += '<div class="pg-time">'+slot+'</div>';
-    days5.forEach((_,di) => {
-      const evs = events.filter(e => e.day===di && e.slot===si);
-      if(editable) {
-        html += '<div class="pg-cell" onclick="openEventAt('+di+','+si+')">';
-        if(!evs.length) html += '<span style="font-size:10px;color:#ccc">+ ajouter</span>';
-        evs.forEach(e => { html += '<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delEvent(\''+e.id+'\',\''+key+'\')">'+e.lieu+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>'; });
-      } else {
-        html += '<div class="pg-cell" style="cursor:default;background:#fafafa">';
-        if(!evs.length) html += '<span style="font-size:10px;color:#ddd">—</span>';
-        evs.forEach(e => { html += '<div class="pg-ev '+e.type+'" style="opacity:0.85">'+e.lieu+'</div>'; });
-      }
-      html += '</div>';
-    });
+  days5.forEach((d,i) => {
+    html += '<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';
+  });
+
+  // Ligne unique par jour (nouvelle logique : 1 event par jour, pas matin/AM)
+  html += '<div class="pg-time" style="font-size:10px;line-height:1.3">Journée</div>';
+  days5.forEach((_,di) => {
+    const ev = events.find(e => e.day === di);
+    const cellClass = editable ? 'pg-cell' : 'pg-cell-ro';
+    const clickAttr = editable ? 'onclick="openEventAt('+di+')"' : '';
+    html += '<div class="'+cellClass+'" '+clickAttr+'>';
+    if(ev) {
+      const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+      const titre = ev.label || labels[ev.type] || ev.type;
+      const del   = editable ? '<span class="pg-del" onclick="event.stopPropagation();delEvent(\''+ev.id+'\',\''+key+'\')"><i class="ti ti-x"></i></span>' : '';
+      let detail = '';
+      if(ev.hdebut && ev.hfin) detail += '<div style="font-size:10px;margin-top:3px;opacity:0.85">⏱ '+formatHeure(ev.hdebut)+'–'+formatHeure(ev.hfin)+'</div>';
+      if(ev.pause)             detail += '<div style="font-size:10px;opacity:0.7">☕ Pause '+ev.pause+'</div>';
+      if(ev.detachDesc)        detail += '<div style="font-size:10px;margin-top:2px;opacity:0.8;font-style:italic">'+ev.detachDesc+'</div>';
+      html += '<div class="pg-card '+ev.type+'">'+del+titre+detail+'</div>';
+    } else if(editable) {
+      html += '<div class="pg-add">+ ajouter</div>';
+    } else {
+      html += '<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';
+    }
+    html += '</div>';
   });
   return html;
 }
@@ -1200,20 +1302,124 @@ function onLieuChange(){
   const v=document.getElementById('e-lieu').value;
   document.getElementById('e-lieu-autre-wrap').style.display=v==='Autre'?'':'none';
 }
-function openEventModal(){document.getElementById('e-day').value='0';document.getElementById('e-slot').value='0';document.getElementById('e-lieu').value='';document.getElementById('e-lieu-autre').value='';document.getElementById('e-type').value='presence';toggleLieuField();document.getElementById('modal-event-wrap').classList.add('open');}
-function openEventAt(d,s){document.getElementById('e-day').value=d;document.getElementById('e-slot').value=s;document.getElementById('e-lieu').value='';document.getElementById('e-lieu-autre').value='';document.getElementById('e-type').value='presence';toggleLieuField();document.getElementById('modal-event-wrap').classList.add('open');}
+// ── Initialisation des selects horaires ──
+function buildTimeOptions(selId, defaultVal){
+  const sel = document.getElementById(selId);
+  if(!sel) return;
+  sel.innerHTML = '';
+  for(let h=6; h<=20; h++){
+    for(let m=0; m<60; m+=30){
+      const hh = String(h).padStart(2,'0');
+      const mm = String(m).padStart(2,'0');
+      const val = hh+':'+mm;
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = hh+'h'+mm;
+      if(val === defaultVal) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+}
+
+function initTimeSelects(){
+  buildTimeOptions('e-hdebut','08:30');
+  buildTimeOptions('e-hfin','17:00');
+}
+
+function onTypeChange(){
+  const type = document.getElementById('e-type').value;
+  // Horaires : masqués pour absent et congé
+  const showHoraires = !['absent','conge'].includes(type);
+  document.getElementById('e-horaires-wrap').style.display = showHoraires ? '' : 'none';
+  // Lieu : présence, formation, réunion
+  const showLieu = ['presence','formation','reunion'].includes(type);
+  document.getElementById('e-lieu-wrap').style.display = showLieu ? '' : 'none';
+  document.getElementById('e-lieu-autre-wrap').style.display = 'none';
+  // Détachement
+  document.getElementById('e-detach-wrap').style.display = type === 'detachement' ? '' : 'none';
+}
+
+function onLieuChange(){
+  const v = document.getElementById('e-lieu').value;
+  document.getElementById('e-lieu-autre-wrap').style.display = v === 'Autre' ? '' : 'none';
+}
+
+// Compatibilité ancienne fonction
+function toggleLieuField(){ onTypeChange(); }
+
+function openEventModal(){
+  initTimeSelects();
+  document.getElementById('e-day').value = '0';
+  document.getElementById('e-full-week').checked = false;
+  document.getElementById('e-lieu').value = '';
+  document.getElementById('e-lieu-autre').value = '';
+  document.getElementById('e-detach-type').value = 'Formation';
+  document.getElementById('e-detach-desc').value = '';
+  document.getElementById('e-type').value = 'presence';
+  document.getElementById('e-pause').value = '12:00-13:00';
+  onTypeChange();
+  document.getElementById('modal-event-wrap').classList.add('open');
+}
+
+function openEventAt(d){
+  openEventModal();
+  document.getElementById('e-day').value = d;
+}
+
 function saveEvent(){
-  const type=document.getElementById('e-type').value;
-  const needsLieu=['presence','formation'].includes(type);
-  let lieu='';
-  if(needsLieu){
-    const sel=document.getElementById('e-lieu').value;
-    if(sel==='Autre'){lieu=document.getElementById('e-lieu-autre').value.trim();}
-    else{lieu=sel;}
-    if(!lieu){alert('Indiquez un lieu.');return;}
-  } else {
-    lieu=type==='absent'?'Absent':type==='reunion'?'Réunion':type;
-  }const ws=weekStart();const userId=currentProfile?.id||currentUser?.id||'dir';const key='events_'+ws.toISOString().slice(0,10)+'_'+userId;const events=JSON.parse(localStorage.getItem(key)||'[]');events.push({id:Date.now().toString(),day:parseInt(document.getElementById('e-day').value),slot:parseInt(document.getElementById('e-slot').value),lieu,type:document.getElementById('e-type').value});localStorage.setItem(key,JSON.stringify(events));closeModal('modal-event-wrap');renderPlanning();}
+  const type    = document.getElementById('e-type').value;
+  const fullWeek= document.getElementById('e-full-week').checked;
+  const dayVal  = parseInt(document.getElementById('e-day').value);
+
+  // Horaires
+  let hdebut='', hfin='', pause='';
+  if(!['absent','conge'].includes(type)){
+    hdebut = document.getElementById('e-hdebut').value;
+    hfin   = document.getElementById('e-hfin').value;
+    pause  = document.getElementById('e-pause').value;
+    if(hdebut >= hfin){ alert('L'heure de fin doit être après l'heure de début.'); return; }
+  }
+
+  // Lieu
+  let lieu = '';
+  if(['presence','formation','reunion'].includes(type)){
+    const sel = document.getElementById('e-lieu').value;
+    lieu = sel === 'Autre' ? document.getElementById('e-lieu-autre').value.trim() : sel;
+    if(!lieu){ alert('Indiquez un lieu.'); return; }
+  }
+
+  // Détachement
+  let detachType='', detachDesc='';
+  if(type === 'detachement'){
+    detachType = document.getElementById('e-detach-type').value;
+    detachDesc = document.getElementById('e-detach-desc').value.trim();
+  }
+
+  // Label affiché dans la carte
+  const labels = {presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+  const label  = lieu ? lieu : (detachType || labels[type] || type);
+
+  // Sauvegarde
+  const ws     = weekStart();
+  const userId = currentProfile?.id||currentUser?.id||'dir';
+  const key    = 'events_'+ws.toISOString().slice(0,10)+'_'+userId;
+  const events = JSON.parse(localStorage.getItem(key)||'[]');
+
+  const days = fullWeek ? [0,1,2,3,4] : [dayVal];
+  days.forEach(d => {
+    // Remplacer la journée existante (1 seul event par jour)
+    const idx = events.findIndex(e => e.day === d);
+    const ev  = {
+      id: idx >= 0 ? events[idx].id : Date.now().toString()+'_'+d,
+      day: d, type, label, lieu, hdebut, hfin, pause, detachType, detachDesc
+    };
+    if(idx >= 0) events[idx] = ev; else events.push(ev);
+  });
+
+  localStorage.setItem(key, JSON.stringify(events));
+  closeModal('modal-event-wrap');
+  renderPlanning();
+}
 function delEvent(id,key){localStorage.setItem(key,JSON.stringify(JSON.parse(localStorage.getItem(key)||'[]').filter(e=>e.id!==id)));renderPlanning();}
 
 // DASHBOARD
