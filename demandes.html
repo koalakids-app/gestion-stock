@@ -5,269 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Koala Kids — Suite de gestion</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
-// ══════════════════════════════════════════════
-// PLANNING — SUPABASE
-// ══════════════════════════════════════════════
-
-let _planningCache = {};
-
-async function planningLoad(referentId, semaineDate) {
-  const k = referentId+'_'+semaineDate;
-  if(_planningCache[k]) return _planningCache[k];
-  const {data,error} = await sb.from('planning').select('*').eq('referent_id',referentId).eq('semaine',semaineDate);
-  if(error){console.error('[Planning]',error.message);return[];}
-  _planningCache[k]=data||[];
-  return _planningCache[k];
-}
-
-function planningInvalidate(referentId, semaineDate){
-  delete _planningCache[referentId+'_'+semaineDate];
-}
-
-async function planningSave(referentId, semaineDate, ev){
-  const row={
-    referent_id:referentId, semaine:semaineDate,
-    jour:ev.day, slot:(ev.slot!==undefined?ev.slot:null),
-    type:ev.type, label:ev.label||null, lieu:ev.lieu||null,
-    hdebut:ev.hdebut||null, hfin:ev.hfin||null, pause:ev.pause||null,
-    detach_type:ev.detachType||null, detach_desc:ev.detachDesc||null,
-  };
-  const {error}=await sb.from('planning').upsert(row,{onConflict:'referent_id,semaine,jour,slot'});
-  if(error){console.error('[Planning] save:',error.message);return false;}
-  planningInvalidate(referentId,semaineDate);
-  return true;
-}
-
-async function planningDeleteRow(id, referentId, semaineDate){
-  const {error}=await sb.from('planning').delete().eq('id',id);
-  if(error){console.error('[Planning] del:',error.message);return false;}
-  planningInvalidate(referentId,semaineDate);
-  return true;
-}
-
-async function delPlanningEvent(id, referentId, semaine){
-  await planningDeleteRow(id,referentId,semaine);
-  await renderPlanning();
-}
-
-function openEventCoordModal(){
-  document.getElementById('ec-day').value='0';
-  document.getElementById('ec-slot').value='0';
-  document.getElementById('ec-lieu').value='';
-  document.getElementById('ec-type').value='presence';
-  document.getElementById('modal-event-coord-wrap').classList.add('open');
-}
-
-function openCoordEventAt(d,s){
-  document.getElementById('ec-day').value=d;
-  document.getElementById('ec-slot').value=s;
-  document.getElementById('ec-lieu').value='';
-  document.getElementById('ec-type').value='presence';
-  document.getElementById('modal-event-coord-wrap').classList.add('open');
-}
-
-async function saveEventCoord(){
-  const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
-  if(!coord){alert('Coordinateur introuvable.');return;}
-  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
-  const type=document.getElementById('ec-type').value;
-  const lieu=document.getElementById('ec-lieu').value||type;
-  const day=parseInt(document.getElementById('ec-day').value);
-  const slot=parseInt(document.getElementById('ec-slot').value);
-  const btn=document.querySelector('#modal-event-coord-wrap .btn-primary');
-  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
-  await planningSave(coord.id,semaine,{day,slot,type,label:lieu,lieu});
-  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';}
-  closeModal('modal-event-coord-wrap');
-  await renderPlanning();
-}
-
-// ══ FONCTIONS GRILLE ══
-
-function formatHeure(h){return h?h.replace(':','h'):''; }
-
-function getPlanningGrid(events, referentId, semaine, editable){
-  const ws=weekStart();
-  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  let html='<div class="pg-hd"></div>';
-  days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
-  html+='<div class="pg-time" style="font-size:10px">Journée</div>';
-  days5.forEach((_,di)=>{
-    const ev=events.find(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
-    html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'" '+(editable?'onclick="openEventAt('+di+')"':'')+'>';
-    if(ev){
-      const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
-      const titre=ev.label||labels[ev.type]||ev.type;
-      const del=editable?'<span class="pg-del" onclick="event.stopPropagation();delPlanningEvent(\''+ev.id+'\',\''+referentId+'\',\''+semaine+'\')"><i class="ti ti-x"></i></span>':'';
-      let detail='';
-      if(ev.hdebut&&ev.hfin)detail+='<div style="font-size:10px;margin-top:3px;opacity:0.85">⏱ '+formatHeure(ev.hdebut)+'–'+formatHeure(ev.hfin)+'</div>';
-      if(ev.pause)detail+='<div style="font-size:10px;opacity:0.7">☕ '+ev.pause+'</div>';
-      if(ev.detach_desc||ev.detachDesc)detail+='<div style="font-size:10px;margin-top:2px;opacity:0.8;font-style:italic">'+(ev.detach_desc||ev.detachDesc)+'</div>';
-      html+='<div class="pg-card '+ev.type+'">'+del+titre+detail+'</div>';
-    } else if(editable){
-      html+='<div class="pg-add">+ ajouter</div>';
-    } else {
-      html+='<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';
-    }
-    html+='</div>';
-  });
-  return html;
-}
-
-function getPlanningGridSimple(events, coordId, semaine){
-  const ws=weekStart();
-  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  const editable=!!coordId;
-  let html='<div class="pg-hd"></div>';
-  days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
-  ['Matin','Après-midi'].forEach((slot,si)=>{
-    html+='<div class="pg-time">'+slot+'</div>';
-    days5.forEach((_,di)=>{
-      const evs=events.filter(e=>(e.jour===di||e.day===di)&&e.slot===si);
-      if(editable){
-        html+='<div class="pg-cell" onclick="openCoordEventAt('+di+','+si+')">';
-        if(!evs.length)html+='<span style="font-size:10px;color:#ccc">+ ajouter</span>';
-        evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delPlanningEvent(\''+e.id+'\',\''+coordId+'\',\''+semaine+'\')">'+
-          (e.lieu||e.label||e.type)+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>';});
-      } else {
-        html+='<div class="pg-cell-ro">';
-        if(!evs.length)html+='<div style="text-align:center;padding:0.5rem;color:#ddd;font-size:11px">—</div>';
-        evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" style="opacity:0.85">'+(e.lieu||e.label||e.type)+'</div>';});
-      }
-      html+='</div>';
-    });
-  });
-  return html;
-}
-
-async function renderPlanning(){
-  const ws=weekStart();
-  const semaine=ws.toISOString().slice(0,10);
-  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  document.getElementById('week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
-
-  const iAmCoord=(currentProfile?.name||'').toLowerCase().includes('david')||(currentProfile?.name||'').toLowerCase().includes('bucari');
-  const userId=currentProfile?.id||currentUser?.id||'dir';
-  const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
-
-  const addBtn     = document.getElementById('planning-add-btn');
-  const refLabel   = document.getElementById('planning-ref-label');
-  const refSelect  = document.getElementById('planning-ref-select');
-  const topBadge   = document.getElementById('planning-top-badge');
-  const coordBadge = document.getElementById('planning-coord-badge');
-  const coordAdd   = document.getElementById('planning-coord-add-btn');
-  const gridMine   = document.getElementById('planning-grid-mine');
-  const gridOther  = document.getElementById('planning-grid-other');
-
-  if(iAmCoord){
-    // ── COORDINATEUR ──
-    // Haut : menu déroulant pour voir le planning d'un référent
-    if(addBtn)   addBtn.style.display='none';
-    if(refLabel) refLabel.style.display='none';
-    if(refSelect){
-      refSelect.style.display='';
-      if(refSelect.options.length<=1){
-        const refs=cacheReferents.filter(r=>!((r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari')));
-        refSelect.innerHTML='<option value="">-- Choisir un référent --</option>'+refs.map(r=>'<option value="'+r.id+'">'+r.name+'</option>').join('');
-      }
-    }
-    if(topBadge){topBadge.textContent='👁 Lecture seule';topBadge.style.background='#f0f0f5';topBadge.style.color='#888';}
-    const selectedId=refSelect?.value;
-    if(gridMine){
-      if(!selectedId){
-        gridMine.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez un référent pour voir son planning</div>';
-      } else {
-        gridMine.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
-        const evs=await planningLoad(selectedId,semaine);
-        gridMine.innerHTML=getPlanningGrid(evs,selectedId,semaine,false);
-      }
-    }
-    // Bas : son propre planning (modifiable)
-    if(coordBadge){coordBadge.textContent='✏️ Modifiable';coordBadge.style.background='var(--koala-light)';coordBadge.style.color='var(--koala)';}
-    if(coordAdd) coordAdd.style.display='';
-    if(gridOther){
-      if(!coord){gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">—</div>';}
-      else{
-        gridOther.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
-        const cEvs=await planningLoad(coord.id,semaine);
-        gridOther.innerHTML=getPlanningGridSimple(cEvs,coord.id,semaine);
-      }
-    }
-  } else {
-    // ── RÉFÉRENT ──
-    if(!userId||userId==='dir'){
-      // Profil pas encore chargé, réessayer dans 500ms
-      setTimeout(()=>renderPlanning(),500);
-      return;
-    }
-    // Haut : son propre planning (modifiable)
-    if(addBtn)   addBtn.style.display='';
-    if(refSelect) refSelect.style.display='none';
-    if(refLabel){ refLabel.style.display=''; refLabel.textContent=currentProfile?.name||'Mon planning'; }
-    if(topBadge){topBadge.textContent='✏️ Modifiable';topBadge.style.background='var(--koala-light)';topBadge.style.color='var(--koala)';}
-    if(gridMine){
-      gridMine.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
-      const evs=await planningLoad(userId,semaine);
-      gridMine.innerHTML=getPlanningGrid(evs,userId,semaine,true);
-    }
-    // Bas : planning du coordinateur (lecture seule)
-    if(coordBadge){coordBadge.textContent='👁 Lecture seule';coordBadge.style.background='#f0f0f5';coordBadge.style.color='#888';}
-    if(coordAdd) coordAdd.style.display='none';
-    if(gridOther){
-      if(!coord){gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Planning coordinateur non disponible</div>';}
-      else{
-        gridOther.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
-        const cEvs=await planningLoad(coord.id,semaine);
-        gridOther.innerHTML=getPlanningGridSimple(cEvs,null,semaine);
-      }
-    }
-  }
-}
-
-function openEventAt(d){
-  openEventModal();
-  document.getElementById('e-day').value = d;
-}
-
-
-async function saveEvent(){
-  const type=document.getElementById('e-type').value;
-  const fullWeek=document.getElementById('e-full-week').checked;
-  const dayVal=parseInt(document.getElementById('e-day').value);
-  const userId=currentProfile?.id||currentUser?.id;
-  if(!userId){alert('Erreur : profil non chargé.');return;}
-  let hdebut='',hfin='',pause='';
-  if(!['absent','conge'].includes(type)){
-    hdebut=document.getElementById('e-hdebut').value;
-    hfin=document.getElementById('e-hfin').value;
-    pause=document.getElementById('e-pause').value;
-    if(hdebut>=hfin){alert("L\'heure de fin doit être après l\'heure de début.");return;}
-  }
-  let lieu='';
-  if(['presence','formation','reunion'].includes(type)){
-    const s=document.getElementById('e-lieu').value;
-    lieu=s==='Autre'?document.getElementById('e-lieu-autre').value.trim():s;
-    if(!lieu){alert('Indiquez un lieu.');return;}
-  }
-  let detachType='',detachDesc='';
-  if(type==='detachement'){detachType=document.getElementById('e-detach-type').value;detachDesc=document.getElementById('e-detach-desc').value.trim();}
-  const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
-  const label=lieu||(detachType||labels[type]||type);
-  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
-  const days=fullWeek?[0,1,2,3,4]:[dayVal];
-  const btn=document.querySelector('#modal-event-wrap .btn-primary');
-  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
-  for(const d of days){await planningSave(userId,semaine,{day:d,slot:null,type,label,lieu,hdebut,hfin,pause,detachType,detachDesc});}
-  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';}
-  closeModal('modal-event-wrap');
-  await renderPlanning();
-}
-
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --koala:#3D3580;--orange:#F47920;--koala-light:#EEEDF8;--orange-light:#FEF0E6;
@@ -415,8 +153,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pg-hd:last-child{border-right:none}
 .pg-hd:first-child{background:var(--koala-dark)}
 .pg-time{background:var(--koala-light);padding:8px 6px;font-size:10px;color:var(--koala);border-right:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:600;text-align:center}
-.pg-cell{padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:110px;background:#fff;vertical-align:top}
+.pg-cell{padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:110px;background:#fff;vertical-align:top;cursor:pointer}
 .pg-cell:last-child{border-right:none}
+.pg-cell:hover{background:var(--koala-light)}
 .pg-cell-ro{padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:110px;background:#fafafa;cursor:default}
 .pg-cell-ro:last-child{border-right:none}
 .pg-card{border-radius:8px;padding:6px 8px;font-size:11px;font-weight:600;margin-bottom:3px;position:relative}
@@ -658,7 +397,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <!-- PLANNING -->
   <div id="main-planning" class="tab-content">
-    <!-- Barre navigation semaine -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:8px">
       <div style="display:flex;align-items:center;gap:10px">
         <button class="ibtn" onclick="changeWeek(-1)"><i class="ti ti-chevron-left"></i></button>
@@ -672,19 +410,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="leg-item"><div class="leg-dot" style="background:#378ADD"></div>Formation</div>
           <div class="leg-item"><div class="leg-dot" style="background:#7B68EE"></div>Réunion</div>
         </div>
-        <!-- Bouton ajouter : uniquement pour le référent connecté (son propre planning) -->
         <button id="planning-add-btn" class="btn-primary" onclick="openEventModal()" style="display:none"><i class="ti ti-plus"></i> Ajouter</button>
       </div>
     </div>
-
-    <!-- Planning HAUT -->
+    <!-- Planning HAUT : référent -->
     <div style="margin-bottom:1.25rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:6px">
         <div style="font-size:13px;font-weight:700;color:var(--koala);display:flex;align-items:center;gap:6px">
           <i class="ti ti-user"></i>
-          <!-- Référent : son nom affiché, pas de menu -->
           <span id="planning-ref-label" style="display:none"></span>
-          <!-- Coordinateur : menu déroulant pour choisir un référent -->
           <select id="planning-ref-select" class="finput" style="display:none;font-size:12px;padding:4px 8px;width:auto;min-width:200px" onchange="renderPlanning()">
             <option value="">-- Choisir un référent --</option>
           </select>
@@ -693,16 +427,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
       <div class="planning-grid" id="planning-grid-mine"></div>
     </div>
-
-    <!-- Séparateur -->
     <div style="border-top:2px dashed var(--border);margin:0.75rem 0"></div>
-
     <!-- Planning BAS : coordinateur -->
     <div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:6px">
         <div style="font-size:13px;font-weight:700;color:var(--koala);display:flex;align-items:center;gap:6px">
           <i class="ti ti-user-circle"></i>
-          <span id="planning-coord-label">Planning du coordinateur</span>
+          <span>Planning du coordinateur</span>
         </div>
         <span id="planning-coord-badge" style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
       </div>
@@ -877,24 +608,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <div class="overlay" id="modal-event-wrap">
   <div class="modal" style="max-width:520px">
-    <h3 id="e-modal-title">Mon planning — Journée</h3>
-
-    <!-- Jour + Application semaine -->
+    <h3>Mon planning — Journée</h3>
     <div class="frow" style="align-items:flex-end;gap:10px;margin-bottom:4px">
       <div class="fg"><label class="flabel">Jour</label>
-        <select class="finput" id="e-day">
-          <option value="0">Lundi</option><option value="1">Mardi</option>
-          <option value="2">Mercredi</option><option value="3">Jeudi</option>
-          <option value="4">Vendredi</option>
-        </select>
+        <select class="finput" id="e-day"><option value="0">Lundi</option><option value="1">Mardi</option><option value="2">Mercredi</option><option value="3">Jeudi</option><option value="4">Vendredi</option></select>
       </div>
       <div class="fg" style="display:flex;align-items:center;gap:6px;padding-bottom:2px">
         <input type="checkbox" id="e-full-week" style="width:16px;height:16px;accent-color:var(--koala)"/>
         <label for="e-full-week" style="font-size:12px;color:var(--ink2);cursor:pointer">Appliquer toute la semaine</label>
       </div>
     </div>
-
-    <!-- Type de journée -->
     <div class="fg"><label class="flabel">Type de journée</label>
       <select class="finput" id="e-type" onchange="onTypeChange()">
         <option value="presence">🏠 Présence crèche</option>
@@ -905,72 +628,47 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <option value="detachement">🔧 Détachement</option>
       </select>
     </div>
-
-    <!-- Horaires (masqués si absent/congé) -->
     <div id="e-horaires-wrap">
       <div class="frow">
-        <div class="fg"><label class="flabel">Heure début</label>
-          <select class="finput" id="e-hdebut"></select>
-        </div>
-        <div class="fg"><label class="flabel">Heure fin</label>
-          <select class="finput" id="e-hfin"></select>
-        </div>
+        <div class="fg"><label class="flabel">Heure début</label><select class="finput" id="e-hdebut"></select></div>
+        <div class="fg"><label class="flabel">Heure fin</label><select class="finput" id="e-hfin"></select></div>
         <div class="fg"><label class="flabel">Pause déjeuner</label>
           <select class="finput" id="e-pause">
             <option value="">Aucune</option>
-            <option value="12:00-12:30">12h00 – 12h30 (30 min)</option>
-            <option value="12:00-12:45">12h00 – 12h45 (45 min)</option>
-            <option value="12:00-13:00" selected>12h00 – 13h00 (1h)</option>
-            <option value="12:00-13:30">12h00 – 13h30 (1h30)</option>
-            <option value="12:30-13:00">12h30 – 13h00 (30 min)</option>
-            <option value="12:30-13:30">12h30 – 13h30 (1h)</option>
-            <option value="13:00-14:00">13h00 – 14h00 (1h)</option>
+            <option value="12:00-12:30">12h00–12h30 (30min)</option>
+            <option value="12:00-12:45">12h00–12h45 (45min)</option>
+            <option value="12:00-13:00" selected>12h00–13h00 (1h)</option>
+            <option value="12:00-13:30">12h00–13h30 (1h30)</option>
+            <option value="12:30-13:00">12h30–13h00 (30min)</option>
+            <option value="12:30-13:30">12h30–13h30 (1h)</option>
+            <option value="13:00-14:00">13h00–14h00 (1h)</option>
           </select>
         </div>
       </div>
     </div>
-
-    <!-- Lieu (présence/formation/réunion) -->
-    <div class="fg" id="e-lieu-wrap">
-      <label class="flabel">Crèche / Lieu</label>
+    <div class="fg" id="e-lieu-wrap"><label class="flabel">Crèche / Lieu</label>
       <select class="finput" id="e-lieu" onchange="onLieuChange()">
         <option value="">— Sélectionner —</option>
-        <option value="Brunet">Brunet</option>
-        <option value="Ollioules">Ollioules</option>
-        <option value="St Jean">St Jean</option>
-        <option value="Picot 1">Picot 1</option>
-        <option value="Picot 2">Picot 2</option>
-        <option value="Cuers">Cuers</option>
+        <option value="Brunet">Brunet</option><option value="Ollioules">Ollioules</option>
+        <option value="St Jean">St Jean</option><option value="Picot 1">Picot 1</option>
+        <option value="Picot 2">Picot 2</option><option value="Cuers">Cuers</option>
         <option value="Autre">Autre (préciser)</option>
       </select>
     </div>
-    <div class="fg" id="e-lieu-autre-wrap" style="display:none">
-      <label class="flabel">Préciser le lieu</label>
-      <input class="finput" id="e-lieu-autre" placeholder="Lieu libre"/>
-    </div>
-
-    <!-- Détachement -->
+    <div class="fg" id="e-lieu-autre-wrap" style="display:none"><label class="flabel">Préciser le lieu</label><input class="finput" id="e-lieu-autre" placeholder="Lieu libre"/></div>
     <div id="e-detach-wrap" style="display:none">
       <div class="frow">
-        <div class="fg"><label class="flabel">Type de détachement</label>
+        <div class="fg"><label class="flabel">Type détachement</label>
           <select class="finput" id="e-detach-type">
-            <option value="Formation">Formation</option>
-            <option value="Réunion">Réunion</option>
-            <option value="Admin">Administratif</option>
-            <option value="Coordination">Coordination</option>
+            <option value="Formation">Formation</option><option value="Réunion">Réunion</option>
+            <option value="Admin">Administratif</option><option value="Coordination">Coordination</option>
             <option value="Autre">Autre</option>
           </select>
         </div>
-        <div class="fg"><label class="flabel">Description</label>
-          <input class="finput" id="e-detach-desc" placeholder="Ex: préparation réunion pédagogique"/>
-        </div>
+        <div class="fg"><label class="flabel">Description</label><input class="finput" id="e-detach-desc" placeholder="Ex: préparation réunion"/></div>
       </div>
     </div>
-
-    <div class="mactions">
-      <button class="btn-cancel" onclick="closeModal('modal-event-wrap')">Annuler</button>
-      <button class="btn-primary" onclick="saveEvent()"><i class="ti ti-check"></i> Enregistrer</button>
-    </div>
+    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-event-wrap')">Annuler</button><button class="btn-primary" onclick="saveEvent()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
 </div>
 
@@ -1024,58 +722,36 @@ let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEn
 window.addEventListener('DOMContentLoaded', async function() {
   document.getElementById('login-logo').src=LOGO_B64;
   document.getElementById('app-logo').src=LOGO_B64;
-
-  // Cas 1 : lien de réinitialisation de mot de passe (hash contient access_token + type=recovery)
-  const hashParams = new URLSearchParams(window.location.hash.replace('#','?').slice(1));
-  const accessToken = hashParams.get('access_token');
-  const refreshToken = hashParams.get('refresh_token');
-  const tokenType   = hashParams.get('type');
-
-  if(accessToken && tokenType === 'recovery') {
-    // Établir la session avec le token du lien email
-    try {
-      await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken || '' });
-    } catch(e) { console.warn('[Recovery] setSession:', e); }
-    // Nettoyer le hash de l'URL
-    history.replaceState(null, '', window.location.pathname);
-    showPasswordResetForm();
+  const hashParams=new URLSearchParams(window.location.hash.replace('#','?').slice(1));
+  const accessToken=hashParams.get('access_token');
+  const tokenType=hashParams.get('type');
+  if(accessToken&&tokenType==='recovery'){
+    try{await sb.auth.setSession({access_token:accessToken,refresh_token:hashParams.get('refresh_token')||''});}catch(e){console.warn('[Recovery]',e);}
+    history.replaceState(null,'',window.location.pathname);
+    showPasswordResetForm();return;
+  }
+  const urlParams=new URLSearchParams(window.location.search);
+  const code=urlParams.get('code');
+  if(code){
+    try{await sb.auth.exchangeCodeForSession(code);history.replaceState(null,'',window.location.pathname);showPasswordResetForm();}
+    catch(e){console.warn('[Recovery]',e);await sb.auth.signOut();showLogin();}
     return;
   }
-
-  // Cas 2 : flow PKCE (Supabase v2 moderne) — code dans les query params
-  const urlParams = new URLSearchParams(window.location.search);
-  const code = urlParams.get('code');
-  if(code) {
-    try {
-      await sb.auth.exchangeCodeForSession(code);
-      history.replaceState(null, '', window.location.pathname);
-      showPasswordResetForm();
-    } catch(e) {
-      console.warn('[Recovery] exchangeCode:', e);
-      await sb.auth.signOut();
-      showLogin();
-    }
-    return;
-  }
-
-  // Cas 3 : chargement normal — déconnexion forcée pour afficher le login
   await sb.auth.signOut();
   showLogin();
 });
 
 async function loadAllData(){
-  const timeout = new Promise((_,reject) => setTimeout(()=>reject(new Error('Timeout Supabase')), 10000));
+  const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout Supabase')),10000));
   [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants]=await Promise.race([
-    Promise.all([
-      dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants')
-    ]),
+    Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants')]),
     timeout
   ]);
 }
 // SUPABASE HELPERS
 async function dbSelect(table,filters={}){let q=sb.from(table).select('*').order('created_at',{ascending:false});for(const[k,v]of Object.entries(filters))q=q.eq(k,v);const{data,error}=await q;if(error){console.warn(table,error);return[];}return data||[];}
 async function dbInsert(table,row){const{data,error}=await sb.from(table).insert(row).select().single();if(error){console.warn('insert',table,error);return null;}return data;}
-async function dbUpdate(table,id,updates){const{error}=await sb.from(table).update(updates).eq('id',id);if(error){console.error('[dbUpdate]',table,id,error.message,error.details,error.hint);return false;}return true;}
+async function dbUpdate(table,id,updates){const{error}=await sb.from(table).update(updates).eq('id',id);if(error){console.error('[dbUpdate]',table,id,error.message);return false;}return true;}
 async function dbDelete(table,id){const{error}=await sb.from(table).delete().eq('id',id);if(error){console.warn('delete',table,error);return false;}return true;}
 
 async function doLogin(){
@@ -1086,40 +762,22 @@ async function doLogin(){
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Connexion…';
   const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
   if(error){
-    // Afficher le message exact pour diagnostic
-    const msg = error.message || 'Erreur inconnue';
-    if(msg.toLowerCase().includes('email') && msg.toLowerCase().includes('confirm')) {
-      err.textContent = 'Compte non confirmé — vérifiez votre boîte mail ou contactez la direction.';
-    } else if(msg.toLowerCase().includes('invalid')) {
-      err.textContent = 'Email ou mot de passe incorrect.';
-    } else {
-      err.textContent = 'Erreur : ' + msg;
-    }
-    err.style.display='block';
-    btn.disabled=false;
-    btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
-    return;
+    const msg=error.message||'';
+    if(msg.toLowerCase().includes('confirm'))err.textContent='Compte non confirmé — contactez la direction.';
+    else err.textContent='Erreur : '+msg;
+    err.style.display='block';btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';return;
   }
-  // Connexion réussie : charger le profil et les données directement
-  try {
+  try{
     currentUser=data.user;
-    // Charger toutes les données d'abord (version fraîche depuis Supabase)
     await loadAllData();
-    // Resynchroniser currentProfile depuis cacheReferents (données fraîches)
     currentProfile=cacheReferents.find(r=>r.user_id===currentUser.id)||null;
-    // Fallback : requête directe si pas trouvé dans le cache
-    if(!currentProfile){
-      const{data:profileData}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();
-      currentProfile=profileData;
-    }
+    if(!currentProfile){const{data:pd}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();currentProfile=pd;}
     isDirection=currentProfile?.role==='direction';
     showApp();
-  } catch(e) {
-    console.error('[Login] Erreur chargement:', e);
-    err.textContent='Erreur de chargement des données. Réessayez.';
-    err.style.display='block';
-    btn.disabled=false;
-    btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
+  }catch(e){
+    console.error('[Login]',e);
+    err.textContent='Erreur de chargement. Réessayez.';err.style.display='block';
+    btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
   }
 }
 async function doLogout(){if(!confirm('Se déconnecter ?'))return;await sb.auth.signOut();window.location.reload();}
@@ -1158,54 +816,7 @@ function showApp(){
   document.getElementById('app-wrap').style.display='block';
   document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
   document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
-  // Migration des clés planning 'dir' → id réel (si événements sauvegardés avant le login forcé)
-  migratePlanningKeys();
   updateBadges();renderCrecheTabs();
-}
-
-function migratePlanningKeys(){
-  const userId=currentProfile?.id||currentUser?.id;
-  if(!userId||userId==='dir')return;
-
-  // Migration 1 : clés '_dir' → '_[userId]' (ancienne session sans login)
-  const keysToMigrate=[];
-  for(let i=0;i<localStorage.length;i++){
-    const k=localStorage.key(i);
-    if(k&&k.startsWith('events_')&&k.endsWith('_dir'))keysToMigrate.push(k);
-  }
-  keysToMigrate.forEach(oldKey=>{
-    const newKey=oldKey.replace(/_dir$/, '_'+userId);
-    if(!localStorage.getItem(newKey)){
-      const data=localStorage.getItem(oldKey);
-      if(data&&data!=='[]'){localStorage.setItem(newKey,data);console.log('[Planning] Migration _dir:',oldKey,'→',newKey);}
-    }
-    localStorage.removeItem(oldKey);
-  });
-
-  // Migration 2 : planning coordinateur 'events_[date]_[coordId]' → 'events_[date]_coord_[coordId]'
-  const coord = cacheReferents.find(r =>
-    (r.name||'').toLowerCase().includes('david') ||
-    (r.name||'').toLowerCase().includes('bucari')
-  );
-  console.log('[Migration] coord trouvé:', coord?.name, coord?.id);
-  if(coord){
-    const coordId = coord.id;
-    const allKeys = [];
-    for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k) allKeys.push(k); }
-    console.log('[Migration] clés localStorage events_:', allKeys.filter(k=>k.startsWith('events_')));
-    const coordKeysToMigrate = allKeys.filter(k =>
-      k.startsWith('events_') && k.endsWith('_'+coordId) && !k.includes('_coord_')
-    );
-    console.log('[Migration] clés coord à migrer:', coordKeysToMigrate);
-    coordKeysToMigrate.forEach(oldKey=>{
-      const newKey = oldKey.replace('_'+coordId, '_coord_'+coordId);
-      if(!localStorage.getItem(newKey)){
-        const data=localStorage.getItem(oldKey);
-        if(data&&data!=='[]'){localStorage.setItem(newKey,data);console.log('[Migration] coord:',oldKey,'→',newKey);}
-      }
-      localStorage.removeItem(oldKey);
-    });
-  }
 }
 
 function todayStr(){return new Date().toISOString().slice(0,10);}
@@ -1368,19 +979,12 @@ async function saveRef(){
   const name=document.getElementById('r-name').value.trim(),email=document.getElementById('r-email').value.trim(),pwd=document.getElementById('r-pwd').value;
   if(!name||!email){alert('Nom et email requis.');return;}
   if(!editingRefId&&(!pwd||pwd.length<6)){alert('Mot de passe requis (min. 6 caractères).');return;}
-  // creche_id vide → null (évite les erreurs de contrainte FK pour la direction)
   const crecheVal=document.getElementById('r-creche').value;
   const row={name,email,poste:document.getElementById('r-poste').value.trim(),creche_id:crecheVal||null,role:document.getElementById('r-is-direction').checked?'direction':'referent'};
   if(editingRefId){
     const ok=await dbUpdate('referents',editingRefId,row);
-    if(ok){
-      const r=cacheReferents.find(x=>x.id===editingRefId);
-      if(r)Object.assign(r,row);
-      showBanner('Référent modifié ✅');
-    } else {
-      showBanner('Erreur lors de la modification — vérifiez la console.','error');
-      return;
-    }
+    if(ok){const r=cacheReferents.find(x=>x.id===editingRefId);if(r)Object.assign(r,row);showBanner('Référent modifié ✅');}
+    else{showBanner('Erreur modification','error');return;}
   }
   else{const ok=await callFn('create-referent',{email,password:pwd,name,creche_id:row.creche_id,poste:row.poste,role:row.role});if(ok){await loadAllData();showBanner('Référent '+name+' créé !');}else showBanner('Erreur création compte.','error');}
   closeModal('modal-ref-wrap');renderReferents();
@@ -1471,91 +1075,294 @@ async function saveEnfant(){const prenom=document.getElementById('enf-prenom').v
 
 // PLANNING (localStorage par utilisateur)
 function changeWeek(d){weekOffset+=d;renderPlanning();}
-// Nom du coordinateur (David Bucari) — identifié par son nom dans les référents
-const COORD_NAME = 'David Bucari';
+function renderPlanning(){
+  const ws=weekStart();const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  document.getElementById('week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
+  const key='events_'+ws.toISOString().slice(0,10)+'_'+(currentProfile?.id||'dir');
+  const events=JSON.parse(localStorage.getItem(key)||'[]');
+  const grid=document.getElementById('planning-grid');
+  let html='<div class="pg-hd"></div>';
+  days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
+  ['Matin','Après-midi'].forEach((slot,si)=>{html+='<div class="pg-time">'+slot+'</div>';days5.forEach((_,di)=>{const evs=events.filter(e=>e.day===di&&e.slot===si);html+='<div class="pg-cell" onclick="openEventAt('+di+','+si+')">';if(!evs.length)html+='<span style="font-size:10px;color:#ccc">+ ajouter</span>';evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delEvent(\''+e.id+'\',\''+key+'\')">'+e.lieu+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>';});html+='</div>';});});
+  grid.innerHTML=html;
+}
+function toggleLieuField(){
+  const type=document.getElementById('e-type').value;
+  const needsLieu=['presence','formation'].includes(type);
+  document.getElementById('e-lieu-wrap').style.display=needsLieu?'':'none';
+  document.getElementById('e-lieu-autre-wrap').style.display='none';
+  if(needsLieu&&document.getElementById('e-lieu').value==='Autre'){
+    document.getElementById('e-lieu-autre-wrap').style.display='';
+  }
+}
+function onLieuChange(){
+  const v=document.getElementById('e-lieu').value;
+  document.getElementById('e-lieu-autre-wrap').style.display=v==='Autre'?'':'none';
+}
+// ── HELPERS HORAIRES ──
+function buildTimeOptions(selId,defaultVal){
+  const sel=document.getElementById(selId);if(!sel)return;sel.innerHTML='';
+  for(let h=6;h<=20;h++)for(let m=0;m<60;m+=30){
+    const v=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+    const o=document.createElement('option');o.value=v;o.textContent=String(h).padStart(2,'0')+'h'+String(m).padStart(2,'0');
+    if(v===defaultVal)o.selected=true;sel.appendChild(o);
+  }
+}
+function initTimeSelects(){buildTimeOptions('e-hdebut','08:30');buildTimeOptions('e-hfin','17:00');}
+function formatHeure(h){return h?h.replace(':','h'):''; }
 
-function formatHeure(h){ return h ? h.replace(':','h') : ''; }
+// ── MODAL REFERENT ──
+function onTypeChange(){
+  const t=document.getElementById('e-type').value;
+  document.getElementById('e-horaires-wrap').style.display=['absent','conge'].includes(t)?'none':'';
+  document.getElementById('e-lieu-wrap').style.display=['presence','formation','reunion'].includes(t)?'':'none';
+  document.getElementById('e-lieu-autre-wrap').style.display='none';
+  document.getElementById('e-detach-wrap').style.display=t==='detachement'?'':'none';
+}
+function onLieuChange(){document.getElementById('e-lieu-autre-wrap').style.display=document.getElementById('e-lieu').value==='Autre'?'':'none';}
+function toggleLieuField(){onTypeChange();}
 
-// Planning simplifié matin/après-midi — coordinateur
-// key=null → lecture seule ; key=string → modifiable (coordinateur)
-function getPlanningGridSimple(events, key) {
-  const ws = weekStart();
-  const fmt = d => d.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'});
-  const days5 = Array.from({length:5}, (_,i) => { const d=new Date(ws); d.setDate(ws.getDate()+i); return d; });
-  const SLOTS = ['Matin','Après-midi'];
-  const editable = !!key;
+function openEventModal(){
+  initTimeSelects();
+  document.getElementById('e-day').value='0';
+  document.getElementById('e-full-week').checked=false;
+  document.getElementById('e-lieu').value='';
+  document.getElementById('e-lieu-autre').value='';
+  document.getElementById('e-detach-type').value='Formation';
+  document.getElementById('e-detach-desc').value='';
+  document.getElementById('e-type').value='presence';
+  document.getElementById('e-pause').value='12:00-13:00';
+  onTypeChange();
+  document.getElementById('modal-event-wrap').classList.add('open');
+}
 
-  let html = '<div class="pg-hd"></div>';
-  days5.forEach((d,i) => {
-    html += '<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';
+function openEventAt(d){openEventModal();document.getElementById('e-day').value=d;}
+
+// ── MODAL COORDINATEUR ──
+function openEventCoordModal(){
+  document.getElementById('ec-day').value='0';document.getElementById('ec-slot').value='0';
+  document.getElementById('ec-lieu').value='';document.getElementById('ec-type').value='presence';
+  document.getElementById('modal-event-coord-wrap').classList.add('open');
+}
+function openCoordEventAt(d,s){
+  document.getElementById('ec-day').value=d;document.getElementById('ec-slot').value=s;
+  document.getElementById('ec-lieu').value='';document.getElementById('ec-type').value='presence';
+  document.getElementById('modal-event-coord-wrap').classList.add('open');
+}
+
+// ── SUPABASE PLANNING ──
+let _planningCache={};
+async function planningLoad(referentId,semaineDate){
+  const k=referentId+'_'+semaineDate;
+  if(_planningCache[k])return _planningCache[k];
+  const{data,error}=await sb.from('planning').select('*').eq('referent_id',referentId).eq('semaine',semaineDate);
+  if(error){console.error('[Planning]',error.message);return[];}
+  _planningCache[k]=data||[];return _planningCache[k];
+}
+function planningInvalidate(r,s){delete _planningCache[r+'_'+s];}
+async function planningSave(referentId,semaineDate,ev){
+  const row={referent_id:referentId,semaine:semaineDate,jour:ev.day,slot:ev.slot!==undefined?ev.slot:null,
+    type:ev.type,label:ev.label||null,lieu:ev.lieu||null,hdebut:ev.hdebut||null,hfin:ev.hfin||null,
+    pause:ev.pause||null,detach_type:ev.detachType||null,detach_desc:ev.detachDesc||null};
+  const{error}=await sb.from('planning').upsert(row,{onConflict:'referent_id,semaine,jour,slot'});
+  if(error){console.error('[Planning] save:',error.message);return false;}
+  planningInvalidate(referentId,semaineDate);return true;
+}
+async function planningDeleteRow(id,referentId,semaineDate){
+  const{error}=await sb.from('planning').delete().eq('id',id);
+  if(error){console.error('[Planning] del:',error.message);return false;}
+  planningInvalidate(referentId,semaineDate);return true;
+}
+async function delPlanningEvent(id,referentId,semaine){await planningDeleteRow(id,referentId,semaine);await renderPlanning();}
+
+// ── SAVE EVENT REFERENT ──
+async function saveEvent(){
+  const type=document.getElementById('e-type').value;
+  const fullWeek=document.getElementById('e-full-week').checked;
+  const dayVal=parseInt(document.getElementById('e-day').value);
+  const userId=currentProfile?.id||currentUser?.id;
+  if(!userId){alert('Erreur : profil non chargé.');return;}
+  let hdebut='',hfin='',pause='';
+  if(!['absent','conge'].includes(type)){
+    hdebut=document.getElementById('e-hdebut').value;hfin=document.getElementById('e-hfin').value;pause=document.getElementById('e-pause').value;
+    if(hdebut>=hfin){alert("L'heure de fin doit être après l'heure de début.");return;}
+  }
+  let lieu='';
+  if(['presence','formation','reunion'].includes(type)){
+    const s=document.getElementById('e-lieu').value;
+    lieu=s==='Autre'?document.getElementById('e-lieu-autre').value.trim():s;
+    if(!lieu){alert('Indiquez un lieu.');return;}
+  }
+  let detachType='',detachDesc='';
+  if(type==='detachement'){detachType=document.getElementById('e-detach-type').value;detachDesc=document.getElementById('e-detach-desc').value.trim();}
+  const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+  const label=lieu||(detachType||labels[type]||type);
+  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
+  const days=fullWeek?[0,1,2,3,4]:[dayVal];
+  const btn=document.querySelector('#modal-event-wrap .btn-primary');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
+  for(const d of days)await planningSave(userId,semaine,{day:d,slot:null,type,label,lieu,hdebut,hfin,pause,detachType,detachDesc});
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';}
+  closeModal('modal-event-wrap');await renderPlanning();
+}
+
+// ── SAVE EVENT COORDINATEUR ──
+async function saveEventCoord(){
+  const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
+  if(!coord){alert('Coordinateur introuvable.');return;}
+  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
+  const type=document.getElementById('ec-type').value;
+  const lieu=document.getElementById('ec-lieu').value||type;
+  const day=parseInt(document.getElementById('ec-day').value);
+  const slot=parseInt(document.getElementById('ec-slot').value);
+  const btn=document.querySelector('#modal-event-coord-wrap .btn-primary');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
+  await planningSave(coord.id,semaine,{day,slot,type,label:lieu,lieu});
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';}
+  closeModal('modal-event-coord-wrap');await renderPlanning();
+}
+
+// ── GRILLES ──
+function getPlanningGrid(events,referentId,semaine,editable){
+  const ws=weekStart();const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  let html='<div class="pg-hd"></div>';
+  days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
+  html+='<div class="pg-time" style="font-size:10px">Journée</div>';
+  days5.forEach((_,di)=>{
+    const ev=events.find(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
+    html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'" '+(editable?'onclick="openEventAt('+di+')"':'')+'>';
+    if(ev){
+      const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+      const titre=ev.label||labels[ev.type]||ev.type;
+      const del=editable?'<span class="pg-del" onclick="event.stopPropagation();delPlanningEvent(\''+ev.id+'\',\''+referentId+'\',\''+semaine+'\')"><i class="ti ti-x"></i></span>':'';
+      let detail='';
+      if(ev.hdebut&&ev.hfin)detail+='<div style="font-size:10px;margin-top:3px;opacity:0.85">⏱ '+formatHeure(ev.hdebut)+'–'+formatHeure(ev.hfin)+'</div>';
+      if(ev.pause)detail+='<div style="font-size:10px;opacity:0.7">☕ '+ev.pause+'</div>';
+      if(ev.detach_desc||ev.detachDesc)detail+='<div style="font-size:10px;margin-top:2px;opacity:0.8;font-style:italic">'+(ev.detach_desc||ev.detachDesc)+'</div>';
+      html+='<div class="pg-card '+ev.type+'">'+del+titre+detail+'</div>';
+    }else if(editable){html+='<div class="pg-add">+ ajouter</div>';}
+    else{html+='<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';}
+    html+='</div>';
   });
-  SLOTS.forEach((slot, si) => {
-    html += '<div class="pg-time">'+slot+'</div>';
-    days5.forEach((_,di) => {
-      const evs = events.filter(e => e.day === di && e.slot === si);
-      if(editable) {
-        html += '<div class="pg-cell" onclick="openCoordEventAt('+di+','+si+')">';
-        if(!evs.length) html += '<span style="font-size:10px;color:#ccc">+ ajouter</span>';
-        evs.forEach(e => {
-          html += '<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delEventCoord(\''+e.id+'\',\''+key+'\')">'+
-            (e.lieu||e.label||e.type)+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>';
-        });
-      } else {
-        html += '<div class="pg-cell-ro">';
-        if(!evs.length) {
-          html += '<div style="text-align:center;padding:0.5rem;color:#ddd;font-size:11px">—</div>';
-        } else {
-          evs.forEach(e => {
-            html += '<div class="pg-ev '+e.type+'" style="opacity:0.85">'+(e.lieu||e.label||e.type)+'</div>';
-          });
-        }
+  return html;
+}
+
+function getPlanningGridSimple(events,coordId,semaine){
+  const ws=weekStart();const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  const editable=!!coordId;
+  let html='<div class="pg-hd"></div>';
+  days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
+  ['Matin','Après-midi'].forEach((slot,si)=>{
+    html+='<div class="pg-time">'+slot+'</div>';
+    days5.forEach((_,di)=>{
+      const evs=events.filter(e=>(e.jour===di||e.day===di)&&e.slot===si);
+      if(editable){
+        html+='<div class="pg-cell" onclick="openCoordEventAt('+di+','+si+')">';
+        if(!evs.length)html+='<span style="font-size:10px;color:#ccc">+ ajouter</span>';
+        evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delPlanningEvent(\''+e.id+'\',\''+coordId+'\',\''+semaine+'\')">'+
+          (e.lieu||e.label||e.type)+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>';});
+      }else{
+        html+='<div class="pg-cell-ro">';
+        if(!evs.length)html+='<div style="text-align:center;padding:0.5rem;color:#ddd;font-size:11px">—</div>';
+        else evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" style="opacity:0.85">'+(e.lieu||e.label||e.type)+'</div>';});
       }
-      html += '</div>';
+      html+='</div>';
     });
   });
   return html;
 }
 
-// Planning horaires complet — utilisé pour le planning du référent connecté (modifiable)
-function getPlanningGrid(events, key, editable) {
-  const ws = weekStart();
-  const fmt = d => d.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'});
-  const days5 = Array.from({length:5}, (_,i) => { const d=new Date(ws); d.setDate(ws.getDate()+i); return d; });
-
-  // En-têtes
-  let html = '<div class="pg-hd"></div>';
-  days5.forEach((d,i) => {
-    html += '<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';
-  });
-
-  // Ligne unique par jour (nouvelle logique : 1 event par jour, pas matin/AM)
-  html += '<div class="pg-time" style="font-size:10px;line-height:1.3">Journée</div>';
-  days5.forEach((_,di) => {
-    const ev = events.find(e => e.day === di);
-    const cellClass = editable ? 'pg-cell' : 'pg-cell-ro';
-    const clickAttr = editable ? 'onclick="openEventAt('+di+')"' : '';
-    html += '<div class="'+cellClass+'" '+clickAttr+'>';
-    if(ev) {
-      const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
-      const titre = ev.label || labels[ev.type] || ev.type;
-      const del   = editable ? '<span class="pg-del" onclick="event.stopPropagation();delEvent(\''+ev.id+'\',\''+key+'\')"><i class="ti ti-x"></i></span>' : '';
-      let detail = '';
-      if(ev.hdebut && ev.hfin) detail += '<div style="font-size:10px;margin-top:3px;opacity:0.85">⏱ '+formatHeure(ev.hdebut)+'–'+formatHeure(ev.hfin)+'</div>';
-      if(ev.pause)             detail += '<div style="font-size:10px;opacity:0.7">☕ Pause '+ev.pause+'</div>';
-      if(ev.detachDesc)        detail += '<div style="font-size:10px;margin-top:2px;opacity:0.8;font-style:italic">'+ev.detachDesc+'</div>';
-      html += '<div class="pg-card '+ev.type+'">'+del+titre+detail+'</div>';
-    } else if(editable) {
-      html += '<div class="pg-add">+ ajouter</div>';
-    } else {
-      html += '<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';
+// ── RENDER PLANNING ──
+async function renderPlanning(){
+  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  document.getElementById('week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
+  const iAmCoord=(currentProfile?.name||'').toLowerCase().includes('david')||(currentProfile?.name||'').toLowerCase().includes('bucari');
+  const userId=currentProfile?.id||currentUser?.id||'dir';
+  const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
+  const addBtn=document.getElementById('planning-add-btn');
+  const refLabel=document.getElementById('planning-ref-label');
+  const refSelect=document.getElementById('planning-ref-select');
+  const topBadge=document.getElementById('planning-top-badge');
+  const coordBadge=document.getElementById('planning-coord-badge');
+  const coordAdd=document.getElementById('planning-coord-add-btn');
+  const gridMine=document.getElementById('planning-grid-mine');
+  const gridOther=document.getElementById('planning-grid-other');
+  if(iAmCoord){
+    if(addBtn)addBtn.style.display='none';
+    if(refLabel)refLabel.style.display='none';
+    if(refSelect){refSelect.style.display='';
+      if(refSelect.options.length<=1){
+        const refs=cacheReferents.filter(r=>!((r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari')));
+        refSelect.innerHTML='<option value="">-- Choisir un référent --</option>'+refs.map(r=>'<option value="'+r.id+'">'+r.name+'</option>').join('');
+      }
     }
-    html += '</div>';
-  });
-  return html;
+    if(topBadge){topBadge.textContent='👁 Lecture seule';topBadge.style.background='#f0f0f5';topBadge.style.color='#888';}
+    const selectedId=refSelect?.value;
+    if(gridMine){
+      if(!selectedId)gridMine.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez un référent</div>';
+      else{gridMine.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+        const evs=await planningLoad(selectedId,semaine);gridMine.innerHTML=getPlanningGrid(evs,selectedId,semaine,false);}
+    }
+    if(coordBadge){coordBadge.textContent='✏️ Modifiable';coordBadge.style.background='var(--koala-light)';coordBadge.style.color='var(--koala)';}
+    if(coordAdd)coordAdd.style.display='';
+    if(gridOther){
+      if(!coord)gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">—</div>';
+      else{gridOther.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+        const cEvs=await planningLoad(coord.id,semaine);gridOther.innerHTML=getPlanningGridSimple(cEvs,coord.id,semaine);}
+    }
+  }else{
+    if(!userId||userId==='dir'){setTimeout(()=>renderPlanning(),500);return;}
+    if(addBtn)addBtn.style.display='';
+    if(refSelect)refSelect.style.display='none';
+    if(refLabel){refLabel.style.display='';refLabel.textContent=currentProfile?.name||'Mon planning';}
+    if(topBadge){topBadge.textContent='✏️ Modifiable';topBadge.style.background='var(--koala-light)';topBadge.style.color='var(--koala)';}
+    if(gridMine){gridMine.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+      const evs=await planningLoad(userId,semaine);gridMine.innerHTML=getPlanningGrid(evs,userId,semaine,true);}
+    if(coordBadge){coordBadge.textContent='👁 Lecture seule';coordBadge.style.background='#f0f0f5';coordBadge.style.color='#888';}
+    if(coordAdd)coordAdd.style.display='none';
+    if(gridOther){
+      if(!coord)gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Coordinateur non disponible</div>';
+      else{gridOther.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+        const cEvs=await planningLoad(coord.id,semaine);gridOther.innerHTML=getPlanningGridSimple(cEvs,null,semaine);}
+    }
+  }
+}
+
+// ── IK PLANNING (Supabase cache) ──
+function ikReadPlanning(yearMonth){
+  const[year,month]=yearMonth.split('-').map(Number);
+  const rows=[];
+  const userId=currentProfile?.id||currentUser?.id||'dir';
+  const iAmCoordIK=(currentProfile?.name||'').toLowerCase().includes('david')||(currentProfile?.name||'').toLowerCase().includes('bucari');
+  const firstDay=new Date(year,month-1,1);const lastDay=new Date(year,month,0);
+  let cursor=new Date(firstDay);const dow=cursor.getDay();cursor.setDate(cursor.getDate()-(dow===0?6:dow-1));
+  const checkedSemaines=new Set();
+  while(cursor<=lastDay){
+    const semaine=cursor.toISOString().slice(0,10);
+    if(!checkedSemaines.has(semaine)){
+      checkedSemaines.add(semaine);
+      const cacheKey=userId+'_'+semaine;
+      const events=_planningCache[cacheKey]||[];
+      events.forEach(e=>{
+        if(e.type&&e.type!=='absent'&&e.type!=='conge'&&e.lieu){
+          const day=e.jour!==undefined?e.jour:e.day;
+          const eDate=new Date(cursor);eDate.setDate(cursor.getDate()+day);
+          if(eDate>=firstDay&&eDate<=lastDay)rows.push({date:eDate.toISOString().slice(0,10),lieu:e.lieu,type:e.type,ignored:false});
+        }
+      });
+    }
+    cursor.setDate(cursor.getDate()+7);
+  }
+  return rows;
 }
 
 
-// delEvent remplacé par delPlanningEvent (Supabase)
+// delEvent remplacé par delPlanningEvent
 
 // DASHBOARD
 function renderDashboard(){
@@ -1689,35 +1496,59 @@ function ikDetectCreche(lieu){
 function ikReadPlanning(yearMonth){
   const[year,month]=yearMonth.split('-').map(Number);
   const rows=[];
-  const userId=currentProfile?.id||currentUser?.id||'dir';
-  const iAmCoordIK=(currentProfile?.name||'').toLowerCase().includes('david')||(currentProfile?.name||'').toLowerCase().includes('bucari');
+  const userId=currentProfile?.id||'dir';
   const firstDay=new Date(year,month-1,1);
   const lastDay=new Date(year,month,0);
   let cursor=new Date(firstDay);
   const dow=cursor.getDay();
   cursor.setDate(cursor.getDate()-(dow===0?6:dow-1));
-  const checkedSemaines=new Set();
-  // Lire depuis le cache _planningCache (déjà chargé par renderPlanning)
+  const checkedKeys=new Set();
   while(cursor<=lastDay){
-    const semaine=cursor.toISOString().slice(0,10);
-    if(!checkedSemaines.has(semaine)){
-      checkedSemaines.add(semaine);
-      const cacheKey=userId+'_'+semaine;
-      const events=_planningCache[cacheKey]||[];
-      events.forEach(e=>{
-        if(e.type&&e.type!=='absent'&&e.type!=='conge'&&e.lieu){
-          const day=e.jour!==undefined?e.jour:e.day;
-          const eDate=new Date(cursor);
-          eDate.setDate(cursor.getDate()+day);
-          if(eDate>=firstDay&&eDate<=lastDay){
-            rows.push({date:eDate.toISOString().slice(0,10),lieu:e.lieu,type:e.type,ignored:false});
-          }
-        }
+    const keyDate=cursor.toISOString().slice(0,10);  // cohérent avec weekStart()
+    const key=`events_${keyDate}_${userId}`;
+    if(!checkedKeys.has(key)){
+      checkedKeys.add(key);
+      const events=JSON.parse(localStorage.getItem(key)||'[]');
+      events.forEach(ev=>{
+        if(ev.type==='absent'||ev.type==='reunion')return;
+        // Reconstruire la date locale du lundi à partir de keyDate (string YYYY-MM-DD)
+        // pour éviter tout décalage UTC. On parse les composantes directement.
+        // keyDate = clé UTC (ex: 2026-06-14 pour le vrai lundi 15/06 en UTC+2)
+        // On repart du curseur local pour calculer la vraie date
+        const evDate=new Date(cursor.getFullYear(),cursor.getMonth(),cursor.getDate()+ev.day);
+        if(evDate.getMonth()+1!==month||evDate.getFullYear()!==year)return;
+        const dateStr=ikLocalDate(evDate);
+        const creche=ikDetectCreche(ev.lieu);
+        rows.push({id:`${ev.id}_${dateStr}`,date:dateStr,trajet:creche&&creche!=='Cuers'?`Cuers/${ev.lieu}`:ev.lieu,creche,nbr:2,lieu:ev.lieu,slot:ev.slot,ignored:!creche||creche==='Cuers'});
       });
     }
     cursor.setDate(cursor.getDate()+7);
   }
+  rows.sort((a,b)=>a.date.localeCompare(b.date)||a.slot-b.slot);
   return rows;
+}
+
+function ikReeval(rows){
+  // Réévalue creche et ignored à partir du lieu — corrige les anciennes saisies texte libre
+  return rows.map(r=>{
+    const creche=ikDetectCreche(r.lieu||r.trajet.replace('Cuers/',''));
+    const ignored=!creche||creche==='Cuers';
+    const trajet=creche&&!ignored?`Cuers/${r.lieu||creche}`:r.trajet;
+    return Object.assign({},r,{creche,ignored,trajet:r.trajet||trajet});
+  });
+}
+
+function ikLoad(){
+  const month=document.getElementById('ik-month').value;
+  if(!month)return;
+  const saved=JSON.parse(localStorage.getItem(`ik_rows_${month}`)||'null');
+  if(saved){
+    ikRows=ikReeval(saved);  // réévalue à chaque chargement
+    ikSaveRows();             // resauvegarde avec les valeurs corrigées
+    ikRenderTable();
+    document.getElementById('ik-load-info').textContent=`${ikRows.filter(r=>!r.ignored).length} trajet(s) chargés (sauvegardés)`;
+  }
+  else ikLoadFromPlanning();
 }
 
 function ikLoadFromPlanning(){
@@ -1978,46 +1809,33 @@ comptes: `
 };
 </script>
 
-<!-- Modal planning coordinateur (matin/AM) -->
+<!-- Modal planning coordinateur -->
 <div class="overlay" id="modal-event-coord-wrap">
   <div class="modal" style="max-width:420px">
     <h3>Planning coordinateur</h3>
     <div class="frow">
       <div class="fg"><label class="flabel">Jour</label>
-        <select class="finput" id="ec-day">
-          <option value="0">Lundi</option><option value="1">Mardi</option>
-          <option value="2">Mercredi</option><option value="3">Jeudi</option>
-          <option value="4">Vendredi</option>
-        </select>
+        <select class="finput" id="ec-day"><option value="0">Lundi</option><option value="1">Mardi</option><option value="2">Mercredi</option><option value="3">Jeudi</option><option value="4">Vendredi</option></select>
       </div>
       <div class="fg"><label class="flabel">Demi-journée</label>
-        <select class="finput" id="ec-slot">
-          <option value="0">Matin</option><option value="1">Après-midi</option>
-        </select>
+        <select class="finput" id="ec-slot"><option value="0">Matin</option><option value="1">Après-midi</option></select>
       </div>
     </div>
     <div class="fg"><label class="flabel">Crèche / Lieu</label>
       <select class="finput" id="ec-lieu">
         <option value="">— Sélectionner —</option>
-        <option value="Brunet">Brunet</option>
-        <option value="Ollioules">Ollioules</option>
-        <option value="St Jean">St Jean</option>
-        <option value="Picot 1">Picot 1</option>
-        <option value="Picot 2">Picot 2</option>
-        <option value="Cuers">Cuers</option>
-        <option value="Absent">Absent</option>
-        <option value="Formation">Formation</option>
+        <option value="Brunet">Brunet</option><option value="Ollioules">Ollioules</option>
+        <option value="St Jean">St Jean</option><option value="Picot 1">Picot 1</option>
+        <option value="Picot 2">Picot 2</option><option value="Cuers">Cuers</option>
+        <option value="Absent">Absent</option><option value="Formation">Formation</option>
         <option value="Réunion">Réunion</option>
       </select>
     </div>
     <div class="fg"><label class="flabel">Type</label>
       <select class="finput" id="ec-type">
-        <option value="presence">Présence crèche</option>
-        <option value="absent">Absent</option>
-        <option value="conge">Congé</option>
-        <option value="formation">Formation</option>
-        <option value="reunion">Réunion</option>
-        <option value="detachement">Détachement</option>
+        <option value="presence">Présence crèche</option><option value="absent">Absent</option>
+        <option value="conge">Congé</option><option value="formation">Formation</option>
+        <option value="reunion">Réunion</option><option value="detachement">Détachement</option>
       </select>
     </div>
     <div class="mactions">
