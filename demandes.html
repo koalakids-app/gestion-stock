@@ -1594,15 +1594,47 @@ function ikLoad(){
   else ikLoadFromPlanning();
 }
 
-function ikLoadFromPlanning(){
+async function ikLoadFromPlanning(){
   const month=document.getElementById('ik-month').value;
   if(!month){alert('Sélectionnez un mois.');return;}
-  ikRows=ikReadPlanning(month);
+  document.getElementById('ik-load-info').textContent='Chargement depuis Supabase…';
+  const userId=currentProfile?.id||currentUser?.id||'dir';
+  const[year,monthNum]=month.split('-').map(Number);
+  const firstDay=new Date(year,monthNum-1,1);
+  const lastDay=new Date(year,monthNum,0);
+  let cursor=new Date(firstDay);
+  const dow=cursor.getDay();
+  cursor.setDate(cursor.getDate()-(dow===0?6:dow-1));
+  const rows=[];
+  while(cursor<=lastDay){
+    const semaine=cursor.toISOString().slice(0,10);
+    const events=await planningLoad(userId,semaine);
+    events.forEach(ev=>{
+      if(ev.type==='absent'||ev.type==='conge'||ev.type==='reunion')return;
+      if(!ev.lieu)return;
+      const day=ev.jour!==undefined?ev.jour:ev.day;
+      const evDate=new Date(cursor.getFullYear(),cursor.getMonth(),cursor.getDate()+day);
+      if(evDate.getMonth()+1!==monthNum||evDate.getFullYear()!==year)return;
+      const dateStr=ikLocalDate(evDate);
+      const creche=ikDetectCreche(ev.lieu);
+      rows.push({
+        id:`${ev.id}_${dateStr}`,
+        date:dateStr,
+        trajet:creche&&creche!=='Cuers'?`Cuers/${ev.lieu}`:ev.lieu,
+        creche,nbr:2,lieu:ev.lieu,
+        slot:ev.slot,
+        ignored:!creche||creche==='Cuers'
+      });
+    });
+    cursor.setDate(cursor.getDate()+7);
+  }
+  rows.sort((a,b)=>a.date.localeCompare(b.date));
+  ikRows=rows;
   ikSaveRows();
   ikRenderTable();
   const count=ikRows.filter(r=>!r.ignored).length;
   const ign=ikRows.filter(r=>r.ignored).length;
-  document.getElementById('ik-load-info').textContent=`${count} trajet(s) chargé(s) depuis le planning${ign>0?` · ${ign} ignoré(s)` :''}`;
+  document.getElementById('ik-load-info').textContent=`${count} trajet(s) chargé(s) depuis le planning${ign>0?` · ${ign} ignoré(s)`:''}`;
 }
 
 function ikSaveRows(){
