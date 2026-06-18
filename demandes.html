@@ -5,7 +5,229 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Koala Kids — Suite de gestion</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+// ══════════════════════════════════════════════
+// PLANNING — SUPABASE
+// ══════════════════════════════════════════════
+
+let _planningCache = {};
+
+async function planningLoad(referentId, semaineDate) {
+  const k = referentId+'_'+semaineDate;
+  if(_planningCache[k]) return _planningCache[k];
+  const {data,error} = await sb.from('planning').select('*').eq('referent_id',referentId).eq('semaine',semaineDate);
+  if(error){console.error('[Planning]',error.message);return[];}
+  _planningCache[k]=data||[];
+  return _planningCache[k];
+}
+
+function planningInvalidate(referentId, semaineDate){
+  delete _planningCache[referentId+'_'+semaineDate];
+}
+
+async function planningSave(referentId, semaineDate, ev){
+  const row={
+    referent_id:referentId, semaine:semaineDate,
+    jour:ev.day, slot:(ev.slot!==undefined?ev.slot:null),
+    type:ev.type, label:ev.label||null, lieu:ev.lieu||null,
+    hdebut:ev.hdebut||null, hfin:ev.hfin||null, pause:ev.pause||null,
+    detach_type:ev.detachType||null, detach_desc:ev.detachDesc||null,
+  };
+  const {error}=await sb.from('planning').upsert(row,{onConflict:'referent_id,semaine,jour,slot'});
+  if(error){console.error('[Planning] save:',error.message);return false;}
+  planningInvalidate(referentId,semaineDate);
+  return true;
+}
+
+async function planningDeleteRow(id, referentId, semaineDate){
+  const {error}=await sb.from('planning').delete().eq('id',id);
+  if(error){console.error('[Planning] del:',error.message);return false;}
+  planningInvalidate(referentId,semaineDate);
+  return true;
+}
+
+async function delPlanningEvent(id, referentId, semaine){
+  await planningDeleteRow(id,referentId,semaine);
+  await renderPlanning();
+}
+
+function openEventCoordModal(){
+  document.getElementById('ec-day').value='0';
+  document.getElementById('ec-slot').value='0';
+  document.getElementById('ec-lieu').value='';
+  document.getElementById('ec-type').value='presence';
+  document.getElementById('modal-event-coord-wrap').classList.add('open');
+}
+
+function openCoordEventAt(d,s){
+  document.getElementById('ec-day').value=d;
+  document.getElementById('ec-slot').value=s;
+  document.getElementById('ec-lieu').value='';
+  document.getElementById('ec-type').value='presence';
+  document.getElementById('modal-event-coord-wrap').classList.add('open');
+}
+
+async function saveEventCoord(){
+  const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
+  if(!coord){alert('Coordinateur introuvable.');return;}
+  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
+  const type=document.getElementById('ec-type').value;
+  const lieu=document.getElementById('ec-lieu').value||type;
+  const day=parseInt(document.getElementById('ec-day').value);
+  const slot=parseInt(document.getElementById('ec-slot').value);
+  const btn=document.querySelector('#modal-event-coord-wrap .btn-primary');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
+  await planningSave(coord.id,semaine,{day,slot,type,label:lieu,lieu});
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';}
+  closeModal('modal-event-coord-wrap');
+  await renderPlanning();
+}
+
+// ══ FONCTIONS GRILLE ══
+
+function formatHeure(h){return h?h.replace(':','h'):''; }
+
+function getPlanningGrid(events, referentId, semaine, editable){
+  const ws=weekStart();
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  let html='<div class="pg-hd"></div>';
+  days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
+  html+='<div class="pg-time" style="font-size:10px">Journée</div>';
+  days5.forEach((_,di)=>{
+    const ev=events.find(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
+    html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'" '+(editable?'onclick="openEventAt('+di+')"':'')+'>';
+    if(ev){
+      const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+      const titre=ev.label||labels[ev.type]||ev.type;
+      const del=editable?'<span class="pg-del" onclick="event.stopPropagation();delPlanningEvent(\''+ev.id+'\',\''+referentId+'\',\''+semaine+'\')"><i class="ti ti-x"></i></span>':'';
+      let detail='';
+      if(ev.hdebut&&ev.hfin)detail+='<div style="font-size:10px;margin-top:3px;opacity:0.85">⏱ '+formatHeure(ev.hdebut)+'–'+formatHeure(ev.hfin)+'</div>';
+      if(ev.pause)detail+='<div style="font-size:10px;opacity:0.7">☕ '+ev.pause+'</div>';
+      if(ev.detach_desc||ev.detachDesc)detail+='<div style="font-size:10px;margin-top:2px;opacity:0.8;font-style:italic">'+(ev.detach_desc||ev.detachDesc)+'</div>';
+      html+='<div class="pg-card '+ev.type+'">'+del+titre+detail+'</div>';
+    } else if(editable){
+      html+='<div class="pg-add">+ ajouter</div>';
+    } else {
+      html+='<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';
+    }
+    html+='</div>';
+  });
+  return html;
+}
+
+function getPlanningGridSimple(events, coordId, semaine){
+  const ws=weekStart();
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  const editable=!!coordId;
+  let html='<div class="pg-hd"></div>';
+  days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
+  ['Matin','Après-midi'].forEach((slot,si)=>{
+    html+='<div class="pg-time">'+slot+'</div>';
+    days5.forEach((_,di)=>{
+      const evs=events.filter(e=>(e.jour===di||e.day===di)&&e.slot===si);
+      if(editable){
+        html+='<div class="pg-cell" onclick="openCoordEventAt('+di+','+si+')">';
+        if(!evs.length)html+='<span style="font-size:10px;color:#ccc">+ ajouter</span>';
+        evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delPlanningEvent(\''+e.id+'\',\''+coordId+'\',\''+semaine+'\')">'+
+          (e.lieu||e.label||e.type)+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>';});
+      } else {
+        html+='<div class="pg-cell-ro">';
+        if(!evs.length)html+='<div style="text-align:center;padding:0.5rem;color:#ddd;font-size:11px">—</div>';
+        evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" style="opacity:0.85">'+(e.lieu||e.label||e.type)+'</div>';});
+      }
+      html+='</div>';
+    });
+  });
+  return html;
+}
+
+async function renderPlanning(){
+  const ws=weekStart();
+  const semaine=ws.toISOString().slice(0,10);
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  document.getElementById('week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
+
+  const iAmCoord=(currentProfile?.name||'').toLowerCase().includes('david')||(currentProfile?.name||'').toLowerCase().includes('bucari');
+  const userId=currentProfile?.id||currentUser?.id||'dir';
+
+  // ── HAUT : référent sélectionné (horaires, lecture seule) ──
+  const sel=document.getElementById('planning-ref-select');
+  if(sel&&sel.options.length<=1){
+    const refs=cacheReferents.filter(r=>!((r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari')));
+    sel.innerHTML='<option value="">-- Choisir un référent --</option>'+refs.map(r=>'<option value="'+r.id+'">'+r.name+'</option>').join('');
+    if(!iAmCoord){const myOpt=Array.from(sel.options).find(o=>o.value===userId);if(myOpt)myOpt.selected=true;}
+  }
+  const selectedId=sel?.value;
+  const gridMine=document.getElementById('planning-grid-mine');
+  if(gridMine){
+    if(!selectedId){
+      gridMine.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez un référent</div>';
+    } else {
+      gridMine.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
+      const evs=await planningLoad(selectedId,semaine);
+      gridMine.innerHTML=getPlanningGrid(evs,selectedId,semaine,false);
+    }
+  }
+
+  // ── BAS : coordinateur (matin/AM) ──
+  const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
+  const gridOther=document.getElementById('planning-grid-other');
+  const badge=document.getElementById('planning-coord-badge');
+  const addBtn=document.getElementById('planning-coord-add-btn');
+  if(iAmCoord){
+    if(badge){badge.textContent='✏️ Modifiable';badge.style.background='var(--koala-light)';badge.style.color='var(--koala)';}
+    if(addBtn)addBtn.style.display='';
+  } else {
+    if(badge){badge.textContent='👁 Lecture seule';badge.style.background='#f0f0f5';badge.style.color='#888';}
+    if(addBtn)addBtn.style.display='none';
+  }
+  if(gridOther){
+    if(!coord){gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Coordinateur non disponible</div>';}
+    else{
+      gridOther.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
+      const cEvs=await planningLoad(coord.id,semaine);
+      gridOther.innerHTML=getPlanningGridSimple(cEvs,iAmCoord?coord.id:null,semaine);
+    }
+  }
+}
+
+async function saveEvent(){
+  const type=document.getElementById('e-type').value;
+  const fullWeek=document.getElementById('e-full-week').checked;
+  const dayVal=parseInt(document.getElementById('e-day').value);
+  const userId=currentProfile?.id||currentUser?.id;
+  if(!userId){alert('Erreur : profil non chargé.');return;}
+  let hdebut='',hfin='',pause='';
+  if(!['absent','conge'].includes(type)){
+    hdebut=document.getElementById('e-hdebut').value;
+    hfin=document.getElementById('e-hfin').value;
+    pause=document.getElementById('e-pause').value;
+    if(hdebut>=hfin){alert("L\'heure de fin doit être après l\'heure de début.");return;}
+  }
+  let lieu='';
+  if(['presence','formation','reunion'].includes(type)){
+    const s=document.getElementById('e-lieu').value;
+    lieu=s==='Autre'?document.getElementById('e-lieu-autre').value.trim():s;
+    if(!lieu){alert('Indiquez un lieu.');return;}
+  }
+  let detachType='',detachDesc='';
+  if(type==='detachement'){detachType=document.getElementById('e-detach-type').value;detachDesc=document.getElementById('e-detach-desc').value.trim();}
+  const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+  const label=lieu||(detachType||labels[type]||type);
+  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
+  const days=fullWeek?[0,1,2,3,4]:[dayVal];
+  const btn=document.querySelector('#modal-event-wrap .btn-primary');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
+  for(const d of days){await planningSave(userId,semaine,{day:d,slot:null,type,label,lieu,hdebut,hfin,pause,detachType,detachDesc});}
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';}
+  closeModal('modal-event-wrap');
+  await renderPlanning();
+}
+
+</script>
 <style>
 :root{
   --koala:#3D3580;--orange:#F47920;--koala-light:#EEEDF8;--orange-light:#FEF0E6;
@@ -1288,248 +1510,8 @@ function getPlanningGrid(events, key, editable) {
   return html;
 }
 
-function renderPlanning(){
-  const ws = weekStart();
-  const fmt = d => d.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'});
-  const days5 = Array.from({length:5}, (_,i) => { const d=new Date(ws); d.setDate(ws.getDate()+i); return d; });
-  document.getElementById('week-label').textContent = fmt(days5[0])+' – '+fmt(days5[4]);
 
-  const iAmCoord = (currentProfile?.name||'').toLowerCase().includes('david') ||
-                   (currentProfile?.name||'').toLowerCase().includes('bucari');
-  const userId   = currentProfile?.id||currentUser?.id||'dir';
-
-  // ── PLANNING HAUT : référent sélectionné (horaires, lecture seule) ──
-  const sel = document.getElementById('planning-ref-select');
-  // Peupler le select avec tous les référents (sauf coordinateur)
-  if(sel && sel.options.length <= 1) {
-    const refs = cacheReferents.filter(r =>
-      !((r.name||'').toLowerCase().includes('david') || (r.name||'').toLowerCase().includes('bucari'))
-    );
-    sel.innerHTML = '<option value="">-- Choisir un référent --</option>' +
-      refs.map(r => '<option value="'+r.id+'">'+r.name+'</option>').join('');
-    // Si je suis un référent, me pré-sélectionner
-    if(!iAmCoord) {
-      const myOpt = Array.from(sel.options).find(o => o.value === userId);
-      if(myOpt) myOpt.selected = true;
-    }
-  }
-  const selectedId = sel?.value;
-  const gridMine   = document.getElementById('planning-grid-mine');
-  if(gridMine) {
-    if(!selectedId) {
-      gridMine.innerHTML = '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez un référent pour voir son planning</div>';
-    } else {
-      const refKey    = 'events_'+ws.toISOString().slice(0,10)+'_'+selectedId;
-      const refEvents = JSON.parse(localStorage.getItem(refKey)||'[]');
-      gridMine.innerHTML = getPlanningGrid(refEvents, refKey, false);
-    }
-  }
-
-  // ── PLANNING BAS : coordinateur (matin/AM) ──
-  const coord = cacheReferents.find(r =>
-    (r.name||'').toLowerCase().includes('david') ||
-    (r.name||'').toLowerCase().includes('bucari')
-  );
-  const gridOther = document.getElementById('planning-grid-other');
-  const badge     = document.getElementById('planning-coord-badge');
-  const addBtn    = document.getElementById('planning-coord-add-btn');
-
-  if(iAmCoord) {
-    // Coordinateur : peut modifier son propre planning du bas
-    if(badge)  badge.textContent  = '✏️ Modifiable';
-    if(badge)  { badge.style.background='var(--koala-light)'; badge.style.color='var(--koala)'; }
-    if(addBtn) addBtn.style.display = '';
-  } else {
-    if(badge)  badge.textContent  = '👁 Lecture seule';
-    if(badge)  { badge.style.background='#f0f0f5'; badge.style.color='#888'; }
-    if(addBtn) addBtn.style.display = 'none';
-  }
-
-  if(gridOther) {
-    if(!coord) {
-      gridOther.innerHTML = '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Planning du coordinateur non disponible</div>';
-    } else {
-      const coordKey    = 'events_'+ws.toISOString().slice(0,10)+'_coord_'+coord.id;
-      const coordEvents = JSON.parse(localStorage.getItem(coordKey)||'[]');
-      // Modifiable uniquement par le coordinateur
-      gridOther.innerHTML = getPlanningGridSimple(coordEvents, iAmCoord ? coordKey : null);
-    }
-  }
-}
-
-// Ouvre le modal classique (matin/AM) pour le coordinateur
-function openCoordEventAt(d,s){
-  document.getElementById('ec-day').value  = d;
-  document.getElementById('ec-slot').value = s;
-  document.getElementById('ec-lieu').value = '';
-  document.getElementById('ec-type').value = 'presence';
-  document.getElementById('modal-event-coord-wrap').classList.add('open');
-}
-
-function openEventCoordModal(){
-  document.getElementById('ec-day').value  = '0';
-  document.getElementById('ec-slot').value = '0';
-  document.getElementById('ec-lieu').value = '';
-  document.getElementById('ec-type').value = 'presence';
-  document.getElementById('modal-event-coord-wrap').classList.add('open');
-}
-
-function saveEventCoord(){
-  const ws    = weekStart();
-  const coord = cacheReferents.find(r =>
-    (r.name||'').toLowerCase().includes('david') ||
-    (r.name||'').toLowerCase().includes('bucari')
-  );
-  if(!coord) return;
-  const coordKey = 'events_'+ws.toISOString().slice(0,10)+'_coord_'+coord.id;
-  const events   = JSON.parse(localStorage.getItem(coordKey)||'[]');
-  const type     = document.getElementById('ec-type').value;
-  const lieu     = document.getElementById('ec-lieu').value || type;
-  const day      = parseInt(document.getElementById('ec-day').value);
-  const slot     = parseInt(document.getElementById('ec-slot').value);
-  events.push({id:Date.now().toString(), day, slot, type, lieu});
-  localStorage.setItem(coordKey, JSON.stringify(events));
-  closeModal('modal-event-coord-wrap');
-  renderPlanning();
-}
-
-function delEventCoord(id, key){
-  const events = JSON.parse(localStorage.getItem(key)||'[]').filter(e=>e.id!==id);
-  localStorage.setItem(key, JSON.stringify(events));
-  renderPlanning();
-}
-function toggleLieuField(){
-  const type=document.getElementById('e-type').value;
-  const needsLieu=['presence','formation'].includes(type);
-  document.getElementById('e-lieu-wrap').style.display=needsLieu?'':'none';
-  document.getElementById('e-lieu-autre-wrap').style.display='none';
-  if(needsLieu&&document.getElementById('e-lieu').value==='Autre'){
-    document.getElementById('e-lieu-autre-wrap').style.display='';
-  }
-}
-function onLieuChange(){
-  const v=document.getElementById('e-lieu').value;
-  document.getElementById('e-lieu-autre-wrap').style.display=v==='Autre'?'':'none';
-}
-// ── Initialisation des selects horaires ──
-function buildTimeOptions(selId, defaultVal){
-  const sel = document.getElementById(selId);
-  if(!sel) return;
-  sel.innerHTML = '';
-  for(let h=6; h<=20; h++){
-    for(let m=0; m<60; m+=30){
-      const hh = String(h).padStart(2,'0');
-      const mm = String(m).padStart(2,'0');
-      const val = hh+':'+mm;
-      const opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = hh+'h'+mm;
-      if(val === defaultVal) opt.selected = true;
-      sel.appendChild(opt);
-    }
-  }
-}
-
-function initTimeSelects(){
-  buildTimeOptions('e-hdebut','08:30');
-  buildTimeOptions('e-hfin','17:00');
-}
-
-function onTypeChange(){
-  const type = document.getElementById('e-type').value;
-  // Horaires : masqués pour absent et congé
-  const showHoraires = !['absent','conge'].includes(type);
-  document.getElementById('e-horaires-wrap').style.display = showHoraires ? '' : 'none';
-  // Lieu : présence, formation, réunion
-  const showLieu = ['presence','formation','reunion'].includes(type);
-  document.getElementById('e-lieu-wrap').style.display = showLieu ? '' : 'none';
-  document.getElementById('e-lieu-autre-wrap').style.display = 'none';
-  // Détachement
-  document.getElementById('e-detach-wrap').style.display = type === 'detachement' ? '' : 'none';
-}
-
-function onLieuChange(){
-  const v = document.getElementById('e-lieu').value;
-  document.getElementById('e-lieu-autre-wrap').style.display = v === 'Autre' ? '' : 'none';
-}
-
-// Compatibilité ancienne fonction
-function toggleLieuField(){ onTypeChange(); }
-
-function openEventModal(){
-  initTimeSelects();
-  document.getElementById('e-day').value = '0';
-  document.getElementById('e-full-week').checked = false;
-  document.getElementById('e-lieu').value = '';
-  document.getElementById('e-lieu-autre').value = '';
-  document.getElementById('e-detach-type').value = 'Formation';
-  document.getElementById('e-detach-desc').value = '';
-  document.getElementById('e-type').value = 'presence';
-  document.getElementById('e-pause').value = '12:00-13:00';
-  onTypeChange();
-  document.getElementById('modal-event-wrap').classList.add('open');
-}
-
-function openEventAt(d){
-  openEventModal();
-  document.getElementById('e-day').value = d;
-}
-
-function saveEvent(){
-  const type    = document.getElementById('e-type').value;
-  const fullWeek= document.getElementById('e-full-week').checked;
-  const dayVal  = parseInt(document.getElementById('e-day').value);
-
-  // Horaires
-  let hdebut='', hfin='', pause='';
-  if(!['absent','conge'].includes(type)){
-    hdebut = document.getElementById('e-hdebut').value;
-    hfin   = document.getElementById('e-hfin').value;
-    pause  = document.getElementById('e-pause').value;
-    if(hdebut >= hfin){ alert("L'heure de fin doit être après l'heure de début."); return; }
-  }
-
-  // Lieu
-  let lieu = '';
-  if(['presence','formation','reunion'].includes(type)){
-    const sel = document.getElementById('e-lieu').value;
-    lieu = sel === 'Autre' ? document.getElementById('e-lieu-autre').value.trim() : sel;
-    if(!lieu){ alert('Indiquez un lieu.'); return; }
-  }
-
-  // Détachement
-  let detachType='', detachDesc='';
-  if(type === 'detachement'){
-    detachType = document.getElementById('e-detach-type').value;
-    detachDesc = document.getElementById('e-detach-desc').value.trim();
-  }
-
-  // Label affiché dans la carte
-  const labels = {presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
-  const label  = lieu ? lieu : (detachType || labels[type] || type);
-
-  // Sauvegarde
-  const ws     = weekStart();
-  const userId = currentProfile?.id||currentUser?.id||'dir';
-  const key    = 'events_'+ws.toISOString().slice(0,10)+'_'+userId;
-  const events = JSON.parse(localStorage.getItem(key)||'[]');
-
-  const days = fullWeek ? [0,1,2,3,4] : [dayVal];
-  days.forEach(d => {
-    // Remplacer la journée existante (1 seul event par jour)
-    const idx = events.findIndex(e => e.day === d);
-    const ev  = {
-      id: idx >= 0 ? events[idx].id : Date.now().toString()+'_'+d,
-      day: d, type, label, lieu, hdebut, hfin, pause, detachType, detachDesc
-    };
-    if(idx >= 0) events[idx] = ev; else events.push(ev);
-  });
-
-  localStorage.setItem(key, JSON.stringify(events));
-  closeModal('modal-event-wrap');
-  renderPlanning();
-}
-function delEvent(id,key){localStorage.setItem(key,JSON.stringify(JSON.parse(localStorage.getItem(key)||'[]').filter(e=>e.id!==id)));renderPlanning();}
+// delEvent remplacé par delPlanningEvent (Supabase)
 
 // DASHBOARD
 function renderDashboard(){
@@ -1664,61 +1646,34 @@ function ikReadPlanning(yearMonth){
   const[year,month]=yearMonth.split('-').map(Number);
   const rows=[];
   const userId=currentProfile?.id||currentUser?.id||'dir';
-  // Coordinateur (David Bucari) : ses IK lisent le planning _coord_
-  const iAmCoordIK = (currentProfile?.name||'').toLowerCase().includes('david') ||
-                     (currentProfile?.name||'').toLowerCase().includes('bucari');
+  const iAmCoordIK=(currentProfile?.name||'').toLowerCase().includes('david')||(currentProfile?.name||'').toLowerCase().includes('bucari');
   const firstDay=new Date(year,month-1,1);
   const lastDay=new Date(year,month,0);
   let cursor=new Date(firstDay);
   const dow=cursor.getDay();
   cursor.setDate(cursor.getDate()-(dow===0?6:dow-1));
-  const checkedKeys=new Set();
+  const checkedSemaines=new Set();
+  // Lire depuis le cache _planningCache (déjà chargé par renderPlanning)
   while(cursor<=lastDay){
-    const keyDate=cursor.toISOString().slice(0,10);  // cohérent avec weekStart()
-    const key=iAmCoordIK ? `events_${keyDate}_coord_${userId}` : `events_${keyDate}_${userId}`;
-    if(!checkedKeys.has(key)){
-      checkedKeys.add(key);
-      const events=JSON.parse(localStorage.getItem(key)||'[]');
-      events.forEach(ev=>{
-        if(ev.type==='absent'||ev.type==='reunion')return;
-        // Reconstruire la date locale du lundi à partir de keyDate (string YYYY-MM-DD)
-        // pour éviter tout décalage UTC. On parse les composantes directement.
-        // keyDate = clé UTC (ex: 2026-06-14 pour le vrai lundi 15/06 en UTC+2)
-        // On repart du curseur local pour calculer la vraie date
-        const evDate=new Date(cursor.getFullYear(),cursor.getMonth(),cursor.getDate()+ev.day);
-        if(evDate.getMonth()+1!==month||evDate.getFullYear()!==year)return;
-        const dateStr=ikLocalDate(evDate);
-        const creche=ikDetectCreche(ev.lieu);
-        rows.push({id:`${ev.id}_${dateStr}`,date:dateStr,trajet:creche&&creche!=='Cuers'?`Cuers/${ev.lieu}`:ev.lieu,creche,nbr:2,lieu:ev.lieu,slot:ev.slot,ignored:!creche||creche==='Cuers'});
+    const semaine=cursor.toISOString().slice(0,10);
+    if(!checkedSemaines.has(semaine)){
+      checkedSemaines.add(semaine);
+      const cacheKey=userId+'_'+semaine;
+      const events=_planningCache[cacheKey]||[];
+      events.forEach(e=>{
+        if(e.type&&e.type!=='absent'&&e.type!=='conge'&&e.lieu){
+          const day=e.jour!==undefined?e.jour:e.day;
+          const eDate=new Date(cursor);
+          eDate.setDate(cursor.getDate()+day);
+          if(eDate>=firstDay&&eDate<=lastDay){
+            rows.push({date:eDate.toISOString().slice(0,10),lieu:e.lieu,type:e.type,ignored:false});
+          }
+        }
       });
     }
     cursor.setDate(cursor.getDate()+7);
   }
-  rows.sort((a,b)=>a.date.localeCompare(b.date)||a.slot-b.slot);
   return rows;
-}
-
-function ikReeval(rows){
-  // Réévalue creche et ignored à partir du lieu — corrige les anciennes saisies texte libre
-  return rows.map(r=>{
-    const creche=ikDetectCreche(r.lieu||r.trajet.replace('Cuers/',''));
-    const ignored=!creche||creche==='Cuers';
-    const trajet=creche&&!ignored?`Cuers/${r.lieu||creche}`:r.trajet;
-    return Object.assign({},r,{creche,ignored,trajet:r.trajet||trajet});
-  });
-}
-
-function ikLoad(){
-  const month=document.getElementById('ik-month').value;
-  if(!month)return;
-  const saved=JSON.parse(localStorage.getItem(`ik_rows_${month}`)||'null');
-  if(saved){
-    ikRows=ikReeval(saved);  // réévalue à chaque chargement
-    ikSaveRows();             // resauvegarde avec les valeurs corrigées
-    ikRenderTable();
-    document.getElementById('ik-load-info').textContent=`${ikRows.filter(r=>!r.ignored).length} trajet(s) chargés (sauvegardés)`;
-  }
-  else ikLoadFromPlanning();
 }
 
 function ikLoadFromPlanning(){
