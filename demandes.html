@@ -633,16 +633,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="fg"><label class="flabel">Heure début</label><select class="finput" id="e-hdebut"></select></div>
         <div class="fg"><label class="flabel">Heure fin</label><select class="finput" id="e-hfin"></select></div>
         <div class="fg"><label class="flabel">Pause déjeuner</label>
-          <select class="finput" id="e-pause">
-            <option value="">Aucune</option>
-            <option value="12:00-12:30">12h00–12h30 (30min)</option>
-            <option value="12:00-12:45">12h00–12h45 (45min)</option>
-            <option value="12:00-13:00" selected>12h00–13h00 (1h)</option>
-            <option value="12:00-13:30">12h00–13h30 (1h30)</option>
-            <option value="12:30-13:00">12h30–13h00 (30min)</option>
-            <option value="12:30-13:30">12h30–13h30 (1h)</option>
-            <option value="13:00-14:00">13h00–14h00 (1h)</option>
-          </select>
+          <div style="display:flex;align-items:center;gap:6px">
+            <select class="finput" id="e-pause-debut" style="flex:1">
+              <option value="">Aucune</option>
+            </select>
+            <span id="e-pause-sep" style="font-size:12px;color:#aaa;display:none">→</span>
+            <select class="finput" id="e-pause-fin" style="flex:1;display:none"></select>
+          </div>
         </div>
       </div>
     </div>
@@ -1109,7 +1106,52 @@ function buildTimeOptions(selId,defaultVal){
     if(v===defaultVal)o.selected=true;sel.appendChild(o);
   }
 }
-function initTimeSelects(){buildTimeOptions('e-hdebut','08:30');buildTimeOptions('e-hfin','17:00');}
+function initTimeSelects(){
+  buildTimeOptions('e-hdebut','08:30');
+  buildTimeOptions('e-hfin','17:00');
+  // Pause début : de 10h à 15h
+  const selD=document.getElementById('e-pause-debut');
+  if(selD){
+    selD.innerHTML='<option value="">Aucune</option>';
+    for(let h=10;h<=15;h++)for(let m=0;m<60;m+=15){
+      const v=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+      const o=document.createElement('option');o.value=v;
+      o.textContent=String(h).padStart(2,'0')+'h'+String(m).padStart(2,'0');
+      if(v==='12:00')o.selected=true;
+      selD.appendChild(o);
+    }
+    selD.onchange=onPauseDebutChange;
+    onPauseDebutChange();
+  }
+}
+
+function onPauseDebutChange(){
+  const selD=document.getElementById('e-pause-debut');
+  const selF=document.getElementById('e-pause-fin');
+  const sep=document.getElementById('e-pause-sep');
+  const val=selD?.value;
+  if(!val){if(selF)selF.style.display='none';if(sep)sep.style.display='none';return;}
+  if(sep)sep.style.display='';
+  if(selF){
+    selF.style.display='';selF.innerHTML='';
+    // Fin : de debut+15min à debut+3h
+    const[h,m]=val.split(':').map(Number);
+    const startMin=h*60+m+15;
+    const endMin=Math.min(h*60+m+180, 18*60);
+    for(let total=startMin;total<=endMin;total+=15){
+      const fh=Math.floor(total/60);const fm=total%60;
+      const fv=String(fh).padStart(2,'0')+':'+String(fm).padStart(2,'0');
+      const o=document.createElement('option');o.value=fv;
+      o.textContent=String(fh).padStart(2,'0')+'h'+String(fm).padStart(2,'0');
+      if(fv===String(h).padStart(2,'0')+':'+(m+60<60?String(m+60).padStart(2,'0'):'00'))o.selected=true;
+      selF.appendChild(o);
+    }
+    // Sélectionner +1h par défaut
+    const defFin=String(h+(m+60>=60?1:0)).padStart(2,'0')+':'+String((m+60)%60).padStart(2,'0');
+    const defOpt=Array.from(selF.options).find(o=>o.value===defFin);
+    if(defOpt)defOpt.selected=true;
+  }
+}
 function formatHeure(h){return h?h.replace(':','h'):''; }
 
 // ── MODAL REFERENT ──
@@ -1132,7 +1174,6 @@ function openEventModal(){
   document.getElementById('e-detach-type').value='Formation';
   document.getElementById('e-detach-desc').value='';
   document.getElementById('e-type').value='presence';
-  document.getElementById('e-pause').value='12:00-13:00';
   onTypeChange();
   document.getElementById('modal-event-wrap').classList.add('open');
 }
@@ -1185,7 +1226,9 @@ async function saveEvent(){
   if(!userId){alert('Erreur : profil non chargé.');return;}
   let hdebut='',hfin='',pause='';
   if(!['absent','conge'].includes(type)){
-    hdebut=document.getElementById('e-hdebut').value;hfin=document.getElementById('e-hfin').value;pause=document.getElementById('e-pause').value;
+    hdebut=document.getElementById('e-hdebut').value;hfin=document.getElementById('e-hfin').value;const pd=document.getElementById('e-pause-debut').value;
+    const pf=pd?document.getElementById('e-pause-fin')?.value:'';
+    pause=pd&&pf?pd+'-'+pf:'';
     if(hdebut>=hfin){alert("L'heure de fin doit être après l'heure de début.");return;}
   }
   let lieu='';
