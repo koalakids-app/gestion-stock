@@ -199,6 +199,11 @@ async function renderPlanning(){
     }
   } else {
     // ── RÉFÉRENT ──
+    if(!userId||userId==='dir'){
+      // Profil pas encore chargé, réessayer dans 500ms
+      setTimeout(()=>renderPlanning(),500);
+      return;
+    }
     // Haut : son propre planning (modifiable)
     if(addBtn)   addBtn.style.display='';
     if(refSelect) refSelect.style.display='none';
@@ -222,6 +227,12 @@ async function renderPlanning(){
     }
   }
 }
+
+function openEventAt(d){
+  openEventModal();
+  document.getElementById('e-day').value = d;
+}
+
 
 async function saveEvent(){
   const type=document.getElementById('e-type').value;
