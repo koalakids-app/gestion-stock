@@ -414,13 +414,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
     </div>
 
-    <!-- Planning MON planning (modifiable) -->
+    <!-- Planning HAUT : référent sélectionné (horaires, lecture seule) -->
     <div style="margin-bottom:1.25rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:6px">
         <div style="font-size:13px;font-weight:700;color:var(--koala);display:flex;align-items:center;gap:6px">
-          <i class="ti ti-user"></i> <span id="planning-my-label">Mon planning</span>
+          <i class="ti ti-user"></i>
+          <select id="planning-ref-select" class="finput" style="font-size:12px;padding:4px 8px;width:auto;min-width:200px" onchange="renderPlanning()">
+            <option value="">-- Choisir un référent --</option>
+          </select>
         </div>
-        <span style="font-size:11px;background:var(--koala-light);color:var(--koala);padding:2px 9px;border-radius:10px;font-weight:600">✏️ Modifiable</span>
+        <span style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
       </div>
       <div class="planning-grid" id="planning-grid-mine"></div>
     </div>
@@ -428,19 +431,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Séparateur -->
     <div style="border-top:2px dashed var(--border);margin:0.75rem 0"></div>
 
-    <!-- Planning du bas : David Bucari (référents) ou menu déroulant (direction) -->
+    <!-- Planning BAS : coordinateur (matin/AM, modifiable par coordinateur, lecture seule pour les autres) -->
     <div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:6px">
         <div style="font-size:13px;font-weight:700;color:var(--koala);display:flex;align-items:center;gap:6px">
           <i class="ti ti-user-circle"></i>
-          <!-- Label fixe pour les référents -->
-          <span id="planning-other-label" style="display:none">Planning du coordinateur</span>
-          <!-- Menu déroulant pour direction -->
-          <select id="planning-ref-select" class="finput" style="display:none;font-size:12px;padding:4px 8px;width:auto;min-width:180px" onchange="renderPlanning()">
-            <option value="">-- Choisir un référent --</option>
-          </select>
+          <span id="planning-coord-label">Planning du coordinateur</span>
         </div>
-        <span style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
+        <span id="planning-coord-badge" style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
+      </div>
+      <div id="planning-coord-add-btn" style="display:none;margin-bottom:6px">
+        <button class="btn-primary" style="font-size:12px;padding:6px 14px" onclick="openEventCoordModal()"><i class="ti ti-plus"></i> Ajouter</button>
       </div>
       <div class="planning-grid" id="planning-grid-other"></div>
     </div>
@@ -1187,6 +1188,47 @@ const COORD_NAME = 'David Bucari';
 
 function formatHeure(h){ return h ? h.replace(':','h') : ''; }
 
+// Planning simplifié matin/après-midi — coordinateur
+// key=null → lecture seule ; key=string → modifiable (coordinateur)
+function getPlanningGridSimple(events, key) {
+  const ws = weekStart();
+  const fmt = d => d.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'});
+  const days5 = Array.from({length:5}, (_,i) => { const d=new Date(ws); d.setDate(ws.getDate()+i); return d; });
+  const SLOTS = ['Matin','Après-midi'];
+  const editable = !!key;
+
+  let html = '<div class="pg-hd"></div>';
+  days5.forEach((d,i) => {
+    html += '<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';
+  });
+  SLOTS.forEach((slot, si) => {
+    html += '<div class="pg-time">'+slot+'</div>';
+    days5.forEach((_,di) => {
+      const evs = events.filter(e => e.day === di && e.slot === si);
+      if(editable) {
+        html += '<div class="pg-cell" onclick="openCoordEventAt('+di+','+si+')">';
+        if(!evs.length) html += '<span style="font-size:10px;color:#ccc">+ ajouter</span>';
+        evs.forEach(e => {
+          html += '<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delEventCoord(\''+e.id+'\',\''+key+'\')">'+
+            (e.lieu||e.label||e.type)+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>';
+        });
+      } else {
+        html += '<div class="pg-cell-ro">';
+        if(!evs.length) {
+          html += '<div style="text-align:center;padding:0.5rem;color:#ddd;font-size:11px">—</div>';
+        } else {
+          evs.forEach(e => {
+            html += '<div class="pg-ev '+e.type+'" style="opacity:0.85">'+(e.lieu||e.label||e.type)+'</div>';
+          });
+        }
+      }
+      html += '</div>';
+    });
+  });
+  return html;
+}
+
+// Planning horaires complet — utilisé pour le planning du référent connecté (modifiable)
 function getPlanningGrid(events, key, editable) {
   const ws = weekStart();
   const fmt = d => d.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'});
@@ -1230,64 +1272,109 @@ function renderPlanning(){
   const days5 = Array.from({length:5}, (_,i) => { const d=new Date(ws); d.setDate(ws.getDate()+i); return d; });
   document.getElementById('week-label').textContent = fmt(days5[0])+' – '+fmt(days5[4]);
 
-  // ── MON planning (modifiable) ──
-  const userId = currentProfile?.id||currentUser?.id||'dir';
-  const myKey  = 'events_'+ws.toISOString().slice(0,10)+'_'+userId;
-  const myEvents = JSON.parse(localStorage.getItem(myKey)||'[]');
-  const myName = currentProfile?.name||'Mon planning';
-  const myLabel = document.getElementById('planning-my-label');
-  if(myLabel) myLabel.textContent = myName;
-  const gridMine = document.getElementById('planning-grid-mine');
-  if(gridMine) gridMine.innerHTML = getPlanningGrid(myEvents, myKey, true);
+  const iAmCoord = (currentProfile?.name||'').toLowerCase().includes('david') ||
+                   (currentProfile?.name||'').toLowerCase().includes('bucari');
+  const userId   = currentProfile?.id||currentUser?.id||'dir';
 
-  // ── PLANNING DU BAS ──
-  const iAmCoord = (currentProfile?.name||'').toLowerCase().includes('david') || (currentProfile?.name||'').toLowerCase().includes('bucari');
-
-  if(iAmCoord) {
-    // Direction/Coordinateur : menu déroulant pour choisir un référent
-    const sel = document.getElementById('planning-ref-select');
-    const lbl = document.getElementById('planning-other-label');
-    if(sel) sel.style.display = '';
-    if(lbl) lbl.style.display = 'none';
-    // Peupler le select si pas encore fait
-    if(sel && sel.options.length <= 1) {
-      const refs = cacheReferents.filter(r => r.role==='referent');
-      sel.innerHTML = '<option value="">-- Choisir un référent --</option>' +
-        refs.map(r => '<option value="'+r.id+'">'+r.name+'</option>').join('');
-    }
-    const selectedId = sel?.value;
-    const gridOther = document.getElementById('planning-grid-other');
-    if(gridOther) {
-      if(!selectedId) {
-        gridOther.innerHTML = '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez un référent pour voir son planning</div>';
-      } else {
-        const otherKey = 'events_'+ws.toISOString().slice(0,10)+'_'+selectedId;
-        const otherEvents = JSON.parse(localStorage.getItem(otherKey)||'[]');
-        gridOther.innerHTML = getPlanningGrid(otherEvents, otherKey, false);
-      }
-    }
-  } else {
-    // Référent : voir le planning de David Bucari (lecture seule)
-    const sel = document.getElementById('planning-ref-select');
-    const lbl = document.getElementById('planning-other-label');
-    if(sel) sel.style.display = 'none';
-    if(lbl) lbl.style.display = '';
-    // Trouver l'id de David Bucari dans les référents
-    const coord = cacheReferents.find(r =>
-      (r.name||'').toLowerCase().includes('david') ||
-      (r.name||'').toLowerCase().includes('bucari')
+  // ── PLANNING HAUT : référent sélectionné (horaires, lecture seule) ──
+  const sel = document.getElementById('planning-ref-select');
+  // Peupler le select avec tous les référents (sauf coordinateur)
+  if(sel && sel.options.length <= 1) {
+    const refs = cacheReferents.filter(r =>
+      !((r.name||'').toLowerCase().includes('david') || (r.name||'').toLowerCase().includes('bucari'))
     );
-    const gridOther = document.getElementById('planning-grid-other');
-    if(gridOther) {
-      if(!coord) {
-        gridOther.innerHTML = '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Planning du coordinateur non disponible</div>';
-      } else {
-        const coordKey = 'events_'+ws.toISOString().slice(0,10)+'_'+coord.id;
-        const coordEvents = JSON.parse(localStorage.getItem(coordKey)||'[]');
-        gridOther.innerHTML = getPlanningGrid(coordEvents, coordKey, false);
-      }
+    sel.innerHTML = '<option value="">-- Choisir un référent --</option>' +
+      refs.map(r => '<option value="'+r.id+'">'+r.name+'</option>').join('');
+    // Si je suis un référent, me pré-sélectionner
+    if(!iAmCoord) {
+      const myOpt = Array.from(sel.options).find(o => o.value === userId);
+      if(myOpt) myOpt.selected = true;
     }
   }
+  const selectedId = sel?.value;
+  const gridMine   = document.getElementById('planning-grid-mine');
+  if(gridMine) {
+    if(!selectedId) {
+      gridMine.innerHTML = '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez un référent pour voir son planning</div>';
+    } else {
+      const refKey    = 'events_'+ws.toISOString().slice(0,10)+'_'+selectedId;
+      const refEvents = JSON.parse(localStorage.getItem(refKey)||'[]');
+      gridMine.innerHTML = getPlanningGrid(refEvents, refKey, false);
+    }
+  }
+
+  // ── PLANNING BAS : coordinateur (matin/AM) ──
+  const coord = cacheReferents.find(r =>
+    (r.name||'').toLowerCase().includes('david') ||
+    (r.name||'').toLowerCase().includes('bucari')
+  );
+  const gridOther = document.getElementById('planning-grid-other');
+  const badge     = document.getElementById('planning-coord-badge');
+  const addBtn    = document.getElementById('planning-coord-add-btn');
+
+  if(iAmCoord) {
+    // Coordinateur : peut modifier son propre planning du bas
+    if(badge)  badge.textContent  = '✏️ Modifiable';
+    if(badge)  { badge.style.background='var(--koala-light)'; badge.style.color='var(--koala)'; }
+    if(addBtn) addBtn.style.display = '';
+  } else {
+    if(badge)  badge.textContent  = '👁 Lecture seule';
+    if(badge)  { badge.style.background='#f0f0f5'; badge.style.color='#888'; }
+    if(addBtn) addBtn.style.display = 'none';
+  }
+
+  if(gridOther) {
+    if(!coord) {
+      gridOther.innerHTML = '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Planning du coordinateur non disponible</div>';
+    } else {
+      const coordKey    = 'events_'+ws.toISOString().slice(0,10)+'_coord_'+coord.id;
+      const coordEvents = JSON.parse(localStorage.getItem(coordKey)||'[]');
+      // Modifiable uniquement par le coordinateur
+      gridOther.innerHTML = getPlanningGridSimple(coordEvents, iAmCoord ? coordKey : null);
+    }
+  }
+}
+
+// Ouvre le modal classique (matin/AM) pour le coordinateur
+function openCoordEventAt(d,s){
+  document.getElementById('ec-day').value  = d;
+  document.getElementById('ec-slot').value = s;
+  document.getElementById('ec-lieu').value = '';
+  document.getElementById('ec-type').value = 'presence';
+  document.getElementById('modal-event-coord-wrap').classList.add('open');
+}
+
+function openEventCoordModal(){
+  document.getElementById('ec-day').value  = '0';
+  document.getElementById('ec-slot').value = '0';
+  document.getElementById('ec-lieu').value = '';
+  document.getElementById('ec-type').value = 'presence';
+  document.getElementById('modal-event-coord-wrap').classList.add('open');
+}
+
+function saveEventCoord(){
+  const ws    = weekStart();
+  const coord = cacheReferents.find(r =>
+    (r.name||'').toLowerCase().includes('david') ||
+    (r.name||'').toLowerCase().includes('bucari')
+  );
+  if(!coord) return;
+  const coordKey = 'events_'+ws.toISOString().slice(0,10)+'_coord_'+coord.id;
+  const events   = JSON.parse(localStorage.getItem(coordKey)||'[]');
+  const type     = document.getElementById('ec-type').value;
+  const lieu     = document.getElementById('ec-lieu').value || type;
+  const day      = parseInt(document.getElementById('ec-day').value);
+  const slot     = parseInt(document.getElementById('ec-slot').value);
+  events.push({id:Date.now().toString(), day, slot, type, lieu});
+  localStorage.setItem(coordKey, JSON.stringify(events));
+  closeModal('modal-event-coord-wrap');
+  renderPlanning();
+}
+
+function delEventCoord(id, key){
+  const events = JSON.parse(localStorage.getItem(key)||'[]').filter(e=>e.id!==id);
+  localStorage.setItem(key, JSON.stringify(events));
+  renderPlanning();
 }
 function toggleLieuField(){
   const type=document.getElementById('e-type').value;
@@ -1866,5 +1953,54 @@ comptes: `
 
 };
 </script>
+
+<!-- Modal planning coordinateur (matin/AM) -->
+<div class="overlay" id="modal-event-coord-wrap">
+  <div class="modal" style="max-width:420px">
+    <h3>Planning coordinateur</h3>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Jour</label>
+        <select class="finput" id="ec-day">
+          <option value="0">Lundi</option><option value="1">Mardi</option>
+          <option value="2">Mercredi</option><option value="3">Jeudi</option>
+          <option value="4">Vendredi</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flabel">Demi-journée</label>
+        <select class="finput" id="ec-slot">
+          <option value="0">Matin</option><option value="1">Après-midi</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label class="flabel">Crèche / Lieu</label>
+      <select class="finput" id="ec-lieu">
+        <option value="">— Sélectionner —</option>
+        <option value="Brunet">Brunet</option>
+        <option value="Ollioules">Ollioules</option>
+        <option value="St Jean">St Jean</option>
+        <option value="Picot 1">Picot 1</option>
+        <option value="Picot 2">Picot 2</option>
+        <option value="Cuers">Cuers</option>
+        <option value="Absent">Absent</option>
+        <option value="Formation">Formation</option>
+        <option value="Réunion">Réunion</option>
+      </select>
+    </div>
+    <div class="fg"><label class="flabel">Type</label>
+      <select class="finput" id="ec-type">
+        <option value="presence">Présence crèche</option>
+        <option value="absent">Absent</option>
+        <option value="conge">Congé</option>
+        <option value="formation">Formation</option>
+        <option value="reunion">Réunion</option>
+        <option value="detachement">Détachement</option>
+      </select>
+    </div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-event-coord-wrap')">Annuler</button>
+      <button class="btn-primary" onclick="saveEventCoord()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
