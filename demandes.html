@@ -917,25 +917,25 @@ function migratePlanningKeys(){
   });
 
   // Migration 2 : planning coordinateur 'events_[date]_[coordId]' → 'events_[date]_coord_[coordId]'
-  // Chercher toutes les clés events_ qui ne contiennent pas '_coord_' et qui correspondent à l'id du coordinateur
   const coord = cacheReferents.find(r =>
     (r.name||'').toLowerCase().includes('david') ||
     (r.name||'').toLowerCase().includes('bucari')
   );
+  console.log('[Migration] coord trouvé:', coord?.name, coord?.id);
   if(coord){
     const coordId = coord.id;
-    const coordKeysToMigrate = [];
-    for(let i=0;i<localStorage.length;i++){
-      const k=localStorage.key(i);
-      if(k && k.startsWith('events_') && k.endsWith('_'+coordId) && !k.includes('_coord_'))
-        coordKeysToMigrate.push(k);
-    }
+    const allKeys = [];
+    for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k) allKeys.push(k); }
+    console.log('[Migration] clés localStorage events_:', allKeys.filter(k=>k.startsWith('events_')));
+    const coordKeysToMigrate = allKeys.filter(k =>
+      k.startsWith('events_') && k.endsWith('_'+coordId) && !k.includes('_coord_')
+    );
+    console.log('[Migration] clés coord à migrer:', coordKeysToMigrate);
     coordKeysToMigrate.forEach(oldKey=>{
-      // Remplacer events_[date]_[coordId] → events_[date]_coord_[coordId]
       const newKey = oldKey.replace('_'+coordId, '_coord_'+coordId);
       if(!localStorage.getItem(newKey)){
         const data=localStorage.getItem(oldKey);
-        if(data&&data!=='[]'){localStorage.setItem(newKey,data);console.log('[Planning] Migration coord:',oldKey,'→',newKey);}
+        if(data&&data!=='[]'){localStorage.setItem(newKey,data);console.log('[Migration] coord:',oldKey,'→',newKey);}
       }
       localStorage.removeItem(oldKey);
     });
@@ -1664,6 +1664,9 @@ function ikReadPlanning(yearMonth){
   const[year,month]=yearMonth.split('-').map(Number);
   const rows=[];
   const userId=currentProfile?.id||currentUser?.id||'dir';
+  // Coordinateur (David Bucari) : ses IK lisent le planning _coord_
+  const iAmCoordIK = (currentProfile?.name||'').toLowerCase().includes('david') ||
+                     (currentProfile?.name||'').toLowerCase().includes('bucari');
   const firstDay=new Date(year,month-1,1);
   const lastDay=new Date(year,month,0);
   let cursor=new Date(firstDay);
@@ -1672,7 +1675,7 @@ function ikReadPlanning(yearMonth){
   const checkedKeys=new Set();
   while(cursor<=lastDay){
     const keyDate=cursor.toISOString().slice(0,10);  // cohérent avec weekStart()
-    const key=`events_${keyDate}_${userId}`;
+    const key=iAmCoordIK ? `events_${keyDate}_coord_${userId}` : `events_${keyDate}_${userId}`;
     if(!checkedKeys.has(key)){
       checkedKeys.add(key);
       const events=JSON.parse(localStorage.getItem(key)||'[]');
