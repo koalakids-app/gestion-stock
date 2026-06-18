@@ -152,44 +152,73 @@ async function renderPlanning(){
 
   const iAmCoord=(currentProfile?.name||'').toLowerCase().includes('david')||(currentProfile?.name||'').toLowerCase().includes('bucari');
   const userId=currentProfile?.id||currentUser?.id||'dir';
-
-  // ── HAUT : référent sélectionné (horaires, lecture seule) ──
-  const sel=document.getElementById('planning-ref-select');
-  if(sel&&sel.options.length<=1){
-    const refs=cacheReferents.filter(r=>!((r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari')));
-    sel.innerHTML='<option value="">-- Choisir un référent --</option>'+refs.map(r=>'<option value="'+r.id+'">'+r.name+'</option>').join('');
-    if(!iAmCoord){const myOpt=Array.from(sel.options).find(o=>o.value===userId);if(myOpt)myOpt.selected=true;}
-  }
-  const selectedId=sel?.value;
-  const gridMine=document.getElementById('planning-grid-mine');
-  if(gridMine){
-    if(!selectedId){
-      gridMine.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez un référent</div>';
-    } else {
-      gridMine.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
-      const evs=await planningLoad(selectedId,semaine);
-      gridMine.innerHTML=getPlanningGrid(evs,selectedId,semaine,false);
-    }
-  }
-
-  // ── BAS : coordinateur (matin/AM) ──
   const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
-  const gridOther=document.getElementById('planning-grid-other');
-  const badge=document.getElementById('planning-coord-badge');
-  const addBtn=document.getElementById('planning-coord-add-btn');
+
+  const addBtn     = document.getElementById('planning-add-btn');
+  const refLabel   = document.getElementById('planning-ref-label');
+  const refSelect  = document.getElementById('planning-ref-select');
+  const topBadge   = document.getElementById('planning-top-badge');
+  const coordBadge = document.getElementById('planning-coord-badge');
+  const coordAdd   = document.getElementById('planning-coord-add-btn');
+  const gridMine   = document.getElementById('planning-grid-mine');
+  const gridOther  = document.getElementById('planning-grid-other');
+
   if(iAmCoord){
-    if(badge){badge.textContent='✏️ Modifiable';badge.style.background='var(--koala-light)';badge.style.color='var(--koala)';}
-    if(addBtn)addBtn.style.display='';
+    // ── COORDINATEUR ──
+    // Haut : menu déroulant pour voir le planning d'un référent
+    if(addBtn)   addBtn.style.display='none';
+    if(refLabel) refLabel.style.display='none';
+    if(refSelect){
+      refSelect.style.display='';
+      if(refSelect.options.length<=1){
+        const refs=cacheReferents.filter(r=>!((r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari')));
+        refSelect.innerHTML='<option value="">-- Choisir un référent --</option>'+refs.map(r=>'<option value="'+r.id+'">'+r.name+'</option>').join('');
+      }
+    }
+    if(topBadge){topBadge.textContent='👁 Lecture seule';topBadge.style.background='#f0f0f5';topBadge.style.color='#888';}
+    const selectedId=refSelect?.value;
+    if(gridMine){
+      if(!selectedId){
+        gridMine.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez un référent pour voir son planning</div>';
+      } else {
+        gridMine.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
+        const evs=await planningLoad(selectedId,semaine);
+        gridMine.innerHTML=getPlanningGrid(evs,selectedId,semaine,false);
+      }
+    }
+    // Bas : son propre planning (modifiable)
+    if(coordBadge){coordBadge.textContent='✏️ Modifiable';coordBadge.style.background='var(--koala-light)';coordBadge.style.color='var(--koala)';}
+    if(coordAdd) coordAdd.style.display='';
+    if(gridOther){
+      if(!coord){gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">—</div>';}
+      else{
+        gridOther.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
+        const cEvs=await planningLoad(coord.id,semaine);
+        gridOther.innerHTML=getPlanningGridSimple(cEvs,coord.id,semaine);
+      }
+    }
   } else {
-    if(badge){badge.textContent='👁 Lecture seule';badge.style.background='#f0f0f5';badge.style.color='#888';}
-    if(addBtn)addBtn.style.display='none';
-  }
-  if(gridOther){
-    if(!coord){gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Coordinateur non disponible</div>';}
-    else{
-      gridOther.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
-      const cEvs=await planningLoad(coord.id,semaine);
-      gridOther.innerHTML=getPlanningGridSimple(cEvs,iAmCoord?coord.id:null,semaine);
+    // ── RÉFÉRENT ──
+    // Haut : son propre planning (modifiable)
+    if(addBtn)   addBtn.style.display='';
+    if(refSelect) refSelect.style.display='none';
+    if(refLabel){ refLabel.style.display=''; refLabel.textContent=currentProfile?.name||'Mon planning'; }
+    if(topBadge){topBadge.textContent='✏️ Modifiable';topBadge.style.background='var(--koala-light)';topBadge.style.color='var(--koala)';}
+    if(gridMine){
+      gridMine.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
+      const evs=await planningLoad(userId,semaine);
+      gridMine.innerHTML=getPlanningGrid(evs,userId,semaine,true);
+    }
+    // Bas : planning du coordinateur (lecture seule)
+    if(coordBadge){coordBadge.textContent='👁 Lecture seule';coordBadge.style.background='#f0f0f5';coordBadge.style.color='#888';}
+    if(coordAdd) coordAdd.style.display='none';
+    if(gridOther){
+      if(!coord){gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Planning coordinateur non disponible</div>';}
+      else{
+        gridOther.innerHTML='<div style="text-align:center;padding:1rem;color:#bbb;font-size:12px">Chargement…</div>';
+        const cEvs=await planningLoad(coord.id,semaine);
+        gridOther.innerHTML=getPlanningGridSimple(cEvs,null,semaine);
+      }
     }
   }
 }
@@ -632,20 +661,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="leg-item"><div class="leg-dot" style="background:#378ADD"></div>Formation</div>
           <div class="leg-item"><div class="leg-dot" style="background:#7B68EE"></div>Réunion</div>
         </div>
-        <button class="btn-primary" onclick="openEventModal()"><i class="ti ti-plus"></i> Ajouter</button>
+        <!-- Bouton ajouter : uniquement pour le référent connecté (son propre planning) -->
+        <button id="planning-add-btn" class="btn-primary" onclick="openEventModal()" style="display:none"><i class="ti ti-plus"></i> Ajouter</button>
       </div>
     </div>
 
-    <!-- Planning HAUT : référent sélectionné (horaires, lecture seule) -->
+    <!-- Planning HAUT -->
     <div style="margin-bottom:1.25rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:6px">
         <div style="font-size:13px;font-weight:700;color:var(--koala);display:flex;align-items:center;gap:6px">
           <i class="ti ti-user"></i>
-          <select id="planning-ref-select" class="finput" style="font-size:12px;padding:4px 8px;width:auto;min-width:200px" onchange="renderPlanning()">
+          <!-- Référent : son nom affiché, pas de menu -->
+          <span id="planning-ref-label" style="display:none"></span>
+          <!-- Coordinateur : menu déroulant pour choisir un référent -->
+          <select id="planning-ref-select" class="finput" style="display:none;font-size:12px;padding:4px 8px;width:auto;min-width:200px" onchange="renderPlanning()">
             <option value="">-- Choisir un référent --</option>
           </select>
         </div>
-        <span style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
+        <span id="planning-top-badge" style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
       </div>
       <div class="planning-grid" id="planning-grid-mine"></div>
     </div>
@@ -653,7 +686,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Séparateur -->
     <div style="border-top:2px dashed var(--border);margin:0.75rem 0"></div>
 
-    <!-- Planning BAS : coordinateur (matin/AM, modifiable par coordinateur, lecture seule pour les autres) -->
+    <!-- Planning BAS : coordinateur -->
     <div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:6px">
         <div style="font-size:13px;font-weight:700;color:var(--koala);display:flex;align-items:center;gap:6px">
