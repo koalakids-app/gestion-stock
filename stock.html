@@ -2820,10 +2820,14 @@ async function saveFournisseur() {
     notes:   document.getElementById('fn-notes').value.trim(),
   };
 
-  if (editingFournisseurId) {
+  // Capture l'id AVANT de le remettre à null
+  const isFournEdit = !!editingFournisseurId;
+  const fournEditId  = editingFournisseurId;
+
+  if (isFournEdit) {
     // Mode modification
-    const oldNom = (FOURNISSEURS.find(f => f.id === editingFournisseurId)||{}).nom;
-    const idx = FOURNISSEURS.findIndex(f => f.id === editingFournisseurId);
+    const oldNom = (FOURNISSEURS.find(f => f.id === fournEditId)||{}).nom;
+    const idx = FOURNISSEURS.findIndex(f => f.id === fournEditId);
     if (idx >= 0) {
       FOURNISSEURS[idx] = { ...FOURNISSEURS[idx], ...data };
       // Mettre à jour le nom dans les articles si changé
@@ -2832,18 +2836,19 @@ async function saveFournisseur() {
         renderActiveInvTable();
       }
     }
-    editingFournisseurId = null;
     document.getElementById('modalFournisseurTitle').textContent = 'Ajouter un fournisseur';
     showNotif('✅ Fournisseur mis à jour');
+    if (!IS_LOCAL) updateFournisseurDB({ id: fournEditId, ...data }).catch(()=>{});
   } else {
     // Mode ajout
     FOURNISSEURS.push({ id: Date.now(), ...data });
     showNotif('✅ Fournisseur ajouté');
+    if (!IS_LOCAL) saveFournisseurDB(FOURNISSEURS[FOURNISSEURS.length-1]).catch(()=>{});
   }
 
+  editingFournisseurId = null;
   saveData();
   closeModal('modal-fournisseur');
-  if (!IS_LOCAL) saveFournisseurDB(FOURNISSEURS[FOURNISSEURS.length-1]).catch(()=>{});
   renderFournisseurs();
 }
 
@@ -4524,6 +4529,14 @@ async function saveFournisseurDB(f) {
     if (rows && rows[0]) f.id = rows[0].id;
     setSaved();
   } catch(e) { console.error('[Supabase] Insert fournisseur :', e); }
+}
+
+async function updateFournisseurDB(f) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try {
+    await sbUpdate('fournisseurs', f.id, fournisseurToRow(f));
+    setSaved();
+  } catch(e) { console.error('[Supabase] Update fournisseur :', e); }
 }
 
 async function saveHistoDB(h) {
