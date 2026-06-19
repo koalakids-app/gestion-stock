@@ -845,18 +845,20 @@ function showMain(tab){
 }
 
 // FULLSCREEN DEMANDES
-let demandsFS=false;
 function toggleDemandsFullscreen(){
-  const panel=document.getElementById('main-demands');
-  demandsFS=!demandsFS;
-  panel.classList.toggle('fs-active',demandsFS);
-  const icon=document.getElementById('fs-icon-demands');
-  if(icon){icon.className=demandsFS?'ti ti-arrows-minimize':'ti ti-arrows-maximize';}
-  const btn=document.getElementById('btn-fs-demands');
-  if(btn){btn.title=demandsFS?'Quitter le plein écran':'Plein écran';}
-  if(demandsFS){panel.scrollTop=0;}
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen().catch(()=>{});
+  } else {
+    document.exitFullscreen().catch(()=>{});
+  }
 }
-document.addEventListener('keydown',function(e){if(e.key==='Escape'&&demandsFS)toggleDemandsFullscreen();});
+document.addEventListener('fullscreenchange',function(){
+  const isFS=!!document.fullscreenElement;
+  const icon=document.getElementById('fs-icon-demands');
+  if(icon){icon.className=isFS?'ti ti-arrows-minimize':'ti ti-arrows-maximize';}
+  const btn=document.getElementById('btn-fs-demands');
+  if(btn){btn.title=isFS?'Quitter le plein écran':'Plein écran';}
+});
 
 // DEMANDES
 function renderCrecheTabs(){
