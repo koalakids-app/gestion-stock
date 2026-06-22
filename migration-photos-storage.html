@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Migration photos articles → Supabase Storage</title>
+<style>
+  :root{
+    --bg:#f4f7f6;
+    --card:#ffffff;
+    --primary:#2e7d6e;
+    --primary-dark:#1f5a4f;
+    --accent:#e8a838;
+    --text:#2b3a39;
+    --muted:#6b7c7a;
+    --border:#dde6e4;
+    --danger:#c0392b;
+    --ok:#2e7d6e;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding:24px;
+    line-height:1.5;
+  }
+  .wrap{max-width:760px;margin:0 auto;}
+  h1{font-size:1.4rem;margin-bottom:4px;}
+  .subtitle{color:var(--muted);margin-top:0;margin-bottom:24px;font-size:0.95rem;}
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:18px 20px;
+    margin-bottom:18px;
+  }
+  .card h2{
+    font-size:1rem;
+    margin:0 0 12px 0;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .step-num{
+    background:var(--primary);
+    color:white;
+    width:22px;height:22px;
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:0.8rem;font-weight:600;flex-shrink:0;
+  }
+  label{display:block;font-size:0.85rem;color:var(--muted);margin-bottom:4px;margin-top:10px;}
+  input[type=text], input[type=password]{
+    width:100%;
+    padding:9px 10px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    font-size:0.9rem;
+    font-family:monospace;
+  }
+  .help{font-size:0.8rem;color:var(--muted);margin-top:4px;}
+  button{
+    background:var(--primary);
+    color:white;
+    border:none;
+    padding:10px 18px;
+    border-radius:6px;
+    font-size:0.9rem;
+    font-weight:600;
+    cursor:pointer;
+    margin-top:12px;
+    margin-right:8px;
+  }
+  button:hover{background:var(--primary-dark);}
+  button:disabled{background:#aab8b6;cursor:not-allowed;}
+  button.secondary{background:var(--accent);}
+  button.secondary:hover{background:#c98c1d;}
+  .stats{
+    display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;
+  }
+  .stat{
+    background:#eef5f3;
+    border-radius:8px;
+    padding:10px 14px;
+    flex:1;
+    min-width:120px;
+  }
+  .stat .num{font-size:1.3rem;font-weight:700;color:var(--primary-dark);}
+  .stat .label{font-size:0.78rem;color:var(--muted);}
+  #log{
+    background:#1e2625;
+    color:#d7e8e5;
+    font-family:monospace;
+    font-size:0.78rem;
+    padding:12px;
+    border-radius:8px;
+    max-height:320px;
+    overflow-y:auto;
+    white-space:pre-wrap;
+    margin-top:14px;
+  }
+  .log-ok{color:#7fd9b9;}
+  .log-err{color:#ff8a80;}
+  .log-warn{color:#ffd54f;}
+  .progress-bar-bg{
+    background:var(--border);
+    border-radius:6px;
+    height:10px;
+    overflow:hidden;
+    margin-top:10px;
+  }
+  .progress-bar{
+    background:var(--primary);
+    height:100%;
+    width:0%;
+    transition:width 0.2s;
+  }
+  .badge{
+    display:inline-block;
+    background:#fdf0d5;
+    color:#a06b0a;
+    border-radius:4px;
+    padding:2px 8px;
+    font-size:0.75rem;
+    font-weight:600;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🐨 Migration photos → Supabase Storage</h1>
+  <p class="subtitle">Outil à usage unique : transfère les photos stockées en base64 dans les tables <code>articles</code> (colonne <code>photo</code>) et <code>commandes</code> (colonne <code>photos_json</code>) vers le bucket <code>assets</code>, et remplace la valeur en base par l'URL publique.</p>
+
+  <div class="card">
+    <h2><span class="step-num">1</span> Connexion à Supabase</h2>
+    <label>URL du projet Supabase</label>
+    <input type="text" id="supaUrl" placeholder="https://juyrceadazrovlitxceb.supabase.co">
+    <div class="help">Tu la trouves dans ton fichier <code>index.html</code> de l'app, là où est défini <code>SUPABASE_URL</code> (ou dans <code>createClient(...)</code>).</div>
+
+    <label>Clé API (anon / publishable)</label>
+    <input type="password" id="supaKey" placeholder="eyJhbGciOi... ou sb_publishable_...">
+    <div class="help">Même clé que celle utilisée dans ton app pour <code>createClient(url, clé)</code>. Cette clé reste dans ton navigateur, elle n'est envoyée nulle part ailleurs.</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="step-num">2</span> Analyser la table</h2>
+    <p style="margin-top:0;color:var(--muted);font-size:0.9rem;">Cette étape ne modifie rien. Elle parcourt les tables <code>articles</code> et <code>commandes</code> et repère, pour chaque ligne, les colonnes (ou clés JSON) qui contiennent une photo en base64 (longue chaîne <code>data:image/...</code> ou base64 brut).</p>
+    <button id="btnAnalyze">Lancer l'analyse</button>
+    <div id="analyzeStats" class="stats" style="display:none;">
+      <div class="stat"><div class="num" id="statRows">0</div><div class="label">lignes scannées</div></div>
+      <div class="stat"><div class="num" id="statPhotos">0</div><div class="label">photos en base64 trouvées</div></div>
+      <div class="stat"><div class="num" id="statSize">0</div><div class="label">poids total estimé</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="step-num">3</span> Lancer la migration</h2>
+    <p style="margin-top:0;color:var(--muted);font-size:0.9rem;">
+      Pour chaque photo trouvée : upload dans le bucket <code>assets</code> (dossier <code>articles-photos/</code>), puis la colonne en base est remplacée par l'URL publique. <span class="badge">Réversible si tu as une sauvegarde</span>
+    </p>
+    <p style="font-size:0.85rem;color:var(--muted);"><strong>Conseil :</strong> avant de lancer, fais un export CSV des tables <code>articles</code> et <code>commandes</code> depuis le Table Editor de Supabase (bouton "Export" en haut), juste par sécurité.</p>
+    <button id="btnMigrate" disabled>Lancer la migration</button>
+    <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+    <div id="migrateStats" class="stats" style="display:none;">
+      <div class="stat"><div class="num" id="statDone">0</div><div class="label">migrées</div></div>
+      <div class="stat"><div class="num" id="statSkipped">0</div><div class="label">déjà migrées / ignorées</div></div>
+      <div class="stat"><div class="num" id="statErrors">0</div><div class="label">erreurs</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Journal</h2>
+    <div id="log">En attente...</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+let supaClient = null;
+let candidates = []; // {table, id, column, dataUri, jsonKey?} — jsonKey si la photo est dans un champ JSON (ex: photos_json)
+const TARGETS = [
+  { table: 'articles', jsonColumns: [] },
+  { table: 'commandes', jsonColumns: ['photos_json'] }
+];
+const BUCKET = 'assets';
+const PAGE_SIZE = 5; // petit pour éviter des réponses trop lourdes (base64)
+
+const logEl = document.getElementById('log');
+function log(msg, type){
+  const line = document.createElement('div');
+  if(type) line.className = 'log-' + type;
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// Vérifie au chargement que la librairie Supabase est bien disponible
+window.addEventListener('DOMContentLoaded', () => {
+  if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') {
+    log('⚠️ La bibliothèque Supabase n\'a pas pu se charger (pas de connexion internet, ou script externe bloqué par le navigateur). Vérifie ta connexion et recharge la page.', 'err');
+  } else {
+    log('Prêt. Renseigne l\'URL et la clé Supabase, puis clique sur "Lancer l\'analyse".');
+  }
+});
+
+// Capture toute erreur JS non gérée et l'affiche dans le journal
+window.addEventListener('error', (e) => {
+  log('Erreur JavaScript : ' + e.message, 'err');
+});
+
+function getClient(){
+  if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') {
+    log('Impossible de continuer : la bibliothèque Supabase n\'est pas chargée.', 'err');
+    return null;
+  }
+  const url = document.getElementById('supaUrl').value.trim();
+  const key = document.getElementById('supaKey').value.trim();
+  if(!url || !key){
+    log('Merci de renseigner l\'URL et la clé Supabase avant de continuer.', 'warn');
+    return null;
+  }
+  try {
+    if(!supaClient){
+      supaClient = window.supabase.createClient(url, key);
+    }
+    return supaClient;
+  } catch(e) {
+    log('Erreur lors de la création du client Supabase : ' + e.message, 'err');
+    return null;
+  }
+}
+
+// Détecte si une valeur de colonne est une photo en base64
+function detectBase64Image(value){
+  if(typeof value !== 'string') return null;
+  if(value.startsWith('http://') || value.startsWith('https://')) return null; // déjà une URL
+  if(value.startsWith('data:image/')){
+    return value;
+  }
+  // base64 brut sans en-tête data:
+  if(value.length > 1000 && /^[A-Za-z0-9+/=]+$/.test(value.slice(0, 100))){
+    if(value.startsWith('/9j/')) return 'data:image/jpeg;base64,' + value;
+    if(value.startsWith('iVBORw0KGgo')) return 'data:image/png;base64,' + value;
+    if(value.startsWith('R0lGOD')) return 'data:image/gif;base64,' + value;
+    if(value.startsWith('UklGR')) return 'data:image/webp;base64,' + value;
+  }
+  return null;
+}
+
+function extFromMime(mime){
+  const map = {'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'};
+  return map[mime] || 'jpg';
+}
+
+function dataURItoBlob(dataURI){
+  const [header, base64] = dataURI.split(',');
+  const mime = header.match(/:(.*?);/)[1];
+  const binary = atob(base64);
+  const array = new Uint8Array(binary.length);
+  for(let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
+  return { blob: new Blob([array], {type: mime}), mime, bytes: array.length };
+}
+
+document.getElementById('btnAnalyze').addEventListener('click', async () => {
+  const client = getClient();
+  if(!client) return;
+
+  const btn = document.getElementById('btnAnalyze');
+  btn.disabled = true;
+  log('Analyse en cours...');
+  candidates = [];
+  let totalRows = 0;
+  let totalBytes = 0;
+
+  try {
+    for(const target of TARGETS){
+      const { table, jsonColumns } = target;
+      let offset = 0;
+      log(`— Table "${table}" —`);
+
+      while(true){
+        const { data, error } = await client
+          .from(table)
+          .select('*')
+          .order('id', { ascending: true })
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if(error){
+          log(`Erreur lors de la lecture de "${table}": ` + error.message, 'err');
+          break;
+        }
+        if(!data || data.length === 0) break;
+
+        for(const row of data){
+          totalRows++;
+          for(const [col, val] of Object.entries(row)){
+            // Cas 1 : colonne JSON contenant un objet/tableau de photos (ex: photos_json)
+            if(jsonColumns.includes(col) && typeof val === 'string' && val.length > 20){
+              let parsed;
+              try { parsed = JSON.parse(val); } catch(e) { parsed = null; }
+              if(parsed && typeof parsed === 'object'){
+                for(const [jsonKey, jsonVal] of Object.entries(parsed)){
+                  const dataUri = detectBase64Image(jsonVal);
+                  if(dataUri){
+                    candidates.push({ table, id: row.id, column: col, jsonKey, dataUri });
+                    const base64part = dataUri.split(',')[1] || '';
+                    totalBytes += Math.floor(base64part.length * 0.75);
+                  }
+                }
+              }
+              continue;
+            }
+            // Cas 2 : colonne texte directe (ex: articles.photo)
+            const dataUri = detectBase64Image(val);
+            if(dataUri){
+              candidates.push({ table, id: row.id, column: col, dataUri });
+              const base64part = dataUri.split(',')[1] || '';
+              totalBytes += Math.floor(base64part.length * 0.75);
+            }
+          }
+        }
+
+        if(data.length < PAGE_SIZE) break;
+        offset += PAGE_SIZE;
+      }
+    }
+
+    document.getElementById('statRows').textContent = totalRows;
+    document.getElementById('statPhotos').textContent = candidates.length;
+    document.getElementById('statSize').textContent = (totalBytes / (1024*1024)).toFixed(1) + ' Mo';
+    document.getElementById('analyzeStats').style.display = 'flex';
+
+    log(`Analyse terminée : ${totalRows} ligne(s) scannée(s) au total, ${candidates.length} photo(s) base64 trouvée(s), ~${(totalBytes/(1024*1024)).toFixed(1)} Mo.`, 'ok');
+
+    if(candidates.length > 0){
+      document.getElementById('btnMigrate').disabled = false;
+    } else {
+      log('Aucune photo base64 trouvée. Rien à migrer, ou la migration a déjà été faite.', 'warn');
+    }
+  } catch(e){
+    log('Erreur inattendue: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btnMigrate').addEventListener('click', async () => {
+  const client = getClient();
+  if(!client) return;
+
+  if(!confirm(`Migrer ${candidates.length} photo(s) ? Cette action modifie la base de données.`)) return;
+
+  const btn = document.getElementById('btnMigrate');
+  btn.disabled = true;
+  document.getElementById('migrateStats').style.display = 'flex';
+
+  let done = 0, skipped = 0, errors = 0;
+  const total = candidates.length;
+
+  // Cache pour regrouper les mises à jour JSON par ligne (table+id+column) avant d'écrire en base
+  const jsonRowCache = {}; // key: table|id|column -> objet photos en cours de modification
+
+  for(let i = 0; i < candidates.length; i++){
+    const { table, id, column, jsonKey, dataUri } = candidates[i];
+    const label = jsonKey ? `${table}.${id}.${column}[${jsonKey}]` : `${table}.${id}.${column}`;
+    try {
+      const { blob, mime } = dataURItoBlob(dataUri);
+      const ext = extFromMime(mime);
+      const folder = table === 'commandes' ? 'commandes-photos' : 'articles-photos';
+      const fileSuffix = jsonKey !== undefined ? `${id}-${column}-${jsonKey}` : `${id}-${column}`;
+      const path = `${folder}/${fileSuffix}.${ext}`;
+
+      // Upload (upsert pour pouvoir relancer sans erreur)
+      const { error: uploadError } = await client.storage
+        .from(BUCKET)
+        .upload(path, blob, { contentType: mime, upsert: true });
+
+      if(uploadError){
+        log(`${label} : erreur upload - ${uploadError.message}`, 'err');
+        errors++;
+      } else {
+        const { data: publicData } = client.storage.from(BUCKET).getPublicUrl(path);
+        const publicUrl = publicData.publicUrl;
+
+        if(jsonKey !== undefined){
+          // Mise à jour différée : on regroupe toutes les clés JSON d'une même ligne
+          const cacheKey = `${table}|${id}|${column}`;
+          if(!jsonRowCache[cacheKey]){
+            // Récupérer la valeur JSON actuelle pour ne pas perdre les autres clés
+            const { data: rowData, error: rowErr } = await client
+              .from(table).select(column).eq('id', id).single();
+            let parsed = {};
+            if(!rowErr && rowData && rowData[column]){
+              try { parsed = JSON.parse(rowData[column]); } catch(e) { parsed = {}; }
+            }
+            jsonRowCache[cacheKey] = parsed;
+          }
+          jsonRowCache[cacheKey][jsonKey] = publicUrl;
+
+          const { error: updateError } = await client
+            .from(table)
+            .update({ [column]: JSON.stringify(jsonRowCache[cacheKey]) })
+            .eq('id', id);
+
+          if(updateError){
+            log(`${label} : upload OK mais erreur mise à jour JSON - ${updateError.message}`, 'err');
+            errors++;
+          } else {
+            log(`${label} : OK → ${publicUrl}`, 'ok');
+            done++;
+          }
+        } else {
+          const { error: updateError } = await client
+            .from(table)
+            .update({ [column]: publicUrl })
+            .eq('id', id);
+
+          if(updateError){
+            log(`${label} : upload OK mais erreur mise à jour - ${updateError.message}`, 'err');
+            errors++;
+          } else {
+            log(`${label} : OK → ${publicUrl}`, 'ok');
+            done++;
+          }
+        }
+      }
+    } catch(e){
+      log(`${label} : erreur - ${e.message}`, 'err');
+      errors++;
+    }
+
+    document.getElementById('statDone').textContent = done;
+    document.getElementById('statSkipped').textContent = skipped;
+    document.getElementById('statErrors').textContent = errors;
+    document.getElementById('progressBar').style.width = Math.round(((i+1)/total)*100) + '%';
+  }
+
+  log(`Migration terminée : ${done} migrée(s), ${errors} erreur(s).`, errors > 0 ? 'warn' : 'ok');
+  btn.disabled = false;
+  btn.textContent = 'Relancer (vérifier les erreurs)';
+});
+</script>
+</body>
+</html>
