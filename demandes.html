@@ -328,6 +328,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn" onclick="showMain('planning')" id="mnav-planning"><i class="ti ti-calendar-event"></i> Planning</button>
       <button class="mnav-btn direction-only" onclick="showMain('dashboard')" id="mnav-dashboard"><i class="ti ti-chart-bar"></i> Tableau de bord</button>
       <button class="mnav-btn direction-only" onclick="showMain('fraisik')" id="mnav-fraisik"><i class="ti ti-car"></i> Frais IK</button>
+      <button class="mnav-btn" onclick="showMain('fraispro')" id="mnav-fraispro"><i class="ti ti-receipt"></i> Frais pro</button>
     </nav>
     <div style="display:flex;align-items:center;gap:8px">
       <div class="user-chip" id="user-chip" onclick="doLogout()"><i class="ti ti-user" style="font-size:13px"></i> <span id="user-name">—</span> <i class="ti ti-logout" style="font-size:12px;opacity:0.7"></i></div>
@@ -525,6 +526,62 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="ik-empty" class="empty-state" style="display:none"><i class="ti ti-road"></i><p>Aucun trajet. Sélectionnez un mois et cliquez sur "Recharger depuis planning".</p></div>
   </div>
 
+  <!-- FRAIS PROFESSIONNELS -->
+  <div id="main-fraispro" class="tab-content">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-title"><i class="ti ti-receipt" style="color:var(--koala)"></i> Frais professionnels</span>
+        <span class="section-sub">Repas, péages, parking, matériel, formation…</span>
+      </div>
+      <button class="btn-primary" onclick="openFraisProModal()"><i class="ti ti-plus"></i> Ajouter un frais</button>
+    </div>
+
+    <!-- Sélection du mois + filtre personne -->
+    <div class="ik-month-sel">
+      <label style="font-size:13px;font-weight:600;color:var(--koala)">Mois :</label>
+      <input type="month" class="finput" id="fp-month" style="width:180px" onchange="fpRender()">
+      <label class="fp-only-direction" style="font-size:13px;font-weight:600;color:var(--koala);display:none">Personne :</label>
+      <select class="finput fp-only-direction" id="fp-person-filter" style="width:200px;display:none" onchange="fpRender()">
+        <option value="all">Tous</option>
+      </select>
+      <span id="fp-load-info" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+
+    <!-- Barre total -->
+    <div class="ik-total-bar">
+      <div>
+        <div class="ik-total-label">Total du mois</div>
+        <div style="display:flex;gap:16px;margin-top:4px;flex-wrap:wrap" id="fp-tot-by-cat"></div>
+      </div>
+      <div class="ik-total-val"><span id="fp-tot-eur">0,00</span> €</div>
+    </div>
+
+    <!-- Actions export / envoi -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+      <button class="btn-sm" onclick="fpGenerateExcel()"><i class="ti ti-file-spreadsheet"></i> Exporter Excel</button>
+      <button class="btn-orange" onclick="fpSendEmail()"><i class="ti ti-mail"></i> Envoyer par email</button>
+    </div>
+
+    <!-- Tableau -->
+    <div class="ik-table-wrap">
+      <table class="ik-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Personne</th>
+            <th>Catégorie</th>
+            <th>Description</th>
+            <th style="text-align:right">Montant</th>
+            <th style="text-align:center">Justificatif</th>
+            <th style="width:70px"></th>
+          </tr>
+        </thead>
+        <tbody id="fp-tbody"></tbody>
+      </table>
+    </div>
+    <div id="fp-empty" class="empty-state" style="display:none"><i class="ti ti-receipt-2"></i><p>Aucun frais enregistré pour ce mois.</p></div>
+  </div>
+
 </div><!-- end .app -->
 </div><!-- end #app-wrap -->
 
@@ -543,6 +600,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="notice-tab" onclick="switchNoticeTab('presences',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👥 Présences</button>
         <button class="notice-tab" onclick="switchNoticeTab('planning',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📅 Planning</button>
         <button class="notice-tab" onclick="switchNoticeTab('comptes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👤 Comptes</button>
+        <button class="notice-tab" onclick="switchNoticeTab('fraispro',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🧾 Frais pro</button>
       </div>
       <button onclick="closeModal('modal-notice')" style="width:28px;height:28px;background:#F0EDE8;border:none;border-radius:50%;cursor:pointer;font-size:13px;flex-shrink:0;margin-left:12px">✕</button>
     </div>
@@ -694,6 +752,39 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<div class="overlay" id="modal-fraispro-wrap">
+  <div class="modal">
+    <h3 id="modal-fp-title">Ajouter un frais professionnel</h3>
+    <div class="fg" id="fp-person-fg" style="display:none"><label class="flabel">Personne</label><select class="finput" id="fp-person-select"><option value="">-- Choisir --</option></select></div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Date</label><input class="finput" id="fp-date" type="date"/></div>
+      <div class="fg"><label class="flabel">Catégorie</label><select class="finput" id="fp-cat">
+        <option value="repas">🍽 Repas</option>
+        <option value="peage">🛣 Péage</option>
+        <option value="parking">🅿️ Parking</option>
+        <option value="materiel">📦 Matériel</option>
+        <option value="formation">🎓 Formation</option>
+        <option value="fourniture">✏️ Fourniture pédagogique</option>
+        <option value="autre">Autre</option>
+      </select></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Montant (€)</label><input class="finput" id="fp-amount" type="number" step="0.01" min="0" placeholder="0.00"/></div>
+      <div class="fg"><label class="flabel">Description</label><input class="finput" id="fp-desc" placeholder="Ex. : Repas formation Toulon"/></div>
+    </div>
+    <div class="fg">
+      <label class="flabel">Justificatif (photo / scan)</label>
+      <input class="finput" id="fp-receipt" type="file" accept="image/*,.pdf" onchange="fpPreviewReceipt(event)" style="padding:7px"/>
+      <div id="fp-receipt-preview" style="margin-top:8px;display:none">
+        <img id="fp-receipt-img" style="max-width:140px;max-height:140px;border-radius:8px;border:1.5px solid var(--border)"/>
+        <span id="fp-receipt-filename" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
+      </div>
+      <div id="fp-upload-status" style="font-size:12px;color:var(--muted);margin-top:4px"></div>
+    </div>
+    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-fraispro-wrap')">Annuler</button><button class="btn-primary" id="btn-save-fraispro" onclick="saveFraisPro()"><i class="ti ti-check"></i> Enregistrer</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="modal-enfant-wrap">
   <div class="modal">
     <h3>Ajouter un enfant</h3>
@@ -719,7 +810,8 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,weekOffset=0,currentPresenceSlot='matin',searchTerm='';
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheFraisPro=[];
+let fpReceiptFile=null,fpReceiptUrl=null,editingFraisProId=null;
 
 // Init au chargement complet de la page
 window.addEventListener('DOMContentLoaded', async function() {
@@ -746,8 +838,8 @@ window.addEventListener('DOMContentLoaded', async function() {
 
 async function loadAllData(){
   const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout Supabase')),10000));
-  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants]=await Promise.race([
-    Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants')]),
+  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants,cacheFraisPro]=await Promise.race([
+    Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('frais_pro')]),
     timeout
   ]);
 }
@@ -830,7 +922,7 @@ document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',func
 function updateBadges(){const myCrecheId=isDirection?null:currentProfile?.creche_id;const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}}
 
 function showMain(tab){
-  ['demands','incidents','presence','referents','planning','dashboard','fraisik'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','dashboard','fraisik','fraispro'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -842,6 +934,7 @@ function showMain(tab){
   if(tab==='presence'){initPresenceDate();renderPresence();}
   if(tab==='dashboard')renderDashboard();
   if(tab==='fraisik'){if(isDirection)ikInit();else showMain('demands');}
+  if(tab==='fraispro')fpInit();
 }
 
 // FULLSCREEN DEMANDES
@@ -1777,6 +1870,258 @@ ${rowsXml}
 // FIN FRAIS IK
 // ============================================================
 
+// ============================================================
+// FRAIS PROFESSIONNELS
+// ============================================================
+
+const FP_CAT_LABELS={
+  repas:'🍽 Repas',peage:'🛣 Péage',parking:'🅿️ Parking',materiel:'📦 Matériel',
+  formation:'🎓 Formation',fourniture:'✏️ Fourniture pédagogique',autre:'Autre'
+};
+const FP_BUCKET='assets';
+
+function fpInit(){
+  const monthInp=document.getElementById('fp-month');
+  if(!monthInp.value)monthInp.value=new Date().toISOString().slice(0,7);
+  document.querySelectorAll('.fp-only-direction').forEach(el=>el.style.display=isDirection?'':'none');
+  if(isDirection){
+    const sel=document.getElementById('fp-person-filter');
+    const people=cacheReferents.filter(r=>r.role==='referent'||r.role==='direction');
+    sel.innerHTML='<option value="all">Tous</option>'+people.map(p=>'<option value="'+p.id+'">'+p.name+'</option>').join('');
+  }
+  fpRender();
+}
+
+function fpCurrentPersonId(){
+  return currentProfile?.id||currentUser?.id||'dir';
+}
+
+function fpFilteredRows(){
+  const month=document.getElementById('fp-month').value;
+  let rows=cacheFraisPro.filter(f=>f.expense_date&&f.expense_date.slice(0,7)===month);
+  if(isDirection){
+    const filterVal=document.getElementById('fp-person-filter')?.value;
+    if(filterVal&&filterVal!=='all')rows=rows.filter(f=>f.person_id===filterVal);
+  }else{
+    rows=rows.filter(f=>f.person_id===fpCurrentPersonId());
+  }
+  return rows.sort((a,b)=>(a.expense_date||'').localeCompare(b.expense_date||''));
+}
+
+function fpRender(){
+  const rows=fpFilteredRows();
+  const tbody=document.getElementById('fp-tbody');
+  const empty=document.getElementById('fp-empty');
+  if(!rows.length){
+    tbody.innerHTML='';
+    empty.style.display='';
+  }else{
+    empty.style.display='none';
+    tbody.innerHTML=rows.map(f=>{
+      const person=cacheReferents.find(r=>r.id===f.person_id);
+      const personName=f.person_name||person?.name||'—';
+      const canManage=isDirection||f.person_id===fpCurrentPersonId();
+      return '<tr>'
+        +'<td>'+(f.expense_date?new Date(f.expense_date).toLocaleDateString('fr-FR'):'—')+'</td>'
+        +'<td>'+personName+'</td>'
+        +'<td>'+(FP_CAT_LABELS[f.category]||f.category||'—')+'</td>'
+        +'<td>'+(f.description||'—')+'</td>'
+        +'<td class="ik-val">'+Number(f.amount||0).toFixed(2)+' €</td>'
+        +'<td style="text-align:center">'+(f.receipt_url?'<a href="'+f.receipt_url+'" target="_blank" rel="noopener" class="ibtn" style="display:inline-flex"><i class="ti ti-paperclip"></i></a>':'<span class="ik-ignored-badge">Aucun</span>')+'</td>'
+        +'<td>'+(canManage?'<button class="ibtn del" onclick="deleteFraisPro(\''+f.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</td>'
+        +'</tr>';
+    }).join('');
+  }
+  // Totaux par catégorie
+  const byCat={};
+  let total=0;
+  rows.forEach(f=>{const amt=Number(f.amount||0);total+=amt;byCat[f.category]=(byCat[f.category]||0)+amt;});
+  document.getElementById('fp-tot-eur').textContent=total.toFixed(2).replace('.',',');
+  document.getElementById('fp-tot-by-cat').innerHTML=Object.entries(byCat).map(([cat,amt])=>
+    '<span style="font-size:12px;opacity:0.85">'+(FP_CAT_LABELS[cat]||cat)+' : '+amt.toFixed(2).replace('.',',')+' €</span>'
+  ).join('');
+}
+
+function openFraisProModal(){
+  editingFraisProId=null;
+  fpReceiptFile=null;fpReceiptUrl=null;
+  document.getElementById('modal-fp-title').textContent='Ajouter un frais professionnel';
+  document.getElementById('fp-date').value=todayStr();
+  document.getElementById('fp-cat').value='repas';
+  document.getElementById('fp-amount').value='';
+  document.getElementById('fp-desc').value='';
+  document.getElementById('fp-receipt').value='';
+  document.getElementById('fp-receipt-preview').style.display='none';
+  document.getElementById('fp-upload-status').textContent='';
+  const personFg=document.getElementById('fp-person-fg');
+  if(isDirection){
+    personFg.style.display='block';
+    const sel=document.getElementById('fp-person-select');
+    const people=cacheReferents.filter(r=>r.role==='referent'||r.role==='direction');
+    sel.innerHTML='<option value="">-- Choisir --</option>'+people.map(p=>'<option value="'+p.id+'" data-name="'+p.name+'">'+p.name+'</option>').join('');
+    sel.value='';
+  }else{
+    personFg.style.display='none';
+  }
+  document.getElementById('modal-fraispro-wrap').classList.add('open');
+}
+
+function fpPreviewReceipt(ev){
+  const file=ev.target.files[0];
+  if(!file)return;
+  fpReceiptFile=file;
+  const preview=document.getElementById('fp-receipt-preview');
+  const filenameEl=document.getElementById('fp-receipt-filename');
+  filenameEl.textContent=file.name;
+  if(file.type.startsWith('image/')){
+    const reader=new FileReader();
+    reader.onload=e=>{document.getElementById('fp-receipt-img').src=e.target.result;preview.style.display='block';};
+    reader.readAsDataURL(file);
+  }else{
+    document.getElementById('fp-receipt-img').src='';
+    preview.style.display='block';
+  }
+}
+
+async function fpUploadReceipt(file){
+  const status=document.getElementById('fp-upload-status');
+  status.textContent='Envoi du justificatif…';
+  try{
+    const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+    const path='frais-pro-photos/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext;
+    const{error}=await sb.storage.from(FP_BUCKET).upload(path,file,{contentType:file.type||'application/octet-stream',upsert:true});
+    if(error){status.textContent='Erreur upload justificatif : '+error.message;return null;}
+    const{data}=sb.storage.from(FP_BUCKET).getPublicUrl(path);
+    status.textContent='';
+    return data?.publicUrl||null;
+  }catch(e){
+    status.textContent='Erreur upload justificatif.';
+    console.warn('[fpUploadReceipt]',e);
+    return null;
+  }
+}
+
+async function saveFraisPro(){
+  const date=document.getElementById('fp-date').value;
+  const cat=document.getElementById('fp-cat').value;
+  const amount=parseFloat(document.getElementById('fp-amount').value);
+  const desc=document.getElementById('fp-desc').value.trim();
+  if(!date){alert('Date requise.');return;}
+  if(!amount||amount<=0){alert('Montant requis.');return;}
+
+  let personId=fpCurrentPersonId(),personName=currentProfile?.name||currentUser?.email||'Direction';
+  if(isDirection){
+    const sel=document.getElementById('fp-person-select');
+    if(!sel.value){alert('Choisissez une personne.');return;}
+    personId=sel.value;
+    personName=sel.options[sel.selectedIndex].getAttribute('data-name')||'';
+  }
+
+  const btn=document.getElementById('btn-save-fraispro');
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';
+
+  let receiptUrl=null;
+  if(fpReceiptFile){
+    receiptUrl=await fpUploadReceipt(fpReceiptFile);
+  }
+
+  const row={
+    person_id:personId,person_name:personName,expense_date:date,category:cat,
+    amount:amount,description:desc||null,receipt_url:receiptUrl
+  };
+  const saved=await dbInsert('frais_pro',row);
+  btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';
+  if(saved){
+    cacheFraisPro.unshift(saved);
+    showBanner('Frais enregistré !');
+    closeModal('modal-fraispro-wrap');
+    fpRender();
+  }else{
+    showBanner('Erreur lors de l\'enregistrement.','error');
+  }
+}
+
+async function deleteFraisPro(id){
+  if(!confirm('Supprimer ce frais ?'))return;
+  const ok=await dbDelete('frais_pro',id);
+  if(ok){
+    cacheFraisPro=cacheFraisPro.filter(f=>f.id!==id);
+    fpRender();
+    showBanner('Frais supprimé.');
+  }else showBanner('Erreur lors de la suppression.','error');
+}
+
+function fpMonthLabel(month){
+  const[year,m]=month.split('-').map(Number);
+  const d=new Date(year,m-1,1);
+  return d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+}
+
+function fpGenerateExcel(){
+  const rows=fpFilteredRows();
+  const month=document.getElementById('fp-month').value;
+  const monthLabel=fpMonthLabel(month);
+  if(!rows.length){showBanner('Aucun frais à exporter pour ce mois.','error');return;}
+  const total=rows.reduce((s,f)=>s+Number(f.amount||0),0);
+  const escapeXml=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const rowsXml=rows.map(f=>{
+    const person=cacheReferents.find(r=>r.id===f.person_id);
+    const personName=f.person_name||person?.name||'';
+    return '<Row><Cell ss:StyleID="sDate"><Data ss:Type="String">'+(f.expense_date?new Date(f.expense_date).toLocaleDateString('fr-FR'):'')+'</Data></Cell>'
+      +'<Cell ss:StyleID="sText"><Data ss:Type="String">'+escapeXml(personName)+'</Data></Cell>'
+      +'<Cell ss:StyleID="sText"><Data ss:Type="String">'+escapeXml(FP_CAT_LABELS[f.category]||f.category||'')+'</Data></Cell>'
+      +'<Cell ss:StyleID="sText"><Data ss:Type="String">'+escapeXml(f.description||'')+'</Data></Cell>'
+      +'<Cell ss:StyleID="sMoney"><Data ss:Type="Number">'+Number(f.amount||0).toFixed(2)+'</Data></Cell>'
+      +'<Cell ss:StyleID="sText"><Data ss:Type="String">'+(f.receipt_url?'Oui':'Non')+'</Data></Cell></Row>';
+  }).join('');
+  const xml=`<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles>`
+    +`<Style ss:ID="Default"><Font ss:FontName="Verdana" ss:Size="9"/></Style>`
+    +`<Style ss:ID="sTitle"><Font ss:FontName="Verdana" ss:Size="12" ss:Bold="1"/></Style>`
+    +`<Style ss:ID="sColHeader"><Font ss:FontName="Verdana" ss:Size="9" ss:Bold="1"/><Interior ss:Color="#3D3580" ss:Pattern="Solid"/><Font ss:Color="#FFFFFF" ss:FontName="Verdana" ss:Size="9" ss:Bold="1"/></Style>`
+    +`<Style ss:ID="sText"><Font ss:FontName="Verdana" ss:Size="9"/></Style>`
+    +`<Style ss:ID="sDate"><Font ss:FontName="Verdana" ss:Size="9"/></Style>`
+    +`<Style ss:ID="sMoney"><Font ss:FontName="Verdana" ss:Size="9" ss:Bold="1"/><NumberFormat ss:Format="#,##0.00"/></Style>`
+    +`<Style ss:ID="sTotalLabel"><Font ss:FontName="Verdana" ss:Size="9" ss:Bold="1"/></Style>`
+    +`</Styles>`
+    +`<Worksheet ss:Name="Frais pro"><Table>`
+    +`<Row ss:Height="22"><Cell ss:MergeAcross="5" ss:StyleID="sTitle"><Data ss:Type="String">Frais professionnels — ${escapeXml(monthLabel)}</Data></Cell></Row>`
+    +`<Row/>`
+    +`<Row><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Date</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Personne</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Catégorie</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Description</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Montant</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Justificatif</Data></Cell></Row>`
+    +rowsXml
+    +`<Row/><Row><Cell ss:MergeAcross="3" ss:StyleID="sTotalLabel"><Data ss:Type="String">TOTAL</Data></Cell><Cell ss:StyleID="sMoney"><Data ss:Type="Number">${total.toFixed(2)}</Data></Cell></Row>`
+    +`</Table></Worksheet></Workbook>`;
+  const blob=new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`FRAIS_PRO_${monthLabel.replace(/\s+/g,'_').toUpperCase()}.xls`;a.click();
+  URL.revokeObjectURL(url);
+  showBanner(`Fiche Frais pro ${monthLabel} générée ✅`);
+}
+
+function fpSendEmail(){
+  const rows=fpFilteredRows();
+  const month=document.getElementById('fp-month').value;
+  const monthLabel=fpMonthLabel(month);
+  if(!rows.length){showBanner('Aucun frais à envoyer pour ce mois.','error');return;}
+  const total=rows.reduce((s,f)=>s+Number(f.amount||0),0);
+  const lines=rows.map(f=>{
+    const person=cacheReferents.find(r=>r.id===f.person_id);
+    const personName=f.person_name||person?.name||'';
+    const dateStr=f.expense_date?new Date(f.expense_date).toLocaleDateString('fr-FR'):'';
+    return `- ${dateStr} | ${personName} | ${FP_CAT_LABELS[f.category]||f.category} | ${f.description||''} | ${Number(f.amount||0).toFixed(2)} €${f.receipt_url?' | Justificatif : '+f.receipt_url:''}`;
+  });
+  const subject=`Frais professionnels — ${monthLabel}`;
+  const body=`Bonjour,\n\nVeuillez trouver ci-dessous le récapitulatif des frais professionnels pour ${monthLabel} :\n\n`
+    +lines.join('\n')
+    +`\n\nTOTAL : ${total.toFixed(2)} €\n\nMerci de procéder au remboursement.\n\nCordialement.`;
+  const mailto='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  window.location.href=mailto;
+  showBanner('Email préparé — vérifiez votre client de messagerie.');
+}
+
+// FIN FRAIS PROFESSIONNELS
+// ============================================================
+
 async function callFn(fn,body){try{const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});return r.ok;}catch{return false;}}
 
 function openNotice() {
@@ -1901,6 +2246,29 @@ comptes: `
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:12px">Utilisez le bouton <strong>← Accueil</strong> en haut à gauche pour revenir au portail et accéder à l'application Stock pédagogique.</div>
 <div style="background:#F0FDF4;border-left:4px solid #16A34A;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#065F46">
   ✅ Votre session reste active pendant 30 jours. Vous n'avez pas besoin de vous reconnecter à chaque visite.
+</div>`,
+
+fraispro: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🧾 Frais professionnels</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
+  💡 Ce module permet à chacun (coordinateur, direction, référentes) de déclarer ses frais professionnels (hors frais kilométriques, gérés dans "Frais IK") : repas, péages, parking, matériel, formation, fournitures…
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Ajouter un frais</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Cliquez sur <strong>+ Ajouter un frais</strong></li>
+  <li>Renseignez la <strong>date</strong>, la <strong>catégorie</strong> et le <strong>montant</strong></li>
+  <li>Ajoutez une <strong>description</strong> et, si possible, une <strong>photo du justificatif</strong> (ticket, facture…)</li>
+  <li>Cliquez <strong>Enregistrer</strong> — le justificatif est stocké de façon sécurisée</li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📅 Suivi mensuel</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Sélectionnez le <strong>mois</strong> en haut de la page pour afficher les frais correspondants et le total par catégorie. La direction peut filtrer par personne.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📤 Export et envoi</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li><strong>Exporter Excel</strong> génère un fichier récapitulatif du mois sélectionné</li>
+  <li><strong>Envoyer par email</strong> ouvre votre messagerie avec un récapitulatif pré-rempli, à transmettre au gestionnaire du réseau</li>
+</ol>
+<div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A">
+  ⚠ Pensez à joindre vos justificatifs photo en pièce jointe de l'email si nécessaire, le lien du justificatif étant inclus dans le récapitulatif.
 </div>`
 
 };
