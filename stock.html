@@ -4700,6 +4700,12 @@ function saveData() {
       const isQuotaError = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
       if (isQuotaError) {
         // Vrai dépassement de quota → sauvegarder sans photos
+        console.warn('[Solo] QuotaExceededError détaillé — message navigateur:', e.message, '| données tentées:', (JSON.stringify(data).length/1024).toFixed(1)+' Ko');
+        if (navigator.storage && navigator.storage.estimate) {
+          navigator.storage.estimate().then(est => {
+            console.warn('[Solo] Quota navigateur — utilisé:', ((est.usage||0)/1024).toFixed(1)+' Ko', '/ alloué:', ((est.quota||0)/1024).toFixed(1)+' Ko');
+          });
+        }
         try {
           const dataLight = { ...data, articles: ARTICLES.map(a => ({...a, photo:null, photoName:null})) };
           localStorage.setItem(LS_KEY, JSON.stringify(dataLight));
