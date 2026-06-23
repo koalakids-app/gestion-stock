@@ -1105,6 +1105,7 @@ body.is-fullscreen .sidebar-trigger {
           <div class="filter-chip" onclick="filterCat('Puériculture', this)">Puériculture</div>
           <div class="filter-chip" onclick="filterCat('Bureautique', this)">Bureautique</div>
           <div class="filter-chip" onclick="filterCat('Rangement', this)">Rangement</div>
+          <div class="filter-chip" onclick="filterCat('Décoration', this)">Décoration</div>
         </div>
       </div>
       <div id="inv-filters-consommable" style="display:none;margin-bottom:16px">
@@ -1114,6 +1115,7 @@ body.is-fullscreen .sidebar-trigger {
           <div class="filter-chip" onclick="filterCatConso('Bureautique', this)">Bureautique</div>
           <div class="filter-chip" onclick="filterCatConso('Sensoriel', this)">Sensoriel</div>
           <div class="filter-chip" onclick="filterCatConso('Expression artistique', this)">Expression artistique</div>
+          <div class="filter-chip" onclick="filterCatConso('Décoration', this)">Décoration</div>
         </div>
       </div>
 
@@ -1236,6 +1238,7 @@ body.is-fullscreen .sidebar-trigger {
           <div class="filter-chip" onclick="filterUnivers('Imitation', this)">🎭 Imitation</div>
           <div class="filter-chip" onclick="filterUnivers('Expression artistique', this)">🎨 Expression</div>
           <div class="filter-chip" onclick="filterUnivers('Rangement', this)">🗂 Rangement</div>
+          <div class="filter-chip" onclick="filterUnivers('Décoration', this)">🎀 Décoration</div>
           <div id="univers-subcat-filters"></div>
         </div>
         <div id="univers-list" style="padding:0 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px"></div>
@@ -1279,6 +1282,7 @@ body.is-fullscreen .sidebar-trigger {
             <option>Imitation</option>
             <option>Expression artistique</option>
             <option>Rangement</option>
+            <option>Décoration</option>
           </select>
         </div>
         <div class="form-group full">
@@ -1329,6 +1333,7 @@ body.is-fullscreen .sidebar-trigger {
             <option>Imitation</option>
             <option>Expression artistique</option>
             <option>Rangement</option>
+            <option>Décoration</option>
             <option>Multi-catégories</option>
           </select>
         </div>
@@ -1419,6 +1424,7 @@ body.is-fullscreen .sidebar-trigger {
             <option>Puériculture</option>
             <option>Bureautique</option>
             <option>Rangement</option>
+            <option>Décoration</option>
           </select>
         </div>
         <div class="form-group">
@@ -1666,7 +1672,7 @@ const IS_LOCAL = (typeof location !== 'undefined') &&
 
 const CRECHES = ['Brunet', 'Cuers', 'Ollioules', 'St Jean', 'Picot 1', 'Picot 2'];
 const CRECHE_COLORS = { 'Brunet': '#F59E0B', 'Cuers': '#10B981', 'Ollioules': '#EF4444', 'St Jean': '#8B5CF6', 'Picot 1': '#0EA5E9', 'Picot 2': '#F43F5E' };
-const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂' };
+const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
 
 let ARTICLES = [
   { id:1, nom:'Puzzles encastrement 4 pièces', ref:'MAT-001', cat:'Sensoriel', creche:'Brunet', stock:8, min:3, prix:12.50, fourn:'Nathan Pédagogique', notes:'Bois certifié FSC. Âge : 12-36 mois.' },
@@ -1781,7 +1787,7 @@ const tb = document.getElementById('tableBody');
   const slicedData = data.slice((currentPageMat - 1) * PAGE_SIZE, currentPageMat * PAGE_SIZE);
 
   tb.innerHTML = slicedData.map(a => {
-    const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂' };
+    const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
     const thumb = a.photo
       ? `<img class="article-thumb" src="${a.photo}" alt="${a.nom}" loading="lazy">`
       : `<div class="article-thumb-placeholder">${CAT_ICONS[a.cat]||'📦'}</div>`;
@@ -1933,7 +1939,7 @@ function renderTableConso() {
   const slicedDataConso = data.slice((currentPageConso - 1) * PAGE_SIZE, currentPageConso * PAGE_SIZE);
 
   tb.innerHTML = slicedDataConso.map(a => {
-    const CAT_ICONS_L = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂' };
+    const CAT_ICONS_L = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
     const thumb = a.photo
       ? `<img class="article-thumb" src="${a.photo}" alt="${a.nom}" loading="lazy">`
       : `<div class="article-thumb-placeholder">${CAT_ICONS_L[a.cat]||'🧴'}</div>`;
@@ -2289,7 +2295,16 @@ function closeModal(id) {
   }
 }
 
+// Modales de saisie : la fermeture au clic/toucher extérieur est désactivée pour
+// éviter la perte de saisie en cas de toucher accidentel (clavier virtuel, scroll, etc.)
+// Seuls le bouton ✕ ou "Annuler" permettent de les fermer (Échap reste actif partout).
+const MODALS_SANS_FERMETURE_EXTERIEURE = [
+  'modal-add', 'modal-commande', 'modal-fournisseur',
+  'modal-univers', 'modal-souscat', 'modal-import'
+];
+
 function closeModalClick(e, id) {
+  if (MODALS_SANS_FERMETURE_EXTERIEURE.includes(id)) return;
   if (e.target.classList.contains('modal-overlay')) closeModal(id);
 }
 
@@ -2865,7 +2880,7 @@ function showDetail(id) {
   const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
   document.getElementById('detail-title').textContent = nomClean;
 
-  const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂' };
+  const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
 
   const photoBlock = a.photo
     ? `<div style="position:relative;margin-bottom:16px">
@@ -3337,7 +3352,7 @@ let currentUniversCatFilter = 'all';
 
 const CAT_UNIVERS_ICONS = {
   'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃',
-  'Imitation':'🎭','Expression artistique':'🎨','Rangement':'🗂','Multi-catégories':'🌟'
+  'Imitation':'🎭','Expression artistique':'🎨','Rangement':'🗂','Décoration':'🎀','Multi-catégories':'🌟'
 };
 
 function renderUnivers() {
@@ -3897,7 +3912,7 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='') {
     </div>
     <select id="row-cat-${idx}" style="border:none;border-right:1px solid var(--border);border-radius:0;padding:4px 6px;font-size:11px;background:var(--surface);color:var(--ink)">
       <option value="">— Cat. —</option>
-      ${['Sensoriel','Manipulation','Construction','Motricité','Imitation','Expression artistique','Mobilier','Puériculture','Bureautique','Rangement'].map(c=>`<option value="${c}" ${cat===c?'selected':''}>${c}</option>`).join('')}
+      ${['Sensoriel','Manipulation','Construction','Motricité','Imitation','Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration'].map(c=>`<option value="${c}" ${cat===c?'selected':''}>${c}</option>`).join('')}
     </select>
     <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00"
            oninput="calcCommandeTotal()" style="text-align:right">
@@ -5130,7 +5145,7 @@ function importExcel(event) {
       }
 
       const CATS_VALID    = ['Sensoriel','Manipulation','Construction','Motricité','Imitation',
-                             'Expression artistique','Mobilier','Puériculture','Bureautique'];
+                             'Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration'];
       const STRUCTS_VALID = ['Brunet','Cuers','Ollioules','St Jean','Picot 1','Picot 2'];
 
       let imported = 0, skipped = 0, warnings = [];
