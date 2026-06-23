@@ -4697,10 +4697,20 @@ function saveData() {
     try {
       localStorage.setItem(LS_KEY, JSON.stringify(data));
     } catch(e) {
-      // localStorage plein → sauvegarder sans photos
-      const dataLight = { ...data, articles: ARTICLES.map(a => ({...a, photo:null, photoName:null})) };
-      localStorage.setItem(LS_KEY, JSON.stringify(dataLight));
-      console.warn('[Solo] Photos omises — localStorage plein');
+      const isQuotaError = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
+      if (isQuotaError) {
+        // Vrai dépassement de quota → sauvegarder sans photos
+        try {
+          const dataLight = { ...data, articles: ARTICLES.map(a => ({...a, photo:null, photoName:null})) };
+          localStorage.setItem(LS_KEY, JSON.stringify(dataLight));
+          console.warn('[Solo] Photos omises — localStorage plein (quota dépassé)');
+        } catch(e2) {
+          console.error('[Solo] Sauvegarde impossible même sans photos:', e2);
+        }
+      } else {
+        // Pas un problème de quota : on logue la vraie cause au lieu d'induire en erreur
+        console.error('[Solo] Échec sauvegarde locale (pas un quota) :', e && e.name, e && e.message, e);
+      }
     }
     const now = new Date();
     setIndicator('💾 Sauvegardé à ' + now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), 'var(--green)');
