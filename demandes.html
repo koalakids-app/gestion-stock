@@ -6,6 +6,7 @@
 <title>Koala Kids — Suite de gestion</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
   --koala:#3D3580;--orange:#F47920;--koala-light:#EEEDF8;--orange-light:#FEF0E6;
@@ -2117,48 +2118,38 @@ function fpGenerateExcel(){
     return;
   }
   const total=rows.reduce((s,f)=>s+Number(f.amount||0),0);
-  const escapeXml=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const rowsXml=rows.map(f=>{
-    const person=cacheReferents.find(r=>r.id===f.person_id);
-    const personName=f.person_name||person?.name||'';
-    return '<Row><Cell ss:StyleID="sDate"><Data ss:Type="String">'+(f.expense_date?new Date(f.expense_date).toLocaleDateString('fr-FR'):'')+'</Data></Cell>'
-      +'<Cell ss:StyleID="sText"><Data ss:Type="String">'+escapeXml(personName)+'</Data></Cell>'
-      +'<Cell ss:StyleID="sText"><Data ss:Type="String">'+escapeXml(FP_CAT_LABELS[f.category]||f.category||'')+'</Data></Cell>'
-      +'<Cell ss:StyleID="sText"><Data ss:Type="String">'+escapeXml(f.description||'')+'</Data></Cell>'
-      +'<Cell ss:StyleID="sMoney"><Data ss:Type="Number">'+Number(f.amount||0).toFixed(2)+'</Data></Cell></Row>';
-  }).join('');
-  const noRowsXml=!rows.length
-    ?`<Row><Cell ss:MergeAcross="4" ss:StyleID="sText"><Data ss:Type="String">Aucun frais saisi à l'unité ce mois-ci — voir le PDF joint pour le détail des tickets.</Data></Cell></Row>`
-    :'';
-  const totalRowXml=rows.length
-    ?`<Row/><Row><Cell ss:MergeAcross="2" ss:StyleID="sTotalLabel"><Data ss:Type="String">TOTAL</Data></Cell><Cell ss:StyleID="sMoney"><Data ss:Type="Number">${total.toFixed(2)}</Data></Cell></Row>`
-    :'';
-  const pdfNoteXml=pdfEntry&&pdfEntry.pdf_url
-    ?`<Row/><Row><Cell ss:StyleID="sText"><Data ss:Type="String">Justificatif (PDF des tickets) : ${escapeXml(pdfEntry.pdf_url)}</Data></Cell></Row>`
-    :'';
-  const xml=`<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles>`
-    +`<Style ss:ID="Default"><Font ss:FontName="Verdana" ss:Size="9"/></Style>`
-    +`<Style ss:ID="sTitle"><Font ss:FontName="Verdana" ss:Size="12" ss:Bold="1"/></Style>`
-    +`<Style ss:ID="sColHeader"><Font ss:FontName="Verdana" ss:Size="9" ss:Bold="1"/><Interior ss:Color="#3D3580" ss:Pattern="Solid"/><Font ss:Color="#FFFFFF" ss:FontName="Verdana" ss:Size="9" ss:Bold="1"/></Style>`
-    +`<Style ss:ID="sText"><Font ss:FontName="Verdana" ss:Size="9"/></Style>`
-    +`<Style ss:ID="sDate"><Font ss:FontName="Verdana" ss:Size="9"/></Style>`
-    +`<Style ss:ID="sMoney"><Font ss:FontName="Verdana" ss:Size="9" ss:Bold="1"/><NumberFormat ss:Format="#,##0.00"/></Style>`
-    +`<Style ss:ID="sTotalLabel"><Font ss:FontName="Verdana" ss:Size="9" ss:Bold="1"/></Style>`
-    +`</Styles>`
-    +`<Worksheet ss:Name="Frais pro"><Table>`
-    +`<Row ss:Height="22"><Cell ss:MergeAcross="4" ss:StyleID="sTitle"><Data ss:Type="String">Frais professionnels — ${escapeXml(monthLabel)}</Data></Cell></Row>`
-    +`<Row/>`
-    +(rows.length?`<Row><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Date</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Personne</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Catégorie</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Description</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Montant</Data></Cell></Row>`:'')
-    +rowsXml
-    +noRowsXml
-    +totalRowXml
-    +pdfNoteXml
-    +`</Table></Worksheet></Workbook>`;
-  const blob=new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.download=`FRAIS_PRO_${monthLabel.replace(/\s+/g,'_').toUpperCase()}.xls`;a.click();
-  URL.revokeObjectURL(url);
+
+  const data=[];
+  data.push([`Frais professionnels — ${monthLabel}`]);
+  data.push([]);
+  if(rows.length){
+    data.push(['Date','Personne','Catégorie','Description','Montant (€)']);
+    rows.forEach(f=>{
+      const person=cacheReferents.find(r=>r.id===f.person_id);
+      const personName=f.person_name||person?.name||'';
+      data.push([
+        f.expense_date?new Date(f.expense_date).toLocaleDateString('fr-FR'):'',
+        personName,
+        FP_CAT_LABELS[f.category]||f.category||'',
+        f.description||'',
+        Number(f.amount||0)
+      ]);
+    });
+    data.push([]);
+    data.push(['','','','TOTAL',total]);
+  }else{
+    data.push(["Aucun frais saisi à l'unité ce mois-ci — voir le PDF joint pour le détail des tickets."]);
+  }
+  if(pdfEntry&&pdfEntry.pdf_url){
+    data.push([]);
+    data.push(['Justificatif (PDF des tickets) :',pdfEntry.pdf_url]);
+  }
+
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=[{wch:14},{wch:22},{wch:16},{wch:35},{wch:14}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Frais pro');
+  XLSX.writeFile(wb,`FRAIS_PRO_${monthLabel.replace(/\s+/g,'_').toUpperCase()}.xlsx`);
   showBanner(`Fiche Frais pro ${monthLabel} générée ✅`);
 }
 
