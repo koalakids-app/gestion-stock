@@ -2111,7 +2111,11 @@ function fpGenerateExcel(){
   const rows=fpFilteredRows();
   const month=document.getElementById('fp-month').value;
   const monthLabel=fpMonthLabel(month);
-  if(!rows.length){showBanner('Aucun frais à exporter pour ce mois.','error');return;}
+  const pdfEntry=cacheFraisProPdf.find(p=>p.month===month&&p.person_id===fpActivePersonIdForPdf());
+  if(!rows.length&&!(pdfEntry&&pdfEntry.pdf_url)){
+    showBanner('Aucun frais ni PDF pour ce mois.','error');
+    return;
+  }
   const total=rows.reduce((s,f)=>s+Number(f.amount||0),0);
   const escapeXml=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const rowsXml=rows.map(f=>{
@@ -2123,7 +2127,12 @@ function fpGenerateExcel(){
       +'<Cell ss:StyleID="sText"><Data ss:Type="String">'+escapeXml(f.description||'')+'</Data></Cell>'
       +'<Cell ss:StyleID="sMoney"><Data ss:Type="Number">'+Number(f.amount||0).toFixed(2)+'</Data></Cell></Row>';
   }).join('');
-  const pdfEntry=cacheFraisProPdf.find(p=>p.month===month&&p.person_id===fpActivePersonIdForPdf());
+  const noRowsXml=!rows.length
+    ?`<Row><Cell ss:MergeAcross="4" ss:StyleID="sText"><Data ss:Type="String">Aucun frais saisi à l'unité ce mois-ci — voir le PDF joint pour le détail des tickets.</Data></Cell></Row>`
+    :'';
+  const totalRowXml=rows.length
+    ?`<Row/><Row><Cell ss:MergeAcross="2" ss:StyleID="sTotalLabel"><Data ss:Type="String">TOTAL</Data></Cell><Cell ss:StyleID="sMoney"><Data ss:Type="Number">${total.toFixed(2)}</Data></Cell></Row>`
+    :'';
   const pdfNoteXml=pdfEntry&&pdfEntry.pdf_url
     ?`<Row/><Row><Cell ss:StyleID="sText"><Data ss:Type="String">Justificatif (PDF des tickets) : ${escapeXml(pdfEntry.pdf_url)}</Data></Cell></Row>`
     :'';
@@ -2139,9 +2148,10 @@ function fpGenerateExcel(){
     +`<Worksheet ss:Name="Frais pro"><Table>`
     +`<Row ss:Height="22"><Cell ss:MergeAcross="4" ss:StyleID="sTitle"><Data ss:Type="String">Frais professionnels — ${escapeXml(monthLabel)}</Data></Cell></Row>`
     +`<Row/>`
-    +`<Row><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Date</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Personne</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Catégorie</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Description</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Montant</Data></Cell></Row>`
+    +(rows.length?`<Row><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Date</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Personne</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Catégorie</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Description</Data></Cell><Cell ss:StyleID="sColHeader"><Data ss:Type="String">Montant</Data></Cell></Row>`:'')
     +rowsXml
-    +`<Row/><Row><Cell ss:MergeAcross="2" ss:StyleID="sTotalLabel"><Data ss:Type="String">TOTAL</Data></Cell><Cell ss:StyleID="sMoney"><Data ss:Type="Number">${total.toFixed(2)}</Data></Cell></Row>`
+    +noRowsXml
+    +totalRowXml
     +pdfNoteXml
     +`</Table></Worksheet></Workbook>`;
   const blob=new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'});
@@ -2156,7 +2166,11 @@ function fpSendEmail(){
   const rows=fpFilteredRows();
   const month=document.getElementById('fp-month').value;
   const monthLabel=fpMonthLabel(month);
-  if(!rows.length){showBanner('Aucun frais à envoyer pour ce mois.','error');return;}
+  const pdfEntry=cacheFraisProPdf.find(p=>p.month===month&&p.person_id===fpActivePersonIdForPdf());
+  if(!rows.length&&!(pdfEntry&&pdfEntry.pdf_url)){
+    showBanner('Aucun frais ni PDF pour ce mois.','error');
+    return;
+  }
   const total=rows.reduce((s,f)=>s+Number(f.amount||0),0);
   const lines=rows.map(f=>{
     const person=cacheReferents.find(r=>r.id===f.person_id);
@@ -2164,11 +2178,13 @@ function fpSendEmail(){
     const dateStr=f.expense_date?new Date(f.expense_date).toLocaleDateString('fr-FR'):'';
     return `- ${dateStr} | ${personName} | ${FP_CAT_LABELS[f.category]||f.category} | ${f.description||''} | ${Number(f.amount||0).toFixed(2)} €`;
   });
-  const pdfEntry=cacheFraisProPdf.find(p=>p.month===month&&p.person_id===fpActivePersonIdForPdf());
   const subject=`Frais professionnels — ${monthLabel}`;
-  let body=`Bonjour,\n\nVeuillez trouver ci-dessous le récapitulatif des frais professionnels pour ${monthLabel} :\n\n`
-    +lines.join('\n')
-    +`\n\nTOTAL : ${total.toFixed(2)} €\n`;
+  let body=`Bonjour,\n\nVeuillez trouver ci-dessous le récapitulatif des frais professionnels pour ${monthLabel} :\n\n`;
+  if(rows.length){
+    body+=lines.join('\n')+`\n\nTOTAL : ${total.toFixed(2)} €\n`;
+  }else{
+    body+=`Aucun frais saisi à l'unité ce mois-ci — voir le PDF joint pour le détail des tickets.\n`;
+  }
   body+=pdfEntry&&pdfEntry.pdf_url
     ? `\nJustificatif (PDF de tous les tickets du mois) : ${pdfEntry.pdf_url}\n`
     : `\n⚠ Pensez à joindre le PDF récapitulatif de vos tickets à cet email.\n`;
