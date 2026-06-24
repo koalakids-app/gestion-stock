@@ -1929,6 +1929,10 @@ function showRmpTab(tab,btn){
   btn.classList.add('active');
   document.getElementById('rmp-'+tab).classList.add('active');
 }
+function rmpDateStr(d){
+  const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
 function rmpWeekStart(){
   const n=new Date();const day=n.getDay();const diff=n.getDate()-(day===0?6:day-1);
   const m=new Date(n.getFullYear(),n.getMonth(),diff+rmpWeekOffset*7);m.setHours(0,0,0,0);return m;
@@ -1957,7 +1961,7 @@ function renderRmpWeek(){
   let html='<div></div>';
   creches.forEach(c=>{html+='<div class="rmp-hd">'+c.name+'</div>';});
   days7.forEach((d,di)=>{
-    const dateStr=d.toISOString().slice(0,10);
+    const dateStr=rmpDateStr(d);
     html+='<div class="rmp-day-lbl">'+dayNames[di]+' '+fmt(d)+'</div>';
     creches.forEach(c=>{
       const slots=cacheRemplacantes.filter(r=>r.creche_id===c.id&&r.date===dateStr);
@@ -1985,13 +1989,13 @@ function renderRmpMonth(){
   const firstDay=new Date(year,month,1);
   const startDow=(firstDay.getDay()===0?6:firstDay.getDay()-1);
   const gridStart=new Date(year,month,1-startDow);
-  const todayStr2=new Date().toISOString().slice(0,10);
+  const todayStr2=rmpDateStr(new Date());
   const filterCrecheId=document.getElementById('rmp-mois-creche-select')?.value||'';
   const allowedIds=isDirection?(filterCrecheId?[filterCrecheId]:cacheCreches.map(c=>c.id)):rmpVisibleCreches().map(c=>c.id);
   let html=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=>'<div class="rmp-month-hd">'+d+'</div>').join('');
   for(let i=0;i<42;i++){
     const d=new Date(gridStart);d.setDate(gridStart.getDate()+i);
-    const dateStr=d.toISOString().slice(0,10);
+    const dateStr=rmpDateStr(d);
     const outside=d.getMonth()!==month;
     const isToday=dateStr===todayStr2;
     const slots=cacheRemplacantes.filter(r=>r.date===dateStr&&allowedIds.includes(r.creche_id));
@@ -2057,7 +2061,7 @@ function openRmpModal(crecheId,dateStr,editId){
     document.getElementById('rmp-modal-title').textContent='Ajouter un créneau';
     document.getElementById('rmp-creche').value=crecheId||'';
     document.getElementById('rmp-nom').value='';
-    document.getElementById('rmp-date').value=dateStr||todayStr();
+    document.getElementById('rmp-date').value=dateStr||rmpDateStr(new Date());
     document.getElementById('rmp-hdebut').value='';
     document.getElementById('rmp-hfin').value='';
     document.getElementById('rmp-pause-debut').value='';
