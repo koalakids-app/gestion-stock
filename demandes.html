@@ -467,7 +467,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <option value="">-- Choisir une crèche --</option>
           </select>
         </div>
-        <span style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
+        <span id="pe-badge" style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
       </div>
       <div id="pe-grid-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:8px"></div>
     </div>
@@ -1651,6 +1651,13 @@ function openImportPlanningModal(){
   document.getElementById('ip-result').style.display='none';
   document.getElementById('ip-btn-confirm').style.display='none';
   _ipPendingByPerson=null;_ipPendingCrecheId=null;_ipPendingReferentPrenom=null;
+
+  // Si c'est la référente elle-même qui importe (pas la direction), pré-sélectionner son propre profil
+  if(!isDirection&&currentProfile?.id){
+    sel.value=currentProfile.id;
+    sel.onchange();
+  }
+
   document.getElementById('modal-import-planning-wrap').classList.add('open');
 }
 
@@ -1963,7 +1970,7 @@ async function renderPlanning(){
   const gridOther=document.getElementById('planning-grid-other');
   if(iAmCoord){
     if(addBtn)addBtn.style.display='none';
-    if(importBtn)importBtn.style.display='';
+    if(importBtn)importBtn.style.display='none';
     if(refLabel)refLabel.style.display='none';
     if(refSelect){refSelect.style.display='';
       if(refSelect.options.length<=1){
@@ -1988,7 +1995,7 @@ async function renderPlanning(){
   }else{
     if(!userId||userId==='dir'){setTimeout(()=>renderPlanning(),500);return;}
     if(addBtn)addBtn.style.display='';
-    if(importBtn)importBtn.style.display='none';
+    if(importBtn)importBtn.style.display='';
     if(refSelect)refSelect.style.display='none';
     if(refLabel){refLabel.style.display='';refLabel.textContent=currentProfile?.name||'Mon planning';}
     if(topBadge){topBadge.textContent='✏️ Modifiable';topBadge.style.background='var(--koala-light)';topBadge.style.color='var(--koala)';}
@@ -2121,6 +2128,11 @@ async function renderPlanningEquipe(){
   const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
   // Éditable pour : la direction, OU la référente dont la propre crèche correspond à celle affichée
   const editable=isDirection||(currentProfile?.creche_id===crecheId);
+  const peBadge=document.getElementById('pe-badge');
+  if(peBadge){
+    if(editable){peBadge.textContent='✏️ Modifiable';peBadge.style.background='var(--koala-light)';peBadge.style.color='var(--koala)';}
+    else{peBadge.textContent='👁 Lecture seule';peBadge.style.background='#f0f0f5';peBadge.style.color='#888';}
+  }
   wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
 }
 
