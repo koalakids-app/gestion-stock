@@ -170,6 +170,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pg-card .pg-del:hover{opacity:1}
 .pg-add{display:flex;align-items:center;justify-content:center;min-height:90px;cursor:pointer;color:#d0d0d0;font-size:11px;border-radius:8px;transition:background .15s}
 .pg-add:hover{background:var(--koala-light);color:var(--koala)}
+.pg-add-more{display:flex;align-items:center;justify-content:center;height:22px;cursor:pointer;color:#bbb;font-size:11px;border:1px dashed var(--border);border-radius:6px;margin-top:2px;transition:background .15s}
+.pg-add-more:hover{background:var(--koala-light);color:var(--koala);border-color:var(--koala)}
 .pg-ev{border-radius:6px;padding:4px 7px;font-size:11px;margin-bottom:3px;cursor:pointer;font-weight:600}
 .pg-ev.presence{background:var(--koala);color:#fff}
 .pg-ev.absent{background:var(--orange);color:#fff}
@@ -631,12 +633,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <div class="overlay" id="modal-event-wrap">
   <div class="modal" style="max-width:520px">
-    <h3>Mon planning — Journée</h3>
+    <h3 id="modal-event-title">Mon planning — Journée</h3>
     <div class="frow" style="align-items:flex-end;gap:10px;margin-bottom:4px">
       <div class="fg"><label class="flabel">Jour</label>
         <select class="finput" id="e-day"><option value="0">Lundi</option><option value="1">Mardi</option><option value="2">Mercredi</option><option value="3">Jeudi</option><option value="4">Vendredi</option></select>
       </div>
-      <div class="fg" style="display:flex;align-items:center;gap:6px;padding-bottom:2px">
+      <div class="fg" id="e-full-week-wrap" style="display:flex;align-items:center;gap:6px;padding-bottom:2px">
         <input type="checkbox" id="e-full-week" style="width:16px;height:16px;accent-color:var(--koala)"/>
         <label for="e-full-week" style="font-size:12px;color:var(--ink2);cursor:pointer">Appliquer toute la semaine</label>
       </div>
@@ -1256,20 +1258,56 @@ function onTypeChange(){
 function onLieuChange(){document.getElementById('e-lieu-autre-wrap').style.display=document.getElementById('e-lieu').value==='Autre'?'':'none';}
 function toggleLieuField(){onTypeChange();}
 
+let editingPlanningEventId=null;
+
 function openEventModal(){
   initTimeSelects();
+  editingPlanningEventId=null;
   document.getElementById('e-day').value='0';
   document.getElementById('e-full-week').checked=false;
+  document.getElementById('e-full-week-wrap').style.display='';
   document.getElementById('e-lieu').value='';
   document.getElementById('e-lieu-autre').value='';
   document.getElementById('e-detach-type').value='Formation';
   document.getElementById('e-detach-desc').value='';
   document.getElementById('e-type').value='presence';
+  document.getElementById('modal-event-title').textContent='Mon planning — Journée';
   onTypeChange();
   document.getElementById('modal-event-wrap').classList.add('open');
 }
 
-function openEventAt(d){openEventModal();document.getElementById('e-day').value=d;}
+function openEventAt(d,eventId){
+  openEventModal();
+  document.getElementById('e-day').value=d;
+  if(!eventId)return; // nouvel événement ce jour (mode ajout)
+
+  // Mode édition : pré-remplir avec l'événement existant trouvé dans le cache courant
+  editingPlanningEventId=eventId;
+  document.getElementById('e-full-week-wrap').style.display='none'; // pas de sens en édition d'un seul événement
+  document.getElementById('modal-event-title').textContent='Modifier l\'événement';
+  const userId=currentProfile?.id||currentUser?.id;
+  const ws=weekStart();const semaine=ipDateToLocalISO(ws);
+  const evs=_planningCache[userId+'_'+semaine]||[];
+  const ev=evs.find(e=>e.id===eventId);
+  if(!ev)return;
+  document.getElementById('e-type').value=ev.type;
+  onTypeChange();
+  if(ev.hdebut)document.getElementById('e-hdebut').value=ev.hdebut;
+  if(ev.hfin)document.getElementById('e-hfin').value=ev.hfin;
+  if(ev.pause){
+    const[pd,pf]=ev.pause.split('-');
+    if(pd)document.getElementById('e-pause-debut').value=pd;
+    if(pf){document.getElementById('e-pause-fin').value=pf;document.getElementById('e-pause-fin').style.display='';document.getElementById('e-pause-sep').style.display='';}
+  }
+  if(ev.lieu){
+    const lieuSelect=document.getElementById('e-lieu');
+    const knownLieux=[...lieuSelect.options].map(o=>o.value);
+    if(knownLieux.includes(ev.lieu)){lieuSelect.value=ev.lieu;}
+    else{lieuSelect.value='Autre';document.getElementById('e-lieu-autre-wrap').style.display='';document.getElementById('e-lieu-autre').value=ev.lieu;}
+  }
+  if(ev.detach_type)document.getElementById('e-detach-type').value=ev.detach_type;
+  if(ev.detach_desc)document.getElementById('e-detach-desc').value=ev.detach_desc;
+}
 
 // ── MODAL COORDINATEUR ──
 function openEventCoordModal(){
@@ -1739,6 +1777,22 @@ async function planningSave(referentId,semaineDate,ev){
   const row={referent_id:referentId,semaine:semaineDate,jour:ev.day,slot:ev.slot!==undefined?ev.slot:null,
     type:ev.type,label:ev.label||null,lieu:ev.lieu||null,hdebut:ev.hdebut||null,hfin:ev.hfin||null,
     pause:ev.pause||null,detach_type:ev.detachType||null,detach_desc:ev.detachDesc||null};
+
+  // Modification d'un événement existant précis (édition) : update ciblé par id, jamais d'upsert sur jour/slot
+  if(ev.id){
+    const{error}=await sb.from('planning').update(row).eq('id',ev.id);
+    if(error){console.error('[Planning] update:',error.message);return false;}
+    planningInvalidate(referentId,semaineDate);return true;
+  }
+
+  // Nouvel événement pour le planning référent individuel (multi-événements/jour autorisé) : insert pur
+  if(ev.multi){
+    const{error}=await sb.from('planning').insert(row);
+    if(error){console.error('[Planning] insert:',error.message);return false;}
+    planningInvalidate(referentId,semaineDate);return true;
+  }
+
+  // Comportement existant (coordinateur, slot 0/1, ou import) : upsert sur jour/slot
   const{error}=await sb.from('planning').upsert(row,{onConflict:'referent_id,semaine,jour,slot'});
   if(error){console.error('[Planning] save:',error.message);return false;}
   planningInvalidate(referentId,semaineDate);return true;
@@ -1778,8 +1832,15 @@ async function saveEvent(){
   const days=fullWeek?[0,1,2,3,4]:[dayVal];
   const btn=document.querySelector('#modal-event-wrap .btn-primary');
   if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
-  for(const d of days)await planningSave(userId,semaine,{day:d,slot:null,type,label,lieu,hdebut,hfin,pause,detachType,detachDesc});
+  if(editingPlanningEventId){
+    // Édition d'un événement existant précis : update ciblé, jamais de doublon
+    await planningSave(userId,semaine,{id:editingPlanningEventId,day:dayVal,slot:null,type,label,lieu,hdebut,hfin,pause,detachType,detachDesc});
+  }else{
+    // Nouvel événement : insert pur pour autoriser plusieurs événements le même jour
+    for(const d of days)await planningSave(userId,semaine,{day:d,slot:null,type,label,lieu,hdebut,hfin,pause,detachType,detachDesc,multi:true});
+  }
   if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';}
+  editingPlanningEventId=null;
   closeModal('modal-event-wrap');await renderPlanning();
 }
 
@@ -1807,18 +1868,21 @@ function getPlanningGrid(events,referentId,semaine,editable){
   days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
   html+='<div class="pg-time" style="font-size:10px">Journée</div>';
   days5.forEach((_,di)=>{
-    const ev=events.find(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
-    html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'" '+(editable?'onclick="openEventAt('+di+')"':'')+'>';
-    if(ev){
+    const evs=events.filter(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
+    html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'">';
+    if(evs.length){
       const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
-      const titre=ev.label||labels[ev.type]||ev.type;
-      const del=editable?'<span class="pg-del" onclick="event.stopPropagation();delPlanningEvent(\''+ev.id+'\',\''+referentId+'\',\''+semaine+'\')"><i class="ti ti-x"></i></span>':'';
-      let detail='';
-      if(ev.hdebut&&ev.hfin)detail+='<div style="font-size:10px;margin-top:3px;opacity:0.85">⏱ '+formatHeure(ev.hdebut)+'–'+formatHeure(ev.hfin)+'</div>';
-      if(ev.pause)detail+='<div style="font-size:10px;opacity:0.7">☕ '+ev.pause+'</div>';
-      if(ev.detach_desc||ev.detachDesc)detail+='<div style="font-size:10px;margin-top:2px;opacity:0.8;font-style:italic">'+(ev.detach_desc||ev.detachDesc)+'</div>';
-      html+='<div class="pg-card '+ev.type+'">'+del+titre+detail+'</div>';
-    }else if(editable){html+='<div class="pg-add">+ ajouter</div>';}
+      evs.forEach(ev=>{
+        const titre=ev.label||labels[ev.type]||ev.type;
+        const del=editable?'<span class="pg-del" onclick="event.stopPropagation();delPlanningEvent(\''+ev.id+'\',\''+referentId+'\',\''+semaine+'\')"><i class="ti ti-x"></i></span>':'';
+        let detail='';
+        if(ev.hdebut&&ev.hfin)detail+='<div style="font-size:10px;margin-top:3px;opacity:0.85">⏱ '+formatHeure(ev.hdebut)+'–'+formatHeure(ev.hfin)+'</div>';
+        if(ev.pause)detail+='<div style="font-size:10px;opacity:0.7">☕ '+ev.pause+'</div>';
+        if(ev.detach_desc||ev.detachDesc)detail+='<div style="font-size:10px;margin-top:2px;opacity:0.8;font-style:italic">'+(ev.detach_desc||ev.detachDesc)+'</div>';
+        html+='<div class="pg-card '+ev.type+'" '+(editable?'onclick="event.stopPropagation();openEventAt('+di+',\''+ev.id+'\')"':'')+'>'+del+titre+detail+'</div>';
+      });
+      if(editable)html+='<div class="pg-add-more" onclick="event.stopPropagation();openEventAt('+di+')" title="Ajouter un autre événement ce jour"><i class="ti ti-plus"></i></div>';
+    }else if(editable){html+='<div class="pg-add" onclick="openEventAt('+di+')">+ ajouter</div>';}
     else{html+='<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';}
     html+='</div>';
   });
@@ -1924,6 +1988,44 @@ async function peLoad(crecheId,semaineDate){
 }
 function peInvalidate(crecheId,semaineDate){delete _peCache[crecheId+'_'+semaineDate];}
 
+// ── DRAG & DROP : déplacer un nom d'une case à une autre dans le tableau équipe ──
+let _peDraggedId=null;
+function peDragStart(event,eventId){
+  _peDraggedId=eventId;
+  event.dataTransfer.effectAllowed='move';
+}
+
+async function peDrop(event,creneauLabel,jourStr,crecheId,semaineDate){
+  event.preventDefault();
+  const draggedId=_peDraggedId;
+  _peDraggedId=null;
+  if(!draggedId)return;
+
+  const jour=parseInt(jourStr);
+  const cached=_peCache[crecheId+'_'+semaineDate]||[];
+  const source=cached.find(r=>r.id===draggedId);
+  if(!source)return;
+
+  // Pas d'effet si on dépose exactement sur sa propre case d'origine
+  if(source.jour===jour&&source.creneau_label===creneauLabel)return;
+
+  const creneau=ipParseCreneauLabel(creneauLabel);
+  const updates={
+    jour,
+    creneau_label:creneauLabel,
+    hdebut:creneau?creneau.hdebut:source.hdebut,
+    hfin:creneau?creneau.hfin:source.hfin,
+    pause:creneau?creneau.pause:source.pause
+  };
+
+  const{error}=await sb.from('planning_equipe').update(updates).eq('id',draggedId);
+  if(error){console.error('[PlanningEquipe] move:',error.message);showBanner('Erreur lors du déplacement.','error');return;}
+
+  peInvalidate(crecheId,semaineDate);
+  await renderPlanningEquipe();
+  showBanner(source.prenom+' déplacé(e) ✅');
+}
+
 async function renderPlanningEquipe(){
   const sel=document.getElementById('pe-creche-select');
   const wrap=document.getElementById('pe-grid-wrap');
@@ -1950,10 +2052,12 @@ async function renderPlanningEquipe(){
   wrap.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
   const rows=await peLoad(crecheId,semaine);
   const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
-  wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName);
+  // Éditable pour : la direction, OU la référente dont la propre crèche correspond à celle affichée
+  const editable=isDirection||(currentProfile?.creche_id===crecheId);
+  wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
 }
 
-function getPlanningEquipeTable(rows,semaine,crecheName){
+function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
   if(!rows.length)return '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucune donnée pour cette semaine — importez un fichier Excel pour cette crèche.</div>';
 
   const ws=new Date(semaine+'T00:00:00');
@@ -1983,7 +2087,8 @@ function getPlanningEquipeTable(rows,semaine,crecheName){
     if(!ev)return '<span style="color:#ddd">—</span>';
     const color=typeColors[ev.type]||'#ccc';
     const ailleurs=ev.lieu&&ev.lieu!==crecheName;
-    return '<div style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left">'+
+    const dragAttrs=editable?'draggable="true" ondragstart="peDragStart(event,\''+ev.id+'\')" style="cursor:grab;'+'background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"':'style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"';
+    return '<div '+dragAttrs+'>'+
       '<strong>'+ev.prenom+'</strong>'+(ailleurs?' <span style="opacity:0.7">('+ev.lieu+')</span>':'')+
       '</div>';
   }
@@ -2000,7 +2105,8 @@ function getPlanningEquipeTable(rows,semaine,crecheName){
     for(let d=0;d<5;d++){
       // Plusieurs personnes peuvent partager le même créneau le même jour
       const evs=evsThisCreneau.filter(e=>e.jour===d);
-      html+='<td style="padding:6px;border-bottom:1px solid var(--border);word-wrap:break-word;overflow-wrap:break-word">';
+      const dropAttrs=editable?'ondragover="event.preventDefault()" ondrop="peDrop(event,\''+creneau.replace(/'/g,"\\'")+'\',\''+d+'\',\''+crecheId+'\',\''+semaine+'\')"':'';
+      html+='<td '+dropAttrs+' style="padding:6px;border-bottom:1px solid var(--border);word-wrap:break-word;overflow-wrap:break-word'+(editable?';min-height:32px':'')+'">';
       if(evs.length)html+=evs.map(e=>renderCell(e,crecheName)).join('<div style="height:4px"></div>');
       else html+='<div style="text-align:center"><span style="color:#ddd">—</span></div>';
       html+='</td>';
