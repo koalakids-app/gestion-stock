@@ -172,6 +172,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pg-add:hover{background:var(--koala-light);color:var(--koala)}
 .pg-add-more{display:flex;align-items:center;justify-content:center;height:22px;cursor:pointer;color:#bbb;font-size:11px;border:1px dashed var(--border);border-radius:6px;margin-top:2px;transition:background .15s}
 .pg-add-more:hover{background:var(--koala-light);color:var(--koala);border-color:var(--koala)}
+.pe-add-more{display:flex;align-items:center;justify-content:center;height:20px;cursor:pointer;color:#bbb;font-size:10px;border:1px dashed var(--border);border-radius:6px;margin-top:3px;transition:background .15s}
+.pe-add-more:hover{background:var(--koala-light);color:var(--koala);border-color:var(--koala)}
+.pe-add-empty{display:flex;align-items:center;justify-content:center;min-height:28px;cursor:pointer;color:#ddd;font-size:11px;border-radius:6px;transition:background .15s}
+.pe-add-empty:hover{background:var(--koala-light);color:var(--koala)}
 .pg-ev{border-radius:6px;padding:4px 7px;font-size:11px;margin-bottom:3px;cursor:pointer;font-weight:600}
 .pg-ev.presence{background:var(--koala);color:#fff}
 .pg-ev.absent{background:var(--orange);color:#fff}
@@ -742,6 +746,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="mactions">
       <button class="btn-cancel" onclick="closeModal('modal-import-planning-wrap')">Annuler</button>
       <button class="btn-primary" id="ip-btn-confirm" style="display:none" onclick="confirmImportPlanning()"><i class="ti ti-check"></i> Importer ces événements</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-pe-edit-wrap">
+  <div class="modal" style="max-width:420px">
+    <h3 id="pe-edit-title">Modifier le créneau</h3>
+    <div style="font-size:12px;color:var(--ink2);margin-bottom:14px" id="pe-edit-creneau-label"></div>
+    <div class="fg"><label class="flabel">Salarié(e)</label>
+      <select class="finput" id="pe-edit-prenom" onchange="peOnPrenomChange()">
+        <option value="">-- Choisir --</option>
+      </select>
+    </div>
+    <div class="fg" id="pe-edit-prenom-autre-wrap">
+      <input class="finput" id="pe-edit-prenom-autre" placeholder="Prénom" style="display:none"/>
+    </div>
+    <div class="mactions">
+      <button class="btn-cancel" id="pe-edit-delete-btn" style="display:none;color:var(--red)" onclick="peDeleteCellEdit()"><i class="ti ti-trash"></i> Retirer</button>
+      <button class="btn-cancel" onclick="closeModal('modal-pe-edit-wrap')">Annuler</button>
+      <button class="btn-primary" onclick="peSaveCellEdit()"><i class="ti ti-check"></i> Enregistrer</button>
     </div>
   </div>
 </div>
@@ -1742,11 +1766,15 @@ async function confirmImportPlanning(){
       },{onConflict:'creche_id,prenom,semaine,jour'});
       if(errEquipe){console.error('[PlanningEquipe]',errEquipe.message);failed++;}else{savedEquipe++;}
 
-      // En plus, si c'est la référente titulaire, enregistrer aussi dans son planning individuel
+      // En plus, si c'est la référente titulaire, enregistrer aussi dans son planning individuel.
+      // On supprime d'abord tout événement existant ce jour-là (l'upsert sur slot=NULL ne déduplique
+      // pas correctement en SQL, NULL n'étant jamais égal à NULL pour une contrainte unique), puis on
+      // insère la nouvelle version — ce qui correspond au comportement "remplacer" annoncé dans l'aperçu.
       if(isRef){
+        await sb.from('planning').delete().eq('referent_id',_ipPendingReferentId).eq('semaine',semaine).eq('jour',e.day).is('slot',null);
         const ok=await planningSave(_ipPendingReferentId,semaine,{
           day:e.day,slot:null,type:e.type,label,lieu:e.lieu,
-          hdebut:e.hdebut,hfin:e.hfin,pause:e.pause,detachType:'',detachDesc:''
+          hdebut:e.hdebut,hfin:e.hfin,pause:e.pause,detachType:'',detachDesc:'',multi:true
         });
         if(ok)savedRef++;else failed++;
       }
@@ -1988,42 +2016,81 @@ async function peLoad(crecheId,semaineDate){
 }
 function peInvalidate(crecheId,semaineDate){delete _peCache[crecheId+'_'+semaineDate];}
 
-// ── DRAG & DROP : déplacer un nom d'une case à une autre dans le tableau équipe ──
-let _peDraggedId=null;
-function peDragStart(event,eventId){
-  _peDraggedId=eventId;
-  event.dataTransfer.effectAllowed='move';
+// ── ÉDITION D'UNE CASE DU TABLEAU ÉQUIPE (remplace/ajoute/supprime un nom sur un créneau) ──
+let _peEditCtx=null; // {eventId|null, creneauLabel, jour, crecheId, semaine}
+
+function peOpenCellEdit(eventId,creneauLabel,jourStr,crecheId,semaine){
+  const jour=parseInt(jourStr);
+  _peEditCtx={eventId:eventId||null,creneauLabel,jour,crecheId,semaine};
+
+  const cached=_peCache[crecheId+'_'+semaine]||[];
+  const knownNames=[...new Set(cached.map(r=>r.prenom))].sort();
+  const sel=document.getElementById('pe-edit-prenom');
+  sel.innerHTML='<option value="">-- Choisir --</option>'+knownNames.map(n=>'<option value="'+n+'">'+n+'</option>').join('')+'<option value="__autre__">Autre (saisir)…</option>';
+  document.getElementById('pe-edit-prenom-autre').value='';
+  document.getElementById('pe-edit-prenom-autre').style.display='none';
+
+  if(eventId){
+    const ev=cached.find(r=>r.id===eventId);
+    document.getElementById('pe-edit-title').textContent='Modifier le créneau';
+    document.getElementById('pe-edit-creneau-label').textContent=creneauLabel+' — '+DAYS[jour];
+    if(ev&&knownNames.includes(ev.prenom))sel.value=ev.prenom;
+    document.getElementById('pe-edit-delete-btn').style.display='';
+  }else{
+    document.getElementById('pe-edit-title').textContent='Ajouter sur ce créneau';
+    document.getElementById('pe-edit-creneau-label').textContent=creneauLabel+' — '+DAYS[jour];
+    sel.value='';
+    document.getElementById('pe-edit-delete-btn').style.display='none';
+  }
+  document.getElementById('modal-pe-edit-wrap').classList.add('open');
 }
 
-async function peDrop(event,creneauLabel,jourStr,crecheId,semaineDate){
-  event.preventDefault();
-  const draggedId=_peDraggedId;
-  _peDraggedId=null;
-  if(!draggedId)return;
+function peOnPrenomChange(){
+  const v=document.getElementById('pe-edit-prenom').value;
+  document.getElementById('pe-edit-prenom-autre').style.display=v==='__autre__'?'':'none';
+}
 
-  const jour=parseInt(jourStr);
-  const cached=_peCache[crecheId+'_'+semaineDate]||[];
-  const source=cached.find(r=>r.id===draggedId);
-  if(!source)return;
+async function peSaveCellEdit(){
+  if(!_peEditCtx)return;
+  const sel=document.getElementById('pe-edit-prenom').value;
+  const prenom=sel==='__autre__'?document.getElementById('pe-edit-prenom-autre').value.trim():sel;
+  if(!prenom){alert('Choisissez ou saisissez un prénom.');return;}
 
-  // Pas d'effet si on dépose exactement sur sa propre case d'origine
-  if(source.jour===jour&&source.creneau_label===creneauLabel)return;
-
+  const{eventId,creneauLabel,jour,crecheId,semaine}=_peEditCtx;
   const creneau=ipParseCreneauLabel(creneauLabel);
-  const updates={
-    jour,
-    creneau_label:creneauLabel,
-    hdebut:creneau?creneau.hdebut:source.hdebut,
-    hfin:creneau?creneau.hfin:source.hfin,
-    pause:creneau?creneau.pause:source.pause
-  };
+  const btn=document.querySelector('#modal-pe-edit-wrap .btn-primary');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
 
-  const{error}=await sb.from('planning_equipe').update(updates).eq('id',draggedId);
-  if(error){console.error('[PlanningEquipe] move:',error.message);showBanner('Erreur lors du déplacement.','error');return;}
+  let error;
+  if(eventId){
+    ({error}=await sb.from('planning_equipe').update({prenom}).eq('id',eventId));
+  }else{
+    ({error}=await sb.from('planning_equipe').insert({
+      creche_id:crecheId,prenom,semaine,jour,type:'presence',label:prenom,
+      lieu:null,hdebut:creneau?.hdebut||null,hfin:creneau?.hfin||null,pause:creneau?.pause||null,
+      creneau_label:creneauLabel
+    }));
+  }
 
-  peInvalidate(crecheId,semaineDate);
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';}
+  if(error){console.error('[PlanningEquipe] edit:',error.message);showBanner('Erreur lors de l\'enregistrement.','error');return;}
+
+  peInvalidate(crecheId,semaine);
+  closeModal('modal-pe-edit-wrap');
   await renderPlanningEquipe();
-  showBanner(source.prenom+' déplacé(e) ✅');
+  showBanner(prenom+' enregistré(e) ✅');
+}
+
+async function peDeleteCellEdit(){
+  if(!_peEditCtx||!_peEditCtx.eventId)return;
+  if(!confirm('Retirer cette personne de ce créneau ?'))return;
+  const{eventId,crecheId,semaine}=_peEditCtx;
+  const{error}=await sb.from('planning_equipe').delete().eq('id',eventId);
+  if(error){console.error('[PlanningEquipe] delete:',error.message);showBanner('Erreur lors de la suppression.','error');return;}
+  peInvalidate(crecheId,semaine);
+  closeModal('modal-pe-edit-wrap');
+  await renderPlanningEquipe();
+  showBanner('Créneau libéré ✅');
 }
 
 async function renderPlanningEquipe(){
@@ -2087,8 +2154,8 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
     if(!ev)return '<span style="color:#ddd">—</span>';
     const color=typeColors[ev.type]||'#ccc';
     const ailleurs=ev.lieu&&ev.lieu!==crecheName;
-    const dragAttrs=editable?'draggable="true" ondragstart="peDragStart(event,\''+ev.id+'\')" style="cursor:grab;'+'background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"':'style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"';
-    return '<div '+dragAttrs+'>'+
+    const clickAttr=editable?'onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"':'style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"';
+    return '<div '+clickAttr+'>'+
       '<strong>'+ev.prenom+'</strong>'+(ailleurs?' <span style="opacity:0.7">('+ev.lieu+')</span>':'')+
       '</div>';
   }
@@ -2101,14 +2168,20 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
 
   creneauOrder.forEach(creneau=>{
     const evsThisCreneau=byCreneau[creneau];
+    const creneauEsc=creneau.replace(/'/g,"\\'");
     html+='<tr><td style="padding:8px;border-bottom:1px solid var(--border);font-weight:600;color:var(--ink2);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+creneau+'</td>';
     for(let d=0;d<5;d++){
       // Plusieurs personnes peuvent partager le même créneau le même jour
       const evs=evsThisCreneau.filter(e=>e.jour===d);
-      const dropAttrs=editable?'ondragover="event.preventDefault()" ondrop="peDrop(event,\''+creneau.replace(/'/g,"\\'")+'\',\''+d+'\',\''+crecheId+'\',\''+semaine+'\')"':'';
-      html+='<td '+dropAttrs+' style="padding:6px;border-bottom:1px solid var(--border);word-wrap:break-word;overflow-wrap:break-word'+(editable?';min-height:32px':'')+'">';
-      if(evs.length)html+=evs.map(e=>renderCell(e,crecheName)).join('<div style="height:4px"></div>');
-      else html+='<div style="text-align:center"><span style="color:#ddd">—</span></div>';
+      html+='<td style="padding:6px;border-bottom:1px solid var(--border);word-wrap:break-word;overflow-wrap:break-word">';
+      if(evs.length){
+        html+=evs.map(e=>renderCell(e,crecheName)).join('<div style="height:4px"></div>');
+        if(editable)html+='<div class="pe-add-more" onclick="peOpenCellEdit(null,\''+creneauEsc+'\',\''+d+'\',\''+crecheId+'\',\''+semaine+'\')" title="Ajouter quelqu\'un d\'autre sur ce créneau"><i class="ti ti-plus"></i></div>';
+      }else if(editable){
+        html+='<div class="pe-add-empty" onclick="peOpenCellEdit(null,\''+creneauEsc+'\',\''+d+'\',\''+crecheId+'\',\''+semaine+'\')">+ ajouter</div>';
+      }else{
+        html+='<div style="text-align:center"><span style="color:#ddd">—</span></div>';
+      }
       html+='</td>';
     }
     html+='</tr>';
