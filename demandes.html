@@ -891,7 +891,7 @@ function showApp(){
   updateBadges();renderCrecheTabs();
 }
 
-function todayStr(){return new Date().toISOString().slice(0,10);}
+function todayStr(){return ipDateToLocalISO(new Date());}
 function weekStart(){const n=new Date();const day=n.getDay();const diff=n.getDate()-(day===0?6:day-1);const m=new Date(n.getFullYear(),n.getMonth(),diff+weekOffset*7);m.setHours(0,0,0,0);return m;}
 function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -1139,7 +1139,7 @@ async function renderPresenceSemaine(){
   const enfants=crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants;
   if(!enfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant.</p></div>';return;}
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  const dateStrs=days5.map(d=>d.toISOString().slice(0,10));
+  const dateStrs=days5.map(d=>ipDateToLocalISO(d));
   const{data:presData}=await sb.from('presences').select('*').in('presence_date',dateStrs).in('enfant_id',enfants.map(e=>e.id));
   const pm={};(presData||[]).forEach(p=>pm[p.enfant_id+'_'+p.presence_date+'_'+p.slot]=p.status);
   const dc={present:'#2a9d4e',absent:'#e03e3e',partial:'#F47920','':'#e0dff0'};
@@ -1147,7 +1147,7 @@ async function renderPresenceSemaine(){
   let html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--koala);color:#fff"><th style="padding:8px 10px;text-align:left">Enfant</th>';
   days5.forEach(d=>{html+='<th style="padding:8px 6px;text-align:center">'+fmt(d)+'<br><span style="font-size:9px;opacity:0.7">M/A</span></th>';});
   html+='</tr></thead><tbody>';
-  enfants.forEach((e,idx)=>{html+='<tr style="background:'+(idx%2===0?'#fff':'#EEEDF8')+'"><td style="padding:8px 10px;font-weight:600;color:var(--koala)">'+e.prenom+' '+e.nom+'</td>';days5.forEach(d=>{const ds=d.toISOString().slice(0,10),m=pm[e.id+'_'+ds+'_M']||'',a=pm[e.id+'_'+ds+'_A']||'';html+='<td style="text-align:center;padding:6px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:'+dc[m]+';margin-right:2px"></span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:'+dc[a]+'"></span></td>';});html+='</tr>';});
+  enfants.forEach((e,idx)=>{html+='<tr style="background:'+(idx%2===0?'#fff':'#EEEDF8')+'"><td style="padding:8px 10px;font-weight:600;color:var(--koala)">'+e.prenom+' '+e.nom+'</td>';days5.forEach(d=>{const ds=ipDateToLocalISO(d),m=pm[e.id+'_'+ds+'_M']||'',a=pm[e.id+'_'+ds+'_A']||'';html+='<td style="text-align:center;padding:6px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:'+dc[m]+';margin-right:2px"></span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:'+dc[a]+'"></span></td>';});html+='</tr>';});
   html+='</tbody></table></div>';view.innerHTML=html;
 }
 async function exportPresence(){
@@ -1288,13 +1288,18 @@ function openCoordEventAt(d,s){
 // ════════════════════════════════════════════════════════════════════════
 
 // Lundi ISO de la semaine contenant la date ISO donnée (YYYY-MM-DD)
+// Formate un objet Date en YYYY-MM-DD en restant en heure LOCALE (toISOString() convertit en UTC,
+// ce qui décale la date d'un jour pour les fuseaux horaires en avance sur UTC, comme la France l'été).
+function ipDateToLocalISO(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
 function mondayOfISO(dateISO){
   const d=new Date(dateISO+'T00:00:00');
   const day=d.getDay();
   const diff=d.getDate()-(day===0?6:day-1);
   const m=new Date(d.getFullYear(),d.getMonth(),diff);
-  m.setHours(0,0,0,0);
-  return m.toISOString().slice(0,10);
+  return ipDateToLocalISO(m);
 }
 
 const IP_MOIS_FR={'janvier':0,'janv':0,'jan':0,'fevrier':1,'fevr':1,'fev':1,'mars':2,'mar':2,
@@ -1358,7 +1363,7 @@ function ipParseWeekColumns(labels,refYear,warnings,weekLabel){
     expected.setDate(anchorDate.getDate()+(i-anchorIdx));
     // Vérifie que le jour-du-mois donné dans le fichier correspond bien à la date calendaire attendue
     if(expected.getDate()===raws[i].day){
-      cols.push({day:i,dateISO:expected.toISOString().slice(0,10),label:labels[i]});
+      cols.push({day:i,dateISO:ipDateToLocalISO(expected),label:labels[i]});
     }else{
       // Incohérence : le jour ne correspond pas au décalage attendu — on retente une résolution directe du mois si possible
       const mi=ipResolveUnambiguousMonth(raws[i].monthRaw)??ipResolveAnyMonth(raws[i].monthRaw);
@@ -1695,7 +1700,7 @@ async function confirmImportPlanning(){
       const{error:errEquipe}=await sb.from('planning_equipe').upsert({
         creche_id:_ipPendingCrecheId,prenom:name,semaine,jour:e.day,type:e.type,label,
         lieu:e.lieu||null,hdebut:e.hdebut||null,hfin:e.hfin||null,pause:e.pause||null,
-        source_cell:e.sourceCell
+        source_cell:e.sourceCell,creneau_label:e.merged?null:e.sourceCreneauLabel
       },{onConflict:'creche_id,prenom,semaine,jour'});
       if(errEquipe){console.error('[PlanningEquipe]',errEquipe.message);failed++;}else{savedEquipe++;}
 
@@ -1769,7 +1774,7 @@ async function saveEvent(){
   if(type==='detachement'){detachType=document.getElementById('e-detach-type').value;detachDesc=document.getElementById('e-detach-desc').value.trim();}
   const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
   const label=lieu||(detachType||labels[type]||type);
-  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
+  const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   const days=fullWeek?[0,1,2,3,4]:[dayVal];
   const btn=document.querySelector('#modal-event-wrap .btn-primary');
   if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
@@ -1782,7 +1787,7 @@ async function saveEvent(){
 async function saveEventCoord(){
   const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
   if(!coord){alert('Coordinateur introuvable.');return;}
-  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
+  const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   const type=document.getElementById('ec-type').value;
   const lieu=document.getElementById('ec-lieu').value||type;
   const day=parseInt(document.getElementById('ec-day').value);
@@ -1848,7 +1853,7 @@ function getPlanningGridSimple(events,coordId,semaine){
 
 // ── RENDER PLANNING ──
 async function renderPlanning(){
-  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
+  const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
   document.getElementById('week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
@@ -1941,46 +1946,85 @@ async function renderPlanningEquipe(){
     return;
   }
 
-  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
+  const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   wrap.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
   const rows=await peLoad(crecheId,semaine);
-  wrap.innerHTML=getPlanningEquipeTable(rows,semaine);
+  const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
+  wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName);
 }
 
-function getPlanningEquipeTable(rows,semaine){
+function getPlanningEquipeTable(rows,semaine,crecheName){
   if(!rows.length)return '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucune donnée pour cette semaine — importez un fichier Excel pour cette crèche.</div>';
 
   const ws=new Date(semaine+'T00:00:00');
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
 
-  const prenoms=[...new Set(rows.map(r=>r.prenom))].sort();
-  const byKey={};
-  rows.forEach(r=>{byKey[r.prenom+'_'+r.jour]=r;});
-
   const typeColors={presence:'var(--koala)',absent:'var(--orange)',conge:'#999',formation:'#378ADD',reunion:'#7B68EE'};
 
+  // Sépare les événements qui ont un créneau horaire identifiable (ligne classique du fichier)
+  // de ceux qui n'en ont pas (fusion de 2 activités, congé, absence) — affichés à part.
+  const withCreneau=rows.filter(r=>r.creneau_label);
+  const withoutCreneau=rows.filter(r=>!r.creneau_label);
+
+  // Lignes = créneaux distincts, triés par heure de début (déduite du premier événement de ce créneau)
+  const creneauOrder=[];
+  const byCreneau={};
+  withCreneau.forEach(r=>{
+    if(!byCreneau[r.creneau_label]){byCreneau[r.creneau_label]=[];creneauOrder.push(r.creneau_label);}
+    byCreneau[r.creneau_label].push(r);
+  });
+  creneauOrder.sort((a,b)=>{
+    const ha=byCreneau[a][0].hdebut||'99:99',hb=byCreneau[b][0].hdebut||'99:99';
+    return ha.localeCompare(hb);
+  });
+
+  function renderCell(ev,crecheName){
+    if(!ev)return '<span style="color:#ddd">—</span>';
+    const color=typeColors[ev.type]||'#ccc';
+    const ailleurs=ev.lieu&&ev.lieu!==crecheName;
+    return '<div style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left">'+
+      '<strong>'+ev.prenom+'</strong>'+(ailleurs?' <span style="opacity:0.7">('+ev.lieu+')</span>':'')+
+      '</div>';
+  }
+
   let html='<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:640px">';
-  html+='<thead><tr><th style="padding:8px;border-bottom:2px solid var(--border);text-align:left;background:#fafafa">Salarié(e)</th>';
+  html+='<thead><tr><th style="padding:8px;border-bottom:2px solid var(--border);text-align:left;background:#fafafa;white-space:nowrap">Horaire</th>';
   DAYS.forEach((d,i)=>{html+='<th style="padding:8px;border-bottom:2px solid var(--border);text-align:center;background:#fafafa">'+d+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';});
   html+='</tr></thead><tbody>';
 
-  prenoms.forEach(prenom=>{
-    html+='<tr><td style="padding:8px;border-bottom:1px solid var(--border);font-weight:700;color:var(--koala)">'+prenom+'</td>';
+  creneauOrder.forEach(creneau=>{
+    const evsThisCreneau=byCreneau[creneau];
+    html+='<tr><td style="padding:8px;border-bottom:1px solid var(--border);font-weight:600;color:var(--ink2);font-size:11px;white-space:nowrap">'+creneau+'</td>';
     for(let d=0;d<5;d++){
-      const ev=byKey[prenom+'_'+d];
-      html+='<td style="padding:6px;border-bottom:1px solid var(--border);text-align:center">';
-      if(ev){
-        const color=typeColors[ev.type]||'#ccc';
-        const horaire=ev.hdebut&&!ev.label?.includes('+')?('<div style="font-size:9px;opacity:0.7">'+ev.hdebut+'–'+ev.hfin+'</div>'):'';
-        html+='<div style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px">'+(ev.label||ev.type)+horaire+'</div>';
-      }else{
-        html+='<span style="color:#ddd">—</span>';
-      }
+      // Plusieurs personnes peuvent partager le même créneau le même jour
+      const evs=evsThisCreneau.filter(e=>e.jour===d);
+      html+='<td style="padding:6px;border-bottom:1px solid var(--border)">';
+      if(evs.length)html+=evs.map(e=>renderCell(e,crecheName)).join('<div style="height:4px"></div>');
+      else html+='<div style="text-align:center"><span style="color:#ddd">—</span></div>';
       html+='</td>';
     }
     html+='</tr>';
   });
+
+  if(withoutCreneau.length){
+    html+='<tr><td colspan="6" style="padding:8px;background:#fafafa;font-weight:600;font-size:11px;color:var(--ink2)">Autres activités (congé, absence, journées combinées)</td></tr>';
+    html+='<tr><td style="padding:8px;border-bottom:1px solid var(--border);font-size:11px;color:var(--ink2)">—</td>';
+    for(let d=0;d<5;d++){
+      const evs=withoutCreneau.filter(e=>e.jour===d);
+      html+='<td style="padding:6px;border-bottom:1px solid var(--border)">';
+      if(evs.length){
+        html+=evs.map(ev=>{
+          const color=typeColors[ev.type]||'#ccc';
+          return '<div style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left;margin-bottom:4px"><strong>'+ev.prenom+'</strong> — '+(ev.label||ev.type)+'</div>';
+        }).join('');
+      }else{
+        html+='<div style="text-align:center"><span style="color:#ddd">—</span></div>';
+      }
+      html+='</td>';
+    }
+    html+='</tr>';
+  }
 
   html+='</tbody></table>';
   return html;
@@ -2045,7 +2089,7 @@ async function exportBackup(){
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
     a.href=url;
-    a.download='koalakids_backup_'+new Date().toISOString().slice(0,10)+'.json';
+    a.download='koalakids_backup_'+ipDateToLocalISO(new Date())+'.json';
     a.click();
     URL.revokeObjectURL(url);
     showBanner('Sauvegarde téléchargée ✅');
@@ -2217,7 +2261,7 @@ async function ikLoadFromPlanning(){
   cursor.setDate(cursor.getDate()-(dow===0?6:dow-1));
   const rows=[];
   while(cursor<=lastDay){
-    const semaine=cursor.toISOString().slice(0,10);
+    const semaine=ipDateToLocalISO(cursor);
     const events=await planningLoad(userId,semaine);
     events.forEach(ev=>{
       if(ev.type==='absent'||ev.type==='conge'||ev.type==='reunion')return;
@@ -2290,7 +2334,7 @@ function ikDeleteRow(idx){ikRows.splice(idx,1);ikSaveRows();ikRenderTable();}
 
 function ikAddRow(){
   const month=document.getElementById('ik-month').value;
-  ikRows.push({id:Date.now().toString(),date:month?month+'-01':new Date().toISOString().slice(0,10),trajet:'Cuers/',creche:null,nbr:2,lieu:'',slot:0,ignored:false});
+  ikRows.push({id:Date.now().toString(),date:month?month+'-01':ipDateToLocalISO(new Date()),trajet:'Cuers/',creche:null,nbr:2,lieu:'',slot:0,ignored:false});
   ikSaveRows();ikRenderTable();
 }
 
@@ -2334,7 +2378,7 @@ function ikGenerate(){
   const monthNames=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
   const monthName=monthNames[monthNum-1];
   const firstDay=`${year}-${String(monthNum).padStart(2,'0')}-01`;
-  const lastDay=new Date(year,monthNum,0).toISOString().slice(0,10);
+  const lastDay=ipDateToLocalISO(new Date(year,monthNum,0));
   const sheetsData={'Picot 1 - Picot 2':active.filter(r=>IK_GROUPS[r.creche]==='Picot 1 - Picot 2'),'Brunet':active.filter(r=>IK_GROUPS[r.creche]==='Brunet'),'Ollioules - St Jean':active.filter(r=>IK_GROUPS[r.creche]==='Ollioules - St Jean')};
   let sheetsXml='';
   for(const[sheetName,rows] of Object.entries(sheetsData)){
