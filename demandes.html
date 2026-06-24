@@ -153,9 +153,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pg-hd:last-child{border-right:none}
 .pg-hd:first-child{background:var(--koala-dark)}
 .pg-time{background:var(--koala-light);padding:8px 6px;font-size:10px;color:var(--koala);border-right:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:600;text-align:center}
-.pg-cell{padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:110px;background:#fff;vertical-align:top;cursor:pointer}
+.pg-cell{padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:110px;background:#fff;vertical-align:top}
 .pg-cell:last-child{border-right:none}
-.pg-cell:hover{background:var(--koala-light)}
 .pg-cell-ro{padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:110px;background:#fafafa;cursor:default}
 .pg-cell-ro:last-child{border-right:none}
 .pg-card{border-radius:8px;padding:6px 8px;font-size:11px;font-weight:600;margin-bottom:3px;position:relative}
@@ -167,8 +166,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pg-card.detachement{background:#e8eaf6;color:#283593;border-left:3px solid #3949ab}
 .pg-card .pg-del{position:absolute;top:3px;right:4px;cursor:pointer;opacity:0.5;font-size:10px}
 .pg-card .pg-del:hover{opacity:1}
-.pg-add{display:flex;align-items:center;justify-content:center;min-height:90px;cursor:pointer;color:#d0d0d0;font-size:11px;border-radius:8px;transition:background .15s}
-.pg-add:hover{background:var(--koala-light);color:var(--koala)}
+.pg-add{display:flex;align-items:center;justify-content:center;min-height:28px;padding:4px;cursor:pointer;color:#bbb;font-size:10.5px;border-radius:7px;border:1.5px dashed var(--border);transition:background .15s}
+.pg-add:hover{background:var(--koala-light);color:var(--koala);border-color:var(--koala)}
 .pg-ev{border-radius:6px;padding:4px 7px;font-size:11px;margin-bottom:3px;cursor:pointer;font-weight:600}
 .pg-ev.presence{background:var(--koala);color:#fff}
 .pg-ev.absent{background:var(--orange);color:#fff}
@@ -1314,7 +1313,7 @@ async function planningSave(referentId,semaineDate,ev){
   const row={referent_id:referentId,semaine:semaineDate,jour:ev.day,slot:ev.slot!==undefined?ev.slot:null,
     type:ev.type,label:ev.label||null,lieu:ev.lieu||null,hdebut:ev.hdebut||null,hfin:ev.hfin||null,
     pause:ev.pause||null,detach_type:ev.detachType||null,detach_desc:ev.detachDesc||null};
-  const{error}=await sb.from('planning').upsert(row,{onConflict:'referent_id,semaine,jour,slot'});
+  const{error}=await sb.from('planning').insert(row);
   if(error){console.error('[Planning] save:',error.message);return false;}
   planningInvalidate(referentId,semaineDate);return true;
 }
@@ -1382,10 +1381,11 @@ function getPlanningGrid(events,referentId,semaine,editable){
   days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
   html+='<div class="pg-time" style="font-size:10px">Journée</div>';
   days5.forEach((_,di)=>{
-    const ev=events.find(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
-    html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'" '+(editable?'onclick="openEventAt('+di+')"':'')+'>';
-    if(ev){
-      const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+    const evs=events.filter(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
+    html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'" style="display:flex;flex-direction:column;gap:5px">';
+    const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+    if(!evs.length&&!editable)html+='<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';
+    evs.forEach(ev=>{
       const titre=ev.label||labels[ev.type]||ev.type;
       const del=editable?'<span class="pg-del" onclick="event.stopPropagation();delPlanningEvent(\''+ev.id+'\',\''+referentId+'\',\''+semaine+'\')"><i class="ti ti-x"></i></span>':'';
       let detail='';
@@ -1393,8 +1393,8 @@ function getPlanningGrid(events,referentId,semaine,editable){
       if(ev.pause)detail+='<div style="font-size:10px;opacity:0.7">☕ '+ev.pause+'</div>';
       if(ev.detach_desc||ev.detachDesc)detail+='<div style="font-size:10px;margin-top:2px;opacity:0.8;font-style:italic">'+(ev.detach_desc||ev.detachDesc)+'</div>';
       html+='<div class="pg-card '+ev.type+'">'+del+titre+detail+'</div>';
-    }else if(editable){html+='<div class="pg-add">+ ajouter</div>';}
-    else{html+='<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';}
+    });
+    if(editable)html+='<div class="pg-add" onclick="openEventAt('+di+')">+ ajouter</div>';
     html+='</div>';
   });
   return html;
