@@ -702,6 +702,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="modal" style="max-width:640px">
     <h3>📂 Importer un planning Excel</h3>
 
+    <div id="ip-last-import-zone" style="display:none;margin-bottom:14px;padding:10px 14px;background:#FFF3E0;border:1px solid #FFD180;border-radius:8px">
+      <div style="font-size:12px;color:#8a5a00;margin-bottom:8px" id="ip-last-import-text"></div>
+      <button class="btn-cancel" style="font-size:12px;color:var(--red);border-color:var(--red)" onclick="resetLastImport()"><i class="ti ti-trash"></i> Réinitialiser ce dernier import</button>
+    </div>
+
     <div id="ip-step-config">
       <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i> Le fichier doit contenir des lignes "Sem XX" avec les dates Lundi→Vendredi, puis des lignes de créneaux horaires (ex : 7H30-12h30/13h30-15H30) où apparaissent les prénoms des salariées. Les fichiers convertis depuis un PDF (plusieurs feuilles) sont pris en charge, ainsi que les mentions d'une autre crèche dans la cellule (ex : "Miline contes PICOT2").</div>
       <div class="info-box" style="margin-bottom:14px;background:#FFF8E1;border-color:#FFE082;color:#8a6d00"><i class="ti ti-file-text" style="font-size:15px"></i> Si vous n'avez qu'un PDF, convertissez-le d'abord en Excel (.xlsx) avant de l'importer ici — l'import direct de PDF n'est pas pris en charge.</div>
@@ -1658,7 +1663,59 @@ function openImportPlanningModal(){
     sel.onchange();
   }
 
+  // Affiche la zone "dernier import" si un import a déjà été fait pour cette crèche
+  const crecheIdForLast=!isDirection?currentProfile?.creche_id:null;
+  showLastImportZone(crecheIdForLast);
+
   document.getElementById('modal-import-planning-wrap').classList.add('open');
+}
+
+function showLastImportZone(crecheId){
+  const zone=document.getElementById('ip-last-import-zone');
+  if(!zone)return;
+  if(!crecheId){zone.style.display='none';return;}
+  const raw=localStorage.getItem('lastImportBatch_'+crecheId);
+  if(!raw){zone.style.display='none';return;}
+  try{
+    const info=JSON.parse(raw);
+    const dateFr=new Date(info.date).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    document.getElementById('ip-last-import-text').innerHTML='📌 Dernier import effectué le <strong>'+dateFr+'</strong>. Si une erreur s\'est glissée, vous pouvez l\'annuler avant d\'en refaire un.';
+    zone.style.display='';
+  }catch(e){zone.style.display='none';}
+}
+
+async function resetLastImport(){
+  const crecheId=!isDirection?currentProfile?.creche_id:document.getElementById('ip-referent').selectedOptions[0]?.dataset?.crecheId;
+  if(!crecheId){alert('Crèche introuvable.');return;}
+  const raw=localStorage.getItem('lastImportBatch_'+crecheId);
+  if(!raw){alert('Aucun import récent trouvé pour cette crèche.');return;}
+  const info=JSON.parse(raw);
+  if(!confirm('Annuler le dernier import du '+new Date(info.date).toLocaleString('fr-FR')+' ?\n\nCela supprimera toutes les lignes créées par cet import, dans le planning équipe ET le planning individuel concerné.'))return;
+
+  const btn=document.querySelector('#ip-last-import-zone .btn-cancel');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Suppression…';}
+
+  const{error:err1}=await sb.from('planning_equipe').delete().eq('creche_id',crecheId).eq('import_batch_id',info.batchId);
+  let err2=null;
+  if(info.referentId){
+    const res=await sb.from('planning').delete().eq('referent_id',info.referentId).eq('import_batch_id',info.batchId);
+    err2=res.error;
+  }
+
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-trash"></i> Réinitialiser ce dernier import';}
+
+  if(err1||err2){
+    console.error('[ResetImport]',err1?.message,err2?.message);
+    showBanner('Erreur lors de la réinitialisation.','error');
+    return;
+  }
+
+  localStorage.removeItem('lastImportBatch_'+crecheId);
+  peInvalidateAll(crecheId);
+  if(info.referentId)planningInvalidateAll(info.referentId);
+  document.getElementById('ip-last-import-zone').style.display='none';
+  showBanner('Dernier import annulé ✅');
+  await renderPlanning();
 }
 
 function handleImportPlanningFile(event){
@@ -1755,6 +1812,7 @@ async function confirmImportPlanning(){
   const btn=document.getElementById('ip-btn-confirm');
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Import en cours…';
 
+  const batchId=(crypto?.randomUUID)?crypto.randomUUID():('batch-'+Date.now()+'-'+Math.random().toString(36).slice(2));
   let savedRef=0,savedEquipe=0,failed=0;
 
   for(const name in _ipPendingByPerson){
@@ -1769,7 +1827,8 @@ async function confirmImportPlanning(){
       const{error:errEquipe}=await sb.from('planning_equipe').upsert({
         creche_id:_ipPendingCrecheId,prenom:name,semaine,jour:e.day,type:e.type,label,
         lieu:e.lieu||null,hdebut:e.hdebut||null,hfin:e.hfin||null,pause:e.pause||null,
-        source_cell:e.sourceCell,creneau_label:e.merged?null:e.sourceCreneauLabel
+        source_cell:e.sourceCell,creneau_label:e.merged?null:e.sourceCreneauLabel,
+        import_batch_id:batchId
       },{onConflict:'creche_id,prenom,semaine,jour'});
       if(errEquipe){console.error('[PlanningEquipe]',errEquipe.message);failed++;}else{savedEquipe++;}
 
@@ -1781,12 +1840,15 @@ async function confirmImportPlanning(){
         await sb.from('planning').delete().eq('referent_id',_ipPendingReferentId).eq('semaine',semaine).eq('jour',e.day).is('slot',null);
         const ok=await planningSave(_ipPendingReferentId,semaine,{
           day:e.day,slot:null,type:e.type,label,lieu:e.lieu,
-          hdebut:e.hdebut,hfin:e.hfin,pause:e.pause,detachType:'',detachDesc:'',multi:true
+          hdebut:e.hdebut,hfin:e.hfin,pause:e.pause,detachType:'',detachDesc:'',multi:true,batchId
         });
         if(ok)savedRef++;else failed++;
       }
     }
   }
+
+  // Mémorise le batch_id du dernier import pour cette crèche, afin que le bouton "Réinitialiser" sache quoi cibler
+  localStorage.setItem('lastImportBatch_'+_ipPendingCrecheId,JSON.stringify({batchId,referentId:_ipPendingReferentId,date:new Date().toISOString()}));
 
   btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Importer ces événements';
   document.getElementById('ip-result').style.display='';
@@ -1808,10 +1870,14 @@ async function planningLoad(referentId,semaineDate){
   _planningCache[k]=data||[];return _planningCache[k];
 }
 function planningInvalidate(r,s){delete _planningCache[r+'_'+s];}
+function planningInvalidateAll(referentId){
+  Object.keys(_planningCache).forEach(k=>{if(k.startsWith(referentId+'_'))delete _planningCache[k];});
+}
 async function planningSave(referentId,semaineDate,ev){
   const row={referent_id:referentId,semaine:semaineDate,jour:ev.day,slot:ev.slot!==undefined?ev.slot:null,
     type:ev.type,label:ev.label||null,lieu:ev.lieu||null,hdebut:ev.hdebut||null,hfin:ev.hfin||null,
-    pause:ev.pause||null,detach_type:ev.detachType||null,detach_desc:ev.detachDesc||null};
+    pause:ev.pause||null,detach_type:ev.detachType||null,detach_desc:ev.detachDesc||null,
+    import_batch_id:ev.batchId||null};
 
   // Modification d'un événement existant précis (édition) : update ciblé par id, jamais d'upsert sur jour/slot
   if(ev.id){
@@ -2022,6 +2088,9 @@ async function peLoad(crecheId,semaineDate){
   _peCache[k]=data||[];return _peCache[k];
 }
 function peInvalidate(crecheId,semaineDate){delete _peCache[crecheId+'_'+semaineDate];}
+function peInvalidateAll(crecheId){
+  Object.keys(_peCache).forEach(k=>{if(k.startsWith(crecheId+'_'))delete _peCache[k];});
+}
 
 // ── ÉDITION D'UNE CASE DU TABLEAU ÉQUIPE (remplace/ajoute/supprime un nom sur un créneau) ──
 let _peEditCtx=null; // {eventId|null, creneauLabel, jour, crecheId, semaine}
