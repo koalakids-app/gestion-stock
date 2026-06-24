@@ -6,6 +6,7 @@
 <title>Koala Kids — Suite de gestion</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
   --koala:#3D3580;--orange:#F47920;--koala-light:#EEEDF8;--orange-light:#FEF0E6;
@@ -153,8 +154,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pg-hd:last-child{border-right:none}
 .pg-hd:first-child{background:var(--koala-dark)}
 .pg-time{background:var(--koala-light);padding:8px 6px;font-size:10px;color:var(--koala);border-right:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:600;text-align:center}
-.pg-cell{padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:110px;background:#fff;vertical-align:top}
+.pg-cell{padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:110px;background:#fff;vertical-align:top;cursor:pointer}
 .pg-cell:last-child{border-right:none}
+.pg-cell:hover{background:var(--koala-light)}
 .pg-cell-ro{padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:110px;background:#fafafa;cursor:default}
 .pg-cell-ro:last-child{border-right:none}
 .pg-card{border-radius:8px;padding:6px 8px;font-size:11px;font-weight:600;margin-bottom:3px;position:relative}
@@ -166,8 +168,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pg-card.detachement{background:#e8eaf6;color:#283593;border-left:3px solid #3949ab}
 .pg-card .pg-del{position:absolute;top:3px;right:4px;cursor:pointer;opacity:0.5;font-size:10px}
 .pg-card .pg-del:hover{opacity:1}
-.pg-add{display:flex;align-items:center;justify-content:center;min-height:28px;padding:4px;cursor:pointer;color:#bbb;font-size:10.5px;border-radius:7px;border:1.5px dashed var(--border);transition:background .15s}
-.pg-add:hover{background:var(--koala-light);color:var(--koala);border-color:var(--koala)}
+.pg-add{display:flex;align-items:center;justify-content:center;min-height:90px;cursor:pointer;color:#d0d0d0;font-size:11px;border-radius:8px;transition:background .15s}
+.pg-add:hover{background:var(--koala-light);color:var(--koala)}
 .pg-ev{border-radius:6px;padding:4px 7px;font-size:11px;margin-bottom:3px;cursor:pointer;font-weight:600}
 .pg-ev.presence{background:var(--koala);color:#fff}
 .pg-ev.absent{background:var(--orange);color:#fff}
@@ -232,10 +234,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .module-tab.active{color:var(--koala);border-bottom-color:var(--orange);font-weight:700}
 .module-tab-content{display:none}
 .module-tab-content.active{display:block}
-.rmp-tab{padding:8px 15px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:#777;background:transparent;border-top:none;border-left:none;border-right:none;font-weight:500}
-.rmp-tab.active{color:var(--koala);border-bottom-color:var(--orange);font-weight:700}
-.rmp-tab-content{display:none}
-.rmp-tab-content.active{display:block}
 
 /* LOADING */
 .loading-screen{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;z-index:200}
@@ -281,32 +279,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #main-demands.fs-active .creche-tabs-bar{top:0;background:var(--bg);z-index:10}
 .ibtn-fs{width:32px;height:32px;border:1.5px solid var(--border);border-radius:8px;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#888;font-size:15px;flex-shrink:0}
 .ibtn-fs:hover{background:var(--koala-light);color:var(--koala);border-color:var(--koala)}
-
-/* REMPLAÇANTES */
-.rmp-week-grid{display:grid;grid-template-columns:90px repeat(var(--rmp-cols,6),minmax(0,1fr));gap:6px}
-.rmp-hd{font-size:11.5px;font-weight:700;color:var(--muted);text-align:center;padding:6px 2px}
-.rmp-day-lbl{font-size:12px;color:var(--muted);display:flex;align-items:center;padding-left:2px}
-.rmp-cell{min-height:54px;border:1.5px dashed var(--border);border-radius:8px;padding:5px;cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:background 0.15s}
-.rmp-cell:hover{background:var(--koala-light)}
-.rmp-cell.ro{cursor:default}
-.rmp-cell.ro:hover{background:transparent}
-.rmp-cell-empty{font-size:10.5px;color:#ccc;text-align:center;margin:auto}
-.rmp-chip{border-radius:6px;padding:4px 6px;font-size:11px;line-height:1.35;cursor:pointer}
-.rmp-chip.ro{cursor:default}
-.rmp-chip b{display:block;font-size:11.5px}
-.rmp-month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
-.rmp-month-hd{font-size:11px;font-weight:700;color:var(--muted);text-align:center;padding:4px 0}
-.rmp-month-cell{min-height:84px;border:1.5px solid var(--border);border-radius:8px;padding:5px;cursor:pointer;display:flex;flex-direction:column;gap:3px;background:#fff}
-.rmp-month-cell:hover{border-color:var(--koala)}
-.rmp-month-cell.outside{opacity:0.35;background:#fafafa}
-.rmp-month-cell.today{border-color:var(--orange);border-width:2px}
-.rmp-month-daynum{font-size:11px;font-weight:700;color:var(--muted)}
-.rmp-month-pill{font-size:9.5px;border-radius:5px;padding:1px 5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rmp-int-card{background:#fff;border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.rmp-int-card .rmp-int-creche{font-weight:700;color:var(--koala);min-width:110px}
-.rmp-int-card .rmp-int-date{font-size:12.5px;color:#555;min-width:140px}
-.rmp-int-card .rmp-int-time{font-size:12.5px;color:#555}
-.rmp-int-card .rmp-int-pause{font-size:11.5px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -353,7 +325,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn active" onclick="showMain('demands')" id="mnav-demands"><i class="ti ti-message-circle"></i> Demandes</button>
       <button class="mnav-btn" onclick="showMain('incidents')" id="mnav-incidents"><i class="ti ti-alert-triangle"></i> Incidents <span class="mnav-badge" id="badge-incidents" style="display:none">0</span></button>
       <button class="mnav-btn" onclick="showMain('presence')" id="mnav-presence"><i class="ti ti-users-group"></i> Présences</button>
-      <button class="mnav-btn" onclick="showMain('remplacantes')" id="mnav-remplacantes"><i class="ti ti-user-search"></i> Remplaçantes</button>
       <button class="mnav-btn direction-only" onclick="showMain('referents')" id="mnav-referents"><i class="ti ti-address-book"></i> Référents</button>
       <button class="mnav-btn" onclick="showMain('planning')" id="mnav-planning"><i class="ti ti-calendar-event"></i> Planning</button>
       <button class="mnav-btn direction-only" onclick="showMain('dashboard')" id="mnav-dashboard"><i class="ti ti-chart-bar"></i> Tableau de bord</button>
@@ -422,59 +393,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 
-  <!-- REMPLAÇANTES -->
-  <div id="main-remplacantes" class="tab-content">
-    <div class="section-header">
-      <div class="section-left">
-        <span class="section-title"><i class="ti ti-user-search" style="color:var(--koala)"></i> Planning des remplaçantes</span>
-      </div>
-      <button class="btn-primary direction-only" id="rmp-add-btn" onclick="openRmpModal()"><i class="ti ti-plus"></i> Ajouter un créneau</button>
-    </div>
-    <div class="module-tabs">
-      <button class="rmp-tab active" onclick="showRmpTab('semaine',this)"><i class="ti ti-calendar-week"></i> Vue semaine</button>
-      <button class="rmp-tab" onclick="showRmpTab('mois',this)"><i class="ti ti-calendar"></i> Vue mois</button>
-      <button class="rmp-tab" onclick="showRmpTab('intervenante',this)"><i class="ti ti-user"></i> Par intervenante</button>
-    </div>
-
-    <!-- VUE SEMAINE -->
-    <div id="rmp-semaine" class="rmp-tab-content active">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.85rem">
-        <button class="ibtn" onclick="rmpChangeWeek(-1)"><i class="ti ti-chevron-left"></i></button>
-        <span id="rmp-week-label" style="font-size:14px;font-weight:700;color:var(--koala)">—</span>
-        <button class="ibtn" onclick="rmpChangeWeek(1)"><i class="ti ti-chevron-right"></i></button>
-        <button class="btn-sm" style="margin-left:auto" onclick="rmpGoToday('semaine')"><i class="ti ti-calendar-event"></i> Aujourd'hui</button>
-      </div>
-      <div id="rmp-week-grid" class="rmp-week-grid"></div>
-    </div>
-
-    <!-- VUE MOIS -->
-    <div id="rmp-mois" class="rmp-tab-content">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.85rem">
-        <button class="ibtn" onclick="rmpChangeMonth(-1)"><i class="ti ti-chevron-left"></i></button>
-        <span id="rmp-month-label" style="font-size:14px;font-weight:700;color:var(--koala)">—</span>
-        <button class="ibtn" onclick="rmpChangeMonth(1)"><i class="ti ti-chevron-right"></i></button>
-        <div class="fg" style="margin:0 0 0 auto;min-width:200px" id="rmp-mois-creche-fg">
-          <select class="finput" id="rmp-mois-creche-select" onchange="renderRmpMonth()" style="font-size:12px;padding:6px 9px">
-            <option value="">Toutes les crèches</option>
-          </select>
-        </div>
-        <button class="btn-sm" onclick="rmpGoToday('mois')"><i class="ti ti-calendar-event"></i> Aujourd'hui</button>
-      </div>
-      <div class="rmp-month-grid" id="rmp-month-grid"></div>
-    </div>
-
-    <!-- VUE PAR INTERVENANTE -->
-    <div id="rmp-intervenante" class="rmp-tab-content">
-      <div class="fg" style="max-width:320px;margin-bottom:1rem">
-        <label class="flabel">Intervenante</label>
-        <select class="finput" id="rmp-int-select" onchange="renderRmpIntervenante()">
-          <option value="">-- Choisir une intervenante --</option>
-        </select>
-      </div>
-      <div id="rmp-int-list"></div>
-    </div>
-  </div>
-
   <!-- RÉFÉRENTS -->
   <div id="main-referents" class="tab-content direction-only">
     <div class="section-header">
@@ -500,6 +418,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="leg-item"><div class="leg-dot" style="background:#7B68EE"></div>Réunion</div>
         </div>
         <button id="planning-add-btn" class="btn-primary" onclick="openEventModal()" style="display:none"><i class="ti ti-plus"></i> Ajouter</button>
+        <button id="planning-import-btn" class="btn-primary" onclick="openImportPlanningModal()" style="display:none;background:#378ADD"><i class="ti ti-file-spreadsheet"></i> Importer Excel</button>
       </div>
     </div>
     <!-- Planning HAUT : référent -->
@@ -530,6 +449,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn-primary" style="font-size:12px;padding:6px 14px" onclick="openEventCoordModal()"><i class="ti ti-plus"></i> Ajouter</button>
       </div>
       <div class="planning-grid" id="planning-grid-other"></div>
+    </div>
+    <div style="border-top:2px dashed var(--border);margin:0.75rem 0"></div>
+    <!-- Planning équipe (toutes les salariées d'une crèche, importé depuis Excel) -->
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:6px">
+        <div style="font-size:13px;font-weight:700;color:var(--koala);display:flex;align-items:center;gap:6px">
+          <i class="ti ti-users"></i>
+          <span>Planning équipe</span>
+          <select id="pe-creche-select" class="finput" style="display:none;font-size:12px;padding:4px 8px;width:auto;min-width:160px" onchange="renderPlanningEquipe()">
+            <option value="">-- Choisir une crèche --</option>
+          </select>
+        </div>
+        <span style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
+      </div>
+      <div id="pe-grid-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:8px"></div>
     </div>
   </div>
 
@@ -758,6 +692,58 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<div class="overlay" id="modal-import-planning-wrap">
+  <div class="modal" style="max-width:640px">
+    <h3>📂 Importer un planning Excel</h3>
+
+    <div id="ip-step-config">
+      <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i> Le fichier doit contenir des lignes "Sem XX" avec les dates Lundi→Vendredi, puis des lignes de créneaux horaires (ex : 7H30-12h30/13h30-15H30) où apparaissent les prénoms des salariées. Les fichiers convertis depuis un PDF (plusieurs feuilles) sont pris en charge, ainsi que les mentions d'une autre crèche dans la cellule (ex : "Miline contes PICOT2").</div>
+      <div class="info-box" style="margin-bottom:14px;background:#FFF8E1;border-color:#FFE082;color:#8a6d00"><i class="ti ti-file-text" style="font-size:15px"></i> Si vous n'avez qu'un PDF, convertissez-le d'abord en Excel (.xlsx) avant de l'importer ici — l'import direct de PDF n'est pas pris en charge.</div>
+      <div class="info-box" style="margin-bottom:14px;background:#EEF6FF;border-color:#BFDBFE;color:#1E40AF"><i class="ti ti-users" style="font-size:15px"></i> <strong>Toutes les salariées</strong> détectées dans le fichier seront enregistrées dans le "Planning équipe" de cette crèche. Seule la référente sélectionnée ci-dessous recevra en plus son planning individuel personnel.</div>
+      <div class="frow">
+        <div class="fg"><label class="flabel">Référent(e) titulaire de la crèche</label>
+          <select class="finput" id="ip-referent">
+            <option value="">-- Choisir --</option>
+          </select>
+        </div>
+        <div class="fg"><label class="flabel">Son prénom dans le fichier</label>
+          <input class="finput" id="ip-prenom" placeholder="Ex: Laureline"/>
+        </div>
+      </div>
+      <div class="fg"><label class="flabel">Crèche / Lieu à appliquer aux créneaux trouvés</label>
+        <select class="finput" id="ip-lieu">
+          <option value="">— Sélectionner —</option>
+          <option value="Brunet">Brunet</option><option value="Ollioules">Ollioules</option>
+          <option value="St Jean">St Jean</option><option value="Picot 1">Picot 1</option>
+          <option value="Picot 2">Picot 2</option><option value="Cuers">Cuers</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flabel">Année du planning</label>
+        <input class="finput" id="ip-year" type="number" value="2026" style="max-width:120px"/>
+      </div>
+      <div class="fg">
+        <label class="flabel">Fichier Excel (.xlsx)</label>
+        <input type="file" id="ip-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleImportPlanningFile(event)"/>
+        <button class="btn-cancel" style="width:100%" onclick="document.getElementById('ip-file-input').click()"><i class="ti ti-upload"></i> Choisir le fichier Excel</button>
+        <div id="ip-filename" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
+      </div>
+    </div>
+
+    <div id="ip-step-preview" style="display:none">
+      <div id="ip-preview-summary" style="margin-bottom:10px"></div>
+      <div id="ip-preview-list" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
+      <div id="ip-preview-warnings" style="margin-top:10px"></div>
+    </div>
+
+    <div id="ip-result" style="display:none;margin-top:10px"></div>
+
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-import-planning-wrap')">Annuler</button>
+      <button class="btn-primary" id="ip-btn-confirm" style="display:none" onclick="confirmImportPlanning()"><i class="ti ti-check"></i> Importer ces événements</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="modal-incident-wrap">
   <div class="modal">
     <h3>Déclarer un incident</h3>
@@ -803,7 +789,6 @@ const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,weekOffset=0,currentPresenceSlot='matin',searchTerm='';
 let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[];
-let cacheRemplacantes=[],rmpLoaded=false,rmpWeekOffset=0,rmpMonthOffset=0,editingRmpId=null,rmpClickedDate=null,rmpClickedCrecheId=null;
 
 // Init au chargement complet de la page
 window.addEventListener('DOMContentLoaded', async function() {
@@ -914,7 +899,7 @@ document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',func
 function updateBadges(){const myCrecheId=isDirection?null:currentProfile?.creche_id;const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}}
 
 function showMain(tab){
-  ['demands','incidents','presence','remplacantes','referents','planning','dashboard','fraisik'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','dashboard','fraisik'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -924,7 +909,6 @@ function showMain(tab){
   if(tab==='referents')renderReferents();
   if(tab==='incidents')renderIncidents();
   if(tab==='presence'){initPresenceDate();renderPresence();}
-  if(tab==='remplacantes')rmpInit();
   if(tab==='dashboard')renderDashboard();
   if(tab==='fraisik'){if(isDirection)ikInit();else showMain('demands');}
 }
@@ -1299,6 +1283,443 @@ function openCoordEventAt(d,s){
   document.getElementById('modal-event-coord-wrap').classList.add('open');
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// ── IMPORT PLANNING EXCEL (équipe) ──
+// ════════════════════════════════════════════════════════════════════════
+
+// Lundi ISO de la semaine contenant la date ISO donnée (YYYY-MM-DD)
+function mondayOfISO(dateISO){
+  const d=new Date(dateISO+'T00:00:00');
+  const day=d.getDay();
+  const diff=d.getDate()-(day===0?6:day-1);
+  const m=new Date(d.getFullYear(),d.getMonth(),diff);
+  m.setHours(0,0,0,0);
+  return m.toISOString().slice(0,10);
+}
+
+const IP_MOIS_FR={'janvier':0,'janv':0,'jan':0,'fevrier':1,'fevr':1,'fev':1,'mars':2,'mar':2,
+  'avril':3,'avr':3,'mai':4,'juin':5,'juillet':6,'juil':6,'aout':7,
+  'septembre':8,'sept':8,'sep':8,'octobre':9,'oct':9,'novembre':10,'nov':10,'decembre':11,'dec':11};
+
+function ipNormStr(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();}
+
+// Extrait {day, monthRaw} sans résoudre le mois — la résolution se fait au niveau de la semaine entière
+function ipParseDayMonthRaw(label){
+  const m=String(label||'').match(/(\d{1,2})\s*([A-Za-zÀ-ÿ]+)/);
+  if(!m)return null;
+  const day=parseInt(m[1]);
+  if(isNaN(day))return null;
+  const monthRaw=ipNormStr(m[2]).replace(/\.$/,'');
+  return {day,monthRaw};
+}
+
+// Résout un monthRaw en index de mois (0-11) UNIQUEMENT si non-ambigu (≥4 lettres = distingue juin/juillet, mar/mai, etc.)
+function ipResolveUnambiguousMonth(monthRaw){
+  if(!monthRaw||monthRaw.length<4)return null; // trop court pour être fiable seul ("Ju","Ma" etc.)
+  for(const k in IP_MOIS_FR){if(monthRaw.startsWith(k)||k.startsWith(monthRaw))return IP_MOIS_FR[k];}
+  return null;
+}
+// Résolution permissive (utilisée seulement en dernier recours si aucune colonne de la semaine n'est fiable)
+function ipResolveAnyMonth(monthRaw){
+  if(!monthRaw)return null;
+  for(const k in IP_MOIS_FR){if(monthRaw.startsWith(k)||k.startsWith(monthRaw.slice(0,4)))return IP_MOIS_FR[k];}
+  return null;
+}
+
+function ipToISO(year,monthIdx,day){return year+'-'+String(monthIdx+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');}
+
+// Parse les 5 libellés de colonnes (Lundi→Vendredi) d'une ligne "Sem XX" en dates ISO fiables,
+// en s'appuyant sur la cohérence calendaire de la semaine plutôt que sur chaque mois isolément.
+function ipParseWeekColumns(labels,refYear,warnings,weekLabel){
+  const raws=labels.map(ipParseDayMonthRaw); // [{day,monthRaw}|null, ...] x5
+  // 1) Trouver une colonne "ancre" dont le mois est non-ambigu
+  let anchorIdx=-1,anchorMonth=null;
+  for(let i=0;i<5;i++){
+    if(!raws[i])continue;
+    const mi=ipResolveUnambiguousMonth(raws[i].monthRaw);
+    if(mi!==null){anchorIdx=i;anchorMonth=mi;break;}
+  }
+  if(anchorIdx===-1){
+    // Aucune colonne fiable : on tente une résolution permissive par colonne (dernier recours)
+    warnings.push('Semaine "'+weekLabel+'" — aucun mois explicite fiable trouvé, résolution approximative utilisée');
+    return raws.map((r,i)=>{
+      if(!r)return null;
+      const mi=ipResolveAnyMonth(r.monthRaw);
+      if(mi===null)return null;
+      return {day:i,dateISO:ipToISO(refYear,mi,r.day),label:labels[i]};
+    });
+  }
+  // 2) Construire la date ancre, puis déduire chaque autre colonne par décalage de jours calendaires
+  const anchorDate=new Date(refYear,anchorMonth,raws[anchorIdx].day);
+  const cols=[];
+  for(let i=0;i<5;i++){
+    if(!raws[i]){cols.push(null);continue;}
+    const expected=new Date(anchorDate);
+    expected.setDate(anchorDate.getDate()+(i-anchorIdx));
+    // Vérifie que le jour-du-mois donné dans le fichier correspond bien à la date calendaire attendue
+    if(expected.getDate()===raws[i].day){
+      cols.push({day:i,dateISO:expected.toISOString().slice(0,10),label:labels[i]});
+    }else{
+      // Incohérence : le jour ne correspond pas au décalage attendu — on retente une résolution directe du mois si possible
+      const mi=ipResolveUnambiguousMonth(raws[i].monthRaw)??ipResolveAnyMonth(raws[i].monthRaw);
+      if(mi!==null){
+        cols.push({day:i,dateISO:ipToISO(refYear,mi,raws[i].day),label:labels[i]});
+      }else{
+        cols.push(null);
+        warnings.push('Semaine "'+weekLabel+'" — colonne '+(i+1)+' incohérente : "'+labels[i]+'"');
+      }
+    }
+  }
+  return cols;
+}
+
+function ipParseCreneauLabel(label){
+  const norm=String(label||'').toUpperCase().replace(/\s+/g,'');
+  const matches=[...norm.matchAll(/(\d{1,2})H(\d{2})?/g)].map(m=>{
+    const h=m[1].padStart(2,'0');const mn=(m[2]||'00').padStart(2,'0');return h+':'+mn;
+  });
+  if(matches.length<4)return null;
+  const[hdebut,finMatin,debutAprem,hfin]=matches;
+  return{hdebut,hfin,pause:finMatin+'-'+debutAprem};
+}
+function ipDetectSpecialType(cellText){
+  const t=ipNormStr(cellText);
+  if(t.includes('ferie'))return 'conge';
+  if(t.includes('reunion'))return 'reunion';
+  if(t.includes('formation')||t.includes('contes'))return 'formation';
+  if(t.includes('absent')||t.includes('arret')||t.includes('maladie'))return 'absent';
+  return null;
+}
+function ipIsFerieCell(cellText){return ipNormStr(cellText).includes('ferie');}
+
+// Détecte si une autre crèche est explicitement mentionnée dans la cellule (ex: "Miline contes PICOT2")
+// et retourne son nom canonique, sinon null.
+const IP_CRECHES_CANON={
+  'brunet':'Brunet','cuers':'Cuers','ollioules':'Ollioules',
+  'st jean':'St Jean','stjean':'St Jean','saint jean':'St Jean',
+  'picot 1':'Picot 1','picot1':'Picot 1','picot 2':'Picot 2','picot2':'Picot 2'
+};
+function ipDetectLieuMentionne(cellText){
+  const t=ipNormStr(cellText);
+  for(const k in IP_CRECHES_CANON){if(t.includes(k))return IP_CRECHES_CANON[k];}
+  return null;
+}
+
+function ipCellMatchesName(cellText,targetName){
+  const norm=ipNormStr(cellText),target=ipNormStr(targetName);
+  if(!norm||!target)return false;
+  const re=new RegExp('\\b'+target.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b');
+  return re.test(norm);
+}
+
+// Mots-clés à exclure quand on détecte automatiquement les prénoms (ne sont pas des noms de personnes)
+const IP_MOTS_EXCLUS=new Set(['ferier','ferie','reunion','rt','contes','formation','absent','arret','maladie',
+  'brunet','cuers','ollioules','st','jean','saint','picot','1','2']);
+
+// Détecte automatiquement tous les prénoms distincts présents dans les cellules de créneaux du classeur,
+// en ignorant les mots-clés spéciaux (FERIER, réunion, contes, noms de crèches...).
+function ipExtractAllNames(workbook){
+  const allRows=[];
+  workbook.SheetNames.forEach(name=>{
+    const sheet=workbook.Sheets[name];
+    const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+    allRows.push(...rows);
+  });
+  const names=new Set();
+  let inWeekSection=false;
+  for(const row of allRows){
+    const firstCell=String(row[0]||'').trim();
+    if(/^Sem\s*\d+/i.test(firstCell)){inWeekSection=true;continue;}
+    if(!inWeekSection||!/^\d{1,2}\s*H/i.test(firstCell))continue;
+    for(let c=1;c<=5;c++){
+      const cellText=String(row[c]||'').trim();
+      if(!cellText)continue;
+      // Premier "mot" de la cellule = le prénom (le reste peut être "réunion RT", "contes PICOT2", etc.)
+      const firstWord=cellText.split(/\s+/)[0];
+      const normWord=ipNormStr(firstWord);
+      if(normWord&&!IP_MOTS_EXCLUS.has(normWord)&&/^[a-zà-ÿ-]+$/i.test(firstWord)){
+        names.add(firstWord);
+      }
+    }
+  }
+  return[...names].sort();
+}
+
+// Parse le classeur entier (toutes les feuilles — une conversion PDF→Excel crée souvent une feuille par page)
+// et extrait les événements pour un prénom donné
+function ipExtractEvents(workbook,targetName,lieuFixe,refYear){
+  const allRows=[];
+  workbook.SheetNames.forEach(name=>{
+    const sheet=workbook.Sheets[name];
+    const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+    allRows.push(...rows);
+  });
+  const rows=allRows;
+  const events=[],warnings=[];
+  let currentWeekCols=null,currentWeekRows=[];
+  const ferieDaysAdded=new Set();
+
+  function flushFerieCheck(){
+    if(!currentWeekCols)return;
+    for(let c=0;c<5;c++){
+      const col=currentWeekCols[c];
+      if(!col)continue;
+      const cellValues=currentWeekRows.map(r=>r[c+1]).filter(v=>v);
+      if(cellValues.length&&cellValues.every(v=>ipIsFerieCell(v))){
+        if(!ferieDaysAdded.has(col.dateISO)){
+          events.push({dateISO:col.dateISO,day:col.day,type:'conge',lieu:'',hdebut:'',hfin:'',pause:'',
+            sourceCell:'FERIE (jour entier)',sourceCreneauLabel:'—'});
+          ferieDaysAdded.add(col.dateISO);
+        }
+      }
+    }
+  }
+
+  for(let i=0;i<rows.length;i++){
+    const row=rows[i];
+    const firstCell=String(row[0]||'').trim();
+
+    if(/^Sem\s*\d+/i.test(firstCell)){
+      flushFerieCheck();
+      currentWeekRows=[];
+      const labels=[1,2,3,4,5].map(c=>row[c]);
+      currentWeekCols=ipParseWeekColumns(labels,refYear,warnings,firstCell);
+      continue;
+    }
+
+    if(currentWeekCols&&/^\d{1,2}\s*H/i.test(firstCell)){
+      currentWeekRows.push(row);
+      const creneau=ipParseCreneauLabel(firstCell);
+      if(!creneau){
+        warnings.push('Créneau illisible : "'+firstCell+'" (ligne '+(i+1)+') — ignoré');
+        continue;
+      }
+      for(let c=1;c<=5;c++){
+        const cellText=row[c];
+        if(!cellText)continue;
+        if(ipCellMatchesName(cellText,targetName)){
+          const col=currentWeekCols[c-1];
+          if(!col){warnings.push('Ligne '+(i+1)+' col '+c+' : trouvé "'+targetName+'" mais date de colonne illisible');continue;}
+          const special=ipDetectSpecialType(cellText);
+          const type=special||'presence';
+          const lieuMentionne=ipDetectLieuMentionne(cellText);
+          const lieuFinal=lieuMentionne||lieuFixe;
+          events.push({
+            dateISO:col.dateISO,day:col.day,type,
+            lieu:(type==='presence'||type==='formation'||type==='reunion')?lieuFinal:'',
+            hdebut:(type==='conge'||type==='absent')?'':creneau.hdebut,
+            hfin:(type==='conge'||type==='absent')?'':creneau.hfin,
+            pause:(type==='conge'||type==='absent')?'':creneau.pause,
+            sourceCell:String(cellText),sourceCreneauLabel:firstCell
+          });
+        }
+      }
+    }
+  }
+  flushFerieCheck();
+
+  // Avertir si le prénom n'a jamais été trouvé explicitement (seuls des jours fériés génériques détectés)
+  const foundNominally=events.some(e=>e.sourceCell!=='FERIE (jour entier)');
+  if(!foundNominally){
+    warnings.unshift('⚠ Le prénom "'+targetName+'" n\'apparaît dans aucune cellule du fichier — vérifiez l\'orthographe. '+(events.length?'Seul(s) jour(s) férié(s) détecté(s) ci-dessous.':''));
+  }
+
+  // Fusionner les activités multiples du même jour (ex: "contes" + présence normale) en une description combinée,
+  // car le planning référente ne peut stocker qu'une seule case par jour.
+  const IP_LABELS_FOR_MERGE={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion'};
+  const byDate={};
+  const order=[];
+  events.forEach(e=>{
+    if(!byDate[e.dateISO]){byDate[e.dateISO]=[];order.push(e.dateISO);}
+    byDate[e.dateISO].push(e);
+  });
+  const merged=order.map(dateISO=>{
+    const list=byDate[dateISO];
+    if(list.length===1)return list[0];
+    // Plusieurs activités le même jour : fusion en une seule case combinée
+    const combinedLabel=list.map(e=>{
+      const lbl=IP_LABELS_FOR_MERGE[e.type]||e.type;
+      const lieuTxt=e.lieu?' '+e.lieu:'';
+      const horaireTxt=e.hdebut?' ('+e.hdebut+'-'+e.hfin+')':'';
+      return lbl+lieuTxt+horaireTxt;
+    }).join(' + ');
+    // On garde le type/horaires du premier segment pour les champs structurés, mais le label texte porte toute l'info
+    const first=list[0];
+    return{
+      dateISO,day:first.day,type:first.type,
+      lieu:first.lieu,hdebut:first.hdebut,hfin:first.hfin,pause:first.pause,
+      sourceCell:list.map(e=>e.sourceCell).join(' / '),
+      sourceCreneauLabel:list.map(e=>e.sourceCreneauLabel).join(' / '),
+      merged:true,mergedLabel:combinedLabel
+    };
+  });
+
+  merged.sort((a,b)=>a.dateISO.localeCompare(b.dateISO));
+  return{events:merged,warnings};
+}
+
+let _ipPendingReferentId=null,_ipPendingByPerson=null,_ipPendingReferentPrenom=null,_ipPendingCrecheId=null;
+
+// ── UI : ouverture modale ──
+function openImportPlanningModal(){
+  const sel=document.getElementById('ip-referent');
+  const refs=cacheReferents.filter(r=>r.role==='referent');
+  sel.innerHTML='<option value="">-- Choisir --</option>'+refs.map(r=>{
+    const creche=cacheCreches.find(c=>c.id===r.creche_id)?.name||'';
+    return '<option value="'+r.id+'" data-creche="'+creche+'" data-creche-id="'+(r.creche_id||'')+'">'+r.name+(creche?' ('+creche+')':'')+'</option>';
+  }).join('');
+  sel.onchange=()=>{
+    const opt=sel.options[sel.selectedIndex];
+    const creche=opt?.dataset?.creche;
+    if(creche)document.getElementById('ip-lieu').value=creche;
+    const name=opt?.textContent?.split(' (')[0];
+    if(name)document.getElementById('ip-prenom').value=name.split(' ')[0];
+  };
+  document.getElementById('ip-prenom').value='';
+  document.getElementById('ip-lieu').value='';
+  document.getElementById('ip-filename').textContent='';
+  document.getElementById('ip-file-input').value='';
+  document.getElementById('ip-step-config').style.display='';
+  document.getElementById('ip-step-preview').style.display='none';
+  document.getElementById('ip-result').style.display='none';
+  document.getElementById('ip-btn-confirm').style.display='none';
+  _ipPendingByPerson=null;_ipPendingCrecheId=null;_ipPendingReferentPrenom=null;
+  document.getElementById('modal-import-planning-wrap').classList.add('open');
+}
+
+function handleImportPlanningFile(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  const prenomRef=document.getElementById('ip-prenom').value.trim();
+  const lieu=document.getElementById('ip-lieu').value;
+  const referentId=document.getElementById('ip-referent').value;
+  const crecheId=document.getElementById('ip-referent').selectedOptions[0]?.dataset?.crecheId;
+  const year=parseInt(document.getElementById('ip-year').value)||new Date().getFullYear();
+
+  if(!referentId){alert('Choisissez d\'abord la référente titulaire.');event.target.value='';return;}
+  if(!prenomRef){alert('Indiquez son prénom dans le fichier.');event.target.value='';return;}
+  if(!lieu){alert('Choisissez la crèche / lieu à appliquer.');event.target.value='';return;}
+
+  document.getElementById('ip-filename').textContent='📄 '+file.name;
+
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+
+      const allNames=ipExtractAllNames(wb);
+      const byPerson={}; // prenom -> {events, warnings}
+      allNames.forEach(name=>{byPerson[name]=ipExtractEvents(wb,name,lieu,year);});
+
+      // S'assurer que le prénom de la référente est bien inclus même s'il n'a pas été détecté automatiquement
+      // (orthographe différente du premier mot de cellule, etc.)
+      if(!byPerson[prenomRef]){byPerson[prenomRef]=ipExtractEvents(wb,prenomRef,lieu,year);}
+
+      _ipPendingByPerson=byPerson;
+      _ipPendingReferentId=referentId;
+      _ipPendingReferentPrenom=prenomRef;
+      _ipPendingCrecheId=crecheId;
+
+      renderImportPlanningPreview(byPerson,prenomRef);
+    }catch(err){
+      document.getElementById('ip-result').style.display='';
+      document.getElementById('ip-result').innerHTML='<div style="color:var(--red);font-size:13px">⚠ Erreur de lecture du fichier : '+err.message+'</div>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+const IP_TYPE_LABELS={presence:'🏠 Présence',absent:'❌ Absent',conge:'🌴 Congé',formation:'📚 Formation',reunion:'👥 Réunion'};
+const IP_LABELS_PLAIN={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion'};
+
+function renderImportPlanningPreview(byPerson,prenomRef){
+  document.getElementById('ip-step-config').style.display='none';
+  document.getElementById('ip-step-preview').style.display='';
+
+  const names=Object.keys(byPerson);
+  const totalEvents=names.reduce((s,n)=>s+byPerson[n].events.length,0);
+  const allWarnings=names.flatMap(n=>byPerson[n].warnings);
+
+  if(totalEvents===0){
+    document.getElementById('ip-preview-summary').innerHTML='<div style="color:var(--orange);font-size:13px">⚠ Aucun créneau détecté dans ce fichier. Vérifiez le format.</div>';
+    document.getElementById('ip-preview-list').innerHTML='';
+    document.getElementById('ip-btn-confirm').style.display='none';
+  }else{
+    document.getElementById('ip-preview-summary').innerHTML=
+      '<div style="font-size:13px;color:var(--koala);font-weight:700">✅ '+names.length+' salarié(e)(s) détecté(e)(s), '+totalEvents+' événement(s) au total</div>'+
+      '<div style="font-size:11px;color:var(--ink2);margin-top:4px">"'+prenomRef+'" recevra en plus son planning individuel personnel.</div>'+
+      '<div style="font-size:11px;color:var(--orange);margin-top:4px">⚠ Les jours déjà renseignés seront remplacés par les données de ce fichier.</div>';
+
+    document.getElementById('ip-preview-list').innerHTML=names.map(name=>{
+      const{events}=byPerson[name];
+      const isRef=ipNormStr(name)===ipNormStr(prenomRef);
+      const badge=isRef?'<span style="font-size:10px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:8px;margin-left:6px">référente — planning individuel + équipe</span>':'<span style="font-size:10px;background:#f0f0f5;color:#888;padding:2px 7px;border-radius:8px;margin-left:6px">planning équipe</span>';
+      const rows=events.map(e=>{
+        const dateFr=new Date(e.dateISO+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'2-digit'});
+        const titre=e.merged?e.mergedLabel:(IP_TYPE_LABELS[e.type]+' '+(e.lieu?'@ '+e.lieu:''));
+        const horaire=!e.merged&&e.hdebut?('<br><span style="color:var(--ink2)">'+e.hdebut+'–'+e.hfin+'</span>'):'';
+        return '<div style="padding:5px 10px;border-bottom:1px solid var(--border);font-size:11px;display:flex;justify-content:space-between;gap:8px"><div>'+dateFr+' — '+titre+horaire+'</div><span style="color:#bbb;white-space:nowrap">"'+e.sourceCell+'"</span></div>';
+      }).join('');
+      return '<details style="border-bottom:1px solid var(--border)"><summary style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:700;color:var(--koala)">'+name+badge+' — '+events.length+' jour(s)</summary>'+rows+'</details>';
+    }).join('');
+    document.getElementById('ip-btn-confirm').style.display='';
+  }
+
+  document.getElementById('ip-preview-warnings').innerHTML=allWarnings.length?
+    '<div style="font-size:11px;color:var(--orange);background:var(--amber-lt);padding:8px 10px;border-radius:8px;max-height:100px;overflow-y:auto">⚠ '+allWarnings.length+' avertissement(s) :<br>'+allWarnings.join('<br>')+'</div>':'';
+}
+
+async function confirmImportPlanning(){
+  if(!_ipPendingByPerson||!_ipPendingReferentId||!_ipPendingCrecheId){
+    if(!_ipPendingCrecheId){
+      document.getElementById('ip-result').style.display='';
+      document.getElementById('ip-result').innerHTML='<div style="color:var(--red);font-size:13px">⚠ Impossible de déterminer la crèche du référent sélectionné — vérifiez sa fiche dans l\'annuaire.</div>';
+    }
+    return;
+  }
+  const btn=document.getElementById('ip-btn-confirm');
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Import en cours…';
+
+  let savedRef=0,savedEquipe=0,failed=0;
+
+  for(const name in _ipPendingByPerson){
+    const{events}=_ipPendingByPerson[name];
+    const isRef=ipNormStr(name)===ipNormStr(_ipPendingReferentPrenom);
+
+    for(const e of events){
+      const semaine=mondayOfISO(e.dateISO);
+      const label=e.merged?e.mergedLabel:(e.lieu||IP_LABELS_PLAIN[e.type]||e.type);
+
+      // Toujours enregistrer dans le planning équipe (toutes les salariées, y compris la référente)
+      const{error:errEquipe}=await sb.from('planning_equipe').upsert({
+        creche_id:_ipPendingCrecheId,prenom:name,semaine,jour:e.day,type:e.type,label,
+        lieu:e.lieu||null,hdebut:e.hdebut||null,hfin:e.hfin||null,pause:e.pause||null,
+        source_cell:e.sourceCell
+      },{onConflict:'creche_id,prenom,semaine,jour'});
+      if(errEquipe){console.error('[PlanningEquipe]',errEquipe.message);failed++;}else{savedEquipe++;}
+
+      // En plus, si c'est la référente titulaire, enregistrer aussi dans son planning individuel
+      if(isRef){
+        const ok=await planningSave(_ipPendingReferentId,semaine,{
+          day:e.day,slot:null,type:e.type,label,lieu:e.lieu,
+          hdebut:e.hdebut,hfin:e.hfin,pause:e.pause,detachType:'',detachDesc:''
+        });
+        if(ok)savedRef++;else failed++;
+      }
+    }
+  }
+
+  btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Importer ces événements';
+  document.getElementById('ip-result').style.display='';
+  document.getElementById('ip-result').innerHTML=failed?
+    '<div style="color:var(--orange);font-size:13px">⚠ Import partiel : '+savedEquipe+' jour(s) équipe + '+savedRef+' jour(s) référente enregistrés, '+failed+' échec(s). Voir la console.</div>':
+    '<div style="color:var(--koala);font-size:13px;font-weight:700">✅ Import terminé : '+savedEquipe+' jour(s) dans le planning équipe, dont '+savedRef+' aussi dans le planning individuel de '+_ipPendingReferentPrenom+'.</div>';
+  document.getElementById('ip-btn-confirm').style.display='none';
+
+  await renderPlanning();
+}
+
 // ── SUPABASE PLANNING ──
 let _planningCache={};
 async function planningLoad(referentId,semaineDate){
@@ -1313,7 +1734,7 @@ async function planningSave(referentId,semaineDate,ev){
   const row={referent_id:referentId,semaine:semaineDate,jour:ev.day,slot:ev.slot!==undefined?ev.slot:null,
     type:ev.type,label:ev.label||null,lieu:ev.lieu||null,hdebut:ev.hdebut||null,hfin:ev.hfin||null,
     pause:ev.pause||null,detach_type:ev.detachType||null,detach_desc:ev.detachDesc||null};
-  const{error}=await sb.from('planning').insert(row);
+  const{error}=await sb.from('planning').upsert(row,{onConflict:'referent_id,semaine,jour,slot'});
   if(error){console.error('[Planning] save:',error.message);return false;}
   planningInvalidate(referentId,semaineDate);return true;
 }
@@ -1381,11 +1802,10 @@ function getPlanningGrid(events,referentId,semaine,editable){
   days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
   html+='<div class="pg-time" style="font-size:10px">Journée</div>';
   days5.forEach((_,di)=>{
-    const evs=events.filter(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
-    html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'" style="display:flex;flex-direction:column;gap:5px">';
-    const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
-    if(!evs.length&&!editable)html+='<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';
-    evs.forEach(ev=>{
+    const ev=events.find(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
+    html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'" '+(editable?'onclick="openEventAt('+di+')"':'')+'>';
+    if(ev){
+      const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
       const titre=ev.label||labels[ev.type]||ev.type;
       const del=editable?'<span class="pg-del" onclick="event.stopPropagation();delPlanningEvent(\''+ev.id+'\',\''+referentId+'\',\''+semaine+'\')"><i class="ti ti-x"></i></span>':'';
       let detail='';
@@ -1393,8 +1813,8 @@ function getPlanningGrid(events,referentId,semaine,editable){
       if(ev.pause)detail+='<div style="font-size:10px;opacity:0.7">☕ '+ev.pause+'</div>';
       if(ev.detach_desc||ev.detachDesc)detail+='<div style="font-size:10px;margin-top:2px;opacity:0.8;font-style:italic">'+(ev.detach_desc||ev.detachDesc)+'</div>';
       html+='<div class="pg-card '+ev.type+'">'+del+titre+detail+'</div>';
-    });
-    if(editable)html+='<div class="pg-add" onclick="openEventAt('+di+')">+ ajouter</div>';
+    }else if(editable){html+='<div class="pg-add">+ ajouter</div>';}
+    else{html+='<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';}
     html+='</div>';
   });
   return html;
@@ -1441,10 +1861,12 @@ async function renderPlanning(){
   const topBadge=document.getElementById('planning-top-badge');
   const coordBadge=document.getElementById('planning-coord-badge');
   const coordAdd=document.getElementById('planning-coord-add-btn');
+  const importBtn=document.getElementById('planning-import-btn');
   const gridMine=document.getElementById('planning-grid-mine');
   const gridOther=document.getElementById('planning-grid-other');
   if(iAmCoord){
     if(addBtn)addBtn.style.display='none';
+    if(importBtn)importBtn.style.display='';
     if(refLabel)refLabel.style.display='none';
     if(refSelect){refSelect.style.display='';
       if(refSelect.options.length<=1){
@@ -1469,6 +1891,7 @@ async function renderPlanning(){
   }else{
     if(!userId||userId==='dir'){setTimeout(()=>renderPlanning(),500);return;}
     if(addBtn)addBtn.style.display='';
+    if(importBtn)importBtn.style.display='none';
     if(refSelect)refSelect.style.display='none';
     if(refLabel){refLabel.style.display='';refLabel.textContent=currentProfile?.name||'Mon planning';}
     if(topBadge){topBadge.textContent='✏️ Modifiable';topBadge.style.background='var(--koala-light)';topBadge.style.color='var(--koala)';}
@@ -1482,6 +1905,85 @@ async function renderPlanning(){
         const cEvs=await planningLoad(coord.id,semaine);gridOther.innerHTML=getPlanningGridSimple(cEvs,null,semaine);}
     }
   }
+  await renderPlanningEquipe();
+}
+
+// ── PLANNING ÉQUIPE (toutes les salariées d'une crèche, importé depuis Excel) ──
+let _peCache={};
+async function peLoad(crecheId,semaineDate){
+  const k=crecheId+'_'+semaineDate;
+  if(_peCache[k])return _peCache[k];
+  const{data,error}=await sb.from('planning_equipe').select('*').eq('creche_id',crecheId).eq('semaine',semaineDate);
+  if(error){console.error('[PlanningEquipe]',error.message);return[];}
+  _peCache[k]=data||[];return _peCache[k];
+}
+function peInvalidate(crecheId,semaineDate){delete _peCache[crecheId+'_'+semaineDate];}
+
+async function renderPlanningEquipe(){
+  const sel=document.getElementById('pe-creche-select');
+  const wrap=document.getElementById('pe-grid-wrap');
+  if(!sel||!wrap)return;
+
+  let crecheId;
+  if(isDirection){
+    sel.style.display='';
+    if(sel.options.length<=1){
+      sel.innerHTML='<option value="">-- Choisir une crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+    }
+    crecheId=sel.value;
+  }else{
+    sel.style.display='none';
+    crecheId=currentProfile?.creche_id;
+  }
+
+  if(!crecheId){
+    wrap.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez une crèche</div>';
+    return;
+  }
+
+  const ws=weekStart();const semaine=ws.toISOString().slice(0,10);
+  wrap.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+  const rows=await peLoad(crecheId,semaine);
+  wrap.innerHTML=getPlanningEquipeTable(rows,semaine);
+}
+
+function getPlanningEquipeTable(rows,semaine){
+  if(!rows.length)return '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucune donnée pour cette semaine — importez un fichier Excel pour cette crèche.</div>';
+
+  const ws=new Date(semaine+'T00:00:00');
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+
+  const prenoms=[...new Set(rows.map(r=>r.prenom))].sort();
+  const byKey={};
+  rows.forEach(r=>{byKey[r.prenom+'_'+r.jour]=r;});
+
+  const typeColors={presence:'var(--koala)',absent:'var(--orange)',conge:'#999',formation:'#378ADD',reunion:'#7B68EE'};
+
+  let html='<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:640px">';
+  html+='<thead><tr><th style="padding:8px;border-bottom:2px solid var(--border);text-align:left;background:#fafafa">Salarié(e)</th>';
+  DAYS.forEach((d,i)=>{html+='<th style="padding:8px;border-bottom:2px solid var(--border);text-align:center;background:#fafafa">'+d+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';});
+  html+='</tr></thead><tbody>';
+
+  prenoms.forEach(prenom=>{
+    html+='<tr><td style="padding:8px;border-bottom:1px solid var(--border);font-weight:700;color:var(--koala)">'+prenom+'</td>';
+    for(let d=0;d<5;d++){
+      const ev=byKey[prenom+'_'+d];
+      html+='<td style="padding:6px;border-bottom:1px solid var(--border);text-align:center">';
+      if(ev){
+        const color=typeColors[ev.type]||'#ccc';
+        const horaire=ev.hdebut&&!ev.label?.includes('+')?('<div style="font-size:9px;opacity:0.7">'+ev.hdebut+'–'+ev.hfin+'</div>'):'';
+        html+='<div style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px">'+(ev.label||ev.type)+horaire+'</div>';
+      }else{
+        html+='<span style="color:#ddd">—</span>';
+      }
+      html+='</td>';
+    }
+    html+='</tr>';
+  });
+
+  html+='</tbody></table>';
+  return html;
 }
 
 // ── IK PLANNING (Supabase cache) ──
@@ -1879,250 +2381,6 @@ function switchNoticeTab(tab, btn) {
   if (el) el.innerHTML = NOTICE_DEM[tab] || '';
 }
 
-// ── REMPLAÇANTES ────────────────────────────────────────────────────────
-const RMP_COLORS=['#3D3580','#F47920','#2a9d4e','#378ADD','#e03e3e','#9b59b6','#16a085','#d35400','#8e44ad','#27ae60'];
-function rmpColorFor(nom){
-  let h=0;for(let i=0;i<nom.length;i++)h=(h*31+nom.charCodeAt(i))>>>0;
-  return RMP_COLORS[h%RMP_COLORS.length];
-}
-function rmpLighten(hex){
-  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  return 'rgba('+r+','+g+','+b+',0.13)';
-}
-async function rmpLoadAll(){
-  if(rmpLoaded)return;
-  cacheRemplacantes=await dbSelect('remplacantes');
-  rmpLoaded=true;
-}
-async function rmpInit(){
-  await rmpLoadAll();
-  document.getElementById('rmp-add-btn').style.display=isDirection?'':'none';
-  rmpFillCrecheSelects();
-  rmpFillNomList();
-  rmpFillIntSelect();
-  renderRmpWeek();
-  renderRmpMonth();
-  renderRmpIntervenante();
-}
-function rmpFillCrecheSelects(){
-  const opts='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
-  const sel=document.getElementById('rmp-creche');if(sel)sel.innerHTML=opts;
-  const moisSel=document.getElementById('rmp-mois-creche-select');
-  if(moisSel)moisSel.innerHTML='<option value="">Toutes les crèches</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
-}
-function rmpFillNomList(){
-  const noms=[...new Set(cacheRemplacantes.map(r=>r.nom).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  const dl=document.getElementById('rmp-nom-list');
-  if(dl)dl.innerHTML=noms.map(n=>'<option value="'+n.replace(/"/g,'&quot;')+'">').join('');
-}
-function rmpFillIntSelect(){
-  const noms=[...new Set(cacheRemplacantes.map(r=>r.nom).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  const sel=document.getElementById('rmp-int-select');
-  if(!sel)return;
-  const cur=sel.value;
-  sel.innerHTML='<option value="">-- Choisir une intervenante --</option>'+noms.map(n=>'<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'</option>').join('');
-  if(noms.includes(cur))sel.value=cur;
-}
-function showRmpTab(tab,btn){
-  document.querySelectorAll('.rmp-tab').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.rmp-tab-content').forEach(c=>c.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('rmp-'+tab).classList.add('active');
-}
-function rmpDateStr(d){
-  const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
-  return y+'-'+m+'-'+day;
-}
-function rmpWeekStart(){
-  const n=new Date();const day=n.getDay();const diff=n.getDate()-(day===0?6:day-1);
-  const m=new Date(n.getFullYear(),n.getMonth(),diff+rmpWeekOffset*7);m.setHours(0,0,0,0);return m;
-}
-function rmpChangeWeek(d){rmpWeekOffset+=d;renderRmpWeek();}
-function rmpGoToday(view){
-  if(view==='semaine'){rmpWeekOffset=0;renderRmpWeek();}
-  else{rmpMonthOffset=0;renderRmpMonth();}
-}
-function rmpChangeMonth(d){rmpMonthOffset+=d;renderRmpMonth();}
-function rmpVisibleCreches(){
-  if(isDirection)return cacheCreches;
-  const mine=cacheCreches.find(c=>c.id===currentProfile?.creche_id);
-  return mine?[mine]:[];
-}
-function renderRmpWeek(){
-  const grid=document.getElementById('rmp-week-grid');
-  if(!grid)return;
-  const ws=rmpWeekStart();
-  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-  const days7=Array.from({length:7},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  const dayNames=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
-  document.getElementById('rmp-week-label').textContent=fmt(days7[0])+' – '+fmt(days7[6])+' '+days7[6].getFullYear();
-  const creches=rmpVisibleCreches();
-  grid.style.setProperty('--rmp-cols',creches.length||1);
-  let html='<div></div>';
-  creches.forEach(c=>{html+='<div class="rmp-hd">'+c.name+'</div>';});
-  days7.forEach((d,di)=>{
-    const dateStr=rmpDateStr(d);
-    html+='<div class="rmp-day-lbl">'+dayNames[di]+' '+fmt(d)+'</div>';
-    creches.forEach(c=>{
-      const slots=cacheRemplacantes.filter(r=>r.creche_id===c.id&&r.date===dateStr);
-      const editable=isDirection;
-      html+='<div class="rmp-cell'+(editable?'':' ro')+'"'+(editable?' onclick="openRmpModal(\''+c.id+'\',\''+dateStr+'\')"':'')+'>';
-      if(!slots.length)html+='<div class="rmp-cell-empty">'+(editable?'+ ajouter':'—')+'</div>';
-      else slots.forEach(s=>{
-        const col=rmpColorFor(s.nom||'?');
-        html+='<div class="rmp-chip'+(editable?'':' ro')+'" style="background:'+rmpLighten(col)+';border-left:3px solid '+col+'"'+(editable?' onclick="event.stopPropagation();openRmpModal(null,null,\''+s.id+'\')"':'')+'>';
-        html+='<b>'+(s.nom||'?')+'</b>'+(s.heure_debut||'')+(s.heure_fin?'–'+s.heure_fin:'');
-        html+='</div>';
-      });
-      html+='</div>';
-    });
-  });
-  grid.innerHTML=html;
-}
-function renderRmpMonth(){
-  const grid=document.getElementById('rmp-month-grid');
-  if(!grid)return;
-  const base=new Date();
-  const ref=new Date(base.getFullYear(),base.getMonth()+rmpMonthOffset,1);
-  const year=ref.getFullYear(),month=ref.getMonth();
-  document.getElementById('rmp-month-label').textContent=ref.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
-  const firstDay=new Date(year,month,1);
-  const startDow=(firstDay.getDay()===0?6:firstDay.getDay()-1);
-  const gridStart=new Date(year,month,1-startDow);
-  const todayStr2=rmpDateStr(new Date());
-  const filterCrecheId=document.getElementById('rmp-mois-creche-select')?.value||'';
-  const allowedIds=isDirection?(filterCrecheId?[filterCrecheId]:cacheCreches.map(c=>c.id)):rmpVisibleCreches().map(c=>c.id);
-  let html=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=>'<div class="rmp-month-hd">'+d+'</div>').join('');
-  for(let i=0;i<42;i++){
-    const d=new Date(gridStart);d.setDate(gridStart.getDate()+i);
-    const dateStr=rmpDateStr(d);
-    const outside=d.getMonth()!==month;
-    const isToday=dateStr===todayStr2;
-    const slots=cacheRemplacantes.filter(r=>r.date===dateStr&&allowedIds.includes(r.creche_id));
-    html+='<div class="rmp-month-cell'+(outside?' outside':'')+(isToday?' today':'')+'" onclick="rmpOpenDayDetail(\''+dateStr+'\')">';
-    html+='<div class="rmp-month-daynum">'+d.getDate()+'</div>';
-    slots.slice(0,4).forEach(s=>{
-      const col=rmpColorFor(s.nom||'?');
-      const cr=cacheCreches.find(c=>c.id===s.creche_id);
-      html+='<div class="rmp-month-pill" style="background:'+rmpLighten(col)+';color:'+col+'">'+(s.nom||'?')+(cr?' · '+cr.name:'')+'</div>';
-    });
-    if(slots.length>4)html+='<div style="font-size:9.5px;color:var(--muted)">+'+(slots.length-4)+' autres</div>';
-    html+='</div>';
-  }
-  grid.innerHTML=html;
-}
-function rmpOpenDayDetail(dateStr){
-  if(isDirection)openRmpModal(null,dateStr);
-}
-function renderRmpIntervenante(){
-  const sel=document.getElementById('rmp-int-select');
-  const list=document.getElementById('rmp-int-list');
-  if(!sel||!list)return;
-  const nom=sel.value;
-  if(!nom){list.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Choisissez une intervenante pour voir son planning.</div>';return;}
-  let slots=cacheRemplacantes.filter(r=>r.nom===nom);
-  if(!isDirection){
-    const allowedIds=rmpVisibleCreches().map(c=>c.id);
-    slots=slots.filter(s=>allowedIds.includes(s.creche_id));
-  }
-  slots=slots.slice().sort((a,b)=>(a.date+a.heure_debut).localeCompare(b.date+b.heure_debut));
-  if(!slots.length){list.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucun créneau enregistré pour cette intervenante.</div>';return;}
-  list.innerHTML=slots.map(s=>{
-    const cr=cacheCreches.find(c=>c.id===s.creche_id);
-    const dateLabel=s.date?new Date(s.date+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}):'';
-    const pause=(s.pause_debut&&s.pause_fin)?s.pause_debut+'–'+s.pause_fin:null;
-    return '<div class="rmp-int-card">'+
-      '<span class="rmp-int-creche"><i class="ti ti-building" style="font-size:13px"></i> '+(cr?cr.name:'—')+'</span>'+
-      '<span class="rmp-int-date">'+dateLabel+'</span>'+
-      '<span class="rmp-int-time"><i class="ti ti-clock" style="font-size:13px"></i> '+(s.heure_debut||'')+(s.heure_fin?'–'+s.heure_fin:'')+'</span>'+
-      (pause?'<span class="rmp-int-pause"><i class="ti ti-coffee" style="font-size:12px"></i> pause '+pause+'</span>':'')+
-      (isDirection?'<button class="ibtn" style="margin-left:auto" onclick="openRmpModal(null,null,\''+s.id+'\')"><i class="ti ti-edit"></i></button>':'')+
-      '</div>';
-  }).join('');
-}
-function openRmpModal(crecheId,dateStr,editId){
-  if(!isDirection)return;
-  editingRmpId=editId||null;
-  const err=document.getElementById('rmp-modal-err');if(err)err.style.display='none';
-  const delBtn=document.getElementById('rmp-delete-btn');
-  if(editId){
-    const s=cacheRemplacantes.find(r=>r.id===editId);
-    if(!s)return;
-    document.getElementById('rmp-modal-title').textContent='Modifier le créneau';
-    document.getElementById('rmp-creche').value=s.creche_id||'';
-    document.getElementById('rmp-nom').value=s.nom||'';
-    document.getElementById('rmp-date').value=s.date||'';
-    document.getElementById('rmp-hdebut').value=s.heure_debut||'';
-    document.getElementById('rmp-hfin').value=s.heure_fin||'';
-    document.getElementById('rmp-pause-debut').value=s.pause_debut||'';
-    document.getElementById('rmp-pause-fin').value=s.pause_fin||'';
-    if(delBtn)delBtn.style.display='';
-  }else{
-    document.getElementById('rmp-modal-title').textContent='Ajouter un créneau';
-    document.getElementById('rmp-creche').value=crecheId||'';
-    document.getElementById('rmp-nom').value='';
-    document.getElementById('rmp-date').value=dateStr||rmpDateStr(new Date());
-    document.getElementById('rmp-hdebut').value='';
-    document.getElementById('rmp-hfin').value='';
-    document.getElementById('rmp-pause-debut').value='';
-    document.getElementById('rmp-pause-fin').value='';
-    if(delBtn)delBtn.style.display='none';
-  }
-  document.getElementById('modal-rmp-wrap').classList.add('open');
-}
-async function saveRmpSlot(){
-  const err=document.getElementById('rmp-modal-err');
-  const creche_id=document.getElementById('rmp-creche').value;
-  const nom=document.getElementById('rmp-nom').value.trim();
-  const date=document.getElementById('rmp-date').value;
-  const heure_debut=document.getElementById('rmp-hdebut').value;
-  const heure_fin=document.getElementById('rmp-hfin').value;
-  const pause_debut=document.getElementById('rmp-pause-debut').value;
-  const pause_fin=document.getElementById('rmp-pause-fin').value;
-  if(!creche_id||!nom||!date||!heure_debut||!heure_fin){
-    if(err){err.textContent='Crèche, intervenante, date et horaires sont obligatoires.';err.style.display='block';}
-    return;
-  }
-  if(heure_debut>=heure_fin){
-    if(err){err.textContent="L'heure de fin doit être après l'heure de début.";err.style.display='block';}
-    return;
-  }
-  if((pause_debut&&!pause_fin)||(!pause_debut&&pause_fin)){
-    if(err){err.textContent='Renseignez les deux heures de pause, ou aucune.';err.style.display='block';}
-    return;
-  }
-  const row={creche_id,nom,date,heure_debut,heure_fin,pause_debut:pause_debut||null,pause_fin:pause_fin||null};
-  if(editingRmpId){
-    const ok=await dbUpdate('remplacantes',editingRmpId,row);
-    if(ok){
-      const idx=cacheRemplacantes.findIndex(r=>r.id===editingRmpId);
-      if(idx>=0)Object.assign(cacheRemplacantes[idx],row);
-      showBanner('Créneau modifié ✅');
-    }else{if(err){err.textContent='Erreur lors de la modification.';err.style.display='block';}return;}
-  }else{
-    const created=await dbInsert('remplacantes',row);
-    if(created){cacheRemplacantes.push(created);showBanner('Créneau ajouté ✅');}
-    else{if(err){err.textContent='Erreur lors de l\'enregistrement.';err.style.display='block';}return;}
-  }
-  closeModal('modal-rmp-wrap');
-  rmpFillNomList();rmpFillIntSelect();
-  renderRmpWeek();renderRmpMonth();renderRmpIntervenante();
-}
-async function deleteRmpSlot(){
-  if(!editingRmpId)return;
-  if(!confirm('Supprimer ce créneau ?'))return;
-  const ok=await dbDelete('remplacantes',editingRmpId);
-  if(ok){
-    cacheRemplacantes=cacheRemplacantes.filter(r=>r.id!==editingRmpId);
-    showBanner('Créneau supprimé.');
-    closeModal('modal-rmp-wrap');
-    rmpFillNomList();rmpFillIntSelect();
-    renderRmpWeek();renderRmpMonth();renderRmpIntervenante();
-  }else{
-    showBanner('Erreur lors de la suppression.','error');
-  }
-}
-
 const NOTICE_DEM = {
 
 demandes: `
@@ -2268,42 +2526,6 @@ comptes: `
     <div class="mactions">
       <button class="btn-cancel" onclick="closeModal('modal-event-coord-wrap')">Annuler</button>
       <button class="btn-primary" onclick="saveEventCoord()"><i class="ti ti-check"></i> Enregistrer</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal créneau remplaçante -->
-<div class="overlay" id="modal-rmp-wrap">
-  <div class="modal" style="max-width:460px">
-    <h3 id="rmp-modal-title">Ajouter un créneau</h3>
-    <div class="fg">
-      <label class="flabel">Crèche</label>
-      <select class="finput" id="rmp-creche">
-        <option value="">-- Choisir --</option>
-      </select>
-    </div>
-    <div class="fg">
-      <label class="flabel">Intervenante</label>
-      <input class="finput" id="rmp-nom" list="rmp-nom-list" placeholder="Nom de la remplaçante" autocomplete="off">
-      <datalist id="rmp-nom-list"></datalist>
-    </div>
-    <div class="fg">
-      <label class="flabel">Date</label>
-      <input class="finput" type="date" id="rmp-date">
-    </div>
-    <div class="frow">
-      <div class="fg"><label class="flabel">Heure début</label><input class="finput" type="time" id="rmp-hdebut"></div>
-      <div class="fg"><label class="flabel">Heure fin</label><input class="finput" type="time" id="rmp-hfin"></div>
-    </div>
-    <div class="frow">
-      <div class="fg"><label class="flabel">Pause début <span style="color:var(--muted);font-weight:400">(optionnel)</span></label><input class="finput" type="time" id="rmp-pause-debut"></div>
-      <div class="fg"><label class="flabel">Pause fin <span style="color:var(--muted);font-weight:400">(optionnel)</span></label><input class="finput" type="time" id="rmp-pause-fin"></div>
-    </div>
-    <div id="rmp-modal-err" style="color:var(--red);font-size:12.5px;margin-bottom:6px;display:none"></div>
-    <div class="mactions">
-      <button class="btn-danger-sm" id="rmp-delete-btn" style="display:none;border-color:var(--red);color:var(--red)" onclick="deleteRmpSlot()"><i class="ti ti-trash"></i> Supprimer</button>
-      <button class="btn-cancel" onclick="closeModal('modal-rmp-wrap')">Annuler</button>
-      <button class="btn-primary" onclick="saveRmpSlot()"><i class="ti ti-check"></i> Enregistrer</button>
     </div>
   </div>
 </div>
