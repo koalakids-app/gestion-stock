@@ -3187,7 +3187,8 @@ function printBordereau(id) {
 
     // Build print rows HTML (no nested template literals)
     const printRowsHTML = arts.map(a => {
-      const lien = a.url ? '<a href="#" onclick="openUrl(\'' + cleanUrl(a.url) + '\',event)" style="color:#2563EB;text-decoration:none">🔗 Voir</a>' : '—';
+      const urlPropre = cleanUrl(a.url);
+      const lien = urlPropre ? '<a href="' + urlPropre + '" target="_blank" rel="noopener noreferrer" style="color:#2563EB;text-decoration:none">🔗 Voir</a>' : '—';
       const t = ((a.qty||0)*(a.prix||0)).toFixed(2);
       return '<tr><td><strong>' + a.nom + '</strong></td>' +
         '<td style="text-align:center">' + (a.fourn||'—') + '</td>' +
