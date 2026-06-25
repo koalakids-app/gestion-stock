@@ -1338,20 +1338,8 @@ async function exportPresence(){
 function openEnfantModal(){document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('modal-enfant-wrap').classList.add('open');}
 async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:document.getElementById('enf-groupe').value,creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim()};const saved=await dbInsert('enfants',row);if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
 
-// PLANNING (localStorage par utilisateur)
+// PLANNING (Supabase — voir renderPlanning plus bas, version active)
 function changeWeek(d){weekOffset+=d;renderPlanning();}
-function renderPlanning(){
-  const ws=weekStart();const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  document.getElementById('week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
-  const key='events_'+ws.toISOString().slice(0,10)+'_'+(currentProfile?.id||'dir');
-  const events=JSON.parse(localStorage.getItem(key)||'[]');
-  const grid=document.getElementById('planning-grid');
-  let html='<div class="pg-hd"></div>';
-  days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
-  ['Matin','Après-midi'].forEach((slot,si)=>{html+='<div class="pg-time">'+slot+'</div>';days5.forEach((_,di)=>{const evs=events.filter(e=>e.day===di&&e.slot===si);html+='<div class="pg-cell" onclick="openEventAt('+di+','+si+')">';if(!evs.length)html+='<span style="font-size:10px;color:#ccc">+ ajouter</span>';evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delEvent(\''+e.id+'\',\''+key+'\')">'+e.lieu+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>';});html+='</div>';});});
-  grid.innerHTML=html;
-}
 function toggleLieuField(){
   const type=document.getElementById('e-type').value;
   const needsLieu=['presence','formation'].includes(type);
@@ -2437,34 +2425,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
   return html;
 }
 
-// ── IK PLANNING (Supabase cache) ──
-function ikReadPlanning(yearMonth){
-  const[year,month]=yearMonth.split('-').map(Number);
-  const rows=[];
-  const userId=currentProfile?.id||currentUser?.id||'dir';
-  const iAmCoordIK=(currentProfile?.name||'').toLowerCase().includes('david')||(currentProfile?.name||'').toLowerCase().includes('bucari');
-  const firstDay=new Date(year,month-1,1);const lastDay=new Date(year,month,0);
-  let cursor=new Date(firstDay);const dow=cursor.getDay();cursor.setDate(cursor.getDate()-(dow===0?6:dow-1));
-  const checkedSemaines=new Set();
-  while(cursor<=lastDay){
-    const semaine=cursor.toISOString().slice(0,10);
-    if(!checkedSemaines.has(semaine)){
-      checkedSemaines.add(semaine);
-      const cacheKey=userId+'_'+semaine;
-      const events=_planningCache[cacheKey]||[];
-      events.forEach(e=>{
-        if(e.type&&e.type!=='absent'&&e.type!=='conge'&&e.lieu){
-          const day=e.jour!==undefined?e.jour:e.day;
-          const eDate=new Date(cursor);eDate.setDate(cursor.getDate()+day);
-          if(eDate>=firstDay&&eDate<=lastDay)rows.push({date:eDate.toISOString().slice(0,10),lieu:e.lieu,type:e.type,ignored:false});
-        }
-      });
-    }
-    cursor.setDate(cursor.getDate()+7);
-  }
-  return rows;
-}
-
+// ── IK PLANNING (Supabase cache) — voir ikReadPlanning plus bas, version active ──
 
 // delEvent remplacé par delPlanningEvent
 
@@ -2608,7 +2569,7 @@ function ikReadPlanning(yearMonth){
   cursor.setDate(cursor.getDate()-(dow===0?6:dow-1));
   const checkedKeys=new Set();
   while(cursor<=lastDay){
-    const keyDate=cursor.toISOString().slice(0,10);  // cohérent avec weekStart()
+    const keyDate=ipDateToLocalISO(cursor);  // cohérent avec weekStart() — version corrigée, sans décalage UTC
     const key=`events_${keyDate}_${userId}`;
     if(!checkedKeys.has(key)){
       checkedKeys.add(key);
