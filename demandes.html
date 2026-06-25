@@ -335,6 +335,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn" onclick="showMain('planning')" id="mnav-planning"><i class="ti ti-calendar-event"></i> Planning</button>
       <button class="mnav-btn direction-only" onclick="showMain('dashboard')" id="mnav-dashboard"><i class="ti ti-chart-bar"></i> Tableau de bord</button>
       <button class="mnav-btn direction-only" onclick="showMain('fraisik')" id="mnav-fraisik"><i class="ti ti-car"></i> Frais IK</button>
+      <button class="mnav-btn" onclick="showMain('fraispro')" id="mnav-fraispro"><i class="ti ti-receipt"></i> Frais pro</button>
+      <button class="mnav-btn" onclick="showMain('remplacantes')" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
     </nav>
     <div style="display:flex;align-items:center;gap:8px">
       <div class="user-chip" id="user-chip" onclick="doLogout()"><i class="ti ti-user" style="font-size:13px"></i> <span id="user-name">—</span> <i class="ti ti-logout" style="font-size:12px;opacity:0.7"></i></div>
@@ -546,6 +548,90 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </table>
     </div>
     <div id="ik-empty" class="empty-state" style="display:none"><i class="ti ti-road"></i><p>Aucun trajet. Sélectionnez un mois et cliquez sur "Recharger depuis planning".</p></div>
+  </div>
+
+  <!-- FRAIS PRO -->
+  <div id="main-fraispro" class="tab-content">
+    <div class="section-header">
+      <span class="section-title"><i class="ti ti-receipt" style="color:var(--koala)"></i> Frais professionnels</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-sm" onclick="fpOpenModal()"><i class="ti ti-plus"></i> Ajouter une dépense</button>
+        <button class="btn-green" onclick="fpExportExcel()"><i class="ti ti-file-spreadsheet"></i> Exporter Excel</button>
+        <button class="btn-orange" onclick="fpSendEmail()"><i class="ti ti-mail"></i> Envoyer par email</button>
+      </div>
+    </div>
+    <div class="ik-month-sel">
+      <label style="font-size:13px;font-weight:600;color:var(--koala)">Mois :</label>
+      <input type="month" class="finput" id="fp-month" style="width:180px" onchange="fpLoad()">
+      <select class="finput" id="fp-referent-select" style="display:none;width:auto;min-width:180px" onchange="fpLoad()">
+        <option value="">-- Toutes les personnes --</option>
+      </select>
+    </div>
+    <div class="ik-total-bar">
+      <div>
+        <div class="ik-total-label">Total du mois</div>
+        <div id="fp-cat-totals" style="display:flex;gap:14px;margin-top:4px;flex-wrap:wrap"></div>
+      </div>
+      <div class="ik-total-val"><span id="fp-tot-eur">0,00</span> €</div>
+    </div>
+    <div class="ik-table-wrap">
+      <table class="ik-table">
+        <thead>
+          <tr>
+            <th>Date</th><th>Catégorie</th><th>Description</th>
+            <th style="text-align:right">Montant</th><th>Justificatif</th><th style="width:36px"></th>
+          </tr>
+        </thead>
+        <tbody id="fp-tbody"></tbody>
+      </table>
+    </div>
+    <div id="fp-empty" class="empty-state" style="display:none"><i class="ti ti-receipt-off"></i><p>Aucune dépense ce mois-ci.</p></div>
+
+    <div style="margin-top:1.5rem">
+      <div style="font-size:13px;font-weight:700;color:var(--koala);margin-bottom:8px"><i class="ti ti-file-text"></i> Justificatifs scannés du mois (PDF unique)</div>
+      <div id="fp-pdf-zone" style="border:2px dashed var(--border);border-radius:10px;padding:1rem;text-align:center"></div>
+    </div>
+  </div>
+
+  <!-- REMPLAÇANTES -->
+  <div id="main-remplacantes" class="tab-content">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-title"><i class="ti ti-user-plus" style="color:var(--koala)"></i> Planning des remplaçantes</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap" id="rmp-add-btn-wrap">
+        <button class="btn-primary" id="rmp-add-btn" onclick="rmpOpenModal()" style="display:none"><i class="ti ti-plus"></i> Ajouter un créneau</button>
+      </div>
+    </div>
+    <div class="module-tabs">
+      <button class="module-tab active" onclick="rmpShowView('semaine',this)"><i class="ti ti-calendar-week"></i> Semaine</button>
+      <button class="module-tab" onclick="rmpShowView('mois',this)"><i class="ti ti-calendar"></i> Mois</button>
+      <button class="module-tab" onclick="rmpShowView('intervenante',this)"><i class="ti ti-user"></i> Par intervenante</button>
+    </div>
+    <div id="rmp-view-semaine" class="module-tab-content active">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem">
+        <button class="ibtn" onclick="rmpChangeWeek(-1)"><i class="ti ti-chevron-left"></i></button>
+        <span id="rmp-week-label" style="font-size:14px;font-weight:700;color:var(--koala)">—</span>
+        <button class="ibtn" onclick="rmpChangeWeek(1)"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div id="rmp-grid-semaine" style="overflow-x:auto"></div>
+    </div>
+    <div id="rmp-view-mois" class="module-tab-content">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem">
+        <button class="ibtn" onclick="rmpChangeMonth(-1)"><i class="ti ti-chevron-left"></i></button>
+        <span id="rmp-month-label" style="font-size:14px;font-weight:700;color:var(--koala)">—</span>
+        <button class="ibtn" onclick="rmpChangeMonth(1)"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div id="rmp-grid-mois"></div>
+    </div>
+    <div id="rmp-view-intervenante" class="module-tab-content">
+      <div style="margin-bottom:0.75rem">
+        <select class="finput" id="rmp-intervenante-select" style="max-width:280px" onchange="rmpRenderIntervenante()">
+          <option value="">-- Choisir une intervenante --</option>
+        </select>
+      </div>
+      <div id="rmp-grid-intervenante"></div>
+    </div>
   </div>
 
 </div><!-- end .app -->
@@ -811,6 +897,64 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- MODAL FRAIS PRO -->
+<div class="overlay" id="modal-fraispro-wrap">
+  <div class="modal">
+    <h3 id="modal-fp-title">Ajouter une dépense</h3>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Date</label><input class="finput" id="fp-date" type="date"/></div>
+      <div class="fg"><label class="flabel">Catégorie</label>
+        <select class="finput" id="fp-categorie">
+          <option value="repas">🍽️ Repas</option>
+          <option value="peage">🛣️ Péage</option>
+          <option value="parking">🅿️ Parking</option>
+          <option value="materiel">📦 Matériel</option>
+          <option value="formation">📚 Formation</option>
+          <option value="fourniture">✏️ Fourniture pédagogique</option>
+          <option value="autre">Autre</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label class="flabel">Montant (€)</label><input class="finput" id="fp-montant" type="number" step="0.01" min="0" placeholder="0.00"/></div>
+    <div class="fg"><label class="flabel">Description</label><input class="finput" id="fp-desc" placeholder="Ex. : Péage A8 retour formation"/></div>
+    <div class="fg">
+      <label class="flabel">Photo du justificatif (optionnel)</label>
+      <input type="file" id="fp-photo-input" accept="image/*" style="display:none" onchange="fpHandlePhoto(event)"/>
+      <button class="btn-cancel" style="width:100%" onclick="document.getElementById('fp-photo-input').click()"><i class="ti ti-camera"></i> Choisir une photo</button>
+      <div id="fp-photo-filename" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
+    </div>
+    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-fraispro-wrap')">Annuler</button><button class="btn-primary" id="fp-btn-save" onclick="fpSave()"><i class="ti ti-check"></i> Enregistrer</button></div>
+  </div>
+</div>
+
+<!-- MODAL REMPLAÇANTES -->
+<div class="overlay" id="modal-remplacante-wrap">
+  <div class="modal">
+    <h3 id="modal-rmp-title">Ajouter un créneau</h3>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="rmp-creche"><option value="">-- Choisir --</option></select></div>
+      <div class="fg"><label class="flabel">Date</label><input class="finput" id="rmp-date" type="date"/></div>
+    </div>
+    <div class="fg"><label class="flabel">Nom de la remplaçante</label>
+      <input class="finput" id="rmp-nom" list="rmp-noms-list" placeholder="Tapez ou choisissez un nom déjà utilisé"/>
+      <datalist id="rmp-noms-list"></datalist>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Heure début</label><input class="finput" id="rmp-hdebut" type="time" value="08:00"/></div>
+      <div class="fg"><label class="flabel">Heure fin</label><input class="finput" id="rmp-hfin" type="time" value="17:00"/></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Pause début</label><input class="finput" id="rmp-pdebut" type="time" value="12:00"/></div>
+      <div class="fg"><label class="flabel">Pause fin</label><input class="finput" id="rmp-pfin" type="time" value="13:00"/></div>
+    </div>
+    <div class="mactions">
+      <button class="btn-cancel" id="rmp-btn-delete" style="display:none;color:var(--red)" onclick="rmpDelete()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn-cancel" onclick="closeModal('modal-remplacante-wrap')">Annuler</button>
+      <button class="btn-primary" onclick="rmpSave()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
@@ -930,7 +1074,7 @@ document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',func
 function updateBadges(){const myCrecheId=isDirection?null:currentProfile?.creche_id;const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}}
 
 function showMain(tab){
-  ['demands','incidents','presence','referents','planning','dashboard','fraisik'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','dashboard','fraisik','fraispro','remplacantes'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -942,6 +1086,8 @@ function showMain(tab){
   if(tab==='presence'){initPresenceDate();renderPresence();}
   if(tab==='dashboard')renderDashboard();
   if(tab==='fraisik'){if(isDirection)ikInit();else showMain('demands');}
+  if(tab==='fraispro')fpInit();
+  if(tab==='remplacantes')rmpInit();
 }
 
 // FULLSCREEN DEMANDES
@@ -2670,7 +2816,436 @@ ${rowsXml}
 // FIN FRAIS IK
 // ============================================================
 
+// ============================================================
+// FRAIS PRO (colonnes réelles : id, created_at, person_id, person_name,
+// expense_date, category, amount, description, receipt_url)
+// ============================================================
+const FP_CATEGORIES={repas:'🍽️ Repas',peage:'🛣️ Péage',parking:'🅿️ Parking',materiel:'📦 Matériel',formation:'📚 Formation',fourniture:'✏️ Fourniture pédagogique',autre:'Autre'};
+let fpRows=[],fpPdfRow=null,fpPendingPhotoUrl=null,fpEditingId=null;
+
+// Client Supabase secondaire pour le Storage (clé publishable récente), pour éviter tout conflit
+// de session avec le client principal (qui utilise l'ancienne clé JWT anon).
+const FP_STORAGE_URL="https://juyrceadazrovlitxceb.supabase.co";
+let _fpStorageClient=null;
+function fpStorageClient(){
+  if(!_fpStorageClient){
+    _fpStorageClient=supabase.createClient(FP_STORAGE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+  }
+  return _fpStorageClient;
+}
+
+function fpInit(){
+  const now=new Date();
+  const month=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  if(!document.getElementById('fp-month').value)document.getElementById('fp-month').value=month;
+  const sel=document.getElementById('fp-referent-select');
+  if(isDirection){
+    sel.style.display='';
+    if(sel.options.length<=1){
+      const refs=cacheReferents.filter(r=>r.role==='referent'||r.role==='direction');
+      sel.innerHTML='<option value="">-- Toutes les personnes --</option>'+refs.map(r=>'<option value="'+r.id+'">'+r.name+'</option>').join('');
+    }
+  }else{sel.style.display='none';}
+  fpLoad();
+}
+
+async function fpLoad(){
+  const month=document.getElementById('fp-month').value;
+  if(!month)return;
+  const [year,monthNum]=month.split('-').map(Number);
+  const firstDay=year+'-'+String(monthNum).padStart(2,'0')+'-01';
+  const lastDay=ipDateToLocalISO(new Date(year,monthNum,0));
+  const targetRefId=isDirection?(document.getElementById('fp-referent-select').value||null):currentProfile?.id;
+
+  let q=sb.from('frais_pro').select('*').gte('expense_date',firstDay).lte('expense_date',lastDay).order('expense_date',{ascending:true});
+  if(targetRefId)q=q.eq('person_id',targetRefId);
+  const{data,error}=await q;
+  if(error){console.warn('[FraisPro]',error.message);fpRows=[];}else{fpRows=data||[];}
+
+  await fpLoadPdf(month,targetRefId);
+  fpRenderTable();
+}
+
+function fpRenderTable(){
+  const tbody=document.getElementById('fp-tbody');
+  if(!fpRows.length){
+    tbody.innerHTML='';document.getElementById('fp-empty').style.display='block';
+  }else{
+    document.getElementById('fp-empty').style.display='none';
+    tbody.innerHTML=fpRows.map(r=>{
+      const dateFr=new Date(r.expense_date+'T12:00:00').toLocaleDateString('fr-FR');
+      return '<tr><td>'+dateFr+(isDirection&&r.person_name?'<br><span style="font-size:10px;color:var(--muted)">'+r.person_name+'</span>':'')+'</td>'+
+        '<td>'+(FP_CATEGORIES[r.category]||r.category)+'</td>'+
+        '<td>'+(r.description||'—')+'</td>'+
+        '<td class="ik-val">'+Number(r.amount).toFixed(2).replace('.',',')+' €</td>'+
+        '<td>'+(r.receipt_url?'<a href="'+r.receipt_url+'" target="_blank" class="btn-sm" style="display:inline-flex"><i class="ti ti-photo"></i></a>':'<span style="color:#ccc;font-size:11px">—</span>')+'</td>'+
+        '<td><button class="ik-row-del" onclick="fpEditRow(\''+r.id+'\')" title="Modifier"><i class="ti ti-edit" style="font-size:12px"></i></button></td></tr>';
+    }).join('');
+  }
+  fpUpdateTotals();
+}
+
+function fpUpdateTotals(){
+  let total=0;const byCat={};
+  fpRows.forEach(r=>{const m=Number(r.amount)||0;total+=m;byCat[r.category]=(byCat[r.category]||0)+m;});
+  document.getElementById('fp-tot-eur').textContent=total.toFixed(2).replace('.',',');
+  document.getElementById('fp-cat-totals').innerHTML=Object.keys(byCat).map(cat=>
+    '<span style="font-size:12px;opacity:0.85">'+(FP_CATEGORIES[cat]||cat)+' : '+byCat[cat].toFixed(2).replace('.',',')+' €</span>'
+  ).join('')||'<span style="font-size:12px;opacity:0.6">Aucune dépense</span>';
+}
+
+function fpOpenModal(){
+  fpEditingId=null;fpPendingPhotoUrl=null;
+  document.getElementById('modal-fp-title').textContent='Ajouter une dépense';
+  document.getElementById('fp-date').value=todayStr();
+  document.getElementById('fp-categorie').value='repas';
+  document.getElementById('fp-montant').value='';
+  document.getElementById('fp-desc').value='';
+  document.getElementById('fp-photo-filename').textContent='';
+  document.getElementById('fp-photo-input').value='';
+  document.getElementById('modal-fraispro-wrap').classList.add('open');
+}
+
+function fpEditRow(id){
+  const r=fpRows.find(x=>x.id===id);if(!r)return;
+  fpEditingId=id;fpPendingPhotoUrl=r.receipt_url||null;
+  document.getElementById('modal-fp-title').textContent='Modifier la dépense';
+  document.getElementById('fp-date').value=r.expense_date;
+  document.getElementById('fp-categorie').value=r.category;
+  document.getElementById('fp-montant').value=r.amount;
+  document.getElementById('fp-desc').value=r.description||'';
+  document.getElementById('fp-photo-filename').textContent=r.receipt_url?'📎 Justificatif déjà joint':'';
+  document.getElementById('fp-photo-input').value='';
+  document.getElementById('modal-fraispro-wrap').classList.add('open');
+}
+
+async function fpHandlePhoto(event){
+  const file=event.target.files[0];if(!file)return;
+  document.getElementById('fp-photo-filename').textContent='⏳ Envoi en cours…';
+  try{
+    const ext=file.name.split('.').pop();
+    const path='frais-pro-photos/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+    const{error}=await fpStorageClient().storage.from('assets').upload(path,file);
+    if(error)throw error;
+    const{data}=fpStorageClient().storage.from('assets').getPublicUrl(path);
+    fpPendingPhotoUrl=data.publicUrl;
+    document.getElementById('fp-photo-filename').textContent='✅ '+file.name;
+  }catch(e){
+    console.error('[FraisPro photo]',e.message);
+    document.getElementById('fp-photo-filename').textContent='⚠ Erreur upload : '+e.message;
+  }
+}
+
+async function fpSave(){
+  const date=document.getElementById('fp-date').value;
+  const montant=parseFloat(document.getElementById('fp-montant').value);
+  if(!date||isNaN(montant)||montant<=0){alert('Date et montant valides requis.');return;}
+  const row={
+    person_id:currentProfile?.id,
+    person_name:currentProfile?.name||'',
+    expense_date:date,category:document.getElementById('fp-categorie').value,
+    amount:montant,description:document.getElementById('fp-desc').value.trim(),
+    receipt_url:fpPendingPhotoUrl
+  };
+  const btn=document.getElementById('fp-btn-save');btn.disabled=true;
+  let ok;
+  if(fpEditingId){ok=await dbUpdate('frais_pro',fpEditingId,row);}
+  else{const saved=await dbInsert('frais_pro',row);ok=!!saved;}
+  btn.disabled=false;
+  if(ok){showBanner('Dépense enregistrée !');closeModal('modal-fraispro-wrap');fpLoad();}
+  else showBanner('Erreur lors de l\'enregistrement.','error');
+}
+
+async function fpDeleteRow(id){
+  if(!confirm('Supprimer cette dépense ?'))return;
+  await dbDelete('frais_pro',id);fpLoad();
+}
+
+// ── PDF mensuel groupé (colonnes réelles : id, created_at, month, person_id [text], person_name, pdf_url, filename) ──
+async function fpLoadPdf(month,referentId){
+  const targetId=referentId||currentProfile?.id;
+  if(!targetId){fpPdfRow=null;fpRenderPdfZone();return;}
+  const{data,error}=await sb.from('frais_pro_pdf').select('*').eq('person_id',String(targetId)).eq('month',month).maybeSingle();
+  if(error){console.warn('[FraisProPdf]',error.message);fpPdfRow=null;}else{fpPdfRow=data||null;}
+  fpRenderPdfZone();
+}
+
+function fpRenderPdfZone(){
+  const zone=document.getElementById('fp-pdf-zone');
+  const month=document.getElementById('fp-month').value;
+  if(fpPdfRow){
+    zone.innerHTML='<i class="ti ti-file-text" style="font-size:28px;color:var(--koala)"></i>'+
+      '<div style="margin:8px 0"><a href="'+fpPdfRow.pdf_url+'" target="_blank" class="btn-primary" style="display:inline-flex"><i class="ti ti-eye"></i> Voir le PDF du mois</a></div>'+
+      '<button class="btn-sm" onclick="document.getElementById(\'fp-pdf-input\').click()"><i class="ti ti-refresh"></i> Remplacer</button>'+
+      '<input type="file" id="fp-pdf-input" accept="application/pdf" style="display:none" onchange="fpHandlePdfUpload(event)"/>';
+  }else{
+    zone.innerHTML='<i class="ti ti-upload" style="font-size:28px;color:#ccc"></i>'+
+      '<div style="margin:8px 0;font-size:13px;color:var(--muted)">Aucun PDF déposé pour '+(month||'ce mois')+'</div>'+
+      '<button class="btn-primary" onclick="document.getElementById(\'fp-pdf-input\').click()"><i class="ti ti-upload"></i> Déposer le PDF scanné</button>'+
+      '<input type="file" id="fp-pdf-input" accept="application/pdf" style="display:none" onchange="fpHandlePdfUpload(event)"/>';
+  }
+}
+
+async function fpHandlePdfUpload(event){
+  const file=event.target.files[0];if(!file)return;
+  const month=document.getElementById('fp-month').value;
+  const targetId=isDirection?(document.getElementById('fp-referent-select').value||currentProfile?.id):currentProfile?.id;
+  if(!targetId){alert('Profil introuvable.');return;}
+  showBanner('Envoi du PDF en cours…');
+  try{
+    const path='frais-pro-pdf/'+targetId+'_'+month+'_'+Date.now()+'.pdf';
+    const{error}=await fpStorageClient().storage.from('assets').upload(path,file,{upsert:true});
+    if(error)throw error;
+    const{data}=fpStorageClient().storage.from('assets').getPublicUrl(path);
+    const refName=cacheReferents.find(r=>r.id===targetId)?.name||currentProfile?.name||'';
+    // Pas de contrainte unique connue sur (person_id, month) dans cette table existante :
+    // on supprime l'ancien enregistrement du mois avant d'insérer le nouveau (remplacement).
+    await sb.from('frais_pro_pdf').delete().eq('person_id',String(targetId)).eq('month',month);
+    const{error:insErr}=await sb.from('frais_pro_pdf').insert({person_id:String(targetId),person_name:refName,month,pdf_url:data.publicUrl,filename:file.name});
+    if(insErr)throw insErr;
+    showBanner('PDF enregistré ✅');
+    fpLoadPdf(month,targetId);
+  }catch(e){
+    console.error('[FraisProPdf upload]',e.message);
+    showBanner('Erreur lors de l\'envoi du PDF.','error');
+  }
+}
+
+// ── Export Excel ──
+function fpExportExcel(){
+  if(!fpRows.length&&!fpPdfRow){alert('Aucune dépense ni PDF à exporter pour ce mois.');return;}
+  const month=document.getElementById('fp-month').value;
+  const wsData=[['Date','Catégorie','Description','Montant (€)']];
+  fpRows.forEach(r=>{wsData.push([new Date(r.expense_date+'T12:00:00').toLocaleDateString('fr-FR'),FP_CATEGORIES[r.category]||r.category,r.description||'',Number(r.amount)]);});
+  const total=fpRows.reduce((s,r)=>s+Number(r.amount),0);
+  wsData.push(['','','TOTAL',total]);
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Frais pro');
+  XLSX.writeFile(wb,'frais_pro_'+month+'.xlsx');
+  showBanner('Export Excel téléchargé !');
+}
+
+function fpSendEmail(){
+  const month=document.getElementById('fp-month').value;
+  const name=currentProfile?.name||'';
+  let body='Récapitulatif des frais professionnels — '+month+'\nDe : '+name+'\n\n';
+  if(fpRows.length){
+    fpRows.forEach(r=>{body+='- '+new Date(r.expense_date+'T12:00:00').toLocaleDateString('fr-FR')+' | '+(FP_CATEGORIES[r.category]||r.category)+' | '+(r.description||'')+' | '+Number(r.amount).toFixed(2)+' €\n';});
+    const total=fpRows.reduce((s,r)=>s+Number(r.amount),0);
+    body+='\nTOTAL : '+total.toFixed(2)+' €\n';
+  }else{body+='(Aucune ligne de dépense saisie ce mois-ci)\n';}
+  if(fpPdfRow)body+='\nJustificatifs scannés (PDF) : '+fpPdfRow.pdf_url+'\n';
+  const subject='Frais pro '+month+' — '+name;
+  window.location.href='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+}
+
 async function callFn(fn,body){try{const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});return r.ok;}catch{return false;}}
+
+// ============================================================
+// REMPLAÇANTES
+// ============================================================
+let rmpWeekOffset=0,rmpMonthOffset=0,rmpCache=[],rmpEditingId=null,rmpEditingDay=null;
+const RMP_COLORS=['#3D3580','#F47920','#2a9d4e','#378ADD','#7B68EE','#e03e3e','#C95F0A','#1565c0'];
+
+// Évite le bug de décalage UTC (toISOString() recule d'un jour en UTC+2) : formate toujours en heure locale.
+function rmpDateStr(d){return ipDateToLocalISO(d);}
+
+function rmpInit(){
+  const sel=document.getElementById('rmp-creche');
+  if(sel)sel.innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+  const addBtn=document.getElementById('rmp-add-btn');
+  if(addBtn)addBtn.style.display=isDirection?'':'none';
+  rmpShowView('semaine',document.querySelector('#main-remplacantes .module-tab'));
+}
+
+function rmpShowView(view,btn){
+  document.querySelectorAll('#main-remplacantes .module-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#main-remplacantes .module-tab-content').forEach(c=>c.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  document.getElementById('rmp-view-'+view).classList.add('active');
+  if(view==='semaine')rmpRenderWeek();
+  if(view==='mois')rmpRenderMonth();
+  if(view==='intervenante')rmpRenderIntervenanteSelect();
+}
+
+function rmpWeekStart(){const n=new Date();const day=n.getDay();const diff=n.getDate()-(day===0?6:day-1);const m=new Date(n.getFullYear(),n.getMonth(),diff+rmpWeekOffset*7);m.setHours(0,0,0,0);return m;}
+function rmpChangeWeek(d){rmpWeekOffset+=d;rmpRenderWeek();}
+function rmpChangeMonth(d){rmpMonthOffset+=d;rmpRenderMonth();}
+
+async function rmpFetchRange(fromISO,toISO){
+  const myCrecheId=isDirection?null:currentProfile?.creche_id;
+  let q=sb.from('remplacantes').select('*').gte('date',fromISO).lte('date',toISO).order('date',{ascending:true});
+  if(myCrecheId)q=q.eq('creche_id',myCrecheId);
+  const{data,error}=await q;
+  if(error){console.warn('[Remplacantes]',error.message);return[];}
+  rmpCache=data||[];
+  return rmpCache;
+}
+
+function rmpColorFor(nom){
+  const names=[...new Set(rmpCache.map(r=>r.nom))].sort();
+  const idx=names.indexOf(nom);
+  return RMP_COLORS[idx>=0?idx%RMP_COLORS.length:0];
+}
+
+async function rmpRenderWeek(){
+  const ws=rmpWeekStart();
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+  document.getElementById('rmp-week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
+  const fromISO=rmpDateStr(days5[0]),toISO=rmpDateStr(days5[4]);
+  document.getElementById('rmp-grid-semaine').innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+  await rmpFetchRange(fromISO,toISO);
+
+  const crechesToShow=isDirection?cacheCreches:cacheCreches.filter(c=>c.id===currentProfile?.creche_id);
+  let html='<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:640px">';
+  html+='<thead><tr><th style="padding:8px;border-bottom:2px solid var(--border);text-align:left;background:#fafafa">Crèche</th>';
+  DAYS.forEach((d,i)=>{html+='<th style="padding:8px;border-bottom:2px solid var(--border);text-align:center;background:#fafafa">'+d+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';});
+  html+='</tr></thead><tbody>';
+  crechesToShow.forEach(creche=>{
+    html+='<tr><td style="padding:8px;border-bottom:1px solid var(--border);font-weight:600;color:var(--koala)">'+creche.name+'</td>';
+    days5.forEach((d,di)=>{
+      const dateISO=rmpDateStr(d);
+      const evs=rmpCache.filter(r=>r.creche_id===creche.id&&r.date===dateISO);
+      html+='<td style="padding:6px;border-bottom:1px solid var(--border);vertical-align:top">';
+      evs.forEach(ev=>{
+        const color=rmpColorFor(ev.nom);
+        const editAttr=isDirection?'onclick="rmpOpenModal(\''+ev.id+'\')" style="cursor:pointer;'+'background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;margin-bottom:4px"':'style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;margin-bottom:4px"';
+        const horaire=ev.heure_debut?ev.heure_debut+'–'+ev.heure_fin:'';
+        html+='<div '+editAttr+'><strong>'+ev.nom+'</strong>'+(horaire?'<br><span style="opacity:0.75">'+horaire+'</span>':'')+'</div>';
+      });
+      if(isDirection)html+='<div class="pe-add-empty" style="min-height:22px" onclick="rmpOpenModal(null,\''+creche.id+'\',\''+dateISO+'\')">+ ajouter</div>';
+      else if(!evs.length)html+='<div style="text-align:center"><span style="color:#ddd">—</span></div>';
+      html+='</td>';
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  document.getElementById('rmp-grid-semaine').innerHTML=html;
+}
+
+async function rmpRenderMonth(){
+  const n=new Date();
+  const refDate=new Date(n.getFullYear(),n.getMonth()+rmpMonthOffset,1);
+  const year=refDate.getFullYear(),month=refDate.getMonth();
+  document.getElementById('rmp-month-label').textContent=refDate.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  const firstDay=new Date(year,month,1),lastDay=new Date(year,month+1,0);
+  document.getElementById('rmp-grid-mois').innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+  await rmpFetchRange(rmpDateStr(firstDay),rmpDateStr(lastDay));
+
+  const startDow=firstDay.getDay()===0?6:firstDay.getDay()-1; // lundi=0
+  const totalDays=lastDay.getDate();
+  const cells=[];
+  for(let i=0;i<startDow;i++)cells.push(null);
+  for(let d=1;d<=totalDays;d++)cells.push(new Date(year,month,d));
+
+  let html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:8px;overflow:hidden">';
+  ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].forEach(d=>{html+='<div style="background:var(--koala);color:#fff;padding:6px;text-align:center;font-size:11px;font-weight:700">'+d+'</div>';});
+  cells.forEach(d=>{
+    if(!d){html+='<div style="background:#fafafa;min-height:70px"></div>';return;}
+    const dateISO=rmpDateStr(d);
+    const evs=rmpCache.filter(r=>r.date===dateISO);
+    html+='<div style="background:#fff;min-height:70px;padding:4px;font-size:10px">';
+    html+='<div style="font-weight:700;color:var(--koala);margin-bottom:2px">'+d.getDate()+'</div>';
+    evs.slice(0,3).forEach(ev=>{
+      const color=rmpColorFor(ev.nom);
+      const crecheName=cacheCreches.find(c=>c.id===ev.creche_id)?.name||'';
+      html+='<div style="background:'+color+'1A;border-left:2px solid '+color+';border-radius:3px;padding:1px 4px;margin-bottom:2px;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+ev.nom+' — '+crecheName+'">'+ev.nom+'</div>';
+    });
+    if(evs.length>3)html+='<div style="font-size:9px;color:var(--muted)">+'+(evs.length-3)+' autre(s)</div>';
+    html+='</div>';
+  });
+  html+='</div>';
+  document.getElementById('rmp-grid-mois').innerHTML=html;
+}
+
+async function rmpRenderIntervenanteSelect(){
+  const now=new Date();
+  const from=new Date(now.getFullYear(),now.getMonth()-2,1),to=new Date(now.getFullYear(),now.getMonth()+2,0);
+  await rmpFetchRange(rmpDateStr(from),rmpDateStr(to));
+  const names=[...new Set(rmpCache.map(r=>r.nom))].sort();
+  const sel=document.getElementById('rmp-intervenante-select');
+  const current=sel.value;
+  sel.innerHTML='<option value="">-- Choisir une intervenante --</option>'+names.map(n=>'<option value="'+n+'"'+(n===current?' selected':'')+'>'+n+'</option>').join('');
+  rmpRenderIntervenante();
+}
+
+function rmpRenderIntervenante(){
+  const name=document.getElementById('rmp-intervenante-select').value;
+  const wrap=document.getElementById('rmp-grid-intervenante');
+  if(!name){wrap.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez une intervenante</div>';return;}
+  const evs=rmpCache.filter(r=>r.nom===name).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!evs.length){wrap.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucun créneau trouvé pour '+name+'</div>';return;}
+  wrap.innerHTML='<div class="demands-list">'+evs.map(ev=>{
+    const creche=cacheCreches.find(c=>c.id===ev.creche_id)?.name||'—';
+    const dateFr=new Date(ev.date+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'});
+    return '<div class="dcard normal"><div class="dmeta"><div class="dtop"><span class="dsubject">'+creche+'</span></div><div class="dbody">'+dateFr+(ev.heure_debut?' · '+ev.heure_debut+'–'+ev.heure_fin:'')+(ev.pause_debut?' (pause '+ev.pause_debut+'–'+ev.pause_fin+')':'')+'</div></div></div>';
+  }).join('')+'</div>';
+}
+
+function rmpOpenModal(id,crecheId,dateISO){
+  rmpEditingId=id||null;
+  const names=[...new Set(rmpCache.map(r=>r.nom))].sort();
+  document.getElementById('rmp-noms-list').innerHTML=names.map(n=>'<option value="'+n+'">').join('');
+  document.getElementById('rmp-btn-delete').style.display=id?'':'none';
+  if(id){
+    const ev=rmpCache.find(r=>r.id===id);if(!ev)return;
+    document.getElementById('modal-rmp-title').textContent='Modifier le créneau';
+    document.getElementById('rmp-creche').value=ev.creche_id;
+    document.getElementById('rmp-date').value=ev.date;
+    document.getElementById('rmp-nom').value=ev.nom;
+    document.getElementById('rmp-hdebut').value=ev.heure_debut||'08:00';
+    document.getElementById('rmp-hfin').value=ev.heure_fin||'17:00';
+    document.getElementById('rmp-pdebut').value=ev.pause_debut||'12:00';
+    document.getElementById('rmp-pfin').value=ev.pause_fin||'13:00';
+  }else{
+    document.getElementById('modal-rmp-title').textContent='Ajouter un créneau';
+    document.getElementById('rmp-creche').value=crecheId||'';
+    document.getElementById('rmp-date').value=dateISO||todayStr();
+    document.getElementById('rmp-nom').value='';
+    document.getElementById('rmp-hdebut').value='08:00';
+    document.getElementById('rmp-hfin').value='17:00';
+    document.getElementById('rmp-pdebut').value='12:00';
+    document.getElementById('rmp-pfin').value='13:00';
+  }
+  document.getElementById('modal-remplacante-wrap').classList.add('open');
+}
+
+async function rmpSave(){
+  const creche_id=document.getElementById('rmp-creche').value;
+  const date=document.getElementById('rmp-date').value;
+  const nom=document.getElementById('rmp-nom').value.trim();
+  if(!creche_id||!date||!nom){alert('Crèche, date et nom requis.');return;}
+  const row={
+    creche_id,date,nom,
+    heure_debut:document.getElementById('rmp-hdebut').value,
+    heure_fin:document.getElementById('rmp-hfin').value,
+    pause_debut:document.getElementById('rmp-pdebut').value,
+    pause_fin:document.getElementById('rmp-pfin').value
+  };
+  let ok;
+  if(rmpEditingId)ok=await dbUpdate('remplacantes',rmpEditingId,row);
+  else{const saved=await dbInsert('remplacantes',row);ok=!!saved;}
+  if(ok){showBanner('Créneau enregistré !');closeModal('modal-remplacante-wrap');rmpRefreshCurrentView();}
+  else showBanner('Erreur lors de l\'enregistrement.','error');
+}
+
+async function rmpDelete(){
+  if(!rmpEditingId)return;
+  if(!confirm('Supprimer ce créneau ?'))return;
+  await dbDelete('remplacantes',rmpEditingId);
+  closeModal('modal-remplacante-wrap');
+  rmpRefreshCurrentView();
+}
+
+function rmpRefreshCurrentView(){
+  const activeBtn=document.querySelector('#main-remplacantes .module-tab.active');
+  const label=activeBtn?activeBtn.textContent.trim():'';
+  if(label.includes('Semaine'))rmpRenderWeek();
+  else if(label.includes('Mois'))rmpRenderMonth();
+  else rmpRenderIntervenanteSelect();
+}
 
 function openNotice() {
   document.getElementById('modal-notice').classList.add('open');
