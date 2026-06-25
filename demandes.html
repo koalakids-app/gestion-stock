@@ -472,6 +472,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <span id="pe-badge" style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
       </div>
       <div id="pe-grid-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:8px"></div>
+      <div id="pe-legend" style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:#666"></div>
     </div>
   </div>
 
@@ -2306,6 +2307,7 @@ async function peDeleteCellEdit(){
 async function renderPlanningEquipe(){
   const sel=document.getElementById('pe-creche-select');
   const wrap=document.getElementById('pe-grid-wrap');
+  const legendEl=document.getElementById('pe-legend');
   if(!sel||!wrap)return;
 
   let crecheId;
@@ -2322,11 +2324,13 @@ async function renderPlanningEquipe(){
 
   if(!crecheId){
     wrap.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez une crèche</div>';
+    if(legendEl)legendEl.innerHTML='';
     return;
   }
 
   const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   wrap.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+  if(legendEl)legendEl.innerHTML='';
   const rows=await peLoad(crecheId,semaine);
   const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
   // Éditable pour : la direction, OU la référente dont la propre crèche correspond à celle affichée
@@ -2336,17 +2340,29 @@ async function renderPlanningEquipe(){
     if(editable){peBadge.textContent='✏️ Modifiable';peBadge.style.background='var(--koala-light)';peBadge.style.color='var(--koala)';}
     else{peBadge.textContent='👁 Lecture seule';peBadge.style.background='#f0f0f5';peBadge.style.color='#888';}
   }
-  wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
+  const{table,legend}=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
+  wrap.innerHTML=table;
+  if(legendEl)legendEl.innerHTML=legend;
 }
 
 function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
-  if(!rows.length)return '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucune donnée pour cette semaine — importez un fichier Excel pour cette crèche.</div>';
+  if(!rows.length)return {table:'<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucune donnée pour cette semaine — importez un fichier Excel pour cette crèche.</div>',legend:''};
 
   const ws=new Date(semaine+'T00:00:00');
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
 
-  const typeColors={presence:'var(--koala)',absent:'var(--orange)',conge:'#999',formation:'#378ADD',reunion:'#7B68EE'};
+  const typeColors={absent:'var(--orange)',conge:'#999',formation:'#378ADD',reunion:'#7B68EE'};
+
+  // Une couleur stable par salarié(e), attribuée selon l'ordre alphabétique des prénoms présents
+  // cette semaine-là (même logique que rmpColorFor pour les remplaçantes) — donne le même visuel
+  // "1 couleur par personne" que le planning Excel d'origine.
+  const PE_PERSON_COLORS=['#F4B183','#9DC3E6','#FFD966','#A9D18E','#C77DFF','#FF8FA3','#4FB0C6','#E07A5F'];
+  const peNamesThisWeek=[...new Set(rows.map(r=>r.prenom))].sort();
+  function peColorFor(prenom){
+    const idx=peNamesThisWeek.indexOf(prenom);
+    return PE_PERSON_COLORS[idx>=0?idx%PE_PERSON_COLORS.length:0];
+  }
 
   // Sépare les événements qui ont un créneau horaire identifiable (ligne classique du fichier)
   // de ceux qui n'en ont pas (fusion de 2 activités, congé, absence) — affichés à part.
@@ -2367,7 +2383,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
 
   function renderCell(ev,crecheName){
     if(!ev)return '<span style="color:#ddd">—</span>';
-    const color=typeColors[ev.type]||'#ccc';
+    const color=ev.type==='presence'?peColorFor(ev.prenom):(typeColors[ev.type]||'#ccc');
     const ailleurs=ev.lieu&&ev.lieu!==crecheName;
     const clickAttr=editable?'onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"':'style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"';
     return '<div '+clickAttr+'>'+
@@ -2422,7 +2438,13 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
   }
 
   html+='</tbody></table>';
-  return html;
+
+  const legend=peNamesThisWeek.map(prenom=>{
+    const color=peColorFor(prenom);
+    return '<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:'+color+'"></div>'+prenom+'</div>';
+  }).join('');
+
+  return {table:html,legend};
 }
 
 // ── IK PLANNING (Supabase cache) — voir ikReadPlanning plus bas, version active ──
