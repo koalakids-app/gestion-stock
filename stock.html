@@ -2853,12 +2853,12 @@ async function saveFournisseur() {
     }
     document.getElementById('modalFournisseurTitle').textContent = 'Ajouter un fournisseur';
     showNotif('✅ Fournisseur mis à jour');
-    if (!IS_LOCAL) updateFournisseurDB({ id: fournEditId, ...data }).catch(()=>{});
+    if (!IS_LOCAL) updateFournisseurDB({ id: fournEditId, ...data }).catch(e => showNotif('⚠ Non synchronisé : ' + e.message));
   } else {
     // Mode ajout
     FOURNISSEURS.push({ id: Date.now(), ...data });
     showNotif('✅ Fournisseur ajouté');
-    if (!IS_LOCAL) saveFournisseurDB(FOURNISSEURS[FOURNISSEURS.length-1]).catch(()=>{});
+    if (!IS_LOCAL) saveFournisseurDB(FOURNISSEURS[FOURNISSEURS.length-1]).catch(e => showNotif('⚠ Non synchronisé : ' + e.message));
   }
 
   editingFournisseurId = null;
@@ -4229,9 +4229,12 @@ async function syncFromCloud() {
     } else if (cmdsR.status === 'rejected')
       console.warn('[Sync] commandes:', cmdsR.reason?.message);
 
-    if (fournsR.status === 'fulfilled' && Array.isArray(fournsR.value))
-      FOURNISSEURS.splice(0, FOURNISSEURS.length, ...fournsR.value.map(rowToFournisseur));
-    else if (fournsR.status === 'rejected')
+    if (fournsR.status === 'fulfilled' && Array.isArray(fournsR.value)) {
+      // Fusionner : garder les fournisseurs locaux non encore persistés (id numérique local > id Supabase)
+      const dbIdsFourn = new Set(fournsR.value.map(r => r.id));
+      const localOnlyFourn = FOURNISSEURS.filter(f => !dbIdsFourn.has(f.id));
+      FOURNISSEURS.splice(0, FOURNISSEURS.length, ...fournsR.value.map(rowToFournisseur), ...localOnlyFourn);
+    } else if (fournsR.status === 'rejected')
       console.warn('[Sync] fournisseurs:', fournsR.reason?.message);
 
     if (histosR.status === 'fulfilled' && Array.isArray(histosR.value))
