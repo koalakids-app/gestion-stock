@@ -2349,7 +2349,23 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
 
-  const typeColors={presence:'#3D3580',absent:'#F47920',conge:'#999',formation:'#378ADD',reunion:'#7B68EE'};
+  // Couleur fixe et distincte par professionnelle : les prénoms présents dans cette crèche sont
+  // triés alphabétiquement puis répartis à intervalle parfaitement régulier sur le cercle des
+  // teintes (360°/n). Stable par prénom (même prénom = toujours la même position alphabétique =
+  // toujours la même couleur), et garantit l'écart maximal possible entre toutes les personnes
+  // affichées ensemble — pas de collision même avec une équipe nombreuse.
+  const _peNamesSorted=[...new Set(rows.map(r=>(r.prenom||'').trim()))].sort((a,b)=>a.localeCompare(b,'fr'));
+  const _peColorCache={};
+  function peColorForName(prenom){
+    const key=(prenom||'').trim();
+    if(_peColorCache[key])return _peColorCache[key];
+    const idx=_peNamesSorted.indexOf(key);
+    const n=_peNamesSorted.length||1;
+    const hue=Math.round((idx<0?0:idx)*360/n);
+    const color='hsl('+hue+',62%,42%)';
+    _peColorCache[key]=color;
+    return color;
+  }
 
   // Sépare les événements qui ont un créneau horaire identifiable (ligne classique du fichier)
   // de ceux qui n'en ont pas (fusion de 2 activités, congé, absence) — affichés à part.
@@ -2370,9 +2386,10 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
 
   function renderCell(ev,crecheName){
     if(!ev)return '<span style="color:#ddd">—</span>';
-    const color=typeColors[ev.type]||'#ccc';
+    const color=peColorForName(ev.prenom);
+    const bg=color.replace('hsl(','hsla(').replace(')',',0.12)');
     const ailleurs=ev.lieu&&ev.lieu!==crecheName;
-    const clickAttr=editable?'onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"':'style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"';
+    const clickAttr=editable?'onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+bg+';border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"':'style="background:'+bg+';border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"';
     return '<div '+clickAttr+'>'+
       '<strong>'+ev.prenom+'</strong>'+(ailleurs?' <span style="opacity:0.7">('+ev.lieu+')</span>':'')+
       '</div>';
@@ -2413,8 +2430,9 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
       html+='<td style="padding:6px;border-bottom:1px solid var(--border);word-wrap:break-word;overflow-wrap:break-word">';
       if(evs.length){
         html+=evs.map(ev=>{
-          const color=typeColors[ev.type]||'#ccc';
-          return '<div style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left;margin-bottom:4px;line-height:1.4"><strong>'+ev.prenom+'</strong> — '+(ev.label||ev.type)+'</div>';
+          const color=peColorForName(ev.prenom);
+          const bg=color.replace('hsl(','hsla(').replace(')',',0.12)');
+          return '<div style="background:'+bg+';border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left;margin-bottom:4px;line-height:1.4"><strong>'+ev.prenom+'</strong> — '+(ev.label||ev.type)+'</div>';
         }).join('');
       }else{
         html+='<div style="text-align:center"><span style="color:#ddd">—</span></div>';
