@@ -304,14 +304,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="login-sub">Suite de gestion pédagogique</div>
       <div class="login-err" id="login-err"></div>
       <div id="login-form">
-        <div class="fg"><label class="flabel">Email</label><input class="finput" id="login-email" type="email" placeholder="votre@email.fr" autocomplete="email"/></div>
-        <div class="fg"><label class="flabel">Mot de passe</label><input class="finput" id="login-pwd" type="password" placeholder="••••••••" autocomplete="current-password"/></div>
-        <button class="login-btn" id="login-btn" onclick="doLogin()"><i class="ti ti-login"></i> Se connecter</button>
+        <form id="login-form-el" autocomplete="on" onsubmit="event.preventDefault();doLogin();">
+          <div class="fg"><label class="flabel">Email</label><input class="finput" id="login-email" type="email" name="email" placeholder="votre@email.fr" autocomplete="username" required/></div>
+          <div class="fg">
+            <label class="flabel">Mot de passe</label>
+            <div style="position:relative">
+              <input class="finput" id="login-pwd" type="password" name="password" placeholder="••••••••" autocomplete="current-password" style="padding-right:38px" required/>
+              <button type="button" class="pwd-toggle-btn" onclick="togglePwdVisibility('login-pwd',this)" tabindex="-1" aria-label="Afficher le mot de passe" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#999;padding:4px;display:flex;align-items:center"><i class="ti ti-eye" style="font-size:17px"></i></button>
+            </div>
+          </div>
+          <button type="submit" class="login-btn" id="login-btn"><i class="ti ti-login"></i> Se connecter</button>
+        </form>
       </div>
       <div id="reset-form" style="display:none">
         <p style="color:#555;font-size:14px;margin-bottom:1rem">Choisissez votre nouveau mot de passe :</p>
-        <div class="fg"><label class="flabel">Nouveau mot de passe</label><input class="finput" id="new-pwd" type="password" placeholder="Min. 6 caractères"/></div>
-        <div class="fg"><label class="flabel">Confirmer</label><input class="finput" id="new-pwd-confirm" type="password" placeholder="Répétez le mot de passe"/></div>
+        <div class="fg">
+          <label class="flabel">Nouveau mot de passe</label>
+          <div style="position:relative">
+            <input class="finput" id="new-pwd" type="password" placeholder="Min. 6 caractères" autocomplete="new-password" style="padding-right:38px" onkeydown="if(event.key==='Enter'){event.preventDefault();saveNewPassword();}"/>
+            <button type="button" class="pwd-toggle-btn" onclick="togglePwdVisibility('new-pwd',this)" tabindex="-1" aria-label="Afficher le mot de passe" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#999;padding:4px;display:flex;align-items:center"><i class="ti ti-eye" style="font-size:17px"></i></button>
+          </div>
+        </div>
+        <div class="fg">
+          <label class="flabel">Confirmer</label>
+          <div style="position:relative">
+            <input class="finput" id="new-pwd-confirm" type="password" placeholder="Répétez le mot de passe" autocomplete="new-password" style="padding-right:38px" onkeydown="if(event.key==='Enter'){event.preventDefault();saveNewPassword();}"/>
+            <button type="button" class="pwd-toggle-btn" onclick="togglePwdVisibility('new-pwd-confirm',this)" tabindex="-1" aria-label="Afficher le mot de passe" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#999;padding:4px;display:flex;align-items:center"><i class="ti ti-eye" style="font-size:17px"></i></button>
+          </div>
+        </div>
         <button class="login-btn" onclick="saveNewPassword()"><i class="ti ti-check"></i> Enregistrer le mot de passe</button>
       </div>
     </div>
@@ -1003,6 +1023,22 @@ async function dbSelect(table,filters={}){let q=sb.from(table).select('*').order
 async function dbInsert(table,row){const{data,error}=await sb.from(table).insert(row).select().single();if(error){console.warn('insert',table,error);return null;}return data;}
 async function dbUpdate(table,id,updates){const{error}=await sb.from(table).update(updates).eq('id',id);if(error){console.error('[dbUpdate]',table,id,error.message);return false;}return true;}
 async function dbDelete(table,id){const{error}=await sb.from(table).delete().eq('id',id);if(error){console.warn('delete',table,error);return false;}return true;}
+
+// Bascule l'affichage en clair d'un champ mot de passe (icône œil) — utilisé sur login et reset password
+function togglePwdVisibility(inputId,btn){
+  const input=document.getElementById(inputId);
+  if(!input)return;
+  const icon=btn.querySelector('i');
+  if(input.type==='password'){
+    input.type='text';
+    if(icon){icon.classList.remove('ti-eye');icon.classList.add('ti-eye-off');}
+    btn.setAttribute('aria-label','Masquer le mot de passe');
+  }else{
+    input.type='password';
+    if(icon){icon.classList.remove('ti-eye-off');icon.classList.add('ti-eye');}
+    btn.setAttribute('aria-label','Afficher le mot de passe');
+  }
+}
 
 async function doLogin(){
   const email=document.getElementById('login-email').value.trim(),pwd=document.getElementById('login-pwd').value;
@@ -2465,6 +2501,7 @@ function printPlanningDoc(title, subtitle, bodyHTML){
       'tr:nth-child(even) td{background:#F9F9F8}'+
       '.footer{margin-top:1.5rem;font-size:10px;color:#888;border-top:1px solid #E7E5E0;padding-top:10px}'+
       '@media print{@page{margin:1.2cm;size:landscape}body{padding:0}}'+
+      '*{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}'+
     '</style></head><body>'+
     '<h1>'+title+'</h1>'+
     '<div class="sub">'+subtitle+'</div>'+
