@@ -2362,7 +2362,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
     const idx=_peNamesSorted.indexOf(key);
     const n=_peNamesSorted.length||1;
     const hue=Math.round((idx<0?0:idx)*360/n);
-    const color='hsl('+hue+',62%,42%)';
+    const color='hsl('+hue+',62%,28%)';
     _peColorCache[key]=color;
     return color;
   }
@@ -2387,11 +2387,10 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
   function renderCell(ev,crecheName){
     if(!ev)return '<span style="color:#ddd">—</span>';
     const color=peColorForName(ev.prenom);
-    const bg=color.replace('hsl(','hsla(').replace(')',',0.12)');
     const ailleurs=ev.lieu&&ev.lieu!==crecheName;
-    const clickAttr=editable?'onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+bg+';border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"':'style="background:'+bg+';border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"';
+    const clickAttr=editable?'onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+';color:#fff;border-radius:4px;padding:4px 6px;font-size:11px;text-align:center"':'style="background:'+color+';color:#fff;border-radius:4px;padding:4px 6px;font-size:11px;text-align:center"';
     return '<div '+clickAttr+'>'+
-      '<strong>'+ev.prenom+'</strong>'+(ailleurs?' <span style="opacity:0.7">('+ev.lieu+')</span>':'')+
+      '<strong>'+ev.prenom+'</strong>'+(ailleurs?' <span style="opacity:0.85">('+ev.lieu+')</span>':'')+
       '</div>';
   }
 
@@ -2431,8 +2430,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
       if(evs.length){
         html+=evs.map(ev=>{
           const color=peColorForName(ev.prenom);
-          const bg=color.replace('hsl(','hsla(').replace(')',',0.12)');
-          return '<div style="background:'+bg+';border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left;margin-bottom:4px;line-height:1.4"><strong>'+ev.prenom+'</strong> — '+(ev.label||ev.type)+'</div>';
+          return '<div style="background:'+color+';color:#fff;border-radius:4px;padding:4px 6px;font-size:11px;text-align:left;margin-bottom:4px;line-height:1.4"><strong>'+ev.prenom+'</strong> — '+(ev.label||ev.type)+'</div>';
         }).join('');
       }else{
         html+='<div style="text-align:center"><span style="color:#ddd">—</span></div>';
