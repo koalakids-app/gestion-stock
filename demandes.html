@@ -440,6 +440,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </select>
         </div>
         <span id="planning-top-badge" style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
+        <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="printPlanningMine()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
       </div>
       <div class="planning-grid" id="planning-grid-mine"></div>
     </div>
@@ -452,6 +453,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <span>Planning du coordinateur</span>
         </div>
         <span id="planning-coord-badge" style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
+        <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="printPlanningCoord()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
       </div>
       <div id="planning-coord-add-btn" style="display:none;margin-bottom:6px">
         <button class="btn-primary" style="font-size:12px;padding:6px 14px" onclick="openEventCoordModal()"><i class="ti ti-plus"></i> Ajouter</button>
@@ -470,9 +472,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </select>
         </div>
         <span id="pe-badge" style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
+        <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="printPlanningEquipe()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
       </div>
       <div id="pe-grid-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:8px"></div>
-      <div id="pe-legend" style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:#666"></div>
     </div>
   </div>
 
@@ -2307,7 +2309,6 @@ async function peDeleteCellEdit(){
 async function renderPlanningEquipe(){
   const sel=document.getElementById('pe-creche-select');
   const wrap=document.getElementById('pe-grid-wrap');
-  const legendEl=document.getElementById('pe-legend');
   if(!sel||!wrap)return;
 
   let crecheId;
@@ -2324,13 +2325,11 @@ async function renderPlanningEquipe(){
 
   if(!crecheId){
     wrap.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez une crèche</div>';
-    if(legendEl)legendEl.innerHTML='';
     return;
   }
 
   const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   wrap.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
-  if(legendEl)legendEl.innerHTML='';
   const rows=await peLoad(crecheId,semaine);
   const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
   // Éditable pour : la direction, OU la référente dont la propre crèche correspond à celle affichée
@@ -2340,29 +2339,17 @@ async function renderPlanningEquipe(){
     if(editable){peBadge.textContent='✏️ Modifiable';peBadge.style.background='var(--koala-light)';peBadge.style.color='var(--koala)';}
     else{peBadge.textContent='👁 Lecture seule';peBadge.style.background='#f0f0f5';peBadge.style.color='#888';}
   }
-  const{table,legend}=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
-  wrap.innerHTML=table;
-  if(legendEl)legendEl.innerHTML=legend;
+  wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
 }
 
 function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
-  if(!rows.length)return {table:'<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucune donnée pour cette semaine — importez un fichier Excel pour cette crèche.</div>',legend:''};
+  if(!rows.length)return '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucune donnée pour cette semaine — importez un fichier Excel pour cette crèche.</div>';
 
   const ws=new Date(semaine+'T00:00:00');
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
 
-  const typeColors={absent:'var(--orange)',conge:'#999',formation:'#378ADD',reunion:'#7B68EE'};
-
-  // Une couleur stable par salarié(e), attribuée selon l'ordre alphabétique des prénoms présents
-  // cette semaine-là (même logique que rmpColorFor pour les remplaçantes) — donne le même visuel
-  // "1 couleur par personne" que le planning Excel d'origine.
-  const PE_PERSON_COLORS=['#F4B183','#9DC3E6','#FFD966','#A9D18E','#C77DFF','#FF8FA3','#4FB0C6','#E07A5F'];
-  const peNamesThisWeek=[...new Set(rows.map(r=>r.prenom))].sort();
-  function peColorFor(prenom){
-    const idx=peNamesThisWeek.indexOf(prenom);
-    return PE_PERSON_COLORS[idx>=0?idx%PE_PERSON_COLORS.length:0];
-  }
+  const typeColors={presence:'var(--koala)',absent:'var(--orange)',conge:'#999',formation:'#378ADD',reunion:'#7B68EE'};
 
   // Sépare les événements qui ont un créneau horaire identifiable (ligne classique du fichier)
   // de ceux qui n'en ont pas (fusion de 2 activités, congé, absence) — affichés à part.
@@ -2383,7 +2370,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
 
   function renderCell(ev,crecheName){
     if(!ev)return '<span style="color:#ddd">—</span>';
-    const color=ev.type==='presence'?peColorFor(ev.prenom):(typeColors[ev.type]||'#ccc');
+    const color=typeColors[ev.type]||'#ccc';
     const ailleurs=ev.lieu&&ev.lieu!==crecheName;
     const clickAttr=editable?'onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"':'style="background:'+color+'1A;border-left:3px solid '+color+';border-radius:4px;padding:4px 6px;font-size:11px;text-align:left"';
     return '<div '+clickAttr+'>'+
@@ -2438,13 +2425,125 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable){
   }
 
   html+='</tbody></table>';
+  return html;
+}
 
-  const legend=peNamesThisWeek.map(prenom=>{
-    const color=peColorFor(prenom);
-    return '<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:'+color+'"></div>'+prenom+'</div>';
-  }).join('');
+// ════════════════════════════════════════════════════════════
+// IMPRESSION / EXPORT PDF DES PLANNINGS
+// ════════════════════════════════════════════════════════════
 
-  return {table:html,legend};
+// Construit un document HTML imprimable et lance l'impression (iframe caché, compatible mobile/tablette)
+function printPlanningDoc(title, subtitle, bodyHTML){
+  const html='<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">'+
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">'+
+    '<title>'+title+'</title>'+
+    '<style>'+
+      '*{margin:0;padding:0;box-sizing:border-box}'+
+      'body{font-family:Arial,sans-serif;color:#111;padding:24px;max-width:1000px;margin:0 auto}'+
+      'h1{font-size:1.5rem;font-weight:bold;margin-bottom:0.2rem;color:#3D3580}'+
+      '.sub{font-size:0.85rem;color:#666;margin-bottom:1rem}'+
+      'table{width:100%;border-collapse:collapse;margin-top:0.5rem}'+
+      'thead tr{background:#3D3580;color:#fff}'+
+      'th{padding:8px 10px;font-size:11px;text-align:left}'+
+      'td{padding:8px 10px;border-bottom:1px solid #E7E5E0;font-size:11px;vertical-align:top}'+
+      'tr:nth-child(even) td{background:#F9F9F8}'+
+      '.footer{margin-top:1.5rem;font-size:10px;color:#888;border-top:1px solid #E7E5E0;padding-top:10px}'+
+      '@media print{@page{margin:1.2cm;size:landscape}body{padding:0}}'+
+    '</style></head><body>'+
+    '<h1>'+title+'</h1>'+
+    '<div class="sub">'+subtitle+'</div>'+
+    bodyHTML+
+    '<div class="footer">Document généré le '+new Date().toLocaleDateString('fr-FR')+' à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' — Koala Kids</div>'+
+    '</body></html>';
+
+  const existing=document.getElementById('_print-frame-planning');
+  if(existing)existing.remove();
+  const iframe=document.createElement('iframe');
+  iframe.id='_print-frame-planning';
+  iframe.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none';
+  document.body.appendChild(iframe);
+  const doc=iframe.contentDocument||iframe.contentWindow.document;
+  doc.open();doc.write(html);doc.close();
+  iframe.onload=()=>{
+    try{iframe.contentWindow.focus();iframe.contentWindow.print();}
+    catch(e){showBanner('Erreur impression : '+e.message,'error');}
+  };
+}
+
+// Convertit une grille planning-grid (référent ou coordinateur) en tableau imprimable simple
+function planningGridToPrintTable(events,semaine){
+  const ws=new Date(semaine+'T00:00:00');
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+  let html='<table><thead><tr><th>Jour</th><th>Détail</th></tr></thead><tbody>';
+  days5.forEach((d,i)=>{
+    const evs=events.filter(e=>(e.jour===i||e.day===i));
+    let cell;
+    if(!evs.length){cell='—';}
+    else{
+      cell=evs.map(ev=>{
+        let t=ev.label||labels[ev.type]||ev.type;
+        if(ev.lieu&&ev.lieu!==t)t+=' — '+ev.lieu;
+        if(ev.hdebut&&ev.hfin)t+=' ('+formatHeure(ev.hdebut)+'–'+formatHeure(ev.hfin)+')';
+        if(ev.pause)t+=' — pause '+ev.pause;
+        if(ev.detach_desc||ev.detachDesc)t+=' : '+(ev.detach_desc||ev.detachDesc);
+        return t;
+      }).join('<br>');
+    }
+    html+='<tr><td style="font-weight:600;white-space:nowrap">'+DAYS[i]+' '+fmt(d)+'</td><td>'+cell+'</td></tr>';
+  });
+  html+='</tbody></table>';
+  return html;
+}
+
+// 1) Planning individuel (référent sélectionné en haut de l'onglet)
+async function printPlanningMine(){
+  const ws=weekStart();const semaine=ipDateToLocalISO(ws);
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  let personId,personName;
+  if(isDirection){
+    const sel=document.getElementById('planning-ref-select');
+    personId=sel?.value;
+    personName=personId?cacheReferents.find(r=>r.id===personId)?.name:'';
+    if(!personId){alert('Choisissez d\'abord un référent dans la liste avant d\'imprimer.');return;}
+  }else{
+    personId=currentProfile?.id||currentUser?.id;
+    personName=currentProfile?.name||'';
+  }
+  const evs=await planningLoad(personId,semaine);
+  const subtitle=(personName||'Planning')+' — semaine du '+fmt(days5[0])+' au '+fmt(days5[4]);
+  printPlanningDoc('Planning individuel',subtitle,planningGridToPrintTable(evs,semaine));
+}
+
+// 2) Planning du coordinateur
+async function printPlanningCoord(){
+  const ws=weekStart();const semaine=ipDateToLocalISO(ws);
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
+  if(!coord){alert('Coordinateur non disponible.');return;}
+  const evs=await planningLoad(coord.id,semaine);
+  const subtitle='Planning du coordinateur — semaine du '+fmt(days5[0])+' au '+fmt(days5[4]);
+  printPlanningDoc('Planning du coordinateur',subtitle,planningGridToPrintTable(evs,semaine));
+}
+
+// 3) Planning équipe (toutes les salariées de la crèche affichée)
+async function printPlanningEquipe(){
+  const sel=document.getElementById('pe-creche-select');
+  const crecheId=isDirection?sel?.value:currentProfile?.creche_id;
+  if(!crecheId){alert('Choisissez d\'abord une crèche avant d\'imprimer.');return;}
+  const ws=weekStart();const semaine=ipDateToLocalISO(ws);
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
+  const rows=await peLoad(crecheId,semaine);
+  if(!rows.length){alert('Aucune donnée à imprimer pour cette crèche cette semaine.');return;}
+  // Réutilise le rendu HTML existant (non éditable) et le débarrasse des attributs onclick/cursor pour l'impression
+  let bodyHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,false);
+  const subtitle='Planning équipe — '+crecheName+' — semaine du '+fmt(days5[0])+' au '+fmt(days5[4]);
+  printPlanningDoc('Planning équipe',subtitle,bodyHTML);
 }
 
 // ── IK PLANNING (Supabase cache) — voir ikReadPlanning plus bas, version active ──
