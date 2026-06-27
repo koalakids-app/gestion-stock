@@ -51,6 +51,9 @@ if (location.protocol === 'https:') {
   --radius-sm: 8px;
 }
 
+/* Bouton aide flottant masqué quand une modale est ouverte (évite le chevauchement avec les boutons du footer modal) */
+body:has(.modal-overlay.open) #helpFloatBtn { display: none !important; }
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -823,25 +826,61 @@ body.is-fullscreen .sidebar-trigger {
 /* ── RESPONSIVE MOBILE ── */
 @media (max-width: 768px) {
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 270px; box-shadow: none; }
+  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 100%; max-width: 320px; box-shadow: none; }
   .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-lg); }
   .mobile-menu-btn { display: inline-flex !important; }
   .sidebar-trigger { display: none !important; }
-  .topbar { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+  .nav-item { padding: 14px 20px; font-size: 15px; min-height: 48px; }
+  .nav-item .nav-icon { font-size: 18px; }
+  .sidebar-section-title { padding: 18px 20px 10px; font-size: 11px; }
+  .creche-badge { padding: 12px 12px; font-size: 14px; min-height: 44px; }
+  .creche-dot { width: 10px; height: 10px; }
+  .creche-count { font-size: 12px; }
+  .sidebar-creches { padding: 16px 20px calc(16px + env(safe-area-inset-bottom)); }
+  .topbar { padding: 10px 14px 12px; flex-wrap: wrap; gap: 8px; }
   .topbar-left { flex: 1; min-width: 0; gap: 8px; }
   .page-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
-  .topbar-right { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; width: 100%; padding-bottom: 2px; }
-  .topbar-right .btn { flex-shrink: 0; font-size: 12px; padding: 7px 10px; }
+  .search-box { min-width: unset; width: 100%; order: 1; flex-basis: 100%; }
+  #save-indicator { display: none !important; }
+
+  /* Bandeau d'actions : icônes + libellés courts, homogènes, scroll horizontal avec indice visuel */
+  .topbar-right {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    width: 100%;
+    order: 2;
+    padding: 2px 2px 6px 0;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+  }
+  .topbar-right::-webkit-scrollbar { display: none; }
+  .topbar-right .btn {
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 10px;
+    line-height: 1.1;
+    padding: 7px 10px 6px;
+    min-width: 52px;
+    min-height: 44px;
+  }
+  .topbar-right .btn-label-short { display: flex !important; flex-direction: column; align-items: center; gap: 2px; }
+  .btn-ic { font-size: 15px; line-height: 1; }
+  .btn-tx { font-size: 10px; font-weight: 600; white-space: nowrap; }
+  #fullscreenBtn { min-width: 40px; padding: 7px 9px; }
   .btn-label-long { display: none; }
   .btn-label-short { display: inline !important; }
-  .search-box { min-width: unset; width: 100%; order: 10; flex-basis: 100%; }
-  #save-indicator { display: none !important; }
   .content { padding: 12px; }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-  .stat-card { padding: 12px 14px; }
-  .stat-value { font-size: 22px; }
-  .stat-label { font-size: 10px; }
-  .stat-sub { font-size: 11px; }
+  .stat-card { padding: 14px 14px 12px; }
+  .stat-value { font-size: 26px; }
+  .stat-label { font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-sub { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { min-width: 500px; }
   #inv-table-materiel thead th:nth-child(6),
@@ -913,6 +952,8 @@ body.is-fullscreen .sidebar-trigger {
 
   /* Select natif Android : flèche et padding cohérents avec les inputs */
   select { padding-right: 32px; }
+  /* La zone drag & drop n'a pas de sens au tactile : masquée sur mobile pour gagner de la place dans le formulaire */
+  .photo-upload-zone { display: none !important; }
 }
 
 /* Tablette */
@@ -1054,24 +1095,24 @@ body.is-fullscreen .sidebar-trigger {
       </div>
       <button class="btn btn-secondary" onclick="triggerImport()">
         <span class="btn-label-long">⬆ Importer Excel</span>
-        <span class="btn-label-short" style="display:none">⬆ XLS</span>
+        <span class="btn-label-short" style="display:none"><span class="btn-ic">⬆</span><span class="btn-tx">Excel</span></span>
       </button>
       <input type="file" id="importInput" accept=".xlsx" style="display:none" onchange="importExcel(event)">
       <button class="btn btn-secondary" onclick="exportCSV()">
         <span class="btn-label-long">⬇ Exporter</span>
-        <span class="btn-label-short" style="display:none">⬇ CSV</span>
+        <span class="btn-label-short" style="display:none"><span class="btn-ic">⬇</span><span class="btn-tx">CSV</span></span>
       </button>
       <button class="btn btn-secondary" onclick="exportBackup()" title="Sauvegarder toutes les données (JSON)">
         <span class="btn-label-long">💾 Sauvegarder</span>
-        <span class="btn-label-short" style="display:none">💾</span>
+        <span class="btn-label-short" style="display:none"><span class="btn-ic">💾</span><span class="btn-tx">Save</span></span>
       </button>
       <button class="btn btn-secondary" onclick="document.getElementById('restoreInput').click()" title="Restaurer une sauvegarde">
         <span class="btn-label-long">📂 Restaurer</span>
-        <span class="btn-label-short" style="display:none">📂</span>
+        <span class="btn-label-short" style="display:none"><span class="btn-ic">📂</span><span class="btn-tx">Restau.</span></span>
       </button>
       <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="importBackup(event)">
       <span id="save-indicator" style="font-size:11px;color:var(--ink3);white-space:nowrap">⏳ Connexion…</span>
-      <button class="btn btn-secondary btn-sm" onclick="onClearData()" title="Supprimer toutes les données locales" style="color:var(--red);border-color:#FECACA;flex-shrink:0">🗑 Reset</button>
+      <button class="btn btn-secondary btn-sm" onclick="onClearData()" title="Supprimer toutes les données locales" style="color:var(--red);border-color:#FECACA;flex-shrink:0"><span class="btn-ic">🗑</span><span class="btn-tx btn-label-short" style="display:none">Reset</span><span class="btn-label-long">🗑 Reset</span></button>
     </div>
   </div>
 
@@ -2340,6 +2381,22 @@ function closeModalClick(e, id) {
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => { m.classList.remove('open'); document.body.style.overflow = ''; }); });
+
+// Fallback pour navigateurs sans support CSS :has() : masque le bouton aide flottant
+// quand une modale est ouverte (sécurité, le CSS gère déjà le cas normal).
+if (!CSS.supports('selector(:has(*))')) {
+  const helpBtn = document.getElementById('helpFloatBtn');
+  if (helpBtn) {
+    const updateHelpBtnVisibility = () => {
+      const hasOpenModal = !!document.querySelector('.modal-overlay.open');
+      helpBtn.style.display = hasOpenModal ? 'none' : 'flex';
+    };
+    new MutationObserver(updateHelpBtnVisibility).observe(document.body, {
+      attributes: true, attributeFilter: ['class'], subtree: true
+    });
+    updateHelpBtnVisibility();
+  }
+}
 
 // ─── SAVE ARTICLE ─────────────────────────────────────────────────────────
 async function saveArticle() {
@@ -5432,7 +5489,7 @@ function showImportResult(type, html) {
 </div>
 
 <!-- ── BOUTON FLOTTANT AIDE ── -->
-<button onclick="openNotice()" title="Aide & Notice d'utilisation"
+<button id="helpFloatBtn" onclick="openNotice()" title="Aide & Notice d'utilisation"
   style="position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;
          background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:22px;
          font-weight:700;box-shadow:0 4px 16px rgba(37,99,235,0.4);z-index:999;
