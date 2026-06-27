@@ -417,6 +417,7 @@ input, select, textarea {
   background: var(--surface2);
   outline: none;
   transition: border-color 0.15s;
+  min-height: 38px;
 }
 
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
@@ -882,6 +883,36 @@ body.is-fullscreen .sidebar-trigger {
   #inv-tab-materiel, #inv-tab-consommable { font-size: 12px !important; padding: 8px 12px !important; }
   .install-bar { padding: 12px 16px; }
   .fournisseur-card { flex-wrap: wrap; }
+
+  /* ── SAISIE OPTIMISÉE ANDROID/MOBILE ── */
+  /* 16px = empêche le zoom automatique du navigateur à l'ouverture du clavier */
+  input, select, textarea {
+    font-size: 16px;
+    padding: 11px 12px;
+    min-height: 44px;
+  }
+  textarea { min-height: 90px; }
+  label { font-size: 13px; margin-bottom: 2px; }
+  .form-group { gap: 8px; }
+  .form-grid { gap: 14px; }
+
+  /* Cases à cocher / radios : zone de tap agrandie (cible tactile ≥ 24px) */
+  input[type="checkbox"], input[type="radio"] {
+    width: 22px !important;
+    height: 22px !important;
+    min-height: unset;
+    flex-shrink: 0;
+  }
+
+  /* Boutons : hauteur tactile confortable sur tout l'écran, pas seulement la topbar */
+  .btn { min-height: 42px; font-size: 14px; }
+  .btn-sm { min-height: 36px; }
+
+  /* Empêche le double-tap-zoom accidentel pendant la saisie */
+  input, select, textarea, button, .btn { touch-action: manipulation; }
+
+  /* Select natif Android : flèche et padding cohérents avec les inputs */
+  select { padding-right: 32px; }
 }
 
 /* Tablette */
@@ -1444,7 +1475,7 @@ body.is-fullscreen .sidebar-trigger {
         </div>
         <div class="form-group">
           <label>Prix unitaire (€)</label>
-          <input type="number" id="f-prix" min="0" step="0.01" placeholder="0.00">
+          <input type="number" id="f-prix" min="0" step="0.01" placeholder="0.00" inputmode="decimal">
         </div>
         <div class="form-group">
           <label>Fournisseur</label>
@@ -1569,7 +1600,7 @@ body.is-fullscreen .sidebar-trigger {
         </div>
         <div class="form-group">
           <label>Montant total (€) <span style="font-size:10px;color:var(--ink3);font-weight:400">— calculé automatiquement</span></label>
-          <input type="number" id="c-montant" placeholder="0.00" step="0.01" readonly
+          <input type="number" id="c-montant" placeholder="0.00" step="0.01" inputmode="decimal" readonly
                  style="background:var(--bg);font-weight:700;color:var(--accent);cursor:default">
         </div>
         <div class="form-group">
@@ -2318,23 +2349,8 @@ async function saveArticle() {
   const stock = parseInt(document.getElementById('f-stock').value) || 0;
   if (!nom || !cat || !creche) { showNotif('⚠ Remplissez les champs obligatoires'); return; }
 
-  const articleId = editingId || Date.now();
-
-  // Upload de la photo vers Supabase Storage (au lieu de stocker le base64 en base)
-  let photoUrl = editingId ? (ARTICLES.find(a=>a.id===editingId)||{}).photo : null;
-  if (currentPhotoFile) {
-    try {
-      showNotif('📤 Envoi de la photo…');
-      photoUrl = await uploadPhotoToStorage(currentPhotoFile, articleId);
-    } catch (err) {
-      console.error('[Photo]', err.message);
-      showNotif('❌ Erreur envoi photo — article enregistré sans photo');
-      photoUrl = editingId ? (ARTICLES.find(a=>a.id===editingId)||{}).photo : null;
-    }
-  }
-
   const article = {
-    id: articleId,
+    id: editingId || Date.now(),
     nom,
     ref: document.getElementById('f-ref').value.trim() || `MAT-${String(Date.now()).slice(-4)}`,
     cat,
@@ -2348,7 +2364,7 @@ async function saveArticle() {
     date_achat: (document.getElementById('f-date-achat')||{}).value || null,
     etat_override: (document.getElementById('f-etat')||{}).value || null,
     depreciable: document.getElementById('f-depreciable')?.checked !== false,
-    photo: photoUrl,
+    photo: currentPhotoData || (editingId ? (ARTICLES.find(a=>a.id===editingId)||{}).photo : null),
     photoName: currentPhotoName || null,
   };
 
@@ -2369,7 +2385,6 @@ async function saveArticle() {
 
   currentPhotoData = null;
   currentPhotoName = null;
-  currentPhotoFile = null;
   resetPhotoUpload();
   closeModal('modal-add');
   renderActiveInvTable();
@@ -2410,26 +2425,6 @@ function generateBC() {
   return `${nom}-${date}-${String(seq).padStart(2,'0')}`;
 }
 
-// Upload toutes les photos de lignes nouvellement choisies (articleRowFiles) vers Storage,
-// met à jour articleRowPhotos avec les URLs obtenues, et retourne le JSON final à persister.
-// Les entrées déjà présentes dans articleRowPhotos sans fichier associé (URLs ou base64 résiduel
-// d'une commande existante non modifiée) sont conservées telles quelles.
-async function uploadRowPhotos(commandeId) {
-  const idxToUpload = Object.keys(articleRowFiles);
-  for (const idx of idxToUpload) {
-    try {
-      const url = await uploadPhotoToStorage(articleRowFiles[idx], `${commandeId}-${idx}`, 'commandes-photos');
-      articleRowPhotos[idx] = url;
-    } catch (err) {
-      console.error('[Photo ligne commande]', idx, err.message);
-      showNotif(`⚠ Photo ligne ${parseInt(idx)+1} non envoyée — ${err.message}`);
-      // on laisse l'aperçu base64 existant dans articleRowPhotos[idx] plutôt que de le perdre
-    }
-    delete articleRowFiles[idx];
-  }
-  return Object.keys(articleRowPhotos).length > 0 ? JSON.stringify(articleRowPhotos) : null;
-}
-
 async function saveCommande_db() {
   const montant = parseFloat(document.getElementById('c-montant').value) || 0;
   const bc = document.getElementById('c-bc').value.trim() || generateBC();
@@ -2451,14 +2446,13 @@ async function saveCommande_db() {
   });
   if (!fourn) fourn = '—';
 
-  const commandeId = Date.now();
-
-  // Upload des photos de lignes vers Supabase Storage (au lieu de stocker le base64 en base)
-  if (Object.keys(articleRowFiles).length > 0) showNotif('📤 Envoi des photos…');
-  const photosJson = await uploadRowPhotos(commandeId);
+  // Sérialiser les photos par index de ligne
+  const photosJson = Object.keys(articleRowPhotos).length > 0
+    ? JSON.stringify(articleRowPhotos)
+    : null;
 
   COMMANDES.push({
-    id: commandeId,
+    id: Date.now(),
     fourn, creche,
     date: document.getElementById('c-date').value,
     livraison: '',
@@ -2778,11 +2772,11 @@ function editCommande(id) {
   const saveBtn = document.getElementById('btn-save-commande');
   if (saveBtn) {
     saveBtn.textContent = '💾 Mettre à jour';
-    saveBtn.onclick = () => onUpdateCommande(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); });
+    saveBtn.onclick = () => onUpdateCommande(id);
   }
 }
 
-async function onUpdateCommande(id) {
+function onUpdateCommande(id) {
   const c = COMMANDES.find(x => x.id === id);
   if (!c) return;
   c.date     = document.getElementById('c-date')?.value || c.date;
@@ -2791,11 +2785,8 @@ async function onUpdateCommande(id) {
   c.montant  = parseFloat(document.getElementById('c-montant')?.value) || c.montant;
   c.bc       = document.getElementById('c-bc')?.value.trim() || c.bc;
   c.creche   = document.getElementById('c-creche-select')?.value || c.creche;
-
-  // Upload des nouvelles photos de lignes vers Supabase Storage avant sauvegarde
-  if (Object.keys(articleRowFiles).length > 0) showNotif('📤 Envoi des photos…');
-  const newPhotosJson = await uploadRowPhotos(id);
-  c.photos_json = newPhotosJson || c.photos_json || null;
+  c.photos_json = Object.keys(articleRowPhotos).length > 0
+    ? JSON.stringify(articleRowPhotos) : (c.photos_json || null);
 
   resetCommandeModal();
   saveData();
@@ -3465,17 +3456,13 @@ function filterUnivers(cat, el) {
 }
 
 let _universPhotoData = null;
-let _universPhotoFile = null;
 
 function handleUniversPhoto(event) {
   const file = event.target.files[0];
   if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { showNotif('⚠ Photo trop grande — max 5 Mo'); return; }
-  if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
   const reader = new FileReader();
   reader.onload = e => {
-    _universPhotoFile = file; // fichier brut conservé pour upload Storage à la sauvegarde
-    _universPhotoData = e.target.result; // aperçu local uniquement
+    _universPhotoData = e.target.result;
     const img = document.getElementById('u-photo-img');
     const preview = document.getElementById('u-photo-preview');
     const label = document.getElementById('u-photo-label');
@@ -3488,7 +3475,6 @@ function handleUniversPhoto(event) {
 
 function removeUniversPhoto() {
   _universPhotoData = null;
-  _universPhotoFile = null;
   const img = document.getElementById('u-photo-img');
   const preview = document.getElementById('u-photo-preview');
   const label = document.getElementById('u-photo-label');
@@ -3588,7 +3574,6 @@ function getSelectedArticleIds() {
 function openModal_univers() {
   editingUniversId = null;
   _universPhotoData = null;
-  _universPhotoFile = null;
   document.getElementById('modalUniversTitle').textContent = 'Créer un univers ludique';
   document.getElementById('btn-save-univers').textContent = '✨ Enregistrer l\'univers';
   ['u-nom','u-age','u-duree','u-enfants','u-desc','u-conseils'].forEach(id => {
@@ -3613,22 +3598,6 @@ async function saveUnivers() {
   const nom = document.getElementById('u-nom').value.trim();
   if (!nom) { showNotif('⚠ Nom obligatoire'); return; }
 
-  const universId = editingUniversId || Date.now();
-
-  // Upload de la photo vers Supabase Storage (au lieu de stocker le base64 en base).
-  // _universPhotoData===null couvre à la fois "jamais eu de photo" et "supprimée via removeUniversPhoto".
-  let photoUrl = _universPhotoData === null ? null : _universPhotoData;
-  if (_universPhotoFile) {
-    try {
-      showNotif('📤 Envoi de la photo…');
-      photoUrl = await uploadPhotoToStorage(_universPhotoFile, universId, 'univers-photos');
-    } catch (err) {
-      console.error('[Photo univers]', err.message);
-      showNotif('❌ Erreur envoi photo — univers enregistré sans photo');
-      photoUrl = editingUniversId ? (UNIVERS.find(u=>u.id===editingUniversId)||{}).photo : null;
-    }
-  }
-
   const creche = document.getElementById('u-creche')?.value || CRECHES[0];
   const data = {
     nom,
@@ -3638,7 +3607,7 @@ async function saveUnivers() {
     conseils: document.getElementById('u-conseils').value.trim(),
     articles: JSON.stringify(getSelectedArticleIds()),
     souscat:  parseInt(document.getElementById('u-souscat')?.value) || null,
-    photo:    photoUrl,
+    photo:    _universPhotoData,
     created_at: new Date().toISOString(),
   };
 
@@ -3650,13 +3619,11 @@ async function saveUnivers() {
     }
     showNotif('✅ Univers mis à jour');
   } else {
-    const newU = { id: universId, ...data };
+    const newU = { id: Date.now(), ...data };
     UNIVERS.unshift(newU);
     if (!IS_LOCAL) await saveUniversDB(newU, true).catch(e => console.warn(e));
     showNotif('✨ Univers créé !');
   }
-  _universPhotoData = null;
-  _universPhotoFile = null;
   saveData();
   closeModal('modal-univers');
   renderUnivers();
@@ -3952,8 +3919,7 @@ function showNotif(msg) {
 // ─── LIGNES D'ARTICLES DANS FORMULAIRE COMMANDE ──────────────────────────
 
 let articleRowCount = 0;
-const articleRowPhotos = {}; // idx → URL (ou base64 résiduel d'avant migration) pour l'aperçu
-const articleRowFiles = {};  // idx → File brut, uniquement pour les photos nouvellement choisies cette session
+const articleRowPhotos = {}; // idx → base64 photo
 
 function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='') {
   const idx = articleRowCount++;
@@ -3979,7 +3945,7 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='') {
       <option value="">— Cat. —</option>
       ${['Sensoriel','Manipulation','Construction','Motricité','Imitation','Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration'].map(c=>`<option value="${c}" ${cat===c?'selected':''}>${c}</option>`).join('')}
     </select>
-    <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00"
+    <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00" inputmode="decimal"
            oninput="calcCommandeTotal()" style="text-align:right">
     <button class="del-row" onclick="removeArticleRow(${idx})" title="Supprimer">×</button>
     <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:4px 8px 6px;border-top:1px solid var(--border);background:var(--bg)">
@@ -4006,8 +3972,7 @@ function handleRowPhoto(event, idx) {
   if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
   const reader = new FileReader();
   reader.onload = e => {
-    articleRowFiles[idx] = file; // fichier brut conservé pour upload Storage à la sauvegarde
-    articleRowPhotos[idx] = e.target.result; // aperçu local uniquement, jamais envoyé en base
+    articleRowPhotos[idx] = e.target.result;
     const prev = document.getElementById(`row-photo-prev-${idx}`);
     const del  = document.getElementById(`row-photo-del-${idx}`);
     const btn  = document.getElementById(`row-photo-btn-${idx}`);
@@ -4020,7 +3985,6 @@ function handleRowPhoto(event, idx) {
 
 function deleteRowPhoto(idx) {
   delete articleRowPhotos[idx];
-  delete articleRowFiles[idx];
   const prev = document.getElementById(`row-photo-prev-${idx}`);
   const del  = document.getElementById(`row-photo-del-${idx}`);
   const btn  = document.getElementById(`row-photo-btn-${idx}`);
@@ -4032,8 +3996,6 @@ function deleteRowPhoto(idx) {
 function removeArticleRow(idx) {
   const row = document.getElementById(`article-row-${idx}`);
   if (row) { row.remove(); calcCommandeTotal(); }
-  delete articleRowPhotos[idx];
-  delete articleRowFiles[idx];
 }
 
 function calcCommandeTotal() {
@@ -4080,8 +4042,6 @@ function commanderArticle(id) {
   const container = document.getElementById('articles-rows');
   if (container) container.innerHTML = '';
   articleRowCount = 0;
-  Object.keys(articleRowPhotos).forEach(k => delete articleRowPhotos[k]);
-  Object.keys(articleRowFiles).forEach(k => delete articleRowFiles[k]);
   // Clean nom from any price/fourn suffixes
   const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
   addArticleRow('1', nomClean, a.prix > 0 ? a.prix.toFixed(2) : '', a.url || '', a.fourn || '');
@@ -4092,7 +4052,6 @@ function resetArticleRows() {
   if (container) container.innerHTML = '';
   articleRowCount = 0;
   Object.keys(articleRowPhotos).forEach(k => delete articleRowPhotos[k]);
-  Object.keys(articleRowFiles).forEach(k => delete articleRowFiles[k]);
   addArticleRow(); // Toujours au moins une ligne vide
 }
 
@@ -4123,7 +4082,6 @@ function getArticlesFromRows() {
 
 let currentPhotoData = null;
 let currentPhotoName = null;
-let currentPhotoFile = null;
 
 function handlePhotoUpload(event) {
   const file = event.target.files[0];
@@ -4146,8 +4104,7 @@ function processPhotoFile(file) {
   }
   const reader = new FileReader();
   reader.onload = async e => {
-    currentPhotoFile = file; // fichier brut conservé pour upload Storage à la sauvegarde
-    currentPhotoData = e.target.result; // aperçu local uniquement, jamais envoyé en base
+    currentPhotoData = e.target.result;
     currentPhotoName = file.name;
     showPhotoPreview(e.target.result, file.name);
     showNotif('📷 Photo chargée');
@@ -4183,7 +4140,6 @@ function resetPhotoUpload() {
   if (fc) fc.value = '';
   currentPhotoData = null;
   currentPhotoName = null;
-  currentPhotoFile = null;
 }
 
 function removePhoto(event) {
@@ -4220,22 +4176,19 @@ function handleDetailPhotoUpload(event, id) {
   const file = event.target.files[0];
   if (!file) return;
   if (file.size > 5 * 1024 * 1024) { showNotif('⚠ Photo trop grande — max 5 Mo'); return; }
-  if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
-  showNotif('📤 Envoi de la photo…');
-  uploadPhotoToStorage(file, id).then(url => {
+  const reader = new FileReader();
+  reader.onload = async e => {
     const a = ARTICLES.find(x => x.id === id);
     if (a) {
-      a.photo = url;
+      a.photo = e.target.result;
       a.photoName = file.name;
       saveData();
       showNotif('📷 Photo ajoutée');
       renderActiveInvTable();
       showDetail(id);
     }
-  }).catch(err => {
-    console.error('[Photo]', err.message);
-    showNotif('❌ Erreur envoi photo — réessayez');
-  });
+  };
+  reader.readAsDataURL(file);
 }
 
 async function removeArticlePhoto(id) {
@@ -4260,30 +4213,6 @@ const SUPA_HEADERS = {
   'Authorization': 'Bearer ' + SUPA_KEY,
   'Prefer': 'return=minimal',
 };
-
-// ── UPLOAD PHOTO VERS SUPABASE STORAGE ──────────────────────────────────
-// Remplace le stockage base64 en base par un upload direct vers le bucket "assets",
-// suivi du retour de l'URL publique. Évite de surcharger l'egress (cf. migration-photos-storage.html).
-const PHOTO_BUCKET = 'assets';
-async function uploadPhotoToStorage(file, idHint, folder = 'articles-photos') {
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'') || 'jpg';
-  const path = `${folder}/${idHint}-${Date.now()}.${ext}`;
-  const res = await fetch(`${SUPA_URL}/storage/v1/object/${PHOTO_BUCKET}/${path}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + SUPA_KEY,
-      'apikey': SUPA_KEY,
-      'Content-Type': file.type || 'image/jpeg',
-      'x-upsert': 'true',
-    },
-    body: file,
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(()=>'');
-    throw new Error(`Upload photo : ${res.status} — ${body}`);
-  }
-  return `${SUPA_URL}/storage/v1/object/public/${PHOTO_BUCKET}/${path}`;
-}
 
 // ── FIX : Supabase en mode dégradé si la clé ne fonctionne pas ──────────
 // L'app fonctionne avec les données d'exemple si Supabase est inaccessible
