@@ -4804,8 +4804,30 @@ if ('serviceWorker' in navigator &&
     !location.hostname.includes('claudeusercontent')) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js')
-      .then(r => console.log('SW registered:', r.scope))
+      .then(reg => {
+        console.log('SW registered:', reg.scope);
+        // Si une mise à jour de sw.js est détectée, l'activer immédiatement sans attendre
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
+        // Vérifie s'il existe une mise à jour de sw.js à chaque chargement de page
+        reg.update();
+      })
       .catch(e => console.log('SW error:', e));
+  });
+  // Quand le nouveau Service Worker prend le contrôle, recharger une seule fois
+  // pour afficher immédiatement la dernière version (évite l'effet "ancienne version figée")
+  let swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (swRefreshing) return;
+    swRefreshing = true;
+    location.reload();
   });
 }
 
