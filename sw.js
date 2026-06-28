@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v3';
+const CACHE_NAME = 'stocks-v4';
 
 self.addEventListener('install', event => {
   event.waitUntil(
