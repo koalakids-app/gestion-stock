@@ -51,6 +51,9 @@ if (location.protocol === 'https:') {
   --radius-sm: 8px;
 }
 
+/* Bouton aide flottant masqué quand une modale est ouverte (évite le chevauchement avec les boutons du footer modal) */
+body:has(.modal-overlay.open) #helpFloatBtn { display: none !important; }
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -163,7 +166,7 @@ body {
 .creche-count { margin-left: auto; color: rgba(255,255,255,0.35); font-size: 11px; }
 
 /* ── MAIN ── */
-.main { display: flex; flex-direction: column; min-height: 100vh; }
+.main { display: flex; flex-direction: column; min-height: 100vh; min-width: 0; }
 
 .topbar {
   background: var(--surface2);
@@ -261,6 +264,8 @@ body {
 .stat-value { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; color: var(--ink); line-height: 1; }
 .stat-sub { font-size: 12px; color: var(--ink3); margin-top: 6px; }
 .stat-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-top: 8px; }
+.stat-link { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 10px; cursor: pointer; }
+.stat-link:hover { text-decoration: underline; }
 
 /* ── SECTION HEADER ── */
 .section-header {
@@ -417,6 +422,7 @@ input, select, textarea {
   background: var(--surface2);
   outline: none;
   transition: border-color 0.15s;
+  min-height: 38px;
 }
 
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
@@ -822,26 +828,62 @@ body.is-fullscreen .sidebar-trigger {
 /* ── RESPONSIVE MOBILE ── */
 @media (max-width: 768px) {
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 270px; box-shadow: none; }
+  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 100%; max-width: 320px; box-shadow: none; }
   .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-lg); }
   .mobile-menu-btn { display: inline-flex !important; }
   .sidebar-trigger { display: none !important; }
-  #fullscreenBtn { display: none !important; }
-  .topbar { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+  .nav-item { padding: 14px 20px; font-size: 15px; min-height: 48px; }
+  .nav-item .nav-icon { font-size: 18px; }
+  .sidebar-section-title { padding: 18px 20px 10px; font-size: 11px; }
+  .creche-badge { padding: 12px 12px; font-size: 14px; min-height: 44px; }
+  .creche-dot { width: 10px; height: 10px; }
+  .creche-count { font-size: 12px; }
+  .sidebar-creches { padding: 16px 20px calc(16px + env(safe-area-inset-bottom)); }
+  .topbar { padding: 10px 14px 12px; flex-wrap: wrap; gap: 8px; }
   .topbar-left { flex: 1; min-width: 0; gap: 8px; }
   .page-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
-  .topbar-right { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; width: 100%; padding-bottom: 2px; }
-  .topbar-right .btn { flex-shrink: 0; font-size: 12px; padding: 7px 10px; }
+  .search-box { min-width: unset; width: 100%; order: 1; flex-basis: 100%; }
+  #save-indicator { display: none !important; }
+
+  /* Bandeau d'actions : icônes + libellés courts, homogènes, scroll horizontal avec indice visuel */
+  .topbar-right {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    width: 100%;
+    order: 2;
+    padding: 2px 2px 6px 0;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+  }
+  .topbar-right::-webkit-scrollbar { display: none; }
+  .topbar-right .btn {
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 10px;
+    line-height: 1.1;
+    padding: 7px 10px 6px;
+    min-width: 52px;
+    min-height: 44px;
+  }
+  .topbar-right .btn-label-short { display: flex !important; flex-direction: column; align-items: center; gap: 2px; }
+  .btn-ic { font-size: 15px; line-height: 1; }
+  .btn-tx { font-size: 10px; font-weight: 600; white-space: nowrap; }
+  #fullscreenBtn { min-width: 40px; padding: 7px 9px; }
   .btn-label-long { display: none; }
   .btn-label-short { display: inline !important; }
-  .search-box { min-width: unset; width: 100%; order: 10; flex-basis: 100%; }
-  #save-indicator { display: none !important; }
   .content { padding: 12px; }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-  .stat-card { padding: 12px 14px; }
-  .stat-value { font-size: 22px; }
-  .stat-label { font-size: 10px; }
-  .stat-sub { font-size: 11px; }
+  .stat-card { padding: 14px 14px 12px; }
+  .stat-value { font-size: 26px; }
+  .stat-label { font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-sub { display: none; }
+  .stat-link { font-size: 11px; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { min-width: 500px; }
   #inv-table-materiel thead th:nth-child(6),
@@ -872,8 +914,18 @@ body.is-fullscreen .sidebar-trigger {
   .modal-footer .btn { flex: 1; justify-content: center; min-width: 100px; }
   .commande-card { grid-template-columns: 1fr; }
   .commande-total, .commande-total-label { text-align: left; }
-  .filters { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
-  .filter-chip { flex-shrink: 0; }
+  .filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px 2px 8px 0;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+  }
+  .filters::-webkit-scrollbar { display: none; }
+  .filter-chip { flex-shrink: 0; padding: 8px 14px; font-size: 13px; min-height: 36px; display: flex; align-items: center; }
   #univers-list { grid-template-columns: 1fr !important; }
   .notif { bottom: 16px; left: 12px; right: 12px; text-align: center; }
   button[onclick="openNotice()"] { bottom: 70px !important; right: 16px !important; width: 44px !important; height: 44px !important; font-size: 18px !important; }
@@ -883,6 +935,38 @@ body.is-fullscreen .sidebar-trigger {
   #inv-tab-materiel, #inv-tab-consommable { font-size: 12px !important; padding: 8px 12px !important; }
   .install-bar { padding: 12px 16px; }
   .fournisseur-card { flex-wrap: wrap; }
+
+  /* ── SAISIE OPTIMISÉE ANDROID/MOBILE ── */
+  /* 16px = empêche le zoom automatique du navigateur à l'ouverture du clavier */
+  input, select, textarea {
+    font-size: 16px;
+    padding: 11px 12px;
+    min-height: 44px;
+  }
+  textarea { min-height: 90px; }
+  label { font-size: 13px; margin-bottom: 2px; }
+  .form-group { gap: 8px; }
+  .form-grid { gap: 14px; }
+
+  /* Cases à cocher / radios : zone de tap agrandie (cible tactile ≥ 24px) */
+  input[type="checkbox"], input[type="radio"] {
+    width: 22px !important;
+    height: 22px !important;
+    min-height: unset;
+    flex-shrink: 0;
+  }
+
+  /* Boutons : hauteur tactile confortable sur tout l'écran, pas seulement la topbar */
+  .btn { min-height: 42px; font-size: 14px; }
+  .btn-sm { min-height: 36px; }
+
+  /* Empêche le double-tap-zoom accidentel pendant la saisie */
+  input, select, textarea, button, .btn { touch-action: manipulation; }
+
+  /* Select natif Android : flèche et padding cohérents avec les inputs */
+  select { padding-right: 32px; }
+  /* La zone drag & drop n'a pas de sens au tactile : masquée sur mobile pour gagner de la place dans le formulaire */
+  .photo-upload-zone { display: none !important; }
 }
 
 /* Tablette */
@@ -939,7 +1023,7 @@ body.is-fullscreen .sidebar-trigger {
   <button class="nav-item active" onclick="showPage('inventaire', this)">
     <span class="nav-icon">📦</span> Inventaire
   </button>
-  <button class="nav-item" onclick="showPage('commandes', this)">
+  <button class="nav-item" id="navItemCommandes" onclick="showPage('commandes', this)">
     <span class="nav-icon">🛒</span> Commandes
   </button>
   <button class="nav-item" onclick="showPage('fournisseurs', this)">
@@ -1024,24 +1108,24 @@ body.is-fullscreen .sidebar-trigger {
       </div>
       <button class="btn btn-secondary" onclick="triggerImport()">
         <span class="btn-label-long">⬆ Importer Excel</span>
-        <span class="btn-label-short" style="display:none">⬆ XLS</span>
+        <span class="btn-label-short" style="display:none"><span class="btn-ic">⬆</span><span class="btn-tx">Excel</span></span>
       </button>
       <input type="file" id="importInput" accept=".xlsx" style="display:none" onchange="importExcel(event)">
       <button class="btn btn-secondary" onclick="exportCSV()">
         <span class="btn-label-long">⬇ Exporter</span>
-        <span class="btn-label-short" style="display:none">⬇ CSV</span>
+        <span class="btn-label-short" style="display:none"><span class="btn-ic">⬇</span><span class="btn-tx">CSV</span></span>
       </button>
       <button class="btn btn-secondary" onclick="exportBackup()" title="Sauvegarder toutes les données (JSON)">
         <span class="btn-label-long">💾 Sauvegarder</span>
-        <span class="btn-label-short" style="display:none">💾</span>
+        <span class="btn-label-short" style="display:none"><span class="btn-ic">💾</span><span class="btn-tx">Save</span></span>
       </button>
       <button class="btn btn-secondary" onclick="document.getElementById('restoreInput').click()" title="Restaurer une sauvegarde">
         <span class="btn-label-long">📂 Restaurer</span>
-        <span class="btn-label-short" style="display:none">📂</span>
+        <span class="btn-label-short" style="display:none"><span class="btn-ic">📂</span><span class="btn-tx">Restau.</span></span>
       </button>
       <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="importBackup(event)">
       <span id="save-indicator" style="font-size:11px;color:var(--ink3);white-space:nowrap">⏳ Connexion…</span>
-      <button class="btn btn-secondary btn-sm" onclick="onClearData()" title="Supprimer toutes les données locales" style="color:var(--red);border-color:#FECACA;flex-shrink:0">🗑 Reset</button>
+      <button class="btn btn-secondary btn-sm" onclick="onClearData()" title="Supprimer toutes les données locales" style="color:var(--red);border-color:#FECACA;flex-shrink:0"><span class="btn-ic">🗑</span><span class="btn-tx btn-label-short" style="display:none">Reset</span><span class="btn-label-long">🗑 Reset</span></button>
     </div>
   </div>
 
@@ -1057,21 +1141,25 @@ body.is-fullscreen .sidebar-trigger {
           <div class="stat-label">Articles total</div>
           <div class="stat-value" id="stat-total">0</div>
           <div class="stat-sub">articles en stock</div>
+          <div class="stat-link" onclick="document.getElementById('articles-table').scrollIntoView({behavior:'smooth',block:'start'})">Voir l'inventaire →</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Valeur totale du stock</div>
           <div class="stat-value" id="stat-valeur">0 €</div>
           <div class="stat-sub">prix × quantité (tous articles)</div>
+          <div class="stat-link" onclick="document.getElementById('articles-table').scrollIntoView({behavior:'smooth',block:'start'})">Voir le détail →</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Commandes en cours</div>
           <div class="stat-value" style="color:var(--accent)" id="stat-commandes">3</div>
           <div class="stat-sub">en attente livraison</div>
+          <div class="stat-link" onclick="showPage('commandes', document.getElementById('navItemCommandes'))">Voir les commandes →</div>
         </div>
         <div class="stat-card" id="stat-card-remplacer">
           <div class="stat-label">🔴 À remplacer</div>
           <div class="stat-value" style="color:#DC2626" id="stat-remplacer">0</div>
           <div class="stat-sub">dépréciation ≥ 60% (3+ ans)</div>
+          <div class="stat-link" style="color:#DC2626" onclick="document.getElementById('articles-table').scrollIntoView({behavior:'smooth',block:'start'})">Voir les alertes →</div>
         </div>
       </div>
 
@@ -1445,7 +1533,7 @@ body.is-fullscreen .sidebar-trigger {
         </div>
         <div class="form-group">
           <label>Prix unitaire (€)</label>
-          <input type="number" id="f-prix" min="0" step="0.01" placeholder="0.00">
+          <input type="number" id="f-prix" min="0" step="0.01" placeholder="0.00" inputmode="decimal">
         </div>
         <div class="form-group">
           <label>Fournisseur</label>
@@ -1570,7 +1658,7 @@ body.is-fullscreen .sidebar-trigger {
         </div>
         <div class="form-group">
           <label>Montant total (€) <span style="font-size:10px;color:var(--ink3);font-weight:400">— calculé automatiquement</span></label>
-          <input type="number" id="c-montant" placeholder="0.00" step="0.01" readonly
+          <input type="number" id="c-montant" placeholder="0.00" step="0.01" inputmode="decimal" readonly
                  style="background:var(--bg);font-weight:700;color:var(--accent);cursor:default">
         </div>
         <div class="form-group">
@@ -2310,6 +2398,22 @@ function closeModalClick(e, id) {
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => { m.classList.remove('open'); document.body.style.overflow = ''; }); });
+
+// Fallback pour navigateurs sans support CSS :has() : masque le bouton aide flottant
+// quand une modale est ouverte (sécurité, le CSS gère déjà le cas normal).
+if (!CSS.supports('selector(:has(*))')) {
+  const helpBtn = document.getElementById('helpFloatBtn');
+  if (helpBtn) {
+    const updateHelpBtnVisibility = () => {
+      const hasOpenModal = !!document.querySelector('.modal-overlay.open');
+      helpBtn.style.display = hasOpenModal ? 'none' : 'flex';
+    };
+    new MutationObserver(updateHelpBtnVisibility).observe(document.body, {
+      attributes: true, attributeFilter: ['class'], subtree: true
+    });
+    updateHelpBtnVisibility();
+  }
+}
 
 // ─── SAVE ARTICLE ─────────────────────────────────────────────────────────
 async function saveArticle() {
@@ -3915,7 +4019,7 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='') {
       <option value="">— Cat. —</option>
       ${['Sensoriel','Manipulation','Construction','Motricité','Imitation','Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration'].map(c=>`<option value="${c}" ${cat===c?'selected':''}>${c}</option>`).join('')}
     </select>
-    <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00"
+    <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00" inputmode="decimal"
            oninput="calcCommandeTotal()" style="text-align:right">
     <button class="del-row" onclick="removeArticleRow(${idx})" title="Supprimer">×</button>
     <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:4px 8px 6px;border-top:1px solid var(--border);background:var(--bg)">
@@ -4717,8 +4821,30 @@ if ('serviceWorker' in navigator &&
     !location.hostname.includes('claudeusercontent')) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js')
-      .then(r => console.log('SW registered:', r.scope))
+      .then(reg => {
+        console.log('SW registered:', reg.scope);
+        // Si une mise à jour de sw.js est détectée, l'activer immédiatement sans attendre
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
+        // Vérifie s'il existe une mise à jour de sw.js à chaque chargement de page
+        reg.update();
+      })
       .catch(e => console.log('SW error:', e));
+  });
+  // Quand le nouveau Service Worker prend le contrôle, recharger une seule fois
+  // pour afficher immédiatement la dernière version (évite l'effet "ancienne version figée")
+  let swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (swRefreshing) return;
+    swRefreshing = true;
+    location.reload();
   });
 }
 
@@ -5402,7 +5528,7 @@ function showImportResult(type, html) {
 </div>
 
 <!-- ── BOUTON FLOTTANT AIDE ── -->
-<button onclick="openNotice()" title="Aide & Notice d'utilisation"
+<button id="helpFloatBtn" onclick="openNotice()" title="Aide & Notice d'utilisation"
   style="position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;
          background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:22px;
          font-weight:700;box-shadow:0 4px 16px rgba(37,99,235,0.4);z-index:999;
