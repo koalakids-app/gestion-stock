@@ -264,6 +264,8 @@ body {
 .stat-value { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; color: var(--ink); line-height: 1; }
 .stat-sub { font-size: 12px; color: var(--ink3); margin-top: 6px; }
 .stat-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-top: 8px; }
+.stat-link { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 10px; cursor: pointer; }
+.stat-link:hover { text-decoration: underline; }
 
 /* ── SECTION HEADER ── */
 .section-header {
@@ -880,7 +882,8 @@ body.is-fullscreen .sidebar-trigger {
   .stat-card { padding: 14px 14px 12px; }
   .stat-value { font-size: 26px; }
   .stat-label { font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .stat-sub { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-sub { display: none; }
+  .stat-link { font-size: 11px; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { min-width: 500px; }
   #inv-table-materiel thead th:nth-child(6),
@@ -911,8 +914,18 @@ body.is-fullscreen .sidebar-trigger {
   .modal-footer .btn { flex: 1; justify-content: center; min-width: 100px; }
   .commande-card { grid-template-columns: 1fr; }
   .commande-total, .commande-total-label { text-align: left; }
-  .filters { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
-  .filter-chip { flex-shrink: 0; }
+  .filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px 2px 8px 0;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+  }
+  .filters::-webkit-scrollbar { display: none; }
+  .filter-chip { flex-shrink: 0; padding: 8px 14px; font-size: 13px; min-height: 36px; display: flex; align-items: center; }
   #univers-list { grid-template-columns: 1fr !important; }
   .notif { bottom: 16px; left: 12px; right: 12px; text-align: center; }
   button[onclick="openNotice()"] { bottom: 70px !important; right: 16px !important; width: 44px !important; height: 44px !important; font-size: 18px !important; }
@@ -1010,7 +1023,7 @@ body.is-fullscreen .sidebar-trigger {
   <button class="nav-item active" onclick="showPage('inventaire', this)">
     <span class="nav-icon">📦</span> Inventaire
   </button>
-  <button class="nav-item" onclick="showPage('commandes', this)">
+  <button class="nav-item" id="navItemCommandes" onclick="showPage('commandes', this)">
     <span class="nav-icon">🛒</span> Commandes
   </button>
   <button class="nav-item" onclick="showPage('fournisseurs', this)">
@@ -1128,21 +1141,25 @@ body.is-fullscreen .sidebar-trigger {
           <div class="stat-label">Articles total</div>
           <div class="stat-value" id="stat-total">0</div>
           <div class="stat-sub">articles en stock</div>
+          <div class="stat-link" onclick="document.getElementById('articles-table').scrollIntoView({behavior:'smooth',block:'start'})">Voir l'inventaire →</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Valeur totale du stock</div>
           <div class="stat-value" id="stat-valeur">0 €</div>
           <div class="stat-sub">prix × quantité (tous articles)</div>
+          <div class="stat-link" onclick="document.getElementById('articles-table').scrollIntoView({behavior:'smooth',block:'start'})">Voir le détail →</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Commandes en cours</div>
           <div class="stat-value" style="color:var(--accent)" id="stat-commandes">3</div>
           <div class="stat-sub">en attente livraison</div>
+          <div class="stat-link" onclick="showPage('commandes', document.getElementById('navItemCommandes'))">Voir les commandes →</div>
         </div>
         <div class="stat-card" id="stat-card-remplacer">
           <div class="stat-label">🔴 À remplacer</div>
           <div class="stat-value" style="color:#DC2626" id="stat-remplacer">0</div>
           <div class="stat-sub">dépréciation ≥ 60% (3+ ans)</div>
+          <div class="stat-link" style="color:#DC2626" onclick="document.getElementById('articles-table').scrollIntoView({behavior:'smooth',block:'start'})">Voir les alertes →</div>
         </div>
       </div>
 
