@@ -828,7 +828,7 @@ body.is-fullscreen .sidebar-trigger {
 /* ── RESPONSIVE MOBILE ── */
 @media (max-width: 768px) {
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 100%; max-width: 320px; box-shadow: none; }
+  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; max-height: 100dvh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 100%; max-width: 320px; box-shadow: none; display: flex; flex-direction: column; overflow: hidden; }
   .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-lg); }
   .mobile-menu-btn { display: inline-flex !important; }
   .sidebar-trigger { display: none !important; }
@@ -838,7 +838,8 @@ body.is-fullscreen .sidebar-trigger {
   .creche-badge { padding: 12px 12px; font-size: 14px; min-height: 44px; }
   .creche-dot { width: 10px; height: 10px; }
   .creche-count { font-size: 12px; }
-  .sidebar-creches { padding: 16px 20px calc(16px + env(safe-area-inset-bottom)); }
+  .sidebar-scroll-zone { overflow-y: auto; flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; }
+  .sidebar-creches { padding: 14px 20px calc(14px + env(safe-area-inset-bottom)); margin-top: 0; flex-shrink: 0; border-top: 1px solid rgba(255,255,255,0.08); background: var(--ink); }
   .topbar { padding: 10px 14px 12px; flex-wrap: wrap; gap: 8px; }
   .topbar-left { flex: 1; min-width: 0; gap: 8px; }
   .page-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
@@ -1002,6 +1003,7 @@ body.is-fullscreen .sidebar-trigger {
 <!-- ── SIDEBAR ── -->
   <div class="sidebar-trigger" id="sidebarTrigger" onclick="toggleSidebar()">▶</div>
 <aside class="sidebar" id="mainSidebar">
+<div class="sidebar-scroll-zone">
   <div id="logo-container" style="display:flex;flex-direction:column;align-items:center;padding:16px 16px 0 16px;">   <img id="logo-img" style="display:none;max-height:70px;max-width:160px;object-fit:contain;cursor:pointer;border-radius:8px;opacity:0.95;" title="Cliquer pour changer le logo" />   <div id="logo-placeholder" onclick="document.getElementById('logo-input').click()" style="cursor:pointer;padding:8px 14px;border:2px dashed rgba(255,255,255,0.3);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:4px;">📷 Ajouter logo</div>   <input type="file" id="logo-input" accept="image/*" style="display:none" /> </div> <div class="sidebar-logo">
     <h1></h1>
     <span style="font-size:12px;opacity:0.7;letter-spacing:0.5px">Réseau Micro-Crèches</span>
@@ -1073,6 +1075,7 @@ body.is-fullscreen .sidebar-trigger {
     <span class="creche-name">Picot 2</span>
     <span class="creche-count" id="cnt-5">0</span>
   </div>
+</div>
 
   <div class="sidebar-creches">
     <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="openModal('add')">
