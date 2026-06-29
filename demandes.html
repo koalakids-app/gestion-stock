@@ -2954,30 +2954,17 @@ function ikBuildSheetXml(templateXml, rows, employeeName, monthNameCap, firstDat
   header = header.replace(/<c r="J4" s="1"><v>\d+<\/v><\/c>/, `<c r="J4" s="1"><v>${ikExcelSerial(firstDate)}</v></c>`);
   header = header.replace(/<c r="L4" s="2"><v>\d+<\/v><\/c>/, `<c r="L4" s="2"><v>${ikExcelSerial(lastDate)}</v></c>`);
 
-  const lastDataRow = n > 0 ? 9 + n : 9;
-  const row6New =
-    '<row r="6" spans="1:14" ht="18" customHeight="1" x14ac:dyDescent="0.2">' +
-    '<c r="A6" s="12"/><c r="B6" s="12"/><c r="C6" s="12"/><c r="D6" s="12"/><c r="E6" s="27"/><c r="F6" s="27"/>' +
-    `<c r="G6" s="13"><f>SUM(G10:G${lastDataRow})</f></c>` +
-    `<c r="H6" s="13"><f>SUM(H9:H${lastDataRow})</f></c>` +
-    `<c r="I6" s="13"><f>SUM(I9:I${lastDataRow})</f></c>` +
-    `<c r="J6" s="13"><f>SUM(J9:J${lastDataRow})</f></c>` +
-    `<c r="K6" s="13"><f>SUM(K9:K${lastDataRow})</f></c>` +
-    `<c r="L6" s="13"><f>SUM(L9:L${lastDataRow})</f></c>` +
-    `<c r="M6" s="14"><f>SUM(M9:M${lastDataRow})</f></c>` +
-    `<c r="N6" s="14"><f>SUM(N10:N${lastDataRow})</f></c>` +
-    '</row>';
-  header = header.replace(/<row r="6"[^>]*>[\s\S]*?<\/row>/, row6New);
-
-  // Désactive fitToPage (instable avec un nombre de lignes variable) — conserve scale="94" fixe
-  header = header.replace('<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>', '<sheetPr/>');
-  header = header.replace(/(<f>[^<]*<\/f>)<v>[^<]*<\/v>/g, '$1');
-  header = header.replace(/(<f>[^<]*<\/f>)<v\s*\/>/g, '$1');
-
+  // --- Construit les lignes de données 10..10+n-1 et calcule les sommes au passage ---
+  // (les sommes sont calculées ici, AVANT row 6 / M4 qui en ont besoin)
   let dataRowsXml = '';
+  let sumG=0, sumN=0;
   for(let i=0;i<n;i++){
     const r = rows[i];
     const rn = 10 + i;
+    const eVal = r.nbr * r.km;
+    const gVal = eVal * bareme;
+    const nVal = gVal; // N = G+H+I+J+K+L-M, et H..M sont vides (0) dans ce gabarit
+    sumG += gVal; sumN += nVal;
     let block = row10Template;
     block = block.replace(/r="10"/, `r="${rn}"`);
     block = block.replace(/r="([A-N])10"/g, (m,col)=>`r="${col}${rn}"`);
@@ -2989,9 +2976,34 @@ function ikBuildSheetXml(templateXml, rows, employeeName, monthNameCap, firstDat
     block = block.replace(new RegExp(`<c r="B${rn}" s="19" t="s"><v>\\d+</v></c>`), `<c r="B${rn}" s="19" t="inlineStr"><is><t>${ikEscapeXml(r.trajet)}</t></is></c>`);
     block = block.replace(new RegExp(`<c r="C${rn}" s="31"><v>\\d+</v></c>`), `<c r="C${rn}" s="31"><v>${r.nbr}</v></c>`);
     block = block.replace(new RegExp(`<c r="D${rn}" s="32"><v>\\d+</v></c>`), `<c r="D${rn}" s="32"><v>${r.km}</v></c>`);
-    block = block.replace(/(<f>[^<]*<\/f>)<v>[^<]*<\/v>/g, '$1');
+    // Remplace les valeurs en cache des formules par les vraies valeurs calculées
+    // (essentiel pour les viewers qui n'exécutent pas le moteur de calcul Excel)
+    block = block.replace(/(<f>D\d+\*C\d+<\/f>)<v>[^<]*<\/v>/, `$1<v>${eVal}</v>`);
+    block = block.replace(/(<f>\+IF\(E\d+="",0,\+E\d+\*\$B\$4\)<\/f>)<v>[^<]*<\/v>/, `$1<v>${gVal}</v>`);
+    block = block.replace(/(<f>\+G\d+\+H\d+\+I\d+\+J\d+\+K\d+\+L\d+-M\d+<\/f>)<v>[^<]*<\/v>/, `$1<v>${nVal}</v>`);
     dataRowsXml += block;
   }
+
+  const lastDataRow = n > 0 ? 9 + n : 9;
+  const row6New =
+    '<row r="6" spans="1:14" ht="18" customHeight="1" x14ac:dyDescent="0.2">' +
+    '<c r="A6" s="12"/><c r="B6" s="12"/><c r="C6" s="12"/><c r="D6" s="12"/><c r="E6" s="27"/><c r="F6" s="27"/>' +
+    `<c r="G6" s="13"><f>SUM(G10:G${lastDataRow})</f><v>${sumG}</v></c>` +
+    `<c r="H6" s="13"><f>SUM(H9:H${lastDataRow})</f><v>0</v></c>` +
+    `<c r="I6" s="13"><f>SUM(I9:I${lastDataRow})</f><v>0</v></c>` +
+    `<c r="J6" s="13"><f>SUM(J9:J${lastDataRow})</f><v>0</v></c>` +
+    `<c r="K6" s="13"><f>SUM(K9:K${lastDataRow})</f><v>0</v></c>` +
+    `<c r="L6" s="13"><f>SUM(L9:L${lastDataRow})</f><v>0</v></c>` +
+    `<c r="M6" s="14"><f>SUM(M9:M${lastDataRow})</f><v>0</v></c>` +
+    `<c r="N6" s="14"><f>SUM(N10:N${lastDataRow})</f><v>${sumN}</v></c>` +
+    '</row>';
+  header = header.replace(/<row r="6"[^>]*>[\s\S]*?<\/row>/, row6New);
+
+  // Désactive fitToPage (instable avec un nombre de lignes variable) — conserve scale="94" fixe
+  header = header.replace('<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>', '<sheetPr/>');
+  // M4 = +M6+N6-M5 = 0 + sumN - 0
+  header = header.replace(/<c r="M4" s="43"><f>\+M6\+N6-M5<\/f>(?:<v>[^<]*<\/v>)?<\/c>/, `<c r="M4" s="43"><f>+M6+N6-M5</f><v>${sumN}</v></c>`);
+  header = header.replace(/(<f>[^<]*<\/f>)<v\s*\/>/g, '$1');
 
   const delta = n - 11; // le gabarit original a 11 lignes (10..20)
   let tailShifted = tail.replace(/r="([A-N]?)(2[1-4])"/g, (m,prefix,num)=>`r="${prefix}${parseInt(num,10)+delta}"`);
