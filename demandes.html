@@ -186,6 +186,30 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .leg-item{display:flex;align-items:center;gap:5px;font-size:12px;color:#666;font-weight:500}
 .leg-dot{width:12px;height:12px;border-radius:3px}
 
+/* CALENDRIER EVENEMENTS */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal-dow{font-size:11px;font-weight:700;color:var(--muted);text-align:center;padding:4px 0;text-transform:uppercase}
+.cal-cell{background:#fff;border:1px solid var(--border);border-radius:8px;min-height:88px;padding:5px;cursor:pointer;display:flex;flex-direction:column;gap:3px;transition:box-shadow 0.15s,border-color 0.15s}
+.cal-cell:hover{border-color:var(--koala);box-shadow:0 2px 8px rgba(61,53,128,0.1)}
+.cal-cell.out{background:#fafafa;opacity:0.5}
+.cal-cell.today{border-color:var(--orange);border-width:2px}
+.cal-daynum{font-size:11.5px;font-weight:700;color:#555}
+.cal-cell.today .cal-daynum{color:var(--orange)}
+.cal-evt{font-size:10.5px;line-height:1.3;padding:2px 5px;border-radius:5px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-evt-more{font-size:10px;color:var(--muted);font-weight:600;padding-left:2px}
+@media (max-width:680px){
+  .cal-cell{min-height:46px;padding:3px}
+  .cal-cell .cal-evt{display:none}
+  .cal-cell.has-evt::after{content:'';display:block;width:6px;height:6px;border-radius:50%;background:var(--orange);margin:0 auto}
+  .cal-dow{font-size:9.5px}
+}
+.cal-day-detail{border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:0.85rem}
+.cal-evt-row{display:flex;align-items:flex-start;gap:9px;padding:8px 0;border-bottom:1px solid var(--border)}
+.cal-evt-row:last-child{border-bottom:none}
+.cal-evt-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;margin-top:4px}
+.cal-evt-title{font-size:13px;font-weight:700;color:var(--text)}
+.cal-evt-meta{font-size:11.5px;color:var(--muted);margin-top:2px}
+
 /* INCIDENTS */
 .incident-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:0.875rem 1.1rem;display:flex;gap:12px;align-items:flex-start;border-left:4px solid var(--red);border-radius:0 12px 12px 0;margin-bottom:8px}
 .incident-card.leger{border-left-color:var(--orange)}
@@ -354,6 +378,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn" onclick="showMain('presence')" id="mnav-presence"><i class="ti ti-users-group"></i> Présences</button>
       <button class="mnav-btn direction-only" onclick="showMain('referents')" id="mnav-referents"><i class="ti ti-address-book"></i> Référents</button>
       <button class="mnav-btn" onclick="showMain('planning')" id="mnav-planning"><i class="ti ti-calendar-event"></i> Planning</button>
+      <button class="mnav-btn" onclick="showMain('evenements')" id="mnav-evenements"><i class="ti ti-calendar"></i> Événements</button>
       <button class="mnav-btn direction-only" onclick="showMain('dashboard')" id="mnav-dashboard"><i class="ti ti-chart-bar"></i> Tableau de bord</button>
       <button class="mnav-btn direction-only" onclick="showMain('fraisik')" id="mnav-fraisik"><i class="ti ti-car"></i> Frais IK</button>
       <button class="mnav-btn" onclick="showMain('fraispro')" id="mnav-fraispro"><i class="ti ti-receipt"></i> Frais pro</button>
@@ -497,6 +522,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
       <div id="pe-grid-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:8px"></div>
     </div>
+  </div>
+
+  <!-- ÉVÉNEMENTS / RENDEZ-VOUS -->
+  <div id="main-evenements" class="tab-content">
+    <div class="section-header">
+      <div class="section-left">
+        <button class="ibtn" onclick="calChangeMonth(-1)"><i class="ti ti-chevron-left"></i></button>
+        <span id="cal-month-label" style="font-size:14px;font-weight:700;color:var(--koala);min-width:140px;text-align:center">—</span>
+        <button class="ibtn" onclick="calChangeMonth(1)"><i class="ti ti-chevron-right"></i></button>
+        <button class="btn-sm" onclick="calGoToday()"><i class="ti ti-calendar-event"></i> Aujourd'hui</button>
+      </div>
+      <button class="btn-primary" onclick="openEvenementModal()"><i class="ti ti-plus"></i> Nouvel événement</button>
+    </div>
+    <div class="filters" id="cal-filters">
+      <button class="fchip active" onclick="calSetFilter('all',this)">Tous</button>
+      <button class="fchip" onclick="calSetFilter('recrutement',this)">🧑‍💼 Recrutement</button>
+      <button class="fchip" onclick="calSetFilter('formation',this)">📚 Formation</button>
+      <button class="fchip" onclick="calSetFilter('reunion',this)">🗣️ Réunion</button>
+      <button class="fchip" onclick="calSetFilter('visite',this)">🏠 Visite</button>
+      <button class="fchip" onclick="calSetFilter('entretien',this)">🤝 Entretien</button>
+      <button class="fchip" onclick="calSetFilter('fete',this)">🎉 Fête</button>
+      <button class="fchip" onclick="calSetFilter('autre',this)">⚪ Autre</button>
+    </div>
+    <div class="cal-grid" id="cal-dow-row"></div>
+    <div class="cal-grid" id="cal-grid" style="margin-top:5px"></div>
+    <div class="cal-day-detail" id="cal-day-detail" style="display:none"></div>
   </div>
 
   <!-- TABLEAU DE BORD -->
@@ -675,6 +726,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="notice-tab" onclick="switchNoticeTab('incidents',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🚨 Incidents</button>
         <button class="notice-tab" onclick="switchNoticeTab('presences',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👥 Présences</button>
         <button class="notice-tab" onclick="switchNoticeTab('planning',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📅 Planning</button>
+        <button class="notice-tab" onclick="switchNoticeTab('evenements',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🗓 Événements</button>
         <button class="notice-tab" onclick="switchNoticeTab('comptes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👤 Comptes</button>
       </div>
       <button onclick="closeModal('modal-notice')" style="width:28px;height:28px;background:#F0EDE8;border:none;border-radius:50%;cursor:pointer;font-size:13px;flex-shrink:0;margin-left:12px">✕</button>
@@ -690,10 +742,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="overlay" id="modal-demand-wrap">
   <div class="modal">
     <h3 id="modal-d-title">Nouvelle demande</h3>
-    <div class="fg" id="d-creche-fg" style="display:none"><label class="flabel">Crèche</label><select class="finput" id="d-creche-select"><option value="">-- Choisir --</option></select></div>
+    <div class="fg" id="d-creche-fg" style="display:none"><label class="flabel">Crèche (optionnel si destinataire admin)</label><select class="finput" id="d-creche-select"><option value="">-- Aucune / non liée à une crèche --</option></select></div>
     <div class="frow">
-      <div class="fg"><label class="flabel">Référent</label><select class="finput" id="d-ref-select" onchange="fillRefEmail()"><option value="">-- Choisir --</option></select></div>
-      <div class="fg"><label class="flabel">E-mail référent</label><input class="finput" id="d-email" placeholder="referent@email.fr" type="email"/></div>
+      <div class="fg"><label class="flabel">Destinataire</label><select class="finput" id="d-ref-select" onchange="fillRefEmail()"><option value="">-- Choisir --</option></select></div>
+      <div class="fg"><label class="flabel">E-mail destinataire</label><input class="finput" id="d-email" placeholder="destinataire@email.fr" type="email"/></div>
     </div>
     <div class="fg"><label class="flabel">Sujet</label><input class="finput" id="d-subj" placeholder="Ex. : Réaménagement espace jeux"/></div>
     <div class="fg"><label class="flabel">Description</label><textarea class="finput" id="d-desc" rows="3" style="resize:vertical"></textarea></div>
@@ -987,7 +1039,8 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,weekOffset=0,currentPresenceSlot='matin',searchTerm='';
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[];
+let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 
 // Init au chargement complet de la page
 window.addEventListener('DOMContentLoaded', async function() {
@@ -1014,8 +1067,8 @@ window.addEventListener('DOMContentLoaded', async function() {
 
 async function loadAllData(){
   const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout Supabase')),10000));
-  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants]=await Promise.race([
-    Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants')]),
+  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants,cacheEvenements]=await Promise.race([
+    Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('evenements')]),
     timeout
   ]);
 }
@@ -1111,10 +1164,14 @@ function weekStart(){const n=new Date();const day=n.getDay();const diff=n.getDat
 function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
-function updateBadges(){const myCrecheId=isDirection?null:currentProfile?.creche_id;const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}}
+function updateBadges(){
+  const myCrecheId=isDirection?null:currentProfile?.creche_id;
+  const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;
+  const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}
+}
 
 function showMain(tab){
-  ['demands','incidents','presence','referents','planning','dashboard','fraisik','fraispro','remplacantes'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -1124,6 +1181,7 @@ function showMain(tab){
   if(tab==='referents')renderReferents();
   if(tab==='incidents')renderIncidents();
   if(tab==='presence'){initPresenceDate();renderPresence();}
+  if(tab==='evenements')renderCalendar();
   if(tab==='dashboard')renderDashboard();
   if(tab==='fraisik'){if(isDirection)ikInit();else showMain('demands');}
   if(tab==='fraispro')fpInit();
@@ -1167,7 +1225,9 @@ function renderCrechePanel(){
   const isAll=isDirection&&activeCrecheId==='all';
   const crecheId=isAll?null:(isDirection?activeCrecheId:currentProfile?.creche_id);
   const creche=crecheId?cacheCreches.find(c=>c.id===crecheId):null;
-  const allD=isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId);
+  const myId=currentProfile?.id;
+  // Inclut aussi les demandes adressées personnellement (admin-à-admin ou vers un référent précis), même sans crèche.
+  const allD=isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId));
   const total=allD.length,attente=allD.filter(d=>d.status==='attente').length,urgent=allD.filter(d=>d.priority==='urgent').length,traite=allD.filter(d=>d.status==='traite').length;
   let html='';
   if(isAll){html+='<div class="creche-header-box"><div class="creche-header-name"><i class="ti ti-building-community" style="font-size:20px"></i> Toutes les crèches <span>'+cacheCreches.length+' établissements</span></div><div class="section-actions"><button class="btn-orange" onclick="openConsigneModal()"><i class="ti ti-send"></i> Envoyer une consigne</button></div></div>';}
@@ -1183,8 +1243,9 @@ function renderDemandsOnly(){
   const inner=document.getElementById('demands-list-inner');if(!inner)return;
   const isAll=isDirection&&activeCrecheId==='all';
   const crecheId=isAll?null:(isDirection?activeCrecheId:currentProfile?.creche_id);
+  const myId=currentProfile?.id;
   const term=searchTerm.toLowerCase().trim();
-  const base=term?cacheDemandes:(isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId));
+  const base=term?cacheDemandes:(isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId)));
   const filtered=base.filter(d=>{
     if(!term){if(activeFilter==='all'&&d.status==='traite')return false;if(activeFilter==='urgent'&&d.priority!=='urgent')return false;if(activeFilter==='attente'&&d.status!=='attente')return false;if(activeFilter==='traite'&&d.status!=='traite')return false;if(activeFilter==='consigne'&&d.type!=='consigne')return false;}
     if(term){const cn=(cacheCreches.find(c=>c.id===d.creche_id)?.name||'').toLowerCase();if(!(d.subject||'').toLowerCase().includes(term)&&!(d.referent_name||'').toLowerCase().includes(term)&&!(d.description||'').toLowerCase().includes(term)&&!cn.includes(term)&&!(d.theme||'').toLowerCase().includes(term))return false;}
@@ -1199,7 +1260,9 @@ function renderDemandsOnly(){
       const isC=d.type==='consigne';
       const crecheLabel=(cacheCreches.find(c=>c.id===d.creche_id)?.name||'');
       const dateLabel=new Date(d.created_at).toLocaleDateString('fr-FR');
-      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+(crecheLabel?'<span class="badge" style="background:#f0f0ff;color:var(--koala)"><i class="ti ti-building" style="font-size:10px"></i> '+hl(crecheLabel)+'</span>':'')+'</div><div class="dbody">'+hl(d.description||'—')+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+'</div></div><div class="dactions">'+((!isC&&isDirection)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
+      const crecheBadge=crecheLabel?'<span class="badge" style="background:#f0f0ff;color:var(--koala)"><i class="ti ti-building" style="font-size:10px"></i> '+hl(crecheLabel)+'</span>':(d.to_referent_id?'<span class="badge" style="background:#F0EDE8;color:#666"><i class="ti ti-arrow-right" style="font-size:10px"></i> Message direct</span>':'');
+      const canToggle=isDirection||(d.to_referent_id&&d.to_referent_id===currentProfile?.id);
+      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
     });
   }
   inner.innerHTML=html;
@@ -1209,24 +1272,38 @@ function setFilter(f,el){activeFilter=f;document.querySelectorAll('.filters .fch
 
 async function openDemandModal(){
   const isAll=isDirection&&activeCrecheId==='all';
-  const fg=document.getElementById('d-creche-fg');if(fg)fg.style.display=(isDirection&&isAll)?'block':'none';
-  if(isDirection&&isAll){const sel=document.getElementById('d-creche-select');if(sel)sel.innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');}
-  const crecheId=isAll?null:(isDirection?activeCrecheId:currentProfile?.creche_id);
-  const refs=crecheId?cacheReferents.filter(r=>r.creche_id===crecheId&&r.role==='referent'):cacheReferents.filter(r=>r.role==='referent');
-  const dSel=document.getElementById('d-ref-select');if(dSel)dSel.innerHTML='<option value="">-- Choisir --</option>'+refs.map(r=>'<option value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'">'+r.name+'</option>').join('');
+  // La crèche est toujours affichée pour la direction (utile pour les demandes liées à un référent terrain),
+  // mais devient optionnelle si le destinataire choisi est un admin (voir fillRefEmail()).
+  const fg=document.getElementById('d-creche-fg');if(fg)fg.style.display=isDirection?'block':'none';
+  if(isDirection){const sel=document.getElementById('d-creche-select');if(sel){sel.innerHTML='<option value="">-- Aucune / non liée à une crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');if(!isAll&&activeCrecheId)sel.value=activeCrecheId;}}
+  // Destinataires : tous les référents ET tous les admins (direction), tout le monde mélangé dans la même liste.
+  const myId=currentProfile?.id;
+  const dests=cacheReferents.filter(r=>r.id!==myId);
+  const dSel=document.getElementById('d-ref-select');
+  if(dSel)dSel.innerHTML='<option value="">-- Choisir --</option>'+dests.map(r=>{
+    const isAdmin=r.role==='direction';
+    const creche=cacheCreches.find(c=>c.id===r.creche_id);
+    const tag=isAdmin?' — 🔑 Admin':(creche?' ('+creche.name+')':'');
+    return '<option value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'" data-admin="'+(isAdmin?'1':'0')+'">'+r.name+tag+'</option>';
+  }).join('');
   ['d-email','d-subj','d-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('d-prio').value='normal';
   document.getElementById('modal-demand-wrap').classList.add('open');
 }
-function fillRefEmail(){const sel=document.getElementById('d-ref-select');const opt=sel.options[sel.selectedIndex];if(opt)document.getElementById('d-email').value=opt.getAttribute('data-email')||'';}
+function fillRefEmail(){
+  const sel=document.getElementById('d-ref-select');const opt=sel.options[sel.selectedIndex];
+  if(opt)document.getElementById('d-email').value=opt.getAttribute('data-email')||'';
+}
 async function saveDemand(){
   const subj=document.getElementById('d-subj').value.trim();if(!subj){alert('Sujet requis.');return;}
   const isAll=isDirection&&activeCrecheId==='all';
-  const crecheId=isAll?document.getElementById('d-creche-select')?.value:(isDirection?activeCrecheId:currentProfile?.creche_id);
-  if(!crecheId){alert('Veuillez sélectionner une crèche.');return;}
   const refSel=document.getElementById('d-ref-select');const refOpt=refSel?.options[refSel.selectedIndex];
+  const destIsAdmin=refOpt?.getAttribute('data-admin')==='1';
+  let crecheId=isDirection?(document.getElementById('d-creche-select')?.value||null):(isAll?null:currentProfile?.creche_id);
+  if(!isDirection)crecheId=currentProfile?.creche_id||null;
+  if(!crecheId&&!destIsAdmin){alert('Veuillez sélectionner une crèche, ou choisir un destinataire admin.');return;}
   const btn=document.getElementById('btn-save-demand');btn.disabled=true;
-  const row={creche_id:crecheId,referent_name:refOpt?.getAttribute('data-name')||'',referent_email:document.getElementById('d-email').value.trim(),subject:subj,description:document.getElementById('d-desc').value.trim(),priority:document.getElementById('d-prio').value,theme:document.getElementById('d-theme').value,status:'attente',type:'demande'};
+  const row={creche_id:crecheId,to_referent_id:refSel?.value||null,referent_name:refOpt?.getAttribute('data-name')||'',referent_email:document.getElementById('d-email').value.trim(),subject:subj,description:document.getElementById('d-desc').value.trim(),priority:document.getElementById('d-prio').value,theme:document.getElementById('d-theme').value,status:'attente',type:'demande'};
   const saved=await dbInsert('demandes',row);
   if(saved){cacheDemandes.unshift(saved);await callFn('notify-demand',{demand:{...row,creche:cacheCreches.find(c=>c.id===crecheId)?.name||''}});showBanner('Demande enregistrée !');closeModal('modal-demand-wrap');renderCrecheTabs();}
   else showBanner('Erreur.','error');
@@ -1324,6 +1401,195 @@ function openIncidentModal(){document.getElementById('inc-creche').innerHTML='<o
 async function saveIncident(){const desc=document.getElementById('inc-desc').value.trim();if(!desc){alert('Description requise.');return;}const row={creche_id:document.getElementById('inc-creche').value,child_name:document.getElementById('inc-child').value.trim(),incident_date:document.getElementById('inc-date').value,incident_time:document.getElementById('inc-time').value,type:document.getElementById('inc-type').value,severity:document.getElementById('inc-severity').value,description:desc,actions:document.getElementById('inc-actions').value.trim(),reporter:document.getElementById('inc-reporter').value.trim(),treated:false};const saved=await dbInsert('incidents',row);if(saved){cacheIncidents.unshift(saved);updateBadges();showBanner('Incident enregistré.');closeModal('modal-incident-wrap');renderIncidents();}else showBanner('Erreur.','error');}
 async function toggleIncident(id,treated){const ok=await dbUpdate('incidents',id,{treated:!treated});if(ok){const i=cacheIncidents.find(x=>x.id===id);if(i)i.treated=!treated;updateBadges();renderIncidents();}}
 async function deleteIncident(id){if(!confirm('Supprimer ?'))return;await dbDelete('incidents',id);cacheIncidents=cacheIncidents.filter(i=>i.id!==id);updateBadges();renderIncidents();}
+
+// EVENEMENTS / RENDEZ-VOUS (CALENDRIER)
+const CAL_TYPE_INFO={
+  recrutement:{label:'Recrutement',emoji:'🧑‍💼',color:'#378ADD'},
+  formation:{label:'Formation',emoji:'📚',color:'#2563EB'},
+  reunion:{label:'Réunion',emoji:'🗣️',color:'#7C3AED'},
+  visite:{label:'Visite',emoji:'🏠',color:'#2a9d4e'},
+  entretien:{label:'Entretien',emoji:'🤝',color:'#F47920'},
+  fete:{label:'Fête',emoji:'🎉',color:'#E0457B'},
+  autre:{label:'Autre',emoji:'⚪',color:'#888'}
+};
+const CAL_DOW=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+
+function calCurrentMonthDate(){const n=new Date();return new Date(n.getFullYear(),n.getMonth()+calMonthOffset,1);}
+function calChangeMonth(delta){calMonthOffset+=delta;calSelectedDay=null;renderCalendar();}
+function calGoToday(){calMonthOffset=0;calSelectedDay=todayStr();renderCalendar();}
+function calSetFilter(f,btn){calFilterType=f;document.querySelectorAll('#cal-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderCalendar();}
+
+function calEventsForDay(dateISO){
+  const myCrecheId=isDirection?null:currentProfile?.creche_id;
+  return cacheEvenements.filter(e=>{
+    if(calFilterType!=='all'&&e.type!==calFilterType)return false;
+    if(myCrecheId&&e.creche_id&&e.creche_id!==myCrecheId)return false;
+    const start=e.date_debut,end=e.date_fin||e.date_debut;
+    return dateISO>=start&&dateISO<=end;
+  }).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
+}
+
+function renderCalendar(){
+  const dowRow=document.getElementById('cal-dow-row'),grid=document.getElementById('cal-grid'),label=document.getElementById('cal-month-label');
+  if(!grid)return;
+  const monthDate=calCurrentMonthDate();
+  const year=monthDate.getFullYear(),month=monthDate.getMonth();
+  label.textContent=monthDate.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  dowRow.innerHTML=CAL_DOW.map(d=>'<div class="cal-dow">'+d+'</div>').join('');
+
+  const firstOfMonth=new Date(year,month,1);
+  const firstDow=(firstOfMonth.getDay()+6)%7; // 0=Lundi
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const today=todayStr();
+
+  let html='';
+  // Jours du mois précédent pour compléter la première semaine
+  for(let i=0;i<firstDow;i++){
+    const d=new Date(year,month,1-(firstDow-i));
+    html+=calCellHtml(d,true,today);
+  }
+  for(let day=1;day<=daysInMonth;day++){
+    const d=new Date(year,month,day);
+    html+=calCellHtml(d,false,today);
+  }
+  const totalCells=firstDow+daysInMonth;
+  const trailing=(7-(totalCells%7))%7;
+  for(let i=1;i<=trailing;i++){
+    const d=new Date(year,month+1,i);
+    html+=calCellHtml(d,true,today);
+  }
+  grid.innerHTML=html;
+  renderCalDayDetail();
+}
+
+function calCellHtml(d,isOut,today){
+  const dateISO=ipDateToLocalISO(d);
+  const evts=calEventsForDay(dateISO);
+  const isToday=dateISO===today;
+  const cls='cal-cell'+(isOut?' out':'')+(isToday?' today':'')+(evts.length?' has-evt':'');
+  let evtHtml='';
+  evts.slice(0,3).forEach(e=>{
+    const info=CAL_TYPE_INFO[e.type]||CAL_TYPE_INFO.autre;
+    evtHtml+='<div class="cal-evt" style="background:'+info.color+'" title="'+escHtml(e.titre)+'">'+info.emoji+' '+escHtml(e.titre)+'</div>';
+  });
+  if(evts.length>3)evtHtml+='<div class="cal-evt-more">+'+(evts.length-3)+' autre(s)</div>';
+  return '<div class="'+cls+'" onclick="calSelectDay(\''+dateISO+'\')"><div class="cal-daynum">'+d.getDate()+'</div>'+evtHtml+'</div>';
+}
+
+function calSelectDay(dateISO){calSelectedDay=dateISO;renderCalDayDetail();}
+
+function renderCalDayDetail(){
+  const box=document.getElementById('cal-day-detail');if(!box)return;
+  if(!calSelectedDay){box.style.display='none';return;}
+  const evts=calEventsForDay(calSelectedDay);
+  const d=new Date(calSelectedDay+'T00:00:00');
+  const dateLabel=d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  box.style.display='block';
+  let html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-size:13.5px;font-weight:700;color:var(--koala);text-transform:capitalize">'+dateLabel+'</span><button class="btn-sm" style="font-size:11.5px;padding:4px 10px" onclick="openEvenementModal(\''+calSelectedDay+'\')"><i class="ti ti-plus"></i> Ajouter</button></div>';
+  if(!evts.length){
+    html+='<div class="empty-state" style="padding:1rem"><i class="ti ti-calendar-off"></i><p>Aucun événement ce jour.</p></div>';
+  }else{
+    html+=evts.map(e=>{
+      const info=CAL_TYPE_INFO[e.type]||CAL_TYPE_INFO.autre;
+      const creche=cacheCreches.find(c=>c.id===e.creche_id);
+      const horaire=(e.heure_debut?e.heure_debut.slice(0,5):'')+(e.heure_fin?' – '+e.heure_fin.slice(0,5):'');
+      const multiJour=e.date_fin&&e.date_fin!==e.date_debut?' · du '+e.date_debut+' au '+e.date_fin:'';
+      return '<div class="cal-evt-row" style="cursor:pointer" onclick="openEvenementModal(null,\''+e.id+'\')">'+
+        '<div class="cal-evt-dot" style="background:'+info.color+'"></div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div class="cal-evt-title">'+info.emoji+' '+escHtml(e.titre)+'</div>'+
+          '<div class="cal-evt-meta">'+(horaire?horaire+' · ':'')+(creche?creche.name:'Réseau / toutes crèches')+(e.lieu?' · '+escHtml(e.lieu):'')+multiJour+'</div>'+
+          (e.description?'<div class="cal-evt-meta" style="margin-top:3px;color:#666">'+escHtml(e.description)+'</div>':'')+
+        '</div>'+
+        '<button class="ibtn" style="flex-shrink:0" onclick="event.stopPropagation();openEvenementModal(null,\''+e.id+'\')"><i class="ti ti-edit"></i></button>'+
+      '</div>';
+    }).join('');
+  }
+  box.innerHTML=html;
+}
+
+function escHtml(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function evtSyncEndDate(){
+  const fin=document.getElementById('evt-date-fin');
+  if(!fin.value)fin.value=document.getElementById('evt-date-debut').value;
+}
+
+function openEvenementModal(presetDate,evtId){
+  editingEvtId=evtId||null;
+  document.getElementById('evt-creche').innerHTML='<option value="">— Toutes / réseau —</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+  document.getElementById('evt-btn-delete').style.display=evtId?'flex':'none';
+  if(evtId){
+    const e=cacheEvenements.find(x=>x.id===evtId);if(!e)return;
+    document.getElementById('modal-evt-title').textContent='Modifier l\'événement';
+    document.getElementById('evt-titre').value=e.titre||'';
+    document.getElementById('evt-type').value=e.type||'autre';
+    document.getElementById('evt-creche').value=e.creche_id||'';
+    document.getElementById('evt-date-debut').value=e.date_debut||'';
+    document.getElementById('evt-date-fin').value=e.date_fin||'';
+    document.getElementById('evt-heure-debut').value=e.heure_debut||'';
+    document.getElementById('evt-heure-fin').value=e.heure_fin||'';
+    document.getElementById('evt-lieu').value=e.lieu||'';
+    document.getElementById('evt-desc').value=e.description||'';
+    document.getElementById('evt-auteur').value=e.auteur||'';
+  }else{
+    document.getElementById('modal-evt-title').textContent='Nouvel événement';
+    ['evt-titre','evt-lieu','evt-desc'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('evt-type').value='reunion';
+    if(!isDirection&&currentProfile?.creche_id)document.getElementById('evt-creche').value=currentProfile.creche_id;
+    const d=presetDate||calSelectedDay||todayStr();
+    document.getElementById('evt-date-debut').value=d;
+    document.getElementById('evt-date-fin').value=d;
+    document.getElementById('evt-heure-debut').value='';
+    document.getElementById('evt-heure-fin').value='';
+    document.getElementById('evt-auteur').value=currentProfile?.name||'';
+  }
+  document.getElementById('modal-evenement-wrap').classList.add('open');
+}
+
+async function saveEvenement(){
+  const titre=document.getElementById('evt-titre').value.trim();
+  const dateDebut=document.getElementById('evt-date-debut').value;
+  if(!titre){alert('Le titre est requis.');return;}
+  if(!dateDebut){alert('La date de début est requise.');return;}
+  let dateFin=document.getElementById('evt-date-fin').value||null;
+  if(dateFin&&dateFin<dateDebut)dateFin=dateDebut;
+  const row={
+    titre,
+    type:document.getElementById('evt-type').value,
+    creche_id:document.getElementById('evt-creche').value||null,
+    date_debut:dateDebut,
+    date_fin:(dateFin&&dateFin!==dateDebut)?dateFin:null,
+    heure_debut:document.getElementById('evt-heure-debut').value||null,
+    heure_fin:document.getElementById('evt-heure-fin').value||null,
+    lieu:document.getElementById('evt-lieu').value.trim(),
+    description:document.getElementById('evt-desc').value.trim(),
+    auteur:document.getElementById('evt-auteur').value.trim()
+  };
+  if(editingEvtId){
+    const ok=await dbUpdate('evenements',editingEvtId,row);
+    if(ok){const e=cacheEvenements.find(x=>x.id===editingEvtId);if(e)Object.assign(e,row);showBanner('Événement modifié !');}
+    else{showBanner('Erreur lors de la modification.','error');return;}
+  }else{
+    const saved=await dbInsert('evenements',row);
+    if(saved){cacheEvenements.push(saved);showBanner('Événement créé !');}
+    else{showBanner('Erreur lors de la création.','error');return;}
+  }
+  closeModal('modal-evenement-wrap');
+  renderCalendar();
+}
+
+async function deleteEvenement(){
+  if(!editingEvtId)return;
+  if(!confirm('Supprimer cet événement ?'))return;
+  const ok=await dbDelete('evenements',editingEvtId);
+  if(ok){
+    cacheEvenements=cacheEvenements.filter(e=>e.id!==editingEvtId);
+    closeModal('modal-evenement-wrap');
+    renderCalendar();
+    showBanner('Événement supprimé.');
+  }else showBanner('Erreur lors de la suppression.','error');
+}
 
 // PRESENCES
 function initPresenceDate(){const input=document.getElementById('presence-date');if(!input.value)input.value=todayStr();}
@@ -3622,23 +3888,24 @@ const NOTICE_DEM = {
 demandes: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">💬 Demandes et consignes</h3>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
-  💡 Les demandes permettent aux référentes terrain de remonter des besoins, informations ou consignes à la direction.
+  💡 Les demandes permettent aux référentes terrain de remonter des besoins, informations ou consignes à la direction — et aussi d'échanger directement entre admins, ou avec n'importe quel référent, sans passer par une crèche.
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📝 Créer une demande</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Cliquez sur <strong>+ Nouvelle demande</strong></li>
-  <li>Choisissez votre <strong>crèche</strong> et votre <strong>profil référent</strong></li>
+  <li>Choisissez le <strong>destinataire</strong> : la liste mélange les référentes et les admins (repérables avec 🔑)</li>
+  <li>Si le destinataire est un admin, la <strong>crèche</strong> devient facultative — laissez-la vide pour un message direct</li>
   <li>Renseignez le <strong>sujet</strong> et la <strong>description</strong> précise</li>
   <li>Choisissez la <strong>priorité</strong> : 🔴 Urgent, Normal ou ℹ️ Info</li>
-  <li>Sélectionnez un <strong>thème</strong> (Matériel, Pédagogie, Administratif…)</li>
   <li>Cliquez <strong>Envoyer</strong></li>
 </ol>
-<div style="font-weight:700;font-size:14px;margin-bottom:10px">✅ Traiter une demande (Direction)</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">✅ Traiter une demande</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Cliquez sur l'icône ✓ à droite de la demande pour la marquer <strong>Traitée</strong></li>
   <li>Une demande traitée peut être réouverte en cliquant sur 🔄</li>
+  <li>Le destinataire direct d'un message peut le marquer traité lui-même, même s'il n'est pas admin</li>
   <li>Utilisez les <strong>filtres</strong> (Urgent, En attente, Traitées) pour trier l'affichage</li>
-  <li>Filtrez par <strong>crèche</strong> via les onglets en haut de la liste</li>
+  <li>Filtrez par <strong>crèche</strong> via les onglets en haut de la liste — les messages directs sans crèche apparaissent dans l'onglet <strong>Toutes</strong> (admins) ou dans votre propre liste (référentes)</li>
 </ol>
 <div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A">
   ⚠ Les demandes <strong>urgentes</strong> apparaissent en tête de liste avec une bordure rouge. Un badge de notification s'affiche dans la navigation.
@@ -3708,6 +3975,30 @@ planning: `
   <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#7C3AED;border-radius:3px;flex-shrink:0"></div> Réunion</div>
 </div>`,
 
+evenements: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🗓 Événements et rendez-vous</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
+  💡 Le calendrier centralise tous les rendez-vous du réseau : entretiens de recrutement, formations, réunions, visites… Il est partagé entre la direction et toutes les référentes.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Créer un événement</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Cliquez sur <strong>Nouvel événement</strong>, ou directement sur un <strong>jour du calendrier</strong></li>
+  <li>Renseignez le <strong>titre</strong>, le <strong>type</strong> et la <strong>crèche</strong> concernée (laissez vide pour un événement réseau)</li>
+  <li>Indiquez les <strong>dates</strong> (et heures si besoin) — un événement peut s'étaler sur plusieurs jours</li>
+  <li>Cliquez <strong>Enregistrer</strong></li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Filtrer et consulter</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Utilisez les <strong>filtres par type</strong> en haut du calendrier. Cliquez sur un jour pour voir le détail des événements et les modifier ou les supprimer.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🎨 Légende des types</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+  <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#378ADD;border-radius:3px;flex-shrink:0"></div> Recrutement</div>
+  <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#2563EB;border-radius:3px;flex-shrink:0"></div> Formation</div>
+  <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#7C3AED;border-radius:3px;flex-shrink:0"></div> Réunion</div>
+  <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#2a9d4e;border-radius:3px;flex-shrink:0"></div> Visite</div>
+  <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#F47920;border-radius:3px;flex-shrink:0"></div> Entretien</div>
+  <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#E0457B;border-radius:3px;flex-shrink:0"></div> Fête</div>
+</div>`,
+
 comptes: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👤 Gestion des comptes</h3>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
@@ -3762,6 +4053,46 @@ comptes: `
     <div class="mactions">
       <button class="btn-cancel" onclick="closeModal('modal-event-coord-wrap')">Annuler</button>
       <button class="btn-primary" onclick="saveEventCoord()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal événement / rendez-vous -->
+<div class="overlay" id="modal-evenement-wrap">
+  <div class="modal" style="max-width:480px">
+    <h3 id="modal-evt-title">Nouvel événement</h3>
+    <div class="fg"><label class="flabel">Titre</label><input class="finput" id="evt-titre" placeholder="Ex. : Entretien candidat — Picot 1"/></div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Type</label>
+        <select class="finput" id="evt-type">
+          <option value="recrutement">🧑‍💼 Recrutement</option>
+          <option value="formation">📚 Formation</option>
+          <option value="reunion">🗣️ Réunion</option>
+          <option value="visite">🏠 Visite</option>
+          <option value="entretien">🤝 Entretien</option>
+          <option value="fete">🎉 Fête</option>
+          <option value="autre">⚪ Autre</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flabel">Crèche (optionnel)</label>
+        <select class="finput" id="evt-creche"><option value="">— Toutes / réseau —</option></select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Date de début</label><input class="finput" id="evt-date-debut" type="date" onchange="evtSyncEndDate()"/></div>
+      <div class="fg"><label class="flabel">Date de fin (si plusieurs jours)</label><input class="finput" id="evt-date-fin" type="date"/></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Heure de début</label><input class="finput" id="evt-heure-debut" type="time"/></div>
+      <div class="fg"><label class="flabel">Heure de fin</label><input class="finput" id="evt-heure-fin" type="time"/></div>
+    </div>
+    <div class="fg"><label class="flabel">Lieu</label><input class="finput" id="evt-lieu" placeholder="Ex. : Bureau coordination, Picot 1…"/></div>
+    <div class="fg"><label class="flabel">Description / notes</label><textarea class="finput" id="evt-desc" rows="3" style="resize:vertical"></textarea></div>
+    <div class="fg"><label class="flabel">Créé par</label><input class="finput" id="evt-auteur" placeholder="Prénom Nom"/></div>
+    <div class="mactions">
+      <button id="evt-btn-delete" class="btn-danger-sm" style="display:none;background:var(--red-light);color:var(--red);border-color:var(--red-light);margin-right:auto" onclick="deleteEvenement()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn-cancel" onclick="closeModal('modal-evenement-wrap')">Annuler</button>
+      <button class="btn-primary" onclick="saveEvenement()"><i class="ti ti-check"></i> Enregistrer</button>
     </div>
   </div>
 </div>
