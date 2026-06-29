@@ -828,7 +828,7 @@ body.is-fullscreen .sidebar-trigger {
 /* ── RESPONSIVE MOBILE ── */
 @media (max-width: 768px) {
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; max-height: 100dvh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 100%; max-width: 320px; box-shadow: none; display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 100%; max-width: 320px; box-shadow: none; }
   .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-lg); }
   .mobile-menu-btn { display: inline-flex !important; }
   .sidebar-trigger { display: none !important; }
@@ -838,8 +838,7 @@ body.is-fullscreen .sidebar-trigger {
   .creche-badge { padding: 12px 12px; font-size: 14px; min-height: 44px; }
   .creche-dot { width: 10px; height: 10px; }
   .creche-count { font-size: 12px; }
-  .sidebar-scroll-zone { overflow-y: auto; flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; }
-  .sidebar-creches { padding: 14px 20px calc(14px + env(safe-area-inset-bottom)); margin-top: 0; flex-shrink: 0; border-top: 1px solid rgba(255,255,255,0.08); background: var(--ink); }
+  .sidebar-creches { padding: 16px 20px calc(16px + env(safe-area-inset-bottom)); }
   .topbar { padding: 10px 14px 12px; flex-wrap: wrap; gap: 8px; }
   .topbar-left { flex: 1; min-width: 0; gap: 8px; }
   .page-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
@@ -875,7 +874,7 @@ body.is-fullscreen .sidebar-trigger {
   .topbar-right .btn-label-short { display: flex !important; flex-direction: column; align-items: center; gap: 2px; }
   .btn-ic { font-size: 15px; line-height: 1; }
   .btn-tx { font-size: 10px; font-weight: 600; white-space: nowrap; }
-  #fullscreenBtn { display: none !important; }
+  #fullscreenBtn { min-width: 40px; padding: 7px 9px; }
   .btn-label-long { display: none; }
   .btn-label-short { display: inline !important; }
   .content { padding: 12px; }
@@ -913,6 +912,8 @@ body.is-fullscreen .sidebar-trigger {
   .modal-header { padding: 16px 16px 14px; }
   .modal-footer { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
   .modal-footer .btn { flex: 1; justify-content: center; min-width: 100px; }
+  .picker-buttons-row { flex-direction: column; }
+  .picker-buttons-row .btn { width: 100%; font-size: 12.5px; }
   .commande-card { grid-template-columns: 1fr; }
   .commande-total, .commande-total-label { text-align: left; }
   .filters {
@@ -1003,7 +1004,6 @@ body.is-fullscreen .sidebar-trigger {
 <!-- ── SIDEBAR ── -->
   <div class="sidebar-trigger" id="sidebarTrigger" onclick="toggleSidebar()">▶</div>
 <aside class="sidebar" id="mainSidebar">
-<div class="sidebar-scroll-zone">
   <div id="logo-container" style="display:flex;flex-direction:column;align-items:center;padding:16px 16px 0 16px;">   <img id="logo-img" style="display:none;max-height:70px;max-width:160px;object-fit:contain;cursor:pointer;border-radius:8px;opacity:0.95;" title="Cliquer pour changer le logo" />   <div id="logo-placeholder" onclick="document.getElementById('logo-input').click()" style="cursor:pointer;padding:8px 14px;border:2px dashed rgba(255,255,255,0.3);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:4px;">📷 Ajouter logo</div>   <input type="file" id="logo-input" accept="image/*" style="display:none" /> </div> <div class="sidebar-logo">
     <h1></h1>
     <span style="font-size:12px;opacity:0.7;letter-spacing:0.5px">Réseau Micro-Crèches</span>
@@ -1075,7 +1075,6 @@ body.is-fullscreen .sidebar-trigger {
     <span class="creche-name">Picot 2</span>
     <span class="creche-count" id="cnt-5">0</span>
   </div>
-</div>
 
   <div class="sidebar-creches">
     <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="openModal('add')">
@@ -1163,6 +1162,12 @@ body.is-fullscreen .sidebar-trigger {
           <div class="stat-value" style="color:#DC2626" id="stat-remplacer">0</div>
           <div class="stat-sub">dépréciation ≥ 60% (3+ ans)</div>
           <div class="stat-link" style="color:#DC2626" onclick="document.getElementById('articles-table').scrollIntoView({behavior:'smooth',block:'start'})">Voir les alertes →</div>
+        </div>
+        <div class="stat-card" id="stat-card-completer">
+          <div class="stat-label">🟠 À compléter</div>
+          <div class="stat-value" style="color:#D97706" id="stat-completer">0</div>
+          <div class="stat-sub">stock ≤ seuil minimum</div>
+          <div class="stat-link" style="color:#D97706" onclick="filterStockStatus('a-completer')">Voir les articles →</div>
         </div>
       </div>
 
@@ -1651,6 +1656,10 @@ body.is-fullscreen .sidebar-trigger {
         </div>
         <div class="form-group full">
           <label>Articles commandés</label>
+          <div class="picker-buttons-row" style="display:flex;gap:8px;margin-bottom:8px">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openArticlePicker()" style="flex:1;justify-content:center">📋 Choisir depuis articles existants</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openOrderHistoryPicker()" style="flex:1;justify-content:center">🕘 Reprendre une commande précédente</button>
+          </div>
           <div id="articles-table" style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
             <div style="display:grid;grid-template-columns:70px 1fr 110px 90px 36px;gap:0;background:var(--bg);padding:8px 10px;font-size:11px;font-weight:600;letter-spacing:0.5px;color:var(--ink2);text-transform:uppercase">
               <span>Qté</span><span>Nom · Fournisseur · Lien</span><span>Catégorie</span><span>Prix €</span><span></span>
@@ -1676,6 +1685,51 @@ body.is-fullscreen .sidebar-trigger {
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="resetCommandeModal();closeModal('modal-commande')">Annuler</button>
       <button class="btn btn-primary" id="btn-save-commande" onclick="onSaveCommande()">🛒 Passer la commande</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL PICKER : CHOISIR DEPUIS ARTICLES EXISTANTS ── -->
+<div class="modal-overlay" id="modal-article-picker" onclick="closeModalClick(event,'modal-article-picker')">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <h2>📋 Choisir des articles</h2>
+      <button class="modal-close" onclick="closeModal('modal-article-picker')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="picker-article-search" placeholder="🔍 Rechercher un article..."
+             oninput="renderArticlePickerList()" style="margin-bottom:12px">
+      <div id="picker-article-list" style="max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm)"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;align-items:center">
+      <span id="picker-article-count" style="font-size:12px;color:var(--ink2)">0 article(s) sélectionné(s)</span>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="closeModal('modal-article-picker')">Annuler</button>
+        <button class="btn btn-primary" onclick="confirmArticlePicker()">+ Ajouter à la commande</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL PICKER : REPRENDRE UNE COMMANDE PRÉCÉDENTE ── -->
+<div class="modal-overlay" id="modal-order-history-picker" onclick="closeModalClick(event,'modal-order-history-picker')">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <h2>🕘 Commandes précédentes</h2>
+      <button class="modal-close" onclick="closeModal('modal-order-history-picker')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--accent-lt);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#1E40AF">
+        💡 Cliquez <strong>🔁 Tout reprendre</strong> pour dupliquer une commande entière, ou <strong>cochez des lignes</strong> dans le détail pour ne reprendre que certains articles.
+      </div>
+      <div id="picker-order-list" style="max-height:55vh;overflow-y:auto"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;align-items:center">
+      <span id="picker-order-count" style="font-size:12px;color:var(--ink2)">0 ligne(s) sélectionnée(s)</span>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="closeModal('modal-order-history-picker')">Fermer</button>
+        <button class="btn btn-primary" onclick="confirmOrderHistoryPicker()">+ Ajouter à la commande</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1819,6 +1873,7 @@ let currentCreche = 'all';
 let currentHisto = 'all';
 let currentInvTab = 'materiel'; // 'materiel' | 'consommable'
 let currentCatConso = 'all';
+let currentStockStatus = 'all'; // 'all' | 'a-completer' | 'epuise'
 let editingId = null;
 let SOUSCATS = [];
 // ─── INIT ─────────────────────────────────────────────────────────────────
@@ -1852,7 +1907,10 @@ function renderTable() {
     const matchCat = currentCat === 'all' || a.cat === currentCat;
     const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
     const matchQ = !q || a.nom.toLowerCase().includes(q) || a.ref.toLowerCase().includes(q) || a.fourn.toLowerCase().includes(q);
-    return isMateriel && matchCat && matchCreche && matchQ;
+    const matchStatus = currentStockStatus === 'all'
+      || (currentStockStatus === 'a-completer' && getStockStatus(a) === 'À compléter')
+      || (currentStockStatus === 'epuise' && getStockStatus(a) === 'Épuisé');
+    return isMateriel && matchCat && matchCreche && matchQ && matchStatus;
   });
 
   let sortCol = window._sortCol || 'nom';
@@ -1893,7 +1951,10 @@ const tb = document.getElementById('tableBody');
           <div>
             <div class="item-name">${a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim()}</div>
             <div class="item-ref">${a.ref}</div>
-            ${(() => { const e = getArticleEtat(a); return e ? getEtatBadgeHtml(e) : ''; })()}
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">
+              ${(() => { const e = getArticleEtat(a); return e ? getEtatBadgeHtml(e) : ''; })()}
+              ${getStockStatusBadgeHtml(a)}
+            </div>
           </div>
         </div>
       </td>
@@ -2009,7 +2070,10 @@ function renderTableConso() {
     const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
     const matchCat = currentCatConso === 'all' || a.cat === currentCatConso;
     const matchQ = !q || a.nom.toLowerCase().includes(q) || (a.ref||'').toLowerCase().includes(q);
-    return isConso && matchCreche && matchCat && matchQ;
+    const matchStatus = currentStockStatus === 'all'
+      || (currentStockStatus === 'a-completer' && getStockStatus(a) === 'À compléter')
+      || (currentStockStatus === 'epuise' && getStockStatus(a) === 'Épuisé');
+    return isConso && matchCreche && matchCat && matchQ && matchStatus;
   });
   const sortCol = window._sortCol || 'nom';
   const sortDir = window._sortDir || 'asc';
@@ -2043,12 +2107,13 @@ function renderTableConso() {
           <div>
             <div class="item-name">${a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').trim()}</div>
             <div class="item-ref">${a.ref}</div>
+            <div style="margin-top:2px">${getStockStatusBadgeHtml(a)}</div>
           </div>
         </div>
       </td>
       <td><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:${CRECHE_COLORS[a.creche]}"></span>${a.creche}</span></td>
       <td><span class="badge badge-blue">${a.cat}</span></td>
-      <td style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:${stockAlert?'#DC2626':'inherit'}">${a.stock}${stockAlert?` <span style="font-size:10px">⚠</span>`:''}</td>
+      <td style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:${stockAlert?'#DC2626':'inherit'}">${a.stock}</td>
       <td style="font-size:12px;color:var(--ink3)">${a.min > 0 ? a.min : '—'}</td>
       <td style="font-weight:500">${a.prix > 0 ? a.prix.toFixed(2)+' €' : '—'}</td>
       <td style="font-size:12px">${a.expiry ? `<span style="color:${expiryColor(a.expiry)};font-weight:600">${formatExpiry(a.expiry)}</span>` : '—'}</td>
@@ -2095,6 +2160,15 @@ function renderStats() {
   if (elRem) elRem.textContent = rem.length;
   const cardRem = document.getElementById('stat-card-remplacer');
   if (cardRem) cardRem.style.borderLeft = rem.length > 0 ? '3px solid #DC2626' : '';
+  // Tuile "À compléter" — articles dont le stock est ≤ au seuil minimum
+  const completer = ARTICLES.filter(a => {
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    return matchCreche && getStockStatus(a) === 'À compléter';
+  });
+  const elCompleter = document.getElementById('stat-completer');
+  if (elCompleter) elCompleter.textContent = completer.length;
+  const cardCompleter = document.getElementById('stat-card-completer');
+  if (cardCompleter) cardCompleter.style.borderLeft = completer.length > 0 ? '3px solid #D97706' : '';
   updateAlertBadge();
 }
   
@@ -2154,6 +2228,23 @@ function filterTable() {
   currentPageConso = 1;
   if (currentInvTab === 'consommable') renderTableConso();
   else renderTable();
+}
+
+// Déclenché par les cartes stat (ex: "À compléter") : active le filtre statut
+// et fait défiler jusqu'au tableau correspondant, sans changer l'onglet matériel/consommable en cours.
+function filterStockStatus(status) {
+  currentStockStatus = (currentStockStatus === status) ? 'all' : status;
+  currentPageMat = 1;
+  currentPageConso = 1;
+  renderActiveInvTable();
+  const target = document.getElementById('articles-table');
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const label = status === 'a-completer' ? '🟠 À compléter' : status === 'epuise' ? '🔴 Épuisé' : null;
+  if (currentStockStatus === 'all') {
+    showNotif('Filtre statut désactivé');
+  } else if (label) {
+    showNotif(`Filtre actif : ${label}`);
+  }
 }
 
 function renderActiveInvTable() {
@@ -4132,6 +4223,198 @@ function resetArticleRows() {
   addArticleRow(); // Toujours au moins une ligne vide
 }
 
+// ─── PICKER : PARSER UNE LIGNE DE COMMANDE "3× Nom {Fourn} [cat:Cat] (12.50€) [url]" ──
+function parseLigneArticle(ligne) {
+  const m = ligne.match(/^[-•]?\s*(\d+)\s*[×xX]\s*(.+)/);
+  if (!m) return null;
+  const urlM = ligne.match(/\[(?!cat:)(.+?)\]$/);
+  const pM   = ligne.match(/\((\d+[.,]?\d*)\s*€?\)/);
+  const fM   = ligne.match(/\{(.+?)\}/);
+  const catM = ligne.match(/\[cat:([^\]]+)\]/);
+  return {
+    qty:   parseInt(m[1]) || 1,
+    url:   urlM ? urlM[1] : '',
+    prix:  pM   ? parseFloat(pM[1].replace(',','.')) : 0,
+    fourn: fM   ? fM[1] : '',
+    cat:   catM ? catM[1] : '',
+    nom:   m[2].replace(/\s*\{.*?\}\s*/g,'')
+                .replace(/\s*\(\d+[.,]?\d*\s*€?\)\s*/g,'')
+                .replace(/\s*\[cat:[^\]]+\]\s*/g,'')
+                .replace(/\s*\[.*?\]\s*$/,'').trim(),
+  };
+}
+
+// ─── PICKER 1 : CHOISIR DEPUIS LES ARTICLES EXISTANTS ──────────────────────
+let pickerArticleSelection = new Set();
+
+function openArticlePicker() {
+  pickerArticleSelection = new Set();
+  const search = document.getElementById('picker-article-search');
+  if (search) search.value = '';
+  renderArticlePickerList();
+  document.getElementById('modal-article-picker').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function renderArticlePickerList() {
+  const q = (document.getElementById('picker-article-search')?.value || '').toLowerCase();
+  const crecheSel = document.getElementById('c-creche-select')?.value;
+  let list = ARTICLES.filter(a =>
+    (!q || a.nom.toLowerCase().includes(q) || (a.ref||'').toLowerCase().includes(q) || (a.fourn||'').toLowerCase().includes(q))
+  );
+  // Prioriser les articles de la crèche sélectionnée dans le tri, sans exclure les autres
+  list = list.slice().sort((a,b) => {
+    if (crecheSel) {
+      const am = a.creche === crecheSel ? 0 : 1;
+      const bm = b.creche === crecheSel ? 0 : 1;
+      if (am !== bm) return am - bm;
+    }
+    return a.nom.localeCompare(b.nom);
+  });
+
+  const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
+  const container = document.getElementById('picker-article-list');
+  if (!container) return;
+  if (list.length === 0) {
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--ink3);font-size:13px">Aucun article trouvé</div>`;
+    return;
+  }
+  container.innerHTML = list.map(a => {
+    const checked = pickerArticleSelection.has(a.id) ? 'checked' : '';
+    const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+    return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+      <input type="checkbox" ${checked} onchange="togglePickerArticle(${a.id}, this.checked)" style="min-height:auto;width:16px;height:16px">
+      <span style="font-size:14px">${CAT_ICONS[a.cat]||'📦'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--ink)">${nomClean}</div>
+        <div style="font-size:11px;color:var(--ink3)">${a.creche} · ${a.fourn||'—'} ${a.prix>0?`· ${a.prix.toFixed(2)} €`:''}</div>
+      </div>
+      ${getStockStatusBadgeHtml(a)}
+    </label>`;
+  }).join('');
+}
+
+function togglePickerArticle(id, checked) {
+  if (checked) pickerArticleSelection.add(id);
+  else pickerArticleSelection.delete(id);
+  const cnt = document.getElementById('picker-article-count');
+  if (cnt) cnt.textContent = `${pickerArticleSelection.size} article(s) sélectionné(s)`;
+}
+
+function confirmArticlePicker() {
+  if (pickerArticleSelection.size === 0) { showNotif('⚠ Sélectionnez au moins un article'); return; }
+  // Si la seule ligne présente est vide, on la retire avant d'ajouter les sélections
+  removeEmptyTrailingRow();
+  pickerArticleSelection.forEach(id => {
+    const a = ARTICLES.find(x => x.id === id);
+    if (!a) return;
+    const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+    addArticleRow('1', nomClean, a.prix > 0 ? a.prix.toFixed(2) : '', a.url || '', a.fourn || '', a.cat || '');
+  });
+  showNotif(`✅ ${pickerArticleSelection.size} article(s) ajouté(s) à la commande`);
+  closeModal('modal-article-picker');
+}
+
+// ─── PICKER 2 : REPRENDRE UNE COMMANDE PRÉCÉDENTE ──────────────────────────
+let pickerOrderSelection = new Set(); // clés "commandeId:ligneIdx"
+
+function openOrderHistoryPicker() {
+  pickerOrderSelection = new Set();
+  renderOrderHistoryPickerList();
+  document.getElementById('modal-order-history-picker').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function renderOrderHistoryPickerList() {
+  const crecheSel = document.getElementById('c-creche-select')?.value;
+  let list = COMMANDES.filter(c => !crecheSel || c.creche === crecheSel);
+  // Plus récentes en premier
+  list = list.slice().sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+
+  const container = document.getElementById('picker-order-list');
+  if (!container) return;
+  if (list.length === 0) {
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--ink3);font-size:13px">Aucune commande antérieure pour cette crèche</div>`;
+    return;
+  }
+  container.innerHTML = list.map(c => {
+    const lignes = (c.articles||'').split('\n').filter(Boolean);
+    const items = lignes.map((ligne, idx) => ({ idx, art: parseLigneArticle(ligne) })).filter(x => x.art);
+    return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg)">
+        <div>
+          <div style="font-size:13px;font-weight:700">🏭 ${c.fourn} <span style="color:var(--ink3);font-weight:400">· ${c.date||''}</span></div>
+          <div style="font-size:11px;color:var(--ink3)">${c.bc||''} · ${items.length} article(s) · ${(c.montant||0).toFixed(2)} €</div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="reprendreCommandeEntiere(${c.id})">🔁 Tout reprendre</button>
+      </div>
+      <div>
+        ${items.map(({idx, art}) => {
+          const key = `${c.id}:${idx}`;
+          const checked = pickerOrderSelection.has(key) ? 'checked' : '';
+          return `<label style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+            <input type="checkbox" ${checked} onchange="togglePickerOrderLine('${key}', this.checked)" style="min-height:auto;width:16px;height:16px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:600">${art.qty}× ${art.nom}</div>
+              <div style="font-size:11px;color:var(--ink3)">${art.fourn||'—'} ${art.prix>0?`· ${art.prix.toFixed(2)} €`:''}</div>
+            </div>
+          </label>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function togglePickerOrderLine(key, checked) {
+  if (checked) pickerOrderSelection.add(key);
+  else pickerOrderSelection.delete(key);
+  const cnt = document.getElementById('picker-order-count');
+  if (cnt) cnt.textContent = `${pickerOrderSelection.size} ligne(s) sélectionnée(s)`;
+}
+
+function reprendreCommandeEntiere(commandeId) {
+  const c = COMMANDES.find(x => x.id === commandeId);
+  if (!c) return;
+  const lignes = (c.articles||'').split('\n').filter(Boolean);
+  const items = lignes.map(parseLigneArticle).filter(Boolean);
+  if (items.length === 0) { showNotif('⚠ Aucun article exploitable dans cette commande'); return; }
+  removeEmptyTrailingRow();
+  items.forEach(art => {
+    addArticleRow(String(art.qty), art.nom, art.prix > 0 ? art.prix.toFixed(2) : '', art.url || '', art.fourn || '', art.cat || '');
+  });
+  showNotif(`✅ ${items.length} article(s) repris de la commande ${c.bc||''}`);
+  closeModal('modal-order-history-picker');
+}
+
+function confirmOrderHistoryPicker() {
+  if (pickerOrderSelection.size === 0) { showNotif('⚠ Sélectionnez au moins une ligne'); return; }
+  removeEmptyTrailingRow();
+  let count = 0;
+  pickerOrderSelection.forEach(key => {
+    const [cIdStr, idxStr] = key.split(':');
+    const c = COMMANDES.find(x => x.id === parseInt(cIdStr) || String(x.id) === cIdStr);
+    if (!c) return;
+    const lignes = (c.articles||'').split('\n').filter(Boolean);
+    const art = parseLigneArticle(lignes[parseInt(idxStr)] || '');
+    if (!art) return;
+    addArticleRow(String(art.qty), art.nom, art.prix > 0 ? art.prix.toFixed(2) : '', art.url || '', art.fourn || '', art.cat || '');
+    count++;
+  });
+  showNotif(`✅ ${count} article(s) ajouté(s) à la commande`);
+  closeModal('modal-order-history-picker');
+}
+
+// Si la seule ligne du formulaire est vide (cas du formulaire vierge), on la retire
+// avant d'injecter des lignes choisies depuis un picker, pour éviter une ligne vide parasite.
+function removeEmptyTrailingRow() {
+  const rows = document.querySelectorAll('.article-row');
+  if (rows.length !== 1) return;
+  const row = rows[0];
+  const idx = row.id.replace('article-row-', '');
+  const nom = document.getElementById(`row-nom-${idx}`)?.value?.trim();
+  if (!nom) row.remove();
+}
+
 function getArticlesFromRows() {
   const rows = document.querySelectorAll('.article-row');
   const lines = [];
@@ -4989,6 +5272,28 @@ function getEtatBadgeHtml(etat) {
 
 function getArticlesToRemplacer() {
   return ARTICLES.filter(a => getArticleEtat(a) === 'À remplacer');
+}
+
+// Statut de stock : "Épuisé" (0), "À compléter" (≤ seuil min, mais seuil renseigné), "OK"
+function getStockStatus(a) {
+  if (a.stock === 0) return 'Épuisé';
+  if (a.min > 0 && a.stock <= a.min) return 'À compléter';
+  return 'OK';
+}
+
+function getStockStatusBadgeHtml(a) {
+  const s = getStockStatus(a);
+  const map = {
+    'Épuisé':      { bg:'#FEE2E2', color:'#991B1B', icon:'🔴' },
+    'À compléter': { bg:'#FFEDD5', color:'#9A3412', icon:'🟠' },
+  };
+  const cfg = map[s];
+  if (!cfg) return ''; // OK → pas de badge, pour ne pas surcharger l'affichage
+  return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${cfg.bg};color:${cfg.color}">${cfg.icon} ${s}</span>`;
+}
+
+function getArticlesACompleter() {
+  return ARTICLES.filter(a => getStockStatus(a) === 'À compléter');
 }
 
 function getLowStockArticles() {
