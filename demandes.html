@@ -373,6 +373,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="logo"><img id="app-logo" src="" alt="Koala Kids"/></div>
     <nav class="main-nav" id="main-nav">
       <button class="mnav-btn active" onclick="showMain('demands')" id="mnav-demands"><i class="ti ti-message-circle"></i> Demandes</button>
+      <button class="mnav-btn" onclick="showMain('msgadmin')" id="mnav-msgadmin"><i class="ti ti-messages"></i> Messages admin <span class="mnav-badge" id="badge-msgadmin" style="display:none">0</span></button>
       <button class="mnav-btn" onclick="showMain('incidents')" id="mnav-incidents"><i class="ti ti-alert-triangle"></i> Incidents <span class="mnav-badge" id="badge-incidents" style="display:none">0</span></button>
       <button class="mnav-btn" onclick="showMain('presence')" id="mnav-presence"><i class="ti ti-users-group"></i> Présences</button>
       <button class="mnav-btn direction-only" onclick="showMain('referents')" id="mnav-referents"><i class="ti ti-address-book"></i> Référents</button>
@@ -394,6 +395,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div id="main-demands" class="tab-content active">
     <div id="creche-tabs-bar" class="creche-tabs-bar"></div>
     <div id="creche-panel"></div>
+  </div>
+
+  <!-- MESSAGES ADMIN -->
+  <div id="main-msgadmin" class="tab-content">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-title"><i class="ti ti-messages" style="color:var(--koala)"></i> Messages entre admins et référents</span>
+        <span class="section-sub">Échanges directs, sans passer par une crèche</span>
+      </div>
+      <button class="btn-primary" onclick="openMsgAdminModal()"><i class="ti ti-plus"></i> Nouveau message</button>
+    </div>
+    <div class="filters" id="msgadmin-filters">
+      <button class="fchip active" onclick="maSetFilter('all',this)">Tous</button>
+      <button class="fchip" onclick="maSetFilter('reçus',this)">📥 Reçus</button>
+      <button class="fchip" onclick="maSetFilter('envoyés',this)">📤 Envoyés</button>
+      <button class="fchip" onclick="maSetFilter('attente',this)">⏳ En attente</button>
+    </div>
+    <div id="msgadmin-list"></div>
   </div>
 
   <!-- INCIDENTS -->
@@ -722,6 +741,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px;border-bottom:1px solid var(--border)">
       <div style="display:flex;gap:0;overflow-x:auto;flex:1">
         <button class="notice-tab active" onclick="switchNoticeTab('demandes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--koala);margin-bottom:-1px;color:var(--koala);white-space:nowrap">💬 Demandes</button>
+        <button class="notice-tab" onclick="switchNoticeTab('msgadmin',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📨 Messages admin</button>
         <button class="notice-tab" onclick="switchNoticeTab('incidents',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🚨 Incidents</button>
         <button class="notice-tab" onclick="switchNoticeTab('presences',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👥 Présences</button>
         <button class="notice-tab" onclick="switchNoticeTab('planning',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📅 Planning</button>
@@ -1038,8 +1058,9 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,weekOffset=0,currentPresenceSlot='matin',searchTerm='';
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMsgAdmin=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
+let maFilter='all';
 
 // Init au chargement complet de la page
 window.addEventListener('DOMContentLoaded', async function() {
@@ -1066,8 +1087,8 @@ window.addEventListener('DOMContentLoaded', async function() {
 
 async function loadAllData(){
   const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout Supabase')),10000));
-  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants,cacheEvenements]=await Promise.race([
-    Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('evenements')]),
+  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants,cacheEvenements,cacheMsgAdmin]=await Promise.race([
+    Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('evenements'),dbSelect('demandes_admin')]),
     timeout
   ]);
 }
@@ -1163,16 +1184,24 @@ function weekStart(){const n=new Date();const day=n.getDay();const diff=n.getDat
 function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
-function updateBadges(){const myCrecheId=isDirection?null:currentProfile?.creche_id;const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}}
+function updateBadges(){
+  const myCrecheId=isDirection?null:currentProfile?.creche_id;
+  const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;
+  const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}
+  const myId=currentProfile?.id;
+  const ma=cacheMsgAdmin.filter(m=>m.to_referent_id===myId&&m.status!=='traite').length;
+  const bm=document.getElementById('badge-msgadmin');if(bm){bm.textContent=ma;bm.style.display=ma>0?'':'none';}
+}
 
 function showMain(tab){
-  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes'].forEach(t=>{
+  ['demands','msgadmin','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
   });
   if(tab==='planning')renderPlanning();
   if(tab==='demands')renderCrecheTabs();
+  if(tab==='msgadmin')renderMsgAdmin();
   if(tab==='referents')renderReferents();
   if(tab==='incidents')renderIncidents();
   if(tab==='presence'){initPresenceDate();renderPresence();}
@@ -1377,6 +1406,97 @@ function openIncidentModal(){document.getElementById('inc-creche').innerHTML='<o
 async function saveIncident(){const desc=document.getElementById('inc-desc').value.trim();if(!desc){alert('Description requise.');return;}const row={creche_id:document.getElementById('inc-creche').value,child_name:document.getElementById('inc-child').value.trim(),incident_date:document.getElementById('inc-date').value,incident_time:document.getElementById('inc-time').value,type:document.getElementById('inc-type').value,severity:document.getElementById('inc-severity').value,description:desc,actions:document.getElementById('inc-actions').value.trim(),reporter:document.getElementById('inc-reporter').value.trim(),treated:false};const saved=await dbInsert('incidents',row);if(saved){cacheIncidents.unshift(saved);updateBadges();showBanner('Incident enregistré.');closeModal('modal-incident-wrap');renderIncidents();}else showBanner('Erreur.','error');}
 async function toggleIncident(id,treated){const ok=await dbUpdate('incidents',id,{treated:!treated});if(ok){const i=cacheIncidents.find(x=>x.id===id);if(i)i.treated=!treated;updateBadges();renderIncidents();}}
 async function deleteIncident(id){if(!confirm('Supprimer ?'))return;await dbDelete('incidents',id);cacheIncidents=cacheIncidents.filter(i=>i.id!==id);updateBadges();renderIncidents();}
+
+// MESSAGES ADMIN (demandes entre admins / référents, sans crèche)
+function maSetFilter(f,btn){maFilter=f;document.querySelectorAll('#msgadmin-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderMsgAdmin();}
+
+function renderMsgAdmin(){
+  const list=document.getElementById('msgadmin-list');if(!list)return;
+  const myId=currentProfile?.id;
+  let filtered=cacheMsgAdmin.filter(m=>m.from_referent_id===myId||m.to_referent_id===myId);
+  if(maFilter==='reçus')filtered=filtered.filter(m=>m.to_referent_id===myId);
+  else if(maFilter==='envoyés')filtered=filtered.filter(m=>m.from_referent_id===myId);
+  else if(maFilter==='attente')filtered=filtered.filter(m=>m.status!=='traite');
+  if(!filtered.length){list.innerHTML='<div class="empty-state"><i class="ti ti-messages"></i><p>Aucun message.</p></div>';return;}
+  list.innerHTML=filtered.map(m=>{
+    const isReceived=m.to_referent_id===myId;
+    const dateLabel=m.created_at?new Date(m.created_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    const dirLabel=isReceived?'<span class="badge" style="background:#EEF6FF;color:#1E40AF"><i class="ti ti-arrow-down" style="font-size:10px"></i> De '+(m.from_name||'?')+'</span>':'<span class="badge" style="background:#F0EDE8;color:#666"><i class="ti ti-arrow-up" style="font-size:10px"></i> À '+(m.to_name||'?')+'</span>';
+    return '<div class="dcard '+(m.priority||'normal')+'">'+
+      '<div class="dmeta">'+
+        '<div class="dtop"><span class="dsubject">'+escHtml(m.subject)+'</span>'+
+          '<span class="badge b-'+(m.priority||'normal')+'">'+(m.priority==='urgent'?'🔴 Urgent':m.priority==='info'?'ℹ️ Info':'Normal')+'</span>'+
+          dirLabel+
+        '</div>'+
+        '<div class="dbody">'+escHtml(m.description||'—')+'</div>'+
+        '<div class="dfoot"><span class="meta-txt">'+dateLabel+'</span>'+
+          '<span class="badge b-'+(m.status||'attente')+'">'+(m.status==='traite'?'✅ Traité':'⏳ En attente')+'</span>'+
+        '</div>'+
+      '</div>'+
+      '<div class="dactions">'+
+        (isReceived?'<button class="ibtn" onclick="toggleMsgAdminStatus(\''+m.id+'\',\''+m.status+'\')"><i class="ti ti-'+(m.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+
+        ((m.from_referent_id===myId||isDirection)?'<button class="ibtn del" onclick="deleteMsgAdmin(\''+m.id+'\')"><i class="ti ti-trash"></i></button>':'')+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function openMsgAdminModal(){
+  const myId=currentProfile?.id;
+  const options=cacheReferents.filter(r=>r.id!==myId);
+  const sel=document.getElementById('ma-to-select');
+  sel.innerHTML='<option value="">-- Choisir --</option>'+options.map(r=>{
+    const roleTag=r.role==='direction'?' — Admin':'';
+    const creche=cacheCreches.find(c=>c.id===r.creche_id);
+    const crecheTag=creche?' ('+creche.name+')':'';
+    return '<option value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'">'+r.name+roleTag+crecheTag+'</option>';
+  }).join('');
+  ['ma-subj','ma-desc'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('ma-prio').value='normal';
+  document.getElementById('modal-msgadmin-wrap').classList.add('open');
+}
+
+async function saveMsgAdmin(){
+  const subj=document.getElementById('ma-subj').value.trim();if(!subj){alert('Sujet requis.');return;}
+  const toSel=document.getElementById('ma-to-select');
+  const toId=toSel.value;if(!toId){alert('Veuillez choisir un destinataire.');return;}
+  const toOpt=toSel.options[toSel.selectedIndex];
+  const btn=document.getElementById('btn-save-msgadmin');btn.disabled=true;
+  const row={
+    from_referent_id:currentProfile?.id||null,
+    from_name:currentProfile?.name||'',
+    to_referent_id:toId,
+    to_name:toOpt.getAttribute('data-name')||'',
+    to_email:toOpt.getAttribute('data-email')||'',
+    subject:subj,
+    description:document.getElementById('ma-desc').value.trim(),
+    priority:document.getElementById('ma-prio').value,
+    status:'attente'
+  };
+  const saved=await dbInsert('demandes_admin',row);
+  if(saved){
+    cacheMsgAdmin.unshift(saved);
+    await callFn('notify-demand',{demand:{referent_name:row.to_name,referent_email:row.to_email,subject:'[Message admin] '+subj,description:row.description,priority:row.priority,creche:'Message direct de '+row.from_name}});
+    showBanner('Message envoyé !');
+    closeModal('modal-msgadmin-wrap');
+    renderMsgAdmin();
+  }else showBanner('Erreur lors de l\'envoi.','error');
+  btn.disabled=false;
+}
+
+async function toggleMsgAdminStatus(id,currentStatus){
+  const newStatus=currentStatus==='traite'?'attente':'traite';
+  const updates={status:newStatus,treated_at:newStatus==='traite'?new Date().toISOString():null};
+  const ok=await dbUpdate('demandes_admin',id,updates);
+  if(ok){const m=cacheMsgAdmin.find(x=>x.id===id);if(m)Object.assign(m,updates);updateBadges();renderMsgAdmin();}
+}
+
+async function deleteMsgAdmin(id){
+  if(!confirm('Supprimer ce message ?'))return;
+  await dbDelete('demandes_admin',id);
+  cacheMsgAdmin=cacheMsgAdmin.filter(m=>m.id!==id);
+  updateBadges();renderMsgAdmin();
+}
 
 // EVENEMENTS / RENDEZ-VOUS (CALENDRIER)
 const CAL_TYPE_INFO={
@@ -3666,6 +3786,24 @@ demandes: `
   ⚠ Les demandes <strong>urgentes</strong> apparaissent en tête de liste avec une bordure rouge. Un badge de notification s'affiche dans la navigation.
 </div>`,
 
+msgadmin: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📨 Messages admin</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
+  💡 Cet onglet permet d'échanger des messages directs entre admins (direction), ou entre un admin et un référent, sans passer par une crèche. Tout le monde peut envoyer et recevoir.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📝 Envoyer un message</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Cliquez sur <strong>+ Nouveau message</strong></li>
+  <li>Choisissez le <strong>destinataire</strong> dans la liste (admins et référents apparaissent ensemble)</li>
+  <li>Renseignez le <strong>sujet</strong> et le <strong>message</strong></li>
+  <li>Choisissez la <strong>priorité</strong> si besoin, puis cliquez <strong>Envoyer</strong></li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📥 Reçus / 📤 Envoyés</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Utilisez les filtres en haut de la liste pour distinguer vos messages <strong>reçus</strong> de vos messages <strong>envoyés</strong>. Marquez un message reçu comme <strong>traité</strong> en cliquant sur ✓.</div>
+<div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A">
+  ⚠ Un badge de notification s'affiche dans la navigation tant qu'un message reçu n'est pas marqué comme traité.
+</div>`,
+
 incidents: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🚨 Registre des incidents</h3>
 <div style="background:#FEF2F2;border-left:4px solid #DC2626;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#991B1B">
@@ -3849,6 +3987,22 @@ comptes: `
       <button class="btn-cancel" onclick="closeModal('modal-evenement-wrap')">Annuler</button>
       <button class="btn-primary" onclick="saveEvenement()"><i class="ti ti-check"></i> Enregistrer</button>
     </div>
+  </div>
+</div>
+
+<!-- Modal message admin -->
+<div class="overlay" id="modal-msgadmin-wrap">
+  <div class="modal">
+    <h3>Nouveau message</h3>
+    <div class="fg"><label class="flabel">Destinataire</label>
+      <select class="finput" id="ma-to-select"><option value="">-- Choisir --</option></select>
+    </div>
+    <div class="fg"><label class="flabel">Sujet</label><input class="finput" id="ma-subj" placeholder="Ex. : Besoin de validation pour le devis fournisseur"/></div>
+    <div class="fg"><label class="flabel">Message</label><textarea class="finput" id="ma-desc" rows="4" style="resize:vertical"></textarea></div>
+    <div class="fg"><label class="flabel">Priorité</label>
+      <select class="finput" id="ma-prio"><option value="normal">Normale</option><option value="urgent">Urgente</option><option value="info">Information</option></select>
+    </div>
+    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-msgadmin-wrap')">Annuler</button><button class="btn-primary" id="btn-save-msgadmin" onclick="saveMsgAdmin()"><i class="ti ti-check"></i> Envoyer</button></div>
   </div>
 </div>
 </body>
