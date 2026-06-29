@@ -4089,7 +4089,7 @@ function showNotif(msg) {
 let articleRowCount = 0;
 const articleRowPhotos = {}; // idx → base64 photo
 
-function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='') {
+function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='', photo='') {
   const idx = articleRowCount++;
   const container = document.getElementById('articles-rows');
   if (!container) return;
@@ -4122,14 +4122,15 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='') {
                onchange="handleRowPhoto(event,${idx})">
         <span id="row-photo-btn-${idx}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px dashed var(--border);border-radius:5px;font-size:11px;color:var(--ink2);cursor:pointer;transition:border-color .15s"
               onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-          📷 Photo article
+          📷 ${photo ? 'Photo ✅' : 'Photo article'}
         </span>
       </label>
-      <img id="row-photo-prev-${idx}" src="" alt="" style="display:none;height:36px;width:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">
-      <button type="button" id="row-photo-del-${idx}" style="display:none;background:none;border:none;cursor:pointer;font-size:14px;color:var(--red);padding:0 4px" onclick="deleteRowPhoto(${idx})" title="Supprimer la photo">✕</button>
+      <img id="row-photo-prev-${idx}" src="${photo||''}" alt="" style="display:${photo?'block':'none'};height:36px;width:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">
+      <button type="button" id="row-photo-del-${idx}" style="display:${photo?'inline-block':'none'};background:none;border:none;cursor:pointer;font-size:14px;color:var(--red);padding:0 4px" onclick="deleteRowPhoto(${idx})" title="Supprimer la photo">✕</button>
     </div>
   `;
   container.appendChild(row);
+  if (photo) articleRowPhotos[idx] = photo; // reprend la photo de l'article/de la commande d'origine
   calcCommandeTotal();
 }
 
@@ -4212,7 +4213,7 @@ function commanderArticle(id) {
   articleRowCount = 0;
   // Clean nom from any price/fourn suffixes
   const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
-  addArticleRow('1', nomClean, a.prix > 0 ? a.prix.toFixed(2) : '', a.url || '', a.fourn || '');
+  addArticleRow('1', nomClean, a.prix > 0 ? a.prix.toFixed(2) : '', a.url || '', a.fourn || '', a.cat || '', a.photo || '');
 }
 
 function resetArticleRows() {
@@ -4282,9 +4283,12 @@ function renderArticlePickerList() {
   container.innerHTML = list.map(a => {
     const checked = pickerArticleSelection.has(a.id) ? 'checked' : '';
     const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+    const thumb = a.photo
+      ? `<img src="${a.photo}" alt="${nomClean}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0" loading="lazy">`
+      : `<span style="font-size:14px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:6px;flex-shrink:0">${CAT_ICONS[a.cat]||'📦'}</span>`;
     return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
       <input type="checkbox" ${checked} onchange="togglePickerArticle(${a.id}, this.checked)" style="min-height:auto;width:16px;height:16px">
-      <span style="font-size:14px">${CAT_ICONS[a.cat]||'📦'}</span>
+      ${thumb}
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:var(--ink)">${nomClean}</div>
         <div style="font-size:11px;color:var(--ink3)">${a.creche} · ${a.fourn||'—'} ${a.prix>0?`· ${a.prix.toFixed(2)} €`:''}</div>
@@ -4309,7 +4313,7 @@ function confirmArticlePicker() {
     const a = ARTICLES.find(x => x.id === id);
     if (!a) return;
     const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
-    addArticleRow('1', nomClean, a.prix > 0 ? a.prix.toFixed(2) : '', a.url || '', a.fourn || '', a.cat || '');
+    addArticleRow('1', nomClean, a.prix > 0 ? a.prix.toFixed(2) : '', a.url || '', a.fourn || '', a.cat || '', a.photo || '');
   });
   showNotif(`✅ ${pickerArticleSelection.size} article(s) ajouté(s) à la commande`);
   closeModal('modal-article-picker');
@@ -4372,15 +4376,21 @@ function togglePickerOrderLine(key, checked) {
   if (cnt) cnt.textContent = `${pickerOrderSelection.size} ligne(s) sélectionnée(s)`;
 }
 
+// Récupère la photo associée à une ligne d'une commande (stockée séparément dans photos_json)
+function getPhotoFromCommandeLine(c, idx) {
+  if (!c.photos_json) return '';
+  try { return JSON.parse(c.photos_json)[idx] || ''; } catch(e) { return ''; }
+}
+
 function reprendreCommandeEntiere(commandeId) {
   const c = COMMANDES.find(x => x.id === commandeId);
   if (!c) return;
   const lignes = (c.articles||'').split('\n').filter(Boolean);
-  const items = lignes.map(parseLigneArticle).filter(Boolean);
+  const items = lignes.map((ligne, idx) => { const art = parseLigneArticle(ligne); if (art) art._idx = idx; return art; }).filter(Boolean);
   if (items.length === 0) { showNotif('⚠ Aucun article exploitable dans cette commande'); return; }
   removeEmptyTrailingRow();
   items.forEach(art => {
-    addArticleRow(String(art.qty), art.nom, art.prix > 0 ? art.prix.toFixed(2) : '', art.url || '', art.fourn || '', art.cat || '');
+    addArticleRow(String(art.qty), art.nom, art.prix > 0 ? art.prix.toFixed(2) : '', art.url || '', art.fourn || '', art.cat || '', getPhotoFromCommandeLine(c, art._idx));
   });
   showNotif(`✅ ${items.length} article(s) repris de la commande ${c.bc||''}`);
   closeModal('modal-order-history-picker');
@@ -4394,10 +4404,11 @@ function confirmOrderHistoryPicker() {
     const [cIdStr, idxStr] = key.split(':');
     const c = COMMANDES.find(x => x.id === parseInt(cIdStr) || String(x.id) === cIdStr);
     if (!c) return;
+    const idx = parseInt(idxStr);
     const lignes = (c.articles||'').split('\n').filter(Boolean);
-    const art = parseLigneArticle(lignes[parseInt(idxStr)] || '');
+    const art = parseLigneArticle(lignes[idx] || '');
     if (!art) return;
-    addArticleRow(String(art.qty), art.nom, art.prix > 0 ? art.prix.toFixed(2) : '', art.url || '', art.fourn || '', art.cat || '');
+    addArticleRow(String(art.qty), art.nom, art.prix > 0 ? art.prix.toFixed(2) : '', art.url || '', art.fourn || '', art.cat || '', getPhotoFromCommandeLine(c, idx));
     count++;
   });
   showNotif(`✅ ${count} article(s) ajouté(s) à la commande`);
