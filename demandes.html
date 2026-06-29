@@ -373,7 +373,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="logo"><img id="app-logo" src="" alt="Koala Kids"/></div>
     <nav class="main-nav" id="main-nav">
       <button class="mnav-btn active" onclick="showMain('demands')" id="mnav-demands"><i class="ti ti-message-circle"></i> Demandes</button>
-      <button class="mnav-btn" onclick="showMain('msgadmin')" id="mnav-msgadmin"><i class="ti ti-messages"></i> Messages admin <span class="mnav-badge" id="badge-msgadmin" style="display:none">0</span></button>
       <button class="mnav-btn" onclick="showMain('incidents')" id="mnav-incidents"><i class="ti ti-alert-triangle"></i> Incidents <span class="mnav-badge" id="badge-incidents" style="display:none">0</span></button>
       <button class="mnav-btn" onclick="showMain('presence')" id="mnav-presence"><i class="ti ti-users-group"></i> Présences</button>
       <button class="mnav-btn direction-only" onclick="showMain('referents')" id="mnav-referents"><i class="ti ti-address-book"></i> Référents</button>
@@ -395,24 +394,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div id="main-demands" class="tab-content active">
     <div id="creche-tabs-bar" class="creche-tabs-bar"></div>
     <div id="creche-panel"></div>
-  </div>
-
-  <!-- MESSAGES ADMIN -->
-  <div id="main-msgadmin" class="tab-content">
-    <div class="section-header">
-      <div class="section-left">
-        <span class="section-title"><i class="ti ti-messages" style="color:var(--koala)"></i> Messages entre admins et référents</span>
-        <span class="section-sub">Échanges directs, sans passer par une crèche</span>
-      </div>
-      <button class="btn-primary" onclick="openMsgAdminModal()"><i class="ti ti-plus"></i> Nouveau message</button>
-    </div>
-    <div class="filters" id="msgadmin-filters">
-      <button class="fchip active" onclick="maSetFilter('all',this)">Tous</button>
-      <button class="fchip" onclick="maSetFilter('reçus',this)">📥 Reçus</button>
-      <button class="fchip" onclick="maSetFilter('envoyés',this)">📤 Envoyés</button>
-      <button class="fchip" onclick="maSetFilter('attente',this)">⏳ En attente</button>
-    </div>
-    <div id="msgadmin-list"></div>
   </div>
 
   <!-- INCIDENTS -->
@@ -741,7 +722,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px;border-bottom:1px solid var(--border)">
       <div style="display:flex;gap:0;overflow-x:auto;flex:1">
         <button class="notice-tab active" onclick="switchNoticeTab('demandes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--koala);margin-bottom:-1px;color:var(--koala);white-space:nowrap">💬 Demandes</button>
-        <button class="notice-tab" onclick="switchNoticeTab('msgadmin',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📨 Messages admin</button>
         <button class="notice-tab" onclick="switchNoticeTab('incidents',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🚨 Incidents</button>
         <button class="notice-tab" onclick="switchNoticeTab('presences',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👥 Présences</button>
         <button class="notice-tab" onclick="switchNoticeTab('planning',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📅 Planning</button>
@@ -761,10 +741,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="overlay" id="modal-demand-wrap">
   <div class="modal">
     <h3 id="modal-d-title">Nouvelle demande</h3>
-    <div class="fg" id="d-creche-fg" style="display:none"><label class="flabel">Crèche</label><select class="finput" id="d-creche-select"><option value="">-- Choisir --</option></select></div>
+    <div class="fg" id="d-creche-fg" style="display:none"><label class="flabel">Crèche (optionnel si destinataire admin)</label><select class="finput" id="d-creche-select"><option value="">-- Aucune / non liée à une crèche --</option></select></div>
     <div class="frow">
-      <div class="fg"><label class="flabel">Référent</label><select class="finput" id="d-ref-select" onchange="fillRefEmail()"><option value="">-- Choisir --</option></select></div>
-      <div class="fg"><label class="flabel">E-mail référent</label><input class="finput" id="d-email" placeholder="referent@email.fr" type="email"/></div>
+      <div class="fg"><label class="flabel">Destinataire</label><select class="finput" id="d-ref-select" onchange="fillRefEmail()"><option value="">-- Choisir --</option></select></div>
+      <div class="fg"><label class="flabel">E-mail destinataire</label><input class="finput" id="d-email" placeholder="destinataire@email.fr" type="email"/></div>
     </div>
     <div class="fg"><label class="flabel">Sujet</label><input class="finput" id="d-subj" placeholder="Ex. : Réaménagement espace jeux"/></div>
     <div class="fg"><label class="flabel">Description</label><textarea class="finput" id="d-desc" rows="3" style="resize:vertical"></textarea></div>
@@ -1058,9 +1038,8 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,weekOffset=0,currentPresenceSlot='matin',searchTerm='';
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMsgAdmin=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
-let maFilter='all';
 
 // Init au chargement complet de la page
 window.addEventListener('DOMContentLoaded', async function() {
@@ -1087,8 +1066,8 @@ window.addEventListener('DOMContentLoaded', async function() {
 
 async function loadAllData(){
   const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout Supabase')),10000));
-  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants,cacheEvenements,cacheMsgAdmin]=await Promise.race([
-    Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('evenements'),dbSelect('demandes_admin')]),
+  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants,cacheEvenements]=await Promise.race([
+    Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('evenements')]),
     timeout
   ]);
 }
@@ -1188,20 +1167,16 @@ function updateBadges(){
   const myCrecheId=isDirection?null:currentProfile?.creche_id;
   const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;
   const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}
-  const myId=currentProfile?.id;
-  const ma=cacheMsgAdmin.filter(m=>m.to_referent_id===myId&&m.status!=='traite').length;
-  const bm=document.getElementById('badge-msgadmin');if(bm){bm.textContent=ma;bm.style.display=ma>0?'':'none';}
 }
 
 function showMain(tab){
-  ['demands','msgadmin','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
   });
   if(tab==='planning')renderPlanning();
   if(tab==='demands')renderCrecheTabs();
-  if(tab==='msgadmin')renderMsgAdmin();
   if(tab==='referents')renderReferents();
   if(tab==='incidents')renderIncidents();
   if(tab==='presence'){initPresenceDate();renderPresence();}
@@ -1249,7 +1224,9 @@ function renderCrechePanel(){
   const isAll=isDirection&&activeCrecheId==='all';
   const crecheId=isAll?null:(isDirection?activeCrecheId:currentProfile?.creche_id);
   const creche=crecheId?cacheCreches.find(c=>c.id===crecheId):null;
-  const allD=isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId);
+  const myId=currentProfile?.id;
+  // Inclut aussi les demandes adressées personnellement (admin-à-admin ou vers un référent précis), même sans crèche.
+  const allD=isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId));
   const total=allD.length,attente=allD.filter(d=>d.status==='attente').length,urgent=allD.filter(d=>d.priority==='urgent').length,traite=allD.filter(d=>d.status==='traite').length;
   let html='';
   if(isAll){html+='<div class="creche-header-box"><div class="creche-header-name"><i class="ti ti-building-community" style="font-size:20px"></i> Toutes les crèches <span>'+cacheCreches.length+' établissements</span></div><div class="section-actions"><button class="btn-orange" onclick="openConsigneModal()"><i class="ti ti-send"></i> Envoyer une consigne</button></div></div>';}
@@ -1265,8 +1242,9 @@ function renderDemandsOnly(){
   const inner=document.getElementById('demands-list-inner');if(!inner)return;
   const isAll=isDirection&&activeCrecheId==='all';
   const crecheId=isAll?null:(isDirection?activeCrecheId:currentProfile?.creche_id);
+  const myId=currentProfile?.id;
   const term=searchTerm.toLowerCase().trim();
-  const base=term?cacheDemandes:(isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId));
+  const base=term?cacheDemandes:(isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId)));
   const filtered=base.filter(d=>{
     if(!term){if(activeFilter==='all'&&d.status==='traite')return false;if(activeFilter==='urgent'&&d.priority!=='urgent')return false;if(activeFilter==='attente'&&d.status!=='attente')return false;if(activeFilter==='traite'&&d.status!=='traite')return false;if(activeFilter==='consigne'&&d.type!=='consigne')return false;}
     if(term){const cn=(cacheCreches.find(c=>c.id===d.creche_id)?.name||'').toLowerCase();if(!(d.subject||'').toLowerCase().includes(term)&&!(d.referent_name||'').toLowerCase().includes(term)&&!(d.description||'').toLowerCase().includes(term)&&!cn.includes(term)&&!(d.theme||'').toLowerCase().includes(term))return false;}
@@ -1281,7 +1259,9 @@ function renderDemandsOnly(){
       const isC=d.type==='consigne';
       const crecheLabel=(cacheCreches.find(c=>c.id===d.creche_id)?.name||'');
       const dateLabel=new Date(d.created_at).toLocaleDateString('fr-FR');
-      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+(crecheLabel?'<span class="badge" style="background:#f0f0ff;color:var(--koala)"><i class="ti ti-building" style="font-size:10px"></i> '+hl(crecheLabel)+'</span>':'')+'</div><div class="dbody">'+hl(d.description||'—')+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+'</div></div><div class="dactions">'+((!isC&&isDirection)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
+      const crecheBadge=crecheLabel?'<span class="badge" style="background:#f0f0ff;color:var(--koala)"><i class="ti ti-building" style="font-size:10px"></i> '+hl(crecheLabel)+'</span>':(d.to_referent_id?'<span class="badge" style="background:#F0EDE8;color:#666"><i class="ti ti-arrow-right" style="font-size:10px"></i> Message direct</span>':'');
+      const canToggle=isDirection||(d.to_referent_id&&d.to_referent_id===currentProfile?.id);
+      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
     });
   }
   inner.innerHTML=html;
@@ -1291,24 +1271,38 @@ function setFilter(f,el){activeFilter=f;document.querySelectorAll('.filters .fch
 
 async function openDemandModal(){
   const isAll=isDirection&&activeCrecheId==='all';
-  const fg=document.getElementById('d-creche-fg');if(fg)fg.style.display=(isDirection&&isAll)?'block':'none';
-  if(isDirection&&isAll){const sel=document.getElementById('d-creche-select');if(sel)sel.innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');}
-  const crecheId=isAll?null:(isDirection?activeCrecheId:currentProfile?.creche_id);
-  const refs=crecheId?cacheReferents.filter(r=>r.creche_id===crecheId&&r.role==='referent'):cacheReferents.filter(r=>r.role==='referent');
-  const dSel=document.getElementById('d-ref-select');if(dSel)dSel.innerHTML='<option value="">-- Choisir --</option>'+refs.map(r=>'<option value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'">'+r.name+'</option>').join('');
+  // La crèche est toujours affichée pour la direction (utile pour les demandes liées à un référent terrain),
+  // mais devient optionnelle si le destinataire choisi est un admin (voir fillRefEmail()).
+  const fg=document.getElementById('d-creche-fg');if(fg)fg.style.display=isDirection?'block':'none';
+  if(isDirection){const sel=document.getElementById('d-creche-select');if(sel){sel.innerHTML='<option value="">-- Aucune / non liée à une crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');if(!isAll&&activeCrecheId)sel.value=activeCrecheId;}}
+  // Destinataires : tous les référents ET tous les admins (direction), tout le monde mélangé dans la même liste.
+  const myId=currentProfile?.id;
+  const dests=cacheReferents.filter(r=>r.id!==myId);
+  const dSel=document.getElementById('d-ref-select');
+  if(dSel)dSel.innerHTML='<option value="">-- Choisir --</option>'+dests.map(r=>{
+    const isAdmin=r.role==='direction';
+    const creche=cacheCreches.find(c=>c.id===r.creche_id);
+    const tag=isAdmin?' — 🔑 Admin':(creche?' ('+creche.name+')':'');
+    return '<option value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'" data-admin="'+(isAdmin?'1':'0')+'">'+r.name+tag+'</option>';
+  }).join('');
   ['d-email','d-subj','d-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('d-prio').value='normal';
   document.getElementById('modal-demand-wrap').classList.add('open');
 }
-function fillRefEmail(){const sel=document.getElementById('d-ref-select');const opt=sel.options[sel.selectedIndex];if(opt)document.getElementById('d-email').value=opt.getAttribute('data-email')||'';}
+function fillRefEmail(){
+  const sel=document.getElementById('d-ref-select');const opt=sel.options[sel.selectedIndex];
+  if(opt)document.getElementById('d-email').value=opt.getAttribute('data-email')||'';
+}
 async function saveDemand(){
   const subj=document.getElementById('d-subj').value.trim();if(!subj){alert('Sujet requis.');return;}
   const isAll=isDirection&&activeCrecheId==='all';
-  const crecheId=isAll?document.getElementById('d-creche-select')?.value:(isDirection?activeCrecheId:currentProfile?.creche_id);
-  if(!crecheId){alert('Veuillez sélectionner une crèche.');return;}
   const refSel=document.getElementById('d-ref-select');const refOpt=refSel?.options[refSel.selectedIndex];
+  const destIsAdmin=refOpt?.getAttribute('data-admin')==='1';
+  let crecheId=isDirection?(document.getElementById('d-creche-select')?.value||null):(isAll?null:currentProfile?.creche_id);
+  if(!isDirection)crecheId=currentProfile?.creche_id||null;
+  if(!crecheId&&!destIsAdmin){alert('Veuillez sélectionner une crèche, ou choisir un destinataire admin.');return;}
   const btn=document.getElementById('btn-save-demand');btn.disabled=true;
-  const row={creche_id:crecheId,referent_name:refOpt?.getAttribute('data-name')||'',referent_email:document.getElementById('d-email').value.trim(),subject:subj,description:document.getElementById('d-desc').value.trim(),priority:document.getElementById('d-prio').value,theme:document.getElementById('d-theme').value,status:'attente',type:'demande'};
+  const row={creche_id:crecheId,to_referent_id:refSel?.value||null,referent_name:refOpt?.getAttribute('data-name')||'',referent_email:document.getElementById('d-email').value.trim(),subject:subj,description:document.getElementById('d-desc').value.trim(),priority:document.getElementById('d-prio').value,theme:document.getElementById('d-theme').value,status:'attente',type:'demande'};
   const saved=await dbInsert('demandes',row);
   if(saved){cacheDemandes.unshift(saved);await callFn('notify-demand',{demand:{...row,creche:cacheCreches.find(c=>c.id===crecheId)?.name||''}});showBanner('Demande enregistrée !');closeModal('modal-demand-wrap');renderCrecheTabs();}
   else showBanner('Erreur.','error');
@@ -1406,97 +1400,6 @@ function openIncidentModal(){document.getElementById('inc-creche').innerHTML='<o
 async function saveIncident(){const desc=document.getElementById('inc-desc').value.trim();if(!desc){alert('Description requise.');return;}const row={creche_id:document.getElementById('inc-creche').value,child_name:document.getElementById('inc-child').value.trim(),incident_date:document.getElementById('inc-date').value,incident_time:document.getElementById('inc-time').value,type:document.getElementById('inc-type').value,severity:document.getElementById('inc-severity').value,description:desc,actions:document.getElementById('inc-actions').value.trim(),reporter:document.getElementById('inc-reporter').value.trim(),treated:false};const saved=await dbInsert('incidents',row);if(saved){cacheIncidents.unshift(saved);updateBadges();showBanner('Incident enregistré.');closeModal('modal-incident-wrap');renderIncidents();}else showBanner('Erreur.','error');}
 async function toggleIncident(id,treated){const ok=await dbUpdate('incidents',id,{treated:!treated});if(ok){const i=cacheIncidents.find(x=>x.id===id);if(i)i.treated=!treated;updateBadges();renderIncidents();}}
 async function deleteIncident(id){if(!confirm('Supprimer ?'))return;await dbDelete('incidents',id);cacheIncidents=cacheIncidents.filter(i=>i.id!==id);updateBadges();renderIncidents();}
-
-// MESSAGES ADMIN (demandes entre admins / référents, sans crèche)
-function maSetFilter(f,btn){maFilter=f;document.querySelectorAll('#msgadmin-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderMsgAdmin();}
-
-function renderMsgAdmin(){
-  const list=document.getElementById('msgadmin-list');if(!list)return;
-  const myId=currentProfile?.id;
-  let filtered=cacheMsgAdmin.filter(m=>m.from_referent_id===myId||m.to_referent_id===myId);
-  if(maFilter==='reçus')filtered=filtered.filter(m=>m.to_referent_id===myId);
-  else if(maFilter==='envoyés')filtered=filtered.filter(m=>m.from_referent_id===myId);
-  else if(maFilter==='attente')filtered=filtered.filter(m=>m.status!=='traite');
-  if(!filtered.length){list.innerHTML='<div class="empty-state"><i class="ti ti-messages"></i><p>Aucun message.</p></div>';return;}
-  list.innerHTML=filtered.map(m=>{
-    const isReceived=m.to_referent_id===myId;
-    const dateLabel=m.created_at?new Date(m.created_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-    const dirLabel=isReceived?'<span class="badge" style="background:#EEF6FF;color:#1E40AF"><i class="ti ti-arrow-down" style="font-size:10px"></i> De '+(m.from_name||'?')+'</span>':'<span class="badge" style="background:#F0EDE8;color:#666"><i class="ti ti-arrow-up" style="font-size:10px"></i> À '+(m.to_name||'?')+'</span>';
-    return '<div class="dcard '+(m.priority||'normal')+'">'+
-      '<div class="dmeta">'+
-        '<div class="dtop"><span class="dsubject">'+escHtml(m.subject)+'</span>'+
-          '<span class="badge b-'+(m.priority||'normal')+'">'+(m.priority==='urgent'?'🔴 Urgent':m.priority==='info'?'ℹ️ Info':'Normal')+'</span>'+
-          dirLabel+
-        '</div>'+
-        '<div class="dbody">'+escHtml(m.description||'—')+'</div>'+
-        '<div class="dfoot"><span class="meta-txt">'+dateLabel+'</span>'+
-          '<span class="badge b-'+(m.status||'attente')+'">'+(m.status==='traite'?'✅ Traité':'⏳ En attente')+'</span>'+
-        '</div>'+
-      '</div>'+
-      '<div class="dactions">'+
-        (isReceived?'<button class="ibtn" onclick="toggleMsgAdminStatus(\''+m.id+'\',\''+m.status+'\')"><i class="ti ti-'+(m.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+
-        ((m.from_referent_id===myId||isDirection)?'<button class="ibtn del" onclick="deleteMsgAdmin(\''+m.id+'\')"><i class="ti ti-trash"></i></button>':'')+
-      '</div>'+
-    '</div>';
-  }).join('');
-}
-
-function openMsgAdminModal(){
-  const myId=currentProfile?.id;
-  const options=cacheReferents.filter(r=>r.id!==myId);
-  const sel=document.getElementById('ma-to-select');
-  sel.innerHTML='<option value="">-- Choisir --</option>'+options.map(r=>{
-    const roleTag=r.role==='direction'?' — Admin':'';
-    const creche=cacheCreches.find(c=>c.id===r.creche_id);
-    const crecheTag=creche?' ('+creche.name+')':'';
-    return '<option value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'">'+r.name+roleTag+crecheTag+'</option>';
-  }).join('');
-  ['ma-subj','ma-desc'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('ma-prio').value='normal';
-  document.getElementById('modal-msgadmin-wrap').classList.add('open');
-}
-
-async function saveMsgAdmin(){
-  const subj=document.getElementById('ma-subj').value.trim();if(!subj){alert('Sujet requis.');return;}
-  const toSel=document.getElementById('ma-to-select');
-  const toId=toSel.value;if(!toId){alert('Veuillez choisir un destinataire.');return;}
-  const toOpt=toSel.options[toSel.selectedIndex];
-  const btn=document.getElementById('btn-save-msgadmin');btn.disabled=true;
-  const row={
-    from_referent_id:currentProfile?.id||null,
-    from_name:currentProfile?.name||'',
-    to_referent_id:toId,
-    to_name:toOpt.getAttribute('data-name')||'',
-    to_email:toOpt.getAttribute('data-email')||'',
-    subject:subj,
-    description:document.getElementById('ma-desc').value.trim(),
-    priority:document.getElementById('ma-prio').value,
-    status:'attente'
-  };
-  const saved=await dbInsert('demandes_admin',row);
-  if(saved){
-    cacheMsgAdmin.unshift(saved);
-    await callFn('notify-demand',{demand:{referent_name:row.to_name,referent_email:row.to_email,subject:'[Message admin] '+subj,description:row.description,priority:row.priority,creche:'Message direct de '+row.from_name}});
-    showBanner('Message envoyé !');
-    closeModal('modal-msgadmin-wrap');
-    renderMsgAdmin();
-  }else showBanner('Erreur lors de l\'envoi.','error');
-  btn.disabled=false;
-}
-
-async function toggleMsgAdminStatus(id,currentStatus){
-  const newStatus=currentStatus==='traite'?'attente':'traite';
-  const updates={status:newStatus,treated_at:newStatus==='traite'?new Date().toISOString():null};
-  const ok=await dbUpdate('demandes_admin',id,updates);
-  if(ok){const m=cacheMsgAdmin.find(x=>x.id===id);if(m)Object.assign(m,updates);updateBadges();renderMsgAdmin();}
-}
-
-async function deleteMsgAdmin(id){
-  if(!confirm('Supprimer ce message ?'))return;
-  await dbDelete('demandes_admin',id);
-  cacheMsgAdmin=cacheMsgAdmin.filter(m=>m.id!==id);
-  updateBadges();renderMsgAdmin();
-}
 
 // EVENEMENTS / RENDEZ-VOUS (CALENDRIER)
 const CAL_TYPE_INFO={
@@ -3764,44 +3667,27 @@ const NOTICE_DEM = {
 demandes: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">💬 Demandes et consignes</h3>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
-  💡 Les demandes permettent aux référentes terrain de remonter des besoins, informations ou consignes à la direction.
+  💡 Les demandes permettent aux référentes terrain de remonter des besoins, informations ou consignes à la direction — et aussi d'échanger directement entre admins, ou avec n'importe quel référent, sans passer par une crèche.
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📝 Créer une demande</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Cliquez sur <strong>+ Nouvelle demande</strong></li>
-  <li>Choisissez votre <strong>crèche</strong> et votre <strong>profil référent</strong></li>
+  <li>Choisissez le <strong>destinataire</strong> : la liste mélange les référentes et les admins (repérables avec 🔑)</li>
+  <li>Si le destinataire est un admin, la <strong>crèche</strong> devient facultative — laissez-la vide pour un message direct</li>
   <li>Renseignez le <strong>sujet</strong> et la <strong>description</strong> précise</li>
   <li>Choisissez la <strong>priorité</strong> : 🔴 Urgent, Normal ou ℹ️ Info</li>
-  <li>Sélectionnez un <strong>thème</strong> (Matériel, Pédagogie, Administratif…)</li>
   <li>Cliquez <strong>Envoyer</strong></li>
 </ol>
-<div style="font-weight:700;font-size:14px;margin-bottom:10px">✅ Traiter une demande (Direction)</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">✅ Traiter une demande</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Cliquez sur l'icône ✓ à droite de la demande pour la marquer <strong>Traitée</strong></li>
   <li>Une demande traitée peut être réouverte en cliquant sur 🔄</li>
+  <li>Le destinataire direct d'un message peut le marquer traité lui-même, même s'il n'est pas admin</li>
   <li>Utilisez les <strong>filtres</strong> (Urgent, En attente, Traitées) pour trier l'affichage</li>
-  <li>Filtrez par <strong>crèche</strong> via les onglets en haut de la liste</li>
+  <li>Filtrez par <strong>crèche</strong> via les onglets en haut de la liste — les messages directs sans crèche apparaissent dans l'onglet <strong>Toutes</strong> (admins) ou dans votre propre liste (référentes)</li>
 </ol>
 <div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A">
   ⚠ Les demandes <strong>urgentes</strong> apparaissent en tête de liste avec une bordure rouge. Un badge de notification s'affiche dans la navigation.
-</div>`,
-
-msgadmin: `
-<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📨 Messages admin</h3>
-<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
-  💡 Cet onglet permet d'échanger des messages directs entre admins (direction), ou entre un admin et un référent, sans passer par une crèche. Tout le monde peut envoyer et recevoir.
-</div>
-<div style="font-weight:700;font-size:14px;margin-bottom:10px">📝 Envoyer un message</div>
-<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
-  <li>Cliquez sur <strong>+ Nouveau message</strong></li>
-  <li>Choisissez le <strong>destinataire</strong> dans la liste (admins et référents apparaissent ensemble)</li>
-  <li>Renseignez le <strong>sujet</strong> et le <strong>message</strong></li>
-  <li>Choisissez la <strong>priorité</strong> si besoin, puis cliquez <strong>Envoyer</strong></li>
-</ol>
-<div style="font-weight:700;font-size:14px;margin-bottom:10px">📥 Reçus / 📤 Envoyés</div>
-<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Utilisez les filtres en haut de la liste pour distinguer vos messages <strong>reçus</strong> de vos messages <strong>envoyés</strong>. Marquez un message reçu comme <strong>traité</strong> en cliquant sur ✓.</div>
-<div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A">
-  ⚠ Un badge de notification s'affiche dans la navigation tant qu'un message reçu n'est pas marqué comme traité.
 </div>`,
 
 incidents: `
@@ -3987,22 +3873,6 @@ comptes: `
       <button class="btn-cancel" onclick="closeModal('modal-evenement-wrap')">Annuler</button>
       <button class="btn-primary" onclick="saveEvenement()"><i class="ti ti-check"></i> Enregistrer</button>
     </div>
-  </div>
-</div>
-
-<!-- Modal message admin -->
-<div class="overlay" id="modal-msgadmin-wrap">
-  <div class="modal">
-    <h3>Nouveau message</h3>
-    <div class="fg"><label class="flabel">Destinataire</label>
-      <select class="finput" id="ma-to-select"><option value="">-- Choisir --</option></select>
-    </div>
-    <div class="fg"><label class="flabel">Sujet</label><input class="finput" id="ma-subj" placeholder="Ex. : Besoin de validation pour le devis fournisseur"/></div>
-    <div class="fg"><label class="flabel">Message</label><textarea class="finput" id="ma-desc" rows="4" style="resize:vertical"></textarea></div>
-    <div class="fg"><label class="flabel">Priorité</label>
-      <select class="finput" id="ma-prio"><option value="normal">Normale</option><option value="urgent">Urgente</option><option value="info">Information</option></select>
-    </div>
-    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-msgadmin-wrap')">Annuler</button><button class="btn-primary" id="btn-save-msgadmin" onclick="saveMsgAdmin()"><i class="ti ti-check"></i> Envoyer</button></div>
   </div>
 </div>
 </body>
