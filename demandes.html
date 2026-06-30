@@ -562,9 +562,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div id="dash-alerts"></div>
     <div class="stats-row" id="dash-stats"></div>
-    <div class="section-header" style="margin-top:0.25rem">
-      <span class="section-title" style="font-size:14px"><i class="ti ti-calendar-today" style="color:var(--koala)"></i> Aujourd'hui</span>
-      <span class="section-sub" id="dash-today-label"></span>
+    <div class="section-header" style="margin-top:0.25rem;flex-wrap:wrap;gap:8px">
+      <span class="section-title" style="font-size:14px"><i class="ti ti-calendar-today" style="color:var(--koala)"></i> <span id="dash-today-title">Aujourd'hui</span></span>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <button class="ibtn" onclick="dashChangeDay(-1)" title="Jour précédent"><i class="ti ti-chevron-left"></i></button>
+        <input type="date" class="finput" id="dash-date-input" style="width:150px;padding:6px 8px" onchange="dashSetDate(this.value)">
+        <button class="ibtn" onclick="dashChangeDay(1)" title="Jour suivant"><i class="ti ti-chevron-right"></i></button>
+        <button class="btn-sm" onclick="dashGoToday()" title="Revenir à aujourd'hui"><i class="ti ti-calendar-event"></i> Aujourd'hui</button>
+        <span class="section-sub" id="dash-today-label"></span>
+      </div>
     </div>
     <div class="dash-grid" id="dash-today-grid"></div>
     <div class="dash-grid" id="dash-grid"></div>
@@ -2893,6 +2899,15 @@ function renderDashboard(){
 }
 
 // AUJOURD'HUI — widget temps réel du tableau de bord
+let dashSelectedDate=null;
+function dashChangeDay(delta){
+  const d=new Date(dashSelectedDate||todayStr());
+  d.setDate(d.getDate()+delta);
+  dashSelectedDate=ipDateToLocalISO(d);
+  renderDashboardToday();
+}
+function dashGoToday(){dashSelectedDate=todayStr();renderDashboardToday();}
+function dashSetDate(v){if(v){dashSelectedDate=v;renderDashboardToday();}}
 function dashTodayEvents(t){
   return cacheEvenements.filter(e=>{
     const start=e.date_debut,end=e.date_fin||e.date_debut;
@@ -2904,9 +2919,14 @@ function dashTodayBirthdays(t){
   return cacheEnfants.filter(e=>e.dob&&e.dob.slice(5)===md);
 }
 function renderDashboardToday(){
-  const t=todayStr();
+  const t=dashSelectedDate||(dashSelectedDate=todayStr());
+  const isToday=t===todayStr();
+  const dateInput=document.getElementById('dash-date-input');
+  if(dateInput)dateInput.value=t;
+  const titleEl=document.getElementById('dash-today-title');
+  if(titleEl)titleEl.textContent=isToday?"Aujourd'hui":'Le '+new Date(t+'T00:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'});
   const lbl=document.getElementById('dash-today-label');
-  if(lbl)lbl.textContent=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'});
+  if(lbl)lbl.textContent=new Date(t+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})+(isToday?'':' (passé/à venir)');
 
   const evts=dashTodayEvents(t);
   const evtsHtml=evts.length?evts.map(e=>{
