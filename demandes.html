@@ -518,6 +518,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </select>
         </div>
         <span id="pe-badge" style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
+        <select id="pe-print-weeks" class="finput" style="font-size:11px;padding:4px 6px;width:auto" title="Nombre de semaines sur la page imprimée">
+          <option value="1">1 semaine / page</option>
+          <option value="2">2 semaines / page</option>
+          <option value="3">3 semaines / page</option>
+          <option value="4">4 semaines / page</option>
+        </select>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="printPlanningEquipe()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
       </div>
       <div id="pe-grid-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:8px"></div>
@@ -2645,7 +2651,7 @@ async function renderPlanningEquipe(){
   wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
 }
 
-function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPrint){
+function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPrint,nbWeeksOnPage){
   if(!rows.length)return '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucune donnée pour cette semaine — importez un fichier Excel pour cette crèche.</div>';
 
   const ws=new Date(semaine+'T00:00:00');
@@ -2691,23 +2697,29 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
     if(!ev)return '<span style="color:#ddd">—</span>';
     const color=peColorForName(ev.prenom);
     const ailleurs=ev.lieu&&ev.lieu!==crecheName;
-    const clickAttr=editable?'onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+';color:#fff;border-radius:4px;padding:'+(forPrint?'9px 12px':'4px 6px')+';font-size:'+_peFSCell+';text-align:center"':'style="background:'+color+';color:#fff;border-radius:4px;padding:'+(forPrint?'9px 12px':'4px 6px')+';font-size:'+_peFSCell+';text-align:center"';
+    const clickAttr=editable?'onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"':'style="background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"';
     return '<div '+clickAttr+'>'+
       '<strong>'+ev.prenom+'</strong>'+(ailleurs?' <span style="opacity:0.85">('+ev.lieu+')</span>':'')+
       '</div>';
   }
 
-  // Tailles adaptées selon contexte écran/impression — l'impression utilise des cases nettement plus
-  // grandes (largeur + hauteur de ligne) et une police plus grande pour que les horaires complets
-  // (ex: 10H30-13H30/14H30-18H30) restent lisibles et que la grille soit confortable à lire sur papier.
-  const _peFS=forPrint?'15px':'12px';
-  const _peFSCell=forPrint?'14px':'11px';
-  const _peFSDay=forPrint?'13px':'10px';
-  const _pePad=forPrint?'16px 14px':'8px';
-  const _pePadCell=forPrint?'14px 10px':'6px';
-  const _peHoraireW=forPrint?'230px':'150px';
-  const _peRowLH=forPrint?'1.6':'1.3';
-  const _peMinW=forPrint?'1100px':'640px';
+  // Tailles adaptées selon contexte écran/impression. Quand plusieurs semaines partagent la même
+  // page (impression portrait compacte), les cases sont plus resserrées pour que tout tienne.
+  nbWeeksOnPage=nbWeeksOnPage||1;
+  const _peTier=!forPrint?'screen':(nbWeeksOnPage>=4?'p4':nbWeeksOnPage===3?'p3':nbWeeksOnPage===2?'p2':'p1');
+  const _peSizes={
+    screen:{fs:'12px',fsCell:'11px',fsDay:'10px',pad:'8px',padCell:'6px',horW:'150px',lh:'1.3',minW:'640px',badgePad:'4px 6px'},
+    p1:    {fs:'15px',fsCell:'14px',fsDay:'13px',pad:'16px 14px',padCell:'14px 10px',horW:'230px',lh:'1.6',minW:'1100px',badgePad:'9px 12px'},
+    p2:    {fs:'13px',fsCell:'12px',fsDay:'11px',pad:'8px 7px',padCell:'7px 6px',horW:'105px',lh:'1.35',minW:'560px',badgePad:'5px 7px'},
+    p3:    {fs:'11px',fsCell:'10px',fsDay:'9px',pad:'6px 5px',padCell:'5px 4px',horW:'88px',lh:'1.25',minW:'490px',badgePad:'4px 6px'},
+    p4:    {fs:'10px',fsCell:'9px',fsDay:'8px',pad:'4px 4px',padCell:'4px 3px',horW:'75px',lh:'1.15',minW:'440px',badgePad:'3px 5px'}
+  };
+  const _peS=_peSizes[_peTier];
+  const _peFS=_peS.fs,_peFSCell=_peS.fsCell,_peFSDay=_peS.fsDay,_pePad=_peS.pad,_pePadCell=_peS.padCell,
+        _peHoraireW=_peS.horW,_peRowLH=_peS.lh,_peMinW=_peS.minW,_peBadgePad=_peS.badgePad;
+  // En impression compacte (2-3 semaines/page), on force un saut de ligne au niveau du "/" des horaires
+  // (ex: "10H30-13H30/14H30-18H30" → "10H30-13H30" puis "/14H30-18H30") pour que la colonne reste étroite.
+  const _peCreneauLabel=c=>(forPrint&&nbWeeksOnPage>1)?c.replace(/\//g,'<br>/'):c;
 
   let html='<table style="width:100%;border-collapse:collapse;font-size:'+_peFS+';min-width:'+_peMinW+';table-layout:fixed;line-height:'+_peRowLH+'">';
   html+='<colgroup><col style="width:'+_peHoraireW+'">'+DAYS.map(()=>'<col style="width:'+((100-12)/5)+'%">').join('')+'</colgroup>';
@@ -2718,7 +2730,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   creneauOrder.forEach(creneau=>{
     const evsThisCreneau=byCreneau[creneau];
     const creneauEsc=creneau.replace(/'/g,"\\'");
-    html+='<tr><td style="padding:'+_pePad+';border-bottom:1px solid var(--border);font-weight:600;color:var(--ink2);font-size:'+_peFSCell+';white-space:normal;word-break:break-word">'+creneau+'</td>';
+    html+='<tr><td style="padding:'+_pePad+';border-bottom:1px solid var(--border);font-weight:600;color:var(--ink2);font-size:'+_peFSCell+';white-space:normal;word-break:break-word">'+_peCreneauLabel(creneau)+'</td>';
     for(let d=0;d<5;d++){
       // Plusieurs personnes peuvent partager le même créneau le même jour
       const evs=evsThisCreneau.filter(e=>e.jour===d);
@@ -2745,7 +2757,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
       if(evs.length){
         html+=evs.map(ev=>{
           const color=peColorForName(ev.prenom);
-          return '<div style="background:'+color+';color:#fff;border-radius:4px;padding:'+(forPrint?'9px 12px':'4px 6px')+';font-size:'+_peFSCell+';text-align:left;margin-bottom:4px;line-height:1.4"><strong>'+ev.prenom+'</strong> — '+(ev.label||ev.type)+'</div>';
+          return '<div style="background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:left;margin-bottom:4px;line-height:1.4"><strong>'+ev.prenom+'</strong> — '+(ev.label||ev.type)+'</div>';
         }).join('');
       }else{
         html+='<div style="text-align:center"><span style="color:#ddd">—</span></div>';
@@ -2764,13 +2776,14 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
 // ════════════════════════════════════════════════════════════
 
 // Construit un document HTML imprimable et lance l'impression (iframe caché, compatible mobile/tablette)
-function printPlanningDoc(title, subtitle, bodyHTML){
+function printPlanningDoc(title, subtitle, bodyHTML, orientation){
+  orientation=orientation||'landscape';
   const html='<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">'+
     '<meta name="viewport" content="width=device-width, initial-scale=1.0">'+
     '<title>'+title+'</title>'+
     '<style>'+
       '*{margin:0;padding:0;box-sizing:border-box}'+
-      'body{font-family:Arial,sans-serif;color:#111;padding:24px;max-width:1400px;margin:0 auto}'+
+      'body{font-family:Arial,sans-serif;color:#111;padding:24px;max-width:'+(orientation==='portrait'?'800px':'1400px')+';margin:0 auto}'+
       'h1{font-size:1.5rem;font-weight:bold;margin-bottom:0.2rem;color:#3D3580}'+
       '.sub{font-size:0.85rem;color:#666;margin-bottom:1rem}'+
       'table{width:100%;border-collapse:collapse;margin-top:0.5rem}'+
@@ -2779,7 +2792,7 @@ function printPlanningDoc(title, subtitle, bodyHTML){
       'td{padding:8px 10px;border-bottom:1px solid #E7E5E0;font-size:11px;vertical-align:top}'+
       'tr:nth-child(even) td{background:#F9F9F8}'+
       '.footer{margin-top:1.5rem;font-size:10px;color:#888;border-top:1px solid #E7E5E0;padding-top:10px}'+
-      '@media print{@page{margin:1.2cm;size:landscape}body{padding:0}}'+
+      '@media print{@page{margin:1.2cm;size:'+orientation+'}body{padding:0}}'+
       '*{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}'+
     '</style></head><body>'+
     '<h1>'+title+'</h1>'+
@@ -2861,21 +2874,34 @@ async function printPlanningCoord(){
   printPlanningDoc('Planning du coordinateur',subtitle,planningGridToPrintTable(evs,semaine));
 }
 
-// 3) Planning équipe (toutes les salariées de la crèche affichée)
+// 3) Planning équipe (toutes les salariées de la crèche affichée) — 1, 2 ou 3 semaines sur la même page
 async function printPlanningEquipe(){
   const sel=document.getElementById('pe-creche-select');
   const crecheId=isDirection?sel?.value:currentProfile?.creche_id;
   if(!crecheId){alert('Choisissez d\'abord une crèche avant d\'imprimer.');return;}
-  const ws=weekStart();const semaine=ipDateToLocalISO(ws);
-  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
   const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
-  const rows=await peLoad(crecheId,semaine);
-  if(!rows.length){alert('Aucune donnée à imprimer pour cette crèche cette semaine.');return;}
-  // Réutilise le rendu HTML existant (non éditable) et le débarrasse des attributs onclick/cursor pour l'impression
-  let bodyHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,false,true);
-  const subtitle='Planning équipe — '+crecheName+' — semaine du '+fmt(days5[0])+' au '+fmt(days5[4]);
-  printPlanningDoc('Planning équipe',subtitle,bodyHTML);
+  const nbWeeks=parseInt(document.getElementById('pe-print-weeks')?.value)||1;
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  const ws0=weekStart();
+  let bodyHTML='';
+  let nbWithData=0;
+  for(let w=0;w<nbWeeks;w++){
+    const wsW=new Date(ws0);wsW.setDate(ws0.getDate()+7*w);
+    const semaineW=ipDateToLocalISO(wsW);
+    const days5=Array.from({length:5},(_,i)=>{const d=new Date(wsW);d.setDate(wsW.getDate()+i);return d;});
+    const rows=await peLoad(crecheId,semaineW);
+    bodyHTML+='<div style="margin-top:'+(w>0?'18px':'0')+'">'+
+      '<div style="font-weight:700;font-size:13px;color:#3D3580;margin-bottom:4px">Semaine du '+fmt(days5[0])+' au '+fmt(days5[4])+'</div>'+
+      (rows.length?getPlanningEquipeTable(rows,semaineW,crecheName,crecheId,false,true,nbWeeks):'<div style="font-size:11px;color:#999;padding:6px 0">Aucune donnée pour cette semaine.</div>')+
+      '</div>';
+    if(rows.length)nbWithData++;
+  }
+  if(!nbWithData){alert('Aucune donnée à imprimer pour cette crèche sur la période choisie.');return;}
+
+  const days5First=Array.from({length:5},(_,i)=>{const d=new Date(ws0);d.setDate(ws0.getDate()+i);return d;});
+  const subtitle='Planning équipe — '+crecheName+' — '+nbWeeks+' semaine(s) à partir du '+fmt(days5First[0]);
+  printPlanningDoc('Planning équipe',subtitle,bodyHTML,'portrait');
 }
 
 // ── IK PLANNING (Supabase cache) — voir ikReadPlanning plus bas, version active ──
