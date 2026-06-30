@@ -565,9 +565,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap">
       <button class="btn-green" onclick="exportBackup()"><i class="ti ti-download"></i> Exporter sauvegarde</button>
       <label class="btn-sm" style="cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-upload"></i> Restaurer <input type="file" accept=".json" onchange="importBackup(event)" style="display:none"/></label>
+      <a href="https://kidevo.gertrude-logiciel.org/login" target="_blank" rel="noopener" class="btn-sm" style="display:flex;align-items:center;gap:5px;text-decoration:none"><i class="ti ti-external-link"></i> KOALA KIDS - Planning</a>
     </div>
     <div id="dash-alerts"></div>
     <div class="stats-row" id="dash-stats"></div>
+    <div class="section-header" style="margin-top:0.25rem;flex-wrap:wrap;gap:8px">
+      <span class="section-title" style="font-size:14px"><i class="ti ti-calendar-today" style="color:var(--koala)"></i> <span id="dash-today-title">Aujourd'hui</span></span>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <button class="ibtn" onclick="dashChangeDay(-1)" title="Jour précédent"><i class="ti ti-chevron-left"></i></button>
+        <input type="date" class="finput" id="dash-date-input" style="width:150px;padding:6px 8px" onchange="dashSetDate(this.value)">
+        <button class="ibtn" onclick="dashChangeDay(1)" title="Jour suivant"><i class="ti ti-chevron-right"></i></button>
+        <button class="btn-sm" onclick="dashGoToday()" title="Revenir à aujourd'hui"><i class="ti ti-calendar-event"></i> Aujourd'hui</button>
+        <span class="section-sub" id="dash-today-label"></span>
+      </div>
+    </div>
+    <div class="dash-grid" id="dash-today-grid"></div>
     <div class="dash-grid" id="dash-grid"></div>
   </div>
 
@@ -2922,6 +2934,96 @@ function renderDashboard(){
   const themes={};cacheDemandes.forEach(d=>{if(d.theme)themes[d.theme]=(themes[d.theme]||0)+1;});
   const themeRows=Object.keys(themes).length?Object.entries(themes).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'<div class="dash-list-item"><span>'+k+'</span><span style="font-weight:700;color:var(--koala)">'+v+'</span></div>').join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune donnée</div>';
   document.getElementById('dash-grid').innerHTML='<div class="dash-card"><div class="dash-card-title"><i class="ti ti-building"></i> Demandes par crèche</div>'+byCrecheRows+'</div><div class="dash-card"><div class="dash-card-title"><i class="ti ti-chart-pie"></i> Thèmes</div>'+themeRows+'</div>';
+  renderDashboardToday();
+}
+
+// AUJOURD'HUI — widget temps réel du tableau de bord
+let dashSelectedDate=null;
+function dashChangeDay(delta){
+  const d=new Date(dashSelectedDate||todayStr());
+  d.setDate(d.getDate()+delta);
+  dashSelectedDate=ipDateToLocalISO(d);
+  renderDashboardToday();
+}
+function dashGoToday(){dashSelectedDate=todayStr();renderDashboardToday();}
+function dashSetDate(v){if(v){dashSelectedDate=v;renderDashboardToday();}}
+function dashTodayEvents(t){
+  return cacheEvenements.filter(e=>{
+    const start=e.date_debut,end=e.date_fin||e.date_debut;
+    return start&&t>=start&&t<=end;
+  }).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
+}
+function dashTodayBirthdays(t){
+  const md=t.slice(5);
+  return cacheEnfants.filter(e=>e.dob&&e.dob.slice(5)===md);
+}
+function renderDashboardToday(){
+  const t=dashSelectedDate||(dashSelectedDate=todayStr());
+  const isToday=t===todayStr();
+  const dateInput=document.getElementById('dash-date-input');
+  if(dateInput)dateInput.value=t;
+  const titleEl=document.getElementById('dash-today-title');
+  if(titleEl)titleEl.textContent=isToday?"Aujourd'hui":'Le '+new Date(t+'T00:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'});
+  const lbl=document.getElementById('dash-today-label');
+  if(lbl)lbl.textContent=new Date(t+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})+(isToday?'':' (passé/à venir)');
+
+  const evts=dashTodayEvents(t);
+  const evtsHtml=evts.length?evts.map(e=>{
+    const info=CAL_TYPE_INFO[e.type]||CAL_TYPE_INFO.autre;
+    const creche=cacheCreches.find(c=>c.id===e.creche_id);
+    const horaire=e.heure_debut?e.heure_debut+(e.heure_fin?'–'+e.heure_fin:''):'';
+    return'<div class="dash-list-item"><span>'+info.emoji+' '+escHtml(e.titre)+(creche?' <span style="color:var(--muted);font-size:11px">('+escHtml(creche.name)+')</span>':' <span style="color:var(--muted);font-size:11px">(réseau)</span>')+'</span><span style="font-weight:700;color:var(--koala);font-size:11px;white-space:nowrap">'+horaire+'</span></div>';
+  }).join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun événement aujourd\'hui</div>';
+
+  const bdays=dashTodayBirthdays(t);
+  const bdaysHtml=bdays.length?bdays.map(e=>{
+    const creche=cacheCreches.find(c=>c.id===e.creche_id);
+    const age=Number(t.slice(0,4))-Number(e.dob.slice(0,4));
+    return'<div class="dash-list-item"><span>🎂 '+escHtml((e.prenom||'')+' '+(e.nom||''))+'</span><span style="font-weight:700;color:var(--koala);font-size:11px;white-space:nowrap">'+age+' an'+(age>1?'s':'')+(creche?' · '+escHtml(creche.name):'')+'</span></div>';
+  }).join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun anniversaire aujourd\'hui</div>';
+
+  const demT=cacheDemandes.filter(d=>(d.created_at||'').slice(0,10)===t);
+  const incT=cacheIncidents.filter(i=>i.incident_date===t);
+  let actHtml='';
+  if(!demT.length&&!incT.length){
+    actHtml='<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucune activité aujourd\'hui</div>';
+  }else{
+    actHtml+=demT.map(d=>{
+      const creche=cacheCreches.find(c=>c.id===d.creche_id);
+      return'<div class="dash-list-item"><span>'+(d.type==='consigne'?'📌':'✉️')+' '+escHtml(d.subject||d.theme||'Demande')+(creche?' <span style="color:var(--muted);font-size:11px">('+escHtml(creche.name)+')</span>':'')+'</span><span style="font-size:11px;font-weight:700;color:'+(d.priority==='urgent'?'var(--red)':'var(--muted)')+'">'+(d.priority==='urgent'?'Urgent':(d.status==='traite'?'Traité':'En attente'))+'</span></div>';
+    }).join('');
+    actHtml+=incT.map(i=>{
+      const creche=cacheCreches.find(c=>c.id===i.creche_id);
+      return'<div class="dash-list-item"><span>🚨 '+escHtml(i.child_name||'Incident')+(creche?' <span style="color:var(--muted);font-size:11px">('+escHtml(creche.name)+')</span>':'')+'</span><span style="font-size:11px;font-weight:700;color:'+(i.severity==='grave'?'var(--red)':'var(--muted)')+'">'+(i.treated?'Traité':'Non traité')+'</span></div>';
+    }).join('');
+  }
+
+  document.getElementById('dash-today-grid').innerHTML=
+    '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-calendar-event"></i> Événements du jour</div>'+evtsHtml+'</div>'+
+    '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-cake"></i> Anniversaires</div>'+bdaysHtml+'</div>'+
+    '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-bolt"></i> Activité du jour</div>'+actHtml+'</div>'+
+    '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
+
+  loadDashboardPresences(t);
+}
+async function loadDashboardPresences(dateStr){
+  const box=document.getElementById('dash-today-presence');
+  if(!box)return;
+  const title='<div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div>';
+  try{
+    const{data,error}=await sb.from('presences').select('enfant_id,status').eq('presence_date',dateStr);
+    if(error)throw error;
+    const presentIds=new Set((data||[]).filter(p=>p.status==='present'||p.status==='partial').map(p=>p.enfant_id));
+    const crechesWithEnfants=cacheCreches.filter(c=>cacheEnfants.some(e=>e.creche_id===c.id));
+    const rows=crechesWithEnfants.map(c=>{
+      const total=cacheEnfants.filter(e=>e.creche_id===c.id).length;
+      const present=cacheEnfants.filter(e=>e.creche_id===c.id&&presentIds.has(e.id)).length;
+      return'<div class="dash-list-item"><strong>'+escHtml(c.name)+'</strong><span style="font-weight:700;color:var(--koala)">'+present+' / '+total+'</span></div>';
+    }).join('');
+    box.innerHTML=title+(rows||'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun enfant enregistré</div>');
+  }catch(e){
+    box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Pointage non saisi aujourd\'hui</div>';
+  }
 }
 
 // EDGE FUNCTIONS
