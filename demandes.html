@@ -559,6 +559,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap">
       <button class="btn-green" onclick="exportBackup()"><i class="ti ti-download"></i> Exporter sauvegarde</button>
       <label class="btn-sm" style="cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-upload"></i> Restaurer <input type="file" accept=".json" onchange="importBackup(event)" style="display:none"/></label>
+      <a href="https://kidevo.gertrude-logiciel.org/login" target="_blank" rel="noopener" class="btn-sm" style="display:flex;align-items:center;gap:5px;text-decoration:none"><i class="ti ti-external-link"></i> KOALA KIDS - Planning</a>
     </div>
     <div id="dash-alerts"></div>
     <div class="stats-row" id="dash-stats"></div>
@@ -2456,12 +2457,13 @@ function getPlanningGridSimple(events,coordId,semaine){
         if(!evs.length)html+='<span style="font-size:10px;color:#ccc">+ ajouter</span>';
         evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delPlanningEvent(\''+e.id+'\',\''+coordId+'\',\''+semaine+'\')">'+
           (e.lieu||e.label||e.type)+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>';});
+        html+='</div>';
       }else{
         html+='<div class="pg-cell-ro">';
         if(!evs.length)html+='<div style="text-align:center;padding:0.5rem;color:#ddd;font-size:11px">—</div>';
         else evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" style="opacity:0.85">'+(e.lieu||e.label||e.type)+'</div>';});
+        html+='</div>';
       }
-      html+='</div>';
     });
   });
   return html;
@@ -3699,14 +3701,13 @@ function fpRenderPdfZone(){
   if(fpPdfRow){
     zone.innerHTML='<i class="ti ti-file-text" style="font-size:28px;color:var(--koala)"></i>'+
       '<div style="margin:8px 0"><a href="'+fpPdfRow.pdf_url+'" target="_blank" class="btn-primary" style="display:inline-flex"><i class="ti ti-eye"></i> Voir le PDF du mois</a></div>'+
-      '<button class="btn-sm" onclick="document.getElementById(\'fp-pdf-input\').click()"><i class="ti ti-refresh"></i> Remplacer</button>'+
-      '<input type="file" id="fp-pdf-input" accept="application/pdf" style="display:none" onchange="fpHandlePdfUpload(event)"/>';
+      '<button class="btn-sm" onclick="document.getElementById(\'fp-pdf-input\').click()"><i class="ti ti-refresh"></i> Remplacer</button>';
   }else{
     zone.innerHTML='<i class="ti ti-upload" style="font-size:28px;color:#ccc"></i>'+
       '<div style="margin:8px 0;font-size:13px;color:var(--muted)">Aucun PDF déposé pour '+(month||'ce mois')+'</div>'+
-      '<button class="btn-primary" onclick="document.getElementById(\'fp-pdf-input\').click()"><i class="ti ti-upload"></i> Déposer le PDF scanné</button>'+
-      '<input type="file" id="fp-pdf-input" accept="application/pdf" style="display:none" onchange="fpHandlePdfUpload(event)"/>';
+      '<button class="btn-primary" onclick="document.getElementById(\'fp-pdf-input\').click()"><i class="ti ti-upload"></i> Déposer le PDF scanné</button>';
   }
+  zone.insertAdjacentHTML('beforeend','<input type="file" id="fp-pdf-input" accept="application/pdf" style="display:none" onchange="fpHandlePdfUpload(event)"/>');
 }
 
 async function fpHandlePdfUpload(event){
