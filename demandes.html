@@ -127,6 +127,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .b-ref{background:#f0f0f0;color:#555}
 .meta-txt{font-size:12px;color:#999}
 .reply-box{background:var(--koala-light);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:13px;color:var(--koala);border-left:3px solid var(--koala)}
+.tmsg{margin-bottom:10px;display:flex;flex-direction:column}
+.tmsg .tbubble{background:#F4F2EF;border-radius:12px;padding:8px 12px;font-size:13.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-width:85%}
+.tmsg.mine{align-items:flex-end}
+.tmsg.mine .tbubble{background:var(--koala);color:#fff}
+.tmsg .tauthor{font-size:11px;font-weight:700;color:#666;margin:0 4px 3px}
+.tmsg.mine .tauthor{text-align:right}
+.tmsg .ttime{font-size:10.5px;color:#aaa;margin:2px 4px 0}
+.tmsg.mine .ttime{text-align:right}
+.torig{background:#FFFBF0;border:1px solid #F0E6C8;border-radius:10px;padding:10px 12px;font-size:13px;color:#444;white-space:pre-wrap}
+.badge-thread{background:#EDEAFF;color:var(--koala);cursor:pointer}
 .reply-box strong{display:block;margin-bottom:4px;font-size:12px}
 .dactions{display:flex;gap:5px;flex-shrink:0}
 
@@ -775,6 +785,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<div class="overlay" id="modal-thread-wrap" onclick="if(event.target===this)closeModal('modal-thread-wrap')">
+  <div class="modal" style="max-width:560px;width:100%;display:flex;flex-direction:column;max-height:88vh">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div style="min-width:0"><h3 id="thread-subject" style="margin:0 0 3px">Discussion</h3><div id="thread-context" style="font-size:12px;color:#888"></div></div>
+      <button onclick="closeModal('modal-thread-wrap')" style="width:28px;height:28px;background:#F0EDE8;border:none;border-radius:50%;cursor:pointer;font-size:13px;flex-shrink:0">✕</button>
+    </div>
+    <div id="thread-orig" style="margin-top:10px"></div>
+    <div id="thread-messages" style="flex:1;overflow-y:auto;margin-top:12px;padding-right:4px;min-height:60px"></div>
+    <div style="margin-top:10px;border-top:1px solid #eee;padding-top:10px">
+      <textarea class="finput" id="thread-input" rows="2" placeholder="Écrire une réponse…" style="resize:vertical"></textarea>
+      <div class="mactions" style="margin-top:8px"><button class="btn-primary" id="btn-send-msg" onclick="sendThreadMessage()"><i class="ti ti-send"></i> Envoyer</button></div>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="modal-consigne-wrap">
   <div class="modal">
     <h3>Envoyer une consigne</h3>
@@ -1057,7 +1082,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,weekOffset=0,currentPresenceSlot='matin',searchTerm='';
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 
 // Init au chargement complet de la page
@@ -1085,8 +1110,8 @@ window.addEventListener('DOMContentLoaded', async function() {
 
 async function loadAllData(){
   const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout Supabase')),10000));
-  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants,cacheEvenements]=await Promise.race([
-    Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('evenements')]),
+  [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants,cacheEvenements,cacheMessages]=await Promise.race([
+    Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('evenements'),dbSelect('messages')]),
     timeout
   ]);
 }
@@ -1280,7 +1305,9 @@ function renderDemandsOnly(){
       const dateLabel=new Date(d.created_at).toLocaleDateString('fr-FR');
       const crecheBadge=crecheLabel?'<span class="badge" style="background:#f0f0ff;color:var(--koala)"><i class="ti ti-building" style="font-size:10px"></i> '+hl(crecheLabel)+'</span>':(d.to_referent_id?'<span class="badge" style="background:#F0EDE8;color:#666"><i class="ti ti-arrow-right" style="font-size:10px"></i> Message direct</span>':'');
       const canToggle=isDirection||(d.to_referent_id&&d.to_referent_id===currentProfile?.id);
-      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
+      const msgCount=cacheMessages.filter(m=>m.demande_id===d.id).length;
+      const threadBadge='<span class="badge badge-thread" onclick="openThread(\''+d.id+'\')"><i class="ti ti-message-2" style="font-size:11px"></i> '+(msgCount>0?msgCount+' réponse'+(msgCount>1?'s':''):'Discuter')+'</span>';
+      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+threadBadge+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
     });
   }
   inner.innerHTML=html;
@@ -1334,6 +1361,59 @@ async function toggleStatus(id,currentStatus){
   if(ok){const d=cacheDemandes.find(x=>x.id===id);if(d)Object.assign(d,updates);const creche=cacheCreches.find(c=>c.id===d?.creche_id);await callFn('notify-status',{demand:{...d,creche:creche?.name||''},newStatus});showBanner('Statut mis à jour !');renderDemandsOnly();renderCrecheTabs();}
 }
 async function deleteDemand(id){if(!confirm('Supprimer ?'))return;await dbDelete('demandes',id);cacheDemandes=cacheDemandes.filter(d=>d.id!==id);renderDemandsOnly();renderCrecheTabs();}
+
+// FIL DE DISCUSSION
+let currentThreadId=null;
+function openThread(demandId){
+  const d=cacheDemandes.find(x=>x.id===demandId);if(!d)return;
+  currentThreadId=demandId;
+  document.getElementById('thread-subject').textContent=d.subject||'Discussion';
+  const crecheLabel=cacheCreches.find(c=>c.id===d.creche_id)?.name||'';
+  const ctx=[crecheLabel,d.referent_name?'À '+d.referent_name:''].filter(Boolean).join(' · ');
+  document.getElementById('thread-context').textContent=ctx;
+  const origAuthor=d.referent_name||'Demande initiale';
+  document.getElementById('thread-orig').innerHTML='<div class="torig"><div style="font-weight:700;font-size:11px;color:#B08900;margin-bottom:4px">📌 '+escHtml(d.subject)+'</div>'+escHtml(d.description||'—')+'<div style="font-size:10.5px;color:#aaa;margin-top:6px">'+new Date(d.created_at).toLocaleString('fr-FR')+'</div></div>';
+  document.getElementById('thread-input').value='';
+  renderThread();
+  document.getElementById('modal-thread-wrap').classList.add('open');
+  setTimeout(()=>document.getElementById('thread-input').focus(),100);
+}
+function renderThread(){
+  const box=document.getElementById('thread-messages');
+  const msgs=cacheMessages.filter(m=>m.demande_id===currentThreadId).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  if(!msgs.length){box.innerHTML='<div style="text-align:center;color:#bbb;font-size:12.5px;padding:14px 0">Aucune réponse pour l\'instant. Lancez la discussion 👇</div>';return;}
+  const myId=currentProfile?.id;
+  box.innerHTML=msgs.map(m=>{
+    const mine=m.author_id===myId;
+    return '<div class="tmsg'+(mine?' mine':'')+'"><div class="tauthor">'+escHtml(m.author_name||'—')+'</div><div class="tbubble">'+escHtml(m.body)+'</div><div class="ttime">'+new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>';
+  }).join('');
+  box.scrollTop=box.scrollHeight;
+}
+async function sendThreadMessage(){
+  const inp=document.getElementById('thread-input');const body=inp.value.trim();if(!body||!currentThreadId)return;
+  const btn=document.getElementById('btn-send-msg');btn.disabled=true;
+  const row={demande_id:currentThreadId,author_id:currentProfile?.id||null,author_name:currentProfile?.name||'Moi',body:body};
+  const saved=await dbInsert('messages',row);
+  if(saved){
+    cacheMessages.push(saved);inp.value='';renderThread();renderDemandsOnly();
+    const d=cacheDemandes.find(x=>x.id===currentThreadId);
+    if(d){
+      // Destinataire de la notif : l'autre partie de la demande.
+      // Si l'auteur du message est le destinataire de la demande, on notifie l'émetteur (via sa crèche / son email connu) et inversement.
+      const dest=cacheReferents.find(r=>r.id===d.to_referent_id);
+      let toEmail='',toName='';
+      if(currentProfile?.id===d.to_referent_id){ // je suis le destinataire → je réponds à l'émetteur
+        toEmail=d.referent_email||'';toName=d.referent_name||'';
+      }else{ // je suis l'émetteur (ou direction) → je notifie le destinataire
+        toEmail=dest?.email||d.referent_email||'';toName=dest?.name||d.referent_name||'';
+      }
+      const creche=cacheCreches.find(c=>c.id===d.creche_id);
+      if(toEmail){await callFn('notify-message',{message:{to_email:toEmail,to_name:toName,author_name:row.author_name,body:body,subject:d.subject||'Demande',creche:creche?.name||'',demande_id:d.id}});}
+    }
+  }
+  else showBanner('Erreur envoi.','error');
+  btn.disabled=false;inp.focus();
+}
 
 function openConsigneModal(){
   const sel=document.getElementById('c-ref-select');
@@ -3002,9 +3082,30 @@ function renderDashboardToday(){
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-calendar-event"></i> Événements du jour</div>'+evtsHtml+'</div>'+
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-cake"></i> Anniversaires</div>'+bdaysHtml+'</div>'+
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-bolt"></i> Activité du jour</div>'+actHtml+'</div>'+
-    '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
+    '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
+    '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
 
   loadDashboardPresences(t);
+  loadDashboardRemplacantes(t);
+}
+async function loadDashboardRemplacantes(dateStr){
+  const box=document.getElementById('dash-today-remplacantes');
+  if(!box)return;
+  const title='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div>';
+  try{
+    const{data,error}=await sb.from('remplacantes').select('*').eq('date',dateStr).order('creche_id',{ascending:true});
+    if(error)throw error;
+    const list=data||[];
+    if(!list.length){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucune remplaçante prévue</div>';return;}
+    const rows=list.map(ev=>{
+      const creche=cacheCreches.find(c=>c.id===ev.creche_id);
+      const horaire=ev.heure_debut?ev.heure_debut+'–'+ev.heure_fin:'';
+      return'<div class="dash-list-item"><span>👤 '+escHtml(ev.nom)+(creche?' <span style="color:var(--muted);font-size:11px">('+escHtml(creche.name)+')</span>':'')+'</span><span style="font-weight:700;color:var(--koala);font-size:11px;white-space:nowrap">'+horaire+'</span></div>';
+    }).join('');
+    box.innerHTML=title+rows;
+  }catch(e){
+    box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Indisponible</div>';
+  }
 }
 async function loadDashboardPresences(dateStr){
   const box=document.getElementById('dash-today-presence');
@@ -3030,10 +3131,10 @@ async function loadDashboardPresences(dateStr){
 async function exportBackup(){
   try{
     showBanner('Préparation de la sauvegarde…');
-    const[creches,demandes,referents,incidents,enfants]=await Promise.all([
-      dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants')
+    const[creches,demandes,referents,incidents,enfants,messages]=await Promise.all([
+      dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('messages')
     ]);
-    const backup={version:'2.0',date:new Date().toISOString(),creches,demandes,referents,incidents,enfants};
+    const backup={version:'2.1',date:new Date().toISOString(),creches,demandes,referents,incidents,enfants,messages};
     const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
@@ -3055,7 +3156,7 @@ async function importBackup(event){
     if(!backup.version||!backup.creches){showBanner('Fichier de sauvegarde invalide.','error');return;}
     showBanner('Restauration en cours…');
     // Vider et réinsérer chaque table
-    for(const table of ['presences','replies','demandes','incidents','enfants','referents','creches']){
+    for(const table of ['messages','presences','replies','demandes','incidents','enfants','referents','creches']){
       await sb.from(table).delete().neq('id','00000000-0000-0000-0000-000000000000');
     }
     if(backup.creches?.length)await sb.from('creches').insert(backup.creches);
@@ -3064,6 +3165,7 @@ async function importBackup(event){
       if(refs.length)await sb.from('referents').insert(refs);
     }
     if(backup.demandes?.length)await sb.from('demandes').insert(backup.demandes);
+    if(backup.messages?.length)await sb.from('messages').insert(backup.messages);
     if(backup.incidents?.length)await sb.from('incidents').insert(backup.incidents);
     if(backup.enfants?.length)await sb.from('enfants').insert(backup.enfants);
     await loadAllData();
