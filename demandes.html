@@ -1575,7 +1575,8 @@ function calCellHtml(d,isOut,today){
   evts.slice(0,3).forEach(e=>{
     const info=CAL_TYPE_INFO[e.type]||CAL_TYPE_INFO.autre;
     const creche=cacheCreches.find(c=>c.id===e.creche_id);
-    const crecheLabel=creche?' · '+escHtml(creche.name):'';
+    const alreadyInTitle=creche&&e.titre&&e.titre.toLowerCase().includes(creche.name.toLowerCase());
+    const crecheLabel=(creche&&!alreadyInTitle)?' · '+escHtml(creche.name):'';
     evtHtml+='<div class="cal-evt" style="background:'+info.color+'" title="'+escHtml(e.titre)+(creche?' — '+creche.name:'')+'">'+info.emoji+' '+escHtml(e.titre)+crecheLabel+'</div>';
   });
   if(evts.length>3)evtHtml+='<div class="cal-evt-more">+'+(evts.length-3)+' autre(s)</div>';
