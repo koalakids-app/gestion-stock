@@ -738,6 +738,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="section-header">
       <span class="section-title"><i class="ti ti-clock-plus" style="color:var(--koala)"></i> Heures supplémentaires</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-sm" onclick="hsOpenAddEmploye()"><i class="ti ti-user-plus"></i> Ajouter un salarié</button>
         <button class="btn-green" onclick="hsSave()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
         <button class="btn-sm" onclick="hsPrint()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
       </div>
@@ -934,6 +935,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fg"><label class="flabel">Message</label><textarea class="finput" id="c-msg" rows="4" style="resize:vertical"></textarea></div>
     <div class="fg"><label class="flabel">Priorité</label><select class="finput" id="c-prio"><option value="normal">Normale</option><option value="urgent">Urgente</option><option value="info">Information</option></select></div>
     <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-consigne-wrap')">Annuler</button><button class="btn-primary" id="btn-save-consigne" onclick="saveConsigne()"><i class="ti ti-send"></i> Envoyer</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-add-employe" onclick="if(event.target===this)closeModal('modal-add-employe')">
+  <div class="modal" style="max-width:420px">
+    <h3><i class="ti ti-user-plus" style="color:var(--koala)"></i> Ajouter un salarié</h3>
+    <div class="fg"><label class="flabel">Prénom et nom</label><input class="finput" id="ae-name" placeholder="Ex. : Marie Dupont"/></div>
+    <div class="fg"><label class="flabel">Crèche</label>
+      <select class="finput" id="ae-creche">
+        <option value="">-- Choisir une crèche --</option>
+      </select>
+    </div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-add-employe')">Annuler</button>
+      <button class="btn-primary" id="btn-save-employe" onclick="hsSaveEmploye()"><i class="ti ti-check"></i> Créer</button>
+    </div>
   </div>
 </div>
 
@@ -3960,13 +3977,25 @@ function hsInit(){
   const month=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   if(!document.getElementById('hs-month').value)document.getElementById('hs-month').value=month;
   const sel=document.getElementById('hs-referent-select');
+  sel.style.display='';
+  // Direction : tous les salariés de toutes les crèches
+  // Référente : uniquement les salariés de sa crèche (elle-même incluse)
+  const myCrecheId=isDirection?null:currentProfile?.creche_id;
+  const all=cacheReferents.filter(r=>
+    (r.role==='referent'||r.role==='direction'||r.role==='employe')
+    &&(!myCrecheId||r.creche_id===myCrecheId)
+  );
+  // Grouper par crèche pour la direction
   if(isDirection){
-    sel.style.display='';
-    if(sel.options.length<=1){
-      const refs=cacheReferents.filter(r=>r.role==='referent'||r.role==='direction');
-      sel.innerHTML='<option value="">-- Choisir un(e) salarié(e) --</option>'+refs.map(r=>'<option value="'+r.id+'">'+escHtml(r.name)+'</option>').join('');
-    }
-  }else{sel.style.display='none';}
+    const byCh={};
+    all.forEach(r=>{const c=cacheCreches.find(x=>x.id===r.creche_id);const k=c?.name||'Sans crèche';(byCh[k]=byCh[k]||[]).push(r);});
+    sel.innerHTML='<option value="">-- Choisir un(e) salarié(e) --</option>'+
+      Object.entries(byCh).sort((a,b)=>a[0].localeCompare(b[0])).map(([cname,refs])=>
+        '<optgroup label="'+escHtml(cname)+'">'+refs.map(r=>'<option value="'+r.id+'">'+escHtml(r.name)+'</option>').join('')+'</optgroup>'
+      ).join('');
+  }else{
+    sel.innerHTML='<option value="">-- Choisir un(e) salarié(e) --</option>'+all.map(r=>'<option value="'+r.id+'">'+escHtml(r.name)+'</option>').join('');
+  }
   hsLoad();
 }
 
@@ -4149,6 +4178,40 @@ function hsPrint(){
   win.document.close();
 }
 // ── FIN HEURES SUPPLÉMENTAIRES ───────────────────────────────────────────
+
+function hsOpenAddEmploye(){
+  // Pré-remplir la crèche selon le contexte
+  const sel=document.getElementById('ae-creche');
+  sel.innerHTML='<option value="">-- Choisir une crèche --</option>'+
+    cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
+  // Présélectionner la crèche du référent connecté
+  if(!isDirection&&currentProfile?.creche_id)sel.value=currentProfile.creche_id;
+  document.getElementById('ae-name').value='';
+  document.getElementById('modal-add-employe').classList.add('open');
+  setTimeout(()=>document.getElementById('ae-name').focus(),100);
+}
+
+async function hsSaveEmploye(){
+  const name=document.getElementById('ae-name').value.trim();
+  const crecheId=document.getElementById('ae-creche').value;
+  if(!name){showBanner('Saisissez un nom.','error');return;}
+  if(!crecheId){showBanner('Choisissez une crèche.','error');return;}
+  const btn=document.getElementById('btn-save-employe');btn.disabled=true;
+  const saved=await dbInsert('referents',{name,role:'employe',creche_id:crecheId});
+  if(saved){
+    cacheReferents.push(saved);
+    closeModal('modal-add-employe');
+    showBanner(name+' ajouté(e) ✅');
+    // Rafraîchir la liste et présélectionner le nouveau salarié
+    hsInit();
+    setTimeout(()=>{
+      const sel=document.getElementById('hs-referent-select');
+      if(sel)sel.value=saved.id;
+      hsLoad();
+    },100);
+  }else{showBanner('Erreur lors de la création.','error');}
+  btn.disabled=false;
+}
 
 function fpInit(){
   const now=new Date();
