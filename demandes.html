@@ -126,7 +126,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .b-traite{background:var(--green-light);color:#2e7d32}
 .b-ref{background:#f0f0f0;color:#555}
 .meta-txt{font-size:12px;color:#999}
-.reply-box{background:var(--koala-light);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:13px;color:var(--koala);border-left:3px solid var(--koala)}
+.hs-row-we{background:#f8f8f8;opacity:.55}
+.hs-row-we td{color:#aaa}
+.hs-duration{font-size:12px;font-weight:700;color:var(--koala);text-align:center;padding:0 4px}
+.hs-total{font-size:13px;font-weight:700;color:var(--koala);text-align:right}
+.hs-time{width:80px;padding:5px 6px;font-size:13px}
+.hs-sep{font-size:12px;color:#bbb;padding:0 2px}
+@media print{
+  .sidebar,.main-nav,.section-header button,.ik-month-sel,.mnav-btn,#notif-banner,
+  .btn-primary,.btn-green,.btn-sm,.btn-cancel,#hs-obs-grid .finput,
+  [onclick*="hsSave"],[onclick*="hsPrint"]{display:none!important}
+  #main-heures-sup{display:block!important}
+  .hs-time{border:1px solid #ccc!important}
+  body{background:#fff!important}
+  .ik-table td,.ik-table th{padding:4px 6px!important;font-size:11px!important}
+  print-color-adjust:exact;-webkit-print-color-adjust:exact
+};border-radius:8px;padding:10px 12px;margin-top:8px;font-size:13px;color:var(--koala);border-left:3px solid var(--koala)}
 .tmsg{margin-bottom:10px;display:flex;flex-direction:column}
 .tmsg .tbubble{background:#F4F2EF;border-radius:12px;padding:8px 12px;font-size:13.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-width:85%}
 .tmsg.mine{align-items:flex-end}
@@ -393,6 +408,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn direction-only" onclick="showMain('dashboard')" id="mnav-dashboard"><i class="ti ti-chart-bar"></i> Tableau de bord</button>
       <button class="mnav-btn direction-only" onclick="showMain('fraisik')" id="mnav-fraisik"><i class="ti ti-car"></i> Frais IK</button>
       <button class="mnav-btn" onclick="showMain('fraispro')" id="mnav-fraispro"><i class="ti ti-receipt"></i> Frais pro</button>
+      <button class="mnav-btn" onclick="showMain('heures-sup')" id="mnav-heures-sup"><i class="ti ti-clock-plus"></i> Heures sup</button>
       <button class="mnav-btn" onclick="showMain('remplacantes')" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
     </nav>
     <div style="display:flex;align-items:center;gap:8px">
@@ -715,6 +731,95 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div style="font-size:13px;font-weight:700;color:var(--koala);margin-bottom:8px"><i class="ti ti-file-text"></i> Justificatifs scannés du mois (PDF unique)</div>
       <div id="fp-pdf-zone" style="border:2px dashed var(--border);border-radius:10px;padding:1rem;text-align:center"></div>
     </div>
+  </div>
+
+  <!-- HEURES SUPPLÉMENTAIRES -->
+  <div id="main-heures-sup" class="tab-content">
+    <div class="section-header">
+      <span class="section-title"><i class="ti ti-clock-plus" style="color:var(--koala)"></i> Heures supplémentaires</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-green" onclick="hsSave()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
+        <button class="btn-sm" onclick="hsPrint()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
+      </div>
+    </div>
+
+    <!-- Sélecteurs mois + référent (direction) -->
+    <div class="ik-month-sel" style="flex-wrap:wrap;gap:10px">
+      <label style="font-size:13px;font-weight:600;color:var(--koala)">Mois :</label>
+      <input type="month" class="finput" id="hs-month" style="width:180px" onchange="hsLoad()">
+      <select class="finput" id="hs-referent-select" style="display:none;width:auto;min-width:200px" onchange="hsLoad()">
+        <option value="">-- Choisir un(e) salarié(e) --</option>
+      </select>
+    </div>
+
+    <!-- Bandeau infos salarié -->
+    <div id="hs-info-bar" style="display:none;background:var(--koala-light);border-radius:10px;padding:10px 16px;margin-bottom:1rem;display:flex;gap:24px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:13px"><i class="ti ti-user" style="color:var(--koala)"></i> <strong id="hs-info-name">—</strong></span>
+      <span style="font-size:13px"><i class="ti ti-building" style="color:var(--koala)"></i> <span id="hs-info-creche">—</span></span>
+      <span style="font-size:13px"><i class="ti ti-calendar" style="color:var(--koala)"></i> <span id="hs-info-mois">—</span></span>
+      <span style="font-size:13px;margin-left:auto;font-weight:700;color:var(--koala)">Total : <span id="hs-total-display">0h00</span></span>
+    </div>
+
+    <!-- Tableau des jours -->
+    <div id="hs-table-wrap" style="display:none">
+      <div style="overflow-x:auto">
+        <table class="ik-table" id="hs-table" style="min-width:520px">
+          <thead>
+            <tr>
+              <th style="width:80px">Jour</th>
+              <th style="width:44px">Jour</th>
+              <th>Créneau 1<br><span style="font-weight:400;font-size:10px">Début — Fin</span></th>
+              <th style="width:70px;text-align:center">Durée 1</th>
+              <th>Créneau 2<br><span style="font-weight:400;font-size:10px">Début — Fin</span></th>
+              <th style="width:70px;text-align:center">Durée 2</th>
+              <th style="width:80px;text-align:right;color:var(--koala)">Total jour</th>
+            </tr>
+          </thead>
+          <tbody id="hs-tbody"></tbody>
+          <tfoot>
+            <tr style="background:var(--koala-light);font-weight:700">
+              <td colspan="6" style="text-align:right;padding:10px 12px;color:var(--koala)">Total du mois</td>
+              <td style="text-align:right;padding:10px 12px;font-size:15px;color:var(--koala)" id="hs-tfoot-total">0h00</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Observations -->
+      <div style="margin-top:1.5rem;display:grid;grid-template-columns:repeat(3,1fr);gap:16px" id="hs-obs-grid">
+        <div class="dash-card">
+          <div class="dash-card-title"><i class="ti ti-clock-exclamation"></i> Retards</div>
+          <div style="display:flex;gap:16px;margin-bottom:8px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="radio" name="hs-retards" id="hs-retards-oui" value="oui"> Oui</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="radio" name="hs-retards" id="hs-retards-non" value="non" checked> Non</label>
+          </div>
+          <input type="text" class="finput" id="hs-retards-dates" placeholder="Date(s) si oui…" style="font-size:12px">
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-title"><i class="ti ti-user-off"></i> Absences</div>
+          <div style="display:flex;gap:16px;margin-bottom:8px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="radio" name="hs-absences" id="hs-absences-oui" value="oui"> Oui</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="radio" name="hs-absences" id="hs-absences-non" value="non" checked> Non</label>
+          </div>
+          <input type="text" class="finput" id="hs-absences-dates" placeholder="Date(s) si oui…" style="font-size:12px">
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-title"><i class="ti ti-beach"></i> Congés</div>
+          <div style="display:flex;gap:16px;margin-bottom:8px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="radio" name="hs-conges" id="hs-conges-oui" value="oui"> Oui</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="radio" name="hs-conges" id="hs-conges-non" value="non" checked> Non</label>
+          </div>
+          <input type="text" class="finput" id="hs-conges-dates" placeholder="Date(s) si oui…" style="font-size:12px">
+        </div>
+      </div>
+
+      <div style="margin-top:1rem">
+        <label class="flabel">Remarques particulières</label>
+        <textarea class="finput" id="hs-remarques" rows="3" placeholder="Observations libres…" style="resize:vertical"></textarea>
+      </div>
+    </div>
+
+    <div id="hs-empty" class="empty-state" style="display:none"><i class="ti ti-clock-off"></i><p>Sélectionnez un mois et un(e) salarié(e) pour commencer.</p></div>
   </div>
 
   <!-- REMPLAÇANTES -->
@@ -1238,7 +1343,7 @@ function updateBadges(){
 }
 
 function showMain(tab){
-  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','heures-sup'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -1251,6 +1356,7 @@ function showMain(tab){
   if(tab==='evenements')renderCalendar();
   if(tab==='dashboard')renderDashboard();
   if(tab==='ref-dashboard')renderRefDashboard();
+  if(tab==='heures-sup')hsInit();
   if(tab==='fraisik'){if(isDirection)ikInit();else showMain('ref-dashboard');}
   if(tab==='fraispro')fpInit();
   if(tab==='remplacantes')rmpInit();
@@ -3845,6 +3951,204 @@ function fpStorageClient(){
   }
   return _fpStorageClient;
 }
+
+// ── HEURES SUPPLÉMENTAIRES ───────────────────────────────────────────────
+let hsCurrentData=null;
+
+function hsInit(){
+  const now=new Date();
+  const month=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  if(!document.getElementById('hs-month').value)document.getElementById('hs-month').value=month;
+  const sel=document.getElementById('hs-referent-select');
+  if(isDirection){
+    sel.style.display='';
+    if(sel.options.length<=1){
+      const refs=cacheReferents.filter(r=>r.role==='referent'||r.role==='direction');
+      sel.innerHTML='<option value="">-- Choisir un(e) salarié(e) --</option>'+refs.map(r=>'<option value="'+r.id+'">'+escHtml(r.name)+'</option>').join('');
+    }
+  }else{sel.style.display='none';}
+  hsLoad();
+}
+
+async function hsLoad(){
+  const month=document.getElementById('hs-month').value;
+  const refId=isDirection?document.getElementById('hs-referent-select').value:currentProfile?.id;
+  const wrap=document.getElementById('hs-table-wrap');
+  const emptyEl=document.getElementById('hs-empty');
+  const infoBar=document.getElementById('hs-info-bar');
+  if(!month||!refId){wrap.style.display='none';infoBar.style.display='none';emptyEl.style.display='';return;}
+  const ref=cacheReferents.find(r=>r.id===refId)||currentProfile;
+  const creche=cacheCreches.find(c=>c.id===ref?.creche_id);
+  document.getElementById('hs-info-name').textContent=ref?.name||'—';
+  document.getElementById('hs-info-creche').textContent=creche?.name||'—';
+  const[y,m]=month.split('-');
+  document.getElementById('hs-info-mois').textContent=new Date(Number(y),Number(m)-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  infoBar.style.display='flex';
+  const{data}=await sb.from('heures_sup').select('*').eq('referent_id',refId).eq('mois',month).maybeSingle();
+  hsCurrentData=data||null;
+  const daysInMonth=new Date(Number(y),Number(m),0).getDate();
+  const saved=JSON.parse(hsCurrentData?.jours||'[]');
+  const DOW_FULL=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+  let html='';
+  for(let d=1;d<=daysInMonth;d++){
+    const date=new Date(Number(y),Number(m)-1,d);
+    const dow=date.getDay();
+    const isWE=dow===0||dow===6;
+    const dateISO=ipDateToLocalISO(date);
+    const entry=saved.find(e=>e.date===dateISO)||{d1s:'',d1e:'',d2s:'',d2e:''};
+    const wc=isWE?' class="hs-row-we"':'';
+    const dis=isWE?'disabled':'';
+    html+=`<tr${wc} id="hs-row-${d}">
+      <td style="font-size:12px;color:var(--muted);padding:5px 8px">${DOW_FULL[dow]}</td>
+      <td style="font-weight:700;padding:5px 8px">${d}</td>
+      <td style="padding:4px 6px"><div style="display:flex;align-items:center;gap:3px">
+        <input type="time" class="finput hs-time" id="hs-d${d}-1s" value="${entry.d1s}" ${dis} onchange="hsUpdateRow(${d})">
+        <span class="hs-sep">–</span>
+        <input type="time" class="finput hs-time" id="hs-d${d}-1e" value="${entry.d1e}" ${dis} onchange="hsUpdateRow(${d})">
+      </div></td>
+      <td class="hs-duration" id="hs-dur${d}-1">—</td>
+      <td style="padding:4px 6px"><div style="display:flex;align-items:center;gap:3px">
+        <input type="time" class="finput hs-time" id="hs-d${d}-2s" value="${entry.d2s}" ${dis} onchange="hsUpdateRow(${d})">
+        <span class="hs-sep">–</span>
+        <input type="time" class="finput hs-time" id="hs-d${d}-2e" value="${entry.d2e}" ${dis} onchange="hsUpdateRow(${d})">
+      </div></td>
+      <td class="hs-duration" id="hs-dur${d}-2">—</td>
+      <td class="hs-total" id="hs-tot${d}">—</td>
+    </tr>`;
+  }
+  document.getElementById('hs-tbody').innerHTML=html;
+  const obs=JSON.parse(hsCurrentData?.observations||'{}');
+  ['retards','absences','conges'].forEach(k=>{
+    const val=obs[k]||'non';
+    const ouiEl=document.getElementById('hs-'+k+'-oui');
+    const nonEl=document.getElementById('hs-'+k+'-non');
+    if(ouiEl)ouiEl.checked=val==='oui';
+    if(nonEl)nonEl.checked=val!=='oui';
+    const dEl=document.getElementById('hs-'+k+'-dates');
+    if(dEl)dEl.value=obs[k+'_dates']||'';
+  });
+  document.getElementById('hs-remarques').value=hsCurrentData?.remarques||'';
+  wrap.style.display='';emptyEl.style.display='none';
+  for(let d=1;d<=daysInMonth;d++)hsUpdateRow(d,true);
+  hsUpdateTotal();
+}
+
+function hsMinutes(t){if(!t)return 0;const[h,mn]=t.split(':').map(Number);return h*60+mn;}
+function hsFormatDur(min){if(min<=0)return'—';return Math.floor(min/60)+'h'+String(min%60).padStart(2,'0');}
+
+function hsUpdateRow(d,silent=false){
+  const v=id=>document.getElementById(id)?.value||'';
+  const dur1=v('hs-d'+d+'-1s')&&v('hs-d'+d+'-1e')?Math.max(0,hsMinutes(v('hs-d'+d+'-1e'))-hsMinutes(v('hs-d'+d+'-1s'))):0;
+  const dur2=v('hs-d'+d+'-2s')&&v('hs-d'+d+'-2e')?Math.max(0,hsMinutes(v('hs-d'+d+'-2e'))-hsMinutes(v('hs-d'+d+'-2s'))):0;
+  const set=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
+  set('hs-dur'+d+'-1',dur1>0?hsFormatDur(dur1):'—');
+  set('hs-dur'+d+'-2',dur2>0?hsFormatDur(dur2):'—');
+  set('hs-tot'+d,(dur1+dur2)>0?hsFormatDur(dur1+dur2):'—');
+  if(!silent)hsUpdateTotal();
+}
+
+function hsUpdateTotal(){
+  const month=document.getElementById('hs-month').value;if(!month)return;
+  const[y,m]=month.split('-');
+  const days=new Date(Number(y),Number(m),0).getDate();
+  const v=id=>document.getElementById(id)?.value||'';
+  let total=0;
+  for(let d=1;d<=days;d++){
+    if(v('hs-d'+d+'-1s')&&v('hs-d'+d+'-1e'))total+=Math.max(0,hsMinutes(v('hs-d'+d+'-1e'))-hsMinutes(v('hs-d'+d+'-1s')));
+    if(v('hs-d'+d+'-2s')&&v('hs-d'+d+'-2e'))total+=Math.max(0,hsMinutes(v('hs-d'+d+'-2e'))-hsMinutes(v('hs-d'+d+'-2s')));
+  }
+  const fmt=total>0?hsFormatDur(total):'0h00';
+  const e1=document.getElementById('hs-total-display');const e2=document.getElementById('hs-tfoot-total');
+  if(e1)e1.textContent=fmt;if(e2)e2.textContent=fmt;
+}
+
+async function hsSave(){
+  const month=document.getElementById('hs-month').value;
+  const refId=isDirection?document.getElementById('hs-referent-select').value:currentProfile?.id;
+  if(!month||!refId){showBanner('Sélectionnez un mois et un(e) salarié(e).','error');return;}
+  const[y,m]=month.split('-');
+  const days=new Date(Number(y),Number(m),0).getDate();
+  const v=id=>document.getElementById(id)?.value||'';
+  const jours=[];
+  for(let d=1;d<=days;d++){
+    const date=new Date(Number(y),Number(m)-1,d);
+    const entry={date:ipDateToLocalISO(date),d1s:v('hs-d'+d+'-1s'),d1e:v('hs-d'+d+'-1e'),d2s:v('hs-d'+d+'-2s'),d2e:v('hs-d'+d+'-2e')};
+    if(entry.d1s||entry.d1e||entry.d2s||entry.d2e)jours.push(entry);
+  }
+  const observations={};
+  ['retards','absences','conges'].forEach(k=>{
+    observations[k]=document.querySelector('input[name="hs-'+k+'"]:checked')?.value||'non';
+    observations[k+'_dates']=document.getElementById('hs-'+k+'-dates')?.value||'';
+  });
+  const ref=cacheReferents.find(r=>r.id===refId)||currentProfile;
+  const row={referent_id:refId,creche_id:ref?.creche_id||null,mois:month,jours:JSON.stringify(jours),observations:JSON.stringify(observations),remarques:document.getElementById('hs-remarques').value};
+  const ok=hsCurrentData?.id?await dbUpdate('heures_sup',hsCurrentData.id,row):await dbInsert('heures_sup',row);
+  if(ok){if(!hsCurrentData?.id)hsCurrentData=ok;showBanner('Heures supplémentaires enregistrées ✅');}
+  else showBanner('Erreur lors de l\'enregistrement.','error');
+}
+
+function hsPrint(){
+  const month=document.getElementById('hs-month').value;
+  if(!month)return;
+  const name=document.getElementById('hs-info-name').textContent;
+  const creche=document.getElementById('hs-info-creche').textContent;
+  const moisLabel=document.getElementById('hs-info-mois').textContent;
+  const total=document.getElementById('hs-tfoot-total').textContent;
+  const[y,m]=month.split('-');
+  const days=new Date(Number(y),Number(m),0).getDate();
+  const DOW_FULL=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+  const v=id=>document.getElementById(id)?.value||'';
+  let rows='';
+  for(let d=1;d<=days;d++){
+    const date=new Date(Number(y),Number(m)-1,d);
+    const isWE=date.getDay()===0||date.getDay()===6;
+    const d1s=v('hs-d'+d+'-1s'),d1e=v('hs-d'+d+'-1e'),d2s=v('hs-d'+d+'-2s'),d2e=v('hs-d'+d+'-2e');
+    const dur1=d1s&&d1e?Math.max(0,hsMinutes(d1e)-hsMinutes(d1s)):0;
+    const dur2=d2s&&d2e?Math.max(0,hsMinutes(d2e)-hsMinutes(d2s)):0;
+    const tot=dur1+dur2;
+    const bg=isWE?'background:#f0f0f0;color:#aaa;':'';
+    rows+=`<tr style="${bg}"><td>${DOW_FULL[date.getDay()]}</td><td style="text-align:center">${d}</td>
+      <td style="text-align:center">${d1s||'—'}</td><td style="text-align:center">${d1e||'—'}</td><td style="text-align:center;font-weight:700">${dur1>0?hsFormatDur(dur1):'—'}</td>
+      <td style="text-align:center">${d2s||'—'}</td><td style="text-align:center">${d2e||'—'}</td><td style="text-align:center;font-weight:700">${dur2>0?hsFormatDur(dur2):'—'}</td>
+      <td style="text-align:right;font-weight:700;color:#3D3580">${tot>0?hsFormatDur(tot):'—'}</td></tr>`;
+  }
+  const obs=['retards','absences','conges'].map(k=>{
+    const val=document.querySelector('input[name="hs-'+k+'"]:checked')?.value||'non';
+    const dates=document.getElementById('hs-'+k+'-dates')?.value||'';
+    const label={'retards':'Retards','absences':'Absences','conges':'Congés'}[k];
+    return`<td style="padding:8px 12px;border:1px solid #ddd;vertical-align:top;width:33%"><strong>${label}</strong><br>${val==='oui'?'✅ Oui':'❌ Non'}${dates?'<br><span style="font-size:11px;color:#666">'+dates+'</span>':''}</td>`;
+  }).join('');
+  const remarques=document.getElementById('hs-remarques')?.value||'';
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Heures sup — ${name} — ${moisLabel}</title>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}
+  h2{color:#3D3580;margin:0 0 4px}
+  .meta{color:#555;font-size:12px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;margin-bottom:16px}
+  th{background:#3D3580;color:#fff;padding:6px 8px;font-size:11px;text-align:center}
+  td{padding:4px 8px;border-bottom:1px solid #eee;font-size:11px}
+  .total-row td{background:#EDE9FF;font-weight:700}
+  @media print{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  </style></head><body>
+  <h2>KOALA KIDS — Heures supplémentaires</h2>
+  <div class="meta">Intervenant(e) : <strong>${name}</strong> &nbsp;|&nbsp; Crèche : <strong>${creche}</strong> &nbsp;|&nbsp; Mois : <strong>${moisLabel}</strong></div>
+  <table><thead><tr>
+    <th>Jour</th><th>Date</th><th>Début 1</th><th>Fin 1</th><th>Durée 1</th>
+    <th>Début 2</th><th>Fin 2</th><th>Durée 2</th><th>Total</th>
+  </tr></thead><tbody>${rows}</tbody>
+  <tfoot><tr class="total-row"><td colspan="8" style="text-align:right;padding:8px 12px">Total du mois</td>
+  <td style="text-align:right;padding:8px 12px;font-size:14px">${total}</td></tr></tfoot></table>
+  <table style="width:100%"><tr>${obs}</tr></table>
+  ${remarques?`<div style="border:1px solid #ddd;border-radius:6px;padding:10px 12px;margin-top:8px"><strong>Remarques :</strong><br>${remarques}</div>`:''}
+  <div style="margin-top:32px;display:flex;justify-content:space-between">
+    <div>Signature intervenant(e) :<br><br><br><div style="border-top:1px solid #999;width:200px;padding-top:4px;font-size:10px;color:#999">${name}</div></div>
+    <div>Signature responsable :<br><br><br><div style="border-top:1px solid #999;width:200px"></div></div>
+  </div>
+  <script>window.onload=()=>window.print();<\/script></body></html>`);
+  win.document.close();
+}
+// ── FIN HEURES SUPPLÉMENTAIRES ───────────────────────────────────────────
 
 function fpInit(){
   const now=new Date();
