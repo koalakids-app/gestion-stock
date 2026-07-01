@@ -1928,14 +1928,16 @@ async function handlePresenceImport(input){
   if(!file)return;
   if(typeof pdfjsLib==='undefined'){alert('Bibliothèque PDF non chargée. Vérifiez votre connexion puis réessayez.');return;}
   const crecheId=isDirection?(activeCrecheId==='all'?null:activeCrecheId):currentProfile?.creche_id;
-  if(!crecheId){alert('Sélectionnez d\'abord une crèche (onglet du haut) avant d\'importer.');return;}
   showBanner('Lecture du PDF en cours…');
   let pages;
   try{ pages=await ipParsePdf(file); }
   catch(e){ console.error('[ImportPresence]',e); showBanner('Impossible de lire ce PDF.','error'); return; }
   if(!pages.length){ showBanner('Aucun planning détecté dans ce PDF.','error'); return; }
-  // Rapprochement avec les enfants de la crèche
-  const enfCreche=cacheEnfants.filter(e=>e.creche_id===crecheId);
+  // Rapprochement avec tous les enfants (ou ceux de la crèche si filtrée)
+  const enfCreche=crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants;
+  console.log('[ImportPresence] crecheId=',crecheId,'enfants dispo=',enfCreche.length,'total cache=',cacheEnfants.length);
+  console.log('[ImportPresence] noms PDF page1=',pages[0]?.names);
+  console.log('[ImportPresence] noms DB=',enfCreche.map(e=>e.prenom+' '+e.nom));
   const byFull={}, byFirst={};
   enfCreche.forEach(e=>{
     const full=ipNormName((e.prenom||'')+' '+(e.nom||''));
@@ -1948,10 +1950,17 @@ async function handlePresenceImport(input){
       const norm=ipNormName(nm);
       let e=byFull[norm];
       if(!e){
-        // repli : prénom seul si unique
+        // repli : prénom seul si unique dans le cache
         const parts=norm.split(' ');
         const cand=byFirst[parts[0]];
         if(cand&&cand.length===1)e=cand[0];
+      }
+      if(!e){
+        // repli large : cherche un enfant dont le nom normalisé est contenu dans le nom PDF ou vice-versa
+        e=enfCreche.find(x=>{
+          const xn=ipNormName((x.prenom||'')+' '+(x.nom||''));
+          return norm.startsWith(xn)||xn.startsWith(norm);
+        });
       }
       if(e)pg.matched.push({name:nm,enfant:e}); else pg.unmatched.push(nm);
     });
