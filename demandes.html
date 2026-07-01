@@ -197,7 +197,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .leg-dot{width:12px;height:12px;border-radius:3px}
 
 /* CALENDRIER EVENEMENTS */
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
 .cal-dow{font-size:11px;font-weight:700;color:var(--muted);text-align:center;padding:4px 0;text-transform:uppercase}
 .cal-cell{background:#fff;border:1px solid var(--border);border-radius:8px;min-height:88px;padding:5px;cursor:pointer;display:flex;flex-direction:column;gap:3px;transition:box-shadow 0.15s,border-color 0.15s}
 .cal-cell:hover{border-color:var(--koala);box-shadow:0 2px 8px rgba(61,53,128,0.1)}
@@ -1539,30 +1539,32 @@ function renderCalendar(){
   const monthDate=calCurrentMonthDate();
   const year=monthDate.getFullYear(),month=monthDate.getMonth();
   label.textContent=monthDate.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
-  dowRow.innerHTML=CAL_DOW.map(d=>'<div class="cal-dow">'+d+'</div>').join('');
+  dowRow.innerHTML=['Lun','Mar','Mer','Jeu','Ven'].map(d=>'<div class="cal-dow">'+d+'</div>').join('');
 
-  const firstOfMonth=new Date(year,month,1);
-  const firstDow=(firstOfMonth.getDay()+6)%7; // 0=Lundi
+  const isWeekday=d=>{const dow=(d.getDay()+6)%7;return dow<=4;};
   const daysInMonth=new Date(year,month+1,0).getDate();
   const today=todayStr();
 
-  let html='';
-  // Jours du mois précédent pour compléter la première semaine
-  for(let i=0;i<firstDow;i++){
-    const d=new Date(year,month,1-(firstDow-i));
-    html+=calCellHtml(d,true,today);
-  }
-  for(let day=1;day<=daysInMonth;day++){
-    const d=new Date(year,month,day);
-    html+=calCellHtml(d,false,today);
-  }
-  const totalCells=firstDow+daysInMonth;
-  const trailing=(7-(totalCells%7))%7;
-  for(let i=1;i<=trailing;i++){
-    const d=new Date(year,month+1,i);
-    html+=calCellHtml(d,true,today);
-  }
-  grid.innerHTML=html;
+  // Collecter tous les jours ouvrés du mois
+  const monthDays=[];
+  for(let day=1;day<=daysInMonth;day++){const d=new Date(year,month,day);if(isWeekday(d))monthDays.push(d);}
+
+  // Padding début : jours ouvrés du mois précédent pour que le 1er tombe dans la bonne colonne
+  const firstDow5=(new Date(year,month,1).getDay()+6)%7; // 0=Lun…4=Ven
+  const padStart=Math.min(firstDow5,5); // max 4 pour un lundi
+  const padDays=[];
+  let pd=new Date(year,month,0); // dernier jour mois précédent
+  while(padDays.length<padStart){if(isWeekday(pd))padDays.unshift(new Date(pd));pd.setDate(pd.getDate()-1);}
+
+  const allDays=[...padDays,...monthDays];
+
+  // Padding fin pour compléter la dernière ligne de 5
+  const trailing=(5-(allDays.length%5))%5;
+  let nd=new Date(year,month+1,1);let added=0;
+  while(added<trailing){if(isWeekday(nd)){allDays.push(new Date(nd));added++;}nd.setDate(nd.getDate()+1);}
+
+  const isPad=d=>d.getMonth()!==month;
+  grid.innerHTML=allDays.map(d=>calCellHtml(d,isPad(d),today)).join('');
   renderCalDayDetail();
 }
 
