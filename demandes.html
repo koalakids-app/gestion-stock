@@ -1934,16 +1934,17 @@ async function handlePresenceImport(input){
   catch(e){ console.error('[ImportPresence]',e); showBanner('Impossible de lire ce PDF.','error'); return; }
   if(!pages.length){ showBanner('Aucun planning détecté dans ce PDF.','error'); return; }
   // Rapprochement avec tous les enfants (ou ceux de la crèche si filtrée)
-  // Si le cache est vide (Promise.race timeout au chargement), on recharge
-  if(!cacheEnfants.length){
-    showBanner('Chargement des enfants…');
-    const fresh=await dbSelect('enfants');
-    if(fresh&&fresh.length)cacheEnfants.push(...fresh);
-  }
-  const enfCreche=crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants;
-  console.log('[ImportPresence] crecheId=',crecheId,'enfants dispo=',enfCreche.length,'total cache=',cacheEnfants.length);
-  console.log('[ImportPresence] noms PDF page1=',pages[0]?.names);
-  console.log('[ImportPresence] noms DB=',enfCreche.map(e=>e.prenom+' '+e.nom));
+  // Charger les enfants directement depuis Supabase (contourne le cache vide post-timeout)
+  showBanner('Chargement des enfants…');
+  const{data:freshEnf,error:enfErr}=await sb.from('enfants').select('*');
+  if(enfErr){console.error('[ImportPresence] enfants',enfErr);showBanner('Impossible de charger les enfants depuis la base.','error');return;}
+  const allEnfants=freshEnf||[];
+  // Mettre à jour le cache si vide
+  if(!cacheEnfants.length&&allEnfants.length)cacheEnfants.push(...allEnfants);
+  console.log('[ImportPresence] enfants chargés=',allEnfants.length,'crecheId=',crecheId);
+  const enfCreche=crecheId?allEnfants.filter(e=>e.creche_id===crecheId):allEnfants;
+  console.log('[ImportPresence] noms DB=',enfCreche.map(e=>JSON.stringify({prenom:e.prenom,nom:e.nom,creche_id:e.creche_id})));
+  console.log('[ImportPresence] noms PDF=',pages[0]?.names);
   const byFull={}, byFirst={};
   enfCreche.forEach(e=>{
     const full=ipNormName((e.prenom||'')+' '+(e.nom||''));
