@@ -384,6 +384,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="logo"><img id="app-logo" src="" alt="Koala Kids"/></div>
     <nav class="main-nav" id="main-nav">
       <button class="mnav-btn active" onclick="showMain('demands')" id="mnav-demands"><i class="ti ti-message-circle"></i> Demandes</button>
+      <button class="mnav-btn referent-only" onclick="showMain('ref-dashboard')" id="mnav-ref-dashboard"><i class="ti ti-layout-dashboard"></i> Mon tableau de bord</button>
       <button class="mnav-btn" onclick="showMain('incidents')" id="mnav-incidents"><i class="ti ti-alert-triangle"></i> Incidents <span class="mnav-badge" id="badge-incidents" style="display:none">0</span></button>
       <button class="mnav-btn" onclick="showMain('presence')" id="mnav-presence"><i class="ti ti-users-group"></i> Présences</button>
       <button class="mnav-btn direction-only" onclick="showMain('referents')" id="mnav-referents"><i class="ti ti-address-book"></i> Référents</button>
@@ -570,6 +571,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 
   <!-- TABLEAU DE BORD -->
+  <!-- TABLEAU DE BORD RÉFÉRENTE -->
+  <div id="main-ref-dashboard" class="tab-content referent-only">
+    <div class="section-header">
+      <span class="section-title"><i class="ti ti-layout-dashboard" style="color:var(--koala)"></i> Mon tableau de bord</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <button class="ibtn" onclick="refDashChangeDay(-1)" title="Jour précédent"><i class="ti ti-chevron-left"></i></button>
+        <input type="date" class="finput" id="ref-dash-date-input" style="width:150px;padding:6px 8px" onchange="refDashSetDate(this.value)">
+        <button class="ibtn" onclick="refDashChangeDay(1)" title="Jour suivant"><i class="ti ti-chevron-right"></i></button>
+        <button class="btn-sm" onclick="refDashGoToday()"><i class="ti ti-calendar-event"></i> Aujourd'hui</button>
+        <span class="section-sub" id="ref-dash-label"></span>
+      </div>
+    </div>
+    <div id="ref-dash-alerts" style="margin-bottom:0.75rem"></div>
+    <div class="dash-grid" id="ref-dash-grid"></div>
+    <div class="dash-grid" id="ref-dash-async-grid" style="margin-top:12px"></div>
+  </div>
+
   <div id="main-dashboard" class="tab-content direction-only">
     <div class="section-header">
       <span class="section-title"><i class="ti ti-chart-bar" style="color:var(--koala)"></i> Tableau de bord direction</span>
@@ -1201,8 +1219,11 @@ function showApp(){
   document.getElementById('login-wrap').style.display='none';
   document.getElementById('app-wrap').style.display='block';
   document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
+  document.querySelectorAll('.referent-only').forEach(el=>el.style.display=(!isDirection)?'':'none');
   document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
   updateBadges();renderCrecheTabs();
+  // Référentes → ouvrir directement leur tableau de bord
+  if(!isDirection)showMain('ref-dashboard');
 }
 
 function todayStr(){return ipDateToLocalISO(new Date());}
@@ -1217,7 +1238,7 @@ function updateBadges(){
 }
 
 function showMain(tab){
-  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -1229,7 +1250,8 @@ function showMain(tab){
   if(tab==='presence'){initPresenceDate();renderPresence();}
   if(tab==='evenements')renderCalendar();
   if(tab==='dashboard')renderDashboard();
-  if(tab==='fraisik'){if(isDirection)ikInit();else showMain('demands');}
+  if(tab==='ref-dashboard')renderRefDashboard();
+  if(tab==='fraisik'){if(isDirection)ikInit();else showMain('ref-dashboard');}
   if(tab==='fraispro')fpInit();
   if(tab==='remplacantes')rmpInit();
 }
@@ -3007,7 +3029,122 @@ async function printPlanningEquipe(){
   printPlanningDoc('Planning équipe',subtitle,bodyHTML,'portrait');
 }
 
-// ── IK PLANNING (Supabase cache) — voir ikReadPlanning plus bas, version active ──
+// ── DASHBOARD RÉFÉRENTE ──────────────────────────────────────────────────
+let refDashSelectedDate=null;
+function refDashChangeDay(delta){const d=new Date(refDashSelectedDate||todayStr());d.setDate(d.getDate()+delta);refDashSelectedDate=ipDateToLocalISO(d);renderRefDashboard();}
+function refDashGoToday(){refDashSelectedDate=todayStr();renderRefDashboard();}
+function refDashSetDate(v){if(v){refDashSelectedDate=v;renderRefDashboard();}}
+
+function renderRefDashboard(){
+  if(isDirection)return;
+  const crecheId=currentProfile?.creche_id;
+  const t=refDashSelectedDate||(refDashSelectedDate=todayStr());
+  const isToday=t===todayStr();
+
+  // Barre de date
+  const dateInput=document.getElementById('ref-dash-date-input');
+  if(dateInput)dateInput.value=t;
+  const lbl=document.getElementById('ref-dash-label');
+  if(lbl)lbl.textContent=new Date(t+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})+(isToday?' — Aujourd\'hui':'');
+
+  // Alertes : demandes urgentes non traitées qui me concernent
+  const urgentes=cacheDemandes.filter(d=>d.creche_id===crecheId&&d.priority==='urgent'&&d.status==='attente');
+  const alerts=document.getElementById('ref-dash-alerts');
+  if(alerts)alerts.innerHTML=urgentes.length
+    ?'<div class="alert-item">'+urgentes.map(d=>'<i class="ti ti-alert-triangle" style="font-size:16px;flex-shrink:0"></i> <strong>Demande urgente</strong> — '+escHtml(d.subject||'—')).join('</div><div class="alert-item">')+'</div>'
+    :'';
+
+  // ── Carte 1 : Événements du jour (scopés crèche + réseau)
+  const evts=cacheEvenements.filter(e=>{
+    const s=e.date_debut,f=e.date_fin||e.date_debut;
+    return s&&t>=s&&t<=f&&(e.creche_id===crecheId||!e.creche_id);
+  }).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
+  const evtsHtml=evts.length?evts.map(e=>{
+    const info=CAL_TYPE_INFO[e.type]||CAL_TYPE_INFO.autre;
+    const h=e.heure_debut?e.heure_debut+(e.heure_fin?'–'+e.heure_fin:''):'';
+    return'<div class="dash-list-item"><span>'+info.emoji+' '+escHtml(e.titre)+'</span><span style="font-weight:700;color:var(--koala);font-size:11px;white-space:nowrap">'+h+'</span></div>';
+  }).join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun événement</div>';
+
+  // ── Carte 2 : Demandes en attente me concernant
+  const demandesAttenteRaw=cacheDemandes.filter(d=>d.creche_id===crecheId&&d.status==='attente');
+  const demandesHtml=demandesAttenteRaw.length?demandesAttenteRaw.slice(0,8).map(d=>{
+    const age=Math.floor((new Date()-new Date(d.created_at))/(1000*86400));
+    return'<div class="dash-list-item" style="cursor:pointer" onclick="showMain(\'demands\')"><span>'+(d.priority==='urgent'?'🔴':'⏳')+' '+escHtml(d.subject||d.theme||'Demande')+'</span><span style="font-size:11px;font-weight:700;color:'+(d.priority==='urgent'?'var(--red)':'var(--muted)')+'">'+age+' j</span></div>';
+  }).join('')+(demandesAttenteRaw.length>8?'<div style="font-size:11px;color:var(--muted);text-align:center;padding:4px">+ '+(demandesAttenteRaw.length-8)+' autres</div>':'')
+  :'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">✅ Aucune demande en attente</div>';
+
+  // ── Carte 3 : Anniversaires enfants de la crèche
+  const md=t.slice(5);
+  const bdays=cacheEnfants.filter(e=>e.creche_id===crecheId&&e.dob&&e.dob.slice(5)===md);
+  const bdaysHtml=bdays.length?bdays.map(e=>{
+    const age=Number(t.slice(0,4))-Number(e.dob.slice(0,4));
+    return'<div class="dash-list-item"><span>🎂 '+escHtml((e.prenom||'')+' '+(e.nom||'').trim())+'</span><span style="font-weight:700;color:var(--koala);font-size:11px">'+age+' an'+(age>1?'s':'')+'</span></div>';
+  }).join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun anniversaire</div>';
+
+  document.getElementById('ref-dash-grid').innerHTML=
+    '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-calendar-event"></i> Événements du jour</div>'+evtsHtml+'</div>'+
+    '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-message-circle"></i> Demandes en attente <span style="background:#eee;color:#555;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700">'+demandesAttenteRaw.length+'</span></div>'+demandesHtml+'</div>'+
+    '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-cake"></i> Anniversaires</div>'+bdaysHtml+'</div>';
+
+  // Cartes async (présences enfants, planning équipe, remplaçantes) chargées après
+  document.getElementById('ref-dash-async-grid').innerHTML=
+    '<div class="dash-card" id="rdb-presences"><div class="dash-card-title"><i class="ti ti-users-group"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
+    '<div class="dash-card" id="rdb-equipe"><div class="dash-card-title"><i class="ti ti-calendar-week"></i> Planning équipe du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
+    '<div class="dash-card" id="rdb-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
+
+  loadRefDashAsync(crecheId,t);
+}
+
+async function loadRefDashAsync(crecheId,t){
+  const titlePresences='<div class="dash-card-title"><i class="ti ti-users-group"></i> Présences du jour</div>';
+  const titleEquipe='<div class="dash-card-title"><i class="ti ti-calendar-week"></i> Planning équipe du jour</div>';
+  const titleRmp='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div>';
+  const empty=msg=>'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">'+msg+'</div>';
+
+  // Présences enfants
+  try{
+    const{data:pres}=await sb.from('presences').select('*').eq('creche_id',crecheId).eq('date',t);
+    const box=document.getElementById('rdb-presences');if(!box)return;
+    if(!pres||!pres.length){box.innerHTML=titlePresences+empty('Aucune présence enregistrée');
+    }else{
+      const matin=pres.filter(p=>p.periode==='matin'||p.periode==='journee');
+      const apm=pres.filter(p=>p.periode==='apm'||p.periode==='journee');
+      box.innerHTML=titlePresences+
+        '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+matin.length+' enfant'+(matin.length>1?'s':'')+'</span></div>'+
+        '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+apm.length+' enfant'+(apm.length>1?'s':'')+'</span></div>'+
+        (pres.length?'<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:0 4px">'+pres.slice(0,6).map(p=>escHtml(p.child_name||'—')).join(', ')+(pres.length>6?' …':'')+'</div>':'');
+    }
+  }catch(e){const b=document.getElementById('rdb-presences');if(b)b.innerHTML=titlePresences+empty('Indisponible');}
+
+  // Planning équipe
+  try{
+    const ws=t.slice(0,10);
+    // On cherche les lignes de planning_equipe pour cette crèche et cette semaine
+    const{data:rows}=await sb.from('planning_equipe').select('*').eq('creche_id',crecheId).eq('semaine',ws);
+    const box=document.getElementById('rdb-equipe');if(!box)return;
+    if(!rows||!rows.length){box.innerHTML=titleEquipe+empty('Aucun planning pour cette semaine');
+    }else{
+      const dow=['lundi','mardi','mercredi','jeudi','vendredi'][new Date(t+'T00:00:00').getDay()-1]||'lundi';
+      const presents=rows.filter(r=>r[dow]&&r[dow]!=='absent'&&r[dow]!=='conge'&&r[dow]!=='');
+      box.innerHTML=titleEquipe+
+        (presents.length?presents.map(r=>'<div class="dash-list-item"><span>👤 '+escHtml(r.nom||'—')+'</span><span style="font-size:11px;color:var(--muted)">'+escHtml(r[dow]||'')+'</span></div>').join('')
+        :empty('Aucun staff présent ce jour'));
+    }
+  }catch(e){const b=document.getElementById('rdb-equipe');if(b)b.innerHTML=titleEquipe+empty('Indisponible');}
+
+  // Remplaçantes
+  try{
+    const{data:rmps}=await sb.from('remplacantes').select('*').eq('creche_id',crecheId).eq('date',t);
+    const box=document.getElementById('rdb-remplacantes');if(!box)return;
+    if(!rmps||!rmps.length){box.innerHTML=titleRmp+empty('Aucune remplaçante prévue');
+    }else{
+      box.innerHTML=titleRmp+rmps.map(r=>{
+        const h=r.heure_debut?r.heure_debut+'–'+(r.heure_fin||''):'';
+        return'<div class="dash-list-item"><span>👤 '+escHtml(r.nom)+'</span><span style="font-weight:700;color:var(--koala);font-size:11px">'+h+'</span></div>';
+      }).join('');
+    }
+  }catch(e){const b=document.getElementById('rdb-remplacantes');if(b)b.innerHTML=titleRmp+empty('Indisponible');}
+}
 
 // delEvent remplacé par delPlanningEvent
 
