@@ -1934,6 +1934,12 @@ async function handlePresenceImport(input){
   catch(e){ console.error('[ImportPresence]',e); showBanner('Impossible de lire ce PDF.','error'); return; }
   if(!pages.length){ showBanner('Aucun planning détecté dans ce PDF.','error'); return; }
   // Rapprochement avec tous les enfants (ou ceux de la crèche si filtrée)
+  // Si le cache est vide (Promise.race timeout au chargement), on recharge
+  if(!cacheEnfants.length){
+    showBanner('Chargement des enfants…');
+    const fresh=await dbSelect('enfants');
+    if(fresh&&fresh.length)cacheEnfants.push(...fresh);
+  }
   const enfCreche=crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants;
   console.log('[ImportPresence] crecheId=',crecheId,'enfants dispo=',enfCreche.length,'total cache=',cacheEnfants.length);
   console.log('[ImportPresence] noms PDF page1=',pages[0]?.names);
