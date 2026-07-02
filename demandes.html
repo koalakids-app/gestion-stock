@@ -2206,7 +2206,14 @@ async function confirmPresenceImport(){
   const toInsert=wantedValid.filter(w=>!exSet.has(w.enfant_id+'_'+w.presence_date+'_'+w.slot));
   console.log('[ConfirmImport] toInsert=',toInsert.length);
   let ok=true;
-  if(toInsert.length){const{error}=await sb.from('presences').insert(toInsert);if(error){console.error('[ImportPresence] insert presences',error);ok=false;}}
+  if(toInsert.length){
+    // Insérer par batch de 20 pour éviter les limites Supabase
+    for(let i=0;i<toInsert.length;i+=20){
+      const batch=toInsert.slice(i,i+20);
+      const{error}=await sb.from('presences').insert(batch);
+      if(error){console.error('[ImportPresence] insert batch',i,error.message,error.details,error.hint,JSON.stringify(batch[0]));ok=false;break;}
+    }
+  }
   closeModal('modal-import-presence-wrap');_importPresData=null;
   if(ok){
     showBanner('Import terminé : '+(toCreateNames.length?toCreateNames.length+' enfant'+(toCreateNames.length>1?'s':'')+'créé'+(toCreateNames.length>1?'s':'')+', ':'')+toInsert.length+' présence'+(toInsert.length>1?'s':'')+' enregistrée'+(toInsert.length>1?'s':'')+' ✅');
