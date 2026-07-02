@@ -2093,7 +2093,12 @@ async function ipParsePdf(file){
     const m=fullText.match(/Planning du \S+ (\d{1,2})(?:er)? (\S+) (\d{4})/i);
     if(m){const day=+m[1],mon=IP_MONTHS[m[2].toLowerCase()],yr=+m[3];if(mon)date=yr+'-'+String(mon).padStart(2,'0')+'-'+String(day).padStart(2,'0');}
     let iEnf=-1,iSal=-1;
-    for(let i=0;i<lines.length;i++){const f=lines[i].toks[0];if(iEnf<0&&f==='Enfants'&&lines[i].minx<70)iEnf=i;else if(iEnf>=0&&iSal<0&&f==='Salariés'&&lines[i].minx<70){iSal=i;break;}}
+    for(let i=0;i<lines.length;i++){const f=(lines[i].toks[0]||'').trim();const x=lines[i].minx;if(iEnf<0&&(f==='Enfants'||f==='Enfant')&&x<200)iEnf=i;else if(iEnf>=0&&iSal<0&&(f==='Salariés'||f==='Salarie'||f==='Salariés')&&x<200){iSal=i;break;}}
+    // Fallback: si iEnf non trouvé, chercher par index de ligne
+    if(iEnf<0){
+      for(let i=0;i<lines.length;i++){const t=(lines[i].toks||[]).join(' ').trim();if(/^Enfants?$/i.test(t)){iEnf=i;}else if(iEnf>=0&&/^Salari/i.test(t)){iSal=i;break;}}
+    }
+    
     const names=[];let cur=null;
     for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){const toks=lines[i].toks;if(!toks.length)continue;if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=toks.join(' ');}else if(cur)cur+=' '+toks.join(' ');}
     if(cur)names.push(cur);
