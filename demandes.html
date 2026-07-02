@@ -2092,16 +2092,26 @@ async function ipParsePdf(file){
     const fullText=lines.map(l=>l.toks.join(' ')).join('\n');
     const m=fullText.match(/Planning du \S+ (\d{1,2})(?:er)? (\S+) (\d{4})/i);
     if(m){const day=+m[1],mon=IP_MONTHS[m[2].toLowerCase()],yr=+m[3];if(mon)date=yr+'-'+String(mon).padStart(2,'0')+'-'+String(day).padStart(2,'0');}
+    // Chercher "Enfants" et "Salariés" dans le texte complet ligne par ligne
     let iEnf=-1,iSal=-1;
-    for(let i=0;i<lines.length;i++){const f=(lines[i].toks[0]||'').trim();const x=lines[i].minx;if(iEnf<0&&(f==='Enfants'||f==='Enfant')&&x<200)iEnf=i;else if(iEnf>=0&&iSal<0&&(f==='Salariés'||f==='Salarie'||f==='Salariés')&&x<200){iSal=i;break;}}
-    // Fallback: si iEnf non trouvé, chercher par index de ligne
-    if(iEnf<0){
-      for(let i=0;i<lines.length;i++){const t=(lines[i].toks||[]).join(' ').trim();if(/^Enfants?$/i.test(t)){iEnf=i;}else if(iEnf>=0&&/^Salari/i.test(t)){iSal=i;break;}}
+    for(let i=0;i<lines.length;i++){
+      const joined=(lines[i].toks||[]).join(' ').trim();
+      if(iEnf<0&&/^Enfants?$/i.test(joined))iEnf=i;
+      else if(iEnf>=0&&iSal<0&&/^Salari/i.test(joined)){iSal=i;break;}
     }
-    
+    console.log('[ipParsePdf] page',p,'date=',date,'iEnf=',iEnf,'iSal=',iSal,'nlines=',lines.length);
+    if(iEnf>=0)console.log('[ipParsePdf] lignes enfants:',lines.slice(iEnf+1,iSal>=0?iSal:iEnf+20).map(l=>l.toks.join(' ')));
     const names=[];let cur=null;
-    for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){const toks=lines[i].toks;if(!toks.length)continue;if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=toks.join(' ');}else if(cur)cur+=' '+toks.join(' ');}
+    for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){
+      const toks=lines[i].toks;if(!toks.length)continue;
+      // Ignorer les lignes ne contenant que des chiffres/heures (grille Gantt)
+      const joined2=toks.join(' ').trim();
+      if(/^[\d\s h:]+$/.test(joined2))continue;
+      if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=joined2;}
+      else if(cur&&!/^(Salari|Total|Enfant|[\d]+h)/.test(joined2))cur+=' '+joined2;
+    }
     if(cur)names.push(cur);
+    console.log('[ipParsePdf] names trouvés:',names);
     if(date&&names.length)out.push({date,names});
   }
   return out;
