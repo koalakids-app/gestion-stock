@@ -2163,12 +2163,25 @@ async function confirmPresenceImport(){
       cacheEnfants.push(saved);
       nameMap[nm]={enfant:saved,isNew:false};
       pages.forEach(pg=>{
-        const idx=pg.toCreate.indexOf(nm);
-        if(idx>=0){pg.toCreate.splice(idx,1);pg.matched.push({name:nm,enfant:saved});}
+        // Chercher par correspondance exacte OU normalisée
+        const idx=pg.toCreate.findIndex(n=>n===nm||ipNormName(n)===ipNormName(nm));
+        if(idx>=0){const found=pg.toCreate[idx];pg.toCreate.splice(idx,1);pg.matched.push({name:found,enfant:saved});}
       });
     }else{console.error('[ImportPresence] create enfant',nm,error);}
   }
   // 2) Enregistrer les présences M + A
+  // Re-matcher les éventuels enfants encore dans toCreate (créés entre-temps ou déjà en base)
+  const{data:freshEnf2}=await sb.from('enfants').select('*').eq('creche_id',crecheId);
+  const allEnf2=freshEnf2||[];
+  pages.forEach(pg=>{
+    const still=[...pg.toCreate];
+    still.forEach(nm=>{
+      const norm=ipNormName(nm);
+      let e=allEnf2.find(x=>ipNormName(x.prenom+' '+x.nom)===norm);
+      if(!e)e=allEnf2.find(x=>{const xn=ipNormName(x.prenom+' '+x.nom);return norm.startsWith(xn)||xn.startsWith(norm);});
+      if(e){const idx=pg.toCreate.indexOf(nm);if(idx>=0){pg.toCreate.splice(idx,1);pg.matched.push({name:nm,enfant:e});}}
+    });
+  });
   showBanner('Enregistrement des présences…');
   const wanted=[];
   pages.forEach(pg=>{
@@ -2205,6 +2218,7 @@ function openSupprimerPresencesModal(){
   document.getElementById('suppr-pres-list').innerHTML='<span style="color:var(--muted);font-size:12px">Sélectionnez une crèche…</span>';
   document.getElementById('suppr-pres-count').textContent='';
   document.getElementById('suppr-pres-all').checked=false;
+  const btnSuppr=document.getElementById('btn-confirm-suppr-pres');btnSuppr.disabled=false;btnSuppr.innerHTML='<i class="ti ti-trash"></i> Supprimer la sélection';
   document.getElementById('modal-suppr-presence-wrap').classList.add('open');
   if(!isDirection&&currentProfile?.creche_id)chargerEnfantsSuppr();
 }
