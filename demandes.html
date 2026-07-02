@@ -2108,7 +2108,8 @@ async function ipParsePdf(file){
       const joined2=toks.join(' ').trim();
       if(/^[\d\s h:]+$/.test(joined2))continue;
       if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=joined2;}
-      else if(cur&&!/^(Salari|Total|Enfant|[\d]+h)/.test(joined2))cur+=' '+joined2;
+      else if(cur&&/^[A-ZÀ-Ÿ][A-ZÀ-Ÿ\s\-]+$/.test(joined2))cur+=' '+joined2;
+      else if(cur&&!/^(Salari|Total|Enfant|[0-9])/.test(joined2))cur+=' '+joined2;
     }
     if(cur)names.push(cur);
     console.log('[ipParsePdf] names trouvés:',names);
