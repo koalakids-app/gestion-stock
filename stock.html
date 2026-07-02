@@ -2988,7 +2988,10 @@ async function saveFournisseur() {
     // Mode ajout
     FOURNISSEURS.push({ id: Date.now(), ...data });
     showNotif('✅ Fournisseur ajouté');
-    if (!IS_LOCAL) saveFournisseurDB(FOURNISSEURS[FOURNISSEURS.length-1]).catch(()=>{});
+    if (!IS_LOCAL) saveFournisseurDB(FOURNISSEURS[FOURNISSEURS.length-1]).catch(e => {
+      showNotif('⚠ Erreur sauvegarde fournisseur : ' + e.message);
+      console.error('[Fournisseur] Insert échoué :', e);
+    });
   }
 
   editingFournisseurId = null;
