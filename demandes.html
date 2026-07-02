@@ -2193,13 +2193,18 @@ async function confirmPresenceImport(){
       wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'A',status:'present'});
     });
   });
-  console.log('[ConfirmImport] wanted=',wanted.length,'toInsert sera calculé après dedup');
-  if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;showBanner('Aucune présence à enregistrer.','error');return;}
-  const dates=[...new Set(wanted.map(w=>w.presence_date))];
-  const ids=[...new Set(wanted.map(w=>w.enfant_id))];
-  const{data:existing}=await sb.from('presences').select('id,enfant_id,presence_date,slot').in('presence_date',dates).in('enfant_id',ids);
+  // Filtrer les wanted valides (enfant_id défini)
+  const wantedValid=wanted.filter(w=>w.enfant_id);
+  console.log('[ConfirmImport] wanted=',wanted.length,'wantedValid=',wantedValid.length);
+  if(!wantedValid.length){closeModal('modal-import-presence-wrap');_importPresData=null;showBanner('Aucune présence à enregistrer.','error');return;}
+  const dates=[...new Set(wantedValid.map(w=>w.presence_date))];
+  const ids=[...new Set(wantedValid.map(w=>w.enfant_id))];
+  console.log('[ConfirmImport] dates=',dates,'ids=',ids.length);
+  const{data:existing,error:exErr}=await sb.from('presences').select('id,enfant_id,presence_date,slot').in('presence_date',dates).in('enfant_id',ids);
+  if(exErr)console.error('[ConfirmImport] erreur dedup',exErr);
   const exSet=new Set((existing||[]).map(e=>e.enfant_id+'_'+e.presence_date+'_'+e.slot));
-  const toInsert=wanted.filter(w=>!exSet.has(w.enfant_id+'_'+w.presence_date+'_'+w.slot));
+  const toInsert=wantedValid.filter(w=>!exSet.has(w.enfant_id+'_'+w.presence_date+'_'+w.slot));
+  console.log('[ConfirmImport] toInsert=',toInsert.length);
   let ok=true;
   if(toInsert.length){const{error}=await sb.from('presences').insert(toInsert);if(error){console.error('[ImportPresence] insert presences',error);ok=false;}}
   closeModal('modal-import-presence-wrap');_importPresData=null;
