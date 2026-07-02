@@ -3550,18 +3550,23 @@ async function loadRefDashAsync(crecheId,t){
   const titleRmp='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div>';
   const empty=msg=>'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">'+msg+'</div>';
 
-  // Présences enfants
+  // Présences enfants (filtrage via enfant_id car presences n'a pas de creche_id)
   try{
-    const{data:pres}=await sb.from('presences').select('*').eq('creche_id',crecheId).eq('date',t);
+    if(!cacheEnfants.length){const{data:fe}=await sb.from('enfants').select('*');if(fe&&fe.length)cacheEnfants.push(...fe);}
+    const enfCreche=cacheEnfants.filter(e=>e.creche_id===crecheId);
     const box=document.getElementById('rdb-presences');if(!box)return;
+    if(!enfCreche.length){box.innerHTML=titlePresences+empty('Aucun enfant enregistré');return;}
+    const{data:pres}=await sb.from('presences').select('enfant_id,slot,status').eq('presence_date',t).in('enfant_id',enfCreche.map(e=>e.id));
     if(!pres||!pres.length){box.innerHTML=titlePresences+empty('Aucune présence enregistrée');
     }else{
-      const matin=pres.filter(p=>p.periode==='matin'||p.periode==='journee');
-      const apm=pres.filter(p=>p.periode==='apm'||p.periode==='journee');
+      const presents=new Set(pres.filter(p=>p.status==='present'||p.status==='partial').map(p=>p.enfant_id));
+      const matin=new Set(pres.filter(p=>p.slot==='M'&&(p.status==='present'||p.status==='partial')).map(p=>p.enfant_id));
+      const apm=new Set(pres.filter(p=>p.slot==='A'&&(p.status==='present'||p.status==='partial')).map(p=>p.enfant_id));
+      const presList=enfCreche.filter(e=>presents.has(e.id));
       box.innerHTML=titlePresences+
-        '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+matin.length+' enfant'+(matin.length>1?'s':'')+'</span></div>'+
-        '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+apm.length+' enfant'+(apm.length>1?'s':'')+'</span></div>'+
-        (pres.length?'<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:0 4px">'+pres.slice(0,6).map(p=>escHtml(p.child_name||'—')).join(', ')+(pres.length>6?' …':'')+'</div>':'');
+        '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+matin.size+' enfant'+(matin.size>1?'s':'')+'</span></div>'+
+        '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+apm.size+' enfant'+(apm.size>1?'s':'')+'</span></div>'+
+        (presList.length?'<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:0 4px">'+presList.slice(0,6).map(e=>escHtml(e.prenom)).join(', ')+(presList.length>6?' …':'')+'</div>':'');
     }
   }catch(e){const b=document.getElementById('rdb-presences');if(b)b.innerHTML=titlePresences+empty('Indisponible');}
 
@@ -3684,7 +3689,7 @@ function renderDashboardToday(){
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-calendar-event"></i> Événements du jour</div>'+evtsHtml+'</div>'+
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-cake"></i> Anniversaires</div>'+bdaysHtml+'</div>'+
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-bolt"></i> Activité du jour</div>'+actHtml+'</div>'+
-    '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
+    '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title" style="display:flex;justify-content:space-between;align-items:center"><span><i class="ti ti-users"></i> Présences du jour</span><select id="dash-pres-creche-filter" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:120px" onchange="loadDashboardPresences(document.getElementById(\"dash-date\").value||new Date().toISOString().slice(0,10))"><option value="">Toutes</option></select></div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
 
   loadDashboardPresences(t);
@@ -3712,41 +3717,46 @@ async function loadDashboardRemplacantes(dateStr){
 async function loadDashboardPresences(dateStr){
   const box=document.getElementById('dash-today-presence');
   if(!box)return;
-  const title='<div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div>';
+  const filterSel=document.getElementById('dash-pres-creche-filter');
+  if(filterSel&&filterSel.options.length<=1){
+    filterSel.innerHTML='<option value="">Toutes</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
+  }
+  const filtreCreche=filterSel?filterSel.value:'';
+  const makeTitle=()=>'<div class="dash-card-title" style="display:flex;justify-content:space-between;align-items:center"><span><i class="ti ti-users"></i> Présences du jour</span>'+
+    '<select id="dash-pres-creche-filter" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:120px" onchange="loadDashboardPresences(document.getElementById(\'dash-date\')​?.value||new Date().toISOString().slice(0,10))">'+
+    '<option value=""'+(filtreCreche===''?' selected':'')+'>Toutes</option>'+
+    cacheCreches.map(c=>'<option value="'+c.id+'"'+(filtreCreche===c.id?' selected':'')+'>'+escHtml(c.name)+'</option>').join('')+
+    '</select></div>';
   try{
-    // Recharger les enfants si cache vide
     if(!cacheEnfants.length){const{data:fe}=await sb.from('enfants').select('*');if(fe&&fe.length)cacheEnfants.push(...fe);}
-    const{data,error}=await sb.from('presences').select('enfant_id,status').eq('presence_date',dateStr);
+    let crechesAffichees=cacheCreches.filter(c=>cacheEnfants.some(e=>e.creche_id===c.id));
+    if(filtreCreche)crechesAffichees=crechesAffichees.filter(c=>c.id===filtreCreche);
+    const enfantsFiltres=cacheEnfants.filter(e=>crechesAffichees.some(c=>c.id===e.creche_id));
+    if(!enfantsFiltres.length){box.innerHTML=makeTitle()+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun enfant enregistré</div>';return;}
+    const{data,error}=await sb.from('presences').select('enfant_id,slot,status').eq('presence_date',dateStr).in('enfant_id',enfantsFiltres.map(e=>e.id));
     if(error)throw error;
     const presentIds=new Set((data||[]).filter(p=>p.status==='present'||p.status==='partial').map(p=>p.enfant_id));
-    const crechesWithEnfants=cacheCreches.filter(c=>cacheEnfants.some(e=>e.creche_id===c.id));
-    if(!crechesWithEnfants.length){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun enfant enregistré</div>';return;}
-    let html='';
-    let totalPresent=0,totalEnfants=0;
-    crechesWithEnfants.forEach(c=>{
+    let html='';let totalPresent=0,totalEnfants=0;
+    crechesAffichees.forEach(c=>{
       const enf=cacheEnfants.filter(e=>e.creche_id===c.id);
       const presents=enf.filter(e=>presentIds.has(e.id));
       totalPresent+=presents.length;totalEnfants+=enf.length;
       html+='<div style="margin-bottom:8px">';
       html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">';
       html+='<span style="font-size:11px;font-weight:700;color:var(--koala)">'+escHtml(c.name)+'</span>';
-      html+='<span style="font-size:11px;font-weight:700;color:'+(presents.length?'var(--green)':'var(--muted)')+'">'+presents.length+' / '+enf.length+'</span>';
+      html+='<span style="font-size:11px;font-weight:700;color:'+(presents.length?'var(--green)':'var(--muted)')+'">'+(presents.length?presents.length+' / '+enf.length:'Pointage non saisi')+'</span>';
       html+='</div>';
       if(presents.length){
         html+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
-        presents.forEach(e=>{
-          html+='<span style="background:var(--koala);color:#fff;border-radius:4px;padding:1px 6px;font-size:10.5px;white-space:nowrap">'+escHtml(e.prenom)+'</span>';
-        });
+        presents.forEach(e=>{html+='<span style="background:var(--koala);color:#fff;border-radius:4px;padding:1px 6px;font-size:10.5px;white-space:nowrap">'+escHtml(e.prenom)+'</span>';});
         html+='</div>';
-      }else{
-        html+='<div style="font-size:11px;color:var(--muted);font-style:italic">Pointage non saisi</div>';
       }
       html+='</div>';
     });
-    const recap='<div style="font-size:11px;font-weight:700;color:var(--koala);border-top:1px solid var(--border);padding-top:6px;margin-top:2px">Total : '+totalPresent+' / '+totalEnfants+' enfants présents</div>';
-    box.innerHTML=title+html+recap;
+    const recap='<div style="font-size:11px;font-weight:700;color:var(--koala);border-top:1px solid var(--border);padding-top:6px;margin-top:2px">Total : '+totalPresent+' / '+totalEnfants+' enfants présents</div>';
+    box.innerHTML=makeTitle()+html+recap;
   }catch(e){
-    box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Pointage non saisi aujourd\'hui</div>';
+    box.innerHTML='<div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Indisponible</div>';
   }
 }
 
