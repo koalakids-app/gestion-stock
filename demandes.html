@@ -3499,10 +3499,15 @@ async function loadRefDashAsync(crecheId,t){
     const box=document.getElementById('rdb-equipe');if(!box)return;
     if(!rows||!rows.length){box.innerHTML=titleEquipe+empty('Aucun planning pour cette semaine');
     }else{
-      const dow=['lundi','mardi','mercredi','jeudi','vendredi'][new Date(t+'T00:00:00').getDay()-1]||'lundi';
-      const presents=rows.filter(r=>r[dow]&&r[dow]!=='absent'&&r[dow]!=='conge'&&r[dow]!=='');
+      // planning_equipe : jour (0=lundi…4=vendredi), prenom, type, hdebut, hfin
+      const d=new Date(t+'T00:00:00');
+      const jourIdx=d.getDay()===0?6:d.getDay()-1;
+      const presents=rows.filter(r=>r.jour===jourIdx&&r.type!=='absent'&&r.type!=='conge');
       box.innerHTML=titleEquipe+
-        (presents.length?presents.map(r=>'<div class="dash-list-item"><span>👤 '+escHtml(r.nom||'—')+'</span><span style="font-size:11px;color:var(--muted)">'+escHtml(r[dow]||'')+'</span></div>').join('')
+        (presents.length?presents.map(r=>{
+          const horaire=(r.hdebut&&r.hfin)?r.hdebut+'–'+r.hfin:'';
+          return'<div class="dash-list-item"><span>👤 '+escHtml(r.prenom||'—')+'</span><span style="font-size:11px;color:var(--muted)">'+escHtml(horaire)+'</span></div>';
+        }).join('')
         :empty('Aucun staff présent ce jour'));
     }
   }catch(e){const b=document.getElementById('rdb-equipe');if(b)b.innerHTML=titleEquipe+empty('Indisponible');}
