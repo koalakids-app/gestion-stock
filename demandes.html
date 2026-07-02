@@ -3493,8 +3493,8 @@ async function loadRefDashAsync(crecheId,t){
 
   // Planning équipe
   try{
-    const ws=t.slice(0,10);
-    // On cherche les lignes de planning_equipe pour cette crèche et cette semaine
+    const ws=mondayOfISO(t);
+    // On cherche les lignes de planning_equipe pour cette crèche et cette semaine (lundi de la semaine)
     const{data:rows}=await sb.from('planning_equipe').select('*').eq('creche_id',crecheId).eq('semaine',ws);
     const box=document.getElementById('rdb-equipe');if(!box)return;
     if(!rows||!rows.length){box.innerHTML=titleEquipe+empty('Aucun planning pour cette semaine');
