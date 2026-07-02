@@ -2193,6 +2193,55 @@ async function confirmPresenceImport(){
   }else showBanner('Erreur lors de l\'enregistrement des présences.','error');
 }
 
+// ── SUPPRESSION ENFANTS ──
+function openSupprimerPresencesModal(){
+  const sel=document.getElementById('suppr-pres-creche');
+  sel.innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+  if(!isDirection&&currentProfile?.creche_id){
+    sel.value=currentProfile.creche_id;
+    document.getElementById('suppr-pres-creche-wrap').style.display='none';
+  }else{
+    document.getElementById('suppr-pres-creche-wrap').style.display='';
+  }
+  document.getElementById('suppr-pres-list').innerHTML='<span style="color:var(--muted);font-size:12px">Sélectionnez une crèche…</span>';
+  document.getElementById('suppr-pres-count').textContent='';
+  document.getElementById('suppr-pres-all').checked=false;
+  const btnSuppr=document.getElementById('btn-confirm-suppr-pres');btnSuppr.disabled=false;btnSuppr.innerHTML='<i class="ti ti-trash"></i> Supprimer la sélection';
+  document.getElementById('modal-suppr-presence-wrap').classList.add('open');
+  if(!isDirection&&currentProfile?.creche_id)chargerEnfantsSuppr();
+}
+
+async function chargerEnfantsSuppr(){
+  const crecheId=isDirection?document.getElementById('suppr-pres-creche').value:currentProfile?.creche_id;
+  const list=document.getElementById('suppr-pres-list');
+  if(!crecheId){list.innerHTML='<span style="color:var(--muted);font-size:12px">Sélectionnez une crèche…</span>';return;}
+  list.innerHTML='<span style="color:var(--muted);font-size:12px">Chargement…</span>';
+  const{data:enfants,error}=await sb.from('enfants').select('*').eq('creche_id',crecheId).order('prenom');
+  if(error||!enfants||!enfants.length){list.innerHTML='<span style="color:var(--muted);font-size:12px">Aucun enfant dans cette crèche.</span>';return;}
+  document.getElementById('suppr-pres-count').textContent=enfants.length+' enfant'+(enfants.length>1?'s':'');
+  document.getElementById('suppr-pres-all').checked=false;
+  list.innerHTML=enfants.map(e=>'<label style="display:flex;align-items:center;gap:10px;padding:7px 6px;border-bottom:1px solid var(--border);cursor:pointer"><input type="checkbox" class="suppr-enf-cb" data-id="'+e.id+'" style="width:15px;height:15px;flex-shrink:0"><span>'+escHtml(e.prenom+' '+e.nom)+'</span></label>').join('');
+}
+
+function toggleSelectAllEnfants(checked){
+  document.querySelectorAll('.suppr-enf-cb').forEach(cb=>cb.checked=checked);
+}
+
+async function confirmerSupprimerPresences(){
+  const selected=[...document.querySelectorAll('.suppr-enf-cb:checked')].map(cb=>cb.dataset.id);
+  if(!selected.length){alert('Cochez au moins un enfant.');return;}
+  if(!confirm('Supprimer '+selected.length+' enfant'+(selected.length>1?'s':'')+' et toutes leurs présences ? Cette action est irréversible.'))return;
+  const btn=document.getElementById('btn-confirm-suppr-pres');btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Suppression…';
+  const{error:e1}=await sb.from('presences').delete().in('enfant_id',selected);
+  if(e1){showBanner('Erreur suppression présences : '+e1.message,'error');btn.disabled=false;btn.innerHTML='<i class="ti ti-trash"></i> Supprimer la sélection';return;}
+  const{error:e2}=await sb.from('enfants').delete().in('id',selected);
+  if(e2){showBanner('Présences supprimées mais erreur enfants : '+e2.message,'error');btn.disabled=false;btn.innerHTML='<i class="ti ti-trash"></i> Supprimer la sélection';return;}
+  selected.forEach(id=>{const idx=cacheEnfants.findIndex(e=>e.id===id);if(idx>=0)cacheEnfants.splice(idx,1);});
+  closeModal('modal-suppr-presence-wrap');
+  showBanner(selected.length+' enfant'+(selected.length>1?'s':'')+' supprimé'+(selected.length>1?'s':'')+' ✅');
+  renderPresence();
+}
+
 // PLANNING (Supabase — voir renderPlanning plus bas, version active)
 function changeWeek(d){weekOffset+=d;renderPlanning();}
 function toggleLieuField(){
