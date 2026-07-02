@@ -2214,14 +2214,15 @@ async function previewSupprimerPresences(){
   const preview=document.getElementById('suppr-pres-preview');
   preview.style.display='';preview.innerHTML='<span style="color:var(--muted)">Chargement…</span>';
   document.getElementById('btn-confirm-suppr-pres').style.display='none';
-  // Charger présences
-  let q=sb.from('presences').select('id,enfant_id,presence_date,slot').gte('presence_date',from).lte('presence_date',to);
-  if(crecheId)q=q.eq('creche_id',crecheId);
+  // La table presences n'a pas de creche_id : filtrer via les enfants de la crèche
+  if(!cacheEnfants.length){const{data:fe}=await sb.from('enfants').select('*');if(fe)cacheEnfants.push(...fe);}
+  const enfantsDeLaCreche=crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants;
+  const enfantsIds=enfantsDeLaCreche.map(e=>e.id);
+  if(!enfantsIds.length){preview.innerHTML='<span style="color:var(--muted)">Aucun enfant enregistré pour cette crèche.</span>';return;}
+  let q=sb.from('presences').select('id,enfant_id,presence_date,slot').gte('presence_date',from).lte('presence_date',to).in('enfant_id',enfantsIds);
   const{data:pres,error}=await q;
   if(error){preview.innerHTML='<span style="color:var(--red)">Erreur : '+error.message+'</span>';return;}
   if(!pres||!pres.length){preview.innerHTML='<span style="color:var(--muted)">Aucune présence trouvée sur cette période.</span>';return;}
-  // Grouper par enfant
-  if(!cacheEnfants.length){const{data:fe}=await sb.from('enfants').select('*');if(fe)cacheEnfants.push(...fe);}
   const byEnfant={};
   pres.forEach(p=>{
     if(!byEnfant[p.enfant_id])byEnfant[p.enfant_id]={count:0,dates:new Set()};
