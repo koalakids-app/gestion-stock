@@ -51,24 +51,18 @@ if (location.protocol === 'https:') {
   --radius-sm: 8px;
 }
 
-/* Bouton aide flottant masqué quand une modale est ouverte (évite le chevauchement avec les boutons du footer modal) */
-body:has(.modal-overlay.open) #helpFloatBtn { display: none !important; }
-
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
   font-family: 'Instrument Sans', sans-serif;
   background: var(--bg);
   color: var(--ink);
-  min-height: 100dvh;
+  min-height: 100vh;
   font-size: 14px;
 }
 
 /* ── LAYOUT ── */
-/* 100dvh au lieu de 100vh : sur Safari iOS, 100vh inclut la zone sous la barre
-   d'outils dynamique et crée un espace vide / un contenu tronqué. dvh s'ajuste
-   en temps réel comme sur Chrome Android. */
-.app { display: grid; grid-template-columns: 240px 1fr; min-height: 100dvh; }
+.app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
 
 /* ── SIDEBAR ── */
 .sidebar {
@@ -78,7 +72,7 @@ body {
   flex-direction: column;
   position: sticky;
   top: 0;
-  height: 100dvh;
+  height: 100vh;
   overflow-y: auto;
 }
 
@@ -140,7 +134,6 @@ body {
   margin-top: auto;
   padding: 16px 20px;
   border-top: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0;
 }
 
 .creche-badge {
@@ -170,7 +163,7 @@ body {
 .creche-count { margin-left: auto; color: rgba(255,255,255,0.35); font-size: 11px; }
 
 /* ── MAIN ── */
-.main { display: flex; flex-direction: column; min-height: 100dvh; min-width: 0; }
+.main { display: flex; flex-direction: column; min-height: 100vh; }
 
 .topbar {
   background: var(--surface2);
@@ -268,8 +261,6 @@ body {
 .stat-value { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; color: var(--ink); line-height: 1; }
 .stat-sub { font-size: 12px; color: var(--ink3); margin-top: 6px; }
 .stat-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-top: 8px; }
-.stat-link { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 10px; cursor: pointer; }
-.stat-link:hover { text-decoration: underline; }
 
 /* ── SECTION HEADER ── */
 .section-header {
@@ -426,7 +417,6 @@ input, select, textarea {
   background: var(--surface2);
   outline: none;
   transition: border-color 0.15s;
-  min-height: 38px;
 }
 
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
@@ -661,7 +651,7 @@ textarea { resize: vertical; min-height: 72px; }
 .install-bar {
   display: none; position: fixed; bottom: 0; left: 0; right: 0;
   background: linear-gradient(135deg, #1C1917, #44403C); color: #fff;
-  padding: 14px 24px calc(14px + env(safe-area-inset-bottom)); align-items: center; justify-content: space-between;
+  padding: 14px 24px; align-items: center; justify-content: space-between;
   gap: 16px; z-index: 9999; box-shadow: 0 -4px 20px rgba(0,0,0,0.25);
   animation: slideUpPWA 0.4s ease;
 }
@@ -729,7 +719,7 @@ textarea { resize: vertical; min-height: 72px; }
   .article-picker-cat { font-size:11px; color:var(--ink3); }
 
 .offline-badge {
-  display: none; position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px;
+  display: none; position: fixed; top: 12px; right: 12px;
   background: var(--red); color: #fff; padding: 5px 12px;
   border-radius: 20px; font-size: 11px; font-weight: 700; z-index: 9999;
 }
@@ -780,7 +770,7 @@ body.is-fullscreen .sidebar {
   position: fixed;
   left: 0;
   top: 0;
-  height: 100dvh;
+  height: 100vh;
   z-index: 250;
   transform: translateX(-100%);
   transition: transform 0.25s ease;
@@ -831,63 +821,28 @@ body.is-fullscreen .sidebar-trigger {
 
 /* ── RESPONSIVE MOBILE ── */
 @media (max-width: 768px) {
+  .picker-buttons-row { flex-direction: column; }
+  .picker-buttons-row .btn { width: 100%; font-size: 12.5px; }
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; left: 0; top: 0; height: 100dvh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 100%; max-width: 320px; box-shadow: none; }
+  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 270px; box-shadow: none; }
   .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-lg); }
   .mobile-menu-btn { display: inline-flex !important; }
   .sidebar-trigger { display: none !important; }
-  .nav-item { padding: 14px 20px; font-size: 15px; min-height: 48px; }
-  .nav-item .nav-icon { font-size: 18px; }
-  .sidebar-section-title { padding: 18px 20px 10px; font-size: 11px; }
-  .creche-badge { padding: 12px 12px; font-size: 14px; min-height: 44px; }
-  .creche-dot { width: 10px; height: 10px; }
-  .creche-count { font-size: 12px; }
-  .sidebar-creches { padding: 16px 20px calc(16px + env(safe-area-inset-bottom)); }
-  .topbar { padding: 10px 14px 12px; flex-wrap: wrap; gap: 8px; }
+  .topbar { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
   .topbar-left { flex: 1; min-width: 0; gap: 8px; }
   .page-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
-  .search-box { min-width: unset; width: 100%; order: 1; flex-basis: 100%; }
-  #save-indicator { display: none !important; }
-
-  /* Bandeau d'actions : icônes + libellés courts, homogènes, scroll horizontal avec indice visuel */
-  .topbar-right {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    flex-wrap: nowrap;
-    width: 100%;
-    order: 2;
-    padding: 2px 2px 6px 0;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-    mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
-  }
-  .topbar-right::-webkit-scrollbar { display: none; }
-  .topbar-right .btn {
-    flex-shrink: 0;
-    flex-direction: column;
-    gap: 2px;
-    font-size: 10px;
-    line-height: 1.1;
-    padding: 7px 10px 6px;
-    min-width: 52px;
-    min-height: 44px;
-  }
-  .topbar-right .btn-label-short { display: flex !important; flex-direction: column; align-items: center; gap: 2px; }
-  .btn-ic { font-size: 15px; line-height: 1; }
-  .btn-tx { font-size: 10px; font-weight: 600; white-space: nowrap; }
-  #fullscreenBtn { min-width: 40px; padding: 7px 9px; }
+  .topbar-right { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; width: 100%; padding-bottom: 2px; }
+  .topbar-right .btn { flex-shrink: 0; font-size: 12px; padding: 7px 10px; }
   .btn-label-long { display: none; }
   .btn-label-short { display: inline !important; }
+  .search-box { min-width: unset; width: 100%; order: 10; flex-basis: 100%; }
+  #save-indicator { display: none !important; }
   .content { padding: 12px; }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-  .stat-card { padding: 14px 14px 12px; }
-  .stat-value { font-size: 26px; }
-  .stat-label { font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .stat-sub { display: none; }
-  .stat-link { font-size: 11px; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-card { padding: 12px 14px; }
+  .stat-value { font-size: 22px; }
+  .stat-label { font-size: 10px; }
+  .stat-sub { font-size: 11px; }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { min-width: 500px; }
   #inv-table-materiel thead th:nth-child(6),
@@ -918,59 +873,17 @@ body.is-fullscreen .sidebar-trigger {
   .modal-footer .btn { flex: 1; justify-content: center; min-width: 100px; }
   .commande-card { grid-template-columns: 1fr; }
   .commande-total, .commande-total-label { text-align: left; }
-  .filters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 2px 2px 8px 0;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-    mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
-  }
-  .filters::-webkit-scrollbar { display: none; }
-  .filter-chip { flex-shrink: 0; padding: 8px 14px; font-size: 13px; min-height: 36px; display: flex; align-items: center; }
+  .filters { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .filter-chip { flex-shrink: 0; }
   #univers-list { grid-template-columns: 1fr !important; }
   .notif { bottom: 16px; left: 12px; right: 12px; text-align: center; }
-  button[onclick="openNotice()"] { bottom: calc(70px + env(safe-area-inset-bottom)) !important; right: 16px !important; width: 44px !important; height: 44px !important; font-size: 18px !important; }
+  button[onclick="openNotice()"] { bottom: 70px !important; right: 16px !important; width: 44px !important; height: 44px !important; font-size: 18px !important; }
   .section-header { flex-wrap: wrap; gap: 8px; }
   .section-title { font-size: 14px; }
   .tab-btn { padding: 7px 10px; font-size: 12px; }
   #inv-tab-materiel, #inv-tab-consommable { font-size: 12px !important; padding: 8px 12px !important; }
   .install-bar { padding: 12px 16px; }
   .fournisseur-card { flex-wrap: wrap; }
-
-  /* ── SAISIE OPTIMISÉE ANDROID/MOBILE ── */
-  /* 16px = empêche le zoom automatique du navigateur à l'ouverture du clavier */
-  input, select, textarea {
-    font-size: 16px;
-    padding: 11px 12px;
-    min-height: 44px;
-  }
-  textarea { min-height: 90px; }
-  label { font-size: 13px; margin-bottom: 2px; }
-  .form-group { gap: 8px; }
-  .form-grid { gap: 14px; }
-
-  /* Cases à cocher / radios : zone de tap agrandie (cible tactile ≥ 24px) */
-  input[type="checkbox"], input[type="radio"] {
-    width: 22px !important;
-    height: 22px !important;
-    min-height: unset;
-    flex-shrink: 0;
-  }
-
-  /* Boutons : hauteur tactile confortable sur tout l'écran, pas seulement la topbar */
-  .btn { min-height: 42px; font-size: 14px; }
-  .btn-sm { min-height: 36px; }
-
-  /* Empêche le double-tap-zoom accidentel pendant la saisie */
-  input, select, textarea, button, .btn { touch-action: manipulation; }
-
-  /* Select natif Android : flèche et padding cohérents avec les inputs */
-  select { padding-right: 32px; }
-  /* La zone drag & drop n'a pas de sens au tactile : masquée sur mobile pour gagner de la place dans le formulaire */
-  .photo-upload-zone { display: none !important; }
 }
 
 /* Tablette */
@@ -1027,7 +940,7 @@ body.is-fullscreen .sidebar-trigger {
   <button class="nav-item active" onclick="showPage('inventaire', this)">
     <span class="nav-icon">📦</span> Inventaire
   </button>
-  <button class="nav-item" id="navItemCommandes" onclick="showPage('commandes', this)">
+  <button class="nav-item" onclick="showPage('commandes', this)">
     <span class="nav-icon">🛒</span> Commandes
   </button>
   <button class="nav-item" onclick="showPage('fournisseurs', this)">
@@ -1112,24 +1025,24 @@ body.is-fullscreen .sidebar-trigger {
       </div>
       <button class="btn btn-secondary" onclick="triggerImport()">
         <span class="btn-label-long">⬆ Importer Excel</span>
-        <span class="btn-label-short" style="display:none"><span class="btn-ic">⬆</span><span class="btn-tx">Excel</span></span>
+        <span class="btn-label-short" style="display:none">⬆ XLS</span>
       </button>
       <input type="file" id="importInput" accept=".xlsx" style="display:none" onchange="importExcel(event)">
       <button class="btn btn-secondary" onclick="exportCSV()">
         <span class="btn-label-long">⬇ Exporter</span>
-        <span class="btn-label-short" style="display:none"><span class="btn-ic">⬇</span><span class="btn-tx">CSV</span></span>
+        <span class="btn-label-short" style="display:none">⬇ CSV</span>
       </button>
       <button class="btn btn-secondary" onclick="exportBackup()" title="Sauvegarder toutes les données (JSON)">
         <span class="btn-label-long">💾 Sauvegarder</span>
-        <span class="btn-label-short" style="display:none"><span class="btn-ic">💾</span><span class="btn-tx">Save</span></span>
+        <span class="btn-label-short" style="display:none">💾</span>
       </button>
       <button class="btn btn-secondary" onclick="document.getElementById('restoreInput').click()" title="Restaurer une sauvegarde">
         <span class="btn-label-long">📂 Restaurer</span>
-        <span class="btn-label-short" style="display:none"><span class="btn-ic">📂</span><span class="btn-tx">Restau.</span></span>
+        <span class="btn-label-short" style="display:none">📂</span>
       </button>
       <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="importBackup(event)">
       <span id="save-indicator" style="font-size:11px;color:var(--ink3);white-space:nowrap">⏳ Connexion…</span>
-      <button class="btn btn-secondary btn-sm" onclick="onClearData()" title="Supprimer toutes les données locales" style="color:var(--red);border-color:#FECACA;flex-shrink:0"><span class="btn-ic">🗑</span><span class="btn-tx btn-label-short" style="display:none">Reset</span><span class="btn-label-long">🗑 Reset</span></button>
+      <button class="btn btn-secondary btn-sm" onclick="onClearData()" title="Supprimer toutes les données locales" style="color:var(--red);border-color:#FECACA;flex-shrink:0">🗑 Reset</button>
     </div>
   </div>
 
@@ -1145,25 +1058,27 @@ body.is-fullscreen .sidebar-trigger {
           <div class="stat-label">Articles total</div>
           <div class="stat-value" id="stat-total">0</div>
           <div class="stat-sub">articles en stock</div>
-          <div class="stat-link" onclick="document.getElementById('articles-table').scrollIntoView({behavior:'smooth',block:'start'})">Voir l'inventaire →</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Valeur totale du stock</div>
           <div class="stat-value" id="stat-valeur">0 €</div>
           <div class="stat-sub">prix × quantité (tous articles)</div>
-          <div class="stat-link" onclick="document.getElementById('articles-table').scrollIntoView({behavior:'smooth',block:'start'})">Voir le détail →</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Commandes en cours</div>
           <div class="stat-value" style="color:var(--accent)" id="stat-commandes">3</div>
           <div class="stat-sub">en attente livraison</div>
-          <div class="stat-link" onclick="showPage('commandes', document.getElementById('navItemCommandes'))">Voir les commandes →</div>
         </div>
         <div class="stat-card" id="stat-card-remplacer">
           <div class="stat-label">🔴 À remplacer</div>
           <div class="stat-value" style="color:#DC2626" id="stat-remplacer">0</div>
           <div class="stat-sub">dépréciation ≥ 60% (3+ ans)</div>
-          <div class="stat-link" style="color:#DC2626" onclick="document.getElementById('articles-table').scrollIntoView({behavior:'smooth',block:'start'})">Voir les alertes →</div>
+        </div>
+        <div class="stat-card" id="stat-card-completer">
+          <div class="stat-label">🟠 À compléter</div>
+          <div class="stat-value" style="color:#D97706" id="stat-completer">0</div>
+          <div class="stat-sub">stock ≤ seuil minimum</div>
+          <div class="stat-link" style="color:#D97706" onclick="filterStockStatus('a-completer')">Voir les articles →</div>
         </div>
       </div>
 
@@ -1537,7 +1452,7 @@ body.is-fullscreen .sidebar-trigger {
         </div>
         <div class="form-group">
           <label>Prix unitaire (€)</label>
-          <input type="number" id="f-prix" min="0" step="0.01" placeholder="0.00" inputmode="decimal">
+          <input type="number" id="f-prix" min="0" step="0.01" placeholder="0.00">
         </div>
         <div class="form-group">
           <label>Fournisseur</label>
@@ -1652,6 +1567,10 @@ body.is-fullscreen .sidebar-trigger {
         </div>
         <div class="form-group full">
           <label>Articles commandés</label>
+          <div class="picker-buttons-row" style="display:flex;gap:8px;margin-bottom:8px">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openArticlePicker()" style="flex:1;justify-content:center">📋 Choisir depuis articles existants</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openOrderHistoryPicker()" style="flex:1;justify-content:center">🕘 Reprendre une commande précédente</button>
+          </div>
           <div id="articles-table" style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
             <div style="display:grid;grid-template-columns:70px 1fr 110px 90px 36px;gap:0;background:var(--bg);padding:8px 10px;font-size:11px;font-weight:600;letter-spacing:0.5px;color:var(--ink2);text-transform:uppercase">
               <span>Qté</span><span>Nom · Fournisseur · Lien</span><span>Catégorie</span><span>Prix €</span><span></span>
@@ -1662,7 +1581,7 @@ body.is-fullscreen .sidebar-trigger {
         </div>
         <div class="form-group">
           <label>Montant total (€) <span style="font-size:10px;color:var(--ink3);font-weight:400">— calculé automatiquement</span></label>
-          <input type="number" id="c-montant" placeholder="0.00" step="0.01" inputmode="decimal" readonly
+          <input type="number" id="c-montant" placeholder="0.00" step="0.01" readonly
                  style="background:var(--bg);font-weight:700;color:var(--accent);cursor:default">
         </div>
         <div class="form-group">
@@ -1677,6 +1596,50 @@ body.is-fullscreen .sidebar-trigger {
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="resetCommandeModal();closeModal('modal-commande')">Annuler</button>
       <button class="btn btn-primary" id="btn-save-commande" onclick="onSaveCommande()">🛒 Passer la commande</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-article-picker" onclick="closeModalClick(event,'modal-article-picker')">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <h2>📋 Choisir des articles</h2>
+      <button class="modal-close" onclick="closeModal('modal-article-picker')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="picker-article-search" placeholder="🔍 Rechercher un article..."
+             oninput="renderArticlePickerList()" style="margin-bottom:12px">
+      <div id="picker-article-list" style="max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm)"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;align-items:center">
+      <span id="picker-article-count" style="font-size:12px;color:var(--ink2)">0 article(s) sélectionné(s)</span>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="closeModal('modal-article-picker')">Annuler</button>
+        <button class="btn btn-primary" onclick="confirmArticlePicker()">+ Ajouter à la commande</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL PICKER : REPRENDRE UNE COMMANDE PRÉCÉDENTE ── -->
+<div class="modal-overlay" id="modal-order-history-picker" onclick="closeModalClick(event,'modal-order-history-picker')">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <h2>🕘 Commandes précédentes</h2>
+      <button class="modal-close" onclick="closeModal('modal-order-history-picker')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--accent-lt);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#1E40AF">
+        💡 Cliquez <strong>🔁 Tout reprendre</strong> pour dupliquer une commande entière, ou <strong>cochez des lignes</strong> dans le détail pour ne reprendre que certains articles.
+      </div>
+      <div id="picker-order-list" style="max-height:55vh;overflow-y:auto"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;align-items:center">
+      <span id="picker-order-count" style="font-size:12px;color:var(--ink2)">0 ligne(s) sélectionnée(s)</span>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="closeModal('modal-order-history-picker')">Fermer</button>
+        <button class="btn btn-primary" onclick="confirmOrderHistoryPicker()">+ Ajouter à la commande</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1820,6 +1783,7 @@ let currentCreche = 'all';
 let currentHisto = 'all';
 let currentInvTab = 'materiel'; // 'materiel' | 'consommable'
 let currentCatConso = 'all';
+let currentStockStatus = 'all'; // 'all' | 'a-completer' | 'epuise'
 let editingId = null;
 let SOUSCATS = [];
 // ─── INIT ─────────────────────────────────────────────────────────────────
@@ -1853,7 +1817,10 @@ function renderTable() {
     const matchCat = currentCat === 'all' || a.cat === currentCat;
     const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
     const matchQ = !q || a.nom.toLowerCase().includes(q) || a.ref.toLowerCase().includes(q) || a.fourn.toLowerCase().includes(q);
-    return isMateriel && matchCat && matchCreche && matchQ;
+    const matchStatus = currentStockStatus === 'all'
+      || (currentStockStatus === 'a-completer' && getStockStatus(a) === 'À compléter')
+      || (currentStockStatus === 'epuise' && getStockStatus(a) === 'Épuisé');
+    return isMateriel && matchCat && matchCreche && matchQ && matchStatus;
   });
 
   let sortCol = window._sortCol || 'nom';
@@ -1895,6 +1862,7 @@ const tb = document.getElementById('tableBody');
             <div class="item-name">${a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim()}</div>
             <div class="item-ref">${a.ref}</div>
             ${(() => { const e = getArticleEtat(a); return e ? getEtatBadgeHtml(e) : ''; })()}
+            ${getStockStatusBadgeHtml(a)}
           </div>
         </div>
       </td>
@@ -2010,7 +1978,10 @@ function renderTableConso() {
     const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
     const matchCat = currentCatConso === 'all' || a.cat === currentCatConso;
     const matchQ = !q || a.nom.toLowerCase().includes(q) || (a.ref||'').toLowerCase().includes(q);
-    return isConso && matchCreche && matchCat && matchQ;
+    const matchStatus = currentStockStatus === 'all'
+      || (currentStockStatus === 'a-completer' && getStockStatus(a) === 'À compléter')
+      || (currentStockStatus === 'epuise' && getStockStatus(a) === 'Épuisé');
+    return isConso && matchCreche && matchCat && matchQ && matchStatus;
   });
   const sortCol = window._sortCol || 'nom';
   const sortDir = window._sortDir || 'asc';
@@ -2044,6 +2015,7 @@ function renderTableConso() {
           <div>
             <div class="item-name">${a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').trim()}</div>
             <div class="item-ref">${a.ref}</div>
+            <div style="margin-top:2px">${getStockStatusBadgeHtml(a)}</div>
           </div>
         </div>
       </td>
@@ -2096,6 +2068,15 @@ function renderStats() {
   if (elRem) elRem.textContent = rem.length;
   const cardRem = document.getElementById('stat-card-remplacer');
   if (cardRem) cardRem.style.borderLeft = rem.length > 0 ? '3px solid #DC2626' : '';
+  // Tuile "À compléter" — articles dont le stock est ≤ au seuil minimum
+  const completer = ARTICLES.filter(a => {
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    return matchCreche && getStockStatus(a) === 'À compléter';
+  });
+  const elCompleter = document.getElementById('stat-completer');
+  if (elCompleter) elCompleter.textContent = completer.length;
+  const cardCompleter = document.getElementById('stat-card-completer');
+  if (cardCompleter) cardCompleter.style.borderLeft = completer.length > 0 ? '3px solid #D97706' : '';
   updateAlertBadge();
 }
   
@@ -2157,6 +2138,22 @@ function filterTable() {
   else renderTable();
 }
 
+// Déclenché par les cartes stat (ex: "À compléter") : active le filtre statut
+function filterStockStatus(status) {
+  currentStockStatus = (currentStockStatus === status) ? 'all' : status;
+  currentPageMat = 1;
+  currentPageConso = 1;
+  renderActiveInvTable();
+  const target = document.getElementById('articles-table');
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const label = status === 'a-completer' ? '🟠 À compléter' : status === 'epuise' ? '🔴 Épuisé' : null;
+  if (currentStockStatus === 'all') {
+    showNotif('Filtre statut désactivé');
+  } else if (label) {
+    showNotif(`Filtre actif : ${label}`);
+  }
+}
+
 function renderActiveInvTable() {
   if (currentInvTab === 'consommable') renderTableConso();
   else renderTable();
@@ -2195,19 +2192,19 @@ function renderCommandes() {
           </div>
           <div class="commande-items">
             ${items.map(i => {
-              // Parser le lien éventuel : "3× Nom (prix€) [https://...]"
-              const urlMatch = i.match(/\[(.+?)\]$/);
+              // Parser le lien éventuel : "3× Nom (prix€) [https://...]" — uniquement une vraie URL, pas [cat:...]
+              const urlMatch = i.match(/\[(https?:\/\/[^\]]+)\]/);
               const lineUrl = urlMatch ? urlMatch[1] : null;
-              const lineText = i.replace(/\s*\[.+?\]$/, '');
+              const lineText = i.replace(/\s*\[https?:\/\/[^\]]+\]\s*$/, '');
               return `<div class="commande-item-row">
                 <span>${lineText}</span>
-                ${lineUrl ? `<a href="#" onclick="openUrl('${lineUrl}',event)"
+                ${lineUrl ? `<a href="#" onclick="openUrl('${jsAttr(lineUrl)}',event)"
                    style="font-size:11px;color:var(--accent);text-decoration:none;white-space:nowrap">🔗 Voir</a>` : ''}
               </div>`;
             }).join('')}
           </div>
           ${c.notes ? `<div style="margin-top:8px;font-size:12px;color:var(--amber);background:var(--amber-lt);padding:6px 10px;border-radius:6px">📌 ${c.notes}</div>` : ''}
-          ${c.url ? `<div style="margin-top:8px"><a href="#" onclick="openUrl(c.url, event)" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);background:var(--accent-lt);padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:500">🔗 Accéder à la commande en ligne</a></div>` : ''}
+          ${c.url ? `<div style="margin-top:8px"><a href="#" onclick="openUrl('${jsAttr(c.url)}', event)" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);background:var(--accent-lt);padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:500">🔗 Accéder à la commande en ligne</a></div>` : ''}
         </div>
         <div>
           <div class="commande-total-label">Total</div>
@@ -2277,7 +2274,7 @@ function renderFournisseurs() {
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         <span class="badge badge-purple">${f.spec}</span>
         <span style="font-size:12px;color:var(--ink3)">${ARTICLES.filter(a=>a.fourn===f.nom).length} articles</span>
-        ${f.web && f.web !== '—' ? `<a href="#" onclick="openUrl(f.web, event)" class="btn btn-secondary btn-sm">🌐 Site</a>` : ''}
+        ${f.web && f.web !== '—' ? `<a href="#" onclick="openUrl('${jsAttr(f.web)}', event)" class="btn btn-secondary btn-sm">🌐 Site</a>` : ''}
         <div style="display:flex;gap:6px;margin-top:4px">
           <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();editFournisseur(${f.id})">✏️ Modifier</button>
           <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteFournisseur(${f.id})">🗑 Supprimer</button>
@@ -2403,22 +2400,6 @@ function closeModalClick(e, id) {
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => { m.classList.remove('open'); document.body.style.overflow = ''; }); });
 
-// Fallback pour navigateurs sans support CSS :has() : masque le bouton aide flottant
-// quand une modale est ouverte (sécurité, le CSS gère déjà le cas normal).
-if (!CSS.supports('selector(:has(*))')) {
-  const helpBtn = document.getElementById('helpFloatBtn');
-  if (helpBtn) {
-    const updateHelpBtnVisibility = () => {
-      const hasOpenModal = !!document.querySelector('.modal-overlay.open');
-      helpBtn.style.display = hasOpenModal ? 'none' : 'flex';
-    };
-    new MutationObserver(updateHelpBtnVisibility).observe(document.body, {
-      attributes: true, attributeFilter: ['class'], subtree: true
-    });
-    updateHelpBtnVisibility();
-  }
-}
-
 // ─── SAVE ARTICLE ─────────────────────────────────────────────────────────
 async function saveArticle() {
   const nom = document.getElementById('f-nom').value.trim();
@@ -2427,8 +2408,23 @@ async function saveArticle() {
   const stock = parseInt(document.getElementById('f-stock').value) || 0;
   if (!nom || !cat || !creche) { showNotif('⚠ Remplissez les champs obligatoires'); return; }
 
+  const articleId = editingId || Date.now();
+
+  // Upload de la photo vers Supabase Storage (au lieu de stocker le base64 en base)
+  let photoUrl = editingId ? (ARTICLES.find(a=>a.id===editingId)||{}).photo : null;
+  if (currentPhotoFile) {
+    try {
+      showNotif('📤 Envoi de la photo…');
+      photoUrl = await uploadPhotoToStorage(currentPhotoFile, articleId);
+    } catch (err) {
+      console.error('[Photo]', err.message);
+      showNotif('❌ Erreur envoi photo — article enregistré sans photo');
+      photoUrl = editingId ? (ARTICLES.find(a=>a.id===editingId)||{}).photo : null;
+    }
+  }
+
   const article = {
-    id: editingId || Date.now(),
+    id: articleId,
     nom,
     ref: document.getElementById('f-ref').value.trim() || `MAT-${String(Date.now()).slice(-4)}`,
     cat,
@@ -2442,7 +2438,7 @@ async function saveArticle() {
     date_achat: (document.getElementById('f-date-achat')||{}).value || null,
     etat_override: (document.getElementById('f-etat')||{}).value || null,
     depreciable: document.getElementById('f-depreciable')?.checked !== false,
-    photo: currentPhotoData || (editingId ? (ARTICLES.find(a=>a.id===editingId)||{}).photo : null),
+    photo: photoUrl,
     photoName: currentPhotoName || null,
   };
 
@@ -2463,6 +2459,7 @@ async function saveArticle() {
 
   currentPhotoData = null;
   currentPhotoName = null;
+  currentPhotoFile = null;
   resetPhotoUpload();
   closeModal('modal-add');
   renderActiveInvTable();
@@ -2503,6 +2500,26 @@ function generateBC() {
   return `${nom}-${date}-${String(seq).padStart(2,'0')}`;
 }
 
+// Upload toutes les photos de lignes nouvellement choisies (articleRowFiles) vers Storage,
+// met à jour articleRowPhotos avec les URLs obtenues, et retourne le JSON final à persister.
+// Les entrées déjà présentes dans articleRowPhotos sans fichier associé (URLs ou base64 résiduel
+// d'une commande existante non modifiée) sont conservées telles quelles.
+async function uploadRowPhotos(commandeId) {
+  const idxToUpload = Object.keys(articleRowFiles);
+  for (const idx of idxToUpload) {
+    try {
+      const url = await uploadPhotoToStorage(articleRowFiles[idx], `${commandeId}-${idx}`, 'commandes-photos');
+      articleRowPhotos[idx] = url;
+    } catch (err) {
+      console.error('[Photo ligne commande]', idx, err.message);
+      showNotif(`⚠ Photo ligne ${parseInt(idx)+1} non envoyée — ${err.message}`);
+      // on laisse l'aperçu base64 existant dans articleRowPhotos[idx] plutôt que de le perdre
+    }
+    delete articleRowFiles[idx];
+  }
+  return Object.keys(articleRowPhotos).length > 0 ? JSON.stringify(articleRowPhotos) : null;
+}
+
 async function saveCommande_db() {
   const montant = parseFloat(document.getElementById('c-montant').value) || 0;
   const bc = document.getElementById('c-bc').value.trim() || generateBC();
@@ -2524,13 +2541,14 @@ async function saveCommande_db() {
   });
   if (!fourn) fourn = '—';
 
-  // Sérialiser les photos par index de ligne
-  const photosJson = Object.keys(articleRowPhotos).length > 0
-    ? JSON.stringify(articleRowPhotos)
-    : null;
+  const commandeId = Date.now();
+
+  // Upload des photos de lignes vers Supabase Storage (au lieu de stocker le base64 en base)
+  if (Object.keys(articleRowFiles).length > 0) showNotif('📤 Envoi des photos…');
+  const photosJson = await uploadRowPhotos(commandeId);
 
   COMMANDES.push({
-    id: Date.now(),
+    id: commandeId,
     fourn, creche,
     date: document.getElementById('c-date').value,
     livraison: '',
@@ -2545,11 +2563,13 @@ async function saveCommande_db() {
   addHisto('commande', `Commande ${bc}`, 0, creche, 'Vous', `${fourn} — ${montant.toFixed(2)}€`);
   saveData();
 
-  // Sauvegarder dans Supabase en attendant le résultat
+  // Sauvegarder dans Supabase
+  let supabaseOk = true;
   if (!IS_LOCAL) {
     try {
       await saveCommandeDB(COMMANDES[COMMANDES.length-1]);
     } catch(e) {
+      supabaseOk = false;
       console.error('[Supabase] saveCommande:', e);
       showNotif('⚠ Commande sauvegardée localement — erreur Supabase : ' + e.message);
     }
@@ -2559,7 +2579,7 @@ async function saveCommande_db() {
   renderCommandes();
   renderHistorique();
   renderStats();
-  showNotif('🛒 Commande enregistrée');
+  if (supabaseOk) showNotif('🛒 Commande enregistrée');
 }
 
 async function markLivree(id) {
@@ -2850,11 +2870,11 @@ function editCommande(id) {
   const saveBtn = document.getElementById('btn-save-commande');
   if (saveBtn) {
     saveBtn.textContent = '💾 Mettre à jour';
-    saveBtn.onclick = () => onUpdateCommande(id);
+    saveBtn.onclick = () => onUpdateCommande(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); });
   }
 }
 
-function onUpdateCommande(id) {
+async function onUpdateCommande(id) {
   const c = COMMANDES.find(x => x.id === id);
   if (!c) return;
   c.date     = document.getElementById('c-date')?.value || c.date;
@@ -2863,8 +2883,11 @@ function onUpdateCommande(id) {
   c.montant  = parseFloat(document.getElementById('c-montant')?.value) || c.montant;
   c.bc       = document.getElementById('c-bc')?.value.trim() || c.bc;
   c.creche   = document.getElementById('c-creche-select')?.value || c.creche;
-  c.photos_json = Object.keys(articleRowPhotos).length > 0
-    ? JSON.stringify(articleRowPhotos) : (c.photos_json || null);
+
+  // Upload des nouvelles photos de lignes vers Supabase Storage avant sauvegarde
+  if (Object.keys(articleRowFiles).length > 0) showNotif('📤 Envoi des photos…');
+  const newPhotosJson = await uploadRowPhotos(id);
+  c.photos_json = newPhotosJson || c.photos_json || null;
 
   resetCommandeModal();
   saveData();
@@ -2967,7 +2990,10 @@ async function saveFournisseur() {
     // Mode ajout
     FOURNISSEURS.push({ id: Date.now(), ...data });
     showNotif('✅ Fournisseur ajouté');
-    if (!IS_LOCAL) saveFournisseurDB(FOURNISSEURS[FOURNISSEURS.length-1]).catch(()=>{});
+    if (!IS_LOCAL) saveFournisseurDB(FOURNISSEURS[FOURNISSEURS.length-1]).catch(e => {
+      showNotif('⚠ Erreur sauvegarde fournisseur : ' + e.message);
+      console.error('[Fournisseur] Insert échoué :', e);
+    });
   }
 
   editingFournisseurId = null;
@@ -3021,7 +3047,7 @@ function showDetail(id) {
           <tr><td style="color:var(--ink3);padding:3px 0">Prix unitaire</td><td style="font-weight:500">${a.prix > 0 ? a.prix.toFixed(2)+' €' : '—'}</td></tr>
           <tr><td style="color:var(--ink3);padding:3px 0">Fournisseur</td><td style="font-weight:500">${a.fourn || '—'}</td></tr>
           <tr><td style="color:var(--ink3);padding:3px 0">Valeur stock</td><td style="font-weight:600;color:var(--accent)">${(a.stock*a.prix).toFixed(2)} €</td></tr>
-          ${a.url ? `<tr><td style="color:var(--ink3);padding:3px 0">Lien</td><td><a href="#" onclick="openUrl(a.url, event)" rel="noopener" style="color:var(--accent);font-size:12px">🔗 Voir</a></td></tr>` : ''}
+          ${a.url ? `<tr><td style="color:var(--ink3);padding:3px 0">Lien</td><td><a href="#" onclick="openUrl('${jsAttr(a.url)}', event)" rel="noopener" style="color:var(--accent);font-size:12px">🔗 Voir</a></td></tr>` : ''}
           ${a.date_achat ? `<tr><td style="color:var(--ink3);padding:3px 0">Date d'achat</td><td style="font-weight:500">${new Date(a.date_achat).toLocaleDateString('fr-FR')}</td></tr>` : ''}
           ${a.depreciable === false
             ? `<tr><td style="color:var(--ink3);padding:3px 0">Type</td><td><span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:#F0FDF4;color:#065F46">🧴 Consommable</span></td></tr>`
@@ -3037,7 +3063,7 @@ function showDetail(id) {
       </div>
     </div>
     ${a.notes ? `<div style="background:var(--amber-lt);border:1px solid #FDE68A;border-radius:8px;padding:12px;font-size:13px;color:#92400E;margin-bottom:16px">📌 ${a.notes}</div>` : ''}
-    ${a.url ? `<div style="margin-bottom:16px"><a href="#" onclick="openUrl(a.url, event)" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:var(--accent-lt);color:var(--accent);padding:10px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;border:1px solid #BFDBFE">🔗 Voir la fiche produit</a></div>` : ''}
+    ${a.url ? `<div style="margin-bottom:16px"><a href="#" onclick="openUrl('${jsAttr(a.url)}', event)" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:var(--accent-lt);color:var(--accent);padding:10px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;border:1px solid #BFDBFE">🔗 Voir la fiche produit</a></div>` : ''}
     <div style="margin-bottom:8px;font-weight:600;font-size:13px">Ajuster le stock</div>
     <div style="display:flex;gap:10px;align-items:center">
       <button class="btn btn-secondary" onclick="onAdjustStock(${a.id}, -1)">− Retirer 1</button>
@@ -3134,7 +3160,7 @@ function exportCommandeExcel(id) {
   function parseArts(str) {
     return (str||'').split('\n').filter(Boolean).map(ligne => {
       const m    = ligne.match(/^[-•]?\s*(\d+)\s*[×xX]\s*(.+)/);
-      const urlM = ligne.match(/\[(.+?)\]$/);
+      const urlM = ligne.match(/\[(https?:\/\/[^\]]+)\]/); // URL réelle uniquement, pas [cat:...]
       const pM   = ligne.match(/\((\d+[.,]?\d*)\s*€?\)/);
       const fM   = ligne.match(/\{(.+?)\}/);
       return {
@@ -3181,11 +3207,12 @@ function exportCommandeExcel(id) {
       total || '',
       '',
     ]);
-    // URL sur la ligne suivante
+    // URL sur la ligne suivante — vrai hyperlien cliquable
     if (art.url) {
-      const ref = XLSX.utils.encode_cell({ r: aoa.length, c: 0 });
-      hyperlinks[ref] = art.url;
-      aoa.push([art.url, '', '', '', '', '']);
+      const rowIdx = aoa.length;
+      const ref = XLSX.utils.encode_cell({ r: rowIdx, c: 0 });
+      hyperlinks[ref] = { Target: art.url, Tooltip: 'Voir le produit' };
+      aoa.push(['🔗 Voir le produit', '', '', '', '', '']);
     } else {
       aoa.push(['', '', '', '', '', '']);
     }
@@ -3197,9 +3224,9 @@ function exportCommandeExcel(id) {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
 
   // Appliquer les hyperliens
-  Object.entries(hyperlinks).forEach(([ref, url]) => {
-    if (!ws[ref]) ws[ref] = { t:'s', v: url };
-    ws[ref].l = { Target: url };
+  Object.entries(hyperlinks).forEach(([ref, link]) => {
+    if (!ws[ref]) ws[ref] = { t:'s', v: link.Tooltip || link.Target };
+    ws[ref].l = { Target: link.Target, Tooltip: link.Tooltip };
   });
 
   // Largeurs identiques au modèle
@@ -3296,7 +3323,7 @@ function printBordereau(id) {
 
     // Build print rows HTML (no nested template literals)
     const printRowsHTML = arts.map(a => {
-      const lien = a.url ? '<a href="' + cleanUrl(a.url) + '" target="_blank" rel="noopener" style="color:#2563EB;text-decoration:none">🔗 Voir</a>' : '—';
+      const lien = a.url ? '<a href="#" onclick="openUrl(\'' + cleanUrl(a.url) + '\',event)" style="color:#2563EB;text-decoration:none">🔗 Voir</a>' : '—';
       const t = ((a.qty||0)*(a.prix||0)).toFixed(2);
       return '<tr><td><strong>' + a.nom + '</strong></td>' +
         '<td style="text-align:center">' + (a.fourn||'—') + '</td>' +
@@ -3534,13 +3561,17 @@ function filterUnivers(cat, el) {
 }
 
 let _universPhotoData = null;
+let _universPhotoFile = null;
 
 function handleUniversPhoto(event) {
   const file = event.target.files[0];
   if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showNotif('⚠ Photo trop grande — max 5 Mo'); return; }
+  if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
   const reader = new FileReader();
   reader.onload = e => {
-    _universPhotoData = e.target.result;
+    _universPhotoFile = file; // fichier brut conservé pour upload Storage à la sauvegarde
+    _universPhotoData = e.target.result; // aperçu local uniquement
     const img = document.getElementById('u-photo-img');
     const preview = document.getElementById('u-photo-preview');
     const label = document.getElementById('u-photo-label');
@@ -3553,6 +3584,7 @@ function handleUniversPhoto(event) {
 
 function removeUniversPhoto() {
   _universPhotoData = null;
+  _universPhotoFile = null;
   const img = document.getElementById('u-photo-img');
   const preview = document.getElementById('u-photo-preview');
   const label = document.getElementById('u-photo-label');
@@ -3652,6 +3684,7 @@ function getSelectedArticleIds() {
 function openModal_univers() {
   editingUniversId = null;
   _universPhotoData = null;
+  _universPhotoFile = null;
   document.getElementById('modalUniversTitle').textContent = 'Créer un univers ludique';
   document.getElementById('btn-save-univers').textContent = '✨ Enregistrer l\'univers';
   ['u-nom','u-age','u-duree','u-enfants','u-desc','u-conseils'].forEach(id => {
@@ -3676,6 +3709,22 @@ async function saveUnivers() {
   const nom = document.getElementById('u-nom').value.trim();
   if (!nom) { showNotif('⚠ Nom obligatoire'); return; }
 
+  const universId = editingUniversId || Date.now();
+
+  // Upload de la photo vers Supabase Storage (au lieu de stocker le base64 en base).
+  // _universPhotoData===null couvre à la fois "jamais eu de photo" et "supprimée via removeUniversPhoto".
+  let photoUrl = _universPhotoData === null ? null : _universPhotoData;
+  if (_universPhotoFile) {
+    try {
+      showNotif('📤 Envoi de la photo…');
+      photoUrl = await uploadPhotoToStorage(_universPhotoFile, universId, 'univers-photos');
+    } catch (err) {
+      console.error('[Photo univers]', err.message);
+      showNotif('❌ Erreur envoi photo — univers enregistré sans photo');
+      photoUrl = editingUniversId ? (UNIVERS.find(u=>u.id===editingUniversId)||{}).photo : null;
+    }
+  }
+
   const creche = document.getElementById('u-creche')?.value || CRECHES[0];
   const data = {
     nom,
@@ -3685,7 +3734,7 @@ async function saveUnivers() {
     conseils: document.getElementById('u-conseils').value.trim(),
     articles: JSON.stringify(getSelectedArticleIds()),
     souscat:  parseInt(document.getElementById('u-souscat')?.value) || null,
-    photo:    _universPhotoData,
+    photo:    photoUrl,
     created_at: new Date().toISOString(),
   };
 
@@ -3697,11 +3746,13 @@ async function saveUnivers() {
     }
     showNotif('✅ Univers mis à jour');
   } else {
-    const newU = { id: Date.now(), ...data };
+    const newU = { id: universId, ...data };
     UNIVERS.unshift(newU);
     if (!IS_LOCAL) await saveUniversDB(newU, true).catch(e => console.warn(e));
     showNotif('✨ Univers créé !');
   }
+  _universPhotoData = null;
+  _universPhotoFile = null;
   saveData();
   closeModal('modal-univers');
   renderUnivers();
@@ -3973,6 +4024,15 @@ function cleanUrl(raw) {
   return match ? match[0] : '';
 }
 
+// Échappe une valeur pour l'injecter en toute sécurité dans un onclick="...('...')"
+function jsAttr(raw) {
+  return String(raw || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;')
+    .replace(/\n/g, '');
+}
+
 function openUrl(raw, e) {
   if (e) e.stopPropagation();
   const url = cleanUrl(raw);
@@ -3991,15 +4051,16 @@ function showNotif(msg) {
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(notifTimer);
-  notifTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  notifTimer = setTimeout(() => el.classList.remove('show'), 6000);
 }
 
 // ─── LIGNES D'ARTICLES DANS FORMULAIRE COMMANDE ──────────────────────────
 
 let articleRowCount = 0;
-const articleRowPhotos = {}; // idx → base64 photo
+const articleRowPhotos = {}; // idx → URL (ou base64 résiduel d'avant migration) pour l'aperçu
+const articleRowFiles = {};  // idx → File brut, uniquement pour les photos nouvellement choisies cette session
 
-function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='') {
+function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='', photo='') {
   const idx = articleRowCount++;
   const container = document.getElementById('articles-rows');
   if (!container) return;
@@ -4023,7 +4084,7 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='') {
       <option value="">— Cat. —</option>
       ${['Sensoriel','Manipulation','Construction','Motricité','Imitation','Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration'].map(c=>`<option value="${c}" ${cat===c?'selected':''}>${c}</option>`).join('')}
     </select>
-    <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00" inputmode="decimal"
+    <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00"
            oninput="calcCommandeTotal()" style="text-align:right">
     <button class="del-row" onclick="removeArticleRow(${idx})" title="Supprimer">×</button>
     <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:4px 8px 6px;border-top:1px solid var(--border);background:var(--bg)">
@@ -4032,14 +4093,15 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='') {
                onchange="handleRowPhoto(event,${idx})">
         <span id="row-photo-btn-${idx}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px dashed var(--border);border-radius:5px;font-size:11px;color:var(--ink2);cursor:pointer;transition:border-color .15s"
               onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-          📷 Photo article
+          📷 ${photo ? 'Photo ✅' : 'Photo article'}
         </span>
       </label>
-      <img id="row-photo-prev-${idx}" src="" alt="" style="display:none;height:36px;width:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">
-      <button type="button" id="row-photo-del-${idx}" style="display:none;background:none;border:none;cursor:pointer;font-size:14px;color:var(--red);padding:0 4px" onclick="deleteRowPhoto(${idx})" title="Supprimer la photo">✕</button>
+      <img id="row-photo-prev-${idx}" src="${photo||''}" alt="" style="display:${photo?'block':'none'};height:36px;width:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">
+      <button type="button" id="row-photo-del-${idx}" style="display:${photo?'inline-block':'none'};background:none;border:none;cursor:pointer;font-size:14px;color:var(--red);padding:0 4px" onclick="deleteRowPhoto(${idx})" title="Supprimer la photo">✕</button>
     </div>
   `;
   container.appendChild(row);
+  if (photo) articleRowPhotos[idx] = photo; // reprend la photo de l'article/de la commande d'origine
   calcCommandeTotal();
 }
 
@@ -4050,7 +4112,8 @@ function handleRowPhoto(event, idx) {
   if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
   const reader = new FileReader();
   reader.onload = e => {
-    articleRowPhotos[idx] = e.target.result;
+    articleRowFiles[idx] = file; // fichier brut conservé pour upload Storage à la sauvegarde
+    articleRowPhotos[idx] = e.target.result; // aperçu local uniquement, jamais envoyé en base
     const prev = document.getElementById(`row-photo-prev-${idx}`);
     const del  = document.getElementById(`row-photo-del-${idx}`);
     const btn  = document.getElementById(`row-photo-btn-${idx}`);
@@ -4063,6 +4126,7 @@ function handleRowPhoto(event, idx) {
 
 function deleteRowPhoto(idx) {
   delete articleRowPhotos[idx];
+  delete articleRowFiles[idx];
   const prev = document.getElementById(`row-photo-prev-${idx}`);
   const del  = document.getElementById(`row-photo-del-${idx}`);
   const btn  = document.getElementById(`row-photo-btn-${idx}`);
@@ -4074,6 +4138,8 @@ function deleteRowPhoto(idx) {
 function removeArticleRow(idx) {
   const row = document.getElementById(`article-row-${idx}`);
   if (row) { row.remove(); calcCommandeTotal(); }
+  delete articleRowPhotos[idx];
+  delete articleRowFiles[idx];
 }
 
 function calcCommandeTotal() {
@@ -4120,6 +4186,8 @@ function commanderArticle(id) {
   const container = document.getElementById('articles-rows');
   if (container) container.innerHTML = '';
   articleRowCount = 0;
+  Object.keys(articleRowPhotos).forEach(k => delete articleRowPhotos[k]);
+  Object.keys(articleRowFiles).forEach(k => delete articleRowFiles[k]);
   // Clean nom from any price/fourn suffixes
   const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
   addArticleRow('1', nomClean, a.prix > 0 ? a.prix.toFixed(2) : '', a.url || '', a.fourn || '');
@@ -4130,7 +4198,210 @@ function resetArticleRows() {
   if (container) container.innerHTML = '';
   articleRowCount = 0;
   Object.keys(articleRowPhotos).forEach(k => delete articleRowPhotos[k]);
+  Object.keys(articleRowFiles).forEach(k => delete articleRowFiles[k]);
   addArticleRow(); // Toujours au moins une ligne vide
+}
+
+// ─── PICKER : PARSER UNE LIGNE DE COMMANDE "3× Nom {Fourn} [cat:Cat] (12.50€) [url]" ──
+function parseLigneArticle(ligne) {
+  const m = ligne.match(/^[-•]?\s*(\d+)\s*[×xX]\s*(.+)/);
+  if (!m) return null;
+  const urlM = ligne.match(/\[(?!cat:)(.+?)\]$/);
+  const pM   = ligne.match(/\((\d+[.,]?\d*)\s*€?\)/);
+  const fM   = ligne.match(/\{(.+?)\}/);
+  const catM = ligne.match(/\[cat:([^\]]+)\]/);
+  return {
+    qty:   parseInt(m[1]) || 1,
+    url:   urlM ? urlM[1] : '',
+    prix:  pM   ? parseFloat(pM[1].replace(',','.')) : 0,
+    fourn: fM   ? fM[1] : '',
+    cat:   catM ? catM[1] : '',
+    nom:   m[2].replace(/\s*\{.*?\}\s*/g,'')
+                .replace(/\s*\(\d+[.,]?\d*\s*€?\)\s*/g,'')
+                .replace(/\s*\[cat:[^\]]+\]\s*/g,'')
+                .replace(/\s*\[.*?\]\s*$/,'').trim(),
+  };
+}
+
+// ─── PICKER 1 : CHOISIR DEPUIS LES ARTICLES EXISTANTS ──────────────────────
+let pickerArticleSelection = new Set();
+
+function openArticlePicker() {
+  pickerArticleSelection = new Set();
+  const search = document.getElementById('picker-article-search');
+  if (search) search.value = '';
+  renderArticlePickerList();
+  document.getElementById('modal-article-picker').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function renderArticlePickerList() {
+  const q = (document.getElementById('picker-article-search')?.value || '').toLowerCase();
+  const crecheSel = document.getElementById('c-creche-select')?.value;
+  let list = ARTICLES.filter(a =>
+    (!q || a.nom.toLowerCase().includes(q) || (a.ref||'').toLowerCase().includes(q) || (a.fourn||'').toLowerCase().includes(q))
+  );
+  // Prioriser les articles de la crèche sélectionnée dans le tri, sans exclure les autres
+  list = list.slice().sort((a,b) => {
+    if (crecheSel) {
+      const am = a.creche === crecheSel ? 0 : 1;
+      const bm = b.creche === crecheSel ? 0 : 1;
+      if (am !== bm) return am - bm;
+    }
+    return a.nom.localeCompare(b.nom);
+  });
+
+  const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
+  const container = document.getElementById('picker-article-list');
+  if (!container) return;
+  if (list.length === 0) {
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--ink3);font-size:13px">Aucun article trouvé</div>`;
+    return;
+  }
+  container.innerHTML = list.map(a => {
+    const checked = pickerArticleSelection.has(a.id) ? 'checked' : '';
+    const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+    const thumb = a.photo
+      ? `<img src="${a.photo}" alt="${nomClean}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0" loading="lazy">`
+      : `<span style="font-size:14px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:6px;flex-shrink:0">${CAT_ICONS[a.cat]||'📦'}</span>`;
+    return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+      <input type="checkbox" ${checked} onchange="togglePickerArticle(${a.id}, this.checked)" style="min-height:auto;width:16px;height:16px">
+      ${thumb}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--ink)">${nomClean}</div>
+        <div style="font-size:11px;color:var(--ink3)">${a.creche} · ${a.fourn||'—'} ${a.prix>0?`· ${a.prix.toFixed(2)} €`:''}</div>
+      </div>
+      ${getStockStatusBadgeHtml(a)}
+    </label>`;
+  }).join('');
+}
+
+function togglePickerArticle(id, checked) {
+  if (checked) pickerArticleSelection.add(id);
+  else pickerArticleSelection.delete(id);
+  const cnt = document.getElementById('picker-article-count');
+  if (cnt) cnt.textContent = `${pickerArticleSelection.size} article(s) sélectionné(s)`;
+}
+
+function confirmArticlePicker() {
+  if (pickerArticleSelection.size === 0) { showNotif('⚠ Sélectionnez au moins un article'); return; }
+  // Si la seule ligne présente est vide, on la retire avant d'ajouter les sélections
+  removeEmptyTrailingRow();
+  pickerArticleSelection.forEach(id => {
+    const a = ARTICLES.find(x => x.id === id);
+    if (!a) return;
+    const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+    addArticleRow('1', nomClean, a.prix > 0 ? a.prix.toFixed(2) : '', a.url || '', a.fourn || '', a.cat || '', a.photo || '');
+  });
+  showNotif(`✅ ${pickerArticleSelection.size} article(s) ajouté(s) à la commande`);
+  closeModal('modal-article-picker');
+}
+
+// ─── PICKER 2 : REPRENDRE UNE COMMANDE PRÉCÉDENTE ──────────────────────────
+let pickerOrderSelection = new Set(); // clés "commandeId:ligneIdx"
+
+function openOrderHistoryPicker() {
+  pickerOrderSelection = new Set();
+  renderOrderHistoryPickerList();
+  document.getElementById('modal-order-history-picker').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function renderOrderHistoryPickerList() {
+  const crecheSel = document.getElementById('c-creche-select')?.value;
+  let list = COMMANDES.filter(c => !crecheSel || c.creche === crecheSel);
+  // Plus récentes en premier
+  list = list.slice().sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+
+  const container = document.getElementById('picker-order-list');
+  if (!container) return;
+  if (list.length === 0) {
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--ink3);font-size:13px">Aucune commande antérieure pour cette crèche</div>`;
+    return;
+  }
+  container.innerHTML = list.map(c => {
+    const lignes = (c.articles||'').split('\n').filter(Boolean);
+    const items = lignes.map((ligne, idx) => ({ idx, art: parseLigneArticle(ligne) })).filter(x => x.art);
+    return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg)">
+        <div>
+          <div style="font-size:13px;font-weight:700">🏭 ${c.fourn} <span style="color:var(--ink3);font-weight:400">· ${c.date||''}</span></div>
+          <div style="font-size:11px;color:var(--ink3)">${c.bc||''} · ${items.length} article(s) · ${(c.montant||0).toFixed(2)} €</div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="reprendreCommandeEntiere(${c.id})">🔁 Tout reprendre</button>
+      </div>
+      <div>
+        ${items.map(({idx, art}) => {
+          const key = `${c.id}:${idx}`;
+          const checked = pickerOrderSelection.has(key) ? 'checked' : '';
+          return `<label style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+            <input type="checkbox" ${checked} onchange="togglePickerOrderLine('${key}', this.checked)" style="min-height:auto;width:16px;height:16px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:600">${art.qty}× ${art.nom}</div>
+              <div style="font-size:11px;color:var(--ink3)">${art.fourn||'—'} ${art.prix>0?`· ${art.prix.toFixed(2)} €`:''}</div>
+            </div>
+          </label>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function togglePickerOrderLine(key, checked) {
+  if (checked) pickerOrderSelection.add(key);
+  else pickerOrderSelection.delete(key);
+  const cnt = document.getElementById('picker-order-count');
+  if (cnt) cnt.textContent = `${pickerOrderSelection.size} ligne(s) sélectionnée(s)`;
+}
+
+// Récupère la photo associée à une ligne d'une commande (stockée séparément dans photos_json)
+function getPhotoFromCommandeLine(c, idx) {
+  if (!c.photos_json) return '';
+  try { return JSON.parse(c.photos_json)[idx] || ''; } catch(e) { return ''; }
+}
+
+function reprendreCommandeEntiere(commandeId) {
+  const c = COMMANDES.find(x => x.id === commandeId);
+  if (!c) return;
+  const lignes = (c.articles||'').split('\n').filter(Boolean);
+  const items = lignes.map((ligne, idx) => { const art = parseLigneArticle(ligne); if (art) art._idx = idx; return art; }).filter(Boolean);
+  if (items.length === 0) { showNotif('⚠ Aucun article exploitable dans cette commande'); return; }
+  removeEmptyTrailingRow();
+  items.forEach(art => {
+    addArticleRow(String(art.qty), art.nom, art.prix > 0 ? art.prix.toFixed(2) : '', art.url || '', art.fourn || '', art.cat || '', getPhotoFromCommandeLine(c, art._idx));
+  });
+  showNotif(`✅ ${items.length} article(s) repris de la commande ${c.bc||''}`);
+  closeModal('modal-order-history-picker');
+}
+
+function confirmOrderHistoryPicker() {
+  if (pickerOrderSelection.size === 0) { showNotif('⚠ Sélectionnez au moins une ligne'); return; }
+  removeEmptyTrailingRow();
+  let count = 0;
+  pickerOrderSelection.forEach(key => {
+    const [cIdStr, idxStr] = key.split(':');
+    const c = COMMANDES.find(x => x.id === parseInt(cIdStr) || String(x.id) === cIdStr);
+    if (!c) return;
+    const idx = parseInt(idxStr);
+    const lignes = (c.articles||'').split('\n').filter(Boolean);
+    const art = parseLigneArticle(lignes[idx] || '');
+    if (!art) return;
+    addArticleRow(String(art.qty), art.nom, art.prix > 0 ? art.prix.toFixed(2) : '', art.url || '', art.fourn || '', art.cat || '', getPhotoFromCommandeLine(c, idx));
+    count++;
+  });
+  showNotif(`✅ ${count} article(s) ajouté(s) à la commande`);
+  closeModal('modal-order-history-picker');
+}
+
+// Si la seule ligne du formulaire est vide (cas du formulaire vierge), on la retire
+// avant d'injecter des lignes choisies depuis un picker, pour éviter une ligne vide parasite.
+function removeEmptyTrailingRow() {
+  const rows = document.querySelectorAll('.article-row');
+  if (rows.length !== 1) return;
+  const row = rows[0];
+  const idx = row.id.replace('article-row-', '');
+  const nom = document.getElementById(`row-nom-${idx}`)?.value?.trim();
+  if (!nom) row.remove();
 }
 
 function getArticlesFromRows() {
@@ -4160,6 +4431,7 @@ function getArticlesFromRows() {
 
 let currentPhotoData = null;
 let currentPhotoName = null;
+let currentPhotoFile = null;
 
 function handlePhotoUpload(event) {
   const file = event.target.files[0];
@@ -4182,7 +4454,8 @@ function processPhotoFile(file) {
   }
   const reader = new FileReader();
   reader.onload = async e => {
-    currentPhotoData = e.target.result;
+    currentPhotoFile = file; // fichier brut conservé pour upload Storage à la sauvegarde
+    currentPhotoData = e.target.result; // aperçu local uniquement, jamais envoyé en base
     currentPhotoName = file.name;
     showPhotoPreview(e.target.result, file.name);
     showNotif('📷 Photo chargée');
@@ -4218,6 +4491,7 @@ function resetPhotoUpload() {
   if (fc) fc.value = '';
   currentPhotoData = null;
   currentPhotoName = null;
+  currentPhotoFile = null;
 }
 
 function removePhoto(event) {
@@ -4254,19 +4528,22 @@ function handleDetailPhotoUpload(event, id) {
   const file = event.target.files[0];
   if (!file) return;
   if (file.size > 5 * 1024 * 1024) { showNotif('⚠ Photo trop grande — max 5 Mo'); return; }
-  const reader = new FileReader();
-  reader.onload = async e => {
+  if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
+  showNotif('📤 Envoi de la photo…');
+  uploadPhotoToStorage(file, id).then(url => {
     const a = ARTICLES.find(x => x.id === id);
     if (a) {
-      a.photo = e.target.result;
+      a.photo = url;
       a.photoName = file.name;
       saveData();
       showNotif('📷 Photo ajoutée');
       renderActiveInvTable();
       showDetail(id);
     }
-  };
-  reader.readAsDataURL(file);
+  }).catch(err => {
+    console.error('[Photo]', err.message);
+    showNotif('❌ Erreur envoi photo — réessayez');
+  });
 }
 
 async function removeArticlePhoto(id) {
@@ -4291,6 +4568,30 @@ const SUPA_HEADERS = {
   'Authorization': 'Bearer ' + SUPA_KEY,
   'Prefer': 'return=minimal',
 };
+
+// ── UPLOAD PHOTO VERS SUPABASE STORAGE ──────────────────────────────────
+// Remplace le stockage base64 en base par un upload direct vers le bucket "assets",
+// suivi du retour de l'URL publique. Évite de surcharger l'egress (cf. migration-photos-storage.html).
+const PHOTO_BUCKET = 'assets';
+async function uploadPhotoToStorage(file, idHint, folder = 'articles-photos') {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'') || 'jpg';
+  const path = `${folder}/${idHint}-${Date.now()}.${ext}`;
+  const res = await fetch(`${SUPA_URL}/storage/v1/object/${PHOTO_BUCKET}/${path}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'apikey': SUPA_KEY,
+      'Content-Type': file.type || 'image/jpeg',
+      'x-upsert': 'true',
+    },
+    body: file,
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(()=>'');
+    throw new Error(`Upload photo : ${res.status} — ${body}`);
+  }
+  return `${SUPA_URL}/storage/v1/object/public/${PHOTO_BUCKET}/${path}`;
+}
 
 // ── FIX : Supabase en mode dégradé si la clé ne fonctionne pas ──────────
 // L'app fonctionne avec les données d'exemple si Supabase est inaccessible
@@ -4651,8 +4952,12 @@ async function saveFournisseurDB(f) {
   try {
     const rows = await sbInsert('fournisseurs', fournisseurToRow(f));
     if (rows && rows[0]) f.id = rows[0].id;
+    else showNotif('⚠ Fournisseur créé mais id non confirmé — rechargez la page');
     setSaved();
-  } catch(e) { console.error('[Supabase] Insert fournisseur :', e); }
+  } catch(e) {
+    console.error('[Supabase] Insert fournisseur :', e);
+    showNotif('⚠ Erreur sauvegarde fournisseur : ' + e.message);
+  }
 }
 
 async function updateFournisseurDB(f) {
@@ -4825,30 +5130,8 @@ if ('serviceWorker' in navigator &&
     !location.hostname.includes('claudeusercontent')) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js')
-      .then(reg => {
-        console.log('SW registered:', reg.scope);
-        // Si une mise à jour de sw.js est détectée, l'activer immédiatement sans attendre
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          if (!newWorker) return;
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              newWorker.postMessage({ type: 'SKIP_WAITING' });
-            }
-          });
-        });
-        // Vérifie s'il existe une mise à jour de sw.js à chaque chargement de page
-        reg.update();
-      })
+      .then(r => console.log('SW registered:', r.scope))
       .catch(e => console.log('SW error:', e));
-  });
-  // Quand le nouveau Service Worker prend le contrôle, recharger une seule fois
-  // pour afficher immédiatement la dernière version (évite l'effet "ancienne version figée")
-  let swRefreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (swRefreshing) return;
-    swRefreshing = true;
-    location.reload();
   });
 }
 
@@ -4990,6 +5273,28 @@ function getEtatBadgeHtml(etat) {
 
 function getArticlesToRemplacer() {
   return ARTICLES.filter(a => getArticleEtat(a) === 'À remplacer');
+}
+
+// Statut de stock : "Épuisé" (0), "À compléter" (≤ seuil min, mais seuil renseigné), "OK"
+function getStockStatus(a) {
+  if (a.stock === 0) return 'Épuisé';
+  if (a.min > 0 && a.stock <= a.min) return 'À compléter';
+  return 'OK';
+}
+
+function getStockStatusBadgeHtml(a) {
+  const s = getStockStatus(a);
+  const map = {
+    'Épuisé':      { bg:'#FEE2E2', color:'#991B1B', icon:'🔴' },
+    'À compléter': { bg:'#FFEDD5', color:'#9A3412', icon:'🟠' },
+  };
+  const cfg = map[s];
+  if (!cfg) return '';
+  return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${cfg.bg};color:${cfg.color}">${cfg.icon} ${s}</span>`;
+}
+
+function getArticlesACompleter() {
+  return ARTICLES.filter(a => getStockStatus(a) === 'À compléter');
 }
 
 function getLowStockArticles() {
@@ -5532,8 +5837,8 @@ function showImportResult(type, html) {
 </div>
 
 <!-- ── BOUTON FLOTTANT AIDE ── -->
-<button id="helpFloatBtn" onclick="openNotice()" title="Aide & Notice d'utilisation"
-  style="position:fixed;bottom:calc(28px + env(safe-area-inset-bottom));right:28px;width:52px;height:52px;border-radius:50%;
+<button onclick="openNotice()" title="Aide & Notice d'utilisation"
+  style="position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;
          background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:22px;
          font-weight:700;box-shadow:0 4px 16px rgba(37,99,235,0.4);z-index:999;
          display:flex;align-items:center;justify-content:center;
