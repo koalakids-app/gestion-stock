@@ -2106,10 +2106,15 @@ async function ipParsePdf(file){
       const toks=lines[i].toks;if(!toks.length)continue;
       // Ignorer les lignes ne contenant que des chiffres/heures (grille Gantt)
       const joined2=toks.join(' ').trim();
+      if(!joined2)continue;
+      // Ignorer lignes purement numériques/horaires
       if(/^[\d\s h:]+$/.test(joined2))continue;
+      // Ignorer marqueurs de section
+      if(/^(Salari|Totaux|Total|Enfants?)$/i.test(joined2))continue;
+      // Si le token commence par une majuscule ET contient des minuscules = nouveau prénom
       if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=joined2;}
-      else if(cur&&/^[A-ZÀ-Ÿ][A-ZÀ-Ÿ\s\-]+$/.test(joined2))cur+=' '+joined2;
-      else if(cur&&!/^(Salari|Total|Enfant|[0-9])/.test(joined2))cur+=' '+joined2;
+      // Sinon : continuation du nom précédent (ex: PELLENC, DE LA ROCHERE)
+      else if(cur)cur+=' '+joined2;
     }
     if(cur)names.push(cur);
     console.log('[ipParsePdf] names trouvés:',names);
@@ -2149,7 +2154,8 @@ function renderImportPreview(){
 }
 
 async function confirmPresenceImport(){
-  if(!_importPresData)return;
+  console.log('[Confirm] appelé, _importPresData=',!!_importPresData);
+  if(!_importPresData){console.log('[Confirm] _importPresData null, abandon');return;}
   const btn=document.getElementById('btn-confirm-import-presence');btn.disabled=true;
   const{crecheId,pages,nameMap}=_importPresData;
   showBanner('Création des nouveaux enfants…');
