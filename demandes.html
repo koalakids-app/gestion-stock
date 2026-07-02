@@ -2117,8 +2117,15 @@ async function ipParsePdf(file){
       else if(cur)cur+=' '+joined2;
     }
     if(cur)names.push(cur);
-    console.log('[ipParsePdf] names trouvés:',names);
-    if(date&&names.length)out.push({date,names});
+    // Fusionner les fragments tout-majuscules avec le nom précédent (ex: "Noam ROUX" + "PELLENC")
+    const namesMerged=[];
+    names.forEach(n=>{
+      const isToutMaj=n===n.toUpperCase()&&/[A-Z]/.test(n);
+      if(isToutMaj&&namesMerged.length)namesMerged[namesMerged.length-1]+=' '+n;
+      else namesMerged.push(n);
+    });
+    console.log('[ipParsePdf] names trouvés:',namesMerged);
+    if(date&&namesMerged.length)out.push({date,names:namesMerged});
   }
   return out;
 }
