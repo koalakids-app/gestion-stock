@@ -4948,9 +4948,19 @@ async function saveFournisseurDB(f) {
   if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
   try {
     const rows = await sbInsert('fournisseurs', fournisseurToRow(f));
-    if (rows && rows[0]) f.id = rows[0].id;
+    console.log('[Fournisseur] Insert OK, réponse Supabase:', JSON.stringify(rows));
+    if (rows && rows[0]) {
+      f.id = rows[0].id;
+      console.log('[Fournisseur] Nouvel id Supabase:', f.id);
+    } else {
+      console.warn('[Fournisseur] Insert OK mais réponse vide — id non mis à jour');
+      showNotif('⚠ Fournisseur créé mais id non confirmé — rechargez la page');
+    }
     setSaved();
-  } catch(e) { console.error('[Supabase] Insert fournisseur :', e); }
+  } catch(e) {
+    console.error('[Supabase] Insert fournisseur :', e);
+    showNotif('⚠ Erreur sauvegarde fournisseur : ' + e.message);
+  }
 }
 
 async function updateFournisseurDB(f) {
