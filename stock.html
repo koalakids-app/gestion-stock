@@ -2563,11 +2563,13 @@ async function saveCommande_db() {
   addHisto('commande', `Commande ${bc}`, 0, creche, 'Vous', `${fourn} — ${montant.toFixed(2)}€`);
   saveData();
 
-  // Sauvegarder dans Supabase en attendant le résultat
+  // Sauvegarder dans Supabase
+  let supabaseOk = true;
   if (!IS_LOCAL) {
     try {
       await saveCommandeDB(COMMANDES[COMMANDES.length-1]);
     } catch(e) {
+      supabaseOk = false;
       console.error('[Supabase] saveCommande:', e);
       showNotif('⚠ Commande sauvegardée localement — erreur Supabase : ' + e.message);
     }
@@ -2577,7 +2579,7 @@ async function saveCommande_db() {
   renderCommandes();
   renderHistorique();
   renderStats();
-  showNotif('🛒 Commande enregistrée');
+  if (supabaseOk) showNotif('🛒 Commande enregistrée');
 }
 
 async function markLivree(id) {
@@ -4049,7 +4051,7 @@ function showNotif(msg) {
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(notifTimer);
-  notifTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  notifTimer = setTimeout(() => el.classList.remove('show'), 6000);
 }
 
 // ─── LIGNES D'ARTICLES DANS FORMULAIRE COMMANDE ──────────────────────────
