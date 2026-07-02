@@ -2152,9 +2152,11 @@ async function confirmPresenceImport(){
   if(!_importPresData)return;
   const btn=document.getElementById('btn-confirm-import-presence');btn.disabled=true;
   const{crecheId,pages,nameMap}=_importPresData;
+  console.log('[ConfirmImport] démarrage, pages=',pages.length,'toCreate total=',pages.flatMap(pg=>pg.toCreate).length,'matched total=',pages.flatMap(pg=>pg.matched).length);
   showBanner('Création des nouveaux enfants…');
   // 1) Créer les enfants manquants
   const toCreateNames=[...new Set(pages.flatMap(pg=>pg.toCreate))];
+  console.log('[ConfirmImport] toCreateNames=',toCreateNames);
   for(const nm of toCreateNames){
     const parts=nm.trim().split(' ');
     const prenom=parts[0];const nom=parts.slice(1).join(' ');
@@ -2170,6 +2172,7 @@ async function confirmPresenceImport(){
     }else{console.error('[ImportPresence] create enfant',nm,error);}
   }
   // 2) Enregistrer les présences M + A
+  console.log('[ConfirmImport] avant re-match, wanted sera calculé');
   // Re-matcher les éventuels enfants encore dans toCreate (créés entre-temps ou déjà en base)
   const{data:freshEnf2}=await sb.from('enfants').select('*').eq('creche_id',crecheId);
   const allEnf2=freshEnf2||[];
@@ -2190,6 +2193,7 @@ async function confirmPresenceImport(){
       wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'A',status:'present'});
     });
   });
+  console.log('[ConfirmImport] wanted=',wanted.length,'toInsert sera calculé après dedup');
   if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;showBanner('Aucune présence à enregistrer.','error');return;}
   const dates=[...new Set(wanted.map(w=>w.presence_date))];
   const ids=[...new Set(wanted.map(w=>w.enfant_id))];
