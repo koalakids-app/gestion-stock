@@ -3158,7 +3158,7 @@ function exportCommandeExcel(id) {
   function parseArts(str) {
     return (str||'').split('\n').filter(Boolean).map(ligne => {
       const m    = ligne.match(/^[-•]?\s*(\d+)\s*[×xX]\s*(.+)/);
-      const urlM = ligne.match(/\[(.+?)\]$/);
+      const urlM = ligne.match(/\[(https?:\/\/[^\]]+)\]/); // URL réelle uniquement, pas [cat:...]
       const pM   = ligne.match(/\((\d+[.,]?\d*)\s*€?\)/);
       const fM   = ligne.match(/\{(.+?)\}/);
       return {
@@ -3205,11 +3205,12 @@ function exportCommandeExcel(id) {
       total || '',
       '',
     ]);
-    // URL sur la ligne suivante
+    // URL sur la ligne suivante — vrai hyperlien cliquable
     if (art.url) {
-      const ref = XLSX.utils.encode_cell({ r: aoa.length, c: 0 });
-      hyperlinks[ref] = art.url;
-      aoa.push([art.url, '', '', '', '', '']);
+      const rowIdx = aoa.length;
+      const ref = XLSX.utils.encode_cell({ r: rowIdx, c: 0 });
+      hyperlinks[ref] = { Target: art.url, Tooltip: 'Voir le produit' };
+      aoa.push(['🔗 Voir le produit', '', '', '', '', '']);
     } else {
       aoa.push(['', '', '', '', '', '']);
     }
@@ -3221,9 +3222,9 @@ function exportCommandeExcel(id) {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
 
   // Appliquer les hyperliens
-  Object.entries(hyperlinks).forEach(([ref, url]) => {
-    if (!ws[ref]) ws[ref] = { t:'s', v: url };
-    ws[ref].l = { Target: url };
+  Object.entries(hyperlinks).forEach(([ref, link]) => {
+    if (!ws[ref]) ws[ref] = { t:'s', v: link.Tooltip || link.Target };
+    ws[ref].l = { Target: link.Target, Tooltip: link.Tooltip };
   });
 
   // Largeurs identiques au modèle
@@ -4948,14 +4949,8 @@ async function saveFournisseurDB(f) {
   if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
   try {
     const rows = await sbInsert('fournisseurs', fournisseurToRow(f));
-    console.log('[Fournisseur] Insert OK, réponse Supabase:', JSON.stringify(rows));
-    if (rows && rows[0]) {
-      f.id = rows[0].id;
-      console.log('[Fournisseur] Nouvel id Supabase:', f.id);
-    } else {
-      console.warn('[Fournisseur] Insert OK mais réponse vide — id non mis à jour');
-      showNotif('⚠ Fournisseur créé mais id non confirmé — rechargez la page');
-    }
+    if (rows && rows[0]) f.id = rows[0].id;
+    else showNotif('⚠ Fournisseur créé mais id non confirmé — rechargez la page');
     setSaved();
   } catch(e) {
     console.error('[Supabase] Insert fournisseur :', e);
