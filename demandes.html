@@ -448,7 +448,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="section-header">
       <div class="section-left">
         <span class="section-title"><i class="ti ti-users-group" style="color:var(--koala)"></i> Feuille de présence</span>
-        <input type="date" class="finput" id="presence-date" style="width:160px" onchange="renderPresence()">
+        <div style="display:flex;align-items:center;gap:4px">
+          <button class="ibtn" onclick="presenceMoveDate(-1)" title="Jour précédent" style="padding:5px 9px;font-size:15px">◀</button>
+          <input type="date" class="finput" id="presence-date" style="width:150px" onchange="renderPresence()">
+          <button class="ibtn" onclick="presenceMoveDate(1)" title="Jour suivant" style="padding:5px 9px;font-size:15px">▶</button>
+        </div>
         <select class="finput direction-only" id="presence-creche-select" style="display:none;width:160px" onchange="renderPresence()">
           <option value="">-- Crèche --</option>
         </select>
@@ -1851,6 +1855,16 @@ async function deleteEvenement(){
 }
 
 // PRESENCES
+function presenceMoveDate(delta){
+  const input=document.getElementById('presence-date');
+  if(!input.value)input.value=todayStr();
+  const d=new Date(input.value+'T00:00:00');
+  d.setDate(d.getDate()+delta);
+  // Sauter les week-ends
+  while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+delta);
+  input.value=ipDateToLocalISO(d);
+  renderPresence();
+}
 function getPresenceCrecheId(){
   if(isDirection){const sel=document.getElementById('presence-creche-select');return sel?.value||null;}
   return currentProfile?.creche_id||null;
@@ -3441,18 +3455,26 @@ async function loadRefDashAsync(crecheId,t){
   const titleRmp='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div>';
   const empty=msg=>'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">'+msg+'</div>';
 
-  // Présences enfants
+  // Présences enfants — filtrage via enfants (presences n'a pas creche_id)
   try{
-    const{data:pres}=await sb.from('presences').select('*').eq('creche_id',crecheId).eq('date',t);
+    let allEnf=cacheEnfants.filter(e=>e.creche_id===crecheId);
+    if(!allEnf.length){const{data:fresh}=await sb.from('enfants').select('*').eq('creche_id',crecheId);allEnf=fresh||[];}
+    const enfCreche=allEnf;
     const box=document.getElementById('rdb-presences');if(!box)return;
+    if(!enfCreche.length){box.innerHTML=titlePresences+empty('Aucun enfant enregistré');return;}
+    const ids=enfCreche.map(e=>e.id);
+    const{data:pres}=await sb.from('presences').select('enfant_id,slot,status').eq('presence_date',t).in('enfant_id',ids).eq('status','present');
     if(!pres||!pres.length){box.innerHTML=titlePresences+empty('Aucune présence enregistrée');
     }else{
-      const matin=pres.filter(p=>p.periode==='matin'||p.periode==='journee');
-      const apm=pres.filter(p=>p.periode==='apm'||p.periode==='journee');
+      const matinIds=[...new Set(pres.filter(p=>p.slot==='M').map(p=>p.enfant_id))];
+      const apmIds=[...new Set(pres.filter(p=>p.slot==='A').map(p=>p.enfant_id))];
+      const allIds=[...new Set(pres.map(p=>p.enfant_id))];
+      const enfMap=Object.fromEntries(enfCreche.map(e=>[e.id,e]));
+      const noms=allIds.map(id=>{const e=enfMap[id];return e?e.prenom+' '+e.nom:'—';}).sort((a,b)=>a.localeCompare(b,'fr'));
       box.innerHTML=titlePresences+
-        '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+matin.length+' enfant'+(matin.length>1?'s':'')+'</span></div>'+
-        '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+apm.length+' enfant'+(apm.length>1?'s':'')+'</span></div>'+
-        (pres.length?'<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:0 4px">'+pres.slice(0,6).map(p=>escHtml(p.child_name||'—')).join(', ')+(pres.length>6?' …':'')+'</div>':'');
+        '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+matinIds.length+' enfant'+(matinIds.length>1?'s':'')+'</span></div>'+
+        '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+apmIds.length+' enfant'+(apmIds.length>1?'s':'')+'</span></div>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:0 4px">'+noms.join(', ')+'</div>';
     }
   }catch(e){const b=document.getElementById('rdb-presences');if(b)b.innerHTML=titlePresences+empty('Indisponible');}
 
