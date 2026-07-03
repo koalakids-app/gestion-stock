@@ -2045,26 +2045,19 @@ function openSupprimerEnfants(){
   body.innerHTML=selectAll+html;
   document.getElementById('modal-suppr-enfants-wrap').classList.add('open');
 }
-function supprToggleAll(state){
-  document.querySelectorAll('.suppr-enf-cb').forEach(cb=>cb.checked=state);
-  supprEnfantsUpdateBtn();
-}
+function supprToggleAll(state){document.querySelectorAll('.suppr-enf-cb').forEach(cb=>cb.checked=state);supprEnfantsUpdateBtn();}
 function supprEnfantsUpdateBtn(){
   const checked=document.querySelectorAll('.suppr-enf-cb:checked').length;
   const total=document.querySelectorAll('.suppr-enf-cb').length;
-  const all=document.getElementById('suppr-select-all');
-  if(all)all.checked=checked===total&&total>0;
-  const btn=document.getElementById('btn-confirm-suppr-enfants');
-  btn.disabled=checked===0;
+  const all=document.getElementById('suppr-select-all');if(all)all.checked=checked===total&&total>0;
+  const btn=document.getElementById('btn-confirm-suppr-enfants');btn.disabled=checked===0;
   btn.innerHTML='<i class="ti ti-trash"></i> Supprimer'+(checked?' ('+checked+' enfant'+(checked>1?'s':'')+')':" la sélection");
 }
 async function confirmSupprimerEnfants(){
-  const checked=[...document.querySelectorAll('.suppr-enf-cb:checked')];
-  if(!checked.length)return;
+  const checked=[...document.querySelectorAll('.suppr-enf-cb:checked')];if(!checked.length)return;
   const noms=checked.map(cb=>cb.dataset.name).join(', ');
   if(!confirm('Supprimer définitivement : '+noms+' ?\n\nToutes leurs présences seront également effacées.'))return;
-  const btn=document.getElementById('btn-confirm-suppr-enfants');
-  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Suppression…';
+  const btn=document.getElementById('btn-confirm-suppr-enfants');btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Suppression…';
   const ids=checked.map(cb=>cb.dataset.id);
   const{error:errPres}=await sb.from('presences').delete().in('enfant_id',ids);
   if(errPres){showBanner('Erreur suppression présences : '+errPres.message,'error');btn.disabled=false;return;}
@@ -2085,7 +2078,6 @@ function ipIsFirstnameToken(tok){return tok&&/^[A-ZÀ-Ÿ]/.test(tok)&&/[a-zà-ÿ
 async function handlePresenceImport(input){
   const file=input.files&&input.files[0];input.value='';if(!file)return;
   if(typeof pdfjsLib==='undefined'){alert('Bibliothèque PDF non chargée.');return;}
-  // Lire la crèche depuis le sélecteur de présence (pas activeCrecheId qui dépend de l'onglet Demandes)
   const crecheId=isDirection?(document.getElementById('presence-creche-select')?.value||null):currentProfile?.creche_id;
   if(!crecheId){alert('Sélectionnez une crèche dans le sélecteur ci-dessus avant d\'importer.');return;}
   showBanner('Lecture du PDF en cours…');
@@ -3562,7 +3554,7 @@ async function loadRefDashAsync(crecheId,t){
       box.innerHTML=titlePresences+
         '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+nM+' / '+total+' enfant'+(total>1?'s':'')+'</span></div>'+
         '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+nA+' / '+total+' enfant'+(total>1?'s':'')+'</span></div>'+
-        (presentNames.length?'<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px">'+presentNames.slice(0,8).map(e=>'<span style="background:var(--koala);color:#fff;border-radius:4px;padding:1px 6px;font-size:10.5px;white-space:nowrap">'+escHtml(e.prenom)+'</span>').join('')+(presentNames.length>8?'<span style="font-size:10.5px;color:var(--muted);margin-left:2px">+'+(presentNames.length-8)+'</span>':'')+'</div>':'');
+        (presentNames.length?'<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px">'+presentNames.map(e=>'<span style="background:var(--koala);color:#fff;border-radius:4px;padding:1px 6px;font-size:10.5px;white-space:nowrap">'+escHtml(e.prenom)+'</span>').join('')+'</div>':'');
     }
   }catch(e){const b=document.getElementById('rdb-presences');if(b)b.innerHTML=titlePresences+empty('Indisponible');}
 
