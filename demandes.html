@@ -460,26 +460,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn-green" onclick="exportPresence()"><i class="ti ti-download"></i> Exporter</button>
       </div>
     </div>
-    <div class="module-tabs">
-      <button class="module-tab active" onclick="showPresenceTab('matin',this)"><i class="ti ti-sun"></i> Matin</button>
-      <button class="module-tab" onclick="showPresenceTab('apm',this)"><i class="ti ti-sunset"></i> Après-midi</button>
-      <button class="module-tab" onclick="showPresenceTab('semaine',this)"><i class="ti ti-calendar-week"></i> Vue semaine</button>
-      <button class="module-tab" onclick="showPresenceTab('gantt',this)"><i class="ti ti-chart-gantt"></i> Gantt</button>
-    </div>
-    <div id="presence-matin" class="module-tab-content active">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:8px">
-        <div style="font-size:13px;color:var(--muted)">Cliquez sur ✓ / ✗ / ½ pour marquer la présence</div>
-        <div id="presence-summary-matin" style="font-size:13px;font-weight:600;color:var(--koala)"></div>
-      </div>
-      <div class="presence-grid" id="presence-grid-matin"></div>
-    </div>
-    <div id="presence-apm" class="module-tab-content">
-      <div class="presence-grid" id="presence-grid-apm"></div>
-    </div>
-    <div id="presence-semaine" class="module-tab-content">
-      <div id="presence-semaine-view"></div>
-    </div>
-    <div id="presence-gantt" class="module-tab-content">
+    <div id="presence-gantt" class="module-tab-content active">
       <div id="presence-gantt-view"></div>
     </div>
   </div>
@@ -1248,7 +1229,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
-let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,weekOffset=0,currentPresenceSlot='matin',searchTerm='';
+let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='';
 let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 
@@ -1885,24 +1866,7 @@ function initPresenceDate(){
   }
 }
 function showPresenceTab(tab,btn){document.querySelectorAll('.module-tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.module-tab-content').forEach(c=>c.classList.remove('active'));btn.classList.add('active');document.getElementById('presence-'+tab).classList.add('active');currentPresenceSlot=tab;renderPresence();}
-async function renderPresence(){
-  if(currentPresenceSlot==='semaine'){await renderPresenceSemaine();return;}
-  if(currentPresenceSlot==='gantt'){await renderPresenceGantt();return;}
-  const dateStr=document.getElementById('presence-date')?.value||todayStr();
-  const slot=currentPresenceSlot==='matin'?'M':'A';
-  const gridId='presence-grid-'+(currentPresenceSlot==='matin'?'matin':'apm');
-  const grid=document.getElementById(gridId);if(!grid)return;
-  const crecheId=getPresenceCrecheId();
-  if(isDirection&&!crecheId){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
-  const enfants=crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants;
-  if(!enfants.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-users"></i><p>Aucun enfant enregistré.</p></div>';return;}
-  const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr).eq('slot',slot);
-  const presMap={};(presData||[]).forEach(p=>presMap[p.enfant_id]=p.status);
-  const colors=['#3D3580','#F47920','#2a9d4e','#378ADD','#7B68EE','#e03e3e'];
-  grid.innerHTML=enfants.map((e,idx)=>{const status=presMap[e.id]||'';const creche=cacheCreches.find(c=>c.id===e.creche_id);const initials=((e.prenom||'?')[0]+(e.nom||'?')[0]).toUpperCase();return'<div class="presence-card"><div class="presence-avatar" style="background:'+colors[idx%colors.length]+'">'+initials+'</div><div style="flex:1;min-width:0"><div class="presence-name">'+e.prenom+' '+e.nom+'</div><div class="presence-group">'+(e.groupe||'—')+(creche?' · '+creche.name:'')+'</div>'+(e.allergies?'<div style="font-size:10px;color:var(--orange);margin-top:2px">⚠️ '+e.allergies+'</div>':'')+'</div><div class="presence-status"><div class="ps-dot '+(status==='present'?'present':'')+'" onclick="setPresence(\''+e.id+'\',\''+slot+'\',\''+dateStr+'\',\'present\')">✓</div><div class="ps-dot '+(status==='absent'?'absent':'')+'" onclick="setPresence(\''+e.id+'\',\''+slot+'\',\''+dateStr+'\',\'absent\')">✗</div><div class="ps-dot '+(status==='partial'?'partial':'')+'" onclick="setPresence(\''+e.id+'\',\''+slot+'\',\''+dateStr+'\',\'partial\')">½</div></div></div>';}).join('');
-  const summEl=document.getElementById('presence-summary-'+(currentPresenceSlot==='matin'?'matin':'apm'));
-  if(summEl)summEl.textContent=Object.values(presMap).filter(v=>v==='present').length+' / '+enfants.length+' présents';
-}
+async function renderPresence(){await renderPresenceGantt();}
 async function setPresence(enfantId,slot,dateStr,status){
   const{data:ex}=await sb.from('presences').select('id,status').eq('enfant_id',enfantId).eq('presence_date',dateStr).eq('slot',slot).maybeSingle();
   if(ex){if(ex.status===status)await sb.from('presences').delete().eq('id',ex.id);else await sb.from('presences').update({status}).eq('id',ex.id);}
@@ -1915,7 +1879,7 @@ async function renderPresenceGantt(){
   if(!view)return;
   const crecheId=getPresenceCrecheId();
   if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
-  const enfants=crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants;
+  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!enfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistr\u00e9.</p></div>';return;}
   view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement\u2026</div>';
   const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr).in('enfant_id',enfants.map(e=>e.id));
@@ -1984,7 +1948,7 @@ async function renderPresenceSemaine(){
   const ws=weekStart(),view=document.getElementById('presence-semaine-view');
   const crecheId=getPresenceCrecheId();
   if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
-  const enfants=crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants;
+  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!enfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant.</p></div>';return;}
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
   const dateStrs=days5.map(d=>ipDateToLocalISO(d));
