@@ -2037,8 +2037,7 @@ function openSupprimerEnfants(){
     html+='<div style="margin-bottom:14px">';
     html+='<div style="font-weight:700;color:var(--koala);font-size:12px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">'+escHtml(c.name)+'</div>';
     enfs.forEach(e=>{
-      html+='<label style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:7px;cursor:pointer;margin-bottom:3px;border:1px solid transparent" '+
-        'onmouseover="this.style.background=\'var(--bg-alt)\'" onmouseout="this.style.background=\'\'">';
+      html+='<label style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:7px;cursor:pointer;margin-bottom:3px">';
       html+='<input type="checkbox" class="suppr-enf-cb" data-id="'+e.id+'" data-name="'+escHtml(e.prenom+' '+(e.nom||''))+'" style="width:16px;height:16px;accent-color:var(--red);cursor:pointer;flex-shrink:0" onchange="supprEnfantsUpdateBtn()">';
       html+='<span style="font-size:13px">'+escHtml(e.prenom+' '+(e.nom||''))+'</span>';
       html+='</label>';
@@ -2172,80 +2171,49 @@ function renderImportPreview(){
 }
 
 async function confirmPresenceImport(){
-  if(!_importPresData){console.error('[ImportPresence] _importPresData est null à la confirmation');return;}
+  if(!_importPresData)return;
   const btn=document.getElementById('btn-confirm-import-presence');btn.disabled=true;
   const{crecheId,pages,nameMap}=_importPresData;
-  console.log('[ImportPresence] Confirmation — pages:',pages.length,'crecheId:',crecheId);
-
+  showBanner('Création des nouveaux enfants…');
   // 1) Créer les enfants manquants
   const toCreateNames=[...new Set(pages.flatMap(pg=>pg.toCreate))];
-  console.log('[ImportPresence] Enfants à créer:',toCreateNames);
-  if(toCreateNames.length)showBanner('Création des nouveaux enfants…');
   for(const nm of toCreateNames){
-    const parts=nm.trim().split(/\s+/);
+    const parts=nm.trim().split(' ');
     const prenom=parts[0];const nom=parts.slice(1).join(' ');
-    console.log('[ImportPresence] Création enfant:',prenom,nom);
     const{data:saved,error}=await sb.from('enfants').insert({prenom,nom,creche_id:crecheId}).select().single();
     if(saved){
-      console.log('[ImportPresence] Enfant créé:',saved.id,saved.prenom,saved.nom);
       cacheEnfants.push(saved);
       nameMap[nm]={enfant:saved,isNew:false};
       pages.forEach(pg=>{
         const idx=pg.toCreate.indexOf(nm);
         if(idx>=0){pg.toCreate.splice(idx,1);pg.matched.push({name:nm,enfant:saved});}
       });
-    }else{console.error('[ImportPresence] Erreur création enfant',nm,error);}
+    }else{console.error('[ImportPresence] create enfant',nm,error);}
   }
-
-  // 2) Construire les présences voulues (M + A pour chaque enfant/jour)
+  // 2) Enregistrer les présences M + A — ligne par ligne pour éviter tout rejet en bloc
   showBanner('Enregistrement des présences…');
   const wanted=[];
   pages.forEach(pg=>{
-    console.log('[ImportPresence] Page date:',pg.date,'matched:',pg.matched.length,'toCreate restant:',pg.toCreate.length);
     pg.matched.forEach(mt=>{
-      if(!mt.enfant||!mt.enfant.id){console.warn('[ImportPresence] enfant sans id, ignoré:',mt.name);return;}
+      if(!mt.enfant||!mt.enfant.id)return;
       wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'M',status:'present'});
       wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'A',status:'present'});
     });
   });
-  console.log('[ImportPresence] wanted total:',wanted.length,'lignes');
-
-  if(!wanted.length){
-    closeModal('modal-import-presence-wrap');_importPresData=null;
-    showBanner('Aucune présence à enregistrer — vérifiez que des enfants sont reconnus dans le PDF.','error');
-    return;
-  }
-
-  // 3) Upsert par lots de 50 (évite les rejets sur contrainte unique sans plantage total)
+  if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;showBanner('Aucune présence à enregistrer — vérifiez le PDF.','error');return;}
   let inserted=0,errors=0;
-  const BATCH=50;
-  for(let i=0;i<wanted.length;i+=BATCH){
-    const batch=wanted.slice(i,i+BATCH);
-    // Upsert : si la ligne existe déjà on la met à jour (onConflict sur la clé unique)
-    const{data:upserted,error}=await sb.from('presences')
-      .upsert(batch,{onConflict:'enfant_id,presence_date,slot',ignoreDuplicates:false})
-      .select('id');
-    if(error){
-      console.error('[ImportPresence] Erreur upsert batch',i,error);
-      // Fallback : insert un par un pour identifier la ligne problématique
-      for(const row of batch){
-        const{error:e2}=await sb.from('presences').upsert(row,{onConflict:'enfant_id,presence_date,slot'});
-        if(e2){console.error('[ImportPresence] Erreur ligne individuelle',row,e2);errors++;}
-        else inserted++;
-      }
-    }else{
-      inserted+=(upserted||batch).length;
-    }
+  for(const row of wanted){
+    await sb.from('presences').delete().eq('enfant_id',row.enfant_id).eq('presence_date',row.presence_date).eq('slot',row.slot);
+    const{error}=await sb.from('presences').insert(row);
+    if(error){console.error('[ImportPresence] insert',row,error);errors++;}
+    else inserted++;
   }
-
-  console.log('[ImportPresence] Résultat — insérées/mises à jour:',inserted,'erreurs:',errors);
   closeModal('modal-import-presence-wrap');_importPresData=null;
-
   if(errors===0){
-    const msgEnfants=toCreateNames.length?toCreateNames.length+' enfant'+(toCreateNames.length>1?'s':'')+'créé'+(toCreateNames.length>1?'s':'')+', ':'';
-    showBanner('Import terminé : '+msgEnfants+inserted+' présence'+(inserted>1?'s':'')+' enregistrée'+(inserted>1?'s':'')+' ✅');
+    const msgEnf=toCreateNames.length?toCreateNames.length+' enfant'+(toCreateNames.length>1?'s':'')+(toCreateNames.length>1?' créés':' créé')+', ':'';
+    showBanner('Import terminé : '+msgEnf+inserted+' présence'+(inserted>1?'s':'')+' enregistrée'+(inserted>1?'s':'')+' ✅');
   }else{
-    showBanner('Import partiel : '+inserted+' présences OK, '+errors+' erreur'+(errors>1?'s':'')+'  (voir console)','error');
+    showBanner('Import partiel : '+inserted+' OK, '+errors+' erreur'+(errors>1?'s':'')+' (voir console)','error');
   }
   renderPresence();
 }
@@ -3576,7 +3544,7 @@ async function loadRefDashAsync(crecheId,t){
   const titleRmp='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div>';
   const empty=msg=>'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">'+msg+'</div>';
 
-  // Présences enfants (filtre via enfant_id — presences n'a pas de colonne creche_id ni date)
+  // Présences enfants — filtre via enfant_id (presences n'a pas de colonne creche_id ni date)
   try{
     const enfCreche=cacheEnfants.filter(e=>e.creche_id===crecheId);
     const enfIds=enfCreche.map(e=>e.id);
