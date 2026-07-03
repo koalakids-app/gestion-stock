@@ -1888,15 +1888,21 @@ async function setPresence(enfantId,slot,dateStr,status){
   renderPresence();
 }
 async function setAbsent(enfantId,dateStr,markAbsent){
-  // Supprime les enregistrements existants pour ce jour
   await sb.from('presences').delete().eq('enfant_id',enfantId).eq('presence_date',dateStr);
   if(markAbsent){
-    // Insère absent sur M et A
     await sb.from('presences').insert([
       {enfant_id:enfantId,presence_date:dateStr,slot:'M',status:'absent'},
       {enfant_id:enfantId,presence_date:dateStr,slot:'A',status:'absent'}
     ]);
   }
+  renderPresence();
+}
+async function setPresent(enfantId,dateStr){
+  await sb.from('presences').delete().eq('enfant_id',enfantId).eq('presence_date',dateStr);
+  await sb.from('presences').insert([
+    {enfant_id:enfantId,presence_date:dateStr,slot:'M',status:'present'},
+    {enfant_id:enfantId,presence_date:dateStr,slot:'A',status:'present'}
+  ]);
   renderPresence();
 }
 async function renderPresenceGantt(){
@@ -1916,7 +1922,7 @@ async function renderPresenceGantt(){
   const H_START=7,H_END=19,COLS=(H_END-H_START)*2;
   const COL_W=28;
   const NAME_W=140;
-  const BTN_W=56;
+  const BTN_W=100;
   const d=new Date(dateStr+'T00:00:00');
   const dateLabel=d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
   const presents=enfants.filter(e=>{const p=presMap[e.id]||{};return p.M==='present'||p.A==='present';});
@@ -1941,10 +1947,18 @@ async function renderPresenceGantt(){
     const bg=idx%2===0?'#fff':'#f7f6fb';
     rowsHtml+='<div style="display:flex;align-items:center;padding:3px 0;background:'+bg+';border-radius:4px">';
     rowsHtml+='<div style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(isAbsent||nonSaisi?'400':'600')+';color:'+(isAbsent?'#e03e3e':nonSaisi?'var(--muted)':'var(--text)')+';padding-right:4px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escHtml(e.prenom+' '+e.nom)+'">'+escHtml(e.prenom+' '+e.nom)+(isAbsent?' <span style="font-size:10px">abs.</span>':'')+'</div>';
-    rowsHtml+='<div style="width:'+BTN_W+'px;flex-shrink:0;padding-right:6px;text-align:right">';
+    rowsHtml+='<div style="width:'+BTN_W+'px;flex-shrink:0;padding-right:6px;display:flex;gap:3px;justify-content:flex-end">';
     if(isAbsent){
-      rowsHtml+='<button onclick="setAbsent(\''+e.id+'\',\''+dateStr+'\',false)" style="font-size:10px;padding:1px 5px;background:#fdecea;color:#e03e3e;border:1px solid #f5c6c6;border-radius:4px;cursor:pointer;line-height:1.4">\u21a9 r\u00e9tablir</button>';
+      // Absent → bouton présent actif + bouton absent désactivé
+      rowsHtml+='<button onclick="setPresent(\''+e.id+'\',\''+dateStr+'\')" style="font-size:10px;padding:1px 5px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;border-radius:4px;cursor:pointer;line-height:1.4">\u2713 pr\u00e9s.</button>';
+      rowsHtml+='<button disabled style="font-size:10px;padding:1px 5px;background:#fdecea;color:#e03e3e;border:1px solid #f5c6c6;border-radius:4px;line-height:1.4;opacity:0.5">\u2715 abs.</button>';
+    }else if(hasM||hasA){
+      // Présent → bouton présent désactivé + bouton absent actif
+      rowsHtml+='<button disabled style="font-size:10px;padding:1px 5px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;border-radius:4px;line-height:1.4;opacity:0.5">\u2713 pr\u00e9s.</button>';
+      rowsHtml+='<button onclick="setAbsent(\''+e.id+'\',\''+dateStr+'\',true)" style="font-size:10px;padding:1px 5px;background:#f5f5f5;color:#999;border:1px solid #ddd;border-radius:4px;cursor:pointer;line-height:1.4">\u2715 abs.</button>';
     }else{
+      // Non saisi → les deux actifs
+      rowsHtml+='<button onclick="setPresent(\''+e.id+'\',\''+dateStr+'\')" style="font-size:10px;padding:1px 5px;background:#f5f5f5;color:#666;border:1px solid #ddd;border-radius:4px;cursor:pointer;line-height:1.4">\u2713 pr\u00e9s.</button>';
       rowsHtml+='<button onclick="setAbsent(\''+e.id+'\',\''+dateStr+'\',true)" style="font-size:10px;padding:1px 5px;background:#f5f5f5;color:#999;border:1px solid #ddd;border-radius:4px;cursor:pointer;line-height:1.4">\u2715 abs.</button>';
     }
     rowsHtml+='</div>';
