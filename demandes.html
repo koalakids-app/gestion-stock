@@ -2028,8 +2028,7 @@ function openSupprimerEnfants(){
   const crecheId=isDirection?(activeCrecheId==='all'?null:activeCrecheId):currentProfile?.creche_id;
   const body=document.getElementById('suppr-enfants-body');
   const btn=document.getElementById('btn-confirm-suppr-enfants');
-  btn.disabled=true;
-  // Grouper les enfants par crèche
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-trash"></i> Supprimer la sélection';
   const creches=crecheId?cacheCreches.filter(c=>c.id===crecheId):cacheCreches;
   let html='';
   creches.forEach(c=>{
@@ -2039,9 +2038,8 @@ function openSupprimerEnfants(){
     html+='<div style="font-weight:700;color:var(--koala);font-size:12px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">'+escHtml(c.name)+'</div>';
     enfs.forEach(e=>{
       html+='<label style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:7px;cursor:pointer;margin-bottom:3px;border:1px solid transparent" '+
-        'onmouseover="this.style.background=\'var(--bg-alt)\'" onmouseout="this.style.background=\'\'" '+
-        'onclick="supprEnfantsUpdateBtn()">';
-      html+='<input type="checkbox" class="suppr-enf-cb" data-id="'+e.id+'" data-name="'+escHtml(e.prenom+' '+e.nom)+'" style="width:16px;height:16px;accent-color:var(--red);cursor:pointer;flex-shrink:0">';
+        'onmouseover="this.style.background=\'var(--bg-alt)\'" onmouseout="this.style.background=\'\'">';
+      html+='<input type="checkbox" class="suppr-enf-cb" data-id="'+e.id+'" data-name="'+escHtml(e.prenom+' '+(e.nom||''))+'" style="width:16px;height:16px;accent-color:var(--red);cursor:pointer;flex-shrink:0" onchange="supprEnfantsUpdateBtn()">';
       html+='<span style="font-size:13px">'+escHtml(e.prenom+' '+(e.nom||''))+'</span>';
       html+='</label>';
     });
@@ -2051,14 +2049,12 @@ function openSupprimerEnfants(){
   body.innerHTML=html;
   document.getElementById('modal-suppr-enfants-wrap').classList.add('open');
 }
-
 function supprEnfantsUpdateBtn(){
   const checked=document.querySelectorAll('.suppr-enf-cb:checked').length;
   const btn=document.getElementById('btn-confirm-suppr-enfants');
   btn.disabled=checked===0;
   btn.innerHTML='<i class="ti ti-trash"></i> Supprimer'+(checked?' ('+checked+' enfant'+(checked>1?'s':'')+')':" la sélection");
 }
-
 async function confirmSupprimerEnfants(){
   const checked=[...document.querySelectorAll('.suppr-enf-cb:checked')];
   if(!checked.length)return;
@@ -2067,13 +2063,10 @@ async function confirmSupprimerEnfants(){
   const btn=document.getElementById('btn-confirm-suppr-enfants');
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Suppression…';
   const ids=checked.map(cb=>cb.dataset.id);
-  // Supprimer les présences d'abord
   const{error:errPres}=await sb.from('presences').delete().in('enfant_id',ids);
   if(errPres){showBanner('Erreur suppression présences : '+errPres.message,'error');btn.disabled=false;return;}
-  // Supprimer les enfants
   const{error:errEnf}=await sb.from('enfants').delete().in('id',ids);
   if(errEnf){showBanner('Erreur suppression enfants : '+errEnf.message,'error');btn.disabled=false;return;}
-  // Mettre à jour le cache
   cacheEnfants=cacheEnfants.filter(e=>!ids.includes(e.id));
   closeModal('modal-suppr-enfants-wrap');
   showBanner(ids.length+' enfant'+(ids.length>1?'s':'')+' supprimé'+(ids.length>1?'s':'')+' ✅');
@@ -2179,47 +2172,82 @@ function renderImportPreview(){
 }
 
 async function confirmPresenceImport(){
-  if(!_importPresData)return;
+  if(!_importPresData){console.error('[ImportPresence] _importPresData est null à la confirmation');return;}
   const btn=document.getElementById('btn-confirm-import-presence');btn.disabled=true;
   const{crecheId,pages,nameMap}=_importPresData;
-  showBanner('Création des nouveaux enfants…');
+  console.log('[ImportPresence] Confirmation — pages:',pages.length,'crecheId:',crecheId);
+
   // 1) Créer les enfants manquants
   const toCreateNames=[...new Set(pages.flatMap(pg=>pg.toCreate))];
+  console.log('[ImportPresence] Enfants à créer:',toCreateNames);
+  if(toCreateNames.length)showBanner('Création des nouveaux enfants…');
   for(const nm of toCreateNames){
-    const parts=nm.trim().split(' ');
+    const parts=nm.trim().split(/\s+/);
     const prenom=parts[0];const nom=parts.slice(1).join(' ');
+    console.log('[ImportPresence] Création enfant:',prenom,nom);
     const{data:saved,error}=await sb.from('enfants').insert({prenom,nom,creche_id:crecheId}).select().single();
     if(saved){
+      console.log('[ImportPresence] Enfant créé:',saved.id,saved.prenom,saved.nom);
       cacheEnfants.push(saved);
       nameMap[nm]={enfant:saved,isNew:false};
       pages.forEach(pg=>{
         const idx=pg.toCreate.indexOf(nm);
         if(idx>=0){pg.toCreate.splice(idx,1);pg.matched.push({name:nm,enfant:saved});}
       });
-    }else{console.error('[ImportPresence] create enfant',nm,error);}
+    }else{console.error('[ImportPresence] Erreur création enfant',nm,error);}
   }
-  // 2) Enregistrer les présences M + A
+
+  // 2) Construire les présences voulues (M + A pour chaque enfant/jour)
   showBanner('Enregistrement des présences…');
   const wanted=[];
   pages.forEach(pg=>{
+    console.log('[ImportPresence] Page date:',pg.date,'matched:',pg.matched.length,'toCreate restant:',pg.toCreate.length);
     pg.matched.forEach(mt=>{
+      if(!mt.enfant||!mt.enfant.id){console.warn('[ImportPresence] enfant sans id, ignoré:',mt.name);return;}
       wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'M',status:'present'});
       wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'A',status:'present'});
     });
   });
-  if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;showBanner('Aucune présence à enregistrer.','error');return;}
-  const dates=[...new Set(wanted.map(w=>w.presence_date))];
-  const ids=[...new Set(wanted.map(w=>w.enfant_id))];
-  const{data:existing}=await sb.from('presences').select('id,enfant_id,presence_date,slot').in('presence_date',dates).in('enfant_id',ids);
-  const exSet=new Set((existing||[]).map(e=>e.enfant_id+'_'+e.presence_date+'_'+e.slot));
-  const toInsert=wanted.filter(w=>!exSet.has(w.enfant_id+'_'+w.presence_date+'_'+w.slot));
-  let ok=true;
-  if(toInsert.length){const{error}=await sb.from('presences').insert(toInsert);if(error){console.error('[ImportPresence] insert presences',error);ok=false;}}
+  console.log('[ImportPresence] wanted total:',wanted.length,'lignes');
+
+  if(!wanted.length){
+    closeModal('modal-import-presence-wrap');_importPresData=null;
+    showBanner('Aucune présence à enregistrer — vérifiez que des enfants sont reconnus dans le PDF.','error');
+    return;
+  }
+
+  // 3) Upsert par lots de 50 (évite les rejets sur contrainte unique sans plantage total)
+  let inserted=0,errors=0;
+  const BATCH=50;
+  for(let i=0;i<wanted.length;i+=BATCH){
+    const batch=wanted.slice(i,i+BATCH);
+    // Upsert : si la ligne existe déjà on la met à jour (onConflict sur la clé unique)
+    const{data:upserted,error}=await sb.from('presences')
+      .upsert(batch,{onConflict:'enfant_id,presence_date,slot',ignoreDuplicates:false})
+      .select('id');
+    if(error){
+      console.error('[ImportPresence] Erreur upsert batch',i,error);
+      // Fallback : insert un par un pour identifier la ligne problématique
+      for(const row of batch){
+        const{error:e2}=await sb.from('presences').upsert(row,{onConflict:'enfant_id,presence_date,slot'});
+        if(e2){console.error('[ImportPresence] Erreur ligne individuelle',row,e2);errors++;}
+        else inserted++;
+      }
+    }else{
+      inserted+=(upserted||batch).length;
+    }
+  }
+
+  console.log('[ImportPresence] Résultat — insérées/mises à jour:',inserted,'erreurs:',errors);
   closeModal('modal-import-presence-wrap');_importPresData=null;
-  if(ok){
-    showBanner('Import terminé : '+(toCreateNames.length?toCreateNames.length+' enfant'+(toCreateNames.length>1?'s':'')+'créé'+(toCreateNames.length>1?'s':'')+', ':'')+toInsert.length+' présence'+(toInsert.length>1?'s':'')+' enregistrée'+(toInsert.length>1?'s':'')+' ✅');
-    renderPresence();
-  }else showBanner('Erreur lors de l\'enregistrement des présences.','error');
+
+  if(errors===0){
+    const msgEnfants=toCreateNames.length?toCreateNames.length+' enfant'+(toCreateNames.length>1?'s':'')+'créé'+(toCreateNames.length>1?'s':'')+', ':'';
+    showBanner('Import terminé : '+msgEnfants+inserted+' présence'+(inserted>1?'s':'')+' enregistrée'+(inserted>1?'s':'')+' ✅');
+  }else{
+    showBanner('Import partiel : '+inserted+' présences OK, '+errors+' erreur'+(errors>1?'s':'')+'  (voir console)','error');
+  }
+  renderPresence();
 }
 
 // PLANNING (Supabase — voir renderPlanning plus bas, version active)
@@ -3548,7 +3576,7 @@ async function loadRefDashAsync(crecheId,t){
   const titleRmp='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div>';
   const empty=msg=>'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">'+msg+'</div>';
 
-  // Présences enfants (filtre via enfant_id car presences n'a pas de creche_id ni date)
+  // Présences enfants (filtre via enfant_id — presences n'a pas de colonne creche_id ni date)
   try{
     const enfCreche=cacheEnfants.filter(e=>e.creche_id===crecheId);
     const enfIds=enfCreche.map(e=>e.id);
@@ -3563,7 +3591,7 @@ async function loadRefDashAsync(crecheId,t){
       box.innerHTML=titlePresences+
         '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+nM+' / '+total+' enfant'+(total>1?'s':'')+'</span></div>'+
         '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+nA+' / '+total+' enfant'+(total>1?'s':'')+'</span></div>'+
-        (presentNames.length?'<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px">'+presentNames.slice(0,8).map(e=>'<span style="background:var(--koala);color:#fff;border-radius:4px;padding:1px 6px;font-size:10.5px;white-space:nowrap">'+escHtml(e.prenom)+'</span>').join('')+(presentNames.length>8?'<span style="font-size:10.5px;color:var(--muted)"> +'+( presentNames.length-8)+'</span>':'')+'</div>':'');
+        (presentNames.length?'<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px">'+presentNames.slice(0,8).map(e=>'<span style="background:var(--koala);color:#fff;border-radius:4px;padding:1px 6px;font-size:10.5px;white-space:nowrap">'+escHtml(e.prenom)+'</span>').join('')+(presentNames.length>8?'<span style="font-size:10.5px;color:var(--muted);margin-left:2px">+'+( presentNames.length-8)+'</span>':'')+'</div>':'');
     }
   }catch(e){const b=document.getElementById('rdb-presences');if(b)b.innerHTML=titlePresences+empty('Indisponible');}
 
