@@ -1887,6 +1887,18 @@ async function setPresence(enfantId,slot,dateStr,status){
   else await sb.from('presences').insert({enfant_id:enfantId,presence_date:dateStr,slot,status});
   renderPresence();
 }
+async function setAbsent(enfantId,dateStr,markAbsent){
+  // Supprime les enregistrements existants pour ce jour
+  await sb.from('presences').delete().eq('enfant_id',enfantId).eq('presence_date',dateStr);
+  if(markAbsent){
+    // Insère absent sur M et A
+    await sb.from('presences').insert([
+      {enfant_id:enfantId,presence_date:dateStr,slot:'M',status:'absent'},
+      {enfant_id:enfantId,presence_date:dateStr,slot:'A',status:'absent'}
+    ]);
+  }
+  renderPresence();
+}
 async function renderPresenceGantt(){
   const dateStr=document.getElementById('presence-date')?.value||todayStr();
   const view=document.getElementById('presence-gantt-view');
@@ -1900,46 +1912,50 @@ async function renderPresenceGantt(){
   // presMap: enfant_id -> {M, A}
   const presMap={};
   (presData||[]).forEach(p=>{if(!presMap[p.enfant_id])presMap[p.enfant_id]={};presMap[p.enfant_id][p.slot]=p.status;});
-  // Gantt: heures 7h\u201319h, 1 colonne = 30min = 24 colonnes
-  const H_START=7,H_END=19,COLS=(H_END-H_START)*2; // 24 demi-heures
-  const COL_W=28; // px par demi-heure
-  const NAME_W=160;
+  // Gantt: heures 7h–19h, 1 colonne = 30min = 24 colonnes
+  const H_START=7,H_END=19,COLS=(H_END-H_START)*2;
+  const COL_W=28;
+  const NAME_W=140;
+  const BTN_W=56;
   const d=new Date(dateStr+'T00:00:00');
   const dateLabel=d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
-  // Compter pr\u00e9sents
   const presents=enfants.filter(e=>{const p=presMap[e.id]||{};return p.M==='present'||p.A==='present';});
-  // En-t\u00eate heures
+  // En-tête heures
   let hdrHtml='<div style="display:flex;align-items:center;border-bottom:2px solid var(--koala);margin-bottom:4px">';
-  hdrHtml+='<div style="width:'+NAME_W+'px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--koala);padding-right:8px;text-align:right">'+presents.length+'\u00a0/\u00a0'+enfants.length+'</div>';
+  hdrHtml+='<div style="width:'+(NAME_W+BTN_W)+'px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--koala);padding-right:8px;text-align:right">'+presents.length+'\u00a0/\u00a0'+enfants.length+'</div>';
   for(let h=H_START;h<H_END;h++){
     hdrHtml+='<div style="width:'+(COL_W*2)+'px;flex-shrink:0;font-size:10px;font-weight:600;color:var(--muted);text-align:left;border-left:1px solid #e0dff0;padding-left:2px">'+h+'h</div>';
   }
   hdrHtml+='</div>';
-  // Lignes enfants
   let rowsHtml='';
   enfants.forEach((e,idx)=>{
     const p=presMap[e.id]||{};
     const hasM=p.M==='present'||p.M==='partial';
     const hasA=p.A==='present'||p.A==='partial';
-    const absent=!hasM&&!hasA;
-    // Calcul segments (en demi-heures depuis H_START)
-    // Matin: 7h\u201313h = cols 0\u201311, Apr\u00e8s-midi: 13h\u201319h = cols 12\u201323
+    const isAbsent=p.M==='absent'||p.A==='absent';
+    const nonSaisi=!hasM&&!hasA&&!isAbsent;
     const segments=[];
     if(hasM&&hasA)segments.push({start:0,end:COLS,color:'var(--koala)'});
     else if(hasM)segments.push({start:0,end:12,color:'var(--koala)'});
     else if(hasA)segments.push({start:12,end:COLS,color:'var(--koala)'});
     const bg=idx%2===0?'#fff':'#f7f6fb';
     rowsHtml+='<div style="display:flex;align-items:center;padding:3px 0;background:'+bg+';border-radius:4px">';
-    rowsHtml+='<div style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--text)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escHtml(e.prenom+' '+e.nom)+'">'+escHtml(e.prenom+' '+e.nom)+'</div>';
-    // Barre Gantt
+    rowsHtml+='<div style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(isAbsent||nonSaisi?'400':'600')+';color:'+(isAbsent?'#e03e3e':nonSaisi?'var(--muted)':'var(--text)')+';padding-right:4px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escHtml(e.prenom+' '+e.nom)+'">'+escHtml(e.prenom+' '+e.nom)+(isAbsent?' <span style="font-size:10px">abs.</span>':'')+'</div>';
+    rowsHtml+='<div style="width:'+BTN_W+'px;flex-shrink:0;padding-right:6px;text-align:right">';
+    if(isAbsent){
+      rowsHtml+='<button onclick="setAbsent(\''+e.id+'\',\''+dateStr+'\',false)" style="font-size:10px;padding:1px 5px;background:#fdecea;color:#e03e3e;border:1px solid #f5c6c6;border-radius:4px;cursor:pointer;line-height:1.4">\u21a9 r\u00e9tablir</button>';
+    }else{
+      rowsHtml+='<button onclick="setAbsent(\''+e.id+'\',\''+dateStr+'\',true)" style="font-size:10px;padding:1px 5px;background:#f5f5f5;color:#999;border:1px solid #ddd;border-radius:4px;cursor:pointer;line-height:1.4">\u2715 abs.</button>';
+    }
+    rowsHtml+='</div>';
     rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:20px;border-left:1px solid #e0dff0">';
-    // Lignes verticales des heures
     for(let c=0;c<COLS;c+=2){
       rowsHtml+='<div style="position:absolute;left:'+(c*COL_W)+'px;top:0;bottom:0;border-left:1px solid '+(c===0?'transparent':'#ece9f5')+';pointer-events:none"></div>';
     }
-    // Bande 12h (s\u00e9parateur matin/apm)
     rowsHtml+='<div style="position:absolute;left:'+(12*COL_W)+'px;top:0;bottom:0;border-left:1px dashed #b0a8d8;pointer-events:none"></div>';
-    if(absent){
+    if(isAbsent){
+      rowsHtml+='<div style="position:absolute;left:4px;right:4px;top:8px;height:4px;background:#f5c6c6;border-radius:4px"></div>';
+    }else if(nonSaisi){
       rowsHtml+='<div style="position:absolute;left:4px;right:4px;top:6px;height:8px;background:#f0eef8;border-radius:4px"></div>';
     }else{
       segments.forEach(seg=>{
@@ -1949,10 +1965,10 @@ async function renderPresenceGantt(){
     }
     rowsHtml+='</div></div>';
   });
-  // Ligne de d\u00e9marcation 12h (l\u00e9gende)
   let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted)">';
   legendHtml+='<span><span style="display:inline-block;width:28px;height:8px;background:var(--koala);border-radius:3px;vertical-align:middle;margin-right:4px"></span>Pr\u00e9sent</span>';
-  legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
+  legendHtml+='<span><span style="display:inline-block;width:28px;height:4px;background:#f5c6c6;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Absent</span>';
+  legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h</span>';
   legendHtml+='</div>';
   const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+'</div>';
   view.innerHTML=dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+COLS*COL_W+20)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
