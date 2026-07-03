@@ -1996,8 +1996,8 @@ function ipIsFirstnameToken(tok){return tok&&/^[A-ZÀ-Ÿ]/.test(tok)&&/[a-zà-ÿ
 async function handlePresenceImport(input){
   const file=input.files&&input.files[0];input.value='';if(!file)return;
   if(typeof pdfjsLib==='undefined'){alert('Bibliothèque PDF non chargée.');return;}
-  const crecheId=isDirection?(activeCrecheId==='all'?null:activeCrecheId):currentProfile?.creche_id;
-  if(!crecheId){alert('Sélectionnez une crèche spécifique avant d\'importer (pas "Toutes").');return;}
+  const crecheId=isDirection?(document.getElementById('presence-creche-select')?.value||null):currentProfile?.creche_id;
+  if(!crecheId){alert('Sélectionnez une crèche dans le menu présences avant d\'importer.');return;}
   showBanner('Lecture du PDF en cours…');
   let pages;
   try{pages=await ipParsePdf(file);}catch(e){console.error('[ImportPresence]',e);showBanner('Impossible de lire ce PDF.','error');return;}
