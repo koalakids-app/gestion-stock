@@ -1912,7 +1912,7 @@ async function renderPresenceGantt(){
   if(!view)return;
   const crecheId=getPresenceCrecheId();
   if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
-  const enfants=crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants;
+  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'})||( a.prenom||'').localeCompare(b.prenom||'','fr',{sensitivity:'base'}));
   if(!enfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistr\u00e9.</p></div>';return;}
   view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement\u2026</div>';
   const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr).in('enfant_id',enfants.map(e=>e.id));
@@ -2014,7 +2014,7 @@ function openSupprimerEnfants(){
   const creches=crecheId?cacheCreches.filter(c=>c.id===crecheId):cacheCreches;
   let html='';
   creches.forEach(c=>{
-    const enfs=cacheEnfants.filter(e=>e.creche_id===c.id);
+    const enfs=cacheEnfants.filter(e=>e.creche_id===c.id).slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr'));
     if(!enfs.length)return;
     html+='<div style="margin-bottom:14px">';
     html+='<div style="font-weight:700;color:var(--koala);font-size:12px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">'+escHtml(c.name)+'</div>';
