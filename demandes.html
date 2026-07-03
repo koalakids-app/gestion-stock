@@ -457,6 +457,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn-sm" onclick="openEnfantModal()"><i class="ti ti-user-plus"></i> Ajouter enfant</button>
         <button class="btn-sm" onclick="document.getElementById('presence-import-input').click()"><i class="ti ti-file-import"></i> Importer PDF</button>
         <input type="file" id="presence-import-input" accept="application/pdf" style="display:none" onchange="handlePresenceImport(this)">
+        <button class="btn-sm" style="color:var(--red);border-color:var(--red)" onclick="openSupprimerEnfants()"><i class="ti ti-trash"></i> Supprimer</button>
         <button class="btn-green" onclick="exportPresence()"><i class="ti ti-download"></i> Exporter</button>
       </div>
     </div>
@@ -1178,6 +1179,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div id="import-presence-body" style="overflow-y:auto;flex:1;font-size:13px"></div>
     <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-import-presence-wrap')">Annuler</button><button class="btn-primary" id="btn-confirm-import-presence" onclick="confirmPresenceImport()"><i class="ti ti-check"></i> Confirmer</button></div>
+  </div>
+</div>
+
+<!-- MODAL SUPPRESSION ENFANTS -->
+<div class="overlay" id="modal-suppr-enfants-wrap">
+  <div class="modal" style="max-width:560px;max-height:86vh;display:flex;flex-direction:column">
+    <h3><i class="ti ti-trash" style="color:var(--red)"></i> Supprimer des enfants</h3>
+    <div style="background:#fff5f5;border-left:4px solid var(--red);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#c0392b">
+      ⚠️ La suppression est <strong>définitive</strong> et efface aussi toutes les présences associées.
+    </div>
+    <div id="suppr-enfants-body" style="overflow-y:auto;flex:1;font-size:13px"></div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-suppr-enfants-wrap')">Annuler</button>
+      <button id="btn-confirm-suppr-enfants" class="btn-primary" style="background:var(--red);border-color:var(--red)" onclick="confirmSupprimerEnfants()" disabled><i class="ti ti-trash"></i> Supprimer la sélection</button>
+    </div>
   </div>
 </div>
 
@@ -2007,6 +2023,62 @@ async function exportPresence(){
 }
 function openEnfantModal(){document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('modal-enfant-wrap').classList.add('open');}
 async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:document.getElementById('enf-groupe').value,creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim()};const saved=await dbInsert('enfants',row);if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
+
+function openSupprimerEnfants(){
+  const crecheId=isDirection?(activeCrecheId==='all'?null:activeCrecheId):currentProfile?.creche_id;
+  const body=document.getElementById('suppr-enfants-body');
+  const btn=document.getElementById('btn-confirm-suppr-enfants');
+  btn.disabled=true;
+  // Grouper les enfants par crèche
+  const creches=crecheId?cacheCreches.filter(c=>c.id===crecheId):cacheCreches;
+  let html='';
+  creches.forEach(c=>{
+    const enfs=cacheEnfants.filter(e=>e.creche_id===c.id);
+    if(!enfs.length)return;
+    html+='<div style="margin-bottom:14px">';
+    html+='<div style="font-weight:700;color:var(--koala);font-size:12px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">'+escHtml(c.name)+'</div>';
+    enfs.forEach(e=>{
+      html+='<label style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:7px;cursor:pointer;margin-bottom:3px;border:1px solid transparent" '+
+        'onmouseover="this.style.background=\'var(--bg-alt)\'" onmouseout="this.style.background=\'\'" '+
+        'onclick="supprEnfantsUpdateBtn()">';
+      html+='<input type="checkbox" class="suppr-enf-cb" data-id="'+e.id+'" data-name="'+escHtml(e.prenom+' '+e.nom)+'" style="width:16px;height:16px;accent-color:var(--red);cursor:pointer;flex-shrink:0">';
+      html+='<span style="font-size:13px">'+escHtml(e.prenom+' '+(e.nom||''))+'</span>';
+      html+='</label>';
+    });
+    html+='</div>';
+  });
+  if(!html)html='<div style="text-align:center;color:var(--muted);padding:1rem">Aucun enfant enregistré.</div>';
+  body.innerHTML=html;
+  document.getElementById('modal-suppr-enfants-wrap').classList.add('open');
+}
+
+function supprEnfantsUpdateBtn(){
+  const checked=document.querySelectorAll('.suppr-enf-cb:checked').length;
+  const btn=document.getElementById('btn-confirm-suppr-enfants');
+  btn.disabled=checked===0;
+  btn.innerHTML='<i class="ti ti-trash"></i> Supprimer'+(checked?' ('+checked+' enfant'+(checked>1?'s':'')+')':" la sélection");
+}
+
+async function confirmSupprimerEnfants(){
+  const checked=[...document.querySelectorAll('.suppr-enf-cb:checked')];
+  if(!checked.length)return;
+  const noms=checked.map(cb=>cb.dataset.name).join(', ');
+  if(!confirm('Supprimer définitivement : '+noms+' ?\n\nToutes leurs présences seront également effacées.'))return;
+  const btn=document.getElementById('btn-confirm-suppr-enfants');
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Suppression…';
+  const ids=checked.map(cb=>cb.dataset.id);
+  // Supprimer les présences d'abord
+  const{error:errPres}=await sb.from('presences').delete().in('enfant_id',ids);
+  if(errPres){showBanner('Erreur suppression présences : '+errPres.message,'error');btn.disabled=false;return;}
+  // Supprimer les enfants
+  const{error:errEnf}=await sb.from('enfants').delete().in('id',ids);
+  if(errEnf){showBanner('Erreur suppression enfants : '+errEnf.message,'error');btn.disabled=false;return;}
+  // Mettre à jour le cache
+  cacheEnfants=cacheEnfants.filter(e=>!ids.includes(e.id));
+  closeModal('modal-suppr-enfants-wrap');
+  showBanner(ids.length+' enfant'+(ids.length>1?'s':'')+' supprimé'+(ids.length>1?'s':'')+' ✅');
+  renderPresence();
+}
 
 // ── IMPORT PRÉSENCES DEPUIS PLANNING PDF (Gantt) ──
 const IP_MONTHS={janvier:1,février:2,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,août:8,aout:8,septembre:9,octobre:10,novembre:11,décembre:12,decembre:12};
@@ -3476,18 +3548,22 @@ async function loadRefDashAsync(crecheId,t){
   const titleRmp='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div>';
   const empty=msg=>'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">'+msg+'</div>';
 
-  // Présences enfants
+  // Présences enfants (filtre via enfant_id car presences n'a pas de creche_id ni date)
   try{
-    const{data:pres}=await sb.from('presences').select('*').eq('creche_id',crecheId).eq('date',t);
+    const enfCreche=cacheEnfants.filter(e=>e.creche_id===crecheId);
+    const enfIds=enfCreche.map(e=>e.id);
     const box=document.getElementById('rdb-presences');if(!box)return;
-    if(!pres||!pres.length){box.innerHTML=titlePresences+empty('Aucune présence enregistrée');
+    if(!enfIds.length){box.innerHTML=titlePresences+empty('Aucun enfant enregistré');
     }else{
-      const matin=pres.filter(p=>p.periode==='matin'||p.periode==='journee');
-      const apm=pres.filter(p=>p.periode==='apm'||p.periode==='journee');
+      const{data:pres}=await sb.from('presences').select('enfant_id,slot,status').in('enfant_id',enfIds).eq('presence_date',t);
+      const presM=new Set((pres||[]).filter(p=>p.slot==='M'&&(p.status==='present'||p.status==='partial')).map(p=>p.enfant_id));
+      const presA=new Set((pres||[]).filter(p=>p.slot==='A'&&(p.status==='present'||p.status==='partial')).map(p=>p.enfant_id));
+      const nM=presM.size,nA=presA.size,total=enfCreche.length;
+      const presentNames=enfCreche.filter(e=>presM.has(e.id)||presA.has(e.id));
       box.innerHTML=titlePresences+
-        '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+matin.length+' enfant'+(matin.length>1?'s':'')+'</span></div>'+
-        '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+apm.length+' enfant'+(apm.length>1?'s':'')+'</span></div>'+
-        (pres.length?'<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:0 4px">'+pres.slice(0,6).map(p=>escHtml(p.child_name||'—')).join(', ')+(pres.length>6?' …':'')+'</div>':'');
+        '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+nM+' / '+total+' enfant'+(total>1?'s':'')+'</span></div>'+
+        '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+nA+' / '+total+' enfant'+(total>1?'s':'')+'</span></div>'+
+        (presentNames.length?'<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px">'+presentNames.slice(0,8).map(e=>'<span style="background:var(--koala);color:#fff;border-radius:4px;padding:1px 6px;font-size:10.5px;white-space:nowrap">'+escHtml(e.prenom)+'</span>').join('')+(presentNames.length>8?'<span style="font-size:10.5px;color:var(--muted)"> +'+( presentNames.length-8)+'</span>':'')+'</div>':'');
     }
   }catch(e){const b=document.getElementById('rdb-presences');if(b)b.innerHTML=titlePresences+empty('Indisponible');}
 
