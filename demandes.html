@@ -3466,15 +3466,12 @@ async function loadRefDashAsync(crecheId,t){
     const{data:pres}=await sb.from('presences').select('enfant_id,slot,status').eq('presence_date',t).in('enfant_id',ids).eq('status','present');
     if(!pres||!pres.length){box.innerHTML=titlePresences+empty('Aucune présence enregistrée');
     }else{
-      const matinIds=[...new Set(pres.filter(p=>p.slot==='M').map(p=>p.enfant_id))];
-      const apmIds=[...new Set(pres.filter(p=>p.slot==='A').map(p=>p.enfant_id))];
       const allIds=[...new Set(pres.map(p=>p.enfant_id))];
       const enfMap=Object.fromEntries(enfCreche.map(e=>[e.id,e]));
       const noms=allIds.map(id=>{const e=enfMap[id];return e?e.prenom+' '+e.nom:'—';}).sort((a,b)=>a.localeCompare(b,'fr'));
       box.innerHTML=titlePresences+
-        '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+matinIds.length+' enfant'+(matinIds.length>1?'s':'')+'</span></div>'+
-        '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+apmIds.length+' enfant'+(apmIds.length>1?'s':'')+'</span></div>'+
-        '<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:0 4px">'+noms.join(', ')+'</div>';
+        '<div style="font-size:12px;font-weight:600;color:var(--koala);margin-bottom:6px;padding:0 4px">'+allIds.length+' enfant'+(allIds.length>1?'s':'')+'</div>'+
+        '<div style="font-size:12px;color:var(--text);padding:0 4px;line-height:1.8">'+noms.join(', ')+'</div>';
     }
   }catch(e){const b=document.getElementById('rdb-presences');if(b)b.innerHTML=titlePresences+empty('Indisponible');}
 
@@ -3598,10 +3595,47 @@ function renderDashboardToday(){
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-cake"></i> Anniversaires</div>'+bdaysHtml+'</div>'+
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-bolt"></i> Activité du jour</div>'+actHtml+'</div>'+
     '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
+    '<div class="dash-card" id="dash-today-planning"><div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span><select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning(document.getElementById('dash-date-input')?.value||todayStr())"><option value="">-- Crèche --</option></select></div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Sélectionnez une crèche</div></div>'+
     '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
 
   loadDashboardPresences(t);
   loadDashboardRemplacantes(t);
+  // Peupler le sélecteur crèche du planning et charger si une crèche déjà choisie
+  const planSel=document.getElementById('dash-planning-creche-select');
+  if(planSel){
+    const prev=planSel.value;
+    planSel.innerHTML='<option value="">-- Crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===prev?' selected':'')+'>'+escHtml(c.name)+'</option>').join('');
+    if(planSel.value)loadDashboardPlanning(t);
+  }
+}
+async function loadDashboardPlanning(dateStr){
+  const box=document.getElementById('dash-today-planning');if(!box)return;
+  const title='<div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span><select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning(document.getElementById(\'dash-date-input\')?.value||todayStr())">'+
+    '<option value="">-- Crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===document.getElementById('dash-planning-creche-select')?.value?' selected':'')+'>'+escHtml(c.name)+'</option>').join('')+
+    '</select></div>';
+  const crecheId=document.getElementById('dash-planning-creche-select')?.value;
+  if(!crecheId){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Sélectionnez une crèche</div>';return;}
+  try{
+    const d=new Date(dateStr+'T00:00:00');
+    const jourIdx=d.getDay()===0?6:d.getDay()-1; // 0=lundi…6=dimanche
+    const ws=mondayOfISO(dateStr);
+    const{data:rows}=await sb.from('planning_equipe').select('*').eq('creche_id',crecheId).eq('semaine',ws).eq('jour',jourIdx);
+    if(!rows||!rows.length){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun planning saisi pour ce jour</div>';return;}
+    const presents=rows.filter(r=>r.type!=='absent'&&r.type!=='conge');
+    const absents=rows.filter(r=>r.type==='absent'||r.type==='conge');
+    let html='';
+    if(presents.length){
+      html+=presents.map(r=>{
+        const horaire=(r.hdebut&&r.hfin)?r.hdebut+'–'+r.hfin:'';
+        const typeLabel={present:'✅ Présent',formation:'📚 Formation',reunion:'🤝 Réunion'}[r.type]||r.type;
+        return'<div class="dash-list-item"><span>👤 '+escHtml(r.prenom||'—')+' <span style="font-size:10.5px;color:var(--muted)">'+typeLabel+'</span></span><span style="font-size:11px;font-weight:700;color:var(--koala)">'+escHtml(horaire)+'</span></div>';
+      }).join('');
+    }
+    if(absents.length){
+      html+='<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:0 4px">Absent(e)s : '+absents.map(r=>escHtml(r.prenom||'—')).join(', ')+'</div>';
+    }
+    box.innerHTML=title+html;
+  }catch(e){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Indisponible</div>';}
 }
 async function loadDashboardRemplacantes(dateStr){
   const box=document.getElementById('dash-today-remplacantes');
