@@ -457,7 +457,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn-sm" onclick="openEnfantModal()"><i class="ti ti-user-plus"></i> Ajouter enfant</button>
         <button class="btn-sm" onclick="document.getElementById('presence-import-input').click()"><i class="ti ti-file-import"></i> Importer PDF</button>
         <input type="file" id="presence-import-input" accept="application/pdf" style="display:none" onchange="handlePresenceImport(this)">
-        <button class="btn-sm" style="color:var(--red);border-color:var(--red)" onclick="openSupprimerPresencesModal()"><i class="ti ti-trash"></i> Supprimer</button>
         <button class="btn-green" onclick="exportPresence()"><i class="ti ti-download"></i> Exporter</button>
       </div>
     </div>
@@ -1179,31 +1178,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div id="import-presence-body" style="overflow-y:auto;flex:1;font-size:13px"></div>
     <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-import-presence-wrap')">Annuler</button><button class="btn-primary" id="btn-confirm-import-presence" onclick="confirmPresenceImport()"><i class="ti ti-check"></i> Confirmer</button></div>
-  </div>
-</div>
-
-<!-- MODAL SUPPRIMER PRÉSENCES -->
-<div class="overlay" id="modal-suppr-presence-wrap">
-  <div class="modal" style="max-width:560px;max-height:86vh;display:flex;flex-direction:column">
-    <h3><i class="ti ti-trash" style="color:var(--red)"></i> Supprimer des enfants</h3>
-    <div style="background:#FFF3F3;border-left:4px solid var(--red);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#b91c1c;flex-shrink:0">
-      ⚠ Les enfants cochés seront <strong>définitivement supprimés</strong> avec toutes leurs présences.
-    </div>
-    <div class="fg" style="margin-bottom:12px;flex-shrink:0" id="suppr-pres-creche-wrap">
-      <label class="flabel">Crèche</label>
-      <select class="finput" id="suppr-pres-creche" onchange="chargerEnfantsSuppr()"><option value="">-- Choisir --</option></select>
-    </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-shrink:0">
-      <span style="font-size:12px;color:var(--muted)" id="suppr-pres-count"></span>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-        <input type="checkbox" id="suppr-pres-all" onchange="toggleSelectAllEnfants(this.checked)"> Tout sélectionner
-      </label>
-    </div>
-    <div id="suppr-pres-list" style="overflow-y:auto;flex:1;border:1px solid var(--border);border-radius:8px;padding:6px;font-size:13px;min-height:80px"></div>
-    <div class="mactions" style="flex-shrink:0;margin-top:12px">
-      <button class="btn-cancel" onclick="closeModal('modal-suppr-presence-wrap')">Annuler</button>
-      <button class="btn-primary" id="btn-confirm-suppr-pres" style="background:var(--red);border-color:var(--red)" onclick="confirmerSupprimerPresences()"><i class="ti ti-trash"></i> Supprimer la sélection</button>
-    </div>
   </div>
 </div>
 
@@ -2043,7 +2017,7 @@ function ipIsFirstnameToken(tok){return tok&&/^[A-ZÀ-Ÿ]/.test(tok)&&/[a-zà-ÿ
 async function handlePresenceImport(input){
   const file=input.files&&input.files[0];input.value='';if(!file)return;
   if(typeof pdfjsLib==='undefined'){alert('Bibliothèque PDF non chargée.');return;}
-  const crecheId=isDirection?(document.getElementById('presence-creche-select')?.value||null):currentProfile?.creche_id;
+  const crecheId=isDirection?(activeCrecheId==='all'?null:activeCrecheId):currentProfile?.creche_id;
   if(!crecheId){alert('Sélectionnez une crèche spécifique avant d\'importer (pas "Toutes").');return;}
   showBanner('Lecture du PDF en cours…');
   let pages;
@@ -2092,40 +2066,12 @@ async function ipParsePdf(file){
     const fullText=lines.map(l=>l.toks.join(' ')).join('\n');
     const m=fullText.match(/Planning du \S+ (\d{1,2})(?:er)? (\S+) (\d{4})/i);
     if(m){const day=+m[1],mon=IP_MONTHS[m[2].toLowerCase()],yr=+m[3];if(mon)date=yr+'-'+String(mon).padStart(2,'0')+'-'+String(day).padStart(2,'0');}
-    // Chercher "Enfants" et "Salariés" dans le texte complet ligne par ligne
     let iEnf=-1,iSal=-1;
-    for(let i=0;i<lines.length;i++){
-      const joined=(lines[i].toks||[]).join(' ').trim();
-      if(iEnf<0&&/^Enfants?$/i.test(joined))iEnf=i;
-      else if(iEnf>=0&&iSal<0&&/^Salari/i.test(joined)){iSal=i;break;}
-    }
-    console.log('[ipParsePdf] page',p,'date=',date,'iEnf=',iEnf,'iSal=',iSal,'nlines=',lines.length);
-    if(iEnf>=0)console.log('[ipParsePdf] lignes enfants:',lines.slice(iEnf+1,iSal>=0?iSal:iEnf+20).map(l=>l.toks.join(' ')));
+    for(let i=0;i<lines.length;i++){const f=lines[i].toks[0];if(iEnf<0&&f==='Enfants'&&lines[i].minx<70)iEnf=i;else if(iEnf>=0&&iSal<0&&f==='Salariés'&&lines[i].minx<70){iSal=i;break;}}
     const names=[];let cur=null;
-    for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){
-      const toks=lines[i].toks;if(!toks.length)continue;
-      // Ignorer les lignes ne contenant que des chiffres/heures (grille Gantt)
-      const joined2=toks.join(' ').trim();
-      if(!joined2)continue;
-      // Ignorer lignes purement numériques/horaires
-      if(/^[\d\s h:]+$/.test(joined2))continue;
-      // Ignorer marqueurs de section
-      if(/^(Salari|Totaux|Total|Enfants?)$/i.test(joined2))continue;
-      // Si le token commence par une majuscule ET contient des minuscules = nouveau prénom
-      if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=joined2;}
-      // Sinon : continuation du nom précédent (ex: PELLENC, DE LA ROCHERE)
-      else if(cur)cur+=' '+joined2;
-    }
+    for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){const toks=lines[i].toks;if(!toks.length)continue;if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=toks.join(' ');}else if(cur)cur+=' '+toks.join(' ');}
     if(cur)names.push(cur);
-    // Fusionner les fragments tout-majuscules avec le nom précédent (ex: "Noam ROUX" + "PELLENC")
-    const namesMerged=[];
-    names.forEach(n=>{
-      const isToutMaj=n===n.toUpperCase()&&/[A-Z]/.test(n);
-      if(isToutMaj&&namesMerged.length)namesMerged[namesMerged.length-1]+=' '+n;
-      else namesMerged.push(n);
-    });
-    console.log('[ipParsePdf] names trouvés:',namesMerged);
-    if(date&&namesMerged.length)out.push({date,names:namesMerged});
+    if(date&&names.length)out.push({date,names});
   }
   return out;
 }
@@ -2161,8 +2107,7 @@ function renderImportPreview(){
 }
 
 async function confirmPresenceImport(){
-  console.log('[Confirm] appelé, _importPresData=',!!_importPresData);
-  if(!_importPresData){console.log('[Confirm] _importPresData null, abandon');return;}
+  if(!_importPresData)return;
   const btn=document.getElementById('btn-confirm-import-presence');btn.disabled=true;
   const{crecheId,pages,nameMap}=_importPresData;
   showBanner('Création des nouveaux enfants…');
@@ -2176,7 +2121,7 @@ async function confirmPresenceImport(){
       cacheEnfants.push(saved);
       nameMap[nm]={enfant:saved,isNew:false};
       pages.forEach(pg=>{
-        const idx=pg.toCreate.findIndex(n=>ipNormName(n)===ipNormName(nm));
+        const idx=pg.toCreate.indexOf(nm);
         if(idx>=0){pg.toCreate.splice(idx,1);pg.matched.push({name:nm,enfant:saved});}
       });
     }else{console.error('[ImportPresence] create enfant',nm,error);}
@@ -2186,7 +2131,6 @@ async function confirmPresenceImport(){
   const wanted=[];
   pages.forEach(pg=>{
     pg.matched.forEach(mt=>{
-      if(!mt.enfant?.id)return;
       wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'M',status:'present'});
       wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'A',status:'present'});
     });
@@ -2204,55 +2148,6 @@ async function confirmPresenceImport(){
     showBanner('Import terminé : '+(toCreateNames.length?toCreateNames.length+' enfant'+(toCreateNames.length>1?'s':'')+'créé'+(toCreateNames.length>1?'s':'')+', ':'')+toInsert.length+' présence'+(toInsert.length>1?'s':'')+' enregistrée'+(toInsert.length>1?'s':'')+' ✅');
     renderPresence();
   }else showBanner('Erreur lors de l\'enregistrement des présences.','error');
-}
-
-// ── SUPPRESSION ENFANTS ──
-function openSupprimerPresencesModal(){
-  const sel=document.getElementById('suppr-pres-creche');
-  sel.innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
-  if(!isDirection&&currentProfile?.creche_id){
-    sel.value=currentProfile.creche_id;
-    document.getElementById('suppr-pres-creche-wrap').style.display='none';
-  }else{
-    document.getElementById('suppr-pres-creche-wrap').style.display='';
-  }
-  document.getElementById('suppr-pres-list').innerHTML='<span style="color:var(--muted);font-size:12px">Sélectionnez une crèche…</span>';
-  document.getElementById('suppr-pres-count').textContent='';
-  document.getElementById('suppr-pres-all').checked=false;
-  const btnSuppr=document.getElementById('btn-confirm-suppr-pres');btnSuppr.disabled=false;btnSuppr.innerHTML='<i class="ti ti-trash"></i> Supprimer la sélection';
-  document.getElementById('modal-suppr-presence-wrap').classList.add('open');
-  if(!isDirection&&currentProfile?.creche_id)chargerEnfantsSuppr();
-}
-
-async function chargerEnfantsSuppr(){
-  const crecheId=isDirection?document.getElementById('suppr-pres-creche').value:currentProfile?.creche_id;
-  const list=document.getElementById('suppr-pres-list');
-  if(!crecheId){list.innerHTML='<span style="color:var(--muted);font-size:12px">Sélectionnez une crèche…</span>';return;}
-  list.innerHTML='<span style="color:var(--muted);font-size:12px">Chargement…</span>';
-  const{data:enfants,error}=await sb.from('enfants').select('*').eq('creche_id',crecheId).order('prenom');
-  if(error||!enfants||!enfants.length){list.innerHTML='<span style="color:var(--muted);font-size:12px">Aucun enfant dans cette crèche.</span>';return;}
-  document.getElementById('suppr-pres-count').textContent=enfants.length+' enfant'+(enfants.length>1?'s':'');
-  document.getElementById('suppr-pres-all').checked=false;
-  list.innerHTML=enfants.map(e=>'<label style="display:flex;align-items:center;gap:10px;padding:7px 6px;border-bottom:1px solid var(--border);cursor:pointer"><input type="checkbox" class="suppr-enf-cb" data-id="'+e.id+'" style="width:15px;height:15px;flex-shrink:0"><span>'+escHtml(e.prenom+' '+e.nom)+'</span></label>').join('');
-}
-
-function toggleSelectAllEnfants(checked){
-  document.querySelectorAll('.suppr-enf-cb').forEach(cb=>cb.checked=checked);
-}
-
-async function confirmerSupprimerPresences(){
-  const selected=[...document.querySelectorAll('.suppr-enf-cb:checked')].map(cb=>cb.dataset.id);
-  if(!selected.length){alert('Cochez au moins un enfant.');return;}
-  if(!confirm('Supprimer '+selected.length+' enfant'+(selected.length>1?'s':'')+' et toutes leurs présences ? Cette action est irréversible.'))return;
-  const btn=document.getElementById('btn-confirm-suppr-pres');btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Suppression…';
-  const{error:e1}=await sb.from('presences').delete().in('enfant_id',selected);
-  if(e1){showBanner('Erreur suppression présences : '+e1.message,'error');btn.disabled=false;btn.innerHTML='<i class="ti ti-trash"></i> Supprimer la sélection';return;}
-  const{error:e2}=await sb.from('enfants').delete().in('id',selected);
-  if(e2){showBanner('Présences supprimées mais erreur enfants : '+e2.message,'error');btn.disabled=false;btn.innerHTML='<i class="ti ti-trash"></i> Supprimer la sélection';return;}
-  selected.forEach(id=>{const idx=cacheEnfants.findIndex(e=>e.id===id);if(idx>=0)cacheEnfants.splice(idx,1);});
-  closeModal('modal-suppr-presence-wrap');
-  showBanner(selected.length+' enfant'+(selected.length>1?'s':'')+' supprimé'+(selected.length>1?'s':'')+' ✅');
-  renderPresence();
 }
 
 // PLANNING (Supabase — voir renderPlanning plus bas, version active)
@@ -3581,43 +3476,33 @@ async function loadRefDashAsync(crecheId,t){
   const titleRmp='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div>';
   const empty=msg=>'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">'+msg+'</div>';
 
-  // Présences enfants (filtrage via enfant_id car presences n'a pas de creche_id)
+  // Présences enfants
   try{
-    if(!cacheEnfants.length){const{data:fe}=await sb.from('enfants').select('*');if(fe&&fe.length)cacheEnfants.push(...fe);}
-    const enfCreche=cacheEnfants.filter(e=>e.creche_id===crecheId);
+    const{data:pres}=await sb.from('presences').select('*').eq('creche_id',crecheId).eq('date',t);
     const box=document.getElementById('rdb-presences');if(!box)return;
-    if(!enfCreche.length){box.innerHTML=titlePresences+empty('Aucun enfant enregistré');return;}
-    const{data:pres}=await sb.from('presences').select('enfant_id,slot,status').eq('presence_date',t).in('enfant_id',enfCreche.map(e=>e.id));
     if(!pres||!pres.length){box.innerHTML=titlePresences+empty('Aucune présence enregistrée');
     }else{
-      const presents=new Set(pres.filter(p=>p.status==='present'||p.status==='partial').map(p=>p.enfant_id));
-      const matin=new Set(pres.filter(p=>p.slot==='M'&&(p.status==='present'||p.status==='partial')).map(p=>p.enfant_id));
-      const apm=new Set(pres.filter(p=>p.slot==='A'&&(p.status==='present'||p.status==='partial')).map(p=>p.enfant_id));
-      const presList=enfCreche.filter(e=>presents.has(e.id));
+      const matin=pres.filter(p=>p.periode==='matin'||p.periode==='journee');
+      const apm=pres.filter(p=>p.periode==='apm'||p.periode==='journee');
       box.innerHTML=titlePresences+
-        '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+matin.size+' enfant'+(matin.size>1?'s':'')+'</span></div>'+
-        '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+apm.size+' enfant'+(apm.size>1?'s':'')+'</span></div>'+
-        (presList.length?'<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:0 4px">'+presList.slice(0,6).map(e=>escHtml(e.prenom)).join(', ')+(presList.length>6?' …':'')+'</div>':'');
+        '<div class="dash-list-item"><span>🌅 Matin</span><span style="font-weight:700;color:var(--koala)">'+matin.length+' enfant'+(matin.length>1?'s':'')+'</span></div>'+
+        '<div class="dash-list-item"><span>☀️ Après-midi</span><span style="font-weight:700;color:var(--koala)">'+apm.length+' enfant'+(apm.length>1?'s':'')+'</span></div>'+
+        (pres.length?'<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:0 4px">'+pres.slice(0,6).map(p=>escHtml(p.child_name||'—')).join(', ')+(pres.length>6?' …':'')+'</div>':'');
     }
   }catch(e){const b=document.getElementById('rdb-presences');if(b)b.innerHTML=titlePresences+empty('Indisponible');}
 
   // Planning équipe
   try{
-    const ws=mondayOfISO(t);
-    // On cherche les lignes de planning_equipe pour cette crèche et cette semaine (lundi de la semaine)
+    const ws=t.slice(0,10);
+    // On cherche les lignes de planning_equipe pour cette crèche et cette semaine
     const{data:rows}=await sb.from('planning_equipe').select('*').eq('creche_id',crecheId).eq('semaine',ws);
     const box=document.getElementById('rdb-equipe');if(!box)return;
     if(!rows||!rows.length){box.innerHTML=titleEquipe+empty('Aucun planning pour cette semaine');
     }else{
-      // planning_equipe : jour (0=lundi…4=vendredi), prenom, type, hdebut, hfin
-      const d=new Date(t+'T00:00:00');
-      const jourIdx=d.getDay()===0?6:d.getDay()-1;
-      const presents=rows.filter(r=>r.jour===jourIdx&&r.type!=='absent'&&r.type!=='conge');
+      const dow=['lundi','mardi','mercredi','jeudi','vendredi'][new Date(t+'T00:00:00').getDay()-1]||'lundi';
+      const presents=rows.filter(r=>r[dow]&&r[dow]!=='absent'&&r[dow]!=='conge'&&r[dow]!=='');
       box.innerHTML=titleEquipe+
-        (presents.length?presents.map(r=>{
-          const horaire=(r.hdebut&&r.hfin)?r.hdebut+'–'+r.hfin:'';
-          return'<div class="dash-list-item"><span>👤 '+escHtml(r.prenom||'—')+'</span><span style="font-size:11px;color:var(--muted)">'+escHtml(horaire)+'</span></div>';
-        }).join('')
+        (presents.length?presents.map(r=>'<div class="dash-list-item"><span>👤 '+escHtml(r.nom||'—')+'</span><span style="font-size:11px;color:var(--muted)">'+escHtml(r[dow]||'')+'</span></div>').join('')
         :empty('Aucun staff présent ce jour'));
     }
   }catch(e){const b=document.getElementById('rdb-equipe');if(b)b.innerHTML=titleEquipe+empty('Indisponible');}
@@ -3720,7 +3605,7 @@ function renderDashboardToday(){
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-calendar-event"></i> Événements du jour</div>'+evtsHtml+'</div>'+
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-cake"></i> Anniversaires</div>'+bdaysHtml+'</div>'+
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-bolt"></i> Activité du jour</div>'+actHtml+'</div>'+
-    '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title" style="display:flex;justify-content:space-between;align-items:center"><span><i class="ti ti-users"></i> Présences du jour</span><select id="dash-pres-creche-filter" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:120px" onchange="loadDashboardPresences(document.getElementById(\"dash-date\").value||new Date().toISOString().slice(0,10))"><option value="">Toutes</option></select></div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
+    '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
 
   loadDashboardPresences(t);
@@ -3748,46 +3633,41 @@ async function loadDashboardRemplacantes(dateStr){
 async function loadDashboardPresences(dateStr){
   const box=document.getElementById('dash-today-presence');
   if(!box)return;
-  const filterSel=document.getElementById('dash-pres-creche-filter');
-  if(filterSel&&filterSel.options.length<=1){
-    filterSel.innerHTML='<option value="">Toutes</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
-  }
-  const filtreCreche=filterSel?filterSel.value:'';
-  const makeTitle=()=>'<div class="dash-card-title" style="display:flex;justify-content:space-between;align-items:center"><span><i class="ti ti-users"></i> Présences du jour</span>'+
-    '<select id="dash-pres-creche-filter" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:120px" onchange="loadDashboardPresences(document.getElementById(\'dash-date\')​?.value||new Date().toISOString().slice(0,10))">'+
-    '<option value=""'+(filtreCreche===''?' selected':'')+'>Toutes</option>'+
-    cacheCreches.map(c=>'<option value="'+c.id+'"'+(filtreCreche===c.id?' selected':'')+'>'+escHtml(c.name)+'</option>').join('')+
-    '</select></div>';
+  const title='<div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div>';
   try{
+    // Recharger les enfants si cache vide
     if(!cacheEnfants.length){const{data:fe}=await sb.from('enfants').select('*');if(fe&&fe.length)cacheEnfants.push(...fe);}
-    let crechesAffichees=cacheCreches.filter(c=>cacheEnfants.some(e=>e.creche_id===c.id));
-    if(filtreCreche)crechesAffichees=crechesAffichees.filter(c=>c.id===filtreCreche);
-    const enfantsFiltres=cacheEnfants.filter(e=>crechesAffichees.some(c=>c.id===e.creche_id));
-    if(!enfantsFiltres.length){box.innerHTML=makeTitle()+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun enfant enregistré</div>';return;}
-    const{data,error}=await sb.from('presences').select('enfant_id,slot,status').eq('presence_date',dateStr).in('enfant_id',enfantsFiltres.map(e=>e.id));
+    const{data,error}=await sb.from('presences').select('enfant_id,status').eq('presence_date',dateStr);
     if(error)throw error;
     const presentIds=new Set((data||[]).filter(p=>p.status==='present'||p.status==='partial').map(p=>p.enfant_id));
-    let html='';let totalPresent=0,totalEnfants=0;
-    crechesAffichees.forEach(c=>{
+    const crechesWithEnfants=cacheCreches.filter(c=>cacheEnfants.some(e=>e.creche_id===c.id));
+    if(!crechesWithEnfants.length){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun enfant enregistré</div>';return;}
+    let html='';
+    let totalPresent=0,totalEnfants=0;
+    crechesWithEnfants.forEach(c=>{
       const enf=cacheEnfants.filter(e=>e.creche_id===c.id);
       const presents=enf.filter(e=>presentIds.has(e.id));
       totalPresent+=presents.length;totalEnfants+=enf.length;
       html+='<div style="margin-bottom:8px">';
       html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">';
       html+='<span style="font-size:11px;font-weight:700;color:var(--koala)">'+escHtml(c.name)+'</span>';
-      html+='<span style="font-size:11px;font-weight:700;color:'+(presents.length?'var(--green)':'var(--muted)')+'">'+(presents.length?presents.length+' / '+enf.length:'Pointage non saisi')+'</span>';
+      html+='<span style="font-size:11px;font-weight:700;color:'+(presents.length?'var(--green)':'var(--muted)')+'">'+presents.length+' / '+enf.length+'</span>';
       html+='</div>';
       if(presents.length){
         html+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
-        presents.forEach(e=>{html+='<span style="background:var(--koala);color:#fff;border-radius:4px;padding:1px 6px;font-size:10.5px;white-space:nowrap">'+escHtml(e.prenom)+'</span>';});
+        presents.forEach(e=>{
+          html+='<span style="background:var(--koala);color:#fff;border-radius:4px;padding:1px 6px;font-size:10.5px;white-space:nowrap">'+escHtml(e.prenom)+'</span>';
+        });
         html+='</div>';
+      }else{
+        html+='<div style="font-size:11px;color:var(--muted);font-style:italic">Pointage non saisi</div>';
       }
       html+='</div>';
     });
-    const recap='<div style="font-size:11px;font-weight:700;color:var(--koala);border-top:1px solid var(--border);padding-top:6px;margin-top:2px">Total : '+totalPresent+' / '+totalEnfants+' enfants présents</div>';
-    box.innerHTML=makeTitle()+html+recap;
+    const recap='<div style="font-size:11px;font-weight:700;color:var(--koala);border-top:1px solid var(--border);padding-top:6px;margin-top:2px">Total : '+totalPresent+' / '+totalEnfants+' enfants présents</div>';
+    box.innerHTML=title+html+recap;
   }catch(e){
-    box.innerHTML='<div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Indisponible</div>';
+    box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Pointage non saisi aujourd\'hui</div>';
   }
 }
 
