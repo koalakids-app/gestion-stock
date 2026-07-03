@@ -3595,7 +3595,7 @@ function renderDashboardToday(){
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-cake"></i> Anniversaires</div>'+bdaysHtml+'</div>'+
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-bolt"></i> Activité du jour</div>'+actHtml+'</div>'+
     '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
-    '<div class="dash-card" id="dash-today-planning"><div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span><select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning(document.getElementById('dash-date-input')?.value||todayStr())"><option value="">-- Crèche --</option></select></div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Sélectionnez une crèche</div></div>'+
+    '<div class="dash-card" id="dash-today-planning"><div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span><select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning()"><option value="">-- Crèche --</option></select></div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Sélectionnez une crèche</div></div>'+
     '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
 
   loadDashboardPresences(t);
@@ -3605,15 +3605,16 @@ function renderDashboardToday(){
   if(planSel){
     const prev=planSel.value;
     planSel.innerHTML='<option value="">-- Crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===prev?' selected':'')+'>'+escHtml(c.name)+'</option>').join('');
-    if(planSel.value)loadDashboardPlanning(t);
+    if(planSel.value)loadDashboardPlanning();
   }
 }
-async function loadDashboardPlanning(dateStr){
+async function loadDashboardPlanning(){
   const box=document.getElementById('dash-today-planning');if(!box)return;
-  const title='<div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span><select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning(document.getElementById(\'dash-date-input\')?.value||todayStr())">'+
-    '<option value="">-- Crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===document.getElementById('dash-planning-creche-select')?.value?' selected':'')+'>'+escHtml(c.name)+'</option>').join('')+
-    '</select></div>';
+  const dateStr=document.getElementById('dash-date-input')?.value||todayStr();
   const crecheId=document.getElementById('dash-planning-creche-select')?.value;
+  const titleBase='<div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span>';
+  const selHtml='<select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning()"><option value="">-- Crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===crecheId?' selected':'')+'>'+escHtml(c.name)+'</option>').join('')+'</select></div>';
+  const title=titleBase+selHtml;
   if(!crecheId){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Sélectionnez une crèche</div>';return;}
   try{
     const d=new Date(dateStr+'T00:00:00');
