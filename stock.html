@@ -827,7 +827,7 @@ body.is-fullscreen .sidebar-trigger {
   .picker-buttons-row { flex-direction: column; }
   .picker-buttons-row .btn { width: 100%; font-size: 12.5px; }
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; left: 0; top: 0; height: 100dvh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 270px; box-shadow: none; }
+  .sidebar { position: fixed; left: 0; top: 0; height: 100dvh; z-index: 200; padding-bottom: env(safe-area-inset-bottom); transform: translateX(-100%); transition: transform 0.25s ease; width: 270px; box-shadow: none; }
   .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-lg); }
   .mobile-menu-btn { display: inline-flex !important; }
   .sidebar-trigger { display: none !important; }
@@ -840,7 +840,7 @@ body.is-fullscreen .sidebar-trigger {
   .btn-label-short { display: inline !important; }
   .search-box { min-width: unset; width: 100%; order: 10; flex-basis: 100%; }
   #save-indicator { display: none !important; }
-  .content { padding: 12px; }
+  .content { padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
   .stat-card { padding: 12px 14px; }
   .stat-value { font-size: 22px; }
@@ -864,6 +864,8 @@ body.is-fullscreen .sidebar-trigger {
   .pagination-btn { width: 30px; height: 30px; font-size: 12px; }
   .pagination-info { font-size: 11px; }
   .form-grid { grid-template-columns: 1fr; }
+  /* iOS : éviter le zoom auto sur focus (font-size < 16px) */
+  input, select, textarea { font-size: 16px !important; }
   .modal-overlay { padding: 0; align-items: flex-end; }
   .modal-overlay.open { padding: 0; align-items: flex-end; }
   .modal { overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -872,7 +874,7 @@ body.is-fullscreen .sidebar-trigger {
   @keyframes slideUpMobile { from { transform: translateY(100%); } to { transform: translateY(0); } }
   .modal-body { padding: 16px; }
   .modal-header { padding: 16px 16px 14px; }
-  .modal-footer { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+  .modal-footer { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)) 16px; flex-wrap: wrap; gap: 8px; }
   .modal-footer .btn { flex: 1; justify-content: center; min-width: 100px; }
   .commande-card { grid-template-columns: 1fr; }
   .commande-total, .commande-total-label { text-align: left; }
