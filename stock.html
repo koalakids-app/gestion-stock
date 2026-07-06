@@ -57,12 +57,12 @@ body {
   font-family: 'Instrument Sans', sans-serif;
   background: var(--bg);
   color: var(--ink);
-  min-height: 100vh;
+  min-height: 100dvh;
   font-size: 14px;
 }
 
 /* ── LAYOUT ── */
-.app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+.app { display: grid; grid-template-columns: 240px 1fr; min-height: 100dvh; }
 
 /* ── SIDEBAR ── */
 .sidebar {
@@ -72,7 +72,7 @@ body {
   flex-direction: column;
   position: sticky;
   top: 0;
-  height: 100vh;
+  height: 100dvh;
   overflow-y: auto;
 }
 
@@ -163,7 +163,7 @@ body {
 .creche-count { margin-left: auto; color: rgba(255,255,255,0.35); font-size: 11px; }
 
 /* ── MAIN ── */
-.main { display: flex; flex-direction: column; min-height: 100vh; }
+.main { display: flex; flex-direction: column; min-height: 100dvh; }
 
 .topbar {
   background: var(--surface2);
@@ -823,7 +823,7 @@ body.is-fullscreen .sidebar-trigger {
   .picker-buttons-row { flex-direction: column; }
   .picker-buttons-row .btn { width: 100%; font-size: 12.5px; }
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 270px; box-shadow: none; }
+  .sidebar { position: fixed; left: 0; top: 0; height: 100dvh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 270px; box-shadow: none; }
   .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-lg); }
   .mobile-menu-btn { display: inline-flex !important; }
   .sidebar-trigger { display: none !important; }
@@ -2623,7 +2623,7 @@ async function markLivree(id) {
     </div>`).join('');
 
   document.getElementById('modal-detail').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
   document.getElementById('detail-title').textContent = `📦 Réception commande ${c.bc}`;
   document.getElementById('detail-body').innerHTML = `
     <div style="font-size:13px;color:var(--ink2);margin-bottom:16px">
@@ -2805,7 +2805,7 @@ function editCommande(id) {
 
   // Open modal
   document.getElementById('modal-commande').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
   document.querySelector('#modal-commande h2').textContent = '✏️ Modifier la commande';
 
   // Fill fields
@@ -2928,7 +2928,7 @@ function editFournisseur(id) {
   document.getElementById('fn-spec').value    = f.spec || 'Général';
   document.getElementById('fn-notes').value   = f.notes || '';
   document.getElementById('modal-fournisseur').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 function deleteFournisseur(id) {
@@ -3077,7 +3077,7 @@ function showDetail(id) {
     <button class="btn btn-primary" onclick="closeModal('modal-detail');commanderArticle(${a.id})">🛒 Commander</button>`;
 
   document.getElementById('modal-detail').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 async function quickAdjust(id, delta) {
@@ -3387,7 +3387,7 @@ function printBordereau(id) {
     if (previewBody && previewModal) {
       previewBody.innerHTML = bordereauHTML;
       previewModal.classList.add('open');
-      document.body.style.overflow = 'hidden';
+      if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
     } else {
       // Modal introuvable — ouvrir directement
       console.error('modal-preview introuvable dans le DOM');
@@ -3701,7 +3701,7 @@ function openModal_univers() {
   buildArticlePicker((crecheEl?.value) || CRECHES[0], []);
   resetUniversPhotoUI(null);
   document.getElementById('modal-univers').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 async function saveUnivers() {
@@ -3782,7 +3782,7 @@ function editUnivers(id) {
   buildArticlePicker(u.creche || CRECHES[0], selIds);
   resetUniversPhotoUI(u.photo || null);
   document.getElementById('modal-univers').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 function deleteUnivers(id) {
@@ -3843,7 +3843,7 @@ function showUniversDetail(id) {
     <button class="btn btn-primary" onclick="printUnivers(${u.id})">🖨 Fiche PDF</button>
   `;
   document.getElementById('modal-univers-detail').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 function printUnivers(id) {
@@ -4169,7 +4169,7 @@ function commanderArticle(id) {
   // Open and reset modal
   resetCommandeModal();
   document.getElementById('modal-commande').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 
   // Set BC and date
   const bcField = document.getElementById('c-bc');
@@ -5370,7 +5370,7 @@ function openMobileMenu() {
   const overlay = document.getElementById('sidebarOverlay');
   if (sidebar) sidebar.classList.add('open');
   if (overlay) overlay.classList.add('visible');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 function closeMobileMenu() {
@@ -5523,7 +5523,7 @@ function triggerImport() {
   document.getElementById('import-options').style.display = 'block';
   document.querySelector('input[name="import-mode"][value="ajouter"]').checked = true;
   document.getElementById('modal-import').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 function triggerImportFromModal() {
@@ -5752,7 +5752,7 @@ function openModal_souscat() {
   ['sc-nom','sc-icon','sc-desc'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   const catEl = document.getElementById('sc-cat'); if (catEl) catEl.value = '';
   document.getElementById('modal-souscat').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 function saveSouscat() {
@@ -5790,7 +5790,7 @@ function editSouscat(id) {
   document.getElementById('sc-icon').value = sc.icon || '';
   document.getElementById('sc-desc').value = sc.desc || '';
   document.getElementById('modal-souscat').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 function deleteSouscat(id) {
@@ -6187,7 +6187,7 @@ sauvegardes: `
 function openNotice() {
   switchNoticeTab('inventaire', document.querySelector('.notice-tab'));
   document.getElementById('modal-notice').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
 
 function switchNoticeTab(tab, btn) {
