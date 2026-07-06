@@ -860,9 +860,10 @@ body.is-fullscreen .sidebar-trigger {
   .pagination-btn { width: 30px; height: 30px; font-size: 12px; }
   .pagination-info { font-size: 11px; }
   .form-grid { grid-template-columns: 1fr; }
-  .modal-overlay:not(#modal-add) { padding: 0; align-items: flex-end; }
-  .modal-overlay.open:not(#modal-add) { padding: 0; align-items: flex-end; }
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal-overlay.open { padding: 0; align-items: flex-end; }
   .modal { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  #modal-add .modal { max-height: 95vh; }
   .modal { border-radius: 20px 20px 0 0; max-height: 92vh; width: 100%; max-width: 100% !important; animation: slideUpMobile 0.3s ease; }
   @keyframes slideUpMobile { from { transform: translateY(100%); } to { transform: translateY(0); } }
   .modal-body { padding: 16px; }
@@ -883,65 +884,6 @@ body.is-fullscreen .sidebar-trigger {
   .install-bar { padding: 12px 16px; }
   .fournisseur-card { flex-wrap: wrap; }
 
-  /* ── MODAL ADD : plein écran mobile ── */
-  #modal-add {
-    position: fixed !important;
-    inset: 0 !important;
-    background: #fff !important;
-    z-index: 200 !important;
-    display: none;
-    flex-direction: column;
-    padding: 0 !important;
-    align-items: stretch !important;
-    justify-content: flex-start !important;
-  }
-  #modal-add.open {
-    display: flex !important;
-  }
-  #modal-add .modal {
-    border-radius: 0 !important;
-    max-height: 100dvh !important;
-    height: 100dvh !important;
-    max-width: 100% !important;
-    width: 100% !important;
-    display: flex;
-    flex-direction: column;
-    box-shadow: none !important;
-    animation: none !important;
-  }
-  #modal-add .modal-header {
-    flex-shrink: 0;
-    background: #fff;
-    border-bottom: 2px solid var(--border);
-    padding: 14px 16px;
-    position: sticky;
-    top: 0;
-    z-index: 5;
-  }
-  #modal-add .modal-body {
-    flex: 1;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 16px;
-  }
-  #modal-add .modal-footer {
-    flex-shrink: 0;
-    background: #fff;
-    border-top: 2px solid var(--border);
-    padding: 12px 16px;
-    position: sticky;
-    bottom: 0;
-    display: flex;
-    flex-direction: row;
-    gap: 10px;
-    justify-content: stretch;
-  }
-  #modal-add .modal-footer .btn {
-    flex: 1;
-    justify-content: center;
-    font-size: 15px;
-    padding: 12px;
-  }
 }
 
 /* Tablette */
@@ -2392,14 +2334,6 @@ function openModal(type) {
     const fDep = document.getElementById('f-depreciable'); if (fDep) fDep.checked = true;
     resetPhotoUpload();
   }
-  // Sur mobile : fermer la sidebar avant d'ouvrir le modal
-  if (window.innerWidth <= 768 && type === 'add') {
-    const sb = document.getElementById('mainSidebar');
-    const ov = document.getElementById('sidebarOverlay');
-    if (sb) sb.classList.remove('open');
-    if (ov) ov.classList.remove('visible');
-    document.body.style.overflow = '';
-  }
   document.getElementById(`modal-${type}`).classList.add('open');
   if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
@@ -2436,13 +2370,6 @@ function editArticle(id) {
     resetPhotoUpload();
   }
 
-  if (window.innerWidth <= 768) {
-    const sb = document.getElementById('mainSidebar');
-    const ov = document.getElementById('sidebarOverlay');
-    if (sb) sb.classList.remove('open');
-    if (ov) ov.classList.remove('visible');
-    document.body.style.overflow = '';
-  }
   document.getElementById('modal-add').classList.add('open');
   if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
