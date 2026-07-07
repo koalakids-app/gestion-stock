@@ -827,7 +827,7 @@ body.is-fullscreen .sidebar-trigger {
   .picker-buttons-row { flex-direction: column; }
   .picker-buttons-row .btn { width: 100%; font-size: 12.5px; }
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; left: 0; top: 0; height: 100dvh; z-index: 200; padding-bottom: env(safe-area-inset-bottom); transform: translateX(-100%); transition: transform 0.25s ease; width: 270px; box-shadow: none; }
+  .sidebar { position: fixed; left: 0; top: 0; height: 100dvh; z-index: 200; transform: translateX(-100%); transition: transform 0.25s ease; width: 270px; box-shadow: none; }
   .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-lg); }
   .mobile-menu-btn { display: inline-flex !important; }
   .sidebar-trigger { display: none !important; }
@@ -840,7 +840,7 @@ body.is-fullscreen .sidebar-trigger {
   .btn-label-short { display: inline !important; }
   .search-box { min-width: unset; width: 100%; order: 10; flex-basis: 100%; }
   #save-indicator { display: none !important; }
-  .content { padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .content { padding: 12px; }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
   .stat-card { padding: 12px 14px; }
   .stat-value { font-size: 22px; }
@@ -864,8 +864,6 @@ body.is-fullscreen .sidebar-trigger {
   .pagination-btn { width: 30px; height: 30px; font-size: 12px; }
   .pagination-info { font-size: 11px; }
   .form-grid { grid-template-columns: 1fr; }
-  /* iOS : éviter le zoom auto sur focus (font-size < 16px) */
-  input, select, textarea { font-size: 16px !important; }
   .modal-overlay { padding: 0; align-items: flex-end; }
   .modal-overlay.open { padding: 0; align-items: flex-end; }
   .modal { overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -874,7 +872,7 @@ body.is-fullscreen .sidebar-trigger {
   @keyframes slideUpMobile { from { transform: translateY(100%); } to { transform: translateY(0); } }
   .modal-body { padding: 16px; }
   .modal-header { padding: 16px 16px 14px; }
-  .modal-footer { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)) 16px; flex-wrap: wrap; gap: 8px; }
+  .modal-footer { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
   .modal-footer .btn { flex: 1; justify-content: center; min-width: 100px; }
   .commande-card { grid-template-columns: 1fr; }
   .commande-total, .commande-total-label { text-align: left; }
@@ -1378,9 +1376,18 @@ body.is-fullscreen .sidebar-trigger {
           <input type="file" id="u-photo-input" accept="image/*" style="display:none" onchange="handleUniversPhoto(event)">
         </div>
         <div class="form-group full">
-          <label>Articles de l'inventaire</label>
+          <label style="display:flex;align-items:center;gap:6px">
+            📦 Articles principaux
+            <span style="font-size:11px;font-weight:400;color:var(--ink3)">— matériel qui compose l'univers</span>
+          </label>
           <div id="u-articles-picker" style="border:1px solid var(--border);border-radius:var(--radius-sm);max-height:220px;overflow-y:auto"></div>
-          <div style="font-size:11px;color:var(--ink3);margin-top:6px">Cochez les articles à inclure dans cet univers</div>
+        </div>
+        <div class="form-group full">
+          <label style="display:flex;align-items:center;gap:6px">
+            ✨ Articles d'enrichissement
+            <span style="font-size:11px;font-weight:400;color:var(--ink3)">— compléments optionnels pour enrichir l'univers</span>
+          </label>
+          <div id="u-enrichissement-picker" style="border:1px dashed var(--border);border-radius:var(--radius-sm);max-height:220px;overflow-y:auto"></div>
         </div>
         <div class="form-group full">
           <label>Conseils de mise en scène</label>
@@ -3616,11 +3623,24 @@ function resetUniversPhotoUI(photoData) {
   }
 }
 
-function buildArticlePicker(selectedIds = []) {
-  const picker = document.getElementById('u-articles-picker');
+function buildArticlePicker(creche, selectedIds = [], targetPickerId = 'u-articles-picker') {
+  const picker = document.getElementById(targetPickerId);
   if (!picker) return;
-  if (ARTICLES.length === 0) {
-    picker.innerHTML = '<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article dans l\'inventaire</div>';
+
+  // Préfixe unique par picker pour éviter les collisions d'IDs de checkbox et d'onglets
+  const pfx = targetPickerId === 'u-enrichissement-picker' ? 'enrich' : 'pick';
+  const tabMatId   = `${pfx}-tab-mat`;
+  const tabConsoId = `${pfx}-tab-conso`;
+  const listMatId  = `${pfx}-list-mat`;
+  const listConId  = `${pfx}-list-conso`;
+
+  // Filtrer par crèche si précisée
+  const articlesCreche = creche ? ARTICLES.filter(a => a.creche === creche) : ARTICLES;
+
+  if (articlesCreche.length === 0) {
+    picker.innerHTML = `<div style="padding:16px;color:var(--ink3);font-size:13px;text-align:center">
+      Aucun article dans l'inventaire de cette crèche
+    </div>`;
     return;
   }
 
@@ -3635,8 +3655,8 @@ function buildArticlePicker(selectedIds = []) {
       ${arts.map(a => {
         const nom = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
         const checked = selectedIds.includes(a.id) ? 'checked' : '';
-        return `<div class="article-picker-row" onclick="document.getElementById('pick-${a.id}').click()">
-          <input type="checkbox" id="pick-${a.id}" ${checked} onclick="event.stopPropagation()">
+        return `<div class="article-picker-row" onclick="document.getElementById('${pfx}-${a.id}').click()">
+          <input type="checkbox" id="${pfx}-${a.id}" ${checked} onclick="event.stopPropagation()">
           <div class="article-picker-label">${nom}</div>
           <span class="article-picker-cat">${a.stock} en stock</span>
         </div>`;
@@ -3644,31 +3664,38 @@ function buildArticlePicker(selectedIds = []) {
     `).join('');
   }
 
-  const materiel = ARTICLES.filter(a => a.depreciable !== false);
-  const conso = ARTICLES.filter(a => a.depreciable === false);
+  const materiel = articlesCreche.filter(a => a.depreciable !== false);
+  const conso = articlesCreche.filter(a => a.depreciable === false);
 
   picker.innerHTML = `
-    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface)">
-      <button id="picker-tab-mat" onclick="switchPickerTab('mat')"
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1">
+      <button id="${tabMatId}" onclick="switchPickerTab('mat','${pfx}')"
         style="flex:1;padding:8px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--accent);color:var(--accent)">
         🧸 Matériel (${materiel.length})
       </button>
-      <button id="picker-tab-conso" onclick="switchPickerTab('conso')"
+      <button id="${tabConsoId}" onclick="switchPickerTab('conso','${pfx}')"
         style="flex:1;padding:8px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--ink3)">
         🧴 Consommables (${conso.length})
       </button>
     </div>
-    <div id="picker-list-mat">${buildList(materiel)}</div>
-    <div id="picker-list-conso" style="display:none">${buildList(conso)}</div>
+    <div id="${listMatId}">${buildList(materiel)}</div>
+    <div id="${listConId}" style="display:none">${buildList(conso)}</div>
   `;
 }
 
-function switchPickerTab(tab) {
+function selectAllPickerArticles(checked, targetPickerId) {
+  const container = document.getElementById(targetPickerId);
+  if (!container) return;
+  container.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = checked; });
+}
+
+function switchPickerTab(tab, pfx) {
+  pfx = pfx || 'pick';
   const isMat = tab === 'mat';
-  const tMat = document.getElementById('picker-tab-mat');
-  const tCon = document.getElementById('picker-tab-conso');
-  const lMat = document.getElementById('picker-list-mat');
-  const lCon = document.getElementById('picker-list-conso');
+  const tMat = document.getElementById(`${pfx}-tab-mat`);
+  const tCon = document.getElementById(`${pfx}-tab-conso`);
+  const lMat = document.getElementById(`${pfx}-list-mat`);
+  const lCon = document.getElementById(`${pfx}-list-conso`);
   if (tMat) { tMat.style.borderBottomColor = isMat ? 'var(--accent)' : 'transparent'; tMat.style.color = isMat ? 'var(--accent)' : 'var(--ink3)'; }
   if (tCon) { tCon.style.borderBottomColor = !isMat ? 'var(--accent)' : 'transparent'; tCon.style.color = !isMat ? 'var(--accent)' : 'var(--ink3)'; }
   if (lMat) lMat.style.display = isMat ? 'block' : 'none';
@@ -3680,9 +3707,9 @@ function toggleArticlePick(id) {
   if (cb) cb.checked = !cb.checked;
 }
 
-function getSelectedArticleIds() {
+function getSelectedArticleIds(prefix = 'pick') {
   return ARTICLES
-    .filter(a => document.getElementById(`pick-${a.id}`)?.checked)
+    .filter(a => document.getElementById(`${prefix}-${a.id}`)?.checked)
     .map(a => a.id);
 }
 
@@ -3701,10 +3728,16 @@ function openModal_univers() {
   const crecheEl = document.getElementById('u-creche');
   if (crecheEl) {
     crecheEl.value = (currentCreche && currentCreche !== 'all') ? currentCreche : CRECHES[0];
-    crecheEl.onchange = () => buildArticlePicker(crecheEl.value, []);
   }
   updateSouscatSelectors();
-  buildArticlePicker((crecheEl?.value) || CRECHES[0], []);
+  buildArticlePicker((crecheEl?.value) || CRECHES[0], [], 'u-articles-picker');
+  buildArticlePicker((crecheEl?.value) || CRECHES[0], [], 'u-enrichissement-picker');
+  if (crecheEl) {
+    crecheEl.onchange = () => {
+      buildArticlePicker(crecheEl.value, [], 'u-articles-picker');
+      buildArticlePicker(crecheEl.value, [], 'u-enrichissement-picker');
+    };
+  }
   resetUniversPhotoUI(null);
   document.getElementById('modal-univers').classList.add('open');
   if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
@@ -3737,7 +3770,8 @@ async function saveUnivers() {
     cat:      document.getElementById('u-cat').value,
     desc:     document.getElementById('u-desc').value.trim(),
     conseils: document.getElementById('u-conseils').value.trim(),
-    articles: JSON.stringify(getSelectedArticleIds()),
+    articles: JSON.stringify(getSelectedArticleIds('pick')),
+    articles_enrichissement: JSON.stringify(getSelectedArticleIds('enrich')),
     souscat:  parseInt(document.getElementById('u-souscat')?.value) || null,
     photo:    photoUrl,
     created_at: new Date().toISOString(),
@@ -3774,7 +3808,10 @@ function editUnivers(id) {
   const crecheEl2 = document.getElementById('u-creche');
   if (crecheEl2) {
     crecheEl2.value = u.creche || CRECHES[0];
-    crecheEl2.onchange = () => buildArticlePicker(crecheEl2.value, []);
+    crecheEl2.onchange = () => {
+      buildArticlePicker(crecheEl2.value, [], 'u-articles-picker');
+      buildArticlePicker(crecheEl2.value, [], 'u-enrichissement-picker');
+    };
   }
   document.getElementById('u-cat').value     = u.cat;
   document.getElementById('u-age').value     = u.age || '';
@@ -3785,7 +3822,11 @@ function editUnivers(id) {
   updateSouscatSelectors();
   const scEl = document.getElementById('u-souscat'); if(scEl) scEl.value = u.souscat || '';
   const selIds = typeof u.articles === 'string' ? JSON.parse(u.articles||'[]') : (u.articles||[]);
-  buildArticlePicker(u.creche || CRECHES[0], selIds);
+  const selEnrichIds = typeof u.articles_enrichissement === 'string'
+    ? JSON.parse(u.articles_enrichissement||'[]')
+    : (u.articles_enrichissement||[]);
+  buildArticlePicker(u.creche || CRECHES[0], selIds, 'u-articles-picker');
+  buildArticlePicker(u.creche || CRECHES[0], selEnrichIds, 'u-enrichissement-picker');
   resetUniversPhotoUI(u.photo || null);
   document.getElementById('modal-univers').classList.add('open');
   if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
@@ -3841,6 +3882,31 @@ function showUniversDetail(id) {
           </div>`;
         }).join('')}
     </div>
+    ${(() => {
+      const enrichIds = typeof u.articles_enrichissement === 'string'
+        ? JSON.parse(u.articles_enrichissement||'[]')
+        : (u.articles_enrichissement||[]);
+      const enrichArts = enrichIds.map(aid => ARTICLES.find(a => a.id === aid)).filter(Boolean);
+      if (enrichArts.length === 0) return '';
+      return `<div style="margin-bottom:16px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--accent)">✨ Enrichissements (${enrichArts.length} article${enrichArts.length>1?'s':''})</div>
+        ${enrichArts.map(a => {
+          const nom = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+          const stockOk = a.stock > 0;
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--border)">
+            ${a.photo ? `<img src="${a.photo}" style="width:36px;height:36px;border-radius:6px;object-fit:cover">` :
+              `<div style="width:36px;height:36px;border-radius:6px;background:var(--accent-lt);display:flex;align-items:center;justify-content:center;font-size:18px">${CAT_ICONS[a.cat]||'📦'}</div>`}
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:500">${nom}</div>
+              <div style="font-size:11px;color:var(--ink3)">${a.cat} · ${a.fourn||'—'}</div>
+            </div>
+            <span style="font-size:11px;font-weight:600;color:${stockOk?'var(--green)':'var(--red)'}">
+              ${stockOk ? `✅ ${a.stock} dispo` : '❌ Rupture'}
+            </span>
+          </div>`;
+        }).join('')}
+      </div>`;
+    })()}
     ${u.conseils ? `<div style="background:#FEF9C3;border:1px solid #FDE68A;border-radius:8px;padding:14px;font-size:13px;line-height:1.6"><strong>💡 Mise en scène :</strong><br>${u.conseils}</div>` : ''}
   `;
   document.getElementById('detail-univers-footer').innerHTML = `
@@ -3912,6 +3978,27 @@ function printUnivers(id) {
       </tr></thead>
       <tbody>${rowsHTML}</tbody></table>
     </div>
+    ${(() => {
+      const enrichIds = typeof u.articles_enrichissement === 'string'
+        ? JSON.parse(u.articles_enrichissement||'[]')
+        : (u.articles_enrichissement||[]);
+      const enrichArts = enrichIds.map(aid => ARTICLES.find(a => a.id === aid)).filter(Boolean);
+      if (enrichArts.length === 0) return '';
+      const rows = enrichArts.map(a => {
+        const n = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+        return `<tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #E7E5E0">${n}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #E7E5E0;text-align:center">${a.cat}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #E7E5E0;text-align:center;font-weight:600;color:${a.stock>0?'#16A34A':'#DC2626'}">${a.stock > 0 ? a.stock + ' dispo' : 'Rupture'}</td>
+        </tr>`;
+      }).join('');
+      return `<div class="section">
+        <h3>✨ Enrichissements (${enrichArts.length} article${enrichArts.length>1?'s':''})</h3>
+        <table><thead><tr>
+          <th>Article</th><th style="text-align:center;width:140px">Catégorie</th><th style="text-align:center;width:100px">Disponibilité</th>
+        </tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+    })()}
     ${u.conseils ? `<div class="section"><h3>💡 Mise en scène</h3><div class="conseils-box">${u.conseils}</div></div>` : ''}
     <div class="footer">Fiche générée le ${new Date().toLocaleDateString('fr-FR')} — ${nom}</div>
     </body></html>`;
@@ -4986,6 +5073,9 @@ async function saveUniversDB(u, isNew) {
       id: u.id, nom: u.nom, creche: u.creche, cat: u.cat,
       description: u.desc||null, conseils: u.conseils||null,
       articles: typeof u.articles === 'string' ? u.articles : JSON.stringify(u.articles||[]),
+      articles_enrichissement: typeof u.articles_enrichissement === 'string'
+        ? u.articles_enrichissement
+        : JSON.stringify(u.articles_enrichissement||[]),
       photo: u.photo||null, souscat: u.souscat||null,
       created_at: u.created_at || new Date().toISOString(),
     };
