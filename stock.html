@@ -3634,12 +3634,15 @@ function buildArticlePicker(creche, selectedIds = [], targetPickerId = 'u-articl
   const listMatId  = `${pfx}-list-mat`;
   const listConId  = `${pfx}-list-conso`;
 
-  // Filtrer par crèche si précisée
-  const articlesCreche = creche ? ARTICLES.filter(a => a.creche === creche) : ARTICLES;
+  // Filtrer par crèche si précisée ; fallback sur tous les articles si la crèche ne matche rien
+  let articlesCreche = creche ? ARTICLES.filter(a => a.creche === creche) : ARTICLES;
+  const isFallback = creche && articlesCreche.length === 0 && ARTICLES.length > 0;
+  if (isFallback) articlesCreche = ARTICLES;
 
   if (articlesCreche.length === 0) {
     picker.innerHTML = `<div style="padding:16px;color:var(--ink3);font-size:13px;text-align:center">
-      Aucun article dans l'inventaire de cette crèche
+      Aucun article (${ARTICLES.length} au total)
+      <br><button type="button" onclick="rebuildPickers()" style="margin-top:8px;padding:5px 12px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--accent);font-size:12px;cursor:pointer">🔄 Rafraîchir</button>
     </div>`;
     return;
   }
@@ -3655,9 +3658,10 @@ function buildArticlePicker(creche, selectedIds = [], targetPickerId = 'u-articl
       ${arts.map(a => {
         const nom = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
         const checked = selectedIds.includes(a.id) ? 'checked' : '';
+        const crecheTag = isFallback ? `<span style="font-size:10px;background:var(--bg);color:var(--ink3);padding:1px 5px;border-radius:10px;margin-left:4px">${a.creche}</span>` : '';
         return `<div class="article-picker-row" onclick="document.getElementById('${pfx}-${a.id}').click()">
           <input type="checkbox" id="${pfx}-${a.id}" ${checked} onclick="event.stopPropagation()">
-          <div class="article-picker-label">${nom}</div>
+          <div class="article-picker-label">${nom}${crecheTag}</div>
           <span class="article-picker-cat">${a.stock} en stock</span>
         </div>`;
       }).join('')}
@@ -3700,6 +3704,15 @@ function switchPickerTab(tab, pfx) {
   if (tCon) { tCon.style.borderBottomColor = !isMat ? 'var(--accent)' : 'transparent'; tCon.style.color = !isMat ? 'var(--accent)' : 'var(--ink3)'; }
   if (lMat) lMat.style.display = isMat ? 'block' : 'none';
   if (lCon) lCon.style.display = !isMat ? 'block' : 'none';
+}
+
+function rebuildPickers() {
+  const crecheEl = document.getElementById('u-creche');
+  const creche = crecheEl?.value || (currentCreche !== 'all' ? currentCreche : CRECHES[0]);
+  const selIds = getSelectedArticleIds('pick');
+  const selEnrichIds = getSelectedArticleIds('enrich');
+  buildArticlePicker(creche, selIds, 'u-articles-picker');
+  buildArticlePicker(creche, selEnrichIds, 'u-enrichissement-picker');
 }
 
 function toggleArticlePick(id) {
@@ -4977,6 +4990,10 @@ async function loadData() {
 
     const now = new Date();
     setIndicator('☁️ Sync cloud — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}), 'var(--green)');
+    // Si le modal univers est ouvert pendant le chargement, rebâtir les pickers
+    if (document.getElementById('modal-univers')?.classList.contains('open')) {
+      if (typeof rebuildPickers === 'function') rebuildPickers();
+    }
     return true;
   } catch(e) {
     setIndicator('⚠️ Hors ligne — données locales', 'var(--amber)');
