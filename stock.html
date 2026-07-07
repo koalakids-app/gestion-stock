@@ -1728,6 +1728,9 @@ const IS_LOCAL = (typeof location !== 'undefined') &&
   (location.protocol === 'file:' ||
    (location.hostname && location.hostname.includes('claudeusercontent')));
 
+// Indique si Supabase est prêt — bloque la création de commande tant que false
+let _supabaseReady = IS_LOCAL; // en mode local, on considère toujours prêt
+
 // ─── DATA ─────────────────────────────────────────────────────────────────
 
 const CRECHES = ['Brunet', 'Cuers', 'Ollioules', 'St Jean', 'Picot 1', 'Picot 2'];
@@ -2574,7 +2577,8 @@ async function saveCommande_db() {
     } catch(e) {
       supabaseOk = false;
       console.error('[Supabase] saveCommande:', e);
-      showNotif('⚠ Commande sauvegardée localement — erreur Supabase : ' + e.message);
+      // Erreur persistante dans l'indicateur (visible jusqu'au prochain sync)
+      setIndicator('⚠️ Commande NON enregistrée dans le cloud — rechargez et repassez la commande', 'var(--red)');
     }
   }
 
@@ -2582,7 +2586,12 @@ async function saveCommande_db() {
   renderCommandes();
   renderHistorique();
   renderStats();
-  if (supabaseOk) showNotif('🛒 Commande enregistrée');
+  if (supabaseOk) {
+    showNotif('🛒 Commande enregistrée ☁️');
+  } else {
+    // Alerte modale pour que ce ne soit pas manqué
+    setTimeout(() => alert('⚠️ La commande n\'a pas pu être enregistrée dans le cloud (problème de connexion).\n\nElle apparaît localement mais disparaîtra au prochain rechargement.\n\nVeuillez recharger la page et la resaisir quand la connexion sera rétablie.'), 300);
+  }
 }
 
 async function markLivree(id) {
@@ -2761,8 +2770,26 @@ function resetCommandeModal() {
   // Reset bouton via id (plus fiable que querySelector)
   const saveBtn = document.getElementById('btn-save-commande');
   if (saveBtn) {
-    saveBtn.textContent = '🛒 Passer la commande';
-    saveBtn.onclick = () => onSaveCommande();
+    if (!_supabaseReady) {
+      // Supabase pas encore connecté : griser et attendre
+      saveBtn.textContent = '⏳ Connexion en cours…';
+      saveBtn.disabled = true;
+      saveBtn.title = 'Attends que la synchronisation soit établie avant de passer la commande';
+      const waitReady = setInterval(() => {
+        if (_supabaseReady) {
+          clearInterval(waitReady);
+          saveBtn.textContent = '🛒 Passer la commande';
+          saveBtn.disabled = false;
+          saveBtn.title = '';
+          saveBtn.onclick = () => onSaveCommande();
+        }
+      }, 500);
+    } else {
+      saveBtn.textContent = '🛒 Passer la commande';
+      saveBtn.disabled = false;
+      saveBtn.title = '';
+      saveBtn.onclick = () => onSaveCommande();
+    }
   }
   // Reset BC editing state
   const bcField = document.getElementById('c-bc');
@@ -3326,7 +3353,7 @@ function printBordereau(id) {
 
     // Build print rows HTML (no nested template literals)
     const printRowsHTML = arts.map(a => {
-      const lien = a.url ? '<a href="' + cleanUrl(a.url) + '" target="_blank" rel="noopener noreferrer" style="color:#2563EB;text-decoration:none">🔗 Voir</a>' : '—';
+      const lien = a.url ? '<a href="#" onclick="openUrl(\'' + cleanUrl(a.url) + '\',event)" style="color:#2563EB;text-decoration:none">🔗 Voir</a>' : '—';
       const t = ((a.qty||0)*(a.prix||0)).toFixed(2);
       return '<tr><td><strong>' + a.nom + '</strong></td>' +
         '<td style="text-align:center">' + (a.fourn||'—') + '</td>' +
@@ -4889,6 +4916,7 @@ async function loadData() {
     }
 
     const now = new Date();
+    _supabaseReady = true;
     setIndicator('☁️ Sync cloud — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}), 'var(--green)');
     return true;
   } catch(e) {
