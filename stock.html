@@ -3640,8 +3640,13 @@ function buildArticlePicker(creche, selectedIds = [], targetPickerId = 'u-articl
   if (isFallback) articlesCreche = ARTICLES;
 
   if (articlesCreche.length === 0) {
-    picker.innerHTML = `<div style="padding:16px;color:var(--ink3);font-size:13px;text-align:center">
-      Aucun article (${ARTICLES.length} au total)
+    // Diagnostic : lister les crèches disponibles dans ARTICLES
+    const crechesDispos = [...new Set(ARTICLES.map(a => a.creche))].filter(Boolean).sort();
+    picker.innerHTML = `<div style="padding:14px;color:var(--ink3);font-size:12px;text-align:center">
+      Aucun article pour "${creche}"<br>
+      ${ARTICLES.length > 0
+        ? `<span style="font-size:11px">Articles dispo : ${crechesDispos.map(c => `<strong>${c}</strong>`).join(', ')}</span>`
+        : '<span style="font-size:11px">Aucun article chargé — réessayez dans un instant</span>'}
       <br><button type="button" onclick="rebuildPickers()" style="margin-top:8px;padding:5px 12px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--accent);font-size:12px;cursor:pointer">🔄 Rafraîchir</button>
     </div>`;
     return;
@@ -4755,7 +4760,10 @@ async function syncFromCloud() {
 
     if (univsR.status === 'fulfilled' && Array.isArray(univsR.value)) {
       const mapped = univsR.value.map(u => ({ ...u, desc: u.desc || u.description || '' }));
-      UNIVERS.splice(0, UNIVERS.length, ...mapped);
+      // Fusionner : garder les univers créés localement et pas encore confirmés en DB
+      const dbIds = new Set(mapped.map(u => u.id));
+      const localOnly = UNIVERS.filter(u => !dbIds.has(u.id));
+      UNIVERS.splice(0, UNIVERS.length, ...mapped, ...localOnly);
     }
     // Note : univsR.rejected est géré plus bas dans allOk
 
@@ -5086,18 +5094,25 @@ async function saveHistoDB(h) {
 async function saveUniversDB(u, isNew) {
   if (IS_LOCAL) return;
   try {
+    const enrichVal = typeof u.articles_enrichissement === 'string'
+      ? u.articles_enrichissement
+      : JSON.stringify(u.articles_enrichissement||[]);
     const row = {
       id: u.id, nom: u.nom, creche: u.creche, cat: u.cat,
       description: u.desc||null, conseils: u.conseils||null,
       articles: typeof u.articles === 'string' ? u.articles : JSON.stringify(u.articles||[]),
-      articles_enrichissement: typeof u.articles_enrichissement === 'string'
-        ? u.articles_enrichissement
-        : JSON.stringify(u.articles_enrichissement||[]),
       photo: u.photo||null, souscat: u.souscat||null,
       created_at: u.created_at || new Date().toISOString(),
     };
     if (isNew) await sbInsert('univers', row);
     else await sbUpdate('univers', u.id, row);
+    // articles_enrichissement dans un patch séparé pour tolérer que la colonne
+    // n'existe pas encore (ALTER TABLE pas encore exécuté) sans bloquer la sauvegarde
+    try {
+      await sbUpdate('univers', u.id, { articles_enrichissement: enrichVal });
+    } catch(e2) {
+      console.warn('[Univers] articles_enrichissement non persisté (colonne absente ?):', e2.message);
+    }
     setSaved();
   } catch(e) {
     console.error('[Supabase] Univers save:', e);
