@@ -1728,9 +1728,6 @@ const IS_LOCAL = (typeof location !== 'undefined') &&
   (location.protocol === 'file:' ||
    (location.hostname && location.hostname.includes('claudeusercontent')));
 
-// Indique si Supabase est prêt — bloque la création de commande tant que false
-let _supabaseReady = IS_LOCAL; // en mode local, on considère toujours prêt
-
 // ─── DATA ─────────────────────────────────────────────────────────────────
 
 const CRECHES = ['Brunet', 'Cuers', 'Ollioules', 'St Jean', 'Picot 1', 'Picot 2'];
@@ -1806,11 +1803,15 @@ function init() {
   // Interface immédiate
   switchInvTab('materiel'); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique();updateCounts();
 
-  // Sync Supabase en arrière-plan
-  loadData().then(() => {
+  // Sync Supabase en arrière-plan (cold start possible jusqu'à 30s)
+  // Afficher un message intermédiaire après 5s si toujours en attente
+  const coldStartTimer = setTimeout(() => setIndicator('⏳ Démarrage du serveur… (peut prendre jusqu\'à 30s)', 'var(--amber)'), 5000);
+  loadData().then(ok => {
+    clearTimeout(coldStartTimer);
     switchInvTab(currentInvTab); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique(); updateCounts();
-    if (typeof startPolling === 'function') startPolling(20);
+    if (typeof startPolling === 'function') startPolling(60);
   }).catch(e => {
+    clearTimeout(coldStartTimer);
     console.warn('Supabase unavailable:', e.message);
     setIndicator('💻 Mode local', 'var(--ink3)');
   });
@@ -2448,20 +2449,17 @@ async function saveArticle() {
     photoName: currentPhotoName || null,
   };
 
-  if (editingId) {
+  // ── Optimistic update : UI immédiate, Supabase en arrière-plan ────────────
+  const isNew = !editingId;
+  if (isNew) {
+    ARTICLES.push(article);
+    addHisto('entrée', nom, stock, creche, 'Vous');
+  } else {
     const idx = ARTICLES.findIndex(a => a.id === editingId);
     ARTICLES[idx] = article;
     addHisto('sortie', `${nom} mis à jour`, 0, creche, 'Vous');
-    await saveArticleDB(article, false);
-    saveData();
-    showNotif('✅ Article mis à jour');
-  } else {
-    ARTICLES.push(article);
-    addHisto('entrée', nom, stock, creche, 'Vous');
-    await saveArticleDB(article, true);
-    saveData();
-    showNotif('✅ Article ajouté');
   }
+  saveData();
 
   currentPhotoData = null;
   currentPhotoName = null;
@@ -2471,6 +2469,17 @@ async function saveArticle() {
   renderActiveInvTable();
   renderHistorique();
   updateCounts();
+  showNotif(isNew ? '✅ Article ajouté' : '✅ Article mis à jour');
+
+  // Persistance Supabase en arrière-plan (sans bloquer)
+  if (!IS_LOCAL) {
+    saveArticleDB(article, isNew).then(() => {
+      if (isNew) saveHistoDB(HISTORIQUE[0]).catch(()=>{});
+    }).catch(e => {
+      console.error('[Supabase] saveArticle:', e);
+      showNotif('⚠ Article enregistré localement — erreur Supabase');
+    });
+  }
 }
 
 async function deleteArticle(id) {
@@ -2569,31 +2578,20 @@ async function saveCommande_db() {
   addHisto('commande', `Commande ${bc}`, 0, creche, 'Vous', `${fourn} — ${montant.toFixed(2)}€`);
   saveData();
 
-  // Sauvegarder dans Supabase
-  let supabaseOk = true;
-  if (!IS_LOCAL) {
-    try {
-      await saveCommandeDB(COMMANDES[COMMANDES.length-1]);
-    } catch(e) {
-      supabaseOk = false;
-      console.error('[Supabase] saveCommande:', e);
-      // Erreur persistante dans l'indicateur (visible jusqu'au prochain sync)
-      setIndicator('⚠️ Commande NON enregistrée dans le cloud — rechargez et repassez la commande', 'var(--red)');
-    }
-  }
-
+  // UI immédiate, Supabase en arrière-plan
   closeModal('modal-commande');
   renderCommandes();
   renderHistorique();
   renderStats();
-  if (supabaseOk) {
-    showNotif('🛒 Commande enregistrée ☁️');
-  } else {
-    // Alerte modale pour que ce ne soit pas manqué
-    setTimeout(() => alert('⚠️ La commande n\'a pas pu être enregistrée dans le cloud (problème de connexion).\n\nElle apparaît localement mais disparaîtra au prochain rechargement.\n\nVeuillez recharger la page et la resaisir quand la connexion sera rétablie.'), 300);
+  showNotif('🛒 Commande enregistrée');
+
+  if (!IS_LOCAL) {
+    saveCommandeDB(COMMANDES[COMMANDES.length-1]).catch(e => {
+      console.error('[Supabase] saveCommande:', e);
+      showNotif('⚠ Commande locale — erreur Supabase : ' + e.message);
+    });
   }
 }
-
 async function markLivree(id) {
   const c = COMMANDES.find(x => x.id === id);
   if (!c) return;
@@ -2770,26 +2768,8 @@ function resetCommandeModal() {
   // Reset bouton via id (plus fiable que querySelector)
   const saveBtn = document.getElementById('btn-save-commande');
   if (saveBtn) {
-    if (!_supabaseReady) {
-      // Supabase pas encore connecté : griser et attendre
-      saveBtn.textContent = '⏳ Connexion en cours…';
-      saveBtn.disabled = true;
-      saveBtn.title = 'Attends que la synchronisation soit établie avant de passer la commande';
-      const waitReady = setInterval(() => {
-        if (_supabaseReady) {
-          clearInterval(waitReady);
-          saveBtn.textContent = '🛒 Passer la commande';
-          saveBtn.disabled = false;
-          saveBtn.title = '';
-          saveBtn.onclick = () => onSaveCommande();
-        }
-      }, 500);
-    } else {
-      saveBtn.textContent = '🛒 Passer la commande';
-      saveBtn.disabled = false;
-      saveBtn.title = '';
-      saveBtn.onclick = () => onSaveCommande();
-    }
+    saveBtn.textContent = '🛒 Passer la commande';
+    saveBtn.onclick = () => onSaveCommande();
   }
   // Reset BC editing state
   const bcField = document.getElementById('c-bc');
@@ -4075,8 +4055,6 @@ function openUrl(raw, e) {
   a.click();
   document.body.removeChild(a);
 }
-// Exposition globale nécessaire pour les onclick injectés via innerHTML
-window.openUrl = openUrl;
 
 function showNotif(msg) {
   const el = document.getElementById('notif');
@@ -4593,7 +4571,7 @@ async function removeArticlePhoto(id) {
 // ─── SUPABASE CLOUD SYNC ──────────────────────────────────────────────────
 
 const SUPA_URL = 'https://juyrceadazrovlitxceb.supabase.co';
-const SUPA_KEY = 'sb_publishable_juEwd3M1wOvOXnM3frvDJA_FIeHQB-Q';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug';
 const SUPA_HEADERS = {
   'Content-Type': 'application/json',
   'apikey': SUPA_KEY,
@@ -4644,14 +4622,16 @@ async function syncFromCloud() {
   if (IS_LOCAL) return;
   if (isPolling) return;
   isPolling = true;
+  // Timeout par requête : 20s max (évite que syncFromCloud reste bloqué indéfiniment)
+  const withTimeout = (p, ms=20000) => Promise.race([p, new Promise((_,r)=>setTimeout(()=>r(new Error('Timeout')),ms))]);
   try {
     // Fetch chaque table indépendamment — une erreur sur l'une ne détruit pas les autres
     const results = await Promise.allSettled([
-      sbGet('articles'),
-      sbGet('commandes'),
-      sbGet('fournisseurs'),
-      sbGet('historique', 'order=id.desc&limit=200'),
-      sbGet('univers', 'order=id.desc'),
+      withTimeout(sbGet('articles')),
+      withTimeout(sbGet('commandes')),
+      withTimeout(sbGet('fournisseurs')),
+      withTimeout(sbGet('historique', 'order=id.desc&limit=200')),
+      withTimeout(sbGet('univers', 'order=id.desc')),
     ]);
 
     const [artsR, cmdsR, fournsR, histosR, univsR] = results;
@@ -4715,7 +4695,7 @@ async function syncFromCloud() {
   }
 }
 
-function startPolling(intervalSec = 20) {
+function startPolling(intervalSec = 60) {
   if (pollingInterval) clearInterval(pollingInterval);
   pollingInterval = setInterval(syncFromCloud, intervalSec * 1000);
 }
@@ -4730,14 +4710,14 @@ document.addEventListener('visibilitychange', () => {
     stopPolling();
   } else {
     syncFromCloud(); // Sync immédiate au retour en avant-plan
-    startPolling(20);
+    startPolling(60);
   }
 });
 
 // Sync immédiate au retour en ligne
 window.addEventListener('online', () => {
   setIndicator('🔄 Reconnexion…', 'var(--amber)');
-  syncFromCloud().then(() => startPolling(20));
+  syncFromCloud().then(() => startPolling(60));
 });
 
 // ── API helpers ────────────────────────────────────────────────────────────
@@ -4885,8 +4865,8 @@ async function loadData() {
   }
   setIndicator('⏳ Connexion à Supabase…', 'var(--amber)');
   try {
-    // Timeout de 8 secondes pour ne pas bloquer l'interface
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000));
+    // Timeout de 30s (Supabase peut mettre jusqu'à 30s à se réveiller après inactivité)
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000));
     const [arts, cmds, fourns, histos, univs] = await Promise.race([
       Promise.all([
         sbGet('articles'),
@@ -4916,7 +4896,6 @@ async function loadData() {
     }
 
     const now = new Date();
-    _supabaseReady = true;
     setIndicator('☁️ Sync cloud — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}), 'var(--green)');
     return true;
   } catch(e) {
