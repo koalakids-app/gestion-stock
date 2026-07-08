@@ -411,6 +411,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn" onclick="showMain('fraispro')" id="mnav-fraispro"><i class="ti ti-receipt"></i> Frais pro</button>
       <button class="mnav-btn" onclick="showMain('heures-sup')" id="mnav-heures-sup"><i class="ti ti-clock-plus"></i> Heures sup</button>
       <button class="mnav-btn" onclick="showMain('remplacantes')" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
+      <button class="mnav-btn" onclick="showMain('vaccinations')" id="mnav-vaccinations"><i class="ti ti-vaccine"></i> Vaccinations</button>
     </nav>
     <div style="display:flex;align-items:center;gap:8px">
       <div class="user-chip" id="user-chip" onclick="doLogout()"><i class="ti ti-user" style="font-size:13px"></i> <span id="user-name">—</span> <i class="ti ti-logout" style="font-size:12px;opacity:0.7"></i></div>
@@ -860,8 +861,56 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 
+  <!-- VACCINATIONS -->
+  <div id="main-vaccinations" class="tab-content">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-title"><i class="ti ti-vaccine" style="color:var(--koala)"></i> Suivi des vaccinations obligatoires</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select class="finput direction-only" id="vac-creche-select" style="width:auto;min-width:160px;font-size:12px;padding:4px 8px" onchange="vacRender()">
+          <option value="">Toutes les crèches</option>
+        </select>
+        <button class="btn-primary" onclick="vacOpenEnfantModal()"><i class="ti ti-plus"></i> Ajouter un enfant</button>
+      </div>
+    </div>
+    <div class="module-tabs" style="margin-bottom:1rem">
+      <button class="module-tab active" onclick="vacShowView('liste',this)"><i class="ti ti-list"></i> Liste enfants</button>
+      <button class="module-tab" onclick="vacShowView('alertes',this)"><i class="ti ti-alert-circle"></i> Alertes <span id="vac-alert-badge" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px">0</span></button>
+      <button class="module-tab" onclick="vacShowView('calendrier',this)"><i class="ti ti-calendar"></i> Calendrier prévisionnel</button>
+    </div>
+    <div id="vac-view-liste" class="module-tab-content active">
+      <div id="vac-enfant-list" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+    <div id="vac-view-alertes" class="module-tab-content">
+      <div id="vac-alert-list" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+    <div id="vac-view-calendrier" class="module-tab-content">
+      <div id="vac-cal-list" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </div>
+
 </div><!-- end .app -->
 </div><!-- end #app-wrap -->
+
+<!-- Modal saisie dose vaccination -->
+<div class="overlay" id="modal-vac-dose-wrap">
+  <div class="modal" style="max-width:460px;width:100%">
+    <h3 id="vac-dose-title" style="margin-bottom:1rem;font-size:15px;color:var(--koala)">Saisir une vaccination</h3>
+    <input type="hidden" id="vac-dose-enfant-id">
+    <input type="hidden" id="vac-dose-vaccin-id">
+    <input type="hidden" id="vac-dose-index">
+    <div class="fg"><label class="flabel">Date de vaccination <span style="color:var(--red)">*</span></label><input class="finput" type="date" id="vac-dose-date"></div>
+    <div class="fg"><label class="flabel">Nom du vaccin utilisé</label><input class="finput" id="vac-dose-vaccin-name" placeholder="ex: Infanrix Hexa, Bexsero…"></div>
+    <div class="fg"><label class="flabel">Numéro de lot</label><input class="finput" id="vac-dose-lot" placeholder="Numéro de lot (optionnel)"></div>
+    <div class="fg"><label class="flabel">Note</label><textarea class="finput" id="vac-dose-note" rows="2" placeholder="Remarque éventuelle…" style="resize:vertical"></textarea></div>
+    <div class="mactions">
+      <button class="btn-danger-sm" id="vac-dose-delete-btn" onclick="vacDeleteDose()" style="display:none;margin-right:auto"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn-cancel" onclick="closeModal('modal-vac-dose-wrap')">Annuler</button>
+      <button class="btn-primary" onclick="vacSaveDose()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
 
 <!-- Bouton aide flottant -->
 <button onclick="openNotice()" title="Aide & Notice d'utilisation"
@@ -1369,7 +1418,7 @@ function updateBadges(){
 }
 
 function showMain(tab){
-  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','heures-sup'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','heures-sup','vaccinations'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -1386,6 +1435,7 @@ function showMain(tab){
   if(tab==='fraisik'){if(isDirection)ikInit();else showMain('ref-dashboard');}
   if(tab==='fraispro')fpInit();
   if(tab==='remplacantes')rmpInit();
+  if(tab==='vaccinations')vacInit();
 }
 
 // FULLSCREEN DEMANDES
@@ -1887,24 +1937,6 @@ async function setPresence(enfantId,slot,dateStr,status){
   else await sb.from('presences').insert({enfant_id:enfantId,presence_date:dateStr,slot,status});
   renderPresence();
 }
-async function setAbsent(enfantId,dateStr,markAbsent){
-  await sb.from('presences').delete().eq('enfant_id',enfantId).eq('presence_date',dateStr);
-  if(markAbsent){
-    await sb.from('presences').insert([
-      {enfant_id:enfantId,presence_date:dateStr,slot:'M',status:'absent'},
-      {enfant_id:enfantId,presence_date:dateStr,slot:'A',status:'absent'}
-    ]);
-  }
-  renderPresence();
-}
-async function setPresent(enfantId,dateStr){
-  await sb.from('presences').delete().eq('enfant_id',enfantId).eq('presence_date',dateStr);
-  await sb.from('presences').insert([
-    {enfant_id:enfantId,presence_date:dateStr,slot:'M',status:'present'},
-    {enfant_id:enfantId,presence_date:dateStr,slot:'A',status:'present'}
-  ]);
-  renderPresence();
-}
 async function renderPresenceGantt(){
   const dateStr=document.getElementById('presence-date')?.value||todayStr();
   const view=document.getElementById('presence-gantt-view');
@@ -1918,58 +1950,46 @@ async function renderPresenceGantt(){
   // presMap: enfant_id -> {M, A}
   const presMap={};
   (presData||[]).forEach(p=>{if(!presMap[p.enfant_id])presMap[p.enfant_id]={};presMap[p.enfant_id][p.slot]=p.status;});
-  // Gantt: heures 7h–19h, 1 colonne = 30min = 24 colonnes
-  const H_START=7,H_END=19,COLS=(H_END-H_START)*2;
-  const COL_W=28;
-  const NAME_W=140;
-  const BTN_W=100;
+  // Gantt: heures 7h\u201319h, 1 colonne = 30min = 24 colonnes
+  const H_START=7,H_END=19,COLS=(H_END-H_START)*2; // 24 demi-heures
+  const COL_W=28; // px par demi-heure
+  const NAME_W=160;
   const d=new Date(dateStr+'T00:00:00');
   const dateLabel=d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  // Compter pr\u00e9sents
   const presents=enfants.filter(e=>{const p=presMap[e.id]||{};return p.M==='present'||p.A==='present';});
-  // En-tête heures
+  // En-t\u00eate heures
   let hdrHtml='<div style="display:flex;align-items:center;border-bottom:2px solid var(--koala);margin-bottom:4px">';
-  hdrHtml+='<div style="width:'+(NAME_W+BTN_W)+'px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--koala);padding-right:8px;text-align:right">'+presents.length+'\u00a0/\u00a0'+enfants.length+'</div>';
+  hdrHtml+='<div style="width:'+NAME_W+'px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--koala);padding-right:8px;text-align:right">'+presents.length+'\u00a0/\u00a0'+enfants.length+'</div>';
   for(let h=H_START;h<H_END;h++){
     hdrHtml+='<div style="width:'+(COL_W*2)+'px;flex-shrink:0;font-size:10px;font-weight:600;color:var(--muted);text-align:left;border-left:1px solid #e0dff0;padding-left:2px">'+h+'h</div>';
   }
   hdrHtml+='</div>';
+  // Lignes enfants
   let rowsHtml='';
   enfants.forEach((e,idx)=>{
     const p=presMap[e.id]||{};
     const hasM=p.M==='present'||p.M==='partial';
     const hasA=p.A==='present'||p.A==='partial';
-    const isAbsent=p.M==='absent'||p.A==='absent';
-    const nonSaisi=!hasM&&!hasA&&!isAbsent;
+    const absent=!hasM&&!hasA;
+    // Calcul segments (en demi-heures depuis H_START)
+    // Matin: 7h\u201313h = cols 0\u201311, Apr\u00e8s-midi: 13h\u201319h = cols 12\u201323
     const segments=[];
     if(hasM&&hasA)segments.push({start:0,end:COLS,color:'var(--koala)'});
     else if(hasM)segments.push({start:0,end:12,color:'var(--koala)'});
     else if(hasA)segments.push({start:12,end:COLS,color:'var(--koala)'});
     const bg=idx%2===0?'#fff':'#f7f6fb';
     rowsHtml+='<div style="display:flex;align-items:center;padding:3px 0;background:'+bg+';border-radius:4px">';
-    rowsHtml+='<div style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(isAbsent||nonSaisi?'400':'600')+';color:'+(isAbsent?'#e03e3e':nonSaisi?'var(--muted)':'var(--text)')+';padding-right:4px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escHtml(e.prenom+' '+e.nom)+'">'+escHtml(e.prenom+' '+e.nom)+(isAbsent?' <span style="font-size:10px">abs.</span>':'')+'</div>';
-    rowsHtml+='<div style="width:'+BTN_W+'px;flex-shrink:0;padding-right:6px;display:flex;gap:3px;justify-content:flex-end">';
-    if(isAbsent){
-      // Absent → bouton présent actif + bouton absent désactivé
-      rowsHtml+='<button onclick="setPresent(\''+e.id+'\',\''+dateStr+'\')" style="font-size:10px;padding:1px 5px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;border-radius:4px;cursor:pointer;line-height:1.4">\u2713 pr\u00e9s.</button>';
-      rowsHtml+='<button disabled style="font-size:10px;padding:1px 5px;background:#fdecea;color:#e03e3e;border:1px solid #f5c6c6;border-radius:4px;line-height:1.4;opacity:0.5">\u2715 abs.</button>';
-    }else if(hasM||hasA){
-      // Présent → bouton présent désactivé + bouton absent actif
-      rowsHtml+='<button disabled style="font-size:10px;padding:1px 5px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;border-radius:4px;line-height:1.4;opacity:0.5">\u2713 pr\u00e9s.</button>';
-      rowsHtml+='<button onclick="setAbsent(\''+e.id+'\',\''+dateStr+'\',true)" style="font-size:10px;padding:1px 5px;background:#f5f5f5;color:#999;border:1px solid #ddd;border-radius:4px;cursor:pointer;line-height:1.4">\u2715 abs.</button>';
-    }else{
-      // Non saisi → les deux actifs
-      rowsHtml+='<button onclick="setPresent(\''+e.id+'\',\''+dateStr+'\')" style="font-size:10px;padding:1px 5px;background:#f5f5f5;color:#666;border:1px solid #ddd;border-radius:4px;cursor:pointer;line-height:1.4">\u2713 pr\u00e9s.</button>';
-      rowsHtml+='<button onclick="setAbsent(\''+e.id+'\',\''+dateStr+'\',true)" style="font-size:10px;padding:1px 5px;background:#f5f5f5;color:#999;border:1px solid #ddd;border-radius:4px;cursor:pointer;line-height:1.4">\u2715 abs.</button>';
-    }
-    rowsHtml+='</div>';
+    rowsHtml+='<div style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--text)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escHtml(e.prenom+' '+e.nom)+'">'+escHtml(e.prenom+' '+e.nom)+'</div>';
+    // Barre Gantt
     rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:20px;border-left:1px solid #e0dff0">';
+    // Lignes verticales des heures
     for(let c=0;c<COLS;c+=2){
       rowsHtml+='<div style="position:absolute;left:'+(c*COL_W)+'px;top:0;bottom:0;border-left:1px solid '+(c===0?'transparent':'#ece9f5')+';pointer-events:none"></div>';
     }
+    // Bande 12h (s\u00e9parateur matin/apm)
     rowsHtml+='<div style="position:absolute;left:'+(12*COL_W)+'px;top:0;bottom:0;border-left:1px dashed #b0a8d8;pointer-events:none"></div>';
-    if(isAbsent){
-      rowsHtml+='<div style="position:absolute;left:4px;right:4px;top:8px;height:4px;background:#f5c6c6;border-radius:4px"></div>';
-    }else if(nonSaisi){
+    if(absent){
       rowsHtml+='<div style="position:absolute;left:4px;right:4px;top:6px;height:8px;background:#f0eef8;border-radius:4px"></div>';
     }else{
       segments.forEach(seg=>{
@@ -1979,10 +1999,10 @@ async function renderPresenceGantt(){
     }
     rowsHtml+='</div></div>';
   });
+  // Ligne de d\u00e9marcation 12h (l\u00e9gende)
   let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted)">';
   legendHtml+='<span><span style="display:inline-block;width:28px;height:8px;background:var(--koala);border-radius:3px;vertical-align:middle;margin-right:4px"></span>Pr\u00e9sent</span>';
-  legendHtml+='<span><span style="display:inline-block;width:28px;height:4px;background:#f5c6c6;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Absent</span>';
-  legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h</span>';
+  legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
   legendHtml+='</div>';
   const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+'</div>';
   view.innerHTML=dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+COLS*COL_W+20)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
@@ -2026,8 +2046,8 @@ function ipIsFirstnameToken(tok){return tok&&/^[A-ZÀ-Ÿ]/.test(tok)&&/[a-zà-ÿ
 async function handlePresenceImport(input){
   const file=input.files&&input.files[0];input.value='';if(!file)return;
   if(typeof pdfjsLib==='undefined'){alert('Bibliothèque PDF non chargée.');return;}
-  const crecheId=isDirection?(document.getElementById('presence-creche-select')?.value||null):currentProfile?.creche_id;
-  if(!crecheId){alert('Sélectionnez une crèche dans le menu présences avant d\'importer.');return;}
+  const crecheId=isDirection?(activeCrecheId==='all'?null:activeCrecheId):currentProfile?.creche_id;
+  if(!crecheId){alert('Sélectionnez une crèche spécifique avant d\'importer (pas "Toutes").');return;}
   showBanner('Lecture du PDF en cours…');
   let pages;
   try{pages=await ipParsePdf(file);}catch(e){console.error('[ImportPresence]',e);showBanner('Impossible de lire ce PDF.','error');return;}
@@ -5106,6 +5126,326 @@ comptes: `
 </div>`
 
 };
+
+// =============================================
+// VACCINATIONS OBLIGATOIRES
+// =============================================
+
+// Définition des vaccins obligatoires selon calendrier vaccinal français 2025
+const VAC_SCHEMA = [
+  {id:'dtp_coque',label:'DTCaP (Diphtérie, Tétanos, Coqueluche, Polio)',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
+  {id:'hib',label:'Haemophilus influenzae b',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
+  {id:'hepb',label:'Hépatite B',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
+  {id:'pneumo',label:'Pneumocoque',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
+  {id:'menb',label:'Méningocoque B',doses:[{label:'3 mois',months:3},{label:'5 mois',months:5},{label:'12 mois',months:12}]},
+  {id:'menacwy',label:'Méningocoques ACWY',doses:[{label:'6 mois',months:6},{label:'12 mois',months:12}]},
+  {id:'menc',label:'Méningocoque C',doses:[{label:'5 mois',months:5},{label:'12 mois',months:12}]},
+  {id:'ror',label:'ROR (Rougeole, Oreillons, Rubéole)',doses:[{label:'12 mois',months:12},{label:'18 mois',months:18}]},
+];
+
+let cacheVaccinations = [];
+let vacCurrentEnfantId = null;
+
+function vacAddMonths(date, months){
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+function vacFmtDate(d){
+  if(!d) return '—';
+  const dd = new Date(d);
+  return dd.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function vacLocalISO(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function vacDaysUntil(isoDate){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(isoDate); target.setHours(0,0,0,0);
+  return Math.round((target-today)/(1000*60*60*24));
+}
+
+async function vacInit(){
+  // Populate crèche select
+  const sel = document.getElementById('vac-creche-select');
+  if(sel){
+    const opts = cacheCreches.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    sel.innerHTML = '<option value="">Toutes les crèches</option>' + opts;
+    if(!isDirection && currentProfile?.creche_id){
+      sel.value = currentProfile.creche_id;
+      sel.style.display = 'none';
+    }
+  }
+  await vacLoadData();
+  vacRender();
+}
+
+async function vacLoadData(){
+  const {data, error} = await sb.from('vaccinations').select('*');
+  if(error){console.warn('vaccinations load',error);cacheVaccinations=[];return;}
+  cacheVaccinations = data || [];
+}
+
+function vacShowView(view, btn){
+  ['liste','alertes','calendrier'].forEach(v=>{
+    const el = document.getElementById('vac-view-'+v);
+    if(el) el.classList.toggle('active', v===view);
+  });
+  document.querySelectorAll('#main-vaccinations .module-tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(view==='liste') vacRenderListe();
+  if(view==='alertes') vacRenderAlertes();
+  if(view==='calendrier') vacRenderCalendrier();
+}
+
+function vacRender(){
+  const activeTab = document.querySelector('#main-vaccinations .module-tab.active');
+  const activeView = activeTab ? (activeTab.textContent.includes('Liste')?'liste':activeTab.textContent.includes('Alertes')?'alertes':'calendrier') : 'liste';
+  if(activeView==='liste') vacRenderListe();
+  if(activeView==='alertes') vacRenderAlertes();
+  if(activeView==='calendrier') vacRenderCalendrier();
+}
+
+function vacGetEnfantsFiltres(){
+  const crecheId = document.getElementById('vac-creche-select')?.value || '';
+  return (crecheId ? cacheEnfants.filter(e=>e.creche_id===crecheId) : [...cacheEnfants])
+    .filter(e=>e.dob) // only enfants with DOB
+    .sort((a,b)=>(a.prenom||'').localeCompare(b.prenom||'','fr'));
+}
+
+function vacGetDoseKey(enfantId, vaccId, doseIdx){ return enfantId+'_'+vaccId+'_'+doseIdx; }
+
+function vacGetRecord(enfantId, vaccId, doseIdx){
+  return cacheVaccinations.find(v=>v.enfant_id===enfantId && v.vaccin_id===vaccId && v.dose_index===doseIdx);
+}
+
+function vacDoseStatus(enfant, vacc, doseIdx){
+  const dose = vacc.doses[doseIdx];
+  const rec = vacGetRecord(enfant.id, vacc.id, doseIdx);
+  if(rec && rec.date_fait) return {state:'fait', date: rec.date_fait, rec};
+  const due = vacAddMonths(new Date(enfant.dob), dose.months);
+  const daysLeft = vacDaysUntil(vacLocalISO(due));
+  if(daysLeft < 0) return {state:'retard', due, daysLeft, rec};
+  if(daysLeft <= 30) return {state:'proche', due, daysLeft, rec};
+  return {state:'ok', due, daysLeft, rec};
+}
+
+function vacRenderListe(){
+  const el = document.getElementById('vac-enfant-list');
+  if(!el) return;
+  const enfants = vacGetEnfantsFiltres();
+  if(!enfants.length){el.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant avec date de naissance. Ajoutez-en via le bouton ci-dessus.</p></div>';return;}
+  el.innerHTML = enfants.map(e=>{
+    const creche = cacheCreches.find(c=>c.id===e.creche_id);
+    let alertCount = 0;
+    const rows = VAC_SCHEMA.map(v=>{
+      const doses = v.doses.map((dose,di)=>{
+        const s = vacDoseStatus(e,v,di);
+        if(s.state==='retard'||s.state==='proche') alertCount++;
+        const stateIcon = s.state==='fait'?'<span style="color:var(--green);font-weight:700">✅ '+vacFmtDate(s.date)+'</span>'
+          :s.state==='retard'?'<span style="color:var(--red);font-weight:700">⚠️ '+vacFmtDate(vacLocalISO(s.due))+'</span>'
+          :s.state==='proche'?'<span style="color:var(--orange);font-weight:700">⏰ '+vacFmtDate(vacLocalISO(s.due))+'</span>'
+          :'<span style="color:var(--muted)">📅 '+vacFmtDate(vacLocalISO(s.due))+'</span>';
+        const btnLabel = s.state==='fait' ? '✏️' : '✔ Saisir';
+        return `<td style="padding:5px 8px;font-size:12px;text-align:center;vertical-align:middle">${stateIcon}<br><button onclick="vacOpenDose('${e.id}','${v.id}',${di})" style="margin-top:3px;font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;color:var(--koala)">${btnLabel}</button></td>`;
+      }).join('');
+      return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600;color:var(--koala-dark);white-space:nowrap">${v.label}</td>${doses}</tr>`;
+    }).join('');
+    const ageMs = Date.now() - new Date(e.dob).getTime();
+    const ageMois = Math.floor(ageMs/(1000*60*60*24*30.44));
+    const ageStr = ageMois < 24 ? ageMois+' mois' : Math.floor(ageMois/12)+' ans '+(ageMois%12)+' mois';
+    const alertBadge = alertCount > 0 ? `<span style="background:var(--red-light);color:var(--red);border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:8px">⚠️ ${alertCount} à vérifier</span>` : '<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:8px">✅ À jour</span>';
+    const doseHeaders = VAC_SCHEMA[0].doses.map(d=>`<th style="padding:5px 8px;font-size:11px;font-weight:700;color:#fff;text-align:center;white-space:nowrap">${d.label}</th>`).join('') + '<th style="padding:5px 8px;font-size:11px;font-weight:700;color:#fff;text-align:center"></th><th style="padding:5px 8px;font-size:11px;font-weight:700;color:#fff;text-align:center"></th>';
+    return `<div style="background:#fff;border-radius:12px;border:1px solid var(--border);overflow:hidden;box-shadow:0 1px 4px rgba(61,53,128,0.07)">
+      <div style="background:var(--koala);color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <i class="ti ti-user" style="font-size:16px"></i>
+          <strong>${escHtml(e.prenom+' '+e.nom)}</strong>
+          <span style="font-size:12px;opacity:0.8">né(e) le ${vacFmtDate(e.dob)} · ${ageStr}</span>
+          ${creche?`<span style="font-size:11px;background:rgba(255,255,255,0.18);border-radius:8px;padding:1px 8px">${escHtml(creche.name)}</span>`:''}
+        </div>
+        <div>${alertBadge}</div>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--koala-light)">
+              <th style="padding:5px 8px;font-size:11px;font-weight:700;color:var(--koala);text-align:left;min-width:180px">Vaccin</th>
+              ${VAC_SCHEMA.flatMap(v=>v.doses.map((d,di)=>`<th style="padding:5px 8px;font-size:11px;font-weight:700;color:var(--koala);text-align:center;white-space:nowrap">${d.label}</th>`)).join('')}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function vacRenderAlertes(){
+  const el = document.getElementById('vac-alert-list');
+  const badge = document.getElementById('vac-alert-badge');
+  if(!el) return;
+  const enfants = vacGetEnfantsFiltres();
+  const alertes = [];
+  enfants.forEach(e=>{
+    const creche = cacheCreches.find(c=>c.id===e.creche_id);
+    VAC_SCHEMA.forEach(v=>{
+      v.doses.forEach((dose,di)=>{
+        const s = vacDoseStatus(e,v,di);
+        if(s.state==='retard'||s.state==='proche'){
+          alertes.push({enfant:e, creche, vacc:v, doseIdx:di, dose, s});
+        }
+      });
+    });
+  });
+  if(badge){
+    badge.textContent = alertes.length;
+    badge.style.display = alertes.length ? 'inline' : 'none';
+  }
+  if(!alertes.length){el.innerHTML='<div class="empty-state"><i class="ti ti-circle-check" style="color:var(--green)"></i><p>Aucune alerte ! Toutes les vaccinations sont à jour.</p></div>';return;}
+  alertes.sort((a,b)=>a.s.daysLeft-b.s.daysLeft);
+  el.innerHTML = alertes.map(({enfant,creche,vacc,doseIdx,dose,s})=>{
+    const urgency = s.state==='retard' ? {bg:'var(--red-light)',col:'var(--red)',icon:'⚠️',label:'En retard'} : {bg:'var(--orange-light)',col:'var(--orange-dark)',icon:'⏰',label:'Dans '+s.daysLeft+' jour(s)'};
+    return `<div style="background:${urgency.bg};border-left:4px solid ${urgency.col};border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-weight:700;color:${urgency.col}">${urgency.icon} ${escHtml(enfant.prenom+' '+enfant.nom)} ${creche?'— '+escHtml(creche.name):''}</div>
+        <div style="font-size:12px;margin-top:2px;color:var(--text)">${escHtml(vacc.label)} · ${dose.label} · Prévu le ${vacFmtDate(vacLocalISO(s.due))}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:12px;font-weight:700;color:${urgency.col}">${urgency.label}</span>
+        <button onclick="vacOpenDose('${enfant.id}','${vacc.id}',${doseIdx})" style="padding:5px 12px;border:2px solid ${urgency.col};border-radius:7px;background:#fff;cursor:pointer;font-weight:600;color:${urgency.col};font-size:12px">✔ Saisir</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function vacRenderCalendrier(){
+  const el = document.getElementById('vac-cal-list');
+  if(!el) return;
+  const enfants = vacGetEnfantsFiltres();
+  const upcoming = [];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const in90 = new Date(today); in90.setDate(in90.getDate()+90);
+  enfants.forEach(e=>{
+    const creche = cacheCreches.find(c=>c.id===e.creche_id);
+    VAC_SCHEMA.forEach(v=>{
+      v.doses.forEach((dose,di)=>{
+        const s = vacDoseStatus(e,v,di);
+        if(s.state==='fait') return;
+        if(s.due && s.due <= in90){
+          upcoming.push({enfant:e,creche,vacc:v,doseIdx:di,dose,s});
+        }
+      });
+    });
+  });
+  upcoming.sort((a,b)=>a.s.due-b.s.due);
+  if(!upcoming.length){el.innerHTML='<div class="empty-state"><i class="ti ti-calendar-check"></i><p>Aucun vaccin prévu dans les 90 prochains jours.</p></div>';return;}
+  // Group by month
+  const byMonth = {};
+  upcoming.forEach(item=>{
+    const key = item.s.due.getFullYear()+'-'+String(item.s.due.getMonth()+1).padStart(2,'0');
+    if(!byMonth[key]) byMonth[key]=[];
+    byMonth[key].push(item);
+  });
+  el.innerHTML = Object.entries(byMonth).map(([key,items])=>{
+    const [y,m] = key.split('-');
+    const monthLabel = new Date(+y,+m-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+    const rows = items.map(({enfant,creche,vacc,doseIdx,dose,s})=>{
+      const col = s.state==='retard'?'var(--red)':s.state==='proche'?'var(--orange)':'var(--koala)';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:6px">
+        <div>
+          <span style="font-weight:600;color:var(--text)">${escHtml(enfant.prenom+' '+enfant.nom)}</span>
+          ${creche?`<span style="font-size:11px;color:var(--muted);margin-left:6px">${escHtml(creche.name)}</span>`:''}
+          <div style="font-size:12px;color:var(--muted);margin-top:1px">${escHtml(vacc.label)} · ${dose.label}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-weight:700;color:${col}">${vacFmtDate(vacLocalISO(s.due))}</span>
+          <button onclick="vacOpenDose('${enfant.id}','${vacc.id}',${doseIdx})" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-size:11px;color:var(--koala)">Saisir</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="background:#fff;border-radius:10px;border:1px solid var(--border);overflow:hidden;margin-bottom:8px">
+      <div style="background:var(--koala-light);padding:8px 12px;font-weight:700;color:var(--koala);font-size:13px;text-transform:capitalize">${monthLabel}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+function vacOpenDose(enfantId, vaccId, doseIdx){
+  vacCurrentEnfantId = enfantId;
+  const vacc = VAC_SCHEMA.find(v=>v.id===vaccId);
+  const dose = vacc?.doses[doseIdx];
+  const enfant = cacheEnfants.find(e=>e.id===enfantId);
+  const rec = vacGetRecord(enfantId, vaccId, doseIdx);
+  document.getElementById('vac-dose-title').textContent = (enfant?enfant.prenom+' '+enfant.nom:'') + ' — ' + (vacc?.label||'') + ' — ' + (dose?.label||'');
+  document.getElementById('vac-dose-vaccin-id').value = vaccId;
+  document.getElementById('vac-dose-index').value = doseIdx;
+  document.getElementById('vac-dose-enfant-id').value = enfantId;
+  document.getElementById('vac-dose-date').value = rec?.date_fait || '';
+  document.getElementById('vac-dose-vaccin-name').value = rec?.vaccin_nom || '';
+  document.getElementById('vac-dose-lot').value = rec?.lot || '';
+  document.getElementById('vac-dose-note').value = rec?.note || '';
+  document.getElementById('vac-dose-delete-btn').style.display = rec ? 'inline-flex' : 'none';
+  document.getElementById('modal-vac-dose-wrap').classList.add('open');
+}
+
+async function vacSaveDose(){
+  const enfantId = document.getElementById('vac-dose-enfant-id').value;
+  const vaccId = document.getElementById('vac-dose-vaccin-id').value;
+  const doseIdx = parseInt(document.getElementById('vac-dose-index').value);
+  const dateFait = document.getElementById('vac-dose-date').value;
+  if(!dateFait){alert('Veuillez saisir la date de vaccination.');return;}
+  const row = {
+    enfant_id: enfantId,
+    vaccin_id: vaccId,
+    dose_index: doseIdx,
+    date_fait: dateFait,
+    vaccin_nom: document.getElementById('vac-dose-vaccin-name').value.trim()||null,
+    lot: document.getElementById('vac-dose-lot').value.trim()||null,
+    note: document.getElementById('vac-dose-note').value.trim()||null
+  };
+  const existing = vacGetRecord(enfantId, vaccId, doseIdx);
+  if(existing){
+    const {error} = await sb.from('vaccinations').update(row).eq('id',existing.id);
+    if(error){alert('Erreur mise à jour: '+error.message);return;}
+    const idx = cacheVaccinations.findIndex(v=>v.id===existing.id);
+    if(idx>=0) cacheVaccinations[idx] = {...existing,...row};
+  } else {
+    const {data, error} = await sb.from('vaccinations').insert(row).select().single();
+    if(error){alert('Erreur enregistrement: '+error.message);return;}
+    if(data) cacheVaccinations.push(data);
+  }
+  closeModal('modal-vac-dose-wrap');
+  vacRender();
+  showBanner('Vaccination enregistrée ✅');
+}
+
+async function vacDeleteDose(){
+  const enfantId = document.getElementById('vac-dose-enfant-id').value;
+  const vaccId = document.getElementById('vac-dose-vaccin-id').value;
+  const doseIdx = parseInt(document.getElementById('vac-dose-index').value);
+  const existing = vacGetRecord(enfantId, vaccId, doseIdx);
+  if(!existing) return;
+  if(!confirm('Supprimer cet enregistrement de vaccination ?')) return;
+  const {error} = await sb.from('vaccinations').delete().eq('id',existing.id);
+  if(error){alert('Erreur suppression: '+error.message);return;}
+  cacheVaccinations = cacheVaccinations.filter(v=>v.id!==existing.id);
+  closeModal('modal-vac-dose-wrap');
+  vacRender();
+  showBanner('Vaccination supprimée.');
+}
+
+function vacOpenEnfantModal(){
+  // Re-use existing openEnfantModal if exists
+  openEnfantModal();
+}
+window.vacOpenDose = vacOpenDose;
+window.vacSaveDose = vacSaveDose;
+window.vacDeleteDose = vacDeleteDose;
+window.vacShowView = vacShowView;
+window.vacRender = vacRender;
+window.vacOpenEnfantModal = vacOpenEnfantModal;
+
 </script>
 
 <!-- Modal planning coordinateur -->
