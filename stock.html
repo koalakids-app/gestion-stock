@@ -1363,22 +1363,27 @@ body.is-fullscreen .sidebar-trigger {
           <textarea id="u-desc" rows="3" placeholder="Décrivez l'objectif, le déroulement, les compétences travaillées..."></textarea>
         </div>
         <div class="form-group full">
-          <label>📷 Photo de l'univers</label>
-          <div id="u-photo-preview" style="display:none;margin-bottom:8px;position:relative">
-            <img id="u-photo-img" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;display:block">
-            <button type="button" onclick="removeUniversPhoto()" 
-              style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px">✕</button>
-          </div>
-          <label for="u-photo-input" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:2px dashed var(--border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink2);transition:border-color 0.2s" 
-                 id="u-photo-label">
-            📷 Cliquer pour ajouter une photo
+          <label>📷 Photos de l'univers</label>
+          <div id="u-photos-preview" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
+          <label for="u-photos-input" id="u-photos-label"
+            style="display:flex;align-items:center;gap:10px;padding:12px 16px;border:2px dashed var(--border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink2);transition:border-color 0.2s"
+            onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+            <span style="font-size:22px">📷</span>
+            <span>Appuyer pour prendre une photo ou choisir depuis la galerie</span>
           </label>
-          <input type="file" id="u-photo-input" accept="image/*" style="display:none" onchange="handleUniversPhoto(event)">
+          <input type="file" id="u-photos-input" accept="image/*" multiple
+            style="display:none" onchange="addUniversPhotos(event)">
+          <div style="font-size:11px;color:var(--ink3);margin-top:6px">Plusieurs photos possibles — appuyez sur une miniature pour la supprimer</div>
         </div>
         <div class="form-group full">
-          <label>Articles de l'inventaire</label>
+          <label>🧸 Matériel principal <span style="font-weight:400;color:var(--ink3)">— articles de la crèche sélectionnée</span></label>
           <div id="u-articles-picker" style="border:1px solid var(--border);border-radius:var(--radius-sm);max-height:220px;overflow-y:auto"></div>
-          <div style="font-size:11px;color:var(--ink3);margin-top:6px">Cochez les articles à inclure dans cet univers</div>
+          <div style="font-size:11px;color:var(--ink3);margin-top:6px">Cochez les articles qui constituent le cœur de l'univers</div>
+        </div>
+        <div class="form-group full">
+          <label>✨ Enrichissement <span style="font-weight:400;color:var(--ink3)">— articles complémentaires (optionnel)</span></label>
+          <div id="u-articles-enrichissement-picker" style="border:1px solid var(--border);border-radius:var(--radius-sm);max-height:220px;overflow-y:auto"></div>
+          <div style="font-size:11px;color:var(--ink3);margin-top:6px">Articles pour enrichir ou faire évoluer l'univers dans le temps</div>
         </div>
         <div class="form-group full">
           <label>Conseils de mise en scène</label>
@@ -3570,73 +3575,88 @@ function filterUnivers(cat, el) {
   renderUnivers();
 }
 
-let _universPhotoData = null;
-let _universPhotoFile = null;
+// ─── PHOTOS MULTIPLES (UPLOAD) ───────────────────────────────────────────
 
-function handleUniversPhoto(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { showNotif('⚠ Photo trop grande — max 5 Mo'); return; }
-  if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
-  const reader = new FileReader();
-  reader.onload = e => {
-    _universPhotoFile = file; // fichier brut conservé pour upload Storage à la sauvegarde
-    _universPhotoData = e.target.result; // aperçu local uniquement
-    const img = document.getElementById('u-photo-img');
-    const preview = document.getElementById('u-photo-preview');
-    const label = document.getElementById('u-photo-label');
-    if (img) img.src = _universPhotoData;
-    if (preview) preview.style.display = 'block';
-    if (label) label.style.display = 'none';
-  };
-  reader.readAsDataURL(file);
+// Tableau en mémoire : { url, file?, local? }
+// url   = URL Supabase (photos déjà uploadées) ou blob: (aperçu local en attente)
+// file  = File object si upload en attente
+// local = true si pas encore uploadé
+let _universPhotos = []; // [{url, file, local}]
+
+function _renderUniversPhotosPreview() {
+  const container = document.getElementById('u-photos-preview');
+  if (!container) return;
+  if (_universPhotos.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = _universPhotos.map((p, i) => `
+    <div style="position:relative;flex-shrink:0">
+      <img src="${p.url}" alt="Photo ${i+1}"
+        style="width:90px;height:70px;object-fit:cover;border-radius:8px;border:2px solid var(--border);display:block">
+      ${p.local ? '<div style="position:absolute;top:2px;left:2px;background:rgba(0,0,0,0.55);color:#fff;font-size:9px;padding:1px 4px;border-radius:4px">⏳</div>' : ''}
+      <button onclick="removeUniversPhoto(${i})"
+        style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;border:none;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>`).join('');
 }
 
-function removeUniversPhoto() {
-  _universPhotoData = null;
-  _universPhotoFile = null;
-  const img = document.getElementById('u-photo-img');
-  const preview = document.getElementById('u-photo-preview');
-  const label = document.getElementById('u-photo-label');
-  const input = document.getElementById('u-photo-input');
-  if (img) img.src = '';
-  if (preview) preview.style.display = 'none';
-  if (label) label.style.display = 'flex';
-  if (input) input.value = '';
+function addUniversPhotos(event) {
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  files.forEach(file => {
+    if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté : ' + file.name); return; }
+    if (file.size > 10 * 1024 * 1024) { showNotif('⚠ Photo trop grande (max 10 Mo) : ' + file.name); return; }
+    const blobUrl = URL.createObjectURL(file);
+    _universPhotos.push({ url: blobUrl, file, local: true });
+  });
+  // Reset input pour permettre de re-sélectionner les mêmes fichiers
+  event.target.value = '';
+  _renderUniversPhotosPreview();
 }
 
-function resetUniversPhotoUI(photoData) {
-  _universPhotoData = photoData || null;
-  const img = document.getElementById('u-photo-img');
-  const preview = document.getElementById('u-photo-preview');
-  const label = document.getElementById('u-photo-label');
-  if (photoData) {
-    if (img) img.src = photoData;
-    if (preview) preview.style.display = 'block';
-    if (label) label.style.display = 'none';
-  } else {
-    if (img) img.src = '';
-    if (preview) preview.style.display = 'none';
-    if (label) label.style.display = 'flex';
+function removeUniversPhoto(i) {
+  const p = _universPhotos[i];
+  if (p && p.local && p.url.startsWith('blob:')) URL.revokeObjectURL(p.url);
+  _universPhotos.splice(i, 1);
+  _renderUniversPhotosPreview();
+}
+
+async function uploadPendingUniversPhotos(universId) {
+  // Upload tous les fichiers locaux, remplace blob: par URL Supabase
+  for (let i = 0; i < _universPhotos.length; i++) {
+    const p = _universPhotos[i];
+    if (!p.local || !p.file) continue;
+    try {
+      const url = await uploadPhotoToStorage(p.file, `${universId}-${i}`, 'univers-photos');
+      if (p.url.startsWith('blob:')) URL.revokeObjectURL(p.url);
+      _universPhotos[i] = { url, local: false };
+    } catch(e) {
+      console.error('[Photo univers upload]', e);
+      showNotif('⚠ Erreur upload photo ' + (i+1) + ' — conservée en local');
+    }
   }
 }
 
-function buildArticlePicker(creche, selectedIds = []) {
-  const picker = document.getElementById('u-articles-picker');
-  if (!picker) return;
-  if (ARTICLES.length === 0) {
-    picker.innerHTML = '<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article dans l\'inventaire</div>';
-    return;
-  }
+function getUniversPhotosUrls() {
+  return _universPhotos.filter(p => !p.local).map(p => p.url);
+}
 
-  // Filtrer les articles par crèche si précisé
-  const articlesSource = (creche && creche !== 'all')
-    ? ARTICLES.filter(a => a.creche === creche)
-    : ARTICLES;
-
-  if (articlesSource.length === 0) {
-    picker.innerHTML = `<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article pour la crèche "${creche}"</div>`;
+function resetUniversPhotoUI(photosData) {
+  // Libérer les blob URLs en cours
+  _universPhotos.forEach(p => { if (p.local && p.url.startsWith('blob:')) URL.revokeObjectURL(p.url); });
+  _universPhotos = [];
+  if (photosData) {
+    let urls = [];
+    try { urls = JSON.parse(photosData); if (!Array.isArray(urls)) urls = [photosData]; }
+    catch { urls = photosData ? [photosData] : []; }
+    urls.filter(Boolean).forEach(url => _universPhotos.push({ url, local: false }));
   }
+  _renderUniversPhotosPreview();
+}
+
+// ─── PICKERS ARTICLES ────────────────────────────────────────────────────
+
+function _buildPickerHTML(creche, selectedIds, prefix) {
+  if (ARTICLES.length === 0) return '<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article dans l\'inventaire</div>';
+  const articlesSource = (creche && creche !== 'all') ? ARTICLES.filter(a => a.creche === creche) : ARTICLES;
+  if (articlesSource.length === 0) return `<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article pour la crèche "${creche}"</div>`;
 
   function buildList(articles) {
     if (articles.length === 0) return '<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article dans cette catégorie</div>';
@@ -3649,8 +3669,8 @@ function buildArticlePicker(creche, selectedIds = []) {
       ${arts.map(a => {
         const nom = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
         const checked = selectedIds.includes(a.id) ? 'checked' : '';
-        return `<div class="article-picker-row" onclick="document.getElementById('pick-${a.id}').click()">
-          <input type="checkbox" id="pick-${a.id}" ${checked} onclick="event.stopPropagation()">
+        return `<div class="article-picker-row" onclick="document.getElementById('${prefix}${a.id}').click()">
+          <input type="checkbox" id="${prefix}${a.id}" ${checked} onclick="event.stopPropagation()">
           <div class="article-picker-label">${nom}</div>
           <span class="article-picker-cat">${a.stock} en stock</span>
         </div>`;
@@ -3659,30 +3679,44 @@ function buildArticlePicker(creche, selectedIds = []) {
   }
 
   const materiel = articlesSource.filter(a => a.depreciable !== false);
-  const conso = articlesSource.filter(a => a.depreciable === false);
+  const conso    = articlesSource.filter(a => a.depreciable === false);
+  const tabMat = `${prefix}tab-mat`;
+  const tabCon = `${prefix}tab-conso`;
+  const listMat = `${prefix}list-mat`;
+  const listCon = `${prefix}list-conso`;
 
-  picker.innerHTML = `
+  return `
     <div style="display:flex;gap:0;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface)">
-      <button id="picker-tab-mat" onclick="switchPickerTab('mat')"
+      <button id="${tabMat}" onclick="switchPickerTab('${prefix}')"
         style="flex:1;padding:8px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--accent);color:var(--accent)">
         🧸 Matériel (${materiel.length})
       </button>
-      <button id="picker-tab-conso" onclick="switchPickerTab('conso')"
+      <button id="${tabCon}" onclick="switchPickerTab('${prefix}','conso')"
         style="flex:1;padding:8px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--ink3)">
         🧴 Consommables (${conso.length})
       </button>
     </div>
-    <div id="picker-list-mat">${buildList(materiel)}</div>
-    <div id="picker-list-conso" style="display:none">${buildList(conso)}</div>
+    <div id="${listMat}">${buildList(materiel)}</div>
+    <div id="${listCon}" style="display:none">${buildList(conso)}</div>
   `;
 }
 
-function switchPickerTab(tab) {
-  const isMat = tab === 'mat';
-  const tMat = document.getElementById('picker-tab-mat');
-  const tCon = document.getElementById('picker-tab-conso');
-  const lMat = document.getElementById('picker-list-mat');
-  const lCon = document.getElementById('picker-list-conso');
+function buildArticlePicker(creche, selectedIds = []) {
+  const picker = document.getElementById('u-articles-picker');
+  if (picker) picker.innerHTML = _buildPickerHTML(creche, selectedIds, 'pick-');
+}
+
+function buildEnrichissementPicker(creche, selectedIds = []) {
+  const picker = document.getElementById('u-articles-enrichissement-picker');
+  if (picker) picker.innerHTML = _buildPickerHTML(creche, selectedIds, 'enrich-');
+}
+
+function switchPickerTab(prefix, tab) {
+  const isMat = !tab || tab === 'mat';
+  const tMat = document.getElementById(`${prefix}tab-mat`);
+  const tCon = document.getElementById(`${prefix}tab-conso`);
+  const lMat = document.getElementById(`${prefix}list-mat`);
+  const lCon = document.getElementById(`${prefix}list-conso`);
   if (tMat) { tMat.style.borderBottomColor = isMat ? 'var(--accent)' : 'transparent'; tMat.style.color = isMat ? 'var(--accent)' : 'var(--ink3)'; }
   if (tCon) { tCon.style.borderBottomColor = !isMat ? 'var(--accent)' : 'transparent'; tCon.style.color = !isMat ? 'var(--accent)' : 'var(--ink3)'; }
   if (lMat) lMat.style.display = isMat ? 'block' : 'none';
@@ -3695,31 +3729,36 @@ function toggleArticlePick(id) {
 }
 
 function getSelectedArticleIds() {
-  return ARTICLES
-    .filter(a => document.getElementById(`pick-${a.id}`)?.checked)
-    .map(a => a.id);
+  return ARTICLES.filter(a => document.getElementById(`pick-${a.id}`)?.checked).map(a => a.id);
+}
+
+function getSelectedEnrichissementIds() {
+  return ARTICLES.filter(a => document.getElementById(`enrich-${a.id}`)?.checked).map(a => a.id);
 }
 
 function openModal_univers() {
   editingUniversId = null;
-  _universPhotoData = null;
-  _universPhotoFile = null;
   document.getElementById('modalUniversTitle').textContent = 'Créer un univers ludique';
   document.getElementById('btn-save-univers').textContent = '✨ Enregistrer l\'univers';
   ['u-nom','u-age','u-duree','u-enfants','u-desc','u-conseils'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  const photosPreview = document.getElementById('u-photos-preview');
+  if (photosPreview) photosPreview.innerHTML = '';
   const catSel = document.getElementById('u-cat');
   if (catSel) catSel.value = 'Sensoriel';
-  // Pré-sélectionner la crèche active
   const crecheEl = document.getElementById('u-creche');
   if (crecheEl) {
     crecheEl.value = (currentCreche && currentCreche !== 'all') ? currentCreche : CRECHES[0];
-    crecheEl.onchange = () => buildArticlePicker(crecheEl.value, []);
+    crecheEl.onchange = () => {
+      buildArticlePicker(crecheEl.value, []);
+      buildEnrichissementPicker(crecheEl.value, []);
+    };
   }
   updateSouscatSelectors();
-  buildArticlePicker((crecheEl?.value) || CRECHES[0], []);
-  resetUniversPhotoUI(null);
+  const creche = (crecheEl?.value) || CRECHES[0];
+  buildArticlePicker(creche, []);
+  buildEnrichissementPicker(creche, []);
   document.getElementById('modal-univers').classList.add('open');
   if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
@@ -3730,31 +3769,29 @@ async function saveUnivers() {
 
   const universId = editingUniversId || Date.now();
 
-  // Upload de la photo vers Supabase Storage (au lieu de stocker le base64 en base).
-  // _universPhotoData===null couvre à la fois "jamais eu de photo" et "supprimée via removeUniversPhoto".
-  let photoUrl = _universPhotoData === null ? null : _universPhotoData;
-  if (_universPhotoFile) {
-    try {
-      showNotif('📤 Envoi de la photo…');
-      photoUrl = await uploadPhotoToStorage(_universPhotoFile, universId, 'univers-photos');
-    } catch (err) {
-      console.error('[Photo univers]', err.message);
-      showNotif('❌ Erreur envoi photo — univers enregistré sans photo');
-      photoUrl = editingUniversId ? (UNIVERS.find(u=>u.id===editingUniversId)||{}).photo : null;
-    }
-  }
+  // Upload des photos locales vers Supabase Storage
+  const hasLocal = _universPhotos.some(p => p.local);
+  if (hasLocal) showNotif('📤 Envoi des photos…');
+  if (!IS_LOCAL) await uploadPendingUniversPhotos(universId);
+
+  const photosUrls = getUniversPhotosUrls();
+  // photo = première URL pour compatibilité affichage carte, photos = JSON array complet
+  const photoUrl = photosUrls[0] || null;
+  const photosJson = photosUrls.length > 0 ? JSON.stringify(photosUrls) : null;
 
   const creche = document.getElementById('u-creche')?.value || CRECHES[0];
   const data = {
     nom,
     creche,
-    cat:      document.getElementById('u-cat').value,
-    desc:     document.getElementById('u-desc').value.trim(),
-    conseils: document.getElementById('u-conseils').value.trim(),
-    articles: JSON.stringify(getSelectedArticleIds()),
-    souscat:  parseInt(document.getElementById('u-souscat')?.value) || null,
-    photo:    photoUrl,
-    created_at: new Date().toISOString(),
+    cat:                     document.getElementById('u-cat').value,
+    desc:                    document.getElementById('u-desc').value.trim(),
+    conseils:                document.getElementById('u-conseils').value.trim(),
+    articles:                JSON.stringify(getSelectedArticleIds()),
+    articles_enrichissement: JSON.stringify(getSelectedEnrichissementIds()),
+    souscat:                 parseInt(document.getElementById('u-souscat')?.value) || null,
+    photo:                   photoUrl,
+    photos:                  photosJson,
+    created_at:              new Date().toISOString(),
   };
 
   if (editingUniversId) {
@@ -3770,8 +3807,6 @@ async function saveUnivers() {
     if (!IS_LOCAL) await saveUniversDB(newU, true).catch(e => console.warn(e));
     showNotif('✨ Univers créé !');
   }
-  _universPhotoData = null;
-  _universPhotoFile = null;
   saveData();
   closeModal('modal-univers');
   renderUnivers();
@@ -3799,8 +3834,20 @@ function editUnivers(id) {
   updateSouscatSelectors();
   const scEl = document.getElementById('u-souscat'); if(scEl) scEl.value = u.souscat || '';
   const selIds = typeof u.articles === 'string' ? JSON.parse(u.articles||'[]') : (u.articles||[]);
-  buildArticlePicker(u.creche || CRECHES[0], selIds);
-  resetUniversPhotoUI(u.photo || null);
+  const enrichIds = typeof u.articles_enrichissement === 'string' ? JSON.parse(u.articles_enrichissement||'[]') : (u.articles_enrichissement||[]);
+  const creche2 = u.creche || CRECHES[0];
+  const crecheEl2 = document.getElementById('u-creche');
+  if (crecheEl2) {
+    crecheEl2.value = creche2;
+    crecheEl2.onchange = () => {
+      buildArticlePicker(crecheEl2.value, []);
+      buildEnrichissementPicker(crecheEl2.value, []);
+    };
+  }
+  buildArticlePicker(creche2, selIds);
+  buildEnrichissementPicker(creche2, enrichIds);
+  // Photos : u.photos (JSON array) prioritaire, sinon u.photo (string unique)
+  resetUniversPhotoUI(u.photos || u.photo || null);
   document.getElementById('modal-univers').classList.add('open');
   if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
@@ -3821,15 +3868,43 @@ function showUniversDetail(id) {
   const artIds = typeof u.articles === 'string' ? JSON.parse(u.articles||'[]') : (u.articles||[]);
   const arts = artIds.map(aid => ARTICLES.find(a => a.id === aid)).filter(Boolean);
 
+  // Photos multiples
+  let photosUrls = [];
+  if (u.photos) { try { photosUrls = JSON.parse(u.photos); } catch { photosUrls = [u.photos]; } }
+  else if (u.photo) { photosUrls = [u.photo]; }
+
+  const enrichIds = typeof u.articles_enrichissement === 'string' ? JSON.parse(u.articles_enrichissement||'[]') : (u.articles_enrichissement||[]);
+  const enrichArts = enrichIds.map(aid => ARTICLES.find(a => a.id === aid)).filter(Boolean);
+
+  function articleRow(a) {
+    const nom = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+    const stockOk = a.stock > 0;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      ${a.photo ? `<img src="${a.photo}" style="width:36px;height:36px;border-radius:6px;object-fit:cover">` :
+        `<div style="width:36px;height:36px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:18px">${CAT_ICONS[a.cat]||'📦'}</div>`}
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500">${nom}</div>
+        <div style="font-size:11px;color:var(--ink3)">${a.cat} · ${a.fourn||'—'}</div>
+      </div>
+      <span style="font-size:11px;font-weight:600;color:${stockOk?'var(--green)':'var(--red)'}">
+        ${stockOk ? `✅ ${a.stock} dispo` : '❌ Rupture'}
+      </span>
+    </div>`;
+  }
+
   document.getElementById('detail-univers-title').textContent = u.nom;
   document.getElementById('detail-univers-body').innerHTML = `
-    ${u.photo ? `<div style="height:200px;border-radius:8px;overflow:hidden;margin-bottom:16px"><img src="${u.photo}" style="width:100%;height:100%;object-fit:cover"></div>` : ''}
+    ${photosUrls.length > 0 ? `
+      <div style="display:flex;gap:8px;overflow-x:auto;margin-bottom:16px;padding-bottom:4px">
+        ${photosUrls.map((url, i) => `<img src="${url}" alt="Photo ${i+1}"
+          style="height:160px;${photosUrls.length===1?'width:100%;':'min-width:220px;'} object-fit:cover;border-radius:8px;flex-shrink:0"
+          onerror="this.style.display='none'">`).join('')}
+      </div>` : ''}
     <div style="display:flex;gap:16px;align-items:center;margin-bottom:20px">
       <span style="font-size:48px">${icon}</span>
       <div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${u.age ? `<span class="badge badge-blue">👶 ${u.age}</span>` : ''}
-
           ${u.enfants ? `<span class="badge badge-purple">👥 ${u.enfants}</span>` : ''}
         </div>
         <div style="margin-top:6px;font-size:12px;color:var(--ink3)">${u.cat}</div>
@@ -3837,24 +3912,14 @@ function showUniversDetail(id) {
     </div>
     ${u.desc ? `<div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.6;color:var(--ink)"><strong>🎯 Objectifs :</strong><br>${u.desc}</div>` : ''}
     <div style="margin-bottom:16px">
-      <div style="font-weight:700;font-size:13px;margin-bottom:10px">📦 Matériel nécessaire (${arts.length} article${arts.length>1?'s':''})</div>
-      ${arts.length === 0 ? '<div style="color:var(--ink3);font-size:13px">Aucun article sélectionné</div>' :
-        arts.map(a => {
-          const nom = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
-          const stockOk = a.stock > 0;
-          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-            ${a.photo ? `<img src="${a.photo}" style="width:36px;height:36px;border-radius:6px;object-fit:cover">` :
-              `<div style="width:36px;height:36px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:18px">${CAT_ICONS[a.cat]||'📦'}</div>`}
-            <div style="flex:1">
-              <div style="font-size:13px;font-weight:500">${nom}</div>
-              <div style="font-size:11px;color:var(--ink3)">${a.cat} · ${a.fourn||'—'}</div>
-            </div>
-            <span style="font-size:11px;font-weight:600;color:${stockOk?'var(--green)':'var(--red)'}">
-              ${stockOk ? `✅ ${a.stock} dispo` : '❌ Rupture'}
-            </span>
-          </div>`;
-        }).join('')}
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px">🧸 Matériel principal (${arts.length} article${arts.length>1?'s':''})</div>
+      ${arts.length === 0 ? '<div style="color:var(--ink3);font-size:13px">Aucun article sélectionné</div>' : arts.map(articleRow).join('')}
     </div>
+    ${enrichArts.length > 0 ? `
+    <div style="margin-bottom:16px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--accent)">✨ Enrichissement (${enrichArts.length} article${enrichArts.length>1?'s':''})</div>
+      ${enrichArts.map(articleRow).join('')}
+    </div>` : ''}
     ${u.conseils ? `<div style="background:#FEF9C3;border:1px solid #FDE68A;border-radius:8px;padding:14px;font-size:13px;line-height:1.6"><strong>💡 Mise en scène :</strong><br>${u.conseils}</div>` : ''}
   `;
   document.getElementById('detail-univers-footer').innerHTML = `
@@ -5003,7 +5068,10 @@ async function saveUniversDB(u, isNew) {
       id: u.id, nom: u.nom, creche: u.creche, cat: u.cat,
       description: u.desc||null, conseils: u.conseils||null,
       articles: typeof u.articles === 'string' ? u.articles : JSON.stringify(u.articles||[]),
-      photo: u.photo||null, souscat: u.souscat||null,
+      articles_enrichissement: typeof u.articles_enrichissement === 'string' ? u.articles_enrichissement : JSON.stringify(u.articles_enrichissement||[]),
+      photo: u.photo||null,
+      photos: u.photos||null,
+      souscat: u.souscat||null,
       created_at: u.created_at || new Date().toISOString(),
     };
     if (isNew) await sbInsert('univers', row);
