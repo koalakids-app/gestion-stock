@@ -3920,6 +3920,10 @@ function deleteUnivers(id) {
   saveData();
   renderUnivers();
   showNotif('🗑 Univers supprimé');
+  if (!IS_LOCAL) deleteUniversDB(id).catch(e => {
+    console.error('[Supabase] deleteUnivers:', e);
+    showNotif('⚠ Supprimé localement mais erreur Supabase — rechargez pour vérifier');
+  });
 }
 
 function showUniversDetail(id) {
