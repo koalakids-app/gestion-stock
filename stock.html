@@ -4733,7 +4733,7 @@ async function sbGet(table, params='') {
     query = params + '&order=id.asc';
   }
   const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${query}`, {
-    headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' }
+    headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY }
   });
   if (!r.ok) {
     const body = await r.text().catch(() => '');
