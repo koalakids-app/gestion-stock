@@ -3541,7 +3541,7 @@ function renderUnivers() {
       (articleNames.length > 4 ? `<span class="univers-article-tag">+${articleNames.length-4}</span>` : '');
 
     const cardPhotoStr = u.photo ? '<div style="height:140px;border-radius:8px 8px 0 0;overflow:hidden;margin:-20px -20px 12px -20px"><img src="' + u.photo + '" style="width:100%;height:100%;object-fit:cover"></div>' : '';
-    return '<div class="univers-card" onclick="showUniversDetail(' + u.id + ')">' + cardPhotoStr + `
+    return `<div class="univers-card" onclick="showUniversDetail('${u.id}')">${cardPhotoStr}
       <div class="univers-card-header">
         <span class="univers-icon">${icon}</span>
         <div style="flex:1">
@@ -3555,9 +3555,9 @@ function renderUnivers() {
       ${u.desc ? `<div class="univers-card-desc">${u.desc}</div>` : ''}
       <div class="univers-articles">${tags}</div>
       <div class="univers-card-actions">
-        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();editUnivers(${u.id})">✏️ Modifier</button>
-        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();printUnivers(${u.id})">🖨 Fiche PDF</button>
-        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteUnivers(${u.id})">🗑</button>
+        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();editUnivers('${u.id}')">✏️ Modifier</button>
+        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();printUnivers('${u.id}')">🖨 Fiche PDF</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteUnivers('${u.id}')">🗑</button>
       </div>
     </div>`;
   }).join('');
@@ -3621,12 +3621,21 @@ function resetUniversPhotoUI(photoData) {
   }
 }
 
-function buildArticlePicker(selectedIds = []) {
+function buildArticlePicker(creche, selectedIds = []) {
   const picker = document.getElementById('u-articles-picker');
   if (!picker) return;
   if (ARTICLES.length === 0) {
     picker.innerHTML = '<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article dans l\'inventaire</div>';
     return;
+  }
+
+  // Filtrer les articles par crèche si précisé
+  const articlesSource = (creche && creche !== 'all')
+    ? ARTICLES.filter(a => a.creche === creche)
+    : ARTICLES;
+
+  if (articlesSource.length === 0) {
+    picker.innerHTML = `<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article pour la crèche "${creche}"</div>`;
   }
 
   function buildList(articles) {
@@ -3649,8 +3658,8 @@ function buildArticlePicker(selectedIds = []) {
     `).join('');
   }
 
-  const materiel = ARTICLES.filter(a => a.depreciable !== false);
-  const conso = ARTICLES.filter(a => a.depreciable === false);
+  const materiel = articlesSource.filter(a => a.depreciable !== false);
+  const conso = articlesSource.filter(a => a.depreciable === false);
 
   picker.innerHTML = `
     <div style="display:flex;gap:0;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface)">
@@ -3850,8 +3859,8 @@ function showUniversDetail(id) {
   `;
   document.getElementById('detail-univers-footer').innerHTML = `
     <button class="btn btn-secondary" onclick="closeModal('modal-univers-detail')">Fermer</button>
-    <button class="btn btn-secondary" onclick="closeModal('modal-univers-detail');editUnivers(${u.id})">✏️ Modifier</button>
-    <button class="btn btn-primary" onclick="printUnivers(${u.id})">🖨 Fiche PDF</button>
+    <button class="btn btn-secondary" onclick="closeModal('modal-univers-detail');editUnivers('${u.id}')">✏️ Modifier</button>
+    <button class="btn btn-primary" onclick="printUnivers('${u.id}')">🖨 Fiche PDF</button>
   `;
   document.getElementById('modal-univers-detail').classList.add('open');
   if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
