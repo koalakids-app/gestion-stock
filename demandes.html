@@ -5268,12 +5268,15 @@ function vacRenderListe(){
       const doses = v.doses.map((dose,di)=>{
         const s = vacDoseStatus(e,v,di);
         if(s.state==='retard'||s.state==='proche') alertCount++;
-        const stateIcon = s.state==='fait'?'<span style="color:var(--green);font-weight:700">✅ '+vacFmtDate(s.date)+'</span>'
-          :s.state==='retard'?'<span style="color:var(--red);font-weight:700">⚠️ '+vacFmtDate(vacLocalISO(s.due))+'</span>'
-          :s.state==='proche'?'<span style="color:var(--orange);font-weight:700">⏰ '+vacFmtDate(vacLocalISO(s.due))+'</span>'
-          :'<span style="color:var(--muted)">📅 '+vacFmtDate(vacLocalISO(s.due))+'</span>';
-        const btnLabel = s.state==='fait' ? '✏️' : '✔ Saisir';
-        return `<td style="padding:5px 8px;font-size:12px;text-align:center;vertical-align:middle">${stateIcon}<br><button onclick="vacOpenDose('${e.id}','${v.id}',${di})" style="margin-top:3px;font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;color:var(--koala)">${btnLabel}</button></td>`;
+        let cell;
+        if(s.state==='fait'){
+          cell='<button onclick="vacToggleDose(\''+e.id+'\',\''+v.id+'\','+di+')" title="Fait — cliquer pour annuler" style="width:34px;height:34px;border:none;border-radius:50%;background:var(--green);color:#fff;font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">✓</button>';
+        }else{
+          const border = s.state==='retard'?'2px solid var(--red)':s.state==='proche'?'2px solid var(--orange)':'2px dashed var(--border)';
+          const bg = s.state==='retard'?'var(--red-light)':s.state==='proche'?'var(--orange-light)':'#fff';
+          cell='<button onclick="vacToggleDose(\''+e.id+'\',\''+v.id+'\','+di+')" title="'+(s.state==='retard'?'En retard — cliquer si fait':s.state==='proche'?'À faire bientôt — cliquer si fait':'Cliquer si fait')+'" style="width:34px;height:34px;border:'+border+';border-radius:50%;background:'+bg+';color:var(--muted);font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center"> </button>';
+        }
+        return `<td style="padding:5px 8px;text-align:center;vertical-align:middle">${cell}</td>`;
       }).join('');
       return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600;color:var(--koala-dark);white-space:nowrap">${v.label}</td>${doses}</tr>`;
     }).join('');
@@ -5339,7 +5342,7 @@ function vacRenderAlertes(){
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:12px;font-weight:700;color:${urgency.col}">${urgency.label}</span>
-        <button onclick="vacOpenDose('${enfant.id}','${vacc.id}',${doseIdx})" style="padding:5px 12px;border:2px solid ${urgency.col};border-radius:7px;background:#fff;cursor:pointer;font-weight:600;color:${urgency.col};font-size:12px">✔ Saisir</button>
+        <button onclick="vacToggleDose('${enfant.id}','${vacc.id}',${doseIdx})" style="padding:5px 12px;border:2px solid ${urgency.col};border-radius:7px;background:#fff;cursor:pointer;font-weight:600;color:${urgency.col};font-size:12px">✔ Marquer fait</button>
       </div>
     </div>`;
   }).join('');
@@ -5386,7 +5389,7 @@ function vacRenderCalendrier(){
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-weight:700;color:${col}">${vacFmtDate(vacLocalISO(s.due))}</span>
-          <button onclick="vacOpenDose('${enfant.id}','${vacc.id}',${doseIdx})" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-size:11px;color:var(--koala)">Saisir</button>
+          <button onclick="vacToggleDose('${enfant.id}','${vacc.id}',${doseIdx})" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-size:11px;color:var(--koala)">✔ Marquer fait</button>
         </div>
       </div>`;
     }).join('');
@@ -5465,6 +5468,27 @@ function vacOpenEnfantModal(){
   // Re-use existing openEnfantModal if exists
   openEnfantModal();
 }
+// Clic simple : bascule fait / non-fait sans saisie de date (date du jour enregistrée automatiquement)
+async function vacToggleDose(enfantId, vaccId, doseIdx){
+  const existing = vacGetRecord(enfantId, vaccId, doseIdx);
+  if(existing){
+    // Déjà fait -> annuler
+    const {error} = await sb.from('vaccinations').delete().eq('id',existing.id);
+    if(error){alert('Erreur : '+error.message);return;}
+    cacheVaccinations = cacheVaccinations.filter(v=>v.id!==existing.id);
+    vacRender();
+    showBanner('Vaccin annulé.');
+  }else{
+    // Pas encore fait -> marquer fait avec la date du jour
+    const row = {enfant_id:enfantId, vaccin_id:vaccId, dose_index:doseIdx, date_fait:todayStr()};
+    const {data, error} = await sb.from('vaccinations').insert(row).select().single();
+    if(error){alert('Erreur : '+error.message);return;}
+    if(data) cacheVaccinations.push(data);
+    vacRender();
+    showBanner('Vaccin marqué comme fait ✅');
+  }
+}
+window.vacToggleDose = vacToggleDose;
 window.vacOpenDose = vacOpenDose;
 window.vacSaveDose = vacSaveDose;
 window.vacDeleteDose = vacDeleteDose;
