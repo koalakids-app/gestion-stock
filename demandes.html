@@ -928,6 +928,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="notice-tab active" onclick="switchNoticeTab('demandes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--koala);margin-bottom:-1px;color:var(--koala);white-space:nowrap">💬 Demandes</button>
         <button class="notice-tab" onclick="switchNoticeTab('incidents',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🚨 Incidents</button>
         <button class="notice-tab" onclick="switchNoticeTab('presences',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👥 Présences</button>
+        <button class="notice-tab" onclick="switchNoticeTab('vaccinations',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">💉 Vaccinations</button>
         <button class="notice-tab" onclick="switchNoticeTab('planning',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📅 Planning</button>
         <button class="notice-tab" onclick="switchNoticeTab('evenements',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🗓 Événements</button>
         <button class="notice-tab" onclick="switchNoticeTab('comptes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👤 Comptes</button>
@@ -5070,18 +5071,20 @@ incidents: `
 presences: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👥 Feuille de présence</h3>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
-  💡 La feuille de présence se remplit chaque matin et après-midi pour chaque enfant inscrit.
+  💡 La feuille de présence s'affiche sous forme de planning (vue Gantt) : une ligne par enfant, avec une barre horaire de 7h à 19h.
 </div>
-<div style="font-weight:700;font-size:14px;margin-bottom:10px">📅 Saisir les présences</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">✅ Marquer présent ou absent</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
-  <li>Sélectionnez la <strong>date</strong> en haut de la page</li>
-  <li>Choisissez l'onglet <strong>Matin</strong> ou <strong>Après-midi</strong></li>
-  <li>Pour chaque enfant, cliquez sur :<br>
-    <strong>✓</strong> Présent &nbsp;|&nbsp; <strong>½</strong> Demi-journée &nbsp;|&nbsp; <strong>✗</strong> Absent</li>
-  <li>La saisie est <strong>enregistrée automatiquement</strong></li>
+  <li>Sélectionnez la <strong>date</strong> et la <strong>crèche</strong> en haut de la page</li>
+  <li>Pour chaque enfant, cliquez sur le <strong>rond</strong> à gauche de son nom :<br>
+    <strong style="color:#2a9d4e">● (coche verte)</strong> = présent &nbsp;|&nbsp; <strong style="color:#999">○ (croix grise)</strong> = absent</li>
+  <li>Un clic bascule d'un état à l'autre pour la <strong>journée entière</strong></li>
+  <li>La barre se remplit et le compteur <strong>présents / total</strong> en haut se met à jour automatiquement</li>
 </ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">👶 Fiche enfant (nom, prénom, date de naissance)</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Cliquez sur le <strong>nom</strong> d'un enfant pour ouvrir sa fiche et modifier son prénom, nom, date de naissance, groupe, crèche ou allergies. Un enfant sans date de naissance affiche un <strong style="color:#e03e3e">⚠</strong> : renseignez-la pour activer son suivi vaccinal.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Ajouter un enfant</div>
-<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Cliquez sur l'icône <strong>👤+</strong> en haut à droite pour ajouter un enfant à la liste. Renseignez son prénom, nom, date de naissance et crèche.</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Cliquez sur <strong>👤+ Ajouter enfant</strong> en haut à droite. Renseignez au minimum le prénom ; la date de naissance est vivement recommandée pour le suivi des vaccinations.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📤 Exporter</div>
 <div style="font-size:13px;color:#555;line-height:1.7">Le bouton <strong>Exporter</strong> génère un récapitulatif de présences pour la date sélectionnée, utile pour les transmissions administratives.</div>`,
 
@@ -5132,8 +5135,32 @@ evenements: `
   <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#E0457B;border-radius:3px;flex-shrink:0"></div> Fête</div>
 </div>`,
 
+vaccinations: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">💉 Suivi des vaccinations</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
+  💡 Cette page suit les vaccins obligatoires (calendrier français) pour chaque enfant, en calculant automatiquement les échéances à partir de sa date de naissance.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">✅ Marquer un vaccin comme fait</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Chaque dose est représentée par une <strong>pastille ronde</strong></li>
+  <li>Cliquez sur la pastille pour la marquer <strong style="color:#2a9d4e">faite ✓ (verte)</strong></li>
+  <li>Un nouveau clic <strong>annule</strong> si vous vous êtes trompé</li>
+  <li>Aucune date à saisir : c'est un simple clic</li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🎨 Comprendre les couleurs</div>
+<ul style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li><strong style="color:#2a9d4e">Vert ✓</strong> : vaccin fait</li>
+  <li><strong style="color:#F47920">Bordure orange</strong> : échéance proche (à faire bientôt)</li>
+  <li><strong style="color:#e03e3e">Bordure rouge</strong> : en retard</li>
+  <li><strong style="color:#999">Contour gris</strong> : pas encore dû</li>
+</ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔔 Alertes et calendrier</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Les onglets <strong>Alertes</strong> et <strong>Calendrier</strong> listent les vaccins en retard ou à venir dans les 90 jours. Le bouton <strong>Marquer fait</strong> y fonctionne comme les pastilles.</div>
+<div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A">
+  ⚠ Un enfant n'apparaît ici que si sa <strong>date de naissance</strong> est renseignée. Ajoutez-la en cliquant sur son nom dans la feuille de présence.
+</div>`,
+
 comptes: `
-<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👤 Gestion des comptes</h3>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
   💡 Chaque membre de l'équipe dispose d'un compte personnel. La direction a accès à toutes les crèches, les référentes uniquement à la leur.
 </div>
