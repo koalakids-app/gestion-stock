@@ -402,7 +402,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </a>
     <div class="logo"><img id="app-logo" src="" alt="Koala Kids"/></div>
     <nav class="main-nav" id="main-nav">
-      <button class="mnav-btn active" onclick="showMain('demands')" id="mnav-demands"><i class="ti ti-message-circle"></i> Demandes</button>
+      <button class="mnav-btn active" onclick="showMain('demands')" id="mnav-demands"><i class="ti ti-message-circle"></i> Demandes <span class="mnav-badge" id="badge-demands" style="display:none">0</span></button>
       <button class="mnav-btn referent-only" onclick="showMain('ref-dashboard')" id="mnav-ref-dashboard"><i class="ti ti-layout-dashboard"></i> Mon tableau de bord</button>
       <button class="mnav-btn" onclick="showMain('incidents')" id="mnav-incidents"><i class="ti ti-alert-triangle"></i> Incidents <span class="mnav-badge" id="badge-incidents" style="display:none">0</span></button>
       <button class="mnav-btn" onclick="showMain('presence')" id="mnav-presence"><i class="ti ti-users-group"></i> Présences</button>
@@ -935,7 +935,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="overlay" id="modal-consigne-wrap">
   <div class="modal">
     <h3>Envoyer une consigne</h3>
-    <div class="fg"><label class="flabel">Référent destinataire</label><select class="finput" id="c-ref-select"><option value="">-- Choisir --</option></select></div>
+    <div class="fg" style="background:var(--orange-light);border-radius:8px;padding:8px 12px;font-size:12.5px;color:var(--orange-dark)"><i class="ti ti-users"></i> Cette consigne sera adressée à <strong>toutes les référentes</strong>.</div>
     <div class="fg"><label class="flabel">Sujet</label><input class="finput" id="c-subj" placeholder="Ex. : Mise à jour protocole accueil"/></div>
     <div class="fg"><label class="flabel">Message</label><textarea class="finput" id="c-msg" rows="4" style="resize:vertical"></textarea></div>
     <div class="fg"><label class="flabel">Priorité</label><select class="finput" id="c-prio"><option value="normal">Normale</option><option value="urgent">Urgente</option><option value="info">Information</option></select></div>
@@ -1243,7 +1243,7 @@ if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https:/
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='';
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 
 // Init au chargement complet de la page
@@ -1275,6 +1275,8 @@ async function loadAllData(){
     Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('evenements'),dbSelect('messages')]),
     timeout
   ]);
+  // Consignes lues (notifications in-app) — non bloquant
+  try{cacheConsignesLues=await dbSelect('consignes_lues');}catch(e){cacheConsignesLues=[];}
 }
 // SUPABASE HELPERS
 async function dbSelect(table,filters={}){let q=sb.from(table).select('*').order('created_at',{ascending:false});for(const[k,v]of Object.entries(filters))q=q.eq(k,v);const{data,error}=await q;if(error){console.warn(table,error);return[];}return data||[];}
@@ -1375,6 +1377,31 @@ function updateBadges(){
   const myCrecheId=isDirection?null:currentProfile?.creche_id;
   const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;
   const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}
+  updateConsigneBadge();
+}
+// Consignes non lues par la référente connectée (la direction émet les consignes, donc pas de badge pour elle)
+function unreadConsignesCount(){
+  if(isDirection||!currentProfile?.id)return 0;
+  const luIds=new Set(cacheConsignesLues.filter(x=>x.referent_id===currentProfile.id).map(x=>x.consigne_id));
+  return cacheDemandes.filter(d=>d.type==='consigne'&&!luIds.has(d.id)).length;
+}
+function updateConsigneBadge(){
+  const n=unreadConsignesCount();
+  const b=document.getElementById('badge-demands');
+  if(b){b.textContent=n;b.style.display=n>0?'':'none';}
+}
+// Marque toutes les consignes comme lues pour la référente connectée
+async function markConsignesRead(){
+  if(isDirection||!currentProfile?.id)return;
+  const luIds=new Set(cacheConsignesLues.filter(x=>x.referent_id===currentProfile.id).map(x=>x.consigne_id));
+  const aMarquer=cacheDemandes.filter(d=>d.type==='consigne'&&!luIds.has(d.id));
+  if(!aMarquer.length)return;
+  for(const d of aMarquer){
+    const saved=await dbInsert('consignes_lues',{consigne_id:d.id,referent_id:currentProfile.id});
+    if(saved)cacheConsignesLues.push(saved);
+    else cacheConsignesLues.push({consigne_id:d.id,referent_id:currentProfile.id}); // fallback local
+  }
+  updateConsigneBadge();
 }
 
 function showMain(tab){
@@ -1384,7 +1411,7 @@ function showMain(tab){
     if(btn)btn.classList.toggle('active',t===tab);
   });
   if(tab==='planning')renderPlanning();
-  if(tab==='demands')renderCrecheTabs();
+  if(tab==='demands'){renderCrecheTabs();setTimeout(markConsignesRead,600);}
   if(tab==='referents')renderReferents();
   if(tab==='incidents')renderIncidents();
   if(tab==='presence'){initPresenceDate();renderPresence();}
@@ -1582,20 +1609,20 @@ async function sendThreadMessage(){
 }
 
 function openConsigneModal(){
-  const sel=document.getElementById('c-ref-select');
-  sel.innerHTML='<option value="">-- Choisir --</option>'+cacheReferents.filter(r=>r.role==='referent').map(r=>'<option value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'" data-creche="'+(r.creche_id||'')+'">'+r.name+' ('+(cacheCreches.find(c=>c.id===r.creche_id)?.name||'?')+')</option>').join('');
   ['c-subj','c-msg'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('modal-consigne-wrap').classList.add('open');
 }
 async function saveConsigne(){
-  const refSel=document.getElementById('c-ref-select');const refOpt=refSel?.options[refSel.selectedIndex];
-  const refId=refSel?.value,subj=document.getElementById('c-subj').value.trim(),msg=document.getElementById('c-msg').value.trim();
-  if(!refId||!subj||!msg){alert('Tous les champs sont requis.');return;}
+  const subj=document.getElementById('c-subj').value.trim(),msg=document.getElementById('c-msg').value.trim();
+  if(!subj||!msg){alert('Le sujet et le message sont requis.');return;}
   const btn=document.getElementById('btn-save-consigne');btn.disabled=true;
-  const crecheId=refOpt?.getAttribute('data-creche')||'';
-  const row={creche_id:crecheId,referent_name:refOpt?.getAttribute('data-name')||'',referent_email:refOpt?.getAttribute('data-email')||'',subject:subj,description:msg,priority:document.getElementById('c-prio').value,status:'envoyee',type:'consigne'};
+  const row={creche_id:null,referent_name:'',referent_email:'',subject:subj,description:msg,priority:document.getElementById('c-prio').value,status:'envoyee',type:'consigne'};
   const saved=await dbInsert('demandes',row);
-  if(saved){cacheDemandes.unshift(saved);await callFn('notify-consigne',{consigne:{...row,id:saved.id,message:msg,creche:cacheCreches.find(c=>c.id===crecheId)?.name||''}});showBanner('Consigne envoyée !');closeModal('modal-consigne-wrap');renderCrecheTabs();}
+  if(saved){
+    cacheDemandes.unshift(saved);
+    const destinataires=cacheReferents.filter(r=>r.role==='referent'&&r.email).map(r=>({email:r.email,name:r.name}));
+    await callFn('notify-consigne',{consigne:{...row,id:saved.id,message:msg,creche:'Toutes les crèches'},destinataires});
+    showBanner('Consigne envoyée à toutes les référentes !');closeModal('modal-consigne-wrap');renderCrecheTabs();}
   else showBanner('Erreur.','error');
   btn.disabled=false;
 }
