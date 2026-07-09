@@ -411,7 +411,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn" onclick="showMain('fraispro')" id="mnav-fraispro"><i class="ti ti-receipt"></i> Frais pro</button>
       <button class="mnav-btn" onclick="showMain('heures-sup')" id="mnav-heures-sup"><i class="ti ti-clock-plus"></i> Heures sup</button>
       <button class="mnav-btn" onclick="showMain('remplacantes')" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
-      <button class="mnav-btn" onclick="showMain('vaccinations')" id="mnav-vaccinations"><i class="ti ti-vaccine"></i> Vaccinations</button>
     </nav>
     <div style="display:flex;align-items:center;gap:8px">
       <div class="user-chip" id="user-chip" onclick="doLogout()"><i class="ti ti-user" style="font-size:13px"></i> <span id="user-name">—</span> <i class="ti ti-logout" style="font-size:12px;opacity:0.7"></i></div>
@@ -861,56 +860,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 
-  <!-- VACCINATIONS -->
-  <div id="main-vaccinations" class="tab-content">
-    <div class="section-header">
-      <div class="section-left">
-        <span class="section-title"><i class="ti ti-vaccine" style="color:var(--koala)"></i> Suivi des vaccinations obligatoires</span>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select class="finput direction-only" id="vac-creche-select" style="width:auto;min-width:160px;font-size:12px;padding:4px 8px" onchange="vacRender()">
-          <option value="">Toutes les crèches</option>
-        </select>
-        <button class="btn-primary" onclick="vacOpenEnfantModal()"><i class="ti ti-plus"></i> Ajouter un enfant</button>
-      </div>
-    </div>
-    <div class="module-tabs" style="margin-bottom:1rem">
-      <button class="module-tab active" onclick="vacShowView('liste',this)"><i class="ti ti-list"></i> Liste enfants</button>
-      <button class="module-tab" onclick="vacShowView('alertes',this)"><i class="ti ti-alert-circle"></i> Alertes <span id="vac-alert-badge" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px">0</span></button>
-      <button class="module-tab" onclick="vacShowView('calendrier',this)"><i class="ti ti-calendar"></i> Calendrier prévisionnel</button>
-    </div>
-    <div id="vac-view-liste" class="module-tab-content active">
-      <div id="vac-enfant-list" style="display:flex;flex-direction:column;gap:10px"></div>
-    </div>
-    <div id="vac-view-alertes" class="module-tab-content">
-      <div id="vac-alert-list" style="display:flex;flex-direction:column;gap:10px"></div>
-    </div>
-    <div id="vac-view-calendrier" class="module-tab-content">
-      <div id="vac-cal-list" style="display:flex;flex-direction:column;gap:10px"></div>
-    </div>
-  </div>
-
 </div><!-- end .app -->
 </div><!-- end #app-wrap -->
-
-<!-- Modal saisie dose vaccination -->
-<div class="overlay" id="modal-vac-dose-wrap">
-  <div class="modal" style="max-width:460px;width:100%">
-    <h3 id="vac-dose-title" style="margin-bottom:1rem;font-size:15px;color:var(--koala)">Saisir une vaccination</h3>
-    <input type="hidden" id="vac-dose-enfant-id">
-    <input type="hidden" id="vac-dose-vaccin-id">
-    <input type="hidden" id="vac-dose-index">
-    <div class="fg"><label class="flabel">Date de vaccination <span style="color:var(--red)">*</span></label><input class="finput" type="date" id="vac-dose-date"></div>
-    <div class="fg"><label class="flabel">Nom du vaccin utilisé</label><input class="finput" id="vac-dose-vaccin-name" placeholder="ex: Infanrix Hexa, Bexsero…"></div>
-    <div class="fg"><label class="flabel">Numéro de lot</label><input class="finput" id="vac-dose-lot" placeholder="Numéro de lot (optionnel)"></div>
-    <div class="fg"><label class="flabel">Note</label><textarea class="finput" id="vac-dose-note" rows="2" placeholder="Remarque éventuelle…" style="resize:vertical"></textarea></div>
-    <div class="mactions">
-      <button class="btn-danger-sm" id="vac-dose-delete-btn" onclick="vacDeleteDose()" style="display:none;margin-right:auto"><i class="ti ti-trash"></i> Supprimer</button>
-      <button class="btn-cancel" onclick="closeModal('modal-vac-dose-wrap')">Annuler</button>
-      <button class="btn-primary" onclick="vacSaveDose()"><i class="ti ti-check"></i> Enregistrer</button>
-    </div>
-  </div>
-</div>
 
 <!-- Bouton aide flottant -->
 <button onclick="openNotice()" title="Aide & Notice d'utilisation"
@@ -1204,6 +1155,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- MODAL FICHE ENFANT / SUIVI VACCINATION -->
+<div class="overlay" id="modal-fiche-enfant-wrap">
+  <div class="modal" style="max-width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <h3 id="fiche-enf-titre" style="margin:0">Fiche enfant</h3>
+      <button class="btn-cancel" style="padding:4px 8px" onclick="closeModal('modal-fiche-enfant-wrap')"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="fiche-enf-entete" style="display:flex;flex-wrap:wrap;gap:12px;margin:10px 0 4px 0;font-size:13px;color:var(--text)"></div>
+    <div style="border-top:1px solid #ece9f5;margin:10px 0"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <h4 style="margin:0;color:var(--koala);font-size:14px"><i class="ti ti-vaccine"></i> Suivi vaccination</h4>
+      <span id="fiche-enf-vac-count" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Calendrier obligatoire (né depuis 2023) — cochez et datez chaque injection réalisée.</div>
+    <div id="fiche-enf-vaccins" style="max-height:44vh;overflow-y:auto"></div>
+    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-fiche-enfant-wrap')">Fermer</button><button class="btn-primary" onclick="saveFicheVaccins()"><i class="ti ti-check"></i> Enregistrer le suivi</button></div>
+  </div>
+</div>
+
 <!-- MODAL IMPORT PRESENCES PDF -->
 <div class="overlay" id="modal-import-presence-wrap">
   <div class="modal" style="max-width:640px;max-height:86vh;display:flex;flex-direction:column">
@@ -1418,7 +1388,7 @@ function updateBadges(){
 }
 
 function showMain(tab){
-  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','heures-sup','vaccinations'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','heures-sup'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -1435,7 +1405,6 @@ function showMain(tab){
   if(tab==='fraisik'){if(isDirection)ikInit();else showMain('ref-dashboard');}
   if(tab==='fraispro')fpInit();
   if(tab==='remplacantes')rmpInit();
-  if(tab==='vaccinations')vacInit();
 }
 
 // FULLSCREEN DEMANDES
@@ -1980,7 +1949,7 @@ async function renderPresenceGantt(){
     else if(hasA)segments.push({start:12,end:COLS,color:'var(--koala)'});
     const bg=idx%2===0?'#fff':'#f7f6fb';
     rowsHtml+='<div style="display:flex;align-items:center;padding:3px 0;background:'+bg+';border-radius:4px">';
-    rowsHtml+='<div style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--text)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escHtml(e.prenom+' '+e.nom)+'">'+escHtml(e.prenom+' '+e.nom)+'</div>';
+    rowsHtml+='<div onclick="openFicheEnfant(\''+e.id+'\')" style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--koala)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;text-decoration:underline;text-decoration-color:#d8d3ee;text-underline-offset:2px" title="Ouvrir la fiche de '+escHtml(e.prenom+' '+e.nom)+'">'+escHtml(e.prenom+' '+e.nom)+'</div>';
     // Barre Gantt
     rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:20px;border-left:1px solid #e0dff0">';
     // Lignes verticales des heures
@@ -2036,6 +2005,90 @@ async function exportPresence(){
 }
 function openEnfantModal(){document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('modal-enfant-wrap').classList.add('open');}
 async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:document.getElementById('enf-groupe').value,creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim()};const saved=await dbInsert('enfants',row);if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
+
+// ── FICHE ENFANT / SUIVI VACCINATION ──
+// Calendrier vaccinal obligatoire du nourrisson (né depuis 2023), source Santé publique France 2026
+const VACCINS_CALENDRIER=[
+  {key:'hexa_2m',   label:'Hexavalent (DTP-coqueluche-Hib-hépatite B) — 1re dose', moisMin:2},
+  {key:'pneumo_2m', label:'Pneumocoque — 1re dose', moisMin:2},
+  {key:'menb_3m',   label:'Méningocoque B — 1re dose', moisMin:3},
+  {key:'hexa_4m',   label:'Hexavalent — 2e dose', moisMin:4},
+  {key:'pneumo_4m', label:'Pneumocoque — 2e dose', moisMin:4},
+  {key:'menb_5m',   label:'Méningocoque B — 2e dose', moisMin:5},
+  {key:'menacwy_6m',label:'Méningocoque ACWY — 1re dose', moisMin:6},
+  {key:'hexa_11m',  label:'Hexavalent — rappel', moisMin:11},
+  {key:'pneumo_11m',label:'Pneumocoque — rappel', moisMin:11},
+  {key:'ror_12m',   label:'ROR (rougeole-oreillons-rubéole) — 1re dose', moisMin:12},
+  {key:'menb_12m',  label:'Méningocoque B — rappel', moisMin:12},
+  {key:'menacwy_12m',label:'Méningocoque ACWY — rappel', moisMin:12},
+  {key:'ror_18m',   label:'ROR — 2e dose', moisMin:16}
+];
+let _ficheEnfantId=null;
+function ageEnMois(dobStr){if(!dobStr)return null;const d=new Date(dobStr+'T00:00:00'),n=new Date();let m=(n.getFullYear()-d.getFullYear())*12+(n.getMonth()-d.getMonth());if(n.getDate()<d.getDate())m--;return m;}
+function ageLisible(dobStr){const m=ageEnMois(dobStr);if(m===null)return'—';if(m<24)return m+' mois';const a=Math.floor(m/12),r=m%12;return a+' an'+(a>1?'s':'')+(r?' et '+r+' mois':'');}
+function openFicheEnfant(id){
+  const e=cacheEnfants.find(x=>String(x.id)===String(id));
+  if(!e){alert('Enfant introuvable.');return;}
+  _ficheEnfantId=e.id;
+  document.getElementById('fiche-enf-titre').textContent=(e.prenom||'')+' '+(e.nom||'');
+  const creche=cacheCreches.find(c=>String(c.id)===String(e.creche_id));
+  const dobLabel=e.dob?new Date(e.dob+'T00:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'}):'non renseignée';
+  let ent='';
+  ent+='<div><span style="color:var(--muted)">Prénom&nbsp;:</span> <b>'+escHtml(e.prenom||'—')+'</b></div>';
+  ent+='<div><span style="color:var(--muted)">Nom&nbsp;:</span> <b>'+escHtml(e.nom||'—')+'</b></div>';
+  ent+='<div><span style="color:var(--muted)">Naissance&nbsp;:</span> <b>'+escHtml(dobLabel)+'</b></div>';
+  ent+='<div><span style="color:var(--muted)">Âge&nbsp;:</span> <b>'+ageLisible(e.dob)+'</b></div>';
+  if(creche)ent+='<div><span style="color:var(--muted)">Crèche&nbsp;:</span> <b>'+escHtml(creche.name)+'</b></div>';
+  if(e.allergies)ent+='<div style="flex-basis:100%"><span style="color:var(--muted)">Allergies&nbsp;:</span> <b>'+escHtml(e.allergies)+'</b></div>';
+  document.getElementById('fiche-enf-entete').innerHTML=ent;
+  renderFicheVaccins(e);
+  document.getElementById('modal-fiche-enfant-wrap').classList.add('open');
+}
+function renderFicheVaccins(e){
+  let vac={};try{vac=typeof e.vaccins==='string'?JSON.parse(e.vaccins||'{}'):(e.vaccins||{});}catch(_){vac={};}
+  const ageM=ageEnMois(e.dob);
+  let done=0;const total=VACCINS_CALENDRIER.length;
+  let html='';
+  VACCINS_CALENDRIER.forEach(v=>{
+    const rec=vac[v.key]||{};
+    const fait=!!rec.fait;if(fait)done++;
+    // en retard = âge dépasse l'échéance et non fait
+    const retard=!fait&&ageM!==null&&ageM>=v.moisMin;
+    const dueLabel=v.moisMin>=12?(v.moisMin+' mois'):(v.moisMin+' mois');
+    let statusColor=fait?'#2a9d4e':(retard?'#e03e3e':'#b0a8d8');
+    let bg=fait?'#f1faf3':(retard?'#fdf0f0':'#faf9fd');
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:'+bg+';border-radius:8px;border-left:3px solid '+statusColor+'">';
+    html+='<input type="checkbox" id="vac-'+v.key+'" '+(fait?'checked':'')+' onchange="onVacToggle(\''+v.key+'\')" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--koala)">';
+    html+='<div style="flex:1;min-width:0">';
+    html+='<div style="font-size:12.5px;font-weight:600;color:var(--text)">'+escHtml(v.label)+'</div>';
+    html+='<div style="font-size:10.5px;color:'+(retard?'#e03e3e':'var(--muted)')+'">Prévu à '+dueLabel+(retard?' · en retard':'')+'</div>';
+    html+='</div>';
+    html+='<input type="date" id="vacdate-'+v.key+'" value="'+(rec.date||'')+'" '+(fait?'':'disabled')+' style="font-size:11px;padding:3px 5px;border:1px solid #ddd8ee;border-radius:6px;flex-shrink:0;width:130px">';
+    html+='</div>';
+  });
+  document.getElementById('fiche-enf-vaccins').innerHTML=html;
+  document.getElementById('fiche-enf-vac-count').textContent=done+' / '+total+' à jour';
+}
+function onVacToggle(key){
+  const cb=document.getElementById('vac-'+key),dt=document.getElementById('vacdate-'+key);
+  if(!cb||!dt)return;
+  dt.disabled=!cb.checked;
+  if(cb.checked&&!dt.value)dt.value=todayStr();
+  if(!cb.checked)dt.value='';
+}
+async function saveFicheVaccins(){
+  if(!_ficheEnfantId)return;
+  const vac={};
+  VACCINS_CALENDRIER.forEach(v=>{
+    const cb=document.getElementById('vac-'+v.key),dt=document.getElementById('vacdate-'+v.key);
+    if(cb&&cb.checked)vac[v.key]={fait:true,date:(dt&&dt.value)||null};
+  });
+  const{error}=await sb.from('enfants').update({vaccins:vac}).eq('id',_ficheEnfantId);
+  if(error){console.warn('update vaccins',error);alert('Erreur d\'enregistrement : '+error.message);return;}
+  const e=cacheEnfants.find(x=>String(x.id)===String(_ficheEnfantId));if(e)e.vaccins=vac;
+  closeModal('modal-fiche-enfant-wrap');
+  showBanner('Suivi vaccination enregistré !');
+}
 
 // ── IMPORT PRÉSENCES DEPUIS PLANNING PDF (Gantt) ──
 const IP_MONTHS={janvier:1,février:2,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,août:8,aout:8,septembre:9,octobre:10,novembre:11,décembre:12,decembre:12};
@@ -5126,326 +5179,6 @@ comptes: `
 </div>`
 
 };
-
-// =============================================
-// VACCINATIONS OBLIGATOIRES
-// =============================================
-
-// Définition des vaccins obligatoires selon calendrier vaccinal français 2025
-const VAC_SCHEMA = [
-  {id:'dtp_coque',label:'DTCaP (Diphtérie, Tétanos, Coqueluche, Polio)',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
-  {id:'hib',label:'Haemophilus influenzae b',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
-  {id:'hepb',label:'Hépatite B',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
-  {id:'pneumo',label:'Pneumocoque',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
-  {id:'menb',label:'Méningocoque B',doses:[{label:'3 mois',months:3},{label:'5 mois',months:5},{label:'12 mois',months:12}]},
-  {id:'menacwy',label:'Méningocoques ACWY',doses:[{label:'6 mois',months:6},{label:'12 mois',months:12}]},
-  {id:'menc',label:'Méningocoque C',doses:[{label:'5 mois',months:5},{label:'12 mois',months:12}]},
-  {id:'ror',label:'ROR (Rougeole, Oreillons, Rubéole)',doses:[{label:'12 mois',months:12},{label:'18 mois',months:18}]},
-];
-
-let cacheVaccinations = [];
-let vacCurrentEnfantId = null;
-
-function vacAddMonths(date, months){
-  const d = new Date(date);
-  d.setMonth(d.getMonth() + months);
-  return d;
-}
-function vacFmtDate(d){
-  if(!d) return '—';
-  const dd = new Date(d);
-  return dd.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
-}
-function vacLocalISO(d){
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
-function vacDaysUntil(isoDate){
-  const today = new Date(); today.setHours(0,0,0,0);
-  const target = new Date(isoDate); target.setHours(0,0,0,0);
-  return Math.round((target-today)/(1000*60*60*24));
-}
-
-async function vacInit(){
-  // Populate crèche select
-  const sel = document.getElementById('vac-creche-select');
-  if(sel){
-    const opts = cacheCreches.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-    sel.innerHTML = '<option value="">Toutes les crèches</option>' + opts;
-    if(!isDirection && currentProfile?.creche_id){
-      sel.value = currentProfile.creche_id;
-      sel.style.display = 'none';
-    }
-  }
-  await vacLoadData();
-  vacRender();
-}
-
-async function vacLoadData(){
-  const {data, error} = await sb.from('vaccinations').select('*');
-  if(error){console.warn('vaccinations load',error);cacheVaccinations=[];return;}
-  cacheVaccinations = data || [];
-}
-
-function vacShowView(view, btn){
-  ['liste','alertes','calendrier'].forEach(v=>{
-    const el = document.getElementById('vac-view-'+v);
-    if(el) el.classList.toggle('active', v===view);
-  });
-  document.querySelectorAll('#main-vaccinations .module-tab').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  if(view==='liste') vacRenderListe();
-  if(view==='alertes') vacRenderAlertes();
-  if(view==='calendrier') vacRenderCalendrier();
-}
-
-function vacRender(){
-  const activeTab = document.querySelector('#main-vaccinations .module-tab.active');
-  const activeView = activeTab ? (activeTab.textContent.includes('Liste')?'liste':activeTab.textContent.includes('Alertes')?'alertes':'calendrier') : 'liste';
-  if(activeView==='liste') vacRenderListe();
-  if(activeView==='alertes') vacRenderAlertes();
-  if(activeView==='calendrier') vacRenderCalendrier();
-}
-
-function vacGetEnfantsFiltres(){
-  const crecheId = document.getElementById('vac-creche-select')?.value || '';
-  return (crecheId ? cacheEnfants.filter(e=>e.creche_id===crecheId) : [...cacheEnfants])
-    .filter(e=>e.dob) // only enfants with DOB
-    .sort((a,b)=>(a.prenom||'').localeCompare(b.prenom||'','fr'));
-}
-
-function vacGetDoseKey(enfantId, vaccId, doseIdx){ return enfantId+'_'+vaccId+'_'+doseIdx; }
-
-function vacGetRecord(enfantId, vaccId, doseIdx){
-  return cacheVaccinations.find(v=>v.enfant_id===enfantId && v.vaccin_id===vaccId && v.dose_index===doseIdx);
-}
-
-function vacDoseStatus(enfant, vacc, doseIdx){
-  const dose = vacc.doses[doseIdx];
-  const rec = vacGetRecord(enfant.id, vacc.id, doseIdx);
-  if(rec && rec.date_fait) return {state:'fait', date: rec.date_fait, rec};
-  const due = vacAddMonths(new Date(enfant.dob), dose.months);
-  const daysLeft = vacDaysUntil(vacLocalISO(due));
-  if(daysLeft < 0) return {state:'retard', due, daysLeft, rec};
-  if(daysLeft <= 30) return {state:'proche', due, daysLeft, rec};
-  return {state:'ok', due, daysLeft, rec};
-}
-
-function vacRenderListe(){
-  const el = document.getElementById('vac-enfant-list');
-  if(!el) return;
-  const enfants = vacGetEnfantsFiltres();
-  if(!enfants.length){el.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant avec date de naissance. Ajoutez-en via le bouton ci-dessus.</p></div>';return;}
-  el.innerHTML = enfants.map(e=>{
-    const creche = cacheCreches.find(c=>c.id===e.creche_id);
-    let alertCount = 0;
-    const rows = VAC_SCHEMA.map(v=>{
-      const doses = v.doses.map((dose,di)=>{
-        const s = vacDoseStatus(e,v,di);
-        if(s.state==='retard'||s.state==='proche') alertCount++;
-        const stateIcon = s.state==='fait'?'<span style="color:var(--green);font-weight:700">✅ '+vacFmtDate(s.date)+'</span>'
-          :s.state==='retard'?'<span style="color:var(--red);font-weight:700">⚠️ '+vacFmtDate(vacLocalISO(s.due))+'</span>'
-          :s.state==='proche'?'<span style="color:var(--orange);font-weight:700">⏰ '+vacFmtDate(vacLocalISO(s.due))+'</span>'
-          :'<span style="color:var(--muted)">📅 '+vacFmtDate(vacLocalISO(s.due))+'</span>';
-        const btnLabel = s.state==='fait' ? '✏️' : '✔ Saisir';
-        return `<td style="padding:5px 8px;font-size:12px;text-align:center;vertical-align:middle">${stateIcon}<br><button onclick="vacOpenDose('${e.id}','${v.id}',${di})" style="margin-top:3px;font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;color:var(--koala)">${btnLabel}</button></td>`;
-      }).join('');
-      return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600;color:var(--koala-dark);white-space:nowrap">${v.label}</td>${doses}</tr>`;
-    }).join('');
-    const ageMs = Date.now() - new Date(e.dob).getTime();
-    const ageMois = Math.floor(ageMs/(1000*60*60*24*30.44));
-    const ageStr = ageMois < 24 ? ageMois+' mois' : Math.floor(ageMois/12)+' ans '+(ageMois%12)+' mois';
-    const alertBadge = alertCount > 0 ? `<span style="background:var(--red-light);color:var(--red);border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:8px">⚠️ ${alertCount} à vérifier</span>` : '<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:8px">✅ À jour</span>';
-    const doseHeaders = VAC_SCHEMA[0].doses.map(d=>`<th style="padding:5px 8px;font-size:11px;font-weight:700;color:#fff;text-align:center;white-space:nowrap">${d.label}</th>`).join('') + '<th style="padding:5px 8px;font-size:11px;font-weight:700;color:#fff;text-align:center"></th><th style="padding:5px 8px;font-size:11px;font-weight:700;color:#fff;text-align:center"></th>';
-    return `<div style="background:#fff;border-radius:12px;border:1px solid var(--border);overflow:hidden;box-shadow:0 1px 4px rgba(61,53,128,0.07)">
-      <div style="background:var(--koala);color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-        <div style="display:flex;align-items:center;gap:10px">
-          <i class="ti ti-user" style="font-size:16px"></i>
-          <strong>${escHtml(e.prenom+' '+e.nom)}</strong>
-          <span style="font-size:12px;opacity:0.8">né(e) le ${vacFmtDate(e.dob)} · ${ageStr}</span>
-          ${creche?`<span style="font-size:11px;background:rgba(255,255,255,0.18);border-radius:8px;padding:1px 8px">${escHtml(creche.name)}</span>`:''}
-        </div>
-        <div>${alertBadge}</div>
-      </div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse">
-          <thead>
-            <tr style="background:var(--koala-light)">
-              <th style="padding:5px 8px;font-size:11px;font-weight:700;color:var(--koala);text-align:left;min-width:180px">Vaccin</th>
-              ${VAC_SCHEMA.flatMap(v=>v.doses.map((d,di)=>`<th style="padding:5px 8px;font-size:11px;font-weight:700;color:var(--koala);text-align:center;white-space:nowrap">${d.label}</th>`)).join('')}
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function vacRenderAlertes(){
-  const el = document.getElementById('vac-alert-list');
-  const badge = document.getElementById('vac-alert-badge');
-  if(!el) return;
-  const enfants = vacGetEnfantsFiltres();
-  const alertes = [];
-  enfants.forEach(e=>{
-    const creche = cacheCreches.find(c=>c.id===e.creche_id);
-    VAC_SCHEMA.forEach(v=>{
-      v.doses.forEach((dose,di)=>{
-        const s = vacDoseStatus(e,v,di);
-        if(s.state==='retard'||s.state==='proche'){
-          alertes.push({enfant:e, creche, vacc:v, doseIdx:di, dose, s});
-        }
-      });
-    });
-  });
-  if(badge){
-    badge.textContent = alertes.length;
-    badge.style.display = alertes.length ? 'inline' : 'none';
-  }
-  if(!alertes.length){el.innerHTML='<div class="empty-state"><i class="ti ti-circle-check" style="color:var(--green)"></i><p>Aucune alerte ! Toutes les vaccinations sont à jour.</p></div>';return;}
-  alertes.sort((a,b)=>a.s.daysLeft-b.s.daysLeft);
-  el.innerHTML = alertes.map(({enfant,creche,vacc,doseIdx,dose,s})=>{
-    const urgency = s.state==='retard' ? {bg:'var(--red-light)',col:'var(--red)',icon:'⚠️',label:'En retard'} : {bg:'var(--orange-light)',col:'var(--orange-dark)',icon:'⏰',label:'Dans '+s.daysLeft+' jour(s)'};
-    return `<div style="background:${urgency.bg};border-left:4px solid ${urgency.col};border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div>
-        <div style="font-weight:700;color:${urgency.col}">${urgency.icon} ${escHtml(enfant.prenom+' '+enfant.nom)} ${creche?'— '+escHtml(creche.name):''}</div>
-        <div style="font-size:12px;margin-top:2px;color:var(--text)">${escHtml(vacc.label)} · ${dose.label} · Prévu le ${vacFmtDate(vacLocalISO(s.due))}</div>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:12px;font-weight:700;color:${urgency.col}">${urgency.label}</span>
-        <button onclick="vacOpenDose('${enfant.id}','${vacc.id}',${doseIdx})" style="padding:5px 12px;border:2px solid ${urgency.col};border-radius:7px;background:#fff;cursor:pointer;font-weight:600;color:${urgency.col};font-size:12px">✔ Saisir</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function vacRenderCalendrier(){
-  const el = document.getElementById('vac-cal-list');
-  if(!el) return;
-  const enfants = vacGetEnfantsFiltres();
-  const upcoming = [];
-  const today = new Date(); today.setHours(0,0,0,0);
-  const in90 = new Date(today); in90.setDate(in90.getDate()+90);
-  enfants.forEach(e=>{
-    const creche = cacheCreches.find(c=>c.id===e.creche_id);
-    VAC_SCHEMA.forEach(v=>{
-      v.doses.forEach((dose,di)=>{
-        const s = vacDoseStatus(e,v,di);
-        if(s.state==='fait') return;
-        if(s.due && s.due <= in90){
-          upcoming.push({enfant:e,creche,vacc:v,doseIdx:di,dose,s});
-        }
-      });
-    });
-  });
-  upcoming.sort((a,b)=>a.s.due-b.s.due);
-  if(!upcoming.length){el.innerHTML='<div class="empty-state"><i class="ti ti-calendar-check"></i><p>Aucun vaccin prévu dans les 90 prochains jours.</p></div>';return;}
-  // Group by month
-  const byMonth = {};
-  upcoming.forEach(item=>{
-    const key = item.s.due.getFullYear()+'-'+String(item.s.due.getMonth()+1).padStart(2,'0');
-    if(!byMonth[key]) byMonth[key]=[];
-    byMonth[key].push(item);
-  });
-  el.innerHTML = Object.entries(byMonth).map(([key,items])=>{
-    const [y,m] = key.split('-');
-    const monthLabel = new Date(+y,+m-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
-    const rows = items.map(({enfant,creche,vacc,doseIdx,dose,s})=>{
-      const col = s.state==='retard'?'var(--red)':s.state==='proche'?'var(--orange)':'var(--koala)';
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:6px">
-        <div>
-          <span style="font-weight:600;color:var(--text)">${escHtml(enfant.prenom+' '+enfant.nom)}</span>
-          ${creche?`<span style="font-size:11px;color:var(--muted);margin-left:6px">${escHtml(creche.name)}</span>`:''}
-          <div style="font-size:12px;color:var(--muted);margin-top:1px">${escHtml(vacc.label)} · ${dose.label}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-weight:700;color:${col}">${vacFmtDate(vacLocalISO(s.due))}</span>
-          <button onclick="vacOpenDose('${enfant.id}','${vacc.id}',${doseIdx})" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-size:11px;color:var(--koala)">Saisir</button>
-        </div>
-      </div>`;
-    }).join('');
-    return `<div style="background:#fff;border-radius:10px;border:1px solid var(--border);overflow:hidden;margin-bottom:8px">
-      <div style="background:var(--koala-light);padding:8px 12px;font-weight:700;color:var(--koala);font-size:13px;text-transform:capitalize">${monthLabel}</div>
-      ${rows}
-    </div>`;
-  }).join('');
-}
-
-function vacOpenDose(enfantId, vaccId, doseIdx){
-  vacCurrentEnfantId = enfantId;
-  const vacc = VAC_SCHEMA.find(v=>v.id===vaccId);
-  const dose = vacc?.doses[doseIdx];
-  const enfant = cacheEnfants.find(e=>e.id===enfantId);
-  const rec = vacGetRecord(enfantId, vaccId, doseIdx);
-  document.getElementById('vac-dose-title').textContent = (enfant?enfant.prenom+' '+enfant.nom:'') + ' — ' + (vacc?.label||'') + ' — ' + (dose?.label||'');
-  document.getElementById('vac-dose-vaccin-id').value = vaccId;
-  document.getElementById('vac-dose-index').value = doseIdx;
-  document.getElementById('vac-dose-enfant-id').value = enfantId;
-  document.getElementById('vac-dose-date').value = rec?.date_fait || '';
-  document.getElementById('vac-dose-vaccin-name').value = rec?.vaccin_nom || '';
-  document.getElementById('vac-dose-lot').value = rec?.lot || '';
-  document.getElementById('vac-dose-note').value = rec?.note || '';
-  document.getElementById('vac-dose-delete-btn').style.display = rec ? 'inline-flex' : 'none';
-  document.getElementById('modal-vac-dose-wrap').classList.add('open');
-}
-
-async function vacSaveDose(){
-  const enfantId = document.getElementById('vac-dose-enfant-id').value;
-  const vaccId = document.getElementById('vac-dose-vaccin-id').value;
-  const doseIdx = parseInt(document.getElementById('vac-dose-index').value);
-  const dateFait = document.getElementById('vac-dose-date').value;
-  if(!dateFait){alert('Veuillez saisir la date de vaccination.');return;}
-  const row = {
-    enfant_id: enfantId,
-    vaccin_id: vaccId,
-    dose_index: doseIdx,
-    date_fait: dateFait,
-    vaccin_nom: document.getElementById('vac-dose-vaccin-name').value.trim()||null,
-    lot: document.getElementById('vac-dose-lot').value.trim()||null,
-    note: document.getElementById('vac-dose-note').value.trim()||null
-  };
-  const existing = vacGetRecord(enfantId, vaccId, doseIdx);
-  if(existing){
-    const {error} = await sb.from('vaccinations').update(row).eq('id',existing.id);
-    if(error){alert('Erreur mise à jour: '+error.message);return;}
-    const idx = cacheVaccinations.findIndex(v=>v.id===existing.id);
-    if(idx>=0) cacheVaccinations[idx] = {...existing,...row};
-  } else {
-    const {data, error} = await sb.from('vaccinations').insert(row).select().single();
-    if(error){alert('Erreur enregistrement: '+error.message);return;}
-    if(data) cacheVaccinations.push(data);
-  }
-  closeModal('modal-vac-dose-wrap');
-  vacRender();
-  showBanner('Vaccination enregistrée ✅');
-}
-
-async function vacDeleteDose(){
-  const enfantId = document.getElementById('vac-dose-enfant-id').value;
-  const vaccId = document.getElementById('vac-dose-vaccin-id').value;
-  const doseIdx = parseInt(document.getElementById('vac-dose-index').value);
-  const existing = vacGetRecord(enfantId, vaccId, doseIdx);
-  if(!existing) return;
-  if(!confirm('Supprimer cet enregistrement de vaccination ?')) return;
-  const {error} = await sb.from('vaccinations').delete().eq('id',existing.id);
-  if(error){alert('Erreur suppression: '+error.message);return;}
-  cacheVaccinations = cacheVaccinations.filter(v=>v.id!==existing.id);
-  closeModal('modal-vac-dose-wrap');
-  vacRender();
-  showBanner('Vaccination supprimée.');
-}
-
-function vacOpenEnfantModal(){
-  // Re-use existing openEnfantModal if exists
-  openEnfantModal();
-}
-window.vacOpenDose = vacOpenDose;
-window.vacSaveDose = vacSaveDose;
-window.vacDeleteDose = vacDeleteDose;
-window.vacShowView = vacShowView;
-window.vacRender = vacRender;
-window.vacOpenEnfantModal = vacOpenEnfantModal;
-
 </script>
 
 <!-- Modal planning coordinateur -->
