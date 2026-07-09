@@ -1463,7 +1463,7 @@ function renderCrechePanel(){
   const creche=crecheId?cacheCreches.find(c=>c.id===crecheId):null;
   const myId=currentProfile?.id;
   // Inclut aussi les demandes adressées personnellement (admin-à-admin ou vers un référent précis), même sans crèche.
-  const allD=isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId));
+  const allD=isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId)||(d.type==='consigne'&&!d.creche_id));
   const total=allD.length,attente=allD.filter(d=>d.status==='attente').length,urgent=allD.filter(d=>d.priority==='urgent').length,traite=allD.filter(d=>d.status==='traite').length;
   let html='';
   if(isAll){html+='<div class="creche-header-box"><div class="creche-header-name"><i class="ti ti-building-community" style="font-size:20px"></i> Toutes les crèches <span>'+cacheCreches.length+' établissements</span></div><div class="section-actions"><button class="btn-orange" onclick="openConsigneModal()"><i class="ti ti-send"></i> Envoyer une consigne</button></div></div>';}
@@ -1481,7 +1481,7 @@ function renderDemandsOnly(){
   const crecheId=isAll?null:(isDirection?activeCrecheId:currentProfile?.creche_id);
   const myId=currentProfile?.id;
   const term=searchTerm.toLowerCase().trim();
-  const base=term?cacheDemandes:(isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId)));
+  const base=term?cacheDemandes:(isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId)||(d.type==='consigne'&&!d.creche_id)));
   const filtered=base.filter(d=>{
     if(!term){if(activeFilter==='all'&&d.status==='traite')return false;if(activeFilter==='urgent'&&d.priority!=='urgent')return false;if(activeFilter==='attente'&&d.status!=='attente')return false;if(activeFilter==='traite'&&d.status!=='traite')return false;if(activeFilter==='consigne'&&d.type!=='consigne')return false;}
     if(term){const cn=(cacheCreches.find(c=>c.id===d.creche_id)?.name||'').toLowerCase();if(!(d.subject||'').toLowerCase().includes(term)&&!(d.referent_name||'').toLowerCase().includes(term)&&!(d.description||'').toLowerCase().includes(term)&&!cn.includes(term)&&!(d.theme||'').toLowerCase().includes(term))return false;}
