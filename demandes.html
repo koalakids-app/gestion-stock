@@ -5712,6 +5712,7 @@ function ctrlRenderEditor(){
     +'<input type="date" class="finput" id="ctrl-date" value="'+escHtml(ctrlCurrentData.date_visite||'')+'" onchange="ctrlSetDate(this.value)" style="max-width:170px">'
     +'<span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--muted)" id="ctrl-progress-label">'+pct+' % renseigné</span>'
     +'<button class="btn-primary" onclick="ctrlSaveNow()"><i class="ti ti-device-floppy"></i> Enregistrer</button>'
+    +'<button class="ibtn" onclick="ctrlExportPDF()" title="Exporter / imprimer en PDF" style="background:var(--koala);color:#fff;border-color:var(--koala)"><i class="ti ti-file-type-pdf"></i></button>'
     +'</div>';
 
   html+='<div style="font-size:11px;color:var(--muted);margin-bottom:0.75rem"><span style="color:var(--red);font-weight:700">(*)</span> = item à caractère réglementaire. Sauvegarde automatique.</div>';
@@ -5813,6 +5814,82 @@ async function ctrlSaveNow(){
     if(saved){ctrlCurrentId=saved.id;ctrlCache.unshift(saved);}
     else{showBanner('Échec de l\'enregistrement (session expirée ?). Reconnectez-vous.','error');}
   }
+}
+
+function ctrlExportPDF(){
+  ctrlSaveNow();
+  const rep=ctrlCurrentData.reponses||{};
+  const crecheName=ctrlCrecheName(ctrlCurrentData.creche_id);
+  const dateV=ctrlCurrentData.date_visite||'';
+  const filled=ctrlCountFilled(rep),total=ctrlCountItems(),pct=total?Math.round(filled/total*100):0;
+
+  function valHtml(it){
+    const v=rep[it.id];
+    if(it.t==='oui_non'){
+      if(v==='oui')return '<span class="v-oui">OUI</span>';
+      if(v==='non')return '<span class="v-non">NON</span>';
+      return '<span class="v-vide">—</span>';
+    }
+    if(v===undefined||v===null||v==='')return '<span class="v-vide">—</span>';
+    return '<span class="v-txt">'+escHtml(String(v)).replace(/\n/g,'<br>')+'</span>';
+  }
+
+  let body='';
+  CTRL_SCHEMA.forEach(sec=>{
+    body+='<h2><span class="ic">■</span> '+escHtml(sec.titre)+'</h2>';
+    body+='<table class="grid">';
+    sec.items.forEach(it=>{
+      if(it.t==='sep'){
+        body+='<tr class="sep"><td colspan="2">'+escHtml(it.l)+'</td></tr>';
+        return;
+      }
+      const star=it.reg?' <span class="star">(*)</span>':'';
+      body+='<tr><td class="lab">'+escHtml(it.l)+star+'</td><td class="val">'+valHtml(it)+'</td></tr>';
+    });
+    body+='</table>';
+  });
+
+  const doc='<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Contrôle EAJE — '+escHtml(crecheName)+'</title>'
+    +'<style>'
+    +'*{box-sizing:border-box}'
+    +'body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#222;margin:0;padding:24px;font-size:12px;line-height:1.4}'
+    +'.head{border-bottom:3px solid #3D3580;padding-bottom:12px;margin-bottom:18px}'
+    +'.head h1{margin:0 0 6px;color:#3D3580;font-size:20px}'
+    +'.meta{display:flex;flex-wrap:wrap;gap:18px;font-size:12px;color:#555}'
+    +'.meta b{color:#222}'
+    +'.prog{margin-top:8px;font-size:11px;color:#666}'
+    +'h2{color:#3D3580;font-size:13px;margin:18px 0 6px;padding:5px 0;border-bottom:1px solid #ddd;break-after:avoid;page-break-after:avoid}'
+    +'h2 .ic{color:#F47920;font-size:9px;vertical-align:middle}'
+    +'table.grid{width:100%;border-collapse:collapse;margin-bottom:4px}'
+    +'table.grid tr{break-inside:avoid;page-break-inside:avoid}'
+    +'td{border:1px solid #e2e2ec;padding:5px 8px;vertical-align:top}'
+    +'td.lab{width:70%;color:#333}'
+    +'td.val{width:30%;text-align:center;font-weight:700}'
+    +'tr.sep td{background:#EEEDF8;color:#3D3580;font-weight:700;font-size:11px}'
+    +'.star{color:#d33;font-weight:700}'
+    +'.v-oui{color:#1a7d47;font-weight:700}'
+    +'.v-non{color:#c0392b;font-weight:700}'
+    +'.v-vide{color:#bbb}'
+    +'.v-txt{font-weight:600;color:#222}'
+    +'.foot{margin-top:20px;padding-top:10px;border-top:1px solid #ddd;font-size:10px;color:#888;text-align:center}'
+    +'@media print{body{padding:0}@page{margin:14mm}}'
+    +'</style></head><body>'
+    +'<div class="head"><h1>Support de contrôle EAJE</h1>'
+    +'<div class="meta"><span><b>Établissement :</b> '+escHtml(crecheName)+'</span>'
+    +'<span><b>Date de visite :</b> '+escHtml(dateV||'—')+'</span>'
+    +'<span><b>Type :</b> micro-crèche (section unique)</span></div>'
+    +'<div class="prog">Fiche renseignée à '+pct+' % ('+filled+'/'+total+' items) — <span class="star">(*)</span> = item à caractère réglementaire</div>'
+    +'</div>'
+    +body
+    +'<div class="foot">Document généré depuis l\'application Koala Kids — '+escHtml(new Date().toLocaleDateString('fr-FR'))+'</div>'
+    +'</body></html>';
+
+  const w=window.open('','_blank');
+  if(!w){showBanner('Autorisez les fenêtres pop-up pour exporter en PDF.','error');return;}
+  w.document.open();
+  w.document.write(doc);
+  w.document.close();
+  setTimeout(()=>{try{w.focus();w.print();}catch(e){}},350);
 }
 
 function ctrlBackToList(){
