@@ -5316,6 +5316,15 @@ async function vacLoadData(){
   const {data, error} = await sb.from('vaccinations').select('*');
   if(error){console.warn('vaccinations load',error);cacheVaccinations=[];return;}
   cacheVaccinations = data || [];
+  await vacLoadPJ();
+}
+
+// ── Pièces jointes vaccinales (photocopies du carnet) ──
+let cacheVacPJ = [];
+async function vacLoadPJ(){
+  const {data, error} = await sb.from('vaccins_pj').select('*').order('created_at',{ascending:true});
+  if(error){console.warn('vaccins_pj load',error);cacheVacPJ=[];return;}
+  cacheVacPJ = data || [];
 }
 
 function vacShowView(view, btn){
@@ -5441,8 +5450,70 @@ function vacRenderFicheBody(){
       <span style="color:var(--orange);font-weight:700">bordure orange</span> : à faire bientôt ·
       <span style="color:var(--red);font-weight:700">bordure rouge</span> : en retard.
       Cliquez une pastille pour la marquer faite (ou l'annuler).
-    </div>`;
+    </div>
+    <div id="vac-pj-zone" style="margin-top:16px"></div>`;
+  vacRenderPJ();
 }
+
+// Rendu de la zone pièces jointes dans la fiche enfant
+function vacRenderPJ(){
+  const zone = document.getElementById('vac-pj-zone');
+  if(!zone) return;
+  const eid = vacFicheEnfantId;
+  const items = cacheVacPJ.filter(p=>String(p.enfant_id)===String(eid));
+  const list = items.length ? items.map(p=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:#fff">'
+    + '<i class="ti ti-paperclip" style="color:var(--koala)"></i>'
+    + '<a href="'+p.url+'" target="_blank" style="flex:1;font-size:12.5px;color:var(--koala-dark);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(p.filename||'Document')+'</a>'
+    + '<button onclick="vacDeletePJ(\''+p.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:15px"><i class="ti ti-trash"></i></button>'
+    + '</div>'
+  ).join('') : '<div style="font-size:12px;color:var(--muted)">Aucune photocopie jointe pour le moment.</div>';
+  zone.innerHTML =
+    '<div style="font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-camera" style="color:var(--koala)"></i> Photocopies du carnet de vaccination</div>'
+    + '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">'+list+'</div>'
+    + '<button class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;font-size:12.5px" onclick="document.getElementById(\'vac-pj-input\').click()"><i class="ti ti-upload"></i> Ajouter une photocopie</button>'
+    + '<span id="vac-pj-status" style="margin-left:10px;font-size:12px;color:var(--muted)"></span>'
+    + '<input type="file" id="vac-pj-input" accept="image/*,application/pdf" multiple style="display:none" onchange="vacHandlePJ(event)"/>';
+}
+
+async function vacHandlePJ(event){
+  const files = Array.from(event.target.files||[]);
+  if(!files.length) return;
+  const eid = vacFicheEnfantId;
+  const status = document.getElementById('vac-pj-status');
+  for(const file of files){
+    if(status) status.textContent = '⏳ Envoi de '+file.name+'…';
+    try{
+      const ext = (file.name.split('.').pop()||'bin');
+      const path = 'vaccins-pj/'+eid+'_'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+      const {error} = await fpStorageClient().storage.from('assets').upload(path,file);
+      if(error) throw error;
+      const {data} = fpStorageClient().storage.from('assets').getPublicUrl(path);
+      const {data:ins, error:insErr} = await sb.from('vaccins_pj')
+        .insert({enfant_id:eid, url:data.publicUrl, filename:file.name}).select().single();
+      if(insErr) throw insErr;
+      if(ins) cacheVacPJ.push(ins);
+      vacRenderPJ();
+    }catch(e){
+      console.error('[VacPJ]',e.message);
+      if(status) status.textContent = '⚠ Erreur : '+e.message;
+      return;
+    }
+  }
+  if(status) status.textContent = '✅ Ajouté';
+  showBanner('Photocopie(s) jointe(s) ✅');
+}
+
+async function vacDeletePJ(id){
+  if(!confirm('Supprimer cette photocopie ?')) return;
+  const {error} = await sb.from('vaccins_pj').delete().eq('id',id);
+  if(error){alert('Erreur : '+error.message);return;}
+  cacheVacPJ = cacheVacPJ.filter(p=>p.id!==id);
+  vacRenderPJ();
+  showBanner('Photocopie supprimée.');
+}
+window.vacHandlePJ = vacHandlePJ;
+window.vacDeletePJ = vacDeletePJ;
 
 function vacRenderAlertes(){
   const el = document.getElementById('vac-alert-list');
