@@ -3271,8 +3271,8 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   // (ex: "10H30-13H30/14H30-18H30" → "10H30-13H30" puis "/14H30-18H30") pour que la colonne reste étroite.
   const _peCreneauLabel=c=>(forPrint&&nbWeeksOnPage>1)?c.replace(/\//g,'<br>/'):c;
 
-  let html='<table style="width:100%;border-collapse:collapse;font-size:'+_peFS+';min-width:'+_peMinW+';table-layout:fixed;line-height:'+_peRowLH+'">';
-  html+='<colgroup><col style="width:'+_peHoraireW+'">'+DAYS.map(()=>'<col style="width:'+((100-12)/5)+'%">').join('')+'</colgroup>';
+  let html='<table style="width:100%;border-collapse:collapse;font-size:'+_peFS+';'+(forPrint?'':'min-width:'+_peMinW+';')+'table-layout:fixed;line-height:'+_peRowLH+'">';
+  html+='<colgroup><col style="width:12%">'+DAYS.map(()=>'<col style="width:'+((100-12)/5)+'%">').join('')+'</colgroup>';
   html+='<thead><tr><th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333;white-space:nowrap">Horaire</th>';
   DAYS.forEach((d,i)=>{html+='<th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:center;background:#fafafa;color:#333">'+d+'<br><span style="font-size:'+_peFSDay+';font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';});
   html+='</tr></thead><tbody>';
