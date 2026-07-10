@@ -1197,8 +1197,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label class="flabel">Nom</label><input class="finput" id="enf-nom" placeholder="Martin"/></div>
     </div>
     <div class="frow">
-      <div class="fg"><label class="flabel">Date de naissance</label><input class="finput" id="enf-dob" type="date"/></div>
-      <div class="fg"><label class="flabel">Groupe</label><select class="finput" id="enf-groupe"><option>Bébés (0-1 an)</option><option>Moyens (1-2 ans)</option><option>Grands (2-3 ans)</option></select></div>
+      <div class="fg"><label class="flabel">Date de naissance</label><input class="finput" id="enf-dob" type="date" onchange="enfSyncGroupe()"/></div>
+      <div class="fg"><label class="flabel">Groupe <span style="font-weight:400;color:var(--muted);font-size:11px">(calculé selon l'âge)</span></label><select class="finput" id="enf-groupe" disabled style="background:#f4f4f8;cursor:not-allowed"><option>Bébés (0-1 an)</option><option>Moyens (1-2 ans)</option><option>Grands (2-3 ans)</option></select></div>
     </div>
     <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="enf-creche"><option value="">-- Choisir --</option></select></div>
     <div class="fg"><label class="flabel">Régime alimentaire / allergies</label><input class="finput" id="enf-allergies" placeholder="Ex. : sans gluten, allergie aux arachides"/></div>
@@ -1319,6 +1319,14 @@ async function loadAllData(){
   ]);
   // Consignes lues (notifications in-app) — non bloquant
   try{cacheConsignesLues=await dbSelect('consignes_lues');}catch(e){cacheConsignesLues=[];}
+  // Recalcul silencieux du groupe selon l'âge : corrige en base les enfants dont le groupe stocké est périmé
+  try{
+    for(const e of cacheEnfants){
+      if(!e.dob) continue;
+      const g=groupeFromDob(e.dob);
+      if(e.groupe!==g){ e.groupe=g; dbUpdate('enfants',e.id,{groupe:g}); }
+    }
+  }catch(err){console.warn('recalcul groupe',err);}
 }
 // SUPABASE HELPERS
 async function dbSelect(table,filters={}){let q=sb.from(table).select('*').order('created_at',{ascending:false});for(const[k,v]of Object.entries(filters))q=q.eq(k,v);const{data,error}=await q;if(error){console.warn(table,error);return[];}return data||[];}
@@ -2080,12 +2088,27 @@ async function exportPresence(){
   const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr);
   const pm={};(presData||[]).forEach(p=>pm[p.enfant_id+'_'+p.slot]=p.status);
   let csv='Enfant,Crèche,Groupe,Allergies,Matin,Après-midi\n';
-  cacheEnfants.forEach(e=>{const creche=cacheCreches.find(c=>c.id===e.creche_id);csv+='"'+(e.prenom+' '+e.nom)+'","'+(creche?.name||'')+'","'+(e.groupe||'')+'","'+(e.allergies||'')+'","'+(pm[e.id+'_M']||'non saisi')+'","'+(pm[e.id+'_A']||'non saisi')+'"\n';});
+  cacheEnfants.forEach(e=>{const creche=cacheCreches.find(c=>c.id===e.creche_id);csv+='"'+(e.prenom+' '+e.nom)+'","'+(creche?.name||'')+'","'+(e.dob?groupeFromDob(e.dob):(e.groupe||''))+'","'+(e.allergies||'')+'","'+(pm[e.id+'_M']||'non saisi')+'","'+(pm[e.id+'_A']||'non saisi')+'"\n';});
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='presences_'+dateStr+'.csv';a.click();URL.revokeObjectURL(url);showBanner('Export CSV téléchargé !');
 }
-function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-groupe').selectedIndex=0;document.getElementById('modal-enfant-wrap').classList.add('open');}
-function editEnfant(id){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===e.creche_id?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';const gsel=document.getElementById('enf-groupe');const gi=[...gsel.options].findIndex(o=>o.value===e.groupe||o.text===e.groupe);gsel.selectedIndex=gi>=0?gi:0;document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:document.getElementById('enf-groupe').value,creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim()};
+function groupeFromDob(dob){
+  if(!dob) return 'Bébés (0-1 an)';
+  const ageMois = Math.floor((Date.now()-new Date(dob).getTime())/(1000*60*60*24*30.44));
+  if(ageMois < 12) return 'Bébés (0-1 an)';
+  if(ageMois < 24) return 'Moyens (1-2 ans)';
+  return 'Grands (2-3 ans)';
+}
+function enfSyncGroupe(){
+  const dob = document.getElementById('enf-dob').value;
+  const groupe = groupeFromDob(dob);
+  const gsel = document.getElementById('enf-groupe');
+  const gi = [...gsel.options].findIndex(o=>o.text===groupe);
+  gsel.selectedIndex = gi>=0 ? gi : 0;
+}
+window.enfSyncGroupe = enfSyncGroupe;
+function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+function editEnfant(id){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===e.creche_id?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim()};
   if(editingEnfantId){const ok=await dbUpdate('enfants',editingEnfantId,row);if(ok){const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(e)Object.assign(e,row);closeModal('modal-enfant-wrap');showBanner(prenom+' modifié(e) ✅');renderPresence();if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();}else showBanner('Erreur lors de la modification.','error');return;}
   const saved=await dbInsert('enfants',row);if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
 async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(!confirm('Supprimer définitivement '+(e?.prenom||'')+' '+(e?.nom||'')+' ?\n\nAttention : les présences liées ne seront plus rattachées.'))return;const ok=await dbDelete('enfants',editingEnfantId);if(ok){cacheEnfants=cacheEnfants.filter(x=>x.id!==editingEnfantId);closeModal('modal-enfant-wrap');showBanner('Enfant supprimé.');renderPresence();}else showBanner('Erreur lors de la suppression.','error');}
