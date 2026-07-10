@@ -5347,50 +5347,78 @@ function vacRenderListe(){
   el.innerHTML = enfants.map(e=>{
     const creche = cacheCreches.find(c=>c.id===e.creche_id);
     let alertCount = 0;
-    const rows = VAC_SCHEMA.map(v=>{
-      const doses = v.doses.map((dose,di)=>{
-        const s = vacDoseStatus(e,v,di);
-        if(s.state==='retard'||s.state==='proche') alertCount++;
-        let cell;
-        if(s.state==='fait'){
-          cell='<button onclick="vacToggleDose(\''+e.id+'\',\''+v.id+'\','+di+')" title="Fait — cliquer pour annuler" style="width:34px;height:34px;border:none;border-radius:50%;background:var(--green);color:#fff;font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">✓</button>';
-        }else{
-          const border = s.state==='retard'?'2px solid var(--red)':s.state==='proche'?'2px solid var(--orange)':'2px dashed var(--border)';
-          const bg = s.state==='retard'?'var(--red-light)':s.state==='proche'?'var(--orange-light)':'#fff';
-          cell='<button onclick="vacToggleDose(\''+e.id+'\',\''+v.id+'\','+di+')" title="'+(s.state==='retard'?'En retard — cliquer si fait':s.state==='proche'?'À faire bientôt — cliquer si fait':'Cliquer si fait')+'" style="width:34px;height:34px;border:'+border+';border-radius:50%;background:'+bg+';color:var(--muted);font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center"> </button>';
-        }
-        return `<td style="padding:5px 8px;text-align:center;vertical-align:middle">${cell}</td>`;
-      }).join('');
-      return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600;color:var(--koala-dark);white-space:nowrap">${v.label}</td>${doses}</tr>`;
-    }).join('');
+    VAC_SCHEMA.forEach(v=>v.doses.forEach((d,di)=>{const s=vacDoseStatus(e,v,di);if(s.state==='retard'||s.state==='proche')alertCount++;}));
     const ageMs = Date.now() - new Date(e.dob).getTime();
     const ageMois = Math.floor(ageMs/(1000*60*60*24*30.44));
     const ageStr = ageMois < 24 ? ageMois+' mois' : Math.floor(ageMois/12)+' ans '+(ageMois%12)+' mois';
-    const alertBadge = alertCount > 0 ? `<span style="background:var(--red-light);color:var(--red);border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:8px">⚠️ ${alertCount} à vérifier</span>` : '<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:8px">✅ À jour</span>';
-    const doseHeaders = VAC_SCHEMA[0].doses.map(d=>`<th style="padding:5px 8px;font-size:11px;font-weight:700;color:#fff;text-align:center;white-space:nowrap">${d.label}</th>`).join('') + '<th style="padding:5px 8px;font-size:11px;font-weight:700;color:#fff;text-align:center"></th><th style="padding:5px 8px;font-size:11px;font-weight:700;color:#fff;text-align:center"></th>';
-    return `<div style="background:#fff;border-radius:12px;border:1px solid var(--border);overflow:hidden;box-shadow:0 1px 4px rgba(61,53,128,0.07)">
-      <div style="background:var(--koala);color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-        <div style="display:flex;align-items:center;gap:10px">
-          <i class="ti ti-user" style="font-size:16px"></i>
-          <strong>${escHtml(e.prenom+' '+e.nom)}</strong>
-          <span style="font-size:12px;opacity:0.8">né(e) le ${vacFmtDate(e.dob)} · ${ageStr}</span>
-          ${creche?`<span style="font-size:11px;background:rgba(255,255,255,0.18);border-radius:8px;padding:1px 8px">${escHtml(creche.name)}</span>`:''}
+    const alertBadge = alertCount > 0
+      ? `<span style="background:var(--red-light);color:var(--red);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⚠️ ${alertCount} à vérifier</span>`
+      : `<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ À jour</span>`;
+    return `<button onclick="vacOpenFiche('${e.id}')" style="width:100%;text-align:left;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;box-shadow:0 1px 4px rgba(61,53,128,0.07)">
+      <div style="display:flex;align-items:center;gap:12px;min-width:0">
+        <span style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:var(--koala-light);color:var(--koala);display:inline-flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-user"></i></span>
+        <div style="min-width:0">
+          <div style="font-weight:700;color:var(--koala-dark);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(e.prenom+' '+e.nom)}</div>
+          <div style="font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">né(e) le ${vacFmtDate(e.dob)} · ${ageStr}${creche?' · '+escHtml(creche.name):''}</div>
         </div>
-        <div>${alertBadge}</div>
       </div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse">
-          <thead>
-            <tr style="background:var(--koala-light)">
-              <th style="padding:5px 8px;font-size:11px;font-weight:700;color:var(--koala);text-align:left;min-width:180px">Vaccin</th>
-              ${VAC_SCHEMA.flatMap(v=>v.doses.map((d,di)=>`<th style="padding:5px 8px;font-size:11px;font-weight:700;color:var(--koala);text-align:center;white-space:nowrap">${d.label}</th>`)).join('')}
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>`;
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">${alertBadge}<i class="ti ti-chevron-right" style="color:var(--muted);font-size:18px"></i></div>
+    </button>`;
   }).join('');
+}
+
+// Fiche vaccins d'un enfant (tableau de doses) affichée en modal
+let vacFicheEnfantId = null;
+function vacOpenFiche(enfantId){
+  const e = cacheEnfants.find(x=>String(x.id)===String(enfantId));
+  if(!e) return;
+  vacFicheEnfantId = e.id;
+  document.getElementById('vac-fiche-title').innerHTML = '<i class="ti ti-vaccine"></i> '+escHtml(e.prenom+' '+e.nom);
+  vacRenderFicheBody();
+  document.getElementById('modal-vac-fiche-wrap').classList.add('open');
+}
+function vacRenderFicheBody(){
+  const e = cacheEnfants.find(x=>String(x.id)===String(vacFicheEnfantId));
+  const body = document.getElementById('vac-fiche-body');
+  if(!e || !body) return;
+  const creche = cacheCreches.find(c=>c.id===e.creche_id);
+  const ageMs = Date.now() - new Date(e.dob).getTime();
+  const ageMois = Math.floor(ageMs/(1000*60*60*24*30.44));
+  const ageStr = ageMois < 24 ? ageMois+' mois' : Math.floor(ageMois/12)+' ans '+(ageMois%12)+' mois';
+  const rows = VAC_SCHEMA.map(v=>{
+    const doses = v.doses.map((dose,di)=>{
+      const s = vacDoseStatus(e,v,di);
+      let cell;
+      if(s.state==='fait'){
+        cell='<button onclick="vacToggleDose(\''+e.id+'\',\''+v.id+'\','+di+')" title="Fait — cliquer pour annuler" style="width:34px;height:34px;border:none;border-radius:50%;background:var(--green);color:#fff;font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">✓</button>';
+      }else{
+        const border = s.state==='retard'?'2px solid var(--red)':s.state==='proche'?'2px solid var(--orange)':'2px dashed var(--border)';
+        const bg = s.state==='retard'?'var(--red-light)':s.state==='proche'?'var(--orange-light)':'#fff';
+        cell='<button onclick="vacToggleDose(\''+e.id+'\',\''+v.id+'\','+di+')" title="'+(s.state==='retard'?'En retard — cliquer si fait':s.state==='proche'?'À faire bientôt — cliquer si fait':'Cliquer si fait')+'" style="width:34px;height:34px;border:'+border+';border-radius:50%;background:'+bg+';color:var(--muted);font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center"> </button>';
+      }
+      return `<td style="padding:5px 8px;text-align:center;vertical-align:middle">${cell}</td>`;
+    }).join('');
+    return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600;color:var(--koala-dark);white-space:nowrap">${v.label}</td>${doses}</tr>`;
+  }).join('');
+  body.innerHTML = `
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">né(e) le ${vacFmtDate(e.dob)} · ${ageStr}${creche?' · '+escHtml(creche.name):''}</div>
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--koala-light)">
+            <th style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--koala);text-align:left;min-width:180px">Vaccin</th>
+            ${VAC_SCHEMA[0].doses.map(d=>`<th style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--koala);text-align:center;white-space:nowrap">${d.label}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:11.5px;color:var(--muted);line-height:1.6">
+      <span style="color:var(--green);font-weight:700">✓ vert</span> : fait ·
+      <span style="color:var(--orange);font-weight:700">bordure orange</span> : à faire bientôt ·
+      <span style="color:var(--red);font-weight:700">bordure rouge</span> : en retard.
+      Cliquez une pastille pour la marquer faite (ou l'annuler).
+    </div>`;
 }
 
 function vacRenderAlertes(){
@@ -5560,6 +5588,7 @@ async function vacToggleDose(enfantId, vaccId, doseIdx){
     if(error){alert('Erreur : '+error.message);return;}
     cacheVaccinations = cacheVaccinations.filter(v=>v.id!==existing.id);
     vacRender();
+  if(document.getElementById('modal-vac-fiche-wrap')?.classList.contains('open')) vacRenderFicheBody();
     showBanner('Vaccin annulé.');
   }else{
     // Pas encore fait -> marquer fait avec la date du jour
@@ -5576,6 +5605,7 @@ window.vacOpenDose = vacOpenDose;
 window.vacSaveDose = vacSaveDose;
 window.vacDeleteDose = vacDeleteDose;
 window.vacShowView = vacShowView;
+window.vacOpenFiche = vacOpenFiche;
 window.vacRender = vacRender;
 window.vacOpenEnfantModal = vacOpenEnfantModal;
 
@@ -6326,6 +6356,17 @@ async function ctrlDelete(id){
 
 
 </script>
+
+<!-- Modal fiche vaccins enfant -->
+<div class="overlay" id="modal-vac-fiche-wrap">
+  <div class="modal" style="max-width:560px;width:100%">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3 id="vac-fiche-title" style="font-size:15px;color:var(--koala);margin:0;display:flex;align-items:center;gap:8px"></h3>
+      <button class="btn-cancel" onclick="closeModal('modal-vac-fiche-wrap')" style="padding:4px 8px"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="vac-fiche-body"></div>
+  </div>
+</div>
 
 <!-- Modal saisie dose vaccination -->
 <div class="overlay" id="modal-vac-dose-wrap">
