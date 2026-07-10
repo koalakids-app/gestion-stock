@@ -5711,8 +5711,9 @@ function ctrlRenderEditor(){
     +'<label style="font-size:13px;color:var(--muted)">Date de visite</label>'
     +'<input type="date" class="finput" id="ctrl-date" value="'+escHtml(ctrlCurrentData.date_visite||'')+'" onchange="ctrlSetDate(this.value)" style="max-width:170px">'
     +'<span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--muted)" id="ctrl-progress-label">'+pct+' % renseigné</span>'
-    +'<button class="btn-primary" onclick="ctrlSaveNow()"><i class="ti ti-device-floppy"></i> Enregistrer</button>'
+    +'<button class="btn-primary" onclick="ctrlSaveNow(true)"><i class="ti ti-device-floppy"></i> Enregistrer</button>'
     +'<button class="ibtn" onclick="ctrlExportPDF()" title="Exporter / imprimer en PDF" style="background:var(--koala);color:#fff;border-color:var(--koala)"><i class="ti ti-file-type-pdf"></i></button>'
+    +(ctrlCurrentId?'<button class="btn-danger-sm" onclick="ctrlDeleteCurrent()" title="Supprimer cette fiche"><i class="ti ti-trash"></i> Supprimer</button>':'')
     +'</div>';
 
   html+='<div style="font-size:11px;color:var(--muted);margin-bottom:0.75rem"><span style="color:var(--red);font-weight:700">(*)</span> = item à caractère réglementaire. Sauvegarde automatique.</div>';
@@ -5797,7 +5798,7 @@ function ctrlScheduleSave(){
   ctrlSaveTimer=setTimeout(ctrlSaveNow,1200);
 }
 
-async function ctrlSaveNow(){
+async function ctrlSaveNow(showMsg){
   clearTimeout(ctrlSaveTimer);
   if(!ctrlCurrentData.creche_id){showBanner('Sélectionnez une crèche.','error');return;}
   const payload={
@@ -5808,10 +5809,11 @@ async function ctrlSaveNow(){
   };
   if(ctrlCurrentId){
     const ok=await dbUpdate('controles_eaje',ctrlCurrentId,payload);
-    if(ok){const c=ctrlCache.find(x=>x.id===ctrlCurrentId);if(c)Object.assign(c,payload);}
+    if(ok){const c=ctrlCache.find(x=>x.id===ctrlCurrentId);if(c)Object.assign(c,payload);if(showMsg)showBanner('Fiche enregistrée.','success');}
+    else if(showMsg)showBanner('Échec de l\'enregistrement (session expirée ?).','error');
   }else{
     const saved=await dbInsert('controles_eaje',payload);
-    if(saved){ctrlCurrentId=saved.id;ctrlCache.unshift(saved);}
+    if(saved){ctrlCurrentId=saved.id;ctrlCache.unshift(saved);if(showMsg){showBanner('Fiche enregistrée.','success');ctrlRenderEditor();}}
     else{showBanner('Échec de l\'enregistrement (session expirée ?). Reconnectez-vous.','error');}
   }
 }
@@ -5890,6 +5892,21 @@ function ctrlExportPDF(){
   w.document.write(doc);
   w.document.close();
   setTimeout(()=>{try{w.focus();w.print();}catch(e){}},350);
+}
+
+async function ctrlDeleteCurrent(){
+  if(!ctrlCurrentId)return;
+  if(!confirm('Supprimer définitivement cette fiche de contrôle ?'))return;
+  clearTimeout(ctrlSaveTimer);
+  const ok=await dbDelete('controles_eaje',ctrlCurrentId);
+  if(ok){
+    ctrlCache=ctrlCache.filter(x=>x.id!==ctrlCurrentId);
+    ctrlCurrentId=null;
+    showBanner('Fiche supprimée.','success');
+    ctrlRenderList();
+  }else{
+    showBanner('Échec de la suppression (session expirée ?).','error');
+  }
 }
 
 function ctrlBackToList(){
