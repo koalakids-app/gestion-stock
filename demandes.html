@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root{
   --koala:#3D3580;--orange:#F47920;--koala-light:#EEEDF8;--orange-light:#FEF0E6;
@@ -461,7 +463,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <select class="finput direction-only" id="presence-creche-select" style="display:none;width:160px" onchange="renderPresence()">
           <option value="">-- Crèche --</option>
         </select>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap"><input type="checkbox" id="presence-show-sortis" onchange="renderPresence()"> Afficher les sortis</label>
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn-sm" onclick="openEnfantModal()"><i class="ti ti-user-plus"></i> Ajouter enfant</button>
@@ -553,6 +554,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <option value="4">4 semaines / page</option>
         </select>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="printPlanningEquipe()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
+        <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="peOpenMail()"><i class="ti ti-mail"></i> Envoyer par mail</button>
       </div>
       <div id="pe-grid-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:8px"></div>
     </div>
@@ -1202,16 +1204,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label class="flabel">Groupe <span style="font-weight:400;color:var(--muted);font-size:11px">(calculé selon l'âge)</span></label><select class="finput" id="enf-groupe" disabled style="background:#f4f4f8;cursor:not-allowed"><option>Bébés (0-1 an)</option><option>Moyens (1-2 ans)</option><option>Grands (2-3 ans)</option></select></div>
     </div>
     <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="enf-creche"><option value="">-- Choisir --</option></select></div>
-    <div class="frow">
-      <div class="fg"><label class="flabel">Début de contrat</label><input class="finput" id="enf-date-entree" type="date"/></div>
-      <div class="fg"><label class="flabel">Fin de contrat <span style="font-weight:400;color:var(--muted);font-size:11px">(vide = en cours)</span></label><input class="finput" id="enf-date-sortie" type="date"/></div>
-    </div>
     <div class="fg"><label class="flabel">Régime alimentaire / allergies</label><input class="finput" id="enf-allergies" placeholder="Ex. : sans gluten, allergie aux arachides"/></div>
     <div class="mactions"><button class="btn-cancel" id="enf-btn-delete" style="display:none;color:var(--red)" onclick="deleteEnfant()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-enfant-wrap')">Annuler</button><button class="btn-primary" id="enf-btn-save" onclick="saveEnfant()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
 </div>
 
 <!-- MODAL IMPORT PRESENCES PDF -->
+<div class="overlay" id="modal-pe-mail-wrap">
+  <div class="modal" style="max-width:520px">
+    <h3 style="margin:0 0 4px"><i class="ti ti-mail"></i> Envoyer le planning par mail</h3>
+    <div id="pe-mail-sub" style="font-size:12px;color:var(--muted);margin-bottom:14px"></div>
+    <label class="flabel">Destinataires <span style="font-weight:400;color:var(--muted)">(séparés par des virgules)</span></label>
+    <textarea class="finput" id="pe-mail-to" rows="2" placeholder="prenom@exemple.fr, autre@exemple.fr" style="resize:vertical"></textarea>
+    <label class="flabel" style="margin-top:10px">Message</label>
+    <textarea class="finput" id="pe-mail-msg" rows="6" style="resize:vertical"></textarea>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">Le planning sera joint en PDF.</div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-pe-mail-wrap')">Annuler</button>
+      <button class="btn-primary" id="pe-mail-send" onclick="peSendMail()"><i class="ti ti-send"></i> Envoyer</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="modal-import-presence-wrap">
   <div class="modal" style="max-width:640px;max-height:86vh;display:flex;flex-direction:column">
     <h3><i class="ti ti-file-import"></i> Importer les présences</h3>
@@ -2004,8 +2018,7 @@ async function renderPresenceGantt(){
   if(!view)return;
   const crecheId=getPresenceCrecheId();
   if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
-  const showSortis=document.getElementById('presence-show-sortis')?.checked;
-  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).filter(e=>showSortis||enfActifLe(e,dateStr)).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
+  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!enfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistr\u00e9.</p></div>';return;}
   view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement\u2026</div>';
   const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr).in('enfant_id',enfants.map(e=>e.id));
@@ -2075,8 +2088,7 @@ async function renderPresenceSemaine(){
   const ws=weekStart(),view=document.getElementById('presence-semaine-view');
   const crecheId=getPresenceCrecheId();
   if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
-  const showSortis=document.getElementById('presence-show-sortis')?.checked;
-  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).filter(e=>showSortis||enfActifLe(e,ipDateToLocalISO(ws))).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
+  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!enfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant.</p></div>';return;}
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
   const dateStrs=days5.map(d=>ipDateToLocalISO(d));
@@ -2113,9 +2125,9 @@ function enfSyncGroupe(){
   gsel.selectedIndex = gi>=0 ? gi : 0;
 }
 window.enfSyncGroupe = enfSyncGroupe;
-function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');['enf-prenom','enf-nom','enf-dob','enf-allergies','enf-date-entree','enf-date-sortie'].forEach(id=>document.getElementById(id).value='');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-function editEnfant(id){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===e.creche_id?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-date-entree').value=e.date_entree||'';document.getElementById('enf-date-sortie').value=e.date_sortie||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim(),date_entree:document.getElementById('enf-date-entree').value||null,date_sortie:document.getElementById('enf-date-sortie').value||null};
+function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+function editEnfant(id){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===e.creche_id?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim()};
   if(editingEnfantId){const ok=await dbUpdate('enfants',editingEnfantId,row);if(ok){const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(e)Object.assign(e,row);closeModal('modal-enfant-wrap');showBanner(prenom+' modifié(e) ✅');renderPresence();if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();}else showBanner('Erreur lors de la modification.','error');return;}
   const saved=await dbInsert('enfants',row);if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
 async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(!confirm('Supprimer définitivement '+(e?.prenom||'')+' '+(e?.nom||'')+' ?\n\nAttention : les présences liées ne seront plus rattachées.'))return;const ok=await dbDelete('enfants',editingEnfantId);if(ok){cacheEnfants=cacheEnfants.filter(x=>x.id!==editingEnfantId);closeModal('modal-enfant-wrap');showBanner('Enfant supprimé.');renderPresence();}else showBanner('Erreur lors de la suppression.','error');}
@@ -2123,21 +2135,13 @@ async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.fi
 // ── IMPORT PRÉSENCES DEPUIS PLANNING PDF (Gantt) ──
 const IP_MONTHS={janvier:1,février:2,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,août:8,aout:8,septembre:9,octobre:10,novembre:11,décembre:12,decembre:12};
 let _importPresData=null;
-function enfActifLe(e,dateISO){
-  if(!e)return false;
-  if(!dateISO)return true;
-  if(e.date_entree&&dateISO<e.date_entree)return false;
-  if(e.date_sortie&&dateISO>e.date_sortie)return false;
-  return true;
-}
 function ipNormName(s){return(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s-]/g,'').replace(/\s+/g,' ').trim();}
-const IP_SKIP_LABELS=new Set(['Totaux','Total','Enfants','Salariés','Salaries','Encadrants']);
 function ipIsFirstnameToken(tok){return tok&&/^[A-ZÀ-Ÿ]/.test(tok)&&/[a-zà-ÿ]/.test(tok);}
 
 async function handlePresenceImport(input){
   const file=input.files&&input.files[0];input.value='';if(!file)return;
   if(typeof pdfjsLib==='undefined'){alert('Bibliothèque PDF non chargée.');return;}
-  const crecheId=getPresenceCrecheId();
+  const crecheId=isDirection?(activeCrecheId==='all'?null:activeCrecheId):currentProfile?.creche_id;
   if(!crecheId){alert('Sélectionnez une crèche spécifique avant d\'importer (pas "Toutes").');return;}
   showBanner('Lecture du PDF en cours…');
   let pages;
@@ -2187,9 +2191,9 @@ async function ipParsePdf(file){
     const m=fullText.match(/Planning du \S+ (\d{1,2})(?:er)? (\S+) (\d{4})/i);
     if(m){const day=+m[1],mon=IP_MONTHS[m[2].toLowerCase()],yr=+m[3];if(mon)date=yr+'-'+String(mon).padStart(2,'0')+'-'+String(day).padStart(2,'0');}
     let iEnf=-1,iSal=-1;
-    for(let i=0;i<lines.length;i++){const f=lines[i].toks[0];if(iEnf<0&&f==='Enfants'&&lines[i].minx<70)iEnf=i;else if(iEnf>=0&&iSal<0&&(f==='Salariés'||f==='Totaux')&&lines[i].minx<70){iSal=i;break;}}
+    for(let i=0;i<lines.length;i++){const f=lines[i].toks[0];if(iEnf<0&&f==='Enfants'&&lines[i].minx<70)iEnf=i;else if(iEnf>=0&&iSal<0&&f==='Salariés'&&lines[i].minx<70){iSal=i;break;}}
     const names=[];let cur=null;
-    for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){const toks=lines[i].toks;if(!toks.length)continue;if(IP_SKIP_LABELS.has(toks[0])){if(cur){names.push(cur);cur=null;}continue;}if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=toks.join(' ');}else if(cur)cur+=' '+toks.join(' ');}
+    for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){const toks=lines[i].toks;if(!toks.length)continue;if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=toks.join(' ');}else if(cur)cur+=' '+toks.join(' ');}
     if(cur)names.push(cur);
     if(date&&names.length)out.push({date,names});
   }
@@ -2236,8 +2240,7 @@ async function confirmPresenceImport(){
   for(const nm of toCreateNames){
     const parts=nm.trim().split(' ');
     const prenom=parts[0];const nom=parts.slice(1).join(' ');
-    const firstDate=pages.filter(pg=>pg.toCreate.includes(nm)).map(pg=>pg.date).sort()[0]||null;
-    const{data:saved,error}=await sb.from('enfants').insert({prenom,nom,creche_id:crecheId,date_entree:firstDate}).select().single();
+    const{data:saved,error}=await sb.from('enfants').insert({prenom,nom,creche_id:crecheId}).select().single();
     if(saved){
       cacheEnfants.push(saved);
       nameMap[nm]={enfant:saved,isNew:false};
@@ -3496,10 +3499,10 @@ async function printPlanningCoord(){
 }
 
 // 3) Planning équipe (toutes les salariées de la crèche affichée) — 1, 2 ou 3 semaines sur la même page
-async function printPlanningEquipe(){
+async function peBuildPrintHTML(){
   const sel=document.getElementById('pe-creche-select');
   const crecheId=isDirection?sel?.value:currentProfile?.creche_id;
-  if(!crecheId){alert('Choisissez d\'abord une crèche avant d\'imprimer.');return;}
+  if(!crecheId){alert('Choisissez d\'abord une crèche.');return null;}
   const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
   const nbWeeks=parseInt(document.getElementById('pe-print-weeks')?.value)||1;
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
@@ -3518,12 +3521,116 @@ async function printPlanningEquipe(){
       '</div>';
     if(rows.length)nbWithData++;
   }
-  if(!nbWithData){alert('Aucune donnée à imprimer pour cette crèche sur la période choisie.');return;}
+  if(!nbWithData){alert('Aucune donnée pour cette crèche sur la période choisie.');return null;}
 
   const days5First=Array.from({length:5},(_,i)=>{const d=new Date(ws0);d.setDate(ws0.getDate()+i);return d;});
   const subtitle='Planning équipe — '+crecheName+' — '+nbWeeks+' semaine(s) à partir du '+fmt(days5First[0]);
-  printPlanningDoc('Planning équipe',subtitle,bodyHTML,'portrait');
+  return{crecheId,crecheName,subtitle,bodyHTML,dateDebut:fmt(days5First[0]),nbWeeks};
 }
+
+async function printPlanningEquipe(){
+  const d=await peBuildPrintHTML();
+  if(!d)return;
+  printPlanningDoc('Planning équipe',d.subtitle,d.bodyHTML,'portrait');
+}
+
+// ── ENVOI DU PLANNING ÉQUIPE PAR MAIL ────────────────────────────────────
+let _peMailData=null;
+
+async function peOpenMail(){
+  const d=await peBuildPrintHTML();
+  if(!d)return;
+  _peMailData=d;
+  document.getElementById('pe-mail-sub').textContent=d.subtitle;
+  document.getElementById('pe-mail-to').value='';
+  document.getElementById('pe-mail-msg').value='Bonjour,\n\nVeuillez trouver ci-joint le planning de la semaine du '+d.dateDebut+' pour la crèche '+d.crecheName+'.\n\nBonne réception,\nKoala Kids';
+  const btn=document.getElementById('pe-mail-send');
+  btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
+  document.getElementById('modal-pe-mail-wrap').classList.add('open');
+}
+window.peOpenMail=peOpenMail;
+
+async function peBuildPdfBase64(d){
+  const html='<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><style>'+
+    '*{margin:0;padding:0;box-sizing:border-box}'+
+    'body{font-family:Arial,sans-serif;color:#111;padding:24px;width:800px;background:#fff}'+
+    'h1{font-size:1.5rem;font-weight:bold;margin-bottom:.2rem;color:#3D3580}'+
+    '.sub{font-size:.85rem;color:#666;margin-bottom:1rem}'+
+    'table{width:100%;border-collapse:collapse;margin-top:.5rem}'+
+    'thead tr{background:#3D3580;color:#fff}'+
+    'th{padding:8px 10px;font-size:11px;text-align:left}'+
+    'td{padding:8px 10px;border-bottom:1px solid #E7E5E0;font-size:11px;vertical-align:top}'+
+    'tr:nth-child(even) td{background:#F9F9F8}'+
+    '.footer{margin-top:1.5rem;font-size:10px;color:#888;border-top:1px solid #E7E5E0;padding-top:10px}'+
+    '</style></head><body><h1>Planning équipe</h1><div class="sub">'+d.subtitle+'</div>'+d.bodyHTML+
+    '<div class="footer">Document généré le '+new Date().toLocaleDateString('fr-FR')+' — Koala Kids</div></body></html>';
+
+  const old=document.getElementById('_pdf-frame-planning');
+  if(old)old.remove();
+  const iframe=document.createElement('iframe');
+  iframe.id='_pdf-frame-planning';
+  iframe.style.cssText='position:fixed;top:0;left:-10000px;width:850px;height:1200px;border:none;background:#fff';
+  document.body.appendChild(iframe);
+  const doc=iframe.contentDocument;
+  doc.open();doc.write(html);doc.close();
+  await new Promise(r=>setTimeout(r,500));
+
+  const canvas=await html2canvas(doc.body,{scale:2,backgroundColor:'#ffffff',windowWidth:850});
+  iframe.remove();
+
+  const{jsPDF}=window.jspdf;
+  const pdf=new jsPDF('p','mm','a4');
+  const pw=210,ph=297,margin=8;
+  const iw=pw-margin*2;
+  const ih=canvas.height*iw/canvas.width;
+  const img=canvas.toDataURL('image/jpeg',0.92);
+  const usable=ph-margin*2;
+  let left=ih,pos=margin;
+  pdf.addImage(img,'JPEG',margin,pos,iw,ih);
+  left-=usable;
+  while(left>0){
+    pos=margin-(ih-left);
+    pdf.addPage();
+    pdf.addImage(img,'JPEG',margin,pos,iw,ih);
+    left-=usable;
+  }
+  return pdf.output('datauristring').split(',')[1];
+}
+
+async function peSendMail(){
+  if(!_peMailData)return;
+  const raw=document.getElementById('pe-mail-to').value.trim();
+  const to=raw.split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean);
+  if(!to.length){alert('Saisissez au moins une adresse mail.');return;}
+  const bad=to.filter(x=>!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+  if(bad.length){alert('Adresse(s) invalide(s) :\n'+bad.join('\n'));return;}
+
+  const btn=document.getElementById('pe-mail-send');
+  btn.disabled=true;btn.innerHTML='Génération du PDF…';
+  try{
+    const b64=await peBuildPdfBase64(_peMailData);
+    btn.innerHTML='Envoi en cours…';
+    const ok=await callFn('send-planning',{
+      to:to,
+      subject:'Planning équipe — '+_peMailData.crecheName+' — semaine du '+_peMailData.dateDebut,
+      message:document.getElementById('pe-mail-msg').value,
+      filename:'planning-'+_peMailData.crecheName.replace(/[^a-zA-Z0-9]/g,'-')+'-'+_peMailData.dateDebut.replace(/\//g,'-')+'.pdf',
+      pdf_base64:b64
+    });
+    if(ok){
+      closeModal('modal-pe-mail-wrap');_peMailData=null;
+      showBanner('Planning envoyé à '+to.length+' destinataire'+(to.length>1?'s':'')+' ✅');
+    }else{
+      showBanner("Échec de l'envoi du mail.",'error');
+      btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
+    }
+  }catch(err){
+    console.error('[peSendMail]',err);
+    showBanner('Erreur lors de la génération du PDF.','error');
+    btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
+  }
+}
+window.peSendMail=peSendMail;
 
 // ── DASHBOARD RÉFÉRENTE ──────────────────────────────────────────────────
 let refDashSelectedDate=null;
@@ -5365,9 +5472,7 @@ function vacRender(){
 
 function vacGetEnfantsFiltres(){
   const crecheId = document.getElementById('vac-creche-select')?.value || '';
-  const auj = todayStr();
   return (crecheId ? cacheEnfants.filter(e=>e.creche_id===crecheId) : [...cacheEnfants])
-    .filter(e=>enfActifLe(e,auj))
     .filter(e=>e.dob) // only enfants with DOB
     .sort((a,b)=>(a.prenom||'').localeCompare(b.prenom||'','fr'));
 }
