@@ -1209,6 +1209,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="module-tab" id="sal-tab-form" onclick="salTab('formations',this)"><i class="ti ti-certificate"></i> Diplômes</button>
       <button class="module-tab" id="sal-tab-doc" onclick="salTab('documents',this)"><i class="ti ti-paperclip"></i> Documents</button>
       <button class="module-tab" id="sal-tab-ent" onclick="salTab('entretiens',this)"><i class="ti ti-messages"></i> Entretiens</button>
+      <button class="module-tab" id="sal-tab-abs" onclick="salTab('absences',this)"><i class="ti ti-calendar-off"></i> Absences</button>
     </div>
 
     <!-- IDENTITÉ -->
@@ -1308,6 +1309,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div id="sal-ent-list" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
 
+    <!-- ABSENCES -->
+    <div id="sal-pane-absences" class="module-tab-content">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+        <button class="btn-sm" onclick="salOpenSubModal('absence')"><i class="ti ti-plus"></i> Ajouter</button>
+      </div>
+      <div id="sal-abs-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
     <div class="mactions">
       <button class="btn-cancel" id="sal-btn-delete" style="display:none;color:var(--red)" onclick="salDelete()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn-cancel" onclick="closeModal('modal-sal-wrap')">Fermer</button>
@@ -1387,6 +1396,35 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn-cancel" id="sale-btn-delete" style="display:none;color:var(--red)" onclick="salSubDelete('entretien')"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn-cancel" onclick="closeModal('modal-salent-wrap')">Annuler</button>
       <button class="btn-primary" onclick="salSubSave('entretien')"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODALE ABSENCE / ARRÊT ═══ -->
+<div class="overlay" id="modal-salabs-wrap">
+  <div class="modal">
+    <h3>Absence / arrêt de travail</h3>
+    <div class="fg"><label class="flabel">Type</label><select class="finput" id="salabs-type">
+      <option value="maladie">Arrêt maladie</option>
+      <option value="at_mp">Accident du travail / maladie pro</option>
+      <option value="maternite">Congé maternité</option>
+      <option value="paternite">Congé paternité</option>
+      <option value="parental">Congé parental</option>
+      <option value="conges_payes">Congés payés</option>
+      <option value="sans_solde">Congé sans solde</option>
+      <option value="autre">Autre</option>
+    </select></div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Début *</label><input class="finput" id="salabs-debut" type="date"/></div>
+      <div class="fg"><label class="flabel">Fin</label><input class="finput" id="salabs-fin" type="date"/></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin:-4px 0 10px">Laissez la date de fin vide si l'arrêt n'est pas encore borné (prolongation en attente).</div>
+    <div class="fg"><label class="flabel">Motif / précisions</label><input class="finput" id="salabs-motif" placeholder="Optionnel"/></div>
+    <div class="fg"><label class="flabel">Justificatif</label><input class="finput" id="salabs-file" type="file" accept="image/*,application/pdf"/></div>
+    <div class="mactions">
+      <button class="btn-cancel" id="salabs-btn-delete" style="display:none;color:var(--red)" onclick="salSubDelete('absence')"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn-cancel" onclick="closeModal('modal-salabs-wrap')">Annuler</button>
+      <button class="btn-primary" onclick="salSubSave('absence')"><i class="ti ti-check"></i> Enregistrer</button>
     </div>
   </div>
 </div>
@@ -5649,7 +5687,7 @@ function vacDaysUntil(isoDate){
 // ════════════════════════════════════════════════════
 // MODULE SALARIÉS
 // ════════════════════════════════════════════════════
-let cacheSalaries=[],cacheSalForm=[],cacheSalDoc=[],cacheSalEnt=[],cacheSalConf={};
+let cacheSalaries=[],cacheSalForm=[],cacheSalDoc=[],cacheSalEnt=[],cacheSalAbs=[],cacheSalConf={};
 let editingSalId=null,editingSubId=null,_salLoaded=false;
 
 async function salInit(){
@@ -5668,17 +5706,18 @@ async function salLoad(){
   cacheSalaries=sd||[];
   const ids=cacheSalaries.map(x=>x.id);
   if(ids.length){
-    const[f,d,e]=await Promise.all([
+    const[f,d,e,ab]=await Promise.all([
       sb.from('salaries_formations').select('*').in('salarie_id',ids),
       sb.from('salaries_documents').select('*').in('salarie_id',ids),
-      sb.from('salaries_entretiens').select('*').in('salarie_id',ids)
+      sb.from('salaries_entretiens').select('*').in('salarie_id',ids),
+      sb.from('salaries_absences').select('*').in('salarie_id',ids)
     ]);
-    cacheSalForm=f.data||[];cacheSalDoc=d.data||[];cacheSalEnt=e.data||[];
+    cacheSalForm=f.data||[];cacheSalDoc=d.data||[];cacheSalEnt=e.data||[];cacheSalAbs=ab.data||[];
     if(isDirection){
       const{data:cf}=await sb.from('salaries_confidentiel').select('*').in('salarie_id',ids);
       cacheSalConf={};(cf||[]).forEach(r=>{cacheSalConf[r.salarie_id]=r.num_secu||'';});
     }
-  }else{cacheSalForm=[];cacheSalDoc=[];cacheSalEnt=[];cacheSalConf={};}
+  }else{cacheSalForm=[];cacheSalDoc=[];cacheSalEnt=[];cacheSalAbs=[];cacheSalConf={};}
   _salLoaded=true;
 }
 
@@ -5791,7 +5830,7 @@ function salRender(){
 }
 
 function salTab(name,btn){
-  ['identite','formations','documents','entretiens'].forEach(n=>{
+  ['identite','formations','documents','entretiens','absences'].forEach(n=>{
     const el=document.getElementById('sal-pane-'+n);
     if(el)el.classList.toggle('active',n===name);
   });
@@ -5807,7 +5846,7 @@ function salOpenModal(id){
   document.getElementById('sal-btn-delete').style.display=(sa&&isDirection)?'':'none';
 
   // Sous-onglets uniquement si la fiche existe
-  ['sal-tab-form','sal-tab-doc','sal-tab-ent'].forEach(t=>{
+  ['sal-tab-form','sal-tab-doc','sal-tab-ent','sal-tab-abs'].forEach(t=>{
     const b=document.getElementById(t);
     if(b){b.style.display=sa?'':'none';}
   });
@@ -5839,7 +5878,7 @@ function salOpenModal(id){
 
   if(sa){salRenderSubLists(sa.id);salRenderPlanningBox(sa);}
   else{
-    ['sal-form-list','sal-doc-list','sal-ent-list'].forEach(i=>{const e=document.getElementById(i);if(e)e.innerHTML='';});
+    ['sal-form-list','sal-doc-list','sal-ent-list','sal-abs-list'].forEach(i=>{const e=document.getElementById(i);if(e)e.innerHTML='';});
     const pb=document.getElementById('sal-planning-box');if(pb)pb.style.display='none';
   }
 
@@ -5927,6 +5966,7 @@ async function salDelete(){
   cacheSalForm=cacheSalForm.filter(x=>x.salarie_id!==editingSalId);
   cacheSalDoc=cacheSalDoc.filter(x=>x.salarie_id!==editingSalId);
   cacheSalEnt=cacheSalEnt.filter(x=>x.salarie_id!==editingSalId);
+  cacheSalAbs=cacheSalAbs.filter(x=>x.salarie_id!==editingSalId);
   editingSalId=null;
   closeModal('modal-sal-wrap');
   showBanner('Fiche supprimée.');
@@ -5953,6 +5993,43 @@ const SAL_ENT_LABEL={annuel:'Entretien annuel',professionnel:'Entretien professi
 const SAL_TYPE_LABEL={diplome:'Diplôme',formation:'Formation',habilitation:'Habilitation'};
 
 function salFmtDate(d){if(!d)return'';const p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+
+const SAL_ABS_LABEL={maladie:'Arrêt maladie',at_mp:'AT / maladie pro',maternite:'Congé maternité',paternite:'Congé paternité',parental:'Congé parental',conges_payes:'Congés payés',sans_solde:'Congé sans solde',autre:'Autre'};
+
+// Statut d'une absence à la date du jour : 'en_cours' | 'a_venir' | 'termine'
+function salAbsStatut(a,ref){
+  const today=ref||ipDateToLocalISO(new Date());
+  if(a.date_debut>today)return 'a_venir';
+  if(a.date_fin&&a.date_fin<today)return 'termine';
+  return 'en_cours';
+}
+function salAbsBadge(st){
+  if(st==='en_cours')return '<span style="background:#F59E0B;color:#fff;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:5px">En cours</span>';
+  if(st==='a_venir')return '<span style="background:#378ADD;color:#fff;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:5px">À venir</span>';
+  return '<span style="background:#9CA3AF;color:#fff;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:5px">Terminé</span>';
+}
+// Un salarié est-il absent à la date donnée ?
+function salAbsenceActive(sid,ref){
+  const today=ref||ipDateToLocalISO(new Date());
+  return cacheSalAbs.find(a=>a.salarie_id===sid&&a.date_debut<=today&&(!a.date_fin||a.date_fin>=today))||null;
+}
+
+function salRenderAbsList(sid){
+  const box=document.getElementById('sal-abs-list');
+  if(!box)return;
+  const list=cacheSalAbs.filter(a=>a.salarie_id===sid)
+    .sort((a,b)=>(b.date_debut||'').localeCompare(a.date_debut||''));
+  if(!list.length){box.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:1rem">Aucune absence enregistrée.</div>';return;}
+  box.innerHTML=list.map(a=>{
+    const st=salAbsStatut(a);
+    return '<div onclick="salOpenSubModal(\'absence\',\''+a.id+'\')" style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:9px 11px;cursor:pointer">'+
+      '<div style="font-size:12.5px;font-weight:700;color:var(--koala)">'+escHtml(SAL_ABS_LABEL[a.type]||a.type)+salAbsBadge(st)+'</div>'+
+      '<div style="font-size:11px;color:var(--muted)">Du '+salFmtDate(a.date_debut)+(a.date_fin?' au '+salFmtDate(a.date_fin):' (fin non précisée)')+
+        (a.motif?' · '+escHtml(a.motif):'')+'</div>'+
+      (a.fichier_url?'<a href="'+a.fichier_url+'" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;color:#378ADD"><i class="ti ti-paperclip"></i> Justificatif</a>':'')+
+    '</div>';
+  }).join('');
+}
 
 function salRenderSubLists(sid){
   // Formations
@@ -5993,6 +6070,8 @@ function salRenderSubLists(sid){
       (e.fichier_url?'<a href="'+e.fichier_url+'" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;color:#378ADD"><i class="ti ti-paperclip"></i> Pièce jointe</a>':'')+
     '</div>';
   }).join(''):'<div style="text-align:center;color:var(--muted);font-size:12px;padding:1rem">Aucun entretien enregistré.</div>';
+
+  salRenderAbsList(sid);
 }
 
 // ── Upload PJ ──
@@ -6010,7 +6089,8 @@ async function salUpload(file,sid){
 const SAL_SUB={
   formation:{wrap:'modal-salform-wrap',del:'salf-btn-delete',table:'salaries_formations',cache:()=>cacheSalForm},
   document:{wrap:'modal-saldoc-wrap',del:'sald-btn-delete',table:'salaries_documents',cache:()=>cacheSalDoc},
-  entretien:{wrap:'modal-salent-wrap',del:'sale-btn-delete',table:'salaries_entretiens',cache:()=>cacheSalEnt}
+  entretien:{wrap:'modal-salent-wrap',del:'sale-btn-delete',table:'salaries_entretiens',cache:()=>cacheSalEnt},
+  absence:{wrap:'modal-salabs-wrap',del:'salabs-btn-delete',table:'salaries_absences',cache:()=>cacheSalAbs}
 };
 
 function salOpenSubModal(kind,id){
@@ -6033,12 +6113,18 @@ function salOpenSubModal(kind,id){
     document.getElementById('sald-validite').value=rec?.date_validite||'';
     document.getElementById('sald-file').value='';
     salDocCatChange();
-  }else{
+  }else if(kind==='entretien'){
     document.getElementById('sale-type').value=rec?.type||'annuel';
     document.getElementById('sale-date').value=rec?.date_entretien||ipDateToLocalISO(new Date());
     document.getElementById('sale-objectifs').value=rec?.objectifs||'';
     document.getElementById('sale-bilan').value=rec?.bilan||'';
     document.getElementById('sale-file').value='';
+  }else if(kind==='absence'){
+    document.getElementById('salabs-type').value=rec?.type||'maladie';
+    document.getElementById('salabs-debut').value=rec?.date_debut||ipDateToLocalISO(new Date());
+    document.getElementById('salabs-fin').value=rec?.date_fin||'';
+    document.getElementById('salabs-motif').value=rec?.motif||'';
+    document.getElementById('salabs-file').value='';
   }
   document.getElementById(cfg.wrap).classList.add('open');
 }
@@ -6062,7 +6148,7 @@ async function salSubSave(kind){
     row={salarie_id:editingSalId,categorie:document.getElementById('sald-categorie').value,
       libelle:document.getElementById('sald-libelle').value.trim()||null,
       date_validite:document.getElementById('sald-validite').value||null};
-  }else{
+  }else if(kind==='entretien'){
     const dt=document.getElementById('sale-date').value;
     if(!dt){alert('Date requise.');return;}
     row={salarie_id:editingSalId,type:document.getElementById('sale-type').value,date_entretien:dt,
@@ -6070,6 +6156,15 @@ async function salSubSave(kind){
       objectifs:document.getElementById('sale-objectifs').value.trim()||null,
       bilan:document.getElementById('sale-bilan').value.trim()||null};
     fileEl=document.getElementById('sale-file');
+  }else if(kind==='absence'){
+    const dd=document.getElementById('salabs-debut').value;
+    const df=document.getElementById('salabs-fin').value;
+    if(!dd){alert('Date de début requise.');return;}
+    if(df&&df<dd){alert('La date de fin ne peut pas précéder la date de début.');return;}
+    row={salarie_id:editingSalId,type:document.getElementById('salabs-type').value,
+      date_debut:dd,date_fin:df||null,
+      motif:document.getElementById('salabs-motif').value.trim()||null};
+    fileEl=document.getElementById('salabs-file');
   }
 
   if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
