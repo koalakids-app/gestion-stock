@@ -1596,6 +1596,7 @@ async function loadAllData(){
   try{cacheConsignesLues=await dbSelect('consignes_lues');}catch(e){cacheConsignesLues=[];}
   // Salariés — non bloquant (alimente aussi le sélecteur de prénom du planning équipe)
   try{cacheSalaries=await dbSelect('salaries');}catch(e){cacheSalaries=[];}
+  try{cacheSalAbs=await dbSelect('salaries_absences');}catch(e){cacheSalAbs=[];}
   // Recalcul silencieux du groupe selon l'âge : corrige en base les enfants dont le groupe stocké est périmé
   try{
     for(const e of cacheEnfants){
@@ -4062,6 +4063,29 @@ function dashTodayBirthdays(t){
   const md=t.slice(5);
   return cacheEnfants.filter(e=>e.dob&&e.dob.slice(5)===md);
 }
+// Salariés absents à la date t (widget dashboard direction)
+function dashAbsentsHtml(t){
+  if(typeof cacheSalAbs==='undefined'||!cacheSalAbs.length)
+    return '<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun salarié absent</div>';
+  const abs=cacheSalAbs.filter(a=>a.date_debut<=t&&(!a.date_fin||a.date_fin>=t));
+  if(!abs.length)
+    return '<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun salarié absent</div>';
+  // tri par crèche puis nom
+  const rows=abs.map(a=>{
+    const sa=cacheSalaries.find(x=>x.id===a.salarie_id);
+    const creche=sa?cacheCreches.find(c=>c.id===sa.creche_id):null;
+    return{a,sa,creche,cname:creche?creche.name:'—',sname:sa?((sa.prenom||'')+' '+(sa.nom||'')):'Salarié'};
+  }).sort((x,y)=>(x.cname+x.sname).localeCompare(y.cname+y.sname,'fr',{sensitivity:'base'}));
+  return rows.map(r=>{
+    const lbl=(typeof SAL_ABS_LABEL!=='undefined'&&SAL_ABS_LABEL[r.a.type])||r.a.type;
+    const finTxt=r.a.date_fin?('jusqu\'au '+salFmtDate(r.a.date_fin)):'retour non précisé';
+    return '<div class="dash-list-item"><span>🚫 '+escHtml(r.sname)+
+      ' <span style="color:var(--muted);font-size:11px">('+escHtml(r.cname)+')</span></span>'+
+      '<span style="font-size:11px;font-weight:700;color:var(--koala);white-space:nowrap">'+escHtml(lbl)+'</span></div>'+
+      '<div style="font-size:10.5px;color:var(--muted);margin:-4px 0 4px 22px">'+finTxt+'</div>';
+  }).join('');
+}
+
 function renderDashboardToday(){
   const t=dashSelectedDate||(dashSelectedDate=todayStr());
   const isToday=t===todayStr();
@@ -4109,7 +4133,8 @@ function renderDashboardToday(){
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-bolt"></i> Activité du jour</div>'+actHtml+'</div>'+
     '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-planning"><div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span><select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning()"><option value="">-- Crèche --</option></select></div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Sélectionnez une crèche</div></div>'+
-    '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
+    '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
+    '<div class="dash-card" id="dash-today-absents"><div class="dash-card-title"><i class="ti ti-calendar-off"></i> Salariés absents</div>'+dashAbsentsHtml(t)+'</div>';
 
   loadDashboardPresences(t);
   loadDashboardRemplacantes(t);
