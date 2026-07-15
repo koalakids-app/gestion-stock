@@ -1700,7 +1700,12 @@ function todayStr(){return ipDateToLocalISO(new Date());}
 function weekStart(){const n=new Date();const day=n.getDay();const diff=n.getDate()-(day===0?6:day-1);const m=new Date(n.getFullYear(),n.getMonth(),diff+weekOffset*7);m.setHours(0,0,0,0);return m;}
 function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
-document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){
+  // Les modales de saisie salarié ne se ferment pas sur clic hors cadre (évite de perdre une saisie non enregistrée)
+  const noClickOutside=['modal-sal-wrap','modal-salform-wrap','modal-saldoc-wrap','modal-salent-wrap','modal-salabs-wrap'];
+  if(noClickOutside.includes(this.id))return;
+  if(e.target===this)this.classList.remove('open');
+}));
 function updateBadges(){
   const myCrecheId=isDirection?null:currentProfile?.creche_id;
   const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;
