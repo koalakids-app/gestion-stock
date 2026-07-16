@@ -254,12 +254,10 @@ document.getElementById('login-logo').src=LOGO;
 document.getElementById('app-logo').src=LOGO;
 
 async function initLogin(){
-  // Charger la liste des crèches pour le sélecteur
-  const {data,error}=await sb.from('creches').select('id,name').order('name');
+  // Peupler le déroulé à partir des crèches connues (indépendant de la RLS)
   const sel=document.getElementById('creche-select');
-  if(error){document.getElementById('login-err').textContent="Impossible de charger les crèches.";return;}
-  data.forEach(c=>{
-    const o=document.createElement('option');o.value=c.id;o.dataset.name=c.name;o.textContent=c.name;
+  Object.keys(KIOSQUE_EMAILS).forEach(name=>{
+    const o=document.createElement('option');o.value=name;o.dataset.name=name;o.textContent=name;
     sel.appendChild(o);
   });
   // Si une session existe déjà (tablette déjà connectée), aller direct à l'app
