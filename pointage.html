@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pointage — Koala Kids</title>
+<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --koala:#5b8a72;          /* vert doux Koala */
+    --koala-dark:#3f6353;
+    --koala-light:#e8f1ec;
+    --amber:#e0a458;          /* accent arrivée */
+    --amber-light:#fbf0dd;
+    --slate:#42566b;          /* départ / neutre foncé */
+    --bg:#f6f5f1;             /* fond crème calme */
+    --card:#ffffff;
+    --ink:#26332e;
+    --muted:#7c8a83;
+    --line:#e4e2da;
+    --present:#5b8a72;        /* vert = présent */
+    --gone:#9aa7b0;           /* gris-bleu = parti */
+    --radius:20px;
+    --shadow:0 4px 18px rgba(40,60,50,.08);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg);color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  .hidden{display:none!important}
+
+  /* ---------- Écran connexion ---------- */
+  #login{
+    min-height:100%;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;padding:28px 22px;gap:22px;
+  }
+  #login .logo{width:96px;height:96px;border-radius:24px;object-fit:cover;box-shadow:var(--shadow)}
+  #login h1{margin:0;font-size:26px;font-weight:800;letter-spacing:-.5px}
+  #login p{margin:0;color:var(--muted);text-align:center;max-width:340px;line-height:1.5}
+  .login-card{
+    background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:22px;width:100%;max-width:400px;display:flex;flex-direction:column;gap:14px;
+  }
+  .login-card label{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .login-card select,.login-card input{
+    width:100%;padding:15px 16px;border:1.5px solid var(--line);border-radius:14px;
+    font-size:17px;background:#fff;color:var(--ink);
+  }
+  .login-card select:focus,.login-card input:focus{outline:none;border-color:var(--koala)}
+  .btn{
+    border:none;border-radius:14px;padding:16px;font-size:17px;font-weight:700;
+    background:var(--koala);color:#fff;cursor:pointer;transition:transform .08s,background .15s;
+  }
+  .btn:active{transform:scale(.98)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .login-err{color:#c0392b;font-size:14px;min-height:18px;text-align:center}
+
+  /* ---------- En-tête kiosque ---------- */
+  header{
+    position:sticky;top:0;z-index:10;background:var(--koala);color:#fff;
+    padding:14px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 10px rgba(0,0,0,.1)
+  }
+  header .h-logo{width:40px;height:40px;border-radius:11px;object-fit:cover}
+  header .h-title{font-weight:800;font-size:18px;line-height:1.1}
+  header .h-sub{font-size:12.5px;opacity:.85}
+  header .h-clock{margin-left:auto;text-align:right;font-variant-numeric:tabular-nums}
+  header .h-clock .t{font-size:22px;font-weight:800;line-height:1}
+  header .h-clock .d{font-size:11.5px;opacity:.85;text-transform:capitalize}
+
+  /* ---------- Sections ---------- */
+  main{padding:16px 14px 40px}
+  .section-title{
+    display:flex;align-items:center;gap:8px;margin:18px 4px 10px;
+    font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)
+  }
+  .section-title .count{
+    background:var(--koala-light);color:var(--koala-dark);border-radius:20px;
+    padding:2px 10px;font-size:12px;font-weight:800
+  }
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+
+  .tile{
+    position:relative;background:var(--card);border:1.5px solid var(--line);
+    border-radius:var(--radius);padding:16px 14px 14px;min-height:132px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;
+    cursor:pointer;transition:transform .09s,box-shadow .15s,border-color .15s;
+    text-align:center;user-select:none;
+  }
+  .tile:active{transform:scale(.97)}
+  .avatar{
+    width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:21px;font-weight:800;color:#fff;background:var(--koala);letter-spacing:.5px
+  }
+  .tile.pro .avatar{background:var(--slate)}
+  .tile .name{font-size:15.5px;font-weight:700;line-height:1.15}
+  .tile .state{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:4px}
+
+  /* états */
+  .tile[data-state="absent"]{border-style:dashed;border-color:var(--line)}
+  .tile[data-state="absent"] .avatar{background:#c7cfca}
+  .tile[data-state="absent"] .state{color:var(--muted)}
+
+  .tile[data-state="present"]{border-color:var(--present);background:var(--koala-light)}
+  .tile[data-state="present"] .avatar{background:var(--present)}
+  .tile[data-state="present"] .state{color:var(--koala-dark)}
+
+  .tile[data-state="gone"]{opacity:.7}
+  .tile[data-state="gone"] .avatar{background:var(--gone)}
+  .tile[data-state="gone"] .name{text-decoration:line-through;text-decoration-color:var(--gone)}
+  .tile[data-state="gone"] .state{color:var(--gone)}
+
+  .tile .badge-time{
+    position:absolute;top:8px;right:10px;font-size:11px;font-weight:800;
+    color:var(--koala-dark);font-variant-numeric:tabular-nums
+  }
+  .tile.pro .badge-time{color:var(--slate)}
+
+  .empty{
+    grid-column:1/-1;text-align:center;color:var(--muted);padding:30px 10px;
+    display:flex;flex-direction:column;align-items:center;gap:8px
+  }
+  .empty i{font-size:34px;opacity:.5}
+
+  /* toast confirmation */
+  #toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(120px);
+    background:var(--ink);color:#fff;padding:14px 20px;border-radius:16px;
+    font-size:15.5px;font-weight:600;box-shadow:0 8px 26px rgba(0,0,0,.25);
+    display:flex;align-items:center;gap:10px;z-index:50;transition:transform .3s cubic-bezier(.2,.8,.3,1);
+    max-width:90vw
+  }
+  #toast.show{transform:translateX(-50%) translateY(0)}
+  #toast .ti{font-size:20px}
+  #toast.arrivee{background:var(--koala)}
+  #toast.depart{background:var(--slate)}
+
+  /* barre bas de page */
+  footer{
+    position:fixed;bottom:0;left:0;right:0;background:rgba(246,245,241,.95);
+    backdrop-filter:blur(6px);border-top:1px solid var(--line);
+    padding:8px 16px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--muted)
+  }
+  footer .refresh{margin-left:auto;background:none;border:1px solid var(--line);border-radius:10px;
+    padding:7px 12px;font-size:12.5px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px}
+  footer .refresh:active{background:var(--koala-light)}
+  #app{padding-bottom:52px}
+</style>
+</head>
+<body>
+
+<!-- ============ ÉCRAN CONNEXION ============ -->
+<div id="login">
+  <img class="logo" id="login-logo" alt="Koala Kids">
+  <div style="text-align:center">
+    <h1>Pointage Koala Kids</h1>
+  </div>
+  <div class="login-card">
+    <div>
+      <label for="creche-select">Crèche</label>
+      <select id="creche-select">
+        <option value="">— Choisir la crèche —</option>
+      </select>
+    </div>
+    <div>
+      <label for="pwd">Mot de passe kiosque</label>
+      <input type="password" id="pwd" inputmode="numeric" autocomplete="off" placeholder="••••••••">
+    </div>
+    <button class="btn" id="login-btn">Se connecter</button>
+    <div class="login-err" id="login-err"></div>
+    <p style="font-size:12.5px;margin-top:2px">À faire une seule fois par tablette. La session reste ouverte ensuite.</p>
+  </div>
+</div>
+
+<!-- ============ APP KIOSQUE ============ -->
+<div id="app" class="hidden">
+  <header>
+    <img class="h-logo" id="app-logo" alt="">
+    <div>
+      <div class="h-title">Pointage</div>
+      <div class="h-sub" id="app-creche">—</div>
+    </div>
+    <div class="h-clock">
+      <div class="t" id="clock-t">--:--</div>
+      <div class="d" id="clock-d">—</div>
+    </div>
+  </header>
+
+  <main>
+    <div class="section-title">
+      <i class="ti ti-mood-kid"></i> Enfants prévus aujourd'hui
+      <span class="count" id="count-enfants">0</span>
+    </div>
+    <div class="grid" id="grid-enfants"></div>
+
+    <div class="section-title">
+      <i class="ti ti-users"></i> Équipe
+      <span class="count" id="count-pros">0</span>
+    </div>
+    <div class="grid" id="grid-pros"></div>
+  </main>
+
+  <footer>
+    <span id="foot-status">Prêt</span>
+    <button class="refresh" id="refresh-btn"><i class="ti ti-refresh"></i> Actualiser</button>
+  </footer>
+</div>
+
+<div id="toast"><i class="ti ti-check"></i><span id="toast-msg"></span></div>
+
+<script>
+/* ================= CONFIG ================= */
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const LOGO="https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/logo.png";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+/* Mapping des comptes kiosque : crèche -> email (mot de passe saisi à la main) */
+const KIOSQUE_EMAILS={
+  "Brunet":"kiosque.brunet@koalakids.local",
+  "Cuers":"kiosque.cuers@koalakids.local",
+  "Ollioules":"kiosque.ollioules@koalakids.local",
+  "Picot 1":"kiosque.picot1@koalakids.local",
+  "Picot 2":"kiosque.picot2@koalakids.local",
+  "St Jean":"kiosque.stjean@koalakids.local"
+};
+
+/* ============ HELPERS ============ */
+// Date locale (évite le décalage UTC+2 de toISOString)
+function ipDateToLocalISO(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function todayStr(){return ipDateToLocalISO(new Date());}
+function initials(name){
+  return (name||'?').trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);
+}
+function hhmm(iso){
+  const d=new Date(iso);
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+
+/* ============ ÉTAT ============ */
+let CTX={crecheId:null,crecheName:null};
+let enfantsPrevus=[];   // [{id,name}]
+let pros=[];            // [{id,name}]
+let pointages={};       // clé `${type}:${personne_id}` -> ligne pointage du jour
+
+/* ============ CONNEXION ============ */
+document.getElementById('login-logo').src=LOGO;
+document.getElementById('app-logo').src=LOGO;
+
+async function initLogin(){
+  // Charger la liste des crèches pour le sélecteur
+  const {data,error}=await sb.from('creches').select('id,name').order('name');
+  const sel=document.getElementById('creche-select');
+  if(error){document.getElementById('login-err').textContent="Impossible de charger les crèches.";return;}
+  data.forEach(c=>{
+    const o=document.createElement('option');o.value=c.id;o.dataset.name=c.name;o.textContent=c.name;
+    sel.appendChild(o);
+  });
+  // Si une session existe déjà (tablette déjà connectée), aller direct à l'app
+  const {data:{session}}=await sb.auth.getSession();
+  if(session){await afterLogin();}
+}
+
+document.getElementById('login-btn').addEventListener('click',async()=>{
+  const sel=document.getElementById('creche-select');
+  const crecheName=sel.selectedOptions[0]?.dataset?.name;
+  const pwd=document.getElementById('pwd').value;
+  const errEl=document.getElementById('login-err');
+  errEl.textContent="";
+  if(!crecheName){errEl.textContent="Choisis d'abord la crèche.";return;}
+  const email=KIOSQUE_EMAILS[crecheName];
+  if(!email){errEl.textContent="Aucun compte kiosque pour cette crèche.";return;}
+  if(!pwd){errEl.textContent="Saisis le mot de passe.";return;}
+  const btn=document.getElementById('login-btn');
+  btn.disabled=true;btn.textContent="Connexion…";
+  const {error}=await sb.auth.signInWithPassword({email,password:pwd});
+  btn.disabled=false;btn.textContent="Se connecter";
+  if(error){errEl.textContent="Mot de passe incorrect.";return;}
+  await afterLogin();
+});
+
+async function afterLogin(){
+  // Récupérer la crèche du compte connecté via referents
+  const {data:{user}}=await sb.auth.getUser();
+  const {data:ref,error}=await sb.from('referents').select('creche_id').eq('user_id',user.id).maybeSingle();
+  if(error||!ref){document.getElementById('login-err').textContent="Compte non relié à une crèche.";return;}
+  CTX.crecheId=ref.creche_id;
+  const {data:c}=await sb.from('creches').select('name').eq('id',ref.creche_id).maybeSingle();
+  CTX.crecheName=c?.name||'';
+  document.getElementById('app-creche').textContent=CTX.crecheName;
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  startClock();
+  await loadDay();
+}
+
+/* ============ CHARGEMENT DU JOUR ============ */
+async function loadDay(){
+  setStatus("Chargement…");
+  const d=todayStr();
+
+  // 1) Enfants prévus : presences du jour, status=present, joints aux enfants de la crèche
+  const {data:enfantsCreche}=await sb.from('enfants').select('id,prenom,nom,name').eq('creche_id',CTX.crecheId);
+  const enfMap={}; (enfantsCreche||[]).forEach(e=>{
+    enfMap[e.id]=e.name || [e.prenom,e.nom].filter(Boolean).join(' ') || 'Enfant';
+  });
+  const ids=Object.keys(enfMap);
+  let prevuIds=[];
+  if(ids.length){
+    const {data:pres}=await sb.from('presences').select('enfant_id,status').eq('presence_date',d).eq('status','present').in('enfant_id',ids);
+    prevuIds=[...new Set((pres||[]).map(p=>p.enfant_id))];
+  }
+  enfantsPrevus=prevuIds.map(id=>({id,name:enfMap[id]})).sort((a,b)=>a.name.localeCompare(b.name));
+
+  // 2) Pros de la crèche (on exclut le compte kiosque lui-même)
+  const {data:refs}=await sb.from('referents').select('id,name,role').eq('creche_id',CTX.crecheId);
+  pros=(refs||[]).filter(r=>r.role!=='kiosque').map(r=>({id:r.id,name:r.name||'Pro'})).sort((a,b)=>a.name.localeCompare(b.name));
+
+  // 3) Pointages du jour déjà enregistrés
+  const {data:pts}=await sb.from('pointages').select('*').eq('creche_id',CTX.crecheId).eq('date',d);
+  pointages={};
+  (pts||[]).forEach(p=>{pointages[`${p.type}:${p.personne_id}`]=p;});
+
+  render();
+  setStatus("À jour");
+}
+
+/* ============ RENDU ============ */
+function stateOf(type,id){
+  const p=pointages[`${type}:${id}`];
+  if(!p) return {state:'absent',label:'Pas arrivé',time:null};
+  if(p.heure_depart) return {state:'gone',label:'Parti '+hhmm(p.heure_depart),time:hhmm(p.heure_depart)};
+  return {state:'present',label:'Présent '+hhmm(p.heure_arrivee),time:hhmm(p.heure_arrivee)};
+}
+
+function tileHTML(type,person){
+  const s=stateOf(type,person.id);
+  const icon=s.state==='present'?'ti-check':(s.state==='gone'?'ti-logout':'ti-clock');
+  const timeBadge=s.time?`<span class="badge-time">${s.time}</span>`:'';
+  return `<div class="tile ${type==='pro'?'pro':''}" data-state="${s.state}" data-type="${type}" data-id="${person.id}" data-name="${encodeURIComponent(person.name)}">
+    ${timeBadge}
+    <div class="avatar">${initials(person.name)}</div>
+    <div class="name">${person.name}</div>
+    <div class="state"><i class="ti ${icon}"></i>${s.label}</div>
+  </div>`;
+}
+
+function render(){
+  const ge=document.getElementById('grid-enfants');
+  const gp=document.getElementById('grid-pros');
+  document.getElementById('count-enfants').textContent=enfantsPrevus.length;
+  document.getElementById('count-pros').textContent=pros.length;
+
+  ge.innerHTML=enfantsPrevus.length
+    ? enfantsPrevus.map(e=>tileHTML('enfant',e)).join('')
+    : `<div class="empty"><i class="ti ti-calendar-off"></i>Aucun enfant prévu aujourd'hui</div>`;
+  gp.innerHTML=pros.length
+    ? pros.map(p=>tileHTML('pro',p)).join('')
+    : `<div class="empty"><i class="ti ti-users"></i>Aucun membre d'équipe</div>`;
+
+  document.querySelectorAll('.tile').forEach(t=>t.addEventListener('click',onTileTap));
+}
+
+/* ============ POINTAGE (tuiles ouvertes) ============ */
+async function onTileTap(e){
+  const t=e.currentTarget;
+  const type=t.dataset.type, id=t.dataset.id, name=decodeURIComponent(t.dataset.name);
+  const key=`${type}:${id}`;
+  const existing=pointages[key];
+  const now=new Date();
+
+  // déjà parti → on ne rebascule pas (simple pour la version test)
+  if(existing && existing.heure_depart){
+    toast(`${name} est déjà parti aujourd'hui`,'depart');
+    return;
+  }
+
+  if(!existing){
+    // ARRIVÉE : créer la session
+    const row={type,personne_id:id,creche_id:CTX.crecheId,date:todayStr(),heure_arrivee:now.toISOString()};
+    const {data,error}=await sb.from('pointages').insert(row).select().maybeSingle();
+    if(error){toast("Erreur, réessaie",'depart');return;}
+    pointages[key]=data;
+    toast(`${name} — arrivée ${hhmm(data.heure_arrivee)}`,'arrivee');
+  }else{
+    // DÉPART : compléter heure_depart
+    const {data,error}=await sb.from('pointages').update({heure_depart:now.toISOString()}).eq('id',existing.id).select().maybeSingle();
+    if(error){toast("Erreur, réessaie",'depart');return;}
+    pointages[key]=data;
+    toast(`${name} — départ ${hhmm(data.heure_depart)}`,'depart');
+  }
+  render();
+}
+
+/* ============ UI utilitaires ============ */
+let toastTimer=null;
+function toast(msg,kind){
+  const el=document.getElementById('toast');
+  document.getElementById('toast-msg').textContent=msg;
+  el.className='show '+(kind||'');
+  el.querySelector('i').className='ti '+(kind==='arrivee'?'ti-login':'ti-logout');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),2200);
+}
+function setStatus(s){document.getElementById('foot-status').textContent=s;}
+
+function startClock(){
+  const days=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+  const months=['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+  function tick(){
+    const n=new Date();
+    document.getElementById('clock-t').textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+    document.getElementById('clock-d').textContent=`${days[n.getDay()]} ${n.getDate()} ${months[n.getMonth()]}`;
+  }
+  tick();setInterval(tick,10000);
+}
+
+document.getElementById('refresh-btn').addEventListener('click',loadDay);
+
+/* ============ DÉMARRAGE ============ */
+initLogin();
+</script>
+</body>
+</html>
