@@ -732,10 +732,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div id="fp-empty" class="empty-state" style="display:none"><i class="ti ti-receipt-off"></i><p>Aucune dépense ce mois-ci.</p></div>
 
-    <div style="margin-top:1.5rem">
-      <div style="font-size:13px;font-weight:700;color:var(--koala);margin-bottom:8px"><i class="ti ti-file-text"></i> Justificatifs scannés du mois (PDF unique)</div>
-      <div id="fp-pdf-zone" style="border:2px dashed var(--border);border-radius:10px;padding:1rem;text-align:center"></div>
-    </div>
   </div>
 
   <!-- HEURES SUPPLÉMENTAIRES -->
@@ -4139,8 +4135,10 @@ function renderDashboardToday(){
     '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-planning"><div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span><select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning()"><option value="">-- Crèche --</option></select></div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Sélectionnez une crèche</div></div>'+
     '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
-    '<div class="dash-card" id="dash-today-absents"><div class="dash-card-title"><i class="ti ti-calendar-off"></i> Salariés absents</div>'+dashAbsentsHtml(t)+'</div>';
+    '<div class="dash-card" id="dash-today-absents"><div class="dash-card-title"><i class="ti ti-calendar-off"></i> Salariés absents</div>'+dashAbsentsHtml(t)+'</div>'+
+    '<div class="dash-card" id="dash-today-mapresence"><div class="dash-card-title"><i class="ti ti-map-pin"></i> Ma présence du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
 
+  loadDashboardMaPresence(t);
   loadDashboardPresences(t);
   loadDashboardRemplacantes(t);
   // Peupler le sélecteur crèche du planning et charger si une crèche déjà choisie
@@ -4150,6 +4148,47 @@ function renderDashboardToday(){
     planSel.innerHTML='<option value="">-- Crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===prev?' selected':'')+'>'+escHtml(c.name)+'</option>').join('');
     if(planSel.value)loadDashboardPlanning();
   }
+}
+// Ma présence du jour (direction) — lue depuis le planning coordinateur (table `planning`)
+const DASH_MP_TYPE={presence:{emoji:'🏫',lbl:'Présence crèche'},absent:{emoji:'🚫',lbl:'Absent'},conge:{emoji:'🌴',lbl:'Congé'},formation:{emoji:'🎓',lbl:'Formation'},reunion:{emoji:'🗣️',lbl:'Réunion'},detachement:{emoji:'🔄',lbl:'Détachement'}};
+async function loadDashboardMaPresence(dateStr){
+  const box=document.getElementById('dash-today-mapresence');if(!box)return;
+  const title='<div class="dash-card-title"><i class="ti ti-map-pin"></i> Ma présence du jour</div>';
+  const myId=currentProfile?.id;
+  if(!myId){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Profil non chargé</div>';return;}
+  const d=new Date(dateStr+'T00:00:00');
+  const dow=d.getDay();
+  if(dow===0||dow===6){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Week-end</div>';return;}
+  const jour=dow-1;
+  const semaine=mondayOfISO(dateStr);
+  let rows=[];
+  try{
+    const{data,error}=await sb.from('planning').select('*').eq('referent_id',myId).eq('semaine',semaine).eq('jour',jour);
+    if(error)throw error;
+    rows=data||[];
+  }catch(e){
+    console.warn('[MaPresence]',e.message);
+    box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Erreur de chargement</div>';return;
+  }
+  if(!rows.length){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Rien de planifié ce jour</div>';return;}
+  const bySlot=[{n:'Matin',v:0},{n:'Après-midi',v:1}];
+  let html='';
+  bySlot.forEach(sl=>{
+    const evs=rows.filter(r=>r.slot===sl.v||(r.slot===null&&sl.v===0));
+    if(!evs.length){
+      html+='<div class="dash-list-item"><span style="color:var(--muted)">'+sl.n+'</span><span style="font-size:11px;color:var(--muted)">—</span></div>';
+      return;
+    }
+    evs.forEach(r=>{
+      const info=DASH_MP_TYPE[r.type]||{emoji:'📍',lbl:r.type||''};
+      const lieu=r.lieu||r.label||info.lbl;
+      const horaire=r.hdebut?(r.hdebut+(r.hfin?'–'+r.hfin:'')):'';
+      html+='<div class="dash-list-item"><span>'+info.emoji+' <strong>'+escHtml(lieu)+'</strong> '+
+        '<span style="color:var(--muted);font-size:11px">('+sl.n+')</span></span>'+
+        '<span style="font-size:11px;font-weight:700;color:var(--koala);white-space:nowrap">'+escHtml(horaire||info.lbl)+'</span></div>';
+    });
+  });
+  box.innerHTML=title+html;
 }
 async function loadDashboardPlanning(){
   const box=document.getElementById('dash-today-planning');if(!box)return;
@@ -4799,7 +4838,7 @@ async function ikGenerate(){
 // expense_date, category, amount, description, receipt_url)
 // ============================================================
 const FP_CATEGORIES={repas:'🍽️ Repas',peage:'🛣️ Péage',parking:'🅿️ Parking',materiel:'📦 Matériel',formation:'📚 Formation',fourniture:'✏️ Fourniture pédagogique',autre:'Autre'};
-let fpRows=[],fpPdfRow=null,fpPendingPhotoUrl=null,fpEditingId=null;
+let fpRows=[],fpPendingPhotoUrl=null,fpEditingId=null;
 
 // Client Supabase secondaire pour le Storage (clé publishable récente), pour éviter tout conflit
 // de session avec le client principal (qui utilise l'ancienne clé JWT anon).
@@ -5110,7 +5149,6 @@ async function fpLoad(){
   const{data,error}=await q;
   if(error){console.warn('[FraisPro]',error.message);fpRows=[];}else{fpRows=data||[];}
 
-  await fpLoadPdf(month,targetRefId);
   fpRenderTable();
 }
 
@@ -5209,59 +5247,9 @@ async function fpDeleteRow(id){
   await dbDelete('frais_pro',id);fpLoad();
 }
 
-// ── PDF mensuel groupé (colonnes réelles : id, created_at, month, person_id [text], person_name, pdf_url, filename) ──
-async function fpLoadPdf(month,referentId){
-  const targetId=referentId||currentProfile?.id;
-  if(!targetId){fpPdfRow=null;fpRenderPdfZone();return;}
-  const{data,error}=await sb.from('frais_pro_pdf').select('*').eq('person_id',String(targetId)).eq('month',month).maybeSingle();
-  if(error){console.warn('[FraisProPdf]',error.message);fpPdfRow=null;}else{fpPdfRow=data||null;}
-  fpRenderPdfZone();
-}
-
-function fpRenderPdfZone(){
-  const zone=document.getElementById('fp-pdf-zone');
-  const month=document.getElementById('fp-month').value;
-  if(fpPdfRow){
-    zone.innerHTML='<i class="ti ti-file-text" style="font-size:28px;color:var(--koala)"></i>'+
-      '<div style="margin:8px 0"><a href="'+fpPdfRow.pdf_url+'" target="_blank" class="btn-primary" style="display:inline-flex"><i class="ti ti-eye"></i> Voir le PDF du mois</a></div>'+
-      '<button class="btn-sm" onclick="document.getElementById(\'fp-pdf-input\').click()"><i class="ti ti-refresh"></i> Remplacer</button>'+
-      '<input type="file" id="fp-pdf-input" accept="application/pdf" style="display:none" onchange="fpHandlePdfUpload(event)"/>';
-  }else{
-    zone.innerHTML='<i class="ti ti-upload" style="font-size:28px;color:#ccc"></i>'+
-      '<div style="margin:8px 0;font-size:13px;color:var(--muted)">Aucun PDF déposé pour '+(month||'ce mois')+'</div>'+
-      '<button class="btn-primary" onclick="document.getElementById(\'fp-pdf-input\').click()"><i class="ti ti-upload"></i> Déposer le PDF scanné</button>'+
-      '<input type="file" id="fp-pdf-input" accept="application/pdf" style="display:none" onchange="fpHandlePdfUpload(event)"/>';
-  }
-}
-
-async function fpHandlePdfUpload(event){
-  const file=event.target.files[0];if(!file)return;
-  const month=document.getElementById('fp-month').value;
-  const targetId=isDirection?(document.getElementById('fp-referent-select').value||currentProfile?.id):currentProfile?.id;
-  if(!targetId){alert('Profil introuvable.');return;}
-  showBanner('Envoi du PDF en cours…');
-  try{
-    const path='frais-pro-pdf/'+targetId+'_'+month+'_'+Date.now()+'.pdf';
-    const{error}=await fpStorageClient().storage.from('assets').upload(path,file,{upsert:true});
-    if(error)throw error;
-    const{data}=fpStorageClient().storage.from('assets').getPublicUrl(path);
-    const refName=cacheReferents.find(r=>r.id===targetId)?.name||currentProfile?.name||'';
-    // Pas de contrainte unique connue sur (person_id, month) dans cette table existante :
-    // on supprime l'ancien enregistrement du mois avant d'insérer le nouveau (remplacement).
-    await sb.from('frais_pro_pdf').delete().eq('person_id',String(targetId)).eq('month',month);
-    const{error:insErr}=await sb.from('frais_pro_pdf').insert({person_id:String(targetId),person_name:refName,month,pdf_url:data.publicUrl,filename:file.name});
-    if(insErr)throw insErr;
-    showBanner('PDF enregistré ✅');
-    fpLoadPdf(month,targetId);
-  }catch(e){
-    console.error('[FraisProPdf upload]',e.message);
-    showBanner('Erreur lors de l\'envoi du PDF.','error');
-  }
-}
-
 // ── Export Excel ──
 function fpExportExcel(){
-  if(!fpRows.length&&!fpPdfRow){alert('Aucune dépense ni PDF à exporter pour ce mois.');return;}
+  if(!fpRows.length){alert('Aucune dépense à exporter pour ce mois.');return;}
   const month=document.getElementById('fp-month').value;
   const wsData=[['Date','Catégorie','Description','Montant (€)']];
   fpRows.forEach(r=>{wsData.push([new Date(r.expense_date+'T12:00:00').toLocaleDateString('fr-FR'),FP_CATEGORIES[r.category]||r.category,r.description||'',Number(r.amount)]);});
@@ -5283,7 +5271,6 @@ function fpSendEmail(){
     const total=fpRows.reduce((s,r)=>s+Number(r.amount),0);
     body+='\nTOTAL : '+total.toFixed(2)+' €\n';
   }else{body+='(Aucune ligne de dépense saisie ce mois-ci)\n';}
-  if(fpPdfRow)body+='\nJustificatifs scannés (PDF) : '+fpPdfRow.pdf_url+'\n';
   const subject='Frais pro '+month+' — '+name;
   window.location.href='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
 }
