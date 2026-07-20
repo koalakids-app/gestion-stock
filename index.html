@@ -3,407 +3,159 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Quiz Koalakids — Protocoles & Sécurité</title>
+<title>Koala Kids — Accueil</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --orange:#E8621A;
-  --orange-light:#FDF0E8;
-  --orange-dark:#C45112;
-  --purple:#4A3F9F;
-  --purple-light:#EEEDFE;
-  --bg:#FBF7F4;
-  --surface:#FFFFFF;
-  --surface-2:#FEF9F6;
-  --border:rgba(232,98,26,0.15);
-  --border-strong:rgba(232,98,26,0.3);
-  --text:#2D1F0E;
-  --text-muted:#7A5C3F;
-  --text-light:#B8956A;
-  --radius:10px;
-  --success-bg:#EAF6EE;
-  --success-border:#2EBD6A;
-  --success-text:#0F6E35;
-  --danger-bg:#FDF0EE;
-  --danger-border:#E07060;
-  --danger-text:#993C1D;
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Instrument Sans', sans-serif;
+  background: #F0EDE8;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
 
-/* HEADER */
-.app-header{background:var(--purple);color:white;padding:.9rem 1.5rem;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100;box-shadow:0 2px 16px rgba(74,63,159,.25)}
-.header-logo{height:44px;border-radius:6px;background:white;padding:3px 6px}
-.header-title{flex:1}
-.header-title h1{font-size:16px;font-weight:700;letter-spacing:-.2px}
-.header-title p{font-size:11px;opacity:.75;margin-top:1px}
-.header-score-chip{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;white-space:nowrap}
+.container {
+  width: 100%;
+  max-width: 480px;
+}
 
-/* CONTAINER */
-.container{max-width:660px;margin:0 auto;padding:1.5rem 1rem 4rem}
+.logo {
+  text-align: center;
+  margin-bottom: 40px;
+}
 
-/* PROGRESS */
-.progress-wrap{background:var(--surface);border-radius:var(--radius);padding:1rem 1.25rem;margin-bottom:1.25rem;border:1px solid var(--border)}
-.progress-meta{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
-.progress-label{font-size:13px;color:var(--text-muted)}
-.progress-count{font-size:13px;font-weight:700;color:var(--orange)}
-.progress-bar{height:7px;background:var(--bg);border-radius:4px;overflow:hidden}
-.progress-fill{height:100%;background:linear-gradient(90deg,var(--orange),#F5963A);border-radius:4px;transition:width .4s cubic-bezier(.4,0,.2,1)}
+.logo h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  color: #1C1917;
+  letter-spacing: -0.5px;
+}
 
-/* QUESTION */
-.question-card{background:var(--surface);border-radius:14px;border:1px solid var(--border);padding:1.5rem;margin-bottom:1rem}
-.q-badge{display:inline-flex;align-items:center;gap:6px;background:var(--orange-light);color:var(--orange);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 10px;border-radius:20px;margin-bottom:12px;border:1px solid rgba(232,98,26,.2)}
-.q-text{font-size:16px;font-weight:500;color:var(--text);line-height:1.55;margin-bottom:1.25rem}
+.logo h1 span { color: #F47920; }
 
-/* OPTIONS */
-.options{display:flex;flex-direction:column;gap:8px}
-.option{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:border-color .15s,background .15s,transform .1s;user-select:none}
-.option:hover:not(.disabled){border-color:var(--orange);background:var(--orange-light);transform:translateX(3px)}
-.option.selected{border-color:var(--orange);background:var(--orange-light)}
-.option.correct{border-color:var(--success-border);background:var(--success-bg)}
-.option.wrong{border-color:var(--danger-border);background:var(--danger-bg)}
-.option.disabled{cursor:default;transform:none}
-.option-letter{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text-muted);flex-shrink:0;transition:all .15s;background:white}
-.option.selected .option-letter{background:var(--orange);border-color:var(--orange);color:white}
-.option.correct .option-letter{background:var(--success-border);border-color:var(--success-border);color:white}
-.option.wrong .option-letter{background:var(--danger-border);border-color:var(--danger-border);color:white}
-.option-text{font-size:14px;color:var(--text);line-height:1.4}
+.logo p {
+  font-size: 14px;
+  color: #A8A29E;
+  margin-top: 6px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
 
-/* FEEDBACK */
-.feedback{margin-top:12px;padding:10px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;display:none;align-items:flex-start;gap:8px}
-.feedback.show{display:flex}
-.feedback.ok{background:var(--success-bg);color:var(--success-text);border:1px solid var(--success-border)}
-.feedback.ko{background:var(--danger-bg);color:var(--danger-text);border:1px solid var(--danger-border)}
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 
-/* NAV */
-.nav{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 22px;border:1.5px solid var(--border-strong);border-radius:var(--radius);background:white;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
-.btn:hover:not(:disabled){border-color:var(--orange);color:var(--orange);background:var(--orange-light)}
-.btn:disabled{opacity:.35;cursor:default}
-.btn.primary{background:var(--orange);color:white;border-color:var(--orange)}
-.btn.primary:hover:not(:disabled){background:#D45715;border-color:#D45715;color:white}
-.btn.purple{background:var(--purple);color:white;border-color:var(--purple)}
-.btn.purple:hover:not(:disabled){background:#3D348E;border-color:#3D348E;color:white}
-.pager{font-size:13px;color:var(--text-muted);font-weight:500}
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px 28px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border: 1px solid #E7E5E0;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.04);
+  transition: transform .15s, box-shadow .15s;
+}
 
-/* START SCREEN */
-.start-screen{background:var(--surface);border-radius:16px;border:1px solid var(--border);padding:2.5rem 2rem;text-align:center}
-.start-logo-wrap{margin:0 auto 1.5rem;display:flex;justify-content:center}
-.start-logo-wrap img{height:80px}
-.start-screen h2{font-size:22px;font-weight:700;color:var(--purple);margin-bottom:8px}
-.start-screen .subtitle{font-size:15px;color:var(--text-muted);margin-bottom:2rem;line-height:1.6}
-.start-meta{display:flex;justify-content:center;gap:20px;margin-bottom:2rem;flex-wrap:wrap}
-.start-meta-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);background:var(--orange-light);padding:5px 14px;border-radius:20px;border:1px solid rgba(232,98,26,.2)}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--orange);flex-shrink:0}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,.10);
+}
 
-/* FORM */
-.form-group{text-align:left;margin-bottom:1rem}
-.form-label{display:block;font-size:13px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
-.form-input,.form-select{width:100%;padding:10px 14px;border:1.5px solid var(--border-strong);border-radius:var(--radius);font-size:15px;font-family:inherit;color:var(--text);background:white;transition:border-color .15s;outline:none}
-.form-input:focus,.form-select:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(232,98,26,.12)}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  flex-shrink: 0;
+}
 
-/* RESULTS */
-.results{background:var(--surface);border-radius:16px;border:1px solid var(--border);padding:2rem 1.5rem;text-align:center}
-.result-icon{font-size:52px;margin-bottom:8px}
-.result-score{font-size:56px;font-weight:800;color:var(--orange);line-height:1;margin-bottom:4px}
-.result-total{font-size:18px;color:var(--text-muted);margin-bottom:4px}
-.result-mention{font-size:20px;font-weight:700;margin-bottom:1.5rem}
-.result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:1.5rem 0}
-.result-stat{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 10px}
-.result-stat-val{font-size:26px;font-weight:800;line-height:1;margin-bottom:4px}
-.result-stat-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
-.result-user-recap{background:var(--orange-light);border:1px solid rgba(232,98,26,.2);border-radius:var(--radius);padding:12px 16px;margin:1rem 0;font-size:14px;color:var(--text-muted)}
-.result-user-recap strong{color:var(--text);display:block;font-size:16px;margin-bottom:2px}
-.result-actions{display:flex;gap:10px;justify-content:center;margin-top:1.5rem;flex-wrap:wrap}
-.save-status{font-size:13px;color:var(--text-muted);margin-top:.75rem;min-height:20px}
-.save-status.ok{color:var(--success-text)}
-.save-status.err{color:var(--danger-text)}
+.card-stock .card-icon { background: #EFF6FF; }
+.card-dem .card-icon   { background: #FEF0E6; }
 
-@media(max-width:480px){
-  .container{padding:1rem .75rem 3rem}
-  .question-card{padding:1.25rem 1rem}
-  .form-row{grid-template-columns:1fr}
-  .result-score{font-size:42px}
-  .result-grid{gap:8px}
-  .result-stat{padding:10px 6px}
-  .result-stat-val{font-size:20px}
+.card-text h2 {
+  font-family: 'Syne', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #1C1917;
+  margin-bottom: 4px;
+}
+
+.card-text p {
+  font-size: 13px;
+  color: #A8A29E;
+  line-height: 1.4;
+}
+
+.card-arrow {
+  margin-left: auto;
+  font-size: 20px;
+  color: #D6D3CF;
+  flex-shrink: 0;
+}
+
+.card-stock:hover .card-arrow { color: #2563EB; }
+.card-dem:hover   .card-arrow { color: #F47920; }
+
+.footer {
+  text-align: center;
+  margin-top: 28px;
+  font-size: 11.5px;
+  color: #C8C4BE;
+}
+
+@media (max-width: 400px) {
+  .card { padding: 18px 20px; gap: 14px; }
+  .card-icon { width: 48px; height: 48px; font-size: 22px; }
+  .card-text h2 { font-size: 15px; }
 }
 </style>
 </head>
 <body>
-<header class="app-header">
-  <img class="header-logo" src="data:image/jpeg;base64,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" alt="Koalakids">
-  <div class="header-title">
-    <h1>Protocoles & Sécurité</h1>
-    <p>Formation Koalakids</p>
-  </div>
-  <div id="header-chip" class="header-score-chip" style="display:none"></div>
-</header>
 
 <div class="container">
-  <div id="app"></div>
+
+  <div class="logo">
+    <h1>koala<span>kids</span></h1>
+    <p>Réseau Micro-Crèches</p>
+  </div>
+
+  <div class="cards">
+
+    <a href="stock.html" class="card card-stock">
+      <div class="card-icon">📦</div>
+      <div class="card-text">
+        <h2>Stock pédagogique</h2>
+        <p>Inventaire, commandes, fournisseurs, univers ludiques</p>
+      </div>
+      <div class="card-arrow">›</div>
+    </a>
+
+    <a href="demandes.html" class="card card-dem">
+      <div class="card-icon">💬</div>
+      <div class="card-text">
+        <h2>Demandes RT</h2>
+        <p>Demandes, incidents, présences, planning, référents</p>
+      </div>
+      <div class="card-arrow">›</div>
+    </a>
+
+  </div>
+
+  <div class="footer">Koala Kids © 2026</div>
+
 </div>
 
-<script>
-const CRECHES = ["Koalakids Toulon Brunet","Koalakids Cuers","Koalakids Ollioules","Koalakids Toulon Picot 1","Koalakids Toulon Picot 2","Koalakids Toulon St Jean","Autre"];
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxCFDTeZJbMoMRVmNt3_Kj7223PrvgFv0s9Df7aesUdzjN-85rFahxEXEshHzWNRP2Q/exec";
-
-const questions = [
-  {q:"Selon le protocole de mise en sûreté d'une crèche Koalakids, quel est le lieu de confinement ?",opts:["Dans une pièce éloignée","Dans une pièce sans fenêtre fermant à clé","Dans le couloir","À côté de l'issue de secours"],ans:1},
-  {q:"En cas de canicule, à quelle fréquence minimale faut-il proposer à boire aux enfants ?",opts:["Toutes les heures","Toutes les 30 minutes","Toutes les deux heures","Si les enfants le demandent"],ans:0},
-  {q:"Quel objet est spécifiquement mentionné dans la liste du contenu du sac d'évacuation ?",opts:["Des gâteaux secs et des compotes","Un paquet de lingettes","Une trousse de secours","Des couches"],ans:0},
-  {q:"Lors d'une évacuation, que doit faire le personnel avec les enfants qui ne marchent pas ?",opts:["Les mettre tous dans le ou les lits à barreaux","Attendre les secours pour les déplacer","Les déplacer en les faisant rouler au sol","Les porter dans les bras un par un"],ans:0},
-  {q:"À quelle fréquence le contenu des sacs de sortie et d'évacuation doit-il être vérifié ?",opts:["Tous les six mois","Tous les mois","Seulement quand un article est utilisé","Tous les ans"],ans:0},
-  {q:"En cas de suspicion de maltraitance sur un enfant dans la sphère privée, que doit faire la professionnelle ?",opts:["Appeler immédiatement la police","Organiser une réunion avec tous les parents de la crèche","Remplir une grille d'observation sur l'enfant et les parents","Refuser d'accueillir l'enfant jusqu'à nouvel ordre"],ans:2},
-  {q:"En cas d'intrusion malveillante et en l'absence de la référente technique, qui prend en charge la gestion de crise ?",opts:["Personne, il faut attendre les ordres de la police","La personne la plus près du téléphone","La personne la plus ancienne dans l'équipe","La dernière personne arrivée à la crèche"],ans:3},
-  {q:"Lors d'un appel aux services de secours (15, 17, 18, 112), quelle est la consigne concernant la communication ?",opts:["Confier le téléphone à une autre personne pour continuer","Raccrocher le premier pour ne pas saturer la ligne","Ne jamais interrompre la communication en premier","Parler le plus vite possible pour donner le maximum d'informations"],ans:2},
-  {q:"Pendant une mise à l'abri, après avoir regroupé tout le monde dans le local désigné, que faut-il faire ?",opts:["Éteindre la lumière","Allumer une veilleuse pour rassurer les enfants","Barricader la porte avec les lits d'évacuation","Mettre de la musique douce pour calmer les enfants"],ans:0},
-  {q:"Selon le protocole, dans quelle situation le lavage de nez (DRP) avec une pipette est-il indiqué ?",opts:["Au moins 4 fois par jour pour prévenir les infections ORL","Dès que le nez de l'enfant coule, même si les sécrétions sont claires","Uniquement sur ordonnance médicale ou si l'enfant est très congestionné","Systématiquement chaque matin pour tous les enfants"],ans:2},
-  {q:"Quelle est la procédure correcte si un enfant de plus d'un an s'étouffe avec un objet ?",opts:["Lui donner de l'eau à boire pour aider à faire passer l'objet","Commencer par 5 claques dans le dos, puis si inefficace, effectuer des compressions abdominales","Le coucher sur le dos et essayer de retirer l'objet avec les doigts","L'encourager à tousser très fort en le laissant dans la position dans laquelle il se trouve"],ans:1},
-  {q:"Un enfant présente une fièvre à 38,5°C mais joue et ne se plaint de rien. Que faire ?",opts:["Appeler les parents pour venir chercher leur enfant en urgence","Donner immédiatement du paracétamol pour faire baisser la fièvre","Dévêtir l'enfant, l'hydrater, le surveiller et prévenir les parents","Appeler le SAMU (15) car toute température au-dessus de 38°C est une urgence"],ans:2},
-  {q:"Quelle est la règle impérative concernant la conservation du lait maternel réchauffé ?",opts:["Il doit être consommé dans la demi-heure sinon il doit être jeté","Il peut être mis au congélateur s'il n'a pas été bu","Il peut être réchauffé une seconde fois plus tard dans la journée","Il peut être conservé au réfrigérateur pendant 24 heures"],ans:0},
-  {q:"Lors d'un arrêt cardio-respiratoire chez un bébé de moins d'un an, quelle est la séquence correcte ?",opts:["Faire 2 insufflations puis alterner 30 compressions thoraciques","Commencer immédiatement par 15 compressions thoraciques","Faire 5 insufflations initiales puis alterner 15 compressions thoraciques et 2 insufflations","Alterner 15 compressions thoraciques et 5 insufflations"],ans:2},
-  {q:"En cas de chute sur la tête sans signe de gravité immédiat, quelle mesure de surveillance doit être appliquée ?",opts:["Appliquer de la chaleur sur la bosse pour la faire disparaître","Éviter de le faire dormir pour pouvoir surveiller son état et ses réactions","Donner un anti-inflammatoire pour faire diminuer le gonflement","Faire dormir l'enfant immédiatement pour qu'il se repose"],ans:1},
-  {q:"Quelle condition est indispensable pour qu'un traitement médical soit administré à un enfant à la crèche ?",opts:["Une ordonnance valide au nom de l'enfant précisant le dosage","L'avis favorable d'une autre professionnelle de la structure","L'autorisation verbale des parents par téléphone","Le médicament doit avoir été déjà entamé par les parents"],ans:0},
-  {q:"Comment doit être positionné un enfant qui saigne du nez (épistaxis) ?",opts:["Allongé sur le dos pour que le sang ne coule pas","Debout avec la tête penchée en arrière","Assis, avec la tête légèrement penchée en avant","Allongé sur le côté, en position latérale de sécurité"],ans:2},
-  {q:"Quel signe, lors d'une réaction allergique, est considéré comme un critère de gravité nécessitant l'appel du 15 ?",opts:["Des éternuements et le nez qui coule clair","L'apparition de quelques boutons sur le torse","Des démangeaisons sur le bras","Un œdème du visage ou une modification de la voix"],ans:3},
-  {q:"En cas de maladie contagieuse avec transmission par les selles (ex : gastro-entérite), quelle est la mesure prioritaire ?",opts:["Le lavage soigneux des mains, particulièrement après chaque change","Le port systématique d'un masque pour tout le personnel","Aérer les dortoirs pendant 15 minutes chaque heure","Nettoyer les sols de la structure avec un produit virucide une fois par jour"],ans:0},
-  {q:"Pour quelle raison l'utilisation du micro-ondes pour réchauffer le lait maternel est-elle interdite ?",opts:["Cela détruit les propriétés immunologiques du lait et crée des points de surchauffe","Cela nécessite de transvaser le lait dans un contenant spécifique","Cela modifie le goût du lait et les bébés le refusent","Cela prend trop de temps par rapport à un chauffe-biberon"],ans:0},
-  {q:"Quelle est la première action à effectuer en cas d'absorption d'un produit toxique par un enfant ?",opts:["Lui donner du lait ou de l'eau à boire pour diluer le produit","Rassurer l'enfant, surveiller son état et appeler le centre antipoison","Appeler les parents pour qu'ils décident de la marche à suivre","Faire vomir l'enfant immédiatement"],ans:1},
-  {q:"Quelle est la règle concernant le port du vernis à ongles pour le personnel en crèche ?",opts:["Il est strictement interdit pour des raisons d'hygiène","Il est uniquement autorisé si les ongles sont recouverts de gants","Il est toléré, mais la Direction peut demander de le rectifier","Il est autorisé sans aucune restriction"],ans:2},
-  {q:"Pendant combien de temps faut-il se savonner les mains et les poignets lors d'un lavage des mains ?",opts:["Jusqu'à ce que les mains semblent propres visuellement","Le temps nécessaire pour chanter 'Joyeux anniversaire' une fois","En comptant jusqu'à 20","En comptant jusqu'à 10"],ans:2},
-  {q:"Quelle est la durée de conservation réglementaire pour les plats témoins préparés en crèche ?",opts:["3 jours au réfrigérateur","24 heures au congélateur","5 jours au réfrigérateur entre 0°C et 3°C","7 jours au réfrigérateur"],ans:2},
-  {q:"Quelle est la température maximale acceptable pour un réfrigérateur de la crèche ?",opts:["Maximum +8°C","Entre 0°C et +3°C","Maximum +6°C","Inférieure à +4°C"],ans:2},
-  {q:"Quelle méthode est strictement interdite pour réchauffer le lait maternel à la crèche ?",opts:["Le chauffe-biberon","Le four à micro-ondes","Le passage sous l'eau chaude du robinet","Le bain-marie"],ans:1},
-  {q:"Lequel des motifs suivants justifie le refus par la crèche d'un panier repas apporté par les parents ?",opts:["Le sac de transport n'est pas isotherme","Le repas contient un yaourt aux fruits","La vaisselle personnelle de l'enfant n'est pas fournie","Le repas est composé de produits frais"],ans:0},
-  {q:"À quelle fréquence les jouets en plastique doivent-ils être lavés en période de gastro-entérite ou d'épidémie ?",opts:["Après chaque proposition de l'univers ludique","Une fois par semaine, quelle que soit la situation","Tous les jours, le soir","Uniquement lorsqu'ils présentent une souillure visible"],ans:0},
-  {q:"Quelle pratique de nettoyage des sols est formellement interdite dans les crèches ?",opts:["L'utilisation de l'aspirateur","Le lavage à plat avec un bandeau de sol","Le balayage humide","Le balayage à sec"],ans:3},
-  {q:"Si un gâteau est préparé à la crèche, comment l'échantillon témoin doit-il être conservé ?",opts:["100g conservés 5 jours au réfrigérateur","100g conservés 7 jours au réfrigérateur","L'étiquetage des ingrédients suffit, pas besoin d'échantillon","Aucun échantillon n'est requis car c'est une activité ponctuelle"],ans:0},
-  {q:"Quelle est la température minimale à cœur que doivent atteindre les plats livrés lors de la remise en température ?",opts:["+70°C","+120°C","+63°C","+45°C"],ans:2},
-  {q:"Une fois qu'un biberon de lait en poudre a été réchauffé, combien de temps peut-il être conservé ?",opts:["30 minutes","Jusqu'au départ de l'enfant le soir","2 heures","1 heure"],ans:0},
-  {q:"À quelle température doit être lavée la machine contenant le linge des changes ?",opts:["À 60°C avec une lessive désinfectante","À 40°C avec une lessive désinfectante","À froid, pour préserver les textiles","À 90°C pour une stérilisation complète"],ans:0},
-  {q:"Dans quel cas l'utilisation d'une solution hydro-alcoolique (SHA) est-elle une alternative valide au lavage des mains ?",opts:["À condition que les mains n'aient pas été souillées","Uniquement si l'enfant n'est pas malade","À n'importe quel moment pour gagner du temps","Seulement après avoir retiré des gants"],ans:0},
-  {q:"Pour quel type de produit n'est-il pas nécessaire de conserver un plat témoin ?",opts:["Les yaourts industriels en pots individuels","Les purées pour bébés de moins de 6 mois","La viande hachée intégrée dans un plat","Le fromage blanc servi en vrac"],ans:0},
-  {q:"À quelle fréquence le protocole de désinfection/détartrage au vinaigre du chauffe-biberon doit-il être effectué ?",opts:["Une fois par mois","Une fois par semaine","Quotidiennement","Uniquement lorsque du tartre est visible"],ans:1},
-  {q:"En cas de visite de la PMI, si le référent technique n'est pas présent, quelle est la procédure ?",opts:["Prévenir immédiatement la gestionnaire par téléphone ET le coordinateur pédagogique","Ne pas autoriser l'accès de la crèche","Prendre les coordonnées de la personne et lui demander de revenir","Prévenir uniquement votre coordinateur pédagogique par téléphone"],ans:0},
-  {q:"Lors d'une administration de paracétamol à la crèche, quelle est la durée minimale entre deux prises ?",opts:["6 heures","4 heures","2 heures","8 heures"],ans:1},
-  {q:"Si un enfant dort au moment du repas, quelle procédure doit être suivie pour son plat ?",multi:true,opts:["Jeter systématiquement le plat et utiliser un plat de secours","Laisser le plat au réfrigérateur, puis réchauffage au chauffe-plat ou bain-marie à son réveil","Maintenir le plat au four à 70°C pendant une durée maximale de 2h","Laisser le plat à température ambiante sur le comptoir pour qu'il soit prêt"],ans:[1,2]},
-  {q:"Selon les protocoles de sortie, combien d'enfants au maximum peuvent être pris en charge par un adulte ?",opts:["5 enfants","14 enfants","6 enfants","12 enfants"],ans:0}
-];
-
-const letters=['A','B','C','D'];
-let state='start';
-let current=0;
-let answers=new Array(questions.length).fill(null);
-let revealed=new Array(questions.length).fill(false);
-let user={prenom:'',nom:'',creche:''};
-
-function isCorrect(i){
-  const q=questions[i],a=answers[i];
-  if(a===null||a===undefined)return false;
-  if(q.multi){
-    if(!Array.isArray(a)||a.length!==q.ans.length)return false;
-    return q.ans.every(x=>a.includes(x));
-  }
-  return a===q.ans;
-}
-function hasAnswer(i){
-  const a=answers[i];
-  return questions[i].multi?(Array.isArray(a)&&a.length>0):a!==null;
-}
-function getScore(){return questions.reduce((acc,_,i)=>isCorrect(i)?acc+1:acc,0)}
-
-function render(){
-  const app=document.getElementById('app');
-  if(state==='start') renderStart(app);
-  else if(state==='quiz') renderQuiz(app);
-  else renderResults(app);
-}
-
-function renderStart(app){
-  document.getElementById('header-chip').style.display='none';
-  const opts=CRECHES.map(c=>`<option value="${c}">${c}</option>`).join('');
-  app.innerHTML=`
-  <div class="start-screen">
-    <div class="start-logo-wrap"><img src="${document.querySelector('.header-logo').src}" alt="Koalakids"></div>
-    <h2>Protocoles & Sécurité</h2>
-    <p class="subtitle">Testez vos connaissances sur les protocoles Koalakids :<br>sécurité, hygiène, soins et gestion des urgences.</p>
-    <div class="start-meta">
-      <div class="start-meta-item"><div class="dot"></div>40 questions</div>
-      <div class="start-meta-item"><div class="dot"></div>4 choix par question</div>
-      <div class="start-meta-item"><div class="dot"></div>Corrigé immédiat</div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Prénom</label>
-        <input class="form-input" id="inp-prenom" type="text" placeholder="ex : Marie" autocomplete="given-name">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Nom</label>
-        <input class="form-input" id="inp-nom" type="text" placeholder="ex : Dupont" autocomplete="family-name">
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Crèche</label>
-      <select class="form-select" id="inp-creche"><option value="">-- Choisir ma crèche --</option>${opts}</select>
-    </div>
-    <div style="margin-top:1.5rem">
-      <button class="btn purple" style="font-size:15px;padding:12px 36px" onclick="startQuiz()">Commencer le quiz →</button>
-    </div>
-    <p style="font-size:12px;color:var(--text-light);margin-top:1rem">Vos résultats seront enregistrés automatiquement.</p>
-  </div>`;
-}
-
-function renderQuiz(app){
-  const q=questions[current];
-  const isAnswered=revealed[current];
-  const isLast=current===questions.length-1;
-  const s=getScore();
-  const chip=document.getElementById('header-chip');
-  chip.style.display='block';
-  const done=revealed.filter(Boolean).length;
-  chip.textContent=done>0?`${s} / ${done} ✓`:`${user.prenom}`;
-
-  const isMulti=!!q.multi;
-  const sel=isMulti?(Array.isArray(answers[current])?answers[current]:[]):answers[current];
-  const optsHtml=q.opts.map((o,i)=>{
-    let cls='option';
-    const picked=isMulti?sel.includes(i):sel===i;
-    const good=isMulti?q.ans.includes(i):i===q.ans;
-    if(isAnswered){cls+=' disabled';if(good)cls+=' correct';else if(picked)cls+=' wrong';}
-    else if(picked)cls+=' selected';
-    return`<div class="${cls}" onclick="choose(${i})"><div class="option-letter">${letters[i]}</div><div class="option-text">${o}</div></div>`;
-  }).join('');
-
-  let fb='';
-  if(isAnswered){
-    const ok=isCorrect(current);
-    const good=isMulti?q.ans.map(x=>q.opts[x]).join(' — '):q.opts[q.ans];
-    const lbl=isMulti?'Les bonnes réponses sont':'La bonne réponse est';
-    fb=`<div class="feedback show ${ok?'ok':'ko'}"><span>${ok?'✓':'✗'}</span><span>${ok?'Bonne réponse !':'Mauvaise réponse — '+lbl+' : <strong>'+good+'</strong>'}</span></div>`;
-  }
-
-  const btnLabel=isAnswered?(isLast?'Voir mes résultats →':'Suivant →'):'Valider';
-  const btnDisabled=(!isAnswered&&!hasAnswer(current))?'disabled':'';
-
-  app.innerHTML=`
-  <div class="progress-wrap">
-    <div class="progress-meta">
-      <span class="progress-label">Question ${current+1} sur ${questions.length}</span>
-      <span class="progress-count">${Math.round((current+1)/questions.length*100)}%</span>
-    </div>
-    <div class="progress-bar"><div class="progress-fill" style="width:${(current+1)/questions.length*100}%"></div></div>
-  </div>
-  <div class="question-card">
-    <div class="q-badge">Question ${current+1}</div>
-    ${isMulti?'<div class="q-badge" style="background:var(--purple-light);color:var(--purple);border-color:rgba(74,63,159,.2);margin-left:6px">Plusieurs réponses</div>':''}
-    <div class="q-text">${q.q}</div>
-    <div class="options">${optsHtml}</div>
-    ${fb}
-  </div>
-  <div class="nav">
-    <button class="btn" onclick="navigate(-1)" ${current===0?'disabled':''}>← Précédent</button>
-    <span class="pager">${current+1} / ${questions.length}</span>
-    <button class="btn primary" onclick="nextAction()" ${btnDisabled}>${btnLabel}</button>
-  </div>`;
-}
-
-function renderResults(app){
-  const score=getScore();
-  const pct=Math.round(score/questions.length*100);
-  const wrong=questions.length-score;
-  let icon,mention,col;
-  if(pct>=80){icon='🎉';mention='Excellent !';col='var(--success-text)'}
-  else if(pct>=60){icon='👍';mention='Bien !';col='var(--purple)'}
-  else{icon='📚';mention='À retravailler';col='var(--danger-text)'}
-  document.getElementById('header-chip').style.display='none';
-  const now=new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  app.innerHTML=`
-  <div class="results">
-    <div class="result-icon">${icon}</div>
-    <div class="result-score">${score}</div>
-    <div class="result-total">sur ${questions.length} questions</div>
-    <div class="result-mention" style="color:${col}">${mention}</div>
-    <div class="result-user-recap">
-      <strong>${user.prenom} ${user.nom}</strong>
-      ${user.creche} · ${now}
-    </div>
-    <div class="result-grid">
-      <div class="result-stat"><div class="result-stat-val" style="color:var(--success-text)">${score}</div><div class="result-stat-label">Correctes</div></div>
-      <div class="result-stat"><div class="result-stat-val" style="color:var(--danger-text)">${wrong}</div><div class="result-stat-label">Incorrectes</div></div>
-      <div class="result-stat"><div class="result-stat-val" style="color:var(--orange)">${pct}%</div><div class="result-stat-label">Score</div></div>
-    </div>
-    <div id="save-status" class="save-status">Enregistrement en cours…</div>
-    <div class="result-actions">
-      <button class="btn purple" onclick="restartQuiz()">Recommencer</button>
-      <button class="btn" onclick="reviewErrors()" ${wrong===0?'disabled':''}>Revoir les erreurs (${wrong})</button>
-    </div>
-  </div>`;
-  saveResults(score,pct,now);
-}
-
-function saveResults(score,pct,dateStr){
-  const payload={
-    prenom:user.prenom,
-    nom:user.nom,
-    creche:user.creche,
-    score:score,
-    total:questions.length,
-    pourcentage:pct,
-    date:dateStr
-  };
-  if(!GOOGLE_SCRIPT_URL||GOOGLE_SCRIPT_URL==='VOTRE_URL_ICI'){
-    document.getElementById('save-status').textContent='⚠ URL Google Script non configurée';
-    document.getElementById('save-status').className='save-status err';
-    return;
-  }
-  fetch(GOOGLE_SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)})
-    .then(r=>{
-      const el=document.getElementById('save-status');
-      if(el){el.textContent='✓ Résultat enregistré';el.className='save-status ok'}
-    })
-    .catch(()=>{
-      const el=document.getElementById('save-status');
-      if(el){el.textContent='⚠ Erreur d\'enregistrement — résultat non sauvegardé';el.className='save-status err'}
-    });
-}
-
-function choose(i){
-  if(revealed[current])return;
-  const q=questions[current];
-  if(q.multi){
-    let a=Array.isArray(answers[current])?answers[current].slice():[];
-    a.includes(i)?a=a.filter(x=>x!==i):a.push(i);
-    answers[current]=a.length?a.sort():null;
-  }else answers[current]=i;
-  render();
-}
-function nextAction(){
-  if(!revealed[current]){if(!hasAnswer(current))return;revealed[current]=true;render();}
-  else if(current===questions.length-1){state='results';render();}
-  else{current++;render();}
-}
-function navigate(d){current=Math.max(0,Math.min(questions.length-1,current+d));render()}
-function startQuiz(){
-  const p=document.getElementById('inp-prenom').value.trim();
-  const n=document.getElementById('inp-nom').value.trim();
-  const c=document.getElementById('inp-creche').value;
-  if(!p||!n||!c){alert('Merci de renseigner votre prénom, nom et crèche avant de commencer.');return;}
-  user={prenom:p,nom:n,creche:c};
-  current=0;answers=new Array(questions.length).fill(null);revealed=new Array(questions.length).fill(false);
-  state='quiz';render();
-}
-function restartQuiz(){
-  current=0;answers=new Array(questions.length).fill(null);revealed=new Array(questions.length).fill(false);
-  state='start';render();
-}
-function reviewErrors(){
-  const errs=questions.reduce((a,_,i)=>{if(!isCorrect(i))a.push(i);return a;},[]);
-  if(!errs.length)return;
-  current=errs[0];revealed[current]=false;answers[current]=null;
-  state='quiz';render();
-}
-render();
-</script>
 </body>
 </html>
