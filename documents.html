@@ -35,6 +35,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 .cat-h h2{font-family:'Baloo 2',cursive;font-size:16px;flex:1;color:var(--violet)}
 .cat-n{font-size:12px;font-weight:700;color:var(--muted);background:#F1EFF7;padding:3px 9px;border-radius:20px}
 .cat-b{border-top:2px solid var(--line);padding:8px}
+.sub{border:2px solid var(--line);border-radius:14px;margin:6px 4px;overflow:hidden;background:#FCFBFE}
+.sub-h{display:flex;align-items:center;gap:9px;padding:10px 12px;cursor:pointer;user-select:none}
+.sub-h h3{font-family:'Baloo 2',cursive;font-size:14px;flex:1;color:#5B4FB8}
+.sub-b{border-top:1px solid var(--line);padding:6px}
+.sub.closed .sub-b{display:none}
+.sub-h .ti-chevron-down{transition:transform .2s;font-size:15px}
+.sub.closed .sub-h .ti-chevron-down{transform:rotate(-90deg)}
 .cat.closed .cat-b{display:none}
 .cat.closed .cat-h{border-bottom:none}
 .cat-h .ti-chevron-down{transition:transform .2s}
@@ -157,6 +164,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 <div class="ov" id="ovCat"><div class="modal" style="max-width:400px">
   <h2>Nouvelle catégorie</h2>
   <div class="f"><label>Nom</label><input id="cNom"></div>
+  <div class="f"><label>Catégorie parente</label><select id="cParent"></select></div>
   <div class="f"><label>Couleur</label><input type="color" id="cCoul" value="#4A3F9F" style="height:44px;padding:4px"></div>
   <div class="mf">
     <button class="btn btn-g" onclick="close_('ovCat')">Annuler</button>
@@ -264,43 +272,75 @@ function render(){
   const el=document.getElementById('list');
   if(!docs.length){el.innerHTML='<div class="empty"><i class="ti ti-folder-off"></i>Aucun document</div>';return;}
   let html='';
-  const groups=CATS.slice();
-  groups.push({id:null,nom:'Sans catégorie',couleur:'#A8A29E'});
-  groups.forEach(cat=>{
-    const items=docs.filter(d=>(d.categorie_id||null)===(cat.id||null));
-    if(!items.length)return;
+  const roots=CATS.filter(c=>!c.parent_id);
+  roots.push({id:null,nom:'Sans catégorie',couleur:'#A8A29E'});
+  roots.forEach(cat=>{
+    const kids=cat.id?CATS.filter(c=>c.parent_id===cat.id):[];
+    const own=docs.filter(d=>(d.categorie_id||null)===(cat.id||null));
+    const kidDocs=kids.map(k=>({cat:k,items:docs.filter(d=>d.categorie_id===k.id)})).filter(x=>x.items.length);
+    const total=own.length+kidDocs.reduce((n,x)=>n+x.items.length,0);
+    if(!total)return;
     const ckey=String(cat.id||'none');
     const open=q?true:OPEN_CATS.has(ckey);
     html+=`<div class="cat${open?'':' closed'}"><div class="cat-h" onclick="toggleCat(this,'${ckey}')">
       <span class="cat-dot" style="background:${esc(cat.couleur||'#4A3F9F')}"></span>
-      <h2>${esc(cat.nom)}</h2><span class="cat-n">${items.length}</span>
+      <h2>${esc(cat.nom)}</h2><span class="cat-n">${total}</span>
       <i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="cat-b">`;
-    items.forEach(d=>{
-      const fill=d.type==='remplissable';
-      const crName=d.creche_id?(CRECHES.find(c=>c.id===d.creche_id)||{}).name:null;
-      html+=`<div class="doc">
-        <div class="doc-i ${fill?'fill':'dl'}"><i class="ti ti-${fill?'forms':'file-download'}"></i></div>
-        <div class="doc-t"><h3>${esc(d.titre)}</h3>
-          <p>${esc(d.description||'')}${crName?' <span class="tag">'+esc(crName)+'</span>':' <span class="tag">Tous sites</span>'}</p></div>
-        <div class="doc-a">
-          ${fill?`<button class="iconbtn" title="Remplir" onclick="openFill('${d.id}')"><i class="ti ti-pencil"></i></button>
-                  <button class="iconbtn" title="Réponses" onclick="openReps('${d.id}')"><i class="ti ti-list"></i></button>`
-                :(d.fichier_url?`<a class="iconbtn" title="Télécharger" href="${esc(d.fichier_url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i></a>`:'')}
-          ${IS_ADMIN?`<button class="iconbtn" title="Modifier" onclick="openDoc('${d.id}')"><i class="ti ti-edit"></i></button>
-          <button class="iconbtn d" title="Supprimer" onclick="delDoc('${d.id}')"><i class="ti ti-trash"></i></button>`:''}
-        </div></div>`;
+    own.forEach(d=>{html+=docRowHtml(d);});
+    kidDocs.forEach(x=>{
+      const skey='sub_'+x.cat.id;
+      const sopen=q?true:OPEN_CATS.has(skey);
+      html+=`<div class="sub${sopen?'':' closed'}"><div class="sub-h" onclick="event.stopPropagation();toggleSub(this,'${skey}')">
+        <span class="cat-dot" style="width:9px;height:9px;background:${esc(x.cat.couleur||'#8E8AA8')}"></span>
+        <h3>${esc(x.cat.nom)}</h3><span class="cat-n">${x.items.length}</span>
+        <i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="sub-b">`;
+      x.items.forEach(d=>{html+=docRowHtml(d);});
+      html+='</div></div>';
     });
     html+='</div></div>';
   });
   el.innerHTML=html;
 }
 
+function docRowHtml(d){
+  const fill=d.type==='remplissable';
+  const crName=d.creche_id?(CRECHES.find(c=>c.id===d.creche_id)||{}).name:null;
+  return `<div class="doc">
+    <div class="doc-i ${fill?'fill':'dl'}"><i class="ti ti-${fill?'forms':'file-download'}"></i></div>
+    <div class="doc-t"><h3>${esc(d.titre)}</h3>
+      <p>${esc(d.description||'')}${crName?' <span class="tag">'+esc(crName)+'</span>':' <span class="tag">Tous sites</span>'}</p></div>
+    <div class="doc-a">
+      ${fill?`<button class="iconbtn" title="Remplir" onclick="openFill('${d.id}')"><i class="ti ti-pencil"></i></button>
+              <button class="iconbtn" title="Réponses" onclick="openReps('${d.id}')"><i class="ti ti-list"></i></button>`
+            :(d.fichier_url?`<a class="iconbtn" title="Télécharger" href="${esc(d.fichier_url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i></a>`:'')}
+      ${IS_ADMIN?`<button class="iconbtn" title="Modifier" onclick="openDoc('${d.id}')"><i class="ti ti-edit"></i></button>
+      <button class="iconbtn d" title="Supprimer" onclick="delDoc('${d.id}')"><i class="ti ti-trash"></i></button>`:''}
+    </div></div>`;
+}
+function toggleSub(h,key){
+  const c=h.parentNode;c.classList.toggle('closed');
+  if(c.classList.contains('closed'))OPEN_CATS.delete(key);else OPEN_CATS.add(key);
+}
+function catOptionsHtml(){
+  let o='';
+  CATS.filter(c=>!c.parent_id).forEach(c=>{
+    o+=`<option value="${c.id}">${esc(c.nom)}</option>`;
+    CATS.filter(k=>k.parent_id===c.id).forEach(k=>{o+=`<option value="${k.id}">\u00A0\u00A0\u00A0— ${esc(k.nom)}</option>`;});
+  });
+  return o;
+}
+
 /* ---------- CATEGORIE ---------- */
-function openCat(){document.getElementById('cNom').value='';document.getElementById('ovCat').classList.add('on');}
+function openCat(){
+  document.getElementById('cNom').value='';
+  document.getElementById('cParent').innerHTML='<option value="">— Aucune (catégorie principale) —</option>'
+    +CATS.filter(c=>!c.parent_id).map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join('');
+  document.getElementById('ovCat').classList.add('on');
+}
 async function saveCat(){
   const nom=document.getElementById('cNom').value.trim();
   if(!nom)return toast('Nom requis');
-  const{error}=await sb.from('doc_categories').insert({nom,couleur:document.getElementById('cCoul').value,ordre:CATS.length+1});
+  const{error}=await sb.from('doc_categories').insert({nom,parent_id:document.getElementById('cParent').value||null,couleur:document.getElementById('cCoul').value,ordre:CATS.length+1});
   if(error)return toast('Erreur : '+error.message);
   close_('ovCat');toast('Catégorie créée');loadAll();
 }
@@ -323,7 +363,7 @@ function addChamp(lab,typ){
 function openDoc(id){
   editDocId=id||null;
   document.getElementById('docTitle').textContent=id?'Modifier le document':'Nouveau document';
-  document.getElementById('dCat').innerHTML='<option value="">— Aucune —</option>'+CATS.map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join('');
+  document.getElementById('dCat').innerHTML='<option value="">— Aucune —</option>'+catOptionsHtml();
   const allowAll=!PROF||PROF.role==='direction';
   document.getElementById('dCreche').innerHTML=(allowAll?'<option value="">Toutes les crèches</option>':'')+CRECHES.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
   document.getElementById('champs').innerHTML='';
@@ -392,25 +432,29 @@ async function bulkImport(input){
   const crecheId=(PROF&&PROF.role==='referent'&&PROF.creche_id)?PROF.creche_id:null;
   let ok=0,ko=0;
   const catMap={};
-  CATS.forEach(c=>catMap[c.nom.toLowerCase()]=c.id);
+  CATS.forEach(c=>catMap[(c.parent_id||'root')+'/'+c.nom.toLowerCase()]=c.id);
+
+  async function ensureCat(nom,parentId){
+    const k=(parentId||'root')+'/'+nom.toLowerCase();
+    if(catMap[k])return catMap[k];
+    const{data,error}=await sb.from('doc_categories')
+      .insert({nom,parent_id:parentId,couleur:parentId?'#8E8AA8':'#4A3F9F',ordre:Object.keys(catMap).length+1})
+      .select().maybeSingle();
+    if(error)throw error;
+    catMap[k]=data.id;
+    return data.id;
+  }
 
   for(let i=0;i<files.length;i++){
     const f=files[i];
-    prog.textContent='Import '+(i+1)+'/'+files.length+'…';
+    prog.textContent='Import '+(i+1)+'/'+files.length+'\u2026';
     try{
       const parts=(f.webkitRelativePath||f.name).split('/');
-      const catNom=parts.length>2?parts[parts.length-2]:(parts.length===2?parts[0]:null);
       let catId=null;
-      if(catNom){
-        const k=catNom.toLowerCase();
-        if(!catMap[k]){
-          const{data,error}=await sb.from('doc_categories')
-            .insert({nom:catNom,couleur:'#4A3F9F',ordre:Object.keys(catMap).length+1})
-            .select().maybeSingle();
-          if(error)throw error;
-          catMap[k]=data.id;
-        }
-        catId=catMap[k];
+      if(parts.length>=2){
+        const rootId=await ensureCat(parts[0],null);
+        catId=rootId;
+        if(parts.length>=3)catId=await ensureCat(parts[parts.length-2],rootId);
       }
       const path='documents/'+Date.now()+'_'+i+'_'+slug(f.name);
       const{error:ue}=await sb.storage.from('assets').upload(path,f,{upsert:true});
