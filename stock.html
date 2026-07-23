@@ -920,9 +920,47 @@ body.is-fullscreen .sidebar-trigger {
   .search-box { min-width: 180px; }
 }
 
+/* ── Ecran de connexion (stock pedagogique) ── */
+#sk-login-overlay{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;background:linear-gradient(135deg,#2A2460 0%,#3D3580 50%,#F47920 100%)}
+.sk-login-box{background:#fff;border-radius:20px;padding:2.5rem 2rem;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+.sk-login-logo{text-align:center;margin-bottom:1.5rem;min-height:8px}
+.sk-login-logo img{height:60px;mix-blend-mode:multiply}
+.sk-login-title{font-size:20px;font-weight:800;color:#2A2460;text-align:center;margin-bottom:6px}
+.sk-login-sub{font-size:13px;color:#6B7280;text-align:center;margin-bottom:1.5rem}
+.sk-login-err{background:#FEE2E2;color:#B91C1C;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:1rem;display:none}
+.sk-fg{margin-bottom:14px}
+.sk-flabel{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}
+.sk-finput{width:100%;padding:11px 12px;border:1px solid #D1D5DB;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box}
+.sk-finput:focus{outline:none;border-color:#2A2460}
+.sk-login-btn{width:100%;padding:12px;background:#2A2460;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;margin-top:0.5rem}
+.sk-login-btn:disabled{opacity:0.6;cursor:not-allowed}
+body.sk-locked{overflow:hidden}
+
 </style>
 </head>
 <body>
+
+<div id="sk-login-overlay">
+  <div class="sk-login-box">
+    <div class="sk-login-logo"><img id="sk-login-logo" src="data:image/png;base64,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" alt="Koala Kids"/></div>
+    <div class="sk-login-sub">Stock pedagogique</div>
+    <div class="sk-login-err" id="sk-login-err"></div>
+    <form id="sk-login-form" autocomplete="on" onsubmit="event.preventDefault();skDoLogin();">
+      <div class="sk-fg">
+        <label class="sk-flabel">Email</label>
+        <input class="sk-finput" id="sk-login-email" type="email" name="email" placeholder="votre@email.fr" autocomplete="username" required/>
+      </div>
+      <div class="sk-fg">
+        <label class="sk-flabel">Mot de passe</label>
+        <div style="position:relative">
+          <input class="sk-finput" id="sk-login-pwd" type="password" name="password" placeholder="........" autocomplete="current-password" style="padding-right:38px" required/>
+          <button type="button" onclick="skTogglePwd(this)" tabindex="-1" aria-label="Afficher le mot de passe" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#999;padding:4px;font-size:15px">&#128065;</button>
+        </div>
+      </div>
+      <button type="submit" class="sk-login-btn" id="sk-login-btn">Se connecter</button>
+    </form>
+  </div>
+</div>
 
 <div class="offline-badge" id="offlineBadge">📵 Hors ligne</div>
 
@@ -4741,11 +4779,18 @@ async function removeArticlePhoto(id) {
 
 const SUPA_URL = 'https://juyrceadazrovlitxceb.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug';
+// Jeton de la session utilisateur : renseigne apres connexion (cf. skDoLogin).
+// Tant qu'il est nul les requetes partent avec la cle anon et sont bloquees par RLS.
+let SK_TOKEN = null;
+function skAuthToken(){ return SK_TOKEN || SUPA_KEY; }
+
+// SUPA_HEADERS reste un objet mais ses valeurs sont recalculees a chaque lecture,
+// ce qui evite de toucher aux 3 spreads `...SUPA_HEADERS` existants.
 const SUPA_HEADERS = {
   'Content-Type': 'application/json',
-  'apikey': SUPA_KEY,
-  'Authorization': 'Bearer ' + SUPA_KEY,
   'Prefer': 'return=minimal',
+  get apikey(){ return SUPA_KEY; },
+  get Authorization(){ return 'Bearer ' + skAuthToken(); },
 };
 
 // ── UPLOAD PHOTO VERS SUPABASE STORAGE ──────────────────────────────────
@@ -4758,7 +4803,7 @@ async function uploadPhotoToStorage(file, idHint, folder = 'articles-photos') {
   const res = await fetch(`${SUPA_URL}/storage/v1/object/${PHOTO_BUCKET}/${path}`, {
     method: 'POST',
     headers: {
-      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Authorization': 'Bearer ' + skAuthToken(),
       'apikey': SUPA_KEY,
       'Content-Type': file.type || 'image/jpeg',
       'x-upsert': 'true',
@@ -4902,7 +4947,7 @@ async function sbGet(table, params='') {
     query = params + '&order=id.asc';
   }
   const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${query}`, {
-    headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY }
+    headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + skAuthToken() }
   });
   if (!r.ok) {
     const body = await r.text().catch(() => '');
@@ -5590,7 +5635,8 @@ document.addEventListener('click', (e) => {
     }
   }
 });
-// Lancer l'app
+// Lancer l'app — differe : appele par skDoLogin() une fois la session ouverte.
+function skBootApp() {
 try {
   init();
 } catch(e) {
@@ -5603,6 +5649,7 @@ try {
     // App fonctionnelle malgré l'erreur mineure — silencieux
     console.warn('[Init] Erreur mineure ignorée:', e.message);
   }
+}
 }
 // ─── LOGO SUPABASE ────────────────────────────────────────────────────────
 const LOGO_SUPABASE_URL = 'https://juyrceadazrovlitxceb.supabase.co';
@@ -5655,8 +5702,82 @@ async function uploadLogo(file) {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+// ─── AUTHENTIFICATION (stock pedagogique) ────────────────────────────────
+// Roles autorises : direction, referent, employe. Les comptes kiosque sont refuses.
+const SK_ROLES_OK = ['direction', 'referent', 'employe'];
+let SK_USER = null, SK_PROFILE = null;
+
+function skTogglePwd(btn) {
+  const i = document.getElementById('sk-login-pwd');
+  i.type = (i.type === 'password') ? 'text' : 'password';
+}
+
+function skLoginError(msg) {
+  const e = document.getElementById('sk-login-err');
+  e.textContent = msg; e.style.display = 'block';
+  const b = document.getElementById('sk-login-btn');
+  b.disabled = false; b.textContent = 'Se connecter';
+}
+
+async function skDoLogin() {
+  const email = document.getElementById('sk-login-email').value.trim();
+  const pwd = document.getElementById('sk-login-pwd').value;
+  const btn = document.getElementById('sk-login-btn');
+  document.getElementById('sk-login-err').style.display = 'none';
+  if (!email || !pwd) { skLoginError('Email et mot de passe requis.'); return; }
+  btn.disabled = true; btn.textContent = 'Connexion...';
+
+  let session;
+  try {
+    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+      body: JSON.stringify({ email, password: pwd }),
+    });
+    session = await r.json();
+    if (!r.ok || !session.access_token) {
+      const m = (session && (session.error_description || session.msg || session.message)) || '';
+      skLoginError(m.toLowerCase().includes('confirm')
+        ? 'Compte non confirme — contactez la direction.'
+        : 'Identifiants incorrects.');
+      return;
+    }
+  } catch (e) {
+    skLoginError('Erreur reseau. Reessayez.');
+    return;
+  }
+
+  // Verification du role avant d'ouvrir l'application
+  try {
+    const uid = session.user && session.user.id;
+    const pr = await fetch(
+      `${SUPA_URL}/rest/v1/referents?user_id=eq.${uid}&select=id,name,role,creche_id`,
+      { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + session.access_token } }
+    );
+    const rows = await pr.json();
+    SK_PROFILE = Array.isArray(rows) && rows.length ? rows[0] : null;
+    if (!SK_PROFILE || SK_ROLES_OK.indexOf(SK_PROFILE.role) === -1) {
+      skLoginError('Acces non autorise pour ce compte.');
+      return;
+    }
+  } catch (e) {
+    skLoginError('Profil introuvable. Contactez la direction.');
+    return;
+  }
+
+  SK_TOKEN = session.access_token;
+  SK_USER = session.user;
+  const ov = document.getElementById('sk-login-overlay');
+  if (ov) ov.remove();
+  document.body.classList.remove('sk-locked');
+  skBootApp();
   loadLogo();
+}
+
+// Verrouillage immediat : aucune donnee n'est chargee avant connexion.
+document.body.classList.add('sk-locked');
+
+document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('logo-input');
   if (input) input.addEventListener('change', (e) => {
     const file = e.target.files[0];
