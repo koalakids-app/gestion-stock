@@ -96,7 +96,7 @@ async function send(){
   const b=document.getElementById('bv');b.disabled=true;b.textContent='Envoi…';
   const png=document.getElementById('c').toDataURL('image/png');
   const{error}=await sb.from('signatures_pending')
-    .update({signature_data:png,signed_at:new Date().toISOString()})
+    .update({signature_data:png,signed_at:new Date().toISOString()},{returning:'minimal'})
     .eq('token',TOKEN);
   if(error){
     b.disabled=false;b.textContent='Valider';
