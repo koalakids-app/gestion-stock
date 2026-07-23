@@ -3800,8 +3800,10 @@ function renderDashboardToday(){
     '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-planning"><div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span><select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning()"><option value="">-- Crèche --</option></select></div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Sélectionnez une crèche</div></div>'+
     '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
-    '<div class="dash-card" id="dash-today-mapresence"><div class="dash-card-title"><i class="ti ti-map-pin"></i> Ma présence du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
+    '<div class="dash-card" id="dash-today-mapresence"><div class="dash-card-title"><i class="ti ti-map-pin"></i> Ma présence du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
+    '<div class="dash-card" id="dash-today-afaire"><div class="dash-card-title"><i class="ti ti-checklist"></i> À faire du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
 
+  loadDashboardAfaire(t);
   loadDashboardMaPresence(t);
   loadDashboardPresences(t);
   loadDashboardRemplacantes(t);
@@ -3813,6 +3815,47 @@ function renderDashboardToday(){
     if(planSel.value)loadDashboardPlanning();
   }
 }
+// À faire du jour (direction) — tâches personnelles issues de `taches_afaire`
+async function loadDashboardAfaire(dateStr){
+  const box=document.getElementById('dash-today-afaire');if(!box)return;
+  const title='<div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-checklist"></i> À faire du jour</span><button class="btn-sm" onclick="showMain(\'afaire\')" style="font-size:11px;padding:2px 8px">Ouvrir</button></div>';
+  let rows=[];
+  try{
+    const{data,error}=await sb.from('taches_afaire').select('*').eq('date_jour',dateStr);
+    if(error)throw error;
+    rows=data||[];
+  }catch(e){
+    console.warn('[AfaireDash]',e.message);
+    box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Erreur de chargement</div>';return;
+  }
+  // synchroniser le cache du module À faire
+  rows.forEach(r=>{const i=afCache.findIndex(x=>x.id===r.id);if(i>=0)afCache[i]=r;else afCache.push(r);});
+  if(!rows.length){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucune tâche ce jour</div>';return;}
+  const sorted=afSortTasks(rows);
+  const restants=rows.filter(t=>!t.fait).length;
+  let html=title;
+  html+='<div style="font-size:11px;color:var(--muted);padding:0 0 6px 2px">'+restants+' restante(s) sur '+rows.length+'</div>';
+  html+=sorted.map(t=>{
+    const meta=afTypeMeta(t.type);
+    const cr=afCrecheName(t.creche_id);
+    const urgent=t.priorite==='urgente'&&!t.fait;
+    const style=t.fait?'text-decoration:line-through;color:var(--muted)':'';
+    return'<div class="dash-list-item" style="cursor:pointer" onclick="dashAfaireToggle(\''+t.id+'\')">'
+      +'<span style="display:flex;align-items:center;gap:7px;'+style+'"><i class="ti ti-'+(t.fait?'square-check-filled':'square')+'" style="font-size:16px;color:'+(t.fait?'var(--koala)':'var(--muted)')+'"></i>'+(urgent?'🔴 ':'')+meta.icon+' '+escHtml(t.titre)+'</span>'
+      +(cr?'<span style="font-size:11px;color:var(--muted)">'+escHtml(cr)+'</span>':'')
+    +'</div>';
+  }).join('');
+  box.innerHTML=html;
+}
+async function dashAfaireToggle(id){
+  const t=afCache.find(x=>x.id===id);if(!t)return;
+  const nv=!t.fait;
+  const{error}=await sb.from('taches_afaire').update({fait:nv}).eq('id',id);
+  if(error){showBanner('Erreur mise à jour.','error');return;}
+  t.fait=nv;
+  loadDashboardAfaire(dashSelectedDate||todayStr());
+}
+
 // Ma présence du jour (direction) — lue depuis le planning coordinateur (table `planning`)
 const DASH_MP_TYPE={presence:{emoji:'🏫',lbl:'Présence crèche'},absent:{emoji:'🚫',lbl:'Absent'},conge:{emoji:'🌴',lbl:'Congé'},formation:{emoji:'🎓',lbl:'Formation'},reunion:{emoji:'🗣️',lbl:'Réunion'},detachement:{emoji:'🔄',lbl:'Détachement'}};
 async function loadDashboardMaPresence(dateStr){
