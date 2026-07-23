@@ -35,6 +35,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 .cat-h h2{font-family:'Baloo 2',cursive;font-size:16px;flex:1;color:var(--violet)}
 .cat-n{font-size:12px;font-weight:700;color:var(--muted);background:#F1EFF7;padding:3px 9px;border-radius:20px}
 .cat-b{border-top:2px solid var(--line);padding:8px}
+.cat.closed .cat-b{display:none}
+.cat.closed .cat-h{border-bottom:none}
+.cat-h .ti-chevron-down{transition:transform .2s}
+.cat.closed .cat-h .ti-chevron-down{transform:rotate(-90deg)}
 .doc{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:14px}
 .doc:hover{background:#FAF8FD}
 .doc-i{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
@@ -69,19 +73,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 .sigbox .lbl{font-size:12px;font-weight:700;color:var(--violet);margin-bottom:6px}
 .sigbox .acts{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
 .sigbox img{width:100%;height:120px;object-fit:contain;background:#fff;border-radius:8px}
-.gev{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px}
-.gev-hd{display:flex;background:var(--violet);color:#fff;font-size:10.5px;font-weight:700;text-align:center;position:sticky;top:0;z-index:2}
-.gev-hd>div{padding:5px 3px}
-.gev-it{display:flex;border-top:1px solid var(--line);align-items:stretch}
-.gev-it:nth-child(even){background:var(--cream)}
-.gev-lab{flex:1 1 auto;min-width:0;padding:7px 8px;font-size:12px;line-height:1.35;display:flex;align-items:center}
-.gev-c{flex:0 0 34px;display:flex;align-items:center;justify-content:center;border-left:1px solid var(--line)}
-.gev-c input{width:auto;margin:0;accent-color:var(--orange);transform:scale(1.15)}
-.gev-a{flex:0 0 110px;border-left:1px solid var(--line);display:flex}
-.gev-a input{width:100%;border:0;background:transparent;font-size:11.5px;padding:4px 6px}
-.gev-a input:focus{outline:2px solid var(--orange);outline-offset:-2px;border-radius:6px}
-.gev-sep{flex:0 0 5px;border-left:2px solid var(--violet)}
-@media(max-width:720px){.gev-lab{font-size:11px}.gev-c{flex:0 0 27px}.gev-a{flex:0 0 78px}}
 #qrBox{text-align:center;padding:10px}
 #qrBox canvas,#qrBox img{margin:0 auto}
 .qrwait{font-size:13px;color:var(--muted);margin-top:12px}
@@ -251,6 +242,12 @@ async function loadAll(){
 }
 
 /* ---------- RENDER ---------- */
+const OPEN_CATS=new Set();
+function toggleCat(h,key){
+  const c=h.parentElement;
+  c.classList.toggle('closed');
+  if(c.classList.contains('closed'))OPEN_CATS.delete(key);else OPEN_CATS.add(key);
+}
 function render(){
   const q=document.getElementById('q').value.toLowerCase().trim();
   const ft=document.getElementById('fType').value;
@@ -269,7 +266,9 @@ function render(){
   groups.forEach(cat=>{
     const items=docs.filter(d=>(d.categorie_id||null)===(cat.id||null));
     if(!items.length)return;
-    html+=`<div class="cat"><div class="cat-h" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+    const ckey=String(cat.id||'none');
+    const open=q?true:OPEN_CATS.has(ckey);
+    html+=`<div class="cat${open?'':' closed'}"><div class="cat-h" onclick="toggleCat(this,'${ckey}')">
       <span class="cat-dot" style="background:${esc(cat.couleur||'#4A3F9F')}"></span>
       <h2>${esc(cat.nom)}</h2><span class="cat-n">${items.length}</span>
       <i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="cat-b">`;
@@ -440,14 +439,6 @@ async function saveFill(){
         const r=document.querySelector('input[name=ff_fonction]:checked');
         donnees.fonction=r?r.value:'';return;
       }
-      if(/^rt_(ref|coo)_s\d+i\d+$/.test(f)){
-        const r=document.querySelector('input[name=ff_'+f+']:checked');
-        donnees[f]=r?r.value:'';return;
-      }
-      if(/^gev_(sal|ref)_/.test(f)){
-        const r=document.querySelector('input[name=ff_'+f+']:checked');
-        donnees[f]=r?r.value:'';return;
-      }
       const el=document.getElementById('ff_'+f);
       if(el)donnees[f]=el.value;
     });
@@ -498,145 +489,7 @@ async function exportFillPdf(){
   doc.save(slug(fillDoc.titre)+'.pdf');
 }
 
-function exportRtPdf(doc){
-  const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
-  const pick=n=>{const r=document.querySelector('input[name=ff_'+n+']:checked');return r?r.value:'';};
-  const W=182;let y=20;
-  const need=h=>{if(y+h>280){doc.addPage();y=20;}};
-  doc.setFontSize(15);doc.setFont(undefined,'bold');
-  doc.text('ÉVALUATION RÉFÉRENT PÉDAGOGIQUE ET FAMILIAL',14,y);y+=9;
-  doc.setFontSize(9.5);doc.setFont(undefined,'normal');
-  doc.text('Nom : '+(g('rt_nom')||'—')+'   |   Structure : '+(g('rt_structure')||'—'),14,y);y+=5;
-  doc.text('Formation : '+(g('rt_formation')||'—')+'   |   Date : '
-    +(g('rt_date')?new Date(g('rt_date')).toLocaleDateString('fr-FR'):'—'),14,y);y+=9;
-
-  const CI=126,CA=[CI+2,CI+14,CI+26],CB=[CI+38,CI+50,CI+62];
-  const head=()=>{need(10);doc.setFillColor(74,63,159);doc.rect(14,y-4,W,7,'F');
-    doc.setTextColor(255);doc.setFontSize(7.5);doc.setFont(undefined,'bold');
-    doc.text('Item',16,y);doc.text('Référent',CI+4,y);doc.text('Coordinateur',CI+40,y);
-    doc.setTextColor(30);y+=7;};
-
-  RT_SECTIONS.forEach((s,si)=>{
-    need(14);doc.setFillColor(240,148,60);doc.rect(14,y-4,W,7,'F');
-    doc.setTextColor(255);doc.setFontSize(9);doc.setFont(undefined,'bold');
-    doc.text(s.titre.toUpperCase(),16,y);doc.setTextColor(30);y+=9;
-    head();
-    s.items.forEach((it,ii)=>{
-      const k='s'+si+'i'+ii;
-      doc.setFontSize(7.5);doc.setFont(undefined,'normal');
-      const lines=doc.splitTextToSize(it,108);
-      const h=Math.max(6,lines.length*3.4+2.5);
-      need(h+2);
-      doc.setDrawColor(215);doc.line(14,y-4,14+W,y-4);
-      doc.text(lines,16,y);
-      const rv=pick('rt_ref_'+k),cv=pick('rt_coo_'+k);
-      doc.setFontSize(7);
-      ['A','ECA','NA'].forEach((o,i)=>{
-        doc.text(o,CA[i],y);if(rv===o){doc.setFont(undefined,'bold');doc.text('X',CA[i]+0.5,y+3.4);doc.setFont(undefined,'normal');}
-        doc.text(o,CB[i],y);if(cv===o){doc.setFont(undefined,'bold');doc.text('X',CB[i]+0.5,y+3.4);doc.setFont(undefined,'normal');}
-      });
-      y+=h;
-    });
-    y+=5;
-  });
-
-  const blk=(t,val)=>{need(14);doc.setFillColor(74,63,159);doc.rect(14,y-4,W,7,'F');
-    doc.setTextColor(255);doc.setFontSize(9);doc.setFont(undefined,'bold');
-    doc.text(t.toUpperCase(),16,y);doc.setTextColor(30);y+=9;
-    doc.setFontSize(9);doc.setFont(undefined,'normal');
-    const l=doc.splitTextToSize(val||'—',W);need(l.length*4.6+4);doc.text(l,14,y);y+=l.length*4.6+7;};
-
-  blk('Commentaires',g('rt_commentaires'));
-
-  need(14);doc.setFillColor(74,63,159);doc.rect(14,y-4,W,7,'F');
-  doc.setTextColor(255);doc.setFontSize(9);doc.setFont(undefined,'bold');
-  doc.text('OBJECTIFS SMART',16,y);doc.setTextColor(30);y+=9;
-  [['Spécifiques','rt_smart_s'],['Mesurables','rt_smart_m'],['Atteignables','rt_smart_a'],
-   ['Réalistes','rt_smart_r'],['Temporellement définis','rt_smart_t']].forEach(([lab,id])=>{
-    const l=doc.splitTextToSize(g(id)||'—',W);
-    need(9+l.length*4.6);
-    doc.setFontSize(8.5);doc.setFont(undefined,'bold');doc.text(lab,14,y);y+=4.6;
-    doc.setFontSize(9);doc.setFont(undefined,'normal');doc.text(l,14,y);y+=l.length*4.6+4;
-  });
-
-  y+=4;need(46);
-  doc.setFontSize(9);doc.text('Date : '+(g('rt_sig_date')?new Date(g('rt_sig_date')).toLocaleDateString('fr-FR'):'—'),14,y);y+=6;
-  const put=(role,lab,x)=>{
-    doc.setFontSize(8.5);doc.setFont(undefined,'bold');doc.text(lab,x,y);
-    doc.setDrawColor(200);doc.rect(x,y+3,84,30);
-    if(SIGS[role]){try{doc.addImage(SIGS[role],'PNG',x+2,y+5,80,26);}catch(e){}}
-  };
-  put('responsable','Coordinateur',14);
-  put('salarie','Référent(e) technique',110);
-  doc.save('evaluation_rt_'+slug(g('rt_nom')||'')+'.pdf');
-}
-
-function exportGevPdf(doc){
-  const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
-  const pick=n=>{const r=document.querySelector('input[name=ff_'+n+']:checked');return r?r.value:'';};
-  const W=182;let y=20;
-  const need=h=>{if(y+h>280){doc.addPage();y=20;}};
-  doc.setFontSize(16);doc.setFont(undefined,'bold');
-  doc.text('GRILLE D\'ÉVALUATION SALARIÉ',14,y);y+=9;
-  doc.setFontSize(9.5);doc.setFont(undefined,'normal');
-  doc.text('Salarié : '+(g('ev_nom')||'—')+'   |   Crèche : '+(g('ev_creche')||'—'),14,y);y+=5;
-  doc.text('Fonction : '+(g('ev_fonction')||'—')+'   |   Référent : '+(g('ev_referent')||'—')
-    +'   |   Date : '+(g('ev_date')?new Date(g('ev_date')).toLocaleDateString('fr-FR'):'—'),14,y);y+=9;
-
-  const CI=112,CS=[CI+2,CI+14,CI+26],CR=[CI+40,CI+52,CI+64];
-  const head=()=>{need(10);doc.setFillColor(74,63,159);doc.rect(14,y-4,W,7,'F');
-    doc.setTextColor(255);doc.setFontSize(7.5);doc.setFont(undefined,'bold');
-    doc.text('Item',16,y);doc.text('Salarié',CI+4,y);doc.text('Référent',CI+42,y);
-    doc.text('Accompagnement',CI+72,y);doc.setTextColor(30);y+=7;};
-
-  GEV_SECTIONS.forEach((s,si)=>{
-    need(14);doc.setFillColor(240,148,60);doc.rect(14,y-4,W,7,'F');
-    doc.setTextColor(255);doc.setFontSize(9);doc.setFont(undefined,'bold');
-    doc.text(s.titre.toUpperCase(),16,y);doc.setTextColor(30);y+=9;
-    head();
-    s.items.forEach((it,ii)=>{
-      const k='s'+si+'i'+ii;
-      doc.setFontSize(7.5);doc.setFont(undefined,'normal');
-      const lines=doc.splitTextToSize(it,94);
-      const h=Math.max(6,lines.length*3.4+2.5);
-      need(h+2);
-      doc.setDrawColor(215);doc.line(14,y-4,14+W,y-4);
-      doc.text(lines,16,y);
-      const sv=pick('gev_sal_'+k),rv=pick('gev_ref_'+k);
-      doc.setFontSize(7);
-      ['A','ECA','NA'].forEach((o,i)=>{
-        doc.text(o,CS[i],y);if(sv===o){doc.setFont(undefined,'bold');doc.text('X',CS[i]+0.5,y+3.4);doc.setFont(undefined,'normal');}
-        doc.text(o,CR[i],y);if(rv===o){doc.setFont(undefined,'bold');doc.text('X',CR[i]+0.5,y+3.4);doc.setFont(undefined,'normal');}
-      });
-      const acc=(document.getElementById('ff_gev_acc_'+k)||{}).value||'';
-      if(acc)doc.text(doc.splitTextToSize(acc,42),CI+72,y);
-      y+=h;
-    });
-    y+=5;
-  });
-
-  need(14);doc.setFillColor(74,63,159);doc.rect(14,y-4,W,7,'F');
-  doc.setTextColor(255);doc.setFontSize(9);doc.setFont(undefined,'bold');
-  doc.text('SYNTHÈSE',16,y);doc.setTextColor(30);y+=9;
-  doc.setFontSize(9);doc.setFont(undefined,'normal');
-  const sy=doc.splitTextToSize(g('ev_synthese')||'—',W);
-  need(sy.length*4.6+4);doc.text(sy,14,y);y+=sy.length*4.6+8;
-
-  need(46);
-  doc.setFontSize(9);doc.text('Date : '+(g('ev_sig_date')?new Date(g('ev_sig_date')).toLocaleDateString('fr-FR'):'—'),14,y);y+=6;
-  const put=(role,lab,x)=>{
-    doc.setFontSize(8.5);doc.setFont(undefined,'bold');doc.text(lab,x,y);
-    doc.setDrawColor(200);doc.rect(x,y+3,84,30);
-    if(SIGS[role]){try{doc.addImage(SIGS[role],'PNG',x+2,y+5,80,26);}catch(e){}}
-  };
-  put('responsable','Référent(e) / Direction',14);
-  put('salarie','Salarié(e)',110);
-  doc.save('grille_evaluation_'+slug(g('ev_nom')||'')+'.pdf');
-}
-
 function exportTplPdf(doc,tpl){
-  if(fillDoc.template_key==='grille_evaluation')return exportGevPdf(doc);
-  if(fillDoc.template_key==='objectifs_rt')return exportRtPdf(doc);
   const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
   const rf=()=>{const r=document.querySelector('input[name=ff_fonction]:checked');return r?r.value:'';};
   const W=182;let y=20;
@@ -690,118 +543,7 @@ function exportTplPdf(doc,tpl){
 const SIGS={};           // {role: dataURL}
 let qrTimer=null,qrToken=null,QR_URL='';
 
-const GEV_SECTIONS=[{"titre": "Le respect des enfants", "items": ["Parle aux enfants avec un langage et un ton approprié, doux, calme et rassurant", "N’indique aux enfants que ce qu’ils peuvent comprendre (consignes ou demandes)", "N’utilise pas de diminutifs sans l’accord express des parents", "Donne des marques d’affection à tous les enfants", "Prend les enfants qui le demandent dans les bras pour des câlins ou du portage", "Demande toujours à l’enfant son accord avant de lui faire un soin (change, aide au repas, installation à table, attache du bavoir, habillage/déshabillage, sortie extérieure, etc.)", "Parle aux enfants de ce qui les concerne", "A des gestes doux et respectueux du corps de l’enfant", "Parle le plus souvent à l’enfant et non de l’enfant aux autres", "Ne presse pas les enfants et prend le temps avec chacun d’eux", "Ne fait pas de changes de couches systématiques mais seulement lorsque l’enfant en a besoin", "Ne laisse pas un enfant qui ne peut pas dormir dans son lit s’il veut se lever", "Ne force pas un enfant à manger mais lui propose de goûter et respecte son choix", "N’élève pas la voix sur les enfants", "Ne critique pas l’enfant mais ce qu’il fait si cela est défendu", "Accepte les émotions de l’enfant et l’aide à trouver des comportements adaptés pour les exprimer", "Installe chaque enfant dans une position en accord avec son développement moteur", "Repère les éventuels mal-être de chaque enfant pour trouver des aides ou des solutions", "Ne laisse jamais un enfant seul dans une salle ou sur un tapis pour un tout-petit", "Aide les enfants à s’endormir par différentes pratiques adaptées et respectueuse de son corps (présence, bercement, caresses, berceuses, choix de lit, portage)", "Valorise la parole et le choix des parents auprès de l’enfant", "Console toujours un enfant qui pleure même s’il a fait un acte défendu", "Prévoit tout son matériel avant de s’occuper d’un enfant pour ne pas le laisser seul après l’avoir installé"]}, {"titre": "Le respect des parents", "items": ["Accueille les parents et toute personne venant à la crèche avec le sourire et la bienvenue", "Laisse les parents venir rester et revenir autant qu’ils le souhaitent sans être dérangé par leur présence", "Laisse les parents aller dans toute la crèche sauf la cuisine et la salle du personnel", "Accepte les remarques des parents et ouvre la discussion si désaccord", "Demande l’avis des parents pour tout ce qui concerne les choix individuels au niveau de la vie de l’enfant : gigoteuse, type de lit, temps de sommeil, alimentation, objet transitionnel, soins d’hygiène,", "Accueille le parent avec du langage et une position ouverte pour qu’il se sente attendu et se permette de venir", "Engage la conversation avec les parents au sujet de son enfant de manière positive et intéressée", "Partage avec le parent les observations des expériences d’apprentissage de l’enfant", "Répond aux demandes spécifiques des parents de manière immédiate ou différée en fonction de la demande", "Indique au parent de manière claire et agréable s’il n’est pas disponible car occupée avec les enfants et l’invite à se reparler à un autre moment", "Utilise un langage adapté et respectueux avec les parents"]}, {"titre": "Le respect des collègues de travail", "items": ["Ne dit pas de mal de ses collègues et exprime ses éventuels désaccords professionnels dans les moments impartis", "Accompagne un collègue qui pourrait être en difficulté avec un parent", "Arrête un collègue s’il ne respecte pas un enfant et lui propose de prendre une pause", "Prévient la RT si des gestes ou des paroles inadaptés ou malheureux sont adressés par un collègue à un enfant ou un parent ou un collègue", "Ne dénigre pas les stagiaires quel que soit leur comportement", "Intègre les stagiaires qui le souhaitent dans les activités de la crèche et leur propose de les accompagner selon leurs demandes d’apprentissages"]}, {"titre": "Le respect du règlement intérieur", "items": ["Laisse son téléphone portable personnel dans les vestiaires", "Ne participe ni n’engage de discussions d’ordre privée en présence des enfants", "Ne prend pas de pause en dehors de celle prévue par son horaire", "S’habille correctement avec une tenue en rapport avec son métier", "Ne mange pas devant les enfants si ce n’est pas un repas commun partagé avec eux", "Ne prend pas de boisson chaude en présence des enfants", "Respecte l’ensemble de ses horaires de travail y compris les modifications données par la RT", "Demande à la RT l’acceptation préalable de toute modification souhaitée d’horaire", "Présente un justificatif officiel à l’ensemble de ses absences", "Accomplie les heures supplémentaires demandées par la direction", "Ne dénigre ni les directives données par les supérieurs hiérarchiques, ni les personnes elles-mêmes", "Parle avec respect de et à l’ensemble de ses collègues et supérieurs", "Accomplit les tâches qui lui sont demandées en rapport avec ses fonctions"]}, {"titre": "Le respect du projet pédagogique", "items": ["Reste au sol au tapis des bébés avec un univers ludique et ne se lève pas s’il n’est pas remplacé (sauf urgence)", "Se positionne auprès des enfants pour les autres univers et ne se déplace que s’il y a une obligation", "Rassemble les objets ludiques de l’univers régulièrement et les met en scène", "Enrichis l’univers ludique au bon moment (désaffection des enfants, ouverture d’un autre univers)", "Ne range pas l’univers ludique trop tôt et vérifie qu’au moins un univers est toujours à disposition des enfants", "Accompagne les enfants en s’intéressant à ce qu’ils font et en le verbalisant de manière positive", "Ne juge pas les actions des enfants en bien ou en mal", "N’empêche pas les enfants de jouer tant qu’ils ne se mettent pas en danger", "Ne montre pas aux enfants ce qu’ils doivent faire", "Laisse le temps aux enfants de découvrir toutes les possibilités de jeux sans ingérence", "Prend du plaisir à être avec les enfants et à soutenir leurs actions", "Observe les actions des enfants et les note en expériences d’apprentissage", "Intervient lorsque les enfants sont en difficulté (agressions, empêchements)", "Imite les jeux des enfants ou répond à leurs invitations de jeux", "Propose des idées de nouveaux univers ludiques", "Donne toujours des choix aux enfants (manger ou jouer, dormir ou jouer, dans des limites de temps, sortir ou rester à l’intérieur)", "Ne gère pas les enfants en groupe mais s’occupe de chacun de manière individuelle"]}];
-const GEV_KEYS=(()=>{const a=[];GEV_SECTIONS.forEach((s,si)=>s.items.forEach((_,ii)=>{const k='s'+si+'i'+ii;a.push('gev_sal_'+k,'gev_ref_'+k,'gev_acc_'+k);}));return a;})();
-
-const RT_SECTIONS=[{"titre": "Accompagnement familles", "items": ["Identifié en tant que RT par les familles", "Accompagnement à la parentalité", "Communications", "Affichages", "Le plus apporté par sa formation initiale"]}, {"titre": "Accompagnement enfants", "items": ["Accompagnement des enfants dans leur développement", "Être personne phare", "Prise en considération des besoins de l'enfant", "Le plus apporté par sa formation initiale"]}, {"titre": "Accompagnement équipe", "items": ["Rôle de chef d'orchestre", "Animer une réunion", "Être attentif à l'implication de chacun dans le quotidien", "Accompagnement de l'équipe dans la mise en place du projet pédagogique", "Résolution de conflit", "Impartialité", "Source de connaissances( proposition d'articles, diffusions de sujets en lien avec le développement de l'enfant...)", "Le plus apporté par la formation initiale"]}, {"titre": "Autonomie", "items": ["Confiance en soi", "Prise d'initiative", "Capacité à résoudre une problématique seul ou savoir vers qui s'adresser"]}, {"titre": "Communication hiérarchie", "items": ["Reporting (compte rendu de réunion...)", "Transmissions d'idée de projets", "Transmissions de problématiques", "Transmissions des besoins de la crèche"]}, {"titre": "Gestion des priorités", "items": ["Organisation et planification journalière, hebdomadaire et mensuelle", "Prise du temps de détachement", "Réorganise le planning en cas de besoin", "Gestion logistique matérielle ( repas, matériel pédagogique,...)"]}];
-const RT_KEYS=(()=>{const a=[];RT_SECTIONS.forEach((s,si)=>s.items.forEach((_,ii)=>{const k='s'+si+'i'+ii;a.push('rt_ref_'+k,'rt_coo_'+k);}));return a;})();
-
 const TPL={
- objectifs_rt:{
-  sections:RT_SECTIONS,
-  get fields(){return ['rt_nom','rt_structure','rt_formation','rt_date','rt_commentaires',
-    'rt_smart_s','rt_smart_m','rt_smart_a','rt_smart_r','rt_smart_t','rt_sig_date'].concat(RT_KEYS);},
-  html:v=>`<div class="tpl">
-   <h3>Évaluation Référent pédagogique et familial</h3>
-   <div class="grid2">
-     <div class="f"><label>Nom et prénom</label><input id="ff_rt_nom" value="${esc(v.rt_nom)}"></div>
-     <div class="f"><label>Structure</label><select id="ff_rt_structure">${
-       ['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean']
-       .map(c=>`<option${v.rt_structure===c?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
-   </div>
-   <div class="grid2">
-     <div class="f"><label>Formation</label><input id="ff_rt_formation" value="${esc(v.rt_formation)}"></div>
-     <div class="f"><label>Date</label><input type="date" id="ff_rt_date" value="${esc(v.rt_date)}"></div>
-   </div>
-   <p class="hint">A : Acquis &nbsp;·&nbsp; E.C.A : En cours d'acquisition &nbsp;·&nbsp; N.A : Non acquis</p>
-   ${RT_SECTIONS.map((s,si)=>`
-     <h3>${esc(s.titre)}</h3>
-     <div class="gev">
-       <div class="gev-hd">
-         <div class="gev-lab" style="justify-content:flex-start">Items</div>
-         <div class="gev-c">A</div><div class="gev-c">ECA</div><div class="gev-c">NA</div>
-         <div class="gev-sep"></div>
-         <div class="gev-c">A</div><div class="gev-c">ECA</div><div class="gev-c">NA</div>
-       </div>
-       ${s.items.map((it,ii)=>{
-         const k='s'+si+'i'+ii;
-         const rad=(who)=>['A','ECA','NA'].map(o=>
-           `<div class="gev-c"><input type="radio" name="ff_rt_${who}_${k}" value="${o}"${v['rt_'+who+'_'+k]===o?' checked':''}></div>`).join('');
-         return `<div class="gev-it">
-           <div class="gev-lab">${esc(it)}</div>
-           ${rad('ref')}<div class="gev-sep"></div>${rad('coo')}
-         </div>`;}).join('')}
-     </div>
-     <p class="hint">Colonnes : avis Référent (gauche) · avis Coordinateur (droite)</p>`).join('')}
-
-   <h3>Commentaires</h3>
-   <div class="f"><textarea id="ff_rt_commentaires" style="min-height:110px">${esc(v.rt_commentaires)}</textarea></div>
-
-   <h3>Objectifs SMART</h3>
-   <div class="f"><label>Spécifiques</label><textarea id="ff_rt_smart_s">${esc(v.rt_smart_s)}</textarea></div>
-   <div class="f"><label>Mesurables</label><textarea id="ff_rt_smart_m">${esc(v.rt_smart_m)}</textarea></div>
-   <div class="f"><label>Atteignables</label><textarea id="ff_rt_smart_a">${esc(v.rt_smart_a)}</textarea></div>
-   <div class="f"><label>Réalistes</label><textarea id="ff_rt_smart_r">${esc(v.rt_smart_r)}</textarea></div>
-   <div class="f"><label>Temporellement définis</label><textarea id="ff_rt_smart_t">${esc(v.rt_smart_t)}</textarea></div>
-
-   <h3>Signatures</h3>
-   <div class="f"><label>Date</label><input type="date" id="ff_rt_sig_date" value="${esc(v.rt_sig_date)}"></div>
-   <div class="grid2">
-     ${sigBoxHtml('responsable','Coordinateur')}
-     ${sigBoxHtml('salarie','Référent(e) technique')}
-   </div>
-  </div>`
- },
- grille_evaluation:{
-  sections:GEV_SECTIONS,
-  get fields(){return ['ev_nom','ev_creche','ev_fonction','ev_referent','ev_date','ev_synthese','ev_sig_date']
-    .concat(GEV_KEYS);},
-  html:v=>`<div class="tpl">
-   <h3>Identification</h3>
-   <div class="grid2">
-     <div class="f"><label>Nom / Prénom du salarié</label><input id="ff_ev_nom" value="${esc(v.ev_nom)}"></div>
-     <div class="f"><label>Crèche</label><select id="ff_ev_creche">${
-       ['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean']
-       .map(c=>`<option${v.ev_creche===c?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
-   </div>
-   <div class="grid2">
-     <div class="f"><label>Fonction</label><input id="ff_ev_fonction" value="${esc(v.ev_fonction)}"></div>
-     <div class="f"><label>Référent(e) évaluateur</label><input id="ff_ev_referent" value="${esc(v.ev_referent)}"></div>
-     <div class="f"><label>Date</label><input type="date" id="ff_ev_date" value="${esc(v.ev_date)}"></div>
-   </div>
-   <p class="hint">A : Acquis &nbsp;·&nbsp; E.C.A : En cours d'acquisition &nbsp;·&nbsp; N.A : Non acquis</p>
-   ${GEV_SECTIONS.map((s,si)=>`
-     <h3>${esc(s.titre)}</h3>
-     <div class="gev">
-       <div class="gev-hd">
-         <div class="gev-lab" style="justify-content:flex-start">Items</div>
-         <div class="gev-c">A</div><div class="gev-c">ECA</div><div class="gev-c">NA</div>
-         <div class="gev-sep"></div>
-         <div class="gev-c">A</div><div class="gev-c">ECA</div><div class="gev-c">NA</div>
-         <div class="gev-a" style="justify-content:center;align-items:center">Accompagnement</div>
-       </div>
-       ${s.items.map((it,ii)=>{
-         const k='s'+si+'i'+ii;
-         const rad=(who)=>['A','ECA','NA'].map(o=>
-           `<div class="gev-c"><input type="radio" name="ff_gev_${who}_${k}" value="${o}"${v['gev_'+who+'_'+k]===o?' checked':''}></div>`).join('');
-         return `<div class="gev-it">
-           <div class="gev-lab">${esc(it)}</div>
-           ${rad('sal')}<div class="gev-sep"></div>${rad('ref')}
-           <div class="gev-a"><input id="ff_gev_acc_${k}" value="${esc(v['gev_acc_'+k]||'')}" placeholder="…"></div>
-         </div>`;}).join('')}
-     </div>`).join('')}
-
-   <h3>Synthèse</h3>
-   <div class="f"><textarea id="ff_ev_synthese" style="min-height:120px">${esc(v.ev_synthese)}</textarea></div>
-
-   <h3>Signatures</h3>
-   <div class="f"><label>Date</label><input type="date" id="ff_ev_sig_date" value="${esc(v.ev_sig_date)}"></div>
-   <div class="grid2">
-     ${sigBoxHtml('responsable','Référent(e) / Direction')}
-     ${sigBoxHtml('salarie','Salarié(e)')}
-   </div>
-  </div>`
- },
  entretien_annuel:{
   fields:['rh_nom','rh_fonction','rh_date','sal_nom','sal_creche','fonction','fonction_autre',
           'b_positif','b_negatif','b_attentes','a_projets','a_objectifs','synthese','sig_date'],
