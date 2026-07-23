@@ -528,7 +528,7 @@ function exportTplPdf(doc,tpl){
 
 /* ---------- TEMPLATES DEDIES ---------- */
 const SIGS={};           // {role: dataURL}
-let qrTimer=null,qrToken=null;
+let qrTimer=null,qrToken=null,QR_URL='';
 
 const TPL={
  entretien_annuel:{
@@ -628,7 +628,27 @@ async function startQr(role,label){
   const url=location.origin+location.pathname.replace(/[^/]*$/,'')+'signature.html?t='+qrToken;
   document.getElementById('qrTitle').textContent=label;
   const box=document.getElementById('qrBox');box.innerHTML='';
-  new QRCode(box,{text:url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});
+  QR_URL=url;
+  let done=false;
+  if(typeof QRCode==='function'){
+    try{new QRCode(box,{text:url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});done=true;}
+    catch(e){console.warn('QRCode lib KO',e);}
+  }
+  if(!done){
+    const img=document.createElement('img');
+    img.width=220;img.height=220;img.alt='QR';
+    img.src='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(url);
+    box.appendChild(img);
+  }
+  const link=document.createElement('div');
+  link.style.cssText='margin-top:12px;font-size:11px;word-break:break-all;color:var(--muted);line-height:1.4';
+  link.textContent=url;
+  box.appendChild(link);
+  const cp=document.createElement('button');
+  cp.className='btn btn-s';cp.style.marginTop='8px';
+  cp.innerHTML='<i class="ti ti-copy"></i> Copier le lien';
+  cp.onclick=()=>{navigator.clipboard.writeText(QR_URL).then(()=>toast('Lien copié'),()=>toast('Copie impossible'));};
+  box.appendChild(cp);
   document.getElementById('qrWait').textContent='En attente de la signature… (lien valable 30 min)';
   document.getElementById('ovQr').classList.add('on');
   qrTimer=setInterval(()=>pollQr(role),3000);
