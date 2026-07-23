@@ -1368,7 +1368,7 @@ function showApp(){
   document.getElementById('app-wrap').style.display='block';
   document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
   document.querySelectorAll('.referent-only').forEach(el=>el.style.display=(!isDirection)?'':'none');
-  const isDavid=(currentProfile?.name||'').toLowerCase().includes('david')||(currentProfile?.name||'').toLowerCase().includes('bucari')||(currentUser?.email||'').toLowerCase()==='cp1.koalakids@outlook.fr';
+  const isDavid=currentProfile?.role==='direction'||(currentUser?.email||'').toLowerCase()==='cp1.koalakids@outlook.fr';
   document.querySelectorAll('.david-only').forEach(el=>el.style.display=isDavid?'':'none');
   document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
   updateBadges();renderCrecheTabs();
@@ -2958,7 +2958,7 @@ async function saveEvent(){
 
 // ── SAVE EVENT COORDINATEUR ──
 async function saveEventCoord(){
-  const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
+  const coord=cacheReferents.find(r=>r.role==='direction');
   if(!coord){alert('Coordinateur introuvable.');return;}
   const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   const type=document.getElementById('ec-type').value;
@@ -3033,9 +3033,9 @@ async function renderPlanning(){
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
   document.getElementById('week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
-  const iAmCoord=(currentProfile?.name||'').toLowerCase().includes('david')||(currentProfile?.name||'').toLowerCase().includes('bucari');
+  const iAmCoord=currentProfile?.role==='direction';
   const userId=currentProfile?.id||currentUser?.id||'dir';
-  const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
+  const coord=cacheReferents.find(r=>r.role==='direction');
   const addBtn=document.getElementById('planning-add-btn');
   const refLabel=document.getElementById('planning-ref-label');
   const refSelect=document.getElementById('planning-ref-select');
@@ -3051,7 +3051,7 @@ async function renderPlanning(){
     if(refLabel)refLabel.style.display='none';
     if(refSelect){refSelect.style.display='';
       if(refSelect.options.length<=1){
-        const refs=cacheReferents.filter(r=>!((r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari')));
+        const refs=cacheReferents.filter(r=>r.role!=='direction');
         refSelect.innerHTML='<option value="">-- Choisir un référent --</option>'+refs.map(r=>'<option value="'+r.id+'">'+r.name+'</option>').join('');
       }
     }
@@ -3434,7 +3434,7 @@ async function printPlanningCoord(){
   const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  const coord=cacheReferents.find(r=>(r.name||'').toLowerCase().includes('david')||(r.name||'').toLowerCase().includes('bucari'));
+  const coord=cacheReferents.find(r=>r.role==='direction');
   if(!coord){alert('Coordinateur non disponible.');return;}
   const evs=await planningLoad(coord.id,semaine);
   const subtitle='Planning du coordinateur — semaine du '+fmt(days5[0])+' au '+fmt(days5[4]);
