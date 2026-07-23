@@ -272,12 +272,15 @@ function render(){
   const el=document.getElementById('list');
   if(!docs.length){el.innerHTML='<div class="empty"><i class="ti ti-folder-off"></i>Aucun document</div>';return;}
   let html='';
-  const roots=CATS.filter(c=>!c.parent_id);
+  const alpha=(a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'});
+  const roots=CATS.filter(c=>!c.parent_id).sort(alpha);
   roots.push({id:null,nom:'Sans catégorie',couleur:'#A8A29E'});
   roots.forEach(cat=>{
-    const kids=cat.id?CATS.filter(c=>c.parent_id===cat.id):[];
-    const own=docs.filter(d=>(d.categorie_id||null)===(cat.id||null));
-    const kidDocs=kids.map(k=>({cat:k,items:docs.filter(d=>d.categorie_id===k.id)})).filter(x=>x.items.length);
+    const kids=cat.id?CATS.filter(c=>c.parent_id===cat.id).sort(alpha):[];
+    const own=docs.filter(d=>(d.categorie_id||null)===(cat.id||null))
+      .sort((a,b)=>(a.titre||'').localeCompare(b.titre||'','fr',{sensitivity:'base'}));
+    const kidDocs=kids.map(k=>({cat:k,items:docs.filter(d=>d.categorie_id===k.id)
+      .sort((a,b)=>(a.titre||'').localeCompare(b.titre||'','fr',{sensitivity:'base'}))})).filter(x=>x.items.length);
     const total=own.length+kidDocs.reduce((n,x)=>n+x.items.length,0);
     if(!total)return;
     const ckey=String(cat.id||'none');
@@ -323,9 +326,10 @@ function toggleSub(h,key){
 }
 function catOptionsHtml(){
   let o='';
-  CATS.filter(c=>!c.parent_id).forEach(c=>{
+  const az=(a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'});
+  CATS.filter(c=>!c.parent_id).sort(az).forEach(c=>{
     o+=`<option value="${c.id}">${esc(c.nom)}</option>`;
-    CATS.filter(k=>k.parent_id===c.id).forEach(k=>{o+=`<option value="${k.id}">\u00A0\u00A0\u00A0— ${esc(k.nom)}</option>`;});
+    CATS.filter(k=>k.parent_id===c.id).sort(az).forEach(k=>{o+=`<option value="${k.id}">\u00A0\u00A0\u00A0— ${esc(k.nom)}</option>`;});
   });
   return o;
 }
@@ -334,7 +338,7 @@ function catOptionsHtml(){
 function openCat(){
   document.getElementById('cNom').value='';
   document.getElementById('cParent').innerHTML='<option value="">— Aucune (catégorie principale) —</option>'
-    +CATS.filter(c=>!c.parent_id).map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join('');
+    +CATS.filter(c=>!c.parent_id).sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'})).map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join('');
   document.getElementById('ovCat').classList.add('on');
 }
 async function saveCat(){
