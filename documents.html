@@ -160,9 +160,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 <!-- Modal remplissage -->
 <div class="ov" id="ovFill"><div class="modal">
   <h2 id="fillTitle"></h2>
+  <p id="fillState" style="font-size:12px;color:var(--muted);margin:-6px 0 12px"></p>
   <div id="fillArea"></div>
   <div class="mf">
     <button class="btn btn-g" onclick="close_('ovFill')">Fermer</button>
+    <button class="btn btn-s" id="btnNewRep" onclick="openFill(fillDoc.id,null,true)"><i class="ti ti-plus"></i> Nouveau</button>
     <button class="btn btn-s" onclick="exportFillPdf()"><i class="ti ti-file-type-pdf"></i> PDF</button>
     <button class="btn btn-p" onclick="saveFill()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
   </div>
@@ -373,12 +375,18 @@ async function delDoc(id){
 }
 
 /* ---------- REMPLISSAGE ---------- */
-async function openFill(id,repId){
+async function openFill(id,repId,forceNew){
   fillDoc=DOCS.find(d=>d.id===id);fillRep=null;
   let vals={};
   if(repId){
     const{data}=await sb.from('documents_reponses').select('*').eq('id',repId).maybeSingle();
     if(data){fillRep=data;vals=data.donnees||{};}
+  }else if(!forceNew){
+    /* reprend la derniere reponse de l'utilisateur pour ce document */
+    const{data}=await sb.from('documents_reponses').select('*')
+      .eq('document_id',id).eq('rempli_par',ME.id)
+      .order('updated_at',{ascending:false}).limit(1);
+    if(data&&data.length){fillRep=data[0];vals=data[0].donnees||{};}
   }
   document.getElementById('fillTitle').textContent=fillDoc.titre;
 
@@ -389,6 +397,9 @@ async function openFill(id,repId){
     if(vals._sigs)Object.assign(SIGS,vals._sigs);
     const v={};tpl.fields.forEach(f=>v[f]=vals[f]!=null?vals[f]:'');
     document.getElementById('fillArea').innerHTML=tpl.html(v);
+    document.getElementById('fillState').textContent=fillRep
+      ? 'Reprise de la saisie du '+new Date(fillRep.updated_at||fillRep.created_at).toLocaleString('fr-FR')
+      : 'Nouvelle saisie';
     ['responsable','salarie'].forEach(mountSig);
     close_('ovReps');
     document.getElementById('ovFill').classList.add('on');
@@ -435,9 +446,13 @@ async function saveFill(){
   };
   let error;
   if(fillRep){({error}=await sb.from('documents_reponses').update(row).eq('id',fillRep.id));}
-  else{({error}=await sb.from('documents_reponses').insert(row));}
+  else{
+    const{data,error:ie}=await sb.from('documents_reponses').insert(row).select().maybeSingle();
+    error=ie;
+    if(data)fillRep=data;          /* evite les doublons aux enregistrements suivants */
+  }
   if(error)return toast('Erreur SB : '+(error.message||JSON.stringify(error)));
-  close_('ovFill');toast('Enregistré');
+  toast('Enregistré');
  }catch(e){
   console.error('saveFill',e);
   alert('Erreur JS : '+(e&&e.message?e.message:e));
