@@ -451,11 +451,12 @@ async function saveFill(){
     error=ie;
     if(data)fillRep=data;          /* evite les doublons aux enregistrements suivants */
   }
-  if(error)return toast('Erreur SB : '+(error.message||JSON.stringify(error)));
+  if(error)return toast('Erreur : '+(error.message||'enregistrement impossible'));
   toast('Enregistré');
+  close_('ovFill');
  }catch(e){
   console.error('saveFill',e);
-  alert('Erreur JS : '+(e&&e.message?e.message:e));
+  toast('Erreur : '+(e&&e.message?e.message:'inattendue'));
  }
 }
 async function exportFillPdf(){
