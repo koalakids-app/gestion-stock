@@ -935,6 +935,10 @@ body.is-fullscreen .sidebar-trigger {
 .sk-login-btn{width:100%;padding:12px;background:#2A2460;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;margin-top:0.5rem}
 .sk-login-btn:disabled{opacity:0.6;cursor:not-allowed}
 body.sk-locked{overflow:hidden}
+#sk-user-bar{margin-top:auto;padding:14px 16px;border-top:1px solid rgba(255,255,255,0.12)}
+#sk-user-name{font-size:12px;color:rgba(255,255,255,0.75);margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#sk-logout-btn{width:100%;padding:8px;background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit}
+#sk-logout-btn:hover{background:rgba(255,255,255,0.18)}
 
 </style>
 </head>
@@ -1059,6 +1063,11 @@ body.sk-locked{overflow:hidden}
     <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="openModal('add')">
       + Ajouter un article
     </button>
+  </div>
+
+  <div id="sk-user-bar">
+    <div id="sk-user-name">&nbsp;</div>
+    <button id="sk-logout-btn" onclick="skLogout()">Se deconnecter</button>
   </div>
 </aside>
 
@@ -2189,6 +2198,8 @@ function filterCat(cat, el) {
 }
 
 function filterCreche(creche, el) {
+  // Une employee ne peut pas sortir de sa structure, meme via la console.
+  if (SK_LOCKED_CRECHE && creche !== SK_LOCKED_CRECHE) return;
   currentCreche = creche;
   currentPageMat = 1;
   currentPageConso = 1;
@@ -5705,7 +5716,21 @@ async function uploadLogo(file) {
 // ─── AUTHENTIFICATION (stock pedagogique) ────────────────────────────────
 // Roles autorises : direction, referent, employe. Les comptes kiosque sont refuses.
 const SK_ROLES_OK = ['direction', 'referent', 'employe'];
-let SK_USER = null, SK_PROFILE = null;
+
+// Correspondance UUID -> nom de creche. Les noms doivent rester identiques
+// aux libelles des badges de la sidebar (filterCreche les compare en texte).
+const SK_CRECHE_NAMES = {
+  '6b66fa60-030e-4843-acae-4d85c666f805': 'Brunet',
+  '65f2756d-9fe7-4c1f-ac69-c207348110ae': 'Cuers',
+  '5be11869-0987-46c8-9a86-43efb0891647': 'Ollioules',
+  '373dae53-d601-4984-9ba4-8fb00f0cf015': 'Picot 1',
+  'dc6074c4-c0fc-4d07-848a-0ba16b421d15': 'Picot 2',
+  '097b5a81-6496-4c1f-a4c7-e5e8676da4d5': 'St Jean',
+};
+
+// Non nul uniquement pour les employees : verrouille la vue sur leur structure.
+let SK_LOCKED_CRECHE = null;
+let SK_USER = null, SK_PROFILE = null, SK_REFRESH = null, SK_REFRESH_TIMER = null;
 
 function skTogglePwd(btn) {
   const i = document.getElementById('sk-login-pwd');
@@ -5766,12 +5791,98 @@ async function skDoLogin() {
   }
 
   SK_TOKEN = session.access_token;
+  SK_REFRESH = session.refresh_token || null;
   SK_USER = session.user;
+  skScheduleRefresh(session.expires_in);
+
   const ov = document.getElementById('sk-login-overlay');
   if (ov) ov.remove();
   document.body.classList.remove('sk-locked');
+
+  const nameEl = document.getElementById('sk-user-name');
+  if (nameEl) nameEl.textContent = (SK_PROFILE && SK_PROFILE.name) || (SK_USER && SK_USER.email) || '';
+
+  skApplyCrecheLock();
   skBootApp();
   loadLogo();
+}
+
+// ── Verrouillage sur une seule structure (role employe) ──────────────────
+// Direction et referentes gardent la vue sur les 6 crèches. Les employees
+// sont limitees a leur structure pour eviter les erreurs de saisie.
+function skApplyCrecheLock() {
+  if (!SK_PROFILE || SK_PROFILE.role !== 'employe') return;
+  const nom = SK_CRECHE_NAMES[SK_PROFILE.creche_id];
+  if (!nom) {
+    console.warn('[Auth] creche_id inconnu, verrouillage ignore :', SK_PROFILE.creche_id);
+    return;
+  }
+  SK_LOCKED_CRECHE = nom;
+  currentCreche = nom;
+
+  // Ne laisser que le badge de sa structure, marque actif.
+  document.querySelectorAll('.creche-badge').forEach(b => {
+    const el = b.querySelector('.creche-name');
+    const label = el ? el.textContent.trim() : '';
+    const onclick = b.getAttribute('onclick') || '';
+    const isAll = onclick.indexOf("'all'") !== -1;
+    if (isAll || (label && label !== nom)) {
+      b.style.display = 'none';
+      b.classList.remove('active');
+    } else if (label === nom) {
+      b.classList.add('active');
+    }
+  });
+
+  const nameEl = document.getElementById('sk-user-name');
+  if (nameEl) nameEl.textContent += ' — ' + nom;
+}
+
+// ── Rafraichissement du jeton ────────────────────────────────────────────
+// Le jeton Supabase expire par defaut au bout d'une heure. On le renouvelle
+// 60 s avant l'echeance pour eviter les echecs d'ecriture silencieux.
+function skScheduleRefresh(expiresIn) {
+  const delay = Math.max(30, (Number(expiresIn) || 3600) - 60) * 1000;
+  if (SK_REFRESH_TIMER) clearTimeout(SK_REFRESH_TIMER);
+  SK_REFRESH_TIMER = setTimeout(skRefreshToken, delay);
+}
+
+async function skRefreshToken() {
+  if (!SK_REFRESH) return;
+  try {
+    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+      body: JSON.stringify({ refresh_token: SK_REFRESH }),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.access_token) throw new Error('refresh refuse');
+    SK_TOKEN = d.access_token;
+    SK_REFRESH = d.refresh_token || SK_REFRESH;
+    skScheduleRefresh(d.expires_in);
+  } catch (e) {
+    console.warn('[Auth] Rafraichissement impossible', e);
+    setIndicator('Session expiree — rechargez la page', 'var(--red)');
+  }
+}
+
+// Filet de securite : au retour sur l'onglet apres une longue mise en veille,
+// le timer peut avoir ete gele par le navigateur (frequent sur Android).
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && SK_TOKEN) skRefreshToken();
+});
+
+async function skLogout() {
+  if (!confirm('Se deconnecter ?')) return;
+  try {
+    await fetch(`${SUPA_URL}/auth/v1/logout`, {
+      method: 'POST',
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SK_TOKEN },
+    });
+  } catch (e) {}
+  SK_TOKEN = null; SK_REFRESH = null; SK_USER = null; SK_PROFILE = null;
+  if (SK_REFRESH_TIMER) clearTimeout(SK_REFRESH_TIMER);
+  window.location.reload();
 }
 
 // Verrouillage immediat : aucune donnee n'est chargee avant connexion.
