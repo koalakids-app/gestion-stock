@@ -65,6 +65,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 .tpl .grid2{display:flex;gap:10px;flex-wrap:wrap}
 .tpl .grid2>.f{flex:1 1 200px}
 .tpl textarea{min-height:90px;line-height:1.5}
+.tpl .rgwrap{overflow-x:auto;border:1px solid var(--line,#e3e3ef);border-radius:10px}
+.tpl table.rg{border-collapse:collapse;width:100%;min-width:900px;font-size:12px}
+.tpl table.rg th{background:var(--violet);color:#fff;font-family:'Nunito';font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:7px 6px;text-align:left;white-space:nowrap}
+.tpl table.rg td{border:1px solid #e3e3ef;padding:0}
+.tpl table.rg td input,.tpl table.rg td textarea{border:0;border-radius:0;width:100%;padding:6px;font-size:12px;background:transparent;min-height:auto}
+.tpl table.rg td textarea{min-height:34px;line-height:1.35;resize:vertical}
+.tpl table.rg tr:nth-child(even) td{background:#faf9ff}
+.tpl .rgdel{background:none;border:0;color:#c0392b;cursor:pointer;font-size:16px;padding:4px 8px}
+.tpl .rgadd{margin-top:10px}
 .radios{display:flex;flex-wrap:wrap;gap:7px}
 .radios label{display:flex;align-items:center;gap:5px;background:var(--violet-l);border-radius:20px;padding:7px 12px;font-size:12.5px;cursor:pointer}
 .radios input{width:auto;accent-color:var(--orange)}
@@ -435,6 +444,7 @@ async function saveFill(){
   const tpl=TPL[fillDoc.template_key];
   if(tpl){
     tpl.fields.forEach(f=>{
+      if(f==='lignes'){donnees.lignes=rgCollect();return;}
       if(f==='fonction'){
         const r=document.querySelector('input[name=ff_fonction]:checked');
         donnees.fonction=r?r.value:'';return;
@@ -474,6 +484,7 @@ async function saveFill(){
 async function exportFillPdf(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const tpl=TPL[fillDoc.template_key];
+  if(tpl&&fillDoc.template_key==='registre_medicaments')return exportRegistrePdf();
   if(tpl){return exportTplPdf(doc,tpl);}
   doc.setFontSize(15);doc.text(fillDoc.titre,14,18);
   doc.setFontSize(10);let y=30;
@@ -487,6 +498,49 @@ async function exportFillPdf(){
     if(y>270){doc.addPage();y=20;}
   });
   doc.save(slug(fillDoc.titre)+'.pdf');
+}
+
+function exportRegistrePdf(){
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  const rows=rgCollect();
+  const creche=(document.getElementById('ff_creche')||{}).value||'';
+  const mois=(document.getElementById('ff_mois')||{}).value||'';
+  const X=8,W=281;
+  const widths=RG_COLS.map(c=>c.pdf);
+  const tot=widths.reduce((a,b)=>a+b,0);
+  const w=widths.map(x=>x*W/tot);
+  let y=0;
+  const header=()=>{
+    doc.setFontSize(14);doc.setFont(undefined,'bold');doc.setTextColor(30);
+    doc.text("Registre pour l'administration de médicaments",X,14);
+    doc.setFontSize(9);doc.setFont(undefined,'normal');
+    const sub=[creche&&('Crèche : '+creche),mois&&('Mois : '+mois)].filter(Boolean).join('   —   ');
+    if(sub)doc.text(sub,X,20);
+    y=24;
+    doc.setFillColor(74,63,159);doc.rect(X,y,W,8,'F');
+    doc.setTextColor(255);doc.setFontSize(7.5);doc.setFont(undefined,'bold');
+    let x=X;RG_COLS.forEach((c,i)=>{doc.text(doc.splitTextToSize(c.l,w[i]-3),x+1.5,y+5);x+=w[i];});
+    doc.setTextColor(30);y+=8;
+  };
+  header();
+  doc.setFont(undefined,'normal');doc.setFontSize(8);
+  const data=rows.length?rows:[{}];
+  data.forEach((r,ri)=>{
+    const cells=RG_COLS.map((c,i)=>{
+      let v=r[c.k]||'';
+      if(c.k==='date'&&v)v=new Date(v).toLocaleDateString('fr-FR');
+      return doc.splitTextToSize(String(v),w[i]-3);
+    });
+    const h=Math.max(9,...cells.map(l=>l.length*4+4));
+    if(y+h>200){doc.addPage();header();doc.setFont(undefined,'normal');doc.setFontSize(8);}
+    if(ri%2)doc.setFillColor(247,246,252),doc.rect(X,y,W,h,'F');
+    doc.setDrawColor(210);
+    let x=X;
+    cells.forEach((lines,i)=>{doc.rect(x,y,w[i],h);doc.text(lines,x+1.5,y+5);x+=w[i];});
+    y+=h;
+  });
+  doc.save('registre_medicaments'+(creche?'_'+slug(creche):'')+(mois?'_'+mois:'')+'.pdf');
 }
 
 function exportTplPdf(doc,tpl){
@@ -543,7 +597,65 @@ function exportTplPdf(doc,tpl){
 const SIGS={};           // {role: dataURL}
 let qrTimer=null,qrToken=null,QR_URL='';
 
+const RG_COLS=[
+ {k:'enfant',  l:"Nom/prénom de l'enfant", w:26, pdf:34},
+ {k:'date',    l:'Date',                   w:14, pdf:20},
+ {k:'heure',   l:'Heure',                  w:10, pdf:15},
+ {k:'medic',   l:'Médicament / Posologie', w:28, pdf:42},
+ {k:'action',  l:'Action',                 w:20, pdf:30},
+ {k:'duree',   l:'Durée du traitement',    w:16, pdf:24},
+ {k:'resultat',l:'Résultats / Commentaires',w:30,pdf:48},
+ {k:'pro',     l:'Nom du professionnel',   w:22, pdf:32}
+];
+function rgRowHtml(r){
+  r=r||{};
+  return '<tr>'+RG_COLS.map(c=>{
+    const v=esc(r[c.k]||'');
+    if(c.k==='date')return `<td><input type="date" data-rg="${c.k}" value="${v}"></td>`;
+    if(c.k==='heure')return `<td><input type="time" data-rg="${c.k}" value="${v}"></td>`;
+    if(c.k==='resultat'||c.k==='medic'||c.k==='action')return `<td><textarea data-rg="${c.k}">${v}</textarea></td>`;
+    return `<td><input data-rg="${c.k}" value="${v}"></td>`;
+  }).join('')+'<td style="border:0;text-align:center"><button type="button" class="rgdel" title="Supprimer la ligne" onclick="rgDel(this)"><i class="ti ti-trash"></i></button></td></tr>';
+}
+function rgAdd(){
+  const tb=document.getElementById('rgBody');
+  tb.insertAdjacentHTML('beforeend',rgRowHtml({}));
+}
+function rgDel(btn){
+  const tb=document.getElementById('rgBody');
+  if(tb.rows.length<=1){btn.closest('tr').querySelectorAll('input,textarea').forEach(e=>e.value='');return;}
+  btn.closest('tr').remove();
+}
+function rgCollect(){
+  return [...document.querySelectorAll('#rgBody tr')].map(tr=>{
+    const o={};tr.querySelectorAll('[data-rg]').forEach(e=>o[e.dataset.rg]=e.value.trim());
+    return o;
+  }).filter(o=>RG_COLS.some(c=>o[c.k]));
+}
+
 const TPL={
+ registre_medicaments:{
+  fields:['creche','mois','lignes'],
+  html:v=>{
+   let lignes=[];
+   try{lignes=typeof v.lignes==='string'?JSON.parse(v.lignes||'[]'):(v.lignes||[]);}catch(e){lignes=[];}
+   if(!lignes.length)lignes=[{},{},{},{},{}];
+   return `<div class="tpl">
+   <h3>Registre pour l'administration de médicaments</h3>
+   <div class="grid2">
+     <div class="f"><label>Crèche</label><select id="ff_creche">${
+       ['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean']
+       .map(c=>`<option${v.creche===c?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
+     <div class="f"><label>Mois concerné</label><input type="month" id="ff_mois" value="${esc(v.mois)}"></div>
+   </div>
+   <p class="hint">Une ligne par administration. Les lignes vides sont ignorées à l'enregistrement.</p>
+   <div class="rgwrap"><table class="rg">
+     <thead><tr>${RG_COLS.map(c=>`<th style="width:${c.w}%">${esc(c.l)}</th>`).join('')}<th style="width:34px"></th></tr></thead>
+     <tbody id="rgBody">${lignes.map(rgRowHtml).join('')}</tbody>
+   </table></div>
+   <button type="button" class="btn btn-g rgadd" onclick="rgAdd()"><i class="ti ti-plus"></i> Ajouter une ligne</button>
+  </div>`;}
+ },
  entretien_annuel:{
   fields:['rh_nom','rh_fonction','rh_date','sal_nom','sal_creche','fonction','fonction_autre',
           'b_positif','b_negatif','b_attentes','a_projets','a_objectifs','synthese','sig_date'],
