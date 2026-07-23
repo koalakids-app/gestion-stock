@@ -583,7 +583,7 @@ function sigBoxHtml(role,label){
     <div id="sbc_${role}"></div>
     <div class="acts">
       <button class="btn btn-g" onclick="clearSig('${role}')"><i class="ti ti-eraser"></i> Effacer</button>
-      <button class="btn btn-s" onclick="startQr('${role}','${esc(label)}')"><i class="ti ti-qrcode"></i> Signer sur mobile</button>
+      <button class="btn btn-s" data-role="${esc(role)}" data-label="${esc(label)}" onclick="startQr(this.dataset.role,this.dataset.label)"><i class="ti ti-qrcode"></i> Signer sur mobile</button>
     </div></div>`;
 }
 
@@ -621,7 +621,7 @@ async function startQr(role,label){
   qrToken=mkToken();
   const{error}=await sb.from('signatures_pending').insert({
     token:qrToken,document_id:fillDoc.id,reponse_id:fillRep?fillRep.id:null,
-    role_sign:role,signataire:role==='salarie'?nom:(PROF?PROF.name:''),
+    role_sign:role,signataire:(role==='salarie'?nom:((PROF&&PROF.name)||''))||'Signataire',
     contexte:fillDoc.titre+(nom?' — '+nom:''),created_by:ME.id
   });
   if(error){qrToken=null;return toast('Erreur : '+error.message);}
