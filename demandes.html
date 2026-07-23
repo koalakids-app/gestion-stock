@@ -701,6 +701,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <select class="finput" id="fp-referent-select" style="display:none;width:auto;min-width:180px" onchange="fpLoad()">
         <option value="">-- Toutes les personnes --</option>
       </select>
+      <select class="finput" id="fp-statut-filter" style="width:auto;min-width:140px" onchange="fpRenderTable()">
+        <option value="">Tous</option>
+        <option value="attente">En attente</option>
+        <option value="regle">Réglés</option>
+      </select>
+      <button class="btn-primary" id="fp-btn-regler-tout" style="display:none" onclick="fpReglerTout()"><i class="ti ti-cash"></i> Tout marquer réglé</button>
     </div>
     <div class="ik-total-bar">
       <div>
@@ -714,7 +720,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <thead>
           <tr>
             <th>Date</th><th>Catégorie</th><th>Description</th>
-            <th style="text-align:right">Montant</th><th>Justificatif</th><th style="width:36px"></th>
+            <th style="text-align:right">Montant</th><th>Justificatif</th><th>Réglé</th><th style="width:36px"></th>
           </tr>
         </thead>
         <tbody id="fp-tbody"></tbody>
@@ -4570,6 +4576,8 @@ function fpInit(){
       sel.innerHTML='<option value="">-- Toutes les personnes --</option>'+refs.map(r=>'<option value="'+r.id+'">'+r.name+'</option>').join('');
     }
   }else{sel.style.display='none';}
+  const btnAll=document.getElementById('fp-btn-regler-tout');
+  if(btnAll)btnAll.style.display=isDirection?'':'none';
   fpLoad();
 }
 
@@ -4595,26 +4603,71 @@ function fpRenderTable(){
     tbody.innerHTML='';document.getElementById('fp-empty').style.display='block';
   }else{
     document.getElementById('fp-empty').style.display='none';
-    tbody.innerHTML=fpRows.map(r=>{
+    const filt=(document.getElementById('fp-statut-filter')||{}).value||'';
+    const rows=fpRows.filter(r=>filt==='regle'?r.regle:(filt==='attente'?!r.regle:true));
+    if(!rows.length){
+      tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted);font-size:12px;padding:14px">Aucune ligne pour ce filtre.</td></tr>';
+      fpUpdateTotals();return;
+    }
+    tbody.innerHTML=rows.map(r=>{
       const dateFr=new Date(r.expense_date+'T12:00:00').toLocaleDateString('fr-FR');
       return '<tr><td>'+dateFr+(isDirection&&r.person_name?'<br><span style="font-size:10px;color:var(--muted)">'+r.person_name+'</span>':'')+'</td>'+
         '<td>'+(FP_CATEGORIES[r.category]||r.category)+'</td>'+
         '<td>'+(r.description||'—')+'</td>'+
         '<td class="ik-val">'+Number(r.amount).toFixed(2).replace('.',',')+' €</td>'+
         '<td>'+(r.receipt_url?'<a href="'+r.receipt_url+'" target="_blank" class="btn-sm" style="display:inline-flex"><i class="ti ti-photo"></i></a>':'<span style="color:#ccc;font-size:11px">—</span>')+'</td>'+
-        '<td><button class="ik-row-del" onclick="fpEditRow(\''+r.id+'\')" title="Modifier"><i class="ti ti-edit" style="font-size:12px"></i></button></td></tr>';
+        '<td>'+fpStatutCell(r)+'</td>'+
+        '<td>'+(r.regle&&!isDirection?'':'<button class="ik-row-del" onclick="fpEditRow(\''+r.id+'\')" title="Modifier"><i class="ti ti-edit" style="font-size:12px"></i></button>')+'</td></tr>';
     }).join('');
   }
   fpUpdateTotals();
 }
 
+function fpStatutCell(r){
+  if(r.regle){
+    const d=r.regle_le?new Date(r.regle_le+'T12:00:00').toLocaleDateString('fr-FR'):'';
+    const lbl='<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#15803d;font-weight:600"><i class="ti ti-circle-check"></i> Réglé'+(d?' le '+d:'')+'</span>';
+    return isDirection?'<span style="cursor:pointer" onclick="fpToggleRegle(\''+r.id+'\')" title="Annuler le règlement">'+lbl+'</span>':lbl;
+  }
+  const lbl='<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)"><i class="ti ti-circle-dashed"></i> En attente</span>';
+  return isDirection?'<span style="cursor:pointer" onclick="fpToggleRegle(\''+r.id+'\')" title="Marquer comme réglé">'+lbl+'</span>':lbl;
+}
+
+async function fpToggleRegle(id){
+  if(!isDirection)return;
+  const r=fpRows.find(x=>x.id===id);if(!r)return;
+  const next=!r.regle;
+  const patch=next
+    ?{regle:true,regle_le:ipDateToLocalISO(new Date()),regle_par:currentProfile?.id||null}
+    :{regle:false,regle_le:null,regle_par:null};
+  const ok=await dbUpdate('frais_pro',id,patch);
+  if(ok){Object.assign(r,patch);fpRenderTable();showBanner(next?'Dépense marquée réglée.':'Règlement annulé.');}
+  else showBanner('Erreur lors de la mise à jour.','error');
+}
+
+async function fpReglerTout(){
+  if(!isDirection)return;
+  const pend=fpRows.filter(r=>!r.regle);
+  if(!pend.length){alert('Aucune dépense en attente sur ce mois.');return;}
+  if(!confirm('Marquer '+pend.length+' dépense(s) comme réglée(s) ?'))return;
+  const patch={regle:true,regle_le:ipDateToLocalISO(new Date()),regle_par:currentProfile?.id||null};
+  const{error}=await sb.from('frais_pro').update(patch).in('id',pend.map(r=>r.id));
+  if(error){console.warn('[FraisPro]',error.message);showBanner('Erreur lors du règlement groupé.','error');return;}
+  pend.forEach(r=>Object.assign(r,patch));
+  fpRenderTable();showBanner(pend.length+' dépense(s) réglée(s).');
+}
+
 function fpUpdateTotals(){
   let total=0;const byCat={};
+  let totRegle=0,totAtt=0;
+  fpRows.forEach(r=>{if(r.regle)totRegle+=Number(r.amount)||0;else totAtt+=Number(r.amount)||0;});
   fpRows.forEach(r=>{const m=Number(r.amount)||0;total+=m;byCat[r.category]=(byCat[r.category]||0)+m;});
   document.getElementById('fp-tot-eur').textContent=total.toFixed(2).replace('.',',');
-  document.getElementById('fp-cat-totals').innerHTML=Object.keys(byCat).map(cat=>
+  const cats=Object.keys(byCat).map(cat=>
     '<span style="font-size:12px;opacity:0.85">'+(FP_CATEGORIES[cat]||cat)+' : '+byCat[cat].toFixed(2).replace('.',',')+' €</span>'
   ).join('')||'<span style="font-size:12px;opacity:0.6">Aucune dépense</span>';
+  const statuts=fpRows.length?'<span style="font-size:12px;opacity:0.85">✔ Réglé : '+totRegle.toFixed(2).replace('.',',')+' €</span><span style="font-size:12px;opacity:0.85">⏳ En attente : '+totAtt.toFixed(2).replace('.',',')+' €</span>':'';
+  document.getElementById('fp-cat-totals').innerHTML=cats+statuts;
 }
 
 function fpOpenModal(){
@@ -4672,7 +4725,11 @@ async function fpSave(){
   };
   const btn=document.getElementById('fp-btn-save');btn.disabled=true;
   let ok;
-  if(fpEditingId){ok=await dbUpdate('frais_pro',fpEditingId,row);}
+  if(fpEditingId){
+    const cur=fpRows.find(x=>x.id===fpEditingId);
+    if(cur&&cur.regle&&!isDirection){btn.disabled=false;showBanner('Dépense déjà réglée : modification impossible.','error');return;}
+    ok=await dbUpdate('frais_pro',fpEditingId,row);
+  }
   else{const saved=await dbInsert('frais_pro',row);ok=!!saved;}
   btn.disabled=false;
   if(ok){showBanner('Dépense enregistrée !');closeModal('modal-fraispro-wrap');fpLoad();}
@@ -4688,10 +4745,10 @@ async function fpDeleteRow(id){
 function fpExportExcel(){
   if(!fpRows.length){alert('Aucune dépense à exporter pour ce mois.');return;}
   const month=document.getElementById('fp-month').value;
-  const wsData=[['Date','Catégorie','Description','Montant (€)']];
-  fpRows.forEach(r=>{wsData.push([new Date(r.expense_date+'T12:00:00').toLocaleDateString('fr-FR'),FP_CATEGORIES[r.category]||r.category,r.description||'',Number(r.amount)]);});
+  const wsData=[['Date','Catégorie','Description','Montant (€)','Statut','Réglé le']];
+  fpRows.forEach(r=>{wsData.push([new Date(r.expense_date+'T12:00:00').toLocaleDateString('fr-FR'),FP_CATEGORIES[r.category]||r.category,r.description||'',Number(r.amount),r.regle?'Réglé':'En attente',r.regle_le?new Date(r.regle_le+'T12:00:00').toLocaleDateString('fr-FR'):'']);});
   const total=fpRows.reduce((s,r)=>s+Number(r.amount),0);
-  wsData.push(['','','TOTAL',total]);
+  wsData.push(['','','TOTAL',total,'','']);
   const ws=XLSX.utils.aoa_to_sheet(wsData);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Frais pro');
@@ -4704,7 +4761,7 @@ function fpSendEmail(){
   const name=currentProfile?.name||'';
   let body='Récapitulatif des frais professionnels — '+month+'\nDe : '+name+'\n\n';
   if(fpRows.length){
-    fpRows.forEach(r=>{body+='- '+new Date(r.expense_date+'T12:00:00').toLocaleDateString('fr-FR')+' | '+(FP_CATEGORIES[r.category]||r.category)+' | '+(r.description||'')+' | '+Number(r.amount).toFixed(2)+' €\n';});
+    fpRows.forEach(r=>{body+='- '+new Date(r.expense_date+'T12:00:00').toLocaleDateString('fr-FR')+' | '+(FP_CATEGORIES[r.category]||r.category)+' | '+(r.description||'')+' | '+Number(r.amount).toFixed(2)+' € | '+(r.regle?('Réglé'+(r.regle_le?' le '+new Date(r.regle_le+'T12:00:00').toLocaleDateString('fr-FR'):'')):'En attente')+'\n';});
     const total=fpRows.reduce((s,r)=>s+Number(r.amount),0);
     body+='\nTOTAL : '+total.toFixed(2)+' €\n';
   }else{body+='(Aucune ligne de dépense saisie ce mois-ci)\n';}
