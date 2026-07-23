@@ -2872,6 +2872,7 @@ async function confirmImportPlanning(){
 }
 
 // ── SUPABASE PLANNING ──
+const COORD_REF_ID='b608fd68-3c86-485f-b55c-75f465b03650';
 let _planningCache={};
 async function planningLoad(referentId,semaineDate){
   const k=referentId+'_'+semaineDate;
@@ -2956,9 +2957,19 @@ async function saveEvent(){
   closeModal('modal-event-wrap');await renderPlanning();
 }
 
+// Le planning « coordinateur » est celui de l'utilisateur connecté lorsqu'il est direction.
+// Plusieurs comptes direction peuvent coexister : on ne cherche donc JAMAIS par nom ni par
+// simple find(role==='direction'), qui renverrait une direction arbitraire.
+function getCoordRef(){
+  if(currentProfile?.role==='direction')return currentProfile;
+  return cacheReferents.find(r=>r.id===COORD_REF_ID)
+      || cacheReferents.find(r=>r.role==='direction')
+      || null;
+}
+
 // ── SAVE EVENT COORDINATEUR ──
 async function saveEventCoord(){
-  const coord=cacheReferents.find(r=>r.role==='direction');
+  const coord=getCoordRef();
   if(!coord){alert('Coordinateur introuvable.');return;}
   const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   const type=document.getElementById('ec-type').value;
@@ -3035,7 +3046,7 @@ async function renderPlanning(){
   document.getElementById('week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
   const iAmCoord=currentProfile?.role==='direction';
   const userId=currentProfile?.id||currentUser?.id||'dir';
-  const coord=cacheReferents.find(r=>r.role==='direction');
+  const coord=getCoordRef();
   const addBtn=document.getElementById('planning-add-btn');
   const refLabel=document.getElementById('planning-ref-label');
   const refSelect=document.getElementById('planning-ref-select');
@@ -3434,7 +3445,7 @@ async function printPlanningCoord(){
   const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  const coord=cacheReferents.find(r=>r.role==='direction');
+  const coord=getCoordRef();
   if(!coord){alert('Coordinateur non disponible.');return;}
   const evs=await planningLoad(coord.id,semaine);
   const subtitle='Planning du coordinateur — semaine du '+fmt(days5[0])+' au '+fmt(days5[4]);
