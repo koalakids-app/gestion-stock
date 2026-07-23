@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -54,6 +55,23 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 .modal{background:#fff;border-radius:20px;width:100%;max-width:560px;padding:20px;margin:auto}
 .modal h2{font-family:'Baloo 2',cursive;font-size:19px;color:var(--violet);margin-bottom:14px}
 .f{margin-bottom:12px}
+.tpl h3{font-family:'Nunito';font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:#fff;background:var(--violet);padding:7px 12px;border-radius:10px;margin:18px 0 12px}
+.tpl h3:first-child{margin-top:0}
+.tpl .hint{font-size:12px;color:var(--muted);font-style:italic;margin:-6px 0 8px}
+.tpl .grid2{display:flex;gap:10px;flex-wrap:wrap}
+.tpl .grid2>.f{flex:1 1 200px}
+.tpl textarea{min-height:90px;line-height:1.5}
+.radios{display:flex;flex-wrap:wrap;gap:7px}
+.radios label{display:flex;align-items:center;gap:5px;background:var(--violet-l);border-radius:20px;padding:7px 12px;font-size:12.5px;cursor:pointer}
+.radios input{width:auto;accent-color:var(--orange)}
+.sigbox{border:1px dashed var(--line);border-radius:12px;padding:10px;background:var(--cream);flex:1 1 240px}
+.sigbox canvas{width:100%;height:120px;background:#fff;border-radius:8px;touch-action:none;display:block}
+.sigbox .lbl{font-size:12px;font-weight:700;color:var(--violet);margin-bottom:6px}
+.sigbox .acts{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+.sigbox img{width:100%;height:120px;object-fit:contain;background:#fff;border-radius:8px}
+#qrBox{text-align:center;padding:10px}
+#qrBox canvas,#qrBox img{margin:0 auto}
+.qrwait{font-size:13px;color:var(--muted);margin-top:12px}
 .f label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
 .mf{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
 .chip{display:inline-flex;align-items:center;gap:6px;background:#F1EFF7;border-radius:10px;padding:7px 10px;font-size:13px;margin-bottom:6px;width:100%}
@@ -155,6 +173,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
   <h2 id="repsTitle">Réponses enregistrées</h2>
   <div id="repsArea"></div>
   <div class="mf"><button class="btn btn-g" onclick="close_('ovReps')">Fermer</button></div>
+</div></div>
+
+<!-- Modal QR signature -->
+<div class="ov" id="ovQr"><div class="modal" style="max-width:380px">
+  <h2 id="qrTitle">Signature à distance</h2>
+  <div id="qrBox"></div>
+  <p class="qrwait" id="qrWait">En attente de la signature…</p>
+  <div class="mf"><button class="btn btn-g" onclick="cancelQr()">Annuler</button></div>
 </div></div>
 
 <div class="toast" id="toast"></div>
@@ -355,6 +381,20 @@ async function openFill(id,repId){
     if(data){fillRep=data;vals=data.donnees||{};}
   }
   document.getElementById('fillTitle').textContent=fillDoc.titre;
+
+  /* --- Template dédié --- */
+  const tpl=TPL[fillDoc.template_key];
+  if(tpl){
+    Object.keys(SIGS).forEach(k=>delete SIGS[k]);
+    if(vals._sigs)Object.assign(SIGS,vals._sigs);
+    const v={};tpl.fields.forEach(f=>v[f]=vals[f]!=null?vals[f]:'');
+    document.getElementById('fillArea').innerHTML=tpl.html(v);
+    ['responsable','salarie'].forEach(mountSig);
+    close_('ovReps');
+    document.getElementById('ovFill').classList.add('on');
+    return;
+  }
+
   document.getElementById('fillArea').innerHTML=(fillDoc.schema_champs||[]).map(c=>{
     const v=vals[c.key]!=null?vals[c.key]:'';
     let inp;
@@ -368,7 +408,19 @@ async function openFill(id,repId){
 }
 async function saveFill(){
   const donnees={};
-  (fillDoc.schema_champs||[]).forEach(c=>{
+  const tpl=TPL[fillDoc.template_key];
+  if(tpl){
+    tpl.fields.forEach(f=>{
+      if(f==='fonction'){
+        const r=document.querySelector('input[name=ff_fonction]:checked');
+        donnees.fonction=r?r.value:'';return;
+      }
+      const el=document.getElementById('ff_'+f);
+      if(el)donnees[f]=el.value;
+    });
+    donnees._sigs=Object.assign({},SIGS);
+  }
+  (tpl?[]:(fillDoc.schema_champs||[])).forEach(c=>{
     const el=document.getElementById('ff_'+c.key);
     if(!el)return;
     donnees[c.key]=c.type==='checkbox'?el.checked:el.value;
@@ -388,6 +440,8 @@ async function saveFill(){
 }
 async function exportFillPdf(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
+  const tpl=TPL[fillDoc.template_key];
+  if(tpl){return exportTplPdf(doc,tpl);}
   doc.setFontSize(15);doc.text(fillDoc.titre,14,18);
   doc.setFontSize(10);let y=30;
   (fillDoc.schema_champs||[]).forEach(c=>{
@@ -400,6 +454,182 @@ async function exportFillPdf(){
     if(y>270){doc.addPage();y=20;}
   });
   doc.save(slug(fillDoc.titre)+'.pdf');
+}
+
+function exportTplPdf(doc,tpl){
+  const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
+  const rf=()=>{const r=document.querySelector('input[name=ff_fonction]:checked');return r?r.value:'';};
+  const W=182;let y=20;
+  const need=h=>{if(y+h>278){doc.addPage();y=20;}};
+  const H=t=>{need(14);doc.setFillColor(74,63,159);doc.rect(14,y-5,W,8,'F');
+    doc.setTextColor(255);doc.setFontSize(10);doc.setFont(undefined,'bold');
+    doc.text(t.toUpperCase(),16,y);doc.setTextColor(30);y+=12;};
+  const L=(lab,val)=>{const lines=doc.splitTextToSize(String(val||'—'),W);
+    need(8+lines.length*5);
+    doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text(lab,14,y);y+=5;
+    doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text(lines,14,y);y+=lines.length*5+5;};
+
+  doc.setFontSize(17);doc.setFont(undefined,'bold');doc.text('ENTRETIEN ANNUEL',14,y);y+=12;
+
+  H("Personne en charge de l'entretien");
+  L('Nom',g('rh_nom'));L('Fonction',g('rh_fonction'));
+  L("Date de l'entretien",g('rh_date')?new Date(g('rh_date')).toLocaleDateString('fr-FR'):'—');
+
+  H('Salarié(e)');
+  L('Nom / Prénom',g('sal_nom'));L('Crèche',g('sal_creche'));
+  L('Fonction',rf()==='Autre'?(g('fonction_autre')||'Autre'):rf());
+
+  H("Bilan de l'année");
+  L('Aspects positifs, réussites, missions privilégiées',g('b_positif'));
+  L('Aspects négatifs, difficultés, manques',g('b_negatif'));
+  L("Le poste a-t-il répondu à vos attentes ?",g('b_attentes'));
+
+  H('Année en cours');
+  L('Projets professionnels',g('a_projets'));
+  L('Objectifs et attentes',g('a_objectifs'));
+
+  H("Synthèse et objectifs de l'année");
+  L('',g('synthese'));
+
+  H('Signatures');
+  L('Date',g('sig_date')?new Date(g('sig_date')).toLocaleDateString('fr-FR'):'—');
+  need(48);
+  const put=(role,lab,x)=>{
+    doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text(lab,x,y);
+    doc.setDrawColor(200);doc.rect(x,y+3,84,32);
+    if(SIGS[role]){try{doc.addImage(SIGS[role],'PNG',x+2,y+5,80,28);}catch(e){}}
+  };
+  put('responsable',"Personne en charge",14);
+  put('salarie','Salarié(e)',110);
+  y+=40;
+
+  doc.save(slug(fillDoc.titre)+'_'+slug(g('sal_nom')||'')+'.pdf');
+}
+
+/* ---------- TEMPLATES DEDIES ---------- */
+const SIGS={};           // {role: dataURL}
+let qrTimer=null,qrToken=null;
+
+const TPL={
+ entretien_annuel:{
+  fields:['rh_nom','rh_fonction','rh_date','sal_nom','sal_creche','fonction','fonction_autre',
+          'b_positif','b_negatif','b_attentes','a_projets','a_objectifs','synthese','sig_date'],
+  html:v=>`<div class="tpl">
+   <h3>Personne en charge de l'entretien</h3>
+   <div class="grid2">
+     <div class="f"><label>Nom</label><input id="ff_rh_nom" value="${esc(v.rh_nom)}"></div>
+     <div class="f"><label>Date de l'entretien</label><input type="date" id="ff_rh_date" value="${esc(v.rh_date)}"></div>
+   </div>
+   <div class="f"><label>Fonction</label><input id="ff_rh_fonction" value="${esc(v.rh_fonction)}"></div>
+
+   <h3>Salarié(e)</h3>
+   <div class="grid2">
+     <div class="f"><label>Nom / Prénom</label><input id="ff_sal_nom" value="${esc(v.sal_nom)}"></div>
+     <div class="f"><label>Crèche</label><select id="ff_sal_creche">${
+       ['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean']
+       .map(c=>`<option${v.sal_creche===c?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
+   </div>
+   <div class="f"><label>Fonction</label><div class="radios">${
+     ['Auxiliaire de puériculture','Educatrice de jeunes enfants','Accompagnante éducative petite enfance','Référente technique','Autre']
+     .map(o=>`<label><input type="radio" name="ff_fonction" value="${esc(o)}"${v.fonction===o?' checked':''}> ${esc(o)}</label>`).join('')}</div>
+     <input id="ff_fonction_autre" placeholder="Si autre, préciser…" style="margin-top:8px" value="${esc(v.fonction_autre)}"></div>
+
+   <h3>Bilan de l'année</h3>
+   <div class="f"><label>Aspects positifs : réussites, missions privilégiées</label><textarea id="ff_b_positif">${esc(v.b_positif)}</textarea></div>
+   <div class="f"><label>Aspects négatifs : difficultés, manques</label><textarea id="ff_b_negatif">${esc(v.b_negatif)}</textarea></div>
+   <div class="f"><label>Le poste a-t-il répondu à vos attentes ?</label><textarea id="ff_b_attentes">${esc(v.b_attentes)}</textarea></div>
+
+   <h3>Année en cours</h3>
+   <div class="f"><label>Projets professionnels</label><textarea id="ff_a_projets">${esc(v.a_projets)}</textarea></div>
+   <div class="f"><label>Objectifs et attentes</label><textarea id="ff_a_objectifs">${esc(v.a_objectifs)}</textarea></div>
+
+   <h3>Synthèse et objectifs de l'année</h3>
+   <p class="hint">Décisions, objectifs, orientations pour l'année.</p>
+   <div class="f"><textarea id="ff_synthese" style="min-height:130px">${esc(v.synthese)}</textarea></div>
+
+   <h3>Signatures</h3>
+   <div class="f"><label>Date</label><input type="date" id="ff_sig_date" value="${esc(v.sig_date)}"></div>
+   <div class="grid2">
+     ${sigBoxHtml('responsable',"Personne en charge de l'entretien")}
+     ${sigBoxHtml('salarie','Salarié(e)')}
+   </div>
+  </div>`
+ }
+};
+
+function sigBoxHtml(role,label){
+  return `<div class="sigbox" id="sb_${role}">
+    <div class="lbl">${esc(label)}</div>
+    <div id="sbc_${role}"></div>
+    <div class="acts">
+      <button class="btn btn-g" onclick="clearSig('${role}')"><i class="ti ti-eraser"></i> Effacer</button>
+      <button class="btn btn-s" onclick="startQr('${role}','${esc(label)}')"><i class="ti ti-qrcode"></i> Signer sur mobile</button>
+    </div></div>`;
+}
+
+function mountSig(role){
+  const host=document.getElementById('sbc_'+role);
+  if(!host)return;
+  if(SIGS[role]){host.innerHTML=`<img src="${SIGS[role]}" alt="signature">`;return;}
+  host.innerHTML='<canvas></canvas>';
+  const c=host.querySelector('canvas');
+  const r=c.getBoundingClientRect();
+  c.width=Math.max(300,r.width)*2;c.height=120*2;
+  const ctx=c.getContext('2d');ctx.scale(2,2);
+  ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#2B2740';
+  let on=false;
+  const pt=e=>{const b=c.getBoundingClientRect();const p=e.touches?e.touches[0]:e;
+    return[(p.clientX-b.left)*(c.width/2/b.width),(p.clientY-b.top)*(c.height/2/b.height)];};
+  const dn=e=>{e.preventDefault();on=true;ctx.beginPath();ctx.moveTo(...pt(e));};
+  const mv=e=>{if(!on)return;e.preventDefault();ctx.lineTo(...pt(e));ctx.stroke();};
+  const up=()=>{if(!on)return;on=false;SIGS[role]=c.toDataURL('image/png');};
+  c.addEventListener('mousedown',dn);c.addEventListener('mousemove',mv);
+  window.addEventListener('mouseup',up);
+  c.addEventListener('touchstart',dn,{passive:false});
+  c.addEventListener('touchmove',mv,{passive:false});
+  c.addEventListener('touchend',up);
+}
+function clearSig(role){delete SIGS[role];mountSig(role);}
+
+/* ---------- QR SIGNATURE A DISTANCE ---------- */
+function mkToken(){
+  const a=new Uint8Array(24);crypto.getRandomValues(a);
+  return [...a].map(b=>b.toString(36).padStart(2,'0')).join('').slice(0,32);
+}
+async function startQr(role,label){
+  const nom=(document.getElementById('ff_sal_nom')||{}).value||'';
+  qrToken=mkToken();
+  const{error}=await sb.from('signatures_pending').insert({
+    token:qrToken,document_id:fillDoc.id,reponse_id:fillRep?fillRep.id:null,
+    role_sign:role,signataire:role==='salarie'?nom:(PROF?PROF.name:''),
+    contexte:fillDoc.titre+(nom?' — '+nom:''),created_by:ME.id
+  });
+  if(error){qrToken=null;return toast('Erreur : '+error.message);}
+  const url=location.origin+location.pathname.replace(/[^/]*$/,'')+'signature.html?t='+qrToken;
+  document.getElementById('qrTitle').textContent=label;
+  const box=document.getElementById('qrBox');box.innerHTML='';
+  new QRCode(box,{text:url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});
+  document.getElementById('qrWait').textContent='En attente de la signature… (lien valable 30 min)';
+  document.getElementById('ovQr').classList.add('on');
+  qrTimer=setInterval(()=>pollQr(role),3000);
+}
+async function pollQr(role){
+  if(!qrToken)return;
+  const{data}=await sb.from('signatures_pending').select('signature_data,signed_at')
+    .eq('token',qrToken).maybeSingle();   /* lecture authentifiee : policy sigpend_auth_all */
+  if(data&&data.signature_data){
+    SIGS[role]=data.signature_data;
+    stopQr();mountSig(role);toast('Signature reçue');
+  }
+}
+function stopQr(){
+  if(qrTimer)clearInterval(qrTimer);
+  qrTimer=null;qrToken=null;
+  document.getElementById('ovQr').classList.remove('on');
+}
+function cancelQr(){
+  if(qrToken)sb.from('signatures_pending').delete().eq('token',qrToken);
+  stopQr();
 }
 
 /* ---------- REPONSES ---------- */

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Signature</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--violet:#4A3F9F;--orange:#F47920;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',system-ui,sans-serif;background:var(--cream);color:#2B2740;
+     min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{background:#fff;border-radius:20px;padding:22px;width:100%;max-width:460px;
+      box-shadow:0 4px 24px rgba(43,39,64,.10)}
+h1{font-size:18px;color:var(--violet);margin-bottom:4px}
+.ctx{font-size:13px;color:var(--muted);margin-bottom:18px}
+.who{font-size:14px;font-weight:700;margin-bottom:10px}
+canvas{width:100%;height:200px;border:1px dashed var(--line);border-radius:14px;
+       background:#fff;touch-action:none;display:block}
+.tip{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
+.acts{display:flex;gap:10px;margin-top:16px}
+button{flex:1;border:none;border-radius:12px;padding:14px;font-family:'Nunito';
+       font-weight:800;font-size:15px;cursor:pointer}
+.p{background:var(--orange);color:#fff}
+.g{background:#F1EFF7;color:var(--muted)}
+button:disabled{opacity:.5}
+.state{text-align:center;padding:30px 10px}
+.state i{font-size:44px;display:block;margin-bottom:12px}
+.ok{color:#2E7D32}.err{color:#C62828}
+.state h2{font-size:17px;margin-bottom:6px}
+.state p{font-size:13.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="card" id="card"><div class="state"><p>Chargement…</p></div></div>
+
+<script>
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,
+  {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+
+const TOKEN=new URLSearchParams(location.search).get('t')||'';
+const card=document.getElementById('card');
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let REQ=null,ctx=null,hasDrawn=false;
+
+function state(cls,title,msg){
+  card.innerHTML=`<div class="state ${cls}"><h2>${esc(title)}</h2><p>${esc(msg)}</p></div>`;
+}
+
+async function boot(){
+  if(!TOKEN)return state('err','Lien invalide','Aucun jeton de signature fourni.');
+  const{data,error}=await sb.from('signatures_pending').select('*').eq('token',TOKEN).maybeSingle();
+  if(error)return state('err','Erreur',error.message);
+  if(!data)return state('err','Lien expiré','Ce lien de signature n\u2019est plus valable. Demandez-en un nouveau.');
+  REQ=data;
+  card.innerHTML=`
+    <h1>Signature</h1>
+    <div class="ctx">${esc(data.contexte||'')}</div>
+    <div class="who">${esc(data.signataire||'Signataire')}</div>
+    <canvas id="c"></canvas>
+    <div class="tip">Signez avec le doigt dans le cadre ci-dessus</div>
+    <div class="acts">
+      <button class="g" id="bc">Effacer</button>
+      <button class="p" id="bv">Valider</button>
+    </div>`;
+  initPad();
+  document.getElementById('bc').onclick=clear;
+  document.getElementById('bv').onclick=send;
+}
+
+function initPad(){
+  const c=document.getElementById('c');
+  const r=c.getBoundingClientRect();
+  c.width=r.width*2;c.height=r.height*2;
+  ctx=c.getContext('2d');ctx.scale(2,2);
+  ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#2B2740';
+  let on=false;
+  const pt=e=>{const b=c.getBoundingClientRect();const p=e.touches?e.touches[0]:e;
+    return[p.clientX-b.left,p.clientY-b.top];};
+  const dn=e=>{e.preventDefault();on=true;hasDrawn=true;ctx.beginPath();ctx.moveTo(...pt(e));};
+  const mv=e=>{if(!on)return;e.preventDefault();ctx.lineTo(...pt(e));ctx.stroke();};
+  const up=()=>{on=false;};
+  c.addEventListener('touchstart',dn,{passive:false});
+  c.addEventListener('touchmove',mv,{passive:false});
+  c.addEventListener('touchend',up);
+  c.addEventListener('mousedown',dn);c.addEventListener('mousemove',mv);
+  window.addEventListener('mouseup',up);
+}
+function clear(){const c=document.getElementById('c');ctx.clearRect(0,0,c.width,c.height);hasDrawn=false;}
+
+async function send(){
+  if(!hasDrawn)return alert('Merci de signer avant de valider.');
+  const b=document.getElementById('bv');b.disabled=true;b.textContent='Envoi…';
+  const png=document.getElementById('c').toDataURL('image/png');
+  const{error}=await sb.from('signatures_pending')
+    .update({signature_data:png,signed_at:new Date().toISOString()})
+    .eq('token',TOKEN);
+  if(error){b.disabled=false;b.textContent='Valider';return alert('Erreur : '+error.message);}
+  state('ok','Signature enregistrée','Vous pouvez refermer cette page.');
+}
+
+boot();
+</script>
+</body>
+</html>
