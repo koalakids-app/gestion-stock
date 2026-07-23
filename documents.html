@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Koala Kids — Documents</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:#2B2740;min-height:100vh}
+a{color:inherit}
+.topbar{background:#fff;border-bottom:2px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50}
+.topbar h1{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);flex:1}
+.topbar .who{font-size:12px;color:var(--muted);font-weight:600}
+.btn{border:none;border-radius:12px;padding:9px 14px;font-family:'Nunito';font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-p{background:var(--orange);color:#fff}
+.btn-s{background:var(--violet-l);color:var(--violet)}
+.btn-g{background:#F1EFF7;color:var(--muted)}
+.btn-d{background:#FDE8E8;color:#C62828}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+input,select,textarea{font-family:'Nunito';font-size:14px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
+.search{flex:1;min-width:180px}
+.cat{background:#fff;border:2px solid var(--line);border-radius:18px;margin-bottom:12px;overflow:hidden}
+.cat-h{display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;user-select:none}
+.cat-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.cat-h h2{font-family:'Baloo 2',cursive;font-size:16px;flex:1;color:var(--violet)}
+.cat-n{font-size:12px;font-weight:700;color:var(--muted);background:#F1EFF7;padding:3px 9px;border-radius:20px}
+.cat-b{border-top:2px solid var(--line);padding:8px}
+.doc{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:14px}
+.doc:hover{background:#FAF8FD}
+.doc-i{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.doc-i.dl{background:var(--violet-l);color:var(--violet)}
+.doc-i.fill{background:var(--orange-l);color:var(--orange)}
+.doc-t{flex:1;min-width:0}
+.doc-t h3{font-size:14px;font-weight:700;line-height:1.25}
+.doc-t p{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.3}
+.doc-a{display:flex;gap:6px;flex-shrink:0}
+.iconbtn{border:none;background:#F1EFF7;color:var(--muted);width:34px;height:34px;border-radius:10px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.iconbtn:hover{background:var(--violet-l);color:var(--violet)}
+.iconbtn.d:hover{background:#FDE8E8;color:#C62828}
+.tag{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;background:#F1EFF7;color:var(--muted);white-space:nowrap}
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty i{font-size:42px;display:block;margin-bottom:10px;opacity:.4}
+.ov{position:fixed;inset:0;background:rgba(43,39,64,.45);display:none;align-items:flex-start;justify-content:center;padding:20px;z-index:100;overflow-y:auto}
+.ov.on{display:flex}
+.modal{background:#fff;border-radius:20px;width:100%;max-width:560px;padding:20px;margin:auto}
+.modal h2{font-family:'Baloo 2',cursive;font-size:19px;color:var(--violet);margin-bottom:14px}
+.f{margin-bottom:12px}
+.f label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+.mf{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#F1EFF7;border-radius:10px;padding:7px 10px;font-size:13px;margin-bottom:6px;width:100%}
+.chip input{flex:1;border:none;background:transparent;padding:4px}
+.chip select{width:auto;border:none;background:#fff;padding:4px 6px;font-size:12px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--violet);color:#fff;padding:11px 18px;border-radius:14px;font-size:13px;font-weight:600;z-index:200;display:none}
+.toast.on{display:block}
+.login{max-width:340px;margin:70px auto;background:#fff;border:2px solid var(--line);border-radius:22px;padding:26px}
+.login h2{font-family:'Baloo 2',cursive;font-size:22px;color:var(--violet);text-align:center;margin-bottom:16px}
+#fillArea .f input,#fillArea .f textarea,#fillArea .f select{background:#FAF8FD}
+.rep{display:flex;align-items:center;gap:10px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;margin-bottom:7px;font-size:13px}
+.rep b{flex:1}
+@media(max-width:600px){.wrap{padding:12px}.doc{flex-wrap:wrap}.doc-a{width:100%;justify-content:flex-end}}
+</style>
+</head>
+<body>
+
+<div id="loginView" style="display:none">
+  <div class="login">
+    <h2>Documents Koala Kids</h2>
+    <div class="f"><label>Email</label><input type="email" id="liMail" autocomplete="username"></div>
+    <div class="f"><label>Mot de passe</label><input type="password" id="liPwd" autocomplete="current-password"></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="doLogin()">Se connecter</button>
+    <p id="liErr" style="color:#C62828;font-size:12.5px;margin-top:10px;text-align:center"></p>
+  </div>
+</div>
+
+<div id="appView" style="display:none">
+  <div class="topbar">
+    <a href="index.html" class="iconbtn"><i class="ti ti-arrow-left"></i></a>
+    <h1>Documents</h1>
+    <span class="who" id="whoAmI"></span>
+    <button class="iconbtn" onclick="doLogout()" title="Déconnexion"><i class="ti ti-logout"></i></button>
+  </div>
+
+  <div class="wrap">
+    <div class="bar">
+      <input class="search" id="q" placeholder="Rechercher un document…" oninput="render()">
+      <select id="fType" style="width:auto" onchange="render()">
+        <option value="all">Tous types</option>
+        <option value="remplissable">À remplir</option>
+        <option value="telechargeable">À télécharger</option>
+      </select>
+      <select id="fCreche" style="width:auto" onchange="render()"></select>
+      <button class="btn btn-p adminonly" onclick="openDoc()"><i class="ti ti-plus"></i> Document</button>
+      <button class="btn btn-s adminonly" onclick="openCat()"><i class="ti ti-folder-plus"></i> Catégorie</button>
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+
+<!-- Modal document -->
+<div class="ov" id="ovDoc"><div class="modal">
+  <h2 id="docTitle">Nouveau document</h2>
+  <div class="f"><label>Titre</label><input id="dTitre"></div>
+  <div class="f"><label>Description</label><input id="dDesc" placeholder="Optionnel"></div>
+  <div class="f"><label>Catégorie</label><select id="dCat"></select></div>
+  <div class="f"><label>Crèche</label><select id="dCreche"></select></div>
+  <div class="f"><label>Type</label><select id="dType" onchange="toggleType()">
+    <option value="telechargeable">À télécharger (fichier)</option>
+    <option value="remplissable">À remplir en ligne</option>
+  </select></div>
+  <div class="f" id="fFile"><label>Fichier</label><input type="file" id="dFile"><p id="dFileCur" style="font-size:12px;color:var(--muted);margin-top:5px"></p></div>
+  <div class="f" id="fSchema" style="display:none">
+    <label>Champs du formulaire</label>
+    <div id="champs"></div>
+    <button class="btn btn-s" onclick="addChamp()"><i class="ti ti-plus"></i> Ajouter un champ</button>
+  </div>
+  <div class="mf">
+    <button class="btn btn-g" onclick="close_('ovDoc')">Annuler</button>
+    <button class="btn btn-p" id="dSave" onclick="saveDoc()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- Modal catégorie -->
+<div class="ov" id="ovCat"><div class="modal" style="max-width:400px">
+  <h2>Nouvelle catégorie</h2>
+  <div class="f"><label>Nom</label><input id="cNom"></div>
+  <div class="f"><label>Couleur</label><input type="color" id="cCoul" value="#4A3F9F" style="height:44px;padding:4px"></div>
+  <div class="mf">
+    <button class="btn btn-g" onclick="close_('ovCat')">Annuler</button>
+    <button class="btn btn-p" onclick="saveCat()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- Modal remplissage -->
+<div class="ov" id="ovFill"><div class="modal">
+  <h2 id="fillTitle"></h2>
+  <div id="fillArea"></div>
+  <div class="mf">
+    <button class="btn btn-g" onclick="close_('ovFill')">Fermer</button>
+    <button class="btn btn-s" onclick="exportFillPdf()"><i class="ti ti-file-type-pdf"></i> PDF</button>
+    <button class="btn btn-p" onclick="saveFill()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- Modal réponses -->
+<div class="ov" id="ovReps"><div class="modal">
+  <h2 id="repsTitle">Réponses enregistrées</h2>
+  <div id="repsArea"></div>
+  <div class="mf"><button class="btn btn-g" onclick="close_('ovReps')">Fermer</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+let ME=null,PROF=null,IS_ADMIN=false;
+let CATS=[],DOCS=[],CRECHES=[];
+let editDocId=null,fillDoc=null,fillRep=null;
+
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600);}
+function close_(id){document.getElementById(id).classList.remove('on');}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function slug(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9.\-_]/g,'_');}
+
+/* ---------- AUTH ---------- */
+async function boot(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){document.getElementById('loginView').style.display='block';return;}
+  ME=session.user;
+  const{data:p}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
+  PROF=p;
+  IS_ADMIN=!!p&&(p.role==='direction'||p.role==='referent');
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('appView').style.display='block';
+  document.getElementById('whoAmI').textContent=p?(p.name||'')+(p.role==='direction'?' · Direction':''):'';
+  document.querySelectorAll('.adminonly').forEach(e=>e.style.display=IS_ADMIN?'':'none');
+  await loadAll();
+}
+async function doLogin(){
+  const e=document.getElementById('liMail').value.trim(),p=document.getElementById('liPwd').value;
+  const{error}=await sb.auth.signInWithPassword({email:e,password:p});
+  if(error){document.getElementById('liErr').textContent='Identifiants incorrects';return;}
+  location.reload();
+}
+async function doLogout(){await sb.auth.signOut();location.reload();}
+
+/* ---------- LOAD ---------- */
+async function loadAll(){
+  const[c,d,cr]=await Promise.all([
+    sb.from('doc_categories').select('*').order('ordre'),
+    sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
+    sb.from('creches').select('id,name').order('name')
+  ]);
+  CATS=c.data||[];DOCS=d.data||[];CRECHES=cr.data||[];
+  const sel=document.getElementById('fCreche');
+  sel.innerHTML='<option value="all">Toutes les crèches</option>'+CRECHES.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
+  if(PROF&&PROF.role==='referent'&&PROF.creche_id)sel.value=PROF.creche_id;
+  render();
+}
+
+/* ---------- RENDER ---------- */
+function render(){
+  const q=document.getElementById('q').value.toLowerCase().trim();
+  const ft=document.getElementById('fType').value;
+  const fc=document.getElementById('fCreche').value;
+  let docs=DOCS.filter(d=>{
+    if(ft!=='all'&&d.type!==ft)return false;
+    if(fc!=='all'&&d.creche_id&&d.creche_id!==fc)return false;
+    if(q&&!((d.titre||'')+' '+(d.description||'')).toLowerCase().includes(q))return false;
+    return true;
+  });
+  const el=document.getElementById('list');
+  if(!docs.length){el.innerHTML='<div class="empty"><i class="ti ti-folder-off"></i>Aucun document</div>';return;}
+  let html='';
+  const groups=CATS.slice();
+  groups.push({id:null,nom:'Sans catégorie',couleur:'#A8A29E'});
+  groups.forEach(cat=>{
+    const items=docs.filter(d=>(d.categorie_id||null)===(cat.id||null));
+    if(!items.length)return;
+    html+=`<div class="cat"><div class="cat-h" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+      <span class="cat-dot" style="background:${esc(cat.couleur||'#4A3F9F')}"></span>
+      <h2>${esc(cat.nom)}</h2><span class="cat-n">${items.length}</span>
+      <i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="cat-b">`;
+    items.forEach(d=>{
+      const fill=d.type==='remplissable';
+      const crName=d.creche_id?(CRECHES.find(c=>c.id===d.creche_id)||{}).name:null;
+      html+=`<div class="doc">
+        <div class="doc-i ${fill?'fill':'dl'}"><i class="ti ti-${fill?'forms':'file-download'}"></i></div>
+        <div class="doc-t"><h3>${esc(d.titre)}</h3>
+          <p>${esc(d.description||'')}${crName?' <span class="tag">'+esc(crName)+'</span>':' <span class="tag">Tous sites</span>'}</p></div>
+        <div class="doc-a">
+          ${fill?`<button class="iconbtn" title="Remplir" onclick="openFill('${d.id}')"><i class="ti ti-pencil"></i></button>
+                  <button class="iconbtn" title="Réponses" onclick="openReps('${d.id}')"><i class="ti ti-list"></i></button>`
+                :(d.fichier_url?`<a class="iconbtn" title="Télécharger" href="${esc(d.fichier_url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i></a>`:'')}
+          ${IS_ADMIN?`<button class="iconbtn" title="Modifier" onclick="openDoc('${d.id}')"><i class="ti ti-edit"></i></button>
+          <button class="iconbtn d" title="Supprimer" onclick="delDoc('${d.id}')"><i class="ti ti-trash"></i></button>`:''}
+        </div></div>`;
+    });
+    html+='</div></div>';
+  });
+  el.innerHTML=html;
+}
+
+/* ---------- CATEGORIE ---------- */
+function openCat(){document.getElementById('cNom').value='';document.getElementById('ovCat').classList.add('on');}
+async function saveCat(){
+  const nom=document.getElementById('cNom').value.trim();
+  if(!nom)return toast('Nom requis');
+  const{error}=await sb.from('doc_categories').insert({nom,couleur:document.getElementById('cCoul').value,ordre:CATS.length+1});
+  if(error)return toast('Erreur : '+error.message);
+  close_('ovCat');toast('Catégorie créée');loadAll();
+}
+
+/* ---------- DOCUMENT ---------- */
+function toggleType(){
+  const t=document.getElementById('dType').value;
+  document.getElementById('fFile').style.display=t==='telechargeable'?'':'none';
+  document.getElementById('fSchema').style.display=t==='remplissable'?'':'none';
+}
+function addChamp(lab,typ){
+  const d=document.createElement('div');d.className='chip';
+  d.innerHTML=`<input placeholder="Libellé du champ" value="${esc(lab||'')}">
+    <select><option value="text">Texte</option><option value="textarea">Zone de texte</option>
+    <option value="number">Nombre</option><option value="date">Date</option><option value="checkbox">Case à cocher</option></select>
+    <button class="iconbtn d" onclick="this.parentNode.remove()"><i class="ti ti-x"></i></button>`;
+  if(typ)d.querySelector('select').value=typ;
+  document.getElementById('champs').appendChild(d);
+}
+function openDoc(id){
+  editDocId=id||null;
+  document.getElementById('docTitle').textContent=id?'Modifier le document':'Nouveau document';
+  document.getElementById('dCat').innerHTML='<option value="">— Aucune —</option>'+CATS.map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join('');
+  const allowAll=!PROF||PROF.role==='direction';
+  document.getElementById('dCreche').innerHTML=(allowAll?'<option value="">Toutes les crèches</option>':'')+CRECHES.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  document.getElementById('champs').innerHTML='';
+  document.getElementById('dFile').value='';
+  document.getElementById('dFileCur').textContent='';
+  if(id){
+    const d=DOCS.find(x=>x.id===id);
+    document.getElementById('dTitre').value=d.titre||'';
+    document.getElementById('dDesc').value=d.description||'';
+    document.getElementById('dCat').value=d.categorie_id||'';
+    document.getElementById('dCreche').value=d.creche_id||'';
+    document.getElementById('dType').value=d.type;
+    if(d.fichier_nom)document.getElementById('dFileCur').textContent='Fichier actuel : '+d.fichier_nom;
+    (d.schema_champs||[]).forEach(c=>addChamp(c.label,c.type));
+  }else{
+    document.getElementById('dTitre').value='';
+    document.getElementById('dDesc').value='';
+    document.getElementById('dType').value='telechargeable';
+    if(PROF&&PROF.role==='referent'&&PROF.creche_id)document.getElementById('dCreche').value=PROF.creche_id;
+  }
+  toggleType();
+  document.getElementById('ovDoc').classList.add('on');
+}
+async function saveDoc(){
+  const titre=document.getElementById('dTitre').value.trim();
+  if(!titre)return toast('Titre requis');
+  const btn=document.getElementById('dSave');btn.disabled=true;btn.textContent='Enregistrement…';
+  try{
+    const type=document.getElementById('dType').value;
+    const row={
+      titre,
+      description:document.getElementById('dDesc').value.trim()||null,
+      categorie_id:document.getElementById('dCat').value||null,
+      creche_id:document.getElementById('dCreche').value||null,
+      type
+    };
+    if(type==='remplissable'){
+      row.schema_champs=[...document.querySelectorAll('#champs .chip')].map((c,i)=>({
+        key:'f'+i,label:c.querySelector('input').value.trim()||('Champ '+(i+1)),type:c.querySelector('select').value
+      }));
+    }else{
+      const f=document.getElementById('dFile').files[0];
+      if(f){
+        const path='documents/'+Date.now()+'_'+slug(f.name);
+        const{error:ue}=await sb.storage.from('assets').upload(path,f,{upsert:true});
+        if(ue)throw ue;
+        row.fichier_url=sb.storage.from('assets').getPublicUrl(path).data.publicUrl;
+        row.fichier_nom=f.name;
+      }
+    }
+    let error;
+    if(editDocId){({error}=await sb.from('documents_koala').update(row).eq('id',editDocId));}
+    else{row.created_by=ME.id;({error}=await sb.from('documents_koala').insert(row));}
+    if(error)throw error;
+    close_('ovDoc');toast('Document enregistré');await loadAll();
+  }catch(e){toast('Erreur : '+(e.message||e));}
+  btn.disabled=false;btn.textContent='Enregistrer';
+}
+async function delDoc(id){
+  if(!confirm('Supprimer ce document ?'))return;
+  const{error}=await sb.from('documents_koala').update({actif:false}).eq('id',id);
+  if(error)return toast('Erreur : '+error.message);
+  toast('Supprimé');loadAll();
+}
+
+/* ---------- REMPLISSAGE ---------- */
+async function openFill(id,repId){
+  fillDoc=DOCS.find(d=>d.id===id);fillRep=null;
+  let vals={};
+  if(repId){
+    const{data}=await sb.from('documents_reponses').select('*').eq('id',repId).maybeSingle();
+    if(data){fillRep=data;vals=data.donnees||{};}
+  }
+  document.getElementById('fillTitle').textContent=fillDoc.titre;
+  document.getElementById('fillArea').innerHTML=(fillDoc.schema_champs||[]).map(c=>{
+    const v=vals[c.key]!=null?vals[c.key]:'';
+    let inp;
+    if(c.type==='textarea')inp=`<textarea id="ff_${c.key}" rows="3">${esc(v)}</textarea>`;
+    else if(c.type==='checkbox')inp=`<input type="checkbox" id="ff_${c.key}" ${v?'checked':''} style="width:auto">`;
+    else inp=`<input type="${c.type}" id="ff_${c.key}" value="${esc(v)}">`;
+    return `<div class="f"><label>${esc(c.label)}</label>${inp}</div>`;
+  }).join('')||'<p style="color:var(--muted);font-size:13px">Ce document n\'a pas encore de champs configurés.</p>';
+  close_('ovReps');
+  document.getElementById('ovFill').classList.add('on');
+}
+async function saveFill(){
+  const donnees={};
+  (fillDoc.schema_champs||[]).forEach(c=>{
+    const el=document.getElementById('ff_'+c.key);
+    if(!el)return;
+    donnees[c.key]=c.type==='checkbox'?el.checked:el.value;
+  });
+  const row={
+    document_id:fillDoc.id,
+    creche_id:fillDoc.creche_id||(PROF?PROF.creche_id:null),
+    donnees,rempli_par:ME.id,
+    rempli_par_nom:PROF?PROF.name:null,
+    updated_at:new Date().toISOString()
+  };
+  let error;
+  if(fillRep){({error}=await sb.from('documents_reponses').update(row).eq('id',fillRep.id));}
+  else{({error}=await sb.from('documents_reponses').insert(row));}
+  if(error)return toast('Erreur : '+error.message);
+  close_('ovFill');toast('Enregistré');
+}
+async function exportFillPdf(){
+  const{jsPDF}=window.jspdf;const doc=new jsPDF();
+  doc.setFontSize(15);doc.text(fillDoc.titre,14,18);
+  doc.setFontSize(10);let y=30;
+  (fillDoc.schema_champs||[]).forEach(c=>{
+    const el=document.getElementById('ff_'+c.key);
+    let v=el?(c.type==='checkbox'?(el.checked?'Oui':'Non'):el.value):'';
+    doc.setFont(undefined,'bold');doc.text(c.label+' :',14,y);
+    doc.setFont(undefined,'normal');
+    const lines=doc.splitTextToSize(String(v||'—'),176);
+    doc.text(lines,14,y+6);y+=10+lines.length*5;
+    if(y>270){doc.addPage();y=20;}
+  });
+  doc.save(slug(fillDoc.titre)+'.pdf');
+}
+
+/* ---------- REPONSES ---------- */
+async function openReps(id){
+  const d=DOCS.find(x=>x.id===id);
+  document.getElementById('repsTitle').textContent='Réponses — '+d.titre;
+  const{data}=await sb.from('documents_reponses').select('*').eq('document_id',id).order('updated_at',{ascending:false});
+  const el=document.getElementById('repsArea');
+  if(!data||!data.length){el.innerHTML='<div class="empty"><i class="ti ti-inbox"></i>Aucune réponse</div>';}
+  else{
+    el.innerHTML=data.map(r=>`<div class="rep">
+      <b>${esc(r.rempli_par_nom||'—')}</b>
+      <span class="tag">${new Date(r.updated_at||r.created_at).toLocaleDateString('fr-FR')}</span>
+      <button class="iconbtn" onclick="openFill('${id}','${r.id}')"><i class="ti ti-eye"></i></button>
+      ${IS_ADMIN?`<button class="iconbtn d" onclick="delRep('${r.id}','${id}')"><i class="ti ti-trash"></i></button>`:''}
+    </div>`).join('');
+  }
+  document.getElementById('ovReps').classList.add('on');
+}
+async function delRep(rid,did){
+  if(!confirm('Supprimer cette réponse ?'))return;
+  await sb.from('documents_reponses').delete().eq('id',rid);
+  openReps(did);
+}
+
+document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('on');}));
+document.getElementById('liPwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+boot();
+</script>
+</body>
+</html>
