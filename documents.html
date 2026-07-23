@@ -407,6 +407,7 @@ async function openFill(id,repId){
   document.getElementById('ovFill').classList.add('on');
 }
 async function saveFill(){
+ try{
   const donnees={};
   const tpl=TPL[fillDoc.template_key];
   if(tpl){
@@ -435,8 +436,12 @@ async function saveFill(){
   let error;
   if(fillRep){({error}=await sb.from('documents_reponses').update(row).eq('id',fillRep.id));}
   else{({error}=await sb.from('documents_reponses').insert(row));}
-  if(error)return toast('Erreur : '+error.message);
+  if(error)return toast('Erreur SB : '+(error.message||JSON.stringify(error)));
   close_('ovFill');toast('Enregistré');
+ }catch(e){
+  console.error('saveFill',e);
+  alert('Erreur JS : '+(e&&e.message?e.message:e));
+ }
 }
 async function exportFillPdf(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
