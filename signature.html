@@ -53,7 +53,7 @@ function state(cls,title,msg){
 async function boot(){
   if(!TOKEN)return state('err','Lien invalide','Aucun jeton de signature fourni.');
   const{data,error}=await sb.from('signatures_pending').select('*').eq('token',TOKEN).maybeSingle();
-  if(error)return state('err','Erreur',error.message);
+  if(error)return state('err','Erreur lecture',(error.code||'')+' '+(error.message||''));
   if(!data)return state('err','Lien expiré','Ce lien de signature n\u2019est plus valable. Demandez-en un nouveau.');
   REQ=data;
   card.innerHTML=`
@@ -98,7 +98,15 @@ async function send(){
   const{error}=await sb.from('signatures_pending')
     .update({signature_data:png,signed_at:new Date().toISOString()})
     .eq('token',TOKEN);
-  if(error){b.disabled=false;b.textContent='Valider';return alert('Erreur : '+error.message);}
+  if(error){
+    b.disabled=false;b.textContent='Valider';
+    console.error('sig update',error);
+    return alert('Erreur\n'
+      +'message: '+(error.message||'-')+'\n'
+      +'code: '+(error.code||'-')+'\n'
+      +'details: '+(error.details||'-')+'\n'
+      +'hint: '+(error.hint||'-'));
+  }
   state('ok','Signature enregistrée','Vous pouvez refermer cette page.');
 }
 
