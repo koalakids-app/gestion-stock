@@ -129,6 +129,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
       <select id="fCreche" style="width:auto" onchange="render()"></select>
       <button class="btn btn-p adminonly" onclick="openDoc()"><i class="ti ti-plus"></i> Document</button>
       <button class="btn btn-s adminonly" onclick="openCat()"><i class="ti ti-folder-plus"></i> Catégorie</button>
+      <button class="btn btn-s adminonly" onclick="openCatMgr()"><i class="ti ti-folders"></i> Gérer catégories</button>
       <button class="btn btn-s adminonly" onclick="document.getElementById('bulkInput').click()"><i class="ti ti-folders"></i> Import dossier</button>
       <input type="file" id="bulkInput" webkitdirectory directory multiple style="display:none" onchange="bulkImport(this)">
       <span id="bulkProg" style="font-size:12px;font-weight:700;color:var(--violet)"></span>
@@ -162,13 +163,23 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 
 <!-- Modal catégorie -->
 <div class="ov" id="ovCat"><div class="modal" style="max-width:400px">
-  <h2>Nouvelle catégorie</h2>
+  <h2 id="catTitle">Nouvelle catégorie</h2>
   <div class="f"><label>Nom</label><input id="cNom"></div>
   <div class="f"><label>Catégorie parente</label><select id="cParent"></select></div>
   <div class="f"><label>Couleur</label><input type="color" id="cCoul" value="#4A3F9F" style="height:44px;padding:4px"></div>
   <div class="mf">
     <button class="btn btn-g" onclick="close_('ovCat')">Annuler</button>
     <button class="btn btn-p" onclick="saveCat()">Enregistrer</button>
+  </div>
+</div></div>
+
+<!-- Modal gestion des catégories -->
+<div class="ov" id="ovCatMgr"><div class="modal" style="max-width:480px">
+  <h2>Gérer les catégories</h2>
+  <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Modifier le nom, la couleur ou déplacer une catégorie sous une autre.</p>
+  <div id="catMgrList"></div>
+  <div class="mf">
+    <button class="btn btn-g" onclick="close_('ovCatMgr')">Fermer</button>
   </div>
 </div></div>
 
@@ -335,18 +346,82 @@ function catOptionsHtml(){
 }
 
 /* ---------- CATEGORIE ---------- */
-function openCat(){
-  document.getElementById('cNom').value='';
-  document.getElementById('cParent').innerHTML='<option value="">— Aucune (catégorie principale) —</option>'
-    +CATS.filter(c=>!c.parent_id).sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'})).map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join('');
+let editCatId=null;
+function openCat(id){
+  editCatId=id||null;
+  const cur=id?CATS.find(c=>c.id===id):null;
+  document.getElementById('catTitle').textContent=cur?'Modifier la catégorie':'Nouvelle catégorie';
+  document.getElementById('cNom').value=cur?(cur.nom||''):'';
+  document.getElementById('cCoul').value=cur?(cur.couleur||'#4A3F9F'):'#4A3F9F';
+  const hasKids=cur?CATS.some(c=>c.parent_id===cur.id):false;
+  let opts='<option value="">— Aucune (catégorie principale) —</option>';
+  if(hasKids){
+    opts+='<option value="" disabled>(catégorie contenant des sous-catégories)</option>';
+  }else{
+    CATS.filter(c=>!c.parent_id&&c.id!==editCatId)
+      .sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'}))
+      .forEach(c=>{opts+=`<option value="${c.id}">${esc(c.nom)}</option>`;});
+  }
+  const sel=document.getElementById('cParent');
+  sel.innerHTML=opts;
+  sel.disabled=hasKids;
+  if(cur&&cur.parent_id)sel.value=cur.parent_id;
   document.getElementById('ovCat').classList.add('on');
 }
 async function saveCat(){
   const nom=document.getElementById('cNom').value.trim();
   if(!nom)return toast('Nom requis');
-  const{error}=await sb.from('doc_categories').insert({nom,parent_id:document.getElementById('cParent').value||null,couleur:document.getElementById('cCoul').value,ordre:CATS.length+1});
+  const parent=document.getElementById('cParent').value||null;
+  const coul=document.getElementById('cCoul').value;
+  let error;
+  if(editCatId){
+    ({error}=await sb.from('doc_categories').update({nom,parent_id:parent,couleur:coul}).eq('id',editCatId));
+  }else{
+    ({error}=await sb.from('doc_categories').insert({nom,parent_id:parent,couleur:coul,ordre:CATS.length+1}));
+  }
   if(error)return toast('Erreur : '+error.message);
-  close_('ovCat');toast('Catégorie créée');loadAll();
+  close_('ovCat');toast(editCatId?'Catégorie modifiée':'Catégorie créée');
+  editCatId=null;
+  await loadAll();
+  if(document.getElementById('ovCatMgr').classList.contains('on'))renderCatMgr();
+}
+
+/* ---------- GESTION DES CATEGORIES ---------- */
+function openCatMgr(){renderCatMgr();document.getElementById('ovCatMgr').classList.add('on');}
+function renderCatMgr(){
+  const az=(a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'});
+  const roots=CATS.filter(c=>!c.parent_id).sort(az);
+  if(!roots.length&&!CATS.length){
+    document.getElementById('catMgrList').innerHTML='<div class="empty"><i class="ti ti-folder-off"></i>Aucune catégorie</div>';return;
+  }
+  const row=(c,sub)=>{
+    const n=DOCS.filter(d=>d.categorie_id===c.id).length;
+    return `<div class="chip" style="${sub?'margin-left:18px;':''}">
+      <span class="cat-dot" style="background:${esc(c.couleur||'#4A3F9F')}"></span>
+      <span style="flex:1">${esc(c.nom)} <span style="color:var(--muted)">(${n})</span></span>
+      <button class="iconbtn" title="Modifier" onclick="openCat('${c.id}')"><i class="ti ti-edit"></i></button>
+      <button class="iconbtn d" title="Supprimer" onclick="delCat('${c.id}')"><i class="ti ti-trash"></i></button>
+    </div>`;
+  };
+  let h='';
+  roots.forEach(c=>{
+    h+=row(c,false);
+    CATS.filter(k=>k.parent_id===c.id).sort(az).forEach(k=>{h+=row(k,true);});
+  });
+  document.getElementById('catMgrList').innerHTML=h;
+}
+async function delCat(id){
+  const c=CATS.find(x=>x.id===id);if(!c)return;
+  if(CATS.some(x=>x.parent_id===id))return toast('Supprimer d\'abord les sous-catégories');
+  const n=DOCS.filter(d=>d.categorie_id===id).length;
+  if(!confirm(`Supprimer la catégorie « ${c.nom} » ?`+(n?`\n\n${n} document(s) passeront en « Sans catégorie ».`:'')))return;
+  if(n){
+    const{error:e1}=await sb.from('documents_koala').update({categorie_id:null}).eq('categorie_id',id);
+    if(e1)return toast('Erreur : '+e1.message);
+  }
+  const{error}=await sb.from('doc_categories').delete().eq('id',id);
+  if(error)return toast('Erreur : '+error.message);
+  toast('Catégorie supprimée');await loadAll();renderCatMgr();
 }
 
 /* ---------- DOCUMENT ---------- */
@@ -939,6 +1014,13 @@ categories: `
   <li>Bouton <strong>Nouvelle catégorie</strong>.</li>
   <li>Renseigner le <strong>nom</strong>, choisir une <strong>couleur</strong> — elle sert de repère visuel dans la liste.</li>
   <li>Laisser <strong>Catégorie parente</strong> vide pour une catégorie de premier niveau, ou en choisir une pour créer une sous-catégorie.</li>
+</ul>
+<div class="st">✏️ Modifier ou déplacer une catégorie</div>
+<ul>
+  <li>Bouton <strong>Gérer catégories</strong> : la liste complète s’affiche, y compris les catégories encore vides.</li>
+  <li>Icône <strong>crayon</strong> pour renommer, changer la couleur, ou choisir une <strong>catégorie parente</strong> — c’est ainsi qu’on déplace une catégorie sous une autre (par exemple : Stagiaires sous Ressources humaines). Les documents suivent automatiquement.</li>
+  <li>Une catégorie qui contient déjà des sous-catégories ne peut pas être déplacée : il faut d’abord sortir ses sous-catégories.</li>
+  <li>Icône <strong>corbeille</strong> pour supprimer : les documents concernés basculent en « Sans catégorie », ils ne sont jamais perdus.</li>
 </ul>
 <div class="st">💡 Conseil d’organisation</div>
 <ul>
