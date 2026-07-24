@@ -168,7 +168,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
   <div class="f"><label>Catégorie parente</label><select id="cParent"></select></div>
   <div class="f"><label>Couleur</label><input type="color" id="cCoul" value="#4A3F9F" style="height:44px;padding:4px"></div>
   <div class="mf">
-    <button class="btn btn-g" onclick="close_('ovCat')">Annuler</button>
+    <button class="btn btn-g" onclick="close_('ovCat');document.getElementById('ovCat').style.zIndex=''">Annuler</button>
     <button class="btn btn-p" onclick="saveCat()">Enregistrer</button>
   </div>
 </div></div>
@@ -366,7 +366,9 @@ function openCat(id){
   sel.innerHTML=opts;
   sel.disabled=hasKids;
   if(cur&&cur.parent_id)sel.value=cur.parent_id;
-  document.getElementById('ovCat').classList.add('on');
+  const ov=document.getElementById('ovCat');
+  ov.style.zIndex=document.getElementById('ovCatMgr').classList.contains('on')?'160':'';
+  ov.classList.add('on');
 }
 async function saveCat(){
   const nom=document.getElementById('cNom').value.trim();
@@ -380,7 +382,8 @@ async function saveCat(){
     ({error}=await sb.from('doc_categories').insert({nom,parent_id:parent,couleur:coul,ordre:CATS.length+1}));
   }
   if(error)return toast('Erreur : '+error.message);
-  close_('ovCat');toast(editCatId?'Catégorie modifiée':'Catégorie créée');
+  close_('ovCat');document.getElementById('ovCat').style.zIndex='';
+  toast(editCatId?'Catégorie modifiée':'Catégorie créée');
   editCatId=null;
   await loadAll();
   if(document.getElementById('ovCatMgr').classList.contains('on'))renderCatMgr();
