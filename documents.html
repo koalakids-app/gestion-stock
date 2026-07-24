@@ -180,8 +180,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
   <div class="mf">
     <button class="btn btn-g" onclick="close_('ovFill')">Fermer</button>
     <button class="btn btn-s" id="btnNewRep" onclick="openFill(fillDoc.id,null,true)"><i class="ti ti-plus"></i> Nouveau</button>
-    <button class="btn btn-s" onclick="exportFillPdf()"><i class="ti ti-file-type-pdf"></i> PDF</button>
-    <button class="btn btn-s" id="btnArchive" onclick="archiveFill()"><i class="ti ti-lock"></i> Archiver</button>
+    <button class="btn btn-s" id="btnPdfReset" onclick="editPdfAndReset()"><i class="ti ti-file-type-pdf"></i> Éditer le PDF</button>
     <button class="btn btn-p" onclick="saveFill()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
   </div>
 </div></div>
@@ -191,13 +190,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
   <h2 id="repsTitle">Réponses enregistrées</h2>
   <div id="repsArea"></div>
   <div class="mf"><button class="btn btn-g" onclick="close_('ovReps')">Fermer</button></div>
-</div></div>
-
-<!-- Modal archives -->
-<div class="ov" id="ovArch"><div class="modal">
-  <h2 id="archTitle">Documents archivés</h2>
-  <div id="archArea"></div>
-  <div class="mf"><button class="btn btn-g" onclick="close_('ovArch')">Fermer</button></div>
 </div></div>
 
 <!-- Modal QR signature -->
@@ -540,7 +532,7 @@ async function openFill(id,repId,forceNew){
   close_('ovReps');
   document.getElementById('ovFill').classList.add('on');
 }
-async function saveFill(opts){
+async function saveFill(){
  try{
   const donnees={};
   const tpl=TPL[fillDoc.template_key];
@@ -574,12 +566,7 @@ async function saveFill(opts){
     error=ie;
     if(data)fillRep=data;          /* evite les doublons aux enregistrements suivants */
   }
-  if(error){
-    toast('Erreur : '+(error.message||'enregistrement impossible'));
-    if(opts&&opts.keepOpen)throw new Error(error.message||'enregistrement impossible');
-    return;
-  }
-  if(opts&&opts.keepOpen)return;
+  if(error)return toast('Erreur : '+(error.message||'enregistrement impossible'));
   toast('Enregistré');
   close_('ovFill');
  }catch(e){
@@ -602,9 +589,8 @@ async function exportFillPdf(mode){
     doc.text(lines,14,y+6);y+=10+lines.length*5;
     if(y>270){doc.addPage();y=20;}
   });
-  const fname=slug(fillDoc.titre)+'.pdf';
-  if(mode==='blob')return{blob:doc.output('blob'),filename:fname,signataire:''};
-  doc.save(fname);
+  doc.save(slug(fillDoc.titre)+'.pdf');
+  return true;
 }
 
 function exportTplPdf(doc,tpl,mode){
@@ -654,104 +640,58 @@ function exportTplPdf(doc,tpl,mode){
   put('salarie','Salarié(e)',110);
   y+=40;
 
-  const fname=slug(fillDoc.titre)+'_'+slug(g('sal_nom')||'')+'.pdf';
-  if(mode==='blob'){
-    pdfArchiveFooter(doc);
-    return{blob:doc.output('blob'),filename:fname,signataire:g('sal_nom')||''};
-  }
-  doc.save(fname);
+  doc.save(slug(fillDoc.titre)+'_'+slug(g('sal_nom')||'')+'.pdf');
+  return true;
 }
 
-/* ---------- ARCHIVAGE DEFINITIF ---------- */
-/* Mention de tracabilite ajoutee en pied de chaque page du PDF archive */
-function pdfArchiveFooter(doc){
-  const n=doc.internal.getNumberOfPages();
-  const stamp=new Date().toLocaleString('fr-FR');
-  const who=(PROF&&PROF.name)?PROF.name:'—';
-  for(let i=1;i<=n;i++){
-    doc.setPage(i);
-    doc.setFontSize(7);doc.setTextColor(130);doc.setFont(undefined,'normal');
-    doc.text('Document archive le '+stamp+' par '+who+'  —  page '+i+'/'+n,14,290);
-    doc.setTextColor(30);
-  }
-}
-
-async function sha256Hex(blob){
-  const buf=await blob.arrayBuffer();
-  const h=await crypto.subtle.digest('SHA-256',buf);
-  return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-
-async function archiveFill(){
-  const btn=document.getElementById('btnArchive');
+/* ---------- EDITION PDF PUIS REINITIALISATION ---------- */
+/* Genere le PDF, supprime la reponse en base et remet le formulaire a vierge.
+   Aucune donnee n'est conservee dans l'application apres l'edition. */
+async function editPdfAndReset(){
+  const btn=document.getElementById('btnPdfReset');
   try{
     if(!fillDoc)return;
-    if(!confirm("Archiver definitivement ce document ?\n\nUn PDF fige sera genere, horodate et stocke. Il ne pourra plus etre modifie."))return;
-    if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Archivage…';}
+    if(!confirm("Éditer le PDF puis vider le formulaire ?\n\nLe document sera téléchargé. Aucune donnée ne sera conservée dans l'application."))return;
+    if(btn)btn.disabled=true;
 
-    /* enregistre la saisie courante avant de figer */
-    await saveFill({keepOpen:true});
+    const ok=await exportFillPdf();
+    if(!ok)throw new Error('génération PDF impossible');
 
-    const out=await exportFillPdf('blob');
-    if(!out||!out.blob)throw new Error('generation PDF impossible');
+    /* suppression de la reponse eventuellement enregistree */
+    if(fillRep&&fillRep.id){
+      const{error}=await sb.from('documents_reponses').delete().eq('id',fillRep.id);
+      if(error)console.warn('suppression réponse',error);
+    }
+    fillRep=null;
 
-    const hash=await sha256Hex(out.blob);
-    const path='documents-signes/'+Date.now()+'_'+slug(out.filename);
-    const{error:ue}=await sb.storage.from('assets').upload(path,out.blob,{contentType:'application/pdf',upsert:false});
-    if(ue)throw new Error(ue.message);
-    const url=sb.storage.from('assets').getPublicUrl(path).data.publicUrl;
-
-    const{error:ie}=await sb.from('documents_archives').insert({
-      document_id:fillDoc.id,
-      reponse_id:fillRep?fillRep.id:null,
-      creche_id:fillDoc.creche_id||(PROF?PROF.creche_id:null),
-      titre:fillDoc.titre,
-      signataire_nom:out.signataire||null,
-      pdf_url:url,pdf_path:path,pdf_hash:hash,
-      donnees_snapshot:fillRep?fillRep.donnees:null,
-      archived_by:ME.id,
-      archived_by_nom:PROF?PROF.name:null
-    });
-    if(ie)throw new Error(ie.message);
-
-    toast('Document archive');
-    close_('ovFill');
+    resetFillForm();
+    toast('PDF édité — formulaire réinitialisé');
   }catch(e){
-    console.error('archiveFill',e);
-    toast('Erreur : '+(e&&e.message?e.message:'archivage impossible'));
+    console.error('editPdfAndReset',e);
+    toast('Erreur : '+(e&&e.message?e.message:'édition impossible'));
   }finally{
-    if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-lock"></i> Archiver';}
+    if(btn)btn.disabled=false;
   }
 }
 
-async function openArchives(id){
-  const d=DOCS.find(x=>x.id===id);
-  document.getElementById('archTitle').textContent='Archives — '+(d?d.titre:'');
-  const{data,error}=await sb.from('documents_archives').select('*')
-    .eq('document_id',id).order('archived_at',{ascending:false});
-  const el=document.getElementById('archArea');
-  if(error){el.innerHTML='<div class="empty">Erreur de chargement</div>';}
-  else if(!data||!data.length){el.innerHTML='<div class="empty"><i class="ti ti-archive"></i>Aucun document archive</div>';}
-  else{
-    el.innerHTML=data.map(a=>`<div class="rep">
-      <b>${esc(a.signataire_nom||a.titre)}</b>
-      <span class="tag">${new Date(a.archived_at).toLocaleString('fr-FR')}</span>
-      <span class="tag" title="Empreinte SHA-256 : ${esc(a.pdf_hash)}">${esc(a.pdf_hash.slice(0,10))}…</span>
-      <a class="iconbtn" href="${esc(a.pdf_url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i></a>
-      ${IS_ADMIN?`<button class="iconbtn d" onclick="delArchive('${a.id}','${id}')"><i class="ti ti-trash"></i></button>`:''}
-    </div>`).join('');
+/* Remet la modale de remplissage a l'etat vierge, sans rouvrir de reponse existante */
+function resetFillForm(){
+  Object.keys(SIGS).forEach(k=>delete SIGS[k]);
+  const tpl=TPL[fillDoc.template_key];
+  if(tpl){
+    const v={};tpl.fields.forEach(f=>v[f]='');
+    document.getElementById('fillArea').innerHTML=tpl.html(v);
+    ['responsable','salarie'].forEach(mountSig);
+  }else{
+    document.getElementById('fillArea').innerHTML=(fillDoc.schema_champs||[]).map(c=>{
+      let inp;
+      if(c.type==='textarea')inp=`<textarea id="ff_${c.key}" rows="3"></textarea>`;
+      else if(c.type==='checkbox')inp=`<input type="checkbox" id="ff_${c.key}" style="width:auto">`;
+      else inp=`<input type="${c.type}" id="ff_${c.key}" value="">`;
+      return `<div class="f"><label>${esc(c.label)}</label>${inp}</div>`;
+    }).join('')||'<p style="color:var(--muted);font-size:13px">Ce document n\'a pas encore de champs configurés.</p>';
   }
-  close_('ovReps');
-  document.getElementById('ovArch').classList.add('on');
-}
-
-async function delArchive(aid,did){
-  if(!confirm('Supprimer definitivement cette archive ?'))return;
-  const{data:a}=await sb.from('documents_archives').select('pdf_path').eq('id',aid).maybeSingle();
-  const{error}=await sb.from('documents_archives').delete().eq('id',aid);
-  if(error)return toast('Erreur : '+error.message);
-  if(a&&a.pdf_path)await sb.storage.from('assets').remove([a.pdf_path]);
-  openArchives(did);
+  document.getElementById('fillState').textContent='Nouvelle saisie';
 }
 
 /* ---------- TEMPLATES DEDIES ---------- */
@@ -906,9 +846,6 @@ async function openReps(id){
   document.getElementById('repsTitle').textContent='Réponses — '+d.titre;
   const{data}=await sb.from('documents_reponses').select('*').eq('document_id',id).order('updated_at',{ascending:false});
   const el=document.getElementById('repsArea');
-  document.getElementById('repsTitle').innerHTML=
-    esc('Réponses — '+d.titre)+
-    ` <button class="btn btn-s" style="float:right" onclick="openArchives('${id}')"><i class="ti ti-archive"></i> Archives</button>`;
   if(!data||!data.length){el.innerHTML='<div class="empty"><i class="ti ti-inbox"></i>Aucune réponse</div>';}
   else{
     el.innerHTML=data.map(r=>`<div class="rep">
