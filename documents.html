@@ -593,7 +593,7 @@ async function openFill(id,repId,forceNew){
     document.getElementById('fillState').textContent=fillRep
       ? 'Reprise de la saisie du '+new Date(fillRep.updated_at||fillRep.created_at).toLocaleString('fr-FR')
       : 'Nouvelle saisie';
-    ['responsable','salarie'].forEach(mountSig);
+    if(tpl.mount)tpl.mount();else ['responsable','salarie'].forEach(mountSig);
     close_('ovReps');
     document.getElementById('ovFill').classList.add('on');
     return;
@@ -616,12 +616,13 @@ async function saveFill(){
   const tpl=TPL[fillDoc.template_key];
   if(tpl){
     tpl.fields.forEach(f=>{
-      if(f==='fonction'){
-        const r=document.querySelector('input[name=ff_fonction]:checked');
-        donnees.fonction=r?r.value:'';return;
+      if(f==='fonction'||(/^g\d+_\d+_/.test(f)&&!/_acc$/.test(f))){
+        const r=document.querySelector('input[name=ff_'+f+']:checked');
+        donnees[f]=r?r.value:'';return;
       }
       const el=document.getElementById('ff_'+f);
-      if(el)donnees[f]=el.value;
+      if(!el)return;
+      donnees[f]=(el.type==='checkbox')?el.checked:el.value;
     });
     donnees._sigs=Object.assign({},SIGS);
   }
@@ -665,7 +666,10 @@ function pdfLogo(doc,y){
 async function exportFillPdf(mode){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const tpl=TPL[fillDoc.template_key];
-  if(tpl){return exportTplPdf(doc,tpl,mode);}
+  if(tpl){
+    if(tpl.pdf)return tpl.pdf(doc,mode);
+    return exportTplPdf(doc,tpl,mode);
+  }
   let y=pdfLogo(doc,18);
   doc.setFontSize(15);doc.text(fillDoc.titre,14,y);
   doc.setFontSize(10);y+=12;
@@ -770,7 +774,7 @@ function resetFillForm(){
   if(tpl){
     const v={};tpl.fields.forEach(f=>v[f]='');
     document.getElementById('fillArea').innerHTML=tpl.html(v);
-    ['responsable','salarie'].forEach(mountSig);
+    if(tpl.mount)tpl.mount();else ['responsable','salarie'].forEach(mountSig);
   }else{
     document.getElementById('fillArea').innerHTML=(fillDoc.schema_champs||[]).map(c=>{
       let inp;
@@ -787,7 +791,181 @@ function resetFillForm(){
 const SIGS={};           // {role: dataURL}
 let qrTimer=null,qrToken=null,QR_URL='';
 
+/* ---------- MOTEUR DE GRILLES GENERIQUE ----------
+   Piloté par documents_koala.schema_grille (JSONB) :
+   { echelle:['A','E.C.A','N.A'],
+     legende:'...',
+     colonnes:[{key:'s',label:'Avis salarié',court:'Sal.'},{key:'r',...}],
+     accompagnement:true,
+     identite:[{key:'nom',label:'Nom',type:'text'},...]   // optionnel
+     synthese:'Observations...',                          // optionnel, '' pour masquer
+     signatures:[{role:'responsable',label:'Référent'},...]// optionnel
+     sections:[{titre:'...',items:['...','...']}] }
+   Aucune grille n'est codée en dur : ajouter une grille = insérer une ligne en base. */
+const GR_DEF_IDENT=[
+  {key:'nom',label:'Nom / Prénom du salarié',type:'text'},
+  {key:'creche',label:'Crèche',type:'creche'},
+  {key:'poste',label:'Poste',type:'text'},
+  {key:'date',label:"Date de l'évaluation",type:'date'},
+  {key:'eval',label:'Évaluateur',type:'text'}
+];
+const GR_DEF_SIGS=[{role:'responsable',label:'Référent'},{role:'salarie',label:'Salarié(e)'}];
+function grSchema(){
+  const s=(fillDoc&&fillDoc.schema_grille)||{};
+  return {
+    echelle:Array.isArray(s.echelle)&&s.echelle.length?s.echelle:['A','E.C.A','N.A'],
+    legende:s.legende||'',
+    colonnes:Array.isArray(s.colonnes)&&s.colonnes.length?s.colonnes:[{key:'r',label:'Évaluation',court:'Éval.'}],
+    accompagnement:s.accompagnement!==false,
+    identite:Array.isArray(s.identite)&&s.identite.length?s.identite:GR_DEF_IDENT,
+    synthese:s.synthese===undefined?'Observations, axes de progrès, accompagnement prévu':s.synthese,
+    signatures:Array.isArray(s.signatures)?s.signatures:GR_DEF_SIGS,
+    sections:Array.isArray(s.sections)?s.sections:[]
+  };
+}
+function grKeys(){
+  const sc=grSchema();const out=[];
+  sc.identite.forEach(f=>out.push('id_'+f.key));
+  sc.sections.forEach((sec,si)=>(sec.items||[]).forEach((_,ii)=>{
+    sc.colonnes.forEach(c=>out.push('g'+si+'_'+ii+'_'+c.key));
+    if(sc.accompagnement)out.push('g'+si+'_'+ii+'_acc');
+  }));
+  if(sc.synthese!=='')out.push('gr_synthese');
+  out.push('gr_date');
+  return out;
+}
+function grRadio(name,val,cur){
+  return `<label class="gr-o"><input type="radio" name="ff_${name}" value="${esc(val)}"${cur===val?' checked':''}><span>${esc(val)}</span></label>`;
+}
+function grIdentField(f,v){
+  const id='ff_id_'+f.key,val=v['id_'+f.key]||'';
+  if(f.type==='creche'){
+    const opts=['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
+    return `<div class="f"><label>${esc(f.label)}</label><select id="${id}">${
+      opts.map(c=>`<option${val===c?' selected':''}>${esc(c)}</option>`).join('')}</select></div>`;
+  }
+  if(f.type==='textarea')return `<div class="f"><label>${esc(f.label)}</label><textarea id="${id}" rows="3">${esc(val)}</textarea></div>`;
+  const t=(f.type==='date')?'date':'text';
+  return `<div class="f"><label>${esc(f.label)}</label><input type="${t}" id="${id}" value="${esc(val)}"></div>`;
+}
+const GR_CSS=`<style>
+.gr .gr-sec{background:var(--violet,#4A3F9F);color:#fff;padding:7px 10px;border-radius:9px;font-weight:700;font-size:13px;margin:16px 0 8px}
+.gr .gr-it{border:1px solid var(--line,#E7E4F0);border-radius:10px;padding:9px 10px;margin-bottom:7px}
+.gr .gr-lab{font-size:12.5px;line-height:1.35;margin-bottom:7px}
+.gr .gr-cols{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.gr .gr-grp{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.gr .gr-grp>b{font-size:10.5px;color:var(--muted,#8E8AA8);font-weight:700;text-transform:uppercase}
+.gr .gr-o{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;background:#F1EFF7;border-radius:8px;padding:3px 7px;cursor:pointer}
+.gr .gr-o input{width:auto;margin:0}
+.gr .gr-acc{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer}
+.gr .gr-acc input{width:auto;margin:0}
+.gr .gr-leg{font-size:11px;color:var(--muted,#8E8AA8);margin:4px 0 10px}
+.gr .gr-empty{font-size:13px;color:var(--muted,#8E8AA8);padding:10px 0}
+</style>`;
+
 const TPL={
+ grille:{
+  get fields(){return grKeys();},
+  html:v=>{
+   const sc=grSchema();
+   return `<div class="tpl gr">${GR_CSS}
+   <h3>Identification</h3>
+   ${sc.identite.map(f=>grIdentField(f,v)).join('')}
+   ${sc.legende?`<div class="gr-leg">${esc(sc.legende)}</div>`:''}
+   ${sc.sections.length?sc.sections.map((sec,si)=>`
+     <div class="gr-sec">${esc(sec.titre||'')}</div>
+     ${(sec.items||[]).map((it,ii)=>{
+       const acc='g'+si+'_'+ii+'_acc';
+       return `<div class="gr-it">
+         <div class="gr-lab">${esc(it)}</div>
+         <div class="gr-cols">
+           ${sc.colonnes.map(c=>{
+             const k='g'+si+'_'+ii+'_'+c.key;
+             return `<div class="gr-grp"><b>${esc(c.label||c.key)}</b>${sc.echelle.map(o=>grRadio(k,o,v[k])).join('')}</div>`;
+           }).join('')}
+           ${sc.accompagnement?`<label class="gr-acc"><input type="checkbox" id="ff_${acc}"${v[acc]?' checked':''}>Besoin d'accompagnement</label>`:''}
+         </div></div>`;
+     }).join('')}`).join('')
+   :'<div class="gr-empty">Aucune section définie pour cette grille.</div>'}
+   ${sc.synthese!==''?`<h3>Synthèse</h3>
+   <div class="f"><label>${esc(sc.synthese)}</label><textarea id="ff_gr_synthese" rows="5">${esc(v.gr_synthese)}</textarea></div>`:''}
+   <div class="f"><label>Date</label><input type="date" id="ff_gr_date" value="${esc(v.gr_date)}"></div>
+   ${sc.signatures.length?`<h3>Signatures</h3><div class="grid2">
+     ${sc.signatures.map(x=>sigBoxHtml(x.role,x.label||x.role)).join('')}
+   </div>`:''}
+  </div>`;},
+  mount:()=>{grSchema().signatures.forEach(x=>mountSig(x.role));},
+  pdf:(doc,mode)=>{
+    const sc=grSchema();
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
+    const rad=n=>{const r=document.querySelector('input[name=ff_'+n+']:checked');return r?r.value:'';};
+    const chk=id=>{const e=document.getElementById('ff_'+id);return !!(e&&e.checked);};
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
+    const W=182;let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+    doc.setFontSize(15);doc.setFont(undefined,'bold');
+    doc.text(String(fillDoc.titre||'').toUpperCase(),14,y,{maxWidth:W});y+=9;
+    doc.setFontSize(9.5);doc.setFont(undefined,'normal');
+    sc.identite.forEach(f=>{
+      const val=(f.type==='date')?dfr(g('id_'+f.key)):(g('id_'+f.key)||'—');
+      need(6);doc.text(f.label+' : '+val,14,y);y+=5;
+    });
+    y+=2;
+    if(sc.legende){
+      doc.setFontSize(8);doc.setTextColor(120);
+      doc.splitTextToSize(sc.legende+(sc.accompagnement?"   ·   X = besoin d'accompagnement":''),W)
+        .forEach(l=>{need(5);doc.text(l,14,y);y+=4;});
+      doc.setTextColor(30);y+=3;
+    }
+    /* colonnes de notation calees a droite */
+    const nCol=sc.colonnes.length+(sc.accompagnement?1:0);
+    const colX=[];for(let i=0;i<nCol;i++)colX.push(196-(nCol-i)*16);
+    const labW=colX[0]-16;
+    sc.sections.forEach((sec,si)=>{
+      need(18);
+      doc.setFillColor(74,63,159);doc.rect(14,y-5,W,8,'F');
+      doc.setTextColor(255);doc.setFontSize(9.5);doc.setFont(undefined,'bold');
+      doc.text(String(sec.titre||'').toUpperCase(),16,y,{maxWidth:W-4});doc.setTextColor(30);y+=9;
+      doc.setFontSize(8);doc.setFont(undefined,'bold');
+      sc.colonnes.forEach((c,i)=>doc.text(c.court||c.key,colX[i],y));
+      if(sc.accompagnement)doc.text('Acc.',colX[nCol-1],y);
+      y+=4;doc.setFont(undefined,'normal');
+      (sec.items||[]).forEach((it,ii)=>{
+        const lines=doc.splitTextToSize(it,labW);
+        need(lines.length*4+4);
+        doc.setFontSize(8);doc.text(lines,14,y);
+        sc.colonnes.forEach((c,i)=>doc.text(rad('g'+si+'_'+ii+'_'+c.key)||'—',colX[i],y));
+        if(sc.accompagnement)doc.text(chk('g'+si+'_'+ii+'_acc')?'X':'',colX[nCol-1],y);
+        y+=Math.max(lines.length*4,5)+1.5;
+        doc.setDrawColor(232,229,240);doc.line(14,y-1,14+W,y-1);
+      });
+      y+=4;
+    });
+    if(sc.synthese!==''){
+      need(20);
+      doc.setFillColor(74,63,159);doc.rect(14,y-5,W,8,'F');
+      doc.setTextColor(255);doc.setFontSize(9.5);doc.setFont(undefined,'bold');
+      doc.text('SYNTHÈSE',16,y);doc.setTextColor(30);y+=10;
+      doc.setFontSize(9);doc.setFont(undefined,'normal');
+      const sl=doc.splitTextToSize(g('gr_synthese')||'—',W);
+      need(sl.length*5+6);doc.text(sl,14,y);y+=sl.length*5+6;
+    }
+    doc.setFontSize(9);doc.text('Date : '+dfr(g('gr_date')),14,y);y+=6;
+    if(sc.signatures.length){
+      need(46);
+      sc.signatures.slice(0,2).forEach((x,i)=>{
+        const px=14+i*96;
+        doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text(x.label||x.role,px,y);
+        doc.setDrawColor(200);doc.rect(px,y+3,84,32);
+        if(SIGS[x.role]){try{doc.addImage(SIGS[x.role],'PNG',px+2,y+5,80,28);}catch(e){}}
+      });
+      y+=40;
+    }
+    const who=sc.identite.length?g('id_'+sc.identite[0].key):'';
+    doc.save(slug(fillDoc.titre)+(who?'_'+slug(who):'')+'.pdf');
+    return true;
+  }
+ },
  entretien_annuel:{
   fields:['rh_nom','rh_fonction','rh_date','sal_nom','sal_creche','fonction','fonction_autre',
           'b_positif','b_negatif','b_attentes','a_projets','a_objectifs','synthese','sig_date'],
