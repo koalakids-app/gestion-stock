@@ -878,5 +878,173 @@ document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.
 document.getElementById('liPwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 boot();
 </script>
+
+<!-- Bouton aide flottant -->
+<button onclick="openNotice()" title="Aide &amp; Notice d’utilisation"
+  style="position:fixed;bottom:24px;right:24px;width:48px;height:48px;border-radius:50%;background:var(--violet);color:#fff;border:none;cursor:pointer;font-size:20px;font-weight:700;box-shadow:0 4px 16px rgba(43,39,64,.35);z-index:90;display:flex;align-items:center;justify-content:center;transition:transform .15s"
+  onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">?</button>
+
+<!-- Modal notice -->
+<div class="ov" id="ovNotice" style="z-index:150">
+  <div class="modal" style="max-width:680px;width:100%;max-height:88vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:14px 18px 0;border-bottom:1px solid var(--line);flex-shrink:0">
+      <div style="display:flex;gap:0;overflow-x:auto;flex:1" id="noticeTabs">
+        <button class="ntab" onclick="switchNoticeTab('principe',this)">💡 Principe</button>
+        <button class="ntab" onclick="switchNoticeTab('categories',this)">🗂️ Catégories</button>
+        <button class="ntab" onclick="switchNoticeTab('documents',this)">📄 Documents</button>
+        <button class="ntab" onclick="switchNoticeTab('remplir',this)">✍️ Remplir</button>
+        <button class="ntab" onclick="switchNoticeTab('signature',this)">🖊️ Signatures</button>
+        <button class="ntab" onclick="switchNoticeTab('reponses',this)">📋 Réponses</button>
+      </div>
+      <button class="btn btn-g btn-s" onclick="close_('ovNotice')" style="flex-shrink:0;margin-bottom:8px">✕</button>
+    </div>
+    <div id="noticeBody" style="flex:1;overflow-y:auto;padding:20px 22px"></div>
+  </div>
+</div>
+
+<style>
+.ntab{padding:9px 13px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--muted);white-space:nowrap;font-family:inherit}
+.ntab.on{border-bottom-color:var(--violet);color:var(--violet)}
+#noticeBody h3{font-size:17px;font-weight:700;margin:0 0 16px}
+#noticeBody .st{font-weight:700;font-size:14px;margin-bottom:10px}
+#noticeBody ul{font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0}
+#noticeBody .tip{background:#EEEDF8;border-left:4px solid var(--violet);border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:var(--violet)}
+#noticeBody .warn{background:#FFF4E5;border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:12px 16px;margin:0 0 18px;font-size:13px;color:#8A4B00}
+</style>
+
+<script>
+const NOTICE_DOC = {
+
+principe: `
+<h3>💡 Comment fonctionne cet outil</h3>
+<div class="tip">Cette page rassemble tous les documents du réseau, classés par catégorie. Certains se téléchargent simplement, d’autres se remplissent et se signent directement en ligne.</div>
+<div class="st">📁 Deux types de documents</div>
+<ul>
+  <li><strong>À télécharger</strong> — un fichier (PDF, Word…) mis à disposition. On clique, on récupère le fichier.</li>
+  <li><strong>À remplir en ligne</strong> — un formulaire dont les champs ont été définis à l’avance. On le remplit à l’écran, on le signe, et on l’exporte en PDF.</li>
+</ul>
+<div class="st">🔍 Retrouver un document</div>
+<ul>
+  <li>Les catégories se déplient d’un clic sur leur titre.</li>
+  <li>La barre de recherche en haut filtre sur le titre du document.</li>
+  <li>Un document peut être rattaché à une crèche précise, ou rester commun à tout le réseau.</li>
+</ul>
+`,
+
+categories: `
+<h3>🗂️ Organiser les catégories</h3>
+<div class="tip">Les catégories structurent la bibliothèque. Elles peuvent s’emboîter : une catégorie parente contient des sous-catégories.</div>
+<div class="st">➕ Créer une catégorie</div>
+<ul>
+  <li>Bouton <strong>Nouvelle catégorie</strong>.</li>
+  <li>Renseigner le <strong>nom</strong>, choisir une <strong>couleur</strong> — elle sert de repère visuel dans la liste.</li>
+  <li>Laisser <strong>Catégorie parente</strong> vide pour une catégorie de premier niveau, ou en choisir une pour créer une sous-catégorie.</li>
+</ul>
+<div class="st">💡 Conseil d’organisation</div>
+<ul>
+  <li>Rester sur un nombre limité de catégories principales : une bibliothèque trop découpée devient difficile à parcourir.</li>
+  <li>Utiliser les sous-catégories pour les regroupements fins (par exemple : Ressources humaines › Entretiens annuels).</li>
+</ul>
+`,
+
+documents: `
+<h3>📄 Ajouter et gérer les documents</h3>
+<div class="st">➕ Nouveau document</div>
+<ul>
+  <li>Bouton <strong>Nouveau document</strong>, puis renseigner le titre, la description, la catégorie et éventuellement la crèche.</li>
+  <li>Choisir le <strong>type</strong> :
+    <ul>
+      <li><strong>À télécharger</strong> → joindre le fichier. Il est stocké en ligne et reste accessible à tous.</li>
+      <li><strong>À remplir en ligne</strong> → définir les champs du formulaire.</li>
+    </ul>
+  </li>
+</ul>
+<div class="st">🧱 Construire un formulaire</div>
+<ul>
+  <li>Bouton <strong>Ajouter un champ</strong> pour chaque information à recueillir.</li>
+  <li>Donner un <strong>libellé</strong> clair — c’est ce que la personne lira.</li>
+  <li>Choisir le type adapté : texte court, zone de texte long, date, e-mail, nombre ou case à cocher.</li>
+  <li>L’ordre des champs à l’écran correspond à l’ordre de saisie ici.</li>
+</ul>
+<div class="warn">⚠️ Modifier les champs d’un document déjà utilisé n’efface pas les réponses existantes, mais les anciennes réponses ne contiendront pas les nouveaux champs. Mieux vaut stabiliser un formulaire avant de le diffuser largement.</div>
+<div class="st">🗑️ Supprimer</div>
+<ul>
+  <li>La suppression retire le document de la liste sans détruire les réponses déjà enregistrées.</li>
+</ul>
+`,
+
+remplir: `
+<h3>✍️ Remplir un document en ligne</h3>
+<div class="tip">Un document de type « à remplir » s’ouvre comme un formulaire. Il peut être complété en une fois ou repris plus tard.</div>
+<div class="st">📝 La saisie</div>
+<ul>
+  <li>Cliquer sur le document pour ouvrir le formulaire.</li>
+  <li>Remplir les champs, puis <strong>Enregistrer</strong>.</li>
+  <li>Tant que la réponse n’est pas exportée, elle reste modifiable : on peut rouvrir et compléter.</li>
+</ul>
+<div class="st">📤 Exporter en PDF</div>
+<ul>
+  <li>L’export produit un PDF propre, à l’en-tête du réseau, reprenant les champs remplis et les signatures.</li>
+  <li>C’est cette version PDF qui fait foi : la conserver ou la transmettre.</li>
+  <li>Il est également possible d’exporter le document <strong>vierge</strong>, pour disposer d’une trame papier.</li>
+</ul>
+`,
+
+signature: `
+<h3>🖊️ Les signatures</h3>
+<div class="tip">Un document peut recueillir plusieurs signatures — par exemple celle du salarié et celle de la personne menant l’entretien. Deux méthodes existent, au choix pour chaque signataire.</div>
+<div class="st">✍️ Signer directement à l’écran</div>
+<ul>
+  <li>Signer avec le doigt ou un stylet dans le cadre prévu.</li>
+  <li>Le bouton <strong>Effacer</strong> permet de recommencer autant de fois que nécessaire.</li>
+  <li>Pratique sur tablette, quand les deux personnes sont côte à côte.</li>
+</ul>
+<div class="st">📱 Signature à distance par QR code</div>
+<ul>
+  <li>Cliquer sur <strong>Signer sur mobile</strong> en face du signataire concerné.</li>
+  <li>Un <strong>QR code</strong> s’affiche : la personne le scanne avec l’appareil photo de son téléphone.</li>
+  <li>Une page de signature s’ouvre sur son téléphone. Elle signe, valide, et c’est terminé.</li>
+  <li>La signature apparaît <strong>automatiquement</strong> sur le document, sans rien faire de plus : la page vérifie toutes les trois secondes.</li>
+  <li>Si le scan pose problème, le bouton <strong>Copier le lien</strong> permet de transmettre l’adresse par SMS ou par mail.</li>
+</ul>
+<div class="warn">⏱️ Le lien de signature est valable <strong>30 minutes</strong>. Passé ce délai, relancer simplement l’opération pour générer un nouveau QR code.</div>
+<div class="st">💡 Bon à savoir</div>
+<ul>
+  <li>La personne qui signe à distance n’a besoin d’aucun compte ni d’aucune application : un simple navigateur suffit.</li>
+  <li>Le lien est propre à ce document et à ce signataire : il ne donne accès à rien d’autre.</li>
+  <li>Une signature reçue peut être effacée et refaite avant l’export final.</li>
+</ul>
+`,
+
+reponses: `
+<h3>📋 Consulter les réponses</h3>
+<div class="tip">Chaque formulaire rempli est archivé. On retrouve l’ensemble des réponses d’un document au même endroit.</div>
+<div class="st">👁️ Consulter</div>
+<ul>
+  <li>Ouvrir la liste des <strong>réponses enregistrées</strong> depuis le document concerné.</li>
+  <li>Les réponses sont datées et identifiées par le nom du signataire.</li>
+  <li>Cliquer sur une réponse pour la rouvrir, la compléter ou la réexporter en PDF.</li>
+</ul>
+<div class="st">🗑️ Supprimer</div>
+<ul>
+  <li>Une réponse peut être supprimée définitivement — l’action est irréversible.</li>
+  <li>Penser à exporter le PDF avant toute suppression si le document doit être conservé.</li>
+</ul>
+<div class="warn">📁 Pour les documents à valeur administrative (entretiens annuels notamment), conserver systématiquement l’export PDF en dehors de l’application.</div>
+`
+
+};
+
+function openNotice(){
+  document.getElementById('ovNotice').classList.add('on');
+  switchNoticeTab('principe', document.querySelector('.ntab'));
+}
+function switchNoticeTab(tab, btn){
+  document.querySelectorAll('.ntab').forEach(b=>b.classList.remove('on'));
+  if(btn) btn.classList.add('on');
+  document.getElementById('noticeBody').innerHTML = NOTICE_DOC[tab] || '';
+}
+</script>
+
 </body>
 </html>
