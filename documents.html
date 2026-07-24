@@ -616,9 +616,12 @@ async function saveFill(){
   const tpl=TPL[fillDoc.template_key];
   if(tpl){
     tpl.fields.forEach(f=>{
-      if(f==='fonction'||(/^g\d+_\d+_/.test(f)&&!/_acc$/.test(f))){
-        const r=document.querySelector('input[name=ff_'+f+']:checked');
-        donnees[f]=r?r.value:'';return;
+      if(f==='fonction'){
+        const r=document.querySelector('input[name=ff_fonction]:checked');
+        donnees.fonction=r?r.value:'';return;
+      }
+      if(/^g\d+_\d+_/.test(f)&&!/_acc$/.test(f)){
+        donnees[f]=grPick(f);return;
       }
       if(/_acc$/.test(f)){
         const a=document.getElementById('ff_'+f),b=document.getElementById('ff_'+f+'_m');
@@ -840,6 +843,18 @@ function grKeys(){
   out.push('gr_date');
   return out;
 }
+/* Lit la valeur du groupe visible : tableau (desktop) ou carte (mobile).
+   Les deux vues coexistent dans le DOM, seule l'une est affichee. */
+function grVisible(el){return !!(el&&el.offsetParent!==null);}
+function grPick(key){
+  const a=document.querySelector('input[name=ff_'+key+']:checked');
+  const b=document.querySelector('input[name=ff_'+key+'_m]:checked');
+  const av=document.querySelector('input[name=ff_'+key+']');
+  const bv=document.querySelector('input[name=ff_'+key+'_m]');
+  if(grVisible(av))return a?a.value:'';
+  if(grVisible(bv))return b?b.value:'';
+  return (a&&a.value)||(b&&b.value)||'';
+}
 function grRadio(name,val,cur){
   return `<label class="gr-o"><input type="radio" name="ff_${name}" value="${esc(val)}"${cur===val?' checked':''}><span>${esc(val)}</span></label>`;
 }
@@ -942,7 +957,7 @@ const TPL={
         <div class="gr-cl">${esc(it)}</div>
         ${sc.colonnes.map(c=>{
           const k='g'+si+'_'+ii+'_'+c.key;
-          return `<div class="gr-cg"><b>${esc(c.label||c.key)}</b>${sc.echelle.map(o=>grRadio(k,o,v[k])).join('')}</div>`;
+          return `<div class="gr-cg"><b>${esc(c.label||c.key)}</b>${sc.echelle.map(o=>grRadio(k+'_m',o,v[k])).join('')}</div>`;
         }).join('')}
         ${sc.accompagnement?`<label class="gr-acc"><input type="checkbox" id="ff_${acc}_m"${v[acc]?' checked':''}>Besoin d'accompagnement</label>`:''}
        </div>`;
@@ -960,9 +975,9 @@ const TPL={
   pdf:(doc,mode)=>{
     const sc=grSchema();
     const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
-    const rad=n=>{const r=document.querySelector('input[name=ff_'+n+']:checked');return r?r.value:'';};
+    const rad=n=>grPick(n);
     const chk=id=>{const a=document.getElementById('ff_'+id),b=document.getElementById('ff_'+id+'_m');
-      const vis=e=>e&&e.offsetParent!==null;const e=vis(a)?a:(vis(b)?b:(a||b));return !!(e&&e.checked);};
+      const e=grVisible(a)?a:(grVisible(b)?b:(a||b));return !!(e&&e.checked);};
     const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
     const W=182;let y=pdfLogo(doc,20);
     const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
