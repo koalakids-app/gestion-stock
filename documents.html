@@ -620,6 +620,12 @@ async function saveFill(){
         const r=document.querySelector('input[name=ff_'+f+']:checked');
         donnees[f]=r?r.value:'';return;
       }
+      if(/_acc$/.test(f)){
+        const a=document.getElementById('ff_'+f),b=document.getElementById('ff_'+f+'_m');
+        const vis=e=>e&&e.offsetParent!==null;
+        const src=vis(a)?a:(vis(b)?b:(a||b));
+        donnees[f]=!!(src&&src.checked);return;
+      }
       const el=document.getElementById('ff_'+f);
       if(!el)return;
       donnees[f]=(el.type==='checkbox')?el.checked:el.value;
@@ -849,18 +855,38 @@ function grIdentField(f,v){
   return `<div class="f"><label>${esc(f.label)}</label><input type="${t}" id="${id}" value="${esc(val)}"></div>`;
 }
 const GR_CSS=`<style>
-.gr .gr-sec{background:var(--violet,#4A3F9F);color:#fff;padding:7px 10px;border-radius:9px;font-weight:700;font-size:13px;margin:16px 0 8px}
-.gr .gr-it{border:1px solid var(--line,#E7E4F0);border-radius:10px;padding:9px 10px;margin-bottom:7px}
-.gr .gr-lab{font-size:12.5px;line-height:1.35;margin-bottom:7px}
-.gr .gr-cols{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-.gr .gr-grp{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.gr .gr-grp>b{font-size:10.5px;color:var(--muted,#8E8AA8);font-weight:700;text-transform:uppercase}
-.gr .gr-o{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;background:#F1EFF7;border-radius:8px;padding:3px 7px;cursor:pointer}
-.gr .gr-o input{width:auto;margin:0}
-.gr .gr-acc{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer}
-.gr .gr-acc input{width:auto;margin:0}
+.gr .gr-sec{background:var(--violet,#4A3F9F);color:#fff;padding:7px 10px;border-radius:9px 9px 0 0;font-weight:700;font-size:13px;margin:18px 0 0}
 .gr .gr-leg{font-size:11px;color:var(--muted,#8E8AA8);margin:4px 0 10px}
 .gr .gr-empty{font-size:13px;color:var(--muted,#8E8AA8);padding:10px 0}
+.gr .gr-wrap{border:1px solid var(--line,#E7E4F0);border-top:none;border-radius:0 0 9px 9px;overflow:hidden}
+.gr table.gr-t{width:100%;border-collapse:collapse;table-layout:fixed}
+.gr .gr-t th,.gr .gr-t td{border-bottom:1px solid var(--line,#E7E4F0);padding:6px 5px;vertical-align:middle}
+.gr .gr-t tr:last-child td{border-bottom:none}
+.gr .gr-t thead th{background:#F6F4FB;font-size:10px;font-weight:700;color:var(--muted,#8E8AA8);text-transform:uppercase;text-align:center;padding:5px 3px;line-height:1.2}
+.gr .gr-t thead th.gr-h1{text-align:left;padding-left:9px}
+.gr .gr-t thead tr.gr-r2 th{font-size:10.5px;color:var(--violet,#4A3F9F);background:#EFEBF9}
+.gr .gr-t td.gr-lab{font-size:12px;line-height:1.35;text-align:left;padding-left:9px}
+.gr .gr-t td.gr-c{text-align:center}
+.gr .gr-t td.gr-c label{display:block;cursor:pointer;padding:5px 0;border-radius:6px}
+.gr .gr-t td.gr-c label:hover{background:#F1EFF7}
+.gr .gr-t input[type=radio],.gr .gr-t input[type=checkbox]{width:17px;height:17px;margin:0;cursor:pointer;accent-color:var(--violet,#4A3F9F)}
+.gr .gr-t tbody tr:nth-child(even){background:#FBFAFE}
+.gr .gr-grpsep{border-left:2px solid var(--line,#E7E4F0)}
+/* --- cartes empilees sur petit ecran --- */
+.gr .gr-card{display:none}
+@media(max-width:700px){
+  .gr .gr-wrap{border:none;border-radius:0;overflow:visible}
+  .gr table.gr-t{display:none}
+  .gr .gr-card{display:block;border:1px solid var(--line,#E7E4F0);border-radius:10px;padding:9px 10px;margin-bottom:7px}
+  .gr .gr-card .gr-cl{font-size:12.5px;line-height:1.35;margin-bottom:8px}
+  .gr .gr-card .gr-cg{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px}
+  .gr .gr-card .gr-cg>b{font-size:10px;color:var(--muted,#8E8AA8);font-weight:700;text-transform:uppercase;min-width:58px}
+  .gr .gr-card .gr-o{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;background:#F1EFF7;border-radius:8px;padding:4px 8px;cursor:pointer}
+  .gr .gr-card .gr-o input{width:auto;margin:0;accent-color:var(--violet,#4A3F9F)}
+  .gr .gr-card .gr-acc{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer;margin-top:2px}
+  .gr .gr-card .gr-acc input{width:auto;margin:0;accent-color:var(--violet,#4A3F9F)}
+  .gr .gr-sec{border-radius:9px;margin:18px 0 8px}
+}
 </style>`;
 
 const TPL={
@@ -872,20 +898,56 @@ const TPL={
    <h3>Identification</h3>
    ${sc.identite.map(f=>grIdentField(f,v)).join('')}
    ${sc.legende?`<div class="gr-leg">${esc(sc.legende)}</div>`:''}
-   ${sc.sections.length?sc.sections.map((sec,si)=>`
+   ${sc.sections.length?sc.sections.map((sec,si)=>{
+     const nc=sc.colonnes.length,ne=sc.echelle.length;
+     const span=nc*ne+(sc.accompagnement?1:0);
+     const labPct=Math.max(34,64-span*4);
+     const cw=((100-labPct)/span).toFixed(2);
+     return `
      <div class="gr-sec">${esc(sec.titre||'')}</div>
+     <div class="gr-wrap">
+     <table class="gr-t">
+      <colgroup><col style="width:${labPct}%">${
+        Array.from({length:span}).map(()=>`<col style="width:${cw}%">`).join('')}</colgroup>
+      <thead>
+       <tr>
+        <th class="gr-h1" rowspan="2">Items</th>
+        ${sc.colonnes.map(c=>`<th colspan="${ne}">${esc(c.label||c.key)}</th>`).join('')}
+        ${sc.accompagnement?'<th rowspan="2">Besoin d\'accomp.</th>':''}
+       </tr>
+       <tr class="gr-r2">
+        ${sc.colonnes.map((c,ci)=>sc.echelle.map((o,oi)=>
+          `<th${(ci>0&&oi===0)?' class="gr-grpsep"':''}>${esc(o)}</th>`).join('')).join('')}
+       </tr>
+      </thead>
+      <tbody>
+       ${(sec.items||[]).map((it,ii)=>{
+         const acc='g'+si+'_'+ii+'_acc';
+         return `<tr>
+          <td class="gr-lab">${esc(it)}</td>
+          ${sc.colonnes.map((c,ci)=>{
+            const k='g'+si+'_'+ii+'_'+c.key;
+            return sc.echelle.map((o,oi)=>
+              `<td class="gr-c${(ci>0&&oi===0)?' gr-grpsep':''}"><label title="${esc(o)}"><input type="radio" name="ff_${k}" value="${esc(o)}"${v[k]===o?' checked':''}></label></td>`
+            ).join('');
+          }).join('')}
+          ${sc.accompagnement?`<td class="gr-c"><label><input type="checkbox" id="ff_${acc}"${v[acc]?' checked':''}></label></td>`:''}
+         </tr>`;
+       }).join('')}
+      </tbody>
+     </table>
      ${(sec.items||[]).map((it,ii)=>{
        const acc='g'+si+'_'+ii+'_acc';
-       return `<div class="gr-it">
-         <div class="gr-lab">${esc(it)}</div>
-         <div class="gr-cols">
-           ${sc.colonnes.map(c=>{
-             const k='g'+si+'_'+ii+'_'+c.key;
-             return `<div class="gr-grp"><b>${esc(c.label||c.key)}</b>${sc.echelle.map(o=>grRadio(k,o,v[k])).join('')}</div>`;
-           }).join('')}
-           ${sc.accompagnement?`<label class="gr-acc"><input type="checkbox" id="ff_${acc}"${v[acc]?' checked':''}>Besoin d'accompagnement</label>`:''}
-         </div></div>`;
-     }).join('')}`).join('')
+       return `<div class="gr-card">
+        <div class="gr-cl">${esc(it)}</div>
+        ${sc.colonnes.map(c=>{
+          const k='g'+si+'_'+ii+'_'+c.key;
+          return `<div class="gr-cg"><b>${esc(c.label||c.key)}</b>${sc.echelle.map(o=>grRadio(k,o,v[k])).join('')}</div>`;
+        }).join('')}
+        ${sc.accompagnement?`<label class="gr-acc"><input type="checkbox" id="ff_${acc}_m"${v[acc]?' checked':''}>Besoin d'accompagnement</label>`:''}
+       </div>`;
+     }).join('')}
+     </div>`;}).join('')
    :'<div class="gr-empty">Aucune section définie pour cette grille.</div>'}
    ${sc.synthese!==''?`<h3>Synthèse</h3>
    <div class="f"><label>${esc(sc.synthese)}</label><textarea id="ff_gr_synthese" rows="5">${esc(v.gr_synthese)}</textarea></div>`:''}
@@ -899,7 +961,8 @@ const TPL={
     const sc=grSchema();
     const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
     const rad=n=>{const r=document.querySelector('input[name=ff_'+n+']:checked');return r?r.value:'';};
-    const chk=id=>{const e=document.getElementById('ff_'+id);return !!(e&&e.checked);};
+    const chk=id=>{const a=document.getElementById('ff_'+id),b=document.getElementById('ff_'+id+'_m');
+      const vis=e=>e&&e.offsetParent!==null;const e=vis(a)?a:(vis(b)?b:(a||b));return !!(e&&e.checked);};
     const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
     const W=182;let y=pdfLogo(doc,20);
     const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
