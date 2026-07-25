@@ -863,6 +863,24 @@
     display:inline-flex;align-items:center;gap:6px;transition:background .15s;white-space:nowrap;}
   .reglo-header-btn:hover{background:rgba(255,255,255,0.18);}
   #reglo-app{display:none;}
+  /* ── ÉTAPE 3b : fraîcheur + actions ── */
+  .freshness{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;
+    padding:2px 8px;border-radius:20px;white-space:nowrap;}
+  .freshness.ok{background:#EEF5EE;color:#375239;}
+  .freshness.stale{background:#FEF5E5;color:#8A5700;}
+  .freshness.never{background:#F3F0EB;color:#8A7B66;}
+  .card-fresh-row{margin-top:8px;}
+  .reglo-add-btn{background:#5C7A5E;color:#fff;border:none;padding:8px 14px;border-radius:8px;
+    cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;
+    display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:background .15s;}
+  .reglo-add-btn:hover{background:#4A6349;}
+  .content-actions{display:flex;align-items:center;gap:10px;}
+  .modal-verify-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    background:#FAF7F2;border:1px solid #E2D9CC;border-radius:12px;padding:12px 16px;margin-bottom:18px;}
+  .reglo-verify-btn{background:#D4891A;color:#fff;border:none;padding:9px 16px;border-radius:9px;
+    cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:600;
+    display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:background .15s;}
+  .reglo-verify-btn:hover{background:#B5730F;}
 </style>
 </head>
 <body>
@@ -1025,9 +1043,14 @@
         <h2 id="sectionTitle">Toutes les fiches</h2>
         <span class="results-count" id="resultsCount"></span>
       </div>
-      <div class="view-toggle">
-        <button class="view-btn active" id="gridBtn" onclick="setView('grid')" title="Vue grille">⊞</button>
-        <button class="view-btn" id="listBtn" onclick="setView('list')" title="Vue liste">☰</button>
+      <div class="content-actions">
+        <button class="reglo-add-btn" id="reglo-add-btn" onclick="regloAddFiche()" style="display:none">
+          <span>➕</span> Ajouter une fiche
+        </button>
+        <div class="view-toggle">
+          <button class="view-btn active" id="gridBtn" onclick="setView('grid')" title="Vue grille">⊞</button>
+          <button class="view-btn" id="listBtn" onclick="setView('list')" title="Vue liste">☰</button>
+        </div>
       </div>
     </div>
 
@@ -2205,11 +2228,29 @@ async function regloLogin(){
   }
 }
 
+function regloCanEdit(){
+  return userRole === 'direction' || userRole === 'referent';
+}
+
+function regloApplyRoleUI(){
+  const addBtn = document.getElementById('reglo-add-btn');
+  if(addBtn) addBtn.style.display = regloCanEdit() ? 'inline-flex' : 'none';
+}
+
+// Placeholders — la mécanique réelle (génération de prompt + collage) arrive à l'étape 3c
+function regloAddFiche(){
+  alert('Ajout de fiche : disponible très bientôt (étape suivante).');
+}
+function regloVerifyFiche(id){
+  alert('Vérification de la fiche #' + id + ' : disponible très bientôt (étape suivante).');
+}
+
 async function enterApp(){
   document.getElementById('reglo-login-wrap').style.display = 'none';
   document.getElementById('reglo-app').style.display = 'block';
   await loadFichesFromSupabase();
   init();
+  regloApplyRoleUI();
 }
 
 // Reprise de session : si déjà connecté, on saute le login
@@ -2335,6 +2376,22 @@ function renderCards() {
   }
 }
 
+// ── Fraîcheur d'une fiche (basée sur verifiedAt) ──
+function freshnessBadge(d){
+  if(!d.verifiedAt){
+    return '<span class="freshness never" title="Jamais vérifiée via Claude">○ Jamais vérifiée</span>';
+  }
+  const then = new Date(d.verifiedAt);
+  const months = Math.floor((Date.now() - then.getTime()) / (1000*60*60*24*30.44));
+  let label;
+  if(months <= 0) label = 'Vérifiée ce mois-ci';
+  else if(months === 1) label = 'Vérifiée il y a 1 mois';
+  else label = 'Vérifiée il y a ' + months + ' mois';
+  const cls = months > 6 ? 'stale' : 'ok';
+  const icon = months > 6 ? '⚠' : '✓';
+  return '<span class="freshness ' + cls + '" title="Dernière vérification via Claude">' + icon + ' ' + label + '</span>';
+}
+
 function renderGridCard(d, i) {
   const cat = CAT[d.category];
   const badge2025 = d.tags && d.tags.includes('decret2025') ? `<span class="badge-2025">⚡ Décret 2025</span>` : '';
@@ -2350,6 +2407,7 @@ function renderGridCard(d, i) {
         </div>
         <h3>${d.title}${badge2025}${badgeCaduque}${badgeNew}</h3>
         <p>${d.summary}</p>
+        <div class="card-fresh-row">${freshnessBadge(d)}</div>
         <div class="card-footer">
           <span class="card-source">📋 ${d.source}</span>
           <button class="expand-btn">Voir détails →</button>
@@ -2409,7 +2467,15 @@ function openModal(id) {
       </div>
     </div>` : '';
 
+  const verifyBtn = regloCanEdit()
+    ? `<button class="reglo-verify-btn" onclick="regloVerifyFiche(${d.id})"><span>🔍</span> Vérifier cette fiche</button>`
+    : '';
+
   document.getElementById('modalBody').innerHTML = `
+    <div class="modal-verify-bar">
+      <div>${freshnessBadge(d)}</div>
+      ${verifyBtn}
+    </div>
     <div class="modal-section">
       <div class="modal-section-title">Description</div>
       <p class="modal-text">${det.description}</p>
