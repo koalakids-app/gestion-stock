@@ -834,8 +834,54 @@
     .header-inner { padding: 14px 16px; }
   }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  /* ── LOGIN ── */
+  #reglo-login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#1A1208 0%,#6B4C2A 55%,#D4891A 100%);padding:1rem;}
+  .reglo-login-box{background:#fff;border-radius:20px;padding:2.5rem 2rem;width:100%;max-width:400px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:'DM Sans',sans-serif;}
+  .reglo-login-logo{text-align:center;font-size:38px;margin-bottom:.5rem;}
+  .reglo-login-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#1A1208;text-align:center;margin-bottom:4px;}
+  .reglo-login-sub{font-size:13px;color:#888;text-align:center;margin-bottom:1.5rem;}
+  .reglo-login-err{background:#FDEDEC;color:#A93226;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:1rem;display:none;}
+  .reglo-fg{margin-bottom:1rem;}
+  .reglo-flabel{display:block;font-size:13px;font-weight:600;color:#6B4C2A;margin-bottom:5px;}
+  .reglo-finput{width:100%;padding:11px 14px;border:1px solid #E2D9CC;border-radius:10px;font-size:15px;
+    font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;}
+  .reglo-finput:focus{border-color:#D4891A;}
+  .reglo-login-btn{width:100%;padding:12px;background:#D4891A;color:#fff;border:none;border-radius:10px;
+    cursor:pointer;font-size:15px;font-weight:700;transition:background .15s;margin-top:.5rem;font-family:'DM Sans',sans-serif;}
+  .reglo-login-btn:hover{background:#B5730F;}
+  .reglo-login-btn:disabled{opacity:.6;cursor:not-allowed;}
+  #reglo-app{display:none;}
+</style>
 </head>
 <body>
+
+<!-- ── ÉCRAN DE CONNEXION ── -->
+<div id="reglo-login-wrap">
+  <div class="reglo-login-box">
+    <div class="reglo-login-logo">🏠</div>
+    <div class="reglo-login-title">Réglementation Micro-Crèches</div>
+    <div class="reglo-login-sub">Base réglementaire — accès réservé</div>
+    <div class="reglo-login-err" id="reglo-login-err"></div>
+    <form id="reglo-login-form" autocomplete="on" onsubmit="event.preventDefault();regloLogin();">
+      <div class="reglo-fg">
+        <label class="reglo-flabel">Email</label>
+        <input class="reglo-finput" id="reglo-email" type="email" name="email" placeholder="votre@email.fr" autocomplete="username" required/>
+      </div>
+      <div class="reglo-fg">
+        <label class="reglo-flabel">Mot de passe</label>
+        <input class="reglo-finput" id="reglo-pwd" type="password" name="password" placeholder="••••••••" autocomplete="current-password" required/>
+      </div>
+      <button type="submit" class="reglo-login-btn" id="reglo-login-btn">Se connecter</button>
+    </form>
+  </div>
+</div>
+
+<!-- ── APPLICATION (masquée avant connexion) ── -->
+<div id="reglo-app">
 
 <header>
   <div class="header-inner">
@@ -991,6 +1037,8 @@
     <div class="modal-body" id="modalBody"></div>
   </div>
 </div>
+
+</div><!-- /#reglo-app -->
 
 <script>
 const DATA = [
@@ -2072,6 +2120,99 @@ const DATA = [
 ];
 
 // ─── STATE ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// SUPABASE + AUTH + CHARGEMENT DES FICHES
+// ═══════════════════════════════════════════════════════════════
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sbReglo = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null, currentProfile = null, userRole = null, isDirection = false;
+// FICHES : source affichée. Repli sur DATA (en dur) si Supabase indisponible.
+let FICHES = DATA;
+
+// Convertit une ligne Supabase (snake_case, jsonb) vers le format interne des fiches
+function rowToFiche(r){
+  return {
+    id: r.id,
+    category: r.category,
+    tags: r.tags || [],
+    caduque: !!r.caduque,
+    isNew: !!r.is_new,
+    title: r.title,
+    ref: r.ref,
+    summary: r.summary,
+    source: r.source,
+    date: r.date,
+    update2025: r.update2025 || null,
+    detail: r.detail,
+    verifiedAt: r.verified_at || null
+  };
+}
+
+async function loadFichesFromSupabase(){
+  try{
+    const { data, error } = await sbReglo
+      .from('reglementation_fiches')
+      .select('*')
+      .order('id', { ascending: true });
+    if(error) throw error;
+    if(data && data.length){
+      FICHES = data.map(rowToFiche);
+    }else{
+      FICHES = DATA; // table vide -> secours
+    }
+  }catch(e){
+    console.warn('Chargement Supabase impossible, repli sur DATA en dur :', e);
+    FICHES = DATA;
+  }
+}
+
+async function regloLogin(){
+  const email = document.getElementById('reglo-email').value.trim();
+  const pwd   = document.getElementById('reglo-pwd').value;
+  const btn   = document.getElementById('reglo-login-btn');
+  const err   = document.getElementById('reglo-login-err');
+  err.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Connexion…';
+  try{
+    const { data, error } = await sbReglo.auth.signInWithPassword({ email, password: pwd });
+    if(error) throw error;
+    currentUser = data.user;
+    const { data: prof } = await sbReglo.from('referents').select('*').eq('user_id', currentUser.id).maybeSingle();
+    currentProfile = prof || null;
+    userRole = currentProfile?.role || null;
+    isDirection = userRole === 'direction';
+    await enterApp();
+  }catch(e){
+    err.textContent = 'Email ou mot de passe incorrect.';
+    err.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Se connecter';
+  }
+}
+
+async function enterApp(){
+  document.getElementById('reglo-login-wrap').style.display = 'none';
+  document.getElementById('reglo-app').style.display = 'block';
+  await loadFichesFromSupabase();
+  init();
+}
+
+// Reprise de session : si déjà connecté, on saute le login
+async function regloBootstrap(){
+  try{
+    const { data:{ session } } = await sbReglo.auth.getSession();
+    if(session && session.user){
+      currentUser = session.user;
+      const { data: prof } = await sbReglo.from('referents').select('*').eq('user_id', currentUser.id).maybeSingle();
+      currentProfile = prof || null;
+      userRole = currentProfile?.role || null;
+      isDirection = userRole === 'direction';
+      await enterApp();
+    }
+  }catch(e){ /* reste sur l'écran de login */ }
+}
+
 let currentFilter = 'all';
 let currentView = 'grid';
 let searchQuery = '';
@@ -2098,12 +2239,12 @@ function init() {
 }
 
 function updateCounts() {
-  const total = DATA.length;
+  const total = FICHES.length;
   document.getElementById('totalCount').textContent = total;
   document.getElementById('countAll').textContent = total;
   Object.keys(CAT).forEach(cat => {
     const el = document.getElementById('count-' + cat);
-    if (el) el.textContent = DATA.filter(d => d.category === cat || (d.tags && d.tags.includes(cat))).length;
+    if (el) el.textContent = FICHES.filter(d => d.category === cat || (d.tags && d.tags.includes(cat))).length;
   });
 }
 
@@ -2133,7 +2274,7 @@ function setView(view) {
 }
 
 function getFiltered() {
-  return DATA.filter(d => {
+  return FICHES.filter(d => {
     const matchCat = currentFilter === 'all' || d.category === currentFilter || (d.tags && d.tags.includes(currentFilter));
     const matchSearch = !searchQuery ||
       d.title.toLowerCase().includes(searchQuery) ||
@@ -2150,7 +2291,7 @@ function renderCards() {
   const empty = document.getElementById('emptyState');
 
   document.getElementById('resultsCount').textContent = 
-    filtered.length === DATA.length ? `${filtered.length} fiches` : `${filtered.length} résultat${filtered.length > 1 ? 's' : ''}`;
+    filtered.length === FICHES.length ? `${filtered.length} fiches` : `${filtered.length} résultat${filtered.length > 1 ? 's' : ''}`;
 
   if (filtered.length === 0) {
     container.innerHTML = '';
@@ -2212,7 +2353,7 @@ function renderListItem(d, i) {
 }
 
 function openModal(id) {
-  const d = DATA.find(x => x.id === id);
+  const d = FICHES.find(x => x.id === id);
   const cat = CAT[d.category];
   const overlay = document.getElementById('modalOverlay');
 
@@ -2354,7 +2495,7 @@ window.addEventListener('online', updateOnlineStatus);
 window.addEventListener('offline', updateOnlineStatus);
 updateOnlineStatus();
 
-init();
+regloBootstrap();
 </script>
 </body>
 </html>
