@@ -881,6 +881,54 @@
     cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:600;
     display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:background .15s;}
   .reglo-verify-btn:hover{background:#B5730F;}
+  /* ── ÉTAPE 3c : modale édition (2 étapes) ── */
+  .redit-overlay{position:fixed;inset:0;background:rgba(26,18,8,0.55);display:none;align-items:flex-start;
+    justify-content:center;z-index:2000;padding:24px 12px;overflow-y:auto;}
+  .redit-overlay.open{display:flex;}
+  .redit-box{background:#fff;border-radius:18px;width:100%;max-width:680px;box-shadow:0 24px 70px rgba(0,0,0,0.35);
+    font-family:'DM Sans',sans-serif;overflow:hidden;margin:auto;}
+  .redit-head{background:#1A1208;color:#fff;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;}
+  .redit-head h3{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;}
+  .redit-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;opacity:.8;}
+  .redit-close:hover{opacity:1;}
+  .redit-body{padding:22px;}
+  .redit-steps{display:flex;gap:8px;margin-bottom:18px;}
+  .redit-step{flex:1;text-align:center;font-size:12px;font-weight:600;padding:8px;border-radius:8px;
+    background:#F3F0EB;color:#8A7B66;}
+  .redit-step.active{background:#D4891A;color:#fff;}
+  .redit-label{font-size:13px;font-weight:600;color:#6B4C2A;margin-bottom:6px;display:block;}
+  .redit-hint{font-size:12.5px;color:#8A7B66;margin-bottom:12px;line-height:1.5;}
+  .redit-prompt{width:100%;min-height:150px;border:1px solid #E2D9CC;border-radius:10px;padding:12px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;
+    background:#FAF7F2;color:#3a2f1e;outline:none;}
+  .redit-paste{width:100%;min-height:130px;border:1px solid #E2D9CC;border-radius:10px;padding:12px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;outline:none;}
+  .redit-paste:focus,.redit-prompt:focus{border-color:#D4891A;}
+  .redit-subject{width:100%;border:1px solid #E2D9CC;border-radius:10px;padding:11px 14px;font-size:14px;
+    font-family:'DM Sans',sans-serif;outline:none;margin-bottom:14px;}
+  .redit-subject:focus{border-color:#D4891A;}
+  .redit-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
+  .redit-btn{border:none;padding:11px 18px;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;
+    font-size:14px;font-weight:600;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}
+  .redit-btn.primary{background:#D4891A;color:#fff;} .redit-btn.primary:hover{background:#B5730F;}
+  .redit-btn.secondary{background:#EFEAE2;color:#6B4C2A;} .redit-btn.secondary:hover{background:#E2D9CC;}
+  .redit-btn.success{background:#5C7A5E;color:#fff;} .redit-btn.success:hover{background:#4A6349;}
+  .redit-btn.danger{background:#C0392B;color:#fff;} .redit-btn.danger:hover{background:#A93226;}
+  .redit-btn.ghost{background:none;color:#8A7B66;border:1px solid #E2D9CC;text-decoration:none;}
+  .redit-btn.ghost:hover{background:#FAF7F2;}
+  .redit-msg{font-size:13px;padding:10px 14px;border-radius:8px;margin-top:12px;display:none;}
+  .redit-msg.err{background:#FDEDEC;color:#A93226;display:block;}
+  .redit-msg.ok{background:#EEF5EE;color:#375239;display:block;}
+  /* diff avant/après */
+  .redit-diff{margin-top:8px;border:1px solid #E2D9CC;border-radius:10px;overflow:hidden;}
+  .redit-diff-row{display:grid;grid-template-columns:120px 1fr;border-bottom:1px solid #F0EBE3;font-size:13px;}
+  .redit-diff-row:last-child{border-bottom:none;}
+  .redit-diff-row.changed{background:#FEF9EF;}
+  .redit-diff-key{padding:9px 12px;font-weight:600;color:#6B4C2A;background:#FAF7F2;border-right:1px solid #F0EBE3;}
+  .redit-diff-val{padding:9px 12px;}
+  .redit-diff-old{color:#A93226;text-decoration:line-through;opacity:.75;display:block;margin-bottom:3px;}
+  .redit-diff-new{color:#2E6B33;display:block;}
+  .redit-diff-same{color:#6b6355;}
 </style>
 </head>
 <body>
@@ -1072,6 +1120,61 @@
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ── MODALE ÉDITION (Ajouter / Vérifier) — direction only ── -->
+<div class="redit-overlay" id="reditOverlay">
+  <div class="redit-box">
+    <div class="redit-head">
+      <h3 id="reditTitle">Éditer une fiche</h3>
+      <button class="redit-close" onclick="reditClose()">✕</button>
+    </div>
+    <div class="redit-body">
+      <div class="redit-steps">
+        <div class="redit-step active" id="reditStep1">1 · Générer le prompt</div>
+        <div class="redit-step" id="reditStep2">2 · Coller la réponse</div>
+      </div>
+
+      <!-- ÉTAPE 1 -->
+      <div id="reditPane1">
+        <div id="reditSubjectWrap" style="display:none">
+          <label class="redit-label">Sujet de la nouvelle fiche</label>
+          <input class="redit-subject" id="reditSubject" placeholder="Ex : taux d'encadrement en micro-crèche"/>
+        </div>
+        <label class="redit-label">Prompt à envoyer à Lia (Claude)</label>
+        <div class="redit-hint">Copie ce texte, colle-le dans ta conversation Lia, puis reviens coller la réponse à l'étape 2.</div>
+        <textarea class="redit-prompt" id="reditPrompt" readonly></textarea>
+        <div class="redit-actions">
+          <button class="redit-btn primary" onclick="reditCopyPrompt()">📋 Copier le prompt</button>
+          <a class="redit-btn ghost" href="https://claude.ai" target="_blank" rel="noopener">↗ Ouvrir Claude</a>
+          <button class="redit-btn secondary" onclick="reditGoStep(2)" style="margin-left:auto">Étape 2 →</button>
+        </div>
+        <div class="redit-msg" id="reditMsg1"></div>
+      </div>
+
+      <!-- ÉTAPE 2 -->
+      <div id="reditPane2" style="display:none">
+        <label class="redit-label">Réponse de Lia (bloc JSON)</label>
+        <div class="redit-hint">Colle ici le bloc JSON que Lia t'a renvoyé, puis clique « Analyser ».</div>
+        <textarea class="redit-paste" id="reditPaste" placeholder='{ "id": ..., "title": ... }'></textarea>
+        <div class="redit-actions">
+          <button class="redit-btn secondary" onclick="reditGoStep(1)">← Étape 1</button>
+          <button class="redit-btn primary" onclick="reditAnalyze()" style="margin-left:auto">🔎 Analyser</button>
+        </div>
+        <div class="redit-msg" id="reditMsg2"></div>
+
+        <!-- Aperçu / diff -->
+        <div id="reditPreview" style="display:none;margin-top:16px">
+          <label class="redit-label" id="reditPreviewLabel">Aperçu des changements</label>
+          <div class="redit-diff" id="reditDiff"></div>
+          <div class="redit-actions">
+            <button class="redit-btn success" onclick="reditSave()" id="reditSaveBtn">💾 Enregistrer</button>
+          </div>
+          <div class="redit-msg" id="reditMsg3"></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2229,7 +2332,7 @@ async function regloLogin(){
 }
 
 function regloCanEdit(){
-  return userRole === 'direction' || userRole === 'referent';
+  return userRole === 'direction';
 }
 
 function regloApplyRoleUI(){
@@ -2237,12 +2340,273 @@ function regloApplyRoleUI(){
   if(addBtn) addBtn.style.display = regloCanEdit() ? 'inline-flex' : 'none';
 }
 
-// Placeholders — la mécanique réelle (génération de prompt + collage) arrive à l'étape 3c
-function regloAddFiche(){
-  alert('Ajout de fiche : disponible très bientôt (étape suivante).');
+// ═══════════════════════════════════════════════════════════════
+// ÉTAPE 3c : édition des fiches (direction only) — voie B semi-manuelle
+// ═══════════════════════════════════════════════════════════════
+let reditMode = null;      // 'add' | 'verify'
+let reditTargetId = null;  // id de la fiche vérifiée
+let reditParsed = null;    // fiche JSON analysée, prête à enregistrer
+
+const CAT_KEYS = ['agrement','encadrement','financement','locaux','sante','gestion'];
+
+// Gabarit de fiche attendu, décrit pour le prompt
+const FICHE_SCHEMA_TXT = [
+  '{',
+  '  "id": <nombre>,                     // conserver l\'id existant en vérification',
+  '  "category": "<une de: '+CAT_KEYS.join(' | ')+'>",',
+  '  "tags": ["decret2025"],             // optionnel, [] sinon',
+  '  "caduque": <true|false>,            // true si la règle est modifiée/supprimée par le décret 2025-304',
+  '  "isNew": <true|false>,              // true si nouveauté du décret 2025',
+  '  "title": "<titre court>",',
+  '  "ref": "<références d\'articles>",',
+  '  "summary": "<résumé 1-2 phrases>",',
+  '  "source": "<source principale>",',
+  '  "date": "<libellé de date, ex: Avril 2025>",',
+  '  "update2025": [ { "date": "<...>", "text": "<...>" } ],  // ou null',
+  '  "detail": {',
+  '    "description": "<paragraphe>",',
+  '    "points": ["<point 1>", "<point 2>"],',
+  '    "details": [ { "label": "<libellé>", "value": "<valeur>" } ],',
+  '    "alert": "<point d\'attention>",',
+  '    "sources": ["<source 1>", "<source 2>"]',
+  '  }',
+  '}'
+].join('\n');
+
+function buildAddPrompt(subject){
+  return [
+    'Tu es Lia, assistante réglementaire des micro-crèches (réseau Koala Kids).',
+    'Recherche sur le web la réglementation FRANÇAISE à jour (au '+new Date().toLocaleDateString('fr-FR')+') concernant le sujet suivant :',
+    '',
+    '  « '+subject+' »',
+    '',
+    'Tiens compte du décret n°2025-304 du 1er avril 2025 et de son calendrier d\'application.',
+    'Rédige UNE fiche réglementaire complète pour ma base, en respectant EXACTEMENT ce format JSON (et rien d\'autre en dehors du bloc) :',
+    '',
+    FICHE_SCHEMA_TXT,
+    '',
+    'Consignes : id = null (je l\'attribuerai). Sois factuel, cite des articles précis (CASF, décrets). Réponds UNIQUEMENT par le bloc JSON, sans commentaire avant ni après.'
+  ].join('\n');
 }
+
+function buildVerifyPrompt(fiche){
+  const clean = {
+    id: fiche.id, category: fiche.category, tags: fiche.tags||[],
+    caduque: !!fiche.caduque, isNew: !!fiche.isNew, title: fiche.title,
+    ref: fiche.ref, summary: fiche.summary, source: fiche.source, date: fiche.date,
+    update2025: fiche.update2025||null, detail: fiche.detail
+  };
+  return [
+    'Tu es Lia, assistante réglementaire des micro-crèches (réseau Koala Kids).',
+    'Voici une fiche réglementaire existante de ma base. Vérifie sur le web si elle est TOUJOURS EXACTE et À JOUR au '+new Date().toLocaleDateString('fr-FR')+', en tenant compte du décret n°2025-304 du 1er avril 2025.',
+    '',
+    'Fiche actuelle :',
+    '```json',
+    JSON.stringify(clean, null, 2),
+    '```',
+    '',
+    'Si la fiche est toujours correcte : renvoie-la à l\'identique.',
+    'Si elle doit être corrigée : renvoie la version CORRIGÉE en conservant le même "id" ('+fiche.id+') et le même format JSON.',
+    'Réponds UNIQUEMENT par le bloc JSON de la fiche (corrigée ou identique), sans commentaire avant ni après.'
+  ].join('\n');
+}
+
+// ── Ouverture de la modale ──
+function regloAddFiche(){
+  if(!regloCanEdit()) return;
+  reditMode = 'add'; reditTargetId = null; reditParsed = null;
+  document.getElementById('reditTitle').textContent = 'Ajouter une fiche';
+  document.getElementById('reditSubjectWrap').style.display = 'block';
+  document.getElementById('reditSubject').value = '';
+  document.getElementById('reditPrompt').value = '(saisis d\'abord un sujet ci-dessus, le prompt se génère automatiquement)';
+  document.getElementById('reditPaste').value = '';
+  reditResetPreview();
+  reditGoStep(1);
+  document.getElementById('reditOverlay').classList.add('open');
+  // Génération dynamique du prompt quand on tape le sujet
+  const subj = document.getElementById('reditSubject');
+  subj.oninput = () => {
+    const s = subj.value.trim();
+    document.getElementById('reditPrompt').value = s ? buildAddPrompt(s) : '(saisis d\'abord un sujet ci-dessus)';
+  };
+}
+
 function regloVerifyFiche(id){
-  alert('Vérification de la fiche #' + id + ' : disponible très bientôt (étape suivante).');
+  if(!regloCanEdit()) return;
+  const fiche = FICHES.find(f => f.id === id);
+  if(!fiche) return;
+  reditMode = 'verify'; reditTargetId = id; reditParsed = null;
+  document.getElementById('reditTitle').textContent = 'Vérifier : ' + fiche.title;
+  document.getElementById('reditSubjectWrap').style.display = 'none';
+  document.getElementById('reditPrompt').value = buildVerifyPrompt(fiche);
+  document.getElementById('reditPaste').value = '';
+  reditResetPreview();
+  reditGoStep(1);
+  document.getElementById('reditOverlay').classList.add('open');
+}
+
+function reditClose(){
+  document.getElementById('reditOverlay').classList.remove('open');
+}
+function reditGoStep(n){
+  document.getElementById('reditPane1').style.display = n===1 ? 'block' : 'none';
+  document.getElementById('reditPane2').style.display = n===2 ? 'block' : 'none';
+  document.getElementById('reditStep1').classList.toggle('active', n===1);
+  document.getElementById('reditStep2').classList.toggle('active', n===2);
+}
+function reditResetPreview(){
+  document.getElementById('reditPreview').style.display = 'none';
+  document.getElementById('reditDiff').innerHTML = '';
+  ['reditMsg1','reditMsg2','reditMsg3'].forEach(id=>{const e=document.getElementById(id);e.className='redit-msg';e.textContent='';});
+}
+
+function reditCopyPrompt(){
+  const txt = document.getElementById('reditPrompt').value;
+  const msg = document.getElementById('reditMsg1');
+  navigator.clipboard.writeText(txt).then(()=>{
+    msg.className='redit-msg ok'; msg.textContent='Prompt copié ✓ — colle-le dans ta conversation Lia.';
+  }).catch(()=>{
+    msg.className='redit-msg err'; msg.textContent='Copie impossible — sélectionne le texte manuellement.';
+  });
+}
+
+// ── Analyse du JSON collé ──
+function reditAnalyze(){
+  const raw = document.getElementById('reditPaste').value.trim();
+  const msg = document.getElementById('reditMsg2');
+  if(!raw){ msg.className='redit-msg err'; msg.textContent='Colle d\'abord la réponse JSON.'; return; }
+  // extraire un bloc JSON même entouré de ```json ... ```
+  let jsonTxt = raw;
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if(fence) jsonTxt = fence[1].trim();
+  else { const s=raw.indexOf('{'), e=raw.lastIndexOf('}'); if(s>=0&&e>s) jsonTxt=raw.slice(s,e+1); }
+  let obj;
+  try{ obj = JSON.parse(jsonTxt); }
+  catch(err){ msg.className='redit-msg err'; msg.textContent='JSON invalide : '+err.message; return; }
+
+  // validations minimales
+  const errs = [];
+  if(!obj.title) errs.push('title manquant');
+  if(!obj.category || !CAT_KEYS.includes(obj.category)) errs.push('category invalide (attendu: '+CAT_KEYS.join(', ')+')');
+  if(!obj.detail || typeof obj.detail!=='object') errs.push('detail manquant');
+  else{
+    if(!Array.isArray(obj.detail.points)) errs.push('detail.points doit être une liste');
+    if(!Array.isArray(obj.detail.details)) errs.push('detail.details doit être une liste');
+    if(!Array.isArray(obj.detail.sources)) errs.push('detail.sources doit être une liste');
+  }
+  if(errs.length){ msg.className='redit-msg err'; msg.textContent='Problèmes : '+errs.join(' · '); return; }
+
+  // normaliser
+  obj.tags = Array.isArray(obj.tags)?obj.tags:[];
+  obj.caduque = !!obj.caduque; obj.isNew = !!obj.isNew;
+  obj.update2025 = obj.update2025||null;
+
+  if(reditMode==='verify') obj.id = reditTargetId;         // on force l'id d'origine
+  else obj.id = (FICHES.reduce((m,f)=>Math.max(m,f.id),0))+1; // nouvel id
+
+  reditParsed = obj;
+  msg.className='redit-msg ok'; msg.textContent='JSON valide ✓';
+  reditRenderDiff();
+}
+
+// ── Écran avant / après ──
+function reditRenderDiff(){
+  const box = document.getElementById('reditDiff');
+  const label = document.getElementById('reditPreviewLabel');
+  const fields = [
+    ['title','Titre'],['category','Catégorie'],['ref','Références'],['summary','Résumé'],
+    ['source','Source'],['date','Date'],['caduque','Caduque'],['isNew','Nouveau'],
+    ['tags','Tags'],['update2025','MàJ 2025'],['detail','Détail']
+  ];
+  const fmt = v => {
+    if(v===null||v===undefined) return '—';
+    if(typeof v==='object') return JSON.stringify(v);
+    return String(v);
+  };
+  let rows='';
+  if(reditMode==='verify'){
+    label.textContent='Avant / après — fiche #'+reditParsed.id;
+    const before = FICHES.find(f=>f.id===reditTargetId);
+    let anyChange=false;
+    fields.forEach(([k,lab])=>{
+      const bv=fmt(before[k]), av=fmt(reditParsed[k]);
+      const changed = bv!==av;
+      if(changed) anyChange=true;
+      rows += '<div class="redit-diff-row'+(changed?' changed':'')+'">'
+        + '<div class="redit-diff-key">'+lab+'</div><div class="redit-diff-val">'
+        + (changed ? '<span class="redit-diff-old">'+escapeHtml(bv)+'</span><span class="redit-diff-new">'+escapeHtml(av)+'</span>'
+                   : '<span class="redit-diff-same">'+escapeHtml(av)+'</span>')
+        + '</div></div>';
+    });
+    if(!anyChange){
+      label.textContent='Aucun changement — la fiche est identique';
+    }
+  }else{
+    label.textContent='Aperçu de la nouvelle fiche #'+reditParsed.id;
+    fields.forEach(([k,lab])=>{
+      rows += '<div class="redit-diff-row"><div class="redit-diff-key">'+lab+'</div>'
+        + '<div class="redit-diff-val"><span class="redit-diff-same">'+escapeHtml(fmt(reditParsed[k]))+'</span></div></div>';
+    });
+  }
+  box.innerHTML = rows;
+  document.getElementById('reditPreview').style.display='block';
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ── Enregistrement Supabase ──
+async function reditSave(){
+  const msg = document.getElementById('reditMsg3');
+  if(!reditParsed){ return; }
+  const btn = document.getElementById('reditSaveBtn');
+  btn.disabled=true; btn.textContent='Enregistrement…';
+  const row = {
+    id: reditParsed.id,
+    category: reditParsed.category,
+    tags: reditParsed.tags,
+    caduque: reditParsed.caduque,
+    is_new: reditParsed.isNew,
+    title: reditParsed.title,
+    ref: reditParsed.ref,
+    summary: reditParsed.summary,
+    source: reditParsed.source,
+    date: reditParsed.date,
+    update2025: reditParsed.update2025,
+    detail: reditParsed.detail,
+    verified_at: new Date().toISOString()
+  };
+  try{
+    const { error } = await sbReglo.from('reglementation_fiches').upsert(row, { onConflict:'id' });
+    if(error) throw error;
+    msg.className='redit-msg ok'; msg.textContent='Fiche enregistrée ✓';
+    await loadFichesFromSupabase();
+    updateCounts(); renderCards();
+    setTimeout(()=>{ reditClose(); }, 900);
+  }catch(e){
+    msg.className='redit-msg err';
+    msg.textContent = (e.message && /policy|permission|rls/i.test(e.message))
+      ? 'Enregistrement refusé : action réservée à la direction.'
+      : 'Erreur : '+(e.message||e);
+  }finally{
+    btn.disabled=false; btn.textContent='💾 Enregistrer';
+  }
+}
+
+// ── Suppression d'une fiche (direction only) ──
+async function regloDeleteFiche(id){
+  if(!regloCanEdit()) return;
+  const fiche = FICHES.find(f=>f.id===id);
+  if(!fiche) return;
+  if(!confirm('Supprimer définitivement la fiche « '+fiche.title+' » ?')) return;
+  try{
+    const { error } = await sbReglo.from('reglementation_fiches').delete().eq('id', id);
+    if(error) throw error;
+    closeModal();
+    await loadFichesFromSupabase();
+    updateCounts(); renderCards();
+  }catch(e){
+    alert(/policy|permission|rls/i.test(e.message||'') ? 'Suppression réservée à la direction.' : 'Erreur : '+(e.message||e));
+  }
 }
 
 async function enterApp(){
@@ -2468,7 +2832,8 @@ function openModal(id) {
     </div>` : '';
 
   const verifyBtn = regloCanEdit()
-    ? `<button class="reglo-verify-btn" onclick="regloVerifyFiche(${d.id})"><span>🔍</span> Vérifier cette fiche</button>`
+    ? `<button class="reglo-verify-btn" onclick="regloVerifyFiche(${d.id})"><span>🔍</span> Vérifier</button>
+       <button class="redit-btn danger" style="padding:9px 14px" onclick="regloDeleteFiche(${d.id})"><span>🗑</span> Supprimer</button>`
     : '';
 
   document.getElementById('modalBody').innerHTML = `
