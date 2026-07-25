@@ -854,6 +854,13 @@
     cursor:pointer;font-size:15px;font-weight:700;transition:background .15s;margin-top:.5rem;font-family:'DM Sans',sans-serif;}
   .reglo-login-btn:hover{background:#B5730F;}
   .reglo-login-btn:disabled{opacity:.6;cursor:not-allowed;}
+  .reglo-hub-link{display:inline-block;margin-top:1rem;font-size:13px;color:#6B4C2A;text-decoration:none;
+    padding:8px 14px;border:1px solid #E2D9CC;border-radius:10px;transition:background .15s;background:#FAF7F2;}
+  .reglo-hub-link:hover{background:#F0E9DD;}
+  .reglo-header-btn{background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.20);color:#fff;
+    padding:8px 12px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;
+    display:inline-flex;align-items:center;gap:6px;transition:background .15s;white-space:nowrap;}
+  .reglo-header-btn:hover{background:rgba(255,255,255,0.18);}
   #reglo-app{display:none;}
 </style>
 </head>
@@ -877,6 +884,9 @@
       </div>
       <button type="submit" class="reglo-login-btn" id="reglo-login-btn">Se connecter</button>
     </form>
+    <div style="text-align:center;">
+      <a href="../index.html" class="reglo-hub-link">← Retour au hub</a>
+    </div>
   </div>
 </div>
 
@@ -909,6 +919,9 @@
         <span class="num">2025</span>
         <span class="lbl">Mis à jour</span>
       </div>
+      <button class="reglo-header-btn" onclick="regloLogout()" title="Revenir à l'écran de connexion">
+        <span>🔒</span> Déconnexion
+      </button>
     </div>
   </div>
 </header>
@@ -2199,6 +2212,18 @@ async function enterApp(){
 }
 
 // Reprise de session : si déjà connecté, on saute le login
+async function regloLogout(){
+  try{ await sbReglo.auth.signOut(); }catch(e){}
+  currentUser = null; currentProfile = null; userRole = null; isDirection = false;
+  document.getElementById('reglo-app').style.display = 'none';
+  document.getElementById('reglo-login-wrap').style.display = 'flex';
+  // Réinitialise le formulaire
+  document.getElementById('reglo-pwd').value = '';
+  const btn = document.getElementById('reglo-login-btn');
+  btn.disabled = false; btn.textContent = 'Se connecter';
+  document.getElementById('reglo-login-err').style.display = 'none';
+}
+
 async function regloBootstrap(){
   try{
     const { data:{ session } } = await sbReglo.auth.getSession();
