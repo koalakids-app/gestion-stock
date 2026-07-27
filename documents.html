@@ -275,6 +275,24 @@ async function loadAll(){
   sel.innerHTML='<option value="all">Toutes les crèches</option>'+CRECHES.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
   if(PROF&&PROF.role==='referent'&&PROF.creche_id)sel.value=PROF.creche_id;
   render();
+  openFromUrl();
+}
+
+/* Ouverture automatique d'un document (et éventuellement d'une réponse précise)
+   via les paramètres d'URL : ?doc=<documentId>&rep=<reponseId>
+   Utilisé par le module Enfants de demandes.html pour rebondir sur un document. */
+function openFromUrl(){
+  try{
+    const q=new URLSearchParams(location.search);
+    const docId=q.get('doc');
+    if(!docId)return;
+    const repId=q.get('rep')||null;
+    const doc=DOCS.find(d=>d.id===docId);
+    if(!doc){toast('Document introuvable ou inaccessible');return;}
+    // nettoyer l'URL pour éviter une réouverture au rechargement
+    history.replaceState(null,'',location.pathname);
+    openFill(docId,repId,false);
+  }catch(e){console.warn('openFromUrl',e);}
 }
 
 /* ---------- RENDER ---------- */

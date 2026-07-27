@@ -5771,6 +5771,8 @@ function enfRenderIdentite(){
     + '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn-primary" onclick="editEnfant(\''+e.id+'\')"><i class="ti ti-edit"></i> Modifier la fiche</button></div>';
 }
 
+let enfDocTitres = {};  // documentId -> titre
+
 async function enfLoadDocs(enfantId){
   const box = document.getElementById('enf-fiche-documents');
   try{
@@ -5780,6 +5782,13 @@ async function enfLoadDocs(enfantId){
       .order('updated_at',{ascending:false});
     if(error) throw error;
     enfDocsCache = data||[];
+    // charger les titres des documents concernés (une seule requête)
+    const ids = [...new Set(enfDocsCache.map(d=>d.document_id).filter(Boolean))]
+      .filter(id=>!(id in enfDocTitres));
+    if(ids.length){
+      const{data:docs}=await sb.from('documents_koala').select('id,titre').in('id',ids);
+      (docs||[]).forEach(d=>{enfDocTitres[d.id]=d.titre;});
+    }
   }catch(err){
     console.warn('enfLoadDocs',err);
     if(box) box.innerHTML='<div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Impossible de charger les documents.</p></div>';
@@ -5791,8 +5800,7 @@ async function enfLoadDocs(enfantId){
 }
 
 function enfDocTitre(docId){
-  // documents_koala n'est pas chargé dans demandes.html : on affiche un libellé générique si inconnu
-  return null;
+  return enfDocTitres[docId] || 'Document rempli';
 }
 
 function enfRenderDocs(){
@@ -5807,16 +5815,21 @@ function enfRenderDocs(){
     : '<span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">🕓 Préparé</span>';
   box.innerHTML = enfDocsCache.map(d=>{
     const dt = new Date(d.updated_at||d.created_at).toLocaleDateString('fr-FR');
+    const titre = escHtml(enfDocTitre(d.document_id));
+    const href = 'documents.html?doc='+encodeURIComponent(d.document_id)+'&rep='+encodeURIComponent(d.id);
     return '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">'
       + '<div style="min-width:0">'
-      + '<div style="font-weight:700;color:var(--koala-dark);font-size:13.5px">Document rempli</div>'
+      + '<div style="font-weight:700;color:var(--koala-dark);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+titre+'</div>'
       + '<div style="font-size:11.5px;color:var(--muted)">'+dt+(d.rempli_par_nom?' · '+escHtml(d.rempli_par_nom):'')+'</div>'
       + '</div>'
+      + '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">'
       + statutBadge(d.statut)
+      + '<a href="'+href+'" target="_blank" rel="noopener" class="btn-primary" style="text-decoration:none;padding:6px 12px;font-size:12px"><i class="ti ti-external-link"></i> Ouvrir</a>'
+      + '</div>'
       + '</div>';
   }).join('');
   // note d'aide sous la liste
-  box.innerHTML += '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">Les documents se préparent et se signent depuis l\u2019outil Documents. Le statut « Signé » apparaît ici une fois la signature enregistrée.</p>';
+  box.innerHTML += '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">« Ouvrir » bascule vers l\u2019outil Documents : on peut y voir le formulaire rempli, générer le PDF et faire signer. Le statut « Signé » apparaît ici une fois la signature enregistrée.</p>';
 }
 
 window.enfInit = enfInit;
