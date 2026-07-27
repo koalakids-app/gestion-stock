@@ -187,6 +187,19 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 <div class="ov" id="ovFill"><div class="modal">
   <h2 id="fillTitle"></h2>
   <p id="fillState" style="font-size:12px;color:var(--muted);margin:-6px 0 12px"></p>
+  <div id="fillMeta" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;background:#F4F3FB;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px">
+    <div class="f" style="flex:1;min-width:200px;margin:0">
+      <label style="font-weight:600">Enfant concerné</label>
+      <select id="fillEnfant"></select>
+    </div>
+    <div class="f" style="min-width:170px;margin:0">
+      <label style="font-weight:600">Statut</label>
+      <select id="fillStatut">
+        <option value="prepare">Préparé (à faire signer)</option>
+        <option value="signe">Signé</option>
+      </select>
+    </div>
+  </div>
   <div id="fillArea"></div>
   <div class="mf">
     <button class="btn btn-g" onclick="close_('ovFill')">Fermer</button>
@@ -220,7 +233,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
 let ME=null,PROF=null,IS_ADMIN=false;
 let CATS=[],DOCS=[],CRECHES=[];
-let editDocId=null,fillDoc=null,fillRep=null;
+let editDocId=null,fillDoc=null,fillRep=null,ENFANTS=[];
 
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600);}
 function close_(id){document.getElementById(id).classList.remove('on');}
@@ -251,12 +264,13 @@ async function doLogout(){await sb.auth.signOut();location.reload();}
 
 /* ---------- LOAD ---------- */
 async function loadAll(){
-  const[c,d,cr]=await Promise.all([
+  const[c,d,cr,en]=await Promise.all([
     sb.from('doc_categories').select('*').order('ordre'),
     sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
-    sb.from('creches').select('id,name').order('name')
+    sb.from('creches').select('id,name').order('name'),
+    sb.from('enfants').select('id,prenom,nom,creche_id').order('prenom')
   ]);
-  CATS=c.data||[];DOCS=d.data||[];CRECHES=cr.data||[];
+  CATS=c.data||[];DOCS=d.data||[];CRECHES=cr.data||[];ENFANTS=en.data||[];
   const sel=document.getElementById('fCreche');
   sel.innerHTML='<option value="all">Toutes les crèches</option>'+CRECHES.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
   if(PROF&&PROF.role==='referent'&&PROF.creche_id)sel.value=PROF.creche_id;
@@ -568,6 +582,22 @@ async function delDoc(id){
 }
 
 /* ---------- REMPLISSAGE ---------- */
+function fillMetaOptions(selEnfant,selStatut){
+  const sel=document.getElementById('fillEnfant');
+  // Référente : enfants de sa crèche uniquement ; direction : tous
+  let list=ENFANTS.slice();
+  if(PROF&&PROF.role==='referent'&&PROF.creche_id){
+    list=list.filter(e=>e.creche_id===PROF.creche_id);
+  }
+  list.sort((a,b)=>(a.prenom||'').localeCompare(b.prenom||'','fr',{sensitivity:'base'})
+    ||(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'}));
+  sel.innerHTML='<option value="">— Aucun enfant —</option>'+
+    list.map(e=>`<option value="${e.id}">${esc((e.prenom||'')+' '+(e.nom||''))}</option>`).join('');
+  sel.value=selEnfant||'';
+  const st=document.getElementById('fillStatut');
+  st.value=(selStatut==='signe')?'signe':'prepare';
+}
+
 async function openFill(id,repId,forceNew){
   fillDoc=DOCS.find(d=>d.id===id);fillRep=null;
   let vals={};
@@ -594,6 +624,7 @@ async function openFill(id,repId,forceNew){
       ? 'Reprise de la saisie du '+new Date(fillRep.updated_at||fillRep.created_at).toLocaleString('fr-FR')
       : 'Nouvelle saisie';
     if(tpl.mount)tpl.mount();else ['responsable','salarie'].forEach(mountSig);
+    fillMetaOptions(fillRep?fillRep.enfant_id:'',fillRep?fillRep.statut:'prepare');
     close_('ovReps');
     document.getElementById('ovFill').classList.add('on');
     return;
@@ -607,6 +638,7 @@ async function openFill(id,repId,forceNew){
     else inp=`<input type="${c.type}" id="ff_${c.key}" value="${esc(v)}">`;
     return `<div class="f"><label>${esc(c.label)}</label>${inp}</div>`;
   }).join('')||'<p style="color:var(--muted);font-size:13px">Ce document n\'a pas encore de champs configurés.</p>';
+  fillMetaOptions(fillRep?fillRep.enfant_id:'',fillRep?fillRep.statut:'prepare');
   close_('ovReps');
   document.getElementById('ovFill').classList.add('on');
 }
@@ -640,9 +672,20 @@ async function saveFill(){
     if(!el)return;
     donnees[c.key]=c.type==='checkbox'?el.checked:el.value;
   });
+  const enfantId=(document.getElementById('fillEnfant')||{}).value||null;
+  const statut=((document.getElementById('fillStatut')||{}).value)==='signe'?'signe':'prepare';
+  // creche_id aligné sur la crèche de l'enfant si un enfant est choisi,
+  // pour que la référente de cette crèche retrouve le document dans le dossier enfant
+  let crecheId=fillDoc.creche_id||(PROF?PROF.creche_id:null);
+  if(enfantId){
+    const enf=ENFANTS.find(e=>e.id===enfantId);
+    if(enf&&enf.creche_id)crecheId=enf.creche_id;
+  }
   const row={
     document_id:fillDoc.id,
-    creche_id:fillDoc.creche_id||(PROF?PROF.creche_id:null),
+    creche_id:crecheId,
+    enfant_id:enfantId,
+    statut,
     donnees,rempli_par:ME.id,
     rempli_par_nom:PROF?PROF.name:null,
     updated_at:new Date().toISOString()
