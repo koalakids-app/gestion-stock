@@ -623,6 +623,21 @@ function fillMetaOptions(selEnfant,selStatut){
   sel.value=selEnfant||'';
   const st=document.getElementById('fillStatut');
   st.value=(selStatut==='signe')?'signe':'prepare';
+  // libellé du bouton PDF selon le contexte, et mise à jour si l'enfant change
+  sel.onchange=fillUpdatePdfBtnLabel;
+  fillUpdatePdfBtnLabel();
+}
+
+/* « Générer le PDF » (conserve) si un enfant est rattaché ou si on vient de la fiche enfant ;
+   « Éditer le PDF » (comportement effacement) sinon. */
+function fillUpdatePdfBtnLabel(){
+  const btn=document.getElementById('btnPdfReset');
+  if(!btn)return;
+  const enfantSel=(document.getElementById('fillEnfant')||{}).value||'';
+  const contexteEnfant=!!enfantSel || !!RETURN_ENFANT_ID;
+  btn.innerHTML=contexteEnfant
+    ? '<i class="ti ti-file-type-pdf"></i> Générer le PDF'
+    : '<i class="ti ti-file-type-pdf"></i> Éditer le PDF';
 }
 
 async function openFill(id,repId,forceNew){
@@ -849,6 +864,24 @@ async function editPdfAndReset(){
   const btn=document.getElementById('btnPdfReset');
   try{
     if(!fillDoc)return;
+
+    // Contexte « dossier enfant » : un enfant est sélectionné, ou on vient de la fiche enfant.
+    // Dans ce cas on GÉNÈRE le PDF et on CONSERVE le document (pas d'effacement).
+    const enfantSel=(document.getElementById('fillEnfant')||{}).value||'';
+    const contexteEnfant=!!enfantSel || !!RETURN_ENFANT_ID;
+
+    if(contexteEnfant){
+      if(btn)btn.disabled=true;
+      // générer le PDF pendant que le formulaire est affiché (les champs sont lus dans le DOM)
+      const ok=await exportFillPdf();
+      if(!ok)throw new Error('génération PDF impossible');
+      // puis enregistrer pour garantir un document à jour et rattaché à l'enfant (statut, signatures)
+      await saveFill();
+      toast('PDF généré — document conservé dans le dossier enfant');
+      return;
+    }
+
+    // Comportement historique (documents sans enfant, ex. entretien annuel) : générer puis effacer.
     if(!confirm("Éditer le PDF puis vider le formulaire ?\n\nLe document sera téléchargé. Aucune donnée ne sera conservée dans l'application."))return;
     if(btn)btn.disabled=true;
 
