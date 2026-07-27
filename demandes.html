@@ -5865,7 +5865,7 @@ function enfRenderDocs(){
       + '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">'
       + statutBadge(d.statut)
       + '<a href="'+href+'" class="btn-primary" style="text-decoration:none;padding:6px 12px;font-size:12px"><i class="ti ti-signature"></i> Ouvrir / signer</a>'
-      + '<button onclick="enfDeleteDoc(\''+d.id+'\',\''+escHtml(enfDocTitre(d.document_id)).replace(/\'/g,"&#39;")+'\')" title="Supprimer ce document" style="background:var(--red-light,#FDE8E8);color:var(--red);border:none;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center"><i class="ti ti-trash"></i></button>'
+      + '<button type="button" onclick="enfDeleteDoc(\''+d.id+'\')" title="Supprimer ce document" style="background:var(--red-light,#FDE8E8);color:var(--red);border:none;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;min-height:36px"><i class="ti ti-trash" style="pointer-events:none"></i><span style="pointer-events:none">Suppr.</span></button>'
       + '</div>'
       + '</div>';
   }).join('');
@@ -5873,8 +5873,14 @@ function enfRenderDocs(){
   box.innerHTML += '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">« Ouvrir / signer » bascule vers l\u2019outil Documents : on y remplit, génère le PDF et fait signer. Un bouton « Revenir aux documents de l\u2019enfant » ramène ensuite ici pour enchaîner les signatures.</p>';
 }
 
-async function enfDeleteDoc(repId, titre){
-  if(!confirm('Supprimer définitivement ce document ?\n\n« '+(titre||'Document')+' »\n\nCette action est irréversible.'))return;
+async function enfDeleteDoc(repId){
+  showBanner('Suppression du document…');   // retour visuel immédiat (confirme l'appel)
+  const d=enfDocsCache.find(x=>String(x.id)===String(repId));
+  const titre=d?enfDocTitre(d.document_id):'Document';
+  if(!confirm('Supprimer définitivement ce document ?\n\n« '+titre+' »\n\nCette action est irréversible.')){
+    showBanner('Suppression annulée.');
+    return;
+  }
   try{
     const{error}=await sb.from('documents_reponses').delete().eq('id',repId);
     if(error) throw error;
