@@ -1087,6 +1087,93 @@ const TPL={
      ${sigBoxHtml('salarie','Salarié(e)')}
    </div>
   </div>`
+ },
+ antipyretique:{
+  fields:['ap_civ1','ap_parent1','ap_qual1','ap_civ2','ap_parent2','ap_qual2','ap_enfant','ap_date',
+          'ci_medicament','ci_date'],
+  html:v=>`<div class="tpl">
+   <h3>Autorisation d’administrer un antipyrétique (type Doliprane)</h3>
+   <p class="hint">Autorise le personnel de la structure à administrer à l’enfant un antipyrétique selon la prescription établie par le médecin de l’enfant, puis à prévenir les parents dans les plus brefs délais.</p>
+   <div class="grid2">
+     <div class="f"><label>Parent 1 — civilité</label><select id="ff_ap_civ1">${
+       ['','Monsieur','Madame'].map(o=>`<option${v.ap_civ1===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Parent 1 — nom</label><input id="ff_ap_parent1" value="${esc(v.ap_parent1)}"></div>
+   </div>
+   <div class="f"><label>Parent 1 — en qualité de</label><input id="ff_ap_qual1" value="${esc(v.ap_qual1)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Parent 2 — civilité</label><select id="ff_ap_civ2">${
+       ['','Monsieur','Madame'].map(o=>`<option${v.ap_civ2===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Parent 2 — nom</label><input id="ff_ap_parent2" value="${esc(v.ap_parent2)}"></div>
+   </div>
+   <div class="f"><label>Parent 2 — en qualité de</label><input id="ff_ap_qual2" value="${esc(v.ap_qual2)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Prénom de l’enfant</label><input id="ff_ap_enfant" value="${esc(v.ap_enfant)}"></div>
+     <div class="f"><label>Date</label><input type="date" id="ff_ap_date" value="${esc(v.ap_date)}"></div>
+   </div>
+   <div class="grid2">
+     ${sigBoxHtml('parent1','Signature du parent')}
+     ${sigBoxHtml('parent2','Signature du parent')}
+   </div>
+
+   <h3>Contre-indication à un antipyrétique</h3>
+   <div class="f"><label>Nom du médicament (contre-indiqué)</label><input id="ff_ci_medicament" value="${esc(v.ci_medicament)}"></div>
+   <div class="f"><label>Date</label><input type="date" id="ff_ci_date" value="${esc(v.ci_date)}"></div>
+   <div class="grid2">
+     ${sigBoxHtml('ci_parent','Signature du parent')}
+   </div>
+  </div>`,
+  mount:()=>{['parent1','parent2','ci_parent'].forEach(mountSig);},
+  pdf:doc=>{
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
+    const W=182;let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+    // Titre encadré
+    doc.setFontSize(12);doc.setFont(undefined,'bold');
+    doc.setDrawColor(120);doc.rect(14,y-5,W,10);
+    doc.text("AUTORISATION D'ADMINISTRER UN ANTIPYRETIQUE (Type Doliprane)",14+W/2,y+1,{align:'center',maxWidth:W-6});
+    y+=16;
+    doc.setFontSize(10.5);doc.setFont(undefined,'normal');
+    const soussPhrase=(civ,nom,qual)=>{
+      const e=(civ||'').toLowerCase()==='madame'?'e':'';
+      const civTxt=(civ||'……').toLowerCase();
+      return 'Je soussigné'+e+', '+civTxt+' '+(nom||'……')+' en ma qualité de '+(qual||'……');};
+    const para=[
+      soussPhrase(g('ap_civ1'),g('ap_parent1'),g('ap_qual1')),
+      soussPhrase(g('ap_civ2'),g('ap_parent2'),g('ap_qual2')),
+      'Autorise (autorisons) le personnel de la structure à administrer à mon (notre) enfant '+(g('ap_enfant')||'……')+' un antipyrétique selon la prescription établie par le médecin de mon (notre) enfant, puis à me (nous) prévenir dans les plus brefs délais.'
+    ];
+    para.forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*5+2);doc.text(L,14,y);y+=L.length*5+2;});
+    y+=3;
+    doc.text('Date : '+dfr(g('ap_date')),14,y);y+=12;
+    // 2 signatures autorisation
+    need(46);
+    [['parent1','Signature du parent',14],['parent2','Signature du parent',110]].forEach(([role,lab,px])=>{
+      doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text(lab+' :',px,y);
+      doc.setDrawColor(200);doc.rect(px,y+3,84,32);
+      if(SIGS[role]){try{doc.addImage(SIGS[role],'PNG',px+2,y+5,80,28);}catch(e){}}
+    });
+    y+=42;
+    // Bloc contre-indication
+    need(52);
+    doc.setDrawColor(120);
+    const boxTop=y-5;
+    doc.setFontSize(10.5);doc.setFont(undefined,'bold');
+    const ciLab='Contre-indication à un antipyrétique : ';
+    doc.text(ciLab,16,y);
+    doc.setFont(undefined,'normal');
+    doc.text('(citer le nom du médicament) '+(g('ci_medicament')||'……………'),16+doc.getTextWidth(ciLab),y);
+    y+=10;
+    doc.setFontSize(10.5);doc.text('Date : '+dfr(g('ci_date')),16,y);y+=10;
+    doc.setFont(undefined,'bold');doc.text('Signature du parent :',16,y);
+    doc.setDrawColor(200);doc.rect(16,y+3,84,30);
+    if(SIGS['ci_parent']){try{doc.addImage(SIGS['ci_parent'],'PNG',18,y+5,80,26);}catch(e){}}
+    y+=34;
+    doc.setDrawColor(120);doc.rect(14,boxTop,W,y-boxTop);
+    y+=6;
+    doc.save(slug(fillDoc.titre)+(g('ap_enfant')?'_'+slug(g('ap_enfant')):'')+'.pdf');
+    return true;
+  }
  }
 };
 
