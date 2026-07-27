@@ -409,6 +409,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn direction-only" onclick="showMain('referents')" id="mnav-referents"><i class="ti ti-address-book"></i> Référents</button>
       <button class="mnav-btn" onclick="showMain('remplacantes')" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
       <button class="mnav-btn" onclick="showMain('vaccinations')" id="mnav-vaccinations"><i class="ti ti-vaccine"></i> Vaccinations</button>
+      <button class="mnav-btn" onclick="showMain('enfants')" id="mnav-enfants"><i class="ti ti-mood-kid"></i> Enfants</button>
     </nav>
     <div style="display:flex;align-items:center;gap:8px">
       <div class="user-chip" id="user-chip" onclick="doLogout()"><i class="ti ti-user" style="font-size:13px"></i> <span id="user-name">—</span> <i class="ti ti-logout" style="font-size:12px;opacity:0.7"></i></div>
@@ -806,6 +807,38 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div id="vac-view-calendrier" class="module-tab-content">
       <div id="vac-cal-list" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </div>
+
+  <div id="main-enfants" class="tab-content">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-title"><i class="ti ti-mood-kid" style="color:var(--koala)"></i> Dossiers enfants</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select class="finput direction-only" id="enf-creche-select" style="width:auto;min-width:160px;font-size:12px;padding:4px 8px" onchange="enfRender()">
+          <option value="">Toutes les crèches</option>
+        </select>
+        <input class="finput" id="enf-search" placeholder="Rechercher un enfant…" style="width:auto;min-width:180px;font-size:12px;padding:4px 8px" oninput="enfRender()">
+      </div>
+    </div>
+    <div id="enf-list" style="display:flex;flex-direction:column;gap:10px"></div>
+  </div>
+
+  <div class="overlay" id="modal-enf-fiche-wrap">
+    <div class="modal" style="max-width:720px;width:100%;max-height:88vh;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <h3 id="enf-fiche-title" style="font-size:15px;color:var(--koala);margin:0;display:flex;align-items:center;gap:8px"><i class="ti ti-mood-kid"></i></h3>
+        <button class="btn-cancel" onclick="closeModal('modal-enf-fiche-wrap')" style="padding:4px 8px"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="module-tabs" style="margin-bottom:1rem">
+        <button class="module-tab active" onclick="enfFicheTab('identite',this)"><i class="ti ti-id"></i> Identité</button>
+        <button class="module-tab" onclick="enfFicheTab('documents',this)"><i class="ti ti-file-text"></i> Documents</button>
+      </div>
+      <div style="overflow-y:auto;flex:1">
+        <div id="enf-fiche-identite" class="module-tab-content active"></div>
+        <div id="enf-fiche-documents" class="module-tab-content"></div>
+      </div>
     </div>
   </div>
 
@@ -1428,7 +1461,7 @@ async function markConsignesRead(){
 }
 
 function showMain(tab){
-  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','controle','vaccinations','afaire'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','controle','vaccinations','enfants','afaire'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -1446,6 +1479,7 @@ function showMain(tab){
   if(tab==='remplacantes')rmpInit();
   if(tab==='controle')ctrlInit();
   if(tab==='vaccinations')vacInit();
+  if(tab==='enfants')enfInit();
   if(tab==='afaire')afInit();
 }
 
@@ -1740,14 +1774,8 @@ function calSetFilter(f,btn){calFilterType=f;document.querySelectorAll('#cal-fil
 
 function calEventsForDay(dateISO){
   const myCrecheId=isDirection?null:currentProfile?.creche_id;
-  const myRefId=currentProfile?.id;
   return cacheEvenements.filter(e=>{
     if(calFilterType!=='all'&&e.type!==calFilterType)return false;
-    if(!isDirection){
-      const vis=e.visibilite||'tous';
-      if(vis==='aucun')return false;
-      if(vis==='un'&&e.visible_referent_id&&e.visible_referent_id!==myRefId)return false;
-    }
     if(myCrecheId&&e.creche_id&&e.creche_id!==myCrecheId)return false;
     const start=e.date_debut,end=e.date_fin||e.date_debut;
     return dateISO>=start&&dateISO<=end;
@@ -1848,7 +1876,6 @@ function evtSyncEndDate(){
 function openEvenementModal(presetDate,evtId){
   editingEvtId=evtId||null;
   document.getElementById('evt-creche').innerHTML='<option value="">— Toutes / réseau —</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
-  document.getElementById('evt-visref').innerHTML='<option value="">— Sélectionner —</option>'+cacheReferents.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(r=>'<option value="'+r.id+'">'+escHtml(r.name||'')+'</option>').join('');
   document.getElementById('evt-btn-delete').style.display=evtId?'flex':'none';
   if(evtId){
     const e=cacheEvenements.find(x=>x.id===evtId);if(!e)return;
@@ -1863,9 +1890,6 @@ function openEvenementModal(presetDate,evtId){
     document.getElementById('evt-lieu').value=e.lieu||'';
     document.getElementById('evt-desc').value=e.description||'';
     document.getElementById('evt-auteur').value=e.auteur||'';
-    document.getElementById('evt-visibilite').value=e.visibilite||'tous';
-    document.getElementById('evt-visref').value=e.visible_referent_id||'';
-    evtOnVisibiliteChange();
   }else{
     document.getElementById('modal-evt-title').textContent='Nouvel événement';
     ['evt-titre','evt-lieu','evt-desc'].forEach(id=>document.getElementById(id).value='');
@@ -1877,16 +1901,8 @@ function openEvenementModal(presetDate,evtId){
     document.getElementById('evt-heure-debut').value='';
     document.getElementById('evt-heure-fin').value='';
     document.getElementById('evt-auteur').value=currentProfile?.name||'';
-    document.getElementById('evt-visibilite').value='tous';
-    document.getElementById('evt-visref').value='';
-    evtOnVisibiliteChange();
   }
   document.getElementById('modal-evenement-wrap').classList.add('open');
-}
-
-function evtOnVisibiliteChange(){
-  const v=document.getElementById('evt-visibilite').value;
-  document.getElementById('evt-visref-wrap').style.display=(v==='un')?'block':'none';
 }
 
 async function saveEvenement(){
@@ -1906,9 +1922,7 @@ async function saveEvenement(){
     heure_fin:document.getElementById('evt-heure-fin').value||null,
     lieu:document.getElementById('evt-lieu').value.trim(),
     description:document.getElementById('evt-desc').value.trim(),
-    auteur:document.getElementById('evt-auteur').value.trim(),
-    visibilite:document.getElementById('evt-visibilite').value,
-    visible_referent_id:(document.getElementById('evt-visibilite').value==='un'?(document.getElementById('evt-visref').value||null):null)
+    auteur:document.getElementById('evt-auteur').value.trim()
   };
   if(editingEvtId){
     const ok=await dbUpdate('evenements',editingEvtId,row);
@@ -5658,6 +5672,159 @@ window.vacRender = vacRender;
 window.vacOpenEnfantModal = vacOpenEnfantModal;
 
 
+/* ===================== MODULE ENFANTS (dossier central) ===================== */
+/* Liste des enfants (référente = sa crèche, direction = toutes), fiche à onglets
+   Identité + Documents. Les documents proviennent de documents_reponses filtrées
+   par enfant_id. Le RLS garantit que la référente ne voit que sa crèche. */
+
+let enfFicheId = null;
+let enfDocsCache = [];
+
+function enfInit(){
+  // remplir le sélecteur crèche (direction)
+  const sel = document.getElementById('enf-creche-select');
+  if(sel && sel.options.length <= 1){
+    sel.innerHTML = '<option value="">Toutes les crèches</option>' +
+      cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
+  }
+  enfRender();
+}
+
+function enfGetListe(){
+  let list = cacheEnfants.slice();
+  // référente : sa crèche uniquement
+  if(!isDirection && currentProfile && currentProfile.creche_id){
+    list = list.filter(e=>e.creche_id===currentProfile.creche_id);
+  } else {
+    // direction : filtre optionnel du sélecteur
+    const cid = (document.getElementById('enf-creche-select')||{}).value || '';
+    if(cid) list = list.filter(e=>e.creche_id===cid);
+  }
+  const q = ((document.getElementById('enf-search')||{}).value || '').trim().toLowerCase();
+  if(q){
+    list = list.filter(e=>((e.prenom||'')+' '+(e.nom||'')).toLowerCase().includes(q));
+  }
+  return list.sort((a,b)=>(a.prenom||'').localeCompare(b.prenom||'','fr',{sensitivity:'base'})
+    ||(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'}));
+}
+
+function enfRender(){
+  const el = document.getElementById('enf-list');
+  if(!el) return;
+  const enfants = enfGetListe();
+  if(!enfants.length){
+    el.innerHTML = '<div class="empty-state"><i class="ti ti-mood-kid"></i><p>Aucun enfant.</p></div>';
+    return;
+  }
+  el.innerHTML = enfants.map(e=>{
+    const creche = cacheCreches.find(c=>c.id===e.creche_id);
+    const grp = e.dob ? groupeFromDob(e.dob) : (e.groupe||'');
+    return '<button onclick="enfOpenFiche(\''+e.id+'\')" style="width:100%;text-align:left;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;box-shadow:0 1px 4px rgba(61,53,128,0.07)">'
+      + '<div style="display:flex;align-items:center;gap:12px;min-width:0">'
+      + '<span style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:var(--koala-light);color:var(--koala);display:inline-flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-mood-kid"></i></span>'
+      + '<div style="min-width:0">'
+      + '<div style="font-weight:700;color:var(--koala-dark);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</div>'
+      + '<div style="font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(creche?escHtml(creche.name):'—')+(grp?' · '+escHtml(grp):'')+'</div>'
+      + '</div></div>'
+      + '<i class="ti ti-chevron-right" style="color:var(--muted);font-size:18px;flex-shrink:0"></i>'
+      + '</button>';
+  }).join('');
+}
+
+async function enfOpenFiche(id){
+  const e = cacheEnfants.find(x=>String(x.id)===String(id));
+  if(!e) return;
+  enfFicheId = e.id;
+  document.getElementById('enf-fiche-title').innerHTML = '<i class="ti ti-mood-kid"></i> '+escHtml((e.prenom||'')+' '+(e.nom||''));
+  // onglet identité par défaut
+  document.querySelectorAll('#modal-enf-fiche-wrap .module-tab').forEach((b,i)=>b.classList.toggle('active',i===0));
+  document.getElementById('enf-fiche-identite').classList.add('active');
+  document.getElementById('enf-fiche-documents').classList.remove('active');
+  enfRenderIdentite();
+  document.getElementById('enf-fiche-documents').innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
+  document.getElementById('modal-enf-fiche-wrap').classList.add('open');
+  // charger les documents en arrière-plan
+  enfLoadDocs(e.id);
+}
+
+function enfFicheTab(tab, btn){
+  document.querySelectorAll('#modal-enf-fiche-wrap .module-tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  document.getElementById('enf-fiche-identite').classList.toggle('active',tab==='identite');
+  document.getElementById('enf-fiche-documents').classList.toggle('active',tab==='documents');
+}
+
+function enfRenderIdentite(){
+  const e = cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
+  const box = document.getElementById('enf-fiche-identite');
+  if(!e || !box) return;
+  const creche = cacheCreches.find(c=>c.id===e.creche_id);
+  const grp = e.dob ? groupeFromDob(e.dob) : (e.groupe||'');
+  const row = (lab,val)=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 2px;border-bottom:1px solid var(--border)"><span style="color:var(--muted);font-size:13px">'+lab+'</span><span style="font-weight:600;font-size:13px;text-align:right">'+(val||'—')+'</span></div>';
+  box.innerHTML =
+      row('Prénom', escHtml(e.prenom||''))
+    + row('Nom', escHtml(e.nom||''))
+    + row('Date de naissance', e.dob ? escHtml(vacFmtDate(e.dob)) : '')
+    + row('Groupe', escHtml(grp))
+    + row('Crèche', creche?escHtml(creche.name):'')
+    + row('Allergies', escHtml(e.allergies||''))
+    + '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn-primary" onclick="editEnfant(\''+e.id+'\')"><i class="ti ti-edit"></i> Modifier la fiche</button></div>';
+}
+
+async function enfLoadDocs(enfantId){
+  const box = document.getElementById('enf-fiche-documents');
+  try{
+    const{data,error}=await sb.from('documents_reponses')
+      .select('id,document_id,statut,rempli_par_nom,updated_at,created_at')
+      .eq('enfant_id',enfantId)
+      .order('updated_at',{ascending:false});
+    if(error) throw error;
+    enfDocsCache = data||[];
+  }catch(err){
+    console.warn('enfLoadDocs',err);
+    if(box) box.innerHTML='<div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Impossible de charger les documents.</p></div>';
+    return;
+  }
+  // ne rendre que si on est toujours sur le même enfant
+  if(String(enfFicheId)!==String(enfantId)) return;
+  enfRenderDocs();
+}
+
+function enfDocTitre(docId){
+  // documents_koala n'est pas chargé dans demandes.html : on affiche un libellé générique si inconnu
+  return null;
+}
+
+function enfRenderDocs(){
+  const box = document.getElementById('enf-fiche-documents');
+  if(!box) return;
+  if(!enfDocsCache.length){
+    box.innerHTML='<div class="empty-state"><i class="ti ti-file-off"></i><p>Aucun document rattaché à cet enfant pour le moment.</p></div>';
+    return;
+  }
+  const statutBadge = st => st==='signe'
+    ? '<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ Signé</span>'
+    : '<span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">🕓 Préparé</span>';
+  box.innerHTML = enfDocsCache.map(d=>{
+    const dt = new Date(d.updated_at||d.created_at).toLocaleDateString('fr-FR');
+    return '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">'
+      + '<div style="min-width:0">'
+      + '<div style="font-weight:700;color:var(--koala-dark);font-size:13.5px">Document rempli</div>'
+      + '<div style="font-size:11.5px;color:var(--muted)">'+dt+(d.rempli_par_nom?' · '+escHtml(d.rempli_par_nom):'')+'</div>'
+      + '</div>'
+      + statutBadge(d.statut)
+      + '</div>';
+  }).join('');
+  // note d'aide sous la liste
+  box.innerHTML += '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">Les documents se préparent et se signent depuis l\u2019outil Documents. Le statut « Signé » apparaît ici une fois la signature enregistrée.</p>';
+}
+
+window.enfInit = enfInit;
+window.enfRender = enfRender;
+window.enfOpenFiche = enfOpenFiche;
+window.enfFicheTab = enfFicheTab;
+
+
 /* ===================== MODULE CONTRÔLE EAJE (micro-crèche) ===================== */
 /* Support de contrôle PMI renseignable — section unique. Réponses stockées en JSON
    dans la table Supabase `controles_eaje`. Rempli par référente (sa crèche) ou direction. */
@@ -6716,16 +6883,6 @@ function afRender(){
     <div class="fg"><label class="flabel">Lieu</label><input class="finput" id="evt-lieu" placeholder="Ex. : Bureau coordination, Picot 1…"/></div>
     <div class="fg"><label class="flabel">Description / notes</label><textarea class="finput" id="evt-desc" rows="3" style="resize:vertical"></textarea></div>
     <div class="fg"><label class="flabel">Créé par</label><input class="finput" id="evt-auteur" placeholder="Prénom Nom"/></div>
-    <div class="fg"><label class="flabel">Visible par les référent(e)s</label>
-      <select class="finput" id="evt-visibilite" onchange="evtOnVisibiliteChange()">
-        <option value="tous">👥 Tous les référents</option>
-        <option value="un">👤 Un seul référent</option>
-        <option value="aucun">🔒 Aucun (direction uniquement)</option>
-      </select>
-    </div>
-    <div class="fg" id="evt-visref-wrap" style="display:none"><label class="flabel">Référent(e) concerné(e)</label>
-      <select class="finput" id="evt-visref"><option value="">— Sélectionner —</option></select>
-    </div>
     <div class="mactions">
       <button id="evt-btn-delete" class="btn-danger-sm" style="display:none;background:var(--red-light);color:var(--red);border-color:var(--red-light);margin-right:auto" onclick="deleteEvenement()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn-cancel" onclick="closeModal('modal-evenement-wrap')">Annuler</button>
