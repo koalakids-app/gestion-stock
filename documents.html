@@ -716,7 +716,13 @@ async function saveFill(){
     donnees[c.key]=c.type==='checkbox'?el.checked:el.value;
   });
   const enfantId=(document.getElementById('fillEnfant')||{}).value||null;
-  const statut=((document.getElementById('fillStatut')||{}).value)==='signe'?'signe':'prepare';
+  // Statut : « signe » si le sélecteur l'indique OU si au moins une signature a été tracée.
+  // « Je signe, donc c'est signé » — sans avoir à régler le sélecteur manuellement.
+  const aUneSignature=Object.keys(SIGS||{}).some(k=>!!SIGS[k]);
+  let statut=((document.getElementById('fillStatut')||{}).value)==='signe'?'signe':'prepare';
+  if(aUneSignature)statut='signe';
+  // refléter la bascule dans le sélecteur pour cohérence visuelle
+  const _st=document.getElementById('fillStatut');if(_st)_st.value=statut;
   // creche_id aligné sur la crèche de l'enfant si un enfant est choisi,
   // pour que la référente de cette crèche retrouve le document dans le dossier enfant
   let crecheId=fillDoc.creche_id||(PROF?PROF.creche_id:null);
