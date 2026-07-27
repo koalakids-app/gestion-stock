@@ -1420,6 +1420,28 @@ function showApp(){
   updateBadges();renderCrecheTabs();
   // Référentes → ouvrir directement leur tableau de bord
   if(!isDirection)showMain('ref-dashboard');
+  enfMaybeOpenFromUrl();
+}
+
+/* Ouverture automatique de la fiche enfant sur l'onglet Documents,
+   après un retour depuis l'outil Documents (?enfant=<id>&tab=documents). */
+function enfMaybeOpenFromUrl(){
+  try{
+    const q=new URLSearchParams(location.search);
+    const enfId=q.get('enfant');
+    if(!enfId)return;
+    // nettoyer l'URL pour éviter une réouverture au rechargement
+    history.replaceState(null,'',location.pathname);
+    showMain('enfants');
+    // laisser le module s'initialiser puis ouvrir la fiche sur l'onglet Documents
+    setTimeout(()=>{
+      enfOpenFiche(enfId);
+      setTimeout(()=>{
+        const btns=document.querySelectorAll('#modal-enf-fiche-wrap .module-tab');
+        if(btns&&btns.length>1)enfFicheTab('documents',btns[1]);
+      },150);
+    },200);
+  }catch(e){console.warn('enfMaybeOpenFromUrl',e);}
 }
 
 function todayStr(){return ipDateToLocalISO(new Date());}
@@ -5816,7 +5838,7 @@ function enfRenderDocs(){
   box.innerHTML = enfDocsCache.map(d=>{
     const dt = new Date(d.updated_at||d.created_at).toLocaleDateString('fr-FR');
     const titre = escHtml(enfDocTitre(d.document_id));
-    const href = 'documents.html?doc='+encodeURIComponent(d.document_id)+'&rep='+encodeURIComponent(d.id);
+    const href = 'documents.html?doc='+encodeURIComponent(d.document_id)+'&rep='+encodeURIComponent(d.id)+'&enf='+encodeURIComponent(enfFicheId);
     return '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">'
       + '<div style="min-width:0">'
       + '<div style="font-weight:700;color:var(--koala-dark);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+titre+'</div>'
@@ -5824,12 +5846,12 @@ function enfRenderDocs(){
       + '</div>'
       + '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">'
       + statutBadge(d.statut)
-      + '<a href="'+href+'" target="_blank" rel="noopener" class="btn-primary" style="text-decoration:none;padding:6px 12px;font-size:12px"><i class="ti ti-external-link"></i> Ouvrir</a>'
+      + '<a href="'+href+'" class="btn-primary" style="text-decoration:none;padding:6px 12px;font-size:12px"><i class="ti ti-signature"></i> Ouvrir / signer</a>'
       + '</div>'
       + '</div>';
   }).join('');
   // note d'aide sous la liste
-  box.innerHTML += '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">« Ouvrir » bascule vers l\u2019outil Documents : on peut y voir le formulaire rempli, générer le PDF et faire signer. Le statut « Signé » apparaît ici une fois la signature enregistrée.</p>';
+  box.innerHTML += '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">« Ouvrir / signer » bascule vers l\u2019outil Documents : on y remplit, génère le PDF et fait signer. Un bouton « Revenir aux documents de l\u2019enfant » ramène ensuite ici pour enchaîner les signatures.</p>';
 }
 
 window.enfInit = enfInit;

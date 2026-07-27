@@ -281,18 +281,27 @@ async function loadAll(){
 /* Ouverture automatique d'un document (et éventuellement d'une réponse précise)
    via les paramètres d'URL : ?doc=<documentId>&rep=<reponseId>
    Utilisé par le module Enfants de demandes.html pour rebondir sur un document. */
+let RETURN_ENFANT_ID=null;   // si ouvert depuis la fiche d'un enfant, on mémorise son id pour le retour
+
 function openFromUrl(){
   try{
     const q=new URLSearchParams(location.search);
     const docId=q.get('doc');
     if(!docId)return;
     const repId=q.get('rep')||null;
+    RETURN_ENFANT_ID=q.get('enf')||null;
     const doc=DOCS.find(d=>d.id===docId);
     if(!doc){toast('Document introuvable ou inaccessible');return;}
     // nettoyer l'URL pour éviter une réouverture au rechargement
     history.replaceState(null,'',location.pathname);
     openFill(docId,repId,false);
   }catch(e){console.warn('openFromUrl',e);}
+}
+
+/* Renvoie vers la fiche de l'enfant (onglet Documents) dans demandes.html */
+function returnToEnfant(){
+  if(!RETURN_ENFANT_ID)return;
+  location.href='demandes.html?enfant='+encodeURIComponent(RETURN_ENFANT_ID);
 }
 
 /* ---------- RENDER ---------- */
@@ -617,6 +626,7 @@ function fillMetaOptions(selEnfant,selStatut){
 }
 
 async function openFill(id,repId,forceNew){
+  const _rb=document.getElementById('returnEnfantBar');if(_rb)_rb.style.display='none';
   fillDoc=DOCS.find(d=>d.id===id);fillRep=null;
   let vals={};
   if(repId){
@@ -660,6 +670,21 @@ async function openFill(id,repId,forceNew){
   close_('ovReps');
   document.getElementById('ovFill').classList.add('on');
 }
+function showReturnEnfantBar(){
+  let bar=document.getElementById('returnEnfantBar');
+  if(!bar){
+    const area=document.getElementById('fillArea');
+    bar=document.createElement('div');
+    bar.id='returnEnfantBar';
+    bar.style.cssText='margin:14px 0 4px;padding:12px 14px;background:#E8F5E9;border:1px solid #57B894;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap';
+    bar.innerHTML='<span style="font-size:13px;color:#2E7D52;font-weight:600">✅ Enregistré. Revenir au dossier de l\u2019enfant pour le prochain document ?</span>'
+      +'<button class="btn btn-p" onclick="returnToEnfant()" style="white-space:nowrap"><i class="ti ti-arrow-back-up"></i> Revenir aux documents de l\u2019enfant</button>';
+    area.parentNode.insertBefore(bar, area);
+  }
+  bar.style.display='flex';
+  bar.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
 async function saveFill(){
  try{
   const donnees={};
@@ -717,7 +742,11 @@ async function saveFill(){
   }
   if(error)return toast('Erreur : '+(error.message||'enregistrement impossible'));
   toast('Enregistré');
-  close_('ovFill');
+  if(RETURN_ENFANT_ID){
+    showReturnEnfantBar();
+  }else{
+    close_('ovFill');
+  }
  }catch(e){
   console.error('saveFill',e);
   toast('Erreur : '+(e&&e.message?e.message:'inattendue'));
