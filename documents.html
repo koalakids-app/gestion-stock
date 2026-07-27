@@ -666,10 +666,15 @@ async function openFill(id,repId,forceNew){
     document.getElementById('fillState').textContent=fillRep
       ? 'Reprise de la saisie du '+new Date(fillRep.updated_at||fillRep.created_at).toLocaleString('fr-FR')
       : 'Nouvelle saisie';
-    if(tpl.mount)tpl.mount();else ['responsable','salarie'].forEach(mountSig);
+    // 1) remplir les métadonnées (enfant/statut) et 2) afficher la modale AVANT
+    //    de monter les canvas de signature, pour que getBoundingClientRect() soit fiable.
     fillMetaOptions(fillRep?fillRep.enfant_id:'',fillRep?fillRep.statut:'prepare');
     close_('ovReps');
     document.getElementById('ovFill').classList.add('on');
+    // 3) monter les signatures une fois le layout stabilisé (double rAF)
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(tpl.mount)tpl.mount();else ['responsable','salarie'].forEach(mountSig);
+    }));
     return;
   }
 
