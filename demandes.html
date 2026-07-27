@@ -1740,8 +1740,14 @@ function calSetFilter(f,btn){calFilterType=f;document.querySelectorAll('#cal-fil
 
 function calEventsForDay(dateISO){
   const myCrecheId=isDirection?null:currentProfile?.creche_id;
+  const myRefId=currentProfile?.id;
   return cacheEvenements.filter(e=>{
     if(calFilterType!=='all'&&e.type!==calFilterType)return false;
+    if(!isDirection){
+      const vis=e.visibilite||'tous';
+      if(vis==='aucun')return false;
+      if(vis==='un'&&e.visible_referent_id&&e.visible_referent_id!==myRefId)return false;
+    }
     if(myCrecheId&&e.creche_id&&e.creche_id!==myCrecheId)return false;
     const start=e.date_debut,end=e.date_fin||e.date_debut;
     return dateISO>=start&&dateISO<=end;
@@ -1842,6 +1848,7 @@ function evtSyncEndDate(){
 function openEvenementModal(presetDate,evtId){
   editingEvtId=evtId||null;
   document.getElementById('evt-creche').innerHTML='<option value="">— Toutes / réseau —</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+  document.getElementById('evt-visref').innerHTML='<option value="">— Sélectionner —</option>'+cacheReferents.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(r=>'<option value="'+r.id+'">'+escHtml(r.name||'')+'</option>').join('');
   document.getElementById('evt-btn-delete').style.display=evtId?'flex':'none';
   if(evtId){
     const e=cacheEvenements.find(x=>x.id===evtId);if(!e)return;
@@ -1856,6 +1863,9 @@ function openEvenementModal(presetDate,evtId){
     document.getElementById('evt-lieu').value=e.lieu||'';
     document.getElementById('evt-desc').value=e.description||'';
     document.getElementById('evt-auteur').value=e.auteur||'';
+    document.getElementById('evt-visibilite').value=e.visibilite||'tous';
+    document.getElementById('evt-visref').value=e.visible_referent_id||'';
+    evtOnVisibiliteChange();
   }else{
     document.getElementById('modal-evt-title').textContent='Nouvel événement';
     ['evt-titre','evt-lieu','evt-desc'].forEach(id=>document.getElementById(id).value='');
@@ -1867,8 +1877,16 @@ function openEvenementModal(presetDate,evtId){
     document.getElementById('evt-heure-debut').value='';
     document.getElementById('evt-heure-fin').value='';
     document.getElementById('evt-auteur').value=currentProfile?.name||'';
+    document.getElementById('evt-visibilite').value='tous';
+    document.getElementById('evt-visref').value='';
+    evtOnVisibiliteChange();
   }
   document.getElementById('modal-evenement-wrap').classList.add('open');
+}
+
+function evtOnVisibiliteChange(){
+  const v=document.getElementById('evt-visibilite').value;
+  document.getElementById('evt-visref-wrap').style.display=(v==='un')?'block':'none';
 }
 
 async function saveEvenement(){
@@ -1888,7 +1906,9 @@ async function saveEvenement(){
     heure_fin:document.getElementById('evt-heure-fin').value||null,
     lieu:document.getElementById('evt-lieu').value.trim(),
     description:document.getElementById('evt-desc').value.trim(),
-    auteur:document.getElementById('evt-auteur').value.trim()
+    auteur:document.getElementById('evt-auteur').value.trim(),
+    visibilite:document.getElementById('evt-visibilite').value,
+    visible_referent_id:(document.getElementById('evt-visibilite').value==='un'?(document.getElementById('evt-visref').value||null):null)
   };
   if(editingEvtId){
     const ok=await dbUpdate('evenements',editingEvtId,row);
@@ -6696,6 +6716,16 @@ function afRender(){
     <div class="fg"><label class="flabel">Lieu</label><input class="finput" id="evt-lieu" placeholder="Ex. : Bureau coordination, Picot 1…"/></div>
     <div class="fg"><label class="flabel">Description / notes</label><textarea class="finput" id="evt-desc" rows="3" style="resize:vertical"></textarea></div>
     <div class="fg"><label class="flabel">Créé par</label><input class="finput" id="evt-auteur" placeholder="Prénom Nom"/></div>
+    <div class="fg"><label class="flabel">Visible par les référent(e)s</label>
+      <select class="finput" id="evt-visibilite" onchange="evtOnVisibiliteChange()">
+        <option value="tous">👥 Tous les référents</option>
+        <option value="un">👤 Un seul référent</option>
+        <option value="aucun">🔒 Aucun (direction uniquement)</option>
+      </select>
+    </div>
+    <div class="fg" id="evt-visref-wrap" style="display:none"><label class="flabel">Référent(e) concerné(e)</label>
+      <select class="finput" id="evt-visref"><option value="">— Sélectionner —</option></select>
+    </div>
     <div class="mactions">
       <button id="evt-btn-delete" class="btn-danger-sm" style="display:none;background:var(--red-light);color:var(--red);border-color:var(--red-light);margin-right:auto" onclick="deleteEvenement()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn-cancel" onclick="closeModal('modal-evenement-wrap')">Annuler</button>
