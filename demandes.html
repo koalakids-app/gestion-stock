@@ -1308,6 +1308,24 @@ window.addEventListener('DOMContentLoaded', async function() {
     catch(e){console.warn('[Recovery]',e);await sb.auth.signOut();showLogin();}
     return;
   }
+  // Retour depuis l'outil Documents (?enfant=<id>) : si une session valide existe déjà,
+  // on la conserve pour éviter de repasser par l'écran de connexion. Partout ailleurs,
+  // la déconnexion systématique à l'ouverture reste inchangée (postes partagés).
+  if(urlParams.get('enfant')){
+    try{
+      const{data:{session}}=await sb.auth.getSession();
+      if(session&&session.user){
+        currentUser=session.user;
+        await loadAllData();
+        currentProfile=cacheReferents.find(r=>r.user_id===currentUser.id)||null;
+        if(!currentProfile){const{data:pd}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();currentProfile=pd;}
+        isDirection=currentProfile?.role==='direction';
+        showApp();
+        return;
+      }
+    }catch(e){console.warn('[Retour enfant] session',e);}
+    // pas de session valide → on retombe sur le comportement normal ci-dessous
+  }
   await sb.auth.signOut();
   showLogin();
 });
