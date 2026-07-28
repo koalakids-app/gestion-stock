@@ -1450,19 +1450,20 @@ const TPL={
     doc.setFontSize(12);doc.setFont(undefined,'bold');
     doc.text('Autorisation parentale',14+W/2,y,{align:'center'});y+=12;
     doc.setFontSize(10.5);doc.setFont(undefined,'normal');
+    const dots=n=>'.'.repeat(n);
     const soussPhrase=(civ,nom,qual)=>{
       const e=(civ||'').toLowerCase()==='madame'?'e':'';
-      const civTxt=(civ||'……').toLowerCase();
-      return 'Je soussigné'+e+', '+civTxt+' '+(nom||'……')+' en qualité de '+(qual||'……');};
+      const civTxt=(civ||'').toLowerCase();
+      return 'Je soussigné'+e+', '+(civTxt?civTxt+' ':'')+(nom||dots(55))+' en qualité de '+(qual||dots(32));};
     const para=[
       soussPhrase(g('cs_civ1'),g('cs_parent1'),g('cs_qual1')),
       soussPhrase(g('cs_civ2'),g('cs_parent2'),g('cs_qual2')),
-      'De l’enfant '+(g('cs_enfant')||'……'),
+      'De l’enfant '+(g('cs_enfant')||dots(55)),
       'autorise (autorisons) le personnel de la structure à appliquer à mon (notre) enfant la crème solaire fournie par mes (nos) soins.'
     ];
-    para.forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*5+3);doc.text(L,14,y);y+=L.length*5+3;});
+    para.forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*5+8);doc.text(L,14,y);y+=L.length*5+8;});
     y+=4;
-    doc.text('Date : '+dfr(g('cs_date')),14,y);y+=12;
+    doc.text('Date : '+dfr(g('cs_date')),14,y);y+=14;
     need(46);
     [['parent1','Signature du parent',14],['parent2','Signature du parent',110]].forEach(([role,lab,px])=>{
       doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text(lab+' :',px,y);
