@@ -1132,6 +1132,65 @@ const GR_CSS=`<style>
 }
 </style>`;
 
+/* ---------- TABLEAUX PDF (helper commun aux fiches) ---------- */
+function pdfGrid(doc,x,y,widths,rows,opt){
+  opt=opt||{};
+  const fs=opt.fs||9, lh=4.2;
+  rows.forEach(r=>{
+    const cells=r.cells||r, head=!!r.head;
+    doc.setFontSize(fs);
+    doc.setFont(undefined,head?'bold':'normal');
+    const wrapped=cells.map((c,i)=>doc.splitTextToSize(String(c==null?'':c),widths[i]-4));
+    const h=Math.max(opt.minH||8, Math.max.apply(null,wrapped.map(w=>w.length))*lh+4);
+    if(y+h>280){doc.addPage();y=pdfLogo(doc,20);}
+    let cx=x;
+    cells.forEach((c,i)=>{
+      if(head){doc.setFillColor(238,237,248);doc.rect(cx,y,widths[i],h,'F');}
+      doc.setDrawColor(150);doc.rect(cx,y,widths[i],h);
+      doc.setFont(undefined,head?'bold':'normal');
+      if(head)doc.text(wrapped[i],cx+widths[i]/2,y+5.5,{align:'center'});
+      else doc.text(wrapped[i],cx+2,y+5.5);
+      cx+=widths[i];
+    });
+    y+=h;
+  });
+  return y;
+}
+
+/* CSS des tableaux de saisie (fiches sanitaire / liaison / reglement) */
+const FT_CSS=`<style>
+.tpl .ftw{overflow-x:auto;margin:0 0 14px}
+.tpl table.ft{width:100%;border-collapse:collapse;font-size:12.5px;min-width:520px}
+.tpl table.ft th,.tpl table.ft td{border:1px solid var(--border);padding:5px 7px;text-align:left;vertical-align:middle}
+.tpl table.ft th{background:#EEEDF8;color:var(--violet);font-weight:700;font-size:12px}
+.tpl table.ft td.lab{font-weight:600;background:#FAFAFD}
+.tpl table.ft input,.tpl table.ft select{margin:0;height:34px;font-size:13px}
+.tpl .txtbox{background:#FAFAFD;border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.65;margin:0 0 14px}
+.tpl .txtbox b{color:var(--violet)}
+.tpl .txtbox ul{margin:6px 0 6px 18px;padding:0}
+</style>`;
+
+const FS_VACCINS=['Diphtérie – Tétanos – Poliomyélite – Coqueluche – Hib','Pneumocoque','Hépatite B','Rubéole – Oreillons – Rougeole','Méningocoque B','Méningocoque C ou ACWY','Autres (précisez)'];
+const FS_ALLERGIES=['Pollens – Acariens et graminées','Alimentaires','Médicamenteuses','Autres'];
+const ON_OPTS=['','Oui','Non'];
+const KK_CRECHES=['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
+function selHtml(id,opts,val){
+  return `<select id="ff_${id}">${opts.map(o=>`<option${val===o?' selected':''}>${esc(o)}</option>`).join('')}</select>`;
+}
+function inHtml(id,val,type){
+  return `<input${type?` type="${type}"`:''} id="ff_${id}" value="${esc(val)}">`;
+}
+const FL_PHOTOS=['Afficher à la crèche','Newsletters','Le site internet','Les pages Facebook','Éventuellement, à l\u2019occasion de reportages télévisés','Dossier « souvenir de crèche »'];
+const RM_TABLE=[
+ ['Savon liquide','Sirop antibiotique'],
+ ['Crème pour le change','Collyre'],
+ ['Liniment oléo-calcaire','Médicaments pour les reflux (gaviscon…)'],
+ ['Huile d\u2019amande douce','Médicaments pour le transit (smecta, débridat, tiorfan…)'],
+ ['Les produits anti-moustiques : lotions, crèmes, sprays et bracelets… Si besoin, les parents en mettent à leur enfant AVANT de le déposer à la crèche, ou dans un contexte médical particulier = PAI','Homéopathie sous toutes ses formes (granules, gouttes) : Apis mellifica, Arnica'],
+ ['Les crèmes solaires : les parents apportent la crème solaire pour leur(s) enfant(s) ET signent l\u2019autorisation','Gouttes et pipettes pour les poussées dentaires…'],
+ ['','Les boîtes de lait']
+];
+
 const TPL={
  grille:{
   get fields(){return grKeys();},
@@ -1474,7 +1533,369 @@ const TPL={
     doc.save(slug(fillDoc.titre)+(g('cs_enfant')?'_'+slug(g('cs_enfant')):'')+'.pdf');
     return true;
   }
+ },
+ fiche_sanitaire:{
+  fields:(()=>{
+    const f=['fs_nom','fs_prenom','fs_naiss','fs_ville','fs_nationalite','fs_sexe','fs_v7_lib',
+             'fs_regime','fs_regime_com','fs_med_nom','fs_med_adr','fs_med_tel',
+             'fs_ped_nom','fs_ped_adr','fs_ped_tel','fs_notes',
+             'fs_doc_nom','fs_doc_enfant','fs_doc_temp','fs_doc_date'];
+    FS_VACCINS.forEach((_,i)=>{f.push('fs_v'+(i+1)+'_d','fs_v'+(i+1)+'_p');});
+    FS_ALLERGIES.forEach((_,i)=>{f.push('fs_a'+(i+1)+'_r','fs_a'+(i+1)+'_c');});
+    return f;
+  })(),
+  html:v=>`<div class="tpl">${FT_CSS}
+   <h3>Enfant</h3>
+   <div class="grid2">
+     <div class="f"><label>Nom</label>${inHtml('fs_nom',v.fs_nom)}</div>
+     <div class="f"><label>Prénom</label>${inHtml('fs_prenom',v.fs_prenom)}</div>
+   </div>
+   <div class="grid2">
+     <div class="f"><label>Né(e) le</label>${inHtml('fs_naiss',v.fs_naiss,'date')}</div>
+     <div class="f"><label>À (ville)</label>${inHtml('fs_ville',v.fs_ville)}</div>
+   </div>
+   <div class="grid2">
+     <div class="f"><label>Nationalité</label>${inHtml('fs_nationalite',v.fs_nationalite)}</div>
+     <div class="f"><label>Sexe</label>${selHtml('fs_sexe',['','M','F'],v.fs_sexe)}</div>
+   </div>
+   <p class="hint" style="font-size:14px;font-style:normal">Joindre les photocopies du carnet de santé.</p>
+
+   <h3>Vaccins</h3>
+   <div class="ftw"><table class="ft">
+    <tr><th style="width:44%">Vaccins</th><th>Date de vaccination</th><th>Prochaine vaccination</th></tr>
+    ${FS_VACCINS.map((lab,i)=>`<tr>
+      <td class="lab">${esc(lab)}</td>
+      <td>${inHtml('fs_v'+(i+1)+'_d',v['fs_v'+(i+1)+'_d'])}</td>
+      <td>${inHtml('fs_v'+(i+1)+'_p',v['fs_v'+(i+1)+'_p'])}</td></tr>`).join('')}
+   </table></div>
+   <div class="f"><label>Autres vaccins — préciser lesquels</label>${inHtml('fs_v7_lib',v.fs_v7_lib)}</div>
+
+   <h3>Allergies</h3>
+   <div class="ftw"><table class="ft">
+    <tr><th style="width:32%">Allergies</th><th style="width:16%">Oui / Non</th><th>Commentaires et conduites à tenir</th></tr>
+    ${FS_ALLERGIES.map((lab,i)=>`<tr>
+      <td class="lab">${esc(lab)}</td>
+      <td>${selHtml('fs_a'+(i+1)+'_r',ON_OPTS,v['fs_a'+(i+1)+'_r'])}</td>
+      <td>${inHtml('fs_a'+(i+1)+'_c',v['fs_a'+(i+1)+'_c'])}</td></tr>`).join('')}
+   </table></div>
+
+   <h3>Régime alimentaire</h3>
+   <div class="grid2">
+     <div class="f"><label>Régime</label>${inHtml('fs_regime',v.fs_regime)}</div>
+     <div class="f"><label>Commentaires</label>${inHtml('fs_regime_com',v.fs_regime_com)}</div>
+   </div>
+
+   <h3>Médecin traitant</h3>
+   <div class="grid2">
+     <div class="f"><label>Nom</label>${inHtml('fs_med_nom',v.fs_med_nom)}</div>
+     <div class="f"><label>Téléphone</label>${inHtml('fs_med_tel',v.fs_med_tel,'tel')}</div>
+   </div>
+   <div class="f"><label>Adresse</label>${inHtml('fs_med_adr',v.fs_med_adr)}</div>
+
+   <h3>Pédiatre</h3>
+   <div class="grid2">
+     <div class="f"><label>Nom</label>${inHtml('fs_ped_nom',v.fs_ped_nom)}</div>
+     <div class="f"><label>Téléphone</label>${inHtml('fs_ped_tel',v.fs_ped_tel,'tel')}</div>
+   </div>
+   <div class="f"><label>Adresse</label>${inHtml('fs_ped_adr',v.fs_ped_adr)}</div>
+
+   <h3>Notes particulières</h3>
+   <div class="f"><textarea id="ff_fs_notes">${esc(v.fs_notes)}</textarea></div>
+
+   <h3>Certificat médical</h3>
+   <p class="hint" style="font-size:14px;font-style:normal">Partie réservée au médecin : atteste que l'enfant est apte à la vie en collectivité, ne présente aucun signe apparent de maladie contagieuse et est à jour de ses vaccinations.</p>
+   <div class="grid2">
+     <div class="f"><label>Je soussigné, Docteur</label>${inHtml('fs_doc_nom',v.fs_doc_nom)}</div>
+     <div class="f"><label>certifie avoir examiné l'enfant</label>${inHtml('fs_doc_enfant',v.fs_doc_enfant)}</div>
+   </div>
+   <div class="grid2">
+     <div class="f"><label>Température à partir de laquelle le Doliprane est préconisé (°C)</label>${inHtml('fs_doc_temp',v.fs_doc_temp)}</div>
+     <div class="f"><label>Date</label>${inHtml('fs_doc_date',v.fs_doc_date,'date')}</div>
+   </div>
+   <div class="grid2">
+     ${sigBoxHtml('medecin','Signature et tampon du docteur')}
+   </div>
+  </div>`,
+  mount:()=>{['medecin'].forEach(mountSig);},
+  pdf:doc=>{
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'';
+    const W=182;let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+    const H=t=>{need(16);doc.setFillColor(74,63,159);doc.rect(14,y-5,W,8,'F');
+      doc.setTextColor(255);doc.setFontSize(10);doc.setFont(undefined,'bold');
+      doc.text(t.toUpperCase(),16,y);doc.setTextColor(30);y+=12;};
+
+    doc.setFontSize(16);doc.setFont(undefined,'bold');doc.text('FICHE SANITAIRE',14,y);y+=12;
+
+    H('Enfant');
+    y=pdfGrid(doc,14,y,[30,61,30,61],[
+      ['Nom',g('fs_nom'),'Prénom',g('fs_prenom')],
+      ['Né(e) le',dfr(g('fs_naiss')),'À (ville)',g('fs_ville')],
+      ['Nationalité',g('fs_nationalite'),'Sexe',g('fs_sexe')]
+    ],{minH:9});
+    y+=8;
+    doc.setFontSize(10);doc.setFont(undefined,'bold');
+    doc.text('Joindre les photocopies du carnet de santé',14,y);y+=10;
+
+    H('Vaccins');
+    y=pdfGrid(doc,14,y,[92,45,45],[{head:true,cells:['Vaccins','Date de vaccination','Prochaine vaccination']}]
+      .concat(FS_VACCINS.map((lab,i)=>[
+        (i===FS_VACCINS.length-1&&g('fs_v7_lib'))?lab+' : '+g('fs_v7_lib'):lab,
+        g('fs_v'+(i+1)+'_d'),g('fs_v'+(i+1)+'_p')])),{minH:10});
+    y+=10;
+
+    H('Allergies');
+    y=pdfGrid(doc,14,y,[62,25,95],[{head:true,cells:['Allergies','Oui / Non','Commentaires et conduites à tenir']}]
+      .concat(FS_ALLERGIES.map((lab,i)=>[lab,g('fs_a'+(i+1)+'_r'),g('fs_a'+(i+1)+'_c')])),{minH:10});
+    y+=10;
+
+    H('Régime alimentaire');
+    y=pdfGrid(doc,14,y,[62,120],[{head:true,cells:['Régime alimentaire','Commentaires']},
+      [g('fs_regime'),g('fs_regime_com')]],{minH:11});
+    y+=10;
+
+    H('Médecins');
+    y=pdfGrid(doc,14,y,[62,85,35],[{head:true,cells:['Nom du médecin traitant','Adresse','Téléphone']},
+      [g('fs_med_nom'),g('fs_med_adr'),g('fs_med_tel')]],{minH:11});
+    y+=4;
+    y=pdfGrid(doc,14,y,[62,85,35],[{head:true,cells:['Nom du pédiatre','Adresse','Téléphone']},
+      [g('fs_ped_nom'),g('fs_ped_adr'),g('fs_ped_tel')]],{minH:11});
+    y+=10;
+
+    if(g('fs_notes')){
+      H('Notes particulières');
+      const L=doc.splitTextToSize(g('fs_notes'),W-4);
+      need(L.length*5+6);
+      doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text(L,14,y);y+=L.length*5+8;
+    }
+
+    H('Certificat médical');
+    doc.setFontSize(10);doc.setFont(undefined,'normal');
+    const dots=n=>'.'.repeat(n);
+    const cert=[
+      'Je, soussigné, Docteur '+(g('fs_doc_nom')||dots(40))+' certifie avoir examiné l\u2019enfant '+(g('fs_doc_enfant')||dots(40)),
+      'Ce patient est apte à la vie en collectivité, ne présente aucun signe apparent de maladie contagieuse et est à jour de ses vaccinations.',
+      'En cas de température supérieure à '+(g('fs_doc_temp')||dots(10))+', je préconise, sur autorisation écrite des parents, l\u2019administration de DOLIPRANE à raison d\u20191 dose/poids de l\u2019enfant toutes les 6 heures.'
+    ];
+    cert.forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*5+5);doc.text(L,14,y);y+=L.length*5+5;});
+    y+=4;
+    doc.text('Date : '+(dfr(g('fs_doc_date'))||dots(20)),14,y);y+=12;
+    need(46);
+    doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text('Signature et tampon du docteur :',14,y);
+    doc.setDrawColor(200);doc.rect(14,y+3,90,34);
+    if(SIGS['medecin']){try{doc.addImage(SIGS['medecin'],'PNG',16,y+5,86,30);}catch(e){}}
+    y+=42;
+    doc.save(slug(fillDoc.titre)+(g('fs_nom')?'_'+slug(g('fs_nom')):'')+'.pdf');
+    return true;
+  }
+ },
+ fiche_liaison:{
+  fields:['fl_creche','fl_enfant','fl_naiss','fl_parents','fl_tel1','fl_tel2','fl_autorisees',
+          'fl_p1','fl_p2','fl_p3','fl_p4','fl_p5','fl_p6','fl_date'],
+  html:v=>`<div class="tpl">${FT_CSS}
+   <h3>Fiche de liaison</h3>
+   <div class="grid2">
+     <div class="f"><label>Crèche</label>${selHtml('fl_creche',KK_CRECHES,v.fl_creche)}</div>
+     <div class="f"><label>Date</label>${inHtml('fl_date',v.fl_date,'date')}</div>
+   </div>
+   <div class="grid2">
+     <div class="f"><label>Nom / Prénom de l'enfant</label>${inHtml('fl_enfant',v.fl_enfant)}</div>
+     <div class="f"><label>Date de naissance</label>${inHtml('fl_naiss',v.fl_naiss,'date')}</div>
+   </div>
+   <div class="f"><label>Nom / Prénom des parents</label>${inHtml('fl_parents',v.fl_parents)}</div>
+   <div class="grid2">
+     <div class="f"><label>Téléphone parent 1</label>${inHtml('fl_tel1',v.fl_tel1,'tel')}</div>
+     <div class="f"><label>Téléphone parent 2</label>${inHtml('fl_tel2',v.fl_tel2,'tel')}</div>
+   </div>
+
+   <h3>Personnes autorisées à venir le chercher</h3>
+   <p class="hint" style="font-size:14px;font-style:normal">Une personne par ligne : nom, prénom, lien avec l'enfant, téléphone.</p>
+   <div class="f"><textarea id="ff_fl_autorisees" style="min-height:130px">${esc(v.fl_autorisees)}</textarea></div>
+
+   <h3>Autorisation de prises de photos et de diffusion</h3>
+   <p class="hint" style="font-size:14px;font-style:normal">Dans le cadre de la crèche, nous sommes amenés à utiliser des photos des enfants pour :</p>
+   <div class="ftw"><table class="ft">
+    <tr><th style="width:70%">Utilisation</th><th>Autorisation</th></tr>
+    ${FL_PHOTOS.map((lab,i)=>`<tr><td class="lab">${esc(lab)}</td><td>${selHtml('fl_p'+(i+1),ON_OPTS,v['fl_p'+(i+1)])}</td></tr>`).join('')}
+   </table></div>
+   <div class="txtbox">
+     Il ne s'agit pas de photographies individuelles d'identité mais de photos de groupe ou bien de vues montrant les enfants en activité.<br><br>
+     En application de la loi informatique et libertés et des règles de protection des mineurs, les légendes accompagnant les photos ne communiqueront aucune information susceptible d'identifier directement ou indirectement les enfants ou leur famille. La loi nous fait obligation d'avoir l'autorisation écrite des parents pour cette utilisation.
+   </div>
+
+   <h3>Signature des parents</h3>
+   <div class="grid2">
+     ${sigBoxHtml('parent1','Signature du parent')}
+     ${sigBoxHtml('parent2','Signature du parent')}
+   </div>
+  </div>`,
+  mount:()=>{['parent1','parent2'].forEach(mountSig);},
+  pdf:doc=>{
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'';
+    const dots=n=>'.'.repeat(n);
+    const W=182;let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+
+    doc.setFontSize(16);doc.setFont(undefined,'bold');
+    doc.text('FICHE DE LIAISON',14+W/2,y,{align:'center'});y+=14;
+
+    doc.setFontSize(10.5);doc.setFont(undefined,'bold');
+    doc.text('NOM / PRÉNOM DE L\u2019ENFANT : ',14,y);
+    doc.setFont(undefined,'normal');doc.text(g('fl_enfant')||dots(30),75,y);
+    doc.setFont(undefined,'bold');doc.text('NÉ(E) LE : ',132,y);
+    doc.setFont(undefined,'normal');doc.text(dfr(g('fl_naiss'))||dots(12),155,y);
+    y+=9;
+    doc.setFont(undefined,'bold');doc.text('NOM / PRÉNOM DES PARENTS : ',14,y);
+    doc.setFont(undefined,'normal');doc.text(g('fl_parents')||dots(40),82,y);
+    y+=12;
+
+    y=pdfGrid(doc,14,y,[62,60,60],[{head:true,cells:['','Parent 1','Parent 2']},
+      ['Numéros de téléphone',g('fl_tel1'),g('fl_tel2')]],{minH:11});
+    y+=12;
+
+    need(60);
+    doc.setFontSize(10.5);doc.setFont(undefined,'bold');
+    doc.text('Personnes autorisées à venir le chercher :',14,y);y+=8;
+    doc.setFont(undefined,'normal');doc.setFontSize(10);
+    const pers=(g('fl_autorisees')||'').split(/\r?\n/).filter(t=>t.trim());
+    const nLignes=Math.max(6,pers.length);
+    for(let i=0;i<nLignes;i++){
+      need(9);
+      if(pers[i])doc.text(doc.splitTextToSize(pers[i],W-2)[0],15,y);
+      doc.setDrawColor(190);doc.line(14,y+1.5,14+W,y+1.5);
+      y+=8;
+    }
+    y+=10;
+
+    need(70);
+    doc.setFontSize(10.5);doc.setFont(undefined,'bold');
+    doc.text('Autorisation de prises de photos et de diffusion des photos',14+W/2,y,{align:'center'});y+=8;
+    doc.setFont(undefined,'normal');doc.setFontSize(10);
+    const intro=doc.splitTextToSize('Dans le cadre de la crèche, nous sommes amenés à utiliser des photos des enfants pour :',W);
+    doc.text(intro,14,y);y+=intro.length*5+4;
+    y=pdfGrid(doc,14,y,[132,50],[{head:true,cells:['Utilisation','Autorisation']}]
+      .concat(FL_PHOTOS.map((lab,i)=>[lab,g('fl_p'+(i+1))||'—'])),{minH:9});
+    y+=8;
+    const legal=[
+      'Il ne s\u2019agit pas de photographies individuelles d\u2019identité mais de photos de groupe ou bien de vues montrant les enfants en activité.',
+      'En application de la loi informatique et libertés et des règles de protection des mineurs, les légendes accompagnant les photos ne communiqueront aucune information susceptible d\u2019identifier directement ou indirectement les enfants ou leur famille. La loi nous fait obligation d\u2019avoir l\u2019autorisation écrite des parents pour cette utilisation.'
+    ];
+    doc.setFontSize(9.5);
+    legal.forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*4.6+4);doc.text(L,14,y);y+=L.length*4.6+4;});
+    y+=8;
+
+    need(50);
+    doc.setFontSize(10);doc.setFont(undefined,'bold');
+    doc.text('Date : ',14,y);doc.setFont(undefined,'normal');
+    doc.text(dfr(g('fl_date'))||dots(20),27,y);y+=8;
+    [['parent1','Signature du parent',14],['parent2','Signature du parent',110]].forEach(([role,lab,px])=>{
+      doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text(lab+' :',px,y);
+      doc.setDrawColor(200);doc.rect(px,y+3,84,32);
+      if(SIGS[role]){try{doc.addImage(SIGS[role],'PNG',px+2,y+5,80,28);}catch(e){}}
+    });
+    y+=40;
+    if(g('fl_creche')){
+      doc.setFontSize(8.5);doc.setFont(undefined,'normal');doc.setTextColor(120);
+      doc.text('Koala Kids '+g('fl_creche'),14,285);doc.setTextColor(30);
+    }
+    doc.save(slug(fillDoc.titre)+(g('fl_enfant')?'_'+slug(g('fl_enfant')):'')+'.pdf');
+    return true;
+  }
+ },
+ reglement_medicaments:{
+  fields:['rm_creche','rm_nom','rm_enfant','rm_date'],
+  html:v=>`<div class="tpl">${FT_CSS}
+   <h3>Règlement — produits d'hygiène et médicaments</h3>
+   <div class="txtbox">
+     <b>Réglementation concernant les ordonnances</b>
+     <ul>
+       <li>Les parents sont responsables de la surveillance médicale de leur enfant et de l'administration des médicaments prescrits par le médecin.</li>
+       <li>L'administration des médicaments en crèche est faite par le personnel, sur délégation écrite du (des) parent(s) et sous condition de fournir l'ordonnance en lien avec le traitement.</li>
+     </ul>
+     L'ordonnance doit comporter de manière précise et lisible : nom ET prénom de l'enfant, date de prescription, nom complet du médicament (mention et nom lisible du générique le cas échéant), posologie précise (quantité, nombre de prises…), durée du traitement.
+     <br><br>
+     <b>Réglementation concernant les appareillages</b><br>
+     Dans l'intérêt de l'enfant, tout appareillage médical ou paramédical (attelle, casque, plâtre…) doit faire l'objet d'une prescription médicale précise et détaillée, réévaluée par le médecin si besoin.
+     <br><br>
+     <b>Les bijoux sont INTERDITS (collier d'ambre inclus).</b>
+   </div>
+   <div class="ftw"><table class="ft">
+    <tr><th style="width:50%">Produits d'hygiène — produits neufs et fermés, avec date limite d'utilisation optimale</th><th>Médicaments avec ordonnance — même ceux obtenus sans prescription médicale, et autorisation parentale d'administrer</th></tr>
+    ${RM_TABLE.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('')}
+   </table></div>
+
+   <h3>Engagement</h3>
+   <div class="grid2">
+     <div class="f"><label>Crèche</label>${selHtml('rm_creche',KK_CRECHES,v.rm_creche)}</div>
+     <div class="f"><label>Date</label>${inHtml('rm_date',v.rm_date,'date')}</div>
+   </div>
+   <div class="grid2">
+     <div class="f"><label>Je soussigné(e)</label>${inHtml('rm_nom',v.rm_nom)}</div>
+     <div class="f"><label>Parent de l'enfant</label>${inHtml('rm_enfant',v.rm_enfant)}</div>
+   </div>
+   <p class="hint" style="font-size:14px;font-style:normal">Déclare avoir pris connaissance du règlement de fonctionnement et m'engage à en respecter les règles.</p>
+   <div class="grid2">
+     ${sigBoxHtml('parent1','Signature du parent')}
+   </div>
+  </div>`,
+  mount:()=>{['parent1'].forEach(mountSig);},
+  pdf:doc=>{
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'';
+    const dots=n=>'.'.repeat(n);
+    const W=182;let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+    const P=(t,size,bold)=>{doc.setFontSize(size||10);doc.setFont(undefined,bold?'bold':'normal');
+      const L=doc.splitTextToSize(t,W);need(L.length*4.8+4);doc.text(L,14,y);y+=L.length*4.8+4;};
+
+    doc.setFontSize(13);doc.setFont(undefined,'bold');
+    const ti=doc.splitTextToSize('RÈGLEMENT CONCERNANT LES PRODUITS D\u2019HYGIÈNE ET LES MÉDICAMENTS',W);
+    doc.text(ti,14+W/2,y,{align:'center'});y+=ti.length*6+8;
+
+    P('Réglementation concernant les ordonnances :',10.5,true);
+    P('- Les parents sont responsables de la surveillance médicale de leur enfant et de l\u2019administration des médicaments prescrits par le médecin.');
+    P('- L\u2019administration des médicaments en crèche est faite par le personnel, sur délégation écrite du (des) parent(s) et sous condition de fournir l\u2019ordonnance en lien avec le traitement.');
+    P('Cette ordonnance doit comporter de manière précise et lisible les informations suivantes :');
+    ['Nom ET prénom de l\u2019enfant',
+     'La date de prescription',
+     'Le nom complet du médicament (si le pharmacien délivre un générique, il devra en faire la mention et préciser le nom du produit de manière lisible)',
+     'La posologie précise (quantité, nombre de prises…)',
+     'La durée du traitement'].forEach(t=>P('- '+t));
+    y+=2;
+    P('Réglementation concernant les appareillages :',10.5,true);
+    P('Dans l\u2019intérêt de l\u2019enfant, tout appareillage médical ou paramédical (attelle, casque, plâtre…) doit faire l\u2019objet d\u2019une prescription médicale précise et détaillée, et réévaluée par le médecin si besoin.');
+    y+=2;
+    P('Les bijoux sont INTERDITS (collier d\u2019ambre inclus)',11,true);
+    y+=6;
+
+    y=pdfGrid(doc,14,y,[91,91],[{head:true,cells:[
+      'PRODUITS d\u2019HYGIÈNE : produits neufs et fermés avec date limite d\u2019utilisation optimale.',
+      'MÉDICAMENTS avec ordonnances. Même ceux obtenus SANS prescription médicale et autorisation parentale d\u2019administrer le médicament.']}]
+      .concat(RM_TABLE.map(r=>[r[0],r[1]])),{minH:9});
+    y+=12;
+
+    need(60);
+    doc.setFontSize(10.5);doc.setFont(undefined,'normal');
+    const eng='Je soussigné(e) '+(g('rm_nom')||dots(40))+(g('rm_enfant')?', parent de l\u2019enfant '+g('rm_enfant'):'')+
+      ' déclare avoir pris connaissance du règlement de fonctionnement et m\u2019engage à en respecter les règles.';
+    const LE=doc.splitTextToSize(eng,W);doc.text(LE,14,y);y+=LE.length*5+10;
+    doc.text('Le '+(dfr(g('rm_date'))||dots(20)),14,y);y+=10;
+    need(44);
+    doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text('Signature :',14,y);
+    doc.setDrawColor(200);doc.rect(14,y+3,90,32);
+    if(SIGS['parent1']){try{doc.addImage(SIGS['parent1'],'PNG',16,y+5,86,28);}catch(e){}}
+    y+=40;
+    if(g('rm_creche')){
+      doc.setFontSize(8.5);doc.setFont(undefined,'normal');doc.setTextColor(120);
+      doc.text('Koala Kids '+g('rm_creche'),14,285);doc.setTextColor(30);
+    }
+    doc.save(slug(fillDoc.titre)+(g('rm_nom')?'_'+slug(g('rm_nom')):'')+'.pdf');
+    return true;
+  }
  }
+
 };
 
 function sigBoxHtml(role,label){
