@@ -609,6 +609,12 @@ async function delDoc(id){
 }
 
 /* ---------- REMPLISSAGE ---------- */
+/* Vrai uniquement si l’utilisateur a lui-meme touche au selecteur de statut
+   pendant cette saisie. Un « signe » herite d’un chargement ou repercute
+   automatiquement apres un enregistrement ne compte pas : sans cela le statut
+   s’auto-entretient et le document reste marque signe apres effacement. */
+let fillStatutManuel=false;
+
 function fillMetaOptions(selEnfant,selStatut){
   const sel=document.getElementById('fillEnfant');
   // Référente : enfants de sa crèche uniquement ; direction : tous
@@ -623,6 +629,8 @@ function fillMetaOptions(selEnfant,selStatut){
   sel.value=selEnfant||'';
   const st=document.getElementById('fillStatut');
   st.value=(selStatut==='signe')?'signe':'prepare';
+  fillStatutManuel=false;
+  st.onchange=()=>{fillStatutManuel=true;};
   // libellé du bouton PDF selon le contexte, et mise à jour si l'enfant change
   sel.onchange=fillUpdatePdfBtnLabel;
   fillUpdatePdfBtnLabel();
@@ -648,9 +656,12 @@ async function openFill(id,repId,forceNew){
     const{data}=await sb.from('documents_reponses').select('*').eq('id',repId).maybeSingle();
     if(data){fillRep=data;vals=data.donnees||{};}
   }else if(!forceNew){
-    /* reprend la derniere reponse de l'utilisateur pour ce document */
+    /* Reprend la derniere saisie EN COURS de l’utilisateur pour ce document.
+       Une reponse rattachee a un enfant a quitte cette page : elle vit dans le
+       dossier de l’enfant et ne doit plus etre rechargee ici, sinon le document
+       resterait « occupe » dans la liste au lieu de redevenir vierge. */
     const{data}=await sb.from('documents_reponses').select('*')
-      .eq('document_id',id).eq('rempli_par',ME.id)
+      .eq('document_id',id).eq('rempli_par',ME.id).is('enfant_id',null)
       .order('updated_at',{ascending:false}).limit(1);
     if(data&&data.length){fillRep=data[0];vals=data[0].donnees||{};}
   }
@@ -738,9 +749,29 @@ async function saveFill(){
   const enfantId=(document.getElementById('fillEnfant')||{}).value||null;
   // Statut : « signe » si le sélecteur l'indique OU si au moins une signature a été tracée.
   // « Je signe, donc c'est signé » — sans avoir à régler le sélecteur manuellement.
-  const aUneSignature=Object.keys(SIGS||{}).some(k=>!!SIGS[k]);
-  let statut=((document.getElementById('fillStatut')||{}).value)==='signe'?'signe':'prepare';
-  if(aUneSignature)statut='signe';
+  // Filet de securite : une image de signature quasi vide (cadre effleure, ou
+  // heritee d’une ancienne saisie) ne doit pas basculer le statut en « signe ».
+  // Un PNG uniforme se compresse en quelques centaines de caracteres ; un trace
+  // reel en depasse largement plusieurs milliers.
+  const sigReelle=v=>typeof v==='string'&&v.indexOf('data:image')===0&&v.length>1500;
+  const aUneSignature=Object.keys(SIGS||{}).some(k=>sigReelle(SIGS[k]));
+  /* Garde-fou : apres un enregistrement rattache a un enfant, le formulaire est
+     remis a blanc et fillRep detache. Un second clic sur « Enregistrer » creerait
+     alors une ligne vide dans le dossier de l’enfant. On refuse donc toute
+     creation sans le moindre contenu. */
+  const aDuContenu=Object.keys(donnees).some(k=>{
+    if(k==='_sigs')return false;
+    const v=donnees[k];
+    return v!==''&&v!==false&&v!=null;
+  })||aUneSignature;
+  if(!fillRep&&!aDuContenu)return toast('Formulaire vide \u2014 rien \u00e0 enregistrer');
+  const statutChoisi=((document.getElementById('fillStatut')||{}).value)==='signe';
+  /* « signe » dans deux cas seulement :
+     - une signature reelle a ete tracee ou recue par QR ;
+     - l’utilisateur a explicitement bascule le selecteur pendant cette saisie
+       (document signe sur papier).
+     Dans tous les autres cas on retombe sur « prepare » : plus d’heritage. */
+  let statut=(aUneSignature||(statutChoisi&&fillStatutManuel))?'signe':'prepare';
   // refléter la bascule dans le sélecteur pour cohérence visuelle
   const _st=document.getElementById('fillStatut');if(_st)_st.value=statut;
   // creche_id aligné sur la crèche de l'enfant si un enfant est choisi,
@@ -767,7 +798,14 @@ async function saveFill(){
     if(data)fillRep=data;          /* evite les doublons aux enregistrements suivants */
   }
   if(error)return toast('Erreur : '+(error.message||'enregistrement impossible'));
-  toast('Enregistré');
+  toast(enfantId?'Enregistré dans le dossier de l\u2019enfant':'Enregistré');
+  if(enfantId){
+    /* Le document est parti dans le dossier de l’enfant : on detache la reponse
+       de la saisie courante et on remet le formulaire a blanc, pour que la page
+       Documents reparte d’un modele vierge au prochain remplissage. */
+    fillRep=null;
+    resetFillForm();
+  }
   if(RETURN_ENFANT_ID){
     showReturnEnfantBar();
   }else{
@@ -913,6 +951,9 @@ async function editPdfAndReset(){
 /* Remet la modale de remplissage a l'etat vierge, sans rouvrir de reponse existante */
 function resetFillForm(){
   Object.keys(SIGS).forEach(k=>delete SIGS[k]);
+  const _st=document.getElementById('fillStatut');
+  if(_st)_st.value='prepare';
+  fillStatutManuel=false;
   const tpl=TPL[fillDoc.template_key];
   if(tpl){
     const v={};tpl.fields.forEach(f=>v[f]='');
@@ -1321,9 +1362,15 @@ function sigBoxHtml(role,label){
     </div></div>`;
 }
 
+/* Longueur minimale de trace (en px CSS) pour qu’un geste compte comme signature.
+   En dessous, il s’agit d’un simple appui ou d’un frolement accidentel : le cadre
+   est remis a blanc et le document reste au statut « prepare ». */
+const SIG_MIN_INK=24;
+
 function mountSig(role){
   const host=document.getElementById('sbc_'+role);
   if(!host)return;
+  if(host._sigUp){window.removeEventListener('mouseup',host._sigUp);host._sigUp=null;}
   if(SIGS[role]){host.innerHTML=`<img src="${SIGS[role]}" alt="signature">`;return;}
   host.innerHTML='<canvas></canvas>';
   const c=host.querySelector('canvas');
@@ -1331,19 +1378,42 @@ function mountSig(role){
   c.width=Math.max(300,r.width)*2;c.height=120*2;
   const ctx=c.getContext('2d');ctx.scale(2,2);
   ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#2B2740';
-  let on=false;
+  let on=false,ink=0,last=null;
   const pt=e=>{const b=c.getBoundingClientRect();const p=e.touches?e.touches[0]:e;
     return[(p.clientX-b.left)*(c.width/2/b.width),(p.clientY-b.top)*(c.height/2/b.height)];};
-  const dn=e=>{e.preventDefault();on=true;ctx.beginPath();ctx.moveTo(...pt(e));};
-  const mv=e=>{if(!on)return;e.preventDefault();ctx.lineTo(...pt(e));ctx.stroke();};
-  const up=()=>{if(!on)return;on=false;SIGS[role]=c.toDataURL('image/png');};
+  const dn=e=>{e.preventDefault();on=true;last=pt(e);ctx.beginPath();ctx.moveTo(...last);};
+  const mv=e=>{if(!on)return;e.preventDefault();
+    const p=pt(e);
+    if(last)ink+=Math.hypot(p[0]-last[0],p[1]-last[1]);
+    last=p;ctx.lineTo(...p);ctx.stroke();};
+  const up=()=>{if(!on)return;on=false;
+    /* Trace cumulee sur l’ensemble des traits : une signature en plusieurs
+       levers de stylo reste valide, un simple clic ne l’est pas. */
+    if(ink<SIG_MIN_INK){
+      ctx.clearRect(0,0,c.width,c.height);
+      delete SIGS[role];
+      ink=0;last=null;
+      return;
+    }
+    SIGS[role]=c.toDataURL('image/png');};
   c.addEventListener('mousedown',dn);c.addEventListener('mousemove',mv);
   window.addEventListener('mouseup',up);
+  host._sigUp=up;                 /* pour retirer l’ecouteur au prochain montage */
   c.addEventListener('touchstart',dn,{passive:false});
   c.addEventListener('touchmove',mv,{passive:false});
   c.addEventListener('touchend',up);
+  c.addEventListener('touchcancel',up);
 }
-function clearSig(role){delete SIGS[role];mountSig(role);}
+function clearSig(role){
+  delete SIGS[role];
+  mountSig(role);
+  /* Plus aucune signature et statut non choisi manuellement : on redescend
+     l’affichage pour que l’ecran corresponde a ce qui sera enregistre. */
+  if(!fillStatutManuel&&!Object.keys(SIGS).some(k=>!!SIGS[k])){
+    const st=document.getElementById('fillStatut');
+    if(st)st.value='prepare';
+  }
+}
 
 /* ---------- QR SIGNATURE A DISTANCE ---------- */
 function mkToken(){
@@ -1414,12 +1484,16 @@ async function openReps(id){
   const el=document.getElementById('repsArea');
   if(!data||!data.length){el.innerHTML='<div class="empty"><i class="ti ti-inbox"></i>Aucune réponse</div>';}
   else{
-    el.innerHTML=data.map(r=>`<div class="rep">
+    el.innerHTML=data.map(r=>{
+      const enf=r.enfant_id?ENFANTS.find(e=>e.id===r.enfant_id):null;
+      return `<div class="rep">
       <b>${esc(r.rempli_par_nom||'—')}</b>
       <span class="tag">${new Date(r.updated_at||r.created_at).toLocaleDateString('fr-FR')}</span>
+      ${r.enfant_id?`<span class="tag">Dossier ${esc(enf?((enf.prenom||'')+' '+(enf.nom||'')).trim():'enfant')}</span>`:''}
+      <span class="tag">${r.statut==='signe'?'Signé':'Préparé'}</span>
       <button class="iconbtn" onclick="openFill('${id}','${r.id}')"><i class="ti ti-eye"></i></button>
       ${IS_ADMIN?`<button class="iconbtn d" onclick="delRep('${r.id}','${id}')"><i class="ti ti-trash"></i></button>`:''}
-    </div>`).join('');
+    </div>`;}).join('');
   }
   document.getElementById('ovReps').classList.add('on');
 }
