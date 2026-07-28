@@ -2092,6 +2092,11 @@ function presToggleFilterPresents(){
 }
 window.presToggleFilterPresents=presToggleFilterPresents;
 
+/* Affiche ou masque les enfants point\u00e9s alors qu\u2019aucun contrat ne couvre la date. */
+let presShowHorsContrat=false;
+function presToggleHorsContrat(){ presShowHorsContrat=!presShowHorsContrat; renderPresence(); }
+window.presToggleHorsContrat=presToggleHorsContrat;
+
 async function renderPresenceGantt(){
   const dateStr=document.getElementById('presence-date')?.value||todayStr();
   const view=document.getElementById('presence-gantt-view');
@@ -2107,12 +2112,15 @@ async function renderPresenceGantt(){
   const presMap={};
   (presData||[]).forEach(p=>{if(!presMap[p.enfant_id])presMap[p.enfant_id]={};presMap[p.enfant_id][p.slot]=p.status;});
   /* \u2500\u2500 Contrats d\u2019accueil \u2500\u2500
-     La feuille n\u2019affiche que les enfants dont un contrat couvre la date ET le jour
-     de la semaine. Les enfants d\u00e9j\u00e0 point\u00e9s ce jour restent visibles m\u00eame sans
-     contrat (sinon une pr\u00e9sence saisie \u00e0 la main dispara\u00eetrait de l\u2019\u00e9cran). */
+     ctPeriode : contrat dont la p\u00e9riode couvre la date, quel que soit le jour
+                 \u2192 d\u00e9finit QUI figure sur la feuille (inscrits en cours de contrat).
+     ctMap     : contrat couvrant la date ET le jour de la semaine
+                 \u2192 d\u00e9finit les horaires de la barre et le d\u00e9compte \u00ab sous contrat \u00bb.
+     Les enfants sans aucun contrat en cours sont masqu\u00e9s (lien en l\u00e9gende pour les
+     r\u00e9afficher s\u2019ils ont \u00e9t\u00e9 point\u00e9s malgr\u00e9 tout). */
   const _dj=new Date(dateStr+'T00:00:00').getDay();
   const jourSem=(_dj===0)?7:_dj;
-  const ctMap={};
+  const ctMap={}, ctPeriode={};
   let ctLus=0;
   try{
     const{data:ctData,error:ctErr}=await sb.from('enfants_contrats').select('*').in('enfant_id',allEnfants.map(e=>e.id));
@@ -2121,15 +2129,20 @@ async function renderPresenceGantt(){
     (ctData||[]).forEach(function(c){
       if(c.date_debut&&c.date_debut>dateStr) return;
       if(c.date_fin&&c.date_fin<dateStr) return;
-      if(ctParseJours(c.jours).indexOf(jourSem)<0) return;
       const k=String(c.enfant_id);
       // en cas de contrats qui se chevauchent, on garde le plus r\u00e9cent
+      if(!ctPeriode[k]||(c.date_debut||'')>(ctPeriode[k].date_debut||'')) ctPeriode[k]=c;
+      if(ctParseJours(c.jours).indexOf(jourSem)<0) return;
       if(!ctMap[k]||(c.date_debut||'')>(ctMap[k].date_debut||'')) ctMap[k]=c;
     });
   }catch(err){ console.warn('[Gantt] lecture contrats',err); }
   const _nbSousContrat=Object.keys(ctMap).length;
-  if(_nbSousContrat){
-    allEnfants=allEnfants.filter(e=>ctMap[String(e.id)]||presMap[e.id]);
+  const _nbPeriode=Object.keys(ctPeriode).length;
+  let _nbHorsContrat=0;
+  if(_nbPeriode){
+    const _horsContrat=allEnfants.filter(e=>!ctPeriode[String(e.id)]&&presMap[e.id]);
+    _nbHorsContrat=_horsContrat.length;
+    allEnfants=allEnfants.filter(e=>ctPeriode[String(e.id)]||(presShowHorsContrat&&presMap[e.id]));
   }
   // Gantt: heures 7h\u201319h, 1 colonne = 30min = 24 colonnes
   const H_START=7,H_END=19,COLS=(H_END-H_START)*2; // 24 demi-heures
@@ -2177,10 +2190,11 @@ async function renderPresenceGantt(){
     else if(hasM&&hasA)segments.push({start:0,end:COLS,color:'var(--koala)'});
     else if(hasM)segments.push({start:0,end:12,color:'var(--koala)'});
     else if(hasA)segments.push({start:12,end:COLS,color:'var(--koala)'});
+    const horsJour=!ctMap[String(e.id)];
     const bg=idx%2===0?'#fff':'#f7f6fb';
     rowsHtml+='<div style="display:flex;align-items:center;padding:3px 0;background:'+bg+';border-radius:4px">';
     rowsHtml+='<button onclick="togglePresence(\''+e.id+'\',\''+dateStr+'\')" title="'+(absent?'Marquer présent':'Marquer absent')+'" style="flex-shrink:0;width:24px;height:24px;margin-right:6px;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;background:'+(absent?'#f0eef8':'var(--koala)')+';color:'+(absent?'var(--muted)':'#fff')+'"><i class="ti ti-'+(absent?'user-x':'user-check')+'"></i></button>';
-    rowsHtml+='<div onclick="enfOpenFiche(\''+e.id+'\')" style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--koala)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="Ouvrir le dossier de '+escHtml(e.prenom+' '+e.nom)+(e.dob?'':' (date de naissance manquante)')+'">'+escHtml(e.prenom+' '+e.nom)+(e.dob?'':' <span style=\"color:var(--red);font-size:10px\">⚠</span>')+'</div>';
+    rowsHtml+='<div onclick="enfOpenFiche(\''+e.id+'\')" style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--koala)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="Ouvrir le dossier de '+escHtml(e.prenom+' '+e.nom)+(e.dob?'':' (date de naissance manquante)')+'">'+escHtml(e.prenom+' '+e.nom)+(horsJour?' <span style="color:var(--muted);font-size:10px" title="Aucun contrat ce jour de la semaine">○</span>':'')+(e.dob?'':' <span style=\"color:var(--red);font-size:10px\">⚠</span>')+'</div>';
     // Barre Gantt
     rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:20px;border-left:1px solid #e0dff0">';
     // Lignes verticales des heures
@@ -2203,8 +2217,9 @@ async function renderPresenceGantt(){
   let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted)">';
   legendHtml+='<span><i class="ti ti-user-check" style="color:var(--koala);vertical-align:middle;margin-right:2px"></i>Cliquez le rond pour '+(presOnlyPresents?'retirer l\u2019enfant de la journ\u00e9e':'basculer pr\u00e9sent / absent')+'</span>';
   legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
-  if(_nbSousContrat) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px">'+_nbSousContrat+' enfant(s) sous contrat ce jour \u00b7 barre = horaires du contrat</span>';
-  else if(ctLus) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px;color:var(--orange)">Aucun contrat ne couvre ce jour \u2014 liste compl\u00e8te affich\u00e9e</span>';
+  if(_nbPeriode) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px">'+_nbSousContrat+' enfant(s) sous contrat le '+((CT_JOURS.find(x=>x[0]===jourSem)||[jourSem,'ce jour'])[1].toLowerCase())+' \u00b7 '+_nbPeriode+' inscrit(s) en cours de contrat</span>';
+  else if(ctLus) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px;color:var(--orange)">Aucun contrat en cours \u00e0 cette date \u2014 liste compl\u00e8te affich\u00e9e</span>';
+  if(_nbHorsContrat) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><a href="#" onclick="presToggleHorsContrat();return false;" style="color:var(--koala);font-weight:600">'+(presShowHorsContrat?'Masquer':'Afficher')+' '+_nbHorsContrat+' enfant(s) point\u00e9(s) sans contrat</a></span>';
   legendHtml+='</div>';
   const crecheLbl=(cacheCreches.find(c=>c.id===crecheId)||{}).name||'';
   const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+(crecheLbl?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml(crecheLbl)+'</span>':'')+'</div>';
