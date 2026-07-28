@@ -192,7 +192,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
       <label style="font-weight:600">Crèche</label>
       <select id="fillCreche"></select>
     </div>
-    <div class="f" style="flex:1;min-width:200px;margin:0">
+    <div class="f" id="fillEnfantWrap" style="flex:1;min-width:200px;margin:0">
       <label style="font-weight:600">Enfant concerné</label>
       <select id="fillEnfant"></select>
     </div>
@@ -619,10 +619,34 @@ async function delDoc(id){
    s’auto-entretient et le document reste marque signe apres effacement. */
 let fillStatutManuel=false;
 
+/* Documents RH : la personne concernee est le salarie, pas un enfant.
+   Le selecteur « Enfant concerne » (et le filtre creche qui ne sert qu’a
+   raccourcir la liste d’enfants) sont masques pour ces modeles. */
+const TPL_SALARIE=['entretien_annuel','grille'];
+function docConcerneSalarie(){
+  return !!(fillDoc&&TPL_SALARIE.indexOf(fillDoc.template_key)>=0);
+}
+
 function fillMetaOptions(selEnfant,selStatut){
   const selC=document.getElementById('fillCreche');
   const wrap=document.getElementById('fillCrecheWrap');
+  const wrapE=document.getElementById('fillEnfantWrap');
   const isRef=!!(PROF&&PROF.role==='referent'&&PROF.creche_id);
+
+  if(docConcerneSalarie()){
+    if(wrapE)wrapE.style.display='none';
+    if(wrap)wrap.style.display='none';
+    const selE=document.getElementById('fillEnfant');
+    if(selE){selE.innerHTML='<option value=""></option>';selE.value='';}
+    if(selC)selC.innerHTML='';
+    fillUpdatePdfBtnLabel();
+    const st0=document.getElementById('fillStatut');
+    st0.value=(selStatut==='signe')?'signe':'prepare';
+    fillStatutManuel=false;
+    st0.onchange=()=>{fillStatutManuel=true;};
+    return;
+  }
+  if(wrapE)wrapE.style.display='';
   /* Référente : la liste est déjà limitée à sa crèche, le filtre n’a pas lieu d’être.
      Direction : filtre crèche pour raccourcir la liste d’enfants. */
   if(isRef){
@@ -671,7 +695,7 @@ function fillUpdatePdfBtnLabel(){
   const btn=document.getElementById('btnPdfReset');
   if(!btn)return;
   const enfantSel=(document.getElementById('fillEnfant')||{}).value||'';
-  const contexteEnfant=!!enfantSel || !!RETURN_ENFANT_ID;
+  const contexteEnfant=(!!enfantSel || !!RETURN_ENFANT_ID) && !docConcerneSalarie();
   btn.innerHTML=contexteEnfant
     ? '<i class="ti ti-file-type-pdf"></i> Générer le PDF'
     : '<i class="ti ti-file-type-pdf"></i> Éditer le PDF';
@@ -940,7 +964,7 @@ async function editPdfAndReset(){
     // Contexte « dossier enfant » : un enfant est sélectionné, ou on vient de la fiche enfant.
     // Dans ce cas on GÉNÈRE le PDF et on CONSERVE le document (pas d'effacement).
     const enfantSel=(document.getElementById('fillEnfant')||{}).value||'';
-    const contexteEnfant=!!enfantSel || !!RETURN_ENFANT_ID;
+    const contexteEnfant=(!!enfantSel || !!RETURN_ENFANT_ID) && !docConcerneSalarie();
 
     if(contexteEnfant){
       if(btn)btn.disabled=true;
