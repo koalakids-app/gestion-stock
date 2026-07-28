@@ -188,6 +188,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
   <h2 id="fillTitle"></h2>
   <p id="fillState" style="font-size:12px;color:var(--muted);margin:-6px 0 12px"></p>
   <div id="fillMeta" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;background:#F4F3FB;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px">
+    <div class="f" id="fillCrecheWrap" style="min-width:170px;margin:0">
+      <label style="font-weight:600">Crèche</label>
+      <select id="fillCreche"></select>
+    </div>
     <div class="f" style="flex:1;min-width:200px;margin:0">
       <label style="font-weight:600">Enfant concerné</label>
       <select id="fillEnfant"></select>
@@ -616,22 +620,47 @@ async function delDoc(id){
 let fillStatutManuel=false;
 
 function fillMetaOptions(selEnfant,selStatut){
+  const selC=document.getElementById('fillCreche');
+  const wrap=document.getElementById('fillCrecheWrap');
+  const isRef=!!(PROF&&PROF.role==='referent'&&PROF.creche_id);
+  /* Référente : la liste est déjà limitée à sa crèche, le filtre n’a pas lieu d’être.
+     Direction : filtre crèche pour raccourcir la liste d’enfants. */
+  if(isRef){
+    if(wrap)wrap.style.display='none';
+    if(selC)selC.innerHTML='';
+  }else if(selC){
+    if(wrap)wrap.style.display='';
+    const enf0=selEnfant?ENFANTS.find(e=>e.id===selEnfant):null;
+    selC.innerHTML='<option value="">— Toutes les crèches —</option>'+
+      CRECHES.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    selC.value=(enf0&&enf0.creche_id)?enf0.creche_id:'';
+    selC.onchange=()=>fillEnfantOptions((document.getElementById('fillEnfant')||{}).value||'');
+  }
+  fillEnfantOptions(selEnfant||'');
+  const st=document.getElementById('fillStatut');
+  st.value=(selStatut==='signe')?'signe':'prepare';
+  fillStatutManuel=false;
+  st.onchange=()=>{fillStatutManuel=true;};
+}
+
+/* Liste des enfants, filtrée par la crèche choisie (direction) ou par la crèche
+   de la référente. Conserve l’enfant sélectionné s’il reste dans la liste. */
+function fillEnfantOptions(selEnfant){
   const sel=document.getElementById('fillEnfant');
-  // Référente : enfants de sa crèche uniquement ; direction : tous
+  if(!sel)return;
   let list=ENFANTS.slice();
   if(PROF&&PROF.role==='referent'&&PROF.creche_id){
     list=list.filter(e=>e.creche_id===PROF.creche_id);
+  }else{
+    const cid=(document.getElementById('fillCreche')||{}).value||'';
+    if(cid)list=list.filter(e=>e.creche_id===cid);
   }
   list.sort((a,b)=>(a.prenom||'').localeCompare(b.prenom||'','fr',{sensitivity:'base'})
     ||(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'}));
   sel.innerHTML='<option value="">— Aucun enfant —</option>'+
     list.map(e=>`<option value="${e.id}">${esc((e.prenom||'')+' '+(e.nom||''))}</option>`).join('');
-  sel.value=selEnfant||'';
-  const st=document.getElementById('fillStatut');
-  st.value=(selStatut==='signe')?'signe':'prepare';
-  fillStatutManuel=false;
-  st.onchange=()=>{fillStatutManuel=true;};
-  // libellé du bouton PDF selon le contexte, et mise à jour si l'enfant change
+  sel.value=(selEnfant&&list.some(e=>e.id===selEnfant))?selEnfant:'';
+  // libellé du bouton PDF selon le contexte, et mise à jour si l’enfant change
   sel.onchange=fillUpdatePdfBtnLabel;
   fillUpdatePdfBtnLabel();
 }
