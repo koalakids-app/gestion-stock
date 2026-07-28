@@ -2099,13 +2099,38 @@ async function renderPresenceGantt(){
   const crecheId=getPresenceCrecheId();
   if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
   presSyncFilterChip();
-  const allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
+  let allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistr\u00e9.</p></div>';return;}
   view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement\u2026</div>';
   const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr).in('enfant_id',allEnfants.map(e=>e.id));
   // presMap: enfant_id -> {M, A}
   const presMap={};
   (presData||[]).forEach(p=>{if(!presMap[p.enfant_id])presMap[p.enfant_id]={};presMap[p.enfant_id][p.slot]=p.status;});
+  /* \u2500\u2500 Contrats d\u2019accueil \u2500\u2500
+     La feuille n\u2019affiche que les enfants dont un contrat couvre la date ET le jour
+     de la semaine. Les enfants d\u00e9j\u00e0 point\u00e9s ce jour restent visibles m\u00eame sans
+     contrat (sinon une pr\u00e9sence saisie \u00e0 la main dispara\u00eetrait de l\u2019\u00e9cran). */
+  const _dj=new Date(dateStr+'T00:00:00').getDay();
+  const jourSem=(_dj===0)?7:_dj;
+  const ctMap={};
+  let ctLus=0;
+  try{
+    const{data:ctData,error:ctErr}=await sb.from('enfants_contrats').select('*').in('enfant_id',allEnfants.map(e=>e.id));
+    if(ctErr) throw ctErr;
+    ctLus=(ctData||[]).length;
+    (ctData||[]).forEach(function(c){
+      if(c.date_debut&&c.date_debut>dateStr) return;
+      if(c.date_fin&&c.date_fin<dateStr) return;
+      if(ctParseJours(c.jours).indexOf(jourSem)<0) return;
+      const k=String(c.enfant_id);
+      // en cas de contrats qui se chevauchent, on garde le plus r\u00e9cent
+      if(!ctMap[k]||(c.date_debut||'')>(ctMap[k].date_debut||'')) ctMap[k]=c;
+    });
+  }catch(err){ console.warn('[Gantt] lecture contrats',err); }
+  const _nbSousContrat=Object.keys(ctMap).length;
+  if(_nbSousContrat){
+    allEnfants=allEnfants.filter(e=>ctMap[String(e.id)]||presMap[e.id]);
+  }
   // Gantt: heures 7h\u201319h, 1 colonne = 30min = 24 colonnes
   const H_START=7,H_END=19,COLS=(H_END-H_START)*2; // 24 demi-heures
   const COL_W=28; // px par demi-heure
@@ -2136,8 +2161,20 @@ async function renderPresenceGantt(){
     const absent=!hasM&&!hasA;
     // Calcul segments (en demi-heures depuis H_START)
     // Matin: 7h\u201313h = cols 0\u201311, Apr\u00e8s-midi: 13h\u201319h = cols 12\u201323
+    // Horaires du contrat si renseign\u00e9s, sinon retour au d\u00e9coupage matin / apr\u00e8s-midi
+    const ct=ctMap[String(e.id)];
+    const _col=function(t,fin){
+      const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));
+      if(!m) return null;
+      const mn=(parseInt(m[1],10)-H_START)*60+parseInt(m[2],10);
+      const v=fin?Math.ceil(mn/30):Math.floor(mn/30);
+      return Math.max(0,Math.min(COLS,v));
+    };
+    const cA=ct?_col(ct.heure_debut,false):null;
+    const cB=ct?_col(ct.heure_fin,true):null;
     const segments=[];
-    if(hasM&&hasA)segments.push({start:0,end:COLS,color:'var(--koala)'});
+    if(cA!==null&&cB!==null&&cB>cA)segments.push({start:cA,end:cB,color:'var(--koala)'});
+    else if(hasM&&hasA)segments.push({start:0,end:COLS,color:'var(--koala)'});
     else if(hasM)segments.push({start:0,end:12,color:'var(--koala)'});
     else if(hasA)segments.push({start:12,end:COLS,color:'var(--koala)'});
     const bg=idx%2===0?'#fff':'#f7f6fb';
@@ -2166,6 +2203,8 @@ async function renderPresenceGantt(){
   let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted)">';
   legendHtml+='<span><i class="ti ti-user-check" style="color:var(--koala);vertical-align:middle;margin-right:2px"></i>Cliquez le rond pour '+(presOnlyPresents?'retirer l\u2019enfant de la journ\u00e9e':'basculer pr\u00e9sent / absent')+'</span>';
   legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
+  if(_nbSousContrat) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px">'+_nbSousContrat+' enfant(s) sous contrat ce jour \u00b7 barre = horaires du contrat</span>';
+  else if(ctLus) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px;color:var(--orange)">Aucun contrat ne couvre ce jour \u2014 liste compl\u00e8te affich\u00e9e</span>';
   legendHtml+='</div>';
   const crecheLbl=(cacheCreches.find(c=>c.id===crecheId)||{}).name||'';
   const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+(crecheLbl?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml(crecheLbl)+'</span>':'')+'</div>';
@@ -6205,20 +6244,37 @@ async function presApplyContrats(){
     showBanner('Lecture des contrats impossible : '+((err&&err.message)||'droits insuffisants'),'error');
     return;
   }
-  console.log('[Contrats] date='+dateStr+' jour='+jour+' enfants='+ids.length+' contrats lus='+contrats.length,contrats);
+  console.log('[Contrats] date='+dateStr+' jour='+jour+' enfants='+ids.length+' contrats lus='+contrats.length);
   if(!contrats.length){
     showBanner('Aucun contrat enregistr\u00e9 pour les enfants de cette cr\u00e8che. Cr\u00e9ez-les dans l\u2019onglet Contrat de la fiche enfant.','error');
     return;
   }
+  // Diagnostic ligne \u00e0 ligne : on trace la raison du rejet de chaque contrat
+  const rejets={avant:0,apres:0,jour:0};
+  const diag=[];
   const concernes=contrats.filter(function(c){
-    if(c.date_debut&&c.date_debut>dateStr) return false;
-    if(c.date_fin&&c.date_fin<dateStr) return false;
-    return ctParseJours(c.jours).indexOf(jour)>=0;
+    const j=ctParseJours(c.jours);
+    let motif='OK';
+    if(c.date_debut&&c.date_debut>dateStr) motif='contrat pas encore commenc\u00e9';
+    else if(c.date_fin&&c.date_fin<dateStr) motif='contrat termin\u00e9';
+    else if(j.indexOf(jour)<0) motif='jour non coch\u00e9';
+    const e=cacheEnfants.find(x=>String(x.id)===String(c.enfant_id));
+    diag.push({enfant:e?((e.prenom||'')+' '+(e.nom||'')).trim():String(c.enfant_id),
+      debut:c.date_debut,fin:c.date_fin,jours_bruts:JSON.stringify(c.jours),jours_lus:j.join('/'),motif:motif});
+    if(motif!=='OK'){
+      if(motif.indexOf('commenc')>=0)rejets.avant++;
+      else if(motif.indexOf('termin')>=0)rejets.apres++;
+      else rejets.jour++;
+      return false;
+    }
+    return true;
   }).map(c=>String(c.enfant_id));
+  if(console.table) console.table(diag); else console.log(diag);
   const uniques=[...new Set(concernes)];
   if(!uniques.length){
     const nomJour=(CT_JOURS.find(x=>x[0]===jour)||[jour,'ce jour'])[1].toLowerCase();
-    showBanner('Aucun des '+contrats.length+' contrat(s) de cette cr\u00e8che ne couvre le '+nomJour+' '+ctFmtDate(dateStr)+' (dates ou jours de pr\u00e9sence).','error');
+    showBanner('Aucun des '+contrats.length+' contrat(s) ne couvre le '+nomJour+' '+ctFmtDate(dateStr)+' : '
+      +rejets.avant+' pas encore commenc\u00e9(s), '+rejets.apres+' termin\u00e9(s), '+rejets.jour+' sans ce jour coch\u00e9. D\u00e9tail dans la console (F12).','error');
     return;
   }
   // Enfants déjà marqués présents ce jour : on ne les retouche pas
@@ -6240,6 +6296,11 @@ async function presApplyContrats(){
   });
   const{error}=await sb.from('presences').insert(rows);
   if(error){ console.warn('presApplyContrats insert',error); showBanner('Enregistrement impossible : '+(error.message||''),'error'); return; }
+  // On bascule sur \u00ab Pr\u00e9sents uniquement \u00bb : les enfants sans contrat ce jour
+  // n\u2019encombrent plus la feuille de pr\u00e9sence (le chip permet de les r\u00e9afficher).
+  presOnlyPresents=true;
+  localStorage.setItem('presOnlyPresents','1');
+  presSyncFilterChip();
   showBanner(noms.length+' enfant(s) marqu\u00e9(s) pr\u00e9sent(s) d\u2019apr\u00e8s les contrats.');
   renderPresence();
 }
