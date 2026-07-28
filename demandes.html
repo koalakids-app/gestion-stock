@@ -455,6 +455,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <select class="finput direction-only" id="presence-creche-select" style="display:none;width:160px" onchange="renderPresence()">
           <option value="">-- Crèche --</option>
         </select>
+        <button class="fchip active" id="pres-filter-chip" onclick="presToggleFilterPresents()" title="N’afficher que les enfants présents ce jour"><i class="ti ti-filter"></i> Présents uniquement</button>
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn-sm" onclick="openEnfantModal()"><i class="ti ti-user-plus"></i> Ajouter enfant</button>
@@ -1206,6 +1207,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn-cancel" onclick="closeModal('modal-pe-mail-wrap')">Annuler</button>
       <button class="btn-primary" id="pe-mail-send" onclick="peSendMail()"><i class="ti ti-send"></i> Envoyer</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-pres-add-day-wrap">
+  <div class="modal" style="max-width:420px">
+    <h3><i class="ti ti-user-plus"></i> Ajouter un enfant à la journée</h3>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">L’enfant sera marqué <strong>présent matin et après-midi</strong> pour la date affichée.</div>
+    <div class="fg"><label class="flabel">Enfant</label><select class="finput" id="pres-add-day-select"></select></div>
+    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-pres-add-day-wrap')">Annuler</button><button class="btn-primary" onclick="presAddDayConfirm()"><i class="ti ti-check"></i> Ajouter</button></div>
   </div>
 </div>
 
@@ -2041,16 +2051,31 @@ async function togglePresence(enfantId,dateStr){
   }
   renderPresence();
 }
+// ── FILTRE « présents uniquement » ──
+let presOnlyPresents=(localStorage.getItem('presOnlyPresents')!=='0');
+function presSyncFilterChip(){
+  const c=document.getElementById('pres-filter-chip');
+  if(c)c.classList.toggle('active',presOnlyPresents);
+}
+function presToggleFilterPresents(){
+  presOnlyPresents=!presOnlyPresents;
+  localStorage.setItem('presOnlyPresents',presOnlyPresents?'1':'0');
+  presSyncFilterChip();
+  renderPresence();
+}
+window.presToggleFilterPresents=presToggleFilterPresents;
+
 async function renderPresenceGantt(){
   const dateStr=document.getElementById('presence-date')?.value||todayStr();
   const view=document.getElementById('presence-gantt-view');
   if(!view)return;
   const crecheId=getPresenceCrecheId();
   if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
-  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
-  if(!enfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistr\u00e9.</p></div>';return;}
+  presSyncFilterChip();
+  const allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
+  if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistr\u00e9.</p></div>';return;}
   view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement\u2026</div>';
-  const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr).in('enfant_id',enfants.map(e=>e.id));
+  const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr).in('enfant_id',allEnfants.map(e=>e.id));
   // presMap: enfant_id -> {M, A}
   const presMap={};
   (presData||[]).forEach(p=>{if(!presMap[p.enfant_id])presMap[p.enfant_id]={};presMap[p.enfant_id][p.slot]=p.status;});
@@ -2061,7 +2086,14 @@ async function renderPresenceGantt(){
   const d=new Date(dateStr+'T00:00:00');
   const dateLabel=d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
   // Compter pr\u00e9sents
-  const presents=enfants.filter(e=>{const p=presMap[e.id]||{};return p.M==='present'||p.A==='present';});
+  const presents=allEnfants.filter(e=>{const p=presMap[e.id]||{};return p.M==='present'||p.A==='present'||p.M==='partial'||p.A==='partial';});
+  const enfants=presOnlyPresents?presents:allEnfants;
+  _presAbsentsDuJour=allEnfants.filter(e=>!presents.includes(e));
+  const addBtnHtml='<div style="margin-top:12px"><button class="btn-sm" onclick="presOpenAddDay()"><i class="ti ti-user-plus"></i> Ajouter un enfant \u00e0 la journ\u00e9e</button></div>';
+  if(!enfants.length){
+    view.innerHTML='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+'</div><div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant pr\u00e9sent ce jour.</p></div>'+addBtnHtml;
+    return;
+  }
   // En-t\u00eate heures
   let hdrHtml='<div style="display:flex;align-items:center;border-bottom:2px solid var(--koala);margin-bottom:4px">';
   hdrHtml+='<div style="width:'+(NAME_W+30)+'px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--koala);padding-right:8px;text-align:right">'+presents.length+'\u00a0/\u00a0'+enfants.length+'</div>';
@@ -2106,23 +2138,27 @@ async function renderPresenceGantt(){
   });
   // Ligne de d\u00e9marcation 12h (l\u00e9gende)
   let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted)">';
-  legendHtml+='<span><i class="ti ti-user-check" style="color:var(--koala);vertical-align:middle;margin-right:2px"></i>Cliquez le rond pour basculer présent / absent</span>';
+  legendHtml+='<span><i class="ti ti-user-check" style="color:var(--koala);vertical-align:middle;margin-right:2px"></i>Cliquez le rond pour '+(presOnlyPresents?'retirer l\u2019enfant de la journ\u00e9e':'basculer pr\u00e9sent / absent')+'</span>';
   legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
   legendHtml+='</div>';
   const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+'</div>';
-  view.innerHTML=dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
+  view.innerHTML=dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml+addBtnHtml;
 }
 
 async function renderPresenceSemaine(){
   const ws=weekStart(),view=document.getElementById('presence-semaine-view');
+  if(!view)return;
   const crecheId=getPresenceCrecheId();
   if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
-  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
-  if(!enfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant.</p></div>';return;}
+  const allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
+  if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant.</p></div>';return;}
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
   const dateStrs=days5.map(d=>ipDateToLocalISO(d));
-  const{data:presData}=await sb.from('presences').select('*').in('presence_date',dateStrs).in('enfant_id',enfants.map(e=>e.id));
+  const{data:presData}=await sb.from('presences').select('*').in('presence_date',dateStrs).in('enfant_id',allEnfants.map(e=>e.id));
   const pm={};(presData||[]).forEach(p=>pm[p.enfant_id+'_'+p.presence_date+'_'+p.slot]=p.status);
+  const semPresentIds=new Set((presData||[]).filter(p=>p.status==='present'||p.status==='partial').map(p=>p.enfant_id));
+  const enfants=presOnlyPresents?allEnfants.filter(e=>semPresentIds.has(e.id)):allEnfants;
+  if(!enfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant pr\u00e9sent cette semaine.</p></div>';return;}
   const dc={present:'#2a9d4e',absent:'#e03e3e',partial:'#F47920','':'#e0dff0'};
   const fmt=d=>d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'2-digit'});
   let html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--koala);color:#fff"><th style="padding:8px 10px;text-align:left">Enfant</th>';
@@ -2131,6 +2167,28 @@ async function renderPresenceSemaine(){
   enfants.forEach((e,idx)=>{html+='<tr style="background:'+(idx%2===0?'#fff':'#EEEDF8')+'"><td style="padding:8px 10px;font-weight:600;color:var(--koala)">'+e.prenom+' '+e.nom+'</td>';days5.forEach(d=>{const ds=ipDateToLocalISO(d),m=pm[e.id+'_'+ds+'_M']||'',a=pm[e.id+'_'+ds+'_A']||'';html+='<td style="text-align:center;padding:6px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:'+dc[m]+';margin-right:2px"></span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:'+dc[a]+'"></span></td>';});html+='</tr>';});
   html+='</tbody></table></div>';view.innerHTML=html;
 }
+
+// ── AJOUT MANUEL D’UN ENFANT À LA JOURNÉE ──
+let _presAbsentsDuJour=[];
+function presOpenAddDay(){
+  const sel=document.getElementById('pres-add-day-select');
+  if(!sel)return;
+  if(!_presAbsentsDuJour.length){showBanner('Tous les enfants de la cr\u00e8che sont d\u00e9j\u00e0 marqu\u00e9s pr\u00e9sents.','error');return;}
+  sel.innerHTML='<option value="">-- Choisir un enfant --</option>'+_presAbsentsDuJour.map(e=>'<option value="'+e.id+'">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</option>').join('');
+  document.getElementById('modal-pres-add-day-wrap').classList.add('open');
+}
+async function presAddDayConfirm(){
+  const sel=document.getElementById('pres-add-day-select');
+  const id=sel&&sel.value;
+  if(!id){showBanner('S\u00e9lectionnez un enfant.','error');return;}
+  const dateStr=document.getElementById('presence-date')?.value||todayStr();
+  closeModal('modal-pres-add-day-wrap');
+  await togglePresence(id,dateStr);
+  showBanner('Enfant ajout\u00e9 \u00e0 la journ\u00e9e.');
+}
+window.presOpenAddDay=presOpenAddDay;
+window.presAddDayConfirm=presAddDayConfirm;
+
 async function exportPresence(){
   const dateStr=document.getElementById('presence-date')?.value||todayStr();
   const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr);
@@ -5138,8 +5196,13 @@ presences: `
 </ol>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">👶 Fiche enfant (nom, prénom, date de naissance)</div>
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Cliquez sur le <strong>nom</strong> d'un enfant pour ouvrir son <strong>dossier</strong> (le même que dans le module Dossiers enfants) : onglet <strong>Identité</strong> et onglet <strong>Documents</strong>. Le bouton <strong>Modifier la fiche</strong> permet d'y corriger le prénom, le nom, la date de naissance, le groupe, la crèche ou les allergies. Un enfant sans date de naissance affiche un <strong style="color:#e03e3e">⚠</strong>.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Filtre « Présents uniquement »</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Le bouton <strong>Présents uniquement</strong>, en haut de la page, n’affiche que les enfants présents à la date choisie — très pratique juste après un <strong>import PDF</strong>. Le compteur en haut du planning reste <strong>présents / effectif total</strong> de la crèche.<br>
+• Pour <strong>retirer</strong> un enfant de la journée : cliquez sur son <strong>rond</strong>, sa ligne disparaît de la liste.<br>
+• Pour <strong>ajouter</strong> un enfant : bouton <strong>Ajouter un enfant à la journée</strong> sous le planning, puis choisissez-le dans la liste (il est marqué présent matin et après-midi).<br>
+Désactivez le filtre pour retrouver la <strong>liste complète</strong> des inscrits, absents compris. Le choix est mémorisé sur votre appareil.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Ajouter un enfant</div>
-<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Cliquez sur <strong>👤+ Ajouter enfant</strong> en haut à droite. Renseignez au minimum le prénom.</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Cliquez sur <strong>👤+ Ajouter enfant</strong> en haut à droite. Renseignez au minimum le prénom. Ce bouton crée un <strong>nouvel enfant en base</strong> (à ne pas confondre avec « Ajouter un enfant à la journée », qui ne fait que marquer une présence).</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📤 Exporter</div>
 <div style="font-size:13px;color:#555;line-height:1.7">Le bouton <strong>Exporter</strong> génère un récapitulatif de présences pour la date sélectionnée, utile pour les transmissions administratives.</div>`,
 
