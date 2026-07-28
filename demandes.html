@@ -2079,7 +2079,16 @@ async function renderPresenceGantt(){
   const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr).in('enfant_id',allEnfants.map(e=>e.id));
   // presMap: enfant_id -> {M, A}
   const presMap={};
-  (presData||[]).forEach(p=>{if(!presMap[p.enfant_id])presMap[p.enfant_id]={};presMap[p.enfant_id][p.slot]=p.status;});
+  (presData||[]).forEach(p=>{
+    if(!presMap[p.enfant_id])presMap[p.enfant_id]={};
+    presMap[p.enfant_id][p.slot]=p.status;
+    // Heures réelles issues de l'import PDF (null pour une saisie manuelle)
+    if(p.heure_debut&&p.heure_fin){
+      const cur=presMap[p.enfant_id]._h;
+      const d=p.heure_debut.slice(0,5),f=p.heure_fin.slice(0,5);
+      presMap[p.enfant_id]._h=cur?{debut:(d<cur.debut?d:cur.debut),fin:(f>cur.fin?f:cur.fin)}:{debut:d,fin:f};
+    }
+  });
   // Gantt: heures 7h\u201319h, 1 colonne = 30min = 24 colonnes
   const H_START=7,H_END=19,COLS=(H_END-H_START)*2; // 24 demi-heures
   const COL_W=28; // px par demi-heure
@@ -2111,9 +2120,19 @@ async function renderPresenceGantt(){
     // Calcul segments (en demi-heures depuis H_START)
     // Matin: 7h\u201313h = cols 0\u201311, Apr\u00e8s-midi: 13h\u201319h = cols 12\u201323
     const segments=[];
-    if(hasM&&hasA)segments.push({start:0,end:COLS,color:'var(--koala)'});
-    else if(hasM)segments.push({start:0,end:12,color:'var(--koala)'});
-    else if(hasA)segments.push({start:12,end:COLS,color:'var(--koala)'});
+    const hRe=p._h;
+    if(hRe){
+      // Horaires réels (import PDF) : 1 colonne = 30 min à partir de H_START
+      const toCol=t=>((parseInt(t.slice(0,2),10)+parseInt(t.slice(3,5),10)/60)-H_START)*2;
+      const st=Math.max(0,toCol(hRe.debut)),en=Math.min(COLS,toCol(hRe.fin));
+      if(en>st)segments.push({start:st,end:en,color:'var(--koala)',label:hRe.debut.replace(':','h')+'\u2013'+hRe.fin.replace(':','h')});
+    }
+    if(!segments.length){
+      // Repli : saisie manuelle, blocs matin / après-midi
+      if(hasM&&hasA)segments.push({start:0,end:COLS,color:'var(--koala)'});
+      else if(hasM)segments.push({start:0,end:12,color:'var(--koala)'});
+      else if(hasA)segments.push({start:12,end:COLS,color:'var(--koala)'});
+    }
     const bg=idx%2===0?'#fff':'#f7f6fb';
     rowsHtml+='<div style="display:flex;align-items:center;padding:3px 0;background:'+bg+';border-radius:4px">';
     rowsHtml+='<button onclick="togglePresence(\''+e.id+'\',\''+dateStr+'\')" title="'+(absent?'Marquer présent':'Marquer absent')+'" style="flex-shrink:0;width:24px;height:24px;margin-right:6px;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;background:'+(absent?'#f0eef8':'var(--koala)')+';color:'+(absent?'var(--muted)':'#fff')+'"><i class="ti ti-'+(absent?'user-x':'user-check')+'"></i></button>';
@@ -2131,7 +2150,8 @@ async function renderPresenceGantt(){
     }else{
       segments.forEach(seg=>{
         const left=seg.start*COL_W;const width=(seg.end-seg.start)*COL_W-2;
-        rowsHtml+='<div style="position:absolute;left:'+left+'px;width:'+width+'px;top:3px;height:14px;background:'+seg.color+';border-radius:4px;opacity:0.85"></div>';
+        const inner=(seg.label&&width>78)?'<span style="color:#fff;font-size:9.5px;font-weight:600;line-height:14px;padding:0 6px;white-space:nowrap">'+seg.label+'</span>':'';
+        rowsHtml+='<div title="'+(seg.label||'')+'" style="position:absolute;left:'+left+'px;width:'+width+'px;top:3px;height:14px;background:'+seg.color+';border-radius:4px;opacity:0.85;overflow:hidden">'+inner+'</div>';
       });
     }
     rowsHtml+='</div></div>';
@@ -2277,6 +2297,36 @@ async function handlePresenceImport(input){
   document.getElementById('modal-import-presence-wrap').classList.add('open');
 }
 
+// Arrondit une heure décimale au pas de 5 min et la formate en "HH:MM"
+function ipRound5(h){
+  var m=Math.round(h*60/5)*5; if(m<0)m=0; if(m>1439)m=1439;
+  return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+}
+// Vert des barres de présence Gertrude (RGB 51,204,102)
+function ipFillIsGreen(f){return f&&Math.abs(f[0]-51)<12&&Math.abs(f[1]-204)<12&&Math.abs(f[2]-102)<12;}
+
+// Extrait les rectangles verts (barres horaires) d'une page — ce sont des tracés
+// vectoriels, invisibles pour getTextContent(), d'où le passage par getOperatorList().
+async function ipPageBars(page){
+  if(!pdfjsLib.OPS)return[];
+  var OPS=pdfjsLib.OPS,ol;
+  try{ol=await page.getOperatorList();}catch(e){console.warn('[ImportPresence] operatorList',e);return[];}
+  var fill=null,out=[],seen={};
+  for(var i=0;i<ol.fnArray.length;i++){
+    var fn=ol.fnArray[i],a=ol.argsArray[i];
+    if(fn===OPS.setFillRGBColor){fill=[a[0],a[1],a[2]];continue;}
+    if(fn!==OPS.constructPath||!ipFillIsGreen(fill))continue;
+    var mm=a&&a[2]; if(!mm||mm.length<4)continue;
+    var x0=Math.min(mm[0],mm[1]),x1=Math.max(mm[0],mm[1]);
+    var y0=Math.min(mm[2],mm[3]),y1=Math.max(mm[2],mm[3]);
+    var hgt=y1-y0; if(hgt<4||hgt>26)continue;          // écarte les bandeaux et séparateurs
+    var k=x0.toFixed(1)+'_'+y0.toFixed(1)+'_'+x1.toFixed(1);
+    if(seen[k])continue; seen[k]=1;
+    out.push({x0:x0,x1:x1,yc:(y0+y1)/2});
+  }
+  return out;
+}
+
 async function ipParsePdf(file){
   const buf=await file.arrayBuffer();
   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
@@ -2284,24 +2334,151 @@ async function ipParsePdf(file){
   for(let p=1;p<=pdf.numPages;p++){
     const page=await pdf.getPage(p);const tc=await page.getTextContent();
     const rowsMap={};
-    tc.items.forEach(it=>{const str=(it.str||'').trim();if(!str)return;const x=it.transform[4],y=Math.round(it.transform[5]);(rowsMap[y]=rowsMap[y]||[]).push({x,str});});
+    tc.items.forEach(it=>{const str=(it.str||'').trim();if(!str)return;const x=it.transform[4],y=Math.round(it.transform[5]);(rowsMap[y]=rowsMap[y]||[]).push({x,str,w:it.width||0});});
     const ys=Object.keys(rowsMap).map(Number).sort((a,b)=>b-a);
-    const lines=ys.map(y=>({y,toks:rowsMap[y].sort((a,b)=>a.x-b.x).map(o=>o.str),minx:Math.min(...rowsMap[y].map(o=>o.x))}));
+    const lines=ys.map(y=>{const sorted=rowsMap[y].sort((a,b)=>a.x-b.x);return{y,items:sorted,toks:sorted.map(o=>o.str),minx:Math.min(...sorted.map(o=>o.x))};});
     let date=null;
     const fullText=lines.map(l=>l.toks.join(' ')).join('\n');
     const m=fullText.match(/Planning du \S+ (\d{1,2})(?:er)? (\S+) (\d{4})/i);
     if(m){const day=+m[1],mon=IP_MONTHS[m[2].toLowerCase()],yr=+m[3];if(mon)date=yr+'-'+String(mon).padStart(2,'0')+'-'+String(day).padStart(2,'0');}
-    let iEnf=-1,iSal=-1;
-    for(let i=0;i<lines.length;i++){const f=lines[i].toks[0];if(iEnf<0&&f==='Enfants'&&lines[i].minx<70)iEnf=i;else if(iEnf>=0&&iSal<0&&f==='Salariés'&&lines[i].minx<70){iSal=i;break;}}
-    const names=[];let cur=null;
-    for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){const toks=lines[i].toks;if(!toks.length)continue;if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=toks.join(' ');}else if(cur)cur+=' '+toks.join(' ');}
-    if(cur)names.push(cur);
-    const cleaned=[...new Set(names.map(ipCleanName).filter(Boolean))];
+    let iEnf=-1,iSal=-1,iTot=-1;
+    for(let i=0;i<lines.length;i++){
+      const f=lines[i].toks[0];
+      if(lines[i].minx>=70)continue;
+      if(iEnf<0&&f==='Enfants')iEnf=i;
+      else if(iEnf>=0&&iSal<0&&f==='Salari\u00e9s')iSal=i;
+      else if(iSal>=0&&iTot<0&&f==='Totaux'){iTot=i;break;}
+    }
+    // Entrées "nom + position verticale" (un nom peut tenir sur 2 lignes)
+    const entries=[];let cur=null;
+    for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){const toks=lines[i].toks;if(!toks.length)continue;
+      if(ipIsFirstnameToken(toks[0])){if(cur)entries.push(cur);cur={name:toks.join(' '),y:lines[i].y};}
+      else if(cur)cur.name+=' '+toks.join(' ');}
+    if(cur)entries.push(cur);
+    entries.forEach(en=>{en.name=ipCleanName(en.name);});
+    const names=entries.map(en=>en.name).filter(Boolean);
+    const cleaned=[...new Set(names)];
+
+    // ── Horaires réels : axe des heures (texte) + barres vertes (vectoriel) ──
+    const hours={};
+    let _ipAxis=null,_ipBars=null;
+    try{
+      let axis=null;
+      for(const l of lines){
+        const t=l.items.filter(o=>/^\d{1,2}h$/.test(o.str));
+        if(t.length>=6){axis=t.map(o=>({h:+o.str.slice(0,-1),cx:o.x+(o.w||0)/2})).sort((a,b)=>a.h-b.h);break;}
+      }
+      if(axis&&iEnf>=0){
+        const first=axis[0],last=axis[axis.length-1];
+        const pxH=(last.cx-first.cx)/(last.h-first.h);
+        const x2h=x=>first.h+(x-first.cx)/pxH;
+        const xMin=first.cx-pxH*1.2,xMax=last.cx+pxH*1.2;
+        const yEnf=lines[iEnf].y,ySal=iSal>=0?lines[iSal].y:-1e9;
+        _ipAxis={x2h,xMin,xMax};
+        _ipBars=await ipPageBars(page);
+        const bars=_ipBars.filter(b=>b.yc<yEnf&&b.yc>ySal&&b.x0>xMin&&b.x1<xMax);
+        bars.forEach(b=>{
+          let best=null,bd=13;
+          entries.forEach(en=>{const d=Math.abs(b.yc-en.y);if(d<bd){bd=d;best=en;}});
+          if(!best)return;
+          const d=x2h(b.x0),f=x2h(b.x1);
+          if(!hours[best.name])hours[best.name]={d,f};
+          else{hours[best.name].d=Math.min(hours[best.name].d,d);hours[best.name].f=Math.max(hours[best.name].f,f);}
+        });
+      }
+    }catch(e){console.warn('[ImportPresence] horaires non lus',e);}
+    const horaires={};
+    Object.keys(hours).forEach(nm=>{horaires[nm]={debut:ipRound5(hours[nm].d),fin:ipRound5(hours[nm].f)};});
+
+    // ── Section Salariés : même principe, bornée par "Salariés" et "Totaux" ──
+    // Alimente le Planning équipe. Le PDF ne porte aucun libellé de type (congé, formation…) :
+    // tout ce qui est lu ici est forcément une présence.
+    const salaries={};
+    try{
+      if(_ipAxis&&iSal>=0&&iTot>iSal){
+        const{x2h,xMin,xMax}=_ipAxis;
+        const ySalTop=lines[iSal].y,yTotTop=lines[iTot].y;
+        const sEntries=[];let sc=null;
+        for(let i=iSal+1;i<iTot;i++){const toks=lines[i].toks;if(!toks.length)continue;
+          if(ipIsFirstnameToken(toks[0])){if(sc)sEntries.push(sc);sc={name:toks.join(' '),y:lines[i].y};}
+          else if(sc)sc.name+=' '+toks.join(' ');}
+        if(sc)sEntries.push(sc);
+        sEntries.forEach(en=>{en.name=ipCleanName(en.name);});
+        const segsBy={};
+        (_ipBars||[]).filter(b=>b.yc<ySalTop&&b.yc>yTotTop&&b.x0>xMin&&b.x1<xMax).forEach(b=>{
+          let best=null,bd=13;
+          sEntries.forEach(en=>{const d=Math.abs(b.yc-en.y);if(d<bd){bd=d;best=en;}});
+          if(best)(segsBy[best.name]=segsBy[best.name]||[]).push([x2h(b.x0),x2h(b.x1)]);
+        });
+        Object.keys(segsBy).forEach(nm=>{
+          const segs=segsBy[nm].sort((a,b)=>a[0]-b[0]);
+          const prenom=nm.split(' ')[0];   // clé planning_equipe = prénom seul (compat. import Excel)
+          const rec={nomComplet:nm,prenom,hdebut:ipRound5(segs[0][0]),hfin:ipRound5(segs[segs.length-1][1]),pause:null};
+          if(segs.length>1){
+            // Coupure la plus longue entre deux segments = pause méridienne
+            let gi=0,gv=-1;
+            for(let k=0;k<segs.length-1;k++){const g=segs[k+1][0]-segs[k][1];if(g>gv){gv=g;gi=k;}}
+            if(gv>0.05)rec.pause=ipRound5(segs[gi][1])+'-'+ipRound5(segs[gi+1][0]);
+          }
+          if(salaries[prenom])rec.doublon=true;
+          salaries[prenom]=rec;
+        });
+      }
+    }catch(e){console.warn('[ImportPresence] salariés non lus',e);}
+
     const tm=fullText.match(/^(.*KOALA\s*KIDS.*)$/im);
     const title=tm?tm[1].trim():'';
-    if(date&&cleaned.length)out.push({date,names:cleaned,title});
+    if(date&&cleaned.length)out.push({date,names:cleaned,title,horaires,salaries});
   }
   return out;
+}
+
+// ── Alimentation du Planning équipe depuis la section "Salariés" du PDF ──
+// Le PDF fait foi de bout en bout : pour chaque journée qu'il couvre, les lignes existantes
+// de planning_equipe sont d'abord effacées, puis remplacées par celles du PDF. Une salariée
+// absente du PDF disparaît donc du planning de cette journée.
+// Garde-fou : la purge n'a lieu que si au moins une salariée a été lue pour la journée, afin
+// qu'une extraction ratée ne vide jamais un planning existant.
+// Limite assumée : le PDF ne portant aucun type de journée, les congés / formations / jours
+// fériés saisis par ailleurs pour ces journées sont perdus et deviennent des présences.
+async function ipSaveSalariesToPlanning(crecheId,pages){
+  const batchId=(crypto&&crypto.randomUUID)?crypto.randomUUID():('pdf-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+  let saved=0,failed=0,purged=0;const doublons=[];
+  const purgedDays={};
+  for(const pg of pages){
+    const sal=pg.salaries||{};
+    const names=Object.keys(sal);
+    if(!names.length)continue;
+    const d=new Date(pg.date+'T00:00:00');
+    const jour=d.getDay()-1;                       // 0 = lundi … 4 = vendredi
+    if(jour<0||jour>4)continue;                    // week-end ignoré
+    const semaine=mondayOfISO(pg.date);
+    // Purge de la journée (une seule fois par couple semaine/jour)
+    const dayKey=semaine+'_'+jour;
+    if(!purgedDays[dayKey]){
+      purgedDays[dayKey]=1;
+      const{error:delErr}=await sb.from('planning_equipe').delete()
+        .eq('creche_id',crecheId).eq('semaine',semaine).eq('jour',jour);
+      if(delErr){
+        console.error('[PlanningEquipe/PDF] purge',delErr.message);
+        failed++;continue;                          // journée non purgée = journée non réécrite
+      }
+      purged++;
+    }
+    for(const prenom of names){
+      const r=sal[prenom];
+      if(r.doublon)doublons.push(prenom);
+      const{error}=await sb.from('planning_equipe').upsert({
+        creche_id:crecheId,prenom,semaine,jour,type:'presence',label:prenom,
+        lieu:null,hdebut:r.hdebut,hfin:r.hfin,pause:r.pause,
+        source_cell:'PDF '+r.nomComplet,creneau_label:null,import_batch_id:batchId
+      },{onConflict:'creche_id,prenom,semaine,jour'});
+      if(error){console.error('[PlanningEquipe/PDF]',error.message);failed++;}else saved++;
+    }
+  }
+  if(doublons.length)console.warn('[PlanningEquipe/PDF] prénoms en doublon dans le PDF :',[...new Set(doublons)].join(', '));
+  if(saved)localStorage.setItem('lastImportPdfBatch_'+crecheId,JSON.stringify({batchId,date:new Date().toISOString()}));
+  return{saved,failed,purged,doublons:[...new Set(doublons)]};
 }
 
 function ipFmtDate(iso){const d=new Date(iso+'T00:00:00');return d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});}
@@ -2328,11 +2505,20 @@ function renderImportPreview(){
     const nb=pg.matched.length+pg.toCreate.length;totalPres+=nb;
     html+='<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">';
     html+='<div style="font-weight:700;color:var(--koala);text-transform:capitalize;margin-bottom:6px">'+ipFmtDate(pg.date)+' <span style="font-weight:400;color:var(--muted);font-size:11px">'+nb+' enfant'+(nb>1?'s':'')+'</span></div>';
+    const hz=nm=>{const h=(pg.horaires||{})[nm];return h?' <span style="opacity:.75;font-size:10.5px">'+h.debut.replace(':','h')+'\u2013'+h.fin.replace(':','h')+'</span>':' <span style="opacity:.6;font-size:10.5px">(horaire non lu)</span>';};
     const tags=[
-      ...pg.matched.map(mt=>'<span style="background:#e8f5e9;color:#2e7d32;border-radius:6px;padding:2px 8px;font-size:11.5px">✓ '+escHtml(mt.enfant.prenom+' '+mt.enfant.nom)+'</span>'),
-      ...pg.toCreate.map(nm=>'<span style="background:#fff3e0;color:#e65100;border-radius:6px;padding:2px 8px;font-size:11.5px">+ '+escHtml(nm)+'</span>')
+      ...pg.matched.map(mt=>'<span style="background:#e8f5e9;color:#2e7d32;border-radius:6px;padding:2px 8px;font-size:11.5px">✓ '+escHtml(mt.enfant.prenom+' '+mt.enfant.nom)+hz(mt.name)+'</span>'),
+      ...pg.toCreate.map(nm=>'<span style="background:#fff3e0;color:#e65100;border-radius:6px;padding:2px 8px;font-size:11.5px">+ '+escHtml(nm)+hz(nm)+'</span>')
     ];
-    html+='<div style="display:flex;flex-wrap:wrap;gap:5px">'+tags.join('')+'</div></div>';
+    html+='<div style="display:flex;flex-wrap:wrap;gap:5px">'+tags.join('')+'</div>';
+    const sal=pg.salaries||{};const sn=Object.keys(sal);
+    if(sn.length){
+      html+='<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);font-size:11.5px;color:var(--muted)"><strong style="color:var(--koala)">Planning équipe</strong> — '+sn.length+' salariée'+(sn.length>1?'s':'')+' <span style="color:var(--orange)">· cette journée sera entièrement réécrite</span><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px">';
+      html+=sn.map(k=>{const r=sal[k];const h=r.hdebut.replace(':','h')+(r.pause?' / '+r.pause.replace(/:/g,'h'):'')+' / '+r.hfin.replace(':','h');
+        return '<span style="background:#EEF6FF;color:#1E40AF;border-radius:6px;padding:2px 8px">'+escHtml(r.prenom)+' <span style="opacity:.75;font-size:10.5px">'+escHtml(h)+'</span></span>';}).join('');
+      html+='</div></div>';
+    }
+    html+='</div>';
   });
   body.innerHTML=html;
   const btn=document.getElementById('btn-confirm-import-presence');
@@ -2365,8 +2551,21 @@ async function confirmPresenceImport(){
   const wanted=[];
   pages.forEach(pg=>{
     pg.matched.forEach(mt=>{
-      wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'M',status:'present'});
-      wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'A',status:'present'});
+      const h=(pg.horaires||{})[mt.name];
+      const base={enfant_id:mt.enfant.id,presence_date:pg.date,status:'present'};
+      if(h){
+        // Horaires lus dans le PDF : le cr\u00e9neau est d\u00e9duit des heures r\u00e9elles
+        const hh=t=>parseInt(t.slice(0,2),10)+parseInt(t.slice(3,5),10)/60;
+        const d=hh(h.debut),f=hh(h.fin);
+        const row=Object.assign({},base,{heure_debut:h.debut,heure_fin:h.fin});
+        if(d<13)wanted.push(Object.assign({},row,{slot:'M'}));
+        if(f>13)wanted.push(Object.assign({},row,{slot:'A'}));
+        if(d>=13&&f<=13)wanted.push(Object.assign({},row,{slot:'M'}));
+      }else{
+        // Repli : ancien comportement, journ\u00e9e enti\u00e8re
+        wanted.push(Object.assign({},base,{slot:'M'}));
+        wanted.push(Object.assign({},base,{slot:'A'}));
+      }
     });
   });
   if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;showBanner('Aucune présence à enregistrer.','error');return;}
@@ -2383,10 +2582,14 @@ async function confirmPresenceImport(){
   const toInsert=wanted.filter(w=>!exSet.has(w.enfant_id+'_'+w.presence_date+'_'+w.slot));
   let ok=true;
   if(toInsert.length){const{error}=await sb.from('presences').insert(toInsert);if(error){console.error('[ImportPresence] insert presences',error);ok=false;}}
+  // ── Planning équipe : les salariées du PDF alimentent automatiquement planning_equipe ──
+  const eq=await ipSaveSalariesToPlanning(crecheId,pages);
   closeModal('modal-import-presence-wrap');_importPresData=null;
   if(ok){
-    showBanner('Import terminé : '+(toCreateNames.length?toCreateNames.length+' enfant'+(toCreateNames.length>1?'s':'')+'créé'+(toCreateNames.length>1?'s':'')+', ':'')+toInsert.length+' présence'+(toInsert.length>1?'s':'')+' enregistrée'+(toInsert.length>1?'s':'')+' ✅');
+    showBanner('Import terminé : '+(toCreateNames.length?toCreateNames.length+' enfant'+(toCreateNames.length>1?'s':'')+'créé'+(toCreateNames.length>1?'s':'')+', ':'')+toInsert.length+' présence'+(toInsert.length>1?'s':'')+' enregistrée'+(toInsert.length>1?'s':'')+(eq&&eq.saved?' · '+eq.saved+' journée'+(eq.saved>1?'s':'')+' salariée'+(eq.saved>1?'s':'')+' au planning équipe':'')+' ✅');
     renderPresence();
+    if(typeof peInvalidateAll==='function')peInvalidateAll(crecheId);
+    if(typeof renderPlanningEquipe==='function'&&document.getElementById('main-planning')?.classList.contains('active'))renderPlanningEquipe();
   }else showBanner('Erreur lors de l\'enregistrement des présences.','error');
 }
 
@@ -5230,6 +5433,16 @@ presences: `
 • Pour <strong>retirer</strong> un enfant de la journée : cliquez sur son <strong>rond</strong>, sa ligne disparaît de la liste.<br>
 • Pour <strong>ajouter</strong> un enfant : bouton <strong>Ajouter à la journée</strong> en haut à droite, puis choisissez-le dans la liste (il est marqué présent matin et après-midi).<br>
 Désactivez le filtre pour retrouver la <strong>liste complète</strong> des inscrits, absents compris. Le choix est mémorisé sur votre appareil.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📥 Import du planning PDF</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Le bouton <strong>Importer PDF</strong> lit le planning journalier issu de Gertrude. Depuis la mise à jour, il récupère aussi les <strong>horaires réels</strong> de chaque enfant (arrivée et départ), arrondis à 5 minutes : les barres du planning reprennent exactement les horaires du PDF au lieu d’un bloc matin / après-midi.<br>
+• L’écran d’aperçu affiche les horaires lus avant validation — vérifiez-les.<br>
+• Un enfant dont l’horaire n’a pas pu être lu apparaît avec la mention <strong>(horaire non lu)</strong> et sera enregistré en journée entière.<br>
+• Les présences saisies <strong>à la main</strong> (clic sur le rond) restent affichées en bloc matin / après-midi : c’est normal, aucun horaire n’y est associé.</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Le même import alimente <strong>automatiquement le Planning équipe</strong> : la section « Salariés » du PDF est lue de la même façon et enregistrée pour la semaine concernée, avec l’horaire du matin, la pause méridienne et l’horaire de l’après-midi. Les horaires sont affichés dans l’écran d’aperçu avant validation.<br>
+• Le PDF <strong>fait foi</strong> : chaque journée qu’il couvre est <strong>entièrement réécrite</strong>. Les lignes existantes de cette journée — y compris celles venant d’un import Excel — sont effacées puis remplacées.<br>
+• Une salariée <strong>absente du PDF</strong> disparaît donc du planning de cette journée.<br>
+• Les journées <strong>non couvertes</strong> par le PDF ne sont pas touchées. Et si aucune salariée n’a pu être lue sur une page, la journée correspondante est laissée intacte plutôt que vidée.<br>
+• Le PDF ne contient <strong>aucun type de journée</strong> : tout ce qui en provient est enregistré comme <strong>présence</strong>. Conséquence directe de la réécriture : un <strong>congé</strong> ou une <strong>formation</strong> déjà saisis sur une journée couverte par le PDF seront perdus. Si une semaine a été annotée à la main, réimporter son PDF efface ces annotations.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Créer une nouvelle fiche enfant</div>
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Dans la fenêtre <strong>Ajouter à la journée</strong>, si l’enfant n’apparaît pas dans la liste déroulante, cliquez sur <strong>Créer une fiche enfant</strong> : cela ouvre le formulaire d’inscription (prénom au minimum). Une fois la fiche créée, l’enfant sera disponible dans la liste. Les enfants sont également créés automatiquement lors de l’<strong>import PDF</strong>.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📤 Exporter</div>
