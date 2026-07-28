@@ -458,7 +458,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="fchip active" id="pres-filter-chip" onclick="presToggleFilterPresents()" title="N’afficher que les enfants présents ce jour"><i class="ti ti-filter"></i> Présents uniquement</button>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn-sm" onclick="openEnfantModal()"><i class="ti ti-user-plus"></i> Ajouter enfant</button>
+        <button class="btn-sm" onclick="presOpenAddDay()"><i class="ti ti-user-plus"></i> Ajouter à la journée</button>
         <button class="btn-sm" onclick="document.getElementById('presence-import-input').click()"><i class="ti ti-file-import"></i> Importer PDF</button>
         <input type="file" id="presence-import-input" accept="application/pdf" style="display:none" onchange="handlePresenceImport(this)">
         <button class="btn-green" onclick="exportPresence()"><i class="ti ti-download"></i> Exporter</button>
@@ -1215,6 +1215,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <h3><i class="ti ti-user-plus"></i> Ajouter un enfant à la journée</h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">L’enfant sera marqué <strong>présent matin et après-midi</strong> pour la date affichée.</div>
     <div class="fg"><label class="flabel">Enfant</label><select class="finput" id="pres-add-day-select"></select></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px">L’enfant n’est pas dans la liste ? <a href="#" onclick="presAddDayCreate();return false;" style="color:var(--koala);font-weight:600">Créer une fiche enfant</a></div>
     <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-pres-add-day-wrap')">Annuler</button><button class="btn-primary" onclick="presAddDayConfirm()"><i class="ti ti-check"></i> Ajouter</button></div>
   </div>
 </div>
@@ -2089,9 +2090,8 @@ async function renderPresenceGantt(){
   const presents=allEnfants.filter(e=>{const p=presMap[e.id]||{};return p.M==='present'||p.A==='present'||p.M==='partial'||p.A==='partial';});
   const enfants=presOnlyPresents?presents:allEnfants;
   _presAbsentsDuJour=allEnfants.filter(e=>!presents.includes(e));
-  const addBtnHtml='<div style="margin-top:12px"><button class="btn-sm" onclick="presOpenAddDay()"><i class="ti ti-user-plus"></i> Ajouter un enfant \u00e0 la journ\u00e9e</button></div>';
   if(!enfants.length){
-    view.innerHTML='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+'</div><div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant pr\u00e9sent ce jour.</p></div>'+addBtnHtml;
+    view.innerHTML='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+'</div><div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant pr\u00e9sent ce jour.<br><span style="font-size:12px">Utilisez <strong>Ajouter \u00e0 la journ\u00e9e</strong> en haut de la page.</span></p></div>';
     return;
   }
   // En-t\u00eate heures
@@ -2142,7 +2142,7 @@ async function renderPresenceGantt(){
   legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
   legendHtml+='</div>';
   const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+'</div>';
-  view.innerHTML=dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml+addBtnHtml;
+  view.innerHTML=dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
 }
 
 async function renderPresenceSemaine(){
@@ -2173,8 +2173,11 @@ let _presAbsentsDuJour=[];
 function presOpenAddDay(){
   const sel=document.getElementById('pres-add-day-select');
   if(!sel)return;
-  if(!_presAbsentsDuJour.length){showBanner('Tous les enfants de la cr\u00e8che sont d\u00e9j\u00e0 marqu\u00e9s pr\u00e9sents.','error');return;}
-  sel.innerHTML='<option value="">-- Choisir un enfant --</option>'+_presAbsentsDuJour.map(e=>'<option value="'+e.id+'">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</option>').join('');
+  if(!_presAbsentsDuJour.length){
+    sel.innerHTML='<option value="">Tous les enfants de la cr\u00e8che sont d\u00e9j\u00e0 pr\u00e9sents</option>';
+  }else{
+    sel.innerHTML='<option value="">-- Choisir un enfant --</option>'+_presAbsentsDuJour.map(e=>'<option value="'+e.id+'">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</option>').join('');
+  }
   document.getElementById('modal-pres-add-day-wrap').classList.add('open');
 }
 async function presAddDayConfirm(){
@@ -2186,6 +2189,8 @@ async function presAddDayConfirm(){
   await togglePresence(id,dateStr);
   showBanner('Enfant ajout\u00e9 \u00e0 la journ\u00e9e.');
 }
+function presAddDayCreate(){closeModal('modal-pres-add-day-wrap');openEnfantModal();}
+window.presAddDayCreate=presAddDayCreate;
 window.presOpenAddDay=presOpenAddDay;
 window.presAddDayConfirm=presAddDayConfirm;
 
@@ -5199,10 +5204,10 @@ presences: `
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Filtre « Présents uniquement »</div>
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Le bouton <strong>Présents uniquement</strong>, en haut de la page, n’affiche que les enfants présents à la date choisie — très pratique juste après un <strong>import PDF</strong>. Le compteur en haut du planning reste <strong>présents / effectif total</strong> de la crèche.<br>
 • Pour <strong>retirer</strong> un enfant de la journée : cliquez sur son <strong>rond</strong>, sa ligne disparaît de la liste.<br>
-• Pour <strong>ajouter</strong> un enfant : bouton <strong>Ajouter un enfant à la journée</strong> sous le planning, puis choisissez-le dans la liste (il est marqué présent matin et après-midi).<br>
+• Pour <strong>ajouter</strong> un enfant : bouton <strong>Ajouter à la journée</strong> en haut à droite, puis choisissez-le dans la liste (il est marqué présent matin et après-midi).<br>
 Désactivez le filtre pour retrouver la <strong>liste complète</strong> des inscrits, absents compris. Le choix est mémorisé sur votre appareil.</div>
-<div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Ajouter un enfant</div>
-<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Cliquez sur <strong>👤+ Ajouter enfant</strong> en haut à droite. Renseignez au minimum le prénom. Ce bouton crée un <strong>nouvel enfant en base</strong> (à ne pas confondre avec « Ajouter un enfant à la journée », qui ne fait que marquer une présence).</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Créer une nouvelle fiche enfant</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Dans la fenêtre <strong>Ajouter à la journée</strong>, si l’enfant n’apparaît pas dans la liste déroulante, cliquez sur <strong>Créer une fiche enfant</strong> : cela ouvre le formulaire d’inscription (prénom au minimum). Une fois la fiche créée, l’enfant sera disponible dans la liste. Les enfants sont également créés automatiquement lors de l’<strong>import PDF</strong>.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📤 Exporter</div>
 <div style="font-size:13px;color:#555;line-height:1.7">Le bouton <strong>Exporter</strong> génère un récapitulatif de présences pour la date sélectionnée, utile pour les transmissions administratives.</div>`,
 
