@@ -1402,6 +1402,77 @@ const TPL={
     doc.save(slug(fillDoc.titre)+(g('ap_enfant')?'_'+slug(g('ap_enfant')):'')+'.pdf');
     return true;
   }
+ },
+ creme_solaire:{
+  fields:['cs_civ1','cs_parent1','cs_qual1','cs_civ2','cs_parent2','cs_qual2','cs_enfant','cs_date'],
+  html:v=>`<div class="tpl">
+   <h3>Autorisation parentale — application de la crème solaire</h3>
+   <p class="hint">Durant la période estivale, la crème solaire (indice 50+ minimum, flacon neuf, péremption après ouverture de 12 mois) est fournie par la famille. Sans crème personnelle, l’enfant ne peut pas profiter des sorties extérieures.</p>
+   <div class="grid2">
+     <div class="f"><label>Parent 1 — civilité</label><select id="ff_cs_civ1">${
+       ['','Monsieur','Madame'].map(o=>`<option${v.cs_civ1===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Parent 1 — nom</label><input id="ff_cs_parent1" value="${esc(v.cs_parent1)}"></div>
+   </div>
+   <div class="f"><label>Parent 1 — en qualité de</label><input id="ff_cs_qual1" value="${esc(v.cs_qual1)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Parent 2 — civilité</label><select id="ff_cs_civ2">${
+       ['','Monsieur','Madame'].map(o=>`<option${v.cs_civ2===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Parent 2 — nom</label><input id="ff_cs_parent2" value="${esc(v.cs_parent2)}"></div>
+   </div>
+   <div class="f"><label>Parent 2 — en qualité de</label><input id="ff_cs_qual2" value="${esc(v.cs_qual2)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Prénom de l’enfant</label><input id="ff_cs_enfant" value="${esc(v.cs_enfant)}"></div>
+     <div class="f"><label>Date</label><input type="date" id="ff_cs_date" value="${esc(v.cs_date)}"></div>
+   </div>
+   <div class="grid2">
+     ${sigBoxHtml('parent1','Signature du parent')}
+     ${sigBoxHtml('parent2','Signature du parent')}
+   </div>
+  </div>`,
+  mount:()=>{['parent1','parent2'].forEach(mountSig);},
+  pdf:doc=>{
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
+    const W=182;let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+    doc.setFontSize(10.5);doc.setFont(undefined,'normal');
+    doc.text('Chers parents,',14,y);y+=10;
+    const intro=[
+      'Durant la période estivale, pour la protection de votre enfant, outre le port d’un chapeau, il est recommandé de protéger la peau de votre enfant contre les rayons du soleil. C’est pourquoi, nous vous demandons de bien vouloir nous fournir une crème solaire d’un indice minimum de 50+, non ouverte et dont la date de péremption après ouverture est de 12 mois (voir logo sur le flacon).',
+      'Dans l’éventualité où votre enfant n’aurait pas de crème solaire personnelle, il ne pourrait pas profiter des sorties que ce soit dans le jardin privatif de la crèche ou tout autre espace extérieur. Il est donc important pour lui d’avoir une crème de protection.',
+      'Veuillez remplir cette autorisation pour l’application de la crème solaire.'
+    ];
+    intro.forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*5+4);doc.text(L,14,y);y+=L.length*5+4;});
+    y+=2;
+    doc.text('L’équipe des Koala Kids',14,y);y+=14;
+    need(70);
+    doc.setDrawColor(90,140,200);doc.line(45,y,165,y);y+=9;
+    doc.setFontSize(12);doc.setFont(undefined,'bold');
+    doc.text('Autorisation parentale',14+W/2,y,{align:'center'});y+=12;
+    doc.setFontSize(10.5);doc.setFont(undefined,'normal');
+    const soussPhrase=(civ,nom,qual)=>{
+      const e=(civ||'').toLowerCase()==='madame'?'e':'';
+      const civTxt=(civ||'……').toLowerCase();
+      return 'Je soussigné'+e+', '+civTxt+' '+(nom||'……')+' en qualité de '+(qual||'……');};
+    const para=[
+      soussPhrase(g('cs_civ1'),g('cs_parent1'),g('cs_qual1')),
+      soussPhrase(g('cs_civ2'),g('cs_parent2'),g('cs_qual2')),
+      'De l’enfant '+(g('cs_enfant')||'……'),
+      'autorise (autorisons) le personnel de la structure à appliquer à mon (notre) enfant la crème solaire fournie par mes (nos) soins.'
+    ];
+    para.forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*5+3);doc.text(L,14,y);y+=L.length*5+3;});
+    y+=4;
+    doc.text('Date : '+dfr(g('cs_date')),14,y);y+=12;
+    need(46);
+    [['parent1','Signature du parent',14],['parent2','Signature du parent',110]].forEach(([role,lab,px])=>{
+      doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text(lab+' :',px,y);
+      doc.setDrawColor(200);doc.rect(px,y+3,84,32);
+      if(SIGS[role]){try{doc.addImage(SIGS[role],'PNG',px+2,y+5,80,28);}catch(e){}}
+    });
+    y+=42;
+    doc.save(slug(fillDoc.titre)+(g('cs_enfant')?'_'+slug(g('cs_enfant')):'')+'.pdf');
+    return true;
+  }
  }
 };
 
