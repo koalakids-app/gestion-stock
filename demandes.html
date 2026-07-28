@@ -6037,8 +6037,20 @@ let enfContratsCache=[], editingContratId=null, ctJoursSel=[];
 
 function ctFmtDate(s){ if(!s) return ''; const d=new Date(s+'T00:00:00'); return isNaN(d)?'':d.toLocaleDateString('fr-FR'); }
 function ctFmtHeure(s){ return s?String(s).slice(0,5).replace(':','h'):''; }
+/* `jours` peut revenir en tableau (jsonb), en chaîne JSON "[1,2]" ou en "1,2"
+   selon la façon dont la ligne a été créée : on normalise dans tous les cas. */
+function ctParseJours(j){
+  if(j==null) return [];
+  let v=j;
+  if(typeof v==='string'){
+    const t=v.trim();
+    try{ v=JSON.parse(t); }catch(e){ v=t.replace(/[{}\[\]"']/g,'').split(','); }
+  }
+  if(!Array.isArray(v)) v=[v];
+  return v.map(x=>parseInt(x,10)).filter(n=>n>=1&&n<=7);
+}
 function ctJoursLabel(j){
-  const arr=(j||[]).map(Number).filter(n=>n>=1&&n<=7).sort((a,b)=>a-b);
+  const arr=ctParseJours(j).sort((a,b)=>a-b);
   if(!arr.length) return '—';
   return arr.map(n=>(CT_JOURS.find(x=>x[0]===n)||[n,'?'])[1]).join(', ');
 }
@@ -6120,7 +6132,7 @@ function ctOpen(id){
   document.getElementById('ct-h1').value=c&&c.heure_debut?String(c.heure_debut).slice(0,5):'';
   document.getElementById('ct-h2').value=c&&c.heure_fin?String(c.heure_fin).slice(0,5):'';
   document.getElementById('ct-notes').value=c&&c.notes?c.notes:'';
-  ctJoursSel=c?((c.jours||[]).map(Number).filter(n=>n>=1&&n<=7)):[1,2,3,4,5];
+  ctJoursSel=c?ctParseJours(c.jours):[1,2,3,4,5];
   ctRenderJours();
   document.getElementById('ct-btn-delete').style.display=c?'':'none';
   document.getElementById('modal-contrat-wrap').classList.add('open');
@@ -6189,16 +6201,26 @@ async function presApplyContrats(){
     if(error) throw error;
     contrats=data||[];
   }catch(err){
-    console.warn('presApplyContrats',err);
-    showBanner('Impossible de lire les contrats.','error'); return;
+    console.warn('presApplyContrats lecture',err);
+    showBanner('Lecture des contrats impossible : '+((err&&err.message)||'droits insuffisants'),'error');
+    return;
+  }
+  console.log('[Contrats] date='+dateStr+' jour='+jour+' enfants='+ids.length+' contrats lus='+contrats.length,contrats);
+  if(!contrats.length){
+    showBanner('Aucun contrat enregistr\u00e9 pour les enfants de cette cr\u00e8che. Cr\u00e9ez-les dans l\u2019onglet Contrat de la fiche enfant.','error');
+    return;
   }
   const concernes=contrats.filter(function(c){
     if(c.date_debut&&c.date_debut>dateStr) return false;
     if(c.date_fin&&c.date_fin<dateStr) return false;
-    return (c.jours||[]).map(Number).indexOf(jour)>=0;
+    return ctParseJours(c.jours).indexOf(jour)>=0;
   }).map(c=>String(c.enfant_id));
   const uniques=[...new Set(concernes)];
-  if(!uniques.length){ showBanner('Aucun contrat ne couvre cette journ\u00e9e.','error'); return; }
+  if(!uniques.length){
+    const nomJour=(CT_JOURS.find(x=>x[0]===jour)||[jour,'ce jour'])[1].toLowerCase();
+    showBanner('Aucun des '+contrats.length+' contrat(s) de cette cr\u00e8che ne couvre le '+nomJour+' '+ctFmtDate(dateStr)+' (dates ou jours de pr\u00e9sence).','error');
+    return;
+  }
   // Enfants déjà marqués présents ce jour : on ne les retouche pas
   const{data:dejaPres}=await sb.from('presences').select('enfant_id')
     .eq('presence_date',dateStr).in('enfant_id',uniques);
