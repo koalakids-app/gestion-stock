@@ -2091,7 +2091,7 @@ async function renderPresenceGantt(){
   const enfants=presOnlyPresents?presents:allEnfants;
   _presAbsentsDuJour=allEnfants.filter(e=>!presents.includes(e));
   if(!enfants.length){
-    view.innerHTML='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+'</div><div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant pr\u00e9sent ce jour.<br><span style="font-size:12px">Utilisez <strong>Ajouter \u00e0 la journ\u00e9e</strong> en haut de la page.</span></p></div>';
+    view.innerHTML='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+((cacheCreches.find(c=>c.id===crecheId)||{}).name?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml((cacheCreches.find(c=>c.id===crecheId)||{}).name)+'</span>':'')+'</div><div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant pr\u00e9sent ce jour.<br><span style="font-size:12px">Utilisez <strong>Ajouter \u00e0 la journ\u00e9e</strong> en haut de la page.</span></p></div>';
     return;
   }
   // En-t\u00eate heures
@@ -2141,7 +2141,8 @@ async function renderPresenceGantt(){
   legendHtml+='<span><i class="ti ti-user-check" style="color:var(--koala);vertical-align:middle;margin-right:2px"></i>Cliquez le rond pour '+(presOnlyPresents?'retirer l\u2019enfant de la journ\u00e9e':'basculer pr\u00e9sent / absent')+'</span>';
   legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
   legendHtml+='</div>';
-  const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+'</div>';
+  const crecheLbl=(cacheCreches.find(c=>c.id===crecheId)||{}).name||'';
+  const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+(crecheLbl?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml(crecheLbl)+'</span>':'')+'</div>';
   view.innerHTML=dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
 }
 
@@ -2227,7 +2228,10 @@ async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.fi
 // ── IMPORT PRÉSENCES DEPUIS PLANNING PDF (Gantt) ──
 const IP_MONTHS={janvier:1,février:2,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,août:8,aout:8,septembre:9,octobre:10,novembre:11,décembre:12,decembre:12};
 let _importPresData=null;
-function ipNormName(s){return(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s-]/g,'').replace(/\s+/g,' ').trim();}
+let _ipReplace=true;
+let _ipForceCreche=false;
+function ipNormName(s){return(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s-]/g,'').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim();}
+function ipCleanName(s){return(s||'').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim();}
 function ipIsFirstnameToken(tok){return tok&&/^[A-ZÀ-Ÿ]/.test(tok)&&/[a-zà-ÿ]/.test(tok);}
 
 async function handlePresenceImport(input){
@@ -2263,7 +2267,12 @@ async function handlePresenceImport(input){
     pg.matched=[];pg.toCreate=[];
     pg.names.forEach(nm=>{const r=nameMap[nm];if(r.enfant)pg.matched.push({name:nm,enfant:r.enfant});else pg.toCreate.push(nm);});
   });
-  _importPresData={crecheId,pages,nameMap};
+  const creche=cacheCreches.find(c=>c.id===crecheId);
+  const titles=[...new Set(pages.map(pg=>pg.title||'').filter(Boolean))];
+  const crecheNorm=ipNormName(creche?creche.name:'');
+  const crecheMatch=(!titles.length||!crecheNorm)?true:titles.every(t=>ipNormName(t).indexOf(crecheNorm)>=0);
+  _ipForceCreche=false;
+  _importPresData={crecheId,pages,nameMap,crecheEnfantIds:enfCreche.map(e=>e.id),titles,crecheMatch};
   renderImportPreview();
   document.getElementById('modal-import-presence-wrap').classList.add('open');
 }
@@ -2287,7 +2296,10 @@ async function ipParsePdf(file){
     const names=[];let cur=null;
     for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){const toks=lines[i].toks;if(!toks.length)continue;if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=toks.join(' ');}else if(cur)cur+=' '+toks.join(' ');}
     if(cur)names.push(cur);
-    if(date&&names.length)out.push({date,names});
+    const cleaned=[...new Set(names.map(ipCleanName).filter(Boolean))];
+    const tm=fullText.match(/^(.*KOALA\s*KIDS.*)$/im);
+    const title=tm?tm[1].trim():'';
+    if(date&&cleaned.length)out.push({date,names:cleaned,title});
   }
   return out;
 }
@@ -2300,7 +2312,13 @@ function renderImportPreview(){
   const creche=cacheCreches.find(c=>c.id===_importPresData.crecheId);
   const toCreateUnique=[...new Set(_importPresData.pages.flatMap(pg=>pg.toCreate))];
   let totalPres=0;const totalNew=toCreateUnique.length;
-  let html='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Crèche : <strong style="color:var(--koala)">'+(creche?creche.name:'—')+'</strong></div>';
+  let html='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Crèche : <strong style="color:var(--koala)">'+(creche?creche.name:'—')+'</strong>'+(_importPresData.titles&&_importPresData.titles.length?' — PDF : <strong style="color:var(--koala)">'+escHtml(_importPresData.titles.join(' / '))+'</strong>':'')+'</div>';
+  if(!_importPresData.crecheMatch){
+    html+='<div style="background:#fdecea;border-left:4px solid var(--red);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#8b1a1a">';
+    html+='<strong>⚠ La crèche ne correspond pas.</strong><br>Le PDF concerne <strong>'+escHtml(_importPresData.titles.join(' / '))+'</strong> alors que la feuille de présence est positionnée sur <strong>'+escHtml(creche?creche.name:'—')+'</strong>.<br>';
+    html+='<label style="display:flex;align-items:center;gap:6px;margin-top:8px;cursor:pointer"><input type="checkbox" id="ip-force-creche" onchange="_ipForceCreche=this.checked;renderImportPreview()"'+(_ipForceCreche?' checked':'')+'/> Importer malgré tout</label></div>';
+  }
+  html+='<label style="display:flex;align-items:flex-start;gap:8px;background:#EEEDF8;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;color:var(--koala);cursor:pointer"><input type="checkbox" id="ip-replace" onchange="_ipReplace=this.checked"'+(_ipReplace?' checked':'')+' style="margin-top:2px"/><span><strong>Remplacer les présences existantes pour ces dates</strong><br><span style="font-weight:400;font-size:11.5px">Le PDF fait foi : les présences d\u00e9j\u00e0 enregistr\u00e9es pour cette cr\u00e8che aux dates du planning seront effac\u00e9es avant l\u2019import. D\u00e9cochez pour cumuler avec l\u2019existant.</span></span></label>';
   if(totalNew){
     html+='<div style="background:#fff8e1;border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px">';
     html+='<strong>'+totalNew+' nouvel enfant'+(totalNew>1?'s':'')+' seront créés</strong> dans <strong>'+(creche?creche.name:'la crèche')+'</strong><br>';
@@ -2318,14 +2336,14 @@ function renderImportPreview(){
   });
   body.innerHTML=html;
   const btn=document.getElementById('btn-confirm-import-presence');
-  btn.disabled=false;
+  btn.disabled=!_importPresData.crecheMatch&&!_ipForceCreche;
   btn.innerHTML='<i class="ti ti-check"></i> Confirmer — '+totalPres+' présence'+(totalPres>1?'s':'')+(totalNew?' + '+totalNew+' création'+(totalNew>1?'s':''):'');
 }
 
 async function confirmPresenceImport(){
   if(!_importPresData)return;
   const btn=document.getElementById('btn-confirm-import-presence');btn.disabled=true;
-  const{crecheId,pages,nameMap}=_importPresData;
+  const{crecheId,pages,nameMap,crecheEnfantIds}=_importPresData;
   showBanner('Création des nouveaux enfants…');
   // 1) Créer les enfants manquants
   const toCreateNames=[...new Set(pages.flatMap(pg=>pg.toCreate))];
@@ -2354,6 +2372,12 @@ async function confirmPresenceImport(){
   if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;showBanner('Aucune présence à enregistrer.','error');return;}
   const dates=[...new Set(wanted.map(w=>w.presence_date))];
   const ids=[...new Set(wanted.map(w=>w.enfant_id))];
+  if(_ipReplace){
+    showBanner('Nettoyage des pr\u00e9sences existantes\u2026');
+    const purgeIds=[...new Set([...(crecheEnfantIds||[]),...ids])];
+    const{error:delErr}=await sb.from('presences').delete().in('presence_date',dates).in('enfant_id',purgeIds);
+    if(delErr){console.error('[ImportPresence] purge',delErr);showBanner('Impossible d\u2019effacer les pr\u00e9sences existantes.','error');btn.disabled=false;return;}
+  }
   const{data:existing}=await sb.from('presences').select('id,enfant_id,presence_date,slot').in('presence_date',dates).in('enfant_id',ids);
   const exSet=new Set((existing||[]).map(e=>e.enfant_id+'_'+e.presence_date+'_'+e.slot));
   const toInsert=wanted.filter(w=>!exSet.has(w.enfant_id+'_'+w.presence_date+'_'+w.slot));
