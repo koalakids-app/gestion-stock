@@ -623,8 +623,12 @@ let fillStatutManuel=false;
    Le selecteur « Enfant concerne » (et le filtre creche qui ne sert qu’a
    raccourcir la liste d’enfants) sont masques pour ces modeles. */
 const TPL_SALARIE=['entretien_annuel','grille'];
+/* Documents d’etablissement (contrôle EAJE…) : ils ne concernent ni un enfant
+   ni un salarie, la crec̀he est saisie dans le formulaire lui-même. */
+const TPL_ETABLISSEMENT=['eaje'];
 function docConcerneSalarie(){
-  return !!(fillDoc&&TPL_SALARIE.indexOf(fillDoc.template_key)>=0);
+  const k=fillDoc&&fillDoc.template_key;
+  return !!(k&&(TPL_SALARIE.indexOf(k)>=0||TPL_ETABLISSEMENT.indexOf(k)>=0));
 }
 
 function fillMetaOptions(selEnfant,selStatut){
@@ -769,7 +773,9 @@ function showReturnEnfantBar(){
   bar.scrollIntoView({behavior:'smooth',block:'center'});
 }
 
-async function saveFill(){
+/* silent=true : enregistrement en arrière-plan (autosave du contrôle EAJE) —
+   ni toast de succès, ni fermeture de la modale. Les erreurs restent affichees. */
+async function saveFill(silent){
  try{
   const donnees={};
   const tpl=TPL[fillDoc.template_key];
@@ -817,7 +823,10 @@ async function saveFill(){
     const v=donnees[k];
     return v!==''&&v!==false&&v!=null;
   })||aUneSignature;
-  if(!fillRep&&!aDuContenu)return toast('Formulaire vide \u2014 rien \u00e0 enregistrer');
+  if(!fillRep&&!aDuContenu){
+    if(silent)return;
+    return toast('Formulaire vide \u2014 rien \u00e0 enregistrer');
+  }
   const statutChoisi=((document.getElementById('fillStatut')||{}).value)==='signe';
   /* « signe » dans deux cas seulement :
      - une signature reelle a ete tracee ou recue par QR ;
@@ -851,7 +860,7 @@ async function saveFill(){
     if(data)fillRep=data;          /* evite les doublons aux enregistrements suivants */
   }
   if(error)return toast('Erreur : '+(error.message||'enregistrement impossible'));
-  toast(enfantId?'Enregistré dans le dossier de l\u2019enfant':'Enregistré');
+  if(!silent)toast(enfantId?'Enregistré dans le dossier de l\u2019enfant':'Enregistré');
   if(enfantId){
     /* Le document est parti dans le dossier de l’enfant : on detache la reponse
        de la saisie courante et on remet le formulaire a blanc, pour que la page
@@ -859,10 +868,12 @@ async function saveFill(){
     fillRep=null;
     resetFillForm();
   }
-  if(RETURN_ENFANT_ID){
-    showReturnEnfantBar();
-  }else{
-    close_('ovFill');
+  if(!silent){
+    if(RETURN_ENFANT_ID){
+      showReturnEnfantBar();
+    }else{
+      close_('ovFill');
+    }
   }
  }catch(e){
   console.error('saveFill',e);
@@ -1188,10 +1199,625 @@ const RM_TABLE=[
  ['Huile d\u2019amande douce','Médicaments pour le transit (smecta, débridat, tiorfan…)'],
  ['Les produits anti-moustiques : lotions, crèmes, sprays et bracelets… Si besoin, les parents en mettent à leur enfant AVANT de le déposer à la crèche, ou dans un contexte médical particulier = PAI','Homéopathie sous toutes ses formes (granules, gouttes) : Apis mellifica, Arnica'],
  ['Les crèmes solaires : les parents apportent la crème solaire pour leur(s) enfant(s) ET signent l\u2019autorisation','Gouttes et pipettes pour les poussées dentaires…'],
- ['Les boîtes de lait','']
+ ['','Les boîtes de lait']
 ];
 
+/* ---------- SUPPORT DE CONTRÔLE EAJE ----------
+   Grille d’auto-contrôle réglementaire (visite PMI), micro-crèche à section unique.
+   Déplacée depuis demandes.html (module « Contrôle EAJE ») le 29/07/2026.
+   Les réponses sont stockées dans documents_reponses.donnees, avec des clés
+   identiques aux ids d’items ci-dessous.
+   Types d’items :
+     'oui_non'  -> boutons Oui / Non (valeur portée par un input caché)
+     'text'     -> champ texte court
+     'num'      -> champ numérique (m², effectifs…)
+     'textarea' -> zone de commentaire multi-lignes
+     'date'     -> champ date
+     'sep'      -> titre de sous-groupe (pas de champ, non compté)
+   Propriété reg:true = item à caractère réglementaire (*) */
+const CTRL_SCHEMA = [
+ {id:'ident', titre:'Identité de l\'établissement', icon:'building', items:[
+   {id:'nom', l:'Nom de l\'établissement', t:'text'},
+   {id:'ville', l:'Ville', t:'text'},
+   {id:'tel_fixe', l:'N° de téléphone fixe', t:'text'},
+   {id:'tel_mobile', l:'N° de téléphone mobile', t:'text'},
+   {id:'mail', l:'Adresse mail', t:'text'},
+   {id:'date_ctrl', l:'Date et heure du contrôle', t:'text'},
+   {id:'effectuee_par', l:'Effectuée par', t:'text'},
+   {id:'qualif_visiteur', l:'Qualification (visiteur)', t:'text'},
+   {id:'en_presence', l:'En présence de', t:'text'},
+   {id:'qualif_present', l:'Qualification (présent)', t:'text'},
+   {id:'capacite', l:'Capacité d\'accueil', t:'num'},
+   {id:'capacite_115', l:'Capacité + 115 % (surnombre autorisé)', t:'num'},
+   {id:'etp_necessaire', l:'Nombre d\'ETP nécessaire', t:'text'},
+   {id:'etp_diplomes', l:'dont ETP de diplômés', t:'text'},
+   {id:'modulation', l:'Modulation horaire', t:'oui_non'},
+   {id:'h_ouverture', l:'Nombre d\'heures d\'ouverture hebdomadaire (amplitude × 5)', t:'text'},
+   {id:'cap_hebdo', l:'Capacité hebdomadaire totale d\'accueil', t:'text'},
+   {id:'ident_obs', l:'Observations', t:'textarea'},
+ ]},
+
+ {id:'effectifs', titre:'Effectif d\'enfants (section unique)', icon:'users', items:[
+   {id:'eff_present', l:'Effectif compté le jour de la visite', t:'num'},
+   {id:'eff_marchent', l:'dont qui marchent', t:'num'},
+   {id:'eff_ne_marchent', l:'dont qui ne marchent pas', t:'num'},
+   {id:'eff_max', l:'Effectif maximum d\'enfants reçus (cahier de présence)', t:'num', reg:true},
+   {id:'tableau_bord_surnombre', l:'Taux d\'occupation hebdo consignés dans un tableau de bord (surnombre – 2 mois)', t:'oui_non'},
+   {id:'taux_derniere_sem', l:'Taux d\'occupation de la dernière semaine', t:'text'},
+ ]},
+
+ {id:'personnel', titre:'Personnel encadrant (tout l\'EAJE)', icon:'user-check', items:[
+   {id:'nb_pro_jour', l:'Nombre de professionnels assurant l\'encadrement direct le jour de la visite', t:'num'},
+   {id:'eff_qualif_adaptes', l:'Effectif et qualifications adaptés', t:'oui_non', reg:true},
+   {id:'sep_qualif', l:'Qualifications présentes (nom, prénom, ETP)', t:'sep'},
+   {id:'q_directrice', l:'Directrice — qualification / ETP / nom', t:'text'},
+   {id:'q_puer', l:'Puéricultrice — ETP / nom', t:'text'},
+   {id:'q_inf', l:'Infirmière — ETP / nom', t:'text'},
+   {id:'q_eje', l:'EJE — ETP / nom', t:'text'},
+   {id:'q_aux', l:'Auxiliaire de puériculture — ETP / nom', t:'text'},
+   {id:'q_cap', l:'CAP PE et autres (art.1 arrêté 29/07/2022) — ETP', t:'text'},
+   {id:'q_autres', l:'Autres professionnels — ETP / nom', t:'text'},
+   {id:'regle_5_8', l:'Règle : 1 pro / 5 non-marcheurs et 1 / 8 marcheurs', t:'oui_non', reg:true},
+   {id:'regle_6', l:'Règle : 1 professionnel pour 6 enfants', t:'oui_non', reg:true},
+   {id:'pro_1etp_diplome', l:'Au moins 1 pro diplômé (1° art. R.2324-42) à hauteur d\'un ETP', t:'oui_non', reg:true},
+   {id:'nb_qualif_adaptes_jour', l:'Nombre et qualifications adaptés tous les jours et aux différentes heures', t:'oui_non', reg:true},
+   {id:'entretien_restauration', l:'Personnels d\'entretien/restauration adaptés', t:'oui_non'},
+   {id:'haccp', l:'Formation HACCP (au moins 1 personnel) — nom', t:'text', reg:true},
+   {id:'haccp_planning', l:'Identifiés sur les plannings', t:'oui_non'},
+   {id:'menage_hors_enfants', l:'Temps de ménage hors présence des enfants', t:'oui_non'},
+   {id:'rechauffage_temps', l:'Temps de réchauffage des repas identifié', t:'oui_non'},
+   {id:'gouters_temps', l:'Temps de préparation des goûters identifié', t:'oui_non'},
+   {id:'continuite_direction', l:'Personne en continuité de direction — nom / qualification', t:'text', reg:true},
+   {id:'cd_docs_gestion', l:'Accès aux documents de gestion', t:'oui_non'},
+   {id:'cd_protocoles', l:'Accès aux protocoles', t:'oui_non'},
+ ]},
+
+ {id:'intervenants', titre:'Autres professionnels & intervenants', icon:'users-group', items:[
+   {id:'rsai', l:'RSAI présent', t:'oui_non', reg:true},
+   {id:'rsai_nom', l:'RSAI — nom / qualification', t:'text'},
+   {id:'rsai_heures', l:'RSAI — heures d\'intervention (mois/trimestre)', t:'text'},
+   {id:'rsai_derniere', l:'RSAI — dernière intervention', t:'text'},
+   {id:'rsai_prochaine', l:'RSAI — prochaine intervention', t:'text'},
+   {id:'app', l:'Professionnel temps APP', t:'oui_non', reg:true},
+   {id:'app_nom', l:'APP — nom / qualification', t:'text'},
+   {id:'app_heures', l:'APP — heures (mois/quadrimestre)', t:'text'},
+   {id:'app_derniere', l:'APP — dernière intervention', t:'text'},
+   {id:'app_prochaine', l:'APP — prochaine intervention', t:'text'},
+   {id:'soutien_rt', l:'Soutien de la référente technique (si qualif. non requise)', t:'oui_non', reg:true},
+   {id:'soutien_rt_nom', l:'Soutien RT — nom / qualification / heures', t:'text'},
+   {id:'autres_interv', l:'Autres intervenants extérieurs', t:'oui_non'},
+   {id:'autres_interv_detail', l:'Autres intervenants — noms / heures', t:'textarea'},
+   {id:'honorabilite_perso', l:'Attestations d\'honorabilité — ensemble du personnel', t:'oui_non', reg:true},
+   {id:'honorabilite_gest', l:'Attestations d\'honorabilité — gestionnaire', t:'oui_non', reg:true},
+   {id:'honorabilite_interv', l:'Attestations d\'honorabilité — intervenants extérieurs', t:'oui_non', reg:true},
+   {id:'honorabilite_3ans', l:'Rappel : renouveler l\'honorabilité tous les 3 ans', t:'oui_non'},
+ ]},
+
+ {id:'entree', titre:'Espace d\'accueil / entrée', icon:'door', items:[
+   {id:'entree_m2', l:'Surface (m²)', t:'num'},
+   {id:'controle_acces', l:'Entrée équipée d\'un dispositif de contrôle d\'accès', t:'oui_non', reg:true},
+   {id:'digicode_annuel', l:'Si digicode, modification du code chaque année', t:'oui_non'},
+   {id:'deverrouillage', l:'Dispositif permettant de contrôler et déverrouiller l\'entrée', t:'oui_non'},
+   {id:'agencement', l:'Agencement et équipements adaptés', t:'oui_non'},
+   {id:'hall_barriere', l:'Hall d\'accueil limité par une barrière/porte', t:'oui_non'},
+   {id:'hall_oculus', l:'Équipée d\'oculus', t:'oui_non', reg:true},
+   {id:'hall_antipince', l:'Anti pince-doigts sur les 2 côtés', t:'oui_non', reg:true},
+   {id:'plan_deshabillage', l:'Plan de déshabillage (profondeur ≥ 85 cm)', t:'oui_non', reg:true},
+   {id:'remontees', l:'Remontées suffisantes (20 cm) sur le côté', t:'oui_non'},
+   {id:'vestiaires', l:'Vestiaires individuels / casiers', t:'oui_non', reg:true},
+   {id:'fauteuil_parents', l:'Fauteuil pour les parents', t:'oui_non', reg:true},
+   {id:'surchaussures', l:'Surchaussures à disposition', t:'oui_non'},
+   {id:'gel_hydro', l:'Gel hydroalcoolique', t:'oui_non'},
+   {id:'espace_poussettes', l:'Espace dédié pour les poussettes', t:'oui_non', reg:true},
+ ]},
+
+ {id:'affichages', titre:'Affichages obligatoires', icon:'clipboard-list', items:[
+   {id:'aff_plan_evac', l:'Plan du bâtiment et consignes d\'évacuation', t:'oui_non'},
+   {id:'aff_secours', l:'Numéros des services de secours', t:'oui_non'},
+   {id:'aff_vigipirate', l:'Consignes Vigipirate', t:'oui_non'},
+   {id:'aff_fumer', l:'Interdiction de fumer', t:'oui_non'},
+   {id:'aff_vapoter', l:'Interdiction de vapoter', t:'oui_non'},
+   {id:'aff_reco_min', l:'Consignes recommandations ministérielles/préfectorales', t:'oui_non'},
+   {id:'aff_projet_etab', l:'Projet d\'établissement (affiché/MAD, en vigueur)', t:'oui_non'},
+   {id:'aff_reglement', l:'Règlement de fonctionnement (affiché/MAD, en vigueur)', t:'oui_non'},
+   {id:'sep_protocoles', l:'Protocoles annexés', t:'sep'},
+   {id:'proto_urgence', l:'1. Situations d\'urgence / recours SAMU', t:'oui_non'},
+   {id:'proto_hygiene', l:'2. Hygiène générale et renforcée (maladie/épidémie)', t:'oui_non'},
+   {id:'proto_soins', l:'3. Délivrance de soins spécifiques', t:'oui_non'},
+   {id:'proto_maltraitance', l:'4. Suspicion de maltraitance / danger', t:'oui_non'},
+   {id:'proto_sorties', l:'5. Sécurité lors des sorties', t:'oui_non'},
+   {id:'proto_mise_surete', l:'Protocole de mise en sûreté transmis (maire + préfet)', t:'oui_non'},
+   {id:'aff_119', l:'Numéro Enfance en danger : 119', t:'oui_non'},
+   {id:'aff_3919', l:'Numéro violences intra-familiales : 3919', t:'oui_non'},
+   {id:'aff_parentalite', l:'Services de soutien à la parentalité à proximité', t:'oui_non'},
+   {id:'aff_veo', l:'Prévention de la violence éducative ordinaire', t:'oui_non'},
+   {id:'aff_vaccinal', l:'Calendrier vaccinal', t:'oui_non'},
+   {id:'aff_menus', l:'Affichage des menus', t:'oui_non'},
+   {id:'aff_allergenes', l:'Indication de la présence d\'allergènes', t:'oui_non'},
+   {id:'aff_charte', l:'Charte nationale d\'accueil du jeune enfant', t:'oui_non'},
+   {id:'aff_arrete', l:'Arrêté de création/modificatif affiché', t:'oui_non', reg:true},
+ ]},
+
+ {id:'salle_vie', titre:'Salle de vie', icon:'sofa', items:[
+   {id:'sv_m2', l:'Surface (m²)', t:'num'},
+   {id:'sv_coin_petits', l:'Coin délimité et sécurisé pour les plus petits', t:'oui_non'},
+   {id:'sv_coin_repas', l:'Coin restauration/activité (tables/chaises adaptées)', t:'oui_non', reg:true},
+   {id:'sv_chaises_5pts', l:'Chaises à 5 points de sécurité pour les plus petits', t:'oui_non'},
+   {id:'sv_fauteuil_allaitement', l:'Fauteuil d\'allaitement', t:'oui_non', reg:true},
+   {id:'sv_fauteuil_pro', l:'Fauteuil pour les pros (prise de biberons)', t:'oui_non', reg:true},
+   {id:'sv_jeux_normes', l:'Jeux et jouets adaptés et normés', t:'oui_non', reg:true},
+   {id:'sv_jeux_nombre', l:'Jeux et jouets en nombre suffisant', t:'oui_non', reg:true},
+   {id:'sv_rangements', l:'Meubles de rangement sécurisés (0.5 m³/place, EAJE post-2022)', t:'oui_non', reg:true},
+   {id:'sv_temperature', l:'Température ambiante 18–22 °C', t:'oui_non', reg:true},
+   {id:'sv_clim', l:'Présence d\'une climatisation', t:'oui_non'},
+   {id:'sv_ventilation', l:'Ventilation des locaux suffisante', t:'oui_non'},
+   {id:'sv_aerations_secu', l:'Sécurisation des aérations naturelles', t:'oui_non', reg:true},
+   {id:'sv_protection_solaire', l:'Protection solaire contre réchauffement excessif', t:'oui_non', reg:true},
+   {id:'sv_lux', l:'Luminosité garantie 300 lux', t:'oui_non', reg:true},
+   {id:'sv_lumiere_bebes', l:'Lumière au plafond pas trop vive côté bébés', t:'oui_non'},
+   {id:'sv_variateurs', l:'Éclairage équipé de variateurs (si possible)', t:'oui_non'},
+   {id:'sv_qualite_air', l:'Contrôle qualité de l\'air effectué', t:'oui_non', reg:true},
+   {id:'sv_antipince', l:'Anti pince-doigts (hauteur mini 110 cm), 2 côtés', t:'oui_non', reg:true},
+   {id:'sv_poignees_130', l:'Portes espaces interdits : poignées à 130 cm / boutons moletés', t:'oui_non', reg:true},
+   {id:'sv_oculus', l:'Portes sur espaces enfants équipées d\'oculus', t:'oui_non', reg:true},
+   {id:'sv_prises_130', l:'Prises électriques à hauteur mini 130 cm', t:'oui_non', reg:true},
+   {id:'sv_portillons', l:'Portillons NF', t:'oui_non', reg:true},
+   {id:'sv_asperites', l:'Aspérités anguleuses/saillies < 110 cm à protéger', t:'oui_non', reg:true},
+   {id:'sv_surfaces_vitrees', l:'Surfaces vitrées sécurisées (verre feuilleté/film)', t:'oui_non', reg:true},
+   {id:'sv_liaison_interne', l:'Liaisons interphoniques/téléphoniques internes', t:'oui_non', reg:true},
+   {id:'sv_tel_exterieur', l:'Téléphone avec accès extérieur direct', t:'oui_non', reg:true},
+   {id:'sv_aff_urgence', l:'Affichage des numéros d\'urgence', t:'oui_non', reg:true},
+   {id:'sv_activites', l:'Activités proposées adaptées', t:'oui_non'},
+   {id:'sv_rythmes', l:'Rythmes proposés adaptés', t:'oui_non'},
+   {id:'sv_projet_peda', l:'Projet pédagogique modifié', t:'oui_non'},
+   {id:'sv_obs', l:'Observations', t:'textarea'},
+ ]},
+
+ {id:'dortoir_bebes', titre:'Dortoir Bébés', icon:'bed', items:[
+   {id:'db_2dortoirs', l:'Présence de 2 dortoirs', t:'oui_non'},
+   {id:'db_m2', l:'Surface dortoir bébés (m²)', t:'num'},
+   {id:'db_visibilite', l:'Visibilité suffisante sur tous les couchages', t:'oui_non', reg:true},
+   {id:'db_lits', l:'Lits adaptés, en bon état (barreaux 7 cm max NF)', t:'oui_non', reg:true},
+   {id:'db_cocon', l:'ou matelas au sol cocon avec contours adaptés', t:'oui_non'},
+   {id:'db_nombre_surface', l:'Nombre adapté à la surface', t:'oui_non', reg:true},
+   {id:'db_lit_roulettes', l:'Lit à roulettes pour l\'évacuation', t:'oui_non'},
+   {id:'db_drap', l:'Drap housse / turbulette par enfant', t:'oui_non'},
+   {id:'db_plan', l:'Plan du dortoir', t:'oui_non'},
+   {id:'db_circulation', l:'Espace de circulation suffisant autour des lits', t:'oui_non'},
+   {id:'db_babyphone', l:'Babyphone', t:'oui_non'},
+   {id:'db_obscurcir', l:'Salle obscurcie par moyen approprié', t:'oui_non'},
+   {id:'db_rideaux_ignifuges', l:'Si rideaux, ignifugés', t:'oui_non'},
+   {id:'db_agent_permanent', l:'Agent en permanence si pas de visibilité', t:'oui_non', reg:true},
+   {id:'db_tracabilite', l:'Feuille de traçabilité surveillance sieste (émargement)', t:'oui_non'},
+   {id:'db_tablettes', l:'Tablettes pour traçabilité sieste', t:'oui_non'},
+   {id:'db_fauteuil_ergo', l:'Fauteuil ergonomique pour les pros', t:'oui_non', reg:true},
+   {id:'db_fenetres', l:'Présence de fenêtre(s)', t:'oui_non'},
+   {id:'db_fenetres_secu', l:'Sécurisation des fenêtres adaptée', t:'oui_non', reg:true},
+   {id:'db_moustiquaires', l:'Présence de moustiquaires', t:'oui_non'},
+   {id:'db_vmc', l:'VMC si aucune aération naturelle', t:'oui_non', reg:true},
+   {id:'db_temperature', l:'Température 19–21 °C', t:'oui_non', reg:true},
+   {id:'db_clim', l:'Présence d\'une climatisation', t:'oui_non'},
+   {id:'db_thermometre', l:'Thermomètre mural', t:'oui_non'},
+   {id:'db_obs', l:'Observations (pas de tirettes / câbles accessibles)', t:'textarea'},
+ ]},
+
+ {id:'dortoir_grands', titre:'Dortoir Moyens / Grands', icon:'bed', items:[
+   {id:'dg_m2', l:'Surface (m²)', t:'num'},
+   {id:'dg_visibilite', l:'Visibilité suffisante sur tous les couchages', t:'oui_non', reg:true},
+   {id:'dg_lits', l:'Lits adaptés, en bon état (bannettes moyens/grands)', t:'oui_non', reg:true},
+   {id:'dg_cocon', l:'ou matelas au sol cocon avec contours adaptés', t:'oui_non'},
+   {id:'dg_nombre_surface', l:'Nombre adapté à la surface', t:'oui_non', reg:true},
+   {id:'dg_lit_roulettes', l:'Lit à roulettes pour l\'évacuation', t:'oui_non'},
+   {id:'dg_drap', l:'Drap housse / turbulette par enfant', t:'oui_non'},
+   {id:'dg_plan', l:'Plan du dortoir', t:'oui_non'},
+   {id:'dg_circulation', l:'Espace de circulation suffisant', t:'oui_non'},
+   {id:'dg_babyphone', l:'Babyphone', t:'oui_non'},
+   {id:'dg_obscurcir', l:'Salle obscurcie par moyen approprié', t:'oui_non'},
+   {id:'dg_rideaux_ignifuges', l:'Si rideaux, ignifugés', t:'oui_non'},
+   {id:'dg_agent_permanent', l:'Agent en permanence si pas de visibilité', t:'oui_non', reg:true},
+   {id:'dg_tracabilite', l:'Feuille de traçabilité surveillance sieste', t:'oui_non'},
+   {id:'dg_tablettes', l:'Tablettes pour traçabilité sieste', t:'oui_non'},
+   {id:'dg_fauteuil_ergo', l:'Fauteuil ergonomique pour les pros', t:'oui_non', reg:true},
+   {id:'dg_fenetres', l:'Présence de fenêtre(s)', t:'oui_non'},
+   {id:'dg_fenetres_secu', l:'Sécurisation des fenêtres adaptée', t:'oui_non', reg:true},
+   {id:'dg_moustiquaires', l:'Présence de moustiquaires', t:'oui_non'},
+   {id:'dg_vmc', l:'VMC si aucune aération naturelle', t:'oui_non', reg:true},
+   {id:'dg_temperature', l:'Température 19–21 °C', t:'oui_non', reg:true},
+   {id:'dg_clim', l:'Présence d\'une climatisation', t:'oui_non'},
+   {id:'dg_thermometre', l:'Thermomètre mural', t:'oui_non'},
+   {id:'dg_mutualise', l:'Espace mutualisé en salle d\'activité', t:'oui_non'},
+   {id:'dg_rangement_lits', l:'Meuble/housse de protection des lits barquettes', t:'oui_non'},
+   {id:'dg_obs', l:'Observations', t:'textarea'},
+ ]},
+
+ {id:'changes', titre:'Espaces de changes et toilettes', icon:'baby-bottle', items:[
+   {id:'ch_m2', l:'Surface (m²)', t:'num'},
+   {id:'ch_visibilite', l:'Visibilité suffisante (intimité préservée)', t:'oui_non', reg:true},
+   {id:'ch_ferme', l:'Espace fermé (odeurs / risque infectieux)', t:'oui_non'},
+   {id:'ch_oculus', l:'Porte sur espace de vie équipée d\'oculus', t:'oui_non', reg:true},
+   {id:'ch_portillons', l:'Portillons NF', t:'oui_non', reg:true},
+   {id:'ch_escalier', l:'Escalier escamotable pour les plus grands', t:'oui_non', reg:true},
+   {id:'ch_point_eau', l:'Point d\'eau à commande non manuelle', t:'oui_non', reg:true},
+   {id:'ch_points_change', l:'Points de change adaptés en nombre (1/10)', t:'oui_non', reg:true},
+   {id:'ch_protocole', l:'Protocole de changes établi', t:'oui_non'},
+   {id:'ch_poubelles', l:'Poubelles adaptées (fermées, non manuelles)', t:'oui_non', reg:true},
+   {id:'ch_bac_linge', l:'Bac à linge sale fermé', t:'oui_non'},
+   {id:'ch_wc', l:'Nombre de WC adapté moyens/grands (1/10)', t:'oui_non', reg:true},
+   {id:'ch_lavabos', l:'Nombre de lavabos adapté (≥ 1 à hauteur enfant)', t:'oui_non', reg:true},
+   {id:'ch_temp_eau', l:'Température de l\'eau adaptée', t:'oui_non', reg:true},
+   {id:'ch_cloisons_entre', l:'Cloisons d\'intimité entre les toilettes', t:'oui_non', reg:true},
+   {id:'ch_cloisons_devant', l:'Cloisons d\'intimité devant les toilettes', t:'oui_non', reg:true},
+   {id:'ch_papier_wc', l:'Papier toilette à disposition', t:'oui_non'},
+   {id:'ch_essuie_mains', l:'Essuie-mains à disposition', t:'oui_non'},
+   {id:'ch_savon', l:'Savon à disposition', t:'oui_non'},
+   {id:'ch_produits_enfants', l:'Produits d\'hygiène enfants (dates d\'ouverture notées)', t:'oui_non'},
+   {id:'ch_produits_hp', l:'Produits d\'hygiène hors de portée des enfants', t:'oui_non'},
+   {id:'ch_entretien_hp', l:'Produits d\'entretien hors de portée (dates notées)', t:'oui_non'},
+   {id:'ch_couches', l:'Paquets de couches dans placard adapté', t:'oui_non'},
+   {id:'ch_pai_affiche', l:'PAI affiché', t:'oui_non'},
+   {id:'ch_medic_pai', l:'Médicaments liés au PAI identifiés', t:'oui_non'},
+   {id:'ch_aeration_secu', l:'Si aération naturelle, sécurisée', t:'oui_non', reg:true},
+ ]},
+
+ {id:'hygiene', titre:'Hygiène — température des locaux', icon:'spray', items:[
+   {id:'hy_pms', l:'Plan de Maîtrise Sanitaire (PMS)', t:'oui_non', reg:true},
+   {id:'hy_proto_locaux', l:'Protocole d\'entretien des locaux + traçabilité', t:'oui_non', reg:true},
+   {id:'hy_proto_jeux', l:'Protocole d\'entretien des jeux/jouets + traçabilité', t:'oui_non', reg:true},
+   {id:'hy_proto_linge', l:'Protocole d\'entretien du linge + traçabilité', t:'oui_non', reg:true},
+   {id:'hy_marche_avant', l:'Marche en avant en buanderie (RABC – 7 principes)', t:'oui_non', reg:true},
+   {id:'hy_adaptee', l:'Hygiène adaptée', t:'oui_non'},
+   {id:'hy_ecs', l:'Surveillance température ECS (55–60 °C / mitigeur 45 °C)', t:'oui_non', reg:true},
+   {id:'hy_produits_labels', l:'Produits labellisés collectivités (pas de « fait maison »)', t:'oui_non'},
+   {id:'hy_agents_formes', l:'Agents formés à l\'utilisation des produits', t:'oui_non'},
+   {id:'hy_tenue', l:'Tenue et chaussures dédiées (entretenues sur site)', t:'oui_non'},
+   {id:'hy_obs', l:'Observations (fréquence entretien, RABC…)', t:'textarea'},
+ ]},
+
+ {id:'restauration', titre:'Restauration et cuisine', icon:'chef-hat', items:[
+   {id:'re_sur_place', l:'Préparations élaborées sur place', t:'oui_non'},
+   {id:'re_prestataire', l:'Repas fournis par prestataire (liaison chaude/froide)', t:'text'},
+   {id:'re_horaire_livraison', l:'Horaire de livraison', t:'text'},
+   {id:'re_tracabilite_temp', l:'Contrôle et traçabilité des températures (>63 / <6 °C)', t:'oui_non', reg:true},
+   {id:'re_menus', l:'Menus adaptés', t:'oui_non'},
+   {id:'re_repas_parents', l:'Si repas parents, chaîne du froid respectée', t:'oui_non', reg:true},
+   {id:'re_marche_avant', l:'Cuisine : marche en avant respectée', t:'oui_non', reg:true},
+   {id:'re_conditions', l:'Conditions de prise des repas adaptées', t:'oui_non'},
+   {id:'re_echantillons', l:'Échantillons gardés (crèche/prestataire), identifiés', t:'oui_non'},
+   {id:'re_temp_frigo', l:'Relevés température réfrigérateurs 2×/j + traçabilité', t:'oui_non'},
+   {id:'re_cuisine_m2', l:'Cuisine — surface (m²)', t:'num'},
+   {id:'re_cuisine_visibilite', l:'Visibilité suffisante depuis l\'espace de vie', t:'oui_non', reg:true},
+   {id:'re_cuisine_oculus', l:'Porte sur espace de vie équipée d\'oculus', t:'oui_non', reg:true},
+   {id:'re_cuisine_portillons', l:'Portillons NF', t:'oui_non', reg:true},
+   {id:'re_cuisine_point_eau', l:'Point d\'eau à commande non manuelle', t:'oui_non', reg:true},
+   {id:'re_frigo_enfants', l:'Réfrigérateur pour les enfants', t:'oui_non'},
+   {id:'re_frigo_pai', l:'Réfrigérateur/clayette réservé aux PAI', t:'oui_non'},
+   {id:'re_circuit', l:'Respect du circuit propre/sale', t:'oui_non', reg:true},
+   {id:'re_proto_frigo', l:'Protocole entretien frigos/micro-ondes + traçabilité', t:'oui_non'},
+   {id:'re_proto_rechauffage', l:'Protocole de réchauffage affiché', t:'oui_non'},
+   {id:'re_proto_lavage', l:'Protocole de lavage des mains affiché', t:'oui_non'},
+   {id:'re_biberonnerie_m2', l:'Biberonnerie — surface (m²)', t:'num'},
+   {id:'re_chauffe_biberon', l:'Chauffe-biberon (lait en poudre, pas de dosettes)', t:'oui_non'},
+   {id:'re_egalim', l:'Respect loi EGALIM (plastiques proscrits)', t:'oui_non', reg:true},
+   {id:'re_obs', l:'Observations', t:'textarea'},
+ ]},
+
+ {id:'sante', titre:'Santé', icon:'first-aid-kit', items:[
+   {id:'sa_pharmacie', l:'Présence d\'une pharmacie', t:'oui_non'},
+   {id:'sa_lieu', l:'Lieu de la pharmacie', t:'text'},
+   {id:'sa_fermee', l:'Fermée et hors de portée des enfants', t:'oui_non'},
+   {id:'sa_contenu', l:'Contenu adapté aux protocoles', t:'oui_non', reg:true},
+   {id:'sa_peremptions', l:'Péremptions vérifiées, respectées et tracées', t:'oui_non'},
+   {id:'sa_certificat', l:'Certificat médical < 2 mois demandé à l\'admission', t:'oui_non', reg:true},
+   {id:'sa_vaccins', l:'Copie des obligations vaccinales régulièrement demandée', t:'oui_non'},
+   {id:'sa_outil_vaccins', l:'Outil de relevé des dates de vaccination par enfant', t:'oui_non'},
+   {id:'sa_proto_soins', l:'Protocole de délivrance de soins établi', t:'oui_non', reg:true},
+   {id:'sa_autorisation_ap', l:'Autorisation des titulaires de l\'AP obtenue', t:'oui_non', reg:true},
+   {id:'sa_verifications', l:'Vérifications réglementaires avant soins', t:'oui_non', reg:true},
+   {id:'sa_antipyretiques', l:'Prescription médicale d\'antipyrétiques / enfant', t:'oui_non', reg:true},
+   {id:'sa_pai', l:'Si traitement nécessaire, PAI existant', t:'oui_non', reg:true},
+   {id:'sa_prescription', l:'Prescription médicale présente', t:'oui_non', reg:true},
+   {id:'sa_proto_internes', l:'Protocoles de soins internes adaptés', t:'oui_non', reg:true},
+   {id:'sa_registre', l:'Chaque geste inscrit dans un registre dédié', t:'oui_non', reg:true},
+   {id:'sa_obs', l:'Observations', t:'textarea'},
+ ]},
+
+ {id:'bureau', titre:'Bureau de la direction', icon:'desk', items:[
+   {id:'bu_m2', l:'Surface (m²)', t:'num'},
+   {id:'bu_ouverture_distance', l:'Système d\'ouverture à distance (porte/portail)', t:'oui_non', reg:true},
+   {id:'bu_tel_fixe', l:'Ligne téléphonique fixe', t:'oui_non', reg:true},
+   {id:'bu_bureau_ordi', l:'Bureau et ordinateur', t:'oui_non'},
+   {id:'bu_chaises_rangement', l:'Plusieurs chaises et rangement', t:'oui_non'},
+   {id:'bu_fauteuil_allaitement', l:'Fauteuil dédié à la poursuite de l\'allaitement', t:'oui_non'},
+   {id:'bu_aeration_secu', l:'Sécurisation de l\'aération naturelle', t:'oui_non', reg:true},
+   {id:'bu_visibilite', l:'Visibilité sur la salle de vie', t:'oui_non'},
+ ]},
+
+ {id:'salle_repos', titre:'Salle de repos du personnel', icon:'coffee', items:[
+   {id:'sr_m2', l:'Surface (m²)', t:'num'},
+   {id:'sr_table_chaises', l:'Table et chaises', t:'oui_non'},
+   {id:'sr_casiers', l:'Casiers pour les affaires des pros', t:'oui_non'},
+   {id:'sr_frigo', l:'Réfrigérateur', t:'oui_non'},
+   {id:'sr_micro_ondes', l:'Micro-ondes', t:'oui_non'},
+   {id:'sr_point_eau', l:'Point d\'eau', t:'oui_non'},
+   {id:'sr_aeration_secu', l:'Sécurisation de l\'aération naturelle', t:'oui_non', reg:true},
+   {id:'sr_affichages', l:'Affichages obligatoires (évacuation, DUERP, méd. travail…)', t:'oui_non', reg:true},
+ ]},
+
+ {id:'buanderie', titre:'Buanderie & local de ménage', icon:'wash', items:[
+   {id:'bd_m2', l:'Buanderie — surface (m²)', t:'num'},
+   {id:'bd_lave_linge', l:'Lave-linge', t:'oui_non'},
+   {id:'bd_seche_linge', l:'Sèche-linge', t:'oui_non'},
+   {id:'bd_pliage', l:'Plan pour le pliage', t:'oui_non'},
+   {id:'bd_etageres', l:'Étagères', t:'oui_non'},
+   {id:'bd_lessive', l:'Produits pour la lessive (pas de « fait maison »)', t:'oui_non'},
+   {id:'bd_aeration_secu', l:'Sécurisation de l\'aération naturelle', t:'oui_non', reg:true},
+   {id:'lm_m2', l:'Local de ménage — surface (m²)', t:'num'},
+   {id:'lm_espace_dedie', l:'Espace dédié ou mutualisé avec la buanderie', t:'oui_non'},
+   {id:'lm_devidoir', l:'Dévidoir', t:'oui_non'},
+   {id:'lm_chariot', l:'Chariot de ménage', t:'oui_non'},
+   {id:'lm_produits_hp', l:'Produits d\'entretien hors de portée des enfants', t:'oui_non'},
+   {id:'lm_aeration_secu', l:'Sécurisation de l\'aération naturelle', t:'oui_non', reg:true},
+ ]},
+
+ {id:'securite', titre:'Sécurité', icon:'shield-check', items:[
+   {id:'se_tel_2lignes', l:'Téléphone sur place (2 lignes)', t:'oui_non', reg:true},
+   {id:'se_aff_urgence', l:'Affichage des N° d\'urgence', t:'oui_non', reg:true},
+   {id:'se_sorties', l:'Sorties organisées (1 adulte / 2 enfants conseillé)', t:'text'},
+   {id:'se_exercices_evac', l:'Exercices d\'évacuation 1 à 2/an', t:'oui_non'},
+   {id:'se_evac_date', l:'Date du dernier exercice d\'évacuation', t:'text'},
+   {id:'se_exercices_conf', l:'Exercices de confinement 1/an', t:'oui_non'},
+   {id:'se_conf_date', l:'Date du dernier exercice de confinement', t:'text'},
+   {id:'sep_dates', l:'Dates des contrôles techniques', t:'sep'},
+   {id:'se_elec', l:'Installation électrique — date', t:'text', reg:true},
+   {id:'se_chaudiere', l:'Installation chaudière — date', t:'text', reg:true},
+   {id:'se_clim', l:'Nettoyage climatisation — date', t:'text', reg:true},
+   {id:'se_extincteurs', l:'Extincteurs vérifiés — date', t:'text', reg:true},
+   {id:'se_alarme', l:'Alarme incendie — date', t:'text', reg:true},
+   {id:'se_baes', l:'Éclairages de sécurité BAES — date', t:'text', reg:true},
+   {id:'se_radon', l:'Contrôle du radon (selon localisation) — date', t:'text', reg:true},
+   {id:'se_qualite_air', l:'Contrôle de la qualité de l\'air — date', t:'text', reg:true},
+   {id:'se_issues', l:'Issues de secours dégagées', t:'oui_non', reg:true},
+   {id:'se_wifi', l:'Wifi / loi abeille respectée', t:'oui_non'},
+   {id:'se_obs', l:'Observations (RAAT si travaux, stockage inflammable ignifugé, caméra interdite…)', t:'textarea'},
+ ]},
+
+ {id:'exterieurs', titre:'Espaces extérieurs', icon:'trees', items:[
+   {id:'ex_m2', l:'Surface (m²)', t:'num'},
+   {id:'ex_type', l:'Type (jardin / cour / terrasse)', t:'text'},
+   {id:'ex_adaptes_secu', l:'Espaces adaptés et sécurisés', t:'oui_non', reg:true},
+   {id:'ex_sols', l:'Sols adaptés', t:'oui_non', reg:true},
+   {id:'ex_ombrage', l:'Système d\'ombrage', t:'oui_non', reg:true},
+   {id:'ex_chute_objets', l:'Protection chute d\'objets', t:'oui_non', reg:true},
+   {id:'ex_arbres', l:'Présence d\'arbres', t:'oui_non'},
+   {id:'ex_vegetaux_dangereux', l:'Présence de végétaux dangereux', t:'oui_non'},
+   {id:'ex_entretien', l:'Entretien régulier', t:'oui_non'},
+   {id:'ex_jeux', l:'Jeux et équipements adaptés et en bon état', t:'oui_non', reg:true},
+   {id:'ex_portail', l:'Portail fermé', t:'oui_non', reg:true},
+   {id:'ex_clotures', l:'Clôtures (hauteur 1,50 m, sans appuis horizontaux)', t:'oui_non', reg:true},
+   {id:'ex_espacement', l:'Espacement < 11 cm (barreaux, sous clôtures)', t:'oui_non', reg:true},
+   {id:'ex_barrieres', l:'Si barrières, normes respectées', t:'oui_non', reg:true},
+   {id:'ex_fermetures', l:'Portes/portillons non manipulables par les enfants', t:'oui_non', reg:true},
+   {id:'ex_tuyaux', l:'Si tuyaux d\'arrosage, enrouleur présent', t:'oui_non'},
+   {id:'ex_projet_plein_air', l:'Si pas d\'extérieur privatif : modalités plein air au projet', t:'oui_non', reg:true},
+   {id:'ex_motricite', l:'Surface motricité ≥ 15 m² présente dans l\'EAJE', t:'oui_non', reg:true},
+   {id:'ex_obs', l:'Observations', t:'textarea'},
+ ]},
+
+ {id:'conclusion', titre:'Impression générale & conclusion', icon:'file-text', items:[
+   {id:'co_points_forts', l:'Points forts', t:'textarea'},
+   {id:'co_points_faibles', l:'Points faibles', t:'textarea'},
+   {id:'co_conditions_travail', l:'Conditions de travail du personnel', t:'textarea'},
+   {id:'co_qualite_prise_charge', l:'Qualité de la prise en charge des enfants', t:'textarea'},
+   {id:'co_charte_accueil', l:'Charte nationale d\'accueil du jeune enfant', t:'textarea'},
+   {id:'co_charte_parentalite', l:'Charte de soutien à la parentalité', t:'textarea'},
+   {id:'co_plan_formation', l:'Plan de formation', t:'textarea'},
+   {id:'co_autres', l:'Autres', t:'textarea'},
+ ]},
+];
+
+/* En-tête de la fiche : ces deux champs sont enregistrés comme les autres. */
+const EAJE_META=[
+  {id:'ctrl_creche', l:'Crèche',            t:'creche'},
+  {id:'ctrl_date',   l:'Date de la visite', t:'date'}
+];
+let eajeTimer=null;
+
+function eajeToday(){
+  const d=new Date();
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+function eajeItems(){
+  const o=[];CTRL_SCHEMA.forEach(s=>(s.items||[]).forEach(it=>{if(it.t!=='sep')o.push(it);}));return o;
+}
+function eajeFields(){
+  return EAJE_META.map(m=>m.id).concat(eajeItems().map(it=>it.id));
+}
+function eajeGet(id){const e=document.getElementById('ff_'+id);return e?e.value:'';}
+
+function eajeStats(){
+  let total=0,filled=0;
+  eajeItems().forEach(it=>{total++;if(eajeGet(it.id)!=='')filled++;});
+  return {total:total,filled:filled,pct:total?Math.round(filled/total*100):0};
+}
+/* Barre de progression globale + compteur x/y de chaque section. */
+function eajeRefresh(){
+  const st=eajeStats();
+  const lbl=document.getElementById('eaje-pct');if(lbl)lbl.textContent=st.pct+' %';
+  const bar=document.getElementById('eaje-bar');if(bar)bar.style.width=st.pct+'%';
+  CTRL_SCHEMA.forEach((sec,si)=>{
+    const c=document.getElementById('eaje-c'+si);if(!c)return;
+    const its=(sec.items||[]).filter(it=>it.t!=='sep');
+    c.textContent=its.filter(it=>eajeGet(it.id)!=='').length+'/'+its.length;
+  });
+}
+/* Repli / dépli par simple bascule d’affichage : les champs restent dans le DOM,
+   sinon saveFill() perdrait les sections fermées. */
+function eajeToggle(si){
+  const body=document.getElementById('eaje-b'+si),head=document.getElementById('eaje-h'+si);
+  if(!body||!head)return;
+  const open=(body.style.display==='none');
+  body.style.display=open?'':'none';
+  head.classList.toggle('on',open);
+  const chev=head.querySelector('.eaje-chev');
+  if(chev)chev.className='ti ti-chevron-'+(open?'up':'down')+' eaje-chev';
+}
+function eajeYN(id,val){
+  const el=document.getElementById('ff_'+id);if(!el)return;
+  el.value=(el.value===val)?'':val;
+  ['oui','non'].forEach(v=>{
+    const b=document.getElementById('ffb_'+id+'_'+v);
+    if(b)b.classList.toggle('on',el.value===v);
+  });
+  eajeTouch();
+}
+/* Sauvegarde automatique, comme dans l’ancien module : 1,5 s après la dernière saisie. */
+function eajeTouch(){
+  eajeRefresh();
+  clearTimeout(eajeTimer);
+  eajeTimer=setTimeout(async()=>{
+    const ov=document.getElementById('ovFill');
+    if(!ov||!ov.classList.contains('on'))return;
+    if(!fillDoc||fillDoc.template_key!=='eaje')return;
+    await saveFill(true);
+    const st=document.getElementById('fillState');
+    if(st)st.textContent='Enregistré automatiquement à '+
+      new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  },1500);
+}
+
+function eajeMetaHtml(f,v){
+  let val=v[f.id]||'';
+  if(f.t==='creche'){
+    const list=(typeof CRECHES!=='undefined'&&CRECHES.length)
+      ?CRECHES.map(c=>c.name)
+      :['Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
+    if(!val&&PROF&&PROF.role==='referent'&&PROF.creche_id){
+      const mine=(CRECHES||[]).find(c=>c.id===PROF.creche_id);
+      if(mine)val=mine.name;
+    }
+    return '<div class="f" style="margin:0;min-width:170px"><label>'+esc(f.l)+'</label>'
+      +'<select id="ff_'+f.id+'" onchange="eajeTouch()"><option value=""></option>'
+      +list.map(n=>'<option'+(val===n?' selected':'')+'>'+esc(n)+'</option>').join('')
+      +'</select></div>';
+  }
+  if(!val)val=eajeToday();
+  return '<div class="f" style="margin:0;min-width:160px"><label>'+esc(f.l)+'</label>'
+    +'<input type="date" id="ff_'+f.id+'" value="'+esc(val)+'" onchange="eajeTouch()"></div>';
+}
+
+function eajeItemHtml(it,v){
+  if(it.t==='sep')return '<div class="eaje-sep">'+esc(it.l)+'</div>';
+  const star=it.reg?' <span class="eaje-star">(*)</span>':'';
+  const lab='<div class="eaje-lab">'+esc(it.l)+star+'</div>';
+  const val=v[it.id]||'';
+  if(it.t==='oui_non'){
+    return '<div class="eaje-row">'+lab+'<div class="eaje-yn">'
+      +'<input type="hidden" id="ff_'+it.id+'" value="'+esc(val)+'">'
+      +'<button type="button" class="eaje-b oui'+(val==='oui'?' on':'')+'" id="ffb_'+it.id+'_oui" onclick="eajeYN(\''+it.id+'\',\'oui\')">Oui</button>'
+      +'<button type="button" class="eaje-b non'+(val==='non'?' on':'')+'" id="ffb_'+it.id+'_non" onclick="eajeYN(\''+it.id+'\',\'non\')">Non</button>'
+      +'</div></div>';
+  }
+  if(it.t==='textarea'){
+    return '<div class="eaje-row col">'+lab
+      +'<textarea id="ff_'+it.id+'" rows="3" oninput="eajeTouch()">'+esc(val)+'</textarea></div>';
+  }
+  const t=(it.t==='num')?'number':((it.t==='date')?'date':'text');
+  return '<div class="eaje-row">'+lab
+    +'<input type="'+t+'" id="ff_'+it.id+'" class="eaje-in" value="'+esc(val)+'" oninput="eajeTouch()"></div>';
+}
+
+const EAJE_CSS=`<style>
+.eaje .eaje-head{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;background:#F4F3FB;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px}
+.eaje .eaje-prog{flex:1;min-width:180px;display:flex;align-items:center;gap:8px}
+.eaje .eaje-track{flex:1;height:7px;background:#E7E4F0;border-radius:4px;overflow:hidden}
+.eaje .eaje-track i{display:block;height:100%;width:0;background:var(--violet,#4A3F9F);transition:width .2s}
+.eaje .eaje-pct{font-size:12px;font-weight:700;color:var(--violet,#4A3F9F);min-width:38px;text-align:right}
+.eaje .eaje-leg{font-size:11.5px;color:var(--muted,#8E8AA8);margin:0 0 12px}
+.eaje .eaje-star{color:#C62828;font-weight:700}
+.eaje .eaje-sec{border:1px solid var(--border,#E7E4F0);border-radius:10px;margin-bottom:9px;overflow:hidden}
+.eaje .eaje-sh{cursor:pointer;padding:11px 13px;background:#F6F4FB;color:var(--violet,#4A3F9F);display:flex;align-items:center;gap:9px;font-weight:700;font-size:13px}
+.eaje .eaje-sh.on{background:var(--violet,#4A3F9F);color:#fff}
+.eaje .eaje-sh span.t{flex:1}
+.eaje .eaje-sh b{font-size:11px;font-weight:700;opacity:.85}
+.eaje .eaje-sb{padding:11px 13px;display:grid;gap:9px}
+.eaje .eaje-sep{font-weight:700;color:var(--violet,#4A3F9F);font-size:12.5px;margin-top:5px;border-bottom:1px solid var(--border,#E7E4F0);padding-bottom:4px}
+.eaje .eaje-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.eaje .eaje-row.col{display:block}
+.eaje .eaje-lab{font-size:12.5px;line-height:1.35;color:#333;flex:1;min-width:150px}
+.eaje .eaje-in{max-width:200px;margin:0}
+.eaje .eaje-row.col textarea{margin-top:5px;width:100%}
+.eaje .eaje-yn{display:flex;gap:6px;flex-shrink:0}
+.eaje .eaje-b{border:1.5px solid #ccc;background:#fff;color:#666;border-radius:7px;padding:5px 15px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit}
+.eaje .eaje-b.oui.on{border-color:#1A9E5E;background:#1A9E5E;color:#fff}
+.eaje .eaje-b.non.on{border-color:#D33;background:#D33;color:#fff}
+@media(max-width:700px){
+  .eaje .eaje-in{max-width:none;width:100%}
+  .eaje .eaje-row{align-items:flex-start}
+}
+</style>`;
+
 const TPL={
+ eaje:{
+  get fields(){return eajeFields();},
+  html:v=>`<div class="tpl eaje">${EAJE_CSS}
+   <div class="eaje-head">
+    ${EAJE_META.map(f=>eajeMetaHtml(f,v)).join('')}
+    <div class="eaje-prog">
+      <div class="eaje-track"><i id="eaje-bar"></i></div>
+      <span class="eaje-pct" id="eaje-pct">0 %</span>
+    </div>
+   </div>
+   <p class="eaje-leg"><span class="eaje-star">(*)</span> = item à caractère réglementaire. Sauvegarde automatique pendant la saisie.</p>
+   ${CTRL_SCHEMA.map((sec,si)=>`
+   <div class="eaje-sec">
+    <div class="eaje-sh" id="eaje-h${si}" onclick="eajeToggle(${si})">
+     <i class="ti ti-${esc(sec.icon||'clipboard-check')}"></i>
+     <span class="t">${esc(sec.titre||'')}</span>
+     <b id="eaje-c${si}">0/0</b>
+     <i class="ti ti-chevron-down eaje-chev"></i>
+    </div>
+    <div class="eaje-sb" id="eaje-b${si}" style="display:none">
+     ${(sec.items||[]).map(it=>eajeItemHtml(it,v)).join('')}
+    </div>
+   </div>`).join('')}
+  </div>`,
+  mount:()=>{eajeToggle(0);eajeRefresh();},
+  pdf:(doc,mode)=>{
+    const g=id=>eajeGet(id);
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
+    const W=182;let y=pdfLogo(doc,20);
+    doc.setFontSize(15);doc.setFont(undefined,'bold');
+    doc.text('SUPPORT DE CONTRÔLE EAJE',14,y);y+=8;
+    doc.setFontSize(9.5);doc.setFont(undefined,'normal');
+    doc.text('Établissement : '+(g('ctrl_creche')||'—'),14,y);
+    doc.text('Date de la visite : '+dfr(g('ctrl_date')),110,y);y+=5;
+    doc.text('Type : micro-crèche (section unique)',14,y);y+=6;
+    const st=eajeStats();
+    doc.setFontSize(8);doc.setTextColor(120);
+    doc.text('Fiche renseignée à '+st.pct+' % ('+st.filled+'/'+st.total+' items)   ·   (*) = item à caractère réglementaire',14,y);
+    doc.setTextColor(30);y+=7;
+    CTRL_SCHEMA.forEach(sec=>{
+      if(y+18>278){doc.addPage();y=pdfLogo(doc,20);}
+      doc.setFillColor(74,63,159);doc.rect(14,y,W,7,'F');
+      doc.setTextColor(255);doc.setFontSize(9.5);doc.setFont(undefined,'bold');
+      doc.text(String(sec.titre||'').toUpperCase(),16,y+5,{maxWidth:W-4});
+      doc.setTextColor(30);doc.setFont(undefined,'normal');y+=9;
+      const rows=(sec.items||[]).map(it=>{
+        if(it.t==='sep')return {head:true,cells:[it.l,'']};
+        const val=g(it.id);
+        let out;
+        if(it.t==='oui_non')out=(val==='oui')?'OUI':((val==='non')?'NON':'—');
+        else if(it.t==='date')out=val?dfr(val):'—';
+        else out=val||'—';
+        return {cells:[it.l+(it.reg?'  (*)':''),out]};
+      });
+      y=pdfGrid(doc,14,y,[126,56],rows,{fs:8.5,minH:7});
+      y+=4;
+    });
+    doc.save('controle_eaje_'+slug(g('ctrl_creche')||'creche')+'_'+slug(g('ctrl_date')||'')+'.pdf');
+    return true;
+  }
+ },
  grille:{
   get fields(){return grKeys();},
   html:v=>{
@@ -2070,6 +2696,7 @@ boot();
         <button class="ntab" onclick="switchNoticeTab('remplir',this)">✍️ Remplir</button>
         <button class="ntab" onclick="switchNoticeTab('signature',this)">🖊️ Signatures</button>
         <button class="ntab" onclick="switchNoticeTab('reponses',this)">📋 Réponses</button>
+        <button class="ntab" onclick="switchNoticeTab('eaje',this)">📋 Contrôle EAJE</button>
       </div>
       <button class="btn btn-g btn-s" onclick="close_('ovNotice')" style="flex-shrink:0;margin-bottom:8px">✕</button>
     </div>
@@ -2231,6 +2858,27 @@ reponses: `
   <li>Penser à exporter le PDF avant toute suppression si le document doit être conservé.</li>
 </ul>
 <div class="warn">📁 Pour les documents à valeur administrative (entretiens annuels notamment), conserver systématiquement l’export PDF en dehors de l’application.</div>
+`,
+
+eaje: `
+<div class="st">📋 Support de contrôle EAJE</div>
+<p>Grille d’auto-contrôle réglementaire reprenant les points vérifiés lors d’une inspection PMI. Utile pour préparer une visite ou faire un point annuel. Elle se trouve dans les documents à remplir, sous « Support de contrôle EAJE ».</p>
+<div class="st">🆕 Renseigner une fiche</div>
+<ul>
+  <li>Ouvrir le document « À remplir » : choisir la crèche et la date de la visite en haut de la fiche.</li>
+  <li>Le formulaire est découpé en sections thématiques repliables : locaux, sécurité, hygiène, santé, extérieurs, personnel, conclusion…</li>
+  <li>Chaque point se répond par Oui / Non, une valeur chiffrée ou du texte libre.</li>
+  <li>Les points marqués <strong>(*)</strong> sont ceux exigés par la réglementation : ils méritent une attention particulière.</li>
+</ul>
+<div class="st">💾 Enregistrement et export</div>
+<ul>
+  <li>La saisie est sauvegardée automatiquement au fil de la frappe : aucun risque de perte.</li>
+  <li>Une barre de progression indique le pourcentage de points renseignés, et chaque section affiche son propre compteur.</li>
+  <li>La partie <strong>Conclusion</strong> permet de formaliser points forts, points faibles et axes de progrès.</li>
+  <li>Le bouton PDF exporte la fiche complète pour archivage ou transmission.</li>
+  <li>Les fiches déjà saisies se retrouvent via le bouton « Réponses » du document.</li>
+</ul>
+<div class="warn">⚠️ Une référente ne voit que les fiches de sa crèche. La direction accède à l’ensemble des établissements.</div>
 `
 
 };
