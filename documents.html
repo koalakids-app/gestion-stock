@@ -1658,17 +1658,16 @@ const CTRL_SCHEMA = [
    {id:"ex_obs", l:"Observations", t:"textarea"},
  ]},
 
- {id:"conclusion", titre:"Impression générale & conclusion", icon:"file-text", items:[
-   {id:"co_points_forts", l:"Points forts", t:"textarea"},
-   {id:"co_points_faibles", l:"Points faibles", t:"textarea"},
-   {id:"co_conditions_travail", l:"Conditions de travail du personnel", t:"textarea"},
-   {id:"co_qualite_prise_charge", l:"Qualité de la prise en charge des enfants", t:"textarea"},
-   {id:"co_charte_accueil", l:"Charte nationale d'accueil du jeune enfant", t:"textarea"},
-   {id:"co_charte_parentalite", l:"Charte de soutien à la parentalité", t:"textarea"},
-   {id:"co_plan_formation", l:"Plan de formation", t:"textarea"},
-   {id:"co_autres", l:"Autres", t:"textarea"},
+ {id:"conclusion", titre:"Impression générale & conclusion", icon:"file-text", bloc:true, notitre:true, items:[
+   {id:"co_points_forts", l:"Points forts", t:"textarea", saut:true, libre:true, chapeau:"Impression générale (ambiance, professionnelles, prise en charge...)"},
+   {id:"co_points_faibles", l:"Points faibles", t:"textarea", saut:true, libre:true, chapeau:"Impression générale (ambiance, professionnelles, prise en charge...)"},
+   {id:"co_conditions_travail", l:"Conditions de travail du personnel", t:"textarea", saut:true, lignes:12, chapeau:"Conclusion"},
+   {id:"co_qualite_prise_charge", l:"Qualité de la prise en charge des enfants", t:"textarea", lignes:11},
+   {id:"co_charte_accueil", l:"La charte nationale d'accueil du jeune enfant et son accompagnement auprès des équipes", t:"textarea", lignes:9},
+   {id:"co_charte_parentalite", l:"La charte de soutien à la parentalité et son accompagnement auprès des équipes", t:"textarea", lignes:6},
+   {id:"co_plan_formation", l:"Le plan de formation", t:"textarea", lignes:8},
+   {id:"co_autres", l:"Autres", t:"textarea", lignes:12},
  ]},
-
 ];
 
 /* En-tête de la fiche : ces deux champs sont enregistrés comme les autres. */
@@ -1928,16 +1927,20 @@ const TPL={
     doc.setTextColor(30);y+=8;
 
     /* ---------- sections ---------- */
-    CTRL_SCHEMA.forEach(sec=>{
+    /* titre de section souligne ; certaines sections portent leur propre chapeau */
+    const secTitle=txt=>{
       need(16);
       doc.setFont('times','bold');doc.setFontSize(12);
-      const t=pdfSafe(String(sec.titre||''))+' :';
+      const t=pdfSafe(txt)+' :';
       doc.text(t,M,y);
       doc.setLineWidth(0.4);doc.setDrawColor(30);
       doc.line(M,y+1.2,M+doc.getTextWidth(t),y+1.2);
       doc.setLineWidth(0.25);
       y+=7;
       doc.setFont('times','normal');doc.setFontSize(10);
+    };
+    CTRL_SCHEMA.forEach(sec=>{
+      if(!sec.notitre)secTitle(String(sec.titre||''));
 
       (sec.items||[]).forEach(it=>{
         /* sous-titre interne */
@@ -1948,7 +1951,10 @@ const TPL={
           doc.setFont('times','normal');doc.setFontSize(10);
           y+=5.5;return;
         }
+        if(it.saut)nextPage(false);                    /* item demarrant une nouvelle page */
+        if(it.chapeau)secTitle(it.chapeau);
         const sub=it.l.indexOf('\u2026 ')===0;          /* sous-question du formulaire */
+        const bloc=!!sec.bloc;                          /* bloc de redaction : pas de fleche */
         const x=M+(sub?8:0);
         const v=g(it.id);
 
@@ -1961,7 +1967,7 @@ const TPL={
         }
         const lab=pdfSafe(sub?it.l.slice(2):it.l);
         const head=()=>{
-          if(!sub)arrow(x+1.2,y);
+          if(!sub&&!bloc)arrow(x+1.2,y);
           if(it.reg){
             doc.setFont('times','bold');doc.setTextColor(200,0,0);
             doc.text('(*)',x+4,y);
@@ -1980,19 +1986,27 @@ const TPL={
           else{y+=5;yesNo(cx,y,v);}
           y+=5.4;
         }else if(it.t==='textarea'){
-          const wrap=doc.splitTextToSize(lab,R-cx);
-          need(wrap.length*4.4+16);
+          if(bloc){doc.setFont('times','bold');doc.setFontSize(11);}
+          const wrap=doc.splitTextToSize(lab+(bloc?' :':''),R-cx);
+          need(wrap.length*4.6+(bloc?10:16));
           head();
-          wrap.forEach((l,k)=>{doc.text(l,cx,y);if(k<wrap.length-1)y+=4.4;});
-          y+=5;
+          wrap.forEach((l,k)=>{doc.text(l,cx,y);if(k<wrap.length-1)y+=4.6;});
+          doc.setFont('times','normal');doc.setFontSize(10);
+          y+=bloc?7:5;
           const val=doc.splitTextToSize(pdfSafe(String(v||'')),R-M-4);
-          const nl=Math.max(3,val.length);
-          for(let k=0;k<nl;k++){
-            need(6);
-            if(val[k]){doc.text(val[k],M+3,y-0.7);}
-            doc.setDrawColor(110);doc.setLineDashPattern([0.4,0.8],0);
-            doc.line(M+2,y+0.7,R,y+0.7);doc.setLineDashPattern([],0);
-            y+=5.2;
+          if(it.libre){
+            /* page laissee libre pour une redaction manuscrite, comme l'original */
+            val.forEach(l=>{if(y<BOT){doc.text(l,M+3,y);y+=5;}});
+            y=BOT+1;
+          }else{
+            const nl=Math.max(it.lignes||3,val.length);
+            for(let k=0;k<nl;k++){
+              need(6);
+              if(val[k]){doc.text(val[k],M+3,y-0.7);}
+              doc.setDrawColor(110);doc.setLineDashPattern([0.4,0.8],0);
+              doc.line(M+2,y+0.7,R,y+0.7);doc.setLineDashPattern([],0);
+              y+=5.2;
+            }
           }
           y+=1.5;
         }else{
