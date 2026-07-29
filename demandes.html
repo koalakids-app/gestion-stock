@@ -6900,6 +6900,10 @@ function spInjecterModale() {
       <div class="fg"><label class="flabel">Crèche concernée</label>
         <select class="finput" id="sp-creche"><option value="">— Sélectionner —</option></select>
       </div>
+      <div class="fg"><label class="flabel">Référente titulaire</label>
+        <select class="finput" id="sp-referent"><option value="">— Sélectionner —</option></select>
+        <div style="font-size:11.5px;color:var(--ink2);margin-top:5px">Ses journées seront aussi écrites dans son planning individuel, comme le fait l\u2019import Excel.</div>
+      </div>
       <div class="fg">
         <input type="file" id="sp-file" accept="application/pdf" style="display:none" onchange="spHandleFile(event)"/>
         <button class="btn-cancel" style="width:100%" onclick="spTriggerFile()"><i class="ti ti-upload"></i> Choisir le fichier PDF</button>
@@ -6924,6 +6928,8 @@ function spOpenImportModal() {
   sel.innerHTML = '<option value="">— Sélectionner —</option>' +
     (cacheCreches || []).map(c => '<option value="' + c.id + '">' + escHtml(c.name) + '</option>').join('');
   if (!isDirection && currentProfile?.creche_id) sel.value = currentProfile.creche_id;
+  sel.onchange = () => spRemplirReferentes(sel.value);
+  spRemplirReferentes(sel.value);
 
   document.getElementById('sp-filename').textContent = '';
   document.getElementById('sp-file').value = '';
@@ -6935,8 +6941,28 @@ function spOpenImportModal() {
   document.getElementById('modal-import-sal-wrap').classList.add('open');
 }
 
+// Les référentes rattachées à la crèche choisie.
+function spRemplirReferentes(crecheId) {
+  const sel = document.getElementById('sp-referent');
+  if (!sel) return;
+  const refs = (cacheReferents || []).filter(r => r.role === 'referent' && (!crecheId || r.creche_id === crecheId));
+  sel.innerHTML = '<option value="">— Sélectionner —</option>'
+    + refs.map(r => '<option value="' + r.id + '" data-name="' + escHtml(r.name || '') + '">'
+      + escHtml(r.name || '') + '</option>').join('');
+}
+
+// Retrouve, parmi les prénoms rapprochés, celui de la référente titulaire.
+function spPrenomReferente(nomReferente, mapping) {
+  const mots = String(nomReferente || '').split(/\s+/).map(spNorm).filter(Boolean);
+  for (const k of Object.keys(mapping)) {
+    if (mots.includes(spNorm(mapping[k].prenom))) return mapping[k].prenom;
+  }
+  return null;
+}
+
 function spTriggerFile() {
   if (!document.getElementById('sp-creche').value) { alert('Choisissez d\u2019abord la crèche.'); return; }
+  if (!document.getElementById('sp-referent').value) { alert('Choisissez la référente titulaire.'); return; }
   document.getElementById('sp-file').click();
 }
 
@@ -6968,7 +6994,13 @@ async function spHandleFile(event) {
   const cn = spNorm(creche?.name);
   const crecheMatch = !parsed.titles.length || !cn || parsed.titles.some(t => spNorm(t).includes(cn));
 
-  _spData = { crecheId, jours, mapping, connus, warnings: parsed.warnings, titles: parsed.titles, crecheMatch };
+  const selRef = document.getElementById('sp-referent');
+  const referentId = selRef.value;
+  const referentNom = selRef.selectedOptions[0]?.dataset?.name || '';
+
+  _spData = { crecheId, jours, mapping, connus, warnings: parsed.warnings, titles: parsed.titles,
+              crecheMatch, referentId, referentNom,
+              referentPrenom: spPrenomReferente(referentNom, mapping) };
   spRenderPreview();
 }
 
@@ -6991,6 +7023,12 @@ function spRenderPreview() {
     + 'Vérifiez le <strong>prénom en base</strong> de chaque salarié. Il doit être écrit exactement comme dans le planning équipe, '
     + 'sinon une seconde ligne sera créée en doublon. Vos corrections sont mémorisées pour les prochains imports.</div>';
 
+  if (_spData.referentId && !_spData.referentPrenom) {
+    html += '<div style="background:var(--amber-lt);border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--orange)">'
+      + '<strong>⚠ Référente non retrouvée.</strong><br>Aucun prénom ne correspond à '
+      + escHtml(_spData.referentNom) + '. Son planning individuel ne sera pas rempli. '
+      + 'Corrigez son prénom ci-dessous pour rétablir le lien.</div>';
+  }
   html += '<div style="font-weight:700;margin-bottom:8px">Correspondance des prénoms</div>';
   html += _spData.connus.length
     ? '<datalist id="sp-dl">' + _spData.connus.map(c => '<option value="' + escHtml(c) + '"></option>').join('') + '</datalist>'
@@ -7000,8 +7038,11 @@ function spRenderPreview() {
     const badge = m.source === 'nouveau'
       ? '<span style="font-size:10.5px;background:var(--amber-lt);color:var(--orange);padding:2px 7px;border-radius:20px;font-weight:700">à vérifier</span>'
       : '<span style="font-size:10.5px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:20px;font-weight:700">reconnu</span>';
+    const bRef = (_spData.referentPrenom && m.prenom === _spData.referentPrenom)
+      ? ' <span style="font-size:10px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:8px">référente — planning individuel + équipe</span>'
+      : ' <span style="font-size:10px;background:#f0f0f5;color:#888;padding:2px 7px;border-radius:8px">planning équipe</span>';
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">'
-      + '<div style="flex:1;min-width:0"><div style="font-size:12.5px">' + escHtml(n) + '</div>' + badge + '</div>'
+      + '<div style="flex:1;min-width:0"><div style="font-size:12.5px">' + escHtml(n) + '</div>' + badge + bRef + '</div>'
       + '<i class="ti ti-arrow-right" style="color:var(--muted)"></i>'
       + '<input class="finput" list="sp-dl" style="max-width:170px;font-size:12.5px" value="' + escHtml(m.prenom) + '" '
       + 'onchange="spSetPrenom(' + JSON.stringify(n).replace(/"/g, '&quot;') + ',this.value)"/>'
@@ -7053,6 +7094,8 @@ function spSetPrenom(nomPdf, valeur) {
   const alias = spLoadAlias(_spData.crecheId);
   alias[spNorm(nomPdf.replace(/\s+/g, ''))] = valeur.trim();
   spSaveAlias(_spData.crecheId, alias);
+  _spData.referentPrenom = spPrenomReferente(_spData.referentNom, _spData.mapping);
+  spRenderPreview();
 }
 
 function spDateFr(iso) {
@@ -7070,7 +7113,7 @@ async function spConfirmImport() {
   const batchId = (crypto?.randomUUID) ? crypto.randomUUID()
     : ('batch-' + Date.now() + '-' + Math.random().toString(36).slice(2));
   const creche = (cacheCreches || []).find(c => c.id === _spData.crecheId);
-  let saved = 0, failed = 0, skipped = 0;
+  let saved = 0, failed = 0, skipped = 0, savedRef = 0;
 
   for (const j of _spData.jours) {
     const d = new Date(j.dateISO + 'T00:00:00');
@@ -7080,9 +7123,10 @@ async function spConfirmImport() {
 
     for (const s of j.salaries) {
       const cr = spVersCreneau(s.segments);
+      const prenom = _spData.mapping[s.nomPdf].prenom;
       const { error } = await sb.from('planning_equipe').upsert({
         creche_id: _spData.crecheId,
-        prenom: _spData.mapping[s.nomPdf].prenom,
+        prenom,
         semaine, jour: jourIdx, type: 'presence',
         label: creche?.name || '', lieu: creche?.name || '',
         hdebut: cr.hdebut, hfin: cr.hfin, pause: cr.pause,
@@ -7091,22 +7135,40 @@ async function spConfirmImport() {
         import_batch_id: batchId
       }, { onConflict: 'creche_id,prenom,semaine,jour' });
       if (error) { console.error('[ImportSalPdf]', error.message); failed++; } else { saved++; }
+
+      // Si c'est la référente titulaire, alimenter aussi son planning individuel.
+      // On purge d'abord la journée : l'upsert sur slot NULL ne déduplique pas en SQL
+      // (NULL n'est jamais égal à NULL pour une contrainte unique).
+      if (_spData.referentId && _spData.referentPrenom && prenom === _spData.referentPrenom) {
+        await sb.from('planning').delete().eq('referent_id', _spData.referentId)
+          .eq('semaine', semaine).eq('jour', jourIdx).is('slot', null);
+        const ok = await planningSave(_spData.referentId, semaine, {
+          day: jourIdx, slot: null, type: 'presence',
+          label: creche?.name || '', lieu: creche?.name || '',
+          hdebut: cr.hdebut, hfin: cr.hfin, pause: cr.pause,
+          detachType: '', detachDesc: '', multi: true, batchId
+        });
+        if (ok) savedRef++; else failed++;
+      }
     }
   }
 
+  // referentId renseigné pour que « Réinitialiser ce dernier import » purge aussi la table planning
   localStorage.setItem('lastImportBatch_' + _spData.crecheId,
-    JSON.stringify({ batchId, referentId: null, date: new Date().toISOString() }));
+    JSON.stringify({ batchId, referentId: _spData.referentId || null, date: new Date().toISOString() }));
 
   btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> Importer ces horaires';
   const res = document.getElementById('sp-result');
   res.style.display = '';
   res.innerHTML = failed
     ? '<div style="color:var(--orange);font-size:13px">⚠ Import partiel : ' + saved + ' jour(s) enregistré(s), ' + failed + ' échec(s). Voir la console.</div>'
-    : '<div style="color:var(--koala);font-size:13px;font-weight:700">✅ ' + saved + ' jour(s) salarié enregistré(s)'
+    : '<div style="color:var(--koala);font-size:13px;font-weight:700">✅ ' + saved + ' jour(s) dans le planning équipe'
+      + (savedRef ? ', dont ' + savedRef + ' aussi dans le planning individuel de ' + escHtml(_spData.referentPrenom) : '')
       + (skipped ? ' — ' + skipped + ' ignoré(s) (week-end)' : '') + '.</div>';
   document.getElementById('sp-btn-confirm').style.display = 'none';
 
   if (typeof peInvalidateAll === 'function') peInvalidateAll(_spData.crecheId);
+  if (_spData.referentId && typeof planningInvalidateAll === 'function') planningInvalidateAll(_spData.referentId);
   _spData = null;
   if (typeof renderPlanning === 'function') await renderPlanning();
 }
