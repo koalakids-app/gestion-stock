@@ -7061,8 +7061,12 @@ async function spConfirmImport() {
 // ── Auto-installation du bouton ────────────────────────────────────────
 // Le bouton se place tout seul après celui de l'import Excel équipe
 // (#planning-import-btn), pour qu'aucune modification du HTML ne soit
-// nécessaire. Ce bouton étant masqué puis révélé selon le rôle par
-// renderPlanning(), on recopie sa visibilité et on la garde synchronisée.
+// nécessaire.
+//
+// Il reste VISIBLE en permanence, contrairement au bouton Excel que
+// renderPlanning() masque quand role === 'direction' : la direction doit
+// pouvoir importer les salariés de n'importe quelle crèche, et le choix de
+// la crèche se fait de toute façon dans la modale.
 
 function spInstallerBouton() {
   if (document.getElementById('sp-open-btn')) return true;
@@ -7072,16 +7076,26 @@ function spInstallerBouton() {
 
   ref.insertAdjacentHTML('afterend',
     '<button id="sp-open-btn" class="btn-primary" onclick="spOpenImportModal()" '
-    + 'style="display:none;background:#2FA84F"><i class="ti ti-file-import"></i> Importer salariés (PDF)</button>');
-
-  const btn = document.getElementById('sp-open-btn');
-  const sync = () => { btn.style.display = ref.style.display; };
-  sync();
-  new MutationObserver(sync).observe(ref, { attributes: true, attributeFilter: ['style'] });
+    + 'style="background:#2FA84F"><i class="ti ti-file-import"></i> Importer salariés (PDF)</button>');
 
   console.log('[ImportSalPdf] Bouton installé.');
   return true;
 }
+
+(function spAutoInstall() {
+  let essais = 0;
+  const tick = () => {
+    if (spInstallerBouton()) return;
+    if (++essais > 40) {
+      console.warn('[ImportSalPdf] Bouton d\u2019import Excel introuvable : '
+        + 'appelez spOpenImportModal() manuellement ou signalez-le.');
+      return;
+    }
+    setTimeout(tick, 500);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick);
+  else tick();
+})();
 
 (function spAutoInstall() {
   let essais = 0;
