@@ -1143,6 +1143,18 @@ const GR_CSS=`<style>
 }
 </style>`;
 
+/* ---------- ENCODAGE PDF ----------
+   Les polices standard de jsPDF (Helvetica) n'encodent que le Latin-1 plus
+   quelques signes WinAnsi. Un seul caractere hors de ce jeu (>=, <=, fleches...)
+   fait basculer TOUTE la chaine en UTF-16 : la ligne s'affiche alors espacee et
+   illisible. On substitue donc ces caracteres juste avant l'ecriture. */
+const PDF_WINANSI_EXTRA='\u20AC\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u017D\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u017E\u0178';
+const PDF_SUBST={'\u2265':'>=','\u2264':'<=','\u2260':'\u2260','\u2248':'~','\u2192':'->','\u21D2':'=>','\u00A0':' ','\u202F':' ','\u2044':'/'};
+function pdfSafe(v){
+  let s=String(v==null?'':v).replace(/[\u2265\u2264\u2248\u2192\u21D2\u00A0\u202F\u2044]/g,c=>PDF_SUBST[c]);
+  return s.replace(/[^\u0000-\u00FF]/g,c=>PDF_WINANSI_EXTRA.indexOf(c)>=0?c:' ');
+}
+
 /* ---------- TABLEAUX PDF (helper commun aux fiches) ---------- */
 function pdfGrid(doc,x,y,widths,rows,opt){
   opt=opt||{};
@@ -1151,7 +1163,7 @@ function pdfGrid(doc,x,y,widths,rows,opt){
     const cells=r.cells||r, head=!!r.head;
     doc.setFontSize(fs);
     doc.setFont(undefined,head?'bold':'normal');
-    const wrapped=cells.map((c,i)=>doc.splitTextToSize(String(c==null?'':c),widths[i]-4));
+    const wrapped=cells.map((c,i)=>doc.splitTextToSize(pdfSafe(c),widths[i]-4));
     const h=Math.max(opt.minH||8, Math.max.apply(null,wrapped.map(w=>w.length))*lh+4);
     if(y+h>280){doc.addPage();y=pdfLogo(doc,20);}
     let cx=x;
@@ -1789,7 +1801,7 @@ const TPL={
     doc.setFontSize(15);doc.setFont(undefined,'bold');
     doc.text('SUPPORT DE CONTRÔLE EAJE',14,y);y+=8;
     doc.setFontSize(9.5);doc.setFont(undefined,'normal');
-    doc.text('Établissement : '+(g('ctrl_creche')||'—'),14,y);
+    doc.text(pdfSafe('Établissement : '+(g('ctrl_creche')||'—')),14,y);
     doc.text('Date de la visite : '+dfr(g('ctrl_date')),110,y);y+=5;
     doc.text('Type : micro-crèche (section unique)',14,y);y+=6;
     const st=eajeStats();
@@ -1800,7 +1812,7 @@ const TPL={
       if(y+18>278){doc.addPage();y=pdfLogo(doc,20);}
       doc.setFillColor(74,63,159);doc.rect(14,y,W,7,'F');
       doc.setTextColor(255);doc.setFontSize(9.5);doc.setFont(undefined,'bold');
-      doc.text(String(sec.titre||'').toUpperCase(),16,y+5,{maxWidth:W-4});
+      doc.text(pdfSafe(String(sec.titre||'').toUpperCase()),16,y+5,{maxWidth:W-4});
       doc.setTextColor(30);doc.setFont(undefined,'normal');y+=9;
       const rows=(sec.items||[]).map(it=>{
         if(it.t==='sep')return {head:true,cells:[it.l,'']};
