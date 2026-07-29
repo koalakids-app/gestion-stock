@@ -6626,5 +6626,478 @@ function afRender(){
     </div>
   </div>
 </div>
+<script>
+// ════════════════════════════════════════════════════════════════════════
+// ── IMPORT PLANNING SALARIÉS DEPUIS LE PDF DE PRÉSENCES (Gantt) ──
+//
+// Le PDF n'expose pas les horaires en texte : ce sont des barres vertes
+// vectorielles. On rend donc chaque page sur un canvas et on détecte les
+// barres par balayage de pixels. La couche texte ne sert qu'aux noms, à
+// l'axe des heures et à la date.
+//
+// Écrit dans planning_equipe, une ligne par (creche_id, prenom, semaine, jour) :
+//   2 segments -> hdebut = début du 1er, hfin = fin du 2e, pause = "12:30-13:30"
+//   1 segment  -> hdebut / hfin, pause = null
+//
+// Préfixe sp* (salariés PDF) pour ne pas entrer en collision avec les
+// fonctions ip* déjà utilisées par l'import Excel et l'import Présences.
+// ════════════════════════════════════════════════════════════════════════
+
+const SP_BAR_RGB = [51, 204, 102];   // vert des barres de présence
+const SP_TOLERANCE = 40;
+const SP_SCALE = 2;                  // ~1 px = 1 minute
+const SP_ROUND_MIN = 5;              // présences pointées, pas planifiées au 1/4 d'heure
+const SP_JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+
+let _spData = null;
+
+// ── Parsing PDF ────────────────────────────────────────────────────────
+
+async function spParsePdf(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const jours = [], warnings = [], titles = [];
+
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    try {
+      const r = await spParsePage(page);
+      if (r.title) titles.push(r.title);
+      jours.push(r);
+    } catch (e) {
+      warnings.push('Page ' + p + ' ignorée : ' + e.message);
+    }
+  }
+  return { jours, warnings, titles: [...new Set(titles)] };
+}
+
+async function spParsePage(page) {
+  const viewport = page.getViewport({ scale: SP_SCALE });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  const px = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  const tc = await page.getTextContent();
+  const items = tc.items.filter(it => (it.str || '').trim()).map(it => {
+    const t = pdfjsLib.Util.transform(viewport.transform, it.transform);
+    return { texte: it.str.trim(), x: t[4], y: t[5], w: it.width * SP_SCALE };
+  });
+
+  const fullText = items.map(i => i.texte).join(' ');
+  const dateISO = spLireDate(fullText);
+  const axe = spCalibrerAxe(items);
+  const bande = spTrouverBandeSalaries(items);
+  const tm = fullText.match(/(KOALA\s*KIDS[^]{0,40}?)\s*(?:CRÈCHE|CRECHE|Planning)/i);
+
+  const salaries = [];
+  for (const ligne of spGrouperLignes(items, bande)) {
+    const segments = spDetecterSegments(px, canvas.width, ligne.y, axe);
+    if (!segments.length) continue;          // listé mais absent ce jour-là
+    salaries.push({ nomPdf: ligne.nom, segments });
+  }
+
+  // Libère le canvas (5 pages en scale 2 sur tablette)
+  canvas.width = canvas.height = 0;
+
+  return { dateISO, salaries, title: tm ? tm[1].trim() : '' };
+}
+
+function spLireDate(txt) {
+  const m = txt.match(/Planning du \S+ (\d{1,2})(?:er)? (\S+) (\d{4})/i);
+  if (!m) throw new Error('date introuvable dans le titre');
+  const mon = IP_MONTHS[m[2].toLowerCase()];   // réutilise la table du module Présences
+  if (!mon) throw new Error('mois non reconnu : ' + m[2]);
+  return m[3] + '-' + String(mon).padStart(2, '0') + '-' + m[1].padStart(2, '0');
+}
+
+// L'axe « 7h … 20h » donne la conversion pixels -> heures (espacement linéaire).
+function spCalibrerAxe(items) {
+  const rep = items.filter(it => /^\d{1,2}h$/.test(it.texte))
+    .map(it => ({ h: parseInt(it.texte, 10), x: it.x + it.w / 2 }))
+    .sort((a, b) => a.h - b.h);
+  if (rep.length < 2) throw new Error('axe des heures introuvable');
+  const a = rep[0], b = rep[rep.length - 1];
+  const pxH = (b.x - a.x) / (b.h - a.h);
+  return { xMin: a.x - pxH / 2, xMax: b.x + pxH / 2, versHeure: x => a.h + (x - a.x) / pxH };
+}
+
+// Bande verticale entre l'en-tête « Salariés » et l'en-tête « Totaux ».
+// « Salariés » apparaît deux fois : en-tête de section, puis dans les totaux.
+function spTrouverBandeSalaries(items) {
+  const tot = items.find(it => /^Totaux$/i.test(it.texte));
+  if (!tot) throw new Error('section « Totaux » introuvable');
+  const ent = items.filter(it => /^Salari[ée]s$/i.test(it.texte) && it.y < tot.y)
+    .sort((a, b) => b.y - a.y);
+  if (!ent.length) throw new Error('section « Salariés » introuvable');
+  return { haut: ent[0].y + 6 * SP_SCALE, bas: tot.y - 6 * SP_SCALE };
+}
+
+// Un nom sur deux lignes (« France miline » / « STRAZEL ») a un interligne
+// d'environ 9 pt, contre 21 pt entre deux salariés : seuil à 13 pt.
+function spGrouperLignes(items, bande) {
+  const dans = items.filter(it => it.y > bande.haut && it.y < bande.bas)
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+  const seuil = 13 * SP_SCALE, groupes = [];
+  for (const it of dans) {
+    const d = groupes[groupes.length - 1];
+    if (d && it.y - d[d.length - 1].y < seuil) d.push(it); else groupes.push([it]);
+  }
+  return groupes.map(g => ({
+    nom: g.map(i => i.texte).join(' ').replace(/\s+/g, ' ').trim(),
+    y: g.reduce((s, i) => s + i.y, 0) / g.length
+  }));
+}
+
+function spEstVert(d, i) {
+  return Math.abs(d[i] - SP_BAR_RGB[0]) < SP_TOLERANCE
+      && Math.abs(d[i + 1] - SP_BAR_RGB[1]) < SP_TOLERANCE
+      && Math.abs(d[i + 2] - SP_BAR_RGB[2]) < SP_TOLERANCE;
+}
+
+// La barre est centrée ~2 pt au-dessus de la ligne de base du nom et fait
+// ~14 pt de haut. On balaie la fenêtre et on retient la ligne la plus verte.
+function spDetecterSegments(px, largeur, yLigne, axe) {
+  const x0 = Math.max(0, Math.floor(axe.xMin));
+  const x1 = Math.min(largeur - 1, Math.ceil(axe.xMax));
+  let best = null, bestScore = 0;
+
+  for (let dy = -9 * SP_SCALE; dy <= 5 * SP_SCALE; dy++) {
+    const y = Math.round(yLigne + dy);
+    if (y < 0 || y >= px.height) continue;
+    const runs = []; let deb = null, score = 0;
+    for (let x = x0; x <= x1; x++) {
+      if (spEstVert(px.data, (y * largeur + x) * 4)) { score++; if (deb === null) deb = x; }
+      else if (deb !== null) { runs.push([deb, x - 1]); deb = null; }
+    }
+    if (deb !== null) runs.push([deb, x1]);
+    if (score > bestScore) { bestScore = score; best = runs; }
+  }
+  if (!best) return [];
+
+  return best.filter(([a, b]) => b - a >= 2 * SP_SCALE)
+    .map(([a, b]) => ({ debut: spHeureTexte(axe.versHeure(a)), fin: spHeureTexte(axe.versHeure(b)) }));
+}
+
+function spHeureTexte(hd) {
+  let mn = Math.round(hd * 60 / SP_ROUND_MIN) * SP_ROUND_MIN;
+  mn = Math.max(0, Math.min(24 * 60 - 1, mn));
+  return String(Math.floor(mn / 60)).padStart(2, '0') + ':' + String(mn % 60).padStart(2, '0');
+}
+
+// Segments -> colonnes planning_equipe. Au-delà de 2 segments (jamais vu à ce
+// jour), on garde les extrêmes et on signale la coupure la plus longue.
+function spVersCreneau(segments) {
+  const s = segments.slice().sort((a, b) => a.debut.localeCompare(b.debut));
+  const hdebut = s[0].debut, hfin = s[s.length - 1].fin;
+  if (s.length === 1) return { hdebut, hfin, pause: null, multi: false };
+  let iMax = 0, dMax = -1;
+  for (let i = 0; i < s.length - 1; i++) {
+    const d = spMin(s[i + 1].debut) - spMin(s[i].fin);
+    if (d > dMax) { dMax = d; iMax = i; }
+  }
+  return { hdebut, hfin, pause: s[iMax].fin + '-' + s[iMax + 1].debut, multi: s.length > 2 };
+}
+function spMin(hhmm) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; }
+
+// ── Correspondance des prénoms ─────────────────────────────────────────
+// planning_equipe stocke un PRÉNOM SEUL ("Miline"), le PDF donne l'identité
+// complète ("France miline STRAZEL"). Prendre le premier mot ne suffit pas :
+// on cherche d'abord un prénom déjà connu parmi TOUS les mots du nom.
+
+function spNorm(s) {
+  return String(s || '').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z-]/g, '').trim();
+}
+
+function spAliasKey(crecheId) { return 'salPdfAlias_' + crecheId; }
+function spLoadAlias(crecheId) {
+  try { return JSON.parse(localStorage.getItem(spAliasKey(crecheId))) || {}; } catch (e) { return {}; }
+}
+function spSaveAlias(crecheId, map) {
+  try { localStorage.setItem(spAliasKey(crecheId), JSON.stringify(map)); } catch (e) {}
+}
+
+async function spPrenomsConnus(crecheId) {
+  const { data, error } = await sb.from('planning_equipe').select('prenom').eq('creche_id', crecheId);
+  if (error) { console.error('[ImportSalPdf] prenoms', error.message); return []; }
+  return [...new Set((data || []).map(r => r.prenom).filter(Boolean))];
+}
+
+function spProposerPrenom(nomPdf, connus, alias) {
+  const cle = spNorm(nomPdf.replace(/\s+/g, ''));
+  if (alias[cle]) return { prenom: alias[cle], source: 'alias' };
+
+  const mots = nomPdf.split(/\s+/).filter(Boolean);
+  for (const mot of mots) {
+    const hit = connus.find(c => spNorm(c) === spNorm(mot));
+    if (hit) return { prenom: hit, source: 'connu' };
+  }
+  // Aucun prénom connu : on retient le premier mot, à confirmer manuellement.
+  return { prenom: mots[0] || nomPdf, source: 'nouveau' };
+}
+
+// ── UI ─────────────────────────────────────────────────────────────────
+
+function spInjecterModale() {
+  if (document.getElementById('modal-import-sal-wrap')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+<div class="overlay" id="modal-import-sal-wrap">
+  <div class="modal" style="max-width:680px;max-height:86vh;display:flex;flex-direction:column">
+    <h3><i class="ti ti-file-import"></i> Importer le planning des salariés (PDF)</h3>
+
+    <div id="sp-step-config">
+      <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i>
+        Déposez le <strong>planning de présences PDF</strong> (celui utilisé pour les enfants).
+        Les horaires des salariés y sont lus directement, pauses comprises.
+        Une journée coupée devient <strong>hdebut / pause / hfin</strong> ; une journée continue n'a pas de pause.
+      </div>
+      <div class="fg"><label class="flabel">Crèche concernée</label>
+        <select class="finput" id="sp-creche"><option value="">— Sélectionner —</option></select>
+      </div>
+      <div class="fg">
+        <input type="file" id="sp-file" accept="application/pdf" style="display:none" onchange="spHandleFile(event)"/>
+        <button class="btn-cancel" style="width:100%" onclick="spTriggerFile()"><i class="ti ti-upload"></i> Choisir le fichier PDF</button>
+        <div id="sp-filename" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
+      </div>
+    </div>
+
+    <div id="sp-step-preview" style="display:none;overflow-y:auto;flex:1;font-size:13px"></div>
+    <div id="sp-result" style="display:none;margin-top:10px"></div>
+
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-import-sal-wrap')">Fermer</button>
+      <button class="btn-primary" id="sp-btn-confirm" style="display:none" onclick="spConfirmImport()"><i class="ti ti-check"></i> Importer ces horaires</button>
+    </div>
+  </div>
+</div>`);
+}
+
+function spOpenImportModal() {
+  spInjecterModale();
+  const sel = document.getElementById('sp-creche');
+  sel.innerHTML = '<option value="">— Sélectionner —</option>' +
+    (cacheCreches || []).map(c => '<option value="' + c.id + '">' + escHtml(c.name) + '</option>').join('');
+  if (!isDirection && currentProfile?.creche_id) sel.value = currentProfile.creche_id;
+
+  document.getElementById('sp-filename').textContent = '';
+  document.getElementById('sp-file').value = '';
+  document.getElementById('sp-step-config').style.display = '';
+  document.getElementById('sp-step-preview').style.display = 'none';
+  document.getElementById('sp-result').style.display = 'none';
+  document.getElementById('sp-btn-confirm').style.display = 'none';
+  _spData = null;
+  document.getElementById('modal-import-sal-wrap').classList.add('open');
+}
+
+function spTriggerFile() {
+  if (!document.getElementById('sp-creche').value) { alert('Choisissez d\u2019abord la crèche.'); return; }
+  document.getElementById('sp-file').click();
+}
+
+async function spHandleFile(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  if (typeof pdfjsLib === 'undefined') { alert('Bibliothèque PDF non chargée.'); return; }
+
+  const crecheId = document.getElementById('sp-creche').value;
+  document.getElementById('sp-filename').textContent = '📄 ' + file.name;
+  showBanner('Lecture du PDF en cours…');
+
+  let parsed;
+  try { parsed = await spParsePdf(file); }
+  catch (e) { console.error('[ImportSalPdf]', e); showBanner('Impossible de lire ce PDF.', 'error'); return; }
+
+  const jours = parsed.jours.filter(j => j.salaries.length);
+  if (!jours.length) { showBanner('Aucun salarié détecté dans ce PDF.', 'error'); return; }
+
+  const connus = await spPrenomsConnus(crecheId);
+  const alias = spLoadAlias(crecheId);
+  const noms = [...new Set(jours.flatMap(j => j.salaries.map(s => s.nomPdf)))];
+  const mapping = {};
+  noms.forEach(n => { mapping[n] = spProposerPrenom(n, connus, alias); });
+
+  // Cohérence crèche : le titre du PDF doit mentionner la crèche choisie
+  const creche = (cacheCreches || []).find(c => c.id === crecheId);
+  const cn = spNorm(creche?.name);
+  const crecheMatch = !parsed.titles.length || !cn || parsed.titles.some(t => spNorm(t).includes(cn));
+
+  _spData = { crecheId, jours, mapping, connus, warnings: parsed.warnings, titles: parsed.titles, crecheMatch };
+  spRenderPreview();
+}
+
+function spRenderPreview() {
+  if (!_spData) return;
+  const box = document.getElementById('sp-step-preview');
+  const creche = (cacheCreches || []).find(c => c.id === _spData.crecheId);
+  const noms = Object.keys(_spData.mapping).sort();
+
+  let html = '';
+
+  if (!_spData.crecheMatch) {
+    html += '<div style="background:#fdecea;border-left:4px solid var(--red);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#8b1a1a">'
+      + '<strong>⚠ La crèche ne correspond pas.</strong><br>Le PDF concerne <strong>'
+      + escHtml(_spData.titles.join(' / ')) + '</strong> alors que vous avez choisi <strong>'
+      + escHtml(creche?.name || '—') + '</strong>.</div>';
+  }
+
+  html += '<div style="background:#EEEDF8;border-left:4px solid var(--koala);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--koala)">'
+    + 'Vérifiez le <strong>prénom en base</strong> de chaque salarié. Il doit être écrit exactement comme dans le planning équipe, '
+    + 'sinon une seconde ligne sera créée en doublon. Vos corrections sont mémorisées pour les prochains imports.</div>';
+
+  html += '<div style="font-weight:700;margin-bottom:8px">Correspondance des prénoms</div>';
+  html += _spData.connus.length
+    ? '<datalist id="sp-dl">' + _spData.connus.map(c => '<option value="' + escHtml(c) + '"></option>').join('') + '</datalist>'
+    : '';
+  html += noms.map(n => {
+    const m = _spData.mapping[n];
+    const badge = m.source === 'nouveau'
+      ? '<span style="font-size:10.5px;background:var(--amber-lt);color:var(--orange);padding:2px 7px;border-radius:20px;font-weight:700">à vérifier</span>'
+      : '<span style="font-size:10.5px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:20px;font-weight:700">reconnu</span>';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">'
+      + '<div style="flex:1;min-width:0"><div style="font-size:12.5px">' + escHtml(n) + '</div>' + badge + '</div>'
+      + '<i class="ti ti-arrow-right" style="color:var(--muted)"></i>'
+      + '<input class="finput" list="sp-dl" style="max-width:170px;font-size:12.5px" value="' + escHtml(m.prenom) + '" '
+      + 'onchange="spSetPrenom(' + JSON.stringify(n).replace(/"/g, '&quot;') + ',this.value)"/>'
+      + '</div>';
+  }).join('');
+
+  html += '<div style="font-weight:700;margin:16px 0 8px">Horaires détectés</div>';
+  html += _spData.jours.map(j => {
+    const d = new Date(j.dateISO + 'T12:00:00');
+    const jourIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+    const hors = jourIdx > 4
+      ? ' <span style="color:var(--orange);font-size:11px">— week-end, ignoré</span>' : '';
+    const lignes = j.salaries.map(s => {
+      const cr = spVersCreneau(s.segments);
+      const pause = cr.pause ? '<span style="color:var(--muted)"> · pause ' + cr.pause + '</span>' : '';
+      const warn = cr.multi ? ' <span style="color:var(--orange)">⚠ &gt;2 segments</span>' : '';
+      return '<div style="padding:4px 12px;font-size:11.5px;display:flex;justify-content:space-between;gap:10px">'
+        + '<span>' + escHtml(_spData.mapping[s.nomPdf].prenom) + '</span>'
+        + '<span>' + cr.hdebut + '–' + cr.hfin + pause + warn + '</span></div>';
+    }).join('');
+    return '<details style="border-bottom:1px solid var(--border)"><summary style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:700;color:var(--koala)">'
+      + spDateFr(j.dateISO) + ' — ' + j.salaries.length + ' salarié(s)' + hors + '</summary>' + lignes + '</details>';
+  }).join('');
+
+  if (_spData.warnings.length) {
+    html += '<div style="font-size:11px;color:var(--orange);background:var(--amber-lt);padding:8px 10px;border-radius:8px;margin-top:12px">⚠ '
+      + _spData.warnings.map(escHtml).join('<br>') + '</div>';
+  }
+
+  box.innerHTML = html;
+  document.getElementById('sp-step-config').style.display = 'none';
+  box.style.display = '';
+  document.getElementById('sp-btn-confirm').style.display = '';
+}
+
+function spSetPrenom(nomPdf, valeur) {
+  if (!_spData || !valeur.trim()) return;
+  _spData.mapping[nomPdf] = { prenom: valeur.trim(), source: 'alias' };
+  const alias = spLoadAlias(_spData.crecheId);
+  alias[spNorm(nomPdf.replace(/\s+/g, ''))] = valeur.trim();
+  spSaveAlias(_spData.crecheId, alias);
+}
+
+function spDateFr(iso) {
+  return new Date(iso + 'T12:00:00')
+    .toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+// ── Écriture ───────────────────────────────────────────────────────────
+
+async function spConfirmImport() {
+  if (!_spData) return;
+  const btn = document.getElementById('sp-btn-confirm');
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Import en cours…';
+
+  const batchId = (crypto?.randomUUID) ? crypto.randomUUID()
+    : ('batch-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  const creche = (cacheCreches || []).find(c => c.id === _spData.crecheId);
+  let saved = 0, failed = 0, skipped = 0;
+
+  for (const j of _spData.jours) {
+    const d = new Date(j.dateISO + 'T00:00:00');
+    const jourIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+    if (jourIdx > 4) { skipped += j.salaries.length; continue; }   // planning_equipe = lundi→vendredi
+    const semaine = mondayOfISO(j.dateISO);
+
+    for (const s of j.salaries) {
+      const cr = spVersCreneau(s.segments);
+      const { error } = await sb.from('planning_equipe').upsert({
+        creche_id: _spData.crecheId,
+        prenom: _spData.mapping[s.nomPdf].prenom,
+        semaine, jour: jourIdx, type: 'presence',
+        label: creche?.name || '', lieu: creche?.name || '',
+        hdebut: cr.hdebut, hfin: cr.hfin, pause: cr.pause,
+        source_cell: 'PDF présences — ' + s.nomPdf,
+        creneau_label: s.segments.map(g => g.debut + '-' + g.fin).join('/'),
+        import_batch_id: batchId
+      }, { onConflict: 'creche_id,prenom,semaine,jour' });
+      if (error) { console.error('[ImportSalPdf]', error.message); failed++; } else { saved++; }
+    }
+  }
+
+  localStorage.setItem('lastImportBatch_' + _spData.crecheId,
+    JSON.stringify({ batchId, referentId: null, date: new Date().toISOString() }));
+
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> Importer ces horaires';
+  const res = document.getElementById('sp-result');
+  res.style.display = '';
+  res.innerHTML = failed
+    ? '<div style="color:var(--orange);font-size:13px">⚠ Import partiel : ' + saved + ' jour(s) enregistré(s), ' + failed + ' échec(s). Voir la console.</div>'
+    : '<div style="color:var(--koala);font-size:13px;font-weight:700">✅ ' + saved + ' jour(s) salarié enregistré(s)'
+      + (skipped ? ' — ' + skipped + ' ignoré(s) (week-end)' : '') + '.</div>';
+  document.getElementById('sp-btn-confirm').style.display = 'none';
+
+  if (typeof peInvalidateAll === 'function') peInvalidateAll(_spData.crecheId);
+  _spData = null;
+  if (typeof renderPlanning === 'function') await renderPlanning();
+}
+
+// ── Auto-installation du bouton ────────────────────────────────────────
+// Le bouton se place tout seul après celui de l'import Excel équipe
+// (#planning-import-btn), pour qu'aucune modification du HTML ne soit
+// nécessaire. Ce bouton étant masqué puis révélé selon le rôle par
+// renderPlanning(), on recopie sa visibilité et on la garde synchronisée.
+
+function spInstallerBouton() {
+  if (document.getElementById('sp-open-btn')) return true;
+  const ref = document.getElementById('planning-import-btn')
+    || document.querySelector('[onclick*="openImportPlanningModal"]');
+  if (!ref) return false;
+
+  ref.insertAdjacentHTML('afterend',
+    '<button id="sp-open-btn" class="btn-primary" onclick="spOpenImportModal()" '
+    + 'style="display:none;background:#2FA84F"><i class="ti ti-file-import"></i> Importer salariés (PDF)</button>');
+
+  const btn = document.getElementById('sp-open-btn');
+  const sync = () => { btn.style.display = ref.style.display; };
+  sync();
+  new MutationObserver(sync).observe(ref, { attributes: true, attributeFilter: ['style'] });
+
+  console.log('[ImportSalPdf] Bouton installé.');
+  return true;
+}
+
+(function spAutoInstall() {
+  let essais = 0;
+  const tick = () => {
+    if (spInstallerBouton()) return;
+    if (++essais > 40) {
+      console.warn('[ImportSalPdf] Bouton d\u2019import Excel introuvable : '
+        + 'appelez spOpenImportModal() manuellement ou signalez-le.');
+      return;
+    }
+    setTimeout(tick, 500);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick);
+  else tick();
+})();
+
+</script>
 </body>
 </html>
