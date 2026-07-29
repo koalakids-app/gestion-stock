@@ -6646,8 +6646,41 @@ function afRender(){
 const SP_BAR_RGB = [51, 204, 102];   // vert des barres de présence
 const SP_TOLERANCE = 40;
 const SP_SCALE = 2;                  // ~1 px = 1 minute
-const SP_ROUND_MIN = 5;              // présences pointées, pas planifiées au 1/4 d'heure
+const SP_ROUND_MIN = 15;             // la grille du PDF est au quart d’heure : on s’y accroche
+                                     // pour retenir l’horaire théorique et non le pointage
 const SP_JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+
+// Créneaux théoriques du réseau. Une journée dont le début ET la fin tombent à
+// moins de SP_TOL_MIN d'un créneau y est ramenée : on retient l'horaire prévu,
+// pas le pointage. Au-delà, l'horaire est conservé tel quel et signalé.
+// Liste confirmée pour Ollioules — à compléter si une crèche diffère.
+const SP_TOL_MIN = 20;
+const SP_CRENEAUX = [
+  { label: '07h00-12h00/12h30-14h30', hdebut: '07:00', hfin: '14:30', pause: '12:00-12:30' },
+  { label: '07h30-12h30/13h30-15h30', hdebut: '07:30', hfin: '15:30', pause: '12:30-13:30' },
+  { label: '09h00-12h00/13h00-17h00', hdebut: '09:00', hfin: '17:00', pause: '12:00-13:00' },
+  { label: '10h30-13h00/14h00-18h30', hdebut: '10:30', hfin: '18:30', pause: '13:00-14:00' },
+  { label: '11h00-13h30/14h30-19h00', hdebut: '11:00', hfin: '19:00', pause: '13:30-14:30' }
+];
+
+// Ramène une journée mesurée sur le créneau théorique le plus proche.
+function spNormaliser(cr) {
+  const a = spMin(cr.hdebut), b = spMin(cr.hfin);
+  let best = null;
+  for (const c of SP_CRENEAUX) {
+    const da = Math.abs(a - spMin(c.hdebut)), db = Math.abs(b - spMin(c.hfin));
+    if (da <= SP_TOL_MIN && db <= SP_TOL_MIN && (!best || da + db < best.ecart)) {
+      best = { c, ecart: da + db };
+    }
+  }
+  if (!best) {
+    return { hdebut: cr.hdebut, hfin: cr.hfin, pause: cr.pause, multi: cr.multi,
+             label: cr.hdebut.replace(':', 'h') + '-' + cr.hfin.replace(':', 'h'),
+             normalise: false, ecart: null };
+  }
+  return { hdebut: best.c.hdebut, hfin: best.c.hfin, pause: best.c.pause, multi: cr.multi,
+           label: best.c.label, normalise: true, ecart: best.ecart };
+}
 
 let _spData = null;
 
@@ -6689,7 +6722,7 @@ async function spParsePage(page) {
   const fullText = items.map(i => i.texte).join(' ');
   const dateISO = spLireDate(fullText);
   const axe = spCalibrerAxe(items);
-  const bande = spTrouverBandeSalaries(items);
+  const bande = spTrouverBandeSalaries(items, canvas.height);
   const tm = fullText.match(/(KOALA\s*KIDS[^]{0,40}?)\s*(?:CRÈCHE|CRECHE|Planning)/i);
 
   const salaries = [];
@@ -6705,8 +6738,12 @@ async function spParsePage(page) {
   return { dateISO, salaries, title: tm ? tm[1].trim() : '' };
 }
 
+// Le titre varie selon l'export ("Planning du lundi 27 juillet 2026", mais un
+// planning prévisionnel peut être libellé autrement). On cherche donc un motif
+// « jour mois année » n'importe où dans l'en-tête, sans exiger de préfixe.
 function spLireDate(txt) {
-  const m = txt.match(/Planning du \S+ (\d{1,2})(?:er)? (\S+) (\d{4})/i);
+  const mois = Object.keys(IP_MONTHS).join('|');
+  const m = txt.match(new RegExp('(\\d{1,2})(?:er)?\\s+(' + mois + ')\\s+(\\d{4})', 'i'));
   if (!m) throw new Error('date introuvable dans le titre');
   const mon = IP_MONTHS[m[2].toLowerCase()];   // réutilise la table du module Présences
   if (!mon) throw new Error('mois non reconnu : ' + m[2]);
@@ -6725,14 +6762,16 @@ function spCalibrerAxe(items) {
 }
 
 // Bande verticale entre l'en-tête « Salariés » et l'en-tête « Totaux ».
-// « Salariés » apparaît deux fois : en-tête de section, puis dans les totaux.
-function spTrouverBandeSalaries(items) {
+// « Salariés » apparaît deux fois quand les totaux sont présents : en-tête de
+// section, puis dans les totaux. Un export prévisionnel peut ne pas avoir de
+// section « Totaux » : on borne alors au bas de la page.
+function spTrouverBandeSalaries(items, hauteurPage) {
   const tot = items.find(it => /^Totaux$/i.test(it.texte));
-  if (!tot) throw new Error('section « Totaux » introuvable');
-  const ent = items.filter(it => /^Salari[ée]s$/i.test(it.texte) && it.y < tot.y)
+  const limite = tot ? tot.y : hauteurPage;
+  const ent = items.filter(it => /^Salari[ée]s$/i.test(it.texte) && it.y < limite)
     .sort((a, b) => b.y - a.y);
   if (!ent.length) throw new Error('section « Salariés » introuvable');
-  return { haut: ent[0].y + 6 * SP_SCALE, bas: tot.y - 6 * SP_SCALE };
+  return { haut: ent[0].y + 6 * SP_SCALE, bas: limite - (tot ? 6 * SP_SCALE : 0) };
 }
 
 // Un nom sur deux lignes (« France miline » / « STRAZEL ») a un interligne
@@ -6790,6 +6829,10 @@ function spHeureTexte(hd) {
 // Segments -> colonnes planning_equipe. Au-delà de 2 segments (jamais vu à ce
 // jour), on garde les extrêmes et on signale la coupure la plus longue.
 function spVersCreneau(segments) {
+  return spNormaliser(spMesurer(segments));
+}
+
+function spMesurer(segments) {
   const s = segments.slice().sort((a, b) => a.debut.localeCompare(b.debut));
   const hdebut = s[0].debut, hfin = s[s.length - 1].fin;
   if (s.length === 1) return { hdebut, hfin, pause: null, multi: false };
@@ -6965,7 +7008,14 @@ function spRenderPreview() {
       + '</div>';
   }).join('');
 
+  const horsCreneau = _spData.jours.reduce((n, j) =>
+    n + j.salaries.filter(s => !spVersCreneau(s.segments).normalise).length, 0);
   html += '<div style="font-weight:700;margin:16px 0 8px">Horaires détectés</div>';
+  html += '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'
+    + 'Les journées proches d\u2019un créneau théorique y sont ramenées, pour retenir l\u2019horaire prévu '
+    + 'et non le pointage.' + (horsCreneau
+      ? ' <strong style="color:var(--orange)">' + horsCreneau + ' journée(s) hors créneau</strong>, conservée(s) telles quelles.'
+      : '') + '</div>';
   html += _spData.jours.map(j => {
     const d = new Date(j.dateISO + 'T12:00:00');
     const jourIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
@@ -6974,10 +7024,13 @@ function spRenderPreview() {
     const lignes = j.salaries.map(s => {
       const cr = spVersCreneau(s.segments);
       const pause = cr.pause ? '<span style="color:var(--muted)"> · pause ' + cr.pause + '</span>' : '';
+      const etat = cr.normalise
+        ? (cr.ecart ? '<span style="color:var(--muted);font-size:10.5px"> · recalé ' + cr.ecart + ' min</span>' : '')
+        : ' <span style="color:var(--orange);font-weight:700">⚠ hors créneau</span>';
       const warn = cr.multi ? ' <span style="color:var(--orange)">⚠ &gt;2 segments</span>' : '';
       return '<div style="padding:4px 12px;font-size:11.5px;display:flex;justify-content:space-between;gap:10px">'
         + '<span>' + escHtml(_spData.mapping[s.nomPdf].prenom) + '</span>'
-        + '<span>' + cr.hdebut + '–' + cr.hfin + pause + warn + '</span></div>';
+        + '<span>' + cr.hdebut + '–' + cr.hfin + pause + etat + warn + '</span></div>';
     }).join('');
     return '<details style="border-bottom:1px solid var(--border)"><summary style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:700;color:var(--koala)">'
       + spDateFr(j.dateISO) + ' — ' + j.salaries.length + ' salarié(s)' + hors + '</summary>' + lignes + '</details>';
@@ -7034,7 +7087,7 @@ async function spConfirmImport() {
         label: creche?.name || '', lieu: creche?.name || '',
         hdebut: cr.hdebut, hfin: cr.hfin, pause: cr.pause,
         source_cell: 'PDF présences — ' + s.nomPdf,
-        creneau_label: s.segments.map(g => g.debut + '-' + g.fin).join('/'),
+        creneau_label: cr.label,
         import_batch_id: batchId
       }, { onConflict: 'creche_id,prenom,semaine,jour' });
       if (error) { console.error('[ImportSalPdf]', error.message); failed++; } else { saved++; }
