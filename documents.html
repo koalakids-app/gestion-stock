@@ -44,6 +44,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 .sub.closed .sub-b{display:none}
 .sub-h .ti-chevron-down{transition:transform .2s;font-size:15px}
 .sub.closed .sub-h .ti-chevron-down{transform:rotate(-90deg)}
+.sub.sub3{border-radius:12px;margin:5px 3px;background:#F7F6FC;border-width:1px}
+.sub.sub3 .sub-h{padding:8px 10px}
+.sub.sub3 .sub-h h3{font-size:13px;color:#6B62C0}
 .cat.closed .cat-b{display:none}
 .cat.closed .cat-h{border-bottom:none}
 .cat-h .ti-chevron-down{transition:transform .2s}
@@ -170,7 +173,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 <div class="ov" id="ovCat"><div class="modal" style="max-width:400px">
   <h2 id="catTitle">Nouvelle catégorie</h2>
   <div class="f"><label>Nom</label><input id="cNom"></div>
-  <div class="f"><label>Catégorie parente</label><select id="cParent"></select></div>
+  <div class="f"><label>Catégorie parente</label><select id="cParent"></select>
+    <div id="cParentHint" style="font-size:11px;color:var(--muted);margin-top:4px;display:none"></div></div>
   <div class="f"><label>Couleur</label><input type="color" id="cCoul" value="#4A3F9F" style="height:44px;padding:4px"></div>
   <div class="mf">
     <button class="btn btn-g" onclick="close_('ovCat');document.getElementById('ovCat').style.zIndex=''">Annuler</button>
@@ -349,37 +353,47 @@ function render(){
   const el=document.getElementById('list');
   if(!docs.length){el.innerHTML='<div class="empty"><i class="ti ti-folder-off"></i>Aucun document</div>';return;}
   let html='';
-  const alpha=(a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'});
-  const roots=CATS.filter(c=>!c.parent_id).sort(alpha);
+  const roots=CATS.filter(c=>!c.parent_id).sort(CAT_ALPHA);
   roots.push({id:null,nom:'Sans catégorie',couleur:'#A8A29E'});
-  roots.forEach(cat=>{
-    const kids=cat.id?CATS.filter(c=>c.parent_id===cat.id).sort(alpha):[];
-    const own=docs.filter(d=>(d.categorie_id||null)===(cat.id||null))
-      .sort((a,b)=>(a.titre||'').localeCompare(b.titre||'','fr',{sensitivity:'base'}));
-    const kidDocs=kids.map(k=>({cat:k,items:docs.filter(d=>d.categorie_id===k.id)
-      .sort((a,b)=>(a.titre||'').localeCompare(b.titre||'','fr',{sensitivity:'base'}))})).filter(x=>x.items.length);
-    const total=own.length+kidDocs.reduce((n,x)=>n+x.items.length,0);
-    if(!total)return;
-    const ckey=String(cat.id||'none');
-    const open=q?true:OPEN_CATS.has(ckey);
-    html+=`<div class="cat${open?'':' closed'}"><div class="cat-h" onclick="toggleCat(this,'${ckey}')">
+  roots.forEach(cat=>{html+=catNodeHtml(cat,docs,1,!!q).html;});
+  el.innerHTML=html;
+}
+
+/* Comparateurs partagés */
+const CAT_ALPHA=(a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'});
+const DOC_ALPHA=(a,b)=>(a.titre||'').localeCompare(b.titre||'','fr',{sensitivity:'base'});
+
+/* Rendu récursif d'une catégorie et de ses descendants (jusqu'à MAX_CAT_DEPTH niveaux).
+   Retourne {html,total} ; total = documents de la catégorie + ceux de toute sa descendance.
+   Une branche sans aucun document n'est pas affichée. */
+function catNodeHtml(cat,docs,depth,qActive){
+  if(depth>MAX_CAT_DEPTH+1)return{html:'',total:0};
+  const kids=cat.id?CATS.filter(c=>c.parent_id===cat.id).sort(CAT_ALPHA):[];
+  const own=docs.filter(d=>(d.categorie_id||null)===(cat.id||null)).sort(DOC_ALPHA);
+  let inner='',subTotal=0;
+  kids.forEach(k=>{
+    const r=catNodeHtml(k,docs,depth+1,qActive);
+    if(r.total){inner+=r.html;subTotal+=r.total;}
+  });
+  const total=own.length+subTotal;
+  if(!total)return{html:'',total:0};
+  const key=(depth>1?'sub_':'')+String(cat.id||'none');
+  const open=qActive?true:OPEN_CATS.has(key);
+  const body=own.map(docRowHtml).join('')+inner;
+  let html;
+  if(depth===1){
+    html=`<div class="cat${open?'':' closed'}"><div class="cat-h" onclick="toggleCat(this,'${key}')">
       <span class="cat-dot" style="background:${esc(cat.couleur||'#4A3F9F')}"></span>
       <h2>${esc(cat.nom)}</h2><span class="cat-n">${total}</span>
-      <i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="cat-b">`;
-    own.forEach(d=>{html+=docRowHtml(d);});
-    kidDocs.forEach(x=>{
-      const skey='sub_'+x.cat.id;
-      const sopen=q?true:OPEN_CATS.has(skey);
-      html+=`<div class="sub${sopen?'':' closed'}"><div class="sub-h" onclick="event.stopPropagation();toggleSub(this,'${skey}')">
-        <span class="cat-dot" style="width:9px;height:9px;background:${esc(x.cat.couleur||'#8E8AA8')}"></span>
-        <h3>${esc(x.cat.nom)}</h3><span class="cat-n">${x.items.length}</span>
-        <i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="sub-b">`;
-      x.items.forEach(d=>{html+=docRowHtml(d);});
-      html+='</div></div>';
-    });
-    html+='</div></div>';
-  });
-  el.innerHTML=html;
+      <i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="cat-b">${body}</div></div>`;
+  }else{
+    const dot=depth===2?'9px':'8px';
+    html=`<div class="sub${depth>=3?' sub3':''}${open?'':' closed'}"><div class="sub-h" onclick="event.stopPropagation();toggleSub(this,'${key}')">
+      <span class="cat-dot" style="width:${dot};height:${dot};background:${esc(cat.couleur||'#8E8AA8')}"></span>
+      <h3>${esc(cat.nom)}</h3><span class="cat-n">${total}</span>
+      <i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="sub-b">${body}</div></div>`;
+  }
+  return{html,total};
 }
 
 function docRowHtml(d){
@@ -404,12 +418,42 @@ function toggleSub(h,key){
 }
 function catOptionsHtml(){
   let o='';
-  const az=(a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'});
-  CATS.filter(c=>!c.parent_id).sort(az).forEach(c=>{
-    o+=`<option value="${c.id}">${esc(c.nom)}</option>`;
-    CATS.filter(k=>k.parent_id===c.id).sort(az).forEach(k=>{o+=`<option value="${k.id}">\u00A0\u00A0\u00A0— ${esc(k.nom)}</option>`;});
-  });
+  const walk=(list,depth)=>{
+    if(depth>=MAX_CAT_DEPTH+1)return;
+    list.sort(CAT_ALPHA).forEach(c=>{
+      const pad='\u00A0'.repeat(depth*3);
+      o+=`<option value="${c.id}">${pad}${depth?'— ':''}${esc(c.nom)}</option>`;
+      walk(CATS.filter(k=>k.parent_id===c.id),depth+1);
+    });
+  };
+  walk(CATS.filter(c=>!c.parent_id),0);
   return o;
+}
+
+/* ---------- HIERARCHIE DES CATEGORIES ---------- */
+const MAX_CAT_DEPTH=3;                 // profondeur maximale autorisée
+function catDepth(id){                 // 1 = catégorie racine
+  let d=1,cur=CATS.find(c=>c.id===id),g=0;
+  while(cur&&cur.parent_id&&g++<20){d++;cur=CATS.find(c=>c.id===cur.parent_id);}
+  return d;
+}
+function catHeight(id){                // 1 = aucune sous-catégorie
+  const kids=CATS.filter(c=>c.parent_id===id);
+  if(!kids.length)return 1;
+  return 1+Math.max.apply(null,kids.map(k=>catHeight(k.id)));
+}
+function catIsDescendant(id,ancestorId){
+  let cur=CATS.find(c=>c.id===id),g=0;
+  while(cur&&cur.parent_id&&g++<20){
+    if(cur.parent_id===ancestorId)return true;
+    cur=CATS.find(c=>c.id===cur.parent_id);
+  }
+  return false;
+}
+function catPath(id){                  // « Protocoles › Médicaux »
+  const names=[];let cur=CATS.find(c=>c.id===id),g=0;
+  while(cur&&g++<20){names.unshift(cur.nom||'');cur=cur.parent_id?CATS.find(c=>c.id===cur.parent_id):null;}
+  return names.join(' › ');
 }
 
 /* ---------- CATEGORIE ---------- */
@@ -420,19 +464,26 @@ function openCat(id){
   document.getElementById('catTitle').textContent=cur?'Modifier la catégorie':'Nouvelle catégorie';
   document.getElementById('cNom').value=cur?(cur.nom||''):'';
   document.getElementById('cCoul').value=cur?(cur.couleur||'#4A3F9F'):'#4A3F9F';
-  const hasKids=cur?CATS.some(c=>c.parent_id===cur.id):false;
+  /* Parents possibles : toute catégorie qui n'est ni elle-même ni un de ses descendants,
+     et dont la profondeur additionnée à la hauteur du sous-arbre déplacé reste <= MAX_CAT_DEPTH. */
+  const h=cur?catHeight(cur.id):1;
   let opts='<option value="">— Aucune (catégorie principale) —</option>';
-  if(hasKids){
-    opts+='<option value="" disabled>(catégorie contenant des sous-catégories)</option>';
-  }else{
-    CATS.filter(c=>!c.parent_id&&c.id!==editCatId)
-      .sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'}))
-      .forEach(c=>{opts+=`<option value="${c.id}">${esc(c.nom)}</option>`;});
-  }
+  const cands=CATS.filter(c=>c.id!==editCatId
+      &&!(editCatId&&catIsDescendant(c.id,editCatId))
+      &&catDepth(c.id)+h<=MAX_CAT_DEPTH)
+    .sort((a,b)=>catPath(a.id).localeCompare(catPath(b.id),'fr',{sensitivity:'base'}));
+  cands.forEach(c=>{opts+=`<option value="${c.id}">${esc(catPath(c.id))}</option>`;});
   const sel=document.getElementById('cParent');
   sel.innerHTML=opts;
-  sel.disabled=hasKids;
+  sel.disabled=false;
   if(cur&&cur.parent_id)sel.value=cur.parent_id;
+  const hint=document.getElementById('cParentHint');
+  if(hint){
+    hint.textContent=cands.length?'':(h>1
+      ?'Cette catégorie contient déjà '+(h-1)+' niveau(x) de sous-catégories : elle ne peut pas descendre plus bas ('+MAX_CAT_DEPTH+' niveaux maximum).'
+      :'Aucune catégorie parente disponible.');
+    hint.style.display=hint.textContent?'':'none';
+  }
   const ov=document.getElementById('ovCat');
   ov.style.zIndex=document.getElementById('ovCatMgr').classList.contains('on')?'160':'';
   ov.classList.add('on');
@@ -441,6 +492,13 @@ async function saveCat(){
   const nom=document.getElementById('cNom').value.trim();
   if(!nom)return toast('Nom requis');
   const parent=document.getElementById('cParent').value||null;
+  if(parent){
+    if(editCatId&&(parent===editCatId||catIsDescendant(parent,editCatId)))
+      return toast('Déplacement impossible : la cible est une sous-catégorie de celle-ci');
+    const hh=editCatId?catHeight(editCatId):1;
+    if(catDepth(parent)+hh>MAX_CAT_DEPTH)
+      return toast('Profondeur maximale de '+MAX_CAT_DEPTH+' niveaux atteinte');
+  }
   const coul=document.getElementById('cCoul').value;
   let error;
   if(editCatId){
@@ -459,25 +517,29 @@ async function saveCat(){
 /* ---------- GESTION DES CATEGORIES ---------- */
 function openCatMgr(){renderCatMgr();document.getElementById('ovCatMgr').classList.add('on');}
 function renderCatMgr(){
-  const az=(a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'});
-  const roots=CATS.filter(c=>!c.parent_id).sort(az);
+  const roots=CATS.filter(c=>!c.parent_id).sort(CAT_ALPHA);
   if(!roots.length&&!CATS.length){
     document.getElementById('catMgrList').innerHTML='<div class="empty"><i class="ti ti-folder-off"></i>Aucune catégorie</div>';return;
   }
-  const row=(c,sub)=>{
+  const row=(c,depth)=>{
     const n=DOCS.filter(d=>d.categorie_id===c.id).length;
-    return `<div class="chip" style="${sub?'margin-left:18px;':''}">
-      <span class="cat-dot" style="background:${esc(c.couleur||'#4A3F9F')}"></span>
+    const dot=depth===0?'11px':(depth===1?'9px':'8px');
+    return `<div class="chip" style="margin-left:${depth*18}px">
+      <span class="cat-dot" style="width:${dot};height:${dot};background:${esc(c.couleur||'#4A3F9F')}"></span>
       <span style="flex:1">${esc(c.nom)} <span style="color:var(--muted)">(${n})</span></span>
       <button class="iconbtn" title="Modifier" onclick="openCat('${c.id}')"><i class="ti ti-edit"></i></button>
       <button class="iconbtn d" title="Supprimer" onclick="delCat('${c.id}')"><i class="ti ti-trash"></i></button>
     </div>`;
   };
   let h='';
-  roots.forEach(c=>{
-    h+=row(c,false);
-    CATS.filter(k=>k.parent_id===c.id).sort(az).forEach(k=>{h+=row(k,true);});
-  });
+  const walk=(list,depth)=>{
+    if(depth>MAX_CAT_DEPTH)return;
+    list.sort(CAT_ALPHA).forEach(c=>{
+      h+=row(c,depth);
+      walk(CATS.filter(k=>k.parent_id===c.id),depth+1);
+    });
+  };
+  walk(roots,0);
   document.getElementById('catMgrList').innerHTML=h;
 }
 async function delCat(id){
@@ -3301,24 +3363,26 @@ principe: `
 
 categories: `
 <h3>🗂️ Organiser les catégories</h3>
-<div class="tip">Les catégories structurent la bibliothèque. Elles peuvent s’emboîter : une catégorie parente contient des sous-catégories.</div>
+<div class="tip">Les catégories structurent la bibliothèque. Elles peuvent s’emboîter sur <strong>trois niveaux</strong> : catégorie › sous-catégorie › sous-sous-catégorie (par exemple Protocoles › Santé › Fièvre).</div>
 <div class="st">➕ Créer une catégorie</div>
 <ul>
   <li>Bouton <strong>Nouvelle catégorie</strong>.</li>
   <li>Renseigner le <strong>nom</strong>, choisir une <strong>couleur</strong> — elle sert de repère visuel dans la liste.</li>
-  <li>Laisser <strong>Catégorie parente</strong> vide pour une catégorie de premier niveau, ou en choisir une pour créer une sous-catégorie.</li>
+  <li>Laisser <strong>Catégorie parente</strong> vide pour une catégorie de premier niveau, ou en choisir une pour créer une sous-catégorie. La liste affiche le chemin complet (« Protocoles › Santé ») ; seules les catégories où un niveau supplémentaire reste possible y figurent.</li>
 </ul>
 <div class="st">✏️ Modifier ou déplacer une catégorie</div>
 <ul>
   <li>Bouton <strong>Gérer catégories</strong> : la liste complète s’affiche, y compris les catégories encore vides.</li>
   <li>Icône <strong>crayon</strong> pour renommer, changer la couleur, ou choisir une <strong>catégorie parente</strong> — c’est ainsi qu’on déplace une catégorie sous une autre (par exemple : Stagiaires sous Ressources humaines). Les documents suivent automatiquement.</li>
-  <li>Une catégorie qui contient déjà des sous-catégories ne peut pas être déplacée : il faut d’abord sortir ses sous-catégories.</li>
+  <li>Une catégorie emporte ses sous-catégories avec elle lors d’un déplacement, à condition que le total reste dans les trois niveaux. Exemple : une catégorie qui contient déjà des sous-catégories peut passer au niveau 2, mais pas au niveau 3.</li>
+  <li>Une catégorie ne peut pas être placée sous une de ses propres sous-catégories.</li>
   <li>Icône <strong>corbeille</strong> pour supprimer : les documents concernés basculent en « Sans catégorie », ils ne sont jamais perdus.</li>
 </ul>
 <div class="st">💡 Conseil d’organisation</div>
 <ul>
   <li>Rester sur un nombre limité de catégories principales : une bibliothèque trop découpée devient difficile à parcourir.</li>
   <li>Utiliser les sous-catégories pour les regroupements fins (par exemple : Ressources humaines › Entretiens annuels).</li>
+  <li>Ne descendre au troisième niveau que si une sous-catégorie dépasse une dizaine de documents — au-delà, la navigation devient plus lente qu’une simple recherche par mot-clé.</li>
 </ul>
 `,
 
