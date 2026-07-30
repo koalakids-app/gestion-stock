@@ -104,6 +104,53 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 .rep{display:flex;align-items:center;gap:10px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;margin-bottom:7px;font-size:13px}
 .rep b{flex:1}
 @media(max-width:600px){.wrap{padding:12px}.doc{flex-wrap:wrap}.doc-a{width:100%;justify-content:flex-end}}
+/* ===== Registre de securite ===== */
+.tabs{display:flex;gap:8px;margin-bottom:14px;border-bottom:2px solid var(--line);flex-wrap:wrap}
+.tabs .tab{border:none;background:none;font-family:'Baloo 2',cursive;font-size:15px;color:var(--muted);
+  padding:9px 14px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;display:inline-flex;align-items:center;gap:7px}
+.tabs .tab.on{color:var(--violet);border-bottom-color:var(--orange)}
+.rs-head{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.rs-head select{width:auto;min-width:170px}
+#rsNav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.rs-t{border:2px solid var(--line);background:#fff;border-radius:20px;padding:7px 13px;font-family:'Nunito';
+  font-weight:700;font-size:12.5px;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.rs-t.on{background:var(--violet);border-color:var(--violet);color:#fff}
+.rs-t b{background:#C62828;color:#fff;border-radius:20px;padding:0 6px;font-size:11px;margin-left:2px}
+.rs-t.on b{background:#fff;color:var(--violet)}
+.rs-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.rs-h{font-family:'Baloo 2',cursive;font-size:15px;color:var(--violet);margin:18px 0 9px}
+.rs-list{display:flex;flex-direction:column;gap:7px}
+.rs-i{display:flex;align-items:flex-start;gap:10px;background:#fff;border:2px solid var(--line);
+  border-radius:14px;padding:11px 13px}
+.rs-i-m{flex:1;min-width:0}
+.rs-i-m b{font-size:13.5px;display:block;line-height:1.3}
+.rs-s{display:block;font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4}
+.rs-a{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--violet);
+  text-decoration:none;margin-top:4px}
+.rs-act{display:flex;gap:5px;flex-shrink:0}
+.rs-b{font-size:11px;font-weight:800;padding:4px 9px;border-radius:20px;white-space:nowrap;flex-shrink:0;align-self:flex-start}
+.rs-r{background:#FDE8E8;color:#C62828}
+.rs-o{background:var(--orange-l);color:#B4560F}
+.rs-v{background:#E7F6EC;color:#1B7A3E}
+.rs-g{background:#F1EFF7;color:var(--muted)}
+.rs-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:6px}
+.rs-k{background:#fff;border:2px solid var(--line);border-radius:16px;padding:13px 14px}
+.rs-k.bad{border-color:#F3C2C2;background:#FFF7F7}
+.rs-k.warn{border-color:#F6D9BB;background:#FFFBF6}
+.rs-k.good{border-color:#CDE9D7;background:#F8FDFA}
+.rs-kv{font-family:'Baloo 2',cursive;font-size:26px;color:var(--violet);line-height:1}
+.rs-kt{font-size:12.5px;font-weight:700;margin-top:4px}
+.rs-ks{font-size:11.5px;color:var(--muted);margin-top:1px}
+.rs-card{background:#fff;border:2px solid var(--line);border-radius:16px;padding:6px 14px}
+.rs-f{display:flex;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.rs-f:last-child{border-bottom:none}
+.rs-f span{color:var(--muted);font-weight:700;flex:0 0 46%}
+.rs-f b{flex:1;word-break:break-word}
+.rs-sw{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
+.rs-sw input{width:auto;accent-color:var(--orange)}
+.rs-note{font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:16px;background:#F7F6FC;
+  border-left:3px solid var(--violet-l);border-radius:0 10px 10px 0;padding:10px 12px}
+@media(max-width:600px){.rs-f{flex-direction:column;gap:2px}.rs-f span{flex:none}}
 </style>
 </head>
 <body>
@@ -127,6 +174,12 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
   </div>
 
   <div class="wrap">
+    <div class="tabs">
+      <button class="tab on" id="tabDocs" onclick="goTab('docs')"><i class="ti ti-folders"></i> Documents</button>
+      <button class="tab" id="tabRS" onclick="goTab('rs')"><i class="ti ti-shield-check"></i> Registre de sécurité</button>
+    </div>
+
+    <div id="viewDocs">
     <div class="bar">
       <input class="search" id="q" placeholder="Rechercher un document…" oninput="render()">
       <select id="fType" style="width:auto" onchange="render()">
@@ -143,8 +196,31 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
       <span id="bulkProg" style="font-size:12px;font-weight:700;color:var(--violet)"></span>
     </div>
     <div id="list"></div>
+    </div>
+
+    <div id="viewRS" style="display:none">
+      <div class="rs-head">
+        <select id="rsCreche" onchange="rsChangeCreche()"></select>
+        <button class="btn btn-s" onclick="rsLoad()"><i class="ti ti-refresh"></i> Actualiser</button>
+        <button class="btn btn-s" onclick="rsApercu()"><i class="ti ti-eye"></i> Aperçu du registre</button>
+        <button class="btn btn-p" onclick="rsPdf()"><i class="ti ti-file-type-pdf"></i> Exporter le registre</button>
+      </div>
+      <div id="rsNav"></div>
+      <div id="rsBody"></div>
+    </div>
   </div>
 </div>
+
+<!-- Modal registre de sécurité -->
+<div class="ov" id="ovRS"><div class="modal">
+  <h2 id="rsModTitre">Registre de sécurité</h2>
+  <div id="rsForm"></div>
+  <div class="mf">
+    <button class="btn btn-g" onclick="close_('ovRS')">Annuler</button>
+    <button class="btn btn-d" id="rsDel" style="display:none" onclick="rsDelCourant()"><i class="ti ti-trash"></i> Supprimer</button>
+    <button class="btn btn-p" onclick="rsSave()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
+  </div>
+</div></div>
 
 <!-- Modal document -->
 <div class="ov" id="ovDoc"><div class="modal">
@@ -3356,6 +3432,7 @@ boot();
         <button class="ntab" onclick="switchNoticeTab('signature',this)">🖊️ Signatures</button>
         <button class="ntab" onclick="switchNoticeTab('reponses',this)">📋 Réponses</button>
         <button class="ntab" onclick="switchNoticeTab('eaje',this)">📋 Contrôle EAJE</button>
+        <button class="ntab" onclick="switchNoticeTab('registre',this)">🛡️ Registre sécurité</button>
       </div>
       <button class="btn btn-g btn-s" onclick="close_('ovNotice')" style="flex-shrink:0;margin-bottom:8px">✕</button>
     </div>
@@ -3544,6 +3621,35 @@ eaje: `
   <li>Les fiches déjà saisies se retrouvent via le bouton « Réponses » du document.</li>
 </ul>
 <div class="warn">⚠️ Une référente ne voit que les fiches de sa crèche. La direction accède à l’ensemble des établissements.</div>
+`,
+
+registre: `
+<h3>🛡️ Le registre de sécurité</h3>
+<div class="tip">Le second onglet de cette page tient le registre de sécurité obligatoire de chaque crèche, au titre de l’article R.143-44 du code de la construction et de l’habitation. Il est présenté à la commission de sécurité, au maire, à la PMI ou à l’assureur sur simple demande.</div>
+<div class="st">🧭 Se repérer</div>
+<ul>
+  <li>Le sélecteur en haut choisit la crèche. Une référente ne voit et ne modifie que la sienne ; la direction accède aux six.</li>
+  <li><strong>Synthèse</strong> — le tableau de bord : contrôles en retard, échéances proches, réserves ouvertes, obligation d’exercices remplie ou non.</li>
+  <li><strong>Identité ERP</strong> — type, catégorie, effectifs, avis de la commission de sécurité, chargé de sécurité désigné, assurance.</li>
+  <li><strong>Vérifications</strong> — l’échéancier réglementaire (27 contrôles pré-paramétrés) et l’historique des contrôles consignés.</li>
+  <li><strong>Exercices</strong> — évacuation et mise en sûreté, avec scénario, durée, difficultés et actions correctives.</li>
+  <li><strong>Formations</strong> — SST, PSC1, extincteurs… avec suivi automatique des recyclages.</li>
+  <li><strong>Travaux</strong> — mention obligatoire de tout aménagement ou transformation, avec l’entreprise et les dates.</li>
+  <li><strong>Réserves</strong> — prescriptions issues des visites, suivies jusqu’à leur levée.</li>
+  <li><strong>Journal</strong> — la trace horodatée de toutes les écritures.</li>
+</ul>
+<div class="st">⏱️ L’échéancier</div>
+<ul>
+  <li>Chaque type de contrôle porte sa périodicité réglementaire. Dès qu’un contrôle est consigné, la prochaine échéance se calcule seule.</li>
+  <li>Un badge rouge signale un contrôle échu, orange une échéance sous 30 jours, gris un contrôle jamais réalisé.</li>
+  <li>Le compteur rouge sur les onglets « Vérifications » et « Réserves » indique ce qui reste à traiter.</li>
+</ul>
+<div class="st">📄 L’export</div>
+<ul>
+  <li>« Exporter le registre » produit le registre complet en PDF, dans l’ordre des sept parties, prêt à être présenté ou archivé.</li>
+  <li>« Aperçu » l’affiche à l’écran sans rien enregistrer sur le disque.</li>
+</ul>
+<div class="warn">⚠️ Les écritures sont horodatées et nominatives, et ne peuvent être ni modifiées ni supprimées après coup dans le journal : c’est cette inaltérabilité qui rend le registre numérique opposable. Une correction se fait en ajoutant une écriture, jamais en effaçant la précédente.</div>
 `
 
 };
@@ -3557,6 +3663,653 @@ function switchNoticeTab(tab, btn){
   if(btn) btn.classList.add('on');
   document.getElementById('noticeBody').innerHTML = NOTICE_DOC[tab] || '';
 }
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   REGISTRE DE SÉCURITÉ NUMÉRIQUE — art. R.143-44 CCH (ERP type R, 5e cat.)
+   Onglet autonome de documents.html. Tables rs_* sur Supabase.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+let RS_LOADED=false, RS_CRECHE=null, RS_MOD='synthese';
+let RS_TYPES=[], RS_ETAB=null, RS_DATA={}, RS_EDIT=null, RS_MODAL_MOD=null;
+
+/* Date locale au format ISO — jamais toISOString() (décalage UTC+2). */
+function rsToday(){
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function rsAddMonths(iso,m){
+  if(!iso||m==null)return null;
+  const p=String(iso).slice(0,10).split('-');
+  const d=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));
+  const j=d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth()+Number(m));
+  d.setDate(Math.min(j,new Date(d.getFullYear(),d.getMonth()+1,0).getDate()));
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function rsJours(iso){
+  if(!iso)return null;
+  const a=new Date(rsToday()+'T00:00:00'), b=new Date(String(iso).slice(0,10)+'T00:00:00');
+  return Math.round((b-a)/86400000);
+}
+function rsFr(iso){
+  if(!iso)return '—';
+  const p=String(iso).slice(0,10).split('-');
+  return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;
+}
+
+/* ---------- Schémas des modules ---------- */
+const RS_MODULES={
+  synthese:{titre:'Synthèse',icon:'gauge'},
+  etab:{titre:'Identité ERP',icon:'building-community'},
+  controles:{
+    titre:'Vérifications',icon:'checkup-list',table:'rs_controles',
+    tri:['date_controle',false],
+    champs:[
+      {k:'type_id',l:'Contrôle',t:'select',req:true,opts:()=>RS_TYPES.map(t=>({v:t.id,l:t.libelle}))},
+      {k:'libelle_libre',l:'Intitulé libre (si hors référentiel)',t:'text'},
+      {k:'date_controle',l:'Date du contrôle',t:'date',req:true},
+      {k:'organisme',l:'Organisme vérificateur',t:'text'},
+      {k:'intervenant',l:'Intervenant',t:'text'},
+      {k:'resultat',l:'Résultat',t:'select',req:true,opts:()=>[
+        {v:'conforme',l:'Conforme'},{v:'conforme_reserves',l:'Conforme avec réserves'},{v:'non_conforme',l:'Non conforme'}]},
+      {k:'cout_ht',l:'Coût HT (€)',t:'num'},
+      {k:'observations',l:'Observations',t:'textarea'},
+      {k:'rapport_url',l:'Rapport de contrôle (PDF)',t:'file'}
+    ]},
+  exercices:{
+    titre:'Exercices',icon:'run',table:'rs_exercices',
+    tri:['date_exercice',false],
+    champs:[
+      {k:'type',l:'Type d’exercice',t:'select',req:true,opts:()=>[
+        {v:'evacuation',l:'Évacuation incendie'},{v:'confinement',l:'Confinement / PPMS'},
+        {v:'attentat_intrusion',l:'Attentat-intrusion'},{v:'autre',l:'Autre'}]},
+      {k:'date_exercice',l:'Date',t:'date',req:true},
+      {k:'heure',l:'Heure',t:'text'},
+      {k:'inopine',l:'Exercice inopiné',t:'bool'},
+      {k:'scenario',l:'Scénario retenu',t:'text'},
+      {k:'nb_enfants',l:'Enfants présents',t:'num'},
+      {k:'nb_adultes',l:'Adultes présents',t:'num'},
+      {k:'duree_secondes',l:'Durée d’évacuation (secondes)',t:'num'},
+      {k:'point_rassemblement',l:'Point de rassemblement',t:'text'},
+      {k:'participants',l:'Participants',t:'textarea'},
+      {k:'deroulement',l:'Déroulement',t:'textarea'},
+      {k:'difficultes',l:'Difficultés rencontrées',t:'textarea'},
+      {k:'actions_correctives',l:'Actions correctives décidées',t:'textarea'},
+      {k:'pj_url',l:'Pièce jointe',t:'file'}
+    ]},
+  formations:{
+    titre:'Formations',icon:'certificate',table:'rs_formations',
+    tri:['date_recyclage',true],
+    champs:[
+      {k:'personne',l:'Personne',t:'text',req:true},
+      {k:'fonction',l:'Fonction',t:'text'},
+      {k:'type_formation',l:'Type',t:'select',req:true,opts:()=>[
+        {v:'sst',l:'SST — sauveteur secouriste du travail'},{v:'psc1',l:'PSC1'},
+        {v:'extincteurs',l:'Manipulation des extincteurs'},{v:'evacuation',l:'Guide / serre-file évacuation'},
+        {v:'gestes_urgence',l:'Gestes d’urgence pédiatriques'},{v:'autre',l:'Autre'}]},
+      {k:'intitule',l:'Intitulé exact',t:'text'},
+      {k:'organisme',l:'Organisme formateur',t:'text'},
+      {k:'date_obtention',l:'Date d’obtention',t:'date',req:true},
+      {k:'validite_mois',l:'Validité (mois) — 24 pour le SST',t:'num'},
+      {k:'observations',l:'Observations',t:'textarea'},
+      {k:'attestation_url',l:'Attestation',t:'file'}
+    ]},
+  travaux:{
+    titre:'Travaux',icon:'tools',table:'rs_travaux',
+    tri:['date_debut',false],
+    champs:[
+      {k:'intitule',l:'Intitulé',t:'text',req:true},
+      {k:'nature',l:'Nature',t:'select',opts:()=>[
+        {v:'amenagement',l:'Aménagement'},{v:'transformation',l:'Transformation'},
+        {v:'entretien',l:'Entretien'},{v:'mise_conformite',l:'Mise en conformité'}]},
+      {k:'description',l:'Description',t:'textarea'},
+      {k:'entreprise',l:'Entreprise',t:'text'},
+      {k:'entreprise_contact',l:'Contact entreprise',t:'text'},
+      {k:'date_debut',l:'Début',t:'date',req:true},
+      {k:'date_fin',l:'Fin',t:'date'},
+      {k:'incidence_erp',l:'Modifie l’ERP (déclaration requise)',t:'bool'},
+      {k:'autorisation_ref',l:'Référence autorisation (AT / DP / avis)',t:'text'},
+      {k:'pj_url',l:'Pièce jointe',t:'file'}
+    ]},
+  reserves:{
+    titre:'Réserves',icon:'alert-triangle',table:'rs_reserves',
+    tri:['echeance',true],
+    champs:[
+      {k:'intitule',l:'Intitulé de la prescription',t:'text',req:true},
+      {k:'origine',l:'Origine',t:'select',req:true,opts:()=>[
+        {v:'commission_securite',l:'Commission de sécurité'},{v:'pmi',l:'PMI'},
+        {v:'assureur',l:'Assureur'},{v:'verificateur',l:'Organisme vérificateur'},
+        {v:'interne',l:'Constat interne'}]},
+      {k:'date_constat',l:'Date du constat',t:'date',req:true},
+      {k:'reference',l:'Référence du rapport',t:'text'},
+      {k:'gravite',l:'Gravité',t:'select',opts:()=>[
+        {v:'majeure',l:'Majeure'},{v:'moyenne',l:'Moyenne'},{v:'mineure',l:'Mineure'}]},
+      {k:'echeance',l:'Échéance de levée',t:'date'},
+      {k:'description',l:'Description',t:'textarea'},
+      {k:'statut',l:'Statut',t:'select',opts:()=>[
+        {v:'ouverte',l:'Ouverte'},{v:'en_cours',l:'En cours'},{v:'levee',l:'Levée'}]},
+      {k:'action_menee',l:'Action menée',t:'textarea'},
+      {k:'date_levee',l:'Date de levée',t:'date'},
+      {k:'preuve_url',l:'Justificatif de levée',t:'file'}
+    ]},
+  journal:{titre:'Journal',icon:'history',table:'rs_journal'}
+};
+
+/* ---------- Navigation entre les deux onglets de la page ---------- */
+function goTab(t){
+  const d=t==='docs';
+  document.getElementById('viewDocs').style.display=d?'':'none';
+  document.getElementById('viewRS').style.display=d?'none':'';
+  document.getElementById('tabDocs').classList.toggle('on',d);
+  document.getElementById('tabRS').classList.toggle('on',!d);
+  if(!d&&!RS_LOADED)rsInit();
+}
+
+/* ---------- Chargement ---------- */
+async function rsInit(){
+  RS_LOADED=true;
+  const sel=document.getElementById('rsCreche');
+  sel.innerHTML=(CRECHES||[]).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  if(PROF&&PROF.role!=='direction'&&PROF.creche_id){sel.value=PROF.creche_id;sel.disabled=true;}
+  RS_CRECHE=sel.value||null;
+  const{data:t}=await sb.from('rs_types_controle').select('*').eq('actif',true).order('ordre');
+  RS_TYPES=t||[];
+  await rsLoad();
+}
+function rsChangeCreche(){RS_CRECHE=document.getElementById('rsCreche').value;rsLoad();}
+
+async function rsLoad(){
+  if(!RS_CRECHE){document.getElementById('rsBody').innerHTML='<div class="empty"><i class="ti ti-building"></i>Aucune crèche sélectionnée.</div>';return;}
+  document.getElementById('rsBody').innerHTML='<div class="empty"><i class="ti ti-loader"></i>Chargement…</div>';
+  const q=n=>sb.from(n).select('*').eq('creche_id',RS_CRECHE);
+  try{
+    const[e,c,x,f,tv,r,j]=await Promise.all([
+      sb.from('rs_etablissement').select('*').eq('creche_id',RS_CRECHE).maybeSingle(),
+      q('rs_controles'),q('rs_exercices'),q('rs_formations'),q('rs_travaux'),q('rs_reserves'),
+      sb.from('rs_journal').select('*').eq('creche_id',RS_CRECHE).order('horodatage',{ascending:false}).limit(300)
+    ]);
+    RS_ETAB=e.data||null;
+    RS_DATA={controles:c.data||[],exercices:x.data||[],formations:f.data||[],
+             travaux:tv.data||[],reserves:r.data||[],journal:j.data||[]};
+  }catch(err){
+    console.error('rsLoad',err);
+    document.getElementById('rsBody').innerHTML='<div class="empty"><i class="ti ti-plug-off"></i>Chargement impossible. Session expirée ? Se déconnecter puis se reconnecter.</div>';
+    return;
+  }
+  rsRender();
+}
+
+function rsGo(m){RS_MOD=m;rsRender();}
+function rsEcrit(){return !!PROF&&(PROF.role==='direction'||(PROF.role==='referent'&&PROF.creche_id===RS_CRECHE));}
+
+/* ---------- Échéancier : dernier contrôle par type + prochaine échéance ---------- */
+function rsEcheancier(){
+  const out=[];
+  RS_TYPES.forEach(t=>{
+    const faits=(RS_DATA.controles||[]).filter(c=>c.type_id===t.id)
+      .sort((a,b)=>String(b.date_controle).localeCompare(String(a.date_controle)));
+    const last=faits[0]||null;
+    const due=last&&t.periodicite_mois?rsAddMonths(last.date_controle,t.periodicite_mois):null;
+    const j=due?rsJours(due):null;
+    let etat='jamais';
+    if(last&&!t.periodicite_mois)etat='ok';
+    else if(j!=null)etat=j<0?'retard':(j<=30?'proche':'ok');
+    out.push({type:t,last:last,due:due,jours:j,etat:etat});
+  });
+  const rang={retard:0,jamais:1,proche:2,ok:3};
+  return out.sort((a,b)=>(rang[a.etat]-rang[b.etat])||(a.type.ordre-b.type.ordre));
+}
+function rsBadge(e){
+  if(e.etat==='retard')return `<span class="rs-b rs-r">Échu depuis ${Math.abs(e.jours)} j</span>`;
+  if(e.etat==='jamais')return '<span class="rs-b rs-g">Jamais réalisé</span>';
+  if(e.etat==='proche')return `<span class="rs-b rs-o">Dans ${e.jours} j</span>`;
+  return '<span class="rs-b rs-v">À jour</span>';
+}
+
+/* ---------- Rendu ---------- */
+function rsRender(){
+  const nav=Object.keys(RS_MODULES).map(k=>{
+    const m=RS_MODULES[k];
+    let n='';
+    if(k==='controles'){const r=rsEcheancier().filter(e=>e.etat==='retard'||e.etat==='jamais').length;if(r)n=`<b>${r}</b>`;}
+    if(k==='reserves'){const r=(RS_DATA.reserves||[]).filter(x=>x.statut!=='levee').length;if(r)n=`<b>${r}</b>`;}
+    return `<button class="rs-t${RS_MOD===k?' on':''}" onclick="rsGo('${k}')"><i class="ti ti-${m.icon}"></i> ${m.titre}${n}</button>`;
+  }).join('');
+  document.getElementById('rsNav').innerHTML=nav;
+  const f={synthese:rsVueSynthese,etab:rsVueEtab,controles:rsVueControles,exercices:rsVueListe,
+           formations:rsVueFormations,travaux:rsVueListe,reserves:rsVueReserves,journal:rsVueJournal};
+  document.getElementById('rsBody').innerHTML=(f[RS_MOD]||rsVueListe)();
+}
+
+function rsVueSynthese(){
+  const ech=rsEcheancier();
+  const retard=ech.filter(e=>e.etat==='retard'||e.etat==='jamais');
+  const proche=ech.filter(e=>e.etat==='proche');
+  const res=(RS_DATA.reserves||[]).filter(r=>r.statut!=='levee');
+  const evac=(RS_DATA.exercices||[]).filter(x=>x.type==='evacuation');
+  const an=String(new Date().getFullYear());
+  const evacAn=evac.filter(x=>String(x.date_exercice).slice(0,4)===an).length;
+  const ppms=(RS_DATA.exercices||[]).filter(x=>(x.type==='confinement'||x.type==='attentat_intrusion')&&String(x.date_exercice).slice(0,4)===an).length;
+  const forExp=(RS_DATA.formations||[]).filter(f=>{
+    const d=f.date_recyclage||(f.validite_mois?rsAddMonths(f.date_obtention,f.validite_mois):null);
+    return d&&rsJours(d)<60;});
+  const k=(t,v,s,cls)=>`<div class="rs-k ${cls||''}"><div class="rs-kv">${v}</div><div class="rs-kt">${t}</div><div class="rs-ks">${s||''}</div></div>`;
+  let h='<div class="rs-kpi">';
+  h+=k('Contrôles en retard',retard.length,retard.length?'action requise':'aucun',retard.length?'bad':'good');
+  h+=k('Échéances < 30 j',proche.length,'à planifier',proche.length?'warn':'good');
+  h+=k('Réserves non levées',res.length,'toutes origines',res.length?'warn':'good');
+  h+=k('Évacuations '+an,evacAn+' / 2',evacAn>=2?'obligation remplie':'2 par an requis',evacAn>=2?'good':'warn');
+  h+=k('Mise en sûreté '+an,ppms+' / 1',ppms>=1?'obligation remplie':'1 par an requis',ppms>=1?'good':'warn');
+  h+=k('Formations à recycler',forExp.length,'sous 60 jours',forExp.length?'warn':'good');
+  h+='</div>';
+  if(retard.length){
+    h+='<h3 class="rs-h">À traiter en priorité</h3><div class="rs-list">';
+    retard.slice(0,12).forEach(e=>{
+      h+=`<div class="rs-i"><div class="rs-i-m"><b>${esc(e.type.libelle)}</b>
+        <span class="rs-s">${esc(e.type.reference||'')}</span></div>${rsBadge(e)}</div>`;});
+    h+='</div>';
+  }
+  if(res.length){
+    h+='<h3 class="rs-h">Réserves ouvertes</h3><div class="rs-list">';
+    res.slice(0,12).forEach(r=>{
+      h+=`<div class="rs-i"><div class="rs-i-m"><b>${esc(r.intitule)}</b>
+        <span class="rs-s">${esc(rsLib('origine',r.origine))} · constat du ${rsFr(r.date_constat)}</span></div>
+        <span class="rs-b ${r.gravite==='majeure'?'rs-r':'rs-o'}">${esc(r.gravite||'')}</span></div>`;});
+    h+='</div>';
+  }
+  h+='<p class="rs-note">Registre de sécurité tenu au titre de l’article R.143-44 du code de la construction et de l’habitation. '
+    +'Toutes les écritures sont horodatées et nominatives ; elles ne peuvent être ni modifiées ni supprimées a posteriori (onglet Journal).</p>';
+  return h;
+}
+
+function rsVueEtab(){
+  const e=RS_ETAB||{};
+  const w=rsEcrit();
+  const l=(lab,val)=>`<div class="rs-f"><span>${lab}</span><b>${val==null||val===''?'—':esc(String(val))}</b></div>`;
+  let h='<div class="rs-bar">';
+  if(w)h+='<button class="btn btn-p" onclick="rsOpenEtab()"><i class="ti ti-edit"></i> Modifier la fiche</button>';
+  h+='</div><div class="rs-card">';
+  h+=l('Type ERP',e.erp_type)+l('Catégorie',e.erp_categorie)
+   +l('Effectif public autorisé',e.effectif_public)+l('Effectif personnel',e.effectif_personnel)
+   +l('Locaux à sommeil',e.locaux_sommeil===false?'Non':'Oui')+l('Niveaux',e.etages)
+   +l('Date d’ouverture',e.date_ouverture?rsFr(e.date_ouverture):null)
+   +l('Avis commission de sécurité',e.avis_commission)
+   +l('Date de l’avis',e.avis_commission_le?rsFr(e.avis_commission_le):null)
+   +l('Prochaine visite',e.prochaine_visite?rsFr(e.prochaine_visite):null)
+   +l('Chargé de sécurité',e.charge_securite)+l('Téléphone',e.charge_securite_tel)
+   +l('Contact SDIS',e.sdis_contact)+l('Contact mairie',e.mairie_contact)
+   +l('Assureur',e.assureur)+l('N° de police',e.police_assurance)
+   +l('Observations',e.observations);
+  h+='</div>';
+  return h;
+}
+
+function rsVueControles(){
+  const w=rsEcrit();
+  let h='<div class="rs-bar">';
+  if(w)h+='<button class="btn btn-p" onclick="rsOpen(\'controles\')"><i class="ti ti-plus"></i> Consigner un contrôle</button>';
+  h+='</div><h3 class="rs-h">Échéancier réglementaire</h3><div class="rs-list">';
+  rsEcheancier().forEach(e=>{
+    h+=`<div class="rs-i"><div class="rs-i-m"><b>${esc(e.type.libelle)}</b>
+      <span class="rs-s">${esc(e.type.reference||'')}${e.type.periodicite_mois?' · tous les '+e.type.periodicite_mois+' mois':' · ponctuel'}</span>
+      <span class="rs-s">Dernier : ${rsFr(e.last&&e.last.date_controle)}${e.due?' — prochain : '+rsFr(e.due):''}</span>
+      </div>${rsBadge(e)}</div>`;});
+  h+='</div><h3 class="rs-h">Contrôles consignés</h3>';
+  const rows=(RS_DATA.controles||[]).slice().sort((a,b)=>String(b.date_controle).localeCompare(String(a.date_controle)));
+  if(!rows.length)return h+'<div class="empty"><i class="ti ti-checkup-list"></i>Aucun contrôle enregistré.</div>';
+  h+='<div class="rs-list">';
+  rows.forEach(r=>{
+    const t=RS_TYPES.find(x=>x.id===r.type_id);
+    const cl=r.resultat==='non_conforme'?'rs-r':(r.resultat==='conforme_reserves'?'rs-o':'rs-v');
+    h+=`<div class="rs-i"><div class="rs-i-m"><b>${esc(t?t.libelle:(r.libelle_libre||'Contrôle'))}</b>
+      <span class="rs-s">${rsFr(r.date_controle)}${r.organisme?' · '+esc(r.organisme):''}${r.cout_ht?' · '+r.cout_ht+' € HT':''}</span>
+      ${r.observations?'<span class="rs-s">'+esc(r.observations)+'</span>':''}
+      ${r.rapport_url?'<a class="rs-a" target="_blank" href="'+esc(r.rapport_url)+'"><i class="ti ti-paperclip"></i> Rapport</a>':''}
+      </div><span class="rs-b ${cl}">${esc(rsLib('resultat',r.resultat))}</span>${rsActions('controles',r)}</div>`;});
+  return h+'</div>';
+}
+
+function rsVueFormations(){
+  const w=rsEcrit();
+  let h='<div class="rs-bar">';
+  if(w)h+='<button class="btn btn-p" onclick="rsOpen(\'formations\')"><i class="ti ti-plus"></i> Ajouter une formation</button>';
+  h+='</div>';
+  const rows=(RS_DATA.formations||[]).slice();
+  if(!rows.length)return h+'<div class="empty"><i class="ti ti-certificate"></i>Aucune formation enregistrée.</div>';
+  rows.forEach(f=>{f._due=f.date_recyclage||(f.validite_mois?rsAddMonths(f.date_obtention,f.validite_mois):null);});
+  rows.sort((a,b)=>String(a._due||'9999').localeCompare(String(b._due||'9999')));
+  h+='<div class="rs-list">';
+  rows.forEach(f=>{
+    const j=f._due?rsJours(f._due):null;
+    const b=j==null?'<span class="rs-b rs-v">Sans échéance</span>'
+      :(j<0?`<span class="rs-b rs-r">Périmée depuis ${Math.abs(j)} j</span>`
+      :(j<=60?`<span class="rs-b rs-o">Recyclage dans ${j} j</span>`:'<span class="rs-b rs-v">Valide</span>'));
+    h+=`<div class="rs-i"><div class="rs-i-m"><b>${esc(f.personne)} — ${esc(rsLib('type_formation',f.type_formation))}</b>
+      <span class="rs-s">${esc(f.fonction||'')}${f.organisme?' · '+esc(f.organisme):''}</span>
+      <span class="rs-s">Obtenue le ${rsFr(f.date_obtention)}${f._due?' — à recycler avant le '+rsFr(f._due):''}</span>
+      ${f.attestation_url?'<a class="rs-a" target="_blank" href="'+esc(f.attestation_url)+'"><i class="ti ti-paperclip"></i> Attestation</a>':''}
+      </div>${b}${rsActions('formations',f)}</div>`;});
+  return h+'</div>';
+}
+
+function rsVueReserves(){
+  const w=rsEcrit();
+  let h='<div class="rs-bar">';
+  if(w)h+='<button class="btn btn-p" onclick="rsOpen(\'reserves\')"><i class="ti ti-plus"></i> Ajouter une réserve</button>';
+  h+='</div>';
+  const rows=(RS_DATA.reserves||[]).slice().sort((a,b)=>{
+    if((a.statut==='levee')!==(b.statut==='levee'))return a.statut==='levee'?1:-1;
+    return String(a.echeance||'9999').localeCompare(String(b.echeance||'9999'));});
+  if(!rows.length)return h+'<div class="empty"><i class="ti ti-alert-triangle"></i>Aucune réserve enregistrée.</div>';
+  h+='<div class="rs-list">';
+  rows.forEach(r=>{
+    const j=r.echeance?rsJours(r.echeance):null;
+    const b=r.statut==='levee'?'<span class="rs-b rs-v">Levée le '+rsFr(r.date_levee)+'</span>'
+      :(j!=null&&j<0?`<span class="rs-b rs-r">En retard de ${Math.abs(j)} j</span>`
+      :'<span class="rs-b rs-o">'+esc(rsLib('statut',r.statut))+'</span>');
+    h+=`<div class="rs-i"><div class="rs-i-m"><b>${esc(r.intitule)}</b>
+      <span class="rs-s">${esc(rsLib('origine',r.origine))} · constat du ${rsFr(r.date_constat)}${r.reference?' · '+esc(r.reference):''}</span>
+      ${r.description?'<span class="rs-s">'+esc(r.description)+'</span>':''}
+      ${r.action_menee?'<span class="rs-s"><i class="ti ti-arrow-right"></i> '+esc(r.action_menee)+'</span>':''}
+      ${r.preuve_url?'<a class="rs-a" target="_blank" href="'+esc(r.preuve_url)+'"><i class="ti ti-paperclip"></i> Justificatif</a>':''}
+      </div>${b}${rsActions('reserves',r)}</div>`;});
+  return h+'</div>';
+}
+
+function rsVueListe(){
+  const mod=RS_MOD, M=RS_MODULES[mod], w=rsEcrit();
+  let h='<div class="rs-bar">';
+  if(w)h+=`<button class="btn btn-p" onclick="rsOpen('${mod}')"><i class="ti ti-plus"></i> Ajouter</button>`;
+  h+='</div>';
+  const rows=(RS_DATA[mod]||[]).slice().sort((a,b)=>String(b[M.tri[0]]||'').localeCompare(String(a[M.tri[0]]||'')));
+  if(!rows.length)return h+`<div class="empty"><i class="ti ti-${M.icon}"></i>Aucune donnée.</div>`;
+  h+='<div class="rs-list">';
+  rows.forEach(r=>{
+    let titre,sous='',extra='';
+    if(mod==='exercices'){
+      titre=rsLib('type',r.type)+' — '+rsFr(r.date_exercice);
+      sous=(r.inopine?'Inopiné · ':'')+(r.scenario?esc(r.scenario)+' · ':'')
+        +(r.nb_enfants!=null?r.nb_enfants+' enfants · ':'')
+        +(r.duree_secondes?'évacuation en '+r.duree_secondes+' s':'');
+      extra=(r.difficultes?'<span class="rs-s"><b>Difficultés :</b> '+esc(r.difficultes)+'</span>':'')
+        +(r.actions_correctives?'<span class="rs-s"><b>Actions :</b> '+esc(r.actions_correctives)+'</span>':'');
+    }else{
+      titre=esc(r.intitule||'');
+      sous=(r.entreprise?esc(r.entreprise)+' · ':'')+rsFr(r.date_debut)+(r.date_fin?' → '+rsFr(r.date_fin):'')
+        +(r.incidence_erp?' · <b>incidence ERP</b>':'');
+      extra=r.description?'<span class="rs-s">'+esc(r.description)+'</span>':'';
+    }
+    const pj=r.pj_url?'<a class="rs-a" target="_blank" href="'+esc(r.pj_url)+'"><i class="ti ti-paperclip"></i> Pièce jointe</a>':'';
+    h+=`<div class="rs-i"><div class="rs-i-m"><b>${titre}</b><span class="rs-s">${sous}</span>${extra}${pj}</div>${rsActions(mod,r)}</div>`;});
+  return h+'</div>';
+}
+
+function rsVueJournal(){
+  const rows=RS_DATA.journal||[];
+  let h='<p class="rs-note">Journal des écritures — horodatage serveur, auteur identifié. '
+   +'Aucune modification ni suppression n’est possible : c’est ce qui rend le registre numérique opposable lors d’un contrôle.</p>';
+  if(!rows.length)return h+'<div class="empty"><i class="ti ti-history"></i>Aucune écriture.</div>';
+  h+='<div class="rs-list">';
+  rows.forEach(j=>{
+    const d=new Date(j.horodatage);
+    const q=d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const act={INSERT:'Création',UPDATE:'Modification',DELETE:'Suppression'}[j.action]||j.action;
+    const tab=(RS_MODULES[String(j.table_cible).replace('rs_','')]||{}).titre||j.table_cible;
+    h+=`<div class="rs-i"><div class="rs-i-m"><b>${esc(act)} · ${esc(tab)}</b>
+      <span class="rs-s">${esc(q)} — ${esc(j.auteur_nom||'inconnu')}</span></div></div>`;});
+  return h+'</div>';
+}
+
+function rsActions(mod,r){
+  if(!rsEcrit())return '';
+  let h='<div class="rs-act">';
+  h+=`<button class="iconbtn" title="Modifier" onclick="rsOpen('${mod}','${r.id}')"><i class="ti ti-edit"></i></button>`;
+  if(PROF&&PROF.role==='direction')
+    h+=`<button class="iconbtn d" title="Supprimer" onclick="rsDel('${mod}','${r.id}')"><i class="ti ti-trash"></i></button>`;
+  return h+'</div>';
+}
+
+/* ---------- Libellés lisibles ---------- */
+const RS_LIB={
+  resultat:{conforme:'Conforme',conforme_reserves:'Avec réserves',non_conforme:'Non conforme'},
+  origine:{commission_securite:'Commission de sécurité',pmi:'PMI',assureur:'Assureur',
+           verificateur:'Organisme vérificateur',interne:'Constat interne'},
+  statut:{ouverte:'Ouverte',en_cours:'En cours',levee:'Levée'},
+  type:{evacuation:'Évacuation incendie',confinement:'Confinement / PPMS',
+        attentat_intrusion:'Attentat-intrusion',autre:'Autre exercice'},
+  type_formation:{sst:'SST',psc1:'PSC1',extincteurs:'Manipulation extincteurs',
+        evacuation:'Guide / serre-file',gestes_urgence:'Gestes d’urgence',autre:'Autre'}
+};
+function rsLib(champ,v){return (RS_LIB[champ]&&RS_LIB[champ][v])||v||'';}
+
+/* ---------- Modale générique ---------- */
+function rsOpen(mod,id){
+  const M=RS_MODULES[mod];
+  RS_MODAL_MOD=mod;
+  RS_EDIT=id?(RS_DATA[mod]||[]).find(x=>x.id===id)||null:null;
+  document.getElementById('rsModTitre').textContent=(RS_EDIT?'Modifier — ':'Nouveau — ')+M.titre;
+  document.getElementById('rsForm').innerHTML=M.champs.map(c=>rsChamp(c,RS_EDIT?RS_EDIT[c.k]:null)).join('');
+  document.getElementById('rsDel').style.display=(RS_EDIT&&PROF&&PROF.role==='direction')?'':'none';
+  document.getElementById('ovRS').classList.add('on');
+}
+function rsOpenEtab(){
+  RS_MODAL_MOD='etab';RS_EDIT=RS_ETAB;
+  const ch=[
+    {k:'erp_type',l:'Type ERP',t:'text'},{k:'erp_categorie',l:'Catégorie',t:'text'},
+    {k:'effectif_public',l:'Effectif public autorisé',t:'num'},
+    {k:'effectif_personnel',l:'Effectif personnel',t:'num'},
+    {k:'locaux_sommeil',l:'Locaux à sommeil',t:'bool'},
+    {k:'etages',l:'Niveaux occupés',t:'text'},
+    {k:'date_ouverture',l:'Date d’ouverture',t:'date'},
+    {k:'avis_commission',l:'Avis commission de sécurité',t:'text'},
+    {k:'avis_commission_le',l:'Date de l’avis',t:'date'},
+    {k:'prochaine_visite',l:'Prochaine visite',t:'date'},
+    {k:'charge_securite',l:'Chargé de sécurité désigné',t:'text'},
+    {k:'charge_securite_tel',l:'Téléphone',t:'text'},
+    {k:'sdis_contact',l:'Contact SDIS',t:'text'},
+    {k:'mairie_contact',l:'Contact mairie',t:'text'},
+    {k:'assureur',l:'Assureur',t:'text'},
+    {k:'police_assurance',l:'N° de police',t:'text'},
+    {k:'observations',l:'Observations',t:'textarea'}
+  ];
+  RS_MODULES.etab.champs=ch;
+  document.getElementById('rsModTitre').textContent='Identité ERP de l’établissement';
+  document.getElementById('rsForm').innerHTML=ch.map(c=>rsChamp(c,RS_ETAB?RS_ETAB[c.k]:null)).join('');
+  document.getElementById('rsDel').style.display='none';
+  document.getElementById('ovRS').classList.add('on');
+}
+function rsChamp(c,v){
+  const id='rsc_'+c.k;
+  let inp='';
+  if(c.t==='textarea')inp=`<textarea id="${id}">${esc(v||'')}</textarea>`;
+  else if(c.t==='select'){
+    const o=(c.opts?c.opts():[]).map(x=>`<option value="${esc(x.v)}"${String(v)===String(x.v)?' selected':''}>${esc(x.l)}</option>`).join('');
+    inp=`<select id="${id}"><option value=""></option>${o}</select>`;
+  }
+  else if(c.t==='bool')inp=`<label class="rs-sw"><input type="checkbox" id="${id}"${v?' checked':''}> Oui</label>`;
+  else if(c.t==='file')inp=`<input type="file" id="${id}">`+(v?`<a class="rs-a" target="_blank" href="${esc(v)}"><i class="ti ti-paperclip"></i> Fichier actuel</a>`:'');
+  else if(c.t==='num')inp=`<input type="number" step="any" id="${id}" value="${v==null?'':esc(v)}">`;
+  else if(c.t==='date')inp=`<input type="date" id="${id}" value="${v?String(v).slice(0,10):''}">`;
+  else inp=`<input id="${id}" value="${esc(v||'')}">`;
+  return `<div class="f"><label>${esc(c.l)}${c.req?' *':''}</label>${inp}</div>`;
+}
+
+async function rsUpload(file,mod){
+  const path='registre-securite/'+RS_CRECHE+'/'+mod+'/'+Date.now()+'_'+slug(file.name);
+  const{error}=await sb.storage.from('assets').upload(path,file,{upsert:true});
+  if(error)throw error;
+  return sb.storage.from('assets').getPublicUrl(path).data.publicUrl;
+}
+
+async function rsSave(){
+  const mod=RS_MODAL_MOD, M=RS_MODULES[mod];
+  const row={creche_id:RS_CRECHE};
+  for(const c of M.champs){
+    const el=document.getElementById('rsc_'+c.k);
+    if(!el)continue;
+    if(c.t==='file'){
+      if(el.files&&el.files[0]){
+        try{row[c.k]=await rsUpload(el.files[0],mod);}
+        catch(e){console.error(e);toast('Envoi du fichier impossible');return;}
+      }
+      continue;
+    }
+    let v;
+    if(c.t==='bool')v=el.checked;
+    else{v=el.value;if(v==='')v=null;}
+    if(c.req&&(v===null||v===''))
+      {toast('Champ obligatoire : '+c.l);return;}
+    if(c.t==='num'&&v!=null)v=Number(v);
+    row[c.k]=v;
+  }
+  if(mod!=='etab'&&PROF)row.saisi_par=PROF.id;
+  /* Échéance stockée pour le tri et les alertes serveur */
+  if(mod==='controles'&&row.date_controle){
+    const t=RS_TYPES.find(x=>x.id===row.type_id);
+    row.date_echeance=(t&&t.periodicite_mois)?rsAddMonths(row.date_controle,t.periodicite_mois):null;
+  }
+  if(mod==='formations'&&!row.date_recyclage&&row.validite_mois&&row.date_obtention)
+    row.date_recyclage=rsAddMonths(row.date_obtention,row.validite_mois);
+
+  let error;
+  if(mod==='etab'){
+    ({error}=await sb.from('rs_etablissement').upsert(row,{onConflict:'creche_id'}));
+  }else if(RS_EDIT){
+    ({error}=await sb.from(M.table).update(row).eq('id',RS_EDIT.id));
+  }else{
+    ({error}=await sb.from(M.table).insert(row));
+  }
+  if(error){
+    console.error('rsSave',error);
+    toast(error.code==='42501'?'Droits insuffisants sur cette crèche':'Enregistrement impossible');
+    return;
+  }
+  close_('ovRS');
+  toast('Enregistré');
+  await rsLoad();
+}
+
+async function rsDelCourant(){
+  if(!RS_EDIT)return;
+  await rsDel(RS_MODAL_MOD,RS_EDIT.id,true);
+}
+async function rsDel(mod,id,depuisModale){
+  if(!confirm('Supprimer définitivement cette écriture ? La suppression sera tracée dans le journal.'))return;
+  const{error}=await sb.from(RS_MODULES[mod].table).delete().eq('id',id);
+  if(error){console.error(error);toast('Suppression impossible');return;}
+  if(depuisModale)close_('ovRS');
+  toast('Supprimé');
+  await rsLoad();
+}
+
+/* ---------- Export PDF du registre complet ---------- */
+function rsPdf(){
+  if(!window.jspdf){toast('Librairie PDF non chargée');return;}
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const W=182;
+  let y=pdfLogo(doc,20);
+  const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+  const cr=(CRECHES||[]).find(c=>c.id===RS_CRECHE)||{};
+  const titre=(t)=>{need(14);doc.setFillColor(74,63,159);doc.rect(14,y-4,W,8,'F');
+    doc.setTextColor(255);doc.setFont('helvetica','bold');doc.setFontSize(11);
+    doc.text(t,16,y+1.5);doc.setTextColor(40);y+=11;};
+  const ligne=(t,gras)=>{doc.setFont('helvetica',gras?'bold':'normal');doc.setFontSize(9.5);
+    const ls=doc.splitTextToSize(t,W-4);need(ls.length*4.6+2);
+    doc.text(ls,16,y);y+=ls.length*4.6+1.5;};
+
+  doc.setFont('helvetica','bold');doc.setFontSize(17);doc.setTextColor(74,63,159);
+  doc.text('Registre de sécurité',14,y);y+=8;
+  doc.setFontSize(12);doc.setTextColor(40);
+  doc.text(cr.name||'',14,y);y+=6;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(120);
+  doc.text('Article R.143-44 du code de la construction et de l’habitation — ERP type '
+    +((RS_ETAB&&RS_ETAB.erp_type)||'R')+', '+((RS_ETAB&&RS_ETAB.erp_categorie)||'5e')+' catégorie',14,y);y+=5;
+  doc.text('Édité le '+rsFr(rsToday())+' par '+((PROF&&PROF.name)||''),14,y);y+=9;
+  doc.setTextColor(40);
+
+  const e=RS_ETAB||{};
+  titre('1 — Identité de l’établissement');
+  ligne('Effectif public autorisé : '+(e.effectif_public||'—')+'   |   Personnel : '+(e.effectif_personnel||'—'));
+  ligne('Locaux à sommeil : '+(e.locaux_sommeil===false?'non':'oui')+'   |   Niveaux : '+(e.etages||'—'));
+  ligne('Avis de la commission de sécurité : '+(e.avis_commission||'—')+(e.avis_commission_le?' du '+rsFr(e.avis_commission_le):''));
+  ligne('Prochaine visite : '+(e.prochaine_visite?rsFr(e.prochaine_visite):'—'));
+  ligne('Chargé de sécurité : '+(e.charge_securite||'—')+(e.charge_securite_tel?' — '+e.charge_securite_tel:''));
+  ligne('Assurance : '+(e.assureur||'—')+(e.police_assurance?' — police '+e.police_assurance:''));
+  y+=3;
+
+  titre('2 — État des vérifications périodiques');
+  rsEcheancier().forEach(x=>{
+    const st=x.etat==='retard'?'ÉCHU':(x.etat==='jamais'?'JAMAIS RÉALISÉ':(x.etat==='proche'?'à échéance':'à jour'));
+    ligne(x.type.libelle+' — dernier : '+rsFr(x.last&&x.last.date_controle)
+      +(x.due?' / prochain : '+rsFr(x.due):'')+'  ['+st+']');
+  });
+  y+=3;
+
+  titre('3 — Contrôles consignés');
+  const cs=(RS_DATA.controles||[]).slice().sort((a,b)=>String(b.date_controle).localeCompare(String(a.date_controle)));
+  if(!cs.length)ligne('Aucun contrôle consigné.');
+  cs.forEach(r=>{
+    const t=RS_TYPES.find(x=>x.id===r.type_id);
+    ligne(rsFr(r.date_controle)+' — '+(t?t.libelle:(r.libelle_libre||'Contrôle'))
+      +' — '+(r.organisme||'organisme non précisé')+' — '+rsLib('resultat',r.resultat),true);
+    if(r.observations)ligne('   '+r.observations);
+  });
+  y+=3;
+
+  titre('4 — Exercices d’évacuation et de mise en sûreté');
+  const xs=(RS_DATA.exercices||[]).slice().sort((a,b)=>String(b.date_exercice).localeCompare(String(a.date_exercice)));
+  if(!xs.length)ligne('Aucun exercice consigné.');
+  xs.forEach(x=>{
+    ligne(rsFr(x.date_exercice)+' — '+rsLib('type',x.type)+(x.inopine?' (inopiné)':'')
+      +(x.duree_secondes?' — évacuation en '+x.duree_secondes+' s':'')
+      +(x.nb_enfants!=null?' — '+x.nb_enfants+' enfants':''),true);
+    if(x.difficultes)ligne('   Difficultés : '+x.difficultes);
+    if(x.actions_correctives)ligne('   Actions correctives : '+x.actions_correctives);
+  });
+  y+=3;
+
+  titre('5 — Personnel formé à la sécurité');
+  const fs=(RS_DATA.formations||[]).slice();
+  if(!fs.length)ligne('Aucune formation consignée.');
+  fs.forEach(f=>{
+    const d=f.date_recyclage||(f.validite_mois?rsAddMonths(f.date_obtention,f.validite_mois):null);
+    ligne(f.personne+' — '+rsLib('type_formation',f.type_formation)
+      +' — obtenue le '+rsFr(f.date_obtention)+(d?' — valide jusqu’au '+rsFr(d):''));
+  });
+  y+=3;
+
+  titre('6 — Travaux et aménagements');
+  const ts=(RS_DATA.travaux||[]).slice().sort((a,b)=>String(b.date_debut).localeCompare(String(a.date_debut)));
+  if(!ts.length)ligne('Aucun travaux consigné.');
+  ts.forEach(t=>{
+    ligne(rsFr(t.date_debut)+(t.date_fin?' → '+rsFr(t.date_fin):'')+' — '+t.intitule
+      +(t.entreprise?' — '+t.entreprise:'')+(t.incidence_erp?' — INCIDENCE ERP':''),true);
+    if(t.description)ligne('   '+t.description);
+    if(t.autorisation_ref)ligne('   Autorisation : '+t.autorisation_ref);
+  });
+  y+=3;
+
+  titre('7 — Réserves et prescriptions');
+  const rs=(RS_DATA.reserves||[]).slice();
+  if(!rs.length)ligne('Aucune réserve consignée.');
+  rs.forEach(r=>{
+    ligne(rsFr(r.date_constat)+' — '+r.intitule+' — '+rsLib('origine',r.origine)
+      +' — '+rsLib('statut',r.statut)+(r.date_levee?' le '+rsFr(r.date_levee):''),true);
+    if(r.action_menee)ligne('   Action : '+r.action_menee);
+  });
+
+  need(20);y+=6;
+  doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(120);
+  doc.text(doc.splitTextToSize('Extrait certifié conforme du registre de sécurité numérique. '
+    +'Les écritures sont horodatées et nominatives, conservées de façon inaltérable dans le journal de la structure.',W),14,y);
+
+  pdfSortie(doc,'Registre_securite_'+slug(cr.name||'creche')+'_'+rsToday()+'.pdf');
+}
+function rsApercu(){PDF_APERCU=true;try{rsPdf();}finally{PDF_APERCU=false;}}
+
 </script>
 
 <script>
