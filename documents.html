@@ -907,6 +907,91 @@ function pdfLogo(doc,y){
   return Math.max(y,10+LOGO_H+6);
 }
 
+/* ---------- EXPORT PDF EN TABLEAU (documents de reference) ---------- */
+/* Les libelles de la forme « Groupe — Attribut » sont recomposes en tableau :
+   une ligne par groupe (une creche), une colonne par attribut. Les champs sans
+   separateur (mail commun, date de mise a jour) sont repris sous le tableau.
+   Aucun nom de creche n'est code en dur : tout vient de schema_champs. */
+const PDF_SEP=' \u2014 ';
+function pdfMatrice(){
+  const champs=(fillDoc&&fillDoc.schema_champs)||[];
+  const groupes=[],attrs=[],cell={},libres=[];
+  champs.forEach(c=>{
+    const el=document.getElementById('ff_'+c.key);
+    let v=el?(c.type==='checkbox'?(el.checked?'Oui':'Non'):el.value):'';
+    if(c.type==='date'&&v){const d=new Date(v);if(!isNaN(d))v=d.toLocaleDateString('fr-FR');}
+    const lab=String(c.label||'');
+    const i=lab.indexOf(PDF_SEP);
+    if(i===-1){libres.push({label:lab,valeur:v});return;}
+    const g=lab.slice(0,i).trim(),a=lab.slice(i+PDF_SEP.length).trim();
+    if(groupes.indexOf(g)===-1)groupes.push(g);
+    if(attrs.indexOf(a)===-1)attrs.push(a);
+    cell[g+'\u0000'+a]=v;
+  });
+  return{groupes,attrs,cell,libres};
+}
+function pdfMatriceApplicable(m){return m.groupes.length>=2&&m.attrs.length>=2;}
+
+function exportMatricePdf(){
+  const m=pdfMatrice();
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'landscape'});
+  const PW=297,PH=210,ML=10,W=PW-2*ML,PAD=2,LH=3.6,BAS=PH-14;
+  const w0=Math.max(26,Math.min(38,W*0.13));
+  const wa=(W-w0)/m.attrs.length;
+  const widths=[w0].concat(m.attrs.map(()=>wa));
+  const xs=[];let x=ML;widths.forEach(w=>{xs.push(x);x+=w;});
+  const wrap=(t,w,size)=>{doc.setFontSize(size);return doc.splitTextToSize(String(t==null?'':t),w-2*PAD);};
+  let y=0;
+
+  function bandeau(){
+    try{doc.addImage(LOGO_KK,'PNG',PW-ML-LOGO_W,8,LOGO_W,LOGO_H);}catch(e){console.warn('logo PDF',e);}
+    y=14+LOGO_H;
+    doc.setTextColor(74,63,159);doc.setFontSize(15);doc.setFont(undefined,'bold');
+    doc.text(String(fillDoc.titre||''),ML,y);
+    doc.setTextColor(30);y+=8;
+  }
+  function entete(){
+    const cells=[''].concat(m.attrs).map((t,i)=>wrap(t,widths[i],7.5));
+    const h=Math.max.apply(null,cells.map(l=>l.length))*LH+2*PAD;
+    doc.setFillColor(74,63,159);doc.rect(ML,y,W,h,'F');
+    doc.setTextColor(255);doc.setFont(undefined,'bold');doc.setFontSize(7.5);
+    cells.forEach((l,i)=>doc.text(l,xs[i]+PAD,y+PAD+2.7));
+    doc.setTextColor(30);doc.setFont(undefined,'normal');
+    y+=h;
+  }
+  bandeau();entete();
+
+  m.groupes.forEach((g,idx)=>{
+    const cells=[wrap(g,widths[0],8)].concat(m.attrs.map((a,i)=>wrap(m.cell[g+'\u0000'+a]||'\u2014',widths[i+1],7.5)));
+    const h=Math.max.apply(null,cells.map(l=>l.length))*LH+2*PAD;
+    if(y+h>BAS){doc.addPage();bandeau();entete();}
+    if(idx%2===1){doc.setFillColor(250,248,253);doc.rect(ML,y,W,h,'F');}
+    doc.setDrawColor(222,216,238);
+    doc.rect(ML,y,W,h);
+    xs.slice(1).forEach(xx=>doc.line(xx,y,xx,y+h));
+    cells.forEach((l,i)=>{
+      doc.setFont(undefined,i===0?'bold':'normal');
+      doc.setFontSize(i===0?8:7.5);
+      doc.setTextColor.apply(doc,i===0?[74,63,159]:[30,30,30]);
+      doc.text(l,xs[i]+PAD,y+PAD+2.7);
+    });
+    doc.setTextColor(30);doc.setFont(undefined,'normal');
+    y+=h;
+  });
+
+  y+=7;doc.setFontSize(8.5);
+  m.libres.forEach(f=>{
+    if(y>BAS){doc.addPage();bandeau();}
+    doc.setFont(undefined,'bold');doc.text(f.label+' :',ML,y);
+    doc.setFont(undefined,'normal');doc.text(String(f.valeur||'\u2014'),ML+78,y);
+    y+=5.5;
+  });
+
+  doc.save(slug(fillDoc.titre)+'.pdf');
+  return true;
+}
+
 async function exportFillPdf(mode){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const tpl=TPL[fillDoc.template_key];
@@ -914,6 +999,9 @@ async function exportFillPdf(mode){
     if(tpl.pdf)return tpl.pdf(doc,mode);
     return exportTplPdf(doc,tpl,mode);
   }
+  /* Document de reference dont les libelles sont structures « Groupe — Attribut » :
+     rendu en tableau paysage plutot qu'en liste champ par champ. */
+  if(fillDoc.doc_reference&&pdfMatriceApplicable(pdfMatrice()))return exportMatricePdf();
   let y=pdfLogo(doc,18);
   doc.setFontSize(15);doc.text(fillDoc.titre,14,y);
   doc.setFontSize(10);y+=12;
