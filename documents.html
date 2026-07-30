@@ -698,6 +698,15 @@ function fillEnfantOptions(selEnfant){
 function fillUpdatePdfBtnLabel(){
   const btn=document.getElementById('btnPdfReset');
   if(!btn)return;
+  /* Document de reference (annuaire, tableau de bord…) : une seule reponse,
+     mise a jour en continu. L'export ne doit jamais vider le formulaire. */
+  const btnNew=document.getElementById('btnNewRep');
+  if(fillDoc&&fillDoc.doc_reference){
+    btn.innerHTML='<i class="ti ti-file-type-pdf"></i> Exporter en PDF';
+    if(btnNew)btnNew.style.display='none';
+    return;
+  }
+  if(btnNew)btnNew.style.display='';
   const enfantSel=(document.getElementById('fillEnfant')||{}).value||'';
   const contexteEnfant=(!!enfantSel || !!RETURN_ENFANT_ID) && !docConcerneSalarie();
   btn.innerHTML=contexteEnfant
@@ -979,6 +988,20 @@ async function editPdfAndReset(){
   const btn=document.getElementById('btnPdfReset');
   try{
     if(!fillDoc)return;
+
+    /* Document de reference : on exporte et on enregistre, sans rien supprimer. */
+    if(fillDoc.doc_reference){
+      if(btn)btn.disabled=true;
+      const okRef=await exportFillPdf();
+      if(!okRef)throw new Error('génération PDF impossible');
+      /* saveFill() referme la modale : on rouvre la meme reponse pour que le
+         formulaire reste affiche, avec les valeurs desormais enregistrees. */
+      const repId=fillRep&&fillRep.id;
+      await saveFill();
+      toast('PDF exporté — document conservé');
+      if(repId)await openFill(fillDoc.id,repId);
+      return;
+    }
 
     // Contexte « dossier enfant » : un enfant est sélectionné, ou on vient de la fiche enfant.
     // Dans ce cas on GÉNÈRE le PDF et on CONSERVE le document (pas d'effacement).
