@@ -994,29 +994,36 @@ async function apercuFichier(id){
       pdfAfficherHtml(res.value||'<p><i>Document vide.</i></p>',nom,d.fichier_url);
     }catch(e){
       console.error('apercuFichier docx',e);
-      window.open(d.fichier_url,'_blank','noopener');
-      toast('Conversion impossible \u2014 ouverture dans un onglet');
+      toast('Aper\u00e7u impossible : '+(e&&e.message?e.message:e));
     }
     return;
   }
   /* Classeurs : SheetJS lit xlsx, xls (ancien format binaire), csv et ods.
      Chaque feuille devient un tableau HTML. */
-  if(PDF_EXT_TABLEUR.indexOf(ext)!==-1&&window.XLSX){
+  if(PDF_EXT_TABLEUR.indexOf(ext)!==-1){
+    if(!window.XLSX)return toast('Librairie tableur non charg\u00e9e \u2014 recharger la page');
     toast('Conversion du classeur\u2026');
     try{
       const r=await fetch(d.fichier_url);
       if(!r.ok)throw new Error('HTTP '+r.status);
       const wb=window.XLSX.read(new Uint8Array(await r.arrayBuffer()),{type:'array'});
-      const html=(wb.SheetNames||[]).map(n=>
-        (wb.SheetNames.length>1?'<h3 class="feuille">'+esc(n)+'</h3>':'')
-        +'<div class="classeur">'
-        +window.XLSX.utils.sheet_to_html(wb.Sheets[n],{header:'',footer:''})
-        +'</div>').join('');
+      const noms=(wb&&wb.SheetNames)||[];
+      /* Une feuille illisible (graphique, feuille protegee, macro) ne doit pas
+         faire echouer tout l'apercu : chacune est traitee isolement. */
+      let html='';
+      noms.forEach(n=>{
+        const ws=wb.Sheets&&wb.Sheets[n];
+        if(!ws)return;
+        let t;
+        try{t=window.XLSX.utils.sheet_to_html(ws,{header:'',footer:''});}
+        catch(err){console.warn('feuille illisible',n,err);t='<p><i>Feuille illisible.</i></p>';}
+        html+=(noms.length>1?'<h3 class="feuille">'+esc(n)+'</h3>':'')
+             +'<div class="classeur">'+t+'</div>';
+      });
       pdfAfficherHtml(html||'<p><i>Classeur vide.</i></p>',nom,d.fichier_url);
     }catch(e){
       console.error('apercuFichier tableur',e);
-      window.open(d.fichier_url,'_blank','noopener');
-      toast('Conversion impossible \u2014 ouverture dans un onglet');
+      toast('Aper\u00e7u impossible : '+(e&&e.message?e.message:e));
     }
     return;
   }
