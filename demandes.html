@@ -2707,6 +2707,47 @@ function ipParseCreneauLabel(label){
   const[hdebut,finMatin,debutAprem,hfin]=matches;
   return{hdebut,hfin,pause:finMatin+'-'+debutAprem};
 }
+// ── Rendu visuel des créneaux horaires (colonne “Horaire” du planning équipe) ──────────
+// Le libellé brut vient du fichier Excel (ex: “07H00-12H00/12H30-14H30”). On en extrait les
+// paires d’heures pour un affichage lisible : une ligne par plage, la durée de pause entre
+// les deux, et le total travaillé en pastille.
+function peFmtDuree(mins){
+  const h=Math.floor(mins/60),m=mins%60;
+  return m?h+'h'+String(m).padStart(2,'0'):h+'h';
+}
+function peCreneauSegments(label){
+  const norm=String(label||'').toUpperCase().replace(/\s+/g,'');
+  const t=[...norm.matchAll(/(\d{1,2})H(\d{2})?/g)].map(m=>parseInt(m[1],10)*60+parseInt(m[2]||'0',10));
+  if(t.length<2||t.length%2)return null;
+  const segs=[];
+  for(let i=0;i<t.length;i+=2){
+    if(t[i+1]<=t[i])return null;
+    segs.push([t[i],t[i+1]]);
+  }
+  return segs;
+}
+function peFmtHeure(mins){
+  return String(Math.floor(mins/60)).padStart(2,'0')+'h'+String(mins%60).padStart(2,'0');
+}
+// fsMain / fsSub : tailles de police adaptées au contexte (écran ou impression compacte)
+function peRenderCreneau(label,fsMain,fsSub){
+  const segs=peCreneauSegments(label);
+  if(!segs)return '<span style="font-size:'+fsMain+';word-break:break-word">'+String(label||'')+'</span>';
+  let total=0,out='<div style="font-variant-numeric:tabular-nums">';
+  segs.forEach((sg,i)=>{
+    total+=sg[1]-sg[0];
+    if(i>0){
+      const pause=sg[0]-segs[i-1][1];
+      if(pause>0)out+='<div style="white-space:nowrap;font-size:'+fsSub+';color:#9C9AA8;font-weight:500;padding:1px 0">pause '+peFmtDuree(pause)+'</div>';
+    }
+    out+='<div style="white-space:nowrap;font-size:'+fsMain+';font-weight:700;color:#3D3580">'+
+         peFmtHeure(sg[0])+'<span style="opacity:.4;font-weight:400;padding:0 2px">→</span>'+peFmtHeure(sg[1])+'</div>';
+  });
+  out+='<div style="display:inline-block;margin-top:3px;background:#EFEEF7;color:#3D3580;border-radius:999px;'+
+       'padding:1px 7px;font-size:'+fsSub+';font-weight:700;white-space:nowrap">'+peFmtDuree(total)+'</div>';
+  return out+'</div>';
+}
+
 function ipDetectSpecialType(cellText){
   const t=ipNormStr(cellText);
   if(t.includes('ferie'))return 'conge';
@@ -3528,7 +3569,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   nbWeeksOnPage=nbWeeksOnPage||1;
   const _peTier=!forPrint?'screen':(nbWeeksOnPage>=4?'p4':nbWeeksOnPage===3?'p3':nbWeeksOnPage===2?'p2':'p1');
   const _peSizes={
-    screen:{fs:'12px',fsCell:'11px',fsDay:'10px',pad:'8px',padCell:'6px',horW:'150px',lh:'1.3',minW:'640px',badgePad:'4px 6px'},
+    screen:{fs:'12px',fsCell:'11px',fsDay:'10px',pad:'8px',padCell:'6px',horW:'150px',lh:'1.3',minW:'700px',badgePad:'4px 6px'},
     p1:    {fs:'15px',fsCell:'14px',fsDay:'13px',pad:'16px 14px',padCell:'14px 10px',horW:'230px',lh:'1.6',minW:'1100px',badgePad:'9px 12px'},
     p2:    {fs:'13px',fsCell:'12px',fsDay:'11px',pad:'8px 7px',padCell:'7px 6px',horW:'105px',lh:'1.35',minW:'560px',badgePad:'5px 7px'},
     p3:    {fs:'11px',fsCell:'10px',fsDay:'9px',pad:'6px 5px',padCell:'5px 4px',horW:'88px',lh:'1.25',minW:'490px',badgePad:'4px 6px'},
@@ -3537,12 +3578,12 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   const _peS=_peSizes[_peTier];
   const _peFS=_peS.fs,_peFSCell=_peS.fsCell,_peFSDay=_peS.fsDay,_pePad=_peS.pad,_pePadCell=_peS.padCell,
         _peHoraireW=_peS.horW,_peRowLH=_peS.lh,_peMinW=_peS.minW,_peBadgePad=_peS.badgePad;
-  // En impression compacte (2-3 semaines/page), on force un saut de ligne au niveau du "/" des horaires
-  // (ex: "10H30-13H30/14H30-18H30" → "10H30-13H30" puis "/14H30-18H30") pour que la colonne reste étroite.
-  const _peCreneauLabel=c=>(forPrint&&nbWeeksOnPage>1)?c.replace(/\//g,'<br>/'):c;
+  // Chaque plage du créneau est rendue sur sa propre ligne (jamais de césure au milieu d'une heure).
+  const _peCreneauLabel=c=>peRenderCreneau(c,_peFSCell,_peFSDay);
 
   let html='<table style="width:100%;border-collapse:collapse;font-size:'+_peFS+';'+(forPrint?'':'min-width:'+_peMinW+';')+'table-layout:fixed;line-height:'+_peRowLH+'">';
-  html+='<colgroup><col style="width:12%">'+DAYS.map(()=>'<col style="width:'+((100-12)/5)+'%">').join('')+'</colgroup>';
+  const _peHorPct=16;
+  html+='<colgroup><col style="width:'+_peHorPct+'%">'+DAYS.map(()=>'<col style="width:'+((100-_peHorPct)/5)+'%">').join('')+'</colgroup>';
   html+='<thead><tr><th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333;white-space:nowrap">Horaire</th>';
   DAYS.forEach((d,i)=>{html+='<th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:center;background:#fafafa;color:#333">'+d+'<br><span style="font-size:'+_peFSDay+';font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';});
   html+='</tr></thead><tbody>';
@@ -3550,7 +3591,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   creneauOrder.forEach(creneau=>{
     const evsThisCreneau=byCreneau[creneau];
     const creneauEsc=creneau.replace(/'/g,"\\'");
-    html+='<tr><td style="padding:'+_pePad+';border-bottom:1px solid var(--border);font-weight:600;color:var(--ink2);font-size:'+_peFSCell+';white-space:normal;word-break:break-word">'+_peCreneauLabel(creneau)+'</td>';
+    html+='<tr><td style="padding:'+_pePad+';border-bottom:1px solid var(--border);background:#FBFBFD;vertical-align:middle">'+_peCreneauLabel(creneau)+'</td>';
     for(let d=0;d<5;d++){
       // Plusieurs personnes peuvent partager le même créneau le même jour
       const evs=evsThisCreneau.filter(e=>e.jour===d);
