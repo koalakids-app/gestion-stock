@@ -148,6 +148,16 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 .rs-f b{flex:1;word-break:break-word}
 .rs-sw{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
 .rs-sw input{width:auto;accent-color:var(--orange)}
+.rs-sig{border:2px dashed var(--line);border-radius:14px;padding:12px;background:var(--cream);margin-top:6px}
+.rs-sig h4{font-family:'Baloo 2',cursive;font-size:14px;color:var(--violet);margin-bottom:3px}
+.rs-sig .req{font-size:11.5px;font-weight:800;color:#C62828;margin-bottom:9px;display:block}
+.rs-sig .opt{font-size:11.5px;color:var(--muted);margin-bottom:9px;display:block}
+.rs-sig canvas{width:100%;height:120px;background:#fff;border-radius:10px;touch-action:none;display:block;border:1px solid var(--line)}
+.rs-sig img{width:100%;height:120px;object-fit:contain;background:#fff;border-radius:10px;border:1px solid var(--line)}
+.rs-sig .acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.rs-lock{background:#FFF7F7;border:2px solid #F3C2C2;border-radius:12px;padding:10px 12px;
+  font-size:12.5px;color:#C62828;font-weight:700;margin-bottom:12px;line-height:1.45}
+.rs-sg{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#1B7A3E;margin-top:4px}
 .rs-note{font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:16px;background:#F7F6FC;
   border-left:3px solid var(--violet-l);border-radius:0 10px 10px 0;padding:10px 12px}
 @media(max-width:600px){.rs-f{flex-direction:column;gap:2px}.rs-f span{flex:none}}
@@ -218,7 +228,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
   <div class="mf">
     <button class="btn btn-g" onclick="close_('ovRS')">Annuler</button>
     <button class="btn btn-d" id="rsDel" style="display:none" onclick="rsDelCourant()"><i class="ti ti-trash"></i> Supprimer</button>
-    <button class="btn btn-p" onclick="rsSave()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
+    <button class="btn btn-p" id="rsSaveBtn" onclick="rsSave()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
   </div>
 </div></div>
 
@@ -3967,6 +3977,7 @@ function rsVueControles(){
       <span class="rs-s">${rsFr(r.date_controle)}${r.organisme?' · '+esc(r.organisme):''}${r.cout_ht?' · '+r.cout_ht+' € HT':''}</span>
       ${r.observations?'<span class="rs-s">'+esc(r.observations)+'</span>':''}
       ${r.rapport_url?'<a class="rs-a" target="_blank" href="'+esc(r.rapport_url)+'"><i class="ti ti-paperclip"></i> Rapport</a>':''}
+      ${rsSigLigne(r)}
       </div><span class="rs-b ${cl}">${esc(rsLib('resultat',r.resultat))}</span>${rsActions('controles',r)}</div>`;});
   return h+'</div>';
 }
@@ -4014,6 +4025,7 @@ function rsVueReserves(){
       ${r.description?'<span class="rs-s">'+esc(r.description)+'</span>':''}
       ${r.action_menee?'<span class="rs-s"><i class="ti ti-arrow-right"></i> '+esc(r.action_menee)+'</span>':''}
       ${r.preuve_url?'<a class="rs-a" target="_blank" href="'+esc(r.preuve_url)+'"><i class="ti ti-paperclip"></i> Justificatif</a>':''}
+      ${rsSigLigne(r)}
       </div>${b}${rsActions('reserves',r)}</div>`;});
   return h+'</div>';
 }
@@ -4042,7 +4054,7 @@ function rsVueListe(){
       extra=r.description?'<span class="rs-s">'+esc(r.description)+'</span>':'';
     }
     const pj=r.pj_url?'<a class="rs-a" target="_blank" href="'+esc(r.pj_url)+'"><i class="ti ti-paperclip"></i> Pièce jointe</a>':'';
-    h+=`<div class="rs-i"><div class="rs-i-m"><b>${titre}</b><span class="rs-s">${sous}</span>${extra}${pj}</div>${rsActions(mod,r)}</div>`;});
+    h+=`<div class="rs-i"><div class="rs-i-m"><b>${titre}</b><span class="rs-s">${sous}</span>${extra}${pj}${rsSigLigne(r)}</div>${rsActions(mod,r)}</div>`;});
   return h+'</div>';
 }
 
@@ -4090,7 +4102,20 @@ function rsOpen(mod,id){
   RS_MODAL_MOD=mod;
   RS_EDIT=id?(RS_DATA[mod]||[]).find(x=>x.id===id)||null:null;
   document.getElementById('rsModTitre').textContent=(RS_EDIT?'Modifier — ':'Nouveau — ')+M.titre;
-  document.getElementById('rsForm').innerHTML=M.champs.map(c=>rsChamp(c,RS_EDIT?RS_EDIT[c.k]:null)).join('');
+  const verrou=!!(RS_EDIT&&RS_EDIT.signature_url&&PROF&&PROF.role!=='direction');
+  let html=verrou?'<div class="rs-lock"><i class="ti ti-lock"></i> Cette écriture est signée : '
+    +'elle ne peut plus être modifiée. Une correction se fait en ajoutant une nouvelle '
+    +'écriture, jamais en effaçant la précédente.</div>':'';
+  html+=M.champs.map(c=>rsChamp(c,RS_EDIT?RS_EDIT[c.k]:null)).join('');
+  RS_SIG=null;
+  if(RS_SIGNABLE.indexOf(mod)>=0)html+=rsSigBloc(mod);
+  document.getElementById('rsForm').innerHTML=html;
+  if(RS_SIGNABLE.indexOf(mod)>=0)rsMountSig();
+  if(verrou){
+    document.querySelectorAll('#rsForm input,#rsForm select,#rsForm textarea,#rsForm .acts button')
+      .forEach(e=>e.disabled=true);
+  }
+  document.getElementById('rsSaveBtn').style.display=verrou?'none':'';
   document.getElementById('rsDel').style.display=(RS_EDIT&&PROF&&PROF.role==='direction')?'':'none';
   document.getElementById('ovRS').classList.add('on');
 }
@@ -4117,6 +4142,7 @@ function rsOpenEtab(){
   RS_MODULES.etab.champs=ch;
   document.getElementById('rsModTitre').textContent='Identité ERP de l’établissement';
   document.getElementById('rsForm').innerHTML=ch.map(c=>rsChamp(c,RS_ETAB?RS_ETAB[c.k]:null)).join('');
+  document.getElementById('rsSaveBtn').style.display='';
   document.getElementById('rsDel').style.display='none';
   document.getElementById('ovRS').classList.add('on');
 }
@@ -4164,6 +4190,27 @@ async function rsSave(){
     if(c.t==='num'&&v!=null)v=Number(v);
     row[c.k]=v;
   }
+  /* Signature : obligatoire sur les exercices et sur la levee d'une reserve. */
+  if(RS_SIGNABLE.indexOf(mod)>=0){
+    const nom=(document.getElementById('rsc_signataire_nom')||{}).value||'';
+    const qual=(document.getElementById('rsc_signataire_qualite')||{}).value||'';
+    const deja=RS_EDIT&&RS_EDIT.signature_url;
+    if(rsSigObligatoire(mod,row.statut)&&!RS_SIG&&!deja){
+      toast(mod==='exercices'?'Signature obligatoire pour consigner un exercice'
+                             :'Signature obligatoire pour attester la levée');
+      return;
+    }
+    if((RS_SIG||deja)&&!nom.trim()){toast('Indiquer le nom du signataire');return;}
+    row.signataire_nom=nom||null;
+    row.signataire_qualite=qual||null;
+    if(RS_SIG){
+      try{row.signature_url=await rsUploadSig(RS_SIG);}
+      catch(e){console.error(e);toast('Envoi de la signature impossible');return;}
+      row.signe_le=new Date().toISOString();
+    }else if(RS_EDIT&&!deja){
+      row.signature_url=null;row.signe_le=null;
+    }
+  }
   if(mod!=='etab'&&PROF)row.saisi_par=PROF.id;
   /* Échéance stockée pour le tri et les alertes serveur */
   if(mod==='controles'&&row.date_controle){
@@ -4204,6 +4251,145 @@ async function rsDel(mod,id,depuisModale){
   await rsLoad();
 }
 
+/* ---------- Signature de l'intervenant ---------- */
+/* Modules concernes. La signature est obligatoire sur un exercice (aucune autre
+   preuve n'existe : pas de rapport externe) et sur la levee d'une reserve (elle
+   engage celui qui atteste la correction). Ailleurs elle reste proposee. */
+const RS_SIGNABLE=['controles','exercices','reserves'];
+let RS_SIG=null;                 /* dataURL de la signature saisie dans la modale */
+const RS_SIG_MIN=24;             /* trace minimale en px : sous ce seuil, simple appui */
+
+function rsSigObligatoire(mod,statut){
+  if(mod==='exercices')return true;
+  if(mod==='reserves')return statut==='levee';
+  return false;
+}
+function rsSigBloc(mod){
+  const dejaSigne=RS_EDIT&&RS_EDIT.signature_url;
+  const obl=mod==='exercices'
+    ? '<span class="req">Signature obligatoire — de la personne ayant conduit l’exercice.</span>'
+    : (mod==='reserves'
+      ? '<span class="req">Signature obligatoire dès que le statut passe à « Levée ».</span>'
+      : '<span class="opt">Signature facultative — utile pour les contrôles sans rapport écrit (aire de jeux, purge du réseau, trousse de secours).</span>');
+  return '<div class="rs-sig"><h4>Signature de l’intervenant</h4>'+obl
+    +'<div class="f"><label>Nom du signataire</label><input id="rsc_signataire_nom" value="'
+      +esc((RS_EDIT&&RS_EDIT.signataire_nom)||'')+'"></div>'
+    +'<div class="f"><label>Qualité (technicien, référente, entreprise…)</label><input id="rsc_signataire_qualite" value="'
+      +esc((RS_EDIT&&RS_EDIT.signataire_qualite)||'')+'"></div>'
+    +'<div id="rsSigHost"></div>'
+    +'<div class="acts">'
+    +'<button type="button" class="btn btn-g" onclick="rsSigClear()"><i class="ti ti-eraser"></i> Effacer</button>'
+    +'<button type="button" class="btn btn-s" onclick="rsSigQr()"><i class="ti ti-qrcode"></i> Faire signer par QR</button>'
+    +'</div>'
+    +(dejaSigne?'<p class="rs-sg"><i class="ti ti-writing-sign"></i> Signée le '
+      +rsFr(String(RS_EDIT.signe_le||'').slice(0,10))+'</p>':'')
+    +'</div>';
+}
+/* Canevas de signature — meme logique que les documents : on cumule la longueur
+   de trace sur l'ensemble des traits, pour qu'une signature en plusieurs levers
+   de stylo reste valide alors qu'un simple appui ne l'est pas. */
+function rsMountSig(){
+  const host=document.getElementById('rsSigHost');
+  if(!host)return;
+  if(host._up){window.removeEventListener('mouseup',host._up);host._up=null;}
+  const src=RS_SIG||((RS_EDIT&&RS_EDIT.signature_url)||null);
+  if(src){host.innerHTML='<img src="'+esc(src)+'" alt="signature">';return;}
+  host.innerHTML='<canvas></canvas>';
+  const c=host.querySelector('canvas');
+  const r=c.getBoundingClientRect();
+  c.width=Math.max(300,r.width)*2;c.height=120*2;
+  const ctx=c.getContext('2d');ctx.scale(2,2);
+  ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#2B2740';
+  let on=false,ink=0,last=null;
+  const pt=e=>{const b=c.getBoundingClientRect();const p=e.touches?e.touches[0]:e;
+    return[(p.clientX-b.left)*(c.width/2/b.width),(p.clientY-b.top)*(c.height/2/b.height)];};
+  const dn=e=>{e.preventDefault();on=true;last=pt(e);ctx.beginPath();ctx.moveTo(last[0],last[1]);};
+  const mv=e=>{if(!on)return;e.preventDefault();const p=pt(e);
+    if(last)ink+=Math.hypot(p[0]-last[0],p[1]-last[1]);
+    last=p;ctx.lineTo(p[0],p[1]);ctx.stroke();};
+  const up=()=>{if(!on)return;on=false;
+    if(ink<RS_SIG_MIN){ctx.clearRect(0,0,c.width,c.height);RS_SIG=null;ink=0;last=null;return;}
+    RS_SIG=c.toDataURL('image/png');};
+  c.addEventListener('mousedown',dn);c.addEventListener('mousemove',mv);
+  window.addEventListener('mouseup',up);host._up=up;
+  c.addEventListener('touchstart',dn,{passive:false});
+  c.addEventListener('touchmove',mv,{passive:false});
+  c.addEventListener('touchend',up);c.addEventListener('touchcancel',up);
+}
+function rsSigClear(){
+  if(RS_EDIT&&RS_EDIT.signature_url&&PROF&&PROF.role!=='direction')
+    return toast('Une écriture signée ne peut plus être modifiée');
+  RS_SIG=null;
+  if(RS_EDIT)RS_EDIT=Object.assign({},RS_EDIT,{signature_url:null});
+  rsMountSig();
+}
+/* Signature a distance : le QR ouvre signature.html sur le telephone de
+   l'intervenant. Lien valable 30 min, releve toutes les 3 s. */
+async function rsSigQr(){
+  const nom=(document.getElementById('rsc_signataire_nom')||{}).value||'';
+  const M=RS_MODULES[RS_MODAL_MOD];
+  qrToken=mkToken();
+  const{error}=await sb.from('signatures_pending').insert({
+    token:qrToken,role_sign:'intervenant',
+    signataire:nom||'Intervenant',
+    contexte:'Registre de sécurité — '+M.titre+(nom?' — '+nom:''),
+    source:'registre',cible_table:M.table,cible_id:RS_EDIT?RS_EDIT.id:null,
+    created_by:ME.id
+  });
+  if(error){qrToken=null;return toast('Erreur : '+error.message);}
+  const url=location.origin+location.pathname.replace(/[^/]*$/,'')+'signature.html?t='+qrToken;
+  document.getElementById('qrTitle').textContent='Signature de l’intervenant';
+  const box=document.getElementById('qrBox');box.innerHTML='';
+  QR_URL=url;
+  let fait=false;
+  if(typeof QRCode==='function'){
+    try{new QRCode(box,{text:url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});fait=true;}
+    catch(e){console.warn('QRCode lib KO',e);}
+  }
+  if(!fait){
+    const img=document.createElement('img');img.width=220;img.height=220;img.alt='QR';
+    img.src='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(url);
+    box.appendChild(img);
+  }
+  const lien=document.createElement('div');
+  lien.style.cssText='margin-top:12px;font-size:11px;word-break:break-all;color:var(--muted);line-height:1.4';
+  lien.textContent=url;box.appendChild(lien);
+  const cp=document.createElement('button');
+  cp.className='btn btn-s';cp.style.marginTop='8px';
+  cp.innerHTML='<i class="ti ti-copy"></i> Copier le lien';
+  cp.onclick=()=>{navigator.clipboard.writeText(QR_URL).then(()=>toast('Lien copié'),()=>toast('Copie impossible'));};
+  box.appendChild(cp);
+  document.getElementById('qrWait').textContent='En attente de la signature… (lien valable 30 min)';
+  document.getElementById('ovQr').classList.add('on');
+  qrTimer=setInterval(rsPollSig,3000);
+}
+async function rsPollSig(){
+  if(!qrToken)return;
+  const{data}=await sb.from('signatures_pending').select('signature_data,signed_at')
+    .eq('token',qrToken).maybeSingle();
+  if(data&&data.signature_data){
+    RS_SIG=data.signature_data;
+    stopQr();rsMountSig();toast('Signature reçue');
+  }
+}
+/* Le trace part dans le bucket : une signature en base gonflerait chaque
+   chargement du registre de toutes les signatures deja enregistrees. */
+async function rsUploadSig(dataUrl){
+  const blob=await (await fetch(dataUrl)).blob();
+  const path='registre-securite/'+RS_CRECHE+'/signatures/'+Date.now()+'.png';
+  const{error}=await sb.storage.from('assets').upload(path,blob,{upsert:true,contentType:'image/png'});
+  if(error)throw error;
+  return sb.storage.from('assets').getPublicUrl(path).data.publicUrl;
+}
+/* Mention de signature affichee dans les listes */
+function rsSigLigne(r){
+  if(!r.signature_url)return '';
+  return '<span class="rs-sg"><i class="ti ti-writing-sign"></i> Signé par '
+    +esc(r.signataire_nom||'intervenant')
+    +(r.signataire_qualite?' ('+esc(r.signataire_qualite)+')':'')
+    +(r.signe_le?' le '+rsFr(String(r.signe_le).slice(0,10)):'')+'</span>';
+}
+
 /* ---------- Export PDF du registre complet ---------- */
 /* Les polices integrees de jsPDF (helvetica) sont encodees en WinAnsi : tout
    caractere hors de cette table sort en charabia et fausse le calcul de
@@ -4226,8 +4412,31 @@ function rsWA(t){
   }
   return o;
 }
-function rsPdf(){
+/* Recupere une signature du bucket sous forme de dataURL pour jsPDF. */
+async function rsSigImg(url){
+  try{
+    const b=await (await fetch(url)).blob();
+    return await new Promise((res,rej)=>{
+      const f=new FileReader();f.onload=()=>res(f.result);f.onerror=rej;f.readAsDataURL(b);});
+  }catch(e){console.warn('signature PDF',e);return null;}
+}
+async function rsPdf(){
   if(!window.jspdf){toast('Librairie PDF non chargée');return;}
+  /* Prechargement : jsPDF ne sait pas embarquer une image distante a la volee. */
+  const SIG={};
+  const aCharger=[].concat(RS_DATA.controles||[],RS_DATA.exercices||[],RS_DATA.reserves||[])
+    .filter(r=>r.signature_url);
+  for(const r of aCharger){if(!SIG[r.signature_url])SIG[r.signature_url]=await rsSigImg(r.signature_url);}
+  const sig=(r)=>{
+    if(!r.signature_url)return;
+    ligne('   Signé par '+(r.signataire_nom||'intervenant')
+      +(r.signataire_qualite?' ('+r.signataire_qualite+')':'')
+      +(r.signe_le?' le '+rsFr(String(r.signe_le).slice(0,10)):''));
+    const d=SIG[r.signature_url];
+    if(!d)return;
+    need(18);
+    try{doc.addImage(d,'PNG',18,y,34,13);y+=15;}catch(e){console.warn('addImage signature',e);}
+  };
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF({unit:'mm',format:'a4'});
   const W=182;
@@ -4277,6 +4486,7 @@ function rsPdf(){
     ligne(rsFr(r.date_controle)+' — '+(t?t.libelle:(r.libelle_libre||'Contrôle'))
       +' — '+(r.organisme||'organisme non précisé')+' — '+rsLib('resultat',r.resultat),true);
     if(r.observations)ligne('   '+r.observations);
+    sig(r);
   });
   y+=3;
 
@@ -4289,6 +4499,7 @@ function rsPdf(){
       +(x.nb_enfants!=null?' — '+x.nb_enfants+' enfants':''),true);
     if(x.difficultes)ligne('   Difficultés : '+x.difficultes);
     if(x.actions_correctives)ligne('   Actions correctives : '+x.actions_correctives);
+    sig(x);
   });
   y+=3;
 
@@ -4320,6 +4531,7 @@ function rsPdf(){
     ligne(rsFr(r.date_constat)+' — '+r.intitule+' — '+rsLib('origine',r.origine)
       +' — '+rsLib('statut',r.statut)+(r.date_levee?' le '+rsFr(r.date_levee):''),true);
     if(r.action_menee)ligne('   Action : '+r.action_menee);
+    sig(r);
   });
 
   need(20);y+=6;
@@ -4329,7 +4541,7 @@ function rsPdf(){
 
   pdfSortie(doc,'Registre_securite_'+slug(cr.name||'creche')+'_'+rsToday()+'.pdf');
 }
-function rsApercu(){PDF_APERCU=true;try{rsPdf();}finally{PDF_APERCU=false;}}
+async function rsApercu(){PDF_APERCU=true;try{await rsPdf();}finally{PDF_APERCU=false;}}
 
 </script>
 
