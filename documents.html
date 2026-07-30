@@ -4205,6 +4205,27 @@ async function rsDel(mod,id,depuisModale){
 }
 
 /* ---------- Export PDF du registre complet ---------- */
+/* Les polices integrees de jsPDF (helvetica) sont encodees en WinAnsi : tout
+   caractere hors de cette table sort en charabia et fausse le calcul de
+   largeur de splitTextToSize. On remplace donc les symboles courants par un
+   equivalent lisible et on ecarte le reste avant impression. */
+const RS_WA_MAP={'\u2264':'<=','\u2265':'>=','\u2260':'!=','\u2248':'~',
+  '\u2192':'->','\u2190':'<-','\u2191':'^','\u2193':'v','\u21d2':'=>',
+  '\u00b1':'+/-','\u2044':'/','\u2032':"'",'\u2033':'"','\u00a0':' ','\u202f':' '};
+const RS_WA_OK='\u20ac\u201a\u0192\u201e\u2026\u2020\u2021\u02c6\u2030\u0160\u2039'
+  +'\u0152\u017d\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u02dc\u2122\u0161'
+  +'\u203a\u0153\u017e\u0178';
+function rsWA(t){
+  let o='';
+  for(const c of String(t==null?'':t)){
+    if(RS_WA_MAP[c]){o+=RS_WA_MAP[c];continue;}
+    if(c.codePointAt(0)<256||RS_WA_OK.indexOf(c)>=0){o+=c;continue;}
+    /* lettre accentuee exotique : on retombe sur sa forme de base */
+    const d=c.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    o+=(d.codePointAt(0)<256)?d:'';
+  }
+  return o;
+}
 function rsPdf(){
   if(!window.jspdf){toast('Librairie PDF non chargée');return;}
   const{jsPDF}=window.jspdf;
@@ -4215,19 +4236,19 @@ function rsPdf(){
   const cr=(CRECHES||[]).find(c=>c.id===RS_CRECHE)||{};
   const titre=(t)=>{need(14);doc.setFillColor(74,63,159);doc.rect(14,y-4,W,8,'F');
     doc.setTextColor(255);doc.setFont('helvetica','bold');doc.setFontSize(11);
-    doc.text(t,16,y+1.5);doc.setTextColor(40);y+=11;};
+    doc.text(rsWA(t),16,y+1.5);doc.setTextColor(40);y+=11;};
   const ligne=(t,gras)=>{doc.setFont('helvetica',gras?'bold':'normal');doc.setFontSize(9.5);
-    const ls=doc.splitTextToSize(t,W-4);need(ls.length*4.6+2);
+    const ls=doc.splitTextToSize(rsWA(t),W-4);need(ls.length*4.6+2);
     doc.text(ls,16,y);y+=ls.length*4.6+1.5;};
 
   doc.setFont('helvetica','bold');doc.setFontSize(17);doc.setTextColor(74,63,159);
-  doc.text('Registre de sécurité',14,y);y+=8;
+  doc.text(rsWA('Registre de sécurité'),14,y);y+=8;
   doc.setFontSize(12);doc.setTextColor(40);
-  doc.text(cr.name||'',14,y);y+=6;
+  doc.text(rsWA(cr.name||''),14,y);y+=6;
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(120);
-  doc.text('Article R.143-44 du code de la construction et de l’habitation — ERP type '
-    +((RS_ETAB&&RS_ETAB.erp_type)||'R')+', '+((RS_ETAB&&RS_ETAB.erp_categorie)||'5e')+' catégorie',14,y);y+=5;
-  doc.text('Édité le '+rsFr(rsToday())+' par '+((PROF&&PROF.name)||''),14,y);y+=9;
+  doc.text(rsWA('Article R.143-44 du code de la construction et de l’habitation — ERP type '
+    +((RS_ETAB&&RS_ETAB.erp_type)||'R')+', '+((RS_ETAB&&RS_ETAB.erp_categorie)||'5e')+' catégorie'),14,y);y+=5;
+  doc.text(rsWA('Édité le '+rsFr(rsToday())+' par '+((PROF&&PROF.name)||'')),14,y);y+=9;
   doc.setTextColor(40);
 
   const e=RS_ETAB||{};
@@ -4303,8 +4324,8 @@ function rsPdf(){
 
   need(20);y+=6;
   doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(120);
-  doc.text(doc.splitTextToSize('Extrait certifié conforme du registre de sécurité numérique. '
-    +'Les écritures sont horodatées et nominatives, conservées de façon inaltérable dans le journal de la structure.',W),14,y);
+  doc.text(doc.splitTextToSize(rsWA('Extrait certifié conforme du registre de sécurité numérique. '
+    +'Les écritures sont horodatées et nominatives, conservées de façon inaltérable dans le journal de la structure.'),W),14,y);
 
   pdfSortie(doc,'Registre_securite_'+slug(cr.name||'creche')+'_'+rsToday()+'.pdf');
 }
