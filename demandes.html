@@ -3616,7 +3616,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   // `withoutCreneau` reste calculé : il sert de compteur pour le pied de tableau.
   if(withoutCreneau.length){
     html+='<tr><td colspan="6" style="padding:'+_pePad+';font-size:'+_peFSDay+';color:var(--muted);font-style:italic;background:#FBFBFD">'
-      +withoutCreneau.length+' activité(s) sans horaire (congé, absence, journée combinée) — voir le dashboard direction</td></tr>';
+      +withoutCreneau.length+' activité(s) sans horaire (congé, absence, journée combinée) — voir « Absences et congés du jour » sur le dashboard</td></tr>';
   }
 
   html+='</tbody></table>';
@@ -4073,7 +4073,7 @@ function renderDashboardToday(){
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-bolt"></i> Activité du jour</div>'+actHtml+'</div>'+
     '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-planning"><div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span><select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning()"><option value="">-- Crèche --</option></select></div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Sélectionnez une crèche</div></div>'+
-    '<div class="dash-card" id="dash-today-autres"><div class="dash-card-title"><i class="ti ti-calendar-off"></i> Autres activités du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
+    '<div class="dash-card" id="dash-today-autres"><div class="dash-card-title"><i class="ti ti-user-off"></i> Absences et congés du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-mapresence"><div class="dash-card-title"><i class="ti ti-map-pin"></i> Ma présence du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-afaire"><div class="dash-card-title"><i class="ti ti-checklist"></i> À faire du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
@@ -4203,15 +4203,21 @@ async function loadDashboardPlanning(){
     box.innerHTML=title+html;
   }catch(e){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Indisponible</div>';}
 }
-// Autres activités du jour (direction) — lignes de `planning_equipe` sans
-// créneau horaire : congés, absences, journées combinées. Elles ne sont plus
-// affichées dans le tableau du planning équipe, qui n'a de sens que pour les
-// horaires ; on les regroupe ici, toutes crèches confondues.
+// Absences et conges du jour (direction).
+// Critere METIER et non technique : on remonte les types conge/absent, plus les
+// journees combinees (deux activites le meme jour, label « A + B », que l'import
+// Excel enregistre sans creneau_label). L'ancien critere « pas de creneau_label »
+// ne voulait rien dire : il attrapait les residus d'import et laissait passer
+// les conges portes par une ligne de creneau.
+// Toutes creches confondues, comme la carte Remplacantes.
+function peEstCombinee(r){
+  return !r.creneau_label && /\s\+\s/.test(String(r.label||''));
+}
 async function loadDashboardAutres(dateStr){
   const box=document.getElementById('dash-today-autres');
   if(!box)return;
-  const title='<div class="dash-card-title"><i class="ti ti-calendar-off"></i> Autres activités du jour</div>';
-  const vide='<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucune autre activité</div>';
+  const title='<div class="dash-card-title"><i class="ti ti-user-off"></i> Absences et cong\u00e9s du jour</div>';
+  const vide='<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Personne d\u2019absent</div>';
   try{
     const d=new Date(dateStr+'T00:00:00');
     const jourIdx=d.getDay()===0?6:d.getDay()-1;
@@ -4219,21 +4225,24 @@ async function loadDashboardAutres(dateStr){
     const ws=mondayOfISO(dateStr);
     const{data,error}=await sb.from('planning_equipe').select('*').eq('semaine',ws).eq('jour',jourIdx);
     if(error)throw error;
-    // creneau_label vide OU nul : la ligne ne porte pas d'horaire exploitable
-    const list=(data||[]).filter(r=>!r.creneau_label);
+    const list=(data||[]).filter(r=>r.type==='conge'||r.type==='absent'||peEstCombinee(r));
     if(!list.length){box.innerHTML=title+vide;return;}
-    const TYPES={conge:'\ud83c\udfd6\ufe0f Cong\u00e9',absent:'\u26a0\ufe0f Absence',formation:'\ud83d\udcda Formation',reunion:'\ud83e\udd1d R\u00e9union'};
-    list.sort((a,b)=>String(a.prenom||'').localeCompare(String(b.prenom||''),'fr'));
+    // Absences d'abord, puis conges, puis journees combinees ; alphabetique dans chaque groupe
+    const rang=r=>(r.type==='absent'?0:r.type==='conge'?1:2);
+    list.sort((a,b)=>rang(a)-rang(b)||String(a.prenom||'').localeCompare(String(b.prenom||''),'fr'));
     box.innerHTML=title+list.map(r=>{
       const creche=cacheCreches.find(c=>c.id===r.creche_id);
-      // Un label identique au prénom n'apporte rien : on ne l'affiche pas deux fois
-      const meme=(typeof spNorm==='function')?spNorm(r.label)===spNorm(r.prenom):r.label===r.prenom;
-      const motif=TYPES[r.type]||(r.label&&!meme?escHtml(r.label):'\u2014 sans motif');
-      const horaire=(r.hdebut&&r.hfin)?r.hdebut+'\u2013'+r.hfin:'';
-      return'<div class="dash-list-item"><span>\ud83d\udc64 '+escHtml(r.prenom||'\u2014')
+      const combi=peEstCombinee(r);
+      const motif=r.type==='absent'?'\u26a0\ufe0f Absence'
+        :r.type==='conge'?'\ud83c\udfd6\ufe0f Cong\u00e9'
+        :'\ud83d\udd00 Journ\u00e9e combin\u00e9e';
+      const couleur=r.type==='absent'?'var(--red)':r.type==='conge'?'var(--koala)':'var(--muted)';
+      // Une journee combinee porte toute son information dans le label : 2e ligne
+      const detail=combi?'<div style="font-size:10.5px;color:var(--muted);padding:2px 0 0 22px;line-height:1.35;flex-basis:100%">'+escHtml(r.label)+'</div>':'';
+      return'<div class="dash-list-item" style="flex-wrap:wrap"><span>\ud83d\udc64 '+escHtml(r.prenom||'\u2014')
         +(creche?' <span style="color:var(--muted);font-size:11px">('+escHtml(creche.name)+')</span>':'')
-        +'</span><span style="font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap">'
-        +motif+(horaire?' \u00b7 '+horaire:'')+'</span></div>';
+        +'</span><span style="font-size:11px;font-weight:700;color:'+couleur+';white-space:nowrap">'+motif+'</span>'
+        +detail+'</div>';
     }).join('');
   }catch(e){
     box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Indisponible</div>';
