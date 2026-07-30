@@ -963,7 +963,14 @@ function pdfAfficherHtml(interieur,nom,srcTelechargement){
     +'th{background:#EEECFA}'
     +'h3.feuille{margin:22px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.6px}'
     +'.classeur{overflow-x:auto}.classeur table{width:auto;min-width:100%}'
-    +'.classeur td,.classeur th{white-space:nowrap}</style>'+interieur;
+    +'.classeur td,.classeur th{white-space:nowrap}'
+    +'table.xl{font-size:12.5px;border-collapse:collapse}'
+    +'table.xl td,table.xl th{border:1px solid #D9D2EC;padding:5px 9px;vertical-align:middle}'
+    +'table.xl td.num,table.xl th.num{text-align:right;font-variant-numeric:tabular-nums}'
+    +'table.xl tr.entete th{position:sticky;top:0;background:#4A3F9F;color:#fff;'
+    +'font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;text-align:left}'
+    +'table.xl tbody tr:nth-child(even):not(.entete){background:#FAF8FD}'
+    +'table.xl td:empty{background:#fff}</style>'+interieur;
   const url=URL.createObjectURL(new Blob([page],{type:'text/html;charset=utf-8'}));
   pdfAfficher(url,nom,url,srcTelechargement,' \u2014 aper\u00e7u de lecture, mise en page approch\u00e9e');
 }
@@ -976,6 +983,61 @@ function pdfSortie(doc,nom){
    le bucket, sans passer par le disque. Les formats que le navigateur ne sait
    pas rendre (docx, xlsx) sont ouverts dans un onglet. */
 const PDF_EXT_TABLEUR=['xlsx','xls','csv','ods'];
+/* Rendu d'une feuille de calcul en tableau HTML. sheet_to_html ignore les
+   largeurs de colonnes, les cellules fusionnees et les formats de nombre :
+   on reconstruit donc la grille a partir de la feuille pour un apercu fidele. */
+function feuilleEnTableau(ws){
+  const XL=window.XLSX;
+  if(!ws||!ws['!ref'])return '<p><i>Feuille vide.</i></p>';
+  const r=XL.utils.decode_range(ws['!ref']);
+  const couvert={},ancre={};
+  (ws['!merges']||[]).forEach(m=>{
+    for(let R=m.s.r;R<=m.e.r;R++)for(let C=m.s.c;C<=m.e.c;C++){
+      if(R===m.s.r&&C===m.s.c)ancre[R+':'+C]={rs:m.e.r-m.s.r+1,cs:m.e.c-m.s.c+1};
+      else couvert[R+':'+C]=1;
+    }
+  });
+  const cols=ws['!cols']||[];
+  let html='<table class="xl"><colgroup>';
+  for(let C=r.s.c;C<=r.e.c;C++){
+    const l=cols[C]&&(cols[C].wch||cols[C].wpx);
+    html+='<col'+(l?' style="width:'+Math.round(cols[C].wpx||l*7.6)+'px"':'')+'>';
+  }
+  html+='</colgroup><tbody>';
+  /* La premiere ligne non vide sert d'en-tete si toutes ses cellules sont du texte. */
+  const nbCol=r.e.c-r.s.c+1;
+  let ligneEntete=-1;
+  for(let R=r.s.r;R<=r.e.r&&ligneEntete===-1;R++){
+    let n=0,txt=0;
+    for(let C=r.s.c;C<=r.e.c;C++){
+      if(couvert[R+':'+C])continue;
+      const c=ws[XL.utils.encode_cell({r:R,c:C})];
+      if(c&&c.v!=null&&String(c.v).trim()!==''){n++;if(c.t==='s')txt++;}
+    }
+    /* Une vraie ligne d'en-tete remplit la quasi-totalite des colonnes en texte.
+       Cela ecarte les lignes de titre ou de contexte du haut de feuille. */
+    if(n>=3&&txt===n&&n>=Math.ceil(nbCol*0.7))ligneEntete=R;
+  }
+  for(let R=r.s.r;R<=r.e.r;R++){
+    let tds='';
+    for(let C=r.s.c;C<=r.e.c;C++){
+      if(couvert[R+':'+C])continue;
+      const c=ws[XL.utils.encode_cell({r:R,c:C})];
+      let v=c?(c.w!=null?c.w:(c.v!=null?String(c.v):'')):'';
+      /* SheetJS formate toujours avec un point decimal : on repasse a la virgule
+         pour les nombres simples, sans toucher aux dates ni aux milliers. */
+      if(c&&c.t==='n'&&/^-?\d+\.\d+$/.test(v))v=v.replace('.',',');
+      const a=ancre[R+':'+C];
+      const attrs=(a?' rowspan="'+a.rs+'" colspan="'+a.cs+'"':'')
+                 +(c&&c.t==='n'?' class="num"':'');
+      tds+=(R===ligneEntete?'<th'+attrs+'>':'<td'+attrs+'>')
+          +esc(v).replace(/\n/g,'<br>')
+          +(R===ligneEntete?'</th>':'</td>');
+    }
+    html+='<tr'+(R===ligneEntete?' class="entete"':'')+'>'+tds+'</tr>';
+  }
+  return html+'</tbody></table>';
+}
 const PDF_MIMES={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',
   gif:'image/gif',webp:'image/webp',svg:'image/svg+xml',txt:'text/plain'};
 async function apercuFichier(id){
@@ -1006,7 +1068,7 @@ async function apercuFichier(id){
     try{
       const r=await fetch(d.fichier_url);
       if(!r.ok)throw new Error('HTTP '+r.status);
-      const wb=window.XLSX.read(new Uint8Array(await r.arrayBuffer()),{type:'array'});
+      const wb=window.XLSX.read(new Uint8Array(await r.arrayBuffer()),{type:'array',cellStyles:true});
       const noms=(wb&&wb.SheetNames)||[];
       /* Une feuille illisible (graphique, feuille protegee, macro) ne doit pas
          faire echouer tout l'apercu : chacune est traitee isolement. */
@@ -1015,7 +1077,7 @@ async function apercuFichier(id){
         const ws=wb.Sheets&&wb.Sheets[n];
         if(!ws)return;
         let t;
-        try{t=window.XLSX.utils.sheet_to_html(ws,{header:'',footer:''});}
+        try{t=feuilleEnTableau(ws);}
         catch(err){console.warn('feuille illisible',n,err);t='<p><i>Feuille illisible.</i></p>';}
         html+=(noms.length>1?'<h3 class="feuille">'+esc(n)+'</h3>':'')
              +'<div class="classeur">'+t+'</div>';
