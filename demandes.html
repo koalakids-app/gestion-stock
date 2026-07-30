@@ -6691,37 +6691,15 @@ const SP_ROUND_MIN = 15;             // la grille du PDF est au quart d’heure 
                                      // pour retenir l’horaire théorique et non le pointage
 const SP_JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
 
-// Créneaux théoriques du réseau. Une journée dont le début ET la fin tombent à
-// moins de SP_TOL_MIN d'un créneau y est ramenée : on retient l'horaire prévu,
-// pas le pointage. Au-delà, l'horaire est conservé tel quel et signalé.
-// Liste confirmée pour Ollioules — à compléter si une crèche diffère.
-const SP_TOL_MIN = 20;
-const SP_CRENEAUX = [
-  { label: '07h00-12h00/12h30-14h30', hdebut: '07:00', hfin: '14:30', pause: '12:00-12:30' },
-  { label: '07h30-12h30/13h30-15h30', hdebut: '07:30', hfin: '15:30', pause: '12:30-13:30' },
-  { label: '09h00-12h00/13h00-17h00', hdebut: '09:00', hfin: '17:00', pause: '12:00-13:00' },
-  { label: '10h30-13h00/14h00-18h30', hdebut: '10:30', hfin: '18:30', pause: '13:00-14:00' },
-  { label: '11h00-13h30/14h30-19h00', hdebut: '11:00', hfin: '19:00', pause: '13:30-14:30' }
-];
-
-// Ramène une journée mesurée sur le créneau théorique le plus proche.
-function spNormaliser(cr) {
-  const a = spMin(cr.hdebut), b = spMin(cr.hfin);
-  let best = null;
-  for (const c of SP_CRENEAUX) {
-    const da = Math.abs(a - spMin(c.hdebut)), db = Math.abs(b - spMin(c.hfin));
-    if (da <= SP_TOL_MIN && db <= SP_TOL_MIN && (!best || da + db < best.ecart)) {
-      best = { c, ecart: da + db };
-    }
-  }
-  if (!best) {
-    return { hdebut: cr.hdebut, hfin: cr.hfin, pause: cr.pause, multi: cr.multi,
-             label: cr.hdebut.replace(':', 'h') + '-' + cr.hfin.replace(':', 'h'),
-             normalise: false, ecart: null };
-  }
-  return { hdebut: best.c.hdebut, hfin: best.c.hfin, pause: best.c.pause, multi: cr.multi,
-           label: best.c.label, normalise: true, ecart: best.ecart };
-}
+// Le PDF est vectoriel : les bornes des barres tombent exactement au quart
+// d’heure (vérifié sur les exports Familien). On garde donc la mesure telle
+// quelle. L’ancien recalage sur une liste de créneaux théoriques falsifiait
+// les pauses : une journée réelle 10h30-13h30 / 14h30-18h30 était réécrite
+// 13h00-14h00, et une journée hors liste perdait sa pause à l’affichage.
+//
+// SP_GAP_MIN : en dessous de ce seuil, une coupure entre deux barres est un
+// artefact de rendu (trait de grille), pas une pause.
+const SP_GAP_MIN = 10;
 
 let _spData = null;
 
@@ -6867,22 +6845,50 @@ function spHeureTexte(hd) {
   return String(Math.floor(mn / 60)).padStart(2, '0') + ':' + String(mn % 60).padStart(2, '0');
 }
 
-// Segments -> colonnes planning_equipe. Au-delà de 2 segments (jamais vu à ce
-// jour), on garde les extrêmes et on signale la coupure la plus longue.
+// Segments -> colonnes planning_equipe.
+//   label : la journée complète ("07h00-12h00/13h00-15h00"). C’est LUI que la
+//           colonne Horaire du planning équipe affiche (peRenderCreneau) : il
+//           porte donc la pause et le total travaillé. Un label à une seule
+//           plage = journée affichée comme continue.
+//   pause : la coupure la plus longue, pour la colonne dédiée.
 function spVersCreneau(segments) {
-  return spNormaliser(spMesurer(segments));
+  if (!segments || !segments.length) {
+    return { hdebut: '', hfin: '', pause: null, multi: false, label: '', segments: [] };
+  }
+  return spMesurer(spFusionner(segments));
 }
 
-function spMesurer(segments) {
+// Deux barres séparées par moins de SP_GAP_MIN minutes ne forment qu’une plage.
+function spFusionner(segments) {
   const s = segments.slice().sort((a, b) => a.debut.localeCompare(b.debut));
-  const hdebut = s[0].debut, hfin = s[s.length - 1].fin;
-  if (s.length === 1) return { hdebut, hfin, pause: null, multi: false };
+  const out = [{ debut: s[0].debut, fin: s[0].fin }];
+  for (let i = 1; i < s.length; i++) {
+    const p = out[out.length - 1];
+    if (spMin(s[i].debut) - spMin(p.fin) < SP_GAP_MIN) {
+      if (spMin(s[i].fin) > spMin(p.fin)) p.fin = s[i].fin;
+    } else {
+      out.push({ debut: s[i].debut, fin: s[i].fin });
+    }
+  }
+  return out;
+}
+
+function spLabel(s) {
+  return s.map(x => x.debut.replace(':', 'h') + '-' + x.fin.replace(':', 'h')).join('/');
+}
+
+function spMesurer(s) {
+  const hdebut = s[0].debut, hfin = s[s.length - 1].fin, label = spLabel(s);
+  if (s.length === 1) {
+    return { hdebut, hfin, pause: null, multi: false, label, segments: s };
+  }
   let iMax = 0, dMax = -1;
   for (let i = 0; i < s.length - 1; i++) {
     const d = spMin(s[i + 1].debut) - spMin(s[i].fin);
     if (d > dMax) { dMax = d; iMax = i; }
   }
-  return { hdebut, hfin, pause: s[iMax].fin + '-' + s[iMax + 1].debut, multi: s.length > 2 };
+  return { hdebut, hfin, pause: s[iMax].fin + '-' + s[iMax + 1].debut,
+           multi: s.length > 2, label, segments: s };
 }
 function spMin(hhmm) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; }
 
@@ -6936,7 +6942,7 @@ function spInjecterModale() {
       <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i>
         Déposez le <strong>planning de présences PDF</strong> (celui utilisé pour les enfants).
         Les horaires des salariés y sont lus directement, pauses comprises.
-        Une journée coupée devient <strong>hdebut / pause / hfin</strong> ; une journée continue n'a pas de pause.
+        Une journée coupée devient <strong>07h00-12h00/13h00-15h00</strong> ; une journée continue n'a qu\u2019une plage.
       </div>
       <div class="fg"><label class="flabel">Crèche concernée</label>
         <select class="finput" id="sp-creche"><option value="">— Sélectionner —</option></select>
@@ -7090,13 +7096,13 @@ function spRenderPreview() {
       + '</div>';
   }).join('');
 
-  const horsCreneau = _spData.jours.reduce((n, j) =>
-    n + j.salaries.filter(s => !spVersCreneau(s.segments).normalise).length, 0);
+  const aVerifier = _spData.jours.reduce((n, j) =>
+    n + j.salaries.filter(s => spVersCreneau(s.segments).multi).length, 0);
   html += '<div style="font-weight:700;margin:16px 0 8px">Horaires détectés</div>';
   html += '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'
-    + 'Les journées proches d\u2019un créneau théorique y sont ramenées, pour retenir l\u2019horaire prévu '
-    + 'et non le pointage.' + (horsCreneau
-      ? ' <strong style="color:var(--orange)">' + horsCreneau + ' journée(s) hors créneau</strong>, conservée(s) telles quelles.'
+    + 'Horaires lus tels quels dans le PDF, au quart d\u2019heure, pauses comprises.'
+    + (aVerifier
+      ? ' <strong style="color:var(--orange)">' + aVerifier + ' journée(s) à plus de deux plages</strong>, à vérifier.'
       : '') + '</div>';
   html += _spData.jours.map(j => {
     const d = new Date(j.dateISO + 'T12:00:00');
@@ -7105,14 +7111,13 @@ function spRenderPreview() {
       ? ' <span style="color:var(--orange);font-size:11px">— week-end, ignoré</span>' : '';
     const lignes = j.salaries.map(s => {
       const cr = spVersCreneau(s.segments);
-      const pause = cr.pause ? '<span style="color:var(--muted)"> · pause ' + cr.pause + '</span>' : '';
-      const etat = cr.normalise
-        ? (cr.ecart ? '<span style="color:var(--muted);font-size:10.5px"> · recalé ' + cr.ecart + ' min</span>' : '')
-        : ' <span style="color:var(--orange);font-weight:700">⚠ hors créneau</span>';
-      const warn = cr.multi ? ' <span style="color:var(--orange)">⚠ &gt;2 segments</span>' : '';
+      const pause = cr.pause
+        ? '<span style="color:var(--muted)"> · pause ' + cr.pause + '</span>'
+        : '<span style="color:var(--muted)"> · journée continue</span>';
+      const warn = cr.multi ? ' <span style="color:var(--orange)">⚠ &gt;2 plages</span>' : '';
       return '<div style="padding:4px 12px;font-size:11.5px;display:flex;justify-content:space-between;gap:10px">'
         + '<span>' + escHtml(_spData.mapping[s.nomPdf].prenom) + '</span>'
-        + '<span>' + cr.hdebut + '–' + cr.hfin + pause + etat + warn + '</span></div>';
+        + '<span>' + cr.hdebut + '–' + cr.hfin + pause + warn + '</span></div>';
     }).join('');
     return '<details style="border-bottom:1px solid var(--border)"><summary style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:700;color:var(--koala)">'
       + spDateFr(j.dateISO) + ' — ' + j.salaries.length + ' salarié(s)' + hors + '</summary>' + lignes + '</details>';
@@ -7237,21 +7242,6 @@ function spInstallerBouton() {
   console.log('[ImportSalPdf] Bouton installé.');
   return true;
 }
-
-(function spAutoInstall() {
-  let essais = 0;
-  const tick = () => {
-    if (spInstallerBouton()) return;
-    if (++essais > 40) {
-      console.warn('[ImportSalPdf] Bouton d\u2019import Excel introuvable : '
-        + 'appelez spOpenImportModal() manuellement ou signalez-le.');
-      return;
-    }
-    setTimeout(tick, 500);
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick);
-  else tick();
-})();
 
 (function spAutoInstall() {
   let essais = 0;
