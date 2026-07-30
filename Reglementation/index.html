@@ -881,6 +881,52 @@
     cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:600;
     display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:background .15s;}
   .reglo-verify-btn:hover{background:#B5730F;}
+  /* ── VEILLE RÉGLEMENTAIRE : titre + lien ── */
+  .veille-add-btn{background:#4A6275;color:#fff;border:none;padding:8px 14px;border-radius:8px;
+    cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;
+    display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:background .15s;}
+  .veille-add-btn:hover{background:#3A4E5C;}
+  .veille-list{display:flex;flex-direction:column;gap:10px;}
+  .veille-row{display:flex;align-items:center;gap:12px;background:#fff;
+    border:1px dashed var(--border);border-radius:12px;padding:14px 16px;
+    box-shadow:0 1px 6px var(--shadow);}
+  .veille-row a{flex:1;min-width:0;color:var(--ink);font-weight:600;font-size:14px;
+    text-decoration:none;line-height:1.45;}
+  .veille-row a:hover{color:var(--amber);text-decoration:underline;}
+  .veille-host{font-size:11px;color:var(--brown);background:var(--cream);
+    border-radius:20px;padding:3px 9px;white-space:nowrap;}
+  .veille-date{font-size:11px;color:#9A8F80;white-space:nowrap;}
+  .veille-del{background:none;border:none;color:#C9C0B4;cursor:pointer;font-size:14px;
+    padding:2px 4px;line-height:1;transition:color .15s;}
+  .veille-del:hover{color:#E74C3C;}
+  @media (max-width:640px){
+    .veille-row{flex-wrap:wrap;gap:8px;}
+    .veille-row a{flex:1 1 100%;}
+  }
+  .veille-overlay{position:fixed;inset:0;background:rgba(26,18,8,0.55);display:none;
+    align-items:center;justify-content:center;z-index:2100;padding:24px 12px;}
+  .veille-overlay.open{display:flex;}
+  .veille-box{background:#fff;border-radius:16px;width:100%;max-width:460px;
+    box-shadow:0 18px 50px rgba(26,18,8,0.28);overflow:hidden;}
+  .veille-head{display:flex;align-items:center;justify-content:space-between;
+    padding:16px 20px;border-bottom:1px solid var(--border);}
+  .veille-head h3{font-size:16px;font-weight:700;margin:0;}
+  .veille-head button{background:none;border:none;font-size:17px;cursor:pointer;color:#9A8F80;}
+  .veille-body{padding:20px;}
+  .veille-fg{margin-bottom:14px;}
+  .veille-fg label{display:block;font-size:12px;font-weight:600;color:var(--brown);
+    margin-bottom:6px;}
+  .veille-fg input{width:100%;box-sizing:border-box;border:1px solid var(--border);
+    border-radius:9px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:16px;
+    color:var(--ink);background:var(--warm-white);}
+  .veille-fg input:focus{outline:none;border-color:var(--amber);}
+  .veille-msg{display:none;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:12px;}
+  .veille-msg.err{background:#FDEDEC;color:#A93226;}
+  .veille-msg.ok{background:#EEF5EE;color:#375239;}
+  .veille-foot{display:flex;justify-content:flex-end;gap:10px;padding:0 20px 20px;}
+  .veille-cancel{background:var(--cream);color:var(--ink);border:1px solid var(--border);
+    padding:10px 16px;border-radius:9px;cursor:pointer;font-family:'DM Sans',sans-serif;
+    font-size:13.5px;font-weight:600;}
   /* ── ÉTAPE 3c : modale édition (2 étapes) ── */
   .redit-overlay{position:fixed;inset:0;background:rgba(26,18,8,0.55);display:none;align-items:flex-start;
     justify-content:center;z-index:2000;padding:24px 12px;overflow-y:auto;}
@@ -1062,6 +1108,15 @@
     </div>
 
     <div class="sidebar-section">
+      <div class="sidebar-title">Veille</div>
+      <button class="filter-btn" data-filter="veille" onclick="filterCards('veille', this)">
+        <span class="dot" style="background:#4A6275"></span>
+        📌 Articles repérés
+        <span class="count" id="count-veille">0</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
       <div class="sidebar-title">Textes de référence</div>
       <button class="filter-btn" style="font-size:12px; color:#7C3AED; font-weight:600; cursor:default;">
         <span>⚡</span> Décret n°2025-304 (NEW)
@@ -1070,7 +1125,7 @@
         <span>📄</span> Décret n°2021-1131
       </button>
       <button class="filter-btn" style="font-size:12px; color:#666; cursor:default;">
-        <span>📄</span> CASF Art. L.2324-1
+        <span>📄</span> CSP Art. L.2324-1
       </button>
       <button class="filter-btn" style="font-size:12px; color:#666; cursor:default;">
         <span>📄</span> Décret n°2010-613
@@ -1092,6 +1147,9 @@
         <span class="results-count" id="resultsCount"></span>
       </div>
       <div class="content-actions">
+        <button class="veille-add-btn" id="veille-add-btn" onclick="veilleOpen()">
+          <span>📌</span> Capturer un lien
+        </button>
         <button class="reglo-add-btn" id="reglo-add-btn" onclick="regloAddFiche()" style="display:none">
           <span>➕</span> Ajouter une fiche
         </button>
@@ -1120,6 +1178,31 @@
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ── MODALE CAPTURE VEILLE (tous les comptes) ── -->
+<div class="veille-overlay" id="veilleOverlay">
+  <div class="veille-box">
+    <div class="veille-head">
+      <h3>📌 Capturer un lien</h3>
+      <button onclick="veilleClose()">✕</button>
+    </div>
+    <div class="veille-body">
+      <div class="veille-msg" id="veilleMsg"></div>
+      <div class="veille-fg">
+        <label for="veilleTitre">Titre de l’article</label>
+        <input type="text" id="veilleTitre" placeholder="ex. Taux d’encadrement : le décret reporté">
+      </div>
+      <div class="veille-fg">
+        <label for="veilleUrl">Lien</label>
+        <input type="url" id="veilleUrl" placeholder="https://…">
+      </div>
+    </div>
+    <div class="veille-foot">
+      <button class="veille-cancel" onclick="veilleClose()">Annuler</button>
+      <button class="veille-add-btn" id="veilleSaveBtn" onclick="veilleSave()">💾 Enregistrer</button>
+    </div>
   </div>
 </div>
 
@@ -1187,7 +1270,7 @@ const DATA = [
     id: 1,
     category: "agrement",
     title: "Définition juridique de la micro-crèche",
-    ref: "Art. L.2324-1 CASF — Décret 2021-1131",
+    ref: "Art. L.2324-1 CSP — Décret 2021-1131",
     summary: "Établissement accueillant au maximum 12 enfants de moins de 6 ans, soumis à autorisation préalable du Président du Conseil Départemental.",
     source: "Code de l'action sociale et des familles",
     date: "Sept. 2021",
@@ -1206,15 +1289,15 @@ const DATA = [
         { label: "Autorité compétente", value: "Président CD" },
         { label: "Service instructeur", value: "PMI" }
       ],
-      alert: "Toute ouverture sans autorisation est passible de sanctions pénales (Art. L.2324-2 CASF). L'autorisation est délivrée pour une durée de 5 ans renouvelable.",
-      sources: ["Art. L.2324-1 CASF", "Décret n°2021-1131 du 30 août 2021", "Art. R.2324-17 CASF"]
+      alert: "Toute ouverture sans autorisation est passible de sanctions pénales (Art. L.2324-2 CSP). L'autorisation est délivrée pour une durée de 5 ans renouvelable.",
+      sources: ["Art. L.2324-1 CSP", "Décret n°2021-1131 du 30 août 2021", "Art. R.2324-17 CSP"]
     }
   },
   {
     id: 2,
     category: "agrement",
     title: "Dossier de demande d'autorisation",
-    ref: "Art. R.2324-18 à R.2324-21 CASF",
+    ref: "Art. R.2324-18 à R.2324-21 CSP",
     summary: "Composition précise du dossier à adresser au Président du Conseil Départemental pour obtenir l'autorisation d'ouverture.",
     source: "CASF — PMI",
     date: "2021",
@@ -1237,7 +1320,7 @@ const DATA = [
         { label: "Silence vaut", value: "Refus" }
       ],
       alert: "Le projet d'établissement doit inclure : les objectifs éducatifs, les modalités d'accueil, la politique d'inclusion du handicap, et les pratiques professionnelles attendues.",
-      sources: ["Art. R.2324-18 CASF", "Art. R.2324-19 CASF", "Décret 2021-1131"]
+      sources: ["Art. R.2324-18 CSP", "Art. R.2324-19 CSP", "Décret 2021-1131"]
     }
   },
   {
@@ -1246,7 +1329,7 @@ const DATA = [
     tags: ["decret2025"],
     caduque: false,
     title: "Contrôle et renouvellement de l'autorisation",
-    ref: "Art. L.2324-3 et R.2324-22 CASF — Décret 2025-304",
+    ref: "Art. L.2324-3 et R.2324-22 CSP — Décret 2025-304",
     summary: "L'autorisation passe de 5 à 15 ans (décret 2025). Le PMI effectue des visites de contrôle inopinées. Toute modification de capacité ou de locaux nécessite une autorisation modificative.",
     source: "CASF — Décret 2025-304",
     date: "Avril 2025",
@@ -1273,7 +1356,7 @@ const DATA = [
         { label: "Délai signalement", value: "24h" }
       ],
       alert: "Les structures ayant une autorisation délivrée avant le décret 2025 la conservent jusqu'à son terme, mais le renouvellement sera soumis aux nouvelles règles. Anticipez dès maintenant.",
-      sources: ["Art. L.2324-3 CASF", "Art. R.2324-22 CASF", "Décret n°2025-304 du 1er avril 2025"]
+      sources: ["Art. L.2324-3 CSP", "Art. R.2324-22 CSP", "Décret n°2025-304 du 1er avril 2025"]
     }
   },
 
@@ -1284,7 +1367,7 @@ const DATA = [
     tags: ["decret2025"],
     caduque: true,
     title: "Référent technique obligatoire",
-    ref: "Art. R.2324-34 et R.2324-35 CASF — Décret 2025-304",
+    ref: "Art. R.2324-34 et R.2324-35 CSP — Décret 2025-304",
     summary: "⚠ Cette fonction est SUPPRIMÉE au 1er septembre 2026 par le décret 2025-304. Elle est remplacée par une direction obligatoire à 0,5 ETP minimum. En vigueur jusqu'au 31 août 2026.",
     source: "CASF — Décret 2025-304",
     date: "Modifié avril 2025",
@@ -1310,7 +1393,7 @@ const DATA = [
         { label: "Transition", value: "Jusqu'au 31/08/26" }
       ],
       alert: "Les structures multi-sites gérées par un seul référent technique doivent impérativement revoir leur organisation RH. Une direction par micro-crèche à 0,5 ETP représente un surcoût salarial significatif à anticiper dans le budget 2025-2026.",
-      sources: ["Art. R.2324-34 CASF", "Décret n°2025-304 du 1er avril 2025", "Question sénat QSE 260207705 — fév. 2026"]
+      sources: ["Art. R.2324-34 CSP", "Décret n°2025-304 du 1er avril 2025", "Question sénat QSE 260207705 — fév. 2026"]
     }
   },
   {
@@ -1318,7 +1401,7 @@ const DATA = [
     category: "encadrement",
     tags: ["decret2025"],
     title: "Taux d'encadrement et présence simultanée",
-    ref: "Art. R.2324-43 et R.2324-44 CASF — Décret 2025-304",
+    ref: "Art. R.2324-43 et R.2324-44 CSP — Décret 2025-304",
     summary: "2 professionnels minimum dès 4 enfants accueillis. En dessous de 4 enfants : 1 seul professionnel catégorie 1 possible (EJE, AP, IDE). Ratios : 1 pour 5 non-marcheurs, 1 pour 8 marcheurs (ou 1 pour 6 au choix). Qualifications : pleine application au 1er sept. 2027 (reporté).",
     source: "CASF — Décret 2025-304 — Report ministeriel mars 2026",
     date: "Mis à jour avril 2026",
@@ -1347,7 +1430,7 @@ const DATA = [
         { label: "Ratio marcheurs", value: "1 pour 8 (ou 1/6)" }
       ],
       alert: "Le report à 2027 est conditionnel : les structures doivent prouver avant le 1er septembre 2026 qu'au moins un salarié est engagé dans une VAE vers un diplôme catégorie 1 (dont le nouveau titre IEPE). Sans cet engagement, la dérogation transitoire ne s'applique pas.",
-      sources: ["Art. R.2324-43 CASF", "Art. R.2324-44 CASF", "Décret n°2025-304 du 1er avril 2025", "Annonce min. Stéphanie Rist — Comité filière PE, 26 mars 2026"]
+      sources: ["Art. R.2324-43 CSP", "Art. R.2324-44 CSP", "Décret n°2025-304 du 1er avril 2025", "Annonce min. Stéphanie Rist — Comité filière PE, 26 mars 2026"]
     }
   },
   {
@@ -1355,7 +1438,7 @@ const DATA = [
     category: "encadrement",
     tags: ["decret2025"],
     title: "Qualifications requises du personnel",
-    ref: "Art. R.2324-42 CASF — Décret 2025-304",
+    ref: "Art. R.2324-42 CSP — Décret 2025-304",
     summary: "40 à 50% du personnel doit être catégorie 1 (EJE, AP, infirmier, puériculteur, titre IEPE). Les CAP AEPE restent dans les 60% catégorie 2. Pleine application reportée au 1er septembre 2027.",
     source: "CASF — DGCS — Décret 2025-304 — Report min. Rist mars 2026",
     date: "Mis à jour avril 2026",
@@ -1383,7 +1466,7 @@ const DATA = [
         { label: "Pleine applic.", value: "01/09/2027" }
       ],
       alert: "Le report à 2027 n'est pas automatique. Les structures qui n'engagent aucun salarié en VAE avant le 1er septembre 2026 ne bénéficient pas de la dérogation et doivent être conformes dès 2026. Contacter la PMI et la CAF locale pour confirmer les modalités applicables à votre département.",
-      sources: ["Art. R.2324-42 CASF", "Décret n°2025-304 du 1er avril 2025", "Annonce min. Stéphanie Rist — Comité filière PE, 26 mars 2026", "SNPPE — mars 2026"]
+      sources: ["Art. R.2324-42 CSP", "Décret n°2025-304 du 1er avril 2025", "Annonce min. Stéphanie Rist — Comité filière PE, 26 mars 2026", "SNPPE — mars 2026"]
     }
   },
 
@@ -1478,7 +1561,7 @@ const DATA = [
     id: 10,
     category: "locaux",
     title: "Superficie et espaces réglementaires",
-    ref: "Art. R.2324-54 à R.2324-60 CASF",
+    ref: "Art. R.2324-54 à R.2324-60 CSP",
     summary: "Minimum 2 m² par enfant dans les espaces de jeux, espace de sommeil séparé obligatoire, coin repas, salle de change avec lave-mains. Espaces extérieurs recommandés.",
     source: "CASF — PMI",
     date: "2021",
@@ -1499,7 +1582,7 @@ const DATA = [
         { label: "Accès PMR", value: "Obligatoire" }
       ],
       alert: "Aucune surface minimale totale n'est fixée par les textes nationaux (la PMI locale peut imposer des exigences plus strictes). La règle des 2 m² s'applique à la superficie des espaces de vie, hors dégagements, sanitaires et cuisines.",
-      sources: ["Art. R.2324-54 CASF", "Art. R.2324-57 CASF", "Norme NF EN 716"]
+      sources: ["Art. R.2324-54 CSP", "Art. R.2324-57 CSP", "Norme NF EN 716"]
     }
   },
   {
@@ -1565,7 +1648,7 @@ const DATA = [
     id: 13,
     category: "sante",
     title: "Protocole de soins et médicaments",
-    ref: "Art. R.2324-30 à R.2324-33 CASF",
+    ref: "Art. R.2324-30 à R.2324-33 CSP",
     summary: "Administration de médicaments possible uniquement sur ordonnance médicale et avec protocole signé par un médecin. Médicaments sous clé, traçabilité obligatoire.",
     source: "CASF — ANSES — HAS",
     date: "2021",
@@ -1587,14 +1670,14 @@ const DATA = [
         { label: "Traçabilité", value: "Obligatoire" }
       ],
       alert: "En cas de doute sur l'état de santé d'un enfant, le professionnel doit immédiatement contacter les parents. Si l'enfant est inconscient ou en détresse respiratoire : appel du 15 (SAMU) en premier.",
-      sources: ["Art. R.2324-30 CASF", "Recommandations HAS 2019", "Circulaire DGS/PS3/2002"]
+      sources: ["Art. R.2324-30 CSP", "Recommandations HAS 2019", "Circulaire DGS/PS3/2002"]
     }
   },
   {
     id: 14,
     category: "sante",
     title: "Éviction des enfants malades — Maladies à déclaration obligatoire",
-    ref: "Art. R.2324-25 CASF — Arrêté du 14/03/1986",
+    ref: "Art. R.2324-25 CSP — Arrêté du 14/03/1986",
     summary: "Liste des maladies entraînant une éviction obligatoire avec durées définies. Obligations de signalement pour les maladies à déclaration obligatoire (MDO) à l'ARS.",
     source: "ARS — SPF",
     date: "2023",
@@ -1654,7 +1737,7 @@ const DATA = [
     id: 16,
     category: "gestion",
     title: "Règlement de fonctionnement",
-    ref: "Art. R.2324-26 CASF",
+    ref: "Art. R.2324-26 CSP",
     summary: "Document obligatoire remis à chaque famille lors de l'inscription. Il définit les horaires, les tarifs, les modalités d'accueil, les règles de vie et les droits des parents.",
     source: "CASF",
     date: "2021",
@@ -1676,14 +1759,14 @@ const DATA = [
         { label: "Mise à jour", value: "À chaque modif." }
       ],
       alert: "Le règlement de fonctionnement doit être affiché dans un lieu visible de la structure. Les parents doivent signer un accusé de réception. En cas de litige, ce document fait foi devant les tribunaux.",
-      sources: ["Art. R.2324-26 CASF", "Guide DGCS 2021"]
+      sources: ["Art. R.2324-26 CSP", "Guide DGCS 2021"]
     }
   },
   {
     id: 17,
     category: "gestion",
     title: "Contrat d'accueil et facturation aux familles",
-    ref: "Art. R.2324-27 CASF — Barème CNAF",
+    ref: "Art. R.2324-27 CSP — Barème CNAF",
     summary: "Un contrat d'accueil individuel doit être signé pour chaque enfant. Pour les structures sous PSU : tarification selon le barème national CNAF (quotient familial).",
     source: "CASF — CNAF",
     date: "2024",
@@ -1705,14 +1788,14 @@ const DATA = [
         { label: "Mensualisation", value: "Possible" }
       ],
       alert: "La facturation aux familles doit refléter les heures réellement contractualisées, pas uniquement les heures effectivement utilisées. Les absences non justifiées médicalement sont généralement dues.",
-      sources: ["Art. R.2324-27 CASF", "Barème CNAF 2024", "Art. 200 quater B CGI"]
+      sources: ["Art. R.2324-27 CSP", "Barème CNAF 2024", "Art. 200 quater B CGI"]
     }
   },
   {
     id: 18,
     category: "gestion",
     title: "Projet d'établissement et évaluation",
-    ref: "Art. R.2324-29 CASF — Recommandations ANESM",
+    ref: "Art. R.2324-29 CSP — Recommandations ANESM",
     summary: "Document pédagogique obligatoire décrivant les valeurs, les objectifs éducatifs et les pratiques professionnelles de la structure. Réévalué tous les 5 ans.",
     source: "CASF — HAS / ANESM",
     date: "2021",
@@ -1734,14 +1817,14 @@ const DATA = [
         { label: "Évaluation", value: "Interne + externe" }
       ],
       alert: "Depuis la réforme de 2021, le projet d'établissement doit intégrer un volet spécifique sur la bientraitance et la prévention de la maltraitance (en lien avec les recommandations HAS). Son absence peut bloquer le renouvellement de l'autorisation.",
-      sources: ["Art. R.2324-29 CASF", "Recommandations HAS 2022", "Décret 2021-1131"]
+      sources: ["Art. R.2324-29 CSP", "Recommandations HAS 2022", "Décret 2021-1131"]
     }
   },
   {
     id: 19,
     category: "gestion",
     title: "Registres obligatoires et archivage",
-    ref: "Art. R.2324-50 à R.2324-52 CASF",
+    ref: "Art. R.2324-50 à R.2324-52 CSP",
     summary: "Registre de présence des enfants, registre du personnel, cahier de liaison, fiches de soins : documents obligatoires devant être conservés 5 ans minimum.",
     source: "CASF",
     date: "2021",
@@ -1763,14 +1846,14 @@ const DATA = [
         { label: "RGPD", value: "Applicable" }
       ],
       alert: "L'absence de registres à jour lors d'un contrôle PMI peut entraîner une mise en demeure. En cas d'accident grave d'un enfant, les registres sont les premières pièces demandées par les enquêteurs et les assureurs.",
-      sources: ["Art. R.2324-50 CASF", "RGPD Règlement UE 2016/679", "Guide CNIL 2021"]
+      sources: ["Art. R.2324-50 CSP", "RGPD Règlement UE 2016/679", "Guide CNIL 2021"]
     }
   },
   {
     id: 20,
     category: "gestion",
     title: "Assurances obligatoires",
-    ref: "Art. L.2324-1 CASF — Droit des assurances",
+    ref: "Art. L.2324-1 CSP — Droit des assurances",
     summary: "Responsabilité civile professionnelle obligatoire pour la structure et le gestionnaire. Assurance des locaux, des personnes accueillies et du personnel également requises.",
     source: "CASF — Code assurances",
     date: "2024",
@@ -1792,7 +1875,7 @@ const DATA = [
         { label: "Mise à jour", value: "Annuelle" }
       ],
       alert: "La couverture RC professionnelle doit inclure spécifiquement l'accueil du jeune enfant (< 6 ans). Certaines polices standard excluent cette activité ou prévoient des plafonds insuffisants. Vérifier les exclusions de garanties.",
-      sources: ["Art. L.2324-1 CASF", "Code des assurances Art. L.121-1", "Guide professionnel FFSA"]
+      sources: ["Art. L.2324-1 CSP", "Code des assurances Art. L.121-1", "Guide professionnel FFSA"]
     }
   },
 
@@ -1834,7 +1917,7 @@ const DATA = [
     isNew: true,
     tags: ["decret2025"],
     title: "Nouvelle direction obligatoire à 0,5 ETP",
-    ref: "Décret n° 2025-304 — Art. R.2324-34 nouveau CASF",
+    ref: "Décret n° 2025-304 — Art. R.2324-34 nouveau CSP",
     summary: "À partir du 1er septembre 2026, chaque micro-crèche doit avoir un directeur dédié à hauteur de 0,5 ETP minimum. Une même personne ne peut diriger plus de 2 structures.",
     source: "Décret 2025-304",
     date: "Entrée en vigueur : 1er sept. 2026",
@@ -1865,7 +1948,7 @@ const DATA = [
     isNew: true,
     tags: ["decret2025"],
     title: "4e volet obligatoire du projet d'établissement",
-    ref: "Art. R.2324-29 CASF modifié — Décret 2025-304",
+    ref: "Art. R.2324-29 CSP modifié — Décret 2025-304",
     summary: "Le projet d'établissement comprend désormais 4 volets obligatoires : éducatif, social, pédagogique + nouveau volet sur la qualité d'accueil (Référentiel National Qualité).",
     source: "CASF — HAS — Décret 2025-304",
     date: "Avril 2025",
@@ -1887,7 +1970,7 @@ const DATA = [
         { label: "Contrôle PMI", value: "Au renouvellement" }
       ],
       alert: "Le projet d'établissement doit être mis à jour pour intégrer ce 4e volet qualité. Les structures en renouvellement d'autorisation dont le projet ne comprend pas ce volet risquent un avis défavorable de la PMI. Télécharger le Référentiel HAS sur has-sante.fr.",
-      sources: ["Décret n°2025-304 du 1er avril 2025", "Référentiel HAS RNQAJE 2022", "Art. R.2324-29 CASF modifié"]
+      sources: ["Décret n°2025-304 du 1er avril 2025", "Référentiel HAS RNQAJE 2022", "Art. R.2324-29 CSP modifié"]
     }
   },
   {
@@ -1933,7 +2016,7 @@ const DATA = [
     id: 25,
     category: "locaux",
     title: "Référentiel bâtimentaire national — Vue d'ensemble",
-    ref: "Arrêté du 31 août 2021 — CASF Art. R.2324-54 à R.2324-60",
+    ref: "Arrêté du 31 août 2021 — CSP Art. R.2324-54 à R.2324-60",
     summary: "Cadre réglementaire unifié fixant les normes de locaux, d'aménagement et d'affichage pour tous les EAJE. Obligatoire pour les nouvelles structures depuis sept. 2022. Mise en conformité des structures existantes : sept. 2026.",
     source: "DGCS — Arrêté 31 août 2021",
     date: "Sept. 2022 (nouvelles) / Sept. 2026 (existantes)",
@@ -1954,7 +2037,7 @@ const DATA = [
         { label: "Nb dispositions", value: "70 (intégral)" }
       ],
       alert: "Les structures existantes ouvertes avant septembre 2022 doivent être en conformité totale avec les 70 dispositions du référentiel au 1er septembre 2026. Un autodiagnostic est disponible sur le site du ministère (DGCS/AMF). Un écart non justifié peut bloquer le renouvellement d'autorisation.",
-      sources: ["Arrêté du 31 août 2021 (JO du 2 sept. 2021)", "Art. R.2324-54 à R.2324-60 CASF", "Guide DGCS 2022", "Outil autodiagnostic AMF/DGCS"]
+      sources: ["Arrêté du 31 août 2021 (JO du 2 sept. 2021)", "Art. R.2324-54 à R.2324-60 CSP", "Guide DGCS 2022", "Outil autodiagnostic AMF/DGCS"]
     }
   },
   {
@@ -2385,7 +2468,7 @@ function buildAddPrompt(subject){
     '',
     FICHE_SCHEMA_TXT,
     '',
-    'Consignes : id = null (je l\'attribuerai). Sois factuel, cite des articles précis (CASF, décrets). Réponds UNIQUEMENT par le bloc JSON, sans commentaire avant ni après.'
+    'Consignes : id = null (je l\'attribuerai). Sois factuel et précis sur le code cité : les EAJE (micro-crèches) relèvent des articles L.2324-1 à L.2324-4 et R.2324-16 à R.2324-48 du CODE DE LA SANTÉ PUBLIQUE (CSP), et non du CASF ; le CASF traite la petite enfance à ses articles L.214-1 et suivants. Vérifie le code avant de citer. Réponds UNIQUEMENT par le bloc JSON, sans commentaire avant ni après.'
   ].join('\n');
 }
 
@@ -2613,6 +2696,7 @@ async function enterApp(){
   document.getElementById('reglo-login-wrap').style.display = 'none';
   document.getElementById('reglo-app').style.display = 'block';
   await loadFichesFromSupabase();
+  await loadVeille();
   init();
   regloApplyRoleUI();
 }
@@ -2659,10 +2743,145 @@ const CAT = {
   decret2025:   { label: 'Décret 2025-304',           color: '#7C3AED', bg: '#F5F3FF', text: '#4C1D95' }
 };
 
+// ═══ VEILLE RÉGLEMENTAIRE ═══
+// Capture opportuniste : titre + lien. Lecture et ajout ouverts à tous les
+// comptes du réseau ; suppression réservée à la direction (voir RLS).
+let VEILLE = [];
+
+async function loadVeille(){
+  try{
+    const { data, error } = await sbReglo
+      .from('reglementation_veille')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if(error) throw error;
+    VEILLE = data || [];
+  }catch(e){
+    console.warn('Veille indisponible :', e);
+    VEILLE = [];
+  }
+}
+
+function updateVeilleCount(){
+  const el = document.getElementById('count-veille');
+  if(el) el.textContent = VEILLE.length;
+}
+
+function veilleOpen(prefTitre, prefUrl){
+  document.getElementById('veilleTitre').value = prefTitre || '';
+  document.getElementById('veilleUrl').value   = prefUrl || '';
+  const msg = document.getElementById('veilleMsg');
+  msg.style.display = 'none'; msg.textContent = '';
+  document.getElementById('veilleOverlay').classList.add('open');
+  setTimeout(()=>{ document.getElementById(prefTitre ? 'veilleUrl' : 'veilleTitre').focus(); }, 50);
+}
+
+function veilleClose(){
+  document.getElementById('veilleOverlay').classList.remove('open');
+}
+
+function veilleMsg(cls, txt){
+  const m = document.getElementById('veilleMsg');
+  m.className = 'veille-msg ' + cls;
+  m.textContent = txt;
+  m.style.display = 'block';
+}
+
+async function veilleSave(){
+  const titre = document.getElementById('veilleTitre').value.trim();
+  let url     = document.getElementById('veilleUrl').value.trim();
+  if(!titre || !url){ veilleMsg('err', 'Le titre et le lien sont tous deux nécessaires.'); return; }
+  if(!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  try{ new URL(url); }catch(e){ veilleMsg('err', 'Ce lien ne semble pas valide.'); return; }
+
+  const btn = document.getElementById('veilleSaveBtn');
+  btn.disabled = true; btn.textContent = 'Enregistrement…';
+  try{
+    const { error } = await sbReglo.from('reglementation_veille').insert({
+      titre: titre,
+      url: url,
+      cree_par: currentProfile ? currentProfile.id : null
+    });
+    if(error) throw error;
+    veilleMsg('ok', 'Lien enregistré ✓');
+    await loadVeille();
+    updateVeilleCount();
+    if(currentFilter === 'veille') renderVeille();
+    setTimeout(veilleClose, 800);
+  }catch(e){
+    const m = e.message || String(e);
+    veilleMsg('err', /policy|permission|rls/i.test(m)
+      ? 'Enregistrement refusé : votre compte n’a pas les droits.'
+      : 'Erreur : ' + m);
+  }finally{
+    btn.disabled = false; btn.textContent = '💾 Enregistrer';
+  }
+}
+
+async function veilleDelete(id){
+  if(!regloCanEdit()) return;
+  const v = VEILLE.find(x => x.id === id);
+  if(!v) return;
+  if(!confirm('Retirer « ' + v.titre + ' » de la veille ?')) return;
+  try{
+    const { error } = await sbReglo.from('reglementation_veille').delete().eq('id', id);
+    if(error) throw error;
+    await loadVeille();
+    updateVeilleCount();
+    renderVeille();
+  }catch(e){
+    const m = e.message || String(e);
+    alert(/policy|permission|rls/i.test(m) ? 'Suppression réservée à la direction.' : 'Erreur : ' + m);
+  }
+}
+
+function renderVeille(){
+  const container = document.getElementById('cardsContainer');
+  const empty = document.getElementById('emptyState');
+  const list = VEILLE.filter(v => !searchQuery
+    || (v.titre || '').toLowerCase().includes(searchQuery)
+    || (v.url   || '').toLowerCase().includes(searchQuery));
+
+  document.getElementById('resultsCount').textContent =
+    list.length + ' lien' + (list.length > 1 ? 's' : '');
+
+  const p = empty.querySelector('p');
+  if(p) p.textContent = searchQuery
+    ? 'Aucun lien ne correspond à cette recherche.'
+    : 'Aucun lien capturé pour le moment. Utilisez « Capturer un lien ».';
+
+  if(!list.length){ container.innerHTML = ''; container.className = 'veille-list'; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  container.className = 'veille-list';
+  container.innerHTML = list.map(v => {
+    let host = '';
+    try{ host = new URL(v.url).hostname.replace(/^www\./, ''); }catch(e){}
+    const d = v.created_at ? new Date(v.created_at).toLocaleDateString('fr-FR') : '';
+    // Vrai <a> et non onclick : un handler inline injecté via innerHTML ne
+    // s’exécuterait pas dans ce contexte.
+    return '<div class="veille-row">'
+      + '<a href="' + escapeHtml(v.url) + '" target="_blank" rel="noopener">' + escapeHtml(v.titre) + '</a>'
+      + (host ? '<span class="veille-host">' + escapeHtml(host) + '</span>' : '')
+      + '<span class="veille-date">' + d + '</span>'
+      + (regloCanEdit() ? '<button class="veille-del" onclick="veilleDelete(' + v.id + ')" title="Retirer">✕</button>' : '')
+      + '</div>';
+  }).join('');
+}
+
 // ─── INIT ───────────────────────────────────────────────────────────────
 function init() {
   updateCounts();
+  updateVeilleCount();
   renderCards();
+  // Partage entrant (share_target Android) : ?title=…&url=…
+  try{
+    const sp = new URLSearchParams(location.search);
+    const st = sp.get('title'), su = sp.get('url') || sp.get('text');
+    if(st || su){
+      veilleOpen(st || '', su || '');
+      history.replaceState(null, '', location.pathname);
+    }
+  }catch(e){}
   document.getElementById('searchInput').addEventListener('input', e => {
     searchQuery = e.target.value.toLowerCase();
     renderCards();
@@ -2691,7 +2910,8 @@ function filterCards(filter, btn) {
     locaux: 'Locaux & Sécurité',
     sante: 'Santé & Hygiène',
     gestion: 'Gestion & Administratif',
-    decret2025: '🆕 Décret 2025-304 — Nouvelles règles'
+    decret2025: '🆕 Décret 2025-304 — Nouvelles règles',
+    veille: '📌 Veille — articles repérés'
   };
   document.getElementById('sectionTitle').textContent = titles[filter];
   renderCards();
@@ -2717,9 +2937,12 @@ function getFiltered() {
 }
 
 function renderCards() {
+  if (currentFilter === 'veille') { renderVeille(); return; }
   const filtered = getFiltered();
   const container = document.getElementById('cardsContainer');
   const empty = document.getElementById('emptyState');
+  const pEmpty = empty.querySelector('p');
+  if (pEmpty) pEmpty.textContent = 'Aucune fiche trouvée pour cette recherche.';
 
   document.getElementById('resultsCount').textContent = 
     filtered.length === FICHES.length ? `${filtered.length} fiches` : `${filtered.length} résultat${filtered.length > 1 ? 's' : ''}`;
