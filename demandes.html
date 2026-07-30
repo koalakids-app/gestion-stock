@@ -6705,21 +6705,40 @@ let _spData = null;
 
 // ── Parsing PDF ────────────────────────────────────────────────────────
 
-async function spParsePdf(file) {
-  const buf = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-  const jours = [], warnings = [], titles = [];
+// Accepte une liste de fichiers : chaque PDF apporte ses journées, on les
+// cumule. Les doublons de date (même journée présente dans deux fichiers) sont
+// écartés et signalés, pour ne pas écrire deux fois la même ligne.
+async function spParsePdf(files) {
+  const liste = Array.isArray(files) ? files : [files];
+  const jours = [], warnings = [], titles = [], vues = new Set();
 
-  for (let p = 1; p <= pdf.numPages; p++) {
-    const page = await pdf.getPage(p);
+  for (let f = 0; f < liste.length; f++) {
+    const fichier = liste[f];
+    if (liste.length > 1) showBanner('Lecture ' + (f + 1) + '/' + liste.length + ' \u2014 ' + fichier.name);
+    let pdf;
     try {
-      const r = await spParsePage(page);
-      if (r.title) titles.push(r.title);
-      jours.push(r);
+      pdf = await pdfjsLib.getDocument({ data: await fichier.arrayBuffer() }).promise;
     } catch (e) {
-      warnings.push('Page ' + p + ' ignorée : ' + e.message);
+      warnings.push(fichier.name + ' : fichier illisible, ignoré.');
+      continue;
+    }
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      try {
+        const r = await spParsePage(page);
+        if (r.title) titles.push(r.title);
+        if (vues.has(r.dateISO)) {
+          warnings.push(spDateFr(r.dateISO) + ' apparaît dans plusieurs fichiers : seule la première lecture est conservée.');
+          continue;
+        }
+        vues.add(r.dateISO);
+        jours.push(r);
+      } catch (e) {
+        warnings.push(fichier.name + ' \u2014 page ' + p + ' ignorée : ' + e.message);
+      }
     }
   }
+  jours.sort((a, b) => a.dateISO.localeCompare(b.dateISO));
   return { jours, warnings, titles: [...new Set(titles)] };
 }
 
@@ -6940,7 +6959,7 @@ function spInjecterModale() {
 
     <div id="sp-step-config">
       <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i>
-        Déposez le <strong>planning de présences PDF</strong> (celui utilisé pour les enfants).
+        Déposez le ou les <strong>plannings de présences PDF</strong> (ceux utilisés pour les enfants). Plusieurs semaines peuvent être importées en une fois, à condition qu\u2019elles concernent la même crèche.
         Les horaires des salariés y sont lus directement, pauses comprises.
         Une journée coupée devient <strong>07h00-12h00/13h00-15h00</strong> ; une journée continue n'a qu\u2019une plage.
       </div>
@@ -6952,8 +6971,8 @@ function spInjecterModale() {
         <div style="font-size:11.5px;color:var(--ink2);margin-top:5px">Ses journées seront aussi écrites dans son planning individuel, comme le fait l\u2019import Excel.</div>
       </div>
       <div class="fg">
-        <input type="file" id="sp-file" accept="application/pdf" style="display:none" onchange="spHandleFile(event)"/>
-        <button class="btn-cancel" style="width:100%" onclick="spTriggerFile()"><i class="ti ti-upload"></i> Choisir le fichier PDF</button>
+        <input type="file" id="sp-file" accept="application/pdf" multiple style="display:none" onchange="spHandleFile(event)"/>
+        <button class="btn-cancel" style="width:100%" onclick="spTriggerFile()"><i class="ti ti-upload"></i> Choisir un ou plusieurs PDF</button>
         <div id="sp-filename" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
       </div>
     </div>
@@ -7014,18 +7033,18 @@ function spTriggerFile() {
 }
 
 async function spHandleFile(event) {
-  const file = event.target.files && event.target.files[0];
+  const files = [...(event.target.files || [])];
   event.target.value = '';
-  if (!file) return;
+  if (!files.length) return;
   if (typeof pdfjsLib === 'undefined') { alert('Bibliothèque PDF non chargée.'); return; }
 
   const crecheId = document.getElementById('sp-creche').value;
-  document.getElementById('sp-filename').textContent = '📄 ' + file.name;
-  showBanner('Lecture du PDF en cours…');
+  document.getElementById('sp-filename').textContent = files.map(f => '📄 ' + f.name).join('  ·  ');
+  showBanner(files.length > 1 ? 'Lecture de ' + files.length + ' PDF en cours…' : 'Lecture du PDF en cours…');
 
   let parsed;
-  try { parsed = await spParsePdf(file); }
-  catch (e) { console.error('[ImportSalPdf]', e); showBanner('Impossible de lire ce PDF.', 'error'); return; }
+  try { parsed = await spParsePdf(files); }
+  catch (e) { console.error('[ImportSalPdf]', e); showBanner('Impossible de lire ces PDF.', 'error'); return; }
 
   const jours = parsed.jours.filter(j => j.salaries.length);
   if (!jours.length) { showBanner('Aucun salarié détecté dans ce PDF.', 'error'); return; }
@@ -7039,7 +7058,9 @@ async function spHandleFile(event) {
   // Cohérence crèche : le titre du PDF doit mentionner la crèche choisie
   const creche = (cacheCreches || []).find(c => c.id === crecheId);
   const cn = spNorm(creche?.name);
-  const crecheMatch = !parsed.titles.length || !cn || parsed.titles.some(t => spNorm(t).includes(cn));
+  // every() et non some() : avec plusieurs fichiers, un seul PDF d’une autre
+  // crèche dans le lot doit alerter, pas passer inaperçu.
+  const crecheMatch = !parsed.titles.length || !cn || parsed.titles.every(t => spNorm(t).includes(cn));
 
   const selRef = document.getElementById('sp-referent');
   const referentId = selRef.value;
@@ -7061,7 +7082,7 @@ function spRenderPreview() {
 
   if (!_spData.crecheMatch) {
     html += '<div style="background:#fdecea;border-left:4px solid var(--red);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#8b1a1a">'
-      + '<strong>⚠ La crèche ne correspond pas.</strong><br>Le PDF concerne <strong>'
+      + '<strong>⚠ La crèche ne correspond pas.</strong><br>Les PDF concernent <strong>'
       + escHtml(_spData.titles.join(' / ')) + '</strong> alors que vous avez choisi <strong>'
       + escHtml(creche?.name || '—') + '</strong>.</div>';
   }
@@ -7098,7 +7119,9 @@ function spRenderPreview() {
 
   const aVerifier = _spData.jours.reduce((n, j) =>
     n + j.salaries.filter(s => spVersCreneau(s.segments).multi).length, 0);
-  html += '<div style="font-weight:700;margin:16px 0 8px">Horaires détectés</div>';
+  const semaines = new Set(_spData.jours.map(j => mondayOfISO(j.dateISO))).size;
+  html += '<div style="font-weight:700;margin:16px 0 8px">Horaires détectés \u2014 '
+    + _spData.jours.length + ' journée(s) sur ' + semaines + ' semaine(s)</div>';
   html += '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'
     + 'Horaires lus tels quels dans le PDF, au quart d\u2019heure, pauses comprises.'
     + (aVerifier
