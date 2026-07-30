@@ -2885,7 +2885,11 @@ async function delRep(rid,did){
   openReps(did);
 }
 
-document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('on');}));
+/* Modales de saisie : pas de fermeture au clic exterieur.
+   Un clic a cote de la carte, ou un glissement de scroll qui se termine sur le
+   fond gris, refermait le formulaire et faisait perdre la saisie en cours. */
+const OV_SAISIE=['ovFill','ovDoc','ovCat'];
+document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o&&OV_SAISIE.indexOf(o.id)===-1)o.classList.remove('on');}));
 document.getElementById('liPwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 boot();
 </script>
