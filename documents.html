@@ -952,18 +952,35 @@ function pdfSortie(doc,nom){
 /* Apercu d'un document « a telecharger » : le fichier joint est affiche depuis
    le bucket, sans passer par le disque. Les formats que le navigateur ne sait
    pas rendre (docx, xlsx) sont ouverts dans un onglet. */
-const PDF_EXT_LISIBLES=['pdf','png','jpg','jpeg','gif','webp','svg','txt'];
-function apercuFichier(id){
+const PDF_MIMES={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',
+  gif:'image/gif',webp:'image/webp',svg:'image/svg+xml',txt:'text/plain'};
+async function apercuFichier(id){
   const d=DOCS.find(x=>x.id===id);
   if(!d||!d.fichier_url)return toast('Aucun fichier joint');
   const nom=d.fichier_nom||d.titre||'document';
   const ext=(String(d.fichier_url).split('?')[0].split('.').pop()||'').toLowerCase();
-  if(PDF_EXT_LISIBLES.indexOf(ext)===-1){
+  const mime=PDF_MIMES[ext];
+  if(!mime){
     window.open(d.fichier_url,'_blank','noopener');
     toast('Format non affichable \u2014 ouverture dans un onglet');
     return;
   }
-  pdfAfficher(d.fichier_url,nom,null);
+  /* On telecharge le fichier en memoire et on impose son type MIME : sans cela un
+     en-tete Content-Disposition: attachment cote bucket declenche un
+     telechargement au lieu de l'affichage, meme dans une iframe. */
+  toast('Chargement de l\u2019aper\u00e7u\u2026');
+  try{
+    const r=await fetch(d.fichier_url);
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    let b=await r.blob();
+    if(b.type!==mime)b=new Blob([b],{type:mime});
+    const url=URL.createObjectURL(b);
+    pdfAfficher(url,nom,url);
+  }catch(e){
+    console.error('apercuFichier',e);
+    window.open(d.fichier_url,'_blank','noopener');
+    toast('Aper\u00e7u indisponible \u2014 ouverture dans un onglet');
+  }
 }
 function pdfLibererBlob(){
   if(PDF_BLOB_URL){try{URL.revokeObjectURL(PDF_BLOB_URL);}catch(e){}PDF_BLOB_URL=null;}
