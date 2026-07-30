@@ -390,7 +390,8 @@ function docRowHtml(d){
     <div class="doc-a">
       ${fill?`<button class="iconbtn" title="Remplir" onclick="openFill('${d.id}')"><i class="ti ti-pencil"></i></button>
               <button class="iconbtn" title="Réponses" onclick="openReps('${d.id}')"><i class="ti ti-list"></i></button>`
-            :(d.fichier_url?`<a class="iconbtn" title="Télécharger" href="${esc(d.fichier_url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i></a>`:'')}
+            :(d.fichier_url?`<button class="iconbtn" title="Aperçu" onclick="apercuFichier('${d.id}')"><i class="ti ti-eye"></i></button>
+              <a class="iconbtn" title="Télécharger" href="${esc(d.fichier_url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i></a>`:'')}
       ${IS_ADMIN?`<button class="iconbtn" title="Modifier" onclick="openDoc('${d.id}')"><i class="ti ti-edit"></i></button>
       <button class="iconbtn d" title="Supprimer" onclick="delDoc('${d.id}')"><i class="ti ti-trash"></i></button>`:''}
     </div></div>`;
@@ -931,15 +932,38 @@ function pdfLogo(doc,y){
    direct (comportement historique), soit affichage dans la visionneuse quand
    l'utilisateur a clique sur « Apercu ». Le document n'est pas ecrit sur le
    disque tant qu'il n'a pas ete demande explicitement. */
-let PDF_APERCU=false,PDF_BLOB_URL=null,PDF_NOM=null;
+let PDF_APERCU=false,PDF_BLOB_URL=null,PDF_SRC=null,PDF_NOM=null;
+/* Affiche une source dans la visionneuse. blobALiberer vaut l'URL blob a
+   revoquer a la fermeture, ou null pour un fichier deja heberge (bucket assets). */
+function pdfAfficher(src,nom,blobALiberer){
+  pdfLibererBlob();
+  PDF_BLOB_URL=blobALiberer||null;
+  PDF_SRC=src;
+  PDF_NOM=nom;
+  document.getElementById('pdfNom').textContent=nom||'';
+  document.getElementById('pdfFrame').src=src;
+  document.getElementById('ovPdf').classList.add('on');
+}
 function pdfSortie(doc,nom){
   if(!PDF_APERCU){doc.save(nom);return;}
-  pdfLibererBlob();
-  PDF_BLOB_URL=URL.createObjectURL(doc.output('blob'));
-  PDF_NOM=nom;
-  document.getElementById('pdfNom').textContent=nom;
-  document.getElementById('pdfFrame').src=PDF_BLOB_URL;
-  document.getElementById('ovPdf').classList.add('on');
+  const url=URL.createObjectURL(doc.output('blob'));
+  pdfAfficher(url,nom,url);
+}
+/* Apercu d'un document « a telecharger » : le fichier joint est affiche depuis
+   le bucket, sans passer par le disque. Les formats que le navigateur ne sait
+   pas rendre (docx, xlsx) sont ouverts dans un onglet. */
+const PDF_EXT_LISIBLES=['pdf','png','jpg','jpeg','gif','webp','svg','txt'];
+function apercuFichier(id){
+  const d=DOCS.find(x=>x.id===id);
+  if(!d||!d.fichier_url)return toast('Aucun fichier joint');
+  const nom=d.fichier_nom||d.titre||'document';
+  const ext=(String(d.fichier_url).split('?')[0].split('.').pop()||'').toLowerCase();
+  if(PDF_EXT_LISIBLES.indexOf(ext)===-1){
+    window.open(d.fichier_url,'_blank','noopener');
+    toast('Format non affichable \u2014 ouverture dans un onglet');
+    return;
+  }
+  pdfAfficher(d.fichier_url,nom,null);
 }
 function pdfLibererBlob(){
   if(PDF_BLOB_URL){try{URL.revokeObjectURL(PDF_BLOB_URL);}catch(e){}PDF_BLOB_URL=null;}
@@ -960,20 +984,22 @@ async function apercuPdf(){
   }
 }
 function pdfTelecharger(){
-  if(!PDF_BLOB_URL)return;
+  if(!PDF_SRC)return;
   const a=document.createElement('a');
-  a.href=PDF_BLOB_URL;a.download=PDF_NOM||'document.pdf';
+  a.href=PDF_SRC;a.download=PDF_NOM||'document.pdf';
+  a.target='_blank';a.rel='noopener';
   document.body.appendChild(a);a.click();a.remove();
 }
 function pdfOnglet(){
-  if(!PDF_BLOB_URL)return;
-  window.open(PDF_BLOB_URL,'_blank');
+  if(!PDF_SRC)return;
+  window.open(PDF_SRC,'_blank','noopener');
 }
 function pdfFermer(){
   close_('ovPdf');
   const f=document.getElementById('pdfFrame');
   if(f)f.src='about:blank';
   pdfLibererBlob();
+  PDF_SRC=null;PDF_NOM=null;
 }
 
 /* ---------- EXPORT PDF EN TABLEAU (documents de reference) ---------- */
