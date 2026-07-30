@@ -208,10 +208,26 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
   <div class="mf">
     <button class="btn btn-g" onclick="close_('ovFill')">Fermer</button>
     <button class="btn btn-s" id="btnNewRep" onclick="openFill(fillDoc.id,null,true)"><i class="ti ti-plus"></i> Nouveau</button>
+    <button class="btn btn-s" id="btnApercu" onclick="apercuPdf()"><i class="ti ti-eye"></i> Aperçu</button>
     <button class="btn btn-s" id="btnPdfReset" onclick="editPdfAndReset()"><i class="ti ti-file-type-pdf"></i> Éditer le PDF</button>
     <button class="btn btn-p" onclick="saveFill()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
   </div>
 </div></div>
+
+<!-- Modal apercu PDF -->
+<div class="ov" id="ovPdf" style="z-index:140">
+  <div class="modal" style="max-width:1100px;width:96%;display:flex;flex-direction:column;max-height:92dvh">
+    <h2 style="display:flex;align-items:center;gap:8px"><i class="ti ti-file-type-pdf"></i> Aperçu avant téléchargement</h2>
+    <p id="pdfNom" style="font-size:12px;color:var(--muted);margin:-6px 0 12px;word-break:break-all"></p>
+    <iframe id="pdfFrame" title="Aperçu du document" style="flex:1;min-height:62dvh;width:100%;border:1px solid var(--border);border-radius:10px;background:#fff"></iframe>
+    <p style="font-size:11.5px;color:var(--muted);margin:10px 0 0">Sur tablette ou téléphone Android, la visionneuse intégrée peut rester vide : utiliser « Ouvrir dans un onglet ».</p>
+    <div class="mf">
+      <button class="btn btn-g" onclick="pdfFermer()">Fermer</button>
+      <button class="btn btn-s" onclick="pdfOnglet()"><i class="ti ti-external-link"></i> Ouvrir dans un onglet</button>
+      <button class="btn btn-p" onclick="pdfTelecharger()"><i class="ti ti-download"></i> Télécharger</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal réponses -->
 <div class="ov" id="ovReps"><div class="modal">
@@ -907,6 +923,56 @@ function pdfLogo(doc,y){
   return Math.max(y,10+LOGO_H+6);
 }
 
+/* ---------- APERCU PDF AVANT TELECHARGEMENT ---------- */
+/* Tous les exports passent desormais par pdfSortie() : soit telechargement
+   direct (comportement historique), soit affichage dans la visionneuse quand
+   l'utilisateur a clique sur « Apercu ». Le document n'est pas ecrit sur le
+   disque tant qu'il n'a pas ete demande explicitement. */
+let PDF_APERCU=false,PDF_BLOB_URL=null,PDF_NOM=null;
+function pdfSortie(doc,nom){
+  if(!PDF_APERCU){doc.save(nom);return;}
+  pdfLibererBlob();
+  PDF_BLOB_URL=URL.createObjectURL(doc.output('blob'));
+  PDF_NOM=nom;
+  document.getElementById('pdfNom').textContent=nom;
+  document.getElementById('pdfFrame').src=PDF_BLOB_URL;
+  document.getElementById('ovPdf').classList.add('on');
+}
+function pdfLibererBlob(){
+  if(PDF_BLOB_URL){try{URL.revokeObjectURL(PDF_BLOB_URL);}catch(e){}PDF_BLOB_URL=null;}
+}
+async function apercuPdf(){
+  const btn=document.getElementById('btnApercu');
+  PDF_APERCU=true;
+  try{
+    if(btn)btn.disabled=true;
+    const ok=await exportFillPdf();
+    if(!ok)toast('Aper\u00e7u impossible');
+  }catch(e){
+    console.error('apercuPdf',e);
+    toast('Erreur : '+(e&&e.message?e.message:'aper\u00e7u impossible'));
+  }finally{
+    PDF_APERCU=false;
+    if(btn)btn.disabled=false;
+  }
+}
+function pdfTelecharger(){
+  if(!PDF_BLOB_URL)return;
+  const a=document.createElement('a');
+  a.href=PDF_BLOB_URL;a.download=PDF_NOM||'document.pdf';
+  document.body.appendChild(a);a.click();a.remove();
+}
+function pdfOnglet(){
+  if(!PDF_BLOB_URL)return;
+  window.open(PDF_BLOB_URL,'_blank');
+}
+function pdfFermer(){
+  close_('ovPdf');
+  const f=document.getElementById('pdfFrame');
+  if(f)f.src='about:blank';
+  pdfLibererBlob();
+}
+
 /* ---------- EXPORT PDF EN TABLEAU (documents de reference) ---------- */
 /* Les libelles de la forme « Groupe — Attribut » sont recomposes en tableau :
    une ligne par groupe (une creche), une colonne par attribut. Les champs sans
@@ -988,7 +1054,7 @@ function exportMatricePdf(){
     y+=5.5;
   });
 
-  doc.save(slug(fillDoc.titre)+'.pdf');
+  pdfSortie(doc,slug(fillDoc.titre)+'.pdf');
   return true;
 }
 
@@ -1014,7 +1080,7 @@ async function exportFillPdf(mode){
     doc.text(lines,14,y+6);y+=10+lines.length*5;
     if(y>270){doc.addPage();y=pdfLogo(doc,20);}
   });
-  doc.save(slug(fillDoc.titre)+'.pdf');
+  pdfSortie(doc,slug(fillDoc.titre)+'.pdf');
   return true;
 }
 
@@ -1065,7 +1131,7 @@ function exportTplPdf(doc,tpl,mode){
   put('salarie','Salarié(e)',110);
   y+=40;
 
-  doc.save(slug(fillDoc.titre)+'_'+slug(g('sal_nom')||'')+'.pdf');
+  pdfSortie(doc,slug(fillDoc.titre)+'_'+slug(g('sal_nom')||'')+'.pdf');
   return true;
 }
 
@@ -2135,7 +2201,7 @@ const TPL={
       y+=3;
     });
     foot();
-    doc.save('controle_eaje_'+slug(g('ctrl_creche')||'creche')+'_'+slug(g('ctrl_date')||'')+'.pdf');
+    pdfSortie(doc,'controle_eaje_'+slug(g('ctrl_creche')||'creche')+'_'+slug(g('ctrl_date')||'')+'.pdf');
     return true;
   }
  },
@@ -2274,7 +2340,7 @@ const TPL={
       y+=40;
     }
     const who=sc.identite.length?g('id_'+sc.identite[0].key):'';
-    doc.save(slug(fillDoc.titre)+(who?'_'+slug(who):'')+'.pdf');
+    pdfSortie(doc,slug(fillDoc.titre)+(who?'_'+slug(who):'')+'.pdf');
     return true;
   }
  },
@@ -2405,7 +2471,7 @@ const TPL={
     y+=34;
     doc.setDrawColor(120);doc.rect(14,boxTop,W,y-boxTop);
     y+=6;
-    doc.save(slug(fillDoc.titre)+(g('ap_enfant')?'_'+slug(g('ap_enfant')):'')+'.pdf');
+    pdfSortie(doc,slug(fillDoc.titre)+(g('ap_enfant')?'_'+slug(g('ap_enfant')):'')+'.pdf');
     return true;
   }
  },
@@ -2477,7 +2543,7 @@ const TPL={
       if(SIGS[role]){try{doc.addImage(SIGS[role],'PNG',px+2,y+5,80,28);}catch(e){}}
     });
     y+=42;
-    doc.save(slug(fillDoc.titre)+(g('cs_enfant')?'_'+slug(g('cs_enfant')):'')+'.pdf');
+    pdfSortie(doc,slug(fillDoc.titre)+(g('cs_enfant')?'_'+slug(g('cs_enfant')):'')+'.pdf');
     return true;
   }
  },
@@ -2633,7 +2699,7 @@ const TPL={
     doc.setDrawColor(200);doc.rect(14,y+3,90,34);
     if(SIGS['medecin']){try{doc.addImage(SIGS['medecin'],'PNG',16,y+5,86,30);}catch(e){}}
     y+=42;
-    doc.save(slug(fillDoc.titre)+(g('fs_nom')?'_'+slug(g('fs_nom')):'')+'.pdf');
+    pdfSortie(doc,slug(fillDoc.titre)+(g('fs_nom')?'_'+slug(g('fs_nom')):'')+'.pdf');
     return true;
   }
  },
@@ -2747,7 +2813,7 @@ const TPL={
       doc.setFontSize(8.5);doc.setFont(undefined,'normal');doc.setTextColor(120);
       doc.text('Koala Kids '+g('fl_creche'),14,285);doc.setTextColor(30);
     }
-    doc.save(slug(fillDoc.titre)+(g('fl_enfant')?'_'+slug(g('fl_enfant')):'')+'.pdf');
+    pdfSortie(doc,slug(fillDoc.titre)+(g('fl_enfant')?'_'+slug(g('fl_enfant')):'')+'.pdf');
     return true;
   }
  },
@@ -2838,7 +2904,7 @@ const TPL={
       doc.setFontSize(8.5);doc.setFont(undefined,'normal');doc.setTextColor(120);
       doc.text('Koala Kids '+g('rm_creche'),14,285);doc.setTextColor(30);
     }
-    doc.save(slug(fillDoc.titre)+(g('rm_nom')?'_'+slug(g('rm_nom')):'')+'.pdf');
+    pdfSortie(doc,slug(fillDoc.titre)+(g('rm_nom')?'_'+slug(g('rm_nom')):'')+'.pdf');
     return true;
   }
  }
@@ -2999,7 +3065,7 @@ async function delRep(rid,did){
 /* Modales de saisie : pas de fermeture au clic exterieur.
    Un clic a cote de la carte, ou un glissement de scroll qui se termine sur le
    fond gris, refermait le formulaire et faisait perdre la saisie en cours. */
-const OV_SAISIE=['ovFill','ovDoc','ovCat'];
+const OV_SAISIE=['ovFill','ovDoc','ovCat','ovPdf'];
 document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o&&OV_SAISIE.indexOf(o.id)===-1)o.classList.remove('on');}));
 document.getElementById('liPwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 boot();
