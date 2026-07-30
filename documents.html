@@ -260,7 +260,7 @@ const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
-let ME=null,PROF=null,IS_ADMIN=false;
+let ME=null,PROF=null,IS_ADMIN=false,IS_DIRECTION=false;
 let CATS=[],DOCS=[],CRECHES=[];
 let editDocId=null,fillDoc=null,fillRep=null,ENFANTS=[];
 
@@ -277,10 +277,15 @@ async function boot(){
   const{data:p}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
   PROF=p;
   IS_ADMIN=!!p&&(p.role==='direction'||p.role==='referent');
+  /* Seule la direction cree, modifie ou supprime des documents et des categories.
+     Les referentes consultent, remplissent en ligne et telechargent (lecture seule
+     sur le fonds documentaire). Verrouillage reel assure par les policies RLS
+     restrictives cote Supabase ; ce drapeau ne fait que masquer l’interface. */
+  IS_DIRECTION=!!p&&p.role==='direction';
   document.getElementById('loginView').style.display='none';
   document.getElementById('appView').style.display='block';
   document.getElementById('whoAmI').textContent=p?(p.name||'')+(p.role==='direction'?' · Direction':''):'';
-  document.querySelectorAll('.adminonly').forEach(e=>e.style.display=IS_ADMIN?'':'none');
+  document.querySelectorAll('.adminonly').forEach(e=>e.style.display=IS_DIRECTION?'':'none');
   await loadAll();
 }
 async function doLogin(){
@@ -331,6 +336,14 @@ function openFromUrl(){
 function returnToEnfant(){
   if(!RETURN_ENFANT_ID)return;
   location.href='demandes.html?enfant='+encodeURIComponent(RETURN_ENFANT_ID);
+}
+
+/* Garde-fou commun a toutes les actions d’ecriture sur le fonds documentaire.
+   Renvoie true si l’action doit etre interrompue. */
+function blocDirection(){
+  if(IS_DIRECTION)return false;
+  toast('Action réservée à la direction');
+  return true;
 }
 
 /* ---------- RENDER ---------- */
@@ -408,7 +421,7 @@ function docRowHtml(d){
               <button class="iconbtn" title="Réponses" onclick="openReps('${d.id}')"><i class="ti ti-list"></i></button>`
             :(d.fichier_url?`<button class="iconbtn" title="Aperçu" onclick="apercuFichier('${d.id}')"><i class="ti ti-eye"></i></button>
               <a class="iconbtn" title="Télécharger" href="${esc(d.fichier_url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i></a>`:'')}
-      ${IS_ADMIN?`<button class="iconbtn" title="Modifier" onclick="openDoc('${d.id}')"><i class="ti ti-edit"></i></button>
+      ${IS_DIRECTION?`<button class="iconbtn" title="Modifier" onclick="openDoc('${d.id}')"><i class="ti ti-edit"></i></button>
       <button class="iconbtn d" title="Supprimer" onclick="delDoc('${d.id}')"><i class="ti ti-trash"></i></button>`:''}
     </div></div>`;
 }
@@ -459,6 +472,7 @@ function catPath(id){                  // « Protocoles › Médicaux »
 /* ---------- CATEGORIE ---------- */
 let editCatId=null;
 function openCat(id){
+  if(blocDirection())return;
   editCatId=id||null;
   const cur=id?CATS.find(c=>c.id===id):null;
   document.getElementById('catTitle').textContent=cur?'Modifier la catégorie':'Nouvelle catégorie';
@@ -489,6 +503,7 @@ function openCat(id){
   ov.classList.add('on');
 }
 async function saveCat(){
+  if(blocDirection())return;
   const nom=document.getElementById('cNom').value.trim();
   if(!nom)return toast('Nom requis');
   const parent=document.getElementById('cParent').value||null;
@@ -515,7 +530,7 @@ async function saveCat(){
 }
 
 /* ---------- GESTION DES CATEGORIES ---------- */
-function openCatMgr(){renderCatMgr();document.getElementById('ovCatMgr').classList.add('on');}
+function openCatMgr(){if(blocDirection())return;renderCatMgr();document.getElementById('ovCatMgr').classList.add('on');}
 function renderCatMgr(){
   const roots=CATS.filter(c=>!c.parent_id).sort(CAT_ALPHA);
   if(!roots.length&&!CATS.length){
@@ -543,6 +558,7 @@ function renderCatMgr(){
   document.getElementById('catMgrList').innerHTML=h;
 }
 async function delCat(id){
+  if(blocDirection())return;
   const c=CATS.find(x=>x.id===id);if(!c)return;
   if(CATS.some(x=>x.parent_id===id))return toast('Supprimer d\'abord les sous-catégories');
   const n=DOCS.filter(d=>d.categorie_id===id).length;
@@ -572,6 +588,7 @@ function addChamp(lab,typ){
   document.getElementById('champs').appendChild(d);
 }
 function openDoc(id){
+  if(blocDirection())return;
   editDocId=id||null;
   document.getElementById('docTitle').textContent=id?'Modifier le document':'Nouveau document';
   document.getElementById('dCat').innerHTML='<option value="">— Aucune —</option>'+catOptionsHtml();
@@ -599,6 +616,7 @@ function openDoc(id){
   document.getElementById('ovDoc').classList.add('on');
 }
 async function saveDoc(){
+  if(blocDirection())return;
   const titre=document.getElementById('dTitre').value.trim();
   if(!titre)return toast('Titre requis');
   const btn=document.getElementById('dSave');btn.disabled=true;btn.textContent='Enregistrement…';
@@ -635,6 +653,7 @@ async function saveDoc(){
 }
 /* ---------- IMPORT EN MASSE DEPUIS UN DOSSIER ---------- */
 async function bulkImport(input){
+  if(blocDirection()){input.value='';return;}
   const files=[...input.files].filter(f=>f.size>0 && !/^\./.test(f.name) && f.name!=='Thumbs.db');
   input.value='';
   if(!files.length)return;
@@ -690,6 +709,7 @@ async function bulkImport(input){
 }
 
 async function delDoc(id){
+  if(blocDirection())return;
   if(!confirm('Supprimer ce document ?'))return;
   const{error}=await sb.from('documents_koala').update({actif:false}).eq('id',id);
   if(error)return toast('Erreur : '+error.message);
@@ -709,7 +729,7 @@ let fillStatutManuel=false;
 const TPL_SALARIE=['entretien_annuel','grille'];
 /* Documents d’etablissement (contrôle EAJE…) : ils ne concernent ni un enfant
    ni un salarie, la crec̀he est saisie dans le formulaire lui-même. */
-const TPL_ETABLISSEMENT=['eaje','affichages'];
+const TPL_ETABLISSEMENT=['eaje'];
 function docConcerneSalarie(){
   const k=fillDoc&&fillDoc.template_key;
   return !!(k&&(TPL_SALARIE.indexOf(k)>=0||TPL_ETABLISSEMENT.indexOf(k)>=0));
@@ -2227,260 +2247,7 @@ const EAJE_CSS=`<style>
 }
 </style>`;
 
-/* ---------- INFORMATIONS ET AFFICHAGES OBLIGATOIRES ----------
-   Version remplissable en ligne du formulaire papier Koala Kids
-   « Informations et affichages obligatoires » (2 blocs, 16 lignes, Oui/Non).
-   L’export PDF reproduit trait pour trait la mise en page de l’original :
-   logo centre, titre violet, en-tete « Conforme / Oui / Non », intitules de
-   bloc en orange, une croix dans la case cochee.
-   Les reponses vivent dans documents_reponses.donnees, cles = ids ci-dessous. */
-const AFF_SCHEMA=[
- {id:'aff', titre:'Affichage obligatoire', icon:'clipboard-list', items:[
-  {id:'af1', l:'Plan du bâtiment et consignes en cas d’évacuation (issues de secours)'},
-  {id:'af2', l:'Numéros des services de secours'},
-  {id:'af3', l:'Consignes Vigipirate'},
-  {id:'af4', l:'Interdiction de fumer (article L. 3512-8 du code de la santé publique)'},
-  {id:'af5', l:'Interdiction de vapoter (article L. 3513-3 du code de la santé publique)'},
-  {id:'af6', l:'Interdiction de fumer (Arrêté du 21 juillet 2025 fixant les périmètres et les modèles de signalisation prévus respectivement aux articles R. 3512-2 et R. 3512-7 du code de la santé publique)'},
-  {id:'af7', l:'Interdiction d’exposition aux écrans des enfants de moins de 3 ans (Arrêté du 27 juin 2025 modifiant la charte nationale pour l’accueil du jeune enfant)'},
-  {id:'af8', l:'Affiche du numéro national Enfance en danger : 119'}
- ]},
- {id:'mad', titre:'Mise à disposition obligatoire (classeur, affichage, ou autre)', icon:'folder', items:[
-  {id:'md1', l:'Consignes en lien avec les recommandations ministérielles ou préfectorales en vigueur (sanitaires, sécurité, canicule…)'},
-  {id:'md2', l:'Projet d’établissement'},
-  {id:'md3', l:'Règlement de fonctionnement de l’établissement'},
-  {id:'md4', l:'Affiche du numéro national concernant les violences infra familiales : 3919',
-             sub:'Numéro des services de soutien à la parentalité à proximité de l’établissement (proposés par les services de protection maternelle et infantile, de la caisse d’allocations familiales, d’associations, comme les lieux d’accueil enfants-parents…)'},
-  {id:'md5', l:'Informations de prévention de la violence éducative ordinaire'},
-  {id:'md6', l:'Calendrier vaccinal'},
-  {id:'md7', l:'Affichage des menus proposés aux enfants'},
-  {id:'md8', l:'Charte nationale d’accueil du jeune enfant'}
- ]}
-];
-const AFF_META=[
-  {id:'aff_creche', l:'Crèche', t:'creche'},
-  {id:'aff_date',   l:'Date du contrôle', t:'date'},
-  {id:'aff_par',    l:'Vérifié par', t:'text'}
-];
-function affItems(){const o=[];AFF_SCHEMA.forEach(s=>(s.items||[]).forEach(i=>o.push(i)));return o;}
-function affFields(){
-  const f=AFF_META.map(m=>m.id);
-  affItems().forEach(i=>f.push(i.id));
-  return f;
-}
-function affGet(id){const e=document.getElementById('ff_'+id);return e?e.value:'';}
-function affToday(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-function affRefresh(){
-  const its=affItems();
-  const n=its.filter(i=>affGet(i.id)!=='').length;
-  const pct=its.length?Math.round(n/its.length*100):0;
-  const lbl=document.getElementById('aff-pct');if(lbl)lbl.textContent=pct+' %';
-  const bar=document.getElementById('aff-bar');if(bar)bar.style.width=pct+'%';
-  AFF_SCHEMA.forEach((sec,si)=>{
-    const c=document.getElementById('aff-c'+si);if(!c)return;
-    const l=sec.items||[];
-    c.textContent=l.filter(i=>affGet(i.id)!=='').length+'/'+l.length;
-  });
-}
-let affTimer=null;
-/* Sauvegarde automatique 1,5 s apres la derniere saisie, comme le controle EAJE. */
-function affTouch(){
-  affRefresh();
-  clearTimeout(affTimer);
-  affTimer=setTimeout(async()=>{
-    const ov=document.getElementById('ovFill');
-    if(!ov||!ov.classList.contains('on'))return;
-    if(!fillDoc||fillDoc.template_key!=='affichages')return;
-    await saveFill(true);
-    const st=document.getElementById('fillState');
-    if(st)st.textContent='Enregistré automatiquement à '+
-      new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-  },1500);
-}
-function affYN(id,val){
-  const el=document.getElementById('ff_'+id);if(!el)return;
-  el.value=(el.value===val)?'':val;
-  ['oui','non'].forEach(v=>{
-    const b=document.getElementById('affb_'+id+'_'+v);
-    if(b)b.classList.toggle('on',el.value===v);
-  });
-  affTouch();
-}
-/* Bascule tout un bloc sur « Oui » (cas le plus courant : tout est conforme). */
-function affTout(si,val){
-  ((AFF_SCHEMA[si]||{}).items||[]).forEach(i=>{
-    const el=document.getElementById('ff_'+i.id);if(!el)return;
-    el.value=val;
-    ['oui','non'].forEach(v=>{
-      const b=document.getElementById('affb_'+i.id+'_'+v);
-      if(b)b.classList.toggle('on',val===v);
-    });
-  });
-  affTouch();
-}
-function affToggle(si){
-  const body=document.getElementById('aff-b'+si),head=document.getElementById('aff-h'+si);
-  if(!body||!head)return;
-  const open=(body.style.display==='none');
-  body.style.display=open?'':'none';
-  head.classList.toggle('on',open);
-  const chev=head.querySelector('.eaje-chev');
-  if(chev)chev.className='ti ti-chevron-'+(open?'up':'down')+' eaje-chev';
-}
-function affMetaHtml(f,v){
-  let val=v[f.id]||'';
-  if(f.t==='creche'){
-    const list=(typeof CRECHES!=='undefined'&&CRECHES.length)
-      ?CRECHES.map(c=>c.name)
-      :['Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
-    if(!val&&PROF&&PROF.role==='referent'&&PROF.creche_id){
-      const mine=(CRECHES||[]).find(c=>c.id===PROF.creche_id);
-      if(mine)val=mine.name;
-    }
-    return '<div class="f" style="margin:0;min-width:170px"><label>'+esc(f.l)+'</label>'
-      +'<select id="ff_'+f.id+'" onchange="affTouch()"><option value=""></option>'
-      +list.map(n=>'<option'+(val===n?' selected':'')+'>'+esc(n)+'</option>').join('')
-      +'</select></div>';
-  }
-  if(f.t==='date'){
-    if(!val)val=affToday();
-    return '<div class="f" style="margin:0;min-width:160px"><label>'+esc(f.l)+'</label>'
-      +'<input type="date" id="ff_'+f.id+'" value="'+esc(val)+'" onchange="affTouch()"></div>';
-  }
-  return '<div class="f" style="margin:0;min-width:170px"><label>'+esc(f.l)+'</label>'
-    +'<input type="text" id="ff_'+f.id+'" value="'+esc(val)+'" oninput="affTouch()"></div>';
-}
-function affItemHtml(it,v){
-  const val=v[it.id]||'';
-  const sub=it.sub?'<div class="aff-sub">'+esc(it.sub)+'</div>':'';
-  return '<div class="eaje-row"><div class="eaje-lab">'+esc(it.l)+sub+'</div>'
-    +'<div class="eaje-yn">'
-    +'<input type="hidden" id="ff_'+it.id+'" value="'+esc(val)+'">'
-    +'<button type="button" class="eaje-b oui'+(val==='oui'?' on':'')+'" id="affb_'+it.id+'_oui" onclick="affYN(\''+it.id+'\',\'oui\')">Oui</button>'
-    +'<button type="button" class="eaje-b non'+(val==='non'?' on':'')+'" id="affb_'+it.id+'_non" onclick="affYN(\''+it.id+'\',\'non\')">Non</button>'
-    +'</div></div>';
-}
-const AFF_CSS=`<style>
-.eaje .aff-sub{font-size:11.5px;line-height:1.35;color:#555;margin-top:3px}
-.eaje .aff-all{border:1px solid var(--border,#E7E4F0);background:#fff;color:var(--violet,#4A3F9F);border-radius:7px;padding:5px 11px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;margin:0 0 4px}
-.eaje .aff-all:hover{background:#F1EFF7}
-</style>`;
-
 const TPL={
- affichages:{
-  fields:affFields(),
-  html:v=>`<div class="tpl eaje">${EAJE_CSS}${AFF_CSS}
-   <div class="eaje-head">
-    ${AFF_META.map(f=>affMetaHtml(f,v)).join('')}
-    <div class="eaje-prog">
-      <div class="eaje-track"><i id="aff-bar"></i></div>
-      <span class="eaje-pct" id="aff-pct">0 %</span>
-    </div>
-   </div>
-   <p class="eaje-leg">Cochez <b>Oui</b> ou <b>Non</b> pour chaque ligne. Sauvegarde automatique pendant la saisie. L’export PDF reprend exactement la mise en page du formulaire papier.</p>
-   ${AFF_SCHEMA.map((sec,si)=>`
-   <div class="eaje-sec">
-    <div class="eaje-sh" id="aff-h${si}" onclick="affToggle(${si})">
-     <i class="ti ti-${esc(sec.icon||'clipboard-list')}"></i>
-     <span class="t">${esc(sec.titre||'')}</span>
-     <b id="aff-c${si}">0/0</b>
-     <i class="ti ti-chevron-down eaje-chev"></i>
-    </div>
-    <div class="eaje-sb" id="aff-b${si}" style="display:none">
-     <div><button type="button" class="aff-all" onclick="affTout(${si},'oui')">Tout marquer conforme</button></div>
-     ${(sec.items||[]).map(it=>affItemHtml(it,v)).join('')}
-    </div>
-   </div>`).join('')}
-  </div>`,
-  mount:()=>{affToggle(0);affToggle(1);affRefresh();},
-  /* Rendu calque sur le formulaire papier : logo centre, titre violet, tableau
-     a 3 colonnes (intitule / Oui / Non) surmonte du bandeau « Conforme ». */
-  pdf:doc=>{
-    const g=id=>affGet(id);
-    const M=14, C1=140, C2=21, VIOLET=[112,48,160], ORANGE=[228,108,10];
-    const logoW=36, logoH=logoW*164/360;
-    try{doc.addImage(LOGO_KK,'PNG',(210-logoW)/2,10,logoW,logoH);}catch(e){console.warn('logo PDF',e);}
-    let y=10+logoH+11;
-    doc.setFont('helvetica','bold');doc.setFontSize(15.5);
-    doc.setTextColor(VIOLET[0],VIOLET[1],VIOLET[2]);
-    doc.text(pdfSafe('Informations et affichages obligatoires'),105,y,{align:'center'});
-    doc.setTextColor(0);
-    y+=10;
-    doc.setLineWidth(0.3);doc.setDrawColor(0);
-    let curTitre='';
-    /* bandeau d’en-tete : intitule du bloc a gauche, « Conforme » + Oui/Non a droite */
-    const enTete=titre=>{
-      const h1=5.4,h2=5.4,H=h1+h2;
-      doc.rect(M,y,C1,H);
-      doc.rect(M+C1,y,C2*2,h1);
-      doc.rect(M+C1,y+h1,C2,h2);
-      doc.rect(M+C1+C2,y+h1,C2,h2);
-      doc.setFont('helvetica','bold');doc.setFontSize(11.5);
-      doc.setTextColor(ORANGE[0],ORANGE[1],ORANGE[2]);
-      doc.text(pdfSafe(titre),M+3,y+H/2+1.7);
-      doc.setTextColor(0);doc.setFontSize(9.5);
-      doc.text('Conforme',M+C1+C2,y+h1-1.7,{align:'center'});
-      doc.text('Oui',M+C1+C2/2,y+H-1.7,{align:'center'});
-      doc.text('Non',M+C1+C2+C2/2,y+H-1.7,{align:'center'});
-      y+=H;
-      curTitre=titre;
-    };
-    /* ligne d’intitule de bloc (2e bloc), sans repetition du bandeau Conforme */
-    const bandeau=titre=>{
-      const H=9;
-      doc.rect(M,y,C1,H);doc.rect(M+C1,y,C2,H);doc.rect(M+C1+C2,y,C2,H);
-      doc.setFont('helvetica','bold');doc.setFontSize(10.8);
-      doc.setTextColor(ORANGE[0],ORANGE[1],ORANGE[2]);
-      const L=doc.splitTextToSize(pdfSafe(titre),C1-6);
-      doc.text(L,M+3,y+H/2+1.6-((L.length-1)*2.1));
-      doc.setTextColor(0);
-      y+=H;
-      curTitre=titre;
-    };
-    /* croix dans la case cochee */
-    const croix=(cx,cy)=>{
-      doc.setLineWidth(0.7);
-      doc.line(cx-1.8,cy-1.8,cx+1.8,cy+1.8);
-      doc.line(cx+1.8,cy-1.8,cx-1.8,cy+1.8);
-      doc.setLineWidth(0.3);
-    };
-    const ligne=it=>{
-      doc.setFont('helvetica','normal');doc.setFontSize(9.6);
-      const L1=doc.splitTextToSize(pdfSafe(it.l),C1-6);
-      const L2=it.sub?doc.splitTextToSize(pdfSafe(it.sub),C1-6):[];
-      const nb=L1.length+L2.length;
-      const H=Math.max(10.6,nb*4.3+5.6);
-      if(y+H>281){doc.addPage();y=16;enTete(curTitre);doc.setFont('helvetica','normal');doc.setFontSize(9.6);}
-      doc.rect(M,y,C1,H);doc.rect(M+C1,y,C2,H);doc.rect(M+C1+C2,y,C2,H);
-      let ty=y+(H-nb*4.3)/2+3.4;
-      doc.text(L1,M+3,ty);
-      if(L2.length)doc.text(L2,M+3,ty+L1.length*4.3);
-      const v=g(it.id);
-      if(v==='oui')croix(M+C1+C2/2,y+H/2);
-      else if(v==='non')croix(M+C1+C2+C2/2,y+H/2);
-      y+=H;
-    };
-    AFF_SCHEMA.forEach((sec,si)=>{
-      if(si===0)enTete(sec.titre);else bandeau(sec.titre);
-      (sec.items||[]).forEach(ligne);
-    });
-    /* mention de contexte : uniquement si renseignee, hors tableau */
-    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'';
-    const info=[g('aff_creche')?'Crèche : '+g('aff_creche'):'',
-                g('aff_date')?'Date : '+dfr(g('aff_date')):'',
-                g('aff_par')?'Vérifié par : '+g('aff_par'):''].filter(Boolean).join('    •    ');
-    if(info){
-      y+=6;
-      if(y>285){doc.addPage();y=20;}
-      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(90);
-      doc.text(pdfSafe(info),M,y);doc.setTextColor(0);
-    }
-    pdfSortie(doc,'affichages_obligatoires'
-      +(g('aff_creche')?'_'+slug(g('aff_creche')):'')
-      +(g('aff_date')?'_'+slug(g('aff_date')):'')+'.pdf');
-    return true;
-  }
- },
  eaje:{
   get fields(){return eajeFields();},
   html:v=>`<div class="tpl eaje">${EAJE_CSS}
@@ -3541,12 +3308,23 @@ async function openReps(id){
       ${r.enfant_id?`<span class="tag">Dossier ${esc(enf?((enf.prenom||'')+' '+(enf.nom||'')).trim():'enfant')}</span>`:''}
       <span class="tag">${r.statut==='signe'?'Signé':'Préparé'}</span>
       <button class="iconbtn" onclick="openFill('${id}','${r.id}')"><i class="ti ti-eye"></i></button>
-      ${IS_ADMIN?`<button class="iconbtn d" onclick="delRep('${r.id}','${id}')"><i class="ti ti-trash"></i></button>`:''}
+      ${peutSupprimerRep(r)?`<button class="iconbtn d" onclick="delRep('${r.id}','${id}')"><i class="ti ti-trash"></i></button>`:''}
     </div>`;}).join('');
   }
   document.getElementById('ovReps').classList.add('on');
 }
+/* Une referente ne peut effacer qu’une reponse encore au statut « Prepare »
+   ET rattachee a sa propre creche. Une reponse signee, ou celle d’un autre site,
+   reste intouchable : seule la direction peut la supprimer. Regle doublee cote
+   Supabase par la policy restrictive reps_delete_scoped. */
+function peutSupprimerRep(r){
+  if(IS_DIRECTION)return true;
+  if(!PROF||PROF.role!=='referent'||!PROF.creche_id)return false;
+  return r.statut!=='signe' && !!r.creche_id && r.creche_id===PROF.creche_id;
+}
 async function delRep(rid,did){
+  const{data:r0}=await sb.from('documents_reponses').select('statut,creche_id').eq('id',rid).maybeSingle();
+  if(r0&&!peutSupprimerRep(r0))return toast('Suppression réservée à la direction');
   if(!confirm('Supprimer cette réponse ?'))return;
   await sb.from('documents_reponses').delete().eq('id',rid);
   openReps(did);
@@ -3641,6 +3419,7 @@ categories: `
 
 documents: `
 <h3>📄 Ajouter et gérer les documents</h3>
+<div class="warn">🔒 <strong>Réservé à la direction.</strong> L’ajout, la modification et la suppression de documents et de catégories, ainsi que l’import de dossier, sont accessibles aux seuls comptes <strong>direction</strong>. Les référentes disposent d’un accès en lecture : elles consultent, remplissent en ligne, signent et téléchargent, mais ne déposent pas de nouveau document.</div>
 <div class="st">➕ Nouveau document</div>
 <ul>
   <li>Bouton <strong>Nouveau document</strong>, puis renseigner le titre, la description, la catégorie et éventuellement la crèche.</li>
@@ -3739,16 +3518,16 @@ reponses: `
 <ul>
   <li>Une réponse peut être supprimée définitivement — l’action est irréversible.</li>
   <li>Penser à exporter le PDF avant toute suppression si le document doit être conservé.</li>
+  <li><strong>Direction</strong> — peut supprimer n’importe quelle réponse.</li>
+  <li><strong>Référente</strong> — uniquement une réponse encore au statut <strong>Préparé</strong> et rattachée à sa propre crèche. Une réponse <strong>Signée</strong>, ou celle d’un autre site, n’affiche pas la corbeille.</li>
 </ul>
+<div class="tip">🖨️ La fonction <strong>Éditer le PDF</strong> reste disponible pour tous : elle génère le PDF puis vide le formulaire en cours de saisie, y compris s’il vient d’être signé.</div>
 <div class="warn">📁 Pour les documents à valeur administrative (entretiens annuels notamment), conserver systématiquement l’export PDF en dehors de l’application.</div>
 `,
 
 eaje: `
 <div class="st">📋 Support de contrôle EAJE</div>
 <p>Grille d’auto-contrôle réglementaire reprenant les points vérifiés lors d’une inspection PMI. Utile pour préparer une visite ou faire un point annuel. Elle se trouve dans les documents à remplir, sous « Support de contrôle EAJE ».</p>
-<div class="st">📌 Informations et affichages obligatoires</div>
-<p>Version remplissable en ligne du formulaire papier Koala Kids : 16 lignes réparties en deux blocs (« Affichage obligatoire » et « Mise à disposition obligatoire »), à cocher Oui ou Non. Le bouton <strong>Tout marquer conforme</strong> remplit un bloc d’un coup, puis il ne reste qu’à corriger les exceptions. La saisie est enregistrée automatiquement.</p>
-<div class="tip">L’export PDF reprend exactement la mise en page de l’original (logo centré, titre violet, bandeau « Conforme / Oui / Non », intitulés de bloc en orange) : une croix apparaît dans la case cochée. La crèche, la date et le vérificateur sont rappelés en petit sous le tableau, uniquement s’ils sont renseignés.</div>
 <div class="st">🆕 Renseigner une fiche</div>
 <ul>
   <li>Ouvrir le document « À remplir » : choisir la crèche et la date de la visite en haut de la fiche.</li>
