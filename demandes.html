@@ -4941,7 +4941,7 @@ function fpRenderTable(){
         '<td class="ik-val">'+Number(r.amount).toFixed(2).replace('.',',')+' €</td>'+
         '<td>'+(r.receipt_url?'<a href="'+r.receipt_url+'" target="_blank" class="btn-sm" style="display:inline-flex"><i class="ti ti-photo"></i></a>':'<span style="color:#ccc;font-size:11px">—</span>')+'</td>'+
         '<td>'+fpStatutCell(r)+'</td>'+
-        '<td>'+(r.regle&&!isDirection?'':'<button class="ik-row-del" onclick="fpEditRow(\''+r.id+'\')" title="Modifier"><i class="ti ti-edit" style="font-size:12px"></i></button>')+'</td></tr>';
+        '<td>'+(r.regle&&!isDirection?'':'<button class="ik-row-del" onclick="fpEditRow(\''+r.id+'\')" title="Modifier"><i class="ti ti-edit" style="font-size:12px"></i></button> <button class="ik-row-del" onclick="fpDeleteRow(\''+r.id+'\')" title="Supprimer"><i class="ti ti-trash" style="font-size:12px"></i></button>')+'</td></tr>';
     }).join('');
   }
   fpUpdateTotals();
@@ -5062,7 +5062,9 @@ async function fpSave(){
 
 async function fpDeleteRow(id){
   if(!confirm('Supprimer cette dépense ?'))return;
-  await dbDelete('frais_pro',id);fpLoad();
+  const ok=await dbDelete('frais_pro',id);
+  if(ok){showBanner('Dépense supprimée.');fpLoad();}
+  else showBanner('Suppression impossible — dépense déjà réglée ?','error');
 }
 
 // ── Export Excel ──
