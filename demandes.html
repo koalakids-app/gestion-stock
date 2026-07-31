@@ -810,6 +810,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <option value="">Toutes les crèches</option>
         </select>
         <input class="finput" id="enf-search" placeholder="Rechercher un enfant…" style="width:auto;min-width:180px;font-size:12px;padding:4px 8px" oninput="enfRender()">
+        <button class="btn-primary" onclick="openEnfantModal()"><i class="ti ti-plus"></i> Ajouter un enfant</button>
       </div>
     </div>
     <div id="enf-list" style="display:flex;flex-direction:column;gap:10px"></div>
@@ -2294,8 +2295,18 @@ function enfSyncGroupe(){
   gsel.selectedIndex = gi>=0 ? gi : 0;
 }
 window.enfSyncGroupe = enfSyncGroupe;
-function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-function editEnfant(id){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');document.getElementById('enf-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===e.creche_id?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+function enfFillCreches(selectedId){
+  const sel=document.getElementById('enf-creche');if(!sel)return;
+  const maCreche=currentProfile?.creche_id||null;
+  const list=isDirection?cacheCreches:cacheCreches.filter(c=>c.id===maCreche);
+  const cible=selectedId||(isDirection?null:maCreche);
+  sel.innerHTML=(isDirection?'<option value="">-- Choisir --</option>':'')+list.map(c=>'<option value="'+c.id+'"'+(c.id===cible?' selected':'')+'>'+c.name+'</option>').join('');
+  sel.disabled=!isDirection;
+  sel.style.background=isDirection?'':'#f4f4f8';
+  sel.style.cursor=isDirection?'':'not-allowed';
+}
+function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+function editEnfant(id){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
 async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim()};
   if(editingEnfantId){const ok=await dbUpdate('enfants',editingEnfantId,row);if(ok){const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(e)Object.assign(e,row);closeModal('modal-enfant-wrap');showBanner(prenom+' modifié(e) ✅');renderPresence();if(document.getElementById('modal-enf-fiche-wrap')?.classList.contains('open')){document.getElementById('enf-fiche-title').innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((row.prenom||'')+' '+(row.nom||''));enfRenderIdentite();}if(typeof enfRender==='function')enfRender();if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();}else showBanner('Erreur lors de la modification.','error');return;}
   const saved=await dbInsert('enfants',row);if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
