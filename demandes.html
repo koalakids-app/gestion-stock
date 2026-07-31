@@ -347,7 +347,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="login-wrap">
     <div class="login-box">
       <div class="login-logo"><img id="login-logo" src="" alt="Koala Kids"/></div>
-      <div class="login-title">Koala Kids</div>
       <div class="login-sub">Suite de gestion pédagogique</div>
       <div class="login-err" id="login-err"></div>
       <div id="login-form">
@@ -1151,13 +1150,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="overlay" id="modal-incident-wrap">
   <div class="modal">
     <h3>Déclarer un incident</h3>
+    <div style="background:#FFF1E3;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:11px 14px;margin-bottom:14px;font-size:13px;color:#B4530F;line-height:1.55">
+      <strong>Chute, morsure, malaise, allergie&nbsp;?</strong> Ces situations se consignent dans le
+      <a href="infirmerie.html" style="color:#B4530F;font-weight:700;text-decoration:underline">registre d’infirmerie</a>,
+      pas ici. Le registre remonte ensuite l’incident à la direction en un clic.
+      Ce formulaire est réservé aux événements sans soin.
+    </div>
     <div class="frow">
       <div class="fg"><label class="flabel">Date</label><input class="finput" id="inc-date" type="date"/></div>
       <div class="fg"><label class="flabel">Heure</label><input class="finput" id="inc-time" type="time"/></div>
     </div>
     <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="inc-creche"><option value="">-- Choisir --</option></select></div>
     <div class="fg"><label class="flabel">Enfant concerné</label><input class="finput" id="inc-child" placeholder="Prénom Nom de l'enfant"/></div>
-    <div class="fg"><label class="flabel">Type d'incident</label><select class="finput" id="inc-type"><option value="chute">Chute</option><option value="morsure">Morsure</option><option value="malaise">Malaise / fièvre</option><option value="allergie">Réaction allergique</option><option value="comportement">Incident comportemental</option><option value="materiel">Incident matériel</option><option value="autre">Autre</option></select></div>
+    <div class="fg"><label class="flabel">Type d'incident</label><select class="finput" id="inc-type"><option value="comportement">Incident comportemental</option><option value="materiel">Incident matériel</option><option value="securite">Sécurité des locaux</option><option value="famille">Relation avec une famille</option><option value="autre">Autre</option></select></div>
     <div class="fg"><label class="flabel">Sévérité</label><select class="finput" id="inc-severity"><option value="info">ℹ️ Information</option><option value="leger">🟠 Léger</option><option value="grave">🔴 Grave / urgence médicale</option></select></div>
     <div class="fg"><label class="flabel">Description</label><textarea class="finput" id="inc-desc" rows="3" style="resize:vertical"></textarea></div>
     <div class="fg"><label class="flabel">Actions menées</label><textarea class="finput" id="inc-actions" rows="2" style="resize:vertical"></textarea></div>
@@ -1813,7 +1818,11 @@ function renderIncidents(){
   list.innerHTML=filtered.map(i=>{const creche=cacheCreches.find(c=>c.id===i.creche_id);return'<div class="incident-card '+i.severity+'"><div style="font-size:22px;flex-shrink:0">'+si[i.severity]+'</div><div class="inc-meta"><div class="inc-child"><i class="ti ti-user" style="font-size:11px"></i> '+(i.child_name||'Enfant non précisé')+(creche?' — '+creche.name:'')+'</div><div class="inc-title">'+(i.type||'')+' · '+(i.incident_date||'')+' '+(i.incident_time?'à '+i.incident_time:'')+'</div><div class="inc-body" style="margin-top:4px">'+(i.description||'—')+'</div>'+(i.actions?'<div style="margin-top:6px;font-size:12px;color:var(--green);background:var(--green-light);border-radius:6px;padding:4px 8px"><strong>Actions :</strong> '+i.actions+'</div>':'')+'<div class="inc-foot"><span class="badge" style="background:'+(i.severity==='grave'?'var(--red-light)':i.severity==='leger'?'var(--orange-light)':'var(--blue-light)')+';color:'+(i.severity==='grave'?'#c0392b':i.severity==='leger'?'var(--orange-dark)':'var(--blue)')+'">'+({grave:'Grave',leger:'Léger',info:'Information'}[i.severity]||i.severity)+'</span>'+(i.reporter?'<span class="meta-txt">'+i.reporter+'</span>':'')+(i.treated?'<span class="badge b-traite">✅ Traité</span>':'<span class="badge b-attente">⏳ En cours</span>')+'</div></div><div class="dactions"><button class="ibtn" onclick="toggleIncident(\''+i.id+'\','+i.treated+')"><i class="ti ti-'+(i.treated?'rotate-clockwise':'check')+'"></i></button>'+(isDirection?'<button class="ibtn del" onclick="deleteIncident(\''+i.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';}).join('');
 }
 function openIncidentModal(){document.getElementById('inc-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('inc-date').value=todayStr();document.getElementById('inc-time').value=new Date().toTimeString().slice(0,5);['inc-child','inc-desc','inc-actions','inc-reporter'].forEach(id=>document.getElementById(id).value='');document.getElementById('modal-incident-wrap').classList.add('open');}
-async function saveIncident(){const desc=document.getElementById('inc-desc').value.trim();if(!desc){alert('Description requise.');return;}const row={creche_id:document.getElementById('inc-creche').value,child_name:document.getElementById('inc-child').value.trim(),incident_date:document.getElementById('inc-date').value,incident_time:document.getElementById('inc-time').value,type:document.getElementById('inc-type').value,severity:document.getElementById('inc-severity').value,description:desc,actions:document.getElementById('inc-actions').value.trim(),reporter:document.getElementById('inc-reporter').value.trim(),treated:false};const saved=await dbInsert('incidents',row);if(saved){cacheIncidents.unshift(saved);updateBadges();showBanner('Incident enregistré.');closeModal('modal-incident-wrap');renderIncidents();}else showBanner('Erreur.','error');}
+async function saveIncident(){const desc=document.getElementById('inc-desc').value.trim();if(!desc){alert('Description requise.');return;}const row={creche_id:document.getElementById('inc-creche').value,child_name:document.getElementById('inc-child').value.trim(),incident_date:document.getElementById('inc-date').value,incident_time:document.getElementById('inc-time').value,type:document.getElementById('inc-type').value,severity:document.getElementById('inc-severity').value,description:desc,actions:document.getElementById('inc-actions').value.trim(),reporter:document.getElementById('inc-reporter').value.trim(),treated:false};const saved=await dbInsert('incidents',row);if(saved){cacheIncidents.unshift(saved);updateBadges();
+/* Alerte immediate a la direction et a la referente si l'incident est grave.
+   Aucun nom d'enfant ni detail n'est transmis par courriel (cf. notify-infirmerie). */
+if(saved.severity==='grave'){callFn('notify-infirmerie',{creche_id:saved.creche_id,motif:'grave',date:saved.incident_date,heure:saved.incident_time,source:'incident'});showBanner('Incident enregistré. Direction et référente alertées.');}else showBanner('Incident enregistré.');
+closeModal('modal-incident-wrap');renderIncidents();}else showBanner('Erreur.','error');}
 async function toggleIncident(id,treated){const ok=await dbUpdate('incidents',id,{treated:!treated});if(ok){const i=cacheIncidents.find(x=>x.id===id);if(i)i.treated=!treated;updateBadges();renderIncidents();}}
 async function deleteIncident(id){if(!confirm('Supprimer ?'))return;await dbDelete('incidents',id);cacheIncidents=cacheIncidents.filter(i=>i.id!==id);updateBadges();renderIncidents();}
 
@@ -5334,14 +5343,22 @@ demandes: `
 </div>`,
 
 incidents: `
-<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🚨 Registre des incidents</h3>
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🚨 Incidents</h3>
+<div style="background:#FFF1E3;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#B4530F;line-height:1.6">
+  <strong>Deux outils, deux usages.</strong> Tout ce qui a donné lieu à un <strong>soin</strong>
+  (chute, morsure, malaise, allergie) se consigne dans le <strong>registre d’infirmerie</strong>,
+  qui a valeur légale et ne peut pas être modifié après coup. Ce module-ci recueille les
+  <strong>événements sans soin</strong> — comportement, matériel, sécurité des locaux,
+  relation avec une famille — et reçoit les signalements remontés depuis le registre.
+</div>
 <div style="background:#FEF2F2;border-left:4px solid #DC2626;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#991B1B">
-  ⚠ Tout incident impliquant un enfant doit être consigné le jour même, même s'il semble bénin.
+  ⚠ Tout événement impliquant un enfant doit être consigné le jour même, même s'il semble bénin — ici ou dans le registre d’infirmerie selon le cas.
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📋 Déclarer un incident</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Vérifiez d’abord qu’<strong>aucun soin n’a été donné</strong> : si c’est le cas, passez par le registre d’infirmerie</li>
   <li>Cliquez sur <strong>+ Déclarer un incident</strong></li>
-  <li>Indiquez le <strong>prénom de l'enfant</strong> concerné</li>
+  <li>Indiquez le <strong>prénom de l'enfant</strong> concerné, s’il y a lieu</li>
   <li>Renseignez la <strong>date</strong> exacte de l'incident</li>
   <li>Choisissez la <strong>gravité</strong> : 🔴 Grave, 🟠 Léger ou 🔵 Info</li>
   <li>Décrivez précisément l'incident et les <strong>actions menées</strong></li>
@@ -5349,8 +5366,8 @@ incidents: `
 </ol>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🔴 Niveaux de gravité</div>
 <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:18px">
-  <div style="background:#FEF2F2;border-radius:8px;padding:10px 14px;font-size:13px"><strong style="color:#DC2626">🔴 Grave</strong> — blessure nécessitant des soins, hospitalisation, déclaration obligatoire</div>
-  <div style="background:#FEF0E6;border-radius:8px;padding:10px 14px;font-size:13px"><strong style="color:#F47920">🟠 Léger</strong> — chute, bosse, morsure légère, parents prévenus</div>
+  <div style="background:#FEF2F2;border-radius:8px;padding:10px 14px;font-size:13px"><strong style="color:#DC2626">🔴 Grave</strong> — événement appelant une réaction immédiate de la direction</div>
+  <div style="background:#FEF0E6;border-radius:8px;padding:10px 14px;font-size:13px"><strong style="color:#F47920">🟠 Léger</strong> — événement à traiter sans urgence, parents prévenus si concernés</div>
   <div style="background:#EFF6FF;border-radius:8px;padding:10px 14px;font-size:13px"><strong style="color:#2563EB">🔵 Info</strong> — dégradation matérielle, signalement préventif</div>
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">✅ Clôturer un incident</div>
