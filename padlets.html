@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Koala Kids — Padlets</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -106,6 +107,34 @@ body {
 }
 .card:hover .card-arrow { color: #E4407F; }
 
+.state {
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px 24px;
+  text-align: center;
+  color: #78716C;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.state strong {
+  display: block;
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  color: #1C1917;
+  margin-bottom: 8px;
+}
+.state a {
+  display: inline-block;
+  margin-top: 16px;
+  background: #E4407F;
+  color: #fff;
+  text-decoration: none;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .footer {
   text-align: center;
   margin-top: 28px;
@@ -137,61 +166,55 @@ body {
     <p>Ressources partagées</p>
   </div>
 
-  <div class="cards">
-
-    <a href="https://padlet.com/coordinateurpedagogiquekoalakids/recrutement-des-stagiaires-drwg5j0ywvf1rkcs" target="_blank" rel="noopener" class="card">
-      <div class="card-icon">🎓</div>
-      <div class="card-text"><h2>Recrutement stagiaires</h2></div>
-      <div class="card-arrow">›</div>
-    </a>
-
-    <a href="https://padlet.com/coordinateurpedagogiquekoalakids/supports-pedagogiques-koalakids-fttbw6bc2e3iwgjc" target="_blank" rel="noopener" class="card">
-      <div class="card-icon">📚</div>
-      <div class="card-text"><h2>Supports pédagogiques Koalakids</h2></div>
-      <div class="card-arrow">›</div>
-    </a>
-
-    <a href="https://padlet.com/coordinateurpedagogiquekoalakids/developpement-du-jeune-enfant-9uhw67jx3j9lqvwy" target="_blank" rel="noopener" class="card">
-      <div class="card-icon">🧸</div>
-      <div class="card-text"><h2>Le développement du jeune enfant</h2></div>
-      <div class="card-arrow">›</div>
-    </a>
-
-    <a href="https://padlet.com/coordinateurpedagogiquekoalakids/projet-educatif-et-pedagogique-koalakids-toulon-ogi20pvaabpv0ujb" target="_blank" rel="noopener" class="card">
-      <div class="card-icon">🐨</div>
-      <div class="card-text"><h2>Le projet Koalakids</h2></div>
-      <div class="card-arrow">›</div>
-    </a>
-
-    <a href="https://padlet.com/coordinateurpedagogiquekoalakids/protocoles-regles-d-hygiene-tuvltwb3n9mqwgei" target="_blank" rel="noopener" class="card">
-      <div class="card-icon">🧼</div>
-      <div class="card-text"><h2>Les protocoles des règles d'hygiène</h2></div>
-      <div class="card-arrow">›</div>
-    </a>
-
-    <a href="https://padlet.com/coordinateurpedagogiquekoalakids/les-protocoles-obligatoires-kpenm99ha5kgklgd" target="_blank" rel="noopener" class="card">
-      <div class="card-icon">📋</div>
-      <div class="card-text"><h2>Les protocoles obligatoires</h2></div>
-      <div class="card-arrow">›</div>
-    </a>
-
-    <a href="https://padlet.com/coordinateurpedagogiquekoalakids/la-sante-chez-koalakids-uc40nqgun5nlojgy" target="_blank" rel="noopener" class="card">
-      <div class="card-icon">🩺</div>
-      <div class="card-text"><h2>La santé chez Koalakids</h2></div>
-      <div class="card-arrow">›</div>
-    </a>
-
-    <a href="https://padlet.com/coordinateurpedagogiquekoalakids/protocoles-pour-le-personnel-wnvjpakilh85pz9a" target="_blank" rel="noopener" class="card">
-      <div class="card-icon">👥</div>
-      <div class="card-text"><h2>Les protocoles pour le personnel</h2></div>
-      <div class="card-arrow">›</div>
-    </a>
-
-  </div>
+  <div id="zone"><div class="state">Chargement…</div></div>
 
   <div class="footer">Koala Kids © 2026</div>
 
 </div>
+
+<script>
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+function showState(titre,texte,lien){
+  document.getElementById('zone').innerHTML=
+    '<div class="state"><strong>'+esc(titre)+'</strong>'+esc(texte)+
+    (lien?'<br><a href="'+lien+'">Se connecter</a>':'')+'</div>';
+}
+
+function render(list){
+  if(!list.length){
+    showState('Aucun padlet disponible','Aucune ressource ne vous est accessible pour le moment.');
+    return;
+  }
+  document.getElementById('zone').innerHTML='<div class="cards">'+list.map(p=>
+    '<a href="'+esc(p.url)+'" target="_blank" rel="noopener" class="card">'+
+      '<div class="card-icon">'+esc(p.icone||'📌')+'</div>'+
+      '<div class="card-text"><h2>'+esc(p.titre)+'</h2></div>'+
+      '<div class="card-arrow">›</div>'+
+    '</a>').join('')+'</div>';
+}
+
+window.addEventListener('DOMContentLoaded',async function(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){
+    showState('Connexion requise','Connectez-vous à l\'application pour accéder aux padlets.','demandes.html');
+    return;
+  }
+  const {data,error}=await sb.from('padlets')
+    .select('titre,icone,url,ordre')
+    .order('ordre',{ascending:true});
+  if(error){
+    console.error('[padlets]',error);
+    showState('Erreur de chargement','Impossible de récupérer la liste des padlets.');
+    return;
+  }
+  render(data||[]);
+});
+</script>
 
 </body>
 </html>
