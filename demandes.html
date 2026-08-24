@@ -322,7 +322,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ik-total-label{font-size:13px;font-weight:600;opacity:0.85}
 .ik-total-val{font-size:22px;font-weight:800}
 .ik-group-badge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700}
-.ik-g1{background:#E8E7F4;color:var(--koala)}.ik-g2{background:#e8f5e9;color:#2e7d32}.ik-g3{background:#FEF0E6;color:var(--orange-dark)}
+.ik-g1{background:#E8E7F4;color:var(--koala)}.ik-g2{background:#e8f5e9;color:#2e7d32}.ik-g3{background:#FEF0E6;color:var(--orange-dark)}.ik-g4{background:#E6F1FB;color:#1565c0}
 .ik-ignored-badge{background:#f5f5f5;color:#aaa;padding:2px 9px;border-radius:10px;font-size:11px}
 .ik-row-del{width:28px;height:28px;border:1.5px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;color:#ccc;font-size:13px;display:flex;align-items:center;justify-content:center}
 .ik-row-del:hover{background:var(--red-light);color:var(--red);border-color:var(--red)}
@@ -639,14 +639,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="ik-month-sel">
       <label style="font-size:13px;font-weight:600;color:var(--koala)">Mois :</label>
       <input type="month" class="finput" id="ik-month" style="width:180px" onchange="ikLoad()">
+      <label style="font-size:13px;font-weight:600;color:var(--koala)">Personne :</label>
+      <select class="finput" id="ik-person-select" style="width:auto;min-width:180px" onchange="ikPersonChanged()"></select>
       <button class="btn-sm" onclick="ikLoadFromPlanning()"><i class="ti ti-refresh"></i> Recharger depuis planning</button>
       <span id="ik-load-info" style="font-size:12px;color:var(--muted)"></span>
     </div>
     <!-- Config distances -->
     <div style="margin-bottom:0.75rem">
-      <div style="font-size:13px;font-weight:700;color:var(--koala);margin-bottom:8px"><i class="ti ti-map-pin"></i> Distances depuis Cuers (km aller)</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:700;color:var(--koala)"><i class="ti ti-map-pin"></i> Distances depuis</span>
+        <select class="finput" id="ik-depart-config" style="width:auto;min-width:150px;padding:5px 8px;font-size:13px" onchange="ikRenderConfig()"></select>
+        <span style="font-size:13px;font-weight:700;color:var(--koala)">(km aller)</span>
+        <button class="btn-sm" onclick="ikAddDepart()"><i class="ti ti-plus"></i> Ville de départ</button>
+        <button class="btn-sm" onclick="ikRemoveDepart()"><i class="ti ti-trash" style="font-size:12px"></i> Retirer</button>
+      </div>
       <div class="ik-config-grid" id="ik-config-grid"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
+        <label style="font-size:13px;font-weight:600;color:var(--koala)">Départ par défaut :</label>
+        <select class="finput" id="ik-depart-default" style="width:auto;min-width:150px;padding:5px 8px;font-size:13px"></select>
         <label style="font-size:13px;font-weight:600;color:var(--koala)">Barème :</label>
         <input type="number" class="ik-config-input" id="ik-bareme" value="0.248" step="0.001" min="0" style="width:90px"> €/km
         <button class="btn-sm" onclick="ikSaveConfig()"><i class="ti ti-device-floppy"></i> Sauvegarder config</button>
@@ -661,6 +671,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <span style="font-size:12px;opacity:0.8">Picot : <span id="ik-tot-picot">0,00 €</span></span>
           <span style="font-size:12px;opacity:0.8">Brunet : <span id="ik-tot-brunet">0,00 €</span></span>
           <span style="font-size:12px;opacity:0.8">Ollioules/StJean : <span id="ik-tot-osj">0,00 €</span></span>
+          <span style="font-size:12px;opacity:0.8">Cuers : <span id="ik-tot-cuers">0,00 €</span></span>
         </div>
       </div>
       <div class="ik-total-val"><span id="ik-tot-eur">0,00</span> €</div>
@@ -671,7 +682,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <thead>
           <tr>
             <th>Date</th>
-            <th>Trajet</th>
+            <th>Départ</th>
+            <th>Destination</th>
             <th style="text-align:center">Nb trajets</th>
             <th style="text-align:center">km/trajet</th>
             <th style="text-align:right">Total km</th>
@@ -4379,37 +4391,118 @@ async function importBackup(event){
 // FRAIS IK
 // ============================================================
 const IK_DEFAULT_DIST={'Brunet':22,'Cuers':0,'Ollioules':30,'St Jean':20,'Picot 1':25,'Picot 2':25};
-const IK_GROUPS={'Picot 1':'Picot 1 - Picot 2','Picot 2':'Picot 1 - Picot 2','Brunet':'Brunet','Ollioules':'Ollioules - St Jean','St Jean':'Ollioules - St Jean'};
+const IK_GROUPS={'Picot 1':'Picot 1 - Picot 2','Picot 2':'Picot 1 - Picot 2','Brunet':'Brunet','Ollioules':'Ollioules - St Jean','St Jean':'Ollioules - St Jean','Cuers':'Cuers'};
+const IK_DEFAULT_DEPART='Cuers';
 let ikRows=[];
 
+// Config v2 : matrice de distances { départ : { crèche : km } }, liste de villes de départ,
+// départ par défaut et barème. Migration automatique de l'ancien format (dist plat = depuis Cuers).
 function ikGetConfig(){
   const saved=JSON.parse(localStorage.getItem('ik_config')||'{}');
-  return{dist:Object.assign({},IK_DEFAULT_DIST,saved.dist||{}),bareme:saved.bareme||0.248};
+  let matrix=saved.matrix;
+  if(!matrix){
+    // migration : ancien format {dist:{Brunet:22,...}} = distances depuis Cuers
+    matrix={};
+    matrix[IK_DEFAULT_DEPART]=Object.assign({},IK_DEFAULT_DIST,saved.dist||{});
+  }
+  if(!matrix[IK_DEFAULT_DEPART])matrix[IK_DEFAULT_DEPART]=Object.assign({},IK_DEFAULT_DIST);
+  const departs=(saved.departs&&saved.departs.length?saved.departs:Object.keys(matrix)).slice();
+  Object.keys(matrix).forEach(d=>{if(!departs.includes(d))departs.push(d);});
+  const defaultDepart=departs.includes(saved.defaultDepart)?saved.defaultDepart:IK_DEFAULT_DEPART;
+  return{matrix,departs,defaultDepart,bareme:saved.bareme||0.248};
+}
+
+function ikWriteConfig(cfg){localStorage.setItem('ik_config',JSON.stringify(cfg));}
+
+// km d'un trajet départ -> crèche (0 si inconnu ou identique)
+function ikKm(depart,creche,matrix){
+  if(!creche)return 0;
+  const m=matrix||ikGetConfig().matrix;
+  const d=depart||IK_DEFAULT_DEPART;
+  if(d===creche)return 0;
+  const row=m[d]||{};
+  const v=row[creche];
+  return v!==undefined?v:0;
 }
 
 function ikSaveConfig(){
-  const dist={};
-  document.querySelectorAll('.ik-dist-input').forEach(inp=>{dist[inp.dataset.creche]=parseFloat(inp.value)||0;});
-  const bareme=parseFloat(document.getElementById('ik-bareme').value)||0.248;
-  localStorage.setItem('ik_config',JSON.stringify({dist,bareme}));
+  const cfg=ikGetConfig();
+  const depart=document.getElementById('ik-depart-config').value||IK_DEFAULT_DEPART;
+  const row={};
+  document.querySelectorAll('.ik-dist-input').forEach(inp=>{row[inp.dataset.creche]=parseFloat(inp.value)||0;});
+  cfg.matrix[depart]=Object.assign({},cfg.matrix[depart]||{},row);
+  cfg.bareme=parseFloat(document.getElementById('ik-bareme').value)||0.248;
+  const def=document.getElementById('ik-depart-default').value;
+  if(def)cfg.defaultDepart=def;
+  ikWriteConfig(cfg);
   ikRenderTable();
   showBanner('Configuration sauvegardée !');
 }
 
-function ikRenderConfig(){
-  const{dist,bareme}=ikGetConfig();
-  document.getElementById('ik-bareme').value=bareme;
+function ikAddDepart(){
+  const ville=(prompt('Nom de la ville / du lieu de départ :')||'').trim();
+  if(!ville)return;
+  const cfg=ikGetConfig();
+  if(cfg.departs.some(d=>d.toLowerCase()===ville.toLowerCase())){alert('Ce lieu de départ existe déjà.');return;}
+  cfg.departs.push(ville);
+  cfg.matrix[ville]={};
+  Object.keys(IK_DEFAULT_DIST).forEach(c=>{cfg.matrix[ville][c]=0;});
+  ikWriteConfig(cfg);
+  ikRenderConfig(ville);
+  ikRenderTable();
+  showBanner('Lieu de départ « '+ville+' » ajouté — renseignez les distances puis sauvegardez.');
+}
+
+function ikRemoveDepart(){
+  const cfg=ikGetConfig();
+  const depart=document.getElementById('ik-depart-config').value;
+  if(!depart)return;
+  if(depart===IK_DEFAULT_DEPART){alert('Le lieu de départ « '+IK_DEFAULT_DEPART+' » ne peut pas être supprimé.');return;}
+  if(!confirm('Retirer le lieu de départ « '+depart+' » ?'))return;
+  cfg.departs=cfg.departs.filter(d=>d!==depart);
+  delete cfg.matrix[depart];
+  if(cfg.defaultDepart===depart)cfg.defaultDepart=IK_DEFAULT_DEPART;
+  ikWriteConfig(cfg);
+  ikRows.forEach(r=>{if(r.depart===depart)r.depart=cfg.defaultDepart;});
+  ikSaveRows();
+  ikRenderConfig();
+  ikRenderTable();
+}
+
+function ikRenderConfig(selectDepart){
+  const cfg=ikGetConfig();
+  document.getElementById('ik-bareme').value=cfg.bareme;
+  const selEl=document.getElementById('ik-depart-config');
+  const current=selectDepart||selEl.value||cfg.defaultDepart;
+  selEl.innerHTML=cfg.departs.map(d=>`<option value="${d}"${d===current?' selected':''}>${d}</option>`).join('');
+  const defEl=document.getElementById('ik-depart-default');
+  defEl.innerHTML=cfg.departs.map(d=>`<option value="${d}"${d===cfg.defaultDepart?' selected':''}>${d}</option>`).join('');
+  const depart=selEl.value||IK_DEFAULT_DEPART;
+  const row=cfg.matrix[depart]||{};
   const grid=document.getElementById('ik-config-grid');
-  grid.innerHTML=Object.entries(IK_DEFAULT_DIST).filter(([c])=>c!=='Cuers').map(([creche])=>{
-    const km=dist[creche]!==undefined?dist[creche]:IK_DEFAULT_DIST[creche];
+  grid.innerHTML=Object.keys(IK_DEFAULT_DIST).filter(c=>c!==depart).map(creche=>{
+    const km=row[creche]!==undefined?row[creche]:0;
     return`<div class="ik-config-card"><span class="ik-config-label">${creche}</span><input type="number" class="ik-config-input ik-dist-input" data-creche="${creche}" value="${km}" min="0" step="1" onchange="ikRenderTable()"> <span style="font-size:12px;color:var(--muted)">km</span></div>`;
   }).join('');
 }
 
-function ikGetCurrentDist(){
-  const dist={};
-  document.querySelectorAll('.ik-dist-input').forEach(inp=>{dist[inp.dataset.creche]=parseFloat(inp.value)||0;});
-  return dist;
+// Matrice « en cours d'édition » : la config sauvegardée + les valeurs saisies
+// dans la grille pour le départ actuellement affiché (aperçu live avant sauvegarde).
+function ikGetCurrentMatrix(){
+  const cfg=ikGetConfig();
+  const selEl=document.getElementById('ik-depart-config');
+  const depart=selEl?selEl.value:IK_DEFAULT_DEPART;
+  const row=Object.assign({},cfg.matrix[depart]||{});
+  document.querySelectorAll('.ik-dist-input').forEach(inp=>{row[inp.dataset.creche]=parseFloat(inp.value)||0;});
+  cfg.matrix[depart]=row;
+  return cfg.matrix;
+}
+
+function ikDepartOptions(selected){
+  const cfg=ikGetConfig();
+  const list=cfg.departs.slice();
+  if(selected&&!list.includes(selected))list.push(selected);
+  return list.map(d=>`<option value="${d.replace(/"/g,'&quot;')}"${d===selected?' selected':''}>${d}</option>`).join('');
 }
 
 function ikLocalDate(d){
@@ -4468,7 +4561,8 @@ function ikReadPlanning(yearMonth){
         if(evDate.getMonth()+1!==month||evDate.getFullYear()!==year)return;
         const dateStr=ikLocalDate(evDate);
         const creche=ikDetectCreche(ev.lieu);
-        rows.push({id:`${ev.id}_${dateStr}`,date:dateStr,trajet:creche&&creche!=='Cuers'?`Cuers/${ev.lieu}`:ev.lieu,creche,nbr:2,lieu:ev.lieu,slot:ev.slot,ignored:!creche||creche==='Cuers'});
+        const depart=ikDefaultDepart();
+        rows.push({id:`${ev.id}_${dateStr}`,date:dateStr,depart,trajet:creche&&creche!==depart?`${depart}/${ev.lieu}`:ev.lieu,creche,nbr:2,lieu:ev.lieu,slot:ev.slot,ignored:!creche||creche===depart});
       });
     }
     cursor.setDate(cursor.getDate()+7);
@@ -4477,20 +4571,68 @@ function ikReadPlanning(yearMonth){
   return rows;
 }
 
+function ikDefaultDepart(){return ikGetConfig().defaultDepart||IK_DEFAULT_DEPART;}
+
 function ikReeval(rows){
-  // Réévalue creche et ignored à partir du lieu — corrige les anciennes saisies texte libre
+  // Réévalue départ, crèche et « ignoré » — corrige les anciennes saisies (format pré-multi-départ)
   return rows.map(r=>{
-    const creche=ikDetectCreche(r.lieu||r.trajet.replace('Cuers/',''));
-    const ignored=!creche||creche==='Cuers';
-    const trajet=creche&&!ignored?`Cuers/${r.lieu||creche}`:r.trajet;
-    return Object.assign({},r,{creche,ignored,trajet:r.trajet||trajet});
+    const depart=r.depart||IK_DEFAULT_DEPART;
+    const lieu=r.lieu||(r.trajet||'').split('/').pop()||'';
+    const creche=ikDetectCreche(lieu);
+    const ignored=!creche||creche===depart;
+    const trajet=creche&&!ignored?`${depart}/${lieu||creche}`:(lieu||r.trajet||'');
+    return Object.assign({},r,{depart,lieu,creche,ignored,trajet});
   });
+}
+
+// ---- Personne concernée (un admin peut consulter les frais d'un autre admin) ----
+function ikPersonId(){
+  const sel=document.getElementById('ik-person-select');
+  return(sel&&sel.value)||currentProfile?.id||currentUser?.id||'dir';
+}
+
+function ikPersonName(){
+  const id=ikPersonId();
+  const p=(cacheReferents||[]).find(r=>r.id===id);
+  return p?.name||currentProfile?.name||'';
+}
+
+// Transforme « David Bucari » en « BUCARI David » (format attendu par le modèle FDEPvi)
+function ikFormatEmployeeName(name){
+  const n=(name||'').trim();
+  if(!n)return'BUCARI David';
+  const parts=n.split(/\s+/);
+  if(parts.length<2)return n.toUpperCase();
+  const nom=parts.pop();
+  return nom.toUpperCase()+' '+parts.join(' ');
+}
+
+function ikRowsKey(month){return`ik_rows_${ikPersonId()}_${month}`;}
+
+function ikPersonChanged(){
+  ikLoad();
+}
+
+function ikRenderPersonSelect(){
+  const sel=document.getElementById('ik-person-select');
+  if(!sel)return;
+  const me=currentProfile?.id||'';
+  const refs=(cacheReferents||[]).filter(r=>r.role==='direction'||r.role==='referent');
+  const previous=sel.value;
+  sel.innerHTML=refs.map(r=>{
+    const tag=r.role==='direction'?' 🔑':'';
+    return`<option value="${r.id}">${r.name}${tag}</option>`;
+  }).join('');
+  if(previous&&refs.some(r=>r.id===previous))sel.value=previous;
+  else if(refs.some(r=>r.id===me))sel.value=me;
 }
 
 function ikLoad(){
   const month=document.getElementById('ik-month').value;
   if(!month)return;
-  const saved=JSON.parse(localStorage.getItem(`ik_rows_${month}`)||'null');
+  let saved=JSON.parse(localStorage.getItem(ikRowsKey(month))||'null');
+  // reprise des lignes enregistrées avant l'ajout du sélecteur de personne
+  if(!saved&&ikPersonId()===(currentProfile?.id||'dir'))saved=JSON.parse(localStorage.getItem(`ik_rows_${month}`)||'null');
   if(saved){
     ikRows=ikReeval(saved);  // réévalue à chaque chargement
     ikSaveRows();             // resauvegarde avec les valeurs corrigées
@@ -4504,7 +4646,7 @@ async function ikLoadFromPlanning(){
   const month=document.getElementById('ik-month').value;
   if(!month){alert('Sélectionnez un mois.');return;}
   document.getElementById('ik-load-info').textContent='Chargement depuis Supabase…';
-  const userId=currentProfile?.id||currentUser?.id||'dir';
+  const userId=ikPersonId();
   const[year,monthNum]=month.split('-').map(Number);
   const firstDay=new Date(year,monthNum-1,1);
   const lastDay=new Date(year,monthNum,0);
@@ -4523,13 +4665,15 @@ async function ikLoadFromPlanning(){
       if(evDate.getMonth()+1!==monthNum||evDate.getFullYear()!==year)return;
       const dateStr=ikLocalDate(evDate);
       const creche=ikDetectCreche(ev.lieu);
+      const depart=ikDefaultDepart();
       rows.push({
         id:`${ev.id}_${dateStr}`,
         date:dateStr,
-        trajet:creche&&creche!=='Cuers'?`Cuers/${ev.lieu}`:ev.lieu,
+        depart,
+        trajet:creche&&creche!==depart?`${depart}/${ev.lieu}`:ev.lieu,
         creche,nbr:2,lieu:ev.lieu,
         slot:ev.slot,
-        ignored:!creche||creche==='Cuers'
+        ignored:!creche||creche===depart
       });
     });
     cursor.setDate(cursor.getDate()+7);
@@ -4545,27 +4689,29 @@ async function ikLoadFromPlanning(){
 
 function ikSaveRows(){
   const month=document.getElementById('ik-month').value;
-  if(month)localStorage.setItem(`ik_rows_${month}`,JSON.stringify(ikRows));
+  if(month)localStorage.setItem(ikRowsKey(month),JSON.stringify(ikRows));
 }
 
 function ikRenderTable(){
   const tbody=document.getElementById('ik-tbody');
-  const dist=ikGetCurrentDist();
+  const matrix=ikGetCurrentMatrix();
   const bareme=parseFloat(document.getElementById('ik-bareme').value)||0.248;
   if(!ikRows.length){tbody.innerHTML='';document.getElementById('ik-empty').style.display='block';ikUpdateTotals();return;}
   document.getElementById('ik-empty').style.display='none';
   tbody.innerHTML=ikRows.map((row,idx)=>{
-    const km=row.ignored?0:(dist[row.creche]||0);
+    const km=row.ignored?0:ikKm(row.depart,row.creche,matrix);
     const tKm=row.nbr*km;
     const mont=tKm*bareme;
     const group=row.creche?IK_GROUPS[row.creche]||'—':'—';
     const badge=row.ignored?'<span class="ik-ignored-badge">ignoré</span>':
       group==='Picot 1 - Picot 2'?'<span class="ik-group-badge ik-g1">Picot</span>':
       group==='Brunet'?'<span class="ik-group-badge ik-g2">Brunet</span>':
+      group==='Cuers'?'<span class="ik-group-badge ik-g4">Cuers</span>':
       '<span class="ik-group-badge ik-g3">Ollio/SJ</span>';
     const inp=(f,v,w='120px',t='text')=>`<input type="${t}" value="${String(v).replace(/"/g,'&quot;')}" onchange="ikUpdateRow(${idx},'${f}',this.value)" style="width:${w};padding:4px 7px;border:1.5px solid transparent;border-radius:6px;font-size:12.5px;font-family:inherit;background:transparent" onfocus="this.style.borderColor='var(--koala)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">`;
-    if(row.ignored)return`<tr style="opacity:0.4"><td>${inp('date',row.date,'95px')}</td><td class="ik-ignored">${row.trajet||row.lieu}</td><td colspan="4" style="text-align:center;font-size:12px;color:#bbb;font-style:italic">— Cuers ou lieu inconnu, non comptabilisé —</td><td style="text-align:center">${badge}</td><td><button class="ik-row-del" onclick="ikDeleteRow(${idx})"><i class="ti ti-x"></i></button></td></tr>`;
-    return`<tr><td>${inp('date',row.date,'95px')}</td><td>${inp('trajet',row.trajet,'150px')}</td><td style="text-align:center">${inp('nbr',row.nbr,'50px','number')}</td><td style="text-align:center;font-weight:600">${km}</td><td class="ik-val">${tKm}</td><td class="ik-val">${mont.toFixed(2)} €</td><td style="text-align:center">${badge}</td><td><button class="ik-row-del" onclick="ikDeleteRow(${idx})"><i class="ti ti-x"></i></button></td></tr>`;
+    const departSel=`<select onchange="ikUpdateRow(${idx},'depart',this.value)" style="width:130px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12.5px;font-family:inherit;background:#fff">${ikDepartOptions(row.depart||IK_DEFAULT_DEPART)}</select>`;
+    if(row.ignored)return`<tr style="opacity:0.4"><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td class="ik-ignored">${inp('lieu',row.lieu||row.trajet||'','140px')}</td><td colspan="4" style="text-align:center;font-size:12px;color:#bbb;font-style:italic">— même lieu que le départ ou destination inconnue, non comptabilisé —</td><td style="text-align:center">${badge}</td><td><button class="ik-row-del" onclick="ikDeleteRow(${idx})"><i class="ti ti-x"></i></button></td></tr>`;
+    return`<tr><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td>${inp('lieu',row.lieu||row.creche||'','140px')}</td><td style="text-align:center">${inp('nbr',row.nbr,'50px','number')}</td><td style="text-align:center;font-weight:600">${km}</td><td class="ik-val">${tKm}</td><td class="ik-val">${mont.toFixed(2)} €</td><td style="text-align:center">${badge}</td><td><button class="ik-row-del" onclick="ikDeleteRow(${idx})"><i class="ti ti-x"></i></button></td></tr>`;
   }).join('');
   ikUpdateTotals();
 }
@@ -4573,10 +4719,16 @@ function ikRenderTable(){
 function ikUpdateRow(idx,field,value){
   if(field==='nbr')ikRows[idx][field]=parseInt(value)||1;
   else ikRows[idx][field]=value;
-  if(field==='trajet'){
-    const creche=ikDetectCreche(value.replace('Cuers/',''));
-    ikRows[idx].creche=creche;
-    ikRows[idx].ignored=!creche||creche==='Cuers';
+  if(field==='lieu'||field==='depart'||field==='trajet'){
+    const row=ikRows[idx];
+    const depart=row.depart||IK_DEFAULT_DEPART;
+    const lieu=field==='trajet'?String(value).split('/').pop():(row.lieu||'');
+    row.depart=depart;
+    row.lieu=lieu;
+    const creche=ikDetectCreche(lieu);
+    row.creche=creche;
+    row.ignored=!creche||creche===depart;
+    row.trajet=row.ignored?(lieu||''):`${depart}/${lieu||creche}`;
   }
   ikSaveRows();
   ikRenderTable();
@@ -4586,33 +4738,38 @@ function ikDeleteRow(idx){ikRows.splice(idx,1);ikSaveRows();ikRenderTable();}
 
 function ikAddRow(){
   const month=document.getElementById('ik-month').value;
-  ikRows.push({id:Date.now().toString(),date:month?month+'-01':ipDateToLocalISO(new Date()),trajet:'Cuers/',creche:null,nbr:2,lieu:'',slot:0,ignored:false});
+  const depart=ikDefaultDepart();
+  ikRows.push({id:Date.now().toString(),date:month?month+'-01':ipDateToLocalISO(new Date()),depart,trajet:'',creche:null,nbr:2,lieu:'',slot:0,ignored:true});
   ikSaveRows();ikRenderTable();
 }
 
 function ikUpdateTotals(){
-  const dist=ikGetCurrentDist();
+  const matrix=ikGetCurrentMatrix();
   const bareme=parseFloat(document.getElementById('ik-bareme').value)||0.248;
-  let tKm=0,tEur=0,tP=0,tB=0,tO=0;
+  let tKm=0,tEur=0,tP=0,tB=0,tO=0,tC=0;
   ikRows.filter(r=>!r.ignored).forEach(r=>{
-    const km=dist[r.creche]||0,tk=r.nbr*km,m=tk*bareme;
+    const km=ikKm(r.depart,r.creche,matrix),tk=r.nbr*km,m=tk*bareme;
     tKm+=tk;tEur+=m;
     const g=IK_GROUPS[r.creche];
     if(g==='Picot 1 - Picot 2')tP+=m;
     else if(g==='Brunet')tB+=m;
     else if(g==='Ollioules - St Jean')tO+=m;
+    else if(g==='Cuers')tC+=m;
   });
   document.getElementById('ik-tot-km').textContent=tKm;
   document.getElementById('ik-tot-eur').textContent=tEur.toFixed(2).replace('.',',');
   document.getElementById('ik-tot-picot').textContent=tP.toFixed(2).replace('.',',')+' €';
   document.getElementById('ik-tot-brunet').textContent=tB.toFixed(2).replace('.',',')+' €';
   document.getElementById('ik-tot-osj').textContent=tO.toFixed(2).replace('.',',')+' €';
+  const cuersEl=document.getElementById('ik-tot-cuers');
+  if(cuersEl)cuersEl.textContent=tC.toFixed(2).replace('.',',')+' €';
 }
 
 function ikInit(){
   const now=new Date();
   const month=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   if(!document.getElementById('ik-month').value)document.getElementById('ik-month').value=month;
+  ikRenderPersonSelect();
   ikRenderConfig();
   ikLoad();
 }
@@ -4844,7 +5001,7 @@ async function ikGenerate(){
   if(!month){alert('Sélectionnez un mois.');return;}
   const active=ikRows.filter(r=>!r.ignored);
   if(!active.length){alert('Aucun trajet à exporter.');return;}
-  const dist=ikGetCurrentDist();
+  const matrix=ikGetCurrentMatrix();
   const bareme=parseFloat(document.getElementById('ik-bareme').value)||0.248;
   const[year,monthNum]=month.split('-').map(Number);
   const monthNames=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
@@ -4855,21 +5012,25 @@ async function ikGenerate(){
   const sheetsData={
     'Picot 1 - Picot 2':active.filter(r=>IK_GROUPS[r.creche]==='Picot 1 - Picot 2'),
     'Brunet':active.filter(r=>IK_GROUPS[r.creche]==='Brunet'),
-    'Ollioules - St Jean':active.filter(r=>IK_GROUPS[r.creche]==='Ollioules - St Jean')
+    'Ollioules - St Jean':active.filter(r=>IK_GROUPS[r.creche]==='Ollioules - St Jean'),
+    'Cuers':active.filter(r=>IK_GROUPS[r.creche]==='Cuers')
   };
   // Un groupe sans aucun trajet ce mois-là n'a pas d'onglet (évite une feuille FDEPvi vide).
   const groupsData=Object.entries(sheetsData).filter(([,rows])=>rows.length>0).map(([name,rows])=>({
     name,
-    rows: rows.map(r=>({date:new Date(r.date+'T12:00:00'), trajet:r.trajet, nbr:r.nbr, km:dist[r.creche]||0}))
+    rows: rows.map(r=>({date:new Date(r.date+'T12:00:00'), trajet:r.trajet||`${r.depart||IK_DEFAULT_DEPART}/${r.lieu||r.creche}`, nbr:r.nbr, km:ikKm(r.depart,r.creche,matrix)}))
   }));
   if(!groupsData.length){alert('Aucun trajet à exporter.');return;}
 
+  const employeeName=ikFormatEmployeeName(ikPersonName());
+  const fileSuffix=employeeName.split(' ')[0].replace(/[^A-Za-zÀ-ÿ-]/g,'')||'FCS';
+
   try{
     showBanner('Génération du fichier Excel…');
-    const blob=await ikBuildWorkbookBlob(groupsData, bareme, monthName, firstDate, lastDate, 'BUCARI David');
+    const blob=await ikBuildWorkbookBlob(groupsData, bareme, monthName, firstDate, lastDate, employeeName);
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
-    a.href=url;a.download=`JUSTIF_IK_MENSUEL_FCS_${monthName.toLowerCase()}_${year}.xlsx`;a.click();
+    a.href=url;a.download=`JUSTIF_IK_MENSUEL_${fileSuffix}_${monthName.toLowerCase()}_${year}.xlsx`;a.click();
     URL.revokeObjectURL(url);
     showBanner(`Fiche IK ${monthName} ${year} générée ✅`);
   }catch(e){
@@ -5089,13 +5250,25 @@ function fpExportExcel(){
   const ws=XLSX.utils.aoa_to_sheet(wsData);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Frais pro');
-  XLSX.writeFile(wb,'frais_pro_'+month+'.xlsx');
+  const slug=fpSelectedPersonName().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
+  XLSX.writeFile(wb,'frais_pro_'+(slug?slug+'_':'')+month+'.xlsx');
   showBanner('Export Excel téléchargé !');
+}
+
+// Nom de la personne affichée dans Frais pro (une direction peut consulter une autre personne)
+function fpSelectedPersonName(){
+  const sel=document.getElementById('fp-referent-select');
+  if(isDirection&&sel&&sel.value){
+    const p=(cacheReferents||[]).find(r=>r.id===sel.value);
+    if(p)return p.name;
+  }
+  if(isDirection&&sel&&!sel.value)return'Toutes les personnes';
+  return currentProfile?.name||'';
 }
 
 function fpSendEmail(){
   const month=document.getElementById('fp-month').value;
-  const name=currentProfile?.name||'';
+  const name=fpSelectedPersonName();
   let body='Récapitulatif des frais professionnels — '+month+'\nDe : '+name+'\n\n';
   if(fpRows.length){
     fpRows.forEach(r=>{body+='- '+new Date(r.expense_date+'T12:00:00').toLocaleDateString('fr-FR')+' | '+(FP_CATEGORIES[r.category]||r.category)+' | '+(r.description||'')+' | '+Number(r.amount).toFixed(2)+' € | '+(r.regle?('Réglé'+(r.regle_le?' le '+new Date(r.regle_le+'T12:00:00').toLocaleDateString('fr-FR'):'')):'En attente')+'\n';});
