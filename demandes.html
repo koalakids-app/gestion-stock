@@ -694,7 +694,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <th style="text-align:right">Total km</th>
             <th style="text-align:right">Montant</th>
             <th style="text-align:center">Groupe</th>
-            <th style="width:36px"></th>
+            <th style="width:96px"></th>
           </tr>
         </thead>
         <tbody id="ik-tbody"></tbody>
@@ -4766,6 +4766,7 @@ function ikLoad(){
   if(!saved&&ikPersonId()===(currentProfile?.id||'dir'))saved=JSON.parse(localStorage.getItem(`ik_rows_${month}`)||'null');
   if(saved){
     ikRows=ikReeval(saved);
+    ikSortRows();
     ikSaveRows();
     ikRenderTable();
     ikSetLoadInfo('sauvegardé');
@@ -4841,12 +4842,17 @@ function ikRenderTable(){
     // séparateur visuel entre journées, pour lire les chaînes multi-sites
     const sep=(lastDate!==null&&row.date!==lastDate)?' style="border-top:2px solid var(--border)"':'';
     lastDate=row.date;
-    if(row.ignored)return`<tr${sep?' style="opacity:0.4;border-top:2px solid var(--border)"':' style="opacity:0.4"'}><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td class="ik-ignored">${destInp}</td><td colspan="4" style="text-align:center;font-size:12px;color:#bbb;font-style:italic">— destination vide ou identique au départ, non comptabilisé —</td><td style="text-align:center">${badge}</td><td><button class="ik-row-del" onclick="ikDeleteRow(${idx})"><i class="ti ti-x"></i></button></td></tr>`;
+    // flèches actives seulement à l'intérieur d'une même journée
+    const canUp=idx>0&&ikRows[idx-1].date===row.date;
+    const canDown=idx<ikRows.length-1&&ikRows[idx+1].date===row.date;
+    const arrow=(dir,ok,icon,titre)=>`<button class="ik-row-del" ${ok?`onclick="ikMoveRow(${idx},${dir})" title="${titre}"`:'disabled title="Première ou dernière étape de la journée"'} style="${ok?'':'opacity:0.25;cursor:default'}"><i class="ti ti-${icon}" style="font-size:12px"></i></button>`;
+    const actions=`<div style="display:flex;gap:2px;align-items:center">${arrow(-1,canUp,'chevron-up','Monter dans la journée')}${arrow(1,canDown,'chevron-down','Descendre dans la journée')}<button class="ik-row-del" onclick="ikDeleteRow(${idx})" title="Supprimer"><i class="ti ti-x"></i></button></div>`;
+    if(row.ignored)return`<tr${sep?' style="opacity:0.4;border-top:2px solid var(--border)"':' style="opacity:0.4"'}><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td class="ik-ignored">${destInp}</td><td colspan="4" style="text-align:center;font-size:12px;color:#bbb;font-style:italic">— destination vide ou identique au départ, non comptabilisé —</td><td style="text-align:center">${badge}</td><td>${actions}</td></tr>`;
     // lieu libre (hors liste) : km saisissable + bouton d'enregistrement du lieu
     const kmCell=row.creche
       ?`<td style="text-align:center;font-weight:600">${km}${km>0?'':' <span title="Distance non renseignée entre ces deux lieux — complétez la grille des distances" style="color:var(--orange);font-size:11px">⚠️</span>'}</td>`
       :`<td style="text-align:center">${inp('km',row.km||0,'55px','number')}${Number(row.km)>0?` <button class="ik-row-del" title="Enregistrer ce lieu dans la liste" onclick="ikSaveRowLieu(${idx})"><i class="ti ti-map-pin-plus" style="font-size:12px"></i></button>`:' <span title="Kilométrage à saisir" style="color:var(--orange);font-size:11px">⚠️</span>'}</td>`;
-    return`<tr${sep}><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td>${destInp}</td><td style="text-align:center">${inp('nbr',row.nbr,'50px','number')}</td>${kmCell}<td class="ik-val">${tKm}</td><td class="ik-val">${mont.toFixed(2)} €</td><td style="text-align:center">${badge}</td><td><button class="ik-row-del" onclick="ikDeleteRow(${idx})"><i class="ti ti-x"></i></button></td></tr>`;
+    return`<tr${sep}><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td>${destInp}</td><td style="text-align:center">${inp('nbr',row.nbr,'50px','number')}</td>${kmCell}<td class="ik-val">${tKm}</td><td class="ik-val">${mont.toFixed(2)} €</td><td style="text-align:center">${badge}</td><td>${actions}</td></tr>`;
   }).join('');
   ikUpdateTotals();
 }
@@ -4862,15 +4868,45 @@ function ikUpdateRow(idx,field,value){
     const rebuilt=ikMakeRow(row.id,row.date,depart,lieu,row.nbr,row.slot);
     Object.assign(row,rebuilt,{km:row.km||0});
   }
+  if(field==='date')ikSortRows();
   ikSaveRows();
   ikRenderTable();
 }
 
-function ikDeleteRow(idx){ikRows.splice(idx,1);ikSaveRows();ikRenderTable();}
+function ikDeleteRow(idx){ikRows.splice(idx,1);ikRenumberSlots();ikSaveRows();ikRenderTable();}
+
+// Renumérote les étapes (slot) de 0..n dans chaque journée, d'après l'ordre courant du tableau.
+function ikRenumberSlots(){
+  let last=null,n=0;
+  ikRows.forEach(r=>{if(r.date!==last){last=r.date;n=0;}r.slot=n++;});
+}
+
+// Remet les lignes dans l'ordre chronologique, en conservant l'ordre des étapes d'une même journée.
+function ikSortRows(){
+  ikRows=ikRows.map((r,i)=>Object.assign(r,{_i:i}))
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date))||(a.slot||0)-(b.slot||0)||a._i-b._i);
+  ikRows.forEach(r=>{delete r._i;});
+  ikRenumberSlots();
+}
+
+// Déplace une ligne d'un cran, uniquement à l'intérieur de sa journée
+// (l'ordre chronologique entre journées reste garanti par le tri).
+function ikMoveRow(idx,dir){
+  const j=idx+dir;
+  if(j<0||j>=ikRows.length)return;
+  if(ikRows[j].date!==ikRows[idx].date)return;
+  const tmp=ikRows[idx];ikRows[idx]=ikRows[j];ikRows[j]=tmp;
+  ikRenumberSlots();
+  ikSaveRows();ikRenderTable();
+}
 
 function ikAddRow(){
   const month=document.getElementById('ik-month').value;
-  ikRows.push(ikMakeRow(Date.now().toString(),month?month+'-01':ipDateToLocalISO(new Date()),ikDefaultDepart(),'',1,0));
+  const derniere=ikRows.length?ikRows[ikRows.length-1].date:null;
+  const date=derniere||(month?month+'-01':ipDateToLocalISO(new Date()));
+  // slot élevé : la nouvelle ligne se place en dernière étape de sa journée, puis le tri la replace
+  ikRows.push(ikMakeRow(Date.now().toString(),date,ikDefaultDepart(),'',1,999));
+  ikSortRows();
   ikSaveRows();ikRenderTable();
 }
 
