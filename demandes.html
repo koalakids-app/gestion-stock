@@ -632,6 +632,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <span class="section-title"><i class="ti ti-car" style="color:var(--koala)"></i> Frais kilométriques</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-sm" onclick="ikAddRow()"><i class="ti ti-plus"></i> Ajouter une ligne</button>
+        <button class="btn-sm" onclick="ikRechainPrompt()"><i class="ti ti-route"></i> Rechaîner une journée</button>
         <button class="btn-primary" onclick="ikGenerate()"><i class="ti ti-file-spreadsheet"></i> Générer Excel</button>
       </div>
     </div>
@@ -653,6 +654,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn-sm" onclick="ikAddDepart()"><i class="ti ti-plus"></i> Ville de départ</button>
         <button class="btn-sm" onclick="ikRemoveDepart()"><i class="ti ti-trash" style="font-size:12px"></i> Retirer</button>
       </div>
+      <div id="ik-estim-warn" style="display:none;background:var(--orange-light);color:var(--orange-dark);border:1.5px solid var(--orange);border-radius:8px;padding:8px 12px;font-size:12.5px;margin-bottom:10px;line-height:1.45">
+        <strong>⚠️ Distances inter-sites pré-remplies à titre indicatif.</strong> Seules les distances depuis Cuers proviennent de ta configuration. Les autres sont des estimations : vérifie-les et corrige-les avant d'utiliser l'export comme justificatif, puis clique sur « Sauvegarder config » pour faire disparaître ce message.
+      </div>
+      <datalist id="ik-lieux-list"></datalist>
       <div class="ik-config-grid" id="ik-config-grid"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
         <label style="font-size:13px;font-weight:600;color:var(--koala)">Départ par défaut :</label>
@@ -4390,77 +4395,146 @@ async function importBackup(event){
 
 // FRAIS IK
 // ============================================================
+// Sites du réseau (crèches). Les distances par défaut sont celles depuis Cuers.
 const IK_DEFAULT_DIST={'Brunet':22,'Cuers':0,'Ollioules':30,'St Jean':20,'Picot 1':25,'Picot 2':25};
+const IK_SITES=Object.keys(IK_DEFAULT_DIST);
 const IK_GROUPS={'Picot 1':'Picot 1 - Picot 2','Picot 2':'Picot 1 - Picot 2','Brunet':'Brunet','Ollioules':'Ollioules - St Jean','St Jean':'Ollioules - St Jean','Cuers':'Cuers'};
+const IK_GROUP_ORDER=['Picot 1 - Picot 2','Brunet','Ollioules - St Jean','Cuers'];
 const IK_DEFAULT_DEPART='Cuers';
+
+// Distances inter-sites PRÉ-REMPLIES À TITRE INDICATIF (estimations à vérifier
+// et à corriger dans l'onglet — elles n'ont aucune valeur justificative en l'état).
+const IK_ESTIM_INTER={
+  'Brunet|Ollioules':9,'Brunet|Picot 1':5,'Brunet|Picot 2':5,'Brunet|St Jean':4,
+  'Ollioules|Picot 1':7,'Ollioules|Picot 2':7,'Ollioules|St Jean':11,
+  'Picot 1|Picot 2':2,'Picot 1|St Jean':6,'Picot 2|St Jean':6
+};
+
 let ikRows=[];
 
-// Config v2 : matrice de distances { départ : { crèche : km } }, liste de villes de départ,
-// départ par défaut et barème. Migration automatique de l'ancien format (dist plat = depuis Cuers).
+function ikPairKey(a,b){return[a,b].sort().join('|');}
+
+// Matrice complète par défaut : ligne Cuers = IK_DEFAULT_DIST, le reste = estimations.
+function ikBuildDefaultMatrix(){
+  const m={};
+  IK_SITES.forEach(a=>{
+    m[a]={};
+    IK_SITES.forEach(b=>{
+      if(a===b){m[a][b]=0;return;}
+      if(a==='Cuers'){m[a][b]=IK_DEFAULT_DIST[b]||0;return;}
+      if(b==='Cuers'){m[a][b]=IK_DEFAULT_DIST[a]||0;return;}
+      m[a][b]=IK_ESTIM_INTER[ikPairKey(a,b)]||0;
+    });
+  });
+  return m;
+}
+
+// Config : { lieux:[], matrix:{A:{B:km}}, defaultDepart, bareme, estimReviewed:bool }
+// Migre les deux formats antérieurs (dist plat depuis Cuers, puis departs+matrix).
 function ikGetConfig(){
   const saved=JSON.parse(localStorage.getItem('ik_config')||'{}');
-  let matrix=saved.matrix;
-  if(!matrix){
-    // migration : ancien format {dist:{Brunet:22,...}} = distances depuis Cuers
-    matrix={};
-    matrix[IK_DEFAULT_DEPART]=Object.assign({},IK_DEFAULT_DIST,saved.dist||{});
+  const matrix=ikBuildDefaultMatrix();
+  if(saved.dist&&!saved.matrix){
+    // format v1 : distances plates depuis Cuers
+    Object.entries(saved.dist).forEach(([c,km])=>{
+      if(matrix['Cuers'])matrix['Cuers'][c]=km;
+      if(matrix[c])matrix[c]['Cuers']=km;
+    });
   }
-  if(!matrix[IK_DEFAULT_DEPART])matrix[IK_DEFAULT_DEPART]=Object.assign({},IK_DEFAULT_DIST);
-  const departs=(saved.departs&&saved.departs.length?saved.departs:Object.keys(matrix)).slice();
-  Object.keys(matrix).forEach(d=>{if(!departs.includes(d))departs.push(d);});
-  const defaultDepart=departs.includes(saved.defaultDepart)?saved.defaultDepart:IK_DEFAULT_DEPART;
-  return{matrix,departs,defaultDepart,bareme:saved.bareme||0.248};
+  if(saved.matrix){
+    Object.entries(saved.matrix).forEach(([a,row])=>{
+      matrix[a]=Object.assign({},matrix[a]||{},row);
+    });
+  }
+  const lieux=IK_SITES.slice();
+  const extra=(saved.lieux||saved.departs||[]).concat(Object.keys(saved.matrix||{}));
+  extra.forEach(l=>{if(l&&!lieux.includes(l))lieux.push(l);});
+  lieux.forEach(l=>{if(!matrix[l])matrix[l]={};});
+  const defaultDepart=lieux.includes(saved.defaultDepart)?saved.defaultDepart:IK_DEFAULT_DEPART;
+  return{lieux,matrix,defaultDepart,bareme:saved.bareme||0.248,estimReviewed:!!saved.estimReviewed};
 }
 
 function ikWriteConfig(cfg){localStorage.setItem('ik_config',JSON.stringify(cfg));}
 
-// km d'un trajet départ -> crèche (0 si inconnu ou identique)
-function ikKm(depart,creche,matrix){
-  if(!creche)return 0;
+function ikDefaultDepart(){return ikGetConfig().defaultDepart||IK_DEFAULT_DEPART;}
+
+// km entre deux lieux connus (matrice symétrique : on retient la valeur renseignée)
+function ikKm(a,b,matrix){
+  if(!a||!b||a===b)return 0;
   const m=matrix||ikGetConfig().matrix;
-  const d=depart||IK_DEFAULT_DEPART;
-  if(d===creche)return 0;
-  const row=m[d]||{};
-  const v=row[creche];
-  return v!==undefined?v:0;
+  const ab=(m[a]||{})[b];
+  if(ab!==undefined&&ab!==null&&ab!=='')return Number(ab)||0;
+  const ba=(m[b]||{})[a];
+  if(ba!==undefined&&ba!==null&&ba!=='')return Number(ba)||0;
+  return 0;
 }
+
+// Kilométrage d'une ligne : matrice si les deux lieux sont connus, sinon saisie manuelle.
+function ikRowKm(row,matrix){
+  if(row.ignored)return 0;
+  if(row.creche)return ikKm(row.depart||IK_DEFAULT_DEPART,row.creche,matrix);
+  return Number(row.km)||0;
+}
+
+// Onglet Excel d'une ligne : groupe de la destination, sinon groupe du site de départ,
+// sinon rattachement à Cuers (site de rattachement administratif).
+function ikRowGroup(row){
+  const dep=row.depart;
+  const depGroup=(dep&&dep!=='Cuers'&&IK_GROUPS[dep])?IK_GROUPS[dep]:null;
+  // trajet de retour vers le site de rattachement : on garde l'onglet du site quitté,
+  // pour qu'une journée chaînée ne soit pas éclatée sur trois onglets.
+  if(row.creche==='Cuers'&&depGroup)return depGroup;
+  if(row.creche&&IK_GROUPS[row.creche])return IK_GROUPS[row.creche];
+  if(depGroup)return depGroup;
+  return 'Cuers';
+}
+
+// ---------------- Configuration des lieux et distances ----------------
 
 function ikSaveConfig(){
   const cfg=ikGetConfig();
   const depart=document.getElementById('ik-depart-config').value||IK_DEFAULT_DEPART;
-  const row={};
-  document.querySelectorAll('.ik-dist-input').forEach(inp=>{row[inp.dataset.creche]=parseFloat(inp.value)||0;});
-  cfg.matrix[depart]=Object.assign({},cfg.matrix[depart]||{},row);
+  const row=Object.assign({},cfg.matrix[depart]||{});
+  document.querySelectorAll('.ik-dist-input').forEach(inp=>{
+    const km=parseFloat(inp.value)||0;
+    const dest=inp.dataset.creche;
+    row[dest]=km;
+    if(!cfg.matrix[dest])cfg.matrix[dest]={};
+    cfg.matrix[dest][depart]=km; // matrice symétrique
+  });
+  cfg.matrix[depart]=row;
   cfg.bareme=parseFloat(document.getElementById('ik-bareme').value)||0.248;
   const def=document.getElementById('ik-depart-default').value;
   if(def)cfg.defaultDepart=def;
+  cfg.estimReviewed=true;
   ikWriteConfig(cfg);
+  ikRenderConfig();
   ikRenderTable();
   showBanner('Configuration sauvegardée !');
 }
 
 function ikAddDepart(){
-  const ville=(prompt('Nom de la ville / du lieu de départ :')||'').trim();
+  const ville=(prompt('Nom du lieu à ajouter (ville, centre de formation, PMI…) :')||'').trim();
   if(!ville)return;
   const cfg=ikGetConfig();
-  if(cfg.departs.some(d=>d.toLowerCase()===ville.toLowerCase())){alert('Ce lieu de départ existe déjà.');return;}
-  cfg.departs.push(ville);
+  if(cfg.lieux.some(d=>d.toLowerCase()===ville.toLowerCase())){alert('Ce lieu existe déjà.');return;}
+  cfg.lieux.push(ville);
   cfg.matrix[ville]={};
-  Object.keys(IK_DEFAULT_DIST).forEach(c=>{cfg.matrix[ville][c]=0;});
   ikWriteConfig(cfg);
   ikRenderConfig(ville);
   ikRenderTable();
-  showBanner('Lieu de départ « '+ville+' » ajouté — renseignez les distances puis sauvegardez.');
+  showBanner('Lieu « '+ville+' » ajouté — renseignez ses distances puis sauvegardez.');
 }
 
 function ikRemoveDepart(){
   const cfg=ikGetConfig();
   const depart=document.getElementById('ik-depart-config').value;
   if(!depart)return;
-  if(depart===IK_DEFAULT_DEPART){alert('Le lieu de départ « '+IK_DEFAULT_DEPART+' » ne peut pas être supprimé.');return;}
-  if(!confirm('Retirer le lieu de départ « '+depart+' » ?'))return;
-  cfg.departs=cfg.departs.filter(d=>d!==depart);
+  if(IK_SITES.includes(depart)){alert('Les crèches du réseau ne peuvent pas être supprimées de la liste des lieux.');return;}
+  if(!confirm('Retirer le lieu « '+depart+' » ?'))return;
+  cfg.lieux=cfg.lieux.filter(d=>d!==depart);
   delete cfg.matrix[depart];
+  Object.values(cfg.matrix).forEach(row=>{delete row[depart];});
   if(cfg.defaultDepart===depart)cfg.defaultDepart=IK_DEFAULT_DEPART;
   ikWriteConfig(cfg);
   ikRows.forEach(r=>{if(r.depart===depart)r.depart=cfg.defaultDepart;});
@@ -4469,38 +4543,67 @@ function ikRemoveDepart(){
   ikRenderTable();
 }
 
+// Enregistre un lieu saisi librement sur une ligne, avec ses km, dans la liste des lieux.
+function ikSaveRowLieu(idx){
+  const row=ikRows[idx];
+  if(!row||!row.lieu)return;
+  const cfg=ikGetConfig();
+  if(cfg.lieux.some(l=>l.toLowerCase()===row.lieu.toLowerCase())){alert('Ce lieu est déjà enregistré.');return;}
+  const depart=row.depart||IK_DEFAULT_DEPART;
+  const km=Number(row.km)||0;
+  cfg.lieux.push(row.lieu);
+  cfg.matrix[row.lieu]={};
+  cfg.matrix[row.lieu][depart]=km;
+  if(!cfg.matrix[depart])cfg.matrix[depart]={};
+  cfg.matrix[depart][row.lieu]=km;
+  ikWriteConfig(cfg);
+  ikRows.forEach(r=>{if(r.lieu===row.lieu)r.creche=row.lieu;});
+  ikSaveRows();
+  ikRenderConfig();
+  ikRenderTable();
+  showBanner('Lieu « '+row.lieu+' » enregistré ('+km+' km depuis '+depart+').');
+}
+
 function ikRenderConfig(selectDepart){
   const cfg=ikGetConfig();
   document.getElementById('ik-bareme').value=cfg.bareme;
   const selEl=document.getElementById('ik-depart-config');
   const current=selectDepart||selEl.value||cfg.defaultDepart;
-  selEl.innerHTML=cfg.departs.map(d=>`<option value="${d}"${d===current?' selected':''}>${d}</option>`).join('');
+  selEl.innerHTML=cfg.lieux.map(d=>`<option value="${d}"${d===current?' selected':''}>${d}</option>`).join('');
   const defEl=document.getElementById('ik-depart-default');
-  defEl.innerHTML=cfg.departs.map(d=>`<option value="${d}"${d===cfg.defaultDepart?' selected':''}>${d}</option>`).join('');
+  defEl.innerHTML=cfg.lieux.map(d=>`<option value="${d}"${d===cfg.defaultDepart?' selected':''}>${d}</option>`).join('');
   const depart=selEl.value||IK_DEFAULT_DEPART;
   const row=cfg.matrix[depart]||{};
   const grid=document.getElementById('ik-config-grid');
-  grid.innerHTML=Object.keys(IK_DEFAULT_DIST).filter(c=>c!==depart).map(creche=>{
-    const km=row[creche]!==undefined?row[creche]:0;
-    return`<div class="ik-config-card"><span class="ik-config-label">${creche}</span><input type="number" class="ik-config-input ik-dist-input" data-creche="${creche}" value="${km}" min="0" step="1" onchange="ikRenderTable()"> <span style="font-size:12px;color:var(--muted)">km</span></div>`;
+  grid.innerHTML=cfg.lieux.filter(c=>c!==depart).map(lieu=>{
+    const km=ikKm(depart,lieu,cfg.matrix);
+    return`<div class="ik-config-card"><span class="ik-config-label">${lieu}</span><input type="number" class="ik-config-input ik-dist-input" data-creche="${lieu}" value="${km}" min="0" step="1" onchange="ikRenderTable()"> <span style="font-size:12px;color:var(--muted)">km</span></div>`;
   }).join('');
+  const warn=document.getElementById('ik-estim-warn');
+  if(warn)warn.style.display=cfg.estimReviewed?'none':'';
+  const dl=document.getElementById('ik-lieux-list');
+  if(dl)dl.innerHTML=cfg.lieux.map(l=>`<option value="${l.replace(/"/g,'&quot;')}"></option>`).join('');
 }
 
-// Matrice « en cours d'édition » : la config sauvegardée + les valeurs saisies
-// dans la grille pour le départ actuellement affiché (aperçu live avant sauvegarde).
+// Matrice « en cours d'édition » : config sauvegardée + valeurs saisies dans la grille.
 function ikGetCurrentMatrix(){
   const cfg=ikGetConfig();
   const selEl=document.getElementById('ik-depart-config');
   const depart=selEl?selEl.value:IK_DEFAULT_DEPART;
   const row=Object.assign({},cfg.matrix[depart]||{});
-  document.querySelectorAll('.ik-dist-input').forEach(inp=>{row[inp.dataset.creche]=parseFloat(inp.value)||0;});
+  document.querySelectorAll('.ik-dist-input').forEach(inp=>{
+    const km=parseFloat(inp.value)||0;
+    row[inp.dataset.creche]=km;
+    if(!cfg.matrix[inp.dataset.creche])cfg.matrix[inp.dataset.creche]={};
+    cfg.matrix[inp.dataset.creche][depart]=km;
+  });
   cfg.matrix[depart]=row;
   return cfg.matrix;
 }
 
 function ikDepartOptions(selected){
   const cfg=ikGetConfig();
-  const list=cfg.departs.slice();
+  const list=cfg.lieux.slice();
   if(selected&&!list.includes(selected))list.push(selected);
   return list.map(d=>`<option value="${d.replace(/"/g,'&quot;')}"${d===selected?' selected':''}>${d}</option>`).join('');
 }
@@ -4520,17 +4623,16 @@ const IK_ALIASES={
   'cuers':'Cuers'
 };
 
+// Reconnaît un lieu connu (crèche du réseau OU lieu ajouté par l'utilisateur).
+// Retourne null si le lieu est libre : la ligne demandera alors une saisie de km.
 function ikDetectCreche(lieu){
   if(!lieu)return null;
-  const l=lieu.trim().toLowerCase();
-  const known=Object.keys(IK_DEFAULT_DIST);
-  // 1. Correspondance exacte
+  const l=String(lieu).trim().toLowerCase();
+  if(!l)return null;
+  const known=ikGetConfig().lieux;
   for(const c of known){if(l===c.toLowerCase())return c;}
-  // 2. Alias explicites (exact)
   for(const[alias,creche] of Object.entries(IK_ALIASES)){if(l===alias)return creche;}
-  // 3. Alias explicites (inclusion)
   for(const[alias,creche] of Object.entries(IK_ALIASES)){if(l.includes(alias))return creche;}
-  // 4. Inclusion clé standard
   for(const c of known){if(l.includes(c.toLowerCase()))return c;}
   return null;
 }
@@ -4546,46 +4648,81 @@ function ikReadPlanning(yearMonth){
   cursor.setDate(cursor.getDate()-(dow===0?6:dow-1));
   const checkedKeys=new Set();
   while(cursor<=lastDay){
-    const keyDate=ipDateToLocalISO(cursor);  // cohérent avec weekStart() — version corrigée, sans décalage UTC
+    const keyDate=ipDateToLocalISO(cursor);
     const key=`events_${keyDate}_${userId}`;
     if(!checkedKeys.has(key)){
       checkedKeys.add(key);
       const events=JSON.parse(localStorage.getItem(key)||'[]');
       events.forEach(ev=>{
         if(ev.type==='absent'||ev.type==='reunion')return;
-        // Reconstruire la date locale du lundi à partir de keyDate (string YYYY-MM-DD)
-        // pour éviter tout décalage UTC. On parse les composantes directement.
-        // keyDate = clé UTC (ex: 2026-06-14 pour le vrai lundi 15/06 en UTC+2)
-        // On repart du curseur local pour calculer la vraie date
         const evDate=new Date(cursor.getFullYear(),cursor.getMonth(),cursor.getDate()+ev.day);
         if(evDate.getMonth()+1!==month||evDate.getFullYear()!==year)return;
-        const dateStr=ikLocalDate(evDate);
-        const creche=ikDetectCreche(ev.lieu);
-        const depart=ikDefaultDepart();
-        rows.push({id:`${ev.id}_${dateStr}`,date:dateStr,depart,trajet:creche&&creche!==depart?`${depart}/${ev.lieu}`:ev.lieu,creche,nbr:2,lieu:ev.lieu,slot:ev.slot,ignored:!creche||creche===depart});
+        rows.push({id:`${ev.id}_${ikLocalDate(evDate)}`,date:ikLocalDate(evDate),lieu:ev.lieu,slot:ev.slot});
       });
     }
     cursor.setDate(cursor.getDate()+7);
   }
-  rows.sort((a,b)=>a.date.localeCompare(b.date)||a.slot-b.slot);
-  return rows;
+  return ikChainDays(rows);
 }
 
-function ikDefaultDepart(){return ikGetConfig().defaultDepart||IK_DEFAULT_DEPART;}
+// ---------------- Chaînage des journées multi-sites ----------------
+// Une journée à un seul site => aller-retour (2 trajets).
+// Une journée à plusieurs sites => chaîne réelle : départ → site 1 → site 2 → … → retour,
+// un trajet par ligne, dans l'ordre des créneaux du planning.
+function ikChainDays(raw){
+  const depart=ikDefaultDepart();
+  const byDate={};
+  raw.forEach(r=>{(byDate[r.date]=byDate[r.date]||[]).push(r);});
+  const out=[];
+  Object.keys(byDate).sort().forEach(date=>{
+    const evs=byDate[date].slice().sort((a,b)=>(a.slot||0)-(b.slot||0));
+    // séquence des lieux visités, sans doublon consécutif
+    const etapes=[];
+    evs.forEach(e=>{
+      const lieu=(e.lieu||'').trim();
+      if(!lieu)return;
+      if(etapes.length&&etapes[etapes.length-1].lieu===lieu)return;
+      etapes.push({lieu,id:e.id,slot:e.slot||0});
+    });
+    if(!etapes.length)return;
+    if(etapes.length===1){
+      out.push(ikMakeRow(`${etapes[0].id}`,date,depart,etapes[0].lieu,2,etapes[0].slot));
+      return;
+    }
+    let from=depart;
+    etapes.forEach((e,i)=>{
+      out.push(ikMakeRow(`${e.id}_s${i}`,date,from,e.lieu,1,e.slot));
+      from=ikDetectCreche(e.lieu)||e.lieu;
+    });
+    out.push(ikMakeRow(`${etapes[etapes.length-1].id}_ret`,date,from,depart,1,99));
+  });
+  out.sort((a,b)=>a.date.localeCompare(b.date)||a.slot-b.slot);
+  return out;
+}
+
+function ikMakeRow(id,date,depart,lieu,nbr,slot){
+  const creche=ikDetectCreche(lieu);
+  const dep=ikDetectCreche(depart)||depart;
+  const ignored=!lieu||!String(lieu).trim()||(creche&&creche===dep)||(!creche&&String(lieu).trim()===dep);
+  return{
+    id,date,depart:dep,lieu:String(lieu).trim(),creche,nbr,slot:slot||0,
+    km:0,ignored:!!ignored,
+    trajet:ignored?String(lieu).trim():`${dep}/${String(lieu).trim()}`
+  };
+}
 
 function ikReeval(rows){
-  // Réévalue départ, crèche et « ignoré » — corrige les anciennes saisies (format pré-multi-départ)
+  const cfgDep=ikDefaultDepart();
   return rows.map(r=>{
     const depart=r.depart||IK_DEFAULT_DEPART;
-    const lieu=r.lieu||(r.trajet||'').split('/').pop()||'';
-    const creche=ikDetectCreche(lieu);
-    const ignored=!creche||creche===depart;
-    const trajet=creche&&!ignored?`${depart}/${lieu||creche}`:(lieu||r.trajet||'');
-    return Object.assign({},r,{depart,lieu,creche,ignored,trajet});
+    const lieu=(r.lieu||(r.trajet||'').split('/').pop()||'').trim();
+    const base=ikMakeRow(r.id,r.date,depart,lieu,r.nbr||2,r.slot);
+    // on conserve le km saisi manuellement pour les lieux libres
+    return Object.assign(base,{km:r.km!==undefined?r.km:0});
   });
 }
 
-// ---- Personne concernée (un admin peut consulter les frais d'un autre admin) ----
+// ---------------- Personne concernée ----------------
 function ikPersonId(){
   const sel=document.getElementById('ik-person-select');
   return(sel&&sel.value)||currentProfile?.id||currentUser?.id||'dir';
@@ -4597,7 +4734,7 @@ function ikPersonName(){
   return p?.name||currentProfile?.name||'';
 }
 
-// Transforme « David Bucari » en « BUCARI David » (format attendu par le modèle FDEPvi)
+// « David Bucari » -> « BUCARI David » (format attendu par le modèle FDEPvi)
 function ikFormatEmployeeName(name){
   const n=(name||'').trim();
   if(!n)return'BUCARI David';
@@ -4609,9 +4746,7 @@ function ikFormatEmployeeName(name){
 
 function ikRowsKey(month){return`ik_rows_${ikPersonId()}_${month}`;}
 
-function ikPersonChanged(){
-  ikLoad();
-}
+function ikPersonChanged(){ikLoad();}
 
 function ikRenderPersonSelect(){
   const sel=document.getElementById('ik-person-select');
@@ -4619,10 +4754,7 @@ function ikRenderPersonSelect(){
   const me=currentProfile?.id||'';
   const refs=(cacheReferents||[]).filter(r=>r.role==='direction'||r.role==='referent');
   const previous=sel.value;
-  sel.innerHTML=refs.map(r=>{
-    const tag=r.role==='direction'?' 🔑':'';
-    return`<option value="${r.id}">${r.name}${tag}</option>`;
-  }).join('');
+  sel.innerHTML=refs.map(r=>`<option value="${r.id}">${r.name}${r.role==='direction'?' 🔑':''}</option>`).join('');
   if(previous&&refs.some(r=>r.id===previous))sel.value=previous;
   else if(refs.some(r=>r.id===me))sel.value=me;
 }
@@ -4631,15 +4763,23 @@ function ikLoad(){
   const month=document.getElementById('ik-month').value;
   if(!month)return;
   let saved=JSON.parse(localStorage.getItem(ikRowsKey(month))||'null');
-  // reprise des lignes enregistrées avant l'ajout du sélecteur de personne
   if(!saved&&ikPersonId()===(currentProfile?.id||'dir'))saved=JSON.parse(localStorage.getItem(`ik_rows_${month}`)||'null');
   if(saved){
-    ikRows=ikReeval(saved);  // réévalue à chaque chargement
-    ikSaveRows();             // resauvegarde avec les valeurs corrigées
+    ikRows=ikReeval(saved);
+    ikSaveRows();
     ikRenderTable();
-    document.getElementById('ik-load-info').textContent=`${ikRows.filter(r=>!r.ignored).length} trajet(s) chargés (sauvegardés)`;
+    ikSetLoadInfo('sauvegardé');
   }
   else ikLoadFromPlanning();
+}
+
+function ikSetLoadInfo(origine){
+  const actives=ikRows.filter(r=>!r.ignored);
+  const matrix=ikGetCurrentMatrix();
+  const sansKm=actives.filter(r=>!(ikRowKm(r,matrix)>0)).length;
+  let txt=`${actives.length} trajet(s) — ${origine}`;
+  if(sansKm)txt+=` · ⚠️ ${sansKm} ligne(s) sans kilométrage (non exportée(s))`;
+  document.getElementById('ik-load-info').textContent=txt;
 }
 
 async function ikLoadFromPlanning(){
@@ -4653,7 +4793,7 @@ async function ikLoadFromPlanning(){
   let cursor=new Date(firstDay);
   const dow=cursor.getDay();
   cursor.setDate(cursor.getDate()-(dow===0?6:dow-1));
-  const rows=[];
+  const raw=[];
   while(cursor<=lastDay){
     const semaine=ipDateToLocalISO(cursor);
     const events=await planningLoad(userId,semaine);
@@ -4663,28 +4803,14 @@ async function ikLoadFromPlanning(){
       const day=ev.jour!==undefined?ev.jour:ev.day;
       const evDate=new Date(cursor.getFullYear(),cursor.getMonth(),cursor.getDate()+day);
       if(evDate.getMonth()+1!==monthNum||evDate.getFullYear()!==year)return;
-      const dateStr=ikLocalDate(evDate);
-      const creche=ikDetectCreche(ev.lieu);
-      const depart=ikDefaultDepart();
-      rows.push({
-        id:`${ev.id}_${dateStr}`,
-        date:dateStr,
-        depart,
-        trajet:creche&&creche!==depart?`${depart}/${ev.lieu}`:ev.lieu,
-        creche,nbr:2,lieu:ev.lieu,
-        slot:ev.slot,
-        ignored:!creche||creche===depart
-      });
+      raw.push({id:`${ev.id}_${ikLocalDate(evDate)}`,date:ikLocalDate(evDate),lieu:ev.lieu,slot:ev.slot});
     });
     cursor.setDate(cursor.getDate()+7);
   }
-  rows.sort((a,b)=>a.date.localeCompare(b.date));
-  ikRows=rows;
+  ikRows=ikChainDays(raw);
   ikSaveRows();
   ikRenderTable();
-  const count=ikRows.filter(r=>!r.ignored).length;
-  const ign=ikRows.filter(r=>r.ignored).length;
-  document.getElementById('ik-load-info').textContent=`${count} trajet(s) chargé(s) depuis le planning${ign>0?` · ${ign} ignoré(s)`:''}`;
+  ikSetLoadInfo('chargé depuis le planning');
 }
 
 function ikSaveRows(){
@@ -4698,37 +4824,43 @@ function ikRenderTable(){
   const bareme=parseFloat(document.getElementById('ik-bareme').value)||0.248;
   if(!ikRows.length){tbody.innerHTML='';document.getElementById('ik-empty').style.display='block';ikUpdateTotals();return;}
   document.getElementById('ik-empty').style.display='none';
+  let lastDate=null;
   tbody.innerHTML=ikRows.map((row,idx)=>{
-    const km=row.ignored?0:ikKm(row.depart,row.creche,matrix);
+    const km=ikRowKm(row,matrix);
     const tKm=row.nbr*km;
     const mont=tKm*bareme;
-    const group=row.creche?IK_GROUPS[row.creche]||'—':'—';
+    const group=ikRowGroup(row);
     const badge=row.ignored?'<span class="ik-ignored-badge">ignoré</span>':
       group==='Picot 1 - Picot 2'?'<span class="ik-group-badge ik-g1">Picot</span>':
       group==='Brunet'?'<span class="ik-group-badge ik-g2">Brunet</span>':
       group==='Cuers'?'<span class="ik-group-badge ik-g4">Cuers</span>':
       '<span class="ik-group-badge ik-g3">Ollio/SJ</span>';
-    const inp=(f,v,w='120px',t='text')=>`<input type="${t}" value="${String(v).replace(/"/g,'&quot;')}" onchange="ikUpdateRow(${idx},'${f}',this.value)" style="width:${w};padding:4px 7px;border:1.5px solid transparent;border-radius:6px;font-size:12.5px;font-family:inherit;background:transparent" onfocus="this.style.borderColor='var(--koala)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">`;
+    const inp=(f,v,w='120px',t='text',extra='')=>`<input type="${t}" ${extra} value="${String(v).replace(/"/g,'&quot;')}" onchange="ikUpdateRow(${idx},'${f}',this.value)" style="width:${w};padding:4px 7px;border:1.5px solid transparent;border-radius:6px;font-size:12.5px;font-family:inherit;background:transparent" onfocus="this.style.borderColor='var(--koala)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">`;
     const departSel=`<select onchange="ikUpdateRow(${idx},'depart',this.value)" style="width:130px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12.5px;font-family:inherit;background:#fff">${ikDepartOptions(row.depart||IK_DEFAULT_DEPART)}</select>`;
-    if(row.ignored)return`<tr style="opacity:0.4"><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td class="ik-ignored">${inp('lieu',row.lieu||row.trajet||'','140px')}</td><td colspan="4" style="text-align:center;font-size:12px;color:#bbb;font-style:italic">— même lieu que le départ ou destination inconnue, non comptabilisé —</td><td style="text-align:center">${badge}</td><td><button class="ik-row-del" onclick="ikDeleteRow(${idx})"><i class="ti ti-x"></i></button></td></tr>`;
-    return`<tr><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td>${inp('lieu',row.lieu||row.creche||'','140px')}</td><td style="text-align:center">${inp('nbr',row.nbr,'50px','number')}</td><td style="text-align:center;font-weight:600">${km}</td><td class="ik-val">${tKm}</td><td class="ik-val">${mont.toFixed(2)} €</td><td style="text-align:center">${badge}</td><td><button class="ik-row-del" onclick="ikDeleteRow(${idx})"><i class="ti ti-x"></i></button></td></tr>`;
+    const destInp=inp('lieu',row.lieu||'','150px','text','list="ik-lieux-list"');
+    // séparateur visuel entre journées, pour lire les chaînes multi-sites
+    const sep=(lastDate!==null&&row.date!==lastDate)?' style="border-top:2px solid var(--border)"':'';
+    lastDate=row.date;
+    if(row.ignored)return`<tr${sep?' style="opacity:0.4;border-top:2px solid var(--border)"':' style="opacity:0.4"'}><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td class="ik-ignored">${destInp}</td><td colspan="4" style="text-align:center;font-size:12px;color:#bbb;font-style:italic">— destination vide ou identique au départ, non comptabilisé —</td><td style="text-align:center">${badge}</td><td><button class="ik-row-del" onclick="ikDeleteRow(${idx})"><i class="ti ti-x"></i></button></td></tr>`;
+    // lieu libre (hors liste) : km saisissable + bouton d'enregistrement du lieu
+    const kmCell=row.creche
+      ?`<td style="text-align:center;font-weight:600">${km}${km>0?'':' <span title="Distance non renseignée entre ces deux lieux — complétez la grille des distances" style="color:var(--orange);font-size:11px">⚠️</span>'}</td>`
+      :`<td style="text-align:center">${inp('km',row.km||0,'55px','number')}${Number(row.km)>0?` <button class="ik-row-del" title="Enregistrer ce lieu dans la liste" onclick="ikSaveRowLieu(${idx})"><i class="ti ti-map-pin-plus" style="font-size:12px"></i></button>`:' <span title="Kilométrage à saisir" style="color:var(--orange);font-size:11px">⚠️</span>'}</td>`;
+    return`<tr${sep}><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td>${destInp}</td><td style="text-align:center">${inp('nbr',row.nbr,'50px','number')}</td>${kmCell}<td class="ik-val">${tKm}</td><td class="ik-val">${mont.toFixed(2)} €</td><td style="text-align:center">${badge}</td><td><button class="ik-row-del" onclick="ikDeleteRow(${idx})"><i class="ti ti-x"></i></button></td></tr>`;
   }).join('');
   ikUpdateTotals();
 }
 
 function ikUpdateRow(idx,field,value){
-  if(field==='nbr')ikRows[idx][field]=parseInt(value)||1;
-  else ikRows[idx][field]=value;
+  const row=ikRows[idx];
+  if(field==='nbr')row.nbr=parseInt(value)||1;
+  else if(field==='km')row.km=parseFloat(value)||0;
+  else row[field]=value;
   if(field==='lieu'||field==='depart'||field==='trajet'){
-    const row=ikRows[idx];
-    const depart=row.depart||IK_DEFAULT_DEPART;
-    const lieu=field==='trajet'?String(value).split('/').pop():(row.lieu||'');
-    row.depart=depart;
-    row.lieu=lieu;
-    const creche=ikDetectCreche(lieu);
-    row.creche=creche;
-    row.ignored=!creche||creche===depart;
-    row.trajet=row.ignored?(lieu||''):`${depart}/${lieu||creche}`;
+    const depart=ikDetectCreche(row.depart)||row.depart||IK_DEFAULT_DEPART;
+    const lieu=(field==='trajet'?String(value).split('/').pop():(row.lieu||'')).trim();
+    const rebuilt=ikMakeRow(row.id,row.date,depart,lieu,row.nbr,row.slot);
+    Object.assign(row,rebuilt,{km:row.km||0});
   }
   ikSaveRows();
   ikRenderTable();
@@ -4738,9 +4870,19 @@ function ikDeleteRow(idx){ikRows.splice(idx,1);ikSaveRows();ikRenderTable();}
 
 function ikAddRow(){
   const month=document.getElementById('ik-month').value;
-  const depart=ikDefaultDepart();
-  ikRows.push({id:Date.now().toString(),date:month?month+'-01':ipDateToLocalISO(new Date()),depart,trajet:'',creche:null,nbr:2,lieu:'',slot:0,ignored:true});
+  ikRows.push(ikMakeRow(Date.now().toString(),month?month+'-01':ipDateToLocalISO(new Date()),ikDefaultDepart(),'',1,0));
   ikSaveRows();ikRenderTable();
+}
+
+// Recompose la chaîne d'une journée après modification manuelle des lieux.
+function ikRechainDate(date){
+  const raw=ikRows.filter(r=>r.date===date).map(r=>({id:r.id,date:r.date,lieu:r.lieu,slot:r.slot}));
+  if(raw.length<2)return;
+  const chained=ikChainDays(raw);
+  ikRows=ikRows.filter(r=>r.date!==date).concat(chained)
+    .sort((a,b)=>a.date.localeCompare(b.date)||a.slot-b.slot);
+  ikSaveRows();ikRenderTable();
+  showBanner('Journée du '+ikFmtDate(date)+' rechaînée.');
 }
 
 function ikUpdateTotals(){
@@ -4748,9 +4890,9 @@ function ikUpdateTotals(){
   const bareme=parseFloat(document.getElementById('ik-bareme').value)||0.248;
   let tKm=0,tEur=0,tP=0,tB=0,tO=0,tC=0;
   ikRows.filter(r=>!r.ignored).forEach(r=>{
-    const km=ikKm(r.depart,r.creche,matrix),tk=r.nbr*km,m=tk*bareme;
+    const km=ikRowKm(r,matrix),tk=r.nbr*km,m=tk*bareme;
     tKm+=tk;tEur+=m;
-    const g=IK_GROUPS[r.creche];
+    const g=ikRowGroup(r);
     if(g==='Picot 1 - Picot 2')tP+=m;
     else if(g==='Brunet')tB+=m;
     else if(g==='Ollioules - St Jean')tO+=m;
@@ -4772,6 +4914,19 @@ function ikInit(){
   ikRenderPersonSelect();
   ikRenderConfig();
   ikLoad();
+}
+
+// Sélection de la journée à rechaîner (recompose départ → sites → retour).
+function ikRechainPrompt(){
+  const dates=[...new Set(ikRows.map(r=>r.date))].sort();
+  const multi=dates.filter(d=>ikRows.filter(r=>r.date===d).length>1);
+  if(!multi.length){alert('Aucune journée à plusieurs déplacements ce mois-ci.');return;}
+  const choix=prompt('Journées à plusieurs déplacements :\n\n'+multi.map(d=>'  '+ikFmtDate(d)).join('\n')+'\n\nSaisis la date à rechaîner (JJ/MM/AAAA) :',ikFmtDate(multi[0]));
+  if(!choix)return;
+  const m=choix.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  const iso=m?`${m[3]}-${m[2]}-${m[1]}`:choix.trim();
+  if(!multi.includes(iso)){alert('Cette date ne fait pas partie des journées multi-déplacements.');return;}
+  ikRechainDate(iso);
 }
 
 function ikFmtDate(d){if(!d)return'';const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});}
@@ -5009,16 +5164,16 @@ async function ikGenerate(){
   const firstDate=new Date(year,monthNum-1,1);
   const lastDate=new Date(year,monthNum,0);
 
-  const sheetsData={
-    'Picot 1 - Picot 2':active.filter(r=>IK_GROUPS[r.creche]==='Picot 1 - Picot 2'),
-    'Brunet':active.filter(r=>IK_GROUPS[r.creche]==='Brunet'),
-    'Ollioules - St Jean':active.filter(r=>IK_GROUPS[r.creche]==='Ollioules - St Jean'),
-    'Cuers':active.filter(r=>IK_GROUPS[r.creche]==='Cuers')
-  };
+  const sansKm=active.filter(r=>!(ikRowKm(r,matrix)>0));
+  const exportables=active.filter(r=>ikRowKm(r,matrix)>0);
+  if(sansKm.length&&!confirm(sansKm.length+' ligne(s) n\'ont pas de kilométrage renseigné et seront exclues de l\'export.\n\nContinuer quand même ?'))return;
+  if(!exportables.length){alert('Aucun trajet avec kilométrage à exporter.');return;}
+  const sheetsData={};
+  IK_GROUP_ORDER.forEach(g=>{sheetsData[g]=exportables.filter(r=>ikRowGroup(r)===g);});
   // Un groupe sans aucun trajet ce mois-là n'a pas d'onglet (évite une feuille FDEPvi vide).
   const groupsData=Object.entries(sheetsData).filter(([,rows])=>rows.length>0).map(([name,rows])=>({
     name,
-    rows: rows.map(r=>({date:new Date(r.date+'T12:00:00'), trajet:r.trajet||`${r.depart||IK_DEFAULT_DEPART}/${r.lieu||r.creche}`, nbr:r.nbr, km:ikKm(r.depart,r.creche,matrix)}))
+    rows: rows.map(r=>({date:new Date(r.date+'T12:00:00'), trajet:r.trajet||`${r.depart||IK_DEFAULT_DEPART}/${r.lieu||r.creche}`, nbr:r.nbr, km:ikRowKm(r,matrix)}))
   }));
   if(!groupsData.length){alert('Aucun trajet à exporter.');return;}
 
