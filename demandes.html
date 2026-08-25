@@ -1920,7 +1920,7 @@ function calCellHtml(d,isOut,today){
     const creche=cacheCreches.find(c=>c.id===e.creche_id);
     const alreadyInTitle=creche&&e.titre&&e.titre.toLowerCase().includes(creche.name.toLowerCase());
     const crecheLabel=(creche&&!alreadyInTitle)?' · '+escHtml(creche.name):'';
-    evtHtml+='<div class="cal-evt" style="background:'+info.color+'" title="'+escHtml(e.titre)+(creche?' — '+creche.name:'')+'">'+info.emoji+' '+escHtml(e.titre)+crecheLabel+'</div>';
+    evtHtml+='<div class="cal-evt" style="background:'+info.color+'" title="'+escHtml(e.titre)+(creche?' — '+creche.name:'')+(e.auteur?' — Créé par '+escHtml(e.auteur):'')+'">'+info.emoji+' '+escHtml(e.titre)+crecheLabel+'</div>';
   });
   if(evts.length>3)evtHtml+='<div class="cal-evt-more">+'+(evts.length-3)+' autre(s)</div>';
   return '<div class="'+cls+'" onclick="calSelectDay(\''+dateISO+'\')"><div class="cal-daynum">'+d.getDate()+'</div>'+evtHtml+'</div>';
@@ -1950,6 +1950,7 @@ function renderCalDayDetail(){
           '<div class="cal-evt-title">'+info.emoji+' '+escHtml(e.titre)+'</div>'+
           '<div class="cal-evt-meta">'+(horaire?horaire+' · ':'')+(creche?creche.name:'Réseau / toutes crèches')+(e.lieu?' · '+escHtml(e.lieu):'')+multiJour+'</div>'+
           (e.description?'<div class="cal-evt-meta" style="margin-top:3px;color:#666">'+escHtml(e.description)+'</div>':'')+
+          (e.auteur?'<div class="cal-evt-meta" style="margin-top:3px;color:#999;font-size:11px"><i class="ti ti-user"></i> Créé par '+escHtml(e.auteur)+'</div>':'')+
         '</div>'+
         '<button class="ibtn" style="flex-shrink:0" onclick="event.stopPropagation();openEvenementModal(null,\''+e.id+'\')"><i class="ti ti-edit"></i></button>'+
       '</div>';
