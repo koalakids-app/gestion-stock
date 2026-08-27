@@ -3452,32 +3452,63 @@ function peInvalidateAll(crecheId){
 // ── ÉDITION D'UNE CASE DU TABLEAU ÉQUIPE (remplace/ajoute/supprime un nom sur un créneau) ──
 let _peEditCtx=null; // {eventId|null, creneauLabel, jour, crecheId, semaine}
 
-function peOpenCellEdit(eventId,creneauLabel,jourStr,crecheId,semaine){
+// Remplit la liste déroulante des prénoms en conservant la sélection courante.
+function peRemplirPrenoms(noms,selection){
+  const sel=document.getElementById('pe-edit-prenom');
+  if(!sel)return;
+  const liste=[...new Set(noms)].filter(Boolean)
+    .sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
+  sel.innerHTML='<option value="">-- Choisir --</option>'
+    +liste.map(n=>'<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>').join('')
+    +'<option value="__autre__">Autre (saisir)…</option>';
+  if(selection&&liste.includes(selection))sel.value=selection;
+  return liste;
+}
+
+async function peOpenCellEdit(eventId,creneauLabel,jourStr,crecheId,semaine){
   const jour=parseInt(jourStr);
   _peEditCtx={eventId:eventId||null,creneauLabel,jour,crecheId,semaine};
 
   const cached=_peCache[crecheId+'_'+semaine]||[];
-  // Fusion : salariés actifs de la crèche (module Salariés) + prénoms déjà présents dans la semaine
-  const knownNames=[...new Set(cached.map(r=>r.prenom))].filter(Boolean)
-    .sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
-  const sel=document.getElementById('pe-edit-prenom');
-  sel.innerHTML='<option value="">-- Choisir --</option>'+knownNames.map(n=>'<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>').join('')+'<option value="__autre__">Autre (saisir)…</option>';
+  const ev=eventId?cached.find(r=>r.id===eventId):null;
+  const courant=ev?ev.prenom:'';
+
+  // Liste immédiate : les prénoms présents dans la semaine affichée.
+  peRemplirPrenoms(cached.map(r=>r.prenom).concat(courant?[courant]:[]),courant);
+
   document.getElementById('pe-edit-prenom-autre').value='';
   document.getElementById('pe-edit-prenom-autre').style.display='none';
-
+  document.getElementById('pe-edit-creneau-label').textContent=creneauLabel+' — '+DAYS[jour];
   if(eventId){
-    const ev=cached.find(r=>r.id===eventId);
     document.getElementById('pe-edit-title').textContent='Modifier le créneau';
-    document.getElementById('pe-edit-creneau-label').textContent=creneauLabel+' — '+DAYS[jour];
-    if(ev&&knownNames.includes(ev.prenom))sel.value=ev.prenom;
     document.getElementById('pe-edit-delete-btn').style.display='';
   }else{
     document.getElementById('pe-edit-title').textContent='Ajouter sur ce créneau';
-    document.getElementById('pe-edit-creneau-label').textContent=creneauLabel+' — '+DAYS[jour];
-    sel.value='';
     document.getElementById('pe-edit-delete-btn').style.display='none';
   }
   document.getElementById('modal-pe-edit-wrap').classList.add('open');
+
+  // Puis on élargit : la semaine affichée ne contient que les personnes déjà
+  // planifiées CETTE semaine-là. Quelqu'un qui n'y travaille pas (congés,
+  // arrivée en cours de mois, semaine encore vide) en était absent et devenait
+  // impossible à ajouter autrement qu'en le retapant via « Autre ».
+  // On y ajoute donc tous les prénoms connus de la crèche, toutes semaines
+  // confondues, ainsi que les référentes qui y sont rattachées.
+  try{
+    const connus=(typeof spPrenomsConnus==='function')?await spPrenomsConnus(crecheId):[];
+    const refs=(cacheReferents||[])
+      .filter(r=>r.creche_id===crecheId&&r.name)
+      .map(r=>String(r.name).trim().split(/\s+/)[0]);
+    // La modale a pu être refermée pendant la requête.
+    if(!_peEditCtx||_peEditCtx.crecheId!==crecheId||_peEditCtx.semaine!==semaine)return;
+    const sel=document.getElementById('pe-edit-prenom');
+    const choixActuel=sel?sel.value:'';
+    peRemplirPrenoms(
+      cached.map(r=>r.prenom).concat(connus,refs,courant?[courant]:[]),
+      (choixActuel&&choixActuel!=='__autre__')?choixActuel:courant
+    );
+    if(choixActuel==='__autre__'&&sel)sel.value='__autre__';
+  }catch(e){console.error('[PlanningEquipe] liste prénoms',e);}
 }
 
 function peOnPrenomChange(){
