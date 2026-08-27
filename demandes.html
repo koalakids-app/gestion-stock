@@ -1256,6 +1256,49 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- ENVOI DE LA COMMANDE AU TRAITEUR -->
+<div class="overlay" id="modal-cr-mail-wrap">
+  <div class="modal" style="max-width:620px">
+    <h3><i class="ti ti-send"></i> Envoyer la commande au traiteur</h3>
+    <div class="info-box" id="crm-deadline" style="display:none;margin-bottom:12px"></div>
+    <div class="fg"><label class="flabel">Destinataires <span style="font-weight:400;color:var(--muted)">(séparés par une virgule)</span></label>
+      <textarea class="finput" id="crm-to" rows="2" style="resize:vertical"></textarea></div>
+    <div class="fg" style="margin-top:-4px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="crm-copie" style="width:16px;height:16px;cursor:pointer"/>
+        <span id="crm-copie-label"></span>
+      </label>
+    </div>
+    <div class="fg"><label class="flabel">Objet</label><input class="finput" id="crm-subject"/></div>
+    <div class="fg"><label class="flabel">Message</label><textarea class="finput" id="crm-msg" rows="7" style="resize:vertical"></textarea></div>
+    <div class="info-box" style="margin-bottom:4px"><i class="ti ti-paperclip" style="font-size:15px"></i>
+      Le bon de commande est joint automatiquement en PDF, à l'identique de celui téléchargé.</div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-cr-mail-wrap')">Annuler</button>
+      <button class="btn-primary" id="crm-send" onclick="crSendMail()"><i class="ti ti-send"></i> Envoyer</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRÉVISUALISATION DE L'EXPORT EXCEL -->
+<div class="overlay" id="modal-xls-wrap">
+  <div class="modal" style="max-width:1040px">
+    <h3><i class="ti ti-file-spreadsheet"></i> Export Excel — prévisualisation</h3>
+    <div class="info-box" style="margin-bottom:12px"><i class="ti ti-info-circle" style="font-size:15px"></i>
+      Aperçu du classeur tel qu'il sera enregistré : <strong id="xls-filename"></strong>.
+      Les trois feuilles ci-dessous correspondent exactement au contenu du fichier.</div>
+    <div class="info-box" id="xls-prevision" style="display:none;margin-bottom:12px;background:var(--orange-light);border-color:var(--orange);color:var(--orange-dark)">
+      <i class="ti ti-chart-dots" style="font-size:15px"></i>
+      Attention : cette semaine repose sur une <strong>prévision</strong> (planning pas encore importé), et non sur des présences réelles.</div>
+    <div class="module-tabs" id="xls-tabs" style="margin-bottom:12px"></div>
+    <div id="xls-preview"></div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-xls-wrap')">Fermer</button>
+      <button class="btn-green" onclick="xlsDownload()"><i class="ti ti-download"></i> Télécharger le fichier</button>
+    </div>
+  </div>
+</div>
+
 <!-- COMMANDE REPAS TRAITEUR (bon MCM) -->
 <div class="overlay" id="modal-commande-wrap">
   <div class="modal" style="max-width:980px">
@@ -1291,7 +1334,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn-cancel" onclick="crCompute(true)" title="Réinitialiser toutes les cases depuis les présences de la semaine"><i class="ti ti-refresh"></i> Recalculer</button>
       <button class="btn-cancel" onclick="closeModal('modal-commande-wrap')">Fermer</button>
       <button class="btn-sm" onclick="crSaveOnly()" title="Enregistrer sans générer le bon"><i class="ti ti-device-floppy"></i> Enregistrer</button>
-      <button class="btn-primary" id="cr-btn-pdf" onclick="crExportPdf()"><i class="ti ti-file-download"></i> Générer le PDF</button>
+      <button class="btn-sm" id="cr-btn-pdf" onclick="crExportPdf()"><i class="ti ti-file-download"></i> Générer le PDF</button>
+      <button class="btn-primary" onclick="crOpenMail()"><i class="ti ti-send"></i> Envoyer au traiteur</button>
     </div>
   </div>
 </div>
@@ -2587,12 +2631,14 @@ async function renderPresenceHebdo(){
 }
 window.renderPresenceHebdo=renderPresenceHebdo;
 
-function exportPresenceHebdoExcel(){
-  if(!_hebdoExportCtx||!_hebdoExportCtx.rows.length){showBanner('Rien à exporter pour cette semaine.','error');return;}
-  const ctx=_hebdoExportCtx;
+/* Construit les trois feuilles du classeur — fonction pure, sans accès au DOM.
+   La prévisualisation et le fichier téléchargé partent des mêmes données : ce qui
+   est affiché à l'écran est donc exactement ce qui sera écrit dans le .xlsx. */
+function hebdoBuildSheets(ctx){
   const JOURS_LBL=['LUNDI','MARDI','MERCREDI','JEUDI','VENDREDI'];
   const dateLbl=ctx.days5[0].toLocaleDateString('fr-FR')+' au '+ctx.days5[4].toLocaleDateString('fr-FR');
-  const titre='Présence hebdomadaire — '+ctx.crecheLbl+' — semaine du '+dateLbl;
+  const titre='Présence hebdomadaire — '+ctx.crecheLbl+' — semaine du '+dateLbl
+    +(ctx.source==='prevision'?' (prévision)':'');
 
   function totauxLignes(colsParJour){
     const out=[];
@@ -2605,50 +2651,121 @@ function exportPresenceHebdoExcel(){
     }
     return out;
   }
+  const nom=function(r){return r.enfant.prenom+' '+(r.enfant.nom||'');};
 
   // Feuille 1 : présence complète (présence + repas)
   const head1=['Enfant'];
   JOURS_LBL.forEach(function(j){head1.push(j+' — Présence',j+' — Repas');});
   const aoa1=[[titre],[],head1];
   ctx.rows.forEach(function(r){
-    const line=[r.enfant.prenom+' '+(r.enfant.nom||'')];
+    const line=[nom(r)];
     r.cells.forEach(function(c){ line.push(c.present?c.horaires:'X'); line.push(c.present?(c.repas||''):'X'); });
     aoa1.push(line);
   });
   aoa1.push([]);
-  totauxLignes(2).forEach(function(r){aoa1.push(r);});
+  totauxLignes(2).forEach(function(l){aoa1.push(l);});
 
   // Feuille 2 : effectifs repas (code repas seul, pour le traiteur)
-  const head2=['Enfant'].concat(JOURS_LBL);
-  const aoa2=[[titre],[],head2];
+  const aoa2=[[titre],[],['Enfant'].concat(JOURS_LBL)];
   ctx.rows.forEach(function(r){
-    const line=[r.enfant.prenom+' '+(r.enfant.nom||'')];
+    const line=[nom(r)];
     r.cells.forEach(function(c){ line.push(c.present?(c.repas||'—'):'X'); });
     aoa2.push(line);
   });
   aoa2.push([]);
-  totauxLignes(1).forEach(function(r){aoa2.push(r);});
+  totauxLignes(1).forEach(function(l){aoa2.push(l);});
 
   // Feuille 3 : effectifs enfants (présence seule, pour le calcul des taux d'encadrement)
-  const head3=['Enfant'].concat(JOURS_LBL);
-  const aoa3=[[titre],[],head3];
+  const aoa3=[[titre],[],['Enfant'].concat(JOURS_LBL)];
   ctx.rows.forEach(function(r){
-    const line=[r.enfant.prenom+' '+(r.enfant.nom||'')];
+    const line=[nom(r)];
     r.cells.forEach(function(c){ line.push(c.present?c.horaires:'X'); });
     aoa3.push(line);
   });
   aoa3.push([]);
   aoa3.push(['Effectif du jour'].concat(ctx.totalParJour));
 
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa1),'Présence hebdomadaire');
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa2),'Effectifs repas');
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa3),'Effectifs enfants');
+  return [
+    {nom:'Présence hebdomadaire',aoa:aoa1},
+    {nom:'Effectifs repas',      aoa:aoa2},
+    {nom:'Effectifs enfants',    aoa:aoa3}
+  ];
+}
+
+function hebdoFileName(ctx){
   const slug=(ctx.crecheLbl||'creche').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
-  XLSX.writeFile(wb,'presence_hebdo_'+slug+'_'+ctx.dateStrs[0]+'.xlsx');
+  return 'presence_hebdo_'+slug+'_'+ctx.dateStrs[0]+'.xlsx';
+}
+
+// ── Prévisualisation avant téléchargement ──
+let _xlsSheets=null,_xlsTab=0;
+function exportPresenceHebdoExcel(){
+  if(!_hebdoExportCtx||!_hebdoExportCtx.rows.length){showBanner('Rien à exporter pour cette semaine.','error');return;}
+  _xlsSheets=hebdoBuildSheets(_hebdoExportCtx);
+  _xlsTab=0;
+  document.getElementById('xls-filename').textContent=hebdoFileName(_hebdoExportCtx);
+  const prev=document.getElementById('xls-prevision');
+  if(prev)prev.style.display=_hebdoExportCtx.source==='prevision'?'':'none';
+  xlsRender();
+  document.getElementById('modal-xls-wrap').classList.add('open');
+}
+
+function xlsSetTab(i){_xlsTab=i;xlsRender();}
+
+/* Rendu façon tableur : en-têtes de colonnes A, B, C… et numéros de ligne,
+   pour que l'utilisateur retrouve exactement ce qu'il ouvrira dans Excel. */
+function xlsRender(){
+  if(!_xlsSheets)return;
+  document.getElementById('xls-tabs').innerHTML=_xlsSheets.map(function(s,i){
+    return '<button class="module-tab'+(i===_xlsTab?' active':'')+'" onclick="xlsSetTab('+i+')">'
+      +'<i class="ti ti-table"></i> '+escHtml(s.nom)+'</button>';
+  }).join('');
+
+  const aoa=_xlsSheets[_xlsTab].aoa;
+  const nbCols=aoa.reduce(function(m,r){return Math.max(m,r.length);},0);
+  const colName=function(n){let s='';n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;};
+  const th='padding:3px 6px;background:#EFEFF4;border:1px solid #D6D5E0;font-size:10px;font-weight:700;color:var(--muted);text-align:center;position:sticky';
+
+  let h='<div style="overflow:auto;max-height:52vh;border:1px solid var(--border);border-radius:8px">';
+  h+='<table style="border-collapse:collapse;font-size:12px;white-space:nowrap">';
+  h+='<thead><tr><th style="'+th+';top:0;left:0;z-index:3"></th>';
+  for(let c=0;c<nbCols;c++)h+='<th style="'+th+';top:0;z-index:2">'+colName(c)+'</th>';
+  h+='</tr></thead><tbody>';
+  aoa.forEach(function(row,ri){
+    h+='<tr><td style="'+th+';left:0;z-index:1">'+(ri+1)+'</td>';
+    for(let c=0;c<nbCols;c++){
+      const v=row[c];
+      const vide=(v===undefined||v===''||v===null);
+      const num=(typeof v==='number');
+      const titreLigne=(ri===0&&c===0);
+      const entete=(ri===2);
+      h+='<td style="border:1px solid #E8E7F0;padding:3px 7px;'
+        +(num?'text-align:center;font-weight:600;':'')
+        +(titreLigne?'font-weight:700;color:var(--koala);':'')
+        +(entete?'background:#F7F6FB;font-weight:700;font-size:11px;':'')
+        +'">'+(vide?'':escHtml(String(v)))+'</td>';
+    }
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div style="font-size:11.5px;color:var(--muted);margin-top:8px">'
+    +aoa.length+' ligne(s) × '+nbCols+' colonne(s) — feuille '+(_xlsTab+1)+' sur '+_xlsSheets.length+'</div>';
+  document.getElementById('xls-preview').innerHTML=h;
+}
+
+function xlsDownload(){
+  if(!_xlsSheets||!_hebdoExportCtx)return;
+  const wb=XLSX.utils.book_new();
+  _xlsSheets.forEach(function(s){
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s.aoa),s.nom);
+  });
+  XLSX.writeFile(wb,hebdoFileName(_hebdoExportCtx));
+  closeModal('modal-xls-wrap');
   showBanner('Export Excel téléchargé !');
 }
 window.exportPresenceHebdoExcel=exportPresenceHebdoExcel;
+window.xlsSetTab=xlsSetTab;
+window.xlsDownload=xlsDownload;
 
 /* ══════════════════════════════════════════════════════════════════════════
    COMMANDE REPAS TRAITEUR (bon « Les mamans cuisinières du Monde »)
@@ -2977,67 +3094,87 @@ async function crSaveOnly(){
   if(ok)crRenderSource();
 }
 
+/* Lit l'écran : valeurs saisies, coordonnées et options du bon. */
+function crCollect(){
+  const ctx=_hebdoExportCtx;
+  const semNum=isoWeekNum(ctx.days5[0]);
+  return {
+    vals:crReadVals(),
+    info:{
+      adresse:document.getElementById('cr-adresse').value.trim(),
+      tel:document.getElementById('cr-tel').value.trim(),
+      mail:document.getElementById('cr-mail').value.trim(),
+      contact:document.getElementById('cr-contact').value.trim(),
+      responsable:document.getElementById('cr-responsable').value.trim()
+    },
+    opts:{
+      annule:document.getElementById('cr-annule').checked,
+      annuleDate:document.getElementById('cr-annule-date').value,
+      validDate:document.getElementById('cr-valid-date').value,
+      semNum:semNum,
+      periode:ctx.days5[0].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'})
+        +' au '+ctx.days5[4].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'})
+    }
+  };
+}
+
+/* Produit le document jsPDF du bon. Partagé par le téléchargement et l'envoi par
+   mail : les deux chemins produisent donc rigoureusement le même fichier. */
+async function crMakePdf(c){
+  const ctx=_hebdoExportCtx;
+  const html=crBuildFormHtml(ctx,c.vals,c.info,c.opts);
+  const old=document.getElementById('_pdf-frame-commande');
+  if(old)old.remove();
+  /* A4 à 96 dpi. L'iframe fait exactement cette taille et la capture est cadrée
+     dessus explicitement : sans ces dimensions, html2canvas retient la hauteur de
+     la fenêtre et le bon se retrouve tassé dans le haut de la page. */
+  const A4W=794,A4H=1123;
+  const iframe=document.createElement('iframe');
+  iframe.id='_pdf-frame-commande';
+  iframe.style.cssText='position:fixed;top:0;left:-10000px;width:'+A4W+'px;height:'+A4H+'px;border:none;background:#fff';
+  document.body.appendChild(iframe);
+  const doc=iframe.contentDocument;
+  doc.open();doc.write(html);doc.close();
+  await new Promise(function(r){setTimeout(r,450);});
+  /* Garde-fou : si un texte inhabituellement long (nom de crèche, adresse) fait
+     déborder la page, on capture la hauteur réelle plutôt que de couper le bas
+     du bon — l'image sera simplement réduite pour tenir sur la feuille. */
+  const capH=Math.max(A4H,doc.body.scrollHeight);
+  const canvas=await html2canvas(doc.body,{
+    scale:2,backgroundColor:'#ffffff',
+    width:A4W,height:capH,windowWidth:A4W,windowHeight:capH,
+    x:0,y:0,scrollX:0,scrollY:0
+  });
+  iframe.remove();
+
+  const{jsPDF}=window.jspdf;
+  const pdf=new jsPDF('p','mm','a4');
+  /* Cas normal : la capture a le rapport exact d'une A4 et se pose bord à bord,
+     le bon occupant toute la page comme le document d'origine. En cas de
+     débordement, elle est réduite proportionnellement et centrée. */
+  let pw=210,ph=210*(canvas.height/canvas.width);
+  if(ph>297){pw=210*(297/ph);ph=297;}
+  pdf.addImage(canvas.toDataURL('image/jpeg',0.94),'JPEG',(210-pw)/2,(297-ph)/2,pw,ph);
+  return pdf;
+}
+
+function crPdfName(semNum){
+  const slug=(_hebdoExportCtx.crecheLbl||'creche').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
+  return 'commande_repas_'+slug+'_sem'+semNum+'.pdf';
+}
+
 async function crExportPdf(){
   const ctx=_hebdoExportCtx;
   if(!ctx)return;
   const btn=document.getElementById('cr-btn-pdf');
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Génération…';
   try{
-    const vals=crReadVals();
-    const info={
-      adresse:document.getElementById('cr-adresse').value.trim(),
-      tel:document.getElementById('cr-tel').value.trim(),
-      mail:document.getElementById('cr-mail').value.trim(),
-      contact:document.getElementById('cr-contact').value.trim(),
-      responsable:document.getElementById('cr-responsable').value.trim()
-    };
+    const c=crCollect();
     /* On enregistre AVANT de produire le bon : si le stockage échoue, l'utilisateur
        est prévenu mais repart quand même avec son PDF. */
     const saved=await crSave(true);
-    const annule=document.getElementById('cr-annule').checked;
-    const annuleDate=document.getElementById('cr-annule-date').value;
-    const validDate=document.getElementById('cr-valid-date').value;
-    const fmtFr=function(s){return s?new Date(s+'T00:00:00').toLocaleDateString('fr-FR'):'';};
-    const semNum=isoWeekNum(ctx.days5[0]);
-    const per=ctx.days5[0].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'})
-      +' au '+ctx.days5[4].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
-    const JOURS=['LUNDI','MARDI','MERCREDI','JEUDI','VENDREDI'];
-
-    const html=crBuildFormHtml(ctx,vals,info,{annule:annule,annuleDate:annuleDate,validDate:validDate,semNum:semNum,periode:per});
-    const old=document.getElementById('_pdf-frame-commande');
-    if(old)old.remove();
-    /* A4 à 96 dpi. L'iframe fait exactement cette taille et la capture est cadrée
-       dessus explicitement : sans ces dimensions, html2canvas retient la hauteur de
-       la fenêtre et le bon se retrouve tassé dans le haut de la page. */
-    const A4W=794,A4H=1123;
-    const iframe=document.createElement('iframe');
-    iframe.id='_pdf-frame-commande';
-    iframe.style.cssText='position:fixed;top:0;left:-10000px;width:'+A4W+'px;height:'+A4H+'px;border:none;background:#fff';
-    document.body.appendChild(iframe);
-    const doc=iframe.contentDocument;
-    doc.open();doc.write(html);doc.close();
-    await new Promise(function(r){setTimeout(r,450);});
-    /* Garde-fou : si un texte inhabituellement long (nom de crèche, adresse) fait
-       déborder la page, on capture la hauteur réelle plutôt que de couper le bas
-       du bon — l'image sera simplement réduite pour tenir sur la feuille. */
-    const capH=Math.max(A4H,doc.body.scrollHeight);
-    const canvas=await html2canvas(doc.body,{
-      scale:2,backgroundColor:'#ffffff',
-      width:A4W,height:capH,windowWidth:A4W,windowHeight:capH,
-      x:0,y:0,scrollX:0,scrollY:0
-    });
-    iframe.remove();
-
-    const{jsPDF}=window.jspdf;
-    const pdf=new jsPDF('p','mm','a4');
-    /* Cas normal : la capture a le rapport exact d'une A4 et se pose bord à bord,
-       le bon occupant toute la page comme le document d'origine. En cas de
-       débordement, elle est réduite proportionnellement et centrée. */
-    let pw=210,ph=210*(canvas.height/canvas.width);
-    if(ph>297){pw=210*(297/ph);ph=297;}
-    pdf.addImage(canvas.toDataURL('image/jpeg',0.94),'JPEG',(210-pw)/2,(297-ph)/2,pw,ph);
-    const slug=(ctx.crecheLbl||'creche').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
-    pdf.save('commande_repas_'+slug+'_sem'+semNum+'.pdf');
+    const pdf=await crMakePdf(c);
+    pdf.save(crPdfName(c.opts.semNum));
     closeModal('modal-commande-wrap');
     showBanner(saved?'Bon de commande généré et enregistré ✅'
                     :'Bon généré ✅ — mais l’enregistrement a échoué (table commandes_repas absente ?).',
@@ -3049,7 +3186,101 @@ async function crExportPdf(){
     btn.disabled=false;btn.innerHTML='<i class="ti ti-file-download"></i> Générer le PDF';
   }
 }
+
+/* ── Envoi du bon au traiteur ─────────────────────────────────────────────
+   La commande est à transmettre le mardi avant 10h de la semaine précédant la
+   livraison : on calcule cette échéance pour signaler un envoi hors délai. */
+const MCM_MAIL='secretariat.mcm@cedis.fr';
+
+function crDeadline(lundiLivraison){
+  const d=new Date(lundiLivraison);
+  d.setDate(d.getDate()-6);       // mardi de la semaine précédente
+  d.setHours(10,0,0,0);
+  return d;
+}
+
+function crOpenMail(){
+  const ctx=_hebdoExportCtx;
+  if(!ctx)return;
+  const c=crCollect();
+  document.getElementById('crm-to').value=MCM_MAIL;
+  const copie=document.getElementById('crm-copie');
+  const lblCopie=document.getElementById('crm-copie-label');
+  if(c.info.mail){
+    copie.checked=true;copie.disabled=false;
+    lblCopie.textContent='Recevoir une copie sur '+c.info.mail;
+    lblCopie.parentNode.style.display='';
+  }else{
+    copie.checked=false;copie.disabled=true;
+    lblCopie.parentNode.style.display='none';
+  }
+  document.getElementById('crm-subject').value=
+    'Commande repas — '+ctx.crecheLbl+' — semaine n°'+c.opts.semNum+' du '+c.opts.periode;
+  document.getElementById('crm-msg').value=
+    'Bonjour,\n\nVeuillez trouver ci-joint la commande de repas de la crèche '+ctx.crecheLbl
+    +' pour la semaine n°'+c.opts.semNum+' du '+c.opts.periode+'.'
+    +(c.opts.annule?'\n\nCette commande annule et remplace celle envoyée précédemment.':'')
+    +'\n\nBonne réception,\n'+(c.info.responsable||'Koala Kids');
+
+  const dl=crDeadline(ctx.days5[0]);
+  const retard=new Date()>dl;
+  const box=document.getElementById('crm-deadline');
+  box.style.display='';
+  box.className='info-box';
+  box.style.background=retard?'var(--orange-light)':'var(--green-light)';
+  box.style.borderColor=retard?'var(--orange)':'var(--green)';
+  box.style.color=retard?'var(--orange-dark)':'var(--green)';
+  box.innerHTML='<i class="ti ti-clock" style="font-size:15px"></i> '
+    +(retard?'<strong>Hors délai</strong> — la commande était à transmettre avant le '
+      :'Dans les délais — à transmettre avant le ')
+    +dl.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})+' à 10h.';
+
+  const btn=document.getElementById('crm-send');
+  btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
+  document.getElementById('modal-cr-mail-wrap').classList.add('open');
+}
+
+async function crSendMail(){
+  const ctx=_hebdoExportCtx;
+  if(!ctx)return;
+  const raw=document.getElementById('crm-to').value.trim();
+  const to=raw.split(/[,;\s]+/).map(function(x){return x.trim();}).filter(Boolean);
+  if(!to.length){showBanner('Saisissez au moins une adresse mail.','error');return;}
+  const bad=to.filter(function(x){return !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x);});
+  if(bad.length){showBanner('Adresse(s) invalide(s) : '+bad.join(', '),'error');return;}
+  const c=crCollect();
+  if(document.getElementById('crm-copie').checked&&c.info.mail&&to.indexOf(c.info.mail)<0)to.push(c.info.mail);
+
+  const btn=document.getElementById('crm-send');
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Génération du PDF…';
+  try{
+    const saved=await crSave(true);
+    const pdf=await crMakePdf(c);
+    const b64=pdf.output('datauristring').split(',')[1];
+    btn.innerHTML='<i class="ti ti-loader"></i> Envoi en cours…';
+    const ok=await callFn('send-planning',{
+      to:to,
+      subject:document.getElementById('crm-subject').value,
+      message:document.getElementById('crm-msg').value,
+      filename:crPdfName(c.opts.semNum),
+      pdf_base64:b64
+    });
+    if(ok){
+      closeModal('modal-cr-mail-wrap');
+      closeModal('modal-commande-wrap');
+      showBanner('Commande envoyée à '+to.join(', ')+(saved?' ✅':' ✅ (enregistrement local échoué)'));
+    }else{
+      showBanner('Échec de l’envoi. Vous pouvez générer le PDF et l’envoyer manuellement.','error');
+      btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
+    }
+  }catch(err){
+    console.error('[CommandeRepas] mail',err);
+    showBanner('Erreur lors de la préparation du mail.','error');
+    btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
+  }
+}
 window.crOpen=crOpen;window.crCompute=crCompute;window.crExportPdf=crExportPdf;
+window.crOpenMail=crOpenMail;window.crSendMail=crSendMail;
 window.crSaveOnly=crSaveOnly;
 
 // ── AJOUT MANUEL D’UN ENFANT À LA JOURNÉE ──
