@@ -7468,7 +7468,7 @@ function enfIsBogusTotaux(e){
 async function enfCleanupTotauxFaux(){
   const bogus = cacheEnfants.filter(enfIsBogusTotaux);
   if(!bogus.length){showBanner('Aucune fiche « Totaux » à nettoyer.');return;}
-  if(!confirm('Supprimer '+bogus.length+' fiche(s) enfant erronée(s), créée(s) par un bug de l’import PDF (ex. « '+(bogus[0].prenom||'')+' ') ? Les présences liées seront aussi supprimées.\n\nCette action est irréversible.'))return;
+  if(!confirm('Supprimer '+bogus.length+' fiche(s) enfant erronée(s), créée(s) par un bug de l’import PDF (ex. « '+(bogus[0].prenom||'')+' ») ? Les présences liées seront aussi supprimées.\n\nCette action est irréversible.'))return;
   for(const e of bogus){
     await sb.from('presences').delete().eq('enfant_id',e.id);
     await dbDelete('enfants',e.id);
