@@ -2264,7 +2264,13 @@ async function renderPresenceGantt(){
   const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr).in('enfant_id',allEnfants.map(e=>e.id));
   // presMap: enfant_id -> {M, A}
   const presMap={};
-  (presData||[]).forEach(p=>{if(!presMap[p.enfant_id])presMap[p.enfant_id]={};presMap[p.enfant_id][p.slot]=p.status;});
+  // hd/hf : amplitude horaire réelle du jour, quand elle a été lue sur le planning PDF importé.
+  (presData||[]).forEach(p=>{
+    if(!presMap[p.enfant_id])presMap[p.enfant_id]={};
+    presMap[p.enfant_id][p.slot]=p.status;
+    if(p.heure_debut&&(!presMap[p.enfant_id].hd||p.heure_debut<presMap[p.enfant_id].hd))presMap[p.enfant_id].hd=p.heure_debut;
+    if(p.heure_fin&&(!presMap[p.enfant_id].hf||p.heure_fin>presMap[p.enfant_id].hf))presMap[p.enfant_id].hf=p.heure_fin;
+  });
   /* \u2500\u2500 Contrats d\u2019accueil \u2500\u2500
      ctPeriode : contrat dont la p\u00e9riode couvre la date, quel que soit le jour
                  \u2192 d\u00e9finit QUI figure sur la feuille (inscrits en cours de contrat).
@@ -2337,8 +2343,11 @@ async function renderPresenceGantt(){
       const v=fin?Math.ceil(mn/30):Math.floor(mn/30);
       return Math.max(0,Math.min(COLS,v));
     };
-    const cA=ct?_col(ct.heure_debut,false):null;
-    const cB=ct?_col(ct.heure_fin,true):null;
+    // L'horaire réellement pointé ce jour-là (lu sur le planning PDF) prime sur le contrat.
+    const srcDeb=p.hd||(ct?ct.heure_debut:null);
+    const srcFin=p.hf||(ct?ct.heure_fin:null);
+    const cA=_col(srcDeb,false);
+    const cB=_col(srcFin,true);
     const segments=[];
     if(cA!==null&&cB!==null&&cB>cA)segments.push({start:cA,end:cB,color:'var(--koala)'});
     else if(hasM&&hasA)segments.push({start:0,end:COLS,color:'var(--koala)'});
@@ -3396,12 +3405,38 @@ async function handlePresenceImport(input){
     pg.matched=[];pg.toCreate=[];
     pg.names.forEach(nm=>{const r=nameMap[nm];if(r.enfant)pg.matched.push({name:nm,enfant:r.enfant});else pg.toCreate.push(nm);});
   });
+  // Horaires (lecture des barres) — non bloquant : un échec laisse l'import des présences intact.
+  showBanner('Lecture des horaires…');
+  let epWarn=[];
+  try{
+    const eh=await epParsePdf(file);
+    epWarn=eh.warnings||[];
+    pages.forEach(pg=>{
+      const parNom=(eh.parDate||{})[pg.date]||{};
+      pg.creneaux={};
+      pg.names.forEach(nm=>{const cr=parNom[ipNormName(nm)];if(cr)pg.creneaux[nm]=cr;});
+    });
+  }catch(e){console.warn('[ImportPresence] horaires',e);pages.forEach(pg=>{pg.creneaux={};});}
   const creche=cacheCreches.find(c=>c.id===crecheId);
   const titles=[...new Set(pages.map(pg=>pg.title||'').filter(Boolean))];
   const crecheNorm=ipNormName(creche?creche.name:'');
   const crecheMatch=(!titles.length||!crecheNorm)?true:titles.every(t=>ipNormName(t).indexOf(crecheNorm)>=0);
   _ipForceCreche=false;
-  _importPresData={crecheId,pages,nameMap,crecheEnfantIds:enfCreche.map(e=>e.id),titles,crecheMatch};
+  // Contrats déjà enregistrés pour les enfants de la crèche (pour l'écran d'aperçu).
+  const contratsParEnfant={};
+  try{
+    const ids=enfCreche.map(e=>e.id);
+    if(ids.length){
+      const{data:cts}=await sb.from('enfants_contrats').select('*').in('enfant_id',ids);
+      (cts||[]).forEach(c=>{
+        const k=String(c.enfant_id);
+        if(!contratsParEnfant[k]||(c.date_debut||'')>(contratsParEnfant[k].date_debut||''))contratsParEnfant[k]=c;
+      });
+    }
+  }catch(e){console.warn('[ImportPresence] contrats',e);}
+  _ipContratCreer=true;_ipContratMaj=false;
+  _importPresData={crecheId,pages,nameMap,crecheEnfantIds:enfCreche.map(e=>e.id),titles,crecheMatch,
+    contratsParEnfant,propositions:ipProposerContrats(pages),epWarn};
   renderImportPreview();
   document.getElementById('modal-import-presence-wrap').classList.add('open');
 }
@@ -3439,6 +3474,126 @@ async function ipParsePdf(file){
 
 function ipFmtDate(iso){const d=new Date(iso+'T00:00:00');return d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});}
 
+/* ══ CONTRATS PROPOSÉS PAR L'IMPORT ════════════════════════════════════════
+   Le PDF donne, pour chaque enfant et chaque jour, une amplitude horaire. En
+   la cumulant sur toutes les dates importées on obtient un contrat d'accueil
+   plausible : jours = jours où l'enfant apparaît, heure_debut = la plus
+   précoce observée, heure_fin = la plus tardive. C'est une PROPOSITION : elle
+   ne vaut que pour les jours réellement présents dans le PDF, d'où le rappel
+   du nombre de dates lues dans l'écran d'aperçu. */
+let _ipContratCreer=true,_ipContratMaj=false;
+
+function ipJourSemaine(iso){const d=new Date(iso+'T00:00:00').getDay();return d===0?7:d;}
+function ipHhmmVersHeure(s){return s?String(s).slice(0,5):'';}
+function ipFmtH(s){return s?String(s).slice(0,5).replace(':','h'):'—';}
+
+/* pages → { nom PDF : {jours:[…], heure_debut, heure_fin, dates:[…]} } */
+function ipProposerContrats(pages){
+  const acc={};
+  (pages||[]).forEach(pg=>{
+    const j=ipJourSemaine(pg.date);
+    const noms=[...pg.matched.map(m=>m.name),...pg.toCreate];
+    noms.forEach(nm=>{
+      const cr=(pg.creneaux||{})[nm];
+      if(!cr||!cr.hdebut||!cr.hfin)return;
+      const e=acc[nm]||(acc[nm]={jours:new Set(),dates:new Set(),deb:null,fin:null});
+      e.jours.add(j);e.dates.add(pg.date);
+      if(e.deb===null||spMin(cr.hdebut)<spMin(e.deb))e.deb=cr.hdebut;
+      if(e.fin===null||spMin(cr.hfin)>spMin(e.fin))e.fin=cr.hfin;
+    });
+  });
+  const out={};
+  Object.keys(acc).forEach(nm=>{
+    const e=acc[nm];
+    out[nm]={jours:[...e.jours].sort((a,b)=>a-b),dates:[...e.dates].sort(),
+             heure_debut:e.deb,heure_fin:e.fin};
+  });
+  return out;
+}
+
+/* Un contrat existant diffère-t-il de la proposition ? */
+function ipContratDiffere(ct,prop){
+  if(!ct)return true;
+  const a=ctParseJours(ct.jours).sort((x,y)=>x-y).join(',');
+  const b=(prop.jours||[]).join(',');
+  return a!==b
+    || ipHhmmVersHeure(ct.heure_debut)!==ipHhmmVersHeure(prop.heure_debut)
+    || ipHhmmVersHeure(ct.heure_fin)!==ipHhmmVersHeure(prop.heure_fin);
+}
+
+/* Les colonnes horaires de `presences` peuvent ne pas exister encore (migration
+   SQL non passée) : on retente alors sans elles plutôt que de perdre l'import. */
+async function ipInsertPresences(rows){
+  let{error}=await sb.from('presences').insert(rows);
+  if(error&&/heure_debut|heure_fin|column/i.test(error.message||'')){
+    const nus=rows.map(r=>({enfant_id:r.enfant_id,presence_date:r.presence_date,slot:r.slot,status:r.status}));
+    const r2=await sb.from('presences').insert(nus);
+    return{error:r2.error,degrade:!r2.error};
+  }
+  return{error,degrade:false};
+}
+
+/* Bloc « Contrats d'accueil » de l'écran d'aperçu, partagé par les deux imports. */
+function ipHtmlContrats(propositions,nameMap,contratsParEnfant,warnings,nbJours){
+  const noms=Object.keys(propositions||{}).sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
+  let html='<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+    +'<div style="font-weight:700;color:var(--koala);font-size:13px;margin-bottom:8px"><i class="ti ti-file-text"></i> Contrats d’accueil (fiche enfant)</div>';
+  if(!noms.length){
+    html+='<div style="font-size:12px;color:var(--muted)">Aucune amplitude horaire n’a pu être lue dans ce PDF : les fiches enfant ne seront pas complétées.</div>';
+    if((warnings||[]).length)html+='<div style="font-size:11.5px;color:var(--orange);margin-top:6px">'+warnings.map(escHtml).join('<br>')+'</div>';
+    return html+'</div>';
+  }
+  let nbSans=0,nbDiff=0;
+  const lignes=noms.map(nm=>{
+    const p=propositions[nm];
+    const enf=(nameMap[nm]||{}).enfant;
+    const ct=enf?(contratsParEnfant||{})[String(enf.id)]:null;
+    let etat,couleur;
+    if(!ct){nbSans++;etat='nouveau contrat';couleur='#2e7d32';}
+    else if(ipContratDiffere(ct,p)){nbDiff++;etat='diffère du contrat existant';couleur='#e65100';}
+    else{etat='identique à l’existant';couleur='var(--muted)';}
+    const horaires=ipFmtH(p.heure_debut)+' – '+ipFmtH(p.heure_fin);
+    const jours=p.jours.map(n=>(CT_JOURS.find(x=>x[0]===n)||[n,'?'])[1].slice(0,3)).join(' ');
+    let det='';
+    if(ct&&ipContratDiffere(ct,p)){
+      det='<div style="font-size:11px;color:var(--muted);margin-left:2px">actuel : '+escHtml(ctJoursLabel(ct.jours))+' · '+escHtml(ipFmtH(ct.heure_debut)+' – '+ipFmtH(ct.heure_fin))+'</div>';
+    }
+    return '<div style="padding:5px 0;border-top:1px solid #f0eef8">'
+      +'<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px">'
+      +'<span style="font-weight:600;color:var(--koala-dark)">'+escHtml(nm)+'</span>'
+      +'<span style="color:'+couleur+';font-size:11px;font-weight:600">'+etat+'</span></div>'
+      +'<div style="font-size:11.5px;color:var(--muted)">'+escHtml(jours)+' · '+escHtml(horaires)+'</div>'+det+'</div>';
+  }).join('');
+  html+='<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">Amplitudes cumulées sur les <strong>'+(nbJours||0)+' journée(s)</strong> lues dans le PDF. Un contrat bâti sur une seule semaine ne reflète pas forcément l’accueil réel du reste de l’année.</div>';
+  html+='<label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;cursor:pointer;margin-bottom:5px"><input type="checkbox" onchange="_ipContratCreer=this.checked"'+(_ipContratCreer?' checked':'')+' style="margin-top:2px"/><span>Créer le contrat des <strong>'+nbSans+' enfant(s) sans contrat</strong></span></label>';
+  html+='<label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;cursor:pointer"><input type="checkbox" onchange="_ipContratMaj=this.checked"'+(_ipContratMaj?' checked':'')+' style="margin-top:2px"/><span>Mettre à jour les <strong>'+nbDiff+' contrat(s) existant(s)</strong> qui diffèrent du PDF</span></label>';
+  html+='<div style="margin-top:8px">'+lignes+'</div>';
+  if((warnings||[]).length)html+='<div style="font-size:11.5px;color:var(--orange);margin-top:8px">'+warnings.map(escHtml).join('<br>')+'</div>';
+  return html+'</div>';
+}
+
+/* Écrit les contrats retenus dans l'écran d'aperçu. Renvoie {crees, majs}. */
+async function ipAppliquerContrats(propositions,nameMap,contratsParEnfant){
+  let crees=0,majs=0;
+  for(const nm of Object.keys(propositions||{})){
+    const prop=propositions[nm];
+    const enf=(nameMap[nm]||{}).enfant;
+    if(!enf||!prop.heure_debut||!prop.heure_fin)continue;
+    const ct=(contratsParEnfant||{})[String(enf.id)];
+    const row={enfant_id:enf.id,jours:prop.jours,
+      heure_debut:prop.heure_debut,heure_fin:prop.heure_fin};
+    if(!ct){
+      if(!_ipContratCreer)continue;
+      row.date_debut=prop.dates[0];
+      row.notes='Créé automatiquement depuis l’import du planning PDF ('+prop.dates.length+' jour(s) lu(s) : '+prop.dates.map(d=>d.split('-').reverse().slice(0,2).join('/')).join(', ')+').';
+      if(await dbInsert('enfants_contrats',row))crees++;
+    }else if(_ipContratMaj&&ipContratDiffere(ct,prop)){
+      if(await dbUpdate('enfants_contrats',ct.id,row))majs++;
+    }
+  }
+  return{crees,majs};
+}
+
 function renderImportPreview(){
   const body=document.getElementById('import-presence-body');
   if(!_importPresData){body.innerHTML='';return;}
@@ -3457,6 +3612,7 @@ function renderImportPreview(){
     html+='<strong>'+totalNew+' nouvel enfant'+(totalNew>1?'s':'')+' seront créés</strong> dans <strong>'+(creche?creche.name:'la crèche')+'</strong><br>';
     html+='<span style="color:var(--muted);font-size:11.5px">'+toCreateUnique.map(escHtml).join(', ')+'</span></div>';
   }
+  html+=ipHtmlContrats(_importPresData.propositions,_importPresData.nameMap,_importPresData.contratsParEnfant,_importPresData.epWarn,_importPresData.pages.length);
   _importPresData.pages.forEach(pg=>{
     const nb=pg.matched.length+pg.toCreate.length;totalPres+=nb;
     html+='<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">';
@@ -3493,13 +3649,19 @@ async function confirmPresenceImport(){
       });
     }else{console.error('[ImportPresence] create enfant',nm,error);}
   }
-  // 2) Enregistrer les présences M + A
+  // 2) Enregistrer les présences M + A, avec l'amplitude horaire lue sur la barre.
+  //    Quand l'horaire est connu, un enfant parti avant 13h n'est plus marqué
+  //    présent l'après-midi (et inversement) : le PDF fait foi jusqu'au créneau.
   showBanner('Enregistrement des présences…');
   const wanted=[];
   pages.forEach(pg=>{
     pg.matched.forEach(mt=>{
-      wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'M',status:'present'});
-      wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'A',status:'present'});
+      const cr=(pg.creneaux||{})[mt.name];
+      const hd=cr&&cr.hdebut?cr.hdebut:null,hf=cr&&cr.hfin?cr.hfin:null;
+      const hasM=!cr||!hd||spMin(hd)<13*60;
+      const hasA=!cr||!hf||spMin(hf)>13*60;
+      if(hasM)wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'M',status:'present',heure_debut:hd,heure_fin:hf});
+      if(hasA)wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'A',status:'present',heure_debut:hd,heure_fin:hf});
     });
   });
   if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;showBanner('Aucune présence à enregistrer.','error');return;}
@@ -3514,11 +3676,24 @@ async function confirmPresenceImport(){
   const{data:existing}=await sb.from('presences').select('id,enfant_id,presence_date,slot').in('presence_date',dates).in('enfant_id',ids);
   const exSet=new Set((existing||[]).map(e=>e.enfant_id+'_'+e.presence_date+'_'+e.slot));
   const toInsert=wanted.filter(w=>!exSet.has(w.enfant_id+'_'+w.presence_date+'_'+w.slot));
-  let ok=true;
-  if(toInsert.length){const{error}=await sb.from('presences').insert(toInsert);if(error){console.error('[ImportPresence] insert presences',error);ok=false;}}
+  let ok=true,degrade=false;
+  if(toInsert.length){const r=await ipInsertPresences(toInsert);if(r.error){console.error('[ImportPresence] insert presences',r.error);ok=false;}degrade=r.degrade;}
+  // 3) Contrats d'accueil (fiche enfant) selon les cases cochées dans l'aperçu.
+  let ctRes={crees:0,majs:0};
+  if(ok&&(_ipContratCreer||_ipContratMaj)){
+    showBanner('Mise à jour des fiches enfant…');
+    try{ctRes=await ipAppliquerContrats(_importPresData.propositions,nameMap,_importPresData.contratsParEnfant);}
+    catch(e){console.warn('[ImportPresence] contrats',e);}
+  }
   closeModal('modal-import-presence-wrap');_importPresData=null;
   if(ok){
-    showBanner('Import terminé : '+(toCreateNames.length?toCreateNames.length+' enfant'+(toCreateNames.length>1?'s':'')+'créé'+(toCreateNames.length>1?'s':'')+', ':'')+toInsert.length+' présence'+(toInsert.length>1?'s':'')+' enregistrée'+(toInsert.length>1?'s':'')+' ✅');
+    const bouts=[];
+    if(toCreateNames.length)bouts.push(toCreateNames.length+' enfant'+(toCreateNames.length>1?'s':'')+' créé'+(toCreateNames.length>1?'s':''));
+    bouts.push(toInsert.length+' présence'+(toInsert.length>1?'s':'')+' enregistrée'+(toInsert.length>1?'s':''));
+    if(ctRes.crees)bouts.push(ctRes.crees+' contrat'+(ctRes.crees>1?'s':'')+' créé'+(ctRes.crees>1?'s':''));
+    if(ctRes.majs)bouts.push(ctRes.majs+' contrat'+(ctRes.majs>1?'s':'')+' mis à jour');
+    showBanner('Import terminé : '+bouts.join(', ')+' ✅');
+    if(degrade)setTimeout(()=>showBanner('Horaires non enregistrés sur les présences : colonnes heure_debut / heure_fin absentes de la table presences.','error'),3500);
     renderPresence();
   }else showBanner('Erreur lors de l\'enregistrement des présences.','error');
 }
@@ -6869,6 +7044,13 @@ presences: `
 Désactivez le filtre pour retrouver la <strong>liste complète</strong> des inscrits, absents compris. Le choix est mémorisé sur votre appareil.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Créer une nouvelle fiche enfant</div>
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Dans la fenêtre <strong>Ajouter à la journée</strong>, si l’enfant n’apparaît pas dans la liste déroulante, cliquez sur <strong>Créer une fiche enfant</strong> : cela ouvre le formulaire d’inscription (prénom au minimum). Une fois la fiche créée, l’enfant sera disponible dans la liste. Les enfants sont également créés automatiquement lors de l’<strong>import PDF</strong>.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">⏱ Ce que l’import PDF remplit tout seul</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>L’import lit la <strong>barre horaire</strong> de chaque enfant : son heure d’arrivée et son heure de départ sont enregistrées jour par jour et dessinées telles quelles sur le planning Gantt.</li>
+  <li>Un enfant parti avant 13h n’est plus marqué présent l’après-midi : le créneau lu sur le PDF fait foi.</li>
+  <li>L’écran d’aperçu propose de <strong>remplir l’onglet Contrat</strong> de la fiche enfant à partir des journées lues : jours de la semaine et amplitude horaire. Deux cases à cocher permettent de choisir — créer les contrats manquants, et/ou mettre à jour ceux qui diffèrent du PDF. Les écarts sont affichés avant validation.</li>
+  <li>Un contrat déduit d’une seule semaine ne vaut que pour cette semaine : vérifiez-le dans la fiche avant de vous y fier pour l’année.</li>
+</ul>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📤 Exporter</div>
 <div style="font-size:13px;color:#555;line-height:1.7">Le bouton <strong>Exporter</strong> génère un récapitulatif de présences pour la date sélectionnée, utile pour les transmissions administratives.</div>`,
 
@@ -8567,6 +8749,81 @@ function spMesurer(s) {
 }
 function spMin(hhmm) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; }
 
+/* ═══ HORAIRES DES ENFANTS (barres du planning PDF) ══════════════════════════
+   Le PDF Gertrude trace, pour chaque enfant, une barre d'arrivée → départ dans
+   EXACTEMENT le même vert que celles des salariés. La couche texte ne contient
+   que les noms : l'amplitude horaire ne s'obtient qu'en lisant les pixels, avec
+   la même mécanique que spParsePage (axe des heures + détection de segments).
+
+   Distinguer les en-têtes de section du récapitulatif final est essentiel :
+   « Enfants », « Salariés » et « Totaux » sont collés à la marge (x ≈ 35 pt)
+   alors que les lignes du bloc Totaux sont indentées (x ≈ 50 pt). Sans ce
+   critère, les lignes de totaux — qui portent elles aussi des barres vertes —
+   seraient lues comme des enfants. */
+const EP_X_SECTION = 42 * SP_SCALE;
+
+function epTrouverBandeEnfants(items, hauteurPage) {
+  const sections = items.filter(it => it.x < EP_X_SECTION);
+  const enf = sections.filter(it => /^Enfants$/i.test(it.texte)).sort((a, b) => a.y - b.y)[0];
+  if (!enf) throw new Error('section « Enfants » introuvable');
+  const fin = sections.filter(it => /^(Salari[ée]s|Totaux)$/i.test(it.texte) && it.y > enf.y)
+    .sort((a, b) => a.y - b.y)[0];
+  return { haut: enf.y + 6 * SP_SCALE, bas: (fin ? fin.y : hauteurPage) - 6 * SP_SCALE };
+}
+
+async function epParsePage(page) {
+  const viewport = page.getViewport({ scale: SP_SCALE });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  const px = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  const tc = await page.getTextContent();
+  const items = tc.items.filter(it => (it.str || '').trim()).map(it => {
+    const t = pdfjsLib.Util.transform(viewport.transform, it.transform);
+    return { texte: it.str.trim(), x: t[4], y: t[5], w: it.width * SP_SCALE };
+  });
+
+  const dateISO = spLireDate(items.map(i => i.texte).join(' '));
+  const axe = spCalibrerAxe(items);
+  const bande = epTrouverBandeEnfants(items, canvas.height);
+
+  const enfants = [];
+  for (const ligne of spGrouperLignes(items, bande)) {
+    if (/^(Totaux|Enfants|Salari[ée]s)$/i.test(ligne.nom)) continue;
+    const segments = spDetecterSegments(px, canvas.width, ligne.y, axe);
+    if (!segments.length) continue;   // listé sans barre : rien à mesurer
+    enfants.push({ nomPdf: ipCleanName(ligne.nom), creneau: spVersCreneau(segments) });
+  }
+  canvas.width = canvas.height = 0;
+  return { dateISO, enfants };
+}
+
+/* Renvoie { parDate: { '2026-09-07': { 'alize chassard': creneau, … } }, warnings }
+   La lecture des horaires ne doit JAMAIS faire échouer l'import des présences :
+   toute page illisible est signalée puis ignorée. */
+async function epParsePdf(files) {
+  const liste = Array.isArray(files) ? files : [files];
+  const parDate = {}, warnings = [];
+  for (const fichier of liste) {
+    let pdf;
+    try { pdf = await pdfjsLib.getDocument({ data: await fichier.arrayBuffer() }).promise; }
+    catch (e) { warnings.push(fichier.name + ' : horaires enfants illisibles.'); continue; }
+    for (let p = 1; p <= pdf.numPages; p++) {
+      try {
+        const r = await epParsePage(await pdf.getPage(p));
+        if (!parDate[r.dateISO]) parDate[r.dateISO] = {};
+        r.enfants.forEach(e => { parDate[r.dateISO][ipNormName(e.nomPdf)] = e.creneau; });
+      } catch (e) {
+        warnings.push(fichier.name + ' — page ' + p + ' : horaires enfants non lus (' + e.message + ')');
+      }
+    }
+  }
+  return { parDate, warnings };
+}
+
 // ── Correspondance des prénoms ─────────────────────────────────────────
 // planning_equipe stocke un PRÉNOM SEUL ("Miline"), le PDF donne l'identité
 // complète ("France miline STRAZEL"). Prendre le premier mot ne suffit pas :
@@ -9013,9 +9270,36 @@ async function uniHandleFile(event) {
   const referentId = selRef.value;
   const referentNom = selRef.selectedOptions[0]?.dataset?.name || '';
 
+  // Horaires des enfants (barres du PDF) — non bloquant.
+  showBanner('Lecture des horaires enfants…');
+  let epWarn = [];
+  try {
+    const eh = await epParsePdf(files);
+    epWarn = eh.warnings || [];
+    presPages.forEach(pg => {
+      const parNom = (eh.parDate || {})[pg.date] || {};
+      pg.creneaux = {};
+      pg.names.forEach(nm => { const cr = parNom[ipNormName(nm)]; if (cr) pg.creneaux[nm] = cr; });
+    });
+  } catch (e) { console.warn('[ImportUnifie] horaires enfants', e); presPages.forEach(pg => { pg.creneaux = {}; }); }
+
+  const contratsParEnfant = {};
+  try {
+    const ids = enfCreche.map(e => e.id);
+    if (ids.length) {
+      const { data: cts } = await sb.from('enfants_contrats').select('*').in('enfant_id', ids);
+      (cts || []).forEach(c => {
+        const k = String(c.enfant_id);
+        if (!contratsParEnfant[k] || (c.date_debut || '') > (contratsParEnfant[k].date_debut || '')) contratsParEnfant[k] = c;
+      });
+    }
+  } catch (e) { console.warn('[ImportUnifie] contrats', e); }
+  _ipContratCreer = true; _ipContratMaj = false;
+
   _uniData = {
     crecheId, referentId, referentNom,
-    pres: { pages: presPages, nameMap, crecheEnfantIds: enfCreche.map(e => e.id), titles: presTitles, crecheMatch: presCrecheMatch, forceCreche: false, replace: true },
+    pres: { pages: presPages, nameMap, crecheEnfantIds: enfCreche.map(e => e.id), titles: presTitles, crecheMatch: presCrecheMatch, forceCreche: false, replace: true,
+            contratsParEnfant, propositions: ipProposerContrats(presPages), epWarn },
     sal: { jours, mapping, connus, warnings: parsedSal.warnings, titles: parsedSal.titles, crecheMatch: salCrecheMatch, replace: true, referentPrenom: spPrenomReferente(referentNom, mapping) }
   };
   uniRenderPreview();
@@ -9046,6 +9330,7 @@ function uniRenderPreview() {
       html += '<strong>' + totalNew + ' nouvel enfant' + (totalNew > 1 ? 's' : '') + ' seront créés</strong> dans <strong>' + (creche ? creche.name : 'la crèche') + '</strong><br>';
       html += '<span style="color:var(--muted);font-size:11.5px">' + toCreateUnique.map(escHtml).join(', ') + '</span></div>';
     }
+    html += ipHtmlContrats(pres.propositions, pres.nameMap, pres.contratsParEnfant, pres.epWarn, pres.pages.length);
     pres.pages.forEach(pg => {
       const nb = pg.matched.length + pg.toCreate.length; totalPres += nb;
       html += '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">';
@@ -9176,8 +9461,10 @@ async function uniConfirmImport() {
     const wanted = [];
     pres.pages.forEach(pg => {
       pg.matched.forEach(mt => {
-        wanted.push({ enfant_id: mt.enfant.id, presence_date: pg.date, slot: 'M', status: 'present' });
-        wanted.push({ enfant_id: mt.enfant.id, presence_date: pg.date, slot: 'A', status: 'present' });
+        const cr = (pg.creneaux || {})[mt.name];
+        const hd = cr && cr.hdebut ? cr.hdebut : null, hf = cr && cr.hfin ? cr.hfin : null;
+        if (!cr || !hd || spMin(hd) < 13 * 60) wanted.push({ enfant_id: mt.enfant.id, presence_date: pg.date, slot: 'M', status: 'present', heure_debut: hd, heure_fin: hf });
+        if (!cr || !hf || spMin(hf) > 13 * 60) wanted.push({ enfant_id: mt.enfant.id, presence_date: pg.date, slot: 'A', status: 'present', heure_debut: hd, heure_fin: hf });
       });
     });
     let toInsertCount = 0;
@@ -9195,8 +9482,17 @@ async function uniConfirmImport() {
         const exSet = new Set((existing || []).map(e => e.enfant_id + '_' + e.presence_date + '_' + e.slot));
         const toInsert = wanted.filter(w => !exSet.has(w.enfant_id + '_' + w.presence_date + '_' + w.slot));
         toInsertCount = toInsert.length;
-        if (toInsert.length) { const { error } = await sb.from('presences').insert(toInsert); if (error) { console.error('[ImportUnifie] insert presences', error); presenceOk = false; } }
+        if (toInsert.length) { const r = await ipInsertPresences(toInsert); if (r.error) { console.error('[ImportUnifie] insert presences', r.error); presenceOk = false; } }
       }
+    }
+    // Contrats d'accueil (fiche enfant), selon les cases cochées dans l'aperçu.
+    if (presenceOk && (_ipContratCreer || _ipContratMaj) && pres.propositions) {
+      showBanner('Mise à jour des fiches enfant…');
+      try {
+        const r = await ipAppliquerContrats(pres.propositions, pres.nameMap, pres.contratsParEnfant);
+        if (r.crees) msgParts.push(r.crees + ' contrat' + (r.crees > 1 ? 's' : '') + ' créé' + (r.crees > 1 ? 's' : ''));
+        if (r.majs) msgParts.push(r.majs + ' contrat' + (r.majs > 1 ? 's' : '') + ' mis à jour');
+      } catch (e) { console.warn('[ImportUnifie] contrats', e); }
     }
     if (presenceOk) {
       msgParts.push((toCreateNames.length ? toCreateNames.length + ' enfant' + (toCreateNames.length > 1 ? 's' : '') + ' créé' + (toCreateNames.length > 1 ? 's' : '') + ', ' : '') + toInsertCount + ' présence' + (toInsertCount > 1 ? 's' : '') + ' enregistrée' + (toInsertCount > 1 ? 's' : ''));
