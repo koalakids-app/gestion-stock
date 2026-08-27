@@ -481,7 +481,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn-sm" onclick="hebdoMoveWeek('today')">Semaine actuelle</button>
         <button class="btn-green" onclick="exportPresenceHebdoExcel()" style="margin-left:auto"><i class="ti ti-file-spreadsheet"></i> Exporter Excel</button>
       </div>
-      <div class="info-box" style="margin-bottom:12px"><i class="ti ti-info-circle" style="font-size:15px"></i> Vue construite à partir des contrats d'accueil (horaires + type de repas) de chaque enfant — comme la feuille de présence hebdomadaire papier. L'export Excel reproduit les 3 feuilles habituelles : présence complète, effectifs repas, effectifs enfants.</div>
+      <div class="info-box" style="margin-bottom:12px"><i class="ti ti-info-circle" style="font-size:15px"></i> Vue construite à partir des présences enregistrées cette semaine (import PDF ou pointage manuel dans l'onglet « Jour »). Le repas (BB/M/G…) est déduit de l'âge de l'enfant et de son régime particulier renseigné sur sa fiche — comme la feuille de présence hebdomadaire papier. L'export Excel reproduit les 3 feuilles habituelles : présence complète, effectifs repas, effectifs enfants.</div>
       <div id="presence-hebdo-view"></div>
     </div>
   </div>
@@ -1222,6 +1222,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="enf-creche"><option value="">-- Choisir --</option></select></div>
     <div class="fg"><label class="flabel">Régime alimentaire / allergies</label><input class="finput" id="enf-allergies" placeholder="Ex. : sans gluten, allergie aux arachides"/></div>
+    <div class="fg"><label class="flabel">Repas <span style="font-weight:400;color:var(--muted);font-size:11px">(pour la feuille de présence hebdomadaire — la lettre BB/M/G est déduite automatiquement de l'âge)</span></label>
+      <select class="finput" id="enf-regime-repas">
+        <option value="">Standard</option>
+        <option value="SV">Sans viande</option>
+        <option value="SPV">Sans protéine de vache</option>
+        <option value="PA">Sans protéine animale</option>
+      </select>
+    </div>
     <div class="mactions"><button class="btn-cancel" id="enf-btn-delete" style="display:none;color:var(--red)" onclick="deleteEnfant()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-enfant-wrap')">Annuler</button><button class="btn-primary" id="enf-btn-save" onclick="saveEnfant()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
 </div>
@@ -1256,19 +1264,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fg"><label class="flabel">Jours de présence</label>
       <div id="ct-jours" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-    </div>
-    <div class="fg"><label class="flabel">Type de repas <span style="font-weight:400;color:var(--muted)">(facultatif — utilisé pour la feuille de présence hebdomadaire)</span></label>
-      <select class="finput" id="ct-repas">
-        <option value="">-- Non renseigné --</option>
-        <option value="BB">BB — Repas bébé (biberon)</option>
-        <option value="M">M — Repas moyen</option>
-        <option value="G">G — Repas grand</option>
-        <option value="GSV">GSV — Repas grand, sans viande</option>
-        <option value="MSV">MSV — Repas moyen, sans viande</option>
-        <option value="MSPV">MSPV — Repas moyen, sans protéine de vache</option>
-        <option value="GSPV">GSPV — Repas grand, sans protéine de vache</option>
-        <option value="MSPA">MSPA — Repas moyen, sans protéine animale</option>
-      </select>
     </div>
     <div class="fg"><label class="flabel">Note <span style="font-weight:400;color:var(--muted)">(facultatif)</span></label><textarea class="finput" id="ct-notes" rows="2" style="resize:vertical"></textarea></div>
     <div class="mactions">
@@ -2334,33 +2329,33 @@ async function renderPresenceHebdo(){
   const allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistré.</p></div>';_hebdoExportCtx=null;return;}
   view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement…</div>';
-  let ctData=[];
+  let presData=[];
   try{
-    const{data,error}=await sb.from('enfants_contrats').select('*').in('enfant_id',allEnfants.map(e=>e.id));
+    const{data,error}=await sb.from('presences').select('*').in('presence_date',dateStrs).in('enfant_id',allEnfants.map(e=>e.id));
     if(error)throw error;
-    ctData=data||[];
-  }catch(err){console.warn('[Hebdo] lecture contrats',err);}
-  function contratDuJour(enfantId,dateStr,jourSem){
-    let best=null;
-    ctData.forEach(function(c){
-      if(String(c.enfant_id)!==String(enfantId))return;
-      if(c.date_debut&&c.date_debut>dateStr)return;
-      if(c.date_fin&&c.date_fin<dateStr)return;
-      if(ctParseJours(c.jours).indexOf(jourSem)<0)return;
-      if(!best||(c.date_debut||'')>(best.date_debut||''))best=c;
-    });
-    return best;
+    presData=data||[];
+  }catch(err){console.warn('[Hebdo] lecture présences',err);}
+  const pm={};
+  presData.forEach(function(p){pm[p.enfant_id+'_'+p.presence_date+'_'+p.slot]=p.status;});
+  function statutJour(enfantId,dateStr){
+    const m=pm[enfantId+'_'+dateStr+'_M'],a=pm[enfantId+'_'+dateStr+'_A'];
+    const mOk=m==='present'||m==='partial',aOk=a==='present'||a==='partial';
+    if(mOk&&aOk)return{present:true,label:'Journée'};
+    if(mOk)return{present:true,label:'Matin'};
+    if(aOk)return{present:true,label:'Après-midi'};
+    return{present:false,label:''};
   }
   const rows=[];
   allEnfants.forEach(function(e){
+    const repas=enfRepasCode(e);
     const cells=days5.map(function(d,i){
-      const c=contratDuJour(e.id,dateStrs[i],i+1);
-      return c?{present:true,horaires:(ctFmtHeure(c.heure_debut)||'?')+'–'+(ctFmtHeure(c.heure_fin)||'?'),repas:c.repas||''}:{present:false,horaires:'',repas:''};
+      const st=statutJour(e.id,dateStrs[i]);
+      return st.present?{present:true,horaires:st.label,repas:repas}:{present:false,horaires:'',repas:''};
     });
     if(cells.some(function(c){return c.present;}))rows.push({enfant:e,cells:cells});
   });
   if(!rows.length){
-    view.innerHTML='<div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant sous contrat cette semaine'+(crecheId?'':' — sélectionnez une crèche')+'.<br><span style="font-size:12px">Renseignez les contrats d’accueil (horaires + jours) dans la fiche de chaque enfant.</span></p></div>';
+    view.innerHTML='<div class="empty-state"><i class="ti ti-user-off"></i><p>Aucune présence enregistrée cette semaine'+(crecheId?'':' — sélectionnez une crèche')+'.<br><span style="font-size:12px">Importez le planning (PDF) ou pointez les présences dans l’onglet « Jour ».</span></p></div>';
     _hebdoExportCtx=null;
     return;
   }
@@ -2375,7 +2370,7 @@ async function renderPresenceHebdo(){
   JOURS_LBL.forEach(function(j,i){html+='<th colspan="2" style="padding:8px 6px;text-align:center;border-left:2px solid rgba(255,255,255,0.3)">'+j+'<br><span style="font-size:9px;font-weight:400;opacity:0.8">'+days5[i].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</span></th>';});
   html+='</tr><tr style="background:#EEEDF8;color:var(--koala-dark)">';
   html+='<th style="padding:4px 10px;position:sticky;left:0;background:#EEEDF8"></th>';
-  JOURS_LBL.forEach(function(){html+='<th style="padding:4px 6px;font-size:10px;font-weight:600;border-left:2px solid #fff">Horaires</th><th style="padding:4px 6px;font-size:10px;font-weight:600">Repas</th>';});
+  JOURS_LBL.forEach(function(){html+='<th style="padding:4px 6px;font-size:10px;font-weight:600;border-left:2px solid #fff">Présence</th><th style="padding:4px 6px;font-size:10px;font-weight:600">Repas</th>';});
   html+='</tr></thead><tbody>';
   rows.forEach(function(r,idx){
     const bg=idx%2===0?'#fff':'#f7f6fb';
@@ -2383,7 +2378,7 @@ async function renderPresenceHebdo(){
     r.cells.forEach(function(c){
       if(c.present){
         html+='<td style="padding:6px;text-align:center;border-left:2px solid #ece9f5;white-space:nowrap">'+escHtml(c.horaires)+'</td>';
-        html+='<td style="padding:6px;text-align:center" title="'+escHtml(ctRepasLabel(c.repas))+'">'+(c.repas?'<span style="background:var(--koala-light);color:var(--koala);border-radius:8px;padding:2px 7px;font-size:11px;font-weight:700">'+escHtml(c.repas)+'</span>':'<span style="color:var(--muted);font-size:11px">—</span>')+'</td>';
+        html+='<td style="padding:6px;text-align:center" title="'+escHtml(repasLabel(c.repas))+'">'+(c.repas?'<span style="background:var(--koala-light);color:var(--koala);border-radius:8px;padding:2px 7px;font-size:11px;font-weight:700">'+escHtml(c.repas)+'</span>':'<span style="color:var(--muted);font-size:11px">—</span>')+'</td>';
       }else{
         html+='<td style="padding:6px;text-align:center;border-left:2px solid #ece9f5;color:#ccc">X</td><td style="padding:6px;text-align:center;color:#ccc">X</td>';
       }
@@ -2394,7 +2389,7 @@ async function renderPresenceHebdo(){
   totalParJour.forEach(function(n){html+='<td colspan="2" style="padding:6px;text-align:center;color:var(--koala)">'+n+'</td>';});
   html+='</tr>';
   totauxRepas.forEach(function(t){
-    html+='<tr><td style="padding:4px 10px;font-size:11px;color:var(--muted);position:sticky;left:0;background:#fff" title="'+escHtml(ctRepasLabel(t.code))+'">dont '+escHtml(t.code)+'</td>';
+    html+='<tr><td style="padding:4px 10px;font-size:11px;color:var(--muted);position:sticky;left:0;background:#fff" title="'+escHtml(repasLabel(t.code))+'">dont '+escHtml(t.code)+'</td>';
     t.parJour.forEach(function(n){html+='<td colspan="2" style="padding:4px;text-align:center;font-size:11px;color:var(--muted)">'+(n||'')+'</td>';});
     html+='</tr>';
   });
@@ -2405,7 +2400,7 @@ async function renderPresenceHebdo(){
   }
   html+='</tbody></table></div>';
   const crecheLbl=(cacheCreches.find(function(c){return c.id===crecheId;})||{}).name||'Toutes crèches';
-  view.innerHTML='<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'+rows.length+' enfant(s) sous contrat cette semaine — '+escHtml(crecheLbl)+'</div>'+html;
+  view.innerHTML='<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'+rows.length+' enfant(s) présent(s) au moins un jour cette semaine — '+escHtml(crecheLbl)+'</div>'+html;
   _hebdoExportCtx={crecheLbl:crecheLbl,days5:days5,dateStrs:dateStrs,rows:rows,totalParJour:totalParJour,totauxRepas:totauxRepas,nbSansRepas:nbSansRepas};
 }
 window.renderPresenceHebdo=renderPresenceHebdo;
@@ -2421,7 +2416,7 @@ function exportPresenceHebdoExcel(){
     const out=[];
     out.push(['Effectif du jour'].concat(ctx.totalParJour.reduce(function(a,n){return a.concat(colsParJour===2?[n,'']:[n]);},[])));
     ctx.totauxRepas.forEach(function(t){
-      out.push(['dont '+t.code+' ('+ctRepasLabel(t.code)+')'].concat(t.parJour.reduce(function(a,n){return a.concat(colsParJour===2?[n,'']:[n]);},[])));
+      out.push(['dont '+t.code+' ('+repasLabel(t.code)+')'].concat(t.parJour.reduce(function(a,n){return a.concat(colsParJour===2?[n,'']:[n]);},[])));
     });
     if(ctx.nbSansRepas.some(function(n){return n>0;})){
       out.push(['dont repas non renseigné'].concat(ctx.nbSansRepas.reduce(function(a,n){return a.concat(colsParJour===2?[n,'']:[n]);},[])));
@@ -2429,9 +2424,9 @@ function exportPresenceHebdoExcel(){
     return out;
   }
 
-  // Feuille 1 : présence complète (horaires + repas)
+  // Feuille 1 : présence complète (présence + repas)
   const head1=['Enfant'];
-  JOURS_LBL.forEach(function(j){head1.push(j+' — Horaires',j+' — Repas');});
+  JOURS_LBL.forEach(function(j){head1.push(j+' — Présence',j+' — Repas');});
   const aoa1=[[titre],[],head1];
   ctx.rows.forEach(function(r){
     const line=[r.enfant.prenom+' '+(r.enfant.nom||'')];
@@ -2452,7 +2447,7 @@ function exportPresenceHebdoExcel(){
   aoa2.push([]);
   totauxLignes(1).forEach(function(r){aoa2.push(r);});
 
-  // Feuille 3 : effectifs enfants (horaires seuls, pour le calcul des taux d'encadrement)
+  // Feuille 3 : effectifs enfants (présence seule, pour le calcul des taux d'encadrement)
   const head3=['Enfant'].concat(JOURS_LBL);
   const aoa3=[[titre],[],head3];
   ctx.rows.forEach(function(r){
@@ -2532,9 +2527,9 @@ function enfFillCreches(selectedId){
   sel.style.background=isDirection?'':'#f4f4f8';
   sel.style.cursor=isDirection?'':'not-allowed';
 }
-function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-function editEnfant(id){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim()};
+function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+function editEnfant(id){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim(),regime_repas:document.getElementById('enf-regime-repas').value||null};
   if(editingEnfantId){const ok=await dbUpdate('enfants',editingEnfantId,row);if(ok){const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(e)Object.assign(e,row);closeModal('modal-enfant-wrap');showBanner(prenom+' modifié(e) ✅');renderPresence();if(document.getElementById('modal-enf-fiche-wrap')?.classList.contains('open')){document.getElementById('enf-fiche-title').innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((row.prenom||'')+' '+(row.nom||''));enfRenderIdentite();}if(typeof enfRender==='function')enfRender();if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();}else showBanner('Erreur lors de la modification.','error');return;}
   const saved=await dbInsert('enfants',row);if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
 async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(!confirm('Supprimer définitivement '+(e?.prenom||'')+' '+(e?.nom||'')+' ?\n\nAttention : les présences liées ne seront plus rattachées.'))return;const ok=await dbDelete('enfants',editingEnfantId);if(ok){cacheEnfants=cacheEnfants.filter(x=>x.id!==editingEnfantId);closeModal('modal-enfant-wrap');closeModal('modal-enf-fiche-wrap');showBanner('Enfant supprimé.');renderPresence();if(typeof enfRender==='function')enfRender();}else showBanner('Erreur lors de la suppression.','error');}
@@ -6799,7 +6794,9 @@ window.enfDeleteDoc = enfDeleteDoc;
 
 const CT_JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi']];
 /* Codes repas utilisés sur la feuille de présence hebdomadaire (transmise au traiteur / à l'administratif).
-   Ajouter un code ici l'ajoute automatiquement aux totaux de l'export Excel. */
+   La lettre de base (BB/M/G) est déduite automatiquement de la tranche d'âge de l'enfant (voir enfRepasCode) ;
+   le suffixe vient du champ « Repas » de sa fiche (régime particulier). Ajouter un code ici l'ajoute
+   automatiquement aux totaux de l'export Excel. */
 const REPAS_TYPES={
   BB:'Repas bébé (biberon)',
   M:'Repas moyen',
@@ -6808,9 +6805,24 @@ const REPAS_TYPES={
   MSV:'Repas moyen — sans viande',
   MSPV:'Repas moyen — sans protéine de vache',
   GSPV:'Repas grand — sans protéine de vache',
-  MSPA:'Repas moyen — sans protéine animale'
+  MSPA:'Repas moyen — sans protéine animale',
+  GPA:'Repas grand — sans protéine animale'
 };
-function ctRepasLabel(code){ return code?(REPAS_TYPES[code]||code):''; }
+function repasLabel(code){ return code?(REPAS_TYPES[code]||code):''; }
+/* Code repas auto : lettre de base selon la tranche d'âge (identique au calcul du groupe),
+   + suffixe selon le régime alimentaire particulier renseigné sur la fiche de l'enfant
+   (champ enf.regime_repas : '' | 'SV' | 'SPV' | 'PA'). Pas de déclinaison pour les biberons (BB). */
+function enfRepasCode(e){
+  if(!e)return'';
+  const groupe=e.dob?groupeFromDob(e.dob):(e.groupe||'');
+  let base='';
+  if(groupe.indexOf('Bébé')>=0)base='BB';
+  else if(groupe.indexOf('Moyen')>=0)base='M';
+  else if(groupe.indexOf('Grand')>=0)base='G';
+  if(!base)return'';
+  if(base==='BB')return'BB';
+  return e.regime_repas?base+e.regime_repas:base;
+}
 let enfContratsCache=[], editingContratId=null, ctJoursSel=[];
 
 function ctFmtDate(s){ if(!s) return ''; const d=new Date(s+'T00:00:00'); return isNaN(d)?'':d.toLocaleDateString('fr-FR'); }
@@ -6881,7 +6893,6 @@ function enfRenderContrat(){
       + '</div></div>'
       + '<div style="font-size:12px;color:var(--muted);margin-top:6px"><i class="ti ti-clock"></i> '+escHtml(horaires)+'</div>'
       + '<div style="font-size:12px;color:var(--muted);margin-top:2px"><i class="ti ti-calendar"></i> '+escHtml(ctJoursLabel(c.jours))+'</div>'
-      + (c.repas?'<div style="font-size:12px;color:var(--muted);margin-top:2px"><i class="ti ti-tools-kitchen-2"></i> '+escHtml(ctRepasLabel(c.repas))+' ('+escHtml(c.repas)+')</div>':'')
       + (c.notes?'<div style="font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap">'+escHtml(c.notes)+'</div>':'')
       + '</div>';
   }).join('')
@@ -6911,7 +6922,6 @@ function ctOpen(id){
   document.getElementById('ct-h1').value=c&&c.heure_debut?String(c.heure_debut).slice(0,5):'';
   document.getElementById('ct-h2').value=c&&c.heure_fin?String(c.heure_fin).slice(0,5):'';
   document.getElementById('ct-notes').value=c&&c.notes?c.notes:'';
-  document.getElementById('ct-repas').value=c&&c.repas?c.repas:'';
   ctJoursSel=c?ctParseJours(c.jours):[1,2,3,4,5];
   ctRenderJours();
   document.getElementById('ct-btn-delete').style.display=c?'':'none';
@@ -6931,7 +6941,6 @@ async function ctSave(){
     heure_debut:document.getElementById('ct-h1').value||null,
     heure_fin:document.getElementById('ct-h2').value||null,
     jours:ctJoursSel.slice().sort(function(a,b){return a-b;}),
-    repas:document.getElementById('ct-repas').value||null,
     notes:(document.getElementById('ct-notes').value||'').trim()||null
   };
   let ok;
