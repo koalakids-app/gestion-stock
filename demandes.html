@@ -541,7 +541,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:6px">
         <div style="font-size:13px;font-weight:700;color:var(--koala);display:flex;align-items:center;gap:6px">
           <i class="ti ti-user-circle"></i>
-          <span>Planning du coordinateur</span>
+          <span id="planning-coord-label">Planning du coordinateur</span>
+          <select id="planning-coord-select" class="finput" style="display:none;font-size:12px;padding:4px 8px;width:auto;min-width:200px" onchange="renderPlanning()">
+            <option value="">-- Choisir --</option>
+          </select>
         </div>
         <span id="planning-coord-badge" style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="printPlanningCoord()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
@@ -4393,6 +4396,8 @@ async function renderPlanning(){
   const topBadge=document.getElementById('planning-top-badge');
   const coordBadge=document.getElementById('planning-coord-badge');
   const coordAdd=document.getElementById('planning-coord-add-btn');
+  const coordLabel=document.getElementById('planning-coord-label');
+  const coordSelect=document.getElementById('planning-coord-select');
   const importBtn=document.getElementById('planning-import-btn');
   const gridMine=document.getElementById('planning-grid-mine');
   const gridOther=document.getElementById('planning-grid-other');
@@ -4413,12 +4418,33 @@ async function renderPlanning(){
       else{gridMine.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
         const evs=await planningLoad(selectedId,semaine);gridMine.innerHTML=getPlanningGrid(evs,selectedId,semaine,false);}
     }
-    if(coordBadge){coordBadge.textContent='✏️ Modifiable';coordBadge.style.background='var(--koala-light)';coordBadge.style.color='var(--koala)';}
-    if(coordAdd)coordAdd.style.display='';
+    // Bloc du bas : tout compte direction peut choisir de voir/éditer SON propre planning,
+    // ou de consulter (lecture seule) celui d'un autre membre de la direction (ex. le coordinateur
+    // principal). Ceci corrige le cas où un autre compte "direction" (ex. Andy Janin, Cyril Gabriel)
+    // ne voyait jamais que son propre planning et jamais celui du coordinateur.
+    const dirAccounts=cacheReferents.filter(r=>r.role==='direction');
+    if(coordSelect){
+      coordSelect.style.display=dirAccounts.length>1?'':'none';
+      if(coordLabel)coordLabel.style.display=dirAccounts.length>1?'none':'';
+      const opts=dirAccounts.map(r=>'<option value="'+r.id+'">'+r.name+(r.id===currentProfile.id?' (moi)':'')+'</option>').join('');
+      if(coordSelect.options.length<=1||coordSelect.getAttribute('data-count')!=String(dirAccounts.length)){
+        coordSelect.innerHTML=opts;
+        coordSelect.value=currentProfile.id;
+        coordSelect.setAttribute('data-count',String(dirAccounts.length));
+      }
+    }
+    const viewedCoordId=(coordSelect&&coordSelect.value)||currentProfile.id;
+    const viewedCoord=dirAccounts.find(r=>r.id===viewedCoordId)||currentProfile;
+    const isOwnCoordPlanning=viewedCoordId===currentProfile.id;
+    if(coordBadge){
+      if(isOwnCoordPlanning){coordBadge.textContent='✏️ Modifiable';coordBadge.style.background='var(--koala-light)';coordBadge.style.color='var(--koala)';}
+      else{coordBadge.textContent='👁 Lecture seule';coordBadge.style.background='#f0f0f5';coordBadge.style.color='#888';}
+    }
+    if(coordAdd)coordAdd.style.display=isOwnCoordPlanning?'':'none';
     if(gridOther){
-      if(!coord)gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">—</div>';
+      if(!viewedCoord)gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">—</div>';
       else{gridOther.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
-        const cEvs=await planningLoad(coord.id,semaine);gridOther.innerHTML=getPlanningGridSimple(cEvs,coord.id,semaine);}
+        const cEvs=await planningLoad(viewedCoord.id,semaine);gridOther.innerHTML=getPlanningGridSimple(cEvs,isOwnCoordPlanning?viewedCoord.id:null,semaine);}
     }
   }else{
     if(!userId||userId==='dir'){setTimeout(()=>renderPlanning(),500);return;}
