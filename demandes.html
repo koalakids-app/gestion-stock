@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- ExcelJS : seul l'export de la feuille de présence hebdomadaire l'utilise
+     (SheetJS gratuit n'écrit ni couleurs, ni gras, ni bordures). Chargé en
+     différé : son absence n'empêche pas l'application de fonctionner. -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -1286,24 +1290,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <!-- PRÉVISUALISATION DE L'EXPORT EXCEL -->
-<div class="overlay" id="modal-xls-wrap">
-  <div class="modal" style="max-width:1040px">
-    <h3><i class="ti ti-file-spreadsheet"></i> Export Excel — prévisualisation</h3>
-    <div class="info-box" style="margin-bottom:12px"><i class="ti ti-info-circle" style="font-size:15px"></i>
-      Aperçu du classeur tel qu'il sera enregistré : <strong id="xls-filename"></strong>.
-      Les trois feuilles ci-dessous correspondent exactement au contenu du fichier.</div>
-    <div class="info-box" id="xls-prevision" style="display:none;margin-bottom:12px;background:var(--orange-light);border-color:var(--orange);color:var(--orange-dark)">
-      <i class="ti ti-chart-dots" style="font-size:15px"></i>
-      Attention : cette semaine repose sur une <strong>prévision</strong> (planning pas encore importé), et non sur des présences réelles.</div>
-    <div class="module-tabs" id="xls-tabs" style="margin-bottom:12px"></div>
-    <div id="xls-preview"></div>
-    <div class="mactions">
-      <button class="btn-cancel" onclick="closeModal('modal-xls-wrap')">Fermer</button>
-      <button class="btn-green" onclick="xlsDownload()"><i class="ti ti-download"></i> Télécharger le fichier</button>
-    </div>
-  </div>
-</div>
-
 <!-- COMMANDE REPAS TRAITEUR (bon MCM) -->
 <div class="overlay" id="modal-commande-wrap">
   <div class="modal" style="max-width:980px">
@@ -2566,11 +2552,17 @@ async function renderPresenceHebdo(){
       });
     });
   }catch(err){console.warn('[Hebdo] lecture contrats',err);}
+  /* Format compact de la feuille d'origine : « 8h-18h », « 7h45-17h45 ». */
+  function hCompact(t){
+    const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));
+    if(!m)return'';
+    return parseInt(m[1],10)+'h'+(m[2]==='00'?'':m[2]);
+  }
   function hebdoHoraires(enfantId,i,slot){
     const rec=phm[enfantId+'_'+dateStrs[i]];
-    if(rec&&rec.hd&&rec.hf)return ctFmtHeure(rec.hd)+'–'+ctFmtHeure(rec.hf);
+    if(rec&&rec.hd&&rec.hf)return hCompact(rec.hd)+'-'+hCompact(rec.hf);
     const ct=ctHebdo[String(enfantId)+'_'+i];
-    if(ct&&slot==='j'&&ct.heure_debut&&ct.heure_fin)return ctFmtHeure(ct.heure_debut)+'–'+ctFmtHeure(ct.heure_fin);
+    if(ct&&slot==='j'&&ct.heure_debut&&ct.heure_fin)return hCompact(ct.heure_debut)+'-'+hCompact(ct.heure_fin);
     return SLOT_LBL[slot]||'';
   }
   /* Semaine encore vierge (commande passée à l'avance) → on bascule sur la
@@ -2701,64 +2693,180 @@ async function renderPresenceHebdo(){
 window.renderPresenceHebdo=renderPresenceHebdo;
 
 /* Construit les trois feuilles du classeur — fonction pure, sans accès au DOM.
-   La prévisualisation et le fichier téléchargé partent des mêmes données : ce qui
-   est affiché à l'écran est donc exactement ce qui sera écrit dans le .xlsx. */
-function hebdoBuildSheets(ctx){
-  const JOURS_LBL=['LUNDI','MARDI','MERCREDI','JEUDI','VENDREDI'];
-  const dateLbl=ctx.days5[0].toLocaleDateString('fr-FR')+' au '+ctx.days5[4].toLocaleDateString('fr-FR');
-  const titre='Présence hebdomadaire — '+ctx.crecheLbl+' — semaine du '+dateLbl
-    +(ctx.source==='prevision'?' (prévision)':'');
+   `kinds` donne la nature de chaque case (en-tête, bande, total…) : c'est elle
+   qui pilote la mise en forme appliquée au fichier. */
+/* Prénom seul, comme sur la feuille d'origine — avec l'initiale du nom en
+   renfort quand deux enfants partagent le même prénom (« Philomène B »). */
+function hebdoPrenoms(rows) {
+  const compte = {};
+  rows.forEach(function (r) {
+    const p = (r.enfant.prenom || '').trim();
+    compte[p.toLowerCase()] = (compte[p.toLowerCase()] || 0) + 1;
+  });
+  const out = {};
+  rows.forEach(function (r) {
+    const p = (r.enfant.prenom || '').trim();
+    const n = (r.enfant.nom || '').trim();
+    out[r.enfant.id] = (compte[p.toLowerCase()] > 1 && n) ? p + ' ' + n.charAt(0).toUpperCase() : p;
+  });
+  return out;
+}
 
-  function totauxLignes(colsParJour){
-    const out=[];
-    out.push(['Effectif du jour'].concat(ctx.totalParJour.reduce(function(a,n){return a.concat(colsParJour===2?[n,'']:[n]);},[])));
-    ctx.totauxRepas.forEach(function(t){
-      out.push(['dont '+t.code+' ('+repasLabel(t.code)+')'].concat(t.parJour.reduce(function(a,n){return a.concat(colsParJour===2?[n,'']:[n]);},[])));
-    });
-    if(ctx.nbSansRepas.some(function(n){return n>0;})){
-      out.push(['dont repas non renseigné'].concat(ctx.nbSansRepas.reduce(function(a,n){return a.concat(colsParJour===2?[n,'']:[n]);},[])));
+function hebdoNumSemaine(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const jour = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - jour);
+  const debut = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - debut) / 86400000 + 1) / 7);
+}
+
+function hebdoBuildSheets(ctx) {
+  const JOURS_LBL = ['LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI'];
+  const prenoms = hebdoPrenoms(ctx.rows);
+  const semaine = ctx.days5[0].toLocaleDateString('fr-FR') + '\nSemaine ' + hebdoNumSemaine(ctx.days5[0]);
+  const titre = 'Présence hebdomadaire enfant — ' + ctx.crecheLbl
+    + (ctx.source === 'prevision' ? ' (PRÉVISION)' : '');
+
+  /* Construit une feuille « un bloc par jour ».
+     colonnes : liste des champs du bloc, ex. ['nom','horaires','repas'] */
+  function feuille(nom, champs, entetes, largeurs, avecRepasTotaux) {
+    const bloc = champs.length;
+    const total = 2 + bloc * 5;                       // A + B (index) + 5 jours
+    const vide = function () { return new Array(total).fill(''); };
+    const aoa = [], kinds = [], merges = [];
+    const pousse = function (ligne, nature) { aoa.push(ligne); kinds.push(nature); };
+
+    // Lignes 1-2 : titre fusionné + date/semaine
+    const l1 = vide(), k1 = vide();
+    l1[5] = titre; k1[5] = 't';
+    pousse(l1, k1);
+    const l2 = vide(), k2 = vide();
+    l2[2] = semaine; k2[2] = 'w';
+    pousse(l2, k2);
+    merges.push({ top: 1, left: 6, bottom: 2, right: 12 });   // F1:L2  (titre)
+    merges.push({ top: 2, left: 3, bottom: 2, right: 4 });    // C2:D2  (semaine)
+    pousse(vide(), vide());
+    pousse(vide(), vide());
+
+    // Ligne 5 : en-têtes, un bloc par jour
+    const lh = vide(), kh = vide();
+    for (let j = 0; j < 5; j++) {
+      for (let c = 0; c < bloc; c++) {
+        lh[2 + j * bloc + c] = c === 0 ? JOURS_LBL[j] : entetes[c];
+        kh[2 + j * bloc + c] = (entetes[c] === 'REPAS' && c > 0) ? 'hr' : 'h';
+      }
     }
-    return out;
+    pousse(lh, kh);
+
+    // Lignes enfants
+    ctx.rows.forEach(function (r, idx) {
+      const l = vide(), k = vide();
+      l[1] = idx + 1; k[1] = 'i';
+      const bande = idx % 2 === 0;
+      for (let j = 0; j < 5; j++) {
+        const cell = r.cells[j];
+        for (let c = 0; c < bloc; c++) {
+          const p = 2 + j * bloc + c;
+          if (!cell.present) { l[p] = 'X'; k[p] = bande ? 'xb' : 'x'; continue; }
+          const champ = champs[c];
+          l[p] = champ === 'nom' ? prenoms[r.enfant.id]
+               : champ === 'horaires' ? (cell.horaires || '')
+               : (cell.repas || '');
+          k[p] = bande ? 'db' : 'd';
+        }
+      }
+      if (bande) k[1] = 'ib';
+      pousse(l, k);
+    });
+
+    pousse(vide(), vide());
+
+    // Effectif du jour, dans la première colonne de chaque bloc
+    const le = vide(), ke = vide();
+    le[0] = ''; le[1] = '';
+    for (let j = 0; j < 5; j++) { le[2 + j * bloc] = ctx.totalParJour[j]; ke[2 + j * bloc] = 'e'; }
+    pousse(le, ke);
+
+    // Détail par code repas : code dans la 1re colonne du bloc, effectif dans la dernière
+    if (avecRepasTotaux) {
+      ctx.totauxRepas.forEach(function (t) {
+        const l = vide(), k = vide();
+        for (let j = 0; j < 5; j++) {
+          l[2 + j * bloc] = t.code; k[2 + j * bloc] = 'rl';
+          l[2 + j * bloc + (bloc - 1)] = t.parJour[j]; k[2 + j * bloc + (bloc - 1)] = 'rc';
+        }
+        pousse(l, k);
+      });
+      if (ctx.nbSansRepas.some(function (n) { return n > 0; })) {
+        const l = vide(), k = vide();
+        for (let j = 0; j < 5; j++) {
+          l[2 + j * bloc] = '?'; k[2 + j * bloc] = 'rl';
+          l[2 + j * bloc + (bloc - 1)] = ctx.nbSansRepas[j]; k[2 + j * bloc + (bloc - 1)] = 'rc';
+        }
+        pousse(l, k);
+      }
+    }
+
+    const cols = [1.2, 4.5];
+    for (let j = 0; j < 5; j++) largeurs.forEach(function (w) { cols.push(w); });
+    return { nom: nom, aoa: aoa, kinds: kinds, merges: merges, cols: cols, headerRow: 5 };
   }
-  const nom=function(r){return r.enfant.prenom+' '+(r.enfant.nom||'');};
-
-  // Feuille 1 : présence complète (présence + repas)
-  const head1=['Enfant'];
-  JOURS_LBL.forEach(function(j){head1.push(j+' — Horaires',j+' — Repas');});
-  const aoa1=[[titre],[],head1];
-  ctx.rows.forEach(function(r){
-    const line=[nom(r)];
-    r.cells.forEach(function(c){ line.push(c.present?c.horaires:'X'); line.push(c.present?(c.repas||''):'X'); });
-    aoa1.push(line);
-  });
-  aoa1.push([]);
-  totauxLignes(2).forEach(function(l){aoa1.push(l);});
-
-  // Feuille 2 : effectifs repas (code repas seul, pour le traiteur)
-  const aoa2=[[titre],[],['Enfant'].concat(JOURS_LBL)];
-  ctx.rows.forEach(function(r){
-    const line=[nom(r)];
-    r.cells.forEach(function(c){ line.push(c.present?(c.repas||'—'):'X'); });
-    aoa2.push(line);
-  });
-  aoa2.push([]);
-  totauxLignes(1).forEach(function(l){aoa2.push(l);});
-
-  // Feuille 3 : effectifs enfants (présence seule, pour le calcul des taux d'encadrement)
-  const aoa3=[[titre],[],['Enfant'].concat(JOURS_LBL)];
-  ctx.rows.forEach(function(r){
-    const line=[nom(r)];
-    r.cells.forEach(function(c){ line.push(c.present?c.horaires:'X'); });
-    aoa3.push(line);
-  });
-  aoa3.push([]);
-  aoa3.push(['Effectif du jour'].concat(ctx.totalParJour));
 
   return [
-    {nom:'Présence hebdomadaire',aoa:aoa1},
-    {nom:'Effectifs repas',      aoa:aoa2},
-    {nom:'Effectifs enfants',    aoa:aoa3}
+    feuille('Présence hebdomadaire', ['nom', 'horaires', 'repas'], ['', 'Horaires', 'REPAS'], [13, 11.7, 7.2], true),
+    feuille('Effectifs repas', ['nom', 'repas'], ['', 'REPAS'], [18.5, 7.5], true),
+    feuille('Effectifs enfants', ['nom', 'horaires'], ['', 'Horaires'], [17, 11.7], false)
   ];
+}
+
+/* ── Mise en forme du fichier Excel (ExcelJS) ─────────────────────────────────
+   SheetJS, déjà chargé pour les autres exports, ne sait pas écrire couleurs,
+   gras ni bordures dans sa version gratuite : ce classeur-ci passe donc par
+   ExcelJS. Si la bibliothèque n'a pas pu être chargée, l'export retombe sur
+   SheetJS — le fichier reste correct, seulement sans mise en forme. */
+const HEBDO_ROSE='FFFFA8A8';           // bande alternée de la feuille d'origine
+const HEBDO_ROUGE='FFC9211E';          // numéro de ligne
+const HEBDO_BORD={style:'thin',color:{argb:'FF000000'}};
+
+function hebdoStyleCase(cell,nature){
+  if(nature==='')return;
+  cell.border={top:HEBDO_BORD,left:HEBDO_BORD,bottom:HEBDO_BORD,right:HEBDO_BORD};
+  cell.alignment={horizontal:'center',vertical:'middle'};
+  if(nature.slice(-1)==='b')cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:HEBDO_ROSE}};
+  switch(nature){
+    case 't':  cell.font={name:'Calibri',size:14,bold:true};cell.border=undefined;break;
+    case 'w':  cell.font={name:'Calibri',size:11,bold:true};
+               cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};break;
+    case 'h':  cell.font={name:'Calibri',size:14,bold:true};break;
+    case 'hr': cell.font={name:'Calibri',size:10,bold:true};break;
+    case 'i': case 'ib':
+               cell.font={name:'Calibri',size:12,color:{argb:HEBDO_ROUGE}};break;
+    case 'e':  cell.font={name:'Calibri',size:14,bold:true};break;
+    case 'rl': cell.font={name:'Calibri',size:14};
+               cell.alignment={horizontal:'right',vertical:'middle'};break;
+    case 'rc': cell.font={name:'Calibri',size:14};break;
+    default:   cell.font={name:'Calibri',size:12};
+  }
+}
+
+function hebdoRemplirClasseur(wb,sheets){
+  sheets.forEach(function(s){
+    const ws=wb.addWorksheet(s.nom,{
+      views:[{state:'frozen',ySplit:s.headerRow}],
+      pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}
+    });
+    ws.columns=s.cols.map(function(w){return{width:w};});
+    s.aoa.forEach(function(ligne,r){
+      const row=ws.getRow(r+1);
+      ligne.forEach(function(v,c){
+        if(v!==''&&v!==null&&v!==undefined)row.getCell(c+1).value=v;
+        hebdoStyleCase(row.getCell(c+1),(s.kinds[r]||[])[c]||'');
+      });
+      row.height=r===0?18:(r===1?24:15.75);
+    });
+    s.merges.forEach(function(m){ws.mergeCells(m.top,m.left,m.bottom,m.right);});
+  });
+  return wb;
 }
 
 function hebdoFileName(ctx){
@@ -2766,75 +2874,41 @@ function hebdoFileName(ctx){
   return 'presence_hebdo_'+slug+'_'+ctx.dateStrs[0]+'.xlsx';
 }
 
-// ── Prévisualisation avant téléchargement ──
-let _xlsSheets=null,_xlsTab=0;
-function exportPresenceHebdoExcel(){
-  if(!_hebdoExportCtx||!_hebdoExportCtx.rows.length){showBanner('Rien à exporter pour cette semaine.','error');return;}
-  _xlsSheets=hebdoBuildSheets(_hebdoExportCtx);
-  _xlsTab=0;
-  document.getElementById('xls-filename').textContent=hebdoFileName(_hebdoExportCtx);
-  const prev=document.getElementById('xls-prevision');
-  if(prev)prev.style.display=_hebdoExportCtx.source==='prevision'?'':'none';
-  xlsRender();
-  document.getElementById('modal-xls-wrap').classList.add('open');
-}
-
-function xlsSetTab(i){_xlsTab=i;xlsRender();}
-
-/* Rendu façon tableur : en-têtes de colonnes A, B, C… et numéros de ligne,
-   pour que l'utilisateur retrouve exactement ce qu'il ouvrira dans Excel. */
-function xlsRender(){
-  if(!_xlsSheets)return;
-  document.getElementById('xls-tabs').innerHTML=_xlsSheets.map(function(s,i){
-    return '<button class="module-tab'+(i===_xlsTab?' active':'')+'" onclick="xlsSetTab('+i+')">'
-      +'<i class="ti ti-table"></i> '+escHtml(s.nom)+'</button>';
-  }).join('');
-
-  const aoa=_xlsSheets[_xlsTab].aoa;
-  const nbCols=aoa.reduce(function(m,r){return Math.max(m,r.length);},0);
-  const colName=function(n){let s='';n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;};
-  const th='padding:3px 6px;background:#EFEFF4;border:1px solid #D6D5E0;font-size:10px;font-weight:700;color:var(--muted);text-align:center;position:sticky';
-
-  let h='<div style="overflow:auto;max-height:52vh;border:1px solid var(--border);border-radius:8px">';
-  h+='<table style="border-collapse:collapse;font-size:12px;white-space:nowrap">';
-  h+='<thead><tr><th style="'+th+';top:0;left:0;z-index:3"></th>';
-  for(let c=0;c<nbCols;c++)h+='<th style="'+th+';top:0;z-index:2">'+colName(c)+'</th>';
-  h+='</tr></thead><tbody>';
-  aoa.forEach(function(row,ri){
-    h+='<tr><td style="'+th+';left:0;z-index:1">'+(ri+1)+'</td>';
-    for(let c=0;c<nbCols;c++){
-      const v=row[c];
-      const vide=(v===undefined||v===''||v===null);
-      const num=(typeof v==='number');
-      const titreLigne=(ri===0&&c===0);
-      const entete=(ri===2);
-      h+='<td style="border:1px solid #E8E7F0;padding:3px 7px;'
-        +(num?'text-align:center;font-weight:600;':'')
-        +(titreLigne?'font-weight:700;color:var(--koala);':'')
-        +(entete?'background:#F7F6FB;font-weight:700;font-size:11px;':'')
-        +'">'+(vide?'':escHtml(String(v)))+'</td>';
-    }
-    h+='</tr>';
-  });
-  h+='</tbody></table></div>';
-  h+='<div style="font-size:11.5px;color:var(--muted);margin-top:8px">'
-    +aoa.length+' ligne(s) × '+nbCols+' colonne(s) — feuille '+(_xlsTab+1)+' sur '+_xlsSheets.length+'</div>';
-  document.getElementById('xls-preview').innerHTML=h;
-}
-
-function xlsDownload(){
-  if(!_xlsSheets||!_hebdoExportCtx)return;
+// ── Export direct ────────────────────────────────────────────────────────────
+/* Plus de prévisualisation : au moment où l'on clique, la feuille hebdomadaire
+   est déjà à l'écran, et le classeur reproduit fidèlement la feuille papier du
+   réseau. Seul garde-fou conservé : une confirmation quand la semaine repose
+   sur une PRÉVISION et non sur le planning réel — c'est le cas où l'on risque
+   de commander des repas sur des présences supposées. */
+async function exportPresenceHebdoExcel(){
+  const ctx=_hebdoExportCtx;
+  if(!ctx||!ctx.rows.length){showBanner('Rien à exporter pour cette semaine.','error');return;}
+  if(ctx.source==='prevision'
+     && !confirm('Cette semaine repose sur une PRÉVISION : le planning n’est pas encore importé.\n\n'
+        +'Les présences exportées sont déduites des semaines précédentes, pas réelles.\n\nExporter quand même ?'))return;
+  const sheets=hebdoBuildSheets(ctx);
+  const nomFichier=hebdoFileName(ctx);
+  if(typeof ExcelJS!=='undefined'){
+    try{
+      const wb=new ExcelJS.Workbook();
+      wb.creator='Koala Kids';
+      hebdoRemplirClasseur(wb,sheets);
+      const buf=await wb.xlsx.writeBuffer();
+      const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+      const a=document.createElement('a');a.href=url;a.download=nomFichier;
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},4000);
+      showBanner('Export Excel téléchargé !');
+      return;
+    }catch(e){console.error('[Export hebdo] ExcelJS',e);}
+  }
+  // Repli sans mise en forme si ExcelJS n'a pas pu être chargé.
   const wb=XLSX.utils.book_new();
-  _xlsSheets.forEach(function(s){
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s.aoa),s.nom);
-  });
-  XLSX.writeFile(wb,hebdoFileName(_hebdoExportCtx));
-  closeModal('modal-xls-wrap');
-  showBanner('Export Excel téléchargé !');
+  sheets.forEach(function(s){XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s.aoa),s.nom);});
+  XLSX.writeFile(wb,nomFichier);
+  showBanner('Export Excel téléchargé (sans mise en forme).');
 }
 window.exportPresenceHebdoExcel=exportPresenceHebdoExcel;
-window.xlsSetTab=xlsSetTab;
-window.xlsDownload=xlsDownload;
 
 /* ══════════════════════════════════════════════════════════════════════════
    COMMANDE REPAS TRAITEUR (bon « Les mamans cuisinières du Monde »)
