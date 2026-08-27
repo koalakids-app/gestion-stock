@@ -3595,11 +3595,24 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   const withoutCreneau=rows.filter(r=>!r.creneau_label);
 
   // Lignes = créneaux distincts, triés par heure de début (déduite du premier événement de ce créneau)
+  //
+  // La clé de regroupement est le créneau NORMALISÉ (ses plages en minutes), pas
+  // le libellé brut : deux sources écrivent le même horaire différemment
+  // (« 10H30-13H00 / 14H00-18H30 » venant de l'Excel, « 10h30-13h00/14h00-18h30 »
+  // venant de l'import PDF). Regrouper sur le texte brut créait deux lignes
+  // visuellement identiques dans le planning, avec les salariés répartis entre
+  // les deux. On garde le premier libellé rencontré pour l'affichage et l'édition.
   const creneauOrder=[];
   const byCreneau={};
+  const labelOf={};
+  const peCreneauKey=lbl=>{
+    const segs=peCreneauSegments(lbl);
+    return segs?segs.map(s=>s[0]+'-'+s[1]).join('|'):'brut:'+String(lbl||'').toUpperCase().replace(/\s+/g,'');
+  };
   withCreneau.forEach(r=>{
-    if(!byCreneau[r.creneau_label]){byCreneau[r.creneau_label]=[];creneauOrder.push(r.creneau_label);}
-    byCreneau[r.creneau_label].push(r);
+    const k=peCreneauKey(r.creneau_label);
+    if(!byCreneau[k]){byCreneau[k]=[];labelOf[k]=r.creneau_label;creneauOrder.push(k);}
+    byCreneau[k].push(r);
   });
   creneauOrder.sort((a,b)=>{
     const ha=byCreneau[a][0].hdebut||'99:99',hb=byCreneau[b][0].hdebut||'99:99';
@@ -3640,9 +3653,10 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   DAYS.forEach((d,i)=>{html+='<th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:center;background:#fafafa;color:#333">'+d+'<br><span style="font-size:'+_peFSDay+';font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';});
   html+='</tr></thead><tbody>';
 
-  creneauOrder.forEach(creneau=>{
-    const evsThisCreneau=byCreneau[creneau];
-    const creneauEsc=creneau.replace(/'/g,"\\'");
+  creneauOrder.forEach(cleCreneau=>{
+    const evsThisCreneau=byCreneau[cleCreneau];
+    const creneau=labelOf[cleCreneau];
+    const creneauEsc=String(creneau||'').replace(/'/g,"\\'");
     html+='<tr><td style="padding:'+_pePad+';border-bottom:1px solid var(--border);background:#FBFBFD;vertical-align:middle">'+_peCreneauLabel(creneau)+'</td>';
     for(let d=0;d<5;d++){
       // Plusieurs personnes peuvent partager le même créneau le même jour
@@ -7807,7 +7821,7 @@ async function uniHandleFile(event) {
   _uniData = {
     crecheId, referentId, referentNom,
     pres: { pages: presPages, nameMap, crecheEnfantIds: enfCreche.map(e => e.id), titles: presTitles, crecheMatch: presCrecheMatch, forceCreche: false, replace: true },
-    sal: { jours, mapping, connus, warnings: parsedSal.warnings, titles: parsedSal.titles, crecheMatch: salCrecheMatch, referentPrenom: spPrenomReferente(referentNom, mapping) }
+    sal: { jours, mapping, connus, warnings: parsedSal.warnings, titles: parsedSal.titles, crecheMatch: salCrecheMatch, replace: true, referentPrenom: spPrenomReferente(referentNom, mapping) }
   };
   uniRenderPreview();
 }
@@ -7862,6 +7876,8 @@ function uniRenderPreview() {
     }
     html += '<div style="background:#EEEDF8;border-left:4px solid var(--koala);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--koala)">'
       + 'Vérifiez le <strong>prénom en base</strong> de chaque salarié. Il doit être écrit exactement comme dans le planning équipe, sinon une seconde ligne sera créée en doublon. Vos corrections sont mémorisées pour les prochains imports.</div>';
+    const semainesTouchees = [...new Set(sal.jours.filter(j => { const d = new Date(j.dateISO + 'T12:00:00'); const i = d.getDay() === 0 ? 6 : d.getDay() - 1; return i <= 4; }).map(j => mondayOfISO(j.dateISO)))];
+    html += '<label style="display:flex;align-items:flex-start;gap:8px;background:#EEEDF8;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;color:var(--koala);cursor:pointer"><input type="checkbox" id="uni-sal-replace" onchange="_uniData.sal.replace=this.checked" ' + (sal.replace ? 'checked' : '') + ' style="margin-top:2px"/><span><strong>Repartir à zéro sur ' + (semainesTouchees.length > 1 ? 'ces ' + semainesTouchees.length + ' semaines' : 'cette semaine') + '</strong><br><span style="font-weight:400;font-size:11.5px">Le planning équipe de cette crèche est effacé pour ' + (semainesTouchees.length > 1 ? 'ces semaines' : 'cette semaine') + ' avant l’import : le PDF fait foi. Cela supprime aussi les anciennes lignes d’un import précédent et les personnes ajoutées à la main. Décochez pour ne mettre à jour que les salariés lus dans le PDF.</span></span></label>';
     if (_uniData.referentId && !sal.referentPrenom) {
       html += '<div style="background:var(--amber-lt);border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--orange)">'
         + '<strong>⚠ Référente non retrouvée.</strong><br>Aucun prénom ne correspond à ' + escHtml(_uniData.referentNom) + '. Son planning individuel ne sera pas rempli. Corrigez son prénom ci-dessous pour rétablir le lien.</div>';
@@ -7995,9 +8011,30 @@ async function uniConfirmImport() {
   }
 
   // ---- 2) Planning des salariés ----
-  let saved = 0, failed = 0, skipped = 0, savedRef = 0;
+  let saved = 0, failed = 0, skipped = 0, savedRef = 0, purgees = 0;
   if (sal.jours.length) {
     const batchId = (crypto?.randomUUID) ? crypto.randomUUID() : ('batch-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+
+    // Remise à zéro des semaines concernées : sans elle, les lignes issues d'un
+    // import antérieur (autre version du lecteur, autre découpage des créneaux)
+    // survivent à côté des nouvelles, puisque l'upsert ne remplace que le triplet
+    // (prénom, semaine, jour) effectivement relu dans le PDF. C'est ce qui
+    // laissait apparaître deux créneaux concurrents pour la même journée.
+    if (sal.replace) {
+      const semaines = [...new Set(sal.jours.filter(j => {
+        const d = new Date(j.dateISO + 'T12:00:00');
+        const i = d.getDay() === 0 ? 6 : d.getDay() - 1;
+        return i <= 4;
+      }).map(j => mondayOfISO(j.dateISO)))];
+      if (semaines.length) {
+        showBanner('Nettoyage du planning équipe existant…');
+        const { error: delErr } = await sb.from('planning_equipe').delete()
+          .eq('creche_id', crecheId).in('semaine', semaines);
+        if (delErr) { console.error('[ImportUnifie] purge planning_equipe', delErr); msgParts.push('⚠ le planning existant n’a pas pu être effacé'); }
+        else { purgees = semaines.length; }
+      }
+    }
+
     for (const j of sal.jours) {
       const d = new Date(j.dateISO + 'T00:00:00');
       const jourIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
@@ -8031,6 +8068,7 @@ async function uniConfirmImport() {
     localStorage.setItem('lastImportBatch_' + crecheId,
       JSON.stringify({ batchId, referentId: referentId || null, date: new Date().toISOString() }));
     msgParts.push(saved + ' jour(s) dans le planning équipe'
+      + (purgees ? ' (' + purgees + ' semaine(s) remises à zéro)' : '')
       + (savedRef ? ', dont ' + savedRef + ' aussi dans le planning individuel de ' + sal.referentPrenom : '')
       + (skipped ? ' — ' + skipped + ' ignoré(s) (week-end)' : '')
       + (failed ? ' (' + failed + ' échec(s), voir la console)' : ''));
