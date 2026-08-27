@@ -2535,6 +2535,44 @@ async function renderPresenceHebdo(){
     if(aOk)return{present:true,slot:'a',label:'Après-midi'};
     return{present:false,slot:null,label:''};
   }
+  /* ── Horaires affichés dans les cases ──────────────────────────────────────
+     La case porte les horaires plutôt que le mot « Journée ». Trois sources,
+     de la plus fiable à la plus théorique :
+       1. l'horaire réellement enregistré ce jour-là (lu sur le planning PDF) ;
+       2. à défaut, l'horaire du contrat d'accueil qui couvre cette date ET ce
+          jour de la semaine ;
+       3. à défaut, le libellé Journée / Matin / Après-midi comme avant.
+     Une demi-journée sans horaire enregistré garde son libellé : le contrat
+     décrit une journée entière et l'afficher tel quel serait faux. */
+  const phm={};
+  presData.forEach(function(p){
+    if(!p.heure_debut&&!p.heure_fin)return;
+    const k=p.enfant_id+'_'+p.presence_date;
+    const o=phm[k]||(phm[k]={});
+    if(p.heure_debut&&(!o.hd||p.heure_debut<o.hd))o.hd=p.heure_debut;
+    if(p.heure_fin&&(!o.hf||p.heure_fin>o.hf))o.hf=p.heure_fin;
+  });
+  const ctHebdo={};
+  try{
+    const{data:ctData}=await sb.from('enfants_contrats').select('*').in('enfant_id',allEnfants.map(e=>e.id));
+    (ctData||[]).forEach(function(c){
+      const jours=ctParseJours(c.jours);
+      dateStrs.forEach(function(ds,i){
+        if(c.date_debut&&c.date_debut>ds)return;
+        if(c.date_fin&&c.date_fin<ds)return;
+        if(jours.indexOf(i+1)<0)return;
+        const kk=String(c.enfant_id)+'_'+i;
+        if(!ctHebdo[kk]||(c.date_debut||'')>(ctHebdo[kk].date_debut||''))ctHebdo[kk]=c;
+      });
+    });
+  }catch(err){console.warn('[Hebdo] lecture contrats',err);}
+  function hebdoHoraires(enfantId,i,slot){
+    const rec=phm[enfantId+'_'+dateStrs[i]];
+    if(rec&&rec.hd&&rec.hf)return ctFmtHeure(rec.hd)+'–'+ctFmtHeure(rec.hf);
+    const ct=ctHebdo[String(enfantId)+'_'+i];
+    if(ct&&slot==='j'&&ct.heure_debut&&ct.heure_fin)return ctFmtHeure(ct.heure_debut)+'–'+ctFmtHeure(ct.heure_fin);
+    return SLOT_LBL[slot]||'';
+  }
   /* Semaine encore vierge (commande passée à l'avance) → on bascule sur la
      semaine type déduite de l'historique, en le signalant clairement. */
   let prevision=null;
@@ -2550,10 +2588,10 @@ async function renderPresenceHebdo(){
     const cells=days5.map(function(d,i){
       if(prevision){
         const s=(prevision[e.id]||[])[i];
-        return s?{present:true,slot:s,horaires:SLOT_LBL[s],repas:repas}:{present:false,slot:null,horaires:'',repas:''};
+        return s?{present:true,slot:s,horaires:hebdoHoraires(e.id,i,s),repas:repas}:{present:false,slot:null,horaires:'',repas:''};
       }
       const st=statutJour(e.id,dateStrs[i]);
-      return st.present?{present:true,slot:st.slot,horaires:st.label,repas:repas}:{present:false,slot:null,horaires:'',repas:''};
+      return st.present?{present:true,slot:st.slot,horaires:hebdoHoraires(e.id,i,st.slot),repas:repas}:{present:false,slot:null,horaires:'',repas:''};
     });
     if(cells.some(function(c){return c.present;})){
       e._repasCode=repas;
@@ -2608,7 +2646,10 @@ async function renderPresenceHebdo(){
     r.cells.forEach(function(c){
       if(c.present){
         const p=PILL[c.slot]||PILL.j;
-        grille+='<td style="text-align:center;padding:6px"><span style="display:inline-block;min-width:34px;border-radius:7px;padding:4px 9px;font-size:11px;font-weight:700;background:'+p[1]+';color:'+p[2]+'">'+p[0]+'</span></td>';
+        // La pastille porte les horaires ; sa couleur continue d'indiquer journée / demi-journée.
+        const txt=c.horaires||p[0];
+        const petit=txt.length>8;
+        grille+='<td style="text-align:center;padding:6px"><span title="'+escHtml(p[0])+'" style="display:inline-block;min-width:34px;border-radius:7px;padding:4px 9px;font-size:'+(petit?'10.5':'11')+'px;font-weight:700;white-space:nowrap;background:'+p[1]+';color:'+p[2]+'">'+escHtml(txt)+'</span></td>';
       }else{
         grille+='<td style="text-align:center;padding:6px;color:#DAD8E5;font-size:15px">·</td>';
       }
@@ -2619,8 +2660,8 @@ async function renderPresenceHebdo(){
   totalParJour.forEach(function(n){grille+='<td style="text-align:center;padding:10px 8px;font-size:12px;font-weight:700;color:var(--koala)">'+n+'</td>';});
   grille+='</tr></tbody></table></div>';
   grille+='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--muted);align-items:center">'
-    +'<span><span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:var(--koala);color:#fff">Journée</span> matin + après-midi</span>'
-    +'<span><span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:#BFB9E4;color:var(--koala-dark)">Matin</span> / <span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:#DCD8F0;color:var(--koala-dark)">Aprèm</span> demi-journée</span>'
+    +'<span><span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:var(--koala);color:#fff">8h–17h</span> journée entière (horaire enregistré, sinon contrat)</span>'
+    +'<span><span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:#BFB9E4;color:var(--koala-dark)">Matin</span> / <span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:#DCD8F0;color:var(--koala-dark)">Aprèm</span> demi-journée sans horaire connu</span>'
     +'<span><span style="display:inline-block;background:var(--koala-light);color:var(--koala);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">G</span> repas déduit de l’âge</span>'
     +'<span><span style="display:inline-block;background:var(--orange-light);color:var(--orange-dark);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">GSV</span> régime particulier</span>'
     +'</div>';
@@ -2683,7 +2724,7 @@ function hebdoBuildSheets(ctx){
 
   // Feuille 1 : présence complète (présence + repas)
   const head1=['Enfant'];
-  JOURS_LBL.forEach(function(j){head1.push(j+' — Présence',j+' — Repas');});
+  JOURS_LBL.forEach(function(j){head1.push(j+' — Horaires',j+' — Repas');});
   const aoa1=[[titre],[],head1];
   ctx.rows.forEach(function(r){
     const line=[nom(r)];
