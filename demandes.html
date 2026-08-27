@@ -1240,7 +1240,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label class="flabel">Type de repas</label>
         <select class="finput" id="enf-repas-base" onchange="enfSyncRepas()">
           <option value="">Selon l'âge (automatique)</option>
-          <option value="BB">BB — Repas bébé (biberon)</option>
+          <option value="BIB">BIB — Biberon (pas de repas)</option>
+          <option value="BB">BB — Repas légumes sans protéines</option>
           <option value="M">M — Repas moyen</option>
           <option value="G">G — Repas grand</option>
         </select>
@@ -1309,7 +1310,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i>
       Chiffres pré-remplis d'après les présences de la semaine et l'âge de chaque enfant <strong>au jour de la livraison</strong>
       (tranches du traiteur : − 6 mois / 6-18 mois / + 18 mois / périscolaire). Les régimes sont notés
-      <strong>6+1SV</strong> (6 repas standard + 1 sans viande). Toutes les cases restent modifiables avant génération du PDF.</div>
+      <strong>6+1SV</strong> (6 repas standard + 1 sans viande). Les enfants dont la fiche indique
+      <strong>BIB (biberon)</strong> sont exclus du bon — ni repas, ni goûter. Toutes les cases restent
+      modifiables avant génération du PDF.</div>
 
     <div class="frow">
       <div class="fg" style="flex:2"><label class="flabel">Adresse</label><input class="finput" id="cr-adresse" placeholder="48 rue Picot – 83000 TOULON"/></div>
@@ -2610,8 +2613,10 @@ async function renderPresenceHebdo(){
   const codesUtilises=Object.keys(REPAS_TYPES).filter(function(code){return rows.some(function(r){return r.cells.some(function(c){return c.repas===code;});});});
   const totauxRepas=codesUtilises.map(function(code){return{code:code,parJour:days5.map(function(d,i){return rows.filter(function(r){return r.cells[i].present&&r.cells[i].repas===code;}).length;})};});
   const nbSansRepas=days5.map(function(d,i){return rows.filter(function(r){return r.cells[i].present&&!r.cells[i].repas;}).length;});
+  // Les enfants au biberon sont présents mais ne comptent pas dans les repas commandés.
+  const totalRepasParJour=days5.map(function(d,i){return rows.filter(function(r){return r.cells[i].present&&r.cells[i].repas!=='BIB';}).length;});
   const crecheLbl=(cacheCreches.find(function(c){return c.id===crecheId;})||{}).name||'Toutes crèches';
-  _hebdoExportCtx={crecheLbl:crecheLbl,days5:days5,dateStrs:dateStrs,rows:rows,totalParJour:totalParJour,totauxRepas:totauxRepas,nbSansRepas:nbSansRepas,crecheId:crecheId,source:_hebdoSource};
+  _hebdoExportCtx={crecheLbl:crecheLbl,days5:days5,dateStrs:dateStrs,rows:rows,totalParJour:totalParJour,totalRepasParJour:totalRepasParJour,totauxRepas:totauxRepas,nbSansRepas:nbSansRepas,crecheId:crecheId,source:_hebdoSource};
 
   const JOURS_LBL=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
   const dFr=function(d){return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});};
@@ -2685,9 +2690,15 @@ async function renderPresenceHebdo(){
     nbSansRepas.forEach(function(n){synth+='<td style="text-align:center;padding:9px 8px;font-size:14px;font-weight:700;color:'+(n?'var(--red)':'#DAD8E5')+'">'+(n||'—')+'</td>';});
     synth+='<td style="text-align:center;padding:9px 8px;font-size:14px;font-weight:700;color:var(--red)">'+nbSansRepas.reduce(function(s,n){return s+n;},0)+'</td></tr>';
   }
+  const _nbBib=days5.map(function(d,i){return totalParJour[i]-totalRepasParJour[i];});
+  if(_nbBib.some(function(n){return n>0;})){
+    synth+='<tr style="border-bottom:1px solid #F1F0F7"><td style="padding:9px 16px;font-size:12.5px;font-weight:600;color:var(--muted)">BIB<span style="display:block;font-size:10.5px;color:var(--muted);font-weight:400">biberon — non compté dans les repas</span></td>';
+    _nbBib.forEach(function(n){synth+='<td style="text-align:center;padding:9px 8px;font-size:14px;font-weight:700;color:'+(n?'var(--muted)':'#DAD8E5')+'">'+(n||'—')+'</td>';});
+    synth+='<td style="text-align:center;padding:9px 8px;font-size:14px;font-weight:700;color:var(--muted)">'+_nbBib.reduce(function(s,n){return s+n;},0)+'</td></tr>';
+  }
   synth+='<tr style="background:var(--koala-light)"><td style="padding:10px 16px;font-size:13px;font-weight:700;color:var(--koala)">Total repas</td>';
-  totalParJour.forEach(function(n){synth+='<td style="text-align:center;padding:10px 8px;font-size:15px;font-weight:800;color:var(--koala)">'+n+'</td>';});
-  synth+='<td style="text-align:center;padding:10px 8px;font-size:15px;font-weight:800;color:var(--koala)">'+totalParJour.reduce(function(s,n){return s+n;},0)+'</td></tr>';
+  totalRepasParJour.forEach(function(n){synth+='<td style="text-align:center;padding:10px 8px;font-size:15px;font-weight:800;color:var(--koala)">'+n+'</td>';});
+  synth+='<td style="text-align:center;padding:10px 8px;font-size:15px;font-weight:800;color:var(--koala)">'+totalRepasParJour.reduce(function(s,n){return s+n;},0)+'</td></tr>';
   synth+='</tbody></table></div>';
   synth+='<details style="border:1px solid var(--border);border-radius:12px;background:#fff"><summary style="padding:11px 16px;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--koala)">Détail par enfant ('+rows.length+' enfant'+(rows.length>1?'s':'')+')</summary><div style="padding:0 14px 14px">'+grille+'</div></details>';
 
@@ -3041,7 +3052,9 @@ function crRenderSource(){
 }
 
 /* Recalcule les cases depuis les présences. Repas du midi = enfant présent le matin
-   (journée ou matin seul) ; goûter = enfant présent l'après-midi (journée ou aprèm seul). */
+   (journée ou matin seul) ; goûter = enfant présent l'après-midi (journée ou aprèm seul).
+   Les enfants au biberon (code repas BIB) sont exclus du bon : ni repas, ni goûter
+   ne sont commandés pour eux, même s'ils sont bien présents ce jour-là. */
 function crCompute(notify){
   const ctx=_hebdoExportCtx;
   if(!ctx)return;
@@ -3052,6 +3065,7 @@ function crCompute(notify){
     ctx.rows.forEach(function(r){
       const cell=r.cells[i];
       if(!cell.present)return;
+      if(cell.repas==='BIB')return;            // au biberon : rien à commander
       const t=mcmTranche(r.enfant.dob,ctx.dateStrs[i]);
       if(!t)return;
       const reg=r.enfant.regime_repas||'';
@@ -3068,10 +3082,14 @@ function crCompute(notify){
     vals.bag[i]='';
   });
   crRenderTable(vals);
-  const sansDob=ctx.rows.filter(function(r){return !r.enfant.dob;});
+  // Les enfants au biberon n'ont pas besoin d'une date de naissance pour ce bon,
+  // puisqu'ils en sont exclus : les signaler serait un faux avertissement.
+  const auBiberon=ctx.rows.filter(function(r){return enfRepasCode(r.enfant)==='BIB';});
+  const sansDob=ctx.rows.filter(function(r){return !r.enfant.dob&&enfRepasCode(r.enfant)!=='BIB';});
+  const mentionBib=auBiberon.length?' · '+auBiberon.length+' enfant(s) au biberon exclu(s) du bon':'';
   if(sansDob.length){
-    showBanner(sansDob.length+' enfant(s) sans date de naissance ne sont pas comptés — complétez leur fiche.','error');
-  }else if(notify){showBanner('Chiffres recalculés depuis les présences.');}
+    showBanner(sansDob.length+' enfant(s) sans date de naissance ne sont pas comptés — complétez leur fiche.'+mentionBib,'error');
+  }else if(notify){showBanner('Chiffres recalculés depuis les présences.'+mentionBib);}
 }
 
 function crRenderTable(vals){
@@ -3499,13 +3517,21 @@ function enfSyncRepas(){
   const regime=(document.getElementById('enf-regime-repas')||{}).value||'';
   const auto=enfRepasBaseAuto({dob:dob});
   const base=forcee||auto;
+  // Le régime ne s'applique pas au biberon : on grise le menu pour le dire.
+  const selReg=document.getElementById('enf-regime-repas');
+  if(selReg){
+    selReg.disabled=(forcee==='BIB');
+    selReg.style.background=selReg.disabled?'#f4f4f8':'';
+    selReg.style.cursor=selReg.disabled?'not-allowed':'';
+  }
   if(!base){
     box.innerHTML='<span style="color:var(--red)">Date de naissance manquante — aucun code repas ne peut être calculé.</span>';
     return;
   }
-  const code=regime?base+regime:base;
+  const code=(base==='BIB')?'BIB':(regime?base+regime:base);
   let txt='Code repas : <strong style="color:var(--koala)">'+escHtml(code)+'</strong> — '+escHtml(repasLabel(code)||'');
-  if(forcee&&auto&&forcee!==auto)txt+=' <span style="color:var(--orange-dark)">(forcé ; l’âge donnerait '+escHtml(auto)+')</span>';
+  if(forcee==='BIB')txt+=' <span style="color:var(--orange-dark)">(non compté dans les repas commandés)</span>';
+  else if(forcee&&auto&&forcee!==auto)txt+=' <span style="color:var(--orange-dark)">(forcé ; l’âge donnerait '+escHtml(auto)+')</span>';
   else if(!forcee)txt+=' <span style="opacity:.8">(suit l’âge)</span>';
   box.innerHTML=txt;
 }
@@ -7276,7 +7302,7 @@ evenements: `
 
 
 enfants: `
-<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👶 Dossiers enfants</h3><div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Ce module rassemble, enfant par enfant, sa fiche d’identité et l’ensemble des documents remplis pour lui. Les référentes voient les enfants de leur crèche, la direction voit les six sites.</div><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Trouver un enfant</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>La barre de recherche filtre sur le prénom et le nom au fur et à mesure de la frappe.</li><li>La direction dispose en plus d’un sélecteur de crèche pour restreindre la liste à un site.</li><li>Chaque ligne rappelle la crèche et le groupe d’âge. Cliquer dessus ouvre la fiche.</li><li>La <strong>création</strong> d’un enfant ne se fait pas ici mais depuis le module Présences, bouton <strong>Ajouter enfant</strong>.</li><li>Le bouton <strong>⚠ Fiches à compléter</strong> filtre sur les enfants dont la date de naissance ou les allergies n’ont jamais été renseignées — utile pour repérer les enfants créés automatiquement par l’import du planning PDF (Gertrude n’exportant que le planning, jamais la fiche complète), et pour les compléter à la main.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🆔 L’onglet Identité</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Reprend la crèche, la date de naissance, le groupe d’âge et les allergies connues.</li><li>La ligne <strong>Repas</strong> affiche le code utilisé sur la feuille hebdomadaire et le bon traiteur, et précise s’il suit l’âge ou s’il a été forcé à la main.</li><li>Le bouton <strong>Modifier la fiche</strong> ouvre la même fenêtre de saisie que le module Présences. On y règle le <strong>type de repas</strong> — laissé sur « Selon l’âge », il suit les anniversaires tout seul ; forcé sur BB, M ou G, il ne bouge plus — et le <strong>régime particulier</strong> (sans viande, sans protéine de vache ou animale). Le code obtenu s’affiche en direct sous les deux menus.</li><li>La suppression d’un enfant est réservée à la direction.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">📄 L’onglet Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Liste tous les documents remplis pour cet enfant, du plus récent au plus ancien, avec la date et la personne qui les a remplis.</li><li>Un badge indique l’état : <strong>✅ Signé</strong> lorsqu’une signature a été recueillie, <strong>🕓 Préparé</strong> tant que ce n’est pas le cas.</li><li><strong>Ouvrir / signer</strong> bascule vers l’outil Documents pour compléter, générer le PDF ou faire signer. Un bouton <strong>Revenir aux documents de l’enfant</strong> ramène ensuite ici pour enchaîner.</li><li><strong>Suppr.</strong> retire définitivement le document du dossier : penser à exporter le PDF avant.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔗 Le lien avec l’outil Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Un document se remplit dans l’outil <strong>Documents</strong>. Il suffit d’y choisir l’enfant concerné dans le sélecteur en haut du formulaire.</li><li>À l’enregistrement, le document quitte la liste des modèles et vient se classer ici, dans le dossier de l’enfant.</li><li>Le modèle redevient vierge côté Documents : il est immédiatement réutilisable pour un autre enfant, sans risque d’écraser le précédent.</li><li>Le dossier de l’enfant devient donc le point d’entrée unique pour retrouver, compléter ou faire signer un document déjà commencé.</li></ul>
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👶 Dossiers enfants</h3><div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Ce module rassemble, enfant par enfant, sa fiche d’identité et l’ensemble des documents remplis pour lui. Les référentes voient les enfants de leur crèche, la direction voit les six sites.</div><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Trouver un enfant</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>La barre de recherche filtre sur le prénom et le nom au fur et à mesure de la frappe.</li><li>La direction dispose en plus d’un sélecteur de crèche pour restreindre la liste à un site.</li><li>Chaque ligne rappelle la crèche et le groupe d’âge. Cliquer dessus ouvre la fiche.</li><li>La <strong>création</strong> d’un enfant ne se fait pas ici mais depuis le module Présences, bouton <strong>Ajouter enfant</strong>.</li><li>Le bouton <strong>⚠ Fiches à compléter</strong> filtre sur les enfants dont la date de naissance ou les allergies n’ont jamais été renseignées — utile pour repérer les enfants créés automatiquement par l’import du planning PDF (Gertrude n’exportant que le planning, jamais la fiche complète), et pour les compléter à la main.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🆔 L’onglet Identité</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Reprend la crèche, la date de naissance, le groupe d’âge et les allergies connues.</li><li>La ligne <strong>Repas</strong> affiche le code utilisé sur la feuille hebdomadaire et le bon traiteur, et précise s’il suit l’âge ou s’il a été forcé à la main.</li><li>Le bouton <strong>Modifier la fiche</strong> ouvre la même fenêtre de saisie que le module Présences. On y règle le <strong>type de repas</strong> — laissé sur « Selon l’âge », il suit les anniversaires tout seul ; forcé sur BIB, BB, M ou G, il ne bouge plus — et le <strong>régime particulier</strong> (sans viande, sans protéine de vache ou animale). Le code obtenu s’affiche en direct sous les deux menus. <strong>BIB</strong> désigne un enfant au biberon : il n’est pas compté dans les repas commandés, et le régime ne s’y applique pas.</li><li>La suppression d’un enfant est réservée à la direction.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">📄 L’onglet Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Liste tous les documents remplis pour cet enfant, du plus récent au plus ancien, avec la date et la personne qui les a remplis.</li><li>Un badge indique l’état : <strong>✅ Signé</strong> lorsqu’une signature a été recueillie, <strong>🕓 Préparé</strong> tant que ce n’est pas le cas.</li><li><strong>Ouvrir / signer</strong> bascule vers l’outil Documents pour compléter, générer le PDF ou faire signer. Un bouton <strong>Revenir aux documents de l’enfant</strong> ramène ensuite ici pour enchaîner.</li><li><strong>Suppr.</strong> retire définitivement le document du dossier : penser à exporter le PDF avant.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔗 Le lien avec l’outil Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Un document se remplit dans l’outil <strong>Documents</strong>. Il suffit d’y choisir l’enfant concerné dans le sélecteur en haut du formulaire.</li><li>À l’enregistrement, le document quitte la liste des modèles et vient se classer ici, dans le dossier de l’enfant.</li><li>Le modèle redevient vierge côté Documents : il est immédiatement réutilisable pour un autre enfant, sans risque d’écraser le précédent.</li><li>Le dossier de l’enfant devient donc le point d’entrée unique pour retrouver, compléter ou faire signer un document déjà commencé.</li></ul>
 `,
 
 vaccinations: `
@@ -8070,11 +8096,13 @@ window.enfDeleteDoc = enfDeleteDoc;
 
 const CT_JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi']];
 /* Codes repas utilisés sur la feuille de présence hebdomadaire (transmise au traiteur / à l'administratif).
-   La lettre de base (BB/M/G) est déduite automatiquement de la tranche d'âge de l'enfant (voir enfRepasCode) ;
-   le suffixe vient du champ « Repas » de sa fiche (régime particulier). Ajouter un code ici l'ajoute
-   automatiquement aux totaux de l'export Excel. */
+   BB = repas légumes sans protéines, M = repas moyen, G = repas grand. La lettre est proposée
+   d'après la tranche d'âge puis modifiable sur la fiche enfant (voir enfRepasCode) ; le suffixe
+   vient du régime particulier de la fiche. Ajouter un code ici l'ajoute automatiquement aux
+   totaux de l'export Excel. */
 const REPAS_TYPES={
-  BB:'Repas bébé (biberon)',
+  BIB:'Biberon (pas de repas traiteur)',
+  BB:'Repas légumes sans protéines',
   M:'Repas moyen',
   G:'Repas grand',
   MSV:'Repas moyen — sans viande',
@@ -8083,24 +8111,24 @@ const REPAS_TYPES={
   GSPV:'Repas grand — sans protéine de vache',
   MSPA:'Repas moyen — sans protéine animale',
   GSPA:'Repas grand — sans protéine animale',
-  BBSV:'Repas bébé — sans viande',
-  BBSPV:'Repas bébé — sans protéine de vache',
-  BBSPA:'Repas bébé — sans protéine animale'
+  BBSV:'Repas légumes sans protéines — sans viande',
+  BBSPV:'Repas légumes sans protéines — sans protéine de vache',
+  BBSPA:'Repas légumes sans protéines — sans protéine animale'
 };
 /* Régimes particuliers — mêmes sigles que la légende du bon de commande MCM. */
 const REGIMES={SV:'Sans viande',SPV:'Sans protéine de vache',SPA:'Sans protéine animale'};
 function repasLabel(code){ return code?(REPAS_TYPES[code]||code):''; }
 /* Code repas = lettre de base + suffixe de régime particulier.
 
-   La lettre de base suit normalement la tranche d'âge, mais l'âge ne fait pas
-   tout : un enfant de 14 mois peut déjà manger comme un grand, un autre rester
-   au biberon après un an. Le champ `repas_base` de la fiche permet donc de
-   forcer la lettre ; vide, la lettre reste déduite de l'âge et suit
+   BB (repas légumes sans protéines), M (moyen) et G (grand) sont les trois
+   préparations du traiteur. La lettre est proposée d'après la tranche d'âge,
+   mais l'âge ne décide pas de ce que l'enfant mange : le champ `repas_base` de
+   la fiche permet de la forcer. Laissé vide, il reste déduit de l'âge et suit
    automatiquement les anniversaires.
 
-   Le suffixe (`regime_repas` : '' | 'SV' | 'SPV' | 'SPA') s'applique aussi aux
-   bébés : un nourrisson intolérant aux protéines de vache doit rester visible
-   comme tel partout, sans quoi l'écran contredirait le bon de commande. */
+   Le suffixe (`regime_repas` : '' | 'SV' | 'SPV' | 'SPA') se combine à la
+   lettre, y compris sur BB — un enfant intolérant aux protéines de vache doit
+   rester repérable partout, sans quoi l'écran contredirait le bon de commande. */
 function enfRepasBaseAuto(e){
   if(!e)return'';
   const groupe=e.dob?groupeFromDob(e.dob):(e.groupe||'');
@@ -8113,6 +8141,8 @@ function enfRepasCode(e){
   if(!e)return'';
   const base=e.repas_base||enfRepasBaseAuto(e);
   if(!base)return'';
+  // Un enfant au biberon ne reçoit pas de plat : lui accoler un régime n'aurait aucun sens.
+  if(base==='BIB')return'BIB';
   return e.regime_repas?base+e.regime_repas:base;
 }
 let enfContratsCache=[], editingContratId=null, ctJoursSel=[];
