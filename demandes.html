@@ -1236,14 +1236,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="enf-creche"><option value="">-- Choisir --</option></select></div>
     <div class="fg"><label class="flabel">Régime alimentaire / allergies</label><input class="finput" id="enf-allergies" placeholder="Ex. : sans gluten, allergie aux arachides"/></div>
-    <div class="fg"><label class="flabel">Repas <span style="font-weight:400;color:var(--muted);font-size:11px">(pour la feuille de présence hebdomadaire — la lettre BB/M/G est déduite automatiquement de l'âge)</span></label>
-      <select class="finput" id="enf-regime-repas">
-        <option value="">Standard</option>
-        <option value="SV">SV — Sans viande</option>
-        <option value="SPV">SPV — Sans protéine de vache</option>
-        <option value="SPA">SPA — Sans protéine animale</option>
-      </select>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Type de repas</label>
+        <select class="finput" id="enf-repas-base" onchange="enfSyncRepas()">
+          <option value="">Selon l'âge (automatique)</option>
+          <option value="BB">BB — Repas bébé (biberon)</option>
+          <option value="M">M — Repas moyen</option>
+          <option value="G">G — Repas grand</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flabel">Régime particulier</label>
+        <select class="finput" id="enf-regime-repas" onchange="enfSyncRepas()">
+          <option value="">Standard</option>
+          <option value="SV">SV — Sans viande</option>
+          <option value="SPV">SPV — Sans protéine de vache</option>
+          <option value="SPA">SPA — Sans protéine animale</option>
+        </select>
+      </div>
     </div>
+    <div id="enf-repas-apercu" style="font-size:11.5px;color:var(--muted);margin:-4px 0 10px 2px"></div>
     <div class="mactions"><button class="btn-cancel" id="enf-btn-delete" style="display:none;color:var(--red)" onclick="deleteEnfant()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-enfant-wrap')">Annuler</button><button class="btn-primary" id="enf-btn-save" onclick="saveEnfant()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
 </div>
@@ -1521,7 +1532,7 @@ async function loadAllData(){
 // SUPABASE HELPERS
 async function dbSelect(table,filters={}){let q=sb.from(table).select('*').order('created_at',{ascending:false});for(const[k,v]of Object.entries(filters))q=q.eq(k,v);const{data,error}=await q;if(error){console.warn(table,error);return[];}return data||[];}
 async function dbInsert(table,row){const{data,error}=await sb.from(table).insert(row).select().single();if(error){console.warn('insert',table,error);window._lastDbError=error.message||String(error);return null;}window._lastDbError=null;return data;}
-async function dbUpdate(table,id,updates){const{error}=await sb.from(table).update(updates).eq('id',id);if(error){console.error('[dbUpdate]',table,id,error.message);return false;}return true;}
+async function dbUpdate(table,id,updates){const{error}=await sb.from(table).update(updates).eq('id',id);if(error){console.error('[dbUpdate]',table,id,error.message);window._lastDbError=error.message||String(error);return false;}window._lastDbError=null;return true;}
 async function dbDelete(table,id){const{error}=await sb.from(table).delete().eq('id',id);if(error){console.warn('delete',table,error);return false;}return true;}
 
 // Bascule l'affichage en clair d'un champ mot de passe (icône œil) — utilisé sur login et reset password
@@ -3473,8 +3484,32 @@ function enfSyncGroupe(){
   const gsel = document.getElementById('enf-groupe');
   const gi = [...gsel.options].findIndex(o=>o.text===groupe);
   gsel.selectedIndex = gi>=0 ? gi : 0;
+  enfSyncRepas();
 }
 window.enfSyncGroupe = enfSyncGroupe;
+
+/* Aperçu en direct du code repas qui sera utilisé partout (feuille hebdomadaire,
+   bon de commande traiteur), pour que la conséquence du choix soit visible
+   avant d'enregistrer. */
+function enfSyncRepas(){
+  const box=document.getElementById('enf-repas-apercu');
+  if(!box)return;
+  const dob=(document.getElementById('enf-dob')||{}).value||'';
+  const forcee=(document.getElementById('enf-repas-base')||{}).value||'';
+  const regime=(document.getElementById('enf-regime-repas')||{}).value||'';
+  const auto=enfRepasBaseAuto({dob:dob});
+  const base=forcee||auto;
+  if(!base){
+    box.innerHTML='<span style="color:var(--red)">Date de naissance manquante — aucun code repas ne peut être calculé.</span>';
+    return;
+  }
+  const code=regime?base+regime:base;
+  let txt='Code repas : <strong style="color:var(--koala)">'+escHtml(code)+'</strong> — '+escHtml(repasLabel(code)||'');
+  if(forcee&&auto&&forcee!==auto)txt+=' <span style="color:var(--orange-dark)">(forcé ; l’âge donnerait '+escHtml(auto)+')</span>';
+  else if(!forcee)txt+=' <span style="opacity:.8">(suit l’âge)</span>';
+  box.innerHTML=txt;
+}
+window.enfSyncRepas = enfSyncRepas;
 function enfFillCreches(selectedId){
   const sel=document.getElementById('enf-creche');if(!sel)return;
   const maCreche=currentProfile?.creche_id||null;
@@ -3485,11 +3520,20 @@ function enfFillCreches(selectedId){
   sel.style.background=isDirection?'':'#f4f4f8';
   sel.style.cursor=isDirection?'':'not-allowed';
 }
-function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-function editEnfant(id){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim(),regime_repas:document.getElementById('enf-regime-repas').value||null};
-  if(editingEnfantId){const ok=await dbUpdate('enfants',editingEnfantId,row);if(ok){const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(e)Object.assign(e,row);closeModal('modal-enfant-wrap');showBanner(prenom+' modifié(e) ✅');renderPresence();if(document.getElementById('modal-enf-fiche-wrap')?.classList.contains('open')){document.getElementById('enf-fiche-title').innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((row.prenom||'')+' '+(row.nom||''));enfRenderIdentite();}if(typeof enfRender==='function')enfRender();if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();}else showBanner('Erreur lors de la modification.','error');return;}
-  const saved=await dbInsert('enfants',row);if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
+function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+function editEnfant(id){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim(),regime_repas:document.getElementById('enf-regime-repas').value||null,repas_base:document.getElementById('enf-repas-base').value||null};
+  // La colonne repas_base peut ne pas exister (migration SQL non passée) : on
+  // réessaie alors sans elle plutôt que de refuser d'enregistrer la fiche.
+  const sansRepasBase=function(){const r=Object.assign({},row);delete r.repas_base;return r;};
+  if(editingEnfantId){let ok=await dbUpdate('enfants',editingEnfantId,row);
+    if(!ok&&/repas_base/i.test(window._lastDbError||'')){delete row.repas_base;ok=await dbUpdate('enfants',editingEnfantId,sansRepasBase());
+      if(ok)setTimeout(function(){showBanner('Type de repas non enregistré : colonne repas_base absente de la table enfants.','error');},2500);}
+    if(ok){const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(e)Object.assign(e,row);closeModal('modal-enfant-wrap');showBanner(prenom+' modifié(e) ✅');renderPresence();if(document.getElementById('modal-enf-fiche-wrap')?.classList.contains('open')){document.getElementById('enf-fiche-title').innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((row.prenom||'')+' '+(row.nom||''));enfRenderIdentite();}if(typeof enfRender==='function')enfRender();if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();}else showBanner('Erreur lors de la modification.','error');return;}
+  let saved=await dbInsert('enfants',row);
+  if(!saved&&/repas_base/i.test(window._lastDbError||'')){saved=await dbInsert('enfants',sansRepasBase());
+    if(saved)setTimeout(function(){showBanner('Type de repas non enregistré : colonne repas_base absente de la table enfants.','error');},2500);}
+  if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
 async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(!confirm('Supprimer définitivement '+(e?.prenom||'')+' '+(e?.nom||'')+' ?\n\nAttention : les présences liées ne seront plus rattachées.'))return;const ok=await dbDelete('enfants',editingEnfantId);if(ok){cacheEnfants=cacheEnfants.filter(x=>x.id!==editingEnfantId);closeModal('modal-enfant-wrap');closeModal('modal-enf-fiche-wrap');showBanner('Enfant supprimé.');renderPresence();if(typeof enfRender==='function')enfRender();}else showBanner('Erreur lors de la suppression.','error');}
 
 // ── IMPORT PRÉSENCES DEPUIS PLANNING PDF (Gantt) ──
@@ -7232,7 +7276,7 @@ evenements: `
 
 
 enfants: `
-<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👶 Dossiers enfants</h3><div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Ce module rassemble, enfant par enfant, sa fiche d’identité et l’ensemble des documents remplis pour lui. Les référentes voient les enfants de leur crèche, la direction voit les six sites.</div><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Trouver un enfant</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>La barre de recherche filtre sur le prénom et le nom au fur et à mesure de la frappe.</li><li>La direction dispose en plus d’un sélecteur de crèche pour restreindre la liste à un site.</li><li>Chaque ligne rappelle la crèche et le groupe d’âge. Cliquer dessus ouvre la fiche.</li><li>La <strong>création</strong> d’un enfant ne se fait pas ici mais depuis le module Présences, bouton <strong>Ajouter enfant</strong>.</li><li>Le bouton <strong>⚠ Fiches à compléter</strong> filtre sur les enfants dont la date de naissance ou les allergies n’ont jamais été renseignées — utile pour repérer les enfants créés automatiquement par l’import du planning PDF (Gertrude n’exportant que le planning, jamais la fiche complète), et pour les compléter à la main.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🆔 L’onglet Identité</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Reprend la crèche, la date de naissance, le groupe d’âge et les allergies connues.</li><li>Le bouton <strong>Modifier la fiche</strong> ouvre la même fenêtre de saisie que le module Présences.</li><li>La suppression d’un enfant est réservée à la direction.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">📄 L’onglet Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Liste tous les documents remplis pour cet enfant, du plus récent au plus ancien, avec la date et la personne qui les a remplis.</li><li>Un badge indique l’état : <strong>✅ Signé</strong> lorsqu’une signature a été recueillie, <strong>🕓 Préparé</strong> tant que ce n’est pas le cas.</li><li><strong>Ouvrir / signer</strong> bascule vers l’outil Documents pour compléter, générer le PDF ou faire signer. Un bouton <strong>Revenir aux documents de l’enfant</strong> ramène ensuite ici pour enchaîner.</li><li><strong>Suppr.</strong> retire définitivement le document du dossier : penser à exporter le PDF avant.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔗 Le lien avec l’outil Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Un document se remplit dans l’outil <strong>Documents</strong>. Il suffit d’y choisir l’enfant concerné dans le sélecteur en haut du formulaire.</li><li>À l’enregistrement, le document quitte la liste des modèles et vient se classer ici, dans le dossier de l’enfant.</li><li>Le modèle redevient vierge côté Documents : il est immédiatement réutilisable pour un autre enfant, sans risque d’écraser le précédent.</li><li>Le dossier de l’enfant devient donc le point d’entrée unique pour retrouver, compléter ou faire signer un document déjà commencé.</li></ul>
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👶 Dossiers enfants</h3><div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Ce module rassemble, enfant par enfant, sa fiche d’identité et l’ensemble des documents remplis pour lui. Les référentes voient les enfants de leur crèche, la direction voit les six sites.</div><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Trouver un enfant</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>La barre de recherche filtre sur le prénom et le nom au fur et à mesure de la frappe.</li><li>La direction dispose en plus d’un sélecteur de crèche pour restreindre la liste à un site.</li><li>Chaque ligne rappelle la crèche et le groupe d’âge. Cliquer dessus ouvre la fiche.</li><li>La <strong>création</strong> d’un enfant ne se fait pas ici mais depuis le module Présences, bouton <strong>Ajouter enfant</strong>.</li><li>Le bouton <strong>⚠ Fiches à compléter</strong> filtre sur les enfants dont la date de naissance ou les allergies n’ont jamais été renseignées — utile pour repérer les enfants créés automatiquement par l’import du planning PDF (Gertrude n’exportant que le planning, jamais la fiche complète), et pour les compléter à la main.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🆔 L’onglet Identité</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Reprend la crèche, la date de naissance, le groupe d’âge et les allergies connues.</li><li>La ligne <strong>Repas</strong> affiche le code utilisé sur la feuille hebdomadaire et le bon traiteur, et précise s’il suit l’âge ou s’il a été forcé à la main.</li><li>Le bouton <strong>Modifier la fiche</strong> ouvre la même fenêtre de saisie que le module Présences. On y règle le <strong>type de repas</strong> — laissé sur « Selon l’âge », il suit les anniversaires tout seul ; forcé sur BB, M ou G, il ne bouge plus — et le <strong>régime particulier</strong> (sans viande, sans protéine de vache ou animale). Le code obtenu s’affiche en direct sous les deux menus.</li><li>La suppression d’un enfant est réservée à la direction.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">📄 L’onglet Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Liste tous les documents remplis pour cet enfant, du plus récent au plus ancien, avec la date et la personne qui les a remplis.</li><li>Un badge indique l’état : <strong>✅ Signé</strong> lorsqu’une signature a été recueillie, <strong>🕓 Préparé</strong> tant que ce n’est pas le cas.</li><li><strong>Ouvrir / signer</strong> bascule vers l’outil Documents pour compléter, générer le PDF ou faire signer. Un bouton <strong>Revenir aux documents de l’enfant</strong> ramène ensuite ici pour enchaîner.</li><li><strong>Suppr.</strong> retire définitivement le document du dossier : penser à exporter le PDF avant.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔗 Le lien avec l’outil Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Un document se remplit dans l’outil <strong>Documents</strong>. Il suffit d’y choisir l’enfant concerné dans le sélecteur en haut du formulaire.</li><li>À l’enregistrement, le document quitte la liste des modèles et vient se classer ici, dans le dossier de l’enfant.</li><li>Le modèle redevient vierge côté Documents : il est immédiatement réutilisable pour un autre enfant, sans risque d’écraser le précédent.</li><li>Le dossier de l’enfant devient donc le point d’entrée unique pour retrouver, compléter ou faire signer un document déjà commencé.</li></ul>
 `,
 
 vaccinations: `
@@ -7897,6 +7941,21 @@ function enfFicheTab(tab, btn){
   document.getElementById('enf-fiche-documents').classList.toggle('active',tab==='documents');
 }
 
+/* Ligne « Repas » de l'onglet Identité : le code tel qu'il partira sur la feuille
+   hebdomadaire et le bon traiteur, en précisant s'il est forcé ou déduit de l'âge. */
+function enfRepasFicheLigne(e){
+  const code=enfRepasCode(e);
+  if(!code)return'<span style="color:var(--red)">— date de naissance manquante</span>';
+  const auto=enfRepasBaseAuto(e);
+  const forcee=e.repas_base||'';
+  let s='<span style="display:inline-block;background:'+(e.regime_repas?'var(--orange-light)':'var(--koala-light)')
+    +';color:'+(e.regime_repas?'var(--orange-dark)':'var(--koala)')
+    +';border-radius:6px;padding:1px 7px;font-weight:800;margin-right:6px">'+escHtml(code)+'</span>'+escHtml(repasLabel(code)||'');
+  if(forcee&&auto&&forcee!==auto)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé — l’âge donnerait '+escHtml(auto)+'</div>';
+  else if(!forcee)s+='<div style="font-size:11px;color:var(--muted);font-weight:400">suit l’âge</div>';
+  return s;
+}
+
 function enfRenderIdentite(){
   const e = cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
   const box = document.getElementById('enf-fiche-identite');
@@ -7911,6 +7970,7 @@ function enfRenderIdentite(){
     + row('Groupe', escHtml(grp))
     + row('Crèche', creche?escHtml(creche.name):'')
     + row('Allergies', escHtml(e.allergies||''))
+    + row('Repas', enfRepasFicheLigne(e))
     + '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn-primary" onclick="editEnfant(\''+e.id+'\')"><i class="ti ti-edit"></i> Modifier la fiche</button></div>';
 }
 
@@ -8030,18 +8090,28 @@ const REPAS_TYPES={
 /* Régimes particuliers — mêmes sigles que la légende du bon de commande MCM. */
 const REGIMES={SV:'Sans viande',SPV:'Sans protéine de vache',SPA:'Sans protéine animale'};
 function repasLabel(code){ return code?(REPAS_TYPES[code]||code):''; }
-/* Code repas auto : lettre de base selon la tranche d'âge (identique au calcul du groupe),
-   + suffixe selon le régime alimentaire particulier renseigné sur la fiche de l'enfant
-   (champ enf.regime_repas : '' | 'SV' | 'SPV' | 'SPA').
-   Le suffixe s'applique aussi aux bébés : un nourrisson intolérant aux protéines de vache
-   doit rester visible comme tel partout, sans quoi l'écran contredirait le bon de commande. */
-function enfRepasCode(e){
+/* Code repas = lettre de base + suffixe de régime particulier.
+
+   La lettre de base suit normalement la tranche d'âge, mais l'âge ne fait pas
+   tout : un enfant de 14 mois peut déjà manger comme un grand, un autre rester
+   au biberon après un an. Le champ `repas_base` de la fiche permet donc de
+   forcer la lettre ; vide, la lettre reste déduite de l'âge et suit
+   automatiquement les anniversaires.
+
+   Le suffixe (`regime_repas` : '' | 'SV' | 'SPV' | 'SPA') s'applique aussi aux
+   bébés : un nourrisson intolérant aux protéines de vache doit rester visible
+   comme tel partout, sans quoi l'écran contredirait le bon de commande. */
+function enfRepasBaseAuto(e){
   if(!e)return'';
   const groupe=e.dob?groupeFromDob(e.dob):(e.groupe||'');
-  let base='';
-  if(groupe.indexOf('Bébé')>=0)base='BB';
-  else if(groupe.indexOf('Moyen')>=0)base='M';
-  else if(groupe.indexOf('Grand')>=0)base='G';
+  if(groupe.indexOf('Bébé')>=0)return'BB';
+  if(groupe.indexOf('Moyen')>=0)return'M';
+  if(groupe.indexOf('Grand')>=0)return'G';
+  return'';
+}
+function enfRepasCode(e){
+  if(!e)return'';
+  const base=e.repas_base||enfRepasBaseAuto(e);
   if(!base)return'';
   return e.regime_repas?base+e.regime_repas:base;
 }
