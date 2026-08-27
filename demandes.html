@@ -458,8 +458,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div style="display:flex;gap:8px">
         <button class="btn-sm" onclick="presApplyContrats()" title="Marquer présents les enfants dont le contrat couvre ce jour"><i class="ti ti-calendar-check"></i> Appliquer les contrats</button>
         <button class="btn-sm" onclick="presOpenAddDay()"><i class="ti ti-user-plus"></i> Ajouter à la journée</button>
-        <button class="btn-sm" onclick="document.getElementById('presence-import-input').click()"><i class="ti ti-file-import"></i> Importer PDF</button>
-        <input type="file" id="presence-import-input" accept="application/pdf" style="display:none" onchange="handlePresenceImport(this)">
+        <button class="btn-sm" onclick="openUnifiedImportModal()"><i class="ti ti-file-import"></i> Importer PDF (présences + planning)</button>
         <button class="btn-green" onclick="exportPresence()"><i class="ti ti-download"></i> Exporter</button>
       </div>
     </div>
@@ -494,6 +493,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
         <button id="planning-add-btn" class="btn-primary" onclick="openEventModal()" style="display:none"><i class="ti ti-plus"></i> Ajouter</button>
         <button id="planning-import-btn" class="btn-primary" onclick="openImportPlanningModal()" style="display:none;background:#378ADD"><i class="ti ti-file-spreadsheet"></i> Importer Excel</button>
+        <button id="uni-open-btn" class="btn-primary" onclick="openUnifiedImportModal()" style="background:#2FA84F"><i class="ti ti-file-import"></i> Importer PDF (présences + planning)</button>
       </div>
     </div>
     <!-- Planning HAUT : référent -->
@@ -1257,14 +1257,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
-<div class="overlay" id="modal-import-presence-wrap">
-  <div class="modal" style="max-width:640px;max-height:86vh;display:flex;flex-direction:column">
-    <h3><i class="ti ti-file-import"></i> Importer les présences</h3>
-    <div style="background:#EEEDF8;border-left:4px solid var(--koala);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--koala)">
-      Les enfants déjà en base sont reconnus automatiquement. Les nouveaux seront <strong>créés</strong> dans la crèche sélectionnée. Tous seront marqués <strong>présent matin et après-midi</strong> pour chaque jour du planning.
+<div class="overlay" id="modal-import-unifie-wrap">
+  <div class="modal" style="max-width:680px;max-height:86vh;display:flex;flex-direction:column">
+    <h3><i class="ti ti-file-import"></i> Importer un planning PDF (présences + salariés)</h3>
+    <div id="uni-step-config">
+      <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i>
+        Déposez le ou les <strong>plannings PDF</strong> édités pour la crèche : les présences des enfants et les horaires des salariés figurent sur le même document, ils seront importés ensemble. Plusieurs semaines peuvent être importées en une fois, à condition qu'elles concernent la même crèche.
+      </div>
+      <div class="fg"><label class="flabel">Crèche concernée</label>
+        <select class="finput" id="uni-creche"><option value="">— Sélectionner —</option></select>
+      </div>
+      <div class="fg"><label class="flabel">Référente titulaire</label>
+        <select class="finput" id="uni-referent"><option value="">— Sélectionner —</option></select>
+        <div style="font-size:11.5px;color:var(--ink2);margin-top:5px">Ses journées seront aussi écrites dans son planning individuel, comme le fait l'import Excel.</div>
+      </div>
+      <div class="fg">
+        <input type="file" id="uni-file" accept="application/pdf" multiple style="display:none" onchange="uniHandleFile(event)"/>
+        <button class="btn-cancel" style="width:100%" onclick="uniTriggerFile()"><i class="ti ti-upload"></i> Choisir un ou plusieurs PDF</button>
+        <div id="uni-filename" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
+      </div>
     </div>
-    <div id="import-presence-body" style="overflow-y:auto;flex:1;font-size:13px"></div>
-    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-import-presence-wrap')">Annuler</button><button class="btn-primary" id="btn-confirm-import-presence" onclick="confirmPresenceImport()"><i class="ti ti-check"></i> Confirmer</button></div>
+    <div id="uni-step-preview" style="display:none;overflow-y:auto;flex:1;font-size:13px"></div>
+    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-import-unifie-wrap')">Fermer</button><button class="btn-primary" id="uni-btn-confirm" style="display:none" onclick="uniConfirmImport()"><i class="ti ti-check"></i> Confirmer</button></div>
   </div>
 </div>
 
@@ -7675,44 +7689,364 @@ async function spConfirmImport() {
   if (typeof renderPlanning === 'function') await renderPlanning();
 }
 
-// ── Auto-installation du bouton ────────────────────────────────────────
-// Le bouton se place tout seul après celui de l'import Excel équipe
-// (#planning-import-btn), pour qu'aucune modification du HTML ne soit
-// nécessaire.
-//
-// Il reste VISIBLE en permanence, contrairement au bouton Excel que
-// renderPlanning() masque quand role === 'direction' : la direction doit
-// pouvoir importer les salariés de n'importe quelle crèche, et le choix de
-// la crèche se fait de toute façon dans la modale.
+// ── IMPORT UNIFIÉ (présences enfants + planning salariés, même PDF) ─────
+// Le bouton « Importer PDF (présences + planning) », présent à la fois dans
+// l'onglet Présences et dans l'onglet Planning, ouvre la même modale
+// (#modal-import-unifie-wrap, voir le HTML) et fait tourner en parallèle :
+//   - ipParsePdf(file)  : lecture texte -> présences des enfants
+//   - spParsePdf(files) : lecture image -> horaires des salariés
+// sur le(s) même(s) fichier(s), puis écrit les deux résultats en un seul
+// clic de confirmation. Remplace les anciens boutons/modales séparés
+// « Importer PDF » (Présences) et « Importer salariés (PDF) » (Planning).
 
-function spInstallerBouton() {
-  if (document.getElementById('sp-open-btn')) return true;
-  const ref = document.getElementById('planning-import-btn')
-    || document.querySelector('[onclick*="openImportPlanningModal"]');
-  if (!ref) return false;
+let _uniData = null;
 
-  ref.insertAdjacentHTML('afterend',
-    '<button id="sp-open-btn" class="btn-primary" onclick="spOpenImportModal()" '
-    + 'style="background:#2FA84F"><i class="ti ti-file-import"></i> Importer salariés (PDF)</button>');
-
-  console.log('[ImportSalPdf] Bouton installé.');
-  return true;
+function uniDefaultCreche() {
+  try { const v = getPresenceCrecheId(); if (v) return v; } catch (e) {}
+  if (!isDirection && currentProfile?.creche_id) return currentProfile.creche_id;
+  return '';
 }
 
-(function spAutoInstall() {
-  let essais = 0;
-  const tick = () => {
-    if (spInstallerBouton()) return;
-    if (++essais > 40) {
-      console.warn('[ImportSalPdf] Bouton d\u2019import Excel introuvable : '
-        + 'appelez spOpenImportModal() manuellement ou signalez-le.');
-      return;
-    }
-    setTimeout(tick, 500);
+function spRemplirReferentesUni(crecheId) {
+  const sel = document.getElementById('uni-referent');
+  if (!sel) return;
+  const refs = (cacheReferents || []).filter(r => r.role === 'referent' && (!crecheId || r.creche_id === crecheId));
+  sel.innerHTML = '<option value="">— Sélectionner —</option>'
+    + refs.map(r => '<option value="' + r.id + '" data-name="' + escHtml(r.name || '') + '">'
+      + escHtml(r.name || '') + '</option>').join('');
+}
+
+function openUnifiedImportModal() {
+  const sel = document.getElementById('uni-creche');
+  sel.innerHTML = '<option value="">— Sélectionner —</option>' +
+    (cacheCreches || []).map(c => '<option value="' + c.id + '">' + escHtml(c.name) + '</option>').join('');
+  const defaultCreche = uniDefaultCreche();
+  if (defaultCreche) sel.value = defaultCreche;
+  sel.onchange = () => spRemplirReferentesUni(sel.value);
+  spRemplirReferentesUni(sel.value);
+
+  document.getElementById('uni-filename').textContent = '';
+  document.getElementById('uni-file').value = '';
+  document.getElementById('uni-step-config').style.display = '';
+  document.getElementById('uni-step-preview').style.display = 'none';
+  document.getElementById('uni-btn-confirm').style.display = 'none';
+  _uniData = null;
+  document.getElementById('modal-import-unifie-wrap').classList.add('open');
+}
+
+function uniTriggerFile() {
+  if (!document.getElementById('uni-creche').value) { alert('Choisissez d’abord la crèche.'); return; }
+  if (!document.getElementById('uni-referent').value) { alert('Choisissez la référente titulaire.'); return; }
+  document.getElementById('uni-file').click();
+}
+
+async function uniHandleFile(event) {
+  const files = [...(event.target.files || [])];
+  event.target.value = '';
+  if (!files.length) return;
+  if (typeof pdfjsLib === 'undefined') { alert('Bibliothèque PDF non chargée.'); return; }
+
+  const crecheId = document.getElementById('uni-creche').value;
+  document.getElementById('uni-filename').textContent = files.map(f => '📄 ' + f.name).join('  ·  ');
+  showBanner(files.length > 1 ? 'Lecture de ' + files.length + ' PDF en cours…' : 'Lecture du PDF en cours…');
+
+  // 1) Présences des enfants (couche texte du PDF)
+  let presPages = [];
+  try { for (const f of files) presPages.push(...await ipParsePdf(f)); }
+  catch (e) { console.error('[ImportUnifie] présences', e); showBanner('Impossible de lire les présences dans ce PDF.', 'error'); return; }
+
+  // 2) Horaires des salariés (rendu image du PDF)
+  let parsedSal;
+  try { parsedSal = await spParsePdf(files); }
+  catch (e) { console.error('[ImportUnifie] salariés', e); showBanner('Impossible de lire les horaires salariés dans ce PDF.', 'error'); return; }
+
+  const jours = parsedSal.jours.filter(j => j.salaries.length);
+  if (!presPages.length && !jours.length) { showBanner('Aucune présence ni horaire détecté dans ce PDF.', 'error'); return; }
+
+  showBanner('Chargement des enfants…');
+  const { data: freshEnf, error: enfErr } = await sb.from('enfants').select('*');
+  if (enfErr) { console.error('[ImportUnifie] enfants', enfErr); showBanner('Impossible de charger les enfants.', 'error'); return; }
+  const allEnfants = freshEnf || [];
+  if (!cacheEnfants.length && allEnfants.length) cacheEnfants.push(...allEnfants);
+  const enfCreche = allEnfants.filter(e => e.creche_id === crecheId);
+  const byFull = {}, byFirst = {};
+  enfCreche.forEach(e => {
+    const full = ipNormName((e.prenom || '') + ' ' + (e.nom || '')); byFull[full] = e;
+    const f = ipNormName(e.prenom || ''); (byFirst[f] = byFirst[f] || []).push(e);
+  });
+  const allNamesInPdf = [...new Set(presPages.flatMap(pg => pg.names))];
+  const nameMap = {};
+  allNamesInPdf.forEach(nm => {
+    const norm = ipNormName(nm);
+    let e = byFull[norm];
+    if (!e) { const parts = norm.split(' '); const cand = byFirst[parts[0]]; if (cand && cand.length === 1) e = cand[0]; }
+    if (!e) { e = enfCreche.find(x => { const xn = ipNormName((x.prenom || '') + ' ' + (x.nom || '')); return norm.startsWith(xn) || xn.startsWith(norm); }); }
+    nameMap[nm] = e ? { enfant: e, isNew: false } : { enfant: null, isNew: true };
+  });
+  presPages.forEach(pg => {
+    pg.matched = []; pg.toCreate = [];
+    pg.names.forEach(nm => { const r = nameMap[nm]; if (r.enfant) pg.matched.push({ name: nm, enfant: r.enfant }); else pg.toCreate.push(nm); });
+  });
+  const creche = cacheCreches.find(c => c.id === crecheId);
+  const presTitles = [...new Set(presPages.map(pg => pg.title || '').filter(Boolean))];
+  const crecheNorm = ipNormName(creche ? creche.name : '');
+  const presCrecheMatch = (!presTitles.length || !crecheNorm) ? true : presTitles.every(t => ipNormName(t).indexOf(crecheNorm) >= 0);
+
+  const connus = await spPrenomsConnus(crecheId);
+  const alias = spLoadAlias(crecheId);
+  const noms = [...new Set(jours.flatMap(j => j.salaries.map(s => s.nomPdf)))];
+  const mapping = {};
+  noms.forEach(n => { mapping[n] = spProposerPrenom(n, connus, alias); });
+  const cn = spNorm(creche?.name);
+  const salCrecheMatch = !parsedSal.titles.length || !cn || parsedSal.titles.every(t => spNorm(t).includes(cn));
+
+  const selRef = document.getElementById('uni-referent');
+  const referentId = selRef.value;
+  const referentNom = selRef.selectedOptions[0]?.dataset?.name || '';
+
+  _uniData = {
+    crecheId, referentId, referentNom,
+    pres: { pages: presPages, nameMap, crecheEnfantIds: enfCreche.map(e => e.id), titles: presTitles, crecheMatch: presCrecheMatch, forceCreche: false, replace: true },
+    sal: { jours, mapping, connus, warnings: parsedSal.warnings, titles: parsedSal.titles, crecheMatch: salCrecheMatch, referentPrenom: spPrenomReferente(referentNom, mapping) }
   };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick);
-  else tick();
-})();
+  uniRenderPreview();
+}
+
+function uniRenderPreview() {
+  if (!_uniData) return;
+  const box = document.getElementById('uni-step-preview');
+  const creche = cacheCreches.find(c => c.id === _uniData.crecheId);
+  const pres = _uniData.pres, sal = _uniData.sal;
+  let html = '';
+
+  // ---- Bloc Présences enfants ----
+  const toCreateUnique = [...new Set(pres.pages.flatMap(pg => pg.toCreate))];
+  let totalPres = 0; const totalNew = toCreateUnique.length;
+  html += '<div style="font-weight:800;color:var(--koala);margin-bottom:6px"><i class="ti ti-users"></i> Présences des enfants</div>';
+  if (!pres.pages.length) {
+    html += '<div style="font-size:12px;color:var(--muted);margin-bottom:14px">Aucune présence enfant détectée dans ce PDF.</div>';
+  } else {
+    if (!pres.crecheMatch) {
+      html += '<div style="background:#fdecea;border-left:4px solid var(--red);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#8b1a1a">';
+      html += '<strong>⚠ La crèche ne correspond pas.</strong><br>Le PDF concerne <strong>' + escHtml(pres.titles.join(' / ')) + '</strong> alors que vous avez choisi <strong>' + escHtml(creche ? creche.name : '—') + '</strong>.<br>';
+      html += '<label style="display:flex;align-items:center;gap:6px;margin-top:8px;cursor:pointer"><input type="checkbox" id="uni-force-creche" onchange="_uniData.pres.forceCreche=this.checked;uniRenderPreview()"' + (pres.forceCreche ? ' checked' : '') + '/> Importer malgré tout</label></div>';
+    }
+    html += '<label style="display:flex;align-items:flex-start;gap:8px;background:#EEEDF8;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;color:var(--koala);cursor:pointer"><input type="checkbox" id="uni-replace" onchange="_uniData.pres.replace=this.checked" ' + (pres.replace ? 'checked' : '') + ' style="margin-top:2px"/><span><strong>Remplacer les présences existantes pour ces dates</strong><br><span style="font-weight:400;font-size:11.5px">Le PDF fait foi : les présences déjà enregistrées pour cette crèche aux dates du planning seront effacées avant l’import. Décochez pour cumuler avec l’existant.</span></span></label>';
+    if (totalNew) {
+      html += '<div style="background:#fff8e1;border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px">';
+      html += '<strong>' + totalNew + ' nouvel enfant' + (totalNew > 1 ? 's' : '') + ' seront créés</strong> dans <strong>' + (creche ? creche.name : 'la crèche') + '</strong><br>';
+      html += '<span style="color:var(--muted);font-size:11.5px">' + toCreateUnique.map(escHtml).join(', ') + '</span></div>';
+    }
+    pres.pages.forEach(pg => {
+      const nb = pg.matched.length + pg.toCreate.length; totalPres += nb;
+      html += '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">';
+      html += '<div style="font-weight:700;color:var(--koala);text-transform:capitalize;margin-bottom:6px">' + ipFmtDate(pg.date) + ' <span style="font-weight:400;color:var(--muted);font-size:11px">' + nb + ' enfant' + (nb > 1 ? 's' : '') + '</span></div>';
+      const tags = [
+        ...pg.matched.map(mt => '<span style="background:#e8f5e9;color:#2e7d32;border-radius:6px;padding:2px 8px;font-size:11.5px">✓ ' + escHtml(mt.enfant.prenom + ' ' + mt.enfant.nom) + '</span>'),
+        ...pg.toCreate.map(nm => '<span style="background:#fff3e0;color:#e65100;border-radius:6px;padding:2px 8px;font-size:11.5px">+ ' + escHtml(nm) + '</span>')
+      ];
+      html += '<div style="display:flex;flex-wrap:wrap;gap:5px">' + tags.join('') + '</div></div>';
+    });
+  }
+
+  html += '<div style="height:1px;background:var(--border);margin:16px 0"></div>';
+
+  // ---- Bloc Planning salariés ----
+  html += '<div style="font-weight:800;color:var(--koala);margin-bottom:6px"><i class="ti ti-calendar-check"></i> Planning des salariés</div>';
+  if (!sal.jours.length) {
+    html += '<div style="font-size:12px;color:var(--muted)">Aucun horaire salarié détecté dans ce PDF.</div>';
+  } else {
+    if (!sal.crecheMatch) {
+      html += '<div style="background:#fdecea;border-left:4px solid var(--red);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#8b1a1a">'
+        + '<strong>⚠ La crèche ne correspond pas.</strong><br>Les PDF concernent <strong>' + escHtml(sal.titles.join(' / ')) + '</strong> alors que vous avez choisi <strong>' + escHtml(creche?.name || '—') + '</strong>.</div>';
+    }
+    html += '<div style="background:#EEEDF8;border-left:4px solid var(--koala);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--koala)">'
+      + 'Vérifiez le <strong>prénom en base</strong> de chaque salarié. Il doit être écrit exactement comme dans le planning équipe, sinon une seconde ligne sera créée en doublon. Vos corrections sont mémorisées pour les prochains imports.</div>';
+    if (_uniData.referentId && !sal.referentPrenom) {
+      html += '<div style="background:var(--amber-lt);border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--orange)">'
+        + '<strong>⚠ Référente non retrouvée.</strong><br>Aucun prénom ne correspond à ' + escHtml(_uniData.referentNom) + '. Son planning individuel ne sera pas rempli. Corrigez son prénom ci-dessous pour rétablir le lien.</div>';
+    }
+    const noms = Object.keys(sal.mapping).sort();
+    html += '<div style="font-weight:700;margin-bottom:8px">Correspondance des prénoms</div>';
+    html += sal.connus.length ? '<datalist id="uni-dl">' + sal.connus.map(c => '<option value="' + escHtml(c) + '"></option>').join('') + '</datalist>' : '';
+    html += noms.map(n => {
+      const m = sal.mapping[n];
+      const badge = m.source === 'nouveau'
+        ? '<span style="font-size:10.5px;background:var(--amber-lt);color:var(--orange);padding:2px 7px;border-radius:20px;font-weight:700">à vérifier</span>'
+        : '<span style="font-size:10.5px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:20px;font-weight:700">reconnu</span>';
+      const bRef = (sal.referentPrenom && m.prenom === sal.referentPrenom)
+        ? ' <span style="font-size:10px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:8px">référente — planning individuel + équipe</span>'
+        : ' <span style="font-size:10px;background:#f0f0f5;color:#888;padding:2px 7px;border-radius:8px">planning équipe</span>';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">'
+        + '<div style="flex:1;min-width:0"><div style="font-size:12.5px">' + escHtml(n) + '</div>' + badge + bRef + '</div>'
+        + '<i class="ti ti-arrow-right" style="color:var(--muted)"></i>'
+        + '<input class="finput" list="uni-dl" style="max-width:170px;font-size:12.5px" value="' + escHtml(m.prenom) + '" '
+        + 'onchange="uniSetPrenom(' + JSON.stringify(n).replace(/"/g, '&quot;') + ',this.value)"/>'
+        + '</div>';
+    }).join('');
+
+    const aVerifier = sal.jours.reduce((n, j) => n + j.salaries.filter(s => spVersCreneau(s.segments).multi).length, 0);
+    const semaines = new Set(sal.jours.map(j => mondayOfISO(j.dateISO))).size;
+    html += '<div style="font-weight:700;margin:16px 0 8px">Horaires détectés — ' + sal.jours.length + ' journée(s) sur ' + semaines + ' semaine(s)</div>';
+    html += '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Horaires lus tels quels dans le PDF, au quart d’heure, pauses comprises.'
+      + (aVerifier ? ' <strong style="color:var(--orange)">' + aVerifier + ' journée(s) à plus de deux plages</strong>, à vérifier.' : '') + '</div>';
+    html += sal.jours.map(j => {
+      const d = new Date(j.dateISO + 'T12:00:00');
+      const jourIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+      const hors = jourIdx > 4 ? ' <span style="color:var(--orange);font-size:11px">— week-end, ignoré</span>' : '';
+      const lignes = j.salaries.map(s => {
+        const cr = spVersCreneau(s.segments);
+        const pause = cr.pause ? '<span style="color:var(--muted)"> · pause ' + cr.pause + '</span>' : '<span style="color:var(--muted)"> · journée continue</span>';
+        const warn = cr.multi ? ' <span style="color:var(--orange)">⚠ &gt;2 plages</span>' : '';
+        return '<div style="padding:4px 12px;font-size:11.5px;display:flex;justify-content:space-between;gap:10px">'
+          + '<span>' + escHtml(sal.mapping[s.nomPdf].prenom) + '</span>'
+          + '<span>' + cr.hdebut + '–' + cr.hfin + pause + warn + '</span></div>';
+      }).join('');
+      return '<details style="border-bottom:1px solid var(--border)"><summary style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:700;color:var(--koala)">'
+        + spDateFr(j.dateISO) + ' — ' + j.salaries.length + ' salarié(s)' + hors + '</summary>' + lignes + '</details>';
+    }).join('');
+    if (sal.warnings.length) {
+      html += '<div style="font-size:11px;color:var(--orange);background:var(--amber-lt);padding:8px 10px;border-radius:8px;margin-top:12px">⚠ ' + sal.warnings.map(escHtml).join('<br>') + '</div>';
+    }
+  }
+
+  box.innerHTML = html;
+  document.getElementById('uni-step-config').style.display = 'none';
+  box.style.display = '';
+  const btn = document.getElementById('uni-btn-confirm');
+  const blocked = (pres.pages.length && !pres.crecheMatch && !pres.forceCreche);
+  btn.disabled = blocked;
+  const parts = [];
+  if (totalPres || totalNew) parts.push(totalPres + ' présence' + (totalPres > 1 ? 's' : '') + (totalNew ? ' + ' + totalNew + ' création' + (totalNew > 1 ? 's' : '') : ''));
+  if (sal.jours.length) parts.push(sal.jours.length + ' journée(s) de planning');
+  btn.innerHTML = '<i class="ti ti-check"></i> Confirmer' + (parts.length ? ' — ' + parts.join(' · ') : '');
+  btn.style.display = '';
+}
+
+function uniSetPrenom(nomPdf, valeur) {
+  if (!_uniData || !valeur.trim()) return;
+  _uniData.sal.mapping[nomPdf] = { prenom: valeur.trim(), source: 'alias' };
+  const alias = spLoadAlias(_uniData.crecheId);
+  alias[spNorm(nomPdf.replace(/\s+/g, ''))] = valeur.trim();
+  spSaveAlias(_uniData.crecheId, alias);
+  _uniData.sal.referentPrenom = spPrenomReferente(_uniData.referentNom, _uniData.sal.mapping);
+  uniRenderPreview();
+}
+
+async function uniConfirmImport() {
+  if (!_uniData) return;
+  const btn = document.getElementById('uni-btn-confirm');
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Import en cours…';
+
+  const crecheId = _uniData.crecheId, referentId = _uniData.referentId;
+  const pres = _uniData.pres, sal = _uniData.sal;
+  const creche = cacheCreches.find(c => c.id === crecheId);
+  const msgParts = [];
+  let presenceOk = true;
+
+  // ---- 1) Présences des enfants ----
+  if (pres.pages.length) {
+    showBanner('Création des nouveaux enfants…');
+    const toCreateNames = [...new Set(pres.pages.flatMap(pg => pg.toCreate))];
+    for (const nm of toCreateNames) {
+      const parts = nm.trim().split(' ');
+      const prenom = parts[0]; const nom = parts.slice(1).join(' ');
+      const { data: saved, error } = await sb.from('enfants').insert({ prenom, nom, creche_id: crecheId }).select().single();
+      if (saved) {
+        cacheEnfants.push(saved);
+        pres.nameMap[nm] = { enfant: saved, isNew: false };
+        pres.pages.forEach(pg => {
+          const idx = pg.toCreate.indexOf(nm);
+          if (idx >= 0) { pg.toCreate.splice(idx, 1); pg.matched.push({ name: nm, enfant: saved }); }
+        });
+      } else { console.error('[ImportUnifie] create enfant', nm, error); }
+    }
+    showBanner('Enregistrement des présences…');
+    const wanted = [];
+    pres.pages.forEach(pg => {
+      pg.matched.forEach(mt => {
+        wanted.push({ enfant_id: mt.enfant.id, presence_date: pg.date, slot: 'M', status: 'present' });
+        wanted.push({ enfant_id: mt.enfant.id, presence_date: pg.date, slot: 'A', status: 'present' });
+      });
+    });
+    let toInsertCount = 0;
+    if (wanted.length) {
+      const dates = [...new Set(wanted.map(w => w.presence_date))];
+      const ids = [...new Set(wanted.map(w => w.enfant_id))];
+      if (pres.replace) {
+        showBanner('Nettoyage des présences existantes…');
+        const purgeIds = [...new Set([...(pres.crecheEnfantIds || []), ...ids])];
+        const { error: delErr } = await sb.from('presences').delete().in('presence_date', dates).in('enfant_id', purgeIds);
+        if (delErr) { console.error('[ImportUnifie] purge', delErr); presenceOk = false; }
+      }
+      if (presenceOk) {
+        const { data: existing } = await sb.from('presences').select('id,enfant_id,presence_date,slot').in('presence_date', dates).in('enfant_id', ids);
+        const exSet = new Set((existing || []).map(e => e.enfant_id + '_' + e.presence_date + '_' + e.slot));
+        const toInsert = wanted.filter(w => !exSet.has(w.enfant_id + '_' + w.presence_date + '_' + w.slot));
+        toInsertCount = toInsert.length;
+        if (toInsert.length) { const { error } = await sb.from('presences').insert(toInsert); if (error) { console.error('[ImportUnifie] insert presences', error); presenceOk = false; } }
+      }
+    }
+    if (presenceOk) {
+      msgParts.push((toCreateNames.length ? toCreateNames.length + ' enfant' + (toCreateNames.length > 1 ? 's' : '') + ' créé' + (toCreateNames.length > 1 ? 's' : '') + ', ' : '') + toInsertCount + ' présence' + (toInsertCount > 1 ? 's' : '') + ' enregistrée' + (toInsertCount > 1 ? 's' : ''));
+    } else {
+      msgParts.push('⚠ erreur lors de l’enregistrement des présences');
+    }
+  }
+
+  // ---- 2) Planning des salariés ----
+  let saved = 0, failed = 0, skipped = 0, savedRef = 0;
+  if (sal.jours.length) {
+    const batchId = (crypto?.randomUUID) ? crypto.randomUUID() : ('batch-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    for (const j of sal.jours) {
+      const d = new Date(j.dateISO + 'T00:00:00');
+      const jourIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+      if (jourIdx > 4) { skipped += j.salaries.length; continue; }
+      const semaine = mondayOfISO(j.dateISO);
+      for (const s of j.salaries) {
+        const cr = spVersCreneau(s.segments);
+        const prenom = sal.mapping[s.nomPdf].prenom;
+        const { error } = await sb.from('planning_equipe').upsert({
+          creche_id: crecheId, prenom, semaine, jour: jourIdx, type: 'presence',
+          label: creche?.name || '', lieu: creche?.name || '',
+          hdebut: cr.hdebut, hfin: cr.hfin, pause: cr.pause,
+          source_cell: 'PDF présences — ' + s.nomPdf,
+          creneau_label: cr.label, import_batch_id: batchId
+        }, { onConflict: 'creche_id,prenom,semaine,jour' });
+        if (error) { console.error('[ImportUnifie]', error.message); failed++; } else { saved++; }
+
+        if (referentId && sal.referentPrenom && prenom === sal.referentPrenom) {
+          await sb.from('planning').delete().eq('referent_id', referentId)
+            .eq('semaine', semaine).eq('jour', jourIdx).is('slot', null);
+          const ok = await planningSave(referentId, semaine, {
+            day: jourIdx, slot: null, type: 'presence',
+            label: creche?.name || '', lieu: creche?.name || '',
+            hdebut: cr.hdebut, hfin: cr.hfin, pause: cr.pause,
+            detachType: '', detachDesc: '', multi: true, batchId
+          });
+          if (ok) savedRef++; else failed++;
+        }
+      }
+    }
+    localStorage.setItem('lastImportBatch_' + crecheId,
+      JSON.stringify({ batchId, referentId: referentId || null, date: new Date().toISOString() }));
+    msgParts.push(saved + ' jour(s) dans le planning équipe'
+      + (savedRef ? ', dont ' + savedRef + ' aussi dans le planning individuel de ' + sal.referentPrenom : '')
+      + (skipped ? ' — ' + skipped + ' ignoré(s) (week-end)' : '')
+      + (failed ? ' (' + failed + ' échec(s), voir la console)' : ''));
+  }
+
+  if (sal.jours.length) {
+    if (typeof peInvalidateAll === 'function') peInvalidateAll(crecheId);
+    if (referentId && typeof planningInvalidateAll === 'function') planningInvalidateAll(referentId);
+  }
+
+  closeModal('modal-import-unifie-wrap');
+  _uniData = null;
+  showBanner(msgParts.length ? 'Import terminé : ' + msgParts.join(' · ') + ' ✅' : 'Aucune donnée à importer.', msgParts.length ? undefined : 'error');
+  if (pres.pages.length && presenceOk) renderPresence();
+  if (sal.jours.length && typeof renderPlanning === 'function') await renderPlanning();
+}
 
 </script>
 </body>
