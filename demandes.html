@@ -854,6 +854,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <option value="">Toutes les crèches</option>
         </select>
         <input class="finput" id="enf-search" placeholder="Rechercher un enfant…" style="width:auto;min-width:180px;font-size:12px;padding:4px 8px" oninput="enfRender()">
+        <button class="btn-sm" id="enf-incomplete-toggle" style="font-size:11px;padding:5px 10px;display:flex;align-items:center;gap:5px" onclick="enfToggleIncomplete()" title="N'afficher que les fiches où la date de naissance ou les allergies n'ont jamais été renseignées"><i class="ti ti-alert-triangle" style="color:#e8a33d"></i> Fiches à compléter<span id="enf-incomplete-count" style="display:none;background:#e8a33d;color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700"></span></button>
         <button class="btn-primary" onclick="openEnfantModal()"><i class="ti ti-plus"></i> Ajouter un enfant</button>
       </div>
     </div>
@@ -6915,7 +6916,7 @@ evenements: `
 
 
 enfants: `
-<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👶 Dossiers enfants</h3><div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Ce module rassemble, enfant par enfant, sa fiche d’identité et l’ensemble des documents remplis pour lui. Les référentes voient les enfants de leur crèche, la direction voit les six sites.</div><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Trouver un enfant</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>La barre de recherche filtre sur le prénom et le nom au fur et à mesure de la frappe.</li><li>La direction dispose en plus d’un sélecteur de crèche pour restreindre la liste à un site.</li><li>Chaque ligne rappelle la crèche et le groupe d’âge. Cliquer dessus ouvre la fiche.</li><li>La <strong>création</strong> d’un enfant ne se fait pas ici mais depuis le module Présences, bouton <strong>Ajouter enfant</strong>.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🆔 L’onglet Identité</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Reprend la crèche, la date de naissance, le groupe d’âge et les allergies connues.</li><li>Le bouton <strong>Modifier la fiche</strong> ouvre la même fenêtre de saisie que le module Présences.</li><li>La suppression d’un enfant est réservée à la direction.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">📄 L’onglet Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Liste tous les documents remplis pour cet enfant, du plus récent au plus ancien, avec la date et la personne qui les a remplis.</li><li>Un badge indique l’état : <strong>✅ Signé</strong> lorsqu’une signature a été recueillie, <strong>🕓 Préparé</strong> tant que ce n’est pas le cas.</li><li><strong>Ouvrir / signer</strong> bascule vers l’outil Documents pour compléter, générer le PDF ou faire signer. Un bouton <strong>Revenir aux documents de l’enfant</strong> ramène ensuite ici pour enchaîner.</li><li><strong>Suppr.</strong> retire définitivement le document du dossier : penser à exporter le PDF avant.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔗 Le lien avec l’outil Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Un document se remplit dans l’outil <strong>Documents</strong>. Il suffit d’y choisir l’enfant concerné dans le sélecteur en haut du formulaire.</li><li>À l’enregistrement, le document quitte la liste des modèles et vient se classer ici, dans le dossier de l’enfant.</li><li>Le modèle redevient vierge côté Documents : il est immédiatement réutilisable pour un autre enfant, sans risque d’écraser le précédent.</li><li>Le dossier de l’enfant devient donc le point d’entrée unique pour retrouver, compléter ou faire signer un document déjà commencé.</li></ul>
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👶 Dossiers enfants</h3><div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Ce module rassemble, enfant par enfant, sa fiche d’identité et l’ensemble des documents remplis pour lui. Les référentes voient les enfants de leur crèche, la direction voit les six sites.</div><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Trouver un enfant</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>La barre de recherche filtre sur le prénom et le nom au fur et à mesure de la frappe.</li><li>La direction dispose en plus d’un sélecteur de crèche pour restreindre la liste à un site.</li><li>Chaque ligne rappelle la crèche et le groupe d’âge. Cliquer dessus ouvre la fiche.</li><li>La <strong>création</strong> d’un enfant ne se fait pas ici mais depuis le module Présences, bouton <strong>Ajouter enfant</strong>.</li><li>Le bouton <strong>⚠ Fiches à compléter</strong> filtre sur les enfants dont la date de naissance ou les allergies n’ont jamais été renseignées — utile pour repérer les enfants créés automatiquement par l’import du planning PDF (Gertrude n’exportant que le planning, jamais la fiche complète), et pour les compléter à la main.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🆔 L’onglet Identité</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Reprend la crèche, la date de naissance, le groupe d’âge et les allergies connues.</li><li>Le bouton <strong>Modifier la fiche</strong> ouvre la même fenêtre de saisie que le module Présences.</li><li>La suppression d’un enfant est réservée à la direction.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">📄 L’onglet Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Liste tous les documents remplis pour cet enfant, du plus récent au plus ancien, avec la date et la personne qui les a remplis.</li><li>Un badge indique l’état : <strong>✅ Signé</strong> lorsqu’une signature a été recueillie, <strong>🕓 Préparé</strong> tant que ce n’est pas le cas.</li><li><strong>Ouvrir / signer</strong> bascule vers l’outil Documents pour compléter, générer le PDF ou faire signer. Un bouton <strong>Revenir aux documents de l’enfant</strong> ramène ensuite ici pour enchaîner.</li><li><strong>Suppr.</strong> retire définitivement le document du dossier : penser à exporter le PDF avant.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔗 Le lien avec l’outil Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Un document se remplit dans l’outil <strong>Documents</strong>. Il suffit d’y choisir l’enfant concerné dans le sélecteur en haut du formulaire.</li><li>À l’enregistrement, le document quitte la liste des modèles et vient se classer ici, dans le dossier de l’enfant.</li><li>Le modèle redevient vierge côté Documents : il est immédiatement réutilisable pour un autre enfant, sans risque d’écraser le précédent.</li><li>Le dossier de l’enfant devient donc le point d’entrée unique pour retrouver, compléter ou faire signer un document déjà commencé.</li></ul>
 `,
 
 vaccinations: `
@@ -7443,6 +7444,22 @@ window.vacOpenEnfantModal = vacOpenEnfantModal;
 
 let enfFicheId = null;
 let enfDocsCache = [];
+let enfShowIncompleteOnly = false;
+
+// Une fiche est "incomplète" quand la date de naissance ou les allergies n'ont jamais
+// été renseignées (allergies===null/undefined = jamais touché ; '' = vérifié, rien à signaler).
+// C'est le cas par défaut des enfants créés automatiquement lors de l'import du planning PDF
+// (Gertrude n'exporte que le planning, jamais la fiche d'identité complète).
+function enfIsIncomplete(e){
+  return !e.dob || e.allergies===null || e.allergies===undefined;
+}
+
+function enfToggleIncomplete(){
+  enfShowIncompleteOnly = !enfShowIncompleteOnly;
+  const btn=document.getElementById('enf-incomplete-toggle');
+  if(btn){btn.style.background = enfShowIncompleteOnly ? '#fdf1de' : '';btn.style.borderColor = enfShowIncompleteOnly ? '#e8a33d' : '';}
+  enfRender();
+}
 
 function enfInit(){
   // remplir le sélecteur crèche (direction)
@@ -7454,7 +7471,8 @@ function enfInit(){
   enfRender();
 }
 
-function enfGetListe(){
+function enfGetListe(opts){
+  opts = opts || {};
   let list = cacheEnfants.slice();
   // référente : sa crèche uniquement
   if(!isDirection && currentProfile && currentProfile.creche_id){
@@ -7463,6 +7481,9 @@ function enfGetListe(){
     // direction : filtre optionnel du sélecteur
     const cid = (document.getElementById('enf-creche-select')||{}).value || '';
     if(cid) list = list.filter(e=>e.creche_id===cid);
+  }
+  if(!opts.skipIncompleteFilter && enfShowIncompleteOnly){
+    list = list.filter(enfIsIncomplete);
   }
   const q = ((document.getElementById('enf-search')||{}).value || '').trim().toLowerCase();
   if(q){
@@ -7476,13 +7497,22 @@ function enfRender(){
   const el = document.getElementById('enf-list');
   if(!el) return;
   const enfants = enfGetListe();
+  // Badge de comptage sur le bouton, calculé sur le périmètre crèche mais avant filtre incomplet/recherche.
+  const countBadge = document.getElementById('enf-incomplete-count');
+  if(countBadge){
+    const n = enfGetListe({skipIncompleteFilter:true}).filter(enfIsIncomplete).length;
+    countBadge.textContent = n;
+    countBadge.style.display = n>0 ? '' : 'none';
+  }
   if(!enfants.length){
-    el.innerHTML = '<div class="empty-state"><i class="ti ti-mood-kid"></i><p>Aucun enfant.</p></div>';
+    el.innerHTML = '<div class="empty-state"><i class="ti ti-mood-kid"></i><p>'+(enfShowIncompleteOnly?'Aucune fiche incomplète 🎉':'Aucun enfant.')+'</p></div>';
     return;
   }
   el.innerHTML = enfants.map(e=>{
     const creche = cacheCreches.find(c=>c.id===e.creche_id);
     const grp = e.dob ? groupeFromDob(e.dob) : (e.groupe||'');
+    const incomplete = enfIsIncomplete(e);
+    const warn = incomplete ? '<span title="Fiche incomplète : date de naissance ou allergies non renseignées" style="color:#e8a33d;font-size:15px;flex-shrink:0"><i class="ti ti-alert-triangle"></i></span>' : '';
     return '<button onclick="enfOpenFiche(\''+e.id+'\')" style="width:100%;text-align:left;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;box-shadow:0 1px 4px rgba(61,53,128,0.07)">'
       + '<div style="display:flex;align-items:center;gap:12px;min-width:0">'
       + '<span style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:var(--koala-light);color:var(--koala);display:inline-flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-mood-kid"></i></span>'
@@ -7490,7 +7520,7 @@ function enfRender(){
       + '<div style="font-weight:700;color:var(--koala-dark);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</div>'
       + '<div style="font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(creche?escHtml(creche.name):'—')+(grp?' · '+escHtml(grp):'')+'</div>'
       + '</div></div>'
-      + '<i class="ti ti-chevron-right" style="color:var(--muted);font-size:18px;flex-shrink:0"></i>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'+warn+'<i class="ti ti-chevron-right" style="color:var(--muted);font-size:18px"></i></div>'
       + '</button>';
   }).join('');
 }
