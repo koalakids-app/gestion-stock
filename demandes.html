@@ -2276,20 +2276,29 @@ async function renderPresenceGantt(){
                  \u2192 d\u00e9finit QUI figure sur la feuille (inscrits en cours de contrat).
      ctMap     : contrat couvrant la date ET le jour de la semaine
                  \u2192 d\u00e9finit les horaires de la barre et le d\u00e9compte \u00ab sous contrat \u00bb.
-     Les enfants sans aucun contrat en cours sont masqu\u00e9s (lien en l\u00e9gende pour les
-     r\u00e9afficher s\u2019ils ont \u00e9t\u00e9 point\u00e9s malgr\u00e9 tout). */
+     ctTout    : l'enfant a-t-il au moins un contrat, toutes p\u00e9riodes confondues ?
+
+     QUI FIGURE SUR LA FEUILLE. Un enfant n'est masqu\u00e9 que s'il a des contrats
+     mais qu'aucun ne couvre la date : contrat termin\u00e9 ou pas encore commenc\u00e9.
+     Un enfant SANS aucun contrat reste affich\u00e9 \u2014 l'absence de contrat veut dire
+     \u00ab information inconnue \u00bb, pas \u00ab non inscrit \u00bb. Sans cette nuance, un import
+     partiel (une seule semaine de planning, qui ne cr\u00e9e de contrat que pour les
+     enfants pr\u00e9sents cette semaine-l\u00e0) ferait dispara\u00eetre tout le reste de la
+     cr\u00e8che de la feuille de pr\u00e9sence.
+     Un enfant point\u00e9 ce jour-l\u00e0 est toujours affich\u00e9, contrat ou pas. */
   const _dj=new Date(dateStr+'T00:00:00').getDay();
   const jourSem=(_dj===0)?7:_dj;
-  const ctMap={}, ctPeriode={};
+  const ctMap={}, ctPeriode={}, ctTout={};
   let ctLus=0;
   try{
     const{data:ctData,error:ctErr}=await sb.from('enfants_contrats').select('*').in('enfant_id',allEnfants.map(e=>e.id));
     if(ctErr) throw ctErr;
     ctLus=(ctData||[]).length;
     (ctData||[]).forEach(function(c){
+      const k=String(c.enfant_id);
+      ctTout[k]=true;
       if(c.date_debut&&c.date_debut>dateStr) return;
       if(c.date_fin&&c.date_fin<dateStr) return;
-      const k=String(c.enfant_id);
       // en cas de contrats qui se chevauchent, on garde le plus r\u00e9cent
       if(!ctPeriode[k]||(c.date_debut||'')>(ctPeriode[k].date_debut||'')) ctPeriode[k]=c;
       if(ctParseJours(c.jours).indexOf(jourSem)<0) return;
@@ -2298,11 +2307,14 @@ async function renderPresenceGantt(){
   }catch(err){ console.warn('[Gantt] lecture contrats',err); }
   const _nbSousContrat=Object.keys(ctMap).length;
   const _nbPeriode=Object.keys(ctPeriode).length;
-  let _nbHorsContrat=0;
-  if(_nbPeriode){
-    const _horsContrat=allEnfants.filter(e=>!ctPeriode[String(e.id)]&&presMap[e.id]);
-    _nbHorsContrat=_horsContrat.length;
-    allEnfants=allEnfants.filter(e=>ctPeriode[String(e.id)]||(presShowHorsContrat&&presMap[e.id]));
+  // Masquables = contrat(s) existants mais aucun ne couvre la date, et enfant non pointé.
+  const _estMasquable=e=>{
+    const k=String(e.id);
+    return ctTout[k]&&!ctPeriode[k]&&!presMap[e.id];
+  };
+  let _nbHorsContrat=allEnfants.filter(_estMasquable).length;
+  if(_nbHorsContrat&&!presShowHorsContrat){
+    allEnfants=allEnfants.filter(e=>!_estMasquable(e));
   }
   // Gantt: heures 7h\u201319h, 1 colonne = 30min = 24 colonnes
   const H_START=7,H_END=19,COLS=(H_END-H_START)*2; // 24 demi-heures
@@ -2382,7 +2394,9 @@ async function renderPresenceGantt(){
   legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
   if(_nbPeriode) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px">'+_nbSousContrat+' enfant(s) sous contrat le '+((CT_JOURS.find(x=>x[0]===jourSem)||[jourSem,'ce jour'])[1].toLowerCase())+' \u00b7 '+_nbPeriode+' inscrit(s) en cours de contrat</span>';
   else if(ctLus) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px;color:var(--orange)">Aucun contrat en cours \u00e0 cette date \u2014 liste compl\u00e8te affich\u00e9e</span>';
-  if(_nbHorsContrat) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><a href="#" onclick="presToggleHorsContrat();return false;" style="color:var(--koala);font-weight:600">'+(presShowHorsContrat?'Masquer':'Afficher')+' '+_nbHorsContrat+' enfant(s) point\u00e9(s) sans contrat</a></span>';
+  const _nbSansContrat=allEnfants.filter(e=>!ctTout[String(e.id)]).length;
+  if(_nbPeriode&&_nbSansContrat) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px">'+_nbSansContrat+' enfant(s) sans contrat enregistr\u00e9 \u2014 affich\u00e9(s) malgr\u00e9 tout</span>';
+  if(_nbHorsContrat) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><a href="#" onclick="presToggleHorsContrat();return false;" style="color:var(--koala);font-weight:600">'+(presShowHorsContrat?'Masquer':'Afficher')+' '+_nbHorsContrat+' enfant(s) hors p\u00e9riode de contrat</a></span>';
   legendHtml+='</div>';
   const crecheLbl=(cacheCreches.find(c=>c.id===crecheId)||{}).name||'';
   const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+(crecheLbl?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml(crecheLbl)+'</span>':'')+'</div>';
