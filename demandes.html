@@ -462,8 +462,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn-green" onclick="exportPresence()"><i class="ti ti-download"></i> Exporter</button>
       </div>
     </div>
+    <div class="module-tabs" style="margin-top:2px">
+      <button class="module-tab active" onclick="showPresenceTab('gantt',this)"><i class="ti ti-clock"></i> Jour</button>
+      <button class="module-tab" onclick="showPresenceTab('semaine',this)"><i class="ti ti-calendar-week"></i> Semaine</button>
+      <button class="module-tab" onclick="showPresenceTab('hebdo',this)"><i class="ti ti-table"></i> Vue hebdomadaire (export)</button>
+    </div>
     <div id="presence-gantt" class="module-tab-content active">
       <div id="presence-gantt-view"></div>
+    </div>
+    <div id="presence-semaine" class="module-tab-content">
+      <div id="presence-semaine-view"></div>
+    </div>
+    <div id="presence-hebdo" class="module-tab-content">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="ibtn" onclick="hebdoMoveWeek(-1)" title="Semaine précédente" style="padding:5px 9px;font-size:15px">◀</button>
+        <span id="hebdo-week-label" style="font-weight:700;color:var(--koala);font-size:13px;white-space:nowrap"></span>
+        <button class="ibtn" onclick="hebdoMoveWeek(1)" title="Semaine suivante" style="padding:5px 9px;font-size:15px">▶</button>
+        <button class="btn-sm" onclick="hebdoMoveWeek('today')">Semaine actuelle</button>
+        <button class="btn-green" onclick="exportPresenceHebdoExcel()" style="margin-left:auto"><i class="ti ti-file-spreadsheet"></i> Exporter Excel</button>
+      </div>
+      <div class="info-box" style="margin-bottom:12px"><i class="ti ti-info-circle" style="font-size:15px"></i> Vue construite à partir des contrats d'accueil (horaires + type de repas) de chaque enfant — comme la feuille de présence hebdomadaire papier. L'export Excel reproduit les 3 feuilles habituelles : présence complète, effectifs repas, effectifs enfants.</div>
+      <div id="presence-hebdo-view"></div>
     </div>
   </div>
 
@@ -1237,6 +1256,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fg"><label class="flabel">Jours de présence</label>
       <div id="ct-jours" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <div class="fg"><label class="flabel">Type de repas <span style="font-weight:400;color:var(--muted)">(facultatif — utilisé pour la feuille de présence hebdomadaire)</span></label>
+      <select class="finput" id="ct-repas">
+        <option value="">-- Non renseigné --</option>
+        <option value="BB">BB — Repas bébé (biberon)</option>
+        <option value="M">M — Repas moyen</option>
+        <option value="G">G — Repas grand</option>
+        <option value="GSV">GSV — Repas grand, sans viande</option>
+        <option value="MSV">MSV — Repas moyen, sans viande</option>
+        <option value="MSPV">MSPV — Repas moyen, sans protéine de vache</option>
+        <option value="GSPV">GSPV — Repas grand, sans protéine de vache</option>
+        <option value="MSPA">MSPA — Repas moyen, sans protéine animale</option>
+      </select>
     </div>
     <div class="fg"><label class="flabel">Note <span style="font-weight:400;color:var(--muted)">(facultatif)</span></label><textarea class="finput" id="ct-notes" rows="2" style="resize:vertical"></textarea></div>
     <div class="mactions">
@@ -2081,8 +2113,12 @@ function initPresenceDate(){
     if(activeCrecheId&&activeCrecheId!=='all'&&!sel.value)sel.value=activeCrecheId;
   }
 }
-function showPresenceTab(tab,btn){document.querySelectorAll('.module-tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.module-tab-content').forEach(c=>c.classList.remove('active'));btn.classList.add('active');document.getElementById('presence-'+tab).classList.add('active');currentPresenceSlot=tab;renderPresence();}
-async function renderPresence(){await renderPresenceGantt();}
+function showPresenceTab(tab,btn){document.querySelectorAll('#main-presence .module-tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('#main-presence .module-tab-content').forEach(c=>c.classList.remove('active'));btn.classList.add('active');document.getElementById('presence-'+tab).classList.add('active');currentPresenceSlot=tab;renderPresence();}
+async function renderPresence(){
+  if(currentPresenceSlot==='semaine'){await renderPresenceSemaine();return;}
+  if(currentPresenceSlot==='hebdo'){await renderPresenceHebdo();return;}
+  await renderPresenceGantt();
+}
 async function setPresence(enfantId,slot,dateStr,status){
   const{data:ex}=await sb.from('presences').select('id,status').eq('enfant_id',enfantId).eq('presence_date',dateStr).eq('slot',slot).maybeSingle();
   if(ex){if(ex.status===status)await sb.from('presences').delete().eq('id',ex.id);else await sb.from('presences').update({status}).eq('id',ex.id);}
@@ -2277,6 +2313,165 @@ async function renderPresenceSemaine(){
   enfants.forEach((e,idx)=>{html+='<tr style="background:'+(idx%2===0?'#fff':'#EEEDF8')+'"><td style="padding:8px 10px;font-weight:600;color:var(--koala)">'+e.prenom+' '+e.nom+'</td>';days5.forEach(d=>{const ds=ipDateToLocalISO(d),m=pm[e.id+'_'+ds+'_M']||'',a=pm[e.id+'_'+ds+'_A']||'';html+='<td style="text-align:center;padding:6px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:'+dc[m]+';margin-right:2px"></span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:'+dc[a]+'"></span></td>';});html+='</tr>';});
   html+='</tbody></table></div>';view.innerHTML=html;
 }
+
+// ── VUE HEBDOMADAIRE (reproduit la feuille de présence papier : horaires + repas par jour, avec export) ──
+let _hebdoExportCtx=null;
+function hebdoMoveWeek(delta){
+  if(delta==='today')weekOffset=0; else weekOffset+=delta;
+  renderPresence();
+}
+window.hebdoMoveWeek=hebdoMoveWeek;
+
+async function renderPresenceHebdo(){
+  const ws=weekStart(),view=document.getElementById('presence-hebdo-view');
+  if(!view)return;
+  const crecheId=getPresenceCrecheId();
+  const lblEl=document.getElementById('hebdo-week-label');
+  if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';_hebdoExportCtx=null;if(lblEl)lblEl.textContent='';return;}
+  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  const dateStrs=days5.map(d=>ipDateToLocalISO(d));
+  if(lblEl)lblEl.textContent='Semaine du '+days5[0].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'})+' au '+days5[4].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
+  if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistré.</p></div>';_hebdoExportCtx=null;return;}
+  view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement…</div>';
+  let ctData=[];
+  try{
+    const{data,error}=await sb.from('enfants_contrats').select('*').in('enfant_id',allEnfants.map(e=>e.id));
+    if(error)throw error;
+    ctData=data||[];
+  }catch(err){console.warn('[Hebdo] lecture contrats',err);}
+  function contratDuJour(enfantId,dateStr,jourSem){
+    let best=null;
+    ctData.forEach(function(c){
+      if(String(c.enfant_id)!==String(enfantId))return;
+      if(c.date_debut&&c.date_debut>dateStr)return;
+      if(c.date_fin&&c.date_fin<dateStr)return;
+      if(ctParseJours(c.jours).indexOf(jourSem)<0)return;
+      if(!best||(c.date_debut||'')>(best.date_debut||''))best=c;
+    });
+    return best;
+  }
+  const rows=[];
+  allEnfants.forEach(function(e){
+    const cells=days5.map(function(d,i){
+      const c=contratDuJour(e.id,dateStrs[i],i+1);
+      return c?{present:true,horaires:(ctFmtHeure(c.heure_debut)||'?')+'–'+(ctFmtHeure(c.heure_fin)||'?'),repas:c.repas||''}:{present:false,horaires:'',repas:''};
+    });
+    if(cells.some(function(c){return c.present;}))rows.push({enfant:e,cells:cells});
+  });
+  if(!rows.length){
+    view.innerHTML='<div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant sous contrat cette semaine'+(crecheId?'':' — sélectionnez une crèche')+'.<br><span style="font-size:12px">Renseignez les contrats d’accueil (horaires + jours) dans la fiche de chaque enfant.</span></p></div>';
+    _hebdoExportCtx=null;
+    return;
+  }
+  const totalParJour=days5.map(function(d,i){return rows.filter(function(r){return r.cells[i].present;}).length;});
+  const codesUtilises=Object.keys(REPAS_TYPES).filter(function(code){return rows.some(function(r){return r.cells.some(function(c){return c.repas===code;});});});
+  const totauxRepas=codesUtilises.map(function(code){return{code:code,parJour:days5.map(function(d,i){return rows.filter(function(r){return r.cells[i].present&&r.cells[i].repas===code;}).length;})};});
+  const nbSansRepas=days5.map(function(d,i){return rows.filter(function(r){return r.cells[i].present&&!r.cells[i].repas;}).length;});
+  const JOURS_LBL=['LUNDI','MARDI','MERCREDI','JEUDI','VENDREDI'];
+  let html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">';
+  html+='<thead><tr style="background:var(--koala);color:#fff">';
+  html+='<th style="padding:8px 10px;text-align:left;position:sticky;left:0;background:var(--koala)">Enfant</th>';
+  JOURS_LBL.forEach(function(j,i){html+='<th colspan="2" style="padding:8px 6px;text-align:center;border-left:2px solid rgba(255,255,255,0.3)">'+j+'<br><span style="font-size:9px;font-weight:400;opacity:0.8">'+days5[i].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</span></th>';});
+  html+='</tr><tr style="background:#EEEDF8;color:var(--koala-dark)">';
+  html+='<th style="padding:4px 10px;position:sticky;left:0;background:#EEEDF8"></th>';
+  JOURS_LBL.forEach(function(){html+='<th style="padding:4px 6px;font-size:10px;font-weight:600;border-left:2px solid #fff">Horaires</th><th style="padding:4px 6px;font-size:10px;font-weight:600">Repas</th>';});
+  html+='</tr></thead><tbody>';
+  rows.forEach(function(r,idx){
+    const bg=idx%2===0?'#fff':'#f7f6fb';
+    html+='<tr style="background:'+bg+'"><td style="padding:6px 10px;font-weight:600;color:var(--koala);white-space:nowrap;position:sticky;left:0;background:'+bg+'">'+escHtml(r.enfant.prenom+' '+(r.enfant.nom||''))+'</td>';
+    r.cells.forEach(function(c){
+      if(c.present){
+        html+='<td style="padding:6px;text-align:center;border-left:2px solid #ece9f5;white-space:nowrap">'+escHtml(c.horaires)+'</td>';
+        html+='<td style="padding:6px;text-align:center" title="'+escHtml(ctRepasLabel(c.repas))+'">'+(c.repas?'<span style="background:var(--koala-light);color:var(--koala);border-radius:8px;padding:2px 7px;font-size:11px;font-weight:700">'+escHtml(c.repas)+'</span>':'<span style="color:var(--muted);font-size:11px">—</span>')+'</td>';
+      }else{
+        html+='<td style="padding:6px;text-align:center;border-left:2px solid #ece9f5;color:#ccc">X</td><td style="padding:6px;text-align:center;color:#ccc">X</td>';
+      }
+    });
+    html+='</tr>';
+  });
+  html+='<tr style="background:var(--koala-light);font-weight:700"><td style="padding:6px 10px;color:var(--koala);position:sticky;left:0;background:var(--koala-light)">Effectif du jour</td>';
+  totalParJour.forEach(function(n){html+='<td colspan="2" style="padding:6px;text-align:center;color:var(--koala)">'+n+'</td>';});
+  html+='</tr>';
+  totauxRepas.forEach(function(t){
+    html+='<tr><td style="padding:4px 10px;font-size:11px;color:var(--muted);position:sticky;left:0;background:#fff" title="'+escHtml(ctRepasLabel(t.code))+'">dont '+escHtml(t.code)+'</td>';
+    t.parJour.forEach(function(n){html+='<td colspan="2" style="padding:4px;text-align:center;font-size:11px;color:var(--muted)">'+(n||'')+'</td>';});
+    html+='</tr>';
+  });
+  if(nbSansRepas.some(function(n){return n>0;})){
+    html+='<tr><td style="padding:4px 10px;font-size:11px;color:var(--orange);position:sticky;left:0;background:#fff">dont repas non renseigné</td>';
+    nbSansRepas.forEach(function(n){html+='<td colspan="2" style="padding:4px;text-align:center;font-size:11px;color:var(--orange)">'+(n||'')+'</td>';});
+    html+='</tr>';
+  }
+  html+='</tbody></table></div>';
+  const crecheLbl=(cacheCreches.find(function(c){return c.id===crecheId;})||{}).name||'Toutes crèches';
+  view.innerHTML='<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'+rows.length+' enfant(s) sous contrat cette semaine — '+escHtml(crecheLbl)+'</div>'+html;
+  _hebdoExportCtx={crecheLbl:crecheLbl,days5:days5,dateStrs:dateStrs,rows:rows,totalParJour:totalParJour,totauxRepas:totauxRepas,nbSansRepas:nbSansRepas};
+}
+window.renderPresenceHebdo=renderPresenceHebdo;
+
+function exportPresenceHebdoExcel(){
+  if(!_hebdoExportCtx||!_hebdoExportCtx.rows.length){showBanner('Rien à exporter pour cette semaine.','error');return;}
+  const ctx=_hebdoExportCtx;
+  const JOURS_LBL=['LUNDI','MARDI','MERCREDI','JEUDI','VENDREDI'];
+  const dateLbl=ctx.days5[0].toLocaleDateString('fr-FR')+' au '+ctx.days5[4].toLocaleDateString('fr-FR');
+  const titre='Présence hebdomadaire — '+ctx.crecheLbl+' — semaine du '+dateLbl;
+
+  function totauxLignes(colsParJour){
+    const out=[];
+    out.push(['Effectif du jour'].concat(ctx.totalParJour.reduce(function(a,n){return a.concat(colsParJour===2?[n,'']:[n]);},[])));
+    ctx.totauxRepas.forEach(function(t){
+      out.push(['dont '+t.code+' ('+ctRepasLabel(t.code)+')'].concat(t.parJour.reduce(function(a,n){return a.concat(colsParJour===2?[n,'']:[n]);},[])));
+    });
+    if(ctx.nbSansRepas.some(function(n){return n>0;})){
+      out.push(['dont repas non renseigné'].concat(ctx.nbSansRepas.reduce(function(a,n){return a.concat(colsParJour===2?[n,'']:[n]);},[])));
+    }
+    return out;
+  }
+
+  // Feuille 1 : présence complète (horaires + repas)
+  const head1=['Enfant'];
+  JOURS_LBL.forEach(function(j){head1.push(j+' — Horaires',j+' — Repas');});
+  const aoa1=[[titre],[],head1];
+  ctx.rows.forEach(function(r){
+    const line=[r.enfant.prenom+' '+(r.enfant.nom||'')];
+    r.cells.forEach(function(c){ line.push(c.present?c.horaires:'X'); line.push(c.present?(c.repas||''):'X'); });
+    aoa1.push(line);
+  });
+  aoa1.push([]);
+  totauxLignes(2).forEach(function(r){aoa1.push(r);});
+
+  // Feuille 2 : effectifs repas (code repas seul, pour le traiteur)
+  const head2=['Enfant'].concat(JOURS_LBL);
+  const aoa2=[[titre],[],head2];
+  ctx.rows.forEach(function(r){
+    const line=[r.enfant.prenom+' '+(r.enfant.nom||'')];
+    r.cells.forEach(function(c){ line.push(c.present?(c.repas||'—'):'X'); });
+    aoa2.push(line);
+  });
+  aoa2.push([]);
+  totauxLignes(1).forEach(function(r){aoa2.push(r);});
+
+  // Feuille 3 : effectifs enfants (horaires seuls, pour le calcul des taux d'encadrement)
+  const head3=['Enfant'].concat(JOURS_LBL);
+  const aoa3=[[titre],[],head3];
+  ctx.rows.forEach(function(r){
+    const line=[r.enfant.prenom+' '+(r.enfant.nom||'')];
+    r.cells.forEach(function(c){ line.push(c.present?c.horaires:'X'); });
+    aoa3.push(line);
+  });
+  aoa3.push([]);
+  aoa3.push(['Effectif du jour'].concat(ctx.totalParJour));
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa1),'Présence hebdomadaire');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa2),'Effectifs repas');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa3),'Effectifs enfants');
+  const slug=(ctx.crecheLbl||'creche').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
+  XLSX.writeFile(wb,'presence_hebdo_'+slug+'_'+ctx.dateStrs[0]+'.xlsx');
+  showBanner('Export Excel téléchargé !');
+}
+window.exportPresenceHebdoExcel=exportPresenceHebdoExcel;
 
 // ── AJOUT MANUEL D’UN ENFANT À LA JOURNÉE ──
 let _presAbsentsDuJour=[];
@@ -6603,6 +6798,19 @@ window.enfDeleteDoc = enfDeleteDoc;
    « Appliquer les contrats » du module Présences. */
 
 const CT_JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi']];
+/* Codes repas utilisés sur la feuille de présence hebdomadaire (transmise au traiteur / à l'administratif).
+   Ajouter un code ici l'ajoute automatiquement aux totaux de l'export Excel. */
+const REPAS_TYPES={
+  BB:'Repas bébé (biberon)',
+  M:'Repas moyen',
+  G:'Repas grand',
+  GSV:'Repas grand — sans viande',
+  MSV:'Repas moyen — sans viande',
+  MSPV:'Repas moyen — sans protéine de vache',
+  GSPV:'Repas grand — sans protéine de vache',
+  MSPA:'Repas moyen — sans protéine animale'
+};
+function ctRepasLabel(code){ return code?(REPAS_TYPES[code]||code):''; }
 let enfContratsCache=[], editingContratId=null, ctJoursSel=[];
 
 function ctFmtDate(s){ if(!s) return ''; const d=new Date(s+'T00:00:00'); return isNaN(d)?'':d.toLocaleDateString('fr-FR'); }
@@ -6673,6 +6881,7 @@ function enfRenderContrat(){
       + '</div></div>'
       + '<div style="font-size:12px;color:var(--muted);margin-top:6px"><i class="ti ti-clock"></i> '+escHtml(horaires)+'</div>'
       + '<div style="font-size:12px;color:var(--muted);margin-top:2px"><i class="ti ti-calendar"></i> '+escHtml(ctJoursLabel(c.jours))+'</div>'
+      + (c.repas?'<div style="font-size:12px;color:var(--muted);margin-top:2px"><i class="ti ti-tools-kitchen-2"></i> '+escHtml(ctRepasLabel(c.repas))+' ('+escHtml(c.repas)+')</div>':'')
       + (c.notes?'<div style="font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap">'+escHtml(c.notes)+'</div>':'')
       + '</div>';
   }).join('')
@@ -6702,6 +6911,7 @@ function ctOpen(id){
   document.getElementById('ct-h1').value=c&&c.heure_debut?String(c.heure_debut).slice(0,5):'';
   document.getElementById('ct-h2').value=c&&c.heure_fin?String(c.heure_fin).slice(0,5):'';
   document.getElementById('ct-notes').value=c&&c.notes?c.notes:'';
+  document.getElementById('ct-repas').value=c&&c.repas?c.repas:'';
   ctJoursSel=c?ctParseJours(c.jours):[1,2,3,4,5];
   ctRenderJours();
   document.getElementById('ct-btn-delete').style.display=c?'':'none';
@@ -6721,6 +6931,7 @@ async function ctSave(){
     heure_debut:document.getElementById('ct-h1').value||null,
     heure_fin:document.getElementById('ct-h2').value||null,
     jours:ctJoursSel.slice().sort(function(a,b){return a-b;}),
+    repas:document.getElementById('ct-repas').value||null,
     notes:(document.getElementById('ct-notes').value||'').trim()||null
   };
   let ok;
