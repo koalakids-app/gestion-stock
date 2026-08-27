@@ -479,9 +479,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <span id="hebdo-week-label" style="font-weight:700;color:var(--koala);font-size:13px;white-space:nowrap"></span>
         <button class="ibtn" onclick="hebdoMoveWeek(1)" title="Semaine suivante" style="padding:5px 9px;font-size:15px">▶</button>
         <button class="btn-sm" onclick="hebdoMoveWeek('today')">Semaine actuelle</button>
-        <button class="btn-green" onclick="exportPresenceHebdoExcel()" style="margin-left:auto"><i class="ti ti-file-spreadsheet"></i> Exporter Excel</button>
+        <span style="width:1px;height:22px;background:var(--border);margin:0 2px"></span>
+        <button class="fchip active" id="hebdo-chip-grille" onclick="hebdoSetView('grille')"><i class="ti ti-layout-grid"></i> Grille</button>
+        <button class="fchip" id="hebdo-chip-synthese" onclick="hebdoSetView('synthese')"><i class="ti ti-tools-kitchen-2"></i> Synthèse repas</button>
+        <div style="display:flex;gap:8px;margin-left:auto">
+          <button class="btn-primary" onclick="crOpen()"><i class="ti ti-clipboard-list"></i> Commande repas</button>
+          <button class="btn-green" onclick="exportPresenceHebdoExcel()"><i class="ti ti-file-spreadsheet"></i> Exporter Excel</button>
+        </div>
       </div>
-      <div class="info-box" style="margin-bottom:12px"><i class="ti ti-info-circle" style="font-size:15px"></i> Vue construite à partir des présences enregistrées cette semaine (import PDF ou pointage manuel dans l'onglet « Jour »). Le repas (BB/M/G…) est déduit de l'âge de l'enfant et de son régime particulier renseigné sur sa fiche — comme la feuille de présence hebdomadaire papier. L'export Excel reproduit les 3 feuilles habituelles : présence complète, effectifs repas, effectifs enfants.</div>
       <div id="presence-hebdo-view"></div>
     </div>
   </div>
@@ -1225,9 +1230,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fg"><label class="flabel">Repas <span style="font-weight:400;color:var(--muted);font-size:11px">(pour la feuille de présence hebdomadaire — la lettre BB/M/G est déduite automatiquement de l'âge)</span></label>
       <select class="finput" id="enf-regime-repas">
         <option value="">Standard</option>
-        <option value="SV">Sans viande</option>
-        <option value="SPV">Sans protéine de vache</option>
-        <option value="PA">Sans protéine animale</option>
+        <option value="SV">SV — Sans viande</option>
+        <option value="SPV">SPV — Sans protéine de vache</option>
+        <option value="SPA">SPA — Sans protéine animale</option>
       </select>
     </div>
     <div class="mactions"><button class="btn-cancel" id="enf-btn-delete" style="display:none;color:var(--red)" onclick="deleteEnfant()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-enfant-wrap')">Annuler</button><button class="btn-primary" id="enf-btn-save" onclick="saveEnfant()"><i class="ti ti-check"></i> Enregistrer</button></div>
@@ -1247,6 +1252,46 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="mactions">
       <button class="btn-cancel" onclick="closeModal('modal-pe-mail-wrap')">Annuler</button>
       <button class="btn-primary" id="pe-mail-send" onclick="peSendMail()"><i class="ti ti-send"></i> Envoyer</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMMANDE REPAS TRAITEUR (bon MCM) -->
+<div class="overlay" id="modal-commande-wrap">
+  <div class="modal" style="max-width:980px">
+    <h3><i class="ti ti-clipboard-list"></i> Commande repas — <span id="cr-creche-name"></span></h3>
+    <div id="cr-source" style="margin-bottom:12px"></div>
+    <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i>
+      Chiffres pré-remplis d'après les présences de la semaine et l'âge de chaque enfant <strong>au jour de la livraison</strong>
+      (tranches du traiteur : − 6 mois / 6-18 mois / + 18 mois / périscolaire). Les régimes sont notés
+      <strong>6+1SV</strong> (6 repas standard + 1 sans viande). Toutes les cases restent modifiables avant génération du PDF.</div>
+
+    <div class="frow">
+      <div class="fg" style="flex:2"><label class="flabel">Adresse</label><input class="finput" id="cr-adresse" placeholder="48 rue Picot – 83000 TOULON"/></div>
+      <div class="fg" style="flex:1"><label class="flabel">Téléphone</label><input class="finput" id="cr-tel" placeholder="07 86 61 56 19"/></div>
+    </div>
+    <div class="frow">
+      <div class="fg" style="flex:2"><label class="flabel">Mail</label><input class="finput" id="cr-mail" placeholder="rt.toulon.picot@koalakids.fr"/></div>
+      <div class="fg" style="flex:1"><label class="flabel">Contact</label><input class="finput" id="cr-contact" placeholder="Nom du contact"/></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin:6px 0 14px;flex-wrap:wrap">
+      <input type="checkbox" id="cr-annule" style="width:16px;height:16px;cursor:pointer" onchange="document.getElementById('cr-annule-date').style.display=this.checked?'':'none'"/>
+      <label for="cr-annule" style="font-size:13px;cursor:pointer">Annule et remplace la commande envoyée le</label>
+      <input type="date" class="finput" id="cr-annule-date" style="width:150px;display:none"/>
+    </div>
+
+    <div id="cr-table-wrap" style="overflow-x:auto;margin-bottom:12px"></div>
+
+    <div class="frow">
+      <div class="fg" style="flex:1"><label class="flabel">Date de validation</label><input type="date" class="finput" id="cr-valid-date"/></div>
+      <div class="fg" style="flex:2"><label class="flabel">Nom de la responsable</label><input class="finput" id="cr-responsable" placeholder="Prénom Nom"/></div>
+    </div>
+
+    <div class="mactions">
+      <button class="btn-cancel" onclick="crCompute(true)" title="Réinitialiser toutes les cases depuis les présences de la semaine"><i class="ti ti-refresh"></i> Recalculer</button>
+      <button class="btn-cancel" onclick="closeModal('modal-commande-wrap')">Fermer</button>
+      <button class="btn-sm" onclick="crSaveOnly()" title="Enregistrer sans générer le bon"><i class="ti ti-device-floppy"></i> Enregistrer</button>
+      <button class="btn-primary" id="cr-btn-pdf" onclick="crExportPdf()"><i class="ti ti-file-download"></i> Générer le PDF</button>
     </div>
   </div>
 </div>
@@ -2309,13 +2354,85 @@ async function renderPresenceSemaine(){
   html+='</tbody></table></div>';view.innerHTML=html;
 }
 
-// ── VUE HEBDOMADAIRE (reproduit la feuille de présence papier : horaires + repas par jour, avec export) ──
-let _hebdoExportCtx=null;
+// ── VUE HEBDOMADAIRE ──
+/* Deux présentations d'un même jeu de données :
+   'grille'   → une ligne par enfant, une colonne par jour (contrôle des présences) ;
+   'synthese' → les totaux repas par jour d'abord, le détail enfant replié dessous
+                (c'est la vue qui prépare le bon de commande du traiteur). */
+let _hebdoExportCtx=null,_hebdoView='grille',_hebdoSource='planning';
 function hebdoMoveWeek(delta){
   if(delta==='today')weekOffset=0; else weekOffset+=delta;
   renderPresence();
 }
+
+/* ── Prévision d'une semaine non encore saisie ──────────────────────────────
+   La commande traiteur part 1 à 2 semaines à l'avance : si le planning de la
+   semaine visée n'est pas encore importé, on déduit la semaine type de chaque
+   enfant de ses 4 semaines précédentes. Un jour est prévu présent si l'enfant
+   y était au moins une fois sur deux parmi les semaines RÉELLEMENT saisies
+   (une semaine sans aucun import ne compte pas et ne fait donc pas baisser la
+   fréquence). Les enfants sans aucune présence sur la période sont ignorés :
+   ce sont, le plus souvent, des départs. */
+async function hebdoPrevision(allEnfants,days5){
+  const ids=allEnfants.map(function(e){return e.id;});
+  const ref=[];
+  for(let w=1;w<=4;w++)for(let d=0;d<5;d++){
+    const x=new Date(days5[0]);x.setDate(x.getDate()-w*7+d);
+    ref.push({iso:ipDateToLocalISO(x),jour:d,sem:w});
+  }
+  let data=[];
+  try{
+    const r=await sb.from('presences').select('*').in('presence_date',ref.map(function(x){return x.iso;})).in('enfant_id',ids);
+    if(r.error)throw r.error;
+    data=r.data||[];
+  }catch(err){console.warn('[Prévision] lecture historique',err);return null;}
+  if(!data.length)return null;
+  const st={};
+  data.forEach(function(p){
+    if(p.status!=='present'&&p.status!=='partial')return;
+    st[p.enfant_id+'_'+p.presence_date]=st[p.enfant_id+'_'+p.presence_date]||{};
+    st[p.enfant_id+'_'+p.presence_date][p.slot]=true;
+  });
+  /* Un import de planning couvre une semaine entière : c'est donc au niveau de la
+     SEMAINE qu'on décide si la période a été saisie. Compter jour par jour serait
+     trompeur — un mardi peu fréquenté ferait passer pour « habituel » un enfant vu
+     une seule fois. Les semaines sans aucune donnée ne comptent pas et ne font donc
+     pas baisser artificiellement la fréquence. */
+  const semSaisies=[1,2,3,4].filter(function(w){
+    return ref.some(function(x){
+      return x.sem===w&&data.some(function(p){return p.presence_date===x.iso;});
+    });
+  });
+  const nbSem=semSaisies.length;
+  if(!nbSem)return null;
+  const prev={};
+  allEnfants.forEach(function(e){
+    let vus=0;
+    const parJour=[0,1,2,3,4].map(function(d){
+      const occ=ref.filter(function(x){return x.jour===d&&semSaisies.indexOf(x.sem)>=0;})
+                   .map(function(x){return st[e.id+'_'+x.iso];}).filter(Boolean);
+      vus+=occ.length;
+      if(!occ.length)return null;
+      if(occ.length*2<nbSem)return null;             // moins d'une semaine sur deux
+      /* Créneau prévu : journée dès que l'enfant a été vu sur les deux demi-journées,
+         sinon la demi-journée observée. */
+      const nbM=occ.filter(function(o){return o.M;}).length,nbA=occ.filter(function(o){return o.A;}).length;
+      if(nbM&&nbA)return'j';
+      return nbM?'m':'a';
+    });
+    if(vus)prev[e.id]=parJour;
+  });
+  return Object.keys(prev).length?prev:null;
+}
+function hebdoSetView(v){
+  _hebdoView=v;
+  const g=document.getElementById('hebdo-chip-grille'),s=document.getElementById('hebdo-chip-synthese');
+  if(g)g.classList.toggle('active',v==='grille');
+  if(s)s.classList.toggle('active',v==='synthese');
+  renderPresence();
+}
 window.hebdoMoveWeek=hebdoMoveWeek;
+window.hebdoSetView=hebdoSetView;
 
 async function renderPresenceHebdo(){
   const ws=weekStart(),view=document.getElementById('presence-hebdo-view');
@@ -2337,25 +2454,42 @@ async function renderPresenceHebdo(){
   }catch(err){console.warn('[Hebdo] lecture présences',err);}
   const pm={};
   presData.forEach(function(p){pm[p.enfant_id+'_'+p.presence_date+'_'+p.slot]=p.status;});
+  /* slot : 'j' journée · 'm' matin seul · 'a' après-midi seul · null absent */
   function statutJour(enfantId,dateStr){
     const m=pm[enfantId+'_'+dateStr+'_M'],a=pm[enfantId+'_'+dateStr+'_A'];
     const mOk=m==='present'||m==='partial',aOk=a==='present'||a==='partial';
-    if(mOk&&aOk)return{present:true,label:'Journée'};
-    if(mOk)return{present:true,label:'Matin'};
-    if(aOk)return{present:true,label:'Après-midi'};
-    return{present:false,label:''};
+    if(mOk&&aOk)return{present:true,slot:'j',label:'Journée'};
+    if(mOk)return{present:true,slot:'m',label:'Matin'};
+    if(aOk)return{present:true,slot:'a',label:'Après-midi'};
+    return{present:false,slot:null,label:''};
   }
+  /* Semaine encore vierge (commande passée à l'avance) → on bascule sur la
+     semaine type déduite de l'historique, en le signalant clairement. */
+  let prevision=null;
+  _hebdoSource='planning';
+  if(!presData.length){
+    prevision=await hebdoPrevision(allEnfants,days5);
+    if(prevision)_hebdoSource='prevision';
+  }
+  const SLOT_LBL={j:'Journée',m:'Matin',a:'Après-midi'};
   const rows=[];
   allEnfants.forEach(function(e){
     const repas=enfRepasCode(e);
     const cells=days5.map(function(d,i){
+      if(prevision){
+        const s=(prevision[e.id]||[])[i];
+        return s?{present:true,slot:s,horaires:SLOT_LBL[s],repas:repas}:{present:false,slot:null,horaires:'',repas:''};
+      }
       const st=statutJour(e.id,dateStrs[i]);
-      return st.present?{present:true,horaires:st.label,repas:repas}:{present:false,horaires:'',repas:''};
+      return st.present?{present:true,slot:st.slot,horaires:st.label,repas:repas}:{present:false,slot:null,horaires:'',repas:''};
     });
-    if(cells.some(function(c){return c.present;}))rows.push({enfant:e,cells:cells});
+    if(cells.some(function(c){return c.present;})){
+      e._repasCode=repas;
+      rows.push({enfant:e,cells:cells});
+    }
   });
   if(!rows.length){
-    view.innerHTML='<div class="empty-state"><i class="ti ti-user-off"></i><p>Aucune présence enregistrée cette semaine'+(crecheId?'':' — sélectionnez une crèche')+'.<br><span style="font-size:12px">Importez le planning (PDF) ou pointez les présences dans l’onglet « Jour ».</span></p></div>';
+    view.innerHTML='<div class="empty-state"><i class="ti ti-user-off"></i><p>Aucune présence enregistrée cette semaine'+(crecheId?'':' — sélectionnez une crèche')+'.<br><span style="font-size:12px">Importez le planning (PDF), pointez les présences dans l’onglet « Jour »,<br>ou attendez d’avoir quelques semaines d’historique pour que la prévision fonctionne.</span></p></div>';
     _hebdoExportCtx=null;
     return;
   }
@@ -2363,45 +2497,93 @@ async function renderPresenceHebdo(){
   const codesUtilises=Object.keys(REPAS_TYPES).filter(function(code){return rows.some(function(r){return r.cells.some(function(c){return c.repas===code;});});});
   const totauxRepas=codesUtilises.map(function(code){return{code:code,parJour:days5.map(function(d,i){return rows.filter(function(r){return r.cells[i].present&&r.cells[i].repas===code;}).length;})};});
   const nbSansRepas=days5.map(function(d,i){return rows.filter(function(r){return r.cells[i].present&&!r.cells[i].repas;}).length;});
-  const JOURS_LBL=['LUNDI','MARDI','MERCREDI','JEUDI','VENDREDI'];
-  let html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">';
-  html+='<thead><tr style="background:var(--koala);color:#fff">';
-  html+='<th style="padding:8px 10px;text-align:left;position:sticky;left:0;background:var(--koala)">Enfant</th>';
-  JOURS_LBL.forEach(function(j,i){html+='<th colspan="2" style="padding:8px 6px;text-align:center;border-left:2px solid rgba(255,255,255,0.3)">'+j+'<br><span style="font-size:9px;font-weight:400;opacity:0.8">'+days5[i].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</span></th>';});
-  html+='</tr><tr style="background:#EEEDF8;color:var(--koala-dark)">';
-  html+='<th style="padding:4px 10px;position:sticky;left:0;background:#EEEDF8"></th>';
-  JOURS_LBL.forEach(function(){html+='<th style="padding:4px 6px;font-size:10px;font-weight:600;border-left:2px solid #fff">Présence</th><th style="padding:4px 6px;font-size:10px;font-weight:600">Repas</th>';});
-  html+='</tr></thead><tbody>';
-  rows.forEach(function(r,idx){
-    const bg=idx%2===0?'#fff':'#f7f6fb';
-    html+='<tr style="background:'+bg+'"><td style="padding:6px 10px;font-weight:600;color:var(--koala);white-space:nowrap;position:sticky;left:0;background:'+bg+'">'+escHtml(r.enfant.prenom+' '+(r.enfant.nom||''))+'</td>';
+  const crecheLbl=(cacheCreches.find(function(c){return c.id===crecheId;})||{}).name||'Toutes crèches';
+  _hebdoExportCtx={crecheLbl:crecheLbl,days5:days5,dateStrs:dateStrs,rows:rows,totalParJour:totalParJour,totauxRepas:totauxRepas,nbSansRepas:nbSansRepas,crecheId:crecheId,source:_hebdoSource};
+
+  const JOURS_LBL=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
+  const dFr=function(d){return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});};
+  const isSpe=function(code){return code&&code!=='M'&&code!=='G'&&code!=='BB';};
+
+  /* ── Bandeau de synthèse : une carte par jour (effectif + détail repas) ── */
+  let stripHtml='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">';
+  days5.forEach(function(d,i){
+    const chips=totauxRepas.filter(function(t){return t.parJour[i];}).map(function(t){
+      return '<span title="'+escHtml(repasLabel(t.code))+'" style="background:#fff;border-radius:6px;padding:2px 7px;font-size:10.5px;font-weight:700;color:'+(isSpe(t.code)?'var(--orange-dark)':'var(--koala)')+'">'+t.parJour[i]+'&nbsp;'+escHtml(t.code)+'</span>';
+    }).join('');
+    const manque=nbSansRepas[i]?'<span title="Date de naissance manquante" style="background:#fff;border-radius:6px;padding:2px 7px;font-size:10.5px;font-weight:700;color:var(--red)">'+nbSansRepas[i]+'&nbsp;?</span>':'';
+    stripHtml+='<div style="background:var(--koala-light);border-radius:12px;padding:11px 12px 12px">'
+      +'<div style="font-size:10.5px;font-weight:700;color:var(--koala);text-transform:uppercase;letter-spacing:.04em">'+JOURS_LBL[i]+'</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'+dFr(d)+'</div>'
+      +'<div style="font-size:26px;font-weight:800;color:var(--koala-dark);line-height:1">'+totalParJour[i]+'</div>'
+      +'<div style="font-size:10.5px;color:var(--muted);margin-bottom:8px">enfant'+(totalParJour[i]>1?'s':'')+'</div>'
+      +'<div style="display:flex;gap:5px;flex-wrap:wrap">'+chips+manque+'</div></div>';
+  });
+  stripHtml+='</div>';
+
+  /* ── Vue A : grille allégée (1 colonne par jour, repas en pastille près du prénom) ── */
+  const PILL={j:['Journée','var(--koala)','#fff'],m:['Matin','#BFB9E4','var(--koala-dark)'],a:['Aprèm','#DCD8F0','var(--koala-dark)']};
+  let grille='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px">';
+  grille+='<thead><tr>';
+  grille+='<th style="background:#fff;text-align:left;padding:11px 8px 11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">Enfant</th>';
+  days5.forEach(function(d,i){grille+='<th style="background:#fff;text-align:center;padding:11px 8px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">'+JOURS_LBL[i]+'<br><span style="font-weight:400;text-transform:none;font-size:10px">'+dFr(d)+'</span></th>';});
+  grille+='</tr></thead><tbody>';
+  rows.forEach(function(r){
+    const code=r.enfant._repasCode||'';
+    const badge=code
+      ?'<span title="'+escHtml(repasLabel(code))+'" style="display:inline-block;background:'+(isSpe(code)?'var(--orange-light)':'var(--koala-light)')+';color:'+(isSpe(code)?'var(--orange-dark)':'var(--koala)')+';border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:800;margin-left:7px;vertical-align:1px">'+escHtml(code)+'</span>'
+      :'<span title="Date de naissance manquante — repas non calculé" style="display:inline-block;background:#FDE8E8;color:var(--red);border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:800;margin-left:7px;vertical-align:1px">?</span>';
+    grille+='<tr style="border-bottom:1px solid #F1F0F7"><td style="padding:9px 8px 9px 16px;white-space:nowrap"><span onclick="enfOpenFiche(\''+r.enfant.id+'\')" style="font-weight:600;color:var(--koala-dark);cursor:pointer">'+escHtml(r.enfant.prenom+' '+(r.enfant.nom||''))+'</span>'+badge+'</td>';
     r.cells.forEach(function(c){
       if(c.present){
-        html+='<td style="padding:6px;text-align:center;border-left:2px solid #ece9f5;white-space:nowrap">'+escHtml(c.horaires)+'</td>';
-        html+='<td style="padding:6px;text-align:center" title="'+escHtml(repasLabel(c.repas))+'">'+(c.repas?'<span style="background:var(--koala-light);color:var(--koala);border-radius:8px;padding:2px 7px;font-size:11px;font-weight:700">'+escHtml(c.repas)+'</span>':'<span style="color:var(--muted);font-size:11px">—</span>')+'</td>';
+        const p=PILL[c.slot]||PILL.j;
+        grille+='<td style="text-align:center;padding:6px"><span style="display:inline-block;min-width:34px;border-radius:7px;padding:4px 9px;font-size:11px;font-weight:700;background:'+p[1]+';color:'+p[2]+'">'+p[0]+'</span></td>';
       }else{
-        html+='<td style="padding:6px;text-align:center;border-left:2px solid #ece9f5;color:#ccc">X</td><td style="padding:6px;text-align:center;color:#ccc">X</td>';
+        grille+='<td style="text-align:center;padding:6px;color:#DAD8E5;font-size:15px">·</td>';
       }
     });
-    html+='</tr>';
+    grille+='</tr>';
   });
-  html+='<tr style="background:var(--koala-light);font-weight:700"><td style="padding:6px 10px;color:var(--koala);position:sticky;left:0;background:var(--koala-light)">Effectif du jour</td>';
-  totalParJour.forEach(function(n){html+='<td colspan="2" style="padding:6px;text-align:center;color:var(--koala)">'+n+'</td>';});
-  html+='</tr>';
+  grille+='<tr style="background:var(--koala-light)"><td style="padding:10px 8px 10px 16px;font-size:12px;font-weight:700;color:var(--koala)">Effectif</td>';
+  totalParJour.forEach(function(n){grille+='<td style="text-align:center;padding:10px 8px;font-size:12px;font-weight:700;color:var(--koala)">'+n+'</td>';});
+  grille+='</tr></tbody></table></div>';
+  grille+='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--muted);align-items:center">'
+    +'<span><span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:var(--koala);color:#fff">Journée</span> matin + après-midi</span>'
+    +'<span><span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:#BFB9E4;color:var(--koala-dark)">Matin</span> / <span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:#DCD8F0;color:var(--koala-dark)">Aprèm</span> demi-journée</span>'
+    +'<span><span style="display:inline-block;background:var(--koala-light);color:var(--koala);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">G</span> repas déduit de l’âge</span>'
+    +'<span><span style="display:inline-block;background:var(--orange-light);color:var(--orange-dark);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">GSV</span> régime particulier</span>'
+    +'</div>';
+
+  /* ── Vue C : synthèse repas d'abord, détail replié en dessous ── */
+  let synth='<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:13px">';
+  synth+='<thead><tr style="background:var(--koala);color:#fff"><th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">Type de repas</th>';
+  days5.forEach(function(d,i){synth+='<th style="text-align:center;padding:10px 8px;font-size:11px;font-weight:700;text-transform:uppercase">'+JOURS_LBL[i]+'<br><span style="font-weight:400;font-size:10px;opacity:.75;text-transform:none">'+dFr(d)+'</span></th>';});
+  synth+='<th style="text-align:center;padding:10px 8px;font-size:11px;font-weight:700;text-transform:uppercase">Semaine</th></tr></thead><tbody>';
   totauxRepas.forEach(function(t){
-    html+='<tr><td style="padding:4px 10px;font-size:11px;color:var(--muted);position:sticky;left:0;background:#fff" title="'+escHtml(repasLabel(t.code))+'">dont '+escHtml(t.code)+'</td>';
-    t.parJour.forEach(function(n){html+='<td colspan="2" style="padding:4px;text-align:center;font-size:11px;color:var(--muted)">'+(n||'')+'</td>';});
-    html+='</tr>';
+    const sem=t.parJour.reduce(function(s,n){return s+n;},0);
+    synth+='<tr style="border-bottom:1px solid #F1F0F7"><td style="padding:9px 16px;font-size:12.5px;font-weight:600;color:'+(isSpe(t.code)?'var(--orange-dark)':'var(--ink2,#2B2A35)')+'">'+escHtml(t.code)+'<span style="display:block;font-size:10.5px;color:var(--muted);font-weight:400">'+escHtml(repasLabel(t.code))+'</span></td>';
+    t.parJour.forEach(function(n){synth+='<td style="text-align:center;padding:9px 8px;font-size:14px;font-weight:700;color:'+(n?'var(--koala-dark)':'#DAD8E5')+'">'+(n||'—')+'</td>';});
+    synth+='<td style="text-align:center;padding:9px 8px;font-size:14px;font-weight:700;color:var(--koala-dark)">'+sem+'</td></tr>';
   });
   if(nbSansRepas.some(function(n){return n>0;})){
-    html+='<tr><td style="padding:4px 10px;font-size:11px;color:var(--orange);position:sticky;left:0;background:#fff">dont repas non renseigné</td>';
-    nbSansRepas.forEach(function(n){html+='<td colspan="2" style="padding:4px;text-align:center;font-size:11px;color:var(--orange)">'+(n||'')+'</td>';});
-    html+='</tr>';
+    synth+='<tr style="border-bottom:1px solid #F1F0F7"><td style="padding:9px 16px;font-size:12.5px;font-weight:600;color:var(--red)">?<span style="display:block;font-size:10.5px;color:var(--muted);font-weight:400">date de naissance manquante</span></td>';
+    nbSansRepas.forEach(function(n){synth+='<td style="text-align:center;padding:9px 8px;font-size:14px;font-weight:700;color:'+(n?'var(--red)':'#DAD8E5')+'">'+(n||'—')+'</td>';});
+    synth+='<td style="text-align:center;padding:9px 8px;font-size:14px;font-weight:700;color:var(--red)">'+nbSansRepas.reduce(function(s,n){return s+n;},0)+'</td></tr>';
   }
-  html+='</tbody></table></div>';
-  const crecheLbl=(cacheCreches.find(function(c){return c.id===crecheId;})||{}).name||'Toutes crèches';
-  view.innerHTML='<div style="font-size:12px;color:var(--muted);margin-bottom:8px">'+rows.length+' enfant(s) présent(s) au moins un jour cette semaine — '+escHtml(crecheLbl)+'</div>'+html;
-  _hebdoExportCtx={crecheLbl:crecheLbl,days5:days5,dateStrs:dateStrs,rows:rows,totalParJour:totalParJour,totauxRepas:totauxRepas,nbSansRepas:nbSansRepas};
+  synth+='<tr style="background:var(--koala-light)"><td style="padding:10px 16px;font-size:13px;font-weight:700;color:var(--koala)">Total repas</td>';
+  totalParJour.forEach(function(n){synth+='<td style="text-align:center;padding:10px 8px;font-size:15px;font-weight:800;color:var(--koala)">'+n+'</td>';});
+  synth+='<td style="text-align:center;padding:10px 8px;font-size:15px;font-weight:800;color:var(--koala)">'+totalParJour.reduce(function(s,n){return s+n;},0)+'</td></tr>';
+  synth+='</tbody></table></div>';
+  synth+='<details style="border:1px solid var(--border);border-radius:12px;background:#fff"><summary style="padding:11px 16px;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--koala)">Détail par enfant ('+rows.length+' enfant'+(rows.length>1?'s':'')+')</summary><div style="padding:0 14px 14px">'+grille+'</div></details>';
+
+  const bandeauPrev=_hebdoSource==='prevision'
+    ?'<div class="info-box" style="background:var(--orange-light);border-color:var(--orange);color:var(--orange-dark);margin-bottom:10px">'
+      +'<i class="ti ti-chart-dots" style="font-size:15px"></i> <strong>Prévision</strong> — le planning de cette semaine n’est pas encore importé. '
+      +'Les jours affichés sont la semaine type de chaque enfant, déduite des 4 semaines précédentes. '
+      +'Vérifiez-les avant de commander : ils seront remplacés dès l’import du vrai planning.</div>'
+    :'';
+  const entete='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+rows.length+' enfant(s) présent(s) au moins un jour — '+escHtml(crecheLbl)
+    +(_hebdoSource==='prevision'?' · <span style="color:var(--orange-dark);font-weight:600">prévision</span>':'')+'</div>';
+  view.innerHTML=bandeauPrev+entete+stripHtml+(_hebdoView==='synthese'?synth:grille);
 }
 window.renderPresenceHebdo=renderPresenceHebdo;
 
@@ -2467,6 +2649,372 @@ function exportPresenceHebdoExcel(){
   showBanner('Export Excel téléchargé !');
 }
 window.exportPresenceHebdoExcel=exportPresenceHebdoExcel;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   COMMANDE REPAS TRAITEUR (bon « Les mamans cuisinières du Monde »)
+
+   Les tranches d'âge du traiteur ne sont PAS celles de l'application
+   (0-1 / 1-2 / 2-3 ans) : ici − 6 mois, 6-18 mois, + 18 mois, périscolaire
+   4/5 ans, calculées sur l'âge réel de l'enfant au jour de la livraison —
+   un enfant qui passe un cap en cours de semaine change donc de ligne.
+   Les contrats étant gérés dans Gertrude, tout part des présences importées.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+const MCM_ROWS=[
+  {k:'bb6',  lbl:'Bébés - de 6 mois',    sub:'(sans lait, sans sel, sans féculent)', bg:'#FFFECF'},
+  {k:'bb18', lbl:'Bébés (6 à 18 mois)',  sub:'',                                     bg:'#FFFECF'},
+  {k:'grand',lbl:'Grands (+ de 18 mois)',sub:'',                                     bg:'#DEEAF6'},
+  {k:'peri', lbl:'Périscolaire 4/5 ans', sub:'',                                     bg:'#E2EFDA'},
+  {k:'temoin',lbl:'REPAS TEMOIN',        sub:'',                                     bg:'#D9D9D9'},
+  {k:'gbb',  lbl:'Goûters Bébés',        sub:'(6 à 18 mois)',                        bg:'#FCE4D6'},
+  {k:'ggr',  lbl:'Goûters Grands',       sub:'(+ de 18 mois & périscol)',            bg:'#FCE4D6'},
+  {k:'bag',  lbl:'BAGUETTES TRADITION',  sub:'(crèche livrée le matin uniquement)',  bg:'#FFFFFF'}
+];
+
+/* Tranche du traiteur d'après l'âge exact (en mois révolus) au jour donné. */
+function mcmTranche(dob,dateStr){
+  if(!dob)return null;
+  const d0=new Date(String(dob).slice(0,10)+'T00:00:00'),d1=new Date(dateStr+'T00:00:00');
+  if(isNaN(d0)||isNaN(d1))return null;
+  let m=(d1.getFullYear()-d0.getFullYear())*12+(d1.getMonth()-d0.getMonth());
+  if(d1.getDate()<d0.getDate())m--;
+  if(m<0)return null;
+  if(m<6)return'bb6';
+  if(m<18)return'bb18';
+  if(m<48)return'grand';
+  return'peri';
+}
+/* « 6+1SV » : effectif standard, puis chaque régime particulier. */
+function crFmtCell(c){
+  const std=c['']||0;
+  const spe=Object.keys(REGIMES).filter(function(r){return c[r];}).map(function(r){return c[r]+r;});
+  if(!std&&!spe.length)return'';
+  return spe.length?[String(std)].concat(spe).join('+'):String(std);
+}
+function crInfoKey(cid){return'cr_info_'+cid;}
+function isoWeekNum(d){
+  const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=t.getUTCDay()||7;
+  t.setUTCDate(t.getUTCDate()+4-day);
+  return Math.ceil(((t-new Date(Date.UTC(t.getUTCFullYear(),0,1)))/86400000+1)/7);
+}
+
+/* Commande déjà enregistrée pour cette crèche et cette semaine, s'il y en a une. */
+let _crSaved=null;
+async function crLoadSaved(crecheId,semaineISO){
+  try{
+    const{data,error}=await sb.from('commandes_repas').select('*')
+      .eq('creche_id',crecheId).eq('semaine',semaineISO).maybeSingle();
+    if(error)throw error;
+    return data||null;
+  }catch(err){console.warn('[CommandeRepas] lecture',err);return null;}
+}
+
+async function crOpen(){
+  if(!_hebdoExportCtx||!_hebdoExportCtx.rows.length){
+    showBanner('Aucune présence ni prévision sur cette semaine — rien à commander.','error');return;
+  }
+  const ctx=_hebdoExportCtx;
+  document.getElementById('cr-creche-name').textContent=ctx.crecheLbl;
+  const creche=cacheCreches.find(function(c){return c.id===ctx.crecheId;})||{};
+  _crSaved=await crLoadSaved(ctx.crecheId,ctx.dateStrs[0]);
+
+  let info={};
+  try{info=JSON.parse(localStorage.getItem(crInfoKey(ctx.crecheId))||'{}');}catch(e){}
+  if(_crSaved&&_crSaved.infos)info=Object.assign(info,_crSaved.infos);
+  document.getElementById('cr-adresse').value=info.adresse||creche.addr||'';
+  document.getElementById('cr-tel').value=info.tel||'';
+  document.getElementById('cr-mail').value=info.mail||'';
+  document.getElementById('cr-contact').value=info.contact||'';
+  document.getElementById('cr-responsable').value=info.responsable||'';
+  document.getElementById('cr-valid-date').value=todayStr();
+
+  /* Une commande déjà transmise : on repart de ses chiffres, et le bon réédité
+     coche « annule et remplace » avec la date du dernier envoi. */
+  const dejaEnvoyee=!!(_crSaved&&_crSaved.envoyee_le);
+  document.getElementById('cr-annule').checked=dejaEnvoyee;
+  document.getElementById('cr-annule-date').style.display=dejaEnvoyee?'':'none';
+  document.getElementById('cr-annule-date').value=dejaEnvoyee?_crSaved.envoyee_le:'';
+
+  if(_crSaved&&_crSaved.valeurs)crRenderTable(_crSaved.valeurs);
+  else crCompute(false);
+  crRenderSource();
+  document.getElementById('modal-commande-wrap').classList.add('open');
+}
+
+/* Bandeau d'origine des chiffres : c'est ce qui dit à l'utilisateur s'il regarde
+   du réel, une prévision, ou une commande déjà transmise. */
+function crRenderSource(){
+  const ctx=_hebdoExportCtx,box=document.getElementById('cr-source');
+  if(!box||!ctx)return;
+  const sem='Semaine du '+ctx.days5[0].toLocaleDateString('fr-FR')+' au '+ctx.days5[4].toLocaleDateString('fr-FR');
+  const passee=ctx.dateStrs[4]<todayStr();
+  let h='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px">';
+  h+='<strong style="color:var(--koala)">'+sem+'</strong>';
+  if(_crSaved){
+    h+='<span class="b-info" style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">'
+      +(_crSaved.envoyee_le?'Déjà transmise le '+new Date(_crSaved.envoyee_le+'T00:00:00').toLocaleDateString('fr-FR')
+        +(_crSaved.nb_envois>1?' · '+_crSaved.nb_envois+' envois':''):'Brouillon enregistré')+'</span>';
+  }
+  h+='<span style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;'
+    +(ctx.source==='prevision'?'background:var(--orange-light);color:var(--orange-dark)':'background:var(--green-light);color:var(--green)')+'">'
+    +(ctx.source==='prevision'?'Prévision d’après l’historique':'D’après le planning importé')+'</span>';
+  if(passee)h+='<span style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;background:var(--red-light);color:var(--red)">Semaine déjà passée</span>';
+  h+='</div>';
+  box.innerHTML=h;
+}
+
+/* Recalcule les cases depuis les présences. Repas du midi = enfant présent le matin
+   (journée ou matin seul) ; goûter = enfant présent l'après-midi (journée ou aprèm seul). */
+function crCompute(notify){
+  const ctx=_hebdoExportCtx;
+  if(!ctx)return;
+  const vals={};
+  MCM_ROWS.forEach(function(r){vals[r.k]=['','','','',''];});
+  ctx.days5.forEach(function(d,i){
+    const repas={bb6:{},bb18:{},grand:{},peri:{}},gouter={gbb:{},ggr:{}};
+    ctx.rows.forEach(function(r){
+      const cell=r.cells[i];
+      if(!cell.present)return;
+      const t=mcmTranche(r.enfant.dob,ctx.dateStrs[i]);
+      if(!t)return;
+      const reg=r.enfant.regime_repas||'';
+      if(cell.slot==='j'||cell.slot==='m')repas[t][reg]=(repas[t][reg]||0)+1;
+      if(cell.slot==='j'||cell.slot==='a'){
+        const g=t==='bb18'?'gbb':(t==='grand'||t==='peri')?'ggr':null;
+        if(g)gouter[g][reg]=(gouter[g][reg]||0)+1;
+      }
+    });
+    ['bb6','bb18','grand','peri'].forEach(function(k){vals[k][i]=crFmtCell(repas[k]);});
+    vals.gbb[i]=crFmtCell(gouter.gbb);
+    vals.ggr[i]=crFmtCell(gouter.ggr);
+    vals.temoin[i]='NON';
+    vals.bag[i]='';
+  });
+  crRenderTable(vals);
+  const sansDob=ctx.rows.filter(function(r){return !r.enfant.dob;});
+  if(sansDob.length){
+    showBanner(sansDob.length+' enfant(s) sans date de naissance ne sont pas comptés — complétez leur fiche.','error');
+  }else if(notify){showBanner('Chiffres recalculés depuis les présences.');}
+}
+
+function crRenderTable(vals){
+  const ctx=_hebdoExportCtx;
+  const JOURS=['LUNDI','MARDI','MERCREDI','JEUDI','VENDREDI'];
+  let h='<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:720px">';
+  h+='<thead><tr><th style="width:210px"></th>';
+  JOURS.forEach(function(j,i){
+    h+='<th style="border:1px solid #999;padding:6px 4px;background:#fff;font-size:11px;font-weight:700;text-align:center">'+j
+      +'<br><span style="font-weight:400;font-size:10px;color:var(--muted)">'+ctx.days5[i].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</span></th>';
+  });
+  h+='</tr></thead><tbody>';
+  MCM_ROWS.forEach(function(r){
+    if(r.k==='gbb')h+='<tr><td colspan="6" style="height:10px;border:none"></td></tr>';
+    if(r.k==='bag')h+='<tr><td colspan="6" style="height:10px;border:none"></td></tr>';
+    h+='<tr><td style="border:1px solid #999;padding:6px 8px;background:'+r.bg+';font-size:11.5px;font-weight:600">'+escHtml(r.lbl)
+      +(r.sub?'<br><span style="font-size:9.5px;font-weight:400;font-style:italic">'+escHtml(r.sub)+'</span>':'')+'</td>';
+    for(let i=0;i<5;i++){
+      h+='<td style="border:1px solid #999;padding:0;background:'+r.bg+'">'
+        +'<input id="cr-c-'+r.k+'-'+i+'" value="'+escHtml((vals&&vals[r.k]&&vals[r.k][i])||'')+'" '
+        +'style="width:100%;border:none;background:transparent;text-align:center;padding:9px 2px;font-size:13px;font-weight:700;color:#111;font-family:inherit;outline:none"/></td>';
+    }
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('cr-table-wrap').innerHTML=h;
+}
+
+function crReadVals(){
+  const vals={};
+  MCM_ROWS.forEach(function(r){
+    vals[r.k]=[0,1,2,3,4].map(function(i){
+      const el=document.getElementById('cr-c-'+r.k+'-'+i);
+      return el?el.value.trim():'';
+    });
+  });
+  return vals;
+}
+
+/* Construit le bon de commande au format du document MCM (fonction pure : aucun accès au DOM,
+   ce qui permet de la tester et de la faire évoluer sans toucher à la génération du PDF).
+   ctx  : contexte de la semaine (crecheLbl, days5)
+   vals : { cle_de_ligne: [lundi..vendredi] } tels que saisis à l'écran
+   info : { adresse, tel, mail, contact, responsable }
+   opts : { annule, annuleDate, validDate, semNum, periode } */
+function crBuildFormHtml(ctx,vals,info,opts){
+  const fmtFr=function(s){return s?new Date(s+'T00:00:00').toLocaleDateString('fr-FR'):'';};
+  const annule=opts.annule,annuleDate=opts.annuleDate,validDate=opts.validDate;
+  const semNum=opts.semNum,per=opts.periode;
+  const JOURS=['LUNDI','MARDI','MERCREDI','JEUDI','VENDREDI'];
+  const bd='1px solid #000';
+  const rowsHtml=function(keys){
+    return keys.map(function(k){
+      const r=MCM_ROWS.find(function(x){return x.k===k;});
+      return '<tr><td style="border:'+bd+';padding:7px 9px;background:'+r.bg+';font-size:11px;font-weight:bold;width:29%">'+escHtml(r.lbl)
+        +(r.sub?'<br><span style="font-size:8.5px;font-weight:normal;font-style:italic">'+escHtml(r.sub)+'</span>':'')+'</td>'
+        +[0,1,2,3,4].map(function(i){
+          return '<td style="border:'+bd+';padding:7px 4px;background:'+r.bg+';text-align:center;font-size:13px;font-weight:bold">'+escHtml(vals[k][i]||'')+'</td>';
+        }).join('')+'</tr>';
+    }).join('');
+  };
+  const headRow='<tr><td style="border:none"></td>'+JOURS.map(function(j){
+    return '<td style="border:'+bd+';padding:5px 3px;text-align:center;font-size:10.5px;font-weight:bold;width:14.2%">'+j+'</td>';
+  }).join('')+'</tr>';
+
+  return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><style>'
+    +'*{margin:0;padding:0;box-sizing:border-box}'
+    +'body{font-family:Arial,Helvetica,sans-serif;color:#000;width:800px;padding:22px 26px;background:#fff}'
+    +'table{width:100%;border-collapse:collapse}'
+    +'</style></head><body>'
+    +'<div style="text-align:center;margin-bottom:10px">'
+      +'<div style="font-size:19px;font-weight:bold;color:#C55A11;font-style:italic">Les mamans cuisinières du Monde</div>'
+      +'<div style="font-size:8px;color:#C55A11;letter-spacing:.5px">Restauration collective · Traiteur · Événements &nbsp;—&nbsp; Entreprise d’Insertion · CEDIS</div>'
+    +'</div>'
+    +'<div style="border:'+bd+';padding:9px;text-align:center;font-size:16px;margin-bottom:12px">COMMANDE REPAS CRECHE</div>'
+    +'<div style="border:'+bd+';border-radius:14px;padding:12px 18px;margin:0 40px 12px">'
+      +'<div style="font-size:15px;font-weight:bold;margin-bottom:5px">CRECHE &nbsp;&nbsp;&nbsp;&nbsp; <span style="color:#1F3864">'+escHtml(ctx.crecheLbl)+'</span></div>'
+      +'<div style="font-size:10.5px;margin-bottom:4px">ADRESSE : '+escHtml(info.adresse)+'</div>'
+      +'<div style="font-size:10.5px;margin-bottom:4px">TEL : '+escHtml(info.tel)+' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; MAIL : '+escHtml(info.mail)+'</div>'
+      +'<div style="font-size:10.5px">Contact : '+escHtml(info.contact)+'</div>'
+    +'</div>'
+    +'<div style="font-size:10.5px;margin-bottom:7px">La commande des repas est à transmettre le <b>MARDI <u>avant 10h</u></b> de la semaine précédente de la livraison</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">'
+      +'<span style="display:inline-block;width:17px;height:17px;border:1px solid #C00000">'+(annule?'<span style="font-size:13px;line-height:15px;padding-left:2px">✕</span>':'')+'</span>'
+      +'<span style="font-size:10.5px">Annule et remplace la commande envoyée le : '+escHtml(fmtFr(annuleDate))+'</span>'
+    +'</div>'
+    +'<div style="border:'+bd+';background:#FDF2E9;padding:8px 12px;margin-bottom:12px">'
+      +'<div style="font-size:10.5px;color:#C55A11;font-weight:bold;margin-bottom:4px">MCM ne produit pas de repas liés à une <span style="color:#C00000">allergie alimentaire</span> (œufs, lactose, fruits à coque, huile d’arachide…)</div>'
+      +'<table style="font-size:10px;margin-top:3px">'
+        +'<tr>'
+          +'<td style="width:38%;padding:1px 0;vertical-align:top"><b style="color:#C00000">SV</b> : Sans Viande</td>'
+          +'<td style="padding:1px 0;vertical-align:top"><b style="color:#C00000">SPV</b> : Sans Protéine de Vache <i style="font-size:8.5px">(intolérance uniquement)</i></td>'
+        +'</tr><tr>'
+          +'<td style="width:38%;padding:1px 0;vertical-align:top"><b style="color:#C00000">PN</b> : Pique-nique</td>'
+          +'<td style="padding:1px 0;vertical-align:top"><b style="color:#C00000">SPA</b> : Sans Protéine Animale <i style="font-size:8.5px">(intolérance uniquement)</i></td>'
+        +'</tr></table>'
+    +'</div>'
+    +'<div style="text-align:center;font-size:14px;margin-bottom:9px">Semaine n°'+semNum+' du '+per+'</div>'
+    +'<table style="margin-bottom:14px">'+headRow+rowsHtml(['bb6','bb18','grand','peri','temoin'])+'</table>'
+    +'<table style="margin-bottom:14px">'+rowsHtml(['gbb','ggr'])+'</table>'
+    +'<table style="margin-bottom:14px">'+rowsHtml(['bag'])+'</table>'
+    +'<table><tr>'
+      +'<td style="border:'+bd+';background:#EDEDE3;padding:12px 10px;width:42%;vertical-align:top">'
+        +'<div style="text-align:center;font-size:11px;font-weight:bold;font-style:italic;margin-bottom:12px">Cadre réservé à MCM</div>'
+        +'<div style="font-size:10.5px">DATE et HEURE DE RECEPTION :</div></td>'
+      +'<td style="border:'+bd+';padding:12px 10px;vertical-align:top">'
+        +'<div style="text-align:center;font-size:11px;font-weight:bold">VALIDATION DE LA CRECHE</div>'
+        +'<div style="text-align:center;font-size:9.5px;font-style:italic;margin-bottom:10px">Tampon, Signature</div>'
+        +'<div style="font-size:10.5px;margin-bottom:16px"><i>Date : </i>'+escHtml(fmtFr(validDate))+'</div>'
+        +'<div style="font-size:10.5px"><i>Nom de la Responsable : </i>'+escHtml(info.responsable)+'</div></td>'
+    +'</tr></table>'
+    +'</body></html>';
+}
+
+/* Enregistre la commande (une ligne par crèche et par semaine livrée).
+   envoi=true marque une transmission : c'est cette date que le bon réédité
+   reprendra dans « Annule et remplace la commande envoyée le … ». */
+async function crSave(envoi){
+  const ctx=_hebdoExportCtx;
+  if(!ctx)return false;
+  const infos={
+    adresse:document.getElementById('cr-adresse').value.trim(),
+    tel:document.getElementById('cr-tel').value.trim(),
+    mail:document.getElementById('cr-mail').value.trim(),
+    contact:document.getElementById('cr-contact').value.trim(),
+    responsable:document.getElementById('cr-responsable').value.trim()
+  };
+  try{localStorage.setItem(crInfoKey(ctx.crecheId),JSON.stringify(infos));}catch(e){}
+  const row={
+    creche_id:ctx.crecheId,
+    semaine:ctx.dateStrs[0],
+    valeurs:crReadVals(),
+    infos:infos,
+    updated_at:new Date().toISOString()
+  };
+  if(envoi){
+    row.envoyee_le=todayStr();
+    row.nb_envois=((_crSaved&&_crSaved.nb_envois)||0)+1;
+  }
+  try{
+    const{data,error}=await sb.from('commandes_repas')
+      .upsert(row,{onConflict:'creche_id,semaine'}).select().single();
+    if(error)throw error;
+    _crSaved=data;
+    return true;
+  }catch(err){
+    console.warn('[CommandeRepas] enregistrement',err);
+    return false;
+  }
+}
+
+async function crSaveOnly(){
+  const ok=await crSave(false);
+  showBanner(ok?'Commande enregistrée ✅':'Enregistrement impossible — le PDF reste générable.',ok?'':'error');
+  if(ok)crRenderSource();
+}
+
+async function crExportPdf(){
+  const ctx=_hebdoExportCtx;
+  if(!ctx)return;
+  const btn=document.getElementById('cr-btn-pdf');
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Génération…';
+  try{
+    const vals=crReadVals();
+    const info={
+      adresse:document.getElementById('cr-adresse').value.trim(),
+      tel:document.getElementById('cr-tel').value.trim(),
+      mail:document.getElementById('cr-mail').value.trim(),
+      contact:document.getElementById('cr-contact').value.trim(),
+      responsable:document.getElementById('cr-responsable').value.trim()
+    };
+    /* On enregistre AVANT de produire le bon : si le stockage échoue, l'utilisateur
+       est prévenu mais repart quand même avec son PDF. */
+    const saved=await crSave(true);
+    const annule=document.getElementById('cr-annule').checked;
+    const annuleDate=document.getElementById('cr-annule-date').value;
+    const validDate=document.getElementById('cr-valid-date').value;
+    const fmtFr=function(s){return s?new Date(s+'T00:00:00').toLocaleDateString('fr-FR'):'';};
+    const semNum=isoWeekNum(ctx.days5[0]);
+    const per=ctx.days5[0].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'})
+      +' au '+ctx.days5[4].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+    const JOURS=['LUNDI','MARDI','MERCREDI','JEUDI','VENDREDI'];
+
+    const html=crBuildFormHtml(ctx,vals,info,{annule:annule,annuleDate:annuleDate,validDate:validDate,semNum:semNum,periode:per});
+    const old=document.getElementById('_pdf-frame-commande');
+    if(old)old.remove();
+    const iframe=document.createElement('iframe');
+    iframe.id='_pdf-frame-commande';
+    iframe.style.cssText='position:fixed;top:0;left:-10000px;width:850px;height:1300px;border:none;background:#fff';
+    document.body.appendChild(iframe);
+    const doc=iframe.contentDocument;
+    doc.open();doc.write(html);doc.close();
+    await new Promise(function(r){setTimeout(r,450);});
+    const canvas=await html2canvas(doc.body,{scale:2,backgroundColor:'#ffffff',windowWidth:850});
+    iframe.remove();
+
+    const{jsPDF}=window.jspdf;
+    const pdf=new jsPDF('p','mm','a4');
+    const margin=8,usableW=210-margin*2,usableH=297-margin*2;
+    /* Le bon doit tenir sur une seule page : on réduit proportionnellement
+       (jamais Math.min sur la seule hauteur, qui écraserait le document). */
+    let w=usableW,h=canvas.height*usableW/canvas.width;
+    if(h>usableH){w=usableW*(usableH/h);h=usableH;}
+    pdf.addImage(canvas.toDataURL('image/jpeg',0.94),'JPEG',(210-w)/2,margin,w,h);
+    const slug=(ctx.crecheLbl||'creche').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
+    pdf.save('commande_repas_'+slug+'_sem'+semNum+'.pdf');
+    closeModal('modal-commande-wrap');
+    showBanner(saved?'Bon de commande généré et enregistré ✅'
+                    :'Bon généré ✅ — mais l’enregistrement a échoué (table commandes_repas absente ?).',
+               saved?'':'error');
+  }catch(err){
+    console.error('[CommandeRepas] PDF',err);
+    showBanner('Impossible de générer le PDF.','error');
+  }finally{
+    btn.disabled=false;btn.innerHTML='<i class="ti ti-file-download"></i> Générer le PDF';
+  }
+}
+window.crOpen=crOpen;window.crCompute=crCompute;window.crExportPdf=crExportPdf;
+window.crSaveOnly=crSaveOnly;
 
 // ── AJOUT MANUEL D’UN ENFANT À LA JOURNÉE ──
 let _presAbsentsDuJour=[];
@@ -6801,17 +7349,24 @@ const REPAS_TYPES={
   BB:'Repas bébé (biberon)',
   M:'Repas moyen',
   G:'Repas grand',
-  GSV:'Repas grand — sans viande',
   MSV:'Repas moyen — sans viande',
+  GSV:'Repas grand — sans viande',
   MSPV:'Repas moyen — sans protéine de vache',
   GSPV:'Repas grand — sans protéine de vache',
   MSPA:'Repas moyen — sans protéine animale',
-  GPA:'Repas grand — sans protéine animale'
+  GSPA:'Repas grand — sans protéine animale',
+  BBSV:'Repas bébé — sans viande',
+  BBSPV:'Repas bébé — sans protéine de vache',
+  BBSPA:'Repas bébé — sans protéine animale'
 };
+/* Régimes particuliers — mêmes sigles que la légende du bon de commande MCM. */
+const REGIMES={SV:'Sans viande',SPV:'Sans protéine de vache',SPA:'Sans protéine animale'};
 function repasLabel(code){ return code?(REPAS_TYPES[code]||code):''; }
 /* Code repas auto : lettre de base selon la tranche d'âge (identique au calcul du groupe),
    + suffixe selon le régime alimentaire particulier renseigné sur la fiche de l'enfant
-   (champ enf.regime_repas : '' | 'SV' | 'SPV' | 'PA'). Pas de déclinaison pour les biberons (BB). */
+   (champ enf.regime_repas : '' | 'SV' | 'SPV' | 'SPA').
+   Le suffixe s'applique aussi aux bébés : un nourrisson intolérant aux protéines de vache
+   doit rester visible comme tel partout, sans quoi l'écran contredirait le bon de commande. */
 function enfRepasCode(e){
   if(!e)return'';
   const groupe=e.dob?groupeFromDob(e.dob):(e.groupe||'');
@@ -6820,7 +7375,6 @@ function enfRepasCode(e){
   else if(groupe.indexOf('Moyen')>=0)base='M';
   else if(groupe.indexOf('Grand')>=0)base='G';
   if(!base)return'';
-  if(base==='BB')return'BB';
   return e.regime_repas?base+e.regime_repas:base;
 }
 let enfContratsCache=[], editingContratId=null, ctJoursSel=[];
