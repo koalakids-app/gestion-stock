@@ -7306,18 +7306,51 @@ function spTrouverBandeSalaries(items, hauteurPage) {
 
 // Un nom sur deux lignes (« France miline » / « STRAZEL ») a un interligne
 // d'environ 9 pt, contre 21 pt entre deux salariés : seuil à 13 pt.
+//
+// Le seuil seul ne suffit pas : quand deux salariés ont chacun un nom sur deux
+// lignes, l'écart entre la fin du premier et le début du second se resserre et
+// passe sous les 13 pt. Les deux personnes fusionnaient alors en une seule
+// entrée (« France miline STRAZEL Juliette CROKAERT Y SAUVANET »), et la
+// seconde disparaissait purement et simplement de l'import.
+//
+// On ajoute donc un second critère, indépendant de la géométrie : une ligne qui
+// commence par un prénom (Majuscule suivie de minuscules) ouvre une nouvelle
+// personne dès lors que le groupe courant contient déjà un patronyme
+// (mot entièrement en majuscules). Ce critère ne peut que séparer davantage,
+// jamais regrouper à tort.
+function spEstPrenomTok(t) { return !!t && /^[A-ZÀ-Ÿ][a-zà-ÿ]/.test(t); }
+function spEstNomTok(t) { return !!t && /^[A-ZÀ-Ÿ][A-ZÀ-Ÿ'’-]+$/.test(t); }
+
 function spGrouperLignes(items, bande) {
   const dans = items.filter(it => it.y > bande.haut && it.y < bande.bas)
     .sort((a, b) => a.y - b.y || a.x - b.x);
-  const seuil = 13 * SP_SCALE, groupes = [];
+
+  // 1) Reconstituer les lignes de texte (même ordonnée à 2 pt près).
+  const lignes = [];
   for (const it of dans) {
-    const d = groupes[groupes.length - 1];
-    if (d && it.y - d[d.length - 1].y < seuil) d.push(it); else groupes.push([it]);
+    const l = lignes[lignes.length - 1];
+    if (l && it.y - l.y < 2 * SP_SCALE) { l.toks.push(it.texte); l.ys.push(it.y); }
+    else lignes.push({ y: it.y, toks: [it.texte], ys: [it.y] });
   }
-  return groupes.map(g => ({
-    nom: g.map(i => i.texte).join(' ').replace(/\s+/g, ' ').trim(),
-    y: g.reduce((s, i) => s + i.y, 0) / g.length
-  }));
+
+  // 2) Regrouper les lignes par personne.
+  const seuil = 13 * SP_SCALE, groupes = [];
+  for (const l of lignes) {
+    const g = groupes[groupes.length - 1];
+    const ecart = g ? l.y - g.lignes[g.lignes.length - 1].y : Infinity;
+    const patronymeDejaVu = g && g.lignes.some(x => x.toks.some(spEstNomTok));
+    const nouveau = !g || ecart >= seuil || (spEstPrenomTok(l.toks[0]) && patronymeDejaVu);
+    if (nouveau) groupes.push({ lignes: [l] }); else g.lignes.push(l);
+  }
+
+  return groupes.map(g => {
+    const toks = g.lignes.flatMap(l => l.toks);
+    const ys = g.lignes.flatMap(l => l.ys);
+    return {
+      nom: toks.join(' ').replace(/\s+/g, ' ').trim(),
+      y: ys.reduce((s, y) => s + y, 0) / ys.length
+    };
+  });
 }
 
 function spEstVert(d, i) {
