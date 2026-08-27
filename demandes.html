@@ -855,6 +855,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </select>
         <input class="finput" id="enf-search" placeholder="Rechercher un enfant…" style="width:auto;min-width:180px;font-size:12px;padding:4px 8px" oninput="enfRender()">
         <button class="btn-sm" id="enf-incomplete-toggle" style="font-size:11px;padding:5px 10px;display:flex;align-items:center;gap:5px" onclick="enfToggleIncomplete()" title="N'afficher que les fiches où la date de naissance ou les allergies n'ont jamais été renseignées"><i class="ti ti-alert-triangle" style="color:#e8a33d"></i> Fiches à compléter<span id="enf-incomplete-count" style="display:none;background:#e8a33d;color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700"></span></button>
+        <button class="btn-sm direction-only" id="enf-cleanup-totaux-btn" style="font-size:11px;padding:5px 10px;display:none;align-items:center;gap:5px;color:var(--red);border-color:var(--red)" onclick="enfCleanupTotauxFaux()" title="Supprime les fausses fiches « Totaux … » créées par un bug de l'import PDF"><i class="ti ti-trash"></i> Nettoyer les fiches « Totaux »<span id="enf-cleanup-totaux-count" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700"></span></button>
         <button class="btn-primary" onclick="openEnfantModal()"><i class="ti ti-plus"></i> Ajouter un enfant</button>
       </div>
     </div>
@@ -3420,9 +3421,13 @@ async function ipParsePdf(file){
     const m=fullText.match(/Planning du \S+ (\d{1,2})(?:er)? (\S+) (\d{4})/i);
     if(m){const day=+m[1],mon=IP_MONTHS[m[2].toLowerCase()],yr=+m[3];if(mon)date=yr+'-'+String(mon).padStart(2,'0')+'-'+String(day).padStart(2,'0');}
     let iEnf=-1,iSal=-1;
-    for(let i=0;i<lines.length;i++){const f=lines[i].toks[0];if(iEnf<0&&f==='Enfants'&&lines[i].minx<70)iEnf=i;else if(iEnf>=0&&iSal<0&&f==='Salariés'&&lines[i].minx<70){iSal=i;break;}}
+    // La section « Enfants » s'arrête soit à « Salariés » (page suivante), soit à une ligne
+    // « Totaux » (récapitulatif quotidien des effectifs) : sans ce second cas, « Totaux »
+    // ressemble à un prénom (majuscule + minuscules) et les chiffres qui suivent sont lus
+    // comme la suite du nom, créant de faux enfants du type « Totaux 1 7 10 9 7 6 1 ».
+    for(let i=0;i<lines.length;i++){const f=lines[i].toks[0];if(iEnf<0&&f==='Enfants'&&lines[i].minx<70)iEnf=i;else if(iEnf>=0&&iSal<0&&lines[i].minx<70&&(f==='Salariés'||f==='Totaux')){iSal=i;break;}}
     const names=[];let cur=null;
-    for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){const toks=lines[i].toks;if(!toks.length)continue;if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=toks.join(' ');}else if(cur)cur+=' '+toks.join(' ');}
+    for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){const toks=lines[i].toks;if(!toks.length)continue;if(/^totaux$/i.test(toks[0]))continue;if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=toks.join(' ');}else if(cur)cur+=' '+toks.join(' ');}
     if(cur)names.push(cur);
     const cleaned=[...new Set(names.map(ipCleanName).filter(Boolean))];
     const tm=fullText.match(/^(.*KOALA\s*KIDS.*)$/im);
@@ -7454,6 +7459,27 @@ function enfIsIncomplete(e){
   return !e.dob || e.allergies===null || e.allergies===undefined;
 }
 
+// Fiches fantômes créées par le bug d'import PDF corrigé ci-dessus (la ligne « Totaux »
+// du récapitulatif quotidien était lue comme un prénom suivi de ses chiffres).
+function enfIsBogusTotaux(e){
+  return /^totaux$/i.test((e.prenom||'').trim());
+}
+
+async function enfCleanupTotauxFaux(){
+  const bogus = cacheEnfants.filter(enfIsBogusTotaux);
+  if(!bogus.length){showBanner('Aucune fiche « Totaux » à nettoyer.');return;}
+  if(!confirm('Supprimer '+bogus.length+' fiche(s) enfant erronée(s), créée(s) par un bug de l’import PDF (ex. « '+(bogus[0].prenom||'')+' ') ? Les présences liées seront aussi supprimées.\n\nCette action est irréversible.'))return;
+  for(const e of bogus){
+    await sb.from('presences').delete().eq('enfant_id',e.id);
+    await dbDelete('enfants',e.id);
+  }
+  const bogusIds=new Set(bogus.map(e=>e.id));
+  cacheEnfants=cacheEnfants.filter(e=>!bogusIds.has(e.id));
+  showBanner(bogus.length+' fiche(s) supprimée(s) ✅');
+  renderPresence();
+  if(typeof enfRender==='function')enfRender();
+}
+
 function enfToggleIncomplete(){
   enfShowIncompleteOnly = !enfShowIncompleteOnly;
   const btn=document.getElementById('enf-incomplete-toggle');
@@ -7503,6 +7529,14 @@ function enfRender(){
     const n = enfGetListe({skipIncompleteFilter:true}).filter(enfIsIncomplete).length;
     countBadge.textContent = n;
     countBadge.style.display = n>0 ? '' : 'none';
+  }
+  // Bouton de nettoyage des fausses fiches « Totaux » (toutes crèches confondues, direction only).
+  const cleanupBtn = document.getElementById('enf-cleanup-totaux-btn');
+  if(cleanupBtn){
+    const nBogus = cacheEnfants.filter(enfIsBogusTotaux).length;
+    cleanupBtn.style.display = (isDirection && nBogus>0) ? 'flex' : 'none';
+    const cleanupCount = document.getElementById('enf-cleanup-totaux-count');
+    if(cleanupCount){cleanupCount.textContent = nBogus;cleanupCount.style.display = nBogus>0 ? '' : 'none';}
   }
   if(!enfants.length){
     el.innerHTML = '<div class="empty-state"><i class="ti ti-mood-kid"></i><p>'+(enfShowIncompleteOnly?'Aucune fiche incomplète 🎉':'Aucun enfant.')+'</p></div>';
