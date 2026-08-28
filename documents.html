@@ -3380,7 +3380,17 @@ function c17Fields(){
     .concat(C17_PJ.map(p=>'pj'+p[0]))
     .map(id=>'c17_'+id);
 }
-function c17Get(id){const e=document.getElementById('ff_c17_'+id);if(!e)return '';return e.type==='checkbox'?(e.checked?'x':''):e.value;}
+/* Valeur d'un champ : depuis le formulaire s'il est affiche, sinon depuis la
+   reponse chargee (documents_reponses.donnees) — un export declenche hors de
+   la modale de saisie ne doit pas produire un cerfa vierge. */
+function c17Get(id){
+  const e=document.getElementById('ff_c17_'+id);
+  if(e)return e.type==='checkbox'?(e.checked?'x':''):e.value;
+  const d=(typeof fillRep!=='undefined'&&fillRep&&fillRep.donnees)?fillRep.donnees['c17_'+id]:undefined;
+  if(d===true)return 'x';
+  if(d===false||d==null)return '';
+  return String(d);
+}
 
 /* --- saisie --- */
 let c17Timer=null;
@@ -3942,6 +3952,13 @@ async function c17ExportOfficiel(){
   const g=id=>c17Get(id);
   const chk=id=>c17Get(id)==='x';
   const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'';
+
+  /* Garde-fou : plutot que de sortir un cerfa vierge sans rien dire, on
+     previent que la saisie n'a pas ete retrouvee. */
+  if(!c17Fields().some(f=>c17Get(f.replace(/^c17_/,''))!=='')){
+    if(typeof toast==='function')toast('Aucune reponse a reporter : le formulaire est vide.');
+    return;
+  }
 
   /* --- objet de la demande --- */
   const t=g('type');
