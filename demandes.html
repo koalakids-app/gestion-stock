@@ -578,6 +578,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </select>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="printPlanningEquipe()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="peOpenMail()"><i class="ti ti-mail"></i> Envoyer par mail</button>
+        <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="pmiOpenExportModal()"><i class="ti ti-file-spreadsheet"></i> Export PMI</button>
       </div>
       <div id="pe-grid-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:8px"></div>
     </div>
@@ -5233,6 +5234,342 @@ async function printPlanningCoord(){
   const subtitle='Planning du coordinateur — semaine du '+fmt(days5[0])+' au '+fmt(days5[4]);
   printPlanningDoc('Planning du coordinateur',subtitle,planningGridToPrintTable(evs,semaine));
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// EXPORT PLANNING PMI (Excel) — Planning équipe, mise en forme PMI
+//
+// Génère, pour la crèche et le nombre de semaines sélectionnés dans le module
+// « Planning équipe », un classeur Excel au format attendu par la PMI :
+// grille 7h→19h par tranches de 1/4h, une couleur par salarié·e, heures
+// travaillées et lignes réglementaires (encadrement, effectif) à compléter.
+//
+// Les données horaires viennent de planning_equipe (déjà importées depuis
+// Gertrude / Excel). La qualification de chaque salarié·e n'est en revanche
+// pas stockée en base : elle est saisie une fois dans la petite modale ci-
+// dessous, puis mémorisée par crèche dans le navigateur (localStorage) pour
+// ne plus avoir à la ressaisir la fois suivante.
+// ══════════════════════════════════════════════════════════════════════════
+
+const PMI_QUALIF_OPTIONS=[
+  'Puéricultrice DE','Éducateur·trice de jeunes enfants DE','Auxiliaire de puériculture DE',
+  'Infirmier·ère DE','Psychomotricien·ne DE','CAP AEPE',
+  "Assistant·e maternel·le agréé·e (3 ans d'expérience)",
+  'Alternant·e EJE','Alternant·e CAP AEPE','Autre (niveau V + 2 ans d’expérience)'
+];
+
+function pmiQualifKey(crecheId,prenom){return 'pmiQualif_'+crecheId+'_'+prenom;}
+function pmiQualifGet(crecheId,prenom){try{return localStorage.getItem(pmiQualifKey(crecheId,prenom))||'';}catch(e){return '';}}
+function pmiQualifSet(crecheId,prenom,val){try{localStorage.setItem(pmiQualifKey(crecheId,prenom),val);}catch(e){}}
+
+// Couleur HSL déterministe par prénom (même principe que peColorForName), convertie
+// en hex pour ExcelJS. Calculée sur l'ensemble des prénoms de l'export (toutes
+// semaines confondues) pour rester stable d'une semaine à l'autre du même fichier.
+function pmiHslToHex(h,s,l){
+  s/=100;l/=100;
+  const k=n=>(n+h/30)%12;
+  const a=s*Math.min(l,1-l);
+  const f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));
+  const toHex=x=>Math.round(255*x).toString(16).padStart(2,'0');
+  return (toHex(f(0))+toHex(f(8))+toHex(f(4))).toUpperCase();
+}
+function pmiBuildColorMap(prenoms){
+  const sorted=[...new Set(prenoms)].sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
+  const map={};
+  sorted.forEach((p,i)=>{
+    const hue=Math.round(i*360/(sorted.length||1));
+    map[p]='FF'+pmiHslToHex(hue,62,32);
+  });
+  return map;
+}
+
+// ── Modale de saisie des qualifications avant export ────────────────────
+let _pmiExportCtx=null; // {crecheId, crecheName, weeks:[{semaine,dateDebut,dateFin,rows}], staffList}
+
+function pmiInjecterModale(){
+  if(document.getElementById('modal-pmi-export-wrap'))return;
+  document.body.insertAdjacentHTML('beforeend',`
+<div class="overlay" id="modal-pmi-export-wrap">
+  <div class="modal" style="max-width:560px;max-height:86vh;display:flex;flex-direction:column">
+    <h3><i class="ti ti-file-spreadsheet"></i> Export planning PMI</h3>
+    <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i>
+      Vérifiez la qualification de chaque salarié·e (mémorisée pour les prochains exports de cette crèche),
+      puis générez le fichier Excel au format PMI.</div>
+    <div id="pmi-export-subtitle" style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:600"></div>
+    <div id="pmi-export-list" style="overflow-y:auto;flex:1;margin-bottom:14px"></div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-pmi-export-wrap')">Annuler</button>
+      <button class="btn-primary" id="pmi-export-btn" onclick="pmiGenerateExcel()"><i class="ti ti-download"></i> Générer le fichier Excel</button>
+    </div>
+  </div>
+</div>`);
+}
+
+async function pmiOpenExportModal(){
+  const sel=document.getElementById('pe-creche-select');
+  const crecheId=isDirection?sel?.value:currentProfile?.creche_id;
+  if(!crecheId){alert('Choisissez d\'abord une crèche.');return;}
+  const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
+  const nbWeeks=parseInt(document.getElementById('pe-print-weeks')?.value)||1;
+  const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  const ws0=weekStart();
+  const weeks=[];
+  for(let w=0;w<nbWeeks;w++){
+    const wsW=new Date(ws0);wsW.setDate(ws0.getDate()+7*w);
+    const semaine=ipDateToLocalISO(wsW);
+    const days5=Array.from({length:5},(_,i)=>{const d=new Date(wsW);d.setDate(wsW.getDate()+i);return d;});
+    const rows=await peLoad(crecheId,semaine);
+    weeks.push({semaine,dateDebut:fmt(days5[0]),dateFin:fmt(days5[4]),rows});
+  }
+  const withData=weeks.filter(w=>w.rows.length);
+  if(!withData.length){alert('Aucune donnée de planning équipe pour cette crèche sur la période choisie.');return;}
+
+  const staffList=[...new Set(weeks.flatMap(w=>w.rows.map(r=>(r.prenom||'').trim())).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
+
+  _pmiExportCtx={crecheId,crecheName,weeks,staffList};
+
+  pmiInjecterModale();
+  document.getElementById('pmi-export-subtitle').textContent=
+    crecheName+' — '+(nbWeeks>1?nbWeeks+' semaines à partir du ':'semaine du ')+weeks[0].dateDebut;
+  const list=document.getElementById('pmi-export-list');
+  list.innerHTML=staffList.map(p=>{
+    const saved=pmiQualifGet(crecheId,p);
+    const opts='<option value="">— Choisir —</option>'
+      +PMI_QUALIF_OPTIONS.map(o=>'<option value="'+escHtml(o)+'"'+(o===saved?' selected':'')+'>'+escHtml(o)+'</option>').join('')
+      +'<option value="__autre__"'+(saved&&!PMI_QUALIF_OPTIONS.includes(saved)?' selected':'')+'>Autre (saisir)…</option>';
+    const autreVal=(saved&&!PMI_QUALIF_OPTIONS.includes(saved))?saved:'';
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      +'<div style="flex:0 0 130px;font-size:13px;font-weight:600">'+escHtml(p)+'</div>'
+      +'<select class="finput pmi-qualif-sel" data-prenom="'+escHtml(p)+'" style="flex:1;font-size:12px" onchange="pmiOnQualifChange(this)">'+opts+'</select>'
+      +'<input class="finput pmi-qualif-autre" data-prenom="'+escHtml(p)+'" placeholder="Qualification…" value="'+escHtml(autreVal)+'" style="flex:1;font-size:12px;display:'+(autreVal?'':'none')+'">'
+      +'</div>';
+  }).join('');
+  document.getElementById('modal-pmi-export-wrap').classList.add('open');
+}
+window.pmiOpenExportModal=pmiOpenExportModal;
+
+function pmiOnQualifChange(sel){
+  const autre=document.querySelector('.pmi-qualif-autre[data-prenom="'+sel.dataset.prenom.replace(/"/g,'\\"')+'"]');
+  if(autre)autre.style.display=sel.value==='__autre__'?'':'none';
+}
+window.pmiOnQualifChange=pmiOnQualifChange;
+
+function pmiCollectQualifs(){
+  const ctx=_pmiExportCtx;
+  const map={};
+  ctx.staffList.forEach(p=>{
+    const sel=document.querySelector('.pmi-qualif-sel[data-prenom="'+p.replace(/"/g,'\\"')+'"]');
+    const autre=document.querySelector('.pmi-qualif-autre[data-prenom="'+p.replace(/"/g,'\\"')+'"]');
+    const val=(sel&&sel.value==='__autre__')?(autre?autre.value.trim():''):(sel?sel.value:'');
+    map[p]=val;
+    if(val)pmiQualifSet(ctx.crecheId,p,val);
+  });
+  return map;
+}
+
+// ── Génération du classeur (ExcelJS) ─────────────────────────────────────
+const PMI_HOUR_LABELS=['7 à 8','8 à 9','9 à 10','10 à 11','11 à 12','12 à 13','13 à 14','14 à 15','15 à 16','16 à 17','17 à 18','18 à 19'];
+const PMI_REGLEMENT_1="Art R2324-42 « Le personnel chargé de l'encadrement des enfants est constitué : 1° Pour quarante pour cent au moins de l'effectif, des puéricultrices diplômées d'Etat, des éducateurs de jeunes enfants diplômés d'Etat, des auxiliaires de puériculture diplômés, des infirmiers diplômés d'Etat ou des psychomotriciens diplômés d'Etat ; 2° Pour soixante pour cent au plus de l'effectif, des titulaires ayant une qualification définie par arrêté du ministre chargé de la famille, qui doivent justifier d'une expérience ou bénéficier d'un accompagnement définis par le même arrêté. » Dans les micro-crèches, « les professionnels du 1° peuvent être remplacés par des personnes qui justifient d'une certification au moins de niveau V, enregistrée au répertoire national de certifications professionnelles prévu à l'article L.335-6 du code de l'éducation, attestant de compétences dans le champ de l'accueil des jeunes enfants et de deux années d'expérience professionnelle, ou d'une expérience professionnelle de trois ans comme assistant maternel agréé ».";
+const PMI_REGLEMENT_2="Art R 2324-43-1 « Pour des raisons de sécurité, l'effectif du personnel encadrant directement les enfants ne peut pas être inférieur à deux, dont, pour les établissements et services d'une capacité supérieure à vingt places, au moins un des professionnels mentionnés au 1° de l'article R2324-42 » Dans les micro-crèches l'effectif du personnel doit être au minimum de deux dès la présence de quatre enfants.";
+
+// Convertit un horaire (creneau_label, ou à défaut hdebut/hfin/pause) en liste de
+// colonnes 1/4h (0=07h00 … 47=18h45) réellement travaillées, pause déduite.
+function pmiSlotsForRow(row){
+  let segs=(typeof peCreneauSegments==='function')?peCreneauSegments(row.creneau_label):null;
+  if(!segs&&row.hdebut&&row.hfin){
+    const toMin=s=>{const[h,m]=String(s).split(':').map(Number);return h*60+(m||0);};
+    segs=[[toMin(row.hdebut),toMin(row.hfin)]];
+    if(row.pause){
+      const[p1,p2]=String(row.pause).split('-').map(toMin);
+      if(!isNaN(p1)&&!isNaN(p2)&&p2>p1){
+        const out=[];
+        segs.forEach(([s,e])=>{
+          if(p1>s&&p2<e){out.push([s,p1],[p2,e]);}else out.push([s,e]);
+        });
+        segs=out;
+      }
+    }
+  }
+  if(!segs)return{cols:[],minutes:0};
+  const cols=[];let minutes=0;
+  segs.forEach(([s,e])=>{
+    minutes+=Math.max(0,e-s);
+    for(let cur=s;cur<e;cur+=15){
+      if(cur>=7*60&&cur<19*60)cols.push(4+Math.floor((cur-7*60)/15)); // colonne 1-based (D=4)
+    }
+  });
+  return{cols,minutes};
+}
+
+function pmiBuildWeekSheet(wb,sheetName,weekInfo,crecheName,staffList,qualifMap,colorMap){
+  const ws=wb.addWorksheet(sheetName,{pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+  const cols=[{width:2}];               // A marge
+  cols.push({width:18},{width:22});     // B nom, C qualification
+  for(let i=0;i<48;i++)cols.push({width:3.1}); // D..AY 1/4h
+  cols.push({width:11},{width:11});     // AZ, BA heures
+  ws.columns=cols;
+
+  const thin={style:'thin',color:{argb:'FFB9B4E0'}};
+  const bordAll={top:thin,left:thin,bottom:thin,right:thin};
+  const KOALA='FF3D3580';
+
+  // ── En-tête établissement / semaine ──
+  ws.mergeCells(1,2,1,11);
+  const eTitle=ws.getCell(1,2);eTitle.value="Établissement : "+crecheName;
+  eTitle.font={bold:true,size:13,color:{argb:KOALA}};
+  ws.mergeCells(1,13,1,24);
+  const eWeek=ws.getCell(1,13);eWeek.value="Semaine du "+weekInfo.dateDebut+" au "+weekInfo.dateFin;
+  eWeek.font={bold:true,size:12};
+  ws.getRow(1).height=22;
+
+  let r=3;
+  const DAYNAMES=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
+  DAYNAMES.forEach((dayName,jour)=>{
+    const hdr=r;
+    // ligne jour + en-têtes horaires
+    const dCell=ws.getCell(hdr,2);dCell.value=dayName;
+    dCell.font={bold:true,size:12,color:{argb:'FFFFFFFF'}};
+    dCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:KOALA}};
+    dCell.alignment={vertical:'middle'};
+    ws.mergeCells(hdr,2,hdr,3);
+    ws.getCell(hdr,3).fill=dCell.fill;
+    for(let h=0;h<12;h++){
+      const c0=4+h*4;
+      ws.mergeCells(hdr,c0,hdr,c0+3);
+      const hc=ws.getCell(hdr,c0);
+      hc.value=PMI_HOUR_LABELS[h];
+      hc.font={bold:true,size:9};
+      hc.alignment={horizontal:'center',vertical:'middle'};
+      hc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEEEDF8'}};
+    }
+    const azh=ws.getCell(hdr,52);azh.value='Heures';azh.font={bold:true,size:9};azh.alignment={horizontal:'center',wrapText:true};
+    ws.getRow(hdr).height=16;
+
+    // ligne NOM/prénom | Qualification
+    const r2=hdr+1;
+    ['NOM/prénom','Qualification'].forEach((t,i)=>{
+      const c=ws.getCell(r2,2+i);c.value=t;c.font={bold:true,size:10};
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF4F3FB'}};
+      c.border=bordAll;
+    });
+
+    // lignes salarié·e·s
+    const dayRows=weekInfo.rows.filter(x=>x.jour===jour);
+    let total=0;
+    staffList.forEach((p,i)=>{
+      const rr=hdr+2+i;
+      const nameCell=ws.getCell(rr,2);nameCell.value=p;nameCell.font={size:10};nameCell.border=bordAll;
+      const qCell=ws.getCell(rr,3);qCell.value=qualifMap[p]||'';qCell.font={size:9};qCell.border=bordAll;
+      const row=dayRows.find(x=>(x.prenom||'').trim()===p);
+      if(row){
+        const{cols:slotCols,minutes}=pmiSlotsForRow(row);
+        if(slotCols.length){
+          const fill={type:'pattern',pattern:'solid',fgColor:{argb:colorMap[p]||'FF3D3580'}};
+          slotCols.forEach(c=>{ws.getCell(rr,c).fill=fill;});
+          const h=Math.round((minutes/60)*100)/100;
+          ws.getCell(rr,52).value=h;
+          ws.getCell(rr,52).alignment={horizontal:'center'};
+          total+=h;
+        }
+      }
+      for(let c=4;c<=51;c++)ws.getCell(rr,c).border={top:thin,bottom:thin};
+      ws.getRow(rr).height=14;
+    });
+
+    const nStaff=staffList.length;
+    const rEnfants=hdr+2+nStaff;
+    ws.getCell(rEnfants,2).value="Nombre d'enfants accueillis";
+    ws.getCell(rEnfants,2).font={size:9,italic:true};
+    const rHors=rEnfants+1;
+    ws.getCell(rHors,2).value='Hors encadrement des enfants';
+    ws.getCell(rHors,2).font={size:9,italic:true};
+    ws.getCell(rHors,40).value="Total des heures d'encadrement";
+    ws.getCell(rHors,40).font={bold:true,size:9};
+    const totCell=ws.getCell(rHors,52);totCell.value=Math.round(total*100)/100;
+    totCell.font={bold:true,size:10};totCell.alignment={horizontal:'center'};
+    const rDir=rHors+1;
+    ws.getCell(rDir,2).value='Direction';ws.getCell(rDir,2).font={size:9,italic:true};
+    const rEntr=rDir+1;
+    ws.getCell(rEntr,2).value='Entretien/restauration';ws.getCell(rEntr,2).font={size:9,italic:true};
+
+    r=rEntr+2; // ligne de départ du jour suivant
+  });
+
+  // ── Récapitulatif hebdomadaire (à compléter à la main) ──
+  r+=1;
+  ws.getCell(r,2).value="Nbre d'heures d'ouverture (hebdomadaire) de l'établissement";
+  ws.getCell(r,2).font={size:10};
+  r++;
+  ws.getCell(r,2).value="Capacité d'accueil de l'établissement";
+  ws.getCell(r,2).font={size:10};
+  r+=2;
+  ws.getCell(r,2).value="Personnel diplômé (1° art. R2324-42) *";ws.getCell(r,2).font={size:10};
+  r++;
+  ws.getCell(r,2).value="Personnel qualifié (2° art. R2324-42) **";ws.getCell(r,2).font={size:10};
+  r++;
+  ws.getCell(r,2).value="Total hebdomadaire";ws.getCell(r,2).font={bold:true,size:10};
+
+  // ── Légende couleurs ──
+  r+=2;
+  ws.getCell(r,2).value='Légende';ws.getCell(r,2).font={bold:true,size:11};
+  r++;
+  staffList.forEach(p=>{
+    const c=ws.getCell(r,2);c.value=p;
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:colorMap[p]||'FF3D3580'}};
+    c.font={bold:true,color:{argb:'FFFFFFFF'},size:10};
+    r++;
+  });
+
+  // ── Textes réglementaires ──
+  r+=1;
+  ws.mergeCells(r,2,r,53);
+  const rg1=ws.getCell(r,2);rg1.value=PMI_REGLEMENT_1;
+  rg1.font={size:8,italic:true};rg1.alignment={wrapText:true,vertical:'top'};
+  ws.getRow(r).height=110;
+  r+=1;
+  ws.mergeCells(r,2,r,53);
+  const rg2=ws.getCell(r,2);rg2.value=PMI_REGLEMENT_2;
+  rg2.font={size:8,italic:true};rg2.alignment={wrapText:true,vertical:'top'};
+  ws.getRow(r).height=40;
+}
+
+async function pmiGenerateExcel(){
+  const ctx=_pmiExportCtx;
+  if(!ctx)return;
+  if(typeof ExcelJS==='undefined'){alert('La bibliothèque Excel (ExcelJS) n\'a pas pu être chargée. Réessayez dans un instant.');return;}
+  const qualifMap=pmiCollectQualifs();
+  const btn=document.getElementById('pmi-export-btn');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Génération…';}
+  try{
+    const colorMap=pmiBuildColorMap(ctx.staffList);
+    const wb=new ExcelJS.Workbook();
+    wb.creator='Koala Kids';
+    const withData=ctx.weeks.filter(w=>w.rows.length);
+    withData.forEach((w,i)=>{
+      const sheetName=('Semaine '+w.dateDebut).slice(0,31);
+      pmiBuildWeekSheet(wb,sheetName,w,ctx.crecheName,ctx.staffList,qualifMap,colorMap);
+    });
+    const buf=await wb.xlsx.writeBuffer();
+    const slug=(ctx.crecheName||'creche').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
+    const fileName='Planning_PMI_'+slug+'_'+withData[0].dateDebut.replace(/\//g,'-')+'.xlsx';
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=fileName;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    closeModal('modal-pmi-export-wrap');
+    showBanner('Planning PMI généré ✅');
+  }catch(e){
+    console.error('[pmiGenerateExcel]',e);
+    showBanner('Erreur lors de la génération du fichier : '+e.message,'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-download"></i> Générer le fichier Excel';}
+  }
+}
+window.pmiGenerateExcel=pmiGenerateExcel;
+
+// FIN EXPORT PLANNING PMI
+// ============================================================
 
 // 3) Planning équipe (toutes les salariées de la crèche affichée) — 1, 2 ou 3 semaines sur la même page
 async function peBuildPrintHTML(){
