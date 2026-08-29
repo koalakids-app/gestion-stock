@@ -5351,7 +5351,7 @@ async function pmiOpenExportModal(){
     const semaine=ipDateToLocalISO(wsW);
     const days5=Array.from({length:5},(_,i)=>{const d=new Date(wsW);d.setDate(wsW.getDate()+i);return d;});
     const rows=await peLoad(crecheId,semaine);
-    weeks.push({semaine,dateDebut:fmt(days5[0]),dateFin:fmt(days5[4]),rows});
+    weeks.push({semaine,dateDebut:fmt(days5[0]),dateFin:fmt(days5[4]),rows,dates:days5.map(ipDateToLocalISO)});
   }
   const withData=weeks.filter(w=>w.rows.length);
   if(!withData.length){alert('Aucune donnée de planning équipe pour cette crèche sur la période choisie.');return;}
@@ -5359,7 +5359,10 @@ async function pmiOpenExportModal(){
   const staffList=[...new Set(weeks.flatMap(w=>w.rows.map(r=>(r.prenom||'').trim())).filter(Boolean))]
     .sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
 
-  _pmiExportCtx={crecheId,crecheName,weeks,staffList};
+  // Présences enfants : chargées ici pour que la génération reste immédiate au clic.
+  const enfants=await pmiChargerPresencesEnfants(crecheId,weeks);
+
+  _pmiExportCtx={crecheId,crecheName,weeks,staffList,enfantsParDate:enfants.parDate,enfantsSansHoraire:enfants.sansHoraire};
 
   pmiInjecterModale();
   document.getElementById('pmi-export-subtitle').textContent=
@@ -5459,13 +5462,17 @@ function pmiSlotsForRow(row){
 // On ne redessine donc rien : on remplit les lignes existantes, repérées ici une fois pour
 // toutes. `nom` = ligne d'en-tête NOM/prénom, `staff` = première/dernière ligne utilisable
 // pour les salarié·e·s, `total` = ligne « Hors encadrement » qui porte les totaux.
+// `enfants` = ligne « Nombre d'enfants accueillis ». Elle existe pour les cinq jours, mais
+// le modèle a oublié d'en écrire le libellé pour lundi et mardi : on le rétablit au
+// remplissage (la mise en forme, elle, est bien présente dans le gabarit).
 const PMI_TPL_DAYS=[
-  {jour:0, nom:8,  staffFirst:9,  staffLast:14, total:16},
-  {jour:1, nom:22, staffFirst:23, staffLast:28, total:30},
-  {jour:2, nom:41, staffFirst:42, staffLast:47, total:49},
-  {jour:3, nom:56, staffFirst:57, staffLast:62, total:64},
-  {jour:4, nom:73, staffFirst:74, staffLast:79, total:81}
+  {jour:0, nom:8,  staffFirst:9,  staffLast:14, enfants:15, total:16},
+  {jour:1, nom:22, staffFirst:23, staffLast:28, enfants:29, total:30},
+  {jour:2, nom:41, staffFirst:42, staffLast:47, enfants:48, total:49},
+  {jour:3, nom:56, staffFirst:57, staffLast:62, enfants:63, total:64},
+  {jour:4, nom:73, staffFirst:74, staffLast:79, enfants:80, total:81}
 ];
+const PMI_LIBELLE_ENFANTS="Nombre d'enfants accueillis";
 const PMI_TPL_COL_FIRST=4;      // D = 07h00-07h15
 const PMI_TPL_COL_LAST=51;      // AY = 18h45-19h00
 const PMI_TPL_COL_DIPLOME=52;   // AZ « Nbre heures personnel diplômé * »
@@ -5483,6 +5490,176 @@ function pmiPeindre(cell,argb){
 function pmiEffacerFond(cell){
   const f=cell.fill;
   if(f&&f.pattern&&f.pattern!=='none')cell.style=Object.assign({},cell.style,{fill:{type:'pattern',pattern:'none'}});
+}
+
+/* ── Nombre d'enfants accueillis ───────────────────────────────────────────
+   La ligne se déduit des présences enfants déjà enregistrées (import Gertrude ou
+   pointage), en comptant pour chaque quart d'heure les enfants présents.
+
+   `presences` porte une ligne par demi-journée (slot M / A) avec, lorsque l'import a
+   pu les lire, les horaires réels d'arrivée et de départ. On applique le même ordre de
+   priorité que la feuille de présence hebdomadaire :
+     1. les horaires réellement enregistrés ce jour-là ;
+     2. à défaut ceux du contrat d'accueil couvrant cette date, ramenés à la demi-journée
+        concernée quand l'enfant n'est présent que le matin ou que l'après-midi (le contrat
+        décrit une journée entière, le prendre tel quel gonflerait le comptage) ;
+     3. sans horaire ni contrat exploitable, l'enfant ne peut pas être situé sur la grille :
+        il n'est pas compté, et l'export le signale plutôt que d'inventer une amplitude.  */
+const PMI_FIN_MATIN=12*60+30;
+const PMI_DEBUT_APREM=13*60+30;
+
+function pmiHeureEnMinutes(t){
+  const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));
+  return m?parseInt(m[1],10)*60+parseInt(m[2],10):null;
+}
+
+// Contrat d'accueil applicable à un enfant pour une date donnée (le plus récent qui couvre
+// à la fois la période et le jour de la semaine).
+function pmiContratPour(contrats,enfantId,dateISO){
+  const d=new Date(dateISO+'T12:00:00');
+  const jourSemaine=d.getDay()===0?7:d.getDay();   // 1 = lundi … 7 = dimanche
+  let choisi=null;
+  (contrats||[]).forEach(c=>{
+    if(c.enfant_id!==enfantId)return;
+    if(c.date_debut&&c.date_debut>dateISO)return;
+    if(c.date_fin&&c.date_fin<dateISO)return;
+    if(ctParseJours(c.jours).indexOf(jourSemaine)<0)return;
+    if(!choisi||(c.date_debut||'')>(choisi.date_debut||''))choisi=c;
+  });
+  return choisi;
+}
+
+async function pmiChargerPresencesEnfants(crecheId,weeks){
+  const res={parDate:{},sansHoraire:0};
+  try{
+    let enfants=(typeof cacheEnfants!=='undefined'?cacheEnfants:[]).filter(e=>e.creche_id===crecheId);
+    if(!enfants.length){
+      const{data}=await sb.from('enfants').select('id,creche_id').eq('creche_id',crecheId);
+      enfants=data||[];
+    }
+    const ids=enfants.map(e=>e.id);
+    if(!ids.length)return res;
+
+    const dates=[];
+    weeks.forEach(w=>(w.dates||[]).forEach(d=>{if(dates.indexOf(d)<0)dates.push(d);}));
+    if(!dates.length)return res;
+
+    const{data:pres}=await sb.from('presences').select('*').in('presence_date',dates).in('enfant_id',ids);
+    if(!pres||!pres.length)return res;
+
+    let contrats=[];
+    try{
+      const{data}=await sb.from('enfants_contrats').select('*').in('enfant_id',ids);
+      contrats=data||[];
+    }catch(e){/* table absente : on se contente des horaires enregistrés */}
+
+    // Les deux demi-journées d'un même enfant sont fusionnées en une seule plage.
+    const parEnfantDate={};
+    pres.forEach(p=>{
+      if(p.status!=='present'&&p.status!=='partial')return;
+      const k=p.enfant_id+'_'+p.presence_date;
+      const o=parEnfantDate[k]||(parEnfantDate[k]={enfant:p.enfant_id,date:p.presence_date,matin:false,aprem:false,hd:null,hf:null});
+      const slot=String(p.slot||'').toUpperCase();
+      if(slot==='M')o.matin=true;
+      if(slot==='A')o.aprem=true;
+      const hd=pmiHeureEnMinutes(p.heure_debut),hf=pmiHeureEnMinutes(p.heure_fin);
+      if(hd!==null&&(o.hd===null||hd<o.hd))o.hd=hd;
+      if(hf!==null&&(o.hf===null||hf>o.hf))o.hf=hf;
+    });
+
+    Object.keys(parEnfantDate).forEach(k=>{
+      const o=parEnfantDate[k];
+      let deb=o.hd,fin=o.hf;
+      if(deb===null||fin===null){
+        const ct=pmiContratPour(contrats,o.enfant,o.date);
+        if(ct){
+          deb=pmiHeureEnMinutes(ct.heure_debut);
+          fin=pmiHeureEnMinutes(ct.heure_fin);
+          if(deb!==null&&fin!==null){
+            if(o.matin&&!o.aprem)fin=Math.min(fin,PMI_FIN_MATIN);
+            if(o.aprem&&!o.matin)deb=Math.max(deb,PMI_DEBUT_APREM);
+          }
+        }
+      }
+      if(deb===null||fin===null||fin<=deb){res.sansHoraire++;return;}
+      (res.parDate[o.date]||(res.parDate[o.date]=[])).push([deb,fin]);
+    });
+  }catch(e){
+    console.warn('[PMI] présences enfants indisponibles :',e);
+  }
+  return res;
+}
+
+// Nombre d'enfants présents sur chacun des 48 quarts d'heure de 7h à 19h.
+function pmiComptesParQuart(intervalles){
+  const comptes=[];
+  for(let c=PMI_TPL_COL_FIRST;c<=PMI_TPL_COL_LAST;c++){
+    const debut=7*60+(c-PMI_TPL_COL_FIRST)*15,fin=debut+15;
+    let n=0;
+    (intervalles||[]).forEach(iv=>{if(iv[0]<fin&&iv[1]>debut)n++;});
+    comptes.push(n);
+  }
+  return comptes;
+}
+
+/* ── Bloc récapitulatif et contrôles réglementaires ────────────────────────
+   Le bas du tableau PMI est un petit tableau à deux colonnes dont les en-têtes sont
+   « Nbre d'heures d'encadrement des enfants » (AL) et « Taux d'encadrement » (AU),
+   pour les trois lignes « Personnel diplômé » (92), « Personnel qualifié » (93) et
+   « Total hebdomadaire » (94). Tout s'en déduit des heures déjà calculées jour par jour.
+
+   Les contrôles reprennent les deux textes que le modèle cite lui-même :
+     · art. R2324-42 : le personnel du 1° (diplômé) doit représenter au moins 40 % de
+       l'effectif — donc des heures d'encadrement ;
+     · art. R2324-43-1 : en micro-crèche, l'effectif ne peut être inférieur à deux
+       professionnels dès la présence de quatre enfants.
+   S'y ajoute le dépassement de la capacité d'accueil de la fiche crèche.
+
+   Le taux « un professionnel pour cinq enfants qui ne marchent pas / huit qui marchent »
+   n'est volontairement pas contrôlé : l'application ne sait pas quels enfants marchent,
+   et l'inventer donnerait une conformité fausse. */
+const PMI_MINI_PROS=2;
+const PMI_ENFANTS_DECLENCHEUR=4;
+const PMI_PART_DIPLOME_MINI=40;
+const PMI_NOMS_JOURS=['lundi','mardi','mercredi','jeudi','vendredi'];
+
+function pmiHeureDeQuart(i){
+  const m=7*60+i*15;
+  return String(Math.floor(m/60)).padStart(2,'0')+'h'+String(m%60).padStart(2,'0');
+}
+
+// Parcourt les 48 quarts d'heure d'une journée et regroupe les quarts consécutifs qui
+// présentent la même anomalie, pour signaler « mardi 12h30–13h00 » plutôt que 48 lignes.
+function pmiControlerJournee(nomJour,comptesEnfants,staffParQuart,capacite,anomalies){
+  let debut=null,detail=null;
+  const clore=fin=>{
+    if(debut!==null)anomalies.push(nomJour+' '+pmiHeureDeQuart(debut)+'–'+pmiHeureDeQuart(fin)+' : '+detail);
+    debut=null;detail=null;
+  };
+  for(let i=0;i<comptesEnfants.length;i++){
+    const e=comptesEnfants[i]||0,p=staffParQuart[i]||0;
+    let d=null;
+    if(capacite&&e>capacite)d=e+' enfants accueillis pour une capacité de '+capacite;
+    else if(e>=PMI_ENFANTS_DECLENCHEUR&&p<PMI_MINI_PROS)
+      d=p+' professionnel'+(p>1?'s':'')+' pour '+e+' enfants (minimum 2 dès 4 enfants)';
+    if(d!==detail){clore(i);if(d){debut=i;detail=d;}}
+  }
+  clore(comptesEnfants.length);
+}
+
+function pmiEcrireRecap(ws,stats,capacite){
+  const arrondi=x=>Math.round(x*100)/100;
+  const total=stats.heuresDiplome+stats.heuresQualifie;
+  if(stats.heuresOuverture)ws.getCell('O92').value=arrondi(stats.heuresOuverture);
+  if(capacite)ws.getCell('O93').value=capacite;
+  ws.getCell('AL92').value=arrondi(stats.heuresDiplome);
+  ws.getCell('AL93').value=arrondi(stats.heuresQualifie);
+  ws.getCell('AL94').value=arrondi(total);
+  const pourcent=v=>total?(Math.round(v/total*1000)/10)+' %':'';
+  ws.getCell('AU92').value=pourcent(stats.heuresDiplome);
+  ws.getCell('AU93').value=pourcent(stats.heuresQualifie);
+  ws.getCell('AU94').value=total?'100 %':'';
+  return total?stats.heuresDiplome/total*100:null;
 }
 
 function pmiB64ToArrayBuffer(b64){
@@ -5538,9 +5715,11 @@ function pmiTexteAvecRenvoi(cell,valeur){
     cell.style=Object.assign({},cell.style,{alignment:Object.assign({},cell.alignment,{wrapText:true})});
 }
 
-function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap){
+function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap,enfantsParDate,capacite){
   ws.getCell('B2').value=crecheName;
   ws.getCell('AZ1').value=weekInfo.dateDebut+' - '+weekInfo.dateFin;
+
+  const stats={heuresDiplome:0,heuresQualifie:0,heuresOuverture:0,anomalies:[]};
 
   PMI_TPL_DAYS.forEach(day=>{
     // 1) remise à zéro : le modèle fourni contient encore quelques valeurs d'un remplissage
@@ -5562,6 +5741,8 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
     // 2) une ligne par salarié·e, dans l'ordre de la liste
     const dayRows=weekInfo.rows.filter(x=>x.jour===day.jour);
     let totalDiplome=0,totalQualifie=0;
+    const staffParQuart=new Array(PMI_TPL_COL_LAST-PMI_TPL_COL_FIRST+1).fill(0);
+    let colMin=null,colMax=null;
     staffList.slice(0,PMI_TPL_MAX_STAFF).forEach((p,i)=>{
       const r=day.staffFirst+i;
       const nomAffiche=pmiNomComplet(p,nomMap&&nomMap[p]);
@@ -5577,7 +5758,15 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       const res=pmiSlotsForRow(src);
       if(!res.cols.length)return;
       const argb=colorMap[p]||'FF3D3580';
-      res.cols.forEach(c=>{if(c>=PMI_TPL_COL_FIRST&&c<=PMI_TPL_COL_LAST)pmiPeindre(ws.getCell(r,c),argb);});
+      res.cols.forEach(c=>{
+        if(c<PMI_TPL_COL_FIRST||c>PMI_TPL_COL_LAST)return;
+        pmiPeindre(ws.getCell(r,c),argb);
+        // Un créneau peint = un professionnel réellement présent auprès des enfants
+        // (la pause, absente de res.cols, ne compte donc pas dans l'encadrement).
+        staffParQuart[c-PMI_TPL_COL_FIRST]++;
+        if(colMin===null||c<colMin)colMin=c;
+        if(colMax===null||c>colMax)colMax=c;
+      });
       const h=Math.round((res.minutes/60)*100)/100;
       const diplome=pmiQualifEstDiplome(qualifMap[p]);
       ws.getCell(r,diplome?PMI_TPL_COL_DIPLOME:PMI_TPL_COL_QUALIFIE).value=h;
@@ -5587,11 +5776,33 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
     // 3) totaux du jour, sur la ligne « Hors encadrement » comme dans le modèle
     if(totalDiplome)ws.getCell(day.total,PMI_TPL_COL_DIPLOME).value=Math.round(totalDiplome*100)/100;
     if(totalQualifie)ws.getCell(day.total,PMI_TPL_COL_QUALIFIE).value=Math.round(totalQualifie*100)/100;
+
+    // 4) nombre d'enfants accueillis, quart d'heure par quart d'heure
+    if(!ws.getCell(day.enfants,2).value)ws.getCell(day.enfants,2).value=PMI_LIBELLE_ENFANTS;
+    const dateISO=(weekInfo.dates||[])[day.jour];
+    const comptes=pmiComptesParQuart(enfantsParDate&&dateISO?enfantsParDate[dateISO]:null);
+    for(let c=PMI_TPL_COL_FIRST;c<=PMI_TPL_COL_LAST;c++){
+      const n=comptes[c-PMI_TPL_COL_FIRST];
+      ws.getCell(day.enfants,c).value=n>0?n:null;   // hors accueil : case laissée vide
+    }
+
+    // 5) cumuls de la semaine et contrôles réglementaires du jour
+    stats.heuresDiplome+=totalDiplome;
+    stats.heuresQualifie+=totalQualifie;
+    // Amplitude d'ouverture : de la première arrivée au dernier départ, pauses incluses.
+    if(colMin!==null)stats.heuresOuverture+=(colMax-colMin+1)*0.25;
+    pmiControlerJournee(PMI_NOMS_JOURS[day.jour],comptes,staffParQuart,capacite,stats.anomalies);
   });
+
+  const partDiplome=pmiEcrireRecap(ws,stats,capacite);
+  if(partDiplome!==null&&partDiplome<PMI_PART_DIPLOME_MINI)
+    stats.anomalies.unshift('sur la semaine, '+(Math.round(partDiplome*10)/10)
+      +' % des heures d\'encadrement sont assurées par du personnel diplômé (minimum 40 % — art. R2324-42)');
 
   // Rien d'autre n'est touché : le bloc du lundi n'a pas le libellé « Total des heures
   // d'encadrement » des quatre autres jours, mais l'ajouter obligerait à fusionner AN16:AY16
   // et ferait disparaître le quadrillage de ces cellules. Le modèle reste tel qu'il est.
+  return stats;
 }
 
 // ExcelJS réécrit la police par défaut du classeur (police n°0) en Calibri 11, alors que le
@@ -5617,6 +5828,43 @@ async function pmiRestaurerPoliceParDefaut(buffer){
     console.warn('[PMI] police par défaut non rétablie :',e);
     return buffer;
   }
+}
+
+// Les anomalies restent dans l'application : le fichier remis à la PMI n'est jamais annoté.
+function pmiAfficherControles(controles,reserves,capacite){
+  const total=controles.reduce((n,c)=>n+c.stats.anomalies.length,0);
+  if(!total&&!reserves.length)return;
+  if(!document.getElementById('modal-pmi-controles-wrap')){
+    document.body.insertAdjacentHTML('beforeend',`
+<div class="overlay" id="modal-pmi-controles-wrap">
+  <div class="modal" style="max-width:640px;max-height:86vh;display:flex;flex-direction:column">
+    <h3><i class="ti ti-alert-triangle"></i> Points de vigilance</h3>
+    <div id="pmi-controles-corps" style="overflow-y:auto;flex:1;font-size:13px;line-height:1.7"></div>
+    <div class="mactions"><button class="btn-primary" onclick="closeModal('modal-pmi-controles-wrap')">Fermer</button></div>
+  </div>
+</div>`);
+  }
+  let html='<div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i> '
+    +'Ces contrôles portent sur les données du planning et des présences. Le fichier Excel, lui, n\'est pas annoté.</div>';
+  controles.forEach(c=>{
+    const s=c.stats,tot=s.heuresDiplome+s.heuresQualifie;
+    const part=tot?Math.round(s.heuresDiplome/tot*1000)/10:0;
+    html+='<div style="margin-bottom:14px">'
+      +'<div style="font-weight:700;color:var(--koala);margin-bottom:4px">Semaine du '+escHtml(c.semaine)+'</div>'
+      +'<div style="color:var(--muted);font-size:12px;margin-bottom:6px">'
+      +'Heures d\'encadrement : '+(Math.round(tot*100)/100)+' h — dont '+part+' % de personnel diplômé'
+      +(capacite?' · capacité : '+capacite+' enfants':'')+'</div>';
+    html+=s.anomalies.length
+      ? '<ul style="margin:0 0 0 18px;padding:0">'+s.anomalies.map(a=>'<li>'+escHtml(a)+'</li>').join('')+'</ul>'
+      : '<div style="color:var(--koala)">✅ Aucune anomalie détectée.</div>';
+    html+='</div>';
+  });
+  if(reserves.length)
+    html+='<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:6px">'
+      +'<div style="font-weight:700;margin-bottom:4px">Limites de ce contrôle</div>'
+      +'<ul style="margin:0 0 0 18px;padding:0">'+reserves.map(r=>'<li>'+escHtml(r)+'</li>').join('')+'</ul></div>';
+  document.getElementById('pmi-controles-corps').innerHTML=html;
+  document.getElementById('modal-pmi-controles-wrap').classList.add('open');
 }
 
 async function pmiGenerateExcel(){
@@ -5645,7 +5893,11 @@ async function pmiGenerateExcel(){
     // Feuil2 / Feuil3 : feuilles vides du classeur d'origine, inutiles dans l'export.
     wb.worksheets.slice().forEach(w=>{if(/^Feuil[23]$/.test(w.name))wb.removeWorksheet(w.id);});
 
-    withData.forEach((w,i)=>pmiFillSheet(feuilles[i],w,ctx.crecheName,ctx.staffList,qualifMap,nomMap,colorMap));
+    const capacite=(cacheCreches||[]).find(c=>c.id===ctx.crecheId)?.capacity||null;
+    const controles=withData.map((w,i)=>({
+      semaine:w.dateDebut,
+      stats:pmiFillSheet(feuilles[i],w,ctx.crecheName,ctx.staffList,qualifMap,nomMap,colorMap,ctx.enfantsParDate,capacite)
+    }));
 
     const buf=await pmiRestaurerPoliceParDefaut(await wb.xlsx.writeBuffer());
     const slug=(ctx.crecheName||'creche').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
@@ -5656,9 +5908,16 @@ async function pmiGenerateExcel(){
     setTimeout(()=>URL.revokeObjectURL(url),4000);
     closeModal('modal-pmi-export-wrap');
     const trop=ctx.staffList.length-PMI_TPL_MAX_STAFF;
-    showBanner(trop>0
-      ? 'Planning PMI généré — attention : le modèle ne comporte que '+PMI_TPL_MAX_STAFF+' lignes par jour, '+trop+' personne(s) n\'y figurent pas.'
-      : 'Planning PMI généré ✅', trop>0?'error':undefined);
+    const reserves=[];
+    if(trop>0)reserves.push('Le modèle ne comporte que '+PMI_TPL_MAX_STAFF+' lignes par jour : '+trop+' personne(s) ne figurent pas dans le fichier.');
+    if(ctx.enfantsSansHoraire)reserves.push(ctx.enfantsSansHoraire+' présence(s) enfant sans horaire ni contrat n\'ont pas pu être comptées dans la ligne « Nombre d\'enfants accueillis ».');
+    if(!capacite)reserves.push('Aucune capacité d\'accueil n\'est renseignée sur la fiche de la crèche : la case correspondante reste vide et le dépassement de capacité n\'a pas pu être vérifié.');
+
+    const nbAnomalies=controles.reduce((n,c)=>n+c.stats.anomalies.length,0);
+    pmiAfficherControles(controles,reserves,capacite);
+    showBanner(nbAnomalies||reserves.length
+      ? 'Planning PMI généré — '+(nbAnomalies||'aucun')+' point'+(nbAnomalies>1?'s':'')+' de vigilance à vérifier.'
+      : 'Planning PMI généré ✅', (nbAnomalies||reserves.length)?'error':undefined);
   }catch(e){
     console.error('[pmiGenerateExcel]',e);
     showBanner('Erreur lors de la génération du fichier : '+e.message,'error');
