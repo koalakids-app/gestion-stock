@@ -581,6 +581,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </select>
         </div>
         <span id="pe-badge" style="font-size:11px;background:#f0f0f5;color:#888;padding:2px 9px;border-radius:10px;font-weight:600">👁 Lecture seule</span>
+        <span id="pe-import-info" style="font-size:11px;font-style:italic"></span>
         <select id="pe-print-weeks" class="finput" style="font-size:11px;padding:4px 6px;width:auto" title="Nombre de semaines sur la page imprimée">
           <option value="1">1 semaine / page</option>
           <option value="2">2 semaines / page</option>
@@ -2730,9 +2731,20 @@ async function renderPresenceHebdo(){
       +'Les jours affichés sont la semaine type de chaque enfant, déduite des 4 semaines précédentes. '
       +'Vérifiez-les avant de commander : ils seront remplacés dès l’import du vrai planning.</div>'
     :'';
-  const entete='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+rows.length+' enfant(s) présent(s) au moins un jour'
-    +(_hebdoSource==='prevision'?' · <span style="color:var(--orange-dark);font-weight:600">prévision</span>':'')+'</div>';
+  const entete='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'
+    +'<span>'+rows.length+' enfant(s) présent(s) au moins un jour</span>'
+    +(_hebdoSource==='prevision'?' · <span style="color:var(--orange-dark);font-weight:600">prévision</span>':'')
+    +'<span id="hebdo-import-info"></span></div>';
   view.innerHTML=bandeauPrev+entete+stripHtml+(_hebdoView==='synthese'?synth:grille);
+
+  // Fraîcheur des présences de la semaine affichée, chargée sans retarder le rendu.
+  const infoPres=document.getElementById('hebdo-import-info');
+  if(infoPres&&_hebdoSource!=='prevision'){
+    ipDateDernierePresence(crecheId,dateStrs).then(function(d){
+      if(!d||!document.body.contains(infoPres))return;
+      infoPres.innerHTML=' · '+ipLibelleFraicheur('saisies le',d);
+    });
+  }
 }
 window.renderPresenceHebdo=renderPresenceHebdo;
 
@@ -4426,6 +4438,54 @@ function openImportPlanningModal(){
   document.getElementById('modal-import-planning-wrap').classList.add('open');
 }
 
+/* ── Fraîcheur des données importées ────────────────────────────────────────
+   Savoir quand remonte le dernier import évite de travailler sur un planning périmé et
+   permet d'anticiper le suivant. Le repère existant ne vivait que dans le localStorage de
+   l'appareil ayant fait l'import : invisible pour les autres. On lit donc la date en base,
+   avec repli sur le repère local — `created_at` n'existe pas forcément sur ces tables, et
+   mieux vaut une date locale qu'une date fausse. */
+function ipAgeLisible(d){
+  const jours=Math.floor((new Date()-d)/86400000);
+  if(jours<=0)return "aujourd'hui";
+  if(jours===1)return 'hier';
+  if(jours<7)return 'il y a '+jours+' jours';
+  if(jours<14)return 'il y a une semaine';
+  return 'il y a '+Math.floor(jours/7)+' semaines';
+}
+function ipLibelleFraicheur(prefixe,d){
+  if(!d)return '';
+  const jours=Math.floor((new Date()-d)/86400000);
+  const couleur=jours>=7?'var(--orange-dark)':'var(--muted)';
+  return '<span style="color:'+couleur+'">'+prefixe+' '
+    +d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' à '
+    +d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})
+    +' · '+ipAgeLisible(d)+'</span>';
+}
+async function ipDateDernierImportPlanning(crecheId){
+  try{
+    const{data,error}=await sb.from('planning_equipe').select('created_at')
+      .eq('creche_id',crecheId).not('import_batch_id','is',null)
+      .order('created_at',{ascending:false}).limit(1);
+    if(!error&&data&&data.length&&data[0].created_at)return new Date(data[0].created_at);
+  }catch(e){/* colonne absente : on retombe sur le repère local */}
+  try{
+    const raw=localStorage.getItem('lastImportBatch_'+crecheId);
+    if(raw){const d=new Date(JSON.parse(raw).date);if(!isNaN(d))return d;}
+  }catch(e){}
+  return null;
+}
+async function ipDateDernierePresence(crecheId,dateStrs){
+  try{
+    const ids=(cacheEnfants||[]).filter(e=>e.creche_id===crecheId).map(e=>e.id);
+    if(!ids.length)return null;
+    const{data,error}=await sb.from('presences').select('created_at')
+      .in('presence_date',dateStrs).in('enfant_id',ids)
+      .order('created_at',{ascending:false}).limit(1);
+    if(!error&&data&&data.length&&data[0].created_at)return new Date(data[0].created_at);
+  }catch(e){}
+  return null;
+}
+
 function showLastImportZone(crecheId){
   const zone=document.getElementById('ip-last-import-zone');
   if(!zone)return;
@@ -5026,6 +5086,21 @@ async function renderPlanningEquipe(){
     else{peBadge.textContent='👁 Lecture seule';peBadge.style.background='#f0f0f5';peBadge.style.color='#888';}
   }
   wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
+
+  const info=document.getElementById('pe-import-info');
+  if(info){
+    info.innerHTML='';
+    ipDateDernierImportPlanning(crecheId).then(function(d){
+      // La crèche affichée a pu changer pendant la requête.
+      if(document.getElementById('pe-creche-select')&&getPlanningEquipeCrecheId()!==crecheId)return;
+      info.innerHTML=d?ipLibelleFraicheur('Importé le',d)
+                      :'<span style="color:var(--muted)">Aucun import enregistré</span>';
+    });
+  }
+}
+function getPlanningEquipeCrecheId(){
+  const sel=document.getElementById('pe-creche-select');
+  return isDirection?(sel?sel.value:''):currentProfile?.creche_id;
 }
 
 function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPrint,nbWeeksOnPage){
@@ -8410,6 +8485,8 @@ Désactivez le filtre pour retrouver la <strong>liste complète</strong> des ins
   <li><strong>Jour</strong> — la vue Gantt décrite ci-dessus. C’est le seul onglet où l’on pointe les présences. On y trouve le sélecteur de date et ses flèches, <strong>Appliquer les contrats</strong>, <strong>Ajouter à la journée</strong> et <strong>Exporter</strong> (récapitulatif de la journée choisie).</li>
   <li><strong>Semaine</strong> — la vue de contrôle et d’export hebdomadaire, avec sa propre navigation de semaine en semaine. Elle remplace l’ancienne vue « Semaine » en carrés matin/après-midi, qui n’apportait rien de plus.</li>
 </ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🕒 Depuis quand les données datent-elles&nbsp;?</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">En haut de la grille hebdomadaire, à côté du nombre d’enfants, la date de <strong>dernière saisie</strong> des présences de la semaine affichée. Elle passe en <strong style="color:#C95F0A">orange au-delà de sept jours</strong> : le signe qu’un nouvel import est sans doute à faire. L’information est lue en base, elle est donc la même pour tout le monde, quel que soit l’appareil ayant fait l’import.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📅 L’onglet Semaine en détail</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li><strong>Grille</strong> : une ligne par enfant, une colonne par jour, avec les horaires réels. En tête, une carte par jour donne l’effectif et sa répartition par tranche d’âge.</li>
@@ -8446,6 +8523,7 @@ planning: `
   <li>Il se remplit par l’<strong>import PDF</strong> (le même que les présences enfants, dans l’onglet Présences) ou par import d’un fichier Excel. Chaque case reste modifiable à la main d’un clic.</li>
   <li><strong>Imprimer / PDF</strong> et <strong>Envoyer par mail</strong> produisent le planning sur 1 à 4 semaines, selon le sélecteur juste à côté.</li>
   <li><strong>Export PMI</strong> génère le tableau réglementaire à transmettre à la PMI — voir l’onglet <strong>📋 Export PMI</strong> de cette notice.</li>
+  <li>La date du <strong>dernier import</strong> est rappelée en haut du planning, à côté du badge Modifiable / Lecture seule. Elle passe en <strong style="color:#C95F0A">orange au-delà de sept jours</strong>, pour anticiper le prochain import.</li>
 </ul>`,
 
 pmi: `
