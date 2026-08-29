@@ -291,6 +291,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .module-tab.active{color:var(--koala);border-bottom-color:var(--orange);font-weight:700}
 .module-tab-content{display:none}
 .module-tab-content.active{display:block}
+/* Contrôles propres à la vue Jour : masqués dans la vue Semaine, où ils agiraient
+   sur une date qu'on ne regarde pas et feraient doublon avec l'export hebdomadaire. */
+.pres-masque{display:none !important}
 
 /* LOADING */
 .loading-screen{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;z-index:200}
@@ -449,7 +452,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="section-header">
       <div class="section-left">
         <span class="section-title"><i class="ti ti-users-group" style="color:var(--koala)"></i> Feuille de présence</span>
-        <div style="display:flex;align-items:center;gap:4px">
+        <div class="pres-jour-only" style="display:flex;align-items:center;gap:4px">
           <button class="ibtn" onclick="presenceMoveDate(-1)" title="Jour précédent" style="padding:5px 9px;font-size:15px">◀</button>
           <input type="date" class="finput" id="presence-date" style="width:150px" onchange="renderPresence()">
           <button class="ibtn" onclick="presenceMoveDate(1)" title="Jour suivant" style="padding:5px 9px;font-size:15px">▶</button>
@@ -460,10 +463,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="fchip active" id="pres-filter-chip" onclick="presToggleFilterPresents()" title="N’afficher que les enfants présents ce jour"><i class="ti ti-filter"></i> Présents uniquement</button>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn-sm" onclick="presApplyContrats()" title="Marquer présents les enfants dont le contrat couvre ce jour"><i class="ti ti-calendar-check"></i> Appliquer les contrats</button>
-        <button class="btn-sm" onclick="presOpenAddDay()"><i class="ti ti-user-plus"></i> Ajouter à la journée</button>
-        <button class="btn-sm" onclick="openUnifiedImportModal()"><i class="ti ti-file-import"></i> Importer PDF (présences + planning)</button>
-        <button class="btn-green" onclick="exportPresence()"><i class="ti ti-download"></i> Exporter</button>
+        <button class="btn-sm pres-jour-only" onclick="presApplyContrats()" title="Marquer présents les enfants dont le contrat couvre ce jour"><i class="ti ti-calendar-check"></i> Appliquer les contrats</button>
+        <button class="btn-sm pres-jour-only" onclick="presOpenAddDay()"><i class="ti ti-user-plus"></i> Ajouter à la journée</button>
+        <button class="btn-sm" onclick="openUnifiedImportModal()"><i class="ti ti-file-import"></i> Importer PDF</button>
+        <button class="btn-green pres-jour-only" onclick="exportPresence()"><i class="ti ti-download"></i> Exporter</button>
       </div>
     </div>
     <div class="module-tabs" style="margin-top:2px">
@@ -1691,7 +1694,7 @@ function showMain(tab){
   if(tab==='demands'){renderCrecheTabs();setTimeout(markConsignesRead,600);}
   if(tab==='referents')renderReferents();
   if(tab==='incidents')renderIncidents();
-  if(tab==='presence'){initPresenceDate();renderPresence();}
+  if(tab==='presence'){initPresenceDate();presMajBarre();renderPresence();}
   if(tab==='evenements')renderCalendar();
   if(tab==='dashboard')renderDashboard();
   if(tab==='ref-dashboard')renderRefDashboard();
@@ -2199,7 +2202,16 @@ function initPresenceDate(){
     if(activeCrecheId&&activeCrecheId!=='all'&&!sel.value)sel.value=activeCrecheId;
   }
 }
-function showPresenceTab(tab,btn){document.querySelectorAll('#main-presence .module-tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('#main-presence .module-tab-content').forEach(c=>c.classList.remove('active'));btn.classList.add('active');document.getElementById('presence-'+tab).classList.add('active');currentPresenceSlot=tab;renderPresence();}
+function showPresenceTab(tab,btn){document.querySelectorAll('#main-presence .module-tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('#main-presence .module-tab-content').forEach(c=>c.classList.remove('active'));btn.classList.add('active');document.getElementById('presence-'+tab).classList.add('active');currentPresenceSlot=tab;presMajBarre();renderPresence();}
+// N'affiche que les commandes utiles à l'onglet courant.
+function presMajBarre(){
+  const jour=currentPresenceSlot!=='hebdo';
+  document.querySelectorAll('#main-presence .pres-jour-only')
+    .forEach(el=>el.classList.toggle('pres-masque',!jour));
+  const chip=document.getElementById('pres-filter-chip');
+  if(chip)chip.title=jour?'N\u2019afficher que les enfants pr\u00e9sents ce jour'
+                         :'N\u2019afficher que les enfants pr\u00e9sents dans la semaine';
+}
 async function renderPresence(){
   if(currentPresenceSlot==='hebdo'){await renderPresenceHebdo();return;}
   await renderPresenceGantt();
@@ -2487,7 +2499,13 @@ async function renderPresenceHebdo(){
   if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';_hebdoExportCtx=null;if(lblEl)lblEl.textContent='';return;}
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
   const dateStrs=days5.map(d=>ipDateToLocalISO(d));
-  if(lblEl)lblEl.textContent='Semaine du '+days5[0].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'})+' au '+days5[4].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  // Libellé compact : les dates jour par jour figurent déjà sur les cartes en dessous.
+  if(lblEl){
+    const memeMois=days5[0].getMonth()===days5[4].getMonth();
+    lblEl.textContent=days5[0].getDate()
+      +(memeMois?'':' '+days5[0].toLocaleDateString('fr-FR',{month:'long'}))
+      +' au '+days5[4].toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+  }
   const allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistré.</p></div>';_hebdoExportCtx=null;return;}
   view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement…</div>';
@@ -2681,7 +2699,7 @@ async function renderPresenceHebdo(){
       +'Les jours affichés sont la semaine type de chaque enfant, déduite des 4 semaines précédentes. '
       +'Vérifiez-les avant de commander : ils seront remplacés dès l’import du vrai planning.</div>'
     :'';
-  const entete='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+rows.length+' enfant(s) présent(s) au moins un jour — '+escHtml(crecheLbl)
+  const entete='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+rows.length+' enfant(s) présent(s) au moins un jour'
     +(_hebdoSource==='prevision'?' · <span style="color:var(--orange-dark);font-weight:600">prévision</span>':'')+'</div>';
   view.innerHTML=bandeauPrev+entete+stripHtml+(_hebdoView==='synthese'?synth:grille);
 }
