@@ -5253,20 +5253,45 @@ async function printPlanningCoord(){
 // Les deux groupes reprennent tels quels le 1° et le 2° de l'art. R2324-42 du code de la
 // santé publique : ils déterminent automatiquement si les heures d'un·e salarié·e comptent
 // dans la colonne « personnel diplômé » ou « personnel qualifié » du tableau PMI.
+// Diplômes cités au 1° de l'article R2324-42 : ils relèvent du 1° quelle que soit l'ancienneté.
 const PMI_QUALIF_DIPLOME=[
   'Puéricultrice DE','Éducateur·trice de jeunes enfants DE','Auxiliaire de puériculture DE',
   'Infirmier·ère DE','Psychomotricien·ne DE'
 ];
+// Qualifications du 2° tant que l'ancienneté requise n'est pas atteinte.
 const PMI_QUALIF_QUALIFIE=[
-  'CAP AEPE',"Assistant·e maternel·le agréé·e (3 ans d'expérience)",
-  'Alternant·e EJE','Alternant·e CAP AEPE','Autre (niveau V + 2 ans d’expérience)'
+  'CAP AEPE',"Assistant·e maternel·le agréé·e",
+  'Alternant·e EJE','Alternant·e CAP AEPE','Autre (certification niveau V petite enfance)'
 ];
 const PMI_QUALIF_OPTIONS=[...PMI_QUALIF_DIPLOME,...PMI_QUALIF_QUALIFIE];
-function pmiQualifEstDiplome(q){return PMI_QUALIF_DIPLOME.includes(q);}
+
+/* Substitution propre aux MICRO-CRÈCHES, prévue par R2324-42 et rappelée en bas du modèle :
+   « les professionnels du 1° peuvent être remplacés par des personnes qui justifient d'une
+   certification au moins de niveau V […] attestant de compétences dans le champ de l'accueil
+   des jeunes enfants et de deux années d'expérience professionnelle, ou d'une expérience
+   professionnelle de trois ans comme assistant maternel agréé ».
+
+   Un CAP AEPE (certification de niveau V petite enfance) comptabilisé avec l'ancienneté
+   requise bascule donc dans le 1°, c'est-à-dire dans les 40 % de personnel diplômé. Comme
+   cela dépend de l'ancienneté de chaque personne — que l'application ne connaît pas — c'est
+   une case à cocher dans la modale d'export, mémorisée ensuite par crèche.
+   Les alternant·e·s en sont exclus : leur diplôme n'est pas encore acquis. */
+const PMI_QUALIF_SANS_SUBSTITUTION=['Alternant·e EJE','Alternant·e CAP AEPE'];
+function pmiQualifEligibleSubstitution(q){
+  return !!q && !PMI_QUALIF_DIPLOME.includes(q) && !PMI_QUALIF_SANS_SUBSTITUTION.includes(q);
+}
+function pmiQualifEstDiplome(q,experience){
+  if(PMI_QUALIF_DIPLOME.includes(q))return true;
+  return !!experience&&pmiQualifEligibleSubstitution(q);
+}
 
 function pmiQualifKey(crecheId,prenom){return 'pmiQualif_'+crecheId+'_'+prenom;}
 function pmiQualifGet(crecheId,prenom){try{return localStorage.getItem(pmiQualifKey(crecheId,prenom))||'';}catch(e){return '';}}
 function pmiQualifSet(crecheId,prenom,val){try{localStorage.setItem(pmiQualifKey(crecheId,prenom),val);}catch(e){}}
+
+function pmiExpKey(crecheId,prenom){return 'pmiExp_'+crecheId+'_'+prenom;}
+function pmiExpGet(crecheId,prenom){try{return localStorage.getItem(pmiExpKey(crecheId,prenom))==='1';}catch(e){return false;}}
+function pmiExpSet(crecheId,prenom,val){try{localStorage.setItem(pmiExpKey(crecheId,prenom),val?'1':'0');}catch(e){}}
 
 // Noms de famille : planning_equipe ne stocke que le prénom (c'est la clé de l'import
 // Gertrude). La PMI attend pourtant un nom complet, on le saisit donc une fois dans la
@@ -5324,8 +5349,11 @@ function pmiInjecterModale(){
   <div class="modal" style="max-width:560px;max-height:86vh;display:flex;flex-direction:column">
     <h3><i class="ti ti-file-spreadsheet"></i> Export planning PMI</h3>
     <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i>
-      Vérifiez la qualification de chaque salarié·e (mémorisée pour les prochains exports de cette crèche),
-      puis générez le fichier Excel au format PMI.</div>
+      Vérifiez le nom et la qualification de chaque salarié·e (mémorisés pour les prochains exports de
+      cette crèche), puis générez le fichier Excel au format PMI.<br>
+      En micro-crèche, une certification de niveau V petite enfance (CAP AEPE) compte dans le
+      <strong>1°</strong> — le personnel diplômé des 40 % — dès <strong>2 ans d'expérience</strong>
+      (3 ans pour un·e assistant·e maternel·le agréé·e) : cochez la case correspondante.</div>
     <div id="pmi-export-subtitle" style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:600"></div>
     <div id="pmi-export-list" style="overflow-y:auto;flex:1;margin-bottom:14px"></div>
     <div class="mactions">
@@ -5375,11 +5403,18 @@ async function pmiOpenExportModal(){
       +'<option value="__autre__"'+(saved&&!PMI_QUALIF_OPTIONS.includes(saved)?' selected':'')+'>Autre (saisir)…</option>';
     const autreVal=(saved&&!PMI_QUALIF_OPTIONS.includes(saved))?saved:'';
     const nom=pmiNomGet(crecheId,p)||pmiNomDepuisAnnuaire(crecheId,p);
-    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
+    const exp=pmiExpGet(crecheId,p);
+    const qualifCourante=(saved&&!PMI_QUALIF_OPTIONS.includes(saved))?saved:saved;
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
       +'<div style="flex:0 0 90px;font-size:13px;font-weight:600">'+escHtml(p)+'</div>'
       +'<input class="finput pmi-nom" data-prenom="'+escHtml(p)+'" placeholder="Nom de famille" value="'+escHtml(nom)+'" style="flex:0 0 130px;font-size:12px">'
       +'<select class="finput pmi-qualif-sel" data-prenom="'+escHtml(p)+'" style="flex:1;min-width:140px;font-size:12px" onchange="pmiOnQualifChange(this)">'+opts+'</select>'
       +'<input class="finput pmi-qualif-autre" data-prenom="'+escHtml(p)+'" placeholder="Qualification…" value="'+escHtml(autreVal)+'" style="flex:1;min-width:140px;font-size:12px;display:'+(autreVal?'':'none')+'">'
+      +'<label class="pmi-exp-wrap" data-prenom="'+escHtml(p)+'" style="flex:0 0 100%;font-size:12px;color:var(--muted);display:'
+        +(pmiQualifEligibleSubstitution(qualifCourante)?'flex':'none')+';align-items:center;gap:6px;margin-left:98px" '
+        +'title="R2324-42 : en micro-crèche, une certification de niveau V petite enfance vaut personnel du 1° à partir de 2 ans d’expérience (3 ans pour un·e assistant·e maternel·le agréé·e).">'
+      +'<input type="checkbox" class="pmi-exp" data-prenom="'+escHtml(p)+'"'+(exp?' checked':'')+'> '
+      +'Ancienneté requise atteinte — compte dans le 1° (personnel diplômé)</label>'
       +'</div>';
   }).join('');
   document.getElementById('modal-pmi-export-wrap').classList.add('open');
@@ -5387,8 +5422,21 @@ async function pmiOpenExportModal(){
 window.pmiOpenExportModal=pmiOpenExportModal;
 
 function pmiOnQualifChange(sel){
-  const autre=document.querySelector('.pmi-qualif-autre[data-prenom="'+sel.dataset.prenom.replace(/"/g,'\\"')+'"]');
+  const prenom=sel.dataset.prenom.replace(/"/g,'\\"');
+  const autre=document.querySelector('.pmi-qualif-autre[data-prenom="'+prenom+'"]');
   if(autre)autre.style.display=sel.value==='__autre__'?'':'none';
+  // La case d'ancienneté n'a de sens que pour les qualifications éligibles à la
+  // substitution micro-crèche : inutile pour un diplôme du 1°, exclue pour un·e alternant·e.
+  const exp=document.querySelector('.pmi-exp-wrap[data-prenom="'+prenom+'"]');
+  if(exp){
+    const q=sel.value==='__autre__'?(autre?autre.value.trim():''):sel.value;
+    const visible=sel.value==='__autre__'||pmiQualifEligibleSubstitution(q);
+    exp.style.display=visible?'flex':'none';
+    if(!visible){
+      const c=document.querySelector('.pmi-exp[data-prenom="'+prenom+'"]');
+      if(c)c.checked=false;
+    }
+  }
 }
 window.pmiOnQualifChange=pmiOnQualifChange;
 
@@ -5401,6 +5449,18 @@ function pmiCollectQualifs(){
     const val=(sel&&sel.value==='__autre__')?(autre?autre.value.trim():''):(sel?sel.value:'');
     map[p]=val;
     if(val)pmiQualifSet(ctx.crecheId,p,val);
+  });
+  return map;
+}
+
+function pmiCollectExperience(){
+  const ctx=_pmiExportCtx;
+  const map={};
+  ctx.staffList.forEach(p=>{
+    const c=document.querySelector('.pmi-exp[data-prenom="'+p.replace(/"/g,'\\"')+'"]');
+    const val=!!(c&&c.checked);
+    map[p]=val;
+    pmiExpSet(ctx.crecheId,p,val);
   });
   return map;
 }
@@ -5715,7 +5775,7 @@ function pmiTexteAvecRenvoi(cell,valeur){
     cell.style=Object.assign({},cell.style,{alignment:Object.assign({},cell.alignment,{wrapText:true})});
 }
 
-function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap,enfantsParDate,capacite){
+function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap,enfantsParDate,capacite,expMap){
   ws.getCell('B2').value=crecheName;
   ws.getCell('AZ1').value=weekInfo.dateDebut+' - '+weekInfo.dateFin;
 
@@ -5768,7 +5828,7 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
         if(colMax===null||c>colMax)colMax=c;
       });
       const h=Math.round((res.minutes/60)*100)/100;
-      const diplome=pmiQualifEstDiplome(qualifMap[p]);
+      const diplome=pmiQualifEstDiplome(qualifMap[p],expMap&&expMap[p]);
       ws.getCell(r,diplome?PMI_TPL_COL_DIPLOME:PMI_TPL_COL_QUALIFIE).value=h;
       if(diplome)totalDiplome+=h;else totalQualifie+=h;
     });
@@ -5875,6 +5935,7 @@ async function pmiGenerateExcel(){
   if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Génération…';}
   try{
     const qualifMap=pmiCollectQualifs();
+    const expMap=pmiCollectExperience();
     const nomMap=pmiCollectNoms();
     const colorMap=pmiBuildColorMap(ctx.staffList);
     const withData=ctx.weeks.filter(w=>w.rows.length);
@@ -5896,7 +5957,7 @@ async function pmiGenerateExcel(){
     const capacite=(cacheCreches||[]).find(c=>c.id===ctx.crecheId)?.capacity||null;
     const controles=withData.map((w,i)=>({
       semaine:w.dateDebut,
-      stats:pmiFillSheet(feuilles[i],w,ctx.crecheName,ctx.staffList,qualifMap,nomMap,colorMap,ctx.enfantsParDate,capacite)
+      stats:pmiFillSheet(feuilles[i],w,ctx.crecheName,ctx.staffList,qualifMap,nomMap,colorMap,ctx.enfantsParDate,capacite,expMap)
     }));
 
     const buf=await pmiRestaurerPoliceParDefaut(await wb.xlsx.writeBuffer());
