@@ -5289,6 +5289,21 @@ function pmiQualifKey(crecheId,prenom){return 'pmiQualif_'+crecheId+'_'+prenom;}
 function pmiQualifGet(crecheId,prenom){try{return localStorage.getItem(pmiQualifKey(crecheId,prenom))||'';}catch(e){return '';}}
 function pmiQualifSet(crecheId,prenom,val){try{localStorage.setItem(pmiQualifKey(crecheId,prenom),val);}catch(e){}}
 
+// Personne assurant la direction / le référent technique, et son volume de bureau
+// hebdomadaire : mémorisés par crèche pour ne les saisir qu'une fois.
+function pmiDirectionGet(crecheId){
+  try{
+    return{prenom:localStorage.getItem('pmiDirPrenom_'+crecheId)||'',
+           heures:parseFloat(localStorage.getItem('pmiDirHeures_'+crecheId))||0};
+  }catch(e){return{prenom:'',heures:0};}
+}
+function pmiDirectionSet(crecheId,prenom,heures){
+  try{
+    localStorage.setItem('pmiDirPrenom_'+crecheId,prenom||'');
+    localStorage.setItem('pmiDirHeures_'+crecheId,String(heures||0));
+  }catch(e){}
+}
+
 function pmiExpKey(crecheId,prenom){return 'pmiExp_'+crecheId+'_'+prenom;}
 function pmiExpGet(crecheId,prenom){try{return localStorage.getItem(pmiExpKey(crecheId,prenom))==='1';}catch(e){return false;}}
 function pmiExpSet(crecheId,prenom,val){try{localStorage.setItem(pmiExpKey(crecheId,prenom),val?'1':'0');}catch(e){}}
@@ -5356,6 +5371,19 @@ function pmiInjecterModale(){
       (3 ans pour un·e assistant·e maternel·le agréé·e) : cochez la case correspondante.</div>
     <div id="pmi-export-subtitle" style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:600"></div>
     <div id="pmi-export-list" style="overflow-y:auto;flex:1;margin-bottom:14px"></div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Temps de bureau (hors encadrement)</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <select class="finput" id="pmi-direction-prenom" style="flex:1;min-width:150px;font-size:12px"></select>
+        <input class="finput" id="pmi-direction-heures" type="number" min="0" max="35" step="0.25"
+               style="flex:0 0 90px;font-size:12px" placeholder="h / semaine">
+        <span style="font-size:12px;color:var(--muted)">h par semaine</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">
+        Ces heures sont reportées sur la ligne « Direction » et retirées du taux d'encadrement.
+        Elles sont placées automatiquement, dans les heures de travail de la personne, au moment
+        où son retrait pèse le moins sur l'accueil.</div>
+    </div>
     <div class="mactions">
       <button class="btn-cancel" onclick="closeModal('modal-pmi-export-wrap')">Annuler</button>
       <button class="btn-primary" id="pmi-export-btn" onclick="pmiGenerateExcel()"><i class="ti ti-download"></i> Générer le fichier Excel</button>
@@ -5393,6 +5421,17 @@ async function pmiOpenExportModal(){
   _pmiExportCtx={crecheId,crecheName,weeks,staffList,enfantsParDate:enfants.parDate,enfantsSansHoraire:enfants.sansHoraire};
 
   pmiInjecterModale();
+  // Direction : par défaut la référente de la crèche si elle figure au planning.
+  const selDir=document.getElementById('pmi-direction-prenom');
+  const dirEnregistree=pmiDirectionGet(crecheId);
+  const refCreche=(cacheReferents||[]).find(r=>r.creche_id===crecheId&&r.name
+    &&staffList.some(p=>p.toLowerCase()===String(r.name).trim().split(/\s+/)[0].toLowerCase()));
+  const dirDefaut=dirEnregistree.prenom
+    ||(refCreche?String(refCreche.name).trim().split(/\s+/)[0]:'');
+  selDir.innerHTML='<option value="">— Aucun temps de bureau —</option>'
+    +staffList.map(p=>'<option value="'+escHtml(p)+'"'+(p===dirDefaut?' selected':'')+'>'+escHtml(p)+'</option>').join('');
+  document.getElementById('pmi-direction-heures').value=dirEnregistree.heures||'';
+
   document.getElementById('pmi-export-subtitle').textContent=
     crecheName+' — '+(nbWeeks>1?nbWeeks+' semaines à partir du ':'semaine du ')+weeks[0].dateDebut;
   const list=document.getElementById('pmi-export-list');
@@ -5533,6 +5572,8 @@ const PMI_TPL_DAYS=[
   {jour:4, nom:73, staffFirst:74, staffLast:79, enfants:80, total:81}
 ];
 const PMI_LIBELLE_ENFANTS="Nombre d'enfants accueillis";
+const PMI_LIBELLE_DIRECTION='Direction';
+const PMI_LIBELLE_ENTRETIEN='Entretien/restauration';
 const PMI_TPL_COL_FIRST=4;      // D = 07h00-07h15
 const PMI_TPL_COL_LAST=51;      // AY = 18h45-19h00
 const PMI_TPL_COL_DIPLOME=52;   // AZ « Nbre heures personnel diplômé * »
@@ -5707,6 +5748,97 @@ function pmiControlerJournee(nomJour,comptesEnfants,staffParQuart,capacite,anoma
   clore(comptesEnfants.length);
 }
 
+/* ── Temps de bureau de la direction / du référent technique ───────────────
+   Ces heures sont travaillées mais ne relèvent pas de l'encadrement : le modèle leur
+   réserve la ligne « Direction », sous l'intitulé « Hors encadrement des enfants ». Elles
+   sont donc retirées des heures d'encadrement de la personne, du total du jour et du
+   décompte servant aux contrôles de taux.
+
+   Placement : on cherche, à l'intérieur des heures réellement travaillées ce jour-là, la
+   plage continue où le retrait de la personne pèse le moins sur l'accueil. Sont écartées
+   les plages qui laisseraient moins de deux professionnels avec quatre enfants ou plus
+   (R2324-43-1), ou plus aucun professionnel alors que des enfants sont présents. Parmi les
+   plages restantes, on privilégie celles où le plus de collègues restent sur le terrain,
+   puis celles où les enfants sont les moins nombreux — ce qui fait naturellement tomber le
+   temps de bureau sur le milieu de journée, quand les équipes du matin et de l'après-midi
+   se chevauchent. */
+const PMI_PENALITE_INTERDIT=100000;
+
+function pmiSegmentsContigus(cols){
+  if(!cols.length)return[];
+  const tri=cols.slice().sort((a,b)=>a-b),segs=[];
+  let seg=[tri[0]];
+  for(let i=1;i<tri.length;i++){
+    if(tri[i]===tri[i-1]+1)seg.push(tri[i]);
+    else{segs.push(seg);seg=[tri[i]];}
+  }
+  segs.push(seg);
+  return segs;
+}
+
+// Répartit le volume hebdomadaire de bureau sur les jours réellement travaillés par la
+// personne : 17,5 h sur cinq jours donnent 3,5 h par jour, mais si elle n'est là que quatre
+// jours cette semaine-là, le volume se répartit sur ces quatre jours. Le reliquat dû aux
+// arrondis au quart d'heure est ajouté aux premiers jours.
+function pmiRepartirBureau(weekInfo,prenom,heuresHebdo){
+  const quartsParJour=[0,0,0,0,0];
+  if(!prenom||!(heuresHebdo>0))return quartsParJour;
+  const dispo=[];
+  PMI_TPL_DAYS.forEach(day=>{
+    const src=weekInfo.rows.find(x=>x.jour===day.jour&&(x.prenom||'').trim()===prenom);
+    const res=src?pmiSlotsForRow(src):{cols:[]};
+    const n=(res.cols||[]).filter(c=>c>=PMI_TPL_COL_FIRST&&c<=PMI_TPL_COL_LAST).length;
+    if(n>0)dispo.push({jour:day.jour,max:n});
+  });
+  if(!dispo.length)return quartsParJour;
+  let restant=Math.round(heuresHebdo*4);
+  const base=Math.floor(restant/dispo.length);
+  dispo.forEach(d=>{const n=Math.min(base,d.max);quartsParJour[d.jour]=n;restant-=n;});
+  // reliquat : on complète jour par jour, sans dépasser les heures travaillées
+  for(let tour=0;tour<4&&restant>0;tour++){
+    dispo.forEach(d=>{
+      if(restant<=0)return;
+      if(quartsParJour[d.jour]<d.max){quartsParJour[d.jour]++;restant--;}
+    });
+  }
+  return quartsParJour;
+}
+
+// Le retrait de la personne ne doit jamais faire tomber l'accueil sous le minimum légal.
+function pmiRetraitInterdit(col,staffParQuart,comptesEnfants){
+  const i=col-PMI_TPL_COL_FIRST;
+  const enfants=comptesEnfants[i]||0;
+  const restants=(staffParQuart[i]||0)-1;
+  return(enfants>=PMI_ENFANTS_DECLENCHEUR&&restants<PMI_MINI_PROS)||(enfants>0&&restants<1);
+}
+
+/* On ne cherche que des plages SANS infraction : placer du temps de bureau ne doit jamais
+   créer un sous-effectif. Si la durée visée n'entre nulle part, on raccourcit la plage
+   plutôt que de la caser en force — le volume non placé est signalé à l'utilisateur. */
+function pmiChoisirCreneauBureau(colsTravaillees,nbQuarts,staffParQuart,comptesEnfants){
+  if(!colsTravaillees.length||nbQuarts<=0)return[];
+  const segments=pmiSegmentsContigus(colsTravaillees);
+  for(let n=Math.min(nbQuarts,colsTravaillees.length);n>=1;n--){
+    let meilleur=null;
+    segments.forEach(seg=>{
+      if(seg.length<n)return;
+      for(let d=0;d+n<=seg.length;d++){
+        const fenetre=seg.slice(d,d+n);
+        if(fenetre.some(c=>pmiRetraitInterdit(c,staffParQuart,comptesEnfants)))continue;
+        let score=0;
+        fenetre.forEach(c=>{
+          const i=c-PMI_TPL_COL_FIRST;
+          score-=((staffParQuart[i]||0)-1)*10;   // laisser le plus de collègues possible
+          score+=comptesEnfants[i]||0;           // à équipe égale, les moments les moins chargés
+        });
+        if(!meilleur||score<meilleur.score)meilleur={score,cols:fenetre};
+      }
+    });
+    if(meilleur)return meilleur.cols;
+  }
+  return[];
+}
+
 function pmiEcrireRecap(ws,stats,capacite){
   const arrondi=x=>Math.round(x*100)/100;
   const total=stats.heuresDiplome+stats.heuresQualifie;
@@ -5775,11 +5907,11 @@ function pmiTexteAvecRenvoi(cell,valeur){
     cell.style=Object.assign({},cell.style,{alignment:Object.assign({},cell.alignment,{wrapText:true})});
 }
 
-function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap,enfantsParDate,capacite,expMap){
+function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap,enfantsParDate,capacite,expMap,direction){
   ws.getCell('B2').value=crecheName;
   ws.getCell('AZ1').value=weekInfo.dateDebut+' - '+weekInfo.dateFin;
 
-  const stats={heuresDiplome:0,heuresQualifie:0,heuresOuverture:0,anomalies:[]};
+  const stats={heuresDiplome:0,heuresQualifie:0,heuresOuverture:0,heuresBureau:0,bureau:[],anomalies:[]};
 
   PMI_TPL_DAYS.forEach(day=>{
     // 1) remise à zéro : le modèle fourni contient encore quelques valeurs d'un remplissage
@@ -5798,13 +5930,44 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
     ws.getCell(day.total,PMI_TPL_COL_DIPLOME).value=null;
     ws.getCell(day.total,PMI_TPL_COL_QUALIFIE).value=null;
 
-    // 2) une ligne par salarié·e, dans l'ordre de la liste
+    // 2) créneaux de chacun, AVANT toute écriture : le placement du temps de bureau a
+    //    besoin de connaître l'équipe présente et l'effectif enfants de la journée.
     const dayRows=weekInfo.rows.filter(x=>x.jour===day.jour);
-    let totalDiplome=0,totalQualifie=0;
     const staffParQuart=new Array(PMI_TPL_COL_LAST-PMI_TPL_COL_FIRST+1).fill(0);
     let colMin=null,colMax=null;
-    staffList.slice(0,PMI_TPL_MAX_STAFF).forEach((p,i)=>{
-      const r=day.staffFirst+i;
+    const presences=staffList.slice(0,PMI_TPL_MAX_STAFF).map((p,i)=>{
+      const src=dayRows.find(x=>(x.prenom||'').trim()===p);
+      const res=src?pmiSlotsForRow(src):{cols:[],minutes:0};
+      const cols=(res.cols||[]).filter(c=>c>=PMI_TPL_COL_FIRST&&c<=PMI_TPL_COL_LAST);
+      cols.forEach(c=>{
+        // Un créneau travaillé = un professionnel présent auprès des enfants
+        // (la pause, absente de res.cols, ne compte donc pas dans l'encadrement).
+        staffParQuart[c-PMI_TPL_COL_FIRST]++;
+        if(colMin===null||c<colMin)colMin=c;
+        if(colMax===null||c>colMax)colMax=c;
+      });
+      return{prenom:p,ligne:day.staffFirst+i,cols:cols};
+    });
+
+    const dateISO=(weekInfo.dates||[])[day.jour];
+    const comptes=pmiComptesParQuart(enfantsParDate&&dateISO?enfantsParDate[dateISO]:null);
+
+    // 3) temps de bureau de la direction : retiré de l'encadrement, reporté ligne « Direction »
+    let colsBureau=[];
+    if(direction&&direction.quartsParJour[day.jour]>0){
+      const cible=presences.find(x=>x.prenom===direction.prenom);
+      if(cible&&cible.cols.length){
+        colsBureau=pmiChoisirCreneauBureau(cible.cols,direction.quartsParJour[day.jour],staffParQuart,comptes);
+        const retire=new Set(colsBureau);
+        cible.cols=cible.cols.filter(c=>!retire.has(c));
+        colsBureau.forEach(c=>{staffParQuart[c-PMI_TPL_COL_FIRST]--;});
+      }
+    }
+
+    // 4) écriture des lignes salarié·e·s
+    let totalDiplome=0,totalQualifie=0;
+    presences.forEach(x=>{
+      const p=x.prenom,r=x.ligne;
       const nomAffiche=pmiNomComplet(p,nomMap&&nomMap[p]);
       const qualif=qualifMap[p]||'';
       pmiTexteAvecRenvoi(ws.getCell(r,2),nomAffiche);
@@ -5813,40 +5976,43 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       const ligne=ws.getRow(r);
       const besoin=lignes*PMI_LIGNE_PT;
       if(besoin>(ligne.height||0))ligne.height=besoin;
-      const src=dayRows.find(x=>(x.prenom||'').trim()===p);
-      if(!src)return;
-      const res=pmiSlotsForRow(src);
-      if(!res.cols.length)return;
+      if(!x.cols.length)return;
       const argb=colorMap[p]||'FF3D3580';
-      res.cols.forEach(c=>{
-        if(c<PMI_TPL_COL_FIRST||c>PMI_TPL_COL_LAST)return;
-        pmiPeindre(ws.getCell(r,c),argb);
-        // Un créneau peint = un professionnel réellement présent auprès des enfants
-        // (la pause, absente de res.cols, ne compte donc pas dans l'encadrement).
-        staffParQuart[c-PMI_TPL_COL_FIRST]++;
-        if(colMin===null||c<colMin)colMin=c;
-        if(colMax===null||c>colMax)colMax=c;
-      });
-      const h=Math.round((res.minutes/60)*100)/100;
-      const diplome=pmiQualifEstDiplome(qualifMap[p],expMap&&expMap[p]);
+      x.cols.forEach(c=>pmiPeindre(ws.getCell(r,c),argb));
+      const h=Math.round(x.cols.length*0.25*100)/100;
+      const diplome=pmiQualifEstDiplome(qualif,expMap&&expMap[p]);
       ws.getCell(r,diplome?PMI_TPL_COL_DIPLOME:PMI_TPL_COL_QUALIFIE).value=h;
       if(diplome)totalDiplome+=h;else totalQualifie+=h;
     });
 
-    // 3) totaux du jour, sur la ligne « Hors encadrement » comme dans le modèle
+    // 5) totaux du jour, sur la ligne « Hors encadrement » comme dans le modèle
     if(totalDiplome)ws.getCell(day.total,PMI_TPL_COL_DIPLOME).value=Math.round(totalDiplome*100)/100;
     if(totalQualifie)ws.getCell(day.total,PMI_TPL_COL_QUALIFIE).value=Math.round(totalQualifie*100)/100;
 
-    // 4) nombre d'enfants accueillis, quart d'heure par quart d'heure
+    // 6) lignes « Direction » et « Entretien/restauration » : le modèle n'en porte le
+    //    libellé que le lundi, on le rétablit comme pour la ligne des enfants.
+    const rDirection=day.total+1,rEntretien=day.total+2;
+    if(!ws.getCell(rDirection,2).value)ws.getCell(rDirection,2).value=PMI_LIBELLE_DIRECTION;
+    if(!ws.getCell(rEntretien,2).value)ws.getCell(rEntretien,2).value=PMI_LIBELLE_ENTRETIEN;
+    for(let c=PMI_TPL_COL_FIRST;c<=PMI_TPL_COL_LAST;c++)pmiEffacerFond(ws.getCell(rDirection,c));
+    if(colsBureau.length){
+      const argb=(direction&&colorMap[direction.prenom])||'FF3D3580';
+      colsBureau.forEach(c=>pmiPeindre(ws.getCell(rDirection,c),argb));
+      const segs=pmiSegmentsContigus(colsBureau)
+        .map(s=>pmiHeureDeQuart(s[0]-PMI_TPL_COL_FIRST)+'–'+pmiHeureDeQuart(s[s.length-1]-PMI_TPL_COL_FIRST+1));
+      stats.bureau.push(PMI_NOMS_JOURS[day.jour]+' '+segs.join(' et ')
+        +' ('+(Math.round(colsBureau.length*0.25*100)/100)+' h)');
+      stats.heuresBureau+=colsBureau.length*0.25;
+    }
+
+    // 7) nombre d'enfants accueillis, quart d'heure par quart d'heure
     if(!ws.getCell(day.enfants,2).value)ws.getCell(day.enfants,2).value=PMI_LIBELLE_ENFANTS;
-    const dateISO=(weekInfo.dates||[])[day.jour];
-    const comptes=pmiComptesParQuart(enfantsParDate&&dateISO?enfantsParDate[dateISO]:null);
     for(let c=PMI_TPL_COL_FIRST;c<=PMI_TPL_COL_LAST;c++){
       const n=comptes[c-PMI_TPL_COL_FIRST];
       ws.getCell(day.enfants,c).value=n>0?n:null;   // hors accueil : case laissée vide
     }
 
-    // 5) cumuls de la semaine et contrôles réglementaires du jour
+    // 8) cumuls de la semaine et contrôles réglementaires du jour
     stats.heuresDiplome+=totalDiplome;
     stats.heuresQualifie+=totalQualifie;
     // Amplitude d'ouverture : de la première arrivée au dernier départ, pauses incluses.
@@ -5914,6 +6080,10 @@ function pmiAfficherControles(controles,reserves,capacite){
       +'<div style="color:var(--muted);font-size:12px;margin-bottom:6px">'
       +'Heures d\'encadrement : '+(Math.round(tot*100)/100)+' h — dont '+part+' % de personnel diplômé'
       +(capacite?' · capacité : '+capacite+' enfants':'')+'</div>';
+    if(s.bureau.length)
+      html+='<div style="font-size:12px;margin-bottom:6px">'
+        +'<span style="font-weight:600">Temps de bureau placé :</span> '
+        +escHtml(s.bureau.join(' · '))+'</div>';
     html+=s.anomalies.length
       ? '<ul style="margin:0 0 0 18px;padding:0">'+s.anomalies.map(a=>'<li>'+escHtml(a)+'</li>').join('')+'</ul>'
       : '<div style="color:var(--koala)">✅ Aucune anomalie détectée.</div>';
@@ -5955,9 +6125,16 @@ async function pmiGenerateExcel(){
     wb.worksheets.slice().forEach(w=>{if(/^Feuil[23]$/.test(w.name))wb.removeWorksheet(w.id);});
 
     const capacite=(cacheCreches||[]).find(c=>c.id===ctx.crecheId)?.capacity||null;
+
+    // Temps de bureau de la direction : la répartition dépend des jours réellement
+    // travaillés, elle est donc recalculée pour chaque semaine exportée.
+    const dirPrenom=(document.getElementById('pmi-direction-prenom')||{}).value||'';
+    const dirHeures=parseFloat((document.getElementById('pmi-direction-heures')||{}).value)||0;
+    pmiDirectionSet(ctx.crecheId,dirPrenom,dirHeures);
     const controles=withData.map((w,i)=>({
       semaine:w.dateDebut,
-      stats:pmiFillSheet(feuilles[i],w,ctx.crecheName,ctx.staffList,qualifMap,nomMap,colorMap,ctx.enfantsParDate,capacite,expMap)
+      stats:pmiFillSheet(feuilles[i],w,ctx.crecheName,ctx.staffList,qualifMap,nomMap,colorMap,ctx.enfantsParDate,capacite,expMap,
+        (dirPrenom&&dirHeures>0)?{prenom:dirPrenom,quartsParJour:pmiRepartirBureau(w,dirPrenom,dirHeures)}:null)
     }));
 
     const buf=await pmiRestaurerPoliceParDefaut(await wb.xlsx.writeBuffer());
@@ -5973,6 +6150,14 @@ async function pmiGenerateExcel(){
     if(trop>0)reserves.push('Le modèle ne comporte que '+PMI_TPL_MAX_STAFF+' lignes par jour : '+trop+' personne(s) ne figurent pas dans le fichier.');
     if(ctx.enfantsSansHoraire)reserves.push(ctx.enfantsSansHoraire+' présence(s) enfant sans horaire ni contrat n\'ont pas pu être comptées dans la ligne « Nombre d\'enfants accueillis ».');
     if(!capacite)reserves.push('Aucune capacité d\'accueil n\'est renseignée sur la fiche de la crèche : la case correspondante reste vide et le dépassement de capacité n\'a pas pu être vérifié.');
+    if(dirPrenom&&dirHeures>0){
+      const place=controles.reduce((n,c)=>n+c.stats.heuresBureau,0);
+      const attendu=dirHeures*controles.length;
+      if(Math.abs(place-attendu)>0.25)
+        reserves.push('Temps de bureau : '+(Math.round(place*100)/100)+' h ont pu être placées sur '
+          +(Math.round(attendu*100)/100)+' h attendues — les heures de travail de '+dirPrenom
+          +' ne suffisent pas à les absorber sur certaines semaines.');
+    }
 
     const nbAnomalies=controles.reduce((n,c)=>n+c.stats.anomalies.length,0);
     pmiAfficherControles(controles,reserves,capacite);
