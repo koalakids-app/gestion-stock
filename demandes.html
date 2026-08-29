@@ -468,14 +468,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="module-tabs" style="margin-top:2px">
       <button class="module-tab active" onclick="showPresenceTab('gantt',this)"><i class="ti ti-clock"></i> Jour</button>
-      <button class="module-tab" onclick="showPresenceTab('semaine',this)"><i class="ti ti-calendar-week"></i> Semaine</button>
-      <button class="module-tab" onclick="showPresenceTab('hebdo',this)"><i class="ti ti-table"></i> Vue hebdomadaire (export)</button>
+      <button class="module-tab" onclick="showPresenceTab('hebdo',this)"><i class="ti ti-calendar-week"></i> Semaine</button>
     </div>
     <div id="presence-gantt" class="module-tab-content active">
       <div id="presence-gantt-view"></div>
-    </div>
-    <div id="presence-semaine" class="module-tab-content">
-      <div id="presence-semaine-view"></div>
     </div>
     <div id="presence-hebdo" class="module-tab-content">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
@@ -2205,7 +2201,6 @@ function initPresenceDate(){
 }
 function showPresenceTab(tab,btn){document.querySelectorAll('#main-presence .module-tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('#main-presence .module-tab-content').forEach(c=>c.classList.remove('active'));btn.classList.add('active');document.getElementById('presence-'+tab).classList.add('active');currentPresenceSlot=tab;renderPresence();}
 async function renderPresence(){
-  if(currentPresenceSlot==='semaine'){await renderPresenceSemaine();return;}
   if(currentPresenceSlot==='hebdo'){await renderPresenceHebdo();return;}
   await renderPresenceGantt();
 }
@@ -2402,29 +2397,6 @@ async function renderPresenceGantt(){
   const crecheLbl=(cacheCreches.find(c=>c.id===crecheId)||{}).name||'';
   const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+(crecheLbl?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml(crecheLbl)+'</span>':'')+'</div>';
   view.innerHTML=dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
-}
-
-async function renderPresenceSemaine(){
-  const ws=weekStart(),view=document.getElementById('presence-semaine-view');
-  if(!view)return;
-  const crecheId=getPresenceCrecheId();
-  if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
-  const allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
-  if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant.</p></div>';return;}
-  const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  const dateStrs=days5.map(d=>ipDateToLocalISO(d));
-  const{data:presData}=await sb.from('presences').select('*').in('presence_date',dateStrs).in('enfant_id',allEnfants.map(e=>e.id));
-  const pm={};(presData||[]).forEach(p=>pm[p.enfant_id+'_'+p.presence_date+'_'+p.slot]=p.status);
-  const semPresentIds=new Set((presData||[]).filter(p=>p.status==='present'||p.status==='partial').map(p=>p.enfant_id));
-  const enfants=presOnlyPresents?allEnfants.filter(e=>semPresentIds.has(e.id)):allEnfants;
-  if(!enfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant pr\u00e9sent cette semaine.</p></div>';return;}
-  const dc={present:'#2a9d4e',absent:'#e03e3e',partial:'#F47920','':'#e0dff0'};
-  const fmt=d=>d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'2-digit'});
-  let html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--koala);color:#fff"><th style="padding:8px 10px;text-align:left">Enfant</th>';
-  days5.forEach(d=>{html+='<th style="padding:8px 6px;text-align:center">'+fmt(d)+'<br><span style="font-size:9px;opacity:0.7">M/A</span></th>';});
-  html+='</tr></thead><tbody>';
-  enfants.forEach((e,idx)=>{html+='<tr style="background:'+(idx%2===0?'#fff':'#EEEDF8')+'"><td style="padding:8px 10px;font-weight:600;color:var(--koala)">'+e.prenom+' '+e.nom+'</td>';days5.forEach(d=>{const ds=ipDateToLocalISO(d),m=pm[e.id+'_'+ds+'_M']||'',a=pm[e.id+'_'+ds+'_A']||'';html+='<td style="text-align:center;padding:6px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:'+dc[m]+';margin-right:2px"></span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:'+dc[a]+'"></span></td>';});html+='</tr>';});
-  html+='</tbody></table></div>';view.innerHTML=html;
 }
 
 // ── VUE HEBDOMADAIRE ──
@@ -5304,6 +5276,24 @@ function pmiDirectionSet(crecheId,prenom,heures){
   }catch(e){}
 }
 
+// Volume quotidien de repas/entretien et horaires d'accueil des enfants, par crèche.
+const PMI_OUVERTURE_DEFAUT='07:30',PMI_FERMETURE_DEFAUT='18:30',PMI_ENTRETIEN_DEFAUT=3.5;
+function pmiEntretienGet(crecheId){
+  try{
+    const h=localStorage.getItem('pmiEntHeures_'+crecheId);
+    return{heures:h===null?PMI_ENTRETIEN_DEFAUT:(parseFloat(h)||0),
+           ouverture:localStorage.getItem('pmiEntOuv_'+crecheId)||PMI_OUVERTURE_DEFAUT,
+           fermeture:localStorage.getItem('pmiEntFerm_'+crecheId)||PMI_FERMETURE_DEFAUT};
+  }catch(e){return{heures:PMI_ENTRETIEN_DEFAUT,ouverture:PMI_OUVERTURE_DEFAUT,fermeture:PMI_FERMETURE_DEFAUT};}
+}
+function pmiEntretienSet(crecheId,heures,ouverture,fermeture){
+  try{
+    localStorage.setItem('pmiEntHeures_'+crecheId,String(heures||0));
+    localStorage.setItem('pmiEntOuv_'+crecheId,ouverture||PMI_OUVERTURE_DEFAUT);
+    localStorage.setItem('pmiEntFerm_'+crecheId,fermeture||PMI_FERMETURE_DEFAUT);
+  }catch(e){}
+}
+
 function pmiExpKey(crecheId,prenom){return 'pmiExp_'+crecheId+'_'+prenom;}
 function pmiExpGet(crecheId,prenom){try{return localStorage.getItem(pmiExpKey(crecheId,prenom))==='1';}catch(e){return false;}}
 function pmiExpSet(crecheId,prenom,val){try{localStorage.setItem(pmiExpKey(crecheId,prenom),val?'1':'0');}catch(e){}}
@@ -5384,6 +5374,21 @@ function pmiInjecterModale(){
         Elles sont placées automatiquement, dans les heures de travail de la personne, au moment
         où son retrait pèse le moins sur l'accueil.</div>
     </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Repas et entretien (hors encadrement)</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <input class="finput" id="pmi-entretien-heures" type="number" min="0" max="12" step="0.25"
+               style="flex:0 0 90px;font-size:12px" placeholder="h / jour">
+        <span style="font-size:12px;color:var(--muted)">h par jour · accueil des enfants de</span>
+        <input class="finput" id="pmi-ouverture" type="time" style="flex:0 0 110px;font-size:12px">
+        <span style="font-size:12px;color:var(--muted)">à</span>
+        <input class="finput" id="pmi-fermeture" type="time" style="flex:0 0 110px;font-size:12px">
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">
+        Réparties sur toute l'équipe, en priorité avant l'ouverture et après la fermeture aux
+        enfants — les professionnels sont là, les enfants non : ces créneaux ne coûtent rien à
+        l'encadrement.</div>
+    </div>
     <div class="mactions">
       <button class="btn-cancel" onclick="closeModal('modal-pmi-export-wrap')">Annuler</button>
       <button class="btn-primary" id="pmi-export-btn" onclick="pmiGenerateExcel()"><i class="ti ti-download"></i> Générer le fichier Excel</button>
@@ -5431,6 +5436,11 @@ async function pmiOpenExportModal(){
   selDir.innerHTML='<option value="">— Aucun temps de bureau —</option>'
     +staffList.map(p=>'<option value="'+escHtml(p)+'"'+(p===dirDefaut?' selected':'')+'>'+escHtml(p)+'</option>').join('');
   document.getElementById('pmi-direction-heures').value=dirEnregistree.heures||'';
+
+  const entEnregistre=pmiEntretienGet(crecheId);
+  document.getElementById('pmi-entretien-heures').value=entEnregistre.heures||'';
+  document.getElementById('pmi-ouverture').value=entEnregistre.ouverture;
+  document.getElementById('pmi-fermeture').value=entEnregistre.fermeture;
 
   document.getElementById('pmi-export-subtitle').textContent=
     crecheName+' — '+(nbWeeks>1?nbWeeks+' semaines à partir du ':'semaine du ')+weeks[0].dateDebut;
@@ -5839,6 +5849,78 @@ function pmiChoisirCreneauBureau(colsTravaillees,nbQuarts,staffParQuart,comptesE
   return[];
 }
 
+/* ── Temps de repas et d'entretien ─────────────────────────────────────────
+   Ces heures sont travaillées mais ne relèvent pas non plus de l'encadrement : elles vont
+   sur la ligne « Entretien/restauration ». Contrairement au temps de bureau, elles peuvent
+   être réparties sur toute l'équipe, et par petits bouts (préparation du repas, service,
+   remise en état, ménage du soir).
+
+   Priorité de placement, dans cet ordre :
+     1. les quarts d'heure où aucun enfant n'est accueilli — typiquement avant l'ouverture
+        aux enfants et après la fermeture, alors que les professionnels sont déjà là : ces
+        créneaux ne coûtent rien à l'encadrement ;
+     2. à défaut, les moments où le retrait d'une personne laisse le plus de collègues sur
+        le terrain, et où les enfants sont les moins nombreux.
+   Comme pour le temps de bureau, aucun créneau qui ferait passer sous le minimum légal
+   n'est retenu : le volume non plaçable est signalé plutôt que forcé.
+
+   Chaque quart d'heure est confié à une seule personne, celle qui en a le moins assuré
+   jusque-là, pour que la charge tourne réellement sur toute l'équipe. */
+function pmiColonneDeHeure(hhmm,defaut){
+  const m=/^(\d{1,2}):(\d{2})/.exec(String(hhmm||''));
+  if(!m)return defaut;
+  const min=parseInt(m[1],10)*60+parseInt(m[2],10);
+  return PMI_TPL_COL_FIRST+Math.round((min-7*60)/15);
+}
+
+function pmiPlacerEntretien(presences,nbQuarts,staffParQuart,comptesEnfants,colOuverture,colFermeture){
+  const choix=[];
+  if(nbQuarts<=0)return choix;
+  const compteur={};
+  presences.forEach(x=>{compteur[x.prenom]=0;});
+
+  const candidats=[];
+  for(let c=PMI_TPL_COL_FIRST;c<=PMI_TPL_COL_LAST;c++){
+    const i=c-PMI_TPL_COL_FIRST;
+    const enfants=comptesEnfants[i]||0;
+    // La priorité se fonde sur les horaires d'accueil DÉCLARÉS, pas sur l'absence d'enfants
+    // enregistrés : une semaine dont les présences n'ont pas été importées ne doit pas passer
+    // pour une semaine sans enfants. La légalité du retrait, elle, reste évaluée sur les
+    // effectifs réels juste en dessous.
+    const horsAccueil=(c<colOuverture||c>=colFermeture)?1:0;
+    if(!presences.some(x=>x.cols.indexOf(c)>=0))continue;
+    const restants=(staffParQuart[i]||0)-1;
+    const interdit=!horsAccueil&&((enfants>=PMI_ENFANTS_DECLENCHEUR&&restants<PMI_MINI_PROS)||(enfants>0&&restants<1));
+    if(interdit)continue;
+    candidats.push({col:c,horsAccueil:horsAccueil,enfants:enfants,restants:restants});
+  }
+  candidats.sort((a,b)=>(b.horsAccueil-a.horsAccueil)||(b.restants-a.restants)
+                       ||(a.enfants-b.enfants)||(a.col-b.col));
+
+  // Les quarts retenus sont regroupés en blocs continus, chacun confié à UNE personne :
+  // sans cela l'attribution alternait toutes les 15 minutes et découpait les lignes
+  // individuelles en peigne, ce qui ne correspond à aucune organisation réelle.
+  const retenus=candidats.slice(0,nbQuarts).map(c=>c.col).sort((a,b)=>a-b);
+  pmiSegmentsContigus(retenus).forEach(seg=>{
+    let i=0;
+    while(i<seg.length){
+      const dispo=presences.filter(x=>x.cols.indexOf(seg[i])>=0)
+        .sort((a,b)=>compteur[a.prenom]-compteur[b.prenom]);
+      if(!dispo.length){i++;continue;}
+      const qui=dispo[0];
+      let j=i;
+      // bloc de 2 h au plus, pour que la charge tourne quand l'équipe le permet
+      while(j<seg.length&&j-i<8&&qui.cols.indexOf(seg[j])>=0){
+        choix.push({col:seg[j],prenom:qui.prenom});
+        compteur[qui.prenom]++;
+        j++;
+      }
+      i=(j>i)?j:i+1;
+    }
+  });
+  return choix;
+}
+
 function pmiEcrireRecap(ws,stats,capacite){
   const arrondi=x=>Math.round(x*100)/100;
   const total=stats.heuresDiplome+stats.heuresQualifie;
@@ -5907,11 +5989,19 @@ function pmiTexteAvecRenvoi(cell,valeur){
     cell.style=Object.assign({},cell.style,{alignment:Object.assign({},cell.alignment,{wrapText:true})});
 }
 
-function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap,enfantsParDate,capacite,expMap,direction){
+function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap,enfantsParDate,capacite,expMap,direction,entretien){
   ws.getCell('B2').value=crecheName;
   ws.getCell('AZ1').value=weekInfo.dateDebut+' - '+weekInfo.dateFin;
 
-  const stats={heuresDiplome:0,heuresQualifie:0,heuresOuverture:0,heuresBureau:0,bureau:[],anomalies:[]};
+  const stats={heuresDiplome:0,heuresQualifie:0,heuresOuverture:0,heuresBureau:0,bureau:[],
+                heuresEntretien:0,entretien:[],parPersonne:{},anomalies:[]};
+  // Suivi des heures de chacun : le temps de bureau et l'entretien sont PRÉLEVÉS sur les
+  // heures déjà planifiées, jamais ajoutés — ce récapitulatif permet de le vérifier et de
+  // comparer le total hebdomadaire de chacun à son contrat.
+  const compter=(prenom,champ,heures)=>{
+    const o=stats.parPersonne[prenom]||(stats.parPersonne[prenom]={planifie:0,encadrement:0,direction:0,entretien:0});
+    o[champ]+=heures;
+  };
 
   PMI_TPL_DAYS.forEach(day=>{
     // 1) remise à zéro : le modèle fourni contient encore quelques valeurs d'un remplissage
@@ -5939,6 +6029,7 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       const src=dayRows.find(x=>(x.prenom||'').trim()===p);
       const res=src?pmiSlotsForRow(src):{cols:[],minutes:0};
       const cols=(res.cols||[]).filter(c=>c>=PMI_TPL_COL_FIRST&&c<=PMI_TPL_COL_LAST);
+      compter(p,'planifie',cols.length*0.25);
       cols.forEach(c=>{
         // Un créneau travaillé = un professionnel présent auprès des enfants
         // (la pause, absente de res.cols, ne compte donc pas dans l'encadrement).
@@ -5961,7 +6052,21 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
         const retire=new Set(colsBureau);
         cible.cols=cible.cols.filter(c=>!retire.has(c));
         colsBureau.forEach(c=>{staffParQuart[c-PMI_TPL_COL_FIRST]--;});
+        compter(direction.prenom,'direction',colsBureau.length*0.25);
       }
+    }
+
+    // 3 bis) repas et entretien : répartis sur toute l'équipe, hors encadrement
+    let choixEntretien=[];
+    if(entretien&&entretien.quarts>0){
+      choixEntretien=pmiPlacerEntretien(presences,entretien.quarts,staffParQuart,comptes,
+        entretien.colOuverture,entretien.colFermeture);
+      choixEntretien.forEach(ch=>{
+        const cible=presences.find(x=>x.prenom===ch.prenom);
+        if(cible)cible.cols=cible.cols.filter(c=>c!==ch.col);
+        staffParQuart[ch.col-PMI_TPL_COL_FIRST]--;
+        compter(ch.prenom,'entretien',0.25);
+      });
     }
 
     // 4) écriture des lignes salarié·e·s
@@ -5980,6 +6085,7 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       const argb=colorMap[p]||'FF3D3580';
       x.cols.forEach(c=>pmiPeindre(ws.getCell(r,c),argb));
       const h=Math.round(x.cols.length*0.25*100)/100;
+      compter(p,'encadrement',h);
       const diplome=pmiQualifEstDiplome(qualif,expMap&&expMap[p]);
       ws.getCell(r,diplome?PMI_TPL_COL_DIPLOME:PMI_TPL_COL_QUALIFIE).value=h;
       if(diplome)totalDiplome+=h;else totalQualifie+=h;
@@ -5994,7 +6100,10 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
     const rDirection=day.total+1,rEntretien=day.total+2;
     if(!ws.getCell(rDirection,2).value)ws.getCell(rDirection,2).value=PMI_LIBELLE_DIRECTION;
     if(!ws.getCell(rEntretien,2).value)ws.getCell(rEntretien,2).value=PMI_LIBELLE_ENTRETIEN;
-    for(let c=PMI_TPL_COL_FIRST;c<=PMI_TPL_COL_LAST;c++)pmiEffacerFond(ws.getCell(rDirection,c));
+    for(let c=PMI_TPL_COL_FIRST;c<=PMI_TPL_COL_LAST;c++){
+      pmiEffacerFond(ws.getCell(rDirection,c));
+      pmiEffacerFond(ws.getCell(rEntretien,c));
+    }
     if(colsBureau.length){
       const argb=(direction&&colorMap[direction.prenom])||'FF3D3580';
       colsBureau.forEach(c=>pmiPeindre(ws.getCell(rDirection,c),argb));
@@ -6003,6 +6112,15 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       stats.bureau.push(PMI_NOMS_JOURS[day.jour]+' '+segs.join(' et ')
         +' ('+(Math.round(colsBureau.length*0.25*100)/100)+' h)');
       stats.heuresBureau+=colsBureau.length*0.25;
+    }
+
+    if(choixEntretien.length){
+      choixEntretien.forEach(ch=>pmiPeindre(ws.getCell(rEntretien,ch.col),colorMap[ch.prenom]||'FF3D3580'));
+      const segs=pmiSegmentsContigus(choixEntretien.map(ch=>ch.col))
+        .map(sg=>pmiHeureDeQuart(sg[0]-PMI_TPL_COL_FIRST)+'–'+pmiHeureDeQuart(sg[sg.length-1]-PMI_TPL_COL_FIRST+1));
+      stats.entretien.push(PMI_NOMS_JOURS[day.jour]+' '+segs.join(', ')
+        +' ('+(Math.round(choixEntretien.length*0.25*100)/100)+' h)');
+      stats.heuresEntretien+=choixEntretien.length*0.25;
     }
 
     // 7) nombre d'enfants accueillis, quart d'heure par quart d'heure
@@ -6080,6 +6198,35 @@ function pmiAfficherControles(controles,reserves,capacite){
       +'<div style="color:var(--muted);font-size:12px;margin-bottom:6px">'
       +'Heures d\'encadrement : '+(Math.round(tot*100)/100)+' h — dont '+part+' % de personnel diplômé'
       +(capacite?' · capacité : '+capacite+' enfants':'')+'</div>';
+    const gens=Object.keys(s.parPersonne||{}).filter(k=>s.parPersonne[k].planifie>0);
+    if(gens.length){
+      const r2=v=>Math.round(v*100)/100;
+      html+='<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px">'
+        +'<tr style="color:var(--muted)"><th style="text-align:left;font-weight:600">&nbsp;</th>'
+        +'<th style="text-align:right;font-weight:600">Planifié</th>'
+        +'<th style="text-align:right;font-weight:600">Encadrement</th>'
+        +'<th style="text-align:right;font-weight:600">Bureau</th>'
+        +'<th style="text-align:right;font-weight:600">Repas/entretien</th></tr>';
+      gens.forEach(k=>{
+        const o=s.parPersonne[k];
+        // Contrôle : rien n'est ajouté aux heures planifiées, la somme doit retomber dessus.
+        const ecart=Math.abs(o.planifie-(o.encadrement+o.direction+o.entretien))>0.01;
+        html+='<tr><td>'+escHtml(k)+'</td>'
+          +'<td style="text-align:right'+(ecart?';color:var(--red);font-weight:700':'')+'">'+r2(o.planifie)+' h</td>'
+          +'<td style="text-align:right">'+r2(o.encadrement)+' h</td>'
+          +'<td style="text-align:right">'+(o.direction?r2(o.direction)+' h':'—')+'</td>'
+          +'<td style="text-align:right">'+(o.entretien?r2(o.entretien)+' h':'—')+'</td></tr>';
+      });
+      html+='</table>'
+        +'<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'
+        +'Le temps de bureau et l\'entretien sont prélevés sur les heures déjà planifiées : la colonne '
+        +'« Planifié » est inchangée et reste à comparer au contrat de chacun — aucune heure supplémentaire '
+        +'n\'est générée par cet export.</div>';
+    }
+    if(s.entretien.length)
+      html+='<div style="font-size:12px;margin-bottom:6px">'
+        +'<span style="font-weight:600">Repas / entretien placés :</span> '
+        +escHtml(s.entretien.join(' · '))+'</div>';
     if(s.bureau.length)
       html+='<div style="font-size:12px;margin-bottom:6px">'
         +'<span style="font-weight:600">Temps de bureau placé :</span> '
@@ -6131,10 +6278,21 @@ async function pmiGenerateExcel(){
     const dirPrenom=(document.getElementById('pmi-direction-prenom')||{}).value||'';
     const dirHeures=parseFloat((document.getElementById('pmi-direction-heures')||{}).value)||0;
     pmiDirectionSet(ctx.crecheId,dirPrenom,dirHeures);
+
+    const entHeures=parseFloat((document.getElementById('pmi-entretien-heures')||{}).value)||0;
+    const entOuv=(document.getElementById('pmi-ouverture')||{}).value||PMI_OUVERTURE_DEFAUT;
+    const entFerm=(document.getElementById('pmi-fermeture')||{}).value||PMI_FERMETURE_DEFAUT;
+    pmiEntretienSet(ctx.crecheId,entHeures,entOuv,entFerm);
+    const entretien=entHeures>0?{
+      quarts:Math.round(entHeures*4),
+      colOuverture:pmiColonneDeHeure(entOuv,PMI_TPL_COL_FIRST),
+      colFermeture:pmiColonneDeHeure(entFerm,PMI_TPL_COL_LAST+1)
+    }:null;
     const controles=withData.map((w,i)=>({
       semaine:w.dateDebut,
       stats:pmiFillSheet(feuilles[i],w,ctx.crecheName,ctx.staffList,qualifMap,nomMap,colorMap,ctx.enfantsParDate,capacite,expMap,
-        (dirPrenom&&dirHeures>0)?{prenom:dirPrenom,quartsParJour:pmiRepartirBureau(w,dirPrenom,dirHeures)}:null)
+        (dirPrenom&&dirHeures>0)?{prenom:dirPrenom,quartsParJour:pmiRepartirBureau(w,dirPrenom,dirHeures)}:null,
+        entretien)
     }));
 
     const buf=await pmiRestaurerPoliceParDefaut(await wb.xlsx.writeBuffer());
@@ -6150,6 +6308,13 @@ async function pmiGenerateExcel(){
     if(trop>0)reserves.push('Le modèle ne comporte que '+PMI_TPL_MAX_STAFF+' lignes par jour : '+trop+' personne(s) ne figurent pas dans le fichier.');
     if(ctx.enfantsSansHoraire)reserves.push(ctx.enfantsSansHoraire+' présence(s) enfant sans horaire ni contrat n\'ont pas pu être comptées dans la ligne « Nombre d\'enfants accueillis ».');
     if(!capacite)reserves.push('Aucune capacité d\'accueil n\'est renseignée sur la fiche de la crèche : la case correspondante reste vide et le dépassement de capacité n\'a pas pu être vérifié.');
+    if(entretien){
+      const place=controles.reduce((n,c)=>n+c.stats.heuresEntretien,0);
+      const attendu=entHeures*5*controles.length;
+      if(attendu-place>0.25)
+        reserves.push('Repas et entretien : '+(Math.round(place*100)/100)+' h ont pu être placées sur '
+          +(Math.round(attendu*100)/100)+' h attendues — les créneaux restants dégraderaient le taux d\'encadrement.');
+    }
     if(dirPrenom&&dirHeures>0){
       const place=controles.reduce((n,c)=>n+c.stats.heuresBureau,0);
       const attendu=dirHeures*controles.length;
@@ -6160,6 +6325,7 @@ async function pmiGenerateExcel(){
     }
 
     const nbAnomalies=controles.reduce((n,c)=>n+c.stats.anomalies.length,0);
+    if(typeof window!=='undefined')window.controlesGlobaux=controles;   // exposé pour les vérifications
     pmiAfficherControles(controles,reserves,capacite);
     showBanner(nbAnomalies||reserves.length
       ? 'Planning PMI généré — '+(nbAnomalies||'aucun')+' point'+(nbAnomalies>1?'s':'')+' de vigilance à vérifier.'
