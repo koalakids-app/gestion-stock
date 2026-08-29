@@ -245,6 +245,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
     <option value="remplissable">À remplir en ligne</option>
   </select></div>
   <div class="f" id="fFile"><label>Fichier</label><input type="file" id="dFile"><p id="dFileCur" style="font-size:12px;color:var(--muted);margin-top:5px"></p></div>
+  <div class="f" id="fTpl" style="display:none"><label>Modèle prédéfini</label>
+    <select id="dTpl" onchange="toggleType()"></select>
+    <p id="dTplHint" style="font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.5"></p>
+  </div>
   <div class="f" id="fSchema" style="display:none">
     <label>Champs du formulaire</label>
     <div id="champs"></div>
@@ -389,7 +393,7 @@ async function loadAll(){
     sb.from('doc_categories').select('*').order('ordre'),
     sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
     sb.from('creches').select('id,name').order('name'),
-    sb.from('enfants').select('id,prenom,nom,creche_id').order('prenom')
+    sb.from('enfants').select('id,prenom,nom,creche_id,dob').order('prenom')
   ]);
   CATS=c.data||[];DOCS=d.data||[];CRECHES=cr.data||[];ENFANTS=en.data||[];
   const sel=document.getElementById('fCreche');
@@ -662,8 +666,24 @@ async function delCat(id){
 /* ---------- DOCUMENT ---------- */
 function toggleType(){
   const t=document.getElementById('dType').value;
+  const tpl=(document.getElementById('dTpl')||{}).value||'';
   document.getElementById('fFile').style.display=t==='telechargeable'?'':'none';
-  document.getElementById('fSchema').style.display=t==='remplissable'?'':'none';
+  document.getElementById('fTpl').style.display=t==='remplissable'?'':'none';
+  /* Un modele predefini apporte sa propre mise en page : le constructeur de
+     champs libres n’a plus lieu d’etre. */
+  document.getElementById('fSchema').style.display=(t==='remplissable'&&!tpl)?'':'none';
+  const hint=document.getElementById('dTplHint');
+  if(hint)hint.textContent=tpl
+    ? 'Formulaire complet fourni par l’application : les champs ci-dessous sont ignorés.'
+    : 'Laisser sur « Formulaire libre » pour définir vous-même les champs.';
+}
+/* Remplit le selecteur de modeles a partir des cles reellement presentes dans
+   TPL, pour qu’un nouveau modele apparaisse sans retoucher cette fonction. */
+function tplOptionsHtml(sel){
+  const cles=Object.keys(typeof TPL!=='undefined'?TPL:{});
+  cles.sort((a,b)=>(TPL_LABELS[a]||a).localeCompare(TPL_LABELS[b]||b,'fr',{sensitivity:'base'}));
+  return '<option value="">— Formulaire libre (champs personnalisés) —</option>'
+    +cles.map(k=>`<option value="${esc(k)}"${sel===k?' selected':''}>${esc(TPL_LABELS[k]||k)}</option>`).join('');
 }
 function addChamp(lab,typ){
   const d=document.createElement('div');d.className='chip';
@@ -682,6 +702,7 @@ function openDoc(id){
   const allowAll=!PROF||PROF.role==='direction';
   document.getElementById('dCreche').innerHTML=(allowAll?'<option value="">Toutes les crèches</option>':'')+CRECHES.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
   document.getElementById('champs').innerHTML='';
+  document.getElementById('dTpl').innerHTML=tplOptionsHtml(id?(DOCS.find(x=>x.id===id)||{}).template_key||'':'');
   document.getElementById('dFile').value='';
   document.getElementById('dFileCur').textContent='';
   if(id){
@@ -717,10 +738,13 @@ async function saveDoc(){
       type
     };
     if(type==='remplissable'){
-      row.schema_champs=[...document.querySelectorAll('#champs .chip')].map((c,i)=>({
+      const tplKey=document.getElementById('dTpl').value||null;
+      row.template_key=tplKey;
+      row.schema_champs=tplKey?[]:[...document.querySelectorAll('#champs .chip')].map((c,i)=>({
         key:'f'+i,label:c.querySelector('input').value.trim()||('Champ '+(i+1)),type:c.querySelector('select').value
       }));
     }else{
+      row.template_key=null;
       const f=document.getElementById('dFile').files[0];
       if(f){
         const path='documents/'+Date.now()+'_'+slug(f.name);
@@ -813,6 +837,21 @@ let fillStatutManuel=false;
 /* Documents RH : la personne concernee est le salarie, pas un enfant.
    Le selecteur « Enfant concerne » (et le filtre creche qui ne sert qu’a
    raccourcir la liste d’enfants) sont masques pour ces modeles. */
+/* Libelles affiches dans le selecteur « Modele predefini » de la fenetre
+   Nouveau document. La cle est celle de l’objet TPL ; un modele ajoute a TPL
+   sans entree ici reste selectionnable, affiche sous sa cle technique. */
+const TPL_LABELS={
+  vaccinations:'Suivi des vaccinations obligatoires (enfant)',
+  fiche_sanitaire:'Fiche sanitaire de liaison (enfant)',
+  fiche_liaison:'Fiche de liaison (enfant)',
+  antipyretique:'Autorisation d’administrer un antipyrétique (enfant)',
+  creme_solaire:'Autorisation d’application de crème solaire (enfant)',
+  reglement_medicaments:'Règlement produits d’hygiène et médicaments (enfant)',
+  entretien_annuel:'Entretien annuel professionnel (salarié)',
+  grille:'Grille d’évaluation (salarié)',
+  eaje:'Contrôle EAJE — grille d’auto-contrôle (établissement)',
+  cerfa_17580:'CERFA n° 17580*01 — autorisation EAJE (établissement)'
+};
 const TPL_SALARIE=['entretien_annuel','grille'];
 /* Documents d’etablissement (contrôle EAJE…) : ils ne concernent ni un enfant
    ni un salarie, la crec̀he est saisie dans le formulaire lui-même. */
@@ -2334,6 +2373,166 @@ const EAJE_CSS=`<style>
 }
 </style>`;
 
+/* ================= SUIVI DES VACCINATIONS OBLIGATOIRES =================
+   Reprise fidele de la trame Excel « Suivi vaccinations obligatoires »
+   (mise a jour 01/01/2025) : une ligne par maladie, les noms commerciaux
+   des vaccins correspondants, et jusqu'a trois doses (Date + Recu).
+   Les dates theoriques sont calculees a partir de la date de naissance
+   avec les memes decalages en jours que les formules du classeur. */
+const VAC_CSS=`<style>
+.tpl .vacw{overflow-x:auto;margin:0 0 12px;border:1px solid var(--border);border-radius:10px}
+.tpl table.vac{width:100%;border-collapse:collapse;font-size:12px;min-width:700px}
+.tpl table.vac th,.tpl table.vac td{border:1px solid var(--border);padding:4px 6px;vertical-align:middle}
+.tpl table.vac th{background:#EEEDF8;color:var(--violet);font-weight:700;font-size:11.5px;text-align:center}
+.tpl table.vac th.lab{text-align:left}
+.tpl table.vac td.mal{background:#FAFAFD;min-width:215px}
+.tpl .vac-mal{display:block;font-weight:700;color:var(--violet);font-size:12px;line-height:1.35}
+.tpl .vac-marq{display:block;font-size:11px;color:var(--muted);line-height:1.45}
+.tpl table.vac td.dose{text-align:center;min-width:118px}
+.tpl table.vac td.recu{width:56px;text-align:center}
+.tpl table.vac td.vide{background:#F5F5F8}
+.tpl .vac-age{display:block;font-size:10.5px;font-weight:700;color:var(--muted);margin-bottom:3px}
+.tpl table.vac input[type=date]{margin:0;height:32px;font-size:12px;text-align:center;padding:2px 4px}
+.tpl table.vac input[type=date].calc{color:#8E8AA8;font-style:italic}
+.tpl table.vac input[type=checkbox]{width:20px;height:20px;margin:0;accent-color:#57B894}
+.tpl tr.vac-retard td.mal{background:#FDECEC}
+.tpl tr.vac-retard td.dose.due{background:#FDECEC}
+.tpl .vac-head{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;background:#F4F3FB;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px}
+.tpl .vac-head .f{margin:0;min-width:170px}
+.tpl .vac-prog{flex:1;min-width:190px;display:flex;align-items:center;gap:8px}
+.tpl .vac-track{flex:1;height:7px;background:#E7E4F0;border-radius:4px;overflow:hidden}
+.tpl .vac-track i{display:block;height:100%;width:0;background:#57B894;transition:width .2s}
+.tpl .vac-pct{font-size:12px;font-weight:700;color:var(--violet);min-width:74px;text-align:right}
+.tpl .vac-leg{font-size:11.5px;color:var(--muted);margin:0 0 12px;line-height:1.6}
+.tpl .vac-leg b{color:#C62828}
+</style>`;
+
+/* j = nombre de jours ajoutes a la date de naissance (identique au classeur) */
+const VAC_DOC=[
+ {m:'Antidiphtérique',v:['Infanrix Tétra','Infanrix Quinta ou Pentavac','Infanrix Hexa ou Hexyon ou Vaxelis'],d:[{a:'2 mois',j:61},{a:'4 mois',j:123},{a:'11 mois',j:335}]},
+ {m:'Antitétanique',v:['Infanrix Tétra','Infanrix Quinta ou Pentavac','Infanrix Hexa ou Hexyon ou Vaxelis'],d:[{a:'2 mois',j:61},{a:'4 mois',j:123},{a:'11 mois',j:335}]},
+ {m:'Antipoliomyélite',v:['Infanrix Tétra','Infanrix Quinta ou Pentavac','Infanrix Hexa ou Hexyon ou Vaxelis'],d:[{a:'2 mois',j:61},{a:'4 mois',j:123},{a:'11 mois',j:335}]},
+ {m:'Contre la coqueluche',v:['Infanrix Tétra','Infanrix Quinta ou Pentavac','Infanrix Hexa ou Hexyon ou Vaxelis'],d:[{a:'2 mois',j:61},{a:'4 mois',j:123},{a:'11 mois',j:335}]},
+ {m:'Contre les infections à Haemophilus influenzae b',v:['Infanrix Quinta ou Pentavac','Infanrix Hexa ou Hexyon ou Vaxelis'],d:[{a:'2 mois',j:61},{a:'4 mois',j:123},{a:'11 mois',j:335}]},
+ {m:'Contre virus Hépatite B',v:['Infanrix Hexa ou Hexyon ou Vaxelis','EngerixB ou Hbvaxpro'],d:[{a:'2 mois',j:61},{a:'4 mois',j:123},{a:'11 mois',j:335}]},
+ {m:'Contre infections pneumocoque',v:['Prevenar ou Pneumovax'],d:[{a:'2 mois',j:61},{a:'4 mois',j:123},{a:'11 mois',j:335}]},
+ {m:'Contre le méningocoque B',v:['Bexsero'],d:[{a:'3 mois',j:91},{a:'5 mois',j:152},{a:'12 mois',j:365}]},
+ {m:'Contre Méningocoques ACWY',v:['Nimenrix ou Menquadfi'],d:[{a:'6 mois',j:182},{a:'12 mois',j:365}]},
+ {m:'Contre le méningocoque C',v:['Menjugate ou Neisvac'],d:[{a:'5 mois',j:151},{a:'12 mois',j:365}]},
+ {m:'Contre la rougeole',v:['M-M-Rvaxpro ou Priorix'],d:[{a:'12 mois',j:365},{a:'18 mois',j:548}]},
+ {m:'Contre les oreillons',v:['M-M-Rvaxpro ou Priorix'],d:[{a:'12 mois',j:365},{a:'18 mois',j:548}]},
+ {m:'Contre la rubéole',v:['M-M-Rvaxpro ou Priorix'],d:[{a:'12 mois',j:365},{a:'18 mois',j:548}]}
+];
+const VAC_MAJ='Mise à jour 01/01/2025';
+const VAC_NBCOL=3;
+const VAC_FIELDS=(function(){
+  const f=['vac_enfant','vac_naissance','vac_creche','vac_obs','vac_verif_nom','vac_verif_date'];
+  VAC_DOC.forEach((g,gi)=>g.d.forEach((_,di)=>{f.push('vac_'+gi+'_'+di+'_d','vac_'+gi+'_'+di+'_r');}));
+  return f;
+})();
+
+/* Conversion locale : jamais toISOString() sur une date construite a minuit,
+   qui recule d'un jour en UTC+2 (cf. notes techniques du projet). */
+function vacIso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function vacPlus(iso,j){
+  if(!iso)return '';
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if(!m)return '';
+  const d=new Date(+m[1],+m[2]-1,+m[3]);
+  if(isNaN(d.getTime()))return '';
+  d.setDate(d.getDate()+j);
+  return vacIso(d);
+}
+function vacCrecheHtml(v){
+  const list=(typeof CRECHES!=='undefined'&&CRECHES.length)?CRECHES.map(c=>c.name):[];
+  let val=v.vac_creche||'';
+  if(!val&&typeof PROF!=='undefined'&&PROF&&PROF.creche_id){
+    const mine=(CRECHES||[]).find(c=>c.id===PROF.creche_id);
+    if(mine)val=mine.name;
+  }
+  return '<div class="f"><label>Crèche</label><select id="ff_vac_creche"><option value=""></option>'
+    +list.map(n=>'<option'+(val===n?' selected':'')+'>'+esc(n)+'</option>').join('')+'</select></div>';
+}
+function vacTableHtml(v){
+  let h='<div class="vacw"><table class="vac"><thead><tr><th class="lab">Vaccins</th>';
+  for(let i=0;i<VAC_NBCOL;i++)h+='<th>Date</th><th>Reçu</th>';
+  h+='</tr></thead><tbody>';
+  VAC_DOC.forEach((g,gi)=>{
+    h+='<tr id="vac-tr'+gi+'"><td class="mal"><span class="vac-mal">'+esc(g.m)+'</span>'
+      +g.v.map(n=>'<span class="vac-marq">'+esc(n)+'</span>').join('')+'</td>';
+    for(let di=0;di<VAC_NBCOL;di++){
+      const dd=g.d[di];
+      if(!dd){h+='<td class="dose vide"></td><td class="recu vide"></td>';continue;}
+      const kd='vac_'+gi+'_'+di+'_d',kr='vac_'+gi+'_'+di+'_r';
+      h+='<td class="dose" id="vac-td'+gi+'_'+di+'"><span class="vac-age">'+esc(dd.a)+'</span>'
+        +'<input type="date" id="ff_'+kd+'" value="'+esc(v[kd]||'')+'" onchange="vacMaj()"></td>'
+        +'<td class="recu"><input type="checkbox" id="ff_'+kr+'"'+(v[kr]?' checked':'')+' onchange="vacMaj()"></td>';
+    }
+    h+='</tr>';
+  });
+  return h+'</tbody></table></div>';
+}
+/* Renseigne les dates theoriques. force=true ecrase les dates deja saisies. */
+function vacRecalc(force){
+  const dob=((document.getElementById('ff_vac_naissance')||{}).value)||'';
+  VAC_DOC.forEach((g,gi)=>g.d.forEach((dd,di)=>{
+    const el=document.getElementById('ff_vac_'+gi+'_'+di+'_d');
+    if(!el)return;
+    const th=vacPlus(dob,dd.j);
+    if(!th)return;
+    if(force||!el.value){el.value=th;el.classList.add('calc');}
+  }));
+  vacMaj();
+}
+/* Compteur de doses recues + mise en evidence des doses echues non recues. */
+function vacMaj(){
+  const auj=vacIso(new Date());
+  let total=0,fait=0;
+  VAC_DOC.forEach((g,gi)=>{
+    let retard=false;
+    g.d.forEach((dd,di)=>{
+      total++;
+      const d=document.getElementById('ff_vac_'+gi+'_'+di+'_d');
+      const r=document.getElementById('ff_vac_'+gi+'_'+di+'_r');
+      const td=document.getElementById('vac-td'+gi+'_'+di);
+      const recu=!!(r&&r.checked);
+      if(recu)fait++;
+      const due=!!(d&&d.value&&d.value<=auj&&!recu);
+      if(td)td.classList.toggle('due',due);
+      if(due)retard=true;
+      if(d&&d.value&&recu)d.classList.remove('calc');
+    });
+    const tr=document.getElementById('vac-tr'+gi);
+    if(tr)tr.classList.toggle('vac-retard',retard);
+  });
+  const bar=document.getElementById('vac-bar'),pct=document.getElementById('vac-pct');
+  const p=total?Math.round(fait*100/total):0;
+  if(bar)bar.style.width=p+'%';
+  if(pct)pct.textContent=fait+'/'+total+' — '+p+' %';
+}
+/* Reprend le nom, la date de naissance et la crèche de l'enfant sélectionné
+   dans l'en-tête de la modale. */
+function vacFromEnfant(){
+  if(!fillDoc||fillDoc.template_key!=='vaccinations')return;
+  const id=((document.getElementById('fillEnfant')||{}).value)||'';
+  const e=(typeof ENFANTS!=='undefined'?ENFANTS:[]).find(x=>x.id===id);
+  if(!e)return;
+  const n=document.getElementById('ff_vac_enfant');
+  if(n)n.value=((e.prenom||'')+' '+(e.nom||'')).trim();
+  const c=document.getElementById('ff_vac_creche');
+  if(c&&e.creche_id){
+    const cr=(typeof CRECHES!=='undefined'?CRECHES:[]).find(x=>x.id===e.creche_id);
+    if(cr)c.value=cr.name;
+  }
+  const d=document.getElementById('ff_vac_naissance');
+  if(d&&e.dob){d.value=e.dob;vacRecalc(false);}
+  else vacMaj();
+}
+function vacHookEnfant(){
+  const se=document.getElementById('fillEnfant');
+  if(se&&!se._vacHook){se.addEventListener('change',vacFromEnfant);se._vacHook=1;}
+}
+
 const TPL={
  eaje:{
   get fields(){return eajeFields();},
@@ -3251,6 +3450,120 @@ const TPL={
     pdfSortie(doc,slug(fillDoc.titre)+(g('rm_nom')?'_'+slug(g('rm_nom')):'')+'.pdf');
     return true;
   }
+ },
+ vaccinations:{
+  get fields(){return VAC_FIELDS;},
+  html:v=>`<div class="tpl">${VAC_CSS}
+   <h3>Suivi des vaccinations obligatoires</h3>
+   <div class="vac-head">
+     <div class="f" style="flex:1;min-width:220px"><label>Nom - prénom de l'enfant</label>
+       <input id="ff_vac_enfant" value="${esc(v.vac_enfant)}"></div>
+     <div class="f"><label>Date de naissance</label>
+       <input type="date" id="ff_vac_naissance" value="${esc(v.vac_naissance)}" onchange="vacRecalc(false)"></div>
+     ${vacCrecheHtml(v)}
+     <div class="vac-prog">
+       <div class="vac-track"><i id="vac-bar"></i></div>
+       <span class="vac-pct" id="vac-pct">0/0 — 0 %</span>
+     </div>
+   </div>
+   <p class="vac-leg">Les dates sont calculées automatiquement à partir de la date de naissance (calendrier vaccinal français, mise à jour 01/01/2025) et restent modifiables : saisir la date réelle du carnet de santé puis cocher « Reçu ». <b>Une ligne en rouge signale une dose échue non reçue.</b></p>
+   <div style="margin:0 0 12px">
+     <button type="button" class="btn btn-s" onclick="vacRecalc(true)"><i class="ti ti-refresh"></i> Recalculer toutes les dates prévues</button>
+   </div>
+   ${vacTableHtml(v)}
+   <div class="f"><label>Observations</label><textarea id="ff_vac_obs" rows="3">${esc(v.vac_obs)}</textarea></div>
+   <div class="grid2">
+     <div class="f"><label>Document vérifié par</label><input id="ff_vac_verif_nom" value="${esc(v.vac_verif_nom)}"></div>
+     <div class="f"><label>Le</label><input type="date" id="ff_vac_verif_date" value="${esc(v.vac_verif_date)}"></div>
+   </div>
+   <div class="grid2">${sigBoxHtml('responsable','Signature')}</div>
+  </div>`,
+  mount:()=>{vacHookEnfant();mountSig('responsable');vacRecalc(false);},
+  pdf:doc=>{
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?(e.type==='checkbox'?e.checked:e.value):'';};
+    const dfr=d=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(d||'');return m?m[3]+'/'+m[2]+'/'+m[1]:'';};
+    const X=14,W=182,CV=64,CD=(W-64)/3,CDATE=CD-14,CRECU=14;
+    let y=pdfLogo(doc,20);
+    doc.setFontSize(13.5);doc.setFont(undefined,'bold');doc.setTextColor(74,63,159);
+    doc.text('Suivi des vaccinations obligatoires',X+W/2,y,{align:'center'});
+    doc.setTextColor(30);y+=8;
+    doc.setFontSize(10);doc.setFont(undefined,'normal');
+    doc.text("Nom - prénom de l'enfant : "+(g('vac_enfant')||'…………………………'),X,y);
+    doc.text('Né(e) le : '+(dfr(g('vac_naissance'))||'……………'),X+124,y);
+    y+=5.5;
+    if(g('vac_creche')){doc.text('Crèche : '+g('vac_creche'),X,y);y+=5.5;}
+    y+=2;
+    const entete=()=>{
+      doc.setFillColor(238,237,248);doc.setDrawColor(120,120,140);doc.setLineWidth(0.2);
+      doc.rect(X,y,W,7,'FD');
+      doc.setFontSize(8.5);doc.setFont(undefined,'bold');doc.setTextColor(74,63,159);
+      doc.text('Vaccins',X+2,y+4.7);
+      for(let i=0;i<3;i++){
+        const bx=X+CV+i*CD;
+        doc.line(bx,y,bx,y+7);
+        doc.text('Date',bx+CDATE/2,y+4.7,{align:'center'});
+        doc.line(bx+CDATE,y,bx+CDATE,y+7);
+        doc.text('Reçu',bx+CDATE+CRECU/2,y+4.7,{align:'center'});
+      }
+      doc.setTextColor(30);y+=7;
+    };
+    entete();
+    VAC_DOC.forEach((grp,gi)=>{
+      doc.setFontSize(8.4);doc.setFont(undefined,'bold');
+      const lab=doc.splitTextToSize(grp.m,CV-4);
+      doc.setFontSize(7.6);doc.setFont(undefined,'normal');
+      let marq=[];grp.v.forEach(n=>{marq=marq.concat(doc.splitTextToSize(n,CV-4));});
+      const h=Math.max(10,2.5+lab.length*3.6+marq.length*3+1.5);
+      if(y+h>283){doc.addPage();y=pdfLogo(doc,20);entete();}
+      doc.setDrawColor(150,150,165);doc.setLineWidth(0.2);
+      doc.rect(X,y,W,h);
+      let ly=y+3.7;
+      doc.setFontSize(8.4);doc.setFont(undefined,'bold');doc.setTextColor(74,63,159);
+      doc.text(lab,X+2,ly);ly+=lab.length*3.6;
+      doc.setFontSize(7.6);doc.setFont(undefined,'normal');doc.setTextColor(120,120,140);
+      if(marq.length){doc.text(marq,X+2,ly+0.4);}
+      doc.setTextColor(30);
+      for(let di=0;di<3;di++){
+        const bx=X+CV+di*CD;
+        doc.line(bx,y,bx,y+h);
+        const dd=grp.d[di];
+        if(!dd){doc.setFillColor(243,243,246);doc.rect(bx,y,CD,h,'F');doc.line(bx,y,bx,y+h);continue;}
+        doc.line(bx+CDATE,y,bx+CDATE,y+h);
+        doc.setFontSize(7);doc.setTextColor(120,120,140);
+        doc.text(dd.a,bx+CDATE/2,y+4,{align:'center'});
+        doc.setTextColor(30);doc.setFontSize(9);
+        const dv=dfr(g('vac_'+gi+'_'+di+'_d'));
+        if(dv)doc.text(dv,bx+CDATE/2,y+h-2.6,{align:'center'});
+        if(g('vac_'+gi+'_'+di+'_r')){
+          doc.setFont(undefined,'bold');doc.setTextColor(40,130,90);
+          doc.text('X',bx+CDATE+CRECU/2,y+h/2+1.4,{align:'center'});
+          doc.setFont(undefined,'normal');doc.setTextColor(30);
+        }
+      }
+      y+=h;
+    });
+    y+=5;
+    const obs=g('vac_obs');
+    if(obs){
+      const L=doc.splitTextToSize(obs,W-4);
+      if(y+L.length*4.4+10>283){doc.addPage();y=pdfLogo(doc,20);}
+      doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text('Observations :',X,y);y+=5;
+      doc.setFont(undefined,'normal');doc.text(L,X,y);y+=L.length*4.4+4;
+    }
+    if(y+34>285){doc.addPage();y=pdfLogo(doc,20);}
+    doc.setFontSize(9);doc.setFont(undefined,'normal');
+    doc.text('Document vérifié par : '+(g('vac_verif_nom')||'……………………')
+      +'      Le '+(dfr(g('vac_verif_date'))||'……………'),X,y);
+    y+=5;
+    doc.setFont(undefined,'bold');doc.text('Signature :',X,y);
+    doc.setDrawColor(200);doc.rect(X,y+2,84,24);
+    if(SIGS['responsable']){try{doc.addImage(SIGS['responsable'],'PNG',X+2,y+4,80,20);}catch(e){}}
+    y+=31;
+    doc.setFontSize(8);doc.setFont(undefined,'normal');doc.setTextColor(120,120,140);
+    doc.text(VAC_MAJ,X,Math.min(y,290));doc.setTextColor(30);
+    pdfSortie(doc,slug(fillDoc.titre)+(g('vac_enfant')?'_'+slug(g('vac_enfant')):'')+'.pdf');
+    return true;
+  }
  }
 
 };
@@ -3380,17 +3693,7 @@ function c17Fields(){
     .concat(C17_PJ.map(p=>'pj'+p[0]))
     .map(id=>'c17_'+id);
 }
-/* Valeur d'un champ : depuis le formulaire s'il est affiche, sinon depuis la
-   reponse chargee (documents_reponses.donnees) — un export declenche hors de
-   la modale de saisie ne doit pas produire un cerfa vierge. */
-function c17Get(id){
-  const e=document.getElementById('ff_c17_'+id);
-  if(e)return e.type==='checkbox'?(e.checked?'x':''):e.value;
-  const d=(typeof fillRep!=='undefined'&&fillRep&&fillRep.donnees)?fillRep.donnees['c17_'+id]:undefined;
-  if(d===true)return 'x';
-  if(d===false||d==null)return '';
-  return String(d);
-}
+function c17Get(id){const e=document.getElementById('ff_c17_'+id);if(!e)return '';return e.type==='checkbox'?(e.checked?'x':''):e.value;}
 
 /* --- saisie --- */
 let c17Timer=null;
@@ -3952,13 +4255,6 @@ async function c17ExportOfficiel(){
   const g=id=>c17Get(id);
   const chk=id=>c17Get(id)==='x';
   const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'';
-
-  /* Garde-fou : plutot que de sortir un cerfa vierge sans rien dire, on
-     previent que la saisie n'a pas ete retrouvee. */
-  if(!c17Fields().some(f=>c17Get(f.replace(/^c17_/,''))!=='')){
-    if(typeof toast==='function')toast('Aucune reponse a reporter : le formulaire est vide.');
-    return;
-  }
 
   /* --- objet de la demande --- */
   const t=g('type');
