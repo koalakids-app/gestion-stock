@@ -2631,37 +2631,55 @@ async function renderPresenceHebdo(){
   stripHtml+='</div>';
 
   /* ── Vue A : grille allégée (1 colonne par jour, repas en pastille près du prénom) ── */
-  const PILL={j:['Journée','var(--koala)','#fff'],m:['Matin','#BFB9E4','var(--koala-dark)'],a:['Aprèm','#DCD8F0','var(--koala-dark)']};
-  let grille='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px">';
+  /* Lisibilité : la journée complète est la norme, elle s'écrit donc sobrement, sans pastille.
+     Seules les DEMI-JOURNÉES sont mises en couleur — un enfant présent une seule demi-journée
+     change l'effectif de l'autre, c'est la seule information qui mérite d'attirer l'œil ici. */
+  const DEMI={m:'Matin',a:'Aprèm'};
+  const ajd=ipDateToLocalISO(new Date());
+  const capacite=(cacheCreches.find(function(c){return c.id===crecheId;})||{}).capacity||null;
+  const FOND_PAIR='#FAFAFC';
+  const jourCourant=function(i){return dateStrs[i]===ajd;};
+  const fondCol=function(i,pair){return jourCourant(i)?'#F7F5FF':(pair?FOND_PAIR:'#fff');};
+
+  let grille='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:#fff"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px">';
   grille+='<thead><tr>';
-  grille+='<th style="background:#fff;text-align:left;padding:11px 8px 11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">Enfant</th>';
-  days5.forEach(function(d,i){grille+='<th style="background:#fff;text-align:center;padding:11px 8px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">'+JOURS_LBL[i]+'<br><span style="font-weight:400;text-transform:none;font-size:10px">'+dFr(d)+'</span></th>';});
+  // Colonne des noms figée : sur tablette, la grille défile horizontalement.
+  grille+='<th style="position:sticky;left:0;z-index:2;background:#fff;text-align:left;padding:11px 8px 11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">Enfant</th>';
+  days5.forEach(function(d,i){grille+='<th style="background:'+(jourCourant(i)?'#F7F5FF':'#fff')+';text-align:center;padding:11px 8px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:'+(jourCourant(i)?'var(--koala)':'var(--muted)')+';border-bottom:1px solid var(--border);white-space:nowrap">'+JOURS_LBL[i]+'<br><span style="font-weight:400;text-transform:none;font-size:10px">'+dFr(d)+'</span></th>';});
   grille+='</tr></thead><tbody>';
-  rows.forEach(function(r){
+  rows.forEach(function(r,idxLigne){
     const code=r.enfant._repasCode||'';
     const badge=code
       ?'<span title="'+escHtml(repasLabel(code))+'" style="display:inline-block;background:'+(isSpe(code)?'var(--orange-light)':'var(--koala-light)')+';color:'+(isSpe(code)?'var(--orange-dark)':'var(--koala)')+';border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:800;margin-left:7px;vertical-align:1px">'+escHtml(code)+'</span>'
       :'<span title="Date de naissance manquante — repas non calculé" style="display:inline-block;background:#FDE8E8;color:var(--red);border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:800;margin-left:7px;vertical-align:1px">?</span>';
-    grille+='<tr style="border-bottom:1px solid #F1F0F7"><td style="padding:9px 8px 9px 16px;white-space:nowrap"><span onclick="enfOpenFiche(\''+r.enfant.id+'\')" style="font-weight:600;color:var(--koala-dark);cursor:pointer">'+escHtml(r.enfant.prenom+' '+(r.enfant.nom||''))+'</span>'+badge+'</td>';
-    r.cells.forEach(function(c){
+    const pair=idxLigne%2===1;
+    grille+='<tr style="border-bottom:1px solid #F1F0F7"><td style="position:sticky;left:0;z-index:1;background:'+(pair?FOND_PAIR:'#fff')+';padding:9px 8px 9px 16px;white-space:nowrap"><span onclick="enfOpenFiche(\''+r.enfant.id+'\')" style="font-weight:600;color:var(--koala-dark);cursor:pointer">'+escHtml(r.enfant.prenom+' '+(r.enfant.nom||''))+'</span>'+badge+'</td>';
+    r.cells.forEach(function(c,i){
+      const fond=fondCol(i,pair);
       if(c.present){
-        const p=PILL[c.slot]||PILL.j;
-        // La pastille porte les horaires ; sa couleur continue d'indiquer journée / demi-journée.
-        const txt=c.horaires||p[0];
-        const petit=txt.length>8;
-        grille+='<td style="text-align:center;padding:6px"><span title="'+escHtml(p[0])+'" style="display:inline-block;min-width:34px;border-radius:7px;padding:4px 9px;font-size:'+(petit?'10.5':'11')+'px;font-weight:700;white-space:nowrap;background:'+p[1]+';color:'+p[2]+'">'+escHtml(txt)+'</span></td>';
+        const demi=DEMI[c.slot];
+        const txt=c.horaires||demi||'Journée';
+        grille+='<td style="text-align:center;padding:8px 6px;background:'+fond+'">'
+          +'<span'+(demi?' title="Présent'+(c.slot==='m'?' le matin uniquement':' l\'après-midi uniquement')+'"':'')
+          +' style="font-size:12px;font-weight:'+(demi?'700':'600')+';white-space:nowrap;color:'+(demi?'var(--orange-dark)':'var(--koala)')+'">'
+          +escHtml(txt)+'</span></td>';
       }else{
-        grille+='<td style="text-align:center;padding:6px;color:#DAD8E5;font-size:15px">·</td>';
+        grille+='<td style="text-align:center;padding:8px 6px;background:'+fond+';color:#DAD8E5;font-size:15px">·</td>';
       }
     });
     grille+='</tr>';
   });
-  grille+='<tr style="background:var(--koala-light)"><td style="padding:10px 8px 10px 16px;font-size:12px;font-weight:700;color:var(--koala)">Effectif</td>';
-  totalParJour.forEach(function(n){grille+='<td style="text-align:center;padding:10px 8px;font-size:12px;font-weight:700;color:var(--koala)">'+n+'</td>';});
+  grille+='<tr><td style="position:sticky;left:0;z-index:1;background:var(--koala-light);padding:10px 8px 10px 16px;font-size:12px;font-weight:700;color:var(--koala)">Effectif</td>';
+  totalParJour.forEach(function(n,i){
+    const depasse=capacite&&n>capacite;
+    grille+='<td style="text-align:center;padding:10px 8px;font-size:12px;background:'+(jourCourant(i)?'#E4E0F5':'var(--koala-light)')+'">'
+      +'<span style="font-weight:700;color:'+(depasse?'var(--red)':'var(--koala)')+'">'+n+'</span>'
+      +(capacite?'<span style="font-weight:500;color:var(--muted);font-size:11px"> / '+capacite+'</span>':'')+'</td>';
+  });
   grille+='</tr></tbody></table></div>';
   grille+='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--muted);align-items:center">'
-    +'<span><span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:var(--koala);color:#fff">8h–17h</span> journée entière (horaire enregistré, sinon contrat)</span>'
-    +'<span><span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:#BFB9E4;color:var(--koala-dark)">Matin</span> / <span style="display:inline-block;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;background:#DCD8F0;color:var(--koala-dark)">Aprèm</span> demi-journée sans horaire connu</span>'
+    +'<span><span style="font-size:11px;font-weight:600;color:var(--koala)">8h–17h</span> journée entière (horaire enregistré, sinon contrat)</span>'
+    +'<span><span style="font-size:11px;font-weight:700;color:var(--orange-dark)">Matin</span> / <span style="font-size:11px;font-weight:700;color:var(--orange-dark)">Aprèm</span> demi-journée&nbsp;: l\'enfant n\'est là qu\'une partie du jour</span>'
     +'<span><span style="display:inline-block;background:var(--koala-light);color:var(--koala);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">G</span> repas déduit de l’âge</span>'
     +'<span><span style="display:inline-block;background:var(--orange-light);color:var(--orange-dark);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">GSV</span> régime particulier</span>'
     +'</div>';
