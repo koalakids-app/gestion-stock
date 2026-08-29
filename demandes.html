@@ -294,6 +294,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* Contrôles propres à la vue Jour : masqués dans la vue Semaine, où ils agiraient
    sur une date qu'on ne regarde pas et feraient doublon avec l'export hebdomadaire. */
 .pres-masque{display:none !important}
+/* Grille hebdomadaire : un filet clair entre les jours guide la lecture verticale sur les
+   lignes creuses (enfant présent un seul jour). Le trait plus marqué borde la colonne des
+   noms elle-même, pour rester visible quand la grille défile horizontalement — c'est
+   justement à ce moment qu'il montre où s'arrête la partie figée. Il est tracé en ombre
+   La grille est en border-collapse:separate : en mode collapse, les bordures sont peintes
+   par le tableau et non par la cellule, si bien qu'elles défilent avec le contenu malgré
+   position:sticky (et Chrome n'y peint pas non plus de box-shadow). Conséquence : le trait
+   séparant les lignes se pose sur les cellules, une bordure de <tr> n'étant pas rendue
+   en mode separate. */
+.hebdo-grille tbody td{border-bottom:1px solid #F1F0F7}
+.hebdo-grille td+td,.hebdo-grille th+th{border-left:1px solid #EDEBF5}
+.hebdo-grille tr>*:first-child{border-right:2px solid var(--border)}
 
 /* LOADING */
 .loading-screen{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;z-index:200}
@@ -2641,7 +2653,7 @@ async function renderPresenceHebdo(){
   const jourCourant=function(i){return dateStrs[i]===ajd;};
   const fondCol=function(i,pair){return jourCourant(i)?'#F7F5FF':(pair?FOND_PAIR:'#fff');};
 
-  let grille='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:#fff"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px">';
+  let grille='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:#fff"><table class="hebdo-grille" style="width:100%;border-collapse:separate;border-spacing:0;font-size:13px;min-width:640px">';
   grille+='<thead><tr>';
   // Colonne des noms figée : sur tablette, la grille défile horizontalement.
   grille+='<th style="position:sticky;left:0;z-index:2;background:#fff;text-align:left;padding:11px 8px 11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">Enfant</th>';
@@ -2653,7 +2665,7 @@ async function renderPresenceHebdo(){
       ?'<span title="'+escHtml(repasLabel(code))+'" style="display:inline-block;background:'+(isSpe(code)?'var(--orange-light)':'var(--koala-light)')+';color:'+(isSpe(code)?'var(--orange-dark)':'var(--koala)')+';border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:800;margin-left:7px;vertical-align:1px">'+escHtml(code)+'</span>'
       :'<span title="Date de naissance manquante — repas non calculé" style="display:inline-block;background:#FDE8E8;color:var(--red);border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:800;margin-left:7px;vertical-align:1px">?</span>';
     const pair=idxLigne%2===1;
-    grille+='<tr style="border-bottom:1px solid #F1F0F7"><td style="position:sticky;left:0;z-index:1;background:'+(pair?FOND_PAIR:'#fff')+';padding:9px 8px 9px 16px;white-space:nowrap"><span onclick="enfOpenFiche(\''+r.enfant.id+'\')" style="font-weight:600;color:var(--koala-dark);cursor:pointer">'+escHtml(r.enfant.prenom+' '+(r.enfant.nom||''))+'</span>'+badge+'</td>';
+    grille+='<tr><td style="position:sticky;left:0;z-index:1;background:'+(pair?FOND_PAIR:'#fff')+';padding:9px 8px 9px 16px;white-space:nowrap"><span onclick="enfOpenFiche(\''+r.enfant.id+'\')" style="font-weight:600;color:var(--koala-dark);cursor:pointer">'+escHtml(r.enfant.prenom+' '+(r.enfant.nom||''))+'</span>'+badge+'</td>';
     r.cells.forEach(function(c,i){
       const fond=fondCol(i,pair);
       if(c.present){
