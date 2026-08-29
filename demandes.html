@@ -964,6 +964,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="notice-tab" onclick="switchNoticeTab('incidents',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🚨 Incidents</button>
         <button class="notice-tab" onclick="switchNoticeTab('presences',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👥 Présences</button>
         <button class="notice-tab" onclick="switchNoticeTab('planning',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📅 Planning</button>
+        <button class="notice-tab" onclick="switchNoticeTab('pmi',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📋 Export PMI</button>
         <button class="notice-tab" onclick="switchNoticeTab('evenements',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🗓 Événements</button>
         <button class="notice-tab" onclick="switchNoticeTab('enfants',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👶 Enfants</button>
         <button class="notice-tab" onclick="switchNoticeTab('vaccinations',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">💉 Vaccinations</button>
@@ -8360,7 +8361,7 @@ presences: `
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">👶 Fiche enfant (nom, prénom, date de naissance)</div>
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Cliquez sur le <strong>nom</strong> d'un enfant pour ouvrir son <strong>dossier</strong> (le même que dans le module Dossiers enfants) : onglet <strong>Identité</strong> et onglet <strong>Documents</strong>. Le bouton <strong>Modifier la fiche</strong> permet d'y corriger le prénom, le nom, la date de naissance, le groupe, la crèche ou les allergies. Un enfant sans date de naissance affiche un <strong style="color:#e03e3e">⚠</strong>.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Filtre « Présents uniquement »</div>
-<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Le bouton <strong>Présents uniquement</strong>, en haut de la page, n’affiche que les enfants présents à la date choisie — très pratique juste après un <strong>import PDF</strong>. Le compteur en haut du planning reste <strong>présents / effectif total</strong> de la crèche.<br>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Le bouton <strong>Présents uniquement</strong>, en haut de la page, n’affiche que les enfants présents — à la date choisie dans l’onglet <strong>Jour</strong>, sur l’ensemble de la semaine dans l’onglet <strong>Semaine</strong>. Très pratique juste après un <strong>import PDF</strong>. Le compteur en haut du planning reste <strong>présents / effectif total</strong> de la crèche.<br>
 • Pour <strong>retirer</strong> un enfant de la journée : cliquez sur son <strong>rond</strong>, sa ligne disparaît de la liste.<br>
 • Pour <strong>ajouter</strong> un enfant : bouton <strong>Ajouter à la journée</strong> en haut à droite, puis choisissez-le dans la liste (il est marqué présent matin et après-midi).<br>
 Désactivez le filtre pour retrouver la <strong>liste complète</strong> des inscrits, absents compris. Le choix est mémorisé sur votre appareil.</div>
@@ -8373,8 +8374,19 @@ Désactivez le filtre pour retrouver la <strong>liste complète</strong> des ins
   <li>L’écran d’aperçu propose de <strong>remplir l’onglet Contrat</strong> de la fiche enfant à partir des journées lues : jours de la semaine et amplitude horaire. Deux cases à cocher permettent de choisir — créer les contrats manquants, et/ou mettre à jour ceux qui diffèrent du PDF. Les écarts sont affichés avant validation.</li>
   <li>Un contrat déduit d’une seule semaine ne vaut que pour cette semaine : vérifiez-le dans la fiche avant de vous y fier pour l’année.</li>
 </ul>
-<div style="font-weight:700;font-size:14px;margin-bottom:10px">📤 Exporter</div>
-<div style="font-size:13px;color:#555;line-height:1.7">Le bouton <strong>Exporter</strong> génère un récapitulatif de présences pour la date sélectionnée, utile pour les transmissions administratives.</div>`,
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Les deux onglets : Jour et Semaine</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:10px">La barre d’outils du haut s’adapte à l’onglet ouvert : elle n’affiche que les commandes qui s’y appliquent.</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li><strong>Jour</strong> — la vue Gantt décrite ci-dessus. C’est le seul onglet où l’on pointe les présences. On y trouve le sélecteur de date et ses flèches, <strong>Appliquer les contrats</strong>, <strong>Ajouter à la journée</strong> et <strong>Exporter</strong> (récapitulatif de la journée choisie).</li>
+  <li><strong>Semaine</strong> — la vue de contrôle et d’export hebdomadaire, avec sa propre navigation de semaine en semaine. Elle remplace l’ancienne vue « Semaine » en carrés matin/après-midi, qui n’apportait rien de plus.</li>
+</ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📅 L’onglet Semaine en détail</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li><strong>Grille</strong> : une ligne par enfant, une colonne par jour, avec les horaires réels. En tête, une carte par jour donne l’effectif et sa répartition par tranche d’âge.</li>
+  <li><strong>Synthèse repas</strong> : les totaux repas par jour d’abord, le détail enfant replié dessous. C’est la vue qui prépare la commande du traiteur.</li>
+  <li><strong>Commande repas</strong> génère le bon du traiteur, <strong>Exporter Excel</strong> produit la feuille de présence hebdomadaire mise en forme.</li>
+  <li>Si la semaine n’est pas encore importée, l’application affiche une <strong>prévision</strong> déduite des semaines précédentes, clairement signalée. Vérifiez-la avant de commander des repas.</li>
+</ul>`,
 
 planning: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📅 Planning des intervenants</h3>
@@ -8397,6 +8409,55 @@ planning: `
   <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#DC2626;border-radius:3px;flex-shrink:0"></div> Absent</div>
   <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#2563EB;border-radius:3px;flex-shrink:0"></div> Formation</div>
   <div style="display:flex;align-items:center;gap:10px;font-size:13px"><div style="width:14px;height:14px;background:#7C3AED;border-radius:3px;flex-shrink:0"></div> Réunion</div>
+</div>
+<div style="font-weight:700;font-size:14px;margin:22px 0 10px">👥 Planning équipe</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:10px">Sous le planning individuel, le <strong>planning équipe</strong> regroupe toutes les salariées d’une crèche : une ligne par créneau horaire, une colonne par jour, une couleur par professionnelle.</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>Il se remplit par l’<strong>import PDF</strong> (le même que les présences enfants, dans l’onglet Présences) ou par import d’un fichier Excel. Chaque case reste modifiable à la main d’un clic.</li>
+  <li><strong>Imprimer / PDF</strong> et <strong>Envoyer par mail</strong> produisent le planning sur 1 à 4 semaines, selon le sélecteur juste à côté.</li>
+  <li><strong>Export PMI</strong> génère le tableau réglementaire à transmettre à la PMI — voir l’onglet <strong>📋 Export PMI</strong> de cette notice.</li>
+</ul>`,
+
+pmi: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📋 Export PMI</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
+  💡 Le bouton <strong>Export PMI</strong>, dans le module <strong>Planning équipe</strong>, produit le tableau réglementaire attendu par la PMI à partir des données déjà saisies : planning des salariées et présences des enfants. Il n’y a rien à ressaisir.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🚀 En pratique</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Dans <strong>Planning</strong>, descendez au <strong>Planning équipe</strong> et choisissez la <strong>crèche</strong> ainsi que le <strong>nombre de semaines</strong> (sélecteur à côté des boutons d’impression).</li>
+  <li>Cliquez sur <strong>Export PMI</strong>.</li>
+  <li>Complétez la fenêtre qui s’ouvre, puis <strong>Générer le fichier Excel</strong> : une feuille par semaine.</li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">✍️ Ce que la fenêtre vous demande</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li><strong>Nom de famille</strong> de chaque salariée : le planning ne contient que les prénoms. Pré-rempli pour les référentes depuis l’annuaire, et mémorisé ensuite — à saisir une seule fois par crèche.</li>
+  <li><strong>Qualification</strong>, à choisir dans la liste ou à saisir librement. Mémorisée également.</li>
+  <li><strong>Ancienneté requise atteinte</strong> : en micro-crèche, une certification de niveau V petite enfance (CAP AEPE) compte dans le <strong>1°</strong> — le personnel diplômé des 40 % — dès <strong>2 ans d’expérience</strong>, 3 ans pour une assistante maternelle agréée. La case n’apparaît que là où elle a un sens ; elle est exclue pour les alternantes, dont le diplôme n’est pas acquis.</li>
+  <li><strong>Temps de bureau</strong> : la personne assurant la direction ou la référence technique, et son volume hebdomadaire.</li>
+  <li><strong>Repas et entretien</strong> : le volume quotidien, et les horaires d’accueil des enfants (7h30 – 18h30 par défaut).</li>
+</ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🤖 Ce que le fichier calcule tout seul</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>Les <strong>horaires de chaque salariée</strong>, en couleur, pauses déduites, et ses heures d’encadrement ventilées en personnel diplômé (1°) ou qualifié (2°).</li>
+  <li>Le <strong>nombre d’enfants accueillis</strong> quart d’heure par quart d’heure, à partir des présences enregistrées — horaires réels de l’import en priorité, contrat d’accueil à défaut.</li>
+  <li>La ligne <strong>Direction</strong> : le temps de bureau est placé automatiquement dans les heures de travail de la personne, au moment où son retrait pèse le moins sur l’accueil — en pratique le milieu de journée, quand les équipes du matin et de l’après-midi se chevauchent.</li>
+  <li>La ligne <strong>Entretien/restauration</strong> : répartie sur toute l’équipe, en priorité avant l’ouverture et après la fermeture aux enfants, puis autour du repas.</li>
+  <li>Le <strong>récapitulatif hebdomadaire</strong> : heures d’ouverture, capacité d’accueil, heures et pourcentages diplômé / qualifié / total.</li>
+</ul>
+<div style="background:#FFF8E1;border-left:4px solid #FFC107;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:18px;font-size:13px;color:#7a5c00">
+  ⚠️ Le temps de bureau et l’entretien sont <strong>prélevés sur les heures déjà planifiées</strong>, jamais ajoutés : aucune heure supplémentaire n’est créée. Le total de chacun reste celui de son planning.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔍 La fenêtre « Points de vigilance »</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:10px">Elle s’affiche après la génération. Le fichier remis à la PMI, lui, n’est jamais annoté.</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>Un <strong>tableau par personne</strong> : heures planifiées, encadrement, bureau, repas/entretien. La colonne « Planifié » est celle à comparer aux contrats.</li>
+  <li>Les <strong>anomalies réglementaires</strong> avec le jour et le créneau : moins de 40 % d’heures diplômées (art. R2324-42), moins de deux professionnels dès quatre enfants (art. R2324-43-1), effectif supérieur à la capacité.</li>
+  <li>Les <strong>limites du contrôle</strong> : volume de bureau ou d’entretien qui n’a pas pu être placé sans dégrader l’encadrement, présences enfants inexploitables, capacité non renseignée.</li>
+</ul>
+<div style="font-size:13px;color:#555;line-height:1.7">Le placement ne retient jamais un créneau qui créerait un sous-effectif : s’il ne trouve pas de plage sûre, il raccourcit et vous signale le volume restant à reporter. Un volume régulièrement non plaçable est le signe que l’équipe est trop juste pour dégager ces temps sans renfort.</div>
+<div style="font-size:12px;color:#888;line-height:1.6;margin-top:14px;border-top:1px solid #eee;padding-top:10px">
+  Le taux « un professionnel pour cinq enfants qui ne marchent pas, un pour huit qui marchent » n’est pas contrôlé : l’application ne sait pas quels enfants marchent, et l’estimer donnerait une conformité fausse.
 </div>`,
 
 evenements: `
