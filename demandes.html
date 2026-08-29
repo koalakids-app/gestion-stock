@@ -5538,20 +5538,21 @@ async function pmiGenerateExcel(){
   const ctx=_pmiExportCtx;
   if(!ctx)return;
   if(typeof ExcelJS==='undefined'){alert('La bibliothèque Excel (ExcelJS) n\'a pas pu être chargée. Réessayez dans un instant.');return;}
-  const qualifMap=pmiCollectQualifs();
   const btn=document.getElementById('pmi-export-btn');
   if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Génération…';}
   try{
+    const qualifMap=pmiCollectQualifs();
     const colorMap=pmiBuildColorMap(ctx.staffList);
     const wb=new ExcelJS.Workbook();
     wb.creator='Koala Kids';
     const withData=ctx.weeks.filter(w=>w.rows.length);
     withData.forEach((w,i)=>{
-      const sheetName=('Semaine '+w.dateDebut).slice(0,31);
+      // Les noms d'onglet Excel interdisent \ / ? * : [ ] — dateDebut est au format JJ/MM/AAAA.
+      const sheetName=('Semaine '+w.dateDebut.replace(/\//g,'-')).slice(0,31);
       pmiBuildWeekSheet(wb,sheetName,w,ctx.crecheName,ctx.staffList,qualifMap,colorMap);
     });
     const buf=await wb.xlsx.writeBuffer();
-    const slug=(ctx.crecheName||'creche').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
+    const slug=(ctx.crecheName||'creche').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
     const fileName='Planning_PMI_'+slug+'_'+withData[0].dateDebut.replace(/\//g,'-')+'.xlsx';
     const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const url=URL.createObjectURL(blob);
