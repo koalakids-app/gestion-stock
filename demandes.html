@@ -5412,9 +5412,9 @@ function pmiSlotsForRow(row){
 function pmiBuildWeekSheet(wb,sheetName,weekInfo,crecheName,staffList,qualifMap,colorMap){
   const ws=wb.addWorksheet(sheetName,{pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});
   const cols=[{width:2.7}];             // A marge
-  cols.push({width:21},{width:18});     // B nom, C qualification
-  for(let i=0;i<48;i++)cols.push({width:2.9}); // D..AY 1/4h
-  cols.push({width:12},{width:12});     // AZ diplômé, BA qualifié
+  cols.push({width:22},{width:24});     // B nom, C qualification (large pour rester lisible sur 2 lignes)
+  for(let i=0;i<48;i++)cols.push({width:3.6}); // D..AY 1/4h — assez large pour rester net à l'impression
+  cols.push({width:13},{width:13});     // AZ diplômé, BA qualifié
   ws.columns=cols;
 
   const thin={style:'thin',color:{argb:'FF8A82C9'}};
@@ -5457,7 +5457,7 @@ function pmiBuildWeekSheet(wb,sheetName,weekInfo,crecheName,staffList,qualifMap,
     totSup.font={name:FONT,bold:true,size:9,color:{argb:'FFFFFFFF'}};
     totSup.fill={type:'pattern',pattern:'solid',fgColor:{argb:KOALA}};
     totSup.alignment={horizontal:'center',vertical:'middle',wrapText:true};
-    ws.getRow(hdr).height=16;
+    ws.getRow(hdr).height=24;
 
     // ── ligne 2 d'en-tête : plages horaires + libellés diplômé/qualifié ──
     const rHour=hdr+1;
@@ -5472,32 +5472,34 @@ function pmiBuildWeekSheet(wb,sheetName,weekInfo,crecheName,staffList,qualifMap,
       for(let cc=c0;cc<c0+4;cc++)ws.getCell(rHour,cc).border=boxAll;
     }
     const azh=ws.getCell(rHour,52);azh.value='Nbre heures\npersonnel diplômé *';
-    azh.font={name:FONT,bold:true,size:8};azh.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+    azh.font={name:FONT,bold:true,size:9};azh.alignment={horizontal:'center',vertical:'middle',wrapText:true};
     azh.fill={type:'pattern',pattern:'solid',fgColor:{argb:LILAS}};azh.border=boxAll;
     const bah=ws.getCell(rHour,53);bah.value='Nbre heures\npersonnel qualifié **';
-    bah.font={name:FONT,bold:true,size:8};bah.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+    bah.font={name:FONT,bold:true,size:9};bah.alignment={horizontal:'center',vertical:'middle',wrapText:true};
     bah.fill={type:'pattern',pattern:'solid',fgColor:{argb:LILAS}};bah.border=boxAll;
-    ws.getRow(rHour).height=26;
+    ws.getRow(rHour).height=32;
 
     // ── ligne NOM/prénom | Qualification ──
     const r2=hdr+2;
     ['NOM/prénom','Qualification'].forEach((t,i)=>{
-      const c=ws.getCell(r2,2+i);c.value=t;c.font={name:FONT,bold:true,size:10};
+      const c=ws.getCell(r2,2+i);c.value=t;c.font={name:FONT,bold:true,size:11};
       c.fill={type:'pattern',pattern:'solid',fgColor:{argb:LILAS}};
       c.alignment={horizontal:'center',vertical:'middle'};
       c.border=boxAll;
     });
     for(let c=4;c<=53;c++)ws.getCell(r2,c).border=boxAll;
-    ws.getRow(r2).height=15;
+    ws.getRow(r2).height=18;
 
     // ── lignes salarié·e·s ──
+    // Hauteur généreuse (36) : la qualification (colonne C) est en texte libre et peut faire
+    // deux lignes une fois repliée (wrapText) — une ligne trop basse la aurait tronquée.
     const dayRows=weekInfo.rows.filter(x=>x.jour===jour);
     let totalDiplome=0,totalQualifie=0;
     staffList.forEach((p,i)=>{
       const rr=r2+1+i;
-      const nameCell=ws.getCell(rr,2);nameCell.value=p;nameCell.font={name:FONT,size:10};
-      nameCell.alignment={vertical:'middle'};nameCell.border=boxAll;
-      const qCell=ws.getCell(rr,3);qCell.value=qualifMap[p]||'';qCell.font={name:FONT,size:9};
+      const nameCell=ws.getCell(rr,2);nameCell.value=p;nameCell.font={name:FONT,size:11};
+      nameCell.alignment={vertical:'middle',wrapText:true};nameCell.border=boxAll;
+      const qCell=ws.getCell(rr,3);qCell.value=qualifMap[p]||'';qCell.font={name:FONT,size:10};
       qCell.alignment={vertical:'middle',wrapText:true};qCell.border=boxAll;
       const row=dayRows.find(x=>(x.prenom||'').trim()===p);
       if(row){
@@ -5509,60 +5511,68 @@ function pmiBuildWeekSheet(wb,sheetName,weekInfo,crecheName,staffList,qualifMap,
           const diplome=pmiQualifEstDiplome(qualifMap[p]);
           const targetCol=diplome?52:53;
           const tCell=ws.getCell(rr,targetCol);tCell.value=h;
-          tCell.font={name:FONT,size:10};tCell.alignment={horizontal:'center',vertical:'middle'};
+          tCell.font={name:FONT,bold:true,size:11};tCell.alignment={horizontal:'center',vertical:'middle'};
           if(diplome)totalDiplome+=h;else totalQualifie+=h;
         }
       }
       for(let c=4;c<=53;c++)ws.getCell(rr,c).border=boxAll;
-      ws.getRow(rr).height=15;
+      ws.getRow(rr).height=36;
     });
 
     const nStaff=staffList.length;
     const rEnfants=r2+1+nStaff;
-    ['B','C'].forEach(()=>{});
+    [rEnfants,rEnfants+1,rEnfants+2,rEnfants+3].forEach(rr=>ws.getRow(rr).height=18);
     ws.getCell(rEnfants,2).value="Nombre d'enfants accueillis";
-    ws.getCell(rEnfants,2).font={name:FONT,size:9,italic:true};
+    ws.getCell(rEnfants,2).font={name:FONT,size:10,italic:true};
     const rHors=rEnfants+1;
     ws.getCell(rHors,2).value='Hors encadrement des enfants';
-    ws.getCell(rHors,2).font={name:FONT,size:9,italic:true};
+    ws.getCell(rHors,2).font={name:FONT,size:10,italic:true};
     const rDir=rHors+1;
-    ws.getCell(rDir,2).value='Direction';ws.getCell(rDir,2).font={name:FONT,size:9,italic:true};
+    ws.getCell(rDir,2).value='Direction';ws.getCell(rDir,2).font={name:FONT,size:10,italic:true};
     const rEntr=rDir+1;
-    ws.getCell(rEntr,2).value='Entretien/restauration';ws.getCell(rEntr,2).font={name:FONT,size:9,italic:true};
+    ws.getCell(rEntr,2).value='Entretien/restauration';ws.getCell(rEntr,2).font={name:FONT,size:10,italic:true};
 
     const rTotal=rEntr+1;
+    ws.getRow(rTotal).height=20;
     ws.getCell(rTotal,40).value="Total des heures d'encadrement";
-    ws.getCell(rTotal,40).font={name:FONT,bold:true,size:9};
+    ws.getCell(rTotal,40).font={name:FONT,bold:true,size:10};
     const totD=ws.getCell(rTotal,52);totD.value=Math.round(totalDiplome*100)/100;
-    totD.font={name:FONT,bold:true,size:10};totD.alignment={horizontal:'center'};totD.border=boxAll;
+    totD.font={name:FONT,bold:true,size:11};totD.alignment={horizontal:'center'};totD.border=boxAll;
     const totQ=ws.getCell(rTotal,53);totQ.value=Math.round(totalQualifie*100)/100;
-    totQ.font={name:FONT,bold:true,size:10};totQ.alignment={horizontal:'center'};totQ.border=boxAll;
+    totQ.font={name:FONT,bold:true,size:11};totQ.alignment={horizontal:'center'};totQ.border=boxAll;
 
     r=rTotal+2; // ligne de départ du jour suivant
   });
 
   // ── Récapitulatif hebdomadaire (à compléter à la main) ──
   r+=1;
+  ws.getRow(r).height=18;
   ws.getCell(r,2).value="Nbre d'heures d'ouverture (hebdomadaire) de l'établissement";
-  ws.getCell(r,2).font={size:10};
+  ws.getCell(r,2).font={name:FONT,size:11};
   r++;
+  ws.getRow(r).height=18;
   ws.getCell(r,2).value="Capacité d'accueil de l'établissement";
-  ws.getCell(r,2).font={size:10};
+  ws.getCell(r,2).font={name:FONT,size:11};
   r+=2;
-  ws.getCell(r,2).value="Personnel diplômé (1° art. R2324-42) *";ws.getCell(r,2).font={size:10};
+  ws.getRow(r).height=18;
+  ws.getCell(r,2).value="Personnel diplômé (1° art. R2324-42) *";ws.getCell(r,2).font={name:FONT,size:11};
   r++;
-  ws.getCell(r,2).value="Personnel qualifié (2° art. R2324-42) **";ws.getCell(r,2).font={size:10};
+  ws.getRow(r).height=18;
+  ws.getCell(r,2).value="Personnel qualifié (2° art. R2324-42) **";ws.getCell(r,2).font={name:FONT,size:11};
   r++;
-  ws.getCell(r,2).value="Total hebdomadaire";ws.getCell(r,2).font={bold:true,size:10};
+  ws.getRow(r).height=18;
+  ws.getCell(r,2).value="Total hebdomadaire";ws.getCell(r,2).font={name:FONT,bold:true,size:11};
 
   // ── Légende couleurs ──
   r+=2;
-  ws.getCell(r,2).value='Légende';ws.getCell(r,2).font={bold:true,size:11};
+  ws.getCell(r,2).value='Légende';ws.getCell(r,2).font={name:FONT,bold:true,size:12};
   r++;
   staffList.forEach(p=>{
     const c=ws.getCell(r,2);c.value=p;
     c.fill={type:'pattern',pattern:'solid',fgColor:{argb:colorMap[p]||'FF3D3580'}};
-    c.font={bold:true,color:{argb:'FFFFFFFF'},size:10};
+    c.font={name:FONT,bold:true,color:{argb:'FFFFFFFF'},size:11};
+    c.alignment={vertical:'middle'};
+    ws.getRow(r).height=18;
     r++;
   });
 
@@ -5570,13 +5580,13 @@ function pmiBuildWeekSheet(wb,sheetName,weekInfo,crecheName,staffList,qualifMap,
   r+=1;
   ws.mergeCells(r,2,r,53);
   const rg1=ws.getCell(r,2);rg1.value=PMI_REGLEMENT_1;
-  rg1.font={size:8,italic:true};rg1.alignment={wrapText:true,vertical:'top'};
-  ws.getRow(r).height=110;
+  rg1.font={name:FONT,size:9,italic:true};rg1.alignment={wrapText:true,vertical:'top'};
+  ws.getRow(r).height=120;
   r+=1;
   ws.mergeCells(r,2,r,53);
   const rg2=ws.getCell(r,2);rg2.value=PMI_REGLEMENT_2;
-  rg2.font={size:8,italic:true};rg2.alignment={wrapText:true,vertical:'top'};
-  ws.getRow(r).height=40;
+  rg2.font={name:FONT,size:9,italic:true};rg2.alignment={wrapText:true,vertical:'top'};
+  ws.getRow(r).height=55;
 }
 
 async function pmiGenerateExcel(){
