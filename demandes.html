@@ -6529,13 +6529,23 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       pmiEffacerFond(ws.getCell(rDirection,c));
       pmiEffacerFond(ws.getCell(rEntretien,c));
     }
+    // Bout de ligne : le volume horaire hors encadrement de la journée. Il est écrit dans la
+    // seule colonne AZ — la colonne BA reste vide — pour qu'il se lise comme un total de
+    // ligne et non comme des heures d'encadrement ventilées diplômé / qualifié.
+    ws.getCell(rDirection,PMI_TPL_COL_DIPLOME).value=null;
+    ws.getCell(rDirection,PMI_TPL_COL_QUALIFIE).value=null;
+    ws.getCell(rEntretien,PMI_TPL_COL_DIPLOME).value=null;
+    ws.getCell(rEntretien,PMI_TPL_COL_QUALIFIE).value=null;
+
     if(colsBureau.length){
       const argb=(direction&&colorMap[direction.prenom])||'FF3D3580';
       colsBureau.forEach(c=>pmiPeindre(ws.getCell(rDirection,c),argb));
       const segs=pmiSegmentsContigus(colsBureau)
         .map(s=>pmiHeureDeQuart(s[0]-PMI_TPL_COL_FIRST)+'–'+pmiHeureDeQuart(s[s.length-1]-PMI_TPL_COL_FIRST+1));
+      const hBureau=Math.round(colsBureau.length*0.25*100)/100;
+      ws.getCell(rDirection,PMI_TPL_COL_DIPLOME).value=hBureau;
       stats.bureau.push(PMI_NOMS_JOURS[day.jour]+' '+segs.join(' et ')
-        +' ('+(Math.round(colsBureau.length*0.25*100)/100)+' h)');
+        +' ('+hBureau+' h)');
       stats.heuresBureau+=colsBureau.length*0.25;
     }
 
@@ -6543,8 +6553,10 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       choixEntretien.forEach(ch=>pmiPeindre(ws.getCell(rEntretien,ch.col),colorMap[ch.prenom]||'FF3D3580'));
       const segs=pmiSegmentsContigus(choixEntretien.map(ch=>ch.col))
         .map(sg=>pmiHeureDeQuart(sg[0]-PMI_TPL_COL_FIRST)+'–'+pmiHeureDeQuart(sg[sg.length-1]-PMI_TPL_COL_FIRST+1));
+      const hEntretien=Math.round(choixEntretien.length*0.25*100)/100;
+      ws.getCell(rEntretien,PMI_TPL_COL_DIPLOME).value=hEntretien;
       stats.entretien.push(PMI_NOMS_JOURS[day.jour]+' '+segs.join(', ')
-        +' ('+(Math.round(choixEntretien.length*0.25*100)/100)+' h)');
+        +' ('+hEntretien+' h)');
       stats.heuresEntretien+=choixEntretien.length*0.25;
     }
 
