@@ -2273,6 +2273,38 @@ let presShowHorsContrat=false;
 function presToggleHorsContrat(){ presShowHorsContrat=!presShowHorsContrat; renderPresence(); }
 window.presToggleHorsContrat=presToggleHorsContrat;
 
+/* Dates proches reellement pointees pour la creche : affichees sous l'etat vide de la
+   feuille de presence. Un planning Gertrude importe sur une autre semaine (ou des enfants
+   rattaches a une autre creche) se repere ainsi immediatement, au lieu d'une page vide. */
+async function presAfficherDatesProches(crecheId,dateStr){
+  const box=document.getElementById('pres-dates-proches');
+  if(!box)return;
+  const ids=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants).map(e=>e.id);
+  if(!ids.length)return;
+  const d0=new Date(dateStr+'T00:00:00'),d1=new Date(dateStr+'T00:00:00');
+  d0.setDate(d0.getDate()-21);d1.setDate(d1.getDate()+21);
+  try{
+    const{data,error}=await sb.from('presences').select('presence_date')
+      .gte('presence_date',ipDateToLocalISO(d0)).lte('presence_date',ipDateToLocalISO(d1))
+      .in('enfant_id',ids);
+    if(error)throw error;
+    const dates=[...new Set((data||[]).map(p=>p.presence_date))].sort();
+    if(!dates.length){
+      box.innerHTML='Aucune présence enregistrée pour cette crèche à trois semaines près — le planning importé ne portait pas sur cette période, ou les enfants ont été rattachés à une autre crèche.';
+      return;
+    }
+    box.innerHTML='Présences enregistrées autour de cette date : '+dates.map(function(x){
+      return '<a href="#" onclick="presGoToDate(\''+x+'\');return false;" style="color:var(--koala);font-weight:600">'
+        +x.split('-').reverse().slice(0,2).join('/')+'</a>';
+    }).join(' · ');
+  }catch(e){console.warn('[Gantt] dates proches',e);}
+}
+function presGoToDate(iso){
+  const i=document.getElementById('presence-date');
+  if(i){i.value=iso;renderPresence();}
+}
+window.presGoToDate=presGoToDate;
+
 async function renderPresenceGantt(){
   const dateStr=document.getElementById('presence-date')?.value||todayStr();
   const view=document.getElementById('presence-gantt-view');
@@ -2349,7 +2381,20 @@ async function renderPresenceGantt(){
   const enfants=presOnlyPresents?presents:allEnfants;
   _presAbsentsDuJour=allEnfants.filter(e=>!presents.includes(e));
   if(!enfants.length){
-    view.innerHTML='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+((cacheCreches.find(c=>c.id===crecheId)||{}).name?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml((cacheCreches.find(c=>c.id===crecheId)||{}).name)+'</span>':'')+'</div><div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant pr\u00e9sent ce jour.<br><span style="font-size:12px">Utilisez <strong>Ajouter \u00e0 la journ\u00e9e</strong> en haut de la page.</span></p></div>';
+    /* Journee vide : dire POURQUOI. Trois causes se ressemblent a l'ecran - le filtre
+       "Presents uniquement" qui masque des inscrits, des contrats qui ne couvrent pas
+       la date, et surtout un planning importe sur une AUTRE semaine. On affiche donc
+       l'effectif de la creche, les enfants masques, et les dates proches reellement
+       pointees (cliquables) plutot qu'un simple "aucun enfant present". */
+    const _crecheLbl0=(cacheCreches.find(c=>c.id===crecheId)||{}).name||'';
+    const _tousCreche=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants);
+    let _aide='';
+    if(presOnlyPresents&&_tousCreche.length)
+      _aide+='<div style="font-size:12px;margin-top:8px">'+_tousCreche.length+' enfant(s) inscrit(s) dans cette cr\u00e8che, aucun point\u00e9 ce jour. <a href="#" onclick="presToggleFilterPresents();return false;" style="color:var(--koala);font-weight:600">Afficher la liste compl\u00e8te</a></div>';
+    if(_nbHorsContrat&&!presShowHorsContrat)
+      _aide+='<div style="font-size:12px;margin-top:6px"><a href="#" onclick="presToggleHorsContrat();return false;" style="color:var(--koala);font-weight:600">Afficher '+_nbHorsContrat+' enfant(s) hors p\u00e9riode de contrat</a></div>';
+    view.innerHTML='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+(_crecheLbl0?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml(_crecheLbl0)+'</span>':'')+'</div><div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant pr\u00e9sent ce jour.<br><span style="font-size:12px">Utilisez <strong>Ajouter \u00e0 la journ\u00e9e</strong> en haut de la page.</span></p>'+_aide+'<div id="pres-dates-proches" style="font-size:12px;color:var(--muted);margin-top:10px"></div></div>';
+    presAfficherDatesProches(crecheId,dateStr);
     return;
   }
   // En-t\u00eate heures
