@@ -3644,6 +3644,11 @@ async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.fi
 // ── IMPORT PRÉSENCES DEPUIS PLANNING PDF (Gantt) ──
 const IP_MONTHS={janvier:1,février:2,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,août:8,aout:8,septembre:9,octobre:10,novembre:11,décembre:12,decembre:12};
 let _importPresData=null;
+/* Journal de lecture du dernier PDF importe : chaque page ecartee (date illisible,
+   section Enfants absente) y laisse une ligne, affichee dans l'ecran d'apercu. Sans
+   lui, une page ignoree ne se voyait nulle part et la feuille de presence restait
+   vide sans explication. */
+let _ipDiag=[];
 let _ipReplace=true;
 let _ipForceCreche=false;
 function ipNormName(s){return(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s-]/g,'').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim();}
@@ -3657,8 +3662,13 @@ async function handlePresenceImport(input){
   if(!crecheId){alert('Sélectionnez une crèche dans la feuille de présence avant d’importer.');return;}
   showBanner('Lecture du PDF en cours…');
   let pages;
+  _ipDiag=[];
   try{pages=await ipParsePdf(file);}catch(e){console.error('[ImportPresence]',e);showBanner('Impossible de lire ce PDF.','error');return;}
-  if(!pages.length){showBanner('Aucun planning détecté dans ce PDF.','error');return;}
+  if(!pages.length){
+    console.warn('[ImportPresence] pages ignorées',_ipDiag);
+    showBanner(_ipDiag.length?('Aucun planning exploitable : '+_ipDiag[0]):'Aucun planning détecté dans ce PDF.','error');
+    return;
+  }
   showBanner('Chargement des enfants…');
   const{data:freshEnf,error:enfErr}=await sb.from('enfants').select('*');
   if(enfErr){console.error('[ImportPresence] enfants',enfErr);showBanner('Impossible de charger les enfants.','error');return;}
@@ -3714,9 +3724,28 @@ async function handlePresenceImport(input){
   }catch(e){console.warn('[ImportPresence] contrats',e);}
   _ipContratCreer=true;_ipContratMaj=false;
   _importPresData={crecheId,pages,nameMap,crecheEnfantIds:enfCreche.map(e=>e.id),titles,crecheMatch,
-    contratsParEnfant,propositions:ipProposerContrats(pages),epWarn};
+    contratsParEnfant,propositions:ipProposerContrats(pages),epWarn,diag:_ipDiag.slice()};
   renderImportPreview();
   document.getElementById('modal-import-presence-wrap').classList.add('open');
+}
+
+/* Date d'une page de planning (« Planning du lundi 31 aout 2026 »).
+   Deux pieges corriges ici :
+   - le libelle peut etre coupe en plusieurs fragments de texte par pdf.js (le titre
+     de la creche juste au-dessus, un retour a la ligne) : on cherche donc sur le
+     texte aplati, pas ligne par ligne ;
+   - le mois etait cherche tel quel dans une table indexee par cle accentuee
+     (« aout »). pdf.js renvoie parfois l'accent en forme decomposee (u + accent
+     combinant) : la cle ne correspondait pas, la date restait nulle et TOUTE la page
+     etait ignoree en silence. On resout desormais le mois sans accent ni casse. */
+function ipDateDePage(texte){
+  const flat=String(texte||'').normalize('NFC').replace(/\s+/g,' ');
+  const m=flat.match(/Planning\s+du\s+\S+\s+(\d{1,2})(?:er)?\s+([^\s\d]+)\s+(\d{4})/i);
+  if(!m)return null;
+  const jour=parseInt(m[1],10),annee=parseInt(m[3],10);
+  const mi=ipResolveAnyMonth(ipNormStr(m[2]).replace(/\.$/,''));
+  if(mi===null||isNaN(jour)||isNaN(annee))return null;
+  return ipToISO(annee,mi,jour);
 }
 
 async function ipParsePdf(file){
@@ -3729,10 +3758,8 @@ async function ipParsePdf(file){
     tc.items.forEach(it=>{const str=(it.str||'').trim();if(!str)return;const x=it.transform[4],y=Math.round(it.transform[5]);(rowsMap[y]=rowsMap[y]||[]).push({x,str});});
     const ys=Object.keys(rowsMap).map(Number).sort((a,b)=>b-a);
     const lines=ys.map(y=>({y,toks:rowsMap[y].sort((a,b)=>a.x-b.x).map(o=>o.str),minx:Math.min(...rowsMap[y].map(o=>o.x))}));
-    let date=null;
     const fullText=lines.map(l=>l.toks.join(' ')).join('\n');
-    const m=fullText.match(/Planning du \S+ (\d{1,2})(?:er)? (\S+) (\d{4})/i);
-    if(m){const day=+m[1],mon=IP_MONTHS[m[2].toLowerCase()],yr=+m[3];if(mon)date=yr+'-'+String(mon).padStart(2,'0')+'-'+String(day).padStart(2,'0');}
+    const date=ipDateDePage(fullText);
     let iEnf=-1,iSal=-1;
     // La section « Enfants » s'arrête soit à « Salariés » (page suivante), soit à une ligne
     // « Totaux » (récapitulatif quotidien des effectifs) : sans ce second cas, « Totaux »
@@ -3746,6 +3773,8 @@ async function ipParsePdf(file){
     const tm=fullText.match(/^(.*KOALA\s*KIDS.*)$/im);
     const title=tm?tm[1].trim():'';
     if(date&&cleaned.length)out.push({date,names:cleaned,title});
+    else if(!date&&cleaned.length)_ipDiag.push('Page '+p+' : date du planning illisible ('+cleaned.length+' enfant(s) pourtant detecte(s)) - page ignoree.');
+    else if(date&&!cleaned.length)_ipDiag.push('Page '+p+' ('+date+') : aucun nom d\u2019enfant lu - section \u00ab Enfants \u00bb introuvable dans ce PDF.');
   }
   return out;
 }
@@ -3809,6 +3838,16 @@ async function ipInsertPresences(rows){
     return{error:r2.error,degrade:!r2.error};
   }
   return{error,degrade:false};
+}
+
+/* Pages du PDF ecartees a la lecture : affichees dans l'apercu des deux imports.
+   Une page ignoree (date illisible, section Enfants absente) expliquait jusqu'ici,
+   sans le dire, une feuille de presence restee vide apres un import « reussi ». */
+function ipHtmlDiag(diag){
+  if(!diag||!diag.length)return '';
+  return '<div style="background:var(--amber-lt);border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--orange)">'
+    +'<strong>⚠ '+diag.length+' page(s) du PDF n’ont pas pu être lues</strong><br>'
+    +'<span style="font-size:11.5px">'+diag.map(escHtml).join('<br>')+'</span></div>';
 }
 
 /* Bloc « Contrats d'accueil » de l'écran d'aperçu, partagé par les deux imports. */
@@ -3890,6 +3929,7 @@ function renderImportPreview(){
     html+='<strong>'+totalNew+' nouvel enfant'+(totalNew>1?'s':'')+' seront créés</strong> dans <strong>'+(creche?creche.name:'la crèche')+'</strong><br>';
     html+='<span style="color:var(--muted);font-size:11.5px">'+toCreateUnique.map(escHtml).join(', ')+'</span></div>';
   }
+  html+=ipHtmlDiag(_importPresData.diag);
   html+=ipHtmlContrats(_importPresData.propositions,_importPresData.nameMap,_importPresData.contratsParEnfant,_importPresData.epWarn,_importPresData.pages.length);
   _importPresData.pages.forEach(pg=>{
     const nb=pg.matched.length+pg.toCreate.length;totalPres+=nb;
@@ -10784,6 +10824,7 @@ async function uniHandleFile(event) {
 
   // 1) Présences des enfants (couche texte du PDF)
   let presPages = [];
+  _ipDiag = [];
   try { for (const f of files) presPages.push(...await ipParsePdf(f)); }
   catch (e) { console.error('[ImportUnifie] présences', e); showBanner('Impossible de lire les présences dans ce PDF.', 'error'); return; }
 
@@ -10865,7 +10906,7 @@ async function uniHandleFile(event) {
   _uniData = {
     crecheId, referentId, referentNom,
     pres: { pages: presPages, nameMap, crecheEnfantIds: enfCreche.map(e => e.id), titles: presTitles, crecheMatch: presCrecheMatch, forceCreche: false, replace: true,
-            contratsParEnfant, propositions: ipProposerContrats(presPages), epWarn },
+            contratsParEnfant, propositions: ipProposerContrats(presPages), epWarn, diag: _ipDiag.slice() },
     sal: { jours, mapping, connus, warnings: parsedSal.warnings, titles: parsedSal.titles, crecheMatch: salCrecheMatch, replace: true, referentPrenom: spPrenomReferente(referentNom, mapping) }
   };
   uniRenderPreview();
@@ -10884,7 +10925,9 @@ function uniRenderPreview() {
   html += '<div style="font-weight:800;color:var(--koala);margin-bottom:6px"><i class="ti ti-users"></i> Présences des enfants</div>';
   if (!pres.pages.length) {
     html += '<div style="font-size:12px;color:var(--muted);margin-bottom:14px">Aucune présence enfant détectée dans ce PDF.</div>';
+    html += ipHtmlDiag(pres.diag);
   } else {
+    html += ipHtmlDiag(pres.diag);
     if (!pres.crecheMatch) {
       html += '<div style="background:#fdecea;border-left:4px solid var(--red);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#8b1a1a">';
       html += '<strong>⚠ La crèche ne correspond pas.</strong><br>Le PDF concerne <strong>' + escHtml(pres.titles.join(' / ')) + '</strong> alors que vous avez choisi <strong>' + escHtml(creche ? creche.name : '—') + '</strong>.<br>';
