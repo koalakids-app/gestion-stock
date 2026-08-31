@@ -1585,7 +1585,15 @@ const SYNC_MIN_MS=10000;       // anti-rafale entre deux rechargements
 let _mainCourant=null,_syncDernier=0,_syncEnCours=false,_syncEnAttente=false,
     _syncTimer=null,_syncCanal=null,_syncDebounce=null,_syncDemarre=false;
 
-function syncModaleOuverte(){return !!document.querySelector('.overlay.open');}
+/* Modales qui ne doivent PAS geler la synchronisation : elles n'affichent que de
+   la lecture, rien à écraser. La fiche enfant en fait partie — c'est justement
+   l'écran qu'on ouvre sur un autre poste pour vérifier qu'une modification est
+   bien arrivée ; la geler revenait à garantir qu'elle ne le serait jamais. */
+const SYNC_MODALES_NON_BLOQUANTES=['modal-enf-fiche-wrap'];
+function syncModaleOuverte(){
+  return [].slice.call(document.querySelectorAll('.overlay.open'))
+    .some(function(o){return SYNC_MODALES_NON_BLOQUANTES.indexOf(o.id)<0;});
+}
 
 /* Dernière action de l'utilisateur : le rappel périodique ne redessine pas
    l'écran sous les doigts de quelqu'un en train de pointer des présences. */
@@ -1622,6 +1630,19 @@ function syncRedessine(){
     else if(t==='enfants'&&typeof enfRender==='function')enfRender();
     else if(t==='afaire'&&typeof afRender==='function')afRender();
   }catch(err){console.warn('[Sync] redessin '+t,err);}
+  // Fiche enfant ouverte en lecture : on remet à jour son titre et son onglet
+  // Identité, sans toucher aux onglets Contrat / Documents chargés à part.
+  try{
+    const fiche=document.getElementById('modal-enf-fiche-wrap');
+    if(fiche&&fiche.classList.contains('open')&&typeof enfRenderIdentite==='function'){
+      const e=cacheEnfants.find(function(x){return String(x.id)===String(enfFicheId);});
+      if(e){
+        const titre=document.getElementById('enf-fiche-title');
+        if(titre)titre.innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((e.prenom||'')+' '+(e.nom||''));
+        enfRenderIdentite();
+      }
+    }
+  }catch(err){console.warn('[Sync] fiche enfant',err);}
   if(typeof updateBadges==='function'){try{updateBadges();}catch(e){}}
 }
 
@@ -3814,7 +3835,7 @@ function enfFillCreches(selectedId){
   sel.style.cursor=isDirection?'':'not-allowed';
 }
 function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-function editEnfant(id){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
 async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim(),regime_repas:document.getElementById('enf-regime-repas').value||null,repas_base:document.getElementById('enf-repas-base').value||null};
   // La colonne repas_base peut ne pas exister (migration SQL non passée) : on
   // réessaie alors sans elle plutôt que de refuser d'enregistrer la fiche.
@@ -5750,14 +5771,21 @@ function pmiInjecterModale(){
 <div class="overlay" id="modal-pmi-export-wrap">
   <div class="modal" style="max-width:560px;max-height:86vh;display:flex;flex-direction:column">
     <h3><i class="ti ti-file-spreadsheet"></i> Export planning PMI</h3>
-    <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i>
-      Vérifiez le nom et la qualification de chaque salarié·e (mémorisés pour les prochains exports de
-      cette crèche), puis générez le fichier Excel au format PMI.<br>
-      En micro-crèche, une certification de niveau V petite enfance (CAP AEPE) compte dans le
-      <strong>1°</strong> — le personnel diplômé des 40 % — dès <strong>2 ans d'expérience</strong>
-      (3 ans pour un·e assistant·e maternel·le agréé·e) : cochez la case correspondante.</div>
+    <!-- .info-box est une flex-row : chaque <strong> deviendrait une colonne et le texte
+         s'empilerait sur toute la hauteur de la modale. Le texte est donc regroupé dans un
+         seul enfant (un unique élément flex), l'icône restant le second. -->
+    <div class="info-box" style="margin-bottom:14px;align-items:flex-start"><i class="ti ti-info-circle" style="font-size:15px;flex:0 0 auto;margin-top:1px"></i>
+      <div style="flex:1;min-width:0;line-height:1.5">
+        Vérifiez le nom et la qualification de chaque salarié·e (mémorisés pour les prochains exports de
+        cette crèche), puis générez le fichier Excel au format PMI.<br>
+        En micro-crèche, une certification de niveau V petite enfance (CAP AEPE) compte dans le
+        <strong>1°</strong> — le personnel diplômé des 40 % — dès <strong>2 ans d'expérience</strong>
+        (3 ans pour un·e assistant·e maternel·le agréé·e) : cochez la case correspondante.
+      </div></div>
     <div id="pmi-export-subtitle" style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:600"></div>
-    <div id="pmi-export-list" style="overflow-y:auto;flex:1;margin-bottom:14px"></div>
+    <!-- min-height : un élément flex en overflow:auto a min-height:0, il peut donc être
+         écrasé à zéro par le reste de la modale et la liste des salariées disparaît. -->
+    <div id="pmi-export-list" style="overflow-y:auto;flex:1 1 auto;min-height:140px;margin-bottom:14px"></div>
     <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:12px">
       <div style="font-weight:700;font-size:13px;margin-bottom:6px">Temps de bureau (hors encadrement)</div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -9505,7 +9533,26 @@ function enfRender(){
   }).join('');
 }
 
+/* Relit une fiche enfant directement en base et met le cache à jour.
+
+   Le cache est rempli à la connexion puis rafraîchi périodiquement : entre deux
+   rafraîchissements, ouvrir une fiche pouvait afficher — et surtout réenregistrer —
+   des valeurs vieilles de plusieurs minutes, écrasant la modification faite depuis
+   un autre poste. Une fiche qu'on ouvre est donc toujours relue au serveur : c'est
+   une seule ligne, le coût est négligeable. */
+async function enfRelire(id){
+  try{
+    const{data,error}=await sb.from('enfants').select('*').eq('id',id).maybeSingle();
+    if(error||!data)return null;
+    const e=cacheEnfants.find(function(x){return String(x.id)===String(id);});
+    if(e){Object.assign(e,data);return e;}
+    cacheEnfants.push(data);
+    return data;
+  }catch(err){console.warn('[Enfants] relecture',err);return null;}
+}
+
 async function enfOpenFiche(id){
+  await enfRelire(id);
   const e = cacheEnfants.find(x=>String(x.id)===String(id));
   if(!e) return;
   enfFicheId = e.id;
