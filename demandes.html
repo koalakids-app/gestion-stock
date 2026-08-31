@@ -429,6 +429,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn" onclick="showMain('enfants')" id="mnav-enfants"><i class="ti ti-mood-kid"></i> Enfants</button>
     </nav>
     <div style="display:flex;align-items:center;gap:8px">
+      <div id="sync-chip" title="Dernière mise à jour depuis le serveur — cliquer pour rafraîchir maintenant"
+           onclick="syncMaintenant({immediat:true})"
+           style="display:none;align-items:center;gap:5px;font-size:11px;color:#fff;opacity:.75;cursor:pointer;white-space:nowrap">
+        <i class="ti ti-refresh" id="sync-chip-icon" style="font-size:13px"></i><span id="sync-chip-txt"></span>
+      </div>
       <div class="user-chip" id="user-chip" onclick="doLogout()"><i class="ti ti-user" style="font-size:13px"></i> <span id="user-name">—</span> <i class="ti ti-logout" style="font-size:12px;opacity:0.7"></i></div>
     </div>
   </div>
@@ -1322,8 +1327,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <h3><i class="ti ti-clipboard-list"></i> Commande repas — <span id="cr-creche-name"></span></h3>
     <div id="cr-source" style="margin-bottom:12px"></div>
     <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i>
-      Chiffres pré-remplis d'après les présences de la semaine et l'âge de chaque enfant <strong>au jour de la livraison</strong>
-      (tranches du traiteur : − 6 mois / 6-18 mois / + 18 mois / périscolaire). Les régimes sont notés
+      Chiffres pré-remplis d'après les présences de la semaine et le <strong>code repas de chaque enfant</strong>
+      (BB / M / G, celui de la feuille de présence) : M va en « Bébés 6-18 mois », G en « Grands + 18 mois ».
+      L'âge au jour de la livraison ne sert qu'à isoler les « − 6 mois » et le « périscolaire 4/5 ans ». Les régimes sont notés
       <strong>6+1SV</strong> (6 repas standard + 1 sans viande). Les enfants dont la fiche indique
       <strong>BIB (biberon)</strong> sont exclus du bon — ni repas, ni goûter. Toutes les cases restent
       modifiables avant génération du PDF.</div>
@@ -1528,6 +1534,7 @@ window.addEventListener('DOMContentLoaded', async function() {
   showLogin();
 });
 
+let _groupesDejaRecalcules=false;
 async function loadAllData(){
   const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout Supabase')),10000));
   [cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants,cacheEvenements,cacheMessages]=await Promise.race([
@@ -1537,7 +1544,12 @@ async function loadAllData(){
   // Consignes lues (notifications in-app) — non bloquant
   try{cacheConsignesLues=await dbSelect('consignes_lues');}catch(e){cacheConsignesLues=[];}
   // Salariés — non bloquant (alimente aussi le sélecteur de prénom du planning équipe)
-  // Recalcul silencieux du groupe selon l'âge : corrige en base les enfants dont le groupe stocké est périmé
+  // Recalcul silencieux du groupe selon l'âge : corrige en base les enfants dont le groupe stocké est périmé.
+  // Une seule fois par session : loadAllData() est aussi rappelée par la synchronisation
+  // entre postes, et réécrire la table `enfants` toutes les minutes déclencherait
+  // en boucle les notifications Realtime des autres postes.
+  if(_groupesDejaRecalcules)return;
+  _groupesDejaRecalcules=true;
   try{
     for(const e of cacheEnfants){
       if(!e.dob) continue;
@@ -1546,6 +1558,154 @@ async function loadAllData(){
     }
   }catch(err){console.warn('recalcul groupe',err);}
 }
+/* ══════════════════════════════════════════════════════════════════════════
+   SYNCHRONISATION ENTRE POSTES
+
+   Les caches (cacheDemandes, cacheEnfants, cacheIncidents…) étaient remplis une
+   seule fois par loadAllData() à la connexion, et chaque écran n'était redessiné
+   qu'à la demande : un poste laissé ouvert ne voyait jamais ce qu'un autre poste
+   venait de modifier — il fallait fermer puis rouvrir l'application.
+
+   Trois filets, du plus réactif au plus sûr :
+   1. Supabase Realtime — la modification arrive en une seconde, à condition que
+      les tables soient publiées (Dashboard Supabase → Database → Publications →
+      supabase_realtime). Si elles ne le sont pas, rien ne casse : le canal reste
+      muet et les deux filets suivants suffisent.
+   2. Retour sur l'onglet (visibilitychange / focus / retour du réseau) : sortie
+      de veille, retour depuis un autre onglet, PWA rouverte.
+   3. Rappel périodique, tant que l'onglet est au premier plan.
+
+   Garde-fous : jamais pendant qu'une fenêtre modale est ouverte (on n'efface pas
+   une saisie en cours — la synchro est alors reportée à sa fermeture), jamais en
+   arrière-plan, et jamais deux rechargements coup sur coup.
+   ═════════════════════════════════════════════════════════════════════════ */
+const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','planning','planning_equipe','enfants_contrats','taches_afaire','commandes_repas'];
+const SYNC_PERIODE_MS=60000;   // rappel périodique quand l'onglet est visible
+const SYNC_MIN_MS=10000;       // anti-rafale entre deux rechargements
+let _mainCourant=null,_syncDernier=0,_syncEnCours=false,_syncEnAttente=false,
+    _syncTimer=null,_syncCanal=null,_syncDebounce=null,_syncDemarre=false;
+
+function syncModaleOuverte(){return !!document.querySelector('.overlay.open');}
+
+/* Dernière action de l'utilisateur : le rappel périodique ne redessine pas
+   l'écran sous les doigts de quelqu'un en train de pointer des présences. */
+let _derniereAction=0;
+['pointerdown','keydown'].forEach(function(ev){
+  document.addEventListener(ev,function(){_derniereAction=Date.now();},true);
+});
+
+/* Écran actuellement affiché — showMain() le mémorise, mais l'onglet Demandes est
+   actif dès le HTML sans passer par showMain : on retombe alors sur le DOM. */
+function syncEcranCourant(){
+  if(_mainCourant)return _mainCourant;
+  const actif=document.querySelector('#app-wrap .tab-content.active');
+  return actif&&actif.id.indexOf('main-')===0?actif.id.slice(5):null;
+}
+
+/* Redessine l'écran affiché SANS repasser par les fonctions *Init(), qui
+   remettraient à zéro l'onglet interne, les filtres ou la semaine choisie.
+   Les écrans de saisie personnelle (frais IK, frais pro, remplaçantes, planning
+   équipe) ne sont volontairement pas redessinés : l'utilisateur y est en train
+   de remplir un formulaire, on ne lui reprend pas la main sous les doigts. */
+function syncRedessine(){
+  const t=syncEcranCourant();
+  try{
+    if(t==='presence'&&typeof renderPresence==='function')renderPresence();
+    else if(t==='demands'&&typeof renderCrecheTabs==='function')renderCrecheTabs();
+    else if(t==='incidents'&&typeof renderIncidents==='function')renderIncidents();
+    else if(t==='referents'&&typeof renderReferents==='function')renderReferents();
+    else if(t==='planning'&&typeof renderPlanning==='function')renderPlanning();
+    else if(t==='evenements'&&typeof renderCalendar==='function')renderCalendar();
+    else if(t==='dashboard'&&typeof renderDashboard==='function')renderDashboard();
+    else if(t==='ref-dashboard'&&typeof renderRefDashboard==='function')renderRefDashboard();
+    else if(t==='vaccinations'&&typeof vacRender==='function')vacRender();
+    else if(t==='enfants'&&typeof enfRender==='function')enfRender();
+    else if(t==='afaire'&&typeof afRender==='function')afRender();
+  }catch(err){console.warn('[Sync] redessin '+t,err);}
+  if(typeof updateBadges==='function'){try{updateBadges();}catch(e){}}
+}
+
+/* Horodatage discret dans l'en-tête : sans lui, impossible de distinguer
+   « rien n'a changé » de « la synchro ne marche plus ». */
+function syncMajChip(etat){
+  const chip=document.getElementById('sync-chip'),txt=document.getElementById('sync-chip-txt'),
+        ico=document.getElementById('sync-chip-icon');
+  if(!chip||!txt)return;
+  chip.style.display='flex';
+  if(etat==='encours'){txt.textContent='mise à jour…';if(ico)ico.style.opacity='1';return;}
+  if(ico)ico.style.opacity='';
+  txt.textContent=_syncDernier
+    ? 'à jour '+new Date(_syncDernier).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})
+    : '';
+}
+
+/* opts.immediat : ignore l'anti-rafale (clic manuel, retour sur l'onglet).
+
+   Toute demande écartée (modale ouverte, saisie en cours, rafale) n'est pas
+   perdue : elle est mise en attente et le rappel périodique la reprend dès que
+   la voie est libre. Sans cela, une modification signalée pendant une saisie
+   n'aurait jamais été affichée. */
+async function syncMaintenant(opts){
+  opts=opts||{};
+  if(_syncEnCours||!currentUser)return;
+  if(document.hidden){_syncEnAttente=true;return;}
+  if(syncModaleOuverte()){_syncEnAttente=true;return;}
+  if(!opts.immediat){
+    if(Date.now()-_derniereAction<15000){_syncEnAttente=true;return;}   // saisie en cours
+    if(Date.now()-_syncDernier<SYNC_MIN_MS){_syncEnAttente=true;return;}
+  }
+  _syncEnAttente=false;
+  _syncEnCours=true;syncMajChip('encours');
+  try{
+    await loadAllData();
+    _syncDernier=Date.now();
+    syncRedessine();
+  }catch(err){console.warn('[Sync] rechargement',err);}
+  finally{_syncEnCours=false;syncMajChip();}
+}
+window.syncMaintenant=syncMaintenant;
+
+/* Un import de planning écrit des centaines de lignes : on regroupe la rafale
+   d'événements en un seul rechargement. Le signal ne force pas le redessin : si
+   l'utilisateur est en pleine saisie, la demande reste en attente. */
+function syncSignalDistant(){
+  _syncEnAttente=true;
+  clearTimeout(_syncDebounce);
+  _syncDebounce=setTimeout(function(){syncMaintenant();},900);
+}
+
+function syncDemarrerRealtime(){
+  if(_syncCanal||typeof sb.channel!=='function')return;
+  try{
+    let ch=sb.channel('koala-sync');
+    SYNC_TABLES.forEach(function(t){
+      ch=ch.on('postgres_changes',{event:'*',schema:'public',table:t},syncSignalDistant);
+    });
+    _syncCanal=ch.subscribe(function(st){
+      if(st==='SUBSCRIBED')console.info('[Sync] temps réel actif');
+      else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT')
+        console.warn('[Sync] temps réel indisponible ('+st+') — mise à jour au retour sur l’onglet et toutes les '
+          +(SYNC_PERIODE_MS/1000)+' s. Pour l’activer : Supabase → Database → Publications → supabase_realtime.');
+    });
+  }catch(err){console.warn('[Sync] realtime',err);}
+}
+
+function syncDemarrer(){
+  if(_syncDemarre)return;
+  _syncDemarre=true;
+  _syncDernier=Date.now();syncMajChip();
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)syncMaintenant({immediat:true});});
+  window.addEventListener('focus',function(){syncMaintenant();});
+  window.addEventListener('online',function(){syncMaintenant({immediat:true});});
+  // Rappel périodique : reprend les demandes mises en attente, et rattrape de
+  // toute façon les modifications que le temps réel n'aurait pas signalées.
+  _syncTimer=setInterval(function(){syncMaintenant();},SYNC_PERIODE_MS);
+  // Reprise plus rapide d'une demande en attente, une fois la saisie terminée.
+  setInterval(function(){if(_syncEnAttente)syncMaintenant();},5000);
+  syncDemarrerRealtime();
+}
+window.syncDemarrer=syncDemarrer;
+
 // SUPABASE HELPERS
 async function dbSelect(table,filters={}){let q=sb.from(table).select('*').order('created_at',{ascending:false});for(const[k,v]of Object.entries(filters))q=q.eq(k,v);const{data,error}=await q;if(error){console.warn(table,error);return[];}return data||[];}
 async function dbInsert(table,row){const{data,error}=await sb.from(table).insert(row).select().single();if(error){console.warn('insert',table,error);window._lastDbError=error.message||String(error);return null;}window._lastDbError=null;return data;}
@@ -1637,6 +1797,7 @@ function showApp(){
   // Référentes → ouvrir directement leur tableau de bord
   if(!isDirection)showMain('ref-dashboard');
   enfMaybeOpenFromUrl();
+  syncDemarrer();
 }
 
 /* Ouverture automatique de la fiche enfant sur l'onglet Documents,
@@ -1663,7 +1824,11 @@ function enfMaybeOpenFromUrl(){
 function todayStr(){return ipDateToLocalISO(new Date());}
 function weekStart(){const n=new Date();const day=n.getDay();const diff=n.getDate()-(day===0?6:day-1);const m=new Date(n.getFullYear(),n.getMonth(),diff+weekOffset*7);m.setHours(0,0,0,0);return m;}
 function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
-function closeModal(id){document.getElementById(id).classList.remove('open');}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  // Une synchro reportée pendant la saisie repartira d'elle-même : le rappel
+  // court de syncDemarrer() reprend la demande en attente dès que l'écran est calme.
+}
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){
   if(e.target===this)this.classList.remove('open');
 }));
@@ -1699,6 +1864,7 @@ async function markConsignesRead(){
 }
 
 function showMain(tab){
+  _mainCourant=tab;
   ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
@@ -3014,10 +3180,12 @@ window.exportPresenceHebdoExcel=exportPresenceHebdoExcel;
 /* ══════════════════════════════════════════════════════════════════════════
    COMMANDE REPAS TRAITEUR (bon « Les mamans cuisinières du Monde »)
 
-   Les tranches d'âge du traiteur ne sont PAS celles de l'application
-   (0-1 / 1-2 / 2-3 ans) : ici − 6 mois, 6-18 mois, + 18 mois, périscolaire
-   4/5 ans, calculées sur l'âge réel de l'enfant au jour de la livraison —
-   un enfant qui passe un cap en cours de semaine change donc de ligne.
+   Les lignes du bon ne sont pas les groupes de l'application (0-1 / 1-2 / 2-3 ans)
+   mais celles du traiteur : − 6 mois, 6-18 mois, + 18 mois, périscolaire 4/5 ans.
+   Le remplissage part du CODE REPAS de l'enfant (BB / M / G), le même que la
+   feuille de présence hebdomadaire et l'export Excel, pour que les deux documents
+   ne puissent jamais s'écarter ; l'âge au jour de la livraison ne tranche que
+   « − 6 mois » vs « 6-18 mois » et « + 18 mois » vs « périscolaire ».
    Les contrats étant gérés dans Gertrude, tout part des présences importées.
    ═════════════════════════════════════════════════════════════════════════ */
 
@@ -3037,18 +3205,37 @@ const MCM_ROWS=[
   {k:'bag',  lbl:'BAGUETTES TRADITION',  sub:'(crèche livrée le matin uniquement)',  bg:'#FFFFFF'}
 ];
 
-/* Tranche du traiteur d'après l'âge exact (en mois révolus) au jour donné. */
-function mcmTranche(dob,dateStr){
+/* Âge exact en mois révolus au jour donné (null si la date de naissance manque). */
+function mcmAgeMois(dob,dateStr){
   if(!dob)return null;
   const d0=new Date(String(dob).slice(0,10)+'T00:00:00'),d1=new Date(dateStr+'T00:00:00');
   if(isNaN(d0)||isNaN(d1))return null;
   let m=(d1.getFullYear()-d0.getFullYear())*12+(d1.getMonth()-d0.getMonth());
   if(d1.getDate()<d0.getDate())m--;
-  if(m<0)return null;
-  if(m<6)return'bb6';
-  if(m<18)return'bb18';
-  if(m<48)return'grand';
-  return'peri';
+  return m<0?null:m;
+}
+/* Ligne du bon traiteur pour un enfant, au jour de la livraison.
+
+   C'est le CODE REPAS (BB / M / G) qui fait foi, pas l'âge brut : c'est lui qui
+   s'affiche sur la feuille de présence et dans l'export Excel, et il est
+   modifiable enfant par enfant sur sa fiche (`repas_base`). Faire dépendre le bon
+   de commande du seul âge remettait un enfant « repas grand » dans la ligne
+   « Bébés 6-18 mois » dès que son code avait été forcé — l'écran et le bon se
+   contredisaient.
+
+   L'âge ne sert plus qu'à départager les deux lignes que le code ne distingue
+   pas : « − 6 mois » / « 6-18 mois » pour BB, et « + 18 mois » / « périscolaire
+   4/5 ans » pour G. Sans date de naissance, on retient la ligne la plus courante
+   (6-18 mois pour BB, + 18 mois pour G) plutôt que d'écarter l'enfant du bon. */
+function mcmLigne(enf,dateStr){
+  const code=enfRepasCode(enf);
+  if(!code||code==='BIB')return null;
+  const base=code.replace(/(SV|SPV|SPA)$/,'');
+  const m=mcmAgeMois(enf.dob,dateStr);
+  if(base==='BB')return(m!==null&&m<6)?'bb6':'bb18';
+  if(base==='M')return'bb18';
+  if(base==='G')return(m!==null&&m>=48)?'peri':'grand';
+  return null;
 }
 /* « 6+1SV » : effectif standard, puis chaque régime particulier. */
 function crFmtCell(c){
@@ -3145,7 +3332,7 @@ function crCompute(notify){
       const cell=r.cells[i];
       if(!cell.present)return;
       if(cell.repas==='BIB')return;            // au biberon : rien à commander
-      const t=mcmTranche(r.enfant.dob,ctx.dateStrs[i]);
+      const t=mcmLigne(r.enfant,ctx.dateStrs[i]);
       if(!t)return;
       const reg=r.enfant.regime_repas||'';
       if(cell.slot==='j'||cell.slot==='m')repas[t][reg]=(repas[t][reg]||0)+1;
@@ -3161,13 +3348,14 @@ function crCompute(notify){
     vals.bag[i]='';
   });
   crRenderTable(vals);
-  // Les enfants au biberon n'ont pas besoin d'une date de naissance pour ce bon,
-  // puisqu'ils en sont exclus : les signaler serait un faux avertissement.
+  // Les enfants au biberon sont volontairement hors du bon : les signaler comme
+  // « manquants » serait un faux avertissement. Ne manquent vraiment que les
+  // enfants sans aucun code repas (ni date de naissance, ni type forcé sur la fiche).
   const auBiberon=ctx.rows.filter(function(r){return enfRepasCode(r.enfant)==='BIB';});
-  const sansDob=ctx.rows.filter(function(r){return !r.enfant.dob&&enfRepasCode(r.enfant)!=='BIB';});
+  const sansCode=ctx.rows.filter(function(r){return !enfRepasCode(r.enfant);});
   const mentionBib=auBiberon.length?' · '+auBiberon.length+' enfant(s) au biberon exclu(s) du bon':'';
-  if(sansDob.length){
-    showBanner(sansDob.length+' enfant(s) sans date de naissance ne sont pas comptés — complétez leur fiche.'+mentionBib,'error');
+  if(sansCode.length){
+    showBanner(sansCode.length+' enfant(s) sans code repas ne sont pas comptés — renseignez leur date de naissance ou leur type de repas.'+mentionBib,'error');
   }else if(notify){showBanner('Chiffres recalculés depuis les présences.'+mentionBib);}
 }
 
