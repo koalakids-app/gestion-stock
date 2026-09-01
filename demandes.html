@@ -2554,7 +2554,7 @@ async function presAfficherDatesProches(crecheId,dateStr){
   const ids=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants).map(e=>e.id);
   if(!ids.length)return;
   const d0=new Date(dateStr+'T00:00:00'),d1=new Date(dateStr+'T00:00:00');
-  d0.setDate(d0.getDate()-21);d1.setDate(d1.getDate()+21);
+  d0.setDate(d0.getDate()-120);d1.setDate(d1.getDate()+120);
   try{
     const{data,error}=await sb.from('presences').select('presence_date')
       .gte('presence_date',ipDateToLocalISO(d0)).lte('presence_date',ipDateToLocalISO(d1))
@@ -2562,7 +2562,7 @@ async function presAfficherDatesProches(crecheId,dateStr){
     if(error)throw error;
     const dates=[...new Set((data||[]).map(p=>p.presence_date))].sort();
     if(!dates.length){
-      box.innerHTML='Aucune présence enregistrée pour cette crèche à trois semaines près — le planning importé ne portait pas sur cette période, ou les enfants ont été rattachés à une autre crèche.';
+      box.innerHTML='Aucune présence enregistrée pour cette crèche à quatre mois près — le planning importé ne portait pas sur cette période, ou les enfants ont été rattachés à une autre crèche.';
       return;
     }
     box.innerHTML='Présences enregistrées autour de cette date : '+dates.map(function(x){
@@ -4195,7 +4195,7 @@ async function handlePresenceImport(input){
   showBanner('Lecture du PDF en cours…');
   let pages;
   _ipDiag=[];
-  try{pages=await ipParsePdf(file);}catch(e){console.error('[ImportPresence]',e);showBanner('Impossible de lire ce PDF.','error');return;}
+  try{pages=ipDedoublonnerPages(await ipParsePdf(file),_ipDiag);}catch(e){console.error('[ImportPresence]',e);showBanner('Impossible de lire ce PDF.','error');return;}
   if(!pages.length){
     console.warn('[ImportPresence] pages ignorées',_ipDiag);
     showBanner(_ipDiag.length?('Aucun planning exploitable : '+_ipDiag[0]):'Aucun planning détecté dans ce PDF.','error');
@@ -4297,7 +4297,8 @@ async function ipParsePdf(file){
     // « Totaux » (récapitulatif quotidien des effectifs) : sans ce second cas, « Totaux »
     // ressemble à un prénom (majuscule + minuscules) et les chiffres qui suivent sont lus
     // comme la suite du nom, créant de faux enfants du type « Totaux 1 7 10 9 7 6 1 ».
-    for(let i=0;i<lines.length;i++){const f=lines[i].toks[0];if(iEnf<0&&f==='Enfants'&&lines[i].minx<70)iEnf=i;else if(iEnf>=0&&iSal<0&&lines[i].minx<70&&(f==='Salariés'||f==='Totaux')){iSal=i;break;}}
+    for(let i=0;i<lines.length;i++){const f=lines[i].toks[0];if(iEnf<0&&spEstEnfants(f)&&lines[i].minx<70)iEnf=i;else if(iEnf>=0&&iSal<0&&lines[i].minx<70&&(spEstSalaries(f)||spEstTotaux(f))){iSal=i;break;}}
+    if(iEnf<0){_ipDiag.push('Page '+p+' : section \u00ab Enfants \u00bb introuvable \u2014 page ignor\u00e9e.');continue;}
     const names=[];let cur=null;
     for(let i=iEnf+1;i<(iSal>=0?iSal:lines.length);i++){const toks=lines[i].toks;if(!toks.length)continue;if(/^totaux$/i.test(toks[0]))continue;if(ipIsFirstnameToken(toks[0])){if(cur)names.push(cur);cur=toks.join(' ');}else if(cur)cur+=' '+toks.join(' ');}
     if(cur)names.push(cur);
@@ -4358,6 +4359,39 @@ function ipContratDiffere(ct,prop){
   return a!==b
     || ipHhmmVersHeure(ct.heure_debut)!==ipHhmmVersHeure(prop.heure_debut)
     || ipHhmmVersHeure(ct.heure_fin)!==ipHhmmVersHeure(prop.heure_fin);
+}
+
+/* Une même journée lue deux fois — c'est le cas dès qu'on sélectionne à la fois
+   « Planning presences 21 septembre.pdf » et sa copie « … (1).pdf », ou deux
+   exports qui se chevauchent — produisait deux lignes identiques dans le lot
+   inséré. La contrainte d'unicité (enfant, date, créneau) faisait alors échouer
+   l'INSERT ENTIER : import annoncé en erreur, aucune présence enregistrée, alors
+   que la lecture du PDF était parfaite. Le lecteur des salariés dédoublonne déjà
+   ses journées (`vues`) ; on fait la même chose ici.
+   Renvoie les pages conservées et alimente _ipDiag pour que l'aperçu le dise. */
+function ipDedoublonnerPages(pages,diag){
+  const vues=new Map();const gardees=[];
+  (pages||[]).forEach(pg=>{
+    if(vues.has(pg.date)){
+      const n=vues.get(pg.date)+1;vues.set(pg.date,n);
+      if(n===2&&diag)diag.push(ipFmtDate(pg.date)+' figure dans plusieurs fichiers : seule la première lecture est conservée.');
+      return;
+    }
+    vues.set(pg.date,1);gardees.push(pg);
+  });
+  return gardees;
+}
+
+/* Dernier filet : même après dédoublonnage des pages, deux noms du PDF peuvent
+   pointer sur la même fiche enfant (nom coupé sur deux lignes, homonyme). On
+   n'envoie donc jamais deux fois le même triplet (enfant, date, créneau). */
+function ipDedoublonnerLignes(rows){
+  const vu=new Set();
+  return (rows||[]).filter(r=>{
+    const k=r.enfant_id+'_'+r.presence_date+'_'+r.slot;
+    if(vu.has(k))return false;
+    vu.add(k);return true;
+  });
 }
 
 /* Les colonnes horaires de `presences` peuvent ne pas exister encore (migration
@@ -4525,9 +4559,10 @@ async function confirmPresenceImport(){
   }
   const{data:existing}=await sb.from('presences').select('id,enfant_id,presence_date,slot').in('presence_date',dates).in('enfant_id',ids);
   const exSet=new Set((existing||[]).map(e=>e.enfant_id+'_'+e.presence_date+'_'+e.slot));
-  const toInsert=wanted.filter(w=>!exSet.has(w.enfant_id+'_'+w.presence_date+'_'+w.slot));
+  const toInsert=ipDedoublonnerLignes(wanted.filter(w=>!exSet.has(w.enfant_id+'_'+w.presence_date+'_'+w.slot)));
   let ok=true,degrade=false;
-  if(toInsert.length){const r=await ipInsertPresences(toInsert);if(r.error){console.error('[ImportPresence] insert presences',r.error);ok=false;}degrade=r.degrade;}
+  let _errMsg='';
+  if(toInsert.length){const r=await ipInsertPresences(toInsert);if(r.error){console.error('[ImportPresence] insert presences',r.error);_errMsg=r.error.message||'';ok=false;}degrade=r.degrade;}
   // 3) Contrats d'accueil (fiche enfant) selon les cases cochées dans l'aperçu.
   let ctRes={crees:0,majs:0};
   if(ok&&(_ipContratCreer||_ipContratMaj)){
@@ -4545,7 +4580,7 @@ async function confirmPresenceImport(){
     showBanner('Import terminé : '+bouts.join(', ')+' ✅');
     if(degrade)setTimeout(()=>showBanner('Horaires non enregistrés sur les présences : colonnes heure_debut / heure_fin absentes de la table presences.','error'),3500);
     renderPresence();
-  }else showBanner('Erreur lors de l\'enregistrement des présences.','error');
+  }else showBanner('Erreur lors de l\u2019enregistrement des pr\u00e9sences'+(_errMsg?' : '+_errMsg:'')+'.','error');
 }
 
 // PLANNING (Supabase — voir renderPlanning plus bas, version active)
@@ -11460,10 +11495,15 @@ function spCalibrerAxe(items) {
 // « Salariés » apparaît deux fois quand les totaux sont présents : en-tête de
 // section, puis dans les totaux. Un export prévisionnel peut ne pas avoir de
 // section « Totaux » : on borne alors au bas de la page.
+function spSection(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, ''); }
+function spEstSalaries(t) { const k = spSection(t); return k === 'salaries' || k === 'salariees' || k === 'salarie' || k === 'personnel' || k === 'equipe'; }
+function spEstEnfants(t) { return spSection(t) === 'enfants'; }
+function spEstTotaux(t) { return spSection(t) === 'totaux' || spSection(t) === 'total'; }
+
 function spTrouverBandeSalaries(items, hauteurPage) {
-  const tot = items.find(it => /^Totaux$/i.test(it.texte));
+  const tot = items.find(it => spEstTotaux(it.texte));
   const limite = tot ? tot.y : hauteurPage;
-  const ent = items.filter(it => /^Salari[ée]s$/i.test(it.texte) && it.y < limite)
+  const ent = items.filter(it => spEstSalaries(it.texte) && it.y < limite)
     .sort((a, b) => b.y - a.y);
   if (!ent.length) throw new Error('section « Salariés » introuvable');
   return { haut: ent[0].y + 6 * SP_SCALE, bas: limite - (tot ? 6 * SP_SCALE : 0) };
@@ -11616,9 +11656,9 @@ const EP_X_SECTION = 42 * SP_SCALE;
 
 function epTrouverBandeEnfants(items, hauteurPage) {
   const sections = items.filter(it => it.x < EP_X_SECTION);
-  const enf = sections.filter(it => /^Enfants$/i.test(it.texte)).sort((a, b) => a.y - b.y)[0];
+  const enf = sections.filter(it => spEstEnfants(it.texte)).sort((a, b) => a.y - b.y)[0];
   if (!enf) throw new Error('section « Enfants » introuvable');
-  const fin = sections.filter(it => /^(Salari[ée]s|Totaux)$/i.test(it.texte) && it.y > enf.y)
+  const fin = sections.filter(it => (spEstSalaries(it.texte) || spEstTotaux(it.texte)) && it.y > enf.y)
     .sort((a, b) => a.y - b.y)[0];
   return { haut: enf.y + 6 * SP_SCALE, bas: (fin ? fin.y : hauteurPage) - 6 * SP_SCALE };
 }
@@ -11644,7 +11684,7 @@ async function epParsePage(page) {
 
   const enfants = [];
   for (const ligne of spGrouperLignes(items, bande)) {
-    if (/^(Totaux|Enfants|Salari[ée]s)$/i.test(ligne.nom)) continue;
+    if (spEstTotaux(ligne.nom) || spEstEnfants(ligne.nom) || spEstSalaries(ligne.nom)) continue;
     const segments = spDetecterSegments(px, canvas.width, ligne.y, axe);
     if (!segments.length) continue;   // listé sans barre : rien à mesurer
     enfants.push({ nomPdf: ipCleanName(ligne.nom), creneau: spVersCreneau(segments) });
@@ -12107,7 +12147,7 @@ async function uniHandleFile(event) {
   // 1) Présences des enfants (couche texte du PDF)
   let presPages = [];
   _ipDiag = [];
-  try { for (const f of files) presPages.push(...await ipParsePdf(f)); }
+  try { for (const f of files) presPages.push(...await ipParsePdf(f)); presPages = ipDedoublonnerPages(presPages, _ipDiag); }
   catch (e) { console.error('[ImportUnifie] présences', e); showBanner('Impossible de lire les présences dans ce PDF.', 'error'); return; }
 
   // 2) Horaires des salariés (rendu image du PDF)
@@ -12330,7 +12370,7 @@ async function uniConfirmImport() {
   const pres = _uniData.pres, sal = _uniData.sal;
   const creche = cacheCreches.find(c => c.id === crecheId);
   const msgParts = [];
-  let presenceOk = true;
+  let presenceOk = true, presErr = '';
 
   // ---- 1) Présences des enfants ----
   if (pres.pages.length) {
@@ -12372,9 +12412,9 @@ async function uniConfirmImport() {
       if (presenceOk) {
         const { data: existing } = await sb.from('presences').select('id,enfant_id,presence_date,slot').in('presence_date', dates).in('enfant_id', ids);
         const exSet = new Set((existing || []).map(e => e.enfant_id + '_' + e.presence_date + '_' + e.slot));
-        const toInsert = wanted.filter(w => !exSet.has(w.enfant_id + '_' + w.presence_date + '_' + w.slot));
+        const toInsert = ipDedoublonnerLignes(wanted.filter(w => !exSet.has(w.enfant_id + '_' + w.presence_date + '_' + w.slot)));
         toInsertCount = toInsert.length;
-        if (toInsert.length) { const r = await ipInsertPresences(toInsert); if (r.error) { console.error('[ImportUnifie] insert presences', r.error); presenceOk = false; } }
+        if (toInsert.length) { const r = await ipInsertPresences(toInsert); if (r.error) { console.error('[ImportUnifie] insert presences', r.error); presErr = r.error.message || ''; presenceOk = false; } }
       }
     }
     // Contrats d'accueil (fiche enfant), selon les cases cochées dans l'aperçu.
@@ -12389,7 +12429,7 @@ async function uniConfirmImport() {
     if (presenceOk) {
       msgParts.push((toCreateNames.length ? toCreateNames.length + ' enfant' + (toCreateNames.length > 1 ? 's' : '') + ' créé' + (toCreateNames.length > 1 ? 's' : '') + ', ' : '') + toInsertCount + ' présence' + (toInsertCount > 1 ? 's' : '') + ' enregistrée' + (toInsertCount > 1 ? 's' : ''));
     } else {
-      msgParts.push('⚠ erreur lors de l’enregistrement des présences');
+      msgParts.push('\u26a0 erreur lors de l\u2019enregistrement des pr\u00e9sences' + (presErr ? ' : ' + presErr : ''));
     }
   }
 
