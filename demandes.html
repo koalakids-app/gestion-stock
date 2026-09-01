@@ -1321,6 +1321,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- MODAL ENVOI DU DOSSIER : choix des destinataires -->
+<div class="overlay" id="modal-envoi-wrap">
+  <div class="modal" style="max-width:520px">
+    <h3>Envoyer le dossier de familiarisation</h3>
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.6;margin:0 0 12px">
+      Cochez les adresses qui doivent recevoir le lien. Un <strong>seul et même lien</strong> est
+      envoyé à tous : les parents remplissent le même dossier, chacun depuis son téléphone.
+    </p>
+    <div id="envoi-liste" style="margin-bottom:6px"></div>
+    <p id="envoi-vide" style="display:none;font-size:12.5px;color:var(--red);margin:0 0 10px"></p>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-envoi-wrap')">Annuler</button>
+      <button class="btn-primary" id="envoi-btn" onclick="enfConfirmerEnvoi()"><i class="ti ti-send"></i> Envoyer</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL IMPORT PRESENCES PDF -->
 <div class="overlay" id="modal-pe-mail-wrap">
   <div class="modal" style="max-width:520px">
@@ -10349,17 +10366,26 @@ async function enfLoadDossier(enfantId){
   enfRenderDossier();
 }
 
-/* Le destinataire : premier parent coché « destinataire » avec une adresse.
-   enfParentsCache est chargé en parallèle par l'onglet Parents. */
-function enfDestinataire(){
-  return enfParentsCache.find(p=>p.destinataire!==false && p.email) || null;
+/* Les destinataires possibles : tout parent avec une adresse mail. Ceux qui
+   sont cochés « destinataire » dans l'onglet Parents sont présélectionnés,
+   mais on peut ajouter ou retirer une adresse au moment de l'envoi. */
+function enfDestinataires(){
+  return enfParentsCache.filter(p=>p.email);
+}
+function enfDestinatairesParDefaut(){
+  const avecEmail=enfDestinataires();
+  const coches=avecEmail.filter(p=>p.destinataire!==false);
+  return coches.length?coches:avecEmail;
+}
+function enfNomParent(p){
+  return ((p.prenom||'')+' '+(p.nom||'')).trim()||p.email;
 }
 
 function enfRenderDossier(){
   const box=document.getElementById('enf-dossier-box');
   if(!box)return;
   const actif=enfDossiersCache.find(d=>d.statut!=='annule' && new Date(d.expire_le)>new Date());
-  const dest=enfDestinataire();
+  const possibles=enfDestinataires();
 
   const cadre=(contenu,fond,bord)=>'<div style="background:'+fond+';border:1px solid '+bord
     +';border-radius:12px;padding:13px 15px;margin-bottom:14px">'
@@ -10367,19 +10393,18 @@ function enfRenderDossier(){
     +'<i class="ti ti-mail-forward"></i> Dossier de familiarisation</div>'+contenu+'</div>';
 
   if(!actif){
-    if(!dest){
+    if(!possibles.length){
       box.innerHTML=cadre(
         '<p style="font-size:12.5px;color:var(--muted);margin:0 0 4px;line-height:1.6">'
-        +'Aucun parent destinataire avec une adresse e-mail. Renseignez-en un dans l\'onglet '
+        +'Aucun parent avec une adresse e-mail. Renseignez-en un dans l\'onglet '
         +'<strong>Parents</strong> pour pouvoir envoyer le dossier.</p>','#FFF8F0','#F3DEC2');
       return;
     }
     box.innerHTML=cadre(
       '<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">'
-      +'Envoie à <strong>'+escHtml(((dest.prenom||'')+' '+(dest.nom||'')).trim()||dest.email)+'</strong> ('
-      +escHtml(dest.email)+') un lien personnel vers les documents à remplir et signer en ligne. '
+      +'Envoie aux parents un lien personnel vers les documents à remplir et signer en ligne. '
       +'Valable '+DOSSIER_JOURS+' jours.</p>'
-      +'<button class="btn-primary" onclick="enfEnvoyerDossier()"><i class="ti ti-send"></i> Envoyer le dossier</button>',
+      +'<button class="btn-primary" onclick="enfOuvrirEnvoi()"><i class="ti ti-send"></i> Envoyer le dossier</button>',
       'var(--koala-light)','var(--border)');
     return;
   }
@@ -10389,12 +10414,15 @@ function enfRenderDossier(){
   const badge=actif.statut==='complet'
     ? '<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">✅ Complet</span>'
     : '<span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">🕓 En attente</span>';
+  const adresses=(actif.email||'').split(',').map(x=>x.trim()).filter(Boolean);
 
   box.innerHTML=cadre(
-    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">'+badge
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+badge
     +'<span style="font-size:12px;color:var(--muted)">envoyé le '+new Date(actif.envoye_le).toLocaleDateString('fr-FR')
-    +' à '+escHtml(actif.email)+' · expire le '+new Date(actif.expire_le).toLocaleDateString('fr-FR')
+    +' · expire le '+new Date(actif.expire_le).toLocaleDateString('fr-FR')
     +(actif.relances?' · '+actif.relances+' relance'+(actif.relances>1?'s':''):'')+'</span></div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:9px">'
+    +'<i class="ti ti-mail"></i> '+escHtml(adresses.join(' · '))+'</div>'
     +(attendus?'<div style="font-size:12.5px;color:var(--muted);margin-bottom:9px">'
       +rendus+' document'+(rendus>1?'s':'')+' signé'+(rendus>1?'s':'')+' sur '+attendus+' attendus</div>':'')
     +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
@@ -10415,31 +10443,51 @@ async function chargerPack(){
   return cacheDocsPack;
 }
 
-async function enfEnvoyerDossier(){
-  const dest=enfDestinataire();
-  if(!dest)return showBanner('Aucun parent destinataire avec une adresse e-mail.','error');
+function enfOuvrirEnvoi(){
+  const possibles=enfDestinataires();
+  if(!possibles.length)return showBanner('Aucun parent avec une adresse e-mail.','error');
+  const defaut=new Set(enfDestinatairesParDefaut().map(p=>p.id));
+  document.getElementById('envoi-liste').innerHTML=possibles.map(p=>
+    '<label style="display:flex;align-items:flex-start;gap:9px;padding:9px 2px;border-bottom:1px solid var(--border);cursor:pointer">'
+    +'<input type="checkbox" class="envoi-dest" value="'+escHtml(p.email)+'"'+(defaut.has(p.id)?' checked':'')+' style="margin-top:3px">'
+    +'<span><span style="font-weight:700;font-size:13px">'+escHtml(enfNomParent(p))+'</span>'
+    +'<span style="display:block;font-size:12px;color:var(--muted)">'+escHtml(p.email)
+    +(p.lien&&PAR_LIENS[p.lien]?' · '+escHtml(PAR_LIENS[p.lien]):'')+'</span></span></label>'
+  ).join('');
+  document.getElementById('envoi-vide').style.display='none';
+  document.getElementById('envoi-btn').disabled=false;
+  document.getElementById('modal-envoi-wrap').classList.add('open');
+}
+
+async function enfConfirmerEnvoi(){
+  const emails=[...document.querySelectorAll('.envoi-dest:checked')].map(c=>c.value);
+  const err=document.getElementById('envoi-vide');
+  if(!emails.length){
+    err.textContent='Cochez au moins une adresse.';err.style.display='block';return;
+  }
   const e=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
   if(!e)return;
   await chargerPack();
   if(!cacheDocsPack.length&&!confirm('Aucun document n\'est coché « Dossier de familiarisation » dans l\'outil Documents.\n\nEnvoyer quand même ?'))return;
-  if(!confirm('Envoyer le dossier de familiarisation de '+(e.prenom||'')+' à '+dest.email+' ?'))return;
 
+  const btn=document.getElementById('envoi-btn');btn.disabled=true;
   showBanner('Envoi en cours…');
   const token=dossierToken();
   const expire=new Date(Date.now()+DOSSIER_JOURS*86400000).toISOString();
   const saved=await dbInsert('dossiers_familles',{
-    enfant_id:e.id,token,email:dest.email,statut:'envoye',
+    enfant_id:e.id,token,email:emails.join(', '),statut:'envoye',
     expire_le:expire,created_by:currentUser?currentUser.id:null
   });
-  if(!saved)return showBanner('Impossible de créer le dossier.','error');
+  if(!saved){btn.disabled=false;return showBanner('Impossible de créer le dossier.','error');}
 
-  /* La fonction ne reçoit qu'un identifiant : elle relit elle-même l'adresse,
+  /* La fonction ne reçoit qu'un identifiant : elle relit elle-même les adresses,
      l'enfant et l'échéance en base, et compose le lien depuis APP_URL. Rien
      d'expédiable ne transite par le navigateur. */
   const ok=await callFn('envoyer-dossier-famille',{dossier_id:saved.id,relance:false});
   enfDossiersCache.unshift(saved);
+  closeModal('modal-envoi-wrap');
   enfRenderDossier();
-  if(ok)showBanner('Dossier envoyé à '+dest.email+' ✅');
+  if(ok)showBanner('Dossier envoyé à '+emails.length+' adresse'+(emails.length>1?'s':'')+' ✅');
   else showBanner('Dossier créé, mais l\'e-mail n\'est pas parti — utilisez « Copier le lien ».','error');
 }
 
@@ -10479,7 +10527,8 @@ async function enfAnnulerDossier(id){
 }
 
 window.enfLoadDossier = enfLoadDossier;
-window.enfEnvoyerDossier = enfEnvoyerDossier;
+window.enfOuvrirEnvoi = enfOuvrirEnvoi;
+window.enfConfirmerEnvoi = enfConfirmerEnvoi;
 window.enfRelancerDossier = enfRelancerDossier;
 window.enfCopierLien = enfCopierLien;
 window.enfAnnulerDossier = enfAnnulerDossier;
