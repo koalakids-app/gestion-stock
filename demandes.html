@@ -896,12 +896,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn-cancel" onclick="closeModal('modal-enf-fiche-wrap')" style="padding:4px 8px"><i class="ti ti-x"></i></button>
       </div>
       <div class="module-tabs" style="margin-bottom:1rem">
-        <button class="module-tab active" onclick="enfFicheTab('identite',this)"><i class="ti ti-id"></i> Identité</button>
-        <button class="module-tab" onclick="enfFicheTab('contrat',this)"><i class="ti ti-file-certificate"></i> Contrat</button>
-        <button class="module-tab" onclick="enfFicheTab('documents',this)"><i class="ti ti-file-text"></i> Documents</button>
+        <button class="module-tab active" data-enftab="identite" onclick="enfFicheTab('identite',this)"><i class="ti ti-id"></i> Identité</button>
+        <button class="module-tab" data-enftab="parents" onclick="enfFicheTab('parents',this)"><i class="ti ti-users"></i> Parents</button>
+        <button class="module-tab" data-enftab="contrat" onclick="enfFicheTab('contrat',this)"><i class="ti ti-file-certificate"></i> Contrat</button>
+        <button class="module-tab" data-enftab="documents" onclick="enfFicheTab('documents',this)"><i class="ti ti-file-text"></i> Documents</button>
       </div>
       <div style="overflow-y:auto;flex:1">
         <div id="enf-fiche-identite" class="module-tab-content active"></div>
+        <div id="enf-fiche-parents" class="module-tab-content"></div>
         <div id="enf-fiche-contrat" class="module-tab-content"></div>
         <div id="enf-fiche-documents" class="module-tab-content"></div>
       </div>
@@ -1281,6 +1283,38 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div id="enf-repas-apercu" style="font-size:11.5px;color:var(--muted);margin:-4px 0 10px 2px"></div>
     <div class="mactions"><button class="btn-cancel" id="enf-btn-delete" style="display:none;color:var(--red)" onclick="deleteEnfant()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-enfant-wrap')">Annuler</button><button class="btn-primary" id="enf-btn-save" onclick="saveEnfant()"><i class="ti ti-check"></i> Enregistrer</button></div>
+  </div>
+</div>
+
+<!-- MODAL PARENT / RESPONSABLE LEGAL (onglet Parents de la fiche enfant) -->
+<div class="overlay" id="modal-parent-wrap">
+  <div class="modal" style="max-width:560px">
+    <h3 id="modal-parent-title">Ajouter un parent</h3>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Lien avec l'enfant</label>
+        <select class="finput" id="par-lien">
+          <option value="mere">Mère</option>
+          <option value="pere">Père</option>
+          <option value="tuteur">Tuteur / tutrice</option>
+          <option value="autre">Autre responsable légal</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="par-prenom" placeholder="Camille"/></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Nom</label><input class="finput" id="par-nom" placeholder="Martin"/></div>
+      <div class="fg"><label class="flabel">Téléphone</label><input class="finput" id="par-tel" type="tel" placeholder="06 12 34 56 78"/></div>
+    </div>
+    <div class="fg"><label class="flabel">Adresse e-mail</label><input class="finput" id="par-email" type="email" placeholder="camille.martin@exemple.fr"/></div>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:#555;margin:2px 0 10px 2px;cursor:pointer">
+      <input type="checkbox" id="par-destinataire" checked style="margin-top:2px"/>
+      <span>Destinataire des envois de la crèche (dossier de familiarisation, documents à signer). Décocher pour un contact de secours.</span>
+    </label>
+    <div class="mactions">
+      <button class="btn-cancel" id="par-btn-delete" style="display:none;color:var(--red)" onclick="deleteParent()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn-cancel" onclick="closeModal('modal-parent-wrap')">Annuler</button>
+      <button class="btn-primary" id="par-btn-save" onclick="saveParent()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
   </div>
 </div>
 
@@ -1863,8 +1897,7 @@ function enfMaybeOpenFromUrl(){
     setTimeout(()=>{
       enfOpenFiche(enfId);
       setTimeout(()=>{
-        const btns=document.querySelectorAll('#modal-enf-fiche-wrap .module-tab');
-        if(btns&&btns.length>1)enfFicheTab('documents',btns[1]);
+        enfFicheTab('documents');
       },150);
     },200);
   }catch(e){console.warn('enfMaybeOpenFromUrl',e);}
@@ -9962,6 +9995,8 @@ async function enfOpenFiche(id){
   document.getElementById('enf-fiche-contrat').classList.remove('active');
   document.getElementById('enf-fiche-documents').classList.remove('active');
   enfRenderIdentite();
+  document.getElementById('enf-fiche-parents').innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
+  enfLoadParents(e.id);
   document.getElementById('enf-fiche-contrat').innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
   enfLoadContrats(e.id);
   document.getElementById('enf-fiche-documents').innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
@@ -9970,12 +10005,18 @@ async function enfOpenFiche(id){
   enfLoadDocs(e.id);
 }
 
+const ENF_FICHE_TABS = ['identite','parents','contrat','documents'];
+
+/* btn est facultatif : sans lui, on retrouve l'onglet par son data-enftab.
+   Se reperer a l'index dans la liste des boutons casse des qu'on en ajoute un. */
 function enfFicheTab(tab, btn){
   document.querySelectorAll('#modal-enf-fiche-wrap .module-tab').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  document.getElementById('enf-fiche-identite').classList.toggle('active',tab==='identite');
-  document.getElementById('enf-fiche-contrat').classList.toggle('active',tab==='contrat');
-  document.getElementById('enf-fiche-documents').classList.toggle('active',tab==='documents');
+  const cible = btn || document.querySelector('#modal-enf-fiche-wrap .module-tab[data-enftab="'+tab+'"]');
+  if(cible) cible.classList.add('active');
+  ENF_FICHE_TABS.forEach(t=>{
+    const el=document.getElementById('enf-fiche-'+t);
+    if(el) el.classList.toggle('active',t===tab);
+  });
 }
 
 /* Ligne « Repas » de l'onglet Identité : le code tel qu'il partira sur la feuille
@@ -10010,6 +10051,157 @@ function enfRenderIdentite(){
     + row('Repas', enfRepasFicheLigne(e))
     + '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn-primary" onclick="editEnfant(\''+e.id+'\')"><i class="ti ti-edit"></i> Modifier la fiche</button></div>';
 }
+
+/* ===================== PARENTS / RESPONSABLES LEGAUX ======================= */
+/* Table Supabase `enfants_parents` : une ligne par responsable legal.
+   Une table plutot que des colonnes sur `enfants` — une famille peut compter
+   deux parents separes, un tuteur, un contact de secours, et la liste sert de
+   carnet d'adresses pour l'envoi du dossier de familiarisation. */
+
+let enfParentsCache = [];      // parents de l'enfant actuellement ouvert
+let editingParentId = null;
+
+const PAR_LIENS = {mere:'Mère', pere:'Père', tuteur:'Tuteur / tutrice', autre:'Responsable légal'};
+
+async function enfLoadParents(enfantId){
+  const box = document.getElementById('enf-fiche-parents');
+  try{
+    const{data,error}=await sb.from('enfants_parents')
+      .select('*')
+      .eq('enfant_id',enfantId)
+      .order('created_at',{ascending:true});
+    if(error) throw error;
+    enfParentsCache = data||[];
+  }catch(err){
+    console.warn('enfLoadParents',err);
+    if(box) box.innerHTML='<div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Impossible de charger les parents.</p></div>';
+    return;
+  }
+  // ne rendre que si on est toujours sur le meme enfant
+  if(String(enfFicheId)!==String(enfantId)) return;
+  enfRenderParents();
+}
+
+function enfRenderParents(){
+  const box = document.getElementById('enf-fiche-parents');
+  if(!box) return;
+  const bouton = '<div style="margin-top:12px"><button class="btn-primary" onclick="openParentModal()"><i class="ti ti-user-plus"></i> Ajouter un parent</button></div>';
+  if(!enfParentsCache.length){
+    box.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun parent enregistré pour cet enfant.</p></div>'+bouton;
+    return;
+  }
+  box.innerHTML = enfParentsCache.map(p=>{
+    const nomComplet = ((p.prenom||'')+' '+(p.nom||'')).trim() || '—';
+    const lien = PAR_LIENS[p.lien]||'Responsable légal';
+    const ligne = (icone,val,href)=>{
+      if(!val) return '';
+      const contenu = href
+        ? '<a href="'+href+encodeURIComponent(val)+'" style="color:var(--koala);text-decoration:none">'+escHtml(val)+'</a>'
+        : escHtml(val);
+      return '<div style="font-size:12.5px;color:#555;display:flex;align-items:center;gap:6px;margin-top:3px"><i class="ti ti-'+icone+'" style="color:var(--muted)"></i>'+contenu+'</div>';
+    };
+    const badgeDest = p.destinataire
+      ? '<span style="background:var(--koala-light);color:var(--koala);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✉️ Destinataire</span>'
+      : '';
+    const manqueMail = !p.email
+      ? '<div style="font-size:11.5px;color:var(--orange-dark,#B25F00);margin-top:5px"><i class="ti ti-alert-circle"></i> Sans e-mail : cette famille ne pourra pas recevoir de dossier en ligne.</div>'
+      : '';
+    return '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">'
+      + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">'
+      + '<div style="min-width:0">'
+      + '<div style="font-weight:700;color:var(--koala-dark);font-size:13.5px">'+escHtml(nomComplet)+'</div>'
+      + '<div style="font-size:11.5px;color:var(--muted)">'+escHtml(lien)+'</div>'
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'
+      + badgeDest
+      + '<button type="button" class="btn-sm" onclick="editParent(\''+p.id+'\')" title="Modifier"><i class="ti ti-edit"></i></button>'
+      + '</div>'
+      + '</div>'
+      + ligne('phone', p.telephone, 'tel:')
+      + ligne('mail', p.email, 'mailto:')
+      + manqueMail
+      + '</div>';
+  }).join('') + bouton;
+}
+
+function openParentModal(){
+  if(!enfFicheId){alert('Ouvrez d\'abord la fiche d\'un enfant.');return;}
+  editingParentId=null;
+  document.getElementById('modal-parent-title').textContent='Ajouter un parent';
+  document.getElementById('par-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';
+  document.getElementById('par-btn-delete').style.display='none';
+  document.getElementById('par-lien').value='mere';
+  ['par-prenom','par-nom','par-tel','par-email'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('par-destinataire').checked=true;
+  document.getElementById('modal-parent-wrap').classList.add('open');
+}
+
+function editParent(id){
+  const p=enfParentsCache.find(x=>String(x.id)===String(id));
+  if(!p)return;
+  editingParentId=p.id;
+  document.getElementById('modal-parent-title').textContent='Modifier '+((p.prenom||'')+' '+(p.nom||'')).trim();
+  document.getElementById('par-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';
+  document.getElementById('par-btn-delete').style.display='';
+  document.getElementById('par-lien').value=p.lien||'autre';
+  document.getElementById('par-prenom').value=p.prenom||'';
+  document.getElementById('par-nom').value=p.nom||'';
+  document.getElementById('par-tel').value=p.telephone||'';
+  document.getElementById('par-email').value=p.email||'';
+  document.getElementById('par-destinataire').checked=p.destinataire!==false;
+  document.getElementById('modal-parent-wrap').classList.add('open');
+}
+
+async function saveParent(){
+  const prenom=document.getElementById('par-prenom').value.trim();
+  const nom=document.getElementById('par-nom').value.trim();
+  if(!prenom&&!nom){alert('Indiquez au moins un nom ou un prénom.');return;}
+  const email=document.getElementById('par-email').value.trim();
+  if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){alert('Adresse e-mail invalide.');return;}
+  const row={
+    enfant_id:enfFicheId,
+    lien:document.getElementById('par-lien').value,
+    prenom,nom,
+    telephone:document.getElementById('par-tel').value.trim(),
+    email,
+    destinataire:document.getElementById('par-destinataire').checked
+  };
+  const btn=document.getElementById('par-btn-save');btn.disabled=true;
+  if(editingParentId){
+    const ok=await dbUpdate('enfants_parents',editingParentId,row);
+    btn.disabled=false;
+    if(!ok){showBanner('Erreur lors de la modification.','error');return;}
+    const p=enfParentsCache.find(x=>String(x.id)===String(editingParentId));
+    if(p)Object.assign(p,row);
+    showBanner('Parent modifié ✅');
+  }else{
+    const saved=await dbInsert('enfants_parents',row);
+    btn.disabled=false;
+    if(!saved){showBanner('Erreur lors de l\'ajout.','error');return;}
+    enfParentsCache.push(saved);
+    showBanner('Parent ajouté ✅');
+  }
+  closeModal('modal-parent-wrap');
+  enfRenderParents();
+}
+
+async function deleteParent(){
+  if(!editingParentId)return;
+  const p=enfParentsCache.find(x=>String(x.id)===String(editingParentId));
+  if(!confirm('Supprimer '+(((p?.prenom||'')+' '+(p?.nom||'')).trim()||'ce parent')+' ?'))return;
+  const ok=await dbDelete('enfants_parents',editingParentId);
+  if(!ok){showBanner('Suppression impossible.','error');return;}
+  enfParentsCache=enfParentsCache.filter(x=>String(x.id)!==String(editingParentId));
+  closeModal('modal-parent-wrap');
+  enfRenderParents();
+  showBanner('Parent supprimé.');
+}
+
+window.enfLoadParents = enfLoadParents;
+window.openParentModal = openParentModal;
+window.editParent = editParent;
+window.saveParent = saveParent;
+window.deleteParent = deleteParent;
 
 let enfDocTitres = {};  // documentId -> titre
 
