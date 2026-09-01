@@ -5727,53 +5727,148 @@ function pmiQualifEstDiplome(q,experience){
   return !!experience&&pmiQualifEligibleSubstitution(q);
 }
 
-function pmiQualifKey(crecheId,prenom){return 'pmiQualif_'+crecheId+'_'+prenom;}
-function pmiQualifGet(crecheId,prenom){try{return localStorage.getItem(pmiQualifKey(crecheId,prenom))||'';}catch(e){return '';}}
-function pmiQualifSet(crecheId,prenom,val){try{localStorage.setItem(pmiQualifKey(crecheId,prenom),val);}catch(e){}}
+// Volume quotidien de repas/entretien et horaires d'accueil des enfants, par crèche.
+const PMI_OUVERTURE_DEFAUT='07:30',PMI_FERMETURE_DEFAUT='18:30',PMI_ENTRETIEN_DEFAUT=3.5;
+
+// ── Configuration PMI : une ligne par crèche dans Supabase ───────────────
+// Ces réglages (noms de famille, qualifications, ancienneté, temps de bureau, horaires
+// d'accueil) ne figurent nulle part ailleurs : planning_equipe ne connaît que les prénoms.
+// Ils vivaient dans le localStorage, donc l'export lancé depuis un autre appareil sortait
+// avec des colonnes vides — pour un document réglementaire, c'était le défaut à corriger.
+// La table pmi_config fait désormais foi ; le localStorage n'est qu'un miroir hors ligne.
+//   config = { direction:{prenom,heures}, entretien:{heures,ouverture,fermeture},
+//              personnes:{ "<prénom>":{nom,qualif,exp} } }
+const PMI_CFG_LS='pmi_config_';
+let _pmiCfg={};        // cache mémoire, pour garder des accesseurs synchrones
+let pmiSyncOk=true;
+
+function pmiCfgVide(){
+  return{direction:{prenom:'',heures:0},
+         entretien:{heures:PMI_ENTRETIEN_DEFAUT,ouverture:PMI_OUVERTURE_DEFAUT,fermeture:PMI_FERMETURE_DEFAUT},
+         personnes:{}};
+}
+
+// Reprise des anciennes clés éparpillées, au premier passage sur un appareil.
+// Les prénoms ne sont pas connus d'avance : on balaie le localStorage par préfixe.
+function pmiMigrerLocal(crecheId){
+  const cfg=pmiCfgVide();
+  try{
+    const dp=localStorage.getItem('pmiDirPrenom_'+crecheId);
+    if(dp!==null)cfg.direction={prenom:dp||'',heures:parseFloat(localStorage.getItem('pmiDirHeures_'+crecheId))||0};
+    const h=localStorage.getItem('pmiEntHeures_'+crecheId);
+    if(h!==null)cfg.entretien.heures=parseFloat(h)||0;
+    const ou=localStorage.getItem('pmiEntOuv_'+crecheId); if(ou)cfg.entretien.ouverture=ou;
+    const fe=localStorage.getItem('pmiEntFerm_'+crecheId); if(fe)cfg.entretien.fermeture=fe;
+    [['pmiNom_','nom'],['pmiQualif_','qualif'],['pmiExp_','exp']].forEach(([prefixe,champ])=>{
+      const base=prefixe+crecheId+'_';
+      Object.keys(localStorage).forEach(k=>{
+        if(k.indexOf(base)!==0)return;
+        const prenom=k.slice(base.length);
+        if(!prenom)return;
+        if(!cfg.personnes[prenom])cfg.personnes[prenom]={};
+        const v=localStorage.getItem(k);
+        cfg.personnes[prenom][champ]=(champ==='exp')?(v==='1'):(v||'');
+      });
+    });
+  }catch(e){}
+  return cfg;
+}
+
+function pmiCfg(crecheId){
+  if(_pmiCfg[crecheId])return _pmiCfg[crecheId];
+  let c=null;
+  try{c=JSON.parse(localStorage.getItem(PMI_CFG_LS+crecheId)||'null');}catch(e){}
+  if(!c)c=pmiMigrerLocal(crecheId);
+  const base=pmiCfgVide();
+  base.direction=Object.assign(base.direction,c.direction||{});
+  base.entretien=Object.assign(base.entretien,c.entretien||{});
+  base.personnes=c.personnes||{};
+  _pmiCfg[crecheId]=base;
+  return base;
+}
+
+function pmiPersonne(crecheId,prenom){
+  const cfg=pmiCfg(crecheId);
+  const k=String(prenom||'').trim();
+  if(!cfg.personnes[k])cfg.personnes[k]={};
+  return cfg.personnes[k];
+}
+
+// La modale enregistre personne par personne : on regroupe les écritures pour
+// n'envoyer qu'un seul upsert par salve de saisie.
+let _pmiPushTimer=null;
+function pmiCfgSave(crecheId){
+  const cfg=pmiCfg(crecheId);
+  try{localStorage.setItem(PMI_CFG_LS+crecheId,JSON.stringify(cfg));}catch(e){}
+  clearTimeout(_pmiPushTimer);
+  _pmiPushTimer=setTimeout(()=>pmiCfgPush(crecheId,pmiCfg(crecheId)),400);
+}
+
+async function pmiCfgPush(crecheId,cfg){
+  try{
+    const{error}=await sb.from('pmi_config')
+      .upsert({creche_id:crecheId,config:cfg,updated_at:new Date().toISOString()},{onConflict:'creche_id'});
+    if(error)throw error;
+    pmiSyncOk=true;return true;
+  }catch(e){pmiSyncOk=false;console.warn('[PMI sync] écriture :',(e&&e.message)||e);return false;}
+}
+
+// Lecture avant ouverture de la modale. Fusion plutôt qu'écrasement : au premier
+// passage, l'appareil peut détenir des réglages que la base n'a pas encore, et
+// l'inverse. La base l'emporte champ par champ quand elle a une valeur renseignée.
+async function pmiCfgPull(crecheId){
+  try{
+    const{data,error}=await sb.from('pmi_config').select('config').eq('creche_id',crecheId).maybeSingle();
+    if(error)throw error;
+    pmiSyncOk=true;
+    if(!data||!data.config){pmiCfgSave(crecheId);return true;} // rien en base : on y dépose le local
+    const local=pmiCfg(crecheId), dist=data.config;
+    if(dist.direction&&dist.direction.prenom)local.direction=Object.assign({},local.direction,dist.direction);
+    if(dist.entretien)local.entretien=Object.assign({},local.entretien,dist.entretien);
+    Object.entries(dist.personnes||{}).forEach(([prenom,champs])=>{
+      const p=pmiPersonne(crecheId,prenom);
+      if(champs.nom)p.nom=champs.nom;
+      if(champs.qualif)p.qualif=champs.qualif;
+      if(champs.exp!==undefined)p.exp=!!champs.exp;
+    });
+    pmiCfgSave(crecheId); // les deux versions convergent
+    return true;
+  }catch(e){pmiSyncOk=false;console.warn('[PMI sync] lecture :',(e&&e.message)||e);return false;}
+}
+
+function pmiQualifGet(crecheId,prenom){return pmiPersonne(crecheId,prenom).qualif||'';}
+function pmiQualifSet(crecheId,prenom,val){pmiPersonne(crecheId,prenom).qualif=val||'';pmiCfgSave(crecheId);}
+
+function pmiExpGet(crecheId,prenom){return !!pmiPersonne(crecheId,prenom).exp;}
+function pmiExpSet(crecheId,prenom,val){pmiPersonne(crecheId,prenom).exp=!!val;pmiCfgSave(crecheId);}
+
+// Noms de famille : planning_equipe ne stocke que le prénom (c'est la clé de l'import
+// Gertrude). La PMI attend pourtant un nom complet, saisi une fois dans la modale d'export.
+function pmiNomGet(crecheId,prenom){return pmiPersonne(crecheId,prenom).nom||'';}
+function pmiNomSet(crecheId,prenom,val){pmiPersonne(crecheId,prenom).nom=val||'';pmiCfgSave(crecheId);}
 
 // Personne assurant la direction / le référent technique, et son volume de bureau
 // hebdomadaire : mémorisés par crèche pour ne les saisir qu'une fois.
 function pmiDirectionGet(crecheId){
-  try{
-    return{prenom:localStorage.getItem('pmiDirPrenom_'+crecheId)||'',
-           heures:parseFloat(localStorage.getItem('pmiDirHeures_'+crecheId))||0};
-  }catch(e){return{prenom:'',heures:0};}
+  const d=pmiCfg(crecheId).direction;
+  return{prenom:d.prenom||'',heures:parseFloat(d.heures)||0};
 }
 function pmiDirectionSet(crecheId,prenom,heures){
-  try{
-    localStorage.setItem('pmiDirPrenom_'+crecheId,prenom||'');
-    localStorage.setItem('pmiDirHeures_'+crecheId,String(heures||0));
-  }catch(e){}
+  pmiCfg(crecheId).direction={prenom:prenom||'',heures:parseFloat(heures)||0};
+  pmiCfgSave(crecheId);
 }
 
-// Volume quotidien de repas/entretien et horaires d'accueil des enfants, par crèche.
-const PMI_OUVERTURE_DEFAUT='07:30',PMI_FERMETURE_DEFAUT='18:30',PMI_ENTRETIEN_DEFAUT=3.5;
 function pmiEntretienGet(crecheId){
-  try{
-    const h=localStorage.getItem('pmiEntHeures_'+crecheId);
-    return{heures:h===null?PMI_ENTRETIEN_DEFAUT:(parseFloat(h)||0),
-           ouverture:localStorage.getItem('pmiEntOuv_'+crecheId)||PMI_OUVERTURE_DEFAUT,
-           fermeture:localStorage.getItem('pmiEntFerm_'+crecheId)||PMI_FERMETURE_DEFAUT};
-  }catch(e){return{heures:PMI_ENTRETIEN_DEFAUT,ouverture:PMI_OUVERTURE_DEFAUT,fermeture:PMI_FERMETURE_DEFAUT};}
+  const e=pmiCfg(crecheId).entretien;
+  return{heures:e.heures===undefined?PMI_ENTRETIEN_DEFAUT:(parseFloat(e.heures)||0),
+         ouverture:e.ouverture||PMI_OUVERTURE_DEFAUT,
+         fermeture:e.fermeture||PMI_FERMETURE_DEFAUT};
 }
 function pmiEntretienSet(crecheId,heures,ouverture,fermeture){
-  try{
-    localStorage.setItem('pmiEntHeures_'+crecheId,String(heures||0));
-    localStorage.setItem('pmiEntOuv_'+crecheId,ouverture||PMI_OUVERTURE_DEFAUT);
-    localStorage.setItem('pmiEntFerm_'+crecheId,fermeture||PMI_FERMETURE_DEFAUT);
-  }catch(e){}
+  pmiCfg(crecheId).entretien={heures:parseFloat(heures)||0,
+    ouverture:ouverture||PMI_OUVERTURE_DEFAUT,fermeture:fermeture||PMI_FERMETURE_DEFAUT};
+  pmiCfgSave(crecheId);
 }
-
-function pmiExpKey(crecheId,prenom){return 'pmiExp_'+crecheId+'_'+prenom;}
-function pmiExpGet(crecheId,prenom){try{return localStorage.getItem(pmiExpKey(crecheId,prenom))==='1';}catch(e){return false;}}
-function pmiExpSet(crecheId,prenom,val){try{localStorage.setItem(pmiExpKey(crecheId,prenom),val?'1':'0');}catch(e){}}
-
-// Noms de famille : planning_equipe ne stocke que le prénom (c'est la clé de l'import
-// Gertrude). La PMI attend pourtant un nom complet, on le saisit donc une fois dans la
-// modale d'export et on le mémorise par crèche, comme la qualification.
-function pmiNomKey(crecheId,prenom){return 'pmiNom_'+crecheId+'_'+prenom;}
-function pmiNomGet(crecheId,prenom){try{return localStorage.getItem(pmiNomKey(crecheId,prenom))||'';}catch(e){return '';}}
-function pmiNomSet(crecheId,prenom,val){try{localStorage.setItem(pmiNomKey(crecheId,prenom),val);}catch(e){}}
 
 // Pré-remplissage : les référentes ont déjà leur nom complet dans l'annuaire (referents.name).
 // On y retrouve le nom de famille quand le prénom correspond, pour éviter une ressaisie.
@@ -5901,6 +5996,11 @@ async function pmiOpenExportModal(){
   const enfants=await pmiChargerPresencesEnfants(crecheId,weeks);
 
   _pmiExportCtx={crecheId,crecheName,weeks,staffList,enfantsParDate:enfants.parDate,enfantsSansHoraire:enfants.sansHoraire};
+
+  // Réglages PMI de la crèche : relus en base avant d'afficher la modale, pour que
+  // l'export produise le même document depuis l'ordinateur et depuis la tablette.
+  await pmiCfgPull(crecheId);
+  if(!pmiSyncOk)showBanner('Réglages PMI non synchronisés : vérifiez-les avant de générer le fichier.','error');
 
   pmiInjecterModale();
   // Direction : par défaut la référente de la crèche si elle figure au planning.
