@@ -274,6 +274,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
         Numérotez de 10 en 10 : intercaler une pièce plus tard n'obligera pas à tout renuméroter.
         Laissé à 0, le document passe en fin de liste.
       </p>
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin:10px 0 0;font-weight:600">
+        <input type="checkbox" id="dPackImprimer" style="margin-top:2px">
+        <span>À imprimer et rapporter</span>
+      </label>
+      <p style="font-size:11.5px;color:var(--muted);margin:5px 0 0 24px;line-height:1.5">
+        Pour ce qui ne peut pas se remplir en ligne — la fiche sanitaire, que seul le médecin
+        peut compléter et signer. La famille télécharge, imprime, fait remplir, et rapporte le
+        papier à la crèche. Ces documents ne comptent pas dans l'avancement du dossier.
+      </p>
     </div>
   </div>
   <div class="mf">
@@ -528,7 +537,7 @@ function docRowHtml(d){
   return `<div class="doc">
     <div class="doc-i ${fill?'fill':'dl'}"><i class="ti ti-${fill?'forms':'file-download'}"></i></div>
     <div class="doc-t"><h3>${esc(d.titre)}</h3>
-      <p>${esc(d.description||'')}${crName?' <span class="tag">'+esc(crName)+'</span>':' <span class="tag">Tous sites</span>'}${d.pack_familiarisation?' <span class="tag" style="background:#EEEDF8;color:#3D3580;font-weight:700">👪 Familiarisation'+(d.pack_ordre?' · '+d.pack_ordre:'')+'</span>':''}</p></div>
+      <p>${esc(d.description||'')}${crName?' <span class="tag">'+esc(crName)+'</span>':' <span class="tag">Tous sites</span>'}${d.pack_familiarisation?' <span class="tag" style="background:#EEEDF8;color:#3D3580;font-weight:700">👪 Familiarisation'+(d.pack_ordre?' · '+d.pack_ordre:'')+(d.pack_imprimer?' · à imprimer':'')+'</span>':''}</p></div>
     <div class="doc-a">
       ${fill?`<button class="iconbtn" title="Remplir" onclick="openFill('${d.id}')"><i class="ti ti-pencil"></i></button>
               <button class="iconbtn" title="Réponses" onclick="openReps('${d.id}')"><i class="ti ti-list"></i></button>`
@@ -744,6 +753,7 @@ function openDoc(id){
     (d.schema_champs||[]).forEach(c=>addChamp(c.label,c.type));
     document.getElementById('dPack').checked=!!d.pack_familiarisation;
     document.getElementById('dPackOrdre').value=d.pack_ordre||0;
+    document.getElementById('dPackImprimer').checked=!!d.pack_imprimer;
   }else{
     document.getElementById('dTitre').value='';
     document.getElementById('dDesc').value='';
@@ -751,6 +761,7 @@ function openDoc(id){
     if(PROF&&PROF.role==='referent'&&PROF.creche_id)document.getElementById('dCreche').value=PROF.creche_id;
     document.getElementById('dPack').checked=false;
     document.getElementById('dPackOrdre').value=0;
+    document.getElementById('dPackImprimer').checked=false;
   }
   togglePack();
   toggleType();
@@ -770,7 +781,8 @@ async function saveDoc(){
       creche_id:document.getElementById('dCreche').value||null,
       type,
       pack_familiarisation:document.getElementById('dPack').checked,
-      pack_ordre:parseInt(document.getElementById('dPackOrdre').value,10)||0
+      pack_ordre:parseInt(document.getElementById('dPackOrdre').value,10)||0,
+      pack_imprimer:document.getElementById('dPack').checked&&document.getElementById('dPackImprimer').checked
     };
     if(type==='remplissable'){
       const tplKey=document.getElementById('dTpl').value||null;

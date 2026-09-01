@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dossier de familiarisation — Koala Kids</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --violet:#3D3580; --violet-l:#8E8AA8; --violet-bg:#EEEDF8;
+  --orange:#F47920; --green:#1B7A3E; --green-bg:#E8F5EC;
+  --red:#C62828; --red-bg:#FDECEC;
+  --ink:#2B2740; --muted:#78748C; --line:#E3E1EF; --bg:#F7F6FC;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Nunito',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.55}
+h1,h2,h3{font-family:'Baloo 2',system-ui,sans-serif;margin:0}
+.top{background:var(--violet);color:#fff;padding:20px 18px calc(20px + env(safe-area-inset-bottom,0px))}
+.top h1{font-size:21px}
+.top p{margin:5px 0 0;font-size:13.5px;opacity:.86}
+.wrap{max-width:680px;margin:0 auto;padding:18px 14px 60px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 16px;margin-bottom:12px}
+.intro{background:var(--violet-bg);border-left:4px solid var(--violet);border-radius:0 12px 12px 0;
+  padding:13px 15px;font-size:13.5px;color:var(--violet);margin-bottom:16px;line-height:1.6}
+.prog{height:9px;background:var(--line);border-radius:99px;overflow:hidden;margin:10px 0 4px}
+.prog i{display:block;height:100%;background:var(--green);border-radius:99px;transition:width .35s}
+.progtxt{font-size:12.5px;color:var(--muted)}
+.doc{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);
+  border-radius:14px;padding:13px 14px;margin-bottom:10px;width:100%;text-align:left;
+  font:inherit;color:inherit;cursor:pointer}
+.doc:disabled{cursor:default}
+.doc .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex:0 0 auto;
+  background:var(--violet-bg);color:var(--violet);font-size:19px}
+.doc .ic.ok{background:var(--green-bg);color:var(--green)}
+.doc .tx{flex:1;min-width:0}
+.doc .tx b{display:block;font-size:14.5px;font-weight:700}
+.doc .tx span{display:block;font-size:12.5px;color:var(--muted);margin-top:1px}
+.doc .go{color:var(--violet-l);font-size:18px;flex:0 0 auto}
+.badge{display:inline-block;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700}
+.b-ok{background:var(--green-bg);color:var(--green)}
+.b-att{background:#FDF0E3;color:#B25F00}
+.b-lu{background:var(--violet-bg);color:var(--violet)}
+label{display:block;font-size:13px;font-weight:700;color:var(--violet);margin:0 0 4px}
+input,select,textarea{width:100%;font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);
+  border-radius:10px;background:#fff;color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--violet-l);outline-offset:1px}
+textarea{min-height:110px;resize:vertical}
+.f{margin-bottom:13px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.grid2{grid-template-columns:1fr}}
+.btn{font:inherit;font-weight:700;font-size:15px;border:none;border-radius:11px;padding:12px 18px;
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.btn-p{background:var(--violet);color:#fff}
+.btn-g{background:#EDEBF6;color:var(--violet)}
+.btn:disabled{opacity:.55;cursor:default}
+.acts{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}
+.acts .btn{flex:1;min-width:130px}
+h3.sec{font-size:17px;color:var(--violet);margin:22px 0 12px}
+h3.sec:first-child{margin-top:0}
+.hint{font-size:13px;color:var(--muted);margin:0 0 10px}
+.ftw{overflow-x:auto;margin:0 0 14px}
+table.ft{width:100%;border-collapse:collapse;font-size:13.5px;min-width:420px}
+table.ft th,table.ft td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:middle}
+table.ft th{background:var(--violet-bg);color:var(--violet);font-weight:700;font-size:12.5px}
+table.ft td.lab{font-weight:600;background:#FAFAFD}
+table.ft select{margin:0;padding:7px 9px}
+.txtbox{background:#FAFAFD;border:1px solid var(--line);border-radius:11px;padding:12px 14px;
+  font-size:13px;line-height:1.65;margin:0 0 14px;color:#555}
+.sig{background:#FAFAFD;border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:12px}
+.sig .lbl{font-size:13px;font-weight:700;color:var(--violet);margin-bottom:7px}
+.sig canvas{width:100%;height:130px;background:#fff;border:1px solid var(--line);border-radius:10px;
+  touch-action:none;display:block}
+.sig img{width:100%;height:130px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:10px}
+.sig .btn{margin-top:8px;padding:8px 14px;font-size:13.5px}
+.lock{background:var(--green-bg);border:1px solid #BFE3CB;border-radius:11px;padding:11px 13px;
+  font-size:13px;color:var(--green);font-weight:600;margin-bottom:14px;line-height:1.5}
+.state{text-align:center;padding:44px 20px}
+.state i{font-size:42px;color:var(--violet-l)}
+.state h2{font-size:19px;margin:12px 0 6px}
+.state p{color:var(--muted);font-size:14px;margin:0}
+.state.err i{color:var(--red)}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;
+  padding:11px 18px;border-radius:11px;font-size:14px;font-weight:600;z-index:99;
+  opacity:0;pointer-events:none;transition:opacity .25s;max-width:90vw;text-align:center}
+.toast.on{opacity:1}
+a{color:var(--violet)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>Dossier de familiarisation</h1>
+  <p id="sousTitre">Koala Kids</p>
+</div>
+
+<div class="wrap" id="wrap">
+  <div class="state"><i class="ti ti-loader"></i><h2>Chargement…</h2><p>Un instant.</p></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===========================================================================
+   FAMILLE.HTML — page publique du dossier de familiarisation
+   ---------------------------------------------------------------------------
+   Aucune session Supabase ici : la famille n'a pas de compte. Tout passe par
+   l'edge function `dossier-famille`, qui s'exécute en service_role et ne
+   renvoie que le dossier correspondant au jeton de l'URL. Aucune table n'est
+   interrogée directement — voir 15c-dossiers-policies.sql.
+
+   Le modèle « fiche de liaison » est RECOPIÉ de documents.html (choix assumé :
+   ne pas toucher à l'outil qui tourne). Si vous modifiez ce modèle là-bas,
+   reportez la modification ici — les deux versions ne se synchronisent pas.
+   =========================================================================== */
+
+const SUPABASE_URL = "https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const FN_URL = SUPABASE_URL + '/functions/v1/dossier-famille';
+
+const TOKEN = new URLSearchParams(location.search).get('t') || '';
+const wrap  = document.getElementById('wrap');
+
+let DOSSIER = null;   // {expire_le, statut}
+let ENFANT  = null;   // {prenom, nom, creche_nom}
+let DOCS    = [];     // documents du pack + leur réponse éventuelle
+let COURANT = null;   // document ouvert
+let SIGS    = {};     // signatures tracées sur le document ouvert
+
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dfr = d => d ? new Date(d).toLocaleDateString('fr-FR') : '';
+
+let toastT=null;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('on');
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600);
+}
+
+function etat(cls,titre,msg,icone){
+  wrap.innerHTML='<div class="state '+cls+'"><i class="ti ti-'+(icone||'alert-circle')+'"></i>'
+    +'<h2>'+esc(titre)+'</h2><p>'+esc(msg)+'</p></div>';
+}
+
+async function appel(action,payload){
+  const r=await fetch(FN_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,
+             'Authorization':'Bearer '+SUPABASE_ANON_KEY},
+    body:JSON.stringify(Object.assign({action,token:TOKEN},payload||{}))
+  });
+  let j=null;
+  try{j=await r.json();}catch(e){}
+  if(!r.ok||!j||j.erreur)throw new Error((j&&j.erreur)||('Erreur '+r.status));
+  return j;
+}
+
+/* ---------------------------------------------------------------- ACCUEIL */
+
+async function boot(){
+  if(!TOKEN)return etat('err','Lien incomplet','Ce lien ne contient pas de jeton. Utilisez celui reçu par e-mail.','link-off');
+  try{
+    const d=await appel('get');
+    DOSSIER=d.dossier;ENFANT=d.enfant;DOCS=d.documents||[];
+    document.getElementById('sousTitre').textContent=
+      (ENFANT.prenom||'')+(ENFANT.creche_nom?' · '+ENFANT.creche_nom:'');
+    renderListe();
+  }catch(e){
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('expir'))
+      etat('err','Lien expiré','Ce lien n’est plus valable. Contactez la crèche, elle vous en enverra un nouveau.','clock-off');
+    else if(m.includes('introuvable'))
+      etat('err','Lien invalide','Ce lien ne correspond à aucun dossier. Vérifiez que vous l’avez copié en entier.','link-off');
+    else
+      etat('err','Erreur','Le dossier n’a pas pu être chargé. Réessayez dans un instant.','alert-triangle');
+  }
+}
+
+/* Trois usages, décidés côté crèche sur chaque document du pack :
+   - à remplir en ligne  : remplissable et non marqué « à imprimer » ;
+   - à imprimer          : pack_imprimer — la fiche sanitaire, que le médecin
+                           doit compléter et signer. Rien à faire en ligne ;
+   - à consulter         : le reste (règlement, projet éducatif). */
+const aRemplirEnLigne = d => d.type==='remplissable' && !d.pack_imprimer;
+
+function lienDoc(d,titre,sousTitre,icone){
+  const url=d.fichier_url||'';
+  const inner='<span class="ic"><i class="ti ti-'+icone+'"></i></span>'
+    +'<span class="tx"><b>'+esc(titre)+'</b><span>'+sousTitre+'</span></span>'
+    +'<span class="go"><i class="ti ti-'+(url?'external-link':'info-circle')+'"></i></span>';
+  return url
+    ? '<a class="doc" href="'+esc(url)+'" target="_blank" rel="noopener" style="text-decoration:none">'+inner+'</a>'
+    : '<div class="doc" style="cursor:default">'+inner+'</div>';
+}
+
+function renderListe(){
+  const enLigne=DOCS.filter(aRemplirEnLigne);
+  const aImprimer=DOCS.filter(d=>d.pack_imprimer);
+  const aLire=DOCS.filter(d=>!aRemplirEnLigne(d)&&!d.pack_imprimer);
+  const faits=enLigne.filter(d=>d.reponse&&d.reponse.statut==='signe').length;
+  const pct=enLigne.length?Math.round(faits/enLigne.length*100):100;
+
+  let h='<div class="intro">Bienvenue ! Voici les documents à préparer avant l’arrivée de '
+    +esc(ENFANT.prenom||'votre enfant')+' à la crèche. '
+    +'Vous pouvez les remplir en plusieurs fois, depuis votre téléphone : '
+    +'tout ce que vous enregistrez est conservé. Un document signé n’est plus modifiable.'
+    +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(DOSSIER.expire_le))+'</b>.</div>';
+
+  if(enLigne.length){
+    h+='<div class="card"><div style="font-weight:700;font-size:14px">Votre avancement</div>'
+      +'<div class="prog"><i style="width:'+pct+'%"></i></div>'
+      +'<div class="progtxt">'+faits+' document'+(faits>1?'s':'')+' signé'+(faits>1?'s':'')
+      +' sur '+enLigne.length+' à remplir en ligne</div></div>';
+
+    h+='<h3 class="sec">À remplir en ligne</h3>';
+    enLigne.forEach(d=>{
+      const i=DOCS.indexOf(d);
+      const signe=d.reponse&&d.reponse.statut==='signe';
+      const st=signe?{cls:'b-ok',txt:'Signé',ic:'check'}
+                    :(d.reponse?{cls:'b-att',txt:'Commencé',ic:'pencil'}
+                               :{cls:'b-att',txt:'À remplir',ic:'forms'});
+      h+='<button class="doc" onclick="ouvrir('+i+')">'
+        +'<span class="ic'+(signe?' ok':'')+'"><i class="ti ti-'+st.ic+'"></i></span>'
+        +'<span class="tx"><b>'+esc(d.titre)+'</b>'
+        +'<span><span class="badge '+st.cls+'">'+st.txt+'</span></span></span>'
+        +'<span class="go"><i class="ti ti-chevron-right"></i></span></button>';
+    });
+  }
+
+  if(aImprimer.length){
+    h+='<h3 class="sec">À imprimer et rapporter</h3>'
+      +'<p class="hint">Ces documents ne se remplissent pas en ligne : ils doivent être complétés '
+      +'et signés par votre médecin. Imprimez-les, faites-les remplir, et rapportez-les à la crèche '
+      +'le jour de la familiarisation.</p>';
+    aImprimer.forEach(d=>{
+      h+=lienDoc(d,d.titre,
+        d.fichier_url
+          ? esc(d.description||'Télécharger, imprimer, faire remplir par le médecin')
+          : '<span class="badge b-att">Document remis par la crèche</span>',
+        'printer');
+    });
+  }
+
+  if(aLire.length){
+    h+='<h3 class="sec">À consulter</h3>';
+    aLire.forEach(d=>{
+      h+=lienDoc(d,d.titre,esc(d.description||'À lire et conserver'),'file-download');
+    });
+  }
+
+  if(enLigne.length&&faits===enLigne.length){
+    h+='<div class="card" style="background:var(--green-bg);border-color:#BFE3CB;color:var(--green);font-weight:600;margin-top:14px">'
+      +'<i class="ti ti-circle-check"></i> Tout est signé en ligne — merci ! '
+      +(aImprimer.length?'Il ne reste que les documents à rapporter en papier.'
+                        :'L’équipe de la crèche a bien reçu vos documents.')+'</div>';
+  }
+  wrap.innerHTML=h;
+  window.scrollTo(0,0);
+}
+
+/* -------------------------------------------------------------- UN DOCUMENT */
+
+function ouvrir(i){
+  COURANT=DOCS[i];SIGS={};
+  const rep=COURANT.reponse;
+  const v=(rep&&rep.donnees)||{};
+  const verrou=!!(rep&&rep.statut==='signe');
+  if(v._sigs)SIGS=Object.assign({},v._sigs);
+
+  let corps;
+  if(COURANT.template_key==='fiche_liaison')corps=ficheLiaisonHtml(v);
+  else corps=champsLibresHtml(COURANT.schema_champs||[],v);
+
+  wrap.innerHTML='<button class="btn btn-g" onclick="renderListe()" style="margin-bottom:14px">'
+    +'<i class="ti ti-arrow-left"></i> Retour à la liste</button>'
+    +(verrou?'<div class="lock"><i class="ti ti-lock"></i> Ce document est signé : il n’est plus modifiable. '
+      +'Une erreur ? Prévenez la crèche, elle peut le rouvrir.</div>':'')
+    +'<div class="card"><h3 class="sec">'+esc(COURANT.titre)+'</h3>'
+    +(COURANT.description?'<p class="hint">'+esc(COURANT.description)+'</p>':'')
+    +corps
+    +(verrou?'':'<div class="acts">'
+      +'<button class="btn btn-g" onclick="enregistrer(false)"><i class="ti ti-device-floppy"></i> Enregistrer</button>'
+      +'<button class="btn btn-p" onclick="enregistrer(true)"><i class="ti ti-signature"></i> Valider et signer</button>'
+      +'</div><p class="hint" style="margin-top:10px">« Enregistrer » garde votre saisie sans rien figer : '
+      +'vous pourrez revenir. « Valider et signer » verrouille le document.</p>')
+    +'</div>';
+
+  if(!verrou)montrerSignatures();
+  else figerSignatures();
+  window.scrollTo(0,0);
+}
+
+/* Champs personnalisés (documents « formulaire libre ») */
+function champsLibresHtml(champs,v){
+  if(!champs.length)return '<p class="hint">Ce document ne contient aucun champ à remplir.</p>';
+  return champs.map(c=>{
+    const val=v[c.key];
+    let inp;
+    if(c.type==='textarea')inp='<textarea id="ff_'+c.key+'">'+esc(val||'')+'</textarea>';
+    else if(c.type==='checkbox')inp='<input type="checkbox" id="ff_'+c.key+'"'+(val?' checked':'')
+      +' style="width:auto;height:20px">';
+    else inp='<input type="'+(c.type||'text')+'" id="ff_'+c.key+'" value="'+esc(val||'')+'">';
+    return '<div class="f"><label>'+esc(c.label||c.key)+'</label>'+inp+'</div>';
+  }).join('')+sigHtml('parent1','Signature du parent');
+}
+
+/* ------------------------------------------------------ MODÈLE FICHE DE LIAISON
+   Recopié de documents.html (TPL.fiche_liaison), adapté au format téléphone.
+   Mêmes clés fl_* : une fiche remplie ici s'ouvre et s'exporte en PDF côté
+   crèche sans conversion. */
+
+const KK_CRECHES=['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
+const ON_OPTS=['','Oui','Non'];
+const FL_PHOTOS=['Afficher à la crèche','Newsletters','Le site internet','Les pages Facebook',
+  'Éventuellement, à l’occasion de reportages télévisés','Dossier « souvenir de crèche »'];
+
+const selHtml=(id,opts,val)=>'<select id="ff_'+id+'">'
+  +opts.map(o=>'<option'+(val===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>';
+const inHtml=(id,val,type)=>'<input'+(type?' type="'+type+'"':'')+' id="ff_'+id+'" value="'+esc(val||'')+'">';
+
+const FL_FIELDS=['fl_creche','fl_enfant','fl_naiss','fl_parents','fl_tel1','fl_tel2','fl_autorisees',
+  'fl_p1','fl_p2','fl_p3','fl_p4','fl_p5','fl_p6','fl_date'];
+
+function ficheLiaisonHtml(v){
+  /* Pré-remplissage : ce que la crèche connaît déjà n'a pas à être ressaisi. */
+  const creche = v.fl_creche || ENFANT.creche_nom || '';
+  const enfant = v.fl_enfant || ((ENFANT.prenom||'')+' '+(ENFANT.nom||'')).trim();
+  const naiss  = v.fl_naiss  || ENFANT.dob || '';
+  const date   = v.fl_date   || new Date().toISOString().slice(0,10);
+
+  return '<div class="grid2">'
+    + '<div class="f"><label>Crèche</label>'+selHtml('fl_creche',KK_CRECHES,creche)+'</div>'
+    + '<div class="f"><label>Date</label>'+inHtml('fl_date',date,'date')+'</div></div>'
+    + '<div class="grid2">'
+    + '<div class="f"><label>Nom et prénom de l’enfant</label>'+inHtml('fl_enfant',enfant)+'</div>'
+    + '<div class="f"><label>Date de naissance</label>'+inHtml('fl_naiss',naiss,'date')+'</div></div>'
+    + '<div class="f"><label>Nom et prénom des parents</label>'+inHtml('fl_parents',v.fl_parents)+'</div>'
+    + '<div class="grid2">'
+    + '<div class="f"><label>Téléphone parent 1</label>'+inHtml('fl_tel1',v.fl_tel1,'tel')+'</div>'
+    + '<div class="f"><label>Téléphone parent 2</label>'+inHtml('fl_tel2',v.fl_tel2,'tel')+'</div></div>'
+
+    + '<h3 class="sec">Personnes autorisées à venir le chercher</h3>'
+    + '<p class="hint">Une personne par ligne : nom, prénom, lien avec l’enfant, téléphone.</p>'
+    + '<div class="f"><textarea id="ff_fl_autorisees">'+esc(v.fl_autorisees||'')+'</textarea></div>'
+
+    + '<h3 class="sec">Autorisation de photos</h3>'
+    + '<p class="hint">Dans le cadre de la crèche, nous sommes amenés à utiliser des photos des enfants pour :</p>'
+    + '<div class="ftw"><table class="ft">'
+    + '<tr><th style="width:62%">Utilisation</th><th>Autorisation</th></tr>'
+    + FL_PHOTOS.map((lab,i)=>'<tr><td class="lab">'+esc(lab)+'</td><td>'
+        +selHtml('fl_p'+(i+1),ON_OPTS,v['fl_p'+(i+1)])+'</td></tr>').join('')
+    + '</table></div>'
+    + '<div class="txtbox">Il ne s’agit pas de photographies individuelles d’identité mais de photos '
+    + 'de groupe ou de vues montrant les enfants en activité.<br><br>'
+    + 'En application de la loi informatique et libertés et des règles de protection des mineurs, les '
+    + 'légendes accompagnant les photos ne communiqueront aucune information susceptible d’identifier '
+    + 'directement ou indirectement les enfants ou leur famille. La loi nous fait obligation d’avoir '
+    + 'l’autorisation écrite des parents pour cette utilisation.</div>'
+
+    + '<h3 class="sec">Signature des parents</h3>'
+    + sigHtml('parent1','Signature du parent 1')
+    + sigHtml('parent2','Signature du parent 2 (facultatif)');
+}
+
+/* ------------------------------------------------------------- SIGNATURES */
+
+function sigHtml(role,label){
+  return '<div class="sig" id="sig_'+role+'"><div class="lbl">'+esc(label)+'</div>'
+    +'<div id="sigc_'+role+'"></div>'
+    +'<button class="btn btn-g" onclick="effacerSig(\''+role+'\')"><i class="ti ti-eraser"></i> Effacer</button>'
+    +'</div>';
+}
+
+function rolesPresents(){
+  return [...document.querySelectorAll('.sig')].map(e=>e.id.replace('sig_',''));
+}
+
+function montrerSignatures(){rolesPresents().forEach(monterPad);}
+function figerSignatures(){
+  rolesPresents().forEach(role=>{
+    const host=document.getElementById('sigc_'+role);
+    if(!host)return;
+    host.innerHTML=SIGS[role]
+      ? '<img src="'+SIGS[role]+'" alt="Signature">'
+      : '<div class="txtbox" style="margin:0">Non signé.</div>';
+    const b=host.parentNode.querySelector('.btn');if(b)b.remove();
+  });
+}
+
+/* Longueur minimale de tracé (px) pour qu'un geste compte comme signature :
+   un effleurement accidentel ne doit pas verrouiller le document. */
+const SIG_MIN=24;
+
+function monterPad(role){
+  const host=document.getElementById('sigc_'+role);
+  if(!host)return;
+  if(SIGS[role]){
+    host.innerHTML='<img src="'+SIGS[role]+'" alt="Signature">';
+    return;
+  }
+  host.innerHTML='<canvas></canvas>';
+  const c=host.querySelector('canvas');
+  const r=c.getBoundingClientRect();
+  c.width=r.width*2;c.height=r.height*2;
+  const ctx=c.getContext('2d');ctx.scale(2,2);
+  ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#2B2740';
+  let on=false,encre=0,last=null;
+  const pt=e=>{const b=c.getBoundingClientRect();const p=e.touches?e.touches[0]:e;
+    return[p.clientX-b.left,p.clientY-b.top];};
+  const dn=e=>{e.preventDefault();on=true;const[x,y]=pt(e);last=[x,y];ctx.beginPath();ctx.moveTo(x,y);};
+  const mv=e=>{if(!on)return;e.preventDefault();const[x,y]=pt(e);
+    if(last)encre+=Math.hypot(x-last[0],y-last[1]);
+    last=[x,y];ctx.lineTo(x,y);ctx.stroke();};
+  const up=()=>{
+    if(!on)return;
+    on=false;
+    if(encre<SIG_MIN){ctx.clearRect(0,0,c.width,c.height);delete SIGS[role];encre=0;last=null;return;}
+    SIGS[role]=c.toDataURL('image/png');
+  };
+  c.addEventListener('touchstart',dn,{passive:false});
+  c.addEventListener('touchmove',mv,{passive:false});
+  c.addEventListener('touchend',up);c.addEventListener('touchcancel',up);
+  c.addEventListener('mousedown',dn);c.addEventListener('mousemove',mv);
+  window.addEventListener('mouseup',up);
+}
+
+function effacerSig(role){
+  delete SIGS[role];
+  monterPad(role);
+}
+
+/* ----------------------------------------------------------- ENREGISTREMENT */
+
+function collecter(){
+  const donnees={};
+  if(COURANT.template_key==='fiche_liaison'){
+    FL_FIELDS.forEach(f=>{
+      const el=document.getElementById('ff_'+f);
+      if(el)donnees[f]=el.value;
+    });
+  }else{
+    (COURANT.schema_champs||[]).forEach(c=>{
+      const el=document.getElementById('ff_'+c.key);
+      if(!el)return;
+      donnees[c.key]=c.type==='checkbox'?el.checked:el.value;
+    });
+  }
+  donnees._sigs=Object.assign({},SIGS);
+  return donnees;
+}
+
+/* Une image de signature quasi vide ne doit pas passer pour un tracé réel :
+   un PNG uniforme pèse quelques centaines de caractères, un vrai tracé bien plus. */
+const sigReelle=v=>typeof v==='string'&&v.indexOf('data:image')===0&&v.length>1500;
+
+async function enregistrer(signer){
+  const donnees=collecter();
+  const aSigne=Object.keys(SIGS).some(k=>sigReelle(SIGS[k]));
+
+  if(signer&&!aSigne)
+    return toast('Signez dans le cadre avant de valider.');
+
+  const vide=Object.keys(donnees).every(k=>k==='_sigs'||donnees[k]===''||donnees[k]===false||donnees[k]==null);
+  if(vide&&!aSigne)return toast('Rien à enregistrer pour le moment.');
+
+  const btns=[...document.querySelectorAll('.acts .btn')];
+  btns.forEach(b=>b.disabled=true);
+  try{
+    const r=await appel('save',{
+      document_id:COURANT.id,
+      donnees,
+      signer:!!signer
+    });
+    COURANT.reponse=r.reponse;
+    toast(signer?'Document signé — merci !':'Enregistré.');
+    if(signer){
+      /* Recharger : le dossier a pu passer à « complet ». */
+      const d=await appel('get');
+      DOSSIER=d.dossier;DOCS=d.documents||[];
+      renderListe();
+    }else{
+      btns.forEach(b=>b.disabled=false);
+    }
+  }catch(e){
+    btns.forEach(b=>b.disabled=false);
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('expir'))toast('Ce lien a expiré. Contactez la crèche.');
+    else if(m.includes('verrou')||m.includes('signe'))toast('Ce document est déjà signé.');
+    else toast('Enregistrement impossible. Vérifiez votre connexion.');
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
