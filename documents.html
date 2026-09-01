@@ -446,12 +446,38 @@ function openFromUrl(){
     if(!docId)return;
     const repId=q.get('rep')||null;
     RETURN_ENFANT_ID=q.get('enf')||null;
+    if(RETURN_ENFANT_ID)installerRetourEnfant();
     const doc=DOCS.find(d=>d.id===docId);
     if(!doc){toast('Document introuvable ou inaccessible');return;}
     // nettoyer l'URL pour éviter une réouverture au rechargement
     history.replaceState(null,'',location.pathname);
     openFill(docId,repId,false);
   }catch(e){console.warn('openFromUrl',e);}
+}
+
+/* Venu du dossier d'un enfant : le chemin du retour doit rester visible en
+   permanence. Jusqu'ici il n'apparaissait qu'apres un enregistrement — celui
+   qui consultait sans rien saisir devait repasser par le portail, et se
+   reconnecter. */
+function installerRetourEnfant(){
+  const barre=document.createElement('div');
+  barre.id='retourEnfantTop';
+  barre.style.cssText='background:#EEEDF8;border-bottom:1px solid #D6D3EA;padding:9px 14px;'
+    +'display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap';
+  barre.innerHTML='<span style="font-size:12.5px;color:#3D3580;font-weight:600">'
+    +'Vous venez du dossier d\u2019un enfant.</span>'
+    +'<button class="btn btn-p" style="padding:7px 13px;font-size:13px" onclick="returnToEnfant()">'
+    +'<i class="ti ti-arrow-back-up"></i> Revenir au dossier de l\u2019enfant</button>';
+  const top=document.querySelector('.topbar');
+  if(top&&top.parentNode)top.parentNode.insertBefore(barre,top.nextSibling);
+  /* La fleche de la barre de titre ramene au dossier, pas au portail. */
+  const fleche=document.querySelector('.topbar a.iconbtn[href="index.html"]');
+  if(fleche){
+    fleche.removeAttribute('href');
+    fleche.style.cursor='pointer';
+    fleche.title='Revenir au dossier de l\u2019enfant';
+    fleche.onclick=returnToEnfant;
+  }
 }
 
 /* Renvoie vers la fiche de l'enfant (onglet Documents) dans demandes.html */

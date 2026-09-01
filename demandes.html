@@ -10409,7 +10409,9 @@ function enfRenderDossier(){
     return;
   }
 
-  const attendus=(cacheDocsPack||[]).length;
+  const enf=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
+  const attendusDocs=packEnLigne(enf);
+  const attendus=attendusDocs.length;
   const rendus=enfDocsCache.filter(d=>d.dossier_id===actif.id&&d.statut==='signe').length;
   const badge=actif.statut==='complet'
     ? '<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">✅ Complet</span>'
@@ -10424,7 +10426,8 @@ function enfRenderDossier(){
     +'<div style="font-size:12px;color:var(--muted);margin-bottom:9px">'
     +'<i class="ti ti-mail"></i> '+escHtml(adresses.join(' · '))+'</div>'
     +(attendus?'<div style="font-size:12.5px;color:var(--muted);margin-bottom:9px">'
-      +rendus+' document'+(rendus>1?'s':'')+' signé'+(rendus>1?'s':'')+' sur '+attendus+' attendus</div>':'')
+      +rendus+' document'+(rendus>1?'s':'')+' signé'+(rendus>1?'s':'')+' sur '+attendus+' attendus en ligne</div>':'')
+    +enfPapierHtml(enf)
     +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
     +'<button class="btn-sm" onclick="enfCopierLien(\''+actif.id+'\')"><i class="ti ti-link"></i> Copier le lien</button>'
     +'<button class="btn-sm" onclick="enfRelancerDossier(\''+actif.id+'\')"><i class="ti ti-bell"></i> Relancer</button>'
@@ -10432,15 +10435,79 @@ function enfRenderDossier(){
     +'</div>','var(--koala-light)','var(--border)');
 }
 
-/* Le pack sert à afficher « x sur y ». Chargé une fois par session. */
-let cacheDocsPack=null;
+/* Le pack complet, chargé une fois par session. Deux sous-ensembles :
+   ce qui se remplit en ligne (barre d'avancement) et ce qui se rapporte en
+   papier (suivi manuel de réception). */
+let cachePack=null;
 async function chargerPack(){
-  if(cacheDocsPack)return cacheDocsPack;
+  if(cachePack)return cachePack;
   const{data}=await sb.from('documents_koala')
-    .select('id,titre,creche_id,type,pack_imprimer')
-    .eq('actif',true).eq('pack_familiarisation',true).eq('type','remplissable');
-  cacheDocsPack=(data||[]).filter(d=>!d.pack_imprimer);
-  return cacheDocsPack;
+    .select('id,titre,creche_id,type,pack_imprimer,pack_ordre')
+    .eq('actif',true).eq('pack_familiarisation',true)
+    .order('pack_ordre');
+  cachePack=data||[];
+  return cachePack;
+}
+function packEnLigne(e){
+  return (cachePack||[]).filter(d=>d.type==='remplissable'&&!d.pack_imprimer
+    &&(!d.creche_id||String(d.creche_id)===String(e&&e.creche_id)));
+}
+function packPapier(e){
+  return (cachePack||[]).filter(d=>d.pack_imprimer
+    &&(!d.creche_id||String(d.creche_id)===String(e&&e.creche_id)));
+}
+
+/* Documents à imprimer et à rapporter : rien ne remonte tout seul, c'est la
+   référente qui coche à la réception du papier. Sans ce suivi, la seule façon
+   de savoir ce qui manque serait de fouiller le classeur. */
+function enfPapierHtml(e){
+  const papier=packPapier(e);
+  if(!papier.length)return '';
+  return '<div style="border-top:1px solid var(--border);margin:10px 0 9px;padding-top:9px">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--koala-dark);margin-bottom:6px">'
+    +'À rapporter en papier</div>'
+    + papier.map(d=>{
+        const recu=enfDocsCache.find(r=>r.document_id===d.id&&r.statut==='remis');
+        return '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:12.5px">'
+          +'<input type="checkbox"'+(recu?' checked':'')
+          +' onchange="enfMarquerRecu(\''+d.id+'\',this.checked,this)">'
+          +'<span>'+escHtml(d.titre)+' — '
+          +(recu
+            ? '<span style="color:var(--green);font-weight:700">reçu en main propre</span>'
+            : '<span style="color:var(--orange);font-weight:700">non rendu</span>')
+          +'</span></label>';
+      }).join('')
+    +'</div>';
+}
+
+async function enfMarquerRecu(docId,recu,input){
+  const e=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
+  if(!e)return;
+  input.disabled=true;
+  const existant=enfDocsCache.find(r=>r.document_id===docId&&r.statut==='remis');
+  if(recu&&!existant){
+    const actif=enfDossiersCache.find(d=>d.statut!=='annule');
+    const saved=await dbInsert('documents_reponses',{
+      document_id:docId, enfant_id:e.id, creche_id:e.creche_id,
+      dossier_id:actif?actif.id:null,
+      statut:'remis', donnees:{},
+      rempli_par_nom:(currentProfile&&currentProfile.name)||'Crèche'
+    });
+    input.disabled=false;
+    if(!saved)return showBanner('Enregistrement impossible.','error');
+    enfDocsCache.unshift(saved);
+    showBanner('Document noté comme reçu ✅');
+  }else if(!recu&&existant){
+    const ok=await dbDelete('documents_reponses',existant.id);
+    input.disabled=false;
+    if(!ok)return showBanner('Modification impossible.','error');
+    enfDocsCache=enfDocsCache.filter(r=>String(r.id)!==String(existant.id));
+    showBanner('Document repassé en « non rendu ».');
+  }else{
+    input.disabled=false;
+  }
+  enfRenderDossier();
+  enfRenderDocs();
 }
 
 function enfOuvrirEnvoi(){
@@ -10468,7 +10535,7 @@ async function enfConfirmerEnvoi(){
   const e=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
   if(!e)return;
   await chargerPack();
-  if(!cacheDocsPack.length&&!confirm('Aucun document n\'est coché « Dossier de familiarisation » dans l\'outil Documents.\n\nEnvoyer quand même ?'))return;
+  if(!cachePack.length&&!confirm('Aucun document n\'est coché « Dossier de familiarisation » dans l\'outil Documents.\n\nEnvoyer quand même ?'))return;
 
   const btn=document.getElementById('envoi-btn');btn.disabled=true;
   showBanner('Envoi en cours…');
@@ -10531,6 +10598,7 @@ window.enfOuvrirEnvoi = enfOuvrirEnvoi;
 window.enfConfirmerEnvoi = enfConfirmerEnvoi;
 window.enfRelancerDossier = enfRelancerDossier;
 window.enfCopierLien = enfCopierLien;
+window.enfMarquerRecu = enfMarquerRecu;
 window.enfAnnulerDossier = enfAnnulerDossier;
 
 window.enfLoadParents = enfLoadParents;
@@ -10580,7 +10648,9 @@ function enfRenderDocs(){
   }
   const statutBadge = st => st==='signe'
     ? '<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ Signé</span>'
-    : '<span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">🕓 Préparé</span>';
+    : (st==='remis'
+      ? '<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">📥 Reçu en main propre</span>'
+      : '<span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">🕓 Préparé</span>');
   box.innerHTML = enfDocsCache.map(d=>{
     const dt = new Date(d.updated_at||d.created_at).toLocaleDateString('fr-FR');
     const titre = escHtml(enfDocTitre(d.document_id));
