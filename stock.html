@@ -4869,9 +4869,10 @@ async function syncFromCloud() {
       withTimeout(sbGet('fournisseurs')),
       withTimeout(sbGet('historique', 'order=id.desc&limit=200')),
       withTimeout(sbGet('univers', 'order=id.desc')),
+      withTimeout(sbGet('souscats', 'order=id.asc')),
     ]);
 
-    const [artsR, cmdsR, fournsR, histosR, univsR] = results;
+    const [artsR, cmdsR, fournsR, histosR, univsR, scR] = results;
 
     // On ne remplace les données en mémoire QUE si le fetch a réussi
     if (artsR.status === 'fulfilled' && Array.isArray(artsR.value))
@@ -4902,6 +4903,18 @@ async function syncFromCloud() {
       UNIVERS.splice(0, UNIVERS.length, ...mapped);
     }
     // Note : univsR.rejected est géré plus bas dans allOk
+
+    // Sous-catégories : elles ne vivaient qu'en localStorage, donc celles créées
+    // sur un appareil restaient invisibles sur les autres. Elles suivent désormais
+    // le même chemin que les univers.
+    if (scR.status === 'fulfilled' && Array.isArray(scR.value)) {
+      // Pas de reprise ici : le premier chargement (loadData) s'en est chargé.
+      // Une base vide au bout d'une minute de polling est une vraie liste vide.
+      if (scR.value.length > 0 || SOUSCATS.length === 0)
+        SOUSCATS.splice(0, SOUSCATS.length, ...scR.value.map(rowToSouscat));
+    }
+    else if (scR.status === 'rejected')
+      console.warn('[Sync] souscats (non-bloquant):', scR.reason?.message);
 
     const savedCreche = currentCreche;
     saveData();
@@ -5104,13 +5117,15 @@ async function loadData() {
   try {
     // Timeout de 30s (Supabase peut mettre jusqu'à 30s à se réveiller après inactivité)
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000));
-    const [arts, cmds, fourns, histos, univs] = await Promise.race([
+    const [arts, cmds, fourns, histos, univs, souscats, config] = await Promise.race([
       Promise.all([
         sbGet('articles'),
         sbGet('commandes'),
         sbGet('fournisseurs'),
         sbGet('historique', 'order=id.desc&limit=200'),
         sbGet('univers', 'order=id.desc').catch(() => []),
+        sbGet('souscats', 'order=id.asc').catch(() => []),
+        sbGet('stock_config').catch(() => []),
       ]),
       timeout.then(() => { throw new Error('Timeout Supabase'); })
     ]);
@@ -5130,6 +5145,28 @@ async function loadData() {
     if (Array.isArray(univs) && univs.length > 0) {
       const mapped = univs.map(u => ({ ...u, desc: u.desc || u.description || '' }));
       UNIVERS.splice(0, UNIVERS.length, ...mapped);
+    }
+    // Sous-catégories : la base fait foi dès qu'elle répond, y compris vide —
+    // sinon une sous-catégorie supprimée sur un appareil réapparaîtrait sur l'autre.
+    // SAUF au tout premier passage : si la base est vide et que cet appareil en a
+    // en local, ce sont les nôtres, jamais synchronisées. On les remonte au lieu
+    // de les effacer. Les identifiants sont conservés, donc les univers qui les
+    // référencent restent rattachés.
+    if (Array.isArray(souscats)) {
+      if (souscats.length === 0 && SOUSCATS.length > 0) {
+        SOUSCATS.forEach(sc => saveSouscatDB(sc, true));
+        showNotif('☁️ ' + SOUSCATS.length + ' sous-catégorie(s) envoyée(s) vers le cloud');
+      } else {
+        SOUSCATS.splice(0, SOUSCATS.length, ...souscats.map(rowToSouscat));
+      }
+    }
+    // Nom de la crèche : réglage unique, partagé.
+    if (Array.isArray(config)) {
+      const n = config.find(c => c.cle === 'creche_name');
+      if (n && n.valeur) {
+        try { localStorage.setItem(LS_NAME_KEY, n.valeur); } catch(e) {}
+        applyNomCreche(n.valeur);
+      }
     }
 
     const now = new Date();
@@ -5251,6 +5288,54 @@ async function deleteUniversDB(id) {
   catch(e) { console.error('[Supabase] Univers delete:', e); }
 }
 
+// ── Sous-catégories ──────────────────────────────────────────────────────
+// Même schéma que les univers : id numérique généré côté client (Date.now()),
+// pour que les enregistrements déjà créés en local gardent leur identifiant et
+// que les univers qui les référencent (u.souscat) continuent de pointer juste.
+function rowToSouscat(r) {
+  return { id: r.id, nom: r.nom, cat: r.cat || '', icon: r.icon || '', desc: r.description || '' };
+}
+function souscatToRow(sc) {
+  return { id: sc.id, nom: sc.nom, cat: sc.cat || null, icon: sc.icon || null,
+           description: sc.desc || null };
+}
+
+async function saveSouscatDB(sc, isNew) {
+  if (IS_LOCAL) return;
+  try {
+    if (isNew) await sbInsert('souscats', souscatToRow(sc));
+    else await sbUpdate('souscats', sc.id, souscatToRow(sc));
+    setSaved();
+  } catch(e) {
+    console.error('[Supabase] Souscat save:', e);
+    showNotif('⚠ Sous-catégorie enregistrée localement seulement : ' + e.message);
+  }
+}
+
+async function deleteSouscatDB(id) {
+  if (IS_LOCAL) return;
+  try { await sbDelete('souscats', id); setSaved(); }
+  catch(e) {
+    console.error('[Supabase] Souscat delete:', e);
+    showNotif('⚠ Suppression non synchronisée : ' + e.message);
+  }
+}
+
+// ── Réglages partagés du module (table clé/valeur) ───────────────────────
+async function saveStockConfigDB(cle, valeur) {
+  if (IS_LOCAL) return;
+  try {
+    // upsert : Prefer resolution=merge-duplicates sur la clé primaire
+    const r = await fetch(`${SUPA_URL}/rest/v1/stock_config`, {
+      method: 'POST',
+      headers: { ...SUPA_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ cle: cle, valeur: valeur, updated_at: new Date().toISOString() }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    setSaved();
+  } catch(e) { console.error('[Supabase] stock_config:', e); }
+}
+
 async function updateArticleStockDB(article) {
   if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
   try { await sbUpdate('articles', article.id, { stock: article.stock }); setSaved(); }
@@ -5312,6 +5397,7 @@ function saveCrecheName() {
   const display = document.getElementById('creche-name-display');
   const nom = input.value.trim() || 'Ma Crèche';
   localStorage.setItem(LS_NAME_KEY, nom);
+  saveStockConfigDB('creche_name', nom);
   input.style.display = 'none';
   display.style.display = 'flex';
   applyNomCreche(nom);
@@ -6237,10 +6323,12 @@ function saveSouscat() {
   };
   if (editingScId) {
     const idx = SOUSCATS.findIndex(s => s.id === editingScId);
-    if (idx >= 0) SOUSCATS[idx] = { ...SOUSCATS[idx], ...data };
+    if (idx >= 0) { SOUSCATS[idx] = { ...SOUSCATS[idx], ...data }; saveSouscatDB(SOUSCATS[idx], false); }
     showNotif('✅ Sous-catégorie mise à jour');
   } else {
-    SOUSCATS.push({ id: Date.now(), ...data });
+    const sc = { id: Date.now(), ...data };
+    SOUSCATS.push(sc);
+    saveSouscatDB(sc, true);
     showNotif('✅ Sous-catégorie créée');
   }
   saveData();
@@ -6272,6 +6360,7 @@ function deleteSouscat(id) {
     : `Supprimer "${sc.nom}" ?`;
   if (!confirm(msg)) return;
   SOUSCATS = SOUSCATS.filter(x => x.id !== id);
+  deleteSouscatDB(id);
   saveData();
   renderSouscats();
   showNotif('🗑 Sous-catégorie supprimée');

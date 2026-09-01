@@ -10931,12 +10931,47 @@ function spNorm(s) {
     .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z-]/g, '').trim();
 }
 
-function spAliasKey(crecheId) { return 'salPdfAlias_' + crecheId; }
+// ── Alias des noms du PDF ────────────────────────────────────────────────
+// Correspondance entre le nom tel qu'il est écrit dans le PDF des salariées et le
+// prénom utilisé dans planning_equipe. Chaque correction est un travail manuel :
+// elle est désormais partagée (table planning_alias) au lieu d'être réapprise sur
+// chaque appareil. Le localStorage reste le miroir hors ligne.
+const SP_ALIAS_LS = 'salPdfAlias_';
+let _spAlias = {};   // cache mémoire par crèche, pour garder spLoadAlias synchrone
+
+function spAliasKey(crecheId) { return SP_ALIAS_LS + crecheId; }
 function spLoadAlias(crecheId) {
-  try { return JSON.parse(localStorage.getItem(spAliasKey(crecheId))) || {}; } catch (e) { return {}; }
+  if (_spAlias[crecheId]) return _spAlias[crecheId];
+  let m = {};
+  try { m = JSON.parse(localStorage.getItem(spAliasKey(crecheId))) || {}; } catch (e) { m = {}; }
+  _spAlias[crecheId] = m;
+  return m;
 }
 function spSaveAlias(crecheId, map) {
+  _spAlias[crecheId] = map;
   try { localStorage.setItem(spAliasKey(crecheId), JSON.stringify(map)); } catch (e) {}
+  spAliasPush(crecheId, map);
+}
+
+async function spAliasPush(crecheId, map) {
+  try {
+    const { error } = await sb.from('planning_alias')
+      .upsert({ creche_id: crecheId, alias: map, updated_at: new Date().toISOString() },
+              { onConflict: 'creche_id' });
+    if (error) throw error;
+  } catch (e) { console.warn('[Alias PDF] écriture :', (e && e.message) || e); }
+}
+
+// Relu avant chaque import. La base l'emporte : toute correction faite ici y part
+// aussitôt, elle est donc toujours au moins aussi récente que le miroir local.
+async function spAliasPull(crecheId) {
+  try {
+    const { data, error } = await sb.from('planning_alias').select('alias').eq('creche_id', crecheId).maybeSingle();
+    if (error) throw error;
+    const fusion = Object.assign({}, spLoadAlias(crecheId), (data && data.alias) || {});
+    spSaveAlias(crecheId, fusion);
+    return true;
+  } catch (e) { console.warn('[Alias PDF] lecture :', (e && e.message) || e); return false; }
 }
 
 async function spPrenomsConnus(crecheId) {
@@ -11060,6 +11095,7 @@ async function spHandleFile(event) {
   if (!jours.length) { showBanner('Aucun salarié détecté dans ce PDF.', 'error'); return; }
 
   const connus = await spPrenomsConnus(crecheId);
+  await spAliasPull(crecheId);   // corrections déjà faites depuis un autre appareil
   const alias = spLoadAlias(crecheId);
   const noms = [...new Set(jours.flatMap(j => j.salaries.map(s => s.nomPdf)))];
   const mapping = {};
@@ -11357,6 +11393,7 @@ async function uniHandleFile(event) {
   const presCrecheMatch = (!presTitles.length || !crecheNorm) ? true : presTitles.every(t => ipNormName(t).indexOf(crecheNorm) >= 0);
 
   const connus = await spPrenomsConnus(crecheId);
+  await spAliasPull(crecheId);   // corrections déjà faites depuis un autre appareil
   const alias = spLoadAlias(crecheId);
   const noms = [...new Set(jours.flatMap(j => j.salaries.map(s => s.nomPdf)))];
   const mapping = {};
