@@ -3049,7 +3049,9 @@ async function renderPresenceHebdo(){
     +'<span>'+rows.length+' enfant(s) présent(s) au moins un jour</span>'
     +(_hebdoSource==='prevision'?' · <span style="color:var(--orange-dark);font-weight:600">prévision</span>':'')
     +'<span id="hebdo-import-info"></span></div>';
-  view.innerHTML=bandeauPrev+entete+stripHtml+(_hebdoView==='synthese'?synth:grille);
+  /* Les tuiles par jour redisent, en plus petit, ce que le tableau de synthese
+     affiche deja colonne par colonne : on ne les garde donc que sur la grille. */
+  view.innerHTML=bandeauPrev+entete+(_hebdoView==='synthese'?synth:stripHtml+grille);
 
   // Fraîcheur des présences de la semaine affichée, chargée sans retarder le rendu.
   const infoPres=document.getElementById('hebdo-import-info');
