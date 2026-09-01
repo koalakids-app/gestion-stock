@@ -3431,13 +3431,40 @@ function isoWeekNum(d){
 
 /* Commande déjà enregistrée pour cette crèche et cette semaine, s'il y en a une. */
 let _crSaved=null;
+let _crBaseKo=false;   // la base n'a pas répondu : l'écran doit le dire, pas faire comme si de rien n'était
+let _crSaveErr='';     // dernier message d'erreur d'enregistrement, affiché tel quel
+
+/* Trace locale de l'envoi. Filet de sécurité : si la table `commandes_repas`
+   n'existe pas encore, ou si la base est injoignable au moment de l'envoi, la
+   personne qui a transmis doit malgré tout revoir l'alerte en rouvrant la
+   semaine sur le même appareil. */
+function crEnvoiKey(cid,sem){return'cr_envoi_'+cid+'_'+sem;}
+function crEnvoiLocal(cid,sem){
+  try{return JSON.parse(localStorage.getItem(crEnvoiKey(cid,sem))||'null');}catch(e){return null;}
+}
+
 async function crLoadSaved(crecheId,semaineISO){
+  _crBaseKo=false;
+  let row=null;
   try{
     const{data,error}=await sb.from('commandes_repas').select('*')
       .eq('creche_id',crecheId).eq('semaine',semaineISO).maybeSingle();
     if(error)throw error;
-    return data||null;
-  }catch(err){console.warn('[CommandeRepas] lecture',err);return null;}
+    row=data||null;
+  }catch(err){console.warn('[CommandeRepas] lecture',err);_crBaseKo=true;}
+
+  /* Rien en base (table absente, enregistrement échoué, hors ligne) mais un envoi
+     tracé ici : on reconstruit le minimum pour que l'alerte s'affiche quand même. */
+  const loc=crEnvoiLocal(crecheId,semaineISO);
+  if(loc&&loc.envoyee_le&&!(row&&row.envoyee_le)){
+    row=Object.assign({},row||{},{
+      envoyee_le:loc.envoyee_le,
+      nb_envois:loc.nb_envois||1,
+      infos:Object.assign({},(row&&row.infos)||{},{envoi_par:loc.envoi_par||'',envoi_at:loc.envoi_at||''}),
+      _local:true
+    });
+  }
+  return row;
 }
 
 async function crOpen(){
@@ -3498,6 +3525,9 @@ function crRenderSource(){
     +(ctx.source==='prevision'?'background:var(--orange-light);color:var(--orange-dark)':'background:var(--green-light);color:var(--green)')+'">'
     +(ctx.source==='prevision'?'Prévision d’après l’historique':'D’après le planning importé')+'</span>';
   if(passee)h+='<span style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;background:var(--red-light);color:var(--red)">Semaine déjà passée</span>';
+  /* Une lecture en base qui échoue passait jusqu'ici totalement inaperçue : l'écran
+     affichait « aucune commande » alors qu'il n'en savait rien. */
+  if(_crBaseKo)h+='<span title="Table commandes_repas absente ou injoignable" style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;background:var(--red-light);color:var(--red)">⚠ Historique des commandes illisible</span>';
   h+='</div>';
   box.innerHTML=h;
   crRenderAlerte();
@@ -3536,6 +3566,7 @@ function crRenderAlerte(){
     +(nb>1?' · '+nb+' envois pour cette semaine':'')+'.<br>'
     +'Un nouvel envoi ne s’ajoute pas : il <strong>annule et remplace</strong> le précédent. '
     +'Vérifiez les chiffres avant de renvoyer, et prévenez la direction si la modification est tardive.'
+    +(s._local?'<br><span style="font-size:11.5px;opacity:0.85">Information lue sur cet appareil : l’envoi n’a pas pu être enregistré en base, les autres postes ne le verront pas.</span>':'')
     +'</div></div>';
 }
 
@@ -3747,6 +3778,11 @@ async function crSave(envoi){
     infos.envoi_par=(currentProfile&&currentProfile.name)||(currentUser&&currentUser.email)||'';
     infos.envoi_at=new Date().toISOString();
     row.infos=infos;
+    /* Tracé localement AVANT l'écriture en base : c'est justement quand la base
+       échoue que cette trace sert. */
+    try{localStorage.setItem(crEnvoiKey(ctx.crecheId,ctx.dateStrs[0]),JSON.stringify({
+      envoyee_le:row.envoyee_le,nb_envois:row.nb_envois,envoi_par:infos.envoi_par,envoi_at:infos.envoi_at
+    }));}catch(e){}
   }
   try{
     const{data,error}=await sb.from('commandes_repas')
@@ -3756,14 +3792,18 @@ async function crSave(envoi){
     return true;
   }catch(err){
     console.warn('[CommandeRepas] enregistrement',err);
+    /* Le message de Postgres est conservé et affiché : un refus de RLS et une
+       colonne manquante se soignent différemment, et personne ne va lire la
+       console d'une tablette. */
+    _crSaveErr=(err&&(err.message||err.hint||err.details))||'erreur inconnue';
     return false;
   }
 }
 
 async function crSaveOnly(){
   const ok=await crSave(false);
-  showBanner(ok?'Commande enregistrée ✅':'Enregistrement impossible — le PDF reste générable.',ok?'':'error');
-  if(ok)crRenderSource();
+  showBanner(ok?'Commande enregistrée ✅':'Enregistrement impossible — '+_crSaveErr+'. Le PDF reste générable.',ok?'':'error');
+  crRenderSource();
 }
 
 /* Lit l'écran : valeurs saisies, coordonnées et options du bon. */
@@ -3954,7 +3994,10 @@ async function crSendMail(){
     if(ok){
       closeModal('modal-cr-mail-wrap');
       closeModal('modal-commande-wrap');
-      showBanner('Commande envoyée à '+to.join(', ')+(saved?' ✅':' ✅ (enregistrement local échoué)'));
+      showBanner(saved
+        ?'Commande envoyée à '+to.join(', ')+' ✅'
+        :'Commande envoyée à '+to.join(', ')+' ✅ — mais NON enregistrée en base ('+_crSaveErr+') : les autres postes ne verront pas qu’elle est partie.',
+        saved?'success':'error');
     }else{
       showBanner('Échec de l’envoi. Vous pouvez générer le PDF et l’envoyer manuellement.','error');
       btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
