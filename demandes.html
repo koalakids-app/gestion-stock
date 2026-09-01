@@ -190,6 +190,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pg-card.formation{background:#e3f2fd;color:#1565c0;border-left:3px solid #1e88e5}
 .pg-card.reunion{background:#f3e5f5;color:#6a1b9a;border-left:3px solid #8e24aa}
 .pg-card.detachement{background:#e8eaf6;color:#283593;border-left:3px solid #3949ab}
+.pg-card.autre{background:#e0f2f1;color:#00695c;border-left:3px solid #00897b}
 .pg-card .pg-del{position:absolute;top:3px;right:4px;cursor:pointer;opacity:0.5;font-size:10px}
 .pg-card .pg-del:hover{opacity:1}
 .pg-add{display:flex;align-items:center;justify-content:center;min-height:90px;cursor:pointer;color:#d0d0d0;font-size:11px;border-radius:8px;transition:background .15s}
@@ -205,6 +206,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pg-ev.absent{background:var(--orange);color:#fff}
 .pg-ev.formation{background:#378ADD;color:#fff}
 .pg-ev.reunion{background:#7B68EE;color:#fff}
+.pg-ev.conge{background:#FB8C00;color:#fff}
+.pg-ev.detachement{background:#3949AB;color:#fff}
+.pg-ev.autre{background:#00897B;color:#fff}
+.pg-ev-ville{display:block;font-size:9.5px;font-weight:500;opacity:0.85;margin-top:1px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:0.75rem}
 .leg-item{display:flex;align-items:center;gap:5px;font-size:12px;color:#666;font-weight:500}
 .leg-dot{width:12px;height:12px;border-radius:3px}
@@ -4360,14 +4365,42 @@ function openEventAt(d,eventId){
 }
 
 // ── MODAL COORDINATEUR ──
+// Le champ « Intitulé libre » n'apparaît que pour le type « autre » : il sert de libellé
+// affiché dans la grille. Le champ « Ville » alimente ev.lieu, donc directement le calcul
+// des frais IK (ikLoadFromPlanning ne lit que ev.lieu).
+function onEcTypeChange(){
+  const t=document.getElementById('ec-type').value;
+  document.getElementById('ec-type-libre-wrap').style.display=(t==='autre')?'':'none';
+}
+
+// Villes proposées : crèches du réseau + lieux déjà enregistrés dans la config IK.
+function ecFillVilleList(){
+  const dl=document.getElementById('ec-ville-list');
+  if(!dl)return;
+  let lieux=[];
+  try{lieux=ikGetConfig().lieux||[];}catch(e){lieux=IK_SITES.slice();}
+  dl.innerHTML=lieux.map(l=>'<option value="'+String(l).replace(/"/g,'&quot;')+'">').join('');
+}
+
+function ecResetModal(){
+  document.getElementById('ec-lieu').value='';
+  document.getElementById('ec-type').value='presence';
+  document.getElementById('ec-type-libre').value='';
+  document.getElementById('ec-ville').value='';
+  onEcTypeChange();
+  ecFillVilleList();
+  // La liste des lieux vient de la config IK partagée : on la rafraîchit sans bloquer l'ouverture.
+  if(typeof ikConfigPull==='function')ikConfigPull().then(ecFillVilleList).catch(()=>{});
+}
+
 function openEventCoordModal(){
   document.getElementById('ec-day').value='0';document.getElementById('ec-slot').value='0';
-  document.getElementById('ec-lieu').value='';document.getElementById('ec-type').value='presence';
+  ecResetModal();
   document.getElementById('modal-event-coord-wrap').classList.add('open');
 }
 function openCoordEventAt(d,s){
   document.getElementById('ec-day').value=d;document.getElementById('ec-slot').value=s;
-  document.getElementById('ec-lieu').value='';document.getElementById('ec-type').value='presence';
+  ecResetModal();
   document.getElementById('modal-event-coord-wrap').classList.add('open');
 }
 
@@ -5072,13 +5105,24 @@ async function saveEventCoord(){
   if(!coord){alert('Coordinateur introuvable.');return;}
   const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   const type=document.getElementById('ec-type').value;
-  const lieu=document.getElementById('ec-lieu').value||type;
+  const creche=document.getElementById('ec-lieu').value;
+  const libre=(document.getElementById('ec-type-libre').value||'').trim();
+  const ville=(document.getElementById('ec-ville').value||'').trim();
+  if(type==='autre'&&!libre){alert('Précisez l\'intitulé libre.');return;}
+  // Libellé affiché dans la grille : l'intitulé libre s'il existe, sinon la crèche, sinon le type.
+  const label=libre||creche||type;
+  // Lieu retenu pour les IK : la ville saisie prime sur la crèche sélectionnée.
+  const lieu=ville||creche||'';
   const day=parseInt(document.getElementById('ec-day').value);
   const slot=parseInt(document.getElementById('ec-slot').value);
   const btn=document.querySelector('#modal-event-coord-wrap .btn-primary');
   if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
-  await planningSave(coord.id,semaine,{day,slot,type,label:lieu,lieu});
+  let ok=await planningSave(coord.id,semaine,{day,slot,type,label,lieu});
+  // Repli si la colonne « type » de la table planning n'accepte pas encore la valeur « autre » :
+  // on conserve l'intitulé libre dans label et on retombe sur « detachement ».
+  if(!ok&&type==='autre')ok=await planningSave(coord.id,semaine,{day,slot,type:'detachement',label,lieu});
   if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';}
+  if(!ok)alert('Enregistrement impossible — vérifiez la connexion.');
   closeModal('modal-event-coord-wrap');await renderPlanning();
 }
 
@@ -5111,6 +5155,14 @@ function getPlanningGrid(events,referentId,semaine,editable){
   return html;
 }
 
+// Libellé principal d'une case du planning coordinateur : l'intitulé saisi, sinon le lieu.
+function pgEvLabel(e){return e.label||e.lieu||e.type;}
+// Ville affichée en sous-ligne quand elle diffère du libellé (déplacement hors crèche).
+function pgEvVille(e){
+  if(!e.lieu||e.lieu===e.label)return'';
+  return'<span class="pg-ev-ville">📍 '+e.lieu+'</span>';
+}
+
 function getPlanningGridSimple(events,coordId,semaine){
   const ws=weekStart();const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
@@ -5125,11 +5177,11 @@ function getPlanningGridSimple(events,coordId,semaine){
         html+='<div class="pg-cell" onclick="openCoordEventAt('+di+','+si+')">';
         if(!evs.length)html+='<span style="font-size:10px;color:#ccc">+ ajouter</span>';
         evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delPlanningEvent(\''+e.id+'\',\''+coordId+'\',\''+semaine+'\')">'+
-          (e.lieu||e.label||e.type)+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i></div>';});
+          pgEvLabel(e)+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i>'+pgEvVille(e)+'</div>';});
       }else{
         html+='<div class="pg-cell-ro">';
         if(!evs.length)html+='<div style="text-align:center;padding:0.5rem;color:#ddd;font-size:11px">—</div>';
-        else evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" style="opacity:0.85">'+(e.lieu||e.label||e.type)+'</div>';});
+        else evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" style="opacity:0.85">'+pgEvLabel(e)+pgEvVille(e)+'</div>';});
       }
       html+='</div>';
     });
@@ -7467,7 +7519,64 @@ function ikGetConfig(){
   return{lieux,matrix,defaultDepart,bareme:saved.bareme||0.248,estimReviewed:!!saved.estimReviewed};
 }
 
-function ikWriteConfig(cfg){localStorage.setItem('ik_config',JSON.stringify(cfg));}
+// ---------------- Synchronisation Supabase ----------------
+// Le module a longtemps vécu uniquement dans le localStorage : chaque appareil avait donc
+// ses propres distances et ses propres lignes, d'où des totaux différents entre l'ordinateur
+// et la tablette. Le localStorage reste utilisé comme miroir local (lecture synchrone par
+// ikGetConfig, et repli hors ligne), mais la référence est désormais Supabase.
+//   frais_ik_config  : une ligne unique 'global' — matrice des distances, lieux, barème.
+//   frais_ik_lignes  : une ligne par (personne, mois) — le tableau des trajets en jsonb.
+const IK_CFG_ID='global';
+let ikSyncOk=true;
+
+function ikSyncWarn(op,e){
+  ikSyncOk=false;
+  console.warn('[IK sync] '+op+' :',(e&&e.message)||e);
+}
+
+async function ikConfigPull(){
+  try{
+    const{data,error}=await sb.from('frais_ik_config').select('config').eq('id',IK_CFG_ID).maybeSingle();
+    if(error)throw error;
+    ikSyncOk=true;
+    if(data&&data.config)localStorage.setItem('ik_config',JSON.stringify(data.config));
+    return true;
+  }catch(e){ikSyncWarn('lecture config',e);return false;}
+}
+
+async function ikConfigPush(cfg){
+  try{
+    const{error}=await sb.from('frais_ik_config')
+      .upsert({id:IK_CFG_ID,config:cfg,updated_at:new Date().toISOString()},{onConflict:'id'});
+    if(error)throw error;
+    ikSyncOk=true;return true;
+  }catch(e){ikSyncWarn('écriture config',e);return false;}
+}
+
+async function ikRowsPull(personId,month){
+  try{
+    const{data,error}=await sb.from('frais_ik_lignes').select('lignes')
+      .eq('referent_id',personId).eq('mois',month).maybeSingle();
+    if(error)throw error;
+    ikSyncOk=true;
+    return(data&&Array.isArray(data.lignes))?data.lignes:null;
+  }catch(e){ikSyncWarn('lecture lignes',e);return null;}
+}
+
+async function ikRowsPush(personId,month,rows){
+  try{
+    const{error}=await sb.from('frais_ik_lignes')
+      .upsert({referent_id:personId,mois:month,lignes:rows,updated_at:new Date().toISOString()},
+              {onConflict:'referent_id,mois'});
+    if(error)throw error;
+    ikSyncOk=true;return true;
+  }catch(e){ikSyncWarn('écriture lignes',e);return false;}
+}
+
+function ikWriteConfig(cfg){
+  localStorage.setItem('ik_config',JSON.stringify(cfg));
+  return ikConfigPush(cfg); // promesse : les appelants peuvent l'attendre ou l'ignorer
+}
 
 function ikDefaultDepart(){return ikGetConfig().defaultDepart||IK_DEFAULT_DEPART;}
 
@@ -7504,7 +7613,7 @@ function ikRowGroup(row){
 
 // ---------------- Configuration des lieux et distances ----------------
 
-function ikSaveConfig(){
+async function ikSaveConfig(){
   const cfg=ikGetConfig();
   const depart=document.getElementById('ik-depart-config').value||IK_DEFAULT_DEPART;
   const row=Object.assign({},cfg.matrix[depart]||{});
@@ -7520,10 +7629,11 @@ function ikSaveConfig(){
   const def=document.getElementById('ik-depart-default').value;
   if(def)cfg.defaultDepart=def;
   cfg.estimReviewed=true;
-  ikWriteConfig(cfg);
+  const ok=await ikWriteConfig(cfg);
   ikRenderConfig();
   ikRenderTable();
-  showBanner('Configuration sauvegardée !');
+  showBanner(ok?'Configuration sauvegardée — valable sur tous vos appareils.'
+               :'Configuration sauvegardée sur cet appareil uniquement (synchronisation indisponible).');
 }
 
 function ikAddDepart(){
@@ -7772,19 +7882,35 @@ function ikRenderPersonSelect(){
   else if(refs.some(r=>r.id===me))sel.value=me;
 }
 
-function ikLoad(){
+async function ikLoad(){
   const month=document.getElementById('ik-month').value;
   if(!month)return;
-  let saved=JSON.parse(localStorage.getItem(ikRowsKey(month))||'null');
-  if(!saved&&ikPersonId()===(currentProfile?.id||'dir'))saved=JSON.parse(localStorage.getItem(`ik_rows_${month}`)||'null');
+  const personId=ikPersonId();
+  const info=document.getElementById('ik-load-info');
+  if(info)info.textContent='Synchronisation…';
+
+  // 1. Config partagée : elle conditionne tous les kilométrages, on la relit avant les lignes.
+  await ikConfigPull();
+  ikRenderConfig();
+
+  // 2. Lignes du mois : la base fait foi ; le localStorage ne sert que si la base n'a rien
+  //    (premier passage, ancien mois saisi avant la synchronisation, ou appareil hors ligne).
+  let saved=await ikRowsPull(personId,month);
+  let origine='synchronisé';
+  if(!saved){
+    saved=JSON.parse(localStorage.getItem(ikRowsKey(month))||'null');
+    if(!saved&&personId===(currentProfile?.id||'dir'))saved=JSON.parse(localStorage.getItem(`ik_rows_${month}`)||'null');
+    if(saved)origine=ikSyncOk?'repris de cet appareil et synchronisé':'appareil seul (hors ligne)';
+  }
+
   if(saved){
     ikRows=ikReeval(saved);
     ikSortRows();
-    ikSaveRows();
+    ikSaveRows(); // remonte en base les mois qui n'existaient qu'en local
     ikRenderTable();
-    ikSetLoadInfo('sauvegardé');
+    ikSetLoadInfo(origine);
   }
-  else ikLoadFromPlanning();
+  else await ikLoadFromPlanning();
 }
 
 function ikSetLoadInfo(origine){
@@ -7793,6 +7919,7 @@ function ikSetLoadInfo(origine){
   const sansKm=actives.filter(r=>!(ikRowKm(r,matrix)>0)).length;
   let txt=`${actives.length} trajet(s) — ${origine}`;
   if(sansKm)txt+=` · ⚠️ ${sansKm} ligne(s) sans kilométrage (non exportée(s))`;
+  if(!ikSyncOk)txt+=' · ⚠️ synchronisation indisponible : saisie locale à cet appareil';
   document.getElementById('ik-load-info').textContent=txt;
 }
 
@@ -7829,7 +7956,10 @@ async function ikLoadFromPlanning(){
 
 function ikSaveRows(){
   const month=document.getElementById('ik-month').value;
-  if(month)localStorage.setItem(ikRowsKey(month),JSON.stringify(ikRows));
+  if(!month)return;
+  const rows=ikRows;
+  localStorage.setItem(ikRowsKey(month),JSON.stringify(rows)); // miroir local / repli hors ligne
+  ikRowsPush(ikPersonId(),month,rows);                          // référence : Supabase
 }
 
 function ikRenderTable(){
@@ -10269,11 +10399,25 @@ function afRender(){
       </select>
     </div>
     <div class="fg"><label class="flabel">Type</label>
-      <select class="finput" id="ec-type">
+      <select class="finput" id="ec-type" onchange="onEcTypeChange()">
         <option value="presence">Présence crèche</option><option value="absent">Absent</option>
         <option value="conge">Congé</option><option value="formation">Formation</option>
         <option value="reunion">Réunion</option><option value="detachement">Détachement</option>
+        <option value="autre">Autre — saisie libre…</option>
       </select>
+    </div>
+    <div class="fg" id="ec-type-libre-wrap" style="display:none">
+      <label class="flabel">Intitulé libre</label>
+      <input class="finput" id="ec-type-libre" placeholder="Ex. : PMI, visite médecine du travail, réseau…">
+    </div>
+    <div class="fg">
+      <label class="flabel">Ville / lieu du déplacement <span style="font-weight:400;color:var(--muted)">(pour le calcul des IK)</span></label>
+      <input class="finput" id="ec-ville" list="ec-ville-list" placeholder="Ex. : Toulon, La Garde, Cuers…">
+      <datalist id="ec-ville-list"></datalist>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.4">
+        Laissez vide pour utiliser la crèche choisie ci-dessus. Une ville inconnue sera reprise
+        dans <strong>Frais IK</strong> avec un kilométrage à saisir une seule fois.
+      </div>
     </div>
     <div class="mactions">
       <button class="btn-cancel" onclick="closeModal('modal-event-coord-wrap')">Annuler</button>
