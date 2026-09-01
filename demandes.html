@@ -1355,6 +1355,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
     <div id="cr-table-wrap" style="overflow-x:auto;margin-bottom:12px"></div>
 
+    <!-- CHIFFRAGE — direction / admin uniquement. Le bon PDF transmis au traiteur
+         reste rigoureusement identique au document MCM : rien de ce bloc n'y figure. -->
+    <div class="direction-only" id="cr-cout-bloc" style="display:none;border:1px solid var(--line,#e2e2e2);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="font-weight:700;font-size:13.5px"><i class="ti ti-cash"></i> Coût de la commande <span style="font-weight:400;font-size:11.5px;color:var(--muted)">— interne, absent du bon traiteur</span></div>
+        <button class="btn-sm" type="button" onclick="crToggleTarifs()"><i class="ti ti-adjustments"></i> <span id="cr-tarifs-toggle-lbl">Modifier les tarifs</span></button>
+      </div>
+
+      <div id="cr-tarifs-panel" style="display:none;background:var(--bg-soft,#f7f7f8);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">
+          Prix unitaire TTC facturé par le traiteur, par prestation. Une grille unique pour les 6 crèches.
+          Le <strong>repas témoin</strong> est prélevé chaque jour : s'il est facturé, renseignez son prix,
+          il compte pour 1 par jour (5 par semaine). Laisser à 0 tout ce qui n'est pas facturé.
+        </div>
+        <div id="cr-tarifs-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px 12px"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+          <button class="btn-primary" type="button" onclick="crSaveTarifs()"><i class="ti ti-check"></i> Enregistrer les tarifs</button>
+        </div>
+      </div>
+
+      <div id="cr-cout-wrap" style="overflow-x:auto"></div>
+    </div>
+
     <div class="frow">
       <div class="fg" style="flex:1"><label class="flabel">Date de validation</label><input type="date" class="finput" id="cr-valid-date"/></div>
       <div class="fg" style="flex:2"><label class="flabel">Nom de la responsable</label><input class="finput" id="cr-responsable" placeholder="Prénom Nom"/></div>
@@ -3271,6 +3294,130 @@ function crFmtCell(c){
   return spe.length?[String(std)].concat(spe).join('+'):String(std);
 }
 function crInfoKey(cid){return'cr_info_'+cid;}
+
+/* ── TARIFS REPAS (direction) ─────────────────────────────────────────────────
+   Grille de prix unitaires, commune aux 6 crèches, saisie une seule fois.
+   Même principe que la config des frais IK : une ligne unique en base
+   (`tarifs_repas_config`), doublée dans localStorage pour que l'écran reste
+   chiffré même hors ligne ou si la table n'existe pas encore.
+   Ces montants ne sortent JAMAIS sur le bon transmis au traiteur : le document
+   MCM doit rester conforme à l'original. */
+const TARIF_CFG_ID='00000000-0000-0000-0000-000000000001';
+const TARIF_LS_KEY='tarifs_repas';
+const TARIF_DEFAUT={bb6:0,bb18:0,grand:0,peri:0,temoin:0,gbb:0,ggr:0,bag:0};
+let crTarifs=Object.assign({},TARIF_DEFAUT);
+
+function crTarifsLocal(){
+  try{return Object.assign({},TARIF_DEFAUT,JSON.parse(localStorage.getItem(TARIF_LS_KEY)||'{}'));}
+  catch(e){return Object.assign({},TARIF_DEFAUT);}
+}
+async function crLoadTarifs(){
+  crTarifs=crTarifsLocal();
+  try{
+    const{data,error}=await sb.from('tarifs_repas_config').select('config').eq('id',TARIF_CFG_ID).maybeSingle();
+    if(error)throw error;
+    if(data&&data.config){
+      crTarifs=Object.assign({},TARIF_DEFAUT,data.config);
+      try{localStorage.setItem(TARIF_LS_KEY,JSON.stringify(crTarifs));}catch(e){}
+    }
+  }catch(err){console.warn('[CommandeRepas] tarifs',err);}
+  return crTarifs;
+}
+async function crSaveTarifs(){
+  const cfg={};
+  MCM_ROWS.forEach(function(r){
+    const el=document.getElementById('cr-t-'+r.k);
+    cfg[r.k]=el?(parseFloat(String(el.value).replace(',','.'))||0):0;
+  });
+  crTarifs=cfg;
+  try{localStorage.setItem(TARIF_LS_KEY,JSON.stringify(cfg));}catch(e){}
+  crRenderCouts();
+  try{
+    const{error}=await sb.from('tarifs_repas_config')
+      .upsert({id:TARIF_CFG_ID,config:cfg,updated_at:new Date().toISOString()},{onConflict:'id'});
+    if(error)throw error;
+    showBanner('Tarifs enregistrés ✅');
+  }catch(err){
+    console.warn('[CommandeRepas] tarifs',err);
+    showBanner('Tarifs conservés sur cet appareil, mais non synchronisés.','error');
+  }
+}
+function crToggleTarifs(){
+  const p=document.getElementById('cr-tarifs-panel');
+  if(!p)return;
+  const ouvert=p.style.display==='none';
+  p.style.display=ouvert?'':'none';
+  document.getElementById('cr-tarifs-toggle-lbl').textContent=ouvert?'Masquer les tarifs':'Modifier les tarifs';
+}
+function crRenderTarifsGrid(){
+  const g=document.getElementById('cr-tarifs-grid');
+  if(!g)return;
+  g.innerHTML=MCM_ROWS.map(function(r){
+    return '<div class="fg" style="margin:0"><label class="flabel" style="font-size:11px">'+escHtml(r.lbl)+'</label>'
+      +'<div style="display:flex;align-items:center;gap:6px">'
+      +'<input class="finput" id="cr-t-'+r.k+'" type="number" min="0" step="0.01" value="'+(crTarifs[r.k]||0)+'" '
+      +'style="text-align:right" oninput="crRenderCouts(true)"/><span style="font-size:12px;color:var(--muted)">€</span></div></div>';
+  }).join('');
+}
+
+/* Quantité facturable d'une case du bon.
+   « 6+1SV » = 7 prestations (le régime ne change pas le nombre de repas),
+   « OUI » du repas témoin = 1 prestation, case vide = 0. */
+function crCellQty(v){
+  const s=String(v||'').trim();
+  if(!s)return 0;
+  if(/^oui$/i.test(s))return 1;
+  const nums=s.match(/\d+(?:[.,]\d+)?/g);
+  if(!nums)return 0;
+  return nums.reduce(function(a,n){return a+parseFloat(n.replace(',','.'));},0);
+}
+function crEuro(n){return (Math.round(n*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';}
+
+/* Récapitulatif chiffré : quantités de la semaine × prix unitaire.
+   depuisTarifs=true quand l'appel vient de la saisie d'un prix (on ne relit pas la grille). */
+function crRenderCouts(depuisTarifs){
+  const wrap=document.getElementById('cr-cout-wrap');
+  if(!wrap||!_hebdoExportCtx)return;
+  if(depuisTarifs){
+    MCM_ROWS.forEach(function(r){
+      const el=document.getElementById('cr-t-'+r.k);
+      if(el)crTarifs[r.k]=parseFloat(String(el.value).replace(',','.'))||0;
+    });
+  }
+  const ctx=_hebdoExportCtx,vals=crReadVals();
+  const JOURS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
+  const parJour=[0,0,0,0,0];
+  let total=0,lignes='';
+  MCM_ROWS.forEach(function(r){
+    const pu=crTarifs[r.k]||0;
+    const q=[0,1,2,3,4].map(function(i){return crCellQty(vals[r.k]&&vals[r.k][i]);});
+    const qTot=q.reduce(function(a,b){return a+b;},0);
+    if(!qTot&&!pu)return;                       // ligne sans quantité ni prix : inutile de l'afficher
+    q.forEach(function(n,i){parJour[i]+=n*pu;});
+    const sous=qTot*pu;total+=sous;
+    lignes+='<tr><td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee)">'+escHtml(r.lbl)+'</td>'
+      +q.map(function(n){return '<td style="padding:5px 4px;text-align:center;border-bottom:1px solid var(--line,#eee);color:var(--muted)">'+(n||'—')+'</td>';}).join('')
+      +'<td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--line,#eee);font-weight:600">'+qTot+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--line,#eee);color:var(--muted)">'+(pu?crEuro(pu):'—')+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--line,#eee);font-weight:700">'+crEuro(sous)+'</td></tr>';
+  });
+  const sansPrix=MCM_ROWS.some(function(r){
+    return !(crTarifs[r.k]>0)&&[0,1,2,3,4].some(function(i){return crCellQty(vals[r.k]&&vals[r.k][i])>0;});
+  });
+  let h='<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:720px">'
+    +'<thead><tr><th style="text-align:left;padding:5px 8px;font-size:11px;color:var(--muted)">Prestation</th>'
+    +JOURS.map(function(j,i){return '<th style="padding:5px 4px;font-size:11px;color:var(--muted)">'+j+'<br><span style="font-weight:400">'+ctx.days5[i].toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</span></th>';}).join('')
+    +'<th style="padding:5px 8px;text-align:right;font-size:11px;color:var(--muted)">Qté</th>'
+    +'<th style="padding:5px 8px;text-align:right;font-size:11px;color:var(--muted)">P.U.</th>'
+    +'<th style="padding:5px 8px;text-align:right;font-size:11px;color:var(--muted)">Total</th></tr></thead><tbody>';
+  h+=lignes||'<tr><td colspan="9" style="padding:8px;color:var(--muted)">Aucune prestation chiffrable sur cette semaine.</td></tr>';
+  h+='<tr><td style="padding:7px 8px;font-weight:700">Coût par jour</td>'
+    +parJour.map(function(v){return '<td style="padding:7px 4px;text-align:center;font-weight:600">'+crEuro(v)+'</td>';}).join('')
+    +'<td colspan="2"></td><td style="padding:7px 8px;text-align:right;font-weight:800;font-size:13.5px;color:var(--koala)">'+crEuro(total)+'</td></tr>';
+  h+='</tbody></table>';
+  if(sansPrix)h+='<div style="font-size:11.5px;color:var(--orange-dark);margin-top:8px"><i class="ti ti-alert-triangle"></i> Des prestations commandées n\'ont pas de tarif renseigné — le total est incomplet.</div>';
+  wrap.innerHTML=h;
+}
 function isoWeekNum(d){
   const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
   const day=t.getUTCDay()||7;
@@ -3314,6 +3461,14 @@ async function crOpen(){
   document.getElementById('cr-annule').checked=dejaEnvoyee;
   document.getElementById('cr-annule-date').style.display=dejaEnvoyee?'':'none';
   document.getElementById('cr-annule-date').value=dejaEnvoyee?_crSaved.envoyee_le:'';
+
+  /* Le chiffrage est réservé à la direction : les référentes gardent l'écran actuel. */
+  const coutBloc=document.getElementById('cr-cout-bloc');
+  if(coutBloc)coutBloc.style.display=isDirection?'':'none';
+  if(isDirection){
+    await crLoadTarifs();
+    crRenderTarifsGrid();
+  }
 
   if(_crSaved&&_crSaved.valeurs)crRenderTable(_crSaved.valeurs);
   else crCompute(false);
@@ -3403,12 +3558,13 @@ function crRenderTable(vals){
     for(let i=0;i<5;i++){
       h+='<td style="border:1px solid #999;padding:0;background:'+r.bg+'">'
         +'<input id="cr-c-'+r.k+'-'+i+'" value="'+escHtml((vals&&vals[r.k]&&vals[r.k][i])||'')+'" '
-        +'style="width:100%;border:none;background:transparent;text-align:center;padding:9px 2px;font-size:13px;font-weight:700;color:#111;font-family:inherit;outline:none"/></td>';
+        +'style="width:100%;border:none;background:transparent;text-align:center;padding:9px 2px;font-size:13px;font-weight:700;color:#111;font-family:inherit;outline:none" oninput="crRenderCouts()"/></td>';
     }
     h+='</tr>';
   });
   h+='</tbody></table>';
   document.getElementById('cr-table-wrap').innerHTML=h;
+  crRenderCouts();
 }
 
 function crReadVals(){
@@ -3747,6 +3903,7 @@ async function crSendMail(){
 window.crOpen=crOpen;window.crCompute=crCompute;window.crExportPdf=crExportPdf;
 window.crOpenMail=crOpenMail;window.crSendMail=crSendMail;
 window.crSaveOnly=crSaveOnly;
+window.crToggleTarifs=crToggleTarifs;window.crSaveTarifs=crSaveTarifs;window.crRenderCouts=crRenderCouts;
 
 // ── AJOUT MANUEL D’UN ENFANT À LA JOURNÉE ──
 let _presAbsentsDuJour=[];
