@@ -112,9 +112,9 @@ a{color:var(--violet)}
    renvoie que le dossier correspondant au jeton de l'URL. Aucune table n'est
    interrogée directement — voir 15c-dossiers-policies.sql.
 
-   Le modèle « fiche de liaison » est RECOPIÉ de documents.html (choix assumé :
-   ne pas toucher à l'outil qui tourne). Si vous modifiez ce modèle là-bas,
-   reportez la modification ici — les deux versions ne se synchronisent pas.
+   Les modèles de formulaires sont RECOPIÉS de documents.html (choix assumé :
+   ne pas toucher à l'outil qui tourne). Si vous en modifiez un là-bas,
+   reportez-le ici — les deux versions ne se synchronisent pas.
    =========================================================================== */
 
 const SUPABASE_URL = "https://juyrceadazrovlitxceb.supabase.co";
@@ -270,8 +270,22 @@ function ouvrir(i){
   const verrou=!!(rep&&rep.statut==='signe');
   if(v._sigs)SIGS=Object.assign({},v._sigs);
 
+  const tpl=COURANT.template_key?TPL[COURANT.template_key]:null;
+  /* Un modèle prédéfini que cette page ne connaît pas ne doit surtout pas
+     s'afficher comme un formulaire vide « à signer » : la famille signerait
+     un document sans contenu. On le dit, et on n'offre aucun bouton. */
+  if(COURANT.template_key&&!tpl){
+    wrap.innerHTML='<button class="btn btn-g" onclick="renderListe()" style="margin-bottom:14px">'
+      +'<i class="ti ti-arrow-left"></i> Retour à la liste</button>'
+      +'<div class="card"><h3 class="sec">'+esc(COURANT.titre)+'</h3>'
+      +'<div class="txtbox">Ce document se remplit avec l’équipe de la crèche, sur place. '
+      +'Rien à faire ici.</div></div>';
+    window.scrollTo(0,0);
+    return;
+  }
+
   let corps;
-  if(COURANT.template_key==='fiche_liaison')corps=ficheLiaisonHtml(v);
+  if(tpl)corps=tpl.html(v);
   else corps=champsLibresHtml(COURANT.schema_champs||[],v);
 
   wrap.innerHTML='<button class="btn btn-g" onclick="renderListe()" style="margin-bottom:14px">'
@@ -307,40 +321,129 @@ function champsLibresHtml(champs,v){
   }).join('')+sigHtml('parent1','Signature du parent');
 }
 
-/* ------------------------------------------------------ MODÈLE FICHE DE LIAISON
-   Recopié de documents.html (TPL.fiche_liaison), adapté au format téléphone.
-   Mêmes clés fl_* : une fiche remplie ici s'ouvre et s'exporte en PDF côté
-   crèche sans conversion. */
+/* ---------------------------------------------------------- LES MODÈLES
+   Recopiés de documents.html (objet TPL), adaptés au format téléphone : mêmes
+   clés de champs, donc un document rempli ici s'ouvre et s'exporte en PDF côté
+   crèche sans conversion. Si vous modifiez un de ces modèles dans
+   documents.html, reportez-le ici — les deux versions ne se synchronisent pas.
+
+   Un modèle absent de ce registre s'affiche comme « à remplir avec la crèche »
+   plutôt que comme un formulaire vide. */
 
 const KK_CRECHES=['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
 const ON_OPTS=['','Oui','Non'];
+const CIV_OPTS=['','Monsieur','Madame'];
 const FL_PHOTOS=['Afficher à la crèche','Newsletters','Le site internet','Les pages Facebook',
   'Éventuellement, à l’occasion de reportages télévisés','Dossier « souvenir de crèche »'];
+const RM_TABLE=[
+ ['Savon liquide','Sirop antibiotique'],
+ ['Crème pour le change','Collyre'],
+ ['Liniment oléo-calcaire','Médicaments pour les reflux (gaviscon…)'],
+ ['Huile d’amande douce','Médicaments pour le transit (smecta, débridat, tiorfan…)'],
+ ['Les produits anti-moustiques : lotions, crèmes, sprays et bracelets… Si besoin, les parents en mettent à leur enfant AVANT de le déposer à la crèche, ou dans un contexte médical particulier = PAI','Homéopathie sous toutes ses formes (granules, gouttes) : Apis mellifica, Arnica'],
+ ['Les crèmes solaires : les parents apportent la crème solaire pour leur(s) enfant(s) ET signent l’autorisation','Gouttes et pipettes pour les poussées dentaires…'],
+ ['','Les boîtes de lait']
+];
 
 const selHtml=(id,opts,val)=>'<select id="ff_'+id+'">'
   +opts.map(o=>'<option'+(val===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>';
 const inHtml=(id,val,type)=>'<input'+(type?' type="'+type+'"':'')+' id="ff_'+id+'" value="'+esc(val||'')+'">';
+const champ=(lab,html)=>'<div class="f"><label>'+lab+'</label>'+html+'</div>';
+const ckHtml=(id,label,val)=>'<label style="display:inline-flex;align-items:center;gap:6px;'
+  +'margin:0 16px 8px 0;font-weight:500;color:var(--ink);cursor:pointer">'
+  +'<input type="checkbox" id="ff_'+id+'"'+(val?' checked':'')+' style="width:auto;height:20px;margin:0">'
+  +esc(label)+'</label>';
 
-const FL_FIELDS=['fl_creche','fl_enfant','fl_naiss','fl_parents','fl_tel1','fl_tel2','fl_autorisees',
-  'fl_p1','fl_p2','fl_p3','fl_p4','fl_p5','fl_p6','fl_date'];
+/* Ce que la crèche connaît déjà n'a pas à être ressaisi par la famille. */
+const nomEnfant=()=>((ENFANT.prenom||'')+' '+(ENFANT.nom||'')).trim();
+const auj=()=>new Date().toISOString().slice(0,10);
 
-function ficheLiaisonHtml(v){
-  /* Pré-remplissage : ce que la crèche connaît déjà n'a pas à être ressaisi. */
-  const creche = v.fl_creche || ENFANT.creche_nom || '';
-  const enfant = v.fl_enfant || ((ENFANT.prenom||'')+' '+(ENFANT.nom||'')).trim();
-  const naiss  = v.fl_naiss  || ENFANT.dob || '';
-  const date   = v.fl_date   || new Date().toISOString().slice(0,10);
-
+/* Bloc « je soussigné(e) » commun à l'antipyrétique et à la crème solaire. */
+function soussignes(p,v){
   return '<div class="grid2">'
-    + '<div class="f"><label>Crèche</label>'+selHtml('fl_creche',KK_CRECHES,creche)+'</div>'
-    + '<div class="f"><label>Date</label>'+inHtml('fl_date',date,'date')+'</div></div>'
+    + champ('Parent 1 — civilité',selHtml(p+'_civ1',CIV_OPTS,v[p+'_civ1']))
+    + champ('Parent 1 — nom',inHtml(p+'_parent1',v[p+'_parent1']))+'</div>'
+    + champ('Parent 1 — en qualité de',inHtml(p+'_qual1',v[p+'_qual1']))
     + '<div class="grid2">'
-    + '<div class="f"><label>Nom et prénom de l’enfant</label>'+inHtml('fl_enfant',enfant)+'</div>'
-    + '<div class="f"><label>Date de naissance</label>'+inHtml('fl_naiss',naiss,'date')+'</div></div>'
-    + '<div class="f"><label>Nom et prénom des parents</label>'+inHtml('fl_parents',v.fl_parents)+'</div>'
+    + champ('Parent 2 — civilité',selHtml(p+'_civ2',CIV_OPTS,v[p+'_civ2']))
+    + champ('Parent 2 — nom',inHtml(p+'_parent2',v[p+'_parent2']))+'</div>'
+    + champ('Parent 2 — en qualité de',inHtml(p+'_qual2',v[p+'_qual2']))
     + '<div class="grid2">'
-    + '<div class="f"><label>Téléphone parent 1</label>'+inHtml('fl_tel1',v.fl_tel1,'tel')+'</div>'
-    + '<div class="f"><label>Téléphone parent 2</label>'+inHtml('fl_tel2',v.fl_tel2,'tel')+'</div></div>'
+    + champ('Prénom de l’enfant',inHtml(p+'_enfant',v[p+'_enfant']||ENFANT.prenom||''))
+    + champ('Date',inHtml(p+'_date',v[p+'_date']||auj(),'date'))+'</div>';
+}
+
+const TPL={
+
+ fiche_renseignements:{
+  fields:['fr_nom','fr_prenom','fr_naiss','fr_age','fr_j1','fr_j2','fr_j3','fr_j4','fr_j5',
+          'fr_horaires','fr_grossesse','fr_antecedents',
+          'fr_lait','fr_lait_recup','fr_quantites','fr_diversification','fr_morceaux','fr_regime',
+          'fr_sieste','fr_tetine','fr_turbulette','fr_doudou','fr_sommeil_autre',
+          'fr_couche_jour','fr_couche_sieste','fr_pot','fr_wc','fr_change','fr_change_autre',
+          'fr_date'],
+  html:v=>
+      '<div class="grid2">'
+    + champ('Nom',inHtml('fr_nom',v.fr_nom||ENFANT.nom||''))
+    + champ('Prénom',inHtml('fr_prenom',v.fr_prenom||ENFANT.prenom||''))+'</div>'
+    + '<div class="grid2">'
+    + champ('Date de naissance',inHtml('fr_naiss',v.fr_naiss||ENFANT.dob||'','date'))
+    + champ('Âge',inHtml('fr_age',v.fr_age))+'</div>'
+    + champ('Jours de présence',['Lundi','Mardi','Mercredi','Jeudi','Vendredi']
+        .map((j,i)=>ckHtml('fr_j'+(i+1),j,v['fr_j'+(i+1)])).join(''))
+    + champ('Horaires',inHtml('fr_horaires',v.fr_horaires))
+
+    + '<h3 class="sec">Avant la crèche</h3>'
+    + '<div class="f"><label>Comment s’est passée la grossesse, la naissance de votre enfant ?</label>'
+    + '<textarea id="ff_fr_grossesse">'+esc(v.fr_grossesse||'')+'</textarea></div>'
+    + '<div class="f"><label>Antécédents (hospitalisation, maladies, difficultés, kiné…)</label>'
+    + '<textarea id="ff_fr_antecedents">'+esc(v.fr_antecedents||'')+'</textarea></div>'
+
+    + '<h3 class="sec">À la maison — repas</h3>'
+    + champ('Lait',selHtml('fr_lait',['','Maternel','Artificiel','Mixte'],v.fr_lait))
+    + champ('Souhaitez-vous récupérer le lait non consommé en fin de journée ?',
+            selHtml('fr_lait_recup',ON_OPTS,v.fr_lait_recup))
+    + champ('Quantités des biberons',inHtml('fr_quantites',v.fr_quantites))
+    + '<div class="grid2">'
+    + champ('Diversification',selHtml('fr_diversification',ON_OPTS,v.fr_diversification))
+    + champ('Morceaux',selHtml('fr_morceaux',ON_OPTS,v.fr_morceaux))+'</div>'
+    + champ('Régime particulier',inHtml('fr_regime',v.fr_regime))
+
+    + '<h3 class="sec">Sommeil</h3>'
+    + '<div class="f"><label>Sieste — rythme et habitudes</label>'
+    + '<textarea id="ff_fr_sieste">'+esc(v.fr_sieste||'')+'</textarea></div>'
+    + champ('Pour s’endormir',
+        ckHtml('fr_tetine','Tétine',v.fr_tetine)+ckHtml('fr_turbulette','Turbulette',v.fr_turbulette)
+        +ckHtml('fr_doudou','Doudou',v.fr_doudou))
+    + champ('Autre',inHtml('fr_sommeil_autre',v.fr_sommeil_autre))
+
+    + '<h3 class="sec">Acquisition de la continence</h3>'
+    + champ('Couche',
+        ckHtml('fr_couche_jour','Journée',v.fr_couche_jour)+ckHtml('fr_couche_sieste','Sieste',v.fr_couche_sieste)
+        +ckHtml('fr_pot','Pot',v.fr_pot)+ckHtml('fr_wc','WC',v.fr_wc))
+    + champ('Change',selHtml('fr_change',
+        ['','Protocole crèche (eau et savon)','Produits personnels (liniment, coton…)'],v.fr_change))
+    + champ('Autre',inHtml('fr_change_autre',v.fr_change_autre))
+
+    + '<h3 class="sec">Signature</h3>'
+    + champ('Date',inHtml('fr_date',v.fr_date||auj(),'date'))
+    + sigHtml('parent1','Signature du parent')
+ },
+
+ fiche_liaison:{
+  fields:['fl_creche','fl_enfant','fl_naiss','fl_parents','fl_tel1','fl_tel2','fl_autorisees',
+          'fl_p1','fl_p2','fl_p3','fl_p4','fl_p5','fl_p6','fl_date'],
+  html:v=>
+      '<div class="grid2">'
+    + champ('Crèche',selHtml('fl_creche',KK_CRECHES,v.fl_creche||ENFANT.creche_nom||''))
+    + champ('Date',inHtml('fl_date',v.fl_date||auj(),'date'))+'</div>'
+    + '<div class="grid2">'
+    + champ('Nom et prénom de l’enfant',inHtml('fl_enfant',v.fl_enfant||nomEnfant()))
+    + champ('Date de naissance',inHtml('fl_naiss',v.fl_naiss||ENFANT.dob||'','date'))+'</div>'
+    + champ('Nom et prénom des parents',inHtml('fl_parents',v.fl_parents))
+    + '<div class="grid2">'
+    + champ('Téléphone parent 1',inHtml('fl_tel1',v.fl_tel1,'tel'))
+    + champ('Téléphone parent 2',inHtml('fl_tel2',v.fl_tel2,'tel'))+'</div>'
 
     + '<h3 class="sec">Personnes autorisées à venir le chercher</h3>'
     + '<p class="hint">Une personne par ligne : nom, prénom, lien avec l’enfant, téléphone.</p>'
@@ -362,8 +465,78 @@ function ficheLiaisonHtml(v){
 
     + '<h3 class="sec">Signature des parents</h3>'
     + sigHtml('parent1','Signature du parent 1')
-    + sigHtml('parent2','Signature du parent 2 (facultatif)');
-}
+    + sigHtml('parent2','Signature du parent 2 (facultatif)')
+ },
+
+ antipyretique:{
+  fields:['ap_civ1','ap_parent1','ap_qual1','ap_civ2','ap_parent2','ap_qual2','ap_enfant','ap_date',
+          'ci_medicament','ci_date'],
+  html:v=>
+      '<div class="txtbox">Vous autorisez le personnel de la structure à administrer à votre enfant '
+    + 'un antipyrétique (type Doliprane) selon la prescription établie par son médecin, puis à vous '
+    + 'prévenir dans les plus brefs délais.</div>'
+    + soussignes('ap',v)
+    + sigHtml('parent1','Signature du parent 1')
+    + sigHtml('parent2','Signature du parent 2 (facultatif)')
+
+    + '<h3 class="sec">Contre-indication</h3>'
+    + '<p class="hint">À remplir seulement si un antipyrétique est contre-indiqué pour votre enfant.</p>'
+    + champ('Nom du médicament contre-indiqué',inHtml('ci_medicament',v.ci_medicament))
+    + champ('Date',inHtml('ci_date',v.ci_date,'date'))
+    + sigHtml('ci_parent','Signature du parent (contre-indication)')
+ },
+
+ creme_solaire:{
+  fields:['cs_civ1','cs_parent1','cs_qual1','cs_civ2','cs_parent2','cs_qual2','cs_enfant','cs_date'],
+  html:v=>
+      '<div class="txtbox">Durant la période estivale, la crème solaire (indice 50+ minimum, flacon '
+    + 'neuf, péremption après ouverture de 12 mois) est fournie par la famille. Sans crème '
+    + 'personnelle, l’enfant ne peut pas profiter des sorties extérieures.<br><br>'
+    + 'En signant, vous autorisez le personnel à appliquer à votre enfant la crème solaire que vous '
+    + 'fournissez.</div>'
+    + soussignes('cs',v)
+    + sigHtml('parent1','Signature du parent 1')
+    + sigHtml('parent2','Signature du parent 2 (facultatif)')
+ },
+
+ reglement_medicaments:{
+  fields:['rm_creche','rm_nom','rm_enfant','rm_date'],
+  html:v=>
+      '<div class="txtbox"><b>Réglementation concernant les ordonnances</b>'
+    + '<ul style="margin:6px 0 6px 18px;padding:0">'
+    + '<li>Les parents sont responsables de la surveillance médicale de leur enfant et de '
+    + 'l’administration des médicaments prescrits par le médecin.</li>'
+    + '<li>L’administration des médicaments en crèche est faite par le personnel, sur délégation '
+    + 'écrite du (des) parent(s) et sous condition de fournir l’ordonnance en lien avec le '
+    + 'traitement.</li></ul>'
+    + 'L’ordonnance doit comporter de manière précise et lisible : nom ET prénom de l’enfant, date '
+    + 'de prescription, nom complet du médicament (mention et nom lisible du générique le cas '
+    + 'échéant), posologie précise (quantité, nombre de prises…), durée du traitement.<br><br>'
+    + '<b>Réglementation concernant les appareillages</b><br>'
+    + 'Dans l’intérêt de l’enfant, tout appareillage médical ou paramédical (attelle, casque, '
+    + 'plâtre…) doit faire l’objet d’une prescription médicale précise et détaillée, réévaluée par '
+    + 'le médecin si besoin.<br><br>'
+    + '<b>Les bijoux sont INTERDITS (collier d’ambre inclus).</b></div>'
+    + '<div class="ftw"><table class="ft">'
+    + '<tr><th style="width:50%">Produits d’hygiène — produits neufs et fermés, avec date limite '
+    + 'd’utilisation optimale</th><th>Médicaments avec ordonnance — même ceux obtenus sans '
+    + 'prescription médicale, et autorisation parentale d’administrer</th></tr>'
+    + RM_TABLE.map(r=>'<tr><td>'+esc(r[0])+'</td><td>'+esc(r[1])+'</td></tr>').join('')
+    + '</table></div>'
+
+    + '<h3 class="sec">Engagement</h3>'
+    + '<div class="grid2">'
+    + champ('Crèche',selHtml('rm_creche',KK_CRECHES,v.rm_creche||ENFANT.creche_nom||''))
+    + champ('Date',inHtml('rm_date',v.rm_date||auj(),'date'))+'</div>'
+    + '<div class="grid2">'
+    + champ('Je soussigné(e)',inHtml('rm_nom',v.rm_nom))
+    + champ('Parent de l’enfant',inHtml('rm_enfant',v.rm_enfant||nomEnfant()))+'</div>'
+    + '<p class="hint">Déclare avoir pris connaissance du règlement de fonctionnement et m’engage '
+    + 'à en respecter les règles.</p>'
+    + sigHtml('parent1','Signature du parent')
+ }
+
+};
 
 /* ------------------------------------------------------------- SIGNATURES */
 
@@ -436,10 +609,12 @@ function effacerSig(role){
 
 function collecter(){
   const donnees={};
-  if(COURANT.template_key==='fiche_liaison'){
-    FL_FIELDS.forEach(f=>{
+  const tpl=COURANT.template_key?TPL[COURANT.template_key]:null;
+  if(tpl){
+    tpl.fields.forEach(f=>{
       const el=document.getElementById('ff_'+f);
-      if(el)donnees[f]=el.value;
+      if(!el)return;
+      donnees[f]=(el.type==='checkbox')?el.checked:el.value;
     });
   }else{
     (COURANT.schema_champs||[]).forEach(c=>{

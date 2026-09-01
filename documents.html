@@ -891,6 +891,7 @@ const TPL_LABELS={
   vaccinations:'Suivi des vaccinations obligatoires (enfant)',
   fiche_sanitaire:'Fiche sanitaire de liaison (enfant)',
   fiche_liaison:'Fiche de liaison (enfant)',
+  fiche_renseignements:'Fiche de renseignements sur l’enfant (enfant)',
   antipyretique:'Autorisation d’administrer un antipyrétique (enfant)',
   creme_solaire:'Autorisation d’application de crème solaire (enfant)',
   reglement_medicaments:'Règlement produits d’hygiène et médicaments (enfant)',
@@ -1819,6 +1820,12 @@ function selHtml(id,opts,val){
 }
 function inHtml(id,val,type){
   return `<input${type?` type="${type}"`:''} id="ff_${id}" value="${esc(val)}">`;
+}
+/* Case a cocher etiquetee, pour les trames ou l'original coche des mentions
+   plutot que de repondre oui/non ligne par ligne. */
+function ckHtml(id,label,val){
+  return `<label style="display:inline-flex;align-items:center;gap:5px;margin:0 14px 6px 0;font-weight:500;cursor:pointer">`
+    +`<input type="checkbox" id="ff_${id}"${val?' checked':''} style="width:auto;margin:0">${esc(label)}</label>`;
 }
 const FL_PHOTOS=['Afficher à la crèche','Newsletters','Le site internet','Les pages Facebook','Éventuellement, à l\u2019occasion de reportages télévisés','Dossier « souvenir de crèche »'];
 const RM_TABLE=[
@@ -3293,6 +3300,149 @@ const TPL={
     if(SIGS['medecin']){try{doc.addImage(SIGS['medecin'],'PNG',16,y+5,86,30);}catch(e){}}
     y+=42;
     pdfSortie(doc,slug(fillDoc.titre)+(g('fs_nom')?'_'+slug(g('fs_nom')):'')+'.pdf');
+    return true;
+  }
+ },
+ /* Fiche de renseignements — reprise de la trame Word de la crèche.
+    Beaucoup de cases à cocher : elles se lisent d'un coup d'oeil sur le PDF,
+    là où des listes Oui/Non obligeraient à comparer ligne à ligne. */
+ fiche_renseignements:{
+  fields:['fr_nom','fr_prenom','fr_naiss','fr_age','fr_j1','fr_j2','fr_j3','fr_j4','fr_j5',
+          'fr_horaires','fr_grossesse','fr_antecedents',
+          'fr_lait','fr_lait_recup','fr_quantites','fr_diversification','fr_morceaux','fr_regime',
+          'fr_sieste','fr_tetine','fr_turbulette','fr_doudou','fr_sommeil_autre',
+          'fr_couche_jour','fr_couche_sieste','fr_pot','fr_wc','fr_change','fr_change_autre',
+          'fr_date'],
+  html:v=>`<div class="tpl">${FT_CSS}
+   <h3>Fiche de renseignements sur l’enfant</h3>
+   <div class="grid2">
+     <div class="f"><label>Nom</label>${inHtml('fr_nom',v.fr_nom)}</div>
+     <div class="f"><label>Prénom</label>${inHtml('fr_prenom',v.fr_prenom)}</div>
+   </div>
+   <div class="grid2">
+     <div class="f"><label>Date de naissance</label>${inHtml('fr_naiss',v.fr_naiss,'date')}</div>
+     <div class="f"><label>Âge</label>${inHtml('fr_age',v.fr_age)}</div>
+   </div>
+   <div class="f"><label>Jours de présence</label>
+     ${['Lundi','Mardi','Mercredi','Jeudi','Vendredi'].map((j,i)=>ckHtml('fr_j'+(i+1),j,v['fr_j'+(i+1)])).join('')}
+   </div>
+   <div class="f"><label>Horaires</label>${inHtml('fr_horaires',v.fr_horaires)}</div>
+
+   <h3>Avant la crèche</h3>
+   <div class="f"><label>Comment s’est passée la grossesse, la naissance de l’enfant ?</label>
+     <textarea id="ff_fr_grossesse">${esc(v.fr_grossesse)}</textarea></div>
+   <div class="f"><label>Antécédents (hospitalisation, maladies, difficultés, kiné…)</label>
+     <textarea id="ff_fr_antecedents">${esc(v.fr_antecedents)}</textarea></div>
+
+   <h3>À la maison — repas</h3>
+   <div class="grid2">
+     <div class="f"><label>Lait</label>${selHtml('fr_lait',['','Maternel','Artificiel','Mixte'],v.fr_lait)}</div>
+     <div class="f"><label>Récupérer le lait non consommé en fin de journée ?</label>${selHtml('fr_lait_recup',ON_OPTS,v.fr_lait_recup)}</div>
+   </div>
+   <div class="f"><label>Quantités des biberons</label>${inHtml('fr_quantites',v.fr_quantites)}</div>
+   <div class="grid2">
+     <div class="f"><label>Diversification</label>${selHtml('fr_diversification',ON_OPTS,v.fr_diversification)}</div>
+     <div class="f"><label>Morceaux</label>${selHtml('fr_morceaux',ON_OPTS,v.fr_morceaux)}</div>
+   </div>
+   <div class="f"><label>Régime particulier</label>${inHtml('fr_regime',v.fr_regime)}</div>
+
+   <h3>Sommeil</h3>
+   <div class="f"><label>Sieste (rythme, habitudes)</label>
+     <textarea id="ff_fr_sieste">${esc(v.fr_sieste)}</textarea></div>
+   <div class="f"><label>Pour s’endormir</label>
+     ${ckHtml('fr_tetine','Tétine',v.fr_tetine)}${ckHtml('fr_turbulette','Turbulette',v.fr_turbulette)}${ckHtml('fr_doudou','Doudou',v.fr_doudou)}
+   </div>
+   <div class="f"><label>Autre</label>${inHtml('fr_sommeil_autre',v.fr_sommeil_autre)}</div>
+
+   <h3>Acquisition de la continence</h3>
+   <div class="f"><label>Couche</label>
+     ${ckHtml('fr_couche_jour','Journée',v.fr_couche_jour)}${ckHtml('fr_couche_sieste','Sieste',v.fr_couche_sieste)}
+     ${ckHtml('fr_pot','Pot',v.fr_pot)}${ckHtml('fr_wc','WC',v.fr_wc)}
+   </div>
+   <div class="f"><label>Change</label>${selHtml('fr_change',['','Protocole crèche (eau et savon)','Produits personnels (liniment, coton…)'],v.fr_change)}</div>
+   <div class="f"><label>Autre</label>${inHtml('fr_change_autre',v.fr_change_autre)}</div>
+
+   <h3>Signature</h3>
+   <div class="f"><label>Date</label>${inHtml('fr_date',v.fr_date,'date')}</div>
+   <div class="grid2">
+     ${sigBoxHtml('parent1','Signature du parent')}
+   </div>
+  </div>`,
+  mount:()=>{['parent1'].forEach(mountSig);},
+  pdf:doc=>{
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
+    const c=id=>{const e=document.getElementById('ff_'+id);return !!(e&&e.checked);};
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'';
+    const oui=v=>v||'—';
+    const W=182;let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+    const titre=t=>{need(14);doc.setFontSize(11);doc.setFont(undefined,'bold');
+      doc.text(t,14,y);doc.setDrawColor(150);doc.line(14,y+1.5,14+W,y+1.5);y+=9;
+      doc.setFontSize(10);doc.setFont(undefined,'normal');};
+    const bloc=t=>{const L=doc.splitTextToSize(t||'—',W-4);need(L.length*5+4);
+      doc.text(L,16,y);y+=L.length*5+4;};
+    const cases=(lab,items)=>{need(9);doc.setFont(undefined,'bold');doc.text(lab,14,y);
+      doc.setFont(undefined,'normal');
+      let x=14+doc.getTextWidth(lab)+4;
+      items.forEach(([l,on])=>{
+        doc.setDrawColor(90);doc.rect(x,y-3.2,3.6,3.6);
+        if(on){doc.setLineWidth(.5);doc.line(x+.5,y-1.4,x+1.5,y-.4);doc.line(x+1.5,y-.4,x+3.2,y-2.9);doc.setLineWidth(.2);}
+        doc.text(l,x+5.2,y);x+=5.2+doc.getTextWidth(l)+6;
+      });y+=8;};
+
+    doc.setFontSize(15);doc.setFont(undefined,'bold');
+    doc.text('FICHE DE RENSEIGNEMENTS SUR L’ENFANT',14+W/2,y,{align:'center'});y+=13;
+    doc.setFontSize(10);doc.setFont(undefined,'normal');
+    doc.setFont(undefined,'bold');doc.text('NOM : ',14,y);
+    doc.setFont(undefined,'normal');doc.text(oui(g('fr_nom')),30,y);
+    doc.setFont(undefined,'bold');doc.text('PRÉNOM : ',110,y);
+    doc.setFont(undefined,'normal');doc.text(oui(g('fr_prenom')),133,y);y+=8;
+    doc.setFont(undefined,'bold');doc.text('Date de naissance : ',14,y);
+    doc.setFont(undefined,'normal');doc.text(dfr(g('fr_naiss'))||'—',56,y);
+    doc.setFont(undefined,'bold');doc.text('Âge : ',110,y);
+    doc.setFont(undefined,'normal');doc.text(oui(g('fr_age')),122,y);y+=9;
+    cases('Jours de présence :',[['Lundi',c('fr_j1')],['Mardi',c('fr_j2')],['Mercredi',c('fr_j3')],
+      ['Jeudi',c('fr_j4')],['Vendredi',c('fr_j5')]]);
+    doc.setFont(undefined,'bold');doc.text('Horaires : ',14,y);
+    doc.setFont(undefined,'normal');doc.text(oui(g('fr_horaires')),36,y);y+=11;
+
+    titre('AVANT LA CRÈCHE');
+    doc.setFont(undefined,'bold');bloc('Grossesse et naissance :');
+    doc.setFont(undefined,'normal');bloc(g('fr_grossesse'));
+    doc.setFont(undefined,'bold');bloc('Antécédents (hospitalisation, maladies, difficultés, kiné…) :');
+    doc.setFont(undefined,'normal');bloc(g('fr_antecedents'));
+
+    titre('À LA MAISON — REPAS');
+    y=pdfGrid(doc,14,y,[70,112],[
+      ['Lait',oui(g('fr_lait'))],
+      ['Récupérer le lait non consommé',oui(g('fr_lait_recup'))],
+      ['Quantités des biberons',oui(g('fr_quantites'))],
+      ['Diversification',oui(g('fr_diversification'))],
+      ['Morceaux',oui(g('fr_morceaux'))],
+      ['Régime particulier',oui(g('fr_regime'))]
+    ],{minH:9});y+=10;
+
+    titre('SOMMEIL');
+    bloc(g('fr_sieste'));
+    cases('Pour s’endormir :',[['Tétine',c('fr_tetine')],['Turbulette',c('fr_turbulette')],['Doudou',c('fr_doudou')]]);
+    if(g('fr_sommeil_autre')){doc.text('Autre : '+g('fr_sommeil_autre'),14,y);y+=8;}
+    y+=3;
+
+    titre('ACQUISITION DE LA CONTINENCE');
+    cases('Couche :',[['Journée',c('fr_couche_jour')],['Sieste',c('fr_couche_sieste')],
+      ['Pot',c('fr_pot')],['WC',c('fr_wc')]]);
+    doc.setFont(undefined,'bold');doc.text('Change : ',14,y);
+    doc.setFont(undefined,'normal');doc.text(oui(g('fr_change')),33,y);y+=8;
+    if(g('fr_change_autre')){doc.text('Autre : '+g('fr_change_autre'),14,y);y+=8;}
+    y+=6;
+
+    need(50);
+    doc.setFont(undefined,'bold');doc.text('Date : ',14,y);
+    doc.setFont(undefined,'normal');doc.text(dfr(g('fr_date'))||'—',28,y);y+=8;
+    doc.setFont(undefined,'bold');doc.setFontSize(9);doc.text('Signature du parent :',14,y);
+    doc.setDrawColor(200);doc.rect(14,y+3,90,32);
+    if(SIGS['parent1']){try{doc.addImage(SIGS['parent1'],'PNG',16,y+5,86,28);}catch(e){}}
+    pdfSortie(doc,slug(fillDoc.titre)+(g('fr_nom')?'_'+slug(g('fr_nom')):'')+'.pdf');
     return true;
   }
  },
