@@ -482,7 +482,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <select class="finput direction-only" id="presence-creche-select" style="display:none;width:160px" onchange="renderPresence()">
           <option value="">-- Crèche --</option>
         </select>
-        <button class="fchip active" id="pres-filter-chip" onclick="presToggleFilterPresents()" title="N’afficher que les enfants présents ce jour"><i class="ti ti-filter"></i> Présents uniquement</button>
+        <button class="fchip active pres-jour-only" id="pres-filter-chip" onclick="presToggleFilterPresents()" title="N’afficher que les enfants présents ce jour"><i class="ti ti-filter"></i> Présents uniquement</button>
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn-sm pres-jour-only" onclick="presApplyContrats()" title="Marquer présents les enfants dont le contrat couvre ce jour"><i class="ti ti-calendar-check"></i> Appliquer les contrats</button>
@@ -2494,9 +2494,6 @@ function presMajBarre(){
   const jour=currentPresenceSlot!=='hebdo';
   document.querySelectorAll('#main-presence .pres-jour-only')
     .forEach(el=>el.classList.toggle('pres-masque',!jour));
-  const chip=document.getElementById('pres-filter-chip');
-  if(chip)chip.title=jour?'N\u2019afficher que les enfants pr\u00e9sents ce jour'
-                         :'N\u2019afficher que les enfants pr\u00e9sents dans la semaine';
 }
 async function renderPresence(){
   if(currentPresenceSlot==='hebdo'){await renderPresenceHebdo();return;}
