@@ -4594,12 +4594,18 @@ function renderImportPreview(){
   html+=ipHtmlDiag(_importPresData.diag);
   html+=ipHtmlContrats(_importPresData.propositions,_importPresData.nameMap,_importPresData.contratsParEnfant,_importPresData.epWarn,_importPresData.pages.length);
   _importPresData.pages.forEach(pg=>{
-    const nb=pg.matched.length+pg.toCreate.length;totalPres+=nb;
+    /* Les enfants listés sans plage horaire sont des absents du jour : ils sont
+       affichés en gris, décomptés du total, et n'entreront pas en base. */
+    const absentsPg=pg.matched.filter(mt=>ipEstAbsentSurPage(pg,mt.name));
+    const presentsPg=pg.matched.filter(mt=>!ipEstAbsentSurPage(pg,mt.name));
+    const nb=presentsPg.length+pg.toCreate.length;totalPres+=nb;
     html+='<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">';
-    html+='<div style="font-weight:700;color:var(--koala);text-transform:capitalize;margin-bottom:6px">'+ipFmtDate(pg.date)+' <span style="font-weight:400;color:var(--muted);font-size:11px">'+nb+' enfant'+(nb>1?'s':'')+'</span></div>';
+    html+='<div style="font-weight:700;color:var(--koala);text-transform:capitalize;margin-bottom:6px">'+ipFmtDate(pg.date)+' <span style="font-weight:400;color:var(--muted);font-size:11px">'+nb+' enfant'+(nb>1?'s':'')
+      +(absentsPg.length?' · '+absentsPg.length+' absent'+(absentsPg.length>1?'s':''):'')+'</span></div>';
     const tags=[
-      ...pg.matched.map(mt=>'<span style="background:#e8f5e9;color:#2e7d32;border-radius:6px;padding:2px 8px;font-size:11.5px">✓ '+escHtml(mt.enfant.prenom+' '+mt.enfant.nom)+'</span>'),
-      ...pg.toCreate.map(nm=>'<span style="background:#fff3e0;color:#e65100;border-radius:6px;padding:2px 8px;font-size:11.5px">+ '+escHtml(nm)+'</span>')
+      ...presentsPg.map(mt=>'<span style="background:#e8f5e9;color:#2e7d32;border-radius:6px;padding:2px 8px;font-size:11.5px">✓ '+escHtml(mt.enfant.prenom+' '+mt.enfant.nom)+'</span>'),
+      ...pg.toCreate.map(nm=>'<span style="background:#fff3e0;color:#e65100;border-radius:6px;padding:2px 8px;font-size:11.5px">+ '+escHtml(nm)+'</span>'),
+      ...absentsPg.map(mt=>'<span style="background:#f1f1f4;color:#777;border-radius:6px;padding:2px 8px;font-size:11.5px" title="Aucune plage horaire sur le planning : non enregistré">— '+escHtml(mt.enfant.prenom+' '+mt.enfant.nom)+'</span>')
     ];
     html+='<div style="display:flex;flex-wrap:wrap;gap:5px">'+tags.join('')+'</div></div>';
   });
@@ -4632,10 +4638,36 @@ async function confirmPresenceImport(){
   // 2) Enregistrer les présences M + A, avec l'amplitude horaire lue sur la barre.
   //    Quand l'horaire est connu, un enfant parti avant 13h n'est plus marqué
   //    présent l'après-midi (et inversement) : le PDF fait foi jusqu'au créneau.
+/* Un Gantt liste TOUS les enfants inscrits de la crèche, y compris ceux qui ne
+   viennent pas ce jour-là : leur ligne est simplement vide. Sans la règle
+   ci-dessous, un enfant sans barre tombait dans le repli « pas d'horaires lus »
+   et était enregistré présent matin ET après-midi — une absence transformée en
+   journée complète, y compris sur le bon traiteur.
+
+   On ne peut pas pour autant décréter absent tout enfant sans créneau : si la
+   lecture des barres échoue en bloc (PDF illisible), personne n'en a, et il faut
+   alors conserver l'ancien comportement plutôt que de vider la semaine. D'où le
+   critère : la lecture n'est réputée fiable sur une page que si au moins un
+   enfant y a un créneau. Dans ce cas seulement, l'absence de barre vaut absence. */
+function ipHorairesFiables(pg){
+  const cr=pg.creneaux||{};
+  return Object.keys(cr).some(function(k){const c=cr[k];return c&&(c.hdebut||c.hfin);});
+}
+function ipEstAbsentSurPage(pg,nom){
+  if(!ipHorairesFiables(pg))return false;
+  const c=(pg.creneaux||{})[nom];
+  return !(c&&(c.hdebut||c.hfin));
+}
+
   showBanner('Enregistrement des présences…');
   const wanted=[];
+  const ignores=[];
   pages.forEach(pg=>{
     pg.matched.forEach(mt=>{
+      if(ipEstAbsentSurPage(pg,mt.name)){
+        ignores.push({date:pg.date,nom:mt.enfant.prenom+' '+mt.enfant.nom});
+        return;
+      }
       const cr=(pg.creneaux||{})[mt.name];
       const hd=cr&&cr.hdebut?cr.hdebut:null,hf=cr&&cr.hfin?cr.hfin:null;
       const hasM=!cr||!hd||spMin(hd)<13*60;
@@ -4644,7 +4676,9 @@ async function confirmPresenceImport(){
       if(hasA)wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'A',status:'present',heure_debut:hd,heure_fin:hf});
     });
   });
-  if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;showBanner('Aucune présence à enregistrer.','error');return;}
+  if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;
+    showBanner(ignores.length?('Aucune présence à enregistrer : les '+ignores.length+' enfant(s) lus n’ont aucune plage horaire sur le planning.')
+                             :'Aucune présence à enregistrer.','error');return;}
   const dates=[...new Set(wanted.map(w=>w.presence_date))];
   const ids=[...new Set(wanted.map(w=>w.enfant_id))];
   if(_ipReplace){
@@ -4673,7 +4707,11 @@ async function confirmPresenceImport(){
     bouts.push(toInsert.length+' présence'+(toInsert.length>1?'s':'')+' enregistrée'+(toInsert.length>1?'s':''));
     if(ctRes.crees)bouts.push(ctRes.crees+' contrat'+(ctRes.crees>1?'s':'')+' créé'+(ctRes.crees>1?'s':''));
     if(ctRes.majs)bouts.push(ctRes.majs+' contrat'+(ctRes.majs>1?'s':'')+' mis à jour');
+    /* Les absences écartées sont annoncées : une ligne vide dans le Gantt est une
+       information, pas un oubli, et la référente doit pouvoir la vérifier. */
+    if(ignores.length)bouts.push(ignores.length+' absence'+(ignores.length>1?'s':'')+' ignorée'+(ignores.length>1?'s':''));
     showBanner('Import terminé : '+bouts.join(', ')+' ✅');
+    if(ignores.length)console.info('[ImportPresence] absents (aucune plage horaire) :',ignores);
     if(degrade)setTimeout(()=>showBanner('Horaires non enregistrés sur les présences : colonnes heure_debut / heure_fin absentes de la table presences.','error'),3500);
     renderPresence();
   }else showBanner('Erreur lors de l\u2019enregistrement des pr\u00e9sences'+(_errMsg?' : '+_errMsg:'')+'.','error');
