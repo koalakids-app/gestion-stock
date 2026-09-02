@@ -3643,7 +3643,13 @@ function crCompute(notify){
       if(cell.slot==='j'||cell.slot==='m')repas[t][reg]=(repas[t][reg]||0)+1;
       if(cell.slot==='j'||cell.slot==='a'){
         const g=t==='bb18'?'gbb':(t==='grand'||t==='peri')?'ggr':null;
-        if(g)gouter[g][reg]=(gouter[g][reg]||0)+1;
+        /* Un goûter ne contient jamais de viande : la mention « SV » n'a pas de
+           sens sur ces deux lignes et faisait apparaître un régime particulier
+           là où le traiteur sert le goûter standard. L'enfant est donc compté
+           dans l'effectif normal. SPV et SPA restent signalés : le lait et les
+           produits laitiers, eux, sont bien présents au goûter. */
+        const gReg=reg==='SV'?'':reg;
+        if(g)gouter[g][gReg]=(gouter[g][gReg]||0)+1;
       }
     });
     ['bb6','bb18','grand','peri'].forEach(function(k){vals[k][i]=crFmtCell(repas[k]);});
@@ -3935,12 +3941,16 @@ async function crExportPdf(){
   try{
     const c=crCollect();
     /* On enregistre AVANT de produire le bon : si le stockage échoue, l'utilisateur
-       est prévenu mais repart quand même avec son PDF. */
-    const saved=await crSave(true);
+       est prévenu mais repart quand même avec son PDF.
+       Enregistrement en BROUILLON (crSave(false)) : télécharger le bon n'est pas
+       le transmettre. Seul « Envoyer au traiteur » marque la commande comme
+       envoyée — sans quoi une simple édition du PDF cochait « annule et remplace »
+       à la réouverture de la semaine, pour une commande jamais partie. */
+    const saved=await crSave(false);
     const pdf=await crMakePdf(c);
     pdf.save(crPdfName(c.opts.semNum));
     closeModal('modal-commande-wrap');
-    showBanner(saved?'Bon de commande généré et enregistré ✅'
+    showBanner(saved?'Bon de commande généré et enregistré (brouillon) ✅'
                     :'Bon généré ✅ — mais l’enregistrement a échoué (table commandes_repas absente ?).',
                saved?'':'error');
   }catch(err){
@@ -4051,7 +4061,7 @@ async function crSendMail(){
         :'Commande envoyée à '+to.join(', ')+' ✅ — mais NON enregistrée en base ('+_crSaveErr+') : les autres postes ne verront pas qu’elle est partie.',
         saved?'success':'error');
     }else{
-      showBanner('Échec de l’envoi. Vous pouvez générer le PDF et l’envoyer manuellement.','error');
+      showBanner('Échec de l’envoi'+(_lastFnErr?' — '+_lastFnErr:'')+'. Vous pouvez générer le PDF et l’envoyer manuellement.','error');
       btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
     }
   }catch(err){
@@ -9065,7 +9075,28 @@ function fpSendEmail(){
   window.location.href='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
 }
 
-async function callFn(fn,body){try{const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});return r.ok;}catch{return false;}}
+/* Dernière erreur d'appel d'edge function, en clair. callFn ne renvoie qu'un
+   booléen (13 appels s'appuient dessus) : le détail est déposé ici pour que les
+   écrans qui le peuvent affichent la cause réelle au lieu d'un « échec » muet —
+   un domaine Resend non vérifié, un secret manquant et un PDF trop lourd ne se
+   soignent pas de la même façon. */
+let _lastFnErr='';
+async function callFn(fn,body){
+  _lastFnErr='';
+  try{
+    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});
+    if(!r.ok){
+      let txt='';try{txt=await r.text();}catch(e){}
+      _lastFnErr='HTTP '+r.status+(txt?' — '+txt.slice(0,300):'');
+      console.error('[callFn] '+fn,_lastFnErr);
+    }
+    return r.ok;
+  }catch(err){
+    _lastFnErr=(err&&err.message)||'réseau injoignable';
+    console.error('[callFn] '+fn,err);
+    return false;
+  }
+}
 
 // ============================================================
 // REMPLAÇANTES
