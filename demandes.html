@@ -4279,6 +4279,28 @@ let _importPresData=null;
 let _ipDiag=[];
 let _ipReplace=true;
 let _ipForceCreche=false;
+/* Un Gantt liste TOUS les enfants inscrits de la crèche, y compris ceux qui ne
+   viennent pas ce jour-là : leur ligne est simplement vide. Sans la règle
+   ci-dessous, un enfant sans barre tombait dans le repli « pas d'horaires lus »
+   et était enregistré présent matin ET après-midi — une absence transformée en
+   journée complète, y compris sur le bon traiteur.
+
+   On ne peut pas pour autant décréter absent tout enfant sans créneau : si la
+   lecture des barres échoue en bloc (PDF illisible), personne n'en a, et il faut
+   alors conserver l'ancien comportement plutôt que de vider la semaine. D'où le
+   critère : la lecture n'est réputée fiable sur une page que si au moins un
+   enfant y a un créneau. Dans ce cas seulement, l'absence de barre vaut absence. */
+function ipHorairesFiables(pg){
+  const cr=pg.creneaux||{};
+  return Object.keys(cr).some(function(k){const c=cr[k];return c&&(c.hdebut||c.hfin);});
+}
+function ipEstAbsentSurPage(pg,nom){
+  if(!ipHorairesFiables(pg))return false;
+  const c=(pg.creneaux||{})[nom];
+  return !(c&&(c.hdebut||c.hfin));
+}
+window.ipHorairesFiables=ipHorairesFiables;window.ipEstAbsentSurPage=ipEstAbsentSurPage;
+
 function ipNormName(s){return(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s-]/g,'').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim();}
 function ipCleanName(s){return(s||'').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim();}
 function ipIsFirstnameToken(tok){return tok&&/^[A-ZÀ-Ÿ]/.test(tok)&&/[a-zà-ÿ]/.test(tok);}
@@ -4638,27 +4660,6 @@ async function confirmPresenceImport(){
   // 2) Enregistrer les présences M + A, avec l'amplitude horaire lue sur la barre.
   //    Quand l'horaire est connu, un enfant parti avant 13h n'est plus marqué
   //    présent l'après-midi (et inversement) : le PDF fait foi jusqu'au créneau.
-/* Un Gantt liste TOUS les enfants inscrits de la crèche, y compris ceux qui ne
-   viennent pas ce jour-là : leur ligne est simplement vide. Sans la règle
-   ci-dessous, un enfant sans barre tombait dans le repli « pas d'horaires lus »
-   et était enregistré présent matin ET après-midi — une absence transformée en
-   journée complète, y compris sur le bon traiteur.
-
-   On ne peut pas pour autant décréter absent tout enfant sans créneau : si la
-   lecture des barres échoue en bloc (PDF illisible), personne n'en a, et il faut
-   alors conserver l'ancien comportement plutôt que de vider la semaine. D'où le
-   critère : la lecture n'est réputée fiable sur une page que si au moins un
-   enfant y a un créneau. Dans ce cas seulement, l'absence de barre vaut absence. */
-function ipHorairesFiables(pg){
-  const cr=pg.creneaux||{};
-  return Object.keys(cr).some(function(k){const c=cr[k];return c&&(c.hdebut||c.hfin);});
-}
-function ipEstAbsentSurPage(pg,nom){
-  if(!ipHorairesFiables(pg))return false;
-  const c=(pg.creneaux||{})[nom];
-  return !(c&&(c.hdebut||c.hfin));
-}
-
   showBanner('Enregistrement des présences…');
   const wanted=[];
   const ignores=[];
