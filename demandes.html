@@ -10314,14 +10314,27 @@ function enfRepasFicheLigne(e){
     +';border-radius:6px;padding:1px 7px;font-weight:800;margin-right:6px">'+escHtml(code)+'</span>'+escHtml(repasLabel(code)||'');
   if(forcee&&auto&&forcee!==auto)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé — l’âge donnerait '+escHtml(auto)+'</div>';
   else if(!forcee)s+='<div style="font-size:11px;color:var(--muted);font-weight:400">suit l’âge</div>';
-  /* Le goûter n'est rappelé que s'il a été forcé : dans le cas courant il découle
-     du code repas affiché juste au-dessus, et le répéter alourdirait la fiche. */
-  if(code!=='BIB'&&e.gouter_base){
-    const gAuto=enfGouterAuto(e);
-    s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">goûter '
-      +(e.gouter_base==='gbb'?'bébé':'grand')+' — forcé'
-      +(gAuto&&gAuto!==e.gouter_base?' (le repas donnerait '+(gAuto==='gbb'?'bébé':'grand')+')':'')+'</div>';
-  }
+  return s;
+}
+
+/* Ligne « Goûter » de l'onglet Identité. Elle est toujours affichée, même quand le
+   goûter suit le repas : c'est une information que la référente doit pouvoir lire
+   sans ouvrir le formulaire de modification. */
+function enfGouterFicheLigne(e){
+  const base=e.repas_base||enfRepasBaseAuto(e);
+  if(!base)return'<span style="color:var(--muted)">—</span>';
+  if(base==='BIB')return'<span style="color:var(--muted)">aucun (biberon)</span>';
+  const g=enfGouterLigne(e);
+  if(!g)return'<span style="color:var(--muted)">aucun (repas légumes sans protéines)</span>';
+  const forcee=e.gouter_base||'';
+  const auto=enfGouterAuto(e);
+  const lbl=function(v){return v==='gbb'?'bébé':'grand';};
+  let s='<span style="display:inline-block;background:'+(forcee?'var(--orange-light)':'var(--koala-light)')
+    +';color:'+(forcee?'var(--orange-dark)':'var(--koala)')
+    +';border-radius:6px;padding:1px 7px;font-weight:800">Goûter '+lbl(g)+'</span>';
+  if(forcee&&auto&&forcee!==auto)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé — le repas donnerait '+lbl(auto)+'</div>';
+  else if(forcee)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé</div>';
+  else s+='<div style="font-size:11px;color:var(--muted);font-weight:400">suit le repas</div>';
   return s;
 }
 
@@ -10340,6 +10353,7 @@ function enfRenderIdentite(){
     + row('Crèche', creche?escHtml(creche.name):'')
     + row('Allergies', escHtml(e.allergies||''))
     + row('Repas', enfRepasFicheLigne(e))
+    + row('Goûter', enfGouterFicheLigne(e))
     + '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn-primary" onclick="editEnfant(\''+e.id+'\')"><i class="ti ti-edit"></i> Modifier la fiche</button></div>';
 }
 
