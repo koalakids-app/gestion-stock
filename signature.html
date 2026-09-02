@@ -51,15 +51,19 @@ function state(cls,title,msg){
 }
 
 async function boot(){
-  if(!TOKEN)return state('err','Lien invalide','Aucun jeton de signature fourni.');
-  const{data,error}=await sb.from('signatures_pending').select('*').eq('token',TOKEN).maybeSingle();
-  if(error)return state('err','Erreur',"Impossible de charger cette demande de signature.");
-  if(!data)return state('err','Lien expiré','Ce lien de signature n\u2019est plus valable. Demandez-en un nouveau.');
-  REQ=data;
+  if(!TOKEN||TOKEN.length<20)return state('err','Lien invalide','Aucun jeton de signature valide dans ce lien.');
+  const{data,error}=await sb.rpc('kk_sig_get',{p_token:TOKEN});
+  if(error){
+    console.error('sig get',error);
+    return state('err','Erreur',"Impossible de charger cette demande de signature.");
+  }
+  const row=Array.isArray(data)?data[0]:data;
+  if(!row)return state('err','Lien expiré','Ce lien de signature n\u2019est plus valable ou la signature a déjà été déposée. Demandez-en un nouveau.');
+  REQ=row;
   card.innerHTML=`
     <h1>Signature</h1>
-    <div class="ctx">${esc(data.contexte||'')}</div>
-    <div class="who">${esc(data.signataire||'Signataire')}</div>
+    <div class="ctx">${esc(row.contexte||'')}</div>
+    <div class="who">${esc(row.signataire||'Signataire')}</div>
     <canvas id="c"></canvas>
     <div class="tip">Signez avec le doigt dans le cadre ci-dessus</div>
     <div class="acts">
@@ -95,13 +99,14 @@ async function send(){
   if(!hasDrawn)return alert('Merci de signer avant de valider.');
   const b=document.getElementById('bv');b.disabled=true;b.textContent='Envoi…';
   const png=document.getElementById('c').toDataURL('image/png');
-  const{error}=await sb.from('signatures_pending')
-    .update({signature_data:png,signed_at:new Date().toISOString()},{returning:'minimal'})
-    .eq('token',TOKEN);
+  const{data,error}=await sb.rpc('kk_sig_sign',{p_token:TOKEN,p_png:png});
   if(error){
     b.disabled=false;b.textContent='Valider';
-    console.error('sig update',error);
+    console.error('sig sign',error);
     return alert('La signature n\u2019a pas pu \u00eatre envoy\u00e9e. V\u00e9rifiez votre connexion et r\u00e9essayez.');
+  }
+  if(data!==true){
+    return state('err','Lien expiré','Ce lien n\u2019est plus valable ou une signature a déjà été déposée. Demandez-en un nouveau.');
   }
   state('ok','Signature enregistrée','Vous pouvez refermer cette page.');
 }
