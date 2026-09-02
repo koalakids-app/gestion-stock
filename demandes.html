@@ -1283,6 +1283,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <option value="SPA">SPA — Sans protéine animale</option>
         </select>
       </div>
+      <!-- Le goûter suit le repas par défaut (M et BB en goûter bébé, G en goûter
+           grand). Ce menu permet de l'en dissoudre : un enfant en repas moyen peut
+           très bien prendre le goûter des grands. -->
+      <div class="fg"><label class="flabel">Goûter</label>
+        <select class="finput" id="enf-gouter-base" onchange="enfSyncRepas()">
+          <option value="">Selon le repas (automatique)</option>
+          <option value="gbb">Goûter bébé</option>
+          <option value="ggr">Goûter grand</option>
+        </select>
+      </div>
     </div>
     <div id="enf-repas-apercu" style="font-size:11.5px;color:var(--muted);margin:-4px 0 10px 2px"></div>
     <div class="mactions"><button class="btn-cancel" id="enf-btn-delete" style="display:none;color:var(--red)" onclick="deleteEnfant()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-enfant-wrap')">Annuler</button><button class="btn-primary" id="enf-btn-save" onclick="saveEnfant()"><i class="ti ti-check"></i> Enregistrer</button></div>
@@ -3642,7 +3652,9 @@ function crCompute(notify){
       const reg=r.enfant.regime_repas||'';
       if(cell.slot==='j'||cell.slot==='m')repas[t][reg]=(repas[t][reg]||0)+1;
       if(cell.slot==='j'||cell.slot==='a'){
-        const g=t==='bb18'?'gbb':(t==='grand'||t==='peri')?'ggr':null;
+        /* La ligne de goûter ne se déduit plus de la ligne de repas : elle vient de
+           enfGouterLigne(), qui respecte le choix éventuellement forcé sur la fiche. */
+        const g=enfGouterLigne(r.enfant);
         /* Un goûter ne contient jamais de viande : la mention « SV » n'a pas de
            sens sur ces deux lignes et faisait apparaître un régime particulier
            là où le traiteur sert le goûter standard. L'enfant est donc compté
@@ -4153,6 +4165,28 @@ function enfSyncRepas(){
   if(forcee==='BIB')txt+=' <span style="color:var(--orange-dark)">(non compté dans les repas commandés)</span>';
   else if(forcee&&auto&&forcee!==auto)txt+=' <span style="color:var(--orange-dark)">(forcé ; l’âge donnerait '+escHtml(auto)+')</span>';
   else if(!forcee)txt+=' <span style="opacity:.8">(suit l’âge)</span>';
+  /* Le goûter : sans plat, pas de goûter non plus — le menu est grisé sur BIB.
+     Sinon on annonce la ligne du bon traiteur qui sera incrémentée. */
+  const selGout=document.getElementById('enf-gouter-base');
+  if(selGout){
+    selGout.disabled=(forcee==='BIB');
+    selGout.style.background=selGout.disabled?'#f4f4f8':'';
+    selGout.style.cursor=selGout.disabled?'not-allowed':'';
+    if(selGout.disabled)selGout.value='';
+    const gForce=selGout.value||'';
+    const gAuto=(base==='BB')?null:(base==='M')?'gbb':(base==='G')?'ggr':null;
+    const gFinal=gForce||gAuto;
+    if(forcee!=='BIB'){
+      if(!gFinal)txt+='<div style="margin-top:2px">Goûter : <span style="color:var(--muted)">aucun (repas légumes sans protéines)</span></div>';
+      else{
+        txt+='<div style="margin-top:2px">Goûter : <strong style="color:var(--koala)">'
+          +(gFinal==='gbb'?'bébé':'grand')+'</strong>'
+          +(gForce&&gAuto&&gForce!==gAuto?' <span style="color:var(--orange-dark)">(forcé ; le repas donnerait '+(gAuto==='gbb'?'bébé':'grand')+')</span>'
+            :(gForce&&!gAuto?' <span style="color:var(--orange-dark)">(forcé)</span>':' <span style="opacity:.8">(suit le repas)</span>'))
+          +'</div>';
+      }
+    }
+  }
   box.innerHTML=txt;
 }
 window.enfSyncRepas = enfSyncRepas;
@@ -4166,20 +4200,73 @@ function enfFillCreches(selectedId){
   sel.style.background=isDirection?'':'#f4f4f8';
   sel.style.cursor=isDirection?'':'not-allowed';
 }
-function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim(),regime_repas:document.getElementById('enf-regime-repas').value||null,repas_base:document.getElementById('enf-repas-base').value||null};
-  // La colonne repas_base peut ne pas exister (migration SQL non passée) : on
-  // réessaie alors sans elle plutôt que de refuser d'enregistrer la fiche.
-  const sansRepasBase=function(){const r=Object.assign({},row);delete r.repas_base;return r;};
-  if(editingEnfantId){let ok=await dbUpdate('enfants',editingEnfantId,row);
-    if(!ok&&/repas_base/i.test(window._lastDbError||'')){delete row.repas_base;ok=await dbUpdate('enfants',editingEnfantId,sansRepasBase());
-      if(ok)setTimeout(function(){showBanner('Type de repas non enregistré : colonne repas_base absente de la table enfants.','error');},2500);}
-    if(ok){const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(e)Object.assign(e,row);closeModal('modal-enfant-wrap');showBanner(prenom+' modifié(e) ✅');renderPresence();if(document.getElementById('modal-enf-fiche-wrap')?.classList.contains('open')){document.getElementById('enf-fiche-title').innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((row.prenom||'')+' '+(row.nom||''));enfRenderIdentite();}if(typeof enfRender==='function')enfRender();if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();}else showBanner('Erreur lors de la modification.','error');return;}
-  let saved=await dbInsert('enfants',row);
-  if(!saved&&/repas_base/i.test(window._lastDbError||'')){saved=await dbInsert('enfants',sansRepasBase());
-    if(saved)setTimeout(function(){showBanner('Type de repas non enregistré : colonne repas_base absente de la table enfants.','error');},2500);}
-  if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
+function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';document.getElementById('enf-gouter-base').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';document.getElementById('enf-gouter-base').value=e.gouter_base||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+/* Écriture d'une fiche enfant tolérante aux colonnes optionnelles absentes.
+   `repas_base` et `gouter_base` sont ajoutées par des migrations SQL distinctes :
+   si l'une manque, Postgres nomme la colonne fautive et on la retire du payload
+   avant de réessayer, plutôt que de refuser d'enregistrer toute la fiche. On ne
+   retire que celle qui est signalée — supprimer les deux ferait perdre en silence
+   un réglage pourtant enregistrable. */
+async function enfEcritureTolerante(row,id){
+  const absentes=[];
+  for(let essai=0;essai<3;essai++){
+    const r=id?await dbUpdate('enfants',id,row):await dbInsert('enfants',row);
+    if(r)return{res:r,absentes:absentes};
+    const err=window._lastDbError||'';
+    const col=/gouter_base/i.test(err)?'gouter_base':(/repas_base/i.test(err)?'repas_base':null);
+    if(!col||!(col in row))return{res:null,absentes:absentes};
+    delete row[col];absentes.push(col);
+  }
+  return{res:null,absentes:absentes};
+}
+function enfAvertirColonnes(absentes){
+  if(!absentes.length)return;
+  const libelles={repas_base:'type de repas',gouter_base:'choix du goûter'};
+  const txt=absentes.map(function(c){return libelles[c]||c;}).join(' et ');
+  setTimeout(function(){showBanner('Fiche enregistrée, mais le '+txt+' n’a pas pu l’être : colonne absente de la table enfants (migration SQL à exécuter).','error');},2500);
+}
+
+async function saveEnfant(){
+  const prenom=document.getElementById('enf-prenom').value.trim();
+  if(!prenom){alert('Prénom requis.');return;}
+  const row={
+    prenom,
+    nom:document.getElementById('enf-nom').value.trim(),
+    dob:document.getElementById('enf-dob').value||null,
+    groupe:groupeFromDob(document.getElementById('enf-dob').value),
+    creche_id:document.getElementById('enf-creche').value,
+    allergies:document.getElementById('enf-allergies').value.trim(),
+    regime_repas:document.getElementById('enf-regime-repas').value||null,
+    repas_base:document.getElementById('enf-repas-base').value||null,
+    gouter_base:document.getElementById('enf-gouter-base').value||null
+  };
+  if(editingEnfantId){
+    const out=await enfEcritureTolerante(row,editingEnfantId);
+    if(!out.res){showBanner('Erreur lors de la modification.','error');return;}
+    enfAvertirColonnes(out.absentes);
+    const e=cacheEnfants.find(x=>x.id===editingEnfantId);
+    if(e)Object.assign(e,row);
+    closeModal('modal-enfant-wrap');
+    showBanner(prenom+' modifié(e) ✅');
+    renderPresence();
+    if(document.getElementById('modal-enf-fiche-wrap')?.classList.contains('open')){
+      document.getElementById('enf-fiche-title').innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((row.prenom||'')+' '+(row.nom||''));
+      enfRenderIdentite();
+    }
+    if(typeof enfRender==='function')enfRender();
+    if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();
+    return;
+  }
+  const out=await enfEcritureTolerante(row,null);
+  if(!out.res){showBanner('Erreur lors de l’ajout.','error');return;}
+  enfAvertirColonnes(out.absentes);
+  cacheEnfants.push(out.res);
+  closeModal('modal-enfant-wrap');
+  showBanner(prenom+' ajouté(e) !');
+  renderPresence();
+}
+
 async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(!confirm('Supprimer définitivement '+(e?.prenom||'')+' '+(e?.nom||'')+' ?\n\nAttention : les présences liées ne seront plus rattachées.'))return;const ok=await dbDelete('enfants',editingEnfantId);if(ok){cacheEnfants=cacheEnfants.filter(x=>x.id!==editingEnfantId);closeModal('modal-enfant-wrap');closeModal('modal-enf-fiche-wrap');showBanner('Enfant supprimé.');renderPresence();if(typeof enfRender==='function')enfRender();}else showBanner('Erreur lors de la suppression.','error');}
 
 // ── IMPORT PRÉSENCES DEPUIS PLANNING PDF (Gantt) ──
@@ -10227,6 +10314,14 @@ function enfRepasFicheLigne(e){
     +';border-radius:6px;padding:1px 7px;font-weight:800;margin-right:6px">'+escHtml(code)+'</span>'+escHtml(repasLabel(code)||'');
   if(forcee&&auto&&forcee!==auto)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé — l’âge donnerait '+escHtml(auto)+'</div>';
   else if(!forcee)s+='<div style="font-size:11px;color:var(--muted);font-weight:400">suit l’âge</div>';
+  /* Le goûter n'est rappelé que s'il a été forcé : dans le cas courant il découle
+     du code repas affiché juste au-dessus, et le répéter alourdirait la fiche. */
+  if(code!=='BIB'&&e.gouter_base){
+    const gAuto=enfGouterAuto(e);
+    s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">goûter '
+      +(e.gouter_base==='gbb'?'bébé':'grand')+' — forcé'
+      +(gAuto&&gAuto!==e.gouter_base?' (le repas donnerait '+(gAuto==='gbb'?'bébé':'grand')+')':'')+'</div>';
+  }
   return s;
 }
 
@@ -10818,6 +10913,26 @@ function enfRepasCode(e){
   // Un enfant au biberon ne reçoit pas de plat : lui accoler un régime n'aurait aucun sens.
   if(base==='BIB')return'BIB';
   return e.regime_repas?base+e.regime_repas:base;
+}
+
+/* ── GOÛTER ────────────────────────────────────────────────────────────────
+   Le bon MCM n'a que deux lignes de goûter : « bébé » et « grand ». Par défaut
+   elles découlent du code repas — M en goûter bébé, G et périscolaire en goûter
+   grand, BB sans goûter. Mais manger un repas moyen n'empêche pas de prendre le
+   goûter des grands : le champ `gouter_base` de la fiche ('' | 'gbb' | 'ggr')
+   permet de dissocier les deux. Laissé vide, le goûter continue de suivre le repas
+   et donc les anniversaires. */
+function enfGouterAuto(e){
+  if(!e)return null;
+  const base=e.repas_base||enfRepasBaseAuto(e);
+  if(!base||base==='BIB'||base==='BB')return null;
+  return base==='M'?'gbb':'ggr';
+}
+function enfGouterLigne(e){
+  if(!e)return null;
+  const base=e.repas_base||enfRepasBaseAuto(e);
+  if(base==='BIB')return null;              // au biberon : ni repas ni goûter
+  return e.gouter_base||enfGouterAuto(e);
 }
 let enfContratsCache=[], editingContratId=null, ctJoursSel=[];
 
