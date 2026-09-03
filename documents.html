@@ -400,6 +400,9 @@ function slug(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,''
    interrompait la fonction avant la ligne qui affiche une vue : la page restait
    entierement blanche, sans application ni formulaire de connexion. C'est ce qui
    se produisait en arrivant ici depuis demandes.html. */
+/* Passe a true juste apres une saisie reussie d'identifiants : autorise boot()
+   a demarrer l'application sans redeclencher la deconnexion obligatoire. */
+let JUSTE_CONNECTE=false;
 function showLoginView(msg){
   document.getElementById('appView').style.display='none';
   document.getElementById('loginView').style.display='block';
@@ -407,6 +410,21 @@ function showLoginView(msg){
 }
 async function boot(){
   let session=null;
+  /* Regle d'acces, alignee sur demandes.html (postes partages) :
+     - arrivee depuis demandes.html (parametres ?doc= / ?rep= / ?enf=) :
+       la session en cours est conservee, pas de seconde saisie ;
+     - arrivee directe, notamment depuis le hub index.html qui n'authentifie
+       personne : deconnexion systematique puis ecran de connexion obligatoire.
+     Sans cette regle, ouvrir Documents depuis le hub donnait acces au fonds
+     documentaire sans aucune identification, avec la session laissee par
+     l'utilisateur precedent. */
+  const _q=new URLSearchParams(location.search);
+  const VENANT_DE_DEMANDES=_q.has('doc')||_q.has('rep')||_q.has('enf');
+  if(!VENANT_DE_DEMANDES&&!JUSTE_CONNECTE){
+    try{await sb.auth.signOut();}catch(e){console.warn('[boot] signOut',e);}
+    showLoginView();
+    return;
+  }
   try{
     const r=await sb.auth.getSession();
     session=(r&&r.data&&r.data.session)||null;
@@ -429,6 +447,14 @@ async function boot(){
     showLoginView('Session expirée ou profil inaccessible — merci de vous reconnecter.');
     return;
   }
+  /* Un compte authentifie mais absent de la table `referents` n'a rien a faire
+     dans le fonds documentaire : on refuse l'entree au lieu de l'ouvrir en
+     lecture seule anonyme. */
+  if(!p){
+    try{await sb.auth.signOut();}catch(e){}
+    showLoginView('Compte non reconnu — contactez la direction.');
+    return;
+  }
   PROF=p;
   IS_ADMIN=!!p&&(p.role==='direction'||p.role==='referent');
   /* Seule la direction cree, modifie ou supprime des documents et des categories.
@@ -446,7 +472,12 @@ async function doLogin(){
   const e=document.getElementById('liMail').value.trim(),p=document.getElementById('liPwd').value;
   const{error}=await sb.auth.signInWithPassword({email:e,password:p});
   if(error){document.getElementById('liErr').textContent='Identifiants incorrects';return;}
-  location.reload();
+  /* Pas de location.reload() : un rechargement sans parametres d'URL
+     redeclencherait la deconnexion obligatoire et bouclerait sur l'ecran de
+     connexion. On enchaine directement sur boot(). */
+  JUSTE_CONNECTE=true;
+  document.getElementById('liPwd').value='';
+  boot().catch(err=>{console.error('[boot]',err);showLoginView('Connexion impossible — réessayez.');});
 }
 async function doLogout(){await sb.auth.signOut();location.reload();}
 
