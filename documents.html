@@ -172,9 +172,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 <div id="loginView" style="display:none">
   <div class="login">
     <h2>Documents Koala Kids</h2>
-    <div class="f"><label>Email</label><input type="email" id="liMail" autocomplete="username"></div>
-    <div class="f"><label>Mot de passe</label><input type="password" id="liPwd" autocomplete="current-password"></div>
-    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="doLogin()">Se connecter</button>
+    <form autocomplete="on" onsubmit="event.preventDefault();doLogin();">
+    <div class="f"><label>Email</label><input type="email" id="liMail" name="email" autocomplete="username"></div>
+    <div class="f"><label>Mot de passe</label><input type="password" id="liPwd" name="password" autocomplete="current-password"></div>
+    <button type="submit" class="btn btn-p" style="width:100%;justify-content:center">Se connecter</button>
+    </form>
     <p id="liErr" style="color:#C62828;font-size:12.5px;margin-top:10px;text-align:center"></p>
   </div>
 </div>
@@ -392,11 +394,41 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;',
 function slug(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9.\-_]/g,'_');}
 
 /* ---------- AUTH ---------- */
+/* Ecran de connexion : il doit s'afficher dans TOUS les cas ou l'application ne
+   peut pas demarrer. Auparavant, la moindre erreur pendant boot() (session
+   expiree, jeton non rafraichi, reseau coupe, lecture de `referents` refusee)
+   interrompait la fonction avant la ligne qui affiche une vue : la page restait
+   entierement blanche, sans application ni formulaire de connexion. C'est ce qui
+   se produisait en arrivant ici depuis demandes.html. */
+function showLoginView(msg){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liErr').textContent=msg||'';
+}
 async function boot(){
-  const{data:{session}}=await sb.auth.getSession();
-  if(!session){document.getElementById('loginView').style.display='block';return;}
+  let session=null;
+  try{
+    const r=await sb.auth.getSession();
+    session=(r&&r.data&&r.data.session)||null;
+    /* Session heritee de demandes.html mais jeton arrive a expiration :
+       on tente un rafraichissement avant de conclure a une deconnexion. */
+    if(session&&session.expires_at&&session.expires_at*1000<Date.now()+10000){
+      const{data:rd}=await sb.auth.refreshSession();
+      session=(rd&&rd.session)||null;
+    }
+  }catch(e){console.warn('[boot] session',e);session=null;}
+  if(!session||!session.user){showLoginView();return;}
   ME=session.user;
-  const{data:p}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
+  let p=null;
+  try{
+    const{data,error}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
+    if(error)throw error;
+    p=data;
+  }catch(e){
+    console.error('[boot] profil',e);
+    showLoginView('Session expirée ou profil inaccessible — merci de vous reconnecter.');
+    return;
+  }
   PROF=p;
   IS_ADMIN=!!p&&(p.role==='direction'||p.role==='referent');
   /* Seule la direction cree, modifie ou supprime des documents et des categories.
@@ -4737,7 +4769,9 @@ async function delRep(rid,did){
 const OV_SAISIE=['ovFill','ovDoc','ovCat','ovPdf'];
 document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o&&OV_SAISIE.indexOf(o.id)===-1)o.classList.remove('on');}));
 document.getElementById('liPwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-boot();
+/* Filet de securite : si boot() echoue malgre tout, on montre le formulaire de
+   connexion plutot qu'une page blanche. */
+boot().catch(e=>{console.error('[boot]',e);showLoginView('Connexion impossible — merci de vous reconnecter.');});
 </script>
 
 <!-- Bouton aide flottant -->
