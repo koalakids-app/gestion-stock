@@ -1067,24 +1067,38 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div id="ad-revue-zone"></div>
       </div>
 
-      <!-- 2 et 3. Les notes -->
+      <!-- 2. Les sujets, crèche par crèche -->
       <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
-        <span class="section-title" style="font-size:14px"><i class="ti ti-notes" style="color:var(--koala)"></i> 2. Points à l'ordre du jour et décisions</span>
-        <p style="font-size:11.5px;color:var(--muted);margin:4px 0 8px">Un paragraphe par sujet : contexte, échange, DÉCISION. Toute décision qui demande une action se saisit ci-dessous.</p>
-        <textarea class="finput" id="ad-r-points" rows="7" style="resize:vertical" placeholder="— Sujet 1 : …&#10;&#10;— Sujet 2 : …" onchange="adReunionDirty()"></textarea>
+        <span class="section-title" style="font-size:14px"><i class="ti ti-building-community" style="color:var(--koala)"></i> 2. Sujets par crèche</span>
+        <p style="font-size:11.5px;color:var(--muted);margin:4px 0 10px">On déroule les sites dans le même ordre à chaque réunion. Un paragraphe par sujet : contexte, échange, DÉCISION. Toute décision qui demande une action se saisit avec le bouton du bloc.</p>
+        <div id="ad-r-points-creches" style="display:flex;flex-direction:column;gap:12px"></div>
+      </div>
+
+      <!-- 3. Les sujets transverses -->
+      <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="section-title" style="font-size:14px"><i class="ti ti-link" style="color:var(--koala)"></i> 3. Sujets transverses</span>
+          <button class="btn-sm" onclick="adAjoutDepuisBloc('')"><i class="ti ti-plus"></i> Action transverse</button>
+        </div>
+        <p style="font-size:11.5px;color:var(--muted);margin:4px 0 8px">Ce qui concerne le réseau et non un site en particulier : recrutement, formations, protocoles, relations gestionnaires.</p>
+        <textarea class="finput" id="ad-r-points" rows="6" style="resize:vertical" placeholder="— Sujet 1 : …&#10;&#10;— Sujet 2 : …" onchange="adReunionDirty()"></textarea>
         <div style="margin-top:12px">
-          <span class="section-title" style="font-size:14px"><i class="ti ti-dots" style="color:var(--koala)"></i> 3. Points divers</span>
+          <span class="section-title" style="font-size:14px"><i class="ti ti-dots" style="color:var(--koala)"></i> 4. Points divers</span>
           <textarea class="finput" id="ad-r-divers" rows="3" style="resize:vertical;margin-top:6px" placeholder="—" onchange="adReunionDirty()"></textarea>
         </div>
       </div>
 
-      <!-- 4. Nouvelles actions décidées -->
+      <!-- 5. Nouvelles actions décidées -->
       <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px">
-        <span class="section-title" style="font-size:14px"><i class="ti ti-plus" style="color:var(--koala)"></i> 4. Nouvelles actions décidées</span>
+        <span class="section-title" style="font-size:14px"><i class="ti ti-plus" style="color:var(--koala)"></i> 5. Récapitulatif des nouvelles actions</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
           <div style="flex:1;min-width:220px">
             <label class="flabel">Action / décision</label>
             <input class="finput" id="ad-new-action" placeholder="Ex : Diffuser l'annonce d'auxiliaire pour Cuers" onkeydown="if(event.key==='Enter')adAjoutRapide()">
+          </div>
+          <div style="width:170px">
+            <label class="flabel">Crèche</label>
+            <select class="finput" id="ad-new-creche"><option value="">— Transverse / réseau —</option></select>
           </div>
           <div style="width:150px">
             <label class="flabel">Thème</label>
@@ -12740,7 +12754,7 @@ const AD_THEMES=['Recrutement','Ressources humaines','Pédagogie','Formation','T
 
 let adCache=[],adReunions=[],adFilter='ouvertes',adEditId=null,
     adReunionDate=null,adReunionCourante=null,adRevueIdx=0,adRevueTout=false,
-    adProjection=false,adSchemaOk=true,_adCrVue=null,_adDirty=false;
+    adProjection=false,adSchemaOk=true,_adCrVue=null,_adDirty=false,_adPointsCreches={};
 
 function adEstClos(s){return AD_CLOS.indexOf(s)>=0;}
 function adStatutMeta(s){return AD_STATUTS[s]||AD_STATUTS.a_faire;}
@@ -12753,6 +12767,36 @@ function adFmtDateLongue(iso){
   return j[d.getDay()]+' '+d.getDate()+' '+m[d.getMonth()]+' '+d.getFullYear();
 }
 function adCrecheName(id){if(!id)return null;const c=cacheCreches.find(x=>String(x.id)===String(id));return c?c.name:null;}
+
+/* ── L'ordre de la réunion ──────────────────────────────────────────────────
+   On traite les sujets crèche par crèche, puis les transverses. Tout le module
+   suit cet ordre : la revue, l'ordre du jour, le compte rendu, la liste.
+
+   Les crèches sont triées par nom plutôt que dans l'ordre de la table (qui est
+   celui de leur création, invisible et instable). L'ordre est ainsi le même à
+   chaque réunion — c'est ce qui permet de savoir où on en est sans compter. */
+function adCrechesOrdonnees(){
+  return (cacheCreches||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'fr'));
+}
+/* Rang d'une action dans cet ordre ; le transverse ferme la marche. */
+function adRangCreche(id){
+  if(!id)return 9999;
+  const i=adCrechesOrdonnees().findIndex(c=>String(c.id)===String(id));
+  return i<0?9998:i;   // une crèche supprimée passe juste avant le transverse
+}
+/* Découpe une liste d'actions en groupes, dans l'ordre de la réunion. */
+function adGrouperParCreche(liste){
+  const groupes=[];
+  adCrechesOrdonnees().forEach(c=>{
+    const items=liste.filter(a=>String(a.creche_id||'')===String(c.id));
+    if(items.length)groupes.push({id:c.id,nom:c.name,icone:'ti-building',items:items});
+  });
+  const orphelines=liste.filter(a=>a.creche_id&&!cacheCreches.find(c=>String(c.id)===String(a.creche_id)));
+  if(orphelines.length)groupes.push({id:null,nom:'Crèche supprimée',icone:'ti-building-off',items:orphelines});
+  const transverse=liste.filter(a=>!a.creche_id);
+  if(transverse.length)groupes.push({id:'',nom:'Sujets transverses / réseau',icone:'ti-link',items:transverse});
+  return groupes;
+}
 
 /* Retard en jours, ou 0. Une action close n'est jamais en retard — c'est la
    formule de la colonne H du classeur, à l'identique. */
@@ -12780,8 +12824,11 @@ async function adInit(){
   const opt=t=>'<option value="'+escHtml(t)+'">'+escHtml(t)+'</option>';
   const themes=AD_THEMES.map(opt).join('');
   ['ad-f-theme','ad-new-theme'].forEach(id=>{const s=document.getElementById(id);if(s)s.innerHTML=themes;});
+  const optsC=adCrechesOrdonnees().map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
   const selC=document.getElementById('ad-f-creche');
-  if(selC)selC.innerHTML='<option value="">— Réseau / transverse —</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
+  if(selC)selC.innerHTML='<option value="">— Transverse / réseau —</option>'+optsC;
+  const selN=document.getElementById('ad-new-creche');
+  if(selN)selN.innerHTML='<option value="">— Transverse / réseau —</option>'+optsC;
   adFillRespSelects();
   if(!adReunionDate)adReunionDate=todayStr();
   const dr=document.getElementById('ad-r-date');if(dr)dr.value=adReunionDate;
@@ -12915,15 +12962,26 @@ function adRespVersFormulaire(prefixe,a){
   else{sel.value='';txt.value='';txt.style.display='none';}
 }
 
+/* Par échéance : c'est l'ordre de l'urgence, celui du miroir « À faire ». */
 function adOuvertes(){
-  return adCache.filter(a=>!adEstClos(a.statut))
-    .sort((a,b)=>{
-      // Les échéances les plus anciennes d'abord ; celles sans date en fin.
-      if(!a.echeance&&!b.echeance)return (a.numero||0)-(b.numero||0);
-      if(!a.echeance)return 1;
-      if(!b.echeance)return -1;
-      return a.echeance<b.echeance?-1:a.echeance>b.echeance?1:(a.numero||0)-(b.numero||0);
-    });
+  return adCache.filter(a=>!adEstClos(a.statut)).sort(adTriEcheance);
+}
+function adTriEcheance(a,b){
+  if(!a.echeance&&!b.echeance)return (a.numero||0)-(b.numero||0);
+  if(!a.echeance)return 1;
+  if(!b.echeance)return -1;
+  return a.echeance<b.echeance?-1:a.echeance>b.echeance?1:(a.numero||0)-(b.numero||0);
+}
+
+/* Par crèche puis par échéance : c'est l'ordre de la RÉUNION, celui de la
+   revue et du compte rendu. On ne saute pas d'un site à l'autre pour revenir
+   au premier trois lignes plus loin. */
+function adOuvertesReunion(){
+  return adCache.filter(a=>!adEstClos(a.statut)).sort((a,b)=>{
+    const ra=adRangCreche(a.creche_id),rb=adRangCreche(b.creche_id);
+    if(ra!==rb)return ra-rb;
+    return adTriEcheance(a,b);
+  });
 }
 
 function adFiltered(){
@@ -12977,7 +13035,14 @@ function adRender(){
       +'</p></div>';
     return;
   }
-  box.innerHTML=l.map(a=>adCardHtml(a)).join('');
+  // Groupée par site, dans l'ordre de la réunion : c'est ainsi qu'on la
+  // parcourt à l'oral. Un filtre sur une seule crèche rend le groupage inutile.
+  const filtreCreche=(document.getElementById('ad-filter-creche')||{}).value||'';
+  if(filtreCreche){box.innerHTML=l.map(a=>adCardHtml(a)).join('');return;}
+  box.innerHTML=adGrouperParCreche(l).map(g=>
+    '<div style="margin-bottom:6px">'+adIntertitre(g,g.items.length)
+    +'<div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">'+g.items.map(a=>adCardHtml(a)).join('')+'</div></div>'
+  ).join('');
 }
 
 function adStatCard(label,val,icon,color){
@@ -13136,6 +13201,7 @@ function adRenderReunion(){
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
   const dr=document.getElementById('ad-r-date');if(dr)dr.value=adReunionDate||todayStr();
   if(!_adDirty){
+    _adPointsCreches=Object.assign({},(r&&r.points_creches)||{});
     set('ad-r-heure',r&&r.heure);
     set('ad-r-presents',r&&r.presents);
     set('ad-r-excuses',r&&r.excuses);
@@ -13149,11 +13215,62 @@ function adRenderReunion(){
   if(ne&&!ne.value)ne.value=adEcheanceParDefaut();
   adMajEtat();
   adRenderRevue();
+  adRenderPointsCreches();
   adRenderNouvelles();
 }
 
+/* ── L'ordre du jour, site par site ─────────────────────────────────────────
+   Un bloc de notes par crèche, dans l'ordre de la réunion, chacun rappelant
+   ses actions ouvertes et permettant d'en ouvrir une nouvelle sans quitter le
+   bloc — c'est au moment où la décision est prise qu'on la saisit, pas dix
+   minutes plus tard quand on ne se souvient plus du site concerné.
+
+   Les notes vivent dans _adPointsCreches, pas dans le DOM : un redessin (une
+   action cochée pendant la séance) ne doit pas effacer ce qui vient d'être
+   tapé. */
+function adCapturePointsCreches(){
+  document.querySelectorAll('#ad-r-points-creches textarea[data-creche]').forEach(t=>{
+    _adPointsCreches[t.getAttribute('data-creche')]=t.value;
+  });
+}
+function adPointsCrecheChange(id,val){_adPointsCreches[id]=val;adReunionDirty();}
+
+function adRenderPointsCreches(){
+  const box=document.getElementById('ad-r-points-creches');if(!box)return;
+  adCapturePointsCreches();
+  const creches=adCrechesOrdonnees();
+  if(!creches.length){box.innerHTML='<div class="meta-txt" style="font-style:italic">Aucune crèche enregistrée.</div>';return;}
+  const ouvertes=adCache.filter(a=>!adEstClos(a.statut));
+  box.innerHTML=creches.map((c,i)=>{
+    const ouv=ouvertes.filter(a=>String(a.creche_id||'')===String(c.id));
+    const enRetard=ouv.filter(a=>adRetard(a)>0).length;
+    const nouv=adCache.filter(a=>a.reunion_date===adReunionDate&&String(a.creche_id||'')===String(c.id));
+    return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--bg)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
+        +'<span style="font-size:13px;font-weight:700;color:var(--koala)"><i class="ti ti-building"></i> '+(i+1)+'. '+escHtml(c.name)+'</span>'
+        +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+          +(ouv.length?'<span class="badge b-ref">'+ouv.length+' action'+(ouv.length>1?'s':'')+' ouverte'+(ouv.length>1?'s':'')+'</span>':'')
+          +(enRetard?'<span class="badge" style="background:var(--red-light);color:#c0392b">'+enRetard+' en retard</span>':'')
+          +(nouv.length?'<span class="badge" style="background:var(--green-light);color:var(--green)">'+nouv.length+' décidée'+(nouv.length>1?'s':'')+' ce jour</span>':'')
+          +'<button class="btn-sm" style="font-size:11px;padding:4px 9px" onclick="adAjoutDepuisBloc(\''+c.id+'\')"><i class="ti ti-plus"></i> Action</button>'
+        +'</div>'
+      +'</div>'
+      +'<textarea class="finput" data-creche="'+c.id+'" rows="3" style="resize:vertical" placeholder="Sujets, échanges et décisions pour '+escHtml(c.name)+'…" '
+        +'onchange="adPointsCrecheChange(\''+c.id+'\',this.value)">'+escHtml(_adPointsCreches[c.id]||'')+'</textarea>'
+    +'</div>';
+  }).join('');
+}
+
+/* Ouvre la fiche action pré-remplie sur le site du bloc et la réunion du jour. */
+function adAjoutDepuisBloc(crecheId){
+  adCapturePointsCreches();
+  adOpenActionModal(null);
+  const sel=document.getElementById('ad-f-creche');if(sel)sel.value=crecheId||'';
+  const dr=document.getElementById('ad-f-reunion');if(dr)dr.value=adReunionDate||todayStr();
+}
+
 function adRevueStep(d){
-  const l=adOuvertes();if(!l.length)return;
+  const l=adOuvertesReunion();if(!l.length)return;
   adRevueIdx=Math.min(Math.max(adRevueIdx+d,0),l.length-1);
   adRenderRevue();
 }
@@ -13174,21 +13291,39 @@ function adToggleProjection(){
 
 function adRenderRevue(){
   const zone=document.getElementById('ad-revue-zone');if(!zone)return;
-  const l=adOuvertes();
+  const l=adOuvertesReunion();
   const cpt=document.getElementById('ad-revue-compteur');
   if(!l.length){
     if(cpt)cpt.textContent='';
-    zone.innerHTML='<div class="empty-state" style="padding:20px"><i class="ti ti-circle-check" style="color:var(--green)"></i><p>Aucune action ouverte. La revue est faite — on peut passer à l\'ordre du jour.</p></div>';
+    zone.innerHTML='<div class="empty-state" style="padding:20px"><i class="ti ti-circle-check" style="color:var(--green)"></i><p>Aucune action ouverte. La revue est faite — on peut passer aux sujets du jour.</p></div>';
     return;
   }
   if(adRevueIdx>=l.length)adRevueIdx=l.length-1;
+  const groupes=adGrouperParCreche(l);
   if(adRevueTout){
     if(cpt)cpt.textContent=l.length+' action'+(l.length>1?'s':'')+' ouverte'+(l.length>1?'s':'');
-    zone.innerHTML='<div style="display:flex;flex-direction:column;gap:10px">'+l.map(a=>adRevueCardHtml(a,false)).join('')+'</div>';
+    zone.innerHTML=groupes.map(g=>
+      '<div style="margin-bottom:14px">'+adIntertitre(g,g.items.length)
+      +'<div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">'+g.items.map(a=>adRevueCardHtml(a,false)).join('')+'</div></div>'
+    ).join('');
   }else{
+    const a=l[adRevueIdx];
+    // Où en est-on dans la traversée des sites : sans ce repère, on ne sait
+    // pas si la crèche est finie ou s'il reste trois lignes derrière.
+    const g=groupes.find(x=>x.items.indexOf(a)>=0)||{nom:'—',icone:'ti-building',items:[a]};
+    const posG=g.items.indexOf(a)+1,iG=groupes.indexOf(g)+1;
     if(cpt)cpt.textContent='Action '+(adRevueIdx+1)+' / '+l.length;
-    zone.innerHTML=adRevueCardHtml(l[adRevueIdx],true);
+    zone.innerHTML=adIntertitre(g,g.items.length,'Bloc '+iG+' / '+groupes.length+' · action '+posG+' sur '+g.items.length)
+      +'<div style="margin-top:6px">'+adRevueCardHtml(a,true)+'</div>';
   }
+}
+
+function adIntertitre(g,n,detail){
+  return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:700;color:var(--koala);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1.5px solid var(--border);padding-bottom:5px">'
+    +'<i class="ti '+g.icone+'"></i> '+escHtml(g.nom)
+    +' <span style="color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0">('+n+')</span>'
+    +(detail?'<span style="margin-left:auto;color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0">'+escHtml(detail)+'</span>':'')
+    +'</div>';
 }
 
 function adRevueCardHtml(a,grand){
@@ -13233,9 +13368,9 @@ async function adRevueSuivi(id,val){
 /* Après un changement de statut, la revue reste sur la même position : l'action
    close disparaît de la liste, donc l'index pointe déjà sur la suivante. */
 async function adRevueStatut(id,statut){
-  const l=adOuvertes(),pos=l.findIndex(x=>String(x.id)===String(id));
+  const l=adOuvertesReunion(),pos=l.findIndex(x=>String(x.id)===String(id));
   await adSetStatut(id,statut,true);
-  const reste=adOuvertes();
+  const reste=adOuvertesReunion();
   if(adEstClos(statut))adRevueIdx=Math.min(pos<0?0:pos,Math.max(reste.length-1,0));
   else adRevueIdx=Math.min(pos<0?0:pos+1,Math.max(reste.length-1,0));
   adRenderReunion();
@@ -13261,14 +13396,15 @@ function adRenderNouvelles(){
   const box=document.getElementById('ad-new-list');if(!box)return;
   const l=adCache.filter(a=>a.reunion_date===adReunionDate).sort((a,b)=>(a.numero||0)-(b.numero||0));
   if(!l.length){box.innerHTML='<div class="meta-txt" style="font-style:italic">Aucune nouvelle action pour cette réunion.</div>';return;}
-  box.innerHTML=l.map(a=>
+  box.innerHTML=adGrouperParCreche(l).map(g=>
+    '<div>'+adIntertitre(g,g.items.length)+'<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">'+g.items.map(a=>
     '<div style="display:flex;gap:8px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:8px 10px">'
     +'<span style="font-weight:800;color:var(--muted);font-size:12px">N°'+(a.numero||'')+'</span>'
     +'<span style="flex:1;font-size:13px">'+escHtml(a.action||'')+'</span>'
     +(a.responsable?'<span class="badge b-ref">'+escHtml(a.responsable)+'</span>':'')
     +(a.echeance?'<span class="meta-txt">'+adFmtDate(a.echeance)+'</span>':'')
     +'<button class="ibtn" onclick="adOpenActionModal(\''+a.id+'\')"><i class="ti ti-edit"></i></button>'
-    +'</div>').join('');
+    +'</div>').join('')+'</div></div>').join('');
 }
 
 async function adAjoutRapide(){
@@ -13279,6 +13415,7 @@ async function adAjoutRapide(){
     action:action,
     theme:document.getElementById('ad-new-theme').value||null,
     echeance:document.getElementById('ad-new-echeance').value||null,
+    creche_id:(document.getElementById('ad-new-creche')||{}).value||null,
     reunion_date:adReunionDate||todayStr(),
     statut:'a_faire'
   };
@@ -13292,7 +13429,13 @@ async function adAjoutRapide(){
 }
 
 async function adReunionEnregistrer(silencieux){
+  adCapturePointsCreches();
+  // On ne stocke que les sites réellement documentés : garder les blocs vides
+  // gonflerait le jsonb d'une clé par crèche et par réunion, sans rien dire.
+  const notes={};
+  Object.keys(_adPointsCreches).forEach(k=>{const v=(_adPointsCreches[k]||'').trim();if(v)notes[k]=v;});
   const row={
+    points_creches:notes,
     date_reunion:adReunionDate||todayStr(),
     heure:(document.getElementById('ad-r-heure').value||'').trim()||null,
     presents:(document.getElementById('ad-r-presents').value||'').trim()||null,
@@ -13367,7 +13510,11 @@ function adCrRouvrir(){
 }
 
 /* Le corps du compte rendu, utilisé tel quel à l'écran et à l'impression.
-   `pourImpression` retire seulement ce qui n'a pas de sens sur papier. */
+
+   Il suit l'ordre réel de la séance : la revue des actions, puis les sujets
+   crèche par crèche, puis les transverses. Chaque site porte ses notes ET les
+   actions décidées pour lui — c'est ce qui permet, un mois plus tard,
+   d'envoyer à une référente le seul passage qui la concerne. */
 function adCRHtml(r,pourImpression){
   const decidees=adCache.filter(a=>a.reunion_date===r.date_reunion).sort((a,b)=>(a.numero||0)-(b.numero||0));
   // Revue : ce qui était ouvert à la date de la réunion, c'est-à-dire tout ce
@@ -13377,6 +13524,13 @@ function adCRHtml(r,pourImpression){
     && (!a.reunion_date||a.reunion_date<r.date_reunion)          // pas née après
     && (!adEstClos(a.statut)||!a.cloture_le||a.cloture_le>=r.date_reunion)  // pas close avant
   ).sort((a,b)=>(a.numero||0)-(b.numero||0));
+  const notes=r.points_creches||{};
+
+  const h2=t=>'<h2 style="font-size:14px;color:#3D3580;margin:18px 0 6px">'+t+'</h2>';
+  const h3=t=>'<h3 style="font-size:12.5px;color:#3D3580;margin:14px 0 4px">'+t+'</h3>';
+  const vide=t=>'<p style="color:#888;font-style:italic;font-size:12px">'+t+'</p>';
+  const texte=t=>'<div style="white-space:pre-wrap;font-size:12.5px;line-height:1.55">'+escHtml(t)+'</div>';
+
   const ligne=a=>{
     const st=adStatutMeta(a.statut),ret=adRetard(a);
     return '<tr>'
@@ -13388,17 +13542,42 @@ function adCRHtml(r,pourImpression){
       +'<td>'+escHtml(a.suivi||'')+'</td>'
     +'</tr>';
   };
-  const tableau=(titre,liste,vide)=>
-    '<h2 style="font-size:14px;color:#3D3580;margin:18px 0 6px">'+titre+'</h2>'
-    +(liste.length
-      ? '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#3D3580;color:#fff">'
-        +['N°','Action / décision','Responsable','Échéance','Statut','Suivi'].map(h=>'<th style="padding:6px 8px;font-size:11px;text-align:left">'+h+'</th>').join('')
-        +'</tr></thead><tbody>'+liste.map(ligne).join('')+'</tbody></table>'
-      : '<p style="color:#888;font-style:italic;font-size:12px">'+vide+'</p>');
-  const bloc=(titre,txt)=>
-    '<h2 style="font-size:14px;color:#3D3580;margin:18px 0 6px">'+titre+'</h2>'
-    +(txt?'<div style="white-space:pre-wrap;font-size:12.5px;line-height:1.55">'+escHtml(txt)+'</div>'
-        :'<p style="color:#888;font-style:italic;font-size:12px">—</p>');
+  const table=liste=>
+    '<table style="width:100%;border-collapse:collapse;margin-top:4px"><thead><tr style="background:#3D3580;color:#fff">'
+    +['N°','Action / décision','Responsable','Échéance','Statut','Suivi'].map(x=>'<th style="padding:6px 8px;font-size:11px;text-align:left">'+x+'</th>').join('')
+    +'</tr></thead><tbody>'+liste.map(ligne).join('')+'</tbody></table>';
+
+  // 1. La revue, groupée comme on l'a menée.
+  let s1=h2('1. Revue des actions en cours');
+  if(!revue.length)s1+=vide('Aucune action n\'était ouverte au moment de cette réunion.');
+  else adGrouperParCreche(revue).forEach(g=>{s1+=h3(escHtml(g.nom)+' <span style="color:#888;font-weight:400">('+g.items.length+')</span>')+table(g.items);});
+
+  // 2. Les sites, un par un — y compris ceux sans rien à signaler : leur
+  // silence est une information, et l'absence de ligne laisserait croire à un
+  // oubli.
+  let s2=h2('2. Sujets par crèche');
+  const creches=adCrechesOrdonnees();
+  if(!creches.length)s2+=vide('Aucune crèche enregistrée.');
+  else creches.forEach((c,i)=>{
+    const n=(notes[c.id]||'').trim();
+    const acts=decidees.filter(a=>String(a.creche_id||'')===String(c.id));
+    s2+=h3((i+1)+'. '+escHtml(c.name));
+    s2+=n?texte(n):vide('Rien à signaler.');
+    if(acts.length)s2+='<p style="font-size:11.5px;color:#888;margin-top:6px">Actions décidées pour ce site :</p>'+table(acts);
+  });
+
+  // 3 et 4. Le transverse, puis les divers.
+  const transverses=decidees.filter(a=>!a.creche_id);
+  let s3=h2('3. Sujets transverses');
+  s3+=(r.points||'').trim()?texte(r.points):vide('Rien à signaler.');
+  if(transverses.length)s3+='<p style="font-size:11.5px;color:#888;margin-top:6px">Actions transverses décidées :</p>'+table(transverses);
+
+  let s4=h2('4. Points divers')+((r.divers||'').trim()?texte(r.divers):vide('—'));
+
+  // 5. Le récapitulatif : la même matière qu'aux points 2 et 3, mais d'un seul
+  // tenant — c'est la liste qu'on relit en fin de séance à voix haute.
+  let s5=h2('5. Récapitulatif des nouvelles actions');
+  s5+=decidees.length?table(decidees):vide('Aucune nouvelle action.');
 
   return '<div style="font-size:12.5px">'
     +'<table style="font-size:12.5px;margin-bottom:6px"><tbody>'
@@ -13406,11 +13585,8 @@ function adCRHtml(r,pourImpression){
       +'<tr><td style="padding:2px 10px 2px 0;color:#888">Présents</td><td>'+escHtml(r.presents||'—')+'</td></tr>'
       +'<tr><td style="padding:2px 10px 2px 0;color:#888">Excusés</td><td>'+escHtml(r.excuses||'—')+'</td></tr>'
     +'</tbody></table>'
-    +tableau('1. Revue des actions en cours',revue,'Aucune action n\'était ouverte au moment de cette réunion.')
-    +bloc('2. Points à l\'ordre du jour et décisions',r.points)
-    +bloc('3. Points divers',r.divers)
-    +tableau('4. Nouvelles actions décidées',decidees,'Aucune nouvelle action.')
-    +'<h2 style="font-size:14px;color:#3D3580;margin:18px 0 6px">Prochaine réunion</h2>'
+    +s1+s2+s3+s4+s5
+    +h2('Prochaine réunion')
     +'<p style="font-size:12.5px">'+(r.prochaine_reunion?adFmtDateLongue(r.prochaine_reunion):'à fixer')+'</p>'
     +'</div>';
 }
@@ -13589,6 +13765,7 @@ async function adAfaireReporter(id){
   if(typeof afRender==='function')afRender();
 }
 
+window.adPointsCrecheChange=adPointsCrecheChange;window.adAjoutDepuisBloc=adAjoutDepuisBloc;
 window.adEnsureCharge=adEnsureCharge;window.adAfaireCocher=adAfaireCocher;window.adAfaireReporter=adAfaireReporter;
 window.adRespSelChange=adRespSelChange;
 window.adInit=adInit;window.adShowView=adShowView;window.adSetFilter=adSetFilter;window.adRender=adRender;
