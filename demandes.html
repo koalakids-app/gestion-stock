@@ -11242,13 +11242,25 @@ function icpRenderRevue(){
         +'</div>';
     }).join('');
 
+    /* Le PDF ne dit jamais qui est la mère et qui est le père, et l'ordre des
+       deux parents change d'une ligne à l'autre : aucune règle automatique ne
+       tiendrait. Ces deux boutons remplissent les rôles dans un sens ou dans
+       l'autre en un clic — c'est le seul raccourci honnête. */
+    const raccourci = b.personnes.length===2
+      ? '<span style="display:flex;gap:5px;align-items:center;margin-left:auto">'
+        +'<span style="font-size:11px;color:var(--muted)">Rôles :</span>'
+        +'<button type="button" class="btn-sm" style="font-size:11px;padding:3px 8px" onclick="icpOrdre('+i+',\'mp\')">Mère puis Père</button>'
+        +'<button type="button" class="btn-sm" style="font-size:11px;padding:3px 8px" onclick="icpOrdre('+i+',\'pm\')">Père puis Mère</button>'
+        +'</span>'
+      : '';
+
     return '<div style="border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:10px'
       +(b.deja?';opacity:.65':'')+'">'
       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
       +'<strong style="color:var(--koala-dark);font-size:13.5px">'+escHtml(b.enfant)+'</strong>'
       +'<i class="ti ti-arrow-right" style="color:var(--muted)"></i>'
       +'<select class="finput" id="icp_'+i+'_enfant" onchange="icpMajBloc('+i+')" style="width:auto;min-width:210px;font-size:12px;padding:4px 6px">'
-      +opts(b.enfantId)+'</select>'+alerte+'</div>'
+      +opts(b.enfantId)+'</select>'+alerte+raccourci+'</div>'
       +(lignes||'<div style="font-size:12px;color:var(--muted)">Aucun parent lisible sur cette ligne.</div>')
       +'</div>';
   }).join('');
@@ -11260,6 +11272,15 @@ function icpRenderRevue(){
   document.getElementById('icp-resume').innerHTML=
     ICP_BLOCS.length+' enfant(s) lus dans le PDF · '+aImporter+' prêt(s) à être importés. '
     +'Vérifiez chaque ligne : le PDF ne dit pas qui est la mère et qui est le père.';
+}
+
+/* Attribue les deux rôles dans l'ordre indiqué, sans toucher au reste de la
+   saisie déjà corrigée à l'écran. */
+function icpOrdre(i,sens){
+  icpCollecter();
+  const roles = sens==='pm' ? ['pere','mere'] : ['mere','pere'];
+  ICP_BLOCS[i].personnes.forEach((p,j)=>{ if(j<2) p.lien=roles[j]; });
+  icpRenderRevue();
 }
 
 async function icpImporter(){
