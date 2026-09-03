@@ -970,6 +970,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
 
     <div id="af-title-day" style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px"></div>
+    <div id="af-actions-dir" style="margin-bottom:12px"></div>
     <div id="af-events-day" style="margin-bottom:12px"></div>
     <div id="af-creche-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
     <div id="af-list" style="display:flex;flex-direction:column;gap:10px"></div>
@@ -1089,9 +1090,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <label class="flabel">Thème</label>
             <select class="finput" id="ad-new-theme"></select>
           </div>
-          <div style="width:170px">
+          <div style="width:190px">
             <label class="flabel">Responsable</label>
-            <input class="finput" id="ad-new-resp" list="ad-resp-list" placeholder="Prénom NOM">
+            <select class="finput" id="ad-new-resp-sel" onchange="adRespSelChange('ad-new')"></select>
+            <input class="finput" id="ad-new-resp" style="display:none;margin-top:6px" placeholder="Nom (hors application)">
           </div>
           <div style="width:150px">
             <label class="flabel">Échéance</label>
@@ -1123,7 +1125,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fg"><label class="flabel">Action / décision</label><textarea class="finput" id="ad-f-action" rows="2" style="resize:vertical" placeholder="Ce qui doit être fait, en une phrase"></textarea></div>
     <div class="frow">
       <div class="fg"><label class="flabel">Thème</label><select class="finput" id="ad-f-theme"></select></div>
-      <div class="fg"><label class="flabel">Responsable</label><input class="finput" id="ad-f-resp" list="ad-resp-list" placeholder="Prénom NOM"></div>
+      <div class="fg"><label class="flabel">Responsable</label>
+        <select class="finput" id="ad-f-resp-sel" onchange="adRespSelChange('ad-f')"></select>
+        <input class="finput" id="ad-f-resp" style="display:none;margin-top:6px" placeholder="Nom de la personne (hors application)"></div>
     </div>
     <div class="frow">
       <div class="fg"><label class="flabel">Réunion du</label><input class="finput" type="date" id="ad-f-reunion"></div>
@@ -11234,6 +11238,10 @@ async function afInit(){
   // peupler le select crèche du formulaire
   const sel=document.getElementById('af-new-creche');
   if(sel)sel.innerHTML='<option value="">— Aucune / réseau —</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
+  // Les actions de direction dont je suis responsable remontent dans la
+  // journée : elles sont chargées ici, l'onglet Actions n'ayant pas
+  // forcément été ouvert.
+  if(typeof adEnsureCharge==='function'){try{await adEnsureCharge();}catch(e){console.warn('[afaire] actions de direction',e);}}
   await afLoad();
 }
 
@@ -11388,6 +11396,7 @@ function afRender(){
   afCurrentDate=document.getElementById('af-nav-date').value||afCurrentDate||todayStr();
   document.getElementById('af-title-day').textContent=afFmtDayLabel(afCurrentDate);
   afRenderEventsOfDay(afCurrentDate);
+  if(typeof adRenderAfaireBloc==='function'){try{adRenderAfaireBloc(afCurrentDate);}catch(e){console.warn('[afaire] miroir actions',e);}}
   const dayItems=afCache.filter(t=>t.date_jour===afCurrentDate);
   afRenderCrecheFilter(dayItems);
   // s'assurer que le filtre courant est encore valide
@@ -11398,7 +11407,9 @@ function afRender(){
 
   const list=document.getElementById('af-list');
   if(!items.length){
-    list.innerHTML='<div style="text-align:center;color:var(--muted);padding:30px;font-size:13px"><i class="ti ti-coffee" style="font-size:28px;display:block;margin-bottom:6px;opacity:0.5"></i>Aucune tâche pour ce jour'+(afCrecheFilter!=='all'?' (avec ce filtre)':'')+'.</div>';
+    const bloc=document.getElementById('af-actions-dir');
+    const avecActions=bloc&&bloc.innerHTML.trim();
+    list.innerHTML='<div style="text-align:center;color:var(--muted);padding:30px;font-size:13px"><i class="ti ti-coffee" style="font-size:28px;display:block;margin-bottom:6px;opacity:0.5"></i>Aucune tâche personnelle pour ce jour'+(afCrecheFilter!=='all'?' (avec ce filtre)':'')+(avecActions?' — seules les actions de direction ci-dessus attendent.':'.')+'</div>';
     return;
   }
   // Si "Toutes" → regrouper par crèche sous des titres. Sinon → liste simple.
@@ -12771,6 +12782,7 @@ async function adInit(){
   ['ad-f-theme','ad-new-theme'].forEach(id=>{const s=document.getElementById(id);if(s)s.innerHTML=themes;});
   const selC=document.getElementById('ad-f-creche');
   if(selC)selC.innerHTML='<option value="">— Réseau / transverse —</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
+  adFillRespSelects();
   if(!adReunionDate)adReunionDate=todayStr();
   const dr=document.getElementById('ad-r-date');if(dr)dr.value=adReunionDate;
   await adLoad();
@@ -12801,6 +12813,10 @@ function adRenderTout(){
   adRender();
   adRenderReunion();
   adRenderCRList();
+  // Le miroir dans « À faire » lit le même cache : le laisser périmé
+  // afficherait comme à traiter une action qu'on vient de clore.
+  const af=document.getElementById('main-afaire');
+  if(af&&af.classList.contains('active')&&typeof afRender==='function'){try{afRender();}catch(e){}}
 }
 
 function adShowView(v,btn){
@@ -12842,6 +12858,61 @@ function adRenderFiltres(){
     const noms=[...new Set([...resp,...(cacheReferents||[]).map(r=>r.name).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'fr'));
     dl.innerHTML=noms.map(n=>'<option value="'+escHtml(n)+'">').join('');
   }
+  adFillRespSelects();
+}
+
+/* ── Le responsable ─────────────────────────────────────────────────────────
+   Un nom tapé à la main ne permet pas de dire « cette action me concerne » :
+   « David », « David M. » et « david » désignent la même personne sans que
+   l'application puisse le savoir. Le responsable se choisit donc parmi les
+   comptes, et la colonne responsable_referent_id porte le lien.
+
+   Le champ texte reste disponible pour qui n'a pas de compte — un artisan, la
+   PMI, le réseau — et c'est lui qui s'imprime dans le CR et l'export Excel :
+   quand le responsable est un compte, on écrit les deux. */
+function adFillRespSelects(){
+  const gens=(cacheReferents||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'fr'));
+  const opts='<option value="">— À désigner —</option>'
+    +gens.map(r=>'<option value="'+r.id+'">'+escHtml(r.name||'(sans nom)')+(r.role==='direction'?' — direction':'')+'</option>').join('')
+    +'<option value="__autre">Autre personne (hors application)…</option>';
+  ['ad-f-resp-sel','ad-new-resp-sel'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    const v=el.value;
+    el.innerHTML=opts;
+    if(v&&(v==='__autre'||gens.some(r=>String(r.id)===String(v))))el.value=v;
+  });
+}
+
+function adRespSelChange(prefixe){
+  const sel=document.getElementById(prefixe+'-resp-sel'),txt=document.getElementById(prefixe+'-resp');
+  if(!sel||!txt)return;
+  const autre=sel.value==='__autre';
+  txt.style.display=autre?'':'none';
+  if(autre)setTimeout(()=>txt.focus(),50); else txt.value='';
+}
+
+/* Ce que les deux champs valent ensemble, prêt à écrire en base. */
+function adRespDuFormulaire(prefixe){
+  const sel=document.getElementById(prefixe+'-resp-sel'),txt=document.getElementById(prefixe+'-resp');
+  const v=sel?sel.value:'';
+  if(v==='__autre')return{responsable_referent_id:null,responsable:((txt&&txt.value)||'').trim()||null};
+  if(v){
+    const r=(cacheReferents||[]).find(x=>String(x.id)===String(v));
+    return{responsable_referent_id:v,responsable:(r&&r.name)||null};
+  }
+  return{responsable_referent_id:null,responsable:null};
+}
+
+/* L'inverse : positionner les deux champs sur une action existante. Un compte
+   supprimé depuis retombe sur « Autre personne », le nom restant lisible. */
+function adRespVersFormulaire(prefixe,a){
+  const sel=document.getElementById(prefixe+'-resp-sel'),txt=document.getElementById(prefixe+'-resp');
+  if(!sel||!txt)return;
+  const lie=a&&a.responsable_referent_id&&(cacheReferents||[]).some(r=>String(r.id)===String(a.responsable_referent_id));
+  if(lie){sel.value=a.responsable_referent_id;txt.value='';txt.style.display='none';}
+  else if(a&&a.responsable){sel.value='__autre';txt.value=a.responsable;txt.style.display='';}
+  else{sel.value='';txt.value='';txt.style.display='none';}
 }
 
 function adOuvertes(){
@@ -12960,7 +13031,7 @@ function adOpenActionModal(id){
   document.getElementById('modal-ad-title').textContent=a?('Action n°'+(a.numero||'')):'Nouvelle action';
   document.getElementById('ad-f-action').value=a?(a.action||''):'';
   document.getElementById('ad-f-theme').value=a&&a.theme?a.theme:'Organisation';
-  document.getElementById('ad-f-resp').value=a?(a.responsable||''):'';
+  adRespVersFormulaire('ad-f',a);
   document.getElementById('ad-f-reunion').value=a?(a.reunion_date||''):(adReunionDate||todayStr());
   document.getElementById('ad-f-echeance').value=a?(a.echeance||''):adEcheanceParDefaut();
   document.getElementById('ad-f-statut').value=a?(a.statut||'a_faire'):'a_faire';
@@ -12986,7 +13057,7 @@ async function adSaveAction(){
   const row={
     action:action,
     theme:document.getElementById('ad-f-theme').value||null,
-    responsable:(document.getElementById('ad-f-resp').value||'').trim()||null,
+    responsable:null,responsable_referent_id:null,   // remplacés juste après
     reunion_date:document.getElementById('ad-f-reunion').value||null,
     echeance:document.getElementById('ad-f-echeance').value||null,
     statut:statut,
@@ -12996,6 +13067,7 @@ async function adSaveAction(){
     // décision a été prise, pas quand la fiche a été retouchée.
     cloture_le:adEstClos(statut)?((ancienne&&ancienne.cloture_le)||todayStr()):null
   };
+  Object.assign(row,adRespDuFormulaire('ad-f'));
   const btn=document.getElementById('ad-f-save');btn.disabled=true;
   try{
     if(adEditId){
@@ -13206,16 +13278,15 @@ async function adAjoutRapide(){
     numero:adNumeroSuivant(),
     action:action,
     theme:document.getElementById('ad-new-theme').value||null,
-    responsable:(document.getElementById('ad-new-resp').value||'').trim()||null,
     echeance:document.getElementById('ad-new-echeance').value||null,
     reunion_date:adReunionDate||todayStr(),
     statut:'a_faire'
   };
+  Object.assign(row,adRespDuFormulaire('ad-new'));
   const{data,error}=await sb.from('actions_direction').insert(row).select().single();
   if(error){showBanner('Ajout refusé : '+error.message,'error');return;}
   adCache.push(data);
   document.getElementById('ad-new-action').value='';
-  document.getElementById('ad-new-resp').value='';
   adRenderFiltres();adRender();adRenderNouvelles();
   showBanner('Action n°'+data.numero+' ajoutée ✅');
 }
@@ -13419,6 +13490,107 @@ function adExportExcel(){
   showBanner('Export Excel généré ✅');
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   LE PONT AVEC « À FAIRE »
+
+   Une action décidée en réunion et dont je suis responsable doit se retrouver
+   dans ma journée sans que j'aie à la recopier. Le choix fait ici est le
+   MIROIR, pas la copie : l'écran « À faire » affiche les lignes de
+   actions_direction telles quelles, et cocher la case écrit dans cette
+   table-là. Une seule vérité, donc rien qui puisse diverger — l'inverse
+   (dupliquer l'action en tâche) aurait créé deux lignes à clore, et la
+   certitude qu'un jour l'une des deux mentirait.
+
+   Ce qui remonte : mes actions ouvertes dont l'échéance est arrivée (celles du
+   jour affiché et tout ce qui traîne derrière). Les échéances à venir restent
+   dans l'écran Actions — l'À faire est la journée, pas le mois.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* L'écran « À faire » s'ouvre souvent sans être passé par Actions : sans ce
+   chargement paresseux, le bloc resterait vide jusqu'à la visite de l'onglet. */
+async function adEnsureCharge(){
+  if(!isDirection||adCache.length||!adSchemaOk)return;
+  const{data,error}=await sb.from('actions_direction').select('*').order('numero',{ascending:true});
+  if(error){adSchemaOk=false;return;}
+  adCache=data||[];
+}
+
+function adMesActions(){
+  const moi=currentProfile&&currentProfile.id;
+  if(!moi)return[];
+  return adCache.filter(a=>!adEstClos(a.statut)&&String(a.responsable_referent_id||'')===String(moi));
+}
+
+function adRenderAfaireBloc(iso){
+  const box=document.getElementById('af-actions-dir');if(!box)return;
+  if(!isDirection||!adSchemaOk){box.innerHTML='';return;}
+  const mine=adMesActions();
+  const dues=mine.filter(a=>a.echeance&&a.echeance<=iso)
+    .sort((a,b)=>String(a.echeance).localeCompare(String(b.echeance)));
+  const sansEcheance=mine.filter(a=>!a.echeance).length;
+  const aVenir=mine.filter(a=>a.echeance&&a.echeance>iso).length;
+  if(!dues.length&&!sansEcheance&&!aVenir){box.innerHTML='';return;}
+
+  const enRetard=dues.filter(a=>adRetard(a)>0).length;
+  const pied=[];
+  if(aVenir)pied.push(aVenir+' à venir');
+  if(sansEcheance)pied.push(sansEcheance+' sans échéance');
+
+  box.innerHTML='<div style="background:var(--card);border:1.5px solid '+(enRetard?'var(--red)':'var(--koala)')+';border-radius:10px;padding:10px 12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:'+(dues.length?'8px':'0')+'">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--koala);text-transform:uppercase;letter-spacing:0.5px">'
+        +'<i class="ti ti-target-arrow"></i> Mes actions de direction'
+        +(enRetard?' <span style="color:var(--red)">· '+enRetard+' en retard</span>':'')+'</div>'
+      +'<button class="btn-sm" style="font-size:11px;padding:4px 9px" onclick="showMain(\'actions\')"><i class="ti ti-external-link"></i> Voir le suivi</button>'
+    +'</div>'
+    +(dues.length
+      ? '<div style="display:flex;flex-direction:column;gap:7px">'+dues.map(a=>adAfaireLigne(a)).join('')+'</div>'
+      : '<div style="font-size:12px;color:var(--muted);font-style:italic">Rien à traiter aujourd\'hui.</div>')
+    +(pied.length?'<div style="font-size:11px;color:var(--muted);margin-top:7px">'+pied.join(' · ')+'</div>':'')
+  +'</div>';
+}
+
+function adAfaireLigne(a){
+  const ret=adRetard(a),creche=adCrecheName(a.creche_id);
+  return '<div style="display:flex;align-items:flex-start;gap:9px;background:var(--bg);border:1px solid '+(ret>0?'var(--red)':'var(--border)')+';border-radius:8px;padding:8px 10px">'
+    +'<div onclick="adAfaireCocher(\''+a.id+'\')" style="cursor:pointer;flex-shrink:0;margin-top:1px" title="Marquer cette action faite">'
+      +'<i class="ti ti-square" style="font-size:20px;color:var(--muted)"></i></div>'
+    +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:13.5px;font-weight:600">'+escHtml(a.action||'')+'</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;align-items:center">'
+        +'<span class="meta-txt">N°'+(a.numero||'')+'</span>'
+        +(a.theme?'<span class="badge b-ref">'+escHtml(a.theme)+'</span>':'')
+        +(creche?'<span class="badge b-ref"><i class="ti ti-building" style="font-size:10px"></i> '+escHtml(creche)+'</span>':'')
+        +(ret>0
+          ? '<span class="badge" style="background:var(--red-light);color:#c0392b">⚠ '+ret+' j de retard</span>'
+          : '<span class="badge" style="background:var(--orange-light);color:var(--orange-dark)">échéance ce jour</span>')
+        +(a.reunion_date?'<span class="meta-txt">réunion du '+adFmtDate(a.reunion_date)+'</span>':'')
+      +'</div>'
+      +(a.suivi?'<div style="font-size:12px;color:var(--muted);margin-top:4px;white-space:pre-wrap">'+escHtml(a.suivi)+'</div>':'')
+    +'</div>'
+    +'<div style="display:flex;gap:2px;flex-shrink:0">'
+      +'<button class="ibtn" title="Reporter l\'échéance" onclick="adAfaireReporter(\''+a.id+'\')"><i class="ti ti-calendar-plus"></i></button>'
+      +'<button class="ibtn" title="Ouvrir l\'action" onclick="adOpenActionModal(\''+a.id+'\')"><i class="ti ti-edit"></i></button>'
+    +'</div></div>';
+}
+
+/* Cocher ici clôt l'action dans le suivi : c'est tout l'intérêt du miroir.
+   Le message le dit explicitement — sans quoi on croirait n'avoir rayé qu'une
+   ligne de sa propre liste. */
+async function adAfaireCocher(id){
+  const a=adCache.find(x=>String(x.id)===String(id));if(!a)return;
+  await adSetStatut(id,'fait',true);
+  if(typeof afRender==='function')afRender();
+  showBanner('Action n°'+(a.numero||'')+' marquée faite dans le suivi de direction ✅');
+}
+
+async function adAfaireReporter(id){
+  await adRevueReporter(id);
+  if(typeof afRender==='function')afRender();
+}
+
+window.adEnsureCharge=adEnsureCharge;window.adAfaireCocher=adAfaireCocher;window.adAfaireReporter=adAfaireReporter;
+window.adRespSelChange=adRespSelChange;
 window.adInit=adInit;window.adShowView=adShowView;window.adSetFilter=adSetFilter;window.adRender=adRender;
 window.adOpenActionModal=adOpenActionModal;window.adSaveAction=adSaveAction;window.adSetStatut=adSetStatut;window.adDelete=adDelete;
 window.adReunionCharger=adReunionCharger;window.adReunionDirty=adReunionDirty;window.adReunionEnregistrer=adReunionEnregistrer;
