@@ -422,6 +422,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn direction-only" onclick="showMain('dashboard')" id="mnav-dashboard"><i class="ti ti-chart-bar"></i> Tableau de bord</button>
       <button class="mnav-btn david-only" onclick="showMain('afaire')" id="mnav-afaire" style="display:none"><i class="ti ti-checklist"></i> À faire</button>
       <button class="mnav-btn" onclick="showMain('evenements')" id="mnav-evenements"><i class="ti ti-calendar"></i> Événements</button>
+      <button class="mnav-btn direction-only" onclick="showMain('actions')" id="mnav-actions"><i class="ti ti-target-arrow"></i> Actions</button>
       <button class="mnav-btn direction-only" onclick="showMain('fraisik')" id="mnav-fraisik"><i class="ti ti-car"></i> Frais IK</button>
       <button class="mnav-btn" onclick="showMain('fraispro')" id="mnav-fraispro"><i class="ti ti-receipt"></i> Frais pro</button>
       <button class="mnav-btn" onclick="showMain('incidents')" id="mnav-incidents"><i class="ti ti-alert-triangle"></i> Incidents <span class="mnav-badge" id="badge-incidents" style="display:none">0</span></button>
@@ -974,9 +975,192 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="af-list" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
 
+  <!-- ════════════════════════════════════════════════════════════════════
+       SUIVI DES ACTIONS DE DIRECTION
+       Reprend le classeur « Suivi_actions_reunion_direction.xlsx » :
+       une ligne = une action, on relit les non closes en début de réunion.
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="main-actions" class="tab-content direction-only">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-title"><i class="ti ti-target-arrow" style="color:var(--koala)"></i> Suivi des actions</span>
+        <span class="section-sub" id="ad-sub">Réunions de direction</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn-primary" onclick="adOpenActionModal()"><i class="ti ti-plus"></i> Nouvelle action</button>
+        <button class="btn-sm" onclick="adExportExcel()"><i class="ti ti-file-spreadsheet"></i> Export Excel</button>
+      </div>
+    </div>
+
+    <div id="ad-schema-warn" style="display:none;background:var(--red-light);color:#c0392b;border:1.5px solid var(--red);border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:12px;line-height:1.45"></div>
+
+    <div class="module-tabs" style="margin-bottom:1rem">
+      <button class="module-tab active" id="ad-tab-liste" onclick="adShowView('liste',this)"><i class="ti ti-list-check"></i> Actions <span id="ad-badge-ouvertes" style="display:none;background:var(--koala);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px">0</span></button>
+      <button class="module-tab" id="ad-tab-reunion" onclick="adShowView('reunion',this)"><i class="ti ti-presentation"></i> Mode réunion</button>
+      <button class="module-tab" id="ad-tab-cr" onclick="adShowView('cr',this)"><i class="ti ti-file-text"></i> Comptes rendus</button>
+    </div>
+
+    <!-- ── Vue 1 : la liste ──────────────────────────────────────────── -->
+    <div id="ad-view-liste" class="module-tab-content active">
+      <div class="stats-row" id="ad-stats" style="margin-bottom:12px"></div>
+      <div class="filters" style="flex-wrap:wrap;align-items:center;gap:6px">
+        <button class="fchip active" id="ad-chip-ouvertes" onclick="adSetFilter('ouvertes')"><i class="ti ti-hourglass"></i> Non closes</button>
+        <button class="fchip" id="ad-chip-retard" onclick="adSetFilter('retard')"><i class="ti ti-alert-triangle"></i> En retard</button>
+        <button class="fchip" id="ad-chip-closes" onclick="adSetFilter('closes')"><i class="ti ti-check"></i> Closes</button>
+        <button class="fchip" id="ad-chip-toutes" onclick="adSetFilter('toutes')"><i class="ti ti-list"></i> Toutes</button>
+        <select class="finput" id="ad-filter-resp" style="width:auto;min-width:150px;font-size:12px;padding:4px 8px" onchange="adRender()"></select>
+        <select class="finput" id="ad-filter-theme" style="width:auto;min-width:140px;font-size:12px;padding:4px 8px" onchange="adRender()"></select>
+        <select class="finput" id="ad-filter-creche" style="width:auto;min-width:150px;font-size:12px;padding:4px 8px" onchange="adRender()"></select>
+        <input class="finput" id="ad-search" placeholder="Rechercher…" style="width:auto;min-width:170px;font-size:12px;padding:4px 8px" oninput="adRender()">
+      </div>
+      <div id="ad-list" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"></div>
+    </div>
+
+    <!-- ── Vue 2 : le mode réunion ───────────────────────────────────── -->
+    <div id="ad-view-reunion" class="module-tab-content">
+
+      <!-- En-tête de la réunion -->
+      <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div style="width:160px">
+            <label class="flabel">Réunion du</label>
+            <input class="finput" type="date" id="ad-r-date" onchange="adReunionCharger(this.value)">
+          </div>
+          <div style="width:110px">
+            <label class="flabel">Heure</label>
+            <input class="finput" id="ad-r-heure" placeholder="9h30" onchange="adReunionDirty()">
+          </div>
+          <div style="flex:1;min-width:200px">
+            <label class="flabel">Présents</label>
+            <input class="finput" id="ad-r-presents" placeholder="Prénoms, séparés par des virgules" onchange="adReunionDirty()">
+          </div>
+          <div style="flex:1;min-width:170px">
+            <label class="flabel">Excusés</label>
+            <input class="finput" id="ad-r-excuses" placeholder="—" onchange="adReunionDirty()">
+          </div>
+          <div style="width:160px">
+            <label class="flabel">Prochaine réunion</label>
+            <input class="finput" type="date" id="ad-r-prochaine" onchange="adReunionDirty()">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+          <button class="btn-primary" onclick="adReunionEnregistrer()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
+          <button class="btn-sm" onclick="adExportCR()"><i class="ti ti-printer"></i> Exporter le CR</button>
+          <button class="btn-sm" id="ad-r-cloturer" onclick="adReunionCloturer()"><i class="ti ti-lock"></i> Clôturer</button>
+          <button class="btn-sm" id="ad-r-projection" onclick="adToggleProjection()" title="Gros caractères pour la vidéoprojection"><i class="ti ti-device-tv"></i> Projection</button>
+          <span id="ad-r-etat" style="font-size:11.5px;color:var(--muted)"></span>
+        </div>
+      </div>
+
+      <!-- 1. Revue guidée des actions non closes -->
+      <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <span class="section-title" style="font-size:14px"><i class="ti ti-list-check" style="color:var(--koala)"></i> 1. Revue des actions en cours</span>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span id="ad-revue-compteur" style="font-size:12px;font-weight:700;color:var(--koala)"></span>
+            <button class="btn-sm" onclick="adRevueStep(-1)"><i class="ti ti-chevron-left"></i></button>
+            <button class="btn-sm" onclick="adRevueStep(1)"><i class="ti ti-chevron-right"></i></button>
+            <button class="btn-sm" id="ad-revue-mode" onclick="adRevueToggleMode()"><i class="ti ti-layout-list"></i> Tout voir</button>
+          </div>
+        </div>
+        <div id="ad-revue-zone"></div>
+      </div>
+
+      <!-- 2 et 3. Les notes -->
+      <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
+        <span class="section-title" style="font-size:14px"><i class="ti ti-notes" style="color:var(--koala)"></i> 2. Points à l'ordre du jour et décisions</span>
+        <p style="font-size:11.5px;color:var(--muted);margin:4px 0 8px">Un paragraphe par sujet : contexte, échange, DÉCISION. Toute décision qui demande une action se saisit ci-dessous.</p>
+        <textarea class="finput" id="ad-r-points" rows="7" style="resize:vertical" placeholder="— Sujet 1 : …&#10;&#10;— Sujet 2 : …" onchange="adReunionDirty()"></textarea>
+        <div style="margin-top:12px">
+          <span class="section-title" style="font-size:14px"><i class="ti ti-dots" style="color:var(--koala)"></i> 3. Points divers</span>
+          <textarea class="finput" id="ad-r-divers" rows="3" style="resize:vertical;margin-top:6px" placeholder="—" onchange="adReunionDirty()"></textarea>
+        </div>
+      </div>
+
+      <!-- 4. Nouvelles actions décidées -->
+      <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px">
+        <span class="section-title" style="font-size:14px"><i class="ti ti-plus" style="color:var(--koala)"></i> 4. Nouvelles actions décidées</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
+          <div style="flex:1;min-width:220px">
+            <label class="flabel">Action / décision</label>
+            <input class="finput" id="ad-new-action" placeholder="Ex : Diffuser l'annonce d'auxiliaire pour Cuers" onkeydown="if(event.key==='Enter')adAjoutRapide()">
+          </div>
+          <div style="width:150px">
+            <label class="flabel">Thème</label>
+            <select class="finput" id="ad-new-theme"></select>
+          </div>
+          <div style="width:170px">
+            <label class="flabel">Responsable</label>
+            <input class="finput" id="ad-new-resp" list="ad-resp-list" placeholder="Prénom NOM">
+          </div>
+          <div style="width:150px">
+            <label class="flabel">Échéance</label>
+            <input class="finput" type="date" id="ad-new-echeance">
+          </div>
+          <button class="btn-primary" onclick="adAjoutRapide()"><i class="ti ti-plus"></i> Ajouter</button>
+        </div>
+        <div id="ad-new-list" style="display:flex;flex-direction:column;gap:8px;margin-top:12px"></div>
+      </div>
+
+      <datalist id="ad-resp-list"></datalist>
+    </div>
+
+    <!-- ── Vue 3 : les comptes rendus ────────────────────────────────── -->
+    <div id="ad-view-cr" class="module-tab-content">
+      <div id="ad-cr-list" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </div>
+
 </div><!-- end .app -->
 </div><!-- end #app-wrap -->
 
+
+
+<!-- Modal action de direction (création / modification) -->
+<div class="overlay" id="modal-action-wrap" onclick="if(event.target===this)closeModal('modal-action-wrap')">
+  <div class="modal">
+    <h3 id="modal-ad-title">Nouvelle action</h3>
+    <div class="fg"><label class="flabel">Action / décision</label><textarea class="finput" id="ad-f-action" rows="2" style="resize:vertical" placeholder="Ce qui doit être fait, en une phrase"></textarea></div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Thème</label><select class="finput" id="ad-f-theme"></select></div>
+      <div class="fg"><label class="flabel">Responsable</label><input class="finput" id="ad-f-resp" list="ad-resp-list" placeholder="Prénom NOM"></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Réunion du</label><input class="finput" type="date" id="ad-f-reunion"></div>
+      <div class="fg"><label class="flabel">Échéance</label><input class="finput" type="date" id="ad-f-echeance"></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Statut</label><select class="finput" id="ad-f-statut">
+        <option value="a_faire">À faire</option>
+        <option value="en_cours">En cours</option>
+        <option value="reporte">Reportée</option>
+        <option value="fait">Faite</option>
+        <option value="abandonne">Abandonnée</option>
+      </select></div>
+      <div class="fg"><label class="flabel">Crèche concernée</label><select class="finput" id="ad-f-creche"><option value="">— Réseau / transverse —</option></select></div>
+    </div>
+    <div class="fg"><label class="flabel">Suivi / commentaire</label><textarea class="finput" id="ad-f-suivi" rows="2" style="resize:vertical" placeholder="Où en est-on ?"></textarea></div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-action-wrap')">Annuler</button>
+      <button class="btn-primary" id="ad-f-save" onclick="adSaveAction()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal lecture d'un compte rendu -->
+<div class="overlay" id="modal-cr-wrap" onclick="if(event.target===this)closeModal('modal-cr-wrap')">
+  <div class="modal" style="max-width:820px;max-height:88vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <h3 id="ad-cr-title" style="margin:0">Compte rendu</h3>
+      <button class="ibtn" onclick="closeModal('modal-cr-wrap')"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="ad-cr-body" style="flex:1;overflow-y:auto;margin-top:12px;font-size:13px;line-height:1.55"></div>
+    <div class="mactions" style="margin-top:10px">
+      <button class="btn-sm" id="ad-cr-print" onclick="adExportCR(_adCrVue)"><i class="ti ti-printer"></i> Imprimer / PDF</button>
+      <button class="btn-primary" onclick="adCrRouvrir()"><i class="ti ti-edit"></i> Ouvrir en mode réunion</button>
+    </div>
+  </div>
+</div>
 
 <!-- Bouton aide flottant -->
 <button onclick="openNotice()" title="Aide & Notice d'utilisation"
@@ -1281,16 +1465,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <option value="SV">SV — Sans viande</option>
           <option value="SPV">SPV — Sans protéine de vache</option>
           <option value="SPA">SPA — Sans protéine animale</option>
-        </select>
-      </div>
-      <!-- Le goûter suit le repas par défaut (M et BB en goûter bébé, G en goûter
-           grand). Ce menu permet de l'en dissoudre : un enfant en repas moyen peut
-           très bien prendre le goûter des grands. -->
-      <div class="fg"><label class="flabel">Goûter</label>
-        <select class="finput" id="enf-gouter-base" onchange="enfSyncRepas()">
-          <option value="">Selon le repas (automatique)</option>
-          <option value="gbb">Goûter bébé</option>
-          <option value="ggr">Goûter grand</option>
         </select>
       </div>
     </div>
@@ -1675,7 +1849,7 @@ async function loadAllData(){
    une saisie en cours — la synchro est alors reportée à sa fermeture), jamais en
    arrière-plan, et jamais deux rechargements coup sur coup.
    ═════════════════════════════════════════════════════════════════════════ */
-const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','planning','planning_equipe','enfants_contrats','taches_afaire','commandes_repas'];
+const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','planning','planning_equipe','enfants_contrats','taches_afaire','commandes_repas','actions_direction','reunions_direction'];
 const SYNC_PERIODE_MS=60000;   // rappel périodique quand l'onglet est visible
 const SYNC_MIN_MS=10000;       // anti-rafale entre deux rechargements
 let _mainCourant=null,_syncDernier=0,_syncEnCours=false,_syncEnAttente=false,
@@ -1725,6 +1899,7 @@ function syncRedessine(){
     else if(t==='vaccinations'&&typeof vacRender==='function')vacRender();
     else if(t==='enfants'&&typeof enfRender==='function')enfRender();
     else if(t==='afaire'&&typeof afRender==='function')afRender();
+    else if(t==='actions'&&typeof adLoad==='function')adLoad();
   }catch(err){console.warn('[Sync] redessin '+t,err);}
   // Fiche enfant ouverte en lecture : on remet à jour son titre et son onglet
   // Identité, sans toucher aux onglets Contrat / Documents chargés à part.
@@ -1824,29 +1999,7 @@ function syncDemarrer(){
 window.syncDemarrer=syncDemarrer;
 
 // SUPABASE HELPERS
-/* Tri par défaut : la plupart des tables ont un `created_at`, mais pas toutes —
-   `consignes_lues` horodate avec `lu_at`. Trier sur une colonne absente fait
-   échouer la requête entière en 42703 et renvoie une liste vide, sans que rien
-   ne le signale à l'écran. On nomme donc explicitement la colonne de tri des
-   tables qui font exception, et un 42703 déclenche un second essai sans tri
-   plutôt que de perdre les données. */
-const DB_ORDER_COL={consignes_lues:'lu_at'};
-async function dbSelect(table,filters={}){
-  const col=DB_ORDER_COL[table]||'created_at';
-  const build=function(orderCol){
-    let q=sb.from(table).select('*');
-    if(orderCol)q=q.order(orderCol,{ascending:false});
-    for(const[k,v]of Object.entries(filters))q=q.eq(k,v);
-    return q;
-  };
-  let{data,error}=await build(col);
-  if(error&&error.code==='42703'){
-    console.warn('[dbSelect] '+table+' : colonne de tri « '+col+' » absente, relecture sans tri.');
-    ({data,error}=await build(null));
-  }
-  if(error){console.warn(table,error);return[];}
-  return data||[];
-}
+async function dbSelect(table,filters={}){let q=sb.from(table).select('*').order('created_at',{ascending:false});for(const[k,v]of Object.entries(filters))q=q.eq(k,v);const{data,error}=await q;if(error){console.warn(table,error);return[];}return data||[];}
 async function dbInsert(table,row){const{data,error}=await sb.from(table).insert(row).select().single();if(error){console.warn('insert',table,error);window._lastDbError=error.message||String(error);return null;}window._lastDbError=null;return data;}
 async function dbUpdate(table,id,updates){const{error}=await sb.from(table).update(updates).eq('id',id);if(error){console.error('[dbUpdate]',table,id,error.message);window._lastDbError=error.message||String(error);return false;}window._lastDbError=null;return true;}
 async function dbDelete(table,id){const{error}=await sb.from(table).delete().eq('id',id);if(error){console.warn('delete',table,error);return false;}return true;}
@@ -2003,7 +2156,7 @@ async function markConsignesRead(){
 
 function showMain(tab){
   _mainCourant=tab;
-  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','actions'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -2022,6 +2175,7 @@ function showMain(tab){
   if(tab==='vaccinations')vacInit();
   if(tab==='enfants')enfInit();
   if(tab==='afaire')afInit();
+  if(tab==='actions'){if(isDirection)adInit();else showMain('ref-dashboard');}
 }
 
 // FULLSCREEN DEMANDES
@@ -3674,16 +3828,8 @@ function crCompute(notify){
       const reg=r.enfant.regime_repas||'';
       if(cell.slot==='j'||cell.slot==='m')repas[t][reg]=(repas[t][reg]||0)+1;
       if(cell.slot==='j'||cell.slot==='a'){
-        /* La ligne de goûter ne se déduit plus de la ligne de repas : elle vient de
-           enfGouterLigne(), qui respecte le choix éventuellement forcé sur la fiche. */
-        const g=enfGouterLigne(r.enfant);
-        /* Un goûter ne contient jamais de viande : la mention « SV » n'a pas de
-           sens sur ces deux lignes et faisait apparaître un régime particulier
-           là où le traiteur sert le goûter standard. L'enfant est donc compté
-           dans l'effectif normal. SPV et SPA restent signalés : le lait et les
-           produits laitiers, eux, sont bien présents au goûter. */
-        const gReg=reg==='SV'?'':reg;
-        if(g)gouter[g][gReg]=(gouter[g][gReg]||0)+1;
+        const g=t==='bb18'?'gbb':(t==='grand'||t==='peri')?'ggr':null;
+        if(g)gouter[g][reg]=(gouter[g][reg]||0)+1;
       }
     });
     ['bb6','bb18','grand','peri'].forEach(function(k){vals[k][i]=crFmtCell(repas[k]);});
@@ -3975,16 +4121,12 @@ async function crExportPdf(){
   try{
     const c=crCollect();
     /* On enregistre AVANT de produire le bon : si le stockage échoue, l'utilisateur
-       est prévenu mais repart quand même avec son PDF.
-       Enregistrement en BROUILLON (crSave(false)) : télécharger le bon n'est pas
-       le transmettre. Seul « Envoyer au traiteur » marque la commande comme
-       envoyée — sans quoi une simple édition du PDF cochait « annule et remplace »
-       à la réouverture de la semaine, pour une commande jamais partie. */
-    const saved=await crSave(false);
+       est prévenu mais repart quand même avec son PDF. */
+    const saved=await crSave(true);
     const pdf=await crMakePdf(c);
     pdf.save(crPdfName(c.opts.semNum));
     closeModal('modal-commande-wrap');
-    showBanner(saved?'Bon de commande généré et enregistré (brouillon) ✅'
+    showBanner(saved?'Bon de commande généré et enregistré ✅'
                     :'Bon généré ✅ — mais l’enregistrement a échoué (table commandes_repas absente ?).',
                saved?'':'error');
   }catch(err){
@@ -4095,7 +4237,7 @@ async function crSendMail(){
         :'Commande envoyée à '+to.join(', ')+' ✅ — mais NON enregistrée en base ('+_crSaveErr+') : les autres postes ne verront pas qu’elle est partie.',
         saved?'success':'error');
     }else{
-      showBanner('Échec de l’envoi'+(_lastFnErr?' — '+_lastFnErr:'')+'. Vous pouvez générer le PDF et l’envoyer manuellement.','error');
+      showBanner('Échec de l’envoi. Vous pouvez générer le PDF et l’envoyer manuellement.','error');
       btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
     }
   }catch(err){
@@ -4187,28 +4329,6 @@ function enfSyncRepas(){
   if(forcee==='BIB')txt+=' <span style="color:var(--orange-dark)">(non compté dans les repas commandés)</span>';
   else if(forcee&&auto&&forcee!==auto)txt+=' <span style="color:var(--orange-dark)">(forcé ; l’âge donnerait '+escHtml(auto)+')</span>';
   else if(!forcee)txt+=' <span style="opacity:.8">(suit l’âge)</span>';
-  /* Le goûter : sans plat, pas de goûter non plus — le menu est grisé sur BIB.
-     Sinon on annonce la ligne du bon traiteur qui sera incrémentée. */
-  const selGout=document.getElementById('enf-gouter-base');
-  if(selGout){
-    selGout.disabled=(forcee==='BIB');
-    selGout.style.background=selGout.disabled?'#f4f4f8':'';
-    selGout.style.cursor=selGout.disabled?'not-allowed':'';
-    if(selGout.disabled)selGout.value='';
-    const gForce=selGout.value||'';
-    const gAuto=(base==='BB')?null:(base==='M')?'gbb':(base==='G')?'ggr':null;
-    const gFinal=gForce||gAuto;
-    if(forcee!=='BIB'){
-      if(!gFinal)txt+='<div style="margin-top:2px">Goûter : <span style="color:var(--muted)">aucun (repas légumes sans protéines)</span></div>';
-      else{
-        txt+='<div style="margin-top:2px">Goûter : <strong style="color:var(--koala)">'
-          +(gFinal==='gbb'?'bébé':'grand')+'</strong>'
-          +(gForce&&gAuto&&gForce!==gAuto?' <span style="color:var(--orange-dark)">(forcé ; le repas donnerait '+(gAuto==='gbb'?'bébé':'grand')+')</span>'
-            :(gForce&&!gAuto?' <span style="color:var(--orange-dark)">(forcé)</span>':' <span style="opacity:.8">(suit le repas)</span>'))
-          +'</div>';
-      }
-    }
-  }
   box.innerHTML=txt;
 }
 window.enfSyncRepas = enfSyncRepas;
@@ -4222,73 +4342,20 @@ function enfFillCreches(selectedId){
   sel.style.background=isDirection?'':'#f4f4f8';
   sel.style.cursor=isDirection?'':'not-allowed';
 }
-function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';document.getElementById('enf-gouter-base').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';document.getElementById('enf-gouter-base').value=e.gouter_base||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-/* Écriture d'une fiche enfant tolérante aux colonnes optionnelles absentes.
-   `repas_base` et `gouter_base` sont ajoutées par des migrations SQL distinctes :
-   si l'une manque, Postgres nomme la colonne fautive et on la retire du payload
-   avant de réessayer, plutôt que de refuser d'enregistrer toute la fiche. On ne
-   retire que celle qui est signalée — supprimer les deux ferait perdre en silence
-   un réglage pourtant enregistrable. */
-async function enfEcritureTolerante(row,id){
-  const absentes=[];
-  for(let essai=0;essai<3;essai++){
-    const r=id?await dbUpdate('enfants',id,row):await dbInsert('enfants',row);
-    if(r)return{res:r,absentes:absentes};
-    const err=window._lastDbError||'';
-    const col=/gouter_base/i.test(err)?'gouter_base':(/repas_base/i.test(err)?'repas_base':null);
-    if(!col||!(col in row))return{res:null,absentes:absentes};
-    delete row[col];absentes.push(col);
-  }
-  return{res:null,absentes:absentes};
-}
-function enfAvertirColonnes(absentes){
-  if(!absentes.length)return;
-  const libelles={repas_base:'type de repas',gouter_base:'choix du goûter'};
-  const txt=absentes.map(function(c){return libelles[c]||c;}).join(' et ');
-  setTimeout(function(){showBanner('Fiche enregistrée, mais le '+txt+' n’a pas pu l’être : colonne absente de la table enfants (migration SQL à exécuter).','error');},2500);
-}
-
-async function saveEnfant(){
-  const prenom=document.getElementById('enf-prenom').value.trim();
-  if(!prenom){alert('Prénom requis.');return;}
-  const row={
-    prenom,
-    nom:document.getElementById('enf-nom').value.trim(),
-    dob:document.getElementById('enf-dob').value||null,
-    groupe:groupeFromDob(document.getElementById('enf-dob').value),
-    creche_id:document.getElementById('enf-creche').value,
-    allergies:document.getElementById('enf-allergies').value.trim(),
-    regime_repas:document.getElementById('enf-regime-repas').value||null,
-    repas_base:document.getElementById('enf-repas-base').value||null,
-    gouter_base:document.getElementById('enf-gouter-base').value||null
-  };
-  if(editingEnfantId){
-    const out=await enfEcritureTolerante(row,editingEnfantId);
-    if(!out.res){showBanner('Erreur lors de la modification.','error');return;}
-    enfAvertirColonnes(out.absentes);
-    const e=cacheEnfants.find(x=>x.id===editingEnfantId);
-    if(e)Object.assign(e,row);
-    closeModal('modal-enfant-wrap');
-    showBanner(prenom+' modifié(e) ✅');
-    renderPresence();
-    if(document.getElementById('modal-enf-fiche-wrap')?.classList.contains('open')){
-      document.getElementById('enf-fiche-title').innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((row.prenom||'')+' '+(row.nom||''));
-      enfRenderIdentite();
-    }
-    if(typeof enfRender==='function')enfRender();
-    if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();
-    return;
-  }
-  const out=await enfEcritureTolerante(row,null);
-  if(!out.res){showBanner('Erreur lors de l’ajout.','error');return;}
-  enfAvertirColonnes(out.absentes);
-  cacheEnfants.push(out.res);
-  closeModal('modal-enfant-wrap');
-  showBanner(prenom+' ajouté(e) !');
-  renderPresence();
-}
-
+function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim(),regime_repas:document.getElementById('enf-regime-repas').value||null,repas_base:document.getElementById('enf-repas-base').value||null};
+  // La colonne repas_base peut ne pas exister (migration SQL non passée) : on
+  // réessaie alors sans elle plutôt que de refuser d'enregistrer la fiche.
+  const sansRepasBase=function(){const r=Object.assign({},row);delete r.repas_base;return r;};
+  if(editingEnfantId){let ok=await dbUpdate('enfants',editingEnfantId,row);
+    if(!ok&&/repas_base/i.test(window._lastDbError||'')){delete row.repas_base;ok=await dbUpdate('enfants',editingEnfantId,sansRepasBase());
+      if(ok)setTimeout(function(){showBanner('Type de repas non enregistré : colonne repas_base absente de la table enfants.','error');},2500);}
+    if(ok){const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(e)Object.assign(e,row);closeModal('modal-enfant-wrap');showBanner(prenom+' modifié(e) ✅');renderPresence();if(document.getElementById('modal-enf-fiche-wrap')?.classList.contains('open')){document.getElementById('enf-fiche-title').innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((row.prenom||'')+' '+(row.nom||''));enfRenderIdentite();}if(typeof enfRender==='function')enfRender();if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();}else showBanner('Erreur lors de la modification.','error');return;}
+  let saved=await dbInsert('enfants',row);
+  if(!saved&&/repas_base/i.test(window._lastDbError||'')){saved=await dbInsert('enfants',sansRepasBase());
+    if(saved)setTimeout(function(){showBanner('Type de repas non enregistré : colonne repas_base absente de la table enfants.','error');},2500);}
+  if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
 async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(!confirm('Supprimer définitivement '+(e?.prenom||'')+' '+(e?.nom||'')+' ?\n\nAttention : les présences liées ne seront plus rattachées.'))return;const ok=await dbDelete('enfants',editingEnfantId);if(ok){cacheEnfants=cacheEnfants.filter(x=>x.id!==editingEnfantId);closeModal('modal-enfant-wrap');closeModal('modal-enf-fiche-wrap');showBanner('Enfant supprimé.');renderPresence();if(typeof enfRender==='function')enfRender();}else showBanner('Erreur lors de la suppression.','error');}
 
 // ── IMPORT PRÉSENCES DEPUIS PLANNING PDF (Gantt) ──
@@ -4301,28 +4368,6 @@ let _importPresData=null;
 let _ipDiag=[];
 let _ipReplace=true;
 let _ipForceCreche=false;
-/* Un Gantt liste TOUS les enfants inscrits de la crèche, y compris ceux qui ne
-   viennent pas ce jour-là : leur ligne est simplement vide. Sans la règle
-   ci-dessous, un enfant sans barre tombait dans le repli « pas d'horaires lus »
-   et était enregistré présent matin ET après-midi — une absence transformée en
-   journée complète, y compris sur le bon traiteur.
-
-   On ne peut pas pour autant décréter absent tout enfant sans créneau : si la
-   lecture des barres échoue en bloc (PDF illisible), personne n'en a, et il faut
-   alors conserver l'ancien comportement plutôt que de vider la semaine. D'où le
-   critère : la lecture n'est réputée fiable sur une page que si au moins un
-   enfant y a un créneau. Dans ce cas seulement, l'absence de barre vaut absence. */
-function ipHorairesFiables(pg){
-  const cr=pg.creneaux||{};
-  return Object.keys(cr).some(function(k){const c=cr[k];return c&&(c.hdebut||c.hfin);});
-}
-function ipEstAbsentSurPage(pg,nom){
-  if(!ipHorairesFiables(pg))return false;
-  const c=(pg.creneaux||{})[nom];
-  return !(c&&(c.hdebut||c.hfin));
-}
-window.ipHorairesFiables=ipHorairesFiables;window.ipEstAbsentSurPage=ipEstAbsentSurPage;
-
 function ipNormName(s){return(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s-]/g,'').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim();}
 function ipCleanName(s){return(s||'').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim();}
 function ipIsFirstnameToken(tok){return tok&&/^[A-ZÀ-Ÿ]/.test(tok)&&/[a-zà-ÿ]/.test(tok);}
@@ -4638,18 +4683,12 @@ function renderImportPreview(){
   html+=ipHtmlDiag(_importPresData.diag);
   html+=ipHtmlContrats(_importPresData.propositions,_importPresData.nameMap,_importPresData.contratsParEnfant,_importPresData.epWarn,_importPresData.pages.length);
   _importPresData.pages.forEach(pg=>{
-    /* Les enfants listés sans plage horaire sont des absents du jour : ils sont
-       affichés en gris, décomptés du total, et n'entreront pas en base. */
-    const absentsPg=pg.matched.filter(mt=>ipEstAbsentSurPage(pg,mt.name));
-    const presentsPg=pg.matched.filter(mt=>!ipEstAbsentSurPage(pg,mt.name));
-    const nb=presentsPg.length+pg.toCreate.length;totalPres+=nb;
+    const nb=pg.matched.length+pg.toCreate.length;totalPres+=nb;
     html+='<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">';
-    html+='<div style="font-weight:700;color:var(--koala);text-transform:capitalize;margin-bottom:6px">'+ipFmtDate(pg.date)+' <span style="font-weight:400;color:var(--muted);font-size:11px">'+nb+' enfant'+(nb>1?'s':'')
-      +(absentsPg.length?' · '+absentsPg.length+' absent'+(absentsPg.length>1?'s':''):'')+'</span></div>';
+    html+='<div style="font-weight:700;color:var(--koala);text-transform:capitalize;margin-bottom:6px">'+ipFmtDate(pg.date)+' <span style="font-weight:400;color:var(--muted);font-size:11px">'+nb+' enfant'+(nb>1?'s':'')+'</span></div>';
     const tags=[
-      ...presentsPg.map(mt=>'<span style="background:#e8f5e9;color:#2e7d32;border-radius:6px;padding:2px 8px;font-size:11.5px">✓ '+escHtml(mt.enfant.prenom+' '+mt.enfant.nom)+'</span>'),
-      ...pg.toCreate.map(nm=>'<span style="background:#fff3e0;color:#e65100;border-radius:6px;padding:2px 8px;font-size:11.5px">+ '+escHtml(nm)+'</span>'),
-      ...absentsPg.map(mt=>'<span style="background:#f1f1f4;color:#777;border-radius:6px;padding:2px 8px;font-size:11.5px" title="Aucune plage horaire sur le planning : non enregistré">— '+escHtml(mt.enfant.prenom+' '+mt.enfant.nom)+'</span>')
+      ...pg.matched.map(mt=>'<span style="background:#e8f5e9;color:#2e7d32;border-radius:6px;padding:2px 8px;font-size:11.5px">✓ '+escHtml(mt.enfant.prenom+' '+mt.enfant.nom)+'</span>'),
+      ...pg.toCreate.map(nm=>'<span style="background:#fff3e0;color:#e65100;border-radius:6px;padding:2px 8px;font-size:11.5px">+ '+escHtml(nm)+'</span>')
     ];
     html+='<div style="display:flex;flex-wrap:wrap;gap:5px">'+tags.join('')+'</div></div>';
   });
@@ -4684,13 +4723,8 @@ async function confirmPresenceImport(){
   //    présent l'après-midi (et inversement) : le PDF fait foi jusqu'au créneau.
   showBanner('Enregistrement des présences…');
   const wanted=[];
-  const ignores=[];
   pages.forEach(pg=>{
     pg.matched.forEach(mt=>{
-      if(ipEstAbsentSurPage(pg,mt.name)){
-        ignores.push({date:pg.date,nom:mt.enfant.prenom+' '+mt.enfant.nom});
-        return;
-      }
       const cr=(pg.creneaux||{})[mt.name];
       const hd=cr&&cr.hdebut?cr.hdebut:null,hf=cr&&cr.hfin?cr.hfin:null;
       const hasM=!cr||!hd||spMin(hd)<13*60;
@@ -4699,9 +4733,7 @@ async function confirmPresenceImport(){
       if(hasA)wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'A',status:'present',heure_debut:hd,heure_fin:hf});
     });
   });
-  if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;
-    showBanner(ignores.length?('Aucune présence à enregistrer : les '+ignores.length+' enfant(s) lus n’ont aucune plage horaire sur le planning.')
-                             :'Aucune présence à enregistrer.','error');return;}
+  if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;showBanner('Aucune présence à enregistrer.','error');return;}
   const dates=[...new Set(wanted.map(w=>w.presence_date))];
   const ids=[...new Set(wanted.map(w=>w.enfant_id))];
   if(_ipReplace){
@@ -4730,11 +4762,7 @@ async function confirmPresenceImport(){
     bouts.push(toInsert.length+' présence'+(toInsert.length>1?'s':'')+' enregistrée'+(toInsert.length>1?'s':''));
     if(ctRes.crees)bouts.push(ctRes.crees+' contrat'+(ctRes.crees>1?'s':'')+' créé'+(ctRes.crees>1?'s':''));
     if(ctRes.majs)bouts.push(ctRes.majs+' contrat'+(ctRes.majs>1?'s':'')+' mis à jour');
-    /* Les absences écartées sont annoncées : une ligne vide dans le Gantt est une
-       information, pas un oubli, et la référente doit pouvoir la vérifier. */
-    if(ignores.length)bouts.push(ignores.length+' absence'+(ignores.length>1?'s':'')+' ignorée'+(ignores.length>1?'s':''));
     showBanner('Import terminé : '+bouts.join(', ')+' ✅');
-    if(ignores.length)console.info('[ImportPresence] absents (aucune plage horaire) :',ignores);
     if(degrade)setTimeout(()=>showBanner('Horaires non enregistrés sur les présences : colonnes heure_debut / heure_fin absentes de la table presences.','error'),3500);
     renderPresence();
   }else showBanner('Erreur lors de l\u2019enregistrement des pr\u00e9sences'+(_errMsg?' : '+_errMsg:'')+'.','error');
@@ -9223,28 +9251,7 @@ function fpSendEmail(){
   window.location.href='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
 }
 
-/* Dernière erreur d'appel d'edge function, en clair. callFn ne renvoie qu'un
-   booléen (13 appels s'appuient dessus) : le détail est déposé ici pour que les
-   écrans qui le peuvent affichent la cause réelle au lieu d'un « échec » muet —
-   un domaine Resend non vérifié, un secret manquant et un PDF trop lourd ne se
-   soignent pas de la même façon. */
-let _lastFnErr='';
-async function callFn(fn,body){
-  _lastFnErr='';
-  try{
-    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});
-    if(!r.ok){
-      let txt='';try{txt=await r.text();}catch(e){}
-      _lastFnErr='HTTP '+r.status+(txt?' — '+txt.slice(0,300):'');
-      console.error('[callFn] '+fn,_lastFnErr);
-    }
-    return r.ok;
-  }catch(err){
-    _lastFnErr=(err&&err.message)||'réseau injoignable';
-    console.error('[callFn] '+fn,err);
-    return false;
-  }
-}
+async function callFn(fn,body){try{const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});return r.ok;}catch{return false;}}
 
 // ============================================================
 // REMPLAÇANTES
@@ -10378,27 +10385,6 @@ function enfRepasFicheLigne(e){
   return s;
 }
 
-/* Ligne « Goûter » de l'onglet Identité. Elle est toujours affichée, même quand le
-   goûter suit le repas : c'est une information que la référente doit pouvoir lire
-   sans ouvrir le formulaire de modification. */
-function enfGouterFicheLigne(e){
-  const base=e.repas_base||enfRepasBaseAuto(e);
-  if(!base)return'<span style="color:var(--muted)">—</span>';
-  if(base==='BIB')return'<span style="color:var(--muted)">aucun (biberon)</span>';
-  const g=enfGouterLigne(e);
-  if(!g)return'<span style="color:var(--muted)">aucun (repas légumes sans protéines)</span>';
-  const forcee=e.gouter_base||'';
-  const auto=enfGouterAuto(e);
-  const lbl=function(v){return v==='gbb'?'bébé':'grand';};
-  let s='<span style="display:inline-block;background:'+(forcee?'var(--orange-light)':'var(--koala-light)')
-    +';color:'+(forcee?'var(--orange-dark)':'var(--koala)')
-    +';border-radius:6px;padding:1px 7px;font-weight:800">Goûter '+lbl(g)+'</span>';
-  if(forcee&&auto&&forcee!==auto)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé — le repas donnerait '+lbl(auto)+'</div>';
-  else if(forcee)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé</div>';
-  else s+='<div style="font-size:11px;color:var(--muted);font-weight:400">suit le repas</div>';
-  return s;
-}
-
 function enfRenderIdentite(){
   const e = cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
   const box = document.getElementById('enf-fiche-identite');
@@ -10414,7 +10400,6 @@ function enfRenderIdentite(){
     + row('Crèche', creche?escHtml(creche.name):'')
     + row('Allergies', escHtml(e.allergies||''))
     + row('Repas', enfRepasFicheLigne(e))
-    + row('Goûter', enfGouterFicheLigne(e))
     + '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn-primary" onclick="editEnfant(\''+e.id+'\')"><i class="ti ti-edit"></i> Modifier la fiche</button></div>';
 }
 
@@ -10988,26 +10973,6 @@ function enfRepasCode(e){
   // Un enfant au biberon ne reçoit pas de plat : lui accoler un régime n'aurait aucun sens.
   if(base==='BIB')return'BIB';
   return e.regime_repas?base+e.regime_repas:base;
-}
-
-/* ── GOÛTER ────────────────────────────────────────────────────────────────
-   Le bon MCM n'a que deux lignes de goûter : « bébé » et « grand ». Par défaut
-   elles découlent du code repas — M en goûter bébé, G et périscolaire en goûter
-   grand, BB sans goûter. Mais manger un repas moyen n'empêche pas de prendre le
-   goûter des grands : le champ `gouter_base` de la fiche ('' | 'gbb' | 'ggr')
-   permet de dissocier les deux. Laissé vide, le goûter continue de suivre le repas
-   et donc les anniversaires. */
-function enfGouterAuto(e){
-  if(!e)return null;
-  const base=e.repas_base||enfRepasBaseAuto(e);
-  if(!base||base==='BIB'||base==='BB')return null;
-  return base==='M'?'gbb':'ggr';
-}
-function enfGouterLigne(e){
-  if(!e)return null;
-  const base=e.repas_base||enfRepasBaseAuto(e);
-  if(base==='BIB')return null;              // au biberon : ni repas ni goûter
-  return e.gouter_base||enfGouterAuto(e);
 }
 let enfContratsCache=[], editingContratId=null, ctJoursSel=[];
 
@@ -12728,6 +12693,739 @@ async function uniConfirmImport() {
   if (pres.pages.length && presenceOk) renderPresence();
   if (sal.jours.length && typeof renderPlanning === 'function') await renderPlanning();
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SUIVI DES ACTIONS DE DIRECTION                    (tables actions_direction
+                                                      et reunions_direction)
+
+   Reprend le classeur « Suivi_actions_reunion_direction.xlsx ». Trois écrans :
+
+     Actions        la liste, filtrée par défaut sur les points NON CLOS —
+                    c'est cette liste-là qu'on relit en début de réunion, et
+                    la voir d'emblée épargne le clic qu'on oublie de faire.
+     Mode réunion   l'en-tête (présents, excusés), la revue guidée une action
+                    à la fois, les notes de séance, les nouvelles actions.
+     Comptes rendus les réunions passées, relisibles dans l'application et
+                    réimprimables.
+
+   Deux principes tenus partout :
+   · le RETARD ne se stocke pas, il se recalcule (aujourd'hui − échéance, tant
+     que l'action n'est pas close) — une valeur stockée serait fausse dès le
+     lendemain ;
+   · un statut CLOS (fait / abandonné) date la clôture et sort l'action de la
+     revue, sans jamais la supprimer : l'historique est ce qui permet de dire
+     « on en avait parlé le 3 septembre ».
+   ═════════════════════════════════════════════════════════════════════════ */
+
+const AD_STATUTS={
+  a_faire  :{label:'À faire',    court:'À faire',  icon:'⬜', bg:'var(--blue-light)',   fg:'var(--blue)'},
+  en_cours :{label:'En cours',   court:'En cours', icon:'🔄', bg:'var(--orange-light)', fg:'var(--orange-dark)'},
+  reporte  :{label:'Reportée',   court:'Reportée', icon:'📅', bg:'#f0f0f5',             fg:'#666'},
+  fait     :{label:'Faite',      court:'Faite',    icon:'✅', bg:'var(--green-light)',  fg:'var(--green)'},
+  abandonne:{label:'Abandonnée', court:'Abandon',  icon:'🚫', bg:'#f0f0f5',             fg:'#888'}
+};
+const AD_CLOS=['fait','abandonne'];
+const AD_THEMES=['Recrutement','Ressources humaines','Pédagogie','Formation','Travaux / Locaux','Sécurité / PMI','Budget','Familles','Réseau','Organisation','Autre'];
+
+let adCache=[],adReunions=[],adFilter='ouvertes',adEditId=null,
+    adReunionDate=null,adReunionCourante=null,adRevueIdx=0,adRevueTout=false,
+    adProjection=false,adSchemaOk=true,_adCrVue=null,_adDirty=false;
+
+function adEstClos(s){return AD_CLOS.indexOf(s)>=0;}
+function adStatutMeta(s){return AD_STATUTS[s]||AD_STATUTS.a_faire;}
+function adFmtDate(iso){if(!iso)return'';const d=new Date(iso+'T12:00:00');return isNaN(d)?'':d.toLocaleDateString('fr-FR');}
+function adFmtDateLongue(iso){
+  if(!iso)return'';
+  const d=new Date(iso+'T12:00:00');if(isNaN(d))return'';
+  const j=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  const m=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  return j[d.getDay()]+' '+d.getDate()+' '+m[d.getMonth()]+' '+d.getFullYear();
+}
+function adCrecheName(id){if(!id)return null;const c=cacheCreches.find(x=>String(x.id)===String(id));return c?c.name:null;}
+
+/* Retard en jours, ou 0. Une action close n'est jamais en retard — c'est la
+   formule de la colonne H du classeur, à l'identique. */
+function adRetard(a){
+  if(!a.echeance||adEstClos(a.statut))return 0;
+  const ech=new Date(a.echeance+'T12:00:00');
+  const auj=new Date(todayStr()+'T12:00:00');
+  const j=Math.round((auj-ech)/86400000);
+  return j>0?j:0;
+}
+/* Jours restants avant l'échéance (négatif = dépassée). */
+function adRestant(a){
+  if(!a.echeance)return null;
+  const ech=new Date(a.echeance+'T12:00:00');
+  const auj=new Date(todayStr()+'T12:00:00');
+  return Math.round((ech-auj)/86400000);
+}
+function adNumeroSuivant(){
+  return adCache.reduce((m,a)=>Math.max(m,a.numero||0),0)+1;
+}
+
+// ── Chargement ────────────────────────────────────────────────────────────
+
+async function adInit(){
+  const opt=t=>'<option value="'+escHtml(t)+'">'+escHtml(t)+'</option>';
+  const themes=AD_THEMES.map(opt).join('');
+  ['ad-f-theme','ad-new-theme'].forEach(id=>{const s=document.getElementById(id);if(s)s.innerHTML=themes;});
+  const selC=document.getElementById('ad-f-creche');
+  if(selC)selC.innerHTML='<option value="">— Réseau / transverse —</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
+  if(!adReunionDate)adReunionDate=todayStr();
+  const dr=document.getElementById('ad-r-date');if(dr)dr.value=adReunionDate;
+  await adLoad();
+}
+
+async function adLoad(){
+  const r1=await sb.from('actions_direction').select('*').order('numero',{ascending:true});
+  const r2=await sb.from('reunions_direction').select('*').order('date_reunion',{ascending:false});
+  const warn=document.getElementById('ad-schema-warn');
+  adSchemaOk=!r1.error&&!r2.error;
+  if(!adSchemaOk){
+    // Un écran vide ne dit pas si la table manque ou si personne n'a rien saisi.
+    const manque=(r1.error||r2.error||{}).message||'';
+    if(warn){
+      warn.style.display='block';
+      warn.innerHTML='<strong><i class="ti ti-alert-triangle"></i> Suivi des actions indisponible.</strong> '
+        +'Le script <code>17-actions-direction.sql</code> n\'a pas encore été exécuté sur Supabase, '
+        +'ou votre compte n\'a pas le rôle « direction ».<br><span style="opacity:.85">Détail : '+escHtml(manque)+'</span>';
+    }
+  }else if(warn){warn.style.display='none';}
+  adCache=r1.data||[];
+  adReunions=r2.data||[];
+  adRenderTout();
+}
+
+function adRenderTout(){
+  adRenderFiltres();
+  adRender();
+  adRenderReunion();
+  adRenderCRList();
+}
+
+function adShowView(v,btn){
+  ['liste','reunion','cr'].forEach(x=>{
+    const el=document.getElementById('ad-view-'+x);
+    if(el)el.classList.toggle('active',x===v);
+  });
+  document.querySelectorAll('#main-actions .module-tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  if(v==='reunion')adRenderReunion();
+  if(v==='cr')adRenderCRList();
+}
+
+// ── Vue 1 : la liste ──────────────────────────────────────────────────────
+
+function adSetFilter(f){
+  adFilter=f;
+  ['ouvertes','retard','closes','toutes'].forEach(x=>{
+    const c=document.getElementById('ad-chip-'+x);
+    if(c)c.classList.toggle('active',x===f);
+  });
+  adRender();
+}
+
+/* Les listes déroulantes se remplissent des valeurs réellement présentes :
+   un filtre qui propose des responsables inexistants ne sert à rien. */
+function adRenderFiltres(){
+  const resp=[...new Set(adCache.map(a=>(a.responsable||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
+  const themes=[...new Set(adCache.map(a=>(a.theme||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
+  const sR=document.getElementById('ad-filter-resp');
+  if(sR){const v=sR.value;sR.innerHTML='<option value="">Tous les responsables</option>'+resp.map(r=>'<option value="'+escHtml(r)+'">'+escHtml(r)+'</option>').join('');sR.value=v;}
+  const sT=document.getElementById('ad-filter-theme');
+  if(sT){const v=sT.value;sT.innerHTML='<option value="">Tous les thèmes</option>'+themes.map(t=>'<option value="'+escHtml(t)+'">'+escHtml(t)+'</option>').join('');sT.value=v;}
+  const sC=document.getElementById('ad-filter-creche');
+  if(sC){const v=sC.value;sC.innerHTML='<option value="">Toutes les crèches</option><option value="__reseau">— Réseau / transverse —</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');sC.value=v;}
+  // Datalist des responsables : direction, référentes, et les noms déjà saisis.
+  const dl=document.getElementById('ad-resp-list');
+  if(dl){
+    const noms=[...new Set([...resp,...(cacheReferents||[]).map(r=>r.name).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'fr'));
+    dl.innerHTML=noms.map(n=>'<option value="'+escHtml(n)+'">').join('');
+  }
+}
+
+function adOuvertes(){
+  return adCache.filter(a=>!adEstClos(a.statut))
+    .sort((a,b)=>{
+      // Les échéances les plus anciennes d'abord ; celles sans date en fin.
+      if(!a.echeance&&!b.echeance)return (a.numero||0)-(b.numero||0);
+      if(!a.echeance)return 1;
+      if(!b.echeance)return -1;
+      return a.echeance<b.echeance?-1:a.echeance>b.echeance?1:(a.numero||0)-(b.numero||0);
+    });
+}
+
+function adFiltered(){
+  let l=adCache.slice();
+  if(adFilter==='ouvertes')l=l.filter(a=>!adEstClos(a.statut));
+  else if(adFilter==='retard')l=l.filter(a=>adRetard(a)>0);
+  else if(adFilter==='closes')l=l.filter(a=>adEstClos(a.statut));
+  const r=(document.getElementById('ad-filter-resp')||{}).value||'';
+  const t=(document.getElementById('ad-filter-theme')||{}).value||'';
+  const c=(document.getElementById('ad-filter-creche')||{}).value||'';
+  const q=((document.getElementById('ad-search')||{}).value||'').trim().toLowerCase();
+  if(r)l=l.filter(a=>(a.responsable||'').trim()===r);
+  if(t)l=l.filter(a=>(a.theme||'').trim()===t);
+  if(c==='__reseau')l=l.filter(a=>!a.creche_id);
+  else if(c)l=l.filter(a=>String(a.creche_id)===String(c));
+  if(q)l=l.filter(a=>((a.action||'')+' '+(a.suivi||'')+' '+(a.responsable||'')+' '+(a.theme||'')).toLowerCase().includes(q));
+  // Non closes : par urgence. Closes : la clôture la plus récente d'abord.
+  if(adFilter==='closes')return l.sort((a,b)=>String(b.cloture_le||'').localeCompare(String(a.cloture_le||'')));
+  return l.sort((a,b)=>{
+    const ra=adRetard(a),rb=adRetard(b);
+    if(ra!==rb)return rb-ra;
+    if(!a.echeance&&!b.echeance)return (a.numero||0)-(b.numero||0);
+    if(!a.echeance)return 1;
+    if(!b.echeance)return -1;
+    return a.echeance<b.echeance?-1:1;
+  });
+}
+
+function adRender(){
+  const box=document.getElementById('ad-list');if(!box)return;
+  const ouvertes=adOuvertes();
+  const enRetard=ouvertes.filter(a=>adRetard(a)>0);
+  const semaine=ouvertes.filter(a=>{const r=adRestant(a);return r!==null&&r>=0&&r<=7;});
+  const moisIso=todayStr().slice(0,7);
+  const closesMois=adCache.filter(a=>adEstClos(a.statut)&&(a.cloture_le||'').slice(0,7)===moisIso);
+
+  const stats=document.getElementById('ad-stats');
+  if(stats)stats.innerHTML=
+     adStatCard('Actions ouvertes',ouvertes.length,'ti-hourglass','var(--koala)')
+    +adStatCard('En retard',enRetard.length,'ti-alert-triangle',enRetard.length?'var(--red)':'var(--muted)')
+    +adStatCard('À échéance sous 7 j',semaine.length,'ti-clock','var(--orange-dark)')
+    +adStatCard('Closes ce mois-ci',closesMois.length,'ti-check','var(--green)');
+
+  const badge=document.getElementById('ad-badge-ouvertes');
+  if(badge){badge.textContent=ouvertes.length;badge.style.display=ouvertes.length?'':'none';}
+
+  const l=adFiltered();
+  if(!l.length){
+    box.innerHTML='<div class="empty-state"><i class="ti ti-target-arrow"></i><p>'
+      +(adCache.length?'Aucune action ne correspond à ce filtre.':'Aucune action pour l\'instant. Cliquez sur « Nouvelle action », ou passez par le mode réunion.')
+      +'</p></div>';
+    return;
+  }
+  box.innerHTML=l.map(a=>adCardHtml(a)).join('');
+}
+
+function adStatCard(label,val,icon,color){
+  return '<div class="stat-card"><div class="stat-val" style="color:'+color+'">'+val+'</div>'
+    +'<div class="stat-label"><i class="ti '+icon+'" style="color:'+color+'"></i> '+label+'</div></div>';
+}
+
+function adCardHtml(a){
+  const st=adStatutMeta(a.statut),ret=adRetard(a),clos=adEstClos(a.statut),rest=adRestant(a);
+  const bord=clos?'var(--border)':ret>0?'var(--red)':(rest!==null&&rest<=7)?'var(--orange)':'var(--koala)';
+  const creche=adCrecheName(a.creche_id);
+  let ech='';
+  if(a.echeance){
+    if(clos)ech='<span class="meta-txt">échéance '+adFmtDate(a.echeance)+'</span>';
+    else if(ret>0)ech='<span class="badge" style="background:var(--red-light);color:#c0392b"><i class="ti ti-alert-triangle" style="font-size:11px"></i> '+ret+' j de retard</span>';
+    else if(rest===0)ech='<span class="badge" style="background:var(--orange-light);color:var(--orange-dark)">échéance aujourd\'hui</span>';
+    else ech='<span class="badge" style="background:'+(rest<=7?'var(--orange-light)':'#f0f0f5')+';color:'+(rest<=7?'var(--orange-dark)':'#666')+'">pour le '+adFmtDate(a.echeance)+'</span>';
+  }else if(!clos){
+    ech='<span class="meta-txt" style="font-style:italic">sans échéance</span>';
+  }
+  return '<div class="dcard" style="border-left:4px solid '+bord+';opacity:'+(clos?'0.72':'1')+'">'
+    +'<div class="dmeta">'
+      +'<div class="dtop">'
+        +'<span class="dsubject">'+(a.numero?'<span style="color:var(--muted);font-weight:700">N°'+a.numero+'</span> ':'')+escHtml(a.action||'')+'</span>'
+        +'<span class="badge" style="background:'+st.bg+';color:'+st.fg+'">'+st.icon+' '+st.label+'</span>'
+        +(a.theme?'<span class="badge b-ref">'+escHtml(a.theme)+'</span>':'')
+        +(creche?'<span class="badge b-ref"><i class="ti ti-building" style="font-size:11px"></i> '+escHtml(creche)+'</span>':'')
+      +'</div>'
+      +(a.suivi?'<div class="dbody">'+escHtml(a.suivi)+'</div>':'')
+      +'<div class="dfoot">'
+        +(a.responsable?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> '+escHtml(a.responsable)+'</span>':'<span class="meta-txt" style="font-style:italic">responsable à désigner</span>')
+        +ech
+        +(a.reunion_date?'<span class="meta-txt">décidée le '+adFmtDate(a.reunion_date)+'</span>':'')
+        +(clos&&a.cloture_le?'<span class="meta-txt">close le '+adFmtDate(a.cloture_le)+'</span>':'')
+      +'</div>'
+    +'</div>'
+    +'<div class="dactions">'
+      +(clos
+        ? '<button class="ibtn" title="Rouvrir" onclick="adSetStatut(\''+a.id+'\',\'en_cours\')"><i class="ti ti-rotate-clockwise"></i></button>'
+        : '<button class="ibtn" title="Marquer faite" onclick="adSetStatut(\''+a.id+'\',\'fait\')"><i class="ti ti-check"></i></button>')
+      +'<button class="ibtn" title="Modifier" onclick="adOpenActionModal(\''+a.id+'\')"><i class="ti ti-edit"></i></button>'
+      +'<button class="ibtn del" title="Supprimer" onclick="adDelete(\''+a.id+'\')"><i class="ti ti-trash"></i></button>'
+    +'</div></div>';
+}
+
+// ── Création / modification ───────────────────────────────────────────────
+
+function adOpenActionModal(id){
+  adEditId=id||null;
+  const a=id?adCache.find(x=>String(x.id)===String(id)):null;
+  document.getElementById('modal-ad-title').textContent=a?('Action n°'+(a.numero||'')):'Nouvelle action';
+  document.getElementById('ad-f-action').value=a?(a.action||''):'';
+  document.getElementById('ad-f-theme').value=a&&a.theme?a.theme:'Organisation';
+  document.getElementById('ad-f-resp').value=a?(a.responsable||''):'';
+  document.getElementById('ad-f-reunion').value=a?(a.reunion_date||''):(adReunionDate||todayStr());
+  document.getElementById('ad-f-echeance').value=a?(a.echeance||''):adEcheanceParDefaut();
+  document.getElementById('ad-f-statut').value=a?(a.statut||'a_faire'):'a_faire';
+  document.getElementById('ad-f-creche').value=a&&a.creche_id?a.creche_id:'';
+  document.getElementById('ad-f-suivi').value=a?(a.suivi||''):'';
+  document.getElementById('modal-action-wrap').classList.add('open');
+  setTimeout(()=>document.getElementById('ad-f-action').focus(),80);
+}
+
+/* Les réunions ont lieu tous les quinze jours : une action sans échéance
+   explicite est due pour la suivante. */
+function adEcheanceParDefaut(){
+  const d=new Date((adReunionDate||todayStr())+'T12:00:00');
+  d.setDate(d.getDate()+14);
+  return ipDateToLocalISO(d);
+}
+
+async function adSaveAction(){
+  const action=(document.getElementById('ad-f-action').value||'').trim();
+  if(!action){showBanner('Décrivez l\'action en une phrase.','error');document.getElementById('ad-f-action').focus();return;}
+  const statut=document.getElementById('ad-f-statut').value||'a_faire';
+  const ancienne=adEditId?adCache.find(x=>String(x.id)===String(adEditId)):null;
+  const row={
+    action:action,
+    theme:document.getElementById('ad-f-theme').value||null,
+    responsable:(document.getElementById('ad-f-resp').value||'').trim()||null,
+    reunion_date:document.getElementById('ad-f-reunion').value||null,
+    echeance:document.getElementById('ad-f-echeance').value||null,
+    statut:statut,
+    creche_id:document.getElementById('ad-f-creche').value||null,
+    suivi:(document.getElementById('ad-f-suivi').value||'').trim()||null,
+    // On ne réécrit pas une date de clôture déjà posée : elle dit quand la
+    // décision a été prise, pas quand la fiche a été retouchée.
+    cloture_le:adEstClos(statut)?((ancienne&&ancienne.cloture_le)||todayStr()):null
+  };
+  const btn=document.getElementById('ad-f-save');btn.disabled=true;
+  try{
+    if(adEditId){
+      const{error}=await sb.from('actions_direction').update(row).eq('id',adEditId);
+      if(error)throw error;
+      Object.assign(ancienne,row);
+      showBanner('Action mise à jour ✅');
+    }else{
+      row.numero=adNumeroSuivant();
+      const{data,error}=await sb.from('actions_direction').insert(row).select().single();
+      if(error)throw error;
+      adCache.push(data);
+      showBanner('Action n°'+data.numero+' créée ✅');
+    }
+    closeModal('modal-action-wrap');
+    adEditId=null;
+    adRenderTout();
+  }catch(err){
+    console.error('[adSaveAction]',err);
+    showBanner('Enregistrement refusé : '+(err.message||'erreur inconnue'),'error');
+  }finally{btn.disabled=false;}
+}
+
+async function adSetStatut(id,statut,silencieux){
+  const a=adCache.find(x=>String(x.id)===String(id));if(!a)return;
+  const maj={statut:statut,cloture_le:adEstClos(statut)?(a.cloture_le||todayStr()):null};
+  const{error}=await sb.from('actions_direction').update(maj).eq('id',id);
+  if(error){showBanner('Mise à jour refusée : '+error.message,'error');return;}
+  Object.assign(a,maj);
+  if(!silencieux)showBanner('Action n°'+(a.numero||'')+' — '+adStatutMeta(statut).label.toLowerCase()+' ✅');
+  adRenderTout();
+}
+
+async function adDelete(id){
+  const a=adCache.find(x=>String(x.id)===String(id));if(!a)return;
+  if(!confirm('Supprimer définitivement l\'action n°'+(a.numero||'')+' ?\n\n« '+(a.action||'')+' »\n\nPour la sortir de la revue sans perdre la trace, préférez le statut « Abandonnée ».'))return;
+  const{error}=await sb.from('actions_direction').delete().eq('id',id);
+  if(error){showBanner('Suppression refusée : '+error.message,'error');return;}
+  adCache=adCache.filter(x=>String(x.id)!==String(id));
+  adRenderTout();
+  showBanner('Action supprimée.');
+}
+
+// ── Vue 2 : le mode réunion ───────────────────────────────────────────────
+
+function adReunionDirty(){_adDirty=true;adMajEtat();}
+function adMajEtat(){
+  const e=document.getElementById('ad-r-etat');if(!e)return;
+  if(_adDirty){e.innerHTML='<i class="ti ti-point-filled" style="color:var(--orange)"></i> modifications non enregistrées';e.style.color='var(--orange-dark)';}
+  else if(adReunionCourante){e.innerHTML='<i class="ti ti-circle-check" style="color:var(--green)"></i> enregistrée'+(adReunionCourante.cloturee?' et clôturée':'');e.style.color='var(--muted)';}
+  else{e.textContent='nouvelle réunion — rien d\'enregistré pour cette date';e.style.color='var(--muted)';}
+}
+
+function adReunionCharger(date){
+  if(_adDirty&&!confirm('Des modifications ne sont pas enregistrées. Changer de date les perdra. Continuer ?')){
+    document.getElementById('ad-r-date').value=adReunionDate;return;
+  }
+  adReunionDate=date||todayStr();
+  adRevueIdx=0;_adDirty=false;
+  adRenderReunion();
+}
+
+function adRenderReunion(){
+  const r=adReunions.find(x=>x.date_reunion===adReunionDate)||null;
+  adReunionCourante=r;
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+  const dr=document.getElementById('ad-r-date');if(dr)dr.value=adReunionDate||todayStr();
+  if(!_adDirty){
+    set('ad-r-heure',r&&r.heure);
+    set('ad-r-presents',r&&r.presents);
+    set('ad-r-excuses',r&&r.excuses);
+    set('ad-r-prochaine',r&&r.prochaine_reunion);
+    set('ad-r-points',r&&r.points);
+    set('ad-r-divers',r&&r.divers);
+  }
+  const bc=document.getElementById('ad-r-cloturer');
+  if(bc)bc.innerHTML=r&&r.cloturee?'<i class="ti ti-lock-open"></i> Rouvrir':'<i class="ti ti-lock"></i> Clôturer';
+  const ne=document.getElementById('ad-new-echeance');
+  if(ne&&!ne.value)ne.value=adEcheanceParDefaut();
+  adMajEtat();
+  adRenderRevue();
+  adRenderNouvelles();
+}
+
+function adRevueStep(d){
+  const l=adOuvertes();if(!l.length)return;
+  adRevueIdx=Math.min(Math.max(adRevueIdx+d,0),l.length-1);
+  adRenderRevue();
+}
+function adRevueToggleMode(){
+  adRevueTout=!adRevueTout;
+  const b=document.getElementById('ad-revue-mode');
+  if(b)b.innerHTML=adRevueTout?'<i class="ti ti-focus-2"></i> Une à une':'<i class="ti ti-layout-list"></i> Tout voir';
+  adRenderRevue();
+}
+function adToggleProjection(){
+  adProjection=!adProjection;
+  const v=document.getElementById('ad-view-reunion');
+  if(v)v.style.fontSize=adProjection?'16px':'';
+  const b=document.getElementById('ad-r-projection');
+  if(b)b.classList.toggle('active',adProjection);
+  adRenderRevue();
+}
+
+function adRenderRevue(){
+  const zone=document.getElementById('ad-revue-zone');if(!zone)return;
+  const l=adOuvertes();
+  const cpt=document.getElementById('ad-revue-compteur');
+  if(!l.length){
+    if(cpt)cpt.textContent='';
+    zone.innerHTML='<div class="empty-state" style="padding:20px"><i class="ti ti-circle-check" style="color:var(--green)"></i><p>Aucune action ouverte. La revue est faite — on peut passer à l\'ordre du jour.</p></div>';
+    return;
+  }
+  if(adRevueIdx>=l.length)adRevueIdx=l.length-1;
+  if(adRevueTout){
+    if(cpt)cpt.textContent=l.length+' action'+(l.length>1?'s':'')+' ouverte'+(l.length>1?'s':'');
+    zone.innerHTML='<div style="display:flex;flex-direction:column;gap:10px">'+l.map(a=>adRevueCardHtml(a,false)).join('')+'</div>';
+  }else{
+    if(cpt)cpt.textContent='Action '+(adRevueIdx+1)+' / '+l.length;
+    zone.innerHTML=adRevueCardHtml(l[adRevueIdx],true);
+  }
+}
+
+function adRevueCardHtml(a,grand){
+  const ret=adRetard(a),rest=adRestant(a),st=adStatutMeta(a.statut);
+  const bord=ret>0?'var(--red)':(rest!==null&&rest<=7)?'var(--orange)':'var(--koala)';
+  const taille=grand&&adProjection?'20px':grand?'16px':'13.5px';
+  const btn=(s,lib,ico,couleur)=>'<button class="btn-sm" style="border-color:'+couleur+';color:'+couleur+'" onclick="adRevueStatut(\''+a.id+'\',\''+s+'\')"><i class="ti '+ico+'"></i> '+lib+'</button>';
+  return '<div style="border:1.5px solid var(--border);border-left:4px solid '+bord+';border-radius:10px;padding:'+(grand?'16px':'12px')+';background:#fff">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
+      +'<span style="font-weight:800;color:var(--muted)">N°'+(a.numero||'—')+'</span>'
+      +'<span class="badge" style="background:'+st.bg+';color:'+st.fg+'">'+st.icon+' '+st.label+'</span>'
+      +(a.theme?'<span class="badge b-ref">'+escHtml(a.theme)+'</span>':'')
+      +(a.responsable?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> '+escHtml(a.responsable)+'</span>':'')
+      +(a.echeance?'<span class="badge" style="background:'+(ret>0?'var(--red-light)':'#f0f0f5')+';color:'+(ret>0?'#c0392b':'#666')+'">'
+        +(ret>0?'⚠ '+ret+' j de retard — échéance '+adFmtDate(a.echeance):'échéance '+adFmtDate(a.echeance))+'</span>':'')
+      +(a.reunion_date?'<span class="meta-txt">décidée le '+adFmtDate(a.reunion_date)+'</span>':'')
+    +'</div>'
+    +'<div style="font-size:'+taille+';font-weight:600;line-height:1.45;margin-bottom:10px">'+escHtml(a.action||'')+'</div>'
+    +'<label class="flabel">Suivi / commentaire</label>'
+    +'<textarea class="finput" rows="2" style="resize:vertical" placeholder="Où en est-on ?" '
+      +'onchange="adRevueSuivi(\''+a.id+'\',this.value)">'+escHtml(a.suivi||'')+'</textarea>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
+      +btn('en_cours','En cours','ti-progress','var(--orange-dark)')
+      +'<button class="btn-sm" onclick="adRevueReporter(\''+a.id+'\')"><i class="ti ti-calendar-plus"></i> Reporter</button>'
+      +btn('fait','Faite','ti-check','var(--green)')
+      +btn('abandonne','Abandonnée','ti-x','#888')
+      +'<button class="btn-sm" onclick="adOpenActionModal(\''+a.id+'\')"><i class="ti ti-edit"></i> Modifier</button>'
+    +'</div></div>';
+}
+
+/* Le commentaire part en base à la sortie du champ : en réunion, personne ne
+   pense à cliquer sur « enregistrer » avant de passer à la ligne suivante. */
+async function adRevueSuivi(id,val){
+  const a=adCache.find(x=>String(x.id)===String(id));if(!a)return;
+  const v=(val||'').trim()||null;
+  if(v===(a.suivi||null))return;
+  const{error}=await sb.from('actions_direction').update({suivi:v}).eq('id',id);
+  if(error){showBanner('Commentaire non enregistré : '+error.message,'error');return;}
+  a.suivi=v;
+}
+
+/* Après un changement de statut, la revue reste sur la même position : l'action
+   close disparaît de la liste, donc l'index pointe déjà sur la suivante. */
+async function adRevueStatut(id,statut){
+  const l=adOuvertes(),pos=l.findIndex(x=>String(x.id)===String(id));
+  await adSetStatut(id,statut,true);
+  const reste=adOuvertes();
+  if(adEstClos(statut))adRevueIdx=Math.min(pos<0?0:pos,Math.max(reste.length-1,0));
+  else adRevueIdx=Math.min(pos<0?0:pos+1,Math.max(reste.length-1,0));
+  adRenderReunion();
+  showBanner('Action n°'+((adCache.find(x=>String(x.id)===String(id))||{}).numero||'')+' — '+adStatutMeta(statut).label.toLowerCase());
+}
+
+async function adRevueReporter(id){
+  const a=adCache.find(x=>String(x.id)===String(id));if(!a)return;
+  const base=a.echeance||adReunionDate||todayStr();
+  const prop=(()=>{const d=new Date(base+'T12:00:00');d.setDate(d.getDate()+14);return ipDateToLocalISO(d);})();
+  const saisie=prompt('Nouvelle échéance pour l\'action n°'+(a.numero||'')+' (AAAA-MM-JJ) :',prop);
+  if(!saisie)return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(saisie.trim())){showBanner('Date attendue au format AAAA-MM-JJ.','error');return;}
+  const{error}=await sb.from('actions_direction').update({echeance:saisie.trim(),statut:'reporte',cloture_le:null}).eq('id',id);
+  if(error){showBanner('Report refusé : '+error.message,'error');return;}
+  a.echeance=saisie.trim();a.statut='reporte';a.cloture_le=null;
+  adRenderTout();
+  showBanner('Action n°'+(a.numero||'')+' reportée au '+adFmtDate(a.echeance)+'.');
+}
+
+// Les actions décidées pendant la réunion en cours
+function adRenderNouvelles(){
+  const box=document.getElementById('ad-new-list');if(!box)return;
+  const l=adCache.filter(a=>a.reunion_date===adReunionDate).sort((a,b)=>(a.numero||0)-(b.numero||0));
+  if(!l.length){box.innerHTML='<div class="meta-txt" style="font-style:italic">Aucune nouvelle action pour cette réunion.</div>';return;}
+  box.innerHTML=l.map(a=>
+    '<div style="display:flex;gap:8px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:8px 10px">'
+    +'<span style="font-weight:800;color:var(--muted);font-size:12px">N°'+(a.numero||'')+'</span>'
+    +'<span style="flex:1;font-size:13px">'+escHtml(a.action||'')+'</span>'
+    +(a.responsable?'<span class="badge b-ref">'+escHtml(a.responsable)+'</span>':'')
+    +(a.echeance?'<span class="meta-txt">'+adFmtDate(a.echeance)+'</span>':'')
+    +'<button class="ibtn" onclick="adOpenActionModal(\''+a.id+'\')"><i class="ti ti-edit"></i></button>'
+    +'</div>').join('');
+}
+
+async function adAjoutRapide(){
+  const action=(document.getElementById('ad-new-action').value||'').trim();
+  if(!action){document.getElementById('ad-new-action').focus();return;}
+  const row={
+    numero:adNumeroSuivant(),
+    action:action,
+    theme:document.getElementById('ad-new-theme').value||null,
+    responsable:(document.getElementById('ad-new-resp').value||'').trim()||null,
+    echeance:document.getElementById('ad-new-echeance').value||null,
+    reunion_date:adReunionDate||todayStr(),
+    statut:'a_faire'
+  };
+  const{data,error}=await sb.from('actions_direction').insert(row).select().single();
+  if(error){showBanner('Ajout refusé : '+error.message,'error');return;}
+  adCache.push(data);
+  document.getElementById('ad-new-action').value='';
+  document.getElementById('ad-new-resp').value='';
+  adRenderFiltres();adRender();adRenderNouvelles();
+  showBanner('Action n°'+data.numero+' ajoutée ✅');
+}
+
+async function adReunionEnregistrer(silencieux){
+  const row={
+    date_reunion:adReunionDate||todayStr(),
+    heure:(document.getElementById('ad-r-heure').value||'').trim()||null,
+    presents:(document.getElementById('ad-r-presents').value||'').trim()||null,
+    excuses:(document.getElementById('ad-r-excuses').value||'').trim()||null,
+    points:(document.getElementById('ad-r-points').value||'').trim()||null,
+    divers:(document.getElementById('ad-r-divers').value||'').trim()||null,
+    prochaine_reunion:document.getElementById('ad-r-prochaine').value||null
+  };
+  if(adReunionCourante)row.cloturee=adReunionCourante.cloturee;
+  const{data,error}=await sb.from('reunions_direction').upsert(row,{onConflict:'date_reunion'}).select().single();
+  if(error){showBanner('Enregistrement refusé : '+error.message,'error');return false;}
+  adReunions=adReunions.filter(x=>x.date_reunion!==row.date_reunion);
+  adReunions.push(data);
+  adReunions.sort((a,b)=>String(b.date_reunion).localeCompare(String(a.date_reunion)));
+  adReunionCourante=data;_adDirty=false;
+  adMajEtat();adRenderCRList();
+  if(!silencieux)showBanner('Réunion du '+adFmtDate(row.date_reunion)+' enregistrée ✅');
+  return true;
+}
+
+async function adReunionCloturer(){
+  if(!await adReunionEnregistrer(true))return;
+  const nv=!adReunionCourante.cloturee;
+  const{error}=await sb.from('reunions_direction').update({cloturee:nv}).eq('id',adReunionCourante.id);
+  if(error){showBanner('Opération refusée : '+error.message,'error');return;}
+  adReunionCourante.cloturee=nv;
+  adRenderReunion();adRenderCRList();
+  showBanner(nv?'Réunion clôturée — le compte rendu est consultable dans l\'onglet « Comptes rendus ».':'Réunion rouverte.');
+}
+
+// ── Vue 3 : les comptes rendus ────────────────────────────────────────────
+
+function adRenderCRList(){
+  const box=document.getElementById('ad-cr-list');if(!box)return;
+  if(!adReunions.length){
+    box.innerHTML='<div class="empty-state"><i class="ti ti-file-text"></i><p>Aucune réunion enregistrée. Le compte rendu se remplit depuis l\'onglet « Mode réunion ».</p></div>';
+    return;
+  }
+  box.innerHTML=adReunions.map(r=>{
+    const decidees=adCache.filter(a=>a.reunion_date===r.date_reunion);
+    const closes=decidees.filter(a=>adEstClos(a.statut)).length;
+    return '<div class="dcard" style="border-left:4px solid '+(r.cloturee?'var(--green)':'var(--orange)')+'">'
+      +'<div class="dmeta">'
+        +'<div class="dtop"><span class="dsubject">Réunion du '+adFmtDateLongue(r.date_reunion)+(r.heure?' — '+escHtml(r.heure):'')+'</span>'
+        +'<span class="badge" style="background:'+(r.cloturee?'var(--green-light)':'var(--orange-light)')+';color:'+(r.cloturee?'var(--green)':'var(--orange-dark)')+'">'+(r.cloturee?'✅ Clôturée':'✏️ En cours')+'</span></div>'
+        +(r.presents?'<div class="dbody"><strong>Présents :</strong> '+escHtml(r.presents)+(r.excuses?' · <em>Excusés : '+escHtml(r.excuses)+'</em>':'')+'</div>':'')
+        +'<div class="dfoot">'
+          +'<span class="badge b-ref">'+decidees.length+' action'+(decidees.length>1?'s':'')+' décidée'+(decidees.length>1?'s':'')+(decidees.length?' · '+closes+' close'+(closes>1?'s':''):'')+'</span>'
+          +(r.prochaine_reunion?'<span class="meta-txt">prochaine réunion : '+adFmtDate(r.prochaine_reunion)+'</span>':'')
+        +'</div>'
+      +'</div>'
+      +'<div class="dactions">'
+        +'<button class="ibtn" title="Lire le compte rendu" onclick="adOpenCR(\''+r.date_reunion+'\')"><i class="ti ti-eye"></i></button>'
+        +'<button class="ibtn" title="Imprimer / PDF" onclick="adExportCR(\''+r.date_reunion+'\')"><i class="ti ti-printer"></i></button>'
+      +'</div></div>';
+  }).join('');
+}
+
+function adOpenCR(date){
+  const r=adReunions.find(x=>x.date_reunion===date);if(!r)return;
+  _adCrVue=date;
+  document.getElementById('ad-cr-title').textContent='Réunion du '+adFmtDateLongue(date);
+  document.getElementById('ad-cr-body').innerHTML=adCRHtml(r,false);
+  document.getElementById('modal-cr-wrap').classList.add('open');
+}
+
+function adCrRouvrir(){
+  if(!_adCrVue)return;
+  closeModal('modal-cr-wrap');
+  adReunionDate=_adCrVue;_adDirty=false;adRevueIdx=0;
+  adShowView('reunion',document.getElementById('ad-tab-reunion'));
+}
+
+/* Le corps du compte rendu, utilisé tel quel à l'écran et à l'impression.
+   `pourImpression` retire seulement ce qui n'a pas de sens sur papier. */
+function adCRHtml(r,pourImpression){
+  const decidees=adCache.filter(a=>a.reunion_date===r.date_reunion).sort((a,b)=>(a.numero||0)-(b.numero||0));
+  // Revue : ce qui était ouvert à la date de la réunion, c'est-à-dire tout ce
+  // qui n'a pas été décidé ce jour-là et qui n'était pas déjà clos avant.
+  const revue=adCache.filter(a=>
+    a.reunion_date!==r.date_reunion
+    && (!a.reunion_date||a.reunion_date<r.date_reunion)          // pas née après
+    && (!adEstClos(a.statut)||!a.cloture_le||a.cloture_le>=r.date_reunion)  // pas close avant
+  ).sort((a,b)=>(a.numero||0)-(b.numero||0));
+  const ligne=a=>{
+    const st=adStatutMeta(a.statut),ret=adRetard(a);
+    return '<tr>'
+      +'<td style="white-space:nowrap">'+(a.numero||'')+'</td>'
+      +'<td>'+escHtml(a.action||'')+(a.theme?'<br><span style="color:#888;font-size:.9em">'+escHtml(a.theme)+'</span>':'')+'</td>'
+      +'<td style="white-space:nowrap">'+escHtml(a.responsable||'—')+'</td>'
+      +'<td style="white-space:nowrap">'+(a.echeance?adFmtDate(a.echeance):'—')+(ret>0?'<br><span style="color:#c0392b;font-size:.9em">'+ret+' j de retard</span>':'')+'</td>'
+      +'<td style="white-space:nowrap">'+st.label+'</td>'
+      +'<td>'+escHtml(a.suivi||'')+'</td>'
+    +'</tr>';
+  };
+  const tableau=(titre,liste,vide)=>
+    '<h2 style="font-size:14px;color:#3D3580;margin:18px 0 6px">'+titre+'</h2>'
+    +(liste.length
+      ? '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#3D3580;color:#fff">'
+        +['N°','Action / décision','Responsable','Échéance','Statut','Suivi'].map(h=>'<th style="padding:6px 8px;font-size:11px;text-align:left">'+h+'</th>').join('')
+        +'</tr></thead><tbody>'+liste.map(ligne).join('')+'</tbody></table>'
+      : '<p style="color:#888;font-style:italic;font-size:12px">'+vide+'</p>');
+  const bloc=(titre,txt)=>
+    '<h2 style="font-size:14px;color:#3D3580;margin:18px 0 6px">'+titre+'</h2>'
+    +(txt?'<div style="white-space:pre-wrap;font-size:12.5px;line-height:1.55">'+escHtml(txt)+'</div>'
+        :'<p style="color:#888;font-style:italic;font-size:12px">—</p>');
+
+  return '<div style="font-size:12.5px">'
+    +'<table style="font-size:12.5px;margin-bottom:6px"><tbody>'
+      +'<tr><td style="padding:2px 10px 2px 0;color:#888">Date</td><td><strong>'+adFmtDateLongue(r.date_reunion)+(r.heure?' — '+escHtml(r.heure):'')+'</strong></td></tr>'
+      +'<tr><td style="padding:2px 10px 2px 0;color:#888">Présents</td><td>'+escHtml(r.presents||'—')+'</td></tr>'
+      +'<tr><td style="padding:2px 10px 2px 0;color:#888">Excusés</td><td>'+escHtml(r.excuses||'—')+'</td></tr>'
+    +'</tbody></table>'
+    +tableau('1. Revue des actions en cours',revue,'Aucune action n\'était ouverte au moment de cette réunion.')
+    +bloc('2. Points à l\'ordre du jour et décisions',r.points)
+    +bloc('3. Points divers',r.divers)
+    +tableau('4. Nouvelles actions décidées',decidees,'Aucune nouvelle action.')
+    +'<h2 style="font-size:14px;color:#3D3580;margin:18px 0 6px">Prochaine réunion</h2>'
+    +'<p style="font-size:12.5px">'+(r.prochaine_reunion?adFmtDateLongue(r.prochaine_reunion):'à fixer')+'</p>'
+    +'</div>';
+}
+
+/* Impression via une iframe cachée : même mécanique que les plannings, elle
+   fonctionne sur tablette là où window.open est bloqué. */
+async function adExportCR(date){
+  let d=date||adReunionDate;
+  // Depuis le mode réunion, on enregistre d'abord : imprimer un CR qui ne
+  // contient pas les notes qu'on vient de taper serait le pire des pièges.
+  if(!date){
+    if(_adDirty&&!await adReunionEnregistrer(true))return;
+    if(!adReunionCourante&&!await adReunionEnregistrer(true))return;
+  }
+  const r=adReunions.find(x=>x.date_reunion===d);
+  if(!r){showBanner('Enregistrez d\'abord la réunion.','error');return;}
+  const html='<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">'
+    +'<title>CR réunion de direction — '+adFmtDate(d)+'</title><style>'
+    +'*{margin:0;padding:0;box-sizing:border-box}'
+    +'body{font-family:Arial,sans-serif;color:#111;padding:24px;max-width:800px;margin:0 auto}'
+    +'h1{font-size:1.35rem;color:#3D3580;margin-bottom:2px}'
+    +'.sub{font-size:.8rem;color:#666;margin-bottom:12px}'
+    +'td{padding:6px 8px;border-bottom:1px solid #E7E5E0;font-size:11px;vertical-align:top}'
+    +'tbody tr:nth-child(even) td{background:#F9F9F8}'
+    +'.footer{margin-top:22px;font-size:10px;color:#888;border-top:1px solid #E7E5E0;padding-top:8px}'
+    +'@media print{@page{margin:1.4cm;size:portrait}body{padding:0}h2{page-break-after:avoid}tr{page-break-inside:avoid}}'
+    +'*{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}'
+    +'</style></head><body>'
+    +'<h1>Compte rendu — réunion de direction</h1>'
+    +'<div class="sub">Koala Kids · '+adFmtDateLongue(d)+'</div>'
+    +adCRHtml(r,true)
+    +'<div class="footer">Document généré le '+new Date().toLocaleDateString('fr-FR')+' à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' — Koala Kids</div>'
+    +'</body></html>';
+  const old=document.getElementById('_print-frame-cr');if(old)old.remove();
+  const iframe=document.createElement('iframe');
+  iframe.id='_print-frame-cr';
+  iframe.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none';
+  document.body.appendChild(iframe);
+  const doc=iframe.contentDocument||iframe.contentWindow.document;
+  doc.open();doc.write(html);doc.close();
+  iframe.onload=()=>{try{iframe.contentWindow.focus();iframe.contentWindow.print();}catch(e){showBanner('Erreur impression : '+e.message,'error');}};
+}
+
+/* Export Excel : mêmes colonnes que le classeur d'origine, pour que le fichier
+   reste échangeable avec le réseau. Le retard est une valeur calculée au jour
+   de l'export, pas une formule — un tableur ouvert dans six mois afficherait
+   sinon des retards inventés. */
+function adExportExcel(){
+  if(typeof XLSX==='undefined'){showBanner('Bibliothèque Excel non chargée.','error');return;}
+  const l=adFiltered();
+  if(!l.length){showBanner('Rien à exporter avec ce filtre.','error');return;}
+  const aoa=[
+    ['SUIVI DES ACTIONS — RÉUNIONS DE DIRECTION'],
+    ['Koala Kids — export du '+new Date().toLocaleDateString('fr-FR')
+      +' — '+({ouvertes:'actions non closes',retard:'actions en retard',closes:'actions closes',toutes:'toutes les actions'}[adFilter])],
+    [],
+    ['N°','Réunion du','Thème','Action / décision','Responsable','Échéance','Statut','Retard (j)','Suivi / commentaire','Date de clôture','Crèche']
+  ];
+  l.forEach(a=>aoa.push([
+    a.numero||'',
+    a.reunion_date?adFmtDate(a.reunion_date):'',
+    a.theme||'',
+    a.action||'',
+    a.responsable||'',
+    a.echeance?adFmtDate(a.echeance):'',
+    adStatutMeta(a.statut).label,
+    adRetard(a)||'',
+    a.suivi||'',
+    a.cloture_le?adFmtDate(a.cloture_le):'',
+    adCrecheName(a.creche_id)||''
+  ]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:5},{wch:12},{wch:18},{wch:52},{wch:18},{wch:12},{wch:12},{wch:10},{wch:44},{wch:14},{wch:18}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Suivi actions');
+  XLSX.writeFile(wb,'suivi-actions-direction-'+todayStr()+'.xlsx');
+  showBanner('Export Excel généré ✅');
+}
+
+window.adInit=adInit;window.adShowView=adShowView;window.adSetFilter=adSetFilter;window.adRender=adRender;
+window.adOpenActionModal=adOpenActionModal;window.adSaveAction=adSaveAction;window.adSetStatut=adSetStatut;window.adDelete=adDelete;
+window.adReunionCharger=adReunionCharger;window.adReunionDirty=adReunionDirty;window.adReunionEnregistrer=adReunionEnregistrer;
+window.adReunionCloturer=adReunionCloturer;window.adRevueStep=adRevueStep;window.adRevueToggleMode=adRevueToggleMode;
+window.adRevueStatut=adRevueStatut;window.adRevueSuivi=adRevueSuivi;window.adRevueReporter=adRevueReporter;
+window.adAjoutRapide=adAjoutRapide;window.adOpenCR=adOpenCR;window.adCrRouvrir=adCrRouvrir;
+window.adExportCR=adExportCR;window.adExportExcel=adExportExcel;window.adToggleProjection=adToggleProjection;
 
 </script>
 </body>
