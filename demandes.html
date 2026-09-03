@@ -3834,9 +3834,16 @@ function crRenderSource(){
   let h='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px">';
   h+='<strong style="color:var(--koala)">'+sem+'</strong>';
   if(_crSaved){
-    h+='<span class="b-info" style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">'
-      +(_crSaved.envoyee_le?'Déjà transmise le '+new Date(_crSaved.envoyee_le+'T00:00:00').toLocaleDateString('fr-FR')
-        +(_crSaved.nb_envois>1?' · '+_crSaved.nb_envois+' envois':''):'Brouillon enregistré')+'</span>';
+    /* Deux informations de nature differente portaient le meme badge orange.
+       « Deja transmise » appelle une verification avant de renvoyer : il reste
+       en orange. « Brouillon enregistre » ne dit qu'une chose rassurante — la
+       saisie est sauvegardee, rien n'est parti chez le traiteur — et n'a donc
+       aucune raison d'alerter. */
+    const transmise=!!_crSaved.envoyee_le;
+    h+='<span style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;'
+      +(transmise?'background:var(--orange-light);color:var(--orange-dark)':'background:#EEEDF8;color:#3D3580')+'">'
+      +(transmise?'Déjà transmise le '+new Date(_crSaved.envoyee_le+'T00:00:00').toLocaleDateString('fr-FR')
+        +(_crSaved.nb_envois>1?' · '+_crSaved.nb_envois+' envois':''):'Brouillon enregistré — rien n’est parti')+'</span>';
   }
   h+='<span style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;'
     +(ctx.source==='prevision'?'background:var(--orange-light);color:var(--orange-dark)':'background:var(--green-light);color:var(--green)')+'">'
@@ -10137,9 +10144,17 @@ function vacRenderFicheBody(){
       if(s.state==='fait'){
         cell='<button onclick="vacToggleDose(\''+e.id+'\',\''+v.id+'\','+di+')" title="Fait — cliquer pour annuler" style="width:34px;height:34px;border:none;border-radius:50%;background:var(--green);color:#fff;font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">✓</button>';
       }else{
-        const border = s.state==='retard'?'2px solid var(--red)':s.state==='proche'?'2px solid var(--orange)':'2px dashed var(--border)';
+        /* La couleur ne doit jamais porter seule l'information : les pastilles
+           non faites etaient vides et ne differaient que par la teinte de leur
+           bordure. Chacune porte desormais un symbole, et l'epaisseur du trait
+           distingue aussi les trois etats sans recours a la couleur.
+             ⚠  en retard   ·  !  a faire bientot  ·  ·  pas encore du */
+        const border = s.state==='retard'?'3px solid var(--red)':s.state==='proche'?'2px solid var(--orange)':'2px dashed var(--border)';
         const bg = s.state==='retard'?'var(--red-light)':s.state==='proche'?'var(--orange-light)':'#fff';
-        cell='<button onclick="vacToggleDose(\''+e.id+'\',\''+v.id+'\','+di+')" title="'+(s.state==='retard'?'En retard — cliquer si fait':s.state==='proche'?'À faire bientôt — cliquer si fait':'Cliquer si fait')+'" style="width:34px;height:34px;border:'+border+';border-radius:50%;background:'+bg+';color:var(--muted);font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center"> </button>';
+        const glyphe = s.state==='retard'?'⚠':s.state==='proche'?'!':'·';
+        const couleur = s.state==='retard'?'var(--red)':s.state==='proche'?'var(--orange-dark)':'var(--muted)';
+        const infobulle = s.state==='retard'?'En retard — cliquer si fait':s.state==='proche'?'À faire bientôt — cliquer si fait':'Pas encore dû — cliquer si fait';
+        cell='<button onclick="vacToggleDose(\''+e.id+'\',\''+v.id+'\','+di+')" aria-label="'+infobulle+'" title="'+infobulle+'" style="width:34px;height:34px;border:'+border+';border-radius:50%;background:'+bg+';color:'+couleur+';font-size:15px;font-weight:800;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">'+glyphe+'</button>';
       }
       return `<td style="padding:5px 8px;text-align:center;vertical-align:middle">${cell}</td>`;
     }).join('');
@@ -10159,9 +10174,10 @@ function vacRenderFicheBody(){
       </table>
     </div>
     <div style="margin-top:12px;font-size:11.5px;color:var(--muted);line-height:1.6">
-      <span style="color:var(--green);font-weight:700">✓ vert</span> : fait ·
-      <span style="color:var(--orange);font-weight:700">bordure orange</span> : à faire bientôt ·
-      <span style="color:var(--red);font-weight:700">bordure rouge</span> : en retard.
+      <span style="color:var(--green);font-weight:700">✓</span> fait ·
+      <span style="color:var(--red);font-weight:800">⚠</span> en retard ·
+      <span style="color:var(--orange-dark);font-weight:800">!</span> à faire bientôt ·
+      <span style="color:var(--muted);font-weight:800">·</span> pas encore dû.
       Cliquez une pastille pour la marquer faite (ou l'annuler).
     </div>
     <div id="vac-pj-zone" style="margin-top:16px"></div>`;
