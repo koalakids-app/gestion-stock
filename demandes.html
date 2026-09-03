@@ -356,6 +356,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #main-demands.fs-active .creche-tabs-bar{top:0;background:var(--bg);z-index:10}
 .ibtn-fs{width:32px;height:32px;border:1.5px solid var(--border);border-radius:8px;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#888;font-size:15px;flex-shrink:0}
 .ibtn-fs:hover{background:var(--koala-light);color:var(--koala);border-color:var(--koala)}
+/* ── Mode projection du suivi des actions ─────────────────────────────────
+   Agrandir la police du conteneur ne suffisait pas : les tailles du module
+   sont écrites en pixels dans les styles en ligne, qui l'emportent toujours.
+   D'où ces règles, et le !important — seul moyen de les surcharger sans
+   réécrire chaque élément. */
+.ad-action-txt{font-size:13.5px;font-weight:600;line-height:1.45;margin-bottom:10px}
+.ad-action-txt.grand{font-size:16px}
+#ad-r-projection.on{background:var(--koala);border-color:var(--koala);color:#fff}
+#main-actions.ad-projection #ad-view-reunion{font-size:17px}
+#main-actions.ad-projection #ad-view-reunion .flabel{font-size:14px!important}
+#main-actions.ad-projection #ad-view-reunion .finput{font-size:16px!important;padding:9px 12px}
+#main-actions.ad-projection #ad-view-reunion .section-title{font-size:18px!important}
+#main-actions.ad-projection #ad-view-reunion .badge{font-size:14px!important;padding:3px 10px}
+#main-actions.ad-projection #ad-view-reunion .meta-txt{font-size:14px!important}
+#main-actions.ad-projection #ad-view-reunion .btn-sm{font-size:14px!important;padding:8px 14px}
+#main-actions.ad-projection #ad-view-reunion .btn-primary{font-size:15px!important;padding:10px 18px}
+#main-actions.ad-projection #ad-view-reunion .ibtn{width:40px;height:40px;font-size:19px}
+#main-actions.ad-projection #ad-revue-compteur{font-size:16px!important}
+#main-actions.ad-projection #ad-revue-zone .ad-num{font-size:20px!important}
+#main-actions.ad-projection .ad-action-txt.grand{font-size:26px;line-height:1.35}
 </style>
 </head>
 <body>
@@ -651,6 +671,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
     </div>
     <div id="ref-dash-alerts" style="margin-bottom:0.75rem"></div>
+    <div id="ref-dash-actions" style="margin-bottom:0.75rem"></div>
     <div class="dash-grid" id="ref-dash-grid"></div>
     <div class="dash-grid" id="ref-dash-async-grid" style="margin-top:12px"></div>
   </div>
@@ -2186,7 +2207,12 @@ function showMain(tab){
   if(tab==='presence'){initPresenceDate();presMajBarre();renderPresence();}
   if(tab==='evenements')renderCalendar();
   if(tab==='dashboard')renderDashboard();
-  if(tab==='ref-dashboard')renderRefDashboard();
+  if(tab==='ref-dashboard'){
+    renderRefDashboard();
+    // Les actions dont la référente est responsable arrivent avec un aller-
+    // retour serveur : on dessine d'abord, on complète ensuite.
+    if(typeof adEnsureCharge==='function')adEnsureCharge().then(()=>{try{adRenderRefDashBloc();}catch(e){}});
+  }
   if(tab==='fraisik'){if(isDirection)ikInit();else showMain('ref-dashboard');}
   if(tab==='fraispro')fpInit();
   if(tab==='remplacantes')rmpInit();
@@ -7638,6 +7664,7 @@ function renderRefDashboard(){
 
   // Alertes : demandes urgentes non traitées qui me concernent
   const urgentes=cacheDemandes.filter(d=>d.creche_id===crecheId&&d.priority==='urgent'&&d.status==='attente');
+  if(typeof adRenderRefDashBloc==='function'){try{adRenderRefDashBloc();}catch(e){}}
   const alerts=document.getElementById('ref-dash-alerts');
   if(alerts)alerts.innerHTML=urgentes.length
     ?'<div class="alert-item">'+urgentes.map(d=>'<i class="ti ti-alert-triangle" style="font-size:16px;flex-shrink:0"></i> <strong>Demande urgente</strong> — '+escHtml(d.subject||'—')).join('</div><div class="alert-item">')+'</div>'
@@ -12791,8 +12818,12 @@ function adGrouperParCreche(liste){
     const items=liste.filter(a=>String(a.creche_id||'')===String(c.id));
     if(items.length)groupes.push({id:c.id,nom:c.name,icone:'ti-building',items:items});
   });
+  // Une crèche supprimée depuis, ou une ligne figée dans un compte rendu :
+  // le nom photographié à l'époque vaut mieux que « crèche supprimée ».
   const orphelines=liste.filter(a=>a.creche_id&&!cacheCreches.find(c=>String(c.id)===String(a.creche_id)));
-  if(orphelines.length)groupes.push({id:null,nom:'Crèche supprimée',icone:'ti-building-off',items:orphelines});
+  const parNom={};
+  orphelines.forEach(a=>{const n=a.creche_nom||'Crèche supprimée';(parNom[n]=parNom[n]||[]).push(a);});
+  Object.keys(parNom).forEach(n=>groupes.push({id:null,nom:n,icone:'ti-building-off',items:parNom[n]}));
   const transverse=liste.filter(a=>!a.creche_id);
   if(transverse.length)groupes.push({id:'',nom:'Sujets transverses / réseau',icone:'ti-link',items:transverse});
   return groupes;
@@ -12830,6 +12861,10 @@ async function adInit(){
   const selN=document.getElementById('ad-new-creche');
   if(selN)selN.innerHTML='<option value="">— Transverse / réseau —</option>'+optsC;
   adFillRespSelects();
+  // Le vidéoprojecteur de la salle ne change pas d'une réunion à l'autre :
+  // le réglage se retrouve tel qu'on l'avait laissé.
+  try{adProjection=localStorage.getItem('adProjection')==='1';}catch(e){}
+  adAppliqueProjection();
   if(!adReunionDate)adReunionDate=todayStr();
   const dr=document.getElementById('ad-r-date');if(dr)dr.value=adReunionDate;
   await adLoad();
@@ -13280,13 +13315,25 @@ function adRevueToggleMode(){
   if(b)b.innerHTML=adRevueTout?'<i class="ti ti-focus-2"></i> Une à une':'<i class="ti ti-layout-list"></i> Tout voir';
   adRenderRevue();
 }
-function adToggleProjection(){
-  adProjection=!adProjection;
-  const v=document.getElementById('ad-view-reunion');
-  if(v)v.style.fontSize=adProjection?'16px':'';
-  const b=document.getElementById('ad-r-projection');
-  if(b)b.classList.toggle('active',adProjection);
+/* La bascule pose une classe sur l'écran entier ; la feuille de style fait le
+   reste. La version précédente se contentait d'agrandir la police du
+   conteneur — sans effet, les tailles en ligne l'emportant : le bouton ne
+   faisait donc rien de visible. */
+function adToggleProjection(force){
+  adProjection=(typeof force==='boolean')?force:!adProjection;
+  adAppliqueProjection();
+  try{localStorage.setItem('adProjection',adProjection?'1':'0');}catch(e){}
   adRenderRevue();
+}
+function adAppliqueProjection(){
+  const ecran=document.getElementById('main-actions');
+  if(ecran)ecran.classList.toggle('ad-projection',adProjection);
+  const b=document.getElementById('ad-r-projection');
+  if(b){
+    b.classList.toggle('on',adProjection);
+    b.innerHTML='<i class="ti ti-device-tv'+(adProjection?'-off':'')+'"></i> '+(adProjection?'Quitter la projection':'Projection');
+    b.title=adProjection?'Revenir à l\'affichage normal':'Gros caractères pour la vidéoprojection';
+  }
 }
 
 function adRenderRevue(){
@@ -13329,11 +13376,11 @@ function adIntertitre(g,n,detail){
 function adRevueCardHtml(a,grand){
   const ret=adRetard(a),rest=adRestant(a),st=adStatutMeta(a.statut);
   const bord=ret>0?'var(--red)':(rest!==null&&rest<=7)?'var(--orange)':'var(--koala)';
-  const taille=grand&&adProjection?'20px':grand?'16px':'13.5px';
+
   const btn=(s,lib,ico,couleur)=>'<button class="btn-sm" style="border-color:'+couleur+';color:'+couleur+'" onclick="adRevueStatut(\''+a.id+'\',\''+s+'\')"><i class="ti '+ico+'"></i> '+lib+'</button>';
   return '<div style="border:1.5px solid var(--border);border-left:4px solid '+bord+';border-radius:10px;padding:'+(grand?'16px':'12px')+';background:#fff">'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
-      +'<span style="font-weight:800;color:var(--muted)">N°'+(a.numero||'—')+'</span>'
+      +'<span class="ad-num" style="font-weight:800;color:var(--muted)">N°'+(a.numero||'—')+'</span>'
       +'<span class="badge" style="background:'+st.bg+';color:'+st.fg+'">'+st.icon+' '+st.label+'</span>'
       +(a.theme?'<span class="badge b-ref">'+escHtml(a.theme)+'</span>':'')
       +(a.responsable?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> '+escHtml(a.responsable)+'</span>':'')
@@ -13341,7 +13388,7 @@ function adRevueCardHtml(a,grand){
         +(ret>0?'⚠ '+ret+' j de retard — échéance '+adFmtDate(a.echeance):'échéance '+adFmtDate(a.echeance))+'</span>':'')
       +(a.reunion_date?'<span class="meta-txt">décidée le '+adFmtDate(a.reunion_date)+'</span>':'')
     +'</div>'
-    +'<div style="font-size:'+taille+';font-weight:600;line-height:1.45;margin-bottom:10px">'+escHtml(a.action||'')+'</div>'
+    +'<div class="ad-action-txt'+(grand?' grand':'')+'">'+escHtml(a.action||'')+'</div>'
     +'<label class="flabel">Suivi / commentaire</label>'
     +'<textarea class="finput" rows="2" style="resize:vertical" placeholder="Où en est-on ?" '
       +'onchange="adRevueSuivi(\''+a.id+'\',this.value)">'+escHtml(a.suivi||'')+'</textarea>'
@@ -13396,15 +13443,31 @@ function adRenderNouvelles(){
   const box=document.getElementById('ad-new-list');if(!box)return;
   const l=adCache.filter(a=>a.reunion_date===adReunionDate).sort((a,b)=>(a.numero||0)-(b.numero||0));
   if(!l.length){box.innerHTML='<div class="meta-txt" style="font-style:italic">Aucune nouvelle action pour cette réunion.</div>';return;}
+  // L'état de chaque action est visible ICI aussi : une ligne cochée ailleurs
+  // (revue, tableau de bord d'une référente) doit se voir dans le
+  // récapitulatif, sans quoi on relit en fin de séance une liste qui donne
+  // tout pour à faire.
   box.innerHTML=adGrouperParCreche(l).map(g=>
-    '<div>'+adIntertitre(g,g.items.length)+'<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">'+g.items.map(a=>
-    '<div style="display:flex;gap:8px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:8px 10px">'
+    '<div>'+adIntertitre(g,g.items.length)+'<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">'+g.items.map(a=>{
+    const st=adStatutMeta(a.statut),clos=adEstClos(a.statut);
+    return '<div style="display:flex;gap:8px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:'+(clos?'var(--bg)':'transparent')+'">'
+    +'<div onclick="adRecapBascule(\''+a.id+'\')" style="cursor:pointer;flex-shrink:0" title="'+(clos?'Rouvrir cette action':'Marquer cette action faite')+'">'
+      +'<i class="ti ti-'+(clos?'square-check-filled':'square')+'" style="font-size:19px;color:'+(clos?'var(--koala)':'var(--muted)')+'"></i></div>'
     +'<span style="font-weight:800;color:var(--muted);font-size:12px">N°'+(a.numero||'')+'</span>'
-    +'<span style="flex:1;font-size:13px">'+escHtml(a.action||'')+'</span>'
+    +'<span style="flex:1;font-size:13px'+(clos?';text-decoration:line-through;color:var(--muted)':'')+'">'+escHtml(a.action||'')+'</span>'
+    +'<span class="badge" style="background:'+st.bg+';color:'+st.fg+'">'+st.icon+' '+st.label+'</span>'
     +(a.responsable?'<span class="badge b-ref">'+escHtml(a.responsable)+'</span>':'')
-    +(a.echeance?'<span class="meta-txt">'+adFmtDate(a.echeance)+'</span>':'')
+    +(clos&&a.cloture_le?'<span class="meta-txt">close le '+adFmtDate(a.cloture_le)+'</span>'
+       :(a.echeance?'<span class="meta-txt">'+adFmtDate(a.echeance)+'</span>':''))
     +'<button class="ibtn" onclick="adOpenActionModal(\''+a.id+'\')"><i class="ti ti-edit"></i></button>'
-    +'</div>').join('')+'</div></div>').join('');
+    +'</div>';}).join('')+'</div></div>').join('');
+}
+
+/* Cocher depuis le récapitulatif : même effet qu'ailleurs, l'action est close
+   dans le suivi et sort de la revue. */
+async function adRecapBascule(id){
+  const a=adCache.find(x=>String(x.id)===String(id));if(!a)return;
+  await adSetStatut(id,adEstClos(a.statut)?'en_cours':'fait');
 }
 
 async function adAjoutRapide(){
@@ -13459,9 +13522,12 @@ async function adReunionEnregistrer(silencieux){
 async function adReunionCloturer(){
   if(!await adReunionEnregistrer(true))return;
   const nv=!adReunionCourante.cloturee;
-  const{error}=await sb.from('reunions_direction').update({cloturee:nv}).eq('id',adReunionCourante.id);
+  // On fige à la clôture, on efface à la réouverture : tant que la réunion est
+  // rouverte, la revue peut encore changer, une photo serait un mensonge.
+  const maj={cloturee:nv,actions_gel:nv?adSnapshot(adReunionCourante):null};
+  const{error}=await sb.from('reunions_direction').update(maj).eq('id',adReunionCourante.id);
   if(error){showBanner('Opération refusée : '+error.message,'error');return;}
-  adReunionCourante.cloturee=nv;
+  Object.assign(adReunionCourante,maj);
   adRenderReunion();adRenderCRList();
   showBanner(nv?'Réunion clôturée — le compte rendu est consultable dans l\'onglet « Comptes rendus ».':'Réunion rouverte.');
 }
@@ -13515,15 +13581,40 @@ function adCrRouvrir(){
    crèche par crèche, puis les transverses. Chaque site porte ses notes ET les
    actions décidées pour lui — c'est ce qui permet, un mois plus tard,
    d'envoyer à une référente le seul passage qui la concerne. */
+/* Quelles actions figurent dans le compte rendu d'une réunion : celles
+   décidées ce jour-là, et la revue — ce qui était ouvert à ce moment, donc
+   né avant et pas déjà clos avant. */
+function adCRSelection(r){
+  return{
+    decidees:adCache.filter(a=>a.reunion_date===r.date_reunion)
+      .sort((a,b)=>(a.numero||0)-(b.numero||0)),
+    revue:adCache.filter(a=>
+      a.reunion_date!==r.date_reunion
+      && (!a.reunion_date||a.reunion_date<r.date_reunion)                    // pas née après
+      && (!adEstClos(a.statut)||!a.cloture_le||a.cloture_le>=r.date_reunion)  // pas close avant
+    ).sort((a,b)=>(a.numero||0)-(b.numero||0))
+  };
+}
+
+/* La photographie prise à la clôture. Le retard y est figé lui aussi : c'est
+   le seul moyen qu'il reste vrai, puisqu'il se recalcule partout ailleurs. */
+function adPhoto(a){
+  return{id:a.id,numero:a.numero,action:a.action,theme:a.theme,responsable:a.responsable,
+    echeance:a.echeance,statut:a.statut,suivi:a.suivi,creche_id:a.creche_id,
+    creche_nom:adCrecheName(a.creche_id)||null,reunion_date:a.reunion_date,retard_j:adRetard(a)};
+}
+function adSnapshot(r){
+  const sel=adCRSelection(r);
+  return{revue:sel.revue.map(adPhoto),decidees:sel.decidees.map(adPhoto),fige_le:todayStr()};
+}
+
 function adCRHtml(r,pourImpression){
-  const decidees=adCache.filter(a=>a.reunion_date===r.date_reunion).sort((a,b)=>(a.numero||0)-(b.numero||0));
-  // Revue : ce qui était ouvert à la date de la réunion, c'est-à-dire tout ce
-  // qui n'a pas été décidé ce jour-là et qui n'était pas déjà clos avant.
-  const revue=adCache.filter(a=>
-    a.reunion_date!==r.date_reunion
-    && (!a.reunion_date||a.reunion_date<r.date_reunion)          // pas née après
-    && (!adEstClos(a.statut)||!a.cloture_le||a.cloture_le>=r.date_reunion)  // pas close avant
-  ).sort((a,b)=>(a.numero||0)-(b.numero||0));
+  // Une réunion clôturée montre l'état photographié ce jour-là. Sans ça, un
+  // compte rendu relu six mois plus tard racontait une réunion où tout était
+  // déjà fait — le contraire de ce qui s'y était dit.
+  const gel=(r.actions_gel&&r.actions_gel.revue)?r.actions_gel:null;
+  const sel=gel?{revue:gel.revue,decidees:gel.decidees||[]}:adCRSelection(r);
+  const decidees=sel.decidees,revue=sel.revue;
   const notes=r.points_creches||{};
 
   const h2=t=>'<h2 style="font-size:14px;color:#3D3580;margin:18px 0 6px">'+t+'</h2>';
@@ -13532,7 +13623,7 @@ function adCRHtml(r,pourImpression){
   const texte=t=>'<div style="white-space:pre-wrap;font-size:12.5px;line-height:1.55">'+escHtml(t)+'</div>';
 
   const ligne=a=>{
-    const st=adStatutMeta(a.statut),ret=adRetard(a);
+    const st=adStatutMeta(a.statut),ret=(a.retard_j!==undefined&&a.retard_j!==null)?a.retard_j:adRetard(a);
     return '<tr>'
       +'<td style="white-space:nowrap">'+(a.numero||'')+'</td>'
       +'<td>'+escHtml(a.action||'')+(a.theme?'<br><span style="color:#888;font-size:.9em">'+escHtml(a.theme)+'</span>':'')+'</td>'
@@ -13585,10 +13676,21 @@ function adCRHtml(r,pourImpression){
       +'<tr><td style="padding:2px 10px 2px 0;color:#888">Présents</td><td>'+escHtml(r.presents||'—')+'</td></tr>'
       +'<tr><td style="padding:2px 10px 2px 0;color:#888">Excusés</td><td>'+escHtml(r.excuses||'—')+'</td></tr>'
     +'</tbody></table>'
+    +adCRMentionEtat(r,gel)
     +s1+s2+s3+s4+s5
     +h2('Prochaine réunion')
     +'<p style="font-size:12.5px">'+(r.prochaine_reunion?adFmtDateLongue(r.prochaine_reunion):'à fixer')+'</p>'
     +'</div>';
+}
+
+/* Dire de quand date ce qu'on lit : sans cette ligne, impossible de
+   distinguer un compte rendu figé d'un état recalculé ce matin. */
+function adCRMentionEtat(r,gel){
+  let t;
+  if(gel)t='État des actions figé à la clôture de la réunion'+(gel.fige_le?', le '+adFmtDate(gel.fige_le):'')+'.';
+  else if(r.cloturee)t='État des actions au jour de la relecture — cette réunion a été clôturée avant la mise en place du figeage.';
+  else t='Réunion non clôturée : l\'état des actions est celui d\'aujourd\'hui et bougera encore.';
+  return '<p style="font-size:11px;color:#888;font-style:italic;margin:2px 0 4px">'+t+'</p>';
 }
 
 /* Impression via une iframe cachée : même mécanique que les plannings, elle
@@ -13685,7 +13787,10 @@ function adExportExcel(){
 /* L'écran « À faire » s'ouvre souvent sans être passé par Actions : sans ce
    chargement paresseux, le bloc resterait vide jusqu'à la visite de l'onglet. */
 async function adEnsureCharge(){
-  if(!isDirection||adCache.length||!adSchemaOk)return;
+  // Ouvert aux référentes depuis 20-actions-referentes.sql : la RLS ne leur
+  // renvoie que les actions dont elles sont responsables, la requête est donc
+  // la même des deux côtés.
+  if(!currentProfile||adCache.length||!adSchemaOk)return;
   const{data,error}=await sb.from('actions_direction').select('*').order('numero',{ascending:true});
   if(error){adSchemaOk=false;return;}
   adCache=data||[];
@@ -13765,6 +13870,117 @@ async function adAfaireReporter(id){
   if(typeof afRender==='function')afRender();
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CÔTÉ RÉFÉRENTE — « c'est fait »
+
+   Une action attribuée à une référente ne pouvait être close que par la
+   direction, sur ce qu'elle en disait en réunion : le tableau était donc
+   toujours en retard d'une quinzaine sur la réalité. Elle voit maintenant ses
+   propres actions dans son tableau de bord, et les coche elle-même.
+
+   Ce qu'elle peut : passer une action en cours ou faite, et écrire le
+   commentaire de suivi. Rien d'autre — ni l'intitulé, ni l'échéance, ni le
+   rattachement. La restriction ne tient pas à l'écran (qui ne propose rien de
+   plus) mais au trigger actions_direction_garde en base : une interface n'est
+   jamais une sécurité.
+
+   Reporter et abandonner restent à la direction : ce sont des arbitrages, pas
+   un état constaté sur le terrain. */
+
+function adRefMesActions(){
+  const moi=currentProfile&&currentProfile.id;
+  if(!moi)return[];
+  return adCache.filter(a=>String(a.responsable_referent_id||'')===String(moi));
+}
+
+function adRenderRefDashBloc(){
+  const box=document.getElementById('ref-dash-actions');if(!box)return;
+  if(isDirection||!currentProfile){box.innerHTML='';return;}
+  const toutes=adRefMesActions();
+  const ouvertes=toutes.filter(a=>!adEstClos(a.statut)).sort(adTriEcheance);
+  // Les actions closes récemment restent visibles quelques jours : sans ça,
+  // cocher fait disparaître la ligne et on doute d'avoir bien cliqué.
+  const recentes=toutes.filter(a=>adEstClos(a.statut)&&a.cloture_le&&adJoursDepuis(a.cloture_le)<=7)
+    .sort((a,b)=>String(b.cloture_le).localeCompare(String(a.cloture_le)));
+  if(!ouvertes.length&&!recentes.length){box.innerHTML='';return;}
+  const enRetard=ouvertes.filter(a=>adRetard(a)>0).length;
+  box.innerHTML='<div style="background:var(--card);border:1.5px solid '+(enRetard?'var(--red)':'var(--koala)')+';border-radius:10px;padding:11px 13px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--koala);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">'
+      +'<i class="ti ti-target-arrow"></i> Actions qui me concernent'
+      +(ouvertes.length?' <span style="color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0">('+ouvertes.length+')</span>':'')
+      +(enRetard?' <span style="color:var(--red)">· '+enRetard+' en retard</span>':'')+'</div>'
+    +(ouvertes.length
+      ? '<div style="display:flex;flex-direction:column;gap:8px">'+ouvertes.map(a=>adRefLigne(a,false)).join('')+'</div>'
+      : '<div style="font-size:12px;color:var(--muted);font-style:italic">Rien en cours.</div>')
+    +(recentes.length
+      ? '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 6px">Terminées récemment</div>'
+        +'<div style="display:flex;flex-direction:column;gap:8px">'+recentes.map(a=>adRefLigne(a,true)).join('')+'</div>'
+      : '')
+  +'</div>';
+}
+
+function adJoursDepuis(iso){
+  const d=new Date(iso+'T12:00:00'),auj=new Date(todayStr()+'T12:00:00');
+  return Math.round((auj-d)/86400000);
+}
+
+function adRefLigne(a,close){
+  const ret=adRetard(a),rest=adRestant(a),creche=adCrecheName(a.creche_id);
+  let ech='';
+  if(close)ech='<span class="badge" style="background:var(--green-light);color:var(--green)">✅ faite le '+adFmtDate(a.cloture_le)+'</span>';
+  else if(ret>0)ech='<span class="badge" style="background:var(--red-light);color:#c0392b">⚠ '+ret+' j de retard</span>';
+  else if(a.echeance)ech='<span class="badge" style="background:'+(rest<=7?'var(--orange-light)':'#f0f0f5')+';color:'+(rest<=7?'var(--orange-dark)':'#666')+'">pour le '+adFmtDate(a.echeance)+'</span>';
+  else ech='<span class="meta-txt" style="font-style:italic">sans échéance</span>';
+  return '<div style="display:flex;align-items:flex-start;gap:9px;background:var(--bg);border:1px solid '+(!close&&ret>0?'var(--red)':'var(--border)')+';border-radius:8px;padding:9px 11px;opacity:'+(close?'0.72':'1')+'">'
+    +'<div onclick="adRefBascule(\''+a.id+'\')" style="cursor:pointer;flex-shrink:0;margin-top:1px" title="'+(close?'Rouvrir cette action':'Marquer cette action faite')+'">'
+      +'<i class="ti ti-'+(close?'square-check-filled':'square')+'" style="font-size:21px;color:'+(close?'var(--koala)':'var(--muted)')+'"></i></div>'
+    +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:13.5px;font-weight:600;'+(close?'text-decoration:line-through;color:var(--muted)':'')+'">'+escHtml(a.action||'')+'</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;align-items:center">'
+        +'<span class="meta-txt">N°'+(a.numero||'')+'</span>'
+        +(a.theme?'<span class="badge b-ref">'+escHtml(a.theme)+'</span>':'')
+        +(creche?'<span class="badge b-ref"><i class="ti ti-building" style="font-size:10px"></i> '+escHtml(creche)+'</span>':'')
+        +ech
+        +(a.reunion_date?'<span class="meta-txt">décidée en réunion du '+adFmtDate(a.reunion_date)+'</span>':'')
+      +'</div>'
+      +(close?'':'<textarea class="finput" rows="1" style="resize:vertical;margin-top:6px;font-size:12.5px" '
+        +'placeholder="Où en êtes-vous ? (visible par la direction)" '
+        +'onchange="adRefSuivi(\''+a.id+'\',this.value)">'+escHtml(a.suivi||'')+'</textarea>')
+      +(close&&a.suivi?'<div style="font-size:12px;color:var(--muted);margin-top:4px;white-space:pre-wrap">'+escHtml(a.suivi)+'</div>':'')
+    +'</div></div>';
+}
+
+async function adRefBascule(id){
+  const a=adCache.find(x=>String(x.id)===String(id));if(!a)return;
+  const clos=adEstClos(a.statut);
+  const maj=clos?{statut:'en_cours'}:{statut:'fait'};
+  const{error}=await sb.from('actions_direction').update(maj).eq('id',id);
+  if(error){showBanner('Mise à jour refusée : '+error.message,'error');return;}
+  // La date de clôture est posée par la base (trigger), pas ici : on la
+  // reflète pour l'affichage sans prétendre l'avoir décidée.
+  a.statut=maj.statut;a.cloture_le=clos?null:(a.cloture_le||todayStr());
+  adRenderRefDashBloc();
+  showBanner(clos?'Action n°'+(a.numero||'')+' rouverte.':'Action n°'+(a.numero||'')+' signalée faite à la direction ✅');
+}
+
+async function adRefSuivi(id,val){
+  const a=adCache.find(x=>String(x.id)===String(id));if(!a)return;
+  const v=(val||'').trim()||null;
+  if(v===(a.suivi||null))return;
+  // Le statut accompagne le commentaire : une action commentée est une action
+  // engagée, et la référente ne peut de toute façon pas la laisser « à faire ».
+  const maj={suivi:v};
+  if(a.statut==='a_faire'||a.statut==='reporte')maj.statut='en_cours';
+  const{error}=await sb.from('actions_direction').update(maj).eq('id',id);
+  if(error){showBanner('Commentaire non enregistré : '+error.message,'error');return;}
+  Object.assign(a,maj);
+  showBanner('Suivi transmis à la direction ✅');
+  adRenderRefDashBloc();
+}
+
+window.adRecapBascule=adRecapBascule;window.adRenderRefDashBloc=adRenderRefDashBloc;window.adRefBascule=adRefBascule;window.adRefSuivi=adRefSuivi;
+
 window.adPointsCrecheChange=adPointsCrecheChange;window.adAjoutDepuisBloc=adAjoutDepuisBloc;
 window.adEnsureCharge=adEnsureCharge;window.adAfaireCocher=adAfaireCocher;window.adAfaireReporter=adAfaireReporter;
 window.adRespSelChange=adRespSelChange;
@@ -13774,7 +13990,7 @@ window.adReunionCharger=adReunionCharger;window.adReunionDirty=adReunionDirty;wi
 window.adReunionCloturer=adReunionCloturer;window.adRevueStep=adRevueStep;window.adRevueToggleMode=adRevueToggleMode;
 window.adRevueStatut=adRevueStatut;window.adRevueSuivi=adRevueSuivi;window.adRevueReporter=adRevueReporter;
 window.adAjoutRapide=adAjoutRapide;window.adOpenCR=adOpenCR;window.adCrRouvrir=adCrRouvrir;
-window.adExportCR=adExportCR;window.adExportExcel=adExportExcel;window.adToggleProjection=adToggleProjection;
+window.adAppliqueProjection=adAppliqueProjection;window.adExportCR=adExportCR;window.adExportExcel=adExportExcel;window.adToggleProjection=adToggleProjection;
 
 </script>
 </body>
