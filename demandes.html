@@ -453,6 +453,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn" onclick="showMain('remplacantes')" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
       <button class="mnav-btn" onclick="showMain('vaccinations')" id="mnav-vaccinations"><i class="ti ti-vaccine"></i> Vaccinations</button>
       <button class="mnav-btn" onclick="showMain('enfants')" id="mnav-enfants"><i class="ti ti-mood-kid"></i> Enfants</button>
+      <button class="mnav-btn" onclick="showMain('stagiaires')" id="mnav-stagiaires"><i class="ti ti-school"></i> Stagiaires <span class="mnav-badge" id="badge-stagiaires" style="display:none">0</span></button>
     </nav>
     <div style="display:flex;align-items:center;gap:8px">
       <div id="sync-chip" title="Dernière mise à jour depuis le serveur — cliquer pour rafraîchir maintenant"
@@ -1152,6 +1153,88 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════════════════════════════════════
+       STAGIAIRES
+       Une fiche par stagiaire et par crèche, de la demande Padlet au bilan.
+       Les pièces sont déposées par la stagiaire elle-même via un lien
+       (stagiaire.html), ou téléversées ici à sa place.
+       ══════════════════════════════════════════════════════════════════════ -->
+  <div id="main-stagiaires" class="tab-content">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-title"><i class="ti ti-school" style="color:var(--koala)"></i> Stagiaires</span>
+        <span class="section-sub" id="stg-sub">Suivi des stages, documents et calendrier</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn-primary" onclick="stgOpenFiche()"><i class="ti ti-plus"></i> Nouvelle stagiaire</button>
+        <button class="btn-sm" onclick="stgExportExcel()"><i class="ti ti-file-spreadsheet"></i> Export Excel</button>
+      </div>
+    </div>
+
+    <div id="stg-schema-warn" style="display:none;background:var(--red-light);color:#c0392b;border:1.5px solid var(--red);border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:12px;line-height:1.45"></div>
+
+    <div class="module-tabs" style="margin-bottom:1rem">
+      <button class="module-tab active" id="stg-tab-fiches" onclick="stgShowView('fiches',this)"><i class="ti ti-users"></i> Fiches <span id="stg-badge-encours" style="display:none;background:var(--koala);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px">0</span></button>
+      <button class="module-tab" id="stg-tab-cal" onclick="stgShowView('cal',this)"><i class="ti ti-calendar-month"></i> Calendrier</button>
+      <button class="module-tab direction-only" id="stg-tab-types" onclick="stgShowView('types',this)"><i class="ti ti-list-check"></i> Pièces demandées</button>
+    </div>
+
+    <!-- ── Vue 1 : les fiches ────────────────────────────────────────── -->
+    <div id="stg-view-fiches" class="module-tab-content active">
+      <div class="stats-row" id="stg-stats" style="margin-bottom:12px"></div>
+      <div class="filters" style="flex-wrap:wrap;align-items:center;gap:6px">
+        <button class="fchip active" id="stg-chip-actives" onclick="stgSetFilter('actives')"><i class="ti ti-hourglass"></i> En cours et à venir</button>
+        <button class="fchip" id="stg-chip-demandes" onclick="stgSetFilter('demandes')"><i class="ti ti-inbox"></i> Demandes à traiter</button>
+        <button class="fchip" id="stg-chip-terminees" onclick="stgSetFilter('terminees')"><i class="ti ti-check"></i> Terminées</button>
+        <button class="fchip" id="stg-chip-toutes" onclick="stgSetFilter('toutes')"><i class="ti ti-list"></i> Toutes</button>
+        <select class="finput" id="stg-f-creche-liste" style="width:auto;min-width:150px;font-size:12px;padding:4px 8px" onchange="stgRender()"></select>
+        <input class="finput" id="stg-search" placeholder="Nom, école…" style="width:auto;min-width:170px;font-size:12px;padding:4px 8px" oninput="stgRender()">
+      </div>
+      <div id="stg-list" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"></div>
+    </div>
+
+    <!-- ── Vue 2 : le calendrier ─────────────────────────────────────── -->
+    <div id="stg-view-cal" class="module-tab-content">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <button class="ibtn" onclick="stgCalMois(-1)"><i class="ti ti-chevron-left"></i></button>
+        <span id="stg-cal-titre" style="font-weight:700;font-size:14px;min-width:170px;text-align:center"></span>
+        <button class="ibtn" onclick="stgCalMois(1)"><i class="ti ti-chevron-right"></i></button>
+        <button class="btn-sm" onclick="stgCalMois(0)"><i class="ti ti-calendar-event"></i> Ce mois-ci</button>
+        <select class="finput" id="stg-f-creche-cal" style="width:auto;min-width:150px;font-size:12px;padding:4px 8px" onchange="stgRenderCal()"></select>
+      </div>
+      <div id="stg-cal" style="overflow-x:auto"></div>
+      <div style="margin-top:10px;font-size:11.5px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap">
+        <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--koala);vertical-align:-1px"></span> jour de présence</span>
+        <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--red-light);border:1px solid var(--red);vertical-align:-1px"></span> absence</span>
+        <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--koala-light);vertical-align:-1px"></span> période de stage sans jour saisi</span>
+        <span>Cliquer sur une ligne ouvre la fiche.</span>
+      </div>
+    </div>
+
+    <!-- ── Vue 3 : les pièces demandées (direction) ──────────────────── -->
+    <div id="stg-view-types" class="module-tab-content">
+      <div style="background:var(--koala-light);border-left:4px solid var(--koala);border-radius:0 8px 8px 0;padding:11px 14px;font-size:12.5px;color:var(--koala-dark);margin-bottom:14px;line-height:1.55">
+        Cette liste est celle que voit la stagiaire sur son lien de dépôt. Une pièce
+        <strong>désactivée</strong> disparaît des nouveaux dossiers sans effacer les documents
+        déjà reçus. Seules les pièces <strong>obligatoires</strong> comptent dans l'avancement.
+      </div>
+      <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div class="frow">
+          <div class="fg" style="margin-bottom:0"><label class="flabel">Nouvelle pièce</label><input class="finput" id="stg-t-libelle" placeholder="Ex. Attestation d'honorabilité"></div>
+          <div class="fg" style="margin-bottom:0"><label class="flabel">Précision affichée à la stagiaire</label><input class="finput" id="stg-t-aide" placeholder="De moins de 6 mois"></div>
+        </div>
+        <div class="frow" style="margin-top:10px">
+          <div class="fg" style="margin-bottom:0"><label class="flabel">Lien pour l'obtenir (facultatif)</label><input class="finput" id="stg-t-lien" placeholder="https://…"></div>
+          <div class="fg" style="margin-bottom:0;display:flex;align-items:flex-end;gap:10px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555"><input type="checkbox" id="stg-t-oblig" checked> Obligatoire</label>
+            <button class="btn-primary" onclick="stgAjouterType()"><i class="ti ti-plus"></i> Ajouter</button>
+          </div>
+        </div>
+      </div>
+      <div id="stg-types-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+  </div>
+
 </div><!-- end .app -->
 </div><!-- end #app-wrap -->
 
@@ -1190,6 +1273,112 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- Modal fiche stagiaire (création / suivi complet) -->
+<div class="overlay" id="modal-stagiaire-wrap" onclick="if(event.target===this)closeModal('modal-stagiaire-wrap')">
+  <div class="modal" style="max-width:880px;width:100%;max-height:90vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <h3 id="stg-modal-title" style="margin:0">Nouvelle stagiaire</h3>
+      <button class="ibtn" onclick="closeModal('modal-stagiaire-wrap')"><i class="ti ti-x"></i></button>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;margin-top:12px;padding-right:4px">
+
+      <div class="frow">
+        <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="stg-f-prenom"></div>
+        <div class="fg"><label class="flabel">Nom</label><input class="finput" id="stg-f-nom"></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label class="flabel">E-mail</label><input class="finput" type="email" id="stg-f-email" placeholder="pour lui envoyer son lien"></div>
+        <div class="fg"><label class="flabel">Téléphone</label><input class="finput" type="tel" id="stg-f-tel"></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label class="flabel">École / organisme</label><input class="finput" id="stg-f-ecole"></div>
+        <div class="fg"><label class="flabel">Formation</label><input class="finput" id="stg-f-formation" placeholder="CAP AEPE, BAC ASSP, EJE…"></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label class="flabel">Niveau / année</label><input class="finput" id="stg-f-niveau" placeholder="1re année…"></div>
+        <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="stg-f-creche" onchange="stgRemplirReferents()"></select></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label class="flabel">Référente qui l'accompagne</label><select class="finput" id="stg-f-referent"></select></div>
+        <div class="fg"><label class="flabel">Statut</label><select class="finput" id="stg-f-statut" onchange="stgStatutChange()">
+          <option value="demande">Demande reçue (Padlet)</option>
+          <option value="contact">Contact pris par la référente</option>
+          <option value="accepte">Accepté — dates posées</option>
+          <option value="en_cours">Stage en cours</option>
+          <option value="termine">Stage terminé</option>
+          <option value="refuse">Refusé</option>
+          <option value="annule">Annulé</option>
+        </select></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label class="flabel">Demande reçue le</label><input class="finput" type="date" id="stg-f-demande"></div>
+        <div class="fg"><label class="flabel">Lien du post Padlet</label><input class="finput" id="stg-f-padlet" placeholder="https://padlet.com/…"></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label class="flabel">Début du stage</label><input class="finput" type="date" id="stg-f-debut"></div>
+        <div class="fg"><label class="flabel">Fin du stage</label><input class="finput" type="date" id="stg-f-fin"></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label class="flabel">Convention de stage</label><select class="finput" id="stg-f-conv">
+          <option value="a_demander">À demander</option>
+          <option value="demandee">Demandée à l'école</option>
+          <option value="recue">Reçue</option>
+          <option value="signee">Signée par tous</option>
+        </select></div>
+        <div class="fg"><label class="flabel">Convention — date</label><input class="finput" type="date" id="stg-f-conv-date"></div>
+      </div>
+      <div class="fg"><label class="flabel">Notes internes</label><textarea class="finput" id="stg-f-notes" rows="2" style="resize:vertical" placeholder="Ce qui n'a pas sa place ailleurs — non visible par la stagiaire"></textarea></div>
+
+      <!-- Ces trois blocs n'existent qu'une fois la fiche enregistrée :
+           un document ou un jour ont besoin d'une stagiaire à qui se rattacher. -->
+      <div id="stg-apres-creation" style="display:none">
+
+        <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
+        <div id="stg-lien-zone"></div>
+
+        <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
+        <div id="stg-docs-zone"></div>
+
+        <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
+        <div id="stg-jours-zone"></div>
+
+        <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
+        <div class="fg"><label class="flabel">Bilan de fin de stage</label>
+          <textarea class="finput" id="stg-f-bilan" rows="4" style="resize:vertical" placeholder="Appréciation, points forts, axes de progrès — rédigé par la référente"></textarea></div>
+        <div class="fg" style="max-width:220px"><label class="flabel">Bilan rédigé le</label><input class="finput" type="date" id="stg-f-bilan-date"></div>
+
+      </div>
+    </div>
+
+    <div class="mactions">
+      <button class="btn-cancel" id="stg-f-del" onclick="stgSupprimer()" style="margin-right:auto;color:var(--red);border-color:var(--red-light);display:none"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn-cancel" onclick="closeModal('modal-stagiaire-wrap')">Fermer</button>
+      <button class="btn-primary" id="stg-f-save" onclick="stgSave()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal d'édition d'un jour de présence -->
+<div class="overlay" id="modal-stg-jour-wrap" onclick="if(event.target===this)closeModal('modal-stg-jour-wrap')">
+  <div class="modal" style="max-width:420px">
+    <h3 id="stg-j-title">Jour de présence</h3>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Arrivée</label><input class="finput" id="stg-j-debut" placeholder="08h00"></div>
+      <div class="fg"><label class="flabel">Départ</label><input class="finput" id="stg-j-fin" placeholder="16h00"></div>
+    </div>
+    <div class="fg"><label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#555">
+      <input type="checkbox" id="stg-j-absent" onchange="stgJourAbsentChange()"> Absente ce jour-là</label></div>
+    <div class="fg" id="stg-j-motif-wrap" style="display:none"><label class="flabel">Motif de l'absence</label><input class="finput" id="stg-j-motif" placeholder="École, maladie, examen…"></div>
+    <div class="fg"><label class="flabel">Note</label><input class="finput" id="stg-j-note" placeholder="Facultatif"></div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="stgJourSupprimer()" style="margin-right:auto;color:var(--red);border-color:var(--red-light)"><i class="ti ti-trash"></i> Retirer ce jour</button>
+      <button class="btn-cancel" onclick="closeModal('modal-stg-jour-wrap')">Annuler</button>
+      <button class="btn-primary" onclick="stgJourEnregistrer()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal lecture d'un compte rendu -->
 <div class="overlay" id="modal-cr-wrap" onclick="if(event.target===this)closeModal('modal-cr-wrap')">
   <div class="modal" style="max-width:820px;max-height:88vh;display:flex;flex-direction:column">
@@ -1223,6 +1412,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="notice-tab" onclick="switchNoticeTab('evenements',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🗓 Événements</button>
         <button class="notice-tab" onclick="switchNoticeTab('enfants',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👶 Enfants</button>
         <button class="notice-tab" onclick="switchNoticeTab('vaccinations',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">💉 Vaccinations</button>
+        <button class="notice-tab" onclick="switchNoticeTab('stagiaires',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🎓 Stagiaires</button>
         <button class="notice-tab" onclick="switchNoticeTab('comptes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👤 Comptes</button>
         <button class="notice-tab" onclick="switchNoticeTab('referents',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🧑‍🏫 Référents</button>
         <button class="notice-tab" onclick="switchNoticeTab('dashboards',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📊 Tableaux de bord</button>
@@ -2254,7 +2444,7 @@ async function markConsignesRead(){
 
 function showMain(tab){
   _mainCourant=tab;
-  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','actions'].forEach(t=>{
+  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','actions','stagiaires'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -2279,6 +2469,7 @@ function showMain(tab){
   if(tab==='enfants')enfInit();
   if(tab==='afaire')afInit();
   if(tab==='actions'){if(isDirection)adInit();else showMain('ref-dashboard');}
+  if(tab==='stagiaires')stgInit();
 }
 
 // FULLSCREEN DEMANDES
@@ -9955,6 +10146,49 @@ vaccinations: `
 </div>`,
 
 
+stagiaires: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🎓 Stagiaires</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580;line-height:1.6">
+  💡 Une fiche par stagiaire, de la demande déposée sur le Padlet jusqu'au bilan de fin de stage. Les documents demandés sont déposés par la stagiaire elle-même, depuis son téléphone, via un lien à durée limitée.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Le chemin d'une stagiaire</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>La demande arrive sur le <strong>Padlet</strong> — vous créez la fiche : prénom, école, formation, et le lien du post. Statut <strong>Demande reçue</strong></li>
+  <li>Vous l'orientez vers une <strong>crèche</strong> : à partir de là, la référente de cette crèche la voit et peut la suivre</li>
+  <li>La référente prend contact → statut <strong>Contact pris</strong></li>
+  <li>C'est d'accord : vous posez les <strong>dates</strong> → statut <strong>Accepté</strong></li>
+  <li>Vous envoyez le <strong>lien de dépôt</strong> à la stagiaire pour ses documents</li>
+  <li>Le stage commence → <strong>En cours</strong>, puis <strong>Terminé</strong> et la référente rédige le <strong>bilan</strong></li>
+</ol>
+<div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A;margin-bottom:18px;line-height:1.6">
+  ⚠ Tant qu'une stagiaire n'a <strong>pas de crèche</strong>, seule la direction la voit. C'est voulu : une demande Padlet vous appartient tant que vous ne l'avez pas orientée.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📎 Les documents</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Dans la fiche, bouton <strong>Créer le lien</strong> : un lien valable <strong>30 jours</strong> est généré</li>
+  <li><strong>Copier le lien</strong> puis l'envoyer par SMS ou par mail — la stagiaire n'a besoin d'aucun compte</li>
+  <li>Elle photographie ses pièces ; elles apparaissent dans la fiche au fur et à mesure</li>
+  <li>Vous <strong>validez</strong> ✓ ou <strong>refusez</strong> ✗ chaque pièce (un refus la remet en « à envoyer » chez elle, avec votre motif)</li>
+  <li>Vous pouvez aussi <strong>téléverser à sa place</strong> une pièce reçue en papier ou par mail</li>
+  <li><strong>Renouveler le lien</strong> en crée un nouveau — l'ancien cesse aussitôt de fonctionner</li>
+</ol>
+<div style="background:#e8f5e9;border-left:4px solid #2a9d4e;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#1B7A3E;margin-bottom:18px;line-height:1.6">
+  🔒 Les pièces sont dans un stockage <strong>privé</strong> : pièces d'identité, casier, certificat médical. Les liens de lecture sont générés au clic et expirent au bout de 5 minutes — inutile de les transférer, ils ne marcheront pas ailleurs.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📅 Le calendrier</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Dans la fiche, <strong>Générer les jours ouvrés</strong> remplit la période du lundi au vendredi</li>
+  <li>Cliquez sur un jour pour changer ses <strong>horaires</strong>, le marquer <strong>absent</strong> ou le retirer</li>
+  <li>L'onglet <strong>Calendrier</strong> affiche le mois entier, une ligne par stagiaire, filtrable par crèche</li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">⚙️ Pièces demandées (direction)</div>
+<p style="font-size:13px;line-height:1.8;color:#555;margin-bottom:18px">
+  L'onglet <strong>Pièces demandées</strong> gère la liste que voit la stagiaire. Désactiver une pièce la retire des nouveaux dossiers sans effacer ce qui a déjà été reçu. Seules les pièces <strong>obligatoires</strong> comptent dans l'avancement affiché.
+</p>
+<div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A;line-height:1.6">
+  ⚠ Les délais (casier de moins de 3 mois, honorabilité de moins de 6 mois) courent depuis la <strong>date d'établissement</strong> de la pièce, pas depuis son dépôt : ils ne sont pas calculés par l'application, à vérifier sur le document.
+</div>`,
+
 comptes: `
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
   💡 Chaque membre de l'équipe dispose d'un compte personnel. La direction a accès à toutes les crèches, les référentes uniquement à la leur.
@@ -14766,6 +15000,1015 @@ window.adReunionCloturer=adReunionCloturer;window.adRevueStep=adRevueStep;window
 window.adRevueStatut=adRevueStatut;window.adRevueSuivi=adRevueSuivi;window.adRevueReporter=adRevueReporter;
 window.adAjoutRapide=adAjoutRapide;window.adOpenCR=adOpenCR;window.adCrRouvrir=adCrRouvrir;
 window.adAppliqueProjection=adAppliqueProjection;window.adExportCR=adExportCR;window.adExportExcel=adExportExcel;window.adToggleProjection=adToggleProjection;
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MODULE STAGIAIRES
+
+   Une fiche par stagiaire et par crèche, de la demande déposée sur le Padlet
+   jusqu'au bilan. Trois choses cohabitent dans la fiche, et une seule sort de
+   l'application : les DOCUMENTS, que la stagiaire dépose elle-même depuis son
+   téléphone via stagiaire.html — un lien à durée limitée, sans compte.
+
+   Ce qui est en base : 23a-stagiaires-tables.sql (tables), 23b (policies),
+   23c (bucket privé). La fonction `dossier-stagiaire` est la seule porte
+   d'entrée de la page publique.
+
+   Trois partis pris :
+   - le CALENDRIER n'est pas déduit des dates de début et de fin. Un stage de
+     trois semaines n'est presque jamais cinq jours sur cinq. On propose la
+     génération des jours ouvrés, puis on corrige à la main ;
+   - une stagiaire SANS CRÈCHE n'est visible que par la direction. C'est la
+     règle RLS, et c'est voulu : la demande Padlet appartient au coordinateur
+     tant qu'il ne l'a pas orientée ;
+   - les fichiers vivent dans un bucket PRIVÉ. Aucune URL n'est stockée : on
+     signe un lien de 5 minutes au moment du clic. Une URL en base serait soit
+     périmée le lendemain, soit permanente — les deux sont mauvais ici, il
+     s'agit de pièces d'identité et de certificats médicaux.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const STG_BUCKET     = 'stagiaires';
+const STG_LIEN_JOURS = 30;    // durée de vie du lien de dépôt
+const STG_URL_TTL    = 300;   // 5 min pour un lien de lecture signé
+
+let stgCache=[], stgTypes=[], stgJoursCache=[], stgDocsCache=[];
+let stgFilter='actives', stgFicheId=null, stgSchemaOk=true;
+let stgCalRef=null;           // 1er du mois affiché dans le calendrier
+let stgJourCourant=null;      // {stagiaire_id, jour} du jour en cours d'édition
+
+const STG_STATUTS={
+  demande :{lib:'Demande reçue', cls:'var(--blue)',        ic:'ti-inbox'},
+  contact :{lib:'Contact pris',  cls:'var(--orange-dark)', ic:'ti-phone'},
+  accepte :{lib:'Accepté',       cls:'var(--koala)',       ic:'ti-thumb-up'},
+  en_cours:{lib:'Stage en cours',cls:'var(--green)',       ic:'ti-run'},
+  termine :{lib:'Terminé',       cls:'var(--muted)',       ic:'ti-check'},
+  refuse  :{lib:'Refusé',        cls:'var(--red)',         ic:'ti-x'},
+  annule  :{lib:'Annulé',        cls:'var(--red)',         ic:'ti-ban'}
+};
+const STG_CONV={a_demander:'À demander',demandee:'Demandée',recue:'Reçue',signee:'Signée'};
+
+const stgMeta   = s => STG_STATUTS[s] || STG_STATUTS.demande;
+const stgClos   = s => s==='termine'||s==='refuse'||s==='annule';
+const stgNomComplet = s => ((s.prenom||'')+' '+(s.nom||'')).trim()||'Sans nom';
+
+function stgCrecheName(id){
+  if(!id)return '';
+  const c=cacheCreches.find(c=>String(c.id)===String(id));
+  return c?c.name:'Crèche supprimée';
+}
+
+/* Une référente ne peut affecter une stagiaire qu'à sa propre crèche : lui
+   proposer les cinq autres l'exposerait à un refus d'écriture incompréhensible
+   côté serveur. */
+function stgCrechesVisibles(){
+  if(isDirection)return cacheCreches;
+  const mien=currentProfile&&currentProfile.creche_id;
+  return cacheCreches.filter(c=>String(c.id)===String(mien));
+}
+
+function stgOptionsCreches(vide){
+  return (vide?'<option value="">'+vide+'</option>':'')
+    +stgCrechesVisibles().map(c=>'<option value="'+escHtml(String(c.id))+'">'+escHtml(c.name)+'</option>').join('');
+}
+
+// ── Chargement ────────────────────────────────────────────────────────────
+
+async function stgInit(){
+  const sel1=document.getElementById('stg-f-creche-liste');
+  if(sel1)sel1.innerHTML=stgOptionsCreches('Toutes les crèches');
+  const sel2=document.getElementById('stg-f-creche-cal');
+  if(sel2)sel2.innerHTML=stgOptionsCreches('Toutes les crèches');
+  if(!stgCalRef){const n=new Date();stgCalRef=new Date(n.getFullYear(),n.getMonth(),1);}
+  await stgLoad();
+}
+
+async function stgLoad(){
+  const r1=await sb.from('stagiaires').select('*').order('date_debut',{ascending:false,nullsFirst:false});
+  const r2=await sb.from('stagiaires_docs_types').select('*').order('ordre');
+  const warn=document.getElementById('stg-schema-warn');
+  stgSchemaOk=!r1.error&&!r2.error;
+  if(!stgSchemaOk){
+    /* Un écran vide ne dit pas si les tables manquent ou si personne n'a rien
+       saisi. On préfère le dire. */
+    const msg=((r1.error||r2.error||{}).message)||'';
+    if(warn){
+      warn.style.display='block';
+      warn.innerHTML='<strong><i class="ti ti-alert-triangle"></i> Module Stagiaires indisponible.</strong> '
+        +'Les scripts <code>23a</code> à <code>23c</code> n\'ont pas encore été exécutés sur Supabase.'
+        +'<br><span style="opacity:.85">Détail : '+escHtml(msg)+'</span>';
+    }
+    stgCache=[];stgTypes=[];stgJoursCache=[];stgDocsCache=[];
+    stgRenderTout();
+    return;
+  }
+  if(warn)warn.style.display='none';
+  stgCache=r1.data||[];
+  stgTypes=r2.data||[];
+
+  const ids=stgCache.map(s=>s.id);
+  if(ids.length){
+    const rj=await sb.from('stagiaires_jours').select('*').in('stagiaire_id',ids);
+    const rd=await sb.from('stagiaires_documents').select('*').in('stagiaire_id',ids);
+    stgJoursCache=rj.data||[];
+    stgDocsCache=rd.data||[];
+  }else{
+    stgJoursCache=[];stgDocsCache=[];
+  }
+  stgRenderTout();
+}
+
+function stgRenderTout(){
+  stgRender();
+  stgRenderCal();
+  stgRenderTypes();
+  stgMajBadge();
+}
+
+function stgShowView(v,btn){
+  ['fiches','cal','types'].forEach(x=>{
+    const el=document.getElementById('stg-view-'+x);
+    if(el)el.classList.toggle('active',x===v);
+  });
+  document.querySelectorAll('#main-stagiaires .module-tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  if(v==='cal')stgRenderCal();
+  if(v==='types')stgRenderTypes();
+}
+
+function stgSetFilter(f){
+  stgFilter=f;
+  ['actives','demandes','terminees','toutes'].forEach(x=>{
+    const c=document.getElementById('stg-chip-'+x);
+    if(c)c.classList.toggle('active',x===f);
+  });
+  stgRender();
+}
+
+// ── Avancement du dossier ─────────────────────────────────────────────────
+
+/* Les pièces d'une stagiaire, groupées par type. Une pièce refusée ne compte
+   pas comme reçue : c'est tout l'intérêt du refus. */
+function stgDocsDe(id){return stgDocsCache.filter(d=>String(d.stagiaire_id)===String(id));}
+
+function stgAvancement(id){
+  const oblig=stgTypes.filter(t=>t.actif&&t.obligatoire);
+  const docs=stgDocsDe(id).filter(d=>d.statut!=='refuse');
+  const couverts=new Set(docs.map(d=>String(d.type_id)));
+  const faits=oblig.filter(t=>couverts.has(String(t.id))).length;
+  return {faits:faits,total:oblig.length,complet:oblig.length>0&&faits===oblig.length};
+}
+
+function stgJoursDe(id){
+  return stgJoursCache.filter(j=>String(j.stagiaire_id)===String(id))
+    .sort((a,b)=>String(a.jour).localeCompare(String(b.jour)));
+}
+
+// ── Vue 1 : les fiches ────────────────────────────────────────────────────
+
+function stgFiltrees(){
+  const creche=(document.getElementById('stg-f-creche-liste')||{}).value||'';
+  const q=((document.getElementById('stg-search')||{}).value||'').trim().toLowerCase();
+  return stgCache.filter(s=>{
+    if(creche&&String(s.creche_id||'')!==String(creche))return false;
+    if(stgFilter==='demandes'&&!(s.statut==='demande'||s.statut==='contact'))return false;
+    if(stgFilter==='actives'&&!(s.statut==='accepte'||s.statut==='en_cours'))return false;
+    if(stgFilter==='terminees'&&!stgClos(s.statut))return false;
+    if(q){
+      const foin=[s.prenom,s.nom,s.ecole,s.formation,s.niveau,stgCrecheName(s.creche_id)]
+        .join(' ').toLowerCase();
+      if(!foin.includes(q))return false;
+    }
+    return true;
+  }).sort((a,b)=>{
+    /* Ce qui demande une action d'abord, le reste ensuite : une demande non
+       traitée ne doit jamais se retrouver sous six stages terminés. */
+    const rang=s=>s.statut==='demande'?0:s.statut==='contact'?1:s.statut==='en_cours'?2:
+                  s.statut==='accepte'?3:8;
+    const d=rang(a)-rang(b);
+    if(d)return d;
+    return String(b.date_debut||'').localeCompare(String(a.date_debut||''));
+  });
+}
+
+function stgStatCard(label,val,icon,color){
+  return '<div class="stat-card"><div class="stat-val" style="color:'+color+'">'+val+'</div>'
+    +'<div class="stat-label"><i class="ti '+icon+'" style="color:'+color+'"></i> '+label+'</div></div>';
+}
+
+function stgRender(){
+  const stats=document.getElementById('stg-stats');
+  if(stats){
+    const aTraiter=stgCache.filter(s=>s.statut==='demande').length;
+    const enCours=stgCache.filter(s=>s.statut==='en_cours').length;
+    const aVenir=stgCache.filter(s=>s.statut==='accepte').length;
+    const incomplets=stgCache.filter(s=>!stgClos(s.statut)&&!stgAvancement(s.id).complet).length;
+    stats.innerHTML=
+       stgStatCard('Demandes à traiter',aTraiter,'ti-inbox',aTraiter?'var(--blue)':'var(--muted)')
+      +stgStatCard('Stages en cours',enCours,'ti-run','var(--green)')
+      +stgStatCard('Acceptés, à venir',aVenir,'ti-calendar-plus','var(--koala)')
+      +stgStatCard('Dossiers incomplets',incomplets,'ti-file-alert',incomplets?'var(--orange-dark)':'var(--muted)');
+  }
+  const badge=document.getElementById('stg-badge-encours');
+  if(badge){
+    const n=stgCache.filter(s=>s.statut==='demande').length;
+    badge.textContent=n;badge.style.display=n?'':'none';
+  }
+
+  const box=document.getElementById('stg-list');
+  if(!box)return;
+  const liste=stgFiltrees();
+  if(!liste.length){
+    box.innerHTML='<div style="text-align:center;padding:36px 20px;color:var(--muted);font-size:13px">'
+      +'<i class="ti ti-school" style="font-size:30px;display:block;margin-bottom:8px;opacity:.5"></i>'
+      +(stgCache.length?'Aucune stagiaire ne correspond à ce filtre.'
+                       :'Aucune stagiaire enregistrée. Commencez par « Nouvelle stagiaire ».')+'</div>';
+    return;
+  }
+  box.innerHTML=liste.map(stgCarte).join('');
+}
+
+function stgCarte(s){
+  const m=stgMeta(s.statut);
+  const av=stgAvancement(s.id);
+  const jours=stgJoursDe(s.id).filter(j=>!j.absent).length;
+  const pct=av.total?Math.round(av.faits/av.total*100):100;
+  const bord=stgClos(s.statut)?'var(--border)':m.cls;
+  const periode=s.date_debut
+    ? stgDateFr(s.date_debut)+(s.date_fin?' → '+stgDateFr(s.date_fin):'')
+    : 'dates non posées';
+  const lien = !s.token ? ''
+    : (new Date(s.token_expire_le).getTime()<Date.now()
+        ? '<span style="color:var(--red)"><i class="ti ti-link-off"></i> lien expiré</span>'
+        : '<span style="color:var(--green)"><i class="ti ti-link"></i> lien actif</span>');
+
+  return '<div onclick="stgOpenFiche(\''+s.id+'\')" style="cursor:pointer;background:var(--card);border:1.5px solid var(--border);border-left:4px solid '+bord+';border-radius:10px;padding:12px 14px">'
+    +'<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start">'
+    +'<div style="min-width:0;flex:1">'
+    +'<div style="font-weight:700;font-size:14px">'+escHtml(stgNomComplet(s))
+    +(s.creche_id?'<span style="font-weight:500;color:var(--muted)"> · '+escHtml(stgCrecheName(s.creche_id))+'</span>'
+                 :'<span style="font-weight:500;color:var(--orange-dark)"> · à orienter</span>')+'</div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-top:2px">'
+    +escHtml([s.formation,s.niveau,s.ecole].filter(Boolean).join(' · ')||'Formation non renseignée')+'</div>'
+    +'</div>'
+    +'<span style="background:'+m.cls+';color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;white-space:nowrap">'
+    +'<i class="ti '+m.ic+'"></i> '+m.lib+'</span>'
+    +'</div>'
+    +'<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#666;margin-top:9px;align-items:center">'
+    +'<span><i class="ti ti-calendar"></i> '+escHtml(periode)+'</span>'
+    +(jours?'<span><i class="ti ti-clock"></i> '+jours+' jour'+(jours>1?'s':'')+' prévu'+(jours>1?'s':'')+'</span>':'')
+    +'<span><i class="ti ti-file-text"></i> Convention : '+escHtml(STG_CONV[s.convention_statut]||'—')+'</span>'
+    +(lien?'<span>'+lien+'</span>':'')
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:9px;margin-top:9px">'
+    +'<div style="flex:1;height:7px;background:var(--border);border-radius:99px;overflow:hidden">'
+    +'<div style="height:100%;width:'+pct+'%;background:'+(av.complet?'var(--green)':'var(--orange)')+';border-radius:99px"></div></div>'
+    +'<span style="font-size:11.5px;color:'+(av.complet?'var(--green)':'var(--muted)')+';font-weight:600;white-space:nowrap">'
+    +av.faits+'/'+av.total+' pièce'+(av.total>1?'s':'')+'</span>'
+    +'</div>'
+    +'</div>';
+}
+
+function stgDateFr(d){
+  if(!d)return '';
+  const p=String(d).slice(0,10).split('-');
+  return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:String(d);
+}
+
+function stgMajBadge(){
+  const b=document.getElementById('badge-stagiaires');
+  if(!b)return;
+  const n=stgCache.filter(s=>s.statut==='demande').length;
+  b.textContent=n;b.style.display=n?'':'none';
+}
+
+// ── La fiche ──────────────────────────────────────────────────────────────
+
+function stgOpenFiche(id){
+  stgFicheId=id||null;
+  const s=id?stgCache.find(x=>String(x.id)===String(id)):null;
+  const v=(el,val)=>{const e=document.getElementById(el);if(e)e.value=val==null?'':val;};
+
+  document.getElementById('stg-modal-title').textContent=
+    s?stgNomComplet(s):'Nouvelle stagiaire';
+
+  const selC=document.getElementById('stg-f-creche');
+  if(selC)selC.innerHTML=stgOptionsCreches('— Pas encore orientée —');
+  stgRemplirReferents(s?s.creche_id:null);
+
+  v('stg-f-prenom',s&&s.prenom);       v('stg-f-nom',s&&s.nom);
+  v('stg-f-email',s&&s.email);         v('stg-f-tel',s&&s.telephone);
+  v('stg-f-ecole',s&&s.ecole);         v('stg-f-formation',s&&s.formation);
+  v('stg-f-niveau',s&&s.niveau);       v('stg-f-creche',s?(s.creche_id||''):(isDirection?'':(currentProfile&&currentProfile.creche_id)||''));
+  v('stg-f-referent',s&&s.referent_id);
+  v('stg-f-statut',s?s.statut:'demande');
+  v('stg-f-demande',s?s.demande_le:todayStr());
+  v('stg-f-padlet',s&&s.padlet_url);
+  v('stg-f-debut',s&&s.date_debut);    v('stg-f-fin',s&&s.date_fin);
+  v('stg-f-conv',s?s.convention_statut:'a_demander');
+  v('stg-f-conv-date',s&&s.convention_le);
+  v('stg-f-notes',s&&s.notes);
+  v('stg-f-bilan',s&&s.bilan);         v('stg-f-bilan-date',s&&s.bilan_le);
+
+  const apres=document.getElementById('stg-apres-creation');
+  if(apres)apres.style.display=s?'':'none';
+  const del=document.getElementById('stg-f-del');
+  if(del)del.style.display=(s&&isDirection)?'':'none';
+
+  if(s){stgRenderLien();stgRenderDocs();stgRenderJours();}
+  document.getElementById('modal-stagiaire-wrap').classList.add('open');
+}
+
+/* La liste des référentes se limite à la crèche choisie : proposer celles des
+   autres sites n'aurait aucun sens sur une fiche de stage. */
+function stgRemplirReferents(crecheId){
+  const sel=document.getElementById('stg-f-referent');
+  if(!sel)return;
+  const cid=crecheId||((document.getElementById('stg-f-creche')||{}).value||'');
+  const liste=cacheReferents.filter(r=>r.role==='referent'&&(!cid||String(r.creche_id)===String(cid)));
+  const val=sel.value;
+  sel.innerHTML='<option value="">— Non désignée —</option>'
+    +liste.map(r=>'<option value="'+escHtml(String(r.id))+'">'+escHtml(r.name||'—')+'</option>').join('');
+  if(val)sel.value=val;
+}
+
+/* Passer une stagiaire en « terminé » sans bilan, c'est perdre le bilan :
+   personne ne rouvre une fiche close. On le rappelle au moment où ça se joue. */
+function stgStatutChange(){
+  const st=(document.getElementById('stg-f-statut')||{}).value;
+  const bilan=(document.getElementById('stg-f-bilan')||{}).value;
+  if(st==='termine'&&!bilan&&stgFicheId){
+    showBanner('Stage terminé : pensez au bilan, plus bas dans la fiche.','error');
+  }
+}
+
+async function stgSave(){
+  const val=id=>{const e=document.getElementById(id);return e?e.value.trim():'';};
+  const prenom=val('stg-f-prenom');
+  if(!prenom)return showBanner('Le prénom est obligatoire.','error');
+
+  const row={
+    prenom:prenom,
+    nom:val('stg-f-nom')||null,
+    email:val('stg-f-email')||null,
+    telephone:val('stg-f-tel')||null,
+    ecole:val('stg-f-ecole')||null,
+    formation:val('stg-f-formation')||null,
+    niveau:val('stg-f-niveau')||null,
+    creche_id:val('stg-f-creche')||null,
+    referent_id:val('stg-f-referent')||null,
+    statut:val('stg-f-statut')||'demande',
+    demande_le:val('stg-f-demande')||null,
+    padlet_url:val('stg-f-padlet')||null,
+    date_debut:val('stg-f-debut')||null,
+    date_fin:val('stg-f-fin')||null,
+    convention_statut:val('stg-f-conv')||'a_demander',
+    convention_le:val('stg-f-conv-date')||null,
+    notes:val('stg-f-notes')||null
+  };
+  /* Les champs de bilan n'existent dans le DOM qu'après création : les lire
+     sur une nouvelle fiche écraserait la valeur par une chaîne vide. */
+  if(stgFicheId){
+    row.bilan=val('stg-f-bilan')||null;
+    row.bilan_le=val('stg-f-bilan-date')||null;
+  }
+  if(row.date_debut&&row.date_fin&&row.date_fin<row.date_debut)
+    return showBanner('La fin du stage est avant son début.','error');
+
+  const btn=document.getElementById('stg-f-save');
+  if(btn)btn.disabled=true;
+  let ok=false;
+  if(stgFicheId){
+    ok=await dbUpdate('stagiaires',stgFicheId,row);
+  }else{
+    const saved=await dbInsert('stagiaires',row);
+    ok=!!saved;
+    if(saved)stgFicheId=saved.id;
+  }
+  if(btn)btn.disabled=false;
+  if(!ok){
+    return showBanner('Enregistrement impossible'
+      +(window._lastDbError?' : '+window._lastDbError:'')+'.','error');
+  }
+  await stgLoad();
+  showBanner('Fiche enregistrée ✅');
+  /* On garde la fiche ouverte après une création : c'est là qu'on enchaîne
+     avec le lien de dépôt et les jours de présence. */
+  stgOpenFiche(stgFicheId);
+}
+
+async function stgSupprimer(){
+  if(!stgFicheId)return;
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  const docs=stgDocsDe(stgFicheId);
+  if(!confirm('Supprimer définitivement la fiche de '+stgNomComplet(s||{})+' ?\n\n'
+    +(docs.length?docs.length+' document(s) déposé(s) et ':'')
+    +'tous ses jours de présence seront effacés.'))return;
+  /* Les fichiers d'abord : la ligne supprimée, on n'aurait plus leur chemin et
+     ils resteraient dans le bucket pour toujours. */
+  const chemins=docs.map(d=>d.path).filter(Boolean);
+  if(chemins.length){
+    const {error}=await sb.storage.from(STG_BUCKET).remove(chemins);
+    if(error)console.warn('[Stagiaires] fichiers non supprimés',error.message);
+  }
+  const ok=await dbDelete('stagiaires',stgFicheId);
+  if(!ok)return showBanner('Suppression impossible.','error');
+  closeModal('modal-stagiaire-wrap');
+  stgFicheId=null;
+  await stgLoad();
+  showBanner('Fiche supprimée.');
+}
+
+// ── Le lien de dépôt ──────────────────────────────────────────────────────
+
+function stgToken(){
+  const a=new Uint8Array(24);
+  crypto.getRandomValues(a);
+  return [...a].map(b=>b.toString(36).padStart(2,'0')).join('').slice(0,32);
+}
+function stgLienUrl(token){
+  return location.origin+location.pathname.replace(/[^/]*$/,'')+'stagiaire.html?t='+token;
+}
+
+function stgRenderLien(){
+  const zone=document.getElementById('stg-lien-zone');
+  if(!zone)return;
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  if(!s){zone.innerHTML='';return;}
+  const actif=s.token&&s.token_expire_le&&new Date(s.token_expire_le).getTime()>Date.now();
+
+  let h='<div style="font-weight:700;font-size:13px;margin-bottom:8px">'
+    +'<i class="ti ti-link" style="color:var(--koala)"></i> Lien de dépôt des documents</div>';
+
+  if(!s.token){
+    h+='<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.5">'
+      +'La stagiaire dépose ses pièces elle-même depuis son téléphone, sans compte ni application. '
+      +'Le lien est valable '+STG_LIEN_JOURS+' jours.</p>'
+      +'<button class="btn-primary" onclick="stgCreerLien()"><i class="ti ti-link-plus"></i> Créer le lien</button>';
+  }else{
+    h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:9px">'
+      +'<input class="finput" id="stg-lien-url" readonly value="'+escHtml(stgLienUrl(s.token))+'" style="flex:1;min-width:220px;font-size:12px">'
+      +'<button class="btn-sm" onclick="stgCopierLien()"><i class="ti ti-copy"></i> Copier</button>'
+      +(s.email?'<a class="btn-sm" style="text-decoration:none" href="'+stgMailto(s)+'"><i class="ti ti-mail"></i> Envoyer par mail</a>':'')
+      +'<button class="btn-sm" onclick="stgCreerLien(true)"><i class="ti ti-refresh"></i> Renouveler</button>'
+      +'</div>'
+      +'<div style="font-size:12px;color:'+(actif?'var(--muted)':'var(--red)')+'">'
+      +(actif?'<i class="ti ti-clock"></i> Valable jusqu\'au '+escHtml(stgDateFr(s.token_expire_le))
+             :'<i class="ti ti-clock-off"></i> Lien expiré le '+escHtml(stgDateFr(s.token_expire_le))
+              +' — « Renouveler » en crée un nouveau')
+      +'</div>';
+  }
+  zone.innerHTML=h;
+}
+
+/* Le mail est composé dans le client de messagerie du poste : rien ne part
+   d'ici, et il n'y a donc pas d'adresse d'expédition à configurer. */
+function stgMailto(s){
+  const sujet='Vos documents de stage — Koala Kids';
+  const corps='Bonjour '+(s.prenom||'')+',\n\n'
+    +'Voici le lien pour nous transmettre les documents nécessaires à votre stage'
+    +(s.creche_id?' à la crèche '+stgCrecheName(s.creche_id):'')+' :\n\n'
+    +stgLienUrl(s.token)+'\n\n'
+    +'Vous pouvez photographier vos pièces directement avec votre téléphone, en plusieurs fois.\n'
+    +'Ce lien est valable jusqu\'au '+stgDateFr(s.token_expire_le)+'.\n\n'
+    +'À bientôt,\nL\'équipe Koala Kids';
+  return 'mailto:'+encodeURIComponent(s.email||'')
+    +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);
+}
+
+async function stgCreerLien(renouveler){
+  if(!stgFicheId)return;
+  if(renouveler&&!confirm('Créer un nouveau lien ?\n\nL\'ancien cessera immédiatement de fonctionner.'))return;
+  const token=stgToken();
+  const expire=new Date(Date.now()+STG_LIEN_JOURS*86400000).toISOString();
+  const ok=await dbUpdate('stagiaires',stgFicheId,{
+    token:token,token_expire_le:expire,lien_envoye_le:new Date().toISOString()
+  });
+  if(!ok)return showBanner('Création du lien impossible.','error');
+  await stgLoad();
+  stgRenderLien();
+  showBanner(renouveler?'Nouveau lien créé — l\'ancien ne fonctionne plus.':'Lien créé ✅');
+}
+
+function stgCopierLien(){
+  const el=document.getElementById('stg-lien-url');
+  if(!el)return;
+  el.select();
+  navigator.clipboard.writeText(el.value)
+    .then(()=>showBanner('Lien copié — collez-le dans un SMS ou un mail ✅'))
+    .catch(()=>{try{document.execCommand('copy');showBanner('Lien copié ✅');}
+                catch(e){showBanner('Copie impossible — sélectionnez le lien à la main.','error');}});
+}
+
+// ── Les documents ─────────────────────────────────────────────────────────
+
+function stgRenderDocs(){
+  const zone=document.getElementById('stg-docs-zone');
+  if(!zone||!stgFicheId)return;
+  const docs=stgDocsDe(stgFicheId);
+  const av=stgAvancement(stgFicheId);
+  const actifs=stgTypes.filter(t=>t.actif);
+
+  let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px">'
+    +'<div style="font-weight:700;font-size:13px"><i class="ti ti-paperclip" style="color:var(--koala)"></i> Documents</div>'
+    +'<span style="font-size:12px;color:'+(av.complet?'var(--green)':'var(--muted)')+';font-weight:600">'
+    +av.faits+' / '+av.total+' pièce'+(av.total>1?'s':'')+' obligatoire'+(av.total>1?'s':'')+'</span></div>';
+
+  h+=actifs.map(t=>{
+    const fs=docs.filter(d=>String(d.type_id)===String(t.id));
+    const ok=fs.some(d=>d.statut!=='refuse');
+    return '<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-bottom:7px;background:'+(ok?'#FCFEFC':'#fff')+'">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      +'<i class="ti ti-'+(ok?'circle-check':'circle-dashed')+'" style="color:'+(ok?'var(--green)':'var(--muted)')+'"></i>'
+      +'<span style="font-weight:600;font-size:12.5px;flex:1;min-width:120px">'+escHtml(t.libelle)
+      +(t.obligatoire?'':'<span style="color:var(--muted);font-weight:400"> (facultatif)</span>')+'</span>'
+      +'<button class="btn-sm" onclick="document.getElementById(\'stg-up-'+t.id+'\').click()">'
+      +'<i class="ti ti-upload"></i> Téléverser</button>'
+      +'<input type="file" id="stg-up-'+t.id+'" data-type="'+t.id+'" accept="image/*,application/pdf" '
+      +'style="display:none" onchange="stgUpload(event)">'
+      +'</div>'
+      +(fs.length?'<div style="display:flex;flex-direction:column;gap:5px;margin-top:7px">'
+        +fs.map(stgLigneDoc).join('')+'</div>':'')
+      +'<span id="stg-upst-'+t.id+'" style="font-size:11.5px;color:var(--muted)"></span>'
+      +'</div>';
+  }).join('');
+
+  /* Une pièce dont le type a été supprimé du catalogue ne doit pas disparaître
+     de la fiche : le document existe, il a été reçu, il se voit. */
+  const orphelins=docs.filter(d=>!actifs.find(t=>String(t.id)===String(d.type_id)));
+  if(orphelins.length){
+    h+='<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-bottom:7px">'
+      +'<div style="font-weight:600;font-size:12.5px;margin-bottom:6px">Autres documents reçus</div>'
+      +'<div style="display:flex;flex-direction:column;gap:5px">'+orphelins.map(stgLigneDoc).join('')+'</div></div>';
+  }
+  if(!actifs.length){
+    h+='<p style="font-size:12.5px;color:var(--muted)">Aucune pièce n\'est demandée pour le moment '
+      +'— la liste se règle dans l\'onglet « Pièces demandées ».</p>';
+  }
+  zone.innerHTML=h;
+}
+
+function stgLigneDoc(d){
+  const st=d.statut==='valide'?{t:'Validé',c:'var(--green)',b:'var(--green-light)'}
+          :d.statut==='refuse'?{t:'Refusé',c:'var(--red)',b:'var(--red-light)'}
+          :{t:'Reçu',c:'var(--orange-dark)',b:'var(--orange-light)'};
+  return '<div style="display:flex;align-items:center;gap:7px;background:#FAFAFD;border:1px solid var(--border);border-radius:7px;padding:6px 9px;flex-wrap:wrap">'
+    +'<button type="button" onclick="stgOuvrirDoc(\''+d.id+'\')" title="Ouvrir" '
+    +'style="flex:1;min-width:110px;text-align:left;border:none;background:none;padding:0;cursor:pointer;'
+    +'font-family:inherit;font-size:12px;color:var(--koala-dark);text-decoration:underline;'
+    +'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+    +escHtml(d.filename||'Document')+'</button>'
+    +'<span style="background:'+st.b+';color:'+st.c+';border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700">'+st.t+'</span>'
+    +'<span style="font-size:10.5px;color:var(--muted)">'+escHtml(d.depose_par==='stagiaire'?'par la stagiaire':(d.depose_par||''))+'</span>'
+    +(d.statut!=='valide'?'<button class="ibtn" style="width:26px;height:26px;font-size:13px;color:var(--green)" title="Valider" onclick="stgStatutDoc(\''+d.id+'\',\'valide\')"><i class="ti ti-check"></i></button>':'')
+    +(d.statut!=='refuse'?'<button class="ibtn" style="width:26px;height:26px;font-size:13px;color:var(--orange-dark)" title="Refuser" onclick="stgStatutDoc(\''+d.id+'\',\'refuse\')"><i class="ti ti-x"></i></button>':'')
+    +'<button class="ibtn" style="width:26px;height:26px;font-size:13px;color:var(--red)" title="Supprimer" onclick="stgSupprimerDoc(\''+d.id+'\')"><i class="ti ti-trash"></i></button>'
+    +(d.statut==='refuse'&&d.commentaire
+      ? '<div style="flex:0 0 100%;font-size:11px;color:var(--red)">Motif : '+escHtml(d.commentaire)+'</div>':'')
+    +'</div>';
+}
+
+/* Le bucket est privé : l'URL est signée au moment du clic et expire. Rien
+   n'est stocké, rien ne se transfère. */
+async function stgOuvrirDoc(id){
+  const d=stgDocsCache.find(x=>String(x.id)===String(id));
+  if(!d||!d.path)return alert('Fichier introuvable.');
+  const {data,error}=await sb.storage.from(d.bucket||STG_BUCKET).createSignedUrl(d.path,STG_URL_TTL);
+  if(error||!data)return alert('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'));
+  window.open(data.signedUrl,'_blank','noopener');
+}
+
+async function stgUpload(ev){
+  const input=ev.target;
+  const file=(input.files||[])[0];
+  const typeId=input.dataset.type;
+  input.value='';
+  if(!file||!stgFicheId)return;
+  const st=document.getElementById('stg-upst-'+typeId);
+  if(file.size>12*1024*1024){
+    if(st)st.textContent='⚠ Fichier trop lourd (12 Mo maximum).';
+    return;
+  }
+  const type=stgTypes.find(t=>String(t.id)===String(typeId));
+  if(st)st.textContent='⏳ Envoi de '+file.name+'…';
+  try{
+    const ext=(file.name.split('.').pop()||'bin');
+    const path=stgFicheId+'/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+    /* Client authentifié (sb) : le bucket est privé et ses policies exigent un
+       compte présent dans referents. */
+    const {error}=await sb.storage.from(STG_BUCKET).upload(path,file);
+    if(error)throw error;
+    const {data:ins,error:insErr}=await sb.from('stagiaires_documents').insert({
+      stagiaire_id:stgFicheId,type_id:typeId,
+      libelle:(type&&type.libelle)||'Document',
+      bucket:STG_BUCKET,path:path,filename:file.name,
+      mime:file.type||null,taille:file.size,statut:'recu',
+      depose_par:(currentProfile&&currentProfile.name)||(currentUser&&currentUser.email)||'la crèche'
+    }).select().single();
+    if(insErr){
+      /* Sans sa ligne, le fichier serait orphelin dans le bucket. */
+      await sb.storage.from(STG_BUCKET).remove([path]);
+      throw insErr;
+    }
+    stgDocsCache.push(ins);
+    if(st)st.textContent='';
+    stgRenderDocs();stgRender();
+    showBanner('Document ajouté ✅');
+  }catch(e){
+    console.error('[Stagiaires] upload',e.message);
+    if(st)st.textContent='⚠ Erreur : '+e.message;
+  }
+}
+
+async function stgStatutDoc(id,statut){
+  const d=stgDocsCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  let motif=d.commentaire||null;
+  if(statut==='refuse'){
+    /* Un refus sans motif oblige la stagiaire à deviner ce qui ne va pas —
+       elle renverra la même photo floue. */
+    motif=prompt('Pourquoi ce document est-il refusé ?\n(la stagiaire verra ce motif)',
+                 motif||'Document illisible, merci de le renvoyer');
+    if(motif===null)return;
+  }
+  const ok=await dbUpdate('stagiaires_documents',id,{statut:statut,commentaire:statut==='refuse'?motif:null});
+  if(!ok)return showBanner('Modification impossible.','error');
+  d.statut=statut;d.commentaire=statut==='refuse'?motif:null;
+  stgRenderDocs();stgRender();
+  showBanner(statut==='valide'?'Document validé ✅':'Document refusé — la stagiaire en est informée sur son lien.');
+}
+
+async function stgSupprimerDoc(id){
+  const d=stgDocsCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  if(!confirm('Supprimer « '+(d.filename||'ce document')+' » ?'))return;
+  const ok=await dbDelete('stagiaires_documents',id);
+  if(!ok)return showBanner('Suppression impossible.','error');
+  const {error}=await sb.storage.from(d.bucket||STG_BUCKET).remove([d.path]);
+  if(error)console.warn('[Stagiaires] fichier non supprimé du stockage',error.message);
+  stgDocsCache=stgDocsCache.filter(x=>String(x.id)!==String(id));
+  stgRenderDocs();stgRender();
+  showBanner('Document supprimé.');
+}
+
+// ── Les jours de présence ─────────────────────────────────────────────────
+
+const STG_JOURS_FR=['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
+
+function stgRenderJours(){
+  const zone=document.getElementById('stg-jours-zone');
+  if(!zone||!stgFicheId)return;
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  const jours=stgJoursDe(stgFicheId);
+  const presents=jours.filter(j=>!j.absent).length;
+
+  let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px">'
+    +'<div style="font-weight:700;font-size:13px"><i class="ti ti-calendar-week" style="color:var(--koala)"></i> Jours de présence</div>'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
+    +'<button class="btn-sm" onclick="stgGenererJours()"><i class="ti ti-wand"></i> Générer les jours ouvrés</button>'
+    +'<button class="btn-sm" onclick="stgAjouterJour()"><i class="ti ti-plus"></i> Ajouter un jour</button>'
+    +'</div></div>';
+
+  if(!jours.length){
+    h+='<p style="font-size:12.5px;color:var(--muted);margin:0;line-height:1.5">'
+      +(s&&s.date_debut
+        ? 'Aucun jour saisi. « Générer les jours ouvrés » remplit la période du lundi au vendredi — '
+          +'vous retirez ensuite ce qui ne colle pas.'
+        : 'Renseignez d\'abord les dates de début et de fin du stage, plus haut.')+'</p>';
+  }else{
+    h+='<div style="font-size:12px;color:var(--muted);margin-bottom:7px">'
+      +presents+' jour'+(presents>1?'s':'')+' de présence'
+      +(jours.length-presents?' · '+(jours.length-presents)+' absence'+((jours.length-presents)>1?'s':''):'')
+      +' — cliquer sur un jour pour le modifier</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px">'
+      +jours.map(j=>{
+        const d=new Date(String(j.jour)+'T12:00:00');
+        const lib=STG_JOURS_FR[d.getDay()]+' '+d.getDate()+'/'+(d.getMonth()+1);
+        const hr=j.absent?(j.motif||'absente'):[j.debut,j.fin].filter(Boolean).join('–');
+        return '<button class="btn-sm" onclick="stgOuvrirJour(\''+j.jour+'\')" style="'
+          +(j.absent?'border-color:var(--red);color:var(--red);background:var(--red-light)'
+                    :'border-color:var(--koala);color:var(--koala-dark);background:var(--koala-light)')
+          +'"><i class="ti ti-'+(j.absent?'user-off':'clock')+'"></i> '+escHtml(lib)
+          +(hr?'<span style="opacity:.75;font-weight:400"> '+escHtml(hr)+'</span>':'')+'</button>';
+      }).join('')
+      +'</div>';
+  }
+  zone.innerHTML=h;
+}
+
+/* Les jours ouvrés de la période, sans écraser ce qui existe déjà : régénérer
+   après avoir retiré un mercredi ne doit pas le faire revenir. */
+async function stgGenererJours(){
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  if(!s)return;
+  if(!s.date_debut||!s.date_fin)
+    return showBanner('Renseignez les dates de début et de fin, puis enregistrez.','error');
+
+  const existants=new Set(stgJoursDe(stgFicheId).map(j=>String(j.jour)));
+  const d=new Date(s.date_debut+'T12:00:00');
+  const fin=new Date(s.date_fin+'T12:00:00');
+  const aCreer=[];
+  while(d<=fin){
+    const jour=d.getDay();
+    if(jour>=1&&jour<=5){
+      const iso=ipDateToLocalISO(d);
+      if(!existants.has(iso))aCreer.push({stagiaire_id:stgFicheId,jour:iso,debut:'08h00',fin:'16h00'});
+    }
+    d.setDate(d.getDate()+1);
+    if(aCreer.length>200)break;   // garde-fou : une date de fin mal saisie
+  }
+  if(!aCreer.length)return showBanner('Tous les jours ouvrés de la période sont déjà saisis.');
+  const {data,error}=await sb.from('stagiaires_jours').insert(aCreer).select();
+  if(error)return showBanner('Génération impossible : '+error.message,'error');
+  stgJoursCache=stgJoursCache.concat(data||[]);
+  stgRenderJours();stgRender();stgRenderCal();
+  showBanner(aCreer.length+' jour'+(aCreer.length>1?'s':'')+' ajouté'+(aCreer.length>1?'s':'')+' ✅');
+}
+
+function stgAjouterJour(){
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  const def=(s&&s.date_debut)||todayStr();
+  const iso=prompt('Date du jour à ajouter (AAAA-MM-JJ) :',def);
+  if(!iso)return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return showBanner('Date attendue au format AAAA-MM-JJ.','error');
+  if(stgJoursDe(stgFicheId).some(j=>String(j.jour)===iso))return stgOuvrirJour(iso);
+  stgJourCourant={stagiaire_id:stgFicheId,jour:iso,nouveau:true};
+  stgOuvrirModalJour(null,iso);
+}
+
+function stgOuvrirJour(iso){
+  const j=stgJoursDe(stgFicheId).find(x=>String(x.jour)===String(iso));
+  stgJourCourant={stagiaire_id:stgFicheId,jour:iso,nouveau:!j};
+  stgOuvrirModalJour(j,iso);
+}
+
+function stgOuvrirModalJour(j,iso){
+  const d=new Date(String(iso)+'T12:00:00');
+  document.getElementById('stg-j-title').textContent=
+    d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('stg-j-debut').value=(j&&j.debut)||'08h00';
+  document.getElementById('stg-j-fin').value=(j&&j.fin)||'16h00';
+  document.getElementById('stg-j-absent').checked=!!(j&&j.absent);
+  document.getElementById('stg-j-motif').value=(j&&j.motif)||'';
+  document.getElementById('stg-j-note').value=(j&&j.note)||'';
+  stgJourAbsentChange();
+  document.getElementById('modal-stg-jour-wrap').classList.add('open');
+}
+
+function stgJourAbsentChange(){
+  const abs=document.getElementById('stg-j-absent').checked;
+  const w=document.getElementById('stg-j-motif-wrap');
+  if(w)w.style.display=abs?'':'none';
+}
+
+async function stgJourEnregistrer(){
+  if(!stgJourCourant)return;
+  const row={
+    stagiaire_id:stgJourCourant.stagiaire_id,
+    jour:stgJourCourant.jour,
+    debut:document.getElementById('stg-j-debut').value.trim()||null,
+    fin:document.getElementById('stg-j-fin').value.trim()||null,
+    absent:document.getElementById('stg-j-absent').checked,
+    motif:document.getElementById('stg-j-motif').value.trim()||null,
+    note:document.getElementById('stg-j-note').value.trim()||null
+  };
+  /* upsert sur (stagiaire_id, jour) : la contrainte d'unicité de 23a fait que
+     rouvrir un jour existant le met à jour au lieu d'en créer un second. */
+  const {data,error}=await sb.from('stagiaires_jours')
+    .upsert(row,{onConflict:'stagiaire_id,jour'}).select();
+  if(error)return showBanner('Enregistrement impossible : '+error.message,'error');
+  stgJoursCache=stgJoursCache.filter(j=>!(String(j.stagiaire_id)===String(row.stagiaire_id)&&String(j.jour)===String(row.jour)))
+    .concat(data||[]);
+  closeModal('modal-stg-jour-wrap');
+  stgRenderJours();stgRenderCal();stgRender();
+  showBanner('Jour enregistré ✅');
+}
+
+async function stgJourSupprimer(){
+  if(!stgJourCourant)return;
+  const j=stgJoursCache.find(x=>String(x.stagiaire_id)===String(stgJourCourant.stagiaire_id)
+                              &&String(x.jour)===String(stgJourCourant.jour));
+  if(!j){closeModal('modal-stg-jour-wrap');return;}
+  if(!confirm('Retirer ce jour du calendrier ?\n\nPour garder la trace d\'une journée manquée, '
+    +'préférez la marquer « absente ».'))return;
+  const ok=await dbDelete('stagiaires_jours',j.id);
+  if(!ok)return showBanner('Suppression impossible.','error');
+  stgJoursCache=stgJoursCache.filter(x=>String(x.id)!==String(j.id));
+  closeModal('modal-stg-jour-wrap');
+  stgRenderJours();stgRenderCal();stgRender();
+  showBanner('Jour retiré.');
+}
+
+// ── Vue 2 : le calendrier ─────────────────────────────────────────────────
+
+function stgCalMois(delta){
+  if(!stgCalRef){const n=new Date();stgCalRef=new Date(n.getFullYear(),n.getMonth(),1);}
+  if(delta===0){const n=new Date();stgCalRef=new Date(n.getFullYear(),n.getMonth(),1);}
+  else stgCalRef=new Date(stgCalRef.getFullYear(),stgCalRef.getMonth()+delta,1);
+  stgRenderCal();
+}
+
+function stgRenderCal(){
+  const box=document.getElementById('stg-cal');
+  if(!box)return;
+  if(!stgCalRef){const n=new Date();stgCalRef=new Date(n.getFullYear(),n.getMonth(),1);}
+
+  const an=stgCalRef.getFullYear(),mois=stgCalRef.getMonth();
+  const nb=new Date(an,mois+1,0).getDate();
+  const titre=document.getElementById('stg-cal-titre');
+  if(titre)titre.textContent=stgCalRef.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+
+  const premier=ipDateToLocalISO(new Date(an,mois,1));
+  const dernier=ipDateToLocalISO(new Date(an,mois,nb));
+  const creche=(document.getElementById('stg-f-creche-cal')||{}).value||'';
+
+  /* On affiche une stagiaire si son stage touche le mois, OU si elle a un jour
+     saisi dedans — une journée isolée hors période reste visible. */
+  const lignes=stgCache.filter(s=>{
+    if(creche&&String(s.creche_id||'')!==String(creche))return false;
+    if(s.statut==='refuse'||s.statut==='annule')return false;
+    const chevauche=s.date_debut&&s.date_fin&&s.date_debut<=dernier&&s.date_fin>=premier;
+    const aDesJours=stgJoursDe(s.id).some(j=>String(j.jour)>=premier&&String(j.jour)<=dernier);
+    return chevauche||aDesJours;
+  }).sort((a,b)=>String(stgCrecheName(a.creche_id)+stgNomComplet(a))
+    .localeCompare(String(stgCrecheName(b.creche_id)+stgNomComplet(b)),'fr'));
+
+  if(!lignes.length){
+    box.innerHTML='<div style="text-align:center;padding:34px 20px;color:var(--muted);font-size:13px">'
+      +'Aucun stage sur ce mois.</div>';
+    return;
+  }
+
+  const auj=todayStr();
+  let h='<table style="border-collapse:collapse;font-size:11.5px;min-width:'+(200+nb*26)+'px">'
+    +'<tr><th style="position:sticky;left:0;background:var(--koala-light);z-index:2;text-align:left;'
+    +'padding:6px 9px;border:1px solid var(--border);min-width:190px">Stagiaire</th>';
+  for(let d=1;d<=nb;d++){
+    const dt=new Date(an,mois,d);
+    const we=dt.getDay()===0||dt.getDay()===6;
+    const iso=ipDateToLocalISO(dt);
+    h+='<th style="width:26px;padding:4px 0;border:1px solid var(--border);font-weight:600;'
+      +'background:'+(iso===auj?'var(--orange-light)':we?'#F4F4F6':'var(--koala-light)')+';'
+      +'color:'+(we?'var(--muted)':'var(--koala-dark)')+'">'
+      +'<div style="font-size:9.5px;opacity:.8">'+STG_JOURS_FR[dt.getDay()].slice(0,1).toUpperCase()+'</div>'
+      +d+'</th>';
+  }
+  h+='</tr>';
+
+  lignes.forEach(s=>{
+    const jours={};
+    stgJoursDe(s.id).forEach(j=>{jours[String(j.jour)]=j;});
+    h+='<tr>'
+      +'<td onclick="stgOpenFiche(\''+s.id+'\')" style="position:sticky;left:0;background:#fff;z-index:1;'
+      +'cursor:pointer;padding:5px 9px;border:1px solid var(--border);white-space:nowrap;'
+      +'overflow:hidden;text-overflow:ellipsis;max-width:230px">'
+      +'<span style="font-weight:600">'+escHtml(stgNomComplet(s))+'</span>'
+      +'<span style="color:var(--muted)"> · '+escHtml(stgCrecheName(s.creche_id)||'—')+'</span></td>';
+    for(let d=1;d<=nb;d++){
+      const iso=ipDateToLocalISO(new Date(an,mois,d));
+      const j=jours[iso];
+      const dansPeriode=s.date_debut&&s.date_fin&&iso>=s.date_debut&&iso<=s.date_fin;
+      let fond='#fff',txt='',titre2='';
+      if(j&&j.absent){fond='var(--red-light)';txt='<span style="color:var(--red);font-weight:700">×</span>';
+        titre2=(j.motif||'absente');}
+      else if(j){fond='var(--koala)';titre2=[j.debut,j.fin].filter(Boolean).join(' – ');}
+      else if(dansPeriode){fond='var(--koala-light)';titre2='période de stage, jour non saisi';}
+      h+='<td onclick="stgCalClic(\''+s.id+'\',\''+iso+'\')" title="'+escHtml(titre2)+'" '
+        +'style="cursor:pointer;border:1px solid var(--border);background:'+fond+';height:26px;text-align:center">'
+        +txt+'</td>';
+    }
+    h+='</tr>';
+  });
+  h+='</table>';
+  box.innerHTML=h;
+}
+
+/* Cliquer une case du calendrier ouvre le jour dans la fiche : c'est le même
+   écran que depuis la fiche, donc une seule façon de saisir un horaire. */
+function stgCalClic(id,iso){
+  stgFicheId=id;
+  stgJourCourant={stagiaire_id:id,jour:iso};
+  const j=stgJoursDe(id).find(x=>String(x.jour)===String(iso));
+  stgJourCourant.nouveau=!j;
+  stgOuvrirModalJour(j,iso);
+}
+
+// ── Vue 3 : les pièces demandées ──────────────────────────────────────────
+
+function stgRenderTypes(){
+  const box=document.getElementById('stg-types-list');
+  if(!box)return;
+  if(!stgTypes.length){
+    box.innerHTML='<div style="color:var(--muted);font-size:13px">Aucune pièce définie.</div>';
+    return;
+  }
+  box.innerHTML=stgTypes.map(t=>
+    '<div style="display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--border);'
+    +'border-radius:9px;padding:9px 12px;'+(t.actif?'':'opacity:.55')+'">'
+    +'<i class="ti ti-'+(t.obligatoire?'asterisk':'circle-dashed')+'" style="color:'+(t.obligatoire?'var(--koala)':'var(--muted)')+'"></i>'
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="font-weight:600;font-size:13px">'+escHtml(t.libelle)
+    +(t.obligatoire?'':'<span style="color:var(--muted);font-weight:400"> — facultatif</span>')
+    +(t.actif?'':'<span style="color:var(--red);font-weight:400"> — désactivée</span>')+'</div>'
+    +(t.aide?'<div style="font-size:11.5px;color:var(--muted)">'+escHtml(t.aide)+'</div>':'')
+    +(t.lien?'<a href="'+escHtml(t.lien)+'" target="_blank" rel="noopener" style="font-size:11.5px">'
+      +'<i class="ti ti-external-link"></i> '+escHtml(t.lien)+'</a>':'')
+    +'</div>'
+    +'<button class="ibtn" title="Monter" onclick="stgDeplacerType(\''+t.id+'\',-1)"><i class="ti ti-chevron-up"></i></button>'
+    +'<button class="ibtn" title="Descendre" onclick="stgDeplacerType(\''+t.id+'\',1)"><i class="ti ti-chevron-down"></i></button>'
+    +'<button class="ibtn" title="Obligatoire / facultatif" onclick="stgBasculerType(\''+t.id+'\',\'obligatoire\')"><i class="ti ti-asterisk"></i></button>'
+    +'<button class="ibtn" title="'+(t.actif?'Désactiver':'Réactiver')+'" onclick="stgBasculerType(\''+t.id+'\',\'actif\')">'
+    +'<i class="ti ti-'+(t.actif?'eye-off':'eye')+'"></i></button>'
+    +'</div>').join('');
+}
+
+async function stgAjouterType(){
+  const lib=(document.getElementById('stg-t-libelle')||{}).value.trim();
+  if(!lib)return showBanner('Indiquez le nom de la pièce.','error');
+  const saved=await dbInsert('stagiaires_docs_types',{
+    libelle:lib,
+    aide:(document.getElementById('stg-t-aide')||{}).value.trim()||null,
+    lien:(document.getElementById('stg-t-lien')||{}).value.trim()||null,
+    obligatoire:(document.getElementById('stg-t-oblig')||{}).checked,
+    ordre:stgTypes.reduce((m,t)=>Math.max(m,t.ordre||0),0)+10,
+    actif:true
+  });
+  if(!saved)return showBanner('Ajout impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');
+  ['stg-t-libelle','stg-t-aide','stg-t-lien'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  stgTypes.push(saved);
+  stgTypes.sort((a,b)=>(a.ordre||0)-(b.ordre||0));
+  stgRenderTypes();stgRender();
+  showBanner('Pièce ajoutée ✅');
+}
+
+async function stgBasculerType(id,champ){
+  const t=stgTypes.find(x=>String(x.id)===String(id));
+  if(!t)return;
+  const ok=await dbUpdate('stagiaires_docs_types',id,{[champ]:!t[champ]});
+  if(!ok)return showBanner('Modification impossible (réservée à la direction).','error');
+  t[champ]=!t[champ];
+  stgRenderTypes();stgRender();
+}
+
+/* L'ordre est celui de la liste que voit la stagiaire : on échange les valeurs
+   de `ordre` avec la voisine plutôt que de renuméroter toute la table. */
+async function stgDeplacerType(id,sens){
+  const i=stgTypes.findIndex(x=>String(x.id)===String(id));
+  const j=i+sens;
+  if(i<0||j<0||j>=stgTypes.length)return;
+  const a=stgTypes[i],b=stgTypes[j];
+  const oa=a.ordre||0,ob=b.ordre||0;
+  const ok1=await dbUpdate('stagiaires_docs_types',a.id,{ordre:ob});
+  const ok2=await dbUpdate('stagiaires_docs_types',b.id,{ordre:oa});
+  if(!ok1||!ok2)return showBanner('Déplacement impossible (réservé à la direction).','error');
+  a.ordre=ob;b.ordre=oa;
+  stgTypes.sort((x,y)=>(x.ordre||0)-(y.ordre||0));
+  stgRenderTypes();
+}
+
+// ── Export ────────────────────────────────────────────────────────────────
+
+function stgExportExcel(){
+  if(!stgCache.length)return showBanner('Rien à exporter.','error');
+  const aoa=[['Prénom','Nom','Crèche','Statut','École','Formation','Niveau',
+              'Début','Fin','Jours prévus','Absences','Pièces reçues','Pièces attendues',
+              'Convention','E-mail','Téléphone','Bilan rédigé le']];
+  stgFiltrees().forEach(s=>{
+    const av=stgAvancement(s.id);
+    const js=stgJoursDe(s.id);
+    aoa.push([
+      s.prenom||'', s.nom||'', stgCrecheName(s.creche_id)||'', stgMeta(s.statut).lib,
+      s.ecole||'', s.formation||'', s.niveau||'',
+      stgDateFr(s.date_debut), stgDateFr(s.date_fin),
+      js.filter(j=>!j.absent).length, js.filter(j=>j.absent).length,
+      av.faits, av.total,
+      STG_CONV[s.convention_statut]||'',
+      s.email||'', s.telephone||'', stgDateFr(s.bilan_le)
+    ]);
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:14},{wch:16},{wch:12},{wch:18},{wch:24},{wch:18},{wch:12},
+               {wch:11},{wch:11},{wch:12},{wch:10},{wch:13},{wch:15},{wch:12},
+               {wch:26},{wch:14},{wch:14}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Stagiaires');
+  XLSX.writeFile(wb,'stagiaires-'+todayStr()+'.xlsx');
+  showBanner('Export Excel généré ✅');
+}
+
+// ── Exposition (les onclick du HTML passent par window) ───────────────────
+
+window.stgInit=stgInit;window.stgShowView=stgShowView;window.stgSetFilter=stgSetFilter;
+window.stgRender=stgRender;window.stgRenderCal=stgRenderCal;window.stgOpenFiche=stgOpenFiche;
+window.stgSave=stgSave;window.stgSupprimer=stgSupprimer;window.stgStatutChange=stgStatutChange;
+window.stgCreerLien=stgCreerLien;window.stgCopierLien=stgCopierLien;
+window.stgUpload=stgUpload;window.stgOuvrirDoc=stgOuvrirDoc;window.stgStatutDoc=stgStatutDoc;
+window.stgSupprimerDoc=stgSupprimerDoc;window.stgGenererJours=stgGenererJours;
+window.stgAjouterJour=stgAjouterJour;window.stgOuvrirJour=stgOuvrirJour;
+window.stgJourAbsentChange=stgJourAbsentChange;window.stgJourEnregistrer=stgJourEnregistrer;
+window.stgJourSupprimer=stgJourSupprimer;window.stgCalMois=stgCalMois;window.stgCalClic=stgCalClic;
+window.stgAjouterType=stgAjouterType;window.stgBasculerType=stgBasculerType;
+window.stgDeplacerType=stgDeplacerType;window.stgExportExcel=stgExportExcel;
+window.stgRemplirReferents=stgRemplirReferents;
 
 </script>
 </body>

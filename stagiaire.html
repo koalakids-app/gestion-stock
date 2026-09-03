@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mes documents de stage — Koala Kids</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" rel="stylesheet">
+<style>
+:root{
+  --violet:#3D3580; --violet-l:#8E8AA8; --violet-bg:#EEEDF8;
+  --orange:#F47920; --green:#1B7A3E; --green-bg:#E8F5EC;
+  --red:#C62828; --red-bg:#FDECEC;
+  --ink:#2B2740; --muted:#78748C; --line:#E3E1EF; --bg:#F7F6FC;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Nunito',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.55}
+h1,h2,h3{font-family:'Baloo 2',system-ui,sans-serif;margin:0}
+.top{background:var(--violet);color:#fff;padding:20px 18px}
+.top h1{font-size:21px}
+.top p{margin:5px 0 0;font-size:13.5px;opacity:.86}
+.wrap{max-width:680px;margin:0 auto;padding:18px 14px 60px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 16px;margin-bottom:12px}
+.intro{background:var(--violet-bg);border-left:4px solid var(--violet);border-radius:0 12px 12px 0;
+  padding:13px 15px;font-size:13.5px;color:var(--violet);margin-bottom:16px;line-height:1.6}
+.prog{height:9px;background:var(--line);border-radius:99px;overflow:hidden;margin:10px 0 4px}
+.prog i{display:block;height:100%;background:var(--green);border-radius:99px;transition:width .35s}
+.progtxt{font-size:12.5px;color:var(--muted)}
+.piece{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:10px}
+.piece.ok{border-color:#BFE3CB;background:#FCFEFC}
+.ptop{display:flex;align-items:flex-start;gap:11px}
+.ptop .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex:0 0 auto;
+  background:var(--violet-bg);color:var(--violet);font-size:18px}
+.ptop .ic.ok{background:var(--green-bg);color:var(--green)}
+.ptop .tx{flex:1;min-width:0}
+.ptop .tx b{display:block;font-size:14.5px;font-weight:700}
+.ptop .tx span.aide{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.badge{display:inline-block;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700}
+.b-ok{background:var(--green-bg);color:var(--green)}
+.b-att{background:#FDF0E3;color:#B25F00}
+.b-ko{background:var(--red-bg);color:var(--red)}
+.b-fac{background:#EFEEF6;color:var(--muted)}
+.files{margin:10px 0 0;display:flex;flex-direction:column;gap:6px}
+.file{display:flex;align-items:center;gap:9px;background:#FAFAFD;border:1px solid var(--line);
+  border-radius:10px;padding:8px 10px;font-size:13px}
+.file .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file button{border:none;background:none;color:var(--red);cursor:pointer;font-size:16px;padding:0}
+.btn{font:inherit;font-weight:700;font-size:15px;border:none;border-radius:11px;padding:12px 18px;
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.btn-p{background:var(--violet);color:#fff}
+.btn-g{background:#EDEBF6;color:var(--violet)}
+.btn-s{padding:8px 13px;font-size:13.5px}
+.btn:disabled{opacity:.55;cursor:default}
+.lienoff{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--violet);
+  font-weight:700;text-decoration:none;margin-top:6px}
+h3.sec{font-size:17px;color:var(--violet);margin:22px 0 12px}
+.hint{font-size:13px;color:var(--muted);margin:0 0 10px}
+.state{text-align:center;padding:44px 20px}
+.state i{font-size:42px;color:var(--violet-l)}
+.state h2{font-size:19px;margin:12px 0 6px}
+.state p{color:var(--muted);font-size:14px;margin:0}
+.state.err i{color:var(--red)}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;
+  padding:11px 18px;border-radius:11px;font-size:14px;font-weight:600;z-index:99;
+  opacity:0;pointer-events:none;transition:opacity .25s;max-width:90vw;text-align:center}
+.toast.on{opacity:1}
+a{color:var(--violet)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>Mes documents de stage</h1>
+  <p id="sousTitre">Koala Kids</p>
+</div>
+
+<div class="wrap" id="wrap">
+  <div class="state"><i class="ti ti-loader"></i><h2>Chargement…</h2><p>Un instant.</p></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===========================================================================
+   STAGIAIRE.HTML — page publique de dépôt des pièces de stage
+   ---------------------------------------------------------------------------
+   Aucune session Supabase ici : la stagiaire n'a pas de compte. Tout passe par
+   l'edge function `dossier-stagiaire`, qui s'exécute en service_role et ne
+   traite que le dossier correspondant au jeton de l'URL. Aucune table n'est
+   interrogée directement, et le bucket est privé — voir 23b et 23c.
+
+   Le fichier est lu en base64 côté navigateur et posté à la fonction : pas de
+   dépôt direct dans le stockage, donc aucune clé d'écriture dans cette page.
+   =========================================================================== */
+
+const SUPABASE_URL = "https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const FN_URL = SUPABASE_URL + '/functions/v1/dossier-stagiaire';
+
+const TOKEN = new URLSearchParams(location.search).get('t') || '';
+const wrap  = document.getElementById('wrap');
+
+/* Doit rester aligné sur TAILLE_MAX de l'edge function : ici c'est du confort
+   (message immédiat, pas d'envoi inutile), là-bas c'est la règle. */
+const TAILLE_MAX = 12 * 1024 * 1024;
+
+let STAG = null;   // {prenom, nom, creche_nom, date_debut, date_fin, expire_le}
+let PIECES = [];   // catalogue + fichiers déposés
+let AUTRES = [];   // pièces dont le type a été supprimé du catalogue
+
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dfr = d => d ? new Date(d).toLocaleDateString('fr-FR') : '';
+
+let toastT=null;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('on');
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),3000);
+}
+
+function etat(cls,titre,msg,icone){
+  wrap.innerHTML='<div class="state '+cls+'"><i class="ti ti-'+(icone||'alert-circle')+'"></i>'
+    +'<h2>'+esc(titre)+'</h2><p>'+esc(msg)+'</p></div>';
+}
+
+async function appel(action,payload){
+  const r=await fetch(FN_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,
+             'Authorization':'Bearer '+SUPABASE_ANON_KEY},
+    body:JSON.stringify(Object.assign({action,token:TOKEN},payload||{}))
+  });
+  let j=null;
+  try{j=await r.json();}catch(e){}
+  if(!r.ok||!j||j.erreur)throw new Error((j&&j.erreur)||('Erreur '+r.status));
+  return j;
+}
+
+/* ---------------------------------------------------------------- ACCUEIL */
+
+async function boot(){
+  if(!TOKEN)return etat('err','Lien incomplet','Ce lien ne contient pas de jeton. Utilisez celui reçu de la crèche.','link-off');
+  try{
+    await recharger();
+  }catch(e){
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('expir'))
+      etat('err','Lien expiré','Ce lien n’est plus valable. Contactez la crèche, elle vous en enverra un nouveau.','clock-off');
+    else if(m.includes('introuvable'))
+      etat('err','Lien invalide','Ce lien ne correspond à aucun dossier. Vérifiez que vous l’avez copié en entier.','link-off');
+    else
+      etat('err','Erreur','Votre dossier n’a pas pu être chargé. Réessayez dans un instant.','alert-triangle');
+  }
+}
+
+async function recharger(){
+  const d=await appel('get');
+  STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];
+  document.getElementById('sousTitre').textContent=
+    (STAG.prenom||'')+(STAG.creche_nom?' · '+STAG.creche_nom:'');
+  render();
+}
+
+/* Une pièce est « fournie » dès qu'un fichier non refusé a été déposé.
+   Un refus la fait repasser en attente : c'est le seul moyen pour la crèche
+   de dire « recommencez celle-là » sans passer un coup de fil. */
+const fournie = p => (p.fichiers||[]).some(f=>f.statut!=='refuse');
+
+function render(){
+  const oblig=PIECES.filter(p=>p.obligatoire);
+  const faits=oblig.filter(fournie).length;
+  const pct=oblig.length?Math.round(faits/oblig.length*100):100;
+
+  const periode = STAG.date_debut
+    ? ' Votre stage est prévu du <b>'+esc(dfr(STAG.date_debut))+'</b>'
+      +(STAG.date_fin?' au <b>'+esc(dfr(STAG.date_fin))+'</b>':'')+'.'
+    : '';
+
+  let h='<div class="intro">Bonjour '+esc(STAG.prenom||'')+' ! Voici les documents à '
+    +'nous transmettre avant le début de votre stage.'+periode
+    +'<br><br>Photographiez-les avec votre téléphone ou envoyez le PDF : '
+    +'vous pouvez le faire en plusieurs fois, tout ce qui est envoyé est conservé.'
+    +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(STAG.expire_le))+'</b>.</div>';
+
+  h+='<div class="card"><div style="font-weight:700;font-size:14px">Votre avancement</div>'
+    +'<div class="prog"><i style="width:'+pct+'%"></i></div>'
+    +'<div class="progtxt">'+faits+' document'+(faits>1?'s':'')+' sur '+oblig.length
+    +' transmis</div></div>';
+
+  PIECES.forEach((p,i)=>h+=htmlPiece(p,i));
+
+  if(AUTRES.length){
+    h+='<h3 class="sec">Autres documents transmis</h3>'
+      +'<div class="card">'+AUTRES.map(f=>htmlFichier(f)).join('')+'</div>';
+  }
+
+  if(oblig.length&&faits===oblig.length){
+    h+='<div class="card" style="background:var(--green-bg);border-color:#BFE3CB;color:var(--green);font-weight:600;margin-top:14px">'
+      +'<i class="ti ti-circle-check"></i> Tout est transmis — merci ! '
+      +'L’équipe de la crèche vérifie vos documents et revient vers vous si besoin.</div>';
+  }else{
+    h+='<p class="hint" style="margin-top:16px">Il vous reste des pièces à envoyer ? '
+      +'Revenez sur ce lien quand vous les aurez, rien n’est perdu.</p>';
+  }
+
+  wrap.innerHTML=h;
+  window.scrollTo(0,0);
+}
+
+function htmlPiece(p,i){
+  const fs=p.fichiers||[];
+  const ok=fournie(p);
+  const refuse=fs.length&&fs.every(f=>f.statut==='refuse');
+  const st = refuse ? '<span class="badge b-ko">À renvoyer</span>'
+           : ok     ? '<span class="badge b-ok">Transmis</span>'
+           :          '<span class="badge b-att">À envoyer</span>';
+  const fac = p.obligatoire ? '' : ' <span class="badge b-fac">facultatif</span>';
+
+  return '<div class="piece'+(ok?' ok':'')+'">'
+    +'<div class="ptop">'
+    +'<span class="ic'+(ok?' ok':'')+'"><i class="ti ti-'+(ok?'check':'file-upload')+'"></i></span>'
+    +'<span class="tx"><b>'+esc(p.libelle)+'</b>'
+    +(p.aide?'<span class="aide">'+esc(p.aide)+'</span>':'')
+    +'<span style="display:block;margin-top:5px">'+st+fac+'</span>'
+    +(p.lien?'<a class="lienoff" href="'+esc(p.lien)+'" target="_blank" rel="noopener">'
+      +'<i class="ti ti-external-link"></i> Faire la demande en ligne</a>':'')
+    +'</span></div>'
+    +(fs.length?'<div class="files">'+fs.map(f=>htmlFichier(f)).join('')+'</div>':'')
+    +'<div style="margin-top:10px">'
+    +'<button class="btn btn-g btn-s" onclick="choisir('+i+')">'
+    +'<i class="ti ti-camera"></i> '+(fs.length?'Ajouter une autre page':'Envoyer')+'</button>'
+    +'<span id="st_'+i+'" style="margin-left:10px;font-size:12.5px;color:var(--muted)"></span>'
+    +'</div>'
+    +'<input type="file" id="inp_'+i+'" accept="image/*,application/pdf" capture="environment" '
+    +'style="display:none" onchange="envoyer(event,'+i+')">'
+    +'</div>';
+}
+
+function htmlFichier(f){
+  const st = f.statut==='valide' ? '<span class="badge b-ok">Validé</span>'
+           : f.statut==='refuse' ? '<span class="badge b-ko">Refusé</span>'
+           :                       '<span class="badge b-att">Reçu</span>';
+  /* Un document validé n'est plus supprimable ici : la crèche l'a vu et
+     accepté, c'est à elle de décider s'il doit être remplacé. */
+  const sup = f.statut==='valide' ? ''
+    : '<button title="Retirer" onclick="retirer(\''+f.id+'\')"><i class="ti ti-trash"></i></button>';
+  return '<div class="file"><i class="ti ti-paperclip" style="color:var(--violet-l)"></i>'
+    +'<span class="nm">'+esc(f.filename||'Document')+'</span>'+st+sup
+    +(f.statut==='refuse'&&f.commentaire
+      ? '<div style="flex:0 0 100%;font-size:12px;color:var(--red);margin-top:2px">'
+        +esc(f.commentaire)+'</div>' : '')
+    +'</div>';
+}
+
+function choisir(i){document.getElementById('inp_'+i).click();}
+
+/* ------------------------------------------------------------------ ENVOI */
+
+/* Le HEIC des iPhone n'est pas toujours reconnu par le navigateur, qui renvoie
+   alors un type vide : on le déduit de l'extension plutôt que de refuser un
+   fichier parfaitement valable. */
+function typeDe(file){
+  if(file.type)return file.type;
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  return {jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',heic:'image/heic',
+          heif:'image/heif',webp:'image/webp',pdf:'application/pdf'}[ext]||'';
+}
+
+function lireBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(String(r.result));
+    r.onerror=()=>rej(new Error('Lecture impossible'));
+    r.readAsDataURL(file);
+  });
+}
+
+async function envoyer(ev,i){
+  const input=ev.target;
+  const file=(input.files||[])[0];
+  input.value='';                       // pour pouvoir renvoyer le même fichier
+  if(!file)return;
+  const st=document.getElementById('st_'+i);
+  const mime=typeDe(file);
+
+  if(file.size>TAILLE_MAX){
+    toast('Ce fichier est trop lourd (12 Mo maximum).');return;
+  }
+  if(!['image/jpeg','image/png','image/heic','image/heif','image/webp','application/pdf'].includes(mime)){
+    toast('Envoyez une photo ou un PDF.');return;
+  }
+
+  if(st)st.textContent='⏳ Envoi…';
+  try{
+    const data=await lireBase64(file);
+    await appel('upload',{
+      type_id:PIECES[i].id,
+      mime,
+      filename:file.name,
+      data
+    });
+    await recharger();
+    toast('Document envoyé — merci !');
+  }catch(e){
+    if(st)st.textContent='';
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('expir'))toast('Ce lien a expiré. Contactez la crèche.');
+    else if(m.includes('lourd'))toast('Ce fichier est trop lourd (12 Mo maximum).');
+    else if(m.includes('format'))toast('Envoyez une photo ou un PDF.');
+    else toast('Envoi impossible. Vérifiez votre connexion et réessayez.');
+  }
+}
+
+async function retirer(id){
+  if(!confirm('Retirer ce document ?'))return;
+  try{
+    await appel('delete',{document_id:id});
+    await recharger();
+    toast('Document retiré.');
+  }catch(e){
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('validée'))toast('La crèche a déjà validé cette pièce.');
+    else toast('Suppression impossible.');
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
