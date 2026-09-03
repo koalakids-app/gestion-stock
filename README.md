@@ -18,7 +18,7 @@ Pas de framework, pas d'étape de build : chaque outil est un **fichier HTML aut
 |---|---|
 | Frontend | HTML/CSS/JS vanilla, fichier unique par application |
 | Backend | Supabase (PostgreSQL + Auth + Storage + Edge Functions) |
-| Stockage fichiers | Supabase Storage, bucket public `assets` |
+| Stockage fichiers | Supabase Storage — bucket public `assets`, buckets **privés** `carnets` (vaccinations) et `stagiaires` |
 | Emails | Resend (via Edge Functions) |
 | Hébergement | GitHub Pages — `koalakids-app.github.io` |
 | Client cible | Chrome sur tablette / mobile Android |
@@ -42,7 +42,7 @@ menu ⋮ → *Ajouter à l'écran d'accueil*.
 | Fichier | Rôle |
 |---|---|
 | `index.html` | Portail d'accueil — accès à tous les outils |
-| `demandes.html` | Application de coordination (14 modules, voir ci-dessous) |
+| `demandes.html` | Application de coordination (17 modules, voir ci-dessous) |
 | `stock.html` | Gestion du stock pédagogique et des commandes |
 | `documents.html` | Bibliothèque de documents et formulaires avec signature |
 
@@ -52,6 +52,8 @@ menu ⋮ → *Ajouter à l'écran d'accueil*.
 |---|---|
 | `padlets.html` | Liens vers les 8 tableaux Padlet du réseau |
 | `signature.html` | Page de signature à distance (ouverte via QR code) |
+| `famille.html` | Dossier de familiarisation — page ouverte par la famille via un lien à durée limitée |
+| `stagiaire.html` | Dépôt des pièces de stage — page ouverte par la stagiaire via un lien à durée limitée |
 | `migration-photos-storage.html` | Utilitaire ponctuel : migration des photos base64 vers Storage |
 | `manifest.json`, `sw.js` | Configuration PWA |
 | `keep-alive.yml` | GitHub Action de ping périodique |
@@ -71,7 +73,10 @@ menu ⋮ → *Ajouter à l'écran d'accueil*.
 | **Événements** | tous | Calendrier mensuel, 10+ types d'événements colorés |
 | **Tableau de bord direction** | direction | Vue consolidée du jour + export/restauration des sauvegardes |
 | **Mon tableau de bord** | référent | Vue du jour limitée à sa crèche |
+| **Enfants** | tous | Fiches enfants, carnet de vaccination joint, envoi du dossier de familiarisation aux familles |
 | **Vaccinations** | tous | Suivi des doses obligatoires par enfant, calcul automatique des échéances |
+| **Stagiaires** | tous | De la demande Padlet au bilan : fiche, pièces déposées par la stagiaire via un lien, calendrier par stagiaire et par crèche |
+| **Actions** | direction | Suivi des actions et décisions des réunions de direction, mode réunion, comptes rendus |
 | **Contrôle EAJE** | tous | Grille d'auto-contrôle réglementaire (19 sections), sauvegarde auto, export PDF |
 | **Frais IK** | direction | Saisie des trajets, génération du classeur Excel au format officiel |
 | **Frais pro** | tous | Dépenses mensuelles, justificatifs, export Excel et envoi par mail |
@@ -91,6 +96,35 @@ sont masquées dans la vue Semaine, où elles porteraient sur une journée non a
 
 L'ancienne vue « Semaine » en carrés matin/après-midi a été supprimée : elle affichait
 les mêmes données en moins riche, sans horaires ni navigation.
+
+### Module Stagiaires
+
+Une fiche par stagiaire et par crèche. Le statut suit le chemin réel d'une demande :
+*demande reçue* (Padlet) → *contact pris* → *accepté* → *en cours* → *terminé*, avec le
+suivi de la convention à part.
+
+Trois partis pris, détaillés dans `claude/STAGIAIRES.md` :
+
+- une stagiaire **sans crèche** n'est visible que par la direction — la demande Padlet
+  appartient au coordinateur tant qu'il ne l'a pas orientée ;
+- le **calendrier n'est pas déduit** des dates de début et de fin : un bouton génère les
+  jours ouvrés en 08h00–16h00, puis on corrige (horaires, absence avec motif, jour retiré).
+  Régénérer n'écrase rien ;
+- les pièces vivent dans le bucket **privé** `stagiaires`, aucune URL n'est stockée : le
+  lien de lecture est signé au clic et vaut 5 minutes. Pièces d'identité, casier
+  judiciaire, certificat médical.
+
+La stagiaire dépose ses pièces elle-même depuis `stagiaire.html`, sans compte, via un lien
+valable **30 jours**. Cette page ne touche à aucune table : tout passe par l'edge function
+`dossier-stagiaire` (à déployer avec `--no-verify-jwt`), qui ne traite que le dossier
+correspondant au jeton. La crèche valide ou refuse chaque pièce ; un refus, motivé, la
+remet en « à envoyer » côté stagiaire.
+
+La liste des pièces demandées est en base (`stagiaires_docs_types`) et se règle depuis
+l'onglet *Pièces demandées*, pas dans le code.
+
+**Tables :** `stagiaires`, `stagiaires_jours`, `stagiaires_documents`,
+`stagiaires_docs_types` — scripts `23a` à `23d`.
 
 ### Export PMI
 
@@ -184,14 +218,24 @@ Points à connaître avant toute intervention sur le code :
 - **Dates** — toujours passer par la fonction locale de conversion ISO.
   `toISOString().slice(0,10)` décale la date d'un jour en UTC+2 (heure d'été).
 - **Photos** — jamais de base64 en base : tout passe par le bucket Storage `assets`.
+- **Pages publiques** (`famille.html`, `stagiaire.html`) — aucune policy `anon` sur les
+  tables concernées : tout passe par une edge function en `service_role`, déployée avec
+  `--no-verify-jwt` puisque la personne n'a pas de compte. Sans ce drapeau, toutes ses
+  requêtes reviennent en 401.
 - **Échecs d'écriture silencieux** — vérifier d'abord une session expirée avant de
   suspecter une politique RLS.
 - **Avant login** — un utilisateur anonyme ne peut lire aucune table, y compris
   `creches`. Toute liste affichée avant authentification doit venir d'une constante.
 - **Table `creches`** — la colonne s'appelle `name`, pas `nom`.
 - **Table `presences`** — pas de colonne `creche_id` : le filtrage se fait via `enfants`.
+- **`creche_id` en text** — `actions_direction`, `frais_ik_lignes`, `pmi_config`,
+  `commandes_repas` et `stagiaires` le stockent en `text` : les policies comparent en
+  `::text` des deux côtés.
 - **Import planning** — le parseur exige le format `HHhMM-HHhMM/HHhMM-HHhMM`.
   Les plages simples type `10H-18H` sont ignorées sans message d'erreur.
+- **Import de PDF scannés** — les CV, lettres et conventions arrivent le plus souvent en
+  **images** (une image plein cadre par page, zéro caractère) : pdf.js n'en tire rien.
+  Ne pas bâtir d'import automatique là-dessus sans OCR.
 - **Deux clients Supabase** — le client secondaire doit être créé avec
   `{auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}}`
   pour éviter les conflits GoTrueClient.
@@ -237,10 +281,10 @@ Envoi manuel des fichiers sur GitHub, publication automatique via GitHub Pages.
 `demandes.html`, `stock.html` et `documents.html` disposent chacun d'une notice
 complète, accessible par le bouton **?** flottant en bas à droite de l'écran.
 
-La notice de `demandes.html` (`NOTICE_DEM`) compte **15 onglets**, un par module, dont
-**📋 Export PMI**. Toute modification d'un module doit s'accompagner de la mise à jour de
+La notice de `demandes.html` (`NOTICE_DEM`) compte **16 onglets**, dont **📋 Export PMI**
+et **🎓 Stagiaires**. Toute modification d'un module doit s'accompagner de la mise à jour de
 l'onglet correspondant : un onglet déclaré dans la barre sans clé dans `NOTICE_DEM`
 s'affiche vide, sans erreur.
 
-`signature.html` n'a pas de notice : la page est mono-usage, ouverte par un signataire
-extérieur au réseau, et déjà auto-explicative.
+`signature.html`, `famille.html` et `stagiaire.html` n'ont pas de notice : ces pages sont
+mono-usage, ouvertes par une personne extérieure au réseau, et déjà auto-explicatives.
