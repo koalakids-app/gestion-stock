@@ -930,6 +930,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div id="enf-fiche-documents" class="module-tab-content">
           <div id="enf-dossier-box"></div>
           <div id="enf-docs-list"></div>
+          <!-- Carnet de vaccination : meme bloc et memes donnees que la fiche
+               vaccins du module Vaccinations (table vaccins_pj). -->
+          <div id="enf-carnet-zone" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)"></div>
         </div>
       </div>
     </div>
@@ -1506,6 +1509,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <option value="SPA">SPA — Sans protéine animale</option>
         </select>
       </div>
+      <!-- Le goûter suit le repas par défaut (M et BB en goûter bébé, G en goûter
+           grand). Ce menu permet de l'en dissoudre : un enfant en repas moyen peut
+           très bien prendre le goûter des grands. -->
+      <div class="fg"><label class="flabel">Goûter</label>
+        <select class="finput" id="enf-gouter-base" onchange="enfSyncRepas()">
+          <option value="">Selon le repas (automatique)</option>
+          <option value="gbb">Goûter bébé</option>
+          <option value="ggr">Goûter grand</option>
+        </select>
+      </div>
     </div>
     <div id="enf-repas-apercu" style="font-size:11.5px;color:var(--muted);margin:-4px 0 10px 2px"></div>
     <div class="mactions"><button class="btn-cancel" id="enf-btn-delete" style="display:none;color:var(--red)" onclick="deleteEnfant()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-enfant-wrap')">Annuler</button><button class="btn-primary" id="enf-btn-save" onclick="saveEnfant()"><i class="ti ti-check"></i> Enregistrer</button></div>
@@ -2038,7 +2051,29 @@ function syncDemarrer(){
 window.syncDemarrer=syncDemarrer;
 
 // SUPABASE HELPERS
-async function dbSelect(table,filters={}){let q=sb.from(table).select('*').order('created_at',{ascending:false});for(const[k,v]of Object.entries(filters))q=q.eq(k,v);const{data,error}=await q;if(error){console.warn(table,error);return[];}return data||[];}
+/* Tri par défaut : la plupart des tables ont un `created_at`, mais pas toutes —
+   `consignes_lues` horodate avec `lu_at`. Trier sur une colonne absente fait
+   échouer la requête entière en 42703 et renvoie une liste vide, sans que rien
+   ne le signale à l'écran. On nomme donc explicitement la colonne de tri des
+   tables qui font exception, et un 42703 déclenche un second essai sans tri
+   plutôt que de perdre les données. */
+const DB_ORDER_COL={consignes_lues:'lu_at'};
+async function dbSelect(table,filters={}){
+  const col=DB_ORDER_COL[table]||'created_at';
+  const build=function(orderCol){
+    let q=sb.from(table).select('*');
+    if(orderCol)q=q.order(orderCol,{ascending:false});
+    for(const[k,v]of Object.entries(filters))q=q.eq(k,v);
+    return q;
+  };
+  let{data,error}=await build(col);
+  if(error&&error.code==='42703'){
+    console.warn('[dbSelect] '+table+' : colonne de tri « '+col+' » absente, relecture sans tri.');
+    ({data,error}=await build(null));
+  }
+  if(error){console.warn(table,error);return[];}
+  return data||[];
+}
 async function dbInsert(table,row){const{data,error}=await sb.from(table).insert(row).select().single();if(error){console.warn('insert',table,error);window._lastDbError=error.message||String(error);return null;}window._lastDbError=null;return data;}
 async function dbUpdate(table,id,updates){const{error}=await sb.from(table).update(updates).eq('id',id);if(error){console.error('[dbUpdate]',table,id,error.message);window._lastDbError=error.message||String(error);return false;}window._lastDbError=null;return true;}
 async function dbDelete(table,id){const{error}=await sb.from(table).delete().eq('id',id);if(error){console.warn('delete',table,error);return false;}return true;}
@@ -3872,8 +3907,16 @@ function crCompute(notify){
       const reg=r.enfant.regime_repas||'';
       if(cell.slot==='j'||cell.slot==='m')repas[t][reg]=(repas[t][reg]||0)+1;
       if(cell.slot==='j'||cell.slot==='a'){
-        const g=t==='bb18'?'gbb':(t==='grand'||t==='peri')?'ggr':null;
-        if(g)gouter[g][reg]=(gouter[g][reg]||0)+1;
+        /* La ligne de goûter ne se déduit plus de la ligne de repas : elle vient de
+           enfGouterLigne(), qui respecte le choix éventuellement forcé sur la fiche. */
+        const g=enfGouterLigne(r.enfant);
+        /* Un goûter ne contient jamais de viande : la mention « SV » n'a pas de
+           sens sur ces deux lignes et faisait apparaître un régime particulier
+           là où le traiteur sert le goûter standard. L'enfant est donc compté
+           dans l'effectif normal. SPV et SPA restent signalés : le lait et les
+           produits laitiers, eux, sont bien présents au goûter. */
+        const gReg=reg==='SV'?'':reg;
+        if(g)gouter[g][gReg]=(gouter[g][gReg]||0)+1;
       }
     });
     ['bb6','bb18','grand','peri'].forEach(function(k){vals[k][i]=crFmtCell(repas[k]);});
@@ -4165,12 +4208,16 @@ async function crExportPdf(){
   try{
     const c=crCollect();
     /* On enregistre AVANT de produire le bon : si le stockage échoue, l'utilisateur
-       est prévenu mais repart quand même avec son PDF. */
-    const saved=await crSave(true);
+       est prévenu mais repart quand même avec son PDF.
+       Enregistrement en BROUILLON (crSave(false)) : télécharger le bon n'est pas
+       le transmettre. Seul « Envoyer au traiteur » marque la commande comme
+       envoyée — sans quoi une simple édition du PDF cochait « annule et remplace »
+       à la réouverture de la semaine, pour une commande jamais partie. */
+    const saved=await crSave(false);
     const pdf=await crMakePdf(c);
     pdf.save(crPdfName(c.opts.semNum));
     closeModal('modal-commande-wrap');
-    showBanner(saved?'Bon de commande généré et enregistré ✅'
+    showBanner(saved?'Bon de commande généré et enregistré (brouillon) ✅'
                     :'Bon généré ✅ — mais l’enregistrement a échoué (table commandes_repas absente ?).',
                saved?'':'error');
   }catch(err){
@@ -4281,7 +4328,7 @@ async function crSendMail(){
         :'Commande envoyée à '+to.join(', ')+' ✅ — mais NON enregistrée en base ('+_crSaveErr+') : les autres postes ne verront pas qu’elle est partie.',
         saved?'success':'error');
     }else{
-      showBanner('Échec de l’envoi. Vous pouvez générer le PDF et l’envoyer manuellement.','error');
+      showBanner('Échec de l’envoi'+(_lastFnErr?' — '+_lastFnErr:'')+'. Vous pouvez générer le PDF et l’envoyer manuellement.','error');
       btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
     }
   }catch(err){
@@ -4373,6 +4420,28 @@ function enfSyncRepas(){
   if(forcee==='BIB')txt+=' <span style="color:var(--orange-dark)">(non compté dans les repas commandés)</span>';
   else if(forcee&&auto&&forcee!==auto)txt+=' <span style="color:var(--orange-dark)">(forcé ; l’âge donnerait '+escHtml(auto)+')</span>';
   else if(!forcee)txt+=' <span style="opacity:.8">(suit l’âge)</span>';
+  /* Le goûter : sans plat, pas de goûter non plus — le menu est grisé sur BIB.
+     Sinon on annonce la ligne du bon traiteur qui sera incrémentée. */
+  const selGout=document.getElementById('enf-gouter-base');
+  if(selGout){
+    selGout.disabled=(forcee==='BIB');
+    selGout.style.background=selGout.disabled?'#f4f4f8':'';
+    selGout.style.cursor=selGout.disabled?'not-allowed':'';
+    if(selGout.disabled)selGout.value='';
+    const gForce=selGout.value||'';
+    const gAuto=(base==='BB')?null:(base==='M')?'gbb':(base==='G')?'ggr':null;
+    const gFinal=gForce||gAuto;
+    if(forcee!=='BIB'){
+      if(!gFinal)txt+='<div style="margin-top:2px">Goûter : <span style="color:var(--muted)">aucun (repas légumes sans protéines)</span></div>';
+      else{
+        txt+='<div style="margin-top:2px">Goûter : <strong style="color:var(--koala)">'
+          +(gFinal==='gbb'?'bébé':'grand')+'</strong>'
+          +(gForce&&gAuto&&gForce!==gAuto?' <span style="color:var(--orange-dark)">(forcé ; le repas donnerait '+(gAuto==='gbb'?'bébé':'grand')+')</span>'
+            :(gForce&&!gAuto?' <span style="color:var(--orange-dark)">(forcé)</span>':' <span style="opacity:.8">(suit le repas)</span>'))
+          +'</div>';
+      }
+    }
+  }
   box.innerHTML=txt;
 }
 window.enfSyncRepas = enfSyncRepas;
@@ -4386,20 +4455,73 @@ function enfFillCreches(selectedId){
   sel.style.background=isDirection?'':'#f4f4f8';
   sel.style.cursor=isDirection?'':'not-allowed';
 }
-function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function saveEnfant(){const prenom=document.getElementById('enf-prenom').value.trim();if(!prenom){alert('Prénom requis.');return;}const row={prenom,nom:document.getElementById('enf-nom').value.trim(),dob:document.getElementById('enf-dob').value||null,groupe:groupeFromDob(document.getElementById('enf-dob').value),creche_id:document.getElementById('enf-creche').value,allergies:document.getElementById('enf-allergies').value.trim(),regime_repas:document.getElementById('enf-regime-repas').value||null,repas_base:document.getElementById('enf-repas-base').value||null};
-  // La colonne repas_base peut ne pas exister (migration SQL non passée) : on
-  // réessaie alors sans elle plutôt que de refuser d'enregistrer la fiche.
-  const sansRepasBase=function(){const r=Object.assign({},row);delete r.repas_base;return r;};
-  if(editingEnfantId){let ok=await dbUpdate('enfants',editingEnfantId,row);
-    if(!ok&&/repas_base/i.test(window._lastDbError||'')){delete row.repas_base;ok=await dbUpdate('enfants',editingEnfantId,sansRepasBase());
-      if(ok)setTimeout(function(){showBanner('Type de repas non enregistré : colonne repas_base absente de la table enfants.','error');},2500);}
-    if(ok){const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(e)Object.assign(e,row);closeModal('modal-enfant-wrap');showBanner(prenom+' modifié(e) ✅');renderPresence();if(document.getElementById('modal-enf-fiche-wrap')?.classList.contains('open')){document.getElementById('enf-fiche-title').innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((row.prenom||'')+' '+(row.nom||''));enfRenderIdentite();}if(typeof enfRender==='function')enfRender();if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();}else showBanner('Erreur lors de la modification.','error');return;}
-  let saved=await dbInsert('enfants',row);
-  if(!saved&&/repas_base/i.test(window._lastDbError||'')){saved=await dbInsert('enfants',sansRepasBase());
-    if(saved)setTimeout(function(){showBanner('Type de repas non enregistré : colonne repas_base absente de la table enfants.','error');},2500);}
-  if(saved){cacheEnfants.push(saved);closeModal('modal-enfant-wrap');showBanner(prenom+' ajouté(e) !');renderPresence();}}
+function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';document.getElementById('enf-gouter-base').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';document.getElementById('enf-gouter-base').value=e.gouter_base||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+/* Écriture d'une fiche enfant tolérante aux colonnes optionnelles absentes.
+   `repas_base` et `gouter_base` sont ajoutées par des migrations SQL distinctes :
+   si l'une manque, Postgres nomme la colonne fautive et on la retire du payload
+   avant de réessayer, plutôt que de refuser d'enregistrer toute la fiche. On ne
+   retire que celle qui est signalée — supprimer les deux ferait perdre en silence
+   un réglage pourtant enregistrable. */
+async function enfEcritureTolerante(row,id){
+  const absentes=[];
+  for(let essai=0;essai<3;essai++){
+    const r=id?await dbUpdate('enfants',id,row):await dbInsert('enfants',row);
+    if(r)return{res:r,absentes:absentes};
+    const err=window._lastDbError||'';
+    const col=/gouter_base/i.test(err)?'gouter_base':(/repas_base/i.test(err)?'repas_base':null);
+    if(!col||!(col in row))return{res:null,absentes:absentes};
+    delete row[col];absentes.push(col);
+  }
+  return{res:null,absentes:absentes};
+}
+function enfAvertirColonnes(absentes){
+  if(!absentes.length)return;
+  const libelles={repas_base:'type de repas',gouter_base:'choix du goûter'};
+  const txt=absentes.map(function(c){return libelles[c]||c;}).join(' et ');
+  setTimeout(function(){showBanner('Fiche enregistrée, mais le '+txt+' n’a pas pu l’être : colonne absente de la table enfants (migration SQL à exécuter).','error');},2500);
+}
+
+async function saveEnfant(){
+  const prenom=document.getElementById('enf-prenom').value.trim();
+  if(!prenom){alert('Prénom requis.');return;}
+  const row={
+    prenom,
+    nom:document.getElementById('enf-nom').value.trim(),
+    dob:document.getElementById('enf-dob').value||null,
+    groupe:groupeFromDob(document.getElementById('enf-dob').value),
+    creche_id:document.getElementById('enf-creche').value,
+    allergies:document.getElementById('enf-allergies').value.trim(),
+    regime_repas:document.getElementById('enf-regime-repas').value||null,
+    repas_base:document.getElementById('enf-repas-base').value||null,
+    gouter_base:document.getElementById('enf-gouter-base').value||null
+  };
+  if(editingEnfantId){
+    const out=await enfEcritureTolerante(row,editingEnfantId);
+    if(!out.res){showBanner('Erreur lors de la modification.','error');return;}
+    enfAvertirColonnes(out.absentes);
+    const e=cacheEnfants.find(x=>x.id===editingEnfantId);
+    if(e)Object.assign(e,row);
+    closeModal('modal-enfant-wrap');
+    showBanner(prenom+' modifié(e) ✅');
+    renderPresence();
+    if(document.getElementById('modal-enf-fiche-wrap')?.classList.contains('open')){
+      document.getElementById('enf-fiche-title').innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((row.prenom||'')+' '+(row.nom||''));
+      enfRenderIdentite();
+    }
+    if(typeof enfRender==='function')enfRender();
+    if(typeof vacRender==='function'&&document.getElementById('main-vaccinations')?.classList.contains('active'))vacRender();
+    return;
+  }
+  const out=await enfEcritureTolerante(row,null);
+  if(!out.res){showBanner('Erreur lors de l’ajout.','error');return;}
+  enfAvertirColonnes(out.absentes);
+  cacheEnfants.push(out.res);
+  closeModal('modal-enfant-wrap');
+  showBanner(prenom+' ajouté(e) !');
+  renderPresence();
+}
+
 async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(!confirm('Supprimer définitivement '+(e?.prenom||'')+' '+(e?.nom||'')+' ?\n\nAttention : les présences liées ne seront plus rattachées.'))return;const ok=await dbDelete('enfants',editingEnfantId);if(ok){cacheEnfants=cacheEnfants.filter(x=>x.id!==editingEnfantId);closeModal('modal-enfant-wrap');closeModal('modal-enf-fiche-wrap');showBanner('Enfant supprimé.');renderPresence();if(typeof enfRender==='function')enfRender();}else showBanner('Erreur lors de la suppression.','error');}
 
 // ── IMPORT PRÉSENCES DEPUIS PLANNING PDF (Gantt) ──
@@ -4412,6 +4534,28 @@ let _importPresData=null;
 let _ipDiag=[];
 let _ipReplace=true;
 let _ipForceCreche=false;
+/* Un Gantt liste TOUS les enfants inscrits de la crèche, y compris ceux qui ne
+   viennent pas ce jour-là : leur ligne est simplement vide. Sans la règle
+   ci-dessous, un enfant sans barre tombait dans le repli « pas d'horaires lus »
+   et était enregistré présent matin ET après-midi — une absence transformée en
+   journée complète, y compris sur le bon traiteur.
+
+   On ne peut pas pour autant décréter absent tout enfant sans créneau : si la
+   lecture des barres échoue en bloc (PDF illisible), personne n'en a, et il faut
+   alors conserver l'ancien comportement plutôt que de vider la semaine. D'où le
+   critère : la lecture n'est réputée fiable sur une page que si au moins un
+   enfant y a un créneau. Dans ce cas seulement, l'absence de barre vaut absence. */
+function ipHorairesFiables(pg){
+  const cr=pg.creneaux||{};
+  return Object.keys(cr).some(function(k){const c=cr[k];return c&&(c.hdebut||c.hfin);});
+}
+function ipEstAbsentSurPage(pg,nom){
+  if(!ipHorairesFiables(pg))return false;
+  const c=(pg.creneaux||{})[nom];
+  return !(c&&(c.hdebut||c.hfin));
+}
+window.ipHorairesFiables=ipHorairesFiables;window.ipEstAbsentSurPage=ipEstAbsentSurPage;
+
 function ipNormName(s){return(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s-]/g,'').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim();}
 function ipCleanName(s){return(s||'').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim();}
 function ipIsFirstnameToken(tok){return tok&&/^[A-ZÀ-Ÿ]/.test(tok)&&/[a-zà-ÿ]/.test(tok);}
@@ -4727,12 +4871,18 @@ function renderImportPreview(){
   html+=ipHtmlDiag(_importPresData.diag);
   html+=ipHtmlContrats(_importPresData.propositions,_importPresData.nameMap,_importPresData.contratsParEnfant,_importPresData.epWarn,_importPresData.pages.length);
   _importPresData.pages.forEach(pg=>{
-    const nb=pg.matched.length+pg.toCreate.length;totalPres+=nb;
+    /* Les enfants listés sans plage horaire sont des absents du jour : ils sont
+       affichés en gris, décomptés du total, et n'entreront pas en base. */
+    const absentsPg=pg.matched.filter(mt=>ipEstAbsentSurPage(pg,mt.name));
+    const presentsPg=pg.matched.filter(mt=>!ipEstAbsentSurPage(pg,mt.name));
+    const nb=presentsPg.length+pg.toCreate.length;totalPres+=nb;
     html+='<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">';
-    html+='<div style="font-weight:700;color:var(--koala);text-transform:capitalize;margin-bottom:6px">'+ipFmtDate(pg.date)+' <span style="font-weight:400;color:var(--muted);font-size:11px">'+nb+' enfant'+(nb>1?'s':'')+'</span></div>';
+    html+='<div style="font-weight:700;color:var(--koala);text-transform:capitalize;margin-bottom:6px">'+ipFmtDate(pg.date)+' <span style="font-weight:400;color:var(--muted);font-size:11px">'+nb+' enfant'+(nb>1?'s':'')
+      +(absentsPg.length?' · '+absentsPg.length+' absent'+(absentsPg.length>1?'s':''):'')+'</span></div>';
     const tags=[
-      ...pg.matched.map(mt=>'<span style="background:#e8f5e9;color:#2e7d32;border-radius:6px;padding:2px 8px;font-size:11.5px">✓ '+escHtml(mt.enfant.prenom+' '+mt.enfant.nom)+'</span>'),
-      ...pg.toCreate.map(nm=>'<span style="background:#fff3e0;color:#e65100;border-radius:6px;padding:2px 8px;font-size:11.5px">+ '+escHtml(nm)+'</span>')
+      ...presentsPg.map(mt=>'<span style="background:#e8f5e9;color:#2e7d32;border-radius:6px;padding:2px 8px;font-size:11.5px">✓ '+escHtml(mt.enfant.prenom+' '+mt.enfant.nom)+'</span>'),
+      ...pg.toCreate.map(nm=>'<span style="background:#fff3e0;color:#e65100;border-radius:6px;padding:2px 8px;font-size:11.5px">+ '+escHtml(nm)+'</span>'),
+      ...absentsPg.map(mt=>'<span style="background:#f1f1f4;color:#777;border-radius:6px;padding:2px 8px;font-size:11.5px" title="Aucune plage horaire sur le planning : non enregistré">— '+escHtml(mt.enfant.prenom+' '+mt.enfant.nom)+'</span>')
     ];
     html+='<div style="display:flex;flex-wrap:wrap;gap:5px">'+tags.join('')+'</div></div>';
   });
@@ -4767,8 +4917,13 @@ async function confirmPresenceImport(){
   //    présent l'après-midi (et inversement) : le PDF fait foi jusqu'au créneau.
   showBanner('Enregistrement des présences…');
   const wanted=[];
+  const ignores=[];
   pages.forEach(pg=>{
     pg.matched.forEach(mt=>{
+      if(ipEstAbsentSurPage(pg,mt.name)){
+        ignores.push({date:pg.date,nom:mt.enfant.prenom+' '+mt.enfant.nom});
+        return;
+      }
       const cr=(pg.creneaux||{})[mt.name];
       const hd=cr&&cr.hdebut?cr.hdebut:null,hf=cr&&cr.hfin?cr.hfin:null;
       const hasM=!cr||!hd||spMin(hd)<13*60;
@@ -4777,7 +4932,9 @@ async function confirmPresenceImport(){
       if(hasA)wanted.push({enfant_id:mt.enfant.id,presence_date:pg.date,slot:'A',status:'present',heure_debut:hd,heure_fin:hf});
     });
   });
-  if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;showBanner('Aucune présence à enregistrer.','error');return;}
+  if(!wanted.length){closeModal('modal-import-presence-wrap');_importPresData=null;
+    showBanner(ignores.length?('Aucune présence à enregistrer : les '+ignores.length+' enfant(s) lus n’ont aucune plage horaire sur le planning.')
+                             :'Aucune présence à enregistrer.','error');return;}
   const dates=[...new Set(wanted.map(w=>w.presence_date))];
   const ids=[...new Set(wanted.map(w=>w.enfant_id))];
   if(_ipReplace){
@@ -4806,7 +4963,11 @@ async function confirmPresenceImport(){
     bouts.push(toInsert.length+' présence'+(toInsert.length>1?'s':'')+' enregistrée'+(toInsert.length>1?'s':''));
     if(ctRes.crees)bouts.push(ctRes.crees+' contrat'+(ctRes.crees>1?'s':'')+' créé'+(ctRes.crees>1?'s':''));
     if(ctRes.majs)bouts.push(ctRes.majs+' contrat'+(ctRes.majs>1?'s':'')+' mis à jour');
+    /* Les absences écartées sont annoncées : une ligne vide dans le Gantt est une
+       information, pas un oubli, et la référente doit pouvoir la vérifier. */
+    if(ignores.length)bouts.push(ignores.length+' absence'+(ignores.length>1?'s':'')+' ignorée'+(ignores.length>1?'s':''));
     showBanner('Import terminé : '+bouts.join(', ')+' ✅');
+    if(ignores.length)console.info('[ImportPresence] absents (aucune plage horaire) :',ignores);
     if(degrade)setTimeout(()=>showBanner('Horaires non enregistrés sur les présences : colonnes heure_debut / heure_fin absentes de la table presences.','error'),3500);
     renderPresence();
   }else showBanner('Erreur lors de l\u2019enregistrement des pr\u00e9sences'+(_errMsg?' : '+_errMsg:'')+'.','error');
@@ -4814,19 +4975,12 @@ async function confirmPresenceImport(){
 
 // PLANNING (Supabase — voir renderPlanning plus bas, version active)
 function changeWeek(d){weekOffset+=d;renderPlanning();}
-function toggleLieuField(){
-  const type=document.getElementById('e-type').value;
-  const needsLieu=['presence','formation'].includes(type);
-  document.getElementById('e-lieu-wrap').style.display=needsLieu?'':'none';
-  document.getElementById('e-lieu-autre-wrap').style.display='none';
-  if(needsLieu&&document.getElementById('e-lieu').value==='Autre'){
-    document.getElementById('e-lieu-autre-wrap').style.display='';
-  }
-}
-function onLieuChange(){
-  const v=document.getElementById('e-lieu').value;
-  document.getElementById('e-lieu-autre-wrap').style.display=v==='Autre'?'':'none';
-}
+/* toggleLieuField() et onLieuChange() etaient definis ici une premiere fois,
+   dans une version anterieure qui ignorait le type « reunion » et le champ
+   detachement. Une seconde definition, plus bas et voisine de onTypeChange(),
+   les ecrasait au chargement : c'est elle qui s'executait reellement. Modifier
+   celle d'ici n'avait donc aucun effet visible. Le doublon mort est supprime,
+   la version active reste a cote de onTypeChange(). */
 // ── HELPERS HORAIRES ──
 function buildTimeOptions(selId,defaultVal){
   const sel=document.getElementById(selId);if(!sel)return;sel.innerHTML='';
@@ -9296,7 +9450,28 @@ function fpSendEmail(){
   window.location.href='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
 }
 
-async function callFn(fn,body){try{const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});return r.ok;}catch{return false;}}
+/* Dernière erreur d'appel d'edge function, en clair. callFn ne renvoie qu'un
+   booléen (13 appels s'appuient dessus) : le détail est déposé ici pour que les
+   écrans qui le peuvent affichent la cause réelle au lieu d'un « échec » muet —
+   un domaine Resend non vérifié, un secret manquant et un PDF trop lourd ne se
+   soignent pas de la même façon. */
+let _lastFnErr='';
+async function callFn(fn,body){
+  _lastFnErr='';
+  try{
+    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});
+    if(!r.ok){
+      let txt='';try{txt=await r.text();}catch(e){}
+      _lastFnErr='HTTP '+r.status+(txt?' — '+txt.slice(0,300):'');
+      console.error('[callFn] '+fn,_lastFnErr);
+    }
+    return r.ok;
+  }catch(err){
+    _lastFnErr=(err&&err.message)||'réseau injoignable';
+    console.error('[callFn] '+fn,err);
+    return false;
+  }
+}
 
 // ============================================================
 // REMPLAÇANTES
@@ -9857,10 +10032,12 @@ async function vacLoadData(){
 
 // ── Pièces jointes vaccinales (photocopies du carnet) ──
 let cacheVacPJ = [];
+let vacPJLoaded = false;   // le cache peut etre demande par la fiche enfant avant l'ouverture du module Vaccinations
 async function vacLoadPJ(){
   const {data, error} = await sb.from('vaccins_pj').select('*').order('created_at',{ascending:true});
   if(error){console.warn('vaccins_pj load',error);cacheVacPJ=[];return;}
   cacheVacPJ = data || [];
+  vacPJLoaded = true;
 }
 
 function vacShowView(view, btn){
@@ -9991,45 +10168,99 @@ function vacRenderFicheBody(){
   vacRenderPJ();
 }
 
-// Rendu de la zone pièces jointes dans la fiche enfant
-function vacRenderPJ(){
-  const zone = document.getElementById('vac-pj-zone');
+/* ── Photocopies du carnet de vaccination ─────────────────────────────────
+   Le meme bloc est affiche a deux endroits : la fiche vaccins du module
+   Vaccinations (#vac-pj-zone) et l'onglet Documents de la fiche enfant
+   (#enf-carnet-zone). Une seule source de donnees : la table `vaccins_pj`,
+   donc une piece ajoutee d'un cote apparait de l'autre.
+
+   Stockage : bucket PRIVE `carnets`. On n'enregistre plus d'URL publique —
+   il s'agit de donnees de sante d'enfants, et une URL publique reste lisible
+   par quiconque la possede, sans authentification. On ne garde que le bucket
+   et le chemin de l'objet, et chaque ouverture demande a Supabase une URL
+   signee valable quelques minutes. Les lignes creees avant ce changement
+   pointent vers l'ancien bucket public `assets` : elles restent lisibles
+   (colonnes bucket/path renseignees par la migration), mais tant que ces
+   fichiers-la n'ont pas ete redeposes ils demeurent publics. */
+const VACPJ_BUCKET = 'carnets';
+const VACPJ_TTL    = 300;   // duree de vie d'une URL signee, en secondes
+
+/* Bucket et chemin d'une piece jointe, y compris pour les lignes
+   historiques ou seule l'URL publique a ete enregistree. */
+function vacPJLoc(p){
+  if(p && p.bucket && p.path) return {bucket:p.bucket, path:p.path};
+  const m = String((p&&p.url)||'').match(/\/object\/(?:public|sign)\/([^/]+)\/(.+?)(?:\?|$)/);
+  return m ? {bucket:m[1], path:decodeURIComponent(m[2])} : null;
+}
+
+/* Ouverture : l'URL est generee au moment du clic et expire ensuite. */
+async function vacPJOpen(id){
+  const p = cacheVacPJ.find(x=>String(x.id)===String(id));
+  const loc = p && vacPJLoc(p);
+  if(!loc){alert('Fichier introuvable.');return;}
+  const {data,error} = await sb.storage.from(loc.bucket).createSignedUrl(loc.path, VACPJ_TTL);
+  if(error||!data){alert('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'));return;}
+  window.open(data.signedUrl,'_blank','noopener');
+}
+
+/* Rendu generique : zoneId = conteneur, eid = enfant, inputId = champ fichier
+   (chaque zone a le sien pour que les deux emplacements coexistent). */
+function vacPJRenderZone(zoneId, eid, inputId){
+  const zone = document.getElementById(zoneId);
   if(!zone) return;
-  const eid = vacFicheEnfantId;
+  if(!eid){zone.innerHTML='';return;}
   const items = cacheVacPJ.filter(p=>String(p.enfant_id)===String(eid));
   const list = items.length ? items.map(p=>
     '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:#fff">'
     + '<i class="ti ti-paperclip" style="color:var(--koala)"></i>'
-    + '<a href="'+p.url+'" target="_blank" style="flex:1;font-size:12.5px;color:var(--koala-dark);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(p.filename||'Document')+'</a>'
+    + '<button type="button" onclick="vacPJOpen(\''+p.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12.5px;color:var(--koala-dark);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(p.filename||'Document')+'</button>'
     + '<button onclick="vacDeletePJ(\''+p.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:15px"><i class="ti ti-trash"></i></button>'
     + '</div>'
   ).join('') : '<div style="font-size:12px;color:var(--muted)">Aucune photocopie jointe pour le moment.</div>';
   zone.innerHTML =
     '<div style="font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-camera" style="color:var(--koala)"></i> Photocopies du carnet de vaccination</div>'
     + '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">'+list+'</div>'
-    + '<button class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;font-size:12.5px" onclick="document.getElementById(\'vac-pj-input\').click()"><i class="ti ti-upload"></i> Ajouter une photocopie</button>'
-    + '<span id="vac-pj-status" style="margin-left:10px;font-size:12px;color:var(--muted)"></span>'
-    + '<input type="file" id="vac-pj-input" accept="image/*,application/pdf" multiple style="display:none" onchange="vacHandlePJ(event)"/>';
+    + '<button class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;font-size:12.5px" onclick="document.getElementById(\''+inputId+'\').click()"><i class="ti ti-upload"></i> Ajouter une photocopie</button>'
+    + '<span id="'+inputId+'-status" style="margin-left:10px;font-size:12px;color:var(--muted)"></span>'
+    + '<input type="file" id="'+inputId+'" data-eid="'+escHtml(String(eid))+'" accept="image/*,application/pdf" multiple style="display:none" onchange="vacHandlePJ(event)"/>';
+}
+
+/* Les deux emplacements sont rafraichis ensemble : celui qui n'est pas
+   affiche sort immediatement de vacPJRenderZone. */
+function vacPJRefresh(){
+  vacPJRenderZone('vac-pj-zone', vacFicheEnfantId, 'vac-pj-input');
+  vacPJRenderZone('enf-carnet-zone', enfFicheId, 'enf-carnet-input');
+}
+function vacRenderPJ(){ vacPJRenderZone('vac-pj-zone', vacFicheEnfantId, 'vac-pj-input'); }
+
+/* Appele a l'ouverture de la fiche enfant : le cache peut ne jamais avoir
+   ete charge si le module Vaccinations n'a pas ete ouvert. */
+async function enfLoadCarnet(enfantId){
+  if(!vacPJLoaded) await vacLoadPJ();
+  if(String(enfFicheId)!==String(enfantId)) return;   // fiche deja refermee ou changee
+  vacPJRenderZone('enf-carnet-zone', enfantId, 'enf-carnet-input');
 }
 
 async function vacHandlePJ(event){
-  const files = Array.from(event.target.files||[]);
+  const input = event.target;
+  const files = Array.from(input.files||[]);
   if(!files.length) return;
-  const eid = vacFicheEnfantId;
-  const status = document.getElementById('vac-pj-status');
+  const eid = input.dataset.eid;
+  const status = document.getElementById(input.id+'-status');
   for(const file of files){
     if(status) status.textContent = '⏳ Envoi de '+file.name+'…';
     try{
       const ext = (file.name.split('.').pop()||'bin');
-      const path = 'vaccins-pj/'+eid+'_'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
-      const {error} = await fpStorageClient().storage.from('assets').upload(path,file);
+      const path = eid+'/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+      /* Client authentifie (sb) et non le client anonyme : le bucket est prive
+         et ses policies exigent un compte referent. */
+      const {error} = await sb.storage.from(VACPJ_BUCKET).upload(path,file);
       if(error) throw error;
-      const {data} = fpStorageClient().storage.from('assets').getPublicUrl(path);
       const {data:ins, error:insErr} = await sb.from('vaccins_pj')
-        .insert({enfant_id:eid, url:data.publicUrl, filename:file.name}).select().single();
+        .insert({enfant_id:eid, bucket:VACPJ_BUCKET, path:path, filename:file.name}).select().single();
       if(insErr) throw insErr;
       if(ins) cacheVacPJ.push(ins);
-      vacRenderPJ();
+      vacPJRefresh();
     }catch(e){
       console.error('[VacPJ]',e.message);
       if(status) status.textContent = '⚠ Erreur : '+e.message;
@@ -10042,14 +10273,23 @@ async function vacHandlePJ(event){
 
 async function vacDeletePJ(id){
   if(!confirm('Supprimer cette photocopie ?')) return;
+  const p = cacheVacPJ.find(x=>String(x.id)===String(id));
   const {error} = await sb.from('vaccins_pj').delete().eq('id',id);
   if(error){alert('Erreur : '+error.message);return;}
+  /* Le fichier lui-meme est retire du stockage : sans cela il resterait
+     indefiniment dans le bucket, hors de toute fiche. */
+  const loc = p && vacPJLoc(p);
+  if(loc){
+    const {error:rmErr} = await sb.storage.from(loc.bucket).remove([loc.path]);
+    if(rmErr) console.warn('[VacPJ] fichier non supprime du stockage',rmErr.message);
+  }
   cacheVacPJ = cacheVacPJ.filter(p=>p.id!==id);
-  vacRenderPJ();
+  vacPJRefresh();
   showBanner('Photocopie supprimée.');
 }
 window.vacHandlePJ = vacHandlePJ;
 window.vacDeletePJ = vacDeletePJ;
+window.vacPJOpen   = vacPJOpen;
 
 function vacRenderAlertes(){
   const el = document.getElementById('vac-alert-list');
@@ -10394,10 +10634,12 @@ async function enfOpenFiche(id){
   enfLoadContrats(e.id);
   document.getElementById('enf-docs-list').innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
   document.getElementById('enf-dossier-box').innerHTML = '';
+  document.getElementById('enf-carnet-zone').innerHTML = '';
   document.getElementById('modal-enf-fiche-wrap').classList.add('open');
   // charger les documents et le dossier famille en arrière-plan
   enfLoadDocs(e.id);
   enfLoadDossier(e.id);
+  enfLoadCarnet(e.id);
 }
 
 const ENF_FICHE_TABS = ['identite','parents','contrat','documents'];
@@ -10430,6 +10672,27 @@ function enfRepasFicheLigne(e){
   return s;
 }
 
+/* Ligne « Goûter » de l'onglet Identité. Elle est toujours affichée, même quand le
+   goûter suit le repas : c'est une information que la référente doit pouvoir lire
+   sans ouvrir le formulaire de modification. */
+function enfGouterFicheLigne(e){
+  const base=e.repas_base||enfRepasBaseAuto(e);
+  if(!base)return'<span style="color:var(--muted)">—</span>';
+  if(base==='BIB')return'<span style="color:var(--muted)">aucun (biberon)</span>';
+  const g=enfGouterLigne(e);
+  if(!g)return'<span style="color:var(--muted)">aucun (repas légumes sans protéines)</span>';
+  const forcee=e.gouter_base||'';
+  const auto=enfGouterAuto(e);
+  const lbl=function(v){return v==='gbb'?'bébé':'grand';};
+  let s='<span style="display:inline-block;background:'+(forcee?'var(--orange-light)':'var(--koala-light)')
+    +';color:'+(forcee?'var(--orange-dark)':'var(--koala)')
+    +';border-radius:6px;padding:1px 7px;font-weight:800">Goûter '+lbl(g)+'</span>';
+  if(forcee&&auto&&forcee!==auto)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé — le repas donnerait '+lbl(auto)+'</div>';
+  else if(forcee)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé</div>';
+  else s+='<div style="font-size:11px;color:var(--muted);font-weight:400">suit le repas</div>';
+  return s;
+}
+
 function enfRenderIdentite(){
   const e = cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
   const box = document.getElementById('enf-fiche-identite');
@@ -10445,6 +10708,7 @@ function enfRenderIdentite(){
     + row('Crèche', creche?escHtml(creche.name):'')
     + row('Allergies', escHtml(e.allergies||''))
     + row('Repas', enfRepasFicheLigne(e))
+    + row('Goûter', enfGouterFicheLigne(e))
     + '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn-primary" onclick="editEnfant(\''+e.id+'\')"><i class="ti ti-edit"></i> Modifier la fiche</button></div>';
 }
 
@@ -11018,6 +11282,26 @@ function enfRepasCode(e){
   // Un enfant au biberon ne reçoit pas de plat : lui accoler un régime n'aurait aucun sens.
   if(base==='BIB')return'BIB';
   return e.regime_repas?base+e.regime_repas:base;
+}
+
+/* ── GOÛTER ────────────────────────────────────────────────────────────────
+   Le bon MCM n'a que deux lignes de goûter : « bébé » et « grand ». Par défaut
+   elles découlent du code repas — M en goûter bébé, G et périscolaire en goûter
+   grand, BB sans goûter. Mais manger un repas moyen n'empêche pas de prendre le
+   goûter des grands : le champ `gouter_base` de la fiche ('' | 'gbb' | 'ggr')
+   permet de dissocier les deux. Laissé vide, le goûter continue de suivre le repas
+   et donc les anniversaires. */
+function enfGouterAuto(e){
+  if(!e)return null;
+  const base=e.repas_base||enfRepasBaseAuto(e);
+  if(!base||base==='BIB'||base==='BB')return null;
+  return base==='M'?'gbb':'ggr';
+}
+function enfGouterLigne(e){
+  if(!e)return null;
+  const base=e.repas_base||enfRepasBaseAuto(e);
+  if(base==='BIB')return null;              // au biberon : ni repas ni goûter
+  return e.gouter_base||enfGouterAuto(e);
 }
 let enfContratsCache=[], editingContratId=null, ctJoursSel=[];
 
