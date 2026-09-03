@@ -13534,7 +13534,10 @@ function adRenderReunion(){
   if(ne&&!ne.value)ne.value=adEcheanceParDefaut();
   adMajEtat();
   adRenderRevue();
-  adRenderPointsCreches();
+  /* On ne reprend la saisie en cours que s'il y a vraiment une saisie en cours.
+     Sinon, en changeant de date, les zones de notes de la reunion precedente
+     etaient relues dans le DOM et recopiees dans la nouvelle seance. */
+  adRenderPointsCreches(_adDirty);
   adRenderNouvelles();
 }
 
@@ -13554,9 +13557,29 @@ function adCapturePointsCreches(){
 }
 function adPointsCrecheChange(id,val){_adPointsCreches[id]=val;adReunionDirty();}
 
-function adRenderPointsCreches(){
+/* Derniere note ecrite pour ce site lors d'une seance ANTERIEURE a celle
+   affichee. Sert au bouton « Reprendre » : recopier le passe est parfois utile,
+   mais c'est une decision, pas un effet de bord. */
+function adNotesPrecedentes(crecheId){
+  const l=(adReunions||[])
+    .filter(r=>r.date_reunion<adReunionDate&&r.points_creches&&String(r.points_creches[crecheId]||'').trim())
+    .sort((a,b)=>a.date_reunion<b.date_reunion?1:-1);
+  return l.length?{date:l[0].date_reunion,texte:String(l[0].points_creches[crecheId])}:null;
+}
+function adReprendreNotes(crecheId){
+  const p=adNotesPrecedentes(crecheId);if(!p)return;
+  const actuel=String(_adPointsCreches[crecheId]||'').trim();
+  if(actuel&&!confirm('Remplacer les notes deja saisies pour ce site par celles du '+adFmtDate(p.date)+' ?'))return;
+  _adPointsCreches[crecheId]=p.texte;
+  adReunionDirty();
+  adRenderPointsCreches(false);
+}
+
+function adRenderPointsCreches(reprendreSaisie){
   const box=document.getElementById('ad-r-points-creches');if(!box)return;
-  adCapturePointsCreches();
+  /* Par defaut on conserve ce qui est en train d'etre tape : un redessin
+     (une action cochee en seance) ne doit pas effacer la saisie. */
+  if(reprendreSaisie!==false)adCapturePointsCreches();
   const creches=adCrechesOrdonnees();
   if(!creches.length){box.innerHTML='<div class="meta-txt" style="font-style:italic">Aucune crèche enregistrée.</div>';return;}
   const ouvertes=adCache.filter(a=>!adEstClos(a.statut));
@@ -13571,6 +13594,7 @@ function adRenderPointsCreches(){
           +(ouv.length?'<span class="badge b-ref">'+ouv.length+' action'+(ouv.length>1?'s':'')+' ouverte'+(ouv.length>1?'s':'')+'</span>':'')
           +(enRetard?'<span class="badge" style="background:var(--red-light);color:#c0392b">'+enRetard+' en retard</span>':'')
           +(nouv.length?'<span class="badge" style="background:var(--green-light);color:var(--green)">'+nouv.length+' décidée'+(nouv.length>1?'s':'')+' ce jour</span>':'')
+          +(adNotesPrecedentes(c.id)?'<button class="btn-sm" style="font-size:11px;padding:4px 9px" title="Recopier ici les notes de ce site lors de la derniere seance ('+adFmtDate(adNotesPrecedentes(c.id).date)+')" onclick="adReprendreNotes(\''+c.id+'\')"><i class="ti ti-history"></i> Reprendre</button>':'')
           +'<button class="btn-sm" style="font-size:11px;padding:4px 9px" onclick="adAjoutDepuisBloc(\''+c.id+'\')"><i class="ti ti-plus"></i> Action</button>'
         +'</div>'
       +'</div>'
