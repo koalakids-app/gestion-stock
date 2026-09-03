@@ -905,6 +905,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <input class="finput" id="enf-search" placeholder="Rechercher un enfant…" style="width:auto;min-width:180px;font-size:12px;padding:4px 8px" oninput="enfRender()">
         <button class="btn-sm" id="enf-incomplete-toggle" style="font-size:11px;padding:5px 10px;display:flex;align-items:center;gap:5px" onclick="enfToggleIncomplete()" title="N'afficher que les fiches où la date de naissance ou les allergies n'ont jamais été renseignées"><i class="ti ti-alert-triangle" style="color:#e8a33d"></i> Fiches à compléter<span id="enf-incomplete-count" style="display:none;background:#e8a33d;color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700"></span></button>
         <button class="btn-sm direction-only" id="enf-cleanup-totaux-btn" style="font-size:11px;padding:5px 10px;display:none;align-items:center;gap:5px;color:var(--red);border-color:var(--red)" onclick="enfCleanupTotauxFaux()" title="Supprime les fausses fiches « Totaux … » créées par un bug de l'import PDF"><i class="ti ti-trash"></i> Nettoyer les fiches « Totaux »<span id="enf-cleanup-totaux-count" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700"></span></button>
+        <button class="btn-sm" onclick="icpOuvrir()" style="font-size:11px;padding:5px 10px;display:flex;align-items:center;gap:5px" title="Lire la liste PDF des coordonnées et créer les parents dans les fiches enfants"><i class="ti ti-address-book"></i> Importer les coordonnées (PDF)</button>
         <button class="btn-primary" onclick="openEnfantModal()"><i class="ti ti-plus"></i> Ajouter un enfant</button>
       </div>
     </div>
@@ -1553,6 +1554,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn-cancel" id="par-btn-delete" style="display:none;color:var(--red)" onclick="deleteParent()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn-cancel" onclick="closeModal('modal-parent-wrap')">Annuler</button>
       <button class="btn-primary" id="par-btn-save" onclick="saveParent()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORT DES COORDONNÉES PARENTS (PDF de la direction) -->
+<div class="overlay" id="modal-import-coord-wrap">
+  <div class="modal" style="max-width:960px;width:100%;max-height:88vh;display:flex;flex-direction:column">
+    <h3 style="margin:0 0 4px"><i class="ti ti-address-book"></i> Importer les coordonnées des parents</h3>
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.6;margin:0 0 12px">
+      Charge la liste « Coordonnées parents » (PDF) et crée les responsables légaux dans l'onglet
+      <strong>Parents</strong> des fiches enfants. Rien n'est enregistré avant votre relecture :
+      chaque nom, téléphone et adresse reste modifiable ci-dessous, et un enfant qui a déjà des
+      parents saisis est laissé de côté.
+    </p>
+    <div id="icp-etape-fichier" style="margin-bottom:10px">
+      <input class="finput" type="file" id="icp-file" accept="application/pdf,.pdf" style="margin-bottom:10px">
+      <button class="btn-primary" id="icp-btn-lire" onclick="icpLire()"><i class="ti ti-file-search"></i> Lire le PDF</button>
+    </div>
+    <div id="icp-resume" style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:8px"></div>
+    <div id="icp-revue" style="display:none;overflow:auto;flex:1;min-height:0"></div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-import-coord-wrap')">Fermer</button>
+      <button class="btn-primary" id="icp-btn-import" style="display:none" onclick="icpImporter()"><i class="ti ti-download"></i> Importer les lignes cochées</button>
     </div>
   </div>
 </div>
@@ -10871,6 +10895,412 @@ async function deleteParent(){
   closeModal('modal-parent-wrap');
   enfRenderParents();
   showBanner('Parent supprimé.');
+}
+
+/* ============ IMPORT PDF DES COORDONNÉES DES PARENTS ======================
+   La direction tient la liste des coordonnées des familles dans un document
+   « Coordonnées parents » : une ligne par enfant, avec les parents, leurs
+   téléphones et leurs adresses. Jusqu'ici il fallait la recopier à la main
+   dans l'onglet Parents, fiche par fiche. Cet import la lit et propose les
+   responsables légaux à créer.
+
+   Le PDF n'a aucune structure : ce sont des mots posés à des coordonnées. On
+   reconstitue les lignes par leur ordonnée, puis les colonnes — celle de
+   l'enfant par sa position, les autres par leur contenu (un « @ » = une
+   adresse, huit chiffres = un téléphone). Se fier aux seules abscisses ferait
+   basculer « DI FRANCESCO », qui déborde sur la colonne des téléphones, du
+   côté des numéros.
+
+   Rien n'est écrit sans relecture : l'import propose, on corrige à l'écran,
+   et seules les lignes cochées partent en base. Un enfant qui a déjà des
+   parents enregistrés est signalé et laissé de côté — l'import ne remplace
+   jamais une saisie existante. */
+
+let ICP_BLOCS = [];     // blocs lus dans le PDF, enrichis à la relecture
+
+function icpNorm(s){
+  return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^A-Za-z0-9]+/g,' ').trim().toLowerCase();
+}
+function icpEstMaj(t){
+  const l=String(t).normalize('NFD').replace(/[^A-Za-z]/g,'');
+  return l.length>1 && l===l.toUpperCase();
+}
+function icpChiffres(t){ return String(t).replace(/[^\d]/g,''); }
+function icpCap(mot){
+  if(!mot) return '';
+  if(icpEstMaj(mot)) return mot;                 // DI FRANCESCO reste tel quel
+  return mot.charAt(0).toLocaleUpperCase('fr')+mot.slice(1);
+}
+
+/* Regroupe les mots en lignes visuelles (tolérance de 3 points). */
+function icpLignes(items){
+  const tri=items.slice().sort((a,b)=> b.y-a.y || a.x-b.x);
+  const lignes=[];
+  let cur=null;
+  tri.forEach(it=>{
+    if(!cur || Math.abs(cur.y-it.y)>3){ cur={y:it.y,toks:[]}; lignes.push(cur); }
+    cur.toks.push(it);
+  });
+  lignes.forEach(l=>l.toks.sort((a,b)=>a.x-b.x));
+  return lignes;
+}
+
+/* Colonne « Enfant » : tout ce qui est à gauche du milieu entre l'en-tête
+   « Enfant » et l'en-tête « Parents ». Si l'en-tête est illisible, on retombe
+   sur 110 points, valeur observée sur les listes de la direction. */
+function icpBornEnfant(lignes){
+  for(let i=0;i<lignes.length;i++){
+    const e=lignes[i].toks.find(t=>/^enfants?\b/i.test(t.str));
+    const p=lignes[i].toks.find(t=>/^parents?\b/i.test(t.str));
+    if(e&&p) return {x:(e.x+p.x)/2, i:i};
+  }
+  return {x:110, i:-1};
+}
+
+function icpParseItems(items){
+  const lignes=icpLignes(items);
+  const b=icpBornEnfant(lignes);
+  const blocs=[];
+  let cur=null;
+  for(let i=b.i+1;i<lignes.length;i++){
+    const toks=lignes[i].toks;
+    const gauche=toks.filter(t=>t.x<b.x);
+    const droite=toks.filter(t=>t.x>=b.x);
+    if(gauche.length){
+      cur={enfant:gauche.map(t=>t.str).join(' ').trim(), parents:[], tels:[], mails:[]};
+      blocs.push(cur);
+    }
+    if(!cur) continue;
+    /* pdf.js ne découpe pas en mots : un fragment vaut souvent une cellule
+       entière (« 0676193773 (S travail) », « Beaufils Cédric et Morgane DI »).
+       On classe donc par le contenu du fragment, pas mot à mot. */
+    droite.forEach(t=>{
+      let s=(t.str||'').trim();
+      if(!s) return;
+
+      const mails=s.match(/[^\s,;:<>()]+@[^\s,;:<>()]+\.[A-Za-z]{2,}/g);
+      if(mails){
+        mails.forEach(m=>cur.mails.push(m.replace(/[.,;]+$/,'')));
+        s=mails.reduce((acc,m)=>acc.split(m).join(' '),s).trim();
+        if(!/[A-Za-zÀ-ÿ]{3,}/.test(s)) return;
+      }
+
+      /* Un numéro, éventuellement suivi de l'initiale du parent : « (M) ». */
+      const re=/(\d[\d .]{6,}\d)\s*(?:\(\s*([A-Za-zÀ-ÿ])[^)]*\)?)?/g;
+      let m, trouve=false;
+      while((m=re.exec(s))){
+        if(icpChiffres(m[1]).length<8) continue;
+        cur.tels.push({num:icpChiffres(m[1]), init:m[2]||''});
+        trouve=true;
+      }
+      if(trouve){
+        s=s.replace(/(\d[\d .]{6,}\d)\s*(?:\([^)]*\)?)?/g,' ').trim();
+        if(!/[A-Za-zÀ-ÿ]{3,}/.test(s)) return;
+      }
+
+      /* Une initiale seule, sur sa propre ligne, complète le dernier numéro. */
+      if(/^\(?\s*[A-Za-zÀ-ÿ][^)]*\)$/.test(s) && cur.tels.length){
+        const i=s.match(/\(?\s*([A-Za-zÀ-ÿ])/);
+        const dernier=cur.tels[cur.tels.length-1];
+        if(i && !dernier.init) dernier.init=i[1];
+        return;
+      }
+      cur.parents.push(s);
+    });
+  }
+  return blocs.filter(x=>x.enfant && !/^enfants?$/i.test(x.enfant)
+                       && (x.parents.length||x.mails.length||x.tels.length));
+}
+
+/* Découpage « Untel et Unetelle » en personnes. Deux conventions cohabitent
+   dans les listes : « Prénom NOM » et, plus rarement, « Nom Prénom ». Les
+   initiales notées à côté des numéros — « 0770185899 (B) » — désignent des
+   prénoms : c'est le meilleur indice quand les deux mots sont écrits de la
+   même façon (« Bryan Leoty », où l'adresse Leoty.bryan@ induirait en erreur).
+   À défaut, l'ordre des mots dans l'adresse départage. */
+function icpPersonnes(bloc){
+  const texte=bloc.parents.join(' ').replace(/\s+/g,' ').trim();
+  if(!texte) return [];
+  const parts=texte.split(/\s+(?:et|&|\/|,)\s+/i).map(s=>s.trim()).filter(Boolean);
+  const locaux=bloc.mails.map(m=>icpNorm(m.split('@')[0]).replace(/ /g,''));
+  const inits=bloc.tels.map(t=>icpNorm(t.init).charAt(0)).filter(Boolean);
+
+  const gens=parts.map(part=>{
+    const toks=part.split(/\s+/).filter(Boolean);
+    if(!toks.length) return null;
+    if(toks.length===1) return {prenom:icpCap(toks[0]), nom:''};
+
+    const maj=toks.filter(icpEstMaj), min=toks.filter(t=>!icpEstMaj(t));
+    if(maj.length && min.length) return {prenom:min.map(icpCap).join(' '), nom:maj.join(' ')};
+
+    const a=icpNorm(toks[0]).replace(/ /g,''), b=icpNorm(toks[1]).replace(/ /g,'');
+    const direct =()=>({prenom:icpCap(toks[0]), nom:toks.slice(1).map(icpCap).join(' ')});
+    const inverse=()=>({prenom:icpCap(toks[1]),
+                        nom:[toks[0]].concat(toks.slice(2)).map(icpCap).join(' ')});
+
+    const ma=inits.indexOf(a.charAt(0))>=0, mb=inits.indexOf(b.charAt(0))>=0;
+    if(ma&&!mb) return direct();
+    if(mb&&!ma) return inverse();
+    for(let k=0;k<locaux.length;k++){
+      const ia=locaux[k].indexOf(a), ib=locaux[k].indexOf(b);
+      if(ia>=0 && ib>=0 && ia!==ib) return ia<ib ? direct() : inverse();
+    }
+    return direct();
+  }).filter(Boolean);
+
+  /* « Ablah et Rachid JENNANI » : le premier parent porte le nom du second. */
+  const avecNom=gens.find(g=>g.nom);
+  if(avecNom) gens.forEach(g=>{ if(!g.nom) g.nom=avecNom.nom; });
+
+  /* Téléphones et adresses : d'abord par l'initiale notée sur le PDF, puis par
+     le prénom lisible dans l'adresse, enfin par l'ordre des lignes. */
+  const tels=bloc.tels.slice(), mails=bloc.mails.slice();
+  const prisT={}, prisM={};
+  const libreT=()=>{for(let k=0;k<tels.length;k++)if(!prisT[k])return k;return -1;};
+  const libreM=()=>{for(let k=0;k<mails.length;k++)if(!prisM[k])return k;return -1;};
+
+  gens.forEach(g=>{
+    const p=icpNorm(g.prenom).replace(/ /g,''), n=icpNorm(g.nom).replace(/ /g,'');
+    let i=-1;
+    for(let k=0;k<tels.length;k++)
+      if(!prisT[k] && tels[k].init && icpNorm(tels[k].init)===p.charAt(0)){i=k;break;}
+    if(i>=0){ g.telephone=tels[i].num; prisT[i]=1; }
+    let j=-1;
+    for(let k=0;k<mails.length;k++){
+      if(prisM[k]) continue;
+      const l=icpNorm(mails[k].split('@')[0]).replace(/ /g,'');
+      if(p.length>2 && l.indexOf(p)>=0){ j=k; break; }
+    }
+    if(j<0 && n.length>2) for(let k=0;k<mails.length;k++){
+      if(prisM[k]) continue;
+      const l=icpNorm(mails[k].split('@')[0]).replace(/ /g,'');
+      if(l.indexOf(n)>=0){ j=k; break; }
+    }
+    if(j>=0){ g.email=mails[j]; prisM[j]=1; }
+  });
+  gens.forEach(g=>{
+    if(!g.telephone){ const i=libreT(); if(i>=0){ g.telephone=tels[i].num; prisT[i]=1; } }
+    if(!g.email){     const j=libreM(); if(j>=0){ g.email=mails[j];       prisM[j]=1; } }
+    if(!g.lien) g.lien='autre';
+  });
+  return gens;
+}
+
+/* ── Lecture du fichier ─────────────────────────────────────────────────── */
+
+async function icpLirePdf(file){
+  const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+  let blocs=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);
+    const tc=await page.getTextContent();
+    const items=tc.items
+      .filter(it=>(it.str||'').trim())
+      .map(it=>({str:it.str.trim(), x:it.transform[4], y:it.transform[5]}));
+    blocs=blocs.concat(icpParseItems(items));   // page par page : les y se répètent
+  }
+  return blocs;
+}
+
+/* Rapprochement avec les fiches enfants déjà en base. Le PDF ne donne que le
+   prénom : on cherche d'abord une correspondance exacte, puis un prénom
+   contenu dans l'autre (« THÉO » / « Théo B. »). Plusieurs candidats = aucun
+   choix automatique, c'est à l'utilisateur de trancher. */
+function icpCandidats(nomPdf){
+  const cible=icpNorm(nomPdf);
+  if(!cible) return [];
+  const exacts=cacheEnfants.filter(e=>icpNorm(e.prenom)===cible);
+  if(exacts.length) return exacts;
+  return cacheEnfants.filter(e=>{
+    const p=icpNorm(e.prenom);
+    return p && (cible.indexOf(p)>=0 || p.indexOf(cible)>=0);
+  });
+}
+
+function icpOuvrir(){
+  ICP_BLOCS=[];
+  document.getElementById('icp-file').value='';
+  document.getElementById('icp-revue').innerHTML='';
+  document.getElementById('icp-revue').style.display='none';
+  document.getElementById('icp-etape-fichier').style.display='';
+  document.getElementById('icp-btn-import').style.display='none';
+  document.getElementById('icp-resume').innerHTML='';
+  document.getElementById('modal-import-coord-wrap').classList.add('open');
+}
+
+async function icpLire(){
+  const f=document.getElementById('icp-file').files[0];
+  if(!f){ showBanner('Choisissez d\'abord un fichier PDF.','error'); return; }
+  const btn=document.getElementById('icp-btn-lire');
+  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> Lecture…';
+  try{
+    ICP_BLOCS=await icpLirePdf(f);
+  }catch(err){
+    console.warn('icpLire',err);
+    btn.disabled=false; btn.innerHTML='<i class="ti ti-file-search"></i> Lire le PDF';
+    showBanner('PDF illisible. Vérifiez qu\'il s\'agit bien de la liste des coordonnées.','error');
+    return;
+  }
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-file-search"></i> Lire le PDF';
+  if(!ICP_BLOCS.length){
+    showBanner('Aucun enfant trouvé dans ce PDF.','error');
+    return;
+  }
+  ICP_BLOCS.forEach(b=>{
+    b.personnes=icpPersonnes(b);
+    const c=icpCandidats(b.enfant);
+    b.candidats=c;
+    b.enfantId=(c.length===1)?c[0].id:'';
+    b.deja=false;
+  });
+
+  /* Qui a déjà des parents en base ? Une seule requête pour tout le lot. */
+  const ids=ICP_BLOCS.map(b=>b.enfantId).filter(Boolean);
+  if(ids.length){
+    try{
+      const{data,error}=await sb.from('enfants_parents').select('enfant_id').in('enfant_id',ids);
+      if(error) throw error;
+      const avec={};
+      (data||[]).forEach(r=>avec[String(r.enfant_id)]=1);
+      ICP_BLOCS.forEach(b=>{ b.deja=!!(b.enfantId&&avec[String(b.enfantId)]); });
+    }catch(err){ console.warn('icpDeja',err); }
+  }
+  ICP_BLOCS.forEach(b=>b.personnes.forEach(p=>{ p.coche=!!(b.enfantId&&!b.deja); }));
+  icpRenderRevue();
+}
+
+/* L'écran de relecture est reconstruit à chaque changement de fiche enfant :
+   on récupère d'abord les corrections déjà saisies, sinon elles seraient
+   effacées par le rendu suivant. */
+function icpCollecter(){
+  ICP_BLOCS.forEach((b,i)=>{
+    const sel=document.getElementById('icp_'+i+'_enfant');
+    if(sel) b.enfantId=sel.value||'';
+    b.personnes.forEach((p,j)=>{
+      const id='icp_'+i+'_'+j+'_';
+      const g=k=>document.getElementById(id+k);
+      if(!g('prenom')) return;
+      p.prenom=g('prenom').value.trim();
+      p.nom=g('nom').value.trim();
+      p.telephone=g('tel').value.trim();
+      p.email=g('mail').value.trim();
+      p.lien=g('lien').value;
+      p.coche=g('ok').checked;
+    });
+  });
+}
+
+/* Choix manuel d'une fiche : l'enfant retenu peut lui aussi avoir déjà des
+   parents. On revérifie, plutôt que de créer des doublons en silence. */
+async function icpMajBloc(i){
+  icpCollecter();
+  const b=ICP_BLOCS[i];
+  b.deja=false;
+  if(b.enfantId){
+    try{
+      const{data,error}=await sb.from('enfants_parents').select('id').eq('enfant_id',b.enfantId).limit(1);
+      if(!error) b.deja=!!(data&&data.length);
+    }catch(err){ console.warn('icpMajBloc',err); }
+  }
+  b.personnes.forEach(p=>{ p.coche=!!(b.enfantId&&!b.deja); });
+  icpRenderRevue();
+}
+
+function icpRenderRevue(){
+  const box=document.getElementById('icp-revue');
+  const opts=(sel)=>{
+    let h='<option value="">— Ne pas importer —</option>';
+    cacheEnfants.slice().sort((a,b)=>(a.prenom||'').localeCompare(b.prenom||'','fr')).forEach(e=>{
+      const cre=cacheCreches.find(c=>String(c.id)===String(e.creche_id));
+      h+='<option value="'+e.id+'"'+(String(sel)===String(e.id)?' selected':'')+'>'
+        +escHtml(((e.prenom||'')+' '+(e.nom||'')).trim())
+        +(cre?' — '+escHtml(cre.name):'')+'</option>';
+    });
+    return h;
+  };
+
+  box.innerHTML=ICP_BLOCS.map((b,i)=>{
+    const alerte=b.deja
+      ? '<span style="background:var(--koala-light);color:var(--koala);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">Déjà renseigné — laissé de côté</span>'
+      : (!b.enfantId
+          ? '<span style="background:#FDEBD8;color:#B25F00;border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">'
+            +(b.candidats.length>1?'Plusieurs fiches possibles':'Aucune fiche trouvée')+'</span>'
+          : '');
+
+    const lignes=b.personnes.map((p,j)=>{
+      const id='icp_'+i+'_'+j+'_';
+      const sel=(v)=>['mere','pere','tuteur','autre'].map(o=>'<option value="'+o+'"'+(v===o?' selected':'')
+        +'>'+({mere:'Mère',pere:'Père',tuteur:'Tuteur / tutrice',autre:'Responsable légal'})[o]+'</option>').join('');
+      return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">'
+        +'<input type="checkbox" id="'+id+'ok"'+(p.coche?' checked':'')+'>'
+        +'<select class="finput" id="'+id+'lien" style="width:auto;font-size:12px;padding:4px 6px">'+sel(p.lien)+'</select>'
+        +'<input class="finput" id="'+id+'prenom" value="'+escHtml(p.prenom||'')+'" placeholder="Prénom" style="width:120px;font-size:12px;padding:4px 6px">'
+        +'<input class="finput" id="'+id+'nom" value="'+escHtml(p.nom||'')+'" placeholder="Nom" style="width:150px;font-size:12px;padding:4px 6px">'
+        +'<input class="finput" id="'+id+'tel" value="'+escHtml(p.telephone||'')+'" placeholder="Téléphone" style="width:120px;font-size:12px;padding:4px 6px">'
+        +'<input class="finput" id="'+id+'mail" value="'+escHtml(p.email||'')+'" placeholder="e-mail" style="flex:1;min-width:190px;font-size:12px;padding:4px 6px">'
+        +'</div>';
+    }).join('');
+
+    return '<div style="border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:10px'
+      +(b.deja?';opacity:.65':'')+'">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+      +'<strong style="color:var(--koala-dark);font-size:13.5px">'+escHtml(b.enfant)+'</strong>'
+      +'<i class="ti ti-arrow-right" style="color:var(--muted)"></i>'
+      +'<select class="finput" id="icp_'+i+'_enfant" onchange="icpMajBloc('+i+')" style="width:auto;min-width:210px;font-size:12px;padding:4px 6px">'
+      +opts(b.enfantId)+'</select>'+alerte+'</div>'
+      +(lignes||'<div style="font-size:12px;color:var(--muted)">Aucun parent lisible sur cette ligne.</div>')
+      +'</div>';
+  }).join('');
+
+  box.style.display='';
+  document.getElementById('icp-etape-fichier').style.display='none';
+  document.getElementById('icp-btn-import').style.display='';
+  const aImporter=ICP_BLOCS.filter(b=>b.enfantId&&!b.deja).length;
+  document.getElementById('icp-resume').innerHTML=
+    ICP_BLOCS.length+' enfant(s) lus dans le PDF · '+aImporter+' prêt(s) à être importés. '
+    +'Vérifiez chaque ligne : le PDF ne dit pas qui est la mère et qui est le père.';
+}
+
+async function icpImporter(){
+  icpCollecter();
+  const btn=document.getElementById('icp-btn-import');
+  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> Import…';
+  let crees=0, echecs=0;
+  const ignores=[];
+
+  for(let i=0;i<ICP_BLOCS.length;i++){
+    const b=ICP_BLOCS[i];
+    if(!b.enfantId){ ignores.push(b.enfant+' : aucune fiche choisie'); continue; }
+    if(b.deja){ ignores.push(b.enfant+' : parents déjà enregistrés'); continue; }
+    let n=0;
+    for(let j=0;j<b.personnes.length;j++){
+      const p=b.personnes[j];
+      if(!p.coche) continue;
+      if(!p.prenom && !p.nom) continue;
+      const saved=await dbInsert('enfants_parents',{
+        enfant_id:b.enfantId,
+        lien:p.lien||'autre',
+        prenom:p.prenom||'', nom:p.nom||'',
+        telephone:p.telephone||'',
+        email:p.email||'',
+        destinataire:!!p.email      // sans adresse, rien ne peut lui être envoyé
+      });
+      if(saved){ crees++; n++; } else echecs++;
+    }
+    if(!n) ignores.push(b.enfant+' : aucune ligne cochée');
+  }
+
+  /* Bouton neutralisé : relancer l'import créerait les mêmes parents en double. */
+  btn.innerHTML='<i class="ti ti-check"></i> Import terminé';
+  document.getElementById('icp-resume').innerHTML=
+    '<strong>'+crees+' parent(s) créé(s).</strong>'
+    +(echecs?' <span style="color:var(--red)">'+echecs+' échec(s) d\'enregistrement.</span>':'')
+    +(ignores.length?'<br>Laissés de côté : '+escHtml(ignores.join(' · ')):'');
+  showBanner(crees+' parent(s) importé(s) ✅');
+
+  /* La fiche ouverte, si elle fait partie du lot, doit refléter l'import. */
+  if(enfFicheId) enfLoadParents(enfFicheId);
 }
 
 /* ================= DOSSIER DE FAMILIARISATION (envoi aux familles) ========= */
