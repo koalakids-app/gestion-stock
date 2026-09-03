@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Koala Kids — Inscriptions</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8;--amber:#B8860B;--amber-l:#FFF6DC}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:#2B2740;min-height:100dvh}
+a{color:inherit}
+.topbar{background:#fff;border-bottom:2px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;padding-top:calc(12px + env(safe-area-inset-top))}
+.topbar h1{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);flex:1}
+.topbar .who{font-size:12px;color:var(--muted);font-weight:600}
+.btn{border:none;border-radius:12px;padding:9px 14px;font-family:'Nunito';font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-p{background:var(--orange);color:#fff}
+.btn-s{background:var(--violet-l);color:var(--violet)}
+.btn-g{background:#F1EFF7;color:var(--muted)}
+.btn-d{background:var(--red-l);color:var(--red)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-sm{padding:6px 10px;font-size:12px}
+.wrap{max-width:1040px;margin:0 auto;padding:16px;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+/* 16px sur tous les champs : en dessous, iOS zoome automatiquement a la mise
+   au point et ne redezoome jamais. */
+input,select,textarea{font-family:'Nunito';font-size:16px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
+textarea{resize:vertical;min-height:70px}
+label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 4px 3px}
+.search{flex:1;min-width:170px}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.stat{background:#fff;border:2px solid var(--line);border-radius:14px;padding:9px 13px;cursor:pointer;flex:1;min-width:96px}
+.stat.on{border-color:var(--orange);background:var(--orange-l)}
+.stat .n{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);line-height:1.1}
+.stat .l{font-size:11px;font-weight:700;color:var(--muted)}
+.card{background:#fff;border:2px solid var(--line);border-radius:18px;padding:13px 15px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
+.card:hover{border-color:#DED6EE}
+.card .av{width:42px;height:42px;border-radius:14px;background:var(--violet-l);color:var(--violet);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.card .bd{flex:1;min-width:0}
+.card .nm{font-family:'Baloo 2',cursive;font-size:16px;color:var(--violet)}
+.card .sub{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.6}
+.tag{display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+.empty{text-align:center;padding:40px 16px;color:var(--muted)}
+.empty i{font-size:34px;display:block;margin-bottom:8px;opacity:.5}
+.ov{display:none;position:fixed;inset:0;background:rgba(43,39,64,.45);z-index:100;align-items:center;justify-content:center;padding:14px}
+.ov.on{display:flex}
+.md{background:#fff;border-radius:20px;padding:18px;max-width:660px;width:100%;max-height:90dvh;overflow-y:auto}
+.md h3{font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.md .acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:560px){.g2,.g3{grid-template-columns:1fr}}
+.f{margin-bottom:10px}
+.sec{font-family:'Baloo 2',cursive;font-size:14px;color:var(--orange);margin:16px 0 9px;padding-bottom:5px;border-bottom:2px solid var(--line)}
+.sec:first-of-type{margin-top:0}
+.ck{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;cursor:pointer;margin:0 14px 8px 0}
+.ck input{width:auto;height:19px;margin:0}
+.jr{display:flex;gap:6px;flex-wrap:wrap}
+.jr label{flex:1;min-width:62px;text-align:center;border:2px solid var(--line);border-radius:12px;padding:8px 4px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer}
+.jr input{display:none}
+.jr input:checked + span{color:var(--orange)}
+.jr label:has(input:checked){border-color:var(--orange);background:var(--orange-l);color:var(--orange)}
+.par{border:2px solid var(--line);border-radius:14px;padding:11px 13px;margin-bottom:9px;background:#FCFBFE}
+.par .h{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+.par .h b{font-size:14px;color:var(--violet);flex:1}
+.par .li{font-size:12.5px;color:#555;margin-top:2px;display:flex;align-items:center;gap:6px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#2B2740;color:#fff;padding:11px 18px;border-radius:14px;font-size:13.5px;font-weight:600;z-index:300;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
+.toast.on{opacity:1}
+.toast.err{background:var(--red)}
+.hint{font-size:12px;color:var(--muted);line-height:1.6;margin:-4px 0 10px 3px}
+#loginView{max-width:360px;margin:60px auto;padding:0 16px}
+#loginView .md{max-height:none}
+</style>
+</head>
+<body>
+
+<div id="loginView" style="display:none">
+  <div class="md">
+    <h3><i class="ti ti-clipboard-list"></i> Inscriptions</h3>
+    <div class="f"><label class="lb">Adresse e-mail</label><input id="liMail" type="email" autocomplete="username"></div>
+    <div class="f"><label class="lb">Mot de passe</label><input id="liPwd" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div id="liErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
+    <div class="acts"><button class="btn btn-p" onclick="doLogin()"><i class="ti ti-login"></i> Se connecter</button></div>
+  </div>
+</div>
+
+<div id="appView" style="display:none">
+  <div class="topbar">
+    <i class="ti ti-clipboard-list" style="font-size:22px;color:var(--orange)"></i>
+    <h1>Inscriptions</h1>
+    <span class="who" id="whoAmI"></span>
+    <button class="btn btn-g btn-sm" onclick="openNotice()" title="Mode d'emploi"><i class="ti ti-help"></i></button>
+    <button class="btn btn-g btn-sm" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i></button>
+  </div>
+
+  <div class="wrap">
+    <div class="stats" id="stats"></div>
+
+    <div class="bar">
+      <input class="search" id="fSearch" placeholder="Rechercher un enfant, un parent…" oninput="render()">
+      <select id="fCreche" style="width:auto;min-width:150px" onchange="render()"></select>
+      <button class="btn btn-s btn-sm" id="btnRappels" onclick="toggleRappels()"><i class="ti ti-bell"></i> À relancer <span id="nRappels"></span></button>
+      <button class="btn btn-p" onclick="openFiche(null)"><i class="ti ti-plus"></i> Nouvelle demande</button>
+    </div>
+
+    <div id="list"></div>
+  </div>
+</div>
+
+<!-- FICHE PRÉINSCRIPTION -->
+<div class="ov" id="ovFiche">
+  <div class="md" style="max-width:720px">
+    <h3><i class="ti ti-mood-kid"></i> <span id="ficheTitle">Nouvelle demande</span></h3>
+
+    <div class="sec">L'enfant</div>
+    <div class="g2">
+      <div class="f"><label class="lb">Prénom</label><input id="fPrenom"></div>
+      <div class="f"><label class="lb">Nom</label><input id="fNom"></div>
+    </div>
+    <div class="g3">
+      <div class="f"><label class="lb">Sexe</label><select id="fSexe"><option value="">—</option><option value="F">Fille</option><option value="M">Garçon</option></select></div>
+      <div class="f"><label class="lb">Situation</label><select id="fNe" onchange="syncNe()"><option value="ne">Déjà né(e)</option><option value="a_naitre">À naître</option></select></div>
+      <div class="f"><label class="lb" id="lbDob">Date de naissance</label><input id="fDob" type="date"></div>
+    </div>
+    <div class="g2">
+      <div class="f"><label class="lb">Allergies connues</label><input id="fAllergies" placeholder="aucune connue"></div>
+      <div class="f"><label class="lb">Régime particulier</label><select id="fRegime">
+        <option value="">Aucun</option><option value="SV">Sans viande</option>
+        <option value="SPV">Sans protéine de vache</option><option value="SPA">Sans protéine animale</option>
+      </select></div>
+    </div>
+    <div class="f">
+      <label class="ck"><input type="checkbox" id="fPai" onchange="syncPai()"> PAI (projet d'accueil individualisé)</label>
+      <label class="ck"><input type="checkbox" id="fFratrie"> Frère ou sœur déjà accueilli dans le réseau</label>
+    </div>
+    <div class="f" id="wrapPai" style="display:none"><label class="lb">Motif du PAI</label><input id="fPaiDetail"></div>
+    <div class="f"><label class="lb">Médecin traitant</label><input id="fMedecin"></div>
+
+    <div class="sec">Le foyer</div>
+    <div class="f"><label class="lb">Adresse</label><input id="fAdresse"></div>
+    <div class="g3">
+      <div class="f"><label class="lb">Code postal</label><input id="fCp"></div>
+      <div class="f" style="grid-column:span 2"><label class="lb">Ville</label><input id="fVille"></div>
+    </div>
+    <div class="g2">
+      <div class="f"><label class="lb">N° allocataire CAF / MSA</label><input id="fAlloc"></div>
+      <div class="f"><label class="lb">Revenus (dernier avis d'imposition)</label><input id="fRevenus" type="number" step="1" placeholder="pour l'estimation CMG"></div>
+    </div>
+    <p class="hint">Les revenus ne servent qu'à estimer le CMG. Ils sont effaçables une fois le dossier clos.</p>
+    <div class="f">
+      <label class="ck"><input type="checkbox" id="fSepares"> Parents séparés</label>
+      <label class="ck"><input type="checkbox" id="fAlternee"> Garde alternée</label>
+      <label class="ck"><input type="checkbox" id="fMajo"> Majoration PAJE (parent isolé, handicap…)</label>
+    </div>
+
+    <div class="sec">L'accueil demandé</div>
+    <div class="f"><label class="lb">Crèches souhaitées</label><div id="fCrechesBox" class="jr"></div></div>
+    <div class="g2">
+      <div class="f"><label class="lb">Crèche retenue</label><select id="fCrecheRetenue"></select></div>
+      <div class="f"><label class="lb">Date d'entrée souhaitée</label><input id="fDateEntree" type="date"></div>
+    </div>
+    <div class="f"><label class="lb">Jours souhaités</label><div id="fJoursBox" class="jr"></div></div>
+    <div class="g2">
+      <div class="f"><label class="lb">Arrivée</label><input id="fHd" type="time"></div>
+      <div class="f"><label class="lb">Départ</label><input id="fHf" type="time"></div>
+    </div>
+    <p class="hint" id="hintHeures"></p>
+
+    <div class="sec">Suivi</div>
+    <div class="g3">
+      <div class="f"><label class="lb">Statut</label><select id="fStatut"></select></div>
+      <div class="f"><label class="lb">Origine</label><input id="fSource" list="dlSource" placeholder="site, téléphone…"><datalist id="dlSource"><option>Site internet</option><option>Téléphone</option><option>Bouche à oreille</option><option>Passage sur place</option><option>Mail</option></datalist></div>
+      <div class="f"><label class="lb">À relancer le</label><input id="fRappel" type="date"></div>
+    </div>
+    <div class="f"><label class="lb">Comment nous ont-ils connus ?</label><input id="fConnus"></div>
+    <div class="f"><label class="lb">Notes internes</label><textarea id="fNotes" placeholder="Jamais transmis à la famille."></textarea></div>
+
+    <div class="sec">Les parents <span id="parCount" style="font-size:12px;color:var(--muted);font-weight:600"></span></div>
+    <div id="parList"></div>
+    <button class="btn btn-s btn-sm" id="btnAddPar" onclick="openParent(null)"><i class="ti ti-user-plus"></i> Ajouter un parent</button>
+    <p class="hint" id="hintPar" style="margin-top:8px"></p>
+
+    <div class="acts">
+      <button class="btn btn-d" id="btnDel" style="display:none" onclick="delFiche()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn btn-g" onclick="closeOv('ovFiche')">Annuler</button>
+      <button class="btn btn-p" id="btnSave" onclick="saveFiche()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- PARENT -->
+<div class="ov" id="ovParent">
+  <div class="md" style="max-width:520px">
+    <h3><i class="ti ti-user"></i> <span id="parTitle">Ajouter un parent</span></h3>
+    <div class="f"><label class="lb">Lien avec l'enfant</label><select id="pLien">
+      <option value="mere">Mère</option><option value="pere">Père</option>
+      <option value="tuteur">Tuteur / tutrice</option><option value="autre">Responsable légal</option>
+    </select></div>
+    <div class="g2">
+      <div class="f"><label class="lb">Prénom</label><input id="pPrenom"></div>
+      <div class="f"><label class="lb">Nom</label><input id="pNom"></div>
+    </div>
+    <div class="f"><label class="lb">Adresse e-mail</label><input id="pEmail" type="email"></div>
+    <div class="g2">
+      <div class="f"><label class="lb">Téléphone portable</label><input id="pTel" type="tel"></div>
+      <div class="f"><label class="lb">Téléphone professionnel</label><input id="pTelPro" type="tel"></div>
+    </div>
+    <div class="f"><label class="lb">Profession</label><input id="pProf"></div>
+    <label class="ck"><input type="checkbox" id="pDest" checked> Destinataire du devis</label>
+    <p class="hint">Décocher pour un contact de secours, qui ne recevra aucun envoi.</p>
+    <div class="acts">
+      <button class="btn btn-d" id="btnDelPar" style="display:none" onclick="delParent()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn btn-g" onclick="closeOv('ovParent')">Annuler</button>
+      <button class="btn btn-p" onclick="saveParent()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- NOTICE -->
+<div class="ov" id="ovNotice">
+  <div class="md" style="max-width:600px">
+    <h3><i class="ti ti-help"></i> Mode d'emploi</h3>
+    <div id="noticeBody" style="font-size:13.5px;line-height:1.8;color:#444"></div>
+    <div class="acts"><button class="btn btn-p" onclick="closeOv('ovNotice')">Fermer</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+let ME=null,PROF=null,IS_DIRECTION=false;
+let PRE=[],CRECHES=[],PARENTS=[];
+let ficheId=null,parentId=null;
+let filtreStatut='',filtreRappels=false;
+
+/* Statuts : libellé, couleur de fond, couleur de texte. L'ordre est celui du
+   cycle de vie, pas alphabétique — la liste déroulante doit se lire comme une
+   progression. */
+const STATUTS={
+  nouvelle:    {l:'Nouvelle',       bg:'#EEECFA', fg:'#4A3F9F'},
+  en_contact:  {l:'En contact',     bg:'#FFF6DC', fg:'#B8860B'},
+  devis_envoye:{l:'Devis envoyé',   bg:'#FFF1E3', fg:'#F47920'},
+  accepte:     {l:'Devis accepté',  bg:'#E6F5EE', fg:'#2E9E6B'},
+  inscrit:     {l:'Inscrit',        bg:'#E6F5EE', fg:'#1B6B47'},
+  refuse:      {l:'Refusé',         bg:'#FDE8E8', fg:'#C62828'},
+  sans_suite:  {l:'Sans suite',     bg:'#F1EFF7', fg:'#8E8AA8'}
+};
+const ORDRE_STATUTS=['nouvelle','en_contact','devis_envoye','accepte','inscrit','refuse','sans_suite'];
+const LIENS={mere:'Mère',pere:'Père',tuteur:'Tuteur / tutrice',autre:'Responsable légal'};
+const JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi']];
+
+function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function closeOv(id){document.getElementById(id).classList.remove('on');}
+function openOv(id){document.getElementById(id).classList.add('on');}
+function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
+function chk(id){const e=document.getElementById(id);return !!(e&&e.checked);}
+function setVal(id,v){const e=document.getElementById(id);if(e)e.value=(v==null?'':v);}
+function setChk(id,v){const e=document.getElementById(id);if(e)e.checked=!!v;}
+
+/* Date locale, jamais toISOString() : en UTC+2 celui-ci renvoie la veille pour
+   tout ce qui est saisi avant 2h du matin. */
+function auj(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
+
+/* Un tableau JSON peut revenir en tableau ou en chaîne selon la façon dont la
+   ligne a été écrite. On accepte les deux plutôt que de planter à l'affichage. */
+function toArr(v){
+  if(Array.isArray(v))return v;
+  if(typeof v==='string'){try{const p=JSON.parse(v);return Array.isArray(p)?p:[];}catch(e){return[];}}
+  return [];
+}
+
+/* ---------- AUTH ---------- */
+/* Même règle que documents.html : arrivée depuis le hub index.html, qui
+   n'authentifie personne, donc déconnexion systématique et saisie obligatoire.
+   Sans elle, ouvrir ce module depuis le hub sur un poste partagé donnerait
+   accès aux coordonnées et aux revenus des familles avec la session laissée
+   par la personne précédente. */
+let JUSTE_CONNECTE=false;
+function showLogin(msg){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liErr').textContent=msg||'';
+}
+async function boot(){
+  if(!JUSTE_CONNECTE){
+    try{await sb.auth.signOut();}catch(e){console.warn('[boot] signOut',e);}
+    showLogin();return;
+  }
+  let session=null;
+  try{
+    const r=await sb.auth.getSession();
+    session=(r&&r.data&&r.data.session)||null;
+    if(session&&session.expires_at&&session.expires_at*1000<Date.now()+10000){
+      const{data:rd}=await sb.auth.refreshSession();
+      session=(rd&&rd.session)||null;
+    }
+  }catch(e){console.warn('[boot] session',e);session=null;}
+  if(!session||!session.user){showLogin();return;}
+  ME=session.user;
+  let p=null;
+  try{
+    const{data,error}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
+    if(error)throw error;
+    p=data;
+  }catch(e){
+    console.error('[boot] profil',e);
+    showLogin('Session expirée ou profil inaccessible — merci de vous reconnecter.');
+    return;
+  }
+  if(!p){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin('Compte non reconnu — contactez la direction.');
+    return;
+  }
+  PROF=p;
+  IS_DIRECTION=(p.role==='direction');
+  /* Le module est réservé à la direction. Le verrou réel est côté Supabase
+     (policies de 24d) : sans lui, cacher l'écran ne protégerait rien. Ce test
+     ne fait qu'éviter d'afficher une page vide et inexplicable. */
+  if(!IS_DIRECTION){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin('Ce module est réservé à la direction.');
+    return;
+  }
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('appView').style.display='block';
+  document.getElementById('whoAmI').textContent=(p.name||'')+' · Direction';
+  await loadAll();
+}
+async function doLogin(){
+  const e=val('liMail'),p=document.getElementById('liPwd').value;
+  const{error}=await sb.auth.signInWithPassword({email:e,password:p});
+  if(error){document.getElementById('liErr').textContent='Identifiants incorrects';return;}
+  JUSTE_CONNECTE=true;
+  document.getElementById('liPwd').value='';
+  boot().catch(err=>{console.error('[boot]',err);showLogin('Connexion impossible — réessayez.');});
+}
+async function doLogout(){await sb.auth.signOut();location.reload();}
+
+/* ---------- CHARGEMENT ---------- */
+async function loadAll(){
+  try{
+    const[pr,cr]=await Promise.all([
+      sb.from('preinscriptions').select('*').order('created_at',{ascending:false}),
+      sb.from('creches').select('id,name').order('name')
+    ]);
+    if(pr.error)throw pr.error;
+    PRE=pr.data||[];CRECHES=cr.data||[];
+  }catch(e){
+    console.error('[loadAll]',e);
+    toast('Chargement impossible — vérifiez votre connexion.',true);
+    return;
+  }
+  const sel=document.getElementById('fCreche');
+  sel.innerHTML='<option value="">Toutes les crèches</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  render();
+}
+
+function nomCreche(id){const c=CRECHES.find(x=>String(x.id)===String(id));return c?c.name:'';}
+
+/* ---------- AFFICHAGE ---------- */
+function render(){
+  const q=val('fSearch').toLowerCase();
+  const cre=val('fCreche');
+
+  // Les compteurs portent sur l'ensemble, indépendamment des filtres en cours :
+  // sinon cliquer un statut ferait tomber tous les autres à zéro.
+  const box=document.getElementById('stats');
+  box.innerHTML=ORDRE_STATUTS.map(s=>{
+    const n=PRE.filter(p=>p.statut===s).length;
+    if(!n&&s!=='nouvelle'&&filtreStatut!==s)return '';
+    return '<div class="stat'+(filtreStatut===s?' on':'')+'" onclick="setStatut(\''+s+'\')">'
+      +'<div class="n">'+n+'</div><div class="l">'+esc(STATUTS[s].l)+'</div></div>';
+  }).join('');
+
+  const nR=PRE.filter(estARelancer).length;
+  document.getElementById('nRappels').textContent=nR?'('+nR+')':'';
+  document.getElementById('btnRappels').className='btn btn-sm '+(filtreRappels?'btn-p':'btn-s');
+
+  let l=PRE.slice();
+  if(filtreStatut)l=l.filter(p=>p.statut===filtreStatut);
+  if(cre)l=l.filter(p=>String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0);
+  if(filtreRappels)l=l.filter(estARelancer);
+  if(q)l=l.filter(p=>((p.prenom||'')+' '+(p.nom||'')+' '+(p.ville||'')+' '+(p.notes_internes||'')).toLowerCase().indexOf(q)>=0);
+
+  const el=document.getElementById('list');
+  if(!l.length){
+    el.innerHTML='<div class="empty"><i class="ti ti-inbox"></i><p>'
+      +(PRE.length?'Aucune demande ne correspond à ces filtres.':'Aucune demande enregistrée pour le moment.')+'</p></div>';
+    return;
+  }
+  el.innerHTML=l.map(p=>{
+    const st=STATUTS[p.statut]||STATUTS.nouvelle;
+    const nom=((p.prenom||'')+' '+(p.nom||'')).trim()||'Sans nom';
+    const cr=nomCreche(p.creche_id)||toArr(p.creches_souhaitees).map(nomCreche).filter(Boolean).join(' · ')||'crèche à définir';
+    const jrs=toArr(p.jours).map(j=>(JOURS.find(x=>x[0]===Number(j))||[0,''])[1].slice(0,3)).filter(Boolean).join(' ');
+    const naiss=p.dob?(p.ne_ou_a_naitre==='a_naitre'?'terme le '+dfr(p.dob):'né(e) le '+dfr(p.dob)):'naissance non renseignée';
+    const rel=estARelancer(p)
+      ? '<span class="tag" style="background:var(--amber-l);color:var(--amber)"><i class="ti ti-bell"></i> à relancer</span>' : '';
+    return '<div class="card" onclick="openFiche(\''+p.id+'\')">'
+      +'<div class="av"><i class="ti ti-mood-kid"></i></div><div class="bd">'
+      +'<div class="nm">'+esc(nom)+'</div>'
+      +'<div class="sub">'+esc(naiss)+' · '+esc(cr)+(jrs?' · '+esc(jrs):'')
+      +(p.date_entree_souhaitee?'<br>Entrée souhaitée le '+dfr(p.date_entree_souhaitee):'')+'</div>'
+      +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'
+      +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>'+rel+'</div>'
+      +'</div></div>';
+  }).join('');
+}
+
+/* Une demande est à relancer si sa date de rappel est passée ou tombe
+   aujourd'hui, et que le dossier n'est pas clos. Relancer un dossier refusé
+   n'aurait aucun sens et polluerait le compteur. */
+function estARelancer(p){
+  if(!p.date_rappel)return false;
+  if(['inscrit','refuse','sans_suite'].indexOf(p.statut)>=0)return false;
+  return String(p.date_rappel).slice(0,10)<=auj();
+}
+function setStatut(s){filtreStatut=(filtreStatut===s?'':s);render();}
+function toggleRappels(){filtreRappels=!filtreRappels;render();}
+
+/* ---------- FICHE ---------- */
+function syncNe(){
+  const aNaitre=val('fNe')==='a_naitre';
+  document.getElementById('lbDob').textContent=aNaitre?'Terme prévu':'Date de naissance';
+}
+function syncPai(){document.getElementById('wrapPai').style.display=chk('fPai')?'':'none';}
+
+function openFiche(id){
+  ficheId=id;
+  const p=id?PRE.find(x=>String(x.id)===String(id)):null;
+
+  document.getElementById('ficheTitle').textContent=p
+    ? (((p.prenom||'')+' '+(p.nom||'')).trim()||'Demande')
+    : 'Nouvelle demande';
+  document.getElementById('btnDel').style.display=(p?'':'none');
+
+  document.getElementById('fStatut').innerHTML=ORDRE_STATUTS
+    .map(s=>'<option value="'+s+'">'+esc(STATUTS[s].l)+'</option>').join('');
+
+  const opts='<option value="">— à définir —</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  document.getElementById('fCrecheRetenue').innerHTML=opts;
+
+  const souhaitees=p?toArr(p.creches_souhaitees).map(String):[];
+  document.getElementById('fCrechesBox').innerHTML=CRECHES.map(c=>
+    '<label><input type="checkbox" class="ckCreche" value="'+c.id+'"'
+    +(souhaitees.indexOf(String(c.id))>=0?' checked':'')+'><span>'+esc(c.name)+'</span></label>').join('');
+
+  const jrs=p?toArr(p.jours).map(Number):[1,2,3,4,5];
+  document.getElementById('fJoursBox').innerHTML=JOURS.map(j=>
+    '<label><input type="checkbox" class="ckJour" value="'+j[0]+'"'
+    +(jrs.indexOf(j[0])>=0?' checked':'')+'><span>'+j[1]+'</span></label>').join('');
+  document.querySelectorAll('.ckJour').forEach(c=>c.addEventListener('change',syncHeures));
+
+  setVal('fPrenom',p?p.prenom:'');setVal('fNom',p?p.nom:'');
+  setVal('fSexe',p?(p.sexe||''):'');setVal('fNe',p?p.ne_ou_a_naitre:'ne');
+  setVal('fDob',p?(p.dob||''):'');
+  setVal('fAllergies',p?p.allergies:'');setVal('fRegime',p?(p.regime_repas||''):'');
+  setChk('fPai',p&&p.pai);setVal('fPaiDetail',p?p.pai_detail:'');
+  setChk('fFratrie',p&&p.fratrie_reseau);setVal('fMedecin',p?p.medecin:'');
+  setVal('fAdresse',p?p.adresse:'');setVal('fCp',p?p.code_postal:'');setVal('fVille',p?p.ville:'');
+  setVal('fAlloc',p?p.num_allocataire:'');
+  setVal('fRevenus',p&&p.revenus_foyer!=null?p.revenus_foyer:'');
+  setChk('fSepares',p&&p.parents_separes);setChk('fAlternee',p&&p.garde_alternee);
+  setChk('fMajo',p&&p.majoration_paje);
+  setVal('fCrecheRetenue',p?(p.creche_id||''):'');
+  setVal('fDateEntree',p?(p.date_entree_souhaitee||''):'');
+  setVal('fHd',p?p.heure_debut:'07:30');setVal('fHf',p?p.heure_fin:'18:00');
+  setVal('fStatut',p?p.statut:'nouvelle');
+  setVal('fSource',p?p.source:'');setVal('fRappel',p?(p.date_rappel||''):'');
+  setVal('fConnus',p?p.comment_connus:'');setVal('fNotes',p?p.notes_internes:'');
+
+  syncNe();syncPai();syncHeures();
+  document.getElementById('fHd').onchange=syncHeures;
+  document.getElementById('fHf').onchange=syncHeures;
+
+  // Les parents ne peuvent être rattachés qu'à une demande déjà enregistrée :
+  // sans identifiant, il n'y a rien à quoi les rattacher.
+  const neuf=!p;
+  document.getElementById('btnAddPar').style.display=neuf?'none':'';
+  document.getElementById('hintPar').textContent=neuf
+    ? 'Enregistrez d\'abord la demande, puis ajoutez les parents.' : '';
+  PARENTS=[];renderParents();
+  if(p)loadParents(p.id);
+
+  openOv('ovFiche');
+}
+
+/* Volume hebdomadaire : ce que le devis facturera. Affiché dès la saisie pour
+   qu'une erreur d'horaire se voie tout de suite, et non à l'établissement du
+   devis. */
+function heuresHebdo(){
+  const hd=val('fHd'),hf=val('fHf');
+  const n=document.querySelectorAll('.ckJour:checked').length;
+  const m=t=>{const r=/^(\d{1,2}):(\d{2})/.exec(t||'');return r?(+r[1])*60+(+r[2]):null;};
+  const a=m(hd),b=m(hf);
+  if(a==null||b==null||b<=a||!n)return null;
+  return Math.round((b-a)/60*n*100)/100;
+}
+function syncHeures(){
+  const h=heuresHebdo();
+  const n=document.querySelectorAll('.ckJour:checked').length;
+  document.getElementById('hintHeures').textContent=h==null
+    ? 'Renseignez les jours et les horaires pour connaître le volume hebdomadaire.'
+    : h+' h par semaine sur '+n+' jour'+(n>1?'s':'')+'.';
+}
+
+async function saveFiche(){
+  const prenom=val('fPrenom'),nom=val('fNom');
+  if(!prenom&&!nom){toast('Indiquez au moins un prénom ou un nom.',true);return;}
+
+  const statut=val('fStatut');
+  const p=ficheId?PRE.find(x=>String(x.id)===String(ficheId)):null;
+  // La contrainte preinscriptions_bascule_ck refuse « inscrit » sans enfant_id.
+  // Mieux vaut l'expliquer ici que laisser remonter une erreur Postgres.
+  if(statut==='inscrit'&&!(p&&p.enfant_id)){
+    toast('Le statut « Inscrit » se pose automatiquement lors de la bascule en fiche enfant.',true);
+    return;
+  }
+
+  const row={
+    statut:statut,
+    source:val('fSource'),
+    comment_connus:val('fConnus'),
+    date_rappel:val('fRappel')||null,
+    notes_internes:val('fNotes'),
+    prenom:prenom,nom:nom,
+    sexe:val('fSexe')||null,
+    ne_ou_a_naitre:val('fNe')||'ne',
+    dob:val('fDob')||null,
+    allergies:val('fAllergies'),
+    regime_repas:val('fRegime')||null,
+    pai:chk('fPai'),
+    pai_detail:chk('fPai')?val('fPaiDetail'):'',
+    medecin:val('fMedecin'),
+    fratrie_reseau:chk('fFratrie'),
+    adresse:val('fAdresse'),code_postal:val('fCp'),ville:val('fVille'),
+    num_allocataire:val('fAlloc'),
+    parents_separes:chk('fSepares'),garde_alternee:chk('fAlternee'),
+    revenus_foyer:val('fRevenus')?Number(val('fRevenus')):null,
+    majoration_paje:chk('fMajo'),
+    creches_souhaitees:[...document.querySelectorAll('.ckCreche:checked')].map(c=>c.value),
+    creche_id:val('fCrecheRetenue')||null,
+    date_entree_souhaitee:val('fDateEntree')||null,
+    jours:[...document.querySelectorAll('.ckJour:checked')].map(c=>Number(c.value)),
+    heure_debut:val('fHd'),heure_fin:val('fHf')
+  };
+
+  const btn=document.getElementById('btnSave');
+  btn.disabled=true;
+  try{
+    if(ficheId){
+      const{error}=await sb.from('preinscriptions').update(row).eq('id',ficheId);
+      if(error)throw error;
+      const i=PRE.findIndex(x=>String(x.id)===String(ficheId));
+      if(i>=0)PRE[i]=Object.assign({},PRE[i],row);
+      toast('Demande enregistrée ✅');
+      closeOv('ovFiche');
+    }else{
+      row.created_by=ME?ME.id:null;
+      const{data,error}=await sb.from('preinscriptions').insert(row).select().single();
+      if(error)throw error;
+      PRE.unshift(data);
+      ficheId=data.id;
+      // On garde la fiche ouverte : les parents restent à saisir, et refermer
+      // ici obligerait à la rouvrir dans la foulée.
+      document.getElementById('btnDel').style.display='';
+      document.getElementById('btnAddPar').style.display='';
+      document.getElementById('hintPar').textContent='';
+      toast('Demande créée — vous pouvez ajouter les parents.');
+    }
+    render();
+  }catch(e){
+    console.error('[saveFiche]',e);
+    toast('Enregistrement impossible : '+(e.message||'erreur inconnue'),true);
+  }finally{
+    btn.disabled=false;
+  }
+}
+
+async function delFiche(){
+  if(!ficheId)return;
+  const p=PRE.find(x=>String(x.id)===String(ficheId));
+  const nom=((p&&p.prenom||'')+' '+(p&&p.nom||'')).trim()||'cette demande';
+  if(p&&p.enfant_id){
+    toast('Cette demande a été basculée en fiche enfant : elle ne peut plus être supprimée.',true);
+    return;
+  }
+  if(!confirm('Supprimer la demande de '+nom+' ? Les parents saisis seront supprimés avec elle.'))return;
+  try{
+    const{error}=await sb.from('preinscriptions').delete().eq('id',ficheId);
+    if(error)throw error;
+    PRE=PRE.filter(x=>String(x.id)!==String(ficheId));
+    closeOv('ovFiche');render();
+    toast('Demande supprimée.');
+  }catch(e){
+    console.error('[delFiche]',e);
+    toast('Suppression impossible.',true);
+  }
+}
+
+/* ---------- PARENTS ---------- */
+async function loadParents(preId){
+  try{
+    const{data,error}=await sb.from('preinscriptions_parents')
+      .select('*').eq('preinscription_id',preId).order('created_at');
+    if(error)throw error;
+    // La fiche a pu changer pendant la requête : ne rien peindre à côté.
+    if(String(ficheId)!==String(preId))return;
+    PARENTS=data||[];
+  }catch(e){
+    console.warn('[loadParents]',e);PARENTS=[];
+  }
+  renderParents();
+}
+
+function renderParents(){
+  const box=document.getElementById('parList');
+  document.getElementById('parCount').textContent=PARENTS.length?'('+PARENTS.length+')':'';
+  if(!PARENTS.length){box.innerHTML='';return;}
+  box.innerHTML=PARENTS.map(p=>{
+    const nom=((p.prenom||'')+' '+(p.nom||'')).trim()||'—';
+    const li=(ic,v)=>v?'<div class="li"><i class="ti ti-'+ic+'" style="color:var(--muted)"></i>'+esc(v)+'</div>':'';
+    const dest=p.destinataire
+      ? '<span class="tag" style="background:var(--violet-l);color:var(--violet)">✉️ destinataire</span>':'';
+    const sansMail=!p.email
+      ? '<span class="tag" style="background:var(--amber-l);color:var(--amber)">sans e-mail</span>':'';
+    return '<div class="par" onclick="openParent(\''+p.id+'\')" style="cursor:pointer">'
+      +'<div class="h"><b>'+esc(nom)+'</b>'+dest+sansMail+'</div>'
+      +'<div class="li" style="color:var(--muted)">'+esc(LIENS[p.lien]||'Responsable légal')
+      +(p.profession?' · '+esc(p.profession):'')+'</div>'
+      +li('mail',p.email)+li('phone',p.telephone)+li('briefcase',p.telephone_pro)
+      +'</div>';
+  }).join('');
+}
+
+function openParent(id){
+  parentId=id;
+  const p=id?PARENTS.find(x=>String(x.id)===String(id)):null;
+  document.getElementById('parTitle').textContent=p?'Modifier le parent':'Ajouter un parent';
+  document.getElementById('btnDelPar').style.display=p?'':'none';
+  setVal('pLien',p?p.lien:'mere');
+  setVal('pPrenom',p?p.prenom:'');setVal('pNom',p?p.nom:'');
+  setVal('pEmail',p?p.email:'');setVal('pTel',p?p.telephone:'');
+  setVal('pTelPro',p?p.telephone_pro:'');setVal('pProf',p?p.profession:'');
+  setChk('pDest',p?p.destinataire:true);
+  openOv('ovParent');
+}
+
+async function saveParent(){
+  if(!ficheId){toast('Enregistrez d\'abord la demande.',true);return;}
+  const email=val('pEmail');
+  if(email&&email.indexOf('@')<0){toast('Adresse e-mail invalide.',true);return;}
+  if(!val('pPrenom')&&!val('pNom')){toast('Indiquez au moins un prénom ou un nom.',true);return;}
+  const row={
+    preinscription_id:ficheId,
+    lien:val('pLien')||'mere',
+    prenom:val('pPrenom'),nom:val('pNom'),
+    email:email,telephone:val('pTel'),telephone_pro:val('pTelPro'),
+    profession:val('pProf'),destinataire:chk('pDest')
+  };
+  try{
+    if(parentId){
+      const{error}=await sb.from('preinscriptions_parents').update(row).eq('id',parentId);
+      if(error)throw error;
+      const i=PARENTS.findIndex(x=>String(x.id)===String(parentId));
+      if(i>=0)PARENTS[i]=Object.assign({},PARENTS[i],row);
+      toast('Parent enregistré ✅');
+    }else{
+      const{data,error}=await sb.from('preinscriptions_parents').insert(row).select().single();
+      if(error)throw error;
+      PARENTS.push(data);
+      toast('Parent ajouté ✅');
+    }
+    closeOv('ovParent');renderParents();
+  }catch(e){
+    console.error('[saveParent]',e);
+    toast('Enregistrement impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+
+async function delParent(){
+  if(!parentId)return;
+  const p=PARENTS.find(x=>String(x.id)===String(parentId));
+  if(!confirm('Supprimer '+(((p&&p.prenom||'')+' '+(p&&p.nom||'')).trim()||'ce parent')+' ?'))return;
+  try{
+    const{error}=await sb.from('preinscriptions_parents').delete().eq('id',parentId);
+    if(error)throw error;
+    PARENTS=PARENTS.filter(x=>String(x.id)!==String(parentId));
+    closeOv('ovParent');renderParents();
+    toast('Parent supprimé.');
+  }catch(e){
+    console.error('[delParent]',e);
+    toast('Suppression impossible.',true);
+  }
+}
+
+/* ---------- NOTICE ---------- */
+const NOTICE_INS=`
+<p><b>À quoi sert ce module.</b> Il recueille les demandes de place avant que l'enfant n'existe dans l'application. Une demande peut concerner un enfant à naître, viser plusieurs crèches, et rester sans suite : la créer directement en fiche enfant fausserait les présences, les commandes de repas et les effectifs PMI.</p>
+<p style="margin-top:10px"><b>Le cycle d'une demande.</b> Nouvelle → En contact → Devis envoyé → Devis accepté → Inscrit. Les statuts Refusé et Sans suite ferment le dossier sans le supprimer : l'historique des demandes reste consultable.</p>
+<p style="margin-top:10px"><b>Le statut « Inscrit »</b> ne se pose pas à la main. Il s'appliquera automatiquement au moment de la bascule en fiche enfant, une fois le contrat signé — c'est ce qui garantit qu'une demande marquée traitée est bien rattachée à un enfant réel.</p>
+<p style="margin-top:10px"><b>Crèches souhaitées et crèche retenue.</b> La famille peut en viser plusieurs ; la crèche retenue ne se renseigne qu'une fois la place attribuée. Les autres choix sont conservés : si une place se libère ailleurs, l'information est encore là.</p>
+<p style="margin-top:10px"><b>Les relances.</b> Renseignez une date de rappel : la demande remonte dans « À relancer » le jour venu. Les dossiers clos en sont exclus.</p>
+<p style="margin-top:10px"><b>Les revenus.</b> Ils ne servent qu'à estimer le CMG. Une fois le dossier clos, ils peuvent être effacés en base — l'estimation, elle, est conservée.</p>
+<p style="margin-top:10px"><b>Accès.</b> Ce module est réservé à la direction : il contient des coordonnées et des revenus de familles qui ne seront peut-être jamais accueillies.</p>
+`;
+function openNotice(){document.getElementById('noticeBody').innerHTML=NOTICE_INS;openOv('ovNotice');}
+
+/* Fermeture au clic sur le fond, mais pas sur la fenêtre elle-même. */
+document.querySelectorAll('.ov').forEach(o=>{
+  o.addEventListener('click',ev=>{if(ev.target===o)o.classList.remove('on');});
+});
+
+boot().catch(e=>{console.error('[boot]',e);showLogin('Démarrage impossible — réessayez.');});
+</script>
+</body>
+</html>
