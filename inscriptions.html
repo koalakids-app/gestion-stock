@@ -324,7 +324,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div class="g3">
       <div class="f"><label class="lb">Arrivée</label><input id="dHd" type="time" onchange="dSync()"></div>
       <div class="f"><label class="lb">Départ</label><input id="dHf" type="time" onchange="dSync()"></div>
-      <div class="f"><label class="lb">Semaines facturées / an</label><input id="dSem" type="number" min="1" max="52" onchange="dSemManuel()" oninput="dSemManuel()"></div>
+      <div class="f" id="dSemBox"><label class="lb">Semaines facturées / an</label><input id="dSem" type="number" min="1" max="52" onchange="dSemManuel()" oninput="dSemManuel()"></div>
     </div>
     <!-- Ces trois champs n'apparaissent que lorsqu'une fin d'accueil est posée :
          sans terme, le devis se lisse sur douze mois et ils n'ont pas de sens. -->
@@ -1193,10 +1193,12 @@ async function openDevis(id){
   document.getElementById('dJoursBox').innerHTML=JOURS.map(j=>
     '<label><input type="checkbox" class="ckDJour" value="'+j[0]+'"'
     +((jrs.length?jrs:[1,2,3,4,5]).indexOf(j[0])>=0?' checked':'')+'><span>'+j[1]+'</span></label>').join('');
-  // Changer les jours change le compte de la période : on la recalcule, sauf si
-  // le devis en porte déjà une (ses chiffres sont figés).
-  document.querySelectorAll('.ckDJour').forEach(c=>c.addEventListener('change',
-    ()=>{ if(val('dFin')&&!DCUR)dPeriodeChange(); else dSync(); }));
+  /* Cocher un jour change le nombre de jours d'accueil de la période : le
+     comptage se rejoue. dPeriodeChange retombe sur dSync quand aucune fin n'est
+     posée, il n'y a donc qu'un seul chemin à retenir.
+     Un devis verrouillé n'émet aucun de ces événements — ses cases sont
+     désactivées — ses chiffres figés ne risquent rien. */
+  document.querySelectorAll('.ckDJour').forEach(c=>c.addEventListener('change',dPeriodeChange));
 
   // Parent isolé : la majoration PAJE cochée sur la fiche est le meilleur
   // indice dont on dispose, mais elle couvre aussi le handicap. Modifiable.
@@ -1257,7 +1259,7 @@ async function openDevis(id){
   /* Un devis enregistré relit ses propres chiffres de période plutôt que de les
      recalculer : ils sont figés, comme ses libellés et ses montants. Un devis
      neuf les déduit des dates. */
-  document.getElementById('dPeriodeBox').style.display=val('dFin')?'':'none';
+  dAfficheRegime();
   if(DCUR&&DCUR.date_fin){
     setVal('dJours',DCUR.jours_accueil!=null?DCUR.jours_accueil:'');
     setVal('dMois',DCUR.mois_factures!=null?DCUR.mois_factures:'');
@@ -1305,7 +1307,9 @@ function dCrecheChange(){
     const n=semainesDe(val('dCreche'));
     if(n!=null)setVal('dSem',n);
   }
-  dSync();
+  // Les semaines de fermeture sont propres à chaque crèche : le nombre de jours
+  // déduits de la période en dépend, et doit suivre le changement.
+  dPeriodeChange();
 }
 function dSemManuel(){semManuel=true;dSync();}
 
@@ -1372,17 +1376,33 @@ function fermetureEstimee(crecheId,nbJoursSemaine,mois){
 /* Recalcule les trois champs de période à partir des dates. Appelée quand une
    date change — jamais quand la direction corrige un des champs à la main,
    sinon sa saisie serait effacée dans la foulée. */
+/* Les semaines annuelles et la période sont deux façons EXCLUSIVES de compter.
+   Dès qu'une fin d'accueil est posée, les 47 semaines ne servent plus à rien :
+   le calcul part des jours réels. Les laisser à l'écran laissait croire
+   qu'elles pilotaient encore le montant — c'est le champ le plus visible du
+   bloc. On montre donc l'un ou l'autre, jamais les deux. */
+function dAfficheRegime(){
+  const avecTerme=!!val('dFin');
+  const sb2=document.getElementById('dSemBox');
+  const pb=document.getElementById('dPeriodeBox');
+  if(sb2)sb2.style.display=avecTerme?'none':'';
+  if(pb)pb.style.display=avecTerme?'':'none';
+}
+
 function dPeriodeChange(){
   const fin=val('dFin'),deb=val('dDebut');
-  const box=document.getElementById('dPeriodeBox');
-  if(!fin){box.style.display='none';dSync();return;}
-  box.style.display='';
+  dAfficheRegime();
+  if(!fin){dSync();return;}
+  // Sans date de début, ou avec des dates inversées, il n'y a rien à compter :
+  // on vide plutôt que de laisser à l'écran les chiffres d'une période
+  // précédente. dSync se charge d'expliquer pourquoi.
+  if(!deb||fin<=deb){setVal('dJours','');setVal('dFerm','');setVal('dMois','');dSync();return;}
   const jours=[...document.querySelectorAll('.ckDJour:checked')].map(c=>Number(c.value));
   const bruts=joursAccueilEntre(deb,fin,jours);
   const mois=moisEntre(deb,fin);
   const ferm=fermetureEstimee(val('dCreche'),jours.length,mois);
   setVal('dMois',mois||'');
-  setVal('dFerm',ferm);
+  setVal('dFerm',mois?ferm:'');
   setVal('dJours',bruts==null?'':Math.max(0,bruts-ferm));
   dSync();
 }
@@ -1509,13 +1529,29 @@ function dSync(){
     document.getElementById('dVol').textContent=
       'Renseignez les jours et les horaires pour calculer le volume hebdomadaire.';
   }else if(c.avecTerme){
-    document.getElementById('dVol').textContent=
-      c.h+' h par semaine sur '+c.nj+' jour'+(c.nj>1?'s':'')+'. '
-      +(c.joursPeriode==null
-        ? 'Renseignez les jours d\'accueil de la période.'
-        : c.joursPeriode+' jour'+(c.joursPeriode>1?'s':'')+' d\'accueil facturés du '
-          +dfr(val('dDebut'))+' au '+dfr(val('dFin'))+', répartis sur '+nbFr(c.mois)+' mois — '
-          +'soit '+nbFr(Math.round(c.jparmois*100)/100)+' jour'+(c.jparmois>1?'s':'')+' par mois.');
+    const deb=val('dDebut'),fin=val('dFin');
+    const el=document.getElementById('dVol');
+    const tete=c.h+' h par semaine sur '+c.nj+' jour'+(c.nj>1?'s':'')+'. ';
+    if(!deb){
+      el.textContent=tete+'Renseignez la date de début : sans elle, ni les jours ni les mois ne peuvent être comptés.';
+    }else if(fin<=deb){
+      /* Une fin antérieure au début est presque toujours une erreur d'année —
+         on saisit 2026 en pensant à la rentrée suivante. Le dire, et proposer
+         la correction probable, évite de laisser trois cases vides sans motif.
+         La base refuserait de toute façon (devis_periode_ck), mais bien plus
+         tard et bien moins clairement. */
+      const p=fin.split('-');
+      const suggestion=p.length===3?[String(Number(p[0])+1),p[1],p[2]].join('-'):null;
+      el.innerHTML=esc(tete)+'<span style="color:var(--red);font-weight:700">La fin de l\'accueil ('
+        +dfr(fin)+') est antérieure au début ('+dfr(deb)+').</span>'
+        +(suggestion&&suggestion>deb?' Vouliez-vous le <b>'+dfr(suggestion)+'</b> ?':'');
+    }else if(c.joursPeriode==null){
+      el.textContent=tete+'Renseignez les jours d\'accueil de la période.';
+    }else{
+      el.textContent=tete+c.joursPeriode+' jour'+(c.joursPeriode>1?'s':'')+' d\'accueil facturés du '
+        +dfr(deb)+' au '+dfr(fin)+', répartis sur '+nbFr(c.mois)+' mois — '
+        +'soit '+nbFr(Math.round(c.jparmois*100)/100)+' jour'+(c.jparmois>1?'s':'')+' par mois.';
+    }
   }else{
     document.getElementById('dVol').textContent=
       c.h+' h par semaine sur '+c.nj+' jour'+(c.nj>1?'s':'')+', soit '
@@ -1614,6 +1650,12 @@ async function saveDevis(){
   const c=DCALC||dCalcule();
   if(!c.lignes.length){toast('Rien à chiffrer : vérifiez les jours, les horaires et le tarif.',true);return;}
 
+  /* La contrainte devis_periode_ck refuserait ces dates, mais son message
+     Postgres est illisible pour qui saisit un devis. On tranche ici. */
+  if(val('dFin')&&val('dDebut')&&val('dFin')<=val('dDebut')){
+    toast('La fin de l\'accueil doit être postérieure au début — vérifiez l\'année.',true);
+    return;
+  }
   const cm=dCmgCalcule(c.mensuel);
   const row={
     preinscription_id:ficheId,
