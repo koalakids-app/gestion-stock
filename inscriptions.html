@@ -142,6 +142,19 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
   border-bottom:1px solid var(--line);font-size:13.5px}
 .kvb span{color:var(--muted)}
 .kvb b{text-align:right}
+/* Une ligne d'historique : le parcours du dossier se lit de gauche à droite,
+   comme il s'est déroulé dans le temps. */
+.hl{border:2px solid var(--line);border-radius:14px;padding:10px 13px;margin-bottom:8px;background:#fff}
+.hl .t{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.hl .n{font-family:'Baloo 2',cursive;font-size:15px;color:var(--violet)}
+.hl .c{font-size:12.5px;color:var(--muted)}
+.hl .p{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:11.5px}
+.hl .e{background:#F6F4FB;border-radius:8px;padding:3px 8px;color:#555;white-space:nowrap}
+.hl .e b{color:var(--violet)}
+.hl .e.off{color:#BBB6CC}
+.hs{background:#fff;border:2px solid var(--line);border-radius:14px;padding:9px 13px;flex:1;min-width:110px}
+.hs .n{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);line-height:1.1}
+.hs .l{font-size:11px;font-weight:700;color:var(--muted)}
 /* Bouton PDF pose sur la carte d'un devis. Il vit a l'interieur d'une zone
    deja cliquable : sans arret de propagation, l'imprimer ouvrirait aussi la
    modale du devis derriere la boite de telechargement. */
@@ -175,6 +188,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <span class="who" id="whoAmI"></span>
     <button class="tbtn accent" onclick="openTarifs()" title="Tarifs et frais"><i class="ti ti-cash"></i><span>Tarifs</span></button>
     <a class="tbtn" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i><span>Accueil</span></a>
+    <button class="tbtn" onclick="openHisto()" title="Historique des demandes"><i class="ti ti-history"></i><span>Historique</span></button>
     <button class="tbtn" onclick="openNotice()" title="Mode d'emploi"><i class="ti ti-help"></i><span>Aide</span></button>
     <button class="tbtn danger" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i><span>Quitter</span></button>
   </div>
@@ -370,6 +384,24 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <button class="btn btn-g" onclick="closeOv('ovDevis')">Fermer</button>
       <button class="btn btn-p" id="btnSaveDev" onclick="saveDevis()"><i class="ti ti-check"></i> Enregistrer le brouillon</button>
     </div>
+  </div>
+</div>
+
+<!-- HISTORIQUE DES DEMANDES -->
+<div class="ov" id="ovHisto">
+  <div class="md" style="max-width:900px">
+    <h3><i class="ti ti-history"></i> Historique des demandes</h3>
+    <div class="bar">
+      <select id="hAnnee" style="width:auto;min-width:170px" onchange="renderHisto()"></select>
+      <select id="hCreche" style="width:auto;min-width:150px" onchange="renderHisto()"></select>
+      <select id="hStatut" style="width:auto;min-width:150px" onchange="renderHisto()"></select>
+      <input class="search" id="hSearch" placeholder="Rechercher un enfant…" oninput="renderHisto()">
+      <button class="btn btn-s" onclick="exporterHisto()"><i class="ti ti-download"></i> Exporter</button>
+    </div>
+    <div id="hStats" class="stats"></div>
+    <div id="hListe"></div>
+    <p class="hint" id="hNote" style="margin-top:10px"></p>
+    <div class="acts"><button class="btn btn-p" onclick="closeOv('ovHisto')">Fermer</button></div>
   </div>
 </div>
 
@@ -1741,6 +1773,210 @@ async function delDevis(){
     console.error('[delDevis]',e);
     toast('Suppression impossible : '+(e.message||'erreur inconnue'),true);
   }
+}
+
+/* ---------- L'HISTORIQUE DES DEMANDES ---------- */
+/* Toutes les demandes, transformées ou non. La file d'attente ne montre que ce
+   qui est vivant — les inscrites en sortent, les refusées se noient. Or ce sont
+   justement les dossiers clos qui portent l'information de gestion : combien de
+   demandes reçues cette année, combien sont devenues des inscriptions, d'où
+   viennent les familles, et combien de temps il s'écoule entre le premier
+   contact et la signature.
+
+   Aucune table nouvelle : tout est déjà en base. Il manquait l'écran.
+
+   L'année est SCOLAIRE, de septembre à août, parce que c'est l'unité dans
+   laquelle une crèche pense ses effectifs. Une demande reçue en juillet 2027
+   appartient à l'année 2026-2027, pas à 2027-2028. */
+let HDEVIS=null;   // tous les devis du réseau, chargés une fois
+
+function anneeScolaire(iso){
+  if(!iso)return null;
+  const d=String(iso).slice(0,10).split('-').map(Number);
+  if(d.length!==3)return null;
+  return d[1]>=9?d[0]:d[0]-1;   // septembre ouvre l'année
+}
+function libelleAnnee(a){return a+'-'+(a+1);}
+
+async function openHisto(){
+  openOv('ovHisto');
+  document.getElementById('hListe').innerHTML='<p class="hint">Chargement…</p>';
+
+  /* Les devis de tout le réseau, en une fois. On ne charge que ce que
+     l'historique affiche — ni lignes, ni signatures, qui pèseraient lourd pour
+     rien. */
+  if(!HDEVIS){
+    try{
+      const{data,error}=await sb.from('devis')
+        .select('id,preinscription_id,statut,numero,envoye_le,repondu_le,total_mensuel,reste_a_charge,created_at')
+        .order('created_at');
+      if(error)throw error;
+      HDEVIS=data||[];
+    }catch(e){
+      console.error('[openHisto]',e);
+      HDEVIS=[];
+      toast('Devis inaccessibles — l\'historique reste lisible sans eux.',true);
+    }
+  }
+
+  // Les années présentes dans les données, la plus récente d'abord.
+  const annees=[...new Set(PRE.map(p=>anneeScolaire(p.created_at)).filter(a=>a!=null))]
+    .sort((a,b)=>b-a);
+  document.getElementById('hAnnee').innerHTML=
+    '<option value="">Toutes les années</option>'
+    +annees.map(a=>'<option value="'+a+'">Année '+libelleAnnee(a)+'</option>').join('');
+
+  document.getElementById('hCreche').innerHTML='<option value="">Toutes les crèches</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  document.getElementById('hStatut').innerHTML='<option value="">Tous les statuts</option>'
+    +ORDRE_STATUTS.map(x=>'<option value="'+x+'">'+esc(STATUTS[x].l)+'</option>').join('');
+
+  renderHisto();
+}
+
+/* Le parcours d'un dossier, reconstitué depuis les devis qui s'y rattachent. */
+function parcours(p){
+  const ds=(HDEVIS||[]).filter(d=>String(d.preinscription_id)===String(p.id));
+  const envoyes=ds.filter(d=>d.envoye_le).sort((a,b)=>String(a.envoye_le).localeCompare(String(b.envoye_le)));
+  const accepte=ds.filter(d=>d.statut==='accepte'&&d.repondu_le)
+    .sort((a,b)=>String(a.repondu_le).localeCompare(String(b.repondu_le)))[0]||null;
+  const refuse=ds.filter(d=>d.statut==='refuse'&&d.repondu_le)
+    .sort((a,b)=>String(b.repondu_le).localeCompare(String(a.repondu_le)))[0]||null;
+  return{
+    nbDevis:ds.length,
+    premierEnvoi:envoyes.length?envoyes[0].envoye_le:null,
+    accepte:accepte,refuse:refuse,
+    mensuel:accepte?accepte.total_mensuel:(envoyes.length?envoyes[envoyes.length-1].total_mensuel:null)
+  };
+}
+
+/* Délai en jours entre deux dates, ou null. */
+function delaiJours(a,b){
+  if(!a||!b)return null;
+  const d0=new Date(String(a).slice(0,10)+'T12:00:00');
+  const d1=new Date(String(b).slice(0,10)+'T12:00:00');
+  if(isNaN(d0)||isNaN(d1))return null;
+  const n=Math.round((d1-d0)/86400000);
+  return n>=0?n:null;
+}
+/* Médiane plutôt que moyenne : un dossier resté six mois en sommeil tirerait la
+   moyenne au point de la rendre inutile. */
+function mediane(t){
+  const v=t.filter(x=>x!=null).sort((a,b)=>a-b);
+  if(!v.length)return null;
+  const m=Math.floor(v.length/2);
+  return v.length%2?v[m]:Math.round((v[m-1]+v[m])/2);
+}
+
+function histoFiltre(){
+  const an=val('hAnnee'),cre=val('hCreche'),st=val('hStatut');
+  const q=val('hSearch').toLowerCase();
+  return PRE.filter(p=>{
+    if(an&&String(anneeScolaire(p.created_at))!==an)return false;
+    if(cre&&String(p.creche_id)!==cre
+      &&toArr(p.creches_souhaitees).map(String).indexOf(cre)<0)return false;
+    if(st&&p.statut!==st)return false;
+    if(q&&((p.prenom||'')+' '+(p.nom||'')+' '+(p.ville||'')+' '+(p.source||''))
+      .toLowerCase().indexOf(q)<0)return false;
+    return true;
+  }).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+}
+
+function renderHisto(){
+  const l=histoFiltre();
+
+  /* Les compteurs. Le taux de transformation est le chiffre que réclame un
+     gestionnaire : combien de demandes reçues deviennent des enfants accueillis.
+     On le calcule sur les dossiers CLOS — inscrits, refusés, sans suite — car
+     inclure les dossiers encore en cours le ferait mécaniquement chuter en
+     début d'année sans que rien n'aille mal. */
+  const n=l.length;
+  const inscrits=l.filter(p=>p.statut==='inscrit').length;
+  const perdus=l.filter(p=>['refuse','sans_suite'].indexOf(p.statut)>=0).length;
+  const clos=inscrits+perdus;
+  const enCours=n-clos;
+  const taux=clos?Math.round(inscrits/clos*100):null;
+
+  const parc=l.map(parcours);
+  const avecDevis=parc.filter(x=>x.premierEnvoi).length;
+  const delais=l.map((p,i)=>delaiJours(p.created_at,parc[i].accepte?parc[i].accepte.repondu_le:null));
+  const med=mediane(delais);
+
+  const st=(v,lib)=>'<div class="hs"><div class="n">'+v+'</div><div class="l">'+esc(lib)+'</div></div>';
+  document.getElementById('hStats').innerHTML=
+    st(n,'demandes')
+    +st(avecDevis,'devis envoyés')
+    +st(inscrits,'inscrits')
+    +st(perdus,'refus / sans suite')
+    +st(enCours,'en cours')
+    +st(taux==null?'—':taux+' %','transformation')
+    +st(med==null?'—':med+' j','délai médian');
+
+  const box=document.getElementById('hListe');
+  if(!n){
+    box.innerHTML='<div class="empty"><i class="ti ti-inbox"></i><p>Aucune demande ne correspond à ces filtres.</p></div>';
+    document.getElementById('hNote').textContent='';
+    return;
+  }
+
+  box.innerHTML=l.map((p,i)=>{
+    const x=parc[i];
+    const s=STATUTS[p.statut]||STATUTS.nouvelle;
+    const nom=((p.prenom||'')+' '+(p.nom||'')).trim()||'Sans nom';
+    const cr=nomCreche(p.creche_id)||toArr(p.creches_souhaitees).map(nomCreche).filter(Boolean).join(' · ')||'crèche non retenue';
+    // Le parcours, étape par étape. Une étape non franchie reste visible en
+    // grisé : c'est là que le dossier s'est arrêté, et c'est l'information.
+    const et=(lib,date,ok)=>'<span class="e'+(ok?'':' off')+'">'+esc(lib)
+      +(date?' <b>'+dfr(date)+'</b>':'')+'</span>';
+    return '<div class="hl" onclick="closeOv(\'ovHisto\');openFiche(\''+p.id+'\')" style="cursor:pointer">'
+      +'<div class="t"><span class="n">'+esc(nom)+'</span>'
+      +'<span class="tag" style="background:'+s.bg+';color:'+s.fg+'">'+esc(s.l)+'</span>'
+      +'<span class="c">'+esc(cr)+(p.source?' · '+esc(p.source):'')+'</span></div>'
+      +'<div class="p">'
+      +et('Demande',p.created_at,true)
+      +et('Devis envoyé',x.premierEnvoi,!!x.premierEnvoi)
+      +(x.refuse?et('Refusé',x.refuse.repondu_le,true):et('Accepté',x.accepte?x.accepte.repondu_le:null,!!x.accepte))
+      +et('Inscrit',null,!!p.enfant_id)
+      +(x.mensuel?'<span class="e">'+euro(x.mensuel)+' / mois</span>':'')
+      +'</div></div>';
+  }).join('');
+
+  document.getElementById('hNote').innerHTML=
+    'Le taux de transformation porte sur les <b>dossiers clos</b> ('+clos+') : '
+    +'inclure les demandes encore en cours le ferait chuter en début d\'année sans qu\'aucune ne soit perdue. '
+    +'Le délai médian sépare la demande de l\'acceptation du devis.';
+}
+
+/* Export pour le gestionnaire. Point-virgule et BOM : Excel en français ouvre
+   sinon tout dans une seule colonne. */
+function exporterHisto(){
+  const l=histoFiltre();
+  if(!l.length){toast('Rien à exporter avec ces filtres.',true);return;}
+  const parc=l.map(parcours);
+  const col=['Prénom','Nom','Crèche','Statut','Origine','Demande le','Devis envoyé le',
+             'Accepté le','Refusé le','Motif du refus','Mensualité','Reste à charge','Inscrit'];
+  const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const lignes=l.map((p,i)=>{
+    const x=parc[i];
+    return [p.prenom||'',p.nom||'',
+      nomCreche(p.creche_id)||'',
+      (STATUTS[p.statut]||{}).l||p.statut,
+      p.source||'',
+      dfr(p.created_at),dfr(x.premierEnvoi),
+      x.accepte?dfr(x.accepte.repondu_le):'',
+      x.refuse?dfr(x.refuse.repondu_le):'',
+      x.refuse?(x.refuse.motif_refus||''):'',
+      x.mensuel!=null?String(x.mensuel).replace('.',','):'',
+      x.accepte&&x.accepte.reste_a_charge!=null?String(x.accepte.reste_a_charge).replace('.',','):'',
+      p.enfant_id?'oui':'non'].map(q).join(';');
+  });
+  const txt='﻿'+col.map(q).join(';')+'\n'+lignes.join('\n');
+  const url=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');
+  a.href=url;a.download='koalakids-demandes-'+auj()+'.csv';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast(l.length+' demande'+(l.length>1?'s':'')+' exportée'+(l.length>1?'s':'')+' ✅');
 }
 
 /* ---------- LA BASCULE : préinscription → fiche enfant ---------- */
@@ -3156,6 +3392,7 @@ const NOTICE_INS=`
 <p style="margin-top:10px"><b>Modifier la grille ne réécrit aucun devis.</b> Un devis recopie libellé et montant au moment de son établissement, puis ne les relit plus. Une hausse de tarif s'applique aux devis suivants, jamais à ceux déjà envoyés. Supprimer une ligne de la grille est donc sans effet sur l'historique — restaurer une sauvegarde non plus.</p>
 <p style="margin-top:10px"><b>Le PDF du devis.</b> Le bouton <b>PDF</b> posé sur chaque devis produit le document à remettre à la famille, sans ouvrir le devis. Il est imprimé <b>depuis la base</b>, pas depuis l'écran : ce qui en sort est ce qui a été figé à l'établissement, même si la grille a bougé depuis. L'en-tête (raison sociale, SIRET, agrément PMI), la durée de validité et les mentions légales viennent du module <b>Paramètres</b> : ce qui n'y est pas renseigné laisse simplement un blanc sur le document. Un brouillon imprimé porte la mention « BROUILLON » — il n'engage personne tant qu'il n'est pas envoyé.</p>
 <p style="margin-top:10px"><b>La signature.</b> Tant que le devis n'est pas signé, le PDF porte un cadre « Bon pour accord » à remplir à la main. La signature en ligne, à venir, remplira ce même cadre avec le tracé de la famille et sa date : le document restera le même, seul le cadre changera.</p>
+<p style="margin-top:10px"><b>L'historique.</b> Le bouton <b>Historique</b> de la barre du haut ouvre toutes les demandes, transformées ou non — la file d'attente, elle, ne montre que ce qui est vivant. On y filtre par année scolaire (septembre à août, l'unité dans laquelle une crèche pense ses effectifs), par crèche et par statut. Chaque ligne montre le parcours du dossier : demande, devis envoyé, accepté ou refusé, inscrit — les étapes non franchies restent visibles en grisé, car c'est là que le dossier s'est arrêté. Le <b>taux de transformation</b> ne porte que sur les dossiers clos : y inclure les demandes en cours le ferait chuter en début d'année sans qu'aucune ne soit perdue. Le bouton <b>Exporter</b> produit un fichier .csv pour le gestionnaire.</p>
 <p style="margin-top:10px"><b>La bascule en fiche enfant.</b> Une fois le devis accepté, le bouton <b>Basculer en fiche enfant</b> apparaît sous les devis. Il ouvre un écran de vérification : ce qui va être créé — l'enfant, les parents, le contrat d'accueil tiré du devis — et ce qui ne suivra pas, faute de champ dans la fiche enfant : le PAI, le médecin, l'adresse, le n° allocataire, la profession des parents. Ces informations restent sur la demande, qui demeure consultable. L'écran signale aussi les enfants du réseau portant déjà ce nom de famille : fratrie ou doublon, c'est à vous de trancher avant d'écrire. La demande passe alors en <b>Inscrit</b> et sort de la file active ; on la retrouve en cliquant sur le compteur « Inscrit ».</p>
 <p style="margin-top:10px"><b>Accès.</b> Ce module est réservé à la direction : il contient des coordonnées et des revenus de familles qui ne seront peut-être jamais accueillies.</p>
 `;
