@@ -350,6 +350,8 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div class="acts">
       <button class="btn btn-d" id="btnDelDev" style="display:none" onclick="delDevis()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn btn-s" id="btnPdfDev" style="display:none" onclick="pdfDevis(devisId)"><i class="ti ti-file-type-pdf"></i> Le PDF</button>
+      <button class="btn btn-s" id="btnLienDev" style="display:none" onclick="copierLienDevis()"><i class="ti ti-link"></i> Le lien</button>
+      <button class="btn btn-p" id="btnEnvoiDev" style="display:none" onclick="envoyerDevis()"><i class="ti ti-send"></i> Envoyer</button>
       <button class="btn btn-g" onclick="closeOv('ovDevis')">Fermer</button>
       <button class="btn btn-p" id="btnSaveDev" onclick="saveDevis()"><i class="ti ti-check"></i> Enregistrer le brouillon</button>
     </div>
@@ -1097,7 +1099,19 @@ async function openDevis(id){
   // supposerait une révision, qui est un nouveau devis remplaçant le premier.
   const lock=document.getElementById('dLock');
   lock.style.display=brouillon?'none':'';
-  lock.textContent=brouillon?'':'Ce devis a quitté le brouillon : il n\'est plus modifiable. Établissez-en un nouveau pour le remplacer.';
+  lock.innerHTML=brouillon?'':etatEnvoi(DCUR);
+
+  /* Envoi et relance. Un devis clos — signé, refusé, annulé — ne s'envoie plus :
+     le lien serait mort à l'arrivée, et relancer une famille qui a déjà répondu
+     est le genre de maladresse qu'une application ne doit pas rendre possible. */
+  const clos=!!(DCUR&&(DCUR.signe_le||DCUR.refuse_le
+    ||['accepte','refuse','annule','expire'].indexOf(DCUR.statut)>=0));
+  const bEnv=document.getElementById('btnEnvoiDev');
+  bEnv.style.display=(DCUR&&!clos)?'':'none';
+  bEnv.innerHTML=(DCUR&&DCUR.statut==='envoye')
+    ? '<i class="ti ti-bell"></i> Relancer la famille'
+    : '<i class="ti ti-send"></i> Envoyer à la famille';
+  document.getElementById('btnLienDev').style.display=(DCUR&&DCUR.jeton&&!clos)?'':'none';
 
   const src=DCUR||p;
   document.getElementById('dCreche').innerHTML='<option value="">— à définir —</option>'
@@ -1470,6 +1484,154 @@ async function delDevis(){
   }catch(e){
     console.error('[delDevis]',e);
     toast('Suppression impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+
+/* ---------- ENVOI ET SIGNATURE EN LIGNE ---------- */
+/* La famille reçoit un mail, ouvre devis.html avec son jeton, lit le devis et
+   le signe du doigt. Même dispositif que le dossier de familiarisation et le
+   dépôt des pièces de stage : jeton porté par la ligne, edge function en
+   service_role, AUCUNE policy anon sur `devis`.
+
+   Le jeton est fabriqué ICI, sous RLS, par quelqu'un qui a le droit d'envoyer
+   le devis — et non par l'edge function, qui ne doit jamais pouvoir créer un
+   accès de sa propre initiative. La fonction d'envoi ne reçoit qu'un
+   identifiant de devis et relit tout le reste en base : connaître son URL ne
+   permet donc pas d'écrire à une adresse arbitraire. */
+
+/* crypto.getRandomValues et non Math.random : ce jeton est la seule chose qui
+   sépare le devis d'une famille de celui d'une autre. 32 octets, 64 caractères
+   hexadécimaux — indevinable. */
+function nouveauJeton(){
+  const a=new Uint8Array(32);
+  crypto.getRandomValues(a);
+  return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function lienDevis(jeton){
+  const racine=location.href.replace(/[^/]*\.html?(\?.*)?(#.*)?$/i,'');
+  return racine+'devis.html?t='+jeton;
+}
+
+/* Ce que la modale affiche à la place du formulaire, une fois le devis parti.
+   L'état d'un envoi se lit en trois temps — parti, ouvert, signé — et c'est ce
+   qui permet de choisir entre relancer et téléphoner. */
+function etatEnvoi(d){
+  if(!d)return '';
+  if(d.signe_le){
+    return '<b style="color:var(--green)">Signé en ligne le '+dfr(d.signe_le)
+      +(d.signe_par?' par '+esc(d.signe_par):'')+'.</b> Le PDF porte la signature.';
+  }
+  if(d.refuse_le){
+    return '<b style="color:var(--red)">Refusé par la famille le '+dfr(d.refuse_le)+'.</b>'
+      +(d.motif_refus?' Motif : '+esc(d.motif_refus):' Aucun motif indiqué.');
+  }
+  const bouts=[];
+  if(d.envoye_le)bouts.push('Envoyé le '+dfr(d.envoye_le)+(d.email_envoi?' à '+esc(d.email_envoi):''));
+  if(d.vu_le)bouts.push('ouvert par la famille le '+dfr(d.vu_le));
+  else if(d.envoye_le)bouts.push('<b>pas encore ouvert</b>');
+  if(d.relances)bouts.push(d.relances+' relance'+(d.relances>1?'s':'')
+    +(d.derniere_relance?', la dernière le '+dfr(d.derniere_relance):''));
+  if(d.jeton_expire_le)bouts.push('lien valable jusqu\'au '+dfr(d.jeton_expire_le));
+  return (bouts.join(' · ')||'Ce devis a quitté le brouillon.')
+    +' Il n\'est plus modifiable : établissez-en un nouveau pour le remplacer.';
+}
+
+/* Les destinataires : les parents cochés « destinataire du devis » qui ont une
+   adresse. Deux parents, deux boîtes, un seul et même lien. */
+function destinatairesDevis(){
+  return PARENTS.filter(p=>p.destinataire&&p.email&&p.email.indexOf('@')>0)
+    .map(p=>p.email.trim());
+}
+
+async function copierLienDevis(){
+  const d=DEVIS.find(x=>String(x.id)===String(devisId));
+  if(!d||!d.jeton){toast('Ce devis n\'a pas de lien actif.',true);return;}
+  const url=lienDevis(d.jeton);
+  try{
+    await navigator.clipboard.writeText(url);
+    toast('Lien copié — collez-le dans un SMS ou un mail.');
+  }catch(e){
+    // Le presse-papier est refusé hors HTTPS et dans certains navigateurs :
+    // plutôt que d'échouer, on montre le lien pour qu'il soit copié à la main.
+    prompt('Copiez ce lien :',url);
+  }
+}
+
+async function envoyerDevis(){
+  const d=DEVIS.find(x=>String(x.id)===String(devisId));
+  if(!d){toast('Enregistrez d\'abord le devis.',true);return;}
+  if(d.signe_le||d.refuse_le){toast('Ce devis a déjà reçu une réponse.',true);return;}
+
+  const relance=(d.statut==='envoye');
+  const adresses=destinatairesDevis();
+  if(!adresses.length){
+    toast('Aucun parent destinataire avec une adresse e-mail : cochez « destinataire » sur au moins un parent.',true);
+    return;
+  }
+  if(!d.total_mensuel){
+    toast('Ce devis ne chiffre rien — vérifiez le contrat avant de l\'envoyer.',true);
+    return;
+  }
+
+  await loadReseau();
+  const jours=Number(RESEAU.devis_validite_jours||30);
+  const fin=new Date();fin.setDate(fin.getDate()+jours);
+
+  const quoi=relance
+    ? 'Relancer '+adresses.join(', ')+' ?'
+    : 'Envoyer ce devis à '+adresses.join(', ')+' ?\n\n'
+      +'Le devis passera en « Envoyé » et ne sera plus modifiable.\n'
+      +'Le lien sera valable '+jours+' jours, jusqu\'au '+dfr(fin.toISOString())+'.';
+  if(!confirm(quoi))return;
+
+  const b=document.getElementById('btnEnvoiDev');
+  b.disabled=true;b.textContent=relance?'Relance…':'Envoi…';
+  try{
+    /* Un jeton n'est fabriqué qu'au premier envoi. Une relance réutilise le
+       même lien : en poser un nouveau invaliderait celui que la famille a déjà
+       dans sa boîte, et c'est souvent celui-là qu'elle rouvrira. On ne le
+       renouvelle que s'il a expiré entre-temps. */
+    const expire=d.jeton_expire_le?new Date(d.jeton_expire_le).getTime():0;
+    const besoinJeton=!d.jeton||expire<Date.now();
+    const maj={email_envoi:adresses.join(', '),updated_at:new Date().toISOString()};
+    if(besoinJeton){maj.jeton=nouveauJeton();maj.jeton_expire_le=fin.toISOString();}
+    if(!relance){maj.statut='envoye';maj.envoye_le=new Date().toISOString();}
+
+    const{error}=await sb.from('devis').update(maj).eq('id',d.id);
+    if(error)throw error;
+    Object.assign(d,maj);
+
+    /* Le mail part APRÈS l'écriture : si l'envoi échoue, le lien existe déjà et
+       le bouton « Le lien » permet de le transmettre à la main. L'inverse —
+       mailer d'abord — aurait pu expédier un lien que la base n'a pas gardé. */
+    const{error:eFn}=await sb.functions.invoke('envoyer-devis',
+      {body:{devis_id:d.id,relance:relance}});
+    if(eFn)throw eFn;
+
+    if(relance){
+      d.relances=(d.relances||0)+1;
+      d.derniere_relance=new Date().toISOString();
+      toast('Relance envoyée ✅');
+    }else{
+      // La file d'attente doit suivre : « Devis envoyé » se voit depuis la liste.
+      const p=PRE.find(x=>String(x.id)===String(ficheId));
+      if(p&&['nouvelle','en_contact'].indexOf(p.statut)>=0){
+        await sb.from('preinscriptions').update({statut:'devis_envoye'}).eq('id',p.id);
+        p.statut='devis_envoye';render();
+      }
+      toast('Devis envoyé ✅');
+    }
+    closeOv('ovDevis');
+    await loadDevis(ficheId);
+  }catch(e){
+    console.error('[envoyerDevis]',e);
+    toast('Envoi impossible : '+(e.message||'erreur inconnue')
+      +' — le lien reste disponible par le bouton « Le lien ».',true);
+  }finally{
+    b.disabled=false;
+    b.innerHTML=relance?'<i class="ti ti-bell"></i> Relancer la famille'
+                       :'<i class="ti ti-send"></i> Envoyer à la famille';
   }
 }
 
@@ -1921,8 +2083,15 @@ function tarifsEnConflit(){
    desormais ecrite dans la liste deroulante du devis, la ou le choix se voit. */
 function tarifPour(h,crecheId){
   const bornes=t=>(t.heures_min==null?0:1)+(t.heures_max==null?0:1);
+  /* Pour MESURER une fourchette, une borne basse absente vaut zero et non moins
+     l'infini : un volume horaire ne peut pas etre negatif. Sans cela, « moins de
+     24 h » et « moins de 40 h » — deux lignes ouvertes a gauche, comme la grille
+     Koala Kids les ecrit — etaient toutes deux larges a l'infini, donc a
+     egalite, et 21 h partait sur la mauvaise.
+     Cette lecture ne vaut que pour la mesure : la SELECTION, elle, continue de
+     traiter une borne absente comme absente. */
   const largeur=t=>{
-    const a=t.heures_min==null?-Infinity:Number(t.heures_min);
+    const a=t.heures_min==null?0:Number(t.heures_min);
     const b=t.heures_max==null?Infinity:Number(t.heures_max);
     return b-a;
   };
