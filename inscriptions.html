@@ -1578,6 +1578,26 @@ async function copierLienDevis(){
                updated_at:new Date().toISOString()};
     const adr=destinatairesDevis();
     if(adr.length)maj.destinataires=adr.join(', ');
+
+    /* Créer un lien pour le donner à une famille, c'est envoyer le devis. Le
+       statut suit donc, et pour deux raisons qui vont ensemble :
+
+       — la signature en ligne n'est acceptée que sur un devis « envoyé ». Un
+         lien créé sur un brouillon laissait la famille tout lire, tout signer,
+         et se faire refuser au dernier clic ;
+       — la contrainte devis_envoi_ck exige `token` ET `envoye_le` dès qu'un
+         devis quitte le brouillon. Les poser séparément était impossible.
+
+       On le dit avant, parce que le devis cesse alors d'être modifiable. */
+    if(d.statut==='brouillon'){
+      if(!confirm('Créer le lien de signature ?\n\n'
+        +'Le devis passera en « Envoyé » et ne sera plus modifiable — c\'est ce qui '
+        +'autorise la famille à le signer en ligne.\n'
+        +'Lien valable '+jours+' jours, jusqu\'au '+dfr(fin.toISOString())+'.'))return;
+      maj.statut='envoye';
+      maj.envoye_le=new Date().toISOString();
+    }
+
     const{error}=await sb.from('devis').update(maj).eq('id',d.id);
     if(error){
       console.error('[copierLienDevis]',error);
@@ -1587,6 +1607,16 @@ async function copierLienDevis(){
     Object.assign(d,maj);
     jeton=maj.token;
     document.getElementById('btnLienDev').innerHTML='<i class="ti ti-link"></i> Le lien';
+    if(maj.statut==='envoye'){
+      // Même suivi que l'envoi par mail : la file d'attente doit montrer
+      // « Devis envoyé » sans qu'on ait à rouvrir la fiche.
+      const p=PRE.find(x=>String(x.id)===String(ficheId));
+      if(p&&['nouvelle','en_contact'].indexOf(p.statut)>=0){
+        await sb.from('preinscriptions').update({statut:'devis_envoye'}).eq('id',p.id);
+        p.statut='devis_envoye';render();
+      }
+      renderDevisList();
+    }
   }
 
   const url=lienDevis(jeton);
@@ -1598,6 +1628,28 @@ async function copierLienDevis(){
     // plutôt que d'échouer, on montre le lien pour qu'il soit copié à la main.
     prompt('Copiez ce lien :',url);
   }
+}
+
+/* supabase-js masque le corps de la réponse d'une edge function derrière un
+   message unique — « Edge Function returned a non-2xx status code » — quelle
+   que soit la cause. Le vrai motif (clé Resend absente, domaine non vérifié,
+   APP_URL manquante, adresse invalide) est dans le corps JSON, sous `erreur`.
+   Sans cette fonction, toutes les pannes d'envoi se ressemblent. */
+async function detailFn(e){
+  try{
+    if(e&&e.context&&typeof e.context.json==='function'){
+      const j=await e.context.json();
+      if(j&&j.erreur)return j.erreur;
+      if(j&&j.error)return String(j.error);
+    }
+  }catch(x){}
+  try{
+    if(e&&e.context&&typeof e.context.text==='function'){
+      const t=await e.context.text();
+      if(t)return t.slice(0,300);
+    }
+  }catch(x){}
+  return (e&&e.message)||'erreur inconnue';
 }
 
 async function envoyerDevis(){
@@ -1649,7 +1701,7 @@ async function envoyerDevis(){
        mailer d'abord — aurait pu expédier un lien que la base n'a pas gardé. */
     const{error:eFn}=await sb.functions.invoke('envoyer-devis',
       {body:{devis_id:d.id,relance:relance}});
-    if(eFn)throw eFn;
+    if(eFn)throw new Error(await detailFn(eFn));
 
     if(relance){
       d.relances=(d.relances||0)+1;
