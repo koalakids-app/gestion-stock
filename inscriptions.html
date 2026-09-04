@@ -67,6 +67,20 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .par .h{display:flex;align-items:center;gap:8px;margin-bottom:3px}
 .par .h b{font-size:14px;color:var(--violet);flex:1}
 .par .li{font-size:12.5px;color:#555;margin-top:2px;display:flex;align-items:center;gap:6px}
+/* Lignes de la grille tarifaire. Meme vocabulaire visuel que .par : une carte
+   cliquable qui ouvre sa modale d'edition. */
+.tr{border:2px solid var(--line);border-radius:14px;padding:10px 13px;margin-bottom:8px;background:#FCFBFE;display:flex;align-items:center;gap:10px;cursor:pointer}
+.tr:hover{border-color:#DED6EE}
+.tr .tb{flex:1;min-width:0}
+.tr .tn{font-size:14px;font-weight:700;color:var(--violet)}
+.tr .td{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5}
+.tr .tm{font-family:'Baloo 2',cursive;font-size:17px;color:#2B2740;white-space:nowrap}
+.tr .tm.red{color:var(--green)}
+.tr.off{opacity:.5}
+.tr.off .tm{color:var(--muted)}
+.grp{display:flex;align-items:center;gap:8px;margin:18px 0 10px}
+.grp:first-of-type{margin-top:0}
+.grp h4{font-family:'Baloo 2',cursive;font-size:14px;color:var(--orange);flex:1}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#2B2740;color:#fff;padding:11px 18px;border-radius:14px;font-size:13.5px;font-weight:600;z-index:300;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
 .toast.on{opacity:1}
 .toast.err{background:var(--red)}
@@ -98,6 +112,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <i class="ti ti-clipboard-list" style="font-size:22px;color:var(--orange)"></i>
     <h1>Inscriptions</h1>
     <span class="who" id="whoAmI"></span>
+    <button class="btn btn-g btn-sm" onclick="openTarifs()" title="Tarifs et frais"><i class="ti ti-cash"></i></button>
     <a class="btn btn-g btn-sm" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i></a>
     <button class="btn btn-g btn-sm" onclick="openNotice()" title="Mode d'emploi"><i class="ti ti-help"></i></button>
     <button class="btn btn-g btn-sm" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i></button>
@@ -222,6 +237,100 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <button class="btn btn-d" id="btnDelPar" style="display:none" onclick="delParent()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn btn-g" onclick="closeOv('ovParent')">Annuler</button>
       <button class="btn btn-p" onclick="saveParent()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- TARIFS ET FRAIS -->
+<div class="ov" id="ovTarifs">
+  <div class="md" style="max-width:720px">
+    <h3><i class="ti ti-cash"></i> Tarifs et frais</h3>
+
+    <div class="grp">
+      <h4>Tarifs d'accueil</h4>
+      <button class="btn btn-s btn-sm" onclick="openTarif(null)"><i class="ti ti-plus"></i> Ajouter</button>
+    </div>
+    <div id="tarList"></div>
+    <p class="hint">Le tarif retenu est celui dont la fourchette contient le volume hebdomadaire.
+      Borne basse incluse, borne haute exclue : 40 h pile relève de la ligne « à partir de 40 h ».</p>
+
+    <div class="grp">
+      <h4>Frais et réductions</h4>
+      <button class="btn btn-s btn-sm" onclick="openFrais(null)"><i class="ti ti-plus"></i> Ajouter</button>
+    </div>
+    <div id="fraList"></div>
+    <p class="hint">Les lignes cochées « proposée par défaut » sont pré-sélectionnées à l'établissement d'un devis.
+      Une réduction se saisit en montant positif : c'est la case « réduction » qui la fait se soustraire.</p>
+
+    <div class="acts"><button class="btn btn-p" onclick="closeOv('ovTarifs')">Fermer</button></div>
+  </div>
+</div>
+
+<!-- UNE LIGNE DE TARIF -->
+<div class="ov" id="ovTarif">
+  <div class="md" style="max-width:560px">
+    <h3><i class="ti ti-clock-dollar"></i> <span id="tarTitle">Ajouter un tarif</span></h3>
+    <div class="f"><label class="lb">Libellé</label><input id="tLib" placeholder="Moins de 24 h par semaine"></div>
+    <div class="f"><label class="lb">Description</label><input id="tDesc" placeholder="Facultatif — figure sur le devis"></div>
+    <div class="g2">
+      <div class="f"><label class="lb">Crèche</label><select id="tCreche"></select></div>
+      <div class="f"><label class="lb">Mode</label><select id="tMode">
+        <option value="horaire">À l'heure</option>
+        <option value="mensuel">Au mois</option>
+        <option value="journee">À la journée</option>
+      </select></div>
+    </div>
+    <div class="g3">
+      <div class="f"><label class="lb">Montant (€)</label><input id="tMontant" type="number" step="0.01" min="0"></div>
+      <div class="f"><label class="lb">À partir de (h/sem.)</label><input id="tMin" type="number" step="0.5" min="0" placeholder="—"></div>
+      <div class="f"><label class="lb">Jusqu'à, exclu (h/sem.)</label><input id="tMax" type="number" step="0.5" min="0" placeholder="—"></div>
+    </div>
+    <p class="hint" id="tHint"></p>
+    <div class="g2">
+      <div class="f"><label class="lb">Ordre d'affichage</label><input id="tOrdre" type="number" step="1"></div>
+      <div class="f" style="display:flex;align-items:flex-end;padding-bottom:9px">
+        <label class="ck"><input type="checkbox" id="tActif" checked> Ligne active</label>
+      </div>
+    </div>
+    <div class="acts">
+      <button class="btn btn-d" id="btnDelTar" style="display:none" onclick="delTarif()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn btn-g" onclick="closeOv('ovTarif')">Annuler</button>
+      <button class="btn btn-p" id="btnSaveTar" onclick="saveTarif()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- UNE LIGNE DE FRAIS -->
+<div class="ov" id="ovFrais">
+  <div class="md" style="max-width:560px">
+    <h3><i class="ti ti-receipt"></i> <span id="fraTitle">Ajouter un frais</span></h3>
+    <div class="f"><label class="lb">Libellé</label><input id="xLib" placeholder="Frais d'entretien"></div>
+    <div class="f"><label class="lb">Description</label><input id="xDesc" placeholder="Facultatif — figure sur le devis"></div>
+    <div class="g2">
+      <div class="f"><label class="lb">Crèche</label><select id="xCreche"></select></div>
+      <div class="f"><label class="lb">Périodicité</label><select id="xType">
+        <option value="unique">Une seule fois</option>
+        <option value="annuel">Chaque année</option>
+        <option value="mensuel">Chaque mois</option>
+        <option value="unitaire">À l'unité (par jour, par repas…)</option>
+      </select></div>
+    </div>
+    <div class="f" style="max-width:180px"><label class="lb">Montant (€)</label><input id="xMontant" type="number" step="0.01" min="0"></div>
+    <div class="f">
+      <label class="ck"><input type="checkbox" id="xRed" onchange="syncRed()"> C'est une réduction</label>
+      <label class="ck"><input type="checkbox" id="xDef"> Proposée par défaut sur un devis</label>
+    </div>
+    <p class="hint" id="xHint"></p>
+    <div class="g2">
+      <div class="f"><label class="lb">Ordre d'affichage</label><input id="xOrdre" type="number" step="1"></div>
+      <div class="f" style="display:flex;align-items:flex-end;padding-bottom:9px">
+        <label class="ck"><input type="checkbox" id="xActif" checked> Ligne active</label>
+      </div>
+    </div>
+    <div class="acts">
+      <button class="btn btn-d" id="btnDelFra" style="display:none" onclick="delFrais()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn btn-g" onclick="closeOv('ovFrais')">Annuler</button>
+      <button class="btn btn-p" id="btnSaveFra" onclick="saveFrais()"><i class="ti ti-check"></i> Enregistrer</button>
     </div>
   </div>
 </div>
@@ -713,6 +822,276 @@ async function delParent(){
   }
 }
 
+/* ---------- TARIFS ET FRAIS ---------- */
+/* La grille vit en donnees, jamais en dur : un devis recopiera libelle et
+   montant au moment de son etablissement, puis ne les relira plus. Modifier
+   une ligne ici ne reecrit donc aucun devis deja emis. */
+let TARIFS=[],FRAIS=[],tarifId=null,fraisId=null;
+
+const MODES={horaire:'à l\'heure',mensuel:'par mois',journee:'par journée'};
+const TYPES={unique:'une seule fois',annuel:'chaque année',mensuel:'chaque mois',unitaire:'à l\'unité'};
+
+function euro(n){return (Math.round(Number(n)*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';}
+function num(id){const v=val(id);return v===''?null:Number(String(v).replace(',','.'));}
+
+/* Fourchette d'un tarif, en toutes lettres. Borne basse incluse, borne haute
+   exclue : c'est ce qui rend le chevauchement impossible par construction, la
+   ou deux conditions ecrites a la main (« <=40 » et « >=40 ») se disputaient
+   le contrat de 40 h pile. */
+function fourchette(t){
+  const a=t.heures_min,b=t.heures_max;
+  if(a==null&&b==null)return'tout volume horaire';
+  if(a==null)return'moins de '+b+' h par semaine';
+  if(b==null)return'à partir de '+a+' h par semaine';
+  return'de '+a+' h à moins de '+b+' h par semaine';
+}
+/* Deux lignes se chevauchent si elles visent la meme creche (ou l'une les
+   toutes) et que leurs fourchettes se recouvrent. On le signale plutot que de
+   l'arbitrer en silence : c'est une erreur de saisie, pas un cas a gerer. */
+function chevauche(a,b){
+  if(a.creche_id&&b.creche_id&&String(a.creche_id)!==String(b.creche_id))return false;
+  const a0=a.heures_min==null?-Infinity:Number(a.heures_min);
+  const a1=a.heures_max==null?Infinity:Number(a.heures_max);
+  const b0=b.heures_min==null?-Infinity:Number(b.heures_min);
+  const b1=b.heures_max==null?Infinity:Number(b.heures_max);
+  return a0<b1&&b0<a1;
+}
+function tarifsEnConflit(){
+  const act=TARIFS.filter(t=>t.actif);
+  const ids={};
+  for(let i=0;i<act.length;i++)for(let j=i+1;j<act.length;j++)
+    if(chevauche(act[i],act[j])){ids[act[i].id]=1;ids[act[j].id]=1;}
+  return ids;
+}
+/* Tarif applicable a un volume hebdomadaire. Servira au devis ; ici il ne
+   nourrit que l'apercu de la modale. */
+function tarifPour(h,crecheId){
+  return TARIFS.filter(t=>t.actif)
+    .filter(t=>!t.creche_id||!crecheId||String(t.creche_id)===String(crecheId))
+    .sort((a,b)=>(a.creche_id?0:1)-(b.creche_id?0:1)||a.ordre-b.ordre)
+    .find(t=>(t.heures_min==null||h>=Number(t.heures_min))
+           &&(t.heures_max==null||h<Number(t.heures_max)))||null;
+}
+
+async function openTarifs(){
+  openOv('ovTarifs');
+  document.getElementById('tarList').innerHTML='<p class="hint">Chargement…</p>';
+  document.getElementById('fraList').innerHTML='';
+  try{
+    const[t,f]=await Promise.all([
+      sb.from('tarifs').select('*').order('ordre').order('created_at'),
+      sb.from('frais_annexes').select('*').order('ordre').order('created_at')
+    ]);
+    if(t.error)throw t.error;
+    if(f.error)throw f.error;
+    TARIFS=t.data||[];FRAIS=f.data||[];
+  }catch(e){
+    console.error('[openTarifs]',e);
+    document.getElementById('tarList').innerHTML='<p class="hint">Chargement impossible.</p>';
+    toast('Grille tarifaire inaccessible : '+(e.message||'erreur inconnue'),true);
+    return;
+  }
+  renderTarifs();renderFrais();
+}
+
+function renderTarifs(){
+  const box=document.getElementById('tarList');
+  if(!TARIFS.length){box.innerHTML='<p class="hint">Aucun tarif enregistré.</p>';return;}
+  const conflits=tarifsEnConflit();
+  box.innerHTML=TARIFS.map(t=>{
+    const cr=t.creche_id?nomCreche(t.creche_id):'toutes les crèches';
+    const gene=t.mode==='horaire'?fourchette(t):MODES[t.mode]||t.mode;
+    const warn=conflits[t.id]
+      ? '<div class="td" style="color:var(--amber);font-weight:700"><i class="ti ti-alert-triangle"></i> Fourchette en conflit avec une autre ligne active.</div>' : '';
+    return '<div class="tr'+(t.actif?'':' off')+'" onclick="openTarif(\''+t.id+'\')">'
+      +'<div class="tb"><div class="tn">'+esc(t.libelle)+(t.actif?'':' · inactive')+'</div>'
+      +'<div class="td">'+esc(gene)+' · '+esc(cr)+'</div>'+warn+'</div>'
+      +'<div class="tm">'+euro(t.montant)+'<span style="font-size:12px;font-family:Nunito;color:var(--muted)"> '
+      +esc(t.mode==='horaire'?'/ h':(t.mode==='journee'?'/ jour':'/ mois'))+'</span></div></div>';
+  }).join('');
+}
+
+function renderFrais(){
+  const box=document.getElementById('fraList');
+  if(!FRAIS.length){box.innerHTML='<p class="hint">Aucun frais enregistré.</p>';return;}
+  box.innerHTML=FRAIS.map(f=>{
+    const cr=f.creche_id?nomCreche(f.creche_id):'toutes les crèches';
+    const def=f.par_defaut?' · proposée par défaut':'';
+    return '<div class="tr'+(f.actif?'':' off')+'" onclick="openFrais(\''+f.id+'\')">'
+      +'<div class="tb"><div class="tn">'+esc(f.libelle)+(f.actif?'':' · inactive')+'</div>'
+      +'<div class="td">'+esc(TYPES[f.type]||f.type)+' · '+esc(cr)+esc(def)+'</div></div>'
+      +'<div class="tm'+(f.est_reduction?' red':'')+'">'+(f.est_reduction?'− ':'')+euro(f.montant)+'</div></div>';
+  }).join('');
+}
+
+/* Liste de creches commune aux deux modales : une ligne peut valoir pour tout
+   le reseau (creche_id null) ou pour un seul site. */
+function optCreches(sel){
+  document.getElementById(sel).innerHTML='<option value="">Toutes les crèches</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+}
+
+function openTarif(id){
+  tarifId=id;
+  const t=id?TARIFS.find(x=>String(x.id)===String(id)):null;
+  document.getElementById('tarTitle').textContent=t?'Modifier le tarif':'Ajouter un tarif';
+  document.getElementById('btnDelTar').style.display=t?'':'none';
+  optCreches('tCreche');
+  setVal('tLib',t?t.libelle:'');setVal('tDesc',t?t.description:'');
+  setVal('tCreche',t?(t.creche_id||''):'');setVal('tMode',t?t.mode:'horaire');
+  setVal('tMontant',t?t.montant:'');
+  setVal('tMin',t&&t.heures_min!=null?t.heures_min:'');
+  setVal('tMax',t&&t.heures_max!=null?t.heures_max:'');
+  setVal('tOrdre',t?t.ordre:(TARIFS.length?Math.max(...TARIFS.map(x=>x.ordre))+10:10));
+  setChk('tActif',t?t.actif:true);
+  ['tMin','tMax','tMode'].forEach(i=>{document.getElementById(i).oninput=syncTar;document.getElementById(i).onchange=syncTar;});
+  syncTar();
+  openOv('ovTarif');
+}
+function syncTar(){
+  const h=document.getElementById('tHint');
+  if(val('tMode')!=='horaire'){h.textContent='Les fourchettes horaires ne s\'appliquent qu\'au mode « à l\'heure ».';return;}
+  const a=num('tMin'),b=num('tMax');
+  if(a!=null&&b!=null&&a>b){h.textContent='La borne basse dépasse la borne haute : la base refusera la ligne.';return;}
+  h.textContent='S\'applique '+fourchette({heures_min:a,heures_max:b})+'. Laisser vide pour ne pas borner.';
+}
+
+async function saveTarif(){
+  const lib=val('tLib');
+  if(!lib){toast('Indiquez un libellé.',true);return;}
+  const m=num('tMontant');
+  if(m==null||isNaN(m)||m<0){toast('Le montant doit être un nombre positif.',true);return;}
+  const a=num('tMin'),b=num('tMax');
+  if(a!=null&&b!=null&&a>b){toast('La borne basse ne peut pas dépasser la borne haute.',true);return;}
+  const horaire=val('tMode')==='horaire';
+  const row={
+    libelle:lib,description:val('tDesc'),
+    creche_id:val('tCreche')||null,
+    mode:val('tMode'),montant:m,
+    // Une fourchette n'a de sens qu'au tarif horaire : la garder sur un forfait
+    // mensuel laisserait une borne fantome qui fausserait la selection.
+    heures_min:horaire?a:null,heures_max:horaire?b:null,
+    actif:chk('tActif'),ordre:Number(val('tOrdre')||0)
+  };
+  const btn=document.getElementById('btnSaveTar');
+  btn.disabled=true;
+  try{
+    if(tarifId){
+      row.updated_at=new Date().toISOString();
+      const{error}=await sb.from('tarifs').update(row).eq('id',tarifId);
+      if(error)throw error;
+      const i=TARIFS.findIndex(x=>String(x.id)===String(tarifId));
+      if(i>=0)TARIFS[i]=Object.assign({},TARIFS[i],row);
+      toast('Tarif enregistré ✅');
+    }else{
+      const{data,error}=await sb.from('tarifs').insert(row).select().single();
+      if(error)throw error;
+      TARIFS.push(data);
+    toast('Tarif ajouté ✅');
+    }
+    TARIFS.sort((x,y)=>x.ordre-y.ordre);
+    closeOv('ovTarif');renderTarifs();
+  }catch(e){
+    console.error('[saveTarif]',e);
+    toast('Enregistrement impossible : '+(e.message||'erreur inconnue'),true);
+  }finally{btn.disabled=false;}
+}
+
+async function delTarif(){
+  if(!tarifId)return;
+  const t=TARIFS.find(x=>String(x.id)===String(tarifId));
+  if(!confirm('Supprimer « '+((t&&t.libelle)||'ce tarif')+' » ?\n\nLes devis déjà établis ne sont pas touchés : ils ont recopié leur montant.'))return;
+  try{
+    const{error}=await sb.from('tarifs').delete().eq('id',tarifId);
+    if(error)throw error;
+    TARIFS=TARIFS.filter(x=>String(x.id)!==String(tarifId));
+    closeOv('ovTarif');renderTarifs();
+    toast('Tarif supprimé.');
+  }catch(e){
+    console.error('[delTarif]',e);
+    toast('Suppression impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+
+function openFrais(id){
+  fraisId=id;
+  const f=id?FRAIS.find(x=>String(x.id)===String(id)):null;
+  document.getElementById('fraTitle').textContent=f?'Modifier le frais':'Ajouter un frais';
+  document.getElementById('btnDelFra').style.display=f?'':'none';
+  optCreches('xCreche');
+  setVal('xLib',f?f.libelle:'');setVal('xDesc',f?f.description:'');
+  setVal('xCreche',f?(f.creche_id||''):'');setVal('xType',f?f.type:'unique');
+  setVal('xMontant',f?f.montant:'');
+  setChk('xRed',f&&f.est_reduction);setChk('xDef',f&&f.par_defaut);
+  setChk('xActif',f?f.actif:true);
+  setVal('xOrdre',f?f.ordre:(FRAIS.length?Math.max(...FRAIS.map(x=>x.ordre))+10:10));
+  syncRed();
+  openOv('ovFrais');
+}
+/* Le montant reste positif en base (contrainte frais_annexes_montant_ck) :
+   c'est est_reduction qui porte le signe. On l'explique a la saisie, sinon
+   « −100 » est le premier reflexe et la base le refuse. */
+function syncRed(){
+  document.getElementById('xHint').textContent=chk('xRed')
+    ? 'Saisissez le montant en positif : il se soustraira du total du devis.'
+    : 'Ce montant s\'ajoutera au total du devis.';
+}
+
+async function saveFrais(){
+  const lib=val('xLib');
+  if(!lib){toast('Indiquez un libellé.',true);return;}
+  const m=num('xMontant');
+  if(m==null||isNaN(m)||m<0){toast('Le montant se saisit en positif, même pour une réduction.',true);return;}
+  const row={
+    libelle:lib,description:val('xDesc'),
+    creche_id:val('xCreche')||null,
+    type:val('xType'),montant:m,
+    est_reduction:chk('xRed'),par_defaut:chk('xDef'),
+    actif:chk('xActif'),ordre:Number(val('xOrdre')||0)
+  };
+  const btn=document.getElementById('btnSaveFra');
+  btn.disabled=true;
+  try{
+    if(fraisId){
+      row.updated_at=new Date().toISOString();
+      const{error}=await sb.from('frais_annexes').update(row).eq('id',fraisId);
+      if(error)throw error;
+      const i=FRAIS.findIndex(x=>String(x.id)===String(fraisId));
+      if(i>=0)FRAIS[i]=Object.assign({},FRAIS[i],row);
+      toast('Frais enregistré ✅');
+    }else{
+      const{data,error}=await sb.from('frais_annexes').insert(row).select().single();
+      if(error)throw error;
+      FRAIS.push(data);
+      toast('Frais ajouté ✅');
+    }
+    FRAIS.sort((x,y)=>x.ordre-y.ordre);
+    closeOv('ovFrais');renderFrais();
+  }catch(e){
+    console.error('[saveFrais]',e);
+    const msg=(e.code==='42703')
+      ? 'Colonne est_reduction absente — exécutez la partie 1 du script 24f.'
+      : (e.message||'erreur inconnue');
+    toast('Enregistrement impossible : '+msg,true);
+  }finally{btn.disabled=false;}
+}
+
+async function delFrais(){
+  if(!fraisId)return;
+  const f=FRAIS.find(x=>String(x.id)===String(fraisId));
+  if(!confirm('Supprimer « '+((f&&f.libelle)||'ce frais')+' » ?\n\nLes devis déjà établis ne sont pas touchés : ils ont recopié leur montant.'))return;
+  try{
+    const{error}=await sb.from('frais_annexes').delete().eq('id',fraisId);
+    if(error)throw error;
+    FRAIS=FRAIS.filter(x=>String(x.id)!==String(fraisId));
+    closeOv('ovFrais');renderFrais();
+    toast('Frais supprimé.');
+  }catch(e){
+    console.error('[delFrais]',e);
+    toast('Suppression impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+
 /* ---------- NOTICE ---------- */
 const NOTICE_INS=`
 <p><b>À quoi sert ce module.</b> Il recueille les demandes de place avant que l'enfant n'existe dans l'application. Une demande peut concerner un enfant à naître, viser plusieurs crèches, et rester sans suite : la créer directement en fiche enfant fausserait les présences, les commandes de repas et les effectifs PMI.</p>
@@ -721,6 +1100,8 @@ const NOTICE_INS=`
 <p style="margin-top:10px"><b>Crèches souhaitées et crèche retenue.</b> La famille peut en viser plusieurs ; la crèche retenue ne se renseigne qu'une fois la place attribuée. Les autres choix sont conservés : si une place se libère ailleurs, l'information est encore là.</p>
 <p style="margin-top:10px"><b>Les relances.</b> Renseignez une date de rappel : la demande remonte dans « À relancer » le jour venu. Les dossiers clos en sont exclus.</p>
 <p style="margin-top:10px"><b>Les revenus.</b> Ils ne servent qu'à estimer le CMG. Une fois le dossier clos, ils peuvent être effacés en base — l'estimation, elle, est conservée.</p>
+<p style="margin-top:10px"><b>Les tarifs et les frais.</b> Le bouton 💶 de la barre du haut ouvre la grille. Un tarif d'accueil s'applique sur une fourchette horaire — borne basse incluse, borne haute exclue, de sorte qu'un contrat de 40 h pile ne puisse jamais relever de deux lignes à la fois. Les frais et les réductions se saisissent tous en montant positif : c'est la case « réduction » qui fait qu'une ligne se soustrait.</p>
+<p style="margin-top:10px"><b>Modifier la grille ne réécrit aucun devis.</b> Un devis recopie libellé et montant au moment de son établissement, puis ne les relit plus. Une hausse de tarif s'applique aux devis suivants, jamais à ceux déjà envoyés. Supprimer une ligne de la grille est donc sans effet sur l'historique.</p>
 <p style="margin-top:10px"><b>Accès.</b> Ce module est réservé à la direction : il contient des coordonnées et des revenus de familles qui ne seront peut-être jamais accueillies.</p>
 `;
 function openNotice(){document.getElementById('noticeBody').innerHTML=NOTICE_INS;openOv('ovNotice');}
