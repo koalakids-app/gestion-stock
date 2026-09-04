@@ -161,12 +161,22 @@ function rendre(){
    +'<div class="kv"><span class="k">Enfant</span><span class="v">'+esc(nomEnfant)+'</span></div>'
    +(c.name?'<div class="kv"><span class="k">Crèche</span><span class="v">'+esc(c.name)+'</span></div>':'')
    +(d.date_debut?'<div class="kv"><span class="k">Début de l\'accueil</span><span class="v">'+dfr(d.date_debut)+'</span></div>':'')
+   +(d.date_fin?'<div class="kv"><span class="k">Fin de l\'accueil</span><span class="v">'+dfr(d.date_fin)+'</span></div>':'')
    +'<div class="kv"><span class="k">Jours</span><span class="v">'+esc(joursTxt(d.jours)||'—')+'</span></div>'
    +'<div class="kv"><span class="k">Horaires</span><span class="v">'+esc((d.heure_debut||'')+' – '+(d.heure_fin||''))+'</span></div>'
    +'<div class="kv"><span class="k">Volume hebdomadaire</span><span class="v">'+nb(d.heures_hebdo)+' h</span></div>'
-   +'<div class="kv"><span class="k">Semaines facturées</span><span class="v">'+esc(d.semaines_an)+' / an</span></div>'
-   +'<p class="note">La mensualité est lissée sur douze mois : elle est identique chaque mois, '
-   +'y compris pendant les semaines de fermeture, déjà déduites du nombre de semaines facturées.</p></div>';
+   +(d.date_fin
+      ? '<div class="kv"><span class="k">Jours facturés</span><span class="v">'
+        +(d.jours_accueil!=null?esc(d.jours_accueil)+' jours':'—')
+        +(d.mois_factures?' sur '+nb(d.mois_factures)+' mois':'')+'</span></div>'
+      : '<div class="kv"><span class="k">Semaines facturées</span><span class="v">'+esc(d.semaines_an)+' / an</span></div>')
+   +'<p class="note">'+(d.date_fin
+      ? 'La mensualité répartit les jours d\'accueil de la période sur '+nb(d.mois_factures||0)
+        +' mensualités égales. Elle est identique chaque mois, y compris pendant les périodes de '
+        +'fermeture, déjà déduites du nombre de jours facturés.'
+      : 'La mensualité est lissée sur douze mois : elle est identique chaque mois, y compris '
+        +'pendant les semaines de fermeture, déjà déduites du nombre de semaines facturées.')
+   +'</p></div>';
 
   h+='<div class="card"><h2>Le détail de la mensualité</h2><table class="lg">'
    +recu.map(tr).join('')

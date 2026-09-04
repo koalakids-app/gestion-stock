@@ -315,15 +315,23 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <p class="hint" id="dLock" style="display:none"></p>
 
     <div class="sec">Le contrat</div>
-    <div class="g2">
+    <div class="g3">
       <div class="f"><label class="lb">Crèche</label><select id="dCreche" onchange="dCrecheChange()"></select></div>
-      <div class="f"><label class="lb">Début de l'accueil</label><input id="dDebut" type="date" onchange="dSync()"></div>
+      <div class="f"><label class="lb">Début de l'accueil</label><input id="dDebut" type="date" onchange="dPeriodeChange()"></div>
+      <div class="f"><label class="lb">Fin de l'accueil</label><input id="dFin" type="date" onchange="dPeriodeChange()"></div>
     </div>
     <div class="f"><label class="lb">Jours d'accueil</label><div id="dJoursBox" class="jr"></div></div>
     <div class="g3">
       <div class="f"><label class="lb">Arrivée</label><input id="dHd" type="time" onchange="dSync()"></div>
       <div class="f"><label class="lb">Départ</label><input id="dHf" type="time" onchange="dSync()"></div>
       <div class="f"><label class="lb">Semaines facturées / an</label><input id="dSem" type="number" min="1" max="52" onchange="dSemManuel()" oninput="dSemManuel()"></div>
+    </div>
+    <!-- Ces trois champs n'apparaissent que lorsqu'une fin d'accueil est posée :
+         sans terme, le devis se lisse sur douze mois et ils n'ont pas de sens. -->
+    <div class="g3" id="dPeriodeBox" style="display:none">
+      <div class="f"><label class="lb">Jours d'accueil sur la période</label><input id="dJours" type="number" min="0" onchange="dSync()" oninput="dSync()"></div>
+      <div class="f"><label class="lb">Dont jours de fermeture déduits</label><input id="dFerm" type="number" min="0" onchange="dFermChange()" oninput="dFermChange()"></div>
+      <div class="f"><label class="lb">Mois facturés</label><input id="dMois" type="number" min="1" step="0.5" onchange="dSync()" oninput="dSync()"></div>
     </div>
     <p class="hint" id="dVol"></p>
 
@@ -1176,6 +1184,7 @@ async function openDevis(id){
     +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   setVal('dCreche',src.creche_id||'');
   setVal('dDebut',(DCUR?DCUR.date_debut:p.date_entree_souhaitee)||'');
+  setVal('dFin',DCUR?(DCUR.date_fin||''):'');
   setVal('dHd',src.heure_debut||'07:30');setVal('dHf',src.heure_fin||'18:00');
   semManuel=false;
   setVal('dSem',DCUR?DCUR.semaines_an:(semainesDe(src.creche_id)||47));
@@ -1184,7 +1193,10 @@ async function openDevis(id){
   document.getElementById('dJoursBox').innerHTML=JOURS.map(j=>
     '<label><input type="checkbox" class="ckDJour" value="'+j[0]+'"'
     +((jrs.length?jrs:[1,2,3,4,5]).indexOf(j[0])>=0?' checked':'')+'><span>'+j[1]+'</span></label>').join('');
-  document.querySelectorAll('.ckDJour').forEach(c=>c.addEventListener('change',dSync));
+  // Changer les jours change le compte de la période : on la recalcule, sauf si
+  // le devis en porte déjà une (ses chiffres sont figés).
+  document.querySelectorAll('.ckDJour').forEach(c=>c.addEventListener('change',
+    ()=>{ if(val('dFin')&&!DCUR)dPeriodeChange(); else dSync(); }));
 
   // Parent isolé : la majoration PAJE cochée sur la fiche est le meilleur
   // indice dont on dispose, mais elle couvre aussi le handicap. Modifiable.
@@ -1242,7 +1254,23 @@ async function openDevis(id){
   });
   document.querySelectorAll('.ckDJour,.ckFrais').forEach(c=>c.disabled=!brouillon);
 
-  dSync();
+  /* Un devis enregistré relit ses propres chiffres de période plutôt que de les
+     recalculer : ils sont figés, comme ses libellés et ses montants. Un devis
+     neuf les déduit des dates. */
+  document.getElementById('dPeriodeBox').style.display=val('dFin')?'':'none';
+  if(DCUR&&DCUR.date_fin){
+    setVal('dJours',DCUR.jours_accueil!=null?DCUR.jours_accueil:'');
+    setVal('dMois',DCUR.mois_factures!=null?DCUR.mois_factures:'');
+    setVal('dFerm','');
+    dSync();
+  }else if(val('dFin')){
+    dPeriodeChange();
+  }else{
+    dSync();
+  }
+  ['dFin','dJours','dFerm','dMois'].forEach(i=>{
+    const e=document.getElementById(i);if(e)e.disabled=!brouillon;
+  });
   openOv('ovDevis');
 }
 
@@ -1281,6 +1309,91 @@ function dCrecheChange(){
 }
 function dSemManuel(){semManuel=true;dSync();}
 
+/* ---------- LA PÉRIODE D'ACCUEIL ---------- */
+/* Un contrat Koala Kids commence rarement au 1er janvier. Le cas normal est une
+   entrée en cours d'année et une fin au 31 août : onze mois, pas douze. Lisser
+   sur une année théorique donnait une mensualité juste mais un total annuel
+   faux d'un mois entier.
+
+   Dès qu'une fin d'accueil est posée, le calcul ne part plus d'un nombre de
+   semaines mais du NOMBRE DE JOURS D'ACCUEIL réellement compris entre les deux
+   dates — lundi, mardi et vendredi entre le 6 octobre et le 31 août, par
+   exemple, un par un, années bissextiles et mois courts inclus.
+
+   Les fermetures sont déduites de ce compte. La base n'en connaît que le
+   NOMBRE de semaines (`etablissements.semaines_fermeture`), pas les dates : on
+   en propose donc une estimation au prorata de la durée, affichée dans un champ
+   modifiable. Une estimation qu'on peut corriger vaut mieux qu'un calcul exact
+   impossible — et mieux qu'un chiffre faux qu'on ne verrait pas. */
+
+/* Compte les jours d'accueil entre deux dates, bornes incluses. On itère jour
+   par jour plutôt que de multiplier des semaines : sur onze mois l'écart entre
+   les deux méthodes atteint plusieurs jours, et chaque jour vaut ici une heure
+   de tarif horaire plus un frais d'entretien. */
+function joursAccueilEntre(deb,fin,jours){
+  if(!deb||!fin||!jours||!jours.length)return null;
+  const d0=new Date(String(deb).slice(0,10)+'T12:00:00');
+  const d1=new Date(String(fin).slice(0,10)+'T12:00:00');
+  if(isNaN(d0)||isNaN(d1)||d1<d0)return null;
+  // Garde-fou : au-delà de cinq ans, c'est une saisie aberrante, pas un contrat.
+  if((d1-d0)/86400000>1830)return null;
+  const set={};jours.forEach(j=>{set[Number(j)]=1;});
+  let n=0;
+  for(const d=new Date(d0);d<=d1;d.setDate(d.getDate()+1)){
+    const js=d.getDay()===0?7:d.getDay();   // 1 = lundi … 7 = dimanche
+    if(set[js])n++;
+  }
+  return n;
+}
+
+/* Nombre de mensualités. Un accueil du 6 octobre au 31 août se facture onze
+   fois : on compte les mois civils touchés, ce qui est la façon dont une
+   facturation mensuelle fonctionne réellement — le mois d'entrée compte pour
+   un, même entamé. Le champ reste modifiable pour les cas limites. */
+function moisEntre(deb,fin){
+  if(!deb||!fin)return null;
+  const a=String(deb).slice(0,10).split('-').map(Number);
+  const b=String(fin).slice(0,10).split('-').map(Number);
+  if(a.length!==3||b.length!==3)return null;
+  const n=(b[0]-a[0])*12+(b[1]-a[1])+1;
+  return n>0?n:null;
+}
+
+/* Jours de fermeture à déduire, estimés au prorata de la durée du contrat.
+   Cinq semaines de fermeture sur douze mois, trois jours d'accueil par
+   semaine, onze mois de contrat → 5 × 3 × 11/12 ≈ 14 jours. */
+function fermetureEstimee(crecheId,nbJoursSemaine,mois){
+  const e=etabDe(crecheId);
+  const sem=e&&e.semaines_fermeture!=null?Number(e.semaines_fermeture):5;
+  if(!nbJoursSemaine||!mois)return 0;
+  return Math.round(sem*nbJoursSemaine*(mois/12));
+}
+
+/* Recalcule les trois champs de période à partir des dates. Appelée quand une
+   date change — jamais quand la direction corrige un des champs à la main,
+   sinon sa saisie serait effacée dans la foulée. */
+function dPeriodeChange(){
+  const fin=val('dFin'),deb=val('dDebut');
+  const box=document.getElementById('dPeriodeBox');
+  if(!fin){box.style.display='none';dSync();return;}
+  box.style.display='';
+  const jours=[...document.querySelectorAll('.ckDJour:checked')].map(c=>Number(c.value));
+  const bruts=joursAccueilEntre(deb,fin,jours);
+  const mois=moisEntre(deb,fin);
+  const ferm=fermetureEstimee(val('dCreche'),jours.length,mois);
+  setVal('dMois',mois||'');
+  setVal('dFerm',ferm);
+  setVal('dJours',bruts==null?'':Math.max(0,bruts-ferm));
+  dSync();
+}
+/* Corriger les fermetures met à jour les jours facturés, sans toucher au reste. */
+function dFermChange(){
+  const jours=[...document.querySelectorAll('.ckDJour:checked')].map(c=>Number(c.value));
+  const bruts=joursAccueilEntre(val('dDebut'),val('dFin'),jours);
+  if(bruts!=null)setVal('dJours',Math.max(0,bruts-(Number(val('dFerm'))||0)));
+  dSync();
+}
+
 /* Le coeur du calcul. Tout est ramené au MOIS : c'est le montant que la
    famille paiera, et celui sur lequel le CMG se plafonne.
      accueil mensuel  = heures hebdo × semaines ÷ 12 × tarif horaire
@@ -1293,16 +1406,37 @@ function dCalcule(){
   const sem=Number(val('dSem'))||47;
   const creche=val('dCreche')||null;
 
+  /* DEUX RÉGIMES, et un seul chiffre les distingue : la date de fin.
+
+     Sans terme — le devis se lisse sur une année théorique, comme avant :
+       jours facturés par mois = jours hebdo × semaines ÷ 12
+
+     Avec terme — on part des jours d'accueil réellement comptés entre les deux
+     dates, fermetures déduites, répartis sur les mois facturés :
+       jours facturés par mois = jours de la période ÷ mois
+
+     Les deux formules produisent la même mensualité quand la période couvre une
+     année pleine. L'écart apparaît sur les contrats courts, et c'est
+     précisément là que l'ancienne se trompait. */
+  const avecTerme=!!val('dFin');
+  const moisP=avecTerme?(Number(val('dMois'))||moisEntre(val('dDebut'),val('dFin'))||12):12;
+  const joursP=avecTerme?(val('dJours')===''?null:Number(val('dJours'))):null;
+  // Jours d'accueil facturés par mois — la quantité qui porte tout le reste.
+  const jparmois=avecTerme
+    ? (joursP==null?null:joursP/moisP)
+    : nj*sem/12;
+  const hparjour=(nj&&h!=null)?h/nj:null;   // amplitude d'une journée
+
   let tarif=null;
   const forc=val('dTarif');
   if(forc)tarif=TARIFS.find(t=>String(t.id)===String(forc))||null;
   else if(h!=null)tarif=tarifPour(h,creche);
 
   const lignes=[];
-  if(tarif&&h!=null){
+  if(tarif&&h!=null&&jparmois!=null){
     let q,pu,tot;
-    if(tarif.mode==='horaire'){q=h*sem/12;pu=Number(tarif.montant);tot=q*pu;}
-    else if(tarif.mode==='journee'){q=nj*sem/12;pu=Number(tarif.montant);tot=q*pu;}
+    if(tarif.mode==='horaire'){q=jparmois*(hparjour||0);pu=Number(tarif.montant);tot=q*pu;}
+    else if(tarif.mode==='journee'){q=jparmois;pu=Number(tarif.montant);tot=q*pu;}
     else{q=1;pu=Number(tarif.montant);tot=pu;}
     lignes.push({libelle:tarif.libelle,description:tarif.description||'',type:'accueil',
       quantite:Math.round(q*1000)/1000,montant_unitaire:pu,total:Math.round(tot*100)/100,
@@ -1314,7 +1448,7 @@ function dCalcule(){
     if(!f)return;
     const signe=f.est_reduction?-1:1;
     let q=1,unite='';
-    if(f.type==='unitaire'){q=nj*sem/12;unite='j';}
+    if(f.type==='unitaire'){q=jparmois==null?0:jparmois;unite='j';}
     lignes.push({libelle:f.libelle,description:f.description||'',type:f.type,
       quantite:Math.round(q*1000)/1000,montant_unitaire:signe*Number(f.montant),
       total:Math.round(signe*Number(f.montant)*q*100)/100,unite:unite});
@@ -1326,9 +1460,11 @@ function dCalcule(){
   const annuels=lignes.filter(l=>l.type==='annuel').reduce((s,l)=>s+l.total,0);
 
   return{h:h,nj:nj,sem:sem,tarif:tarif,lignes:lignes,
+    avecTerme:avecTerme,mois:moisP,joursPeriode:joursP,jparmois:jparmois,
     mensuel:Math.round(mensuel*100)/100,
     uniques:Math.round(uniques*100)/100,
-    annuel:Math.round((mensuel*12+annuels)*100)/100};
+    // Le total sur la DURÉE du contrat, et non sur douze mois d'office.
+    annuel:Math.round((mensuel*moisP+annuels)*100)/100};
 }
 
 /* Estimation CMG. Deux plafonds jouent : le montant du barème selon les
@@ -1369,10 +1505,23 @@ function dSync(){
     ? ' Aucune crèche retenue : valeur par défaut.'
     : (Number(c.sem)===ref ? ' Nombre repris des paramètres de la crèche.'
                            : ' Corrigé à la main — les paramètres de la crèche indiquent '+ref+' semaines.');
-  document.getElementById('dVol').textContent=c.h==null
-    ? 'Renseignez les jours et les horaires pour calculer le volume hebdomadaire.'
-    : c.h+' h par semaine sur '+c.nj+' jour'+(c.nj>1?'s':'')+', soit '
-      +(Math.round(c.h*c.sem*100)/100)+' h sur '+c.sem+' semaines.'+origine;
+  if(c.h==null){
+    document.getElementById('dVol').textContent=
+      'Renseignez les jours et les horaires pour calculer le volume hebdomadaire.';
+  }else if(c.avecTerme){
+    document.getElementById('dVol').textContent=
+      c.h+' h par semaine sur '+c.nj+' jour'+(c.nj>1?'s':'')+'. '
+      +(c.joursPeriode==null
+        ? 'Renseignez les jours d\'accueil de la période.'
+        : c.joursPeriode+' jour'+(c.joursPeriode>1?'s':'')+' d\'accueil facturés du '
+          +dfr(val('dDebut'))+' au '+dfr(val('dFin'))+', répartis sur '+nbFr(c.mois)+' mois — '
+          +'soit '+nbFr(Math.round(c.jparmois*100)/100)+' jour'+(c.jparmois>1?'s':'')+' par mois.');
+  }else{
+    document.getElementById('dVol').textContent=
+      c.h+' h par semaine sur '+c.nj+' jour'+(c.nj>1?'s':'')+', soit '
+      +(Math.round(c.h*c.sem*100)/100)+' h sur '+c.sem+' semaines.'+origine
+      +' Accueil sans terme : lissage sur douze mois.';
+  }
 
   const th=document.getElementById('dTarifHint');
   if(!c.tarif){
@@ -1426,6 +1575,10 @@ function dSync(){
     const hors=c.lignes.filter(l=>recur.indexOf(l.type)<0);
     if(hors.length)html+='<div style="margin-top:12px"><table class="lg">'+hors.map(tr).join('')+'</table>'
       +'<p class="hint" style="margin-top:6px">Facturés en une fois ou à l\'année, hors mensualité.</p></div>';
+    html+='<p class="hint" style="margin-top:8px">'
+      +(c.avecTerme
+        ? '<b>'+euro(c.annuel)+'</b> sur la durée du contrat — '+nbFr(c.mois)+' mensualités.'
+        : '<b>'+euro(c.annuel)+'</b> sur douze mois, accueil sans terme.')+'</p>';
     box.innerHTML=html;
   }
 
@@ -1470,6 +1623,9 @@ async function saveDevis(){
     jours:[...document.querySelectorAll('.ckDJour:checked')].map(x=>Number(x.value)),
     heure_debut:val('dHd'),heure_fin:val('dHf'),
     heures_hebdo:c.h||0,semaines_an:Number(val('dSem'))||47,
+    date_fin:val('dFin')||null,
+    jours_accueil:c.avecTerme&&c.joursPeriode!=null?Math.round(c.joursPeriode):null,
+    mois_factures:c.avecTerme?c.mois:null,
     tarif_id:c.tarif?c.tarif.id:null,
     tarif_libelle:c.tarif?c.tarif.libelle:'',
     tarif_mode:c.tarif?c.tarif.mode:'horaire',
@@ -1630,13 +1786,26 @@ function rendreBascule(){
      à convenir » est une situation courante. Le devis étant verrouillé une fois
      accepté, cet écran est le seul endroit où elle peut encore être posée. */
   const dDefaut=d.date_debut||p.date_entree_souhaitee||'';
-  h+='<div class="f" style="margin-top:10px"><label class="lb">Date d\'entrée — début du contrat</label>'
+  h+='<div class="g2" style="margin-top:10px">'
+   +'<div class="f"><label class="lb">Date d\'entrée — début du contrat</label>'
    +'<input id="bsDate" type="date" value="'+esc(dDefaut)+'"></div>'
+   +'<div class="f"><label class="lb">Fin du contrat — facultatif</label>'
+   +'<input id="bsDateFin" type="date" value="'+esc(d.date_fin||'')+'"></div></div>'
    +'<p class="hint">'+(d.date_debut
-      ? 'Reprise du devis accepté. Modifiable si la famille a décalé son arrivée.'
+      ? 'Date d\'entrée reprise du devis accepté. Modifiable si la famille a décalé son arrivée.'
       : (p.date_entree_souhaitee
-         ? 'Le devis ne portait pas de date : celle-ci vient du souhait exprimé à la demande. Vérifiez-la.'
+         ? 'Le devis ne portait pas de date d\'entrée : celle-ci vient du souhait exprimé à la demande. Vérifiez-la.'
          : '<b>Le devis ne portait aucune date d\'entrée.</b> Renseignez-la : le contrat d\'accueil en dépend.'))
+   +'</p>'
+   /* La fin de contrat ne vient PAS du devis, et c'est normal : la mensualité
+      se calcule sur une année lissée sur douze mois, sans terme. Elle se saisit
+      ici quand il est connu — un accueil jusqu'à l'entrée à l'école, un contrat
+      court — et se laisse vide sinon. Une fin de contrat renseignée fait sortir
+      l'enfant des feuilles de présence après cette date, sans le supprimer. */
+   +'<p class="hint">'+(d.date_fin
+      ? 'Fin reprise du devis accepté, qui a servi de base au calcul de la mensualité.'
+      : 'Le devis a été établi sans terme, sur une année lissée. Renseignez la fin ici si le départ '
+        +'est déjà connu — sinon laissez vide, et posez-la le moment venu depuis la fiche enfant.')
    +'</p>';
 
   h+='<div class="sec">Les parents rattachés <span style="font-size:12px;color:var(--muted);font-weight:600">('+PARENTS.length+')</span></div>';
@@ -1652,7 +1821,7 @@ function rendreBascule(){
   h+='<div class="sec">Le contrat d\'accueil</div>'
    +li('Jours',BS.jours.map(j=>(JOURS.find(x=>x[0]===j)||[0,''])[1].toLowerCase()).filter(Boolean).join(', '))
    +li('Horaires',(d.heure_debut||'')+' – '+(d.heure_fin||''))
-   +li('Au','sans terme');
+   +li('Au','selon la date de fin saisie ci-dessus');
   h+='<p class="hint">Le contrat reprend le <b>devis accepté</b>, pas les souhaits de la demande initiale : '
    +'c\'est lui qui engage. Il est créé sans date de fin — renseignez-la le jour du départ, depuis la fiche enfant.</p>';
 
@@ -1690,9 +1859,15 @@ async function lancerBascule(){
   if(!BS)return;
   const p=BS.pre,d=BS.devis;
   const dateEntree=val('bsDate');
+  const dateFin=val('bsDateFin')||null;
   if(!dateEntree){
     toast('Renseignez la date d\'entrée : le contrat d\'accueil ne peut pas s\'en passer.',true);
     const c=document.getElementById('bsDate');if(c)c.focus();
+    return;
+  }
+  if(dateFin&&dateFin<=dateEntree){
+    toast('La fin du contrat doit être postérieure à la date d\'entrée.',true);
+    const c=document.getElementById('bsDateFin');if(c)c.focus();
     return;
   }
   const b=document.getElementById('btnBsGo');
@@ -1708,6 +1883,10 @@ async function lancerBascule(){
       dob:p.dob||null,
       creche_id:BS.crecheId,
       date_entree:dateEntree,
+      /* `date_sortie` reste vide, même quand une fin de contrat est connue :
+         elle marque un départ EFFECTIF, et la poser d'avance ferait disparaître
+         l'enfant des listes et des effectifs avant qu'il ne soit parti. C'est
+         le contrat qui porte le terme prévu. */
       allergies:p.allergies||'',
       regime_repas:p.regime_repas||null
     };
@@ -1733,7 +1912,7 @@ async function lancerBascule(){
     const{error:eCt}=await sb.from('enfants_contrats').insert({
       enfant_id:enfantId,
       date_debut:dateEntree,
-      date_fin:null,
+      date_fin:dateFin,
       jours:BS.jours,
       heure_debut:d.heure_debut||null,
       heure_fin:d.heure_fin||null,
@@ -2213,13 +2392,18 @@ function dessineDevis(d,lignes){
 
   /* ---- Le contrat proposé ---- */
   titreSection('L\'accueil proposé');
+  const avecTerme=!!d.date_fin;
   const contrat=[
     ['Crèche',cr||'—'],
     ['Début de l\'accueil',d.date_debut?dfr(d.date_debut):'à convenir'],
+    ['Fin de l\'accueil',avecTerme?dfr(d.date_fin):'sans terme prévu'],
     ['Jours d\'accueil',joursTxt(d.jours)||'—'],
     ['Horaires',(d.heure_debut||'')+' – '+(d.heure_fin||'')],
     ['Volume hebdomadaire',nbFr(d.heures_hebdo)+' h par semaine'],
-    ['Semaines facturées',d.semaines_an+' semaines par an']
+    avecTerme
+      ? ['Jours facturés',(d.jours_accueil!=null?d.jours_accueil+' jours':'—')
+          +(d.mois_factures?' sur '+nbFr(d.mois_factures)+' mois':'')]
+      : ['Semaines facturées',d.semaines_an+' semaines par an']
   ];
   police(9.5,'normal');
   contrat.forEach(([k,v])=>{
@@ -2229,8 +2413,12 @@ function dessineDevis(d,lignes){
     y+=5;
   });
   y+=1;
-  para('La mensualité est lissée sur douze mois : elle est identique chaque mois, y compris '
-    +'pendant les semaines de fermeture, qui sont déjà déduites du nombre de semaines facturées.',
+  para(avecTerme
+    ? 'La mensualité répartit les '+(d.jours_accueil!=null?d.jours_accueil:'—')+' jours d\'accueil de '
+      +'la période sur '+nbFr(d.mois_factures||0)+' mensualités égales. Elle est identique chaque mois, '
+      +'y compris pendant les périodes de fermeture, déjà déduites du nombre de jours facturés.'
+    : 'La mensualité est lissée sur douze mois : elle est identique chaque mois, y compris '
+      +'pendant les semaines de fermeture, qui sont déjà déduites du nombre de semaines facturées.',
     8.5,'italic',GRIS,L,4);
 
   /* ---- Le détail chiffré ---- */
@@ -2279,6 +2467,17 @@ function dessineDevis(d,lignes){
   doc.setFontSize(14);
   doc.text(eurPdf(d.total_mensuel),D,y,{align:'right'});
   y+=4;trait(VIOLET);y+=4;
+
+  /* Le total sur la durée. Il ne figurait pas jusqu'ici, et c'est pourtant le
+     chiffre qu'une famille veut connaître avant de s'engager. */
+  if(d.total_annuel){
+    place(6);
+    police(9,'normal',GRIS);
+    doc.text(avecTerme
+      ? 'Soit '+eurPdf(d.total_annuel)+' sur la durée du contrat ('+nbFr(d.mois_factures||0)+' mensualités).'
+      : 'Soit '+eurPdf(d.total_annuel)+' sur douze mois.',G,y);
+    y+=7;
+  }
 
   if(hors.length){
     titreSection('Hors mensualité');
