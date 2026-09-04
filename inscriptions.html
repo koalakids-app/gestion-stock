@@ -136,6 +136,12 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .dif .old{color:var(--muted);text-decoration:line-through}
 .dif .new{color:var(--green);font-weight:700}
 .dif .neuf{color:var(--amber);font-weight:700}
+/* Lignes de l'écran de bascule : libellé à gauche, valeur à droite, comme une
+   fiche que l'on relit avant de signer. */
+.kvb{display:flex;justify-content:space-between;gap:12px;padding:6px 2px;
+  border-bottom:1px solid var(--line);font-size:13.5px}
+.kvb span{color:var(--muted)}
+.kvb b{text-align:right}
 /* Bouton PDF pose sur la carte d'un devis. Il vit a l'interieur d'une zone
    deja cliquable : sans arret de propagation, l'imprimer ouvrirait aussi la
    modale du devis derriere la boite de telechargement. */
@@ -263,6 +269,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div class="sec">Les devis <span id="devCount" style="font-size:12px;color:var(--muted);font-weight:600"></span></div>
     <div id="devList"></div>
     <button class="btn btn-s btn-sm" id="btnAddDev" onclick="openDevis(null)"><i class="ti ti-file-euro"></i> Établir un devis</button>
+    <button class="btn btn-p btn-sm" id="btnBascule" style="display:none;margin-left:6px" onclick="ouvrirBascule()"><i class="ti ti-user-check"></i> Basculer en fiche enfant</button>
     <p class="hint" id="hintDev" style="margin-top:8px"></p>
 
     <div class="acts">
@@ -354,6 +361,18 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <button class="btn btn-p" id="btnEnvoiDev" style="display:none" onclick="envoyerDevis()"><i class="ti ti-send"></i> Envoyer</button>
       <button class="btn btn-g" onclick="closeOv('ovDevis')">Fermer</button>
       <button class="btn btn-p" id="btnSaveDev" onclick="saveDevis()"><i class="ti ti-check"></i> Enregistrer le brouillon</button>
+    </div>
+  </div>
+</div>
+
+<!-- BASCULE EN FICHE ENFANT -->
+<div class="ov" id="ovBascule">
+  <div class="md" style="max-width:640px">
+    <h3><i class="ti ti-user-check"></i> Basculer en fiche enfant</h3>
+    <div id="bsBody"></div>
+    <div class="acts">
+      <button class="btn btn-g" onclick="closeOv('ovBascule')">Annuler</button>
+      <button class="btn btn-p" id="btnBsGo" onclick="lancerBascule()"><i class="ti ti-check"></i> Créer la fiche enfant</button>
     </div>
   </div>
 </div>
@@ -645,6 +664,11 @@ function render(){
   document.getElementById('btnRappels').className='btn btn-sm '+(filtreRappels?'btn-p':'btn-s');
 
   let l=PRE.slice();
+  /* Une demande basculée sort de la file active : le dossier est traité, et le
+     laisser là remplirait la liste de dossiers clos au fil de l'année. Elle
+     reste entière — devis, dates, origine — et se retrouve en cliquant sur le
+     compteur « Inscrit ». */
+  if(!filtreStatut)l=l.filter(p=>p.statut!=='inscrit');
   if(filtreStatut)l=l.filter(p=>p.statut===filtreStatut);
   if(cre)l=l.filter(p=>String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0);
   if(filtreRappels)l=l.filter(estARelancer);
@@ -754,6 +778,7 @@ function openFiche(id){
     ? 'Enregistrez d\'abord la demande, puis établissez le devis.'
     : 'Un devis fige les montants qu\'il facture : modifier la grille ensuite ne le réécrit pas.';
   DEVIS=[];renderDevisList();
+  document.getElementById('btnBascule').style.display='none';
   if(p){loadParents(p.id);loadDevis(p.id);}
 
   openOv('ovFiche');
@@ -1040,9 +1065,33 @@ async function loadDevis(preId){
   renderDevisList();
 }
 
+/* Le devis qui vaut engagement : accepté, et le plus récemment répondu. C'est
+   lui qui fournit les jours, les horaires et la date d'entrée du contrat —
+   jamais la préinscription, dont les souhaits initiaux ont pu changer en cours
+   de négociation. */
+function devisAccepte(){
+  // Le statut suffit : une acceptation peut aussi venir d'un accord écrit remis
+  // en main propre et saisi par la direction, sans signature à l'écran ni
+  // `repondu_le`. Exiger la signature en ligne fermerait la bascule à ces
+  // dossiers-là, qui sont pourtant les plus classiques hors saison.
+  return DEVIS.filter(d=>d.statut==='accepte')
+    .sort((a,b)=>String(b.repondu_le||b.updated_at||b.created_at||'')
+      .localeCompare(String(a.repondu_le||a.updated_at||a.created_at||'')))[0]||null;
+}
+
+function majBoutonBascule(){
+  const b=document.getElementById('btnBascule');
+  if(!b)return;
+  const p=ficheId?PRE.find(x=>String(x.id)===String(ficheId)):null;
+  // Déjà basculée : le bouton disparaît. La contrainte preinscriptions_enfant_uk
+  // refuserait de toute façon une seconde fiche pour la même demande.
+  b.style.display=(p&&!p.enfant_id&&devisAccepte())?'':'none';
+}
+
 function renderDevisList(){
   const box=document.getElementById('devList');
   document.getElementById('devCount').textContent=DEVIS.length?'('+DEVIS.length+')':'';
+  majBoutonBascule();
   if(!DEVIS.length){box.innerHTML='';return;}
   box.innerHTML=DEVIS.map(d=>{
     const st=D_STATUTS[d.statut]||D_STATUTS.brouillon;
@@ -1493,6 +1542,214 @@ async function delDevis(){
   }catch(e){
     console.error('[delDevis]',e);
     toast('Suppression impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+
+/* ---------- LA BASCULE : préinscription → fiche enfant ---------- */
+/* Le dernier pas du module. Une préinscription est une intention ; une fiche
+   enfant est une présence, qui pèse sur les effectifs PMI, les commandes de
+   repas et les feuilles de présence. On ne franchit ce seuil qu'une fois le
+   devis accepté, et jamais automatiquement : c'est un bouton, précédé d'un
+   écran qui montre ce qui va être écrit.
+
+   Quatre écritures s'enchaînent — enfant, parents, contrat, rattachement —
+   sans transaction possible via PostgREST. L'ordre est donc choisi pour que le
+   pire échec soit réparable : si le rattachement final échoue, l'application
+   supprime l'enfant qu'elle vient de créer (la cascade emporte parents et
+   contrat) plutôt que de laisser un enfant orphelin dans les présences.
+
+   CE QUI NE SUIT PAS. `enfants` ne porte ni PAI, ni médecin, ni adresse, ni
+   n° allocataire ; `enfants_parents` n'a ni profession ni téléphone
+   professionnel. Ces informations restent sur la préinscription, consultables,
+   mais ne sont pas recopiées. L'écran le dit avant d'écrire : le découvrir
+   trois semaines plus tard en cherchant le médecin d'un enfant serait pire. */
+let BS=null;   // le plan de bascule préparé par ouvrirBascule()
+
+async function ouvrirBascule(){
+  const p=ficheId?PRE.find(x=>String(x.id)===String(ficheId)):null;
+  if(!p){toast('Enregistrez d\'abord la demande.',true);return;}
+  if(p.enfant_id){toast('Cette demande a déjà été basculée.',true);return;}
+  const d=devisAccepte();
+  if(!d){toast('Aucun devis accepté : la bascule attend la réponse de la famille.',true);return;}
+
+  const crecheId=d.creche_id||p.creche_id||null;
+  const jours=toArr(d.jours).map(Number).filter(Boolean);
+
+  BS={pre:p,devis:d,crecheId:crecheId,jours:jours,homonymes:[]};
+
+  document.getElementById('bsBody').innerHTML='<p class="hint">Vérification en cours…</p>';
+  document.getElementById('btnBsGo').disabled=true;
+  openOv('ovBascule');
+
+  /* Homonymes : même nom de famille dans le réseau. On ne bloque pas — une
+     fratrie porte le même nom, et c'est le cas le plus fréquent — mais on
+     montre, parce qu'un doublon créé par erreur ne se voit qu'une fois les
+     présences faussées. */
+  try{
+    if(p.nom&&String(p.nom).trim()){
+      const{data}=await sb.from('enfants')
+        .select('id,prenom,nom,dob,creche_id')
+        .ilike('nom',String(p.nom).trim());
+      BS.homonymes=data||[];
+    }
+  }catch(e){console.warn('[bascule homonymes]',e);}
+
+  rendreBascule();
+}
+
+function rendreBascule(){
+  const p=BS.pre,d=BS.devis;
+  const nom=((p.prenom||'')+' '+(p.nom||'')).trim()||'Sans nom';
+  const li=(k,v)=>'<div class="kvb"><span>'+esc(k)+'</span><b>'+esc(v||'—')+'</b></div>';
+
+  let h='';
+
+  // Ce qui manque et qui empêcherait la fiche d'être exploitable.
+  const bloquants=[];
+  if(!p.prenom&&!p.nom)bloquants.push('la demande n\'a ni prénom ni nom');
+  if(!p.dob)bloquants.push('la date de naissance n\'est pas renseignée');
+  if(p.ne_ou_a_naitre==='a_naitre')bloquants.push('l\'enfant est encore déclaré « à naître » — corrigez la fiche une fois né');
+  if(!BS.crecheId)bloquants.push('aucune crèche retenue');
+  if(!BS.jours.length)bloquants.push('le devis ne porte aucun jour d\'accueil');
+
+  if(bloquants.length){
+    h+='<div class="warn"><i class="ti ti-alert-triangle"></i><span><b>Bascule impossible en l\'état.</b><br>'
+      +bloquants.map(esc).join('<br>')+'</span></div>';
+  }
+
+  h+='<div class="sec">L\'enfant qui sera créé</div>'
+   +li('Prénom et nom',nom)
+   +li('Date de naissance',dfr(p.dob))
+   +li('Crèche',nomCreche(BS.crecheId))
+   +li('Date d\'entrée',dfr(d.date_debut))
+   +li('Allergies',p.allergies)
+   +li('Régime particulier',p.regime_repas||'aucun');
+
+  h+='<div class="sec">Les parents rattachés <span style="font-size:12px;color:var(--muted);font-weight:600">('+PARENTS.length+')</span></div>';
+  if(!PARENTS.length){
+    h+='<p class="hint">Aucun parent saisi : la fiche enfant sera créée sans coordonnées. '
+      +'Vous pourrez les ajouter ensuite, mais l\'envoi du dossier de familiarisation en dépend.</p>';
+  }else{
+    h+=PARENTS.map(x=>'<div class="kvb"><span>'+esc(LIENS[x.lien]||'Responsable légal')+'</span><b>'
+      +esc(((x.prenom||'')+' '+(x.nom||'')).trim()||'—')
+      +(x.email?' · '+esc(x.email):'')+(x.telephone?' · '+esc(x.telephone):'')+'</b></div>').join('');
+  }
+
+  h+='<div class="sec">Le contrat d\'accueil</div>'
+   +li('Jours',BS.jours.map(j=>(JOURS.find(x=>x[0]===j)||[0,''])[1].toLowerCase()).filter(Boolean).join(', '))
+   +li('Horaires',(d.heure_debut||'')+' – '+(d.heure_fin||''))
+   +li('Du',dfr(d.date_debut))
+   +li('Au','sans terme');
+  h+='<p class="hint">Le contrat reprend le <b>devis accepté</b>, pas les souhaits de la demande initiale : '
+   +'c\'est lui qui engage. Il est créé sans date de fin — renseignez-la le jour du départ, depuis la fiche enfant.</p>';
+
+  // Homonymes
+  if(BS.homonymes.length){
+    h+='<div class="warn"><i class="ti ti-users"></i><span><b>'+BS.homonymes.length+' enfant'
+      +(BS.homonymes.length>1?'s portent':' porte')+' déjà ce nom de famille :</b><br>'
+      +BS.homonymes.map(e=>esc(((e.prenom||'')+' '+(e.nom||'')).trim())
+        +(e.dob?' · né(e) le '+dfr(e.dob):'')+(e.creche_id?' · '+esc(nomCreche(e.creche_id)):'')).join('<br>')
+      +'<br>Fratrie, ou doublon ? Vérifiez avant de créer.</span></div>';
+  }
+
+  // Ce qui ne sera pas repris — listé seulement si c'est renseigné.
+  const perdus=[];
+  if(p.pai)perdus.push('le PAI'+(p.pai_detail?' ('+p.pai_detail+')':''));
+  if(p.medecin)perdus.push('le médecin traitant');
+  if(p.adresse||p.ville)perdus.push('l\'adresse du foyer');
+  if(p.num_allocataire)perdus.push('le n° allocataire');
+  if(PARENTS.some(x=>x.profession))perdus.push('la profession des parents');
+  if(PARENTS.some(x=>x.telephone_pro))perdus.push('le téléphone professionnel');
+  if(perdus.length){
+    h+='<div class="warn" style="background:var(--violet-l);color:var(--violet)">'
+      +'<i class="ti ti-info-circle"></i><span><b>Ne sera pas recopié</b> — la fiche enfant n\'a pas de champ pour : '
+      +esc(perdus.join(', '))+'.<br>Ces informations restent sur la demande, qui demeure consultable.</span></div>';
+  }
+
+  h+='<p class="hint">La demande passera en <b>Inscrit</b> et sortira de la file active. '
+   +'Elle reste accessible par le compteur « Inscrit ».</p>';
+
+  document.getElementById('bsBody').innerHTML=h;
+  document.getElementById('btnBsGo').disabled=bloquants.length>0;
+}
+
+async function lancerBascule(){
+  if(!BS)return;
+  const p=BS.pre,d=BS.devis;
+  const b=document.getElementById('btnBsGo');
+  b.disabled=true;b.textContent='Création…';
+
+  let enfantId=null;
+  try{
+    /* 1. L'enfant. `groupe` n'est pas posé ici : demandes.html le recalcule
+       depuis la date de naissance à chaque chargement, et le poser à la main
+       reviendrait à écrire une règle en double, qui divergerait. */
+    const rowEnfant={
+      prenom:p.prenom||'',nom:p.nom||'',
+      dob:p.dob||null,
+      creche_id:BS.crecheId,
+      date_entree:d.date_debut||null,
+      allergies:p.allergies||'',
+      regime_repas:p.regime_repas||null
+    };
+    const ins=await sb.from('enfants').insert(rowEnfant).select().single();
+    if(ins.error)throw ins.error;
+    enfantId=ins.data.id;
+
+    // 2. Les parents. Les colonnes absentes côté enfants_parents (profession,
+    //    téléphone professionnel) sont volontairement laissées de côté.
+    if(PARENTS.length){
+      const lignes=PARENTS.map(x=>({
+        enfant_id:enfantId,
+        lien:x.lien||'autre',
+        prenom:x.prenom||'',nom:x.nom||'',
+        telephone:x.telephone||'',email:x.email||'',
+        destinataire:x.destinataire!==false
+      }));
+      const{error}=await sb.from('enfants_parents').insert(lignes);
+      if(error)throw error;
+    }
+
+    // 3. Le contrat, tiré du devis accepté.
+    const{error:eCt}=await sb.from('enfants_contrats').insert({
+      enfant_id:enfantId,
+      date_debut:d.date_debut||null,
+      date_fin:null,
+      jours:BS.jours,
+      heure_debut:d.heure_debut||null,
+      heure_fin:d.heure_fin||null,
+      notes:'Créé à la bascule du devis '+(d.numero||'')
+    });
+    if(eCt)throw eCt;
+
+    /* 4. Le rattachement. `.is('enfant_id',null)` est le garde-fou contre un
+       double clic ou une bascule menée en parallèle depuis un autre poste :
+       la seconde ne trouve plus de ligne à modifier, et sa fiche enfant est
+       défaite juste après. */
+    const{data:maj,error:ePre}=await sb.from('preinscriptions')
+      .update({enfant_id:enfantId,statut:'inscrit'})
+      .eq('id',p.id).is('enfant_id',null).select();
+    if(ePre)throw ePre;
+    if(!maj||!maj.length)throw new Error('Cette demande vient d\'être basculée ailleurs.');
+
+    p.enfant_id=enfantId;p.statut='inscrit';
+    closeOv('ovBascule');closeOv('ovFiche');
+    render();
+    toast('Fiche enfant créée ✅ — '+((p.prenom||'')+' '+(p.nom||'')).trim());
+  }catch(e){
+    console.error('[lancerBascule]',e);
+    /* Défaire ce qui a été créé. Supprimer l'enfant emporte parents et contrat
+       par cascade. Un enfant à demi créé fausserait les présences et les
+       effectifs PMI sans que personne ne sache d'où il sort. */
+    if(enfantId){
+      try{await sb.from('enfants').delete().eq('id',enfantId);}
+      catch(x){console.error('[bascule annulation]',x);}
+    }
+    const msg=e.code==='42501'
+      ? 'Droits insuffisants sur la fiche enfant — exécutez la partie 3 du script 29.'
+      : (e.message||'erreur inconnue');
+    toast('Bascule impossible : '+msg+' Rien n\'a été créé.',true);
+    b.disabled=false;b.innerHTML='<i class="ti ti-check"></i> Créer la fiche enfant';
   }
 }
 
@@ -2639,6 +2896,7 @@ const NOTICE_INS=`
 <p style="margin-top:10px"><b>Modifier la grille ne réécrit aucun devis.</b> Un devis recopie libellé et montant au moment de son établissement, puis ne les relit plus. Une hausse de tarif s'applique aux devis suivants, jamais à ceux déjà envoyés. Supprimer une ligne de la grille est donc sans effet sur l'historique — restaurer une sauvegarde non plus.</p>
 <p style="margin-top:10px"><b>Le PDF du devis.</b> Le bouton <b>PDF</b> posé sur chaque devis produit le document à remettre à la famille, sans ouvrir le devis. Il est imprimé <b>depuis la base</b>, pas depuis l'écran : ce qui en sort est ce qui a été figé à l'établissement, même si la grille a bougé depuis. L'en-tête (raison sociale, SIRET, agrément PMI), la durée de validité et les mentions légales viennent du module <b>Paramètres</b> : ce qui n'y est pas renseigné laisse simplement un blanc sur le document. Un brouillon imprimé porte la mention « BROUILLON » — il n'engage personne tant qu'il n'est pas envoyé.</p>
 <p style="margin-top:10px"><b>La signature.</b> Tant que le devis n'est pas signé, le PDF porte un cadre « Bon pour accord » à remplir à la main. La signature en ligne, à venir, remplira ce même cadre avec le tracé de la famille et sa date : le document restera le même, seul le cadre changera.</p>
+<p style="margin-top:10px"><b>La bascule en fiche enfant.</b> Une fois le devis accepté, le bouton <b>Basculer en fiche enfant</b> apparaît sous les devis. Il ouvre un écran de vérification : ce qui va être créé — l'enfant, les parents, le contrat d'accueil tiré du devis — et ce qui ne suivra pas, faute de champ dans la fiche enfant : le PAI, le médecin, l'adresse, le n° allocataire, la profession des parents. Ces informations restent sur la demande, qui demeure consultable. L'écran signale aussi les enfants du réseau portant déjà ce nom de famille : fratrie ou doublon, c'est à vous de trancher avant d'écrire. La demande passe alors en <b>Inscrit</b> et sort de la file active ; on la retrouve en cliquant sur le compteur « Inscrit ».</p>
 <p style="margin-top:10px"><b>Accès.</b> Ce module est réservé à la direction : il contient des coordonnées et des revenus de familles qui ne seront peut-être jamais accueillies.</p>
 `;
 function openNotice(){document.getElementById('noticeBody').innerHTML=NOTICE_INS;openOv('ovNotice');}
