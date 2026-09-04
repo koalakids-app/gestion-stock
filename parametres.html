@@ -123,7 +123,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <div class="sec"><i class="ti ti-certificate"></i> Agrément PMI</div>
         <div class="g2">
           <div class="f"><label class="lb">N° d'autorisation</label><input id="ePmiNum"></div>
-          <div class="f"><label class="lb">Capacité agréée (berceaux)</label><input id="cCap" type="number" min="1" max="12" oninput="syncCap()"></div>
+          <div class="f"><label class="lb">Capacité agréée (berceaux)</label><input id="cCap" type="number" step="1" min="1" max="12" oninput="syncCap()"></div>
         </div>
         <p class="hint" id="hCap">La capacité agréée est le nombre de berceaux autorisés par la PMI — 12 au maximum pour une micro-crèche. À ne pas confondre avec l'effectif public du registre de sécurité, qui compte aussi les adultes.</p>
         <div class="g2">
@@ -132,9 +132,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         </div>
         <p class="hint" id="hPmi"></p>
         <div class="g2">
-          <div class="f"><label class="lb">Âge minimum accueilli (mois)</label><input id="eAgeMin" type="number" min="0"></div>
-          <div class="f"><label class="lb">Âge maximum accueilli (mois)</label><input id="eAgeMax" type="number" min="0"></div>
+          <div class="f"><label class="lb">Âge minimum accueilli (mois)</label><input id="eAgeMin" type="number" step="0.5" min="0"></div>
+          <div class="f"><label class="lb">Âge maximum accueilli (mois)</label><input id="eAgeMax" type="number" step="0.5" min="0"></div>
         </div>
+        <p class="hint">Le demi-mois est accepté : 2,5 pour un accueil dès deux mois et demi.</p>
       </div>
 
       <div class="card">
@@ -145,8 +146,8 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
           <div class="f"><label class="lb">Fermeture</label><input id="eHf" type="time"></div>
         </div>
         <div class="g2">
-          <div class="f"><label class="lb">Semaines de fermeture par an</label><input id="eSemFerm" type="number" min="0" max="51" oninput="syncSem()"></div>
-          <div class="f"><label class="lb">Semaines facturées par an</label><input id="eSemFact" type="number" min="1" max="52" oninput="syncSem(true)"></div>
+          <div class="f"><label class="lb">Semaines de fermeture par an</label><input id="eSemFerm" type="number" step="1" min="0" max="51" oninput="syncSem()"></div>
+          <div class="f"><label class="lb">Semaines facturées par an</label><input id="eSemFact" type="number" step="1" min="1" max="52" oninput="syncSem(true)"></div>
         </div>
         <p class="hint" id="hSem"></p>
         <div class="f"><label class="lb">Observations</label><textarea id="eObs" placeholder="Usage interne."></textarea></div>
@@ -157,7 +158,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div id="paneReseau" style="display:none">
       <div class="card">
         <div class="sec"><i class="ti ti-file-euro"></i> Le devis</div>
-        <div class="f" style="max-width:240px"><label class="lb">Validité d'un devis (jours)</label><input id="rValid" type="number" min="1"></div>
+        <div class="f" style="max-width:240px"><label class="lb">Validité d'un devis (jours)</label><input id="rValid" type="number" step="1" min="1"></div>
         <p class="hint">Au-delà de ce délai, le lien envoyé à la famille expire et le devis passe en « Expiré ».</p>
         <div class="f"><label class="lb">Mentions légales portées sur le devis</label><textarea id="rMentions" placeholder="Figurent en pied du document remis à la famille."></textarea></div>
         <div class="f"><label class="lb">Conditions de résiliation et préavis</label><textarea id="rPreavis"></textarea></div>
@@ -195,6 +196,17 @@ function val(id){const e=document.getElementById(id);return e?e.value.trim():'';
 function setVal(id,v){const e=document.getElementById(id);if(e)e.value=(v==null?'':v);}
 function num(id){const v=val(id);return v===''?null:Number(String(v).replace(',','.'));}
 function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
+/* Champs stockes en integer cote base. Un decimal y est refuse par Postgres
+   avec un message brut ("invalid input syntax for type integer") que personne
+   ne devrait avoir a lire : on le rattrape ici, en nommant le champ. */
+function entier(id,label){
+  const v=val(id);
+  if(v==='')return null;
+  const n=Number(String(v).replace(',','.'));
+  if(!isFinite(n))throw new Error(label+' : valeur illisible.');
+  if(!Number.isInteger(n))throw new Error(label+' : un nombre entier est attendu, pas '+v+'.');
+  return n;
+}
 function auj(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function toArr(v){
   if(Array.isArray(v))return v;
@@ -408,8 +420,16 @@ function syncSem(depuisFact){
   if(!depuisFact&&ferm!=null)setVal('eSemFact',52-ferm);
   else if(depuisFact&&fact!=null)setVal('eSemFerm',52-fact);
   const f=num('eSemFact');
-  document.getElementById('hSem').textContent=f==null?''
-    :'Les devis de cette crèche mensualiseront sur '+f+' semaines : montant hebdomadaire × '+f+' ÷ 12.';
+  const h=document.getElementById('hSem');
+  if(f==null){h.textContent='';h.style.color='';return;}
+  if(!Number.isInteger(f)){
+    // La base stocke ces deux champs en integer : autant le dire avant
+    // l'enregistrement plutot que de laisser Postgres refuser la ligne.
+    h.textContent='Ces deux champs se comptent en semaines entières. Pour une fermeture qui ne tombe pas juste, arrondissez au plus proche.';
+    h.style.color='var(--red)';return;
+  }
+  h.style.color='';
+  h.textContent='Les devis de cette crèche mensualiseront sur '+f+' semaines : montant hebdomadaire × '+f+' ÷ 12.';
 }
 
 /* ---------- ENREGISTREMENT ---------- */
@@ -419,13 +439,25 @@ async function save(){
   const s=val('eSiret').replace(/\s/g,'');
   if(s&&(s.length!==14||!/^\d+$/.test(s)||!luhnOk(s))
      &&!confirm('Le SIRET saisi ne paraît pas valide. L\'enregistrer quand même ?'))return;
+  // Les ages s'expriment en mois et acceptent le demi-mois : un accueil
+  // demarre couramment a 2,5 mois. Les semaines et la capacite, elles, sont
+  // des entiers en base.
   const amin=num('eAgeMin'),amax=num('eAgeMax');
+  if((amin!=null&&!isFinite(amin))||(amax!=null&&!isFinite(amax))){
+    toast('Âge illisible : indiquez un nombre de mois, 2,5 pour deux mois et demi.',true);return;}
+  let cap,semFerm,semFact,valid;
+  try{
+    cap    =entier('cCap','La capacité agréée');
+    semFerm=entier('eSemFerm','Les semaines de fermeture');
+    semFact=entier('eSemFact','Les semaines facturées');
+    valid  =entier('rValid','La validité du devis');
+  }catch(e){toast(e.message,true);return;}
   if(amin!=null&&amax!=null&&amin>amax){toast('L\'âge minimum dépasse l\'âge maximum.',true);return;}
 
   btn.disabled=true;st.textContent='Enregistrement…';
   try{
     // 1. Les champs qui vivent déjà dans creches, modifiés sur place.
-    const cr={name:val('cName'),addr:val('cAddr'),capacity:num('cCap')};
+    const cr={name:val('cName'),addr:val('cAddr'),capacity:cap};
     const{error:ec}=await sb.from('creches').update(cr).eq('id',crecheId);
     if(ec)throw ec;
     Object.assign(crecheDe(crecheId),cr);
@@ -442,8 +474,8 @@ async function save(){
       age_min_mois:amin,age_max_mois:amax,
       jours_ouverture:[...document.querySelectorAll('.ckJour:checked')].map(x=>Number(x.value)),
       heure_ouverture:val('eHo'),heure_fermeture:val('eHf'),
-      semaines_fermeture:num('eSemFerm')!=null?num('eSemFerm'):5,
-      semaines_facturees:num('eSemFact')!=null?num('eSemFact'):47,
+      semaines_fermeture:semFerm!=null?semFerm:5,
+      semaines_facturees:semFact!=null?semFact:47,
       observations:val('eObs'),
       updated_at:new Date().toISOString()
     };
@@ -455,7 +487,7 @@ async function save(){
 
     // 3. Les paramètres réseau.
     const cfg={
-      devis_validite_jours:num('rValid')!=null?num('rValid'):30,
+      devis_validite_jours:valid!=null?valid:30,
       devis_mentions:val('rMentions'),
       preavis_resiliation:val('rPreavis'),
       pied_page:val('rPied')
