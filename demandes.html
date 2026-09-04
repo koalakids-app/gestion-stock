@@ -2765,11 +2765,25 @@ function calChangeMonth(delta){calMonthOffset+=delta;calSelectedDay=null;renderC
 function calGoToday(){calMonthOffset=0;calSelectedDay=todayStr();renderCalendar();}
 function calSetFilter(f,btn){calFilterType=f;document.querySelectorAll('#cal-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderCalendar();}
 
+/* Le calendrier est commun a tout le reseau : une referente voit les evenements
+   de toutes les creches, pas seulement de la sienne. Un filtre par creche vivait
+   ici — il cachait les visites PMI, les formations et les fetes des autres sites,
+   alors que la notice annonce un calendrier partage et que la table `evenements`
+   est de toute facon en lecture ouverte aux connectes : rien n'etait protege,
+   seulement masque.
+
+   C'est aussi ce qui permet d'eviter les telescopages : deux creches ne peuvent
+   pas programmer le meme jour un evenement qui demande la presence de la
+   direction si elles ne voient pas ce que l'autre a pose. La coordination reste
+   humaine — l'application montre, elle n'arbitre pas — mais elle ne peut se
+   faire que sur un calendrier ouvert.
+
+   Le nom de la creche est deja porte sur chaque evenement, dans la case du mois
+   comme dans le detail du jour : savoir de quel site il s'agit se lit, sans
+   avoir besoin d'ecarter. */
 function calEventsForDay(dateISO){
-  const myCrecheId=isDirection?null:currentProfile?.creche_id;
   return cacheEvenements.filter(e=>{
     if(calFilterType!=='all'&&e.type!==calFilterType)return false;
-    if(myCrecheId&&e.creche_id&&e.creche_id!==myCrecheId)return false;
     const start=e.date_debut,end=e.date_fin||e.date_debut;
     return dateISO>=start&&dateISO<=end;
   }).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
