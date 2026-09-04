@@ -2292,6 +2292,22 @@ async function dbInsert(table,row){const{data,error}=await sb.from(table).insert
 async function dbUpdate(table,id,updates){const{error}=await sb.from(table).update(updates).eq('id',id);if(error){console.error('[dbUpdate]',table,id,error.message);window._lastDbError=error.message||String(error);return false;}window._lastDbError=null;return true;}
 async function dbDelete(table,id){const{error}=await sb.from(table).delete().eq('id',id);if(error){console.warn('delete',table,error);return false;}return true;}
 
+// Variantes strictes : une ecriture refusee par la RLS ne leve PAS d'erreur,
+// elle ne touche simplement aucune ligne. Sans .select(), l'application croit
+// avoir enregistre. Utilisees sur les evenements (droits par auteur).
+async function dbUpdateStrict(table,id,updates){
+  const{data,error}=await sb.from(table).update(updates).eq('id',id).select('id');
+  if(error){console.error('[dbUpdateStrict]',table,id,error.message);window._lastDbError=error.message||String(error);return false;}
+  if(!data||!data.length){window._lastDbError='Modification refusee (droits insuffisants).';return false;}
+  window._lastDbError=null;return true;
+}
+async function dbDeleteStrict(table,id){
+  const{data,error}=await sb.from(table).delete().eq('id',id).select('id');
+  if(error){console.error('[dbDeleteStrict]',table,id,error.message);window._lastDbError=error.message||String(error);return false;}
+  if(!data||!data.length){window._lastDbError='Suppression refusee (droits insuffisants).';return false;}
+  window._lastDbError=null;return true;
+}
+
 // Bascule l'affichage en clair d'un champ mot de passe (icône œil) — utilisé sur login et reset password
 function togglePwdVisibility(inputId,btn){
   const input=document.getElementById(inputId);
@@ -2765,22 +2781,17 @@ function calChangeMonth(delta){calMonthOffset+=delta;calSelectedDay=null;renderC
 function calGoToday(){calMonthOffset=0;calSelectedDay=todayStr();renderCalendar();}
 function calSetFilter(f,btn){calFilterType=f;document.querySelectorAll('#cal-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderCalendar();}
 
-/* Le calendrier est commun a tout le reseau : une referente voit les evenements
-   de toutes les creches, pas seulement de la sienne. Un filtre par creche vivait
-   ici — il cachait les visites PMI, les formations et les fetes des autres sites,
-   alors que la notice annonce un calendrier partage et que la table `evenements`
-   est de toute facon en lecture ouverte aux connectes : rien n'etait protege,
-   seulement masque.
+// Qui peut toucher a un evenement : son auteur, ou la direction.
+// created_by est pose par la base (28-evenements-auteur.sql) ; les evenements
+// anterieurs au script n'en ont pas — ils restent a la direction.
+function peutModifierEvt(e){
+  if(isDirection)return true;
+  const uid=currentUser?.id;
+  return !!(uid&&e&&e.created_by===uid);
+}
 
-   C'est aussi ce qui permet d'eviter les telescopages : deux creches ne peuvent
-   pas programmer le meme jour un evenement qui demande la presence de la
-   direction si elles ne voient pas ce que l'autre a pose. La coordination reste
-   humaine — l'application montre, elle n'arbitre pas — mais elle ne peut se
-   faire que sur un calendrier ouvert.
-
-   Le nom de la creche est deja porte sur chaque evenement, dans la case du mois
-   comme dans le detail du jour : savoir de quel site il s'agit se lit, sans
-   avoir besoin d'ecarter. */
+// Le calendrier est l'agenda partage du reseau : tout le monde voit tout.
+// Le cloisonnement porte sur l'ECRITURE, pas sur la lecture.
 function calEventsForDay(dateISO){
   return cacheEvenements.filter(e=>{
     if(calFilterType!=='all'&&e.type!==calFilterType)return false;
@@ -2867,7 +2878,9 @@ function renderCalDayDetail(){
           (e.description?'<div class="cal-evt-meta" style="margin-top:3px;color:#666">'+escHtml(e.description)+'</div>':'')+
           (e.auteur?'<div class="cal-evt-meta" style="margin-top:3px;color:#999;font-size:11px"><i class="ti ti-user"></i> Créé par '+escHtml(e.auteur)+'</div>':'')+
         '</div>'+
-        '<button class="ibtn" style="flex-shrink:0" onclick="event.stopPropagation();openEvenementModal(null,\''+e.id+'\')"><i class="ti ti-edit"></i></button>'+
+        (peutModifierEvt(e)
+          ? '<button class="ibtn" style="flex-shrink:0" title="Modifier" onclick="event.stopPropagation();openEvenementModal(null,\''+e.id+'\')"><i class="ti ti-edit"></i></button>'
+          : '<button class="ibtn" style="flex-shrink:0;opacity:.45" title="Créé par quelqu\'un d\'autre — consultation seule" onclick="event.stopPropagation();openEvenementModal(null,\''+e.id+'\')"><i class="ti ti-eye"></i></button>')+
       '</div>';
     }).join('');
   }
@@ -2881,13 +2894,24 @@ function evtSyncEndDate(){
   if(!fin.value)fin.value=document.getElementById('evt-date-debut').value;
 }
 
+const EVT_FIELDS=['evt-titre','evt-type','evt-creche','evt-date-debut','evt-date-fin',
+                  'evt-heure-debut','evt-heure-fin','evt-lieu','evt-desc','evt-auteur'];
+function evtSetLectureSeule(ro){
+  EVT_FIELDS.forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=ro;});
+  const save=document.getElementById('evt-btn-save');    if(save)save.style.display=ro?'none':'';
+  const note=document.getElementById('evt-lecture-seule');if(note)note.style.display=ro?'':'none';
+}
+
 function openEvenementModal(presetDate,evtId){
   editingEvtId=evtId||null;
   document.getElementById('evt-creche').innerHTML='<option value="">— Toutes / réseau —</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
-  document.getElementById('evt-btn-delete').style.display=evtId?'flex':'none';
+  document.getElementById('evt-btn-delete').style.display='none';
   if(evtId){
     const e=cacheEvenements.find(x=>x.id===evtId);if(!e)return;
-    document.getElementById('modal-evt-title').textContent='Modifier l\'événement';
+    const modifiable=peutModifierEvt(e);
+    evtSetLectureSeule(!modifiable);
+    document.getElementById('evt-btn-delete').style.display=modifiable?'flex':'none';
+    document.getElementById('modal-evt-title').textContent=modifiable?'Modifier l\'événement':'Événement';
     document.getElementById('evt-titre').value=e.titre||'';
     document.getElementById('evt-type').value=e.type||'autre';
     document.getElementById('evt-creche').value=e.creche_id||'';
@@ -2909,11 +2933,19 @@ function openEvenementModal(presetDate,evtId){
     document.getElementById('evt-heure-debut').value='';
     document.getElementById('evt-heure-fin').value='';
     document.getElementById('evt-auteur').value=currentProfile?.name||'';
+    evtSetLectureSeule(false);
   }
   document.getElementById('modal-evenement-wrap').classList.add('open');
 }
 
 async function saveEvenement(){
+  if(editingEvtId){
+    const ex=cacheEvenements.find(x=>x.id===editingEvtId);
+    if(ex&&!peutModifierEvt(ex)){
+      showBanner('Cet événement a été créé par quelqu\'un d\'autre : vous ne pouvez pas le modifier.','error');
+      return;
+    }
+  }
   const titre=document.getElementById('evt-titre').value.trim();
   const dateDebut=document.getElementById('evt-date-debut').value;
   if(!titre){alert('Le titre est requis.');return;}
@@ -2933,11 +2965,11 @@ async function saveEvenement(){
     auteur:document.getElementById('evt-auteur').value.trim()
   };
   if(editingEvtId){
-    const ok=await dbUpdate('evenements',editingEvtId,row);
+    const ok=await dbUpdateStrict('evenements',editingEvtId,row);
     if(ok){const e=cacheEvenements.find(x=>x.id===editingEvtId);if(e)Object.assign(e,row);showBanner('Événement modifié !');}
-    else{showBanner('Erreur lors de la modification.','error');return;}
+    else{showBanner(window._lastDbError||'Erreur lors de la modification.','error');return;}
   }else{
-    const saved=await dbInsert('evenements',row);
+    const saved=await dbInsert('evenements',{...row,created_by:currentUser?.id||null});
     if(saved){cacheEvenements.push(saved);showBanner('Événement créé !');}
     else{showBanner('Erreur lors de la création.','error');return;}
   }
@@ -2947,14 +2979,19 @@ async function saveEvenement(){
 
 async function deleteEvenement(){
   if(!editingEvtId)return;
+  const ex=cacheEvenements.find(x=>x.id===editingEvtId);
+  if(ex&&!peutModifierEvt(ex)){
+    showBanner('Seul l\'auteur de l\'événement, ou la direction, peut le supprimer.','error');
+    return;
+  }
   if(!confirm('Supprimer cet événement ?'))return;
-  const ok=await dbDelete('evenements',editingEvtId);
+  const ok=await dbDeleteStrict('evenements',editingEvtId);
   if(ok){
     cacheEvenements=cacheEvenements.filter(e=>e.id!==editingEvtId);
     closeModal('modal-evenement-wrap');
     renderCalendar();
     showBanner('Événement supprimé.');
-  }else showBanner('Erreur lors de la suppression.','error');
+  }else showBanner(window._lastDbError||'Erreur lors de la suppression.','error');
 }
 
 // PRESENCES
@@ -12556,6 +12593,9 @@ function afRender(){
 <div class="overlay" id="modal-evenement-wrap">
   <div class="modal" style="max-width:480px">
     <h3 id="modal-evt-title">Nouvel événement</h3>
+    <div id="evt-lecture-seule" style="display:none;background:#FDECEC;color:#B4232A;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:12px">
+      <i class="ti ti-lock"></i> Événement créé par une autre personne : consultation seule. Voyez avec son auteur ou avec la direction pour le modifier.
+    </div>
     <div class="fg"><label class="flabel">Titre</label><input class="finput" id="evt-titre" placeholder="Ex. : Entretien candidat — Picot 1"/></div>
     <div class="frow">
       <div class="fg"><label class="flabel">Type</label>
@@ -12591,7 +12631,7 @@ function afRender(){
     <div class="mactions">
       <button id="evt-btn-delete" class="btn-danger-sm" style="display:none;background:var(--red-light);color:var(--red);border-color:var(--red-light);margin-right:auto" onclick="deleteEvenement()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn-cancel" onclick="closeModal('modal-evenement-wrap')">Annuler</button>
-      <button class="btn-primary" onclick="saveEvenement()"><i class="ti ti-check"></i> Enregistrer</button>
+      <button id="evt-btn-save" class="btn-primary" onclick="saveEvenement()"><i class="ti ti-check"></i> Enregistrer</button>
     </div>
   </div>
 </div>
