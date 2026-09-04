@@ -461,6 +461,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
            style="display:none;align-items:center;gap:5px;font-size:11px;color:#fff;opacity:.75;cursor:pointer;white-space:nowrap">
         <i class="ti ti-refresh" id="sync-chip-icon" style="font-size:13px"></i><span id="sync-chip-txt"></span>
       </div>
+      <button id="btn-brief" onclick="brBriefingManuel()" title="Ce que j'ai a faire aujourd'hui"
+              style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;background:rgba(255,255,255,.16);color:#fff;border:none;border-radius:8px;font-family:-apple-system,sans-serif;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">
+        <i class="ti ti-sun" style="font-size:15px"></i><span>Ma journée</span>
+        <span id="btn-brief-n" style="display:none;background:var(--red,#e05252);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;font-weight:700">0</span>
+      </button>
       <div class="user-chip" id="user-chip" onclick="doLogout()"><i class="ti ti-user" style="font-size:13px"></i> <span id="user-name">—</span> <i class="ti ti-logout" style="font-size:12px;opacity:0.7"></i></div>
     </div>
   </div>
@@ -2390,10 +2395,17 @@ function showApp(){
   document.querySelectorAll('.david-only').forEach(el=>el.style.display=isDavid?'':'none');
   document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
   updateBadges();renderCrecheTabs();
-  // Référentes → ouvrir directement leur tableau de bord
-  if(!isDirection)showMain('ref-dashboard');
+  /* Ouverture sur le tableau de bord, direction comme referentes : c'est la vue
+     du jour, et non la messagerie, qui doit accueillir a la connexion. */
+  showMain(isDirection?'dashboard':'ref-dashboard');
   enfMaybeOpenFromUrl();
   syncDemarrer();
+  /* Briefing du jour : une fois par jour et par poste. Il part apres le dessin
+     de l'ecran, le temps que les caches soient en place. Retour depuis l'outil
+     Documents (?enfant=) : on ne l'interrompt pas avec une fenetre. */
+  if(!new URLSearchParams(location.search).get('enfant')){
+    setTimeout(function(){try{brBriefingAuto();}catch(e){console.warn('[briefing]',e);}},500);
+  }
 }
 
 /* Ouverture automatique de la fiche enfant sur l'onglet Documents,
@@ -16064,6 +16076,237 @@ window.stgAjouterType=stgAjouterType;window.stgBasculerType=stgBasculerType;
 window.stgDeplacerType=stgDeplacerType;window.stgExportExcel=stgExportExcel;
 window.stgRemplirReferents=stgRemplirReferents;
 
+
+// ══════════════════════════════════════════════════════════════════════════
+// BRIEFING DU JOUR — « Ce que j'ai à faire aujourd'hui »
+//
+// S'ouvre tout seul à la première connexion de la journée sur ce poste, juste
+// après le tableau de bord. Il ne calcule rien de neuf : il rassemble au même
+// endroit ce que les modules savent déjà (demandes, incidents, actions de
+// direction, tâches À faire, événements, anniversaires), scopé à la crèche de
+// la référente connectée, ouvert au réseau entier pour la direction.
+//
+// La mémoire est locale au poste (localStorage, une clé par utilisateur et par
+// jour) : rien n'est écrit en base, et un poste partagé ne prive pas la
+// personne suivante de son briefing.
+// ══════════════════════════════════════════════════════════════════════════
+
+function brCleJour(){
+  return 'kk-brief-'+((currentUser&&currentUser.id)||'anon')+'-'+todayStr();
+}
+function brBriefingAuto(){
+  try{ if(localStorage.getItem(brCleJour()))return; }catch(e){}
+  try{ localStorage.setItem(brCleJour(),'1'); }catch(e){}
+  brBriefingOuvrir();
+}
+function brBriefingManuel(){ brBriefingOuvrir(); }
+function brBriefingFermer(){ closeModal('modal-brief-wrap'); }
+/* Aller sur un module depuis le briefing : on ferme d'abord, sinon l'écran
+   ouvert reste caché derrière la fenêtre. */
+function brAller(tab){ brBriefingFermer(); showMain(tab); }
+
+function brBriefingOuvrir(){
+  const w=document.getElementById('modal-brief-wrap');if(!w)return;
+  const t=todayStr();
+  const d=new Date(t+'T12:00:00');
+  const lbl=document.getElementById('br-date');
+  if(lbl)lbl.textContent=d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  const bonjour=document.getElementById('br-bonjour');
+  const prenom=((currentProfile&&currentProfile.name)||'').split(' ')[0];
+  if(bonjour)bonjour.textContent='Bonjour'+(prenom?' '+prenom:'');
+  w.classList.add('open');
+  brRender();
+}
+
+function brVide(msg){return '<div class="br-vide">'+msg+'</div>';}
+function brSection(icone,titre,n,corps,accent){
+  return '<div class="br-sec'+(accent?' br-'+accent:'')+'">'
+    +'<div class="br-sec-t"><i class="ti ti-'+icone+'"></i> <span>'+titre+'</span>'
+    +(n?'<span class="br-n">'+n+'</span>':'')+'</div>'+corps+'</div>';
+}
+function brLigne(txt,meta,tab,rouge){
+  return '<div class="br-l'+(tab?' br-clic':'')+'"'+(tab?' onclick="brAller(\''+tab+'\')"':'')+'>'
+    +'<span>'+txt+'</span>'
+    +(meta?'<span class="br-meta'+(rouge?' br-rouge':'')+'">'+meta+'</span>':'')+'</div>';
+}
+function brNomCreche(id){const c=cacheCreches.find(x=>x.id===id);return c?c.name:'';}
+function brSuffixeCreche(id){
+  if(!isDirection)return'';
+  const n=brNomCreche(id);
+  return n?' <span class="br-cr">('+escHtml(n)+')</span>':' <span class="br-cr">(réseau)</span>';
+}
+
+async function brRender(){
+  const box=document.getElementById('br-body');if(!box)return;
+  box.innerHTML=brVide('Chargement…');
+  const t=todayStr();
+  const maCreche=isDirection?null:((currentProfile&&currentProfile.creche_id)||null);
+  const aMoi=id=>isDirection||id===maCreche;
+
+  // ── Ce qui attend une réponse ──────────────────────────────────────────
+  const dem=cacheDemandes.filter(d=>d.status==='attente'&&d.type!=='consigne'&&aMoi(d.creche_id));
+  const urg=dem.filter(d=>d.priority==='urgent');
+  const inc=cacheIncidents.filter(i=>!i.treated&&aMoi(i.creche_id));
+  const graves=inc.filter(i=>i.severity==='grave');
+
+  // ── Actions de direction échues (la RLS limite déjà les référentes aux
+  //    actions dont elles sont responsables) ────────────────────────────────
+  let actEch=[];
+  try{
+    if(typeof adEnsureCharge==='function')await adEnsureCharge();
+    const ouvertes=isDirection
+      ?adCache.filter(a=>!adEstClos(a.statut))
+      :(typeof adMesActions==='function'?adMesActions():[]);
+    actEch=ouvertes.filter(a=>a.echeance&&a.echeance<=t).sort(adTriEcheance);
+  }catch(e){console.warn('[briefing] actions',e);}
+
+  // ── Tâches « À faire » du jour (module personnel de la direction) ──────
+  let taches=[];
+  if(isDirection){
+    try{
+      const{data,error}=await sb.from('taches_afaire').select('*').eq('date_jour',t);
+      if(!error)taches=(data||[]).filter(x=>!x.fait);
+    }catch(e){console.warn('[briefing] taches',e);}
+  }
+
+  // ── Le contexte du jour ────────────────────────────────────────────────
+  const evts=cacheEvenements.filter(e=>{
+    const s=e.date_debut,f=e.date_fin||e.date_debut;
+    return s&&t>=s&&t<=f&&(isDirection||e.creche_id===maCreche||!e.creche_id);
+  }).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
+  const md=t.slice(5);
+  const bdays=cacheEnfants.filter(e=>e.dob&&e.dob.slice(5)===md&&aMoi(e.creche_id));
+
+  // ── En-tête : le compte de ce qui demande une action ───────────────────
+  const nAction=urg.length+inc.length+actEch.length+taches.length;
+  const res=document.getElementById('br-resume');
+  if(res){
+    res.className='br-resume'+(nAction?' br-chaud':'');
+    res.innerHTML=nAction
+      ?'<i class="ti ti-alert-circle"></i> <strong>'+nAction+'</strong> point'+(nAction>1?'s':'')+' à traiter aujourd\'hui'
+      :'<i class="ti ti-circle-check"></i> Rien d\'urgent aujourd\'hui — bonne journée !';
+  }
+  const badge=document.getElementById('btn-brief-n');
+  if(badge){badge.textContent=nAction;badge.style.display=nAction?'':'none';}
+
+  let h='';
+
+  // 1. Tâches personnelles du jour
+  if(isDirection){
+    h+=brSection('checklist','Mes tâches du jour',taches.length,
+      taches.length
+        ?(typeof afSortTasks==='function'?afSortTasks(taches):taches).map(x=>{
+            const meta=(typeof afTypeMeta==='function')?afTypeMeta(x.type):{icon:'✔️'};
+            const cr=brNomCreche(x.creche_id);
+            return brLigne((x.priorite==='urgente'?'🔴 ':'')+meta.icon+' '+escHtml(x.titre),escHtml(cr),'afaire');
+          }).join('')
+        :brVide('Aucune tâche notée pour aujourd\'hui'),
+      taches.length?'accent':'');
+  }
+
+  // 2. Actions de direction arrivées à échéance
+  h+=brSection('target-arrow','Actions à échéance',actEch.length,
+    actEch.length
+      ?actEch.slice(0,8).map(a=>{
+          const r=(typeof adRetard==='function')?adRetard(a):0;
+          return brLigne(escHtml(a.action||a.titre||'Action')+brSuffixeCreche(a.creche_id),
+            r>0?'en retard de '+r+' j':'pour aujourd\'hui','actions',r>0);
+        }).join('')+(actEch.length>8?'<div class="br-plus">+ '+(actEch.length-8)+' autres</div>':'')
+      :brVide('Aucune action à échéance'),
+    actEch.length?'accent':'');
+
+  // 3. Demandes en attente
+  h+=brSection('message-circle','Demandes en attente',dem.length,
+    dem.length
+      ?dem.slice(0,8).map(d=>{
+          const age=Math.floor((new Date()-new Date(d.created_at))/86400000);
+          return brLigne((d.priority==='urgent'?'🔴 ':'⏳ ')+escHtml(d.subject||d.theme||'Demande')+brSuffixeCreche(d.creche_id),
+            age+' j','demands',d.priority==='urgent');
+        }).join('')+(dem.length>8?'<div class="br-plus">+ '+(dem.length-8)+' autres</div>':'')
+      :brVide('✅ Aucune demande en attente'),
+    urg.length?'accent':'');
+
+  // 4. Incidents non traités
+  h+=brSection('alert-triangle','Incidents non traités',inc.length,
+    inc.length
+      ?inc.slice(0,8).map(i=>brLigne('🚨 '+escHtml(i.child_name||'Incident')+brSuffixeCreche(i.creche_id),
+          i.severity==='grave'?'grave':(i.incident_date||''),'incidents',i.severity==='grave')).join('')
+        +(inc.length>8?'<div class="br-plus">+ '+(inc.length-8)+' autres</div>':'')
+      :brVide('✅ Aucun incident en attente'),
+    graves.length?'accent':'');
+
+  // 5. Événements du jour
+  h+=brSection('calendar-event','Événements du jour',evts.length,
+    evts.length
+      ?evts.map(e=>{
+          const info=(typeof CAL_TYPE_INFO!=='undefined'&&CAL_TYPE_INFO[e.type])||{emoji:'📌'};
+          const heure=e.heure_debut?e.heure_debut+(e.heure_fin?'–'+e.heure_fin:''):'';
+          return brLigne(info.emoji+' '+escHtml(e.titre)+brSuffixeCreche(e.creche_id),heure,'evenements');
+        }).join('')
+      :brVide('Aucun événement'));
+
+  // 6. Anniversaires
+  h+=brSection('cake','Anniversaires',bdays.length,
+    bdays.length
+      ?bdays.map(e=>{
+          const age=Number(t.slice(0,4))-Number(e.dob.slice(0,4));
+          return brLigne('🎂 '+escHtml(((e.prenom||'')+' '+(e.nom||'')).trim())+brSuffixeCreche(e.creche_id),
+            age+' an'+(age>1?'s':''),'enfants');
+        }).join('')
+      :brVide('Aucun anniversaire'));
+
+  box.innerHTML=h;
+}
+
+window.brBriefingAuto=brBriefingAuto;
+window.brBriefingManuel=brBriefingManuel;
+window.brBriefingOuvrir=brBriefingOuvrir;
+window.brBriefingFermer=brBriefingFermer;
+window.brAller=brAller;
+
 </script>
+
+<!-- ══ BRIEFING DU JOUR ══════════════════════════════════════════════════ -->
+<style>
+#modal-brief-wrap .modal{max-width:660px;border-top-color:var(--orange)}
+.br-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:2px}
+.br-head h3{margin-bottom:2px}
+#br-date{font-size:12.5px;color:#777;font-weight:600;text-transform:capitalize}
+.br-resume{margin:12px 0 16px;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;background:var(--green-light,#e8f5ec);color:var(--green,#2e8b57)}
+.br-resume.br-chaud{background:var(--orange-light,#fdefe2);color:var(--orange-dark,#b35c00)}
+.br-sec{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.br-sec.br-accent{border-color:var(--orange,#e59500);background:#fffaf3}
+.br-sec-t{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:var(--koala);margin-bottom:6px}
+.br-n{margin-left:auto;background:#eee;color:#555;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700}
+.br-sec.br-accent .br-n{background:var(--orange,#e59500);color:#fff}
+.br-l{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 2px;font-size:12.5px;border-top:1px solid #f1f1f1}
+.br-sec .br-l:first-of-type{border-top:none}
+.br-clic{cursor:pointer;border-radius:6px}
+.br-clic:hover{background:#f5f4fb}
+.br-meta{font-size:11px;font-weight:700;color:#888;white-space:nowrap}
+.br-meta.br-rouge{color:var(--red,#e05252)}
+.br-cr{color:#999;font-size:11px}
+.br-vide{font-size:12px;color:#999;text-align:center;padding:8px}
+.br-plus{font-size:11px;color:#999;text-align:center;padding:4px}
+@media print{#modal-brief-wrap{position:static;background:none}#modal-brief-wrap .modal{max-height:none;border:none}}
+</style>
+<div class="overlay" id="modal-brief-wrap" onclick="if(event.target===this)brBriefingFermer()">
+  <div class="modal">
+    <div class="br-head">
+      <div>
+        <h3 id="br-bonjour" style="margin-bottom:2px">Bonjour</h3>
+        <div id="br-date"></div>
+      </div>
+      <button class="btn-cancel" onclick="brBriefingFermer()" title="Fermer" style="padding:4px 10px"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="br-resume" class="br-resume"></div>
+    <div id="br-body"></div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="brRender()"><i class="ti ti-refresh"></i> Actualiser</button>
+      <button class="btn-primary" onclick="brBriefingFermer()"><i class="ti ti-layout-dashboard"></i> Voir le tableau de bord</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
