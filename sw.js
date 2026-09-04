@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v7';
+const CACHE_NAME = 'stocks-v8';   // v8 : ajout de la page Paramètres au hub
 
 self.addEventListener('install', event => {
   event.waitUntil(
