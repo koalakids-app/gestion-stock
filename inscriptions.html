@@ -78,6 +78,20 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .tr .tm.red{color:var(--green)}
 .tr.off{opacity:.5}
 .tr.off .tm{color:var(--muted)}
+/* Detail chiffre du devis. Tableau plutot que cartes : ces lignes se lisent en
+   colonne, et c'est la forme qu'aura le PDF remis a la famille. */
+.lg{width:100%;border-collapse:collapse;font-size:13px}
+.lg td{padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.lg td.q{color:var(--muted);font-size:12px;white-space:nowrap}
+.lg td.m{text-align:right;font-weight:700;white-space:nowrap}
+.lg tr.neg td.m{color:var(--green)}
+.lg tr.tot td{border-top:2px solid var(--line);border-bottom:none;padding-top:10px;font-weight:800}
+.lg tr.tot td.m{font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet)}
+.lg tr.sub td{border-bottom:none;padding-top:2px;padding-bottom:2px;color:var(--muted);font-size:12px}
+.box{border:2px solid var(--line);border-radius:14px;padding:12px 14px;background:#FCFBFE;margin-top:4px}
+.box .rac{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:8px;padding-top:8px;border-top:2px solid var(--line)}
+.box .rac b{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet)}
+.warn{background:var(--amber-l);color:var(--amber);border-radius:12px;padding:9px 12px;font-size:12.5px;font-weight:600;line-height:1.6;margin:8px 0;display:flex;gap:7px;align-items:flex-start}
 .grp{display:flex;align-items:center;gap:8px;margin:18px 0 10px}
 .grp:first-of-type{margin-top:0}
 .grp h4{font-family:'Baloo 2',cursive;font-size:14px;color:var(--orange);flex:1}
@@ -205,6 +219,11 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <button class="btn btn-s btn-sm" id="btnAddPar" onclick="openParent(null)"><i class="ti ti-user-plus"></i> Ajouter un parent</button>
     <p class="hint" id="hintPar" style="margin-top:8px"></p>
 
+    <div class="sec">Les devis <span id="devCount" style="font-size:12px;color:var(--muted);font-weight:600"></span></div>
+    <div id="devList"></div>
+    <button class="btn btn-s btn-sm" id="btnAddDev" onclick="openDevis(null)"><i class="ti ti-file-euro"></i> Établir un devis</button>
+    <p class="hint" id="hintDev" style="margin-top:8px"></p>
+
     <div class="acts">
       <button class="btn btn-d" id="btnDel" style="display:none" onclick="delFiche()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn btn-g" onclick="closeOv('ovFiche')">Annuler</button>
@@ -237,6 +256,58 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <button class="btn btn-d" id="btnDelPar" style="display:none" onclick="delParent()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn btn-g" onclick="closeOv('ovParent')">Annuler</button>
       <button class="btn btn-p" onclick="saveParent()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- DEVIS -->
+<div class="ov" id="ovDevis">
+  <div class="md" style="max-width:760px">
+    <h3><i class="ti ti-file-euro"></i> <span id="dTitle">Nouveau devis</span> <span id="dStatut"></span></h3>
+    <p class="hint" id="dLock" style="display:none"></p>
+
+    <div class="sec">Le contrat</div>
+    <div class="g2">
+      <div class="f"><label class="lb">Crèche</label><select id="dCreche" onchange="dSync()"></select></div>
+      <div class="f"><label class="lb">Début de l'accueil</label><input id="dDebut" type="date" onchange="dSync()"></div>
+    </div>
+    <div class="f"><label class="lb">Jours d'accueil</label><div id="dJoursBox" class="jr"></div></div>
+    <div class="g3">
+      <div class="f"><label class="lb">Arrivée</label><input id="dHd" type="time" onchange="dSync()"></div>
+      <div class="f"><label class="lb">Départ</label><input id="dHf" type="time" onchange="dSync()"></div>
+      <div class="f"><label class="lb">Semaines facturées / an</label><input id="dSem" type="number" min="1" max="52" onchange="dSync()" oninput="dSync()"></div>
+    </div>
+    <p class="hint" id="dVol"></p>
+
+    <div class="sec">Le tarif d'accueil</div>
+    <div class="f"><label class="lb">Ligne de la grille</label><select id="dTarif" onchange="dSync()"></select></div>
+    <p class="hint" id="dTarifHint"></p>
+
+    <div class="sec">Frais et réductions</div>
+    <div id="dFraisBox"></div>
+    <p class="hint" id="dFraisHint"></p>
+
+    <div class="sec">Le détail chiffré</div>
+    <div id="dLignes"></div>
+
+    <div class="sec">Estimation du CMG</div>
+    <div class="g3">
+      <div class="f"><label class="lb">Situation</label><select id="dSit" onchange="dSync()">
+        <option value="couple">Couple</option><option value="isole">Parent isolé</option>
+      </select></div>
+      <div class="f"><label class="lb">Revenus annuels (N-2)</label><input id="dRev" type="number" step="1" min="0" oninput="dSync()"></div>
+      <div class="f"><label class="lb">Âge à l'entrée</label><input id="dAge" disabled></div>
+    </div>
+    <p class="hint">Les revenus saisis ici sont reportés sur la fiche de préinscription à l'enregistrement.</p>
+    <div id="dCmg"></div>
+
+    <div class="f" style="margin-top:14px"><label class="lb">Commentaire porté sur le devis</label><textarea id="dCom" placeholder="Visible par la famille."></textarea></div>
+    <div class="f"><label class="lb">Notes internes</label><textarea id="dNotes" placeholder="Jamais transmis à la famille."></textarea></div>
+
+    <div class="acts">
+      <button class="btn btn-d" id="btnDelDev" style="display:none" onclick="delDevis()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn btn-g" onclick="closeOv('ovDevis')">Fermer</button>
+      <button class="btn btn-p" id="btnSaveDev" onclick="saveDevis()"><i class="ti ti-check"></i> Enregistrer le brouillon</button>
     </div>
   </div>
 </div>
@@ -608,7 +679,12 @@ function openFiche(id){
   document.getElementById('hintPar').textContent=neuf
     ? 'Enregistrez d\'abord la demande, puis ajoutez les parents.' : '';
   PARENTS=[];renderParents();
-  if(p)loadParents(p.id);
+  document.getElementById('btnAddDev').style.display=neuf?'none':'';
+  document.getElementById('hintDev').textContent=neuf
+    ? 'Enregistrez d\'abord la demande, puis établissez le devis.'
+    : 'Un devis fige les montants qu\'il facture : modifier la grille ensuite ne le réécrit pas.';
+  DEVIS=[];renderDevisList();
+  if(p){loadParents(p.id);loadDevis(p.id);}
 
   openOv('ovFiche');
 }
@@ -694,6 +770,8 @@ async function saveFiche(){
       document.getElementById('btnDel').style.display='';
       document.getElementById('btnAddPar').style.display='';
       document.getElementById('hintPar').textContent='';
+      document.getElementById('btnAddDev').style.display='';
+      document.getElementById('hintDev').textContent='Un devis fige les montants qu\'il facture : modifier la grille ensuite ne le réécrit pas.';
       toast('Demande créée — vous pouvez ajouter les parents.');
     }
     render();
@@ -819,6 +897,407 @@ async function delParent(){
   }catch(e){
     console.error('[delParent]',e);
     toast('Suppression impossible.',true);
+  }
+}
+
+/* ---------- DEVIS ---------- */
+/* Un devis fige ce qu'il facture. Les lignes recopient libelle et montant
+   depuis la grille au moment de l'enregistrement ; modifier la grille ensuite
+   ne les touche plus. C'est la raison d'etre de devis_lignes : sans elle, une
+   hausse de tarif reecrirait retroactivement des devis deja envoyes. */
+let DEVIS=[],devisId=null,DCUR=null,DCALC=null;
+let CMG_BAREME=[],CMG_CFG={taux_max:0.85,ratio_3_6:0.5,plafond_horaire:10};
+const CMG_CFG_ID='00000000-0000-0000-0000-000000000002';
+
+const D_STATUTS={
+  brouillon:{l:'Brouillon',bg:'#F1EFF7',fg:'#8E8AA8'},
+  envoye:   {l:'Envoyé',   bg:'#FFF1E3',fg:'#F47920'},
+  accepte:  {l:'Accepté',  bg:'#E6F5EE',fg:'#2E9E6B'},
+  refuse:   {l:'Refusé',   bg:'#FDE8E8',fg:'#C62828'},
+  expire:   {l:'Expiré',   bg:'#FFF6DC',fg:'#B8860B'},
+  annule:   {l:'Annulé',   bg:'#F1EFF7',fg:'#8E8AA8'}
+};
+
+async function loadCmg(){
+  if(CMG_BAREME.length)return;
+  try{
+    const[b,c]=await Promise.all([
+      sb.from('cmg_bareme').select('*').eq('actif',true).order('ordre'),
+      sb.from('cmg_config').select('config').eq('id',CMG_CFG_ID).maybeSingle()
+    ]);
+    if(b.error)throw b.error;
+    CMG_BAREME=b.data||[];
+    if(c&&c.data&&c.data.config)CMG_CFG=Object.assign({},CMG_CFG,c.data.config);
+  }catch(e){
+    // Le devis reste calculable sans barème : seule l'estimation CMG manquera.
+    console.warn('[loadCmg]',e);CMG_BAREME=[];
+  }
+}
+
+async function loadDevis(preId){
+  try{
+    const{data,error}=await sb.from('devis').select('*')
+      .eq('preinscription_id',preId).order('created_at',{ascending:false});
+    if(error)throw error;
+    if(String(ficheId)!==String(preId))return;
+    DEVIS=data||[];
+  }catch(e){console.warn('[loadDevis]',e);DEVIS=[];}
+  renderDevisList();
+}
+
+function renderDevisList(){
+  const box=document.getElementById('devList');
+  document.getElementById('devCount').textContent=DEVIS.length?'('+DEVIS.length+')':'';
+  if(!DEVIS.length){box.innerHTML='';return;}
+  box.innerHTML=DEVIS.map(d=>{
+    const st=D_STATUTS[d.statut]||D_STATUTS.brouillon;
+    const rev=d.revision>1?' · révision '+d.revision:'';
+    return '<div class="par" onclick="openDevis(\''+d.id+'\')" style="cursor:pointer">'
+      +'<div class="h"><b>'+esc(d.numero||'Sans numéro')+'</b>'
+      +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span></div>'
+      +'<div class="li" style="color:var(--muted)">'+euro(d.total_mensuel)+' par mois'
+      +(d.reste_a_charge!=null?' · reste à charge '+euro(d.reste_a_charge):'')+esc(rev)+'</div>'
+      +(d.envoye_le?'<div class="li"><i class="ti ti-send" style="color:var(--muted)"></i>Envoyé le '+dfr(d.envoye_le)+'</div>':'')
+      +'</div>';
+  }).join('');
+}
+
+/* Age en annees revolues a la date d'entree : le CMG est divise par deux a
+   partir de 3 ans, et s'eteint a 6 ans. */
+function ageAns(dob,dateRef){
+  if(!dob||!dateRef)return null;
+  const d0=new Date(String(dob).slice(0,10)+'T00:00:00');
+  const d1=new Date(String(dateRef).slice(0,10)+'T00:00:00');
+  if(isNaN(d0)||isNaN(d1))return null;
+  let a=d1.getFullYear()-d0.getFullYear();
+  const m=d1.getMonth()-d0.getMonth();
+  if(m<0||(m===0&&d1.getDate()<d0.getDate()))a--;
+  return a;
+}
+
+async function openDevis(id){
+  const p=ficheId?PRE.find(x=>String(x.id)===String(ficheId)):null;
+  if(!p){toast('Enregistrez d\'abord la demande.',true);return;}
+  await Promise.all([loadCmg(),TARIFS.length?Promise.resolve():chargeGrille()]);
+
+  devisId=id;
+  DCUR=id?DEVIS.find(x=>String(x.id)===String(id)):null;
+  const brouillon=!DCUR||DCUR.statut==='brouillon';
+
+  document.getElementById('dTitle').textContent=DCUR?(DCUR.numero||'Devis'):'Nouveau devis';
+  const st=DCUR?(D_STATUTS[DCUR.statut]||D_STATUTS.brouillon):null;
+  document.getElementById('dStatut').innerHTML=st
+    ? '<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>':'';
+  document.getElementById('btnDelDev').style.display=(DCUR&&brouillon)?'':'none';
+  document.getElementById('btnSaveDev').style.display=brouillon?'':'none';
+
+  // Un devis envoyé est un engagement : il ne se modifie plus. Le corriger
+  // supposerait une révision, qui est un nouveau devis remplaçant le premier.
+  const lock=document.getElementById('dLock');
+  lock.style.display=brouillon?'none':'';
+  lock.textContent=brouillon?'':'Ce devis a quitté le brouillon : il n\'est plus modifiable. Établissez-en un nouveau pour le remplacer.';
+
+  const src=DCUR||p;
+  document.getElementById('dCreche').innerHTML='<option value="">— à définir —</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  setVal('dCreche',src.creche_id||'');
+  setVal('dDebut',(DCUR?DCUR.date_debut:p.date_entree_souhaitee)||'');
+  setVal('dHd',src.heure_debut||'07:30');setVal('dHf',src.heure_fin||'18:00');
+  setVal('dSem',DCUR?DCUR.semaines_an:47);
+
+  const jrs=toArr(src.jours).map(Number);
+  document.getElementById('dJoursBox').innerHTML=JOURS.map(j=>
+    '<label><input type="checkbox" class="ckDJour" value="'+j[0]+'"'
+    +((jrs.length?jrs:[1,2,3,4,5]).indexOf(j[0])>=0?' checked':'')+'><span>'+j[1]+'</span></label>').join('');
+  document.querySelectorAll('.ckDJour').forEach(c=>c.addEventListener('change',dSync));
+
+  // Parent isolé : la majoration PAJE cochée sur la fiche est le meilleur
+  // indice dont on dispose, mais elle couvre aussi le handicap. Modifiable.
+  setVal('dSit',p.majoration_paje?'isole':'couple');
+  setVal('dRev',p.revenus_foyer!=null?p.revenus_foyer:'');
+  setVal('dCom',DCUR?DCUR.commentaire:'');
+  setVal('dNotes',DCUR?DCUR.notes_internes:'');
+
+  document.getElementById('dTarif').innerHTML='<option value="">— choix automatique —</option>'
+    +TARIFS.filter(t=>t.actif).map(t=>'<option value="'+t.id+'">'+esc(t.libelle)+' · '+euro(t.montant)+'</option>').join('');
+  setVal('dTarif',DCUR&&DCUR.tarif_id?DCUR.tarif_id:'');
+
+  // Les frais cochés : ceux du devis s'il existe, sinon les « par défaut ».
+  let coches=null;
+  if(DCUR){
+    try{
+      const{data}=await sb.from('devis_lignes').select('libelle').eq('devis_id',DCUR.id);
+      coches=(data||[]).map(x=>x.libelle);
+    }catch(e){console.warn('[devis lignes]',e);}
+  }
+  document.getElementById('dFraisBox').innerHTML=FRAIS.filter(f=>f.actif).map(f=>{
+    const on=coches?coches.indexOf(f.libelle)>=0:f.par_defaut;
+    return '<label class="ck"><input type="checkbox" class="ckFrais" value="'+f.id+'"'+(on?' checked':'')+'> '
+      +esc(f.libelle)+' <span style="color:'+(f.est_reduction?'var(--green)':'var(--muted)')+'">('
+      +(f.est_reduction?'− ':'')+euro(f.montant)+' '+esc(TYPES[f.type])+')</span></label>';
+  }).join('')||'<p class="hint">Aucun frais paramétré.</p>';
+  document.querySelectorAll('.ckFrais').forEach(c=>c.addEventListener('change',dSync));
+
+  // Verrouillage visuel d'un devis non modifiable.
+  ['dCreche','dDebut','dHd','dHf','dSem','dTarif','dSit','dRev','dCom','dNotes'].forEach(i=>{
+    const e=document.getElementById(i);if(e)e.disabled=!brouillon;
+  });
+  document.querySelectorAll('.ckDJour,.ckFrais').forEach(c=>c.disabled=!brouillon);
+
+  dSync();
+  openOv('ovDevis');
+}
+
+/* La grille peut ne pas avoir été ouverte de la session : le devis en a besoin. */
+async function chargeGrille(){
+  try{
+    const[t,f]=await Promise.all([
+      sb.from('tarifs').select('*').order('ordre'),
+      sb.from('frais_annexes').select('*').order('ordre')
+    ]);
+    if(t.error)throw t.error;
+    if(f.error)throw f.error;
+    TARIFS=t.data||[];FRAIS=f.data||[];
+  }catch(e){console.error('[chargeGrille]',e);toast('Grille tarifaire inaccessible.',true);}
+}
+
+/* Volume hebdomadaire du devis — même règle que la fiche, sur ses propres
+   champs : le devis peut retenir un contrat différent de la demande initiale. */
+function dHeuresHebdo(){
+  const m=t=>{const r=/^(\d{1,2}):(\d{2})/.exec(t||'');return r?(+r[1])*60+(+r[2]):null;};
+  const a=m(val('dHd')),b=m(val('dHf'));
+  const n=document.querySelectorAll('.ckDJour:checked').length;
+  if(a==null||b==null||b<=a||!n)return null;
+  return Math.round((b-a)/60*n*100)/100;
+}
+
+/* Le coeur du calcul. Tout est ramené au MOIS : c'est le montant que la
+   famille paiera, et celui sur lequel le CMG se plafonne.
+     accueil mensuel  = heures hebdo × semaines ÷ 12 × tarif horaire
+     frais unitaires  = jours hebdo  × semaines ÷ 12 × montant
+   Les frais mensuels s'ajoutent tels quels ; les frais uniques et annuels
+   sortent du récurrent et sont présentés à part. */
+function dCalcule(){
+  const h=dHeuresHebdo();
+  const nj=document.querySelectorAll('.ckDJour:checked').length;
+  const sem=Number(val('dSem'))||47;
+  const creche=val('dCreche')||null;
+
+  let tarif=null;
+  const forc=val('dTarif');
+  if(forc)tarif=TARIFS.find(t=>String(t.id)===String(forc))||null;
+  else if(h!=null)tarif=tarifPour(h,creche);
+
+  const lignes=[];
+  if(tarif&&h!=null){
+    let q,pu,tot;
+    if(tarif.mode==='horaire'){q=h*sem/12;pu=Number(tarif.montant);tot=q*pu;}
+    else if(tarif.mode==='journee'){q=nj*sem/12;pu=Number(tarif.montant);tot=q*pu;}
+    else{q=1;pu=Number(tarif.montant);tot=pu;}
+    lignes.push({libelle:tarif.libelle,description:tarif.description||'',type:'accueil',
+      quantite:Math.round(q*1000)/1000,montant_unitaire:pu,total:Math.round(tot*100)/100,
+      unite:tarif.mode==='horaire'?'h':(tarif.mode==='journee'?'j':'mois')});
+  }
+
+  [...document.querySelectorAll('.ckFrais:checked')].forEach(c=>{
+    const f=FRAIS.find(x=>String(x.id)===String(c.value));
+    if(!f)return;
+    const signe=f.est_reduction?-1:1;
+    let q=1,unite='';
+    if(f.type==='unitaire'){q=nj*sem/12;unite='j';}
+    lignes.push({libelle:f.libelle,description:f.description||'',type:f.type,
+      quantite:Math.round(q*1000)/1000,montant_unitaire:signe*Number(f.montant),
+      total:Math.round(signe*Number(f.montant)*q*100)/100,unite:unite});
+  });
+
+  const recur=['accueil','mensuel','unitaire'];
+  const mensuel=lignes.filter(l=>recur.indexOf(l.type)>=0).reduce((s,l)=>s+l.total,0);
+  const uniques=lignes.filter(l=>l.type==='unique').reduce((s,l)=>s+l.total,0);
+  const annuels=lignes.filter(l=>l.type==='annuel').reduce((s,l)=>s+l.total,0);
+
+  return{h:h,nj:nj,sem:sem,tarif:tarif,lignes:lignes,
+    mensuel:Math.round(mensuel*100)/100,
+    uniques:Math.round(uniques*100)/100,
+    annuel:Math.round((mensuel*12+annuels)*100)/100};
+}
+
+/* Estimation CMG. Deux plafonds jouent : le montant du barème selon les
+   revenus, et la part maximale du coût que le CMG peut couvrir (85 %). C'est
+   le plus petit des deux qui s'applique — sur un petit contrat, c'est
+   toujours le second. */
+function dCmgCalcule(mensuel){
+  const rev=val('dRev')===''?null:Number(val('dRev'));
+  const sit=val('dSit')||'couple';
+  const p=ficheId?PRE.find(x=>String(x.id)===String(ficheId)):null;
+  const age=ageAns(p&&p.dob,val('dDebut'));
+
+  if(!CMG_BAREME.length)return{err:'Barème CMG non renseigné en base — exécutez le script 24g.'};
+  if(rev==null)return{err:'Renseignez les revenus du foyer pour estimer le CMG.'};
+  if(age==null)return{err:'Renseignez la date de naissance et la date de début pour estimer le CMG.'};
+  if(age>=6)return{err:'Le CMG s\'éteint aux 6 ans de l\'enfant.'};
+
+  const tr=CMG_BAREME.filter(b=>b.situation===sit)
+    .sort((a,b)=>(a.revenu_max==null?1:0)-(b.revenu_max==null?1:0)||Number(a.revenu_max)-Number(b.revenu_max))
+    .find(b=>b.revenu_max==null||rev<=Number(b.revenu_max));
+  if(!tr)return{err:'Aucune tranche de barème ne correspond à cette situation.'};
+
+  const ratio=age>=3?Number(CMG_CFG.ratio_3_6||0.5):1;
+  const plafondBareme=Math.round(Number(tr.montant)*ratio*100)/100;
+  const plafondCout=Math.round(mensuel*Number(CMG_CFG.taux_max||0.85)*100)/100;
+  const cmg=Math.min(plafondBareme,plafondCout);
+  return{age:age,ratio:ratio,bareme:plafondBareme,cout:plafondCout,
+    cmg:Math.round(cmg*100)/100,reste:Math.round((mensuel-cmg)*100)/100,
+    limite:plafondCout<plafondBareme?'cout':'bareme'};
+}
+
+function dSync(){
+  const c=dCalcule();
+  DCALC=c;
+
+  document.getElementById('dVol').textContent=c.h==null
+    ? 'Renseignez les jours et les horaires pour calculer le volume hebdomadaire.'
+    : c.h+' h par semaine sur '+c.nj+' jour'+(c.nj>1?'s':'')+', soit '
+      +(Math.round(c.h*c.sem*100)/100)+' h sur '+c.sem+' semaines.';
+
+  const th=document.getElementById('dTarifHint');
+  if(!c.tarif)th.textContent=c.h==null?'Le tarif se déduit du volume hebdomadaire.'
+    :'Aucune ligne de la grille ne couvre '+c.h+' h par semaine.';
+  else th.textContent=(val('dTarif')?'Tarif forcé : ':'Retenu automatiquement : ')
+    +c.tarif.libelle+' — '+euro(c.tarif.montant)+' '+(c.tarif.mode==='horaire'?'de l\'heure':(c.tarif.mode==='journee'?'la journée':'par mois'))+'.';
+
+  document.getElementById('dFraisHint').textContent=
+    'Un montant en vert se soustrait du total. Les frais uniques et annuels sont présentés hors mensualité.';
+
+  // Le détail chiffré
+  const box=document.getElementById('dLignes');
+  if(!c.lignes.length){box.innerHTML='<p class="hint">Rien à chiffrer pour l\'instant.</p>';}
+  else{
+    const recur=['accueil','mensuel','unitaire'];
+    const q=l=>l.unite?(Math.round(l.quantite*100)/100).toLocaleString('fr-FR')+' '+l.unite+' × '+euro(Math.abs(l.montant_unitaire)):'';
+    const tr=l=>'<tr'+(l.total<0?' class="neg"':'')+'><td>'+esc(l.libelle)
+      +(l.description?'<div class="q">'+esc(l.description)+'</div>':'')+'</td>'
+      +'<td class="q">'+q(l)+'</td><td class="m">'+(l.total<0?'− ':'')+euro(Math.abs(l.total))+'</td></tr>';
+    let html='<table class="lg">'+c.lignes.filter(l=>recur.indexOf(l.type)>=0).map(tr).join('')
+      +'<tr class="tot"><td colspan="2">Total mensuel</td><td class="m">'+euro(c.mensuel)+'</td></tr></table>';
+    const hors=c.lignes.filter(l=>recur.indexOf(l.type)<0);
+    if(hors.length)html+='<div style="margin-top:12px"><table class="lg">'+hors.map(tr).join('')+'</table>'
+      +'<p class="hint" style="margin-top:6px">Facturés en une fois ou à l\'année, hors mensualité.</p></div>';
+    box.innerHTML=html;
+  }
+
+  // CMG
+  const p=ficheId?PRE.find(x=>String(x.id)===String(ficheId)):null;
+  const age=ageAns(p&&p.dob,val('dDebut'));
+  setVal('dAge',age==null?'—':(age+' an'+(age>1?'s':'')+(age<3?' · plein tarif CMG':(age<6?' · CMG divisé par deux':' · plus de droit'))));
+
+  const cm=dCmgCalcule(c.mensuel);
+  const cbox=document.getElementById('dCmg');
+  if(cm.err){cbox.innerHTML='<p class="hint">'+esc(cm.err)+'</p>';}
+  else{
+    const pourquoi=cm.limite==='cout'
+      ? 'Plafonné à '+Math.round((CMG_CFG.taux_max||0.85)*100)+' % du coût : le barème autoriserait '+euro(cm.bareme)+'.'
+      : 'Montant du barème. Le plafond des '+Math.round((CMG_CFG.taux_max||0.85)*100)+' % autoriserait jusqu\'à '+euro(cm.cout)+'.';
+    cbox.innerHTML='<div class="box">'
+      +'<div style="display:flex;justify-content:space-between"><span>Coût mensuel</span><b>'+euro(c.mensuel)+'</b></div>'
+      +'<div style="display:flex;justify-content:space-between;color:var(--green);margin-top:4px"><span>CMG estimé</span><b>− '+euro(cm.cmg)+'</b></div>'
+      +'<div class="rac"><span>Reste à charge</span><b>'+euro(cm.reste)+'</b></div>'
+      +'<p class="hint" style="margin:8px 0 0">'+esc(pourquoi)+' Estimation indicative : seule la CAF fait foi.</p></div>';
+  }
+
+  // Le tarif horaire au-delà duquel la famille perd tout droit au CMG.
+  const plaf=Number(CMG_CFG.plafond_horaire||10);
+  const dep=c.tarif&&c.tarif.mode==='horaire'&&Number(c.tarif.montant)>plaf;
+  if(dep)document.getElementById('dCmg').insertAdjacentHTML('afterbegin',
+    '<div class="warn"><i class="ti ti-alert-triangle"></i><span>Le tarif retenu dépasse '+plaf
+    +' € de l\'heure : au-delà de ce seuil, la famille perd <b>la totalité</b> du CMG, et non une fraction.</span></div>');
+}
+
+async function saveDevis(){
+  if(!ficheId){toast('Enregistrez d\'abord la demande.',true);return;}
+  const c=DCALC||dCalcule();
+  if(!c.lignes.length){toast('Rien à chiffrer : vérifiez les jours, les horaires et le tarif.',true);return;}
+
+  const cm=dCmgCalcule(c.mensuel);
+  const row={
+    preinscription_id:ficheId,
+    statut:'brouillon',
+    creche_id:val('dCreche')||null,
+    date_debut:val('dDebut')||null,
+    jours:[...document.querySelectorAll('.ckDJour:checked')].map(x=>Number(x.value)),
+    heure_debut:val('dHd'),heure_fin:val('dHf'),
+    heures_hebdo:c.h||0,semaines_an:Number(val('dSem'))||47,
+    tarif_id:c.tarif?c.tarif.id:null,
+    tarif_libelle:c.tarif?c.tarif.libelle:'',
+    tarif_mode:c.tarif?c.tarif.mode:'horaire',
+    tarif_montant:c.tarif?Number(c.tarif.montant):0,
+    total_mensuel:c.mensuel,total_annuel:c.annuel,frais_uniques:c.uniques,
+    cmg_estime:cm.err?null:cm.cmg,
+    reste_a_charge:cm.err?null:cm.reste,
+    commentaire:val('dCom'),notes_internes:val('dNotes')
+  };
+
+  const btn=document.getElementById('btnSaveDev');
+  btn.disabled=true;
+  try{
+    let id=devisId;
+    if(id){
+      row.updated_at=new Date().toISOString();
+      const{error}=await sb.from('devis').update(row).eq('id',id);
+      if(error)throw error;
+    }else{
+      // Le numéro vient de devis_numero_seq ; si un trigger le pose déjà,
+      // l'insert sans numero passe. Sinon on retombe sur un numéro daté.
+      row.created_by=ME?ME.id:null;
+      let ins=await sb.from('devis').insert(row).select().single();
+      if(ins.error&&ins.error.code==='23502'){
+        row.numero='D'+auj().replace(/-/g,'')+'-'+String(Date.now()).slice(-4);
+        ins=await sb.from('devis').insert(row).select().single();
+      }
+      if(ins.error)throw ins.error;
+      id=ins.data.id;devisId=id;
+    }
+
+    // Les lignes sont remplacées en bloc : un brouillon n'a pas d'historique
+    // à préserver, et un devis envoyé n'arrive jamais ici.
+    await sb.from('devis_lignes').delete().eq('devis_id',id);
+    const lignes=c.lignes.map((l,i)=>({devis_id:id,libelle:l.libelle,description:l.description,
+      type:l.type,quantite:l.quantite,montant_unitaire:l.montant_unitaire,total:l.total,ordre:(i+1)*10}));
+    if(lignes.length){
+      const{error}=await sb.from('devis_lignes').insert(lignes);
+      if(error)throw error;
+    }
+
+    // Les revenus saisis ici valent pour la fiche : les laisser diverger
+    // ferait deux chiffres pour une même famille.
+    const rev=val('dRev')===''?null:Number(val('dRev'));
+    const p=PRE.find(x=>String(x.id)===String(ficheId));
+    if(p&&rev!==p.revenus_foyer){
+      await sb.from('preinscriptions').update({revenus_foyer:rev}).eq('id',ficheId);
+      p.revenus_foyer=rev;
+    }
+
+    toast('Devis enregistré ✅');
+    closeOv('ovDevis');
+    await loadDevis(ficheId);
+  }catch(e){
+    console.error('[saveDevis]',e);
+    toast('Enregistrement impossible : '+(e.message||'erreur inconnue'),true);
+  }finally{btn.disabled=false;}
+}
+
+async function delDevis(){
+  if(!devisId)return;
+  if(!confirm('Supprimer ce devis ? Ses lignes seront supprimées avec lui.'))return;
+  try{
+    await sb.from('devis_lignes').delete().eq('devis_id',devisId);
+    const{error}=await sb.from('devis').delete().eq('id',devisId);
+    if(error)throw error;
+    closeOv('ovDevis');
+    await loadDevis(ficheId);
+    toast('Devis supprimé.');
+  }catch(e){
+    console.error('[delDevis]',e);
+    toast('Suppression impossible : '+(e.message||'erreur inconnue'),true);
   }
 }
 
