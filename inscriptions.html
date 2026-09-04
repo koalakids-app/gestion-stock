@@ -136,6 +136,14 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .dif .old{color:var(--muted);text-decoration:line-through}
 .dif .new{color:var(--green);font-weight:700}
 .dif .neuf{color:var(--amber);font-weight:700}
+/* Bouton PDF pose sur la carte d'un devis. Il vit a l'interieur d'une zone
+   deja cliquable : sans arret de propagation, l'imprimer ouvrirait aussi la
+   modale du devis derriere la boite de telechargement. */
+.par .pdf{border:none;background:var(--violet-l);color:var(--violet);border-radius:10px;
+  min-height:34px;padding:0 11px;font-family:'Nunito';font-weight:800;font-size:12px;
+  cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.par .pdf:hover{background:#E3DEF8}
+.par .pdf i{font-size:16px}
 </style>
 </head>
 <body>
@@ -339,6 +347,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
     <div class="acts">
       <button class="btn btn-d" id="btnDelDev" style="display:none" onclick="delDevis()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn btn-s" id="btnPdfDev" style="display:none" onclick="pdfDevis(devisId)"><i class="ti ti-file-type-pdf"></i> Le PDF</button>
       <button class="btn btn-g" onclick="closeOv('ovDevis')">Fermer</button>
       <button class="btn btn-p" id="btnSaveDev" onclick="saveDevis()"><i class="ti ti-check"></i> Enregistrer le brouillon</button>
     </div>
@@ -587,11 +596,14 @@ async function doLogin(){
 async function doLogout(){await sb.auth.signOut();location.reload();}
 
 /* ---------- CHARGEMENT ---------- */
+/* creches.addr est lue ici parce que l'en-tête du PDF la porte : la faire
+   chercher au moment de l'impression obligerait à une requête de plus pendant
+   que la boîte de téléchargement s'ouvre. */
 async function loadAll(){
   try{
     const[pr,cr]=await Promise.all([
       sb.from('preinscriptions').select('*').order('created_at',{ascending:false}),
-      sb.from('creches').select('id,name').order('name')
+      sb.from('creches').select('id,name,addr').order('name')
     ]);
     if(pr.error)throw pr.error;
     PRE=pr.data||[];CRECHES=cr.data||[];
@@ -607,6 +619,7 @@ async function loadAll(){
 }
 
 function nomCreche(id){const c=CRECHES.find(x=>String(x.id)===String(id));return c?c.name:'';}
+function adrCreche(id){const c=CRECHES.find(x=>String(x.id)===String(id));return (c&&c.addr)||'';}
 
 /* ---------- AFFICHAGE ---------- */
 function render(){
@@ -993,11 +1006,13 @@ async function loadCmg(){
 }
 
 /* Table du module Paramètres. Son absence n'est pas bloquante : on retombe
-   sur 47, la valeur par défaut de devis.semaines_an. */
+   sur 47, la valeur par défaut de devis.semaines_an.
+   La ligne entière est chargée, et non les seules semaines facturées :
+   l'en-tête du PDF y lit la raison sociale, le SIRET et l'agrément PMI. */
 async function loadEtabs(){
   if(ETABS.length)return;
   try{
-    const{data,error}=await sb.from('etablissements').select('creche_id,semaines_facturees');
+    const{data,error}=await sb.from('etablissements').select('*');
     if(error)throw error;
     ETABS=data||[];
   }catch(e){console.warn('[loadEtabs]',e);ETABS=[];}
@@ -1005,6 +1020,9 @@ async function loadEtabs(){
 function semainesDe(crecheId){
   const e=ETABS.find(x=>String(x.creche_id)===String(crecheId));
   return e&&e.semaines_facturees!=null?Number(e.semaines_facturees):null;
+}
+function etabDe(crecheId){
+  return ETABS.find(x=>String(x.creche_id)===String(crecheId))||{};
 }
 
 async function loadDevis(preId){
@@ -1025,12 +1043,18 @@ function renderDevisList(){
   box.innerHTML=DEVIS.map(d=>{
     const st=D_STATUTS[d.statut]||D_STATUTS.brouillon;
     const rev=d.revision>1?' · révision '+d.revision:'';
+    // Le PDF s'imprime sans ouvrir le devis : c'est le geste le plus fréquent
+    // une fois le devis établi. stopPropagation empêche la carte de s'ouvrir
+    // derrière la boîte de téléchargement.
     return '<div class="par" onclick="openDevis(\''+d.id+'\')" style="cursor:pointer">'
       +'<div class="h"><b>'+esc(d.numero||'Sans numéro')+'</b>'
-      +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span></div>'
+      +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>'
+      +'<button class="pdf" onclick="event.stopPropagation();pdfDevis(\''+d.id+'\')" title="Télécharger le PDF">'
+      +'<i class="ti ti-file-type-pdf"></i> PDF</button></div>'
       +'<div class="li" style="color:var(--muted)">'+euro(d.total_mensuel)+' par mois'
       +(d.reste_a_charge!=null?' · reste à charge '+euro(d.reste_a_charge):'')+esc(rev)+'</div>'
       +(d.envoye_le?'<div class="li"><i class="ti ti-send" style="color:var(--muted)"></i>Envoyé le '+dfr(d.envoye_le)+'</div>':'')
+      +(d.signe_le?'<div class="li"><i class="ti ti-writing-sign" style="color:var(--green)"></i>Signé le '+dfr(d.signe_le)+'</div>':'')
       +'</div>';
   }).join('');
 }
@@ -1063,6 +1087,9 @@ async function openDevis(id){
     ? '<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>':'';
   document.getElementById('btnDelDev').style.display=(DCUR&&brouillon)?'':'none';
   document.getElementById('btnSaveDev').style.display=brouillon?'':'none';
+  // Le PDF ne s'imprime que depuis la base : un devis jamais enregistré n'a ni
+  // numéro ni lignes, et sortirait un document sans identité.
+  document.getElementById('btnPdfDev').style.display=DCUR?'':'none';
 
   // Un devis envoyé est un engagement : il ne se modifie plus. Le corriger
   // supposerait une révision, qui est un nouveau devis remplaçant le premier.
@@ -1390,6 +1417,384 @@ async function delDevis(){
     console.error('[delDevis]',e);
     toast('Suppression impossible : '+(e.message||'erreur inconnue'),true);
   }
+}
+
+/* ---------- LE PDF DU DEVIS ---------- */
+/* Le document est REDESSINE en texte, pas photographie. html2canvas aurait été
+   plus court à écrire, mais il produit une image : fichier lourd, texte ni
+   sélectionnable ni cherchable, et rendu dépendant de la largeur de l'écran
+   depuis lequel on imprime — le même devis n'aurait pas sorti pareil depuis la
+   tablette et depuis le poste du bureau.
+
+   Deuxième parti pris : le PDF lit devis_lignes EN BASE, jamais le calcul à
+   l'écran. Ce qui s'imprime est donc ce qui a été figé à l'établissement du
+   devis, même si la grille tarifaire a bougé depuis, et même si la modale est
+   ouverte sur des cases décochées.
+
+   Ce que le PDF va chercher ailleurs :
+     etablissements  → raison sociale, SIRET, agrément PMI, représentant
+     reseau_config   → durée de validité, mentions, préavis, pied de page
+     creches.addr    → l'adresse du site d'accueil
+   Aucune de ces sources n'est bloquante : ce qui manque laisse un blanc, le
+   devis sort quand même. Un écran de paramètres vide ne doit pas empêcher
+   d'imprimer. */
+const JSPDF_URL='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+const RESEAU_CFG_ID='00000000-0000-0000-0000-000000000003';
+let RESEAU={devis_validite_jours:30,devis_mentions:'',preavis_resiliation:'',pied_page:''};
+let reseauCharge=false;
+
+async function loadReseau(){
+  if(reseauCharge)return;
+  try{
+    const{data,error}=await sb.from('reseau_config').select('config').eq('id',RESEAU_CFG_ID).maybeSingle();
+    if(error)throw error;
+    if(data&&data.config)RESEAU=Object.assign({},RESEAU,data.config);
+  }catch(e){console.warn('[loadReseau]',e);}
+  reseauCharge=true;
+}
+
+/* jsPDF n'est chargé qu'au premier clic : 300 ko qu'il serait absurde de faire
+   payer à l'ouverture du module à quelqu'un qui vient consulter une file
+   d'attente. */
+function chargeJsPdf(){
+  if(window.jspdf&&window.jspdf.jsPDF)return Promise.resolve();
+  return new Promise((ok,ko)=>{
+    const s=document.createElement('script');
+    s.src=JSPDF_URL;
+    s.onload=()=>(window.jspdf&&window.jspdf.jsPDF)?ok():ko(new Error('jsPDF chargé mais introuvable.'));
+    s.onerror=()=>ko(new Error('jsPDF n\'a pas pu être téléchargé — vérifiez la connexion.'));
+    document.head.appendChild(s);
+  });
+}
+
+/* Montant pour le PDF. euro() passe par toLocaleString, qui sépare les
+   milliers par une espace insécable étroite (U+202F) que les polices
+   standard de jsPDF ne savent pas dessiner : le chiffre sortait troué.
+   Ici l'espace est une espace ordinaire. */
+function eurPdf(n){
+  const v=Math.round(Number(n||0)*100)/100;
+  const s=Math.abs(v).toFixed(2).replace('.',',');
+  const pt=s.split(',');
+  return (v<0?'- ':'')+pt[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ')+','+pt[1]+' €';
+}
+function nbFr(n){
+  const v=Math.round(Number(n||0)*100)/100;
+  return String(v).replace('.',',');
+}
+function joursTxt(v){
+  const j=toArr(v).map(Number);
+  return JOURS.filter(x=>j.indexOf(x[0])>=0).map(x=>x[1].toLowerCase()).join(', ');
+}
+/* Date d'échéance = point de départ + durée de validité du réseau. On part de
+   l'envoi s'il a eu lieu, sinon de l'établissement : un devis daté du 2 et
+   envoyé le 20 court à partir du 20, sinon la famille reçoit un document déjà
+   à moitié périmé. */
+function echeanceDevis(d){
+  const base=String(d.envoye_le||d.created_at||auj()).slice(0,10);
+  const dt=new Date(base+'T00:00:00');
+  if(isNaN(dt))return '';
+  dt.setDate(dt.getDate()+Number(RESEAU.devis_validite_jours||30));
+  return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+}
+
+async function pdfDevis(id){
+  const d=DEVIS.find(x=>String(x.id)===String(id));
+  if(!d){toast('Enregistrez le devis avant de l\'imprimer.',true);return;}
+  toast('Préparation du PDF…');
+  try{
+    await Promise.all([chargeJsPdf(),loadEtabs(),loadReseau()]);
+    const{data,error}=await sb.from('devis_lignes').select('*').eq('devis_id',d.id).order('ordre');
+    if(error)throw error;
+    dessineDevis(d,data||[]);
+  }catch(e){
+    console.error('[pdfDevis]',e);
+    toast('PDF impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+
+function dessineDevis(d,lignes){
+  const jsPDF=window.jspdf.jsPDF;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const G=16, D=194, L=D-G, BAS=278;   // marges et bas de page utile
+  let y=0;
+
+  const p=PRE.find(x=>String(x.id)===String(d.preinscription_id))||{};
+  const e=etabDe(d.creche_id);
+  const cr=nomCreche(d.creche_id);
+  const VIOLET=[74,63,159], ORANGE=[244,121,32], GRIS=[142,138,168],
+        NOIR=[43,39,64], VERT=[46,158,107], TRAIT=[228,222,240];
+
+  function police(t,s,c){doc.setFontSize(t);doc.setFont('helvetica',s||'normal');
+    const k=c||NOIR;doc.setTextColor(k[0],k[1],k[2]);}
+  function trait(c){const k=c||TRAIT;doc.setDrawColor(k[0],k[1],k[2]);doc.setLineWidth(.3);doc.line(G,y,D,y);}
+  function place(h){if(y+h>BAS){doc.addPage();y=20;}}
+  function ecrire(s,t,st,c,x,al){
+    police(t,st,c);
+    doc.text(String(s==null?'':s),x==null?G:x,y,al?{align:al}:undefined);
+  }
+  /* Un paragraphe qui se coupe tout seul et sait changer de page en cours de
+     route : les mentions du réseau peuvent faire dix lignes comme trois. */
+  function para(s,t,st,c,larg,inter){
+    if(s==null||String(s).trim()==='')return;
+    police(t||9.5,st,c);
+    doc.splitTextToSize(String(s),larg||L).forEach(l=>{
+      place(inter||4.4);
+      doc.text(l,G,y);y+=(inter||4.4);
+    });
+  }
+  function titreSection(s){
+    place(14);y+=5;
+    ecrire(s.toUpperCase(),9,'bold',ORANGE);
+    y+=2;trait();y+=5;
+  }
+
+  /* ---- En-tête : qui édite le devis ---- */
+  y=18;
+  ecrire(e.raison_sociale||'Koala Kids',15,'bold',VIOLET);
+  y+=5.6;
+  [e.forme_juridique,
+   e.adresse_siege,
+   [e.siret?'SIRET '+e.siret:'',e.code_ape?'APE '+e.code_ape:''].filter(Boolean).join('  ·  '),
+   [e.telephone,e.email].filter(Boolean).join('  ·  ')
+  ].filter(Boolean).forEach(t=>{ecrire(t,8.5,'normal',GRIS);y+=4;});
+
+  // Colonne de droite : le site d'accueil et son agrément.
+  let yd=18;
+  const dr=(s,t,st,c)=>{if(!s)return;police(t,st,c);doc.text(String(s),D,yd,{align:'right'});yd+=t<=8.5?4:5.4;};
+  dr(cr||'',11,'bold',NOIR);
+  dr(adrCreche(d.creche_id),8.5,'normal',GRIS);
+  dr(e.pmi_numero?'Agrément PMI '+e.pmi_numero:'',8.5,'normal',GRIS);
+  dr(e.pmi_date?'délivré le '+dfr(e.pmi_date):'',8.5,'normal',GRIS);
+
+  y=Math.max(y,yd)+4;
+  trait(VIOLET);y+=9;
+
+  /* ---- Le titre ---- */
+  const titre='DEVIS '+(d.numero||'');
+  ecrire(titre,16,'bold',VIOLET);
+  // La largeur se mesure AVEC la police du titre, avant d'en changer : mesurée
+  // en 9,5 pt elle vaut deux tiers de la vraie, et « révision 2 » venait se
+  // poser au milieu du numéro.
+  const apresTitre=G+doc.getTextWidth(titre)+5;
+  if(d.revision>1){police(9.5,'normal',GRIS);doc.text('révision '+d.revision,apresTitre,y);}
+  // Un brouillon imprimé doit se voir comme tel : rien n'empêche de le tendre
+  // à une famille par mégarde, et il n'engage personne.
+  if(d.statut==='brouillon'){
+    police(9,'bold',ORANGE);
+    doc.text('BROUILLON',D,y,{align:'right'});
+  }else if(d.statut==='accepte'){
+    police(9,'bold',VERT);
+    doc.text('ACCEPTÉ',D,y,{align:'right'});
+  }
+  y+=5.5;
+  const ech=echeanceDevis(d);
+  ecrire('Établi le '+dfr(String(d.created_at||auj()).slice(0,10))
+    +(ech?'  ·  valable jusqu\'au '+dfr(ech):''),9,'normal',GRIS);
+  y+=8;
+
+  /* ---- La famille et l'enfant, côte à côte ---- */
+  const mid=G+L/2+4;
+  const yb=y;
+  police(9,'bold',ORANGE);doc.text('LA FAMILLE',G,y);doc.text('L\'ENFANT',mid,y);
+  y+=5;
+  const dest=PARENTS.filter(x=>x.destinataire);
+  const gauche=[];
+  (dest.length?dest:PARENTS).forEach(x=>{
+    gauche.push(((x.prenom||'')+' '+(x.nom||'')).trim()+(x.lien?' ('+(LIENS[x.lien]||'').toLowerCase()+')':''));
+    if(x.email)gauche.push(x.email);
+    if(x.telephone)gauche.push(x.telephone);
+  });
+  if(p.adresse)gauche.push(p.adresse);
+  if(p.code_postal||p.ville)gauche.push(((p.code_postal||'')+' '+(p.ville||'')).trim());
+
+  const droite=[];
+  droite.push(((p.prenom||'')+' '+(p.nom||'')).trim()||'—');
+  if(p.dob)droite.push(p.ne_ou_a_naitre==='a_naitre'?'terme prévu le '+dfr(p.dob):'né(e) le '+dfr(p.dob));
+  if(p.num_allocataire)droite.push('N° allocataire '+p.num_allocataire);
+
+  police(9.5,'normal',NOIR);
+  const n=Math.max(gauche.length,droite.length);
+  for(let i=0;i<n;i++){
+    place(4.6);
+    if(gauche[i])doc.text(doc.splitTextToSize(gauche[i],L/2-6)[0],G,y);
+    if(droite[i])doc.text(doc.splitTextToSize(droite[i],L/2-6)[0],mid,y);
+    y+=4.6;
+  }
+  y=Math.max(y,yb+14);
+
+  /* ---- Le contrat proposé ---- */
+  titreSection('L\'accueil proposé');
+  const contrat=[
+    ['Crèche',cr||'—'],
+    ['Début de l\'accueil',d.date_debut?dfr(d.date_debut):'à convenir'],
+    ['Jours d\'accueil',joursTxt(d.jours)||'—'],
+    ['Horaires',(d.heure_debut||'')+' – '+(d.heure_fin||'')],
+    ['Volume hebdomadaire',nbFr(d.heures_hebdo)+' h par semaine'],
+    ['Semaines facturées',d.semaines_an+' semaines par an']
+  ];
+  police(9.5,'normal');
+  contrat.forEach(([k,v])=>{
+    place(5);
+    police(9.5,'normal',GRIS);doc.text(k,G,y);
+    police(9.5,'bold',NOIR);doc.text(String(v),G+52,y);
+    y+=5;
+  });
+  y+=1;
+  para('La mensualité est lissée sur douze mois : elle est identique chaque mois, y compris '
+    +'pendant les semaines de fermeture, qui sont déjà déduites du nombre de semaines facturées.',
+    8.5,'italic',GRIS,L,4);
+
+  /* ---- Le détail chiffré ---- */
+  titreSection('Le détail de la mensualité');
+  const RECUR=['accueil','mensuel','unitaire'];
+  function unite(l){
+    if(l.type==='accueil')return d.tarif_mode==='horaire'?'h':(d.tarif_mode==='journee'?'j':'mois');
+    if(l.type==='unitaire')return 'j';
+    return '';
+  }
+  function detail(l){
+    const q=Number(l.quantite);
+    if(!q||q===1)return '';
+    const u=unite(l);
+    return nbFr(Math.round(q*100)/100)+(u?' '+u:'')+' × '+eurPdf(Math.abs(l.montant_unitaire));
+  }
+  function ligne(l){
+    const neg=Number(l.total)<0;
+    police(9.5,'normal',NOIR);
+    const nom=doc.splitTextToSize(String(l.libelle||''),82);
+    const des=l.description?doc.splitTextToSize(String(l.description),82):[];
+    const h=nom.length*4.3+des.length*3.6;
+    place(h+3);
+    nom.forEach((t,i)=>doc.text(t,G,y+i*4.3));
+    if(des.length){
+      police(8,'italic',GRIS);
+      des.forEach((t,i)=>doc.text(t,G,y+nom.length*4.3+i*3.6));
+    }
+    police(8.5,'normal',GRIS);
+    doc.text(detail(l),G+86,y);
+    police(10,'bold',neg?VERT:NOIR);
+    doc.text((neg?'- ':'')+eurPdf(Math.abs(l.total)),D,y,{align:'right'});
+    y+=h+2.4;
+    trait();y+=3.2;
+  }
+
+  const recu=lignes.filter(l=>RECUR.indexOf(l.type)>=0);
+  const hors=lignes.filter(l=>RECUR.indexOf(l.type)<0);
+  if(!recu.length)para('Aucune ligne récurrente.',9.5,'italic',GRIS);
+  recu.forEach(ligne);
+
+  place(12);
+  y+=1;
+  police(11,'bold',VIOLET);
+  doc.text('TOTAL MENSUEL',G,y);
+  doc.setFontSize(14);
+  doc.text(eurPdf(d.total_mensuel),D,y,{align:'right'});
+  y+=4;trait(VIOLET);y+=4;
+
+  if(hors.length){
+    titreSection('Hors mensualité');
+    hors.forEach(ligne);
+    para('Ces montants sont facturés en une seule fois ou une fois par an, en sus de la mensualité.',
+      8.5,'italic',GRIS,L,4);
+  }
+
+  /* ---- Le CMG ---- */
+  /* Il est versé aux parents par la CAF, pas à la crèche. Le porter au devis
+     rend le reste à charge lisible, mais la mention qui suit n'est pas une
+     précaution de style : c'est ce qui empêche qu'une estimation faite sur des
+     revenus déclarés soit lue comme un engagement de la crèche. */
+  if(d.cmg_estime!=null){
+    titreSection('Estimation du complément de libre choix du mode de garde');
+    const bl=[['Coût mensuel',eurPdf(d.total_mensuel),NOIR],
+              ['CMG estimé, versé par la CAF','- '+eurPdf(d.cmg_estime),VERT]];
+    bl.forEach(([k,v,c])=>{
+      place(5.4);
+      police(9.5,'normal',GRIS);doc.text(k,G,y);
+      police(9.5,'bold',c);doc.text(v,D,y,{align:'right'});
+      y+=5.4;
+    });
+    y+=1;trait();y+=5.6;
+    police(11,'bold',VIOLET);doc.text('RESTE À CHARGE MENSUEL',G,y);
+    doc.setFontSize(14);doc.text(eurPdf(d.reste_a_charge),D,y,{align:'right'});
+    y+=6;
+    para('Estimation indicative, calculée à partir des revenus communiqués par la famille et du '
+      +'barème CAF en vigueur. Seule la CAF détermine le montant réellement versé. La crèche ne '
+      +'perçoit pas le CMG : elle facture la mensualité ci-dessus.',8.5,'italic',GRIS,L,4);
+  }
+
+  /* ---- Le mot de la crèche ---- */
+  if(d.commentaire&&String(d.commentaire).trim()){
+    titreSection('Précisions');
+    para(d.commentaire,9.5,'normal',NOIR);
+  }
+
+  /* ---- Les mentions du réseau ---- */
+  const mentions=[RESEAU.devis_mentions,RESEAU.preavis_resiliation].filter(x=>x&&String(x).trim());
+  if(mentions.length||ech){
+    titreSection('Conditions');
+    if(ech)para('Ce devis est valable jusqu\'au '+dfr(ech)+'. Passé cette date, il devient caduc '
+      +'et un nouveau devis doit être établi.',9,'normal',NOIR,L,4.2);
+    mentions.forEach(m=>{y+=1.5;para(m,9,'normal',NOIR,L,4.2);});
+  }
+
+  /* ---- L'acceptation ---- */
+  /* Deux états pour un même cadre. Tant que le devis n'est pas signé, il porte
+     une zone à remplir à la main. Une fois signé en ligne, la même zone porte
+     le tracé et son horodatage : le document remis à la famille et celui
+     conservé par la crèche sont alors le même. */
+  const H_CADRE=d.signe_le?44:36;
+  place(H_CADRE+16);
+  y+=6;
+  titreSection('Acceptation');
+  const yc=y;
+  doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.4);
+  doc.roundedRect(G,yc-2,L,H_CADRE,3,3);
+  y=yc+4;
+  if(d.signe_le){
+    police(9,'normal',GRIS);
+    doc.text('Devis accepté et signé en ligne le '+dfr(d.signe_le)
+      +(d.signe_par?' par '+d.signe_par:''),G+5,y);
+    y+=5;
+    if(d.signature_png){
+      // Une signature tracée au doigt est plus large que haute. La hauteur est
+      // bornée, la largeur suit : déformer un tracé le rend méconnaissable.
+      try{doc.addImage(d.signature_png,'PNG',G+5,y,52,20);}
+      catch(err){console.warn('[pdf signature]',err);
+        police(9,'italic',GRIS);doc.text('(signature illisible)',G+5,y+8);}
+    }
+    police(8,'italic',GRIS);
+    doc.text('Signature électronique simple, recueillie sur la page d\'acceptation du devis.',G+5,yc+38);
+  }else{
+    police(9,'normal',GRIS);
+    doc.text('Écrire « Bon pour accord », dater et signer :',G+5,y);
+    y+=8;
+    doc.setDrawColor(210,204,230);doc.setLineWidth(.3);
+    doc.line(G+5,y+12,G+62,y+12);   // date
+    doc.line(G+72,y+12,D-5,y+12);   // signature
+    police(8,'normal',GRIS);
+    doc.text('Date',G+5,y+16);
+    doc.text('Signature du responsable légal',G+72,y+16);
+  }
+  y=yc+H_CADRE+4;
+
+  /* ---- Pieds de page, une fois toutes les pages connues ---- */
+  const np=doc.getNumberOfPages();
+  const pied=[e.raison_sociale||'Koala Kids',
+              e.siret?'SIRET '+e.siret:'',
+              RESEAU.pied_page||''].filter(Boolean).join('  ·  ');
+  for(let i=1;i<=np;i++){
+    doc.setPage(i);
+    doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.3);
+    doc.line(G,285,D,285);
+    doc.setFontSize(7.5);doc.setFont('helvetica','normal');
+    doc.setTextColor(GRIS[0],GRIS[1],GRIS[2]);
+    doc.text(doc.splitTextToSize(pied,L-24)[0]||'',G,289);
+    doc.text(i+' / '+np,D,289,{align:'right'});
+  }
+
+  const enf=((p.prenom||'')+'-'+(p.nom||'')).replace(/[^A-Za-zÀ-ÿ0-9-]/g,'').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  doc.save('devis-'+(d.numero||auj())+(enf?'-'+enf:'')+'.pdf');
+  toast('PDF téléchargé ✅');
 }
 
 /* ---------- TARIFS ET FRAIS ---------- */
@@ -1874,6 +2279,8 @@ const NOTICE_INS=`
 <p style="margin-top:10px"><b>Les tarifs et les frais.</b> Le bouton « Tarifs » de la barre du haut ouvre la grille. Un tarif d'accueil s'applique sur une fourchette horaire — borne basse incluse, borne haute exclue, de sorte qu'un contrat de 40 h pile ne puisse jamais relever de deux lignes à la fois. Les frais et les réductions se saisissent tous en montant positif : c'est la case « réduction » qui fait qu'une ligne se soustrait.</p>
 <p style="margin-top:10px"><b>Sauvegarder la grille.</b> En bas de cette même fenêtre, « Exporter » télécharge un fichier .json daté contenant tous les tarifs et tous les frais. Conservez-le hors de l'application : il permet de retrouver la grille si une ligne est écrasée ou supprimée par erreur. « Restaurer » relit ce fichier et présente les écarts avant d'écrire quoi que ce soit ; les lignes créées depuis l'export ne sont jamais supprimées.</p>
 <p style="margin-top:10px"><b>Modifier la grille ne réécrit aucun devis.</b> Un devis recopie libellé et montant au moment de son établissement, puis ne les relit plus. Une hausse de tarif s'applique aux devis suivants, jamais à ceux déjà envoyés. Supprimer une ligne de la grille est donc sans effet sur l'historique — restaurer une sauvegarde non plus.</p>
+<p style="margin-top:10px"><b>Le PDF du devis.</b> Le bouton <b>PDF</b> posé sur chaque devis produit le document à remettre à la famille, sans ouvrir le devis. Il est imprimé <b>depuis la base</b>, pas depuis l'écran : ce qui en sort est ce qui a été figé à l'établissement, même si la grille a bougé depuis. L'en-tête (raison sociale, SIRET, agrément PMI), la durée de validité et les mentions légales viennent du module <b>Paramètres</b> : ce qui n'y est pas renseigné laisse simplement un blanc sur le document. Un brouillon imprimé porte la mention « BROUILLON » — il n'engage personne tant qu'il n'est pas envoyé.</p>
+<p style="margin-top:10px"><b>La signature.</b> Tant que le devis n'est pas signé, le PDF porte un cadre « Bon pour accord » à remplir à la main. La signature en ligne, à venir, remplira ce même cadre avec le tracé de la famille et sa date : le document restera le même, seul le cadre changera.</p>
 <p style="margin-top:10px"><b>Accès.</b> Ce module est réservé à la direction : il contient des coordonnées et des revenus de familles qui ne seront peut-être jamais accueillies.</p>
 `;
 function openNotice(){document.getElementById('noticeBody').innerHTML=NOTICE_INS;openOv('ovNotice');}
