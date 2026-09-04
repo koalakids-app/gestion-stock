@@ -322,7 +322,9 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
     <div class="sec">Le tarif d'accueil</div>
     <div class="f"><label class="lb">Ligne de la grille</label><select id="dTarif" onchange="dSync()"></select></div>
-    <p class="hint" id="dTarifHint"></p>
+    <!-- div et non p : cette zone peut porter un encart d'alerte, et un div
+         dans un p referme le paragraphe silencieusement côté navigateur. -->
+    <div class="hint" id="dTarifHint"></div>
 
     <div class="sec">Frais et réductions</div>
     <div id="dFraisBox"></div>
@@ -1121,7 +1123,26 @@ async function openDevis(id){
 
   document.getElementById('dTarif').innerHTML='<option value="">— choix automatique —</option>'
     +TARIFS.filter(t=>t.actif).map(t=>'<option value="'+t.id+'">'+esc(t.libelle)+' · '+euro(t.montant)+'</option>').join('');
-  setVal('dTarif',DCUR&&DCUR.tarif_id?DCUR.tarif_id:'');
+  /* Un devis enregistre TOUJOURS son tarif_id, y compris quand la grille l'a
+     choisi toute seule — c'est ce qui fige le montant facturé. Mais le relire
+     tel quel à la réouverture transformait chaque choix automatique en « tarif
+     forcé » : le tarif cessait alors de suivre le volume horaire, et un contrat
+     rallongé après coup gardait le tarif de l'ancien. Un accueil passé de 20 h
+     à 52,5 h restait ainsi facturé 9,90 € au lieu de 9,00 €, sans que rien ne
+     le signale.
+
+     On ne pré-sélectionne donc la ligne que si elle diffère de ce que la grille
+     retiendrait aujourd'hui. Un forçage qui coïncide avec l'automatique se
+     comporte exactement pareil : l'indistinction est sans conséquence.
+     Volume incalculable (jours ou horaires manquants) : on garde la valeur
+     enregistrée, faute de quoi la comparer reviendrait à deviner. */
+  let forcage='';
+  if(DCUR&&DCUR.tarif_id){
+    const h0=dHeuresHebdo();
+    const auto=h0==null?null:tarifPour(h0,val('dCreche')||null);
+    if(!auto||String(auto.id)!==String(DCUR.tarif_id))forcage=DCUR.tarif_id;
+  }
+  setVal('dTarif',forcage);
 
   // Les frais cochés : ceux du devis s'il existe, sinon les « par défaut ».
   let coches=null;
@@ -1278,10 +1299,30 @@ function dSync(){
       +(Math.round(c.h*c.sem*100)/100)+' h sur '+c.sem+' semaines.'+origine;
 
   const th=document.getElementById('dTarifHint');
-  if(!c.tarif)th.textContent=c.h==null?'Le tarif se déduit du volume hebdomadaire.'
-    :'Aucune ligne de la grille ne couvre '+c.h+' h par semaine.';
-  else th.textContent=(val('dTarif')?'Tarif forcé : ':'Retenu automatiquement : ')
-    +c.tarif.libelle+' — '+euro(c.tarif.montant)+' '+(c.tarif.mode==='horaire'?'de l\'heure':(c.tarif.mode==='journee'?'la journée':'par mois'))+'.';
+  if(!c.tarif){
+    th.textContent=c.h==null?'Le tarif se déduit du volume hebdomadaire.'
+      :'Aucune ligne de la grille ne couvre '+nbFr(c.h)+' h par semaine.';
+  }else{
+    const forceId=val('dTarif');
+    const auto=c.h==null?null:tarifPour(c.h,val('dCreche')||null);
+    const base=(forceId?'Tarif forcé : ':'Retenu automatiquement : ')
+      +esc(c.tarif.libelle)+' — '+euro(c.tarif.montant)+' '
+      +(c.tarif.mode==='horaire'?'de l\'heure':(c.tarif.mode==='journee'?'la journée':'par mois'))+'.';
+    /* Un tarif forcé ne suit plus le volume : c'est sa raison d'être, et il y a
+       de bonnes raisons d'en poser un. Mais c'est aussi ce qui laisse facturer
+       9,90 € un contrat de 52,5 h que la grille place à 9,00 €. On ne corrige
+       pas d'office — le forçage est un choix, et l'écraser serait pire — mais
+       on montre l'écart et ce que la grille aurait retenu. */
+    let alerte='';
+    if(forceId&&auto&&String(auto.id)!==String(c.tarif.id)){
+      alerte='<div class="warn"><i class="ti ti-alert-triangle"></i><span>'
+        +'Ce tarif ne correspond pas au volume saisi. Pour '+esc(nbFr(c.h))
+        +' h par semaine, la grille retient <b>'+esc(auto.libelle)+'</b> à '
+        +euro(auto.montant)+'. Repassez sur « choix automatique » pour la suivre.'
+        +'</span></div>';
+    }
+    th.innerHTML=base+alerte;
+  }
 
   document.getElementById('dFraisHint').textContent=
     'Un montant en vert se soustrait du total. Les frais uniques et annuels sont présentés hors mensualité.';
