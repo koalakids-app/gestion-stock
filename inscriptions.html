@@ -15,7 +15,7 @@ a{color:inherit}
 .topbar{background:#fff;border-bottom:2px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;padding-top:calc(12px + env(safe-area-inset-top))}
 .topbar h1{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);flex:1}
 .topbar .who{font-size:12px;color:var(--muted);font-weight:600}
-.btn{border:none;border-radius:12px;padding:9px 14px;font-family:'Nunito';font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn{border:none;border-radius:12px;padding:9px 14px;font-family:'Nunito';font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
 .btn-p{background:var(--orange);color:#fff}
 .btn-s{background:var(--violet-l);color:var(--violet)}
 .btn-g{background:#F1EFF7;color:var(--muted)}
@@ -73,6 +73,8 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .hint{font-size:12px;color:var(--muted);line-height:1.6;margin:-4px 0 10px 3px}
 #loginView{max-width:360px;margin:60px auto;padding:0 16px}
 #loginView .md{max-height:none}
+#loginView .back{text-align:center;margin-top:14px}
+#loginView .back a{font-size:13px;font-weight:700;color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:5px}
 </style>
 </head>
 <body>
@@ -84,6 +86,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div class="f"><label class="lb">Mot de passe</label><input id="liPwd" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div id="liErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
     <div class="acts"><button class="btn btn-p" onclick="doLogin()"><i class="ti ti-login"></i> Se connecter</button></div>
+    <!-- Sortie de secours. En PWA installee il n'y a pas de bouton « precedent » :
+         sans ce lien l'ecran de connexion est un cul-de-sac, y compris pour une
+         referente que boot() vient de rejeter faute d'etre direction. -->
+    <div class="back"><a href="index.html"><i class="ti ti-arrow-left"></i> Retour à l'accueil</a></div>
   </div>
 </div>
 
@@ -92,6 +98,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <i class="ti ti-clipboard-list" style="font-size:22px;color:var(--orange)"></i>
     <h1>Inscriptions</h1>
     <span class="who" id="whoAmI"></span>
+    <a class="btn btn-g btn-sm" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i></a>
     <button class="btn btn-g btn-sm" onclick="openNotice()" title="Mode d'emploi"><i class="ti ti-help"></i></button>
     <button class="btn btn-g btn-sm" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i></button>
   </div>
