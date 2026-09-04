@@ -1058,7 +1058,9 @@ function renderDevisList(){
       +'<div class="li" style="color:var(--muted)">'+euro(d.total_mensuel)+' par mois'
       +(d.reste_a_charge!=null?' · reste à charge '+euro(d.reste_a_charge):'')+esc(rev)+'</div>'
       +(d.envoye_le?'<div class="li"><i class="ti ti-send" style="color:var(--muted)"></i>Envoyé le '+dfr(d.envoye_le)+'</div>':'')
-      +(d.signe_le?'<div class="li"><i class="ti ti-writing-sign" style="color:var(--green)"></i>Signé le '+dfr(d.signe_le)+'</div>':'')
+      +(d.repondu_le?'<div class="li"><i class="ti ti-writing-sign" style="color:'
+        +(d.statut==='accepte'?'var(--green)':'var(--red)')+'"></i>'
+        +(d.statut==='accepte'?'Accepté':'Réponse')+' le '+dfr(d.repondu_le)+'</div>':'')
       +'</div>';
   }).join('');
 }
@@ -1104,14 +1106,21 @@ async function openDevis(id){
   /* Envoi et relance. Un devis clos — signé, refusé, annulé — ne s'envoie plus :
      le lien serait mort à l'arrivée, et relancer une famille qui a déjà répondu
      est le genre de maladresse qu'une application ne doit pas rendre possible. */
-  const clos=!!(DCUR&&(DCUR.signe_le||DCUR.refuse_le
+  const clos=!!(DCUR&&(DCUR.repondu_le
     ||['accepte','refuse','annule','expire'].indexOf(DCUR.statut)>=0));
   const bEnv=document.getElementById('btnEnvoiDev');
   bEnv.style.display=(DCUR&&!clos)?'':'none';
   bEnv.innerHTML=(DCUR&&DCUR.statut==='envoye')
     ? '<i class="ti ti-bell"></i> Relancer la famille'
     : '<i class="ti ti-send"></i> Envoyer à la famille';
-  document.getElementById('btnLienDev').style.display=(DCUR&&DCUR.jeton&&!clos)?'':'none';
+  /* Le lien s'obtient sur tout devis enregistré et non clos, qu'il ait déjà été
+     envoyé ou non : c'est la voie manuelle, et elle ne doit jamais dépendre du
+     bon fonctionnement du mail automatique. */
+  const bLien=document.getElementById('btnLienDev');
+  bLien.style.display=(DCUR&&!clos)?'':'none';
+  bLien.innerHTML=(DCUR&&DCUR.token)
+    ? '<i class="ti ti-link"></i> Le lien'
+    : '<i class="ti ti-link"></i> Créer le lien';
 
   const src=DCUR||p;
   document.getElementById('dCreche').innerHTML='<option value="">— à définir —</option>'
@@ -1518,21 +1527,22 @@ function lienDevis(jeton){
    qui permet de choisir entre relancer et téléphoner. */
 function etatEnvoi(d){
   if(!d)return '';
-  if(d.signe_le){
-    return '<b style="color:var(--green)">Signé en ligne le '+dfr(d.signe_le)
-      +(d.signe_par?' par '+esc(d.signe_par):'')+'.</b> Le PDF porte la signature.';
+  if(d.repondu_le&&d.statut==='accepte'){
+    return '<b style="color:var(--green)">Accepté par la famille le '+dfr(d.repondu_le)
+      +(d.repondu_par?', au nom de '+esc(d.repondu_par):'')+'.</b>'
+      +(d.signature_png?' Le PDF porte la signature.':' Sans signature en ligne.');
   }
-  if(d.refuse_le){
-    return '<b style="color:var(--red)">Refusé par la famille le '+dfr(d.refuse_le)+'.</b>'
+  if(d.repondu_le&&d.statut==='refuse'){
+    return '<b style="color:var(--red)">Refusé par la famille le '+dfr(d.repondu_le)+'.</b>'
       +(d.motif_refus?' Motif : '+esc(d.motif_refus):' Aucun motif indiqué.');
   }
   const bouts=[];
-  if(d.envoye_le)bouts.push('Envoyé le '+dfr(d.envoye_le)+(d.email_envoi?' à '+esc(d.email_envoi):''));
+  if(d.envoye_le)bouts.push('Envoyé le '+dfr(d.envoye_le)+(d.destinataires?' à '+esc(d.destinataires):''));
   if(d.vu_le)bouts.push('ouvert par la famille le '+dfr(d.vu_le));
   else if(d.envoye_le)bouts.push('<b>pas encore ouvert</b>');
   if(d.relances)bouts.push(d.relances+' relance'+(d.relances>1?'s':'')
     +(d.derniere_relance?', la dernière le '+dfr(d.derniere_relance):''));
-  if(d.jeton_expire_le)bouts.push('lien valable jusqu\'au '+dfr(d.jeton_expire_le));
+  if(d.expire_le)bouts.push('lien valable jusqu\'au '+dfr(d.expire_le));
   return (bouts.join(' · ')||'Ce devis a quitté le brouillon.')
     +' Il n\'est plus modifiable : établissez-en un nouveau pour le remplacer.';
 }
@@ -1544,13 +1554,45 @@ function destinatairesDevis(){
     .map(p=>p.email.trim());
 }
 
+/* Le lien vit indépendamment de l'envoi. On peut donc le créer et le
+   transmettre à la main — SMS, mail écrit soi-même, message sur le Padlet —
+   sans passer par Resend. C'est la porte de sortie quand le mail automatique
+   échoue, quand la famille n'a pas d'adresse, ou quand on veut simplement
+   vérifier la page avant de l'envoyer à qui que ce soit.
+
+   Le jeton n'est fabriqué qu'une fois : rappeler ce bouton recopie le même
+   lien, et n'invalide pas celui qui est déjà parti. Il n'est renouvelé que
+   s'il a expiré. */
 async function copierLienDevis(){
   const d=DEVIS.find(x=>String(x.id)===String(devisId));
-  if(!d||!d.jeton){toast('Ce devis n\'a pas de lien actif.',true);return;}
-  const url=lienDevis(d.jeton);
+  if(!d){toast('Enregistrez d\'abord le devis.',true);return;}
+  if(d.repondu_le){toast('Ce devis a déjà reçu une réponse.',true);return;}
+
+  let jeton=d.token;
+  const expire=d.expire_le?new Date(d.expire_le).getTime():0;
+  if(!jeton||expire<Date.now()){
+    await loadReseau();
+    const jours=Number(RESEAU.devis_validite_jours||30);
+    const fin=new Date();fin.setDate(fin.getDate()+jours);
+    const maj={token:nouveauJeton(),expire_le:fin.toISOString(),
+               updated_at:new Date().toISOString()};
+    const adr=destinatairesDevis();
+    if(adr.length)maj.destinataires=adr.join(', ');
+    const{error}=await sb.from('devis').update(maj).eq('id',d.id);
+    if(error){
+      console.error('[copierLienDevis]',error);
+      toast('Création du lien impossible : '+(error.message||'erreur inconnue'),true);
+      return;
+    }
+    Object.assign(d,maj);
+    jeton=maj.token;
+    document.getElementById('btnLienDev').innerHTML='<i class="ti ti-link"></i> Le lien';
+  }
+
+  const url=lienDevis(jeton);
   try{
     await navigator.clipboard.writeText(url);
-    toast('Lien copié — collez-le dans un SMS ou un mail.');
+    toast('Lien copié — collez-le dans votre mail ou un SMS.');
   }catch(e){
     // Le presse-papier est refusé hors HTTPS et dans certains navigateurs :
     // plutôt que d'échouer, on montre le lien pour qu'il soit copié à la main.
@@ -1561,7 +1603,7 @@ async function copierLienDevis(){
 async function envoyerDevis(){
   const d=DEVIS.find(x=>String(x.id)===String(devisId));
   if(!d){toast('Enregistrez d\'abord le devis.',true);return;}
-  if(d.signe_le||d.refuse_le){toast('Ce devis a déjà reçu une réponse.',true);return;}
+  if(d.repondu_le){toast('Ce devis a déjà reçu une réponse.',true);return;}
 
   const relance=(d.statut==='envoye');
   const adresses=destinatairesDevis();
@@ -1592,10 +1634,10 @@ async function envoyerDevis(){
        même lien : en poser un nouveau invaliderait celui que la famille a déjà
        dans sa boîte, et c'est souvent celui-là qu'elle rouvrira. On ne le
        renouvelle que s'il a expiré entre-temps. */
-    const expire=d.jeton_expire_le?new Date(d.jeton_expire_le).getTime():0;
-    const besoinJeton=!d.jeton||expire<Date.now();
-    const maj={email_envoi:adresses.join(', '),updated_at:new Date().toISOString()};
-    if(besoinJeton){maj.jeton=nouveauJeton();maj.jeton_expire_le=fin.toISOString();}
+    const expire=d.expire_le?new Date(d.expire_le).getTime():0;
+    const besoinJeton=!d.token||expire<Date.now();
+    const maj={destinataires:adresses.join(', '),updated_at:new Date().toISOString()};
+    if(besoinJeton){maj.token=nouveauJeton();maj.expire_le=fin.toISOString();}
     if(!relance){maj.statut='envoye';maj.envoye_le=new Date().toISOString();}
 
     const{error}=await sb.from('devis').update(maj).eq('id',d.id);
@@ -1706,6 +1748,9 @@ function joursTxt(v){
    envoyé le 20 court à partir du 20, sinon la famille reçoit un document déjà
    à moitié périmé. */
 function echeanceDevis(d){
+  // expire_le fait foi quand le lien a été créé : c'est la date que la famille
+  // a effectivement reçue dans son mail. Sinon on la déduit de la durée réseau.
+  if(d.expire_le)return String(d.expire_le).slice(0,10);
   const base=String(d.envoye_le||d.created_at||auj()).slice(0,10);
   const dt=new Date(base+'T00:00:00');
   if(isNaN(dt))return '';
@@ -1958,7 +2003,11 @@ function dessineDevis(d,lignes){
      une zone à remplir à la main. Une fois signé en ligne, la même zone porte
      le tracé et son horodatage : le document remis à la famille et celui
      conservé par la crèche sont alors le même. */
-  const H_CADRE=d.signe_le?44:36;
+  /* Signé en ligne = accepté ET tracé recueilli. `repondu_le` seul ne suffit
+     pas : il porte aussi les refus, et une acceptation saisie à la main par la
+     direction, sans signature à l'écran. */
+  const signeEnLigne=!!(d.repondu_le&&d.statut==='accepte'&&d.signature_png);
+  const H_CADRE=signeEnLigne?44:36;
   place(H_CADRE+16);
   y+=6;
   titreSection('Acceptation');
@@ -1966,10 +2015,10 @@ function dessineDevis(d,lignes){
   doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.4);
   doc.roundedRect(G,yc-2,L,H_CADRE,3,3);
   y=yc+4;
-  if(d.signe_le){
+  if(signeEnLigne){
     police(9,'normal',GRIS);
-    doc.text('Devis accepté et signé en ligne le '+dfr(d.signe_le)
-      +(d.signe_par?' par '+d.signe_par:''),G+5,y);
+    doc.text('Devis accepté et signé en ligne le '+dfr(d.repondu_le)
+      +(d.repondu_par?' par '+d.repondu_par:''),G+5,y);
     y+=5;
     if(d.signature_png){
       // Une signature tracée au doigt est plus large que haute. La hauteur est
