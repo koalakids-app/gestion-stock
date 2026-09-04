@@ -1611,6 +1611,7 @@ function rendreBascule(){
   if(p.ne_ou_a_naitre==='a_naitre')bloquants.push('l\'enfant est encore déclaré « à naître » — corrigez la fiche une fois né');
   if(!BS.crecheId)bloquants.push('aucune crèche retenue');
   if(!BS.jours.length)bloquants.push('le devis ne porte aucun jour d\'accueil');
+  if(!d.heure_debut||!d.heure_fin)bloquants.push('le devis ne porte pas d\'horaires');
 
   if(bloquants.length){
     h+='<div class="warn"><i class="ti ti-alert-triangle"></i><span><b>Bascule impossible en l\'état.</b><br>'
@@ -1621,9 +1622,22 @@ function rendreBascule(){
    +li('Prénom et nom',nom)
    +li('Date de naissance',dfr(p.dob))
    +li('Crèche',nomCreche(BS.crecheId))
-   +li('Date d\'entrée',dfr(d.date_debut))
    +li('Allergies',p.allergies)
    +li('Régime particulier',p.regime_repas||'aucun');
+
+  /* La date d'entrée se saisit ici, elle ne se lit pas. `enfants_contrats`
+     l'exige, et un devis peut fort bien avoir été accepté sans elle — « début
+     à convenir » est une situation courante. Le devis étant verrouillé une fois
+     accepté, cet écran est le seul endroit où elle peut encore être posée. */
+  const dDefaut=d.date_debut||p.date_entree_souhaitee||'';
+  h+='<div class="f" style="margin-top:10px"><label class="lb">Date d\'entrée — début du contrat</label>'
+   +'<input id="bsDate" type="date" value="'+esc(dDefaut)+'"></div>'
+   +'<p class="hint">'+(d.date_debut
+      ? 'Reprise du devis accepté. Modifiable si la famille a décalé son arrivée.'
+      : (p.date_entree_souhaitee
+         ? 'Le devis ne portait pas de date : celle-ci vient du souhait exprimé à la demande. Vérifiez-la.'
+         : '<b>Le devis ne portait aucune date d\'entrée.</b> Renseignez-la : le contrat d\'accueil en dépend.'))
+   +'</p>';
 
   h+='<div class="sec">Les parents rattachés <span style="font-size:12px;color:var(--muted);font-weight:600">('+PARENTS.length+')</span></div>';
   if(!PARENTS.length){
@@ -1638,7 +1652,6 @@ function rendreBascule(){
   h+='<div class="sec">Le contrat d\'accueil</div>'
    +li('Jours',BS.jours.map(j=>(JOURS.find(x=>x[0]===j)||[0,''])[1].toLowerCase()).filter(Boolean).join(', '))
    +li('Horaires',(d.heure_debut||'')+' – '+(d.heure_fin||''))
-   +li('Du',dfr(d.date_debut))
    +li('Au','sans terme');
   h+='<p class="hint">Le contrat reprend le <b>devis accepté</b>, pas les souhaits de la demande initiale : '
    +'c\'est lui qui engage. Il est créé sans date de fin — renseignez-la le jour du départ, depuis la fiche enfant.</p>';
@@ -1676,6 +1689,12 @@ function rendreBascule(){
 async function lancerBascule(){
   if(!BS)return;
   const p=BS.pre,d=BS.devis;
+  const dateEntree=val('bsDate');
+  if(!dateEntree){
+    toast('Renseignez la date d\'entrée : le contrat d\'accueil ne peut pas s\'en passer.',true);
+    const c=document.getElementById('bsDate');if(c)c.focus();
+    return;
+  }
   const b=document.getElementById('btnBsGo');
   b.disabled=true;b.textContent='Création…';
 
@@ -1688,7 +1707,7 @@ async function lancerBascule(){
       prenom:p.prenom||'',nom:p.nom||'',
       dob:p.dob||null,
       creche_id:BS.crecheId,
-      date_entree:d.date_debut||null,
+      date_entree:dateEntree,
       allergies:p.allergies||'',
       regime_repas:p.regime_repas||null
     };
@@ -1713,7 +1732,7 @@ async function lancerBascule(){
     // 3. Le contrat, tiré du devis accepté.
     const{error:eCt}=await sb.from('enfants_contrats').insert({
       enfant_id:enfantId,
-      date_debut:d.date_debut||null,
+      date_debut:dateEntree,
       date_fin:null,
       jours:BS.jours,
       heure_debut:d.heure_debut||null,
