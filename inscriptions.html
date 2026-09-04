@@ -268,14 +268,14 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
     <div class="sec">Le contrat</div>
     <div class="g2">
-      <div class="f"><label class="lb">Crèche</label><select id="dCreche" onchange="dSync()"></select></div>
+      <div class="f"><label class="lb">Crèche</label><select id="dCreche" onchange="dCrecheChange()"></select></div>
       <div class="f"><label class="lb">Début de l'accueil</label><input id="dDebut" type="date" onchange="dSync()"></div>
     </div>
     <div class="f"><label class="lb">Jours d'accueil</label><div id="dJoursBox" class="jr"></div></div>
     <div class="g3">
       <div class="f"><label class="lb">Arrivée</label><input id="dHd" type="time" onchange="dSync()"></div>
       <div class="f"><label class="lb">Départ</label><input id="dHf" type="time" onchange="dSync()"></div>
-      <div class="f"><label class="lb">Semaines facturées / an</label><input id="dSem" type="number" min="1" max="52" onchange="dSync()" oninput="dSync()"></div>
+      <div class="f"><label class="lb">Semaines facturées / an</label><input id="dSem" type="number" min="1" max="52" onchange="dSemManuel()" oninput="dSemManuel()"></div>
     </div>
     <p class="hint" id="dVol"></p>
 
@@ -906,6 +906,11 @@ async function delParent(){
    ne les touche plus. C'est la raison d'etre de devis_lignes : sans elle, une
    hausse de tarif reecrirait retroactivement des devis deja envoyes. */
 let DEVIS=[],devisId=null,DCUR=null,DCALC=null;
+/* Les semaines facturées vivent désormais sur la crèche (module Paramètres) :
+   le devis les lit au lieu de proposer 47 en dur. semManuel retient que la
+   direction a corrigé le nombre à la main, pour qu'un changement de crèche
+   n'écrase pas sa saisie. */
+let ETABS=[],semManuel=false;
 let CMG_BAREME=[],CMG_CFG={taux_max:0.85,ratio_3_6:0.5,plafond_horaire:10};
 const CMG_CFG_ID='00000000-0000-0000-0000-000000000002';
 
@@ -932,6 +937,21 @@ async function loadCmg(){
     // Le devis reste calculable sans barème : seule l'estimation CMG manquera.
     console.warn('[loadCmg]',e);CMG_BAREME=[];
   }
+}
+
+/* Table du module Paramètres. Son absence n'est pas bloquante : on retombe
+   sur 47, la valeur par défaut de devis.semaines_an. */
+async function loadEtabs(){
+  if(ETABS.length)return;
+  try{
+    const{data,error}=await sb.from('etablissements').select('creche_id,semaines_facturees');
+    if(error)throw error;
+    ETABS=data||[];
+  }catch(e){console.warn('[loadEtabs]',e);ETABS=[];}
+}
+function semainesDe(crecheId){
+  const e=ETABS.find(x=>String(x.creche_id)===String(crecheId));
+  return e&&e.semaines_facturees!=null?Number(e.semaines_facturees):null;
 }
 
 async function loadDevis(preId){
@@ -978,7 +998,7 @@ function ageAns(dob,dateRef){
 async function openDevis(id){
   const p=ficheId?PRE.find(x=>String(x.id)===String(ficheId)):null;
   if(!p){toast('Enregistrez d\'abord la demande.',true);return;}
-  await Promise.all([loadCmg(),TARIFS.length?Promise.resolve():chargeGrille()]);
+  await Promise.all([loadCmg(),loadEtabs(),TARIFS.length?Promise.resolve():chargeGrille()]);
 
   devisId=id;
   DCUR=id?DEVIS.find(x=>String(x.id)===String(id)):null;
@@ -1003,7 +1023,8 @@ async function openDevis(id){
   setVal('dCreche',src.creche_id||'');
   setVal('dDebut',(DCUR?DCUR.date_debut:p.date_entree_souhaitee)||'');
   setVal('dHd',src.heure_debut||'07:30');setVal('dHf',src.heure_fin||'18:00');
-  setVal('dSem',DCUR?DCUR.semaines_an:47);
+  semManuel=false;
+  setVal('dSem',DCUR?DCUR.semaines_an:(semainesDe(src.creche_id)||47));
 
   const jrs=toArr(src.jours).map(Number);
   document.getElementById('dJoursBox').innerHTML=JOURS.map(j=>
@@ -1070,6 +1091,18 @@ function dHeuresHebdo(){
   if(a==null||b==null||b<=a||!n)return null;
   return Math.round((b-a)/60*n*100)/100;
 }
+
+/* Changer de crèche change le calendrier de facturation. On suit la nouvelle
+   crèche, sauf si la direction a déjà corrigé le nombre à la main : sa saisie
+   l'emporte, sinon elle serait effacée sans prévenir. */
+function dCrecheChange(){
+  if(!semManuel){
+    const n=semainesDe(val('dCreche'));
+    if(n!=null)setVal('dSem',n);
+  }
+  dSync();
+}
+function dSemManuel(){semManuel=true;dSync();}
 
 /* Le coeur du calcul. Tout est ramené au MOIS : c'est le montant que la
    famille paiera, et celui sur lequel le CMG se plafonne.
@@ -1154,10 +1187,15 @@ function dSync(){
   const c=dCalcule();
   DCALC=c;
 
+  const ref=semainesDe(val('dCreche'));
+  const origine=ref==null
+    ? ' Aucune crèche retenue : valeur par défaut.'
+    : (Number(c.sem)===ref ? ' Nombre repris des paramètres de la crèche.'
+                           : ' Corrigé à la main — les paramètres de la crèche indiquent '+ref+' semaines.');
   document.getElementById('dVol').textContent=c.h==null
     ? 'Renseignez les jours et les horaires pour calculer le volume hebdomadaire.'
     : c.h+' h par semaine sur '+c.nj+' jour'+(c.nj>1?'s':'')+', soit '
-      +(Math.round(c.h*c.sem*100)/100)+' h sur '+c.sem+' semaines.';
+      +(Math.round(c.h*c.sem*100)/100)+' h sur '+c.sem+' semaines.'+origine;
 
   const th=document.getElementById('dTarifHint');
   if(!c.tarif)th.textContent=c.h==null?'Le tarif se déduit du volume hebdomadaire.'
