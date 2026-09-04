@@ -1121,8 +1121,12 @@ async function openDevis(id){
   setVal('dCom',DCUR?DCUR.commentaire:'');
   setVal('dNotes',DCUR?DCUR.notes_internes:'');
 
+  /* La fourchette figure dans la liste : c'est ici que le choix se fait, et une
+     ligne « Moins de 24 h » qui couvre en réalité tout volume horaire doit se
+     voir à l'endroit où elle est retenue, pas seulement dans l'écran Tarifs. */
   document.getElementById('dTarif').innerHTML='<option value="">— choix automatique —</option>'
-    +TARIFS.filter(t=>t.actif).map(t=>'<option value="'+t.id+'">'+esc(t.libelle)+' · '+euro(t.montant)+'</option>').join('');
+    +TARIFS.filter(t=>t.actif).map(t=>'<option value="'+t.id+'">'+esc(t.libelle)+' · '+euro(t.montant)
+      +(t.mode==='horaire'?' · '+esc(fourchette(t)):'')+'</option>').join('');
   /* Un devis enregistre TOUJOURS son tarif_id, y compris quand la grille l'a
      choisi toute seule — c'est ce qui fige le montant facturé. Mais le relire
      tel quel à la réouverture transformait chaque choix automatique en « tarif
@@ -1314,6 +1318,15 @@ function dSync(){
        pas d'office — le forçage est un choix, et l'écraser serait pire — mais
        on montre l'écart et ce que la grille aurait retenu. */
     let alerte='';
+    /* Une ligne horaire sans aucune borne s'applique à tous les contrats. Elle
+       est rarement voulue : c'est la signature d'une fourchette laissée vide à
+       la saisie. Tant qu'elle est là, tous les devis sortent au même tarif. */
+    if(c.tarif.mode==='horaire'&&c.tarif.heures_min==null&&c.tarif.heures_max==null){
+      alerte+='<div class="warn"><i class="ti ti-alert-triangle"></i><span>'
+        +'Cette ligne ne porte <b>aucune borne horaire</b> : elle s\'applique à tout '
+        +'volume, quel que soit le contrat. Complétez sa fourchette dans l\'écran '
+        +'Tarifs — sans quoi tous les devis sortiront à ce tarif.</span></div>';
+    }
     if(forceId&&auto&&String(auto.id)!==String(c.tarif.id)){
       alerte='<div class="warn"><i class="ti ti-alert-triangle"></i><span>'
         +'Ce tarif ne correspond pas au volume saisi. Pour '+esc(nbFr(c.h))
@@ -1879,14 +1892,48 @@ function tarifsEnConflit(){
     if(chevauche(act[i],act[j])){ids[act[i].id]=1;ids[act[j].id]=1;}
   return ids;
 }
-/* Tarif applicable a un volume hebdomadaire. Servira au devis ; ici il ne
-   nourrit que l'apercu de la modale. */
+/* Tarif applicable a un volume hebdomadaire.
+   On retient d'abord toutes les lignes qui couvrent le volume, puis on tranche —
+   au lieu de prendre la premiere venue dans l'ordre d'affichage.
+
+   Ce qui l'imposait : une borne laissee vide ne veut pas dire zero, elle veut
+   dire « pas de limite ». Une ligne « Moins de 24 h » enregistree sans borne
+   haute couvre donc TOUT volume horaire, et, premiere dans l'ordre, elle raflait
+   les contrats de 31,5 h comme de 52,5 h — factures 9,90 € au lieu de 9,50 € ou
+   9,00 €, sans que rien ne le signale. Un ecart de l'ordre de 185 € par mois sur
+   un temps plein.
+
+   La regle de depart, dans cet ordre :
+     1. une ligne propre a la creche l'emporte sur une ligne du reseau ;
+     2. la ligne la plus PRECISE l'emporte : deux bornes battent une, une borne
+        bat aucune. Une ligne sans borne redevient ainsi ce qu'elle devrait
+        etre — un filet de securite, jamais un vainqueur ;
+     3. a precision egale, la fourchette la plus ETROITE ;
+     4. a egalite encore, l'ordre d'affichage tranche.
+
+   La precision se compte avant la largeur, et non l'inverse : « a partir de
+   40 h » et une ligne sans borne sont toutes deux larges a l'infini, et les
+   comparer par la largeur les laissait a egalite — un contrat de 52,5 h
+   retombait alors sur la premiere dans l'ordre, c'est-a-dire la mauvaise.
+
+   Cela repare le symptome, pas la saisie : si AUCUNE ligne n'est bornee, elles
+   sont toutes aussi larges et la premiere gagne encore. La fourchette est donc
+   desormais ecrite dans la liste deroulante du devis, la ou le choix se voit. */
 function tarifPour(h,crecheId){
+  const bornes=t=>(t.heures_min==null?0:1)+(t.heures_max==null?0:1);
+  const largeur=t=>{
+    const a=t.heures_min==null?-Infinity:Number(t.heures_min);
+    const b=t.heures_max==null?Infinity:Number(t.heures_max);
+    return b-a;
+  };
   return TARIFS.filter(t=>t.actif)
     .filter(t=>!t.creche_id||!crecheId||String(t.creche_id)===String(crecheId))
-    .sort((a,b)=>(a.creche_id?0:1)-(b.creche_id?0:1)||a.ordre-b.ordre)
-    .find(t=>(t.heures_min==null||h>=Number(t.heures_min))
-           &&(t.heures_max==null||h<Number(t.heures_max)))||null;
+    .filter(t=>(t.heures_min==null||h>=Number(t.heures_min))
+             &&(t.heures_max==null||h<Number(t.heures_max)))
+    .sort((a,b)=>(a.creche_id?0:1)-(b.creche_id?0:1)
+              ||bornes(b)-bornes(a)
+              ||largeur(a)-largeur(b)
+              ||a.ordre-b.ordre)[0]||null;
 }
 
 async function openTarifs(){
