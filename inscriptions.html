@@ -12,9 +12,9 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Nunito',sans-serif;background:var(--cream);color:#2B2740;min-height:100dvh}
 a{color:inherit}
-.topbar{background:#fff;border-bottom:2px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;padding-top:calc(12px + env(safe-area-inset-top))}
+.topbar{background:#fff;border-bottom:2px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:9px;position:sticky;top:0;z-index:50;padding-top:calc(10px + env(safe-area-inset-top))}
 .topbar h1{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);flex:1}
-.topbar .who{font-size:12px;color:var(--muted);font-weight:600}
+.topbar .who{font-size:12.5px;color:var(--muted);font-weight:700;margin-right:4px}
 .btn{border:none;border-radius:12px;padding:9px 14px;font-family:'Nunito';font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
 .btn-p{background:var(--orange);color:#fff}
 .btn-s{background:var(--violet-l);color:var(--violet)}
@@ -22,6 +22,28 @@ a{color:inherit}
 .btn-d{background:var(--red-l);color:var(--red)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btn-sm{padding:6px 10px;font-size:12px}
+/* Boutons de la barre du haut. Cible tactile de 44 px, contour net et libelle
+   des qu'il y a la place : quatre pictogrammes gris pale de 12 px, tous de la
+   meme couleur, ne se distinguaient ni les uns des autres ni du fond. */
+.tbtn{min-height:44px;padding:0 14px;border-radius:14px;border:2px solid #D9D3F2;background:var(--violet-l);color:var(--violet);
+  font-family:'Nunito';font-weight:800;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+  text-decoration:none;white-space:nowrap;transition:background .15s,border-color .15s}
+.tbtn i{font-size:20px}
+.tbtn:hover{background:#E3DEF8;border-color:var(--violet)}
+.tbtn:active{transform:translateY(1px)}
+.tbtn:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+/* Les tarifs sont l'action la plus frequente de cette barre : elle porte la
+   couleur d'accent, les autres restent en second plan. */
+.tbtn.accent{background:var(--orange-l);border-color:#F7CFA8;color:var(--orange)}
+.tbtn.accent:hover{background:#FFE6CC;border-color:var(--orange)}
+.tbtn.danger{background:var(--red-l);border-color:#F3C9C9;color:var(--red)}
+.tbtn.danger:hover{background:#FADCDC;border-color:var(--red)}
+@media(max-width:1000px){.topbar .who{display:none}}
+@media(max-width:820px){
+  .tbtn span{display:none}
+  .tbtn{padding:0;width:44px;justify-content:center}
+  .topbar h1{font-size:18px}
+}
 .wrap{max-width:1040px;margin:0 auto;padding:16px;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
 .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
 /* 16px sur tous les champs : en dessous, iOS zoome automatiquement a la mise
@@ -103,6 +125,17 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 #loginView .md{max-height:none}
 #loginView .back{text-align:center;margin-top:14px}
 #loginView .back a{font-size:13px;font-weight:700;color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+/* Sauvegarde de la grille : boutons a cible tactile et liste des ecarts. */
+.sauv{display:flex;gap:9px;flex-wrap:wrap}
+.sauv .btn{min-height:44px;padding:0 16px;font-size:13.5px}
+.sauv .btn i{font-size:18px}
+.dif .gr{font-weight:800;color:var(--violet);margin:14px 0 4px;font-size:13.5px}
+.dif .gr:first-child{margin-top:0}
+.dif .ln{padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.55}
+.dif .k{font-weight:700}
+.dif .old{color:var(--muted);text-decoration:line-through}
+.dif .new{color:var(--green);font-weight:700}
+.dif .neuf{color:var(--amber);font-weight:700}
 </style>
 </head>
 <body>
@@ -126,10 +159,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <i class="ti ti-clipboard-list" style="font-size:22px;color:var(--orange)"></i>
     <h1>Inscriptions</h1>
     <span class="who" id="whoAmI"></span>
-    <button class="btn btn-g btn-sm" onclick="openTarifs()" title="Tarifs et frais"><i class="ti ti-cash"></i></button>
-    <a class="btn btn-g btn-sm" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i></a>
-    <button class="btn btn-g btn-sm" onclick="openNotice()" title="Mode d'emploi"><i class="ti ti-help"></i></button>
-    <button class="btn btn-g btn-sm" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i></button>
+    <button class="tbtn accent" onclick="openTarifs()" title="Tarifs et frais"><i class="ti ti-cash"></i><span>Tarifs</span></button>
+    <a class="tbtn" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i><span>Accueil</span></a>
+    <button class="tbtn" onclick="openNotice()" title="Mode d'emploi"><i class="ti ti-help"></i><span>Aide</span></button>
+    <button class="tbtn danger" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i><span>Quitter</span></button>
   </div>
 
   <div class="wrap">
@@ -333,7 +366,27 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <p class="hint">Les lignes cochées « proposée par défaut » sont pré-sélectionnées à l'établissement d'un devis.
       Une réduction se saisit en montant positif : c'est la case « réduction » qui la fait se soustraire.</p>
 
+    <div class="grp"><h4>Sauvegarde de la grille</h4></div>
+    <div class="sauv">
+      <button class="btn btn-s" onclick="exporterGrille()"><i class="ti ti-download"></i> Exporter</button>
+      <button class="btn btn-s" onclick="document.getElementById('fImport').click()"><i class="ti ti-upload"></i> Restaurer depuis un fichier…</button>
+      <input type="file" id="fImport" accept="application/json,.json" style="display:none" onchange="lireSauvegarde(event)">
+    </div>
+    <p class="hint" id="hSauv" style="margin-top:9px">Un fichier <b>.json</b> daté contenant toutes les lignes ci-dessus, à conserver hors de l'application. À la restauration, les écarts vous sont présentés avant toute écriture.</p>
+
     <div class="acts"><button class="btn btn-p" onclick="closeOv('ovTarifs')">Fermer</button></div>
+  </div>
+</div>
+
+<!-- ÉCARTS D'UNE RESTAURATION -->
+<div class="ov" id="ovSauv">
+  <div class="md" style="max-width:640px">
+    <h3><i class="ti ti-git-compare"></i> <span id="sTitle">Écarts relevés</span></h3>
+    <div class="dif" id="sBody"></div>
+    <div class="acts">
+      <button class="btn btn-g" onclick="closeOv('ovSauv')">Annuler</button>
+      <button class="btn btn-p" id="btnResto" onclick="restaurerGrille()"><i class="ti ti-history"></i> Appliquer</button>
+    </div>
   </div>
 </div>
 
@@ -1441,6 +1494,195 @@ function renderFrais(){
   }).join('');
 }
 
+/* ---------- SAUVEGARDE EXTERNE DE LA GRILLE ---------- */
+/* Un fichier .json tenu hors de Supabase. Il ne contient que la grille — aucun
+   nom de famille, aucun revenu — et se relit sur une base reconstruite : les
+   crèches y sont désignées par leur nom autant que par leur identifiant. Le
+   format est versionné pour qu'une relecture dans deux ans sache ce qu'elle lit. */
+const SAUV_FORMAT='koalakids-grille-tarifaire';
+const SAUV_VERSION=1;
+const CH_TARIF={libelle:'Libellé',description:'Description',mode:'Mode',montant:'Montant',
+  heures_min:'À partir de (h/sem.)',heures_max:'Jusqu\'à, exclu (h/sem.)',
+  actif:'Ligne active',ordre:'Ordre d\'affichage',creche_id:'Crèche'};
+const CH_FRAIS={libelle:'Libellé',description:'Description',type:'Périodicité',montant:'Montant',
+  est_reduction:'Réduction',par_defaut:'Proposée par défaut',
+  actif:'Ligne active',ordre:'Ordre d\'affichage',creche_id:'Crèche'};
+
+/* Comparaison indulgente : null, undefined et chaîne vide décrivent la même
+   absence de valeur, et 12 vaut 12.00. Sans cela la liste des écarts se
+   remplirait de différences qui n'en sont pas. */
+function nrm(v){
+  if(v==null||v==='')return '';
+  if(typeof v==='boolean')return v?'oui':'non';
+  if(typeof v==='number')return String(Math.round(v*1000)/1000);
+  const s=String(v).trim();
+  if(s!==''&&!isNaN(Number(s.replace(',','.'))))return String(Math.round(Number(s.replace(',','.'))*1000)/1000);
+  return s;
+}
+function affV(champ,v){
+  if(champ==='creche_id')return v?(nomCreche(v)||'crèche inconnue'):'toutes les crèches';
+  const n=nrm(v);
+  return n===''?'(vide)':n;
+}
+/* Clé d'appariement : le libellé et la crèche. Les identifiants ne survivent
+   pas à une reconstruction de base, les libellés si. */
+function cle(x){return nrm(x.libelle).toLowerCase()+'|'+nrm(x.creche_id);}
+
+function exporterGrille(){
+  if(!TARIFS.length&&!FRAIS.length){toast('Rien à exporter : la grille est vide.',true);return;}
+  const proj=(o,champs)=>{
+    const r={};
+    Object.keys(champs).forEach(k=>{r[k]=o[k]==null?null:o[k];});
+    r.creche_nom=o.creche_id?nomCreche(o.creche_id):null;
+    return r;
+  };
+  const payload={
+    format:SAUV_FORMAT,version:SAUV_VERSION,
+    exporte_le:new Date().toISOString(),
+    exporte_par:(PROF&&PROF.name)||'',
+    creches:CRECHES.map(c=>({id:c.id,name:c.name})),
+    tarifs:TARIFS.map(t=>proj(t,CH_TARIF)),
+    frais:FRAIS.map(f=>proj(f,CH_FRAIS))
+  };
+  const txt=JSON.stringify(payload,null,2);
+  const url=URL.createObjectURL(new Blob([txt],{type:'application/json'}));
+  const a=document.createElement('a');
+  a.href=url;a.download='koalakids-grille-'+auj()+'.json';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const h=document.getElementById('hSauv');
+  h.style.color='var(--green)';
+  h.textContent='Sauvegarde du '+dfr(auj())+' exportée : '+TARIFS.length+' tarif'+(TARIFS.length>1?'s':'')
+    +' et '+FRAIS.length+' frais. Rangez-la hors de l\'application.';
+}
+
+let PLAN=null;
+
+function lireSauvegarde(ev){
+  const f=ev.target.files&&ev.target.files[0];
+  ev.target.value=''; // pour pouvoir rouvrir deux fois le même fichier
+  if(!f)return;
+  const h=document.getElementById('hSauv');
+  const r=new FileReader();
+  r.onerror=()=>{h.style.color='var(--red)';h.textContent='Fichier illisible.';};
+  r.onload=()=>{
+    let d;
+    try{d=JSON.parse(r.result);}
+    catch(e){h.style.color='var(--red)';h.textContent='Ce fichier n\'est pas un JSON valide.';return;}
+    if(!d||d.format!==SAUV_FORMAT){
+      h.style.color='var(--red)';
+      h.textContent='Ce fichier ne provient pas de l\'export de la grille tarifaire.';return;
+    }
+    if(Number(d.version)>SAUV_VERSION){
+      h.style.color='var(--red)';
+      h.textContent='Sauvegarde écrite par une version plus récente de l\'application (format '+d.version+').';return;
+    }
+    h.style.color='';
+    h.textContent='Fichier du '+(d.exporte_le?dfr(d.exporte_le.slice(0,10)):'date inconnue')
+      +(d.exporte_par?' — export de '+d.exporte_par:'')+'.';
+    comparerSauvegarde(d);
+  };
+  r.readAsText(f);
+}
+
+/* Une crèche du fichier se retrouve par son identifiant, puis par son nom.
+   Une crèche disparue laisse la ligne sur « toutes les crèches » plutôt que
+   de pointer vers un identifiant qui n'existe plus. */
+function resoudreCreche(id,nom){
+  if(id&&CRECHES.some(c=>String(c.id)===String(id)))return id;
+  if(nom){
+    const c=CRECHES.find(x=>nrm(x.name).toLowerCase()===nrm(nom).toLowerCase());
+    if(c)return c.id;
+  }
+  return null;
+}
+
+function comparerSauvegarde(d){
+  const plan=[];
+  const passe=(fichier,base,champs,table,titre)=>{
+    (Array.isArray(fichier)?fichier:[]).forEach(fx=>{
+      const row={};
+      Object.keys(champs).forEach(k=>{if(k in fx)row[k]=fx[k];});
+      row.creche_id=resoudreCreche(fx.creche_id,fx.creche_nom);
+      const ex=base.find(b=>cle(b)===cle(row));
+      if(!ex){
+        plan.push({table:table,op:'insert',titre:titre+' · '+(row.libelle||'sans libellé'),row:row,diffs:[]});
+        return;
+      }
+      const diffs=[];
+      Object.keys(row).forEach(k=>{
+        if(nrm(row[k])!==nrm(ex[k]))diffs.push({label:champs[k]||k,de:ex[k],vers:row[k],champ:k});
+      });
+      if(diffs.length)plan.push({table:table,op:'update',id:ex.id,
+        titre:titre+' · '+(ex.libelle||'sans libellé'),row:row,diffs:diffs});
+    });
+  };
+  passe(d.tarifs,TARIFS,CH_TARIF,'tarifs','Tarif');
+  passe(d.frais,FRAIS,CH_FRAIS,'frais_annexes',"Frais");
+
+  // Ce qui existe en base sans figurer dans le fichier n'est jamais supprimé :
+  // une restauration ne doit pas effacer une ligne créée depuis l'export.
+  const enTrop=[]
+    .concat(TARIFS.filter(t=>!(d.tarifs||[]).some(f=>cle(Object.assign({},f,{creche_id:resoudreCreche(f.creche_id,f.creche_nom)}))===cle(t))).map(t=>'Tarif · '+t.libelle))
+    .concat(FRAIS.filter(x=>!(d.frais||[]).some(f=>cle(Object.assign({},f,{creche_id:resoudreCreche(f.creche_id,f.creche_nom)}))===cle(x))).map(x=>'Frais · '+x.libelle));
+
+  PLAN=plan;
+  const n=plan.length;
+  document.getElementById('sTitle').textContent=n
+    ? n+' ligne'+(n>1?'s':'')+' à restaurer' : 'Aucune différence';
+  let corps=n
+    ? plan.map(p=>'<div class="gr">'+esc(p.titre)
+        +(p.op==='insert'?' <span class="neuf">(à créer)</span>':'')+'</div>'
+        +(p.op==='insert'
+          ? '<div class="ln">Ligne absente de la base : elle sera ajoutée telle que le fichier la décrit.</div>'
+          : p.diffs.map(x=>'<div class="ln"><span class="k">'+esc(x.label)+'</span> : '
+              +'<span class="old">'+esc(affV(x.champ,x.de))+'</span> → '
+              +'<span class="new">'+esc(affV(x.champ,x.vers))+'</span></div>').join(''))
+      ).join('')
+    : '<p class="hint">Le fichier est identique à la grille en base : rien à restaurer.</p>';
+  if(enTrop.length)corps+='<div class="gr" style="color:var(--muted)">Conservées telles quelles</div>'
+    +'<div class="ln" style="color:var(--muted)">'+esc(enTrop.join(', '))
+    +' — absentes du fichier, elles ne sont pas supprimées.</div>';
+  document.getElementById('sBody').innerHTML=corps;
+  const b=document.getElementById('btnResto');
+  b.style.display=n?'':'none';
+  b.disabled=false;b.innerHTML='<i class="ti ti-history"></i> Appliquer';
+  openOv('ovSauv');
+}
+
+async function restaurerGrille(){
+  if(!PLAN||!PLAN.length)return;
+  const b=document.getElementById('btnResto');
+  b.disabled=true;b.textContent='Restauration…';
+  const h=document.getElementById('hSauv');
+  let n=0;
+  try{
+    for(const p of PLAN){
+      if(p.op==='insert'){
+        const{error}=await sb.from(p.table).insert(p.row);
+        if(error)throw error;
+      }else{
+        const row=Object.assign({},p.row,{updated_at:new Date().toISOString()});
+        const{error}=await sb.from(p.table).update(row).eq('id',p.id);
+        if(error)throw error;
+      }
+      n++;
+    }
+    closeOv('ovSauv');
+    PLAN=null;
+    await openTarifs(); // recharge la grille depuis la base
+    h.style.color='var(--green)';
+    h.textContent=n+' ligne'+(n>1?'s':'')+' restaurée'+(n>1?'s':'')+' à '
+      +new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+'.';
+    toast('Grille restaurée ✅');
+  }catch(e){
+    console.error('[restaurerGrille]',e);
+    b.disabled=false;b.innerHTML='<i class="ti ti-history"></i> Appliquer';
+    const msg=e.code==='42501'?'Droits insuffisants sur la grille.':(e.message||'erreur inconnue');
+    toast('Restauration interrompue après '+n+' ligne'+(n>1?'s':'')+' : '+msg,true);
+  }
+}
+
 /* Liste de creches commune aux deux modales : une ligne peut valoir pour tout
    le reseau (creche_id null) ou pour un seul site. */
 function optCreches(sel){
@@ -1629,8 +1871,9 @@ const NOTICE_INS=`
 <p style="margin-top:10px"><b>Crèches souhaitées et crèche retenue.</b> La famille peut en viser plusieurs ; la crèche retenue ne se renseigne qu'une fois la place attribuée. Les autres choix sont conservés : si une place se libère ailleurs, l'information est encore là.</p>
 <p style="margin-top:10px"><b>Les relances.</b> Renseignez une date de rappel : la demande remonte dans « À relancer » le jour venu. Les dossiers clos en sont exclus.</p>
 <p style="margin-top:10px"><b>Les revenus.</b> Ils ne servent qu'à estimer le CMG. Une fois le dossier clos, ils peuvent être effacés en base — l'estimation, elle, est conservée.</p>
-<p style="margin-top:10px"><b>Les tarifs et les frais.</b> Le bouton 💶 de la barre du haut ouvre la grille. Un tarif d'accueil s'applique sur une fourchette horaire — borne basse incluse, borne haute exclue, de sorte qu'un contrat de 40 h pile ne puisse jamais relever de deux lignes à la fois. Les frais et les réductions se saisissent tous en montant positif : c'est la case « réduction » qui fait qu'une ligne se soustrait.</p>
-<p style="margin-top:10px"><b>Modifier la grille ne réécrit aucun devis.</b> Un devis recopie libellé et montant au moment de son établissement, puis ne les relit plus. Une hausse de tarif s'applique aux devis suivants, jamais à ceux déjà envoyés. Supprimer une ligne de la grille est donc sans effet sur l'historique.</p>
+<p style="margin-top:10px"><b>Les tarifs et les frais.</b> Le bouton « Tarifs » de la barre du haut ouvre la grille. Un tarif d'accueil s'applique sur une fourchette horaire — borne basse incluse, borne haute exclue, de sorte qu'un contrat de 40 h pile ne puisse jamais relever de deux lignes à la fois. Les frais et les réductions se saisissent tous en montant positif : c'est la case « réduction » qui fait qu'une ligne se soustrait.</p>
+<p style="margin-top:10px"><b>Sauvegarder la grille.</b> En bas de cette même fenêtre, « Exporter » télécharge un fichier .json daté contenant tous les tarifs et tous les frais. Conservez-le hors de l'application : il permet de retrouver la grille si une ligne est écrasée ou supprimée par erreur. « Restaurer » relit ce fichier et présente les écarts avant d'écrire quoi que ce soit ; les lignes créées depuis l'export ne sont jamais supprimées.</p>
+<p style="margin-top:10px"><b>Modifier la grille ne réécrit aucun devis.</b> Un devis recopie libellé et montant au moment de son établissement, puis ne les relit plus. Une hausse de tarif s'applique aux devis suivants, jamais à ceux déjà envoyés. Supprimer une ligne de la grille est donc sans effet sur l'historique — restaurer une sauvegarde non plus.</p>
 <p style="margin-top:10px"><b>Accès.</b> Ce module est réservé à la direction : il contient des coordonnées et des revenus de familles qui ne seront peut-être jamais accueillies.</p>
 `;
 function openNotice(){document.getElementById('noticeBody').innerHTML=NOTICE_INS;openOv('ovNotice');}
