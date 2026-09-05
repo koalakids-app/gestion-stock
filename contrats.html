@@ -249,6 +249,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
     <div class="acts">
       <button class="btn btn-d" id="btnDelCt" style="display:none" onclick="delContrat()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn btn-s" id="btnPdfCt" style="display:none" onclick="pdfContrat(contratId)"><i class="ti ti-file-type-pdf"></i> Le PDF</button>
       <button class="btn btn-s" id="btnLienCt" style="display:none" onclick="copierLienContrat()"><i class="ti ti-link"></i> Le lien</button>
       <button class="btn btn-p" id="btnEnvoiCt" style="display:none" onclick="envoyerContrat()"><i class="ti ti-send"></i> Envoyer</button>
       <button class="btn btn-p" id="btnSignerCt" style="display:none" onclick="openContresignature()"><i class="ti ti-stamp"></i> Contresigner</button>
@@ -732,7 +733,13 @@ async function openDossier(kind,id){
   CTX={kind:kind,id:id};
   CSUJ=normaliser(kind,id);
   if(!CSUJ){toast('Dossier introuvable — rechargez la page.',true);return;}
-  await loadContexte();
+  /* Les contrats sont RELUS à chaque ouverture de dossier. Ils vivent en
+     mémoire depuis le chargement de la page, et une famille qui signe le fait
+     ailleurs — sur son téléphone, pendant que cet écran est resté ouvert.
+     Sans cette relecture, la direction voyait « Envoyé » sur un contrat déjà
+     signé et concluait que rien n'avait bougé. C'est précisément dans ce
+     moment-là qu'on attend l'information. */
+  await Promise.all([loadContexte(),recharger()]);
   rendreDossier();
   openOv('ovDossier');
 }
@@ -821,10 +828,17 @@ function rendreDossier(){
     h+=l.map(c=>{
       const st=C_STATUTS[c.statut]||C_STATUTS.brouillon;
       const per=dfr(c.date_debut)+(c.date_fin?' au '+dfr(c.date_fin):' — sans terme');
+      /* Le PDF s'imprime sans ouvrir le contrat : c'est le geste le plus
+         fréquent une fois le contrat signé. stopPropagation empêche la carte
+         de s'ouvrir derrière la boîte de téléchargement. */
       return '<div class="par" onclick="openContrat(\''+c.id+'\',null)" style="cursor:pointer">'
         +'<div class="h"><b>'+esc(c.numero||'Sans numéro')+'</b>'
         +'<span class="tag" style="background:var(--violet-l);color:var(--violet)">'+esc(C_TYPES[c.type]||c.type)+'</span>'
-        +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span></div>'
+        +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>'
+        +'<button class="pdf" style="border:none;background:var(--violet-l);color:var(--violet);'
+        +'border-radius:10px;min-height:34px;padding:0 11px;font-family:Nunito;font-weight:800;'
+        +'font-size:12px;cursor:pointer" onclick="event.stopPropagation();pdfContrat(\''+c.id+'\')" '
+        +'title="Télécharger le PDF"><i class="ti ti-file-type-pdf"></i> PDF</button></div>'
         +'<div class="li" style="color:var(--muted)">Du '+esc(per)+'</div>'
         +'<div class="li" style="color:var(--muted)">'+euro(c.total_mensuel)+' par mois'
         +(c.reste_a_charge!=null?' · reste à charge '+euro(c.reste_a_charge):'')+'</div>'
@@ -1109,6 +1123,9 @@ async function openContrat(id,type){
   // d'autre : ni avant, ni deux fois.
   document.getElementById('btnSignerCt').style.display=
     (CCUR&&CCUR.statut==='signe')?'':'none';
+  // Le PDF ne s'imprime que depuis la base : un contrat jamais enregistré n'a
+  // ni numéro ni lignes, et sortirait un document sans identité.
+  document.getElementById('btnPdfCt').style.display=CCUR?'':'none';
 
   const lock=document.getElementById('cLock');
   lock.style.display=brouillon?'none':'';
@@ -1878,6 +1895,387 @@ async function recharger(){
     CONTRATS=data||[];
   }catch(e){console.warn('[recharger]',e);}
   render();
+}
+
+/* ---------- LE PDF DU CONTRAT ---------- */
+/* Le document est REDESSINÉ en texte, pas photographié. html2canvas aurait été
+   plus court à écrire, mais il produit une image : fichier lourd, texte ni
+   sélectionnable ni cherchable, et rendu dépendant de la largeur de l'écran
+   depuis lequel on imprime — le même contrat n'aurait pas sorti pareil depuis
+   la tablette et depuis le poste du bureau.
+
+   Deuxième parti pris, repris du devis : le PDF lit `contrats_lignes` EN BASE,
+   jamais le calcul à l'écran. Ce qui s'imprime est donc ce qui a été figé à
+   l'établissement du contrat, même si la grille tarifaire a bougé depuis.
+
+   C'est CE document qui répond à la question « où voit-on le contrat signé ».
+   Il porte les deux tracés — celui de la famille et celui de la crèche — avec
+   leurs dates. Tant qu'il n'est pas signé, il porte les deux cadres vides,
+   pour être imprimé et signé à la main : la voie papier reste ouverte. */
+const JSPDF_URL='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+
+/* jsPDF n'est chargé qu'au premier clic : 300 ko qu'il serait absurde de faire
+   payer à l'ouverture du module à quelqu'un qui vient consulter une liste. */
+function chargeJsPdf(){
+  if(window.jspdf&&window.jspdf.jsPDF)return Promise.resolve();
+  return new Promise((ok,ko)=>{
+    const s=document.createElement('script');
+    s.src=JSPDF_URL;
+    s.onload=()=>(window.jspdf&&window.jspdf.jsPDF)?ok():ko(new Error('jsPDF chargé mais introuvable.'));
+    s.onerror=()=>ko(new Error('jsPDF n\'a pas pu être téléchargé — vérifiez la connexion.'));
+    document.head.appendChild(s);
+  });
+}
+
+/* Montant pour le PDF. euro() passe par toLocaleString, qui sépare les
+   milliers par une espace insécable étroite (U+202F) que les polices standard
+   de jsPDF ne savent pas dessiner : le chiffre sortait troué. Ici l'espace est
+   une espace ordinaire. */
+function eurPdf(n){
+  const v=Math.round(Number(n||0)*100)/100;
+  const s=Math.abs(v).toFixed(2).replace('.',',');
+  const pt=s.split(',');
+  return (v<0?'- ':'')+pt[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ')+','+pt[1]+' €';
+}
+function adrCreche(id){const c=CRECHES.find(x=>String(x.id)===String(id));return (c&&c.addr)||'';}
+function joursTxt(v){
+  const j=toArr(v).map(Number);
+  return JOURS.filter(x=>j.indexOf(x[0])>=0).map(x=>x[1].toLowerCase()).join(', ');
+}
+
+async function pdfContrat(id){
+  const c=CONTRATS.find(x=>String(x.id)===String(id));
+  if(!c){toast('Enregistrez le contrat avant de l\'imprimer.',true);return;}
+  toast('Préparation du PDF…');
+  try{
+    await Promise.all([chargeJsPdf(),loadReseau()]);
+    // Le sujet et les parents : la fiche du dossier est ouverte, mais le PDF
+    // peut aussi être demandé depuis la liste. On s'assure du contexte.
+    if(!CSUJ||String(CSUJ.id)!==String(c.enfant_id||c.preinscription_id)){
+      const kind=c.enfant_id?'enfant':'pre';
+      CSUJ=normaliser(kind,c.enfant_id||c.preinscription_id);
+      if(CSUJ)await loadContexte();
+    }
+    const{data,error}=await sb.from('contrats_lignes').select('*')
+      .eq('contrat_id',c.id).order('ordre');
+    if(error)throw error;
+    dessineContrat(c,data||[]);
+  }catch(e){
+    console.error('[pdfContrat]',e);
+    toast('PDF impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+
+function dessineContrat(c,lignes){
+  const jsPDF=window.jspdf.jsPDF;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const G=16, D=194, L=D-G, BAS=278;   // marges et bas de page utile
+  let y=0;
+
+  const e=etabDe(c.creche_id);
+  const cr=nomCreche(c.creche_id);
+  const suj=CSUJ||{};
+  const VIOLET=[74,63,159], ORANGE=[244,121,32], GRIS=[142,138,168],
+        NOIR=[43,39,64], VERT=[46,158,107], TRAIT=[228,222,240];
+  const avenant=c.type==='avenant';
+
+  function police(t,s,k){doc.setFontSize(t);doc.setFont('helvetica',s||'normal');
+    const q=k||NOIR;doc.setTextColor(q[0],q[1],q[2]);}
+  function trait(k){const q=k||TRAIT;doc.setDrawColor(q[0],q[1],q[2]);doc.setLineWidth(.3);doc.line(G,y,D,y);}
+  function place(h){if(y+h>BAS){doc.addPage();y=20;}}
+  function ecrire(s,t,st,k,x,al){
+    police(t,st,k);
+    doc.text(String(s==null?'':s),x==null?G:x,y,al?{align:al}:undefined);
+  }
+  /* Un paragraphe qui se coupe tout seul et sait changer de page en cours de
+     route : les clauses d'un contrat peuvent faire quinze lignes comme trois. */
+  function para(s,t,st,k,larg,inter){
+    if(s==null||String(s).trim()==='')return;
+    police(t||9.5,st,k);
+    doc.splitTextToSize(String(s),larg||L).forEach(l=>{
+      place(inter||4.4);
+      doc.text(l,G,y);y+=(inter||4.4);
+    });
+  }
+  function titreSection(s){
+    place(14);y+=5;
+    ecrire(s.toUpperCase(),9,'bold',ORANGE);
+    y+=2;trait();y+=5;
+  }
+  function kv(k,v){
+    place(5);
+    police(9.5,'normal',GRIS);doc.text(String(k),G,y);
+    police(9.5,'bold',NOIR);doc.text(String(v==null?'—':v),G+56,y);
+    y+=5;
+  }
+
+  /* ---- En-tête : qui édite le contrat ---- */
+  y=18;
+  ecrire(e.raison_sociale||'Koala Kids',15,'bold',VIOLET);
+  y+=5.6;
+  [e.forme_juridique,
+   e.adresse_siege,
+   [e.siret?'SIRET '+e.siret:'',e.code_ape?'APE '+e.code_ape:''].filter(Boolean).join('  ·  '),
+   [e.telephone,e.email].filter(Boolean).join('  ·  ')
+  ].filter(Boolean).forEach(t=>{ecrire(t,8.5,'normal',GRIS);y+=4;});
+
+  let yd=18;
+  const dr=(s,t,st,k)=>{if(!s)return;police(t,st,k);doc.text(String(s),D,yd,{align:'right'});yd+=t<=8.5?4:5.4;};
+  dr(cr||'',11,'bold',NOIR);
+  dr(adrCreche(c.creche_id),8.5,'normal',GRIS);
+  dr(e.pmi_numero?'Agrément PMI '+e.pmi_numero:'',8.5,'normal',GRIS);
+  dr(e.pmi_date?'délivré le '+dfr(e.pmi_date):'',8.5,'normal',GRIS);
+
+  y=Math.max(y,yd)+4;
+  trait(VIOLET);y+=9;
+
+  /* ---- Le titre ---- */
+  const titre=(avenant?'AVENANT ':'CONTRAT D\'ACCUEIL ')+(c.numero||'');
+  ecrire(titre,15,'bold',VIOLET);
+  // La largeur se mesure AVEC la police du titre, avant d'en changer : mesurée
+  // en 9,5 pt elle vaut deux tiers de la vraie, et la mention venait se poser
+  // au milieu du numéro.
+  const apres=G+doc.getTextWidth(titre)+5;
+  if(c.type==='renouvellement'){police(9.5,'normal',GRIS);doc.text('renouvellement',apres,y);}
+  // Un brouillon imprimé doit se voir comme tel : rien n'empêche de le tendre
+  // à une famille par mégarde, et il n'engage personne.
+  if(c.statut==='brouillon'){
+    police(9,'bold',ORANGE);doc.text('BROUILLON',D,y,{align:'right'});
+  }else if(c.statut==='contresigne'){
+    police(9,'bold',VERT);doc.text('SIGNÉ DES DEUX PARTS',D,y,{align:'right'});
+  }else if(c.statut==='signe'){
+    police(9,'bold',ORANGE);doc.text('EN ATTENTE DE CONTRESIGNATURE',D,y,{align:'right'});
+  }else if(c.statut==='resilie'){
+    police(9,'bold',[198,40,40]);doc.text('RÉSILIÉ',D,y,{align:'right'});
+  }
+  y+=5.5;
+  ecrire('Établi le '+dfr(String(c.created_at||auj()).slice(0,10))
+    +(avenant&&c.date_effet?'  ·  prend effet le '+dfr(c.date_effet):''),9,'normal',GRIS);
+  y+=8;
+
+  /* ---- Les parties ---- */
+  /* Un contrat nomme ceux qu'il engage. C'est la différence de fond avec un
+     devis, qui ne faisait que chiffrer une proposition. */
+  titreSection('Entre les soussignés');
+  para('D\'une part, '+(e.raison_sociale||'la crèche')
+    +(e.forme_juridique?', '+e.forme_juridique:'')
+    +(e.siret?', SIRET '+e.siret:'')
+    +(e.adresse_siege?', dont le siège est situé '+e.adresse_siege:'')
+    +(e.representant_nom?', représentée par '+e.representant_nom
+      +(e.representant_qualite?', '+e.representant_qualite:''):'')
+    +(cr?', pour son établissement '+cr:'')+'.',9.5,'normal',NOIR,L,4.4);
+  y+=2;
+  const foyer=[c.famille_adresse,
+    [c.famille_code_postal,c.famille_ville].filter(Boolean).join(' ')]
+    .filter(Boolean).join(', ');
+  const signataires=(CPARENTS||[]).filter(p=>p.destinataire)
+    .map(p=>((p.prenom||'')+' '+(p.nom||'')).trim()+(p.lien?' ('+(LIENS[p.lien]||'').toLowerCase()+')':''))
+    .filter(Boolean);
+  para('D\'autre part, '+(signataires.length?signataires.join(' et '):'le ou les responsables légaux')
+    +(foyer?', demeurant '+foyer:'')
+    +(c.num_allocataire?', n° allocataire '+c.num_allocataire:'')+'.',9.5,'normal',NOIR,L,4.4);
+  y+=2;
+  para('Il a été convenu ce qui suit pour l\'accueil de '
+    +(((suj.prenom||'')+' '+(suj.nom||'')).trim()||'l\'enfant')
+    +(suj.dob?', né(e) le '+dfr(suj.dob):'')+'.',9.5,'normal',NOIR,L,4.4);
+
+  /* ---- L'accueil ---- */
+  titreSection(avenant?'Ce que l\'avenant modifie':'L\'accueil convenu');
+  const avecTerme=!!c.date_fin;
+  kv('Crèche',cr||'—');
+  kv('Début de l\'accueil',c.date_debut?dfr(c.date_debut):'à convenir');
+  kv('Fin de l\'accueil',avecTerme?dfr(c.date_fin):'sans terme prévu');
+  if(avenant&&c.date_effet)kv('Date d\'effet',dfr(c.date_effet));
+  kv('Jours d\'accueil',joursTxt(c.jours)||'—');
+  kv('Horaires',(String(c.heure_debut||'').slice(0,5))+' – '+(String(c.heure_fin||'').slice(0,5)));
+  kv('Volume hebdomadaire',nbFr(c.heures_hebdo)+' h par semaine');
+  if(avecTerme){
+    kv('Jours facturés',(c.jours_accueil!=null?c.jours_accueil+' jours':'—')
+      +(c.mois_factures?' sur '+nbFr(c.mois_factures)+' mois':''));
+  }else{
+    kv('Semaines facturées',c.semaines_an+' semaines par an');
+  }
+  y+=1;
+  para(avecTerme
+    ? 'La mensualité répartit les '+(c.jours_accueil!=null?c.jours_accueil:'—')+' jours d\'accueil de '
+      +'la période sur '+nbFr(c.mois_factures||0)+' mensualités égales. Elle est identique chaque mois, '
+      +'y compris pendant les périodes de fermeture, déjà déduites du nombre de jours facturés.'
+    : 'La mensualité est lissée sur douze mois : elle est identique chaque mois, y compris '
+      +'pendant les semaines de fermeture, déjà déduites du nombre de semaines facturées.',
+    8.5,'italic',GRIS,L,4);
+
+  /* ---- Le détail chiffré ---- */
+  titreSection('La mensualité');
+  const RECUR=['accueil','mensuel','unitaire'];
+  function unite(l){
+    if(l.type==='accueil')return c.tarif_mode==='horaire'?'h':(c.tarif_mode==='journee'?'j':'mois');
+    if(l.type==='unitaire')return 'j';
+    return '';
+  }
+  function detail(l){
+    const q=Number(l.quantite);
+    if(!q||q===1)return '';
+    const u=unite(l);
+    return nbFr(Math.round(q*100)/100)+(u?' '+u:'')+' × '+eurPdf(Math.abs(l.montant_unitaire));
+  }
+  function ligne(l){
+    const neg=Number(l.total)<0;
+    police(9.5,'normal',NOIR);
+    const nom=doc.splitTextToSize(String(l.libelle||''),82);
+    const des=l.description?doc.splitTextToSize(String(l.description),82):[];
+    const h=nom.length*4.3+des.length*3.6;
+    place(h+3);
+    nom.forEach((t,i)=>doc.text(t,G,y+i*4.3));
+    if(des.length){
+      police(8,'italic',GRIS);
+      des.forEach((t,i)=>doc.text(t,G,y+nom.length*4.3+i*3.6));
+    }
+    police(8.5,'normal',GRIS);
+    doc.text(detail(l),G+86,y);
+    police(10,'bold',neg?VERT:NOIR);
+    doc.text((neg?'- ':'')+eurPdf(Math.abs(l.total)),D,y,{align:'right'});
+    y+=h+2.4;
+    trait();y+=3.2;
+  }
+
+  const recu=lignes.filter(l=>RECUR.indexOf(l.type)>=0);
+  const hors=lignes.filter(l=>RECUR.indexOf(l.type)<0);
+  if(!recu.length)para('Aucune ligne récurrente.',9.5,'italic',GRIS);
+  recu.forEach(ligne);
+
+  place(12);y+=1;
+  police(11,'bold',VIOLET);
+  doc.text('TOTAL MENSUEL',G,y);
+  doc.setFontSize(14);
+  doc.text(eurPdf(c.total_mensuel),D,y,{align:'right'});
+  y+=4;trait(VIOLET);y+=4;
+
+  if(c.total_annuel){
+    place(6);
+    police(9,'normal',GRIS);
+    doc.text(avecTerme
+      ? 'Soit '+eurPdf(c.total_annuel)+' sur la durée du contrat ('+nbFr(c.mois_factures||0)+' mensualités).'
+      : 'Soit '+eurPdf(c.total_annuel)+' sur douze mois.',G,y);
+    y+=7;
+  }
+
+  if(hors.length){
+    titreSection('Hors mensualité');
+    hors.forEach(ligne);
+    para('Ces montants sont facturés en une seule fois ou une fois par an, en sus de la mensualité.',
+      8.5,'italic',GRIS,L,4);
+  }
+
+  /* ---- Le CMG ---- */
+  if(c.cmg_estime!=null){
+    titreSection('Estimation du complément de libre choix du mode de garde');
+    [['Coût mensuel',eurPdf(c.total_mensuel),NOIR],
+     ['CMG estimé, versé par la CAF','- '+eurPdf(c.cmg_estime),VERT]].forEach(([k,v,q])=>{
+      place(5.4);
+      police(9.5,'normal',GRIS);doc.text(k,G,y);
+      police(9.5,'bold',q);doc.text(v,D,y,{align:'right'});
+      y+=5.4;
+    });
+    y+=1;trait();y+=5.6;
+    police(11,'bold',VIOLET);doc.text('RESTE À CHARGE MENSUEL',G,y);
+    doc.setFontSize(14);doc.text(eurPdf(c.reste_a_charge),D,y,{align:'right'});
+    y+=6;
+    para('Estimation indicative, calculée à partir des revenus communiqués par la famille et du '
+      +'barème CAF en vigueur. Seule la CAF détermine le montant réellement versé. La crèche ne '
+      +'perçoit pas le CMG : elle facture la mensualité ci-dessus.',8.5,'italic',GRIS,L,4);
+  }
+
+  /* ---- Le mot de la crèche ---- */
+  if(c.commentaire&&String(c.commentaire).trim()){
+    titreSection('Précisions');
+    para(c.commentaire,9.5,'normal',NOIR);
+  }
+
+  /* ---- Les clauses, telles qu'elles ont été figées à l'envoi ---- */
+  const clauses=[
+    ['Résiliation et préavis',c.preavis_texte],
+    ['Conditions de résiliation',c.conditions_resiliation],
+    ['Mentions légales',c.mentions_legales]
+  ].filter(x=>x[1]&&String(x[1]).trim());
+  if(clauses.length){
+    titreSection('Les conditions du contrat');
+    clauses.forEach(x=>{
+      place(10);
+      ecrire(x[0],9.5,'bold',NOIR);y+=5;
+      para(x[1],9,'normal',NOIR,L,4.2);
+      y+=2;
+    });
+  }
+
+  /* ---- Les signatures ---- */
+  /* Deux cadres côte à côte : la famille à gauche, la crèche à droite. Chacun
+     porte son tracé et sa date s'il existe, et reste vide sinon — un contrat
+     non signé s'imprime ainsi pour être signé à la main, ce qui garde la voie
+     papier ouverte pour une famille sans smartphone. */
+  const H_CADRE=46;
+  place(H_CADRE+18);
+  y+=6;
+  titreSection('Signatures');
+  const yc=y;
+  const larg=(L-6)/2;
+  doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.4);
+  doc.roundedRect(G,yc-2,larg,H_CADRE,3,3);
+  doc.roundedRect(G+larg+6,yc-2,larg,H_CADRE,3,3);
+
+  function cadre(x,titre,sousTitre,png,quand,qui){
+    police(8.5,'bold',VIOLET);doc.text(titre,x+4,yc+3);
+    police(7.5,'normal',GRIS);doc.text(sousTitre,x+4,yc+7);
+    if(png){
+      // Une signature tracée au doigt est plus large que haute. La hauteur est
+      // bornée, la largeur suit : déformer un tracé le rend méconnaissable.
+      try{doc.addImage(png,'PNG',x+4,yc+9,larg-10,18);}
+      catch(err){console.warn('[pdf signature]',err);
+        police(8,'italic',GRIS);doc.text('(signature illisible)',x+4,yc+18);}
+      police(7.5,'normal',GRIS);
+      doc.text('Le '+dfr(quand),x+4,yc+32);
+      if(qui)doc.splitTextToSize(String(qui),larg-8).slice(0,2)
+        .forEach((t,i)=>doc.text(t,x+4,yc+36+i*3.6));
+    }else{
+      doc.setDrawColor(210,204,230);doc.setLineWidth(.3);
+      doc.line(x+4,yc+30,x+larg-4,yc+30);
+      police(7.5,'normal',GRIS);doc.text('Date et signature',x+4,yc+34);
+    }
+  }
+  const signeFamille=!!(c.signature_png&&c.repondu_le
+    &&['signe','contresigne','resilie'].indexOf(c.statut)>=0);
+  cadre(G,'LA FAMILLE',
+    signeFamille?'Signé en ligne':'Faire précéder de « Lu et approuvé »',
+    signeFamille?c.signature_png:null,c.repondu_le,c.repondu_par);
+  cadre(G+larg+6,'LA CRÈCHE',
+    c.contresignature_png?'Contresigné':'Pour l\'établissement',
+    c.contresignature_png||null,c.contresigne_le,c.contresigne_par);
+  y=yc+H_CADRE+4;
+
+  if(signeFamille||c.contresignature_png){
+    place(8);
+    para('Signature électronique simple au sens du règlement eIDAS, recueillie sur la page de '
+      +'signature du contrat. Elle vaut preuve de l\'accord des parties.',7.5,'italic',GRIS,L,3.6);
+  }
+
+  /* ---- Pieds de page, une fois toutes les pages connues ---- */
+  const np=doc.getNumberOfPages();
+  const pied=[e.raison_sociale||'Koala Kids',
+              e.siret?'SIRET '+e.siret:'',
+              RESEAU.pied_page||''].filter(Boolean).join('  ·  ');
+  for(let i=1;i<=np;i++){
+    doc.setPage(i);
+    doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.3);
+    doc.line(G,285,D,285);
+    doc.setFontSize(7.5);doc.setFont('helvetica','normal');
+    doc.setTextColor(GRIS[0],GRIS[1],GRIS[2]);
+    doc.text(doc.splitTextToSize(pied,L-24)[0]||'',G,289);
+    doc.text(i+' / '+np,D,289,{align:'right'});
+  }
+
+  const enf=((suj.prenom||'')+'-'+(suj.nom||'')).replace(/[^A-Za-zÀ-ÿ0-9-]/g,'')
+    .replace(/-+/g,'-').replace(/^-|-$/g,'');
+  doc.save((avenant?'avenant-':'contrat-')+(c.numero||auj())+(enf?'-'+enf:'')+'.pdf');
+  toast('PDF téléchargé ✅');
 }
 
 /* ---------- NOTICE ---------- */
