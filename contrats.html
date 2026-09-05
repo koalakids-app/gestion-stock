@@ -57,6 +57,16 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .card .nm{font-family:'Baloo 2',cursive;font-size:16px;color:var(--violet)}
 .card .sub{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.6}
 .tag{display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+/* Bouton posé sur une carte déjà cliquable. Cible tactile de 34 px, et la
+   variante « neuf » porte la couleur d'accent : c'est l'action qui manque, pas
+   une action parmi d'autres. */
+.card .pdf{border:none;background:var(--violet-l);color:var(--violet);border-radius:10px;
+  min-height:34px;padding:0 11px;font-family:'Nunito';font-weight:800;font-size:12px;
+  cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-left:auto}
+.card .pdf:hover{background:#E3DEF8}
+.card .pdf i{font-size:16px}
+.card .pdf.neuf{background:var(--orange);color:#fff}
+.card .pdf.neuf:hover{background:#E06A12}
 .empty{text-align:center;padding:40px 16px;color:var(--muted)}
 .empty i{font-size:34px;display:block;margin-bottom:8px;opacity:.5}
 .ov{display:none;position:fixed;inset:0;background:rgba(43,39,64,.45);z-index:100;align-items:center;justify-content:center;padding:14px}
@@ -509,10 +519,23 @@ function render(){
 
   const el=document.getElementById('list');
   if(!l.length){
-    el.innerHTML='<div class="empty"><i class="ti ti-file-off"></i><p>'
-      +(ENFANTS.length?'Aucun enfant ne correspond à ces filtres.'
-                      :'Aucun enfant enregistré. Les fiches enfants naissent de la bascule, dans le module Inscriptions.')
-      +'</p></div>';
+    /* Un écran vide doit dire POURQUOI il est vide. « Aucun résultat » sur un
+       filtre d'année posé par défaut laisse chercher un bouton qui n'existe
+       pas, alors que le réseau compte des dizaines d'enfants. */
+    let pq;
+    if(!ENFANTS.length){
+      pq='Aucun enfant enregistré. Les fiches enfants naissent de la bascule, '
+        +'dans le module Inscriptions.';
+    }else if(filtreEtat){
+      pq='Aucun enfant dans cet état pour l\'année '+(anneeFiltre?libelleAnnee(Number(anneeFiltre)):'retenue')
+        +'. Recliquez le compteur pour tout revoir.';
+    }else if(anneeFiltre&&base.length===0&&!q&&!cre){
+      pq='Aucun enfant accueilli sur l\'année '+libelleAnnee(Number(anneeFiltre))
+        +'. Choisissez une autre année dans la liste ci-dessus, ou « Toutes les années ».';
+    }else{
+      pq='Aucun enfant ne correspond à ces filtres.';
+    }
+    el.innerHTML='<div class="empty"><i class="ti ti-file-off"></i><p>'+esc(pq)+'</p></div>';
     return;
   }
   el.innerHTML=l.map(e=>{
@@ -532,16 +555,41 @@ function render(){
     }
     const avt=av?'<span class="tag" style="background:var(--violet-l);color:var(--violet)">'
       +av+' avenant'+(av>1?'s':'')+'</span>':'';
+    /* Le geste le plus fréquent de cet écran est d'établir le contrat qui
+       manque. Le laisser au fond de la fiche de l'enfant, sous le pli d'une
+       modale qui défile, revenait à le cacher. Il est donc posé sur la carte
+       elle-même — comme le bouton PDF l'est sur la carte d'un devis. Le
+       stopPropagation empêche la fiche de s'ouvrir derrière la modale du
+       contrat. */
+    const act=c
+      ? '<button class="pdf" onclick="event.stopPropagation();ouvrirFiche(\''+e.id+'\')">'
+        +'<i class="ti ti-file-search"></i> Ouvrir</button>'
+      : '<button class="pdf neuf" onclick="event.stopPropagation();nouveauContrat(\''+e.id+'\')">'
+        +'<i class="ti ti-file-plus"></i> Établir le contrat</button>';
     return '<div class="card" onclick="openEnfant(\''+e.id+'\')">'
       +'<div class="av"><i class="ti ti-mood-kid"></i></div><div class="bd">'
       +'<div class="nm">'+esc(nom)+'</div>'
       +'<div class="sub">'+esc(nomCreche(e.creche_id)||'crèche non renseignée')
       +(e.dob?' · né(e) le '+dfr(e.dob):'')+'<br>'+sub+'</div>'
-      +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+tag+avt+'</div>'
+      +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+      +tag+avt+act+'</div>'
       +'</div></div>';
   }).join('');
 }
 function setEtat(k){filtreEtat=(filtreEtat===k?'':k);render();}
+
+/* Deux entrées, deux gestes. « Ouvrir » montre l'historique des contrats de
+   l'enfant ; « Établir le contrat » va droit au formulaire, sans passer par la
+   fiche — c'est le geste attendu quand la carte annonce déjà qu'il n'y a pas
+   de contrat. */
+function ouvrirFiche(id){openEnfant(id);}
+async function nouveauContrat(id){
+  enfantId=id;
+  CENF=ENFANTS.find(x=>String(x.id)===String(id))||null;
+  if(!CENF){toast('Enfant introuvable.',true);return;}
+  CPARENT=null;
+  await openContrat(null,null);
+}
 
 /* ---------- LES CONTRATS D'UN ENFANT ---------- */
 function openEnfant(id){
@@ -558,7 +606,19 @@ function openEnfant(id){
   document.getElementById('btnAvenant').style.display=amendable?'':'none';
   CPARENT=amendable||null;
 
-  let h='<div class="kvb"><span>Crèche</span><b>'+esc(nomCreche(CENF.creche_id)||'—')+'</b></div>'
+  /* Le bouton d'action est répété EN HAUT de la fiche. Celui du bas, dans la
+     barre d'actions, se retrouve sous le pli dès que l'enfant a deux ou trois
+     contrats : on ne le voyait qu'en défilant, ce qui laissait croire qu'il
+     n'existait pas. */
+  let h='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
+    +'<button class="btn btn-p" onclick="openContrat(null,null)">'
+    +(courant?'<i class="ti ti-refresh"></i> Renouveler le contrat'
+             :'<i class="ti ti-file-plus"></i> Établir un contrat')+'</button>'
+    +(amendable?'<button class="btn btn-s" onclick="openContrat(null,\'avenant\')">'
+      +'<i class="ti ti-file-diff"></i> Établir un avenant</button>':'')
+    +'</div>';
+
+  h+='<div class="kvb"><span>Crèche</span><b>'+esc(nomCreche(CENF.creche_id)||'—')+'</b></div>'
     +'<div class="kvb"><span>Date d\'entrée</span><b>'+(CENF.date_entree?dfr(CENF.date_entree):'—')+'</b></div>'
     +(CENF.date_sortie?'<div class="kvb"><span>Date de sortie</span><b>'+dfr(CENF.date_sortie)+'</b></div>':'');
 
