@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Koala Kids — Contrats d'accueil</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8;--amber:#B8860B;--amber-l:#FFF6DC}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:#2B2740;min-height:100dvh}
+a{color:inherit}
+.topbar{background:#fff;border-bottom:2px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:9px;position:sticky;top:0;z-index:50;padding-top:calc(10px + env(safe-area-inset-top))}
+.topbar h1{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);flex:1}
+.topbar .who{font-size:12.5px;color:var(--muted);font-weight:700;margin-right:4px}
+.btn{border:none;border-radius:12px;padding:9px 14px;font-family:'Nunito';font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.btn-p{background:var(--orange);color:#fff}
+.btn-s{background:var(--violet-l);color:var(--violet)}
+.btn-g{background:#F1EFF7;color:var(--muted)}
+.btn-d{background:var(--red-l);color:var(--red)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-sm{padding:6px 10px;font-size:12px}
+.tbtn{min-height:44px;padding:0 14px;border-radius:14px;border:2px solid #D9D3F2;background:var(--violet-l);color:var(--violet);
+  font-family:'Nunito';font-weight:800;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+  text-decoration:none;white-space:nowrap;transition:background .15s,border-color .15s}
+.tbtn i{font-size:20px}
+.tbtn:hover{background:#E3DEF8;border-color:var(--violet)}
+.tbtn:active{transform:translateY(1px)}
+.tbtn:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+.tbtn.danger{background:var(--red-l);border-color:#F3C9C9;color:var(--red)}
+.tbtn.danger:hover{background:#FADCDC;border-color:var(--red)}
+@media(max-width:1000px){.topbar .who{display:none}}
+@media(max-width:820px){
+  .tbtn span{display:none}
+  .tbtn{padding:0;width:44px;justify-content:center}
+  .topbar h1{font-size:18px}
+}
+.wrap{max-width:1040px;margin:0 auto;padding:16px;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+input,select,textarea{font-family:'Nunito';font-size:16px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
+input:disabled,select:disabled,textarea:disabled{background:#FAF8FD;color:#6B6785}
+textarea{resize:vertical;min-height:70px}
+label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 4px 3px}
+.search{flex:1;min-width:170px}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.stat{background:#fff;border:2px solid var(--line);border-radius:14px;padding:9px 13px;cursor:pointer;flex:1;min-width:96px}
+.stat.on{border-color:var(--orange);background:var(--orange-l)}
+.stat .n{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);line-height:1.1}
+.stat .l{font-size:11px;font-weight:700;color:var(--muted)}
+.card{background:#fff;border:2px solid var(--line);border-radius:18px;padding:13px 15px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
+.card:hover{border-color:#DED6EE}
+.card .av{width:42px;height:42px;border-radius:14px;background:var(--violet-l);color:var(--violet);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.card .bd{flex:1;min-width:0}
+.card .nm{font-family:'Baloo 2',cursive;font-size:16px;color:var(--violet)}
+.card .sub{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.6}
+.tag{display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+.empty{text-align:center;padding:40px 16px;color:var(--muted)}
+.empty i{font-size:34px;display:block;margin-bottom:8px;opacity:.5}
+.ov{display:none;position:fixed;inset:0;background:rgba(43,39,64,.45);z-index:100;align-items:center;justify-content:center;padding:14px}
+.ov.on{display:flex}
+.md{background:#fff;border-radius:20px;padding:18px;max-width:660px;width:100%;max-height:90dvh;overflow-y:auto}
+.md h3{font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet);margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.md .acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:560px){.g2,.g3{grid-template-columns:1fr}}
+.f{margin-bottom:10px}
+.sec{font-family:'Baloo 2',cursive;font-size:14px;color:var(--orange);margin:16px 0 9px;padding-bottom:5px;border-bottom:2px solid var(--line)}
+.sec:first-of-type{margin-top:0}
+.ck{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;cursor:pointer;margin:0 14px 8px 0}
+.ck input{width:auto;height:19px;margin:0}
+.jr{display:flex;gap:6px;flex-wrap:wrap}
+.jr label{flex:1;min-width:62px;text-align:center;border:2px solid var(--line);border-radius:12px;padding:8px 4px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer}
+.jr input{display:none}
+.jr label:has(input:checked){border-color:var(--orange);background:var(--orange-l);color:var(--orange)}
+.par{border:2px solid var(--line);border-radius:14px;padding:11px 13px;margin-bottom:9px;background:#FCFBFE}
+.par .h{display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap}
+.par .h b{font-size:14px;color:var(--violet);flex:1}
+.par .li{font-size:12.5px;color:#555;margin-top:2px;display:flex;align-items:center;gap:6px}
+.lg{width:100%;border-collapse:collapse;font-size:13px}
+.lg td{padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.lg td.q{color:var(--muted);font-size:12px;white-space:nowrap}
+.lg td.m{text-align:right;font-weight:700;white-space:nowrap}
+.lg tr.neg td.m{color:var(--green)}
+.lg tr.tot td{border-top:2px solid var(--line);border-bottom:none;padding-top:10px;font-weight:800}
+.lg tr.tot td.m{font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet)}
+.box{border:2px solid var(--line);border-radius:14px;padding:12px 14px;background:#FCFBFE;margin-top:4px}
+.box .rac{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:8px;padding-top:8px;border-top:2px solid var(--line)}
+.box .rac b{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet)}
+.warn{background:var(--amber-l);color:var(--amber);border-radius:12px;padding:9px 12px;font-size:12.5px;font-weight:600;line-height:1.6;margin:8px 0;display:flex;gap:7px;align-items:flex-start}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#2B2740;color:#fff;padding:11px 18px;border-radius:14px;font-size:13.5px;font-weight:600;z-index:300;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
+.toast.on{opacity:1}
+.toast.err{background:var(--red)}
+.hint{font-size:12px;color:var(--muted);line-height:1.6;margin:-4px 0 10px 3px}
+.kvb{display:flex;justify-content:space-between;gap:12px;padding:6px 2px;border-bottom:1px solid var(--line);font-size:13.5px}
+.kvb span{color:var(--muted)}
+.kvb b{text-align:right}
+#loginView{max-width:360px;margin:60px auto;padding:0 16px}
+#loginView .md{max-height:none}
+#loginView .back{text-align:center;margin-top:14px}
+#loginView .back a{font-size:13px;font-weight:700;color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+</style>
+</head>
+<body>
+
+<div id="loginView" style="display:none">
+  <div class="md">
+    <h3><i class="ti ti-file-certificate"></i> Contrats d'accueil</h3>
+    <div class="f"><label class="lb">Adresse e-mail</label><input id="liMail" type="email" autocomplete="username"></div>
+    <div class="f"><label class="lb">Mot de passe</label><input id="liPwd" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div id="liErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
+    <div class="acts"><button class="btn btn-p" onclick="doLogin()"><i class="ti ti-login"></i> Se connecter</button></div>
+    <div class="back"><a href="index.html"><i class="ti ti-arrow-left"></i> Retour à l'accueil</a></div>
+  </div>
+</div>
+
+<div id="appView" style="display:none">
+  <div class="topbar">
+    <i class="ti ti-file-certificate" style="font-size:22px;color:var(--orange)"></i>
+    <h1>Contrats d'accueil</h1>
+    <span class="who" id="whoAmI"></span>
+    <a class="tbtn" href="inscriptions.html" title="Inscriptions"><i class="ti ti-clipboard-list"></i><span>Inscriptions</span></a>
+    <a class="tbtn" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i><span>Accueil</span></a>
+    <button class="tbtn" onclick="openNotice()" title="Mode d'emploi"><i class="ti ti-help"></i><span>Aide</span></button>
+    <button class="tbtn danger" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i><span>Quitter</span></button>
+  </div>
+
+  <div class="wrap">
+    <div class="stats" id="stats"></div>
+
+    <div class="bar">
+      <input class="search" id="fSearch" placeholder="Rechercher un enfant…" oninput="render()">
+      <select id="fCreche" style="width:auto;min-width:150px" onchange="render()"></select>
+      <select id="fAnnee" style="width:auto;min-width:160px" onchange="render()"></select>
+    </div>
+
+    <div id="list"></div>
+  </div>
+</div>
+
+<!-- LES CONTRATS D'UN ENFANT -->
+<div class="ov" id="ovEnfant">
+  <div class="md" style="max-width:660px">
+    <h3><i class="ti ti-mood-kid"></i> <span id="eTitle">Enfant</span></h3>
+    <div id="eBody"></div>
+    <div class="acts">
+      <button class="btn btn-g" onclick="closeOv('ovEnfant')">Fermer</button>
+      <button class="btn btn-s" id="btnAvenant" style="display:none" onclick="openContrat(null,'avenant')"><i class="ti ti-file-diff"></i> Établir un avenant</button>
+      <button class="btn btn-p" id="btnNouveauCt" onclick="openContrat(null,null)"><i class="ti ti-file-plus"></i> Établir un contrat</button>
+    </div>
+  </div>
+</div>
+
+<!-- UN CONTRAT -->
+<div class="ov" id="ovContrat">
+  <div class="md" style="max-width:760px">
+    <h3><i class="ti ti-file-certificate"></i> <span id="cTitle">Nouveau contrat</span> <span id="cStatut"></span></h3>
+    <p class="hint" id="cLock" style="display:none"></p>
+    <div id="cOrigine"></div>
+
+    <div class="sec">L'accueil contracté</div>
+    <div class="g3">
+      <div class="f"><label class="lb">Crèche</label><select id="cCreche" onchange="cCrecheChange()"></select></div>
+      <div class="f"><label class="lb">Début de l'accueil</label><input id="cDebut" type="date" onchange="cPeriodeChange()"></div>
+      <div class="f"><label class="lb">Fin de l'accueil</label><input id="cFin" type="date" onchange="cPeriodeChange()"></div>
+    </div>
+    <div class="f" id="cEffetBox" style="display:none">
+      <label class="lb">Date d'effet de l'avenant</label><input id="cEffet" type="date">
+      <p class="hint" style="margin-top:6px">L'avenant s'applique à partir de cette date. Le contrat d'origine reste
+        intact et couvre la période antérieure.</p>
+    </div>
+    <div class="f"><label class="lb">Jours d'accueil</label><div id="cJoursBox" class="jr"></div></div>
+    <div class="g3">
+      <div class="f"><label class="lb">Arrivée</label><input id="cHd" type="time" onchange="cSync()"></div>
+      <div class="f"><label class="lb">Départ</label><input id="cHf" type="time" onchange="cSync()"></div>
+      <div class="f"><label class="lb">Semaines facturées / an</label><input id="cSem" type="number" min="1" max="52" onchange="cSemManuel()" oninput="cSemManuel()"></div>
+    </div>
+    <div class="g3" id="cPeriodeBox" style="display:none">
+      <div class="f"><label class="lb">Jours d'accueil sur la période</label><input id="cJours" type="number" min="0" onchange="cSync()" oninput="cSync()"></div>
+      <div class="f"><label class="lb">Dont jours de fermeture déduits</label><input id="cFerm" type="number" min="0" onchange="cFermChange()" oninput="cFermChange()"></div>
+      <div class="f"><label class="lb">Mois facturés</label><input id="cMois" type="number" min="1" step="0.5" onchange="cSync()" oninput="cSync()"></div>
+    </div>
+    <div class="f"><label class="lb">Repas</label><select id="cRepas" onchange="cSync()">
+      <option value="">— non précisé —</option>
+      <option value="BIB">Biberon</option><option value="BB">Repas bébé</option>
+      <option value="M">Repas moyen</option><option value="G">Repas grand</option>
+    </select></div>
+    <p class="hint" id="cVol"></p>
+
+    <div class="sec">Le tarif</div>
+    <div class="f"><label class="lb">Ligne de la grille</label><select id="cTarif" onchange="cSync()"></select></div>
+    <div class="hint" id="cTarifHint"></div>
+
+    <div class="sec">Frais et réductions</div>
+    <div id="cFraisBox"></div>
+    <p class="hint">Un montant en vert se soustrait du total. Les frais uniques et annuels sont présentés hors mensualité.</p>
+
+    <div class="sec">Le détail chiffré</div>
+    <div id="cLignes"></div>
+
+    <div class="sec">Estimation du CMG</div>
+    <div class="g3">
+      <div class="f"><label class="lb">Situation</label><select id="cSit" onchange="cSync()">
+        <option value="couple">Couple</option><option value="isole">Parent isolé</option>
+      </select></div>
+      <div class="f"><label class="lb">Revenus annuels (N-2)</label><input id="cRev" type="number" step="1" min="0" oninput="cSync()"></div>
+      <div class="f"><label class="lb">Âge au début</label><input id="cAge" disabled></div>
+    </div>
+    <div id="cCmg"></div>
+
+    <div class="sec">Les coordonnées portées au contrat</div>
+    <p class="hint">Recopiées ici et figées : un contrat garde les coordonnées de la famille telles qu'elles étaient
+      à sa signature. Les modifier ne change rien à la fiche enfant.</p>
+    <div class="f"><label class="lb">Adresse du foyer</label><input id="cAdresse"></div>
+    <div class="g3">
+      <div class="f"><label class="lb">Code postal</label><input id="cCp"></div>
+      <div class="f" style="grid-column:span 2"><label class="lb">Ville</label><input id="cVille"></div>
+    </div>
+    <div class="f"><label class="lb">N° allocataire CAF / MSA</label><input id="cAlloc"></div>
+    <div class="f"><label class="lb">Signataires destinataires</label><input id="cDest" placeholder="aucun parent destinataire avec une adresse"></div>
+
+    <div class="f" style="margin-top:14px"><label class="lb">Commentaire porté sur le contrat</label><textarea id="cCom" placeholder="Visible par la famille."></textarea></div>
+    <div class="f"><label class="lb">Notes internes</label><textarea id="cNotes" placeholder="Jamais transmis à la famille."></textarea></div>
+
+    <div class="acts">
+      <button class="btn btn-d" id="btnDelCt" style="display:none" onclick="delContrat()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn btn-g" onclick="closeOv('ovContrat')">Fermer</button>
+      <button class="btn btn-p" id="btnSaveCt" onclick="saveContrat()"><i class="ti ti-check"></i> Enregistrer le brouillon</button>
+    </div>
+  </div>
+</div>
+
+<!-- NOTICE -->
+<div class="ov" id="ovNotice">
+  <div class="md" style="max-width:600px">
+    <h3><i class="ti ti-help"></i> Mode d'emploi</h3>
+    <div id="noticeBody" style="font-size:13.5px;line-height:1.8;color:#444"></div>
+    <div class="acts"><button class="btn btn-p" onclick="closeOv('ovNotice')">Fermer</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+let ME=null,PROF=null,IS_DIRECTION=false;
+let ENFANTS=[],CRECHES=[],ETABS=[],CONTRATS=[],TARIFS=[],FRAIS=[];
+let CMG_BAREME=[],CMG_CFG={taux_max:0.85,ratio_3_6:0.5,plafond_horaire:10};
+const CMG_CFG_ID='00000000-0000-0000-0000-000000000002';
+const RESEAU_CFG_ID='00000000-0000-0000-0000-000000000003';
+let RESEAU={devis_validite_jours:30,contrat_validite_jours:30,devis_mentions:'',
+            preavis_resiliation:'',conditions_resiliation:'',pied_page:''};
+let reseauCharge=false;
+
+let filtreEtat='',anneeFiltre='';
+let enfantId=null,contratId=null;
+let CCUR=null,CCALC=null,CTYPE='initial',CPARENT=null;
+let CPRE=null,CPARENTS=[],CENF=null,semManuel=false;
+
+const JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi']];
+const LIENS={mere:'Mère',pere:'Père',tuteur:'Tuteur / tutrice',autre:'Responsable légal'};
+const MODES={horaire:"à l'heure",mensuel:'par mois',journee:'par journée'};
+const TYPES={unique:'une seule fois',annuel:'chaque année',mensuel:'chaque mois',unitaire:"par jour d'accueil"};
+
+/* Les statuts d'un contrat. L'ordre est celui du cycle de vie : un contrat naît
+   brouillon, part chez la famille, revient signé, et n'est complet qu'une fois
+   contresigné par la crèche. `resilie` est une fin, pas un échec — un contrat
+   résilié a existé et a été facturé. */
+const C_STATUTS={
+  brouillon:  {l:'Brouillon',   bg:'#F1EFF7',fg:'#8E8AA8'},
+  envoye:     {l:'Envoyé',      bg:'#FFF1E3',fg:'#F47920'},
+  signe:      {l:'Signé',       bg:'#E6F5EE',fg:'#2E9E6B'},
+  contresigne:{l:'Contresigné', bg:'#E6F5EE',fg:'#1B6B47'},
+  refuse:     {l:'Refusé',      bg:'#FDE8E8',fg:'#C62828'},
+  expire:     {l:'Expiré',      bg:'#FFF6DC',fg:'#B8860B'},
+  annule:     {l:'Annulé',      bg:'#F1EFF7',fg:'#8E8AA8'},
+  resilie:    {l:'Résilié',     bg:'#FDE8E8',fg:'#C62828'}
+};
+const C_TYPES={initial:'Contrat initial',avenant:'Avenant',renouvellement:'Renouvellement'};
+
+/* Les états de la liste, du point de vue de la direction : ce qu'il reste à
+   faire. « Sans contrat » est le seul qui compte vraiment — un enfant accueilli
+   sans contrat signé est une anomalie de contrôle PMI. */
+const ETATS=[
+  ['sans',       'Sans contrat'],
+  ['brouillon',  'Brouillon'],
+  ['envoye',     'Chez la famille'],
+  ['signe',      'À contresigner'],
+  ['contresigne','Complet']
+];
+
+function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function closeOv(id){document.getElementById(id).classList.remove('on');}
+function openOv(id){document.getElementById(id).classList.add('on');}
+function val(id){const e=document.getElementById(id);return e?String(e.value).trim():'';}
+function chk(id){const e=document.getElementById(id);return !!(e&&e.checked);}
+function setVal(id,v){const e=document.getElementById(id);if(e)e.value=(v==null?'':v);}
+function setChk(id,v){const e=document.getElementById(id);if(e)e.checked=!!v;}
+function num(id){const v=val(id);return v===''?null:Number(String(v).replace(',','.'));}
+
+/* Date locale, jamais toISOString() : en UTC+2 celui-ci renvoie la veille pour
+   tout ce qui est saisi avant 2 h du matin. */
+function auj(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
+function toArr(v){
+  if(Array.isArray(v))return v;
+  if(typeof v==='string'){try{const p=JSON.parse(v);return Array.isArray(p)?p:[];}catch(e){return[];}}
+  return [];
+}
+function euro(n){return (Math.round(Number(n)*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';}
+function nbFr(n){const v=Math.round(Number(n||0)*100)/100;return String(v).replace('.',',');}
+
+/* ---------- L'ANNÉE SCOLAIRE ---------- */
+/* Chez Koala Kids un contrat court du 1er septembre au 31 août. Une date de
+   janvier appartient donc à l'année scolaire ouverte en septembre précédent :
+   sans cette bascule, un contrat signé en mars se rangerait dans l'année
+   suivante et disparaîtrait du filtre en cours. */
+function anneeScolaireDe(d){
+  if(!d)return null;
+  const p=String(d).slice(0,10).split('-').map(Number);
+  if(p.length!==3)return null;
+  return p[1]>=9?p[0]:p[0]-1;
+}
+function libelleAnnee(a){return a+' – '+(a+1);}
+function debutAnnee(a){return a+'-09-01';}
+function finAnnee(a){return (a+1)+'-08-31';}
+/* Un contrat appartient à une année scolaire dès qu'il la CHEVAUCHE, et non
+   seulement s'il y commence : un contrat de septembre à juin traverse l'année
+   entière, et le filtrer sur sa seule date de début le ferait disparaître dès
+   octobre. */
+function contratDansAnnee(c,a){
+  if(a==='')return true;
+  const d0=String(c.date_debut||'').slice(0,10);
+  const d1=String(c.date_fin||'9999-12-31').slice(0,10);
+  return d0<=finAnnee(Number(a))&&d1>=debutAnnee(Number(a));
+}
+
+/* ---------- AUTH ---------- */
+/* Même règle que inscriptions.html : arrivée depuis le hub index.html, qui
+   n'authentifie personne, donc déconnexion systématique et saisie obligatoire.
+   Un contrat porte les coordonnées et les revenus d'une famille : il ne doit
+   jamais s'ouvrir sur la session laissée par la personne précédente. */
+let JUSTE_CONNECTE=false;
+function showLogin(msg){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liErr').textContent=msg||'';
+}
+async function boot(){
+  if(!JUSTE_CONNECTE){
+    try{await sb.auth.signOut();}catch(e){console.warn('[boot] signOut',e);}
+    showLogin();return;
+  }
+  let session=null;
+  try{
+    const r=await sb.auth.getSession();
+    session=(r&&r.data&&r.data.session)||null;
+    if(session&&session.expires_at&&session.expires_at*1000<Date.now()+10000){
+      const{data:rd}=await sb.auth.refreshSession();
+      session=(rd&&rd.session)||null;
+    }
+  }catch(e){console.warn('[boot] session',e);session=null;}
+  if(!session||!session.user){showLogin();return;}
+  ME=session.user;
+  let p=null;
+  try{
+    const{data,error}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
+    if(error)throw error;
+    p=data;
+  }catch(e){
+    console.error('[boot] profil',e);
+    showLogin('Session expirée ou profil inaccessible — merci de vous reconnecter.');
+    return;
+  }
+  if(!p){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin('Compte non reconnu — contactez la direction.');
+    return;
+  }
+  PROF=p;
+  IS_DIRECTION=(p.role==='direction');
+  if(!IS_DIRECTION){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin('Ce module est réservé à la direction.');
+    return;
+  }
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('appView').style.display='block';
+  document.getElementById('whoAmI').textContent=(p.name||'')+' · Direction';
+  await loadAll();
+}
+async function doLogin(){
+  const e=val('liMail'),p=document.getElementById('liPwd').value;
+  const{error}=await sb.auth.signInWithPassword({email:e,password:p});
+  if(error){document.getElementById('liErr').textContent='Identifiants incorrects';return;}
+  JUSTE_CONNECTE=true;
+  document.getElementById('liPwd').value='';
+  boot().catch(err=>{console.error('[boot]',err);showLogin('Connexion impossible — réessayez.');});
+}
+async function doLogout(){await sb.auth.signOut();location.reload();}
+
+/* ---------- CHARGEMENT ---------- */
+async function loadAll(){
+  try{
+    const[en,cr,ct,et]=await Promise.all([
+      sb.from('enfants').select('id,prenom,nom,dob,creche_id,date_entree,date_sortie,allergies,regime_repas').order('nom'),
+      sb.from('creches').select('id,name,addr').order('name'),
+      sb.from('contrats').select('*').order('created_at',{ascending:false}),
+      sb.from('etablissements').select('*')
+    ]);
+    if(en.error)throw en.error;
+    if(ct.error)throw ct.error;
+    ENFANTS=en.data||[];CRECHES=cr.data||[];CONTRATS=ct.data||[];ETABS=et.data||[];
+  }catch(e){
+    console.error('[loadAll]',e);
+    const msg=(e.code==='42P01')
+      ? 'La table des contrats n\'existe pas — exécutez le script 31.'
+      : (e.message||'erreur inconnue');
+    toast('Chargement impossible : '+msg,true);
+    return;
+  }
+  document.getElementById('fCreche').innerHTML='<option value="">Toutes les crèches</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+
+  /* Les années proposées : celle en cours, les deux précédentes, la suivante.
+     Assez pour retrouver un contrat archivé sans noyer la liste déroulante. */
+  const a0=anneeScolaireDe(auj());
+  const annees=[a0+1,a0,a0-1,a0-2];
+  anneeFiltre=String(a0);
+  document.getElementById('fAnnee').innerHTML=
+    annees.map(a=>'<option value="'+a+'"'+(a===a0?' selected':'')+'>Année '+libelleAnnee(a)+'</option>').join('')
+    +'<option value="">Toutes les années</option>';
+  render();
+}
+
+function nomCreche(id){const c=CRECHES.find(x=>String(x.id)===String(id));return c?c.name:'';}
+function adrCreche(id){const c=CRECHES.find(x=>String(x.id)===String(id));return (c&&c.addr)||'';}
+function etabDe(id){return ETABS.find(x=>String(x.creche_id)===String(id))||{};}
+function semainesDe(id){
+  const e=etabDe(id);
+  return e&&e.semaines_facturees!=null?Number(e.semaines_facturees):null;
+}
+
+/* Les contrats d'un enfant, du plus récent au plus ancien. Les avenants
+   restent dans le lot : ce sont des documents à part entière, pas des versions
+   du contrat d'origine. */
+function contratsDe(id){
+  return CONTRATS.filter(c=>String(c.enfant_id)===String(id))
+    .sort((a,b)=>String(b.date_debut||'').localeCompare(String(a.date_debut||''))
+              ||String(b.created_at||'').localeCompare(String(a.created_at||'')));
+}
+/* Le contrat qui fait foi pour une année donnée : celui qui la chevauche, le
+   plus abouti, et à degré égal le plus récent. Un brouillon ne masque jamais
+   un contrat contresigné. */
+const RANG={contresigne:5,signe:4,envoye:3,brouillon:2,expire:1,refuse:0,annule:0,resilie:1};
+function contratCourant(id,annee){
+  const l=contratsDe(id).filter(c=>c.type!=='avenant').filter(c=>contratDansAnnee(c,annee));
+  if(!l.length)return null;
+  return l.slice().sort((a,b)=>(RANG[b.statut]||0)-(RANG[a.statut]||0)
+    ||String(b.date_debut||'').localeCompare(String(a.date_debut||'')))[0];
+}
+function etatEnfant(id,annee){
+  const c=contratCourant(id,annee);
+  if(!c)return 'sans';
+  if(['contresigne','signe','envoye','brouillon'].indexOf(c.statut)>=0)return c.statut;
+  return 'sans';   // refusé, annulé, expiré : il n'y a pas de contrat valable
+}
+
+/* Un enfant est concerné par l'année scolaire s'il y est accueilli : entré
+   avant sa fin, et pas sorti avant son début. Filtrer sur la seule date de
+   sortie ferait apparaître, en 2026, des enfants partis en 2024. */
+function enfantDansAnnee(e,a){
+  if(a==='')return !e.date_sortie||String(e.date_sortie)>=auj();
+  const d0=debutAnnee(Number(a)),d1=finAnnee(Number(a));
+  if(e.date_entree&&String(e.date_entree).slice(0,10)>d1)return false;
+  if(e.date_sortie&&String(e.date_sortie).slice(0,10)<d0)return false;
+  return true;
+}
+
+/* ---------- AFFICHAGE ---------- */
+function render(){
+  const q=val('fSearch').toLowerCase();
+  const cre=val('fCreche');
+  anneeFiltre=val('fAnnee');
+
+  let base=ENFANTS.filter(e=>enfantDansAnnee(e,anneeFiltre));
+  if(cre)base=base.filter(e=>String(e.creche_id)===cre);
+
+  // Les compteurs portent sur la crèche et l'année retenues, mais pas sur le
+  // filtre d'état : sinon cliquer « Sans contrat » ferait tomber les autres à
+  // zéro et on ne saurait plus où l'on en est.
+  const box=document.getElementById('stats');
+  box.innerHTML=ETATS.map(([k,l])=>{
+    const n=base.filter(e=>etatEnfant(e.id,anneeFiltre)===k).length;
+    return '<div class="stat'+(filtreEtat===k?' on':'')+'" onclick="setEtat(\''+k+'\')">'
+      +'<div class="n">'+n+'</div><div class="l">'+esc(l)+'</div></div>';
+  }).join('');
+
+  let l=base;
+  if(filtreEtat)l=l.filter(e=>etatEnfant(e.id,anneeFiltre)===filtreEtat);
+  if(q)l=l.filter(e=>((e.prenom||'')+' '+(e.nom||'')).toLowerCase().indexOf(q)>=0);
+
+  const el=document.getElementById('list');
+  if(!l.length){
+    el.innerHTML='<div class="empty"><i class="ti ti-file-off"></i><p>'
+      +(ENFANTS.length?'Aucun enfant ne correspond à ces filtres.'
+                      :'Aucun enfant enregistré. Les fiches enfants naissent de la bascule, dans le module Inscriptions.')
+      +'</p></div>';
+    return;
+  }
+  el.innerHTML=l.map(e=>{
+    const c=contratCourant(e.id,anneeFiltre);
+    const nom=((e.prenom||'')+' '+(e.nom||'')).trim()||'Sans nom';
+    const av=contratsDe(e.id).filter(x=>x.type==='avenant'&&contratDansAnnee(x,anneeFiltre)).length;
+    let tag,sub;
+    if(!c){
+      tag='<span class="tag" style="background:var(--red-l);color:var(--red)">'
+        +'<i class="ti ti-alert-triangle"></i> sans contrat</span>';
+      sub='Aucun contrat pour l\'année retenue.';
+    }else{
+      const st=C_STATUTS[c.statut]||C_STATUTS.brouillon;
+      tag='<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>';
+      sub=esc(c.numero||'sans numéro')+' · '+euro(c.total_mensuel)+' par mois'
+        +' · du '+dfr(c.date_debut)+(c.date_fin?' au '+dfr(c.date_fin):' sans terme');
+    }
+    const avt=av?'<span class="tag" style="background:var(--violet-l);color:var(--violet)">'
+      +av+' avenant'+(av>1?'s':'')+'</span>':'';
+    return '<div class="card" onclick="openEnfant(\''+e.id+'\')">'
+      +'<div class="av"><i class="ti ti-mood-kid"></i></div><div class="bd">'
+      +'<div class="nm">'+esc(nom)+'</div>'
+      +'<div class="sub">'+esc(nomCreche(e.creche_id)||'crèche non renseignée')
+      +(e.dob?' · né(e) le '+dfr(e.dob):'')+'<br>'+sub+'</div>'
+      +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+tag+avt+'</div>'
+      +'</div></div>';
+  }).join('');
+}
+function setEtat(k){filtreEtat=(filtreEtat===k?'':k);render();}
+
+/* ---------- LES CONTRATS D'UN ENFANT ---------- */
+function openEnfant(id){
+  enfantId=id;
+  CENF=ENFANTS.find(x=>String(x.id)===String(id))||null;
+  if(!CENF)return;
+  document.getElementById('eTitle').textContent=((CENF.prenom||'')+' '+(CENF.nom||'')).trim()||'Enfant';
+
+  const l=contratsDe(id);
+  const courant=contratCourant(id,anneeFiltre);
+  // Un avenant se rattache à un contrat existant : sans contrat au moins signé,
+  // il n'y aurait rien à amender.
+  const amendable=l.find(c=>c.type!=='avenant'&&['signe','contresigne'].indexOf(c.statut)>=0);
+  document.getElementById('btnAvenant').style.display=amendable?'':'none';
+  CPARENT=amendable||null;
+
+  let h='<div class="kvb"><span>Crèche</span><b>'+esc(nomCreche(CENF.creche_id)||'—')+'</b></div>'
+    +'<div class="kvb"><span>Date d\'entrée</span><b>'+(CENF.date_entree?dfr(CENF.date_entree):'—')+'</b></div>'
+    +(CENF.date_sortie?'<div class="kvb"><span>Date de sortie</span><b>'+dfr(CENF.date_sortie)+'</b></div>':'');
+
+  if(!l.length){
+    h+='<div class="warn" style="margin-top:12px"><i class="ti ti-alert-triangle"></i><span>'
+      +'<b>Aucun contrat d\'accueil.</b> L\'enfant est accueilli sans document signé : '
+      +'c\'est ce que la PMI relève en premier lors d\'un contrôle.</span></div>';
+  }else{
+    h+='<div class="sec" style="margin-top:16px">Les contrats</div>';
+    h+=l.map(c=>{
+      const st=C_STATUTS[c.statut]||C_STATUTS.brouillon;
+      const per=dfr(c.date_debut)+(c.date_fin?' au '+dfr(c.date_fin):' — sans terme');
+      return '<div class="par" onclick="openContrat(\''+c.id+'\',null)" style="cursor:pointer">'
+        +'<div class="h"><b>'+esc(c.numero||'Sans numéro')+'</b>'
+        +'<span class="tag" style="background:var(--violet-l);color:var(--violet)">'+esc(C_TYPES[c.type]||c.type)+'</span>'
+        +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span></div>'
+        +'<div class="li" style="color:var(--muted)">Du '+esc(per)+'</div>'
+        +'<div class="li" style="color:var(--muted)">'+euro(c.total_mensuel)+' par mois'
+        +(c.reste_a_charge!=null?' · reste à charge '+euro(c.reste_a_charge):'')+'</div>'
+        +(c.envoye_le?'<div class="li"><i class="ti ti-send" style="color:var(--muted)"></i>Envoyé le '+dfr(c.envoye_le)+'</div>':'')
+        +(c.repondu_le?'<div class="li"><i class="ti ti-writing-sign" style="color:'
+          +(c.statut==='refuse'?'var(--red)':'var(--green)')+'"></i>'
+          +(c.statut==='refuse'?'Refusé':'Signé')+' le '+dfr(c.repondu_le)+'</div>':'')
+        +(c.contresigne_le?'<div class="li"><i class="ti ti-stamp" style="color:var(--green)"></i>Contresigné le '
+          +dfr(c.contresigne_le)+(c.contresigne_par?' par '+esc(c.contresigne_par):'')+'</div>':'')
+        +'</div>';
+    }).join('');
+  }
+
+  // Le bouton principal change de sens selon ce qui existe déjà.
+  const b=document.getElementById('btnNouveauCt');
+  b.innerHTML=courant
+    ? '<i class="ti ti-refresh"></i> Renouveler'
+    : '<i class="ti ti-file-plus"></i> Établir un contrat';
+
+  document.getElementById('eBody').innerHTML=h;
+  openOv('ovEnfant');
+}
+
+/* ---------- LES DONNÉES DE CONTEXTE ---------- */
+async function loadGrille(){
+  if(TARIFS.length||FRAIS.length)return;
+  try{
+    const[t,f]=await Promise.all([
+      sb.from('tarifs').select('*').order('ordre'),
+      sb.from('frais_annexes').select('*').order('ordre')
+    ]);
+    if(t.error)throw t.error;
+    if(f.error)throw f.error;
+    TARIFS=t.data||[];FRAIS=f.data||[];
+  }catch(e){console.error('[loadGrille]',e);toast('Grille tarifaire inaccessible.',true);}
+}
+async function loadCmg(){
+  if(CMG_BAREME.length)return;
+  try{
+    const[b,c]=await Promise.all([
+      sb.from('cmg_bareme').select('*').eq('actif',true).order('ordre'),
+      sb.from('cmg_config').select('config').eq('id',CMG_CFG_ID).maybeSingle()
+    ]);
+    if(b.error)throw b.error;
+    CMG_BAREME=b.data||[];
+    if(c&&c.data&&c.data.config)CMG_CFG=Object.assign({},CMG_CFG,c.data.config);
+  }catch(e){console.warn('[loadCmg]',e);CMG_BAREME=[];}
+}
+async function loadReseau(){
+  if(reseauCharge)return;
+  try{
+    const{data,error}=await sb.from('reseau_config').select('config').eq('id',RESEAU_CFG_ID).maybeSingle();
+    if(error)throw error;
+    if(data&&data.config)RESEAU=Object.assign({},RESEAU,data.config);
+  }catch(e){console.warn('[loadReseau]',e);}
+  reseauCharge=true;
+}
+
+/* La préinscription d'origine et les parents de l'enfant. La première porte
+   l'adresse, le n° allocataire et les revenus, que `enfants` n'a pas ; les
+   seconds donnent les destinataires de l'envoi. Ni l'une ni les autres ne sont
+   bloquants : un enfant peut avoir été créé à la main, sans demande. */
+async function loadContexte(id){
+  CPRE=null;CPARENTS=[];
+  try{
+    const[pr,pa]=await Promise.all([
+      sb.from('preinscriptions').select('*').eq('enfant_id',id).maybeSingle(),
+      sb.from('enfants_parents').select('*').eq('enfant_id',id).order('created_at')
+    ]);
+    CPRE=(pr&&pr.data)||null;
+    CPARENTS=(pa&&pa.data)||[];
+  }catch(e){console.warn('[loadContexte]',e);}
+}
+/* Le devis accepté de la demande d'origine : c'est lui qui a servi de base à
+   l'accord, et donc au contrat initial. Un renouvellement n'en a pas — il part
+   du contrat de l'année écoulée et de la grille du jour. */
+async function devisAccepteDe(preId){
+  if(!preId)return null;
+  try{
+    const{data}=await sb.from('devis').select('*')
+      .eq('preinscription_id',preId).eq('statut','accepte')
+      .order('repondu_le',{ascending:false});
+    return (data&&data[0])||null;
+  }catch(e){console.warn('[devisAccepte]',e);return null;}
+}
+function destinatairesDe(){
+  return CPARENTS.filter(p=>p.destinataire&&p.email&&p.email.indexOf('@')>0)
+    .map(p=>p.email.trim());
+}
+
+/* ---------- LA NUMÉROTATION ---------- */
+/* Pas de séquence en base : le numéro se déduit du plus grand de l'année, puis
+   l'unicité est garantie par contrats_numero_uk. Deux postes qui créent un
+   contrat à la même seconde tomberaient sur le même numéro — c'est l'index qui
+   refuse le second, et saveContrat() réessaie. Une séquence Postgres aurait
+   évité la collision mais laissé des trous à chaque brouillon supprimé, et un
+   contrat numéroté C-2026-0042 quand il n'y en a que douze est une question
+   qu'on préfère ne pas avoir à expliquer au gestionnaire. */
+function prochainNumero(annee){
+  const prefixe='C-'+annee+'-';
+  const n=CONTRATS.filter(c=>String(c.numero||'').indexOf(prefixe)===0)
+    .map(c=>Number(String(c.numero).slice(prefixe.length).split('-')[0]))
+    .filter(x=>!isNaN(x));
+  const max=n.length?Math.max.apply(null,n):0;
+  return prefixe+String(max+1).padStart(4,'0');
+}
+/* Un avenant porte le numéro de son contrat, suffixé : C-2026-0007-A1. Le lien
+   se lit sans ouvrir la base, ce qui compte le jour où la PMI demande à voir
+   « le contrat et ses avenants ». */
+function numeroAvenant(parent){
+  const n=CONTRATS.filter(c=>String(c.parent_contrat_id)===String(parent.id)).length;
+  return (parent.numero||'C')+'-A'+(n+1);
+}
+
+/* ---------- LE CALCUL ---------- */
+/* Repris du devis, à l'identique et volontairement : le contrat doit produire
+   le même montant que le devis que la famille a accepté. Toute divergence entre
+   les deux calculs serait une divergence entre ce qui a été promis et ce qui
+   est facturé. */
+function cHeuresHebdo(){
+  const m=t=>{const r=/^(\d{1,2}):(\d{2})/.exec(t||'');return r?(+r[1])*60+(+r[2]):null;};
+  const a=m(val('cHd')),b=m(val('cHf'));
+  const n=document.querySelectorAll('.ckCJour:checked').length;
+  if(a==null||b==null||b<=a||!n)return null;
+  return Math.round((b-a)/60*n*100)/100;
+}
+function joursAccueilEntre(deb,fin,jours){
+  if(!deb||!fin||!jours||!jours.length)return null;
+  const d0=new Date(String(deb).slice(0,10)+'T12:00:00');
+  const d1=new Date(String(fin).slice(0,10)+'T12:00:00');
+  if(isNaN(d0)||isNaN(d1)||d1<d0)return null;
+  if((d1-d0)/86400000>1830)return null;
+  const set={};jours.forEach(j=>{set[Number(j)]=1;});
+  let n=0;
+  for(const d=new Date(d0);d<=d1;d.setDate(d.getDate()+1)){
+    const js=d.getDay()===0?7:d.getDay();
+    if(set[js])n++;
+  }
+  return n;
+}
+function moisEntre(deb,fin){
+  if(!deb||!fin)return null;
+  const a=String(deb).slice(0,10).split('-').map(Number);
+  const b=String(fin).slice(0,10).split('-').map(Number);
+  if(a.length!==3||b.length!==3)return null;
+  const n=(b[0]-a[0])*12+(b[1]-a[1])+1;
+  return n>0?n:null;
+}
+function fermetureEstimee(crecheId,nbJoursSemaine,mois){
+  const e=etabDe(crecheId);
+  const sem=e&&e.semaines_fermeture!=null?Number(e.semaines_fermeture):5;
+  if(!nbJoursSemaine||!mois)return 0;
+  return Math.round(sem*nbJoursSemaine*(mois/12));
+}
+function fourchette(t){
+  const a=t.heures_min,b=t.heures_max;
+  if(a==null&&b==null)return'tout volume horaire';
+  if(a==null)return'moins de '+b+' h par semaine';
+  if(b==null)return'à partir de '+a+' h par semaine';
+  return'de '+a+' h à moins de '+b+' h par semaine';
+}
+/* Départage identique au devis : crèche propre, puis la ligne la plus PRÉCISE,
+   puis la plus ÉTROITE, puis l'ordre. La précision se compte avant la largeur,
+   et pour mesurer une fourchette une borne basse absente vaut zéro — les deux
+   subtilités ont chacune coûté un aller-retour côté devis. */
+function tarifPour(h,crecheId){
+  const bornes=t=>(t.heures_min==null?0:1)+(t.heures_max==null?0:1);
+  const largeur=t=>{
+    const a=t.heures_min==null?0:Number(t.heures_min);
+    const b=t.heures_max==null?Infinity:Number(t.heures_max);
+    return b-a;
+  };
+  return TARIFS.filter(t=>t.actif)
+    .filter(t=>!t.creche_id||!crecheId||String(t.creche_id)===String(crecheId))
+    .filter(t=>(t.heures_min==null||h>=Number(t.heures_min))
+             &&(t.heures_max==null||h<Number(t.heures_max)))
+    .sort((a,b)=>(a.creche_id?0:1)-(b.creche_id?0:1)
+              ||bornes(b)-bornes(a)
+              ||largeur(a)-largeur(b)
+              ||a.ordre-b.ordre)[0]||null;
+}
+function ageAns(dob,dateRef){
+  if(!dob||!dateRef)return null;
+  const d0=new Date(String(dob).slice(0,10)+'T00:00:00');
+  const d1=new Date(String(dateRef).slice(0,10)+'T00:00:00');
+  if(isNaN(d0)||isNaN(d1))return null;
+  let a=d1.getFullYear()-d0.getFullYear();
+  const m=d1.getMonth()-d0.getMonth();
+  if(m<0||(m===0&&d1.getDate()<d0.getDate()))a--;
+  return a;
+}
+
+function cCalcule(){
+  const h=cHeuresHebdo();
+  const nj=document.querySelectorAll('.ckCJour:checked').length;
+  const sem=Number(val('cSem'))||47;
+  const creche=val('cCreche')||null;
+
+  const avecTerme=!!val('cFin');
+  const moisP=avecTerme?(Number(val('cMois'))||moisEntre(val('cDebut'),val('cFin'))||12):12;
+  const joursP=avecTerme?(val('cJours')===''?null:Number(val('cJours'))):null;
+  const jparmois=avecTerme?(joursP==null?null:joursP/moisP):nj*sem/12;
+  const hparjour=(nj&&h!=null)?h/nj:null;
+
+  let tarif=null;
+  const forc=val('cTarif');
+  if(forc)tarif=TARIFS.find(t=>String(t.id)===String(forc))||null;
+  else if(h!=null)tarif=tarifPour(h,creche);
+
+  const lignes=[];
+  if(tarif&&h!=null&&jparmois!=null){
+    let q,pu,tot;
+    if(tarif.mode==='horaire'){q=jparmois*(hparjour||0);pu=Number(tarif.montant);tot=q*pu;}
+    else if(tarif.mode==='journee'){q=jparmois;pu=Number(tarif.montant);tot=q*pu;}
+    else{q=1;pu=Number(tarif.montant);tot=pu;}
+    lignes.push({libelle:tarif.libelle,description:tarif.description||'',type:'accueil',
+      quantite:Math.round(q*1000)/1000,montant_unitaire:pu,total:Math.round(tot*100)/100,
+      unite:tarif.mode==='horaire'?'h':(tarif.mode==='journee'?'j':'mois')});
+  }
+
+  [...document.querySelectorAll('.ckCFrais:checked')].forEach(c=>{
+    const f=FRAIS.find(x=>String(x.id)===String(c.value));
+    if(!f)return;
+    const signe=f.est_reduction?-1:1;
+    let q=1,unite='';
+    if(f.type==='unitaire'){q=jparmois==null?0:jparmois;unite='j';}
+    lignes.push({libelle:f.libelle,description:f.description||'',type:f.type,
+      quantite:Math.round(q*1000)/1000,montant_unitaire:signe*Number(f.montant),
+      total:Math.round(signe*Number(f.montant)*q*100)/100,unite:unite});
+  });
+
+  const recur=['accueil','mensuel','unitaire'];
+  const mensuel=lignes.filter(l=>recur.indexOf(l.type)>=0).reduce((s,l)=>s+l.total,0);
+  const uniques=lignes.filter(l=>l.type==='unique').reduce((s,l)=>s+l.total,0);
+  const annuels=lignes.filter(l=>l.type==='annuel').reduce((s,l)=>s+l.total,0);
+
+  return{h:h,nj:nj,sem:sem,tarif:tarif,lignes:lignes,
+    avecTerme:avecTerme,mois:moisP,joursPeriode:joursP,jparmois:jparmois,
+    mensuel:Math.round(mensuel*100)/100,
+    uniques:Math.round(uniques*100)/100,
+    annuel:Math.round((mensuel*moisP+annuels)*100)/100};
+}
+
+function cCmgCalcule(mensuel){
+  const rev=val('cRev')===''?null:Number(val('cRev'));
+  const sit=val('cSit')||'couple';
+  const age=ageAns(CENF&&CENF.dob,val('cDebut'));
+  if(!CMG_BAREME.length)return{err:'Barème CMG non renseigné en base.'};
+  if(rev==null)return{err:'Renseignez les revenus du foyer pour estimer le CMG.'};
+  if(age==null)return{err:'Renseignez la date de naissance et la date de début pour estimer le CMG.'};
+  if(age>=6)return{err:'Le CMG s\'éteint aux 6 ans de l\'enfant.'};
+  const tr=CMG_BAREME.filter(b=>b.situation===sit)
+    .sort((a,b)=>(a.revenu_max==null?1:0)-(b.revenu_max==null?1:0)||Number(a.revenu_max)-Number(b.revenu_max))
+    .find(b=>b.revenu_max==null||rev<=Number(b.revenu_max));
+  if(!tr)return{err:'Aucune tranche de barème ne correspond à cette situation.'};
+  const ratio=age>=3?Number(CMG_CFG.ratio_3_6||0.5):1;
+  const plafondBareme=Math.round(Number(tr.montant)*ratio*100)/100;
+  const plafondCout=Math.round(mensuel*Number(CMG_CFG.taux_max||0.85)*100)/100;
+  const cmg=Math.min(plafondBareme,plafondCout);
+  return{age:age,bareme:plafondBareme,cout:plafondCout,
+    cmg:Math.round(cmg*100)/100,reste:Math.round((mensuel-cmg)*100)/100,
+    limite:plafondCout<plafondBareme?'cout':'bareme'};
+}
+
+/* ---------- LA MODALE ---------- */
+/* `type` : null pour ouvrir un contrat existant ou en créer un selon ce qui
+   existe, 'avenant' pour amender le contrat en cours. */
+async function openContrat(id,type){
+  if(!enfantId||!CENF){toast('Ouvrez d\'abord un enfant.',true);return;}
+  await Promise.all([loadGrille(),loadCmg(),loadReseau(),loadContexte(enfantId)]);
+
+  contratId=id;
+  CCUR=id?CONTRATS.find(x=>String(x.id)===String(id)):null;
+  const brouillon=!CCUR||CCUR.statut==='brouillon';
+
+  // Le type se déduit de l'existant, sauf demande explicite d'avenant.
+  if(CCUR){
+    CTYPE=CCUR.type;
+    CPARENT=CCUR.parent_contrat_id
+      ? CONTRATS.find(x=>String(x.id)===String(CCUR.parent_contrat_id))||null : null;
+  }else if(type==='avenant'){
+    CTYPE='avenant';
+    if(!CPARENT){toast('Aucun contrat signé à amender.',true);return;}
+  }else{
+    const precedent=contratsDe(enfantId).find(c=>c.type!=='avenant'
+      &&['signe','contresigne','resilie'].indexOf(c.statut)>=0);
+    CTYPE=precedent?'renouvellement':'initial';
+    CPARENT=null;
+  }
+
+  document.getElementById('cTitle').textContent=CCUR
+    ? (CCUR.numero||'Contrat') : ('Nouveau — '+(C_TYPES[CTYPE]||'contrat').toLowerCase());
+  const st=CCUR?(C_STATUTS[CCUR.statut]||C_STATUTS.brouillon):null;
+  document.getElementById('cStatut').innerHTML=st
+    ? '<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>':'';
+  document.getElementById('btnDelCt').style.display=(CCUR&&brouillon)?'':'none';
+  document.getElementById('btnSaveCt').style.display=brouillon?'':'none';
+
+  const lock=document.getElementById('cLock');
+  lock.style.display=brouillon?'none':'';
+  lock.innerHTML=brouillon?'':etatContrat(CCUR);
+
+  // La date d'effet n'a de sens que pour un avenant.
+  document.getElementById('cEffetBox').style.display=(CTYPE==='avenant')?'':'none';
+
+  /* D'où viennent les valeurs proposées, dans l'ordre de préférence :
+       un contrat existant  → ses propres chiffres, figés ;
+       un avenant neuf      → le contrat qu'il amende ;
+       un renouvellement    → le contrat de l'année écoulée, dates décalées ;
+       un contrat initial   → le devis accepté, qui est l'accord de la famille ;
+       à défaut             → la ligne technique de enfants_contrats.
+     Le devis n'est jamais relu pour un renouvellement : il chiffrait l'année
+     passée, à la grille de l'année passée. */
+  let src=null,origine='';
+  const devis=(!CCUR&&CTYPE==='initial')?await devisAccepteDe(CPRE&&CPRE.id):null;
+  if(CCUR){src=CCUR;}
+  else if(CTYPE==='avenant'&&CPARENT){src=CPARENT;origine='avenant';}
+  else if(CTYPE==='renouvellement'){
+    src=contratsDe(enfantId).find(c=>c.type!=='avenant'
+      &&['signe','contresigne','resilie'].indexOf(c.statut)>=0)||null;
+    origine='renouvellement';
+  }
+  else if(devis){src=devis;origine='devis';}
+
+  const ob=document.getElementById('cOrigine');
+  if(CCUR){ob.innerHTML='';}
+  else if(origine==='devis'){
+    ob.innerHTML='<div class="warn" style="background:var(--violet-l);color:var(--violet)">'
+      +'<i class="ti ti-file-euro"></i><span>Repris du <b>devis '+esc(devis.numero||'')+'</b>, accepté le '
+      +dfr(devis.repondu_le)+'. Les montants ci-dessous sont recalculés sur la grille du jour : '
+      +'vérifiez qu\'ils correspondent bien à ce que la famille a accepté.</span></div>';
+  }else if(origine==='renouvellement'&&src){
+    ob.innerHTML='<div class="warn" style="background:var(--violet-l);color:var(--violet)">'
+      +'<i class="ti ti-refresh"></i><span>Renouvellement du contrat <b>'+esc(src.numero||'')+'</b>. '
+      +'Les dates sont décalées d\'une année scolaire et le tarif suit la <b>grille en vigueur</b> — '
+      +'il peut donc différer de celui de l\'an passé.</span></div>';
+  }else if(origine==='avenant'&&src){
+    ob.innerHTML='<div class="warn" style="background:var(--violet-l);color:var(--violet)">'
+      +'<i class="ti ti-file-diff"></i><span>Avenant au contrat <b>'+esc(src.numero||'')+'</b>. '
+      +'Le contrat d\'origine reste intact : modifiez ici ce qui change, et posez la date d\'effet.</span></div>';
+  }else if(!CCUR&&!src){
+    ob.innerHTML='<div class="warn"><i class="ti ti-info-circle"></i><span>'
+      +'Aucun devis accepté ni contrat antérieur n\'a été retrouvé pour cet enfant. '
+      +'Le contrat part de la fiche enfant : vérifiez chaque ligne.</span></div>';
+  }
+
+  document.getElementById('cCreche').innerHTML='<option value="">— à définir —</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  setVal('cCreche',(src&&src.creche_id)||CENF.creche_id||'');
+
+  /* Un renouvellement décale les dates d'une année scolaire : du 1er septembre
+     au 31 août. C'est le cas normal, et le seul que l'application propose —
+     une entrée en cours d'année se corrige à la main. */
+  if(!CCUR&&CTYPE==='renouvellement'){
+    const a=anneeScolaireDe(auj());
+    setVal('cDebut',debutAnnee(a));
+    setVal('cFin',finAnnee(a));
+  }else{
+    setVal('cDebut',(src&&src.date_debut)||CENF.date_entree||'');
+    setVal('cFin',(src&&src.date_fin)||'');
+  }
+  setVal('cEffet',(CCUR&&CCUR.date_effet)||'');
+  setVal('cHd',(src&&src.heure_debut?String(src.heure_debut).slice(0,5):'')||'07:30');
+  setVal('cHf',(src&&src.heure_fin?String(src.heure_fin).slice(0,5):'')||'18:00');
+  semManuel=false;
+  setVal('cSem',(src&&src.semaines_an)||semainesDe(val('cCreche'))||47);
+  setVal('cRepas',(src&&src.repas)||CENF.repas_base||'');
+
+  const jrs=toArr(src&&src.jours).map(Number);
+  document.getElementById('cJoursBox').innerHTML=JOURS.map(j=>
+    '<label><input type="checkbox" class="ckCJour" value="'+j[0]+'"'
+    +((jrs.length?jrs:[1,2,3,4,5]).indexOf(j[0])>=0?' checked':'')+'><span>'+j[1]+'</span></label>').join('');
+  document.querySelectorAll('.ckCJour').forEach(c=>c.addEventListener('change',
+    ()=>{ if(val('cFin')&&!CCUR)cPeriodeChange(); else cSync(); }));
+
+  setVal('cSit',(CPRE&&CPRE.majoration_paje)?'isole':'couple');
+  setVal('cRev',(CPRE&&CPRE.revenus_foyer!=null)?CPRE.revenus_foyer:'');
+  setVal('cCom',(CCUR&&CCUR.commentaire)||'');
+  setVal('cNotes',(CCUR&&CCUR.notes_internes)||'');
+
+  // Les coordonnées : figées sur un contrat existant, reprises de la demande
+  // d'origine sur un contrat neuf.
+  setVal('cAdresse',CCUR?CCUR.famille_adresse:((CPRE&&CPRE.adresse)||''));
+  setVal('cCp',CCUR?CCUR.famille_code_postal:((CPRE&&CPRE.code_postal)||''));
+  setVal('cVille',CCUR?CCUR.famille_ville:((CPRE&&CPRE.ville)||''));
+  setVal('cAlloc',CCUR?CCUR.num_allocataire:((CPRE&&CPRE.num_allocataire)||''));
+  setVal('cDest',CCUR?CCUR.destinataires:destinatairesDe().join(', '));
+
+  document.getElementById('cTarif').innerHTML='<option value="">— choix automatique —</option>'
+    +TARIFS.filter(t=>t.actif).map(t=>'<option value="'+t.id+'">'+esc(t.libelle)+' · '+euro(t.montant)
+      +(t.mode==='horaire'?' · '+esc(fourchette(t)):'')+'</option>').join('');
+  /* Comme sur le devis : on ne pré-sélectionne la ligne que si elle DIFFÈRE de
+     ce que la grille retiendrait aujourd'hui. La relire telle quelle
+     transformerait chaque choix automatique en tarif forcé, et le tarif
+     cesserait de suivre le volume. */
+  let forcage='';
+  if(CCUR&&CCUR.tarif_id){
+    const h0=cHeuresHebdo();
+    const auto=h0==null?null:tarifPour(h0,val('cCreche'));
+    if(!auto||String(auto.id)!==String(CCUR.tarif_id))forcage=CCUR.tarif_id;
+  }
+  setVal('cTarif',forcage);
+
+  // Les frais cochés : ceux du contrat s'il existe, sinon ceux du devis
+  // d'origine, sinon les « par défaut » de la grille.
+  let coches=null;
+  if(CCUR){
+    try{
+      const{data}=await sb.from('contrats_lignes').select('libelle').eq('contrat_id',CCUR.id);
+      coches=(data||[]).map(x=>x.libelle);
+    }catch(e){console.warn('[contrats_lignes]',e);}
+  }else if(devis){
+    try{
+      const{data}=await sb.from('devis_lignes').select('libelle').eq('devis_id',devis.id);
+      coches=(data||[]).map(x=>x.libelle);
+    }catch(e){console.warn('[devis_lignes]',e);}
+  }
+  document.getElementById('cFraisBox').innerHTML=FRAIS.filter(f=>f.actif).map(f=>{
+    const on=coches?coches.indexOf(f.libelle)>=0:f.par_defaut;
+    return '<label class="ck"><input type="checkbox" class="ckCFrais" value="'+f.id+'"'+(on?' checked':'')+'> '
+      +esc(f.libelle)+' <span style="color:'+(f.est_reduction?'var(--green)':'var(--muted)')+'">('
+      +(f.est_reduction?'− ':'')+euro(f.montant)+' '+esc(TYPES[f.type]||f.type)+')</span></label>';
+  }).join('')||'<p class="hint">Aucun frais paramétré.</p>';
+  document.querySelectorAll('.ckCFrais').forEach(c=>c.addEventListener('change',cSync));
+
+  // Verrouillage visuel d'un contrat qui a quitté le brouillon.
+  ['cCreche','cDebut','cFin','cEffet','cHd','cHf','cSem','cRepas','cTarif','cSit','cRev',
+   'cAdresse','cCp','cVille','cAlloc','cDest','cCom','cNotes','cJours','cFerm','cMois'].forEach(i=>{
+    const e=document.getElementById(i);if(e)e.disabled=!brouillon;
+  });
+  document.querySelectorAll('.ckCJour,.ckCFrais').forEach(c=>c.disabled=!brouillon);
+
+  document.getElementById('cPeriodeBox').style.display=val('cFin')?'':'none';
+  if(CCUR&&CCUR.date_fin){
+    setVal('cJours',CCUR.jours_accueil!=null?CCUR.jours_accueil:'');
+    setVal('cMois',CCUR.mois_factures!=null?CCUR.mois_factures:'');
+    setVal('cFerm','');
+    cSync();
+  }else if(val('cFin')){
+    cPeriodeChange();
+  }else{
+    cSync();
+  }
+  openOv('ovContrat');
+}
+
+function etatContrat(c){
+  if(!c)return '';
+  if(c.statut==='contresigne'){
+    return '<b style="color:var(--green)">Contrat complet.</b> Signé par la famille le '+dfr(c.repondu_le)
+      +(c.repondu_par?' au nom de '+esc(c.repondu_par):'')+', contresigné le '+dfr(c.contresigne_le)
+      +(c.contresigne_par?' par '+esc(c.contresigne_par):'')+'.';
+  }
+  if(c.statut==='signe'){
+    return '<b style="color:var(--green)">Signé par la famille le '+dfr(c.repondu_le)+'.</b> '
+      +'Il reste à le contresigner : tant que la crèche ne l\'a pas fait, le contrat n\'est engagé que d\'un côté.';
+  }
+  if(c.statut==='refuse'){
+    return '<b style="color:var(--red)">Refusé par la famille le '+dfr(c.repondu_le)+'.</b>'
+      +(c.motif_refus?' Motif : '+esc(c.motif_refus):' Aucun motif indiqué.');
+  }
+  if(c.statut==='resilie'){
+    return '<b style="color:var(--red)">Résilié le '+dfr(c.resilie_le)+'.</b>'
+      +(c.resilie_fin_preavis?' Fin de préavis le '+dfr(c.resilie_fin_preavis)+'.':'')
+      +(c.resilie_motif?' Motif : '+esc(c.resilie_motif):'');
+  }
+  const b=[];
+  if(c.envoye_le)b.push('Envoyé le '+dfr(c.envoye_le)+(c.destinataires?' à '+esc(c.destinataires):''));
+  if(c.vu_le)b.push('ouvert par la famille le '+dfr(c.vu_le));
+  else if(c.envoye_le)b.push('<b>pas encore ouvert</b>');
+  if(c.expire_le)b.push('lien valable jusqu\'au '+dfr(c.expire_le));
+  return (b.join(' · ')||'Ce contrat a quitté le brouillon.')
+    +' Il n\'est plus modifiable : un changement en cours d\'année se porte par avenant.';
+}
+
+function cCrecheChange(){
+  if(!semManuel){
+    const n=semainesDe(val('cCreche'));
+    if(n!=null)setVal('cSem',n);
+  }
+  cSync();
+}
+function cSemManuel(){semManuel=true;cSync();}
+
+function cPeriodeChange(){
+  const fin=val('cFin'),deb=val('cDebut');
+  const box=document.getElementById('cPeriodeBox');
+  if(!fin){box.style.display='none';cSync();return;}
+  box.style.display='';
+  const jours=[...document.querySelectorAll('.ckCJour:checked')].map(c=>Number(c.value));
+  const bruts=joursAccueilEntre(deb,fin,jours);
+  const mois=moisEntre(deb,fin);
+  const ferm=fermetureEstimee(val('cCreche'),jours.length,mois);
+  setVal('cMois',mois||'');
+  setVal('cFerm',ferm);
+  setVal('cJours',bruts==null?'':Math.max(0,bruts-ferm));
+  cSync();
+}
+function cFermChange(){
+  const jours=[...document.querySelectorAll('.ckCJour:checked')].map(c=>Number(c.value));
+  const bruts=joursAccueilEntre(val('cDebut'),val('cFin'),jours);
+  if(bruts!=null)setVal('cJours',Math.max(0,bruts-(Number(val('cFerm'))||0)));
+  cSync();
+}
+
+function cSync(){
+  const c=cCalcule();
+  CCALC=c;
+
+  const ref=semainesDe(val('cCreche'));
+  const origine=ref==null
+    ? ' Aucune crèche retenue : valeur par défaut.'
+    : (Number(c.sem)===ref ? ' Nombre repris des paramètres de la crèche.'
+                           : ' Corrigé à la main — les paramètres de la crèche indiquent '+ref+' semaines.');
+  const vol=document.getElementById('cVol');
+  if(c.h==null){
+    vol.textContent='Renseignez les jours et les horaires pour calculer le volume hebdomadaire.';
+  }else if(c.avecTerme){
+    vol.textContent=c.h+' h par semaine sur '+c.nj+' jour'+(c.nj>1?'s':'')+'. '
+      +(c.joursPeriode==null
+        ? 'Renseignez les jours d\'accueil de la période.'
+        : c.joursPeriode+' jour'+(c.joursPeriode>1?'s':'')+' d\'accueil facturés du '
+          +dfr(val('cDebut'))+' au '+dfr(val('cFin'))+', répartis sur '+nbFr(c.mois)+' mois — soit '
+          +nbFr(Math.round(c.jparmois*100)/100)+' jour'+(c.jparmois>1?'s':'')+' par mois.');
+  }else{
+    vol.textContent=c.h+' h par semaine sur '+c.nj+' jour'+(c.nj>1?'s':'')+', soit '
+      +(Math.round(c.h*c.sem*100)/100)+' h sur '+c.sem+' semaines.'+origine
+      +' Accueil sans terme : lissage sur douze mois.';
+  }
+
+  const th=document.getElementById('cTarifHint');
+  if(!c.tarif){
+    th.textContent=c.h==null?'Le tarif se déduit du volume hebdomadaire.'
+      :'Aucune ligne de la grille ne couvre '+nbFr(c.h)+' h par semaine.';
+  }else{
+    const forceId=val('cTarif');
+    const auto=c.h==null?null:tarifPour(c.h,val('cCreche')||null);
+    let base=(forceId?'Tarif forcé : ':'Retenu automatiquement : ')
+      +esc(c.tarif.libelle)+' — '+euro(c.tarif.montant)+' '
+      +(c.tarif.mode==='horaire'?'de l\'heure':(c.tarif.mode==='journee'?'la journée':'par mois'))+'.';
+    let alerte='';
+    if(c.tarif.mode==='horaire'&&c.tarif.heures_min==null&&c.tarif.heures_max==null){
+      alerte+='<div class="warn"><i class="ti ti-alert-triangle"></i><span>'
+        +'Cette ligne ne porte <b>aucune borne horaire</b> : elle s\'applique à tout volume. '
+        +'Complétez sa fourchette dans l\'écran Tarifs du module Inscriptions.</span></div>';
+    }
+    if(forceId&&auto&&String(auto.id)!==String(c.tarif.id)){
+      alerte+='<div class="warn"><i class="ti ti-alert-triangle"></i><span>'
+        +'Ce tarif ne correspond pas au volume saisi. Pour '+esc(nbFr(c.h))
+        +' h par semaine, la grille retient <b>'+esc(auto.libelle)+'</b> à '+euro(auto.montant)
+        +'. Repassez sur « choix automatique » pour la suivre.</span></div>';
+    }
+    th.innerHTML=base+alerte;
+  }
+
+  const box=document.getElementById('cLignes');
+  if(!c.lignes.length){box.innerHTML='<p class="hint">Rien à chiffrer pour l\'instant.</p>';}
+  else{
+    const recur=['accueil','mensuel','unitaire'];
+    const q=l=>l.unite?(Math.round(l.quantite*100)/100).toLocaleString('fr-FR')+' '+l.unite+' × '+euro(Math.abs(l.montant_unitaire)):'';
+    const tr=l=>'<tr'+(l.total<0?' class="neg"':'')+'><td>'+esc(l.libelle)
+      +(l.description?'<div class="q">'+esc(l.description)+'</div>':'')+'</td>'
+      +'<td class="q">'+q(l)+'</td><td class="m">'+(l.total<0?'− ':'')+euro(Math.abs(l.total))+'</td></tr>';
+    let html='<table class="lg">'+c.lignes.filter(l=>recur.indexOf(l.type)>=0).map(tr).join('')
+      +'<tr class="tot"><td colspan="2">Total mensuel</td><td class="m">'+euro(c.mensuel)+'</td></tr></table>';
+    const hors=c.lignes.filter(l=>recur.indexOf(l.type)<0);
+    if(hors.length)html+='<div style="margin-top:12px"><table class="lg">'+hors.map(tr).join('')+'</table>'
+      +'<p class="hint" style="margin-top:6px">Facturés en une fois ou à l\'année, hors mensualité.</p></div>';
+    html+='<p class="hint" style="margin-top:8px">'
+      +(c.avecTerme
+        ? '<b>'+euro(c.annuel)+'</b> sur la durée du contrat — '+nbFr(c.mois)+' mensualités.'
+        : '<b>'+euro(c.annuel)+'</b> sur douze mois, accueil sans terme.')+'</p>';
+    box.innerHTML=html;
+  }
+
+  const age=ageAns(CENF&&CENF.dob,val('cDebut'));
+  setVal('cAge',age==null?'—':(age+' an'+(age>1?'s':'')
+    +(age<3?' · plein tarif CMG':(age<6?' · CMG divisé par deux':' · plus de droit'))));
+
+  const cm=cCmgCalcule(c.mensuel);
+  const cbox=document.getElementById('cCmg');
+  if(cm.err){cbox.innerHTML='<p class="hint">'+esc(cm.err)+'</p>';}
+  else{
+    const pourquoi=cm.limite==='cout'
+      ? 'Plafonné à '+Math.round((CMG_CFG.taux_max||0.85)*100)+' % du coût : le barème autoriserait '+euro(cm.bareme)+'.'
+      : 'Montant du barème. Le plafond des '+Math.round((CMG_CFG.taux_max||0.85)*100)+' % autoriserait jusqu\'à '+euro(cm.cout)+'.';
+    cbox.innerHTML='<div class="box">'
+      +'<div style="display:flex;justify-content:space-between"><span>Coût mensuel</span><b>'+euro(c.mensuel)+'</b></div>'
+      +'<div style="display:flex;justify-content:space-between;color:var(--green);margin-top:4px"><span>CMG estimé</span><b>− '+euro(cm.cmg)+'</b></div>'
+      +'<div class="rac"><span>Reste à charge</span><b>'+euro(cm.reste)+'</b></div>'
+      +'<p class="hint" style="margin:8px 0 0">'+esc(pourquoi)+' Estimation indicative : seule la CAF fait foi.</p></div>';
+  }
+  const plaf=Number(CMG_CFG.plafond_horaire||10);
+  if(c.tarif&&c.tarif.mode==='horaire'&&Number(c.tarif.montant)>plaf){
+    cbox.insertAdjacentHTML('afterbegin',
+      '<div class="warn"><i class="ti ti-alert-triangle"></i><span>Le tarif retenu dépasse '+plaf
+      +' € de l\'heure : au-delà de ce seuil, la famille perd <b>la totalité</b> du CMG.</span></div>');
+  }
+}
+
+/* ---------- ENREGISTREMENT ---------- */
+async function saveContrat(){
+  if(!enfantId||!CENF){toast('Ouvrez d\'abord un enfant.',true);return;}
+  const c=CCALC||cCalcule();
+  if(!c.lignes.length){toast('Rien à chiffrer : vérifiez les jours, les horaires et le tarif.',true);return;}
+  if(!val('cDebut')){toast('La date de début est obligatoire : le contrat en dépend.',true);return;}
+  if(val('cFin')&&val('cFin')<=val('cDebut')){
+    toast('La fin de l\'accueil doit être postérieure au début.',true);return;
+  }
+  if(CTYPE==='avenant'){
+    if(!CPARENT){toast('Cet avenant n\'a plus de contrat d\'origine.',true);return;}
+    if(!val('cEffet')){toast('Un avenant doit porter une date d\'effet.',true);return;}
+  }
+
+  const cm=cCmgCalcule(c.mensuel);
+  const row={
+    enfant_id:enfantId,
+    type:CTYPE,
+    parent_contrat_id:CTYPE==='avenant'?CPARENT.id:null,
+    preinscription_id:(CPRE&&CPRE.id)||null,
+    creche_id:val('cCreche')||null,
+    statut:'brouillon',
+    date_debut:val('cDebut'),
+    date_fin:val('cFin')||null,
+    date_effet:CTYPE==='avenant'?(val('cEffet')||null):null,
+    jours:[...document.querySelectorAll('.ckCJour:checked')].map(x=>Number(x.value)),
+    heure_debut:val('cHd'),heure_fin:val('cHf'),
+    heures_hebdo:c.h||0,semaines_an:Number(val('cSem'))||47,
+    jours_accueil:c.avecTerme&&c.joursPeriode!=null?Math.round(c.joursPeriode):null,
+    mois_factures:c.avecTerme?c.mois:null,
+    repas:val('cRepas')||null,
+    tarif_id:c.tarif?c.tarif.id:null,
+    tarif_libelle:c.tarif?c.tarif.libelle:'',
+    tarif_mode:c.tarif?c.tarif.mode:'horaire',
+    tarif_montant:c.tarif?Number(c.tarif.montant):0,
+    total_mensuel:c.mensuel,total_annuel:c.annuel,frais_uniques:c.uniques,
+    cmg_estime:cm.err?null:cm.cmg,
+    reste_a_charge:cm.err?null:cm.reste,
+    famille_adresse:val('cAdresse'),famille_code_postal:val('cCp'),
+    famille_ville:val('cVille'),num_allocataire:val('cAlloc'),
+    destinataires:val('cDest'),
+    commentaire:val('cCom'),notes_internes:val('cNotes')
+  };
+
+  const btn=document.getElementById('btnSaveCt');
+  btn.disabled=true;
+  try{
+    let id=contratId;
+    if(id){
+      const{error}=await sb.from('contrats').update(row).eq('id',id);
+      if(error)throw error;
+      const i=CONTRATS.findIndex(x=>String(x.id)===String(id));
+      if(i>=0)CONTRATS[i]=Object.assign({},CONTRATS[i],row);
+    }else{
+      /* Le devis d'origine, tracé sur le contrat initial : il permet de
+         retrouver, six mois plus tard, sur quoi la famille s'est engagée. */
+      if(CTYPE==='initial'){
+        const d=await devisAccepteDe(CPRE&&CPRE.id);
+        if(d)row.devis_id=d.id;
+      }
+      row.created_by=ME?ME.id:null;
+      /* Deux postes peuvent viser le même numéro à la seconde près.
+         contrats_numero_uk refuse le second (code 23505) : on recalcule et on
+         réessaie, plutôt que de laisser la direction devant une erreur Postgres
+         qu'elle ne peut pas interpréter. */
+      const annee=anneeScolaireDe(row.date_debut)||new Date().getFullYear();
+      let ins=null;
+      for(let essai=0;essai<5;essai++){
+        row.numero=CTYPE==='avenant'?numeroAvenant(CPARENT):prochainNumero(annee);
+        ins=await sb.from('contrats').insert(row).select().single();
+        if(!ins.error)break;
+        if(ins.error.code!=='23505')throw ins.error;
+        // Numéro pris entre-temps : on relit les numéros et on repart.
+        const{data}=await sb.from('contrats').select('id,numero,parent_contrat_id');
+        if(data)CONTRATS=data.map(x=>Object.assign(
+          CONTRATS.find(y=>String(y.id)===String(x.id))||{},x));
+      }
+      if(ins.error)throw ins.error;
+      id=ins.data.id;contratId=id;
+      CONTRATS.unshift(ins.data);
+    }
+
+    // Les lignes sont remplacées en bloc : un brouillon n'a pas d'historique à
+    // préserver, et un contrat envoyé n'arrive jamais ici.
+    await sb.from('contrats_lignes').delete().eq('contrat_id',id);
+    /* Le type est écrit tel quel, `accueil` compris : le PDF s'en sert pour
+       distinguer la ligne d'accueil des frais, et la ranger sous une unité
+       différente. L'écraser en `mensuel` pour satisfaire la contrainte aurait
+       déformé la donnée pour épargner une correction de schéma. */
+    const lignes=c.lignes.map((l,i)=>({contrat_id:id,libelle:l.libelle,description:l.description,
+      type:l.type,
+      quantite:l.quantite,montant_unitaire:l.montant_unitaire,total:l.total,ordre:(i+1)*10}));
+    if(lignes.length){
+      const{error}=await sb.from('contrats_lignes').insert(lignes);
+      if(error)throw error;
+    }
+
+    toast('Contrat enregistré ✅');
+    closeOv('ovContrat');
+    await recharger();
+    openEnfant(enfantId);
+  }catch(e){
+    console.error('[saveContrat]',e);
+    const msg=(e.code==='42P01')
+      ? 'La table des contrats n\'existe pas — exécutez le script 31.'
+      : (e.code==='23514'
+        ? 'Une contrainte de la base refuse cette combinaison : '+(e.message||'')
+        : (e.message||'erreur inconnue'));
+    toast('Enregistrement impossible : '+msg,true);
+  }finally{btn.disabled=false;}
+}
+
+async function delContrat(){
+  if(!contratId)return;
+  const c=CONTRATS.find(x=>String(x.id)===String(contratId));
+  if(c&&c.statut!=='brouillon'){
+    toast('Seul un brouillon peut être supprimé. Un contrat parti chez la famille s\'annule.',true);
+    return;
+  }
+  if(!confirm('Supprimer ce brouillon de contrat ? Ses lignes seront supprimées avec lui.'))return;
+  try{
+    await sb.from('contrats_lignes').delete().eq('contrat_id',contratId);
+    const{error}=await sb.from('contrats').delete().eq('id',contratId);
+    if(error)throw error;
+    closeOv('ovContrat');
+    await recharger();
+    openEnfant(enfantId);
+    toast('Brouillon supprimé.');
+  }catch(e){
+    console.error('[delContrat]',e);
+    toast('Suppression impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+
+async function recharger(){
+  try{
+    const{data,error}=await sb.from('contrats').select('*').order('created_at',{ascending:false});
+    if(error)throw error;
+    CONTRATS=data||[];
+  }catch(e){console.warn('[recharger]',e);}
+  render();
+}
+
+/* ---------- NOTICE ---------- */
+const NOTICE=`
+<p><b>Deux choses s'appellent « contrat ».</b> La ligne technique qui fait tourner les feuilles de présence et l'export PMI, et le <b>document que la famille signe</b>. C'est ce document que ce module produit. La ligne technique ne bouge qu'une fois le document contresigné : tant qu'un contrat est à l'état de brouillon, rien ne change dans les présences.</p>
+<p style="margin-top:10px"><b>Le cycle d'un contrat.</b> Brouillon → Envoyé → Signé par la famille → Contresigné par la crèche. Un contrat n'est complet qu'au dernier état : signé d'un seul côté, il n'engage qu'un seul côté.</p>
+<p style="margin-top:10px"><b>D'où viennent les chiffres.</b> Un contrat initial reprend le <b>devis accepté</b> — l'accord de la famille. Un renouvellement repart du contrat de l'année écoulée, décale les dates d'une année scolaire, et applique la <b>grille en vigueur</b> : le tarif peut donc changer. Dans les deux cas, les montants sont recalculés à l'écran et figés à l'enregistrement.</p>
+<p style="margin-top:10px"><b>Un contrat envoyé ne se modifie plus.</b> Un changement en cours d'année — un jour ajouté, des horaires décalés — se porte par <b>avenant</b> : un document daté, rattaché au contrat d'origine, qui se signe comme lui. Le contrat initial reste intact. La PMI l'exige en contrôle, et c'est le seul moyen de justifier en juin ce qui était facturé en mars.</p>
+<p style="margin-top:10px"><b>Les coordonnées sont recopiées, pas liées.</b> L'adresse et le n° allocataire portés au contrat sont ceux du jour de la signature. Les corriger sur la fiche de la famille ne réécrit aucun contrat déjà signé — c'est voulu : un contrat garde les coordonnées sous lesquelles il a été conclu.</p>
+<p style="margin-top:10px"><b>Le compteur « Sans contrat »</b> est celui à surveiller. Un enfant accueilli sans contrat signé est ce qu'un contrôle relève en premier.</p>
+<p style="margin-top:10px"><b>L'année scolaire</b> court du 1er septembre au 31 août. Un contrat apparaît dans toutes les années qu'il traverse, pas seulement celle où il commence.</p>
+<p style="margin-top:10px"><b>Ce qui n'est pas encore là :</b> l'envoi à la famille, la signature en ligne, la contresignature et le PDF. Ils arrivent dans la suite du module. En attendant, un contrat se prépare ici et s'imprime depuis le devis.</p>
+<p style="margin-top:10px"><b>Réserve juridique.</b> Une signature tracée à l'écran est une signature électronique <b>simple</b> au sens d'eIDAS : elle prouve un accord, sans la force probante d'une signature qualifiée. Même niveau que le dossier de familiarisation, déjà en usage dans le réseau.</p>
+`;
+function openNotice(){document.getElementById('noticeBody').innerHTML=NOTICE;openOv('ovNotice');}
+
+document.querySelectorAll('.ov').forEach(o=>{
+  o.addEventListener('click',ev=>{if(ev.target===o)o.classList.remove('on');});
+});
+
+boot().catch(e=>{console.error('[boot]',e);showLogin('Démarrage impossible — réessayez.');});
+</script>
+</body>
+</html>
