@@ -1997,16 +1997,19 @@ function dessineContrat(c,lignes){
       doc.text(l,G,y);y+=(inter||4.4);
     });
   }
+  /* Les interlignes sont resserrés au strict lisible : chaque millimètre gagné
+     ici est un millimètre qui rapproche les signatures du contrat, et une page
+     de signatures détachée est une faiblesse juridique. */
   function titreSection(s){
-    place(14);y+=5;
+    place(12);y+=4;
     ecrire(s.toUpperCase(),9,'bold',ORANGE);
-    y+=2;trait();y+=5;
+    y+=2;trait();y+=4.2;
   }
   function kv(k,v){
-    place(5);
+    place(4.6);
     police(9.5,'normal',GRIS);doc.text(String(k),G,y);
     police(9.5,'bold',NOIR);doc.text(String(v==null?'—':v),G+56,y);
-    y+=5;
+    y+=4.6;
   }
 
   /* ---- En-tête : qui édite le contrat ---- */
@@ -2143,20 +2146,20 @@ function dessineContrat(c,lignes){
   if(!recu.length)para('Aucune ligne récurrente.',9.5,'italic',GRIS);
   recu.forEach(ligne);
 
-  place(12);y+=1;
+  place(11);y+=1;
   police(11,'bold',VIOLET);
   doc.text('TOTAL MENSUEL',G,y);
   doc.setFontSize(14);
   doc.text(eurPdf(c.total_mensuel),D,y,{align:'right'});
-  y+=4;trait(VIOLET);y+=4;
+  y+=3.5;trait(VIOLET);y+=4;
 
   if(c.total_annuel){
-    place(6);
+    place(5);
     police(9,'normal',GRIS);
     doc.text(avecTerme
       ? 'Soit '+eurPdf(c.total_annuel)+' sur la durée du contrat ('+nbFr(c.mois_factures||0)+' mensualités).'
       : 'Soit '+eurPdf(c.total_annuel)+' sur douze mois.',G,y);
-    y+=7;
+    y+=5;
   }
 
   if(hors.length){
@@ -2171,15 +2174,15 @@ function dessineContrat(c,lignes){
     titreSection('Estimation du complément de libre choix du mode de garde');
     [['Coût mensuel',eurPdf(c.total_mensuel),NOIR],
      ['CMG estimé, versé par la CAF','- '+eurPdf(c.cmg_estime),VERT]].forEach(([k,v,q])=>{
-      place(5.4);
+      place(4.8);
       police(9.5,'normal',GRIS);doc.text(k,G,y);
       police(9.5,'bold',q);doc.text(v,D,y,{align:'right'});
-      y+=5.4;
+      y+=4.8;
     });
-    y+=1;trait();y+=5.6;
+    y+=1;trait();y+=5;
     police(11,'bold',VIOLET);doc.text('RESTE À CHARGE MENSUEL',G,y);
     doc.setFontSize(14);doc.text(eurPdf(c.reste_a_charge),D,y,{align:'right'});
-    y+=6;
+    y+=5;
     para('Estimation indicative, calculée à partir des revenus communiqués par la famille et du '
       +'barème CAF en vigueur. Seule la CAF détermine le montant réellement versé. La crèche ne '
       +'perçoit pas le CMG : elle facture la mensualité ci-dessus.',8.5,'italic',GRIS,L,4);
@@ -2212,10 +2215,37 @@ function dessineContrat(c,lignes){
      porte son tracé et sa date s'il existe, et reste vide sinon — un contrat
      non signé s'imprime ainsi pour être signé à la main, ce qui garde la voie
      papier ouverte pour une famille sans smartphone. */
-  const H_CADRE=46;
-  place(H_CADRE+18);
-  y+=6;
-  titreSection('Signatures');
+  /* La réservation doit couvrir TOUT le bloc, sinon il se coupe : 4 mm de
+     respiration, 12 pour le titre de section, la hauteur des cadres, 4 après,
+     et 8 pour la mention eIDAS. Réserver moins — c'était le cas — faisait
+     basculer les deux cadres sur une page vide alors qu'il restait la place
+     juste au-dessus. */
+  const H_CADRE=38;
+  const BESOIN=H_CADRE+23;
+  if(y+BESOIN>BAS){
+    doc.addPage();y=20;
+    /* Une page de signatures détachée du contrat ne prouve pas grand-chose :
+       rien ne dit ce qu'on a signé. Quand le saut est inévitable, la page
+       s'ouvre donc sur un rappel qui la rattache au document — numéro, enfant,
+       période, mensualité. C'est ce qu'un contrôle ou un avocat cherche en
+       premier. */
+    police(9,'bold',VIOLET);
+    doc.text((avenant?'Avenant ':'Contrat d\'accueil ')+(c.numero||''),G,y);
+    y+=4.6;
+    police(8.5,'normal',GRIS);
+    doc.text([((suj.prenom||'')+' '+(suj.nom||'')).trim(),
+              cr,
+              (c.date_debut?'du '+dfr(c.date_debut):'')+(c.date_fin?' au '+dfr(c.date_fin):''),
+              eurPdf(c.total_mensuel)+' par mois'
+             ].filter(Boolean).join('  ·  '),G,y);
+    y+=3;trait();y+=6;
+  }else{
+    y+=4;
+  }
+  // Le titre est écrit sans place() : la réservation vient d'être faite en
+  // bloc, et un second saut ici séparerait le titre de ses cadres.
+  ecrire('SIGNATURES',9,'bold',ORANGE);
+  y+=2;trait();y+=5;
   const yc=y;
   const larg=(L-6)/2;
   doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.4);
@@ -2228,17 +2258,17 @@ function dessineContrat(c,lignes){
     if(png){
       // Une signature tracée au doigt est plus large que haute. La hauteur est
       // bornée, la largeur suit : déformer un tracé le rend méconnaissable.
-      try{doc.addImage(png,'PNG',x+4,yc+9,larg-10,18);}
+      try{doc.addImage(png,'PNG',x+4,yc+9,larg-10,17);}
       catch(err){console.warn('[pdf signature]',err);
-        police(8,'italic',GRIS);doc.text('(signature illisible)',x+4,yc+18);}
+        police(8,'italic',GRIS);doc.text('(signature illisible)',x+4,yc+17);}
       police(7.5,'normal',GRIS);
-      doc.text('Le '+dfr(quand),x+4,yc+32);
+      doc.text('Le '+dfr(quand),x+4,yc+30);
       if(qui)doc.splitTextToSize(String(qui),larg-8).slice(0,2)
-        .forEach((t,i)=>doc.text(t,x+4,yc+36+i*3.6));
+        .forEach((t,i)=>doc.text(t,x+4,yc+34+i*3.6));
     }else{
       doc.setDrawColor(210,204,230);doc.setLineWidth(.3);
-      doc.line(x+4,yc+30,x+larg-4,yc+30);
-      police(7.5,'normal',GRIS);doc.text('Date et signature',x+4,yc+34);
+      doc.line(x+4,yc+28,x+larg-4,yc+28);
+      police(7.5,'normal',GRIS);doc.text('Date et signature',x+4,yc+32);
     }
   }
   const signeFamille=!!(c.signature_png&&c.repondu_le
