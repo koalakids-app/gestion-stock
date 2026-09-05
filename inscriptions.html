@@ -283,6 +283,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div class="sec">Les devis <span id="devCount" style="font-size:12px;color:var(--muted);font-weight:600"></span></div>
     <div id="devList"></div>
     <button class="btn btn-s btn-sm" id="btnAddDev" onclick="openDevis(null)"><i class="ti ti-file-euro"></i> Établir un devis</button>
+    <button class="btn btn-p btn-sm" id="btnContrat" style="display:none;margin-left:6px" onclick="ouvrirContrat()"><i class="ti ti-file-plus"></i> Établir le contrat</button>
     <button class="btn btn-p btn-sm" id="btnBascule" style="display:none;margin-left:6px" onclick="ouvrirBascule()"><i class="ti ti-user-check"></i> Basculer en fiche enfant</button>
     <p class="hint" id="hintDev" style="margin-top:8px"></p>
 
@@ -817,9 +818,12 @@ function openFiche(id){
   document.getElementById('hintDev').textContent=neuf
     ? 'Enregistrez d\'abord la demande, puis établissez le devis.'
     : 'Un devis fige les montants qu\'il facture : modifier la grille ensuite ne le réécrit pas.';
-  DEVIS=[];renderDevisList();
+  DEVIS=[];CONTRATS_PRE=[];renderDevisList();
   document.getElementById('btnBascule').style.display='none';
-  if(p){loadParents(p.id);loadDevis(p.id);}
+  document.getElementById('btnContrat').style.display='none';
+  // Les contrats sont relus en même temps que les devis : c'est leur état qui
+  // décide désormais si la bascule est ouverte.
+  if(p){loadParents(p.id);loadDevis(p.id);loadContrats(p.id);}
 
   openOv('ovFiche');
 }
@@ -1106,26 +1110,114 @@ async function loadDevis(preId){
 }
 
 /* Le devis qui vaut engagement : accepté, et le plus récemment répondu. C'est
-   lui qui fournit les jours, les horaires et la date d'entrée du contrat —
-   jamais la préinscription, dont les souhaits initiaux ont pu changer en cours
-   de négociation. */
+   lui qui a servi de base au contrat — jamais la préinscription, dont les
+   souhaits initiaux ont pu changer en cours de négociation. */
 function devisAccepte(){
   // Le statut suffit : une acceptation peut aussi venir d'un accord écrit remis
   // en main propre et saisi par la direction, sans signature à l'écran ni
-  // `repondu_le`. Exiger la signature en ligne fermerait la bascule à ces
+  // `repondu_le`. Exiger la signature en ligne fermerait la porte à ces
   // dossiers-là, qui sont pourtant les plus classiques hors saison.
   return DEVIS.filter(d=>d.statut==='accepte')
     .sort((a,b)=>String(b.repondu_le||b.updated_at||b.created_at||'')
       .localeCompare(String(a.repondu_le||a.updated_at||a.created_at||'')))[0]||null;
 }
 
+/* ---------- LES CONTRATS D'ACCUEIL ---------- */
+/* Le contrat vit dans son propre module (contrats.html) : il s'y établit, s'y
+   envoie, s'y signe et s'y contresigne. Cet écran ne fait que deux choses avec
+   lui — dire où il en est, et attendre qu'il soit complet pour ouvrir la
+   bascule. On ne charge donc que le strict nécessaire. */
+let CONTRATS_PRE=[];
+
+async function loadContrats(preId){
+  try{
+    const{data,error}=await sb.from('contrats').select('*')
+      .eq('preinscription_id',preId).order('created_at',{ascending:false});
+    if(error)throw error;
+    if(String(ficheId)!==String(preId))return;
+    CONTRATS_PRE=data||[];
+  }catch(e){
+    // La table peut ne pas exister sur une base où le script 31 n'est pas
+    // passé : le module Inscriptions doit continuer de fonctionner sans elle.
+    console.warn('[loadContrats]',e);CONTRATS_PRE=[];
+  }
+  majBoutonBascule();
+}
+
+/* Le contrat qui autorise la bascule : un contrat INITIAL contresigné.
+   Contresigné, et pas seulement signé : un contrat signé d'un seul côté
+   n'engage qu'un seul côté, et faire entrer un enfant dans les effectifs PMI,
+   les présences et les commandes de repas sur cette base reviendrait à
+   anticiper un accord qui n'est pas conclu. */
+function contratComplet(){
+  return CONTRATS_PRE.filter(c=>c.type==='initial'&&c.statut==='contresigne')
+    .sort((a,b)=>String(b.contresigne_le||'').localeCompare(String(a.contresigne_le||'')))[0]||null;
+}
+/* Le contrat en cours, quel que soit son état — pour dire à la direction où en
+   est le dossier plutôt que de lui laisser un bouton absent sans explication. */
+function contratEnCours(){
+  const RANG={contresigne:5,signe:4,envoye:3,brouillon:2,expire:1,refuse:0,annule:0};
+  return CONTRATS_PRE.filter(c=>c.type==='initial')
+    .sort((a,b)=>(RANG[b.statut]||0)-(RANG[a.statut]||0))[0]||null;
+}
+
 function majBoutonBascule(){
   const b=document.getElementById('btnBascule');
-  if(!b)return;
+  const bc=document.getElementById('btnContrat');
   const p=ficheId?PRE.find(x=>String(x.id)===String(ficheId)):null;
-  // Déjà basculée : le bouton disparaît. La contrainte preinscriptions_enfant_uk
-  // refuserait de toute façon une seconde fiche pour la même demande.
-  b.style.display=(p&&!p.enfant_id&&devisAccepte())?'':'none';
+  const dev=devisAccepte();
+  const ct=contratEnCours();
+
+  /* Le bouton « Établir le contrat » apparaît dès qu'un devis est accepté, et
+     ouvre le module Contrats sur ce dossier. Il n'y a pas de second formulaire
+     ici : le contrat ne s'écrit qu'à un seul endroit. */
+  if(bc){
+    bc.style.display=(p&&!p.enfant_id&&dev)?'':'none';
+    bc.innerHTML=ct
+      ? '<i class="ti ti-file-certificate"></i> Voir le contrat'
+      : '<i class="ti ti-file-plus"></i> Établir le contrat';
+  }
+
+  if(!b)return;
+  /* La bascule attend le contrat contresigné — plus le devis accepté.
+     C'est le changement de fond du module Contrat : la fiche enfant naît du
+     document signé des deux parts, pas de la proposition acceptée. */
+  b.style.display=(p&&!p.enfant_id&&contratComplet())?'':'none';
+
+  // Dire pourquoi le bouton n'est pas là vaut mieux que de laisser chercher.
+  const hint=document.getElementById('hintDev');
+  if(hint&&p&&!p.enfant_id){
+    if(!dev){
+      hint.textContent='Un devis fige les montants qu\'il facture : modifier la grille ensuite ne le réécrit pas.';
+    }else if(!ct){
+      hint.innerHTML='<b>Devis accepté.</b> Établissez maintenant le contrat d\'accueil : '
+        +'la fiche enfant ne se crée qu\'une fois ce contrat signé par la famille et contresigné par la crèche.';
+    }else if(ct.statut==='brouillon'){
+      hint.innerHTML='Le contrat <b>'+esc(ct.numero||'')+'</b> est à l\'état de brouillon — il reste à l\'envoyer à la famille.';
+    }else if(ct.statut==='envoye'){
+      hint.innerHTML='Le contrat <b>'+esc(ct.numero||'')+'</b> est chez la famille depuis le '
+        +dfr(ct.envoye_le)+(ct.vu_le?', ouvert le '+dfr(ct.vu_le):', pas encore ouvert')+'.';
+    }else if(ct.statut==='signe'){
+      hint.innerHTML='Le contrat <b>'+esc(ct.numero||'')+'</b> a été signé par la famille le '
+        +dfr(ct.repondu_le)+'. <b>Il reste à le contresigner</b>, dans le module Contrats — '
+        +'c\'est ce qui ouvrira la création de la fiche enfant.';
+    }else if(ct.statut==='contresigne'){
+      hint.innerHTML='Contrat <b>'+esc(ct.numero||'')+'</b> complet des deux parts. '
+        +'La fiche enfant peut être créée.';
+    }else if(ct.statut==='refuse'){
+      hint.innerHTML='Le contrat <b>'+esc(ct.numero||'')+'</b> a été refusé par la famille le '
+        +dfr(ct.repondu_le)+(ct.motif_refus?' — '+esc(ct.motif_refus):'')+'.';
+    }
+  }
+}
+
+/* Ouvre le module Contrats sur CE dossier. Le paramètre `pre` est lu par
+   contrats.html au démarrage, qui ouvre directement la bonne fiche : la
+   direction enchaîne sans avoir à retrouver le dossier dans une liste. */
+function ouvrirContrat(){
+  const p=ficheId?PRE.find(x=>String(x.id)===String(ficheId)):null;
+  if(!p){toast('Enregistrez d\'abord la demande.',true);return;}
+  location.href='contrats.html?pre='+encodeURIComponent(p.id);
 }
 
 function renderDevisList(){
@@ -2003,13 +2095,25 @@ async function ouvrirBascule(){
   const p=ficheId?PRE.find(x=>String(x.id)===String(ficheId)):null;
   if(!p){toast('Enregistrez d\'abord la demande.',true);return;}
   if(p.enfant_id){toast('Cette demande a déjà été basculée.',true);return;}
+
+  /* C'est le CONTRAT contresigné qui commande, et non plus le devis accepté.
+     Le devis reste chargé — il figure sur l'écran de vérification, parce qu'il
+     dit sur quoi la famille s'était engagée — mais toutes les valeurs
+     techniques viennent du contrat : c'est lui qui a été signé. */
+  const ct=contratComplet();
+  if(!ct){
+    const enCours=contratEnCours();
+    toast(enCours
+      ? 'Le contrat '+(enCours.numero||'')+' n\'est pas encore contresigné : la fiche enfant attend qu\'il soit complet des deux parts.'
+      : 'Aucun contrat contresigné : établissez le contrat d\'accueil avant de créer la fiche enfant.',true);
+    return;
+  }
   const d=devisAccepte();
-  if(!d){toast('Aucun devis accepté : la bascule attend la réponse de la famille.',true);return;}
 
-  const crecheId=d.creche_id||p.creche_id||null;
-  const jours=toArr(d.jours).map(Number).filter(Boolean);
+  const crecheId=ct.creche_id||(d&&d.creche_id)||p.creche_id||null;
+  const jours=toArr(ct.jours).map(Number).filter(Boolean);
 
-  BS={pre:p,devis:d,crecheId:crecheId,jours:jours,homonymes:[]};
+  BS={pre:p,devis:d,contrat:ct,crecheId:crecheId,jours:jours,homonymes:[]};
 
   document.getElementById('bsBody').innerHTML='<p class="hint">Vérification en cours…</p>';
   document.getElementById('btnBsGo').disabled=true;
@@ -2032,11 +2136,21 @@ async function ouvrirBascule(){
 }
 
 function rendreBascule(){
-  const p=BS.pre,d=BS.devis;
+  const p=BS.pre,d=BS.devis,ct=BS.contrat;
   const nom=((p.prenom||'')+' '+(p.nom||'')).trim()||'Sans nom';
   const li=(k,v)=>'<div class="kvb"><span>'+esc(k)+'</span><b>'+esc(v||'—')+'</b></div>';
 
   let h='';
+
+  /* Le document qui fonde la bascule, nommé en premier. Trois semaines plus
+     tard, savoir de quel contrat cette fiche enfant est née est la première
+     question qu'on se pose. */
+  h+='<div class="warn" style="background:var(--green-l);color:var(--green)">'
+   +'<i class="ti ti-file-certificate"></i><span>Contrat <b>'+esc(ct.numero||'')+'</b>, '
+   +'signé par la famille le '+dfr(ct.repondu_le)
+   +(ct.repondu_par?' au nom de '+esc(ct.repondu_par):'')
+   +', contresigné le '+dfr(ct.contresigne_le)
+   +(ct.contresigne_par?' par '+esc(ct.contresigne_par):'')+'.</span></div>';
 
   // Ce qui manque et qui empêcherait la fiche d'être exploitable.
   const bloquants=[];
@@ -2044,8 +2158,8 @@ function rendreBascule(){
   if(!p.dob)bloquants.push('la date de naissance n\'est pas renseignée');
   if(p.ne_ou_a_naitre==='a_naitre')bloquants.push('l\'enfant est encore déclaré « à naître » — corrigez la fiche une fois né');
   if(!BS.crecheId)bloquants.push('aucune crèche retenue');
-  if(!BS.jours.length)bloquants.push('le devis ne porte aucun jour d\'accueil');
-  if(!d.heure_debut||!d.heure_fin)bloquants.push('le devis ne porte pas d\'horaires');
+  if(!BS.jours.length)bloquants.push('le contrat ne porte aucun jour d\'accueil');
+  if(!ct.heure_debut||!ct.heure_fin)bloquants.push('le contrat ne porte pas d\'horaires');
 
   if(bloquants.length){
     h+='<div class="warn"><i class="ti ti-alert-triangle"></i><span><b>Bascule impossible en l\'état.</b><br>'
@@ -2059,32 +2173,21 @@ function rendreBascule(){
    +li('Allergies',p.allergies)
    +li('Régime particulier',p.regime_repas||'aucun');
 
-  /* La date d'entrée se saisit ici, elle ne se lit pas. `enfants_contrats`
-     l'exige, et un devis peut fort bien avoir été accepté sans elle — « début
-     à convenir » est une situation courante. Le devis étant verrouillé une fois
-     accepté, cet écran est le seul endroit où elle peut encore être posée. */
-  const dDefaut=d.date_debut||p.date_entree_souhaitee||'';
+  /* Les dates viennent maintenant du CONTRAT signé, et elles ne devraient plus
+     avoir à être corrigées : un contrat sans date de début ne peut pas être
+     enregistré. Les champs restent modifiables pour le cas où la famille a
+     décalé son arrivée entre la signature et l'entrée effective — mais toute
+     divergence est signalée, parce qu'elle fait diverger la feuille de présence
+     du document signé. */
+  const dDefaut=ct.date_debut||d&&d.date_debut||p.date_entree_souhaitee||'';
   h+='<div class="g2" style="margin-top:10px">'
    +'<div class="f"><label class="lb">Date d\'entrée — début du contrat</label>'
    +'<input id="bsDate" type="date" value="'+esc(dDefaut)+'"></div>'
-   +'<div class="f"><label class="lb">Fin du contrat — facultatif</label>'
-   +'<input id="bsDateFin" type="date" value="'+esc(d.date_fin||'')+'"></div></div>'
-   +'<p class="hint">'+(d.date_debut
-      ? 'Date d\'entrée reprise du devis accepté. Modifiable si la famille a décalé son arrivée.'
-      : (p.date_entree_souhaitee
-         ? 'Le devis ne portait pas de date d\'entrée : celle-ci vient du souhait exprimé à la demande. Vérifiez-la.'
-         : '<b>Le devis ne portait aucune date d\'entrée.</b> Renseignez-la : le contrat d\'accueil en dépend.'))
-   +'</p>'
-   /* La fin de contrat ne vient PAS du devis, et c'est normal : la mensualité
-      se calcule sur une année lissée sur douze mois, sans terme. Elle se saisit
-      ici quand il est connu — un accueil jusqu'à l'entrée à l'école, un contrat
-      court — et se laisse vide sinon. Une fin de contrat renseignée fait sortir
-      l'enfant des feuilles de présence après cette date, sans le supprimer. */
-   +'<p class="hint">'+(d.date_fin
-      ? 'Fin reprise du devis accepté, qui a servi de base au calcul de la mensualité.'
-      : 'Le devis a été établi sans terme, sur une année lissée. Renseignez la fin ici si le départ '
-        +'est déjà connu — sinon laissez vide, et posez-la le moment venu depuis la fiche enfant.')
-   +'</p>';
+   +'<div class="f"><label class="lb">Fin du contrat</label>'
+   +'<input id="bsDateFin" type="date" value="'+esc(ct.date_fin||'')+'"></div></div>'
+   +'<p class="hint">Dates reprises du <b>contrat signé</b>. Ne les modifiez que si l\'arrivée a été '
+   +'décalée depuis la signature : la feuille de présence doit correspondre au document que la '
+   +'famille a signé, et un écart durable se règle par un avenant, pas ici.</p>';
 
   h+='<div class="sec">Les parents rattachés <span style="font-size:12px;color:var(--muted);font-weight:600">('+PARENTS.length+')</span></div>';
   if(!PARENTS.length){
@@ -2096,12 +2199,21 @@ function rendreBascule(){
       +(x.email?' · '+esc(x.email):'')+(x.telephone?' · '+esc(x.telephone):'')+'</b></div>').join('');
   }
 
-  h+='<div class="sec">Le contrat d\'accueil</div>'
+  h+='<div class="sec">La ligne d\'accueil qui sera créée</div>'
    +li('Jours',BS.jours.map(j=>(JOURS.find(x=>x[0]===j)||[0,''])[1].toLowerCase()).filter(Boolean).join(', '))
-   +li('Horaires',(d.heure_debut||'')+' – '+(d.heure_fin||''))
-   +li('Au','selon la date de fin saisie ci-dessus');
-  h+='<p class="hint">Le contrat reprend le <b>devis accepté</b>, pas les souhaits de la demande initiale : '
-   +'c\'est lui qui engage. Il est créé sans date de fin — renseignez-la le jour du départ, depuis la fiche enfant.</p>';
+   +li('Horaires',(String(ct.heure_debut||'').slice(0,5))+' – '+(String(ct.heure_fin||'').slice(0,5)))
+   +li('Repas',ct.repas||'non précisé')
+   +li('Mensualité',euro(ct.total_mensuel)+' par mois');
+  h+='<p class="hint">Ces valeurs sont celles du <b>contrat signé</b>, et c\'est ce qui a changé : '
+   +'jusqu\'ici la ligne d\'accueil était tirée du devis. Elle pilote les feuilles de présence, '
+   +'la vue Gantt et l\'export PMI. Le contrat lui restera rattaché : on saura toujours de quel '
+   +'document elle est née.</p>';
+  if(d&&Number(d.total_mensuel)!==Number(ct.total_mensuel)){
+    h+='<div class="warn"><i class="ti ti-alert-triangle"></i><span>'
+      +'Le contrat porte '+euro(ct.total_mensuel)+' par mois là où le devis '+esc(d.numero||'')
+      +' en portait '+euro(d.total_mensuel)+'. C\'est le <b>contrat</b> qui fait foi — il a été signé. '
+      +'Vérifiez simplement que la famille en a bien été informée.</span></div>';
+  }
 
   // Homonymes
   if(BS.homonymes.length){
@@ -2135,7 +2247,7 @@ function rendreBascule(){
 
 async function lancerBascule(){
   if(!BS)return;
-  const p=BS.pre,d=BS.devis;
+  const p=BS.pre,d=BS.devis,ct=BS.contrat;
   const dateEntree=val('bsDate');
   const dateFin=val('bsDateFin')||null;
   if(!dateEntree){
@@ -2186,17 +2298,21 @@ async function lancerBascule(){
       if(error)throw error;
     }
 
-    // 3. Le contrat, tiré du devis accepté.
-    const{error:eCt}=await sb.from('enfants_contrats').insert({
+    /* 3. La ligne d'accueil, tirée du CONTRAT SIGNÉ et non plus du devis.
+       C'est le changement de fond du module Contrat : le document produit la
+       ligne technique. `repas` suit aussi, ce que le devis ne portait pas. */
+    const insCt=await sb.from('enfants_contrats').insert({
       enfant_id:enfantId,
       date_debut:dateEntree,
       date_fin:dateFin,
       jours:BS.jours,
-      heure_debut:d.heure_debut||null,
-      heure_fin:d.heure_fin||null,
-      notes:'Créé à la bascule du devis '+(d.numero||'')
-    });
-    if(eCt)throw eCt;
+      heure_debut:ct.heure_debut||null,
+      heure_fin:ct.heure_fin||null,
+      repas:ct.repas||null,
+      notes:'Créée à la bascule du contrat '+(ct.numero||'')
+    }).select().single();
+    if(insCt.error)throw insCt.error;
+    const ligneCtId=insCt.data.id;
 
     /* 4. Le rattachement. `.is('enfant_id',null)` est le garde-fou contre un
        double clic ou une bascule menée en parallèle depuis un autre poste :
@@ -2207,6 +2323,24 @@ async function lancerBascule(){
       .eq('id',p.id).is('enfant_id',null).select();
     if(ePre)throw ePre;
     if(!maj||!maj.length)throw new Error('Cette demande vient d\'être basculée ailleurs.');
+
+    /* 5. Le contrat rejoint l'enfant. Cette écriture vient APRÈS le point de
+       non-retour, et volontairement : si elle échoue, la fiche enfant est
+       complète et exploitable — présences, repas, effectifs PMI — et il ne
+       manque qu'un lien, qui se répare d'un clic depuis le module Contrats.
+       La défaire aurait détruit un enfant valide pour une colonne manquante.
+       C'est pourquoi son échec est signalé sans annuler la bascule. */
+    try{
+      const{error:eLien}=await sb.from('contrats')
+        .update({enfant_id:enfantId,enfants_contrat_id:ligneCtId,
+                 updated_at:new Date().toISOString()})
+        .eq('id',ct.id);
+      if(eLien)throw eLien;
+    }catch(x){
+      console.error('[bascule rattachement contrat]',x);
+      toast('Fiche enfant créée, mais le contrat '+(ct.numero||'')+' n\'a pas pu y être rattaché. '
+        +'Signalez-le : le lien se répare sans toucher à la fiche.',true);
+    }
 
     p.enfant_id=enfantId;p.statut='inscrit';
     closeOv('ovBascule');closeOv('ovFiche');
@@ -3393,7 +3527,9 @@ const NOTICE_INS=`
 <p style="margin-top:10px"><b>Le PDF du devis.</b> Le bouton <b>PDF</b> posé sur chaque devis produit le document à remettre à la famille, sans ouvrir le devis. Il est imprimé <b>depuis la base</b>, pas depuis l'écran : ce qui en sort est ce qui a été figé à l'établissement, même si la grille a bougé depuis. L'en-tête (raison sociale, SIRET, agrément PMI), la durée de validité et les mentions légales viennent du module <b>Paramètres</b> : ce qui n'y est pas renseigné laisse simplement un blanc sur le document. Un brouillon imprimé porte la mention « BROUILLON » — il n'engage personne tant qu'il n'est pas envoyé.</p>
 <p style="margin-top:10px"><b>La signature.</b> Tant que le devis n'est pas signé, le PDF porte un cadre « Bon pour accord » à remplir à la main. La signature en ligne, à venir, remplira ce même cadre avec le tracé de la famille et sa date : le document restera le même, seul le cadre changera.</p>
 <p style="margin-top:10px"><b>L'historique.</b> Le bouton <b>Historique</b> de la barre du haut ouvre toutes les demandes, transformées ou non — la file d'attente, elle, ne montre que ce qui est vivant. On y filtre par année scolaire (septembre à août, l'unité dans laquelle une crèche pense ses effectifs), par crèche et par statut. Chaque ligne montre le parcours du dossier : demande, devis envoyé, accepté ou refusé, inscrit — les étapes non franchies restent visibles en grisé, car c'est là que le dossier s'est arrêté. Le <b>taux de transformation</b> ne porte que sur les dossiers clos : y inclure les demandes en cours le ferait chuter en début d'année sans qu'aucune ne soit perdue. Le bouton <b>Exporter</b> produit un fichier .csv pour le gestionnaire.</p>
-<p style="margin-top:10px"><b>La bascule en fiche enfant.</b> Une fois le devis accepté, le bouton <b>Basculer en fiche enfant</b> apparaît sous les devis. Il ouvre un écran de vérification : ce qui va être créé — l'enfant, les parents, le contrat d'accueil tiré du devis — et ce qui ne suivra pas, faute de champ dans la fiche enfant : le PAI, le médecin, l'adresse, le n° allocataire, la profession des parents. Ces informations restent sur la demande, qui demeure consultable. L'écran signale aussi les enfants du réseau portant déjà ce nom de famille : fratrie ou doublon, c'est à vous de trancher avant d'écrire. La demande passe alors en <b>Inscrit</b> et sort de la file active ; on la retrouve en cliquant sur le compteur « Inscrit ».</p>
+<p style="margin-top:10px"><b>Le contrat d'accueil.</b> Une fois le devis accepté, le bouton <b>Établir le contrat</b> apparaît sous les devis et ouvre le module <b>Contrats</b> sur ce dossier. Le contrat s'y rédige, s'y envoie à la famille, s'y signe et s'y contresigne. Il n'y a pas de second formulaire ici : le contrat ne s'écrit qu'à un seul endroit. La ligne sous les devis vous dit en permanence où il en est — brouillon, chez la famille, signé, contresigné.</p>
+<p style="margin-top:10px"><b>La bascule en fiche enfant.</b> Le bouton <b>Basculer en fiche enfant</b> n'apparaît qu'une fois le contrat <b>contresigné</b>, c'est-à-dire signé des deux parts. Un devis accepté ne suffit plus : faire entrer un enfant dans les effectifs PMI, les présences et les commandes de repas sur la foi d'une proposition acceptée, c'était anticiper un accord qui n'était pas conclu.</p>
+<p style="margin-top:10px">La bascule ouvre un écran de vérification : le contrat qui la fonde, ce qui va être créé — l'enfant, les parents, la ligne d'accueil <b>tirée du contrat signé</b> — et ce qui ne suivra pas, faute de champ dans la fiche enfant : le PAI, le médecin, l'adresse, le n° allocataire, la profession des parents. Ces informations restent sur la demande, qui demeure consultable. L'écran signale aussi les enfants du réseau portant déjà ce nom de famille : fratrie ou doublon, c'est à vous de trancher avant d'écrire. La demande passe alors en <b>Inscrit</b> et sort de la file active ; on la retrouve en cliquant sur le compteur « Inscrit ».</p>
 <p style="margin-top:10px"><b>Accès.</b> Ce module est réservé à la direction : il contient des coordonnées et des revenus de familles qui ne seront peut-être jamais accueillies.</p>
 `;
 function openNotice(){document.getElementById('noticeBody').innerHTML=NOTICE_INS;openOv('ovNotice');}
