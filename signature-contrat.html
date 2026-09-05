@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Koala Kids — Votre contrat d'accueil</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Page ouverte par une famille, sur son téléphone, une seule fois. Aucune
+   dépendance : ni Supabase JS, ni bibliothèque d'icônes. Tout ce dont elle a
+   besoin tient dans ce fichier, et un CDN indisponible ne doit pas empêcher
+   quelqu'un de signer son contrat. Même parti pris que devis.html. */
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;
+  --muted:#8E8AA8;--line:#EFE9F5;--green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',system-ui,sans-serif;background:var(--cream);color:#2B2740;
+  line-height:1.6;padding:0 0 40px;padding-bottom:calc(40px + env(safe-area-inset-bottom))}
+.hd{background:var(--violet);color:#fff;padding:22px 18px;padding-top:calc(22px + env(safe-area-inset-top))}
+.hd h1{font-family:'Baloo 2',cursive;font-size:22px;font-weight:800}
+.hd .s{font-size:13.5px;opacity:.85;margin-top:2px}
+.wrap{max-width:640px;margin:0 auto;padding:16px}
+.card{background:#fff;border:2px solid var(--line);border-radius:18px;padding:16px 18px;margin-bottom:14px}
+h2{font-family:'Baloo 2',cursive;font-size:16px;color:var(--orange);margin-bottom:10px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:14.5px}
+.kv .k{color:var(--muted)}
+.kv .v{font-weight:700;text-align:right}
+table.lg{width:100%;border-collapse:collapse;font-size:14px}
+table.lg td{padding:9px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+table.lg td.m{text-align:right;font-weight:700;white-space:nowrap}
+table.lg td .d{font-size:12.5px;color:var(--muted);line-height:1.4}
+table.lg tr.neg td.m{color:var(--green)}
+table.lg tr.tot td{border-top:2px solid var(--line);border-bottom:none;padding-top:12px;font-weight:800}
+table.lg tr.tot td.m{font-family:'Baloo 2',cursive;font-size:19px;color:var(--violet)}
+.rac{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  margin-top:10px;padding-top:10px;border-top:2px solid var(--line)}
+.rac b{font-family:'Baloo 2',cursive;font-size:22px;color:var(--violet)}
+.note{font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:10px}
+.clause{font-size:13.5px;line-height:1.7;margin-top:10px;white-space:pre-wrap}
+.btn{border:none;border-radius:14px;padding:15px 22px;font-family:'Nunito';font-weight:800;
+  font-size:16px;cursor:pointer;width:100%;min-height:52px}
+.btn-p{background:var(--orange);color:#fff}
+.btn-g{background:#F1EFF7;color:var(--muted);font-size:14px;min-height:46px;padding:12px}
+.btn:disabled{opacity:.5}
+label.lb{display:block;font-size:13px;font-weight:700;color:var(--muted);margin:0 0 5px 3px}
+input,textarea{font-family:'Nunito';font-size:16px;padding:13px;border:2px solid var(--line);
+  border-radius:13px;width:100%;background:#fff;color:#2B2740}
+input:focus,textarea:focus{outline:none;border-color:var(--orange)}
+/* Zone de tracé. touch-action:none est indispensable : sans elle, le doigt
+   fait défiler la page au lieu de dessiner, et la signature est impossible
+   sur mobile — c'est-à-dire dans le seul cas d'usage réel de cette page. */
+#sigBox{border:2px dashed #D9D3F2;border-radius:14px;background:#fff;position:relative;overflow:hidden}
+#sig{display:block;width:100%;height:190px;touch-action:none;cursor:crosshair}
+#sigHint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:#C6C1DA;font-size:14.5px;font-weight:700;pointer-events:none}
+.msg{border-radius:14px;padding:14px 16px;font-size:14.5px;font-weight:600;margin-bottom:14px;line-height:1.6}
+.msg.err{background:var(--red-l);color:var(--red)}
+.msg.ok{background:var(--green-l);color:#1B6B47}
+.msg.info{background:var(--violet-l);color:var(--violet)}
+.center{text-align:center;padding:48px 20px;color:var(--muted)}
+.center .big{font-size:44px;margin-bottom:10px}
+.center h3{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);margin-bottom:8px}
+.foot{font-size:12px;color:var(--muted);text-align:center;margin-top:20px;line-height:1.7}
+.eng{background:var(--violet-l);color:var(--violet);border-radius:14px;padding:13px 15px;
+  font-size:13.5px;font-weight:600;line-height:1.6;margin-bottom:14px}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <h1>Koala Kids</h1>
+  <div class="s" id="hdSub">Votre contrat d'accueil</div>
+</div>
+
+<div class="wrap" id="wrap">
+  <div class="center"><div class="big">⏳</div><p>Chargement de votre contrat…</p></div>
+</div>
+
+<script>
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const FN=SUPABASE_URL+"/functions/v1/dossier-contrat";
+
+const TOKEN=new URLSearchParams(location.search).get('t')||'';
+let D=null;
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function eur(n){
+  const v=Math.round(Number(n||0)*100)/100;
+  const p=Math.abs(v).toFixed(2).replace('.',',').split(',');
+  return (v<0?'− ':'')+p[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ')+','+p[1]+' €';
+}
+function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
+const JOURS=[[1,'lundi'],[2,'mardi'],[3,'mercredi'],[4,'jeudi'],[5,'vendredi']];
+function joursTxt(v){
+  let j=v;
+  if(typeof j==='string'){try{j=JSON.parse(j);}catch(e){j=[];}}
+  if(!Array.isArray(j))return'';
+  return JOURS.filter(x=>j.map(Number).indexOf(x[0])>=0).map(x=>x[1]).join(', ');
+}
+function nb(n){return String(Math.round(Number(n||0)*100)/100).replace('.',',');}
+
+async function appel(action,extra){
+  const r=await fetch(FN,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,
+             'Authorization':'Bearer '+SUPABASE_ANON_KEY},
+    body:JSON.stringify(Object.assign({action:action,token:TOKEN},extra||{}))
+  });
+  const j=await r.json().catch(()=>({erreur:'Réponse illisible'}));
+  if(!r.ok)throw new Error(j.erreur||'Erreur');
+  return j;
+}
+
+function ecranSimple(emoji,titre,texte){
+  document.getElementById('wrap').innerHTML=
+    '<div class="center"><div class="big">'+emoji+'</div><h3>'+esc(titre)+'</h3><p>'+texte+'</p></div>';
+}
+
+/* ---------- L'affichage du contrat ---------- */
+function rendre(){
+  const c=D.contrat, e=D.enfant||{}, cr=D.creche||{}, et=D.etablissement||{};
+  const nomEnfant=((e.prenom||'')+' '+(e.nom||'')).trim()||'votre enfant';
+  const avenant=c.type==='avenant';
+  document.getElementById('hdSub').textContent=
+    (avenant?'Avenant ':'Contrat ')+(c.numero||'')+(cr.name?' · '+cr.name:'');
+
+  /* Déjà clos : on montre l'état, pas le formulaire. Un contrat signé peut
+     encore attendre la contresignature de la crèche — la famille doit savoir
+     laquelle des deux situations est la sienne, sans avoir à téléphoner. */
+  if(c.signe_le){
+    ecranSimple('✅',avenant?'Avenant signé':'Contrat signé',
+      'Vous avez signé ce '+(avenant?'avenant':'contrat')+' le <b>'+dfr(c.signe_le)+'</b>'
+      +(c.signe_par?' au nom de <b>'+esc(c.signe_par)+'</b>':'')+'.<br><br>'
+      +(c.contresigne_le
+        ? 'Il a été contresigné par la crèche le <b>'+dfr(c.contresigne_le)+'</b> : '
+          +'il est désormais complet. Vous pouvez fermer cette page.'
+        : 'La crèche doit encore le contresigner. Vous n\'avez rien d\'autre à faire — '
+          +'nous revenons vers vous très vite.'));
+    return;
+  }
+  if(c.refuse_le){
+    ecranSimple('📄',avenant?'Avenant refusé':'Contrat refusé',
+      'Vous avez décliné ce '+(avenant?'avenant':'contrat')+' le <b>'+dfr(c.refuse_le)+'</b>.<br><br>'
+      +'Si c\'était une erreur, ou si votre situation a changé, appelez-nous : '
+      +'nous en établirons un nouveau.');
+    return;
+  }
+
+  const RECUR=['accueil','mensuel','unitaire'];
+  const lignes=D.lignes||[];
+  const unite=l=>l.type==='accueil'
+    ? (c.tarif_mode==='horaire'?'h':(c.tarif_mode==='journee'?'j':'mois'))
+    : (l.type==='unitaire'?'j':'');
+  const detail=l=>{
+    const q=Number(l.quantite);
+    if(!q||q===1)return '';
+    const u=unite(l);
+    return nb(q)+(u?' '+u:'')+' × '+eur(Math.abs(l.montant_unitaire));
+  };
+  const tr=l=>'<tr'+(Number(l.total)<0?' class="neg"':'')+'>'
+    +'<td>'+esc(l.libelle)
+    +(l.description?'<div class="d">'+esc(l.description)+'</div>':'')
+    +(detail(l)?'<div class="d">'+esc(detail(l))+'</div>':'')+'</td>'
+    +'<td class="m">'+(Number(l.total)<0?'− ':'')+eur(Math.abs(l.total))+'</td></tr>';
+
+  const recu=lignes.filter(l=>RECUR.indexOf(l.type)>=0);
+  const hors=lignes.filter(l=>RECUR.indexOf(l.type)<0);
+
+  let h='';
+
+  /* Un contrat engage sur une année, là où un devis chiffrait une proposition.
+     On le dit d'emblée, en haut : c'est ce qui distingue ce document de celui
+     que la famille a déjà signé, et il ne faut pas qu'elle croie signer deux
+     fois la même chose. */
+  h+='<div class="eng">'
+   +(avenant
+      ? 'Cet <b>avenant</b> modifie votre contrat d\'accueil'
+        +(c.date_effet?' à partir du <b>'+dfr(c.date_effet)+'</b>':'')
+        +'. Le contrat d\'origine reste en vigueur pour tout ce qui n\'est pas repris ici.'
+      : 'Ce document est votre <b>contrat d\'accueil</b>. Il engage la crèche et votre famille '
+        +'pour la durée indiquée ci-dessous. Prenez le temps de le lire : il reprend le devis '
+        +'que vous avez accepté et y ajoute les conditions de l\'accueil.')
+   +'</div>';
+
+  h+='<div class="card"><h2>L\'accueil convenu</h2>'
+   +'<div class="kv"><span class="k">Enfant</span><span class="v">'+esc(nomEnfant)+'</span></div>'
+   +(cr.name?'<div class="kv"><span class="k">Crèche</span><span class="v">'+esc(cr.name)+'</span></div>':'')
+   +(cr.addr?'<div class="kv"><span class="k">Adresse</span><span class="v">'+esc(cr.addr)+'</span></div>':'')
+   +(c.date_debut?'<div class="kv"><span class="k">Début de l\'accueil</span><span class="v">'+dfr(c.date_debut)+'</span></div>':'')
+   +(c.date_fin?'<div class="kv"><span class="k">Fin de l\'accueil</span><span class="v">'+dfr(c.date_fin)+'</span></div>':'')
+   +(c.date_effet?'<div class="kv"><span class="k">Prend effet le</span><span class="v">'+dfr(c.date_effet)+'</span></div>':'')
+   +'<div class="kv"><span class="k">Jours</span><span class="v">'+esc(joursTxt(c.jours)||'—')+'</span></div>'
+   +'<div class="kv"><span class="k">Horaires</span><span class="v">'+esc((c.heure_debut||'')+' – '+(c.heure_fin||''))+'</span></div>'
+   +'<div class="kv"><span class="k">Volume hebdomadaire</span><span class="v">'+nb(c.heures_hebdo)+' h</span></div>'
+   +(c.date_fin
+      ? '<div class="kv"><span class="k">Jours facturés</span><span class="v">'
+        +(c.jours_accueil!=null?esc(c.jours_accueil)+' jours':'—')
+        +(c.mois_factures?' sur '+nb(c.mois_factures)+' mois':'')+'</span></div>'
+      : '<div class="kv"><span class="k">Semaines facturées</span><span class="v">'+esc(c.semaines_an)+' / an</span></div>')
+   +'<p class="note">'+(c.date_fin
+      ? 'La mensualité répartit les jours d\'accueil de la période sur '+nb(c.mois_factures||0)
+        +' mensualités égales. Elle est identique chaque mois, y compris pendant les périodes de '
+        +'fermeture, déjà déduites du nombre de jours facturés.'
+      : 'La mensualité est lissée sur douze mois : elle est identique chaque mois, y compris '
+        +'pendant les semaines de fermeture, déjà déduites du nombre de semaines facturées.')
+   +'</p></div>';
+
+  h+='<div class="card"><h2>La mensualité</h2><table class="lg">'
+   +recu.map(tr).join('')
+   +'<tr class="tot"><td>Total mensuel</td><td class="m">'+eur(c.total_mensuel)+'</td></tr>'
+   +'</table>';
+  if(hors.length){
+    h+='<div style="margin-top:16px"><table class="lg">'+hors.map(tr).join('')+'</table>'
+     +'<p class="note">Facturés en une seule fois ou une fois par an, en sus de la mensualité.</p></div>';
+  }
+  if(c.total_annuel){
+    h+='<p class="note">Soit <b>'+eur(c.total_annuel)+'</b>'
+     +(c.date_fin?' sur la durée du contrat, en '+nb(c.mois_factures||0)+' mensualités.':' sur douze mois.')
+     +'</p>';
+  }
+  h+='</div>';
+
+  if(c.cmg_estime!=null){
+    h+='<div class="card"><h2>Estimation du CMG</h2>'
+     +'<div class="kv"><span class="k">Coût mensuel</span><span class="v">'+eur(c.total_mensuel)+'</span></div>'
+     +'<div class="kv"><span class="k" style="color:var(--green)">CMG estimé, versé par la CAF</span>'
+     +'<span class="v" style="color:var(--green)">− '+eur(c.cmg_estime)+'</span></div>'
+     +'<div class="rac"><span>Reste à charge</span><b>'+eur(c.reste_a_charge)+'</b></div>'
+     +'<p class="note">Estimation calculée à partir des revenus que vous nous avez communiqués et du '
+     +'barème CAF en vigueur. <b>Seule la CAF détermine le montant réellement versé.</b> La crèche ne '
+     +'perçoit pas le CMG : elle facture la mensualité ci-dessus.</p></div>';
+  }
+
+  if(c.commentaire&&String(c.commentaire).trim()){
+    h+='<div class="card"><h2>Précisions</h2><p style="font-size:14.5px">'+esc(c.commentaire)+'</p></div>';
+  }
+
+  /* Les clauses. Elles sont figées sur le contrat : ce que la famille lit ici
+     est ce qui s'appliquera, même si le réseau modifie ses textes demain. */
+  const clauses=[
+    ['Résiliation et préavis', c.preavis_texte],
+    ['Conditions de résiliation', c.conditions_resiliation],
+    ['Mentions légales', c.mentions_legales]
+  ].filter(x=>x[1]&&String(x[1]).trim());
+  if(clauses.length){
+    h+='<div class="card"><h2>Les conditions du contrat</h2>'
+     +clauses.map(x=>'<div style="margin-top:12px"><b style="font-size:14px">'+esc(x[0])+'</b>'
+       +'<div class="clause">'+esc(x[1])+'</div></div>').join('')
+     +'</div>';
+  }
+
+  h+='<div class="card"><h2>Les parties au contrat</h2>'
+   +'<div class="kv"><span class="k">La crèche</span><span class="v">'+esc(et.raison_sociale||'Koala Kids')+'</span></div>'
+   +(et.representant_nom?'<div class="kv"><span class="k">Représentée par</span><span class="v">'
+     +esc(et.representant_nom)+(et.representant_qualite?', '+esc(et.representant_qualite):'')+'</span></div>':'')
+   +(et.siret?'<div class="kv"><span class="k">SIRET</span><span class="v">'+esc(et.siret)+'</span></div>':'')
+   +(et.adresse_siege?'<div class="kv"><span class="k">Siège</span><span class="v">'+esc(et.adresse_siege)+'</span></div>':'')
+   +(c.famille_adresse||c.famille_ville
+      ? '<div class="kv" style="margin-top:8px;padding-top:12px;border-top:2px solid var(--line)">'
+        +'<span class="k">Votre foyer</span><span class="v">'
+        +esc([c.famille_adresse,[c.famille_code_postal,c.famille_ville].filter(Boolean).join(' ')]
+             .filter(Boolean).join(', '))+'</span></div>'
+      : '')
+   +'<p class="note">Si l\'une de ces informations est inexacte, dites-le-nous <b>avant</b> de signer : '
+   +'elles figureront sur le contrat.</p></div>';
+
+  /* Le formulaire de signature. Le nom est saisi et non pré-rempli : c'est
+     lui qui figurera sur le contrat, et il peut différer de la fiche (nom
+     d'usage, second parent, tuteur). */
+  h+='<div class="card">'
+   +'<h2>Signer '+(avenant?'l\'avenant':'le contrat')+'</h2>'
+   +'<div id="msg"></div>'
+   +'<div style="margin-bottom:12px"><label class="lb">Votre nom et prénom</label>'
+   +'<input id="nom" autocomplete="name" placeholder="Marie Durand"></div>'
+   +'<label class="lb">Votre signature — tracez-la avec le doigt</label>'
+   +'<div id="sigBox"><canvas id="sig"></canvas><div id="sigHint">Signez ici</div></div>'
+   +'<button class="btn btn-g" style="margin-top:8px" onclick="effacer()">Effacer la signature</button>'
+   +'<p class="note">En signant, vous vous engagez aux conditions ci-dessus. '
+   +'La crèche contresignera à son tour, et vous recevrez le contrat complet.</p>'
+   +'<button class="btn btn-p" style="margin-top:12px" id="btnOk" onclick="signer()">Signer '
+   +(avenant?'l\'avenant':'le contrat')+'</button>'
+   +'<button class="btn btn-g" style="margin-top:10px" onclick="refuser()">Je ne souhaite pas signer</button>'
+   +'</div>';
+
+  h+='<p class="foot">'+esc(et.raison_sociale||'Koala Kids')
+   +(et.siret?' · SIRET '+esc(et.siret):'')
+   +(et.pmi_numero?'<br>Agrément PMI '+esc(et.pmi_numero):'')
+   +(et.telephone||et.email?'<br>'+esc([et.telephone,et.email].filter(Boolean).join(' · ')):'')
+   +'</p>';
+
+  document.getElementById('wrap').innerHTML=h;
+  initSignature();
+}
+
+/* ---------- La signature ---------- */
+/* Canvas redimensionné à la densité réelle de l'écran : dessiné en pixels CSS
+   sur un mobile récent, le tracé sort flou et pixelisé une fois collé dans le
+   PDF, qui l'agrandit. */
+let ctx=null,dessine=false,aTrace=false;
+function initSignature(){
+  const cv=document.getElementById('sig');
+  if(!cv)return;
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  const r=cv.getBoundingClientRect();
+  cv.width=Math.round(r.width*dpr);
+  cv.height=Math.round(r.height*dpr);
+  ctx=cv.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#2B2740';
+  const pos=ev=>{const b=cv.getBoundingClientRect();return{x:ev.clientX-b.left,y:ev.clientY-b.top};};
+  cv.addEventListener('pointerdown',ev=>{
+    ev.preventDefault();cv.setPointerCapture(ev.pointerId);
+    dessine=true;aTrace=true;
+    document.getElementById('sigHint').style.display='none';
+    const p=pos(ev);ctx.beginPath();ctx.moveTo(p.x,p.y);
+  });
+  cv.addEventListener('pointermove',ev=>{
+    if(!dessine)return;ev.preventDefault();
+    const p=pos(ev);ctx.lineTo(p.x,p.y);ctx.stroke();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(t=>
+    cv.addEventListener(t,()=>{dessine=false;}));
+}
+function effacer(){
+  const cv=document.getElementById('sig');
+  if(!cv||!ctx)return;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  aTrace=false;
+  document.getElementById('sigHint').style.display='';
+}
+function message(txt,type){
+  const m=document.getElementById('msg');
+  if(m)m.innerHTML='<div class="msg '+(type||'err')+'">'+txt+'</div>';
+}
+
+async function signer(){
+  const nom=(document.getElementById('nom').value||'').trim();
+  if(nom.length<3){message('Merci d\'indiquer votre nom et votre prénom.');return;}
+  if(!aTrace){message('Merci de tracer votre signature dans le cadre.');return;}
+  const png=document.getElementById('sig').toDataURL('image/png');
+  // Le même seuil que côté serveur : mieux vaut le dire ici que d'essuyer un
+  // refus après l'aller-retour.
+  if(png.length<1500){message('La signature est trop brève — retracez-la un peu plus largement.');return;}
+
+  const b=document.getElementById('btnOk');
+  b.disabled=true;b.textContent='Enregistrement…';
+  try{
+    await appel('signer',{nom:nom,signature:png});
+    ecranSimple('✅','Merci !',
+      'Votre contrat est signé. La crèche va le contresigner à son tour, et vous '
+      +'recevrez ensuite le document complet.<br><br>Vous pouvez fermer cette page.');
+  }catch(e){
+    message(esc(e.message||'Enregistrement impossible.'));
+    b.disabled=false;b.textContent='Signer le contrat';
+  }
+}
+
+async function refuser(){
+  if(!confirm('Confirmez-vous que vous ne souhaitez pas signer ce contrat ?'))return;
+  const motif=prompt('Souhaitez-vous nous en dire la raison ? (facultatif)')||'';
+  try{
+    await appel('refuser',{motif:motif});
+    ecranSimple('📄','C\'est noté',
+      'Merci de nous avoir répondu. Appelez-nous si vous souhaitez en discuter : '
+      +'nous pouvons revoir les conditions ensemble.');
+  }catch(e){
+    message(esc(e.message||'Enregistrement impossible.'));
+  }
+}
+
+/* ---------- Démarrage ---------- */
+(async function(){
+  if(!TOKEN){
+    ecranSimple('🔗','Lien incomplet',
+      'Cette adresse ne contient pas de contrat. Ouvrez le lien tel qu\'il figure dans notre e-mail, '
+      +'sans le raccourcir.');
+    return;
+  }
+  try{
+    D=await appel('get');
+    rendre();
+  }catch(e){
+    const m=String(e.message||'');
+    if(/expiré/i.test(m)){
+      ecranSimple('⏳','Lien expiré',
+        'Ce contrat n\'est plus valable. Appelez-nous ou répondez à notre e-mail : '
+        +'nous vous en enverrons un nouveau tout de suite.');
+    }else if(/annulé/i.test(m)){
+      ecranSimple('📄','Contrat annulé',
+        'Ce contrat a été annulé par la crèche. Contactez-nous pour en savoir plus.');
+    }else if(/introuvable/i.test(m)){
+      ecranSimple('🔗','Lien introuvable',
+        'Ce lien ne correspond à aucun contrat. Vérifiez que vous l\'avez copié en entier, '
+        +'ou répondez à notre e-mail.');
+    }else{
+      ecranSimple('⚠️','Chargement impossible',
+        'Le contrat n\'a pas pu être chargé. Vérifiez votre connexion et réessayez dans un instant.');
+    }
+  }
+})();
+</script>
+</body>
+</html>

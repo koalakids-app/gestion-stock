@@ -249,8 +249,33 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
     <div class="acts">
       <button class="btn btn-d" id="btnDelCt" style="display:none" onclick="delContrat()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn btn-s" id="btnLienCt" style="display:none" onclick="copierLienContrat()"><i class="ti ti-link"></i> Le lien</button>
+      <button class="btn btn-p" id="btnEnvoiCt" style="display:none" onclick="envoyerContrat()"><i class="ti ti-send"></i> Envoyer</button>
+      <button class="btn btn-p" id="btnSignerCt" style="display:none" onclick="openContresignature()"><i class="ti ti-stamp"></i> Contresigner</button>
       <button class="btn btn-g" onclick="closeOv('ovContrat')">Fermer</button>
       <button class="btn btn-p" id="btnSaveCt" onclick="saveContrat()"><i class="ti ti-check"></i> Enregistrer le brouillon</button>
+    </div>
+  </div>
+</div>
+
+<!-- LA CONTRESIGNATURE DE LA CRÈCHE -->
+<div class="ov" id="ovContresign">
+  <div class="md" style="max-width:540px">
+    <h3><i class="ti ti-stamp"></i> Contresigner le contrat</h3>
+    <div id="csInfo"></div>
+    <div class="f"><label class="lb">Nom et qualité du signataire</label>
+      <input id="csNom" placeholder="Prénom Nom, coordinateur pédagogique"></div>
+    <label class="lb">Signature — tracez-la à la souris ou au doigt</label>
+    <div id="csBox" style="border:2px dashed #D9D3F2;border-radius:14px;background:#fff;position:relative;overflow:hidden">
+      <canvas id="csSig" style="display:block;width:100%;height:180px;touch-action:none;cursor:crosshair"></canvas>
+      <div id="csHint" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#C6C1DA;font-size:14px;font-weight:700;pointer-events:none">Signez ici</div>
+    </div>
+    <button class="btn btn-g btn-sm" style="margin-top:8px" onclick="csEffacer()"><i class="ti ti-eraser"></i> Effacer</button>
+    <p class="hint" style="margin-top:10px">La contresignature rend le contrat complet des deux côtés. C'est elle qui
+      autorise ensuite la création de la fiche enfant, dans le module Inscriptions.</p>
+    <div class="acts">
+      <button class="btn btn-g" onclick="closeOv('ovContresign')">Annuler</button>
+      <button class="btn btn-p" id="btnCsGo" onclick="contresigner()"><i class="ti ti-check"></i> Contresigner</button>
     </div>
   </div>
 </div>
@@ -283,7 +308,7 @@ let reseauCharge=false;
 
 let filtreEtat='',anneeFiltre='';
 let contratId=null;
-let CCUR=null,CCALC=null,CTYPE='initial',CPARENT=null;
+let CCUR=null,CCALC=null,CTYPE='initial',CPARENT=null,CBROUILLON=true;
 let CTX=null;      // {kind:'pre'|'enfant', id} — le dossier ouvert
 let CSUJ=null;     // le sujet normalisé : d'où qu'il vienne, mêmes champs
 let CPRE=null,CPARENTS=[],semManuel=false;
@@ -1030,6 +1055,7 @@ async function openContrat(id,type){
   contratId=id;
   CCUR=id?CONTRATS.find(x=>String(x.id)===String(id)):null;
   const brouillon=!CCUR||CCUR.statut==='brouillon';
+  CBROUILLON=brouillon;
 
   if(CCUR){
     CTYPE=CCUR.type;
@@ -1057,6 +1083,32 @@ async function openContrat(id,type){
     ? '<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>':'';
   document.getElementById('btnDelCt').style.display=(CCUR&&brouillon)?'':'none';
   document.getElementById('btnSaveCt').style.display=brouillon?'':'none';
+
+  /* Envoi, lien, contresignature — les trois boutons qui font avancer le
+     contrat, affichés seulement quand ils ont un sens.
+
+     Un contrat CLOS ne s'envoie plus : le lien serait mort à l'arrivée, et
+     relancer une famille qui a déjà répondu est le genre de maladresse qu'une
+     application ne doit pas rendre possible. */
+  const clos=!!(CCUR&&(CCUR.repondu_le
+    ||['signe','contresigne','refuse','annule','expire','resilie'].indexOf(CCUR.statut)>=0));
+  const bEnv=document.getElementById('btnEnvoiCt');
+  bEnv.style.display=(CCUR&&!clos)?'':'none';
+  bEnv.innerHTML=(CCUR&&CCUR.statut==='envoye')
+    ? '<i class="ti ti-bell"></i> Relancer la famille'
+    : '<i class="ti ti-send"></i> Envoyer à la famille';
+  /* Le lien s'obtient sur tout contrat enregistré et non clos, qu'il ait déjà
+     été envoyé ou non : c'est la voie manuelle, et elle ne doit jamais dépendre
+     du bon fonctionnement du mail automatique. */
+  const bLien=document.getElementById('btnLienCt');
+  bLien.style.display=(CCUR&&!clos)?'':'none';
+  bLien.innerHTML=(CCUR&&CCUR.token)
+    ? '<i class="ti ti-link"></i> Le lien'
+    : '<i class="ti ti-link"></i> Créer le lien';
+  // La contresignature n'a de sens qu'entre la signature de la famille et rien
+  // d'autre : ni avant, ni deux fois.
+  document.getElementById('btnSignerCt').style.display=
+    (CCUR&&CCUR.statut==='signe')?'':'none';
 
   const lock=document.getElementById('cLock');
   lock.style.display=brouillon?'none':'';
@@ -1262,6 +1314,14 @@ function cSync(){
     ? ' Aucune crèche retenue : valeur par défaut.'
     : (Number(c.sem)===ref ? ' Nombre repris des paramètres de la crèche.'
                            : ' Corrigé à la main — les paramètres de la crèche indiquent '+ref+' semaines.');
+  /* Les semaines facturées par an ne servent QU'AUX accueils sans terme : dès
+     qu'une fin est posée, le calcul part des jours réellement comptés sur la
+     période, et ce champ n'a plus aucun effet. Le laisser actif donnait un
+     chiffre qu'on pouvait corriger sans que rien ne bouge — on le grise, et on
+     dit pourquoi. */
+  const eSem=document.getElementById('cSem');
+  if(eSem)eSem.disabled=!CBROUILLON||c.avecTerme;
+
   const vol=document.getElementById('cVol');
   if(c.h==null){
     vol.textContent='Renseignez les jours et les horaires pour calculer le volume hebdomadaire.';
@@ -1271,7 +1331,9 @@ function cSync(){
         ? 'Renseignez les jours d\'accueil de la période.'
         : c.joursPeriode+' jour'+(c.joursPeriode>1?'s':'')+' d\'accueil facturés du '
           +dfr(val('cDebut'))+' au '+dfr(val('cFin'))+', répartis sur '+nbFr(c.mois)+' mois — soit '
-          +nbFr(Math.round(c.jparmois*100)/100)+' jour'+(c.jparmois>1?'s':'')+' par mois.');
+          +nbFr(Math.round(c.jparmois*100)/100)+' jour'+(c.jparmois>1?'s':'')+' par mois. ')
+      +'Une fin d\'accueil étant posée, les semaines facturées par an n\'entrent pas dans le calcul : '
+      +'la mensualité se déduit des jours réellement comptés sur la période. Le champ est donc grisé.';
   }else{
     vol.textContent=c.h+' h par semaine sur '+c.nj+' jour'+(c.nj>1?'s':'')+', soit '
       +(Math.round(c.h*c.sem*100)/100)+' h sur '+c.sem+' semaines.'+origine
@@ -1494,6 +1556,318 @@ async function delContrat(){
   }catch(e){
     console.error('[delContrat]',e);
     toast('Suppression impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+
+/* ---------- ENVOI ET SIGNATURE EN LIGNE ---------- */
+/* La famille reçoit un mail, ouvre signature-contrat.html avec son jeton, lit le contrat
+   et le signe du doigt. Même dispositif que le devis : jeton porté par la
+   ligne, edge function en service_role, AUCUNE policy anon sur `contrats`.
+
+   Le jeton est fabriqué ICI, sous RLS, par quelqu'un qui a le droit d'envoyer
+   le contrat — et non par l'edge function, qui ne doit jamais pouvoir créer un
+   accès de sa propre initiative. La fonction d'envoi ne reçoit qu'un
+   identifiant et relit tout le reste en base. */
+
+/* crypto.getRandomValues et non Math.random : ce jeton est la seule chose qui
+   sépare le contrat d'une famille de celui d'une autre. 32 octets, 64
+   caractères hexadécimaux — indevinable. */
+function nouveauJeton(){
+  const a=new Uint8Array(32);
+  crypto.getRandomValues(a);
+  return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('');
+}
+/* La page famille s'appelle `signature-contrat.html`, et non `contrat.html` :
+   une seule lettre d'écart avec `contrats.html` — l'écran de la direction —
+   aurait fini par produire un lien qui envoie une famille sur la liste de tous
+   les dossiers du réseau. Ce nom-là doit rester stable : il part dans les mails
+   et vit dans les boîtes des familles pendant des semaines. */
+function lienContrat(jeton){
+  const racine=location.href.replace(/[^/]*\.html?(\?.*)?(#.*)?$/i,'');
+  return racine+'signature-contrat.html?t='+jeton;
+}
+
+/* supabase-js masque le corps de la réponse d'une edge function derrière un
+   message unique — « Edge Function returned a non-2xx status code » — quelle
+   que soit la cause. Le vrai motif (clé Resend absente, domaine non vérifié,
+   APP_URL manquante, adresse invalide) est dans le corps JSON, sous `erreur`.
+   Sans cette fonction, toutes les pannes d'envoi se ressemblent. */
+async function detailFn(e){
+  try{
+    if(e&&e.context&&typeof e.context.json==='function'){
+      const j=await e.context.json();
+      if(j&&j.erreur)return j.erreur;
+      if(j&&j.error)return String(j.error);
+    }
+  }catch(x){}
+  try{
+    if(e&&e.context&&typeof e.context.text==='function'){
+      const t=await e.context.text();
+      if(t)return t.slice(0,300);
+    }
+  }catch(x){}
+  return (e&&e.message)||'erreur inconnue';
+}
+
+/* Les clauses sont RECOPIÉES sur le contrat au moment où il part, pas lues à
+   l'affichage. Un contrat garde les conditions sous lesquelles il a été signé,
+   même si le réseau réécrit ses textes le lendemain — c'est la même règle que
+   pour le tarif, et pour la même raison. */
+function clausesFigees(){
+  return {
+    preavis_texte:String(RESEAU.preavis_resiliation||''),
+    conditions_resiliation:String(RESEAU.conditions_resiliation||''),
+    mentions_legales:String(RESEAU.contrat_mentions||RESEAU.devis_mentions||'')
+  };
+}
+
+/* Le lien vit indépendamment de l'envoi. On peut donc le créer et le
+   transmettre à la main — SMS, mail écrit soi-même — sans passer par Resend.
+   C'est la porte de sortie quand le mail automatique échoue, quand la famille
+   n'a pas d'adresse, ou quand on veut simplement vérifier la page avant de
+   l'envoyer à qui que ce soit.
+
+   Le jeton n'est fabriqué qu'une fois : rappeler ce bouton recopie le même
+   lien, et n'invalide pas celui qui est déjà parti. Il n'est renouvelé que
+   s'il a expiré. */
+async function copierLienContrat(){
+  const c=CONTRATS.find(x=>String(x.id)===String(contratId));
+  if(!c){toast('Enregistrez d\'abord le contrat.',true);return;}
+  if(c.repondu_le){toast('Ce contrat a déjà reçu une réponse.',true);return;}
+
+  let jeton=c.token;
+  const expire=c.expire_le?new Date(c.expire_le).getTime():0;
+  if(!jeton||expire<Date.now()){
+    await loadReseau();
+    const jours=Number(RESEAU.contrat_validite_jours||RESEAU.devis_validite_jours||30);
+    const fin=new Date();fin.setDate(fin.getDate()+jours);
+    const maj=Object.assign({
+      token:nouveauJeton(),expire_le:fin.toISOString(),
+      updated_at:new Date().toISOString()
+    },clausesFigees());
+    const adr=destinatairesDe();
+    if(adr.length)maj.destinataires=adr.join(', ');
+
+    /* Créer un lien pour le donner à une famille, c'est envoyer le contrat. Le
+       statut suit donc, et pour deux raisons qui vont ensemble :
+
+       — la signature en ligne n'est acceptée que sur un contrat « envoyé ». Un
+         lien créé sur un brouillon laissait la famille tout lire, tout signer,
+         et se faire refuser au dernier clic ;
+       — la contrainte contrats_envoi_ck exige `token` ET `envoye_le` dès qu'un
+         contrat quitte le brouillon. Les poser séparément est impossible.
+
+       On le dit avant, parce que le contrat cesse alors d'être modifiable. */
+    if(c.statut==='brouillon'){
+      if(!confirm('Créer le lien de signature ?\n\n'
+        +'Le contrat passera en « Envoyé » et ne sera plus modifiable — c\'est ce qui '
+        +'autorise la famille à le signer en ligne.\n'
+        +'Un changement ultérieur se portera par avenant.\n\n'
+        +'Lien valable '+jours+' jours, jusqu\'au '+dfr(fin.toISOString())+'.'))return;
+      maj.statut='envoye';
+      maj.envoye_le=new Date().toISOString();
+    }
+
+    const{error}=await sb.from('contrats').update(maj).eq('id',c.id);
+    if(error){
+      console.error('[copierLienContrat]',error);
+      toast('Création du lien impossible : '+(error.message||'erreur inconnue'),true);
+      return;
+    }
+    Object.assign(c,maj);
+    jeton=maj.token;
+    document.getElementById('btnLienCt').innerHTML='<i class="ti ti-link"></i> Le lien';
+    if(maj.statut==='envoye'){render();rendreDossier();}
+  }
+
+  const url=lienContrat(jeton);
+  try{
+    await navigator.clipboard.writeText(url);
+    toast('Lien copié — collez-le dans votre mail ou un SMS.');
+  }catch(e){
+    // Le presse-papier est refusé hors HTTPS et dans certains navigateurs :
+    // plutôt que d'échouer, on montre le lien pour qu'il soit copié à la main.
+    prompt('Copiez ce lien :',url);
+  }
+}
+
+async function envoyerContrat(){
+  const c=CONTRATS.find(x=>String(x.id)===String(contratId));
+  if(!c){toast('Enregistrez d\'abord le contrat.',true);return;}
+  if(c.repondu_le){toast('Ce contrat a déjà reçu une réponse.',true);return;}
+
+  const relance=(c.statut==='envoye');
+  const adresses=String(val('cDest')||c.destinataires||'')
+    .split(',').map(x=>x.trim()).filter(x=>x.indexOf('@')>0);
+  if(!adresses.length){
+    toast('Aucun destinataire avec une adresse e-mail : cochez « destinataire » sur au moins un parent, dans le module Inscriptions.',true);
+    return;
+  }
+  if(!c.total_mensuel){
+    toast('Ce contrat ne chiffre rien — vérifiez-le avant de l\'envoyer.',true);
+    return;
+  }
+
+  await loadReseau();
+  const jours=Number(RESEAU.contrat_validite_jours||RESEAU.devis_validite_jours||30);
+  const fin=new Date();fin.setDate(fin.getDate()+jours);
+
+  const quoi=relance
+    ? 'Relancer '+adresses.join(', ')+' ?'
+    : 'Envoyer ce contrat à '+adresses.join(', ')+' ?\n\n'
+      +'Le contrat passera en « Envoyé » et ne sera plus modifiable.\n'
+      +'Un changement ultérieur se portera par avenant.\n'
+      +'Le lien sera valable '+jours+' jours, jusqu\'au '+dfr(fin.toISOString())+'.';
+  if(!confirm(quoi))return;
+
+  const b=document.getElementById('btnEnvoiCt');
+  b.disabled=true;b.textContent=relance?'Relance…':'Envoi…';
+  try{
+    /* Un jeton n'est fabriqué qu'au premier envoi. Une relance réutilise le
+       même lien : en poser un nouveau invaliderait celui que la famille a déjà
+       dans sa boîte, et c'est souvent celui-là qu'elle rouvrira. On ne le
+       renouvelle que s'il a expiré entre-temps. */
+    const expire=c.expire_le?new Date(c.expire_le).getTime():0;
+    const besoinJeton=!c.token||expire<Date.now();
+    const maj={destinataires:adresses.join(', '),updated_at:new Date().toISOString()};
+    if(besoinJeton){maj.token=nouveauJeton();maj.expire_le=fin.toISOString();}
+    if(!relance){
+      maj.statut='envoye';
+      maj.envoye_le=new Date().toISOString();
+      Object.assign(maj,clausesFigees());
+    }
+
+    const{error}=await sb.from('contrats').update(maj).eq('id',c.id);
+    if(error)throw error;
+    Object.assign(c,maj);
+
+    /* Le mail part APRÈS l'écriture : si l'envoi échoue, le lien existe déjà et
+       le bouton « Le lien » permet de le transmettre à la main. L'inverse —
+       mailer d'abord — aurait pu expédier un lien que la base n'a pas gardé. */
+    const{error:eFn}=await sb.functions.invoke('envoyer-contrat',
+      {body:{contrat_id:c.id,relance:relance}});
+    if(eFn)throw new Error(await detailFn(eFn));
+
+    if(relance){
+      c.relances=(c.relances||0)+1;
+      c.derniere_relance=new Date().toISOString();
+      toast('Relance envoyée ✅');
+    }else{
+      toast('Contrat envoyé ✅');
+    }
+    closeOv('ovContrat');
+    await recharger();
+    rendreDossier();
+  }catch(e){
+    console.error('[envoyerContrat]',e);
+    toast('Envoi impossible : '+(e.message||'erreur inconnue')
+      +' — le lien reste disponible par le bouton « Le lien ».',true);
+  }finally{
+    b.disabled=false;
+    b.innerHTML=relance?'<i class="ti ti-bell"></i> Relancer la famille'
+                       :'<i class="ti ti-send"></i> Envoyer à la famille';
+  }
+}
+
+/* ---------- LA CONTRESIGNATURE ---------- */
+/* Tracée à chaque contrat, jamais stockée une fois pour toutes en paramètres :
+   une signature réapposée automatiquement prouve seulement que l'application
+   sait la recopier. Celle-ci est horodatée, nominative, et propre à ce
+   contrat — c'est ce qu'un contrôle PMI attend de voir. */
+let csCtx=null,csDessine=false,csTrace=false;
+
+function openContresignature(){
+  const c=CONTRATS.find(x=>String(x.id)===String(contratId));
+  if(!c){toast('Contrat introuvable.',true);return;}
+  if(c.statut!=='signe'){
+    toast('Seul un contrat signé par la famille peut être contresigné.',true);return;
+  }
+  document.getElementById('csInfo').innerHTML=
+    '<div class="warn" style="background:var(--green-l);color:var(--green)">'
+    +'<i class="ti ti-writing-sign"></i><span>Contrat <b>'+esc(c.numero||'')+'</b>, signé par la famille le '
+    +dfr(c.repondu_le)+(c.repondu_par?' au nom de <b>'+esc(c.repondu_par)+'</b>':'')+'.</span></div>';
+  setVal('csNom',(PROF&&PROF.name)?PROF.name:'');
+  csTrace=false;
+  const hint=document.getElementById('csHint');
+  if(hint)hint.style.display='';
+  openOv('ovContresign');
+  // Le canvas doit être dimensionné APRÈS l'affichage de la modale : mesuré
+  // pendant qu'elle est masquée, il fait zéro pixel de large et le tracé
+  // n'apparaît nulle part.
+  setTimeout(csInit,60);
+}
+
+function csInit(){
+  const cv=document.getElementById('csSig');
+  if(!cv)return;
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  const r=cv.getBoundingClientRect();
+  if(!r.width)return;
+  cv.width=Math.round(r.width*dpr);
+  cv.height=Math.round(r.height*dpr);
+  csCtx=cv.getContext('2d');
+  csCtx.scale(dpr,dpr);
+  csCtx.lineWidth=2.4;csCtx.lineCap='round';csCtx.lineJoin='round';csCtx.strokeStyle='#2B2740';
+  const pos=ev=>{const b=cv.getBoundingClientRect();return{x:ev.clientX-b.left,y:ev.clientY-b.top};};
+  cv.onpointerdown=ev=>{
+    ev.preventDefault();cv.setPointerCapture(ev.pointerId);
+    csDessine=true;csTrace=true;
+    document.getElementById('csHint').style.display='none';
+    const p=pos(ev);csCtx.beginPath();csCtx.moveTo(p.x,p.y);
+  };
+  cv.onpointermove=ev=>{
+    if(!csDessine)return;ev.preventDefault();
+    const p=pos(ev);csCtx.lineTo(p.x,p.y);csCtx.stroke();
+  };
+  cv.onpointerup=cv.onpointercancel=cv.onpointerleave=()=>{csDessine=false;};
+}
+function csEffacer(){
+  const cv=document.getElementById('csSig');
+  if(!cv||!csCtx)return;
+  csCtx.clearRect(0,0,cv.width,cv.height);
+  csTrace=false;
+  document.getElementById('csHint').style.display='';
+}
+
+async function contresigner(){
+  const c=CONTRATS.find(x=>String(x.id)===String(contratId));
+  if(!c)return;
+  const nom=val('csNom');
+  if(nom.length<3){toast('Indiquez le nom et la qualité du signataire.',true);return;}
+  if(!csTrace){toast('Tracez la signature dans le cadre.',true);return;}
+  const png=document.getElementById('csSig').toDataURL('image/png');
+  // Même seuil que côté famille : un cadre effleuré n'est pas une signature.
+  if(png.length<1500){toast('Signature trop brève — retracez-la plus largement.',true);return;}
+
+  const b=document.getElementById('btnCsGo');
+  b.disabled=true;b.textContent='Enregistrement…';
+  try{
+    const maintenant=new Date().toISOString();
+    /* `.eq('statut','signe')` protège du double clic et d'une contresignature
+       menée en parallèle depuis un autre poste : la seconde ne trouve plus de
+       ligne à modifier. */
+    const{data,error}=await sb.from('contrats').update({
+      statut:'contresigne',
+      contresigne_le:maintenant,
+      contresigne_par:nom,
+      contresignature_png:png,
+      updated_at:maintenant
+    }).eq('id',c.id).eq('statut','signe').select();
+    if(error)throw error;
+    if(!data||!data.length)throw new Error('Ce contrat vient d\'être contresigné ailleurs.');
+
+    Object.assign(c,data[0]);
+    closeOv('ovContresign');closeOv('ovContrat');
+    await recharger();
+    rendreDossier();
+    toast('Contrat contresigné ✅ — il est complet des deux côtés.');
+  }catch(e){
+    console.error('[contresigner]',e);
+    const msg=(e.code==='23514')
+      ? 'Une contrainte de la base refuse cet état : '+(e.message||'')
+      : (e.message||'erreur inconnue');
+    toast('Contresignature impossible : '+msg,true);
+    b.disabled=false;b.innerHTML='<i class="ti ti-check"></i> Contresigner';
   }
 }
 
