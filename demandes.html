@@ -1412,7 +1412,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
      les codes changent d'une école à l'autre, c'est vous qui dites ce que
      chacun veut dire.
      ══════════════════════════════════════════════════════════════════════ -->
-<div class="overlay" id="modal-stg-import-wrap" onclick="if(event.target===this)closeModal('modal-stg-import-wrap')">
+<div class="overlay" id="modal-stg-import-wrap" style="z-index:1300" onclick="if(event.target===this)closeModal('modal-stg-import-wrap')">
   <div class="modal" style="max-width:620px;max-height:88vh;display:flex;flex-direction:column">
     <h3><i class="ti ti-calendar-up" style="color:var(--koala)"></i> Importer un calendrier</h3>
     <div style="overflow-y:auto;flex:1;padding-right:4px">
@@ -15864,8 +15864,13 @@ function stgRenderJours(){
     +'<div style="font-weight:700;font-size:13px"><i class="ti ti-calendar-week" style="color:var(--koala)"></i> Jours de présence</div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
     +'<button class="btn-sm" onclick="stgGenererJours()"><i class="ti ti-wand"></i> Générer les jours ouvrés</button>'
-    +'<button class="btn-sm" onclick="document.getElementById(\'stg-imp-file\').click()"><i class="ti ti-calendar-up"></i> Importer un calendrier (PDF)</button>'
-    +'<input type="file" id="stg-imp-file" accept="application/pdf" style="display:none" onchange="stgImportPdf(event)">'
+    /* Un <label> et non un bouton avec .click() : l'ouverture du sélecteur de
+       fichier est alors native, sans JavaScript à exécuter — c'est ce qui
+       marche partout, tablette comprise. */
+    +'<label class="btn-sm" for="stg-imp-file" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px">'
+    +'<i class="ti ti-calendar-up"></i> Importer un calendrier (PDF)</label>'
+    +'<input type="file" id="stg-imp-file" accept="application/pdf,.pdf" '
+    +'style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden" onchange="stgImportPdf(event)">'
     +'<button class="btn-sm" onclick="stgAjouterJour()"><i class="ti ti-plus"></i> Ajouter un jour</button>'
     +'</div></div>';
 
@@ -15986,7 +15991,7 @@ async function stgImportPdf(ev){
     document.getElementById('modal-stg-import-wrap').classList.add('open');
   }catch(e){
     console.error('[Stagiaires] import calendrier',e);
-    showBanner('Ce PDF n\'a pas pu être lu.','error');
+    showBanner('Ce PDF n\'a pas pu être lu'+(e&&e.message?' : '+e.message:'')+'.','error');
   }
 }
 
@@ -16104,9 +16109,13 @@ function stgImportLignes(){
     if(!role||role==='ignore')return;
     if(dansPeriode&&((s.date_debut&&iso<s.date_debut)||(s.date_fin&&iso>s.date_fin))){horsPeriode++;return;}
     if(existants.has(iso)){deja++;return;}
+    /* Toutes les lignes portent EXACTEMENT les mêmes colonnes : PostgREST
+       refuse un envoi groupé dont les objets n'ont pas les mêmes clés
+       (« All object keys must match »), et un import mêlant présences et jours
+       de formation partirait alors entièrement en erreur. */
     rows.push(role==='presence'
-      ? {stagiaire_id:stgFicheId,jour:iso,debut:debut,fin:fin}
-      : {stagiaire_id:stgFicheId,jour:iso,absent:true,motif:'Centre de formation'});
+      ? {stagiaire_id:stgFicheId,jour:iso,debut:debut,fin:fin,absent:false,motif:null}
+      : {stagiaire_id:stgFicheId,jour:iso,debut:null,fin:null,absent:true,motif:'Centre de formation'});
   });
   return {rows,deja,horsPeriode,
     presences:rows.filter(r=>!r.absent).length,
@@ -16131,7 +16140,8 @@ function stgImportApercu(){
 }
 
 async function stgImportValider(){
-  if(!stgImp||!stgFicheId)return;
+  if(!stgImp)return showBanner('Aucun calendrier chargé — reprenez depuis « Importer un calendrier ».','error');
+  if(!stgFicheId)return showBanner('Enregistrez d\'abord la fiche.','error');
   const {rows}=stgImportLignes();
   if(!rows.length)return showBanner('Aucun jour à importer avec ces réglages.','error');
   if(rows.length>400&&!confirm(rows.length+' jours vont être ajoutés. Continuer ?'))return;
