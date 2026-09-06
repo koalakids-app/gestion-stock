@@ -1437,6 +1437,37 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════════
+     Ajout d'une semaine entière. Le cas courant d'un stage : « du lundi au
+     vendredi, 8h-16h, pendant trois semaines ». Le jour par jour reste là pour
+     les exceptions, qui sont justement des exceptions.
+     ══════════════════════════════════════════════════════════════════════ -->
+<div class="overlay" id="modal-stg-semaine-wrap" style="z-index:1300" onclick="if(event.target===this)closeModal('modal-stg-semaine-wrap')">
+  <div class="modal" style="max-width:520px">
+    <h3><i class="ti ti-calendar-plus" style="color:var(--koala)"></i> Ajouter une semaine</h3>
+    <div class="fg" style="max-width:260px"><label class="flabel">Semaine du</label>
+      <input class="finput" type="date" id="stg-sem-date" onchange="stgSemaineApercu()"></div>
+    <div class="fg"><label class="flabel">Jours retenus</label>
+      <div id="stg-sem-jours" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Arrivée</label><input class="finput" id="stg-sem-debut" value="08h00" oninput="stgSemaineApercu()"></div>
+      <div class="fg"><label class="flabel">Départ</label><input class="finput" id="stg-sem-fin" value="16h00" oninput="stgSemaineApercu()"></div>
+    </div>
+    <div class="fg" style="max-width:260px"><label class="flabel">Répéter sur</label>
+      <select class="finput" id="stg-sem-repeter" onchange="stgSemaineApercu()">
+        <option value="1">1 semaine</option><option value="2">2 semaines</option>
+        <option value="3">3 semaines</option><option value="4">4 semaines</option>
+        <option value="6">6 semaines</option><option value="8">8 semaines</option>
+        <option value="12">12 semaines</option>
+      </select></div>
+    <div id="stg-sem-apercu" style="background:var(--koala-light);border-left:4px solid var(--koala);border-radius:0 8px 8px 0;padding:10px 13px;font-size:12.5px;color:var(--koala-dark);line-height:1.55"></div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-stg-semaine-wrap')">Annuler</button>
+      <button class="btn-primary" id="stg-sem-ok" onclick="stgSemaineAjouter()"><i class="ti ti-check"></i> Ajouter</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal lecture d'un compte rendu -->
 <div class="overlay" id="modal-cr-wrap" onclick="if(event.target===this)closeModal('modal-cr-wrap')">
   <div class="modal" style="max-width:820px;max-height:88vh;display:flex;flex-direction:column">
@@ -10296,6 +10327,7 @@ stagiaires: `
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Dans la fiche, <strong>Générer les jours ouvrés</strong> remplit la période du lundi au vendredi</li>
   <li><strong>Importer un calendrier (PDF)</strong> reprend le calendrier envoyé par le centre de formation : l'application lit les douze colonnes de mois et vous demande ce que signifie chaque lettre (présence à la crèche, centre de formation, ou rien). Les jours déjà saisis ne sont jamais écrasés, et rien n'est enregistré avant votre validation. Un calendrier scanné (image) n'est pas lisible : il ne contient pas de texte</li>
+  <li><strong>Ajouter une semaine</strong> remplit une semaine type (lundi au vendredi par défaut, jours à cocher, horaires libres) et sait la <strong>répéter</strong> jusqu'à 12 semaines — la semaine est toujours calée sur le lundi</li>
   <li>Cliquez sur un jour pour changer ses <strong>horaires</strong>, le marquer <strong>absent</strong> ou le retirer</li>
   <li>L'onglet <strong>Calendrier</strong> affiche le mois entier, une ligne par stagiaire, filtrable par crèche</li>
 </ol>
@@ -15894,6 +15926,7 @@ function stgRenderJours(){
     +'<i class="ti ti-calendar-up"></i> Importer un calendrier (PDF)</label>'
     +'<input type="file" id="stg-imp-file" accept="application/pdf,.pdf" '
     +'style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden" onchange="stgImportPdf(event)">'
+    +'<button class="btn-sm" onclick="stgOuvrirSemaine()"><i class="ti ti-calendar-plus"></i> Ajouter une semaine</button>'
     +'<button class="btn-sm" onclick="stgAjouterJour()"><i class="ti ti-plus"></i> Ajouter un jour</button>'
     +'</div></div>';
 
@@ -16210,6 +16243,109 @@ async function stgImportValider(){
   stgImp=null;
   stgRenderJours();stgRender();stgRenderCal();
   showBanner(ajoutes.length+' jour'+(ajoutes.length>1?'s':'')+' importé'+(ajoutes.length>1?'s':'')+' ✅');
+}
+
+/* ══ Ajouter une semaine ═══════════════════════════════════════════════════
+   Saisir quinze jours un par un, c'est quinze fenêtres. La semaine type couvre
+   l'essentiel des stages ; le jour par jour garde sa place pour ce qui sort de
+   la règle (un mercredi retiré, un horaire différent).
+
+   Les jours déjà saisis ne sont jamais touchés : ajouter une semaine par-dessus
+   une autre ne défait pas un horaire corrigé à la main. */
+
+const STG_SEM_JOURS=[{n:1,lib:'Lundi'},{n:2,lib:'Mardi'},{n:3,lib:'Mercredi'},
+  {n:4,lib:'Jeudi'},{n:5,lib:'Vendredi'},{n:6,lib:'Samedi'},{n:0,lib:'Dimanche'}];
+let stgSemChoix={1:true,2:true,3:true,4:true,5:true,6:false,0:false};
+
+function stgOuvrirSemaine(){
+  if(!stgFicheId)return showBanner('Enregistrez d\'abord la fiche.','error');
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  /* Par défaut : la semaine du début du stage si elle est connue, sinon celle
+     en cours. On se cale toujours sur le lundi. */
+  const dep=new Date(((s&&s.date_debut)||todayStr())+'T12:00:00');
+  const el=document.getElementById('stg-sem-date');
+  if(el)el.value=ipDateToLocalISO(stgLundiDe(dep));
+  stgSemaineBoutons();
+  stgSemaineApercu();
+  document.getElementById('modal-stg-semaine-wrap').classList.add('open');
+}
+
+function stgLundiDe(d){
+  const x=new Date(d.getTime());
+  const dec=(x.getDay()+6)%7;          // lundi = 0
+  x.setDate(x.getDate()-dec);
+  return x;
+}
+
+function stgSemaineBoutons(){
+  const box=document.getElementById('stg-sem-jours');
+  if(!box)return;
+  box.innerHTML=STG_SEM_JOURS.map(j=>{
+    const on=!!stgSemChoix[j.n];
+    return '<button type="button" class="btn-sm" onclick="stgSemaineBascule('+j.n+')" style="'
+      +(on?'border-color:var(--koala);color:#fff;background:var(--koala)'
+          :'border-color:var(--border);color:var(--muted);background:#fff')+'">'
+      +escHtml(j.lib)+'</button>';
+  }).join('');
+}
+
+function stgSemaineBascule(n){
+  stgSemChoix[n]=!stgSemChoix[n];
+  stgSemaineBoutons();
+  stgSemaineApercu();
+}
+
+/* Les lignes à écrire. Mêmes colonnes partout — un envoi groupé dont les objets
+   n'ont pas les mêmes clés est refusé en bloc par PostgREST. */
+function stgSemaineLignes(){
+  const iso=((document.getElementById('stg-sem-date')||{}).value||'').slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return {rows:[],deja:0,iso:''};
+  const debut=((document.getElementById('stg-sem-debut')||{}).value||'08h00').trim();
+  const fin=((document.getElementById('stg-sem-fin')||{}).value||'16h00').trim();
+  const semaines=+((document.getElementById('stg-sem-repeter')||{}).value||1);
+  const lundi=stgLundiDe(new Date(iso+'T12:00:00'));
+  const existants=new Set(stgJoursDe(stgFicheId).map(j=>String(j.jour)));
+  const rows=[];let deja=0;
+  for(let w=0;w<semaines;w++){
+    for(let d=0;d<7;d++){
+      const jour=new Date(lundi.getTime());
+      jour.setDate(jour.getDate()+w*7+d);
+      if(!stgSemChoix[jour.getDay()])continue;
+      const j=ipDateToLocalISO(jour);
+      if(existants.has(j)){deja++;continue;}
+      rows.push({stagiaire_id:stgFicheId,jour:j,debut:debut,fin:fin,absent:false,motif:null});
+    }
+  }
+  return {rows,deja,iso:ipDateToLocalISO(lundi),semaines};
+}
+
+function stgSemaineApercu(){
+  const z=document.getElementById('stg-sem-apercu');
+  if(!z)return;
+  const r=stgSemaineLignes();
+  if(!r.iso){z.innerHTML='Choisissez la semaine.';return;}
+  const fin=new Date(r.iso+'T12:00:00');
+  fin.setDate(fin.getDate()+r.semaines*7-1);
+  z.innerHTML='Du <strong>'+stgDateFr(r.iso)+'</strong> au <strong>'+stgDateFr(ipDateToLocalISO(fin))+'</strong> — '
+    +(r.rows.length?'<strong>'+r.rows.length+' jour'+(r.rows.length>1?'s':'')+'</strong> à ajouter.'
+                   :'aucun jour à ajouter avec ces réglages.')
+    +(r.deja?'<br>'+r.deja+' jour(s) déjà saisi(s) — laissés tels quels.':'')
+    +'<br><span style="opacity:.8">La semaine est calée sur le lundi, quelle que soit la date choisie.</span>';
+}
+
+async function stgSemaineAjouter(){
+  if(!stgFicheId)return;
+  const {rows}=stgSemaineLignes();
+  if(!rows.length)return showBanner('Aucun jour à ajouter : tous sont déjà saisis, ou aucun jour n\'est retenu.','error');
+  const btn=document.getElementById('stg-sem-ok');
+  if(btn)btn.disabled=true;
+  const {data,error}=await sb.from('stagiaires_jours').insert(rows).select();
+  if(btn)btn.disabled=false;
+  if(error)return showBanner('Ajout impossible : '+error.message,'error');
+  stgJoursCache=stgJoursCache.concat(data||[]);
+  closeModal('modal-stg-semaine-wrap');
+  stgRenderJours();stgRender();stgRenderCal();
+  showBanner(rows.length+' jour'+(rows.length>1?'s':'')+' ajouté'+(rows.length>1?'s':'')+' ✅');
 }
 
 function stgAjouterJour(){
@@ -16554,6 +16690,8 @@ window.stgAjouterType=stgAjouterType;window.stgBasculerType=stgBasculerType;
 window.stgTypeChange=stgTypeChange;window.stgCyclerPour=stgCyclerPour;
 window.stgImportPdf=stgImportPdf;window.stgImportRole=stgImportRole;
 window.stgImportApercu=stgImportApercu;window.stgImportValider=stgImportValider;
+window.stgOuvrirSemaine=stgOuvrirSemaine;window.stgSemaineBascule=stgSemaineBascule;
+window.stgSemaineApercu=stgSemaineApercu;window.stgSemaineAjouter=stgSemaineAjouter;
 window.stgDeplacerType=stgDeplacerType;window.stgExportExcel=stgExportExcel;
 window.stgRemplirReferents=stgRemplirReferents;
 
