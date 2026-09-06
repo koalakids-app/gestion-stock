@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Mes documents de stage — Koala Kids</title>
+<title>Mes documents — Koala Kids</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" rel="stylesheet">
@@ -72,7 +72,7 @@ a{color:var(--violet)}
 <body>
 
 <div class="top">
-  <h1>Mes documents de stage</h1>
+  <h1 id="titrePage">Mes documents</h1>
   <p id="sousTitre">Koala Kids</p>
 </div>
 
@@ -84,7 +84,7 @@ a{color:var(--violet)}
 
 <script>
 /* ===========================================================================
-   STAGIAIRE.HTML — page publique de dépôt des pièces de stage
+   STAGIAIRE.HTML — page publique de dépôt des pièces (stage ou alternance)
    ---------------------------------------------------------------------------
    Aucune session Supabase ici : la stagiaire n'a pas de compte. Tout passe par
    l'edge function `dossier-stagiaire`, qui s'exécute en service_role et ne
@@ -93,6 +93,11 @@ a{color:var(--violet)}
 
    Le fichier est lu en base64 côté navigateur et posté à la fonction : pas de
    dépôt direct dans le stockage, donc aucune clé d'écriture dans cette page.
+
+   La page sert aussi bien un stage qu'une alternance : c'est la fonction qui
+   dit lequel (`type_contrat`) et qui n'envoie que les pièces demandées à ce
+   profil. Ici, ce champ ne change QUE le vocabulaire — jamais ce qu'on peut
+   déposer, sans quoi il suffirait de le modifier dans le navigateur.
    =========================================================================== */
 
 const SUPABASE_URL = "https://juyrceadazrovlitxceb.supabase.co";
@@ -106,9 +111,18 @@ const wrap  = document.getElementById('wrap');
    (message immédiat, pas d'envoi inutile), là-bas c'est la règle. */
 const TAILLE_MAX = 12 * 1024 * 1024;
 
-let STAG = null;   // {prenom, nom, creche_nom, date_debut, date_fin, expire_le}
+let STAG = null;   // {prenom, nom, creche_nom, date_debut, date_fin, expire_le, type_contrat}
 let PIECES = [];   // catalogue + fichiers déposés
-let AUTRES = [];   // pièces dont le type a été supprimé du catalogue
+let AUTRES = [];   // pièces dont le type ne figure plus dans la liste demandée
+
+/* Le vocabulaire, et rien d'autre. */
+const MOTS = {
+  stagiaire:{titre:'Mes documents de stage',  nom:'stage',      art:'votre stage',
+             prevu:'Votre stage est prévu'},
+  alternant:{titre:"Mes documents d'alternance", nom:'alternance', art:'votre alternance',
+             prevu:'Votre alternance est prévue'}
+};
+const mots = () => MOTS[(STAG&&STAG.type_contrat==='alternant')?'alternant':'stagiaire'];
 
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dfr = d => d ? new Date(d).toLocaleDateString('fr-FR') : '';
@@ -158,6 +172,8 @@ async function boot(){
 async function recharger(){
   const d=await appel('get');
   STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];
+  document.getElementById('titrePage').textContent=mots().titre;
+  document.title=mots().titre+' — Koala Kids';
   document.getElementById('sousTitre').textContent=
     (STAG.prenom||'')+(STAG.creche_nom?' · '+STAG.creche_nom:'');
   render();
@@ -169,17 +185,18 @@ async function recharger(){
 const fournie = p => (p.fichiers||[]).some(f=>f.statut!=='refuse');
 
 function render(){
+  const M=mots();
   const oblig=PIECES.filter(p=>p.obligatoire);
   const faits=oblig.filter(fournie).length;
   const pct=oblig.length?Math.round(faits/oblig.length*100):100;
 
   const periode = STAG.date_debut
-    ? ' Votre stage est prévu du <b>'+esc(dfr(STAG.date_debut))+'</b>'
+    ? ' '+M.prevu+' du <b>'+esc(dfr(STAG.date_debut))+'</b>'
       +(STAG.date_fin?' au <b>'+esc(dfr(STAG.date_fin))+'</b>':'')+'.'
     : '';
 
   let h='<div class="intro">Bonjour '+esc(STAG.prenom||'')+' ! Voici les documents à '
-    +'nous transmettre avant le début de votre stage.'+periode
+    +'nous transmettre avant le début de '+M.art+'.'+periode
     +'<br><br>Photographiez-les avec votre téléphone ou envoyez le PDF : '
     +'vous pouvez le faire en plusieurs fois, tout ce qui est envoyé est conservé.'
     +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(STAG.expire_le))+'</b>.</div>';

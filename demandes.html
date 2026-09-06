@@ -453,7 +453,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn" onclick="showMain('remplacantes')" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
       <button class="mnav-btn" onclick="showMain('vaccinations')" id="mnav-vaccinations"><i class="ti ti-vaccine"></i> Vaccinations</button>
       <button class="mnav-btn" onclick="showMain('enfants')" id="mnav-enfants"><i class="ti ti-mood-kid"></i> Enfants</button>
-      <button class="mnav-btn" onclick="showMain('stagiaires')" id="mnav-stagiaires"><i class="ti ti-school"></i> Stagiaires <span class="mnav-badge" id="badge-stagiaires" style="display:none">0</span></button>
+      <button class="mnav-btn" onclick="showMain('stagiaires')" id="mnav-stagiaires"><i class="ti ti-school"></i> Stagiaires &amp; alternants <span class="mnav-badge" id="badge-stagiaires" style="display:none">0</span></button>
     </nav>
     <div style="display:flex;align-items:center;gap:8px">
       <div id="sync-chip" title="Dernière mise à jour depuis le serveur — cliquer pour rafraîchir maintenant"
@@ -1167,11 +1167,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div id="main-stagiaires" class="tab-content">
     <div class="section-header">
       <div class="section-left">
-        <span class="section-title"><i class="ti ti-school" style="color:var(--koala)"></i> Stagiaires</span>
-        <span class="section-sub" id="stg-sub">Suivi des stages, documents et calendrier</span>
+        <span class="section-title"><i class="ti ti-school" style="color:var(--koala)"></i> Stagiaires et alternants</span>
+        <span class="section-sub" id="stg-sub">Suivi des stages et des alternances, documents et calendrier</span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <button class="btn-primary" onclick="stgOpenFiche()"><i class="ti ti-plus"></i> Nouvelle stagiaire</button>
+        <button class="btn-primary" onclick="stgOpenFiche(null,'stagiaire')"><i class="ti ti-plus"></i> Nouveau stagiaire</button>
+        <button class="btn-primary" onclick="stgOpenFiche(null,'alternant')" style="background:var(--orange)"><i class="ti ti-plus"></i> Nouvel alternant</button>
         <button class="btn-sm" onclick="stgExportExcel()"><i class="ti ti-file-spreadsheet"></i> Export Excel</button>
       </div>
     </div>
@@ -1192,6 +1193,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="fchip" id="stg-chip-demandes" onclick="stgSetFilter('demandes')"><i class="ti ti-inbox"></i> Demandes à traiter</button>
         <button class="fchip" id="stg-chip-terminees" onclick="stgSetFilter('terminees')"><i class="ti ti-check"></i> Terminées</button>
         <button class="fchip" id="stg-chip-toutes" onclick="stgSetFilter('toutes')"><i class="ti ti-list"></i> Toutes</button>
+        <select class="finput" id="stg-f-type-liste" style="width:auto;min-width:150px;font-size:12px;padding:4px 8px" onchange="stgRender()">
+          <option value="">Stagiaires et alternants</option>
+          <option value="stagiaire">Stagiaires seulement</option>
+          <option value="alternant">Alternants seulement</option>
+        </select>
         <select class="finput" id="stg-f-creche-liste" style="width:auto;min-width:150px;font-size:12px;padding:4px 8px" onchange="stgRender()"></select>
         <input class="finput" id="stg-search" placeholder="Nom, école…" style="width:auto;min-width:170px;font-size:12px;padding:4px 8px" oninput="stgRender()">
       </div>
@@ -1209,27 +1215,37 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
       <div id="stg-cal" style="overflow-x:auto"></div>
       <div style="margin-top:10px;font-size:11.5px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap">
-        <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--koala);vertical-align:-1px"></span> jour de présence</span>
+        <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--koala);vertical-align:-1px"></span> jour de présence (stagiaire)</span>
+        <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--orange-dark);vertical-align:-1px"></span> jour de présence (alternant)</span>
         <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--red-light);border:1px solid var(--red);vertical-align:-1px"></span> absence</span>
-        <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--koala-light);vertical-align:-1px"></span> période de stage sans jour saisi</span>
-        <span>Cliquer sur une ligne ouvre la fiche.</span>
+        <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--koala-light);vertical-align:-1px"></span> période sans jour saisi</span>
+        <span>Cliquer sur une ligne ouvre la fiche. Stagiaires et alternants figurent sur le même calendrier.</span>
       </div>
     </div>
 
     <!-- ── Vue 3 : les pièces demandées (direction) ──────────────────── -->
     <div id="stg-view-types" class="module-tab-content">
       <div style="background:var(--koala-light);border-left:4px solid var(--koala);border-radius:0 8px 8px 0;padding:11px 14px;font-size:12.5px;color:var(--koala-dark);margin-bottom:14px;line-height:1.55">
-        Cette liste est celle que voit la stagiaire sur son lien de dépôt. Une pièce
+        Cette liste est celle que voit la stagiaire ou l'alternant sur son lien de dépôt. Une pièce
         <strong>désactivée</strong> disparaît des nouveaux dossiers sans effacer les documents
         déjà reçus. Seules les pièces <strong>obligatoires</strong> comptent dans l'avancement.
+        Le champ <strong>Demandée à</strong> décide qui la voit : une convention de stage n'a rien
+        à faire dans un dossier d'alternance, et inversement pour le contrat d'apprentissage.
       </div>
       <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
         <div class="frow">
           <div class="fg" style="margin-bottom:0"><label class="flabel">Nouvelle pièce</label><input class="finput" id="stg-t-libelle" placeholder="Ex. Attestation d'honorabilité"></div>
-          <div class="fg" style="margin-bottom:0"><label class="flabel">Précision affichée à la stagiaire</label><input class="finput" id="stg-t-aide" placeholder="De moins de 6 mois"></div>
+          <div class="fg" style="margin-bottom:0"><label class="flabel">Précision affichée à la personne</label><input class="finput" id="stg-t-aide" placeholder="De moins de 6 mois"></div>
         </div>
         <div class="frow" style="margin-top:10px">
           <div class="fg" style="margin-bottom:0"><label class="flabel">Lien pour l'obtenir (facultatif)</label><input class="finput" id="stg-t-lien" placeholder="https://…"></div>
+          <div class="fg" style="margin-bottom:0"><label class="flabel">Demandée à</label><select class="finput" id="stg-t-pour">
+            <option value="tous">Stagiaires et alternants</option>
+            <option value="stagiaire">Stagiaires seulement</option>
+            <option value="alternant">Alternants seulement</option>
+          </select></div>
+        </div>
+        <div class="frow" style="margin-top:10px">
           <div class="fg" style="margin-bottom:0;display:flex;align-items:flex-end;gap:10px">
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555"><input type="checkbox" id="stg-t-oblig" checked> Obligatoire</label>
             <button class="btn-primary" onclick="stgAjouterType()"><i class="ti ti-plus"></i> Ajouter</button>
@@ -1288,6 +1304,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
     <div style="flex:1;overflow-y:auto;margin-top:12px;padding-right:4px">
 
+      <!-- Le type de profil commande le vocabulaire de la fiche (stage ou
+           alternance) et la liste des pièces demandées : il est donc en tête. -->
+      <div class="fg" style="max-width:280px"><label class="flabel">Type de profil</label>
+        <select class="finput" id="stg-f-type" onchange="stgTypeChange()">
+          <option value="stagiaire">Stagiaire</option>
+          <option value="alternant">Alternant / apprenti</option>
+        </select></div>
       <div class="frow">
         <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="stg-f-prenom"></div>
         <div class="fg"><label class="flabel">Nom</label><input class="finput" id="stg-f-nom"></div>
@@ -1310,8 +1333,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <option value="demande">Demande reçue (Padlet)</option>
           <option value="contact">Contact pris par la référente</option>
           <option value="accepte">Accepté — dates posées</option>
-          <option value="en_cours">Stage en cours</option>
-          <option value="termine">Stage terminé</option>
+          <option value="en_cours" id="stg-opt-encours">Stage en cours</option>
+          <option value="termine" id="stg-opt-termine">Stage terminé</option>
           <option value="refuse">Refusé</option>
           <option value="annule">Annulé</option>
         </select></div>
@@ -1321,17 +1344,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="fg"><label class="flabel">Lien du post Padlet</label><input class="finput" id="stg-f-padlet" placeholder="https://padlet.com/…"></div>
       </div>
       <div class="frow">
-        <div class="fg"><label class="flabel">Début du stage</label><input class="finput" type="date" id="stg-f-debut"></div>
-        <div class="fg"><label class="flabel">Fin du stage</label><input class="finput" type="date" id="stg-f-fin"></div>
+        <div class="fg"><label class="flabel" id="stg-lbl-debut">Début du stage</label><input class="finput" type="date" id="stg-f-debut"></div>
+        <div class="fg"><label class="flabel" id="stg-lbl-fin">Fin du stage</label><input class="finput" type="date" id="stg-f-fin"></div>
       </div>
       <div class="frow">
-        <div class="fg"><label class="flabel">Convention de stage</label><select class="finput" id="stg-f-conv">
+        <div class="fg"><label class="flabel" id="stg-lbl-conv">Convention de stage</label><select class="finput" id="stg-f-conv">
           <option value="a_demander">À demander</option>
           <option value="demandee">Demandée à l'école</option>
           <option value="recue">Reçue</option>
           <option value="signee">Signée par tous</option>
         </select></div>
-        <div class="fg"><label class="flabel">Convention — date</label><input class="finput" type="date" id="stg-f-conv-date"></div>
+        <div class="fg"><label class="flabel" id="stg-lbl-conv-date">Convention — date</label><input class="finput" type="date" id="stg-f-conv-date"></div>
       </div>
       <div class="fg"><label class="flabel">Notes internes</label><textarea class="finput" id="stg-f-notes" rows="2" style="resize:vertical" placeholder="Ce qui n'a pas sa place ailleurs — non visible par la stagiaire"></textarea></div>
 
@@ -1349,7 +1372,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div id="stg-jours-zone"></div>
 
         <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
-        <div class="fg"><label class="flabel">Bilan de fin de stage</label>
+        <div class="fg"><label class="flabel" id="stg-lbl-bilan">Bilan de fin de stage</label>
           <textarea class="finput" id="stg-f-bilan" rows="4" style="resize:vertical" placeholder="Appréciation, points forts, axes de progrès — rédigé par la référente"></textarea></div>
         <div class="fg" style="max-width:220px"><label class="flabel">Bilan rédigé le</label><input class="finput" type="date" id="stg-f-bilan-date"></div>
 
@@ -1417,7 +1440,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="notice-tab" onclick="switchNoticeTab('evenements',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🗓 Événements</button>
         <button class="notice-tab" onclick="switchNoticeTab('enfants',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👶 Enfants</button>
         <button class="notice-tab" onclick="switchNoticeTab('vaccinations',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">💉 Vaccinations</button>
-        <button class="notice-tab" onclick="switchNoticeTab('stagiaires',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🎓 Stagiaires</button>
+        <button class="notice-tab" onclick="switchNoticeTab('stagiaires',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🎓 Stagiaires &amp; alternants</button>
         <button class="notice-tab" onclick="switchNoticeTab('comptes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">👤 Comptes</button>
         <button class="notice-tab" onclick="switchNoticeTab('referents',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🧑‍🏫 Référents</button>
         <button class="notice-tab" onclick="switchNoticeTab('dashboards',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📊 Tableaux de bord</button>
@@ -10210,11 +10233,12 @@ vaccinations: `
 
 
 stagiaires: `
-<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🎓 Stagiaires</h3>
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🎓 Stagiaires et alternants</h3>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580;line-height:1.6">
-  💡 Une fiche par stagiaire, de la demande déposée sur le Padlet jusqu'au bilan de fin de stage. Les documents demandés sont déposés par la stagiaire elle-même, depuis son téléphone, via un lien à durée limitée.
+  💡 Une fiche par stagiaire <strong>ou par alternant</strong>, de la demande déposée sur le Padlet jusqu'au bilan de fin de stage ou d'alternance. Les documents demandés sont déposés par la personne elle-même, depuis son téléphone, via un lien à durée limitée.
+  <br><br>Le <strong>type de profil</strong> se choisit en haut de la fiche : il change le vocabulaire (convention de stage ou contrat d'alternance, début du stage ou de l'alternance) et surtout la <strong>liste des pièces demandées</strong>. Les deux profils partagent le même calendrier, le même lien de dépôt et le même export.
 </div>
-<div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Le chemin d'une stagiaire</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Le chemin d'une fiche</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>La demande arrive sur le <strong>Padlet</strong> — vous créez la fiche : prénom, école, formation, et le lien du post. Statut <strong>Demande reçue</strong></li>
   <li>Vous l'orientez vers une <strong>crèche</strong> : à partir de là, la référente de cette crèche la voit et peut la suivre</li>
@@ -10246,7 +10270,8 @@ stagiaires: `
 </ol>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">⚙️ Pièces demandées (direction)</div>
 <p style="font-size:13px;line-height:1.8;color:#555;margin-bottom:18px">
-  L'onglet <strong>Pièces demandées</strong> gère la liste que voit la stagiaire. Désactiver une pièce la retire des nouveaux dossiers sans effacer ce qui a déjà été reçu. Seules les pièces <strong>obligatoires</strong> comptent dans l'avancement affiché.
+  L'onglet <strong>Pièces demandées</strong> gère la liste que voit la personne sur son lien. Désactiver une pièce la retire des nouveaux dossiers sans effacer ce qui a déjà été reçu. Seules les pièces <strong>obligatoires</strong> comptent dans l'avancement affiché.
+  <br><br>Le bouton 👥 fait tourner le champ <strong>Demandée à</strong> : <em>Stagiaires et alternants</em> → <em>Stagiaires seulement</em> → <em>Alternants seulement</em>. C'est ainsi que la convention de stage ne s'affiche pas dans un dossier d'alternance, et le contrat d'apprentissage pas dans un dossier de stage. Une pièce déjà reçue reste visible dans la fiche même si elle ne concerne plus ce profil.
 </p>
 <div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A;line-height:1.6">
   ⚠ Les délais (casier de moins de 3 mois, honorabilité de moins de 6 mois) courent depuis la <strong>date d'établissement</strong> de la pièce, pas depuis son dépôt : ils ne sont pas calculés par l'application, à vérifier sur le document.
@@ -15113,6 +15138,24 @@ const STG_STATUTS={
 };
 const STG_CONV={a_demander:'À demander',demandee:'Demandée',recue:'Reçue',signee:'Signée'};
 
+/* ── Stagiaires et alternants ───────────────────────────────────────────────
+   Le même dossier, le même calendrier, les mêmes pièces à quelques exceptions
+   près : un alternant n'a pas de convention de stage mais un contrat
+   d'apprentissage ou de professionnalisation. Plutôt qu'un second module qui
+   dupliquerait tout, une colonne `type_contrat` sur la fiche et un champ
+   `pour_type` sur chaque pièce demandée. Une fiche sans type est une fiche
+   d'avant le script 31 : c'est une stagiaire. */
+const STG_PROFILS={
+  stagiaire:{lib:'Stagiaire', pluriel:'stagiaires', periode:'stage',
+             periodeArt:'le stage', contrat:'Convention de stage',
+             contratCourt:'Convention', couleur:'var(--koala)', ic:'ti-school'},
+  alternant:{lib:'Alternant',  pluriel:'alternants', periode:'alternance',
+             periodeArt:"l'alternance", contrat:"Contrat d'alternance",
+             contratCourt:'Contrat', couleur:'var(--orange-dark)', ic:'ti-briefcase'}
+};
+const stgType    = s => (s&&s.type_contrat==='alternant')?'alternant':'stagiaire';
+const stgProfil  = s => STG_PROFILS[stgType(s)];
+
 const stgMeta   = s => STG_STATUTS[s] || STG_STATUTS.demande;
 const stgClos   = s => s==='termine'||s==='refuse'||s==='annule';
 const stgNomComplet = s => ((s.prenom||'')+' '+(s.nom||'')).trim()||'Sans nom';
@@ -15216,8 +15259,16 @@ function stgSetFilter(f){
    pas comme reçue : c'est tout l'intérêt du refus. */
 function stgDocsDe(id){return stgDocsCache.filter(d=>String(d.stagiaire_id)===String(id));}
 
+/* Les pièces qui concernent ce profil. `pour_type` absent = base d'avant le
+   script 31 : la pièce vaut alors pour tout le monde, comme avant. */
+function stgTypesPour(type){
+  const t=type==='alternant'?'alternant':'stagiaire';
+  return stgTypes.filter(x=>!x.pour_type||x.pour_type==='tous'||x.pour_type===t);
+}
+
 function stgAvancement(id){
-  const oblig=stgTypes.filter(t=>t.actif&&t.obligatoire);
+  const s=stgCache.find(x=>String(x.id)===String(id));
+  const oblig=stgTypesPour(stgType(s)).filter(t=>t.actif&&t.obligatoire);
   const docs=stgDocsDe(id).filter(d=>d.statut!=='refuse');
   const couverts=new Set(docs.map(d=>String(d.type_id)));
   const faits=oblig.filter(t=>couverts.has(String(t.id))).length;
@@ -15233,9 +15284,11 @@ function stgJoursDe(id){
 
 function stgFiltrees(){
   const creche=(document.getElementById('stg-f-creche-liste')||{}).value||'';
+  const type=(document.getElementById('stg-f-type-liste')||{}).value||'';
   const q=((document.getElementById('stg-search')||{}).value||'').trim().toLowerCase();
   return stgCache.filter(s=>{
     if(creche&&String(s.creche_id||'')!==String(creche))return false;
+    if(type&&stgType(s)!==type)return false;
     if(stgFilter==='demandes'&&!(s.statut==='demande'||s.statut==='contact'))return false;
     if(stgFilter==='actives'&&!(s.statut==='accepte'||s.statut==='en_cours'))return false;
     if(stgFilter==='terminees'&&!stgClos(s.statut))return false;
@@ -15267,11 +15320,13 @@ function stgRender(){
     const aTraiter=stgCache.filter(s=>s.statut==='demande').length;
     const enCours=stgCache.filter(s=>s.statut==='en_cours').length;
     const aVenir=stgCache.filter(s=>s.statut==='accepte').length;
+    const alt=stgCache.filter(s=>stgType(s)==='alternant'&&!stgClos(s.statut)).length;
     const incomplets=stgCache.filter(s=>!stgClos(s.statut)&&!stgAvancement(s.id).complet).length;
     stats.innerHTML=
        stgStatCard('Demandes à traiter',aTraiter,'ti-inbox',aTraiter?'var(--blue)':'var(--muted)')
-      +stgStatCard('Stages en cours',enCours,'ti-run','var(--green)')
+      +stgStatCard('En cours',enCours,'ti-run','var(--green)')
       +stgStatCard('Acceptés, à venir',aVenir,'ti-calendar-plus','var(--koala)')
+      +stgStatCard('Alternants en cours et à venir',alt,'ti-briefcase',alt?'var(--orange-dark)':'var(--muted)')
       +stgStatCard('Dossiers incomplets',incomplets,'ti-file-alert',incomplets?'var(--orange-dark)':'var(--muted)');
   }
   const badge=document.getElementById('stg-badge-encours');
@@ -15286,8 +15341,8 @@ function stgRender(){
   if(!liste.length){
     box.innerHTML='<div style="text-align:center;padding:36px 20px;color:var(--muted);font-size:13px">'
       +'<i class="ti ti-school" style="font-size:30px;display:block;margin-bottom:8px;opacity:.5"></i>'
-      +(stgCache.length?'Aucune stagiaire ne correspond à ce filtre.'
-                       :'Aucune stagiaire enregistrée. Commencez par « Nouvelle stagiaire ».')+'</div>';
+      +(stgCache.length?'Aucune fiche ne correspond à ce filtre.'
+                       :'Aucune fiche enregistrée. Commencez par « Nouveau stagiaire » ou « Nouvel alternant ».')+'</div>';
     return;
   }
   box.innerHTML=liste.map(stgCarte).join('');
@@ -15295,6 +15350,7 @@ function stgRender(){
 
 function stgCarte(s){
   const m=stgMeta(s.statut);
+  const p=stgProfil(s);
   const av=stgAvancement(s.id);
   const jours=stgJoursDe(s.id).filter(j=>!j.absent).length;
   const pct=av.total?Math.round(av.faits/av.total*100):100;
@@ -15302,6 +15358,8 @@ function stgCarte(s){
   const periode=s.date_debut
     ? stgDateFr(s.date_debut)+(s.date_fin?' → '+stgDateFr(s.date_fin):'')
     : 'dates non posées';
+  const libStatut=(s.statut==='en_cours')
+    ? (stgType(s)==='alternant'?'Alternance en cours':'Stage en cours') : m.lib;
   const lien = !s.token ? ''
     : (new Date(s.token_expire_le).getTime()<Date.now()
         ? '<span style="color:var(--red)"><i class="ti ti-link-off"></i> lien expiré</span>'
@@ -15310,19 +15368,22 @@ function stgCarte(s){
   return '<div onclick="stgOpenFiche(\''+s.id+'\')" style="cursor:pointer;background:var(--card);border:1.5px solid var(--border);border-left:4px solid '+bord+';border-radius:10px;padding:12px 14px">'
     +'<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start">'
     +'<div style="min-width:0;flex:1">'
-    +'<div style="font-weight:700;font-size:14px">'+escHtml(stgNomComplet(s))
+    +'<div style="font-weight:700;font-size:14px">'
+    +'<span style="background:'+p.couleur+';color:#fff;border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:700;margin-right:6px;vertical-align:1px">'
+    +'<i class="ti '+p.ic+'"></i> '+p.lib+'</span>'
+    +escHtml(stgNomComplet(s))
     +(s.creche_id?'<span style="font-weight:500;color:var(--muted)"> · '+escHtml(stgCrecheName(s.creche_id))+'</span>'
                  :'<span style="font-weight:500;color:var(--orange-dark)"> · à orienter</span>')+'</div>'
     +'<div style="font-size:12px;color:var(--muted);margin-top:2px">'
     +escHtml([s.formation,s.niveau,s.ecole].filter(Boolean).join(' · ')||'Formation non renseignée')+'</div>'
     +'</div>'
     +'<span style="background:'+m.cls+';color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;white-space:nowrap">'
-    +'<i class="ti '+m.ic+'"></i> '+m.lib+'</span>'
+    +'<i class="ti '+m.ic+'"></i> '+escHtml(libStatut)+'</span>'
     +'</div>'
     +'<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#666;margin-top:9px;align-items:center">'
     +'<span><i class="ti ti-calendar"></i> '+escHtml(periode)+'</span>'
     +(jours?'<span><i class="ti ti-clock"></i> '+jours+' jour'+(jours>1?'s':'')+' prévu'+(jours>1?'s':'')+'</span>':'')
-    +'<span><i class="ti ti-file-text"></i> Convention : '+escHtml(STG_CONV[s.convention_statut]||'—')+'</span>'
+    +'<span><i class="ti ti-file-text"></i> '+p.contratCourt+' : '+escHtml(STG_CONV[s.convention_statut]||'—')+'</span>'
     +(lien?'<span>'+lien+'</span>':'')
     +'</div>'
     +'<div style="display:flex;align-items:center;gap:9px;margin-top:9px">'
@@ -15349,13 +15410,15 @@ function stgMajBadge(){
 
 // ── La fiche ──────────────────────────────────────────────────────────────
 
-function stgOpenFiche(id){
+function stgOpenFiche(id,typeDefaut){
   stgFicheId=id||null;
   const s=id?stgCache.find(x=>String(x.id)===String(id)):null;
   const v=(el,val)=>{const e=document.getElementById(el);if(e)e.value=val==null?'':val;};
+  const type=s?stgType(s):(typeDefaut==='alternant'?'alternant':'stagiaire');
 
   document.getElementById('stg-modal-title').textContent=
-    s?stgNomComplet(s):'Nouvelle stagiaire';
+    s?stgNomComplet(s):(type==='alternant'?'Nouvel alternant':'Nouveau stagiaire');
+  v('stg-f-type',type);
 
   const selC=document.getElementById('stg-f-creche');
   if(selC)selC.innerHTML=stgOptionsCreches('— Pas encore orientée —');
@@ -15380,8 +15443,29 @@ function stgOpenFiche(id){
   const del=document.getElementById('stg-f-del');
   if(del)del.style.display=(s&&isDirection)?'':'none';
 
+  stgTypeChange();
   if(s){stgRenderLien();stgRenderDocs();stgRenderJours();}
   document.getElementById('modal-stagiaire-wrap').classList.add('open');
+}
+
+/* Changer le type ne change aucune donnée : il change le vocabulaire de la
+   fiche et la liste des pièces demandées. Un alternant à qui on réclame une
+   convention de stage rappelle la crèche pour demander ce qu'il doit envoyer —
+   c'est exactement ce qu'on veut éviter. */
+function stgTypeChange(){
+  const type=(document.getElementById('stg-f-type')||{}).value==='alternant'?'alternant':'stagiaire';
+  const p=STG_PROFILS[type];
+  const txt=(id,val)=>{const e=document.getElementById(id);if(e)e.textContent=val;};
+  txt('stg-lbl-debut','Début '+(type==='alternant'?"de l'alternance":'du stage'));
+  txt('stg-lbl-fin','Fin '+(type==='alternant'?"de l'alternance":'du stage'));
+  txt('stg-lbl-conv',p.contrat);
+  txt('stg-lbl-conv-date',p.contratCourt+' — date');
+  txt('stg-lbl-bilan','Bilan de fin '+(type==='alternant'?"d'alternance":'de stage'));
+  txt('stg-opt-encours',type==='alternant'?'Alternance en cours':'Stage en cours');
+  txt('stg-opt-termine',type==='alternant'?'Alternance terminée':'Stage terminé');
+  /* Les pièces demandées ne sont pas les mêmes : on redessine le bloc si la
+     fiche est déjà enregistrée. */
+  if(stgFicheId)stgRenderDocs(type);
 }
 
 /* La liste des référentes se limite à la crèche choisie : proposer celles des
@@ -15413,6 +15497,7 @@ async function stgSave(){
   if(!prenom)return showBanner('Le prénom est obligatoire.','error');
 
   const row={
+    type_contrat:val('stg-f-type')==='alternant'?'alternant':'stagiaire',
     prenom:prenom,
     nom:val('stg-f-nom')||null,
     email:val('stg-f-email')||null,
@@ -15449,6 +15534,15 @@ async function stgSave(){
     const saved=await dbInsert('stagiaires',row);
     ok=!!saved;
     if(saved)stgFicheId=saved.id;
+  }
+  /* Si le script 31 n'a pas encore été exécuté, la colonne type_contrat
+     n'existe pas : plutôt que de perdre la saisie, on réenregistre sans elle
+     et on dit pourquoi le type n'a pas été retenu. */
+  if(!ok&&/type_contrat/i.test(window._lastDbError||'')){
+    delete row.type_contrat;
+    ok=stgFicheId?await dbUpdate('stagiaires',stgFicheId,row)
+                 :!!(await dbInsert('stagiaires',row).then(r=>{if(r)stgFicheId=r.id;return r;}));
+    if(ok)showBanner('Fiche enregistrée, mais le type (stagiaire / alternant) n\'a pas pu l\'être : le script 31 n\'a pas encore été exécuté sur Supabase.','error');
   }
   if(btn)btn.disabled=false;
   if(!ok){
@@ -15507,7 +15601,7 @@ function stgRenderLien(){
 
   if(!s.token){
     h+='<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.5">'
-      +'La stagiaire dépose ses pièces elle-même depuis son téléphone, sans compte ni application. '
+      +'La personne dépose ses pièces elle-même depuis son téléphone, sans compte ni application. '
       +'Le lien est valable '+STG_LIEN_JOURS+' jours.</p>'
       +'<button class="btn-primary" onclick="stgCreerLien()"><i class="ti ti-link-plus"></i> Créer le lien</button>';
   }else{
@@ -15529,9 +15623,10 @@ function stgRenderLien(){
 /* Le mail est composé dans le client de messagerie du poste : rien ne part
    d'ici, et il n'y a donc pas d'adresse d'expédition à configurer. */
 function stgMailto(s){
-  const sujet='Vos documents de stage — Koala Kids';
+  const p=stgProfil(s);
+  const sujet='Vos documents '+(stgType(s)==='alternant'?"d'alternance":'de stage')+' — Koala Kids';
   const corps='Bonjour '+(s.prenom||'')+',\n\n'
-    +'Voici le lien pour nous transmettre les documents nécessaires à votre stage'
+    +'Voici le lien pour nous transmettre les documents nécessaires à votre '+p.periode
     +(s.creche_id?' à la crèche '+stgCrecheName(s.creche_id):'')+' :\n\n'
     +stgLienUrl(s.token)+'\n\n'
     +'Vous pouvez photographier vos pièces directement avec votre téléphone, en plusieurs fois.\n'
@@ -15567,12 +15662,19 @@ function stgCopierLien(){
 
 // ── Les documents ─────────────────────────────────────────────────────────
 
-function stgRenderDocs(){
+/* `typeForce` vient de stgTypeChange() : la fiche en cours d'édition peut avoir
+   changé de type sans être encore enregistrée. */
+function stgRenderDocs(typeForce){
   const zone=document.getElementById('stg-docs-zone');
   if(!zone||!stgFicheId)return;
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  const type=typeForce||stgType(s);
   const docs=stgDocsDe(stgFicheId);
-  const av=stgAvancement(stgFicheId);
-  const actifs=stgTypes.filter(t=>t.actif);
+  const oblig=stgTypesPour(type).filter(t=>t.actif&&t.obligatoire);
+  const couverts=new Set(docs.filter(d=>d.statut!=='refuse').map(d=>String(d.type_id)));
+  const faitsN=oblig.filter(t=>couverts.has(String(t.id))).length;
+  const av={faits:faitsN,total:oblig.length,complet:oblig.length>0&&faitsN===oblig.length};
+  const actifs=stgTypesPour(type).filter(t=>t.actif);
 
   let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px">'
     +'<div style="font-weight:700;font-size:13px"><i class="ti ti-paperclip" style="color:var(--koala)"></i> Documents</div>'
@@ -15624,7 +15726,7 @@ function stgLigneDoc(d){
     +'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
     +escHtml(d.filename||'Document')+'</button>'
     +'<span style="background:'+st.b+';color:'+st.c+';border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700">'+st.t+'</span>'
-    +'<span style="font-size:10.5px;color:var(--muted)">'+escHtml(d.depose_par==='stagiaire'?'par la stagiaire':(d.depose_par||''))+'</span>'
+    +'<span style="font-size:10.5px;color:var(--muted)">'+escHtml(d.depose_par==='stagiaire'?'déposé via le lien':(d.depose_par||''))+'</span>'
     +(d.statut!=='valide'?'<button class="ibtn" style="width:26px;height:26px;font-size:13px;color:var(--green)" title="Valider" onclick="stgStatutDoc(\''+d.id+'\',\'valide\')"><i class="ti ti-check"></i></button>':'')
     +(d.statut!=='refuse'?'<button class="ibtn" style="width:26px;height:26px;font-size:13px;color:var(--orange-dark)" title="Refuser" onclick="stgStatutDoc(\''+d.id+'\',\'refuse\')"><i class="ti ti-x"></i></button>':'')
     +'<button class="ibtn" style="width:26px;height:26px;font-size:13px;color:var(--red)" title="Supprimer" onclick="stgSupprimerDoc(\''+d.id+'\')"><i class="ti ti-trash"></i></button>'
@@ -15900,14 +16002,14 @@ function stgRenderCal(){
 
   if(!lignes.length){
     box.innerHTML='<div style="text-align:center;padding:34px 20px;color:var(--muted);font-size:13px">'
-      +'Aucun stage sur ce mois.</div>';
+      +'Aucun stage ni alternance sur ce mois.</div>';
     return;
   }
 
   const auj=todayStr();
   let h='<table style="border-collapse:collapse;font-size:11.5px;min-width:'+(200+nb*26)+'px">'
     +'<tr><th style="position:sticky;left:0;background:var(--koala-light);z-index:2;text-align:left;'
-    +'padding:6px 9px;border:1px solid var(--border);min-width:190px">Stagiaire</th>';
+    +'padding:6px 9px;border:1px solid var(--border);min-width:190px">Stagiaire / alternant</th>';
   for(let d=1;d<=nb;d++){
     const dt=new Date(an,mois,d);
     const we=dt.getDay()===0||dt.getDay()===6;
@@ -15921,12 +16023,14 @@ function stgRenderCal(){
   h+='</tr>';
 
   lignes.forEach(s=>{
+    const prof=stgProfil(s);
     const jours={};
     stgJoursDe(s.id).forEach(j=>{jours[String(j.jour)]=j;});
     h+='<tr>'
       +'<td onclick="stgOpenFiche(\''+s.id+'\')" style="position:sticky;left:0;background:#fff;z-index:1;'
       +'cursor:pointer;padding:5px 9px;border:1px solid var(--border);white-space:nowrap;'
       +'overflow:hidden;text-overflow:ellipsis;max-width:230px">'
+      +'<i class="ti '+prof.ic+'" style="color:'+prof.couleur+'" title="'+prof.lib+'"></i> '
       +'<span style="font-weight:600">'+escHtml(stgNomComplet(s))+'</span>'
       +'<span style="color:var(--muted)"> · '+escHtml(stgCrecheName(s.creche_id)||'—')+'</span></td>';
     for(let d=1;d<=nb;d++){
@@ -15936,8 +16040,8 @@ function stgRenderCal(){
       let fond='#fff',txt='',titre2='';
       if(j&&j.absent){fond='var(--red-light)';txt='<span style="color:var(--red);font-weight:700">×</span>';
         titre2=(j.motif||'absente');}
-      else if(j){fond='var(--koala)';titre2=[j.debut,j.fin].filter(Boolean).join(' – ');}
-      else if(dansPeriode){fond='var(--koala-light)';titre2='période de stage, jour non saisi';}
+      else if(j){fond=prof.couleur;titre2=[j.debut,j.fin].filter(Boolean).join(' – ');}
+      else if(dansPeriode){fond='var(--koala-light)';titre2='période prévue, jour non saisi';}
       h+='<td onclick="stgCalClic(\''+s.id+'\',\''+iso+'\')" title="'+escHtml(titre2)+'" '
         +'style="cursor:pointer;border:1px solid var(--border);background:'+fond+';height:26px;text-align:center">'
         +txt+'</td>';
@@ -15967,12 +16071,17 @@ function stgRenderTypes(){
     box.innerHTML='<div style="color:var(--muted);font-size:13px">Aucune pièce définie.</div>';
     return;
   }
-  box.innerHTML=stgTypes.map(t=>
-    '<div style="display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--border);'
+  const POUR={tous:{lib:'Stagiaires et alternants',c:'var(--muted)'},
+              stagiaire:{lib:'Stagiaires',c:'var(--koala)'},
+              alternant:{lib:'Alternants',c:'var(--orange-dark)'}};
+  box.innerHTML=stgTypes.map(t=>{
+   const pr=POUR[t.pour_type]||POUR.tous;
+   return '<div style="display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--border);'
     +'border-radius:9px;padding:9px 12px;'+(t.actif?'':'opacity:.55')+'">'
     +'<i class="ti ti-'+(t.obligatoire?'asterisk':'circle-dashed')+'" style="color:'+(t.obligatoire?'var(--koala)':'var(--muted)')+'"></i>'
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-weight:600;font-size:13px">'+escHtml(t.libelle)
+    +' <span style="background:'+pr.c+';color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap">'+pr.lib+'</span>'
     +(t.obligatoire?'':'<span style="color:var(--muted);font-weight:400"> — facultatif</span>')
     +(t.actif?'':'<span style="color:var(--red);font-weight:400"> — désactivée</span>')+'</div>'
     +(t.aide?'<div style="font-size:11.5px;color:var(--muted)">'+escHtml(t.aide)+'</div>':'')
@@ -15982,22 +16091,46 @@ function stgRenderTypes(){
     +'<button class="ibtn" title="Monter" onclick="stgDeplacerType(\''+t.id+'\',-1)"><i class="ti ti-chevron-up"></i></button>'
     +'<button class="ibtn" title="Descendre" onclick="stgDeplacerType(\''+t.id+'\',1)"><i class="ti ti-chevron-down"></i></button>'
     +'<button class="ibtn" title="Obligatoire / facultatif" onclick="stgBasculerType(\''+t.id+'\',\'obligatoire\')"><i class="ti ti-asterisk"></i></button>'
+    +'<button class="ibtn" title="Demandée à : tous, stagiaires, alternants" onclick="stgCyclerPour(\''+t.id+'\')"><i class="ti ti-users-group"></i></button>'
     +'<button class="ibtn" title="'+(t.actif?'Désactiver':'Réactiver')+'" onclick="stgBasculerType(\''+t.id+'\',\'actif\')">'
     +'<i class="ti ti-'+(t.actif?'eye-off':'eye')+'"></i></button>'
-    +'</div>').join('');
+    +'</div>';}).join('');
+}
+
+/* Trois valeurs seulement : le bouton tourne plutôt que d'ouvrir un menu pour
+   un choix à trois branches. */
+async function stgCyclerPour(id){
+  const t=stgTypes.find(x=>String(x.id)===String(id));
+  if(!t)return;
+  const suite={tous:'stagiaire',stagiaire:'alternant',alternant:'tous'};
+  const val=suite[t.pour_type||'tous']||'stagiaire';
+  const ok=await dbUpdate('stagiaires_docs_types',id,{pour_type:val});
+  if(!ok)return showBanner('Modification impossible'
+    +(window._lastDbError?' : '+window._lastDbError:' (réservée à la direction, ou script 31 non exécuté)')+'.','error');
+  t.pour_type=val;
+  stgRenderTypes();stgRender();
 }
 
 async function stgAjouterType(){
   const lib=(document.getElementById('stg-t-libelle')||{}).value.trim();
   if(!lib)return showBanner('Indiquez le nom de la pièce.','error');
-  const saved=await dbInsert('stagiaires_docs_types',{
+  const base={
     libelle:lib,
     aide:(document.getElementById('stg-t-aide')||{}).value.trim()||null,
     lien:(document.getElementById('stg-t-lien')||{}).value.trim()||null,
     obligatoire:(document.getElementById('stg-t-oblig')||{}).checked,
+    pour_type:(document.getElementById('stg-t-pour')||{}).value||'tous',
     ordre:stgTypes.reduce((m,t)=>Math.max(m,t.ordre||0),0)+10,
     actif:true
-  });
+  };
+  let saved=await dbInsert('stagiaires_docs_types',base);
+  /* Colonne absente = script 31 non exécuté : on ajoute quand même la pièce,
+     elle vaudra pour tout le monde. */
+  if(!saved&&/pour_type/i.test(window._lastDbError||'')){
+    delete base.pour_type;
+    saved=await dbInsert('stagiaires_docs_types',base);
+    if(saved)showBanner('Pièce ajoutée, mais demandée à tout le monde : le script 31 n\'a pas encore été exécuté sur Supabase.','error');
+  }
   if(!saved)return showBanner('Ajout impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');
   ['stg-t-libelle','stg-t-aide','stg-t-lien'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   stgTypes.push(saved);
@@ -16035,13 +16168,14 @@ async function stgDeplacerType(id,sens){
 
 function stgExportExcel(){
   if(!stgCache.length)return showBanner('Rien à exporter.','error');
-  const aoa=[['Prénom','Nom','Crèche','Statut','École','Formation','Niveau',
+  const aoa=[['Type','Prénom','Nom','Crèche','Statut','École','Formation','Niveau',
               'Début','Fin','Jours prévus','Absences','Pièces reçues','Pièces attendues',
-              'Convention','E-mail','Téléphone','Bilan rédigé le']];
+              'Convention / contrat','E-mail','Téléphone','Bilan rédigé le']];
   stgFiltrees().forEach(s=>{
     const av=stgAvancement(s.id);
     const js=stgJoursDe(s.id);
     aoa.push([
+      stgProfil(s).lib,
       s.prenom||'', s.nom||'', stgCrecheName(s.creche_id)||'', stgMeta(s.statut).lib,
       s.ecole||'', s.formation||'', s.niveau||'',
       stgDateFr(s.date_debut), stgDateFr(s.date_fin),
@@ -16052,12 +16186,12 @@ function stgExportExcel(){
     ]);
   });
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:14},{wch:16},{wch:12},{wch:18},{wch:24},{wch:18},{wch:12},
+  ws['!cols']=[{wch:11},{wch:14},{wch:16},{wch:12},{wch:18},{wch:24},{wch:18},{wch:12},
                {wch:11},{wch:11},{wch:12},{wch:10},{wch:13},{wch:15},{wch:12},
                {wch:26},{wch:14},{wch:14}];
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Stagiaires');
-  XLSX.writeFile(wb,'stagiaires-'+todayStr()+'.xlsx');
+  XLSX.utils.book_append_sheet(wb,ws,'Stagiaires et alternants');
+  XLSX.writeFile(wb,'stagiaires-alternants-'+todayStr()+'.xlsx');
   showBanner('Export Excel généré ✅');
 }
 
@@ -16073,6 +16207,7 @@ window.stgAjouterJour=stgAjouterJour;window.stgOuvrirJour=stgOuvrirJour;
 window.stgJourAbsentChange=stgJourAbsentChange;window.stgJourEnregistrer=stgJourEnregistrer;
 window.stgJourSupprimer=stgJourSupprimer;window.stgCalMois=stgCalMois;window.stgCalClic=stgCalClic;
 window.stgAjouterType=stgAjouterType;window.stgBasculerType=stgBasculerType;
+window.stgTypeChange=stgTypeChange;window.stgCyclerPour=stgCyclerPour;
 window.stgDeplacerType=stgDeplacerType;window.stgExportExcel=stgExportExcel;
 window.stgRemplirReferents=stgRemplirReferents;
 
