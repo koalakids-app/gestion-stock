@@ -1327,7 +1327,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="stg-f-creche" onchange="stgRemplirReferents()"></select></div>
       </div>
       <div class="frow">
-        <div class="fg"><label class="flabel">Référente qui l'accompagne</label><select class="finput" id="stg-f-referent"></select></div>
+        <div class="fg"><label class="flabel">Qui l'accompagne</label><select class="finput" id="stg-f-referent"></select></div>
         <div class="fg"><label class="flabel">Statut</label><select class="finput" id="stg-f-statut" onchange="stgStatutChange()">
           <option value="demande">Demande reçue (Padlet)</option>
           <option value="contact">Contact pris par la référente</option>
@@ -15499,17 +15499,32 @@ function stgTypeChange(){
   if(stgFicheId)stgRenderDocs(type);
 }
 
-/* La liste des référentes se limite à la crèche choisie : proposer celles des
-   autres sites n'aurait aucun sens sur une fiche de stage. */
+/* Les référentes proposées sont celles de la crèche choisie : offrir celles des
+   autres sites n'aurait aucun sens sur une fiche de stage.
+   La direction et la coordination, elles, apparaissent toujours et quelle que
+   soit la crèche — accompagner un stagiaire ou un alternant fait partie du
+   travail de coordination, et il fallait pouvoir s'y inscrire soi-même. */
 function stgRemplirReferents(crecheId){
   const sel=document.getElementById('stg-f-referent');
   if(!sel)return;
   const cid=crecheId||((document.getElementById('stg-f-creche')||{}).value||'');
-  const liste=cacheReferents.filter(r=>r.role==='referent'&&(!cid||String(r.creche_id)===String(cid)));
+  const refs=cacheReferents.filter(r=>r.role==='referent'&&(!cid||String(r.creche_id)===String(cid)));
+  const dirs=cacheReferents.filter(r=>r.role==='direction');
+  const opt=r=>'<option value="'+escHtml(String(r.id))+'">'+escHtml(r.name||'—')
+    +(r.poste?' — '+escHtml(r.poste):'')+'</option>';
   const val=sel.value;
   sel.innerHTML='<option value="">— Non désignée —</option>'
-    +liste.map(r=>'<option value="'+escHtml(String(r.id))+'">'+escHtml(r.name||'—')+'</option>').join('');
-  if(val)sel.value=val;
+    +(refs.length?'<optgroup label="Référentes de la crèche">'+refs.map(opt).join('')+'</optgroup>':'')
+    +(dirs.length?'<optgroup label="Direction et coordination">'+dirs.map(opt).join('')+'</optgroup>':'');
+  /* Une personne enregistrée sur la fiche mais absente des deux groupes (elle a
+     changé de crèche depuis) resterait perdue en silence : on la remet. */
+  if(val){
+    sel.value=val;
+    if(sel.value!==val){
+      const r=cacheReferents.find(x=>String(x.id)===String(val));
+      if(r){sel.insertAdjacentHTML('beforeend','<optgroup label="Déjà enregistrée">'+opt(r)+'</optgroup>');sel.value=val;}
+    }
+  }
 }
 
 /* Passer une stagiaire en « terminé » sans bilan, c'est perdre le bilan :
@@ -15558,6 +15573,7 @@ async function stgSave(){
 
   const btn=document.getElementById('stg-f-save');
   if(btn)btn.disabled=true;
+  const creation=!stgFicheId;
   let ok=false;
   if(stgFicheId){
     ok=await dbUpdate('stagiaires',stgFicheId,row);
@@ -15581,10 +15597,17 @@ async function stgSave(){
       +(window._lastDbError?' : '+window._lastDbError:'')+'.','error');
   }
   await stgLoad();
-  showBanner('Fiche enregistrée ✅');
-  /* On garde la fiche ouverte après une création : c'est là qu'on enchaîne
-     avec le lien de dépôt et les jours de présence. */
-  stgOpenFiche(stgFicheId);
+  /* À la création, la fiche reste ouverte : le lien de dépôt, les documents et
+     les jours n'existent qu'une fois la personne enregistrée, et c'est là qu'on
+     enchaîne. Sur une fiche déjà connue, « Enregistrer » veut dire « j'ai
+     fini » : on ferme. */
+  if(creation){
+    showBanner('Fiche créée — vous pouvez maintenant créer le lien de dépôt et saisir les jours ✅');
+    stgOpenFiche(stgFicheId);
+  }else{
+    closeModal('modal-stagiaire-wrap');
+    showBanner('Fiche enregistrée ✅');
+  }
 }
 
 async function stgSupprimer(){
@@ -16298,8 +16321,32 @@ function stgRenderCal(){
     .localeCompare(String(stgCrecheName(b.creche_id)+stgNomComplet(b)),'fr'));
 
   if(!lignes.length){
-    box.innerHTML='<div style="text-align:center;padding:34px 20px;color:var(--muted);font-size:13px">'
-      +'Aucun stage ni alternance sur ce mois.</div>';
+    /* Un écran vide ne dit pas POURQUOI il est vide : filtre de crèche, fiche
+       pas encore orientée, ou jours saisis sur d'autres mois. Chacune de ces
+       trois raisons se répare différemment, alors on les nomme. */
+    const vivantes=stgCache.filter(s=>s.statut!=='refuse'&&s.statut!=='annule');
+    const pistes=[];
+    if(creche){
+      const ailleurs=vivantes.filter(s=>s.creche_id&&String(s.creche_id)!==String(creche)).length;
+      const orphelines=vivantes.filter(s=>!s.creche_id).length;
+      if(ailleurs)pistes.push(ailleurs+' fiche'+(ailleurs>1?'s':'')+' sur une autre crèche — choisissez « Toutes les crèches ».');
+      if(orphelines)pistes.push(orphelines+' fiche'+(orphelines>1?'s':'')+' pas encore orientée'+(orphelines>1?'s':'')
+        +' vers une crèche : tant qu\'aucune crèche n\'est choisie sur la fiche, un filtre par crèche l\'écarte.');
+    }
+    const muettes=vivantes.filter(s=>!stgJoursDe(s.id).length&&!(s.date_debut&&s.date_fin)).length;
+    if(muettes)pistes.push(muettes+' fiche'+(muettes>1?'s':'')+' sans dates ni jours saisis : une fiche n\'apparaît ici '
+      +'qu\'avec des dates de début et de fin, ou des jours de présence.');
+    /* Les mois où il se passe quelque chose : le plus utile est souvent
+       simplement d'aller voir ailleurs. */
+    const tousJours=vivantes.flatMap(s=>stgJoursDe(s.id).map(j=>String(j.jour))).sort();
+    if(tousJours.length&&(tousJours[tousJours.length-1]<premier||tousJours[0]>dernier))
+      pistes.push('Les jours saisis vont du '+stgDateFr(tousJours[0])+' au '+stgDateFr(tousJours[tousJours.length-1])
+        +' : utilisez les flèches pour changer de mois.');
+    box.innerHTML='<div style="text-align:center;padding:34px 20px;color:var(--muted);font-size:13px;line-height:1.6">'
+      +'Aucun stage ni alternance sur ce mois.'
+      +(pistes.length?'<div style="margin-top:10px;font-size:12.5px;color:var(--orange-dark);max-width:620px;margin-left:auto;margin-right:auto">'
+        +pistes.map(p=>'<div style="margin-top:5px">'+p+'</div>').join('')+'</div>':'')
+      +'</div>';
     return;
   }
 
