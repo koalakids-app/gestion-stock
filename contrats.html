@@ -253,6 +253,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <button class="btn btn-s" id="btnLienCt" style="display:none" onclick="copierLienContrat()"><i class="ti ti-link"></i> Le lien</button>
       <button class="btn btn-p" id="btnEnvoiCt" style="display:none" onclick="envoyerContrat()"><i class="ti ti-send"></i> Envoyer</button>
       <button class="btn btn-p" id="btnSignerCt" style="display:none" onclick="openContresignature()"><i class="ti ti-stamp"></i> Contresigner</button>
+      <button class="btn btn-d" id="btnResilCt" style="display:none" onclick="openResiliation()"><i class="ti ti-file-x"></i> Résilier</button>
       <button class="btn btn-g" onclick="closeOv('ovContrat')">Fermer</button>
       <button class="btn btn-p" id="btnSaveCt" onclick="saveContrat()"><i class="ti ti-check"></i> Enregistrer le brouillon</button>
     </div>
@@ -277,6 +278,43 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div class="acts">
       <button class="btn btn-g" onclick="closeOv('ovContresign')">Annuler</button>
       <button class="btn btn-p" id="btnCsGo" onclick="contresigner()"><i class="ti ti-check"></i> Contresigner</button>
+    </div>
+  </div>
+</div>
+
+<!-- LA RÉSILIATION -->
+<div class="ov" id="ovResil">
+  <div class="md" style="max-width:560px">
+    <h3><i class="ti ti-file-x"></i> Résilier le contrat</h3>
+    <div id="rsInfo"></div>
+
+    <div class="f"><label class="lb">À l'initiative de qui ?</label>
+      <select id="rsOrigine" onchange="rsSync()">
+        <option value="famille">La famille</option>
+        <option value="creche">La crèche</option>
+      </select></div>
+    <p class="hint" id="rsQuiHint"></p>
+
+    <div class="g2">
+      <div class="f"><label class="lb">Notifiée le</label>
+        <input id="rsLe" type="date" onchange="rsCalcule()"></div>
+      <div class="f"><label class="lb">Durée du préavis (mois)</label>
+        <input id="rsMois" type="number" min="0" step="0.5" onchange="rsCalcule()" oninput="rsCalcule()"></div>
+    </div>
+    <div class="f"><label class="lb">Fin du préavis — dernier jour d'accueil</label>
+      <input id="rsFin" type="date" onchange="rsSync()"></div>
+    <p class="hint" id="rsFinHint"></p>
+
+    <div class="f"><label class="lb">Motif</label>
+      <textarea id="rsMotif" placeholder="Déménagement, entrée à l'école, changement de mode de garde…"></textarea></div>
+    <div class="f"><label class="lb">Nom de la personne qui notifie ou qui saisit</label>
+      <input id="rsPar" placeholder="Prénom Nom"></div>
+
+    <div id="rsEffet"></div>
+
+    <div class="acts">
+      <button class="btn btn-g" onclick="closeOv('ovResil')">Annuler</button>
+      <button class="btn btn-d" id="btnRsGo" onclick="resilier()"><i class="ti ti-file-x"></i> Résilier le contrat</button>
     </div>
   </div>
 </div>
@@ -848,6 +886,11 @@ function rendreDossier(){
           +(c.statut==='refuse'?'Refusé':'Signé par la famille')+' le '+dfr(c.repondu_le)+'</div>':'')
         +(c.contresigne_le?'<div class="li"><i class="ti ti-stamp" style="color:var(--green)"></i>Contresigné le '
           +dfr(c.contresigne_le)+(c.contresigne_par?' par '+esc(c.contresigne_par):'')+'</div>':'')
+        +(c.resilie_le?'<div class="li"><i class="ti ti-file-x" style="color:var(--red)"></i>'
+          +'Résilié le '+dfr(c.resilie_le)
+          +(c.resilie_origine==='creche'?' par la crèche':' par la famille')
+          +(c.resilie_fin_preavis?' — dernier jour d\'accueil le '+dfr(c.resilie_fin_preavis):'')
+          +'</div>':'')
         +'</div>';
     }).join('');
   }
@@ -1123,6 +1166,11 @@ async function openContrat(id,type){
   // d'autre : ni avant, ni deux fois.
   document.getElementById('btnSignerCt').style.display=
     (CCUR&&CCUR.statut==='signe')?'':'none';
+  /* On ne résilie que ce qui engage. Un brouillon se supprime, un contrat
+     parti chez la famille s'annule — la résiliation, elle, met fin à un
+     accueil en cours, et suppose donc un contrat complet des deux parts. */
+  document.getElementById('btnResilCt').style.display=
+    (CCUR&&CCUR.statut==='contresigne')?'':'none';
   // Le PDF ne s'imprime que depuis la base : un contrat jamais enregistré n'a
   // ni numéro ni lignes, et sortirait un document sans identité.
   document.getElementById('btnPdfCt').style.display=CCUR?'':'none';
@@ -1279,9 +1327,16 @@ function etatContrat(c){
       +(c.motif_refus?' Motif : '+esc(c.motif_refus):' Aucun motif indiqué.');
   }
   if(c.statut==='resilie'){
-    return '<b style="color:var(--red)">Résilié le '+dfr(c.resilie_le)+'.</b>'
-      +(c.resilie_fin_preavis?' Fin de préavis le '+dfr(c.resilie_fin_preavis)+'.':'')
-      +(c.resilie_motif?' Motif : '+esc(c.resilie_motif):'');
+    const encours=c.resilie_fin_preavis&&String(c.resilie_fin_preavis).slice(0,10)>=auj();
+    return '<b style="color:var(--red)">Résilié le '+dfr(c.resilie_le)
+      +(c.resilie_origine==='creche'?' à l\'initiative de la crèche':' à l\'initiative de la famille')
+      +'.</b>'
+      +(c.resilie_fin_preavis
+        ? ' Dernier jour d\'accueil le <b>'+dfr(c.resilie_fin_preavis)+'</b>'
+          +(encours?' — préavis en cours.':'.')
+        : '')
+      +(c.resilie_par?' Notifié par '+esc(c.resilie_par)+'.':'')
+      +(c.resilie_motif?'<br>Motif : '+esc(c.resilie_motif):'');
   }
   const b=[];
   if(c.envoye_le)b.push('Envoyé le '+dfr(c.envoye_le)+(c.destinataires?' à '+esc(c.destinataires):''));
@@ -1897,6 +1952,206 @@ async function recharger(){
   render();
 }
 
+/* ---------- LA RÉSILIATION ---------- */
+/* Un contrat d'accueil se termine rarement à sa date de fin : une famille
+   déménage, change de mode de garde, ou la crèche met fin à l'accueil. La
+   résiliation n'est donc pas un cas d'exception, c'est le second mode de fin
+   d'un contrat — et le seul qui laisse une trace utile en cas de litige.
+
+   TROIS CHOSES SONT ENREGISTRÉES, et chacune répond à une question qui se pose
+   plus tard :
+     · de quel côté vient la décision  → qui doit quoi à qui ;
+     · quand elle a été notifiée       → d'où court le préavis ;
+     · quand le préavis s'achève       → jusqu'à quand on facture et on accueille.
+
+   CE QUE LA RÉSILIATION FAIT, ET CE QU'ELLE NE FAIT PAS. Elle borne la ligne
+   `enfants_contrats` à la fin du préavis : les présences s'arrêtent là. Elle ne
+   touche PAS à `enfants.date_sortie`, qui marque un départ EFFECTIF — la poser
+   d'avance ferait disparaître l'enfant des listes, des effectifs PMI et des
+   commandes de repas avant qu'il ne soit parti. C'est la règle posée à la
+   bascule, et elle vaut ici pour la même raison. */
+
+function moisPlus(dateISO,mois){
+  if(!dateISO)return '';
+  const p=String(dateISO).slice(0,10).split('-').map(Number);
+  if(p.length!==3)return '';
+  const entiers=Math.floor(mois);
+  const demi=(mois-entiers)>=0.5;
+  const d=new Date(p[0],p[1]-1,p[2]);
+  /* setMonth gère seul les fins de mois : le 31 janvier + 1 mois donne le
+     3 mars, pas le 31 février. On ramène donc au dernier jour du mois visé
+     quand le jour d'origine n'existe pas — un préavis d'un mois notifié le 31
+     doit finir le 28 ou le 29, pas déborder sur le mois suivant. */
+  const jour=d.getDate();
+  d.setMonth(d.getMonth()+entiers);
+  if(d.getDate()!==jour)d.setDate(0);
+  if(demi)d.setDate(d.getDate()+15);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function openResiliation(){
+  const c=CONTRATS.find(x=>String(x.id)===String(contratId));
+  if(!c){toast('Contrat introuvable.',true);return;}
+  if(c.statut!=='contresigne'){
+    toast('Seul un contrat contresigné peut être résilié.',true);return;
+  }
+  document.getElementById('rsInfo').innerHTML=
+    '<div class="warn" style="background:var(--violet-l);color:var(--violet)">'
+    +'<i class="ti ti-file-certificate"></i><span>Contrat <b>'+esc(c.numero||'')+'</b>, '
+    +'du '+dfr(c.date_debut)+(c.date_fin?' au '+dfr(c.date_fin):' sans terme')
+    +' · '+euro(c.total_mensuel)+' par mois.</span></div>';
+  setVal('rsOrigine','famille');
+  setVal('rsLe',auj());
+  // La durée standard vient des Paramètres. Un mois est l'usage en crèche,
+  // mais rien ne remplace ce que porte le règlement de fonctionnement.
+  const mois=Number(RESEAU.preavis_mois!=null?RESEAU.preavis_mois:1);
+  setVal('rsMois',isNaN(mois)?1:mois);
+  setVal('rsMotif','');
+  setVal('rsPar','');
+  rsCalcule();
+  const b=document.getElementById('btnRsGo');
+  b.disabled=false;b.innerHTML='<i class="ti ti-file-x"></i> Résilier le contrat';
+  openOv('ovResil');
+}
+
+/* La date de fin est PROPOSÉE, jamais imposée : un départ négocié, une
+   dispense de préavis ou un préavis courant jusqu'à la fin du mois civil sont
+   des cas réels que la règle générale ne couvre pas. Recalculer par-dessus une
+   saisie manuelle effacerait la décision de la direction — on ne recalcule
+   donc qu'au changement de la date de notification ou de la durée. */
+function rsCalcule(){
+  const le=val('rsLe');
+  const mois=Number(val('rsMois'));
+  if(le&&!isNaN(mois))setVal('rsFin',moisPlus(le,mois));
+  rsSync();
+}
+
+function rsSync(){
+  const c=CONTRATS.find(x=>String(x.id)===String(contratId));
+  const orig=val('rsOrigine');
+  document.getElementById('rsQuiHint').textContent=orig==='creche'
+    ? 'Rupture à l\'initiative de la crèche : le motif sera opposable, rédigez-le précisément et '
+      +'assurez-vous qu\'il correspond à un cas prévu par le règlement de fonctionnement.'
+    : 'Départ à l\'initiative de la famille — le cas le plus courant. Le motif reste utile pour '
+      +'le suivi du réseau, sans être opposable.';
+
+  const fin=val('rsFin'),le=val('rsLe');
+  const h=document.getElementById('rsFinHint');
+  if(!fin){h.textContent='Renseignez la fin du préavis : elle détermine le dernier jour d\'accueil.';}
+  else if(le&&fin<le){h.innerHTML='<b style="color:var(--red)">La fin du préavis précède sa notification.</b>';}
+  else{
+    const auTerme=c&&c.date_fin&&fin>=String(c.date_fin).slice(0,10);
+    h.innerHTML='Dernier jour d\'accueil : <b>'+dfr(fin)+'</b>. '
+      +(auTerme
+        ? 'Cette date atteint ou dépasse le terme prévu au contrat — l\'accueil irait donc à son terme normal.'
+        : 'Modifiable : un départ négocié, une dispense de préavis ou un préavis courant jusqu\'à la fin '
+          +'du mois civil ne suivent pas la règle générale.');
+  }
+
+  /* Ce que le bouton va réellement écrire, dit avant de cliquer. La ligne
+     d'accueil pilote les présences : la borner n'est pas un détail
+     administratif. */
+  const box=document.getElementById('rsEffet');
+  if(!c){box.innerHTML='';return;}
+  box.innerHTML='<div class="warn"><i class="ti ti-info-circle"></i><span>'
+    +'<b>Ce qui sera écrit :</b><br>'
+    +'· le contrat passe en <b>Résilié</b> et n\'est plus modifiable ;<br>'
+    +'· la ligne d\'accueil est close au <b>'+(fin?dfr(fin):'—')+'</b> — les feuilles de présence, '
+    +'la vue Gantt et les commandes de repas s\'arrêtent à cette date ;<br>'
+    +'· <b>la fiche enfant n\'est pas touchée.</b> Sa date de sortie marque un départ effectif : '
+    +'vous la poserez le jour venu, depuis la fiche enfant.</span></div>';
+}
+
+async function resilier(){
+  const c=CONTRATS.find(x=>String(x.id)===String(contratId));
+  if(!c)return;
+  const orig=val('rsOrigine');
+  const le=val('rsLe'),fin=val('rsFin');
+  const motif=val('rsMotif'),par=val('rsPar');
+
+  if(!le){toast('Indiquez la date de notification.',true);return;}
+  if(!fin){toast('Indiquez la fin du préavis.',true);return;}
+  if(fin<le){toast('La fin du préavis ne peut pas précéder sa notification.',true);return;}
+  if(String(c.date_debut)&&fin<String(c.date_debut).slice(0,10)){
+    toast('La fin du préavis précède le début de l\'accueil : vérifiez les dates.',true);return;
+  }
+  // Un motif de rupture à l'initiative de la crèche sera lu par un tiers.
+  if(orig==='creche'&&motif.length<10){
+    toast('Une rupture à l\'initiative de la crèche demande un motif écrit et précis.',true);return;
+  }
+  if(par.length<3){toast('Indiquez le nom de la personne qui notifie ou qui saisit.',true);return;}
+
+  if(!confirm('Résilier le contrat '+(c.numero||'')+' ?\n\n'
+    +'Dernier jour d\'accueil : '+dfr(fin)+'.\n'
+    +'La ligne d\'accueil sera close à cette date et le contrat ne sera plus modifiable.'))return;
+
+  const b=document.getElementById('btnRsGo');
+  b.disabled=true;b.textContent='Enregistrement…';
+  try{
+    /* `.eq('statut','contresigne')` protège du double clic et d'une
+       résiliation menée en parallèle depuis un autre poste. */
+    const{data,error}=await sb.from('contrats').update({
+      statut:'resilie',
+      resilie_le:le,
+      resilie_origine:orig,
+      resilie_fin_preavis:fin,
+      resilie_motif:motif,
+      resilie_par:par,
+      updated_at:new Date().toISOString()
+    }).eq('id',c.id).eq('statut','contresigne').select();
+    if(error)throw error;
+    if(!data||!data.length)throw new Error('Ce contrat vient d\'être modifié ailleurs.');
+    Object.assign(c,data[0]);
+
+    /* La ligne d'accueil suit. Elle vient APRÈS l'écriture du contrat et dans
+       son propre try : si elle échoue, la résiliation est enregistrée — c'est
+       elle qui fait foi — et il reste à borner la ligne à la main. L'inverse
+       aurait laissé une ligne close sans résiliation, c'est-à-dire un enfant
+       sorti des présences sans qu'aucun document ne l'explique. */
+    let ligneId=c.enfants_contrat_id;
+    try{
+      /* Les contrats nés avant que le rattachement existe — les dossiers de
+         transition du 5 septembre — n'ont pas d'`enfants_contrat_id`. On
+         retrouve alors la ligne d'accueil ouverte de l'enfant. */
+      if(!ligneId&&c.enfant_id){
+        const{data:l}=await sb.from('enfants_contrats')
+          .select('id,date_debut,date_fin').eq('enfant_id',c.enfant_id)
+          .order('date_debut',{ascending:false});
+        const ouverte=(l||[]).find(x=>!x.date_fin||String(x.date_fin).slice(0,10)>=fin)
+          ||(l||[])[0];
+        ligneId=ouverte&&ouverte.id;
+      }
+      if(ligneId){
+        const{error:eL}=await sb.from('enfants_contrats')
+          .update({date_fin:fin,updated_at:new Date().toISOString()})
+          .eq('id',ligneId);
+        if(eL)throw eL;
+      }else{
+        throw new Error('aucune ligne d\'accueil rattachée');
+      }
+    }catch(x){
+      console.error('[resiliation ligne accueil]',x);
+      toast('Contrat résilié, mais la ligne d\'accueil n\'a pas pu être close au '+dfr(fin)
+        +'. Posez la fin de contrat à la main depuis la fiche enfant, sinon les présences '
+        +'continueront après le départ.',true);
+    }
+
+    closeOv('ovResil');closeOv('ovContrat');
+    await recharger();
+    rendreDossier();
+    toast('Contrat résilié — dernier jour d\'accueil le '+dfr(fin)+'.');
+  }catch(e){
+    console.error('[resilier]',e);
+    const msg=(e.code==='42703')
+      ? 'Colonne resilie_origine absente — exécutez la partie 1 du script 34.'
+      : (e.code==='23514'
+        ? 'Une contrainte de la base refuse cette résiliation : '+(e.message||'')
+        : (e.message||'erreur inconnue'));
+    toast('Résiliation impossible : '+msg,true);
+    b.disabled=false;b.innerHTML='<i class="ti ti-file-x"></i> Résilier le contrat';
+  }
+}
+
 /* ---------- LE PDF DU CONTRAT ---------- */
 /* Le document est REDESSINÉ en texte, pas photographié. html2canvas aurait été
    plus court à écrire, mais il produit une image : fichier lourd, texte ni
@@ -2188,6 +2443,22 @@ function dessineContrat(c,lignes){
       +'perçoit pas le CMG : elle facture la mensualité ci-dessus.',8.5,'italic',GRIS,L,4);
   }
 
+  /* ---- La résiliation ---- */
+  /* Un contrat résilié reste un contrat : il a existé, il a été facturé, et
+     c'est lui qu'on ressort en cas de litige. La résiliation s'y inscrit donc
+     comme une mention datée, et non en remplacement du document. */
+  if(c.statut==='resilie'||c.resilie_le){
+    titreSection('Résiliation');
+    kv('Notifiée le',dfr(c.resilie_le));
+    kv('À l\'initiative de',c.resilie_origine==='creche'?'la crèche':'la famille');
+    kv('Dernier jour d\'accueil',dfr(c.resilie_fin_preavis));
+    if(c.resilie_par)kv('Notifiée par',c.resilie_par);
+    if(c.resilie_motif&&String(c.resilie_motif).trim()){
+      y+=1;
+      para('Motif : '+c.resilie_motif,9,'normal',NOIR,L,4.2);
+    }
+  }
+
   /* ---- Le mot de la crèche ---- */
   if(c.commentaire&&String(c.commentaire).trim()){
     titreSection('Précisions');
@@ -2317,7 +2588,8 @@ const NOTICE=`
 <p style="margin-top:10px"><b>Un contrat envoyé ne se modifie plus.</b> Un changement en cours d'année — un jour ajouté, des horaires décalés — se porte par <b>avenant</b> : un document daté, rattaché au contrat d'origine, qui se signe comme lui. Le contrat initial reste intact. La PMI l'exige en contrôle, et c'est le seul moyen de justifier en juin ce qui était facturé en mars.</p>
 <p style="margin-top:10px"><b>Une demande ne porte qu'un seul contrat initial.</b> La base le refuse au second : deux contrats initiaux sur la même demande seraient deux engagements concurrents pour le même accueil.</p>
 <p style="margin-top:10px"><b>Les coordonnées sont recopiées, pas liées.</b> L'adresse et le n° allocataire portés au contrat sont ceux du jour de la signature. Les corriger ailleurs ne réécrit aucun contrat déjà signé — c'est voulu.</p>
-<p style="margin-top:10px"><b>Ce qui n'est pas encore là :</b> l'envoi à la famille, la page de signature, la contresignature et le PDF. Ils arrivent dans la suite du module.</p>
+<p style="margin-top:10px"><b>La résiliation.</b> Un contrat d'accueil se termine rarement à sa date de fin : une famille déménage, change de mode de garde, ou la crèche met fin à l'accueil. Le bouton <b>Résilier</b> apparaît sur un contrat contresigné. Il demande de quel côté vient la décision, la date de notification et la fin du préavis — proposée à partir de la durée réglée dans Paramètres, et modifiable pour un départ négocié ou une dispense.</p>
+<p style="margin-top:10px">La résiliation <b>clôt la ligne d'accueil</b> à la fin du préavis : les feuilles de présence, la vue Gantt et les commandes de repas s'arrêtent à cette date. Elle ne touche <b>pas</b> à la date de sortie de la fiche enfant, qui marque un départ effectif — vous la poserez le jour venu. Le contrat résilié reste consultable et imprimable : il a existé, il a été facturé, et c'est lui qu'on ressort en cas de litige.</p>
 <p style="margin-top:10px"><b>Réserve juridique.</b> Une signature tracée à l'écran est une signature électronique <b>simple</b> au sens d'eIDAS : elle prouve un accord, sans la force probante d'une signature qualifiée. Même niveau que le dossier de familiarisation, déjà en usage dans le réseau.</p>
 `;
 function openNotice(){document.getElementById('noticeBody').innerHTML=NOTICE;openOv('ovNotice');}

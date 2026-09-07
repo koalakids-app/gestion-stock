@@ -108,6 +108,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
           <div class="f"><label class="lb">Représentant légal</label><input id="eRepNom"></div>
           <div class="f"><label class="lb">Qualité</label><input id="eRepQual" placeholder="Président, gérante…"></div>
         </div>
+        <!-- Ces champs ne servaient qu'à l'en-tête du devis. Ils nomment
+             maintenant la personne morale qui s'engage dans le contrat
+             d'accueil : sans eux, le contrat ne dit pas qui contracte. -->
+        <p class="hint" id="hIdent"></p>
       </div>
 
       <div class="card">
@@ -161,13 +165,44 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <div class="f" style="max-width:240px"><label class="lb">Validité d'un devis (jours)</label><input id="rValid" type="number" step="1" min="1"></div>
         <p class="hint">Au-delà de ce délai, le lien envoyé à la famille expire et le devis passe en « Expiré ».</p>
         <div class="f"><label class="lb">Mentions légales portées sur le devis</label><textarea id="rMentions" placeholder="Figurent en pied du document remis à la famille."></textarea></div>
-        <div class="f"><label class="lb">Conditions de résiliation et préavis</label><textarea id="rPreavis"></textarea></div>
       </div>
+
+      <!-- LE CONTRAT D'ACCUEIL
+           Ces réglages sont lus par le module Contrats et RECOPIÉS sur chaque
+           contrat au moment de son envoi. Un contrat garde donc les conditions
+           sous lesquelles il a été signé, même si ces textes changent ensuite :
+           c'est voulu, et c'est ce qui rend l'écran ci-dessous sans danger. -->
+      <div class="card">
+        <div class="sec"><i class="ti ti-file-certificate"></i> Le contrat d'accueil</div>
+        <div class="g2">
+          <div class="f"><label class="lb">Validité d'un lien de signature (jours)</label><input id="rCtValid" type="number" step="1" min="1"></div>
+          <div class="f"><label class="lb">Durée du préavis de résiliation (mois)</label><input id="rPreavisMois" type="number" step="0.5" min="0" oninput="syncPreavis()"></div>
+        </div>
+        <p class="hint" id="hPreavis"></p>
+
+        <div class="f"><label class="lb">Résiliation et préavis — texte porté au contrat</label>
+          <textarea id="rPreavis" placeholder="Chaque partie peut résilier le contrat en respectant un préavis d'un mois, notifié par lettre recommandée…"></textarea></div>
+        <p class="hint">Ce texte figure aussi sur le devis. C'est la clause que la famille lit avant de signer :
+          si elle est vide, le contrat ne dit rien de la façon dont il prend fin — et c'est le point qui
+          pose problème le jour où une famille part en cours d'année.</p>
+
+        <div class="f"><label class="lb">Conditions particulières de résiliation</label>
+          <textarea id="rCondResil" placeholder="Cas de rupture à l'initiative de la crèche, dispense de préavis, sort du dépôt de garantie…"></textarea></div>
+        <p class="hint">Facultatif. Ce qui ne tient pas dans la clause générale : les cas de rupture à l'initiative
+          de la crèche, ce qui advient en cas d'absence prolongée, les dispenses de préavis.</p>
+
+        <div class="f"><label class="lb">Mentions légales portées sur le contrat</label>
+          <textarea id="rCtMentions" placeholder="Laisser vide pour reprendre les mentions du devis."></textarea></div>
+        <p class="hint">Laissé vide, le contrat reprend les mentions du devis ci-dessus.</p>
+      </div>
+
       <div class="card">
         <div class="sec"><i class="ti ti-file-text"></i> Tous les documents</div>
         <div class="f"><label class="lb">Pied de page commun</label><textarea id="rPied" placeholder="Apparaît en bas de chaque document sortant."></textarea></div>
       </div>
-      <div class="warn"><i class="ti ti-info-circle"></i><span>Ces valeurs ne prendront effet dans un document qu'une fois ce document modifié pour venir les lire. C'est un chantier par document : devis d'abord, puis registre de sécurité.</span></div>
+
+      <div class="warn"><i class="ti ti-info-circle"></i><span>Le devis et le contrat d'accueil lisent déjà ces valeurs.
+        Les autres documents — registre de sécurité notamment — restent à câbler : c'est un chantier par document.</span></div>
     </div>
   </div>
 
@@ -348,7 +383,7 @@ function renderEtab(){
     '<label><input type="checkbox" class="ckJour" value="'+j[0]+'"'
     +(jrs.indexOf(j[0])>=0?' checked':'')+'><span>'+j[1]+'</span></label>').join('');
 
-  syncSiret();syncCap();syncPmi();syncSem();
+  syncSiret();syncCap();syncPmi();syncSem();syncIdentite();
   document.getElementById('statut').textContent=etabDe(crecheId)
     ? '' : 'Aucune ligne en base pour cette crèche — elle sera créée à l\'enregistrement.';
   SNAP=snapshot();
@@ -357,8 +392,17 @@ function renderEtab(){
 function renderReseau(){
   setVal('rValid',RCFG.devis_validite_jours!=null?RCFG.devis_validite_jours:30);
   setVal('rMentions',RCFG.devis_mentions);
+  /* Le contrat retombe sur la validité du devis tant qu'il n'a pas la sienne :
+     une valeur par défaut vaut mieux qu'un champ vide sur un écran qu'on
+     ouvrira peut-être une seule fois. */
+  setVal('rCtValid',RCFG.contrat_validite_jours!=null?RCFG.contrat_validite_jours
+    :(RCFG.devis_validite_jours!=null?RCFG.devis_validite_jours:30));
+  setVal('rPreavisMois',RCFG.preavis_mois!=null?RCFG.preavis_mois:1);
   setVal('rPreavis',RCFG.preavis_resiliation);
+  setVal('rCondResil',RCFG.conditions_resiliation);
+  setVal('rCtMentions',RCFG.contrat_mentions);
   setVal('rPied',RCFG.pied_page);
+  syncPreavis();
 }
 
 function showTab(t){
@@ -389,6 +433,30 @@ function syncSiret(){
   if(s.length!==14){h.textContent='SIRET incomplet : '+s.length+' chiffres sur 14.';h.style.color='var(--amber)';return;}
   if(!luhnOk(s)){h.textContent='Ces 14 chiffres ne forment pas un SIRET valide — vérifiez la saisie.';h.style.color='var(--red)';return;}
   h.textContent='SIRET valide. SIREN '+s.slice(0,9)+', établissement '+s.slice(9)+'.';h.style.color='var(--green)';
+  syncIdentite();
+}
+/* Ces quatre champs ne servaient qu'à l'en-tête du devis, où leur absence
+   laissait un simple blanc. Ils nomment désormais la personne morale qui
+   s'engage dans le contrat d'accueil : un contrat qui ne dit pas qui contracte
+   est attaquable, et c'est le premier point qu'un contrôle regarde. On le
+   signale ici plutôt que de le laisser découvrir sur un contrat signé. */
+function syncIdentite(){
+  const h=document.getElementById('hIdent');
+  if(!h)return;
+  const manque=[];
+  if(!val('eRaison'))manque.push('la raison sociale');
+  if(!val('eSiret'))manque.push('le SIRET');
+  if(!val('eSiege'))manque.push('l\'adresse du siège');
+  if(!val('eRepNom'))manque.push('le représentant légal');
+  if(!manque.length){
+    h.textContent='Ces informations nomment la crèche dans la clause « Entre les soussignés » du contrat d\'accueil.';
+    h.style.color='';
+    return;
+  }
+  h.innerHTML='<b>Le contrat d\'accueil de cette crèche sortira incomplet</b> : il manque '
+    +esc(manque.join(', '))+'. Ce sont les informations qui nomment la partie qui s\'engage, '
+    +'dans la clause « Entre les soussignés ».';
+  h.style.color='var(--red)';
 }
 function syncCap(){
   const n=num('cCap');
@@ -410,6 +478,25 @@ function syncPmi(){
   if(j<0){h.textContent='Autorisation échue depuis le '+dfr(e)+'.';h.style.color='var(--red)';}
   else if(j<180){h.textContent='Autorisation à renouveler dans '+j+' jours (échéance le '+dfr(e)+').';h.style.color='var(--amber)';}
   else{h.textContent='Valable jusqu\'au '+dfr(e)+'.';h.style.color='';}
+}
+/* La durée du préavis n'est qu'une PROPOSITION : l'écran de résiliation la
+   calcule puis laisse corriger la date, parce qu'un départ négocié ou une
+   dispense ne suivent pas la règle générale. Le dire ici évite de croire que
+   ce nombre s'impose. */
+function syncPreavis(){
+  const m=num('rPreavisMois');
+  const h=document.getElementById('hPreavis');
+  if(!h)return;
+  if(m==null||!isFinite(m)){
+    h.textContent='En l\'absence de valeur, le module Contrats proposera un mois.';h.style.color='';return;
+  }
+  if(m<0){h.textContent='Une durée de préavis ne peut pas être négative.';h.style.color='var(--red)';return;}
+  h.style.color='';
+  h.textContent=m===0
+    ? 'Sans préavis : la résiliation proposera le jour même comme dernier jour d\'accueil.'
+    : 'À la résiliation, l\'application proposera un dernier jour d\'accueil à '+String(m).replace('.',',')
+      +' mois de la notification. La date reste corrigeable au cas par cas — départ négocié, '
+      +'dispense de préavis, ou préavis courant jusqu\'à la fin du mois civil.';
 }
 /* Les deux nombres sont liés : 52 semaines moins les fermetures. On propage
    dans le sens de la dernière saisie plutôt que d'imposer une direction — la
@@ -445,14 +532,21 @@ async function save(){
   const amin=num('eAgeMin'),amax=num('eAgeMax');
   if((amin!=null&&!isFinite(amin))||(amax!=null&&!isFinite(amax))){
     toast('Âge illisible : indiquez un nombre de mois, 2,5 pour deux mois et demi.',true);return;}
-  let cap,semFerm,semFact,valid;
+  let cap,semFerm,semFact,valid,ctValid;
   try{
     cap    =entier('cCap','La capacité agréée');
     semFerm=entier('eSemFerm','Les semaines de fermeture');
     semFact=entier('eSemFact','Les semaines facturées');
     valid  =entier('rValid','La validité du devis');
+    ctValid=entier('rCtValid','La validité du lien de signature');
   }catch(e){toast(e.message,true);return;}
   if(amin!=null&&amax!=null&&amin>amax){toast('L\'âge minimum dépasse l\'âge maximum.',true);return;}
+  /* Le préavis accepte le demi-mois — quinze jours est une durée courante —
+     mais pas le négatif, qui ferait proposer une fin de préavis antérieure à
+     sa notification et se ferait refuser par contrats_preavis_ck. */
+  const preavisMois=num('rPreavisMois');
+  if(preavisMois!=null&&(!isFinite(preavisMois)||preavisMois<0)){
+    toast('La durée du préavis doit être un nombre de mois positif — 0,5 pour quinze jours.',true);return;}
 
   btn.disabled=true;st.textContent='Enregistrement…';
   try{
@@ -485,19 +579,27 @@ async function save(){
     const i=ETABS.findIndex(x=>String(x.creche_id)===String(crecheId));
     if(i>=0)ETABS[i]=data;else ETABS.push(data);
 
-    // 3. Les paramètres réseau.
-    const cfg={
+    /* 3. Les paramètres réseau. On repart de RCFG plutôt que de reconstruire
+       l'objet de zéro : une clé posée par un autre module — ou par une version
+       plus récente de cet écran — serait sinon effacée à chaque enregistrement
+       depuis un onglet qui ne la connaît pas. `config` est un jsonb libre,
+       c'est justement ce qui rend cette précaution nécessaire. */
+    const cfg=Object.assign({},RCFG,{
       devis_validite_jours:valid!=null?valid:30,
       devis_mentions:val('rMentions'),
+      contrat_validite_jours:ctValid!=null?ctValid:(valid!=null?valid:30),
+      preavis_mois:preavisMois!=null?preavisMois:1,
       preavis_resiliation:val('rPreavis'),
+      conditions_resiliation:val('rCondResil'),
+      contrat_mentions:val('rCtMentions'),
       pied_page:val('rPied')
-    };
+    });
     const{error:er}=await sb.from('reseau_config')
       .upsert({id:RESEAU_CFG_ID,config:cfg,updated_at:new Date().toISOString()},{onConflict:'id'});
     if(er)throw er;
     RCFG=cfg;
 
-    renderChips();
+    renderChips();syncIdentite();
     SNAP=snapshot();
     st.textContent='Enregistré à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+'.';
     toast('Paramètres enregistrés ✅');
