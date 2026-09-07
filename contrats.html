@@ -2055,9 +2055,20 @@ function rsSync(){
       +'le suivi du réseau, sans être opposable.';
 
   const fin=val('rsFin'),le=val('rsLe');
+  const debut=c&&c.date_debut?String(c.date_debut).slice(0,10):'';
+  /* DÉSISTEMENT AVANT ENTRÉE. Un contrat signé et contresigné en septembre pour
+     une entrée en novembre peut être rompu entre les deux : la famille trouve
+     une place ailleurs, déménage, renonce. La fin du préavis tombe alors AVANT
+     le début de l'accueil — ce n'est pas une erreur de dates, c'est un accueil
+     qui n'aura jamais lieu, et il fallait le traiter au lieu de le refuser. */
+  const desistement=!!(debut&&fin&&fin<debut);
   const h=document.getElementById('rsFinHint');
   if(!fin){h.textContent='Renseignez la fin du préavis : elle détermine le dernier jour d\'accueil.';}
   else if(le&&fin<le){h.innerHTML='<b style="color:var(--red)">La fin du préavis précède sa notification.</b>';}
+  else if(desistement){
+    h.innerHTML='<b>L\'accueil n\'aura pas commencé</b> : le préavis s\'achève le '+dfr(fin)
+      +', avant le début prévu au '+dfr(debut)+'.';
+  }
   else{
     const auTerme=c&&c.date_fin&&fin>=String(c.date_fin).slice(0,10);
     h.innerHTML='Dernier jour d\'accueil : <b>'+dfr(fin)+'</b>. '
@@ -2072,6 +2083,22 @@ function rsSync(){
      administratif. */
   const box=document.getElementById('rsEffet');
   if(!c){box.innerHTML='';return;}
+  if(desistement){
+    /* La ligne d'accueil ne peut pas être close avant d'avoir commencé : une
+       date de fin antérieure à sa date de début n'a aucun sens pour les
+       présences. On la borne donc à son propre début — elle existe, mais ne
+       couvre plus aucun jour — et on dit que la fiche enfant est à revoir,
+       parce qu'un enfant jamais accueilli n'a rien à faire dans les effectifs. */
+    box.innerHTML='<div class="warn"><i class="ti ti-alert-triangle"></i><span>'
+      +'<b>Désistement avant l\'entrée.</b> L\'accueil devait commencer le '+dfr(debut)
+      +' et n\'aura pas lieu.<br>'
+      +'· le contrat passe en <b>Résilié</b>, avec la trace de qui a renoncé et quand ;<br>'
+      +'· la ligne d\'accueil est ramenée au '+dfr(debut)+' — elle ne couvre plus aucun jour ;<br>'
+      +'· <b>la fiche enfant reste en place.</b> Comme l\'enfant n\'aura jamais été accueilli, '
+      +'elle est à revoir depuis le module Gestion : la laisser telle quelle la ferait compter '
+      +'dans les effectifs.</span></div>';
+    return;
+  }
   box.innerHTML='<div class="warn"><i class="ti ti-info-circle"></i><span>'
     +'<b>Ce qui sera écrit :</b><br>'
     +'· le contrat passe en <b>Résilié</b> et n\'est plus modifiable ;<br>'
@@ -2091,18 +2118,27 @@ async function resilier(){
   if(!le){toast('Indiquez la date de notification.',true);return;}
   if(!fin){toast('Indiquez la fin du préavis.',true);return;}
   if(fin<le){toast('La fin du préavis ne peut pas précéder sa notification.',true);return;}
-  if(String(c.date_debut)&&fin<String(c.date_debut).slice(0,10)){
-    toast('La fin du préavis précède le début de l\'accueil : vérifiez les dates.',true);return;
-  }
+  /* Une fin de préavis antérieure au début de l'accueil n'est PAS une erreur :
+     c'est un désistement avant l'entrée. Ce qui suit s'y adapte au lieu de le
+     refuser — mais la ligne d'accueil, elle, ne peut pas se clore avant d'avoir
+     commencé : on la borne à sa propre date de début. */
+  const debutCt=c.date_debut?String(c.date_debut).slice(0,10):'';
+  const desistement=!!(debutCt&&fin<debutCt);
+  const finLigne=desistement?debutCt:fin;
   // Un motif de rupture à l'initiative de la crèche sera lu par un tiers.
   if(orig==='creche'&&motif.length<10){
     toast('Une rupture à l\'initiative de la crèche demande un motif écrit et précis.',true);return;
   }
   if(par.length<3){toast('Indiquez le nom de la personne qui notifie ou qui saisit.',true);return;}
 
-  if(!confirm('Résilier le contrat '+(c.numero||'')+' ?\n\n'
-    +'Dernier jour d\'accueil : '+dfr(fin)+'.\n'
-    +'La ligne d\'accueil sera close à cette date et le contrat ne sera plus modifiable.'))return;
+  if(!confirm(desistement
+    ? 'Résilier le contrat '+(c.numero||'')+' avant l\'entrée ?\n\n'
+      +'L\'accueil devait commencer le '+dfr(debutCt)+' et n\'aura pas lieu.\n'
+      +'La ligne d\'accueil sera ramenée à cette date et le contrat ne sera plus modifiable.\n\n'
+      +'Pensez à revoir la fiche enfant : sans cela, l\'enfant continuera de compter dans les effectifs.'
+    : 'Résilier le contrat '+(c.numero||'')+' ?\n\n'
+      +'Dernier jour d\'accueil : '+dfr(fin)+'.\n'
+      +'La ligne d\'accueil sera close à cette date et le contrat ne sera plus modifiable.'))return;
 
   const b=document.getElementById('btnRsGo');
   b.disabled=true;b.textContent='Enregistrement…';
@@ -2136,13 +2172,13 @@ async function resilier(){
         const{data:l}=await sb.from('enfants_contrats')
           .select('id,date_debut,date_fin').eq('enfant_id',c.enfant_id)
           .order('date_debut',{ascending:false});
-        const ouverte=(l||[]).find(x=>!x.date_fin||String(x.date_fin).slice(0,10)>=fin)
+        const ouverte=(l||[]).find(x=>!x.date_fin||String(x.date_fin).slice(0,10)>=finLigne)
           ||(l||[])[0];
         ligneId=ouverte&&ouverte.id;
       }
       if(ligneId){
         const{error:eL}=await sb.from('enfants_contrats')
-          .update({date_fin:fin,updated_at:new Date().toISOString()})
+          .update({date_fin:finLigne,updated_at:new Date().toISOString()})
           .eq('id',ligneId);
         if(eL)throw eL;
       }else{
@@ -2150,7 +2186,7 @@ async function resilier(){
       }
     }catch(x){
       console.error('[resiliation ligne accueil]',x);
-      toast('Contrat résilié, mais la ligne d\'accueil n\'a pas pu être close au '+dfr(fin)
+      toast('Contrat résilié, mais la ligne d\'accueil n\'a pas pu être close au '+dfr(finLigne)
         +'. Posez la fin de contrat à la main depuis la fiche enfant, sinon les présences '
         +'continueront après le départ.',true);
     }
@@ -2158,7 +2194,9 @@ async function resilier(){
     closeOv('ovResil');closeOv('ovContrat');
     await recharger();
     rendreDossier();
-    toast('Contrat résilié — dernier jour d\'accueil le '+dfr(fin)+'.');
+    toast(desistement
+      ? 'Contrat résilié avant l\'entrée — l\'accueil n\'aura pas lieu.'
+      : 'Contrat résilié — dernier jour d\'accueil le '+dfr(fin)+'.');
   }catch(e){
     console.error('[resilier]',e);
     const msg=(e.code==='42703')
