@@ -110,6 +110,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .fchip{padding:5px 12px;border:1.5px solid var(--border);border-radius:20px;background:transparent;cursor:pointer;font-size:12px;color:#666;font-weight:500}
 .fchip.active{background:var(--koala);border-color:var(--koala);color:#fff}
 .fchip:hover:not(.active){background:var(--koala-light);border-color:var(--koala);color:var(--koala)}
+/* Le nombre de fiches derrière chaque puce : une fiche rangée sous une autre
+   puce que celle ouverte ne doit jamais être invisible. */
+.stg-n{display:inline-block;min-width:16px;padding:0 5px;margin-left:3px;border-radius:9px;background:rgba(0,0,0,.09);font-size:11px;font-weight:700;line-height:16px;text-align:center;vertical-align:1px}
+.fchip.active .stg-n{background:rgba(255,255,255,.28);color:#fff}
+.stg-n.vide{opacity:.45}
 
 /* DEMAND CARDS */
 .demands-list{display:flex;flex-direction:column;gap:8px}
@@ -1188,10 +1193,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="stg-view-fiches" class="module-tab-content active">
       <div class="stats-row" id="stg-stats" style="margin-bottom:12px"></div>
       <div class="filters" style="flex-wrap:wrap;align-items:center;gap:6px">
-        <button class="fchip active" id="stg-chip-actives" onclick="stgSetFilter('actives')"><i class="ti ti-hourglass"></i> En cours et à venir</button>
-        <button class="fchip" id="stg-chip-demandes" onclick="stgSetFilter('demandes')"><i class="ti ti-inbox"></i> Demandes à traiter</button>
-        <button class="fchip" id="stg-chip-terminees" onclick="stgSetFilter('terminees')"><i class="ti ti-check"></i> Terminées</button>
-        <button class="fchip" id="stg-chip-toutes" onclick="stgSetFilter('toutes')"><i class="ti ti-list"></i> Toutes</button>
+        <button class="fchip active" id="stg-chip-actives" onclick="stgSetFilter('actives')"><i class="ti ti-hourglass"></i> En cours et à venir <span class="stg-n" id="stg-n-actives">0</span></button>
+        <button class="fchip" id="stg-chip-demandes" onclick="stgSetFilter('demandes')"><i class="ti ti-inbox"></i> Demandes à traiter <span class="stg-n" id="stg-n-demandes">0</span></button>
+        <button class="fchip" id="stg-chip-terminees" onclick="stgSetFilter('terminees')"><i class="ti ti-check"></i> Terminées <span class="stg-n" id="stg-n-terminees">0</span></button>
+        <button class="fchip" id="stg-chip-toutes" onclick="stgSetFilter('toutes')"><i class="ti ti-list"></i> Toutes <span class="stg-n" id="stg-n-toutes">0</span></button>
         <select class="finput" id="stg-f-type-liste" style="width:auto;min-width:150px;font-size:12px;padding:4px 8px" onchange="stgRender()">
           <option value="">Stagiaires et alternants</option>
           <option value="stagiaire">Stagiaires seulement</option>
@@ -15345,6 +15350,40 @@ function stgJoursDe(id){
 
 // ── Vue 1 : les fiches ────────────────────────────────────────────────────
 
+/* « À traiter » veut dire : personne n'a encore tranché. Un premier contact
+   pris compte donc autant qu'une demande brute — c'est exactement le moment où
+   la fiche a besoin d'être vue, et le statut sous lequel une référente
+   enregistre souvent sa première saisie. */
+function stgATraiter(s){return s.statut==='demande'||s.statut==='contact';}
+
+/* La règle de chaque puce, écrite une seule fois : les compteurs affichés et
+   la liste affichée ne peuvent donc pas se contredire. */
+function stgDansPuce(s,puce){
+  if(puce==='demandes')return stgATraiter(s);
+  if(puce==='actives')return s.statut==='accepte'||s.statut==='en_cours';
+  if(puce==='terminees')return stgClos(s.statut);
+  return true;
+}
+
+/* Le nombre de fiches derrière chaque puce, crèche et type courants compris :
+   une fiche rangée ailleurs reste visible depuis la puce ouverte. */
+function stgMajCompteurs(){
+  const creche=(document.getElementById('stg-f-creche-liste')||{}).value||'';
+  const type=(document.getElementById('stg-f-type-liste')||{}).value||'';
+  const base=stgCache.filter(s=>{
+    if(creche&&String(s.creche_id||'')!==String(creche))return false;
+    if(type&&stgType(s)!==type)return false;
+    return true;
+  });
+  ['actives','demandes','terminees','toutes'].forEach(p=>{
+    const el=document.getElementById('stg-n-'+p);
+    if(!el)return;
+    const n=base.filter(s=>stgDansPuce(s,p)).length;
+    el.textContent=n;
+    el.classList.toggle('vide',!n);
+  });
+}
+
 function stgFiltrees(){
   const creche=(document.getElementById('stg-f-creche-liste')||{}).value||'';
   const type=(document.getElementById('stg-f-type-liste')||{}).value||'';
@@ -15352,9 +15391,7 @@ function stgFiltrees(){
   return stgCache.filter(s=>{
     if(creche&&String(s.creche_id||'')!==String(creche))return false;
     if(type&&stgType(s)!==type)return false;
-    if(stgFilter==='demandes'&&!(s.statut==='demande'||s.statut==='contact'))return false;
-    if(stgFilter==='actives'&&!(s.statut==='accepte'||s.statut==='en_cours'))return false;
-    if(stgFilter==='terminees'&&!stgClos(s.statut))return false;
+    if(!stgDansPuce(s,stgFilter))return false;
     if(q){
       const foin=[s.prenom,s.nom,s.ecole,s.formation,s.niveau,stgCrecheName(s.creche_id)]
         .join(' ').toLowerCase();
@@ -15377,10 +15414,26 @@ function stgStatCard(label,val,icon,color){
     +'<div class="stat-label"><i class="ti '+icon+'" style="color:'+color+'"></i> '+label+'</div></div>';
 }
 
+/* Une liste vide a trois causes très différentes : rien en base, un filtre trop
+   étroit, ou des fiches rangées sous une autre puce. Les confondre, c'est
+   chercher un bug là où il n'y en a pas. */
+function stgMessageVide(){
+  if(!stgCache.length)
+    return 'Aucune fiche enregistrée. Commencez par « Nouvelle fiche ».';
+  const ailleurs=['demandes','actives','terminees']
+    .filter(p=>p!==stgFilter&&stgCache.some(s=>stgDansPuce(s,p)));
+  const nom={demandes:'Demandes à traiter',actives:'En cours et à venir',terminees:'Terminées'};
+  if(!ailleurs.length)
+    return 'Aucune fiche ne correspond à ce filtre.';
+  return 'Aucune fiche sous ce filtre.<br><span style="font-size:12px">'
+    +'Il y en a sous : '+ailleurs.map(p=>'<strong>'+nom[p]+'</strong>').join(', ')
+    +' — ou cliquez sur <strong>Toutes</strong>.</span>';
+}
+
 function stgRender(){
   const stats=document.getElementById('stg-stats');
   if(stats){
-    const aTraiter=stgCache.filter(s=>s.statut==='demande').length;
+    const aTraiter=stgCache.filter(s=>stgATraiter(s)).length;
     const enCours=stgCache.filter(s=>s.statut==='en_cours').length;
     const aVenir=stgCache.filter(s=>s.statut==='accepte').length;
     const alt=stgCache.filter(s=>stgType(s)==='alternant'&&!stgClos(s.statut)).length;
@@ -15394,9 +15447,10 @@ function stgRender(){
   }
   const badge=document.getElementById('stg-badge-encours');
   if(badge){
-    const n=stgCache.filter(s=>s.statut==='demande').length;
+    const n=stgCache.filter(s=>stgATraiter(s)).length;
     badge.textContent=n;badge.style.display=n?'':'none';
   }
+  stgMajCompteurs();
 
   const box=document.getElementById('stg-list');
   if(!box)return;
@@ -15404,8 +15458,7 @@ function stgRender(){
   if(!liste.length){
     box.innerHTML='<div style="text-align:center;padding:36px 20px;color:var(--muted);font-size:13px">'
       +'<i class="ti ti-school" style="font-size:30px;display:block;margin-bottom:8px;opacity:.5"></i>'
-      +(stgCache.length?'Aucune fiche ne correspond à ce filtre.'
-                       :'Aucune fiche enregistrée. Commencez par « Nouvelle fiche ».')+'</div>';
+      +stgMessageVide()+'</div>';
     return;
   }
   box.innerHTML=liste.map(stgCarte).join('');
@@ -15467,7 +15520,7 @@ function stgDateFr(d){
 function stgMajBadge(){
   const b=document.getElementById('badge-stagiaires');
   if(!b)return;
-  const n=stgCache.filter(s=>s.statut==='demande').length;
+  const n=stgCache.filter(s=>stgATraiter(s)).length;
   b.textContent=n;b.style.display=n?'':'none';
 }
 
