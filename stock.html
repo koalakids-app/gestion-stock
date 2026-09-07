@@ -2417,6 +2417,14 @@ function openModal(type) {
     ['f-stock','f-prix'].forEach(id => document.getElementById(id).value = '');
     ['f-min','f-notes'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     ['f-cat','f-creche','f-fourn'].forEach(id => document.getElementById(id).value = '');
+    // Référente / employée : sa structure est la seule option, on la pose d'office
+    // plutôt que de laisser un select vide qui bloque sur « champs obligatoires ».
+    if (SK_WRITE_CRECHE) {
+      const fc = document.getElementById('f-creche');
+      if (fc && Array.from(fc.options).some(o => o.value === SK_WRITE_CRECHE)) {
+        fc.value = SK_WRITE_CRECHE;
+      }
+    }
     document.getElementById('f-url').value = '';
     const fDA = document.getElementById('f-date-achat'); if (fDA) fDA.value = '';
     const fEt = document.getElementById('f-etat'); if (fEt) fEt.value = '';
@@ -2629,9 +2637,22 @@ async function saveCommande_db() {
   const articles = getArticlesFromRows();
 
   // Crèche = celle choisie dans le menu déroulant du bon de commande
+  // Jamais de repli sur CRECHES[0] : une crèche devinée est une commande perdue,
+  // soit refusée par skCanWrite, soit enregistrée sur la mauvaise structure.
   const crecheSel = document.getElementById('c-creche-select')?.value;
-  const creche = crecheSel || (currentCreche && currentCreche !== 'all' ? currentCreche : CRECHES[0]);
-  if (!skCanWrite(creche)) return;
+  const creche = crecheSel
+    || SK_WRITE_CRECHE
+    || (currentCreche && currentCreche !== 'all' ? currentCreche : '');
+  if (!creche) {
+    alert('Aucune structure sélectionnée — la commande n\'a pas été enregistrée.\n'
+        + 'Choisissez la crèche dans le menu « Structure » puis réessayez.');
+    return;
+  }
+  if (!skCanWrite(creche)) {
+    alert('Commande non enregistrée : vous ne pouvez commander que pour '
+        + SK_WRITE_CRECHE + ' (structure demandée : ' + creche + ').');
+    return;
+  }
 
   // Fournisseur = extraire du premier article renseigné
   const rows = document.querySelectorAll('.article-row');
@@ -2869,10 +2890,17 @@ function resetCommandeModal() {
   // Reset date to today
   const dateField = document.getElementById('c-date');
   if (dateField) dateField.value = new Date().toISOString().split('T')[0];
-  // Pré-sélectionner la crèche (active dans la sidebar si définie, sinon la 1ère)
+  // Pré-sélectionner la crèche.
+  // Attention : pour une référente, skRestrictCrecheSelects() a retiré toutes les
+  // options sauf la sienne. Affecter une valeur absente de la liste vide le select
+  // (selectedIndex = -1) sans erreur, et la commande partait alors sur CRECHES[0],
+  // où l'écriture lui est refusée : elle n'était jamais enregistrée.
   const crecheSel = document.getElementById('c-creche-select');
   if (crecheSel) {
-    crecheSel.value = (currentCreche && currentCreche !== 'all') ? currentCreche : CRECHES[0];
+    const dispo = Array.from(crecheSel.options).map(o => o.value);
+    const voulue = SK_WRITE_CRECHE
+      || ((currentCreche && currentCreche !== 'all') ? currentCreche : CRECHES[0]);
+    crecheSel.value = dispo.includes(voulue) ? voulue : (dispo[0] || '');
   }
 }
 
