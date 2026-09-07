@@ -876,7 +876,18 @@ function rendreDossier(){
         +'<button class="pdf" style="border:none;background:var(--violet-l);color:var(--violet);'
         +'border-radius:10px;min-height:34px;padding:0 11px;font-family:Nunito;font-weight:800;'
         +'font-size:12px;cursor:pointer" onclick="event.stopPropagation();pdfContrat(\''+c.id+'\')" '
-        +'title="Télécharger le PDF"><i class="ti ti-file-type-pdf"></i> PDF</button></div>'
+        +'title="Télécharger le PDF"><i class="ti ti-file-type-pdf"></i> PDF</button>'
+        /* Résilier est posé ICI, sur la carte, et non plus seulement au fond de
+           la modale du contrat : cette barre d'actions passe sous le pli dès
+           que le contrat a quelques clauses, et un bouton qu'on ne voit pas
+           n'existe pas. Même correction que pour le PDF et la création. */
+        +(c.statut==='contresigne'
+          ? '<button class="pdf" style="border:none;background:var(--red-l);color:var(--red);'
+            +'border-radius:10px;min-height:34px;padding:0 11px;font-family:Nunito;font-weight:800;'
+            +'font-size:12px;cursor:pointer" onclick="event.stopPropagation();resilierDepuisFiche(\''+c.id+'\')" '
+            +'title="Résilier le contrat"><i class="ti ti-file-x"></i> Résilier</button>'
+          : '')
+        +'</div>'
         +'<div class="li" style="color:var(--muted)">Du '+esc(per)+'</div>'
         +'<div class="li" style="color:var(--muted)">'+euro(c.total_mensuel)+' par mois'
         +(c.reste_a_charge!=null?' · reste à charge '+euro(c.reste_a_charge):'')+'</div>'
@@ -1987,6 +1998,14 @@ function moisPlus(dateISO,mois){
   if(d.getDate()!==jour)d.setDate(0);
   if(demi)d.setDate(d.getDate()+15);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+/* Entrée directe depuis la carte du dossier : on pose le contrat courant, puis
+   on ouvre la modale de résiliation sans passer par celle du contrat. */
+function resilierDepuisFiche(id){
+  contratId=id;
+  CCUR=CONTRATS.find(x=>String(x.id)===String(id))||null;
+  openResiliation();
 }
 
 function openResiliation(){
