@@ -1187,6 +1187,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="module-tab active" id="stg-tab-fiches" onclick="stgShowView('fiches',this)"><i class="ti ti-users"></i> Fiches <span id="stg-badge-encours" style="display:none;background:var(--koala);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px">0</span></button>
       <button class="module-tab" id="stg-tab-cal" onclick="stgShowView('cal',this)"><i class="ti ti-calendar-month"></i> Calendrier</button>
       <button class="module-tab direction-only" id="stg-tab-types" onclick="stgShowView('types',this)"><i class="ti ti-list-check"></i> Pièces demandées</button>
+      <button class="module-tab direction-only" id="stg-tab-ress" onclick="stgShowView('ress',this)"><i class="ti ti-send"></i> Documents à transmettre</button>
     </div>
 
     <!-- ── Vue 1 : les fiches ────────────────────────────────────────── -->
@@ -1257,6 +1258,60 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
       </div>
       <div id="stg-types-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+    <!-- ── Vue 4 : ce que la crèche transmet (direction) ─────────────────
+         Le dossier va dans les deux sens : la stagiaire dépose ses pièces,
+         et lit ce qu'on lui envoie. Un document déposé ici arrive dans le
+         bucket privé — la stagiaire reçoit un lien signé de quelques
+         minutes, jamais un PDF en pièce jointe qui traînera dans sa boîte
+         mail et circulera ensuite sans nous. -->
+    <div id="stg-view-ress" class="module-tab-content">
+      <div style="background:var(--orange-light);border-left:4px solid var(--orange-dark);border-radius:0 8px 8px 0;padding:11px 14px;font-size:12.5px;color:#8a4b00;margin-bottom:14px;line-height:1.55">
+        Ce que la personne trouve <strong>en haut de son lien de dépôt</strong>, avant les pièces à
+        envoyer : un <strong>document</strong> (le projet pédagogique, un livret d'accueil) ou un
+        <strong>lien</strong> (questionnaire en ligne, vidéo). Cochez
+        <strong>Demander une confirmation</strong> et vous saurez, fiche par fiche, qui a lu et
+        qui a répondu — sans avoir à le demander.
+        <br>Un document déposé ici n'est <strong>jamais</strong> public : la personne reçoit un lien
+        signé valable 5 minutes, comme pour les pièces d'identité.
+      </div>
+
+      <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div class="frow">
+          <div class="fg" style="margin-bottom:0"><label class="flabel">Titre</label><input class="finput" id="stg-r-libelle" placeholder="Ex. Notre projet pédagogique"></div>
+          <div class="fg" style="margin-bottom:0"><label class="flabel">Nature</label>
+            <select class="finput" id="stg-r-nature" onchange="stgRessNatureChange()">
+              <option value="fichier">Document à joindre (PDF, image)</option>
+              <option value="lien">Lien à ouvrir (questionnaire, vidéo)</option>
+            </select></div>
+        </div>
+        <div class="fg" style="margin-top:10px;margin-bottom:0"><label class="flabel">Ce qu'on en dit à la personne</label>
+          <textarea class="finput" id="stg-r-desc" rows="2" style="resize:vertical" placeholder="À lire avant votre arrivée : nos trois postures…"></textarea></div>
+
+        <div class="frow" style="margin-top:10px">
+          <div class="fg" style="margin-bottom:0" id="stg-r-fichier-wrap"><label class="flabel">Fichier</label>
+            <input type="file" class="finput" id="stg-r-fichier" accept="image/*,application/pdf" style="padding:6px"></div>
+          <div class="fg" style="margin-bottom:0;display:none" id="stg-r-url-wrap"><label class="flabel">Adresse du lien</label>
+            <input class="finput" id="stg-r-url" placeholder="https://forms.gle/… ou https://framaforms.org/…"></div>
+          <div class="fg" style="margin-bottom:0"><label class="flabel">Destinataires</label><select class="finput" id="stg-r-pour">
+            <option value="tous">Stagiaires et alternants</option>
+            <option value="stagiaire">Stagiaires seulement</option>
+            <option value="alternant">Alternants seulement</option>
+          </select></div>
+        </div>
+        <div class="frow" style="margin-top:10px">
+          <div class="fg" style="margin-bottom:0"><label class="flabel">Crèche concernée</label>
+            <select class="finput" id="stg-r-creche"><option value="">— Toutes les crèches —</option></select></div>
+          <div class="fg" style="margin-bottom:0;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555"><input type="checkbox" id="stg-r-accuse" checked> Demander une confirmation</label>
+            <button class="btn-primary" id="stg-r-add" onclick="stgAjouterRess()"><i class="ti ti-plus"></i> Ajouter</button>
+          </div>
+        </div>
+        <div id="stg-r-status" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+      </div>
+
+      <div id="stg-ress-list" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
   </div>
 
@@ -1368,6 +1423,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
         <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
         <div id="stg-lien-zone"></div>
+
+        <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
+        <div id="stg-ressources-zone"></div>
 
         <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
         <div id="stg-docs-zone"></div>
@@ -10343,7 +10401,14 @@ stagiaires: `
 </p>
 <div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A;line-height:1.6">
   ⚠ Les délais (casier de moins de 3 mois, honorabilité de moins de 6 mois) courent depuis la <strong>date d'établissement</strong> de la pièce, pas depuis son dépôt : ils ne sont pas calculés par l'application, à vérifier sur le document.
-</div>`,
+</div>
+<div style="font-weight:700;font-size:14px;margin:20px 0 10px">📤 Documents à transmettre (direction)</div>
+<p style="font-size:13px;color:#555;line-height:1.7;margin-bottom:12px">
+  Le lien de dépôt va dans les <strong>deux sens</strong>. L'onglet <strong>Documents à transmettre</strong> décide de ce que la personne trouve <strong>en haut de sa page</strong>, avant les pièces à envoyer : un <strong>document</strong> (le projet pédagogique, un livret d'accueil) ou un <strong>lien</strong> (questionnaire en ligne, vidéo).
+  <br><br>Le document n'est pas joint au mail : il vit sur le lien. Deux conséquences — la personne a toujours la <strong>dernière version</strong> (le bouton ↻ la remplace sans rien perdre du suivi), et le PDF ne circule pas ensuite hors de la crèche, puisque son lien de lecture est signé pour 5 minutes.
+  <br><br><strong>Demander une confirmation</strong> ajoute une case « j'ai lu ce document » ou « j'ai répondu au questionnaire ». La fiche affiche alors, personne par personne, qui a ouvert et qui a confirmé — c'est déclaratif, cela dit que la case a été cochée, pas que tout a été lu.
+  <br><br>Comme pour les pièces, <strong>Destinataires</strong> sépare stagiaires et alternants, et <strong>Crèche concernée</strong> reste sur « toutes » dans le cas courant — le projet pédagogique est celui du réseau.
+</p>`,
 
 comptes: `
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
@@ -15191,6 +15256,10 @@ const STG_LIEN_JOURS = 30;    // durée de vie du lien de dépôt
 const STG_URL_TTL    = 300;   // 5 min pour un lien de lecture signé
 
 let stgCache=[], stgTypes=[], stgJoursCache=[], stgDocsCache=[];
+/* Script 36 — ce que la crèche transmet, et qui l'a ouvert. Tables absentes
+   (script non encore exécuté) : les deux listes restent vides et le module se
+   comporte exactement comme avant. */
+let stgRess=[], stgRessVues=[], stgRessOk=true;
 let stgFilter='actives', stgFicheId=null, stgSchemaOk=true;
 let stgCalRef=null;           // 1er du mois affiché dans le calendrier
 let stgJourCourant=null;      // {stagiaire_id, jour} du jour en cours d'édition
@@ -15255,6 +15324,8 @@ async function stgInit(){
   if(sel1)sel1.innerHTML=stgOptionsCreches('Toutes les crèches');
   const sel2=document.getElementById('stg-f-creche-cal');
   if(sel2)sel2.innerHTML=stgOptionsCreches('Toutes les crèches');
+  const sel3=document.getElementById('stg-r-creche');
+  if(sel3)sel3.innerHTML=stgOptionsCreches('— Toutes les crèches —');
   if(!stgCalRef){const n=new Date();stgCalRef=new Date(n.getFullYear(),n.getMonth(),1);}
   await stgLoad();
 }
@@ -15291,6 +15362,20 @@ async function stgLoad(){
   }else{
     stgJoursCache=[];stgDocsCache=[];
   }
+
+  /* Les ressources transmises (script 36). Leur absence n'est pas une erreur
+     du module : tant que 36a n'a pas été exécuté, il n'y a simplement rien à
+     transmettre, et l'écran le dit à sa façon. */
+  const rr=await sb.from('stagiaires_ressources').select('*').order('ordre');
+  stgRessOk=!rr.error;
+  stgRess=stgRessOk?(rr.data||[]):[];
+  if(stgRessOk&&ids.length){
+    const rv=await sb.from('stagiaires_ressources_vues').select('*').in('stagiaire_id',ids);
+    stgRessVues=rv.data||[];
+  }else{
+    stgRessVues=[];
+  }
+
   stgRenderTout();
 }
 
@@ -15298,11 +15383,12 @@ function stgRenderTout(){
   stgRender();
   stgRenderCal();
   stgRenderTypes();
+  stgRenderRess();
   stgMajBadge();
 }
 
 function stgShowView(v,btn){
-  ['fiches','cal','types'].forEach(x=>{
+  ['fiches','cal','types','ress'].forEach(x=>{
     const el=document.getElementById('stg-view-'+x);
     if(el)el.classList.toggle('active',x===v);
   });
@@ -15310,6 +15396,7 @@ function stgShowView(v,btn){
   if(btn)btn.classList.add('active');
   if(v==='cal')stgRenderCal();
   if(v==='types')stgRenderTypes();
+  if(v==='ress')stgRenderRess();
 }
 
 function stgSetFilter(f){
@@ -15560,7 +15647,7 @@ function stgOpenFiche(id,typeDefaut){
   if(del)del.style.display=(s&&isDirection)?'':'none';
 
   stgTypeChange();
-  if(s){stgRenderLien();stgRenderDocs();stgRenderJours();}
+  if(s){stgRenderLien();stgRenderRessFiche();stgRenderDocs();stgRenderJours();}
   document.getElementById('modal-stagiaire-wrap').classList.add('open');
 }
 
@@ -15581,7 +15668,7 @@ function stgTypeChange(){
   txt('stg-opt-termine',type==='alternant'?'Alternance terminée':'Stage terminé');
   /* Les pièces demandées ne sont pas les mêmes : on redessine le bloc si la
      fiche est déjà enregistrée. */
-  if(stgFicheId)stgRenderDocs(type);
+  if(stgFicheId){stgRenderDocs(type);stgRenderRessFiche(type);}
 }
 
 /* Les référentes proposées sont celles de la crèche choisie : offrir celles des
@@ -15759,6 +15846,22 @@ function stgRenderLien(){
   zone.innerHTML=h;
 }
 
+/* Ce que la personne trouvera EN PLUS sur son lien. La phrase n'est écrite
+   que s'il y a effectivement quelque chose à lire ou à remplir : annoncer un
+   projet pédagogique qui n'est pas en ligne ferait plus de mal que de bien.
+   Le PDF n'est pas joint au mail — il vit sur le lien, où il reste à jour et
+   où l'on sait qui l'a ouvert. */
+function stgMailtoRess(s){
+  const liste=stgRessPour(s);
+  if(!liste.length)return '';
+  const docs=liste.filter(r=>stgRessNature(r)!=='lien').map(r=>r.libelle);
+  const liens=liste.filter(r=>stgRessNature(r)==='lien').map(r=>r.libelle);
+  let t='Vous y trouverez aussi, en haut de la page :\n';
+  docs.forEach(l=>{t+='  · '+l+' (à lire)\n';});
+  liens.forEach(l=>{t+='  · '+l+' (à remplir en ligne)\n';});
+  return t+'\n';
+}
+
 /* Le mail est composé dans le client de messagerie du poste : rien ne part
    d'ici, et il n'y a donc pas d'adresse d'expédition à configurer. */
 function stgMailto(s){
@@ -15768,6 +15871,7 @@ function stgMailto(s){
     +'Voici le lien pour nous transmettre les documents nécessaires à votre '+p.periode
     +(s.creche_id?' à la crèche '+stgCrecheName(s.creche_id):'')+' :\n\n'
     +stgLienUrl(s.token)+'\n\n'
+    +stgMailtoRess(s)
     +'Vous pouvez photographier vos pièces directement avec votre téléphone, en plusieurs fois.\n'
     +'Ce lien est valable jusqu\'au '+stgDateFr(s.token_expire_le)+'.\n\n'
     +'À bientôt,\nL\'équipe Koala Kids';
@@ -16697,6 +16801,324 @@ async function stgDeplacerType(id,sens){
   stgRenderTypes();
 }
 
+
+// ── Vue 4 : les documents à transmettre (direction) ───────────────────────
+
+/* Le pendant exact des pièces demandées, dans l'autre sens. Deux natures
+   seulement :
+     'fichier' — déposé dans le bucket PRIVÉ, sous le préfixe `_ressources/`.
+                 La personne n'en reçoit jamais l'emplacement : la page lui
+                 demande une URL signée de 5 minutes au moment du clic. Un PDF
+                 envoyé en pièce jointe d'un mail, lui, circule ensuite sans
+                 nous et reste à jamais la version de ce jour-là.
+     'lien'    — une adresse externe (questionnaire), publique par nature.
+
+   Un préfixe qui commence par un souligné ne peut pas entrer en collision avec
+   un dossier de stagiaire, dont le nom est toujours un uuid. */
+
+const STG_RESS_PREFIXE = '_ressources/';
+
+const stgRessNature = r => (r&&r.nature==='lien')?'lien':'fichier';
+
+/* Les ressources destinées à CETTE fiche : actives, prévues pour son profil,
+   et valables soit pour tout le réseau, soit pour sa crèche. Le même filtre
+   est refait côté edge function — ici c'est de l'affichage, là-bas c'est la
+   règle. */
+function stgRessPour(s,typeForce){
+  const type=typeForce||stgType(s);
+  return stgRess.filter(r=>r.actif
+    && (!r.pour_type||r.pour_type==='tous'||r.pour_type===type)
+    && (!r.creche_id||String(r.creche_id)===String(s.creche_id||'')));
+}
+
+function stgRessVue(stagiaireId,ressourceId){
+  return stgRessVues.find(v=>String(v.stagiaire_id)===String(stagiaireId)
+                          && String(v.ressource_id)===String(ressourceId));
+}
+
+/* ── Dans la fiche : qui a lu quoi ──────────────────────────────────────── */
+
+function stgRenderRessFiche(typeForce){
+  const zone=document.getElementById('stg-ressources-zone');
+  if(!zone||!stgFicheId)return;
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  if(!s){zone.innerHTML='';return;}
+  const liste=stgRessPour(s,typeForce);
+
+  let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px">'
+    +'<div style="font-weight:700;font-size:13px"><i class="ti ti-send" style="color:var(--orange-dark)"></i> '
+    +'Ce qu\'elle reçoit sur son lien</div>';
+  const aConfirmer=liste.filter(r=>r.accuse);
+  const confirmes=aConfirmer.filter(r=>{const v=stgRessVue(s.id,r.id);return v&&v.accuse_le;}).length;
+  if(aConfirmer.length){
+    h+='<span style="font-size:12px;font-weight:600;color:'
+      +(confirmes===aConfirmer.length?'var(--green)':'var(--muted)')+'">'
+      +confirmes+' / '+aConfirmer.length+' confirmé'+(aConfirmer.length>1?'s':'')+'</span>';
+  }
+  h+='</div>';
+
+  if(!stgRessOk){
+    h+='<p style="font-size:12.5px;color:var(--muted);margin:0">Le script <code>36a</code> n\'a pas '
+      +'encore été exécuté sur Supabase : rien n\'est transmis pour le moment.</p>';
+    zone.innerHTML=h;return;
+  }
+  if(!liste.length){
+    h+='<p style="font-size:12.5px;color:var(--muted);margin:0">Rien à transmettre pour ce profil '
+      +'— le projet pédagogique et le questionnaire se règlent dans l\'onglet '
+      +'« Documents à transmettre ».</p>';
+    zone.innerHTML=h;return;
+  }
+
+  h+=liste.map(r=>{
+    const v=stgRessVue(s.id,r.id);
+    const lien=stgRessNature(r)==='lien';
+    const fait=r.accuse?!!(v&&v.accuse_le):!!(v&&v.ouvert_le);
+    let etat;
+    if(v&&v.accuse_le)      etat='<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700">Confirmé le '+escHtml(stgDateFr(v.accuse_le))+'</span>';
+    else if(v&&v.ouvert_le) etat='<span style="background:var(--orange-light);color:var(--orange-dark);border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700">'+(lien?'Ouvert':'Consulté')+' le '+escHtml(stgDateFr(v.ouvert_le))+'</span>';
+    else                    etat='<span style="background:#EFEEF6;color:var(--muted);border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700">Pas encore ouvert</span>';
+    return '<div style="display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:9px;'
+      +'padding:9px 11px;margin-bottom:7px;flex-wrap:wrap;background:'+(fait?'#FCFEFC':'#fff')+'">'
+      +'<i class="ti ti-'+(lien?'clipboard-list':'file-text')+'" style="color:'+(fait?'var(--green)':'var(--muted)')+'"></i>'
+      +'<span style="font-weight:600;font-size:12.5px;flex:1;min-width:120px">'+escHtml(r.libelle)
+      +(r.accuse?'':'<span style="color:var(--muted);font-weight:400"> (sans confirmation)</span>')+'</span>'
+      +etat
+      +'<button class="ibtn" style="width:26px;height:26px;font-size:13px" title="Ouvrir" '
+      +'onclick="stgOuvrirRess(\''+r.id+'\')"><i class="ti ti-external-link"></i></button>'
+      +'</div>';
+  }).join('');
+
+  h+='<p style="font-size:11.5px;color:var(--muted);margin:2px 0 0">Ces documents s\'affichent en haut '
+    +'de son lien de dépôt. La confirmation est déclarative : elle dit que la personne a coché la case, '
+    +'pas qu\'elle a tout lu.</p>';
+  zone.innerHTML=h;
+}
+
+/* ── L'écran de réglage ─────────────────────────────────────────────────── */
+
+function stgRessNatureChange(){
+  const lien=(document.getElementById('stg-r-nature')||{}).value==='lien';
+  const f=document.getElementById('stg-r-fichier-wrap');
+  const u=document.getElementById('stg-r-url-wrap');
+  if(f)f.style.display=lien?'none':'';
+  if(u)u.style.display=lien?'':'none';
+}
+
+function stgRenderRess(){
+  const box=document.getElementById('stg-ress-list');
+  if(!box)return;
+  if(!stgRessOk){
+    box.innerHTML='<div style="color:var(--red);font-size:13px">Les scripts <code>36a</code> et '
+      +'<code>36b</code> n\'ont pas encore été exécutés sur Supabase.</div>';
+    return;
+  }
+  if(!stgRess.length){
+    box.innerHTML='<div style="color:var(--muted);font-size:13px">Rien à transmettre pour le moment.</div>';
+    return;
+  }
+  const POUR={tous:{lib:'Stagiaires et alternants',c:'var(--muted)'},
+              stagiaire:{lib:'Stagiaires',c:'var(--koala)'},
+              alternant:{lib:'Alternants',c:'var(--orange-dark)'}};
+  box.innerHTML=stgRess.map(r=>{
+    const pr=POUR[r.pour_type]||POUR.tous;
+    const lien=stgRessNature(r)==='lien';
+    const vide=lien?!r.url:!r.path;
+    const vues=stgRessVues.filter(v=>String(v.ressource_id)===String(r.id));
+    const lus=vues.filter(v=>v.ouvert_le).length;
+    const confirmes=vues.filter(v=>v.accuse_le).length;
+    return '<div style="display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--border);'
+      +'border-radius:9px;padding:9px 12px;flex-wrap:wrap;'+(r.actif?'':'opacity:.55')+'">'
+      +'<i class="ti ti-'+(lien?'clipboard-list':'file-text')+'" style="color:'+(lien?'var(--orange-dark)':'var(--koala)')+'"></i>'
+      +'<div style="flex:1;min-width:180px">'
+      +'<div style="font-weight:600;font-size:13px">'+escHtml(r.libelle)
+      +' <span style="background:'+pr.c+';color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap">'+pr.lib+'</span>'
+      +(r.creche_id?' <span style="background:var(--koala-light);color:var(--koala-dark);border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700">'+escHtml(stgCrecheName(r.creche_id))+'</span>':'')
+      +(r.accuse?'':'<span style="color:var(--muted);font-weight:400"> — sans confirmation</span>')
+      +(r.actif?'':'<span style="color:var(--red);font-weight:400"> — désactivé</span>')
+      +(vide?'<span style="color:var(--red);font-weight:400"> — '+(lien?'adresse manquante':'fichier manquant')+'</span>':'')
+      +'</div>'
+      +(r.description?'<div style="font-size:11.5px;color:var(--muted)">'+escHtml(r.description)+'</div>':'')
+      +(lien&&r.url?'<a href="'+escHtml(r.url)+'" target="_blank" rel="noopener" style="font-size:11.5px">'
+        +'<i class="ti ti-external-link"></i> '+escHtml(r.url)+'</a>'
+        :(!lien&&r.filename?'<div style="font-size:11.5px;color:var(--muted)"><i class="ti ti-paperclip"></i> '+escHtml(r.filename)+'</div>':''))
+      +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'
+      +lus+' ouverture'+(lus>1?'s':'')+(r.accuse?' · '+confirmes+' confirmation'+(confirmes>1?'s':''):'')+'</div>'
+      +'</div>'
+      +(vide?'':'<button class="ibtn" title="Ouvrir" onclick="stgOuvrirRess(\''+r.id+'\')"><i class="ti ti-eye"></i></button>')
+      +'<button class="ibtn" title="Monter" onclick="stgDeplacerRess(\''+r.id+'\',-1)"><i class="ti ti-chevron-up"></i></button>'
+      +'<button class="ibtn" title="Descendre" onclick="stgDeplacerRess(\''+r.id+'\',1)"><i class="ti ti-chevron-down"></i></button>'
+      +'<button class="ibtn" title="'+(lien?'Remplacer l\'adresse':'Remplacer le fichier')+'" onclick="stgRemplacerRess(\''+r.id+'\')"><i class="ti ti-refresh"></i></button>'
+      +'<button class="ibtn" title="Demander ou non une confirmation" onclick="stgBasculerRess(\''+r.id+'\',\'accuse\')"><i class="ti ti-checkbox"></i></button>'
+      +'<button class="ibtn" title="'+(r.actif?'Désactiver':'Réactiver')+'" onclick="stgBasculerRess(\''+r.id+'\',\'actif\')">'
+      +'<i class="ti ti-'+(r.actif?'eye-off':'eye')+'"></i></button>'
+      +'<button class="ibtn" style="color:var(--red)" title="Supprimer" onclick="stgSupprimerRess(\''+r.id+'\')"><i class="ti ti-trash"></i></button>'
+      +'</div>';
+  }).join('');
+}
+
+/* Le fichier part dans le bucket privé avant l'écriture de la ligne : sans
+   chemin, la ligne ne servirait à rien. L'inverse — une ligne perdue et un
+   fichier orphelin — est rattrapé en supprimant le fichier. */
+async function stgRessUpload(file){
+  const ext=(file.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,5)||'bin';
+  const path=STG_RESS_PREFIXE+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+  const {error}=await sb.storage.from(STG_BUCKET).upload(path,file,
+    {contentType:file.type||'application/octet-stream',upsert:false});
+  if(error)throw new Error(error.message||'Envoi impossible');
+  return {bucket:STG_BUCKET,path,filename:file.name.slice(0,180),
+          mime:file.type||null,taille:file.size};
+}
+
+async function stgAjouterRess(){
+  const lib=((document.getElementById('stg-r-libelle')||{}).value||'').trim();
+  const st=document.getElementById('stg-r-status');
+  const dire=m=>{if(st)st.textContent=m||'';};
+  if(!lib)return showBanner('Indiquez un titre.','error');
+
+  const nature=(document.getElementById('stg-r-nature')||{}).value==='lien'?'lien':'fichier';
+  const base={
+    libelle:lib,
+    description:((document.getElementById('stg-r-desc')||{}).value||'').trim()||null,
+    nature:nature,
+    pour_type:(document.getElementById('stg-r-pour')||{}).value||'tous',
+    creche_id:(document.getElementById('stg-r-creche')||{}).value||null,
+    accuse:(document.getElementById('stg-r-accuse')||{}).checked,
+    ordre:stgRess.reduce((m,r)=>Math.max(m,r.ordre||0),0)+10,
+    actif:true
+  };
+
+  let depose=null;
+  if(nature==='lien'){
+    const url=((document.getElementById('stg-r-url')||{}).value||'').trim();
+    if(!/^https?:\/\//i.test(url))
+      return showBanner('L\'adresse doit commencer par http:// ou https://.','error');
+    base.url=url;
+  }else{
+    const file=((document.getElementById('stg-r-fichier')||{}).files||[])[0];
+    if(!file)return showBanner('Choisissez le fichier à transmettre.','error');
+    if(file.size>12*1024*1024)return showBanner('Fichier trop lourd (12 Mo maximum).','error');
+    dire('⏳ Envoi de '+file.name+'…');
+    try{depose=await stgRessUpload(file);}
+    catch(e){dire('');return showBanner('Envoi du fichier impossible : '+e.message,'error');}
+    Object.assign(base,depose);
+  }
+
+  const saved=await dbInsert('stagiaires_ressources',base);
+  if(!saved){
+    /* La ligne n'existe pas : le fichier serait invisible et impossible à
+       retrouver. On le retire. */
+    if(depose)await sb.storage.from(STG_BUCKET).remove([depose.path]);
+    dire('');
+    return showBanner('Ajout impossible'
+      +(window._lastDbError?' : '+window._lastDbError:' (réservé à la direction).')+'','error');
+  }
+  dire('');
+  ['stg-r-libelle','stg-r-desc','stg-r-url'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const f=document.getElementById('stg-r-fichier');if(f)f.value='';
+  stgRess.push(saved);
+  stgRess.sort((a,b)=>(a.ordre||0)-(b.ordre||0));
+  stgRenderRess();
+  showBanner('Ajouté — visible sur les liens de dépôt ✅');
+}
+
+/* Remplacer, plutôt que supprimer puis recréer : la ligne garde son suivi de
+   lecture, et l'ordre d'affichage ne bouge pas. */
+async function stgRemplacerRess(id){
+  const r=stgRess.find(x=>String(x.id)===String(id));
+  if(!r)return;
+  if(stgRessNature(r)==='lien'){
+    const url=prompt('Nouvelle adresse du lien :',r.url||'https://');
+    if(url===null)return;
+    if(!/^https?:\/\//i.test(url.trim()))return showBanner('L\'adresse doit commencer par http:// ou https://.','error');
+    const ok=await dbUpdate('stagiaires_ressources',id,{url:url.trim()});
+    if(!ok)return showBanner('Modification impossible (réservée à la direction).','error');
+    r.url=url.trim();
+    stgRenderRess();
+    return showBanner('Adresse mise à jour ✅');
+  }
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='image/*,application/pdf';
+  inp.onchange=async()=>{
+    const file=(inp.files||[])[0];
+    if(!file)return;
+    if(file.size>12*1024*1024)return showBanner('Fichier trop lourd (12 Mo maximum).','error');
+    let depose=null;
+    try{depose=await stgRessUpload(file);}
+    catch(e){return showBanner('Envoi impossible : '+e.message,'error');}
+    const ancien=r.path;
+    const ok=await dbUpdate('stagiaires_ressources',id,depose);
+    if(!ok){
+      await sb.storage.from(STG_BUCKET).remove([depose.path]);
+      return showBanner('Modification impossible (réservée à la direction).','error');
+    }
+    Object.assign(r,depose);
+    /* L'ancien fichier ne sert plus à rien : plus aucune ligne ne le désigne. */
+    if(ancien)await sb.storage.from(STG_BUCKET).remove([ancien]);
+    stgRenderRess();
+    showBanner('Document remplacé — la nouvelle version est en ligne ✅');
+  };
+  inp.click();
+}
+
+async function stgBasculerRess(id,champ){
+  const r=stgRess.find(x=>String(x.id)===String(id));
+  if(!r)return;
+  const ok=await dbUpdate('stagiaires_ressources',id,{[champ]:!r[champ]});
+  if(!ok)return showBanner('Modification impossible (réservée à la direction).','error');
+  r[champ]=!r[champ];
+  stgRenderRess();
+  stgRenderRessFiche();
+}
+
+async function stgDeplacerRess(id,sens){
+  const i=stgRess.findIndex(x=>String(x.id)===String(id));
+  const j=i+sens;
+  if(i<0||j<0||j>=stgRess.length)return;
+  const a=stgRess[i],b=stgRess[j];
+  const oa=a.ordre||0,ob=b.ordre||0;
+  const ok1=await dbUpdate('stagiaires_ressources',a.id,{ordre:ob});
+  const ok2=await dbUpdate('stagiaires_ressources',b.id,{ordre:oa});
+  if(!ok1||!ok2)return showBanner('Déplacement impossible (réservé à la direction).','error');
+  a.ordre=ob;b.ordre=oa;
+  stgRess.sort((x,y)=>(x.ordre||0)-(y.ordre||0));
+  stgRenderRess();
+}
+
+async function stgSupprimerRess(id){
+  const r=stgRess.find(x=>String(x.id)===String(id));
+  if(!r)return;
+  const vues=stgRessVues.filter(v=>String(v.ressource_id)===String(r.id)).length;
+  if(!confirm('Supprimer « '+r.libelle+' » ?\n\n'
+    +(vues?'Le suivi de lecture de '+vues+' personne(s) sera effacé.\n':'')
+    +'Pour le retirer des nouveaux dossiers sans rien effacer, désactivez-le plutôt.'))return;
+  const ok=await dbDelete('stagiaires_ressources',id);
+  if(!ok)return showBanner('Suppression impossible (réservée à la direction).','error');
+  if(r.path){
+    const {error}=await sb.storage.from(r.bucket||STG_BUCKET).remove([r.path]);
+    if(error)console.warn('[Stagiaires] fichier non supprimé',error.message);
+  }
+  stgRess=stgRess.filter(x=>String(x.id)!==String(id));
+  stgRessVues=stgRessVues.filter(v=>String(v.ressource_id)!==String(id));
+  stgRenderRess();
+  showBanner('Supprimé.');
+}
+
+/* Côté application, on ouvre le fichier comme n'importe quelle pièce : URL
+   signée de 5 minutes. Ouvrir depuis ici ne compte pas comme une lecture de la
+   stagiaire — seul son propre lien écrit dans le suivi. */
+async function stgOuvrirRess(id){
+  const r=stgRess.find(x=>String(x.id)===String(id));
+  if(!r)return;
+  if(stgRessNature(r)==='lien'){
+    if(!r.url)return showBanner('Aucune adresse enregistrée.','error');
+    return window.open(r.url,'_blank','noopener');
+  }
+  if(!r.path)return showBanner('Aucun fichier enregistré.','error');
+  const {data,error}=await sb.storage.from(r.bucket||STG_BUCKET).createSignedUrl(r.path,STG_URL_TTL);
+  if(error||!data)return showBanner('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'),'error');
+  window.open(data.signedUrl,'_blank','noopener');
+}
+
 // ── Export ────────────────────────────────────────────────────────────────
 
 function stgExportExcel(){
@@ -16746,6 +17168,10 @@ window.stgImportApercu=stgImportApercu;window.stgImportValider=stgImportValider;
 window.stgOuvrirSemaine=stgOuvrirSemaine;window.stgSemaineBascule=stgSemaineBascule;
 window.stgSemaineApercu=stgSemaineApercu;window.stgSemaineAjouter=stgSemaineAjouter;
 window.stgDeplacerType=stgDeplacerType;window.stgExportExcel=stgExportExcel;
+window.stgAjouterRess=stgAjouterRess;window.stgBasculerRess=stgBasculerRess;
+window.stgDeplacerRess=stgDeplacerRess;window.stgSupprimerRess=stgSupprimerRess;
+window.stgOuvrirRess=stgOuvrirRess;window.stgRemplacerRess=stgRemplacerRess;
+window.stgRessNatureChange=stgRessNatureChange;
 window.stgRemplirReferents=stgRemplirReferents;
 
 

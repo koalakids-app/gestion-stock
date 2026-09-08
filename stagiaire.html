@@ -67,6 +67,25 @@ h3.sec{font-size:17px;color:var(--violet);margin:22px 0 12px}
   opacity:0;pointer-events:none;transition:opacity .25s;max-width:90vw;text-align:center}
 .toast.on{opacity:1}
 a{color:var(--violet)}
+
+/* ── Ce que la crèche transmet ────────────────────────────────────────────
+   Volontairement distinct des pièces à envoyer : ici, rien n'est à fournir,
+   il y a à lire et à répondre. Le fond orangé sépare les deux sens du
+   dossier sans qu'il faille lire les titres. */
+.ress{background:#fff;border:1px solid #F3DCC4;border-left:4px solid var(--orange);
+  border-radius:0 14px 14px 0;padding:13px 14px;margin-bottom:10px}
+.ress.fait{border-color:#BFE3CB;border-left-color:var(--green);background:#FCFEFC}
+.ress .rtop{display:flex;align-items:flex-start;gap:11px}
+.ress .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex:0 0 auto;
+  background:#FDF0E3;color:#B25F00;font-size:18px}
+.ress.fait .ic{background:var(--green-bg);color:var(--green)}
+.ress .tx{flex:1;min-width:0}
+.ress .tx b{display:block;font-size:14.5px;font-weight:700}
+.ress .tx span.desc{display:block;font-size:12.5px;color:var(--muted);margin-top:3px}
+.accuse{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;
+  color:var(--ink);cursor:pointer;background:#FAFAFD;border:1px solid var(--line);
+  border-radius:10px;padding:9px 11px}
+.accuse input{width:18px;height:18px;accent-color:var(--green);flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -84,7 +103,7 @@ a{color:var(--violet)}
 
 <script>
 /* ===========================================================================
-   STAGIAIRE.HTML — page publique de dépôt des pièces (stage ou alternance)
+   STAGIAIRE.HTML — page publique du dossier (stage ou alternance)
    ---------------------------------------------------------------------------
    Aucune session Supabase ici : la stagiaire n'a pas de compte. Tout passe par
    l'edge function `dossier-stagiaire`, qui s'exécute en service_role et ne
@@ -93,6 +112,12 @@ a{color:var(--violet)}
 
    Le fichier est lu en base64 côté navigateur et posté à la fonction : pas de
    dépôt direct dans le stockage, donc aucune clé d'écriture dans cette page.
+
+   La page va dans les deux sens (script 36) : en haut, ce que la crèche
+   transmet — le projet pédagogique à lire, le questionnaire à remplir ; en
+   dessous, les pièces à envoyer. Le projet pédagogique n'est PAS un lien
+   public : la page en demande une URL signée au moment du clic, valable
+   quelques minutes.
 
    La page sert aussi bien un stage qu'une alternance : c'est la fonction qui
    dit lequel (`type_contrat`) et qui n'envoie que les pièces demandées à ce
@@ -114,6 +139,7 @@ const TAILLE_MAX = 12 * 1024 * 1024;
 let STAG = null;   // {prenom, nom, creche_nom, date_debut, date_fin, expire_le, type_contrat}
 let PIECES = [];   // catalogue + fichiers déposés
 let AUTRES = [];   // pièces dont le type ne figure plus dans la liste demandée
+let RESS = [];     // ce que la crèche transmet (documents et liens)
 
 /* Le vocabulaire, et rien d'autre. */
 const MOTS = {
@@ -171,7 +197,7 @@ async function boot(){
 
 async function recharger(){
   const d=await appel('get');
-  STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];
+  STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];RESS=d.ressources||[];
   document.getElementById('titrePage').textContent=mots().titre;
   document.title=mots().titre+' — Koala Kids';
   document.getElementById('sousTitre').textContent=
@@ -201,6 +227,19 @@ function render(){
     +'vous pouvez le faire en plusieurs fois, tout ce qui est envoyé est conservé.'
     +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(STAG.expire_le))+'</b>.</div>';
 
+  /* Ce que la crèche transmet vient EN PREMIER : le projet pédagogique se lit
+     avant de remplir un questionnaire, et le questionnaire se remplit avant
+     l'arrivée — les pièces d'identité, elles, peuvent attendre le week-end. */
+  if(RESS.length){
+    const reste=RESS.filter(r=>r.accuse&&!r.accuse_le).length;
+    h+='<h3 class="sec"><i class="ti ti-mail-opened"></i> À lire et à faire</h3>'
+      +'<p class="hint">'+(reste
+        ? 'Il vous reste '+reste+' chose'+(reste>1?'s':'')+' à confirmer ci-dessous.'
+        : 'Merci, vous avez tout confirmé ✔')+'</p>';
+    RESS.forEach((r,i)=>h+=htmlRessource(r,i));
+    h+='<h3 class="sec"><i class="ti ti-file-upload"></i> Les documents à nous envoyer</h3>';
+  }
+
   h+='<div class="card"><div style="font-weight:700;font-size:14px">Votre avancement</div>'
     +'<div class="prog"><i style="width:'+pct+'%"></i></div>'
     +'<div class="progtxt">'+faits+' document'+(faits>1?'s':'')+' sur '+oblig.length
@@ -225,6 +264,91 @@ function render(){
   wrap.innerHTML=h;
   window.scrollTo(0,0);
 }
+
+/* ------------------------------------------- CE QUE LA CRÈCHE TRANSMET */
+
+/* Une ressource est « faite » quand la confirmation a été cochée, ou — si
+   aucune confirmation n'est demandée — dès qu'elle a été ouverte. */
+const ressFaite = r => r.accuse ? !!r.accuse_le : !!r.ouvert_le;
+
+function htmlRessource(r,i){
+  const fait=ressFaite(r);
+  const lien=r.nature==='lien';
+  const ic = fait ? 'circle-check' : (lien?'clipboard-list':'file-text');
+
+  let etat='';
+  if(r.accuse_le)      etat='<span class="badge b-ok">Confirmé le '+esc(dfr(r.accuse_le))+'</span>';
+  else if(r.ouvert_le) etat='<span class="badge b-att">'+(lien?'Ouvert':'Consulté')+' le '+esc(dfr(r.ouvert_le))+'</span>';
+  else                 etat='<span class="badge b-att">'+(lien?'À remplir':'À lire')+'</span>';
+
+  return '<div class="ress'+(fait?' fait':'')+'">'
+    +'<div class="rtop">'
+    +'<span class="ic"><i class="ti ti-'+ic+'"></i></span>'
+    +'<span class="tx"><b>'+esc(r.libelle)+'</b>'
+    +(r.description?'<span class="desc">'+esc(r.description)+'</span>':'')
+    +'<span style="display:block;margin-top:6px">'+etat+'</span>'
+    +'</span></div>'
+    +'<div style="margin-top:10px">'
+    +'<button class="btn btn-g btn-s" onclick="ouvrirRessource('+i+')">'
+    +'<i class="ti ti-'+(lien?'external-link':'download')+'"></i> '
+    +(lien?'Ouvrir le questionnaire':'Lire le document')+'</button>'
+    +'<span id="rst_'+i+'" style="margin-left:10px;font-size:12.5px;color:var(--muted)"></span>'
+    +'</div>'
+    +(r.accuse
+      ? '<label class="accuse"><input type="checkbox" '+(r.accuse_le?'checked':'')+' '
+        +'onchange="confirmerRessource('+i+',this.checked)"> '
+        +(lien?'J’ai répondu au questionnaire':'J’ai lu ce document')+'</label>'
+      : '')
+    +'</div>';
+}
+
+/* Le fichier n'est pas servi par une URL en dur : on en demande une, signée
+   pour quelques minutes. L'ouverture est datée côté serveur — pas ici, où
+   elle serait déclarative. */
+async function ouvrirRessource(i){
+  const r=RESS[i];
+  if(!r)return;
+  const st=document.getElementById('rst_'+i);
+
+  if(r.nature==='lien'){
+    if(!r.url)return toast('Ce lien n’est pas encore disponible.');
+    /* La fenêtre s'ouvre AVANT l'appel réseau : ouverte depuis le retour
+       d'une promesse, elle serait bloquée par le navigateur. */
+    window.open(r.url,'_blank','noopener');
+    try{
+      await appel('ressource_marque',{ressource_id:r.id});
+      await recharger();
+    }catch(e){/* le questionnaire est ouvert, le suivi peut attendre */}
+    return;
+  }
+
+  if(st)st.textContent='⏳ Ouverture…';
+  try{
+    const d=await appel('ressource_url',{ressource_id:r.id});
+    window.open(d.url,'_blank','noopener');
+    await recharger();
+  }catch(e){
+    if(st)st.textContent='';
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('expir'))toast('Ce lien a expiré. Contactez la crèche.');
+    else toast('Ouverture impossible. Réessayez dans un instant.');
+  }
+}
+
+async function confirmerRessource(i,coche){
+  const r=RESS[i];
+  if(!r)return;
+  try{
+    await appel('ressource_marque',{ressource_id:r.id,accuse:!!coche,ouvert:false});
+    await recharger();
+    if(coche)toast('Merci, c’est noté ✔');
+  }catch(e){
+    toast('Impossible d’enregistrer. Vérifiez votre connexion.');
+    await recharger();
+  }
+}
+
+/* ----------------------------------------------- LES PIÈCES À ENVOYER */
 
 function htmlPiece(p,i){
   const fs=p.fichiers||[];
