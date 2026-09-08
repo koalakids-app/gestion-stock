@@ -1187,7 +1187,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="module-tab active" id="stg-tab-fiches" onclick="stgShowView('fiches',this)"><i class="ti ti-users"></i> Fiches <span id="stg-badge-encours" style="display:none;background:var(--koala);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px">0</span></button>
       <button class="module-tab" id="stg-tab-cal" onclick="stgShowView('cal',this)"><i class="ti ti-calendar-month"></i> Calendrier</button>
       <button class="module-tab direction-only" id="stg-tab-types" onclick="stgShowView('types',this)"><i class="ti ti-list-check"></i> Pièces demandées</button>
-      <button class="module-tab direction-only" id="stg-tab-ress" onclick="stgShowView('ress',this)"><i class="ti ti-send"></i> Documents à transmettre</button>
+      <button class="module-tab" id="stg-tab-ress" onclick="stgShowView('ress',this)"><i class="ti ti-send"></i> Documents à transmettre</button>
     </div>
 
     <!-- ── Vue 1 : les fiches ────────────────────────────────────────── -->
@@ -1275,6 +1275,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         qui a répondu — sans avoir à le demander.
         <br>Un document déposé ici n'est <strong>jamais</strong> public : la personne reçoit un lien
         signé valable 5 minutes, comme pour les pièces d'identité.
+        <br><strong>Une référente</strong> peut ajouter ce qui concerne <strong>sa crèche</strong>
+        (mot d'accueil, plan d'accès, questionnaire de l'équipe). Ce qui vaut pour
+        <strong>toutes les crèches</strong> reste à la direction : le projet pédagogique engage le
+        réseau entier.
       </div>
 
       <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
@@ -10368,11 +10372,14 @@ stagiaires: `
   <li>Vous l'orientez vers une <strong>crèche</strong> : à partir de là, la référente de cette crèche la voit et peut la suivre</li>
   <li>La référente prend contact → statut <strong>Contact pris</strong></li>
   <li>C'est d'accord : vous posez les <strong>dates</strong> → statut <strong>Accepté</strong></li>
-  <li>Vous envoyez le <strong>lien de dépôt</strong> à la stagiaire pour ses documents</li>
+  <li>Vous envoyez le <strong>lien de dépôt</strong> à la stagiaire pour ses documents — inutile de le faire six mois à l'avance : la fiche passe d'elle-même en <strong>« lien à envoyer »</strong> un mois avant le début, et la vignette <strong>Liens à envoyer</strong> en haut du module compte celles qui attendent</li>
   <li>Le stage commence → <strong>En cours</strong>, puis <strong>Terminé</strong> et la référente rédige le <strong>bilan</strong></li>
 </ol>
 <div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A;margin-bottom:18px;line-height:1.6">
   ⚠ Tant qu'une stagiaire n'a <strong>pas de crèche</strong>, seule la direction la voit. C'est voulu : une demande Padlet vous appartient tant que vous ne l'avez pas orientée.
+</div>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#3D3580;margin-bottom:18px;line-height:1.6">
+  ⏳ <strong>La durée du lien suit les dates de la fiche</strong> : il reste valable jusqu'à 30 jours après la fin du stage, jamais moins de 30 jours à compter de sa création. Créé un mois avant l'arrivée, il couvre donc tout le stage — le temps de réclamer une pièce oubliée. Le bouton <strong>Renouveler</strong> reste là pour les cas particuliers ; l'ancien lien cesse alors immédiatement de fonctionner.
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📎 Les documents</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
@@ -15254,6 +15261,8 @@ window.adAppliqueProjection=adAppliqueProjection;window.adExportCR=adExportCR;wi
 const STG_BUCKET     = 'stagiaires';
 const STG_LIEN_JOURS = 30;    // durée de vie du lien de dépôt
 const STG_URL_TTL    = 300;   // 5 min pour un lien de lecture signé
+const STG_LIEN_AVANT = 30;    // on prévient qu'il est temps d'envoyer le lien, J-30
+const STG_LIEN_APRES = 30;    // et il reste valable 30 jours après la fin du stage
 
 let stgCache=[], stgTypes=[], stgJoursCache=[], stgDocsCache=[];
 /* Script 36 — ce que la crèche transmet, et qui l'a ouvert. Tables absentes
@@ -15324,8 +15333,14 @@ async function stgInit(){
   if(sel1)sel1.innerHTML=stgOptionsCreches('Toutes les crèches');
   const sel2=document.getElementById('stg-f-creche-cal');
   if(sel2)sel2.innerHTML=stgOptionsCreches('Toutes les crèches');
+  /* Proposer « toutes les crèches » à une référente serait lui promettre une
+     écriture que la policy refusera (script 36c) : elle ne voit que la sienne,
+     déjà choisie. */
   const sel3=document.getElementById('stg-r-creche');
-  if(sel3)sel3.innerHTML=stgOptionsCreches('— Toutes les crèches —');
+  if(sel3){
+    sel3.innerHTML=stgOptionsCreches(isDirection?'— Toutes les crèches —':'');
+    sel3.disabled=!isDirection;
+  }
   if(!stgCalRef){const n=new Date();stgCalRef=new Date(n.getFullYear(),n.getMonth(),1);}
   await stgLoad();
 }
@@ -15471,6 +15486,49 @@ function stgMajCompteurs(){
   });
 }
 
+/* ── Quand envoyer le lien, et jusqu'à quand il vaut ──────────────────────
+   Une demande de stage arrive souvent des mois avant le stage lui-même. Deux
+   conséquences, longtemps mal traitées :
+
+   1. Envoyer le lien tout de suite n'a pas de sens — la personne le perdra, et
+      il aura expiré le jour où elle en aura besoin. L'application ne l'envoie
+      donc jamais toute seule : elle signale, à J-30 du début, que c'est le
+      moment. Rien n'empêche de le créer plus tôt si la stagiaire le réclame.
+
+   2. Une durée fixe de 30 jours à partir de la création tombe au milieu du
+      stage. L'expiration se cale donc sur les DATES DE LA FICHE : 30 jours
+      après la fin, ce qui laisse aussi le temps de réclamer une pièce
+      manquante pendant le stage. Sans dates, on retombe sur les 30 jours. */
+
+function stgLienExpiration(s){
+  const plancher=Date.now()+STG_LIEN_JOURS*86400000;
+  const apres=d=>new Date(String(d).slice(0,10)+'T12:00:00').getTime()+STG_LIEN_APRES*86400000;
+  let cible=plancher;
+  if(s&&s.date_fin)        cible=Math.max(cible,apres(s.date_fin));
+  else if(s&&s.date_debut) cible=Math.max(cible,apres(s.date_debut)+30*86400000);
+  return new Date(cible).toISOString();
+}
+
+/* « Il est temps » : le stage commence dans moins de 30 jours (ou a commencé),
+   et il n'y a pas de lien utilisable. Une fiche refusée, annulée ou terminée
+   ne réclame rien. */
+function stgLienAEnvoyer(s){
+  if(!s||stgClos(s.statut)||s.statut==='demande')return false;
+  if(!s.date_debut)return false;
+  const debut=new Date(String(s.date_debut).slice(0,10)+'T12:00:00').getTime();
+  if(debut-Date.now()>STG_LIEN_AVANT*86400000)return false;
+  if(!s.token)return true;
+  return !s.token_expire_le||new Date(s.token_expire_le).getTime()<Date.now();
+}
+
+/* La date à partir de laquelle le rappel s'allumera. */
+function stgLienDateRappel(s){
+  if(!s||!s.date_debut)return '';
+  const d=new Date(String(s.date_debut).slice(0,10)+'T12:00:00');
+  d.setDate(d.getDate()-STG_LIEN_AVANT);
+  return d.toISOString().slice(0,10);
+}
+
 function stgFiltrees(){
   const creche=(document.getElementById('stg-f-creche-liste')||{}).value||'';
   const type=(document.getElementById('stg-f-type-liste')||{}).value||'';
@@ -15525,12 +15583,14 @@ function stgRender(){
     const aVenir=stgCache.filter(s=>s.statut==='accepte').length;
     const alt=stgCache.filter(s=>stgType(s)==='alternant'&&!stgClos(s.statut)).length;
     const incomplets=stgCache.filter(s=>!stgClos(s.statut)&&!stgAvancement(s.id).complet).length;
+    const aEnvoyer=stgCache.filter(stgLienAEnvoyer).length;
     stats.innerHTML=
        stgStatCard('Demandes à traiter',aTraiter,'ti-inbox',aTraiter?'var(--blue)':'var(--muted)')
       +stgStatCard('En cours',enCours,'ti-run','var(--green)')
       +stgStatCard('Acceptés, à venir',aVenir,'ti-calendar-plus','var(--koala)')
       +stgStatCard('Alternants en cours et à venir',alt,'ti-briefcase',alt?'var(--orange-dark)':'var(--muted)')
-      +stgStatCard('Dossiers incomplets',incomplets,'ti-file-alert',incomplets?'var(--orange-dark)':'var(--muted)');
+      +stgStatCard('Dossiers incomplets',incomplets,'ti-file-alert',incomplets?'var(--orange-dark)':'var(--muted)')
+      +stgStatCard('Liens à envoyer',aEnvoyer,'ti-send',aEnvoyer?'var(--orange-dark)':'var(--muted)');
   }
   const badge=document.getElementById('stg-badge-encours');
   if(badge){
@@ -15563,7 +15623,10 @@ function stgCarte(s){
     : 'dates non posées';
   const libStatut=(s.statut==='en_cours')
     ? (stgType(s)==='alternant'?'Alternance en cours':'Stage en cours') : m.lib;
-  const lien = !s.token ? ''
+  const lien = stgLienAEnvoyer(s)
+    ? '<span style="background:var(--orange-light);color:var(--orange-dark);border-radius:10px;padding:1px 9px;font-weight:700">'
+      +'<i class="ti ti-send"></i> lien à envoyer</span>'
+    : !s.token ? ''
     : (new Date(s.token_expire_le).getTime()<Date.now()
         ? '<span style="color:var(--red)"><i class="ti ti-link-off"></i> lien expiré</span>'
         : '<span style="color:var(--green)"><i class="ti ti-link"></i> lien actif</span>');
@@ -15826,10 +15889,32 @@ function stgRenderLien(){
     +'<i class="ti ti-link" style="color:var(--koala)"></i> Lien de dépôt des documents</div>';
 
   if(!s.token){
+    const rappel=stgLienDateRappel(s);
+    const tard=stgLienAEnvoyer(s);
     h+='<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.5">'
       +'La personne dépose ses pièces elle-même depuis son téléphone, sans compte ni application. '
-      +'Le lien est valable '+STG_LIEN_JOURS+' jours.</p>'
-      +'<button class="btn-primary" onclick="stgCreerLien()"><i class="ti ti-link-plus"></i> Créer le lien</button>';
+      +'Le lien restera valable jusqu\'au <b>'+escHtml(stgDateFr(stgLienExpiration(s)))+'</b>'
+      +(s.date_fin?' — soit '+STG_LIEN_APRES+' jours après la fin '
+        +(stgType(s)==='alternant'?"de l'alternance":'du stage'):'')+'.</p>';
+    /* Une demande arrivée six mois à l'avance n'a pas besoin de son lien tout
+       de suite : il se perdrait, et la personne aurait tout oublié le jour du
+       stage. On dit quand ce sera le moment, sans l'empêcher de le créer. */
+    if(tard){
+      h+='<div style="background:var(--orange-light);border-left:4px solid var(--orange-dark);border-radius:0 8px 8px 0;'
+        +'padding:9px 12px;font-size:12.5px;color:#8a4b00;margin-bottom:10px">'
+        +'<i class="ti ti-send"></i> <strong>C\'est le moment de lui envoyer son lien</strong> — '
+        +(stgType(s)==='alternant'?"l'alternance commence":'le stage commence')+' le '
+        +escHtml(stgDateFr(s.date_debut))+'.</div>';
+    }else if(rappel){
+      h+='<div style="background:var(--koala-light);border-left:4px solid var(--koala);border-radius:0 8px 8px 0;'
+        +'padding:9px 12px;font-size:12.5px;color:var(--koala-dark);margin-bottom:10px">'
+        +'<i class="ti ti-clock"></i> Rien ne presse : '
+        +(stgType(s)==='alternant'?"l'alternance commence":'le stage commence')+' le <b>'
+        +escHtml(stgDateFr(s.date_debut))+'</b>. La fiche passera en '
+        +'<strong>« lien à envoyer »</strong> le <b>'+escHtml(stgDateFr(rappel))+'</b>'
+        +' — vous pouvez aussi le créer dès maintenant si elle le demande.</div>';
+    }
+    h+='<button class="btn-primary" onclick="stgCreerLien()"><i class="ti ti-link-plus"></i> Créer le lien</button>';
   }else{
     h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:9px">'
       +'<input class="finput" id="stg-lien-url" readonly value="'+escHtml(stgLienUrl(s.token))+'" style="flex:1;min-width:220px;font-size:12px">'
@@ -15883,7 +15968,8 @@ async function stgCreerLien(renouveler){
   if(!stgFicheId)return;
   if(renouveler&&!confirm('Créer un nouveau lien ?\n\nL\'ancien cessera immédiatement de fonctionner.'))return;
   const token=stgToken();
-  const expire=new Date(Date.now()+STG_LIEN_JOURS*86400000).toISOString();
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  const expire=stgLienExpiration(s);
   const ok=await dbUpdate('stagiaires',stgFicheId,{
     token:token,token_expire_le:expire,lien_envoye_le:new Date().toISOString()
   });
@@ -16820,6 +16906,17 @@ const STG_RESS_PREFIXE = '_ressources/';
 
 const stgRessNature = r => (r&&r.nature==='lien')?'lien':'fichier';
 
+/* Qui peut modifier quoi (script 36c) : la direction, tout ; une référente,
+   uniquement ce qui est rattaché à sa crèche. Une ressource « toutes les
+   crèches » engage le réseau et lui reste fermée. Le même calcul est refait en
+   base — ici, c'est pour ne pas proposer un bouton qui échouera. */
+function stgRessModifiable(r){
+  if(isDirection)return true;
+  if(!r||!r.creche_id)return false;
+  const mien=currentProfile&&currentProfile.creche_id;
+  return String(r.creche_id)===String(mien||'');
+}
+
 /* Les ressources destinées à CETTE fiche : actives, prévues pour son profil,
    et valables soit pour tout le réseau, soit pour sa crèche. Le même filtre
    est refait côté edge function — ici c'est de l'affichage, là-bas c'est la
@@ -16945,13 +17042,18 @@ function stgRenderRess(){
       +lus+' ouverture'+(lus>1?'s':'')+(r.accuse?' · '+confirmes+' confirmation'+(confirmes>1?'s':''):'')+'</div>'
       +'</div>'
       +(vide?'':'<button class="ibtn" title="Ouvrir" onclick="stgOuvrirRess(\''+r.id+'\')"><i class="ti ti-eye"></i></button>')
-      +'<button class="ibtn" title="Monter" onclick="stgDeplacerRess(\''+r.id+'\',-1)"><i class="ti ti-chevron-up"></i></button>'
-      +'<button class="ibtn" title="Descendre" onclick="stgDeplacerRess(\''+r.id+'\',1)"><i class="ti ti-chevron-down"></i></button>'
-      +'<button class="ibtn" title="'+(lien?'Remplacer l\'adresse':'Remplacer le fichier')+'" onclick="stgRemplacerRess(\''+r.id+'\')"><i class="ti ti-refresh"></i></button>'
-      +'<button class="ibtn" title="Demander ou non une confirmation" onclick="stgBasculerRess(\''+r.id+'\',\'accuse\')"><i class="ti ti-checkbox"></i></button>'
-      +'<button class="ibtn" title="'+(r.actif?'Désactiver':'Réactiver')+'" onclick="stgBasculerRess(\''+r.id+'\',\'actif\')">'
-      +'<i class="ti ti-'+(r.actif?'eye-off':'eye')+'"></i></button>'
-      +'<button class="ibtn" style="color:var(--red)" title="Supprimer" onclick="stgSupprimerRess(\''+r.id+'\')"><i class="ti ti-trash"></i></button>'
+      +(stgRessModifiable(r)
+        ? '<button class="ibtn" title="Monter" onclick="stgDeplacerRess(\''+r.id+'\',-1)"><i class="ti ti-chevron-up"></i></button>'
+          +'<button class="ibtn" title="Descendre" onclick="stgDeplacerRess(\''+r.id+'\',1)"><i class="ti ti-chevron-down"></i></button>'
+          +'<button class="ibtn" title="'+(lien?'Remplacer l\'adresse':'Remplacer le fichier')+'" onclick="stgRemplacerRess(\''+r.id+'\')"><i class="ti ti-refresh"></i></button>'
+          +'<button class="ibtn" title="Demander ou non une confirmation" onclick="stgBasculerRess(\''+r.id+'\',\'accuse\')"><i class="ti ti-checkbox"></i></button>'
+          +'<button class="ibtn" title="'+(r.actif?'Désactiver':'Réactiver')+'" onclick="stgBasculerRess(\''+r.id+'\',\'actif\')">'
+          +'<i class="ti ti-'+(r.actif?'eye-off':'eye')+'"></i></button>'
+          +'<button class="ibtn" style="color:var(--red)" title="Supprimer" onclick="stgSupprimerRess(\''+r.id+'\')"><i class="ti ti-trash"></i></button>'
+        /* Ni bouton grisé ni message d'erreur au clic : on dit simplement d'où
+           vient la ligne. */
+        : '<span style="font-size:11px;color:var(--muted);white-space:nowrap">'
+          +'<i class="ti ti-lock"></i> '+(r.creche_id?'autre crèche':'réseau')+'</span>')
       +'</div>';
   }).join('');
 }
@@ -16976,12 +17078,19 @@ async function stgAjouterRess(){
   if(!lib)return showBanner('Indiquez un titre.','error');
 
   const nature=(document.getElementById('stg-r-nature')||{}).value==='lien'?'lien':'fichier';
+  const creche=(document.getElementById('stg-r-creche')||{}).value
+              ||(isDirection?'':((currentProfile&&currentProfile.creche_id)||''));
+  /* La policy le refuserait de toute façon (36c) ; autant le dire ici, avec la
+     raison plutôt qu'un code d'erreur. */
+  if(!isDirection&&!creche)
+    return showBanner('Un document valable pour toutes les crèches est ajouté par la direction. '
+      +'Le vôtre sera rattaché à votre crèche.','error');
   const base={
     libelle:lib,
     description:((document.getElementById('stg-r-desc')||{}).value||'').trim()||null,
     nature:nature,
     pour_type:(document.getElementById('stg-r-pour')||{}).value||'tous',
-    creche_id:(document.getElementById('stg-r-creche')||{}).value||null,
+    creche_id:creche||null,
     accuse:(document.getElementById('stg-r-accuse')||{}).checked,
     ordre:stgRess.reduce((m,r)=>Math.max(m,r.ordre||0),0)+10,
     actif:true
@@ -17010,7 +17119,8 @@ async function stgAjouterRess(){
     if(depose)await sb.storage.from(STG_BUCKET).remove([depose.path]);
     dire('');
     return showBanner('Ajout impossible'
-      +(window._lastDbError?' : '+window._lastDbError:' (réservé à la direction).')+'','error');
+      +(window._lastDbError?' : '+window._lastDbError
+        :(isDirection?'.':' — une référente ne peut ajouter que pour sa crèche (script 36c).'))+'','error');
   }
   dire('');
   ['stg-r-libelle','stg-r-desc','stg-r-url'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
@@ -17275,8 +17385,26 @@ async function brRender(){
   const md=t.slice(5);
   const bdays=cacheEnfants.filter(e=>e.dob&&e.dob.slice(5)===md&&aMoi(e.creche_id));
 
+  // ── Stagiaires : les liens de dépôt qu'il est temps d'envoyer ──────────
+  //
+  // C'est la référente qui suit sa stagiaire, pas seulement la direction : le
+  // rappel doit donc arriver là où elle regarde le matin, et non dans un écran
+  // qu'elle n'ouvre qu'une fois par mois. La RLS ne lui montre que sa crèche,
+  // le filtre ci-dessous ne fait que le redire côté écran.
+  //
+  // Le module n'a pas forcément été ouvert aujourd'hui : on charge nous-mêmes
+  // plutôt que d'afficher un zéro qui voudrait dire « pas encore lu ».
+  let stgLiens=[];
+  try{
+    if(typeof stgLoad==='function'&&!stgCache.length)await stgLoad();
+    if(typeof stgLienAEnvoyer==='function'){
+      stgLiens=stgCache.filter(x=>
+        (isDirection||String(x.creche_id||'')===String(maCreche||''))&&stgLienAEnvoyer(x));
+    }
+  }catch(e){console.warn('[briefing] stagiaires',e);}
+
   // ── En-tête : le compte de ce qui demande une action ───────────────────
-  const nAction=urg.length+inc.length+actEch.length+taches.length;
+  const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length;
   const res=document.getElementById('br-resume');
   if(res){
     res.className='br-resume'+(nAction?' br-chaud':'');
@@ -17333,7 +17461,23 @@ async function brRender(){
       :brVide('✅ Aucun incident en attente'),
     graves.length?'accent':'');
 
-  // 5. Événements du jour
+  // 5. Stagiaires dont le lien de dépôt attend d'être envoyé
+  h+=brSection('send','Stagiaires — liens à envoyer',stgLiens.length,
+    stgLiens.length
+      ?stgLiens.slice(0,8).map(x=>{
+          const debut=(typeof stgDateFr==='function')?stgDateFr(x.date_debut):(x.date_debut||'');
+          const j=x.date_debut
+            ? Math.round((new Date(String(x.date_debut).slice(0,10)+'T12:00:00')-new Date(t+'T12:00:00'))/86400000)
+            : null;
+          const meta=(j===null)?debut
+                    :(j>0?'arrive dans '+j+' j':(j===0?'arrive aujourd\'hui':'commencé depuis '+(-j)+' j'));
+          const nom=(typeof stgNomComplet==='function')?stgNomComplet(x):((x.prenom||'')+' '+(x.nom||'')).trim();
+          return brLigne('📨 '+escHtml(nom)+brSuffixeCreche(x.creche_id),meta,'stagiaires',j!==null&&j<=7);
+        }).join('')+(stgLiens.length>8?'<div class="br-plus">+ '+(stgLiens.length-8)+' autres</div>':'')
+      :brVide('✅ Aucun lien à envoyer'),
+    stgLiens.length?'accent':'');
+
+  // 6. Événements du jour
   h+=brSection('calendar-event','Événements du jour',evts.length,
     evts.length
       ?evts.map(e=>{
@@ -17343,7 +17487,7 @@ async function brRender(){
         }).join('')
       :brVide('Aucun événement'));
 
-  // 6. Anniversaires
+  // 7. Anniversaires
   h+=brSection('cake','Anniversaires',bdays.length,
     bdays.length
       ?bdays.map(e=>{
