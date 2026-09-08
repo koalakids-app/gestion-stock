@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Koala Kids — Facturation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8;--amber:#B8860B;--amber-l:#FFF6DC}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:#2B2740;min-height:100dvh}
+a{color:inherit}
+.topbar{background:#fff;border-bottom:2px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;padding-top:calc(12px + env(safe-area-inset-top))}
+.topbar h1{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);flex:1}
+.topbar .who{font-size:12px;color:var(--muted);font-weight:600}
+.btn{border:none;border-radius:12px;padding:9px 14px;font-family:'Nunito';font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.btn-p{background:var(--orange);color:#fff}
+.btn-s{background:var(--violet-l);color:var(--violet)}
+.btn-g{background:#F1EFF7;color:var(--muted)}
+.btn-d{background:var(--red-l);color:var(--red)}
+.btn-v{background:var(--green-l);color:var(--green)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-sm{padding:6px 10px;font-size:12px}
+.wrap{max-width:1000px;margin:0 auto;padding:16px;padding-bottom:calc(40px + env(safe-area-inset-bottom))}
+input,select,textarea{font-family:'Nunito';font-size:16px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
+textarea{resize:vertical;min-height:70px}
+label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 4px 3px}
+.f{margin-bottom:10px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.g4{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px}
+@media(max-width:620px){.g2,.g3,.g4{grid-template-columns:1fr}}
+.card{background:#fff;border:2px solid var(--line);border-radius:18px;padding:16px 18px;margin-bottom:14px}
+.sec{font-family:'Baloo 2',cursive;font-size:15px;color:var(--orange);margin:0 0 12px;padding-bottom:6px;border-bottom:2px solid var(--line);display:flex;align-items:center;gap:7px}
+.tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tab{border:2px solid var(--line);background:#fff;border-radius:14px;padding:9px 15px;font-family:'Nunito';font-weight:700;font-size:13px;color:var(--muted);cursor:pointer}
+.tab.on{border-color:var(--orange);background:var(--orange-l);color:var(--orange)}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.chip{border:2px solid var(--line);background:#fff;border-radius:20px;padding:7px 14px;font-family:'Nunito';font-weight:700;font-size:13px;color:var(--muted);cursor:pointer}
+.chip.on{border-color:var(--violet);background:var(--violet-l);color:var(--violet)}
+.hint{font-size:12px;color:var(--muted);line-height:1.6;margin:-2px 0 10px 3px}
+.warn{background:var(--amber-l);color:var(--amber);border-radius:12px;padding:10px 13px;font-size:12.5px;font-weight:600;line-height:1.6;margin:10px 0;display:flex;gap:8px;align-items:flex-start}
+.warn.err{background:var(--red-l);color:var(--red)}
+.warn.ok{background:var(--green-l);color:var(--green)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#2B2740;color:#fff;padding:11px 18px;border-radius:14px;font-size:13.5px;font-weight:600;z-index:300;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
+.toast.on{opacity:1}
+.toast.err{background:var(--red)}
+.row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:none}
+.row .main{flex:1;min-width:0}
+.row .nm{font-weight:700;font-size:14px}
+.row .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.row .amt{font-weight:800;font-size:14.5px;white-space:nowrap}
+.bdg{display:inline-block;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:800;white-space:nowrap}
+.b-br{background:#F1EFF7;color:var(--muted)}
+.b-em{background:var(--violet-l);color:var(--violet)}
+.b-en{background:var(--orange-l);color:var(--orange)}
+.b-pa{background:var(--green-l);color:var(--green)}
+.b-pt{background:var(--amber-l);color:var(--amber)}
+.b-an{background:var(--red-l);color:var(--red)}
+.b-rt{background:var(--red);color:#fff}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+@media(max-width:620px){.stats{grid-template-columns:1fr 1fr}}
+.stat{background:#fff;border:2px solid var(--line);border-radius:16px;padding:12px}
+.stat .n{font-family:'Baloo 2',cursive;font-size:21px;color:var(--violet)}
+.stat .l{font-size:11.5px;color:var(--muted);font-weight:700}
+.ov{position:fixed;inset:0;background:rgba(43,39,64,.55);z-index:200;display:none;overflow-y:auto;padding:16px}
+.ov.on{display:block}
+.ov .box{max-width:820px;margin:20px auto;background:var(--cream);border-radius:20px;padding:18px}
+.ov h3{font-family:'Baloo 2',cursive;font-size:18px;color:var(--violet);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.ov h3 .x{margin-left:auto;cursor:pointer;color:var(--muted)}
+table.lg{width:100%;border-collapse:collapse;font-size:13px}
+table.lg th{text-align:left;font-size:11.5px;color:var(--muted);padding:6px 4px;border-bottom:2px solid var(--line)}
+table.lg td{padding:7px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+table.lg td.r,table.lg th.r{text-align:right;white-space:nowrap}
+.tot{display:flex;justify-content:flex-end;gap:18px;padding-top:10px;font-weight:800;font-size:15px}
+#loginView{max-width:360px;margin:60px auto;padding:0 16px}
+#loginView .card{padding:18px}
+#loginView h3{font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+#loginView .back{text-align:center;margin-top:14px}
+#loginView .back a{font-size:13px;font-weight:700;color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+</style>
+</head>
+<body>
+
+<div id="loginView" style="display:none">
+  <div class="card">
+    <h3><i class="ti ti-receipt-euro"></i> Facturation</h3>
+    <div class="f"><label class="lb">Adresse e-mail</label><input id="liMail" type="email" autocomplete="username"></div>
+    <div class="f"><label class="lb">Mot de passe</label><input id="liPwd" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div id="liErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-p" onclick="doLogin()"><i class="ti ti-login"></i> Se connecter</button>
+    </div>
+    <div class="back"><a href="index.html"><i class="ti ti-arrow-left"></i> Retour à l'accueil</a></div>
+  </div>
+</div>
+
+<div id="appView" style="display:none">
+  <div class="topbar">
+    <i class="ti ti-receipt-euro" style="font-size:22px;color:var(--orange)"></i>
+    <h1>Facturation</h1>
+    <span class="who" id="whoAmI"></span>
+    <a class="btn btn-g btn-sm" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i></a>
+    <button class="btn btn-g btn-sm" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i></button>
+  </div>
+
+  <div class="wrap">
+    <div class="tabs">
+      <button class="tab on" id="tabMois"  onclick="showTab('mois')"><i class="ti ti-calendar-month"></i> Le mois</button>
+      <button class="tab"    id="tabToutes" onclick="showTab('toutes')"><i class="ti ti-files"></i> Toutes les factures</button>
+      <button class="tab"    id="tabSuivi" onclick="showTab('suivi')"><i class="ti ti-alert-triangle"></i> Impayés et relances</button>
+    </div>
+
+    <div class="chips" id="chips"></div>
+
+    <!-- ===================== LE MOIS ===================== -->
+    <div id="paneMois">
+      <div class="card">
+        <div class="sec"><i class="ti ti-calendar-month"></i> Le mois à facturer</div>
+        <div class="g3">
+          <div class="f"><label class="lb">Mois</label><input id="fMois" type="month" onchange="chargerMois()"></div>
+          <div class="f"><label class="lb">Date d'émission</label><input id="fEmission" type="date" onchange="syncEcheance()"></div>
+          <div class="f"><label class="lb">Échéance</label><input id="fEcheance" type="date"></div>
+        </div>
+        <p class="hint" id="hTerme"></p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-s" onclick="preparer()"><i class="ti ti-list-check"></i> Préparer les factures du mois</button>
+          <button class="btn btn-g" onclick="chargerMois()"><i class="ti ti-refresh"></i> Actualiser</button>
+        </div>
+      </div>
+
+      <div class="stats" id="statsMois"></div>
+      <div class="card">
+        <div class="sec"><i class="ti ti-receipt"></i> Les factures de ce mois</div>
+        <div id="listeMois"><p class="hint">Choisir une crèche et un mois.</p></div>
+      </div>
+    </div>
+
+    <!-- ===================== TOUTES ===================== -->
+    <div id="paneToutes" style="display:none">
+      <div class="card">
+        <div class="sec"><i class="ti ti-search"></i> Rechercher</div>
+        <div class="g3">
+          <div class="f"><label class="lb">Statut</label>
+            <select id="fStatut" onchange="chargerToutes()">
+              <option value="">Tous</option>
+              <option value="brouillon">Brouillons</option>
+              <option value="emise">Émises</option>
+              <option value="envoyee">Envoyées</option>
+              <option value="partielle">Partiellement réglées</option>
+              <option value="payee">Réglées</option>
+              <option value="annulee">Annulées</option>
+            </select></div>
+          <div class="f"><label class="lb">Enfant ou numéro</label><input id="fQ" oninput="chargerToutes()" placeholder="Nom, prénom, numéro…"></div>
+          <div class="f"><label class="lb">Année</label><input id="fAnnee" type="number" step="1" oninput="chargerToutes()"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec"><i class="ti ti-files"></i> Résultats</div>
+        <div id="listeToutes"></div>
+      </div>
+    </div>
+
+    <!-- ===================== SUIVI ===================== -->
+    <div id="paneSuivi" style="display:none">
+      <div class="card">
+        <div class="sec"><i class="ti ti-alert-triangle"></i> Échéances dépassées</div>
+        <p class="hint">Les factures émises ou envoyées dont l'échéance est passée et le solde non nul.
+          « Impayée » n'est pas un statut enregistré : c'est ce constat, recalculé à chaque ouverture —
+          un statut stocké se serait périmé le jour du règlement.</p>
+        <div id="listeRetard"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== FICHE FACTURE ===================== -->
+<div class="ov" id="ovFac"><div class="box">
+  <h3><i class="ti ti-receipt"></i> <span id="facTitre">Facture</span><span class="x" onclick="fermer('ovFac')"><i class="ti ti-x"></i></span></h3>
+  <div id="facCorps"></div>
+</div></div>
+
+<!-- ===================== ÉCRAN DE VÉRIFICATION ===================== -->
+<div class="ov" id="ovPrep"><div class="box">
+  <h3><i class="ti ti-list-check"></i> Avant de générer<span class="x" onclick="fermer('ovPrep')"><i class="ti ti-x"></i></span></h3>
+  <div id="prepCorps"></div>
+</div></div>
+
+<!-- ===================== DÉCOMPTE DE FIN DE CONTRAT ===================== -->
+<div class="ov" id="ovSolde"><div class="box">
+  <h3><i class="ti ti-flag-check"></i> Décompte de fin de contrat<span class="x" onclick="fermer('ovSolde')"><i class="ti ti-x"></i></span></h3>
+  <div id="soldeCorps"></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const RESEAU_CFG_ID='00000000-0000-0000-0000-000000000003';
+
+let ME=null,PROF=null;
+let CRECHES=[],ETABS=[],RCFG={};
+let crecheId=null, TAB='mois';
+let FACTURES=[], CONTRATS=[], ENFANTS=[], PARENTS=[], PREINS=[];
+
+/* ------------------------------------------------------------------ outils */
+function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',3200);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function val(id){const e=document.getElementById(id);return e?String(e.value).trim():'';}
+function setVal(id,v){const e=document.getElementById(id);if(e)e.value=(v==null?'':v);}
+function nb(v){const n=Number(String(v==null?'':v).replace(',','.'));return isFinite(n)?n:0;}
+function r2(n){return Math.round(Number(n||0)*100)/100;}
+/* Même règle que le devis et le contrat : pas de toLocaleString. L'espace
+   insécable étroite (U+202F) n'existe pas dans les polices standard de jsPDF,
+   et le montant y sortait troué. Un seul formateur pour l'écran et le PDF. */
+function eur(n){
+  const v=r2(n);
+  const p=Math.abs(v).toFixed(2).replace('.',',').split(',');
+  return (v<0?'- ':'')+p[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ')+','+p[1]+' €';
+}
+function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
+function auj(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+const MOIS_FR=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+function moisLibelle(m){if(!m)return'';const p=String(m).split('-');return MOIS_FR[Number(p[1])-1]+' '+p[0];}
+function finDeMois(m){const a=Number(m.slice(0,4)),mo=Number(m.slice(5,7));const d=new Date(Date.UTC(a,mo,0));return m+'-'+String(d.getUTCDate()).padStart(2,'0');}
+function debutDeMois(m){return m+'-01';}
+function plusMois(iso,n){const d=new Date(iso+'T00:00:00');const j=d.getDate();d.setDate(1);d.setMonth(d.getMonth()+n);
+  const dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(j,dim));
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+/* Les colonnes de `contrats` n'ont pas toutes le même nom d'une base à
+   l'autre selon l'ordre dans lequel les scripts 31/32/33 ont été passés.
+   Plutôt que de parier sur un nom, on cherche le premier présent — et si
+   aucun ne l'est, la valeur reste vide et se saisit à la main sur le
+   brouillon. Un blanc visible vaut mieux qu'un montant faux. */
+function champ(o,noms,def){
+  if(!o)return def===undefined?null:def;
+  for(let i=0;i<noms.length;i++){
+    if(o[noms[i]]!==undefined&&o[noms[i]]!==null&&o[noms[i]]!=='')return o[noms[i]];
+  }
+  return def===undefined?null:def;
+}
+const C_MENSU =['total_mensuel','mensualite','montant_mensuel','total_mensualite'];
+const C_DEBUT =['date_debut'];
+const C_FIN   =['date_fin'];
+const C_HEURES=['heures_hebdo'];
+const C_TARIF =['tarif_montant','tarif_horaire'];
+const C_JOURS =['jours'];
+
+/* Détail d'erreur : supabase-js masque le corps des réponses derrière un
+   message identique quelle que soit la cause. Sans ce helper, toutes les
+   pannes se ressemblent. */
+function detail(e){
+  if(!e)return'erreur inconnue';
+  if(e.code==='42P01')return'Table absente — exécuter le script 35.';
+  if(e.code==='42501')return'Droits insuffisants : ce module est réservé à la direction (partie 7 du script 35).';
+  if(e.code==='23505')return'Cette facture existe déjà pour ce contrat et ce mois.';
+  return e.message||e.details||e.hint||'erreur inconnue';
+}
+function fermer(id){document.getElementById(id).classList.remove('on');}
+function ouvrir(id){document.getElementById(id).classList.add('on');}
+
+/* ------------------------------------------------------------------- AUTH */
+/* Même règle que Paramètres : arrivée depuis index.html, qui n'authentifie
+   personne. Cet écran porte des montants et des impayés de familles : sur un
+   poste partagé, hériter de la session précédente n'est pas acceptable. */
+let JUSTE_CONNECTE=false;
+function showLogin(msg){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liErr').textContent=msg||'';
+}
+async function boot(){
+  if(!JUSTE_CONNECTE){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin();return;
+  }
+  let session=null;
+  try{
+    const r=await sb.auth.getSession();
+    session=(r&&r.data&&r.data.session)||null;
+  }catch(e){session=null;}
+  if(!session||!session.user){showLogin();return;}
+  ME=session.user;
+  let p=null;
+  try{
+    const{data,error}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
+    if(error)throw error;p=data;
+  }catch(e){showLogin('Session expirée ou profil inaccessible — merci de vous reconnecter.');return;}
+  if(!p){try{await sb.auth.signOut();}catch(e){}showLogin('Compte non reconnu — contactez la direction.');return;}
+  PROF=p;
+  if(p.role!=='direction'){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin('La facturation est réservée à la direction.');return;
+  }
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('appView').style.display='block';
+  document.getElementById('whoAmI').textContent=(p.name||'')+' · Direction';
+  await loadAll();
+}
+async function doLogin(){
+  const e=val('liMail'),p=document.getElementById('liPwd').value;
+  const{error}=await sb.auth.signInWithPassword({email:e,password:p});
+  if(error){document.getElementById('liErr').textContent='Identifiants incorrects';return;}
+  JUSTE_CONNECTE=true;
+  document.getElementById('liPwd').value='';
+  boot().catch(err=>{showLogin('Connexion impossible — réessayez.');});
+}
+async function doLogout(){await sb.auth.signOut();location.href='index.html';}
+
+/* ------------------------------------------------------------- CHARGEMENT */
+async function loadAll(){
+  try{
+    const[c,e,r]=await Promise.all([
+      sb.from('creches').select('*').order('name'),
+      sb.from('etablissements').select('*'),
+      sb.from('reseau_config').select('config').eq('id',RESEAU_CFG_ID).maybeSingle()
+    ]);
+    if(c.error)throw c.error;
+    CRECHES=c.data||[];ETABS=(e&&e.data)||[];RCFG=(r&&r.data&&r.data.config)||{};
+  }catch(err){toast('Chargement impossible : '+detail(err),true);return;}
+  if(!CRECHES.length){toast('Aucune crèche enregistrée.',true);return;}
+  crecheId=CRECHES[0].id;
+  const d=new Date();
+  setVal('fMois',d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  setVal('fAnnee',d.getFullYear());
+  renderChips();majTerme();
+  await chargerMois();
+}
+function renderChips(){
+  document.getElementById('chips').innerHTML=CRECHES.map(c=>
+    '<button class="chip'+(String(c.id)===String(crecheId)?' on':'')+'" onclick="pick(\''+c.id+'\')">'
+    +esc(c.name)+'</button>').join('');
+}
+function pick(id){crecheId=id;renderChips();refresh();}
+function etabDe(id){return ETABS.find(x=>String(x.creche_id)===String(id))||{};}
+function crecheDe(id){return CRECHES.find(x=>String(x.id)===String(id))||{};}
+
+function showTab(t){
+  TAB=t;
+  document.getElementById('paneMois').style.display   = t==='mois'?'':'none';
+  document.getElementById('paneToutes').style.display = t==='toutes'?'':'none';
+  document.getElementById('paneSuivi').style.display  = t==='suivi'?'':'none';
+  ['Mois','Toutes','Suivi'].forEach(k=>{
+    document.getElementById('tab'+k).className='tab'+(t===k.toLowerCase()?' on':'');
+  });
+  refresh();
+}
+function refresh(){
+  if(TAB==='mois')return chargerMois();
+  if(TAB==='toutes')return chargerToutes();
+  return chargerRetard();
+}
+
+/* Le terme échu, décidé le 7 septembre : la facture de septembre s'établit
+   fin septembre et porte déjà les déductions du mois. L'échéance suit le
+   prélèvement, le 20 du mois suivant. Les deux dates restent corrigeables :
+   un mois où la direction facture le 2 du mois suivant n'a rien d'anormal. */
+function majTerme(){
+  const m=val('fMois')||auj().slice(0,7);
+  const jourEch=Number(RCFG.facturation_jour_echeance||20);
+  const emission=finDeMois(m);
+  setVal('fEmission',emission);
+  const ech=plusMois(debutDeMois(m),1).slice(0,8)+String(jourEch).padStart(2,'0');
+  setVal('fEcheance',ech);
+  const jourEnv=Number(RCFG.facturation_jour_envoi||10);
+  document.getElementById('hTerme').innerHTML=
+    'Facturation à terme échu : la facture de <b>'+esc(moisLibelle(m))+'</b> est établie à la fin du mois, '
+    +'déductions et suppléments du mois compris. À envoyer <b>avant le '+jourEnv+' du mois suivant</b>, '
+    +'en même temps que la déclaration des heures à la CAF. Prélèvement le '+jourEch+'. '
+    +'Les deux dates se corrigent.';
+}
+function syncEcheance(){
+  const em=val('fEmission');if(!em)return;
+  const jourEch=Number(RCFG.facturation_jour_echeance||20);
+  setVal('fEcheance',plusMois(em,1).slice(0,8)+String(jourEch).padStart(2,'0'));
+}
+
+async function chargerMois(){
+  majTerme();
+  const m=val('fMois');
+  if(!crecheId||!m)return;
+  const el=document.getElementById('listeMois');
+  el.innerHTML='<p class="hint">Chargement…</p>';
+  try{
+    const{data,error}=await sb.from('factures').select('*')
+      .eq('creche_id',crecheId).eq('mois',m).order('created_at');
+    if(error)throw error;
+    FACTURES=data||[];
+  }catch(e){el.innerHTML='<div class="warn err"><i class="ti ti-alert-circle"></i><span>'+esc(detail(e))+'</span></div>';return;}
+  renderStats();
+  el.innerHTML=FACTURES.length?FACTURES.map(ligneFacture).join('')
+    :'<p class="hint">Aucune facture pour '+esc(moisLibelle(m))+'. Le bouton « Préparer les factures du mois » liste les contrats à facturer avant d\'écrire quoi que ce soit.</p>';
+}
+
+function renderStats(){
+  const n=FACTURES.length;
+  const tot=FACTURES.filter(f=>f.statut!=='annulee').reduce((s,f)=>s+Number(f.total||0),0);
+  const regle=FACTURES.reduce((s,f)=>s+Number(f.total_regle||0),0);
+  const brouillons=FACTURES.filter(f=>f.statut==='brouillon').length;
+  document.getElementById('statsMois').innerHTML=
+    stat(n,'factures')+stat(brouillons,'brouillons')+stat(eur(tot),'facturé')+stat(eur(regle),'encaissé');
+}
+function stat(n,l){return '<div class="stat"><div class="n">'+esc(String(n))+'</div><div class="l">'+esc(l)+'</div></div>';}
+
+function badge(f){
+  const s=f.statut;
+  const enRetard=(s==='emise'||s==='envoyee'||s==='partielle')&&f.date_echeance&&f.date_echeance<auj()&&Number(f.solde||0)>0;
+  if(enRetard)return '<span class="bdg b-rt">En retard</span>';
+  const map={brouillon:['b-br','Brouillon'],emise:['b-em','Émise'],envoyee:['b-en','Envoyée'],
+             partielle:['b-pt','Partielle'],payee:['b-pa','Réglée'],annulee:['b-an','Annulée']};
+  const v=map[s]||['b-br',s];
+  return '<span class="bdg '+v[0]+'">'+esc(v[1])+'</span>';
+}
+function ligneFacture(f){
+  const qui=[f.en_prenom,f.en_nom].filter(Boolean).join(' ')||f.fa_nom||'—';
+  const sub=[f.numero||'sans numéro',moisLibelle(f.mois),f.date_echeance?('échéance '+dfr(f.date_echeance)):''].filter(Boolean).join(' · ');
+  const typ=f.type==='avoir'?' <span class="bdg b-an">Avoir</span>'
+           :f.type==='solde_tout_compte'?' <span class="bdg b-em">Solde de tout compte</span>':'';
+  return '<div class="row"><div class="main"><div class="nm">'+esc(qui)+typ+'</div>'
+    +'<div class="sub">'+esc(sub)+'</div></div>'
+    +'<div class="amt">'+eur(f.total)+'</div>'+badge(f)
+    +'<button class="btn btn-s btn-sm" onclick="ouvrirFacture(\''+f.id+'\')"><i class="ti ti-eye"></i></button></div>';
+}
+
+async function chargerToutes(){
+  const el=document.getElementById('listeToutes');
+  el.innerHTML='<p class="hint">Chargement…</p>';
+  let q=sb.from('factures').select('*').eq('creche_id',crecheId)
+        .order('date_emission',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false}).limit(300);
+  const st=val('fStatut');if(st)q=q.eq('statut',st);
+  const an=val('fAnnee');if(an)q=q.gte('mois',an+'-01').lte('mois',an+'-12');
+  try{
+    const{data,error}=await q;if(error)throw error;
+    let l=data||[];
+    const s=val('fQ').toLowerCase();
+    if(s)l=l.filter(f=>((f.en_prenom||'')+' '+(f.en_nom||'')+' '+(f.fa_nom||'')+' '+(f.numero||'')).toLowerCase().includes(s));
+    el.innerHTML=l.length?l.map(ligneFacture).join(''):'<p class="hint">Aucune facture ne correspond.</p>';
+  }catch(e){el.innerHTML='<div class="warn err"><i class="ti ti-alert-circle"></i><span>'+esc(detail(e))+'</span></div>';}
+}
+
+async function chargerRetard(){
+  const el=document.getElementById('listeRetard');
+  el.innerHTML='<p class="hint">Chargement…</p>';
+  try{
+    const{data,error}=await sb.from('factures').select('*')
+      .eq('creche_id',crecheId).in('statut',['emise','envoyee','partielle'])
+      .lt('date_echeance',auj()).gt('solde',0).order('date_echeance');
+    if(error)throw error;
+    const l=data||[];
+    if(!l.length){el.innerHTML='<div class="warn ok"><i class="ti ti-check"></i><span>Aucune échéance dépassée.</span></div>';return;}
+    const total=l.reduce((s,f)=>s+Number(f.solde||0),0);
+    el.innerHTML='<div class="warn"><i class="ti ti-alert-triangle"></i><span>'+l.length
+      +' facture(s) en retard, '+eur(total)+' restant dû.</span></div>'+l.map(ligneFacture).join('');
+  }catch(e){el.innerHTML='<div class="warn err"><i class="ti ti-alert-circle"></i><span>'+esc(detail(e))+'</span></div>';}
+}
+
+/* ------------------------------------------- PRÉPARATION : QUI FACTURER ? */
+/* Écran de vérification obligatoire avant toute écriture — même principe que
+   la bascule en fiche enfant. On montre ce qui sera créé, ce qui existe déjà,
+   et surtout ce dont on n'est pas sûr : mois incomplet, mensualité absente,
+   contrat résilié en cours de mois. Rien n'est écrit tant que le bouton du
+   bas n'est pas cliqué. */
+async function preparer(){
+  const m=val('fMois');
+  if(!m){toast('Choisir un mois.',true);return;}
+  const box=document.getElementById('prepCorps');
+  box.innerHTML='<p class="hint">Lecture des contrats…</p>';
+  ouvrir('ovPrep');
+  const d1=debutDeMois(m),d2=finDeMois(m);
+  try{
+    const[ct,en,fa]=await Promise.all([
+      sb.from('contrats').select('*').eq('creche_id',crecheId).eq('statut','contresigne'),
+      sb.from('enfants').select('id,prenom,nom,date_sortie').eq('creche_id',crecheId),
+      sb.from('factures').select('id,contrat_id,mois,statut,numero').eq('creche_id',crecheId).eq('mois',m)
+    ]);
+    if(ct.error)throw ct.error;
+    CONTRATS=ct.data||[];ENFANTS=(en&&en.data)||[];
+    const dejaFait={};((fa&&fa.data)||[]).forEach(f=>{if(f.contrat_id&&f.statut!=='annulee')dejaFait[f.contrat_id]=f;});
+
+    const lignes=CONTRATS.map(c=>{
+      const deb=champ(c,C_DEBUT), fin=champ(c,C_FIN);
+      const finEff=c.resilie_fin_preavis||fin;
+      const actif=(!deb||deb<=d2)&&(!finEff||finEff>=d1);
+      const mensu=Number(champ(c,C_MENSU,0));
+      const tarif=Number(champ(c,C_TARIF,0));
+      /* Les heures mensualisées : c'est ce nombre que le réseau déclare à la
+         CAF, et la CAF ne verse le CMG que sur cette base. On le déduit de la
+         mensualité et du tarif horaire — le contrat porte les deux — et il
+         reste modifiable, comme tout le reste de cet écran. */
+      const heures=tarif>0?r2(mensu/tarif):0;
+      const enf=ENFANTS.find(e=>String(e.id)===String(c.enfant_id));
+      const nom=enf?((enf.prenom||'')+' '+(enf.nom||'')).trim():(c.enfant_nom||'contrat '+(c.numero||''));
+      const alertes=[];
+      if(deb&&deb>d1&&deb<=d2)alertes.push('entrée le '+dfr(deb)+' — mois incomplet');
+      if(finEff&&finEff>=d1&&finEff<d2)alertes.push('fin le '+dfr(finEff)+' — mois incomplet'+(c.resilie_fin_preavis?' (fin de préavis)':''));
+      if(!mensu)alertes.push('aucune mensualité lisible sur le contrat — à saisir sur le brouillon');
+      if(!heures)alertes.push('heures mensualisées introuvables (tarif horaire absent du contrat) — à saisir');
+      return {c:c,actif:actif,mensu:mensu,heures:heures,nom:nom,alertes:alertes,deja:dejaFait[c.id]||null};
+    }).filter(x=>x.actif).sort((a,b)=>a.nom.localeCompare(b.nom));
+
+    const aFaire=lignes.filter(x=>!x.deja);
+    let h='';
+    if(!lignes.length){
+      h='<div class="warn"><i class="ti ti-info-circle"></i><span>Aucun contrat contresigné actif sur '
+        +esc(moisLibelle(m))+' pour cette crèche. Un contrat n\'est facturable qu\'une fois contresigné : '
+        +'c\'est la contresignature qui engage la crèche.</span></div>';
+    }else{
+      h+='<p class="hint">'+aFaire.length+' facture(s) à créer sur '+lignes.length+' contrat(s) actifs. '
+        +'Les contrats déjà facturés ce mois-ci sont listés mais ne seront pas touchés.</p>';
+      h+='<table class="lg"><tr><th></th><th>Enfant</th><th class="r">Heures</th><th class="r">Mensualité</th><th>État</th></tr>';
+      lignes.forEach((x,i)=>{
+        const av=x.alertes.length?'<div class="sub" style="color:var(--amber);font-size:11.5px">⚠ '+esc(x.alertes.join(' · '))+'</div>':'';
+        h+='<tr><td>'+(x.deja?'':'<input type="checkbox" class="ckC" value="'+x.c.id+'" checked style="width:auto">')+'</td>'
+          +'<td>'+esc(x.nom)+av+'</td>'
+          +'<td class="r"><input class="hrC" data-c="'+x.c.id+'" value="'+(x.heures?String(x.heures).replace('.',','):'')+'" style="width:80px;text-align:right;font-size:14px;padding:5px 8px"'+(x.deja?' disabled':'')+'></td>'
+          +'<td class="r"><input class="mnC" data-c="'+x.c.id+'" value="'+(x.mensu?String(x.mensu).replace('.',','):'')+'" style="width:110px;text-align:right;font-size:14px;padding:5px 8px"'+(x.deja?' disabled':'')+'></td>'
+          +'<td>'+(x.deja?'<span class="bdg b-em">déjà facturé</span>':'<span class="bdg b-br">à créer</span>')+'</td></tr>';
+      });
+      h+='</table>';
+      h+='<p class="hint">Les <b>heures</b> sont celles qui seront déclarées à la CAF, et celles que la facture portera : '
+        +'sans elles, le CMG de la famille ne peut pas être liquidé.</p>';
+      h+='<div class="warn"><i class="ti ti-info-circle"></i><span>Les factures sont créées <b>en brouillon</b> : '
+        +'rien n\'est numéroté ni envoyé. Un brouillon se corrige et se supprime librement — une facture émise, jamais.</span></div>';
+      h+='<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'
+        +'<button class="btn btn-g" onclick="fermer(\'ovPrep\')">Annuler</button>'
+        +(aFaire.length?'<button class="btn btn-p" id="btnGen" onclick="genererBrouillons()"><i class="ti ti-file-plus"></i> Créer '+aFaire.length+' brouillon(s)</button>':'')
+        +'</div>';
+    }
+    box.innerHTML=h;
+  }catch(e){
+    box.innerHTML='<div class="warn err"><i class="ti ti-alert-circle"></i><span>'+esc(detail(e))+'</span></div>';
+  }
+}
+
+/* Les entêtes recopiés. Une facture émise ne dépend plus de rien : si le
+   SIRET est corrigé demain dans Paramètres, les factures déjà parties gardent
+   celui sous lequel elles ont été émises. */
+function enteteEmetteur(){
+  const e=etabDe(crecheId),c=crecheDe(crecheId);
+  return {
+    em_raison_sociale:e.raison_sociale||null, em_forme_juridique:e.forme_juridique||null,
+    em_siret:e.siret||null, em_code_ape:e.code_ape||null,
+    em_adresse:e.adresse_siege||c.addr||null, em_telephone:e.telephone||null,
+    em_email:e.email||null,
+    em_representant:[e.representant_nom,e.representant_qualite].filter(Boolean).join(' — ')||null,
+    em_creche_nom:c.name||null
+  };
+}
+function enteteFamille(ct){
+  const enf=ENFANTS.find(e=>String(e.id)===String(ct.enfant_id))||{};
+  return {
+    fa_nom:champ(ct,['famille_nom','parent_nom','representant_nom','fa_nom'],null),
+    fa_adresse:champ(ct,['famille_adresse','adresse','fa_adresse'],null),
+    fa_email:champ(ct,['famille_email','email','fa_email'],null),
+    fa_telephone:champ(ct,['famille_telephone','telephone','fa_telephone'],null),
+    fa_num_allocataire:champ(ct,['num_allocataire','numero_allocataire','allocataire'],null),
+    en_prenom:enf.prenom||champ(ct,['enfant_prenom'],null),
+    en_nom:enf.nom||champ(ct,['enfant_nom'],null)
+  };
+}
+
+async function genererBrouillons(){
+  const btn=document.getElementById('btnGen');if(btn)btn.disabled=true;
+  const m=val('fMois'),d1=debutDeMois(m),d2=finDeMois(m);
+  const ech=val('fEcheance')||null;
+  const ids=[...document.querySelectorAll('.ckC:checked')].map(x=>x.value);
+  const mns={};document.querySelectorAll('.mnC').forEach(i=>{mns[i.dataset.c]=nb(i.value);});
+  const hrs={};document.querySelectorAll('.hrC').forEach(i=>{hrs[i.dataset.c]=nb(i.value);});
+  let ok=0,ko=0,dernier=null;
+  for(const id of ids){
+    const ct=CONTRATS.find(c=>String(c.id)===String(id));
+    if(!ct)continue;
+    const mensu=r2(mns[id]||0);
+    const heures=r2(hrs[id]||0);
+    const row=Object.assign({
+      creche_id:crecheId, contrat_id:ct.id, enfant_id:ct.enfant_id||null,
+      type:'mensuelle', statut:'brouillon',
+      mois:m, periode_debut:d1, periode_fin:d2, date_echeance:ech,
+      ct_numero:ct.numero||null,
+      ct_mensualite:mensu||null,
+      ct_heures_hebdo:Number(champ(ct,C_HEURES,0))||null,
+      ct_tarif_horaire:Number(champ(ct,C_TARIF,0))||null,
+      heures_facturees:heures||null,
+      created_by:ME?ME.id:null
+    },enteteEmetteur(),enteteFamille(ct));
+    try{
+      const{data,error}=await sb.from('factures').insert(row).select().single();
+      if(error)throw error;
+      dernier=data.id;
+      if(mensu>0){
+        const{error:el}=await sb.from('factures_lignes').insert({
+          facture_id:data.id, ordre:1, type:'mensualite',
+          libelle:'Accueil régulier — '+moisLibelle(m),
+          quantite:heures||1, prix_unitaire:heures?r2(mensu/heures):mensu, montant:mensu,
+          detail:'Mensualité lissée du contrat '+(ct.numero||'')
+            +(heures?(' — '+String(heures).replace('.',',')+' h mensualisées'):'')});
+        if(el)throw el;
+      }
+      ok++;
+    }catch(e){ko++;console.error('[generer]',e);toast('Échec sur un contrat : '+detail(e),true);}
+  }
+  fermer('ovPrep');
+  await chargerMois();
+  toast(ok+' brouillon(s) créé(s)'+(ko?', '+ko+' échec(s)':'')+'.',ko>0);
+  if(ok===1&&dernier)ouvrirFacture(dernier);
+}
+
+/* --------------------------------------------------------- FICHE FACTURE */
+let FAC=null,LIGNES=[],REGL=[];
+async function ouvrirFacture(id){
+  ouvrir('ovFac');
+  document.getElementById('facCorps').innerHTML='<p class="hint">Chargement…</p>';
+  try{
+    const[f,l,r]=await Promise.all([
+      sb.from('factures').select('*').eq('id',id).single(),
+      sb.from('factures_lignes').select('*').eq('facture_id',id).order('ordre'),
+      sb.from('factures_reglements').select('*').eq('facture_id',id).order('date_reglement')
+    ]);
+    if(f.error)throw f.error;
+    FAC=f.data;LIGNES=(l&&l.data)||[];REGL=(r&&r.data)||[];
+    renderFacture();
+  }catch(e){document.getElementById('facCorps').innerHTML='<div class="warn err"><i class="ti ti-alert-circle"></i><span>'+esc(detail(e))+'</span></div>';}
+}
+function renderFacture(){
+  const f=FAC,brouillon=!f.numero;
+  document.getElementById('facTitre').textContent=f.numero?('Facture '+f.numero):'Brouillon de facture';
+  const qui=[f.en_prenom,f.en_nom].filter(Boolean).join(' ')||f.fa_nom||'—';
+  let h='';
+
+  if(!f.em_siret){
+    h+='<div class="warn err"><i class="ti ti-alert-circle"></i><span><b>SIRET manquant.</b> '
+      +'Une facture doit porter le SIRET de l\'émetteur. Compléter l\'identité juridique de la crèche '
+      +'dans Paramètres, puis recréer ce brouillon — un brouillon déjà créé garde l\'en-tête copié à sa création.</span></div>';
+  }
+
+  h+='<div class="card"><div class="sec"><i class="ti ti-user"></i> '+esc(qui)+'</div>'
+    +'<div class="g2">'
+    +'<div><div class="sub" style="font-size:12px;color:var(--muted)">Période</div><b>'+esc(moisLibelle(f.mois)||(dfr(f.periode_debut)+' → '+dfr(f.periode_fin)))+'</b></div>'
+    +'<div><div class="sub" style="font-size:12px;color:var(--muted)">Échéance</div><b>'+esc(dfr(f.date_echeance)||'—')+'</b></div>'
+    +'<div><div class="sub" style="font-size:12px;color:var(--muted)">Émetteur</div><b>'+esc(f.em_raison_sociale||'—')+'</b><div class="sub">'+esc(f.em_siret||'')+'</div></div>'
+    +'<div><div class="sub" style="font-size:12px;color:var(--muted)">Statut</div>'+badge(f)+'</div>'
+    +'<div><div class="sub" style="font-size:12px;color:var(--muted)">Heures facturées (déclaration CAF)</div><b>'
+      +(f.heures_facturees?String(f.heures_facturees).replace('.',',')+' h':'—')+'</b></div>'
+    +'<div><div class="sub" style="font-size:12px;color:var(--muted)">N° allocataire</div><b>'+esc(f.fa_num_allocataire||'—')+'</b></div>'
+    +'</div></div>';
+  if(!f.fa_num_allocataire||!f.heures_facturees){
+    h+='<div class="warn"><i class="ti ti-info-circle"></i><span>La CAF ne liquide le CMG que sur une facture <b>acquittée</b>, '
+      +'portant le <b>numéro d\'allocataire</b> et les <b>heures facturées</b>. Il en manque ici — la famille risque de ne pas être payée.</span></div>';
+  }
+
+  /* Les lignes */
+  h+='<div class="card"><div class="sec"><i class="ti ti-list"></i> Le détail</div><table class="lg">'
+    +'<tr><th>Libellé</th><th class="r">Qté</th><th class="r">P.U.</th><th class="r">Montant</th><th></th></tr>';
+  LIGNES.forEach(l=>{
+    h+='<tr><td><b>'+esc(l.libelle)+'</b>'+(l.detail?'<div class="sub">'+esc(l.detail)+'</div>':'')+'</td>'
+      +'<td class="r">'+(l.quantite!=null?String(l.quantite).replace('.',','):'')+'</td>'
+      +'<td class="r">'+(l.prix_unitaire!=null?eur(l.prix_unitaire):'')+'</td>'
+      +'<td class="r"><b>'+eur(l.montant)+'</b></td>'
+      +'<td class="r">'+(brouillon?'<button class="btn btn-d btn-sm" onclick="supprLigne(\''+l.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</td></tr>';
+  });
+  h+='</table>';
+  if(!LIGNES.length)h+='<p class="hint">Aucune ligne. Une facture sans ligne ne peut pas être émise.</p>';
+  h+='<div class="tot"><span>Total</span><span>'+eur(f.total)+'</span></div>';
+  if(Number(f.total_regle||0)!==0){
+    h+='<div class="tot" style="color:var(--green)"><span>Réglé</span><span>'+eur(f.total_regle)+'</span></div>'
+      +'<div class="tot" style="color:'+(Number(f.solde)>0?'var(--red)':'var(--muted)')+'"><span>Solde</span><span>'+eur(f.solde)+'</span></div>';
+  }
+  h+='</div>';
+
+  /* Ajout de ligne — brouillon seulement */
+  if(brouillon){
+    h+='<div class="card"><div class="sec"><i class="ti ti-plus"></i> Ajouter une ligne</div>'
+      +'<div class="g4">'
+      +'<div class="f"><label class="lb">Libellé</label><input id="nlLib" placeholder="Heures supplémentaires, déduction maladie…"></div>'
+      +'<div class="f"><label class="lb">Nature</label><select id="nlType">'
+      +'<option value="supplement">Supplément</option>'
+      +'<option value="deduction">Déduction (montant négatif)</option>'
+      +'<option value="repas">Repas / entretien</option>'
+      +'<option value="adaptation">Adaptation</option>'
+      +'<option value="cotisation">Cotisation annuelle</option>'
+      +'<option value="frais">Frais</option>'
+      +'<option value="regularisation">Régularisation</option>'
+      +'</select></div>'
+      +'<div class="f"><label class="lb">Quantité</label><input id="nlQte" inputmode="decimal" placeholder="1"></div>'
+      +'<div class="f"><label class="lb">Prix unitaire</label><input id="nlPu" inputmode="decimal" placeholder="0,00"></div>'
+      +'</div>'
+      +'<p class="hint">Une déduction se saisit avec un montant positif : elle est portée en négatif automatiquement. '
+      +'Rappel de la convention : la maladie n\'ouvre déduction qu\'à partir de trois jours consécutifs, sur certificat remis sous 48 h, '
+      +'et jamais pendant le préavis.</p>'
+      +'<div style="display:flex;justify-content:flex-end"><button class="btn btn-s" onclick="ajouterLigne()"><i class="ti ti-plus"></i> Ajouter</button></div></div>';
+  }
+
+  /* Règlements */
+  h+='<div class="card"><div class="sec"><i class="ti ti-cash"></i> Les règlements</div>';
+  if(REGL.length){
+    h+='<table class="lg"><tr><th>Date</th><th>Mode</th><th>Référence</th><th class="r">Montant</th><th></th></tr>';
+    REGL.forEach(r=>{h+='<tr><td>'+esc(dfr(r.date_reglement))+'</td><td>'+esc(r.mode)+'</td><td>'+esc(r.reference||'')+'</td>'
+      +'<td class="r"><b>'+eur(r.montant)+'</b></td>'
+      +'<td class="r"><button class="btn btn-d btn-sm" onclick="supprReglement(\''+r.id+'\')"><i class="ti ti-trash"></i></button></td></tr>';});
+    h+='</table>';
+  }else h+='<p class="hint">Aucun règlement enregistré.</p>';
+  if(f.numero&&f.statut!=='annulee'){
+    h+='<div class="g4" style="margin-top:10px">'
+      +'<div class="f"><label class="lb">Date</label><input id="rgDate" type="date" value="'+auj()+'"></div>'
+      +'<div class="f"><label class="lb">Mode</label><select id="rgMode">'
+      +'<option value="prelevement">Prélèvement</option><option value="virement">Virement</option>'
+      +'<option value="cheque">Chèque</option><option value="cesu">CESU préfinancé</option>'
+      +'<option value="especes">Espèces</option><option value="compensation">Compensation</option></select></div>'
+      +'<div class="f"><label class="lb">Référence</label><input id="rgRef"></div>'
+      +'<div class="f"><label class="lb">Montant</label><input id="rgMt" inputmode="decimal" value="'+String(r2(f.solde)).replace('.',',')+'"></div>'
+      +'</div><div style="display:flex;justify-content:flex-end"><button class="btn btn-v" onclick="ajouterReglement()"><i class="ti ti-check"></i> Enregistrer l\'encaissement</button></div>';
+  }
+  h+='</div>';
+
+  /* Commentaire et notes */
+  h+='<div class="card"><div class="sec"><i class="ti ti-note"></i> Commentaires</div>'
+    +'<div class="f"><label class="lb">Mot porté sur la facture</label><textarea id="fCom">'+esc(f.commentaire||'')+'</textarea></div>'
+    +'<div class="f"><label class="lb">Notes internes (jamais imprimées)</label><textarea id="fNot">'+esc(f.notes_internes||'')+'</textarea></div>'
+    +'<div style="display:flex;justify-content:flex-end"><button class="btn btn-g btn-sm" onclick="sauverNotes()"><i class="ti ti-device-floppy"></i> Enregistrer</button></div></div>';
+
+  /* Actions */
+  h+='<div class="card"><div class="sec"><i class="ti ti-settings"></i> Actions</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
+  if(brouillon){
+    h+='<button class="btn btn-p" onclick="emettre()"><i class="ti ti-stamp"></i> Émettre et numéroter</button>'
+      +'<button class="btn btn-d" onclick="supprimerFacture()"><i class="ti ti-trash"></i> Supprimer le brouillon</button>';
+  }else{
+    h+='<button class="btn btn-s" onclick="pdf()"><i class="ti ti-file-type-pdf"></i> PDF</button>';
+    if(f.statut!=='annulee'){
+      h+='<button class="btn btn-g" onclick="marquerEnvoyee()"><i class="ti ti-send"></i> Marquer envoyée</button>'
+        +'<button class="btn btn-g" onclick="relancer()"><i class="ti ti-bell"></i> Relance ('+(f.relances||0)+')</button>'
+        +'<button class="btn btn-d" onclick="creerAvoir()"><i class="ti ti-file-minus"></i> Annuler par un avoir</button>';
+      if(Number(f.solde||0)>0&&f.date_echeance&&f.date_echeance<auj())
+        h+='<button class="btn btn-d" onclick="facturerFraisImpaye()"><i class="ti ti-alert-triangle"></i> Facturer les 40 € de frais d\'impayé</button>';
+    }
+  }
+  if(f.contrat_id)h+='<button class="btn btn-s" onclick="ouvrirSolde(\''+f.contrat_id+'\')"><i class="ti ti-flag-check"></i> Décompte de fin de contrat</button>';
+  h+='</div>';
+  if(!brouillon)h+='<p class="hint">Une facture émise ne se modifie plus — la base le refuse. Une erreur se corrige par un avoir, puis une nouvelle facture.</p>';
+  h+='</div>';
+
+  document.getElementById('facCorps').innerHTML=h;
+}
+
+async function ajouterLigne(){
+  const lib=val('nlLib');if(!lib){toast('Un libellé est nécessaire.',true);return;}
+  const t=val('nlType');
+  const q=val('nlQte')?nb(val('nlQte')):1;
+  const pu=nb(val('nlPu'));
+  let mt=r2(q*pu);
+  if(t==='deduction'&&mt>0)mt=-mt;
+  try{
+    const{error}=await sb.from('factures_lignes').insert({
+      facture_id:FAC.id, ordre:(LIGNES.length+1), type:t, libelle:lib,
+      quantite:q, prix_unitaire:t==='deduction'?-Math.abs(pu):pu, montant:mt});
+    if(error)throw error;
+    await ouvrirFacture(FAC.id);
+    if(TAB==='mois')chargerMois();
+  }catch(e){toast('Ajout impossible : '+detail(e),true);}
+}
+async function supprLigne(id){
+  if(!confirm('Supprimer cette ligne ?'))return;
+  try{
+    const{error}=await sb.from('factures_lignes').delete().eq('id',id);
+    if(error)throw error;
+    await ouvrirFacture(FAC.id);
+  }catch(e){toast('Suppression impossible : '+detail(e),true);}
+}
+async function sauverNotes(){
+  try{
+    const{error}=await sb.from('factures').update({commentaire:val('fCom'),notes_internes:val('fNot'),updated_at:new Date().toISOString()}).eq('id',FAC.id);
+    if(error)throw error;
+    toast('Enregistré ✅');
+  }catch(e){toast('Enregistrement impossible : '+detail(e),true);}
+}
+async function ajouterReglement(){
+  const mt=nb(val('rgMt'));
+  if(!mt){toast('Montant à zéro : rien à enregistrer.',true);return;}
+  try{
+    const{error}=await sb.from('factures_reglements').insert({
+      facture_id:FAC.id, date_reglement:val('rgDate')||auj(),
+      montant:r2(mt), mode:val('rgMode'), reference:val('rgRef')||null, created_by:ME?ME.id:null});
+    if(error)throw error;
+    await ouvrirFacture(FAC.id);refresh();
+    toast('Encaissement enregistré ✅');
+  }catch(e){toast('Enregistrement impossible : '+detail(e),true);}
+}
+async function supprReglement(id){
+  if(!confirm('Supprimer cet encaissement ?'))return;
+  try{
+    const{error}=await sb.from('factures_reglements').delete().eq('id',id);
+    if(error)throw error;
+    await ouvrirFacture(FAC.id);refresh();
+  }catch(e){toast('Suppression impossible : '+detail(e),true);}
+}
+
+/* L'émission consomme un numéro de la suite légale : c'est irréversible, et
+   c'est pour cela qu'elle demande confirmation. Le numéro est posé par la
+   base (attribuer_numero_facture), jamais calculé ici : deux tablettes qui
+   émettent en même temps poseraient sinon le même numéro. */
+async function emettre(){
+  if(!LIGNES.length){toast('Facture sans ligne : rien à émettre.',true);return;}
+  if(!FAC.em_siret){toast('SIRET de l\'émetteur manquant : la facture serait irrégulière.',true);return;}
+  if(!confirm('Émettre cette facture ?\n\nElle recevra un numéro définitif dans la suite légale et ne sera plus modifiable.'))return;
+  try{
+    const em=val('fEmission')||auj();
+    const{error:e1}=await sb.from('factures').update({date_emission:em}).eq('id',FAC.id).is('numero',null);
+    if(e1)throw e1;
+    const{data,error}=await sb.rpc('attribuer_numero_facture',{p_facture:FAC.id});
+    if(error)throw error;
+    await ouvrirFacture(FAC.id);refresh();
+    toast('Facture '+data+' émise ✅');
+  }catch(e){toast('Émission impossible : '+detail(e),true);}
+}
+async function supprimerFacture(){
+  if(!confirm('Supprimer ce brouillon ? Il n\'a pas de numéro : rien ne restera.'))return;
+  try{
+    const{error}=await sb.from('factures').delete().eq('id',FAC.id).is('numero',null);
+    if(error)throw error;
+    fermer('ovFac');refresh();toast('Brouillon supprimé.');
+  }catch(e){toast('Suppression impossible : '+detail(e),true);}
+}
+async function marquerEnvoyee(){
+  try{
+    const{error}=await sb.from('factures').update({envoye_le:new Date().toISOString(),
+      envoye_a:FAC.fa_email||null,statut:FAC.statut==='emise'?'envoyee':FAC.statut}).eq('id',FAC.id);
+    if(error)throw error;
+    await ouvrirFacture(FAC.id);refresh();toast('Marquée envoyée.');
+  }catch(e){toast('Impossible : '+detail(e),true);}
+}
+async function relancer(){
+  try{
+    const{error}=await sb.from('factures').update({relance_le:new Date().toISOString(),
+      relances:(FAC.relances||0)+1}).eq('id',FAC.id);
+    if(error)throw error;
+    await ouvrirFacture(FAC.id);toast('Relance notée.');
+  }catch(e){toast('Impossible : '+detail(e),true);}
+}
+
+/* L'avoir : la seule façon d'annuler une facture émise. Il reprend les lignes
+   en négatif, porte son propre numéro dans la même suite, et référence la
+   facture qu'il corrige. La facture d'origine passe en « annulée » mais garde
+   son numéro : un numéro qui disparaîtrait ferait un trou dans la suite. */
+async function creerAvoir(){
+  const motif=prompt('Motif de l\'avoir (il figure sur le document) :','Erreur de facturation');
+  if(motif===null)return;
+  try{
+    const row=Object.assign({},FAC);
+    ['id','numero','serie','date_emission','statut','total','total_regle','solde',
+     'envoye_le','envoye_a','relance_le','relances','annule_le','annule_motif',
+     'created_at','updated_at'].forEach(k=>delete row[k]);
+    row.type='avoir';row.statut='brouillon';
+    row.avoir_de_facture_id=FAC.id;
+    row.commentaire='Avoir sur la facture '+FAC.numero+' — '+motif;
+    row.created_by=ME?ME.id:null;
+    const{data,error}=await sb.from('factures').insert(row).select().single();
+    if(error)throw error;
+    const lg=LIGNES.map((l,i)=>({facture_id:data.id,ordre:i+1,type:'avoir',
+      libelle:'Annulation — '+l.libelle,quantite:l.quantite,
+      prix_unitaire:l.prix_unitaire!=null?-Number(l.prix_unitaire):null,
+      montant:-Number(l.montant||0),detail:'Avoir sur '+FAC.numero}));
+    if(lg.length){const{error:e2}=await sb.from('factures_lignes').insert(lg);if(e2)throw e2;}
+    const{error:e3}=await sb.from('factures').update({statut:'annulee',
+      annule_le:new Date().toISOString(),annule_motif:motif}).eq('id',FAC.id);
+    if(e3)throw e3;
+    await ouvrirFacture(data.id);refresh();
+    toast('Avoir créé en brouillon — il reste à émettre.');
+  }catch(e){toast('Avoir impossible : '+detail(e),true);}
+}
+
+/* Les 40 € de frais d'impayé (art. 12) ne peuvent pas s'ajouter à la facture
+   impayée : elle est émise, donc figée. Ils font l'objet d'une facture à
+   part, ce qui est aussi ce qui se pratique. */
+async function facturerFraisImpaye(){
+  const mt=Number(RCFG.frais_dossier_impaye||40);
+  if(!confirm('Créer une facture de '+eur(mt)+' au titre des frais d\'ouverture de dossier d\'impayé ?'))return;
+  try{
+    const row=Object.assign({
+      creche_id:FAC.creche_id, contrat_id:FAC.contrat_id, enfant_id:FAC.enfant_id,
+      type:'ponctuelle', statut:'brouillon', mois:FAC.mois,
+      periode_debut:FAC.periode_debut, periode_fin:FAC.periode_fin,
+      date_echeance:plusMois(auj(),1), created_by:ME?ME.id:null,
+      commentaire:'Frais d\'ouverture de dossier d\'impayé — facture '+FAC.numero
+    },enteteEmetteur(),{
+      fa_nom:FAC.fa_nom,fa_adresse:FAC.fa_adresse,fa_email:FAC.fa_email,
+      fa_telephone:FAC.fa_telephone,en_prenom:FAC.en_prenom,en_nom:FAC.en_nom});
+    const{data,error}=await sb.from('factures').insert(row).select().single();
+    if(error)throw error;
+    const{error:e2}=await sb.from('factures_lignes').insert({facture_id:data.id,ordre:1,type:'frais',
+      libelle:'Frais d\'ouverture de dossier d\'impayé',quantite:1,prix_unitaire:mt,montant:mt,
+      detail:'Article 12 des conditions générales — facture '+FAC.numero});
+    if(e2)throw e2;
+    await ouvrirFacture(data.id);refresh();
+  }catch(e){toast('Impossible : '+detail(e),true);}
+}
+
+/* ------------------------------------------ DÉCOMPTE DE FIN DE CONTRAT */
+/* La méthode est celle du document remis aux familles, « La facturation avec
+   Koala Kids » : la régularisation se calcule EN HEURES, pas en euros.
+
+     heures réalisées − heures mensualisées payées = écart, valorisé au tarif
+
+   Et « réalisées » y est défini sans ambiguïté : « le nombre d'heures réalisé
+   TEL QUE LE PLANNING DE VOTRE CONTRAT LE STIPULE ». C'est donc le planning
+   contractuel qui fait foi, pas le relevé de présences — ce qui tranche la
+   question 1 bis restée ouverte dans CONTRAT-FIN-FACTURATION.md, et rend le
+   calcul entièrement faisable par l'application.
+
+   Les heures mensualisées, elles, sont celles déjà facturées mois par mois :
+   on les additionne depuis les factures émises, pas depuis une formule.
+   Les deux nombres restent modifiables — une reprise à la main doit rester
+   possible — mais ils ne sont plus des estimations. */
+let SOLDE_CT=null;
+async function ouvrirSolde(contratId){
+  ouvrir('ovSolde');
+  const box=document.getElementById('soldeCorps');
+  box.innerHTML='<p class="hint">Lecture du contrat…</p>';
+  try{
+    const[ct,fs]=await Promise.all([
+      sb.from('contrats').select('*').eq('id',contratId).single(),
+      sb.from('factures').select('id,numero,mois,total,statut,type,heures_facturees').eq('contrat_id',contratId).neq('statut','annulee').order('mois')
+    ]);
+    if(ct.error)throw ct.error;
+    SOLDE_CT=ct.data;
+    const fac=(fs&&fs.data)||[];
+    const deja=fac.reduce((s,f)=>s+Number(f.total||0),0);
+    const hPayees=r2(fac.reduce((s,f)=>s+Number(f.heures_facturees||0),0));
+    const deb=champ(SOLDE_CT,C_DEBUT),fin=SOLDE_CT.resilie_fin_preavis||champ(SOLDE_CT,C_FIN);
+    const tarif=Number(champ(SOLDE_CT,C_TARIF,0));
+    const hHebdo=Number(champ(SOLDE_CT,C_HEURES,0));
+    /* Les heures réalisées au sens du contrat : le planning hebdomadaire
+       appliqué aux semaines effectivement courues jusqu'à la sortie. */
+    const semaines=(deb&&fin)?((new Date(fin+'T00:00:00')-new Date(deb+'T00:00:00'))/(7*86400000)):0;
+    const hEstim=r2(Math.max(0,semaines)*hHebdo);
+
+    let h='';
+    h+='<div class="warn"><i class="ti ti-info-circle"></i><span>Méthode du document remis aux familles : '
+      +'<b>heures réalisées − heures mensualisées payées</b>, l\'écart valorisé au tarif horaire et porté sur la dernière facture. '
+      +'« Ce n\'est en aucun cas une pénalité » : c\'est le départ avec un compteur d\'heures à zéro. '
+      +'Les heures réalisées s\'entendent <b>telles que le planning du contrat les stipule</b> — c\'est le contrat qui fait foi, '
+      +'pas le relevé de présences.</span></div>';
+    h+='<div class="card"><div class="sec"><i class="ti ti-file-certificate"></i> Le contrat</div>'
+      +'<table class="lg">'
+      +'<tr><td>Période</td><td class="r"><b>'+esc(dfr(deb))+' → '+esc(dfr(fin)||'sans terme')+'</b></td></tr>'
+      +(SOLDE_CT.resilie_le?'<tr><td>Résilié le</td><td class="r"><b>'+esc(dfr(SOLDE_CT.resilie_le))+'</b>'
+        +(SOLDE_CT.resilie_fin_preavis?' · fin de préavis le '+esc(dfr(SOLDE_CT.resilie_fin_preavis)):'')+'</td></tr>':'')
+      +'<tr><td>Tarif horaire du contrat</td><td class="r"><b>'+eur(tarif)+'</b></td></tr>'
+      +'<tr><td>Heures hebdomadaires</td><td class="r"><b>'+String(hHebdo).replace('.',',')+' h</b></td></tr>'
+      +'<tr><td>Factures déjà émises ('+fac.length+')</td><td class="r"><b>'+eur(deja)+'</b></td></tr>'
+      +'<tr><td>Heures déjà facturées (mensualisées)</td><td class="r"><b>'+String(hPayees).replace('.',',')+' h</b></td></tr>'
+      +'</table></div>';
+    h+='<div class="card"><div class="sec"><i class="ti ti-calculator"></i> Le décompte, en heures</div>'
+      +'<div class="g2">'
+      +'<div class="f"><label class="lb">Heures réalisées (planning du contrat)</label><input id="sdHreel" inputmode="decimal" value="'+String(hEstim).replace('.',',')+'"></div>'
+      +'<div class="f"><label class="lb">Heures mensualisées déjà payées</label><input id="sdHpaye" inputmode="decimal" value="'+String(hPayees).replace('.',',')+'"></div>'
+      +'<div class="f"><label class="lb">Tarif horaire</label><input id="sdTarif" inputmode="decimal" value="'+String(tarif).replace('.',',')+'"></div>'
+      +'<div class="f"><label class="lb">Régularisation</label><input id="sdEcart" readonly style="background:#F7F5FB;font-weight:800"></div>'
+      +'</div>'
+      +'<p class="hint" id="sdDetail"></p>'
+      +'<p class="hint">Les heures réalisées sont calculées ici comme <b>heures hebdomadaires du contrat × semaines courues</b> '
+      +'jusqu\'à la date de sortie : c\'est le planning contractuel, celui que le document famille retient. Ce calcul ne déduit pas '
+      +'les semaines de fermeture tombées dans la période — l\'application ne connaît pas leurs dates. <b>Vérifier ce nombre '
+      +'avant de valider</b>, il commande tout le décompte. '
+      +'Les heures déjà payées sont additionnées depuis les factures émises du contrat : elles ne valent que si chaque facture '
+      +'porte bien ses heures.</p>'
+      +'<div class="f"><label class="lb">Ce qui s\'ajoute encore (préavis dû, semaine entamée, frais)</label><input id="sdSup" inputmode="decimal" value="0"></div>'
+      +'<p class="hint">Rappel : le préavis de deux mois est dû dans tous les cas, même si l\'enfant ne vient plus, et aucun certificat '
+      +'médical n\'ouvre droit à déduction pendant cette période (art. 8). Le départ en cours de semaine entraîne la facturation de la semaine entière. '
+      +'Le dépôt de garantie se restitue par virement APRÈS cette dernière facture : il ne se déduit pas ici.</p>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'
+      +'<button class="btn btn-g" onclick="fermer(\'ovSolde\')">Annuler</button>'
+      +'<button class="btn btn-p" onclick="creerSolde()"><i class="ti ti-file-plus"></i> Créer la facture de solde</button>'
+      +'</div></div>';
+    box.innerHTML=h;
+    ['sdHreel','sdHpaye','sdTarif','sdSup'].forEach(id=>document.getElementById(id).addEventListener('input',calcSolde));
+    calcSolde();
+  }catch(e){box.innerHTML='<div class="warn err"><i class="ti ti-alert-circle"></i><span>'+esc(detail(e))+'</span></div>';}
+}
+function ecartHeures(){return r2(nb(val('sdHreel'))-nb(val('sdHpaye')));}
+function calcSolde(){
+  const dh=ecartHeures();
+  const e=r2(dh*nb(val('sdTarif')));
+  setVal('sdEcart',String(e).replace('.',',')+' €');
+  const el=document.getElementById('sdEcart');
+  if(el)el.style.color=e<0?'var(--green)':'var(--red)';
+  const d=document.getElementById('sdDetail');
+  if(d)d.innerHTML=val('sdHreel')+' h réalisées − '+val('sdHpaye')+' h mensualisées = <b>'
+    +String(dh).replace('.',',')+' h</b> × '+val('sdTarif')+' € = <b>'+esc(eur(e))+'</b>'
+    +(dh>0?' à facturer.':(dh<0?' à restituer à la famille.':' — compteur déjà à zéro.'));
+}
+async function creerSolde(){
+  const dh=ecartHeures();
+  const ecart=r2(dh*nb(val('sdTarif')));
+  const sup=r2(nb(val('sdSup')));
+  const total=r2(ecart+sup);
+  if(!confirm('Créer la facture de solde de tout compte ?\n\nRégularisation : '+eur(ecart)
+    +(sup?'\nCompléments : '+eur(sup):'')+'\nTotal : '+eur(total)
+    +'\n\nElle sera créée EN BROUILLON : rien n\'est numéroté ni envoyé.'))return;
+  try{
+    const fin=SOLDE_CT.resilie_fin_preavis||champ(SOLDE_CT,C_FIN)||auj();
+    const mois=String(fin).slice(0,7);
+    const row=Object.assign({
+      creche_id:SOLDE_CT.creche_id, contrat_id:SOLDE_CT.id, enfant_id:SOLDE_CT.enfant_id||null,
+      type:'solde_tout_compte', statut:'brouillon',
+      mois:mois, periode_debut:champ(SOLDE_CT,C_DEBUT), periode_fin:fin,
+      date_echeance:plusMois(auj(),1),
+      ct_numero:SOLDE_CT.numero||null,
+      ct_tarif_horaire:nb(val('sdTarif'))||null,
+      heures_facturees:dh>0?dh:null,
+      commentaire:'Décompte de fin de contrat — régularisation entre les heures réellement réalisées '
+        +'et les heures mensualisées payées (article 8 de la convention d\'accueil). '
+        +'Le dépôt de garantie est restitué par virement après règlement de cette facture.',
+      created_by:ME?ME.id:null
+    },enteteEmetteur(),enteteFamille(SOLDE_CT));
+    const{data,error}=await sb.from('factures').insert(row).select().single();
+    if(error)throw error;
+    const lg=[];
+    if(ecart!==0)lg.push({facture_id:data.id,ordre:1,type:'regularisation',
+      libelle:ecart>0?'Régularisation d\'heures — complément dû':'Régularisation d\'heures — trop-perçu restitué',
+      quantite:dh,prix_unitaire:nb(val('sdTarif')),montant:ecart,
+      detail:val('sdHreel')+' h réalisées − '+val('sdHpaye')+' h mensualisées = '
+        +String(dh).replace('.',',')+' h, au tarif de '+val('sdTarif')+' €'});
+    if(sup!==0)lg.push({facture_id:data.id,ordre:2,type:'supplement',
+      libelle:'Compléments de fin de contrat (préavis, semaine entamée, frais)',montant:sup});
+    if(lg.length){const{error:e2}=await sb.from('factures_lignes').insert(lg);if(e2)throw e2;}
+    fermer('ovSolde');
+    await ouvrirFacture(data.id);refresh();
+    toast('Facture de solde créée en brouillon.');
+  }catch(e){toast('Impossible : '+detail(e),true);}
+}
+
+/* ------------------------------------------------------------------- PDF */
+/* Texte natif jsPDF, jamais html2canvas : une facture doit rester lisible,
+   sélectionnable et légère. jsPDF est chargé au premier clic seulement. */
+let JSPDF_OK=false;
+function chargerJsPDF(){
+  if(JSPDF_OK)return Promise.resolve();
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+    s.onload=()=>{JSPDF_OK=true;res();};
+    s.onerror=()=>rej(new Error('jsPDF n\'a pas pu être chargé (connexion ?).'));
+    document.head.appendChild(s);
+  });
+}
+async function pdf(){
+  try{await chargerJsPDF();}catch(e){toast(e.message,true);return;}
+  const f=FAC;
+  const {jsPDF}=window.jspdf;
+  const d=new jsPDF({unit:'mm',format:'a4'});
+  const L=18,R=192;let y=20;
+  const txt=(s,x,yy,o)=>{d.text(String(s==null?'':s),x,yy,o);};
+  const ligne=()=>{d.setDrawColor(230,226,240);d.line(L,y,R,y);y+=5;};
+  const saut=(besoin)=>{if(y+besoin>282){d.addPage();y=20;}};
+
+  /* En-tête : l'émetteur. Sans raison sociale ni SIRET, on laisse le blanc
+     apparent plutôt que d'inventer — c'est la règle de tous les documents. */
+  d.setFont('helvetica','bold');d.setFontSize(15);d.setTextColor(74,63,159);
+  txt(f.em_raison_sociale||f.em_creche_nom||'',L,y);y+=6;
+  d.setFont('helvetica','normal');d.setFontSize(9);d.setTextColor(90,86,110);
+  [f.em_forme_juridique,f.em_adresse,
+   f.em_siret?('SIRET '+f.em_siret+(f.em_code_ape?' — APE '+f.em_code_ape:'')):null,
+   [f.em_telephone,f.em_email].filter(Boolean).join(' — ')||null,
+   f.em_creche_nom?('Établissement : '+f.em_creche_nom):null
+  ].filter(Boolean).forEach(s=>{txt(s,L,y);y+=4.2;});
+
+  /* Le titre et le numéro, à droite */
+  let yt=20;
+  d.setFont('helvetica','bold');d.setFontSize(17);d.setTextColor(244,121,32);
+  const titre=f.type==='avoir'?'AVOIR':'FACTURE';
+  txt(titre,R,yt,{align:'right'});yt+=7;
+  d.setFontSize(11);d.setTextColor(43,39,64);
+  txt(f.numero||'BROUILLON — SANS VALEUR',R,yt,{align:'right'});yt+=5;
+  d.setFont('helvetica','normal');d.setFontSize(9);d.setTextColor(90,86,110);
+  if(f.date_emission){txt('Émise le '+dfr(f.date_emission),R,yt,{align:'right'});yt+=4.2;}
+  if(f.date_echeance){txt('Échéance le '+dfr(f.date_echeance),R,yt,{align:'right'});yt+=4.2;}
+  y=Math.max(y,yt)+6;
+
+  /* Le destinataire */
+  d.setFont('helvetica','bold');d.setFontSize(10);d.setTextColor(43,39,64);
+  txt('Facturé à',L,y);y+=5;
+  d.setFont('helvetica','normal');d.setFontSize(10);
+  [f.fa_nom,f.fa_adresse,f.fa_email].filter(Boolean).forEach(s=>{txt(s,L,y);y+=4.6;});
+  const enf=[f.en_prenom,f.en_nom].filter(Boolean).join(' ');
+  if(enf){d.setTextColor(90,86,110);txt('Pour l\'accueil de '+enf,L,y);y+=4.6;}
+  if(f.fa_num_allocataire){txt('N° allocataire : '+f.fa_num_allocataire,L,y);y+=4.6;}
+  y+=3;
+  d.setTextColor(43,39,64);
+  d.setFont('helvetica','bold');
+  txt('Période : '+(moisLibelle(f.mois)||(dfr(f.periode_debut)+' au '+dfr(f.periode_fin))),L,y);y+=5;
+  /* Les heures facturées, en clair sur le document : c'est la pièce que la
+     famille transmet à la CAF, et le CMG se liquide dessus. */
+  if(f.heures_facturees){
+    txt('Heures facturées : '+String(f.heures_facturees).replace('.',',')+' h',L,y);y+=5;
+  }
+  y+=2;
+
+  /* Les lignes */
+  d.setFillColor(238,236,250);d.rect(L,y-4.5,R-L,7,'F');
+  d.setFontSize(9);d.setTextColor(74,63,159);
+  txt('Désignation',L+2,y);txt('Qté',R-62,y,{align:'right'});
+  txt('P.U.',R-34,y,{align:'right'});txt('Montant',R-2,y,{align:'right'});
+  y+=7;
+  d.setFont('helvetica','normal');d.setTextColor(43,39,64);d.setFontSize(9.5);
+  LIGNES.forEach(l=>{
+    saut(12);
+    const lib=d.splitTextToSize(String(l.libelle||''),R-L-70);
+    txt(lib,L+2,y);
+    if(l.quantite!=null)txt(String(l.quantite).replace('.',','),R-62,y,{align:'right'});
+    if(l.prix_unitaire!=null)txt(eur(l.prix_unitaire),R-34,y,{align:'right'});
+    d.setFont('helvetica','bold');txt(eur(l.montant),R-2,y,{align:'right'});d.setFont('helvetica','normal');
+    y+=4.6*lib.length;
+    if(l.detail){
+      d.setFontSize(8);d.setTextColor(140,136,160);
+      const det=d.splitTextToSize(String(l.detail),R-L-70);
+      txt(det,L+2,y);y+=3.6*det.length;
+      d.setFontSize(9.5);d.setTextColor(43,39,64);
+    }
+    y+=1.5;ligne();
+  });
+
+  /* Les totaux */
+  saut(30);y+=2;
+  d.setFont('helvetica','bold');d.setFontSize(12);
+  txt('Total à payer',R-42,y,{align:'right'});txt(eur(f.total),R-2,y,{align:'right'});y+=6;
+  d.setFont('helvetica','normal');d.setFontSize(9.5);d.setTextColor(90,86,110);
+  if(Number(f.total_regle||0)!==0){
+    txt('Déjà réglé',R-42,y,{align:'right'});txt(eur(f.total_regle),R-2,y,{align:'right'});y+=5;
+    d.setFont('helvetica','bold');d.setTextColor(43,39,64);
+    txt('Reste dû',R-42,y,{align:'right'});txt(eur(f.solde),R-2,y,{align:'right'});y+=6;
+    d.setFont('helvetica','normal');d.setTextColor(90,86,110);
+  }
+  /* « Acquittée » : la CAF ne liquide le CMG que sur une facture acquittée.
+     La mention n'apparaît que si le solde est réellement soldé — elle porte
+     la date du dernier encaissement, pas celle du jour. */
+  if(Number(f.total||0)!==0&&Number(f.solde||0)<=0&&REGL.length){
+    const der=REGL.map(r=>r.date_reglement).sort().pop();
+    d.setFont('helvetica','bold');d.setTextColor(46,158,107);d.setFontSize(10);
+    txt('Facture acquittée le '+dfr(der),L,y);
+    d.setFont('helvetica','normal');d.setTextColor(90,86,110);d.setFontSize(9.5);y+=6;
+  }
+  y+=2;
+  if(f.commentaire){
+    saut(20);d.setFontSize(9);
+    const c=d.splitTextToSize(String(f.commentaire),R-L);txt(c,L,y);y+=4*c.length+3;
+  }
+
+  /* Mentions légales — exonération de TVA en tête, c'est la mention qui ne
+     peut pas manquer sur une facture de micro-crèche. */
+  const mentions=[RCFG.facture_mentions,RCFG.facture_deductions,
+    RCFG.modes_reglement?('Modes de règlement acceptés : '+RCFG.modes_reglement+'.'):null,
+    RCFG.pied_page].filter(Boolean);
+  if(mentions.length){
+    saut(30);
+    d.setDrawColor(230,226,240);d.line(L,y,R,y);y+=5;
+    d.setFontSize(7.6);d.setTextColor(120,116,140);
+    mentions.forEach(m=>{
+      const t=d.splitTextToSize(String(m),R-L);
+      t.forEach(li=>{saut(6);txt(li,L,y);y+=3.1;});
+      y+=2;
+    });
+  }
+  if(!f.numero){
+    d.setTextColor(198,40,40);d.setFontSize(30);d.setFont('helvetica','bold');
+    d.text('BROUILLON',105,160,{align:'center',angle:35});
+  }
+  const nom=(f.numero||'brouillon')+' '+enf+'.pdf';
+  d.save(nom.replace(/[\\/:*?"<>|]/g,'-'));
+}
+
+boot().catch(e=>{showLogin('Démarrage impossible — réessayez.');});
+</script>
+</body>
+</html>
