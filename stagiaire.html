@@ -302,6 +302,34 @@ function htmlRessource(r,i){
     +'</div>';
 }
 
+/* L'adresse d'un questionnaire maison, complétée de ce que la crèche sait
+   déjà : la personne n'a plus rien à ressaisir, et sa réponse pourra être
+   rattachée à son dossier (`ref`).
+
+   Uniquement si la ressource le prévoit (`identite`, script 36d) : envoyer le
+   nom d'une stagiaire dans l'adresse d'un site tiers reviendrait à le lui
+   confier sans l'avoir décidé.
+
+   `ref` est l'identifiant du dossier, pas le jeton : il n'ouvre rien, et le
+   jeton, lui, ne quitte jamais cette page. */
+function urlRessource(r){
+  if(!r.url)return '';
+  if(!r.identite)return r.url;
+  try{
+    const u=new URL(r.url,location.href);
+    const mettre=(k,v)=>{ if(v)u.searchParams.set(k,v); };
+    mettre('prenom',STAG.prenom);
+    mettre('nom',STAG.nom);
+    mettre('statut',STAG.type_contrat==='alternant'?'Alternant(e)':'Stagiaire');
+    mettre('creche',STAG.creche_nom);
+    mettre('ref',STAG.ref);
+    return u.toString();
+  }catch(e){
+    /* Adresse mal formée : on l'ouvre telle quelle plutôt que de bloquer. */
+    return r.url;
+  }
+}
+
 /* Le fichier n'est pas servi par une URL en dur : on en demande une, signée
    pour quelques minutes. L'ouverture est datée côté serveur — pas ici, où
    elle serait déclarative. */
@@ -314,7 +342,7 @@ async function ouvrirRessource(i){
     if(!r.url)return toast('Ce lien n’est pas encore disponible.');
     /* La fenêtre s'ouvre AVANT l'appel réseau : ouverte depuis le retour
        d'une promesse, elle serait bloquée par le navigateur. */
-    window.open(r.url,'_blank','noopener');
+    window.open(urlRessource(r),'_blank','noopener');
     try{
       await appel('ressource_marque',{ressource_id:r.id});
       await recharger();
