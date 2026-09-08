@@ -997,6 +997,26 @@ function docConcerneSalarie(){
   const k=fillDoc&&fillDoc.template_key;
   return !!(k&&(TPL_SALARIE.indexOf(k)>=0||TPL_ETABLISSEMENT.indexOf(k)>=0));
 }
+/* Le document en cours est-il un document d'etablissement ? */
+function docEstEtablissement(){
+  const k=fillDoc&&fillDoc.template_key;
+  return !!(k&&TPL_ETABLISSEMENT.indexOf(k)>=0);
+}
+/* Crec̀he portee par le formulaire lui-meme (selecteur « Crèche » de la grille
+   EAJE / du CERFA). Le formulaire stocke le NOM ; la base attend l'identifiant.
+   Sans cette resolution, la reponse part avec la creche du PROFIL — donc null
+   pour un compte direction, et la fiche devient invisible aux referentes. */
+function crecheIdDuFormulaire(){
+  const ids=['ff_ctrl_creche','ff_creche'];
+  for(let i=0;i<ids.length;i++){
+    const el=document.getElementById(ids[i]);
+    const nom=el&&el.value?String(el.value).trim():'';
+    if(!nom)continue;
+    const c=(typeof CRECHES!=='undefined'?CRECHES:[]).find(x=>(x.name||'').trim()===nom);
+    if(c)return c.id;
+  }
+  return null;
+}
 
 function fillMetaOptions(selEnfant,selStatut){
   const selC=document.getElementById('fillCreche');
@@ -1074,6 +1094,13 @@ function fillUpdatePdfBtnLabel(){
     return;
   }
   if(btnNew)btnNew.style.display='';
+  /* Document d'etablissement (controle EAJE, CERFA) : piece d'archive, jamais
+     un brouillon jetable. L'export conserve la fiche. Le bouton « Nouveau »
+     reste visible : une creche remplit legitimement plusieurs grilles par an. */
+  if(docEstEtablissement()){
+    btn.innerHTML='<i class="ti ti-file-type-pdf"></i> Exporter en PDF';
+    return;
+  }
   const enfantSel=(document.getElementById('fillEnfant')||{}).value||'';
   const contexteEnfant=(!!enfantSel || !!RETURN_ENFANT_ID) && !docConcerneSalarie();
   btn.innerHTML=contexteEnfant
@@ -1153,7 +1180,13 @@ function showReturnEnfantBar(){
 
 /* silent=true : enregistrement en arrière-plan (autosave du contrôle EAJE) —
    ni toast de succès, ni fermeture de la modale. Les erreurs restent affichees. */
+/* Motif du dernier echec d'enregistrement, ou null si la derniere tentative a
+   reussi. Lu par l'autosave du controle EAJE : sans ca, le bandeau annonce
+   « Enregistre automatiquement a 14:32 » meme quand rien n'a ete ecrit. */
+let SAVE_KO=null;
+
 async function saveFill(silent){
+ SAVE_KO=null;
  try{
   const donnees={};
   const tpl=TPL[fillDoc.template_key];
@@ -1202,8 +1235,9 @@ async function saveFill(silent){
     return v!==''&&v!==false&&v!=null;
   })||aUneSignature;
   if(!fillRep&&!aDuContenu){
+    SAVE_KO='Formulaire vide \u2014 rien \u00e0 enregistrer';
     if(silent)return;
-    return toast('Formulaire vide \u2014 rien \u00e0 enregistrer');
+    return toast(SAVE_KO);
   }
   const statutChoisi=((document.getElementById('fillStatut')||{}).value)==='signe';
   /* « signe » dans deux cas seulement :
@@ -1217,6 +1251,13 @@ async function saveFill(silent){
   // creche_id aligné sur la crèche de l'enfant si un enfant est choisi,
   // pour que la référente de cette crèche retrouve le document dans le dossier enfant
   let crecheId=fillDoc.creche_id||(PROF?PROF.creche_id:null);
+  /* Document d'etablissement : c'est la crec̀he saisie DANS la fiche qui fait
+     foi, pas celle du profil. Sans ca, une fiche remplie par la direction part
+     avec creche_id null et n'est plus lisible par aucune referente (RLS). */
+  if(docEstEtablissement()){
+    const cf=crecheIdDuFormulaire();
+    if(cf)crecheId=cf;
+  }
   if(enfantId){
     const enf=ENFANTS.find(e=>e.id===enfantId);
     if(enf&&enf.creche_id)crecheId=enf.creche_id;
@@ -1231,13 +1272,29 @@ async function saveFill(silent){
     updated_at:new Date().toISOString()
   };
   let error;
-  if(fillRep){({error}=await sb.from('documents_reponses').update(row).eq('id',fillRep.id));}
+  if(fillRep){
+    /* .select('id') OBLIGATOIRE : un update refuse par la RLS ne leve pas
+       d'erreur, il ne touche simplement aucune ligne et PostgREST repond 204.
+       Sans cette clause, l'ecran affiche « enregistre » alors que rien n'a ete
+       ecrit — et la saisie disparait au premier rafraichissement. */
+    const{data:up,error:ue}=await sb.from('documents_reponses')
+      .update(row).eq('id',fillRep.id).select('id');
+    error=ue;
+    if(!error&&(!up||!up.length)){
+      SAVE_KO='Modification refusée (droits insuffisants) — rien n’a été enregistré.';
+      return toast(SAVE_KO);
+    }
+  }
   else{
     const{data,error:ie}=await sb.from('documents_reponses').insert(row).select().maybeSingle();
     error=ie;
     if(data)fillRep=data;          /* evite les doublons aux enregistrements suivants */
   }
-  if(error)return toast('Erreur : '+(error.message||'enregistrement impossible'));
+  if(error){
+    SAVE_KO='Erreur : '+(error.message||'enregistrement impossible');
+    return toast(SAVE_KO);
+  }
+  SAVE_KO=null;
   if(!silent)toast(enfantId?'Enregistré dans le dossier de l\u2019enfant':'Enregistré');
   if(enfantId){
     /* Le document est parti dans le dossier de l’enfant : on detache la reponse
@@ -1255,7 +1312,8 @@ async function saveFill(silent){
   }
  }catch(e){
   console.error('saveFill',e);
-  toast('Erreur : '+(e&&e.message?e.message:'inattendue'));
+  SAVE_KO='Erreur : '+(e&&e.message?e.message:'inattendue');
+  toast(SAVE_KO);
  }
 }
 /* ---------- LOGO KOALA KIDS (PDF) ---------- */
@@ -1676,6 +1734,19 @@ async function editPdfAndReset(){
       await saveFill();
       toast('PDF exporté — document conservé');
       if(repId)await openFill(fillDoc.id,repId);
+      return;
+    }
+
+    /* Document d'etablissement (controle EAJE, CERFA) : une grille d'auto-controle
+       reglementaire est une piece d'archive. On exporte, on enregistre, et on ne
+       supprime RIEN — l'ancien comportement « editer puis vider » effacait la
+       fiche en base sans possibilite de retour (perte constatee le 08/09/2026). */
+    if(docEstEtablissement()){
+      if(btn)btn.disabled=true;
+      const okEtab=await exportFillPdf();
+      if(!okEtab)throw new Error('génération PDF impossible');
+      await saveFill(true);   /* silencieux : n'efface pas et ne ferme pas la modale */
+      toast(SAVE_KO?SAVE_KO:'PDF exporté — fiche conservée');
       return;
     }
 
@@ -2440,7 +2511,18 @@ function eajeTouch(){
     if(!fillDoc||fillDoc.template_key!=='eaje')return;
     await saveFill(true);
     const st=document.getElementById('fillState');
-    if(st)st.textContent='Enregistré automatiquement à '+
+    if(!st)return;
+    /* Ne jamais annoncer un enregistrement qui n'a pas eu lieu : un refus RLS
+       est silencieux cote base, c'est a l'ecran de le dire. */
+    if(SAVE_KO){
+      st.textContent='⚠ NON ENREGISTRÉ — '+SAVE_KO;
+      st.style.color='#C62828';
+      st.style.fontWeight='700';
+      return;
+    }
+    st.style.color='';
+    st.style.fontWeight='';
+    st.textContent='Enregistré automatiquement à '+
       new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
   },1500);
 }
@@ -3996,7 +4078,18 @@ function c17Touch(){
     if(!fillDoc||fillDoc.template_key!=='cerfa_17580')return;
     await saveFill(true);
     const st=document.getElementById('fillState');
-    if(st)st.textContent='Enregistré automatiquement à '+
+    if(!st)return;
+    /* Ne jamais annoncer un enregistrement qui n'a pas eu lieu : un refus RLS
+       est silencieux cote base, c'est a l'ecran de le dire. */
+    if(SAVE_KO){
+      st.textContent='⚠ NON ENREGISTRÉ — '+SAVE_KO;
+      st.style.color='#C62828';
+      st.style.fontWeight='700';
+      return;
+    }
+    st.style.color='';
+    st.style.fontWeight='';
+    st.textContent='Enregistré automatiquement à '+
       new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
   },1500);
 }
