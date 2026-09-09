@@ -2722,7 +2722,7 @@ function showMain(tab){
   if(tab==='planning')renderPlanning();
   if(tab==='demands'){renderCrecheTabs();setTimeout(markConsignesRead,600);}
   if(tab==='referents')renderReferents();
-  if(tab==='employes')renderEmployes();
+  if(tab==='employes'){renderEmployes();empChargerHeuresSemaine();}
   if(tab==='incidents')renderIncidents();
   if(tab==='presence'){initPresenceDate();presMajBarre();renderPresence();}
   if(tab==='evenements')renderCalendar();
@@ -3039,6 +3039,7 @@ async function deleteRef(id){if(!confirm('Supprimer ce référent ?'))return;con
 
 // EMPLOYÉS (personnel sans compte de connexion — table `employes`, cf. sql/module_employes.sql)
 let editingEmployeId=null;
+let empHeuresSemaine={};   // {employe_id: heures pointées depuis lundi} — cf. empChargerHeuresSemaine()
 function renderEmployes(){
   const grid=document.getElementById('employe-grid');if(!grid)return;
   const list=isDirection?cacheEmployes:cacheEmployes.filter(e=>e.creche_id===currentProfile?.creche_id);
@@ -3047,8 +3048,60 @@ function renderEmployes(){
     const creche=cacheCreches.find(c=>c.id===e.creche_id);
     const initials=((e.prenom||'')+' '+(e.nom||'')).trim().split(' ').filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?';
     const contratTxt=[e.type_contrat,e.temps_travail==='temps_partiel'?'Temps partiel':e.temps_travail==='temps_plein'?'Temps plein':''].filter(Boolean).join(' · ');
-    return '<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:var(--muted)">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+escHtml(e.poste||'Employé(e)')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div>'+(e.email?'<div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+escHtml(e.email)+'</div>':'')+(contratTxt?'<div class="ref-detail"><i class="ti ti-file-certificate" style="font-size:11px"></i> '+escHtml(contratTxt)+'</div>':'<div class="ref-detail" style="color:var(--red)"><i class="ti ti-alert-triangle" style="font-size:11px"></i> Contrat non renseigné</div>')+'<div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkCodeLigne(e.code_pointage)+'</div></div></div><div class="ref-actions"><button class="ibtn" onclick="editEmploye(\''+e.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteEmploye(\''+e.id+'\')"><i class="ti ti-trash"></i></button></div>'+(e.creche_id?'<div style="display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px">'+kkCodeActions('employe',e.id,e.creche_id,e.code_pointage)+'</div>':'')+'</div>';
+    return '<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:var(--muted)">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+escHtml(e.poste||'Employé(e)')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div>'+(e.email?'<div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+escHtml(e.email)+'</div>':'')+(contratTxt?'<div class="ref-detail"><i class="ti ti-file-certificate" style="font-size:11px"></i> '+escHtml(contratTxt)+'</div>':'<div class="ref-detail" style="color:var(--red)"><i class="ti ti-alert-triangle" style="font-size:11px"></i> Contrat non renseigné</div>')+'<div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkCodeLigne(e.code_pointage)+'</div>'+empHeuresLigne(e)+'</div></div><div class="ref-actions"><button class="ibtn" onclick="editEmploye(\''+e.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteEmploye(\''+e.id+'\')"><i class="ti ti-trash"></i></button></div>'+(e.creche_id?'<div style="display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px">'+kkCodeActions('employe',e.id,e.creche_id,e.code_pointage)+'</div>':'')+'</div>';
   }).join('');
+}
+
+/* Heures pointées (via `pointages.employe_id`) depuis lundi 00:00, comparées
+   à `heures_hebdo` du contrat. Purement informatif — un CDD à temps partiel
+   commencé en cours de semaine, une régularisation manuelle des pointages...
+   il y a trop de cas légitimes d'écart pour que ce soit autre chose qu'un
+   signal, jamais un blocage. */
+function empHeuresLigne(e){
+  const h=empHeuresSemaine[e.id];
+  if(h==null)return'';
+  const pointees=Math.round(h*10)/10;
+  if(!e.heures_hebdo){
+    return '<div class="ref-detail"><i class="ti ti-clock" style="font-size:11px"></i> '+pointees+' h pointées cette semaine</div>';
+  }
+  const ecart=pointees-e.heures_hebdo;
+  const ok=Math.abs(ecart)<=Math.max(1,e.heures_hebdo*0.1);
+  const ecartTxt=ok?'':' ('+(ecart>0?'+':'')+(Math.round(ecart*10)/10)+' h)';
+  return '<div class="ref-detail" style="color:'+(ok?'var(--green)':'var(--orange-dark)')+'"><i class="ti ti-clock" style="font-size:11px"></i> '
+    +pointees+' h / '+e.heures_hebdo+' h contrat cette semaine'+ecartTxt+'</div>';
+}
+
+/* Une seule requête pour toutes les crèches visibles, appelée à l'ouverture
+   de l'onglet — pas à chaque rendu, pour ne pas interroger `pointages` en
+   boucle. Semaine en cours, lundi 00:00 → dimanche 24:00. */
+async function empChargerHeuresSemaine(){
+  const list=isDirection?cacheEmployes:cacheEmployes.filter(e=>e.creche_id===currentProfile?.creche_id);
+  const crecheIds=[...new Set(list.map(e=>e.creche_id).filter(Boolean))];
+  if(!crecheIds.length)return;
+  const debut=mondayOfISO(todayStr());
+  const finD=new Date(debut+'T00:00:00');finD.setDate(finD.getDate()+7);
+  const fin=ipDateToLocalISO(finD);
+  const{data,error}=await sb.from('pointages').select('employe_id,action,horodatage')
+    .in('creche_id',crecheIds).not('employe_id','is',null)
+    .gte('horodatage',debut+'T00:00:00').lt('horodatage',fin+'T00:00:00')
+    .order('horodatage',{ascending:true});
+  if(error){console.warn('[empChargerHeuresSemaine]',error);return;}
+  const parEmploye={};
+  (data||[]).forEach(p=>{(parEmploye[p.employe_id]=parEmploye[p.employe_id]||[]).push(p);});
+  const heures={};
+  Object.keys(parEmploye).forEach(id=>{
+    let total=0,derniereArrivee=null;
+    parEmploye[id].forEach(ev=>{
+      if(ev.action==='arrivee')derniereArrivee=new Date(ev.horodatage);
+      else if(ev.action==='depart'&&derniereArrivee){
+        total+=(new Date(ev.horodatage)-derniereArrivee)/3600000;
+        derniereArrivee=null;
+      }
+    });
+    heures[id]=total;
+  });
+  empHeuresSemaine=heures;
+  renderEmployes();
 }
 window.renderEmployes=renderEmployes;
 
