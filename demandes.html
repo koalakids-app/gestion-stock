@@ -454,6 +454,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn active" onclick="showMain('demands')" id="mnav-demands"><i class="ti ti-message-circle"></i> Messagerie <span class="mnav-badge" id="badge-demands" style="display:none">0</span></button>
       <button class="mnav-btn" onclick="showMain('planning')" id="mnav-planning"><i class="ti ti-calendar-event"></i> Planning</button>
       <button class="mnav-btn" onclick="showMain('presence')" id="mnav-presence"><i class="ti ti-users-group"></i> Présences</button>
+      <button class="mnav-btn" onclick="openKiosque()" id="mnav-kiosque"><i class="ti ti-device-tablet"></i> Mode kiosque</button>
       <button class="mnav-btn direction-only" onclick="showMain('referents')" id="mnav-referents"><i class="ti ti-address-book"></i> Référents</button>
       <button class="mnav-btn" onclick="showMain('remplacantes')" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
       <button class="mnav-btn" onclick="showMain('vaccinations')" id="mnav-vaccinations"><i class="ti ti-vaccine"></i> Vaccinations</button>
@@ -17569,6 +17570,238 @@ window.brAller=brAller;
     </div>
   </div>
 </div>
+
+<!-- ══ MODE KIOSQUE — pointage arrivée/départ enfants & personnel ══════════ -->
+<style>
+#kiosque-overlay{display:none;position:fixed;inset:0;z-index:500;background:var(--bg);flex-direction:column}
+#kiosque-overlay.open{display:flex}
+.kiosque-head{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;background:#fff;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px}
+.kiosque-head-left{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.kiosque-title{font-size:18px;font-weight:800;color:var(--koala);display:flex;align-items:center;gap:8px}
+.kiosque-who{font-size:12px;color:var(--muted)}
+.kiosque-clockbox{text-align:right;line-height:1.25}
+#kiosque-clock{font-size:22px;font-weight:800;color:var(--koala);font-variant-numeric:tabular-nums}
+#kiosque-date{font-size:12px;color:var(--muted);text-transform:capitalize}
+.kiosque-tabs{display:flex;gap:8px;padding:10px 22px 0}
+.kiosque-tab{flex:1;padding:14px;border:none;border-radius:12px 12px 0 0;background:#e9e8f2;color:#555;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s,color .15s}
+.kiosque-tab.active{background:#fff;color:var(--koala)}
+.kiosque-toolbar{display:flex;align-items:center;gap:10px;padding:12px 22px;background:#fff;flex-wrap:wrap}
+.kiosque-search{flex:1;min-width:180px;padding:12px 14px;font-size:15px;border:1.5px solid var(--border);border-radius:10px}
+.kiosque-search:focus{outline:none;border-color:var(--koala)}
+.kiosque-counts{font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap}
+#kiosque-grid{flex:1;overflow-y:auto;padding:18px 22px 100px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;align-content:start}
+.kiosk-tile{background:#fff;border:2px solid var(--border);border-radius:16px;padding:16px 14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:6px;min-height:130px;transition:transform .1s,background .15s,border-color .15s;font-family:inherit}
+.kiosk-tile:active{transform:scale(0.96)}
+.kiosk-tile:disabled{opacity:0.5;cursor:default}
+.kiosk-tile.present{border-color:var(--green);background:var(--green-light)}
+.kiosk-tile-name{font-size:16px;font-weight:800;color:var(--text)}
+.kiosk-tile-sub{font-size:12px;color:var(--muted)}
+.kiosk-tile-status{font-size:12px;color:#888;margin-top:auto}
+.kiosk-tile.present .kiosk-tile-status{color:#1e7a3a;font-weight:600}
+.kiosk-tile-action{margin-top:6px;padding:8px;border-radius:8px;text-align:center;font-size:13px;font-weight:700;background:var(--koala-light);color:var(--koala);display:flex;align-items:center;justify-content:center;gap:6px}
+.kiosk-tile.present .kiosk-tile-action{background:var(--red-light);color:var(--red)}
+.kiosk-empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;font-size:14px}
+#kiosque-toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,120%);background:var(--koala-dark);color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;display:flex;align-items:center;gap:14px;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:transform .2s;z-index:20;max-width:90vw}
+#kiosque-toast.show{transform:translate(-50%,0)}
+#kiosque-toast button{background:rgba(255,255,255,.18);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;flex-shrink:0;white-space:nowrap}
+</style>
+<div id="kiosque-overlay">
+  <div class="kiosque-head">
+    <div class="kiosque-head-left">
+      <span class="kiosque-title"><i class="ti ti-device-tablet"></i> Mode kiosque</span>
+      <div id="kiosque-creche-wrap" style="display:none;align-items:center;gap:6px">
+        <i class="ti ti-building" style="color:var(--muted)"></i>
+        <select id="kiosque-creche-select" class="finput" style="width:auto;padding:6px 10px;font-size:13px" onchange="kioskChangeCreche(this.value)"></select>
+      </div>
+      <span class="kiosque-who">Connecté(e) en tant que <strong id="kiosque-who-name"></strong></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px">
+      <div class="kiosque-clockbox"><div id="kiosque-clock">--:--:--</div><div id="kiosque-date"></div></div>
+      <button class="btn-sm" onclick="if(confirm('Quitter le mode kiosque ?'))closeKiosque()"><i class="ti ti-x"></i> Quitter</button>
+    </div>
+  </div>
+  <div class="kiosque-tabs">
+    <button class="kiosque-tab active" id="kiosque-tab-enfants" onclick="kioskSetMode('enfants')"><i class="ti ti-mood-kid"></i> Enfants</button>
+    <button class="kiosque-tab" id="kiosque-tab-personnel" onclick="kioskSetMode('personnel')"><i class="ti ti-users-group"></i> Personnel</button>
+  </div>
+  <div class="kiosque-toolbar">
+    <input id="kiosque-search" class="kiosque-search" placeholder="Rechercher un prénom…" oninput="kioskOnSearch(this.value)">
+    <span class="kiosque-counts" id="kiosque-counts"></span>
+  </div>
+  <div id="kiosque-grid"></div>
+  <div id="kiosque-toast"></div>
+</div>
+<script>
+let kioskCrecheId=null,kioskMode='enfants',kioskPointagesToday=[],kioskSearch='',kioskBusy=false;
+let _kioskClockTimer=null,_kioskToastTimer=null;
+
+function openKiosque(){
+  kioskCrecheId=isDirection?(localStorage.getItem('kioskCrecheId')||(cacheCreches[0]?.id||null)):(currentProfile?.creche_id||null);
+  if(!kioskCrecheId){showBanner('Aucune crèche associée à votre compte.','error');return;}
+  kioskMode='enfants';kioskSearch='';kioskPointagesToday=[];
+  const s=document.getElementById('kiosque-search');if(s)s.value='';
+  kioskSyncModeBtns();
+  document.getElementById('kiosque-who-name').textContent=currentProfile?.name||currentUser?.email||'—';
+  kioskRenderCrecheSelect();
+  document.getElementById('kiosque-overlay').classList.add('open');
+  document.documentElement.requestFullscreen?.().catch(()=>{});
+  kioskStartClock();
+  kioskLoadToday();
+}
+window.openKiosque=openKiosque;
+
+function closeKiosque(){
+  document.getElementById('kiosque-overlay').classList.remove('open');
+  if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+  kioskStopClock();
+}
+window.closeKiosque=closeKiosque;
+
+function kioskStartClock(){kioskTickClock();_kioskClockTimer=setInterval(kioskTickClock,1000);}
+function kioskStopClock(){if(_kioskClockTimer){clearInterval(_kioskClockTimer);_kioskClockTimer=null;}}
+function kioskTickClock(){
+  const n=new Date();
+  const c=document.getElementById('kiosque-clock');if(c)c.textContent=n.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const d=document.getElementById('kiosque-date');if(d)d.textContent=n.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+}
+
+function kioskRenderCrecheSelect(){
+  const wrap=document.getElementById('kiosque-creche-wrap');if(!wrap)return;
+  if(!isDirection){wrap.style.display='none';return;}
+  wrap.style.display='flex';
+  const sel=document.getElementById('kiosque-creche-select');
+  sel.innerHTML=cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===kioskCrecheId?' selected':'')+'>'+c.name+'</option>').join('');
+}
+function kioskChangeCreche(id){
+  kioskCrecheId=id;
+  localStorage.setItem('kioskCrecheId',id);
+  kioskLoadToday();
+}
+window.kioskChangeCreche=kioskChangeCreche;
+
+async function kioskLoadToday(){
+  const d0=new Date();d0.setHours(0,0,0,0);
+  const d1=new Date(d0);d1.setDate(d1.getDate()+1);
+  const{data,error}=await sb.from('pointages').select('*').eq('creche_id',kioskCrecheId)
+    .gte('horodatage',d0.toISOString()).lt('horodatage',d1.toISOString())
+    .order('horodatage',{ascending:true});
+  if(error){console.warn('[kiosque] chargement pointages',error);showBanner('Erreur de chargement des pointages.','error');}
+  kioskPointagesToday=data||[];
+  kioskRender();
+}
+
+function kioskStatusMap(){
+  const map={};
+  kioskPointagesToday.forEach(p=>{
+    const key=(p.enfant_id?'e_':'s_')+(p.enfant_id||p.salarie_id);
+    if(!map[key]||new Date(p.horodatage)>new Date(map[key].horodatage))map[key]=p;
+  });
+  return map;
+}
+
+function kioskSetMode(m){
+  kioskMode=m;kioskSearch='';
+  const s=document.getElementById('kiosque-search');if(s)s.value='';
+  kioskSyncModeBtns();kioskRender();
+}
+window.kioskSetMode=kioskSetMode;
+function kioskSyncModeBtns(){
+  document.getElementById('kiosque-tab-enfants')?.classList.toggle('active',kioskMode==='enfants');
+  document.getElementById('kiosque-tab-personnel')?.classList.toggle('active',kioskMode==='personnel');
+}
+function kioskOnSearch(v){kioskSearch=v;kioskRender();}
+window.kioskOnSearch=kioskOnSearch;
+
+function kioskRender(){
+  const grid=document.getElementById('kiosque-grid');if(!grid)return;
+  const statusMap=kioskStatusMap();
+  const today=todayStr();
+  let items,presentCount=0;
+  if(kioskMode==='enfants'){
+    items=cacheEnfants.filter(e=>e.creche_id===kioskCrecheId&&(!e.date_sortie||e.date_sortie>=today));
+  }else{
+    items=cacheReferents.filter(r=>r.creche_id===kioskCrecheId);
+  }
+  items.forEach(p=>{const k=(kioskMode==='enfants'?'e_':'s_')+p.id;const l=statusMap[k];if(l&&l.action==='arrivee')presentCount++;});
+  const counts=document.getElementById('kiosque-counts');
+  if(counts)counts.textContent=presentCount+' / '+items.length+' présent(s)';
+  if(kioskSearch){
+    const s=kioskSearch.toLowerCase();
+    items=items.filter(p=>((p.prenom||p.name||'')+' '+(p.nom||'')).toLowerCase().includes(s));
+  }
+  items=items.slice().sort((a,b)=>(a.prenom||a.name||'').localeCompare(b.prenom||b.name||'','fr',{sensitivity:'base'}));
+  if(!items.length){grid.innerHTML='<div class="kiosk-empty"><i class="ti ti-search-off" style="font-size:24px;display:block;margin-bottom:8px;opacity:.5"></i>Aucun'+(kioskMode==='enfants'?' enfant':' membre du personnel')+' trouvé.</div>';return;}
+  grid.innerHTML=items.map(p=>{
+    const key=(kioskMode==='enfants'?'e_':'s_')+p.id;
+    const last=statusMap[key];
+    const present=!!(last&&last.action==='arrivee');
+    const label=kioskMode==='enfants'?(p.prenom||''):(p.name||'');
+    const sub=kioskMode==='enfants'?(p.nom||''):(p.poste||(p.role==='direction'?'Direction':'Référente'));
+    const heure=last?new Date(last.horodatage).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
+    const statusTxt=present?('Présent(e) depuis '+heure):(last?('Parti(e) à '+heure):'Pas encore pointé(e)');
+    return '<button class="kiosk-tile'+(present?' present':'')+'" onclick="kioskToggle(this,\''+kioskMode+'\',\''+p.id+'\')">'
+      +'<div class="kiosk-tile-name">'+label+'</div>'
+      +(sub?'<div class="kiosk-tile-sub">'+sub+'</div>':'')
+      +'<div class="kiosk-tile-status">'+statusTxt+'</div>'
+      +'<div class="kiosk-tile-action">'+(present?'<i class="ti ti-door-exit"></i> Départ':'<i class="ti ti-door-enter"></i> Arrivée')+'</div>'
+      +'</button>';
+  }).join('');
+}
+
+async function kioskToggle(btn,mode,id){
+  if(kioskBusy)return;
+  kioskBusy=true;
+  if(btn)btn.disabled=true;
+  try{
+    const statusMap=kioskStatusMap();
+    const key=(mode==='enfants'?'e_':'s_')+id;
+    const last=statusMap[key];
+    const present=!!(last&&last.action==='arrivee');
+    const action=present?'depart':'arrivee';
+    const row={creche_id:kioskCrecheId,action,effectue_par:currentUser.id};
+    if(mode==='enfants')row.enfant_id=id;else row.salarie_id=id;
+    const saved=await dbInsert('pointages',row);
+    if(!saved){showBanner(window._lastDbError||'Erreur d’enregistrement du pointage.','error');return;}
+    kioskPointagesToday.push(saved);
+    kioskRender();
+    const person=mode==='enfants'?cacheEnfants.find(e=>e.id===id):cacheReferents.find(r=>r.id===id);
+    kioskShowUndo(saved,person);
+  }finally{
+    kioskBusy=false;
+  }
+}
+window.kioskToggle=kioskToggle;
+
+function kioskShowUndo(row,person){
+  const box=document.getElementById('kiosque-toast');if(!box)return;
+  const nom=person?(person.prenom||person.name||''):'';
+  const verbe=row.action==='arrivee'?'Arrivée':'Départ';
+  box.innerHTML='<span><i class="ti ti-circle-check"></i> '+verbe+' enregistrée pour '+nom+'</span>'
+    +'<button onclick="kioskUndo(\''+row.id+'\')"><i class="ti ti-arrow-back-up"></i> Annuler</button>';
+  box.classList.add('show');
+  clearTimeout(_kioskToastTimer);
+  _kioskToastTimer=setTimeout(()=>box.classList.remove('show'),8000);
+}
+async function kioskUndo(pointageId){
+  const ok=await dbDeleteStrict('pointages',pointageId);
+  if(ok){
+    kioskPointagesToday=kioskPointagesToday.filter(p=>p.id!==pointageId);
+    kioskRender();
+    document.getElementById('kiosque-toast').classList.remove('show');
+    showBanner('Pointage annulé.');
+  }else{
+    showBanner(window._lastDbError||'Impossible d’annuler (délai dépassé).','error');
+  }
+}
+window.kioskUndo=kioskUndo;
+
+document.addEventListener('fullscreenchange',function(){
+  if(!document.fullscreenElement&&document.getElementById('kiosque-overlay')?.classList.contains('open')){
+    // sortie du plein écran (touche Échap...) : on referme aussi le mode kiosque
+    closeKiosque();
+  }
+});
+</script>
 
 </body>
 </html>
