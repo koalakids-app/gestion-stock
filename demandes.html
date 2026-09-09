@@ -459,6 +459,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="mnav-btn" onclick="showMain('remplacantes')" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
       <button class="mnav-btn" onclick="showMain('vaccinations')" id="mnav-vaccinations"><i class="ti ti-vaccine"></i> Vaccinations</button>
       <button class="mnav-btn" onclick="showMain('enfants')" id="mnav-enfants"><i class="ti ti-mood-kid"></i> Enfants</button>
+      <button class="mnav-btn" onclick="showMain('employes')" id="mnav-employes"><i class="ti ti-id-badge-2"></i> Employés</button>
       <button class="mnav-btn" onclick="showMain('stagiaires')" id="mnav-stagiaires"><i class="ti ti-school"></i> Stagiaires &amp; alternants <span class="mnav-badge" id="badge-stagiaires" style="display:none">0</span></button>
     </nav>
     <div style="display:flex;align-items:center;gap:8px">
@@ -556,6 +557,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn-primary" onclick="openRefModal()"><i class="ti ti-plus"></i> Ajouter un référent</button>
     </div>
     <div class="ref-grid" id="ref-grid"></div>
+  </div>
+
+  <!-- EMPLOYÉS (personnel sans compte de connexion) -->
+  <div id="main-employes" class="tab-content">
+    <div class="section-header">
+      <span class="section-title">Employés (sans compte de connexion)</span>
+      <button class="btn-primary" onclick="openEmployeModal()"><i class="ti ti-plus"></i> Ajouter un employé</button>
+    </div>
+    <p class="hint" style="font-size:12.5px;color:var(--muted);margin:-4px 0 12px">Pour le personnel qui n'a pas besoin de se connecter à l'application — agents d'entretien, remplaçantes ponctuelles… Chacun reçoit un code de pointage à 4 chiffres pour la tablette dédiée.</p>
+    <div class="ref-grid" id="employe-grid"></div>
   </div>
 
   <!-- PLANNING -->
@@ -1669,6 +1680,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<div class="overlay" id="modal-employe-wrap">
+  <div class="modal">
+    <h3 id="modal-employe-title">Ajouter un employé</h3>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="emp-prenom" placeholder="Julie"/></div>
+      <div class="fg"><label class="flabel">Nom</label><input class="finput" id="emp-nom" placeholder="Petit"/></div>
+    </div>
+    <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="emp-creche"><option value="">-- Choisir --</option></select></div>
+    <div class="fg"><label class="flabel">Poste</label><input class="finput" id="emp-poste" placeholder="Agent d'entretien"/></div>
+    <div class="fg"><label class="flabel">E-mail (optionnel)</label><input class="finput" id="emp-email" type="email" placeholder="Pour l'envoi du code de pointage par e-mail"/></div>
+    <div class="info-box"><i class="ti ti-info-circle" style="font-size:15px"></i> Pas de compte de connexion créé — seulement une fiche et un code de pointage.</div>
+    <div class="mactions"><button class="btn-cancel" id="emp-btn-delete" style="display:none;color:var(--red)" onclick="deleteEmploye()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-employe-wrap')">Annuler</button><button class="btn-primary" id="emp-btn-save" onclick="saveEmploye()"><i class="ti ti-check"></i> Enregistrer</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="modal-creche-wrap">
   <div class="modal">
     <h3 id="modal-creche-title">Ajouter une crèche</h3>
@@ -2201,7 +2227,7 @@ if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https:/
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='';
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 
 // Init au chargement complet de la page
@@ -2252,6 +2278,9 @@ async function loadAllData(){
     Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('evenements'),dbSelect('messages')]),
     timeout
   ]);
+  // Employés (personnel sans compte) — table posée par sql/module_employes.sql,
+  // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
+  try{cacheEmployes=await dbSelect('employes');}catch(e){console.warn('[loadAllData] employes',e);cacheEmployes=[];}
   // Consignes lues (notifications in-app) — non bloquant
   try{cacheConsignesLues=await dbSelect('consignes_lues');}catch(e){cacheConsignesLues=[];}
   // Salariés — non bloquant (alimente aussi le sélecteur de prénom du planning équipe)
@@ -2290,7 +2319,7 @@ async function loadAllData(){
    une saisie en cours — la synchro est alors reportée à sa fermeture), jamais en
    arrière-plan, et jamais deux rechargements coup sur coup.
    ═════════════════════════════════════════════════════════════════════════ */
-const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','planning','planning_equipe','enfants_contrats','taches_afaire','commandes_repas','actions_direction','reunions_direction'];
+const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','employes','planning','planning_equipe','enfants_contrats','taches_afaire','commandes_repas','actions_direction','reunions_direction'];
 const SYNC_PERIODE_MS=60000;   // rappel périodique quand l'onglet est visible
 const SYNC_MIN_MS=10000;       // anti-rafale entre deux rechargements
 let _mainCourant=null,_syncDernier=0,_syncEnCours=false,_syncEnAttente=false,
@@ -2333,6 +2362,7 @@ function syncRedessine(){
     else if(t==='demands'&&typeof renderCrecheTabs==='function')renderCrecheTabs();
     else if(t==='incidents'&&typeof renderIncidents==='function')renderIncidents();
     else if(t==='referents'&&typeof renderReferents==='function')renderReferents();
+    else if(t==='employes'&&typeof renderEmployes==='function')renderEmployes();
     else if(t==='planning'&&typeof renderPlanning==='function')renderPlanning();
     else if(t==='evenements'&&typeof renderCalendar==='function')renderCalendar();
     else if(t==='dashboard'&&typeof renderDashboard==='function')renderDashboard();
@@ -2642,7 +2672,7 @@ async function markConsignesRead(){
 
 function showMain(tab){
   _mainCourant=tab;
-  ['demands','incidents','presence','referents','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','actions','stagiaires'].forEach(t=>{
+  ['demands','incidents','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','actions','stagiaires'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -2650,6 +2680,7 @@ function showMain(tab){
   if(tab==='planning')renderPlanning();
   if(tab==='demands'){renderCrecheTabs();setTimeout(markConsignesRead,600);}
   if(tab==='referents')renderReferents();
+  if(tab==='employes')renderEmployes();
   if(tab==='incidents')renderIncidents();
   if(tab==='presence'){initPresenceDate();presMajBarre();renderPresence();}
   if(tab==='evenements')renderCalendar();
@@ -2963,6 +2994,106 @@ async function saveRef(){
   closeModal('modal-ref-wrap');renderReferents();
 }
 async function deleteRef(id){if(!confirm('Supprimer ce référent ?'))return;const ok=await callFn('delete-referent',{referent_id:id});if(ok){cacheReferents=cacheReferents.filter(r=>r.id!==id);renderReferents();showBanner('Référent supprimé.');}else showBanner('Erreur lors de la suppression.','error');}
+
+// EMPLOYÉS (personnel sans compte de connexion — table `employes`, cf. sql/module_employes.sql)
+let editingEmployeId=null;
+function renderEmployes(){
+  const grid=document.getElementById('employe-grid');if(!grid)return;
+  const list=isDirection?cacheEmployes:cacheEmployes.filter(e=>e.creche_id===currentProfile?.creche_id);
+  if(!list.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-id-badge-2"></i><p>Aucun employé.</p></div>';return;}
+  grid.innerHTML=list.map(e=>{
+    const creche=cacheCreches.find(c=>c.id===e.creche_id);
+    const initials=((e.prenom||'')+' '+(e.nom||'')).trim().split(' ').filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?';
+    return '<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:var(--muted)">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+escHtml(e.poste||'Employé(e)')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div>'+(e.email?'<div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+escHtml(e.email)+'</div>':'')+'<div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkCodeLigne(e.code_pointage)+'</div></div></div><div class="ref-actions"><button class="ibtn" onclick="editEmploye(\''+e.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteEmploye(\''+e.id+'\')"><i class="ti ti-trash"></i></button></div>'+(e.creche_id?'<div style="display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px">'+kkCodeActions('employe',e.id,e.creche_id,e.code_pointage)+'</div>':'')+'</div>';
+  }).join('');
+}
+window.renderEmployes=renderEmployes;
+
+function empFillCreches(selectedId){
+  const sel=document.getElementById('emp-creche');if(!sel)return;
+  const maCreche=currentProfile?.creche_id||null;
+  const list=isDirection?cacheCreches:cacheCreches.filter(c=>c.id===maCreche);
+  const cible=selectedId||(isDirection?null:maCreche);
+  sel.innerHTML=(isDirection?'<option value="">-- Choisir --</option>':'')+list.map(c=>'<option value="'+c.id+'"'+(c.id===cible?' selected':'')+'>'+c.name+'</option>').join('');
+  sel.disabled=!isDirection;
+  sel.style.background=isDirection?'':'#f4f4f8';
+  sel.style.cursor=isDirection?'':'not-allowed';
+}
+
+function openEmployeModal(){
+  editingEmployeId=null;
+  document.getElementById('modal-employe-title').textContent='Ajouter un employé';
+  document.getElementById('emp-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';
+  document.getElementById('emp-btn-delete').style.display='none';
+  ['emp-prenom','emp-nom','emp-poste','emp-email'].forEach(id=>document.getElementById(id).value='');
+  empFillCreches(null);
+  document.getElementById('modal-employe-wrap').classList.add('open');
+}
+window.openEmployeModal=openEmployeModal;
+
+function editEmploye(id){
+  const e=cacheEmployes.find(x=>String(x.id)===String(id));if(!e)return;
+  editingEmployeId=e.id;
+  document.getElementById('modal-employe-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');
+  document.getElementById('emp-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';
+  document.getElementById('emp-btn-delete').style.display='';
+  document.getElementById('emp-prenom').value=e.prenom||'';
+  document.getElementById('emp-nom').value=e.nom||'';
+  document.getElementById('emp-poste').value=e.poste||'';
+  document.getElementById('emp-email').value=e.email||'';
+  empFillCreches(e.creche_id);
+  document.getElementById('modal-employe-wrap').classList.add('open');
+}
+window.editEmploye=editEmploye;
+
+async function saveEmploye(){
+  const prenom=document.getElementById('emp-prenom').value.trim();
+  if(!prenom){alert('Le prénom est requis.');return;}
+  const crecheId=document.getElementById('emp-creche').value||(isDirection?null:currentProfile?.creche_id);
+  if(!crecheId){alert('Veuillez choisir une crèche.');return;}
+  const row={
+    prenom,
+    nom:document.getElementById('emp-nom').value.trim(),
+    poste:document.getElementById('emp-poste').value.trim(),
+    email:document.getElementById('emp-email').value.trim()||null,
+    creche_id:crecheId
+  };
+  const btn=document.getElementById('emp-btn-save');btn.disabled=true;
+  try{
+    if(editingEmployeId){
+      const ok=await dbUpdate('employes',editingEmployeId,row);
+      if(!ok)throw new Error(window._lastDbError||'échec');
+      const e=cacheEmployes.find(x=>String(x.id)===String(editingEmployeId));
+      if(e)Object.assign(e,row);
+      showBanner('Employé modifié ✅');
+    }else{
+      const saved=await dbInsert('employes',row);
+      if(!saved)throw new Error(window._lastDbError||'échec');
+      cacheEmployes.push(saved);
+      showBanner('Employé ajouté ✅');
+    }
+    closeModal('modal-employe-wrap');
+    renderEmployes();
+  }catch(e){
+    console.error('[saveEmploye]',e);
+    showBanner('Erreur : '+(e.message||'inconnue'),'error');
+  }finally{btn.disabled=false;}
+}
+window.saveEmploye=saveEmploye;
+
+async function deleteEmploye(id){
+  const targetId=id||editingEmployeId;
+  if(!targetId)return;
+  if(!confirm('Supprimer cette fiche employé ?'))return;
+  const ok=await dbDelete('employes',targetId);
+  if(ok){
+    cacheEmployes=cacheEmployes.filter(e=>e.id!==targetId);
+    closeModal('modal-employe-wrap');
+    renderEmployes();
+    showBanner('Employé supprimé.');
+  }else showBanner('Erreur lors de la suppression.','error');
+}
+window.deleteEmploye=deleteEmploye;
 async function sendLink(refId){const r=cacheReferents.find(x=>x.id===refId);if(!r?.email){alert('Pas d\'email.');return;}const creche=cacheCreches.find(c=>c.id===r.creche_id);const ok=await callFn('send-referent-link',{referent:{id:r.id,name:r.name,email:r.email,creche:creche?.name||''}});if(ok)showBanner('Lien envoyé à '+r.name+' !');else showBanner('Erreur envoi.','error');}
 
 async function resetPassword(refId){
@@ -11316,13 +11447,14 @@ async function kkCopyCode(code){
 window.kkCopyCode=kkCopyCode;
 async function kkRegenCode(type,id,crecheId){
   if(!confirm('Générer un nouveau code ? L\'ancien cessera de fonctionner immédiatement sur la tablette.'))return;
-  const table=type==='enfant'?'enfants':'referents';
+  const table=type==='enfant'?'enfants':(type==='employe'?'employes':'referents');
   try{
     const{data,error}=await sb.rpc('kk_gen_code_pointage',{p_creche_id:crecheId});
     if(error)throw error;
     const ok=await dbUpdateStrict(table,id,{code_pointage:data});
     if(!ok)throw new Error(window._lastDbError||'écriture refusée');
     if(type==='enfant'){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(e)e.code_pointage=data;enfRenderIdentite();}
+    else if(type==='employe'){const e=cacheEmployes.find(x=>String(x.id)===String(id));if(e)e.code_pointage=data;renderEmployes();}
     else{const r=cacheReferents.find(x=>String(x.id)===String(id));if(r)r.code_pointage=data;renderReferents();}
     showBanner('Nouveau code généré : '+data);
   }catch(e){
@@ -17817,7 +17949,7 @@ async function kioskLoadToday(){
 function kioskStatusMap(){
   const map={};
   kioskPointagesToday.forEach(p=>{
-    const key=(p.enfant_id?'e_':'s_')+(p.enfant_id||p.salarie_id);
+    const key=p.enfant_id?('e_'+p.enfant_id):p.employe_id?('m_'+p.employe_id):('s_'+p.salarie_id);
     if(!map[key]||new Date(p.horodatage)>new Date(map[key].horodatage))map[key]=p;
   });
   return map;
@@ -17842,11 +17974,14 @@ function kioskRender(){
   const today=todayStr();
   let items,presentCount=0;
   if(kioskMode==='enfants'){
-    items=cacheEnfants.filter(e=>e.creche_id===kioskCrecheId&&(!e.date_sortie||e.date_sortie>=today));
+    items=cacheEnfants.filter(e=>e.creche_id===kioskCrecheId&&(!e.date_sortie||e.date_sortie>=today)).map(r=>({...r,_kind:'enfants'}));
   }else{
-    items=cacheReferents.filter(r=>r.creche_id===kioskCrecheId);
+    // Personnel = référent(e)s/direction (compte de connexion) + employés (sans compte).
+    items=cacheReferents.filter(r=>r.creche_id===kioskCrecheId).map(r=>({...r,_kind:'referent'}))
+      .concat(cacheEmployes.filter(e=>e.creche_id===kioskCrecheId).map(e=>({...e,_kind:'employe'})));
   }
-  items.forEach(p=>{const k=(kioskMode==='enfants'?'e_':'s_')+p.id;const l=statusMap[k];if(l&&l.action==='arrivee')presentCount++;});
+  const keyOf=p=>(p._kind==='enfants'?'e_':p._kind==='employe'?'m_':'s_')+p.id;
+  items.forEach(p=>{const l=statusMap[keyOf(p)];if(l&&l.action==='arrivee')presentCount++;});
   const counts=document.getElementById('kiosque-counts');
   if(counts)counts.textContent=presentCount+' / '+items.length+' présent(s)';
   if(kioskSearch){
@@ -17856,14 +17991,14 @@ function kioskRender(){
   items=items.slice().sort((a,b)=>(a.prenom||a.name||'').localeCompare(b.prenom||b.name||'','fr',{sensitivity:'base'}));
   if(!items.length){grid.innerHTML='<div class="kiosk-empty"><i class="ti ti-search-off" style="font-size:24px;display:block;margin-bottom:8px;opacity:.5"></i>Aucun'+(kioskMode==='enfants'?' enfant':' membre du personnel')+' trouvé.</div>';return;}
   grid.innerHTML=items.map(p=>{
-    const key=(kioskMode==='enfants'?'e_':'s_')+p.id;
+    const key=keyOf(p);
     const last=statusMap[key];
     const present=!!(last&&last.action==='arrivee');
-    const label=kioskMode==='enfants'?(p.prenom||''):(p.name||'');
-    const sub=kioskMode==='enfants'?(p.nom||''):(p.poste||(p.role==='direction'?'Direction':'Référente'));
+    const label=p._kind==='referent'?(p.name||''):(p.prenom||'');
+    const sub=p._kind==='enfants'?(p.nom||''):p._kind==='employe'?(p.poste||'Employé(e)'):(p.poste||(p.role==='direction'?'Direction':'Référente'));
     const heure=last?new Date(last.horodatage).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
     const statusTxt=present?('Présent(e) depuis '+heure):(last?('Parti(e) à '+heure):'Pas encore pointé(e)');
-    return '<button class="kiosk-tile'+(present?' present':'')+'" onclick="kioskToggle(this,\''+kioskMode+'\',\''+p.id+'\')">'
+    return '<button class="kiosk-tile'+(present?' present':'')+'" onclick="kioskToggle(this,\''+p._kind+'\',\''+p.id+'\')">'
       +'<div class="kiosk-tile-name">'+label+'</div>'
       +(sub?'<div class="kiosk-tile-sub">'+sub+'</div>':'')
       +'<div class="kiosk-tile-status">'+statusTxt+'</div>'
@@ -17878,17 +18013,17 @@ async function kioskToggle(btn,mode,id){
   if(btn)btn.disabled=true;
   try{
     const statusMap=kioskStatusMap();
-    const key=(mode==='enfants'?'e_':'s_')+id;
+    const key=(mode==='enfants'?'e_':mode==='employe'?'m_':'s_')+id;
     const last=statusMap[key];
     const present=!!(last&&last.action==='arrivee');
     const action=present?'depart':'arrivee';
     const row={creche_id:kioskCrecheId,action,effectue_par:currentUser.id};
-    if(mode==='enfants')row.enfant_id=id;else row.salarie_id=id;
+    if(mode==='enfants')row.enfant_id=id;else if(mode==='employe')row.employe_id=id;else row.salarie_id=id;
     const saved=await dbInsert('pointages',row);
     if(!saved){showBanner(window._lastDbError||'Erreur d’enregistrement du pointage.','error');return;}
     kioskPointagesToday.push(saved);
     kioskRender();
-    const person=mode==='enfants'?cacheEnfants.find(e=>e.id===id):cacheReferents.find(r=>r.id===id);
+    const person=mode==='enfants'?cacheEnfants.find(e=>e.id===id):mode==='employe'?cacheEmployes.find(e=>e.id===id):cacheReferents.find(r=>r.id===id);
     kioskShowUndo(saved,person);
   }finally{
     kioskBusy=false;
