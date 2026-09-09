@@ -54,6 +54,16 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 #loginView h3{font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet);margin-bottom:12px;display:flex;align-items:center;gap:8px}
 #loginView .back{text-align:center;margin-top:14px}
 #loginView .back a{font-size:13px;font-weight:700;color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.kiosk-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.kiosk-row:last-child{border-bottom:none}
+.kiosk-info{flex:1;min-width:180px}
+.kiosk-label{font-weight:800;font-size:14px}
+.kiosk-meta{font-size:11.5px;color:var(--muted)}
+.kiosk-link{font-size:11.5px;color:var(--muted);font-family:monospace;background:#F8F6FC;border-radius:8px;padding:4px 8px;display:inline-block;margin-top:3px;word-break:break-all}
+.kiosk-badge{font-size:11px;font-weight:800;border-radius:20px;padding:3px 9px}
+.kiosk-badge.on{background:var(--green-l);color:var(--green)}
+.kiosk-badge.off{background:#F1EFF7;color:var(--muted)}
+.kiosk-acts{display:flex;gap:6px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -156,6 +166,18 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <p class="hint" id="hSem"></p>
         <div class="f"><label class="lb">Observations</label><textarea id="eObs" placeholder="Usage interne."></textarea></div>
       </div>
+
+      <div class="card">
+        <div class="sec"><i class="ti ti-device-tablet"></i> Tablette de pointage par code</div>
+        <p class="hint">Chaque tablette dédiée (sans compte) porte un lien unique. Un parent ou la
+          référente y tape le code à 4 chiffres de l'enfant ou du salarié pour pointer arrivée/départ.
+          Désactivez une tablette perdue ou volée plutôt que de la supprimer : l'historique des pointages
+          déjà saisis est conservé.</p>
+        <div id="kioskDevices"></div>
+        <button class="btn btn-s btn-sm" style="margin-top:8px" onclick="kioskNewDevice()">
+          <i class="ti ti-plus"></i> Nouvelle tablette</button>
+        <p class="hint" id="hKiosk" style="margin-top:10px"></p>
+      </div>
     </div>
 
     <!-- RÉSEAU -->
@@ -221,7 +243,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const RESEAU_CFG_ID='00000000-0000-0000-0000-000000000003';
 
 let ME=null,PROF=null;
-let CRECHES=[],ETABS=[],RCFG={};
+let CRECHES=[],ETABS=[],RCFG={},KIOSK_DEVICES=[];
 let crecheId=null;
 const JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi'],[6,'Samedi']];
 
@@ -335,6 +357,17 @@ async function loadAll(){
   }
   if(!CRECHES.length){toast('Aucune crèche enregistrée.',true);return;}
   crecheId=CRECHES[0].id;
+  // Table posée par le script kiosque_code_pointage.sql : peut ne pas encore
+  // exister sur une base où l'étape 1 n'a pas été exécutée. Ne doit jamais
+  // bloquer le reste de l'écran.
+  try{
+    const{data,error}=await sb.from('kiosk_devices').select('*').order('created_at');
+    if(error)throw error;
+    KIOSK_DEVICES=data||[];
+  }catch(err){
+    console.warn('[loadAll] kiosk_devices',err);
+    KIOSK_DEVICES=[];
+  }
   renderChips();renderEtab();renderReseau();
 }
 
@@ -387,7 +420,105 @@ function renderEtab(){
   document.getElementById('statut').textContent=etabDe(crecheId)
     ? '' : 'Aucune ligne en base pour cette crèche — elle sera créée à l\'enregistrement.';
   SNAP=snapshot();
+  renderKiosk();
 }
+
+/* ---------- TABLETTES DE POINTAGE PAR CODE ---------- */
+function kioskLinkFor(token){
+  try{return new URL('tablette.html?k='+token,location.href).href;}
+  catch(e){return location.href.replace(/[^/]*$/,'')+'tablette.html?k='+token;}
+}
+function renderKiosk(){
+  const box=document.getElementById('kioskDevices');
+  const h=document.getElementById('hKiosk');
+  if(!box)return;
+  const devices=KIOSK_DEVICES.filter(d=>String(d.creche_id)===String(crecheId));
+  if(!devices.length){
+    box.innerHTML='<p class="hint" style="margin:4px 0 0">Aucune tablette enregistrée pour cette crèche.</p>';
+  }else{
+    box.innerHTML=devices.map(d=>{
+      const link=kioskLinkFor(d.token);
+      const created=d.created_at?new Date(d.created_at).toLocaleDateString('fr-FR'):'';
+      return '<div class="kiosk-row">'
+        +'<div class="kiosk-info">'
+          +'<div class="kiosk-label">'+esc(d.label||'Tablette sans nom')+'</div>'
+          +'<div class="kiosk-meta">Créée le '+esc(created)+'</div>'
+          +'<div class="kiosk-link">'+esc(link)+'</div>'
+        +'</div>'
+        +'<span class="kiosk-badge '+(d.active?'on':'off')+'">'+(d.active?'Active':'Désactivée')+'</span>'
+        +'<div class="kiosk-acts">'
+          +'<button class="btn btn-g btn-sm" onclick="kioskCopyLink(\''+esc(link)+'\')"><i class="ti ti-copy"></i> Copier le lien</button>'
+          +'<button class="btn btn-g btn-sm" onclick="kioskToggleActive(\''+d.id+'\','+(!d.active)+')"><i class="ti ti-power"></i> '+(d.active?'Désactiver':'Réactiver')+'</button>'
+          +'<button class="btn btn-g btn-sm" onclick="kioskRegen(\''+d.id+'\')"><i class="ti ti-refresh"></i> Régénérer le lien</button>'
+        +'</div>'
+      +'</div>';
+    }).join('');
+  }
+  if(h)h.textContent='Le lien ouvre '+location.origin.replace(/^https?:\/\//,'')+'… — ouvrez-le une seule fois sur la tablette dédiée puis ajoutez-le à l\'écran d\'accueil.';
+}
+
+async function kioskNewDevice(){
+  const label=prompt('Nom de cette tablette (ex. "Accueil", "Salle bleue")');
+  if(label===null)return;
+  try{
+    const{data,error}=await sb.from('kiosk_devices')
+      .insert({creche_id:crecheId,label:label.trim()||null})
+      .select().single();
+    if(error)throw error;
+    KIOSK_DEVICES.push(data);
+    renderKiosk();
+    toast('Tablette créée ✅');
+  }catch(e){
+    console.error('[kioskNewDevice]',e);
+    const msg=e.code==='42P01'
+      ? 'Table absente — exécutez d\'abord sql/kiosque_code_pointage.sql.' : (e.message||'erreur inconnue');
+    toast('Création impossible : '+msg,true);
+  }
+}
+window.kioskNewDevice=kioskNewDevice;
+
+async function kioskToggleActive(id,active){
+  try{
+    const{error}=await sb.from('kiosk_devices').update({active}).eq('id',id);
+    if(error)throw error;
+    const d=KIOSK_DEVICES.find(x=>String(x.id)===String(id));
+    if(d)d.active=active;
+    renderKiosk();
+    toast(active?'Tablette réactivée ✅':'Tablette désactivée — son lien ne pointera plus.');
+  }catch(e){
+    console.error('[kioskToggleActive]',e);
+    toast('Modification impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+window.kioskToggleActive=kioskToggleActive;
+
+async function kioskRegen(id){
+  if(!confirm('L\'ancien lien cessera de fonctionner immédiatement. Continuer ?'))return;
+  const newToken=crypto.randomUUID();
+  try{
+    const{error}=await sb.from('kiosk_devices').update({token:newToken}).eq('id',id);
+    if(error)throw error;
+    const d=KIOSK_DEVICES.find(x=>String(x.id)===String(id));
+    if(d)d.token=newToken;
+    renderKiosk();
+    toast('Nouveau lien généré — pensez à le recharger sur la tablette.');
+  }catch(e){
+    console.error('[kioskRegen]',e);
+    toast('Régénération impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+window.kioskRegen=kioskRegen;
+
+async function kioskCopyLink(link){
+  try{
+    await navigator.clipboard.writeText(link);
+    toast('Lien copié dans le presse-papiers.');
+  }catch(e){
+    console.warn('[kioskCopyLink]',e);
+    toast('Copie impossible — sélectionnez le lien manuellement.',true);
+  }
+}
+window.kioskCopyLink=kioskCopyLink;
 
 function renderReseau(){
   setVal('rValid',RCFG.devis_validite_jours!=null?RCFG.devis_validite_jours:30);

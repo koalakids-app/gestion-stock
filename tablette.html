@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Pointage</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--violet:#4A3F9F;--orange:#F47920;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--ok:#2E7D32;--err:#C62828}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{height:100%}
+body{font-family:'Nunito',system-ui,sans-serif;background:var(--cream);color:#2B2740;
+     min-height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+.top{display:flex;align-items:center;justify-content:space-between;padding:18px 26px;flex-shrink:0}
+.top .title{font-size:17px;font-weight:800;color:var(--violet);display:flex;align-items:center;gap:8px}
+.top .clock{text-align:right;line-height:1.2}
+#clock{font-size:20px;font-weight:800;color:var(--violet);font-variant-numeric:tabular-nums}
+#date{font-size:12px;color:var(--muted);text-transform:capitalize}
+
+.main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 20px 30px;gap:26px;min-height:0}
+
+.prompt{font-size:19px;font-weight:800;color:var(--violet);text-align:center}
+.subprompt{font-size:13.5px;color:var(--muted);text-align:center;margin-top:-14px}
+
+.dots{display:flex;gap:16px}
+.dot{width:20px;height:20px;border-radius:50%;border:2.5px solid var(--line);background:#fff;transition:background .15s,border-color .15s,transform .15s}
+.dot.filled{background:var(--violet);border-color:var(--violet);transform:scale(1.08)}
+.dots.shake{animation:shake .4s}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-10px)}40%{transform:translateX(10px)}60%{transform:translateX(-8px)}80%{transform:translateX(8px)}}
+
+.pad{display:grid;grid-template-columns:repeat(3,84px);gap:16px}
+.key{width:84px;height:84px;border-radius:50%;border:none;background:#fff;color:#2B2740;
+     font-size:28px;font-weight:800;box-shadow:0 2px 10px rgba(43,39,64,.08);cursor:pointer}
+.key:active{background:#F1EFF7}
+.key.fn{background:transparent;box-shadow:none;color:var(--muted);font-size:15px;font-weight:700}
+.key:disabled{opacity:.4}
+
+.state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+       text-align:center;padding:30px;gap:10px}
+.state i{font-size:60px}
+.state h2{font-size:22px;color:#2B2740}
+.state p{font-size:14.5px;color:var(--muted);max-width:340px}
+.ok i{color:var(--ok)}
+.err i{color:var(--err)}
+.busy i{color:var(--violet)}
+
+.result-acts{display:flex;gap:12px;margin-top:6px}
+.result-acts button{border:none;border-radius:12px;padding:13px 22px;font-family:'Nunito';
+       font-weight:800;font-size:14.5px;cursor:pointer}
+.result-acts .undo{background:#F1EFF7;color:var(--muted)}
+.result-acts .undo:active{background:#E6E2F2}
+
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <span class="title"><i>⏱</i> Pointage</span>
+  <div class="clock"><div id="clock">--:--:--</div><div id="date"></div></div>
+</div>
+
+<div class="main" id="main">
+  <div class="prompt" id="prompt">Entrez votre code</div>
+  <div class="subprompt" id="subprompt">4 chiffres</div>
+  <div class="dots" id="dots">
+    <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+  </div>
+  <div class="pad" id="pad">
+    <button class="key" data-k="1">1</button>
+    <button class="key" data-k="2">2</button>
+    <button class="key" data-k="3">3</button>
+    <button class="key" data-k="4">4</button>
+    <button class="key" data-k="5">5</button>
+    <button class="key" data-k="6">6</button>
+    <button class="key" data-k="7">7</button>
+    <button class="key" data-k="8">8</button>
+    <button class="key" data-k="9">9</button>
+    <button class="key fn" data-k="c">Effacer</button>
+    <button class="key" data-k="0">0</button>
+    <button class="key fn" data-k="back">⌫</button>
+  </div>
+</div>
+
+<div class="state hidden" id="stateBox"></div>
+
+<script>
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,
+  {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+
+const TOKEN=new URLSearchParams(location.search).get('k')||'';
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const main=document.getElementById('main');
+const stateBox=document.getElementById('stateBox');
+const dotsEl=document.getElementById('dots');
+const dots=[...dotsEl.querySelectorAll('.dot')];
+let code='';
+let busy=false;
+let lastCode='';
+let undoTimer=null,resetTimer=null;
+
+function renderDots(){dots.forEach((d,i)=>d.classList.toggle('filled',i<code.length));}
+
+function showMain(){
+  stateBox.classList.add('hidden');
+  main.classList.remove('hidden');
+}
+function showState(html){
+  main.classList.add('hidden');
+  stateBox.innerHTML=html;
+  stateBox.classList.remove('hidden');
+}
+
+function resetPad(){
+  code='';
+  renderDots();
+  clearTimeout(resetTimer);
+  clearTimeout(undoTimer);
+  showMain();
+}
+
+function shakeDots(){
+  dotsEl.classList.remove('shake');
+  void dotsEl.offsetWidth;
+  dotsEl.classList.add('shake');
+}
+
+async function submitCode(){
+  if(busy)return;
+  busy=true;
+  showState(`<div class="state busy"><i>⏳</i><h2>Vérification…</h2></div>`);
+  const{data,error}=await sb.rpc('kk_kiosk_pointer',{p_token:TOKEN,p_code:code});
+  busy=false;
+  const row=Array.isArray(data)?data[0]:data;
+  if(error||!row){
+    console.error('kiosk pointer',error);
+    showErrorThenReset('Connexion impossible','Vérifiez le Wi-Fi de la tablette et réessayez.',3000);
+    return;
+  }
+  if(!row.ok){
+    handleError(row.error);
+    return;
+  }
+  lastCode=code;
+  const verbe=row.action==='arrivee'?'Arrivée enregistrée':'Départ enregistré';
+  const heure=row.horodatage?new Date(row.horodatage).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
+  showState(`
+    <div class="state ok">
+      <i>✓</i>
+      <h2>${esc(verbe)}</h2>
+      <p>${esc(row.label||'')}${row.sub?' · '+esc(row.sub):''} — ${esc(heure)}</p>
+      <div class="result-acts">
+        <button class="undo" id="undoBtn">Annuler ce pointage</button>
+      </div>
+    </div>`);
+  document.getElementById('undoBtn').onclick=undoLast;
+  clearTimeout(resetTimer);
+  resetTimer=setTimeout(resetPad,6000);
+}
+
+function handleError(err){
+  const messages={
+    token_invalide:['Tablette non configurée','Contactez la direction pour reconfigurer cet appareil.',0],
+    trop_de_tentatives:['Trop de tentatives','Merci de patienter quelques minutes avant de réessayer.',4000],
+    code_invalide:['Code invalide','Le code doit comporter 4 chiffres.',2000],
+    code_inconnu:['Code inconnu','Vérifiez le code et réessayez.',2000],
+    code_ambigu:['Erreur de configuration','Contactez la direction : deux dossiers partagent ce code.',4000]
+  };
+  const[title,msg,delay]=messages[err]||['Erreur','Une erreur inattendue est survenue.',3000];
+  showErrorThenReset(title,msg,delay);
+}
+
+function showErrorThenReset(title,msg,delay){
+  showState(`<div class="state err"><i>✕</i><h2>${esc(title)}</h2><p>${esc(msg)}</p></div>`);
+  code='';renderDots();
+  clearTimeout(resetTimer);
+  if(delay>0)resetTimer=setTimeout(resetPad,delay);
+}
+
+async function undoLast(){
+  const btn=document.getElementById('undoBtn');
+  if(btn){btn.disabled=true;btn.textContent='Annulation…';}
+  const{data,error}=await sb.rpc('kk_kiosk_annuler_dernier',{p_token:TOKEN,p_code:lastCode});
+  if(error||!data){
+    showErrorThenReset('Annulation impossible','Le délai de 2 minutes est peut-être dépassé.',3000);
+    return;
+  }
+  showState(`<div class="state ok"><i>↩</i><h2>Pointage annulé</h2></div>`);
+  clearTimeout(resetTimer);
+  resetTimer=setTimeout(resetPad,2000);
+}
+
+document.getElementById('pad').addEventListener('click',e=>{
+  const btn=e.target.closest('.key');
+  if(!btn||busy)return;
+  const k=btn.dataset.k;
+  if(k==='c'){code='';renderDots();return;}
+  if(k==='back'){code=code.slice(0,-1);renderDots();return;}
+  if(code.length>=4)return;
+  code+=k;
+  renderDots();
+  if(code.length===4)submitCode();
+});
+
+function tickClock(){
+  const n=new Date();
+  document.getElementById('clock').textContent=n.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('date').textContent=n.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+}
+tickClock();
+setInterval(tickClock,1000);
+
+if(!TOKEN||TOKEN.length<20){
+  showState('<div class="state err"><i>✕</i><h2>Lien invalide</h2><p>Cette tablette n’a pas de jeton de configuration valide dans son URL.</p></div>');
+}
+</script>
+</body>
+</html>
