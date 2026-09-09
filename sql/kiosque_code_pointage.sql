@@ -347,14 +347,17 @@ begin
 
   v_new_action := case when v_last_action = 'arrivee' then 'depart' else 'arrivee' end;
 
+  -- `horodatage` bare serait ambigu ici : RETURNS TABLE déclare aussi une
+  -- colonne de sortie nommée `horodatage`, qui masque la colonne de la table
+  -- dans un RETURNING non qualifié (erreur Postgres 42702). D'où l'alias.
   if v_type = 'enfant' then
-    insert into public.pointages(creche_id, enfant_id, action, effectue_par, source)
+    insert into public.pointages as pt (creche_id, enfant_id, action, effectue_par, source)
       values (v_creche_id, v_id, v_new_action, null, 'kiosque_code')
-      returning horodatage into v_horodatage;
+      returning pt.horodatage into v_horodatage;
   else
-    insert into public.pointages(creche_id, salarie_id, action, effectue_par, source)
+    insert into public.pointages as pt (creche_id, salarie_id, action, effectue_par, source)
       values (v_creche_id, v_id, v_new_action, null, 'kiosque_code')
-      returning horodatage into v_horodatage;
+      returning pt.horodatage into v_horodatage;
   end if;
 
   insert into public.kiosk_login_attempts(device_id, success) values (v_device.id, true);
@@ -381,7 +384,7 @@ declare
   v_enfant_id  uuid;
   v_referent_id uuid;
   v_creche_id  uuid;
-  v_deleted    boolean := false;
+  v_rows       int;
 begin
   select * into v_device from public.kiosk_devices where token = p_token and active = true;
   if v_device is null or p_code !~ '^[0-9]{4}$' then
@@ -412,8 +415,11 @@ begin
         limit 1
       );
 
-  get diagnostics v_deleted = row_count;
-  return v_deleted > 0;
+  -- GET DIAGNOSTICS ... row_count exige une cible entière : une variable
+  -- boolean provoquait une erreur de cast à l'exécution (jamais au moment du
+  -- CREATE FUNCTION, d'où le bug passé inaperçu jusqu'au premier vrai appel).
+  get diagnostics v_rows = row_count;
+  return v_rows > 0;
 end;
 $$;
 
