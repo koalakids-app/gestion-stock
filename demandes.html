@@ -1681,16 +1681,58 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <div class="overlay" id="modal-employe-wrap">
-  <div class="modal">
+  <div class="modal" style="max-width:640px;width:100%;max-height:88vh;overflow-y:auto">
     <h3 id="modal-employe-title">Ajouter un employé</h3>
+
     <div class="frow">
       <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="emp-prenom" placeholder="Julie"/></div>
       <div class="fg"><label class="flabel">Nom</label><input class="finput" id="emp-nom" placeholder="Petit"/></div>
     </div>
     <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="emp-creche"><option value="">-- Choisir --</option></select></div>
-    <div class="fg"><label class="flabel">Poste</label><input class="finput" id="emp-poste" placeholder="Agent d'entretien"/></div>
-    <div class="fg"><label class="flabel">E-mail (optionnel)</label><input class="finput" id="emp-email" type="email" placeholder="Pour l'envoi du code de pointage par e-mail"/></div>
-    <div class="info-box"><i class="ti ti-info-circle" style="font-size:15px"></i> Pas de compte de connexion créé — seulement une fiche et un code de pointage.</div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Poste</label><input class="finput" id="emp-poste" placeholder="Agent d'entretien"/></div>
+      <div class="fg"><label class="flabel">E-mail (optionnel)</label><input class="finput" id="emp-email" type="email" placeholder="Pour l'envoi du code de pointage"/></div>
+    </div>
+
+    <div style="font-size:12.5px;font-weight:800;color:var(--koala);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 10px">État civil</div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Date de naissance</label><input class="finput" id="emp-date-naissance" type="date"/></div>
+      <div class="fg"><label class="flabel">Lieu de naissance</label><input class="finput" id="emp-lieu-naissance" placeholder="Ville"/></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Nationalité</label><input class="finput" id="emp-nationalite" placeholder="Française"/></div>
+      <div class="fg"><label class="flabel">N° de sécurité sociale</label><input class="finput" id="emp-numero-secu" placeholder="15 chiffres"/></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Adresse</label><input class="finput" id="emp-adresse" placeholder="Adresse postale"/></div>
+      <div class="fg"><label class="flabel">Téléphone</label><input class="finput" id="emp-telephone" type="tel"/></div>
+    </div>
+
+    <div style="font-size:12.5px;font-weight:800;color:var(--koala);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 10px">Contrat de travail</div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Type de contrat</label><select class="finput" id="emp-type-contrat"><option value="">-- Non défini --</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select></div>
+      <div class="fg"><label class="flabel">Qualification</label><input class="finput" id="emp-qualification" placeholder="Ex. : Auxiliaire de puériculture"/></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Date de début</label><input class="finput" id="emp-date-debut" type="date"/></div>
+      <div class="fg"><label class="flabel">Date de fin (si CDD)</label><input class="finput" id="emp-date-fin" type="date"/></div>
+    </div>
+    <div class="fg"><label class="flabel">Motif du CDD (si applicable)</label><input class="finput" id="emp-motif-cdd" placeholder="Ex. : remplacement d'une salariée absente"/></div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Période d'essai</label><input class="finput" id="emp-periode-essai" placeholder="Ex. : 2 mois renouvelable une fois"/></div>
+      <div class="fg"><label class="flabel">Temps de travail</label><select class="finput" id="emp-temps-travail"><option value="">-- Non défini --</option><option value="temps_plein">Temps plein</option><option value="temps_partiel">Temps partiel</option></select></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Heures hebdomadaires</label><input class="finput" id="emp-heures-hebdo" type="number" step="0.5" min="0"/></div>
+      <div class="fg"><label class="flabel">Salaire brut mensuel (€)</label><input class="finput" id="emp-salaire-brut" type="number" step="0.01" min="0"/></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Convention collective</label><input class="finput" id="emp-convention" placeholder="Ex. : SNAECSO"/></div>
+      <div class="fg"><label class="flabel">Coefficient / échelon</label><input class="finput" id="emp-coefficient"/></div>
+    </div>
+    <div class="fg"><label class="flabel">Lieu de travail</label><input class="finput" id="emp-lieu-travail" placeholder="Par défaut, l'adresse de la crèche"/></div>
+
+    <div class="info-box"><i class="ti ti-info-circle" style="font-size:15px"></i> Pas de compte de connexion créé — seulement une fiche, ces informations et un code de pointage.</div>
     <div class="mactions"><button class="btn-cancel" id="emp-btn-delete" style="display:none;color:var(--red)" onclick="deleteEmploye()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-employe-wrap')">Annuler</button><button class="btn-primary" id="emp-btn-save" onclick="saveEmploye()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
 </div>
@@ -2680,7 +2722,7 @@ function showMain(tab){
   if(tab==='planning')renderPlanning();
   if(tab==='demands'){renderCrecheTabs();setTimeout(markConsignesRead,600);}
   if(tab==='referents')renderReferents();
-  if(tab==='employes')renderEmployes();
+  if(tab==='employes'){renderEmployes();empChargerHeuresSemaine();}
   if(tab==='incidents')renderIncidents();
   if(tab==='presence'){initPresenceDate();presMajBarre();renderPresence();}
   if(tab==='evenements')renderCalendar();
@@ -2997,6 +3039,7 @@ async function deleteRef(id){if(!confirm('Supprimer ce référent ?'))return;con
 
 // EMPLOYÉS (personnel sans compte de connexion — table `employes`, cf. sql/module_employes.sql)
 let editingEmployeId=null;
+let empHeuresSemaine={};   // {employe_id: heures pointées depuis lundi} — cf. empChargerHeuresSemaine()
 function renderEmployes(){
   const grid=document.getElementById('employe-grid');if(!grid)return;
   const list=isDirection?cacheEmployes:cacheEmployes.filter(e=>e.creche_id===currentProfile?.creche_id);
@@ -3004,8 +3047,61 @@ function renderEmployes(){
   grid.innerHTML=list.map(e=>{
     const creche=cacheCreches.find(c=>c.id===e.creche_id);
     const initials=((e.prenom||'')+' '+(e.nom||'')).trim().split(' ').filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?';
-    return '<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:var(--muted)">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+escHtml(e.poste||'Employé(e)')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div>'+(e.email?'<div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+escHtml(e.email)+'</div>':'')+'<div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkCodeLigne(e.code_pointage)+'</div></div></div><div class="ref-actions"><button class="ibtn" onclick="editEmploye(\''+e.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteEmploye(\''+e.id+'\')"><i class="ti ti-trash"></i></button></div>'+(e.creche_id?'<div style="display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px">'+kkCodeActions('employe',e.id,e.creche_id,e.code_pointage)+'</div>':'')+'</div>';
+    const contratTxt=[e.type_contrat,e.temps_travail==='temps_partiel'?'Temps partiel':e.temps_travail==='temps_plein'?'Temps plein':''].filter(Boolean).join(' · ');
+    return '<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:var(--muted)">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+escHtml(e.poste||'Employé(e)')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div>'+(e.email?'<div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+escHtml(e.email)+'</div>':'')+(contratTxt?'<div class="ref-detail"><i class="ti ti-file-certificate" style="font-size:11px"></i> '+escHtml(contratTxt)+'</div>':'<div class="ref-detail" style="color:var(--red)"><i class="ti ti-alert-triangle" style="font-size:11px"></i> Contrat non renseigné</div>')+'<div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkCodeLigne(e.code_pointage)+'</div>'+empHeuresLigne(e)+'</div></div><div class="ref-actions"><button class="ibtn" onclick="editEmploye(\''+e.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteEmploye(\''+e.id+'\')"><i class="ti ti-trash"></i></button></div>'+(e.creche_id?'<div style="display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px">'+kkCodeActions('employe',e.id,e.creche_id,e.code_pointage)+'</div>':'')+'</div>';
   }).join('');
+}
+
+/* Heures pointées (via `pointages.employe_id`) depuis lundi 00:00, comparées
+   à `heures_hebdo` du contrat. Purement informatif — un CDD à temps partiel
+   commencé en cours de semaine, une régularisation manuelle des pointages...
+   il y a trop de cas légitimes d'écart pour que ce soit autre chose qu'un
+   signal, jamais un blocage. */
+function empHeuresLigne(e){
+  const h=empHeuresSemaine[e.id];
+  if(h==null)return'';
+  const pointees=Math.round(h*10)/10;
+  if(!e.heures_hebdo){
+    return '<div class="ref-detail"><i class="ti ti-clock" style="font-size:11px"></i> '+pointees+' h pointées cette semaine</div>';
+  }
+  const ecart=pointees-e.heures_hebdo;
+  const ok=Math.abs(ecart)<=Math.max(1,e.heures_hebdo*0.1);
+  const ecartTxt=ok?'':' ('+(ecart>0?'+':'')+(Math.round(ecart*10)/10)+' h)';
+  return '<div class="ref-detail" style="color:'+(ok?'var(--green)':'var(--orange-dark)')+'"><i class="ti ti-clock" style="font-size:11px"></i> '
+    +pointees+' h / '+e.heures_hebdo+' h contrat cette semaine'+ecartTxt+'</div>';
+}
+
+/* Une seule requête pour toutes les crèches visibles, appelée à l'ouverture
+   de l'onglet — pas à chaque rendu, pour ne pas interroger `pointages` en
+   boucle. Semaine en cours, lundi 00:00 → dimanche 24:00. */
+async function empChargerHeuresSemaine(){
+  const list=isDirection?cacheEmployes:cacheEmployes.filter(e=>e.creche_id===currentProfile?.creche_id);
+  const crecheIds=[...new Set(list.map(e=>e.creche_id).filter(Boolean))];
+  if(!crecheIds.length)return;
+  const debut=mondayOfISO(todayStr());
+  const finD=new Date(debut+'T00:00:00');finD.setDate(finD.getDate()+7);
+  const fin=ipDateToLocalISO(finD);
+  const{data,error}=await sb.from('pointages').select('employe_id,action,horodatage')
+    .in('creche_id',crecheIds).not('employe_id','is',null)
+    .gte('horodatage',debut+'T00:00:00').lt('horodatage',fin+'T00:00:00')
+    .order('horodatage',{ascending:true});
+  if(error){console.warn('[empChargerHeuresSemaine]',error);return;}
+  const parEmploye={};
+  (data||[]).forEach(p=>{(parEmploye[p.employe_id]=parEmploye[p.employe_id]||[]).push(p);});
+  const heures={};
+  Object.keys(parEmploye).forEach(id=>{
+    let total=0,derniereArrivee=null;
+    parEmploye[id].forEach(ev=>{
+      if(ev.action==='arrivee')derniereArrivee=new Date(ev.horodatage);
+      else if(ev.action==='depart'&&derniereArrivee){
+        total+=(new Date(ev.horodatage)-derniereArrivee)/3600000;
+        derniereArrivee=null;
+      }
+    });
+    heures[id]=total;
+  });
+  empHeuresSemaine=heures;
+  renderEmployes();
 }
 window.renderEmployes=renderEmployes;
 
@@ -3020,12 +3116,29 @@ function empFillCreches(selectedId){
   sel.style.cursor=isDirection?'':'not-allowed';
 }
 
+/* Champs texte de la fiche employé (état civil + contrat de travail),
+   au-delà de prénom/nom/poste/email/crèche gérés à part. */
+const EMP_TEXT_FIELDS=[
+  ['emp-date-naissance','date_naissance'],['emp-lieu-naissance','lieu_naissance'],
+  ['emp-nationalite','nationalite'],['emp-numero-secu','numero_secu'],
+  ['emp-adresse','adresse'],['emp-telephone','telephone'],
+  ['emp-type-contrat','type_contrat'],['emp-qualification','qualification'],
+  ['emp-date-debut','date_debut'],['emp-date-fin','date_fin'],
+  ['emp-motif-cdd','motif_cdd'],['emp-periode-essai','periode_essai'],
+  ['emp-temps-travail','temps_travail'],
+  ['emp-convention','convention_collective'],['emp-coefficient','coefficient'],
+  ['emp-lieu-travail','lieu_travail']
+];
+const EMP_NUM_FIELDS=[['emp-heures-hebdo','heures_hebdo'],['emp-salaire-brut','salaire_brut']];
+
 function openEmployeModal(){
   editingEmployeId=null;
   document.getElementById('modal-employe-title').textContent='Ajouter un employé';
   document.getElementById('emp-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';
   document.getElementById('emp-btn-delete').style.display='none';
   ['emp-prenom','emp-nom','emp-poste','emp-email'].forEach(id=>document.getElementById(id).value='');
+  EMP_TEXT_FIELDS.forEach(([id])=>{const el=document.getElementById(id);if(el)el.value='';});
+  EMP_NUM_FIELDS.forEach(([id])=>{const el=document.getElementById(id);if(el)el.value='';});
   empFillCreches(null);
   document.getElementById('modal-employe-wrap').classList.add('open');
 }
@@ -3041,6 +3154,8 @@ function editEmploye(id){
   document.getElementById('emp-nom').value=e.nom||'';
   document.getElementById('emp-poste').value=e.poste||'';
   document.getElementById('emp-email').value=e.email||'';
+  EMP_TEXT_FIELDS.forEach(([id,col])=>{const el=document.getElementById(id);if(el)el.value=e[col]||'';});
+  EMP_NUM_FIELDS.forEach(([id,col])=>{const el=document.getElementById(id);if(el)el.value=e[col]==null?'':e[col];});
   empFillCreches(e.creche_id);
   document.getElementById('modal-employe-wrap').classList.add('open');
 }
@@ -3058,6 +3173,15 @@ async function saveEmploye(){
     email:document.getElementById('emp-email').value.trim()||null,
     creche_id:crecheId
   };
+  EMP_TEXT_FIELDS.forEach(([id,col])=>{
+    const el=document.getElementById(id);
+    row[col]=el&&el.value.trim()?el.value.trim():null;
+  });
+  EMP_NUM_FIELDS.forEach(([id,col])=>{
+    const el=document.getElementById(id);
+    const v=el?el.value.trim():'';
+    row[col]=v===''?null:Number(v);
+  });
   const btn=document.getElementById('emp-btn-save');btn.disabled=true;
   try{
     if(editingEmployeId){
