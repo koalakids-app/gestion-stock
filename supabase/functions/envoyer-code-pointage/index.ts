@@ -14,9 +14,9 @@
 //
 // Déploiement :
 //   supabase functions deploy envoyer-code-pointage
-// Secrets nécessaires (déjà posés si envoyer-devis/envoyer-contrat fonctionnent) :
+// Secrets nécessaires (déjà posés — voir `supabase secrets list`) :
 //   RESEND_API_KEY   — clé API Resend
-//   RESEND_FROM      — adresse d'expédition vérifiée, ex. "Koala Kids <no-reply@koalakids.fr>"
+//   FROM_EMAIL       — adresse d'expédition vérifiée, ex. "Koala Kids <no-reply@koalakids.fr>"
 // SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont injectées automatiquement par
 // la plateforme Supabase Edge Functions, pas besoin de les poser à la main.
 // ============================================================================
@@ -38,9 +38,9 @@ function json(body: unknown, status = 200) {
 
 async function sendResendEmail(to: string[], subject: string, html: string) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
-  const from = Deno.env.get("RESEND_FROM");
+  const from = Deno.env.get("FROM_EMAIL");
   if (!apiKey || !from) {
-    throw new Error("Configuration Resend manquante (RESEND_API_KEY / RESEND_FROM).");
+    throw new Error("Configuration Resend manquante (RESEND_API_KEY / FROM_EMAIL).");
   }
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
