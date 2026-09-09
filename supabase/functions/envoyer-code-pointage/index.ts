@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     return json({ error: "corps_invalide" }, 400);
   }
   const { type, id } = body;
-  if (type !== "enfant" && type !== "salarie") return json({ error: "type_invalide" }, 400);
+  if (type !== "enfant" && type !== "salarie" && type !== "employe") return json({ error: "type_invalide" }, 400);
   if (!id) return json({ error: "id_manquant" }, 400);
 
   const supabase = createClient(
@@ -129,27 +129,54 @@ Deno.serve(async (req) => {
       return json({ ok: true, sent_to: emails.length });
     }
 
-    // type === "salarie"
-    const { data: referent, error: rErr } = await supabase
-      .from("referents")
-      .select("id, name, email, code_pointage, creche_id")
+    if (type === "salarie") {
+      const { data: referent, error: rErr } = await supabase
+        .from("referents")
+        .select("id, name, email, code_pointage, creche_id")
+        .eq("id", id)
+        .maybeSingle();
+      if (rErr) throw rErr;
+      if (!referent) return json({ error: "referent_introuvable" }, 404);
+      if (!referent.code_pointage) return json({ error: "code_absent" }, 400);
+      if (!referent.email) return json({ error: "aucun_email" }, 400);
+
+      const { data: creche } = await supabase
+        .from("creches").select("name").eq("id", referent.creche_id).maybeSingle();
+
+      await sendResendEmail(
+        [referent.email],
+        "Votre code de pointage",
+        codeEmailHtml({
+          titre: `Code de pointage de ${referent.name || ""}`,
+          sousTitre: "À taper sur la tablette de pointage",
+          code: referent.code_pointage,
+          creche: creche?.name || "",
+        }),
+      );
+      return json({ ok: true, sent_to: 1 });
+    }
+
+    // type === "employe" (table `employes`, personnel sans compte de connexion)
+    const { data: employe, error: emErr } = await supabase
+      .from("employes")
+      .select("id, prenom, nom, email, code_pointage, creche_id")
       .eq("id", id)
       .maybeSingle();
-    if (rErr) throw rErr;
-    if (!referent) return json({ error: "referent_introuvable" }, 404);
-    if (!referent.code_pointage) return json({ error: "code_absent" }, 400);
-    if (!referent.email) return json({ error: "aucun_email" }, 400);
+    if (emErr) throw emErr;
+    if (!employe) return json({ error: "employe_introuvable" }, 404);
+    if (!employe.code_pointage) return json({ error: "code_absent" }, 400);
+    if (!employe.email) return json({ error: "aucun_email" }, 400);
 
     const { data: creche } = await supabase
-      .from("creches").select("name").eq("id", referent.creche_id).maybeSingle();
+      .from("creches").select("name").eq("id", employe.creche_id).maybeSingle();
 
     await sendResendEmail(
-      [referent.email],
+      [employe.email],
       "Votre code de pointage",
       codeEmailHtml({
-        titre: `Code de pointage de ${referent.name || ""}`,
+        titre: `Code de pointage de ${employe.prenom || ""} ${employe.nom || ""}`.trim(),
         sousTitre: "À taper sur la tablette de pointage",
-        code: referent.code_pointage,
+        code: employe.code_pointage,
         creche: creche?.name || "",
       }),
     );
