@@ -3615,6 +3615,8 @@ async function renderPresenceGantt(){
     presMap[p.enfant_id][p.slot]=p.status;
     if(p.heure_debut&&(!presMap[p.enfant_id].hd||p.heure_debut<presMap[p.enfant_id].hd))presMap[p.enfant_id].hd=p.heure_debut;
     if(p.heure_fin&&(!presMap[p.enfant_id].hf||p.heure_fin>presMap[p.enfant_id].hf))presMap[p.enfant_id].hf=p.heure_fin;
+    // Un seul créneau pointé via tablette suffit à considérer la journée « pointée ».
+    if(p.source==='pointage')presMap[p.enfant_id].pointe=true;
   });
   /* \u2500\u2500 Contrats d\u2019accueil \u2500\u2500
      ctPeriode : contrat dont la p\u00e9riode couvre la date, quel que soit le jour
@@ -3718,18 +3720,23 @@ async function renderPresenceGantt(){
     const srcFin=p.hf||(ct?ct.heure_fin:null);
     const cA=_col(srcDeb,false);
     const cB=_col(srcFin,true);
+    // Vert = pointé réellement (tablette/kiosque), violet = présence cochée à la main.
+    const pointe=!!p.pointe;
+    const barColor=pointe?'var(--green)':'var(--koala)';
     const segments=[];
-    if(cA!==null&&cB!==null&&cB>cA)segments.push({start:cA,end:cB,color:'var(--koala)'});
-    else if(hasM&&hasA)segments.push({start:0,end:COLS,color:'var(--koala)'});
-    else if(hasM)segments.push({start:0,end:12,color:'var(--koala)'});
-    else if(hasA)segments.push({start:12,end:COLS,color:'var(--koala)'});
+    if(cA!==null&&cB!==null&&cB>cA)segments.push({start:cA,end:cB,color:barColor});
+    else if(hasM&&hasA)segments.push({start:0,end:COLS,color:barColor});
+    else if(hasM)segments.push({start:0,end:12,color:barColor});
+    else if(hasA)segments.push({start:12,end:COLS,color:barColor});
     const horsJour=!ctMap[String(e.id)];
-    const bg=idx%2===0?'#fff':'#f7f6fb';
-    rowsHtml+='<div style="display:flex;align-items:center;padding:3px 0;background:'+bg+';border-radius:4px">';
-    rowsHtml+='<button onclick="togglePresence(\''+e.id+'\',\''+dateStr+'\')" title="'+(absent?'Marquer présent':'Marquer absent')+'" style="flex-shrink:0;width:24px;height:24px;margin-right:6px;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;background:'+(absent?'#f0eef8':'var(--koala)')+';color:'+(absent?'var(--muted)':'#fff')+'"><i class="ti ti-'+(absent?'user-x':'user-check')+'"></i></button>';
-    rowsHtml+='<div onclick="enfOpenFiche(\''+e.id+'\')" style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--koala)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="Ouvrir le dossier de '+escHtml(e.prenom+' '+e.nom)+(e.dob?'':' (date de naissance manquante)')+'">'+escHtml(e.prenom+' '+e.nom)+(horsJour?' <span style="color:var(--muted);font-size:10px" title="Aucun contrat ce jour de la semaine">○</span>':'')+(e.dob?'':' <span style=\"color:var(--red);font-size:10px\">⚠</span>')+'</div>';
+    // Une ligne « hors contrat » se voit sans avoir à chercher : fond teinté,
+    // pas juste un petit repère à côté du prénom (trop discret dans un groupe).
+    const bg=horsJour?'var(--orange-light)':(idx%2===0?'#fff':'#f7f6fb');
+    rowsHtml+='<div style="display:flex;align-items:center;padding:3px 0;background:'+bg+';border-radius:4px'+(horsJour?';box-shadow:inset 3px 0 0 var(--orange)':'')+'">';
+    rowsHtml+='<button onclick="togglePresence(\''+e.id+'\',\''+dateStr+'\')" title="'+(absent?'Marquer présent':'Marquer absent')+'" style="flex-shrink:0;width:24px;height:24px;margin-right:6px;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;background:'+(absent?'#f0eef8':barColor)+';color:'+(absent?'var(--muted)':'#fff')+'"><i class="ti ti-'+(absent?'user-x':pointe?'device-tablet':'user-check')+'"></i></button>';
+    rowsHtml+='<div onclick="enfOpenFiche(\''+e.id+'\')" style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--koala)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="Ouvrir le dossier de '+escHtml(e.prenom+' '+e.nom)+(e.dob?'':' (date de naissance manquante)')+'">'+escHtml(e.prenom+' '+e.nom)+(horsJour?' <span style="display:inline-flex;align-items:center;gap:2px;background:var(--orange);color:#fff;font-size:9.5px;font-weight:800;border-radius:8px;padding:1.5px 6px;margin-left:4px;vertical-align:middle" title="Aucun contrat ce jour de la semaine"><i class="ti ti-alert-triangle" style="font-size:10px"></i> Hors contrat</span>':'')+(e.dob?'':' <span style=\"color:var(--red);font-size:10px\">⚠</span>')+'</div>';
     // Barre Gantt
-    rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:20px;border-left:1px solid #e0dff0">';
+    rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:22px;border-left:1px solid #e0dff0">';
     // Lignes verticales des heures
     for(let c=0;c<COLS;c+=2){
       rowsHtml+='<div style="position:absolute;left:'+(c*COL_W)+'px;top:0;bottom:0;border-left:1px solid '+(c===0?'transparent':'#ece9f5')+';pointer-events:none"></div>';
@@ -3737,18 +3744,21 @@ async function renderPresenceGantt(){
     // Bande 12h (s\u00e9parateur matin/apm)
     rowsHtml+='<div style="position:absolute;left:'+(12*COL_W)+'px;top:0;bottom:0;border-left:1px dashed #b0a8d8;pointer-events:none"></div>';
     if(absent){
-      rowsHtml+='<div style="position:absolute;left:4px;right:4px;top:6px;height:8px;background:#f0eef8;border-radius:4px"></div>';
+      rowsHtml+='<div style="position:absolute;left:4px;right:4px;top:7px;height:8px;background:#f0eef8;border-radius:4px"></div>';
     }else{
       segments.forEach(seg=>{
         const left=seg.start*COL_W;const width=(seg.end-seg.start)*COL_W-2;
-        rowsHtml+='<div style="position:absolute;left:'+left+'px;width:'+width+'px;top:3px;height:14px;background:'+seg.color+';border-radius:4px;opacity:0.85"></div>';
+        rowsHtml+='<div style="position:absolute;left:'+left+'px;width:'+width+'px;top:2px;height:18px;background:'+seg.color+';border-radius:5px;box-shadow:0 1px 3px rgba(0,0,0,.18);display:flex;align-items:center;padding-left:3px">'
+          +(pointe?'<i class="ti ti-device-tablet" style="color:#fff;font-size:11px;opacity:.95"></i>':'')+'</div>';
       });
     }
     rowsHtml+='</div></div>';
   });
   // Ligne de d\u00e9marcation 12h (l\u00e9gende)
-  let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted)">';
+  let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted);flex-wrap:wrap">';
   legendHtml+='<span><i class="ti ti-user-check" style="color:var(--koala);vertical-align:middle;margin-right:2px"></i>Cliquez le rond pour '+(presOnlyPresents?'retirer l\u2019enfant de la journ\u00e9e':'basculer pr\u00e9sent / absent')+'</span>';
+  legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><i class="ti ti-square-rounded-filled" style="color:var(--green);vertical-align:middle;margin-right:2px"></i>Point\u00e9 sur tablette <i class="ti ti-square-rounded-filled" style="color:var(--koala);vertical-align:middle;margin:0 2px 0 8px"></i>Pr\u00e9sence coch\u00e9e manuellement</span>';
+  legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:8px;height:8px;background:var(--orange);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Hors jour de contrat</span>';
   legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
   if(_nbPeriode) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px">'+_nbSousContrat+' enfant(s) sous contrat le '+((CT_JOURS.find(x=>x[0]===jourSem)||[jourSem,'ce jour'])[1].toLowerCase())+' \u00b7 '+_nbPeriode+' inscrit(s) en cours de contrat</span>';
   else if(ctLus) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px;color:var(--orange)">Aucun contrat en cours \u00e0 cette date \u2014 liste compl\u00e8te affich\u00e9e</span>';
@@ -18144,7 +18154,7 @@ async function presMarquerPresentDepuisPointage(enfantId,dateStr){
     const deja=new Set((existant||[]).map(p=>p.slot));
     const manquants=['M','A'].filter(s=>!deja.has(s));
     if(!manquants.length)return;
-    await sb.from('presences').insert(manquants.map(slot=>({enfant_id:enfantId,presence_date:dateStr,slot,status:'present'})));
+    await sb.from('presences').insert(manquants.map(slot=>({enfant_id:enfantId,presence_date:dateStr,slot,status:'present',source:'pointage'})));
   }catch(e){console.warn('[presMarquerPresentDepuisPointage]',e);}
 }
 
