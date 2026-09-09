@@ -18131,6 +18131,23 @@ function kioskRender(){
   }).join('');
 }
 
+/* Lien pointage → présences (mode kiosque connecté). Même règle que côté
+   SQL (kk_kiosk_pointer, cf. sql/lien_pointage_presence.sql) : présent sur
+   toute la journée (M+A, comme togglePresence), et on ne touche JAMAIS
+   heure_debut/heure_fin ici — laissés null pour que le Gantt du module
+   Présences retombe sur les horaires du contrat d'accueil plutôt que sur
+   l'heure de pointage. Un slot déjà renseigné (statut quelconque) n'est
+   jamais écrasé. */
+async function presMarquerPresentDepuisPointage(enfantId,dateStr){
+  try{
+    const{data:existant}=await sb.from('presences').select('slot').eq('enfant_id',enfantId).eq('presence_date',dateStr);
+    const deja=new Set((existant||[]).map(p=>p.slot));
+    const manquants=['M','A'].filter(s=>!deja.has(s));
+    if(!manquants.length)return;
+    await sb.from('presences').insert(manquants.map(slot=>({enfant_id:enfantId,presence_date:dateStr,slot,status:'present'})));
+  }catch(e){console.warn('[presMarquerPresentDepuisPointage]',e);}
+}
+
 async function kioskToggle(btn,mode,id){
   if(kioskBusy)return;
   kioskBusy=true;
@@ -18146,6 +18163,7 @@ async function kioskToggle(btn,mode,id){
     const saved=await dbInsert('pointages',row);
     if(!saved){showBanner(window._lastDbError||'Erreur d’enregistrement du pointage.','error');return;}
     kioskPointagesToday.push(saved);
+    if(mode==='enfants'&&action==='arrivee')await presMarquerPresentDepuisPointage(id,todayStr());
     kioskRender();
     const person=mode==='enfants'?cacheEnfants.find(e=>e.id===id):mode==='employe'?cacheEmployes.find(e=>e.id===id):cacheReferents.find(r=>r.id===id);
     kioskShowUndo(saved,person);
