@@ -1603,6 +1603,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label class="flabel">Priorité</label><select class="finput" id="d-prio"><option value="normal">Normale</option><option value="urgent">Urgente</option><option value="info">Information</option></select></div>
       <div class="fg"><label class="flabel">Thème</label><select class="finput" id="d-theme"><option>Pédagogie</option><option>Matériel</option><option>Formation</option><option>Organisation</option><option>Sécurité</option><option>Autre</option></select></div>
     </div>
+    <div class="fg">
+      <label class="flabel">Pièce jointe (optionnel)</label>
+      <input type="file" id="d-attach-input" style="display:none" onchange="dHandleAttachment(event)"/>
+      <button class="btn-cancel" style="width:100%" onclick="document.getElementById('d-attach-input').click()"><i class="ti ti-paperclip"></i> Joindre un fichier</button>
+      <div id="d-attach-status" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
+    </div>
     <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-demand-wrap')">Annuler</button><button class="btn-primary" id="btn-save-demand" onclick="saveDemand()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
 </div>
@@ -1617,7 +1623,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="thread-messages" style="flex:1;overflow-y:auto;margin-top:12px;padding-right:4px;min-height:60px"></div>
     <div style="margin-top:10px;border-top:1px solid #eee;padding-top:10px">
       <textarea class="finput" id="thread-input" rows="2" placeholder="Écrire une réponse…" style="resize:vertical"></textarea>
-      <div class="mactions" style="margin-top:8px"><button class="btn-primary" id="btn-send-msg" onclick="sendThreadMessage()"><i class="ti ti-send"></i> Envoyer</button></div>
+      <input type="file" id="thread-attach-input" style="display:none" onchange="threadHandleAttachment(event)"/>
+      <div id="thread-attach-status" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
+      <div class="mactions" style="margin-top:8px">
+        <button class="btn-cancel" onclick="document.getElementById('thread-attach-input').click()" title="Joindre un fichier"><i class="ti ti-paperclip"></i></button>
+        <button class="btn-primary" id="btn-send-msg" onclick="sendThreadMessage()"><i class="ti ti-send"></i> Envoyer</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1629,6 +1640,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fg"><label class="flabel">Sujet</label><input class="finput" id="c-subj" placeholder="Ex. : Mise à jour protocole accueil"/></div>
     <div class="fg"><label class="flabel">Message</label><textarea class="finput" id="c-msg" rows="4" style="resize:vertical"></textarea></div>
     <div class="fg"><label class="flabel">Priorité</label><select class="finput" id="c-prio"><option value="normal">Normale</option><option value="urgent">Urgente</option><option value="info">Information</option></select></div>
+    <div class="fg">
+      <label class="flabel">Pièce jointe (optionnel)</label>
+      <input type="file" id="c-attach-input" style="display:none" onchange="cHandleAttachment(event)"/>
+      <button class="btn-cancel" style="width:100%" onclick="document.getElementById('c-attach-input').click()"><i class="ti ti-paperclip"></i> Joindre un fichier</button>
+      <div id="c-attach-status" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
+    </div>
     <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-consigne-wrap')">Annuler</button><button class="btn-primary" id="btn-save-consigne" onclick="saveConsigne()"><i class="ti ti-send"></i> Envoyer</button></div>
   </div>
 </div>
@@ -2729,13 +2746,53 @@ function renderDemandsOnly(){
       const canToggle=isDirection||(d.to_referent_id&&d.to_referent_id===currentProfile?.id);
       const msgCount=cacheMessages.filter(m=>m.demande_id===d.id).length;
       const threadBadge='<span class="badge badge-thread" onclick="openThread(\''+d.id+'\')"><i class="ti ti-message-2" style="font-size:11px"></i> '+(msgCount>0?msgCount+' réponse'+(msgCount>1?'s':''):'Discuter')+'</span>';
-      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+threadBadge+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
+      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+msgAttachmentHtml(d.attachment_url,d.attachment_name)+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+threadBadge+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
     });
   }
   inner.innerHTML=html;
   const clr=document.getElementById('search-clear');if(clr)clr.style.display=term?'':'none';
 }
 function setFilter(f,el){activeFilter=f;document.querySelectorAll('.filters .fchip').forEach(b=>b.classList.remove('active'));if(el)el.classList.add('active');renderDemandsOnly();}
+
+/* ---------- PIÈCES JOINTES (demandes, consignes, fil de discussion) ----------
+   Même bucket `assets` que Frais pro/Stagiaires : jamais de base64 en base. */
+function msgAttachmentHtml(url,name){
+  if(!url)return'';
+  return '<div style="margin-top:6px"><a href="'+escHtml(url)+'" target="_blank" rel="noopener" style="font-size:12px;color:var(--koala);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-paperclip"></i> '+escHtml(name||'Pièce jointe')+'</a></div>';
+}
+async function msgUploadFile(file,statusElId){
+  const el=document.getElementById(statusElId);
+  if(el)el.textContent='⏳ Envoi en cours…';
+  try{
+    const ext=(file.name.split('.').pop()||'').toLowerCase();
+    const path='messagerie/'+Date.now()+'_'+Math.random().toString(36).slice(2)+(ext?'.'+ext:'');
+    const{error}=await sb.storage.from('assets').upload(path,file);
+    if(error)throw error;
+    const{data}=sb.storage.from('assets').getPublicUrl(path);
+    if(el)el.textContent='✅ '+file.name;
+    return{url:data.publicUrl,name:file.name};
+  }catch(e){
+    console.error('[msgUploadFile]',e);
+    if(el)el.textContent='⚠ Erreur upload : '+(e.message||'inconnue');
+    return null;
+  }
+}
+let dPendingAttachment=null,cPendingAttachment=null,threadPendingAttachment=null;
+async function dHandleAttachment(event){
+  const file=event.target.files[0];if(!file)return;
+  dPendingAttachment=await msgUploadFile(file,'d-attach-status');
+}
+window.dHandleAttachment=dHandleAttachment;
+async function cHandleAttachment(event){
+  const file=event.target.files[0];if(!file)return;
+  cPendingAttachment=await msgUploadFile(file,'c-attach-status');
+}
+window.cHandleAttachment=cHandleAttachment;
+async function threadHandleAttachment(event){
+  const file=event.target.files[0];if(!file)return;
+  threadPendingAttachment=await msgUploadFile(file,'thread-attach-status');
+}
+window.threadHandleAttachment=threadHandleAttachment;
 
 async function openDemandModal(){
   const isAll=isDirection&&activeCrecheId==='all';
@@ -2755,6 +2812,9 @@ async function openDemandModal(){
   }).join('');
   ['d-email','d-subj','d-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('d-prio').value='normal';
+  dPendingAttachment=null;
+  document.getElementById('d-attach-input').value='';
+  document.getElementById('d-attach-status').textContent='';
   document.getElementById('modal-demand-wrap').classList.add('open');
 }
 function fillRefEmail(){
@@ -2770,7 +2830,7 @@ async function saveDemand(){
   if(!isDirection)crecheId=currentProfile?.creche_id||null;
   if(!crecheId&&!destIsAdmin){alert('Veuillez sélectionner une crèche, ou choisir un destinataire admin.');return;}
   const btn=document.getElementById('btn-save-demand');btn.disabled=true;
-  const row={creche_id:crecheId,to_referent_id:refSel?.value||null,referent_name:refOpt?.getAttribute('data-name')||'',referent_email:document.getElementById('d-email').value.trim(),subject:subj,description:document.getElementById('d-desc').value.trim(),priority:document.getElementById('d-prio').value,theme:document.getElementById('d-theme').value,status:'attente',type:'demande'};
+  const row={creche_id:crecheId,to_referent_id:refSel?.value||null,referent_name:refOpt?.getAttribute('data-name')||'',referent_email:document.getElementById('d-email').value.trim(),subject:subj,description:document.getElementById('d-desc').value.trim(),priority:document.getElementById('d-prio').value,theme:document.getElementById('d-theme').value,status:'attente',type:'demande',attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null};
   const saved=await dbInsert('demandes',row);
   if(saved){cacheDemandes.unshift(saved);await callFn('notify-demand',{demand:{...row,creche:cacheCreches.find(c=>c.id===crecheId)?.name||''}});showBanner('Demande enregistrée !');closeModal('modal-demand-wrap');renderCrecheTabs();}
   else showBanner('Erreur.','error');
@@ -2796,6 +2856,9 @@ function openThread(demandId){
   const origAuthor=d.referent_name||'Demande initiale';
   document.getElementById('thread-orig').innerHTML='<div class="torig"><div style="font-weight:700;font-size:11px;color:#B08900;margin-bottom:4px">📌 '+escHtml(d.subject)+'</div>'+escHtml(d.description||'—')+'<div style="font-size:10.5px;color:#aaa;margin-top:6px">'+new Date(d.created_at).toLocaleString('fr-FR')+'</div></div>';
   document.getElementById('thread-input').value='';
+  threadPendingAttachment=null;
+  document.getElementById('thread-attach-input').value='';
+  document.getElementById('thread-attach-status').textContent='';
   renderThread();
   document.getElementById('modal-thread-wrap').classList.add('open');
   setTimeout(()=>document.getElementById('thread-input').focus(),100);
@@ -2807,17 +2870,22 @@ function renderThread(){
   const myId=currentProfile?.id;
   box.innerHTML=msgs.map(m=>{
     const mine=m.author_id===myId;
-    return '<div class="tmsg'+(mine?' mine':'')+'"><div class="tauthor">'+escHtml(m.author_name||'—')+'</div><div class="tbubble">'+escHtml(m.body)+'</div><div class="ttime">'+new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>';
+    return '<div class="tmsg'+(mine?' mine':'')+'"><div class="tauthor">'+escHtml(m.author_name||'—')+'</div><div class="tbubble">'+escHtml(m.body||'')+msgAttachmentHtml(m.attachment_url,m.attachment_name)+'</div><div class="ttime">'+new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>';
   }).join('');
   box.scrollTop=box.scrollHeight;
 }
 async function sendThreadMessage(){
-  const inp=document.getElementById('thread-input');const body=inp.value.trim();if(!body||!currentThreadId)return;
+  const inp=document.getElementById('thread-input');const body=inp.value.trim();
+  if((!body&&!threadPendingAttachment)||!currentThreadId)return;
   const btn=document.getElementById('btn-send-msg');btn.disabled=true;
-  const row={demande_id:currentThreadId,author_id:currentProfile?.id||null,author_name:currentProfile?.name||'Moi',body:body};
+  const row={demande_id:currentThreadId,author_id:currentProfile?.id||null,author_name:currentProfile?.name||'Moi',body:body,attachment_url:threadPendingAttachment?.url||null,attachment_name:threadPendingAttachment?.name||null};
   const saved=await dbInsert('messages',row);
   if(saved){
-    cacheMessages.push(saved);inp.value='';renderThread();renderDemandsOnly();
+    cacheMessages.push(saved);inp.value='';
+    threadPendingAttachment=null;
+    document.getElementById('thread-attach-input').value='';
+    document.getElementById('thread-attach-status').textContent='';
+    renderThread();renderDemandsOnly();
     const d=cacheDemandes.find(x=>x.id===currentThreadId);
     if(d){
       // Destinataire de la notif : l'autre partie de la demande.
@@ -2839,13 +2907,16 @@ async function sendThreadMessage(){
 
 function openConsigneModal(){
   ['c-subj','c-msg'].forEach(id=>document.getElementById(id).value='');
+  cPendingAttachment=null;
+  document.getElementById('c-attach-input').value='';
+  document.getElementById('c-attach-status').textContent='';
   document.getElementById('modal-consigne-wrap').classList.add('open');
 }
 async function saveConsigne(){
   const subj=document.getElementById('c-subj').value.trim(),msg=document.getElementById('c-msg').value.trim();
   if(!subj||!msg){alert('Le sujet et le message sont requis.');return;}
   const btn=document.getElementById('btn-save-consigne');btn.disabled=true;
-  const row={creche_id:null,referent_name:'',referent_email:'',subject:subj,description:msg,priority:document.getElementById('c-prio').value,status:'envoyee',type:'consigne'};
+  const row={creche_id:null,referent_name:'',referent_email:'',subject:subj,description:msg,priority:document.getElementById('c-prio').value,status:'envoyee',type:'consigne',attachment_url:cPendingAttachment?.url||null,attachment_name:cPendingAttachment?.name||null};
   const saved=await dbInsert('demandes',row);
   if(saved){
     cacheDemandes.unshift(saved);
