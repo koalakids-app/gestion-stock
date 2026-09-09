@@ -2873,7 +2873,7 @@ async function renderReferents(){
   const grid=document.getElementById('ref-grid');if(!grid)return;
   const refs=cacheReferents.filter(r=>r.role==='referent'||r.role==='direction');
   if(!refs.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-users"></i><p>Aucun référent.</p></div>';return;}
-  grid.innerHTML=refs.map(r=>{const creche=cacheCreches.find(c=>c.id===r.creche_id);const initials=r.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);const isDir=r.role==='direction';const avatarBg=isDir?'var(--orange)':'var(--koala)';const roleBadge=isDir?'<span style="display:inline-flex;align-items:center;gap:3px;background:var(--orange-light);color:var(--orange-dark);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:4px">🔑 Direction</span>':'';return'<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:'+avatarBg+'">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+r.name+roleBadge+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+(r.poste||'Référent')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div><div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+(r.email||'—')+'</div></div></div><div class="ref-actions"><button class="btn-primary" style="font-size:12px" onclick="sendLink(\''+r.id+'\')"><i class="ti ti-link" style="font-size:12px"></i> Envoyer le lien</button><button class="btn-sm" style="font-size:12px" title="Envoyer un email de réinitialisation du mot de passe" onclick="resetPassword(\''+r.id+'\')"><i class="ti ti-key" style="font-size:12px"></i> Réinitialiser MDP</button><button class="ibtn" onclick="editRef(\''+r.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteRef(\''+r.id+'\')"><i class="ti ti-trash"></i></button></div></div>';}).join('');
+  grid.innerHTML=refs.map(r=>{const creche=cacheCreches.find(c=>c.id===r.creche_id);const initials=r.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);const isDir=r.role==='direction';const avatarBg=isDir?'var(--orange)':'var(--koala)';const roleBadge=isDir?'<span style="display:inline-flex;align-items:center;gap:3px;background:var(--orange-light);color:var(--orange-dark);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:4px">🔑 Direction</span>':'';return'<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:'+avatarBg+'">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+r.name+roleBadge+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+(r.poste||'Référent')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div><div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+(r.email||'—')+'</div><div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkCodeLigne(r.code_pointage)+'</div></div></div><div class="ref-actions"><button class="btn-primary" style="font-size:12px" onclick="sendLink(\''+r.id+'\')"><i class="ti ti-link" style="font-size:12px"></i> Envoyer le lien</button><button class="btn-sm" style="font-size:12px" title="Envoyer un email de réinitialisation du mot de passe" onclick="resetPassword(\''+r.id+'\')"><i class="ti ti-key" style="font-size:12px"></i> Réinitialiser MDP</button><button class="ibtn" onclick="editRef(\''+r.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteRef(\''+r.id+'\')"><i class="ti ti-trash"></i></button></div>'+(r.creche_id?'<div style="display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px">'+kkCodeActions('salarie',r.id,r.creche_id,r.code_pointage)+'</div>':'')+'</div>';}).join('');
 }
 function openRefModal(){editingRefId=null;['r-name','r-email','r-poste','r-pwd'].forEach(id=>document.getElementById(id).value='');document.getElementById('r-is-direction').checked=false;document.getElementById('r-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');document.getElementById('modal-ref-title').textContent='Ajouter un référent';document.getElementById('modal-ref-wrap').classList.add('open');}
 function editRef(id){const r=cacheReferents.find(x=>x.id===id);if(!r)return;editingRefId=id;document.getElementById('r-name').value=r.name;document.getElementById('r-email').value=r.email||'';document.getElementById('r-poste').value=r.poste||'';document.getElementById('r-pwd').value='';document.getElementById('r-is-direction').checked=(r.role==='direction');document.getElementById('r-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===r.creche_id?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('modal-ref-title').textContent='Modifier le référent';document.getElementById('modal-ref-wrap').classList.add('open');}
@@ -11213,8 +11213,61 @@ function enfRenderIdentite(){
     + row('Allergies', escHtml(e.allergies||''))
     + row('Repas', enfRepasFicheLigne(e))
     + row('Goûter', enfGouterFicheLigne(e))
+    + row('Code de pointage', kkCodeLigne(e.code_pointage))
+    + '<div style="display:flex;gap:6px;justify-content:flex-end;margin:-4px 0 10px;flex-wrap:wrap">'+kkCodeActions('enfant',e.id,e.creche_id,e.code_pointage)+'</div>'
     + '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn-primary" onclick="editEnfant(\''+e.id+'\')"><i class="ti ti-edit"></i> Modifier la fiche</button></div>';
 }
+
+/* ===================== CODE DE POINTAGE (tablette sans compte) =====================
+   Le code lui-même (4 chiffres, colonne enfants.code_pointage / referents.code_pointage)
+   est généré côté base par kk_gen_code_pointage() — voir sql/kiosque_code_pointage.sql.
+   Ici on ne fait que l'afficher, le régénérer (même RPC, appelable par un utilisateur
+   authentifié) et proposer son envoi par e-mail via l'edge function
+   envoyer-code-pointage. Le code n'est jamais listé nulle part ailleurs : seule la
+   fiche de la personne concernée le montre, à la direction et à la référente de sa
+   crèche — la portée normale des policies RLS sur enfants/referents. */
+function kkCodeLigne(code){
+  return code
+    ? '<span style="font-family:monospace;font-weight:800;font-size:15px;letter-spacing:3px">'+escHtml(code)+'</span>'
+    : '<span style="color:var(--muted)">Non généré</span>';
+}
+function kkCodeActions(type,id,crecheId,code){
+  if(!crecheId)return '<span style="font-size:11.5px;color:var(--muted)">Sans crèche assignée — pas de code possible</span>';
+  const copyBtn=code?'<button class="btn-sm" onclick="kkCopyCode(\''+code+'\')"><i class="ti ti-copy"></i> Copier</button>':'';
+  const sendBtn=code?'<button class="btn-sm" onclick="kkSendCode(\''+type+'\',\''+id+'\')"><i class="ti ti-mail"></i> Envoyer par e-mail</button>':'';
+  const regenBtn='<button class="btn-sm" onclick="kkRegenCode(\''+type+'\',\''+id+'\',\''+crecheId+'\')"><i class="ti ti-refresh"></i> '+(code?'Régénérer':'Générer')+'</button>';
+  return copyBtn+sendBtn+regenBtn;
+}
+async function kkCopyCode(code){
+  try{await navigator.clipboard.writeText(code);showBanner('Code copié dans le presse-papiers.');}
+  catch(e){console.warn('[kkCopyCode]',e);showBanner('Copie impossible — notez le code manuellement.','error');}
+}
+window.kkCopyCode=kkCopyCode;
+async function kkRegenCode(type,id,crecheId){
+  if(!confirm('Générer un nouveau code ? L\'ancien cessera de fonctionner immédiatement sur la tablette.'))return;
+  const table=type==='enfant'?'enfants':'referents';
+  try{
+    const{data,error}=await sb.rpc('kk_gen_code_pointage',{p_creche_id:crecheId});
+    if(error)throw error;
+    const ok=await dbUpdateStrict(table,id,{code_pointage:data});
+    if(!ok)throw new Error(window._lastDbError||'écriture refusée');
+    if(type==='enfant'){const e=cacheEnfants.find(x=>String(x.id)===String(id));if(e)e.code_pointage=data;enfRenderIdentite();}
+    else{const r=cacheReferents.find(x=>String(x.id)===String(id));if(r)r.code_pointage=data;renderReferents();}
+    showBanner('Nouveau code généré : '+data);
+  }catch(e){
+    console.error('[kkRegenCode]',e);
+    const msg=e.code==='42883'?'Fonction absente — exécutez sql/kiosque_code_pointage.sql.':(e.message||'erreur inconnue');
+    showBanner('Génération impossible : '+msg,'error');
+  }
+}
+window.kkRegenCode=kkRegenCode;
+async function kkSendCode(type,id){
+  if(!confirm('Envoyer ce code de pointage par e-mail ?'))return;
+  const ok=await callFn('envoyer-code-pointage',{type,id});
+  if(ok)showBanner('Code envoyé par e-mail !');
+  else showBanner('Envoi impossible'+(_lastFnErr?' — '+_lastFnErr:'')+'. Vous pouvez copier le code et le transmettre vous-même.','error');
+}
+window.kkSendCode=kkSendCode;
 
 /* ===================== PARENTS / RESPONSABLES LEGAUX ======================= */
 /* Table Supabase `enfants_parents` : une ligne par responsable legal.
