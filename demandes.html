@@ -47,6 +47,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .mnav-btn:hover:not(.active){background:var(--koala-light);border-color:var(--koala);color:var(--koala)}
 .mnav-badge{background:var(--orange);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700;min-width:14px;text-align:center}
 .mnav-btn.active .mnav-badge{background:#fff;color:var(--koala)}
+.mnav-hub-wrap{position:relative}
+.mnav-hub-btn.hub-open{background:var(--koala-light);border-color:var(--koala);color:var(--koala)}
+.mnav-hub-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 34px rgba(42,36,96,0.16);padding:14px;gap:18px;z-index:60;max-width:min(90vw,720px)}
+.mnav-hub-panel.open{display:flex;flex-wrap:wrap}
+.mnav-hub-col{display:flex;flex-direction:column;gap:2px;min-width:170px}
+.mnav-hub-title{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;margin:2px 0 4px 8px}
+.mnav-hub-item{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:none;background:transparent;border-radius:8px;font-size:13px;color:#444;cursor:pointer;text-align:left;font-weight:500;transition:background .12s}
+.mnav-hub-item:hover{background:var(--koala-light);color:var(--koala)}
+.mnav-hub-item.active{background:var(--koala);color:#fff}
+.mnav-hub-item.active .mnav-badge{background:#fff;color:var(--koala)}
 .user-chip{display:flex;align-items:center;gap:6px;background:var(--koala-light);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--koala);font-weight:600;cursor:pointer}
 .user-chip:hover{background:var(--red-light);color:var(--red)}
 
@@ -139,7 +149,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .b-ref{background:#f0f0f0;color:#555}
 .meta-txt{font-size:12px;color:#999}
 @media print{
-  .sidebar,.main-nav,.section-header button,.ik-month-sel,.mnav-btn,#notif-banner,
+  .sidebar,.main-nav,.section-header button,.ik-month-sel,.mnav-btn,.mnav-hub-panel,#notif-banner,
   .btn-primary,.btn-green,.btn-sm,.btn-cancel{display:none!important}
   body{background:#fff!important}
   .ik-table td,.ik-table th{padding:4px 6px!important;font-size:11px!important}
@@ -329,6 +339,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   .section-actions{flex-direction:column}
   .main-nav{gap:4px}
   .mnav-btn{padding:6px 10px;font-size:12px}
+  .mnav-hub-panel{right:auto;left:0;max-width:88vw}
 }
 /* FRAIS IK */
 .ik-config-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:1rem}
@@ -445,22 +456,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <nav class="main-nav" id="main-nav">
       <button class="mnav-btn referent-only" onclick="showMain('ref-dashboard')" id="mnav-ref-dashboard"><i class="ti ti-layout-dashboard"></i> Mon tableau de bord</button>
       <button class="mnav-btn direction-only" onclick="showMain('dashboard')" id="mnav-dashboard"><i class="ti ti-chart-bar"></i> Tableau de bord</button>
-      <button class="mnav-btn david-only" onclick="showMain('afaire')" id="mnav-afaire" style="display:none"><i class="ti ti-checklist"></i> À faire</button>
       <button class="mnav-btn" onclick="showMain('evenements')" id="mnav-evenements"><i class="ti ti-calendar"></i> Événements</button>
-      <button class="mnav-btn direction-only" onclick="showMain('actions')" id="mnav-actions"><i class="ti ti-target-arrow"></i> Actions</button>
-      <button class="mnav-btn direction-only" onclick="showMain('fraisik')" id="mnav-fraisik"><i class="ti ti-car"></i> Frais IK</button>
-      <button class="mnav-btn" onclick="showMain('fraispro')" id="mnav-fraispro"><i class="ti ti-receipt"></i> Frais pro</button>
-      <button class="mnav-btn" onclick="showMain('incidents')" id="mnav-incidents"><i class="ti ti-alert-triangle"></i> Incidents <span class="mnav-badge" id="badge-incidents" style="display:none">0</span></button>
       <button class="mnav-btn active" onclick="showMain('demands')" id="mnav-demands"><i class="ti ti-message-circle"></i> Messagerie <span class="mnav-badge" id="badge-demands" style="display:none">0</span></button>
       <button class="mnav-btn" onclick="showMain('planning')" id="mnav-planning"><i class="ti ti-calendar-event"></i> Planning</button>
       <button class="mnav-btn" onclick="showMain('presence')" id="mnav-presence"><i class="ti ti-users-group"></i> Présences</button>
-      <button class="mnav-btn" onclick="openKiosque()" id="mnav-kiosque"><i class="ti ti-device-tablet"></i> Mode kiosque</button>
-      <button class="mnav-btn direction-only" onclick="showMain('referents')" id="mnav-referents"><i class="ti ti-address-book"></i> Référents</button>
-      <button class="mnav-btn" onclick="showMain('remplacantes')" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
-      <button class="mnav-btn" onclick="showMain('vaccinations')" id="mnav-vaccinations"><i class="ti ti-vaccine"></i> Vaccinations</button>
-      <button class="mnav-btn" onclick="showMain('enfants')" id="mnav-enfants"><i class="ti ti-mood-kid"></i> Enfants</button>
-      <button class="mnav-btn" onclick="showMain('employes')" id="mnav-employes"><i class="ti ti-id-badge-2"></i> Employés</button>
-      <button class="mnav-btn" onclick="showMain('stagiaires')" id="mnav-stagiaires"><i class="ti ti-school"></i> Stagiaires &amp; alternants <span class="mnav-badge" id="badge-stagiaires" style="display:none">0</span></button>
+      <div class="mnav-hub-wrap" id="mnav-hub-wrap">
+        <button class="mnav-btn mnav-hub-btn" onclick="toggleHub(event)" id="mnav-hub-btn">
+          <i class="ti ti-apps"></i> Plus <span class="mnav-badge" id="badge-hub" style="display:none">0</span> <i class="ti ti-chevron-down" style="font-size:11px"></i>
+        </button>
+        <div class="mnav-hub-panel" id="mnav-hub-panel">
+          <div class="mnav-hub-col">
+            <div class="mnav-hub-title">Suivi</div>
+            <button class="mnav-hub-item david-only" onclick="showMain('afaire');closeHub()" id="mnav-afaire" style="display:none"><i class="ti ti-checklist"></i> À faire</button>
+            <button class="mnav-hub-item direction-only" onclick="showMain('actions');closeHub()" id="mnav-actions"><i class="ti ti-target-arrow"></i> Actions</button>
+            <button class="mnav-hub-item" onclick="showMain('incidents');closeHub()" id="mnav-incidents"><i class="ti ti-alert-triangle"></i> Incidents <span class="mnav-badge" id="badge-incidents" style="display:none">0</span></button>
+            <button class="mnav-hub-item" onclick="showMain('enfants');closeHub()" id="mnav-enfants"><i class="ti ti-mood-kid"></i> Enfants</button>
+            <button class="mnav-hub-item" onclick="showMain('vaccinations');closeHub()" id="mnav-vaccinations"><i class="ti ti-vaccine"></i> Vaccinations</button>
+          </div>
+          <div class="mnav-hub-col">
+            <div class="mnav-hub-title">Équipe</div>
+            <button class="mnav-hub-item" onclick="showMain('employes');closeHub()" id="mnav-employes"><i class="ti ti-id-badge-2"></i> Employés</button>
+            <button class="mnav-hub-item direction-only" onclick="showMain('referents');closeHub()" id="mnav-referents"><i class="ti ti-address-book"></i> Référents</button>
+            <button class="mnav-hub-item" onclick="showMain('remplacantes');closeHub()" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
+            <button class="mnav-hub-item" onclick="showMain('stagiaires');closeHub()" id="mnav-stagiaires"><i class="ti ti-school"></i> Stagiaires &amp; alternants <span class="mnav-badge" id="badge-stagiaires" style="display:none">0</span></button>
+          </div>
+          <div class="mnav-hub-col">
+            <div class="mnav-hub-title">Finances</div>
+            <button class="mnav-hub-item direction-only" onclick="showMain('fraisik');closeHub()" id="mnav-fraisik"><i class="ti ti-car"></i> Frais IK</button>
+            <button class="mnav-hub-item" onclick="showMain('fraispro');closeHub()" id="mnav-fraispro"><i class="ti ti-receipt"></i> Frais pro</button>
+          </div>
+          <div class="mnav-hub-col">
+            <div class="mnav-hub-title">Outils</div>
+            <button class="mnav-hub-item" onclick="openKiosque();closeHub()" id="mnav-kiosque"><i class="ti ti-device-tablet"></i> Mode kiosque</button>
+          </div>
+        </div>
+      </div>
     </nav>
     <div style="display:flex;align-items:center;gap:8px">
       <div id="sync-chip" title="Dernière mise à jour depuis le serveur — cliquer pour rafraîchir maintenant"
@@ -2681,11 +2711,33 @@ function closeModal(id){
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){
   if(e.target===this)this.classList.remove('open');
 }));
+// HUB (menu "Plus" regroupant les fonctionnalités secondaires)
+function toggleHub(e){
+  e.stopPropagation();
+  document.getElementById('mnav-hub-panel').classList.toggle('open');
+  document.getElementById('mnav-hub-btn').classList.toggle('hub-open');
+}
+function closeHub(){
+  const p=document.getElementById('mnav-hub-panel'),b=document.getElementById('mnav-hub-btn');
+  if(p)p.classList.remove('open');
+  if(b)b.classList.remove('hub-open');
+}
+document.addEventListener('click',function(e){
+  const wrap=document.getElementById('mnav-hub-wrap');
+  if(wrap&&!wrap.contains(e.target))closeHub();
+});
+function updateHubBadge(){
+  const n=(parseInt(document.getElementById('badge-incidents')?.textContent,10)||0)
+    +(parseInt(document.getElementById('badge-stagiaires')?.textContent,10)||0);
+  const b=document.getElementById('badge-hub');
+  if(b){b.textContent=n;b.style.display=n>0?'':'none';}
+}
 function updateBadges(){
   const myCrecheId=isDirection?null:currentProfile?.creche_id;
   const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;
   const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}
   updateConsigneBadge();
+  updateHubBadge();
 }
 // Consignes non lues par la référente connectée (la direction émet les consignes, donc pas de badge pour elle)
 function unreadConsignesCount(){
@@ -16116,6 +16168,7 @@ function stgMajBadge(){
   if(!b)return;
   const n=stgCache.filter(s=>stgATraiter(s)).length;
   b.textContent=n;b.style.display=n?'':'none';
+  updateHubBadge();
 }
 
 // ── La fiche ──────────────────────────────────────────────────────────────
