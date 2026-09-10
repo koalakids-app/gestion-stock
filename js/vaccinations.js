@@ -10,7 +10,6 @@ const VAC_SCHEMA = [
   {id:'pneumo',label:'Pneumocoque',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
   {id:'menb',label:'Méningocoque B',doses:[{label:'3 mois',months:3},{label:'5 mois',months:5},{label:'12 mois',months:12}]},
   {id:'menacwy',label:'Méningocoques ACWY',doses:[{label:'6 mois',months:6},{label:'12 mois',months:12}]},
-  {id:'menc',label:'Méningocoque C',doses:[{label:'5 mois',months:5},{label:'12 mois',months:12}]},
   {id:'ror',label:'ROR (Rougeole, Oreillons, Rubéole)',doses:[{label:'12 mois',months:12},{label:'18 mois',months:18}]},
 ];
 

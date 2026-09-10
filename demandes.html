@@ -706,6 +706,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <span id="cal-month-label" style="font-size:14px;font-weight:700;color:var(--koala);min-width:140px;text-align:center">—</span>
         <button class="ibtn" onclick="calChangeMonth(1)"><i class="ti ti-chevron-right"></i></button>
         <button class="btn-sm" onclick="calGoToday()"><i class="ti ti-calendar-event"></i> Aujourd'hui</button>
+        <button class="btn-sm referent-only" id="cal-only-mine-btn" onclick="calToggleOnlyMine()"><i class="ti ti-eye-off"></i> Masquer ce qui ne me concerne pas</button>
       </div>
       <button class="btn-primary" onclick="openEvenementModal()"><i class="ti ti-plus"></i> Nouvel événement</button>
     </div>
@@ -2320,6 +2321,7 @@ let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='';
 let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
+let calOnlyMine=(localStorage.getItem('calOnlyMine')==='1');
 
 // Init au chargement complet de la page
 window.addEventListener('DOMContentLoaded', async function() {
@@ -3345,6 +3347,31 @@ function calChangeMonth(delta){calMonthOffset+=delta;calSelectedDay=null;renderC
 function calGoToday(){calMonthOffset=0;calSelectedDay=todayStr();renderCalendar();}
 function calSetFilter(f,btn){calFilterType=f;document.querySelectorAll('#cal-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderCalendar();}
 
+// Un evenement concerne le/la referent(e) s'il est reseau (pas de creche_id),
+// s'il vise sa propre creche, ou si c'est elle/lui qui l'a cree.
+function calEvtConcerneMoi(e){
+  if(isDirection)return true;
+  if(!e.creche_id)return true;
+  if(e.creche_id===currentProfile?.creche_id)return true;
+  const uid=currentUser?.id;
+  return !!(uid&&e.created_by===uid);
+}
+
+function calSyncOnlyMineBtn(){
+  const b=document.getElementById('cal-only-mine-btn');if(!b)return;
+  b.classList.toggle('active',calOnlyMine);
+  b.style.background=calOnlyMine?'var(--koala)':'';
+  b.style.color=calOnlyMine?'#fff':'';
+  b.innerHTML=calOnlyMine?'<i class="ti ti-eye"></i> Tout afficher':'<i class="ti ti-eye-off"></i> Masquer ce qui ne me concerne pas';
+}
+
+function calToggleOnlyMine(){
+  calOnlyMine=!calOnlyMine;
+  localStorage.setItem('calOnlyMine',calOnlyMine?'1':'0');
+  calSyncOnlyMineBtn();
+  renderCalendar();
+}
+
 // Qui peut toucher a un evenement : son auteur, ou la direction.
 // created_by est pose par la base (28-evenements-auteur.sql) ; les evenements
 // anterieurs au script n'en ont pas — ils restent a la direction.
@@ -3359,6 +3386,7 @@ function peutModifierEvt(e){
 function calEventsForDay(dateISO){
   return cacheEvenements.filter(e=>{
     if(calFilterType!=='all'&&e.type!==calFilterType)return false;
+    if(calOnlyMine&&!calEvtConcerneMoi(e))return false;
     const start=e.date_debut,end=e.date_fin||e.date_debut;
     return dateISO>=start&&dateISO<=end;
   }).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
@@ -3397,6 +3425,7 @@ function renderCalendar(){
   const isPad=d=>d.getMonth()!==month;
   grid.innerHTML=allDays.map(d=>calCellHtml(d,isPad(d),today)).join('');
   renderCalDayDetail();
+  calSyncOnlyMineBtn();
 }
 
 function calCellHtml(d,isOut,today){
