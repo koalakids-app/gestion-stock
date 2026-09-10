@@ -52,6 +52,27 @@ body{font-family:'Nunito',system-ui,sans-serif;background:var(--cream);color:#2B
 .result-acts .undo{background:#F1EFF7;color:var(--muted)}
 .result-acts .undo:active{background:#E6E2F2}
 
+.mode-switch{display:flex;gap:6px;background:#F1EFF7;border-radius:14px;padding:4px}
+.mode-switch button{border:none;background:transparent;color:var(--muted);font-family:'Nunito';
+       font-weight:800;font-size:13.5px;padding:9px 18px;border-radius:10px;cursor:pointer}
+.mode-switch button.on{background:#fff;color:var(--violet);box-shadow:0 2px 8px rgba(43,39,64,.1)}
+
+.picto-slots{display:flex;gap:12px}
+.picto-slot{width:52px;height:52px;border-radius:14px;border:2.5px solid var(--line);background:#fff;
+       display:flex;align-items:center;justify-content:center;overflow:hidden;transition:border-color .15s,transform .15s}
+.picto-slot.filled{border-color:var(--violet);transform:scale(1.06)}
+.picto-slot img{width:100%;height:100%;object-fit:cover}
+.picto-slots.shake{animation:shake .4s}
+
+.picto-grid{display:grid;grid-template-columns:repeat(4,76px);gap:14px}
+.picto-key{width:76px;height:76px;border-radius:18px;border:none;background:#fff;padding:0;overflow:hidden;
+       box-shadow:0 2px 10px rgba(43,39,64,.08);cursor:pointer}
+.picto-key img{width:100%;height:100%;object-fit:cover;display:block}
+.picto-key:active{transform:scale(.96)}
+.picto-key.used{opacity:.3;pointer-events:none}
+.picto-reset{border:none;background:transparent;color:var(--muted);font-family:'Nunito';
+       font-weight:700;font-size:14.5px;cursor:pointer;padding:8px}
+
 .hidden{display:none!important}
 </style>
 </head>
@@ -63,24 +84,39 @@ body{font-family:'Nunito',system-ui,sans-serif;background:var(--cream);color:#2B
 </div>
 
 <div class="main" id="main">
-  <div class="prompt" id="prompt">Entrez votre code</div>
-  <div class="subprompt" id="subprompt">4 chiffres</div>
-  <div class="dots" id="dots">
-    <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+  <div class="mode-switch" id="modeSwitch">
+    <button class="on" data-mode="enfant" onclick="setMode('enfant')">Enfant</button>
+    <button data-mode="perso" onclick="setMode('perso')">Personnel</button>
   </div>
-  <div class="pad" id="pad">
-    <button class="key" data-k="1">1</button>
-    <button class="key" data-k="2">2</button>
-    <button class="key" data-k="3">3</button>
-    <button class="key" data-k="4">4</button>
-    <button class="key" data-k="5">5</button>
-    <button class="key" data-k="6">6</button>
-    <button class="key" data-k="7">7</button>
-    <button class="key" data-k="8">8</button>
-    <button class="key" data-k="9">9</button>
-    <button class="key fn" data-k="c">Effacer</button>
-    <button class="key" data-k="0">0</button>
-    <button class="key fn" data-k="back">⌫</button>
+
+  <div id="modeEnfant">
+    <div class="prompt">Choisis tes 4 images</div>
+    <div class="subprompt">dans l'ordre</div>
+    <div class="picto-slots" id="pictoSlots"></div>
+    <div class="picto-grid" id="pictoGrid"></div>
+    <button class="picto-reset" onclick="resetPictos()">↺ Recommencer</button>
+  </div>
+
+  <div id="modePerso" class="hidden">
+    <div class="prompt">Entrez votre code</div>
+    <div class="subprompt">4 chiffres</div>
+    <div class="dots" id="dots">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+    <div class="pad" id="pad">
+      <button class="key" data-k="1">1</button>
+      <button class="key" data-k="2">2</button>
+      <button class="key" data-k="3">3</button>
+      <button class="key" data-k="4">4</button>
+      <button class="key" data-k="5">5</button>
+      <button class="key" data-k="6">6</button>
+      <button class="key" data-k="7">7</button>
+      <button class="key" data-k="8">8</button>
+      <button class="key" data-k="9">9</button>
+      <button class="key fn" data-k="c">Effacer</button>
+      <button class="key" data-k="0">0</button>
+      <button class="key fn" data-k="back">⌫</button>
+    </div>
   </div>
 </div>
 
@@ -103,6 +139,74 @@ let code='';
 let busy=false;
 let lastCode='';
 let undoTimer=null,resetTimer=null;
+let mode='enfant';
+
+// Pool de pictogrammes — DOIT rester identique, dans le même ordre, à
+// kk_pictos_pool() dans sql/claude_37-kiosque-code-images.sql.
+const PICTOS=[
+  {id:'ours',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/ours.png'},
+  {id:'arc_en_ciel',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/arc_en_ciel.png'},
+  {id:'zebre',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/zebre.png'},
+  {id:'hochet',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/hochet.png'},
+  {id:'baleine',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/baleine.png'},
+  {id:'cubes_alphabet',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/cubes_alphabet.png'},
+  {id:'camionnette_rouge',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/camionnette_rouge.png'},
+  {id:'pingouin',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/pingouin.png'}
+];
+const pictoById=Object.fromEntries(PICTOS.map(p=>[p.id,p]));
+let pictoCode=[];
+let crecheId=null;
+
+const pictoSlotsEl=document.getElementById('pictoSlots');
+const pictoGridEl=document.getElementById('pictoGrid');
+
+function renderPictoSlots(){
+  pictoSlotsEl.innerHTML=[0,1,2,3].map(i=>{
+    const p=pictoCode[i]?pictoById[pictoCode[i]]:null;
+    return '<div class="picto-slot'+(p?' filled':'')+'">'+(p?'<img src="'+p.url+'" alt="">':'')+'</div>';
+  }).join('');
+}
+function renderPictoGrid(){
+  pictoGridEl.innerHTML=PICTOS.map(p=>
+    '<button class="picto-key'+(pictoCode.includes(p.id)?' used':'')+'" data-p="'+p.id+'">'
+    +'<img src="'+p.url+'" alt=""></button>'
+  ).join('');
+}
+function shakePictoSlots(){
+  pictoSlotsEl.classList.remove('shake');
+  void pictoSlotsEl.offsetWidth;
+  pictoSlotsEl.classList.add('shake');
+}
+function resetPictos(){
+  pictoCode=[];
+  renderPictoSlots();
+  renderPictoGrid();
+  clearTimeout(resetTimer);
+  clearTimeout(undoTimer);
+  showMain();
+}
+window.resetPictos=resetPictos;
+
+pictoGridEl.addEventListener('click',e=>{
+  const btn=e.target.closest('.picto-key');
+  if(!btn||busy||pictoCode.length>=4)return;
+  const id=btn.dataset.p;
+  if(pictoCode.includes(id))return;
+  pictoCode.push(id);
+  renderPictoSlots();
+  renderPictoGrid();
+  if(pictoCode.length===4)submitPictoCode();
+});
+
+function setMode(m){
+  mode=m;
+  document.querySelectorAll('#modeSwitch button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
+  document.getElementById('modeEnfant').classList.toggle('hidden',m!=='enfant');
+  document.getElementById('modePerso').classList.toggle('hidden',m!=='perso');
+  resetPictos();
+  resetPad();
+}
+window.setMode=setMode;
 
 function renderDots(){dots.forEach((d,i)=>d.classList.toggle('filled',i<code.length));}
 
@@ -128,6 +232,60 @@ function shakeDots(){
   dotsEl.classList.remove('shake');
   void dotsEl.offsetWidth;
   dotsEl.classList.add('shake');
+}
+
+async function submitPictoCode(){
+  if(busy)return;
+  busy=true;
+  showState(`<div class="state busy"><i>⏳</i><h2>Vérification…</h2></div>`);
+  if(!crecheId){
+    busy=false;
+    showErrorPictosThenReset('Tablette non configurée','Contactez la direction pour reconfigurer cet appareil.',0);
+    return;
+  }
+  const{data,error}=await sb.rpc('verifier_code_pointage',{p_creche_id:crecheId,p_code:pictoCode});
+  busy=false;
+  const row=Array.isArray(data)?data[0]:data;
+  if(error||!row){
+    console.error('verifier_code_pointage',error);
+    showErrorPictosThenReset('Connexion impossible','Vérifiez le Wi-Fi de la tablette et réessayez.',3000);
+    return;
+  }
+  if(!row.ok){
+    handlePictoError(row.error);
+    return;
+  }
+  const verbe=row.action==='arrivee'?'Arrivée enregistrée':'Départ enregistré';
+  const heure=row.horodatage?new Date(row.horodatage).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
+  showState(`
+    <div class="state ok">
+      <i>✓</i>
+      <h2>${esc(verbe)}</h2>
+      <p>${esc(row.prenom||'')}${row.nom?' '+esc(row.nom):''} — ${esc(heure)}</p>
+    </div>`);
+  clearTimeout(resetTimer);
+  resetTimer=setTimeout(resetPictos,6000);
+}
+
+function handlePictoError(err){
+  const messages={
+    creche_invalide:['Tablette non configurée','Contactez la direction pour reconfigurer cet appareil.',0],
+    trop_de_tentatives:['Trop de tentatives','Merci de patienter quelques minutes avant de réessayer.',4000],
+    code_invalide:['Code invalide','Choisissez 4 images distinctes.',2000],
+    code_inconnu:['Code inconnu','Vérifiez les images et réessayez.',2000]
+  };
+  const[title,msg,delay]=messages[err]||['Erreur','Une erreur inattendue est survenue.',3000];
+  showErrorPictosThenReset(title,msg,delay);
+}
+
+function showErrorPictosThenReset(title,msg,delay){
+  showState(`<div class="state err"><i>✕</i><h2>${esc(title)}</h2><p>${esc(msg)}</p></div>`);
+  shakePictoSlots();
+  pictoCode=[];
+  renderPictoSlots();
+  renderPictoGrid();
+  clearTimeout(resetTimer);
+  if(delay>0)resetTimer=setTimeout(resetPictos,delay);
 }
 
 async function submitCode(){
@@ -215,8 +373,16 @@ function tickClock(){
 tickClock();
 setInterval(tickClock,1000);
 
+renderPictoSlots();
+renderPictoGrid();
+
 if(!TOKEN||TOKEN.length<20){
   showState('<div class="state err"><i>✕</i><h2>Lien invalide</h2><p>Cette tablette n’a pas de jeton de configuration valide dans son URL.</p></div>');
+}else{
+  sb.rpc('kk_resolve_creche_id',{p_token:TOKEN}).then(({data,error})=>{
+    if(error)console.error('kk_resolve_creche_id',error);
+    crecheId=data||null;
+  });
 }
 </script>
 </body>

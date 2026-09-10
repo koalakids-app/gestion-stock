@@ -11155,6 +11155,8 @@ function enfRenderIdentite(){
     + row('Goûter', enfGouterFicheLigne(e))
     + row('Code de pointage', kkCodeLigne(e.code_pointage))
     + '<div style="display:flex;gap:6px;justify-content:flex-end;margin:-4px 0 10px;flex-wrap:wrap">'+kkCodeActions('enfant',e.id,e.creche_id,e.code_pointage)+'</div>'
+    + row('Code image (kiosque)', kkPictosLigne(e.code_pictos))
+    + '<div style="display:flex;gap:6px;justify-content:flex-end;margin:-4px 0 10px;flex-wrap:wrap">'+kkPictosActions(e.id,e.creche_id)+'</div>'
     + '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn-primary" onclick="editEnfant(\''+e.id+'\')"><i class="ti ti-edit"></i> Modifier la fiche</button></div>';
 }
 
@@ -11209,6 +11211,52 @@ async function kkSendCode(type,id){
   else showBanner('Envoi impossible'+(_lastFnErr?' — '+_lastFnErr:'')+'. Vous pouvez copier le code et le transmettre vous-même.','error');
 }
 window.kkSendCode=kkSendCode;
+
+/* ===================== CODE IMAGE (kiosque, enfants uniquement) ============
+   Depuis claude_37-kiosque-code-images.sql : les enfants pointent au kiosque
+   avec une séquence de 4 pictogrammes (au lieu du code à 4 chiffres, gardé
+   pour le personnel). Le tirage se fait côté base (generer_code_pictos),
+   pris parmi le même pool que côté tablette (tablette.html) — toute
+   divergence entre les deux listes casserait l'affichage ici (pas la
+   validité du code lui-même, qui reste comparé en base). */
+const KK_PICTOS={
+  ours:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/ours.png',
+  arc_en_ciel:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/arc_en_ciel.png',
+  zebre:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/zebre.png',
+  hochet:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/hochet.png',
+  baleine:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/baleine.png',
+  cubes_alphabet:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/cubes_alphabet.png',
+  camionnette_rouge:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/camionnette_rouge.png',
+  pingouin:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/pingouin.png'
+};
+function kkPictosLigne(codePictos){
+  if(!Array.isArray(codePictos)||codePictos.length!==4)return '<span style="color:var(--muted)">Non généré</span>';
+  return '<div style="display:flex;gap:4px;justify-content:flex-end">'
+    +codePictos.map(id=>'<img src="'+(KK_PICTOS[id]||'')+'" alt="'+escHtml(id)+'" title="'+escHtml(id)+'" style="width:26px;height:26px;border-radius:7px;object-fit:cover">').join('')
+    +'</div>';
+}
+function kkPictosActions(id,crecheId){
+  if(!crecheId)return '<span style="font-size:11.5px;color:var(--muted)">Sans crèche assignée — pas de code possible</span>';
+  return '<button class="btn-sm" onclick="kkRegenPictos(\''+id+'\',\''+crecheId+'\')"><i class="ti ti-refresh"></i> Générer un code image</button>';
+}
+async function kkRegenPictos(id,crecheId){
+  if(!confirm('Générer un nouveau code image ? L\'ancien cessera de fonctionner immédiatement sur la tablette.'))return;
+  try{
+    const{data,error}=await sb.rpc('generer_code_pictos',{p_creche_id:crecheId});
+    if(error)throw error;
+    const ok=await dbUpdateStrict('enfants',id,{code_pictos:data});
+    if(!ok)throw new Error(window._lastDbError||'écriture refusée');
+    const e=cacheEnfants.find(x=>String(x.id)===String(id));
+    if(e)e.code_pictos=data;
+    enfRenderIdentite();
+    showBanner('Nouveau code image généré.');
+  }catch(e){
+    console.error('[kkRegenPictos]',e);
+    const msg=e.code==='42883'?'Fonction absente — exécutez sql/claude_37-kiosque-code-images.sql.':(e.message||'erreur inconnue');
+    showBanner('Génération impossible : '+msg,'error');
+  }
+}
+window.kkRegenPictos=kkRegenPictos;
 
 /* ===================== PARENTS / RESPONSABLES LEGAUX ======================= */
 /* Table Supabase `enfants_parents` : une ligne par responsable legal.
