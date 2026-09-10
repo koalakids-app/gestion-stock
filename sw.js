@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v10';   // v10 : extraction du module Vaccinations vers js/vaccinations.js
+const CACHE_NAME = 'stocks-v11';   // v11 : ajout notifications push
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -38,4 +38,46 @@ self.addEventListener('fetch', event => {
 
 self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
+// --- Notifications Push ---
+self.addEventListener('push', event => {
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch (e) {
+    payload = { title: 'Koala Kids', body: event.data.text() };
+  }
+
+  const options = {
+    body: payload.body || '',
+    icon: './icons/icon-192.png',
+    data: { url: payload.url || './demandes.html' },
+    tag: payload.tag || 'koala-notif',
+    renotify: true
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title || 'Koala Kids', options)
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || './demandes.html';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url.includes(targetUrl.replace('./', '')) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
 });
