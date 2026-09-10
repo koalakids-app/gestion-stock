@@ -2451,6 +2451,7 @@ function syncEcranCourant(){
    de remplir un formulaire, on ne lui reprend pas la main sous les doigts. */
 function syncRedessine(){
   const t=syncEcranCourant();
+  const scrollYAvant=window.scrollY;
   try{
     if(t==='presence'&&typeof renderPresence==='function')renderPresence();
     else if(t==='demands'&&typeof renderCrecheTabs==='function')renderCrecheTabs();
@@ -2480,6 +2481,9 @@ function syncRedessine(){
     }
   }catch(err){console.warn('[Sync] fiche enfant',err);}
   if(typeof updateBadges==='function'){try{updateBadges();}catch(e){}}
+  // Les réécritures innerHTML ci-dessus peuvent faire sauter le scroll (perte
+  // de focus, redimensionnement) — on le restaure une fois le DOM stabilisé.
+  requestAnimationFrame(()=>window.scrollTo(0,scrollYAvant));
 }
 
 /* Horodatage discret dans l'en-tête : sans lui, impossible de distinguer
@@ -8932,6 +8936,9 @@ function dashTodayBirthdays(t){
   return cacheEnfants.filter(e=>e.dob&&e.dob.slice(5)===md);
 }
 function renderDashboardToday(){
+  // Capturé avant la réécriture de #dash-today-grid : une fois le innerHTML
+  // remplacé, le select est recréé vide et sa valeur ne peut plus être lue.
+  const planSelPrev=document.getElementById('dash-planning-creche-select')?.value||'';
   const t=dashSelectedDate||(dashSelectedDate=todayStr());
   const isToday=t===todayStr();
   const dateInput=document.getElementById('dash-date-input');
@@ -8991,8 +8998,7 @@ function renderDashboardToday(){
   // Peupler le sélecteur crèche du planning et charger si une crèche déjà choisie
   const planSel=document.getElementById('dash-planning-creche-select');
   if(planSel){
-    const prev=planSel.value;
-    planSel.innerHTML='<option value="">-- Crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===prev?' selected':'')+'>'+escHtml(c.name)+'</option>').join('');
+    planSel.innerHTML='<option value="">-- Crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===planSelPrev?' selected':'')+'>'+escHtml(c.name)+'</option>').join('');
     if(planSel.value)loadDashboardPlanning();
   }
 }
