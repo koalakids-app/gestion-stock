@@ -8774,6 +8774,26 @@ function refDashChangeDay(delta){const d=new Date(refDashSelectedDate||todayStr(
 function refDashGoToday(){refDashSelectedDate=todayStr();renderRefDashboard();}
 function refDashSetDate(v){if(v){refDashSelectedDate=v;renderRefDashboard();}}
 
+/* Vaccinations en retard et dossiers famille à relancer, scopés à la crèche
+   de la référente — mêmes fonctions que celles utilisées par « Ma journée »
+   et le tableau de bord réseau (cf. vaccinationsEnRetard/dossiersFamilleARelancer
+   plus bas dans le fichier), pour ne pas réécrire le calcul une troisième
+   fois. Pas de notion de réseau ici : la crèche est implicite, donc pas de
+   brSuffixeCreche à reprendre. */
+async function loadRefDashAlertesExtra(crecheId,urgentesHtml){
+  try{
+    const[vacc,dossiers]=await Promise.all([
+      vaccinationsEnRetard(crecheId).catch(e=>{console.warn('[RefDash] vaccinations',e);return[];}),
+      dossiersFamilleARelancer(crecheId).catch(e=>{console.warn('[RefDash] dossiers familles',e);return[];})
+    ]);
+    const box=document.getElementById('ref-dash-alerts');if(!box)return;
+    let html=urgentesHtml;
+    if(vacc.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'vaccinations\')"><i class="ti ti-vaccine" style="font-size:16px;flex-shrink:0"></i> <strong>'+vacc.length+' vaccination(s) en retard</strong></div>';
+    if(dossiers.length)html+='<div class="alert-item warning"><i class="ti ti-mail-forward" style="font-size:16px;flex-shrink:0"></i> <strong>'+dossiers.length+' dossier(s) famille</strong> à relancer</div>';
+    box.innerHTML=html;
+  }catch(e){console.warn('[RefDash] alertes',e);}
+}
+
 function renderRefDashboard(){
   if(isDirection)return;
   const crecheId=currentProfile?.creche_id;
@@ -8789,10 +8809,17 @@ function renderRefDashboard(){
   // Alertes : demandes urgentes non traitées qui me concernent
   const urgentes=cacheDemandes.filter(d=>d.creche_id===crecheId&&d.priority==='urgent'&&d.status==='attente');
   if(typeof adRenderRefDashBloc==='function'){try{adRenderRefDashBloc();}catch(e){}}
-  const alerts=document.getElementById('ref-dash-alerts');
-  if(alerts)alerts.innerHTML=urgentes.length
-    ?'<div class="alert-item">'+urgentes.map(d=>'<i class="ti ti-alert-triangle" style="font-size:16px;flex-shrink:0"></i> <strong>Demande urgente</strong> — '+escHtml(d.subject||'—')).join('</div><div class="alert-item">')+'</div>'
+  const urgentesHtml=urgentes.length
+    ?urgentes.map(d=>'<div class="alert-item" style="cursor:pointer" onclick="showMain(\'demands\')"><i class="ti ti-alert-triangle" style="font-size:16px;flex-shrink:0"></i> <strong>Demande urgente</strong> — '+escHtml(d.subject||'—')+'</div>').join('')
     :'';
+  const alerts=document.getElementById('ref-dash-alerts');
+  if(alerts)alerts.innerHTML=urgentesHtml;
+  // Vaccinations en retard et dossiers famille à relancer : indépendantes de
+  // la date consultée plus bas, chargées à part et ajoutées après coup (même
+  // motif que le tableau de bord réseau) pour ne pas retarder le reste de
+  // l'écran. Remplace tout le contenu (pas de +=) pour rester correct quand
+  // la référente navigue vite d'un jour à l'autre et relance l'appel.
+  loadRefDashAlertesExtra(crecheId,urgentesHtml);
 
   // ── Carte 1 : Événements du jour (scopés crèche + réseau)
   const evts=cacheEvenements.filter(e=>{
@@ -8923,9 +8950,7 @@ function renderDashboard(){
 // être encore en mémoire (lazy-load comme dans brRender()).
 async function loadDashboardVaccAlertes(){
   try{
-    if(typeof vacLoadData==='function'&&!cacheVaccinations.length)await vacLoadData();
-    if(typeof vacAlertesRetard!=='function')return;
-    const n=vacAlertesRetard(cacheEnfants).length;
+    const n=(await vaccinationsEnRetard(null)).length;
     if(n>0){
       const box=document.getElementById('dash-alerts');if(!box)return;
       box.innerHTML+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'vaccinations\')"><i class="ti ti-vaccine" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' vaccination(s) en retard</strong></div>';
@@ -8936,14 +8961,7 @@ async function loadDashboardVaccAlertes(){
 // globale pour dossiers_familles, réseau entier (aucun filtre crèche).
 async function loadDashboardDossiersAlertes(){
   try{
-    const seuil=new Date(Date.now()-5*86400000).toISOString();
-    const{data,error}=await sb.from('dossiers_familles')
-      .select('id')
-      .in('statut',['envoye','en_cours'])
-      .lte('envoye_le',seuil)
-      .gt('expire_le',new Date().toISOString());
-    if(error)throw error;
-    const n=(data||[]).length;
+    const n=(await dossiersFamilleARelancer(null)).length;
     if(n>0){
       const box=document.getElementById('dash-alerts');if(!box)return;
       box.innerHTML+='<div class="alert-item warning"><i class="ti ti-mail-forward" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' dossier(s) famille</strong> à relancer</div>';
@@ -8965,14 +8983,7 @@ async function loadDashboardStgDocsAlertes(){
 }
 async function loadDashboardDevisAlertes(){
   try{
-    const seuil=new Date(Date.now()-5*86400000).toISOString();
-    const{data,error}=await sb.from('devis')
-      .select('id')
-      .eq('statut','envoye')
-      .lte('envoye_le',seuil)
-      .gt('expire_le',new Date().toISOString());
-    if(error)throw error;
-    const n=(data||[]).length;
+    const n=(await devisARelancer(null)).length;
     if(n>0){
       const box=document.getElementById('dash-alerts');if(!box)return;
       // showMain() ne gère que les onglets internes à demandes.html : les devis
@@ -17593,6 +17604,58 @@ function brSuffixeCreche(id){
   return n?' <span class="br-cr">('+escHtml(n)+')</span>':' <span class="br-cr">(réseau)</span>';
 }
 
+// ── Alertes réutilisées par « Ma journée », le Tableau de bord réseau et
+//    « Mon tableau de bord » (référentes) : un seul calcul par famille
+//    d'alerte, paramétré par crèche (null = réseau entier), pour ne pas
+//    réécrire trois fois la même requête. ─────────────────────────────────
+
+/* Vaccinations en retard. Charge cacheVaccinations si besoin — lazy-load
+   partagé par les trois écrans, la cache une fois en mémoire pour la
+   session. */
+async function vaccinationsEnRetard(crecheId){
+  if(typeof vacLoadData==='function'&&!cacheVaccinations.length)await vacLoadData();
+  if(typeof vacAlertesRetard!=='function')return[];
+  const enfants=crecheId?cacheEnfants.filter(e=>String(e.creche_id)===String(crecheId)):cacheEnfants;
+  return vacAlertesRetard(enfants);
+}
+
+/* Dossiers de familiarisation envoyés depuis ≥ 5 jours, non expirés, et pas
+   déjà relancés aujourd'hui (derniere_relance nulle ou antérieure à minuit) —
+   inutile de stresser sur un dossier encore dans les temps ou déjà relancé. */
+async function dossiersFamilleARelancer(crecheId){
+  const seuil=new Date(Date.now()-5*86400000).toISOString();
+  const debutJour=new Date();debutJour.setHours(0,0,0,0);
+  const{data,error}=await sb.from('dossiers_familles')
+    .select('*, enfants(prenom,nom,creche_id)')
+    .in('statut',['envoye','en_cours'])
+    .lte('envoye_le',seuil)
+    .gt('expire_le',new Date().toISOString())
+    .or('derniere_relance.is.null,derniere_relance.lt.'+debutJour.toISOString());
+  if(error)throw error;
+  return(data||[])
+    .filter(d=>d.enfants&&(!crecheId||String(d.enfants.creche_id)===String(crecheId)))
+    .sort((a,b)=>new Date(a.envoye_le)-new Date(b.envoye_le));
+}
+
+/* Devis envoyés depuis ≥ 5 jours, non expirés, pas déjà relancés aujourd'hui —
+   même logique que les dossiers famille ci-dessus. devis a son propre
+   creche_id : filtre serveur direct, pas besoin de passer par la
+   préinscription. */
+async function devisARelancer(crecheId){
+  const seuil=new Date(Date.now()-5*86400000).toISOString();
+  const debutJour=new Date();debutJour.setHours(0,0,0,0);
+  let q=sb.from('devis')
+    .select('*, preinscriptions(prenom,nom)')
+    .eq('statut','envoye')
+    .lte('envoye_le',seuil)
+    .gt('expire_le',new Date().toISOString())
+    .or('derniere_relance.is.null,derniere_relance.lt.'+debutJour.toISOString());
+  if(crecheId)q=q.eq('creche_id',crecheId);
+  const{data,error}=await q;
+  if(error)throw error;
+  return(data||[]).sort((a,b)=>new Date(a.envoye_le)-new Date(b.envoye_le));
+}
+
 async function brRender(){
   const box=document.getElementById('br-body');if(!box)return;
   box.innerHTML=brVide('Chargement…');
@@ -17675,55 +17738,15 @@ async function brRender(){
     }
   }catch(e){console.warn('[briefing] documents stagiaires',e);}
 
-  // ── Vaccinations en retard ──────────────────────────────────────────────
-  let vaccRetard=[];
-  try{
-    if(typeof vacLoadData==='function'&&!cacheVaccinations.length)await vacLoadData();
-    if(typeof vacAlertesRetard==='function'){
-      const enfantsVac=cacheEnfants.filter(e=>aMoi(e.creche_id));
-      vaccRetard=vacAlertesRetard(enfantsVac);
-    }
-  }catch(e){console.warn('[briefing] vaccinations',e);}
-
-  // ── Dossiers de familiarisation envoyés sans réponse ───────────────────
-  // Pas de cache globale ici : on interroge directement, avec la jointure
-  // enfant pour connaître sa crèche (filtre) et son nom (affichage). Pas de
-  // colonne « dernière relance » en base : le seuil de 5 jours porte donc
-  // sur la date d'envoi initiale, sans distinguer un dossier déjà relancé
-  // aujourd'hui — il réapparaîtra jusqu'à ce qu'il soit complété ou annulé.
-  let dossiersRelance=[];
-  try{
-    const seuil=new Date(Date.now()-5*86400000).toISOString();
-    const{data,error}=await sb.from('dossiers_familles')
-      .select('*, enfants(prenom,nom,creche_id)')
-      .in('statut',['envoye','en_cours'])
-      .lte('envoye_le',seuil)
-      .gt('expire_le',new Date().toISOString());
-    if(error)throw error;
-    dossiersRelance=(data||[])
-      .filter(d=>d.enfants&&aMoi(d.enfants.creche_id))
-      .sort((a,b)=>new Date(a.envoye_le)-new Date(b.envoye_le));
-  }catch(e){console.warn('[briefing] dossiers familles',e);}
-
-  // ── Devis envoyés sans réponse ──────────────────────────────────────────
-  // devis a bien son propre creche_id (pas besoin de passer par la
-  // préinscription pour le filtre), mais pas le nom de l'enfant : celui-ci
-  // vit sur preinscriptions.prenom/nom (une préinscription = un enfant, les
-  // parents sont dans une table à part). Un devis qui traîne trop est le
-  // plus sensible commercialement — une place qui risque de se perdre.
-  let devisRelance=[];
-  try{
-    const seuil=new Date(Date.now()-5*86400000).toISOString();
-    const{data,error}=await sb.from('devis')
-      .select('*, preinscriptions(prenom,nom)')
-      .eq('statut','envoye')
-      .lte('envoye_le',seuil)
-      .gt('expire_le',new Date().toISOString());
-    if(error)throw error;
-    devisRelance=(data||[])
-      .filter(d=>aMoi(d.creche_id))
-      .sort((a,b)=>new Date(a.envoye_le)-new Date(b.envoye_le));
-  }catch(e){console.warn('[briefing] devis',e);}
+  // ── Vaccinations en retard, dossiers famille et devis à relancer ───────
+  // Les trois requêtes sont indépendantes : parallélisées pour ne pas
+  // allonger le temps d'ouverture perçu de la modale.
+  const criblage=isDirection?null:maCreche;
+  const[vaccRetard,dossiersRelance,devisRelance]=await Promise.all([
+    vaccinationsEnRetard(criblage).catch(e=>{console.warn('[briefing] vaccinations',e);return[];}),
+    dossiersFamilleARelancer(criblage).catch(e=>{console.warn('[briefing] dossiers familles',e);return[];}),
+    devisARelancer(criblage).catch(e=>{console.warn('[briefing] devis',e);return[];})
+  ]);
 
   // ── En-tête : le compte de ce qui demande une action ───────────────────
   const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length
