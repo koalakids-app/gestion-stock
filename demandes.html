@@ -3074,6 +3074,17 @@ async function sendThreadMessage(){
       }
       const creche=cacheCreches.find(c=>c.id===d.creche_id);
       if(toEmail){await callFn('notify-message',{message:{to_email:toEmail,to_name:toName,author_name:row.author_name,body:body,subject:d.subject||'Demande',creche:creche?.name||'',demande_id:d.id}});}
+      // Destinataire du push : même logique, mais l'émetteur d'origine n'a pas
+      // de colonne dédiée sur la demande — on le retrouve via le dernier
+      // message existant (avant celui-ci) posté par quelqu'un d'autre.
+      let pushDestId=null;
+      if(currentProfile?.id!==d.to_referent_id){
+        pushDestId=d.to_referent_id||null;
+      }else{
+        const precedents=cacheMessages.filter(m=>m.demande_id===currentThreadId&&m.id!==saved.id&&m.author_id&&m.author_id!==currentProfile?.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+        pushDestId=precedents[0]?.author_id||null;
+      }
+      if(pushDestId){await callFn('notify-push',{referent_ids:[pushDestId],title:'Nouveau message',body:body,url:'./demandes.html',tag:'message-'+saved.id});}
     }
   }
   else showBanner('Erreur envoi.','error');
