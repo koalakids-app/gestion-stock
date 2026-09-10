@@ -222,7 +222,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <div class="sec"><i class="ti ti-file-text"></i> Tous les documents</div>
         <div class="f"><label class="lb">Pied de page commun</label><textarea id="rPied" placeholder="Apparaît en bas de chaque document sortant."></textarea></div>
       </div>
-
+ <div class="card"> <div class="sec"><i class="ti ti-bell-off"></i> Notifications — droit à la déconnexion</div> <div class="g2"> <div class="f"><label class="lb">Silence à partir de</label><input id="rNotifDebut" type="time"></div> <div class="f"><label class="lb">Notifications reprises à</label><input id="rNotifFin" type="time"></div> </div> <p class="hint">Aucune notification push n'est envoyée entre ces deux heures, pour tout le réseau. Les demandes, événements et actions assignées restent bien enregistrés — ils sont simplement notifiés dès la reprise.</p> </div>
       <div class="warn"><i class="ti ti-info-circle"></i><span>Le devis et le contrat d'accueil lisent déjà ces valeurs.
         Les autres documents — registre de sécurité notamment — restent à câbler : c'est un chantier par document.</span></div>
     </div>
@@ -533,6 +533,8 @@ function renderReseau(){
   setVal('rCondResil',RCFG.conditions_resiliation);
   setVal('rCtMentions',RCFG.contrat_mentions);
   setVal('rPied',RCFG.pied_page);
+  setVal('rNotifDebut',RCFG.notif_silence_debut||'19:00');
+  setVal('rNotifFin',RCFG.notif_silence_fin||'08:00');
   syncPreavis();
 }
 
@@ -723,8 +725,7 @@ async function save(){
       preavis_resiliation:val('rPreavis'),
       conditions_resiliation:val('rCondResil'),
       contrat_mentions:val('rCtMentions'),
-      pied_page:val('rPied')
-    });
+      pied_page:val('rPied'),notif_silence_debut:val('rNotifDebut')||'19:00', notif_silence_fin:val('rNotifFin')||'08:00'});
     const{error:er}=await sb.from('reseau_config')
       .upsert({id:RESEAU_CFG_ID,config:cfg,updated_at:new Date().toISOString()},{onConflict:'id'});
     if(er)throw er;
