@@ -2981,7 +2981,7 @@ async function saveDemand(){
   const btn=document.getElementById('btn-save-demand');btn.disabled=true;
   const row={creche_id:crecheId,to_referent_id:refSel?.value||null,referent_name:refOpt?.getAttribute('data-name')||'',referent_email:document.getElementById('d-email').value.trim(),subject:subj,description:document.getElementById('d-desc').value.trim(),priority:document.getElementById('d-prio').value,theme:document.getElementById('d-theme').value,status:'attente',type:'demande',attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null};
   const saved=await dbInsert('demandes',row);
-  if(saved){cacheDemandes.unshift(saved);await callFn('notify-demand',{demand:{...row,creche:cacheCreches.find(c=>c.id===crecheId)?.name||''}});showBanner('Demande enregistrée !');closeModal('modal-demand-wrap');renderCrecheTabs();}
+  if(saved){cacheDemandes.unshift(saved);await callFn('notify-demand',{demand:{...row,creche:cacheCreches.find(c=>c.id===crecheId)?.name||''}});showBanner('Demande enregistrée !');const pushDest=[row.to_referent_id].filter(Boolean);if(pushDest.length)await callFn('notify-push',{referent_ids:pushDest,title:'Nouvelle demande',body:subj,url:'./demandes.html',tag:'demande-'+saved.id});closeModal('modal-demand-wrap');renderCrecheTabs();}
   else showBanner('Erreur.','error');
   btn.disabled=false;
 }
