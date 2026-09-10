@@ -17822,6 +17822,14 @@ function brBriefingAuto(){
 }
 function brBriefingManuel(){ brBriefingOuvrir(); }
 function brBriefingFermer(){ closeModal('modal-brief-wrap'); }
+/* Bouton « Me le rappeler » : efface la marque « vu aujourd'hui » pour que le
+   briefing s'ouvre de nouveau tout seul à la prochaine connexion, même le même
+   jour — utile pour ne pas perdre de vue ce qui reste à faire. */
+function brRappelProchaineFois(btn){
+  try{ localStorage.removeItem(brCleJour()); }catch(e){}
+  if(btn){btn.innerHTML='<i class="ti ti-check"></i> Rappel programmé';btn.disabled=true;}
+  setTimeout(brBriefingFermer,900);
+}
 /* Aller sur un module depuis le briefing : on ferme d'abord, sinon l'écran
    ouvert reste caché derrière la fenêtre. */
 function brAller(tab){ brBriefingFermer(); showMain(tab); }
@@ -18018,6 +18026,7 @@ window.brBriefingManuel=brBriefingManuel;
 window.brBriefingOuvrir=brBriefingOuvrir;
 window.brBriefingFermer=brBriefingFermer;
 window.brAller=brAller;
+window.brRappelProchaineFois=brRappelProchaineFois;
 
 </script>
 
@@ -18058,6 +18067,7 @@ window.brAller=brAller;
     <div id="br-body"></div>
     <div class="mactions">
       <button class="btn-cancel" onclick="brRender()"><i class="ti ti-refresh"></i> Actualiser</button>
+      <button class="btn-cancel" onclick="brRappelProchaineFois(this)" title="Rouvre ce résumé à la prochaine connexion, pour ne rien oublier"><i class="ti ti-bell"></i> Me le rappeler</button>
       <button class="btn-primary" onclick="brBriefingFermer()"><i class="ti ti-layout-dashboard"></i> Voir le tableau de bord</button>
     </div>
   </div>
