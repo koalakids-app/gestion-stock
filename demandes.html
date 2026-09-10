@@ -52,8 +52,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* Desktop (>1024px, nav ne passe pas à la ligne) : petit menu ancré sous le
    bouton. En dessous (tablette comprise, cf. media query plus bas), la nav
    peut passer sur plusieurs lignes et la position du bouton devient
-   imprévisible — le panneau bascule alors en plein écran pour ne jamais
-   chevaucher le contenu à mi-largeur. */
+   imprévisible — le panneau s'ancre alors au viewport (coin haut-droit)
+   plutôt qu'au bouton, pour ne jamais chevaucher le contenu à mi-largeur. */
 .mnav-hub-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:120}
 .mnav-hub-panel.open{display:flex}
 .mnav-hub-card{background:#fff;border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 34px rgba(42,36,96,0.16);padding:14px;display:flex;flex-wrap:wrap;gap:18px;max-width:min(90vw,720px)}
@@ -348,12 +348,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 }
 /* En dessous de 1024px (tablette comprise), la nav peut passer sur
    plusieurs lignes : la position du bouton "Plus" devient imprévisible et
-   un menu ancré risque de chevaucher le contenu à mi-largeur. Le menu
-   bascule donc en plein écran avec fond assombri, comme les autres
-   panneaux de l'appli (cf. .overlay). */
+   un menu ancré au bouton risque de chevaucher le contenu à mi-largeur.
+   On ancre donc le menu au viewport (position:fixed, coin haut-droit)
+   plutôt qu'au bouton : sa position reste prévisible quel que soit
+   l'endroit où la nav a fait passer le bouton à la ligne, et le menu
+   reste une carte compacte (pas de plein écran). */
 @media(max-width:1024px){
-  .mnav-hub-panel{position:fixed;inset:0;background:rgba(0,0,0,0.45);align-items:flex-start;justify-content:center;padding:64px 16px 16px;overflow-y:auto}
-  .mnav-hub-card{width:100%;max-width:480px;max-height:calc(100vh - 90px);overflow-y:auto}
+  .mnav-hub-panel{position:fixed;top:68px;right:12px;left:auto;bottom:auto;background:transparent;padding:0;align-items:flex-start;justify-content:flex-end}
+  .mnav-hub-card{flex-direction:column;flex-wrap:nowrap;width:250px;max-width:calc(100vw - 24px);max-height:calc(100vh - 90px);overflow-y:auto}
 }
 /* FRAIS IK */
 .ik-config-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:1rem}
