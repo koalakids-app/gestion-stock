@@ -49,8 +49,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .mnav-btn.active .mnav-badge{background:#fff;color:var(--koala)}
 .mnav-hub-wrap{position:relative}
 .mnav-hub-btn.hub-open{background:var(--koala-light);border-color:var(--koala);color:var(--koala)}
-.mnav-hub-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 34px rgba(42,36,96,0.16);padding:14px;gap:18px;z-index:60;max-width:min(90vw,720px)}
-.mnav-hub-panel.open{display:flex;flex-wrap:wrap}
+/* Desktop (>1024px, nav ne passe pas à la ligne) : petit menu ancré sous le
+   bouton. En dessous (tablette comprise, cf. media query plus bas), la nav
+   peut passer sur plusieurs lignes et la position du bouton devient
+   imprévisible — le panneau bascule alors en plein écran pour ne jamais
+   chevaucher le contenu à mi-largeur. */
+.mnav-hub-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:120}
+.mnav-hub-panel.open{display:flex}
+.mnav-hub-card{background:#fff;border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 34px rgba(42,36,96,0.16);padding:14px;display:flex;flex-wrap:wrap;gap:18px;max-width:min(90vw,720px)}
 .mnav-hub-col{display:flex;flex-direction:column;gap:2px;min-width:170px}
 .mnav-hub-title{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;margin:2px 0 4px 8px}
 .mnav-hub-item{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:none;background:transparent;border-radius:8px;font-size:13px;color:#444;cursor:pointer;text-align:left;font-weight:500;transition:background .12s}
@@ -339,7 +345,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   .section-actions{flex-direction:column}
   .main-nav{gap:4px}
   .mnav-btn{padding:6px 10px;font-size:12px}
-  .mnav-hub-panel{right:auto;left:0;max-width:88vw}
+}
+/* En dessous de 1024px (tablette comprise), la nav peut passer sur
+   plusieurs lignes : la position du bouton "Plus" devient imprévisible et
+   un menu ancré risque de chevaucher le contenu à mi-largeur. Le menu
+   bascule donc en plein écran avec fond assombri, comme les autres
+   panneaux de l'appli (cf. .overlay). */
+@media(max-width:1024px){
+  .mnav-hub-panel{position:fixed;inset:0;background:rgba(0,0,0,0.45);align-items:flex-start;justify-content:center;padding:64px 16px 16px;overflow-y:auto}
+  .mnav-hub-card{width:100%;max-width:480px;max-height:calc(100vh - 90px);overflow-y:auto}
 }
 /* FRAIS IK */
 .ik-config-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:1rem}
@@ -464,7 +478,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="mnav-btn mnav-hub-btn" onclick="toggleHub(event)" id="mnav-hub-btn">
           <i class="ti ti-apps"></i> Plus <span class="mnav-badge" id="badge-hub" style="display:none">0</span> <i class="ti ti-chevron-down" style="font-size:11px"></i>
         </button>
-        <div class="mnav-hub-panel" id="mnav-hub-panel">
+        <div class="mnav-hub-panel" id="mnav-hub-panel" onclick="if(event.target===this)closeHub()">
+        <div class="mnav-hub-card">
           <div class="mnav-hub-col">
             <div class="mnav-hub-title">Suivi</div>
             <button class="mnav-hub-item david-only" onclick="showMain('afaire');closeHub()" id="mnav-afaire" style="display:none"><i class="ti ti-checklist"></i> À faire</button>
@@ -489,6 +504,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <div class="mnav-hub-title">Outils</div>
             <button class="mnav-hub-item" onclick="openKiosque();closeHub()" id="mnav-kiosque"><i class="ti ti-device-tablet"></i> Mode kiosque</button>
           </div>
+        </div>
         </div>
       </div>
     </nav>
