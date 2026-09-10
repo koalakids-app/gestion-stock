@@ -8907,12 +8907,27 @@ function renderDashboard(){
   if(incGrave>0)alerts+='<div class="alert-item"><i class="ti ti-stethoscope" style="font-size:16px;flex-shrink:0"></i> <strong>'+incGrave+' incident(s) grave(s)</strong></div>';
   if(incNT>0)alerts+='<div class="alert-item warning"><i class="ti ti-clipboard-list" style="font-size:16px;flex-shrink:0"></i> <strong>'+incNT+' incident(s)</strong> non traité(s)</div>';
   document.getElementById('dash-alerts').innerHTML=alerts;
+  loadDashboardVaccAlertes();
   document.getElementById('dash-stats').innerHTML='<div class="stat-card"><div class="stat-label">Crèches</div><div class="stat-val cv">'+cacheCreches.length+'</div><div class="stat-sub">'+cacheEnfants.length+' enfants</div></div><div class="stat-card" style="border-top-color:var(--orange)"><div class="stat-label">Demandes</div><div class="stat-val co">'+totalD+'</div><div class="stat-sub">'+cacheDemandes.filter(d=>d.status==='attente').length+' en attente</div></div><div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Incidents</div><div class="stat-val cr">'+cacheIncidents.length+'</div><div class="stat-sub">'+incNT+' non traités</div></div><div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Référents</div><div class="stat-val cg">'+cacheReferents.filter(r=>r.role==='referent').length+'</div><div class="stat-sub">actifs</div></div>';
   const byCrecheRows=cacheCreches.map(c=>{const n=cacheDemandes.filter(d=>d.creche_id===c.id).length;const pct=totalD>0?Math.round(n/totalD*100):0;return'<div class="dash-list-item"><strong>'+c.name+'</strong><span style="font-weight:700;color:var(--koala)">'+n+'</span></div><div class="dash-bar"><div class="dash-bar-fill" style="width:'+pct+'%"></div></div>';}).join('')||'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune crèche</div>';
   const themes={};cacheDemandes.forEach(d=>{if(d.theme)themes[d.theme]=(themes[d.theme]||0)+1;});
   const themeRows=Object.keys(themes).length?Object.entries(themes).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'<div class="dash-list-item"><span>'+k+'</span><span style="font-weight:700;color:var(--koala)">'+v+'</span></div>').join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune donnée</div>';
   document.getElementById('dash-grid').innerHTML='<div class="dash-card"><div class="dash-card-title"><i class="ti ti-building"></i> Demandes par crèche</div>'+byCrecheRows+'</div><div class="dash-card"><div class="dash-card-title"><i class="ti ti-chart-pie"></i> Thèmes</div>'+themeRows+'</div>';
   renderDashboardToday();
+}
+// Vue direction : aucun filtre de crèche — le réseau entier. Chargée à part
+// et ajoutée après coup à #dash-alerts, la cache vaccination pouvant ne pas
+// être encore en mémoire (lazy-load comme dans brRender()).
+async function loadDashboardVaccAlertes(){
+  try{
+    if(typeof vacLoadData==='function'&&!cacheVaccinations.length)await vacLoadData();
+    if(typeof vacAlertesRetard!=='function')return;
+    const n=vacAlertesRetard(cacheEnfants).length;
+    if(n>0){
+      const box=document.getElementById('dash-alerts');if(!box)return;
+      box.innerHTML+='<div class="alert-item warning"><i class="ti ti-vaccine" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' vaccination(s) en retard</strong></div>';
+    }
+  }catch(e){console.warn('[Dashboard] vaccinations',e);}
 }
 
 // AUJOURD'HUI — widget temps réel du tableau de bord
@@ -17561,8 +17576,18 @@ async function brRender(){
     }
   }catch(e){console.warn('[briefing] stagiaires',e);}
 
+  // ── Vaccinations en retard ──────────────────────────────────────────────
+  let vaccRetard=[];
+  try{
+    if(typeof vacLoadData==='function'&&!cacheVaccinations.length)await vacLoadData();
+    if(typeof vacAlertesRetard==='function'){
+      const enfantsVac=cacheEnfants.filter(e=>aMoi(e.creche_id));
+      vaccRetard=vacAlertesRetard(enfantsVac);
+    }
+  }catch(e){console.warn('[briefing] vaccinations',e);}
+
   // ── En-tête : le compte de ce qui demande une action ───────────────────
-  const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length;
+  const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length+vaccRetard.length;
   const res=document.getElementById('br-resume');
   if(res){
     res.className='br-resume'+(nAction?' br-chaud':'');
@@ -17634,6 +17659,17 @@ async function brRender(){
         }).join('')+(stgLiens.length>8?'<div class="br-plus">+ '+(stgLiens.length-8)+' autres</div>':'')
       :brVide('✅ Aucun lien à envoyer'),
     stgLiens.length?'accent':'');
+
+  // 5bis. Vaccinations en retard
+  h+=brSection('vaccine','Vaccinations en retard',vaccRetard.length,
+    vaccRetard.length
+      ?vaccRetard.slice(0,8).map(({enfant,vacc,dose,s})=>{
+          const nom=((enfant.prenom||'')+' '+(enfant.nom||'')).trim();
+          return brLigne('💉 '+escHtml(nom)+' — '+escHtml(vacc.label)+' ('+dose.label+')'+brSuffixeCreche(enfant.creche_id),
+            'retard de '+(-s.daysLeft)+' j','vaccinations',true);
+        }).join('')+(vaccRetard.length>8?'<div class="br-plus">+ '+(vaccRetard.length-8)+' autres</div>':'')
+      :brVide('✅ Aucune vaccination en retard'),
+    vaccRetard.length?'accent':'');
 
   // 6. Événements du jour
   h+=brSection('calendar-event','Événements du jour',evts.length,
