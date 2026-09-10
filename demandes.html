@@ -8910,6 +8910,7 @@ function renderDashboard(){
   loadDashboardVaccAlertes();
   loadDashboardDossiersAlertes();
   loadDashboardStgDocsAlertes();
+  loadDashboardDevisAlertes();
   document.getElementById('dash-stats').innerHTML='<div class="stat-card"><div class="stat-label">Crèches</div><div class="stat-val cv">'+cacheCreches.length+'</div><div class="stat-sub">'+cacheEnfants.length+' enfants</div></div><div class="stat-card" style="border-top-color:var(--orange)"><div class="stat-label">Demandes</div><div class="stat-val co">'+totalD+'</div><div class="stat-sub">'+cacheDemandes.filter(d=>d.status==='attente').length+' en attente</div></div><div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Incidents</div><div class="stat-val cr">'+cacheIncidents.length+'</div><div class="stat-sub">'+incNT+' non traités</div></div><div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Référents</div><div class="stat-val cg">'+cacheReferents.filter(r=>r.role==='referent').length+'</div><div class="stat-sub">actifs</div></div>';
   const byCrecheRows=cacheCreches.map(c=>{const n=cacheDemandes.filter(d=>d.creche_id===c.id).length;const pct=totalD>0?Math.round(n/totalD*100):0;return'<div class="dash-list-item"><strong>'+c.name+'</strong><span style="font-weight:700;color:var(--koala)">'+n+'</span></div><div class="dash-bar"><div class="dash-bar-fill" style="width:'+pct+'%"></div></div>';}).join('')||'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune crèche</div>';
   const themes={};cacheDemandes.forEach(d=>{if(d.theme)themes[d.theme]=(themes[d.theme]||0)+1;});
@@ -8961,6 +8962,22 @@ async function loadDashboardStgDocsAlertes(){
       box.innerHTML+='<div class="alert-item warning"><i class="ti ti-file-x" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' document(s) stagiaire refusé(s)</strong> à corriger</div>';
     }
   }catch(e){console.warn('[Dashboard] documents stagiaires',e);}
+}
+async function loadDashboardDevisAlertes(){
+  try{
+    const seuil=new Date(Date.now()-5*86400000).toISOString();
+    const{data,error}=await sb.from('devis')
+      .select('id')
+      .eq('statut','envoye')
+      .lte('envoye_le',seuil)
+      .gt('expire_le',new Date().toISOString());
+    if(error)throw error;
+    const n=(data||[]).length;
+    if(n>0){
+      const box=document.getElementById('dash-alerts');if(!box)return;
+      box.innerHTML+='<div class="alert-item warning"><i class="ti ti-file-invoice" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' devis</strong> en attente de signature</div>';
+    }
+  }catch(e){console.warn('[Dashboard] devis',e);}
 }
 
 // AUJOURD'HUI — widget temps réel du tableau de bord
@@ -17529,6 +17546,12 @@ function brAllerEnfant(id){
   showMain('enfants');
   if(typeof enfOpenFiche==='function')enfOpenFiche(id);
 }
+/* Les devis vivent dans inscriptions.html, une autre page : pas d'onglet à
+   activer ici, on quitte carrément demandes.html. */
+function brAllerInscriptions(){
+  brBriefingFermer();
+  location.href='inscriptions.html';
+}
 
 function brBriefingOuvrir(){
   const w=document.getElementById('modal-brief-wrap');if(!w)return;
@@ -17680,9 +17703,29 @@ async function brRender(){
       .sort((a,b)=>new Date(a.envoye_le)-new Date(b.envoye_le));
   }catch(e){console.warn('[briefing] dossiers familles',e);}
 
+  // ── Devis envoyés sans réponse ──────────────────────────────────────────
+  // devis a bien son propre creche_id (pas besoin de passer par la
+  // préinscription pour le filtre), mais pas le nom de l'enfant : celui-ci
+  // vit sur preinscriptions.prenom/nom (une préinscription = un enfant, les
+  // parents sont dans une table à part). Un devis qui traîne trop est le
+  // plus sensible commercialement — une place qui risque de se perdre.
+  let devisRelance=[];
+  try{
+    const seuil=new Date(Date.now()-5*86400000).toISOString();
+    const{data,error}=await sb.from('devis')
+      .select('*, preinscriptions(prenom,nom)')
+      .eq('statut','envoye')
+      .lte('envoye_le',seuil)
+      .gt('expire_le',new Date().toISOString());
+    if(error)throw error;
+    devisRelance=(data||[])
+      .filter(d=>aMoi(d.creche_id))
+      .sort((a,b)=>new Date(a.envoye_le)-new Date(b.envoye_le));
+  }catch(e){console.warn('[briefing] devis',e);}
+
   // ── En-tête : le compte de ce qui demande une action ───────────────────
   const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length
-    +stgRefuses.length+stgManquants.length+vaccRetard.length+dossiersRelance.length;
+    +stgRefuses.length+stgManquants.length+vaccRetard.length+dossiersRelance.length+devisRelance.length;
   const res=document.getElementById('br-resume');
   if(res){
     res.className='br-resume'+(nAction?' br-chaud':'');
@@ -17793,6 +17836,20 @@ async function brRender(){
       :brVide('✅ Aucun dossier à relancer'),
     dossiersRelance.length?'accent':'');
 
+  // 5quinquies. Devis en attente de signature
+  h+=brSection('file-invoice','Devis en attente de signature',devisRelance.length,
+    devisRelance.length
+      ?devisRelance.slice(0,8).map(d=>{
+          const pre=d.preinscriptions||{};
+          const nom=((pre.prenom||'')+' '+(pre.nom||'')).trim()||'Sans nom';
+          const j=Math.floor((new Date()-new Date(d.envoye_le))/86400000);
+          return brLigneClic('📄 '+escHtml(nom)+brSuffixeCreche(d.creche_id),
+            'envoyé le '+j+' j'+(d.relances?', '+d.relances+' relance'+(d.relances>1?'s':''):''),
+            'brAllerInscriptions()',true);
+        }).join('')+(devisRelance.length>8?'<div class="br-plus">+ '+(devisRelance.length-8)+' autres</div>':'')
+      :brVide('✅ Aucun devis à relancer'),
+    devisRelance.length?'accent':'');
+
   // 6. Événements du jour
   h+=brSection('calendar-event','Événements du jour',evts.length,
     evts.length
@@ -17822,6 +17879,7 @@ window.brBriefingOuvrir=brBriefingOuvrir;
 window.brBriefingFermer=brBriefingFermer;
 window.brAller=brAller;
 window.brAllerEnfant=brAllerEnfant;
+window.brAllerInscriptions=brAllerInscriptions;
 window.brRappelProchaineFois=brRappelProchaineFois;
 
 </script>
