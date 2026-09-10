@@ -14493,16 +14493,23 @@ async function adSaveAction(){
   const btn=document.getElementById('ad-f-save');btn.disabled=true;
   try{
     if(adEditId){
+      const ancienResponsableId=ancienne?.responsable_referent_id;
       const{error}=await sb.from('actions_direction').update(row).eq('id',adEditId);
       if(error)throw error;
       Object.assign(ancienne,row);
       showBanner('Action mise à jour ✅');
+      if(row.responsable_referent_id&&row.responsable_referent_id!==ancienResponsableId){
+        await callFn('notify-push',{referent_ids:[row.responsable_referent_id],title:'Action qui vous est assignée',body:action,url:'./demandes.html',tag:'action-'+adEditId});
+      }
     }else{
       row.numero=adNumeroSuivant();
       const{data,error}=await sb.from('actions_direction').insert(row).select().single();
       if(error)throw error;
       adCache.push(data);
       showBanner('Action n°'+data.numero+' créée ✅');
+      if(row.responsable_referent_id){
+        await callFn('notify-push',{referent_ids:[row.responsable_referent_id],title:'Action qui vous est assignée',body:action,url:'./demandes.html',tag:'action-'+data.id});
+      }
     }
     closeModal('modal-action-wrap');
     adEditId=null;
