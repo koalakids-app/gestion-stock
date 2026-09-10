@@ -1,11 +1,11 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v8';   // v8 : ajout de la page Paramètres au hub
+const CACHE_NAME = 'stocks-v9';   // v9 : extraction du module Kiosque vers js/kiosque.js
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(['./index.html', './manifest.json']))
+      .then(cache => cache.addAll(['./index.html', './manifest.json', './js/kiosque.js']))
       .then(() => self.skipWaiting())
   );
 });
