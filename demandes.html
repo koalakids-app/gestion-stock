@@ -521,7 +521,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <i class="ti ti-sun" style="font-size:15px"></i><span>Ma journée</span>
         <span id="btn-brief-n" style="display:none;background:var(--red,#e05252);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;font-weight:700">0</span>
       </button>
-     <button id="btn-notif" onclick="activerNotificationsPush()" title="Activer les notifications" style="display:inline-flex;align-items:center;gap:6px;background:var(--koala-light);color:var(--koala);border:none;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer"><i class="ti ti-bell" style="font-size:15px"></i></button>
+     <button id="btn-notif" onclick="toggleNotificationsPush()" title="Activer les notifications" style="display:inline-flex;align-items:center;gap:6px;background:var(--koala-light);color:#9ca3af;border:none;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer"><i class="ti ti-bell-off" style="font-size:15px"></i></button>
                   <div class="user-chip" id="user-chip" onclick="doLogout()"><i class="ti ti-user" style="font-size:13px"></i> <span id="user-name">—</span> <i class="ti ti-logout" style="font-size:12px;opacity:0.7"></i></div>
     </div>
   </div>
@@ -2653,7 +2653,32 @@ async function doLogout(){if(!confirm('Se déconnecter ?'))return;await sb.auth.
 const VAPID_PUBLIC_KEY='BAYWoYbzpxn-poxeKn-7CPccnX-aGN5y8kXLVCgcgC8a025oz8HMdNj7E36VLgtiD-oV71KhgCECdQGL85kidOk';
 function urlBase64ToUint8Array(base64String){const padding='='.repeat((4-base64String.length%4)%4);const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');const rawData=atob(base64);return Uint8Array.from([...rawData].map(c=>c.charCodeAt(0)));}
 if('serviceWorker'in navigator&&location.protocol==='https:'&&!location.hostname.includes('claudeusercontent')){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').then(r=>console.log('SW registered:',r.scope)).catch(e=>console.log('SW error:',e));});}
-async function activerNotificationsPush(){if(!('serviceWorker'in navigator)||!('PushManager'in window)){alert('Les notifications push ne sont pas supportées sur cet appareil/navigateur.');return;}const permission=await Notification.requestPermission();if(permission!=='granted'){alert('Notifications refusées. Tu peux les réactiver dans les réglages du navigateur.');return;}const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();if(sub){await sub.unsubscribe();}sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});const subJson=sub.toJSON();const{error}=await sb.from('push_subscriptions').upsert({referent_id:currentProfile?.id,endpoint:subJson.endpoint,p256dh:subJson.keys.p256dh,auth_key:subJson.keys.auth,user_agent:navigator.userAgent},{onConflict:'endpoint'});if(error){console.error(error);alert("Erreur lors de l'activation des notifications.");return;}alert('Notifications activées !');}function showLogin(){
+function updateNotifIcon(subscribed){const btn=document.getElementById('btn-notif');if(!btn)return;const icon=btn.querySelector('i');if(subscribed){if(icon)icon.className='ti ti-bell';btn.style.color='var(--koala)';btn.title='Désactiver les notifications';}else{if(icon)icon.className='ti ti-bell-off';btn.style.color='#9ca3af';btn.title='Activer les notifications';}}
+async function checkNotifSubscription(){if(!('serviceWorker'in navigator)||!('PushManager'in window))return;try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();updateNotifIcon(!!sub);}catch(e){console.warn('[Notif] check subscription',e);}}
+async function toggleNotificationsPush(){
+  if(!('serviceWorker'in navigator)||!('PushManager'in window)){alert('Les notifications push ne sont pas supportées sur cet appareil/navigateur.');return;}
+  const reg=await navigator.serviceWorker.ready;
+  const existingSub=await reg.pushManager.getSubscription();
+  if(existingSub){
+    try{
+      await existingSub.unsubscribe();
+      if(currentProfile?.id){const{error}=await sb.from('push_subscriptions').delete().eq('referent_id',currentProfile.id);if(error)console.error(error);}
+      updateNotifIcon(false);
+      if(typeof showBanner==='function')showBanner('Notifications désactivées.');else alert('Notifications désactivées.');
+    }catch(e){console.error(e);alert('Erreur lors de la désactivation des notifications.');}
+    return;
+  }
+  const permission=await Notification.requestPermission();if(permission!=='granted'){alert('Notifications refusées. Tu peux les réactiver dans les réglages du navigateur.');return;}
+  let sub=await reg.pushManager.getSubscription();if(sub){await sub.unsubscribe();}
+  sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
+  const subJson=sub.toJSON();
+  const{error}=await sb.from('push_subscriptions').upsert({referent_id:currentProfile?.id,endpoint:subJson.endpoint,p256dh:subJson.keys.p256dh,auth_key:subJson.keys.auth,user_agent:navigator.userAgent},{onConflict:'endpoint'});
+  if(error){console.error(error);alert("Erreur lors de l'activation des notifications.");return;}
+  updateNotifIcon(true);
+  if(typeof showBanner==='function')showBanner('Notifications activées !');else alert('Notifications activées !');
+}
+const activerNotificationsPush=toggleNotificationsPush;
+function showLogin(){
   document.getElementById('loading-screen').style.display='none';
   document.getElementById('login-wrap').style.display='block';
   document.getElementById('app-wrap').style.display='none';
@@ -2691,6 +2716,7 @@ function showApp(){
   document.querySelectorAll('.david-only').forEach(el=>el.style.display=isDavid?'':'none');
   document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
   updateBadges();renderCrecheTabs();
+  checkNotifSubscription();
   /* Ouverture sur le tableau de bord, direction comme referentes : c'est la vue
      du jour, et non la messagerie, qui doit accueillir a la connexion. */
   showMain(isDirection?'dashboard':'ref-dashboard');
