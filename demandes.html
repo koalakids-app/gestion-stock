@@ -8909,6 +8909,7 @@ function renderDashboard(){
   document.getElementById('dash-alerts').innerHTML=alerts;
   loadDashboardVaccAlertes();
   loadDashboardDossiersAlertes();
+  loadDashboardStgDocsAlertes();
   document.getElementById('dash-stats').innerHTML='<div class="stat-card"><div class="stat-label">Crèches</div><div class="stat-val cv">'+cacheCreches.length+'</div><div class="stat-sub">'+cacheEnfants.length+' enfants</div></div><div class="stat-card" style="border-top-color:var(--orange)"><div class="stat-label">Demandes</div><div class="stat-val co">'+totalD+'</div><div class="stat-sub">'+cacheDemandes.filter(d=>d.status==='attente').length+' en attente</div></div><div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Incidents</div><div class="stat-val cr">'+cacheIncidents.length+'</div><div class="stat-sub">'+incNT+' non traités</div></div><div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Référents</div><div class="stat-val cg">'+cacheReferents.filter(r=>r.role==='referent').length+'</div><div class="stat-sub">actifs</div></div>';
   const byCrecheRows=cacheCreches.map(c=>{const n=cacheDemandes.filter(d=>d.creche_id===c.id).length;const pct=totalD>0?Math.round(n/totalD*100):0;return'<div class="dash-list-item"><strong>'+c.name+'</strong><span style="font-weight:700;color:var(--koala)">'+n+'</span></div><div class="dash-bar"><div class="dash-bar-fill" style="width:'+pct+'%"></div></div>';}).join('')||'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune crèche</div>';
   const themes={};cacheDemandes.forEach(d=>{if(d.theme)themes[d.theme]=(themes[d.theme]||0)+1;});
@@ -8947,6 +8948,19 @@ async function loadDashboardDossiersAlertes(){
       box.innerHTML+='<div class="alert-item warning"><i class="ti ti-mail-forward" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' dossier(s) famille</strong> à relancer</div>';
     }
   }catch(e){console.warn('[Dashboard] dossiers familles',e);}
+}
+// Seul le cas refusé est remonté ici : c'est le plus actionnable (une pièce
+// manquante peut encore attendre, une pièce refusée attend une réponse).
+async function loadDashboardStgDocsAlertes(){
+  try{
+    if(typeof stgLoad==='function'&&!stgCache.length)await stgLoad();
+    if(typeof stgEnSuivi!=='function'||typeof stgDocsDe!=='function')return;
+    const n=stgCache.filter(s=>stgEnSuivi(s)&&stgDocsDe(s.id).some(d=>d.statut==='refuse')).length;
+    if(n>0){
+      const box=document.getElementById('dash-alerts');if(!box)return;
+      box.innerHTML+='<div class="alert-item warning"><i class="ti ti-file-x" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' document(s) stagiaire refusé(s)</strong> à corriger</div>';
+    }
+  }catch(e){console.warn('[Dashboard] documents stagiaires',e);}
 }
 
 // AUJOURD'HUI — widget temps réel du tableau de bord
@@ -15469,6 +15483,9 @@ const stgProfil  = s => STG_PROFILS[stgType(s)];
 const stgMeta   = s => STG_STATUTS[s] || STG_STATUTS.demande;
 const stgClos   = s => s==='termine'||s==='refuse'||s==='annule';
 const stgNomComplet = s => ((s.prenom||'')+' '+(s.nom||'')).trim()||'Sans nom';
+/* Le lien a déjà été (ou aurait déjà dû être) envoyé : ni une simple demande
+   Padlet, ni un premier contact, ni un dossier clos. */
+const stgEnSuivi = s => s&&!stgClos(s.statut)&&s.statut!=='demande'&&s.statut!=='contact';
 
 function stgCrecheName(id){
   if(!id)return '';
@@ -17610,6 +17627,29 @@ async function brRender(){
     }
   }catch(e){console.warn('[briefing] stagiaires',e);}
 
+  // ── Stagiaires : documents refusés ou manquants proche du début ────────
+  // Deux cas distincts sur les fiches déjà suivies (lien envoyé ou stage
+  // commencé, cf. stgEnSuivi) : une pièce refusée est toujours urgente,
+  // une pièce obligatoire manquante ne l'est que si le début approche —
+  // même fenêtre de 7 jours que le surlignage rouge des liens ci-dessus.
+  let stgRefuses=[], stgManquants=[];
+  try{
+    if(typeof stgLoad==='function'&&!stgCache.length)await stgLoad();
+    if(typeof stgEnSuivi==='function'&&typeof stgDocsDe==='function'&&typeof stgAvancement==='function'){
+      const enSuivi=stgCache.filter(s=>
+        (isDirection||String(s.creche_id||'')===String(maCreche||''))&&stgEnSuivi(s));
+      enSuivi.forEach(s=>{
+        if(stgDocsDe(s.id).some(d=>d.statut==='refuse')){
+          stgRefuses.push(s);
+        }else if(s.date_debut){
+          const av=stgAvancement(s.id);
+          const j=Math.round((new Date(String(s.date_debut).slice(0,10)+'T12:00:00')-new Date(t+'T12:00:00'))/86400000);
+          if(av.total>av.faits&&j<=7)stgManquants.push({s,j});
+        }
+      });
+    }
+  }catch(e){console.warn('[briefing] documents stagiaires',e);}
+
   // ── Vaccinations en retard ──────────────────────────────────────────────
   let vaccRetard=[];
   try{
@@ -17641,7 +17681,8 @@ async function brRender(){
   }catch(e){console.warn('[briefing] dossiers familles',e);}
 
   // ── En-tête : le compte de ce qui demande une action ───────────────────
-  const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length+vaccRetard.length+dossiersRelance.length;
+  const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length
+    +stgRefuses.length+stgManquants.length+vaccRetard.length+dossiersRelance.length;
   const res=document.getElementById('br-resume');
   if(res){
     res.className='br-resume'+(nAction?' br-chaud':'');
@@ -17714,7 +17755,21 @@ async function brRender(){
       :brVide('✅ Aucun lien à envoyer'),
     stgLiens.length?'accent':'');
 
-  // 5bis. Vaccinations en retard
+  // 5bis. Stagiaires : documents refusés ou manquants proche du début
+  const stgDocsIssues=[
+    ...stgRefuses.map(s=>({icon:'🚫',s,meta:'à corriger',rouge:true})),
+    ...stgManquants.map(({s,j})=>({icon:'📎',s,
+      meta:j<=0?'stage commencé':'dans '+j+' j',rouge:true}))
+  ];
+  h+=brSection('file-alert','Stagiaires — documents à traiter',stgDocsIssues.length,
+    stgDocsIssues.length
+      ?stgDocsIssues.slice(0,8).map(x=>
+          brLigne(x.icon+' '+escHtml(stgNomComplet(x.s))+brSuffixeCreche(x.s.creche_id),x.meta,'stagiaires',x.rouge)
+        ).join('')+(stgDocsIssues.length>8?'<div class="br-plus">+ '+(stgDocsIssues.length-8)+' autres</div>':'')
+      :brVide('✅ Aucun document à traiter'),
+    stgDocsIssues.length?'accent':'');
+
+  // 5ter. Vaccinations en retard
   h+=brSection('vaccine','Vaccinations en retard',vaccRetard.length,
     vaccRetard.length
       ?vaccRetard.slice(0,8).map(({enfant,vacc,dose,s})=>{
@@ -17725,7 +17780,7 @@ async function brRender(){
       :brVide('✅ Aucune vaccination en retard'),
     vaccRetard.length?'accent':'');
 
-  // 5ter. Dossiers de familiarisation à relancer
+  // 5quater. Dossiers de familiarisation à relancer
   h+=brSection('mail-forward','Dossiers familles à relancer',dossiersRelance.length,
     dossiersRelance.length
       ?dossiersRelance.slice(0,8).map(d=>{
