@@ -3587,6 +3587,7 @@ async function deleteEvenement(){
     closeModal('modal-evenement-wrap');
     renderCalendar();
     showBanner('Événement supprimé.');
+const pushDest=cacheReferents.filter(r=>r.id!==currentProfile?.id&&(!ex?.creche_id||r.creche_id===ex.creche_id)).map(r=>r.id);if(pushDest.length)await callFn('notify-push',{referent_ids:pushDest,title:'Événement annulé',body:ex?.titre||'',url:'./demandes.html',tag:'evenement-annule-'+editingEvtId});
   }else showBanner(window._lastDbError||'Erreur lors de la suppression.','error');
 }
 
