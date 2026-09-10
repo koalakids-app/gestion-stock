@@ -327,6 +327,25 @@ window.vacHandlePJ = vacHandlePJ;
 window.vacDeletePJ = vacDeletePJ;
 window.vacPJOpen   = vacPJOpen;
 
+// Alertes "retard" uniquement (pas les "proche"), réutilisées par Ma journée
+// et le Tableau de bord — un résumé condensé n'a pas la place de vacRenderAlertes()
+// au complet, et "proche" noierait la section sur un réseau avec beaucoup d'enfants.
+function vacAlertesRetard(enfants){
+  const alertes=[];
+  (enfants||[]).forEach(e=>{
+    if(!e.dob)return;
+    const creche=cacheCreches.find(c=>c.id===e.creche_id);
+    VAC_SCHEMA.forEach(v=>{
+      v.doses.forEach((dose,di)=>{
+        const s=vacDoseStatus(e,v,di);
+        if(s.state==='retard')alertes.push({enfant:e,creche,vacc:v,doseIdx:di,dose,s});
+      });
+    });
+  });
+  alertes.sort((a,b)=>a.s.daysLeft-b.s.daysLeft);
+  return alertes;
+}
+
 function vacRenderAlertes(){
   const el = document.getElementById('vac-alert-list');
   const badge = document.getElementById('vac-alert-badge');
@@ -515,3 +534,4 @@ window.vacShowView = vacShowView;
 window.vacOpenFiche = vacOpenFiche;
 window.vacRender = vacRender;
 window.vacOpenEnfantModal = vacOpenEnfantModal;
+window.vacAlertesRetard = vacAlertesRetard;
