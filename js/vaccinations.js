@@ -253,8 +253,13 @@ function vacPJRenderZone(zoneId, eid, inputId){
     + '<button onclick="vacDeletePJ(\''+p.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:15px"><i class="ti ti-trash"></i></button>'
     + '</div>'
   ).join('') : '<div style="font-size:12px;color:var(--muted)">Aucune photocopie jointe pour le moment.</div>';
-  zone.innerHTML =
-    '<div style="font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-camera" style="color:var(--koala)"></i> Photocopies du carnet de vaccination</div>'
+  /* Dans la fiche enfant, le titre « Documents sanitaires » de la section
+     joue déjà ce rôle : répéter « Photocopies du carnet de vaccination »
+     juste en dessous est redondant. Le module Vaccinations, lui, n'a pas
+     ce titre englobant et en a besoin. */
+  const titre = zoneId==='enf-carnet-zone' ? '' :
+    '<div style="font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-camera" style="color:var(--koala)"></i> Photocopies du carnet de vaccination</div>';
+  zone.innerHTML = titre
     + '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">'+list+'</div>'
     + '<button class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;font-size:12.5px" onclick="document.getElementById(\''+inputId+'\').click()"><i class="ti ti-upload"></i> Ajouter une photocopie</button>'
     + '<span id="'+inputId+'-status" style="margin-left:10px;font-size:12px;color:var(--muted)"></span>'
