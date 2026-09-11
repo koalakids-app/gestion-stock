@@ -1024,15 +1024,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div id="enf-fiche-contrat" class="module-tab-content"></div>
         <div id="enf-fiche-documents" class="module-tab-content">
           <!-- Le dossier enfant se compose de deux dossiers : le dossier
-               administratif (statut d'envoi, documents remplis/signés,
-               pièces importées) et le dossier santé (fiche sanitaire,
-               carnet de vaccination) — ce ne sont ni les mêmes
-               destinataires, ni la même confidentialité. -->
+               administratif (documents remplis/signés, pièces importées) et
+               le dossier santé (fiche sanitaire, carnet de vaccination,
+               dossier de familiarisation dont la réception compose le
+               dossier santé) — ce ne sont ni les mêmes destinataires, ni la
+               même confidentialité. -->
           <div style="border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden">
             <div style="background:var(--koala-light);padding:10px 15px;font-weight:700;font-size:13.5px;color:var(--koala-dark);display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border)">
               <i class="ti ti-folder"></i> Dossier administratif</div>
             <div style="padding:13px 15px">
-              <div id="enf-dossier-box"></div>
               <div id="enf-docs-list"></div>
               <div id="enf-pieces-dossier-box" style="margin-top:14px"></div>
               <div id="enf-admin-docs-zone" style="margin-top:14px"></div>
@@ -1046,6 +1046,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
               <!-- Carnet de vaccination : meme bloc et memes donnees que la fiche
                    vaccins du module Vaccinations (table vaccins_pj). -->
               <div id="enf-carnet-zone"></div>
+              <!-- Dossier de familiarisation : sa réception compose le dossier
+                   santé (fiche sanitaire, autorisations), donc affiché ici
+                   plutôt que dans le dossier administratif. -->
+              <div id="enf-dossier-box" style="margin-top:14px"></div>
             </div>
           </div>
         </div>
@@ -12829,11 +12833,13 @@ async function enfLoadAdminDocs(enfantId){
   // ne rendre que si on est toujours sur le même enfant
   if(String(enfFicheId)!==String(enfantId)) return;
   enfRenderAdminDocs();
-  /* Ces deux zones affichent aussi des fichiers de enfAdminDocsCache
-     (piece_key='papier_<id>') : à redessiner si elles ont déjà rendu sans
-     ce cache (course entre requêtes, même logique que pour les parents). */
+  /* Ces zones affichent aussi des fichiers de enfAdminDocsCache
+     (piece_key='papier_<id>' ou le compteur de pièces reçues) : à redessiner
+     si elles ont déjà rendu sans ce cache (course entre requêtes, même
+     logique que pour les parents). */
   enfRenderDossier();
   enfRenderFicheSanitaireZone();
+  enfRenderPiecesDossier();
 }
 
 /* Fichiers déposés pour une pièce donnée, le plus récent d'abord (le cache
