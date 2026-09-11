@@ -456,6 +456,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
         <button class="login-btn" onclick="saveNewPassword()"><i class="ti ti-check"></i> Enregistrer le mot de passe</button>
       </div>
+      <div id="mfa-gate-form" style="display:none">
+        <!-- Sous-vue : facteur déjà activé, demande du code à cette connexion -->
+        <div id="mfa-gate-challenge-view" style="display:none">
+          <p style="color:#555;font-size:14px;margin-bottom:1rem">Entrez le code à 6 chiffres généré par votre application d'authentification.</p>
+          <div class="fg"><input class="finput" id="mfa-gate-code" maxlength="6" inputmode="numeric" placeholder="123456" style="letter-spacing:4px;text-align:center;font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();mfaGateVerifyChallenge();}"/></div>
+          <div id="mfa-gate-challenge-err" class="login-err" style="display:none"></div>
+          <button class="login-btn" onclick="mfaGateVerifyChallenge()"><i class="ti ti-check"></i> Valider</button>
+          <button type="button" class="btn-cancel" style="width:100%;margin-top:8px" onclick="mfaGateCancel()">Annuler, se déconnecter</button>
+        </div>
+        <!-- Sous-vue : MFA obligatoire mais pas encore activé sur ce compte -->
+        <div id="mfa-gate-enroll-view" style="display:none">
+          <p style="color:#555;font-size:14px;margin-bottom:1rem">La double authentification est désormais obligatoire. Scannez ce QR code avec une application d'authentification (Google Authenticator, Authy...), puis entrez le code généré pour continuer.</p>
+          <div id="mfa-gate-qr" style="text-align:center;margin:14px 0;min-height:190px;display:flex;align-items:center;justify-content:center;overflow:hidden"></div>
+          <p style="font-size:0.82em;color:#666;text-align:center">Impossible de scanner ? Code manuel : <code id="mfa-gate-secret" style="user-select:all"></code></p>
+          <div class="fg"><input class="finput" id="mfa-gate-enroll-code" maxlength="6" inputmode="numeric" placeholder="123456" style="letter-spacing:4px;text-align:center;font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();mfaGateConfirmEnroll();}"/></div>
+          <div id="mfa-gate-enroll-err" class="login-err" style="display:none"></div>
+          <button class="login-btn" onclick="mfaGateConfirmEnroll()"><i class="ti ti-check"></i> Activer et continuer</button>
+          <button type="button" class="btn-cancel" style="width:100%;margin-top:8px" onclick="mfaGateCancel()">Annuler, se déconnecter</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -2390,11 +2410,10 @@ window.addEventListener('DOMContentLoaded', async function() {
       const{data:{session}}=await sb.auth.getSession();
       if(session&&session.user){
         currentUser=session.user;
-        await loadAllData();
-        currentProfile=cacheReferents.find(r=>r.user_id===currentUser.id)||null;
-        if(!currentProfile){const{data:pd}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();currentProfile=pd;}
-        isDirection=currentProfile?.role==='direction';
-        showApp();
+        // Même passage obligé par le portail MFA qu'après un login classique : une
+        // session restaurée dont l'AAL serait retombé à aal1 ne doit pas donner
+        // un accès direct à l'app.
+        await mfaGateCheckAndProceed();
         return;
       }
     }catch(e){console.warn('[Retour enfant] session',e);}
@@ -2679,8 +2698,12 @@ async function doLogin(){
     else err.textContent='Erreur : '+msg;
     err.style.display='block';btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';return;
   }
+  currentUser=data.user;
+  await mfaGateCheckAndProceed();
+}
+async function finishLoginAfterAuth(){
+  const btn=document.getElementById('login-btn'),err=document.getElementById('login-err');
   try{
-    currentUser=data.user;
     await loadAllData();
     currentProfile=cacheReferents.find(r=>r.user_id===currentUser.id)||null;
     if(!currentProfile){const{data:pd}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();currentProfile=pd;}
@@ -2689,8 +2712,130 @@ async function doLogin(){
   }catch(e){
     console.error('[Login]',e);
     err.textContent='Erreur de chargement. Réessayez.';err.style.display='block';
+    document.getElementById('mfa-gate-form').style.display='none';
+    document.getElementById('login-form').style.display='block';
     btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
   }
+}
+// --- Portail MFA obligatoire à la connexion ---
+// S'intercale entre l'authentification par mot de passe (AAL1) et l'entrée dans
+// l'app : impose la vérification du second facteur si un facteur est déjà
+// enrôlé, ou impose l'enrôlement immédiat si le compte n'en a pas encore.
+async function mfaGateCheckAndProceed(){
+  try{
+    const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(error)throw error;
+    if(data.currentLevel==='aal2'){await finishLoginAfterAuth();return;}
+    if(data.nextLevel==='aal2'){mfaGateShowChallenge();return;}
+    await mfaGateShowEnroll();
+  }catch(e){
+    console.error('[MFA Gate]',e);
+    await sb.auth.signOut();
+    showLogin();
+    const err=document.getElementById('login-err');
+    err.textContent='Erreur de vérification de la double authentification. Réessayez.';err.style.display='block';
+  }
+}
+function mfaGateSwitchView(id){
+  document.getElementById('loading-screen').style.display='none';
+  document.getElementById('login-wrap').style.display='block';
+  document.getElementById('app-wrap').style.display='none';
+  document.getElementById('login-form').style.display='none';
+  document.getElementById('reset-form').style.display='none';
+  document.getElementById('mfa-gate-form').style.display='block';
+  ['mfa-gate-challenge-view','mfa-gate-enroll-view'].forEach(v=>{
+    document.getElementById(v).style.display=(v===id?'block':'none');
+  });
+}
+function mfaGateShowChallenge(){
+  document.getElementById('mfa-gate-code').value='';
+  document.getElementById('mfa-gate-challenge-err').style.display='none';
+  mfaGateSwitchView('mfa-gate-challenge-view');
+  setTimeout(()=>{const el=document.getElementById('mfa-gate-code');if(el)el.focus();},100);
+}
+let mfaGateFactorId=null;
+async function mfaGateShowEnroll(){
+  mfaGateSwitchView('mfa-gate-enroll-view');
+  const err=document.getElementById('mfa-gate-enroll-err');
+  err.style.display='none';
+  try{
+    // Nettoyage des facteurs non vérifiés laissés par une tentative précédente,
+    // sinon enroll() échoue avec "friendly name already exists" (même correctif
+    // que secMfaStartEnroll dans le module Sécurité).
+    const{data:existing,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const stale=(existing.all||[]).filter(f=>f.factor_type==='totp'&&f.status!=='verified');
+    for(const f of stale){
+      try{await sb.auth.mfa.unenroll({factorId:f.id});}catch(e){console.warn('Nettoyage facteur MFA périmé échoué :',e.message);}
+    }
+    const{data,error}=await sb.auth.mfa.enroll({factorType:'totp'});
+    if(error)throw error;
+    mfaGateFactorId=data.id;
+    const qrEl=document.getElementById('mfa-gate-qr');
+    qrEl.innerHTML='';
+    const qr=data.totp.qr_code||'';
+    const svgMatch=qr.match(/<svg[\s\S]*<\/svg>/i);
+    if(svgMatch){
+      qrEl.innerHTML=svgMatch[0];
+      const svg=qrEl.querySelector('svg');
+      if(svg){svg.style.width='180px';svg.style.height='180px';}
+    }else{
+      const img=document.createElement('img');
+      img.alt='QR code MFA';
+      img.style.cssText='display:block;width:180px;height:180px;object-fit:contain';
+      img.src=qr;
+      qrEl.appendChild(img);
+    }
+    document.getElementById('mfa-gate-secret').textContent=data.totp.secret;
+    document.getElementById('mfa-gate-enroll-code').value='';
+  }catch(e){
+    console.error('[MFA Gate enroll]',e);
+    err.textContent="Erreur lors de la préparation de l'enrôlement : "+e.message;err.style.display='block';
+  }
+}
+async function mfaGateVerifyChallenge(){
+  const code=document.getElementById('mfa-gate-code').value.trim();
+  const err=document.getElementById('mfa-gate-challenge-err');
+  err.style.display='none';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';err.style.display='block';return;}
+  try{
+    const{data:factors,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const verified=(factors.totp||[])[0];
+    if(!verified)throw new Error('Aucun facteur MFA vérifié trouvé sur ce compte.');
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:verified.id});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:verified.id,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    await finishLoginAfterAuth();
+  }catch(e){
+    err.textContent='Code invalide ou expiré : '+e.message;err.style.display='block';
+  }
+}
+async function mfaGateConfirmEnroll(){
+  const code=document.getElementById('mfa-gate-enroll-code').value.trim();
+  const err=document.getElementById('mfa-gate-enroll-err');
+  err.style.display='none';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';err.style.display='block';return;}
+  if(!mfaGateFactorId){err.textContent='Session d\'enrôlement expirée, réessayez.';err.style.display='block';return;}
+  try{
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:mfaGateFactorId});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:mfaGateFactorId,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    mfaGateFactorId=null;
+    await finishLoginAfterAuth();
+  }catch(e){
+    err.textContent='Code invalide ou expiré : '+e.message;err.style.display='block';
+  }
+}
+async function mfaGateCancel(){
+  if(mfaGateFactorId){try{await sb.auth.mfa.unenroll({factorId:mfaGateFactorId});}catch(e){console.warn('Nettoyage annulation MFA gate échoué :',e.message);}}
+  mfaGateFactorId=null;
+  await sb.auth.signOut();
+  currentUser=null;
+  const pwdEl=document.getElementById('login-pwd');if(pwdEl)pwdEl.value='';
+  showLogin();
 }
 async function doLogout(){if(!confirm('Se déconnecter ?'))return;await sb.auth.signOut();window.location.reload();}
 const VAPID_PUBLIC_KEY='BAYWoYbzpxn-poxeKn-7CPccnX-aGN5y8kXLVCgcgC8a025oz8HMdNj7E36VLgtiD-oV71KhgCECdQGL85kidOk';
@@ -2727,6 +2872,9 @@ function showLogin(){
   document.getElementById('app-wrap').style.display='none';
   document.getElementById('login-form').style.display='block';
   document.getElementById('reset-form').style.display='none';
+  document.getElementById('mfa-gate-form').style.display='none';
+  const btn=document.getElementById('login-btn');
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';}
 }
 
 function showPasswordResetForm(){
