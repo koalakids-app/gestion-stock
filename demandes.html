@@ -12552,6 +12552,7 @@ async function enfMarquerRecu(docId,recu,input){
   if(!e)return;
   input.disabled=true;
   const existant=enfDocsCache.find(r=>r.document_id===docId&&r.statut==='remis');
+  let message=null, erreur=false;
   if(recu&&!existant){
     const actif=enfDossiersCache.find(d=>d.statut!=='annule');
     const saved=await dbInsert('documents_reponses',{
@@ -12560,22 +12561,22 @@ async function enfMarquerRecu(docId,recu,input){
       statut:'remis', donnees:{},
       rempli_par_nom:(currentProfile&&currentProfile.name)||'Crèche'
     });
-    input.disabled=false;
-    if(!saved)return showBanner('Enregistrement impossible.','error');
-    enfDocsCache.unshift(saved);
-    showBanner('Document noté comme reçu ✅');
+    if(saved){enfDocsCache.unshift(saved);message='Document noté comme reçu ✅';}
+    else{message='Enregistrement impossible.';erreur=true;}
   }else if(!recu&&existant){
     const ok=await dbDelete('documents_reponses',existant.id);
-    input.disabled=false;
-    if(!ok)return showBanner('Modification impossible.','error');
-    enfDocsCache=enfDocsCache.filter(r=>String(r.id)!==String(existant.id));
-    showBanner('Document repassé en « non rendu ».');
-  }else{
-    input.disabled=false;
+    if(ok){enfDocsCache=enfDocsCache.filter(r=>String(r.id)!==String(existant.id));message='Document repassé en « non rendu ».';}
+    else{message='Modification impossible.';erreur=true;}
   }
+  input.disabled=false;
+  /* Toujours redessiner, y compris en cas d'échec : la case a été cochée par
+     le navigateur dès le clic, indépendamment de notre code — sans ce
+     rafraîchissement elle resterait affichée cochée alors que rien n'a été
+     enregistré. */
   enfRenderDossier();
   enfRenderFicheSanitaireZone();
   enfRenderDocs();
+  if(message)showBanner(message,erreur?'error':undefined);
 }
 
 /* Variante silencieuse (pas d'input à désactiver/réactiver, pas de banniere) :
