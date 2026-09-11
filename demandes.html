@@ -12579,13 +12579,16 @@ async function enfMarquerRecu(docId,recu,input){
   if(message)showBanner(message,erreur?'error':undefined);
 }
 
-/* Variante silencieuse (pas d'input à désactiver/réactiver, pas de banniere) :
-   utilisée quand l'import d'un scan vaut de facto confirmation de réception
-   (voir enfHandleAdminDocUpload). N'écrase rien si déjà marqué reçu. */
+/* Variante silencieuse en cas de succès (pas de bannière « reçu ✅ » en plus
+   de celle de l'import) : utilisée quand l'import d'un scan vaut de facto
+   confirmation de réception (voir enfHandleAdminDocUpload). N'écrase rien si
+   déjà marqué reçu. Renvoie false en cas d'échec, pour que l'appelant
+   prévienne l'utilisateur — un import qui « prend » sans marquer le document
+   reçu serait sinon indétectable. */
 async function enfMarquerRecuSilencieux(docId){
   const e=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
-  if(!e)return;
-  if(enfDocsCache.find(r=>r.document_id===docId&&r.statut==='remis'))return;
+  if(!e)return true;
+  if(enfDocsCache.find(r=>r.document_id===docId&&r.statut==='remis'))return true;
   const actif=enfDossiersCache.find(d=>d.statut!=='annule');
   const saved=await dbInsert('documents_reponses',{
     document_id:docId, enfant_id:e.id, creche_id:e.creche_id,
@@ -12593,7 +12596,9 @@ async function enfMarquerRecuSilencieux(docId){
     statut:'remis', donnees:{}, rempli_par:currentUser?currentUser.id:null,
     rempli_par_nom:(currentProfile&&currentProfile.name)||'Crèche'
   });
-  if(saved) enfDocsCache.unshift(saved);
+  if(saved){enfDocsCache.unshift(saved);return true;}
+  console.warn('[enfMarquerRecuSilencieux]',window._lastDbError);
+  return false;
 }
 
 function enfOuvrirEnvoi(){
@@ -12917,6 +12922,7 @@ async function enfHandleAdminDocUpload(event){
   const eid=enfFicheId;
   const pieceKey=enfPieceKeyEnCours||null;
   const status=document.getElementById('enf-admin-docs-input-status');
+  let recuKo=false;
   for(const file of files){
     if(status) status.textContent='⏳ Envoi de '+file.name+'…';
     try{
@@ -12935,7 +12941,8 @@ async function enfHandleAdminDocUpload(event){
          sanitaire...) dont on importe le scan : l'import vaut confirmation
          de réception, pas besoin de cocher la case à part. */
       if(pieceKey && pieceKey.startsWith('papier_')){
-        await enfMarquerRecuSilencieux(pieceKey.slice('papier_'.length));
+        const ok=await enfMarquerRecuSilencieux(pieceKey.slice('papier_'.length));
+        if(!ok)recuKo=true;
         enfRenderDossier();
         enfRenderFicheSanitaireZone();
         enfRenderDocs();
@@ -12948,7 +12955,8 @@ async function enfHandleAdminDocUpload(event){
   }
   if(status) status.textContent='✅ Ajouté';
   input.value='';
-  showBanner('Document(s) importé(s) ✅');
+  if(recuKo)showBanner('Document importé, mais le marquage « reçu » a échoué'+(window._lastDbError?' : '+window._lastDbError:'.'),'error');
+  else showBanner('Document(s) importé(s) ✅');
 }
 
 async function enfAdminDocOpen(id){
