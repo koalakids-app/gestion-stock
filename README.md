@@ -53,6 +53,7 @@ menu ⋮ → *Ajouter à l'écran d'accueil*.
 | `padlets.html` | Liens vers les 8 tableaux Padlet du réseau |
 | `signature.html` | Page de signature à distance (ouverte via QR code) |
 | `famille.html` | Dossier de familiarisation — page ouverte par la famille via un lien à durée limitée |
+| `pieces.html` | Dépôt des documents administratifs (pièce d'identité, justificatif...) — page ouverte par la famille via un lien à durée limitée |
 | `stagiaire.html` | Dépôt des pièces de stage — page ouverte par la stagiaire via un lien à durée limitée |
 | `migration-photos-storage.html` | Utilitaire ponctuel : migration des photos base64 vers Storage |
 | `manifest.json`, `sw.js` | Configuration PWA |
@@ -218,7 +219,7 @@ Points à connaître avant toute intervention sur le code :
 - **Dates** — toujours passer par la fonction locale de conversion ISO.
   `toISOString().slice(0,10)` décale la date d'un jour en UTC+2 (heure d'été).
 - **Photos** — jamais de base64 en base : tout passe par le bucket Storage `assets`.
-- **Pages publiques** (`famille.html`, `stagiaire.html`) — aucune policy `anon` sur les
+- **Pages publiques** (`famille.html`, `pieces.html`, `stagiaire.html`) — aucune policy `anon` sur les
   tables concernées : tout passe par une edge function en `service_role`, déployée avec
   `--no-verify-jwt` puisque la personne n'a pas de compte. Sans ce drapeau, toutes ses
   requêtes reviennent en 401.
