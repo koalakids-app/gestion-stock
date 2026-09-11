@@ -4196,8 +4196,13 @@ async function renderPresenceGantt(){
   }
   // Gantt: heures 7h\u201319h, 1 colonne = 30min = 24 colonnes
   const H_START=7,H_END=19,COLS=(H_END-H_START)*2; // 24 demi-heures
-  const COL_W=28; // px par demi-heure
-  const NAME_W=160;
+  // Sur smartphone (écran étroit), les colonnes de 30 min et la colonne nom
+  // sont resserrées pour réduire le défilement horizontal — les barres et
+  // noms restent lisibles (le nom garde sa troncature avec « … » déjà en
+  // place), juste plus compacts qu'en tablette.
+  const _isPhone=window.innerWidth<=680;
+  const COL_W=_isPhone?18:28; // px par demi-heure
+  const NAME_W=_isPhone?96:160;
   const d=new Date(dateStr+'T00:00:00');
   const dateLabel=d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
   // Compter pr\u00e9sents
