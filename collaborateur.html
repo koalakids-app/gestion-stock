@@ -62,6 +62,19 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
   </div>
 </div>
 
+<div id="setPwdView" style="display:none;max-width:360px;margin:60px auto;padding:0 16px">
+  <div class="card" style="padding:18px">
+    <h3 style="font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet);margin-bottom:6px;display:flex;align-items:center;gap:8px"><i class="ti ti-lock"></i> Bienvenue !</h3>
+    <p class="hint" style="margin-top:0">Choisissez votre mot de passe pour accéder à votre espace (8 caractères minimum).</p>
+    <div class="f"><label class="lb">Mot de passe</label><input id="spPwd" type="password" autocomplete="new-password"></div>
+    <div class="f"><label class="lb">Confirmez le mot de passe</label><input id="spPwd2" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitSetPassword()"></div>
+    <div id="spErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-p" id="spBtn" onclick="submitSetPassword()"><i class="ti ti-check"></i> Valider</button>
+    </div>
+  </div>
+</div>
+
 <div id="appView" style="display:none">
   <div class="topbar">
     <i class="ti ti-user-circle" style="font-size:22px;color:var(--orange)"></i>
@@ -128,9 +141,29 @@ function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p
 let JUSTE_CONNECTE=false;
 function showLogin(msg){
   document.getElementById('appView').style.display='none';
+  document.getElementById('setPwdView').style.display='none';
   document.getElementById('loginView').style.display='block';
   document.getElementById('liErr').textContent=msg||'';
 }
+function showSetPassword(){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('setPwdView').style.display='block';
+}
+/* Un lien d'invitation (ou de réinitialisation) Supabase revient avec
+   #access_token=...&type=invite (ou type=recovery) : sb-js détecte le hash et
+   crée une session automatiquement (detectSessionInUrl, activé par défaut),
+   mais aucun mot de passe n'a encore été choisi par la personne — sans cet
+   écran intermédiaire, elle se retrouverait connectée sans jamais en définir
+   un, donc incapable de se reconnecter ensuite. */
+function parseHashParams(){
+  const h=location.hash.startsWith('#')?location.hash.slice(1):location.hash;
+  const p=new URLSearchParams(h);
+  return{type:p.get('type'),access_token:p.get('access_token')};
+}
+const HASH_INFO=parseHashParams();
+if(HASH_INFO.access_token){JUSTE_CONNECTE=true;}
+
 async function boot(){
   if(!JUSTE_CONNECTE){
     try{await sb.auth.signOut();}catch(e){}
@@ -143,6 +176,10 @@ async function boot(){
   }catch(e){session=null;}
   if(!session||!session.user){showLogin();return;}
   ME=session.user;
+  if(HASH_INFO.type==='invite'||HASH_INFO.type==='recovery'){
+    showSetPassword();
+    return;
+  }
   let c=null;
   try{
     const{data,error}=await sb.from('employes').select('*').eq('user_id',ME.id).maybeSingle();
@@ -175,11 +212,22 @@ async function doLogout(){
   JUSTE_CONNECTE=false;
   showLogin();
 }
-/* Un lien d'invitation Supabase revient avec un access_token dans le hash :
-   sb-js le convertit en session automatiquement (detectSessionInUrl, par
-   défaut) — on considère alors l'utilisateur comme connecté sans repasser
-   par le formulaire. */
-if(location.hash.includes('access_token')){JUSTE_CONNECTE=true;}
+async function submitSetPassword(){
+  const p1=val('spPwd'),p2=val('spPwd2');
+  const err=document.getElementById('spErr');
+  err.textContent='';
+  if(p1.length<8){err.textContent='8 caractères minimum.';return;}
+  if(p1!==p2){err.textContent='Les deux mots de passe ne correspondent pas.';return;}
+  const btn=document.getElementById('spBtn');
+  btn.disabled=true;
+  const{error}=await sb.auth.updateUser({password:p1});
+  btn.disabled=false;
+  if(error){err.textContent='Erreur : '+error.message;return;}
+  HASH_INFO.type=null;
+  try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
+  toast('Mot de passe défini.');
+  await boot();
+}
 
 async function grantAccess(){
   document.getElementById('loginView').style.display='none';
