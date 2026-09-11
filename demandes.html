@@ -246,11 +246,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .cal-cell.today .cal-daynum{color:var(--orange)}
 .cal-evt{font-size:10.5px;line-height:1.3;padding:2px 5px;border-radius:5px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-evt-more{font-size:10px;color:var(--muted);font-weight:600;padding-left:2px}
+.cal-dow-inline{display:none}
 @media (max-width:680px){
   .cal-cell{min-height:46px;padding:3px}
   .cal-cell .cal-evt{display:none}
   .cal-cell.has-evt::after{content:'';display:block;width:6px;height:6px;border-radius:50%;background:var(--orange);margin:0 auto}
   .cal-dow{font-size:9.5px}
+}
+/* Tablette en portrait : 5 colonnes de jours deviennent trop étroites pour
+   lire le texte des événements (troncature au milieu des mots). On bascule
+   sur un agenda vertical — une ligne pleine largeur par jour — qui laisse
+   assez de place pour le titre complet des événements. */
+@media (orientation:portrait) and (min-width:681px){
+  #cal-dow-row{display:none}
+  #cal-grid{grid-template-columns:1fr;gap:4px}
+  #cal-grid .cal-cell{flex-direction:row;flex-wrap:wrap;align-items:center;min-height:auto;padding:7px 10px;gap:6px 8px}
+  #cal-grid .cal-cell.out:not(.has-evt){display:none}
+  #cal-grid .cal-daynum{flex-shrink:0;min-width:64px;display:flex;align-items:baseline;gap:5px}
+  #cal-grid .cal-dow-inline{display:inline;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase}
+  #cal-grid .cal-evt{white-space:normal;font-size:11.5px;flex:1 1 220px;max-width:100%}
 }
 .cal-day-detail{border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:0.85rem}
 .cal-evt-row{display:flex;align-items:flex-start;gap:9px;padding:8px 0;border-bottom:1px solid var(--border)}
@@ -3819,7 +3833,8 @@ function calCellHtml(d,isOut,today){
     evtHtml+='<div class="cal-evt" style="background:'+info.color+'" title="'+escHtml(e.titre)+(creche?' — '+creche.name:'')+(e.auteur?' — Créé par '+escHtml(e.auteur):'')+'">'+info.emoji+' '+escHtml(e.titre)+crecheLabel+'</div>';
   });
   if(evts.length>3)evtHtml+='<div class="cal-evt-more">+'+(evts.length-3)+' autre(s)</div>';
-  return '<div class="'+cls+'" onclick="calSelectDay(\''+dateISO+'\')"><div class="cal-daynum">'+d.getDate()+'</div>'+evtHtml+'</div>';
+  const dowAbbr=['Lun','Mar','Mer','Jeu','Ven'][(d.getDay()+6)%7]||'';
+  return '<div class="'+cls+'" onclick="calSelectDay(\''+dateISO+'\')"><div class="cal-daynum"><span class="cal-dow-inline">'+dowAbbr+'</span>'+d.getDate()+'</div>'+evtHtml+'</div>';
 }
 
 function calSelectDay(dateISO){calSelectedDay=dateISO;renderCalDayDetail();}
@@ -4197,7 +4212,7 @@ async function renderPresenceGantt(){
   }
   // En-t\u00eate heures
   let hdrHtml='<div style="display:flex;align-items:center;border-bottom:2px solid var(--koala);margin-bottom:4px">';
-  hdrHtml+='<div style="width:'+(NAME_W+30)+'px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--koala);padding-right:8px;text-align:right">'+presents.length+'\u00a0/\u00a0'+enfants.length+'</div>';
+  hdrHtml+='<div style="position:sticky;left:0;z-index:3;background:#fff;width:'+(NAME_W+30)+'px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--koala);padding-right:8px;text-align:right">'+presents.length+'\u00a0/\u00a0'+enfants.length+'</div>';
   for(let h=H_START;h<H_END;h++){
     hdrHtml+='<div style="width:'+(COL_W*2)+'px;flex-shrink:0;font-size:10px;font-weight:600;color:var(--muted);text-align:left;border-left:1px solid #e0dff0;padding-left:2px">'+h+'h</div>';
   }
@@ -4256,8 +4271,13 @@ async function renderPresenceGantt(){
     // pas juste un petit repère à côté du prénom (trop discret dans un groupe).
     const bg=horsJour?'var(--orange-light)':(idx%2===0?'#fff':'#f7f6fb');
     rowsHtml+='<div style="display:flex;align-items:center;padding:3px 0;background:'+bg+';border-radius:4px'+(horsJour?';box-shadow:inset 3px 0 0 var(--orange)':'')+'">';
+    // Bouton + nom regroupés dans un bloc "sticky" : sur un écran étroit (tablette/
+    // Android en portrait), on doit faire défiler horizontalement pour voir les
+    // heures, mais on ne doit jamais perdre de vue à quel enfant correspond la ligne.
+    rowsHtml+='<div style="position:sticky;left:0;z-index:2;display:flex;align-items:center;background:'+bg+'">';
     rowsHtml+='<button onclick="togglePresence(\''+e.id+'\',\''+dateStr+'\')" title="'+(absent?'Marquer présent':'Marquer absent')+'" style="flex-shrink:0;width:24px;height:24px;margin-right:6px;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;background:'+(absent?'#f0eef8':barColor)+';color:'+(absent?'var(--muted)':'#fff')+'"><i class="ti ti-'+(absent?'user-x':pointe?'device-tablet':'user-check')+'"></i></button>';
     rowsHtml+='<div onclick="enfOpenFiche(\''+e.id+'\')" style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--koala)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="Ouvrir le dossier de '+escHtml(e.prenom+' '+e.nom)+(e.dob?'':' (date de naissance manquante)')+'">'+escHtml(e.prenom+' '+e.nom)+(horsJour?' <span style="display:inline-flex;align-items:center;gap:2px;background:var(--orange);color:#fff;font-size:9.5px;font-weight:800;border-radius:8px;padding:1.5px 6px;margin-left:4px;vertical-align:middle" title="Aucun contrat ce jour de la semaine"><i class="ti ti-alert-triangle" style="font-size:10px"></i> Hors contrat</span>':'')+(e.dob?'':' <span style=\"color:var(--red);font-size:10px\">⚠</span>')+'</div>';
+    rowsHtml+='</div>';
     // Barre Gantt
     rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:22px;border-left:1px solid #e0dff0">';
     // Lignes verticales des heures
@@ -7573,7 +7593,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   let html='<table style="width:100%;border-collapse:collapse;font-size:'+_peFS+';'+(forPrint?'':'min-width:'+_peMinW+';')+'table-layout:fixed;line-height:'+_peRowLH+'">';
   const _peHorPct=16;
   html+='<colgroup><col style="width:'+_peHorPct+'%">'+DAYS.map(()=>'<col style="width:'+((100-_peHorPct)/5)+'%">').join('')+'</colgroup>';
-  html+='<thead><tr><th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333;white-space:nowrap">Horaire</th>';
+  html+='<thead><tr><th style="position:sticky;left:0;z-index:2;padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333;white-space:nowrap">Horaire</th>';
   DAYS.forEach((d,i)=>{html+='<th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:center;background:#fafafa;color:#333">'+d+'<br><span style="font-size:'+_peFSDay+';font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';});
   html+='</tr></thead><tbody>';
 
@@ -7581,7 +7601,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
     const evsThisCreneau=byCreneau[cleCreneau];
     const creneau=labelOf[cleCreneau];
     const creneauEsc=String(creneau||'').replace(/'/g,"\\'");
-    html+='<tr><td style="padding:'+_pePad+';border-bottom:1px solid var(--border);background:#FBFBFD;vertical-align:middle">'+_peCreneauLabel(creneau)+'</td>';
+    html+='<tr><td style="position:sticky;left:0;z-index:1;padding:'+_pePad+';border-bottom:1px solid var(--border);background:#FBFBFD;vertical-align:middle">'+_peCreneauLabel(creneau)+'</td>';
     for(let d=0;d<5;d++){
       // Plusieurs personnes peuvent partager le même créneau le même jour
       const evs=evsThisCreneau.filter(e=>e.jour===d);
@@ -10914,11 +10934,11 @@ async function rmpRenderWeek(){
 
   const crechesToShow=isDirection?cacheCreches:cacheCreches.filter(c=>c.id===currentProfile?.creche_id);
   let html='<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:640px">';
-  html+='<thead><tr><th style="padding:8px;border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333">Crèche</th>';
+  html+='<thead><tr><th style="position:sticky;left:0;z-index:2;padding:8px;border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333">Crèche</th>';
   DAYS.forEach((d,i)=>{html+='<th style="padding:8px;border-bottom:2px solid var(--border);text-align:center;background:#fafafa;color:#333">'+d+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';});
   html+='</tr></thead><tbody>';
   crechesToShow.forEach(creche=>{
-    html+='<tr><td style="padding:8px;border-bottom:1px solid var(--border);font-weight:600;color:var(--koala)">'+creche.name+'</td>';
+    html+='<tr><td style="position:sticky;left:0;z-index:1;padding:8px;border-bottom:1px solid var(--border);font-weight:600;color:var(--koala);background:#fff">'+creche.name+'</td>';
     days5.forEach((d,di)=>{
       const dateISO=rmpDateStr(d);
       const evs=rmpCache.filter(r=>r.creche_id===creche.id&&r.date===dateISO);
