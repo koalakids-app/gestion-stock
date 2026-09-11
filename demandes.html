@@ -12558,11 +12558,11 @@ async function enfMarquerRecu(docId,recu,input){
     const saved=await dbInsert('documents_reponses',{
       document_id:docId, enfant_id:e.id, creche_id:e.creche_id,
       dossier_id:actif?actif.id:null,
-      statut:'remis', donnees:{},
+      statut:'remis', donnees:{}, rempli_par:currentUser?currentUser.id:null,
       rempli_par_nom:(currentProfile&&currentProfile.name)||'Crèche'
     });
     if(saved){enfDocsCache.unshift(saved);message='Document noté comme reçu ✅';}
-    else{message='Enregistrement impossible.';erreur=true;}
+    else{message='Enregistrement impossible'+(window._lastDbError?' : '+window._lastDbError:'.');erreur=true;}
   }else if(!recu&&existant){
     const ok=await dbDelete('documents_reponses',existant.id);
     if(ok){enfDocsCache=enfDocsCache.filter(r=>String(r.id)!==String(existant.id));message='Document repassé en « non rendu ».';}
@@ -12590,7 +12590,7 @@ async function enfMarquerRecuSilencieux(docId){
   const saved=await dbInsert('documents_reponses',{
     document_id:docId, enfant_id:e.id, creche_id:e.creche_id,
     dossier_id:actif?actif.id:null,
-    statut:'remis', donnees:{},
+    statut:'remis', donnees:{}, rempli_par:currentUser?currentUser.id:null,
     rempli_par_nom:(currentProfile&&currentProfile.name)||'Crèche'
   });
   if(saved) enfDocsCache.unshift(saved);
