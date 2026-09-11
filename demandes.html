@@ -1030,6 +1030,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="section-title" style="margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-folder"></i> Documents administratifs</div>
           <div id="enf-dossier-box"></div>
           <div id="enf-docs-list"></div>
+          <div id="enf-pieces-dossier-box" style="margin-top:14px"></div>
           <div id="enf-admin-docs-zone" style="margin-top:14px"></div>
           <div class="section-title" style="margin:20px 0 10px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px"><i class="ti ti-heart-plus"></i> Documents sanitaires</div>
           <!-- Carnet de vaccination : meme bloc et memes donnees que la fiche
@@ -2144,6 +2145,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="mactions">
       <button class="btn-cancel" onclick="closeModal('modal-envoi-wrap')">Annuler</button>
       <button class="btn-primary" id="envoi-btn" onclick="enfConfirmerEnvoi()"><i class="ti ti-send"></i> Envoyer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ENVOI DU LIEN DE DÉPÔT DE PIÈCES : choix des destinataires -->
+<div class="overlay" id="modal-envoi-pieces-wrap">
+  <div class="modal" style="max-width:520px">
+    <h3>Envoyer le lien de dépôt des documents</h3>
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.6;margin:0 0 12px">
+      Cochez les adresses qui doivent recevoir le lien. Un <strong>seul et même lien</strong> est
+      envoyé à tous : les parents déposent les mêmes documents, chacun depuis son téléphone.
+    </p>
+    <div id="envoi-pieces-liste" style="margin-bottom:6px"></div>
+    <p id="envoi-pieces-vide" style="display:none;font-size:12.5px;color:var(--red);margin:0 0 10px"></p>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-envoi-pieces-wrap')">Annuler</button>
+      <button class="btn-primary" id="envoi-pieces-btn" onclick="enfConfirmerEnvoiPieces()"><i class="ti ti-send"></i> Envoyer</button>
     </div>
   </div>
 </div>
@@ -11526,6 +11544,8 @@ async function enfOpenFiche(id){
   enfDossiersCache = [];
   enfDossierPret = false;
   enfAdminDocsCache = [];
+  enfPiecesCache = [];
+  enfPiecesPret = false;
   document.getElementById('enf-fiche-title').innerHTML = '<i class="ti ti-mood-kid"></i> '+escHtml((e.prenom||'')+' '+(e.nom||''));
   // onglet identité par défaut
   document.querySelectorAll('#modal-enf-fiche-wrap .module-tab').forEach((b,i)=>b.classList.toggle('active',i===0));
@@ -11539,6 +11559,7 @@ async function enfOpenFiche(id){
   enfLoadContrats(e.id);
   document.getElementById('enf-docs-list').innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
   document.getElementById('enf-dossier-box').innerHTML = '';
+  document.getElementById('enf-pieces-dossier-box').innerHTML = '';
   document.getElementById('enf-admin-docs-zone').innerHTML = '';
   document.getElementById('enf-carnet-zone').innerHTML = '';
   document.getElementById('modal-enf-fiche-wrap').classList.add('open');
@@ -11546,6 +11567,7 @@ async function enfOpenFiche(id){
   enfLoadDocs(e.id);
   enfLoadDossier(e.id);
   enfLoadAdminDocs(e.id);
+  enfLoadPieces(e.id);
   enfLoadCarnet(e.id);
 }
 
@@ -12667,10 +12689,18 @@ async function enfDeleteDoc(repId){
 }
 
 /* ===== Documents administratifs importés (fiche enfant) =====================
-   Pièces libres qu'une référente dépose directement (pièce d'identité,
-   justificatif de domicile, attestation CAF, etc.), distinctes des formulaires
-   remplis/signés via l'outil Documents (enf-docs-list) et du carnet de
-   vaccination (table vaccins_pj, données de santé).
+   Pièces d'un enfant, distinctes des formulaires remplis/signés via l'outil
+   Documents (enf-docs-list) et du carnet de vaccination (table vaccins_pj,
+   données de santé). Deux façons d'en obtenir une copie :
+   - une référente l'importe directement (remise en main propre, pièce jointe
+     reçue par mail) ;
+   - la famille la dépose elle-même en ligne, via un lien envoyé par mail
+     (voir plus bas « dossier de pièces »), sur le même principe que le
+     dossier de familiarisation.
+   Les deux passent par la même table et le même bucket : seule la colonne
+   piece_key (quelle pièce de la liste ci-dessous) et dossier_id (par quel
+   envoi la famille l'a déposée, absent pour un import fait par une référente)
+   distinguent leur origine.
 
    Même schéma de stockage que les photocopies du carnet de vaccination : bucket
    PRIVÉ, aucune URL publique enregistrée — seuls bucket et chemin sont gardés en
@@ -12678,13 +12708,36 @@ async function enfDeleteDoc(repId){
 const ENF_ADMIN_DOCS_BUCKET = 'documents-admin';
 const ENF_ADMIN_DOCS_TTL    = 300;   // durée de vie d'une URL signée, en secondes
 
+/* Liste figée des pièces demandées à l'inscription. `optionnel` = ne compte
+   pas dans la progression (ne concerne que certaines familles). `renouveler`
+   = à redéposer chaque année (assurance) ; un exemplaire déposé il y a plus
+   de 365 jours est signalé mais ne compte pas comme manquant pour autant —
+   la référente juge si un rappel est nécessaire.
+   Recopiée dans pieces.html pour la vue famille : si vous modifiez cette
+   liste ici, reportez-la là-bas — les deux versions ne se synchronisent pas
+   (même choix assumé que pour les modèles de famille.html/documents.html). */
+const PIECES_ADMIN = [
+  {key:'livret_famille',        label:'Copie du livret de famille'},
+  {key:'piece_identite_parents',label:"Copie de la pièce d'identité des parents"},
+  {key:'justificatif_domicile', label:'Justificatif de domicile de moins de trois mois'},
+  {key:'acte_naissance',        label:"Copie intégrale de l'acte de naissance de l'enfant"},
+  {key:'attestation_vitale',    label:'Attestation de la carte vitale'},
+  {key:'pages_vaccins',         label:'Pages des vaccins'},
+  {key:'attestation_rc',        label:'Attestation de responsabilité civile pour l’année en cours',renouveler:true},
+  {key:'numero_caf',            label:"Numéro d'allocataire CAF (précisant le nom du bénéficiaire)"},
+  {key:'autorite_parentale',    label:"Justificatif de l'autorité parentale (couples séparés/divorcés)",optionnel:true},
+  {key:'avis_imposition',       label:"Copie du dernier avis d'imposition"},
+  {key:'bulletin_salaire',      label:'Dernier bulletin de salaire ou attestation Pôle Emploi'},
+  {key:'rib',                   label:"Relevé d'identité bancaire"}
+];
+
 let enfAdminDocsCache = [];
 async function enfLoadAdminDocs(enfantId){
   try{
     const{data,error}=await sb.from('enfants_documents_admin')
       .select('*')
       .eq('enfant_id',enfantId)
-      .order('created_at',{ascending:true});
+      .order('created_at',{ascending:false});
     if(error) throw error;
     enfAdminDocsCache = data||[];
   }catch(err){
@@ -12696,21 +12749,70 @@ async function enfLoadAdminDocs(enfantId){
   enfRenderAdminDocs();
 }
 
+/* Fichiers déposés pour une pièce donnée, le plus récent d'abord (le cache
+   est déjà trié ainsi par enfLoadAdminDocs). */
+function enfPiecesPourCle(key){
+  return enfAdminDocsCache.filter(d=>d.piece_key===key);
+}
+
+const UN_AN_MS = 365*86400000;
+
 function enfRenderAdminDocs(){
   const zone=document.getElementById('enf-admin-docs-zone');
   if(!zone) return;
-  const items=enfAdminDocsCache;
-  const list=items.length ? items.map(d=>
-    '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;margin-bottom:6px">'
-    +'<i class="ti ti-paperclip" style="color:var(--koala)"></i>'
-    +'<button type="button" onclick="enfAdminDocOpen(\''+d.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12.5px;color:var(--koala-dark);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(d.filename||'Document')+'</button>'
-    +'<button onclick="enfAdminDocDelete(\''+d.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:15px"><i class="ti ti-trash"></i></button>'
-    +'</div>'
-  ).join('') : '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Aucun document administratif importé pour le moment.</div>';
-  zone.innerHTML = list
-    +'<button class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;font-size:12.5px" onclick="document.getElementById(\'enf-admin-docs-input\').click()"><i class="ti ti-upload"></i> Importer un document</button>'
-    +'<span id="enf-admin-docs-input-status" style="margin-left:10px;font-size:12px;color:var(--muted)"></span>'
+
+  const ligneFichier=d=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:5px 0">'
+    +'<i class="ti ti-paperclip" style="color:var(--koala);flex-shrink:0"></i>'
+    +'<button type="button" onclick="enfAdminDocOpen(\''+d.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;color:var(--koala-dark);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(d.filename||'Document')+'</button>'
+    +'<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+new Date(d.created_at).toLocaleDateString('fr-FR')+'</span>'
+    +'<button onclick="enfAdminDocDelete(\''+d.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:14px;flex-shrink:0"><i class="ti ti-trash"></i></button>'
+    +'</div>';
+
+  const checklist=PIECES_ADMIN.map(p=>{
+    const fichiers=enfPiecesPourCle(p.key);
+    const dernier=fichiers[0];
+    let badge;
+    if(!dernier){
+      badge=p.optionnel
+        ? '<span style="background:var(--koala-light);color:var(--muted);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">— Non concerné / à voir</span>'
+        : '<span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⚠ Manquant</span>';
+    }else{
+      const perime=p.renouveler && (Date.now()-new Date(dernier.created_at).getTime())>UN_AN_MS;
+      badge='<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ Reçu le '+new Date(dernier.created_at).toLocaleDateString('fr-FR')+'</span>'
+        +(perime?' <span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">🔄 À renouveler</span>':'');
+    }
+    return '<div style="border-bottom:1px solid var(--border);padding:9px 2px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      +'<span style="font-size:12.5px;font-weight:600;color:var(--koala-dark)">'+escHtml(p.label)+'</span>'
+      +'<span style="display:flex;align-items:center;gap:6px;flex-shrink:0">'+badge
+      +'<button type="button" onclick="enfOpenPieceUpload(\''+p.key+'\')" title="Importer" style="border:1px solid var(--border);background:#fff;border-radius:7px;padding:4px 9px;font-size:11.5px;cursor:pointer;color:var(--koala);display:inline-flex;align-items:center;gap:4px"><i class="ti ti-upload"></i> Importer</button>'
+      +'</span></div>'
+      +(fichiers.length?'<div style="margin-top:4px">'+fichiers.map(ligneFichier).join('')+'</div>':'')
+      +'</div>';
+  }).join('');
+
+  const autres=enfAdminDocsCache.filter(d=>!d.piece_key);
+  const autresHtml='<div style="margin-top:14px">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--koala-dark);margin-bottom:6px">Autres documents importés</div>'
+    +(autres.length?autres.map(ligneFichier).join(''):'<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Aucun autre document.</div>')
+    +'<button class="btn-sm" style="margin-top:6px" onclick="enfOpenPieceUpload(\'\')"><i class="ti ti-upload"></i> Importer un document hors liste</button>'
+    +'</div>';
+
+  zone.innerHTML = '<div style="font-size:12px;font-weight:700;color:var(--koala-dark);margin-bottom:2px">Pièces demandées à l\'inscription</div>'
+    + checklist + autresHtml
+    +'<span id="enf-admin-docs-input-status" style="display:block;margin-top:8px;font-size:12px;color:var(--muted)"></span>'
     +'<input type="file" id="enf-admin-docs-input" accept="image/*,application/pdf" multiple style="display:none" onchange="enfHandleAdminDocUpload(event)"/>';
+}
+
+/* La pièce ciblée est mémorisée ici le temps du choix de fichier : un seul
+   input caché sert toutes les lignes de la checklist plutôt que d'en dupliquer
+   un par pièce. */
+let enfPieceKeyEnCours='';
+function enfOpenPieceUpload(key){
+  enfPieceKeyEnCours=key||'';
+  const input=document.getElementById('enf-admin-docs-input');
+  if(input)input.click();
 }
 
 async function enfHandleAdminDocUpload(event){
@@ -12718,6 +12820,7 @@ async function enfHandleAdminDocUpload(event){
   const files=Array.from(input.files||[]);
   if(!files.length) return;
   const eid=enfFicheId;
+  const pieceKey=enfPieceKeyEnCours||null;
   const status=document.getElementById('enf-admin-docs-input-status');
   for(const file of files){
     if(status) status.textContent='⏳ Envoi de '+file.name+'…';
@@ -12729,9 +12832,9 @@ async function enfHandleAdminDocUpload(event){
       const{error}=await sb.storage.from(ENF_ADMIN_DOCS_BUCKET).upload(path,file);
       if(error) throw error;
       const{data:ins,error:insErr}=await sb.from('enfants_documents_admin')
-        .insert({enfant_id:eid,bucket:ENF_ADMIN_DOCS_BUCKET,path:path,filename:file.name}).select().single();
+        .insert({enfant_id:eid,bucket:ENF_ADMIN_DOCS_BUCKET,path:path,filename:file.name,piece_key:pieceKey}).select().single();
       if(insErr) throw insErr;
-      if(ins) enfAdminDocsCache.push(ins);
+      if(ins) enfAdminDocsCache.unshift(ins);
       enfRenderAdminDocs();
     }catch(e){
       console.error('[enfAdminDocs]',e.message);
@@ -12740,6 +12843,7 @@ async function enfHandleAdminDocUpload(event){
     }
   }
   if(status) status.textContent='✅ Ajouté';
+  input.value='';
   showBanner('Document(s) importé(s) ✅');
 }
 
@@ -12769,6 +12873,177 @@ async function enfAdminDocDelete(id){
 window.enfAdminDocOpen = enfAdminDocOpen;
 window.enfAdminDocDelete = enfAdminDocDelete;
 window.enfHandleAdminDocUpload = enfHandleAdminDocUpload;
+window.enfOpenPieceUpload = enfOpenPieceUpload;
+
+/* ===== Dossier de pièces (envoi d'un lien de dépôt aux parents) ============
+   Même principe que le dossier de familiarisation (dossiers_familles /
+   famille.html), en parallèle : un envoi = un jeton = un lien public
+   (pieces.html), valable PIECES_JOURS jours. La page publique ne touche à
+   aucune table directement, tout passe par l'edge function `dossier-pieces`
+   en service_role — voir sql/dossiers_pieces.sql. */
+let enfPiecesCache = [];   // dossiers de pièces de l'enfant ouvert, plus récent d'abord
+let enfPiecesPret  = false;
+
+const PIECES_JOURS = 15;
+
+function piecesLien(token){
+  return location.origin + location.pathname.replace(/[^/]*$/,'') + 'pieces.html?t=' + token;
+}
+
+async function enfLoadPieces(enfantId){
+  try{
+    const{data,error}=await sb.from('dossiers_pieces')
+      .select('*')
+      .eq('enfant_id',enfantId)
+      .order('envoye_le',{ascending:false});
+    if(error) throw error;
+    enfPiecesCache = data||[];
+  }catch(err){
+    console.warn('enfLoadPieces',err);
+    enfPiecesCache = [];
+  }
+  if(String(enfFicheId)!==String(enfantId)) return;
+  enfPiecesPret = true;
+  enfRenderPiecesDossier();
+}
+
+function enfRenderPiecesDossier(){
+  const box=document.getElementById('enf-pieces-dossier-box');
+  if(!box) return;
+  if(!enfPiecesPret){ box.innerHTML=''; return; }
+  const actif=enfPiecesCache.find(d=>d.statut!=='annule' && new Date(d.expire_le)>new Date());
+  const possibles=enfDestinataires();
+
+  const cadre=(contenu,fond,bord)=>'<div style="background:'+fond+';border:1px solid '+bord
+    +';border-radius:12px;padding:13px 15px">'
+    +'<div style="font-weight:700;font-size:13.5px;color:var(--koala-dark);margin-bottom:7px">'
+    +'<i class="ti ti-cloud-upload"></i> Dépôt en ligne des documents administratifs</div>'+contenu+'</div>';
+
+  if(!actif){
+    if(!possibles.length){
+      box.innerHTML=cadre(
+        '<p style="font-size:12.5px;color:var(--muted);margin:0;line-height:1.6">'
+        +'Aucun parent avec une adresse e-mail. Renseignez-en un dans l\'onglet '
+        +'<strong>Parents</strong> pour pouvoir envoyer le lien.</p>','#FFF8F0','#F3DEC2');
+      return;
+    }
+    box.innerHTML=cadre(
+      '<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">'
+      +'Envoie aux parents un lien personnel pour déposer en ligne les pièces demandées ci-dessous. '
+      +'Valable '+PIECES_JOURS+' jours.</p>'
+      +'<button class="btn-primary" onclick="enfOuvrirEnvoiPieces()"><i class="ti ti-send"></i> Envoyer le lien de dépôt</button>',
+      'var(--koala-light)','var(--border)');
+    return;
+  }
+
+  const requis=PIECES_ADMIN.filter(p=>!p.optionnel);
+  const recus=requis.filter(p=>enfPiecesPourCle(p.key).length).length;
+  const badge=recus===requis.length
+    ? '<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">✅ Complet</span>'
+    : '<span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">🕓 En attente</span>';
+  const adresses=(actif.email||'').split(',').map(x=>x.trim()).filter(Boolean);
+
+  box.innerHTML=cadre(
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+badge
+    +'<span style="font-size:12px;color:var(--muted)">envoyé le '+new Date(actif.envoye_le).toLocaleDateString('fr-FR')
+    +' · expire le '+new Date(actif.expire_le).toLocaleDateString('fr-FR')
+    +(actif.relances?' · '+actif.relances+' relance'+(actif.relances>1?'s':''):'')+'</span></div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:9px">'
+    +'<i class="ti ti-mail"></i> '+escHtml(adresses.join(' · '))+'</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin-bottom:9px">'
+    +recus+' pièce'+(recus>1?'s':'')+' reçue'+(recus>1?'s':'')+' sur '+requis.length+' demandées (hors pièces non concernées)</div>'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
+    +'<button class="btn-sm" onclick="enfCopierLienPieces(\''+actif.id+'\')"><i class="ti ti-link"></i> Copier le lien</button>'
+    +'<button class="btn-sm" onclick="enfRelancerPieces(\''+actif.id+'\')"><i class="ti ti-bell"></i> Relancer</button>'
+    +'<button class="btn-sm" style="color:var(--red);border-color:var(--red)" onclick="enfAnnulerPieces(\''+actif.id+'\')"><i class="ti ti-x"></i> Annuler</button>'
+    +'</div>','var(--koala-light)','var(--border)');
+}
+
+function enfOuvrirEnvoiPieces(){
+  const possibles=enfDestinataires();
+  if(!possibles.length)return showBanner('Aucun parent avec une adresse e-mail.','error');
+  const defaut=new Set(enfDestinatairesParDefaut().map(p=>p.id));
+  document.getElementById('envoi-pieces-liste').innerHTML=possibles.map(p=>
+    '<label style="display:flex;align-items:flex-start;gap:9px;padding:9px 2px;border-bottom:1px solid var(--border);cursor:pointer">'
+    +'<input type="checkbox" class="envoi-pieces-dest" value="'+escHtml(p.email)+'"'+(defaut.has(p.id)?' checked':'')+' style="margin-top:3px">'
+    +'<span><span style="font-weight:700;font-size:13px">'+escHtml(enfNomParent(p))+'</span>'
+    +'<span style="display:block;font-size:12px;color:var(--muted)">'+escHtml(p.email)
+    +(p.lien&&PAR_LIENS[p.lien]?' · '+escHtml(PAR_LIENS[p.lien]):'')+'</span></span></label>'
+  ).join('');
+  document.getElementById('envoi-pieces-vide').style.display='none';
+  document.getElementById('envoi-pieces-btn').disabled=false;
+  document.getElementById('modal-envoi-pieces-wrap').classList.add('open');
+}
+
+async function enfConfirmerEnvoiPieces(){
+  const emails=[...document.querySelectorAll('.envoi-pieces-dest:checked')].map(c=>c.value);
+  const err=document.getElementById('envoi-pieces-vide');
+  if(!emails.length){
+    err.textContent='Cochez au moins une adresse.';err.style.display='block';return;
+  }
+  const e=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
+  if(!e)return;
+
+  const btn=document.getElementById('envoi-pieces-btn');btn.disabled=true;
+  showBanner('Envoi en cours…');
+  const token=dossierToken();
+  const expire=new Date(Date.now()+PIECES_JOURS*86400000).toISOString();
+  const saved=await dbInsert('dossiers_pieces',{
+    enfant_id:e.id,token,email:emails.join(', '),statut:'envoye',
+    expire_le:expire,created_by:currentUser?currentUser.id:null
+  });
+  if(!saved){btn.disabled=false;return showBanner('Impossible de créer le dossier.','error');}
+
+  /* La fonction ne reçoit que l'identifiant du dossier et le lien déjà
+     composé côté client : elle n'a besoin de connaître ni l'origine de
+     l'app, ni aucun secret supplémentaire. */
+  const ok=await callFn('envoyer-dossier-pieces',{dossier_id:saved.id,relance:false,lien:piecesLien(token)});
+  enfPiecesCache.unshift(saved);
+  closeModal('modal-envoi-pieces-wrap');
+  enfRenderPiecesDossier();
+  if(ok)showBanner('Lien envoyé à '+emails.length+' adresse'+(emails.length>1?'s':'')+' ✅');
+  else showBanner('Dossier créé, mais l\'e-mail n\'est pas parti — utilisez « Copier le lien ».','error');
+}
+
+async function enfRelancerPieces(id){
+  const d=enfPiecesCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  if(!confirm('Renvoyer le lien à '+d.email+' ?'))return;
+  showBanner('Relance en cours…');
+  const ok=await callFn('envoyer-dossier-pieces',{dossier_id:d.id,relance:true,lien:piecesLien(d.token)});
+  if(!ok)return showBanner('La relance n\'est pas partie.','error');
+  d.relances=(d.relances||0)+1;
+  enfRenderPiecesDossier();
+  showBanner('Relance envoyée ✅');
+}
+
+function enfCopierLienPieces(id){
+  const d=enfPiecesCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  const url=piecesLien(d.token);
+  navigator.clipboard.writeText(url).then(
+    ()=>showBanner('Lien copié — à transmettre par SMS si besoin.'),
+    ()=>prompt('Copiez ce lien :',url)
+  );
+}
+
+async function enfAnnulerPieces(id){
+  const d=enfPiecesCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  if(!confirm('Annuler ce dossier ?\n\nLe lien déjà envoyé cessera immédiatement de fonctionner. Les pièces déjà déposées par la famille sont conservées.'))return;
+  const ok=await dbUpdate('dossiers_pieces',d.id,{statut:'annule'});
+  if(!ok)return showBanner('Annulation impossible.','error');
+  d.statut='annule';
+  enfRenderPiecesDossier();
+  showBanner('Dossier annulé — le lien ne fonctionne plus.');
+}
+
+window.enfLoadPieces = enfLoadPieces;
+window.enfOuvrirEnvoiPieces = enfOuvrirEnvoiPieces;
+window.enfConfirmerEnvoiPieces = enfConfirmerEnvoiPieces;
+window.enfRelancerPieces = enfRelancerPieces;
+window.enfCopierLienPieces = enfCopierLienPieces;
+window.enfAnnulerPieces = enfAnnulerPieces;
 
 window.enfInit = enfInit;
 window.enfRender = enfRender;
