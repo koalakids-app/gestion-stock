@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Koala Kids — Mon espace</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8;--amber:#B8860B;--amber-l:#FFF6DC}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:#2B2740;min-height:100dvh}
+a{color:inherit}
+.topbar{background:#fff;border-bottom:2px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;padding-top:calc(12px + env(safe-area-inset-top))}
+.topbar h1{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);flex:1}
+.topbar .who{font-size:12px;color:var(--muted);font-weight:600}
+.btn{border:none;border-radius:12px;padding:9px 14px;font-family:'Nunito';font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.btn-p{background:var(--orange);color:#fff}
+.btn-g{background:#F1EFF7;color:var(--muted)}
+.btn-sm{padding:6px 10px;font-size:12px}
+.wrap{max-width:720px;margin:0 auto;padding:16px;padding-bottom:calc(40px + env(safe-area-inset-bottom))}
+input{font-family:'Nunito';font-size:16px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740;width:100%}
+input:focus{outline:none;border-color:var(--orange)}
+label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 4px 3px}
+.f{margin-bottom:10px}
+.card{background:#fff;border:2px solid var(--line);border-radius:18px;padding:16px 18px;margin-bottom:14px}
+.sec{font-family:'Baloo 2',cursive;font-size:15px;color:var(--orange);margin:0 0 12px;padding-bottom:6px;border-bottom:2px solid var(--line);display:flex;align-items:center;gap:7px;justify-content:space-between}
+.hint{font-size:12px;color:var(--muted);line-height:1.6;margin:-4px 0 10px 3px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#2B2740;color:#fff;padding:11px 18px;border-radius:14px;font-size:13.5px;font-weight:600;z-index:300;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
+.toast.on{opacity:1}
+.toast.err{background:var(--red)}
+#loginView{max-width:360px;margin:60px auto;padding:0 16px}
+#loginView .card{padding:18px}
+#loginView h3{font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.pgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+@media(max-width:560px){.pgrid{grid-template-columns:1fr 1fr}}
+.pday{border:2px solid var(--line);border-radius:14px;padding:9px 8px;min-height:70px}
+.pday .dname{font-size:11.5px;font-weight:800;color:var(--muted);margin-bottom:6px;text-transform:uppercase}
+.pslot{font-size:12px;font-weight:700;color:var(--violet);margin-bottom:3px}
+.pslot .h{color:var(--muted);font-weight:600;font-size:11px;display:block}
+.pempty{font-size:11.5px;color:var(--muted)}
+.weeknav{display:flex;align-items:center;gap:8px}
+.counter{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+.stat{flex:1;min-width:120px;background:var(--violet-l);border-radius:14px;padding:12px 14px;text-align:center}
+.stat .n{font-family:'Baloo 2',cursive;font-size:22px;color:var(--violet)}
+.stat.pos .n{color:var(--red)}
+.stat .l{font-size:11px;color:var(--muted);font-weight:700;margin-top:2px}
+</style>
+</head>
+<body>
+
+<div id="loginView" style="display:none">
+  <div class="card">
+    <h3><i class="ti ti-user-circle"></i> Mon espace</h3>
+    <div class="f"><label class="lb">Adresse e-mail</label><input id="liMail" type="email" autocomplete="username"></div>
+    <div class="f"><label class="lb">Mot de passe</label><input id="liPwd" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div id="liErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-p" onclick="doLogin()"><i class="ti ti-login"></i> Se connecter</button>
+    </div>
+  </div>
+</div>
+
+<div id="appView" style="display:none">
+  <div class="topbar">
+    <i class="ti ti-user-circle" style="font-size:22px;color:var(--orange)"></i>
+    <h1>Mon espace</h1>
+    <span class="who" id="whoAmI"></span>
+    <button class="btn btn-g btn-sm" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i></button>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="sec">
+        <span><i class="ti ti-calendar-week"></i> Mon planning</span>
+        <div class="weeknav">
+          <button class="btn btn-g btn-sm" onclick="changeSemaine(-1)"><i class="ti ti-chevron-left"></i></button>
+          <span id="semaineLabel" style="font-size:12.5px;font-weight:700;color:var(--muted)"></span>
+          <button class="btn btn-g btn-sm" onclick="changeSemaine(1)"><i class="ti ti-chevron-right"></i></button>
+        </div>
+      </div>
+      <div class="pgrid" id="planningGrid"></div>
+      <p class="hint">Planning saisi par la direction (import de l'équipe). Pour toute correction,
+        contactez la direction.</p>
+    </div>
+
+    <div class="card">
+      <div class="sec">
+        <span><i class="ti ti-clock-hour-4"></i> Mon compteur d'heures supplémentaires</span>
+        <select id="anneeSelect" onchange="loadCompteur()" style="width:auto;padding:5px 9px;font-size:12.5px;border:2px solid var(--line);border-radius:10px"></select>
+      </div>
+      <div class="counter" id="counterBox"></div>
+      <p class="hint">Calcul annualisé : 1607h temps plein par an, proraté selon vos heures
+        hebdomadaires contractuelles et la période couverte par votre contrat sur l'année. Un solde
+        positif correspond à des heures supplémentaires.</p>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+let ME=null,COLLAB=null,semaineDate=null;
+const JOURS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
+
+function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function mondayOfISO(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const day=d.getDay();
+  const diff=(day===0?-6:1-day);
+  d.setDate(d.getDate()+diff);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function addDays(dateStr,n){const d=new Date(dateStr+'T00:00:00');d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
+
+/* ---------- AUTH ---------- */
+/* Pas de MFA ici, à la différence des modules direction/référente : c'est un
+   accès en lecture seule à ses propres données (planning, pointages), pas au
+   dossier des enfants ni aux informations financières de la crèche. */
+let JUSTE_CONNECTE=false;
+function showLogin(msg){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liErr').textContent=msg||'';
+}
+async function boot(){
+  if(!JUSTE_CONNECTE){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin();return;
+  }
+  let session=null;
+  try{
+    const r=await sb.auth.getSession();
+    session=(r&&r.data&&r.data.session)||null;
+  }catch(e){session=null;}
+  if(!session||!session.user){showLogin();return;}
+  ME=session.user;
+  let c=null;
+  try{
+    const{data,error}=await sb.from('employes').select('*').eq('user_id',ME.id).maybeSingle();
+    if(error)throw error;
+    c=data;
+  }catch(e){
+    showLogin('Session expirée ou profil inaccessible — merci de vous reconnecter.');
+    return;
+  }
+  if(!c){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin('Compte non reconnu — contactez la direction.');
+    return;
+  }
+  COLLAB=c;
+  await grantAccess();
+}
+async function doLogin(){
+  const e=val('liMail'),p=val('liPwd');
+  if(!e||!p){document.getElementById('liErr').textContent='E-mail et mot de passe requis.';return;}
+  document.getElementById('liErr').textContent='';
+  const{error}=await sb.auth.signInWithPassword({email:e,password:p});
+  if(error){document.getElementById('liErr').textContent='Identifiants incorrects.';return;}
+  JUSTE_CONNECTE=true;
+  await boot();
+}
+function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
+async function doLogout(){
+  try{await sb.auth.signOut();}catch(e){}
+  JUSTE_CONNECTE=false;
+  showLogin();
+}
+/* Un lien d'invitation Supabase revient avec un access_token dans le hash :
+   sb-js le convertit en session automatiquement (detectSessionInUrl, par
+   défaut) — on considère alors l'utilisateur comme connecté sans repasser
+   par le formulaire. */
+if(location.hash.includes('access_token')){JUSTE_CONNECTE=true;}
+
+async function grantAccess(){
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('appView').style.display='block';
+  document.getElementById('whoAmI').textContent=(COLLAB.prenom||'')+' '+(COLLAB.nom||'');
+  semaineDate=mondayOfISO(todayStr());
+  const anneeSel=document.getElementById('anneeSelect');
+  const anneeActuelle=new Date().getFullYear();
+  anneeSel.innerHTML=[anneeActuelle,anneeActuelle-1].map(a=>'<option value="'+a+'">'+a+'</option>').join('');
+  await Promise.all([loadPlanning(),loadCompteur()]);
+}
+
+/* ---------- PLANNING (lecture seule, table planning_equipe par prénom) --- */
+async function changeSemaine(n){
+  semaineDate=addDays(semaineDate,n*7);
+  await loadPlanning();
+}
+async function loadPlanning(){
+  const grid=document.getElementById('planningGrid');
+  document.getElementById('semaineLabel').textContent='Semaine du '+dfr(semaineDate);
+  const{data,error}=await sb.from('planning_equipe').select('*')
+    .eq('creche_id',COLLAB.creche_id).eq('semaine',semaineDate);
+  if(error){grid.innerHTML='<p class="hint">Planning indisponible pour le moment.</p>';return;}
+  const rows=data||[];
+  grid.innerHTML=JOURS.map((nom,idx)=>{
+    const evs=rows.filter(r=>r.jour===idx);
+    let inner;
+    if(!evs.length){
+      inner='<div class="pempty">Rien de prévu</div>';
+    }else{
+      inner=evs.map(r=>{
+        const horaire=(r.hdebut&&r.hfin)?r.hdebut+'–'+r.hfin:'';
+        const label={present:'Présence',absent:'Absent(e)',conge:'Congé',formation:'Formation',reunion:'Réunion'}[r.type]||(r.label||r.type||'');
+        return'<div class="pslot">'+esc(label)+(horaire?'<span class="h">'+esc(horaire)+'</span>':'')+'</div>';
+      }).join('');
+    }
+    return'<div class="pday"><div class="dname">'+nom+'</div>'+inner+'</div>';
+  }).join('');
+}
+
+/* ---------- COMPTEUR D'HEURES SUPPLÉMENTAIRES ---------- */
+async function loadCompteur(){
+  const box=document.getElementById('counterBox');
+  const annee=Number(document.getElementById('anneeSelect').value)||new Date().getFullYear();
+  const{data,error}=await sb.rpc('kk_collaborateur_heures_annuelles',{p_annee:annee});
+  if(error){box.innerHTML='<p class="hint">Compteur indisponible : '+esc(error.message)+'</p>';return;}
+  const r=(data&&data[0])||{heures_realisees:0,heures_dues:0,solde:0};
+  const solde=Number(r.solde||0);
+  box.innerHTML=
+    '<div class="stat"><div class="n">'+Number(r.heures_realisees||0).toFixed(1)+'h</div><div class="l">Heures réalisées</div></div>'
+    +'<div class="stat"><div class="n">'+Number(r.heures_dues||0).toFixed(1)+'h</div><div class="l">Heures dues (1607h proraté)</div></div>'
+    +'<div class="stat'+(solde>0?' pos':'')+'"><div class="n">'+(solde>0?'+':'')+solde.toFixed(1)+'h</div><div class="l">'+(solde>0?'Heures supplémentaires':'Solde')+'</div></div>';
+}
+
+boot();
+</script>
+</body>
+</html>
