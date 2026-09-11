@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Koala Kids — Collaborateurs</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8;--amber:#B8860B;--amber-l:#FFF6DC}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:#2B2740;min-height:100dvh}
+a{color:inherit}
+.topbar{background:#fff;border-bottom:2px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;padding-top:calc(12px + env(safe-area-inset-top))}
+.topbar h1{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);flex:1}
+.topbar .who{font-size:12px;color:var(--muted);font-weight:600}
+.btn{border:none;border-radius:12px;padding:9px 14px;font-family:'Nunito';font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.btn-p{background:var(--orange);color:#fff}
+.btn-s{background:var(--violet-l);color:var(--violet)}
+.btn-g{background:#F1EFF7;color:var(--muted)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-sm{padding:6px 10px;font-size:12px}
+.wrap{max-width:900px;margin:0 auto;padding:16px;padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+input,select,textarea{font-family:'Nunito';font-size:16px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
+label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 4px 3px}
+.f{margin-bottom:10px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:620px){.g2,.g3{grid-template-columns:1fr}}
+.card{background:#fff;border:2px solid var(--line);border-radius:18px;padding:16px 18px;margin-bottom:14px}
+.sec{font-family:'Baloo 2',cursive;font-size:15px;color:var(--orange);margin:0 0 12px;padding-bottom:6px;border-bottom:2px solid var(--line);display:flex;align-items:center;gap:7px}
+.hint{font-size:12px;color:var(--muted);line-height:1.6;margin:-4px 0 10px 3px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#2B2740;color:#fff;padding:11px 18px;border-radius:14px;font-size:13.5px;font-weight:600;z-index:300;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
+.toast.on{opacity:1}
+.toast.err{background:var(--red)}
+#loginView{max-width:360px;margin:60px auto;padding:0 16px}
+#loginView .card{padding:18px}
+#loginView h3{font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+#loginView .back{text-align:center;margin-top:14px}
+#loginView .back a{font-size:13px;font-weight:700;color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.crow{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.crow:last-child{border-bottom:none}
+.cinfo{flex:1;min-width:180px}
+.cname{font-weight:800;font-size:14.5px}
+.cmeta{font-size:11.5px;color:var(--muted)}
+.badge{font-size:11px;font-weight:800;border-radius:20px;padding:3px 9px;white-space:nowrap}
+.badge.on{background:var(--green-l);color:var(--green)}
+.badge.off{background:#F1EFF7;color:var(--muted)}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.overlay{position:fixed;inset:0;background:rgba(43,39,64,.45);display:none;align-items:flex-start;justify-content:center;z-index:200;overflow:auto;padding:24px 12px}
+.overlay.on{display:flex}
+.modal{background:#fff;border-radius:20px;padding:20px;max-width:640px;width:100%;margin:20px 0}
+.modal h3{font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.modal .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:30px 10px}
+</style>
+</head>
+<body>
+
+<div id="loginView" style="display:none">
+  <div class="card">
+    <h3><i class="ti ti-users"></i> Collaborateurs</h3>
+    <div class="f"><label class="lb">Adresse e-mail</label><input id="liMail" type="email" autocomplete="username"></div>
+    <div class="f"><label class="lb">Mot de passe</label><input id="liPwd" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div id="liErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-p" onclick="doLogin()"><i class="ti ti-login"></i> Se connecter</button>
+    </div>
+    <div class="back"><a href="index.html"><i class="ti ti-arrow-left"></i> Retour à l'accueil</a></div>
+  </div>
+</div>
+
+<div id="appView" style="display:none">
+  <div class="topbar">
+    <i class="ti ti-users" style="font-size:22px;color:var(--orange)"></i>
+    <h1>Collaborateurs</h1>
+    <span class="who" id="whoAmI"></span>
+    <a class="btn btn-g btn-sm" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i></a>
+    <button class="btn btn-g btn-sm" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i></button>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="sec"><i class="ti ti-building-community"></i> Crèche</div>
+      <select id="crecheSelect" onchange="crecheId=this.value;loadEmployes()"></select>
+    </div>
+
+    <div class="card">
+      <div class="sec" style="justify-content:space-between">
+        <span><i class="ti ti-address-book"></i> Fiches collaborateurs/trices</span>
+        <button class="btn btn-p btn-sm" onclick="openFiche(null)"><i class="ti ti-plus"></i> Ajouter</button>
+      </div>
+      <p class="hint">Le compte de connexion permet à un(e) collaborateur/trice de consulter, depuis
+        <b>collaborateur.html</b>, son planning et son compteur d'heures supplémentaires annualisées.
+        Il ne donne aucun droit de saisie : la fiche, le planning et les pointages restent gérés ici
+        et dans le planning d'équipe.</p>
+      <div id="listeEmployes"></div>
+      <div class="empty" id="empty" style="display:none">Aucun(e) collaborateur/trice pour cette crèche.</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE FICHE -->
+<div class="overlay" id="modalFiche">
+  <div class="modal">
+    <h3><i class="ti ti-id-badge-2"></i> <span id="ficheTitre">Fiche collaborateur/trice</span></h3>
+    <input type="hidden" id="fId">
+    <div class="g2">
+      <div class="f"><label class="lb">Prénom</label><input id="fPrenom"></div>
+      <div class="f"><label class="lb">Nom</label><input id="fNom"></div>
+    </div>
+    <div class="g2">
+      <div class="f"><label class="lb">Poste</label><input id="fPoste" placeholder="Auxiliaire, agent d'entretien…"></div>
+      <div class="f"><label class="lb">E-mail</label><input id="fEmail" type="email"></div>
+    </div>
+    <div class="g2">
+      <div class="f"><label class="lb">Type de contrat</label>
+        <select id="fTypeContrat"><option value="">—</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select>
+      </div>
+      <div class="f"><label class="lb">Heures hebdomadaires</label><input id="fHeuresHebdo" type="number" step="0.5" min="0" placeholder="35"></div>
+    </div>
+    <div class="g2">
+      <div class="f"><label class="lb">Date de début</label><input id="fDateDebut" type="date"></div>
+      <div class="f"><label class="lb">Date de fin</label><input id="fDateFin" type="date"></div>
+    </div>
+    <p class="hint">Les heures hebdomadaires et les dates de contrat servent de référence au calcul du
+      compteur d'heures supplémentaires annualisées (1607h temps plein, proraté).</p>
+    <div id="ficheErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
+    <div class="foot">
+      <button class="btn btn-g" onclick="closeFiche()">Annuler</button>
+      <button class="btn btn-p" onclick="saveFiche()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+let ME=null,PROF=null,crecheId=null,CRECHES=[],EMPLOYES=[];
+
+function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
+function setVal(id,v){const e=document.getElementById(id);if(e)e.value=(v==null?'':v);}
+function num(id){const v=val(id);return v===''?null:Number(String(v).replace(',','.'));}
+
+async function callFn(fn,body){
+  try{
+    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});
+    const data=await r.json().catch(()=>({}));
+    return{ok:r.ok,data};
+  }catch(err){
+    return{ok:false,data:{error:(err&&err.message)||'réseau injoignable'}};
+  }
+}
+
+/* ---------- AUTH ---------- */
+/* Arrivée depuis le hub index.html, qui n'authentifie personne : déconnexion
+   systématique et saisie obligatoire, même règle que parametres.html. */
+let JUSTE_CONNECTE=false;
+function showLogin(msg){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liErr').textContent=msg||'';
+}
+async function boot(){
+  if(!JUSTE_CONNECTE){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin();return;
+  }
+  let session=null;
+  try{
+    const r=await sb.auth.getSession();
+    session=(r&&r.data&&r.data.session)||null;
+  }catch(e){session=null;}
+  if(!session||!session.user){showLogin();return;}
+  ME=session.user;
+  let p=null;
+  try{
+    const{data,error}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
+    if(error)throw error;
+    p=data;
+  }catch(e){
+    showLogin('Session expirée ou profil inaccessible — merci de vous reconnecter.');
+    return;
+  }
+  if(!p){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin('Compte non reconnu — contactez la direction.');
+    return;
+  }
+  PROF=p;
+  await grantAccess();
+}
+async function doLogin(){
+  const e=val('liMail'),p=val('liPwd');
+  if(!e||!p){document.getElementById('liErr').textContent='E-mail et mot de passe requis.';return;}
+  document.getElementById('liErr').textContent='';
+  const{error}=await sb.auth.signInWithPassword({email:e,password:p});
+  if(error){document.getElementById('liErr').textContent='Identifiants incorrects.';return;}
+  JUSTE_CONNECTE=true;
+  await boot();
+}
+async function doLogout(){
+  try{await sb.auth.signOut();}catch(e){}
+  JUSTE_CONNECTE=false;
+  showLogin();
+}
+async function grantAccess(){
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('appView').style.display='block';
+  document.getElementById('whoAmI').textContent=PROF.name||PROF.email||'';
+  await loadCreches();
+  await loadEmployes();
+}
+
+/* ---------- DONNÉES ---------- */
+async function loadCreches(){
+  const{data,error}=await sb.from('creches').select('id,name').order('name');
+  if(error){toast('Erreur de chargement des crèches',true);return;}
+  CRECHES=data||[];
+  const sel=document.getElementById('crecheSelect');
+  sel.innerHTML=CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  if(CRECHES.length)crecheId=CRECHES[0].id;
+}
+async function loadEmployes(){
+  if(!crecheId)return;
+  const{data,error}=await sb.from('employes').select('*').eq('creche_id',crecheId).order('prenom');
+  if(error){toast('Erreur de chargement : '+error.message,true);return;}
+  EMPLOYES=data||[];
+  renderListe();
+}
+function renderListe(){
+  const box=document.getElementById('listeEmployes');
+  document.getElementById('empty').style.display=EMPLOYES.length?'none':'block';
+  box.innerHTML=EMPLOYES.map(e=>{
+    const compte=e.user_id
+      ?'<span class="badge on"><i class="ti ti-lock-open"></i> Compte actif</span>'
+      :'<span class="badge off">Pas de compte</span>';
+    const btnCompte=e.user_id
+      ?''
+      :'<button class="btn btn-s btn-sm" onclick="creerCompte(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant de créer le compte"')+'><i class="ti ti-mail-forward"></i> Créer le compte</button>';
+    return'<div class="crow">'
+      +'<div class="cinfo"><div class="cname">'+esc(e.prenom)+' '+esc(e.nom||'')+'</div>'
+      +'<div class="cmeta">'+esc(e.poste||'—')+(e.email?' · '+esc(e.email):'')+'</div></div>'
+      +compte
+      +'<div class="acts">'
+      +'<button class="btn btn-g btn-sm" onclick="openFiche(\''+e.id+'\')"><i class="ti ti-edit"></i></button>'
+      +btnCompte
+      +'</div></div>';
+  }).join('');
+}
+
+/* ---------- FICHE ---------- */
+function openFiche(id){
+  const e=id?EMPLOYES.find(x=>x.id===id):null;
+  document.getElementById('ficheTitre').textContent=e?'Fiche collaborateur/trice':'Nouveau/nouvelle collaborateur/trice';
+  document.getElementById('ficheErr').textContent='';
+  setVal('fId',e?e.id:'');
+  setVal('fPrenom',e?e.prenom:'');
+  setVal('fNom',e?e.nom:'');
+  setVal('fPoste',e?e.poste:'');
+  setVal('fEmail',e?e.email:'');
+  setVal('fTypeContrat',e?e.type_contrat:'');
+  setVal('fHeuresHebdo',e?e.heures_hebdo:'');
+  setVal('fDateDebut',e?e.date_debut:'');
+  setVal('fDateFin',e?e.date_fin:'');
+  document.getElementById('modalFiche').classList.add('on');
+}
+function closeFiche(){document.getElementById('modalFiche').classList.remove('on');}
+async function saveFiche(){
+  const id=val('fId');
+  const prenom=val('fPrenom');
+  if(!prenom){document.getElementById('ficheErr').textContent='Le prénom est obligatoire.';return;}
+  const row={
+    prenom,
+    nom:val('fNom')||null,
+    poste:val('fPoste')||null,
+    email:val('fEmail')||null,
+    type_contrat:val('fTypeContrat')||null,
+    heures_hebdo:num('fHeuresHebdo'),
+    date_debut:val('fDateDebut')||null,
+    date_fin:val('fDateFin')||null,
+  };
+  let error;
+  if(id){
+    ({error}=await sb.from('employes').update(row).eq('id',id));
+  }else{
+    row.creche_id=crecheId;
+    ({error}=await sb.from('employes').insert(row));
+  }
+  if(error){document.getElementById('ficheErr').textContent=error.message;return;}
+  closeFiche();
+  toast('Fiche enregistrée.');
+  await loadEmployes();
+}
+
+/* ---------- COMPTE DE CONNEXION ---------- */
+async function creerCompte(id){
+  const e=EMPLOYES.find(x=>x.id===id);
+  if(!e||!e.email)return;
+  if(!confirm('Envoyer à '+e.email+' un e-mail d\'invitation pour créer son compte de connexion ?'))return;
+  const redirect=location.href.replace(/employes\.html.*$/,'collaborateur.html');
+  const{ok,data}=await callFn('creer-compte-collaborateur',{employe_id:id,redirect_to:redirect});
+  if(!ok){toast('Échec : '+(data.error||'erreur inconnue'),true);return;}
+  toast('Invitation envoyée à '+e.email+'.');
+  await loadEmployes();
+}
+
+boot();
+</script>
+</body>
+</html>
