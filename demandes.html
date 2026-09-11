@@ -2844,13 +2844,24 @@ async function secMfaStartEnroll(){
     if(error)throw error;
     secMfaFactorId=data.id;
     const qrEl=document.getElementById('sec-mfa-qr');
+    qrEl.innerHTML='';
     const qr=data.totp.qr_code||'';
-    if(qr.trim().startsWith('<svg')){
-      qrEl.innerHTML=qr;
+    // qr_code peut être du SVG brut, ou une data-URI dont le payload SVG n'est pas
+    // encodé (donc plein de guillemets) : dans les deux cas, le concaténer dans une
+    // chaîne HTML (ex. src="'+qr+'") casse l'attribut au premier guillemet rencontré.
+    // On extrait le SVG s'il y en a un, sinon on assigne l'URL via la propriété DOM
+    // .src (jamais interprétée comme du HTML, donc jamais cassée par des guillemets).
+    const svgMatch=qr.match(/<svg[\s\S]*<\/svg>/i);
+    if(svgMatch){
+      qrEl.innerHTML=svgMatch[0];
       const svg=qrEl.querySelector('svg');
       if(svg){svg.style.width='180px';svg.style.height='180px';}
     }else{
-      qrEl.innerHTML='<img src="'+qr+'" alt="QR code MFA" style="display:block;width:180px;height:180px;object-fit:contain">';
+      const img=document.createElement('img');
+      img.alt='QR code MFA';
+      img.style.cssText='display:block;width:180px;height:180px;object-fit:contain';
+      img.src=qr;
+      qrEl.appendChild(img);
     }
     document.getElementById('sec-mfa-secret').textContent=data.totp.secret;
     document.getElementById('sec-mfa-code').value='';
