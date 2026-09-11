@@ -1023,11 +1023,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div id="enf-fiche-parents" class="module-tab-content"></div>
         <div id="enf-fiche-contrat" class="module-tab-content"></div>
         <div id="enf-fiche-documents" class="module-tab-content">
+          <!-- Deux blocs bien séparés : les documents administratifs (dossier de
+               familiarisation, formulaires remplis/signés, pièces importées) d'un
+               côté, les documents sanitaires (carnet de vaccination) de l'autre —
+               ce ne sont ni les mêmes destinataires, ni la même confidentialité. -->
+          <div class="section-title" style="margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-folder"></i> Documents administratifs</div>
           <div id="enf-dossier-box"></div>
           <div id="enf-docs-list"></div>
+          <div id="enf-admin-docs-zone" style="margin-top:14px"></div>
+          <div class="section-title" style="margin:20px 0 10px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px"><i class="ti ti-heart-plus"></i> Documents sanitaires</div>
           <!-- Carnet de vaccination : meme bloc et memes donnees que la fiche
                vaccins du module Vaccinations (table vaccins_pj). -->
-          <div id="enf-carnet-zone" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)"></div>
+          <div id="enf-carnet-zone"></div>
         </div>
       </div>
     </div>
@@ -11518,6 +11525,7 @@ async function enfOpenFiche(id){
   enfParentsCache = [];
   enfDossiersCache = [];
   enfDossierPret = false;
+  enfAdminDocsCache = [];
   document.getElementById('enf-fiche-title').innerHTML = '<i class="ti ti-mood-kid"></i> '+escHtml((e.prenom||'')+' '+(e.nom||''));
   // onglet identité par défaut
   document.querySelectorAll('#modal-enf-fiche-wrap .module-tab').forEach((b,i)=>b.classList.toggle('active',i===0));
@@ -11531,11 +11539,13 @@ async function enfOpenFiche(id){
   enfLoadContrats(e.id);
   document.getElementById('enf-docs-list').innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
   document.getElementById('enf-dossier-box').innerHTML = '';
+  document.getElementById('enf-admin-docs-zone').innerHTML = '';
   document.getElementById('enf-carnet-zone').innerHTML = '';
   document.getElementById('modal-enf-fiche-wrap').classList.add('open');
   // charger les documents et le dossier famille en arrière-plan
   enfLoadDocs(e.id);
   enfLoadDossier(e.id);
+  enfLoadAdminDocs(e.id);
   enfLoadCarnet(e.id);
 }
 
@@ -12655,6 +12665,110 @@ async function enfDeleteDoc(repId){
     showBanner('Suppression impossible : '+((err&&err.message)||'droits insuffisants'),'error');
   }
 }
+
+/* ===== Documents administratifs importés (fiche enfant) =====================
+   Pièces libres qu'une référente dépose directement (pièce d'identité,
+   justificatif de domicile, attestation CAF, etc.), distinctes des formulaires
+   remplis/signés via l'outil Documents (enf-docs-list) et du carnet de
+   vaccination (table vaccins_pj, données de santé).
+
+   Même schéma de stockage que les photocopies du carnet de vaccination : bucket
+   PRIVÉ, aucune URL publique enregistrée — seuls bucket et chemin sont gardés en
+   base, une URL signée est générée à chaque ouverture. */
+const ENF_ADMIN_DOCS_BUCKET = 'documents-admin';
+const ENF_ADMIN_DOCS_TTL    = 300;   // durée de vie d'une URL signée, en secondes
+
+let enfAdminDocsCache = [];
+async function enfLoadAdminDocs(enfantId){
+  try{
+    const{data,error}=await sb.from('enfants_documents_admin')
+      .select('*')
+      .eq('enfant_id',enfantId)
+      .order('created_at',{ascending:true});
+    if(error) throw error;
+    enfAdminDocsCache = data||[];
+  }catch(err){
+    console.warn('enfLoadAdminDocs',err);
+    enfAdminDocsCache = [];
+  }
+  // ne rendre que si on est toujours sur le même enfant
+  if(String(enfFicheId)!==String(enfantId)) return;
+  enfRenderAdminDocs();
+}
+
+function enfRenderAdminDocs(){
+  const zone=document.getElementById('enf-admin-docs-zone');
+  if(!zone) return;
+  const items=enfAdminDocsCache;
+  const list=items.length ? items.map(d=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;margin-bottom:6px">'
+    +'<i class="ti ti-paperclip" style="color:var(--koala)"></i>'
+    +'<button type="button" onclick="enfAdminDocOpen(\''+d.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12.5px;color:var(--koala-dark);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(d.filename||'Document')+'</button>'
+    +'<button onclick="enfAdminDocDelete(\''+d.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:15px"><i class="ti ti-trash"></i></button>'
+    +'</div>'
+  ).join('') : '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Aucun document administratif importé pour le moment.</div>';
+  zone.innerHTML = list
+    +'<button class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;font-size:12.5px" onclick="document.getElementById(\'enf-admin-docs-input\').click()"><i class="ti ti-upload"></i> Importer un document</button>'
+    +'<span id="enf-admin-docs-input-status" style="margin-left:10px;font-size:12px;color:var(--muted)"></span>'
+    +'<input type="file" id="enf-admin-docs-input" accept="image/*,application/pdf" multiple style="display:none" onchange="enfHandleAdminDocUpload(event)"/>';
+}
+
+async function enfHandleAdminDocUpload(event){
+  const input=event.target;
+  const files=Array.from(input.files||[]);
+  if(!files.length) return;
+  const eid=enfFicheId;
+  const status=document.getElementById('enf-admin-docs-input-status');
+  for(const file of files){
+    if(status) status.textContent='⏳ Envoi de '+file.name+'…';
+    try{
+      const ext=(file.name.split('.').pop()||'bin');
+      const path=eid+'/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+      /* Client authentifie et non le client anonyme : le bucket est prive et
+         ses policies exigent un compte referent. */
+      const{error}=await sb.storage.from(ENF_ADMIN_DOCS_BUCKET).upload(path,file);
+      if(error) throw error;
+      const{data:ins,error:insErr}=await sb.from('enfants_documents_admin')
+        .insert({enfant_id:eid,bucket:ENF_ADMIN_DOCS_BUCKET,path:path,filename:file.name}).select().single();
+      if(insErr) throw insErr;
+      if(ins) enfAdminDocsCache.push(ins);
+      enfRenderAdminDocs();
+    }catch(e){
+      console.error('[enfAdminDocs]',e.message);
+      if(status) status.textContent='⚠ Erreur : '+e.message;
+      return;
+    }
+  }
+  if(status) status.textContent='✅ Ajouté';
+  showBanner('Document(s) importé(s) ✅');
+}
+
+async function enfAdminDocOpen(id){
+  const d=enfAdminDocsCache.find(x=>String(x.id)===String(id));
+  if(!d){alert('Fichier introuvable.');return;}
+  const{data,error}=await sb.storage.from(d.bucket||ENF_ADMIN_DOCS_BUCKET).createSignedUrl(d.path,ENF_ADMIN_DOCS_TTL);
+  if(error||!data){alert('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'));return;}
+  window.open(data.signedUrl,'_blank','noopener');
+}
+
+async function enfAdminDocDelete(id){
+  if(!confirm('Supprimer ce document ?')) return;
+  const d=enfAdminDocsCache.find(x=>String(x.id)===String(id));
+  const{error}=await sb.from('enfants_documents_admin').delete().eq('id',id);
+  if(error){alert('Erreur : '+error.message);return;}
+  /* Le fichier lui-meme est retire du stockage : sans cela il resterait
+     indefiniment dans le bucket, hors de toute fiche. */
+  if(d){
+    const{error:rmErr}=await sb.storage.from(d.bucket||ENF_ADMIN_DOCS_BUCKET).remove([d.path]);
+    if(rmErr) console.warn('[enfAdminDocs] fichier non supprime du stockage',rmErr.message);
+  }
+  enfAdminDocsCache=enfAdminDocsCache.filter(x=>String(x.id)!==String(id));
+  enfRenderAdminDocs();
+  showBanner('Document supprimé.');
+}
+window.enfAdminDocOpen = enfAdminDocOpen;
+window.enfAdminDocDelete = enfAdminDocDelete;
+window.enfHandleAdminDocUpload = enfHandleAdminDocUpload;
 
 window.enfInit = enfInit;
 window.enfRender = enfRender;
