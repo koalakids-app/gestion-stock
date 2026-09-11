@@ -12464,15 +12464,22 @@ function packPapier(e){
   return (cachePack||[]).filter(d=>d.pack_imprimer
     &&(!d.creche_id||String(d.creche_id)===String(e&&e.creche_id)));
 }
-/* La fiche sanitaire est identifiée par son template_key (voir documents.html,
-   registre TPL) : c'est une donnée de santé, elle vit dans la section
+/* La fiche sanitaire est une donnée de santé : elle vit dans la section
    Documents sanitaires plutôt qu'avec le reste du dossier de familiarisation
-   « à rapporter en papier » (ex. autorisation droit à l'image). */
+   « à rapporter en papier » (ex. autorisation droit à l'image). Repérée par
+   son template_key quand le document utilise le modèle prédéfini du même
+   nom (voir documents.html, registre TPL), ou par son titre sinon — dans la
+   pratique, une « Fiche sanitaire » est le plus souvent configurée en type
+   « À télécharger » (PDF vierge à faire remplir par le médecin), sans
+   template_key du tout. */
+function estFicheSanitaire(d){
+  return d.template_key==='fiche_sanitaire' || /fiche\s+sanitaire/i.test(d.titre||'');
+}
 function packPapierSanitaire(e){
-  return packPapier(e).filter(d=>d.template_key==='fiche_sanitaire');
+  return packPapier(e).filter(estFicheSanitaire);
 }
 function packPapierAdmin(e){
-  return packPapier(e).filter(d=>d.template_key!=='fiche_sanitaire');
+  return packPapier(e).filter(d=>!estFicheSanitaire(d));
 }
 
 /* Une ligne pour un document « à rapporter en papier » : case à cocher pour
