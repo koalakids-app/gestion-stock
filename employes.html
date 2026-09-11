@@ -253,6 +253,7 @@ function renderListe(){
       +'<div class="acts">'
       +'<button class="btn btn-g btn-sm" onclick="openFiche(\''+e.id+'\')"><i class="ti ti-edit"></i></button>'
       +btnCompte
+      +'<button class="btn btn-g btn-sm" onclick="supprimerEmploye(\''+e.id+'\')" title="Supprimer"><i class="ti ti-trash" style="color:var(--red)"></i></button>'
       +'</div></div>';
   }).join('');
 }
@@ -310,6 +311,24 @@ async function creerCompte(id){
   const{ok,data}=await callFn('creer-compte-collaborateur',{employe_id:id,redirect_to:redirect});
   if(!ok){toast('Échec : '+(data.error||'erreur inconnue'),true);return;}
   toast('Invitation envoyée à '+e.email+'.');
+  await loadEmployes();
+}
+
+/* ---------- SUPPRESSION ---------- */
+/* La fiche disparaît, ainsi que l'historique de ses pointages (suppression en
+   cascade côté base, cf. sql/module_employes.sql). Le compte de connexion
+   auth.users éventuellement créé n'est en revanche pas supprimé — cette
+   opération demande le service role et n'est pas accessible depuis un
+   client anon ; la personne ne pourra simplement plus rien voir, sa fiche
+   employes n'existant plus (RLS le bloque). */
+async function supprimerEmploye(id){
+  const e=EMPLOYES.find(x=>x.id===id);
+  if(!e)return;
+  const nom=(e.prenom||'')+' '+(e.nom||'');
+  if(!confirm('Supprimer définitivement la fiche de '+nom.trim()+' ?\n\nSon historique de pointages sera aussi supprimé. Cette action est irréversible.'))return;
+  const{error}=await sb.from('employes').delete().eq('id',id);
+  if(error){toast('Échec de la suppression : '+error.message,true);return;}
+  toast('Fiche supprimée.');
   await loadEmployes();
 }
 
