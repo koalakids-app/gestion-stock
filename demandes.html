@@ -1028,8 +1028,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
                côté, les documents sanitaires (carnet de vaccination) de l'autre —
                ce ne sont ni les mêmes destinataires, ni la même confidentialité. -->
           <div class="section-title" style="margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-folder"></i> Documents administratifs</div>
-          <div id="enf-dossier-box"></div>
-          <div id="enf-docs-list"></div>
+          <!-- Une seule carte pour tout ce qui n'est pas la checklist de pièces
+               à importer : statut d'envoi du dossier, documents remplis/signés
+               en ligne, documents à rapporter en papier. Le dossier de
+               familiarisation a glissé vers un usage plus large que son nom
+               d'origine — d'où l'intitulé « Dossier de l'enfant » ici. -->
+          <div style="background:var(--koala-light);border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:14px">
+            <div style="font-weight:700;font-size:13.5px;color:var(--koala-dark);margin-bottom:7px;display:flex;align-items:center;gap:6px">
+              <i class="ti ti-folder-open"></i> Dossier de l'enfant</div>
+            <div id="enf-dossier-box"></div>
+            <div id="enf-docs-list"></div>
+          </div>
           <div id="enf-pieces-dossier-box" style="margin-top:14px"></div>
           <div id="enf-admin-docs-zone" style="margin-top:14px"></div>
           <div class="section-title" style="margin:20px 0 10px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px"><i class="ti ti-heart-plus"></i> Documents sanitaires</div>
@@ -12395,25 +12404,17 @@ function enfRenderDossier(){
   const actif=enfDossiersCache.find(d=>d.statut!=='annule' && new Date(d.expire_le)>new Date());
   const possibles=enfDestinataires();
 
-  const cadre=(contenu,fond,bord)=>'<div style="background:'+fond+';border:1px solid '+bord
-    +';border-radius:12px;padding:13px 15px;margin-bottom:14px">'
-    +'<div style="font-weight:700;font-size:13.5px;color:var(--koala-dark);margin-bottom:7px">'
-    +'<i class="ti ti-mail-forward"></i> Dossier de familiarisation</div>'+contenu+'</div>';
-
   if(!actif){
     if(!possibles.length){
-      box.innerHTML=cadre(
-        '<p style="font-size:12.5px;color:var(--muted);margin:0 0 4px;line-height:1.6">'
+      box.innerHTML='<p style="background:#FFF8F0;border:1px solid #F3DEC2;border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">'
         +'Aucun parent avec une adresse e-mail. Renseignez-en un dans l\'onglet '
-        +'<strong>Parents</strong> pour pouvoir envoyer le dossier.</p>','#FFF8F0','#F3DEC2');
+        +'<strong>Parents</strong> pour pouvoir envoyer le dossier.</p>';
       return;
     }
-    box.innerHTML=cadre(
-      '<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">'
+    box.innerHTML='<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">'
       +'Envoie aux parents un lien personnel vers les documents à remplir et signer en ligne. '
       +'Valable '+DOSSIER_JOURS+' jours.</p>'
-      +'<button class="btn-primary" onclick="enfOuvrirEnvoi()"><i class="ti ti-send"></i> Envoyer le dossier</button>',
-      'var(--koala-light)','var(--border)');
+      +'<button class="btn-primary" onclick="enfOuvrirEnvoi()"><i class="ti ti-send"></i> Envoyer le dossier</button>';
     return;
   }
 
@@ -12426,7 +12427,7 @@ function enfRenderDossier(){
     : '<span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">🕓 En attente</span>';
   const adresses=(actif.email||'').split(',').map(x=>x.trim()).filter(Boolean);
 
-  box.innerHTML=cadre(
+  box.innerHTML=
     '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+badge
     +'<span style="font-size:12px;color:var(--muted)">envoyé le '+new Date(actif.envoye_le).toLocaleDateString('fr-FR')
     +' · expire le '+new Date(actif.expire_le).toLocaleDateString('fr-FR')
@@ -12436,11 +12437,11 @@ function enfRenderDossier(){
     +(attendus?'<div style="font-size:12.5px;color:var(--muted);margin-bottom:9px">'
       +rendus+' document'+(rendus>1?'s':'')+' signé'+(rendus>1?'s':'')+' sur '+attendus+' attendus en ligne</div>':'')
     +enfPapierHtml(enf)
-    +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px">'
     +'<button class="btn-sm" onclick="enfCopierLien(\''+actif.id+'\')"><i class="ti ti-link"></i> Copier le lien</button>'
     +'<button class="btn-sm" onclick="enfRelancerDossier(\''+actif.id+'\')"><i class="ti ti-bell"></i> Relancer</button>'
     +'<button class="btn-sm" style="color:var(--red);border-color:var(--red)" onclick="enfAnnulerDossier(\''+actif.id+'\')"><i class="ti ti-x"></i> Annuler</button>'
-    +'</div>','var(--koala-light)','var(--border)');
+    +'</div>';
 }
 
 /* Le pack complet, chargé une fois par session. Deux sous-ensembles :
