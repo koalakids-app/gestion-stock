@@ -7593,7 +7593,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   let html='<table style="width:100%;border-collapse:collapse;font-size:'+_peFS+';'+(forPrint?'':'min-width:'+_peMinW+';')+'table-layout:fixed;line-height:'+_peRowLH+'">';
   const _peHorPct=16;
   html+='<colgroup><col style="width:'+_peHorPct+'%">'+DAYS.map(()=>'<col style="width:'+((100-_peHorPct)/5)+'%">').join('')+'</colgroup>';
-  html+='<thead><tr><th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333;white-space:nowrap">Horaire</th>';
+  html+='<thead><tr><th style="position:sticky;left:0;z-index:2;padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333;white-space:nowrap">Horaire</th>';
   DAYS.forEach((d,i)=>{html+='<th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:center;background:#fafafa;color:#333">'+d+'<br><span style="font-size:'+_peFSDay+';font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';});
   html+='</tr></thead><tbody>';
 
@@ -7601,7 +7601,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
     const evsThisCreneau=byCreneau[cleCreneau];
     const creneau=labelOf[cleCreneau];
     const creneauEsc=String(creneau||'').replace(/'/g,"\\'");
-    html+='<tr><td style="padding:'+_pePad+';border-bottom:1px solid var(--border);background:#FBFBFD;vertical-align:middle">'+_peCreneauLabel(creneau)+'</td>';
+    html+='<tr><td style="position:sticky;left:0;z-index:1;padding:'+_pePad+';border-bottom:1px solid var(--border);background:#FBFBFD;vertical-align:middle">'+_peCreneauLabel(creneau)+'</td>';
     for(let d=0;d<5;d++){
       // Plusieurs personnes peuvent partager le même créneau le même jour
       const evs=evsThisCreneau.filter(e=>e.jour===d);
@@ -10934,11 +10934,11 @@ async function rmpRenderWeek(){
 
   const crechesToShow=isDirection?cacheCreches:cacheCreches.filter(c=>c.id===currentProfile?.creche_id);
   let html='<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:640px">';
-  html+='<thead><tr><th style="padding:8px;border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333">Crèche</th>';
+  html+='<thead><tr><th style="position:sticky;left:0;z-index:2;padding:8px;border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333">Crèche</th>';
   DAYS.forEach((d,i)=>{html+='<th style="padding:8px;border-bottom:2px solid var(--border);text-align:center;background:#fafafa;color:#333">'+d+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';});
   html+='</tr></thead><tbody>';
   crechesToShow.forEach(creche=>{
-    html+='<tr><td style="padding:8px;border-bottom:1px solid var(--border);font-weight:600;color:var(--koala)">'+creche.name+'</td>';
+    html+='<tr><td style="position:sticky;left:0;z-index:1;padding:8px;border-bottom:1px solid var(--border);font-weight:600;color:var(--koala);background:#fff">'+creche.name+'</td>';
     days5.forEach((d,di)=>{
       const dateISO=rmpDateStr(d);
       const evs=rmpCache.filter(r=>r.creche_id===creche.id&&r.date===dateISO);
