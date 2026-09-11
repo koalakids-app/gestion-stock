@@ -1033,6 +1033,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div id="enf-pieces-dossier-box" style="margin-top:14px"></div>
           <div id="enf-admin-docs-zone" style="margin-top:14px"></div>
           <div class="section-title" style="margin:20px 0 10px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px"><i class="ti ti-heart-plus"></i> Documents sanitaires</div>
+          <div id="enf-fiche-sanitaire-zone" style="margin-bottom:14px"></div>
           <!-- Carnet de vaccination : meme bloc et memes donnees que la fiche
                vaccins du module Vaccinations (table vaccins_pj). -->
           <div id="enf-carnet-zone"></div>
@@ -11561,6 +11562,7 @@ async function enfOpenFiche(id){
   document.getElementById('enf-dossier-box').innerHTML = '';
   document.getElementById('enf-pieces-dossier-box').innerHTML = '';
   document.getElementById('enf-admin-docs-zone').innerHTML = '';
+  document.getElementById('enf-fiche-sanitaire-zone').innerHTML = '';
   document.getElementById('enf-carnet-zone').innerHTML = '';
   document.getElementById('modal-enf-fiche-wrap').classList.add('open');
   // charger les documents et le dossier famille en arrière-plan
@@ -12363,6 +12365,10 @@ async function enfLoadDossier(enfantId){
   if(String(enfFicheId)!==String(enfantId)) return;
   enfDossierPret = true;
   enfRenderDossier();
+  /* La zone Fiche sanitaire (section Documents sanitaires) dépend elle aussi
+     de cachePack (chargé ci-dessus) : la redessiner ici couvre le cas où
+     enfLoadAdminDocs() a déjà rendu une première fois sans cachePack. */
+  enfRenderFicheSanitaireZone();
 }
 
 /* Les destinataires possibles : tout parent avec une adresse mail. Ceux qui
@@ -12458,27 +12464,71 @@ function packPapier(e){
   return (cachePack||[]).filter(d=>d.pack_imprimer
     &&(!d.creche_id||String(d.creche_id)===String(e&&e.creche_id)));
 }
+/* La fiche sanitaire est identifiée par son template_key (voir documents.html,
+   registre TPL) : c'est une donnée de santé, elle vit dans la section
+   Documents sanitaires plutôt qu'avec le reste du dossier de familiarisation
+   « à rapporter en papier » (ex. autorisation droit à l'image). */
+function packPapierSanitaire(e){
+  return packPapier(e).filter(d=>d.template_key==='fiche_sanitaire');
+}
+function packPapierAdmin(e){
+  return packPapier(e).filter(d=>d.template_key!=='fiche_sanitaire');
+}
 
-/* Documents à imprimer et à rapporter : rien ne remonte tout seul, c'est la
-   référente qui coche à la réception du papier. Sans ce suivi, la seule façon
-   de savoir ce qui manque serait de fouiller le classeur. */
+/* Une ligne pour un document « à rapporter en papier » : case à cocher pour
+   le suivi de réception (déclaratif, sans fichier), et un import du scan/
+   de la photo une fois le papier rendu. Les deux sont indépendants —
+   importer un fichier coche automatiquement la case (voir
+   enfHandleAdminDocUpload), mais cocher sans importer reste possible pour
+   qui n'a pas de scanner sous la main. */
+function enfPapierDocRowHtml(d){
+  const recu=enfDocsCache.find(r=>r.document_id===d.id&&r.statut==='remis');
+  const fichiers=enfPiecesPourCle('papier_'+d.id);
+  const listeFichiers=fichiers.length ? '<div style="margin:4px 0 0 26px">'+fichiers.map(f=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">'
+    +'<i class="ti ti-paperclip" style="color:var(--koala);flex-shrink:0;font-size:13px"></i>'
+    +'<button type="button" onclick="enfAdminDocOpen(\''+f.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;color:var(--koala-dark);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(f.filename||'Document')+'</button>'
+    +'<button onclick="enfAdminDocDelete(\''+f.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px;flex-shrink:0"><i class="ti ti-trash"></i></button>'
+    +'</div>'
+  ).join('')+'</div>' : '';
+  return '<div style="padding:4px 0">'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px">'
+    +'<input type="checkbox"'+(recu?' checked':'')
+    +' onchange="enfMarquerRecu(\''+d.id+'\',this.checked,this)">'
+    +'<span style="flex:1">'+escHtml(d.titre)+' — '
+    +(recu
+      ? '<span style="color:var(--green);font-weight:700">reçu en main propre</span>'
+      : '<span style="color:var(--orange);font-weight:700">non rendu</span>')
+    +'</span>'
+    +'<button type="button" onclick="enfOpenPieceUpload(\'papier_'+d.id+'\')" title="Importer le document rendu" style="border:1px solid var(--border);background:#fff;border-radius:7px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--koala);display:inline-flex;align-items:center;gap:4px;flex-shrink:0"><i class="ti ti-upload"></i> Importer</button>'
+    +'</label>'
+    +listeFichiers
+    +'</div>';
+}
+
 function enfPapierHtml(e){
-  const papier=packPapier(e);
+  const papier=packPapierAdmin(e);
   if(!papier.length)return '';
   return '<div style="border-top:1px solid var(--border);margin:10px 0 9px;padding-top:9px">'
     +'<div style="font-size:12px;font-weight:700;color:var(--koala-dark);margin-bottom:6px">'
     +'À rapporter en papier</div>'
-    + papier.map(d=>{
-        const recu=enfDocsCache.find(r=>r.document_id===d.id&&r.statut==='remis');
-        return '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:12.5px">'
-          +'<input type="checkbox"'+(recu?' checked':'')
-          +' onchange="enfMarquerRecu(\''+d.id+'\',this.checked,this)">'
-          +'<span>'+escHtml(d.titre)+' — '
-          +(recu
-            ? '<span style="color:var(--green);font-weight:700">reçu en main propre</span>'
-            : '<span style="color:var(--orange);font-weight:700">non rendu</span>')
-          +'</span></label>';
-      }).join('')
+    + papier.map(enfPapierDocRowHtml).join('')
+    +'</div>';
+}
+
+/* Section Documents sanitaires : même case à cocher + import que les autres
+   documents « à rapporter en papier », mais pour la seule fiche sanitaire —
+   voir packPapierSanitaire. */
+function enfRenderFicheSanitaireZone(){
+  const zone=document.getElementById('enf-fiche-sanitaire-zone');
+  if(!zone) return;
+  const e=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
+  const docs=packPapierSanitaire(e);
+  if(!docs.length){ zone.innerHTML=''; return; }
+  zone.innerHTML='<div style="background:var(--koala-light);border:1px solid var(--border);border-radius:12px;padding:13px 15px">'
+    +'<div style="font-weight:700;font-size:13.5px;color:var(--koala-dark);margin-bottom:7px">'
+    +'<i class="ti ti-file-heart"></i> Fiche sanitaire</div>'
+    + docs.map(enfPapierDocRowHtml).join('')
     +'</div>';
 }
 
@@ -12509,7 +12559,25 @@ async function enfMarquerRecu(docId,recu,input){
     input.disabled=false;
   }
   enfRenderDossier();
+  enfRenderFicheSanitaireZone();
   enfRenderDocs();
+}
+
+/* Variante silencieuse (pas d'input à désactiver/réactiver, pas de banniere) :
+   utilisée quand l'import d'un scan vaut de facto confirmation de réception
+   (voir enfHandleAdminDocUpload). N'écrase rien si déjà marqué reçu. */
+async function enfMarquerRecuSilencieux(docId){
+  const e=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
+  if(!e)return;
+  if(enfDocsCache.find(r=>r.document_id===docId&&r.statut==='remis'))return;
+  const actif=enfDossiersCache.find(d=>d.statut!=='annule');
+  const saved=await dbInsert('documents_reponses',{
+    document_id:docId, enfant_id:e.id, creche_id:e.creche_id,
+    dossier_id:actif?actif.id:null,
+    statut:'remis', donnees:{},
+    rempli_par_nom:(currentProfile&&currentProfile.name)||'Crèche'
+  });
+  if(saved) enfDocsCache.unshift(saved);
 }
 
 function enfOuvrirEnvoi(){
@@ -12751,6 +12819,11 @@ async function enfLoadAdminDocs(enfantId){
   // ne rendre que si on est toujours sur le même enfant
   if(String(enfFicheId)!==String(enfantId)) return;
   enfRenderAdminDocs();
+  /* Ces deux zones affichent aussi des fichiers de enfAdminDocsCache
+     (piece_key='papier_<id>') : à redessiner si elles ont déjà rendu sans
+     ce cache (course entre requêtes, même logique que pour les parents). */
+  enfRenderDossier();
+  enfRenderFicheSanitaireZone();
 }
 
 /* Fichiers déposés pour une pièce donnée, le plus récent d'abord (le cache
@@ -12840,6 +12913,15 @@ async function enfHandleAdminDocUpload(event){
       if(insErr) throw insErr;
       if(ins) enfAdminDocsCache.unshift(ins);
       enfRenderAdminDocs();
+      /* Un document « à rapporter en papier » (droit à l'image, fiche
+         sanitaire...) dont on importe le scan : l'import vaut confirmation
+         de réception, pas besoin de cocher la case à part. */
+      if(pieceKey && pieceKey.startsWith('papier_')){
+        await enfMarquerRecuSilencieux(pieceKey.slice('papier_'.length));
+        enfRenderDossier();
+        enfRenderFicheSanitaireZone();
+        enfRenderDocs();
+      }
     }catch(e){
       console.error('[enfAdminDocs]',e.message);
       if(status) status.textContent='⚠ Erreur : '+e.message;
@@ -12872,6 +12954,10 @@ async function enfAdminDocDelete(id){
   }
   enfAdminDocsCache=enfAdminDocsCache.filter(x=>String(x.id)!==String(id));
   enfRenderAdminDocs();
+  if(d&&d.piece_key&&d.piece_key.startsWith('papier_')){
+    enfRenderDossier();
+    enfRenderFicheSanitaireZone();
+  }
   showBanner('Document supprimé.');
 }
 window.enfAdminDocOpen = enfAdminDocOpen;
