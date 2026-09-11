@@ -158,12 +158,31 @@ textarea{resize:vertical;min-height:66px}
 <body>
 
 <div id="loginView" style="display:none">
-  <div class="login">
+  <div class="login" id="liFormBox">
     <h2>Registre d'infirmerie</h2>
     <div class="f"><label>Email</label><input type="email" id="liMail" autocomplete="username"></div>
     <div class="f"><label>Mot de passe</label><input type="password" id="liPwd" autocomplete="current-password"></div>
     <button class="btn btn-p" style="width:100%;justify-content:center" id="btnLogin">Se connecter</button>
     <p id="liErr" style="color:var(--red);font-size:12.5px;margin-top:10px;text-align:center"></p>
+  </div>
+  <div class="login" id="mfaGateBox" style="display:none">
+    <h2>Double authentification</h2>
+    <div id="mfaGateChallengeView" style="display:none">
+      <p style="color:#666;font-size:13px;margin-bottom:12px">Entrez le code à 6 chiffres généré par votre application d'authentification.</p>
+      <div class="f"><input type="text" id="mfaGateCode" maxlength="6" inputmode="numeric" placeholder="123456" style="letter-spacing:4px;text-align:center;font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();mfaGateVerifyChallenge();}"></div>
+      <p id="mfaGateChallengeErr" style="color:var(--red);font-size:12.5px;margin-top:6px;text-align:center;display:none"></p>
+      <button class="btn btn-p" style="width:100%;justify-content:center" onclick="mfaGateVerifyChallenge()">Valider</button>
+      <button class="btn" style="width:100%;justify-content:center;margin-top:8px" onclick="mfaGateCancel()">Annuler, se déconnecter</button>
+    </div>
+    <div id="mfaGateEnrollView" style="display:none">
+      <p style="color:#666;font-size:13px;margin-bottom:12px">La double authentification est désormais obligatoire. Scannez ce QR code avec une application d'authentification (Google Authenticator, Authy...), puis entrez le code généré pour continuer.</p>
+      <div id="mfaGateQr" style="text-align:center;margin:14px 0;min-height:190px;display:flex;align-items:center;justify-content:center;overflow:hidden"></div>
+      <p style="font-size:11.5px;color:#666;text-align:center">Impossible de scanner ? Code manuel : <code id="mfaGateSecret" style="user-select:all"></code></p>
+      <div class="f"><input type="text" id="mfaGateEnrollCode" maxlength="6" inputmode="numeric" placeholder="123456" style="letter-spacing:4px;text-align:center;font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();mfaGateConfirmEnroll();}"></div>
+      <p id="mfaGateEnrollErr" style="color:var(--red);font-size:12.5px;margin-top:6px;text-align:center;display:none"></p>
+      <button class="btn btn-p" style="width:100%;justify-content:center" onclick="mfaGateConfirmEnroll()">Activer et continuer</button>
+      <button class="btn" style="width:100%;justify-content:center;margin-top:8px" onclick="mfaGateCancel()">Annuler, se déconnecter</button>
+    </div>
   </div>
 </div>
 
@@ -463,15 +482,26 @@ document.addEventListener('click',e=>{
 /* ================= AUTH ================= */
 async function boot(){
   const {data:{session}}=await sb.auth.getSession();
-  if(!session){document.getElementById('loginView').style.display='block';return;}
+  if(!session){showLoginView();return;}
   ME=session.user;
   const {data:p}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
   if(!p){toast("Profil introuvable. Contactez la direction.",true);await sb.auth.signOut();location.reload();return;}
   PROF=p; IS_DIRECTION=(p.role==='direction'); IS_EMPLOYE=(p.role==='employe');
+  // MFA obligatoire \u00e0 la connexion, m\u00eame portail que demandes.html/documents.html.
+  await mfaGateCheckAndProceed();
+}
+function showLoginView(msg){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liFormBox').style.display='block';
+  document.getElementById('mfaGateBox').style.display='none';
+  if(msg)document.getElementById('liErr').textContent=msg;
+}
+async function infirmerieGrantAccess(){
   document.getElementById('loginView').style.display='none';
   document.getElementById('appView').style.display='block';
-  document.getElementById('whoAmI').textContent=(p.name||'')+(IS_DIRECTION?' \u00b7 Direction':'');
-  document.querySelectorAll('.adminonly').forEach(e=>e.style.display=(p.role==='direction'||p.role==='referent')?'':'none');
+  document.getElementById('whoAmI').textContent=(PROF.name||'')+(IS_DIRECTION?' \u00b7 Direction':'');
+  document.querySelectorAll('.adminonly').forEach(e=>e.style.display=(PROF.role==='direction'||PROF.role==='referent')?'':'none');
   /* Un employe ne voit que les PAI actifs (policy pai_select) : la case n'a plus d'objet. */
   if(IS_EMPLOYE)document.getElementById('pInactifs').closest('.ck').style.display='none';
   if(IS_DIRECTION){
@@ -483,6 +513,114 @@ async function boot(){
   document.getElementById('fMois').value=monthISO();
   buildChips();
   await loadAll();
+}
+// --- Portail MFA obligatoire ---
+function mfaGateSwitchView(id){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liFormBox').style.display='none';
+  document.getElementById('mfaGateBox').style.display='block';
+  ['mfaGateChallengeView','mfaGateEnrollView'].forEach(v=>{
+    document.getElementById(v).style.display=(v===id?'block':'none');
+  });
+}
+async function mfaGateCheckAndProceed(){
+  try{
+    const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(error)throw error;
+    if(data.currentLevel==='aal2'){await infirmerieGrantAccess();return;}
+    if(data.nextLevel==='aal2'){mfaGateShowChallenge();return;}
+    await mfaGateShowEnroll();
+  }catch(e){
+    console.error('[MFA Gate]',e);
+    try{await sb.auth.signOut();}catch(_e){}
+    showLoginView('Erreur de v\u00e9rification de la double authentification. R\u00e9essayez.');
+  }
+}
+function mfaGateShowChallenge(){
+  document.getElementById('mfaGateCode').value='';
+  document.getElementById('mfaGateChallengeErr').style.display='none';
+  mfaGateSwitchView('mfaGateChallengeView');
+  setTimeout(()=>{const el=document.getElementById('mfaGateCode');if(el)el.focus();},100);
+}
+let mfaGateFactorId=null;
+async function mfaGateShowEnroll(){
+  mfaGateSwitchView('mfaGateEnrollView');
+  const err=document.getElementById('mfaGateEnrollErr');
+  err.style.display='none';
+  try{
+    const{data:existing,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const stale=(existing.all||[]).filter(f=>f.factor_type==='totp'&&f.status!=='verified');
+    for(const f of stale){
+      try{await sb.auth.mfa.unenroll({factorId:f.id});}catch(e){console.warn('Nettoyage facteur MFA p\u00e9rim\u00e9 \u00e9chou\u00e9 :',e.message);}
+    }
+    const{data,error}=await sb.auth.mfa.enroll({factorType:'totp'});
+    if(error)throw error;
+    mfaGateFactorId=data.id;
+    const qrEl=document.getElementById('mfaGateQr');
+    qrEl.innerHTML='';
+    const qr=data.totp.qr_code||'';
+    const svgMatch=qr.match(/<svg[\s\S]*<\/svg>/i);
+    if(svgMatch){
+      qrEl.innerHTML=svgMatch[0];
+      const svg=qrEl.querySelector('svg');
+      if(svg){svg.style.width='180px';svg.style.height='180px';}
+    }else{
+      const img=document.createElement('img');
+      img.alt='QR code MFA';
+      img.style.cssText='display:block;width:180px;height:180px;object-fit:contain';
+      img.src=qr;
+      qrEl.appendChild(img);
+    }
+    document.getElementById('mfaGateSecret').textContent=data.totp.secret;
+    document.getElementById('mfaGateEnrollCode').value='';
+  }catch(e){
+    console.error('[MFA Gate enroll]',e);
+    err.textContent="Erreur lors de la pr\u00e9paration de l'enr\u00f4lement : "+e.message;err.style.display='block';
+  }
+}
+async function mfaGateVerifyChallenge(){
+  const code=document.getElementById('mfaGateCode').value.trim();
+  const err=document.getElementById('mfaGateChallengeErr');
+  err.style.display='none';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';err.style.display='block';return;}
+  try{
+    const{data:factors,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const verified=(factors.totp||[])[0];
+    if(!verified)throw new Error('Aucun facteur MFA v\u00e9rifi\u00e9 trouv\u00e9 sur ce compte.');
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:verified.id});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:verified.id,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    await infirmerieGrantAccess();
+  }catch(e){
+    err.textContent='Code invalide ou expir\u00e9 : '+e.message;err.style.display='block';
+  }
+}
+async function mfaGateConfirmEnroll(){
+  const code=document.getElementById('mfaGateEnrollCode').value.trim();
+  const err=document.getElementById('mfaGateEnrollErr');
+  err.style.display='none';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';err.style.display='block';return;}
+  if(!mfaGateFactorId){err.textContent="Session d'enr\u00f4lement expir\u00e9e, r\u00e9essayez.";err.style.display='block';return;}
+  try{
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:mfaGateFactorId});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:mfaGateFactorId,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    mfaGateFactorId=null;
+    await infirmerieGrantAccess();
+  }catch(e){
+    err.textContent='Code invalide ou expir\u00e9 : '+e.message;err.style.display='block';
+  }
+}
+async function mfaGateCancel(){
+  if(mfaGateFactorId){try{await sb.auth.mfa.unenroll({factorId:mfaGateFactorId});}catch(e){console.warn('Nettoyage annulation MFA gate \u00e9chou\u00e9 :',e.message);}}
+  mfaGateFactorId=null;
+  try{await sb.auth.signOut();}catch(e){}
+  showLoginView();
 }
 async function doLogin(){
   const e=document.getElementById('liMail').value.trim(),p=document.getElementById('liPwd').value;
