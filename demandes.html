@@ -11515,6 +11515,9 @@ async function enfOpenFiche(id){
   const e = cacheEnfants.find(x=>String(x.id)===String(id));
   if(!e) return;
   enfFicheId = e.id;
+  enfParentsCache = [];
+  enfDossiersCache = [];
+  enfDossierPret = false;
   document.getElementById('enf-fiche-title').innerHTML = '<i class="ti ti-mood-kid"></i> '+escHtml((e.prenom||'')+' '+(e.nom||''));
   // onglet identité par défaut
   document.querySelectorAll('#modal-enf-fiche-wrap .module-tab').forEach((b,i)=>b.classList.toggle('active',i===0));
@@ -11734,6 +11737,9 @@ async function enfLoadParents(enfantId){
   // ne rendre que si on est toujours sur le meme enfant
   if(String(enfFicheId)!==String(enfantId)) return;
   enfRenderParents();
+  /* Le bloc « Dossier de familiarisation » dépend de ces adresses : si les
+     parents arrivent après les dossiers, c'est ici qu'il faut le redessiner. */
+  enfRenderDossier();
 }
 
 function enfRenderParents(){
@@ -11837,6 +11843,7 @@ async function saveParent(){
   }
   closeModal('modal-parent-wrap');
   enfRenderParents();
+  enfRenderDossier();
 }
 
 async function deleteParent(){
@@ -11848,6 +11855,7 @@ async function deleteParent(){
   enfParentsCache=enfParentsCache.filter(x=>String(x.id)!==String(editingParentId));
   closeModal('modal-parent-wrap');
   enfRenderParents();
+  enfRenderDossier();
   showBanner('Parent supprimé.');
 }
 
@@ -12286,6 +12294,8 @@ async function icpImporter(){
    l'envoi du mail. */
 
 let enfDossiersCache = [];      // dossiers de l'enfant ouvert, plus récent d'abord
+let enfDossierPret = false;     // les dossiers sont-ils chargés ? (évite d'afficher
+                                 // un état faux tant que la requête n'est pas revenue)
 
 const DOSSIER_JOURS = 15;
 
@@ -12313,6 +12323,7 @@ async function enfLoadDossier(enfantId){
   }
   await chargerPack();
   if(String(enfFicheId)!==String(enfantId)) return;
+  enfDossierPret = true;
   enfRenderDossier();
 }
 
@@ -12320,7 +12331,7 @@ async function enfLoadDossier(enfantId){
    sont cochés « destinataire » dans l'onglet Parents sont présélectionnés,
    mais on peut ajouter ou retirer une adresse au moment de l'envoi. */
 function enfDestinataires(){
-  return enfParentsCache.filter(p=>p.email);
+  return enfParentsCache.filter(p=>(p.email||'').trim());
 }
 function enfDestinatairesParDefaut(){
   const avecEmail=enfDestinataires();
@@ -12334,6 +12345,9 @@ function enfNomParent(p){
 function enfRenderDossier(){
   const box=document.getElementById('enf-dossier-box');
   if(!box)return;
+  /* Tant que les dossiers ne sont pas revenus, on n'affiche rien : dessiner ici
+     annoncerait « aucun dossier » pour un enfant qui en a un. */
+  if(!enfDossierPret){ box.innerHTML=''; return; }
   const actif=enfDossiersCache.find(d=>d.statut!=='annule' && new Date(d.expire_le)>new Date());
   const possibles=enfDestinataires();
 
