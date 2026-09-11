@@ -2836,7 +2836,10 @@ async function secMfaStartEnroll(){
     // échouer un nouvel enroll() avec "A factor with the friendly name ... already exists".
     const{data:existing,error:listError}=await sb.auth.mfa.listFactors();
     if(listError)throw listError;
-    const stale=(existing.totp||[]).filter(f=>f.status!=='verified');
+    // Le SDK filtre déjà existing.totp aux facteurs "verified" uniquement — un facteur
+    // non vérifié n'y apparaît jamais. Il faut chercher dans existing.all (liste brute,
+    // tous statuts confondus) pour trouver les facteurs périmés à nettoyer.
+    const stale=(existing.all||[]).filter(f=>f.factor_type==='totp'&&f.status!=='verified');
     for(const f of stale){
       try{await sb.auth.mfa.unenroll({factorId:f.id});}catch(err){console.warn('Nettoyage facteur MFA périmé échoué :',err.message);}
     }
