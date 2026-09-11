@@ -641,6 +641,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn-primary" onclick="openEmployeModal()"><i class="ti ti-plus"></i> Ajouter un employé</button>
     </div>
     <p class="hint" style="font-size:12.5px;color:var(--muted);margin:-4px 0 12px">Pour le personnel qui n'a pas besoin de se connecter à l'application — agents d'entretien, remplaçantes ponctuelles… Chacun reçoit un code de pointage à 4 chiffres pour la tablette dédiée.</p>
+    <div id="employe-creche-tabs-bar" class="creche-tabs-bar"></div>
     <div class="ref-grid" id="employe-grid"></div>
   </div>
 
@@ -3496,9 +3497,25 @@ async function deleteRef(id){if(!confirm('Supprimer ce référent ?'))return;con
 // EMPLOYÉS (personnel sans compte de connexion — table `employes`, cf. sql/module_employes.sql)
 let editingEmployeId=null;
 let empHeuresSemaine={};   // {employe_id: heures pointées depuis lundi} — cf. empChargerHeuresSemaine()
+// Onglets par crèche, même principe que creche-tabs-bar du module Demandes
+// (nom de variable/fonctions distinct pour ne pas entrer en collision avec lui).
+let activeEmployeCrecheId='all';
+function renderEmployeCrecheTabs(){
+  const bar=document.getElementById('employe-creche-tabs-bar');if(!bar)return;
+  if(!isDirection){bar.style.display='none';return;}
+  if(!cacheCreches.length){activeEmployeCrecheId='all';}
+  else if(activeEmployeCrecheId!=='all'&&!cacheCreches.find(c=>c.id===activeEmployeCrecheId)){activeEmployeCrecheId='all';}
+  let html='<button class="creche-tab'+(activeEmployeCrecheId==='all'?' active':'')+'" onclick="selectEmployeCreche(\'all\')"><i class="ti ti-building-community" style="font-size:13px"></i> Toutes<span class="tab-count">'+cacheEmployes.length+'</span></button>';
+  cacheCreches.forEach(c=>{const count=cacheEmployes.filter(e=>e.creche_id===c.id).length;html+='<button class="creche-tab'+(activeEmployeCrecheId===c.id?' active':'')+'" onclick="selectEmployeCreche(\''+c.id+'\')"><i class="ti ti-building" style="font-size:13px"></i> '+c.name+'<span class="tab-count">'+count+'</span></button>';});
+  bar.style.display='';bar.innerHTML=html;
+}
+function selectEmployeCreche(id){activeEmployeCrecheId=id;renderEmployes();}
 function renderEmployes(){
   const grid=document.getElementById('employe-grid');if(!grid)return;
-  const list=isDirection?cacheEmployes:cacheEmployes.filter(e=>e.creche_id===currentProfile?.creche_id);
+  renderEmployeCrecheTabs();
+  const list=isDirection
+    ?(activeEmployeCrecheId==='all'?cacheEmployes:cacheEmployes.filter(e=>e.creche_id===activeEmployeCrecheId))
+    :cacheEmployes.filter(e=>e.creche_id===currentProfile?.creche_id);
   if(!list.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-id-badge-2"></i><p>Aucun employé.</p></div>';return;}
   grid.innerHTML=list.map(e=>{
     const creche=cacheCreches.find(c=>c.id===e.creche_id);
