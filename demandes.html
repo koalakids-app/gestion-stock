@@ -246,11 +246,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .cal-cell.today .cal-daynum{color:var(--orange)}
 .cal-evt{font-size:10.5px;line-height:1.3;padding:2px 5px;border-radius:5px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-evt-more{font-size:10px;color:var(--muted);font-weight:600;padding-left:2px}
+.cal-dow-inline{display:none}
 @media (max-width:680px){
   .cal-cell{min-height:46px;padding:3px}
   .cal-cell .cal-evt{display:none}
   .cal-cell.has-evt::after{content:'';display:block;width:6px;height:6px;border-radius:50%;background:var(--orange);margin:0 auto}
   .cal-dow{font-size:9.5px}
+}
+/* Tablette en portrait : 5 colonnes de jours deviennent trop étroites pour
+   lire le texte des événements (troncature au milieu des mots). On bascule
+   sur un agenda vertical — une ligne pleine largeur par jour — qui laisse
+   assez de place pour le titre complet des événements. */
+@media (orientation:portrait) and (min-width:681px){
+  #cal-dow-row{display:none}
+  #cal-grid{grid-template-columns:1fr;gap:4px}
+  #cal-grid .cal-cell{flex-direction:row;flex-wrap:wrap;align-items:center;min-height:auto;padding:7px 10px;gap:6px 8px}
+  #cal-grid .cal-cell.out:not(.has-evt){display:none}
+  #cal-grid .cal-daynum{flex-shrink:0;min-width:64px;display:flex;align-items:baseline;gap:5px}
+  #cal-grid .cal-dow-inline{display:inline;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase}
+  #cal-grid .cal-evt{white-space:normal;font-size:11.5px;flex:1 1 220px;max-width:100%}
 }
 .cal-day-detail{border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:0.85rem}
 .cal-evt-row{display:flex;align-items:flex-start;gap:9px;padding:8px 0;border-bottom:1px solid var(--border)}
@@ -3819,7 +3833,8 @@ function calCellHtml(d,isOut,today){
     evtHtml+='<div class="cal-evt" style="background:'+info.color+'" title="'+escHtml(e.titre)+(creche?' — '+creche.name:'')+(e.auteur?' — Créé par '+escHtml(e.auteur):'')+'">'+info.emoji+' '+escHtml(e.titre)+crecheLabel+'</div>';
   });
   if(evts.length>3)evtHtml+='<div class="cal-evt-more">+'+(evts.length-3)+' autre(s)</div>';
-  return '<div class="'+cls+'" onclick="calSelectDay(\''+dateISO+'\')"><div class="cal-daynum">'+d.getDate()+'</div>'+evtHtml+'</div>';
+  const dowAbbr=['Lun','Mar','Mer','Jeu','Ven'][(d.getDay()+6)%7]||'';
+  return '<div class="'+cls+'" onclick="calSelectDay(\''+dateISO+'\')"><div class="cal-daynum"><span class="cal-dow-inline">'+dowAbbr+'</span>'+d.getDate()+'</div>'+evtHtml+'</div>';
 }
 
 function calSelectDay(dateISO){calSelectedDay=dateISO;renderCalDayDetail();}
