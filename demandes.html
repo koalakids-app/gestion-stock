@@ -11769,9 +11769,13 @@ async function enfLoadParents(enfantId){
   // ne rendre que si on est toujours sur le meme enfant
   if(String(enfFicheId)!==String(enfantId)) return;
   enfRenderParents();
-  /* Le bloc « Dossier de familiarisation » dépend de ces adresses : si les
-     parents arrivent après les dossiers, c'est ici qu'il faut le redessiner. */
+  /* Ces deux encadrés dépendent des mêmes adresses (enfDestinataires) : si
+     les parents arrivent après eux, c'est ici qu'il faut les redessiner.
+     Le second (dépôt de pièces) manquait à l'appel et reproduisait le même
+     faux « Aucun parent avec une adresse e-mail » déjà corrigé une fois
+     pour le premier. */
   enfRenderDossier();
+  enfRenderPiecesDossier();
 }
 
 function enfRenderParents(){
@@ -11876,6 +11880,7 @@ async function saveParent(){
   closeModal('modal-parent-wrap');
   enfRenderParents();
   enfRenderDossier();
+  enfRenderPiecesDossier();
 }
 
 async function deleteParent(){
@@ -11888,6 +11893,7 @@ async function deleteParent(){
   closeModal('modal-parent-wrap');
   enfRenderParents();
   enfRenderDossier();
+  enfRenderPiecesDossier();
   showBanner('Parent supprimé.');
 }
 
