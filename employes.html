@@ -127,6 +127,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     </div>
     <p class="hint">Les heures hebdomadaires et les dates de contrat servent de référence au calcul du
       compteur d'heures supplémentaires annualisées (1607h temps plein, proraté).</p>
+    <div class="f"><label class="lb">Nom utilisé dans le planning équipe (si différent)</label><input id="fPlanningNom" placeholder="Laisser vide si le prénom suffit"></div>
+    <p class="hint">À remplir seulement en cas d'homonymie : le planning équipe (import Excel) rapproche
+      les créneaux par prénom, ce qui peut se tromper si deux personnes de la crèche portent le même
+      prénom. Ce champ prend alors le pas sur le prénom pour le "Mon espace" de ce/cette collaborateur/trice.</p>
     <div id="ficheErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
     <div class="foot">
       <button class="btn btn-g" onclick="closeFiche()">Annuler</button>
@@ -272,6 +276,7 @@ function openFiche(id){
   setVal('fHeuresHebdo',e?e.heures_hebdo:'');
   setVal('fDateDebut',e?e.date_debut:'');
   setVal('fDateFin',e?e.date_fin:'');
+  setVal('fPlanningNom',e?e.planning_nom:'');
   document.getElementById('modalFiche').classList.add('on');
 }
 function closeFiche(){document.getElementById('modalFiche').classList.remove('on');}
@@ -288,6 +293,7 @@ async function saveFiche(){
     heures_hebdo:num('fHeuresHebdo'),
     date_debut:val('fDateDebut')||null,
     date_fin:val('fDateFin')||null,
+    planning_nom:val('fPlanningNom')||null,
   };
   let error;
   if(id){
