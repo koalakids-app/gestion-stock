@@ -2834,7 +2834,15 @@ async function secMfaStartEnroll(){
     const{data,error}=await sb.auth.mfa.enroll({factorType:'totp'});
     if(error)throw error;
     secMfaFactorId=data.id;
-    document.getElementById('sec-mfa-qr').innerHTML='<img src="'+data.totp.qr_code+'" alt="QR code MFA" style="display:block;width:180px;height:180px;object-fit:contain">';
+    const qrEl=document.getElementById('sec-mfa-qr');
+    const qr=data.totp.qr_code||'';
+    if(qr.trim().startsWith('<svg')){
+      qrEl.innerHTML=qr;
+      const svg=qrEl.querySelector('svg');
+      if(svg){svg.style.width='180px';svg.style.height='180px';}
+    }else{
+      qrEl.innerHTML='<img src="'+qr+'" alt="QR code MFA" style="display:block;width:180px;height:180px;object-fit:contain">';
+    }
     document.getElementById('sec-mfa-secret').textContent=data.totp.secret;
     document.getElementById('sec-mfa-code').value='';
     secMfaShowOnly('sec-mfa-enroll-step');
