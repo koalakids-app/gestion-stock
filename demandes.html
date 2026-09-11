@@ -522,6 +522,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <span id="btn-brief-n" style="display:none;background:var(--red,#e05252);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;font-weight:700">0</span>
       </button>
      <button id="btn-notif" onclick="toggleNotificationsPush()" title="Activer les notifications" style="display:inline-flex;align-items:center;gap:6px;background:var(--koala-light);color:#9ca3af;border:none;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer"><i class="ti ti-bell-off" style="font-size:15px"></i></button>
+     <button id="btn-securite" onclick="openSecuriteModal()" title="Sécurité du compte" style="display:inline-flex;align-items:center;gap:6px;background:var(--koala-light);color:#9ca3af;border:none;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer"><i class="ti ti-shield-lock" style="font-size:15px"></i></button>
                   <div class="user-chip" id="user-chip" onclick="doLogout()"><i class="ti ti-user" style="font-size:13px"></i> <span id="user-name">—</span> <i class="ti ti-logout" style="font-size:12px;opacity:0.7"></i></div>
     </div>
   </div>
@@ -1711,6 +1712,45 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<div class="overlay" id="modal-securite-wrap" onclick="if(event.target===this)closeModal('modal-securite-wrap')">
+  <div class="modal">
+    <h3><i class="ti ti-shield-lock"></i> Sécurité du compte</h3>
+
+    <div id="sec-mfa-status" class="fg" style="background:var(--koala-light);border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--ink2)">
+      Vérification du statut…
+    </div>
+
+    <!-- Vue : MFA non activé -->
+    <div id="sec-mfa-off-view" style="display:none">
+      <div class="fg" style="font-size:12.5px;color:var(--ink2)">
+        Ajoutez la double authentification (TOTP) pour sécuriser votre compte avec une application comme Google Authenticator ou Authy.
+      </div>
+      <div class="mactions"><button class="btn-primary" onclick="secMfaStartEnroll()"><i class="ti ti-plus"></i> Activer la double authentification</button></div>
+    </div>
+
+    <!-- Vue : enrôlement en cours (QR code + code) -->
+    <div id="sec-mfa-enroll-view" style="display:none">
+      <div class="fg" style="font-size:12.5px;color:var(--ink2)">Scannez ce QR code avec votre application d'authentification, puis saisissez le code à 6 chiffres généré.</div>
+      <div class="fg" style="display:flex;justify-content:center"><div id="sec-mfa-qr" style="width:200px;height:200px"></div></div>
+      <div class="fg" id="sec-mfa-secret-wrap" style="font-size:11.5px;color:var(--ink2);text-align:center;word-break:break-all"></div>
+      <div class="fg"><label class="flabel">Code à 6 chiffres</label><input class="finput" id="sec-mfa-code" maxlength="6" inputmode="numeric" placeholder="123456"/></div>
+      <div id="sec-mfa-error" style="display:none;color:var(--red);font-size:12px;margin-bottom:8px"></div>
+      <div class="mactions">
+        <button class="btn-cancel" onclick="secMfaCancelEnroll()">Annuler</button>
+        <button class="btn-primary" id="sec-mfa-confirm-btn" onclick="secMfaConfirmEnroll()"><i class="ti ti-check"></i> Valider</button>
+      </div>
+    </div>
+
+    <!-- Vue : MFA déjà activé -->
+    <div id="sec-mfa-on-view" style="display:none">
+      <div class="fg" style="background:var(--green-light,#e6f4ea);border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--green-dark,#1e7e34)"><i class="ti ti-shield-check"></i> La double authentification est activée sur votre compte.</div>
+      <div class="mactions"><button class="btn-cancel" style="color:var(--red)" onclick="secMfaUnenroll()"><i class="ti ti-shield-x"></i> Désactiver</button></div>
+    </div>
+
+    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-securite-wrap')">Fermer</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="modal-ref-wrap">
   <div class="modal">
     <h3 id="modal-ref-title">Ajouter un référent</h3>
@@ -2654,6 +2694,89 @@ async function doLogin(){
   }
 }
 async function doLogout(){if(!confirm('Se déconnecter ?'))return;await sb.auth.signOut();window.location.reload();}
+
+let secMfaEnrollFactorId=null;
+function secMfaShowView(view){
+  ['off','enroll','on'].forEach(v=>{document.getElementById('sec-mfa-'+v+'-view').style.display=(v===view?'':'none');});
+}
+function secMfaShowError(msg){
+  const el=document.getElementById('sec-mfa-error');
+  if(!msg){el.style.display='none';el.textContent='';return;}
+  el.style.display='block';el.textContent=msg;
+}
+async function openSecuriteModal(){
+  document.getElementById('modal-securite-wrap').classList.add('open');
+  secMfaShowError('');
+  document.getElementById('sec-mfa-code').value='';
+  await secMfaRefreshStatus();
+}
+async function secMfaRefreshStatus(){
+  const statusEl=document.getElementById('sec-mfa-status');
+  statusEl.textContent='Vérification du statut…';
+  ['off','enroll','on'].forEach(v=>{document.getElementById('sec-mfa-'+v+'-view').style.display='none';});
+  try{
+    const{data,error}=await sb.auth.mfa.listFactors();
+    if(error)throw error;
+    const verified=(data.totp||[]).find(f=>f.status==='verified');
+    statusEl.textContent=verified?'Double authentification activée.':'Double authentification non activée.';
+    secMfaShowView(verified?'on':'off');
+  }catch(e){
+    statusEl.textContent='Impossible de vérifier le statut MFA : '+(e.message||e);
+  }
+}
+async function secMfaStartEnroll(){
+  secMfaShowError('');
+  try{
+    const{data,error}=await sb.auth.mfa.enroll({factorType:'totp'});
+    if(error)throw error;
+    secMfaEnrollFactorId=data.id;
+    const qrEl=document.getElementById('sec-mfa-qr');
+    qrEl.innerHTML=data.totp.qr_code&&data.totp.qr_code.startsWith('<svg')?data.totp.qr_code:'';
+    if(!qrEl.innerHTML)qrEl.innerHTML='<img src="'+data.totp.qr_code+'" style="width:100%;height:100%"/>';
+    document.getElementById('sec-mfa-secret-wrap').textContent='Ou saisissez ce code manuellement : '+data.totp.secret;
+    document.getElementById('sec-mfa-code').value='';
+    secMfaShowView('enroll');
+  }catch(e){
+    secMfaShowError('Erreur lors du démarrage de l\'enrôlement : '+(e.message||e));
+  }
+}
+async function secMfaConfirmEnroll(){
+  const code=document.getElementById('sec-mfa-code').value.trim();
+  if(!code||code.length!==6){secMfaShowError('Saisissez le code à 6 chiffres affiché par votre application.');return;}
+  secMfaShowError('');
+  try{
+    const{data:challenge,error:challengeError}=await sb.auth.mfa.challenge({factorId:secMfaEnrollFactorId});
+    if(challengeError)throw challengeError;
+    const{error:verifyError}=await sb.auth.mfa.verify({factorId:secMfaEnrollFactorId,challengeId:challenge.id,code});
+    if(verifyError)throw verifyError;
+    secMfaEnrollFactorId=null;
+    await secMfaRefreshStatus();
+  }catch(e){
+    secMfaShowError('Code invalide ou expiré : '+(e.message||e));
+  }
+}
+async function secMfaCancelEnroll(){
+  if(secMfaEnrollFactorId){
+    try{await sb.auth.mfa.unenroll({factorId:secMfaEnrollFactorId});}catch(e){}
+    secMfaEnrollFactorId=null;
+  }
+  await secMfaRefreshStatus();
+}
+async function secMfaUnenroll(){
+  if(!confirm('Désactiver la double authentification sur ce compte ?'))return;
+  try{
+    const{data,error}=await sb.auth.mfa.listFactors();
+    if(error)throw error;
+    const verified=(data.totp||[]).find(f=>f.status==='verified');
+    if(verified){
+      const{error:unenrollError}=await sb.auth.mfa.unenroll({factorId:verified.id});
+      if(unenrollError)throw unenrollError;
+    }
+    await secMfaRefreshStatus();
+  }catch(e){
+    alert('Erreur lors de la désactivation : '+(e.message||e));
+  }
+}
 const VAPID_PUBLIC_KEY='BAYWoYbzpxn-poxeKn-7CPccnX-aGN5y8kXLVCgcgC8a025oz8HMdNj7E36VLgtiD-oV71KhgCECdQGL85kidOk';
 function urlBase64ToUint8Array(base64String){const padding='='.repeat((4-base64String.length%4)%4);const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');const rawData=atob(base64);return Uint8Array.from([...rawData].map(c=>c.charCodeAt(0)));}
 if('serviceWorker'in navigator&&location.protocol==='https:'&&!location.hostname.includes('claudeusercontent')){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').then(r=>console.log('SW registered:',r.scope)).catch(e=>console.log('SW error:',e));});}
