@@ -24,7 +24,7 @@ const corsHeaders = {
 function asciiSafe(s: string): string {
   return s
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[—–]/g, "-")
     .replace(/[^\x20-\x7E]/g, "")
     .trim();
