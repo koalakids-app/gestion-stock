@@ -2435,18 +2435,39 @@ let calOnlyMine=(localStorage.getItem('calOnlyMine')==='1');
 window.addEventListener('DOMContentLoaded', async function() {
   document.getElementById('login-logo').src=LOGO_B64;
   document.getElementById('app-logo').src=LOGO_B64;
+  const urlParams=new URLSearchParams(window.location.search);
+  const tokenHash=urlParams.get('token_hash');
+  const otpType=urlParams.get('type');
+  if(tokenHash&&(otpType==='recovery'||otpType==='invite')){
+    // Lien du mail d'invitation/réinitialisation (template Supabase personnalisé,
+    // cf. sql/README des templates) : on vérifie le token_hash nous-mêmes via
+    // verifyOtp au moment du clic, plutôt que de laisser Supabase le valider dès
+    // la première requête GET sur le lien. Ça évite qu'un scanner de sécurité du
+    // client mail (Gmail, Outlook…) qui pré-visite les liens des e-mails ne
+    // "grille" le lien à usage unique avant que la personne n'ait cliqué dessus.
+    try{
+      const{error}=await sb.auth.verifyOtp({token_hash:tokenHash,type:otpType});
+      history.replaceState(null,'',window.location.pathname);
+      if(error)throw error;
+      showPasswordResetForm();return;
+    }catch(e){
+      console.warn('[verifyOtp]',e);
+      history.replaceState(null,'',window.location.pathname);
+      await sb.auth.signOut();
+      showLogin();showBanner('Lien invalide ou expiré — merci de redemander un nouveau lien.','error');return;
+    }
+  }
+  // Anciens formats de lien (hash implicite ou ?code=, avant le passage au
+  // template token_hash ci-dessus) — conservés en secours pour les liens déjà
+  // envoyés au moment du déploiement de ce changement.
   const hashParams=new URLSearchParams(window.location.hash.replace('#','?').slice(1));
   const accessToken=hashParams.get('access_token');
   const tokenType=hashParams.get('type');
   if(accessToken&&(tokenType==='recovery'||tokenType==='invite')){
-    // type=invite : lien envoyé par create-referent (invitation Supabase) —
-    // même écran que la réinitialisation de mot de passe, la référente doit
-    // définir son mot de passe avant de pouvoir se connecter normalement.
     try{await sb.auth.setSession({access_token:accessToken,refresh_token:hashParams.get('refresh_token')||''});}catch(e){console.warn('[Recovery/Invite]',e);}
     history.replaceState(null,'',window.location.pathname);
     showPasswordResetForm();return;
   }
-  const urlParams=new URLSearchParams(window.location.search);
   const code=urlParams.get('code');
   if(code){
     try{await sb.auth.exchangeCodeForSession(code);history.replaceState(null,'',window.location.pathname);showPasswordResetForm();}
