@@ -482,7 +482,7 @@ function stgOpenFiche(id,typeDefaut){
   if(del)del.style.display=(s&&isDirection)?'':'none';
 
   stgTypeChange();
-  if(s){stgRenderLien();stgRenderRessFiche();stgRenderDocs();stgRenderJours();}
+  if(s){stgRenderLien();stgRenderRessFiche();stgRenderDocs();stgRenderJours();stgRenderCollabZone();}
   document.getElementById('modal-stagiaire-wrap').classList.add('open');
 }
 
@@ -503,7 +503,7 @@ function stgTypeChange(){
   txt('stg-opt-termine',type==='alternant'?'Alternance terminée':'Stage terminé');
   /* Les pièces demandées ne sont pas les mêmes : on redessine le bloc si la
      fiche est déjà enregistrée. */
-  if(stgFicheId){stgRenderDocs(type);stgRenderRessFiche(type);}
+  if(stgFicheId){stgRenderDocs(type);stgRenderRessFiche(type);stgRenderCollabZone();}
 }
 
 /* Les référentes proposées sont celles de la crèche choisie : offrir celles des
@@ -2071,3 +2071,97 @@ window.stgDeplacerRess=stgDeplacerRess;window.stgSupprimerRess=stgSupprimerRess;
 window.stgOuvrirRess=stgOuvrirRess;window.stgRemplacerRess=stgRemplacerRess;
 window.stgRessNatureChange=stgRessNatureChange;
 window.stgRemplirReferents=stgRemplirReferents;
+
+/* ── Compte collaborateur (alternant·e) ──────────────────────────────────
+   Un·e alternant·e est aussi salarié·e : plutôt que ressaisir prénom/nom/
+   e-mail/crèche une seconde fois dans employes, on relie la fiche stagiaires
+   à sa fiche employes via stagiaires.employe_id (cf.
+   sql/stagiaires_lien_employe.sql). Une fois liée, ces informations sont
+   gérées depuis employes, source de vérité — la fiche alternant ne fait plus
+   que refléter la liaison.
+   Ouvrir « Mon espace » (planning, pointages, compteur d'heures) à
+   l'alternant·e ne demande alors plus rien de neuf : c'est l'infrastructure
+   déjà en place pour les collaborateurs/trices (bouton « Créer le compte de
+   connexion », identique à l'onglet Collaborateurs). */
+function stgEmployeLie(s){
+  return (s&&s.employe_id)?cacheEmployes.find(e=>String(e.id)===String(s.employe_id)):null;
+}
+function stgRenderCollabZone(){
+  const zone=document.getElementById('stg-collab-zone');
+  if(!zone)return;
+  const s=stgFicheId?stgCache.find(x=>String(x.id)===String(stgFicheId)):null;
+  const type=(document.getElementById('stg-f-type')||{}).value==='alternant'?'alternant':'stagiaire';
+  if(!s||type!=='alternant'){zone.innerHTML='';return;}
+  const emp=stgEmployeLie(s);
+  const div='<div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>';
+  if(!emp){
+    zone.innerHTML=div+'<div class="fg"><label class="flabel">Compte collaborateur</label>'
+      +'<p style="font-size:0.85em;color:#666;margin:2px 0 8px">Un·e alternant·e est aussi salarié·e : créez sa fiche '
+      +'collaborateur pour lui ouvrir Mon espace (planning, pointages, compteur d\'heures) sans ressaisir ses informations.</p>'
+      +'<button type="button" class="btn-primary" onclick="stgCreerFicheCollab()"><i class="ti ti-user-plus"></i> Créer la fiche collaborateur</button>'
+      +'</div>';
+    return;
+  }
+  const compteBadge=emp.user_id
+    ?'<span class="badge" style="background:var(--green-light);color:var(--green)"><i class="ti ti-lock-open"></i> Compte actif</span>'
+    :'<span class="badge" style="background:#f0f0f5;color:#888">Pas de compte</span>';
+  const btnCompte=emp.user_id?'':'<button type="button" class="btn-primary" onclick="stgCreerCompteCollab()" '
+    +(emp.email?'':'disabled title="Renseignez un e-mail sur la fiche collaborateur avant de créer le compte"')
+    +'><i class="ti ti-mail-forward"></i> Créer le compte de connexion</button>';
+  zone.innerHTML=div+'<div class="fg"><label class="flabel">Compte collaborateur</label>'
+    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:#f8f8fb;border-radius:10px">'
+    +'<div style="flex:1;min-width:160px"><b>'+escHtml(emp.prenom||'')+' '+escHtml(emp.nom||'')+'</b>'
+    +(emp.poste?' — '+escHtml(emp.poste):'')
+    +(emp.email?'<br><span style="color:#888;font-size:0.85em">'+escHtml(emp.email)+'</span>':'')
+    +'</div>'+compteBadge+btnCompte
+    +'<button type="button" class="btn-cancel" onclick="stgDelierCollab()" title="Délier la fiche collaborateur"><i class="ti ti-unlink"></i></button>'
+    +'</div>'
+    +'<p style="font-size:0.8em;color:#888;margin-top:6px">Prénom, nom, e-mail et crèche sont désormais gérés depuis la '
+    +'fiche collaborateur — modifiez-les dans l\'onglet Collaborateurs.</p></div>';
+}
+async function stgCreerFicheCollab(){
+  const s=stgFicheId?stgCache.find(x=>String(x.id)===String(stgFicheId)):null;
+  if(!s)return;
+  if(!s.creche_id)return showBanner('Orientez d\'abord cette personne vers une crèche avant de créer sa fiche collaborateur.','error');
+  const row={prenom:s.prenom,nom:s.nom||null,email:s.email||null,creche_id:s.creche_id};
+  const saved=await dbInsert('employes',row);
+  if(!saved)return showBanner('Création de la fiche collaborateur impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');
+  cacheEmployes.push(saved);
+  const ok=await dbUpdate('stagiaires',stgFicheId,{employe_id:saved.id});
+  if(!ok){
+    showBanner('Fiche collaborateur créée, mais le lien avec la fiche alternant a échoué'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');
+    return;
+  }
+  s.employe_id=saved.id;
+  showBanner('Fiche collaborateur créée et liée ✅');
+  stgRenderCollabZone();
+}
+async function stgCreerCompteCollab(){
+  const s=stgFicheId?stgCache.find(x=>String(x.id)===String(stgFicheId)):null;
+  const emp=stgEmployeLie(s);
+  if(!emp||!emp.email)return;
+  if(!confirm('Envoyer à '+emp.email+' un e-mail d\'invitation pour créer son compte de connexion ?'))return;
+  const redirect=location.href.replace(/demandes\.html.*$/,'collaborateur.html');
+  const{ok,data}=await callFn('creer-compte-collaborateur',{employe_id:emp.id,redirect_to:redirect});
+  if(!ok)return showBanner('Échec : '+(data.error||'erreur inconnue'),'error');
+  showBanner('Invitation envoyée à '+emp.email+'.');
+  /* Le vrai user_id n'est posé côté base qu'après acceptation de
+     l'invitation — pas de mise à jour optimiste ici, juste un rechargement
+     pour refléter l'état réel au prochain passage sur la fiche. */
+  await stgLoad();
+  stgRenderCollabZone();
+}
+async function stgDelierCollab(){
+  if(!stgFicheId)return;
+  if(!confirm('Délier cette fiche alternant de sa fiche collaborateur ?\n\nLa fiche collaborateur elle-même n\'est pas supprimée.'))return;
+  const ok=await dbUpdate('stagiaires',stgFicheId,{employe_id:null});
+  if(!ok)return showBanner('Échec du déliage.','error');
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  if(s)s.employe_id=null;
+  showBanner('Fiche déliée.');
+  stgRenderCollabZone();
+}
+window.stgRenderCollabZone=stgRenderCollabZone;
+window.stgCreerFicheCollab=stgCreerFicheCollab;
+window.stgCreerCompteCollab=stgCreerCompteCollab;
+window.stgDelierCollab=stgDelierCollab;
