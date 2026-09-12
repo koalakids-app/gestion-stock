@@ -11710,7 +11710,7 @@ function enfRenderIdentite(){
     + row('Repas', enfRepasFicheLigne(e))
     + row('Goûter', enfGouterFicheLigne(e))
     + row('Code image (kiosque)', kkPictosLigne(e.code_pictos))
-    + '<div style="display:flex;gap:6px;justify-content:flex-end;margin:-4px 0 10px;flex-wrap:wrap">'+kkPictosActions(e.id,e.creche_id)+'</div>'
+    + '<div style="display:flex;gap:6px;justify-content:flex-end;margin:-4px 0 10px;flex-wrap:wrap">'+kkPictosActions(e.id,e.creche_id,e.code_pictos)+'</div>'
     + '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn-primary" onclick="editEnfant(\''+e.id+'\')"><i class="ti ti-edit"></i> Modifier la fiche</button></div>';
 }
 
@@ -11789,10 +11789,19 @@ function kkPictosLigne(codePictos){
     +codePictos.map(id=>'<img src="'+(KK_PICTOS[id]||'')+'" alt="'+escHtml(id)+'" title="'+escHtml(id)+'" style="width:26px;height:26px;border-radius:7px;object-fit:cover">').join('')
     +'</div>';
 }
-function kkPictosActions(id,crecheId){
+function kkPictosActions(id,crecheId,codePictos){
   if(!crecheId)return '<span style="font-size:11.5px;color:var(--muted)">Sans crèche assignée — pas de code possible</span>';
-  return '<button class="btn-sm" onclick="kkRegenPictos(\''+id+'\',\''+crecheId+'\')"><i class="ti ti-refresh"></i> Générer un code image</button>';
+  const peutEnvoyer=Array.isArray(codePictos)&&codePictos.length===4;
+  return '<button class="btn-sm" onclick="kkRegenPictos(\''+id+'\',\''+crecheId+'\')"><i class="ti ti-refresh"></i> Générer un code image</button>'
+    +(peutEnvoyer?' <button class="btn-sm" onclick="kkSendPictos(\''+id+'\')"><i class="ti ti-mail"></i> Envoyer par e-mail</button>':'');
 }
+async function kkSendPictos(id){
+  if(!confirm('Envoyer le code image par e-mail aux parents ?'))return;
+  const ok=await callFn('envoyer-code-pictos',{enfant_id:id});
+  if(ok)showBanner('Code image envoyé.');
+  else showBanner('Échec de l\'envoi'+(_lastFnErr?' : '+_lastFnErr:''),'error');
+}
+window.kkSendPictos=kkSendPictos;
 async function kkRegenPictos(id,crecheId){
   if(!confirm('Générer un nouveau code image ? L\'ancien cessera de fonctionner immédiatement sur la tablette.'))return;
   try{
