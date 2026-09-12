@@ -26,6 +26,19 @@ function json(body: unknown, status: number) {
   });
 }
 
+// denomailer encode mal l'en-tête Subject dès qu'il contient des caractères
+// non-ASCII (accents, tiret long —) ET qu'un attachment est présent : le
+// message entier arrive corrompu (MIME brut affiché comme texte). On
+// retombe donc sur un sujet ASCII pour ce cas précis, le seul des fonctions
+// d'envoi de l'appli à combiner sujet accentué et pièce jointe.
+function asciiSafe(s: string): string {
+  return s
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[—–]/g, "-")
+    .replace(/[^\x20-\x7E]/g, "");
+}
+
 Deno.serve(async (req) => {
   // Requête préliminaire du navigateur
   if (req.method === "OPTIONS") {
@@ -77,7 +90,7 @@ Deno.serve(async (req) => {
       await client.send({
         from: user,
         to,
-        subject: subject || "Planning equipe - Koala Kids",
+        subject: asciiSafe(subject || "Planning equipe - Koala Kids"),
         content: "Ce message nécessite un client de messagerie compatible HTML.",
         html,
         attachments: [
