@@ -2454,7 +2454,11 @@ window.addEventListener('DOMContentLoaded', async function() {
       console.warn('[verifyOtp]',e);
       history.replaceState(null,'',window.location.pathname);
       await sb.auth.signOut();
-      showLogin();showBanner('Lien invalide ou expiré — merci de redemander un nouveau lien.','error');return;
+      showLogin();
+      const err=document.getElementById('login-err');
+      err.textContent='Lien invalide ou expiré ('+(e?.message||e)+') — merci de redemander un nouveau lien.';
+      err.style.display='block';
+      return;
     }
   }
   // Anciens formats de lien (hash implicite ou ?code=, avant le passage au
@@ -3015,7 +3019,7 @@ function enfMaybeOpenFromUrl(){
 
 function todayStr(){return ipDateToLocalISO(new Date());}
 function weekStart(){const n=new Date();const day=n.getDay();const diff=n.getDate()-(day===0?6:day-1);const m=new Date(n.getFullYear(),n.getMonth(),diff+weekOffset*7);m.setHours(0,0,0,0);return m;}
-function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
+function showBanner(msg,type='success'){const b=document.getElementById('notif-banner');b.style.display='';b.className='notif-banner '+type;b.innerHTML='<i class="ti ti-'+(type==='success'?'circle-check':'alert-circle')+'"></i> '+msg;setTimeout(()=>{b.style.display='none';b.className='notif-banner';},5000);}
 function closeModal(id){
   document.getElementById(id).classList.remove('open');
   // Une synchro reportée pendant la saisie repartira d'elle-même : le rappel
