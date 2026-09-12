@@ -146,7 +146,7 @@ const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
-let ME=null,PROF=null,crecheId=null,CRECHES=[],EMPLOYES=[];
+let ME=null,PROF=null,crecheId=null,CRECHES=[],EMPLOYES=[],isDirection=false;
 
 function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -200,6 +200,7 @@ async function boot(){
     return;
   }
   PROF=p;
+  isDirection=PROF.role==='direction';
   await grantAccess();
 }
 async function doLogin(){
@@ -228,12 +229,18 @@ async function grantAccess(){
 async function loadCreches(){
   const{data,error}=await sb.from('creches').select('id,name').order('name');
   if(error){toast('Erreur de chargement des crèches',true);return;}
-  CRECHES=data||[];
-  if(CRECHES.length)crecheId=CRECHES[0].id;
+  // Une référente (non-direction) ne gère que sa propre crèche : lui montrer
+  // les autres onglets l'exposerait à choisir une creche_id qui ne correspond
+  // pas à la sienne, ce que la policy RLS d'insertion sur `employes` refuse.
+  CRECHES=isDirection?(data||[]):(data||[]).filter(c=>c.id===PROF.creche_id);
+  if(CRECHES.length)crecheId=isDirection?CRECHES[0].id:PROF.creche_id;
   renderCrecheTabs();
 }
 function renderCrecheTabs(){
-  document.getElementById('crecheTabs').innerHTML=CRECHES.map(c=>
+  const bar=document.getElementById('crecheTabs');
+  if(!isDirection){bar.style.display='none';return;}
+  bar.style.display='';
+  bar.innerHTML=CRECHES.map(c=>
     '<button class="tab'+(c.id===crecheId?' on':'')+'" onclick="selectCreche(\''+c.id+'\')">'+esc(c.name)+'</button>'
   ).join('');
 }
