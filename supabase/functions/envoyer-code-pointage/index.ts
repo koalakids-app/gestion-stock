@@ -1,6 +1,6 @@
 // Edge function "envoyer-code-pointage"
 // ============================================================================
-// Envoie par e-mail (Resend) le code de pointage à 4 chiffres d'un enfant
+// Envoie par e-mail (SMTP Gmail) le code de pointage à 4 chiffres d'un enfant
 // (aux parents marqués "destinataire", ou à défaut tous les parents ayant un
 // e-mail) ou d'un salarié (à sa propre adresse).
 //
@@ -12,16 +12,25 @@
 // fonction utilise le service role uniquement pour lire code_pointage et les
 // coordonnées — elle n'expose rien de plus que ce que l'appelant demande.
 //
+// Envoi par SMTP Gmail plutôt que Resend : Resend exige un domaine expéditeur
+// vérifié (DNS), pas encore disponible (koalakids.fr en attente d'accès DNS).
+// Un compte Gmail avec validation en deux étapes + mot de passe d'application
+// suffit, sans dépendance à un domaine.
+//
 // Déploiement :
 //   supabase functions deploy envoyer-code-pointage
-// Secrets nécessaires (déjà posés — voir `supabase secrets list`) :
-//   RESEND_API_KEY   — clé API Resend
-//   FROM_EMAIL       — adresse d'expédition vérifiée, ex. "Koala Kids <no-reply@koalakids.fr>"
+// Secrets nécessaires (mêmes noms pour toutes les fonctions d'envoi d'e-mail
+// de l'appli — voir `supabase secrets list`) :
+//   GMAIL_USER           — adresse Gmail d'expédition (ex. koalakids.app@gmail.com)
+//   GMAIL_APP_PASSWORD   — mot de passe d'application à 16 caractères (pas le
+//                          mot de passe du compte), généré depuis
+//                          myaccount.google.com/apppasswords
 // SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont injectées automatiquement par
 // la plateforme Supabase Edge Functions, pas besoin de les poser à la main.
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -36,23 +45,32 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function sendResendEmail(to: string[], subject: string, html: string) {
-  const apiKey = Deno.env.get("RESEND_API_KEY");
-  const from = Deno.env.get("FROM_EMAIL");
-  if (!apiKey || !from) {
-    throw new Error("Configuration Resend manquante (RESEND_API_KEY / FROM_EMAIL).");
+async function sendEmail(to: string[], subject: string, html: string) {
+  const user = Deno.env.get("GMAIL_USER");
+  const pass = Deno.env.get("GMAIL_APP_PASSWORD");
+  if (!user || !pass) {
+    throw new Error("Configuration Gmail manquante (GMAIL_USER / GMAIL_APP_PASSWORD).");
   }
-  const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+  // "From" doit obligatoirement être l'adresse authentifiée elle-même : Gmail
+  // rejette silencieusement tout expéditeur différent du compte SMTP utilisé.
+  const client = new SMTPClient({
+    connection: {
+      hostname: "smtp.gmail.com",
+      port: 465,
+      tls: true,
+      auth: { username: user, password: pass },
     },
-    body: JSON.stringify({ from, to, subject, html }),
   });
-  if (!r.ok) {
-    const txt = await r.text().catch(() => "");
-    throw new Error(`Resend a refusé l'envoi (HTTP ${r.status}) : ${txt.slice(0, 300)}`);
+  try {
+    await client.send({
+      from: user,
+      to,
+      subject,
+      content: "Ce message nécessite un client de messagerie compatible HTML.",
+      html,
+    });
+  } finally {
+    await client.close();
   }
 }
 
@@ -116,7 +134,7 @@ Deno.serve(async (req) => {
       const emails = [...new Set((cibles.length ? cibles : tous).map((p) => p.email as string))];
       if (!emails.length) return json({ error: "aucun_email_parent" }, 400);
 
-      await sendResendEmail(
+      await sendEmail(
         emails,
         `Code de pointage — ${enfant.prenom || "votre enfant"}`,
         codeEmailHtml({
@@ -143,7 +161,7 @@ Deno.serve(async (req) => {
       const { data: creche } = await supabase
         .from("creches").select("name").eq("id", referent.creche_id).maybeSingle();
 
-      await sendResendEmail(
+      await sendEmail(
         [referent.email],
         "Votre code de pointage",
         codeEmailHtml({
@@ -170,7 +188,7 @@ Deno.serve(async (req) => {
     const { data: creche } = await supabase
       .from("creches").select("name").eq("id", employe.creche_id).maybeSingle();
 
-    await sendResendEmail(
+    await sendEmail(
       [employe.email],
       "Votre code de pointage",
       codeEmailHtml({

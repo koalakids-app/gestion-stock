@@ -1,7 +1,7 @@
 // Edge function "envoyer-dossier-pieces"
 // ============================================================================
-// Envoie par e-mail (Resend) le lien vers pieces.html, où une famille dépose
-// en ligne les documents administratifs demandés (pièce d'identité,
+// Envoie par e-mail (SMTP Gmail) le lien vers pieces.html, où une famille
+// dépose en ligne les documents administratifs demandés (pièce d'identité,
 // justificatif de domicile, etc.). Même principe que le dossier de
 // familiarisation (envoyer-dossier-famille / famille.html), en parallèle :
 // pipeline entièrement distincte pour ne pas toucher à celle qui tourne.
@@ -15,17 +15,25 @@
 // client (module visible aux comptes direction/référente seulement), et
 // cette fonction ne lit que le dossier demandé, via son id.
 //
+// Envoi par SMTP Gmail plutôt que Resend : Resend exige un domaine expéditeur
+// vérifié (DNS), pas encore disponible (koalakids.fr en attente d'accès DNS).
+// Un compte Gmail avec validation en deux étapes + mot de passe d'application
+// suffit, sans dépendance à un domaine.
+//
 // Déploiement :
 //   supabase functions deploy envoyer-dossier-pieces
-// Secrets nécessaires (déjà posés pour envoyer-code-pointage — voir
-// `supabase secrets list`) :
-//   RESEND_API_KEY   — clé API Resend
-//   FROM_EMAIL       — adresse d'expédition vérifiée
+// Secrets nécessaires (mêmes noms pour toutes les fonctions d'envoi d'e-mail
+// de l'appli — voir `supabase secrets list`) :
+//   GMAIL_USER           — adresse Gmail d'expédition (ex. koalakids.app@gmail.com)
+//   GMAIL_APP_PASSWORD   — mot de passe d'application à 16 caractères (pas le
+//                          mot de passe du compte), généré depuis
+//                          myaccount.google.com/apppasswords
 // SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont injectées automatiquement par
 // la plateforme Supabase Edge Functions, pas besoin de les poser à la main.
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -40,23 +48,32 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function sendResendEmail(to: string[], subject: string, html: string) {
-  const apiKey = Deno.env.get("RESEND_API_KEY");
-  const from = Deno.env.get("FROM_EMAIL");
-  if (!apiKey || !from) {
-    throw new Error("Configuration Resend manquante (RESEND_API_KEY / FROM_EMAIL).");
+async function sendEmail(to: string[], subject: string, html: string) {
+  const user = Deno.env.get("GMAIL_USER");
+  const pass = Deno.env.get("GMAIL_APP_PASSWORD");
+  if (!user || !pass) {
+    throw new Error("Configuration Gmail manquante (GMAIL_USER / GMAIL_APP_PASSWORD).");
   }
-  const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+  // "From" doit obligatoirement être l'adresse authentifiée elle-même : Gmail
+  // rejette silencieusement tout expéditeur différent du compte SMTP utilisé.
+  const client = new SMTPClient({
+    connection: {
+      hostname: "smtp.gmail.com",
+      port: 465,
+      tls: true,
+      auth: { username: user, password: pass },
     },
-    body: JSON.stringify({ from, to, subject, html }),
   });
-  if (!r.ok) {
-    const txt = await r.text().catch(() => "");
-    throw new Error(`Resend a refusé l'envoi (HTTP ${r.status}) : ${txt.slice(0, 300)}`);
+  try {
+    await client.send({
+      from: user,
+      to,
+      subject,
+      content: "Ce message nécessite un client de messagerie compatible HTML.",
+      html,
+    });
+  } finally {
+    await client.close();
   }
 }
 
@@ -115,7 +132,7 @@ Deno.serve(async (req) => {
       ? await supabase.from("creches").select("name").eq("id", enfant.creche_id).maybeSingle()
       : { data: null };
 
-    await sendResendEmail(
+    await sendEmail(
       emails,
       `${relance ? "Rappel — " : ""}Documents administratifs — ${enfant?.prenom || "votre enfant"}`,
       piecesEmailHtml({
