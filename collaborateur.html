@@ -104,6 +104,23 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
     <div class="card">
       <div class="sec">
+        <span><i class="ti ti-fingerprint"></i> Mes pointages</span>
+        <div class="weeknav">
+          <button class="btn btn-g btn-sm" onclick="changeSemaine(-1)"><i class="ti ti-chevron-left"></i></button>
+          <span id="semaineLabelPt" style="font-size:12.5px;font-weight:700;color:var(--muted)"></span>
+          <button class="btn btn-g btn-sm" onclick="changeSemaine(1)"><i class="ti ti-chevron-right"></i></button>
+        </div>
+      </div>
+      <div class="pgrid" id="pointagesGrid"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-g btn-sm" onclick="exportPointagesMois()"><i class="ti ti-file-download"></i> Exporter le mois (CSV)</button>
+      </div>
+      <p class="hint">Arrivées/départs pointés au kiosque. L'export couvre le mois entier de la
+        semaine affichée ci-dessus.</p>
+    </div>
+
+    <div class="card">
+      <div class="sec">
         <span><i class="ti ti-clock-hour-4"></i> Mon compteur d'heures supplémentaires</span>
         <select id="anneeSelect" onchange="loadCompteur()" style="width:auto;padding:5px 9px;font-size:12.5px;border:2px solid var(--line);border-radius:10px"></select>
       </div>
@@ -272,7 +289,7 @@ async function grantAccess(){
   const anneeSel=document.getElementById('anneeSelect');
   const anneeActuelle=new Date().getFullYear();
   anneeSel.innerHTML=[anneeActuelle,anneeActuelle-1].map(a=>'<option value="'+a+'">'+a+'</option>').join('');
-  await Promise.all([loadPlanning(),loadCompteur()]);
+  await Promise.all([loadPlanning(),loadPointages(),loadCompteur()]);
 }
 
 /* ---------- PLANNING ----------------------------------------------------
@@ -282,7 +299,7 @@ async function grantAccess(){
    de rapprochement fragile nécessaire, elle a déjà un planning dédié. */
 async function changeSemaine(n){
   semaineDate=addDays(semaineDate,n*7);
-  await loadPlanning();
+  await Promise.all([loadPlanning(),loadPointages()]);
 }
 const PLANNING_LABELS={present:'Présence',presence:'Présence',absent:'Absent(e)',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
 async function loadPlanning(){
@@ -312,6 +329,104 @@ async function loadPlanning(){
     }
     return'<div class="pday"><div class="dname">'+nom+'</div>'+inner+'</div>';
   }).join('');
+}
+
+/* ---------- MES POINTAGES (détail journalier) ----------------------------
+   Colonne de rapprochement : employe_id pour un(e) collaborateur/trice,
+   salarie_id pour une référente (cf. sql/collaborateurs_comptes.sql et
+   sql/referents_espace.sql — même distinction que pour le compteur
+   d'heures). Lecture directe, RLS déjà en place, pas de rapprochement par
+   prénom nécessaire ici (employe_id/salarie_id est fiable). */
+function pointageCol(){return COLLAB_TYPE==='referent'?'salarie_id':'employe_id';}
+function isoLocalDate(iso){const d=new Date(iso);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function heureLocale(iso){return new Date(iso).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+function dureeStr(mins){const h=Math.floor(mins/60),m=Math.round(mins%60);return h+'h'+String(m).padStart(2,'0');}
+
+async function loadPointages(){
+  const grid=document.getElementById('pointagesGrid');
+  document.getElementById('semaineLabelPt').textContent='Semaine du '+dfr(semaineDate);
+  const finExclusive=addDays(semaineDate,7);
+  const{data,error}=await sb.from('pointages').select('action,horodatage')
+    .eq(pointageCol(),COLLAB.id)
+    .gte('horodatage',semaineDate+'T00:00:00')
+    .lt('horodatage',finExclusive+'T00:00:00')
+    .order('horodatage',{ascending:true});
+  if(error){grid.innerHTML='<p class="hint">Pointages indisponibles pour le moment.</p>';return;}
+  const rows=data||[];
+  const jours=Array.from({length:5},(_,i)=>addDays(semaineDate,i));
+  grid.innerHTML=JOURS.map((nom,idx)=>{
+    const dayRows=rows.filter(r=>isoLocalDate(r.horodatage)===jours[idx]);
+    let inner,totalMin=0;
+    if(!dayRows.length){
+      inner='<div class="pempty">Aucun pointage</div>';
+    }else{
+      const segs=[];
+      for(let i=0;i<dayRows.length;i++){
+        const r=dayRows[i];
+        if(r.action!=='arrivee')continue;
+        const next=dayRows[i+1];
+        if(next&&next.action==='depart'){
+          const mins=(new Date(next.horodatage)-new Date(r.horodatage))/60000;
+          totalMin+=mins;
+          segs.push('<div class="pslot">'+heureLocale(r.horodatage)+' → '+heureLocale(next.horodatage)+'<span class="h">'+dureeStr(mins)+'</span></div>');
+          i++;
+        }else{
+          segs.push('<div class="pslot">'+heureLocale(r.horodatage)+' → en cours</div>');
+        }
+      }
+      if(totalMin>0)segs.push('<div class="pslot" style="color:var(--green)">Total '+dureeStr(totalMin)+'</div>');
+      inner=segs.join('')||'<div class="pempty">Aucun pointage</div>';
+    }
+    return'<div class="pday"><div class="dname">'+nom+'</div>'+inner+'</div>';
+  }).join('');
+}
+
+/* Export CSV du mois contenant la semaine actuellement affichée. */
+function monthBoundsFromDate(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const first=new Date(d.getFullYear(),d.getMonth(),1);
+  const last=new Date(d.getFullYear(),d.getMonth()+1,0);
+  const fmt=x=>x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+  return{first:fmt(first),last:fmt(last)};
+}
+async function exportPointagesMois(){
+  const{first,last}=monthBoundsFromDate(semaineDate);
+  const finExclusive=addDays(last,1);
+  const{data,error}=await sb.from('pointages').select('action,horodatage')
+    .eq(pointageCol(),COLLAB.id)
+    .gte('horodatage',first+'T00:00:00')
+    .lt('horodatage',finExclusive+'T00:00:00')
+    .order('horodatage',{ascending:true});
+  if(error){toast('Export impossible : '+error.message,true);return;}
+  const rows=data||[];
+  const parJour={};
+  rows.forEach(r=>{const d=isoLocalDate(r.horodatage);(parJour[d]=parJour[d]||[]).push(r);});
+  const lignes=[['Date','Arrivée','Départ','Durée (h)']];
+  Object.keys(parJour).sort().forEach(dateStr=>{
+    const dayRows=parJour[dateStr];
+    for(let i=0;i<dayRows.length;i++){
+      const r=dayRows[i];
+      if(r.action!=='arrivee')continue;
+      const next=dayRows[i+1];
+      if(next&&next.action==='depart'){
+        const mins=(new Date(next.horodatage)-new Date(r.horodatage))/60000;
+        lignes.push([dfr(dateStr),heureLocale(r.horodatage),heureLocale(next.horodatage),(mins/60).toFixed(2).replace('.',',')]);
+        i++;
+      }else{
+        lignes.push([dfr(dateStr),heureLocale(r.horodatage),'(en cours)','']);
+      }
+    }
+  });
+  if(lignes.length===1){toast('Aucun pointage ce mois-ci.',true);return;}
+  const csv=lignes.map(l=>l.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const moisLabel=String(new Date(first+'T00:00:00').getMonth()+1).padStart(2,'0')+'-'+new Date(first+'T00:00:00').getFullYear();
+  a.href=url;a.download='pointages_'+moisLabel+'.csv';
+  document.body.appendChild(a);a.click();a.remove();
+  URL.revokeObjectURL(url);
+  toast('Export terminé.');
 }
 
 /* ---------- COMPTEUR D'HEURES SUPPLÉMENTAIRES ---------- */
