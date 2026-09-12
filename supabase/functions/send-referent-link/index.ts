@@ -62,7 +62,7 @@ serve(async (req) => {
 
   try {
     const { referent } = await req.json();
-    const { id, name, email, creche } = referent;
+    const { name, email, creche } = referent;
 
     if (!email) {
       return new Response(JSON.stringify({ ok: false, reason: "no email" }), {
@@ -77,8 +77,12 @@ serve(async (req) => {
       });
     }
 
-    // Lien personnalisé vers la page référent
-    const refUrl = `${APP_URL}/referent.html?id=${id}&name=${encodeURIComponent(name)}&creche=${encodeURIComponent(creche || "")}`;
+    // referent.html n'a jamais existé dans l'appli : les référentes se
+    // connectent depuis demandes.html (e-mail + mot de passe), qui limite
+    // déjà leur accès à leur propre crèche. id/name/creche ne servent à rien
+    // là-bas (l'authentification se fait par session, pas par paramètres
+    // d'URL) : on ne les propage donc plus.
+    const refUrl = `${APP_URL}/demandes.html`;
 
     const html = `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f4f4f6;padding:20px">
