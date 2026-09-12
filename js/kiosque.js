@@ -87,7 +87,9 @@ function kioskRender(){
     items=cacheEnfants.filter(e=>e.creche_id===kioskCrecheId&&(!e.date_sortie||e.date_sortie>=today)).map(r=>({...r,_kind:'enfants'}));
   }else{
     // Personnel = référent(e)s/direction (compte de connexion) + employés (sans compte).
-    items=cacheReferents.filter(r=>r.creche_id===kioskCrecheId).map(r=>({...r,_kind:'referent'}))
+    // Un référent sans crèche assignée (creche_id null, cas typique de la direction qui
+    // supervise toutes les crèches) doit pouvoir se pointer depuis n'importe quel kiosque.
+    items=cacheReferents.filter(r=>r.creche_id===kioskCrecheId||r.creche_id==null).map(r=>({...r,_kind:'referent'}))
       .concat(cacheEmployes.filter(e=>e.creche_id===kioskCrecheId).map(e=>({...e,_kind:'employe'})));
   }
   const keyOf=p=>(p._kind==='enfants'?'e_':p._kind==='employe'?'m_':'s_')+p.id;
