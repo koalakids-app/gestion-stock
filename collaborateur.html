@@ -168,7 +168,33 @@ function parseHashParams(){
 const HASH_INFO=parseHashParams();
 if(HASH_INFO.access_token){JUSTE_CONNECTE=true;}
 
+/* Lien du mail (template Supabase personnalisé) au format
+   ?token_hash=...&type=invite|recovery : on vérifie nous-mêmes le token via
+   verifyOtp au moment du clic plutôt que de laisser Supabase le valider dès la
+   première requête GET — ça évite qu'un scanner de sécurité du client mail ne
+   "grille" le lien à usage unique avant que la personne n'ait cliqué dessus. */
+async function consumeTokenHashLink(){
+  const qp=new URLSearchParams(location.search);
+  const tokenHash=qp.get('token_hash'),otpType=qp.get('type');
+  if(!tokenHash||(otpType!=='recovery'&&otpType!=='invite'))return null;
+  history.replaceState(null,'',location.pathname);
+  try{
+    const{error}=await sb.auth.verifyOtp({token_hash:tokenHash,type:otpType});
+    if(error)throw error;
+    JUSTE_CONNECTE=true;
+    return otpType;
+  }catch(e){
+    console.warn('[verifyOtp]',e);
+    await sb.auth.signOut();
+    showLogin('Lien invalide ou expiré — merci de redemander un nouveau lien.');
+    return 'error';
+  }
+}
+
 async function boot(){
+  const linkResult=await consumeTokenHashLink();
+  if(linkResult==='error')return;
+  if(linkResult==='invite'||linkResult==='recovery'){showSetPassword();return;}
   if(!JUSTE_CONNECTE){
     try{await sb.auth.signOut();}catch(e){}
     showLogin();return;
