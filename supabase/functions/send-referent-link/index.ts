@@ -17,6 +17,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// denomailer encode mal l'en-tête Subject dès qu'il contient un caractère hors
+// du plan multilingue de base (emoji, notamment — 4 octets en UTF-8) : le
+// message entier arrive corrompu (MIME brut affiché comme texte). Le corps
+// HTML n'est pas concerné, seul le sujet est ramené à de l'ASCII.
+function asciiSafe(s: string): string {
+  return s
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[—–]/g, "-")
+    .replace(/[^\x20-\x7E]/g, "")
+    .trim();
+}
+
 async function sendEmail(to: string, subject: string, html: string) {
   if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
     throw new Error("Configuration Gmail manquante (GMAIL_USER / GMAIL_APP_PASSWORD).");
@@ -99,7 +112,7 @@ serve(async (req) => {
         <p style="text-align:center;color:#aaa;font-size:11px;margin-top:12px">© Koala Kids — Ce message est automatique.</p>
       </div>`;
 
-    await sendEmail(email, `🐨 Votre accès Koala Kids — ${creche || "Espace référent"}`, html);
+    await sendEmail(email, asciiSafe(`Votre accès Koala Kids — ${creche || "Espace référent"}`), html);
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
