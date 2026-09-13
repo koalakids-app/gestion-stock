@@ -229,7 +229,7 @@ async function grantAccess(){
 async function loadCreches(){
   const{data,error}=await sb.from('creches').select('id,name').order('name');
   if(error){toast('Erreur de chargement des crèches',true);return;}
-  // Une référente (non-direction) ne gère que sa propre crèche : lui montrer
+  // Une directrice technique (non-direction) ne gère que sa propre crèche : lui montrer
   // les autres onglets l'exposerait à choisir une creche_id qui ne correspond
   // pas à la sienne, ce que la policy RLS d'insertion sur `employes` refuse.
   CRECHES=isDirection?(data||[]):(data||[]).filter(c=>c.id===PROF.creche_id);

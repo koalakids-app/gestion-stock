@@ -103,7 +103,7 @@ function refDashGoToday(){refDashSelectedDate=todayStr();renderRefDashboard();}
 function refDashSetDate(v){if(v){refDashSelectedDate=v;renderRefDashboard();}}
 
 /* Vaccinations en retard et dossiers famille à relancer, scopés à la crèche
-   de la référente — mêmes fonctions que celles utilisées par « Ma journée »
+   de la directrice technique — mêmes fonctions que celles utilisées par « Ma journée »
    et le tableau de bord réseau (cf. vaccinationsEnRetard/dossiersFamilleARelancer
    plus bas dans le fichier), pour ne pas réécrire le calcul une troisième
    fois. Pas de notion de réseau ici : la crèche est implicite, donc pas de
@@ -146,7 +146,7 @@ function renderRefDashboard(){
   // la date consultée plus bas, chargées à part et ajoutées après coup (même
   // motif que le tableau de bord réseau) pour ne pas retarder le reste de
   // l'écran. Remplace tout le contenu (pas de +=) pour rester correct quand
-  // la référente navigue vite d'un jour à l'autre et relance l'appel.
+  // la directrice technique navigue vite d'un jour à l'autre et relance l'appel.
   loadRefDashAlertesExtra(crecheId,urgentesHtml);
 
   // ── Carte 1 : Événements du jour (scopés crèche + réseau)
@@ -266,7 +266,7 @@ function renderDashboard(){
   loadDashboardDossiersAlertes();
   loadDashboardStgDocsAlertes();
   loadDashboardDevisAlertes();
-  document.getElementById('dash-stats').innerHTML='<div class="stat-card"><div class="stat-label">Crèches</div><div class="stat-val cv">'+cacheCreches.length+'</div><div class="stat-sub">'+cacheEnfants.length+' enfants</div></div><div class="stat-card" style="border-top-color:var(--orange)"><div class="stat-label">Demandes</div><div class="stat-val co">'+totalD+'</div><div class="stat-sub">'+cacheDemandes.filter(d=>d.status==='attente').length+' en attente</div></div><div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Incidents</div><div class="stat-val cr">'+cacheIncidents.length+'</div><div class="stat-sub">'+incNT+' non traités</div></div><div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Référents</div><div class="stat-val cg">'+cacheReferents.filter(r=>r.role==='referent').length+'</div><div class="stat-sub">actifs</div></div>';
+  document.getElementById('dash-stats').innerHTML='<div class="stat-card"><div class="stat-label">Crèches</div><div class="stat-val cv">'+cacheCreches.length+'</div><div class="stat-sub">'+cacheEnfants.length+' enfants</div></div><div class="stat-card" style="border-top-color:var(--orange)"><div class="stat-label">Demandes</div><div class="stat-val co">'+totalD+'</div><div class="stat-sub">'+cacheDemandes.filter(d=>d.status==='attente').length+' en attente</div></div><div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Incidents</div><div class="stat-val cr">'+cacheIncidents.length+'</div><div class="stat-sub">'+incNT+' non traités</div></div><div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Directeurs techniques</div><div class="stat-val cg">'+cacheReferents.filter(r=>r.role==='referent').length+'</div><div class="stat-sub">actifs</div></div>';
   const byCrecheRows=cacheCreches.map(c=>{const n=cacheDemandes.filter(d=>d.creche_id===c.id).length;const pct=totalD>0?Math.round(n/totalD*100):0;return'<div class="dash-list-item"><strong>'+c.name+'</strong><span style="font-weight:700;color:var(--koala)">'+n+'</span></div><div class="dash-bar"><div class="dash-bar-fill" style="width:'+pct+'%"></div></div>';}).join('')||'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune crèche</div>';
   const themes={};cacheDemandes.forEach(d=>{if(d.theme)themes[d.theme]=(themes[d.theme]||0)+1;});
   const themeRows=Object.keys(themes).length?Object.entries(themes).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'<div class="dash-list-item"><span>'+k+'</span><span style="font-weight:700;color:var(--koala)">'+v+'</span></div>').join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune donnée</div>';

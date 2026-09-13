@@ -1,9 +1,9 @@
 
 
 /* ===================== MODULE ENFANTS (dossier central) ===================== */
-/* Liste des enfants (référente = sa crèche, direction = toutes), fiche à onglets
+/* Liste des enfants (directrice technique = sa crèche, direction = toutes), fiche à onglets
    Identité + Documents. Les documents proviennent de documents_reponses filtrées
-   par enfant_id. Le RLS garantit que la référente ne voit que sa crèche. */
+   par enfant_id. Le RLS garantit que la directrice technique ne voit que sa crèche. */
 
 let enfFicheId = null;
 let enfDocsCache = [];
@@ -58,7 +58,7 @@ function enfInit(){
 function enfGetListe(opts){
   opts = opts || {};
   let list = cacheEnfants.slice();
-  // référente : sa crèche uniquement
+  // directrice technique : sa crèche uniquement
   if(!isDirection && currentProfile && currentProfile.creche_id){
     list = list.filter(e=>e.creche_id===currentProfile.creche_id);
   } else {
@@ -203,7 +203,7 @@ function enfRepasFicheLigne(e){
 }
 
 /* Ligne « Goûter » de l'onglet Identité. Elle est toujours affichée, même quand le
-   goûter suit le repas : c'est une information que la référente doit pouvoir lire
+   goûter suit le repas : c'est une information que la directrice technique doit pouvoir lire
    sans ouvrir le formulaire de modification. */
 function enfGouterFicheLigne(e){
   const base=e.repas_base||enfRepasBaseAuto(e);
@@ -250,7 +250,7 @@ function enfRenderIdentite(){
    Ici on ne fait que l'afficher, le régénérer (même RPC, appelable par un utilisateur
    authentifié) et proposer son envoi par e-mail via l'edge function
    envoyer-code-pointage. Le code n'est jamais listé nulle part ailleurs : seule la
-   fiche de la personne concernée le montre, à la direction et à la référente de sa
+   fiche de la personne concernée le montre, à la direction et à la directrice technique de sa
    crèche — la portée normale des policies RLS sur enfants/referents. */
 function kkCodeLigne(code){
   return code
@@ -296,13 +296,15 @@ async function kkSendCode(type,id){
 }
 window.kkSendCode=kkSendCode;
 
-/* ===================== CODE IMAGE (kiosque, enfants uniquement) ============
+/* ===================== CODE IMAGE (kiosque) =================================
    Depuis claude_37-kiosque-code-images.sql : les enfants pointent au kiosque
-   avec une séquence de 4 pictogrammes (au lieu du code à 4 chiffres, gardé
-   pour le personnel). Le tirage se fait côté base (generer_code_pictos),
-   pris parmi le même pool que côté tablette (tablette.html) — toute
-   divergence entre les deux listes casserait l'affichage ici (pas la
-   validité du code lui-même, qui reste comparé en base). */
+   avec une séquence de 4 pictogrammes. Depuis kiosque_code_pictos_personnel.sql,
+   le personnel (referents) pointe aussi par code image, à la place du code à
+   4 chiffres. Le tirage se fait côté base (generer_code_pictos /
+   generer_code_pictos_referent), pris parmi le même pool que côté tablette
+   (tablette.html) — toute divergence entre les deux listes casserait
+   l'affichage ici (pas la validité du code lui-même, qui reste comparé en
+   base). */
 const KK_PICTOS={
   ours:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/ours.png',
   arc_en_ciel:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/arc_en_ciel.png',
@@ -319,33 +321,47 @@ function kkPictosLigne(codePictos){
     +codePictos.map(id=>'<img src="'+(KK_PICTOS[id]||'')+'" alt="'+escHtml(id)+'" title="'+escHtml(id)+'" style="width:26px;height:26px;border-radius:7px;object-fit:cover">').join('')
     +'</div>';
 }
-function kkPictosActions(id,crecheId,codePictos){
+function kkPictosActions(id,crecheId,codePictos,type){
+  type=type||'enfant';
   if(!crecheId)return '<span style="font-size:11.5px;color:var(--muted)">Sans crèche assignée — pas de code possible</span>';
   const peutEnvoyer=Array.isArray(codePictos)&&codePictos.length===4;
-  return '<button class="btn-sm" onclick="kkRegenPictos(\''+id+'\',\''+crecheId+'\')"><i class="ti ti-refresh"></i> Générer un code image</button>'
-    +(peutEnvoyer?' <button class="btn-sm" onclick="kkSendPictos(\''+id+'\')"><i class="ti ti-mail"></i> Envoyer par e-mail</button>':'');
+  return '<button class="btn-sm" onclick="kkRegenPictos(\''+id+'\',\''+crecheId+'\',\''+type+'\')"><i class="ti ti-refresh"></i> '+(peutEnvoyer?'Régénérer':'Générer')+' un code image</button>'
+    +(peutEnvoyer?' <button class="btn-sm" onclick="kkSendPictos(\''+id+'\',\''+type+'\')"><i class="ti ti-mail"></i> Envoyer par e-mail</button>':'');
 }
-async function kkSendPictos(id){
-  if(!confirm('Envoyer le code image par e-mail aux parents ?'))return;
-  const ok=await callFn('envoyer-code-pictos',{enfant_id:id});
+async function kkSendPictos(id,type){
+  type=type||'enfant';
+  const dest=type==='referent'?'à ce directeur/trice technique':'aux parents';
+  if(!confirm('Envoyer le code image par e-mail '+dest+' ?'))return;
+  const fn=type==='referent'?'envoyer-code-pictos-referent':'envoyer-code-pictos';
+  const param=type==='referent'?{referent_id:id}:{enfant_id:id};
+  const ok=await callFn(fn,param);
   if(ok)showBanner('Code image envoyé.');
   else showBanner('Échec de l\'envoi'+(_lastFnErr?' : '+_lastFnErr:''),'error');
 }
 window.kkSendPictos=kkSendPictos;
-async function kkRegenPictos(id,crecheId){
+async function kkRegenPictos(id,crecheId,type){
+  type=type||'enfant';
   if(!confirm('Générer un nouveau code image ? L\'ancien cessera de fonctionner immédiatement sur la tablette.'))return;
+  const table=type==='referent'?'referents':'enfants';
+  const rpcName=type==='referent'?'generer_code_pictos_referent':'generer_code_pictos';
   try{
-    const{data,error}=await sb.rpc('generer_code_pictos',{p_creche_id:crecheId});
+    const{data,error}=await sb.rpc(rpcName,{p_creche_id:crecheId});
     if(error)throw error;
-    const ok=await dbUpdateStrict('enfants',id,{code_pictos:data});
+    const ok=await dbUpdateStrict(table,id,{code_pictos:data});
     if(!ok)throw new Error(window._lastDbError||'écriture refusée');
-    const e=cacheEnfants.find(x=>String(x.id)===String(id));
-    if(e)e.code_pictos=data;
-    enfRenderIdentite();
+    if(type==='referent'){
+      const r=cacheReferents.find(x=>String(x.id)===String(id));
+      if(r)r.code_pictos=data;
+      renderReferents();
+    }else{
+      const e=cacheEnfants.find(x=>String(x.id)===String(id));
+      if(e)e.code_pictos=data;
+      enfRenderIdentite();
+    }
     showBanner('Nouveau code image généré.');
   }catch(e){
     console.error('[kkRegenPictos]',e);
-    const msg=e.code==='42883'?'Fonction absente — exécutez sql/claude_37-kiosque-code-images.sql.':(e.message||'erreur inconnue');
+    const msg=e.code==='42883'?'Fonction absente — exécutez sql/claude_37-kiosque-code-images.sql et sql/kiosque_code_pictos_personnel.sql.':(e.message||'erreur inconnue');
     showBanner('Génération impossible : '+msg,'error');
   }
 }
@@ -1379,14 +1395,14 @@ async function enfDeleteDoc(repId){
    Pièces d'un enfant, distinctes des formulaires remplis/signés via l'outil
    Documents (enf-docs-list) et du carnet de vaccination (table vaccins_pj,
    données de santé). Deux façons d'en obtenir une copie :
-   - une référente l'importe directement (remise en main propre, pièce jointe
+   - une directrice technique l'importe directement (remise en main propre, pièce jointe
      reçue par mail) ;
    - la famille la dépose elle-même en ligne, via un lien envoyé par mail
      (voir plus bas « dossier de pièces »), sur le même principe que le
      dossier de familiarisation.
    Les deux passent par la même table et le même bucket : seule la colonne
    piece_key (quelle pièce de la liste ci-dessous) et dossier_id (par quel
-   envoi la famille l'a déposée, absent pour un import fait par une référente)
+   envoi la famille l'a déposée, absent pour un import fait par une directrice technique)
    distinguent leur origine.
 
    Même schéma de stockage que les photocopies du carnet de vaccination : bucket
@@ -1399,7 +1415,7 @@ const ENF_ADMIN_DOCS_TTL    = 300;   // durée de vie d'une URL signée, en seco
    pas dans la progression (ne concerne que certaines familles). `renouveler`
    = à redéposer chaque année (assurance) ; un exemplaire déposé il y a plus
    de 365 jours est signalé mais ne compte pas comme manquant pour autant —
-   la référente juge si un rappel est nécessaire.
+   la directrice technique juge si un rappel est nécessaire.
    Recopiée dans pieces.html pour la vue famille : si vous modifiez cette
    liste ici, reportez-la là-bas — les deux versions ne se synchronisent pas
    (même choix assumé que pour les modèles de famille.html/documents.html). */

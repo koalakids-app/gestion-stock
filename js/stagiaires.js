@@ -80,7 +80,7 @@ function stgCrecheName(id){
   return c?c.name:'Crèche supprimée';
 }
 
-/* Une référente ne peut affecter une stagiaire qu'à sa propre crèche : lui
+/* Une directrice technique ne peut affecter une stagiaire qu'à sa propre crèche : lui
    proposer les cinq autres l'exposerait à un refus d'écriture incompréhensible
    côté serveur. */
 function stgCrechesVisibles(){
@@ -101,7 +101,7 @@ async function stgInit(){
   if(sel1)sel1.innerHTML=stgOptionsCreches('Toutes les crèches');
   const sel2=document.getElementById('stg-f-creche-cal');
   if(sel2)sel2.innerHTML=stgOptionsCreches('Toutes les crèches');
-  /* Proposer « toutes les crèches » à une référente serait lui promettre une
+  /* Proposer « toutes les crèches » à une directrice technique serait lui promettre une
      écriture que la policy refusera (script 36c) : elle ne voit que la sienne,
      déjà choisie. */
   const sel3=document.getElementById('stg-r-creche');
@@ -225,7 +225,7 @@ function stgJoursDe(id){
 
 /* « À traiter » veut dire : personne n'a encore tranché. Un premier contact
    pris compte donc autant qu'une demande brute — c'est exactement le moment où
-   la fiche a besoin d'être vue, et le statut sous lequel une référente
+   la fiche a besoin d'être vue, et le statut sous lequel une directrice technique
    enregistre souvent sa première saisie. */
 function stgATraiter(s){return s.statut==='demande'||s.statut==='contact';}
 
@@ -506,7 +506,7 @@ function stgTypeChange(){
   if(stgFicheId){stgRenderDocs(type);stgRenderRessFiche(type);stgRenderCollabZone();}
 }
 
-/* Les référentes proposées sont celles de la crèche choisie : offrir celles des
+/* Les directrices techniques proposées sont celles de la crèche choisie : offrir celles des
    autres sites n'aurait aucun sens sur une fiche de stage.
    La direction et la coordination, elles, apparaissent toujours et quelle que
    soit la crèche — accompagner un stagiaire ou un alternant fait partie du
@@ -521,7 +521,7 @@ function stgRemplirReferents(crecheId){
     +(r.poste?' — '+escHtml(r.poste):'')+'</option>';
   const val=sel.value;
   sel.innerHTML='<option value="">— Non désignée —</option>'
-    +(refs.length?'<optgroup label="Référentes de la crèche">'+refs.map(opt).join('')+'</optgroup>':'')
+    +(refs.length?'<optgroup label="Directrices techniques de la crèche">'+refs.map(opt).join('')+'</optgroup>':'')
     +(dirs.length?'<optgroup label="Direction et coordination">'+dirs.map(opt).join('')+'</optgroup>':'');
   /* Une personne enregistrée sur la fiche mais absente des deux groupes (elle a
      changé de crèche depuis) resterait perdue en silence : on la remet. */
@@ -1166,7 +1166,7 @@ function stgImportRole(code,val){
 }
 
 /* Les lignes qui seront réellement écrites. Un jour déjà saisi n'est jamais
-   modifié : l'import complète, il n'écrase pas ce que la référente a corrigé
+   modifié : l'import complète, il n'écrase pas ce que la directrice technique a corrigé
    à la main. */
 function stgImportLignes(){
   const s=stgCache.find(x=>String(x.id)===String(stgFicheId))||{};
@@ -1678,7 +1678,7 @@ const STG_RESS_PREFIXE = '_ressources/';
 
 const stgRessNature = r => (r&&r.nature==='lien')?'lien':'fichier';
 
-/* Qui peut modifier quoi (script 36c) : la direction, tout ; une référente,
+/* Qui peut modifier quoi (script 36c) : la direction, tout ; une directrice technique,
    uniquement ce qui est rattaché à sa crèche. Une ressource « toutes les
    crèches » engage le réseau et lui reste fermée. Le même calcul est refait en
    base — ici, c'est pour ne pas proposer un bouton qui échouera. */
@@ -1908,7 +1908,7 @@ async function stgAjouterRess(){
     dire('');
     return showBanner('Ajout impossible'
       +(window._lastDbError?' : '+window._lastDbError
-        :(isDirection?'.':' — une référente ne peut ajouter que pour sa crèche (script 36c).'))+'','error');
+        :(isDirection?'.':' — une directrice technique ne peut ajouter que pour sa crèche (script 36c).'))+'','error');
   }
   dire('');
   ['stg-r-libelle','stg-r-desc','stg-r-url'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
