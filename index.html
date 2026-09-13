@@ -247,7 +247,7 @@ body {
       <div class="card-arrow">›</div>
     </a>
 
-    <a href="parametres.html" class="card card-param direction-only" style="display:none">
+    <a href="parametres.html" class="card card-param">
       <div class="card-icon">⚙️</div>
       <div class="card-text">
         <h2>Paramètres</h2>
@@ -256,7 +256,7 @@ body {
       <div class="card-arrow">›</div>
     </a>
 
-    <a href="employes.html" class="card card-team direction-only" style="display:none">
+    <a href="employes.html" class="card card-team">
       <div class="card-icon">🧑‍💼</div>
       <div class="card-text">
         <h2>Équipe</h2>
@@ -363,25 +363,6 @@ body {
 </div>
 
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-// Affichage des tuiles réservées à la direction (Paramètres, Équipe) : basé sur
-// le rôle réel du compte connecté (table "referents"), pas sur un bouton de démo.
-// Masquées par défaut tant que le rôle n'est pas confirmé (fail-safe).
-const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
-const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-(async function applyRoleVisibility(){
-  try{
-    const{data:{session}}=await sb.auth.getSession();
-    if(!session)return;
-    const{data:ref}=await sb.from('referents').select('role').eq('user_id',session.user.id).maybeSingle();
-    if(ref?.role==='direction'){
-      document.querySelectorAll('.direction-only').forEach(el=>el.style.display='');
-    }
-  }catch(e){console.warn('[role]',e);}
-})();
-</script>
 
 <script>
 function openSub(id){
