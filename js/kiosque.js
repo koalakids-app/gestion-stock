@@ -86,8 +86,8 @@ function kioskRender(){
   if(kioskMode==='enfants'){
     items=cacheEnfants.filter(e=>e.creche_id===kioskCrecheId&&(!e.date_sortie||e.date_sortie>=today)).map(r=>({...r,_kind:'enfants'}));
   }else{
-    // Personnel = référent(e)s/direction (compte de connexion) + employés (sans compte).
-    // Un référent sans crèche assignée (creche_id null, cas typique de la direction qui
+    // Personnel = directeurs/trices techniques/direction (compte de connexion) + employés (sans compte).
+    // Un directeur technique sans crèche assignée (creche_id null, cas typique de la direction qui
     // supervise toutes les crèches) doit pouvoir se pointer depuis n'importe quel kiosque.
     items=cacheReferents.filter(r=>r.creche_id===kioskCrecheId||r.creche_id==null).map(r=>({...r,_kind:'referent'}))
       .concat(cacheEmployes.filter(e=>e.creche_id===kioskCrecheId).map(e=>({...e,_kind:'employe'})));
@@ -107,7 +107,7 @@ function kioskRender(){
     const last=statusMap[key];
     const present=!!(last&&last.action==='arrivee');
     const label=p._kind==='referent'?(p.name||''):(p.prenom||'');
-    const sub=p._kind==='enfants'?(p.nom||''):p._kind==='employe'?(p.poste||'Employé(e)'):(p.poste||(p.role==='direction'?'Direction':'Référente'));
+    const sub=p._kind==='enfants'?(p.nom||''):p._kind==='employe'?(p.poste||'Employé(e)'):(p.poste||(p.role==='direction'?'Direction':'Directrice technique'));
     const heure=last?new Date(last.horodatage).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
     const statusTxt=present?('Présent(e) depuis '+heure):(last?('Parti(e) à '+heure):'Pas encore pointé(e)');
     return '<button class="kiosk-tile'+(present?' present':'')+'" onclick="kioskToggle(this,\''+p._kind+'\',\''+p.id+'\')">'

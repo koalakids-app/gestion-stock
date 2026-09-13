@@ -186,7 +186,7 @@ function adRenderFiltres(){
   if(sT){const v=sT.value;sT.innerHTML='<option value="">Tous les thèmes</option>'+themes.map(t=>'<option value="'+escHtml(t)+'">'+escHtml(t)+'</option>').join('');sT.value=v;}
   const sC=document.getElementById('ad-filter-creche');
   if(sC){const v=sC.value;sC.innerHTML='<option value="">Toutes les crèches</option><option value="__reseau">— Réseau / transverse —</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');sC.value=v;}
-  // Datalist des responsables : direction, référentes, et les noms déjà saisis.
+  // Datalist des responsables : direction, directrices techniques, et les noms déjà saisis.
   const dl=document.getElementById('ad-resp-list');
   if(dl){
     const noms=[...new Set([...resp,...(cacheReferents||[]).map(r=>r.name).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'fr'));
@@ -727,7 +727,7 @@ function adRenderNouvelles(){
   const l=adCache.filter(a=>a.reunion_date===adReunionDate).sort((a,b)=>(a.numero||0)-(b.numero||0));
   if(!l.length){box.innerHTML='<div class="meta-txt" style="font-style:italic">Aucune nouvelle action pour cette réunion.</div>';return;}
   // L'état de chaque action est visible ICI aussi : une ligne cochée ailleurs
-  // (revue, tableau de bord d'une référente) doit se voir dans le
+  // (revue, tableau de bord d'une directrice technique) doit se voir dans le
   // récapitulatif, sans quoi on relit en fin de séance une liste qui donne
   // tout pour à faire.
   box.innerHTML=adGrouperParCreche(l).map(g=>
@@ -863,7 +863,7 @@ function adCrRouvrir(){
    Il suit l'ordre réel de la séance : la revue des actions, puis les sujets
    crèche par crèche, puis les transverses. Chaque site porte ses notes ET les
    actions décidées pour lui — c'est ce qui permet, un mois plus tard,
-   d'envoyer à une référente le seul passage qui la concerne. */
+   d'envoyer à une directrice technique le seul passage qui la concerne. */
 /* Quelles actions figurent dans le compte rendu d'une réunion : celles
    décidées ce jour-là, et la revue — ce qui était ouvert à ce moment, donc
    né avant et pas déjà clos avant. */
@@ -1070,7 +1070,7 @@ function adExportExcel(){
 /* L'écran « À faire » s'ouvre souvent sans être passé par Actions : sans ce
    chargement paresseux, le bloc resterait vide jusqu'à la visite de l'onglet. */
 async function adEnsureCharge(){
-  // Ouvert aux référentes depuis 20-actions-referentes.sql : la RLS ne leur
+  // Ouvert aux directrices techniques depuis 20-actions-referentes.sql : la RLS ne leur
   // renvoie que les actions dont elles sont responsables, la requête est donc
   // la même des deux côtés.
   if(!currentProfile||adCache.length||!adSchemaOk)return;
@@ -1157,7 +1157,7 @@ async function adAfaireReporter(id){
 /* ══════════════════════════════════════════════════════════════════════════
    CÔTÉ RÉFÉRENTE — « c'est fait »
 
-   Une action attribuée à une référente ne pouvait être close que par la
+   Une action attribuée à une directrice technique ne pouvait être close que par la
    direction, sur ce qu'elle en disait en réunion : le tableau était donc
    toujours en retard d'une quinzaine sur la réalité. Elle voit maintenant ses
    propres actions dans son tableau de bord, et les coche elle-même.
@@ -1252,7 +1252,7 @@ async function adRefSuivi(id,val){
   const v=(val||'').trim()||null;
   if(v===(a.suivi||null))return;
   // Le statut accompagne le commentaire : une action commentée est une action
-  // engagée, et la référente ne peut de toute façon pas la laisser « à faire ».
+  // engagée, et la directrice technique ne peut de toute façon pas la laisser « à faire ».
   const maj={suivi:v};
   if(a.statut==='a_faire'||a.statut==='reporte')maj.statut='en_cours';
   const{error}=await sb.from('actions_direction').update(maj).eq('id',id);

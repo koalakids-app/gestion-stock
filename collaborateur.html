@@ -156,7 +156,7 @@ function addDays(dateStr,n){const d=new Date(dateStr+'T00:00:00');d.setDate(d.ge
 function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
 
 /* ---------- AUTH ---------- */
-/* Pas de MFA ici, à la différence des modules direction/référente : c'est un
+/* Pas de MFA ici, à la différence des modules direction/directrice technique : c'est un
    accès en lecture seule à ses propres données (planning, pointages), pas au
    dossier des enfants ni aux informations financières de la crèche. */
 let JUSTE_CONNECTE=false;
@@ -295,7 +295,7 @@ async function grantAccess(){
 /* ---------- PLANNING ----------------------------------------------------
    Employé(e) : planning_equipe (import Excel, rapproché par prénom, cf.
    RLS planning_equipe_select_self).
-   Référent(e) : table planning individuelle, indexée par referent_id — pas
+   Directeur technique(e) : table planning individuelle, indexée par referent_id — pas
    de rapprochement fragile nécessaire, elle a déjà un planning dédié. */
 async function changeSemaine(n){
   semaineDate=addDays(semaineDate,n*7);
@@ -333,7 +333,7 @@ async function loadPlanning(){
 
 /* ---------- MES POINTAGES (détail journalier) ----------------------------
    Colonne de rapprochement : employe_id pour un(e) collaborateur/trice,
-   salarie_id pour une référente (cf. sql/collaborateurs_comptes.sql et
+   salarie_id pour une directrice technique (cf. sql/collaborateurs_comptes.sql et
    sql/referents_espace.sql — même distinction que pour le compteur
    d'heures). Lecture directe, RLS déjà en place, pas de rapprochement par
    prénom nécessaire ici (employe_id/salarie_id est fiable). */

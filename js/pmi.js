@@ -168,7 +168,7 @@ function pmiExpSet(crecheId,prenom,val){pmiPersonne(crecheId,prenom).exp=!!val;p
 function pmiNomGet(crecheId,prenom){return pmiPersonne(crecheId,prenom).nom||'';}
 function pmiNomSet(crecheId,prenom,val){pmiPersonne(crecheId,prenom).nom=val||'';pmiCfgSave(crecheId);}
 
-// Personne assurant la direction / le référent technique, et son volume de bureau
+// Personne assurant la direction / le directeur technique, et son volume de bureau
 // hebdomadaire : mémorisés par crèche pour ne les saisir qu'une fois.
 function pmiDirectionGet(crecheId){
   const d=pmiCfg(crecheId).direction;
@@ -191,7 +191,7 @@ function pmiEntretienSet(crecheId,heures,ouverture,fermeture){
   pmiCfgSave(crecheId);
 }
 
-// Pré-remplissage : les référentes ont déjà leur nom complet dans l'annuaire (referents.name).
+// Pré-remplissage : les directrices techniques ont déjà leur nom complet dans l'annuaire (referents.name).
 // On y retrouve le nom de famille quand le prénom correspond, pour éviter une ressaisie.
 function pmiNomDepuisAnnuaire(crecheId,prenom){
   const cible=(prenom||'').trim().toLowerCase();
@@ -324,7 +324,7 @@ async function pmiOpenExportModal(){
   if(!pmiSyncOk)showBanner('Réglages PMI non synchronisés : vérifiez-les avant de générer le fichier.','error');
 
   pmiInjecterModale();
-  // Direction : par défaut la référente de la crèche si elle figure au planning.
+  // Direction : par défaut la directrice technique de la crèche si elle figure au planning.
   const selDir=document.getElementById('pmi-direction-prenom');
   const dirEnregistree=pmiDirectionGet(crecheId);
   const refCreche=(cacheReferents||[]).find(r=>r.creche_id===crecheId&&r.name
@@ -656,7 +656,7 @@ function pmiControlerJournee(nomJour,comptesEnfants,staffParQuart,capacite,anoma
   clore(comptesEnfants.length);
 }
 
-/* ── Temps de bureau de la direction / du référent technique ───────────────
+/* ── Temps de bureau de la direction / du directeur technique ───────────────
    Ces heures sont travaillées mais ne relèvent pas de l'encadrement : le modèle leur
    réserve la ligne « Direction », sous l'intitulé « Hors encadrement des enfants ». Elles
    sont donc retirées des heures d'encadrement de la personne, du total du jour et du
