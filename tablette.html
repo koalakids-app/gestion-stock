@@ -263,7 +263,7 @@ function showErrorPictosThenReset(title,msg,delay){
    Depuis sql/kiosque_code_pictos_personnel.sql, le personnel pointe aussi par
    séquence de 4 pictogrammes (à la place du code à 4 chiffres). Grille et
    emplacements dédiés (pictoGridPerso/pictoSlotsPerso), distincts de ceux du
-   mode enfant : kk_kiosk_pointer(token, code_pictos[]) exige le token de la
+   mode enfant : kk_kiosk_pointer_pictos(token, code_pictos[]) exige le token de la
    tablette en plus du code (contrairement à verifier_code_pointage, réservé
    aux enfants), donc un chemin de vérification séparé. */
 let pictoCodePerso=[];
@@ -311,7 +311,7 @@ async function submitPictoCodePerso(){
   if(busy)return;
   busy=true;
   showState(`<div class="state busy"><i>⏳</i><h2>Vérification…</h2></div>`);
-  const{data,error}=await sb.rpc('kk_kiosk_pointer',{p_token:TOKEN,p_code:pictoCodePerso});
+  const{data,error}=await sb.rpc('kk_kiosk_pointer_pictos',{p_token:TOKEN,p_code:pictoCodePerso});
   busy=false;
   const row=Array.isArray(data)?data[0]:data;
   if(error||!row){
