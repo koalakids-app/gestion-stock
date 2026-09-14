@@ -2795,6 +2795,25 @@ async function finishLoginAfterAuth(){
     btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Se connecter';
   }
 }
+// --- Mémorisation de l'appareil : évite de redemander le code à chaque
+// reconnexion (déconnexion systématique à chaque ouverture, cf. plus haut) sur
+// le même navigateur, en le limitant à 24h glissantes. Stocké en localStorage
+// (propre à ce navigateur/appareil), pas en base : ne dispense donc jamais du
+// mot de passe, seulement du code à 6 chiffres.
+const MFA_TRUST_MS=24*60*60*1000;
+function mfaTrustKey(){return 'kk_mfa_trust_'+(currentUser&&currentUser.id||'');}
+function mfaIsTrusted(){
+  try{
+    const t=Number(localStorage.getItem(mfaTrustKey())||0);
+    return t>0&&(Date.now()-t)<MFA_TRUST_MS;
+  }catch(e){return false;}
+}
+function mfaMarkTrusted(){
+  try{localStorage.setItem(mfaTrustKey(),String(Date.now()));}catch(e){}
+}
+function mfaClearTrusted(){
+  try{localStorage.removeItem(mfaTrustKey());}catch(e){}
+}
 // --- Portail MFA obligatoire à la connexion ---
 // S'intercale entre l'authentification par mot de passe (AAL1) et l'entrée dans
 // l'app : impose la vérification du second facteur si un facteur est déjà
@@ -2804,7 +2823,10 @@ async function mfaGateCheckAndProceed(){
     const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
     if(error)throw error;
     if(data.currentLevel==='aal2'){await finishLoginAfterAuth();return;}
-    if(data.nextLevel==='aal2'){mfaGateShowChallenge();return;}
+    if(data.nextLevel==='aal2'){
+      if(mfaIsTrusted()){await finishLoginAfterAuth();return;}
+      mfaGateShowChallenge();return;
+    }
     await mfaGateShowEnroll();
   }catch(e){
     console.error('[MFA Gate]',e);
@@ -2885,6 +2907,7 @@ async function mfaGateVerifyChallenge(){
     if(chErr)throw chErr;
     const{error:vErr}=await sb.auth.mfa.verify({factorId:verified.id,challengeId:ch.id,code});
     if(vErr)throw vErr;
+    mfaMarkTrusted();
     await finishLoginAfterAuth();
   }catch(e){
     err.textContent='Code invalide ou expiré : '+e.message;err.style.display='block';
@@ -2902,6 +2925,7 @@ async function mfaGateConfirmEnroll(){
     const{error:vErr}=await sb.auth.mfa.verify({factorId:mfaGateFactorId,challengeId:ch.id,code});
     if(vErr)throw vErr;
     mfaGateFactorId=null;
+    mfaMarkTrusted();
     await finishLoginAfterAuth();
   }catch(e){
     err.textContent='Code invalide ou expiré : '+e.message;err.style.display='block';
@@ -3126,6 +3150,7 @@ async function secMfaUnenroll(){
     const{error}=await sb.auth.mfa.unenroll({factorId:secMfaFactorId});
     if(error)throw error;
     secMfaFactorId=null;
+    mfaClearTrusted();
     await secMfaRefreshStatus();
   }catch(err){
     document.getElementById('sec-mfa-err-generic').textContent='Erreur lors de la désactivation : '+err.message;
