@@ -65,6 +65,35 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
   </div>
 </div>
 
+<div id="mfaGateView" style="display:none;max-width:360px;margin:60px auto;padding:0 16px">
+  <div class="card" style="padding:18px">
+    <div id="mfaChallengeView" style="display:none">
+      <h3><i class="ti ti-shield-lock"></i> Double authentification</h3>
+      <p class="hint" style="margin-top:0">Entrez le code à 6 chiffres généré par votre application d'authentification.</p>
+      <div class="f"><label class="lb">Code</label><input id="mfaCode" maxlength="6" inputmode="numeric" placeholder="123456" style="letter-spacing:4px;text-align:center;font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();mfaVerifyChallenge();}"></div>
+      <div id="mfaChallengeErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button class="btn btn-g" onclick="mfaCancel()">Annuler</button>
+        <button class="btn btn-p" onclick="mfaVerifyChallenge()"><i class="ti ti-check"></i> Valider</button>
+      </div>
+    </div>
+    <div id="mfaEnrollView" style="display:none">
+      <h3><i class="ti ti-shield-lock"></i> Double authentification requise</h3>
+      <p class="hint" style="margin-top:0">La double authentification est désormais obligatoire pour accéder à votre espace.
+        Scannez ce QR code avec une application d'authentification (Google Authenticator, Authy...), puis entrez le code
+        généré pour continuer.</p>
+      <div id="mfaQr" style="text-align:center;margin:14px 0;min-height:190px;display:flex;align-items:center;justify-content:center;overflow:hidden"></div>
+      <p class="hint" style="text-align:center">Impossible de scanner ? Code manuel : <code id="mfaSecret" style="user-select:all"></code></p>
+      <div class="f"><label class="lb">Code</label><input id="mfaEnrollCode" maxlength="6" inputmode="numeric" placeholder="123456" style="letter-spacing:4px;text-align:center;font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();mfaConfirmEnroll();}"></div>
+      <div id="mfaEnrollErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button class="btn btn-g" onclick="mfaCancel()">Annuler</button>
+        <button class="btn btn-p" onclick="mfaConfirmEnroll()"><i class="ti ti-check"></i> Activer et continuer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="setPwdView" style="display:none;max-width:360px;margin:60px auto;padding:0 16px">
   <div class="card" style="padding:18px">
     <h3 style="font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet);margin-bottom:6px;display:flex;align-items:center;gap:8px"><i class="ti ti-lock"></i> Bienvenue !</h3>
@@ -156,19 +185,21 @@ function addDays(dateStr,n){const d=new Date(dateStr+'T00:00:00');d.setDate(d.ge
 function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
 
 /* ---------- AUTH ---------- */
-/* Pas de MFA ici, à la différence des modules direction/directrice technique : c'est un
-   accès en lecture seule à ses propres données (planning, pointages), pas au
-   dossier des enfants ni aux informations financières de la crèche. */
+/* MFA (TOTP) obligatoire, comme dans les modules direction/directrice technique
+   (demandes.html) : même portail mfaGateCheckAndProceed, imposé après le mot de
+   passe (AAL1) et avant l'accès à l'espace. */
 let JUSTE_CONNECTE=false;
 function showLogin(msg){
   document.getElementById('appView').style.display='none';
   document.getElementById('setPwdView').style.display='none';
+  document.getElementById('mfaGateView').style.display='none';
   document.getElementById('loginView').style.display='block';
   document.getElementById('liErr').textContent=msg||'';
 }
 function showSetPassword(){
   document.getElementById('appView').style.display='none';
   document.getElementById('loginView').style.display='none';
+  document.getElementById('mfaGateView').style.display='none';
   document.getElementById('setPwdView').style.display='block';
 }
 /* Un lien d'invitation (ou de réinitialisation) Supabase revient avec
@@ -227,6 +258,9 @@ async function boot(){
     showSetPassword();
     return;
   }
+  await mfaGateCheckAndProceed();
+}
+async function loadProfileAndGrant(){
   let c=null,type=null;
   try{
     const{data,error}=await sb.from('employes').select('*').eq('user_id',ME.id).maybeSingle();
@@ -253,10 +287,121 @@ async function doLogin(){
   const e=val('liMail'),p=val('liPwd');
   if(!e||!p){document.getElementById('liErr').textContent='E-mail et mot de passe requis.';return;}
   document.getElementById('liErr').textContent='';
-  const{error}=await sb.auth.signInWithPassword({email:e,password:p});
+  const{data,error}=await sb.auth.signInWithPassword({email:e,password:p});
   if(error){document.getElementById('liErr').textContent='Identifiants incorrects.';return;}
   JUSTE_CONNECTE=true;
-  await boot();
+  ME=data.user;
+  await mfaGateCheckAndProceed();
+}
+
+/* ---------- Portail MFA obligatoire (aal2), même mécanique que demandes.html ---------- */
+async function mfaGateCheckAndProceed(){
+  try{
+    const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(error)throw error;
+    if(data.currentLevel==='aal2'){await loadProfileAndGrant();return;}
+    if(data.nextLevel==='aal2'){mfaShowChallenge();return;}
+    await mfaShowEnroll();
+  }catch(e){
+    console.error('[MFA Gate]',e);
+    try{await sb.auth.signOut();}catch(e2){}
+    showLogin('Erreur de vérification de la double authentification. Réessayez.');
+  }
+}
+function mfaSwitchView(id){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('setPwdView').style.display='none';
+  document.getElementById('mfaGateView').style.display='block';
+  ['mfaChallengeView','mfaEnrollView'].forEach(v=>{
+    document.getElementById(v).style.display=(v===id?'block':'none');
+  });
+}
+function mfaShowChallenge(){
+  document.getElementById('mfaCode').value='';
+  document.getElementById('mfaChallengeErr').textContent='';
+  mfaSwitchView('mfaChallengeView');
+  setTimeout(()=>{const el=document.getElementById('mfaCode');if(el)el.focus();},100);
+}
+let MFA_FACTOR_ID=null;
+async function mfaShowEnroll(){
+  mfaSwitchView('mfaEnrollView');
+  const err=document.getElementById('mfaEnrollErr');
+  err.textContent='';
+  try{
+    const{data:existing,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const stale=(existing.all||[]).filter(f=>f.factor_type==='totp'&&f.status!=='verified');
+    for(const f of stale){
+      try{await sb.auth.mfa.unenroll({factorId:f.id});}catch(e){console.warn('Nettoyage facteur MFA périmé échoué :',e.message);}
+    }
+    const{data,error}=await sb.auth.mfa.enroll({factorType:'totp'});
+    if(error)throw error;
+    MFA_FACTOR_ID=data.id;
+    const qrEl=document.getElementById('mfaQr');
+    qrEl.innerHTML='';
+    const qr=data.totp.qr_code||'';
+    const svgMatch=qr.match(/<svg[\s\S]*<\/svg>/i);
+    if(svgMatch){
+      qrEl.innerHTML=svgMatch[0];
+      const svg=qrEl.querySelector('svg');
+      if(svg){svg.style.width='180px';svg.style.height='180px';}
+    }else{
+      const img=document.createElement('img');
+      img.alt='QR code MFA';
+      img.style.cssText='display:block;width:180px;height:180px;object-fit:contain';
+      img.src=qr;
+      qrEl.appendChild(img);
+    }
+    document.getElementById('mfaSecret').textContent=data.totp.secret;
+    document.getElementById('mfaEnrollCode').value='';
+  }catch(e){
+    console.error('[MFA enroll]',e);
+    err.textContent="Erreur lors de la préparation de l'enrôlement : "+e.message;
+  }
+}
+async function mfaVerifyChallenge(){
+  const code=val('mfaCode');
+  const err=document.getElementById('mfaChallengeErr');
+  err.textContent='';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';return;}
+  try{
+    const{data:factors,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const verified=(factors.totp||[])[0];
+    if(!verified)throw new Error('Aucun facteur MFA vérifié trouvé sur ce compte.');
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:verified.id});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:verified.id,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    await loadProfileAndGrant();
+  }catch(e){
+    err.textContent='Code invalide ou expiré : '+e.message;
+  }
+}
+async function mfaConfirmEnroll(){
+  const code=val('mfaEnrollCode');
+  const err=document.getElementById('mfaEnrollErr');
+  err.textContent='';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';return;}
+  if(!MFA_FACTOR_ID){err.textContent='Session d\'enrôlement expirée, réessayez.';return;}
+  try{
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:MFA_FACTOR_ID});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:MFA_FACTOR_ID,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    MFA_FACTOR_ID=null;
+    await loadProfileAndGrant();
+  }catch(e){
+    err.textContent='Code invalide ou expiré : '+e.message;
+  }
+}
+async function mfaCancel(){
+  if(MFA_FACTOR_ID){try{await sb.auth.mfa.unenroll({factorId:MFA_FACTOR_ID});}catch(e){console.warn('Nettoyage annulation MFA échoué :',e.message);}}
+  MFA_FACTOR_ID=null;
+  try{await sb.auth.signOut();}catch(e){}
+  JUSTE_CONNECTE=false;
+  showLogin();
 }
 function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
 async function doLogout(){
