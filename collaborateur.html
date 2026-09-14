@@ -294,13 +294,33 @@ async function doLogin(){
   await mfaGateCheckAndProceed();
 }
 
+/* Mémorisation de l'appareil : évite de redemander le code à chaque reconnexion
+   (déconnexion systématique à chaque ouverture, cf. plus haut) sur le même
+   navigateur, en le limitant à 24h glissantes. Stocké en localStorage (propre à
+   ce navigateur/appareil), pas en base : ne dispense donc jamais du mot de
+   passe, seulement du code à 6 chiffres. */
+const MFA_TRUST_MS=24*60*60*1000;
+function mfaTrustKey(){return 'kk_mfa_trust_'+(ME&&ME.id||'');}
+function mfaIsTrusted(){
+  try{
+    const t=Number(localStorage.getItem(mfaTrustKey())||0);
+    return t>0&&(Date.now()-t)<MFA_TRUST_MS;
+  }catch(e){return false;}
+}
+function mfaMarkTrusted(){
+  try{localStorage.setItem(mfaTrustKey(),String(Date.now()));}catch(e){}
+}
+
 /* ---------- Portail MFA obligatoire (aal2), même mécanique que demandes.html ---------- */
 async function mfaGateCheckAndProceed(){
   try{
     const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
     if(error)throw error;
     if(data.currentLevel==='aal2'){await loadProfileAndGrant();return;}
-    if(data.nextLevel==='aal2'){mfaShowChallenge();return;}
+    if(data.nextLevel==='aal2'){
+      if(mfaIsTrusted()){await loadProfileAndGrant();return;}
+      mfaShowChallenge();return;
+    }
     await mfaShowEnroll();
   }catch(e){
     console.error('[MFA Gate]',e);
@@ -374,6 +394,7 @@ async function mfaVerifyChallenge(){
     if(chErr)throw chErr;
     const{error:vErr}=await sb.auth.mfa.verify({factorId:verified.id,challengeId:ch.id,code});
     if(vErr)throw vErr;
+    mfaMarkTrusted();
     await loadProfileAndGrant();
   }catch(e){
     err.textContent='Code invalide ou expiré : '+e.message;
@@ -391,6 +412,7 @@ async function mfaConfirmEnroll(){
     const{error:vErr}=await sb.auth.mfa.verify({factorId:MFA_FACTOR_ID,challengeId:ch.id,code});
     if(vErr)throw vErr;
     MFA_FACTOR_ID=null;
+    mfaMarkTrusted();
     await loadProfileAndGrant();
   }catch(e){
     err.textContent='Code invalide ou expiré : '+e.message;
