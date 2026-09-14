@@ -487,6 +487,21 @@ async function boot(){
   // MFA obligatoire à la connexion, même portail que demandes.html/documents.html.
   await mfaGateCheckAndProceed();
 }
+// --- Mémorisation de l'appareil : évite de redemander le code à chaque
+// reconnexion sur le même navigateur, en le limitant à 24h glissantes.
+// Stocké en localStorage (propre à ce navigateur/appareil), pas en base : ne
+// dispense donc jamais du mot de passe, seulement du code à 6 chiffres.
+const MFA_TRUST_MS=24*60*60*1000;
+function mfaTrustKey(){return 'kk_mfa_trust_'+(ME&&ME.id||'');}
+function mfaIsTrusted(){
+  try{
+    const t=Number(localStorage.getItem(mfaTrustKey())||0);
+    return t>0&&(Date.now()-t)<MFA_TRUST_MS;
+  }catch(e){return false;}
+}
+function mfaMarkTrusted(){
+  try{localStorage.setItem(mfaTrustKey(),String(Date.now()));}catch(e){}
+}
 // --- Portail MFA obligatoire ---
 function mfaGateSwitchView(id){
   document.getElementById('appView').style.display='none';
@@ -502,7 +517,10 @@ async function mfaGateCheckAndProceed(){
     const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
     if(error)throw error;
     if(data.currentLevel==='aal2'){await contratsGrantAccess();return;}
-    if(data.nextLevel==='aal2'){mfaGateShowChallenge();return;}
+    if(data.nextLevel==='aal2'){
+      if(mfaIsTrusted()){await contratsGrantAccess();return;}
+      mfaGateShowChallenge();return;
+    }
     await mfaGateShowEnroll();
   }catch(e){
     console.error('[MFA Gate]',e);
@@ -567,6 +585,7 @@ async function mfaGateVerifyChallenge(){
     if(chErr)throw chErr;
     const{error:vErr}=await sb.auth.mfa.verify({factorId:verified.id,challengeId:ch.id,code});
     if(vErr)throw vErr;
+    mfaMarkTrusted();
     await contratsGrantAccess();
   }catch(e){
     err.textContent='Code invalide ou expiré : '+e.message;err.style.display='block';
@@ -584,6 +603,7 @@ async function mfaGateConfirmEnroll(){
     const{error:vErr}=await sb.auth.mfa.verify({factorId:mfaGateFactorId,challengeId:ch.id,code});
     if(vErr)throw vErr;
     mfaGateFactorId=null;
+    mfaMarkTrusted();
     await contratsGrantAccess();
   }catch(e){
     err.textContent='Code invalide ou expiré : '+e.message;err.style.display='block';
