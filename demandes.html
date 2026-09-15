@@ -515,6 +515,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <button class="mnav-hub-item" onclick="showMain('incidents');closeHub()" id="mnav-incidents"><i class="ti ti-alert-triangle"></i> Incidents <span class="mnav-badge" id="badge-incidents" style="display:none">0</span></button>
             <button class="mnav-hub-item" onclick="showMain('enfants');closeHub()" id="mnav-enfants"><i class="ti ti-mood-kid"></i> Enfants</button>
             <button class="mnav-hub-item" onclick="showMain('vaccinations');closeHub()" id="mnav-vaccinations"><i class="ti ti-vaccine"></i> Vaccinations</button>
+            <button class="mnav-hub-item" onclick="showMain('partenaires');closeHub()" id="mnav-partenaires"><i class="ti ti-building-community"></i> Partenaires</button>
           </div>
           <div class="mnav-hub-col">
             <div class="mnav-hub-title">Équipe</div>
@@ -644,6 +645,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <p class="hint" style="font-size:12.5px;color:var(--muted);margin:-4px 0 12px">Pour le personnel qui n'a pas besoin de se connecter à l'application — agents d'entretien, remplaçantes ponctuelles… Chacun reçoit un code de pointage à 4 chiffres pour la tablette dédiée.</p>
     <div id="employe-creche-tabs-bar" class="creche-tabs-bar"></div>
     <div class="ref-grid" id="employe-grid"></div>
+  </div>
+
+  <!-- PARTENAIRES ET INSTITUTIONS -->
+  <div id="main-partenaires" class="tab-content">
+    <div class="section-header">
+      <span class="section-title">Partenaires et institutions</span>
+      <button class="btn-primary" onclick="openPartenaireModal()"><i class="ti ti-plus"></i> Ajouter un partenaire</button>
+    </div>
+    <p class="hint" style="font-size:12.5px;color:var(--muted);margin:-4px 0 12px">CAF, PMI, prestataire repas, mairie… les organismes avec lesquels le réseau travaille. Un contact sans crèche précisée concerne l'ensemble du réseau.</p>
+    <div id="partenaires-filtre-bar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
+    <div class="ref-grid" id="partenaires-grid"></div>
   </div>
 
   <!-- PLANNING -->
@@ -1895,6 +1907,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<div class="overlay" id="modal-partenaire-wrap">
+  <div class="modal">
+    <h3 id="modal-partenaire-title">Ajouter un partenaire</h3>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Nom</label><input class="finput" id="part-nom" placeholder="CAF du Var"/></div>
+      <div class="fg"><label class="flabel">Catégorie</label><input class="finput" id="part-categorie" list="part-categories" placeholder="CAF, PMI, Prestataire repas…"/>
+        <datalist id="part-categories"><option value="CAF"><option value="PMI"><option value="Prestataire repas"><option value="Mairie"><option value="Assurance"><option value="Autre"></datalist>
+      </div>
+    </div>
+    <div class="fg"><label class="flabel">Crèche concernée</label><select class="finput" id="part-creche"><option value="">-- Tout le réseau --</option></select></div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Contact (nom)</label><input class="finput" id="part-contact-nom" placeholder="Nom de l'interlocuteur"/></div>
+      <div class="fg"><label class="flabel">Téléphone</label><input class="finput" id="part-telephone" type="tel"/></div>
+    </div>
+    <div class="fg"><label class="flabel">E-mail</label><input class="finput" id="part-email" type="email"/></div>
+    <div class="fg"><label class="flabel">Adresse</label><input class="finput" id="part-adresse" placeholder="Adresse postale"/></div>
+    <div class="fg"><label class="flabel">Notes</label><textarea class="finput" id="part-notes" rows="3" style="resize:vertical" placeholder="Numéro de dossier, horaires d'ouverture, particularités…"></textarea></div>
+    <div class="mactions"><button class="btn-cancel" id="part-btn-delete" style="display:none;color:var(--red)" onclick="deletePartenaire()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-partenaire-wrap')">Annuler</button><button class="btn-primary" onclick="savePartenaire()"><i class="ti ti-check"></i> Enregistrer</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="modal-creche-wrap">
   <div class="modal">
     <h3 id="modal-creche-title">Ajouter une crèche</h3>
@@ -2455,7 +2488,7 @@ if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https:/
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='';
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 let calOnlyMine=(localStorage.getItem('calOnlyMine')==='1');
 
@@ -2539,6 +2572,9 @@ async function loadAllData(){
   try{cacheEmployes=await dbSelect('employes');}catch(e){console.warn('[loadAllData] employes',e);cacheEmployes=[];}
   // Consignes lues (notifications in-app) — non bloquant
   try{cacheConsignesLues=await dbSelect('consignes_lues');}catch(e){cacheConsignesLues=[];}
+  // Annuaire des partenaires/institutions — table posée par sql/partenaires.sql,
+  // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
+  try{cachePartenaires=await dbSelect('partenaires');}catch(e){console.warn('[loadAllData] partenaires',e);cachePartenaires=[];}
   // Salariés — non bloquant (alimente aussi le sélecteur de prénom du planning équipe)
   // Recalcul silencieux du groupe selon l'âge : corrige en base les enfants dont le groupe stocké est périmé.
   // Une seule fois par session : loadAllData() est aussi rappelée par la synchronisation
@@ -2575,7 +2611,7 @@ async function loadAllData(){
    une saisie en cours — la synchro est alors reportée à sa fermeture), jamais en
    arrière-plan, et jamais deux rechargements coup sur coup.
    ═════════════════════════════════════════════════════════════════════════ */
-const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','employes','planning','planning_equipe','enfants_contrats','taches_afaire','commandes_repas','actions_direction','reunions_direction'];
+const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','employes','planning','planning_equipe','enfants_contrats','taches_afaire','commandes_repas','actions_direction','reunions_direction','partenaires'];
 const SYNC_PERIODE_MS=60000;   // rappel périodique quand l'onglet est visible
 const SYNC_MIN_MS=10000;       // anti-rafale entre deux rechargements
 let _mainCourant=null,_syncDernier=0,_syncEnCours=false,_syncEnAttente=false,
@@ -2628,6 +2664,7 @@ function syncRedessine(){
     else if(t==='enfants'&&typeof enfRender==='function')enfRender();
     else if(t==='afaire'&&typeof afRender==='function')afRender();
     else if(t==='actions'&&typeof adLoad==='function')adLoad();
+    else if(t==='partenaires'&&typeof renderPartenaires==='function')renderPartenaires();
   }catch(err){console.warn('[Sync] redessin '+t,err);}
   // Fiche enfant ouverte en lecture : on remet à jour son titre et son onglet
   // Identité, sans toucher aux onglets Contrat / Documents chargés à part.
@@ -3240,7 +3277,7 @@ async function markConsignesRead(){
 
 function showMain(tab){
   _mainCourant=tab;
-  ['demands','incidents','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','actions','stagiaires'].forEach(t=>{
+  ['demands','incidents','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','actions','stagiaires','partenaires'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -3267,6 +3304,7 @@ function showMain(tab){
   if(tab==='afaire')afInit();
   if(tab==='actions'){if(isDirection)adInit();else showMain('ref-dashboard');}
   if(tab==='stagiaires')stgInit();
+  if(tab==='partenaires')renderPartenaires();
 }
 
 // FULLSCREEN DEMANDES
@@ -3826,6 +3864,117 @@ async function deleteEmploye(id){
     closeModal('modal-employe-wrap');
     renderEmployes();
     showBanner('Employé supprimé.');
+  }else showBanner('Erreur lors de la suppression.','error');
+}
+
+/* ===== PARTENAIRES ET INSTITUTIONS (CAF, PMI, prestataire repas…) =========
+   Annuaire partagé, table `partenaires` (cf. sql/partenaires.sql). Un
+   partenaire sans creche_id concerne tout le réseau ; sinon il n'apparaît
+   qu'aux comptes rattachés à cette crèche (et à la direction, qui voit
+   toujours tout). */
+let editingPartenaireId=null,partenairesFiltreCategorie='';
+function partenairesVisibles(){
+  return cachePartenaires.filter(p=>!p.creche_id||p.creche_id===currentProfile?.creche_id||isDirection);
+}
+function renderPartenairesFiltres(){
+  const bar=document.getElementById('partenaires-filtre-bar');if(!bar)return;
+  const categories=[...new Set(partenairesVisibles().map(p=>p.categorie||'Autre'))].sort((a,b)=>a.localeCompare(b,'fr'));
+  if(!categories.length){bar.innerHTML='';return;}
+  const chip=(label,value)=>'<button class="fchip'+(partenairesFiltreCategorie===value?' active':'')+'" onclick="partenairesFiltrerCategorie(\''+value+'\')">'+escHtml(label)+'</button>';
+  bar.innerHTML=chip('Toutes','')+categories.map(c=>chip(c,c)).join('');
+}
+function partenairesFiltrerCategorie(cat){partenairesFiltreCategorie=cat;renderPartenaires();}
+window.partenairesFiltrerCategorie=partenairesFiltrerCategorie;
+function renderPartenaires(){
+  const grid=document.getElementById('partenaires-grid');if(!grid)return;
+  renderPartenairesFiltres();
+  let list=partenairesVisibles();
+  if(partenairesFiltreCategorie)list=list.filter(p=>(p.categorie||'Autre')===partenairesFiltreCategorie);
+  list=list.slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'}));
+  if(!list.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-building-community"></i><p>Aucun partenaire enregistré.</p></div>';return;}
+  grid.innerHTML=list.map(p=>{
+    const creche=p.creche_id?cacheCreches.find(c=>c.id===p.creche_id):null;
+    const portee=creche?escHtml(creche.name):'<span style="color:var(--koala)">🌐 Tout le réseau</span>';
+    return '<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:var(--muted)">'+escHtml((p.categorie||'?').slice(0,2).toUpperCase())+'</div><div style="flex:1;min-width:0">'
+      +'<div class="ref-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+escHtml(p.nom)+' <span style="background:var(--koala-light);color:var(--koala);border-radius:10px;padding:2px 8px;font-size:10px;font-weight:700">'+escHtml(p.categorie||'Autre')+'</span></div>'
+      +'<div class="ref-detail"><i class="ti ti-map-pin" style="font-size:11px"></i> '+portee+'</div>'
+      +(p.contact_nom?'<div class="ref-detail"><i class="ti ti-user" style="font-size:11px"></i> '+escHtml(p.contact_nom)+'</div>':'')
+      +(p.telephone?'<div class="ref-detail"><i class="ti ti-phone" style="font-size:11px"></i> '+escHtml(p.telephone)+'</div>':'')
+      +(p.email?'<div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+escHtml(p.email)+'</div>':'')
+      +(p.adresse?'<div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+escHtml(p.adresse)+'</div>':'')
+      +(p.notes?'<div class="ref-detail" style="white-space:pre-wrap">'+escHtml(p.notes)+'</div>':'')
+      +'</div></div><div class="ref-actions"><button class="ibtn" onclick="editPartenaire(\''+p.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deletePartenaire(\''+p.id+'\')"><i class="ti ti-trash"></i></button></div></div>';
+  }).join('');
+}
+window.renderPartenaires=renderPartenaires;
+function partenaireFillCrecheSelect(selectedId){
+  const sel=document.getElementById('part-creche');if(!sel)return;
+  sel.innerHTML='<option value="">-- Tout le réseau --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===selectedId?' selected':'')+'>'+escHtml(c.name)+'</option>').join('');
+}
+function openPartenaireModal(){
+  editingPartenaireId=null;
+  document.getElementById('modal-partenaire-title').textContent='Ajouter un partenaire';
+  ['part-nom','part-categorie','part-contact-nom','part-telephone','part-email','part-adresse','part-notes'].forEach(id=>{document.getElementById(id).value='';});
+  partenaireFillCrecheSelect('');
+  document.getElementById('part-btn-delete').style.display='none';
+  document.getElementById('modal-partenaire-wrap').classList.add('open');
+}
+window.openPartenaireModal=openPartenaireModal;
+function editPartenaire(id){
+  const p=cachePartenaires.find(x=>String(x.id)===String(id));if(!p)return;
+  editingPartenaireId=id;
+  document.getElementById('modal-partenaire-title').textContent='Modifier le partenaire';
+  document.getElementById('part-nom').value=p.nom||'';
+  document.getElementById('part-categorie').value=p.categorie||'';
+  document.getElementById('part-contact-nom').value=p.contact_nom||'';
+  document.getElementById('part-telephone').value=p.telephone||'';
+  document.getElementById('part-email').value=p.email||'';
+  document.getElementById('part-adresse').value=p.adresse||'';
+  document.getElementById('part-notes').value=p.notes||'';
+  partenaireFillCrecheSelect(p.creche_id||'');
+  document.getElementById('part-btn-delete').style.display='';
+  document.getElementById('modal-partenaire-wrap').classList.add('open');
+}
+window.editPartenaire=editPartenaire;
+async function savePartenaire(){
+  const nom=document.getElementById('part-nom').value.trim();
+  if(!nom){alert('Le nom du partenaire est requis.');return;}
+  const row={
+    nom,
+    categorie:document.getElementById('part-categorie').value.trim()||'Autre',
+    creche_id:document.getElementById('part-creche').value||null,
+    contact_nom:document.getElementById('part-contact-nom').value.trim()||null,
+    telephone:document.getElementById('part-telephone').value.trim()||null,
+    email:document.getElementById('part-email').value.trim()||null,
+    adresse:document.getElementById('part-adresse').value.trim()||null,
+    notes:document.getElementById('part-notes').value.trim()||null
+  };
+  let ok;
+  if(editingPartenaireId){
+    row.updated_at=new Date().toISOString();
+    ok=await dbUpdate('partenaires',editingPartenaireId,row);
+    if(ok){const p=cachePartenaires.find(x=>String(x.id)===String(editingPartenaireId));if(p)Object.assign(p,row);}
+  }else{
+    const saved=await dbInsert('partenaires',row);
+    ok=!!saved;
+    if(saved)cachePartenaires.push(saved);
+  }
+  if(!ok){showBanner('Enregistrement impossible : '+(window._lastDbError||'droits insuffisants'),'error');return;}
+  closeModal('modal-partenaire-wrap');
+  showBanner(editingPartenaireId?'Partenaire modifié ✅':'Partenaire ajouté ✅');
+  renderPartenaires();
+}
+window.savePartenaire=savePartenaire;
+async function deletePartenaire(id){
+  const targetId=id||editingPartenaireId;
+  if(!targetId)return;
+  if(!confirm('Supprimer ce partenaire ?'))return;
+  const ok=await dbDelete('partenaires',targetId);
+  if(ok){
+    cachePartenaires=cachePartenaires.filter(p=>p.id!==targetId);
+    closeModal('modal-partenaire-wrap');
+    renderPartenaires();
+    showBanner('Partenaire supprimé.');
   }else showBanner('Erreur lors de la suppression.','error');
 }
 window.deleteEmploye=deleteEmploye;
