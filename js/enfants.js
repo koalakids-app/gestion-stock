@@ -162,6 +162,7 @@ async function enfOpenFiche(id){
   document.getElementById('enf-pieces-dossier-box').innerHTML = '';
   document.getElementById('enf-admin-docs-zone').innerHTML = '';
   document.getElementById('enf-fiche-sanitaire-zone').innerHTML = '';
+  document.getElementById('enf-pai-zone').innerHTML = '';
   document.getElementById('enf-carnet-zone').innerHTML = '';
   document.getElementById('modal-enf-fiche-wrap').classList.add('open');
   // charger les documents et le dossier famille en arrière-plan
@@ -170,6 +171,7 @@ async function enfOpenFiche(id){
   enfLoadAdminDocs(e.id);
   enfLoadPieces(e.id);
   enfLoadCarnet(e.id);
+  enfLoadPai(e.id);
 }
 
 const ENF_FICHE_TABS = ['identite','parents','contrat','documents'];
@@ -1598,6 +1600,110 @@ window.enfAdminDocOpen = enfAdminDocOpen;
 window.enfAdminDocDelete = enfAdminDocDelete;
 window.enfHandleAdminDocUpload = enfHandleAdminDocUpload;
 window.enfOpenPieceUpload = enfOpenPieceUpload;
+
+/* ===== PAI — Projet d'Accueil Individualisé (fiche enfant) =================
+   Documents liés au PAI d'un enfant (protocole, ordonnances associées...) :
+   donnée de santé, au même titre que le carnet de vaccination. Même schéma de
+   stockage que `vaccins_pj` : bucket PRIVÉ `carnets` (déjà créé, déjà doté de
+   policies pour les données de santé enfant), aucune URL publique enregistrée —
+   seuls bucket et chemin sont gardés en base, une URL signée est générée à
+   chaque ouverture. Voir sql/enfants_pai.sql. */
+const ENF_PAI_BUCKET = 'carnets';
+const ENF_PAI_TTL    = 300;   // durée de vie d'une URL signée, en secondes
+
+let enfPaiCache = [];
+async function enfLoadPai(enfantId){
+  try{
+    const{data,error}=await sb.from('enfants_pai')
+      .select('*')
+      .eq('enfant_id',enfantId)
+      .order('created_at',{ascending:false});
+    if(error) throw error;
+    enfPaiCache = data||[];
+  }catch(err){
+    console.warn('enfLoadPai',err);
+    enfPaiCache = [];
+  }
+  // ne rendre que si on est toujours sur le même enfant
+  if(String(enfFicheId)!==String(enfantId)) return;
+  enfRenderPai();
+}
+
+function enfRenderPai(){
+  const zone=document.getElementById('enf-pai-zone');
+  if(!zone) return;
+  const list = enfPaiCache.length ? enfPaiCache.map(d=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:#fff">'
+    +'<i class="ti ti-paperclip" style="color:var(--koala)"></i>'
+    +'<button type="button" onclick="enfPaiOpen(\''+d.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12.5px;color:var(--koala-dark);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(d.filename||'Document')+'</button>'
+    +'<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+new Date(d.created_at).toLocaleDateString('fr-FR')+'</span>'
+    +'<button onclick="enfPaiDelete(\''+d.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:15px"><i class="ti ti-trash"></i></button>'
+    +'</div>'
+  ).join('') : '<div style="font-size:12px;color:var(--muted)">Aucun document PAI pour le moment.</div>';
+  zone.innerHTML = '<div style="font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-first-aid-kit" style="color:var(--koala)"></i> PAI (Projet d\'Accueil Individualisé)</div>'
+    + '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">'+list+'</div>'
+    + '<button class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;font-size:12.5px" onclick="document.getElementById(\'enf-pai-input\').click()"><i class="ti ti-upload"></i> Importer un document PAI</button>'
+    + '<span id="enf-pai-input-status" style="margin-left:10px;font-size:12px;color:var(--muted)"></span>'
+    + '<input type="file" id="enf-pai-input" accept="image/*,application/pdf" multiple style="display:none" onchange="enfHandlePaiUpload(event)"/>';
+}
+
+async function enfHandlePaiUpload(event){
+  const input=event.target;
+  const files=Array.from(input.files||[]);
+  if(!files.length) return;
+  const eid=enfFicheId;
+  const status=document.getElementById('enf-pai-input-status');
+  for(const file of files){
+    if(status) status.textContent='⏳ Envoi de '+file.name+'…';
+    try{
+      const ext=(file.name.split('.').pop()||'bin');
+      const path=eid+'/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+      /* Client authentifie et non le client anonyme : le bucket est prive et
+         ses policies exigent un compte referent. */
+      const{error}=await sb.storage.from(ENF_PAI_BUCKET).upload(path,file);
+      if(error) throw error;
+      const{data:ins,error:insErr}=await sb.from('enfants_pai')
+        .insert({enfant_id:eid,bucket:ENF_PAI_BUCKET,path:path,filename:file.name}).select().single();
+      if(insErr) throw insErr;
+      if(ins) enfPaiCache.unshift(ins);
+      enfRenderPai();
+    }catch(e){
+      console.error('[enfPai]',e.message);
+      if(status) status.textContent='⚠ Erreur : '+e.message;
+      return;
+    }
+  }
+  if(status) status.textContent='✅ Ajouté';
+  input.value='';
+  showBanner('Document(s) PAI importé(s) ✅');
+}
+
+async function enfPaiOpen(id){
+  const d=enfPaiCache.find(x=>String(x.id)===String(id));
+  if(!d){alert('Fichier introuvable.');return;}
+  const{data,error}=await sb.storage.from(d.bucket||ENF_PAI_BUCKET).createSignedUrl(d.path,ENF_PAI_TTL);
+  if(error||!data){alert('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'));return;}
+  window.open(data.signedUrl,'_blank','noopener');
+}
+
+async function enfPaiDelete(id){
+  if(!confirm('Supprimer ce document ?')) return;
+  const d=enfPaiCache.find(x=>String(x.id)===String(id));
+  const{error}=await sb.from('enfants_pai').delete().eq('id',id);
+  if(error){alert('Erreur : '+error.message);return;}
+  /* Le fichier lui-meme est retire du stockage : sans cela il resterait
+     indefiniment dans le bucket, hors de toute fiche. */
+  if(d){
+    const{error:rmErr}=await sb.storage.from(d.bucket||ENF_PAI_BUCKET).remove([d.path]);
+    if(rmErr) console.warn('[enfPai] fichier non supprime du stockage',rmErr.message);
+  }
+  enfPaiCache=enfPaiCache.filter(x=>String(x.id)!==String(id));
+  enfRenderPai();
+  showBanner('Document supprimé.');
+}
+window.enfPaiOpen = enfPaiOpen;
+window.enfPaiDelete = enfPaiDelete;
+window.enfHandlePaiUpload = enfHandlePaiUpload;
 
 /* ===== Dossier de pièces (envoi d'un lien de dépôt aux parents) ============
    Même principe que le dossier de familiarisation (dossiers_familles /
