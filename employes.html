@@ -161,15 +161,9 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       les créneaux par prénom, ce qui peut se tromper si deux personnes de la crèche portent le même
       prénom. Ce champ prend alors le pas sur le prénom pour le "Mon espace" de ce/cette collaborateur/trice.</p>
     <div class="f" id="ficheFormationWrap" style="display:none">
-      <label class="lb">Envoyer un quiz ou une formation</label>
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <select id="ficheFormationSelect" style="flex:1"><option value="">Chargement…</option></select>
-        <button type="button" class="btn btn-s btn-sm" onclick="envoyerFormation()"><i class="ti ti-send"></i> Envoyer</button>
-      </div>
-      <p class="hint">L'envoi transmet le lien par e-mail à l'adresse de la fiche (ou vous prévient s'il n'y en
-        a pas de renseignée) et l'ajoute au parcours de ce/cette collaborateur/trice, dans "À faire".</p>
-      <label class="lb" style="margin-top:10px">Parcours de formation</label>
+      <label class="lb">Parcours de formation</label>
       <div id="ficheFormationBox"></div>
+      <p class="hint">Les quiz et micro-formations s'assignent depuis l'espace <a href="https://koalakids-app.github.io/quiz-protocoles/admin.html" target="_blank" rel="noopener">Quiz &amp; Formations</a> (bouton « Assigner » sur chaque quiz/formation) — ils apparaissent ici une fois assignés.</p>
     </div>
     <div id="ficheErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
     <div class="foot">
@@ -194,8 +188,6 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const QUIZ_SUPABASE_URL="https://phbcqxjzobzwuzetgbem.supabase.co";
 const QUIZ_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoYmNxeGp6b2J6d3V6ZXRnYmVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1Mjg3ODMsImV4cCI6MjEwMDEwNDc4M30.Cz7_0WN_pWoXeamk484hJr2iCVdKZEatR-m_f0bKj3w";
 const sbQuiz=supabase.createClient(QUIZ_SUPABASE_URL,QUIZ_SUPABASE_ANON_KEY);
-const QUIZ_APP_URL="https://koalakids-app.github.io/quiz-protocoles/index.html";
-const FORMATIONS_APP_URL="https://koalakids-app.github.io/quiz-protocoles/formations.html";
 
 let ME=null,PROF=null,crecheId=null,CRECHES=[],EMPLOYES=[],isDirection=false;
 
@@ -517,69 +509,14 @@ async function saveFiche(){
   await loadEmployes();
 }
 
-/* ---------- PARCOURS DE FORMATION (envoi + lecture, vue direction/directrice) ----------
-   L'initiative revient à la direction/directrice technique : on choisit un
-   quiz ou une micro-formation publié(e) et on l'envoie explicitement (bouton
-   "Envoyer"), ce qui enregistre l'envoi dans gestion-stock (table
-   formations_envois, cf. sql/formations_envois.sql) — jamais un libre choix
-   côté collaborateur/trice, qui ne fait qu'afficher ce qu'on lui a envoyé.
-   Le lien porte un `ref` opaque (l'id de la fiche) qui rattache le résultat
-   côté quiz-protocoles (base Supabase distincte) sans dépendre du nom saisi
-   là-bas. */
-let FICHE_FORMATION_OPTIONS=[],FICHE_FORMATION_EMPLOYE=null;
-async function loadFicheFormationOptions(){
-  const sel=document.getElementById('ficheFormationSelect');
-  try{
-    const[qz,md]=await Promise.all([
-      sbQuiz.from('quiz').select('id,titre').eq('publie',true).order('titre'),
-      sbQuiz.from('module').select('id,titre').eq('publie',true).order('titre')
-    ]);
-    FICHE_FORMATION_OPTIONS=[
-      ...((qz.data||[]).map(q=>({value:'q-'+q.id,id:q.id,kind:'quiz',titre:q.titre}))),
-      ...((md.data||[]).map(m=>({value:'m-'+m.id,id:m.id,kind:'module',titre:m.titre})))
-    ];
-    if(!FICHE_FORMATION_OPTIONS.length){sel.innerHTML='<option value="">Aucun quiz ni formation publié</option>';return;}
-    sel.innerHTML='<option value="">— Choisir —</option>'
-      +'<optgroup label="Quiz">'+FICHE_FORMATION_OPTIONS.filter(o=>o.kind==='quiz').map(o=>'<option value="'+o.value+'">'+esc(o.titre)+'</option>').join('')+'</optgroup>'
-      +'<optgroup label="Micro-formations">'+FICHE_FORMATION_OPTIONS.filter(o=>o.kind==='module').map(o=>'<option value="'+o.value+'">'+esc(o.titre)+'</option>').join('')+'</optgroup>';
-  }catch(e){sel.innerHTML='<option value="">Liste indisponible</option>';}
-}
-async function envoyerFormation(){
-  const e=FICHE_FORMATION_EMPLOYE;
-  if(!e)return;
-  const sel=document.getElementById('ficheFormationSelect');
-  const opt=FICHE_FORMATION_OPTIONS.find(o=>o.value===sel.value);
-  if(!opt){toast('Choisissez un quiz ou une formation.',true);return;}
-  const crecheNom=(CRECHES.find(c=>c.id===crecheId)||{}).name||'';
-  const params=new URLSearchParams({ref:e.id,prenom:e.prenom||'',nom:e.nom||'',statut:'Salarié(e) en poste'});
-  if(crecheNom)params.set('creche',crecheNom);
-  const base=opt.kind==='quiz'?QUIZ_APP_URL:FORMATIONS_APP_URL;
-  params.set(opt.kind==='quiz'?'quiz':'module',opt.id);
-  const lien=base+'?'+params.toString();
-  const{data:saved,error}=await sb.from('formations_envois').insert({
-    employe_id:e.id,kind:opt.kind,item_id:opt.id,item_titre:opt.titre,lien,envoye_par:ME.id
-  }).select().single();
-  if(error){toast('Échec de l\'envoi : '+error.message,true);return;}
-  /* Le presse-papiers du navigateur échoue silencieusement dans de nombreux
-     contextes (permission refusée, page non sécurisée...) : la personne
-     copiait alors un lien vide sans le savoir. On envoie désormais un vrai
-     e-mail depuis le serveur (edge function envoyer-formation), qui ne
-     dépend pas du navigateur — le presse-papiers ne reste qu'un confort
-     silencieux en plus, jamais le seul moyen de transmission. */
-  if(e.email){
-    const{ok,data}=await callFn('envoyer-formation',{envoi_id:saved.id});
-    if(ok)toast('E-mail envoyé à '+e.email+'.');
-    else toast('Enregistré, mais l\'e-mail n\'a pas pu être envoyé : '+(data.error||'erreur inconnue')+'. Copiez le lien manuellement : '+lien,true);
-  }else{
-    toast('Envoyé — mais aucun e-mail sur cette fiche : copiez le lien manuellement : '+lien,true);
-  }
-  try{await navigator.clipboard.writeText(lien);}catch(err){}
-  sel.value='';
-  await loadFicheFormation(e);
-}
+/* ---------- PARCOURS DE FORMATION (lecture seule, vue direction/directrice) ----------
+   L'assignation d'un quiz/formation se fait depuis l'espace "Quiz &
+   Formations" (koalakids-app/quiz-protocoles, admin.html — bouton
+   "Assigner"), pas ici : cette fiche n'affiche que le résultat, à faire ou
+   déjà réalisé. Le lien porte un `ref` opaque (l'id de la fiche) qui
+   rattache le résultat côté quiz-protocoles (base Supabase distincte) sans
+   dépendre du nom saisi là-bas. */
 async function loadFicheFormation(e){
-  FICHE_FORMATION_EMPLOYE=e;
-  await loadFicheFormationOptions();
   const box=document.getElementById('ficheFormationBox');
   box.innerHTML='<p class="hint">Chargement…</p>';
   try{
