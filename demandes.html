@@ -1885,6 +1885,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fg"><label class="flabel">Nom</label><input class="finput" id="creche-name" placeholder="Les Petits Lutins"/></div>
     <div class="fg"><label class="flabel">Adresse (optionnel)</label><input class="finput" id="creche-addr" placeholder="Adresse"/></div>
     <div class="fg"><label class="flabel">Capacité d'accueil</label><input class="finput" id="creche-capacity" type="number" placeholder="10" min="1" max="60"/></div>
+    <div style="font-weight:700;font-size:12.5px;margin:14px 0 6px;color:var(--muted)">Coordonnées traiteur — commande repas</div>
+    <div class="info-box" style="margin-bottom:10px;font-size:11.5px"><i class="ti ti-info-circle" style="font-size:14px"></i> Pré-remplies d'office sur chaque commande repas de cette crèche : plus besoin de les ressaisir à chaque envoi.</div>
+    <div class="frow">
+      <div class="fg" style="flex:1"><label class="flabel">Téléphone</label><input class="finput" id="creche-repas-tel" placeholder="07 86 61 56 19"/></div>
+      <div class="fg" style="flex:1"><label class="flabel">Mail</label><input class="finput" id="creche-repas-mail" placeholder="rt.toulon.picot@koalakids.fr"/></div>
+    </div>
+    <div class="frow">
+      <div class="fg" style="flex:1"><label class="flabel">Contact</label><input class="finput" id="creche-repas-contact" placeholder="Nom du contact"/></div>
+      <div class="fg" style="flex:1"><label class="flabel">Nom de la responsable</label><input class="finput" id="creche-repas-responsable" placeholder="Prénom Nom"/></div>
+    </div>
     <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-creche-wrap')">Annuler</button><button class="btn-primary" id="btn-save-creche" onclick="saveCreche()"><i class="ti ti-check"></i> Ajouter</button></div>
   </div>
 </div>
@@ -3512,11 +3522,15 @@ async function saveConsigne(){
 }
 
 // CRECHES
-function openCrecheModal(){editingCrecheId=null;['creche-name','creche-addr','creche-capacity'].forEach(id=>document.getElementById(id).value='');document.getElementById('modal-creche-title').textContent='Ajouter une crèche';document.getElementById('btn-save-creche').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('modal-creche-wrap').classList.add('open');}
-function editCreche(id){const c=cacheCreches.find(x=>x.id===id);if(!c)return;editingCrecheId=id;document.getElementById('creche-name').value=c.name;document.getElementById('creche-addr').value=c.addr||'';document.getElementById('creche-capacity').value=c.capacity||'';document.getElementById('modal-creche-title').textContent='Modifier la crèche';document.getElementById('btn-save-creche').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('modal-creche-wrap').classList.add('open');}
+function openCrecheModal(){editingCrecheId=null;['creche-name','creche-addr','creche-capacity','creche-repas-tel','creche-repas-mail','creche-repas-contact','creche-repas-responsable'].forEach(id=>document.getElementById(id).value='');document.getElementById('modal-creche-title').textContent='Ajouter une crèche';document.getElementById('btn-save-creche').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('modal-creche-wrap').classList.add('open');}
+function editCreche(id){const c=cacheCreches.find(x=>x.id===id);if(!c)return;editingCrecheId=id;document.getElementById('creche-name').value=c.name;document.getElementById('creche-addr').value=c.addr||'';document.getElementById('creche-capacity').value=c.capacity||'';document.getElementById('creche-repas-tel').value=c.repas_tel||'';document.getElementById('creche-repas-mail').value=c.repas_mail||'';document.getElementById('creche-repas-contact').value=c.repas_contact||'';document.getElementById('creche-repas-responsable').value=c.repas_responsable||'';document.getElementById('modal-creche-title').textContent='Modifier la crèche';document.getElementById('btn-save-creche').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('modal-creche-wrap').classList.add('open');}
 async function saveCreche(){
   const name=document.getElementById('creche-name').value.trim();if(!name){alert('Nom requis.');return;}
-  const row={name,addr:document.getElementById('creche-addr').value.trim(),capacity:parseInt(document.getElementById('creche-capacity').value)||null};
+  const row={name,addr:document.getElementById('creche-addr').value.trim(),capacity:parseInt(document.getElementById('creche-capacity').value)||null,
+    repas_tel:document.getElementById('creche-repas-tel').value.trim()||null,
+    repas_mail:document.getElementById('creche-repas-mail').value.trim()||null,
+    repas_contact:document.getElementById('creche-repas-contact').value.trim()||null,
+    repas_responsable:document.getElementById('creche-repas-responsable').value.trim()||null};
   if(editingCrecheId){await dbUpdate('creches',editingCrecheId,row);const c=cacheCreches.find(x=>x.id===editingCrecheId);if(c)Object.assign(c,row);showBanner('Crèche modifiée !');}
   else{const saved=await dbInsert('creches',row);if(saved){cacheCreches.push(saved);activeCrecheId=saved.id;}}
   closeModal('modal-creche-wrap');renderCrecheTabs();
@@ -5199,10 +5213,15 @@ async function crOpen(){
   const creche=cacheCreches.find(function(c){return c.id===ctx.crecheId;})||{};
   _crSaved=await crLoadSaved(ctx.crecheId,ctx.dateStrs[0]);
 
-  let info={};
-  try{info=JSON.parse(localStorage.getItem(crInfoKey(ctx.crecheId))||'{}');}catch(e){}
-  if(_crSaved&&_crSaved.infos)info=Object.assign(info,_crSaved.infos);
-  document.getElementById('cr-adresse').value=info.adresse||creche.addr||'';
+  /* Coordonnées par défaut : celles enregistrées une fois pour toutes sur la
+     fiche crèche (onglet Crèches). Une commande déjà brouillonnée sur cet
+     appareil (localStorage) ou déjà enregistrée en base (_crSaved.infos)
+     reste prioritaire, pour ne pas écraser une correction ponctuelle. */
+  const nonEmpty=function(o){const r={};Object.keys(o||{}).forEach(function(k){if(o[k])r[k]=o[k];});return r;};
+  let info={adresse:creche.addr||'',tel:creche.repas_tel||'',mail:creche.repas_mail||'',contact:creche.repas_contact||'',responsable:creche.repas_responsable||''};
+  try{info=Object.assign(info,nonEmpty(JSON.parse(localStorage.getItem(crInfoKey(ctx.crecheId))||'{}')));}catch(e){}
+  if(_crSaved&&_crSaved.infos)info=Object.assign(info,nonEmpty(_crSaved.infos));
+  document.getElementById('cr-adresse').value=info.adresse||'';
   document.getElementById('cr-tel').value=info.tel||'';
   document.getElementById('cr-mail').value=info.mail||'';
   document.getElementById('cr-contact').value=info.contact||'';
