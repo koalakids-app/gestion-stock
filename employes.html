@@ -166,8 +166,8 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <select id="ficheFormationSelect" style="flex:1"><option value="">Chargement…</option></select>
         <button type="button" class="btn btn-s btn-sm" onclick="envoyerFormation()"><i class="ti ti-send"></i> Envoyer</button>
       </div>
-      <p class="hint">L'envoi copie le lien dans le presse-papiers (à transmettre par mail, SMS...) et
-        l'ajoute au parcours de ce/cette collaborateur/trice, dans "À faire".</p>
+      <p class="hint">L'envoi transmet le lien par e-mail à l'adresse de la fiche (ou vous prévient s'il n'y en
+        a pas de renseignée) et l'ajoute au parcours de ce/cette collaborateur/trice, dans "À faire".</p>
       <label class="lb" style="margin-top:10px">Parcours de formation</label>
       <div id="ficheFormationBox"></div>
     </div>
@@ -556,12 +556,24 @@ async function envoyerFormation(){
   const base=opt.kind==='quiz'?QUIZ_APP_URL:FORMATIONS_APP_URL;
   params.set(opt.kind==='quiz'?'quiz':'module',opt.id);
   const lien=base+'?'+params.toString();
-  const{error}=await sb.from('formations_envois').insert({
+  const{data:saved,error}=await sb.from('formations_envois').insert({
     employe_id:e.id,kind:opt.kind,item_id:opt.id,item_titre:opt.titre,lien,envoye_par:ME.id
-  });
+  }).select().single();
   if(error){toast('Échec de l\'envoi : '+error.message,true);return;}
-  try{await navigator.clipboard.writeText(lien);toast('Envoyé — lien copié, à transmettre à '+(e.prenom||'')+'.');}
-  catch(err){toast('Envoyé (copie du lien impossible, copiez-le manuellement : '+lien+')');}
+  /* Le presse-papiers du navigateur échoue silencieusement dans de nombreux
+     contextes (permission refusée, page non sécurisée...) : la personne
+     copiait alors un lien vide sans le savoir. On envoie désormais un vrai
+     e-mail depuis le serveur (edge function envoyer-formation), qui ne
+     dépend pas du navigateur — le presse-papiers ne reste qu'un confort
+     silencieux en plus, jamais le seul moyen de transmission. */
+  if(e.email){
+    const{ok,data}=await callFn('envoyer-formation',{envoi_id:saved.id});
+    if(ok)toast('E-mail envoyé à '+e.email+'.');
+    else toast('Enregistré, mais l\'e-mail n\'a pas pu être envoyé : '+(data.error||'erreur inconnue')+'. Copiez le lien manuellement : '+lien,true);
+  }else{
+    toast('Envoyé — mais aucun e-mail sur cette fiche : copiez le lien manuellement : '+lien,true);
+  }
+  try{await navigator.clipboard.writeText(lien);}catch(err){}
   sel.value='';
   await loadFicheFormation(e);
 }
