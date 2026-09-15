@@ -50,11 +50,18 @@ async function vacInit(){
   vacRender();
 }
 
+let vacDataLoaded = false;   // le cache peut etre demande par la fiche enfant avant l'ouverture du module Vaccinations
 async function vacLoadData(){
   const {data, error} = await sb.from('vaccinations').select('*');
   if(error){console.warn('vaccinations load',error);cacheVaccinations=[];return;}
   cacheVaccinations = data || [];
+  vacDataLoaded = true;
   await vacLoadPJ();
+}
+/* Appele depuis la fiche enfant (js/enfants.js) pour le statut vaccinal :
+   le module Vaccinations peut ne jamais avoir ete ouvert dans la session. */
+async function vacEnsureDataLoaded(){
+  if(!vacDataLoaded) await vacLoadData();
 }
 
 // ── Pièces jointes vaccinales (photocopies du carnet) ──
@@ -519,6 +526,7 @@ async function vacToggleDose(enfantId, vaccId, doseIdx){
     cacheVaccinations = cacheVaccinations.filter(v=>v.id!==existing.id);
     vacRender();
     if(document.getElementById('modal-vac-fiche-wrap')?.classList.contains('open')) vacRenderFicheBody();
+    vacRefreshFicheEnfantZone(enfantId);
     showBanner('Vaccin annulé.');
   }else{
     // Pas encore fait -> marquer fait avec la date du jour
@@ -528,7 +536,17 @@ async function vacToggleDose(enfantId, vaccId, doseIdx){
     if(data) cacheVaccinations.push(data);
     vacRender();
     if(document.getElementById('modal-vac-fiche-wrap')?.classList.contains('open')) vacRenderFicheBody();
+    vacRefreshFicheEnfantZone(enfantId);
     showBanner('Vaccin marqué comme fait ✅');
+  }
+}
+/* Rafraichit le statut vaccinal affiche dans la fiche enfant (js/enfants.js,
+   zone enf-vaccins-zone) si c'est bien cet enfant qui y est ouvert — meme
+   principe que vacPJRefresh pour les photocopies du carnet. */
+function vacRefreshFicheEnfantZone(enfantId){
+  if(typeof enfFicheId!=='undefined' && String(enfFicheId)===String(enfantId)
+     && document.getElementById('enf-vaccins-zone') && typeof enfRenderVaccins==='function'){
+    enfRenderVaccins(enfantId);
   }
 }
 window.vacToggleDose = vacToggleDose;
