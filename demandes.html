@@ -1826,6 +1826,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fg"><label class="flabel">Crèche rattachée</label><select class="finput" id="r-creche"><option value="">-- Choisir --</option></select></div>
     <div class="fg"><label class="flabel">Poste</label><input class="finput" id="r-poste" placeholder="Éducatrice de jeunes enfants"/></div>
+    <div class="fg"><label class="flabel">Lier à une fiche Employé(e) (contrat)</label><select class="finput" id="r-employe"><option value="">-- Aucune —</option></select>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:4px">Si cette personne a aussi une fiche dans l'espace Employés (type de contrat, heures hebdo), la lier ici évite la double fiche : une seule tuile apparaîtra au mode kiosque, et son pointage continuera d'alimenter son compteur d'heures.</p>
+    </div>
     <div class="fg" style="display:flex;align-items:center;gap:10px;background:var(--koala-light);border-radius:8px;padding:10px 14px;margin-top:2px">
       <input type="checkbox" id="r-is-direction" style="width:17px;height:17px;accent-color:#3D3580;cursor:pointer;flex-shrink:0"/>
       <label for="r-is-direction" style="font-size:13px;font-weight:600;color:var(--koala);cursor:pointer;line-height:1.4">🔑 Accès direction — peut voir <strong>toutes les crèches</strong> et gérer l'application</label>
@@ -3582,15 +3585,29 @@ async function renderReferents(){
   const grid=document.getElementById('ref-grid');if(!grid)return;
   const refs=cacheReferents.filter(r=>r.role==='referent'||r.role==='direction');
   if(!refs.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-users"></i><p>Aucun directeur technique.</p></div>';return;}
-  grid.innerHTML=refs.map(r=>{const creche=cacheCreches.find(c=>c.id===r.creche_id);const initials=r.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);const isDir=r.role==='direction';const avatarBg=isDir?'var(--orange)':'var(--koala)';const roleBadge=isDir?'<span style="display:inline-flex;align-items:center;gap:3px;background:var(--orange-light);color:var(--orange-dark);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:4px">🔑 Direction</span>':'';return'<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:'+avatarBg+'">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+r.name+roleBadge+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+(r.poste||'Directeur technique')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div><div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+(r.email||'—')+'</div><div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkPictosLigne(r.code_pictos)+'</div></div></div><div class="ref-actions"><button class="btn-primary" style="font-size:12px" onclick="resetPassword(\''+r.id+'\')" title="Envoie un e-mail avec un lien pour définir ou réinitialiser son mot de passe"><i class="ti ti-key" style="font-size:12px"></i> Envoyer le lien de connexion</button><button class="ibtn" onclick="editRef(\''+r.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteRef(\''+r.id+'\')"><i class="ti ti-trash"></i></button></div>'+(r.creche_id?'<div style="margin:0 14px 12px;padding-top:10px;border-top:1px dashed var(--border)"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-bottom:6px"><i class="ti ti-device-tablet" style="font-size:12px"></i> Code image (tablette) — sans rapport avec la connexion</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+kkPictosActions(r.id,r.creche_id,r.code_pictos,'referent')+'</div></div>':'')+'</div>';}).join('');
+  grid.innerHTML=refs.map(r=>{const creche=cacheCreches.find(c=>c.id===r.creche_id);const empLie=r.employe_id?cacheEmployes.find(e=>e.id===r.employe_id):null;const contratTxt=empLie?[empLie.type_contrat,empLie.temps_travail==='temps_partiel'?'Temps partiel':empLie.temps_travail==='temps_plein'?'Temps plein':''].filter(Boolean).join(' · '):'';const initials=r.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);const isDir=r.role==='direction';const avatarBg=isDir?'var(--orange)':'var(--koala)';const roleBadge=isDir?'<span style="display:inline-flex;align-items:center;gap:3px;background:var(--orange-light);color:var(--orange-dark);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:4px">🔑 Direction</span>':'';return'<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:'+avatarBg+'">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+r.name+roleBadge+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+(r.poste||'Directeur technique')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div><div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+(r.email||'—')+'</div><div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkPictosLigne(r.code_pictos)+'</div>'+(empLie?'<div class="ref-detail"><i class="ti ti-file-certificate" style="font-size:11px"></i> '+(contratTxt?escHtml(contratTxt):'Contrat non renseigné')+' <span style="color:var(--muted)">(lié à la fiche Employé(e))</span></div>':'')+'</div></div><div class="ref-actions"><button class="btn-primary" style="font-size:12px" onclick="resetPassword(\''+r.id+'\')" title="Envoie un e-mail avec un lien pour définir ou réinitialiser son mot de passe"><i class="ti ti-key" style="font-size:12px"></i> Envoyer le lien de connexion</button><button class="ibtn" onclick="editRef(\''+r.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteRef(\''+r.id+'\')"><i class="ti ti-trash"></i></button></div>'+(r.creche_id?'<div style="margin:0 14px 12px;padding-top:10px;border-top:1px dashed var(--border)"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-bottom:6px"><i class="ti ti-device-tablet" style="font-size:12px"></i> Code image (tablette) — sans rapport avec la connexion</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+kkPictosActions(r.id,r.creche_id,r.code_pictos,'referent')+'</div></div>':'')+'</div>';}).join('');
 }
-function openRefModal(){editingRefId=null;['r-name','r-email','r-poste'].forEach(id=>document.getElementById(id).value='');document.getElementById('r-is-direction').checked=false;document.getElementById('r-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');document.getElementById('modal-ref-title').textContent='Ajouter un directeur technique';document.getElementById('modal-ref-wrap').classList.add('open');}
-function editRef(id){const r=cacheReferents.find(x=>x.id===id);if(!r)return;editingRefId=id;document.getElementById('r-name').value=r.name;document.getElementById('r-email').value=r.email||'';document.getElementById('r-poste').value=r.poste||'';document.getElementById('r-is-direction').checked=(r.role==='direction');document.getElementById('r-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===r.creche_id?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('modal-ref-title').textContent='Modifier le directeur technique';document.getElementById('modal-ref-wrap').classList.add('open');}
+/* Fiches Employé(e) proposées au lien : pas déjà liées à un autre directeur
+   technique (l'index unique referents.employe_id le refuserait de toute
+   façon), en gardant celle déjà liée à CE référent en tête de liste même si
+   sa crèche a changé entretemps. */
+function refFillEmployeSelect(selectedEmployeId){
+  const sel=document.getElementById('r-employe');if(!sel)return;
+  const dejaLies=new Set(cacheReferents.filter(r=>r.employe_id&&r.id!==editingRefId).map(r=>r.employe_id));
+  const options=cacheEmployes.filter(e=>!dejaLies.has(e.id)).map(e=>{
+    const creche=cacheCreches.find(c=>c.id===e.creche_id);
+    return '<option value="'+e.id+'"'+(e.id===selectedEmployeId?' selected':'')+'>'+escHtml((e.prenom||'')+' '+(e.nom||''))+(creche?' — '+escHtml(creche.name):'')+'</option>';
+  }).join('');
+  sel.innerHTML='<option value="">-- Aucune --</option>'+options;
+}
+function openRefModal(){editingRefId=null;['r-name','r-email','r-poste'].forEach(id=>document.getElementById(id).value='');document.getElementById('r-is-direction').checked=false;document.getElementById('r-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');refFillEmployeSelect('');document.getElementById('modal-ref-title').textContent='Ajouter un directeur technique';document.getElementById('modal-ref-wrap').classList.add('open');}
+function editRef(id){const r=cacheReferents.find(x=>x.id===id);if(!r)return;editingRefId=id;document.getElementById('r-name').value=r.name;document.getElementById('r-email').value=r.email||'';document.getElementById('r-poste').value=r.poste||'';document.getElementById('r-is-direction').checked=(r.role==='direction');document.getElementById('r-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===r.creche_id?' selected':'')+'>'+c.name+'</option>').join('');refFillEmployeSelect(r.employe_id||'');document.getElementById('modal-ref-title').textContent='Modifier le directeur technique';document.getElementById('modal-ref-wrap').classList.add('open');}
 async function saveRef(){
   const name=document.getElementById('r-name').value.trim(),email=document.getElementById('r-email').value.trim();
   if(!name||!email){alert('Nom et email requis.');return;}
   const crecheVal=document.getElementById('r-creche').value;
-  const row={name,email,poste:document.getElementById('r-poste').value.trim(),creche_id:crecheVal||null,role:document.getElementById('r-is-direction').checked?'direction':'referent'};
+  const employeVal=document.getElementById('r-employe')?.value||'';
+  const row={name,email,poste:document.getElementById('r-poste').value.trim(),creche_id:crecheVal||null,role:document.getElementById('r-is-direction').checked?'direction':'referent',employe_id:employeVal||null};
   if(editingRefId){
     const ok=await dbUpdate('referents',editingRefId,row);
     if(ok){const r=cacheReferents.find(x=>x.id===editingRefId);if(r)Object.assign(r,row);showBanner('Directeur technique modifié ✅');}
@@ -3599,7 +3616,16 @@ async function saveRef(){
   else{
     const redirect=location.href.replace(/demandes\.html.*$/,'demandes.html');
     const ok=await callFn('create-referent',{email,name,creche_id:row.creche_id,poste:row.poste,role:row.role,redirect_to:redirect});
-    if(ok){await loadAllData();showBanner('Invitation envoyée à '+name+' !');}
+    if(ok){
+      await loadAllData();
+      /* create-referent ne connaît pas encore le lien employe_id (hors de son
+         périmètre) : posé ensuite en une mise à jour séparée si renseigné. */
+      if(employeVal){
+        const created=cacheReferents.find(r=>r.email===email);
+        if(created)await dbUpdate('referents',created.id,{employe_id:employeVal});
+      }
+      showBanner('Invitation envoyée à '+name+' !');
+    }
     else{showBanner('Échec de l\'invitation'+(_lastFnErr?' : '+_lastFnErr:''),'error');return;}
   }
   closeModal('modal-ref-wrap');renderReferents();

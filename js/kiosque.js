@@ -89,10 +89,21 @@ function kioskRender(){
     // Personnel = directeurs/trices techniques/direction (compte de connexion) + employés (sans compte).
     // Un directeur technique sans crèche assignée (creche_id null, cas typique de la direction qui
     // supervise toutes les crèches) doit pouvoir se pointer depuis n'importe quel kiosque.
+    // Un·e directeur/trice technique lié·e à une fiche employes (referents.employe_id, cf.
+    // sql/referents_lien_employe.sql) est aussi salarié·e — sa fiche employes existe pour son
+    // contrat, pas pour pointer une seconde fois : elle est donc exclue de la liste employés,
+    // sa tuile unique (référent) pointant à sa place sur l'employe_id lié (cf. kioskToggle).
+    const employesLies=new Set(cacheReferents.filter(r=>r.employe_id).map(r=>r.employe_id));
     items=cacheReferents.filter(r=>r.creche_id===kioskCrecheId||r.creche_id==null).map(r=>({...r,_kind:'referent'}))
-      .concat(cacheEmployes.filter(e=>e.creche_id===kioskCrecheId).map(e=>({...e,_kind:'employe'})));
+      .concat(cacheEmployes.filter(e=>e.creche_id===kioskCrecheId&&!employesLies.has(e.id)).map(e=>({...e,_kind:'employe'})));
   }
-  const keyOf=p=>(p._kind==='enfants'?'e_':p._kind==='employe'?'m_':'s_')+p.id;
+  // Un référent lié à un employé pointe et affiche son statut sous l'employe_id
+  // lié (là où vit son compteur d'heures), pas sous son propre id de référent.
+  const keyOf=p=>{
+    if(p._kind==='enfants')return 'e_'+p.id;
+    if(p._kind==='employe')return 'm_'+p.id;
+    return p.employe_id?('m_'+p.employe_id):('s_'+p.id);   // référent lié : même clé que son employe_id ; sinon clé propre
+  };
   items.forEach(p=>{const l=statusMap[keyOf(p)];if(l&&l.action==='arrivee')presentCount++;});
   const counts=document.getElementById('kiosque-counts');
   if(counts)counts.textContent=presentCount+' / '+items.length+' présent(s)';
@@ -110,7 +121,7 @@ function kioskRender(){
     const sub=p._kind==='enfants'?(p.nom||''):p._kind==='employe'?(p.poste||'Employé(e)'):(p.poste||(p.role==='direction'?'Direction':'Directrice technique'));
     const heure=last?new Date(last.horodatage).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
     const statusTxt=present?('Présent(e) depuis '+heure):(last?('Parti(e) à '+heure):'Pas encore pointé(e)');
-    return '<button class="kiosk-tile'+(present?' present':'')+'" onclick="kioskToggle(this,\''+p._kind+'\',\''+p.id+'\')">'
+    return '<button class="kiosk-tile'+(present?' present':'')+'" onclick="kioskToggle(this,\''+p._kind+'\',\''+p.id+'\',\''+(p.employe_id||'')+'\')">'
       +'<div class="kiosk-tile-name">'+label+'</div>'
       +(sub?'<div class="kiosk-tile-sub">'+sub+'</div>':'')
       +'<div class="kiosk-tile-status">'+statusTxt+'</div>'
@@ -136,18 +147,24 @@ async function presMarquerPresentDepuisPointage(enfantId,dateStr){
   }catch(e){console.warn('[presMarquerPresentDepuisPointage]',e);}
 }
 
-async function kioskToggle(btn,mode,id){
+async function kioskToggle(btn,mode,id,employeId){
   if(kioskBusy)return;
   kioskBusy=true;
   if(btn)btn.disabled=true;
   try{
+    // Un référent lié à une fiche employes (cf. sql/referents_lien_employe.sql)
+    // pointe sous cet employe_id, pas sous son propre id : c'est là que vit déjà
+    // son compteur d'heures (empHeuresLigne, pointages.employe_id).
+    const pointeSousEmploye=mode==='referent'&&employeId;
+    const effMode=pointeSousEmploye?'employe':mode;
+    const effId=pointeSousEmploye?employeId:id;
     const statusMap=kioskStatusMap();
-    const key=(mode==='enfants'?'e_':mode==='employe'?'m_':'s_')+id;
+    const key=(effMode==='enfants'?'e_':effMode==='employe'?'m_':'s_')+effId;
     const last=statusMap[key];
     const present=!!(last&&last.action==='arrivee');
     const action=present?'depart':'arrivee';
     const row={creche_id:kioskCrecheId,action,effectue_par:currentUser.id};
-    if(mode==='enfants')row.enfant_id=id;else if(mode==='employe')row.employe_id=id;else row.salarie_id=id;
+    if(effMode==='enfants')row.enfant_id=effId;else if(effMode==='employe')row.employe_id=effId;else row.salarie_id=effId;
     const saved=await dbInsert('pointages',row);
     if(!saved){showBanner(window._lastDbError||'Erreur d’enregistrement du pointage.','error');return;}
     kioskPointagesToday.push(saved);
