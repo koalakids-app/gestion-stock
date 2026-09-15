@@ -334,10 +334,10 @@ function kkPictosActions(id,crecheId,codePictos,type){
 }
 async function kkSendPictos(id,type){
   type=type||'enfant';
-  const dest=type==='referent'?'à ce directeur/trice technique':'aux parents';
+  const dest=type==='referent'?'à ce directeur/trice technique':(type==='employe'?'à cet employé/cette employée':'aux parents');
   if(!confirm('Envoyer le code image par e-mail '+dest+' ?'))return;
-  const fn=type==='referent'?'envoyer-code-pictos-referent':'envoyer-code-pictos';
-  const param=type==='referent'?{referent_id:id}:{enfant_id:id};
+  const fn=type==='referent'?'envoyer-code-pictos-referent':(type==='employe'?'envoyer-code-pictos-employe':'envoyer-code-pictos');
+  const param=type==='referent'?{referent_id:id}:(type==='employe'?{employe_id:id}:{enfant_id:id});
   const ok=await callFn(fn,param);
   if(ok)showBanner('Code image envoyé.');
   else showBanner('Échec de l\'envoi'+(_lastFnErr?' : '+_lastFnErr:''),'error');
@@ -346,8 +346,8 @@ window.kkSendPictos=kkSendPictos;
 async function kkRegenPictos(id,crecheId,type){
   type=type||'enfant';
   if(!confirm('Générer un nouveau code image ? L\'ancien cessera de fonctionner immédiatement sur la tablette.'))return;
-  const table=type==='referent'?'referents':'enfants';
-  const rpcName=type==='referent'?'generer_code_pictos_referent':'generer_code_pictos';
+  const table=type==='referent'?'referents':(type==='employe'?'employes':'enfants');
+  const rpcName=type==='referent'?'generer_code_pictos_referent':(type==='employe'?'generer_code_pictos_employe':'generer_code_pictos');
   try{
     const{data,error}=await sb.rpc(rpcName,{p_creche_id:crecheId});
     if(error)throw error;
@@ -357,6 +357,10 @@ async function kkRegenPictos(id,crecheId,type){
       const r=cacheReferents.find(x=>String(x.id)===String(id));
       if(r)r.code_pictos=data;
       renderReferents();
+    }else if(type==='employe'){
+      const e=cacheEmployes.find(x=>String(x.id)===String(id));
+      if(e)e.code_pictos=data;
+      renderEmployes();
     }else{
       const e=cacheEnfants.find(x=>String(x.id)===String(id));
       if(e)e.code_pictos=data;
@@ -365,7 +369,7 @@ async function kkRegenPictos(id,crecheId,type){
     showBanner('Nouveau code image généré.');
   }catch(e){
     console.error('[kkRegenPictos]',e);
-    const msg=e.code==='42883'?'Fonction absente — exécutez sql/claude_37-kiosque-code-images.sql et sql/kiosque_code_pictos_personnel.sql.':(e.message||'erreur inconnue');
+    const msg=e.code==='42883'?'Fonction absente — exécutez sql/claude_37-kiosque-code-images.sql, sql/kiosque_code_pictos_personnel.sql et sql/kiosque_code_pictos_employes.sql.':(e.message||'erreur inconnue');
     showBanner('Génération impossible : '+msg,'error');
   }
 }
