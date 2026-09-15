@@ -163,19 +163,9 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <div class="sec">
         <span><i class="ti ti-school"></i> Mon parcours de formation</span>
       </div>
-      <div class="f">
-        <label class="lb">Quiz ou micro-formation à faire</label>
-        <select id="formationSelect" onchange="renderFormationLink()" style="width:100%;font-family:'Nunito';font-size:14px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740"><option value="">Chargement…</option></select>
-      </div>
-      <div class="f">
-        <div style="display:flex;gap:8px">
-          <input id="formationLink" readonly style="flex:1;font-size:12px" onclick="this.select()">
-          <button class="btn btn-g btn-sm" onclick="copyFormationLink()" title="Copier"><i class="ti ti-copy"></i></button>
-        </div>
-      </div>
       <div id="formationBox"></div>
-      <p class="hint">Les quiz réussis et les micro-formations lues depuis ces liens sont automatiquement
-        rattachés à votre fiche et listés ci-dessus.</p>
+      <p class="hint">Quiz et micro-formations envoyés par la direction. Cliquez sur « À faire » pour
+        ouvrir un quiz ou une formation en attente : une fois terminé(e), il/elle apparaît ici comme réalisé(e).</p>
     </div>
   </div>
 </div>
@@ -198,7 +188,7 @@ const sbQuiz=supabase.createClient(QUIZ_SUPABASE_URL,QUIZ_SUPABASE_ANON_KEY);
 const QUIZ_APP_URL="https://koalakids-app.github.io/quiz-protocoles/index.html";
 const FORMATIONS_APP_URL="https://koalakids-app.github.io/quiz-protocoles/formations.html";
 
-let ME=null,COLLAB=null,COLLAB_TYPE=null,semaineDate=null,MY_CRECHE_NOM='';
+let ME=null,COLLAB=null,COLLAB_TYPE=null,semaineDate=null;
 const JOURS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 
 function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
@@ -486,12 +476,6 @@ async function grantAccess(){
   const anneeSel=document.getElementById('anneeSelect');
   const anneeActuelle=new Date().getFullYear();
   anneeSel.innerHTML=[anneeActuelle,anneeActuelle-1].map(a=>'<option value="'+a+'">'+a+'</option>').join('');
-  if(COLLAB.creche_id){
-    try{
-      const{data}=await sb.from('creches').select('name').eq('id',COLLAB.creche_id).maybeSingle();
-      MY_CRECHE_NOM=(data&&data.name)||'';
-    }catch(e){MY_CRECHE_NOM='';}
-  }
   await Promise.all([loadPlanning(),loadPointages(),loadCompteur(),loadFormation()]);
 }
 
@@ -647,84 +631,58 @@ async function loadCompteur(){
 }
 
 /* ---------- MON PARCOURS DE FORMATION ---------- */
-/* Le lien transmet identité et crèche en clair (pratique, pré-rempli et
-   modifiable côté quiz/formation) et un `ref` opaque — l'id de la fiche —
-   qui est le seul champ exploité pour rattacher le résultat ici : une faute
-   de frappe sur le nom côté quiz n'empêche donc jamais l'affichage du
-   parcours. Un quiz se choisit (précis) ou une micro-formation (précise) :
-   les deux apps n'affichent rien sans un id dans l'URL, donc pas de lien
-   "générique" possible. */
-let FORMATION_OPTIONS=[];
-function myIdentite(){
-  const full=COLLAB_TYPE==='referent'?(COLLAB.name||'').trim():((COLLAB.prenom||'')+' '+(COLLAB.nom||'')).trim();
-  const espace=full.indexOf(' ');
-  const prenom=COLLAB_TYPE==='referent'?(espace>-1?full.slice(0,espace):full):(COLLAB.prenom||'');
-  const nom=COLLAB_TYPE==='referent'?(espace>-1?full.slice(espace+1):''):(COLLAB.nom||'');
-  return{prenom,nom};
-}
-function renderFormationLink(){
-  const sel=document.getElementById('formationSelect');
-  const opt=FORMATION_OPTIONS.find(o=>o.value===sel.value);
-  const linkEl=document.getElementById('formationLink');
-  if(!opt){linkEl.value='';return;}
-  const{prenom,nom}=myIdentite();
-  const params=new URLSearchParams({ref:COLLAB.id,prenom,nom,statut:'Salarié(e) en poste'});
-  if(MY_CRECHE_NOM)params.set('creche',MY_CRECHE_NOM);
-  const base=opt.kind==='quiz'?QUIZ_APP_URL:FORMATIONS_APP_URL;
-  if(opt.kind==='quiz')params.set('quiz',opt.id);else params.set('module',opt.id);
-  linkEl.value=base+'?'+params.toString();
-}
-function copyFormationLink(){
-  const el=document.getElementById('formationLink');
-  if(!el.value){toast('Choisissez un quiz ou une formation.',true);return;}
-  el.select();
-  try{navigator.clipboard.writeText(el.value);toast('Lien copié.');}
-  catch(e){toast('Sélectionnez et copiez le lien manuellement.',true);}
-}
-async function loadFormationOptions(){
-  const sel=document.getElementById('formationSelect');
-  try{
-    const[qz,md]=await Promise.all([
-      sbQuiz.from('quiz').select('id,titre').eq('publie',true).order('titre'),
-      sbQuiz.from('module').select('id,titre').eq('publie',true).order('titre')
-    ]);
-    FORMATION_OPTIONS=[
-      ...((qz.data||[]).map(q=>({value:'q-'+q.id,id:q.id,kind:'quiz',titre:q.titre}))),
-      ...((md.data||[]).map(m=>({value:'m-'+m.id,id:m.id,kind:'module',titre:m.titre})))
-    ];
-    if(!FORMATION_OPTIONS.length){sel.innerHTML='<option value="">Aucun quiz ni formation publié</option>';return;}
-    sel.innerHTML='<option value="">— Choisir —</option>'
-      +'<optgroup label="Quiz">'+FORMATION_OPTIONS.filter(o=>o.kind==='quiz').map(o=>'<option value="'+o.value+'">'+esc(o.titre)+'</option>').join('')+'</optgroup>'
-      +'<optgroup label="Micro-formations">'+FORMATION_OPTIONS.filter(o=>o.kind==='module').map(o=>'<option value="'+o.value+'">'+esc(o.titre)+'</option>').join('')+'</optgroup>';
-  }catch(e){sel.innerHTML='<option value="">Liste indisponible</option>';}
+/* L'initiative revient à la direction/directrice technique, depuis la fiche
+   collaborateur (employes.html, bouton "Envoyer") : "Mon espace" n'affiche
+   ici que ce qui a été envoyé, à faire ou déjà réalisé — jamais de libre
+   choix. Le rattachement du résultat, lui, passe par le `ref` opaque déjà
+   présent dans le lien envoyé (l'id de la fiche) : une faute de frappe sur
+   le nom côté quiz n'empêche donc jamais l'affichage ici. */
+function envoisCol(){return COLLAB_TYPE==='referent'?'referent_id':'employe_id';}
+/* Même logique que renderParcoursHtml (employes.html) : dupliquée faute de
+   module JS partagé entre les deux pages. */
+function renderParcoursHtml(envois,resultats,formationsLues){
+  const items=envois.map(env=>{
+    if(env.kind==='quiz'){
+      const r=resultats.find(x=>x.quiz_id===env.item_id);
+      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',score:r.score,total:r.total,pourcentage:r.pourcentage}
+              :{type:'quiz',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',lien:env.lien};
+    }
+    const f=formationsLues.find(x=>x.module_id===env.item_id);
+    return f?{type:'formation',titre:env.item_titre,date:f.lu_le,statut:'fait'}
+            :{type:'formation',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',lien:env.lien};
+  }).sort((a,b)=>(a.statut==='a_faire')-(b.statut==='a_faire')||new Date(b.date)-new Date(a.date));
+  if(!items.length)return'<p class="hint">Rien ne vous a encore été envoyé.</p>';
+  return items.map(r=>{
+    const d=new Date(r.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const icone=r.type==='quiz'?'ti-clipboard-check':'ti-book-2';
+    let droite;
+    if(r.statut==='a_faire'){
+      droite='<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" class="btn btn-p btn-sm" style="font-size:11.5px"><i class="ti ti-player-play"></i> À faire</a>';
+    }else if(r.type==='quiz'){
+      const col=r.pourcentage>=80?'var(--green)':r.pourcentage>=60?'var(--violet)':'var(--red)';
+      droite='<span style="font-weight:800;font-size:13px;color:'+col+';white-space:nowrap">'+r.score+'/'+r.total+' · '+r.pourcentage+'%</span>';
+    }else{
+      droite='<span style="font-weight:700;font-size:11.5px;color:var(--green);white-space:nowrap"><i class="ti ti-check"></i> Lue</span>';
+    }
+    return'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">'
+      +'<div style="display:flex;align-items:center;gap:8px"><i class="ti '+icone+'" style="color:var(--orange);font-size:16px"></i>'
+      +'<div><div style="font-weight:700;font-size:13px">'+esc(r.titre)+'</div>'
+      +'<div style="font-size:11.5px;color:var(--muted)">'+(r.statut==='a_faire'?'Envoyé le ':'')+d+'</div></div></div>'+droite+'</div>';
+  }).join('');
 }
 async function loadFormation(){
-  await loadFormationOptions();
   const box=document.getElementById('formationBox');
   box.innerHTML='<p class="hint">Chargement…</p>';
   try{
-    const[qz,md]=await Promise.all([
+    const[envois,qz,md]=await Promise.all([
+      sb.from('formations_envois').select('*').eq(envoisCol(),COLLAB.id).order('envoye_le',{ascending:false}),
       sbQuiz.rpc('kk_resultats_par_ref',{p_ref:COLLAB.id}),
       sbQuiz.rpc('kk_formations_par_ref',{p_ref:COLLAB.id})
     ]);
+    if(envois.error)throw envois.error;
     if(qz.error)throw qz.error;
     if(md.error)throw md.error;
-    const items=[
-      ...((qz.data||[]).map(r=>({type:'quiz',titre:r.quiz_titre,date:r.passe_le,score:r.score,total:r.total,pourcentage:r.pourcentage}))),
-      ...((md.data||[]).map(r=>({type:'formation',titre:r.module_titre,date:r.lu_le})))
-    ].sort((a,b)=>new Date(b.date)-new Date(a.date));
-    if(!items.length){box.innerHTML='<p class="hint">Aucun quiz ni formation réalisé pour le moment.</p>';return;}
-    box.innerHTML=items.map(r=>{
-      const d=new Date(r.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
-      const icone=r.type==='quiz'?'ti-clipboard-check':'ti-book-2';
-      const droite=r.type==='quiz'
-        ?'<span style="font-weight:800;font-size:13px;color:'+(r.pourcentage>=80?'var(--green)':r.pourcentage>=60?'var(--violet)':'var(--red)')+';white-space:nowrap">'+r.score+'/'+r.total+' · '+r.pourcentage+'%</span>'
-        :'<span style="font-weight:700;font-size:11.5px;color:var(--green);white-space:nowrap"><i class="ti ti-check"></i> Lue</span>';
-      return'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">'
-        +'<div style="display:flex;align-items:center;gap:8px"><i class="ti '+icone+'" style="color:var(--orange);font-size:16px"></i>'
-        +'<div><div style="font-weight:700;font-size:13px">'+esc(r.titre)+'</div>'
-        +'<div style="font-size:11.5px;color:var(--muted)">'+d+'</div></div></div>'+droite+'</div>';
-    }).join('');
+    box.innerHTML=renderParcoursHtml(envois.data||[],qz.data||[],md.data||[]);
   }catch(e){
     box.innerHTML='<p class="hint">Parcours de formation indisponible pour le moment.</p>';
   }
