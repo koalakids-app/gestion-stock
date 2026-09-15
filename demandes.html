@@ -594,7 +594,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="fchip active pres-jour-only" id="pres-filter-chip" onclick="presToggleFilterPresents()" title="N’afficher que les enfants présents ce jour"><i class="ti ti-filter"></i> Présents uniquement</button>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn-sm pres-jour-only" onclick="presApplyContrats()" title="Marquer présents les enfants dont le contrat couvre ce jour"><i class="ti ti-calendar-check"></i> Appliquer les contrats</button>
+        <button class="btn-sm pres-jour-only" onclick="presApplyContrats()" title="Marquer présents les enfants sur toute la durée de leurs contrats (date de début à date de fin)"><i class="ti ti-calendar-check"></i> Appliquer les contrats</button>
         <button class="btn-sm pres-jour-only" onclick="presOpenAddDay()"><i class="ti ti-user-plus"></i> Ajouter à la journée</button>
         <button class="btn-sm" onclick="openUnifiedImportModal()"><i class="ti ti-file-import"></i> Importer PDF</button>
         <button class="btn-green pres-jour-only" onclick="exportPresence()"><i class="ti ti-download"></i> Exporter</button>
@@ -1049,6 +1049,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
               <i class="ti ti-heart-plus"></i> Dossier santé</div>
             <div style="padding:13px 15px">
               <div id="enf-fiche-sanitaire-zone" style="margin-bottom:14px"></div>
+              <!-- PAI (Projet d'Accueil Individualisé) : documents liés (protocole,
+                   ordonnances...), donnée de santé (table enfants_pai, bucket
+                   carnets — voir sql/enfants_pai.sql). -->
+              <div id="enf-pai-zone" style="margin-bottom:14px"></div>
               <!-- Carnet de vaccination : meme bloc et memes donnees que la fiche
                    vaccins du module Vaccinations (table vaccins_pj). -->
               <div id="enf-carnet-zone"></div>
@@ -1747,10 +1751,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="modal">
     <h3 id="modal-d-title">Nouvelle demande</h3>
     <div class="fg" id="d-creche-fg" style="display:none"><label class="flabel">Crèche (optionnel si destinataire admin)</label><select class="finput" id="d-creche-select"><option value="">-- Aucune / non liée à une crèche --</option></select></div>
-    <div class="frow">
-      <div class="fg"><label class="flabel">Destinataire</label><select class="finput" id="d-ref-select" onchange="fillRefEmail()"><option value="">-- Choisir --</option></select></div>
-      <div class="fg"><label class="flabel">E-mail destinataire</label><input class="finput" id="d-email" placeholder="destinataire@email.fr" type="email"/></div>
+    <div class="fg">
+      <label class="flabel">Destinataire(s)</label>
+      <div id="d-ref-list" style="display:flex;flex-direction:column;gap:4px;max-height:170px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px"></div>
     </div>
+    <div class="fg" id="d-email-fg" style="display:none"><label class="flabel">E-mail destinataire</label><input class="finput" id="d-email" placeholder="destinataire@email.fr" type="email"/></div>
     <div class="fg"><label class="flabel">Sujet</label><input class="finput" id="d-subj" placeholder="Ex. : Réaménagement espace jeux"/></div>
     <div class="fg"><label class="flabel">Description</label><textarea class="finput" id="d-desc" rows="3" style="resize:vertical"></textarea></div>
     <div class="frow">
@@ -3380,19 +3385,23 @@ window.threadHandleAttachment=threadHandleAttachment;
 async function openDemandModal(){
   const isAll=isDirection&&activeCrecheId==='all';
   // La crèche est toujours affichée pour la direction (utile pour les demandes liées à un directeur technique terrain),
-  // mais devient optionnelle si le destinataire choisi est un admin (voir fillRefEmail()).
+  // mais devient optionnelle si au moins un destinataire choisi est admin (voir saveDemand()).
   const fg=document.getElementById('d-creche-fg');if(fg)fg.style.display=isDirection?'block':'none';
   if(isDirection){const sel=document.getElementById('d-creche-select');if(sel){sel.innerHTML='<option value="">-- Aucune / non liée à une crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');if(!isAll&&activeCrecheId)sel.value=activeCrecheId;}}
-  // Destinataires : tous les directeurs techniques ET tous les admins (direction), tout le monde mélangé dans la même liste.
+  // Destinataires : tous les directeurs techniques ET tous les admins (direction), tout le monde mélangé dans la même liste,
+  // sélectionnables un ou plusieurs à la fois (voir saveDemand() qui enregistre une demande par destinataire coché).
   const myId=currentProfile?.id;
   const dests=cacheReferents.filter(r=>r.id!==myId);
-  const dSel=document.getElementById('d-ref-select');
-  if(dSel)dSel.innerHTML='<option value="">-- Choisir --</option>'+dests.map(r=>{
+  const dList=document.getElementById('d-ref-list');
+  if(dList)dList.innerHTML=dests.map(r=>{
     const isAdmin=r.role==='direction';
     const creche=cacheCreches.find(c=>c.id===r.creche_id);
     const tag=isAdmin?' — 🔑 Admin':(creche?' ('+creche.name+')':'');
-    return '<option value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'" data-admin="'+(isAdmin?'1':'0')+'">'+r.name+tag+'</option>';
+    return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:3px 2px">'
+      +'<input type="checkbox" class="ckDestDemand" value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'" data-admin="'+(isAdmin?'1':'0')+'" onchange="dRefSelectionChanged()"/>'
+      +escHtml(r.name)+tag+'</label>';
   }).join('');
+  document.getElementById('d-email-fg').style.display='none';
   ['d-email','d-subj','d-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('d-prio').value='normal';
   dPendingAttachment=null;
@@ -3400,23 +3409,46 @@ async function openDemandModal(){
   document.getElementById('d-attach-status').textContent='';
   document.getElementById('modal-demand-wrap').classList.add('open');
 }
-function fillRefEmail(){
-  const sel=document.getElementById('d-ref-select');const opt=sel.options[sel.selectedIndex];
-  if(opt)document.getElementById('d-email').value=opt.getAttribute('data-email')||'';
+/* L'e-mail ne peut être ajusté à la main que pour un seul destinataire à la
+   fois (sinon on ne saurait pas à qui l'appliquer) : le champ n'apparaît que
+   lorsqu'une seule case est cochée, pré-rempli avec l'e-mail connu. */
+function dRefSelectionChanged(){
+  const checked=[...document.querySelectorAll('.ckDestDemand:checked')];
+  const fg=document.getElementById('d-email-fg');
+  if(checked.length===1){
+    fg.style.display='block';
+    document.getElementById('d-email').value=checked[0].getAttribute('data-email')||'';
+  }else{
+    fg.style.display='none';
+  }
 }
 async function saveDemand(){
   const subj=document.getElementById('d-subj').value.trim();if(!subj){alert('Sujet requis.');return;}
   const isAll=isDirection&&activeCrecheId==='all';
-  const refSel=document.getElementById('d-ref-select');const refOpt=refSel?.options[refSel.selectedIndex];
-  const destIsAdmin=refOpt?.getAttribute('data-admin')==='1';
+  const checked=[...document.querySelectorAll('.ckDestDemand:checked')];
+  if(!checked.length){alert('Veuillez sélectionner au moins un destinataire.');return;}
+  const anyAdmin=checked.some(c=>c.getAttribute('data-admin')==='1');
   let crecheId=isDirection?(document.getElementById('d-creche-select')?.value||null):(isAll?null:currentProfile?.creche_id);
   if(!isDirection)crecheId=currentProfile?.creche_id||null;
-  if(!crecheId&&!destIsAdmin){alert('Veuillez sélectionner une crèche, ou choisir un destinataire admin.');return;}
+  if(!crecheId&&!anyAdmin){alert('Veuillez sélectionner une crèche, ou choisir au moins un destinataire admin.');return;}
   const btn=document.getElementById('btn-save-demand');btn.disabled=true;
-  const row={creche_id:crecheId,to_referent_id:refSel?.value||null,referent_name:refOpt?.getAttribute('data-name')||'',referent_email:document.getElementById('d-email').value.trim(),subject:subj,description:document.getElementById('d-desc').value.trim(),priority:document.getElementById('d-prio').value,theme:document.getElementById('d-theme').value,status:'attente',type:'demande',attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null};
-  const saved=await dbInsert('demandes',row);
-  if(saved){cacheDemandes.unshift(saved);await callFn('notify-demand',{demand:{...row,creche:cacheCreches.find(c=>c.id===crecheId)?.name||''}});showBanner('Demande enregistrée !');const pushDest=[row.to_referent_id].filter(Boolean);if(pushDest.length)await callFn('notify-push',{referent_ids:pushDest,title:'Nouvelle demande',body:subj,url:'./demandes.html',tag:'demande-'+saved.id});closeModal('modal-demand-wrap');renderCrecheTabs();}
-  else showBanner('Erreur.','error');
+  const desc=document.getElementById('d-desc').value.trim();
+  const prio=document.getElementById('d-prio').value;
+  const theme=document.getElementById('d-theme').value;
+  const manualEmail=checked.length===1?document.getElementById('d-email').value.trim():'';
+  let okCount=0;
+  for(const c of checked){
+    const row={creche_id:crecheId,to_referent_id:c.value,referent_name:c.getAttribute('data-name')||'',referent_email:manualEmail||c.getAttribute('data-email')||'',subject:subj,description:desc,priority:prio,theme:theme,status:'attente',type:'demande',attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null};
+    const saved=await dbInsert('demandes',row);
+    if(saved){
+      okCount++;
+      cacheDemandes.unshift(saved);
+      await callFn('notify-demand',{demand:{...row,creche:cacheCreches.find(c2=>c2.id===crecheId)?.name||''}});
+      await callFn('notify-push',{referent_ids:[row.to_referent_id],title:'Nouvelle demande',body:subj,url:'./demandes.html',tag:'demande-'+saved.id});
+    }
+  }
+  if(okCount){showBanner(okCount>1?okCount+' demandes envoyées !':'Demande enregistrée !');closeModal('modal-demand-wrap');renderCrecheTabs();}
+  if(okCount<checked.length)showBanner('Certains envois ont échoué.','error');
   btn.disabled=false;
 }
 async function toggleStatus(id,currentStatus){
