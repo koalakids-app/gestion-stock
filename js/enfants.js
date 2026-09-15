@@ -2030,7 +2030,7 @@ function enfRenderContrat(){
       + (c.notes?'<div style="font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap">'+escHtml(c.notes)+'</div>':'')
       + '</div>';
   }).join('')
-  + '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">Le bouton « Appliquer les contrats » du module Présences marque présents, pour la date affichée, tous les enfants dont un contrat couvre ce jour.</p>';
+  + '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">Le bouton « Appliquer les contrats » du module Présences marque présents tous les enfants sur toute la durée de leurs contrats (de la date de début à la date de fin). Un contrat sans date de fin est ignoré.</p>';
 }
 
 function ctRenderJours(){
@@ -2108,17 +2108,19 @@ window.ctSave=ctSave;
 window.ctDelete=ctDelete;
 
 /* --- Lien avec le module Présences ------------------------------------- */
-/* Marque présents (matin + après-midi) les enfants de la crèche affichée dont
-   un contrat couvre la date affichée et inclut le jour de la semaine. */
+/* Marque présents (matin + après-midi) les enfants de la crèche affichée pour
+   TOUTE la durée de chacun de leurs contrats (de la date de début à la date
+   de fin), sur les jours de la semaine cochés dans le contrat — et non plus
+   jour par jour pour la seule date affichée dans l'onglet Jour.
+   Un contrat « sans terme » (pas de date de fin) ne peut pas être développé
+   sur une durée : il est signalé et ignoré, en attendant qu'une date de fin
+   lui soit renseignée dans l'onglet Contrat de la fiche enfant. */
 async function presApplyContrats(){
-  const dateStr=document.getElementById('presence-date')?.value||todayStr();
   const crecheId=getPresenceCrecheId();
-  if(isDirection&&!crecheId){ showBanner('S\u00e9lectionnez d\u2019abord une cr\u00e8che.','error'); return; }
-  const d=new Date(dateStr+'T00:00:00');
-  const jour=(d.getDay()===0)?7:d.getDay();          // 1 = lundi … 7 = dimanche
+  if(isDirection&&!crecheId){ showBanner('Sélectionnez d’abord une crèche.','error'); return; }
   const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants.slice());
   const ids=enfants.map(e=>e.id);
-  if(!ids.length){ showBanner('Aucun enfant dans cette cr\u00e8che.','error'); return; }
+  if(!ids.length){ showBanner('Aucun enfant dans cette crèche.','error'); return; }
   let contrats=[];
   try{
     const{data,error}=await sb.from('enfants_contrats').select('*').in('enfant_id',ids);
@@ -2129,64 +2131,81 @@ async function presApplyContrats(){
     showBanner('Lecture des contrats impossible : '+((err&&err.message)||'droits insuffisants'),'error');
     return;
   }
-  console.log('[Contrats] date='+dateStr+' jour='+jour+' enfants='+ids.length+' contrats lus='+contrats.length);
   if(!contrats.length){
-    showBanner('Aucun contrat enregistr\u00e9 pour les enfants de cette cr\u00e8che. Cr\u00e9ez-les dans l\u2019onglet Contrat de la fiche enfant.','error');
+    showBanner('Aucun contrat enregistré pour les enfants de cette crèche. Créez-les dans l’onglet Contrat de la fiche enfant.','error');
     return;
   }
-  // Diagnostic ligne \u00e0 ligne : on trace la raison du rejet de chaque contrat
-  const rejets={avant:0,apres:0,jour:0};
-  const diag=[];
-  const concernes=contrats.filter(function(c){
-    const j=ctParseJours(c.jours);
-    let motif='OK';
-    if(c.date_debut&&c.date_debut>dateStr) motif='contrat pas encore commenc\u00e9';
-    else if(c.date_fin&&c.date_fin<dateStr) motif='contrat termin\u00e9';
-    else if(j.indexOf(jour)<0) motif='jour non coch\u00e9';
-    const e=cacheEnfants.find(x=>String(x.id)===String(c.enfant_id));
-    diag.push({enfant:e?((e.prenom||'')+' '+(e.nom||'')).trim():String(c.enfant_id),
-      debut:c.date_debut,fin:c.date_fin,jours_bruts:JSON.stringify(c.jours),jours_lus:j.join('/'),motif:motif});
-    if(motif!=='OK'){
-      if(motif.indexOf('commenc')>=0)rejets.avant++;
-      else if(motif.indexOf('termin')>=0)rejets.apres++;
-      else rejets.jour++;
-      return false;
+  const sansTerme=contrats.filter(c=>!c.date_fin);
+  const avecTerme=contrats.filter(c=>c.date_fin);
+  if(!avecTerme.length){
+    showBanner('Tous les contrats trouvés sont « sans terme » (pas de date de fin) : renseignez une date de fin dans l’onglet Contrat de la fiche enfant pour pouvoir les appliquer.','error');
+    return;
+  }
+  // Pour chaque contrat avec une date de fin, toutes les dates comprises entre
+  // date_debut et date_fin dont le jour de semaine est coché dans le contrat.
+  const datesParEnfant=new Map();   // enfant_id -> Set(presence_date ISO)
+  avecTerme.forEach(function(c){
+    const jours=ctParseJours(c.jours);
+    if(!jours.length||!c.date_debut||c.date_fin<c.date_debut) return;
+    const set=datesParEnfant.get(c.enfant_id)||new Set();
+    const fin=new Date(c.date_fin+'T00:00:00');
+    for(let d=new Date(c.date_debut+'T00:00:00'); d<=fin; d.setDate(d.getDate()+1)){
+      const jour=(d.getDay()===0)?7:d.getDay();      // 1 = lundi … 7 = dimanche
+      if(jours.indexOf(jour)>=0) set.add(ipDateToLocalISO(d));
     }
-    return true;
-  }).map(c=>String(c.enfant_id));
-  if(console.table) console.table(diag); else console.log(diag);
-  const uniques=[...new Set(concernes)];
-  if(!uniques.length){
-    const nomJour=(CT_JOURS.find(x=>x[0]===jour)||[jour,'ce jour'])[1].toLowerCase();
-    showBanner('Aucun des '+contrats.length+' contrat(s) ne couvre le '+nomJour+' '+ctFmtDate(dateStr)+' : '
-      +rejets.avant+' pas encore commenc\u00e9(s), '+rejets.apres+' termin\u00e9(s), '+rejets.jour+' sans ce jour coch\u00e9. D\u00e9tail dans la console (F12).','error');
+    datesParEnfant.set(c.enfant_id,set);
+  });
+  const enfantsConcernes=[...datesParEnfant.keys()].filter(id=>datesParEnfant.get(id).size);
+  if(!enfantsConcernes.length){
+    showBanner('Aucune date ne correspond aux jours cochés des contrats.','error');
     return;
   }
-  // Enfants déjà marqués présents ce jour : on ne les retouche pas
-  const{data:dejaPres}=await sb.from('presences').select('enfant_id')
-    .eq('presence_date',dateStr).in('enfant_id',uniques);
-  const deja=new Set((dejaPres||[]).map(p=>String(p.enfant_id)));
-  const aAjouter=uniques.filter(id=>!deja.has(id));
-  if(!aAjouter.length){ showBanner('Tous les enfants sous contrat sont d\u00e9j\u00e0 pointer\u00e9s ce jour.'); return; }
-  const noms=aAjouter.map(function(id){
-    const e=cacheEnfants.find(x=>String(x.id)===String(id));
-    return e?((e.prenom||'')+' '+(e.nom||'')).trim():'?';
-  }).sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
-  const label=d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'});
-  if(!confirm('Marquer pr\u00e9sents ('+label+') :\n\n\u2022 '+noms.join('\n\u2022 ')+'\n\nSoit '+noms.length+' enfant(s).')) return;
+  // Dates déjà pointées (présentes ou non) : on ne les retouche pas.
+  let dejaPres=[];
+  try{
+    const{data,error}=await sb.from('presences').select('enfant_id,presence_date').in('enfant_id',enfantsConcernes);
+    if(error) throw error;
+    dejaPres=data||[];
+  }catch(err){
+    console.warn('presApplyContrats lecture presences',err);
+    showBanner('Lecture des présences existantes impossible : '+((err&&err.message)||'droits insuffisants'),'error');
+    return;
+  }
+  const dejaSet=new Set(dejaPres.map(p=>p.enfant_id+'_'+p.presence_date));
   const rows=[];
-  aAjouter.forEach(function(id){
-    rows.push({enfant_id:id,presence_date:dateStr,slot:'M',status:'present'});
-    rows.push({enfant_id:id,presence_date:dateStr,slot:'A',status:'present'});
+  let nbEnfants=0;
+  enfantsConcernes.forEach(function(id){
+    let ajouts=0;
+    datesParEnfant.get(id).forEach(function(dateStr){
+      if(dejaSet.has(id+'_'+dateStr)) return;
+      rows.push({enfant_id:id,presence_date:dateStr,slot:'M',status:'present'});
+      rows.push({enfant_id:id,presence_date:dateStr,slot:'A',status:'present'});
+      ajouts++;
+    });
+    if(ajouts) nbEnfants++;
   });
-  const{error}=await sb.from('presences').insert(rows);
-  if(error){ console.warn('presApplyContrats insert',error); showBanner('Enregistrement impossible : '+(error.message||''),'error'); return; }
-  // On bascule sur \u00ab Pr\u00e9sents uniquement \u00bb : les enfants sans contrat ce jour
-  // n\u2019encombrent plus la feuille de pr\u00e9sence (le chip permet de les r\u00e9afficher).
+  const avertSansTerme=sansTerme.length
+    ? '\n\n⚠ '+sansTerme.length+' contrat(s) sans date de fin ignoré(s) : renseignez une date de fin pour les inclure.'
+    : '';
+  if(!rows.length){
+    showBanner('Toutes les dates des contrats sont déjà pointées.'+avertSansTerme);
+    return;
+  }
+  const nbJours=rows.length/2;
+  if(!confirm('Marquer présents d’après la durée complète des contrats :\n\n• '+nbEnfants+' enfant(s)\n• '+nbJours+' jour(s) au total'+avertSansTerme+'\n\nContinuer ?')) return;
+  // Insertion par lots : un contrat de plusieurs mois peut représenter des
+  // centaines de lignes, mieux vaut ne pas tout envoyer en un seul appel.
+  const CHUNK=500;
+  for(let i=0;i<rows.length;i+=CHUNK){
+    const{error}=await sb.from('presences').insert(rows.slice(i,i+CHUNK));
+    if(error){ console.warn('presApplyContrats insert',error); showBanner('Enregistrement impossible : '+(error.message||''),'error'); return; }
+  }
+  // On bascule sur « Présents uniquement » : les enfants sans contrat ce jour
+  // n’encombrent plus la feuille de présence (le chip permet de les réafficher).
   presOnlyPresents=true;
   localStorage.setItem('presOnlyPresents','1');
   presSyncFilterChip();
-  showBanner(noms.length+' enfant(s) marqu\u00e9(s) pr\u00e9sent(s) d\u2019apr\u00e8s les contrats.');
+  showBanner(nbEnfants+' enfant(s) marqué(s) présent(s) sur '+nbJours+' jour(s) d’après la durée des contrats.'+avertSansTerme);
   renderPresence();
 }
 window.presApplyContrats=presApplyContrats;
