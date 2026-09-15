@@ -164,6 +164,7 @@ async function enfOpenFiche(id){
   document.getElementById('enf-fiche-sanitaire-zone').innerHTML = '';
   document.getElementById('enf-pai-zone').innerHTML = '';
   document.getElementById('enf-carnet-zone').innerHTML = '';
+  document.getElementById('enf-vaccins-zone').innerHTML = '';
   document.getElementById('modal-enf-fiche-wrap').classList.add('open');
   // charger les documents et le dossier famille en arrière-plan
   enfLoadDocs(e.id);
@@ -172,6 +173,7 @@ async function enfOpenFiche(id){
   enfLoadPieces(e.id);
   enfLoadCarnet(e.id);
   enfLoadPai(e.id);
+  enfLoadVaccinsStatus(e.id);
 }
 
 const ENF_FICHE_TABS = ['identite','parents','contrat','documents'];
@@ -1704,6 +1706,60 @@ async function enfPaiDelete(id){
 window.enfPaiOpen = enfPaiOpen;
 window.enfPaiDelete = enfPaiDelete;
 window.enfHandlePaiUpload = enfHandlePaiUpload;
+
+/* ===== Statut vaccinal (fiche enfant) =======================================
+   Reprend la logique de la fiche vaccins du module Vaccinations (VAC_SCHEMA +
+   vacDoseStatus, js/vaccinations.js), mais rendue dans sa propre zone du
+   dossier santé plutôt que dans la modale dédiée. Même source de données —
+   table `vaccinations`, cache partagé `cacheVaccinations` — donc une dose
+   marquée faite d'un côté apparaît aussitôt de l'autre (voir vacToggleDose,
+   qui rafraîchit cette zone quand la fiche enfant est ouverte sur le même
+   enfant). */
+async function enfLoadVaccinsStatus(enfantId){
+  await vacEnsureDataLoaded();
+  if(String(enfFicheId)!==String(enfantId)) return;
+  enfRenderVaccins(enfantId);
+}
+
+function enfRenderVaccins(enfantId){
+  const zone=document.getElementById('enf-vaccins-zone');
+  if(!zone) return;
+  const e=cacheEnfants.find(x=>String(x.id)===String(enfantId));
+  if(!e){zone.innerHTML='';return;}
+  const titre='<div style="font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-vaccine" style="color:var(--koala)"></i> Vaccinations</div>';
+  if(!e.dob){
+    zone.innerHTML=titre+'<div style="font-size:12px;color:var(--muted)">Date de naissance manquante : impossible de calculer les échéances vaccinales.</div>';
+    return;
+  }
+  const rows=VAC_SCHEMA.map(function(v){
+    const doses=v.doses.map(function(dose,di){
+      const s=vacDoseStatus(e,v,di);
+      let cell;
+      if(s.state==='fait'){
+        cell='<button type="button" onclick="vacToggleDose(\''+e.id+'\',\''+v.id+'\','+di+')" title="Fait — cliquer pour annuler" style="width:30px;height:30px;border:none;border-radius:50%;background:var(--green);color:#fff;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">✓</button>';
+      }else{
+        const border=s.state==='retard'?'3px solid var(--red)':s.state==='proche'?'2px solid var(--orange)':'2px dashed var(--border)';
+        const bg=s.state==='retard'?'var(--red-light)':s.state==='proche'?'var(--orange-light)':'#fff';
+        const glyphe=s.state==='retard'?'⚠':s.state==='proche'?'!':'·';
+        const couleur=s.state==='retard'?'var(--red)':s.state==='proche'?'var(--orange-dark)':'var(--muted)';
+        const infobulle=s.state==='retard'?'En retard — cliquer si fait':s.state==='proche'?'À faire bientôt — cliquer si fait':'Pas encore dû — cliquer si fait';
+        cell='<button type="button" onclick="vacToggleDose(\''+e.id+'\',\''+v.id+'\','+di+')" aria-label="'+infobulle+'" title="'+infobulle+'" style="width:30px;height:30px;border:'+border+';border-radius:50%;background:'+bg+';color:'+couleur+';font-size:13px;font-weight:800;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">'+glyphe+'</button>';
+      }
+      return '<td style="padding:4px 6px;text-align:center;vertical-align:middle">'+cell+'</td>';
+    }).join('');
+    return '<tr><td style="padding:4px 6px;font-size:11.5px;font-weight:600;color:var(--koala-dark);white-space:nowrap">'+escHtml(v.label)+'</td>'+doses+'</tr>';
+  }).join('');
+  zone.innerHTML=titre
+    +'<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">'
+    +'<table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr style="background:var(--koala-light)">'
+    +'<th style="padding:5px 6px;font-size:10.5px;font-weight:700;color:var(--koala);text-align:left;min-width:150px">Vaccin</th>'
+    +VAC_SCHEMA[0].doses.map(function(d){return '<th style="padding:5px 6px;font-size:10.5px;font-weight:700;color:var(--koala);text-align:center;white-space:nowrap">'+escHtml(d.label)+'</th>';}).join('')
+    +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div style="margin-top:8px;font-size:11px;color:var(--muted)">Cliquez une pastille pour la marquer faite (ou l\'annuler).</div>';
+}
+window.enfLoadVaccinsStatus = enfLoadVaccinsStatus;
+window.enfRenderVaccins = enfRenderVaccins;
 
 /* ===== Dossier de pièces (envoi d'un lien de dépôt aux parents) ============
    Même principe que le dossier de familiarisation (dossiers_familles /
