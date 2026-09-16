@@ -164,8 +164,17 @@ function vacRenderFicheBody(){
   const ageMs = Date.now() - new Date(e.dob).getTime();
   const ageMois = Math.floor(ageMs/(1000*60*60*24*30.44));
   const ageStr = ageMois < 24 ? ageMois+' mois' : Math.floor(ageMois/12)+' ans '+(ageMois%12)+' mois';
+  // Les vaccins n'ont pas tous le meme calendrier (ex. ACWY : 6/12 mois,
+  // ROR : 12/18 mois) : les colonnes du tableau doivent donc s'aligner sur
+  // l'age de la dose (en mois), pas sur sa position dans le tableau `doses`
+  // de chaque vaccin — sinon la dose de 12 mois du ROR se retrouve affichee
+  // sous la colonne "2 mois" du DTCaP.
+  const allMonths = [...new Set(VAC_SCHEMA.flatMap(v=>v.doses.map(d=>d.months)))].sort((a,b)=>a-b);
   const rows = VAC_SCHEMA.map(v=>{
-    const doses = v.doses.map((dose,di)=>{
+    const cells = allMonths.map(months=>{
+      const di = v.doses.findIndex(d=>d.months===months);
+      if(di===-1) return '<td style="padding:5px 8px;text-align:center;vertical-align:middle"></td>';
+      const dose = v.doses[di];
       const s = vacDoseStatus(e,v,di);
       let cell;
       if(s.state==='fait'){
@@ -185,7 +194,7 @@ function vacRenderFicheBody(){
       }
       return `<td style="padding:5px 8px;text-align:center;vertical-align:middle">${cell}</td>`;
     }).join('');
-    return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600;color:var(--koala-dark);white-space:nowrap">${v.label}</td>${doses}</tr>`;
+    return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600;color:var(--koala-dark);white-space:nowrap">${v.label}</td>${cells}</tr>`;
   }).join('');
   body.innerHTML = `
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">né(e) le ${vacFmtDate(e.dob)} · ${ageStr}${creche?' · '+escHtml(creche.name):''}</div>
@@ -194,7 +203,7 @@ function vacRenderFicheBody(){
         <thead>
           <tr style="background:var(--koala-light)">
             <th style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--koala);text-align:left;min-width:180px">Vaccin</th>
-            ${VAC_SCHEMA[0].doses.map(d=>`<th style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--koala);text-align:center;white-space:nowrap">${d.label}</th>`).join('')}
+            ${allMonths.map(m=>`<th style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--koala);text-align:center;white-space:nowrap">${m} mois</th>`).join('')}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
