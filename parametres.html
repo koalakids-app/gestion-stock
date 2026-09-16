@@ -566,6 +566,12 @@ function kioskLinkFor(token){
   try{return new URL('tablette.html?k='+token,location.href).href;}
   catch(e){return location.href.replace(/[^/]*$/,'')+'tablette.html?k='+token;}
 }
+/* Même token que le pointage : la tablette pointe et fait le suivi santé/
+   développement avec le même lien de base, juste une autre page. */
+function suiviLinkFor(token){
+  try{return new URL('suivi.html?k='+token,location.href).href;}
+  catch(e){return location.href.replace(/[^/]*$/,'')+'suivi.html?k='+token;}
+}
 function renderKiosk(){
   const box=document.getElementById('kioskDevices');
   const h=document.getElementById('hKiosk');
@@ -585,7 +591,8 @@ function renderKiosk(){
         +'</div>'
         +'<span class="kiosk-badge '+(d.active?'on':'off')+'">'+(d.active?'Active':'Désactivée')+'</span>'
         +'<div class="kiosk-acts">'
-          +'<button class="btn btn-g btn-sm" onclick="kioskCopyLink(\''+esc(link)+'\')"><i class="ti ti-copy"></i> Copier le lien</button>'
+          +'<button class="btn btn-g btn-sm" onclick="kioskCopyLink(\''+esc(link)+'\')"><i class="ti ti-copy"></i> Copier le lien pointage</button>'
+          +'<button class="btn btn-g btn-sm" onclick="kioskCopyLink(\''+esc(suiviLinkFor(d.token))+'\')"><i class="ti ti-heart-handshake"></i> Copier le lien suivi</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskToggleActive(\''+d.id+'\','+(!d.active)+')"><i class="ti ti-power"></i> '+(d.active?'Désactiver':'Réactiver')+'</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskRegen(\''+d.id+'\')"><i class="ti ti-refresh"></i> Régénérer le lien</button>'
         +'</div>'
