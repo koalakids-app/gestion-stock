@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v11';   // v11 : ajout notifications push
+const CACHE_NAME = 'stocks-v12';   // v12 : module Suivi de l'enfant (écran tablette)
 
 self.addEventListener('install', event => {
   event.waitUntil(

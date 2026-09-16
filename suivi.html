@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Suivi de l'enfant</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--violet:#4A3F9F;--orange:#F47920;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--ok:#2E7D32;--err:#C62828}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;min-width:0}
+html,body{height:100dvh}
+body{font-family:'Nunito',system-ui,sans-serif;background:var(--cream);color:#2B2740;
+     min-height:100dvh;display:flex;flex-direction:column;overflow:hidden;
+     padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+button,input,select,textarea{font-family:inherit;font-size:16px}
+.hidden{display:none!important}
+
+/* ---- en-tête ---- */
+.top{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;flex-shrink:0}
+.top .title{font-family:'Baloo 2',cursive;font-size:19px;font-weight:700;color:var(--violet);display:flex;align-items:center;gap:8px}
+.top .clock{text-align:right;line-height:1.15}
+#clock{font-size:18px;font-weight:800;color:var(--violet);font-variant-numeric:tabular-nums}
+#date{font-size:11.5px;color:var(--muted);text-transform:capitalize}
+.btn-auteur{border:none;background:#F1EFF7;color:var(--violet);border-radius:12px;padding:8px 14px;
+  font-weight:800;font-size:13px;display:flex;align-items:center;gap:6px}
+
+/* ---- identification par code image ---- */
+.ident{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:20px}
+.ident .prompt{font-size:18px;font-weight:800;color:var(--violet);text-align:center}
+.ident .subprompt{font-size:13px;color:var(--muted);text-align:center;margin-top:2px}
+.picto-slots{display:flex;gap:12px}
+.picto-slot{width:50px;height:50px;border-radius:14px;border:2.5px solid var(--line);background:#fff;
+  display:flex;align-items:center;justify-content:center;overflow:hidden}
+.picto-slot.filled{border-color:var(--violet)}
+.picto-slot img{width:100%;height:100%;object-fit:cover}
+.picto-slots.shake{animation:shake .4s}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-10px)}40%{transform:translateX(10px)}60%{transform:translateX(-8px)}80%{transform:translateX(8px)}}
+.picto-grid{display:grid;grid-template-columns:repeat(4,72px);gap:12px}
+.picto-key{width:72px;height:72px;border-radius:16px;border:none;background:#fff;padding:0;overflow:hidden;
+  box-shadow:0 2px 10px rgba(43,39,64,.08)}
+.picto-key img{width:100%;height:100%;object-fit:cover;display:block}
+.picto-key.used{opacity:.3;pointer-events:none}
+
+/* ---- grille des enfants présents ---- */
+.grille-wrap{flex:1;display:flex;flex-direction:column;min-height:0}
+.grille{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;padding:14px 16px 90px}
+.tile{background:#fff;border-radius:16px;padding:12px 10px;border:2.5px solid var(--line);display:flex;flex-direction:column;
+  align-items:center;gap:6px;text-align:center;position:relative}
+.tile.sel{border-color:var(--violet);background:#F1EFF7}
+.tile .av{width:56px;height:56px;border-radius:50%;background:var(--violet);color:#fff;font-weight:800;font-size:19px;
+  display:flex;align-items:center;justify-content:center}
+.tile .nom{font-weight:800;font-size:14px}
+.tile .badges{display:flex;gap:4px;position:absolute;top:8px;right:8px}
+.tile .badge{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
+.tile .badge.allergie{background:var(--err)}
+.tile .badge.pai{background:var(--orange)}
+.tile .btn-jalons{border:none;background:none;color:var(--muted);font-size:11px;font-weight:700;display:flex;align-items:center;gap:3px}
+.empty-grille{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);text-align:center;padding:30px}
+.empty-grille i{font-size:44px}
+
+/* ---- barre d'action groupée ---- */
+.barre{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:2px solid var(--line);
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;overflow-x:auto;
+  box-shadow:0 -4px 14px rgba(43,39,64,.06)}
+.barre .compte{font-size:12px;font-weight:800;color:var(--violet);white-space:nowrap;align-self:center;padding-right:4px}
+.chip{border:none;background:#F1EFF7;color:var(--violet);border-radius:14px;padding:10px 14px;font-weight:800;
+  font-size:13px;white-space:nowrap;display:flex;align-items:center;gap:6px;flex-shrink:0}
+.chip:active{background:#E6E2F2}
+.chip.orange{background:var(--orange);color:#fff}
+
+/* ---- overlay générique ---- */
+.ov-wrap{position:fixed;inset:0;background:rgba(43,39,64,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+.ov{background:#fff;border-radius:22px 22px 0 0;width:100%;max-width:520px;max-height:88dvh;overflow-y:auto;
+  padding:20px 20px calc(20px + env(safe-area-inset-bottom))}
+.ov h2{font-family:'Baloo 2',cursive;color:var(--violet);font-size:18px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.ov-choix{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.ov-choix button{border:2.5px solid var(--line);background:#fff;border-radius:14px;padding:14px 16px;font-weight:800;
+  font-size:14.5px;flex:1;min-width:120px}
+.ov-choix button:active{background:#F1EFF7;border-color:var(--violet)}
+.ov textarea{width:100%;border:2px solid var(--line);border-radius:14px;padding:12px;min-height:90px;resize:vertical}
+.ov .row{display:flex;gap:10px;margin-top:12px}
+.ov .row button{flex:1;border:none;border-radius:14px;padding:14px;font-weight:800;font-size:15px}
+.ov .btn-annule{background:#F1EFF7;color:var(--muted)}
+.ov .btn-valide{background:var(--orange);color:#fff}
+.mic-btn{border:none;background:var(--violet);color:#fff;border-radius:50%;width:44px;height:44px;font-size:18px;
+  display:flex;align-items:center;justify-content:center;margin-top:10px}
+.mic-btn.on{background:var(--err)}
+.temp-val{font-size:44px;font-weight:800;color:var(--violet);text-align:center;margin:10px 0}
+.temp-pad{display:flex;justify-content:center;gap:16px}
+.temp-pad button{width:56px;height:56px;border-radius:50%;border:none;background:#F1EFF7;color:var(--violet);font-size:22px;font-weight:800}
+
+/* ---- toast annuler ---- */
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:#2B2740;color:#fff;border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:12px;
+  font-size:13.5px;font-weight:700;z-index:60;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+.toast button{border:none;background:var(--orange);color:#fff;border-radius:10px;padding:8px 12px;font-weight:800}
+
+/* ---- écran jalons ---- */
+.jalons-wrap{flex:1;display:flex;flex-direction:column;min-height:0}
+.jalons-head{display:flex;align-items:center;gap:10px;padding:12px 16px}
+.jalons-head .retour{border:none;background:#F1EFF7;color:var(--violet);border-radius:12px;padding:10px 14px;font-weight:800}
+.jalons-head .qui{font-weight:800;font-size:15px}
+.jalons-list{flex:1;overflow-y:auto;padding:0 16px 20px}
+.domaine-titre{font-family:'Baloo 2',cursive;color:var(--orange);font-size:14.5px;margin:16px 0 8px;padding-bottom:4px;border-bottom:2px solid var(--line)}
+.jalon{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.jalon .lib{flex:1;font-size:14px}
+.jalon .btns{display:flex;gap:6px}
+.jalon button{border:2px solid var(--line);background:#fff;border-radius:10px;padding:7px 10px;font-size:12px;font-weight:800;color:var(--muted)}
+.jalon button.on.observe{background:var(--ok);border-color:var(--ok);color:#fff}
+.jalon button.on.emergence{background:var(--orange);border-color:var(--orange);color:#fff}
+.mention{font-size:11px;color:var(--muted);text-align:center;padding:10px}
+
+/* ---- état chargement/erreur ---- */
+.state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:30px}
+.state i{font-size:50px;color:var(--muted)}
+.state h2{font-size:18px}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <span class="title"><i class="ti ti-heart-handshake"></i> Suivi</span>
+  <button class="btn-auteur hidden" id="btnAuteur" onclick="changerAuteur()"></button>
+  <div class="clock"><div id="clock">--:--:--</div><div id="date"></div></div>
+</div>
+
+<div id="app" class="state"><i class="ti ti-loader-2"></i><h2>Chargement…</h2></div>
+
+<script>
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,
+  {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+
+const TOKEN=new URLSearchParams(location.search).get('k')||'';
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* Dates locales, jamais toISOString().slice(0,10) */
+function ipDateToLocalISO(d){
+  d=d||new Date();
+  const p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+
+const app=document.getElementById('app');
+const btnAuteur=document.getElementById('btnAuteur');
+
+const PICTOS=[
+  {id:'ours',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/ours.png'},
+  {id:'arc_en_ciel',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/arc_en_ciel.png'},
+  {id:'zebre',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/zebre.png'},
+  {id:'hochet',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/hochet.png'},
+  {id:'baleine',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/baleine.png'},
+  {id:'cubes_alphabet',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/cubes_alphabet.png'},
+  {id:'camionnette_rouge',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/camionnette_rouge.png'},
+  {id:'pingouin',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/pingouin.png'}
+];
+const pictoById=Object.fromEntries(PICTOS.map(p=>[p.id,p]));
+
+/* Identification : une fois par session tablette (pas à chaque geste, sinon
+   impossible de tenir les <10s/3 touchers). Stockée en mémoire seulement —
+   jamais en localStorage (redémarrage de la tablette = ré-identification). */
+let AUTEUR_PICTOS=null;
+let AUTEUR_LABEL='';
+
+let ENFANTS=[];
+let JALONS=[];
+let selection=new Set();
+let ecran='grille';
+let enfantJalons=null;
+let lastBatch=null; // {table, ids:[...]}
+let toastTimer=null;
+
+/* File d'attente hors-ligne : un item par action qui a échoué faute de
+   réseau. Rejouée dès que le navigateur repasse en ligne. */
+const QUEUE_KEY='suivi_queue_'+TOKEN;
+function queueLire(){try{return JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]');}catch(e){return [];}}
+function queueEcrire(q){try{localStorage.setItem(QUEUE_KEY,JSON.stringify(q));}catch(e){}}
+function queueAjouter(item){const q=queueLire();q.push(item);queueEcrire(q);}
+async function queueRejouer(){
+  const q=queueLire();
+  if(!q.length)return;
+  const restants=[];
+  for(const item of q){
+    const{error}=await sb.rpc(item.fn,item.args);
+    if(error)restants.push(item);
+  }
+  queueEcrire(restants);
+  if(restants.length!==q.length)chargerEnfants();
+}
+window.addEventListener('online',queueRejouer);
+
+/* ---- horloge ---- */
+function tickClock(){
+  const d=new Date();
+  document.getElementById('clock').textContent=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('date').textContent=d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+}
+tickClock();setInterval(tickClock,1000);
+
+/* ---- démarrage ---- */
+(async function init(){
+  if(!TOKEN||TOKEN.length<20){
+    app.innerHTML='<i class="ti ti-alert-triangle"></i><h2>Lien invalide</h2><p style="color:var(--muted);font-size:13px">Cette tablette n\'a pas de lien de suivi valide. Contactez la direction.</p>';
+    return;
+  }
+  const{data:crecheId,error}=await sb.rpc('kk_resolve_creche_id',{p_token:TOKEN});
+  if(error||!crecheId){
+    app.innerHTML='<i class="ti ti-alert-triangle"></i><h2>Tablette non configurée</h2><p style="color:var(--muted);font-size:13px">Contactez la direction pour reconfigurer cet appareil.</p>';
+    return;
+  }
+  afficherIdentification();
+})();
+
+/* ============================= IDENTIFICATION ============================= */
+function afficherIdentification(){
+  AUTEUR_PICTOS=null;AUTEUR_LABEL='';btnAuteur.classList.add('hidden');
+  let code=[];
+  app.className='';
+  app.innerHTML=`
+    <div class="ident">
+      <div><div class="prompt">Qui êtes-vous ?</div><div class="subprompt">Choisissez vos 4 images, dans l'ordre</div></div>
+      <div class="picto-slots" id="pSlots"></div>
+      <div class="picto-grid" id="pGrid"></div>
+    </div>`;
+  const slotsEl=document.getElementById('pSlots');
+  const gridEl=document.getElementById('pGrid');
+  function renderSlots(){
+    slotsEl.innerHTML=[0,1,2,3].map(i=>{
+      const p=code[i]?pictoById[code[i]]:null;
+      return '<div class="picto-slot'+(p?' filled':'')+'">'+(p?'<img src="'+p.url+'">':'')+'</div>';
+    }).join('');
+  }
+  function renderGrid(){
+    gridEl.innerHTML=PICTOS.map(p=>
+      '<button class="picto-key'+(code.includes(p.id)?' used':'')+'" data-p="'+p.id+'"><img src="'+p.url+'"></button>'
+    ).join('');
+  }
+  renderSlots();renderGrid();
+  gridEl.addEventListener('click',e=>{
+    const btn=e.target.closest('.picto-key');
+    if(!btn||code.length>=4)return;
+    const id=btn.dataset.p;
+    if(code.includes(id))return;
+    code.push(id);renderSlots();renderGrid();
+    if(code.length===4)valider();
+  });
+  async function valider(){
+    /* Pas de RPC de vérification isolée : le code est simplement mémorisé,
+       il sera validé (ou rejeté) au premier vrai geste. Une tentative avec
+       un mauvais code affichera l'erreur "code_inconnu" à ce moment-là. */
+    AUTEUR_PICTOS=code.slice();
+    btnAuteur.classList.remove('hidden');
+    btnAuteur.innerHTML='<i class="ti ti-user-check"></i> Changer';
+    await chargerEnfants();
+  }
+}
+function changerAuteur(){afficherIdentification();}
+window.changerAuteur=changerAuteur;
+
+/* ============================= GRILLE ENFANTS ============================= */
+async function chargerJalonsRef(){
+  if(JALONS.length)return;
+  const{data,error}=await sb.from('suivi_jalons').select('*').eq('actif',true).order('domaine').order('tranche').order('ordre');
+  if(!error)JALONS=data||[];
+}
+
+async function chargerEnfants(){
+  ecran='grille';selection.clear();
+  const{data,error}=await sb.rpc('kk_suivi_kiosk_enfants_presents',{p_token:TOKEN});
+  chargerJalonsRef();
+  if(error){
+    app.innerHTML='<i class="ti ti-wifi-off"></i><h2>Connexion impossible</h2><p style="color:var(--muted);font-size:13px">Vérifiez le Wi-Fi et réessayez.</p><button class="chip orange" style="margin-top:14px" onclick="chargerEnfants()">Réessayer</button>';
+    return;
+  }
+  ENFANTS=data||[];
+  renderGrille();
+}
+
+function initiales(prenom,nom){
+  return (prenom?prenom[0]:'')+(nom?nom[0]:'');
+}
+
+function renderGrille(){
+  if(!ENFANTS.length){
+    app.innerHTML=`<div class="empty-grille"><i class="ti ti-mood-kid"></i><div>Aucun enfant pointé présent pour le moment.</div>
+      <button class="chip orange" onclick="chargerEnfants()"><i class="ti ti-refresh"></i> Actualiser</button></div>`;
+    return;
+  }
+  app.innerHTML=`
+    <div class="grille-wrap">
+      <div class="grille" id="grille"></div>
+    </div>`;
+  const g=document.getElementById('grille');
+  g.innerHTML=ENFANTS.map(e=>`
+    <div class="tile${selection.has(e.id)?' sel':''}" data-id="${e.id}">
+      <div class="badges">
+        ${e.allergies?'<span class="badge allergie" title="Allergie / régime"><i class="ti ti-alert-triangle"></i></span>':''}
+        ${e.pai_actif?'<span class="badge pai" title="PAI actif"><i class="ti ti-clipboard-heart"></i></span>':''}
+      </div>
+      <div class="av">${esc(initiales(e.prenom,e.nom))}</div>
+      <div class="nom">${esc(e.prenom)}</div>
+      <button class="btn-jalons" data-jalons="${e.id}"><i class="ti ti-chart-line"></i> Repères</button>
+    </div>`).join('');
+  g.querySelectorAll('.tile').forEach(t=>t.addEventListener('click',ev=>{
+    if(ev.target.closest('.btn-jalons'))return;
+    const id=t.dataset.id;
+    if(selection.has(id))selection.delete(id);else selection.add(id);
+    renderGrille();
+  }));
+  g.querySelectorAll('[data-jalons]').forEach(b=>b.addEventListener('click',ev=>{
+    ev.stopPropagation();
+    ouvrirJalons(b.dataset.jalons);
+  }));
+  renderBarre();
+}
+
+function renderBarre(){
+  const anc=document.querySelector('.barre');if(anc)anc.remove();
+  if(!selection.size)return;
+  const barre=document.createElement('div');
+  barre.className='barre';
+  barre.innerHTML=`
+    <span class="compte">${selection.size} sélectionné${selection.size>1?'s':''}</span>
+    <button class="chip" data-action="repas"><i class="ti ti-tools-kitchen-2"></i> Repas</button>
+    <button class="chip" data-action="sieste_debut"><i class="ti ti-moon"></i> Sieste début</button>
+    <button class="chip" data-action="sieste_fin"><i class="ti ti-sun"></i> Sieste fin</button>
+    <button class="chip" data-action="change"><i class="ti ti-droplet"></i> Change</button>
+    <button class="chip" data-action="humeur"><i class="ti ti-mood-smile"></i> Humeur</button>
+    <button class="chip" data-action="temperature"><i class="ti ti-thermometer"></i> Température</button>
+    <button class="chip" data-action="soin"><i class="ti ti-first-aid-kit"></i> Soin</button>
+    <button class="chip" data-action="note"><i class="ti ti-microphone"></i> Note</button>
+  `;
+  document.body.appendChild(barre);
+  barre.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>lancerAction(b.dataset.action)));
+}
+
+/* ============================= ACTIONS GROUPÉES ============================= */
+function lancerAction(type){
+  if(type==='sieste_debut'||type==='sieste_fin')return envoyerSaisie(type,{});
+  if(type==='repas')return ouvrirChoix('Repas',[
+    {v:'tout',l:'Tout mangé'},{v:'bien',l:'Bien mangé'},{v:'peu',l:'Un peu mangé'},{v:'refus',l:'A refusé'}
+  ],v=>envoyerSaisie('repas',{niveau:v}));
+  if(type==='change')return ouvrirChoix('Change',[
+    {v:'urine',l:'Urine'},{v:'selles',l:'Selles'},{v:'urine_selles',l:'Les deux'}
+  ],v=>envoyerSaisie('change',{nature:v}));
+  if(type==='humeur')return ouvrirChoix('Humeur',[
+    {v:'content',l:'😊 Content'},{v:'neutre',l:'😐 Neutre'},{v:'difficile',l:'😢 Difficile'}
+  ],v=>envoyerSaisie('humeur',{niveau:v}));
+  if(type==='temperature')return ouvrirTemperature(c=>envoyerSaisie('temperature',{celsius:c}));
+  if(type==='soin')return ouvrirNote('Soin',t=>envoyerSaisie('soin',{texte:t}));
+  if(type==='note')return ouvrirNote('Note libre',t=>envoyerSaisie('note',{texte:t}));
+}
+
+function ouvrirChoix(titre,options,onChoix){
+  const w=document.createElement('div');w.className='ov-wrap';
+  w.innerHTML=`<div class="ov"><h2>${esc(titre)}</h2><div class="ov-choix">${
+    options.map(o=>`<button data-v="${o.v}">${esc(o.l)}</button>`).join('')
+  }</div><div class="row"><button class="btn-annule" id="ovAnnule">Annuler</button></div></div>`;
+  document.body.appendChild(w);
+  w.querySelectorAll('[data-v]').forEach(b=>b.addEventListener('click',()=>{w.remove();onChoix(b.dataset.v);}));
+  w.querySelector('#ovAnnule').addEventListener('click',()=>w.remove());
+}
+
+function ouvrirTemperature(onValide){
+  let val=37.0;
+  const w=document.createElement('div');w.className='ov-wrap';
+  w.innerHTML=`<div class="ov"><h2><i class="ti ti-thermometer"></i> Température</h2>
+    <div class="temp-val" id="tVal">${val.toFixed(1)} °C</div>
+    <div class="temp-pad">
+      <button id="tMoins">−0,1</button><button id="tMoinsGros">−1</button>
+      <button id="tPlusGros">+1</button><button id="tPlus">+0,1</button>
+    </div>
+    <div class="row"><button class="btn-annule" id="ovAnnule">Annuler</button><button class="btn-valide" id="ovValide">Enregistrer</button></div>
+    </div>`;
+  document.body.appendChild(w);
+  const maj=()=>{document.getElementById('tVal').textContent=val.toFixed(1)+' °C';};
+  document.getElementById('tMoins').onclick=()=>{val=Math.max(34,val-0.1);maj();};
+  document.getElementById('tPlus').onclick=()=>{val=Math.min(42,val+0.1);maj();};
+  document.getElementById('tMoinsGros').onclick=()=>{val=Math.max(34,val-1);maj();};
+  document.getElementById('tPlusGros').onclick=()=>{val=Math.min(42,val+1);maj();};
+  w.querySelector('#ovAnnule').addEventListener('click',()=>w.remove());
+  w.querySelector('#ovValide').addEventListener('click',()=>{w.remove();onValide(Math.round(val*10)/10);});
+}
+
+/* Dictée vocale : Web Speech API (Chrome Android). Facultative — si absente,
+   le champ texte reste utilisable normalement. */
+function ouvrirNote(titre,onValide){
+  const w=document.createElement('div');w.className='ov-wrap';
+  w.innerHTML=`<div class="ov"><h2><i class="ti ti-notes"></i> ${esc(titre)}</h2>
+    <textarea id="ovTexte" placeholder="Note facultative…"></textarea>
+    <button class="mic-btn" id="ovMic" title="Dicter"><i class="ti ti-microphone"></i></button>
+    <div class="row"><button class="btn-annule" id="ovAnnule">Annuler</button><button class="btn-valide" id="ovValide">Enregistrer</button></div>
+    </div>`;
+  document.body.appendChild(w);
+  const ta=document.getElementById('ovTexte');
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(SR){
+    const reco=new SR();reco.lang='fr-FR';reco.interimResults=false;reco.continuous=false;
+    const micBtn=document.getElementById('ovMic');
+    let on=false;
+    micBtn.addEventListener('click',()=>{
+      if(on){reco.stop();return;}
+      reco.start();on=true;micBtn.classList.add('on');
+    });
+    reco.onresult=ev=>{
+      const t=ev.results[0][0].transcript;
+      ta.value=(ta.value?ta.value+' ':'')+t;
+    };
+    reco.onend=()=>{on=false;micBtn.classList.remove('on');};
+    reco.onerror=()=>{on=false;micBtn.classList.remove('on');};
+  }else{
+    document.getElementById('ovMic').style.display='none';
+  }
+  w.querySelector('#ovAnnule').addEventListener('click',()=>w.remove());
+  w.querySelector('#ovValide').addEventListener('click',()=>{const t=ta.value.trim();w.remove();onValide(t);});
+}
+
+async function envoyerSaisie(type,valeur){
+  const enfantIds=[...selection];
+  const args={p_token:TOKEN,p_code_pictos:AUTEUR_PICTOS,p_enfant_ids:enfantIds,p_type:type,p_valeur:valeur};
+  selection.clear();renderGrille();
+  if(!navigator.onLine){
+    queueAjouter({fn:'kk_suivi_kiosk_saisir',args});
+    toast('Enregistré (hors ligne, sera envoyé au retour du réseau).',null);
+    return;
+  }
+  const{data,error}=await sb.rpc('kk_suivi_kiosk_saisir',args);
+  if(error){
+    queueAjouter({fn:'kk_suivi_kiosk_saisir',args});
+    toast('Réseau indisponible : mis en attente.',null);
+    return;
+  }
+  const rows=data||[];
+  const echecs=rows.filter(r=>!r.ok);
+  const okIds=rows.filter(r=>r.ok).map(r=>r.saisie_id);
+  if(echecs.length&&echecs[0].error==='code_inconnu'){
+    afficherIdentification();
+    alert('Code image non reconnu. Merci de vous identifier à nouveau.');
+    return;
+  }
+  if(okIds.length){
+    lastBatch={table:'suivi_saisies',ids:okIds};
+    toast(okIds.length>1?okIds.length+' saisies enregistrées.':'Saisie enregistrée.',annulerDernier);
+  }
+  if(echecs.length)console.warn('saisies en échec',echecs);
+}
+
+function toast(msg,onAnnuler){
+  const anc=document.querySelector('.toast');if(anc)anc.remove();
+  clearTimeout(toastTimer);
+  const t=document.createElement('div');t.className='toast';
+  t.innerHTML=`<span>${esc(msg)}</span>`+(onAnnuler?'<button id="tAnnule">Annuler</button>':'');
+  document.body.appendChild(t);
+  if(onAnnuler)t.querySelector('#tAnnule').addEventListener('click',()=>{t.remove();onAnnuler();});
+  toastTimer=setTimeout(()=>t.remove(),10000);
+}
+
+async function annulerDernier(){
+  if(!lastBatch)return;
+  const{table,ids}=lastBatch;
+  lastBatch=null;
+  for(const id of ids){
+    await sb.rpc('kk_suivi_kiosk_annuler',{p_token:TOKEN,p_code_pictos:AUTEUR_PICTOS,p_id:id,p_table:table});
+  }
+  chargerEnfants();
+}
+
+/* ============================= JALONS (un enfant) ============================= */
+const TRANCHES=['0-6 mois','6-12 mois','1-2 ans','2-3 ans','3-4 ans'];
+function trancheDepuisDob(dob){
+  if(!dob)return null;
+  const naissance=new Date(dob+'T00:00:00');
+  const moisAge=(new Date().getFullYear()-naissance.getFullYear())*12+(new Date().getMonth()-naissance.getMonth());
+  if(moisAge<6)return 0;
+  if(moisAge<12)return 1;
+  if(moisAge<24)return 2;
+  if(moisAge<36)return 3;
+  return 4;
+}
+
+function ouvrirJalons(enfantId){
+  const e=ENFANTS.find(x=>x.id===enfantId);
+  if(!e)return;
+  enfantJalons=e;
+  ecran='jalons';
+  const idx=trancheDepuisDob(e.dob);
+  const tranchesAffichees=idx===null?[]:[TRANCHES[idx],TRANCHES[idx+1]].filter(Boolean);
+  const jalons=JALONS.filter(j=>tranchesAffichees.includes(j.tranche));
+  const domaines=[...new Set(jalons.map(j=>j.domaine))];
+
+  app.innerHTML=`
+    <div class="jalons-wrap">
+      <div class="jalons-head">
+        <button class="retour" onclick="chargerEnfants()"><i class="ti ti-arrow-left"></i></button>
+        <span class="qui">${esc(e.prenom)} — repères de développement</span>
+      </div>
+      <div class="jalons-list" id="jList"></div>
+    </div>`;
+  const list=document.getElementById('jList');
+  if(!jalons.length){
+    list.innerHTML='<div class="mention">Aucun repère actif pour la tranche d\'âge de cet enfant.</div>';
+    return;
+  }
+  list.innerHTML=domaines.map(dom=>`
+    <div class="domaine-titre">${esc(dom)}</div>
+    ${jalons.filter(j=>j.domaine===dom).map(j=>`
+      <div class="jalon" data-jalon="${j.id}">
+        <span class="lib">${esc(j.libelle)}</span>
+        <div class="btns">
+          <button data-statut="emergence" class="emergence">En émergence</button>
+          <button data-statut="observe" class="observe">Observé</button>
+        </div>
+      </div>`).join('')}
+  `).join('')+`<div class="mention">Repères élaborés par l'équipe Koala Kids, inspirés des travaux de Francine Ferland.</div>`;
+
+  list.querySelectorAll('.jalon').forEach(row=>{
+    row.querySelectorAll('button[data-statut]').forEach(btn=>{
+      btn.addEventListener('click',()=>marquerJalon(e.id,row.dataset.jalon,btn.dataset.statut,row,btn));
+    });
+  });
+}
+
+async function marquerJalon(enfantId,jalonId,statut,row,btn){
+  row.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  const args={p_token:TOKEN,p_code_pictos:AUTEUR_PICTOS,p_enfant_id:enfantId,p_jalon_id:jalonId,
+    p_statut:statut,p_note:null,p_posture:null,p_partage:'interne'};
+  if(!navigator.onLine){queueAjouter({fn:'kk_suivi_kiosk_observer',args});return;}
+  const{data,error}=await sb.rpc('kk_suivi_kiosk_observer',args);
+  if(error){queueAjouter({fn:'kk_suivi_kiosk_observer',args});return;}
+  const row0=Array.isArray(data)?data[0]:data;
+  if(row0&&!row0.ok&&row0.error==='code_inconnu'){
+    afficherIdentification();
+    alert('Code image non reconnu. Merci de vous identifier à nouveau.');
+  }
+}
+</script>
+</body>
+</html>
