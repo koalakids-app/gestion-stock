@@ -173,7 +173,11 @@ function vacRenderFicheBody(){
   const rows = VAC_SCHEMA.map(v=>{
     const cells = allMonths.map(months=>{
       const di = v.doses.findIndex(d=>d.months===months);
-      if(di===-1) return '<td style="padding:5px 8px;text-align:center;vertical-align:middle"></td>';
+      if(di===-1){
+        // Ce vaccin n'a pas de dose a cet age : une pastille grisee garde la
+        // grille lisible (au lieu d'une case vide qui casse l'alignement visuel).
+        return '<td style="padding:5px 8px;text-align:center;vertical-align:middle"><span aria-hidden="true" style="display:inline-flex;width:34px;height:34px;border:2px dashed var(--border);border-radius:50%;opacity:0.35"></span></td>';
+      }
       const dose = v.doses[di];
       const s = vacDoseStatus(e,v,di);
       let cell;
