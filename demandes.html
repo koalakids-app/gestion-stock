@@ -654,6 +654,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn-primary" onclick="openPartenaireModal()"><i class="ti ti-plus"></i> Ajouter un partenaire</button>
     </div>
     <p class="hint" style="font-size:12.5px;color:var(--muted);margin:-4px 0 12px">CAF, PMI, prestataire repas, mairie… les organismes avec lesquels le réseau travaille. Un contact sans crèche précisée concerne l'ensemble du réseau.</p>
+    <div id="partenaires-creche-tabs-bar" class="creche-tabs-bar"></div>
     <div id="partenaires-filtre-bar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
     <div class="ref-grid" id="partenaires-grid"></div>
   </div>
@@ -1916,7 +1917,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <datalist id="part-categories"><option value="CAF"><option value="PMI"><option value="Prestataire repas"><option value="Mairie"><option value="Assurance"><option value="Autre"></datalist>
       </div>
     </div>
-    <div class="fg"><label class="flabel">Crèche concernée</label><select class="finput" id="part-creche"><option value="">-- Tout le réseau --</option></select></div>
+    <div class="fg"><label class="flabel">Crèches concernées</label>
+      <div id="part-creches-checks" style="display:flex;gap:12px;flex-wrap:wrap;padding:8px 0"></div>
+      <p class="hint" style="font-size:12px;color:var(--muted);margin:2px 0 0">Aucune case cochée = concerne tout le réseau.</p>
+    </div>
     <div class="frow">
       <div class="fg"><label class="flabel">Contact (nom)</label><input class="finput" id="part-contact-nom" placeholder="Nom de l'interlocuteur"/></div>
       <div class="fg"><label class="flabel">Téléphone</label><input class="finput" id="part-telephone" type="tel"/></div>
@@ -3869,13 +3873,25 @@ async function deleteEmploye(id){
 
 /* ===== PARTENAIRES ET INSTITUTIONS (CAF, PMI, prestataire repas…) =========
    Annuaire partagé, table `partenaires` (cf. sql/partenaires.sql). Un
-   partenaire sans creche_id concerne tout le réseau ; sinon il n'apparaît
-   qu'aux comptes rattachés à cette crèche (et à la direction, qui voit
-   toujours tout). */
-let editingPartenaireId=null,partenairesFiltreCategorie='';
+   partenaire dont creche_ids est vide concerne tout le réseau ; sinon il
+   n'apparaît qu'aux comptes rattachés à l'une des crèches listées (et à la
+   direction, qui voit toujours tout) — un même intervenant extérieur (ex.
+   le RSAI) peut ne travailler qu'avec une partie du réseau. */
+let editingPartenaireId=null,partenairesFiltreCategorie='',activePartenaireCrecheId='all';
 function partenairesVisibles(){
-  return cachePartenaires.filter(p=>!p.creche_id||p.creche_id===currentProfile?.creche_id||isDirection);
+  return cachePartenaires.filter(p=>!p.creche_ids?.length||isDirection||p.creche_ids.includes(currentProfile?.creche_id));
 }
+function renderPartenaireCrecheTabs(){
+  const bar=document.getElementById('partenaires-creche-tabs-bar');if(!bar)return;
+  if(!isDirection){bar.style.display='none';return;}
+  if(!cacheCreches.length){activePartenaireCrecheId='all';}
+  else if(activePartenaireCrecheId!=='all'&&!cacheCreches.find(c=>c.id===activePartenaireCrecheId)){activePartenaireCrecheId='all';}
+  let html='<button class="creche-tab'+(activePartenaireCrecheId==='all'?' active':'')+'" onclick="selectPartenaireCreche(\'all\')"><i class="ti ti-building-community" style="font-size:13px"></i> Toutes<span class="tab-count">'+cachePartenaires.length+'</span></button>';
+  cacheCreches.forEach(c=>{const count=cachePartenaires.filter(p=>!p.creche_ids?.length||p.creche_ids.includes(c.id)).length;html+='<button class="creche-tab'+(activePartenaireCrecheId===c.id?' active':'')+'" onclick="selectPartenaireCreche(\''+c.id+'\')"><i class="ti ti-building" style="font-size:13px"></i> '+c.name+'<span class="tab-count">'+count+'</span></button>';});
+  bar.style.display='';bar.innerHTML=html;
+}
+function selectPartenaireCreche(id){activePartenaireCrecheId=id;renderPartenaires();}
+window.selectPartenaireCreche=selectPartenaireCreche;
 function renderPartenairesFiltres(){
   const bar=document.getElementById('partenaires-filtre-bar');if(!bar)return;
   const categories=[...new Set(partenairesVisibles().map(p=>p.categorie||'Autre'))].sort((a,b)=>a.localeCompare(b,'fr'));
@@ -3887,14 +3903,16 @@ function partenairesFiltrerCategorie(cat){partenairesFiltreCategorie=cat;renderP
 window.partenairesFiltrerCategorie=partenairesFiltrerCategorie;
 function renderPartenaires(){
   const grid=document.getElementById('partenaires-grid');if(!grid)return;
+  renderPartenaireCrecheTabs();
   renderPartenairesFiltres();
   let list=partenairesVisibles();
+  if(isDirection&&activePartenaireCrecheId!=='all')list=list.filter(p=>!p.creche_ids?.length||p.creche_ids.includes(activePartenaireCrecheId));
   if(partenairesFiltreCategorie)list=list.filter(p=>(p.categorie||'Autre')===partenairesFiltreCategorie);
   list=list.slice().sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'}));
   if(!list.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-building-community"></i><p>Aucun partenaire enregistré.</p></div>';return;}
   grid.innerHTML=list.map(p=>{
-    const creche=p.creche_id?cacheCreches.find(c=>c.id===p.creche_id):null;
-    const portee=creche?escHtml(creche.name):'<span style="color:var(--koala)">🌐 Tout le réseau</span>';
+    const noms=(p.creche_ids||[]).map(id=>cacheCreches.find(c=>c.id===id)?.name).filter(Boolean);
+    const portee=noms.length?escHtml(noms.join(', ')):'<span style="color:var(--koala)">🌐 Tout le réseau</span>';
     return '<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:var(--muted)">'+escHtml((p.categorie||'?').slice(0,2).toUpperCase())+'</div><div style="flex:1;min-width:0">'
       +'<div class="ref-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+escHtml(p.nom)+' <span style="background:var(--koala-light);color:var(--koala);border-radius:10px;padding:2px 8px;font-size:10px;font-weight:700">'+escHtml(p.categorie||'Autre')+'</span></div>'
       +'<div class="ref-detail"><i class="ti ti-map-pin" style="font-size:11px"></i> '+portee+'</div>'
@@ -3907,15 +3925,20 @@ function renderPartenaires(){
   }).join('');
 }
 window.renderPartenaires=renderPartenaires;
-function partenaireFillCrecheSelect(selectedId){
-  const sel=document.getElementById('part-creche');if(!sel)return;
-  sel.innerHTML='<option value="">-- Tout le réseau --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(c.id===selectedId?' selected':'')+'>'+escHtml(c.name)+'</option>').join('');
+function partenaireFillCrecheChecks(selectedIds){
+  const wrap=document.getElementById('part-creches-checks');if(!wrap)return;
+  const ids=selectedIds||[];
+  wrap.innerHTML=cacheCreches.map(c=>'<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="checkbox" value="'+c.id+'"'+(ids.includes(c.id)?' checked':'')+'/> '+escHtml(c.name)+'</label>').join('')
+    ||'<span class="hint" style="font-size:12px;color:var(--muted)">Aucune crèche enregistrée.</span>';
+}
+function partenaireGetCrecheChecks(){
+  return [...document.querySelectorAll('#part-creches-checks input[type=checkbox]:checked')].map(i=>i.value);
 }
 function openPartenaireModal(){
   editingPartenaireId=null;
   document.getElementById('modal-partenaire-title').textContent='Ajouter un partenaire';
   ['part-nom','part-categorie','part-contact-nom','part-telephone','part-email','part-adresse','part-notes'].forEach(id=>{document.getElementById(id).value='';});
-  partenaireFillCrecheSelect('');
+  partenaireFillCrecheChecks([]);
   document.getElementById('part-btn-delete').style.display='none';
   document.getElementById('modal-partenaire-wrap').classList.add('open');
 }
@@ -3931,7 +3954,7 @@ function editPartenaire(id){
   document.getElementById('part-email').value=p.email||'';
   document.getElementById('part-adresse').value=p.adresse||'';
   document.getElementById('part-notes').value=p.notes||'';
-  partenaireFillCrecheSelect(p.creche_id||'');
+  partenaireFillCrecheChecks(p.creche_ids||[]);
   document.getElementById('part-btn-delete').style.display='';
   document.getElementById('modal-partenaire-wrap').classList.add('open');
 }
@@ -3942,7 +3965,7 @@ async function savePartenaire(){
   const row={
     nom,
     categorie:document.getElementById('part-categorie').value.trim()||'Autre',
-    creche_id:document.getElementById('part-creche').value||null,
+    creche_ids:partenaireGetCrecheChecks(),
     contact_nom:document.getElementById('part-contact-nom').value.trim()||null,
     telephone:document.getElementById('part-telephone').value.trim()||null,
     email:document.getElementById('part-email').value.trim()||null,
