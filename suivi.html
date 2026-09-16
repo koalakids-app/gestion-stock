@@ -116,6 +116,40 @@ button,input,select,textarea{font-family:inherit;font-size:16px}
 .state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:30px}
 .state i{font-size:50px;color:var(--muted)}
 .state h2{font-size:18px}
+
+/* ---- connexion (mode ordinateur) ---- */
+.login{max-width:340px;margin:70px auto;background:#fff;border:2px solid var(--line);border-radius:22px;padding:26px}
+.login h2{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);text-align:center;margin-bottom:16px}
+.f{margin-bottom:12px}
+.f label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+input,select,textarea{font-family:'Nunito';font-size:16px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740;width:100%}
+.btn{border:none;border-radius:12px;padding:9px 14px;font-family:'Nunito';font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-p{background:var(--orange);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ---- mode ordinateur ---- */
+.ordi-wrap{flex:1;overflow-y:auto;min-height:0}
+.ordi-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:14px 20px;border-bottom:2px solid var(--line)}
+.ordi-top select,.ordi-top input[type=date]{width:auto}
+.ordi-body{display:flex;gap:0;min-height:calc(100dvh - 130px)}
+.ordi-liste{width:300px;flex-shrink:0;border-right:2px solid var(--line);overflow-y:auto;padding:10px}
+.ordi-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:14px;cursor:pointer}
+.ordi-item:hover{background:#F1EFF7}
+.ordi-item.on{background:#F1EFF7}
+.ordi-item .av{width:38px;height:38px;border-radius:50%;background:var(--violet);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ordi-item .nom{font-weight:800;font-size:14px;flex:1}
+.pill{font-size:10.5px;font-weight:800;border-radius:20px;padding:3px 9px;white-space:nowrap}
+.pill.brouillon{background:#F1EFF7;color:var(--muted)}
+.pill.publiee{background:#E4F3E5;color:var(--ok)}
+.pill.bloque{background:#FBE9E7;color:var(--err)}
+.ordi-detail{flex:1;padding:20px 26px;overflow-y:auto}
+.section-titre{font-family:'Baloo 2',cursive;color:var(--orange);font-size:15px;margin:18px 0 8px}
+.section-titre:first-child{margin-top:0}
+.bullet-list{list-style:none;display:flex;flex-direction:column;gap:6px}
+.bullet-list li{background:#fff;border:2px solid var(--line);border-radius:12px;padding:10px 12px;font-size:14px}
+.bullet-list.interne li{border-color:#FBE9E7;background:#FFFBFA}
+.ordi-empty{color:var(--muted);text-align:center;padding:60px 20px}
+.mention2{font-size:11px;color:var(--muted);margin-top:16px}
 </style>
 </head>
 <body>
@@ -127,6 +161,37 @@ button,input,select,textarea{font-family:inherit;font-size:16px}
 </div>
 
 <div id="app" class="state"><i class="ti ti-loader-2"></i><h2>Chargement…</h2></div>
+
+<div id="loginView" style="display:none">
+  <div class="login" id="liFormBox">
+    <h2>Suivi de l'enfant</h2>
+    <div class="f"><label>Email</label><input type="email" id="liMail" autocomplete="username"></div>
+    <div class="f"><label>Mot de passe</label><input type="password" id="liPwd" autocomplete="current-password"></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center" id="btnLogin" onclick="doLogin()">Se connecter</button>
+    <p id="liErr" style="color:var(--err);font-size:12.5px;margin-top:10px;text-align:center"></p>
+  </div>
+  <div class="login" id="mfaGateBox" style="display:none">
+    <h2>Double authentification</h2>
+    <div id="mfaGateChallengeView" style="display:none">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Entrez le code à 6 chiffres généré par votre application d'authentification.</p>
+      <div class="f"><input type="text" id="mfaGateCode" maxlength="6" inputmode="numeric" placeholder="123456" style="letter-spacing:4px;text-align:center;font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();mfaGateVerifyChallenge();}"></div>
+      <p id="mfaGateChallengeErr" style="color:var(--err);font-size:12.5px;margin-top:6px;text-align:center;display:none"></p>
+      <button class="btn btn-p" style="width:100%;justify-content:center" onclick="mfaGateVerifyChallenge()">Valider</button>
+      <button class="btn" style="width:100%;justify-content:center;margin-top:8px;background:#F1EFF7;color:var(--muted)" onclick="mfaGateCancel()">Annuler, se déconnecter</button>
+    </div>
+    <div id="mfaGateEnrollView" style="display:none">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">La double authentification est obligatoire. Scannez ce QR code avec une application d'authentification, puis entrez le code généré pour continuer.</p>
+      <div id="mfaGateQr" style="text-align:center;margin:14px 0;min-height:190px;display:flex;align-items:center;justify-content:center;overflow:hidden"></div>
+      <p style="font-size:11.5px;color:var(--muted);text-align:center">Impossible de scanner ? Code manuel : <code id="mfaGateSecret" style="user-select:all"></code></p>
+      <div class="f"><input type="text" id="mfaGateEnrollCode" maxlength="6" inputmode="numeric" placeholder="123456" style="letter-spacing:4px;text-align:center;font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();mfaGateConfirmEnroll();}"></div>
+      <p id="mfaGateEnrollErr" style="color:var(--err);font-size:12.5px;margin-top:6px;text-align:center;display:none"></p>
+      <button class="btn btn-p" style="width:100%;justify-content:center" onclick="mfaGateConfirmEnroll()">Activer et continuer</button>
+      <button class="btn" style="width:100%;justify-content:center;margin-top:8px;background:#F1EFF7;color:var(--muted)" onclick="mfaGateCancel()">Annuler, se déconnecter</button>
+    </div>
+  </div>
+</div>
+
+<div id="appOrdi" class="ordi-wrap hidden"></div>
 
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
@@ -202,17 +267,340 @@ tickClock();setInterval(tickClock,1000);
 
 /* ---- démarrage ---- */
 (async function init(){
-  if(!TOKEN||TOKEN.length<20){
-    app.innerHTML='<i class="ti ti-alert-triangle"></i><h2>Lien invalide</h2><p style="color:var(--muted);font-size:13px">Cette tablette n\'a pas de lien de suivi valide. Contactez la direction.</p>';
+  if(TOKEN&&TOKEN.length>=20){
+    const{data:crecheId,error}=await sb.rpc('kk_resolve_creche_id',{p_token:TOKEN});
+    if(error||!crecheId){
+      app.innerHTML='<i class="ti ti-alert-triangle"></i><h2>Tablette non configurée</h2><p style="color:var(--muted);font-size:13px">Contactez la direction pour reconfigurer cet appareil.</p>';
+      return;
+    }
+    afficherIdentification();
     return;
   }
-  const{data:crecheId,error}=await sb.rpc('kk_resolve_creche_id',{p_token:TOKEN});
-  if(error||!crecheId){
-    app.innerHTML='<i class="ti ti-alert-triangle"></i><h2>Tablette non configurée</h2><p style="color:var(--muted);font-size:13px">Contactez la direction pour reconfigurer cet appareil.</p>';
-    return;
-  }
-  afficherIdentification();
+  /* Pas de token = poste ordinateur, mode direction/référente authentifié. */
+  app.classList.add('hidden');
+  bootOrdinateur();
 })();
+
+/* ============================================================================
+   MODE ORDINATEUR (direction / référente) — connexion, MFA, synthèse du jour
+   ============================================================================ */
+let ME=null, PROF=null, IS_DIRECTION=false;
+let CRECHES_ORDI=[];
+let dateChoisie=ipDateToLocalISO();
+let enfantChoisiId=null;
+
+async function bootOrdinateur(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){showLoginView();return;}
+  ME=session.user;
+  const{data:p}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
+  if(!p){alert('Profil introuvable. Contactez la direction.');await sb.auth.signOut();location.reload();return;}
+  PROF=p;IS_DIRECTION=(p.role==='direction');
+  await mfaGateCheckAndProceed();
+}
+function showLoginView(msg){
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liFormBox').style.display='block';
+  document.getElementById('mfaGateBox').style.display='none';
+  if(msg)document.getElementById('liErr').textContent=msg;
+}
+async function doLogin(){
+  const e=document.getElementById('liMail').value.trim(),p=document.getElementById('liPwd').value;
+  const{error}=await sb.auth.signInWithPassword({email:e,password:p});
+  if(error){document.getElementById('liErr').textContent='Identifiants incorrects';return;}
+  location.reload();
+}
+window.doLogin=doLogin;
+
+/* ---- MFA gate (repris à l'identique d'infirmerie.html) ---- */
+function mfaGateSwitchView(id){
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liFormBox').style.display='none';
+  document.getElementById('mfaGateBox').style.display='block';
+  ['mfaGateChallengeView','mfaGateEnrollView'].forEach(v=>{
+    document.getElementById(v).style.display=(v===id?'block':'none');
+  });
+}
+async function mfaGateCheckAndProceed(){
+  try{
+    const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(error)throw error;
+    if(data.currentLevel==='aal2'){await ordinateurGrantAccess();return;}
+    if(data.nextLevel==='aal2'){mfaGateShowChallenge();return;}
+    await mfaGateShowEnroll();
+  }catch(e){
+    console.error('[MFA Gate]',e);
+    try{await sb.auth.signOut();}catch(_e){}
+    showLoginView('Erreur de vérification de la double authentification. Réessayez.');
+  }
+}
+function mfaGateShowChallenge(){
+  document.getElementById('mfaGateCode').value='';
+  document.getElementById('mfaGateChallengeErr').style.display='none';
+  mfaGateSwitchView('mfaGateChallengeView');
+}
+let mfaGateFactorId=null;
+async function mfaGateShowEnroll(){
+  mfaGateSwitchView('mfaGateEnrollView');
+  const err=document.getElementById('mfaGateEnrollErr');
+  err.style.display='none';
+  try{
+    const{data:existing,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const stale=(existing.all||[]).filter(f=>f.factor_type==='totp'&&f.status!=='verified');
+    for(const f of stale){try{await sb.auth.mfa.unenroll({factorId:f.id});}catch(e){}}
+    const{data,error}=await sb.auth.mfa.enroll({factorType:'totp'});
+    if(error)throw error;
+    mfaGateFactorId=data.id;
+    const qrEl=document.getElementById('mfaGateQr');
+    qrEl.innerHTML='';
+    const qr=data.totp.qr_code||'';
+    const svgMatch=qr.match(/<svg[\s\S]*<\/svg>/i);
+    if(svgMatch){qrEl.innerHTML=svgMatch[0];const svg=qrEl.querySelector('svg');if(svg){svg.style.width='180px';svg.style.height='180px';}}
+    else{const img=document.createElement('img');img.alt='QR code MFA';img.style.cssText='display:block;width:180px;height:180px;object-fit:contain';img.src=qr;qrEl.appendChild(img);}
+    document.getElementById('mfaGateSecret').textContent=data.totp.secret;
+    document.getElementById('mfaGateEnrollCode').value='';
+  }catch(e){
+    console.error('[MFA Gate enroll]',e);
+    err.textContent="Erreur lors de la préparation de l'enrôlement : "+e.message;err.style.display='block';
+  }
+}
+async function mfaGateVerifyChallenge(){
+  const code=document.getElementById('mfaGateCode').value.trim();
+  const err=document.getElementById('mfaGateChallengeErr');
+  err.style.display='none';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';err.style.display='block';return;}
+  try{
+    const{data:factors,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const verified=(factors.totp||[])[0];
+    if(!verified)throw new Error('Aucun facteur MFA vérifié trouvé sur ce compte.');
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:verified.id});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:verified.id,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    await ordinateurGrantAccess();
+  }catch(e){
+    err.textContent='Code invalide ou expiré : '+e.message;err.style.display='block';
+  }
+}
+async function mfaGateConfirmEnroll(){
+  const code=document.getElementById('mfaGateEnrollCode').value.trim();
+  const err=document.getElementById('mfaGateEnrollErr');
+  err.style.display='none';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';err.style.display='block';return;}
+  if(!mfaGateFactorId){err.textContent="Session d'enrôlement expirée, réessayez.";err.style.display='block';return;}
+  try{
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:mfaGateFactorId});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:mfaGateFactorId,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    mfaGateFactorId=null;
+    await ordinateurGrantAccess();
+  }catch(e){
+    err.textContent='Code invalide ou expiré : '+e.message;err.style.display='block';
+  }
+}
+async function mfaGateCancel(){
+  if(mfaGateFactorId){try{await sb.auth.mfa.unenroll({factorId:mfaGateFactorId});}catch(e){}}
+  mfaGateFactorId=null;
+  try{await sb.auth.signOut();}catch(e){}
+  showLoginView();
+}
+window.mfaGateVerifyChallenge=mfaGateVerifyChallenge;
+window.mfaGateConfirmEnroll=mfaGateConfirmEnroll;
+window.mfaGateCancel=mfaGateCancel;
+
+async function ordinateurGrantAccess(){
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('appOrdi').classList.remove('hidden');
+  const{data:cr}=await sb.from('creches').select('id,name').order('name');
+  CRECHES_ORDI=cr||[];
+  await chargerJalonsRef();
+  renderOrdiShell();
+}
+
+/* ============================================================================
+   ÉCRAN : synthèse du jour
+   ============================================================================ */
+function renderOrdiShell(){
+  const wrap=document.getElementById('appOrdi');
+  wrap.innerHTML=`
+    <div class="ordi-top">
+      <span class="title"><i class="ti ti-heart-handshake"></i> Suivi — synthèse du jour</span>
+      ${IS_DIRECTION?`<select id="ordiCreche"></select>`:''}
+      <input type="date" id="ordiDate" value="${dateChoisie}" max="${ipDateToLocalISO()}">
+      <button class="btn btn-g" style="background:#F1EFF7;color:var(--muted)" onclick="sb.auth.signOut().then(()=>location.reload())"><i class="ti ti-logout"></i> Déconnexion</button>
+    </div>
+    <div class="ordi-body">
+      <div class="ordi-liste" id="ordiListe"></div>
+      <div class="ordi-detail" id="ordiDetail"><div class="ordi-empty">Sélectionnez un enfant.</div></div>
+    </div>`;
+  if(IS_DIRECTION){
+    const sel=document.getElementById('ordiCreche');
+    sel.innerHTML=CRECHES_ORDI.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    sel.value=PROF.creche_id||CRECHES_ORDI[0]?.id||'';
+    sel.addEventListener('change',chargerListeOrdi);
+  }
+  document.getElementById('ordiDate').addEventListener('change',e=>{dateChoisie=e.target.value;chargerListeOrdi();});
+  chargerListeOrdi();
+}
+
+function crecheCouranteOrdi(){
+  return IS_DIRECTION ? (document.getElementById('ordiCreche')?.value||PROF.creche_id) : PROF.creche_id;
+}
+
+async function chargerListeOrdi(){
+  const crecheId=crecheCouranteOrdi();
+  const liste=document.getElementById('ordiListe');
+  liste.innerHTML='<div class="ordi-empty">Chargement…</div>';
+  const[{data:enfants},{data:syntheses},{data:departs}]=await Promise.all([
+    sb.from('enfants').select('id,prenom,nom,dob').eq('creche_id',crecheId)
+      .or('date_sortie.is.null,date_sortie.gte.'+dateChoisie).order('prenom'),
+    sb.from('suivi_syntheses').select('*').eq('creche_id',crecheId)
+      .eq('periode_type','jour').eq('periode_debut',dateChoisie),
+    sb.from('pointages').select('enfant_id,horodatage').eq('creche_id',crecheId).eq('action','depart')
+      .gte('horodatage',dateChoisie+'T00:00:00').lt('horodatage',dateChoisie+'T23:59:59.999')
+  ]);
+  ENFANTS_ORDI=enfants||[];
+  SYNTHESES_JOUR=Object.fromEntries((syntheses||[]).map(s=>[s.enfant_id,s]));
+  DEPARTS_JOUR=new Set((departs||[]).map(d=>d.enfant_id));
+  if(!ENFANTS_ORDI.length){liste.innerHTML='<div class="ordi-empty">Aucun enfant pour cette crèche.</div>';return;}
+  liste.innerHTML=ENFANTS_ORDI.map(e=>{
+    const s=SYNTHESES_JOUR[e.id];
+    const depart=DEPARTS_JOUR.has(e.id);
+    let pill='<span class="pill brouillon">Brouillon</span>';
+    if(s&&s.statut==='publiee')pill='<span class="pill publiee">Publiée</span>';
+    else if(!depart)pill='<span class="pill bloque">Départ non pointé</span>';
+    return `<div class="ordi-item${e.id===enfantChoisiId?' on':''}" data-id="${e.id}">
+      <div class="av">${esc((e.prenom?e.prenom[0]:'')+(e.nom?e.nom[0]:''))}</div>
+      <div class="nom">${esc(e.prenom)}</div>${pill}
+    </div>`;
+  }).join('');
+  liste.querySelectorAll('.ordi-item').forEach(it=>it.addEventListener('click',()=>{
+    enfantChoisiId=it.dataset.id;
+    liste.querySelectorAll('.ordi-item').forEach(x=>x.classList.remove('on'));
+    it.classList.add('on');
+    afficherDetailOrdi();
+  }));
+  if(enfantChoisiId&&ENFANTS_ORDI.some(e=>e.id===enfantChoisiId))afficherDetailOrdi();
+}
+let ENFANTS_ORDI=[],SYNTHESES_JOUR={},DEPARTS_JOUR=new Set();
+
+/* Construit un contenu de synthèse à partir des saisies du jour — en langage
+   descriptif et bienveillant, sans comparaison à une norme. Seuls repas/
+   sieste/change/humeur alimentent le texte destiné à la famille : soin,
+   température, incident et note restent affichés à l'équipe uniquement (une
+   inquiétude se dit en entretien, jamais dans la synthèse). Les jalons ne
+   remontent que s'ils sont explicitement marqués "famille". */
+function genererContenuJour(saisies,observations){
+  const heure=iso=>new Date(iso).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  const repasLabels={tout:'a tout mangé',bien:'a bien mangé',peu:'a mangé un peu',refus:'a refusé de manger'};
+  const humeurLabels={content:'de bonne humeur',neutre:'calme',difficile:'un peu difficile par moments'};
+  const famille=[];
+  const interne=[];
+
+  const repas=saisies.filter(s=>s.type==='repas');
+  repas.forEach(s=>famille.push(`À ${heure(s.horodatage)}, ${repasLabels[s.valeur?.niveau]||'a mangé'}.`));
+
+  const debuts=saisies.filter(s=>s.type==='sieste_debut'),fins=saisies.filter(s=>s.type==='sieste_fin');
+  debuts.forEach((d,i)=>{
+    const f=fins[i];
+    famille.push(f?`Sieste de ${heure(d.horodatage)} à ${heure(f.horodatage)}.`:`Sieste débutée à ${heure(d.horodatage)}.`);
+  });
+
+  const changes=saisies.filter(s=>s.type==='change');
+  if(changes.length)famille.push(`${changes.length} change${changes.length>1?'s':''} dans la journée.`);
+
+  const humeurs=saisies.filter(s=>s.type==='humeur');
+  if(humeurs.length){
+    const compte={};humeurs.forEach(h=>{compte[h.valeur?.niveau]=(compte[h.valeur?.niveau]||0)+1;});
+    const dominant=Object.entries(compte).sort((a,b)=>b[1]-a[1])[0][0];
+    famille.push(`Aujourd'hui, ${humeurLabels[dominant]||'a passé une journée tranquille'}.`);
+  }
+
+  observations.filter(o=>o.partage==='famille').forEach(o=>{
+    const j=JALONS.find(x=>x.id===o.jalon_id);
+    if(j)famille.push((o.statut==='observe'?'A montré : ':'En cours d\'acquisition : ')+j.libelle+(o.note?' — '+o.note:''));
+    else if(o.note)famille.push(o.note);
+  });
+
+  saisies.filter(s=>['temperature','soin','incident','note'].includes(s.type)).forEach(s=>{
+    const txt=s.type==='temperature'?`Température : ${s.valeur?.celsius} °C`:(s.valeur?.texte||s.type);
+    interne.push(`À ${heure(s.horodatage)} — ${txt}`);
+  });
+  observations.filter(o=>o.partage==='interne').forEach(o=>{
+    const j=JALONS.find(x=>x.id===o.jalon_id);
+    interne.push((j?j.libelle+' : '+(o.statut==='observe'?'observé':'en émergence'):'')+(o.note?' — '+o.note:''));
+  });
+
+  return{famille,interne};
+}
+
+async function afficherDetailOrdi(){
+  const detail=document.getElementById('ordiDetail');
+  detail.innerHTML='<div class="ordi-empty">Chargement…</div>';
+  const e=ENFANTS_ORDI.find(x=>x.id===enfantChoisiId);
+  const debut=dateChoisie+'T00:00:00',fin=dateChoisie+'T23:59:59.999';
+  const[{data:saisies},{data:observations}]=await Promise.all([
+    sb.from('suivi_saisies').select('*').eq('enfant_id',enfantChoisiId).gte('horodatage',debut).lte('horodatage',fin).order('horodatage'),
+    sb.from('suivi_observations').select('*').eq('enfant_id',enfantChoisiId).gte('horodatage',debut).lte('horodatage',fin).order('horodatage')
+  ]);
+  const{famille,interne}=genererContenuJour(saisies||[],observations||[]);
+  const synthese=SYNTHESES_JOUR[e.id];
+  const depart=DEPARTS_JOUR.has(e.id);
+  const dejaPubliee=synthese&&synthese.statut==='publiee';
+
+  detail.innerHTML=`
+    <h2 style="font-family:'Baloo 2',cursive;color:var(--violet);margin-bottom:4px">${esc(e.prenom)} ${esc(e.nom||'')}</h2>
+    <div style="color:var(--muted);font-size:13px;margin-bottom:10px">${new Date(dateChoisie+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
+
+    <div class="section-titre">Ce qui sera transmis à la famille</div>
+    ${famille.length?`<ul class="bullet-list">${famille.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<div class="ordi-empty" style="padding:14px 0">Rien de saisi pour l\'instant.</div>'}
+
+    ${interne.length?`<div class="section-titre">Usage interne — jamais transmis à la famille</div>
+    <ul class="bullet-list interne">${interne.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:''}
+
+    <div style="margin-top:22px;display:flex;gap:10px;align-items:center">
+      ${dejaPubliee
+        ?`<span class="pill publiee" style="font-size:13px;padding:8px 14px">Publiée le ${new Date(synthese.publiee_le).toLocaleString('fr-FR')}</span>`
+        :`<button class="btn btn-p" id="btnPublier" ${depart?'':'disabled'}><i class="ti ti-send"></i> Publier à la famille</button>
+          ${depart?'':'<span style="color:var(--muted);font-size:12.5px">Départ non encore pointé — publication impossible.</span>'}`
+      }
+    </div>
+    <div class="mention2">Repères élaborés par l'équipe Koala Kids, inspirés des travaux de Francine Ferland.</div>
+  `;
+
+  const btn=document.getElementById('btnPublier');
+  if(btn)btn.addEventListener('click',()=>publierSyntheseJour(e.id,famille,interne));
+}
+
+async function publierSyntheseJour(enfantId,famille,interne){
+  const btn=document.getElementById('btnPublier');
+  if(btn)btn.disabled=true;
+  const crecheId=crecheCouranteOrdi();
+  const contenu={famille,interne};
+  let row=SYNTHESES_JOUR[enfantId];
+  if(!row){
+    const{data,error}=await sb.from('suivi_syntheses').insert({
+      enfant_id:enfantId,creche_id:crecheId,periode_type:'jour',
+      periode_debut:dateChoisie,periode_fin:dateChoisie,contenu,statut:'brouillon'
+    }).select().single();
+    if(error){alert('Erreur : '+error.message);if(btn)btn.disabled=false;return;}
+    row=data;
+  }else{
+    const{error}=await sb.from('suivi_syntheses').update({contenu,updated_at:new Date().toISOString()}).eq('id',row.id);
+    if(error){alert('Erreur : '+error.message);if(btn)btn.disabled=false;return;}
+  }
+  const{error:pubErr}=await sb.from('suivi_syntheses').update({statut:'publiee'}).eq('id',row.id);
+  if(pubErr){
+    alert('Publication refusée : '+pubErr.message);
+    if(btn)btn.disabled=false;
+    return;
+  }
+  await chargerListeOrdi();
+  afficherDetailOrdi();
+}
 
 /* ============================= IDENTIFICATION ============================= */
 function afficherIdentification(){
