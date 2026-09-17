@@ -1304,6 +1304,7 @@ async function publierSynthese(e,contenu,debut,fin){
 
 /* ============================= IDENTIFICATION ============================= */
 async function afficherIdentification(){
+  retirerBarre();
   AUTEUR_TYPE=null;AUTEUR_ID=null;AUTEUR_LABEL='';btnAuteur.classList.add('hidden');
   app.className='state';
   app.innerHTML='<i class="ti ti-loader-2"></i><h2>Chargement…</h2>';
@@ -1398,8 +1399,12 @@ function renderGrille(){
   renderBarre();
 }
 
-function renderBarre(){
+function retirerBarre(){
   const anc=document.querySelector('.barre');if(anc)anc.remove();
+}
+
+function renderBarre(){
+  retirerBarre();
   if(!selection.size)return;
   const barre=document.createElement('div');
   barre.className='barre';
@@ -1570,6 +1575,7 @@ let jalonsDomOuverts=new Set();
 function ouvrirJalons(enfantId){
   const e=ENFANTS.find(x=>x.id===enfantId);
   if(!e)return;
+  retirerBarre();
   enfantJalons=e;
   ecran='jalons';
   jalonsDomOuverts=new Set();
