@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--violet:#4A3F9F;--orange:#F47920;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--ok:#2E7D32;--err:#C62828}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;min-width:0}
@@ -1124,6 +1125,7 @@ async function renderAccesFamille(enfantId){
       <span class="lib">${esc(p.prenom)} ${esc(p.nom||'')}${p.lien?' — '+esc(p.lien):''}</span>
       ${a
         ?`<button class="btn btn-s" style="background:#F1EFF7;color:var(--violet)" data-action="copier" data-token="${a.token}"><i class="ti ti-copy"></i> Copier le lien</button>
+          <button class="btn btn-s" style="background:#F1EFF7;color:var(--violet)" data-action="qr" data-token="${a.token}"><i class="ti ti-qrcode"></i> QR code</button>
           <button class="btn btn-g" style="background:#FBE9E7;color:var(--err)" data-action="revoquer" data-acces="${a.id}"><i class="ti ti-ban"></i> Révoquer</button>`
         :`<button class="btn btn-p" data-action="creer" data-parent="${p.id}"><i class="ti ti-link"></i> Créer un accès</button>`
       }
@@ -1135,6 +1137,9 @@ async function renderAccesFamille(enfantId){
       ()=>alert('Lien copié :\n'+lien),
       ()=>prompt('Copiez ce lien :',lien)
     );
+  }));
+  zone.querySelectorAll('[data-action="qr"]').forEach(b=>b.addEventListener('click',()=>{
+    afficherQrAcces(suiviFamilleLienFor(b.dataset.token));
   }));
   zone.querySelectorAll('[data-action="creer"]').forEach(b=>b.addEventListener('click',async()=>{
     b.disabled=true;
@@ -1153,6 +1158,30 @@ async function renderAccesFamille(enfantId){
     if(error){alert('Erreur : '+error.message);b.disabled=false;return;}
     renderAccesFamille(enfantId);
   }));
+}
+
+function afficherQrAcces(url){
+  const w=document.createElement('div');w.className='ov-wrap';
+  w.innerHTML=`<div class="ov" style="text-align:center">
+    <h2 style="justify-content:center"><i class="ti ti-qrcode"></i> Lien pour la famille</h2>
+    <div id="qrBox" style="display:flex;align-items:center;justify-content:center;margin:14px 0;min-height:220px"></div>
+    <p style="font-size:12px;color:var(--muted);word-break:break-all">${esc(url)}</p>
+    <div class="row"><button class="btn-valide" id="qrFermer" style="width:100%">Fermer</button></div>
+  </div>`;
+  document.body.appendChild(w);
+  const box=document.getElementById('qrBox');
+  let ok=false;
+  if(typeof QRCode==='function'){
+    try{new QRCode(box,{text:url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});ok=true;}
+    catch(e){console.warn('QRCode lib KO',e);}
+  }
+  if(!ok){
+    const img=document.createElement('img');
+    img.width=220;img.height=220;img.alt='QR code';
+    img.src='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(url);
+    box.appendChild(img);
+  }
+  w.querySelector('#qrFermer').addEventListener('click',()=>w.remove());
 }
 
 async function upsertSynthese(e,contenu,debut,fin,extraPatch){
