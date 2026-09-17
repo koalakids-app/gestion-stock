@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v24';   // v24 : QR code (accès famille) + export PDF (synthèse famille)
+const CACHE_NAME = 'stocks-v25';   // v25 : fix erreur JS bloquante sur famille-suivi.html (pdfSafe)
 
 self.addEventListener('install', event => {
   event.waitUntil(
