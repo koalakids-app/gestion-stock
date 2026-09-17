@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root{
   --violet:#3D3580; --violet-l:#8E8AA8; --violet-bg:#EEEDF8;
@@ -36,6 +37,10 @@ h1,h2,h3{font-family:'Baloo 2',system-ui,sans-serif;margin:0}
 .bullets li::before{content:'';position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:50%;background:var(--orange)}
 .note-ref{background:var(--violet-bg);border-radius:10px;padding:11px 13px;margin-top:12px;font-size:13.5px;color:var(--violet);white-space:pre-wrap}
 .mention{font-size:11.5px;color:var(--muted);margin-top:14px;line-height:1.5}
+.btn{font:inherit;font-weight:700;font-size:13px;border:none;border-radius:10px;padding:9px 14px;
+  cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-g{background:var(--violet-bg);color:var(--violet)}
+.card-acts{margin-top:14px}
 .state{max-width:420px;margin:60px auto;text-align:center;padding:0 20px}
 .state i{font-size:44px;color:var(--violet-l)}
 .state h2{font-size:18px;margin:14px 0 6px}
@@ -105,8 +110,9 @@ async function boot(){
   if(!TOKEN)return etat('Lien incomplet','Ce lien ne contient pas de jeton. Utilisez celui reçu par la crèche.','link-off');
   try{
     const d=await appel('get');
+    ENFANT_PRENOM=d.enfant.prenom||'';CRECHE_NOM=d.creche_nom||'';
     document.getElementById('sousTitre').textContent=
-      (d.enfant.prenom||'')+(d.creche_nom?' · '+d.creche_nom:'');
+      ENFANT_PRENOM+(CRECHE_NOM?' · '+CRECHE_NOM:'');
     renderListe(d.syntheses||[]);
   }catch(e){
     const m=(e.message||'').toLowerCase();
@@ -119,12 +125,15 @@ async function boot(){
   }
 }
 
+let ENFANT_PRENOM='',CRECHE_NOM='',SYNTHESES=[];
+
 function renderListe(syntheses){
+  SYNTHESES=syntheses;
   if(!syntheses.length){
     wrap.innerHTML='<div class="empty"><i class="ti ti-mood-kid" style="font-size:32px"></i><br>Aucune synthèse publiée pour le moment.<br>Elle apparaîtra ici après le départ de votre enfant.</div>';
     return;
   }
-  wrap.innerHTML=syntheses.map(s=>`
+  wrap.innerHTML=syntheses.map((s,i)=>`
     <div class="card">
       <div class="card-head">
         <span class="periode">${esc(libellePeriode(s))}</span>
@@ -133,7 +142,53 @@ function renderListe(syntheses){
       ${s.famille.length?`<ul class="bullets">${s.famille.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<p style="color:var(--muted);font-size:13.5px">Rien à signaler de particulier.</p>'}
       ${s.note_referente?`<div class="note-ref">${esc(s.note_referente)}</div>`:''}
       ${(s.periode_type==='mois'||s.periode_type==='annee')?`<div class="mention">Repères élaborés par l'équipe Koala Kids, inspirés des travaux de Francine Ferland.</div>`:''}
+      <div class="card-acts"><button class="btn btn-g" data-pdf="${i}"><i class="ti ti-download"></i> Télécharger en PDF</button></div>
     </div>`).join('');
+  wrap.querySelectorAll('[data-pdf]').forEach(b=>b.addEventListener('click',()=>telechargerPdf(SYNTHESES[+b.dataset.pdf])));
+}
+
+/* Les polices standard de jsPDF (Helvetica) n'encodent que le Latin-1 plus
+   quelques signes WinAnsi : un caractère hors de ce jeu fait basculer toute
+   la chaîne en UTF-16, illisible. On substitue donc les caractères
+   problématiques juste avant l'écriture (repris de documents.html). */
+const PDF_WINANSI_EXTRA='€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+const PDF_SUBST={'≥':'>=','≤':'<=','≈':'~','→':'->','⇒':'=>',' ':' ',' ':' ','⁄':'/'};
+function pdfSafe(v){
+  let s=String(v==null?'':v).replace(/[≥≤≈→⇒  ⁄]/g,c=>PDF_SUBST[c]);
+  return s.replace(/[^ -ÿ]/g,c=>PDF_WINANSI_EXTRA.indexOf(c)>=0?c:' ');
+}
+
+function telechargerPdf(s){
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const marge=18;let y=22;
+  doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(61,53,128);
+  doc.text(pdfSafe('Suivi de '+(ENFANT_PRENOM||"l'enfant")),marge,y);y+=8;
+  doc.setFont('helvetica','normal');doc.setFontSize(11);doc.setTextColor(120,116,140);
+  doc.text(pdfSafe(CRECHE_NOM),marge,y);y+=6;
+  doc.text(pdfSafe(libellePeriode(s)),marge,y);y+=10;
+  doc.setTextColor(43,39,64);doc.setFontSize(11);
+  const largeur=210-2*marge;
+  const items=s.famille.length?s.famille:['Rien à signaler de particulier.'];
+  items.forEach(t=>{
+    const lignes=doc.splitTextToSize(pdfSafe('• '+t),largeur);
+    lignes.forEach(l=>{
+      if(y>270){doc.addPage();y=22;}
+      doc.text(l,marge,y);y+=6;
+    });
+  });
+  if(s.note_referente){
+    y+=4;doc.setFont('helvetica','italic');
+    const lignes=doc.splitTextToSize(pdfSafe(s.note_referente),largeur);
+    lignes.forEach(l=>{
+      if(y>270){doc.addPage();y=22;}
+      doc.text(l,marge,y);y+=6;
+    });
+    doc.setFont('helvetica','normal');
+  }
+  y+=10;doc.setFontSize(8.5);doc.setTextColor(150,146,166);
+  doc.text(pdfSafe("Repères élaborés par l'équipe Koala Kids, inspirés des travaux de Francine Ferland."),marge,270);
+  doc.save('suivi-'+(ENFANT_PRENOM||'enfant').toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+s.periode_debut+'.pdf');
 }
 
 boot();
