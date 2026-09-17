@@ -30,18 +30,14 @@ button,input,select,textarea{font-family:inherit;font-size:16px}
 .ident{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:20px}
 .ident .prompt{font-size:18px;font-weight:800;color:var(--violet);text-align:center}
 .ident .subprompt{font-size:13px;color:var(--muted);text-align:center;margin-top:2px}
-.picto-slots{display:flex;gap:12px}
-.picto-slot{width:50px;height:50px;border-radius:14px;border:2.5px solid var(--line);background:#fff;
-  display:flex;align-items:center;justify-content:center;overflow:hidden}
-.picto-slot.filled{border-color:var(--violet)}
-.picto-slot img{width:100%;height:100%;object-fit:cover}
-.picto-slots.shake{animation:shake .4s}
-@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-10px)}40%{transform:translateX(10px)}60%{transform:translateX(-8px)}80%{transform:translateX(8px)}}
-.picto-grid{display:grid;grid-template-columns:repeat(4,72px);gap:12px}
-.picto-key{width:72px;height:72px;border-radius:16px;border:none;background:#fff;padding:0;overflow:hidden;
-  box-shadow:0 2px 10px rgba(43,39,64,.08)}
-.picto-key img{width:100%;height:100%;object-fit:cover;display:block}
-.picto-key.used{opacity:.3;pointer-events:none}
+/* ---- identification par sélection dans la liste du personnel présent ---- */
+.pers-list{display:flex;flex-direction:column;gap:12px;width:100%;max-width:420px}
+.pers-item{background:#fff;border:2.5px solid var(--line);border-radius:16px;padding:16px 18px;
+  display:flex;align-items:center;gap:14px;font-weight:800;font-size:16px;color:#2B2740;text-align:left}
+.pers-item:active{background:#F1EFF7;border-color:var(--violet)}
+.pers-item .av2{width:44px;height:44px;border-radius:50%;background:var(--orange);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.pers-item .sub2{font-size:12px;color:var(--muted);font-weight:600}
 
 /* ---- grille des enfants présents ---- */
 .grille-wrap{flex:1;display:flex;flex-direction:column;min-height:0}
@@ -220,22 +216,14 @@ function ipDateToLocalISO(d){
 const app=document.getElementById('app');
 const btnAuteur=document.getElementById('btnAuteur');
 
-const PICTOS=[
-  {id:'ours',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/ours.png'},
-  {id:'arc_en_ciel',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/arc_en_ciel.png'},
-  {id:'zebre',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/zebre.png'},
-  {id:'hochet',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/hochet.png'},
-  {id:'baleine',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/baleine.png'},
-  {id:'cubes_alphabet',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/cubes_alphabet.png'},
-  {id:'camionnette_rouge',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/camionnette_rouge.png'},
-  {id:'pingouin',url:'https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/pingouin.png'}
-];
-const pictoById=Object.fromEntries(PICTOS.map(p=>[p.id,p]));
-
 /* Identification : une fois par session tablette (pas à chaque geste, sinon
-   impossible de tenir les <10s/3 touchers). Stockée en mémoire seulement —
-   jamais en localStorage (redémarrage de la tablette = ré-identification). */
-let AUTEUR_PICTOS=null;
+   impossible de tenir les <10s/3 touchers). On choisit son nom dans la liste
+   du personnel déjà pointé arrivé — pas de code à taper. Stockée en mémoire
+   seulement (jamais en localStorage : redémarrage de la tablette =
+   ré-identification). Chaque écriture revérifie côté serveur que la
+   personne est bien présente, indépendamment de ce que montre cette liste. */
+let AUTEUR_TYPE=null;
+let AUTEUR_ID=null;
 let AUTEUR_LABEL='';
 
 let ENFANTS=[];
@@ -860,80 +848,40 @@ async function publierSynthese(e,contenu,debut,fin){
 }
 
 /* ============================= IDENTIFICATION ============================= */
-function afficherIdentification(){
-  AUTEUR_PICTOS=null;AUTEUR_LABEL='';btnAuteur.classList.add('hidden');
-  let code=[];
-  let busyIdent=false;
+async function afficherIdentification(){
+  AUTEUR_TYPE=null;AUTEUR_ID=null;AUTEUR_LABEL='';btnAuteur.classList.add('hidden');
+  app.className='state';
+  app.innerHTML='<i class="ti ti-loader-2"></i><h2>Chargement…</h2>';
+  const{data,error}=await sb.rpc('kk_suivi_kiosk_personnel_present',{p_token:TOKEN});
+  if(error){
+    app.innerHTML='<i class="ti ti-wifi-off"></i><h2>Connexion impossible</h2><p style="color:var(--muted);font-size:13px">Vérifiez le Wi-Fi et réessayez.</p><button class="chip orange" style="margin-top:14px" onclick="afficherIdentification()">Réessayer</button>';
+    return;
+  }
+  const personnel=data||[];
   app.className='';
+  if(!personnel.length){
+    app.innerHTML='<div class="ident"><div><div class="prompt">Personne n\'est pointé arrivé</div><div class="subprompt">Pointez d\'abord votre arrivée sur l\'écran de pointage, puis revenez ici.</div></div>'
+      +'<button class="chip orange" onclick="afficherIdentification()"><i class="ti ti-refresh"></i> Actualiser</button></div>';
+    return;
+  }
   app.innerHTML=`
     <div class="ident">
-      <div><div class="prompt" id="identPrompt">Qui êtes-vous ?</div><div class="subprompt" id="identSubprompt">Choisissez vos 4 images, dans l'ordre</div></div>
-      <div class="picto-slots" id="pSlots"></div>
-      <div class="picto-grid" id="pGrid"></div>
+      <div><div class="prompt">Qui êtes-vous ?</div><div class="subprompt">Touchez votre nom dans la liste</div></div>
+      <div class="pers-list" id="persList"></div>
     </div>`;
-  const slotsEl=document.getElementById('pSlots');
-  const gridEl=document.getElementById('pGrid');
-  const promptEl=document.getElementById('identPrompt');
-  const subpromptEl=document.getElementById('identSubprompt');
-  function renderSlots(){
-    slotsEl.innerHTML=[0,1,2,3].map(i=>{
-      const p=code[i]?pictoById[code[i]]:null;
-      return '<div class="picto-slot'+(p?' filled':'')+'">'+(p?'<img src="'+p.url+'">':'')+'</div>';
-    }).join('');
-  }
-  function renderGrid(){
-    gridEl.innerHTML=PICTOS.map(p=>
-      '<button class="picto-key'+(code.includes(p.id)?' used':'')+'" data-p="'+p.id+'"><img src="'+p.url+'"></button>'
-    ).join('');
-  }
-  function reset(){
-    code=[];busyIdent=false;
-    promptEl.textContent='Qui êtes-vous ?';
-    subpromptEl.textContent="Choisissez vos 4 images, dans l'ordre";
-    renderSlots();renderGrid();
-  }
-  renderSlots();renderGrid();
-  gridEl.addEventListener('click',e=>{
-    const btn=e.target.closest('.picto-key');
-    if(!btn||busyIdent||code.length>=4)return;
-    const id=btn.dataset.p;
-    if(code.includes(id))return;
-    code.push(id);renderSlots();renderGrid();
-    if(code.length===4)valider();
-  });
-  async function valider(){
-    busyIdent=true;
-    promptEl.textContent='Vérification…';
-    subpromptEl.textContent='';
-    const{data,error}=await sb.rpc('kk_suivi_kiosk_identifier',{p_token:TOKEN,p_code_pictos:code});
-    const row=Array.isArray(data)?data[0]:data;
-    if(error||!row){
-      promptEl.textContent='Connexion impossible';
-      subpromptEl.textContent='Vérifiez le Wi-Fi et réessayez.';
-      slotsEl.classList.remove('shake');void slotsEl.offsetWidth;slotsEl.classList.add('shake');
-      setTimeout(reset,2500);
-      return;
-    }
-    if(!row.ok){
-      const messages={
-        token_invalide:'Tablette non configurée.',
-        trop_de_tentatives:'Trop de tentatives, patientez quelques minutes.',
-        code_invalide:'Choisissez 4 images distinctes.',
-        code_ambigu:'Code ambigu, contactez la direction.',
-        code_inconnu:'Code image non reconnu, réessayez.'
-      };
-      promptEl.textContent='Code non reconnu';
-      subpromptEl.textContent=messages[row.error]||'Réessayez.';
-      slotsEl.classList.remove('shake');void slotsEl.offsetWidth;slotsEl.classList.add('shake');
-      setTimeout(reset,2200);
-      return;
-    }
-    AUTEUR_PICTOS=code.slice();
-    AUTEUR_LABEL=row.label||'';
+  const list=document.getElementById('persList');
+  list.innerHTML=personnel.map(p=>`
+    <button class="pers-item" data-type="${p.type}" data-id="${p.id}">
+      <span class="av2">${esc(p.label?p.label[0]:'?')}</span>
+      <span><span>${esc(p.label)}</span><br><span class="sub2">${esc(p.sub||'')}</span></span>
+    </button>`).join('');
+  list.querySelectorAll('.pers-item').forEach(btn=>btn.addEventListener('click',()=>{
+    AUTEUR_TYPE=btn.dataset.type;AUTEUR_ID=btn.dataset.id;
+    AUTEUR_LABEL=btn.querySelector('span > span').textContent;
     btnAuteur.classList.remove('hidden');
     btnAuteur.innerHTML='<i class="ti ti-user-check"></i> '+esc(AUTEUR_LABEL||'Changer');
-    await chargerEnfants();
-  }
+    chargerEnfants();
+  }));
 }
 function changerAuteur(){afficherIdentification();}
 window.changerAuteur=changerAuteur;
@@ -1098,7 +1046,7 @@ function ouvrirNote(titre,onValide){
 
 async function envoyerSaisie(type,valeur){
   const enfantIds=[...selection];
-  const args={p_token:TOKEN,p_code_pictos:AUTEUR_PICTOS,p_enfant_ids:enfantIds,p_type:type,p_valeur:valeur};
+  const args={p_token:TOKEN,p_auteur_type:AUTEUR_TYPE,p_auteur_id:AUTEUR_ID,p_enfant_ids:enfantIds,p_type:type,p_valeur:valeur};
   selection.clear();renderGrille();
   if(!navigator.onLine){
     queueAjouter({fn:'kk_suivi_kiosk_saisir',args});
@@ -1114,9 +1062,9 @@ async function envoyerSaisie(type,valeur){
   const rows=data||[];
   const echecs=rows.filter(r=>!r.ok);
   const okIds=rows.filter(r=>r.ok).map(r=>r.saisie_id);
-  if(echecs.length&&echecs[0].error==='code_inconnu'){
+  if(echecs.length&&echecs[0].error==='auteur_absent'){
     afficherIdentification();
-    alert('Code image non reconnu. Merci de vous identifier à nouveau.');
+    alert('Identification perdue (départ pointé entre-temps ?). Merci de vous identifier à nouveau.');
     return;
   }
   if(okIds.length){
@@ -1141,7 +1089,7 @@ async function annulerDernier(){
   const{table,ids}=lastBatch;
   lastBatch=null;
   for(const id of ids){
-    await sb.rpc('kk_suivi_kiosk_annuler',{p_token:TOKEN,p_code_pictos:AUTEUR_PICTOS,p_id:id,p_table:table});
+    await sb.rpc('kk_suivi_kiosk_annuler',{p_token:TOKEN,p_auteur_type:AUTEUR_TYPE,p_auteur_id:AUTEUR_ID,p_id:id,p_table:table});
   }
   chargerEnfants();
 }
@@ -1204,15 +1152,15 @@ function ouvrirJalons(enfantId){
 async function marquerJalon(enfantId,jalonId,statut,row,btn){
   row.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');
-  const args={p_token:TOKEN,p_code_pictos:AUTEUR_PICTOS,p_enfant_id:enfantId,p_jalon_id:jalonId,
+  const args={p_token:TOKEN,p_auteur_type:AUTEUR_TYPE,p_auteur_id:AUTEUR_ID,p_enfant_id:enfantId,p_jalon_id:jalonId,
     p_statut:statut,p_note:null,p_posture:null,p_partage:'interne'};
   if(!navigator.onLine){queueAjouter({fn:'kk_suivi_kiosk_observer',args});return;}
   const{data,error}=await sb.rpc('kk_suivi_kiosk_observer',args);
   if(error){queueAjouter({fn:'kk_suivi_kiosk_observer',args});return;}
   const row0=Array.isArray(data)?data[0]:data;
-  if(row0&&!row0.ok&&row0.error==='code_inconnu'){
+  if(row0&&!row0.ok&&row0.error==='auteur_absent'){
     afficherIdentification();
-    alert('Code image non reconnu. Merci de vous identifier à nouveau.');
+    alert('Identification perdue (départ pointé entre-temps ?). Merci de vous identifier à nouveau.');
   }
 }
 </script>
