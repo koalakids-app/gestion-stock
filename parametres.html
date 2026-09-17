@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8;--amber:#B8860B;--amber-l:#FFF6DC}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -64,6 +65,14 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .kiosk-badge.on{background:var(--green-l);color:var(--green)}
 .kiosk-badge.off{background:#F1EFF7;color:var(--muted)}
 .kiosk-acts{display:flex;gap:6px;flex-wrap:wrap}
+.ov{position:fixed;inset:0;background:rgba(43,39,64,.45);display:none;align-items:flex-start;justify-content:center;padding:20px;z-index:100;overflow-y:auto}
+.ov.on{display:flex}
+.modal{background:#fff;border-radius:20px;width:100%;max-width:380px;padding:20px;margin:auto}
+.modal h2{font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet);margin-bottom:12px}
+#qrBox{text-align:center;padding:10px}
+#qrBox canvas,#qrBox img{margin:0 auto}
+#qrBox .qr-link{font-size:11px;color:var(--muted);font-family:monospace;word-break:break-all;margin-top:10px}
+.mf{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 </style>
 </head>
 <body>
@@ -256,6 +265,12 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <button class="btn btn-p" id="btnSave" onclick="save()"><i class="ti ti-check"></i> Enregistrer</button>
   </div>
 </div>
+
+<div class="ov" id="ovQr"><div class="modal">
+  <h2 id="qrTitle">Lien de la tablette</h2>
+  <div id="qrBox"></div>
+  <div class="mf"><button class="btn btn-g" onclick="closeQr()">Fermer</button></div>
+</div></div>
 
 <div class="toast" id="toast"></div>
 
@@ -592,6 +607,7 @@ function renderKiosk(){
         +'<span class="kiosk-badge '+(d.active?'on':'off')+'">'+(d.active?'Active':'Désactivée')+'</span>'
         +'<div class="kiosk-acts">'
           +'<button class="btn btn-g btn-sm" onclick="kioskCopyLink(\''+esc(link)+'\')"><i class="ti ti-copy"></i> Copier le lien pointage</button>'
+          +'<button class="btn btn-s btn-sm" onclick="kioskShowQr(\''+esc(link)+'\',\''+esc(d.label||'Tablette')+'\')"><i class="ti ti-qrcode"></i> QR code</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskCopyLink(\''+esc(suiviLinkFor(d.token))+'\')"><i class="ti ti-heart-handshake"></i> Copier le lien suivi</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskToggleActive(\''+d.id+'\','+(!d.active)+')"><i class="ti ti-power"></i> '+(d.active?'Désactiver':'Réactiver')+'</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskRegen(\''+d.id+'\')"><i class="ti ti-refresh"></i> Régénérer le lien</button>'
@@ -599,7 +615,7 @@ function renderKiosk(){
       +'</div>';
     }).join('');
   }
-  if(h)h.textContent='Le lien ouvre '+location.origin.replace(/^https?:\/\//,'')+'… — ouvrez-le une seule fois sur la tablette dédiée puis ajoutez-le à l\'écran d\'accueil.';
+  if(h)h.textContent='Le lien ouvre '+location.origin.replace(/^https?:\/\//,'')+'… — scannez le QR code avec l\'appareil photo de la tablette (ou ouvrez le lien copié), une seule fois, puis ajoutez la page à l\'écran d\'accueil.';
 }
 
 async function kioskNewDevice(){
@@ -664,6 +680,42 @@ async function kioskCopyLink(link){
   }
 }
 window.kioskCopyLink=kioskCopyLink;
+
+/* Scanner ce QR avec l'appareil photo de la tablette ouvre directement le
+   lien de pointage dans Chrome : plus rapide et plus sûr que de retaper ou
+   copier/coller une longue URL sur un appareil qu'on configure une fois. */
+let QR_LINK='';
+function kioskShowQr(link,label){
+  document.getElementById('qrTitle').textContent='Tablette « '+label+' »';
+  const box=document.getElementById('qrBox');
+  box.innerHTML='';
+  QR_LINK=link;
+  let ok=false;
+  if(typeof QRCode==='function'){
+    try{new QRCode(box,{text:link,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});ok=true;}
+    catch(e){console.warn('QRCode lib KO',e);}
+  }
+  if(!ok){
+    const img=document.createElement('img');
+    img.width=220;img.height=220;img.alt='QR code';
+    img.src='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(link);
+    box.appendChild(img);
+  }
+  const p=document.createElement('p');
+  p.className='qr-link';
+  p.textContent=link;
+  box.appendChild(p);
+  const cp=document.createElement('button');
+  cp.className='btn btn-s btn-sm';
+  cp.style.marginTop='10px';
+  cp.innerHTML='<i class="ti ti-copy"></i> Copier le lien';
+  cp.onclick=()=>kioskCopyLink(QR_LINK);
+  box.appendChild(cp);
+  document.getElementById('ovQr').classList.add('on');
+}
+window.kioskShowQr=kioskShowQr;
+function closeQr(){document.getElementById('ovQr').classList.remove('on');}
+window.closeQr=closeQr;
 
 function renderReseau(){
   setVal('rValid',RCFG.devis_validite_jours!=null?RCFG.devis_validite_jours:30);
