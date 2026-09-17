@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v22';   // v22 : écran référentiel des repères (import/export CSV) dans suivi.html
+const CACHE_NAME = 'stocks-v23';   // v23 : accès famille au suivi (jetons + famille-suivi.html)
 
 self.addEventListener('install', event => {
   event.waitUntil(
