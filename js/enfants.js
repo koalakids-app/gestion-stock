@@ -163,6 +163,7 @@ async function enfOpenFiche(id){
   document.getElementById('enf-admin-docs-zone').innerHTML = '';
   document.getElementById('enf-fiche-sanitaire-zone').innerHTML = '';
   document.getElementById('enf-pai-zone').innerHTML = '';
+  enfRenderSuiviZone(e.id);
   document.getElementById('enf-carnet-zone').innerHTML = '';
   document.getElementById('enf-vaccins-zone').innerHTML = '';
   document.getElementById('modal-enf-fiche-wrap').classList.add('open');
@@ -1161,6 +1162,16 @@ function enfRenderFicheSanitaireZone(){
     +'<i class="ti ti-file-heart"></i> Fiche sanitaire</div>'
     + docs.map(enfPapierDocRowHtml).join('')
     +'</div>';
+}
+
+/* Lien direct vers la synthèse du jour de cet enfant dans suivi.html — mode
+   ordinateur, pas le lien tablette (?k=) qui suit le token de l'appareil. */
+function enfRenderSuiviZone(enfantId){
+  const zone=document.getElementById('enf-suivi-zone');
+  if(!zone) return;
+  zone.innerHTML='<a class="btn" href="suivi.html?enfant='+encodeURIComponent(enfantId)+'" target="_blank" rel="noopener" '
+    +'style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">'
+    +'<i class="ti ti-heart-handshake"></i> Ouvrir la synthèse du jour</a>';
 }
 
 async function enfMarquerRecu(docId,recu,input){
