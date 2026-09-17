@@ -7804,7 +7804,18 @@ function peInvalidateAll(crecheId){
 function peFindReferentIdForPrenom(crecheId,prenom){
   const target=ipNormStr(prenom);
   if(!target)return null;
-  const ref=(cacheReferents||[]).find(r=>r.creche_id===crecheId&&r.name&&ipNormStr(String(r.name).trim().split(/\s+/)[0])===target);
+  // Clé de rapprochement : le prénom réglé en cas d'homonymie sur la fiche employé
+  // liée (employes.planning_nom, cf. sql/collaborateurs_planning_nom.sql), sinon le
+  // premier prénom de la fiche directeur technique elle-même.
+  const ref=(cacheReferents||[]).find(r=>{
+    if(r.creche_id!==crecheId)return false;
+    const emp=r.employe_id?(cacheEmployes||[]).find(e=>e.id===r.employe_id):null;
+    if(emp&&emp.planning_nom)return ipNormStr(emp.planning_nom)===target;
+    if(!r.name)return false;
+    // Tolère "Prénom Nom" comme "Nom Prénom" : on compare à chaque mot du nom complet.
+    return String(r.name).trim().split(/\s+/).some(w=>ipNormStr(w)===target);
+  });
+  if(!ref)console.warn('[PlanningEquipe] Aucun directeur/directrice technique de cette crèche ne correspond au prénom "'+prenom+'" — son planning individuel ne sera pas mis à jour. Vérifiez l\'Annuaire des directeurs techniques (ou employes.planning_nom en cas d\'homonymie).');
   return ref?ref.id:null;
 }
 async function peSyncReferentPlanning(crecheId,semaine,jour,prenom,ev){
