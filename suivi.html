@@ -1413,9 +1413,12 @@ function renderBarre(){
     <button class="chip" data-action="temperature"><i class="ti ti-thermometer"></i> Température</button>
     <button class="chip" data-action="soin"><i class="ti ti-first-aid-kit"></i> Soin</button>
     <button class="chip" data-action="note"><i class="ti ti-microphone"></i> Note</button>
+    ${selection.size===1?'<button class="chip" id="barreJalons"><i class="ti ti-chart-line"></i> Repères</button>':''}
   `;
   document.body.appendChild(barre);
   barre.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>lancerAction(b.dataset.action)));
+  const btnJalons=document.getElementById('barreJalons');
+  if(btnJalons)btnJalons.addEventListener('click',()=>ouvrirJalons([...selection][0]));
 }
 
 /* ============================= ACTIONS GROUPÉES ============================= */
