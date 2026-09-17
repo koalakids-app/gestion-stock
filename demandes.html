@@ -7887,6 +7887,7 @@ async function peResyncWeek(){
     }
   }
   if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-refresh"></i> Resynchroniser';}
+  if(nb)await renderPlanning();
   showBanner(nb?nb+' créneau(x) répercuté(s) sur le planning individuel ✅':'Aucun créneau de cette semaine ne correspond à un directeur technique connu.',nb?undefined:'error');
 }
 
@@ -7991,7 +7992,7 @@ async function peSaveCellEdit(){
 
   peInvalidate(crecheId,semaine);
   closeModal('modal-pe-edit-wrap');
-  await renderPlanningEquipe();
+  await renderPlanning();
   showBanner(prenom+' enregistré(e) ✅');
 }
 
@@ -8005,7 +8006,7 @@ async function peDeleteCellEdit(){
   if(removedRow)await peUnsyncReferentPlanning(crecheId,semaine,jour,removedRow.prenom);
   peInvalidate(crecheId,semaine);
   closeModal('modal-pe-edit-wrap');
-  await renderPlanningEquipe();
+  await renderPlanning();
   showBanner('Créneau libéré ✅');
 }
 
@@ -8081,7 +8082,7 @@ async function peSaveNewCreneau(){
 
   peInvalidate(_peCurCrecheId,_peCurSemaine);
   closeModal('modal-pe-new-creneau-wrap');
-  await renderPlanningEquipe();
+  await renderPlanning();
   showBanner('Créneau ajouté ✅');
 }
 
@@ -8137,7 +8138,7 @@ async function peSaveDuplicateDay(){
 
   peInvalidate(_peCurCrecheId,_peCurSemaine);
   closeModal('modal-pe-dup-day-wrap');
-  await renderPlanningEquipe();
+  await renderPlanning();
   showBanner('Journée dupliquée ✅');
 }
 
@@ -8189,7 +8190,7 @@ async function peSaveDuplicateWeek(){
 
   if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Dupliquer';}
   closeModal('modal-pe-dup-week-wrap');
-  await renderPlanningEquipe();
+  await renderPlanning();
   showBanner(count>1?count+' semaines dupliquées ✅':'Semaine dupliquée ✅');
 }
 
@@ -8352,7 +8353,7 @@ async function peValidateIA(){
 
   if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Écrire dans le planning';}
   closeModal('modal-pe-ia-wrap');
-  await renderPlanningEquipe();
+  await renderPlanning();
   showBanner('Planning généré par IA ✅');
 }
 
