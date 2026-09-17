@@ -1735,8 +1735,17 @@ function enfRenderVaccins(enfantId){
     zone.innerHTML=titre+'<div style="font-size:12px;color:var(--muted)">Date de naissance manquante : impossible de calculer les échéances vaccinales.</div>';
     return;
   }
+  // Les vaccins n'ont pas tous le meme calendrier (ex. ACWY : 6/12 mois,
+  // ROR : 12/18 mois) : les colonnes s'alignent sur l'age de la dose (en
+  // mois), pas sur sa position dans le tableau `doses` de chaque vaccin —
+  // meme principe que vacRenderFicheBody (js/vaccinations.js).
+  const allMonths=[...new Set(VAC_SCHEMA.flatMap(function(v){return v.doses.map(function(d){return d.months;});}))].sort(function(a,b){return a-b;});
   const rows=VAC_SCHEMA.map(function(v){
-    const doses=v.doses.map(function(dose,di){
+    const cells=allMonths.map(function(months){
+      const di=v.doses.findIndex(function(d){return d.months===months;});
+      if(di===-1){
+        return '<td style="padding:4px 6px;text-align:center;vertical-align:middle"><span aria-hidden="true" style="display:inline-flex;width:30px;height:30px;border:2px dashed var(--muted);border-radius:50%;opacity:0.6"></span></td>';
+      }
       const s=vacDoseStatus(e,v,di);
       let cell;
       if(s.state==='fait'){
@@ -1751,14 +1760,14 @@ function enfRenderVaccins(enfantId){
       }
       return '<td style="padding:4px 6px;text-align:center;vertical-align:middle">'+cell+'</td>';
     }).join('');
-    return '<tr><td style="padding:4px 6px;font-size:11.5px;font-weight:600;color:var(--koala-dark);white-space:nowrap">'+escHtml(v.label)+'</td>'+doses+'</tr>';
+    return '<tr><td style="padding:4px 6px;font-size:11.5px;font-weight:600;color:var(--koala-dark);white-space:nowrap">'+escHtml(v.label)+'</td>'+cells+'</tr>';
   }).join('');
   zone.innerHTML=titre
     +'<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">'
     +'<table style="width:100%;border-collapse:collapse">'
     +'<thead><tr style="background:var(--koala-light)">'
     +'<th style="padding:5px 6px;font-size:10.5px;font-weight:700;color:var(--koala);text-align:left;min-width:150px">Vaccin</th>'
-    +VAC_SCHEMA[0].doses.map(function(d){return '<th style="padding:5px 6px;font-size:10.5px;font-weight:700;color:var(--koala);text-align:center;white-space:nowrap">'+escHtml(d.label)+'</th>';}).join('')
+    +allMonths.map(function(m){return '<th style="padding:5px 6px;font-size:10.5px;font-weight:700;color:var(--koala);text-align:center;white-space:nowrap">'+m+' mois</th>';}).join('')
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
     +'<div style="margin-top:8px;font-size:11px;color:var(--muted)">Cliquez une pastille pour la marquer faite (ou l\'annuler).</div>';
 }
