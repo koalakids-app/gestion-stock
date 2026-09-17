@@ -24,7 +24,10 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
-import webpush from "npm:web-push@3.6.7";
+// L'import de web-push est fait à la demande (voir plus bas), pas ici en haut de
+// fichier : un import npm: de premier niveau qui échoue à résoudre empêche la
+// fonction entière de démarrer (y compris l'envoi d'email), ce qui s'est produit
+// en test (504 sur la simple requête OPTIONS, avant même tout traitement).
 
 const VAPID_PUBLIC_KEY = "BAYWoYbzpxn-poxeKn-7CPccnX-aGN5y8kXLVCgcgC8a025oz8HMdNj7E36VLgtiD-oV71KhgCECdQGL85kidOk";
 
@@ -131,6 +134,7 @@ Deno.serve(async (req) => {
       const { data: subs } = await admin
         .from("push_subscriptions").select("id, endpoint, p256dh, auth_key").eq("referent_id", referentId);
       if (subs?.length) {
+        const { default: webpush } = await import("npm:web-push@3.6.7");
         webpush.setVapidDetails("mailto:koalakids.app@gmail.com", VAPID_PUBLIC_KEY, vapidPrivate);
         const payload = JSON.stringify({
           title: "Nouvelle connexion détectée",
