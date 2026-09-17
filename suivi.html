@@ -146,6 +146,30 @@ input,select,textarea{font-family:'Nunito';font-size:16px;padding:9px 11px;borde
 .bullet-list.interne li{border-color:#FBE9E7;background:#FFFBFA}
 .ordi-empty{color:var(--muted);text-align:center;padding:60px 20px}
 .mention2{font-size:11px;color:var(--muted);margin-top:16px}
+
+/* ---- nav direction (synthèses / référentiel) ---- */
+.ordi-nav{display:flex;gap:6px;background:#F1EFF7;border-radius:14px;padding:4px}
+.ordi-nav-btn{border:none;background:transparent;color:var(--muted);font-family:'Nunito';font-weight:800;
+  font-size:13px;padding:9px 16px;border-radius:10px;cursor:pointer}
+.ordi-nav-btn.on{background:#fff;color:var(--violet);box-shadow:0 2px 8px rgba(43,39,64,.1)}
+
+/* ---- écran référentiel ---- */
+.ref-wrap{padding:20px 26px;max-width:900px;margin:0 auto}
+.ref-top{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+.ref-domaine{font-family:'Baloo 2',cursive;color:var(--orange);font-size:16px;margin:22px 0 4px}
+.ref-tranche{font-size:12.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px}
+.ref-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.ref-row.inactif{opacity:.45}
+.ref-row .lib{flex:1;font-size:14px}
+.ref-row input.edit-libelle{flex:1;font-size:14px;padding:6px 8px}
+.ref-row .ord{width:44px;font-size:12.5px;text-align:center;padding:6px 4px}
+.ref-import-box{border:2px dashed var(--line);border-radius:16px;padding:20px;text-align:center;margin-bottom:20px}
+.ref-preview{border:2px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:16px}
+.ref-preview .ok{color:var(--ok);font-weight:800}
+.ref-preview .rej{color:var(--err);font-weight:800}
+.ref-preview .dup{color:var(--muted);font-weight:800}
+.ref-preview table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+.ref-preview td,.ref-preview th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}
 </style>
 </head>
 <body>
@@ -515,21 +539,42 @@ function libellePeriode(debut,fin){
   return 'Année '+debut.slice(0,4)+'-'+fin.slice(0,4);
 }
 
+let ordiVue='syntheses';
+
 function renderOrdiShell(){
   const wrap=document.getElementById('appOrdi');
   wrap.innerHTML=`
     <div class="ordi-top">
-      <span class="title"><i class="ti ti-heart-handshake"></i> Suivi — synthèses</span>
-      ${IS_DIRECTION?`<select id="ordiCreche"></select>`:''}
-      <select id="ordiPeriodeType">
-        <option value="jour">Jour</option>
-        <option value="semaine">Semaine</option>
-        <option value="mois">Mois</option>
-        <option value="annee">Année</option>
-      </select>
-      <span id="ordiPeriodeValeurWrap"></span>
-      <button class="btn btn-g" style="background:#F1EFF7;color:var(--muted)" onclick="sb.auth.signOut().then(()=>location.reload())"><i class="ti ti-logout"></i> Déconnexion</button>
+      <span class="title"><i class="ti ti-heart-handshake"></i> Suivi</span>
+      ${IS_DIRECTION?`
+        <div class="ordi-nav">
+          <button class="ordi-nav-btn${ordiVue==='syntheses'?' on':''}" id="navSyntheses">Synthèses</button>
+          <button class="ordi-nav-btn${ordiVue==='referentiel'?' on':''}" id="navReferentiel">Référentiel</button>
+        </div>`:''}
+      <span id="ordiOutils"></span>
+      <button class="btn btn-g" style="background:#F1EFF7;color:var(--muted);margin-left:auto" onclick="sb.auth.signOut().then(()=>location.reload())"><i class="ti ti-logout"></i> Déconnexion</button>
     </div>
+    <div id="ordiContenu"></div>`;
+  if(IS_DIRECTION){
+    document.getElementById('navSyntheses').addEventListener('click',()=>{ordiVue='syntheses';renderOrdiShell();});
+    document.getElementById('navReferentiel').addEventListener('click',()=>{ordiVue='referentiel';renderOrdiShell();});
+  }
+  if(ordiVue==='referentiel'&&IS_DIRECTION){renderOrdiReferentiel();return;}
+  renderOrdiSyntheses();
+}
+
+function renderOrdiSyntheses(){
+  const outils=document.getElementById('ordiOutils');
+  outils.innerHTML=`
+    ${IS_DIRECTION?`<select id="ordiCreche"></select>`:''}
+    <select id="ordiPeriodeType">
+      <option value="jour">Jour</option>
+      <option value="semaine">Semaine</option>
+      <option value="mois">Mois</option>
+      <option value="annee">Année</option>
+    </select>
+    <span id="ordiPeriodeValeurWrap"></span>`;
+  document.getElementById('ordiContenu').innerHTML=`
     <div class="ordi-body">
       <div class="ordi-liste" id="ordiListe"></div>
       <div class="ordi-detail" id="ordiDetail"><div class="ordi-empty">Sélectionnez un enfant.</div></div>
@@ -565,6 +610,227 @@ function renderPeriodeValeur(){
 
 function crecheCouranteOrdi(){
   return IS_DIRECTION ? (document.getElementById('ordiCreche')?.value||PROF.creche_id) : PROF.creche_id;
+}
+
+/* ============================================================================
+   ÉCRAN : référentiel des repères de développement (direction uniquement)
+   ============================================================================ */
+const REF_TRANCHES_ORDRE=['0-6 mois','6-12 mois','1-2 ans','2-3 ans','3-4 ans'];
+let refImportPreview=null;
+
+async function renderOrdiReferentiel(){
+  const zone=document.getElementById('ordiContenu');
+  zone.innerHTML='<div class="ordi-empty">Chargement…</div>';
+  await chargerJalonsTous();
+  zone.innerHTML=`
+    <div class="ref-wrap">
+      <div class="ref-top">
+        <button class="btn btn-p" id="btnRefAjouter"><i class="ti ti-plus"></i> Ajouter un repère</button>
+        <button class="btn btn-s" style="background:#F1EFF7;color:var(--violet)" id="btnRefExporter"><i class="ti ti-download"></i> Exporter en CSV</button>
+        <label class="btn btn-s" style="background:#F1EFF7;color:var(--violet);cursor:pointer">
+          <i class="ti ti-upload"></i> Importer un CSV
+          <input type="file" accept=".csv,text/csv" id="refFichier" style="display:none">
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-left:auto">
+          <input type="checkbox" id="refVoirInactifs" style="width:auto"> Voir les repères désactivés
+        </label>
+      </div>
+      <div id="refImportZone"></div>
+      <div id="refListe"></div>
+      <div class="mention2">Repères élaborés par l'équipe Koala Kids, inspirés des travaux de Francine Ferland. Un repère déjà utilisé n'est jamais supprimé, seulement désactivé.</div>
+    </div>`;
+  document.getElementById('btnRefAjouter').addEventListener('click',ouvrirFormulaireJalon);
+  document.getElementById('btnRefExporter').addEventListener('click',exporterJalonsCsv);
+  document.getElementById('refFichier').addEventListener('change',e=>{
+    const f=e.target.files[0];if(f)importerJalonsCsv(f);e.target.value='';
+  });
+  document.getElementById('refVoirInactifs').addEventListener('change',renderRefListe);
+  renderRefListe();
+}
+
+async function chargerJalonsTous(){
+  const{data,error}=await sb.from('suivi_jalons').select('*').order('domaine').order('tranche').order('ordre');
+  if(!error)JALONS=data||[];
+}
+
+function renderRefListe(){
+  const listeEl=document.getElementById('refListe');
+  const voirInactifs=document.getElementById('refVoirInactifs')?.checked;
+  const jalons=JALONS.filter(j=>voirInactifs||j.actif);
+  if(!jalons.length){listeEl.innerHTML='<div class="ordi-empty">Aucun repère. Importez le référentiel en CSV ou ajoutez-en un.</div>';return;}
+  const domaines=[...new Set(jalons.map(j=>j.domaine))];
+  listeEl.innerHTML=domaines.map(dom=>{
+    const parDomaine=jalons.filter(j=>j.domaine===dom);
+    const tranches=[...new Set(parDomaine.map(j=>j.tranche))]
+      .sort((a,b)=>REF_TRANCHES_ORDRE.indexOf(a)-REF_TRANCHES_ORDRE.indexOf(b));
+    const blocs=tranches.map(tr=>{
+      const lignes=parDomaine.filter(j=>j.tranche===tr).map(j=>`
+        <div class="ref-row${j.actif?'':' inactif'}" data-id="${j.id}">
+          <input class="ord" type="number" value="${j.ordre}" data-champ="ordre">
+          <span class="lib">${esc(j.libelle)}</span>
+          <button class="btn btn-g" style="background:#F1EFF7;color:var(--muted)" data-action="editer" title="Modifier"><i class="ti ti-edit"></i></button>
+          <button class="btn ${j.actif?'btn-g':'btn-p'}" style="${j.actif?'background:#FBE9E7;color:var(--err)':''}" data-action="toggle">${j.actif?'Désactiver':'Réactiver'}</button>
+        </div>`).join('');
+      return `<div class="ref-tranche">${esc(tr)}</div>${lignes}`;
+    }).join('');
+    return `<div class="ref-domaine">${esc(dom)}</div>${blocs}`;
+  }).join('');
+  listeEl.querySelectorAll('.ref-row').forEach(row=>{
+    const id=row.dataset.id;
+    const j=JALONS.find(x=>x.id===id);
+    row.querySelector('[data-action="toggle"]').addEventListener('click',()=>toggleJalonActif(j));
+    row.querySelector('[data-action="editer"]').addEventListener('click',()=>ouvrirFormulaireJalon(j));
+    row.querySelector('.ord').addEventListener('change',e=>majOrdreJalon(j,parseInt(e.target.value,10)||0));
+  });
+}
+
+async function toggleJalonActif(j){
+  const{error}=await sb.from('suivi_jalons').update({actif:!j.actif,updated_at:new Date().toISOString()}).eq('id',j.id);
+  if(error){alert('Erreur : '+error.message);return;}
+  j.actif=!j.actif;
+  renderRefListe();
+}
+
+async function majOrdreJalon(j,ordre){
+  const{error}=await sb.from('suivi_jalons').update({ordre,updated_at:new Date().toISOString()}).eq('id',j.id);
+  if(error){alert('Erreur : '+error.message);return;}
+  j.ordre=ordre;
+}
+
+function ouvrirFormulaireJalon(j){
+  const domainesExistants=[...new Set(JALONS.map(x=>x.domaine))];
+  const w=document.createElement('div');w.className='ov-wrap';
+  w.innerHTML=`<div class="ov">
+    <h2><i class="ti ti-chart-line"></i> ${j?'Modifier le repère':'Ajouter un repère'}</h2>
+    <div class="f"><label>Domaine</label><input id="jfDomaine" list="jfDomaines" value="${esc(j?j.domaine:'')}"></div>
+    <datalist id="jfDomaines">${domainesExistants.map(d=>`<option value="${esc(d)}">`).join('')}</datalist>
+    <div class="f"><label>Tranche d'âge</label><select id="jfTranche">${REF_TRANCHES_ORDRE.map(t=>`<option value="${t}"${j&&j.tranche===t?' selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="f"><label>Libellé</label><textarea id="jfLibelle" rows="2">${esc(j?j.libelle:'')}</textarea></div>
+    <div class="f"><label>Ordre</label><input type="number" id="jfOrdre" value="${j?j.ordre:0}"></div>
+    <p id="jfErr" style="color:var(--err);font-size:12.5px;display:none"></p>
+    <div class="row"><button class="btn-annule" id="jfAnnule">Annuler</button><button class="btn-valide" id="jfValide">${j?'Enregistrer':'Ajouter'}</button></div>
+  </div>`;
+  document.body.appendChild(w);
+  w.querySelector('#jfAnnule').addEventListener('click',()=>w.remove());
+  w.querySelector('#jfValide').addEventListener('click',async()=>{
+    const domaine=document.getElementById('jfDomaine').value.trim();
+    const tranche=document.getElementById('jfTranche').value;
+    const libelle=document.getElementById('jfLibelle').value.trim();
+    const ordre=parseInt(document.getElementById('jfOrdre').value,10)||0;
+    const err=document.getElementById('jfErr');
+    if(!domaine||!libelle){err.textContent='Domaine et libellé sont obligatoires.';err.style.display='block';return;}
+    if(j){
+      const{error}=await sb.from('suivi_jalons').update({domaine,tranche,libelle,ordre,updated_at:new Date().toISOString()}).eq('id',j.id);
+      if(error){err.textContent='Erreur : '+error.message;err.style.display='block';return;}
+      Object.assign(j,{domaine,tranche,libelle,ordre});
+    }else{
+      const{data,error}=await sb.from('suivi_jalons').insert({domaine,tranche,libelle,ordre}).select().single();
+      if(error){err.textContent='Erreur : '+error.message;err.style.display='block';return;}
+      JALONS.push(data);
+    }
+    w.remove();
+    renderRefListe();
+  });
+}
+
+/* ---- Export CSV ---- */
+function csvEchapper(v){
+  v=String(v==null?'':v);
+  return /[;"\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v;
+}
+function exporterJalonsCsv(){
+  const lignes=['domaine;tranche;ordre;libelle;actif'];
+  JALONS.forEach(j=>lignes.push([j.domaine,j.tranche,j.ordre,j.libelle,j.actif?'oui':'non'].map(csvEchapper).join(';')));
+  const contenu='﻿'+lignes.join('\r\n');
+  const blob=new Blob([contenu],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='reperes-developpement-koalakids.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ---- Import CSV : parsing minimal (séparateur ; champs éventuellement entre
+   guillemets), aperçu avant enregistrement — rien n'est écrit tant que la
+   direction n'a pas cliqué "Enregistrer". ---- */
+function parserCsv(texte){
+  const t=texte.replace(/^﻿/,'').replace(/\r\n/g,'\n');
+  const lignes=[];
+  let ligne=[],champ='',dansGuillemets=false;
+  for(let i=0;i<t.length;i++){
+    const c=t[i];
+    if(dansGuillemets){
+      if(c==='"'){
+        if(t[i+1]==='"'){champ+='"';i++;}else dansGuillemets=false;
+      }else champ+=c;
+    }else if(c==='"'){dansGuillemets=true;}
+    else if(c===';'){ligne.push(champ);champ='';}
+    else if(c==='\n'){ligne.push(champ);lignes.push(ligne);ligne=[];champ='';}
+    else champ+=c;
+  }
+  if(champ.length||ligne.length){ligne.push(champ);lignes.push(ligne);}
+  return lignes.filter(l=>l.some(c=>c.trim()!==''));
+}
+
+function importerJalonsCsv(fichier){
+  const lecteur=new FileReader();
+  lecteur.onload=()=>{
+    const lignes=parserCsv(lecteur.result);
+    if(!lignes.length){alert('Fichier vide.');return;}
+    const entete=lignes[0].map(c=>c.trim().toLowerCase());
+    const idx={domaine:entete.indexOf('domaine'),tranche:entete.indexOf('tranche'),ordre:entete.indexOf('ordre'),libelle:entete.indexOf('libelle'),actif:entete.indexOf('actif')};
+    if(idx.domaine<0||idx.tranche<0||idx.libelle<0){
+      alert('Colonnes attendues : domaine;tranche;ordre;libelle;actif. Colonne manquante.');return;
+    }
+    const existants=new Set(JALONS.map(j=>(j.domaine+'|'+j.tranche+'|'+j.libelle).toLowerCase()));
+    const vuDansLeFichier=new Set();
+    const valides=[],rejetees=[],doublons=[];
+    lignes.slice(1).forEach((l,i)=>{
+      const numero=i+2;
+      const domaine=(l[idx.domaine]||'').trim();
+      const tranche=(l[idx.tranche]||'').trim();
+      const libelle=(l[idx.libelle]||'').trim();
+      const ordre=idx.ordre>=0?(parseInt(l[idx.ordre],10)||0):0;
+      const actifTxt=idx.actif>=0?(l[idx.actif]||'').trim().toLowerCase():'oui';
+      const actif=actifTxt!=='non'&&actifTxt!=='false'&&actifTxt!=='0';
+      if(!domaine||!tranche||!libelle){rejetees.push({numero,domaine,tranche,libelle,motif:'domaine, tranche et libellé sont obligatoires'});return;}
+      const cle=(domaine+'|'+tranche+'|'+libelle).toLowerCase();
+      if(existants.has(cle)){doublons.push({numero,domaine,tranche,libelle,motif:'existe déjà en base'});return;}
+      if(vuDansLeFichier.has(cle)){doublons.push({numero,domaine,tranche,libelle,motif:'doublon dans le fichier'});return;}
+      vuDansLeFichier.add(cle);
+      valides.push({domaine,tranche,ordre,libelle,actif});
+    });
+    refImportPreview=valides;
+    const zone=document.getElementById('refImportZone');
+    zone.innerHTML=`
+      <div class="ref-preview">
+        <div><span class="ok">${valides.length} ligne${valides.length>1?'s':''} valide${valides.length>1?'s':''}</span>
+          · <span class="dup">${doublons.length} doublon${doublons.length>1?'s':''} ignoré${doublons.length>1?'s':''}</span>
+          · <span class="rej">${rejetees.length} ligne${rejetees.length>1?'s':''} rejetée${rejetees.length>1?'s':''}</span></div>
+        ${rejetees.length?`<table><tr><th>Ligne</th><th>Domaine</th><th>Tranche</th><th>Libellé</th><th>Motif</th></tr>
+          ${rejetees.map(r=>`<tr><td>${r.numero}</td><td>${esc(r.domaine)}</td><td>${esc(r.tranche)}</td><td>${esc(r.libelle)}</td><td>${esc(r.motif)}</td></tr>`).join('')}
+          </table>`:''}
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="btn btn-g" style="background:#F1EFF7;color:var(--muted)" id="btnRefAnnulerImport">Annuler</button>
+          <button class="btn btn-p" id="btnRefConfirmerImport" ${valides.length?'':'disabled'}><i class="ti ti-check"></i> Enregistrer ${valides.length} repère${valides.length>1?'s':''}</button>
+        </div>
+      </div>`;
+    document.getElementById('btnRefAnnulerImport').addEventListener('click',()=>{refImportPreview=null;zone.innerHTML='';});
+    document.getElementById('btnRefConfirmerImport').addEventListener('click',confirmerImportJalons);
+  };
+  lecteur.readAsText(fichier,'utf-8');
+}
+
+async function confirmerImportJalons(){
+  if(!refImportPreview||!refImportPreview.length)return;
+  const btn=document.getElementById('btnRefConfirmerImport');
+  btn.disabled=true;btn.textContent='Enregistrement…';
+  const{data,error}=await sb.from('suivi_jalons').insert(refImportPreview).select();
+  if(error){alert('Erreur : '+error.message);btn.disabled=false;return;}
+  JALONS.push(...(data||[]));
+  refImportPreview=null;
+  document.getElementById('refImportZone').innerHTML='';
+  renderRefListe();
 }
 
 let ENFANTS_ORDI=[],SYNTHESES_PERIODE={},DEPARTS_PERIODE=new Set();
