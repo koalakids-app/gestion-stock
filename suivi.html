@@ -863,15 +863,18 @@ async function publierSynthese(e,contenu,debut,fin){
 function afficherIdentification(){
   AUTEUR_PICTOS=null;AUTEUR_LABEL='';btnAuteur.classList.add('hidden');
   let code=[];
+  let busyIdent=false;
   app.className='';
   app.innerHTML=`
     <div class="ident">
-      <div><div class="prompt">Qui êtes-vous ?</div><div class="subprompt">Choisissez vos 4 images, dans l'ordre</div></div>
+      <div><div class="prompt" id="identPrompt">Qui êtes-vous ?</div><div class="subprompt" id="identSubprompt">Choisissez vos 4 images, dans l'ordre</div></div>
       <div class="picto-slots" id="pSlots"></div>
       <div class="picto-grid" id="pGrid"></div>
     </div>`;
   const slotsEl=document.getElementById('pSlots');
   const gridEl=document.getElementById('pGrid');
+  const promptEl=document.getElementById('identPrompt');
+  const subpromptEl=document.getElementById('identSubprompt');
   function renderSlots(){
     slotsEl.innerHTML=[0,1,2,3].map(i=>{
       const p=code[i]?pictoById[code[i]]:null;
@@ -883,22 +886,52 @@ function afficherIdentification(){
       '<button class="picto-key'+(code.includes(p.id)?' used':'')+'" data-p="'+p.id+'"><img src="'+p.url+'"></button>'
     ).join('');
   }
+  function reset(){
+    code=[];busyIdent=false;
+    promptEl.textContent='Qui êtes-vous ?';
+    subpromptEl.textContent="Choisissez vos 4 images, dans l'ordre";
+    renderSlots();renderGrid();
+  }
   renderSlots();renderGrid();
   gridEl.addEventListener('click',e=>{
     const btn=e.target.closest('.picto-key');
-    if(!btn||code.length>=4)return;
+    if(!btn||busyIdent||code.length>=4)return;
     const id=btn.dataset.p;
     if(code.includes(id))return;
     code.push(id);renderSlots();renderGrid();
     if(code.length===4)valider();
   });
   async function valider(){
-    /* Pas de RPC de vérification isolée : le code est simplement mémorisé,
-       il sera validé (ou rejeté) au premier vrai geste. Une tentative avec
-       un mauvais code affichera l'erreur "code_inconnu" à ce moment-là. */
+    busyIdent=true;
+    promptEl.textContent='Vérification…';
+    subpromptEl.textContent='';
+    const{data,error}=await sb.rpc('kk_suivi_kiosk_identifier',{p_token:TOKEN,p_code_pictos:code});
+    const row=Array.isArray(data)?data[0]:data;
+    if(error||!row){
+      promptEl.textContent='Connexion impossible';
+      subpromptEl.textContent='Vérifiez le Wi-Fi et réessayez.';
+      slotsEl.classList.remove('shake');void slotsEl.offsetWidth;slotsEl.classList.add('shake');
+      setTimeout(reset,2500);
+      return;
+    }
+    if(!row.ok){
+      const messages={
+        token_invalide:'Tablette non configurée.',
+        trop_de_tentatives:'Trop de tentatives, patientez quelques minutes.',
+        code_invalide:'Choisissez 4 images distinctes.',
+        code_ambigu:'Code ambigu, contactez la direction.',
+        code_inconnu:'Code image non reconnu, réessayez.'
+      };
+      promptEl.textContent='Code non reconnu';
+      subpromptEl.textContent=messages[row.error]||'Réessayez.';
+      slotsEl.classList.remove('shake');void slotsEl.offsetWidth;slotsEl.classList.add('shake');
+      setTimeout(reset,2200);
+      return;
+    }
     AUTEUR_PICTOS=code.slice();
+    AUTEUR_LABEL=row.label||'';
     btnAuteur.classList.remove('hidden');
-    btnAuteur.innerHTML='<i class="ti ti-user-check"></i> Changer';
+    btnAuteur.innerHTML='<i class="ti ti-user-check"></i> '+esc(AUTEUR_LABEL||'Changer');
     await chargerEnfants();
   }
 }
