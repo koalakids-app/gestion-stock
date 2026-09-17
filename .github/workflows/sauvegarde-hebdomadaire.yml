@@ -1,0 +1,25 @@
+name: Sauvegarde hebdomadaire
+
+on:
+  schedule:
+    # Tous les lundis à 4h00 UTC (5h/6h en France selon l'heure d'été)
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déclencher la sauvegarde Supabase
+        run: |
+          status=$(curl -s -o /tmp/reponse.json -w "%{http_code}" \
+            -X POST "https://juyrceadazrovlitxceb.supabase.co/functions/v1/sauvegarde-hebdomadaire" \
+            -H "x-backup-secret: ${{ secrets.BACKUP_TRIGGER_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "Réponse (HTTP $status) :"
+          cat /tmp/reponse.json
+          echo
+          if [ "$status" -ne 200 ]; then
+            echo "::error::Sauvegarde échouée (HTTP $status)"
+            exit 1
+          fi
