@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v14';   // v14 : fix connexion suivi.html (session non persistée)
+const CACHE_NAME = 'stocks-v15';   // v15 : lien retour à l'accueil sur l'écran de connexion de suivi.html
 
 self.addEventListener('install', event => {
   event.waitUntil(
