@@ -436,15 +436,74 @@ async function ordinateurGrantAccess(){
 }
 
 /* ============================================================================
-   ÉCRAN : synthèse du jour
+   ÉCRAN : synthèses (jour / semaine / mois / année)
    ============================================================================ */
+let PERIODE_TYPE='jour';
+let valeurPeriode={jour:dateChoisie,semaine:isoWeekValue(new Date()),mois:dateChoisie.slice(0,7),annee:String(anneeRentreeCourante())};
+
+function anneeRentreeCourante(){
+  const d=new Date();
+  return d.getMonth()>=8 ? d.getFullYear() : d.getFullYear()-1; // rentrée de septembre
+}
+/* Numéro de semaine ISO 8601 (lundi-dimanche), format <input type="week">. */
+function isoWeekValue(d){
+  const date=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const dayNum=(date.getUTCDay()+6)%7;
+  date.setUTCDate(date.getUTCDate()-dayNum+3);
+  const firstThursday=new Date(Date.UTC(date.getUTCFullYear(),0,4));
+  const diffDays=Math.round((date-firstThursday)/86400000-3+((firstThursday.getUTCDay()+6)%7));
+  const week=1+Math.round(diffDays/7);
+  return date.getUTCFullYear()+'-W'+String(week).padStart(2,'0');
+}
+function fmtLocale(d){return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');}
+function semaineBornes(v){
+  if(!v)return null;
+  const[yStr,wStr]=v.split('-W');
+  const year=+yStr,week=+wStr;
+  const simple=new Date(Date.UTC(year,0,1+(week-1)*7));
+  const dow=simple.getUTCDay()||7;
+  const monday=new Date(simple);monday.setUTCDate(simple.getUTCDate()+1-dow);
+  const sunday=new Date(monday);sunday.setUTCDate(monday.getUTCDate()+6);
+  return{debut:fmtLocale(monday),fin:fmtLocale(sunday)};
+}
+function moisBornes(v){
+  if(!v)return null;
+  const[y,m]=v.split('-').map(Number);
+  const debut=y+'-'+String(m).padStart(2,'0')+'-01';
+  const dernierJour=new Date(y,m,0).getDate();
+  return{debut,fin:y+'-'+String(m).padStart(2,'0')+'-'+String(dernierJour).padStart(2,'0')};
+}
+function anneeBornes(v){
+  const y=parseInt(v,10);
+  return{debut:y+'-09-01',fin:(y+1)+'-08-31'};
+}
+function periodeBornes(){
+  if(PERIODE_TYPE==='jour')return{debut:valeurPeriode.jour,fin:valeurPeriode.jour};
+  if(PERIODE_TYPE==='semaine')return semaineBornes(valeurPeriode.semaine);
+  if(PERIODE_TYPE==='mois')return moisBornes(valeurPeriode.mois);
+  return anneeBornes(valeurPeriode.annee);
+}
+function libellePeriode(debut,fin){
+  const fmt=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+  if(PERIODE_TYPE==='jour')return new Date(debut+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  if(PERIODE_TYPE==='semaine')return 'Semaine du '+fmt(debut)+' au '+fmt(fin);
+  if(PERIODE_TYPE==='mois')return new Date(debut+'T12:00:00').toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  return 'Année '+debut.slice(0,4)+'-'+fin.slice(0,4);
+}
+
 function renderOrdiShell(){
   const wrap=document.getElementById('appOrdi');
   wrap.innerHTML=`
     <div class="ordi-top">
-      <span class="title"><i class="ti ti-heart-handshake"></i> Suivi — synthèse du jour</span>
+      <span class="title"><i class="ti ti-heart-handshake"></i> Suivi — synthèses</span>
       ${IS_DIRECTION?`<select id="ordiCreche"></select>`:''}
-      <input type="date" id="ordiDate" value="${dateChoisie}" max="${ipDateToLocalISO()}">
+      <select id="ordiPeriodeType">
+        <option value="jour">Jour</option>
+        <option value="semaine">Semaine</option>
+        <option value="mois">Mois</option>
+        <option value="annee">Année</option>
+      </select>
+      <span id="ordiPeriodeValeurWrap"></span>
       <button class="btn btn-g" style="background:#F1EFF7;color:var(--muted)" onclick="sb.auth.signOut().then(()=>location.reload())"><i class="ti ti-logout"></i> Déconnexion</button>
     </div>
     <div class="ordi-body">
@@ -457,39 +516,90 @@ function renderOrdiShell(){
     sel.value=crecheCibleParam||PROF.creche_id||CRECHES_ORDI[0]?.id||'';
     sel.addEventListener('change',chargerListeOrdi);
   }
-  document.getElementById('ordiDate').addEventListener('change',e=>{dateChoisie=e.target.value;chargerListeOrdi();});
+  document.getElementById('ordiPeriodeType').value=PERIODE_TYPE;
+  document.getElementById('ordiPeriodeType').addEventListener('change',e=>{PERIODE_TYPE=e.target.value;renderPeriodeValeur();chargerListeOrdi();});
+  renderPeriodeValeur();
   chargerListeOrdi();
+}
+
+function renderPeriodeValeur(){
+  const wrap=document.getElementById('ordiPeriodeValeurWrap');
+  if(PERIODE_TYPE==='jour'){
+    wrap.innerHTML=`<input type="date" id="ordiValeur" value="${valeurPeriode.jour}" max="${ipDateToLocalISO()}">`;
+  }else if(PERIODE_TYPE==='semaine'){
+    wrap.innerHTML=`<input type="week" id="ordiValeur" value="${valeurPeriode.semaine}">`;
+  }else if(PERIODE_TYPE==='mois'){
+    wrap.innerHTML=`<input type="month" id="ordiValeur" value="${valeurPeriode.mois}">`;
+  }else{
+    const courante=anneeRentreeCourante();
+    const options=[];
+    for(let y=courante;y>=courante-4;y--)options.push(y);
+    wrap.innerHTML=`<select id="ordiValeur">${options.map(y=>`<option value="${y}"${String(y)===valeurPeriode.annee?' selected':''}>${y}-${y+1}</option>`).join('')}</select>`;
+  }
+  document.getElementById('ordiValeur').addEventListener('change',e=>{valeurPeriode[PERIODE_TYPE]=e.target.value;chargerListeOrdi();});
 }
 
 function crecheCouranteOrdi(){
   return IS_DIRECTION ? (document.getElementById('ordiCreche')?.value||PROF.creche_id) : PROF.creche_id;
 }
 
+let ENFANTS_ORDI=[],SYNTHESES_PERIODE={},DEPARTS_PERIODE=new Set();
+
+/* "Départ pointé" côté interface (juste pour l'affichage/activer le bouton —
+   la règle qui compte vraiment est le trigger serveur kk_suivi_verifier_
+   publication) : pour jour, un départ ce jour-là ; pour semaine/mois/année,
+   un départ le dernier jour où l'enfant était effectivement présent dans la
+   période, même logique que kk_suivi_dernier_jour_accueil côté SQL. */
+async function calculerDepartsPeriode(crecheId,debut,fin){
+  if(PERIODE_TYPE==='jour'){
+    const{data}=await sb.from('pointages').select('enfant_id').eq('creche_id',crecheId).eq('action','depart')
+      .gte('horodatage',debut+'T00:00:00').lt('horodatage',debut+'T23:59:59.999');
+    return new Set((data||[]).map(d=>d.enfant_id));
+  }
+  const[{data:pres},{data:departs}]=await Promise.all([
+    sb.from('presences').select('enfant_id,presence_date').eq('status','present').gte('presence_date',debut).lte('presence_date',fin),
+    sb.from('pointages').select('enfant_id,horodatage').eq('creche_id',crecheId).eq('action','depart')
+      .gte('horodatage',debut+'T00:00:00').lt('horodatage',fin+'T23:59:59.999')
+  ]);
+  const dernierJour={};
+  (pres||[]).forEach(p=>{if(!dernierJour[p.enfant_id]||p.presence_date>dernierJour[p.enfant_id])dernierJour[p.enfant_id]=p.presence_date;});
+  const departsParJour={};
+  (departs||[]).forEach(d=>{const jour=String(d.horodatage).slice(0,10);(departsParJour[d.enfant_id]=departsParJour[d.enfant_id]||new Set()).add(jour);});
+  const ok=new Set();
+  Object.keys(dernierJour).forEach(eid=>{if(departsParJour[eid]&&departsParJour[eid].has(dernierJour[eid]))ok.add(eid);});
+  return ok;
+}
+
+function pillHtml(s,depart){
+  if(s&&s.statut==='publiee')return '<span class="pill publiee">Publiée</span>';
+  if(s&&s.statut==='validee')return depart?'<span class="pill publiee">Validée — à publier</span>':'<span class="pill bloque">Validée — départ non pointé</span>';
+  if(!depart)return '<span class="pill bloque">Départ non pointé</span>';
+  return '<span class="pill brouillon">Brouillon</span>';
+}
+
 async function chargerListeOrdi(){
   const crecheId=crecheCouranteOrdi();
+  const bornes=periodeBornes();
+  if(!bornes)return;
+  const{debut,fin}=bornes;
   const liste=document.getElementById('ordiListe');
   liste.innerHTML='<div class="ordi-empty">Chargement…</div>';
-  const[{data:enfants},{data:syntheses},{data:departs}]=await Promise.all([
+  const[{data:enfants},{data:syntheses}]=await Promise.all([
     sb.from('enfants').select('id,prenom,nom,dob').eq('creche_id',crecheId)
-      .or('date_sortie.is.null,date_sortie.gte.'+dateChoisie).order('prenom'),
+      .or('date_sortie.is.null,date_sortie.gte.'+debut).order('prenom'),
     sb.from('suivi_syntheses').select('*').eq('creche_id',crecheId)
-      .eq('periode_type','jour').eq('periode_debut',dateChoisie),
-    sb.from('pointages').select('enfant_id,horodatage').eq('creche_id',crecheId).eq('action','depart')
-      .gte('horodatage',dateChoisie+'T00:00:00').lt('horodatage',dateChoisie+'T23:59:59.999')
+      .eq('periode_type',PERIODE_TYPE).eq('periode_debut',debut)
   ]);
   ENFANTS_ORDI=enfants||[];
-  SYNTHESES_JOUR=Object.fromEntries((syntheses||[]).map(s=>[s.enfant_id,s]));
-  DEPARTS_JOUR=new Set((departs||[]).map(d=>d.enfant_id));
+  SYNTHESES_PERIODE=Object.fromEntries((syntheses||[]).map(s=>[s.enfant_id,s]));
+  DEPARTS_PERIODE=await calculerDepartsPeriode(crecheId,debut,fin);
   if(!ENFANTS_ORDI.length){liste.innerHTML='<div class="ordi-empty">Aucun enfant pour cette crèche.</div>';return;}
   liste.innerHTML=ENFANTS_ORDI.map(e=>{
-    const s=SYNTHESES_JOUR[e.id];
-    const depart=DEPARTS_JOUR.has(e.id);
-    let pill='<span class="pill brouillon">Brouillon</span>';
-    if(s&&s.statut==='publiee')pill='<span class="pill publiee">Publiée</span>';
-    else if(!depart)pill='<span class="pill bloque">Départ non pointé</span>';
+    const s=SYNTHESES_PERIODE[e.id];
+    const depart=DEPARTS_PERIODE.has(e.id);
     return `<div class="ordi-item${e.id===enfantChoisiId?' on':''}" data-id="${e.id}">
       <div class="av">${esc((e.prenom?e.prenom[0]:'')+(e.nom?e.nom[0]:''))}</div>
-      <div class="nom">${esc(e.prenom)}</div>${pill}
+      <div class="nom">${esc(e.prenom)}</div>${pillHtml(s,depart)}
     </div>`;
   }).join('');
   liste.querySelectorAll('.ordi-item').forEach(it=>it.addEventListener('click',()=>{
@@ -499,15 +609,15 @@ async function chargerListeOrdi(){
     afficherDetailOrdi();
   }));
   if(enfantChoisiId&&ENFANTS_ORDI.some(e=>e.id===enfantChoisiId))afficherDetailOrdi();
+  else document.getElementById('ordiDetail').innerHTML='<div class="ordi-empty">Sélectionnez un enfant.</div>';
 }
-let ENFANTS_ORDI=[],SYNTHESES_JOUR={},DEPARTS_JOUR=new Set();
 
-/* Construit un contenu de synthèse à partir des saisies du jour — en langage
-   descriptif et bienveillant, sans comparaison à une norme. Seuls repas/
-   sieste/change/humeur alimentent le texte destiné à la famille : soin,
-   température, incident et note restent affichés à l'équipe uniquement (une
-   inquiétude se dit en entretien, jamais dans la synthèse). Les jalons ne
-   remontent que s'ils sont explicitement marqués "famille". */
+/* Construit un contenu de synthèse jour — en langage descriptif et
+   bienveillant, sans comparaison à une norme. Seuls repas/sieste/change/
+   humeur alimentent le texte destiné à la famille : soin, température,
+   incident et note restent affichés à l'équipe uniquement (une inquiétude
+   se dit en entretien, jamais dans la synthèse). Les jalons ne remontent
+   que s'ils sont explicitement marqués "famille". */
 function genererContenuJour(saisies,observations){
   const heure=iso=>new Date(iso).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
   const repasLabels={tout:'a tout mangé',bien:'a bien mangé',peu:'a mangé un peu',refus:'a refusé de manger'};
@@ -552,69 +662,201 @@ function genererContenuJour(saisies,observations){
   return{famille,interne};
 }
 
+/* Semaine/mois/année : mêmes règles de partage que le jour (repas/sieste/
+   change/humeur agrégés en tendances, jalons "famille" uniquement),
+   regroupées par domaine pour montrer l'évolution du développement — sans
+   jamais utiliser le mot "retard" ni comparer à une norme. */
+function genererContenuPeriode(saisies,observations){
+  const repasLabels={tout:'tout mangé',bien:'bien mangé',peu:'mangé un peu',refus:'refusé de manger'};
+  const humeurLabels={content:'de bonne humeur',neutre:'calme',difficile:'plus difficile par moments'};
+  const famille=[];
+  const interne=[];
+
+  const repas=saisies.filter(s=>s.type==='repas');
+  if(repas.length){
+    const compte={};repas.forEach(r=>{const n=r.valeur?.niveau;compte[n]=(compte[n]||0)+1;});
+    const parts=Object.entries(compte).map(([n,c])=>`${c} fois ${repasLabels[n]||n}`);
+    famille.push(`Repas : sur ${repas.length} repas enregistrés, ${parts.join(', ')}.`);
+  }
+
+  const debuts=saisies.filter(s=>s.type==='sieste_debut'),fins=saisies.filter(s=>s.type==='sieste_fin');
+  if(debuts.length){
+    const durees=[];
+    debuts.forEach((d,i)=>{const f=fins[i];if(f)durees.push((new Date(f.horodatage)-new Date(d.horodatage))/60000);});
+    if(durees.length){
+      const moy=Math.round(durees.reduce((a,b)=>a+b,0)/durees.length);
+      famille.push(`Sieste : ${debuts.length} sieste${debuts.length>1?'s':''} enregistrée${debuts.length>1?'s':''}, durée moyenne d'environ ${Math.floor(moy/60)} h ${String(moy%60).padStart(2,'0')}.`);
+    }else{
+      famille.push(`Sieste : ${debuts.length} sieste${debuts.length>1?'s':''} enregistrée${debuts.length>1?'s':''}.`);
+    }
+  }
+
+  const changes=saisies.filter(s=>s.type==='change');
+  if(changes.length)famille.push(`${changes.length} change${changes.length>1?'s':''} sur la période.`);
+
+  const humeurs=saisies.filter(s=>s.type==='humeur');
+  if(humeurs.length){
+    const compte={};humeurs.forEach(h=>{compte[h.valeur?.niveau]=(compte[h.valeur?.niveau]||0)+1;});
+    const dominant=Object.entries(compte).sort((a,b)=>b[1]-a[1])[0][0];
+    famille.push(`Humeur : globalement ${humeurLabels[dominant]||'variable'} sur la période.`);
+  }
+
+  const domaines={};
+  observations.filter(o=>o.partage==='famille'&&o.jalon_id).forEach(o=>{
+    const j=JALONS.find(x=>x.id===o.jalon_id);
+    if(!j)return;
+    (domaines[j.domaine]=domaines[j.domaine]||[]).push({libelle:j.libelle,statut:o.statut});
+  });
+  observations.filter(o=>o.partage==='famille'&&!o.jalon_id&&o.note).forEach(o=>famille.push(o.note));
+
+  saisies.filter(s=>['temperature','soin','incident','note'].includes(s.type)).forEach(s=>{
+    const d=new Date(s.horodatage);
+    const heure=d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    const txt=s.type==='temperature'?`Température : ${s.valeur?.celsius} °C`:(s.valeur?.texte||s.type);
+    interne.push(`${heure} — ${txt}`);
+  });
+  observations.filter(o=>o.partage==='interne').forEach(o=>{
+    const j=JALONS.find(x=>x.id===o.jalon_id);
+    interne.push((j?j.libelle+' : '+(o.statut==='observe'?'observé':'en émergence'):'')+(o.note?' — '+o.note:''));
+  });
+
+  return{famille,domaines,interne};
+}
+
 async function afficherDetailOrdi(){
   const detail=document.getElementById('ordiDetail');
   detail.innerHTML='<div class="ordi-empty">Chargement…</div>';
   const e=ENFANTS_ORDI.find(x=>x.id===enfantChoisiId);
-  const debut=dateChoisie+'T00:00:00',fin=dateChoisie+'T23:59:59.999';
+  const{debut,fin}=periodeBornes();
+  const bDebut=debut+'T00:00:00',bFin=fin+'T23:59:59.999';
   const[{data:saisies},{data:observations}]=await Promise.all([
-    sb.from('suivi_saisies').select('*').eq('enfant_id',enfantChoisiId).gte('horodatage',debut).lte('horodatage',fin).order('horodatage'),
-    sb.from('suivi_observations').select('*').eq('enfant_id',enfantChoisiId).gte('horodatage',debut).lte('horodatage',fin).order('horodatage')
+    sb.from('suivi_saisies').select('*').eq('enfant_id',enfantChoisiId).gte('horodatage',bDebut).lte('horodatage',bFin).order('horodatage'),
+    sb.from('suivi_observations').select('*').eq('enfant_id',enfantChoisiId).gte('horodatage',bDebut).lte('horodatage',bFin).order('horodatage')
   ]);
-  const{famille,interne}=genererContenuJour(saisies||[],observations||[]);
-  const synthese=SYNTHESES_JOUR[e.id];
-  const depart=DEPARTS_JOUR.has(e.id);
-  const dejaPubliee=synthese&&synthese.statut==='publiee';
+  const synthese=SYNTHESES_PERIODE[e.id];
+  const depart=DEPARTS_PERIODE.has(e.id);
+  const noteExistante=(synthese&&synthese.contenu&&synthese.contenu.note_referente)||'';
+
+  let famille,interne,domaines={};
+  if(PERIODE_TYPE==='jour'){
+    ({famille,interne}=genererContenuJour(saisies||[],observations||[]));
+  }else{
+    ({famille,domaines,interne}=genererContenuPeriode(saisies||[],observations||[]));
+  }
+
+  const requiertValidation=(PERIODE_TYPE==='mois'||PERIODE_TYPE==='annee');
+  const requiertDirection=(PERIODE_TYPE==='annee');
+  const valideRef=!!(synthese&&synthese.valide_referente_le);
+  const valideDir=!!(synthese&&synthese.valide_direction_le);
+  const estValidee=synthese&&synthese.statut==='validee';
+  const estPubliee=synthese&&synthese.statut==='publiee';
 
   detail.innerHTML=`
     <h2 style="font-family:'Baloo 2',cursive;color:var(--violet);margin-bottom:4px">${esc(e.prenom)} ${esc(e.nom||'')}</h2>
-    <div style="color:var(--muted);font-size:13px;margin-bottom:10px">${new Date(dateChoisie+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
+    <div style="color:var(--muted);font-size:13px;margin-bottom:10px">${esc(libellePeriode(debut,fin))}</div>
 
     <div class="section-titre">Ce qui sera transmis à la famille</div>
     ${famille.length?`<ul class="bullet-list">${famille.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<div class="ordi-empty" style="padding:14px 0">Rien de saisi pour l\'instant.</div>'}
 
+    ${Object.keys(domaines).length?Object.entries(domaines).map(([dom,items])=>`
+      <div class="section-titre">${esc(dom)}</div>
+      <ul class="bullet-list">${items.map(it=>`<li>${it.statut==='observe'?'Observé':'En émergence'} : ${esc(it.libelle)}</li>`).join('')}</ul>
+    `).join(''):''}
+
+    ${requiertValidation?`
+    <div class="section-titre">Mot de la référente${PERIODE_TYPE==='annee'?' — bilan, préparation à la transition':' (facultatif)'}</div>
+    <textarea id="ordiNoteReferente" rows="4" placeholder="Note libre, éditable jusqu'à validation…">${esc(noteExistante)}</textarea>
+    `:''}
+
     ${interne.length?`<div class="section-titre">Usage interne — jamais transmis à la famille</div>
     <ul class="bullet-list interne">${interne.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:''}
 
-    <div style="margin-top:22px;display:flex;gap:10px;align-items:center">
-      ${dejaPubliee
+    <div style="margin-top:22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      ${estPubliee
         ?`<span class="pill publiee" style="font-size:13px;padding:8px 14px">Publiée le ${new Date(synthese.publiee_le).toLocaleString('fr-FR')}</span>`
-        :`<button class="btn btn-p" id="btnPublier" ${depart?'':'disabled'}><i class="ti ti-send"></i> Publier à la famille</button>
-          ${depart?'':'<span style="color:var(--muted);font-size:12.5px">Départ non encore pointé — publication impossible.</span>'}`
+        :requiertValidation
+          ?(estValidee
+            ?`<button class="btn btn-p" id="btnPublier" ${depart?'':'disabled'}><i class="ti ti-send"></i> Publier à la famille</button>
+              ${depart?'':'<span style="color:var(--muted);font-size:12.5px">Dernier jour d’accueil de la période non encore pointé au départ.</span>'}`
+            :`<button class="btn btn-s" id="btnEnregistrer" style="background:#F1EFF7;color:var(--violet)"><i class="ti ti-device-floppy"></i> Enregistrer le brouillon</button>
+              <button class="btn btn-p" id="btnValiderRef" ${valideRef?'disabled':''}><i class="ti ti-check"></i> ${valideRef?'Validé par la référente':'Valider (référente)'}</button>
+              ${requiertDirection?`<button class="btn btn-p" id="btnValiderDir" ${(!IS_DIRECTION||valideDir)?'disabled':''}><i class="ti ti-check"></i> ${valideDir?'Validé par la direction':'Valider (direction)'}</button>`:''}`
+          )
+          :`<button class="btn btn-p" id="btnPublier" ${depart?'':'disabled'}><i class="ti ti-send"></i> Publier à la famille</button>
+            ${depart?'':'<span style="color:var(--muted);font-size:12.5px">Dernier jour d’accueil de la période non encore pointé au départ.</span>'}`
       }
     </div>
     <div class="mention2">Repères élaborés par l'équipe Koala Kids, inspirés des travaux de Francine Ferland.</div>
   `;
 
-  const btn=document.getElementById('btnPublier');
-  if(btn)btn.addEventListener('click',()=>publierSyntheseJour(e.id,famille,interne));
+  const contenuBase={famille,domaines,interne};
+  const noteEl=document.getElementById('ordiNoteReferente');
+  const lireNote=()=>noteEl?noteEl.value.trim():noteExistante;
+
+  const btnPub=document.getElementById('btnPublier');
+  if(btnPub)btnPub.addEventListener('click',()=>publierSynthese(e,Object.assign({},contenuBase,{note_referente:lireNote()}),debut,fin));
+  const btnEnr=document.getElementById('btnEnregistrer');
+  if(btnEnr)btnEnr.addEventListener('click',()=>enregistrerBrouillon(e,Object.assign({},contenuBase,{note_referente:lireNote()}),debut,fin));
+  const btnVRef=document.getElementById('btnValiderRef');
+  if(btnVRef)btnVRef.addEventListener('click',()=>validerSynthese(e,Object.assign({},contenuBase,{note_referente:lireNote()}),debut,fin,'referente'));
+  const btnVDir=document.getElementById('btnValiderDir');
+  if(btnVDir)btnVDir.addEventListener('click',()=>validerSynthese(e,Object.assign({},contenuBase,{note_referente:lireNote()}),debut,fin,'direction'));
 }
 
-async function publierSyntheseJour(enfantId,famille,interne){
-  const btn=document.getElementById('btnPublier');
-  if(btn)btn.disabled=true;
+async function upsertSynthese(e,contenu,debut,fin,extraPatch){
   const crecheId=crecheCouranteOrdi();
-  const contenu={famille,interne};
-  let row=SYNTHESES_JOUR[enfantId];
+  let row=SYNTHESES_PERIODE[e.id];
   if(!row){
-    const{data,error}=await sb.from('suivi_syntheses').insert({
-      enfant_id:enfantId,creche_id:crecheId,periode_type:'jour',
-      periode_debut:dateChoisie,periode_fin:dateChoisie,contenu,statut:'brouillon'
-    }).select().single();
-    if(error){alert('Erreur : '+error.message);if(btn)btn.disabled=false;return;}
+    const{data,error}=await sb.from('suivi_syntheses').insert(Object.assign({
+      enfant_id:e.id,creche_id:crecheId,periode_type:PERIODE_TYPE,
+      periode_debut:debut,periode_fin:fin,contenu,statut:'brouillon'
+    },extraPatch||{})).select().single();
+    if(error)throw error;
     row=data;
   }else{
-    const{error}=await sb.from('suivi_syntheses').update({contenu,updated_at:new Date().toISOString()}).eq('id',row.id);
-    if(error){alert('Erreur : '+error.message);if(btn)btn.disabled=false;return;}
+    const patch=Object.assign({contenu,updated_at:new Date().toISOString()},extraPatch||{});
+    const{data,error}=await sb.from('suivi_syntheses').update(patch).eq('id',row.id).select().single();
+    if(error)throw error;
+    row=data;
   }
-  const{error:pubErr}=await sb.from('suivi_syntheses').update({statut:'publiee'}).eq('id',row.id);
-  if(pubErr){
-    alert('Publication refusée : '+pubErr.message);
+  SYNTHESES_PERIODE[e.id]=row;
+  return row;
+}
+
+async function enregistrerBrouillon(e,contenu,debut,fin){
+  try{
+    await upsertSynthese(e,contenu,debut,fin);
+    afficherDetailOrdi();
+  }catch(err){alert('Erreur : '+err.message);}
+}
+
+async function validerSynthese(e,contenu,debut,fin,role){
+  try{
+    const row=await upsertSynthese(e,contenu,debut,fin);
+    const patch={};
+    if(role==='referente'){patch.valide_referente_id=PROF.id;patch.valide_referente_le=new Date().toISOString();}
+    if(role==='direction'){patch.valide_direction_id=PROF.id;patch.valide_direction_le=new Date().toISOString();}
+    const refOk=patch.valide_referente_le||row.valide_referente_le;
+    const dirOk=PERIODE_TYPE!=='annee'||patch.valide_direction_le||row.valide_direction_le;
+    if(refOk&&dirOk)patch.statut='validee';
+    const{error}=await sb.from('suivi_syntheses').update(patch).eq('id',row.id);
+    if(error)throw error;
+    await chargerListeOrdi();
+  }catch(err){alert('Erreur de validation : '+err.message);}
+}
+
+async function publierSynthese(e,contenu,debut,fin){
+  const btn=document.getElementById('btnPublier');
+  if(btn)btn.disabled=true;
+  try{
+    const row=await upsertSynthese(e,contenu,debut,fin);
+    const{error}=await sb.from('suivi_syntheses').update({statut:'publiee'}).eq('id',row.id);
+    if(error)throw error;
+    await chargerListeOrdi();
+  }catch(err){
+    alert('Publication refusée : '+err.message);
     if(btn)btn.disabled=false;
-    return;
   }
-  await chargerListeOrdi();
-  afficherDetailOrdi();
 }
 
 /* ============================= IDENTIFICATION ============================= */
