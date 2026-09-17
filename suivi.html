@@ -274,7 +274,13 @@ tickClock();setInterval(tickClock,1000);
   if(TOKEN&&TOKEN.length>=20){
     const{data:crecheId,error}=await sb.rpc('kk_resolve_creche_id',{p_token:TOKEN});
     if(error||!crecheId){
-      app.innerHTML='<i class="ti ti-alert-triangle"></i><h2>Tablette non configurée</h2><p style="color:var(--muted);font-size:13px">Contactez la direction pour reconfigurer cet appareil.</p>';
+      /* Détail technique affiché temporairement (diagnostic) : le message
+         générique seul ne dit pas si c'est un token introuvable, une
+         erreur réseau, ou une erreur d'API — on en a besoin pour
+         diagnostiquer un cas où tout est pourtant correct en base. */
+      const detail=error?(error.message||JSON.stringify(error)):'crecheId vide (token introuvable ou inactif)';
+      app.innerHTML='<i class="ti ti-alert-triangle"></i><h2>Tablette non configurée</h2><p style="color:var(--muted);font-size:13px">Contactez la direction pour reconfigurer cet appareil.</p>'
+        +'<p style="color:var(--err);font-size:11px;margin-top:10px;word-break:break-all;max-width:320px">'+esc(detail)+'</p>';
       return;
     }
     afficherIdentification();

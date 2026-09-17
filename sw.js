@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v20';   // v20 : isole la session tablette de la session ordinateur sur suivi.html
+const CACHE_NAME = 'stocks-v21';   // v21 : affiche le détail technique de l'erreur "Tablette non configurée"
 
 self.addEventListener('install', event => {
   event.waitUntil(
