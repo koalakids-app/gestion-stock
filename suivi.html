@@ -11,9 +11,9 @@
 <style>
 :root{--violet:#4A3F9F;--orange:#F47920;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--ok:#2E7D32;--err:#C62828}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;min-width:0}
-html,body{height:100vh;height:100dvh}
+html,body{height:100vh;height:100dvh;height:var(--vh-px,100dvh)}
 body{font-family:'Nunito',system-ui,sans-serif;background:var(--cream);color:#2B2740;
-     min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;overflow:hidden;
+     min-height:100vh;min-height:100dvh;min-height:var(--vh-px,100dvh);display:flex;flex-direction:column;overflow:hidden;
      padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 button,input,select,textarea{font-family:inherit;font-size:16px}
 .hidden{display:none!important}
@@ -232,6 +232,20 @@ input,select,textarea{font-family:'Nunito';font-size:16px;padding:9px 11px;borde
 <div id="appOrdi" class="ordi-wrap hidden"></div>
 
 <script>
+/* Hauteur réelle en JS plutôt que vh/dvh : sur certains Android/Chrome,
+   avec body en overflow:hidden (pas de scroll de page), la hauteur
+   calculée par ces unités CSS peut ne pas correspondre à la zone
+   réellement visible (barre d'adresse comprise), ce qui bloque le
+   scroll des listes internes sans qu'aucune règle CSS ne le révèle. */
+function ajusterHauteurViewport(){
+  const h=(window.visualViewport?window.visualViewport.height:window.innerHeight);
+  document.documentElement.style.setProperty('--vh-px',h+'px');
+}
+ajusterHauteurViewport();
+window.addEventListener('resize',ajusterHauteurViewport);
+window.addEventListener('orientationchange',ajusterHauteurViewport);
+if(window.visualViewport)window.visualViewport.addEventListener('resize',ajusterHauteurViewport);
+
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const TOKEN=new URLSearchParams(location.search).get('k')||'';
