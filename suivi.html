@@ -1077,7 +1077,9 @@ async function afficherDetailOrdi(){
       }
     </div>
     <div class="mention2">Repères élaborés par l'équipe Koala Kids, inspirés des travaux de Francine Ferland.</div>
+    <div id="accesFamilleZone" style="margin-top:26px"></div>
   `;
+  renderAccesFamille(e.id);
 
   const contenuBase={famille,domaines,interne};
   const noteEl=document.getElementById('ordiNoteReferente');
@@ -1091,6 +1093,66 @@ async function afficherDetailOrdi(){
   if(btnVRef)btnVRef.addEventListener('click',()=>validerSynthese(e,Object.assign({},contenuBase,{note_referente:lireNote()}),debut,fin,'referente'));
   const btnVDir=document.getElementById('btnValiderDir');
   if(btnVDir)btnVDir.addEventListener('click',()=>validerSynthese(e,Object.assign({},contenuBase,{note_referente:lireNote()}),debut,fin,'direction'));
+}
+
+/* ============================================================================
+   ACCÈS FAMILLE — jetons révocables, un par parent destinataire
+   ============================================================================ */
+function suiviFamilleLienFor(token){
+  try{return new URL('famille-suivi.html?t='+token,location.href).href;}
+  catch(e){return location.href.replace(/[^/]*$/,'')+'famille-suivi.html?t='+token;}
+}
+
+async function renderAccesFamille(enfantId){
+  const zone=document.getElementById('accesFamilleZone');
+  if(!zone)return;
+  zone.innerHTML='<div class="section-titre">Accès famille</div><div class="ordi-empty" style="padding:10px 0">Chargement…</div>';
+  const[{data:parents},{data:acces}]=await Promise.all([
+    sb.from('enfants_parents').select('id,prenom,nom,lien,destinataire').eq('enfant_id',enfantId).eq('destinataire',true),
+    sb.from('suivi_acces_famille').select('*').eq('enfant_id',enfantId)
+  ]);
+  const actifsParParent={};
+  (acces||[]).forEach(a=>{if(a.actif)actifsParParent[a.parent_id]=a;});
+
+  if(!parents||!parents.length){
+    zone.innerHTML='<div class="section-titre">Accès famille</div><div class="ordi-empty" style="padding:10px 0">Aucun parent marqué "destinataire" sur la fiche de cet enfant.</div>';
+    return;
+  }
+  zone.innerHTML=`<div class="section-titre">Accès famille</div>`+parents.map(p=>{
+    const a=actifsParParent[p.id];
+    return `<div class="ref-row" data-parent="${p.id}">
+      <span class="lib">${esc(p.prenom)} ${esc(p.nom||'')}${p.lien?' — '+esc(p.lien):''}</span>
+      ${a
+        ?`<button class="btn btn-s" style="background:#F1EFF7;color:var(--violet)" data-action="copier" data-token="${a.token}"><i class="ti ti-copy"></i> Copier le lien</button>
+          <button class="btn btn-g" style="background:#FBE9E7;color:var(--err)" data-action="revoquer" data-acces="${a.id}"><i class="ti ti-ban"></i> Révoquer</button>`
+        :`<button class="btn btn-p" data-action="creer" data-parent="${p.id}"><i class="ti ti-link"></i> Créer un accès</button>`
+      }
+    </div>`;
+  }).join('');
+  zone.querySelectorAll('[data-action="copier"]').forEach(b=>b.addEventListener('click',()=>{
+    const lien=suiviFamilleLienFor(b.dataset.token);
+    navigator.clipboard.writeText(lien).then(
+      ()=>alert('Lien copié :\n'+lien),
+      ()=>prompt('Copiez ce lien :',lien)
+    );
+  }));
+  zone.querySelectorAll('[data-action="creer"]').forEach(b=>b.addEventListener('click',async()=>{
+    b.disabled=true;
+    const{error}=await sb.from('suivi_acces_famille').insert({
+      enfant_id:enfantId,creche_id:crecheCouranteOrdi(),parent_id:b.dataset.parent,cree_par:PROF.id
+    });
+    if(error){alert('Erreur : '+error.message);b.disabled=false;return;}
+    renderAccesFamille(enfantId);
+  }));
+  zone.querySelectorAll('[data-action="revoquer"]').forEach(b=>b.addEventListener('click',async()=>{
+    if(!confirm('Révoquer cet accès ? La famille ne pourra plus consulter le suivi avec ce lien.'))return;
+    b.disabled=true;
+    const{error}=await sb.from('suivi_acces_famille').update({
+      actif:false,revoque_le:new Date().toISOString(),revoque_par:PROF.id
+    }).eq('id',b.dataset.acces);
+    if(error){alert('Erreur : '+error.message);b.disabled=false;return;}
+    renderAccesFamille(enfantId);
+  }));
 }
 
 async function upsertSynthese(e,contenu,debut,fin,extraPatch){
