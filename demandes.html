@@ -7796,6 +7796,34 @@ function peInvalidateAll(crecheId){
   Object.keys(_peCache).forEach(k=>{if(k.startsWith(crecheId+'_'))delete _peCache[k];});
 }
 
+// ── SYNCHRONISATION AVEC LE PLANNING INDIVIDUEL DE LA DIRECTRICE TECHNIQUE ──
+// Comme lors d'un import Excel/PDF : toute personne du planning équipe qui
+// correspond à la directrice technique titulaire de la crèche voit aussi son
+// planning individuel (table "planning", celui affiché en haut de l'onglet
+// et sur collaborateur.html) mis à jour automatiquement.
+function peFindReferentIdForPrenom(crecheId,prenom){
+  const target=ipNormStr(prenom);
+  if(!target)return null;
+  const ref=(cacheReferents||[]).find(r=>r.creche_id===crecheId&&r.name&&ipNormStr(String(r.name).trim().split(/\s+/)[0])===target);
+  return ref?ref.id:null;
+}
+async function peSyncReferentPlanning(crecheId,semaine,jour,prenom,ev){
+  const referentId=peFindReferentIdForPrenom(crecheId,prenom);
+  if(!referentId)return;
+  await sb.from('planning').delete().eq('referent_id',referentId).eq('semaine',semaine).eq('jour',jour).is('slot',null);
+  await planningSave(referentId,semaine,{
+    day:jour,slot:null,type:ev.type||'presence',label:ev.label||prenom,lieu:ev.lieu||null,
+    hdebut:ev.hdebut||null,hfin:ev.hfin||null,pause:ev.pause||null,detachType:'',detachDesc:'',multi:true
+  });
+  planningInvalidate(referentId,semaine);
+}
+async function peUnsyncReferentPlanning(crecheId,semaine,jour,prenom){
+  const referentId=peFindReferentIdForPrenom(crecheId,prenom);
+  if(!referentId)return;
+  await sb.from('planning').delete().eq('referent_id',referentId).eq('semaine',semaine).eq('jour',jour).is('slot',null);
+  planningInvalidate(referentId,semaine);
+}
+
 // ── ÉDITION D'UNE CASE DU TABLEAU ÉQUIPE (remplace/ajoute/supprime un nom sur un créneau) ──
 let _peEditCtx=null; // {eventId|null, creneauLabel, jour, crecheId, semaine}
 
@@ -7871,6 +7899,8 @@ async function peSaveCellEdit(){
 
   const{eventId,creneauLabel,jour,crecheId,semaine}=_peEditCtx;
   const creneau=ipParseCreneauLabel(creneauLabel);
+  const prevRow=eventId?(_peCache[crecheId+'_'+semaine]||[]).find(r=>r.id===eventId):null;
+  const prevPrenom=prevRow?prevRow.prenom:null;
   const btn=document.querySelector('#modal-pe-edit-wrap .btn-primary');
   if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
 
@@ -7888,6 +7918,11 @@ async function peSaveCellEdit(){
   if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';}
   if(error){console.error('[PlanningEquipe] edit:',error.message);showBanner('Erreur lors de l\'enregistrement.','error');return;}
 
+  if(prevPrenom&&prevPrenom!==prenom)await peUnsyncReferentPlanning(crecheId,semaine,jour,prevPrenom);
+  await peSyncReferentPlanning(crecheId,semaine,jour,prenom,{
+    type:'presence',label:prenom,lieu:null,hdebut:creneau?.hdebut||null,hfin:creneau?.hfin||null,pause:creneau?.pause||null
+  });
+
   peInvalidate(crecheId,semaine);
   closeModal('modal-pe-edit-wrap');
   await renderPlanningEquipe();
@@ -7897,9 +7932,11 @@ async function peSaveCellEdit(){
 async function peDeleteCellEdit(){
   if(!_peEditCtx||!_peEditCtx.eventId)return;
   if(!confirm('Retirer cette personne de ce créneau ?'))return;
-  const{eventId,crecheId,semaine}=_peEditCtx;
+  const{eventId,jour,crecheId,semaine}=_peEditCtx;
+  const removedRow=(_peCache[crecheId+'_'+semaine]||[]).find(r=>r.id===eventId);
   const{error}=await sb.from('planning_equipe').delete().eq('id',eventId);
   if(error){console.error('[PlanningEquipe] delete:',error.message);showBanner('Erreur lors de la suppression.','error');return;}
+  if(removedRow)await peUnsyncReferentPlanning(crecheId,semaine,jour,removedRow.prenom);
   peInvalidate(crecheId,semaine);
   closeModal('modal-pe-edit-wrap');
   await renderPlanningEquipe();
@@ -7972,6 +8009,10 @@ async function peSaveNewCreneau(){
   if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Ajouter';}
   if(error){console.error('[PlanningEquipe] new:',error.message);showBanner('Erreur lors de l\'enregistrement.','error');return;}
 
+  for(const jour of jours){
+    await peSyncReferentPlanning(_peCurCrecheId,_peCurSemaine,jour,prenom,{type:'presence',label:prenom,lieu:null,hdebut,hfin,pause});
+  }
+
   peInvalidate(_peCurCrecheId,_peCurSemaine);
   closeModal('modal-pe-new-creneau-wrap');
   await renderPlanningEquipe();
@@ -8007,8 +8048,10 @@ async function peSaveDuplicateDay(){
   }
 
   if(replace){
+    const oldTargetRows=cached.filter(r=>targets.includes(r.jour));
     const{error:errDel}=await sb.from('planning_equipe').delete().eq('creche_id',_peCurCrecheId).eq('semaine',_peCurSemaine).in('jour',targets);
     if(errDel){console.error('[PlanningEquipe] dup day del:',errDel.message);showBanner('Erreur lors du remplacement.','error');if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Dupliquer';}return;}
+    for(const r of oldTargetRows)await peUnsyncReferentPlanning(_peCurCrecheId,_peCurSemaine,r.jour,r.prenom);
   }
 
   const rowsToInsert=[];
@@ -8019,6 +8062,12 @@ async function peSaveDuplicateDay(){
   const{error}=await sb.from('planning_equipe').insert(rowsToInsert);
   if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Dupliquer';}
   if(error){console.error('[PlanningEquipe] dup day:',error.message);showBanner('Erreur lors de la duplication.','error');return;}
+
+  for(const jour of targets){
+    for(const r of sourceRows){
+      await peSyncReferentPlanning(_peCurCrecheId,_peCurSemaine,jour,r.prenom,{type:r.type,label:r.label||r.prenom,lieu:r.lieu,hdebut:r.hdebut,hfin:r.hfin,pause:r.pause});
+    }
+  }
 
   peInvalidate(_peCurCrecheId,_peCurSemaine);
   closeModal('modal-pe-dup-day-wrap');
@@ -8055,8 +8104,10 @@ async function peSaveDuplicateWeek(){
     const targetDate=new Date(baseDate);targetDate.setDate(baseDate.getDate()+7*i);
     const targetSemaine=ipDateToLocalISO(targetDate);
     if(replace){
+      const oldTargetRows=await peLoad(_peCurCrecheId,targetSemaine);
       const{error:errDel}=await sb.from('planning_equipe').delete().eq('creche_id',_peCurCrecheId).eq('semaine',targetSemaine);
       if(errDel){console.error('[PlanningEquipe] dup week del:',errDel.message);continue;}
+      for(const r of oldTargetRows)await peUnsyncReferentPlanning(_peCurCrecheId,targetSemaine,r.jour,r.prenom);
     }
     const rowsToInsert=sourceRows.map(r=>({
       creche_id:_peCurCrecheId,prenom:r.prenom,semaine:targetSemaine,jour:r.jour,type:r.type||'presence',label:r.label||r.prenom,
@@ -8064,6 +8115,9 @@ async function peSaveDuplicateWeek(){
     }));
     const{error}=await sb.from('planning_equipe').insert(rowsToInsert);
     if(error)console.error('[PlanningEquipe] dup week:',error.message);
+    for(const r of sourceRows){
+      await peSyncReferentPlanning(_peCurCrecheId,targetSemaine,r.jour,r.prenom,{type:r.type,label:r.label||r.prenom,lieu:r.lieu,hdebut:r.hdebut,hfin:r.hfin,pause:r.pause});
+    }
     peInvalidate(_peCurCrecheId,targetSemaine);
   }
 
@@ -8203,8 +8257,10 @@ async function peValidateIA(){
     const creneaux=semObj?.creneaux||[];
     if(!creneaux.length)continue;
     if(replace){
+      const oldTargetRows=await peLoad(_peCurCrecheId,tw.semaine);
       const{error:errDel}=await sb.from('planning_equipe').delete().eq('creche_id',_peCurCrecheId).eq('semaine',tw.semaine);
       if(errDel){console.error('[PlanningEquipe IA] del:',errDel.message);continue;}
+      for(const r of oldTargetRows)await peUnsyncReferentPlanning(_peCurCrecheId,tw.semaine,r.jour,r.prenom);
     }
     const rowsToInsert=creneaux.map(c=>{
       const avecPause=c.pauseDebut&&c.pauseFin;
@@ -8218,6 +8274,13 @@ async function peValidateIA(){
     });
     const{error}=await sb.from('planning_equipe').insert(rowsToInsert);
     if(error)console.error('[PlanningEquipe IA] insert:',error.message);
+    for(const c of creneaux){
+      const avecPause=c.pauseDebut&&c.pauseFin;
+      await peSyncReferentPlanning(_peCurCrecheId,tw.semaine,c.jour,c.prenom,{
+        type:'presence',label:c.prenom,lieu:null,hdebut:c.heureDebut||null,hfin:c.heureFin||null,
+        pause:avecPause?(c.pauseDebut+'-'+c.pauseFin):null
+      });
+    }
     peInvalidate(_peCurCrecheId,tw.semaine);
   }
 
