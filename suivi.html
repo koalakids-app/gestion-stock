@@ -100,7 +100,11 @@ button,input,select,textarea{font-family:inherit;font-size:16px}
 .jalons-head .retour{border:none;background:#F1EFF7;color:var(--violet);border-radius:12px;padding:10px 14px;font-weight:800}
 .jalons-head .qui{font-weight:800;font-size:15px}
 .jalons-list{flex:1;overflow-y:auto;padding:0 16px 20px}
-.domaine-titre{font-family:'Baloo 2',cursive;color:var(--orange);font-size:14.5px;margin:16px 0 8px;padding-bottom:4px;border-bottom:2px solid var(--line)}
+.domaine-head{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;padding:0;cursor:pointer;text-align:left;margin:16px 0 8px;padding-bottom:4px;border-bottom:2px solid var(--line)}
+.domaine-head .chevron{transition:transform .15s;color:var(--muted);font-size:15px}
+.domaine-head.on .chevron{transform:rotate(90deg)}
+.domaine-titre{font-family:'Baloo 2',cursive;color:var(--orange);font-size:14.5px;flex:1}
+.domaine-nb{font-size:11px;font-weight:700;color:var(--muted);background:#F1EFF7;border-radius:10px;padding:1px 8px}
 .jalon{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
 .jalon .lib{flex:1;font-size:14px}
 .jalon .btns{display:flex;gap:6px}
@@ -1534,15 +1538,14 @@ function trancheDepuisDob(dob){
   return 4;
 }
 
+let jalonsDomOuverts=new Set();
+
 function ouvrirJalons(enfantId){
   const e=ENFANTS.find(x=>x.id===enfantId);
   if(!e)return;
   enfantJalons=e;
   ecran='jalons';
-  const idx=trancheDepuisDob(e.dob);
-  const tranchesAffichees=idx===null?[]:[TRANCHES[idx],TRANCHES[idx+1]].filter(Boolean);
-  const jalons=JALONS.filter(j=>tranchesAffichees.includes(j.tranche));
-  const domaines=[...new Set(jalons.map(j=>j.domaine))];
+  jalonsDomOuverts=new Set();
 
   app.innerHTML=`
     <div class="jalons-wrap">
@@ -1552,23 +1555,49 @@ function ouvrirJalons(enfantId){
       </div>
       <div class="jalons-list" id="jList"></div>
     </div>`;
+  renderJalonsListe();
+}
+
+function renderJalonsListe(){
+  const e=enfantJalons;
   const list=document.getElementById('jList');
+  const idx=trancheDepuisDob(e.dob);
+  const tranchesAffichees=idx===null?[]:[TRANCHES[idx],TRANCHES[idx+1]].filter(Boolean);
+  const jalons=JALONS.filter(j=>tranchesAffichees.includes(j.tranche));
+  const domaines=[...new Set(jalons.map(j=>j.domaine))];
+
   if(!jalons.length){
     list.innerHTML='<div class="mention">Aucun repère actif pour la tranche d\'âge de cet enfant.</div>';
     return;
   }
-  list.innerHTML=domaines.map(dom=>`
-    <div class="domaine-titre">${esc(dom)}</div>
-    ${jalons.filter(j=>j.domaine===dom).map(j=>`
-      <div class="jalon" data-jalon="${j.id}">
-        <span class="lib">${esc(j.libelle)}</span>
-        <div class="btns">
-          <button data-statut="emergence" class="emergence">En émergence</button>
-          <button data-statut="observe" class="observe">Observé</button>
-        </div>
-      </div>`).join('')}
-  `).join('')+`<div class="mention">Repères élaborés par l'équipe Koala Kids, inspirés des travaux de Francine Ferland.</div>`;
+  list.innerHTML=domaines.map(dom=>{
+    const parDomaine=jalons.filter(j=>j.domaine===dom);
+    const ouvert=jalonsDomOuverts.has(dom);
+    return `
+      <button class="domaine-head${ouvert?' on':''}" data-domaine="${esc(dom)}">
+        <i class="ti ti-chevron-right chevron"></i>
+        <span class="domaine-titre">${esc(dom)}</span>
+        <span class="domaine-nb">${parDomaine.length}</span>
+      </button>
+      <div class="domaine-body"${ouvert?'':' style="display:none"'}>
+        ${parDomaine.map(j=>`
+          <div class="jalon" data-jalon="${j.id}">
+            <span class="lib">${esc(j.libelle)}</span>
+            <div class="btns">
+              <button data-statut="emergence" class="emergence">En émergence</button>
+              <button data-statut="observe" class="observe">Observé</button>
+            </div>
+          </div>`).join('')}
+      </div>`;
+  }).join('')+`<div class="mention">Repères élaborés par l'équipe Koala Kids, inspirés des travaux de Francine Ferland.</div>`;
 
+  list.querySelectorAll('.domaine-head').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const dom=btn.dataset.domaine;
+      if(jalonsDomOuverts.has(dom))jalonsDomOuverts.delete(dom);else jalonsDomOuverts.add(dom);
+      renderJalonsListe();
+    });
+  });
   list.querySelectorAll('.jalon').forEach(row=>{
     row.querySelectorAll('button[data-statut]').forEach(btn=>{
       btn.addEventListener('click',()=>marquerJalon(e.id,row.dataset.jalon,btn.dataset.statut,row,btn));
