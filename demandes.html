@@ -739,6 +739,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="peOpenMail()"><i class="ti ti-mail"></i> Envoyer par mail</button>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="pmiOpenExportModal()"><i class="ti ti-file-spreadsheet"></i> Export PMI</button>
       </div>
+      <div id="pe-ref-nom-row" style="display:none;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;color:var(--ink2)">
+        <i class="ti ti-user-check"></i>
+        <span id="pe-ref-nom-label"></span>
+        <input class="finput" id="pe-ref-nom-input" style="font-size:12px;padding:4px 8px;width:auto;min-width:140px" placeholder="Prénom dans ce planning">
+        <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="peSaveRefPlanningNom()"><i class="ti ti-check"></i> Enregistrer</button>
+      </div>
       <div id="pe-grid-wrap" style="overflow-x:auto;border:1px solid var(--border);border-radius:8px"></div>
     </div>
   </div>
@@ -7804,11 +7810,14 @@ function peInvalidateAll(crecheId){
 function peFindReferentIdForPrenom(crecheId,prenom){
   const target=ipNormStr(prenom);
   if(!target)return null;
-  // Clé de rapprochement : le prénom réglé en cas d'homonymie sur la fiche employé
-  // liée (employes.planning_nom, cf. sql/collaborateurs_planning_nom.sql), sinon le
-  // premier prénom de la fiche directeur technique elle-même.
+  // Clé de rapprochement, par ordre de priorité : le prénom réglé explicitement sur
+  // la fiche directeur technique (referents.planning_nom — l'équivalent, pour ce
+  // module, du prénom qu'on choisissait déjà lors d'un import Excel/PDF), sinon
+  // celui de la fiche employé liée (employes.planning_nom, cf.
+  // sql/collaborateurs_planning_nom.sql), sinon le nom de la fiche referents.
   const ref=(cacheReferents||[]).find(r=>{
     if(r.creche_id!==crecheId)return false;
+    if(r.planning_nom)return ipNormStr(r.planning_nom)===target;
     const emp=r.employe_id?(cacheEmployes||[]).find(e=>e.id===r.employe_id):null;
     if(emp&&emp.planning_nom)return ipNormStr(emp.planning_nom)===target;
     if(!r.name)return false;
@@ -7833,6 +7842,32 @@ async function peUnsyncReferentPlanning(crecheId,semaine,jour,prenom){
   if(!referentId)return;
   await sb.from('planning').delete().eq('referent_id',referentId).eq('semaine',semaine).eq('jour',jour).is('slot',null);
   planningInvalidate(referentId,semaine);
+}
+
+// Comme lors d'un import Excel/PDF, où l'on choisissait explicitement le prénom de la
+// directrice technique dans le fichier : ce réglage (referents.planning_nom) permet
+// de fiabiliser le rapprochement automatique quand le prénom du planning équipe ne
+// correspond pas exactement au nom de sa fiche.
+let _peRefNomTargetId=null;
+function peRenderRefNomRow(crecheId,editable){
+  const row=document.getElementById('pe-ref-nom-row');
+  if(!row)return;
+  const ref=editable?(cacheReferents||[]).find(r=>r.creche_id===crecheId):null;
+  if(!ref){row.style.display='none';_peRefNomTargetId=null;return;}
+  _peRefNomTargetId=ref.id;
+  document.getElementById('pe-ref-nom-label').textContent='Prénom de '+ref.name+' dans ce planning :';
+  document.getElementById('pe-ref-nom-input').value=ref.planning_nom||'';
+  document.getElementById('pe-ref-nom-input').placeholder=ref.name?String(ref.name).trim().split(/\s+/)[0]:'';
+  row.style.display='flex';
+}
+async function peSaveRefPlanningNom(){
+  if(!_peRefNomTargetId)return;
+  const val=document.getElementById('pe-ref-nom-input').value.trim();
+  const ok=await dbUpdate('referents',_peRefNomTargetId,{planning_nom:val||null});
+  if(!ok){showBanner('Erreur lors de l\'enregistrement.','error');return;}
+  const ref=(cacheReferents||[]).find(r=>r.id===_peRefNomTargetId);
+  if(ref)ref.planning_nom=val||null;
+  showBanner('Prénom enregistré ✅');
 }
 
 // ── ÉDITION D'UNE CASE DU TABLEAU ÉQUIPE (remplace/ajoute/supprime un nom sur un créneau) ──
@@ -8344,6 +8379,7 @@ async function renderPlanningEquipe(){
   if(ncBtn)ncBtn.style.display=editable?'':'none';
   if(dwBtn)dwBtn.style.display=(editable&&rows.length)?'':'none';
   if(iaBtn)iaBtn.style.display=editable?'':'none';
+  peRenderRefNomRow(crecheId,editable);
   wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
 
   const info=document.getElementById('pe-import-info');
