@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v21';   // v21 : affiche le détail technique de l'erreur "Tablette non configurée"
+const CACHE_NAME = 'stocks-v22';   // v22 : écran référentiel des repères (import/export CSV) dans suivi.html
 
 self.addEventListener('install', event => {
   event.waitUntil(
