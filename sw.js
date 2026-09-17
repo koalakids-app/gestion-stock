@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v16';   // v16 : synthèses semaine/mois/année dans suivi.html
+const CACHE_NAME = 'stocks-v18';   // v18 : identification suivi.html par liste du personnel présent
 
 self.addEventListener('install', event => {
   event.waitUntil(
