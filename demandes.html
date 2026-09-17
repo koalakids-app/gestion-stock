@@ -735,6 +735,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn-sm" id="pe-new-creneau-btn" style="display:none;font-size:11px;padding:4px 10px" onclick="peOpenNewCreneau()"><i class="ti ti-plus"></i> Ajouter un créneau</button>
         <button class="btn-sm" id="pe-dup-week-btn" style="display:none;font-size:11px;padding:4px 10px" onclick="peOpenDuplicateWeek()"><i class="ti ti-copy"></i> Dupliquer la semaine</button>
         <button class="btn-sm" id="pe-ia-btn" style="display:none;font-size:11px;padding:4px 10px;background:#EFEEF7;color:#3D3580" onclick="peOpenIA()"><i class="ti ti-sparkles"></i> Génération IA</button>
+        <button class="btn-sm" id="pe-resync-btn" style="display:none;font-size:11px;padding:4px 10px" onclick="peResyncWeek()" title="Répercute les créneaux déjà présents cette semaine sur le planning individuel du directeur technique"><i class="ti ti-refresh"></i> Resynchroniser</button>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="printPlanningEquipe()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="peOpenMail()"><i class="ti ti-mail"></i> Envoyer par mail</button>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="pmiOpenExportModal()"><i class="ti ti-file-spreadsheet"></i> Export PMI</button>
@@ -7870,6 +7871,25 @@ async function peSaveRefPlanningNom(){
   showBanner('Prénom enregistré ✅');
 }
 
+// Répercute sur le planning individuel du directeur technique les créneaux déjà présents
+// dans Planning équipe cette semaine — utile quand ils ont été ajoutés avant que le
+// rapprochement (nom de la fiche, ou pe-ref-nom-input) ne soit correctement réglé.
+async function peResyncWeek(){
+  if(!_peCurCrecheId||!_peCurSemaine)return;
+  const btn=document.getElementById('pe-resync-btn');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Resynchronisation…';}
+  const rows=await peLoad(_peCurCrecheId,_peCurSemaine);
+  let nb=0;
+  for(const r of rows){
+    if(peFindReferentIdForPrenom(_peCurCrecheId,r.prenom)){
+      await peSyncReferentPlanning(_peCurCrecheId,_peCurSemaine,r.jour,r.prenom,{type:r.type,label:r.label||r.prenom,lieu:r.lieu,hdebut:r.hdebut,hfin:r.hfin,pause:r.pause});
+      nb++;
+    }
+  }
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-refresh"></i> Resynchroniser';}
+  showBanner(nb?nb+' créneau(x) répercuté(s) sur le planning individuel ✅':'Aucun créneau de cette semaine ne correspond à un directeur technique connu.',nb?undefined:'error');
+}
+
 // ── ÉDITION D'UNE CASE DU TABLEAU ÉQUIPE (remplace/ajoute/supprime un nom sur un créneau) ──
 let _peEditCtx=null; // {eventId|null, creneauLabel, jour, crecheId, semaine}
 
@@ -8356,10 +8376,11 @@ async function renderPlanningEquipe(){
 
   if(!crecheId){
     wrap.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez une crèche</div>';
-    const ncBtn0=document.getElementById('pe-new-creneau-btn'),dwBtn0=document.getElementById('pe-dup-week-btn'),iaBtn0=document.getElementById('pe-ia-btn');
+    const ncBtn0=document.getElementById('pe-new-creneau-btn'),dwBtn0=document.getElementById('pe-dup-week-btn'),iaBtn0=document.getElementById('pe-ia-btn'),rsBtn0=document.getElementById('pe-resync-btn');
     if(ncBtn0)ncBtn0.style.display='none';
     if(dwBtn0)dwBtn0.style.display='none';
     if(iaBtn0)iaBtn0.style.display='none';
+    if(rsBtn0)rsBtn0.style.display='none';
     return;
   }
 
@@ -8375,10 +8396,11 @@ async function renderPlanningEquipe(){
     if(editable){peBadge.textContent='✏️ Modifiable';peBadge.style.background='var(--koala-light)';peBadge.style.color='var(--koala)';}
     else{peBadge.textContent='👁 Lecture seule';peBadge.style.background='#f0f0f5';peBadge.style.color='#888';}
   }
-  const ncBtn=document.getElementById('pe-new-creneau-btn'),dwBtn=document.getElementById('pe-dup-week-btn'),iaBtn=document.getElementById('pe-ia-btn');
+  const ncBtn=document.getElementById('pe-new-creneau-btn'),dwBtn=document.getElementById('pe-dup-week-btn'),iaBtn=document.getElementById('pe-ia-btn'),rsBtn=document.getElementById('pe-resync-btn');
   if(ncBtn)ncBtn.style.display=editable?'':'none';
   if(dwBtn)dwBtn.style.display=(editable&&rows.length)?'':'none';
   if(iaBtn)iaBtn.style.display=editable?'':'none';
+  if(rsBtn)rsBtn.style.display=(editable&&rows.length)?'':'none';
   peRenderRefNomRow(crecheId,editable);
   wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
 
