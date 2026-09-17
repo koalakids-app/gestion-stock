@@ -211,6 +211,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pg-card.formation{background:#e3f2fd;color:#1565c0;border-left:3px solid #1e88e5}
 .pg-card.reunion{background:#f3e5f5;color:#6a1b9a;border-left:3px solid #8e24aa}
 .pg-card.detachement{background:#e8eaf6;color:#283593;border-left:3px solid #3949ab}
+.pg-card.ferie{background:#ffebee;color:#b71c1c;border-left:3px solid #e53935}
+.pg-card.vacances{background:#e0f7fa;color:#00838f;border-left:3px solid #00acc1}
 .pg-card.autre{background:#e0f2f1;color:#00695c;border-left:3px solid #00897b}
 .pg-card .pg-del{position:absolute;top:3px;right:4px;cursor:pointer;opacity:0.5;font-size:10px}
 .pg-card .pg-del:hover{opacity:1}
@@ -229,6 +231,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pg-ev.reunion{background:#7B68EE;color:#fff}
 .pg-ev.conge{background:#FB8C00;color:#fff}
 .pg-ev.detachement{background:#3949AB;color:#fff}
+.pg-ev.ferie{background:#E53935;color:#fff}
+.pg-ev.vacances{background:#00ACC1;color:#fff}
 .pg-ev.autre{background:#00897B;color:#fff}
 .pg-ev-ville{display:block;font-size:9.5px;font-weight:500;opacity:0.85;margin-top:1px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:0.75rem}
@@ -675,6 +679,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="leg-item"><div class="leg-dot" style="background:var(--orange)"></div>Absent</div>
           <div class="leg-item"><div class="leg-dot" style="background:#378ADD"></div>Formation</div>
           <div class="leg-item"><div class="leg-dot" style="background:#7B68EE"></div>Réunion</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#E53935"></div>Férié</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#00ACC1"></div>Vacances</div>
         </div>
         <button id="planning-add-btn" class="btn-primary" onclick="openEventModal()" style="display:none"><i class="ti ti-plus"></i> Ajouter</button>
         <button id="planning-import-btn" class="btn-primary" onclick="openImportPlanningModal()" style="display:none;background:#378ADD"><i class="ti ti-file-spreadsheet"></i> Importer Excel</button>
@@ -1991,6 +1997,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <option value="formation">📚 Formation</option>
         <option value="reunion">👥 Réunion</option>
         <option value="detachement">🔧 Détachement</option>
+        <option value="ferie">🎌 Férié</option>
+        <option value="vacances">🏖️ Vacances</option>
       </select>
     </div>
     <div id="e-horaires-wrap">
@@ -6838,7 +6846,7 @@ function formatHeure(h){return h?h.replace(':','h'):''; }
 // ── MODAL REFERENT ──
 function onTypeChange(){
   const t=document.getElementById('e-type').value;
-  document.getElementById('e-horaires-wrap').style.display=['absent','conge'].includes(t)?'none':'';
+  document.getElementById('e-horaires-wrap').style.display=['absent','conge','ferie','vacances'].includes(t)?'none':'';
   document.getElementById('e-lieu-wrap').style.display=['presence','formation','reunion'].includes(t)?'':'none';
   document.getElementById('e-lieu-autre-wrap').style.display='none';
   document.getElementById('e-detach-wrap').style.display=t==='detachement'?'':'none';
@@ -7084,7 +7092,8 @@ function peRenderCreneau(label,fsMain,fsSub){
 
 function ipDetectSpecialType(cellText){
   const t=ipNormStr(cellText);
-  if(t.includes('ferie'))return 'conge';
+  if(t.includes('ferie'))return 'ferie';
+  if(t.includes('vacances'))return 'vacances';
   if(t.includes('reunion'))return 'reunion';
   if(t.includes('formation')||t.includes('contes'))return 'formation';
   if(t.includes('absent')||t.includes('arret')||t.includes('maladie'))return 'absent';
@@ -7167,7 +7176,7 @@ function ipExtractEvents(workbook,targetName,lieuFixe,refYear){
       const cellValues=currentWeekRows.map(r=>r[c+1]).filter(v=>v);
       if(cellValues.length&&cellValues.every(v=>ipIsFerieCell(v))){
         if(!ferieDaysAdded.has(col.dateISO)){
-          events.push({dateISO:col.dateISO,day:col.day,type:'conge',lieu:'',hdebut:'',hfin:'',pause:'',
+          events.push({dateISO:col.dateISO,day:col.day,type:'ferie',lieu:'',hdebut:'',hfin:'',pause:'',
             sourceCell:'FERIE (jour entier)',sourceCreneauLabel:'—'});
           ferieDaysAdded.add(col.dateISO);
         }
@@ -7207,9 +7216,9 @@ function ipExtractEvents(workbook,targetName,lieuFixe,refYear){
           events.push({
             dateISO:col.dateISO,day:col.day,type,
             lieu:(type==='presence'||type==='formation'||type==='reunion')?lieuFinal:'',
-            hdebut:(type==='conge'||type==='absent')?'':creneau.hdebut,
-            hfin:(type==='conge'||type==='absent')?'':creneau.hfin,
-            pause:(type==='conge'||type==='absent')?'':creneau.pause,
+            hdebut:(type==='conge'||type==='absent'||type==='ferie'||type==='vacances')?'':creneau.hdebut,
+            hfin:(type==='conge'||type==='absent'||type==='ferie'||type==='vacances')?'':creneau.hfin,
+            pause:(type==='conge'||type==='absent'||type==='ferie'||type==='vacances')?'':creneau.pause,
             sourceCell:String(cellText),sourceCreneauLabel:firstCell
           });
         }
@@ -7437,8 +7446,8 @@ function handleImportPlanningFile(event){
   reader.readAsArrayBuffer(file);
 }
 
-const IP_TYPE_LABELS={presence:'🏠 Présence',absent:'❌ Absent',conge:'🌴 Congé',formation:'📚 Formation',reunion:'👥 Réunion'};
-const IP_LABELS_PLAIN={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion'};
+const IP_TYPE_LABELS={presence:'🏠 Présence',absent:'❌ Absent',conge:'🌴 Congé',formation:'📚 Formation',reunion:'👥 Réunion',ferie:'🎌 Férié',vacances:'🏖️ Vacances'};
+const IP_LABELS_PLAIN={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',ferie:'Férié',vacances:'Vacances'};
 
 function renderImportPlanningPreview(byPerson,prenomRef){
   document.getElementById('ip-step-config').style.display='none';
@@ -7590,7 +7599,7 @@ async function saveEvent(){
   const userId=currentProfile?.id||currentUser?.id;
   if(!userId){alert('Erreur : profil non chargé.');return;}
   let hdebut='',hfin='',pause='';
-  if(!['absent','conge'].includes(type)){
+  if(!['absent','conge','ferie','vacances'].includes(type)){
     hdebut=document.getElementById('e-hdebut').value;hfin=document.getElementById('e-hfin').value;const pd=document.getElementById('e-pause-debut').value;
     const pf=pd?document.getElementById('e-pause-fin')?.value:'';
     pause=pd&&pf?pd+'-'+pf:'';
@@ -7604,7 +7613,7 @@ async function saveEvent(){
   }
   let detachType='',detachDesc='';
   if(type==='detachement'){detachType=document.getElementById('e-detach-type').value;detachDesc=document.getElementById('e-detach-desc').value.trim();}
-  const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+  const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement',ferie:'Férié',vacances:'Vacances'};
   const label=lieu||(detachType||labels[type]||type);
   const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   const days=fullWeek?[0,1,2,3,4]:[dayVal];
@@ -7670,7 +7679,7 @@ function getPlanningGrid(events,referentId,semaine,editable){
     const evs=events.filter(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
     html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'">';
     if(evs.length){
-      const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+      const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement',ferie:'Férié',vacances:'Vacances'};
       evs.forEach(ev=>{
         const titre=ev.label||labels[ev.type]||ev.type;
         const del=editable?'<span class="pg-del" onclick="event.stopPropagation();delPlanningEvent(\''+ev.id+'\',\''+referentId+'\',\''+semaine+'\')"><i class="ti ti-x"></i></span>':'';
@@ -8622,7 +8631,7 @@ function planningGridToPrintTable(events,semaine){
   const ws=new Date(semaine+'T00:00:00');
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+  const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement',ferie:'Férié',vacances:'Vacances'};
   let html='<table><thead><tr><th>Jour</th><th>Détail</th></tr></thead><tbody>';
   days5.forEach((d,i)=>{
     const evs=events.filter(e=>(e.jour===i||e.day===i));
@@ -9281,7 +9290,7 @@ planning: `
   <li>Cliquez directement sur une <strong>case du planning</strong> ou sur <strong>+ Ajouter</strong></li>
   <li>Le jour et la demi-journée sont <strong>pré-remplis</strong> si vous cliquez sur une case</li>
   <li>Indiquez le <strong>lieu / crèche</strong> concerné</li>
-  <li>Choisissez le <strong>type</strong> : Présence, Absent, Formation ou Réunion</li>
+  <li>Choisissez le <strong>type</strong> : Présence, Absent, Formation, Réunion, Férié ou Vacances</li>
   <li>Cliquez <strong>Enregistrer</strong></li>
 </ol>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🗓 Navigation</div>
@@ -9570,6 +9579,7 @@ annexes: `
         <option value="presence">Présence crèche</option><option value="absent">Absent</option>
         <option value="conge">Congé</option><option value="formation">Formation</option>
         <option value="reunion">Réunion</option><option value="detachement">Détachement</option>
+        <option value="ferie">Férié</option><option value="vacances">Vacances</option>
         <option value="autre">Autre — saisie libre…</option>
       </select>
     </div>
