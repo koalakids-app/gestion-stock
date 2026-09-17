@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Test scroll</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100vh;height:100dvh}
+  body{display:flex;flex-direction:column;overflow:hidden;font-family:sans-serif}
+  .top{flex-shrink:0;background:#4A3F9F;color:#fff;padding:14px;font-weight:bold;text-align:center}
+  .liste{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+  .item{padding:20px;border-bottom:1px solid #ddd;font-size:18px}
+  .item:nth-child(even){background:#f5f5f5}
+  #compteur{position:fixed;top:10px;right:10px;background:#F47920;color:#fff;padding:6px 10px;border-radius:8px;font-size:14px;z-index:10}
+</style>
+</head>
+<body>
+  <div id="compteur">scrollTop: 0</div>
+  <div class="top">Test de défilement — fais glisser la liste ci-dessous</div>
+  <div class="liste" id="liste"></div>
+  <script>
+    const liste = document.getElementById('liste');
+    let html = '';
+    for (let i = 1; i <= 60; i++) html += '<div class="item">Ligne numéro ' + i + '</div>';
+    liste.innerHTML = html;
+    const compteur = document.getElementById('compteur');
+    liste.addEventListener('scroll', () => {
+      compteur.textContent = 'scrollTop: ' + Math.round(liste.scrollTop);
+    });
+  </script>
+</body>
+</html>
