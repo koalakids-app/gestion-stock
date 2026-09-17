@@ -168,7 +168,11 @@ input,select,textarea{font-family:'Nunito';font-size:16px;padding:9px 11px;borde
 .ref-domaine{font-family:'Baloo 2',cursive;color:var(--orange);font-size:16px}
 .ref-domaine-nb{font-size:11.5px;font-weight:700;color:var(--muted);background:#F1EFF7;border-radius:10px;padding:1px 8px}
 .ref-domaine-plus{border:none;background:#F1EFF7;color:var(--violet);border-radius:10px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.ref-tranche{font-size:12.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px}
+.ref-tranche-head{display:flex;align-items:center;gap:6px;width:100%;background:none;border:none;padding:0;cursor:pointer;text-align:left;margin:12px 0 6px}
+.ref-tranche-head .chevron{transition:transform .15s;color:var(--muted);font-size:13px}
+.ref-tranche-head.on .chevron{transform:rotate(90deg)}
+.ref-tranche{font-size:12.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.ref-tranche-nb{font-size:10.5px;font-weight:700;color:var(--muted);background:#F1EFF7;border-radius:10px;padding:0 7px}
 .ref-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
 .ref-row.inactif{opacity:.45}
 .ref-row .lib{flex:1;font-size:14px}
@@ -665,6 +669,8 @@ async function chargerJalonsTous(){
 }
 
 let refDomainesOuverts=new Set();
+let refTranchesOuvertes=new Set();
+const refTrancheCle=(dom,tr)=>dom+'||'+tr;
 
 function renderRefListe(){
   const listeEl=document.getElementById('refListe');
@@ -678,14 +684,23 @@ function renderRefListe(){
     const tranches=[...new Set(parDomaine.map(j=>j.tranche))]
       .sort((a,b)=>REF_TRANCHES_ORDRE.indexOf(a)-REF_TRANCHES_ORDRE.indexOf(b));
     const blocs=tranches.map(tr=>{
-      const lignes=parDomaine.filter(j=>j.tranche===tr).map(j=>`
+      const parTranche=parDomaine.filter(j=>j.tranche===tr);
+      const cle=refTrancheCle(dom,tr);
+      const trOuvert=refTranchesOuvertes.has(cle);
+      const lignes=parTranche.map(j=>`
         <div class="ref-row${j.actif?'':' inactif'}" data-id="${j.id}">
           <input class="ord" type="number" value="${j.ordre}" data-champ="ordre">
           <span class="lib">${esc(j.libelle)}</span>
           <button class="btn btn-g" style="background:#F1EFF7;color:var(--muted)" data-action="editer" title="Modifier"><i class="ti ti-edit"></i></button>
           <button class="btn ${j.actif?'btn-g':'btn-p'}" style="${j.actif?'background:#FBE9E7;color:var(--err)':''}" data-action="toggle">${j.actif?'Désactiver':'Réactiver'}</button>
         </div>`).join('');
-      return `<div class="ref-tranche">${esc(tr)}</div>${lignes}`;
+      return `
+        <button class="ref-tranche-head${trOuvert?' on':''}" data-tranche-domaine="${esc(dom)}" data-tranche="${esc(tr)}">
+          <i class="ti ti-chevron-right chevron"></i>
+          <span class="ref-tranche">${esc(tr)}</span>
+          <span class="ref-tranche-nb">${parTranche.length}</span>
+        </button>
+        <div class="ref-tranche-body"${trOuvert?'':' style="display:none"'}>${lignes}</div>`;
     }).join('');
     return `
       <div class="ref-domaine-bloc">
@@ -712,6 +727,13 @@ function renderRefListe(){
       const dom=btn.dataset.domaineAdd;
       refDomainesOuverts.add(dom);
       ouvrirFormulaireJalon(null,dom);
+    });
+  });
+  listeEl.querySelectorAll('.ref-tranche-head').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const cle=refTrancheCle(btn.dataset.trancheDomaine,btn.dataset.tranche);
+      if(refTranchesOuvertes.has(cle))refTranchesOuvertes.delete(cle);else refTranchesOuvertes.add(cle);
+      renderRefListe();
     });
   });
   listeEl.querySelectorAll('.ref-row').forEach(row=>{
@@ -767,6 +789,8 @@ function ouvrirFormulaireJalon(j,domainePrefill){
       if(error){err.textContent='Erreur : '+error.message;err.style.display='block';return;}
       JALONS.push(data);
     }
+    refDomainesOuverts.add(domaine);
+    refTranchesOuvertes.add(refTrancheCle(domaine,tranche));
     w.remove();
     renderRefListe();
   });
