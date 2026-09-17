@@ -732,6 +732,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <option value="3">3 semaines / page</option>
           <option value="4">4 semaines / page</option>
         </select>
+        <button class="btn-sm" id="pe-new-creneau-btn" style="display:none;font-size:11px;padding:4px 10px" onclick="peOpenNewCreneau()"><i class="ti ti-plus"></i> Ajouter un créneau</button>
+        <button class="btn-sm" id="pe-dup-week-btn" style="display:none;font-size:11px;padding:4px 10px" onclick="peOpenDuplicateWeek()"><i class="ti ti-copy"></i> Dupliquer la semaine</button>
+        <button class="btn-sm" id="pe-ia-btn" style="display:none;font-size:11px;padding:4px 10px;background:#EFEEF7;color:#3D3580" onclick="peOpenIA()"><i class="ti ti-sparkles"></i> Génération IA</button>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="printPlanningEquipe()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="peOpenMail()"><i class="ti ti-mail"></i> Envoyer par mail</button>
         <button class="btn-sm" style="font-size:11px;padding:4px 10px" onclick="pmiOpenExportModal()"><i class="ti ti-file-spreadsheet"></i> Export PMI</button>
@@ -2095,6 +2098,97 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn-cancel" id="pe-edit-delete-btn" style="display:none;color:var(--red)" onclick="peDeleteCellEdit()"><i class="ti ti-trash"></i> Retirer</button>
       <button class="btn-cancel" onclick="closeModal('modal-pe-edit-wrap')">Annuler</button>
       <button class="btn-primary" onclick="peSaveCellEdit()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-pe-new-creneau-wrap">
+  <div class="modal" style="max-width:440px">
+    <h3>Ajouter un créneau</h3>
+    <div style="font-size:12px;color:var(--ink2);margin-bottom:14px">Créez un horaire de A à Z : jour(s), plage horaire et salarié(e). Utile pour construire le planning à la main, sans import.</div>
+    <div class="fg"><label class="flabel">Jour(s)</label>
+      <div id="pe-nc-jours" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <div class="fg" style="display:flex;gap:8px">
+      <div style="flex:1"><label class="flabel">Début</label><input class="finput" type="time" id="pe-nc-hdebut" value="08:00"></div>
+      <div style="flex:1"><label class="flabel">Fin</label><input class="finput" type="time" id="pe-nc-hfin" value="18:00"></div>
+    </div>
+    <div class="fg"><label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" id="pe-nc-pause-toggle" onchange="peNcTogglePause()"> Pause déjeuner</label></div>
+    <div class="fg" id="pe-nc-pause-wrap" style="display:none;gap:8px">
+      <div style="flex:1"><label class="flabel">Pause de</label><input class="finput" type="time" id="pe-nc-pause-debut" value="12:30"></div>
+      <div style="flex:1"><label class="flabel">à</label><input class="finput" type="time" id="pe-nc-pause-fin" value="14:00"></div>
+    </div>
+    <div class="fg"><label class="flabel">Salarié(e)</label>
+      <select class="finput" id="pe-nc-prenom" onchange="peNcOnPrenomChange()">
+        <option value="">-- Choisir --</option>
+      </select>
+    </div>
+    <div class="fg" id="pe-nc-prenom-autre-wrap">
+      <input class="finput" id="pe-nc-prenom-autre" placeholder="Prénom" style="display:none"/>
+    </div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-pe-new-creneau-wrap')">Annuler</button>
+      <button class="btn-primary" onclick="peSaveNewCreneau()"><i class="ti ti-check"></i> Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-pe-dup-week-wrap">
+  <div class="modal" style="max-width:420px">
+    <h3>Dupliquer la semaine</h3>
+    <div style="font-size:12px;color:var(--ink2);margin-bottom:14px" id="pe-dup-week-sub"></div>
+    <div class="fg"><label class="flabel">Nombre de semaines suivantes à remplir</label>
+      <input class="finput" type="number" id="pe-dup-week-count" value="1" min="1" max="12">
+    </div>
+    <div class="fg"><label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" id="pe-dup-week-replace" checked> Remplacer le contenu existant des semaines cibles</label></div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-pe-dup-week-wrap')">Annuler</button>
+      <button class="btn-primary" onclick="peSaveDuplicateWeek()"><i class="ti ti-check"></i> Dupliquer</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-pe-dup-day-wrap">
+  <div class="modal" style="max-width:420px">
+    <h3>Dupliquer ce jour</h3>
+    <div style="font-size:12px;color:var(--ink2);margin-bottom:14px" id="pe-dup-day-sub"></div>
+    <div class="fg"><label class="flabel">Vers quel(s) jour(s) ?</label>
+      <div id="pe-dup-day-targets" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <div class="fg"><label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" id="pe-dup-day-replace" checked> Remplacer le contenu existant de ces jours</label></div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-pe-dup-day-wrap')">Annuler</button>
+      <button class="btn-primary" onclick="peSaveDuplicateDay()"><i class="ti ti-check"></i> Dupliquer</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-pe-ia-wrap">
+  <div class="modal" style="max-width:560px">
+    <h3><i class="ti ti-sparkles"></i> Génération du planning par IA</h3>
+    <div id="pe-ia-step-form">
+      <div style="font-size:12px;color:var(--ink2);margin-bottom:14px">L'IA analyse le planning déjà réalisé sur les semaines choisies, détecte la rotation de l'équipe et propose les semaines suivantes. Rien n'est écrit avant votre validation.</div>
+      <div class="fg"><label class="flabel">Semaine de départ des données à analyser</label>
+        <input class="finput" type="date" id="pe-ia-source-start" onchange="peIAUpdateSub()">
+      </div>
+      <div class="fg" style="display:flex;gap:8px">
+        <div style="flex:1"><label class="flabel">Nombre de semaines à analyser</label><input class="finput" type="number" id="pe-ia-nb-source" value="4" min="1" max="12" oninput="peIAUpdateSub()"></div>
+        <div style="flex:1"><label class="flabel">Nombre de semaines à générer</label><input class="finput" type="number" id="pe-ia-nb-target" value="4" min="1" max="12" oninput="peIAUpdateSub()"></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px" id="pe-ia-target-sub"></div>
+      <div class="mactions">
+        <button class="btn-cancel" onclick="closeModal('modal-pe-ia-wrap')">Annuler</button>
+        <button class="btn-primary" onclick="peRunIA()"><i class="ti ti-sparkles"></i> Analyser et générer</button>
+      </div>
+    </div>
+    <div id="pe-ia-step-preview" style="display:none">
+      <div style="font-size:12px;color:var(--ink2);margin-bottom:10px;background:#EFEEF7;border-radius:8px;padding:10px 12px" id="pe-ia-remarques"></div>
+      <div id="pe-ia-preview-body" style="max-height:340px;overflow-y:auto;margin-bottom:10px"></div>
+      <div class="fg"><label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" id="pe-ia-replace" checked> Remplacer le contenu existant des semaines générées</label></div>
+      <div class="mactions">
+        <button class="btn-cancel" onclick="peIABackToForm()">← Refaire</button>
+        <button class="btn-primary" onclick="peValidateIA()"><i class="ti ti-check"></i> Écrire dans le planning</button>
+      </div>
     </div>
   </div>
 </div>
@@ -7706,8 +7800,8 @@ function peInvalidateAll(crecheId){
 let _peEditCtx=null; // {eventId|null, creneauLabel, jour, crecheId, semaine}
 
 // Remplit la liste déroulante des prénoms en conservant la sélection courante.
-function peRemplirPrenoms(noms,selection){
-  const sel=document.getElementById('pe-edit-prenom');
+function peRemplirPrenoms(noms,selection,selectId){
+  const sel=document.getElementById(selectId||'pe-edit-prenom');
   if(!sel)return;
   const liste=[...new Set(noms)].filter(Boolean)
     .sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
@@ -7812,6 +7906,328 @@ async function peDeleteCellEdit(){
   showBanner('Créneau libéré ✅');
 }
 
+// ── CRÉATION MANUELLE D'UN CRÉNEAU (construire le planning à la main, sans import) ──
+function peTimeToLabel(hhmm){return String(hhmm||'').replace(':','h');}
+
+async function peOpenNewCreneau(){
+  if(!_peCurCrecheId||!_peCurEditable)return;
+  const joursWrap=document.getElementById('pe-nc-jours');
+  joursWrap.innerHTML=DAYS.map((d,i)=>'<label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#F5F4FA;border-radius:8px;padding:5px 9px;cursor:pointer"><input type="checkbox" class="pe-nc-jour-cb" value="'+i+'"> '+d+'</label>').join('');
+  document.getElementById('pe-nc-hdebut').value='08:00';
+  document.getElementById('pe-nc-hfin').value='18:00';
+  document.getElementById('pe-nc-pause-toggle').checked=false;
+  document.getElementById('pe-nc-pause-wrap').style.display='none';
+  document.getElementById('pe-nc-pause-debut').value='12:30';
+  document.getElementById('pe-nc-pause-fin').value='14:00';
+  document.getElementById('pe-nc-prenom-autre').value='';
+  document.getElementById('pe-nc-prenom-autre').style.display='none';
+
+  const cached=_peCache[_peCurCrecheId+'_'+_peCurSemaine]||[];
+  peRemplirPrenoms(cached.map(r=>r.prenom),'','pe-nc-prenom');
+  document.getElementById('modal-pe-new-creneau-wrap').classList.add('open');
+
+  try{
+    const connus=(typeof spPrenomsConnus==='function')?await spPrenomsConnus(_peCurCrecheId):[];
+    const refs=(cacheReferents||[]).filter(r=>r.creche_id===_peCurCrecheId&&r.name).map(r=>String(r.name).trim().split(/\s+/)[0]);
+    if(!document.getElementById('modal-pe-new-creneau-wrap').classList.contains('open'))return;
+    peRemplirPrenoms(cached.map(r=>r.prenom).concat(connus,refs),'','pe-nc-prenom');
+  }catch(e){console.error('[PlanningEquipe] liste prénoms',e);}
+}
+
+function peNcTogglePause(){
+  document.getElementById('pe-nc-pause-wrap').style.display=document.getElementById('pe-nc-pause-toggle').checked?'flex':'none';
+}
+function peNcOnPrenomChange(){
+  const v=document.getElementById('pe-nc-prenom').value;
+  document.getElementById('pe-nc-prenom-autre').style.display=v==='__autre__'?'':'none';
+}
+
+async function peSaveNewCreneau(){
+  if(!_peCurCrecheId||!_peCurSemaine)return;
+  const jours=[...document.querySelectorAll('.pe-nc-jour-cb:checked')].map(cb=>parseInt(cb.value,10));
+  if(!jours.length){alert('Choisissez au moins un jour.');return;}
+  const hdebut=document.getElementById('pe-nc-hdebut').value;
+  const hfin=document.getElementById('pe-nc-hfin').value;
+  if(!hdebut||!hfin){alert('Renseignez les heures de début et de fin.');return;}
+  const avecPause=document.getElementById('pe-nc-pause-toggle').checked;
+  const pauseDebut=document.getElementById('pe-nc-pause-debut').value;
+  const pauseFin=document.getElementById('pe-nc-pause-fin').value;
+  if(avecPause&&(!pauseDebut||!pauseFin)){alert('Renseignez la plage de pause, ou décochez-la.');return;}
+  const sel=document.getElementById('pe-nc-prenom').value;
+  const prenom=sel==='__autre__'?document.getElementById('pe-nc-prenom-autre').value.trim():sel;
+  if(!prenom){alert('Choisissez ou saisissez un prénom.');return;}
+
+  const creneauLabel=avecPause
+    ?peTimeToLabel(hdebut)+'-'+peTimeToLabel(pauseDebut)+'/'+peTimeToLabel(pauseFin)+'-'+peTimeToLabel(hfin)
+    :peTimeToLabel(hdebut)+'-'+peTimeToLabel(hfin);
+  const pause=avecPause?(pauseDebut+'-'+pauseFin):null;
+
+  const btn=document.querySelector('#modal-pe-new-creneau-wrap .btn-primary');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
+  const rowsToInsert=jours.map(jour=>({
+    creche_id:_peCurCrecheId,prenom,semaine:_peCurSemaine,jour,type:'presence',label:prenom,
+    lieu:null,hdebut,hfin,pause,creneau_label:creneauLabel
+  }));
+  const{error}=await sb.from('planning_equipe').insert(rowsToInsert);
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Ajouter';}
+  if(error){console.error('[PlanningEquipe] new:',error.message);showBanner('Erreur lors de l\'enregistrement.','error');return;}
+
+  peInvalidate(_peCurCrecheId,_peCurSemaine);
+  closeModal('modal-pe-new-creneau-wrap');
+  await renderPlanningEquipe();
+  showBanner('Créneau ajouté ✅');
+}
+
+// ── DUPLICATION D'UN JOUR VERS D'AUTRES JOURS (même semaine) ──
+let _peDupDaySource=null;
+function peOpenDuplicateDay(dayIndex){
+  if(!_peCurCrecheId||!_peCurEditable)return;
+  _peDupDaySource=dayIndex;
+  document.getElementById('pe-dup-day-sub').textContent='Copier le contenu du '+DAYS[dayIndex]+' vers :';
+  const wrap=document.getElementById('pe-dup-day-targets');
+  wrap.innerHTML=DAYS.map((d,i)=>i===dayIndex?'':'<label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#F5F4FA;border-radius:8px;padding:5px 9px;cursor:pointer"><input type="checkbox" class="pe-dup-day-cb" value="'+i+'"> '+d+'</label>').join('');
+  document.getElementById('pe-dup-day-replace').checked=true;
+  document.getElementById('modal-pe-dup-day-wrap').classList.add('open');
+}
+async function peSaveDuplicateDay(){
+  if(_peDupDaySource==null||!_peCurCrecheId||!_peCurSemaine)return;
+  const targets=[...document.querySelectorAll('.pe-dup-day-cb:checked')].map(cb=>parseInt(cb.value,10));
+  if(!targets.length){alert('Choisissez au moins un jour de destination.');return;}
+  const replace=document.getElementById('pe-dup-day-replace').checked;
+
+  const btn=document.querySelector('#modal-pe-dup-day-wrap .btn-primary');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Duplication…';}
+
+  const cached=await peLoad(_peCurCrecheId,_peCurSemaine);
+  const sourceRows=cached.filter(r=>r.jour===_peDupDaySource);
+  if(!sourceRows.length){
+    if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Dupliquer';}
+    showBanner('Aucun créneau à dupliquer sur ce jour.','error');
+    return;
+  }
+
+  if(replace){
+    const{error:errDel}=await sb.from('planning_equipe').delete().eq('creche_id',_peCurCrecheId).eq('semaine',_peCurSemaine).in('jour',targets);
+    if(errDel){console.error('[PlanningEquipe] dup day del:',errDel.message);showBanner('Erreur lors du remplacement.','error');if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Dupliquer';}return;}
+  }
+
+  const rowsToInsert=[];
+  targets.forEach(jour=>sourceRows.forEach(r=>rowsToInsert.push({
+    creche_id:_peCurCrecheId,prenom:r.prenom,semaine:_peCurSemaine,jour,type:r.type||'presence',label:r.label||r.prenom,
+    lieu:r.lieu||null,hdebut:r.hdebut||null,hfin:r.hfin||null,pause:r.pause||null,creneau_label:r.creneau_label||null
+  })));
+  const{error}=await sb.from('planning_equipe').insert(rowsToInsert);
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Dupliquer';}
+  if(error){console.error('[PlanningEquipe] dup day:',error.message);showBanner('Erreur lors de la duplication.','error');return;}
+
+  peInvalidate(_peCurCrecheId,_peCurSemaine);
+  closeModal('modal-pe-dup-day-wrap');
+  await renderPlanningEquipe();
+  showBanner('Journée dupliquée ✅');
+}
+
+// ── DUPLICATION DE LA SEMAINE AFFICHÉE VERS LES SEMAINES SUIVANTES ──
+function peOpenDuplicateWeek(){
+  if(!_peCurCrecheId||!_peCurEditable)return;
+  const ws=new Date(_peCurSemaine+'T00:00:00');
+  document.getElementById('pe-dup-week-sub').textContent='Copier la semaine du '+ws.toLocaleDateString('fr-FR')+' sur les semaines suivantes.';
+  document.getElementById('pe-dup-week-count').value='1';
+  document.getElementById('pe-dup-week-replace').checked=true;
+  document.getElementById('modal-pe-dup-week-wrap').classList.add('open');
+}
+async function peSaveDuplicateWeek(){
+  if(!_peCurCrecheId||!_peCurSemaine)return;
+  const count=Math.max(1,Math.min(12,parseInt(document.getElementById('pe-dup-week-count').value,10)||1));
+  const replace=document.getElementById('pe-dup-week-replace').checked;
+
+  const btn=document.querySelector('#modal-pe-dup-week-wrap .btn-primary');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Duplication…';}
+
+  const sourceRows=await peLoad(_peCurCrecheId,_peCurSemaine);
+  if(!sourceRows.length){
+    if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Dupliquer';}
+    showBanner('Aucun créneau à dupliquer sur cette semaine.','error');
+    return;
+  }
+
+  const baseDate=new Date(_peCurSemaine+'T00:00:00');
+  for(let i=1;i<=count;i++){
+    const targetDate=new Date(baseDate);targetDate.setDate(baseDate.getDate()+7*i);
+    const targetSemaine=ipDateToLocalISO(targetDate);
+    if(replace){
+      const{error:errDel}=await sb.from('planning_equipe').delete().eq('creche_id',_peCurCrecheId).eq('semaine',targetSemaine);
+      if(errDel){console.error('[PlanningEquipe] dup week del:',errDel.message);continue;}
+    }
+    const rowsToInsert=sourceRows.map(r=>({
+      creche_id:_peCurCrecheId,prenom:r.prenom,semaine:targetSemaine,jour:r.jour,type:r.type||'presence',label:r.label||r.prenom,
+      lieu:r.lieu||null,hdebut:r.hdebut||null,hfin:r.hfin||null,pause:r.pause||null,creneau_label:r.creneau_label||null
+    }));
+    const{error}=await sb.from('planning_equipe').insert(rowsToInsert);
+    if(error)console.error('[PlanningEquipe] dup week:',error.message);
+    peInvalidate(_peCurCrecheId,targetSemaine);
+  }
+
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Dupliquer';}
+  closeModal('modal-pe-dup-week-wrap');
+  await renderPlanningEquipe();
+  showBanner(count>1?count+' semaines dupliquées ✅':'Semaine dupliquée ✅');
+}
+
+// ── GÉNÉRATION AUTOMATIQUE DU PLANNING PAR IA ──
+// L'IA (edge function generer-planning-ia) reçoit le planning déjà réalisé sur
+// N semaines et propose les semaines suivantes en respectant la rotation
+// observée. Rien n'est écrit en base avant validation explicite (aperçu).
+let _peIAProposal=null,_peIATargetWeeks=[]; // [{semaine, decalage}]
+
+function peOpenIA(){
+  if(!_peCurCrecheId||!_peCurEditable)return;
+  document.getElementById('pe-ia-step-preview').style.display='none';
+  document.getElementById('pe-ia-step-form').style.display='';
+  document.getElementById('pe-ia-nb-source').value='4';
+  document.getElementById('pe-ia-nb-target').value='4';
+  // Par défaut : les 4 semaines qui précèdent celle affichée.
+  const defStart=new Date(_peCurSemaine+'T00:00:00');defStart.setDate(defStart.getDate()-28);
+  document.getElementById('pe-ia-source-start').value=ipDateToLocalISO(defStart);
+  peIAUpdateSub();
+  document.getElementById('modal-pe-ia-wrap').classList.add('open');
+}
+
+function peIAUpdateSub(){
+  const startVal=document.getElementById('pe-ia-source-start').value;
+  const nbSource=Math.max(1,Math.min(12,parseInt(document.getElementById('pe-ia-nb-source').value,10)||1));
+  const nbTarget=Math.max(1,Math.min(12,parseInt(document.getElementById('pe-ia-nb-target').value,10)||1));
+  const sub=document.getElementById('pe-ia-target-sub');
+  if(!startVal||!sub){if(sub)sub.textContent='';return;}
+  const start=new Date(startVal+'T00:00:00');
+  const firstTarget=new Date(start);firstTarget.setDate(start.getDate()+7*nbSource);
+  const lastTarget=new Date(firstTarget);lastTarget.setDate(firstTarget.getDate()+7*(nbTarget-1));
+  sub.textContent='Semaines générées : du '+firstTarget.toLocaleDateString('fr-FR')+' au '+lastTarget.toLocaleDateString('fr-FR')+'.';
+}
+
+async function peLoadWeeksRange(crecheId,startSemaineISO,nbWeeks){
+  const start=new Date(startSemaineISO+'T00:00:00');
+  const out=[];
+  for(let i=0;i<nbWeeks;i++){
+    const d=new Date(start);d.setDate(start.getDate()+7*i);
+    const semaine=ipDateToLocalISO(d);
+    const rows=await peLoad(crecheId,semaine);
+    out.push({semaine,rows});
+  }
+  return out;
+}
+
+async function peRunIA(){
+  if(!_peCurCrecheId)return;
+  const startVal=document.getElementById('pe-ia-source-start').value;
+  if(!startVal){alert('Choisissez la semaine de départ des données à analyser.');return;}
+  const nbSource=Math.max(1,Math.min(12,parseInt(document.getElementById('pe-ia-nb-source').value,10)||1));
+  const nbTarget=Math.max(1,Math.min(12,parseInt(document.getElementById('pe-ia-nb-target').value,10)||1));
+
+  const btn=document.querySelector('#pe-ia-step-form .btn-primary');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Analyse en cours…';}
+
+  try{
+    const weeks=await peLoadWeeksRange(_peCurCrecheId,startVal,nbSource);
+    const sourceRows=[];
+    weeks.forEach((w,semaineIndex)=>{
+      w.rows.filter(r=>r.creneau_label).forEach(r=>{
+        sourceRows.push({semaineIndex,jour:r.jour,prenom:r.prenom,heureDebut:r.hdebut||null,heureFin:r.hfin||null,pause:r.pause||null});
+      });
+    });
+    if(!sourceRows.length){
+      showBanner('Aucun créneau dans les semaines sélectionnées : rien à analyser.','error');
+      return;
+    }
+
+    const lastSourceDate=new Date(startVal+'T00:00:00');lastSourceDate.setDate(lastSourceDate.getDate()+7*nbSource);
+    _peIATargetWeeks=Array.from({length:nbTarget},(_,i)=>{
+      const d=new Date(lastSourceDate);d.setDate(lastSourceDate.getDate()+7*i);
+      return{decalage:i,semaine:ipDateToLocalISO(d)};
+    });
+
+    const r=await fetch(SUPABASE_URL+'/functions/v1/generer-planning-ia',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
+      body:JSON.stringify({crecheName:_peCurCrecheName,nbSemainesSource:nbSource,nbSemainesAGenerer:nbTarget,sourceRows})
+    });
+    const data=await r.json().catch(()=>null);
+    if(!r.ok||!data||!Array.isArray(data.semaines)){
+      showBanner((data&&data.error)?data.error:'Erreur lors de la génération IA.','error');
+      return;
+    }
+
+    _peIAProposal=data;
+    peRenderIAPreview(data);
+    document.getElementById('pe-ia-step-form').style.display='none';
+    document.getElementById('pe-ia-step-preview').style.display='';
+  }catch(err){
+    console.error('[PlanningEquipe IA]',err);
+    showBanner('Erreur réseau lors de la génération IA.','error');
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-sparkles"></i> Analyser et générer';}
+  }
+}
+
+function peRenderIAPreview(data){
+  document.getElementById('pe-ia-remarques').textContent=data.remarques||'';
+  const body=document.getElementById('pe-ia-preview-body');
+  const bySemaine=[...(_peIATargetWeeks||[])].sort((a,b)=>a.decalage-b.decalage);
+  body.innerHTML=bySemaine.map(tw=>{
+    const semObj=(data.semaines||[]).find(s=>s.decalageSemaines===tw.decalage);
+    const creneaux=semObj?.creneaux||[];
+    const wsDate=new Date(tw.semaine+'T00:00:00');
+    const parJour=DAYS.map((d,i)=>({jour:d,items:creneaux.filter(c=>c.jour===i)}));
+    return '<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:8px 10px">'
+      +'<div style="font-size:12.5px;font-weight:700;color:var(--koala);margin-bottom:6px">Semaine du '+wsDate.toLocaleDateString('fr-FR')+'</div>'
+      +(creneaux.length?parJour.map(pj=>pj.items.length?
+        '<div style="font-size:12px;margin-bottom:3px"><strong>'+pj.jour+' :</strong> '+pj.items.map(c=>escHtml(c.prenom)+' ('+(c.heureDebut||'?')+'-'+(c.heureFin||'?')+')').join(', ')+'</div>'
+        :'').join('')
+        :'<div style="font-size:12px;color:#bbb">Aucun créneau proposé.</div>')
+      +'</div>';
+  }).join('');
+}
+
+function peIABackToForm(){
+  document.getElementById('pe-ia-step-preview').style.display='none';
+  document.getElementById('pe-ia-step-form').style.display='';
+}
+
+async function peValidateIA(){
+  if(!_peIAProposal||!_peCurCrecheId)return;
+  const replace=document.getElementById('pe-ia-replace').checked;
+  const btn=document.querySelector('#pe-ia-step-preview .btn-primary');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Écriture…';}
+
+  for(const tw of _peIATargetWeeks){
+    const semObj=(_peIAProposal.semaines||[]).find(s=>s.decalageSemaines===tw.decalage);
+    const creneaux=semObj?.creneaux||[];
+    if(!creneaux.length)continue;
+    if(replace){
+      const{error:errDel}=await sb.from('planning_equipe').delete().eq('creche_id',_peCurCrecheId).eq('semaine',tw.semaine);
+      if(errDel){console.error('[PlanningEquipe IA] del:',errDel.message);continue;}
+    }
+    const rowsToInsert=creneaux.map(c=>{
+      const avecPause=c.pauseDebut&&c.pauseFin;
+      const creneauLabel=avecPause
+        ?peTimeToLabel(c.heureDebut)+'-'+peTimeToLabel(c.pauseDebut)+'/'+peTimeToLabel(c.pauseFin)+'-'+peTimeToLabel(c.heureFin)
+        :peTimeToLabel(c.heureDebut)+'-'+peTimeToLabel(c.heureFin);
+      return{
+        creche_id:_peCurCrecheId,prenom:c.prenom,semaine:tw.semaine,jour:c.jour,type:'presence',label:c.prenom,
+        lieu:null,hdebut:c.heureDebut||null,hfin:c.heureFin||null,pause:avecPause?(c.pauseDebut+'-'+c.pauseFin):null,creneau_label:creneauLabel
+      };
+    });
+    const{error}=await sb.from('planning_equipe').insert(rowsToInsert);
+    if(error)console.error('[PlanningEquipe IA] insert:',error.message);
+    peInvalidate(_peCurCrecheId,tw.semaine);
+  }
+
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Écrire dans le planning';}
+  closeModal('modal-pe-ia-wrap');
+  await renderPlanningEquipe();
+  showBanner('Planning généré par IA ✅');
+}
+
+let _peCurCrecheId=null,_peCurSemaine=null,_peCurEditable=false,_peCurCrecheName='';
 async function renderPlanningEquipe(){
   const sel=document.getElementById('pe-creche-select');
   const wrap=document.getElementById('pe-grid-wrap');
@@ -7831,6 +8247,10 @@ async function renderPlanningEquipe(){
 
   if(!crecheId){
     wrap.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez une crèche</div>';
+    const ncBtn0=document.getElementById('pe-new-creneau-btn'),dwBtn0=document.getElementById('pe-dup-week-btn'),iaBtn0=document.getElementById('pe-ia-btn');
+    if(ncBtn0)ncBtn0.style.display='none';
+    if(dwBtn0)dwBtn0.style.display='none';
+    if(iaBtn0)iaBtn0.style.display='none';
     return;
   }
 
@@ -7840,11 +8260,16 @@ async function renderPlanningEquipe(){
   const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
   // Éditable pour : la direction, OU la directrice technique dont la propre crèche correspond à celle affichée
   const editable=isDirection||(currentProfile?.creche_id===crecheId);
+  _peCurCrecheId=crecheId;_peCurSemaine=semaine;_peCurEditable=editable;_peCurCrecheName=crecheName;
   const peBadge=document.getElementById('pe-badge');
   if(peBadge){
     if(editable){peBadge.textContent='✏️ Modifiable';peBadge.style.background='var(--koala-light)';peBadge.style.color='var(--koala)';}
     else{peBadge.textContent='👁 Lecture seule';peBadge.style.background='#f0f0f5';peBadge.style.color='#888';}
   }
+  const ncBtn=document.getElementById('pe-new-creneau-btn'),dwBtn=document.getElementById('pe-dup-week-btn'),iaBtn=document.getElementById('pe-ia-btn');
+  if(ncBtn)ncBtn.style.display=editable?'':'none';
+  if(dwBtn)dwBtn.style.display=(editable&&rows.length)?'':'none';
+  if(iaBtn)iaBtn.style.display=editable?'':'none';
   wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
 
   const info=document.getElementById('pe-import-info');
@@ -7864,7 +8289,13 @@ function getPlanningEquipeCrecheId(){
 }
 
 function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPrint,nbWeeksOnPage){
-  if(!rows.length)return '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucune donnée pour cette semaine — importez un fichier Excel pour cette crèche.</div>';
+  if(!rows.length){
+    if(editable&&!forPrint){
+      return '<div style="text-align:center;padding:2rem;color:#999;font-size:13px">Aucun créneau pour cette semaine.<br><span style="font-size:12px">Importez un fichier Excel/PDF, ou construisez le planning à la main.</span>'
+        +'<div style="margin-top:12px"><button class="btn-primary" style="font-size:12px;padding:7px 14px" onclick="peOpenNewCreneau()"><i class="ti ti-plus"></i> Ajouter un créneau</button></div></div>';
+    }
+    return '<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Aucune donnée pour cette semaine — importez un fichier Excel pour cette crèche.</div>';
+  }
 
   const ws=new Date(semaine+'T00:00:00');
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
@@ -7949,7 +8380,10 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   const _peHorPct=16;
   html+='<colgroup><col style="width:'+_peHorPct+'%">'+DAYS.map(()=>'<col style="width:'+((100-_peHorPct)/5)+'%">').join('')+'</colgroup>';
   html+='<thead><tr><th style="position:sticky;left:0;z-index:2;padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333;white-space:nowrap">Horaire</th>';
-  DAYS.forEach((d,i)=>{html+='<th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:center;background:#fafafa;color:#333">'+d+'<br><span style="font-size:'+_peFSDay+';font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';});
+  DAYS.forEach((d,i)=>{
+    const dupIcon=(editable&&!forPrint)?' <i class="ti ti-copy" style="cursor:pointer;opacity:0.55;font-size:'+_peFSDay+'" title="Dupliquer ce jour vers d\'autres jours" onclick="event.stopPropagation();peOpenDuplicateDay('+i+')"></i>':'';
+    html+='<th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:center;background:#fafafa;color:#333">'+d+dupIcon+'<br><span style="font-size:'+_peFSDay+';font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';
+  });
   html+='</tr></thead><tbody>';
 
   creneauOrder.forEach(cleCreneau=>{
