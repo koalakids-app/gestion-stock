@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v12';   // v12 : module Suivi de l'enfant (écran tablette)
+const CACHE_NAME = 'stocks-v13';   // v13 : tuile portail + bouton fiche enfant pour Suivi
 
 self.addEventListener('install', event => {
   event.waitUntil(

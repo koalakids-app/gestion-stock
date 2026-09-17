@@ -200,6 +200,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,
   {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 
 const TOKEN=new URLSearchParams(location.search).get('k')||'';
+const ENFANT_PARAM=new URLSearchParams(location.search).get('enfant')||'';
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* Dates locales, jamais toISOString().slice(0,10) */
@@ -411,12 +412,19 @@ window.mfaGateVerifyChallenge=mfaGateVerifyChallenge;
 window.mfaGateConfirmEnroll=mfaGateConfirmEnroll;
 window.mfaGateCancel=mfaGateCancel;
 
+let crecheCibleParam=null;
 async function ordinateurGrantAccess(){
   document.getElementById('loginView').style.display='none';
   document.getElementById('appOrdi').classList.remove('hidden');
   const{data:cr}=await sb.from('creches').select('id,name').order('name');
   CRECHES_ORDI=cr||[];
   await chargerJalonsRef();
+  /* Lien direct depuis la fiche enfant (?enfant=<id>) : on retrouve sa
+     crèche pour présélectionner le bon onglet avant de charger la liste. */
+  if(ENFANT_PARAM){
+    const{data:cible}=await sb.from('enfants').select('id,creche_id').eq('id',ENFANT_PARAM).maybeSingle();
+    if(cible){enfantChoisiId=cible.id;crecheCibleParam=cible.creche_id;}
+  }
   renderOrdiShell();
 }
 
@@ -439,7 +447,7 @@ function renderOrdiShell(){
   if(IS_DIRECTION){
     const sel=document.getElementById('ordiCreche');
     sel.innerHTML=CRECHES_ORDI.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
-    sel.value=PROF.creche_id||CRECHES_ORDI[0]?.id||'';
+    sel.value=crecheCibleParam||PROF.creche_id||CRECHES_ORDI[0]?.id||'';
     sel.addEventListener('change',chargerListeOrdi);
   }
   document.getElementById('ordiDate').addEventListener('change',e=>{dateChoisie=e.target.value;chargerListeOrdi();});
