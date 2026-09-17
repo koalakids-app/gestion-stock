@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v19';   // v19 : double authentification journalière (24h) sur suivi.html
+const CACHE_NAME = 'stocks-v20';   // v20 : isole la session tablette de la session ordinateur sur suivi.html
 
 self.addEventListener('install', event => {
   event.waitUntil(

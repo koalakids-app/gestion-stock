@@ -195,15 +195,23 @@ input,select,textarea{font-family:'Nunito';font-size:16px;padding:9px 11px;borde
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
-/* Session persistée par défaut (comme infirmerie.html) : nécessaire pour la
-   connexion en mode ordinateur, qui recharge la page après signInWithPassword
-   et après validation MFA. Le mode tablette n'utilise jamais sb.auth (rôle
-   anon uniquement via les fonctions kk_suivi_kiosk_*), donc rien à perdre
-   côté kiosque à garder la persistance active. */
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-
 const TOKEN=new URLSearchParams(location.search).get('k')||'';
 const ENFANT_PARAM=new URLSearchParams(location.search).get('enfant')||'';
+
+/* Deux clients distincts, jamais mélangés :
+   - mode tablette (TOKEN présent) : strictement anonyme, sans persistance —
+     une tablette qui aurait aussi servi une fois à se connecter en mode
+     ordinateur ne doit jamais réutiliser cette session pour les appels
+     kiosque (sinon un jeton de session périmé peut faire échouer même les
+     appels anonymes, ex. "Tablette non configurée" à tort).
+   - mode ordinateur (pas de TOKEN) : session persistée, nécessaire pour que
+     la connexion et la double authentification survivent au rechargement
+     de page.
+   Le rôle et les droits sont les mêmes (anon key) ; seule la persistance
+   diffère. */
+const sb = (TOKEN && TOKEN.length>=20)
+  ? supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}})
+  : supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* Dates locales, jamais toISOString().slice(0,10) */
