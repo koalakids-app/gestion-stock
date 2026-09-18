@@ -714,13 +714,21 @@ async function choisirPdfImport(ev){
 }
 
 /* Extraction brute : une entrée par ligne du tableau, colonnes assemblées à
-   partir des positions x, lignes physiques regroupées via le marqueur numéro
-   en première colonne. */
+   partir des positions x. Chaque ligne du tableau s'étale sur plusieurs
+   lignes physiques (retours à la ligne dans les cellules) — mais le petit
+   numéro d'ordre, souvent centré verticalement, ne tombe pas forcément sur la
+   toute première d'entre elles : une adresse ou un e-mail sur deux lignes
+   commence parfois avant que le numéro n'apparaisse. Rattacher « tout ce qui
+   suit le numéro » ferait glisser ce début de ligne — et donc des bouts de la
+   ligne suivante — dans la fiche précédente. On rattache donc chaque ligne
+   physique au numéro d'ordre le plus proche verticalement, jamais à celui
+   « déjà vu ». */
 async function pdfImportExtraire(file){
   const buf=await file.arrayBuffer();
   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
   const entetes=PDFIMPORT_ENTETES.map(s=>s.trim());
-  const lignes=[];
+  const parNumero=new Map();
+  const ordreVu=[];
   for(let p=1;p<=pdf.numPages;p++){
     const page=await pdf.getPage(p);
     const tc=await page.getTextContent();
@@ -737,22 +745,27 @@ async function pdfImportExtraire(file){
     }
     physiques.sort((a,b)=>b.y-a.y);
     physiques.forEach(l=>l.items.sort((a,b)=>a.x-b.x));
-    let courante=null;
+    const marqueurs=physiques
+      .map(l=>{const it=l.items.find(it=>pdfImportColonneDe(it.x)==='ordre'&&/^\d+$/.test(it.s.trim()));return it?{y:l.y,num:it.s.trim()}:null;})
+      .filter(Boolean);
+    if(!marqueurs.length)continue;
     for(const l of physiques){
-      const marqueur=l.items.find(it=>pdfImportColonneDe(it.x)==='ordre'&&/^\d+$/.test(it.s.trim()));
-      if(marqueur){
-        courante={ordre:marqueur.s.trim(),cols:{}};
-        lignes.push(courante);
+      let meilleur=marqueurs[0],ecart=Math.abs(marqueurs[0].y-l.y);
+      for(const m of marqueurs){
+        const e=Math.abs(m.y-l.y);
+        if(e<ecart){ecart=e;meilleur=m;}
       }
-      if(!courante)continue;
+      let ligne=parNumero.get(meilleur.num);
+      if(!ligne){ligne={ordre:meilleur.num,cols:{}};parNumero.set(meilleur.num,ligne);ordreVu.push(meilleur.num);}
       for(const it of l.items){
         const c=pdfImportColonneDe(it.x);
         if(c==='ordre')continue;
-        (courante.cols[c]=courante.cols[c]||[]).push(it.s);
+        (ligne.cols[c]=ligne.cols[c]||[]).push(it.s);
       }
     }
   }
-  return lignes.map(l=>{
+  return ordreVu.map(num=>{
+    const l=parNumero.get(num);
     const j=k=>((l.cols[k]||[]).join(' ').replace(/\s+/g,' ').trim());
     return {ordre:l.ordre,parents:j('parents'),email:j('email'),tel:j('tel'),adresse:j('adresse'),
       enfant:j('enfant'),dob:j('dob'),jours:j('jours'),debut:j('debut'),commentaires:j('commentaires')};
