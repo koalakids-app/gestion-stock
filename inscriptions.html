@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <style>
 :root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8;--amber:#B8860B;--amber-l:#FFF6DC}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -151,6 +152,17 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .hl .p{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:11.5px}
 .hl .e{background:#F6F4FB;border-radius:8px;padding:3px 8px;color:#555;white-space:nowrap}
 .hl .e b{color:var(--violet)}
+/* Une ligne du prévisualisateur d'import PDF : une carte compacte, éditable,
+   qui se grise quand elle est décochée pour qu'on voie tout de suite ce qui
+   ne sera pas importé (lignes de test, doublons…). */
+.pdfrow{border:2px solid var(--line);border-radius:14px;padding:10px 13px;margin-bottom:9px;background:#fff}
+.pdfrow.off{opacity:.45}
+.pdfrow .hd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.pdfrow .hd b{font-family:'Baloo 2',cursive;color:var(--violet);flex:1}
+.pdfrow .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px}
+.pdfrow .g label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin:0 0 2px 2px}
+.pdfrow .g input,.pdfrow .g textarea{font-size:13px;padding:6px 8px}
+.pdfrow .flag{font-size:11px;font-weight:700;color:var(--red);background:var(--red-l);border-radius:8px;padding:2px 7px}
 .hl .e.off{color:#BBB6CC}
 .hs{background:#fff;border:2px solid var(--line);border-radius:14px;padding:9px 13px;flex:1;min-width:110px}
 .hs .n{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);line-height:1.1}
@@ -210,6 +222,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <h1>Inscriptions</h1>
     <span class="who" id="whoAmI"></span>
     <button class="tbtn accent" onclick="openTarifs()" title="Tarifs et frais"><i class="ti ti-cash"></i><span>Tarifs</span></button>
+    <button class="tbtn" onclick="openImportPdf()" title="Importer une liste de préinscriptions (PDF)"><i class="ti ti-file-upload"></i><span>Importer PDF</span></button>
     <a class="tbtn" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i><span>Accueil</span></a>
     <button class="tbtn" onclick="openHisto()" title="Historique des demandes"><i class="ti ti-history"></i><span>Historique</span></button>
     <button class="tbtn" onclick="openNotice()" title="Mode d'emploi"><i class="ti ti-help"></i><span>Aide</span></button>
@@ -429,6 +442,32 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
   </div>
 </div>
 
+<!-- IMPORT D'UNE LISTE DE PRÉINSCRIPTIONS (PDF) -->
+<div class="ov" id="ovImportPdf">
+  <div class="md" style="max-width:1000px">
+    <h3><i class="ti ti-file-upload"></i> Importer une liste de préinscriptions</h3>
+    <p class="hint">Sélectionnez le PDF exporté (« Liste inscriptions/préinscriptions »). Chaque ligne est analysée puis
+      proposée ci-dessous : relisez et corrigez si besoin avant d'importer — rien n'est enregistré tant que vous
+      n'avez pas cliqué sur « Importer la sélection ».</p>
+    <div class="bar">
+      <button class="btn btn-s" onclick="document.getElementById('fPdfImport').click()"><i class="ti ti-file-type-pdf"></i> Choisir un PDF…</button>
+      <input type="file" id="fPdfImport" accept="application/pdf,.pdf" style="display:none" onchange="choisirPdfImport(event)">
+      <span id="pdfImportNomFichier" class="hint" style="margin:0"></span>
+    </div>
+    <p class="hint" id="pdfImportStatut"></p>
+    <div id="pdfImportBar" class="bar" style="display:none">
+      <button class="btn btn-s btn-sm" onclick="pdfImportToutCocher(true)">Tout cocher</button>
+      <button class="btn btn-s btn-sm" onclick="pdfImportToutCocher(false)">Tout décocher</button>
+      <span class="hint" style="margin:0" id="pdfImportCompte"></span>
+    </div>
+    <div id="pdfImportListe" style="max-height:55vh;overflow:auto"></div>
+    <div class="acts">
+      <button class="btn btn-g" onclick="closeOv('ovImportPdf')">Fermer</button>
+      <button class="btn btn-p" id="btnPdfImportGo" style="display:none" onclick="importerPdfSelection()"><i class="ti ti-check"></i> Importer la sélection</button>
+    </div>
+  </div>
+</div>
+
 <!-- BASCULE EN FICHE ENFANT -->
 <div class="ov" id="ovBascule">
   <div class="md" style="max-width:640px">
@@ -600,6 +639,289 @@ function val(id){const e=document.getElementById(id);return e?e.value.trim():'';
 function chk(id){const e=document.getElementById(id);return !!(e&&e.checked);}
 function setVal(id,v){const e=document.getElementById(id);if(e)e.value=(v==null?'':v);}
 function setChk(id,v){const e=document.getElementById(id);if(e)e.checked=!!v;}
+
+/* ---------- IMPORT D'UNE LISTE DE PRÉINSCRIPTIONS (PDF) ----------
+   Le PDF exporté ("Liste inscriptions/préinscriptions") est un tableau de 10
+   colonnes fixes, une ligne par demande, numérotée en premier colonne. Les
+   bordures du tableau ne sont pas lisibles depuis le texte seul : on repère
+   donc chaque colonne par sa position horizontale (en points PDF), mesurée
+   une fois sur un export de référence. Le format est celui d'un rapport
+   système régulier — ces repères ne bougent pas d'un export à l'autre.
+   Chaque ligne du tableau peut s'étaler sur plusieurs lignes physiques
+   (retour à la ligne dans une cellule) : on les regroupe tant qu'on n'a pas
+   revu, dans la colonne « Ordre », un nombre seul qui ouvre la ligne suivante.
+   Rien n'est jamais écrit tant que la direction n'a pas validé l'aperçu. */
+if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+const PDFIMPORT_COLS=[
+  {key:'ordre',        x0:40,  x1:68 },
+  {key:'parents',      x0:68,  x1:145},
+  {key:'email',        x0:145, x1:223},
+  {key:'tel',          x0:223, x1:280},
+  {key:'adresse',      x0:280, x1:382},
+  {key:'enfant',       x0:382, x1:478},
+  {key:'dob',          x0:478, x1:543},
+  {key:'jours',        x0:543, x1:614},
+  {key:'debut',        x0:614, x1:684},
+  {key:'commentaires', x0:684, x1:2000}
+];
+const PDFIMPORT_ENTETES=['Ordre','arrivée','Nom des parents','Email','Téléphone','Adresse',
+  "Nom/prénom de l'enfant",'date naissance','Jours de présence','Date de début souhaité','Commentaires'];
+const PDFIMPORT_JOURS={lundi:1,mardi:2,mercredi:3,jeudi:4,vendredi:5,samedi:6,dimanche:7};
+
+let PDFIMPORT_LIGNES=[];
+
+function openImportPdf(){
+  PDFIMPORT_LIGNES=[];
+  document.getElementById('pdfImportNomFichier').textContent='';
+  document.getElementById('pdfImportStatut').textContent='';
+  document.getElementById('pdfImportBar').style.display='none';
+  document.getElementById('pdfImportListe').innerHTML='';
+  document.getElementById('btnPdfImportGo').style.display='none';
+  document.getElementById('fPdfImport').value='';
+  openOv('ovImportPdf');
+}
+
+function pdfImportColonneDe(x){
+  for(const c of PDFIMPORT_COLS)if(x>=c.x0-3&&x<c.x1)return c.key;
+  return 'commentaires';
+}
+
+async function choisirPdfImport(ev){
+  const f=ev.target.files&&ev.target.files[0];
+  if(!f)return;
+  document.getElementById('pdfImportNomFichier').textContent=f.name;
+  const statut=document.getElementById('pdfImportStatut');
+  statut.textContent='Analyse du PDF en cours…';
+  document.getElementById('pdfImportListe').innerHTML='';
+  document.getElementById('pdfImportBar').style.display='none';
+  document.getElementById('btnPdfImportGo').style.display='none';
+  try{
+    const lignes=await pdfImportExtraire(f);
+    PDFIMPORT_LIGNES=lignes.map(pdfImportInterpreter);
+    if(!PDFIMPORT_LIGNES.length){
+      statut.textContent="Aucune ligne n'a pu être reconnue dans ce PDF. Vérifiez qu'il s'agit bien d'un export « Liste inscriptions/préinscriptions ».";
+      return;
+    }
+    statut.textContent=PDFIMPORT_LIGNES.length+' ligne(s) détectée(s). Relisez avant d’importer.';
+    document.getElementById('pdfImportBar').style.display='';
+    document.getElementById('btnPdfImportGo').style.display='';
+    renderPdfImportListe();
+  }catch(e){
+    console.error('[choisirPdfImport]',e);
+    statut.textContent='Lecture du PDF impossible : '+(e.message||'erreur inconnue');
+  }
+}
+
+/* Extraction brute : une entrée par ligne du tableau, colonnes assemblées à
+   partir des positions x, lignes physiques regroupées via le marqueur numéro
+   en première colonne. */
+async function pdfImportExtraire(file){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const entetes=PDFIMPORT_ENTETES.map(s=>s.trim());
+  const lignes=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);
+    const tc=await page.getTextContent();
+    let items=tc.items
+      .map(it=>({x:it.transform[4],y:it.transform[5],s:it.str}))
+      .filter(it=>it.s&&it.s.trim()!==''&&entetes.indexOf(it.s.trim())<0);
+    // Regroupe les fragments qui partagent la même ligne physique.
+    const physiques=[];
+    items.sort((a,b)=>b.y-a.y||a.x-b.x);
+    for(const it of items){
+      let l=physiques.find(l=>Math.abs(l.y-it.y)<2.5);
+      if(!l){l={y:it.y,items:[]};physiques.push(l);}
+      l.items.push(it);
+    }
+    physiques.sort((a,b)=>b.y-a.y);
+    physiques.forEach(l=>l.items.sort((a,b)=>a.x-b.x));
+    let courante=null;
+    for(const l of physiques){
+      const marqueur=l.items.find(it=>pdfImportColonneDe(it.x)==='ordre'&&/^\d+$/.test(it.s.trim()));
+      if(marqueur){
+        courante={ordre:marqueur.s.trim(),cols:{}};
+        lignes.push(courante);
+      }
+      if(!courante)continue;
+      for(const it of l.items){
+        const c=pdfImportColonneDe(it.x);
+        if(c==='ordre')continue;
+        (courante.cols[c]=courante.cols[c]||[]).push(it.s);
+      }
+    }
+  }
+  return lignes.map(l=>{
+    const j=k=>((l.cols[k]||[]).join(' ').replace(/\s+/g,' ').trim());
+    return {ordre:l.ordre,parents:j('parents'),email:j('email'),tel:j('tel'),adresse:j('adresse'),
+      enfant:j('enfant'),dob:j('dob'),jours:j('jours'),debut:j('debut'),commentaires:j('commentaires')};
+  });
+}
+
+/* Nom d'enfant → { nom, prenom, aNaitre } : les familles surnommées "à
+   naître" n'ont simplement pas encore de prénom. Sinon, on prend les
+   éventuels mots en MAJUSCULES de tête comme nom de famille — c'est la
+   convention la plus fréquente dans cet export — sinon le premier mot. */
+function pdfImportSplitEnfant(txt){
+  const clean=(txt||'').replace(/\s+/g,' ').trim();
+  if(/à\s*na[iî]tre|a\s*naitre/i.test(clean)){
+    return {nom:clean.replace(/à?\s*na[iî]tre/i,'').trim(),prenom:'',aNaitre:true};
+  }
+  const toks=clean.split(' ').filter(Boolean);
+  if(!toks.length)return {nom:'',prenom:'',aNaitre:false};
+  const estMaj=t=>t===t.toUpperCase()&&/[A-ZÀ-Ý]/.test(t);
+  let i=0;
+  while(i<toks.length-1&&estMaj(toks[i]))i++;
+  if(i===0)i=1;
+  return {nom:toks.slice(0,i).join(' '),prenom:toks.slice(i).join(' '),aNaitre:false};
+}
+
+/* Nom de parent → { prenom, nom } : ici la convention est presque inverse —
+   le nom de famille en MAJUSCULES se trouve le plus souvent en fin, parfois
+   en tête. Best-effort ; la direction corrige à l'écran si besoin. */
+function pdfImportSplitParent(txt){
+  const toks=(txt||'').trim().split(/\s+/).filter(Boolean);
+  if(!toks.length)return {prenom:'',nom:''};
+  const estMaj=t=>t===t.toUpperCase()&&/[A-ZÀ-Ý]/.test(t);
+  let j=toks.length;
+  while(j>1&&estMaj(toks[j-1]))j--;
+  if(j<toks.length)return {prenom:toks.slice(0,j).join(' '),nom:toks.slice(j).join(' ')};
+  let i=0;
+  while(i<toks.length-1&&estMaj(toks[i]))i++;
+  if(i>0)return {nom:toks.slice(0,i).join(' '),prenom:toks.slice(i).join(' ')};
+  return {prenom:toks.join(' '),nom:''};
+}
+
+function pdfImportDateISO(txt){
+  const m=/^(\d{2})\/(\d{2})\/(\d{4})$/.exec((txt||'').trim());
+  return m?(m[3]+'-'+m[2]+'-'+m[1]):'';
+}
+
+/* Ligne brute → objet préinscription pré-rempli, éditable dans l'aperçu. */
+function pdfImportInterpreter(l){
+  const enf=pdfImportSplitEnfant(l.enfant);
+  const adrM=/^(.*?)\s*-\s*(\d{5})\s+(.+)$/.exec((l.adresse||'').trim());
+  const jours=(l.jours||'').split(',').map(s=>PDFIMPORT_JOURS[s.trim().toLowerCase()])
+    .filter(n=>n>=1&&n<=5);
+  const nomsParents=(l.parents||'').split(/\bet\b/i).map(s=>s.trim()).filter(Boolean);
+  const emails=(l.email||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const tels=(l.tel||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const parents=nomsParents.length?nomsParents.map((n,i)=>{
+    const sp=pdfImportSplitParent(n);
+    return {prenom:sp.prenom,nom:sp.nom,email:emails[i]||'',telephone:tels[i]||''};
+  }):(l.email||l.tel?[{prenom:'',nom:'',email:emails[0]||'',telephone:tels[0]||''}]:[]);
+  const suspect=/ne pas traiter|lskaizen\.fr|test-integration|test technique|verification automatis/i
+    .test((l.commentaires||'')+' '+(l.email||'')+' '+l.enfant);
+  return {
+    ordre:l.ordre,
+    inclus:!suspect,
+    suspect:suspect,
+    prenom:enf.prenom,nom:enf.nom,aNaitre:enf.aNaitre,
+    dob:pdfImportDateISO(l.dob),
+    adresse:adrM?adrM[1].trim():(l.adresse||''),
+    code_postal:adrM?adrM[2]:'',
+    ville:adrM?adrM[3].trim():'',
+    jours:jours,
+    date_entree_souhaitee:pdfImportDateISO(l.debut),
+    commentaires:l.commentaires||'',
+    parents:parents
+  };
+}
+
+function renderPdfImportListe(){
+  const box=document.getElementById('pdfImportListe');
+  box.innerHTML=PDFIMPORT_LIGNES.map((r,i)=>{
+    const jrsHtml=JOURS.map(j=>'<label style="display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:600;margin-right:6px">'
+      +'<input type="checkbox" data-i="'+i+'" data-f="jour" value="'+j[0]+'"'+(r.jours.indexOf(j[0])>=0?' checked':'')+' onchange="pdfImportMajJour(this)">'+j[1].slice(0,3)+'</label>').join('');
+    const par=r.parents[0]||{prenom:'',nom:'',email:'',telephone:''};
+    return '<div class="pdfrow'+(r.inclus?'':' off')+'" id="pdfrow'+i+'">'
+      +'<div class="hd"><input type="checkbox" '+(r.inclus?'checked':'')+' onchange="pdfImportToggle('+i+',this.checked)">'
+      +'<b>Ligne n°'+esc(r.ordre)+'</b>'+(r.suspect?'<span class="flag">ressemble à une ligne de test</span>':'')+'</div>'
+      +'<div class="g">'
+      +'<div><label>Prénom enfant</label><input value="'+esc(r.prenom)+'" oninput="pdfImportMaj('+i+',\'prenom\',this.value)"></div>'
+      +'<div><label>Nom enfant</label><input value="'+esc(r.nom)+'" oninput="pdfImportMaj('+i+',\'nom\',this.value)"></div>'
+      +'<div><label>'+(r.aNaitre?'Terme prévu':'Naissance')+'</label><input type="date" value="'+esc(r.dob)+'" oninput="pdfImportMaj('+i+',\'dob\',this.value)"></div>'
+      +'<div><label>Adresse</label><input value="'+esc(r.adresse)+'" oninput="pdfImportMaj('+i+',\'adresse\',this.value)"></div>'
+      +'<div><label>CP</label><input value="'+esc(r.code_postal)+'" oninput="pdfImportMaj('+i+',\'code_postal\',this.value)"></div>'
+      +'<div><label>Ville</label><input value="'+esc(r.ville)+'" oninput="pdfImportMaj('+i+',\'ville\',this.value)"></div>'
+      +'<div><label>Date d’entrée souhaitée</label><input type="date" value="'+esc(r.date_entree_souhaitee)+'" oninput="pdfImportMaj('+i+',\'date_entree_souhaitee\',this.value)"></div>'
+      +'<div><label>Parent — prénom</label><input value="'+esc(par.prenom)+'" oninput="pdfImportMajParent('+i+',\'prenom\',this.value)"></div>'
+      +'<div><label>Parent — nom</label><input value="'+esc(par.nom)+'" oninput="pdfImportMajParent('+i+',\'nom\',this.value)"></div>'
+      +'<div><label>E-mail</label><input value="'+esc(par.email)+'" oninput="pdfImportMajParent('+i+',\'email\',this.value)"></div>'
+      +'<div><label>Téléphone</label><input value="'+esc(par.telephone)+'" oninput="pdfImportMajParent('+i+',\'telephone\',this.value)"></div>'
+      +'</div>'
+      +'<label style="display:block;margin-top:7px">Jours souhaités</label>'+jrsHtml
+      +'<div style="margin-top:7px"><label>Commentaires</label><textarea oninput="pdfImportMaj('+i+',\'commentaires\',this.value)">'+esc(r.commentaires)+'</textarea></div>'
+      +'</div>';
+  }).join('');
+  pdfImportMajCompte();
+}
+
+function pdfImportMaj(i,champ,v){PDFIMPORT_LIGNES[i][champ]=v;}
+function pdfImportMajParent(i,champ,v){
+  const r=PDFIMPORT_LIGNES[i];
+  if(!r.parents.length)r.parents.push({prenom:'',nom:'',email:'',telephone:''});
+  r.parents[0][champ]=v;
+}
+function pdfImportMajJour(el){
+  const i=Number(el.getAttribute('data-i')),v=Number(el.value);
+  const r=PDFIMPORT_LIGNES[i];
+  r.jours=el.checked?r.jours.concat(v).filter((x,idx,a)=>a.indexOf(x)===idx):r.jours.filter(x=>x!==v);
+}
+function pdfImportToggle(i,v){
+  PDFIMPORT_LIGNES[i].inclus=v;
+  document.getElementById('pdfrow'+i).classList.toggle('off',!v);
+  pdfImportMajCompte();
+}
+function pdfImportToutCocher(v){
+  PDFIMPORT_LIGNES.forEach((r,i)=>{r.inclus=v;});
+  renderPdfImportListe();
+}
+function pdfImportMajCompte(){
+  const n=PDFIMPORT_LIGNES.filter(r=>r.inclus).length;
+  document.getElementById('pdfImportCompte').textContent=n+' / '+PDFIMPORT_LIGNES.length+' ligne(s) sélectionnée(s)';
+}
+
+async function importerPdfSelection(){
+  const aFaire=PDFIMPORT_LIGNES.filter(r=>r.inclus);
+  if(!aFaire.length){toast('Aucune ligne sélectionnée.',true);return;}
+  const btn=document.getElementById('btnPdfImportGo');
+  btn.disabled=true;
+  let ok=0,ko=0;
+  for(const r of aFaire){
+    try{
+      const row={
+        statut:'nouvelle',
+        prenom:r.prenom,nom:r.nom,
+        ne_ou_a_naitre:r.aNaitre?'a_naitre':'ne',
+        dob:r.dob||null,
+        adresse:r.adresse,code_postal:r.code_postal,ville:r.ville,
+        date_entree_souhaitee:r.date_entree_souhaitee||null,
+        jours:r.jours,
+        notes_internes:r.commentaires,
+        created_by:ME?ME.id:null
+      };
+      const{data,error}=await sb.from('preinscriptions').insert(row).select().single();
+      if(error)throw error;
+      PRE.unshift(data);
+      for(const p of r.parents){
+        if(!p.prenom&&!p.nom&&!p.email&&!p.telephone)continue;
+        await sb.from('preinscriptions_parents').insert({
+          preinscription_id:data.id,lien:'autre',
+          prenom:p.prenom,nom:p.nom,email:p.email,telephone:p.telephone,destinataire:!!p.email
+        });
+      }
+      ok++;
+    }catch(e){
+      console.error('[importerPdfSelection]',e);ko++;
+    }
+  }
+  btn.disabled=false;
+  render();
+  toast(ok+' demande(s) importée(s)'+(ko?', '+ko+' échec(s)':'')+' ✅',!!ko&&!ok);
+  if(!ko)closeOv('ovImportPdf');
+}
 
 /* Date locale, jamais toISOString() : en UTC+2 celui-ci renvoie la veille pour
    tout ce qui est saisi avant 2h du matin. */
