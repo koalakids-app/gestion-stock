@@ -434,11 +434,16 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
   <div class="md" style="max-width:900px">
     <h3><i class="ti ti-history"></i> Historique des demandes</h3>
     <div class="bar">
+      <select id="hVue" style="width:auto;min-width:170px" onchange="changerVueHisto()">
+        <option value="dossier">Par dossier</option>
+        <option value="devis">Tous les devis</option>
+      </select>
       <select id="hAnnee" style="width:auto;min-width:170px" onchange="renderHisto()"></select>
       <select id="hCreche" style="width:auto;min-width:150px" onchange="renderHisto()"></select>
       <select id="hStatut" style="width:auto;min-width:150px" onchange="renderHisto()"></select>
       <input class="search" id="hSearch" placeholder="Rechercher un enfant…" oninput="renderHisto()">
       <button class="btn btn-s" onclick="exporterHisto()"><i class="ti ti-download"></i> Exporter</button>
+      <a class="btn btn-s" href="contrats.html" target="_blank" rel="noopener"><i class="ti ti-file-certificate"></i> Tous les contrats</a>
     </div>
     <div id="hStats" class="stats"></div>
     <div id="hListe"></div>
@@ -1368,12 +1373,15 @@ function render(){
   // Les compteurs portent sur l'ensemble, indépendamment des filtres en cours :
   // sinon cliquer un statut ferait tomber tous les autres à zéro.
   const box=document.getElementById('stats');
-  box.innerHTML=ORDRE_STATUTS.map(s=>{
-    const n=PRE.filter(p=>p.statut===s).length;
-    if(!n&&s!=='nouvelle'&&filtreStatut!==s)return '';
-    return '<div class="stat'+(filtreStatut===s?' on':'')+'" onclick="setStatut(\''+s+'\')">'
-      +'<div class="n">'+n+'</div><div class="l">'+esc(STATUTS[s].l)+'</div></div>';
-  }).join('');
+  box.innerHTML=
+    '<div class="stat'+(filtreStatut==='__tous__'?' on':'')+'" onclick="setStatut(\'__tous__\')">'
+    +'<div class="n">'+PRE.length+'</div><div class="l">Tous</div></div>'
+    +ORDRE_STATUTS.map(s=>{
+      const n=PRE.filter(p=>p.statut===s).length;
+      if(!n&&s!=='nouvelle'&&filtreStatut!==s)return '';
+      return '<div class="stat'+(filtreStatut===s?' on':'')+'" onclick="setStatut(\''+s+'\')">'
+        +'<div class="n">'+n+'</div><div class="l">'+esc(STATUTS[s].l)+'</div></div>';
+    }).join('');
 
   const nR=PRE.filter(estARelancer).length;
   document.getElementById('nRappels').textContent=nR?'('+nR+')':'';
@@ -1385,7 +1393,7 @@ function render(){
      reste entière — devis, dates, origine — et se retrouve en cliquant sur le
      compteur « Inscrit ». */
   if(!filtreStatut)l=l.filter(p=>p.statut!=='inscrit');
-  if(filtreStatut)l=l.filter(p=>p.statut===filtreStatut);
+  else if(filtreStatut!=='__tous__')l=l.filter(p=>p.statut===filtreStatut);
   if(cre)l=l.filter(p=>String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0);
   if(filtreRappels)l=l.filter(estARelancer);
   if(q)l=l.filter(p=>((p.prenom||'')+' '+(p.nom||'')+' '+(p.ville||'')+' '+(p.notes_internes||'')).toLowerCase().indexOf(q)>=0);
@@ -2567,6 +2575,7 @@ async function delDevis(){
    laquelle une crèche pense ses effectifs. Une demande reçue en juillet 2027
    appartient à l'année 2026-2027, pas à 2027-2028. */
 let HDEVIS=null;   // tous les devis du réseau, chargés une fois
+let HCONTRATS=null;// tous les contrats d'accueil du réseau, chargés une fois
 
 function anneeScolaire(iso){
   if(!iso)return null;
@@ -2597,6 +2606,22 @@ async function openHisto(){
     }
   }
 
+  /* Les contrats d'accueil de tout le réseau : c'est ce qui manquait pour que
+     l'historique montre le parcours complet d'un dossier — devis, mais aussi
+     signature et contresignature du contrat — sans avoir à ouvrir la fiche. */
+  if(!HCONTRATS){
+    try{
+      const{data,error}=await sb.from('contrats')
+        .select('id,preinscription_id,type,statut,numero,repondu_le,contresigne_le,total_mensuel')
+        .eq('type','initial').order('created_at');
+      if(error)throw error;
+      HCONTRATS=data||[];
+    }catch(e){
+      console.warn('[openHisto contrats]',e);
+      HCONTRATS=[];
+    }
+  }
+
   // Les années présentes dans les données, la plus récente d'abord.
   const annees=[...new Set(PRE.map(p=>anneeScolaire(p.created_at)).filter(a=>a!=null))]
     .sort((a,b)=>b-a);
@@ -2606,13 +2631,27 @@ async function openHisto(){
 
   document.getElementById('hCreche').innerHTML='<option value="">Toutes les crèches</option>'
     +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
-  document.getElementById('hStatut').innerHTML='<option value="">Tous les statuts</option>'
-    +ORDRE_STATUTS.map(x=>'<option value="'+x+'">'+esc(STATUTS[x].l)+'</option>').join('');
+  setVal('hVue','dossier');
+  majStatutsHisto();
 
   renderHisto();
 }
 
-/* Le parcours d'un dossier, reconstitué depuis les devis qui s'y rattachent. */
+/* Les options du filtre « Statut » dépendent de la vue : les statuts d'une
+   demande n'ont pas de sens pour lister des devis individuels. */
+function majStatutsHisto(){
+  const vue=val('hVue');
+  document.getElementById('hStatut').innerHTML=vue==='devis'
+    ? '<option value="">Tous les statuts</option>'
+      +Object.keys(D_STATUTS).map(x=>'<option value="'+x+'">'+esc(D_STATUTS[x].l)+'</option>').join('')
+    : '<option value="">Tous les statuts</option>'
+      +ORDRE_STATUTS.map(x=>'<option value="'+x+'">'+esc(STATUTS[x].l)+'</option>').join('');
+}
+function changerVueHisto(){majStatutsHisto();renderHisto();}
+
+/* Le parcours d'un dossier, reconstitué depuis les devis et le contrat initial
+   qui s'y rattachent — le tableau de bord complet d'une demande sans avoir à
+   l'ouvrir. */
 function parcours(p){
   const ds=(HDEVIS||[]).filter(d=>String(d.preinscription_id)===String(p.id));
   const envoyes=ds.filter(d=>d.envoye_le).sort((a,b)=>String(a.envoye_le).localeCompare(String(b.envoye_le)));
@@ -2620,11 +2659,16 @@ function parcours(p){
     .sort((a,b)=>String(a.repondu_le).localeCompare(String(b.repondu_le)))[0]||null;
   const refuse=ds.filter(d=>d.statut==='refuse'&&d.repondu_le)
     .sort((a,b)=>String(b.repondu_le).localeCompare(String(a.repondu_le)))[0]||null;
+  // Le contrat le plus avancé : contresigné vaut mieux que signé, qui vaut
+  // mieux qu'envoyé — un contrat refusé ou annulé ne fait pas progresser.
+  const RANG={contresigne:4,signe:3,envoye:2,brouillon:1,expire:0,refuse:0,annule:0};
+  const cs=(HCONTRATS||[]).filter(c=>String(c.preinscription_id)===String(p.id));
+  const contrat=cs.sort((a,b)=>(RANG[b.statut]||0)-(RANG[a.statut]||0))[0]||null;
   return{
     nbDevis:ds.length,
     premierEnvoi:envoyes.length?envoyes[0].envoye_le:null,
-    accepte:accepte,refuse:refuse,
-    mensuel:accepte?accepte.total_mensuel:(envoyes.length?envoyes[envoyes.length-1].total_mensuel:null)
+    accepte:accepte,refuse:refuse,contrat:contrat,
+    mensuel:contrat?contrat.total_mensuel:(accepte?accepte.total_mensuel:(envoyes.length?envoyes[envoyes.length-1].total_mensuel:null))
   };
 }
 
@@ -2661,6 +2705,7 @@ function histoFiltre(){
 }
 
 function renderHisto(){
+  if(val('hVue')==='devis'){renderHistoDevis();return;}
   const l=histoFiltre();
 
   /* Les compteurs. Le taux de transformation est le chiffre que réclame un
@@ -2714,6 +2759,10 @@ function renderHisto(){
       +et('Demande',p.created_at,true)
       +et('Devis envoyé',x.premierEnvoi,!!x.premierEnvoi)
       +(x.refuse?et('Refusé',x.refuse.repondu_le,true):et('Accepté',x.accepte?x.accepte.repondu_le:null,!!x.accepte))
+      +(x.contrat&&x.contrat.statut==='refuse'?et('Contrat refusé',x.contrat.repondu_le,true)
+        :x.contrat&&x.contrat.statut==='contresigne'?et('Contrat contresigné',x.contrat.contresigne_le,true)
+        :x.contrat&&x.contrat.statut==='signe'?et('Contrat signé',x.contrat.repondu_le,true)
+        :et('Contrat',null,false))
       +et('Inscrit',null,!!p.enfant_id)
       +(x.mensuel?'<span class="e">'+euro(x.mensuel)+' / mois</span>':'')
       +'</div></div>';
@@ -2723,6 +2772,53 @@ function renderHisto(){
     'Le taux de transformation porte sur les <b>dossiers clos</b> ('+clos+') : '
     +'inclure les demandes encore en cours le ferait chuter en début d\'année sans qu\'aucune ne soit perdue. '
     +'Le délai médian sépare la demande de l\'acceptation du devis.';
+}
+
+/* Vue « Tous les devis » : chaque devis individuellement, quel que soit son
+   statut — y compris les brouillons, qu'aucune autre vue ne montre — plutôt
+   que le résumé par dossier de la vue « Par dossier ». */
+function renderHistoDevis(){
+  const an=val('hAnnee'),cre=val('hCreche'),st=val('hStatut'),q=val('hSearch').toLowerCase();
+  const byId={};PRE.forEach(p=>{byId[p.id]=p;});
+  const l=(HDEVIS||[]).filter(d=>{
+    const p=byId[d.preinscription_id];
+    if(an&&String(anneeScolaire(d.created_at))!==an)return false;
+    if(cre&&!(p&&(String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0)))return false;
+    if(st&&d.statut!==st)return false;
+    if(q&&(p?((p.prenom||'')+' '+(p.nom||'')):'').toLowerCase().indexOf(q)<0
+      &&(d.numero||'').toLowerCase().indexOf(q)<0)return false;
+    return true;
+  }).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+
+  const parStatut={};
+  Object.keys(D_STATUTS).forEach(s=>parStatut[s]=0);
+  l.forEach(d=>{parStatut[d.statut]=(parStatut[d.statut]||0)+1;});
+  document.getElementById('hStats').innerHTML=Object.keys(D_STATUTS)
+    .map(s=>'<div class="hs"><div class="n">'+(parStatut[s]||0)+'</div><div class="l">'+esc(D_STATUTS[s].l)+'</div></div>').join('');
+
+  const box=document.getElementById('hListe');
+  if(!l.length){
+    box.innerHTML='<div class="empty"><i class="ti ti-inbox"></i><p>Aucun devis ne correspond à ces filtres.</p></div>';
+    document.getElementById('hNote').textContent='';
+    return;
+  }
+  box.innerHTML=l.map(d=>{
+    const p=byId[d.preinscription_id];
+    const nom=p?(((p.prenom||'')+' '+(p.nom||'')).trim()||'Sans nom'):'Demande introuvable';
+    const cr=p?(nomCreche(p.creche_id)||toArr(p.creches_souhaitees).map(nomCreche).filter(Boolean).join(' · ')):'';
+    const ds=D_STATUTS[d.statut]||D_STATUTS.brouillon;
+    return '<div class="hl"'+(p?' onclick="closeOv(\'ovHisto\');openFiche(\''+p.id+'\')" style="cursor:pointer"':'')+'>'
+      +'<div class="t"><span class="n">'+esc(nom)+'</span>'
+      +'<span class="tag" style="background:'+ds.bg+';color:'+ds.fg+'">'+esc(ds.l)+'</span>'
+      +'<span class="c">'+esc(d.numero||'')+(cr?' · '+esc(cr):'')+'</span></div>'
+      +'<div class="p">'
+      +'<span class="e">créé <b>'+dfr(d.created_at)+'</b></span>'
+      +(d.envoye_le?'<span class="e">envoyé <b>'+dfr(d.envoye_le)+'</b></span>':'')
+      +(d.repondu_le?'<span class="e">répondu <b>'+dfr(d.repondu_le)+'</b></span>':'')
+      +(d.total_mensuel?'<span class="e">'+euro(d.total_mensuel)+' / mois</span>':'')
+      +'</div></div>';
+  }).join('');
+  document.getElementById('hNote').textContent=l.length+' devis.';
 }
 
 /* Export pour le gestionnaire. Point-virgule et BOM : Excel en français ouvre
