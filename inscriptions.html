@@ -223,6 +223,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <span class="who" id="whoAmI"></span>
     <button class="tbtn accent" onclick="openTarifs()" title="Tarifs et frais"><i class="ti ti-cash"></i><span>Tarifs</span></button>
     <button class="tbtn" onclick="openImportPdf()" title="Importer une liste de préinscriptions (PDF)"><i class="ti ti-file-upload"></i><span>Importer PDF</span></button>
+    <button class="tbtn danger" onclick="openSupprGroupe()" title="Supprimer un import en groupe"><i class="ti ti-trash-x"></i><span>Suppr. import</span></button>
     <a class="tbtn" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i><span>Accueil</span></a>
     <button class="tbtn" onclick="openHisto()" title="Historique des demandes"><i class="ti ti-history"></i><span>Historique</span></button>
     <button class="tbtn" onclick="openNotice()" title="Mode d'emploi"><i class="ti ti-help"></i><span>Aide</span></button>
@@ -473,6 +474,33 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div class="acts">
       <button class="btn btn-g" onclick="closeOv('ovImportPdf')">Fermer</button>
       <button class="btn btn-p" id="btnPdfImportGo" style="display:none" onclick="importerPdfSelection()"><i class="ti ti-check"></i> Importer la sélection</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUPPRESSION GROUPÉE (annuler un import) -->
+<div class="ov" id="ovSupprGroupe">
+  <div class="md" style="max-width:900px">
+    <h3><i class="ti ti-trash-x"></i> Supprimer un import en groupe</h3>
+    <p class="hint">Retrouvez les demandes créées par un import (par crèche visée et par date de création), relisez
+      la liste, puis supprimez celles que vous ne vouliez pas garder. Une demande déjà basculée en fiche enfant ne
+      peut pas être supprimée : elle n'apparaîtra pas ici.</p>
+    <div class="bar">
+      <select id="sgCreche" style="width:auto;min-width:170px"><option value="">Toutes les crèches</option></select>
+      <div class="f" style="margin:0"><label class="lb">Créées à partir du</label><input type="date" id="sgDepuis"></div>
+      <div class="f" style="margin:0"><label class="lb">Jusqu'au</label><input type="date" id="sgJusqua"></div>
+      <button class="btn btn-s" onclick="rechercherSupprGroupe()"><i class="ti ti-search"></i> Rechercher</button>
+    </div>
+    <p class="hint" id="sgStatut"></p>
+    <div id="sgBar" class="bar" style="display:none">
+      <button class="btn btn-s btn-sm" onclick="sgToutCocher(true)">Tout cocher</button>
+      <button class="btn btn-s btn-sm" onclick="sgToutCocher(false)">Tout décocher</button>
+      <span class="hint" style="margin:0" id="sgCompte"></span>
+    </div>
+    <div id="sgListe" style="max-height:50vh;overflow:auto"></div>
+    <div class="acts">
+      <button class="btn btn-g" onclick="closeOv('ovSupprGroupe')">Fermer</button>
+      <button class="btn btn-d" id="btnSgGo" style="display:none" onclick="supprimerSelectionGroupee()"><i class="ti ti-trash"></i> Supprimer la sélection</button>
     </div>
   </div>
 </div>
@@ -995,6 +1023,94 @@ async function importerPdfSelection(){
   render();
   toast(ok+' demande(s) importée(s)'+(ko?', '+ko+' échec(s)':'')+' ✅',!!ko&&!ok);
   if(!ko)closeOv('ovImportPdf');
+}
+
+/* ---------- SUPPRESSION GROUPÉE (annuler un import) ----------
+   Un import ne laisse aucune trace de lot à lui seul : on retrouve donc les
+   demandes créées via les mêmes repères que l'import lui-même, à la relecture
+   — crèche souhaitée et date de création — plutôt qu'un identifiant de lot
+   qui n'existe pas. Rien n'est jamais supprimé sans être d'abord listé et
+   coché un par un, comme pour l'import. */
+let SG_RESULTATS=[];
+
+function openSupprGroupe(){
+  document.getElementById('sgCreche').innerHTML='<option value="">Toutes les crèches</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  setVal('sgDepuis',auj());setVal('sgJusqua','');
+  document.getElementById('sgStatut').textContent='';
+  document.getElementById('sgBar').style.display='none';
+  document.getElementById('sgListe').innerHTML='';
+  document.getElementById('btnSgGo').style.display='none';
+  SG_RESULTATS=[];
+  openOv('ovSupprGroupe');
+}
+
+function rechercherSupprGroupe(){
+  const cre=val('sgCreche'),depuis=val('sgDepuis'),jusqua=val('sgJusqua');
+  SG_RESULTATS=PRE.filter(p=>{
+    if(p.enfant_id)return false; // basculée en fiche enfant : jamais proposée ici
+    if(cre&&toArr(p.creches_souhaitees).map(String).indexOf(cre)<0)return false;
+    const d=String(p.created_at||'').slice(0,10);
+    if(depuis&&d<depuis)return false;
+    if(jusqua&&d>jusqua)return false;
+    return true;
+  }).map(p=>({p,inclus:true}));
+  const statut=document.getElementById('sgStatut');
+  if(!SG_RESULTATS.length){
+    statut.textContent='Aucune demande ne correspond à ces critères.';
+    document.getElementById('sgBar').style.display='none';
+    document.getElementById('sgListe').innerHTML='';
+    document.getElementById('btnSgGo').style.display='none';
+    return;
+  }
+  statut.textContent=SG_RESULTATS.length+' demande(s) trouvée(s).';
+  document.getElementById('sgBar').style.display='';
+  document.getElementById('btnSgGo').style.display='';
+  renderSgListe();
+}
+
+function renderSgListe(){
+  const box=document.getElementById('sgListe');
+  box.innerHTML=SG_RESULTATS.map((r,i)=>{
+    const p=r.p;
+    const nom=((p.prenom||'')+' '+(p.nom||'')).trim()||'Sans nom';
+    const naiss=p.dob?(p.ne_ou_a_naitre==='a_naitre'?'terme le '+dfr(p.dob):'né(e) le '+dfr(p.dob)):'naissance non renseignée';
+    const cr=toArr(p.creches_souhaitees).map(nomCreche).filter(Boolean).join(' · ')||'crèche non précisée';
+    return '<div class="hl"><div class="t">'
+      +'<input type="checkbox" '+(r.inclus?'checked':'')+' onchange="sgToggle('+i+',this.checked)">'
+      +'<span class="n">'+esc(nom)+'</span><span class="c">'+esc(naiss)+' · '+esc(cr)
+      +' · créée le '+dfr(String(p.created_at||'').slice(0,10))+'</span></div></div>';
+  }).join('');
+  sgMajCompte();
+}
+function sgToggle(i,v){SG_RESULTATS[i].inclus=v;sgMajCompte();}
+function sgToutCocher(v){SG_RESULTATS.forEach(r=>r.inclus=v);renderSgListe();}
+function sgMajCompte(){
+  const n=SG_RESULTATS.filter(r=>r.inclus).length;
+  document.getElementById('sgCompte').textContent=n+' / '+SG_RESULTATS.length+' sélectionnée(s)';
+}
+
+async function supprimerSelectionGroupee(){
+  const aSupprimer=SG_RESULTATS.filter(r=>r.inclus);
+  if(!aSupprimer.length){toast('Aucune demande sélectionnée.',true);return;}
+  if(!confirm('Supprimer définitivement '+aSupprimer.length+' demande(s) ? Les parents saisis seront supprimés avec elles. Cette action est irréversible.'))return;
+  const btn=document.getElementById('btnSgGo');
+  btn.disabled=true;
+  let ok=0,ko=0;
+  for(const r of aSupprimer){
+    try{
+      const{error}=await sb.from('preinscriptions').delete().eq('id',r.p.id);
+      if(error)throw error;
+      PRE=PRE.filter(x=>String(x.id)!==String(r.p.id));
+      ok++;
+    }catch(e){
+      console.error('[supprimerSelectionGroupee]',e);ko++;
+    }
+  }
+  btn.disabled=false;
+  render();
+  toast(ok+' demande(s) supprimée(s)'+(ko?', '+ko+' échec(s)':''),!!ko&&!ok);
+  rechercherSupprGroupe();
 }
 
 /* Date locale, jamais toISOString() : en UTC+2 celui-ci renvoie la veille pour
