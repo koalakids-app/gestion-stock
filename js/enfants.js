@@ -2236,11 +2236,18 @@ async function presApplyContrats(){
     datesParEnfant.set(c.enfant_id,set);
   });
   const enfantsConcernes=[...datesParEnfant.keys()].filter(id=>datesParEnfant.get(id).size);
-  if(!enfantsConcernes.length){
+  // Tous les enfants ayant un contrat avec terme : même ceux dont le contrat édité
+  // ne couvre plus aucun jour (toutes les cases décochées) doivent être nettoyés
+  // ci-dessous, pas seulement ceux qui ont encore des dates à pointer.
+  const enfantsAvecTerme=[...new Set(avecTerme.map(c=>c.enfant_id))];
+  if(!enfantsConcernes.length&&!enfantsAvecTerme.length){
     showBanner('Aucune date ne correspond aux jours cochés des contrats.','error');
     return;
   }
-  // Dates déjà pointées (présentes ou non) : on ne les retouche pas.
+  // Présences existantes (pointées ou non) pour ces enfants : on ne retouche pas
+  // les dates déjà pointées, et on s'en sert aussi pour repérer les présences
+  // laissées par un précédent « Appliquer les contrats » sur un jour retiré
+  // depuis du contrat (cf. nettoyage plus bas).
   // Lecture paginée : PostgREST plafonne à 1000 lignes par requête, et un
   // historique de présences dépasse vite ce seuil — une lecture tronquée
   // ferait croire à tort que certaines dates ne sont pas encore pointées,
@@ -2249,8 +2256,8 @@ async function presApplyContrats(){
   try{
     const PAGE=1000;
     for(let from=0;;from+=PAGE){
-      const{data,error}=await sb.from('presences').select('enfant_id,presence_date')
-        .in('enfant_id',enfantsConcernes).range(from,from+PAGE-1);
+      const{data,error}=await sb.from('presences').select('enfant_id,presence_date,status,source,heure_debut,heure_fin')
+        .in('enfant_id',enfantsAvecTerme).range(from,from+PAGE-1);
       if(error) throw error;
       dejaPres=dejaPres.concat(data||[]);
       if(!data||data.length<PAGE) break;
@@ -2261,6 +2268,14 @@ async function presApplyContrats(){
     return;
   }
   const dejaSet=new Set(dejaPres.map(p=>p.enfant_id+'_'+p.presence_date));
+  // Présences « auto-générées » par un Appliquer les contrats précédent : sans
+  // horaire ni source particulière. Seules celles-là peuvent être retirées sans
+  // risque si le jour n'est plus coché dans le contrat — un pointage tablette
+  // (source:'pointage') ou un horaire issu du planning importé reflètent du réel
+  // et ne doivent jamais être effacés automatiquement.
+  const autoGenerees=new Set(dejaPres.filter(function(p){
+    return p.status==='present'&&!p.source&&!p.heure_debut&&!p.heure_fin;
+  }).map(function(p){return p.enfant_id+'_'+p.presence_date;}));
   const rows=[];
   let nbEnfants=0;
   enfantsConcernes.forEach(function(id){
@@ -2273,15 +2288,37 @@ async function presApplyContrats(){
     });
     if(ajouts) nbEnfants++;
   });
+  // Nettoyage : dates couvertes par la période d'un contrat mais dont le jour de
+  // semaine n'est PLUS coché (ex. lundi/mardi décochés après modification) — sans
+  // ça elles restent affichées comme présentes sur le Gantt malgré le contrat à jour.
+  const aSupprimerParEnfant=new Map(); // enfant_id -> Set(presence_date ISO)
+  let nbSuppr=0;
+  avecTerme.forEach(function(c){
+    const jours=ctParseJours(c.jours);
+    if(!c.date_debut||c.date_fin<c.date_debut) return;
+    const fin=new Date(c.date_fin+'T00:00:00');
+    for(let d=new Date(c.date_debut+'T00:00:00'); d<=fin; d.setDate(d.getDate()+1)){
+      const jour=(d.getDay()===0)?7:d.getDay();
+      if(jours.indexOf(jour)>=0) continue;
+      const iso=ipDateToLocalISO(d);
+      const key=c.enfant_id+'_'+iso;
+      if(!autoGenerees.has(key)) continue;
+      const set=aSupprimerParEnfant.get(c.enfant_id)||new Set();
+      if(!set.has(iso)){ set.add(iso); nbSuppr++; }
+      aSupprimerParEnfant.set(c.enfant_id,set);
+    }
+  });
   const avertSansTerme=sansTerme.length
     ? '\n\n⚠ '+sansTerme.length+' contrat(s) sans date de fin ignoré(s) : renseignez une date de fin pour les inclure.'
     : '';
-  if(!rows.length){
-    showBanner('Toutes les dates des contrats sont déjà pointées.'+avertSansTerme);
+  if(!rows.length&&!nbSuppr){
+    showBanner('Toutes les dates des contrats sont déjà à jour.'+avertSansTerme);
     return;
   }
   const nbJours=rows.length/2;
-  if(!confirm('Marquer présents d’après la durée complète des contrats :\n\n• '+nbEnfants+' enfant(s)\n• '+nbJours+' jour(s) au total'+avertSansTerme+'\n\nContinuer ?')) return;
+  const msgAjout=nbJours?('• '+nbEnfants+' enfant(s), '+nbJours+' jour(s) marqué(s) présent(s)\n'):'';
+  const msgSuppr=nbSuppr?('• '+nbSuppr+' jour(s) retiré(s) (plus dans le contrat)\n'):'';
+  if(!confirm('Appliquer les contrats :\n\n'+msgAjout+msgSuppr+avertSansTerme+'\n\nContinuer ?')) return;
   // Insertion par lots : un contrat de plusieurs mois peut représenter des
   // centaines de lignes, mieux vaut ne pas tout envoyer en un seul appel.
   // upsert + ignoreDuplicates plutôt qu'un simple insert : si une ligne a
@@ -2294,12 +2331,18 @@ async function presApplyContrats(){
       {onConflict:'enfant_id,presence_date,slot',ignoreDuplicates:true});
     if(error){ console.warn('presApplyContrats insert',error); showBanner('Enregistrement impossible : '+(error.message||''),'error'); return; }
   }
+  for(const[id,dates]of aSupprimerParEnfant){
+    const{error}=await sb.from('presences').delete().eq('enfant_id',id).in('presence_date',[...dates]);
+    if(error){ console.warn('presApplyContrats suppression',error); showBanner('Nettoyage des présences impossible : '+(error.message||''),'error'); return; }
+  }
   // On bascule sur « Présents uniquement » : les enfants sans contrat ce jour
   // n’encombrent plus la feuille de présence (le chip permet de les réafficher).
   presOnlyPresents=true;
   localStorage.setItem('presOnlyPresents','1');
   presSyncFilterChip();
-  showBanner(nbEnfants+' enfant(s) marqué(s) présent(s) sur '+nbJours+' jour(s) d’après la durée des contrats.'+avertSansTerme);
+  showBanner((nbJours?nbEnfants+' enfant(s) marqué(s) présent(s) sur '+nbJours+' jour(s)':'')
+    +(nbJours&&nbSuppr?' — ':'')+(nbSuppr?nbSuppr+' jour(s) retiré(s) du planning':'')
+    +' d’après la durée des contrats.'+avertSansTerme);
   renderPresence();
 }
 window.presApplyContrats=presApplyContrats;
