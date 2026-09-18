@@ -236,9 +236,15 @@ function enfRenderIdentite(){
   const grp = e.dob ? groupeFromDob(e.dob) : (e.groupe||'');
   const row = (lab,val)=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 2px;border-bottom:1px solid var(--border)"><span style="color:var(--muted);font-size:13px">'+lab+'</span><span style="font-weight:600;font-size:13px;text-align:right">'+(val||'—')+'</span></div>';
   box.innerHTML =
-      row('Prénom', escHtml(e.prenom||''))
+      (e.naissance_provisoire
+        ? '<div style="background:#FFF6DC;border-left:4px solid #B8860B;border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#B8860B">'
+          +'<i class="ti ti-alert-triangle"></i> Date de naissance <b>provisoire</b> (terme prévu, enfant pas encore né) — '
+          +'corrigez-la ci-dessous dès la naissance connue.</div>'
+        : '')
+    + row('Prénom', escHtml(e.prenom||''))
     + row('Nom', escHtml(e.nom||''))
-    + row('Date de naissance', e.dob ? escHtml(vacFmtDate(e.dob)) : '')
+    + row(e.naissance_provisoire?'Date de naissance (terme prévu)':'Date de naissance',
+        e.dob ? escHtml(vacFmtDate(e.dob)) : '')
     + row('Groupe', escHtml(grp))
     + row('Crèche', creche?escHtml(creche.name):'')
     + row('Allergies', escHtml(e.allergies||''))
