@@ -74,6 +74,7 @@ alter table public.stock_couches_mouvements enable row level security;
 -- Même principe que suivi_saisies (37b) : direction (referents.creche_id
 -- null) voit tout, une référente scopée ne voit que sa crèche — via le nom,
 -- faute de creche_id sur ces deux tables.
+drop policy if exists stock_couches_select on public.stock_couches;
 create policy stock_couches_select on public.stock_couches
   for select to authenticated
   using (
@@ -85,6 +86,7 @@ create policy stock_couches_select on public.stock_couches
     )
   );
 
+drop policy if exists stock_couches_insert on public.stock_couches;
 create policy stock_couches_insert on public.stock_couches
   for insert to authenticated
   with check (
@@ -96,6 +98,7 @@ create policy stock_couches_insert on public.stock_couches
     )
   );
 
+drop policy if exists stock_couches_update on public.stock_couches;
 create policy stock_couches_update on public.stock_couches
   for update to authenticated
   using (
@@ -117,6 +120,7 @@ create policy stock_couches_update on public.stock_couches
 
 grant select, insert, update on public.stock_couches to authenticated;
 
+drop policy if exists stock_couches_mouvements_select on public.stock_couches_mouvements;
 create policy stock_couches_mouvements_select on public.stock_couches_mouvements
   for select to authenticated
   using (
@@ -131,6 +135,7 @@ create policy stock_couches_mouvements_select on public.stock_couches_mouvements
 -- Insertion manuelle (réception, ajustement) depuis stock.html. Les lignes
 -- automatiques (change_auto/annulation_change) sont écrites par le trigger
 -- ci-dessous, en SECURITY DEFINER, donc pas concernées par cette policy.
+drop policy if exists stock_couches_mouvements_insert on public.stock_couches_mouvements;
 create policy stock_couches_mouvements_insert on public.stock_couches_mouvements
   for insert to authenticated
   with check (
