@@ -273,6 +273,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div class="acts">
       <button class="btn btn-d" id="btnDelCt" style="display:none" onclick="delContrat()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn btn-s" id="btnPdfCt" style="display:none" onclick="pdfContrat(contratId)"><i class="ti ti-file-type-pdf"></i> Le PDF</button>
+      <button class="btn btn-s" id="btnMailCt" style="display:none" onclick="renvoyerContratSigne()"><i class="ti ti-mail"></i> Envoyer par mail</button>
       <button class="btn btn-s" id="btnLienCt" style="display:none" onclick="copierLienContrat()"><i class="ti ti-link"></i> Le lien</button>
       <button class="btn btn-p" id="btnEnvoiCt" style="display:none" onclick="envoyerContrat()"><i class="ti ti-send"></i> Envoyer</button>
       <button class="btn btn-p" id="btnSignerCt" style="display:none" onclick="openContresignature()"><i class="ti ti-stamp"></i> Contresigner</button>
@@ -1352,6 +1353,10 @@ async function openContrat(id,type){
   // Le PDF ne s'imprime que depuis la base : un contrat jamais enregistré n'a
   // ni numéro ni lignes, et sortirait un document sans identité.
   document.getElementById('btnPdfCt').style.display=CCUR?'':'none';
+  // Renvoi manuel : pour un contrat déjà contresigné avant la mise en place de
+  // l'envoi automatique, ou simplement si la famille redemande une copie.
+  document.getElementById('btnMailCt').style.display=
+    (CCUR&&CCUR.statut==='contresigne')?'':'none';
 
   const lock=document.getElementById('cLock');
   lock.style.display=brouillon?'none':'';
@@ -2841,9 +2846,26 @@ async function envoyerContratSigneParMail(c){
     toast('Contrat signé envoyé à la famille par e-mail ✅');
   }catch(e){
     console.error('[envoyerContratSigneParMail]',e);
-    toast('Contresignature enregistrée, mais l\'envoi du mail a échoué : '
+    toast('L\'envoi du mail a échoué : '
       +(e.message||'erreur inconnue')+' — le PDF reste disponible via « Le PDF ».',true);
   }
+}
+
+/* Renvoi manuel depuis la fiche du contrat : couvre les contrats déjà
+   contresignés avant la mise en place de l'envoi automatique, et le cas où
+   la famille redemande simplement une copie. Même fonction d'envoi que
+   celle déclenchée après la contresignature. */
+async function renvoyerContratSigne(){
+  const c=CONTRATS.find(x=>String(x.id)===String(contratId));
+  if(!c){toast('Contrat introuvable.',true);return;}
+  const adresses=String(c.destinataires||'').split(',').map(x=>x.trim()).filter(x=>x.includes('@'));
+  if(!adresses.length){toast('Aucune adresse e-mail enregistrée sur ce contrat.',true);return;}
+  if(!confirm('Envoyer le contrat signé à '+adresses.join(', ')+' ?'))return;
+
+  const b=document.getElementById('btnMailCt');
+  b.disabled=true;b.innerHTML='<i class="ti ti-mail"></i> Envoi…';
+  await envoyerContratSigneParMail(c);
+  b.disabled=false;b.innerHTML='<i class="ti ti-mail"></i> Envoyer par mail';
 }
 
 /* ---------- NOTICE ---------- */
