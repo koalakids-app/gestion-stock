@@ -236,6 +236,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div class="bar">
       <input class="search" id="fSearch" placeholder="Rechercher un enfant, un parent…" oninput="render()">
       <select id="fCreche" style="width:auto;min-width:150px" onchange="render()"></select>
+      <select id="fTri" style="width:auto;min-width:190px" onchange="render()">
+        <option value="creation">Trier par date d'ajout</option>
+        <option value="debut">Trier par date de début souhaitée</option>
+      </select>
       <button class="btn btn-s btn-sm" id="btnRappels" onclick="toggleRappels()"><i class="ti ti-bell"></i> À relancer <span id="nRappels"></span></button>
       <button class="btn btn-p" onclick="openFiche(null)"><i class="ti ti-plus"></i> Nouvelle demande</button>
     </div>
@@ -1385,6 +1389,17 @@ function render(){
   if(cre)l=l.filter(p=>String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0);
   if(filtreRappels)l=l.filter(estARelancer);
   if(q)l=l.filter(p=>((p.prenom||'')+' '+(p.nom||'')+' '+(p.ville||'')+' '+(p.notes_internes||'')).toLowerCase().indexOf(q)>=0);
+
+  /* Par date d'ajout (l'ordre déjà chargé, le plus récent en tête) ou par
+     date de début souhaitée — la plus proche en tête, les demandes sans date
+     renseignée reléguées en bas plutôt qu'éparpillées par un tri « vide en
+     premier ». */
+  if(val('fTri')==='debut'){
+    l.sort((a,b)=>{
+      const da=a.date_entree_souhaitee||'9999',db=b.date_entree_souhaitee||'9999';
+      return da<db?-1:da>db?1:0;
+    });
+  }
 
   const el=document.getElementById('list');
   if(!l.length){
