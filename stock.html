@@ -1024,6 +1024,9 @@ body.sk-locked{overflow:hidden}
   <button class="nav-item" onclick="showPage('univers', this)">
     <span class="nav-icon">🌟</span> Univers ludiques
   </button>
+  <button class="nav-item" onclick="showPage('couches', this)">
+    <span class="nav-icon">🍼</span> Couches
+  </button>
 
   <div class="sidebar-section-title">Structures</div>
  <div class="creche-badge active" onclick="filterCreche('all', this)">
@@ -1341,6 +1344,20 @@ body.sk-locked{overflow:hidden}
         </div>
         <div id="souscats-list" style="padding:0 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
       </div>
+    </div>
+
+    <!-- ── PAGE COUCHES ── -->
+    <div id="page-couches" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Stock de couches</div>
+      </div>
+      <div style="padding:0 20px 4px;font-size:12.5px;color:var(--ink3);line-height:1.6">
+        Le stock se décompte tout seul : chaque « Change » saisi dans le suivi de l'enfant retire
+        une couche de la taille portée par l'enfant (fiche enfant → Taille de couche). Utilisez les
+        boutons ci-dessous seulement pour enregistrer une <b>réception</b> de commande ou corriger le stock.
+      </div>
+      <div id="couches-alertes" style="padding:12px 20px 0"></div>
+      <div id="couches-grid" style="padding:16px 20px;display:flex;flex-direction:column;gap:24px"></div>
     </div>
 
   </div><!-- /content -->
@@ -1858,6 +1875,19 @@ let HISTORIQUE = [
   { id:8, type:'commande', article:'Commande BC-2024-040', qty:0, creche:'Cuers', user:'Admin', date:'2024-03-28 15:00', note:'Halilit — 97,50€' },
 ];
 
+// ─── COUCHES ────────────────────────────────────────────────────────────
+// Une ligne par crèche × taille (3/4/5/6). Alimenté par stock_couches et
+// stock_couches_mouvements (Supabase) — le décompte automatique se fait côté
+// base (trigger sur suivi_saisies), voir sql/stock_couches.sql.
+// Deux familles d'articles : couche classique (3 à 6) et couche-culotte
+// (4/5 seulement, apprentissage de la propreté) — voir sql/stock_couches.sql.
+const COUCHES_PRODUITS = [
+  { type: 'couche',  label: 'Couches classiques', tailles: ['3','4','5','6'] },
+  { type: 'culotte', label: 'Couches-culottes',   tailles: ['4','5'] },
+];
+let COUCHES = [];      // stock courant : { id, creche, typeCouche, taille, stock, seuilAlerteJours }
+let COUCHES_MVTS = []; // journal des mouvements (500 derniers), pour estimer la conso/jour
+
 // ─── STATE ─────────────────────────────────────────────────────────────
 // ─── PAGINATION ──────────────────────────────────────────────────────────
 const PAGE_SIZE = 10;
@@ -2218,6 +2248,7 @@ function filterCreche(creche, el) {
   else if (currentPage === 'commandes') renderCommandes();
   else if (currentPage === 'univers') renderUnivers();
   else if (currentPage === 'historique') renderHistorique();
+  else if (currentPage === 'couches') renderCouches();
   else renderTable();
 }
 
@@ -2399,6 +2430,132 @@ function renderHistorique() {
       <div class="histo-date">${h.date}</div>
     </div>`;
   }).join('');
+}
+
+// ─── COUCHES ──────────────────────────────────────────────────────────────
+// Le stock lui-même se décompte tout seul (trigger côté base sur chaque
+// « Change » du suivi — sql/stock_couches.sql). Ici on affiche juste l'état
+// courant, une estimation « jours restants » à partir de la conso des 14
+// derniers jours, et deux actions manuelles : réception d'une commande et
+// correction ponctuelle du stock.
+function coucheLabel(type) { return type === 'culotte' ? 'Couches-culottes' : 'Couches classiques'; }
+
+function coucheFind(creche, type, taille) {
+  return COUCHES.find(c => c.creche === creche && c.typeCouche === type && c.taille === taille);
+}
+
+async function sbCoucheEnsureRow(creche, type, taille) {
+  const existant = coucheFind(creche, type, taille);
+  if (existant) return existant;
+  try {
+    const rows = await sbInsert('stock_couches', { creche, type_couche: type, taille, stock: 0 });
+    const nc = rowToCouche(rows[0]);
+    COUCHES.push(nc);
+    return nc;
+  } catch(e) {
+    console.error('[Couches] création ligne stock :', e);
+    showNotif('❌ Impossible de créer la ligne de stock : ' + (e.message || e));
+    return null;
+  }
+}
+
+async function coucheReception(creche, type, taille) {
+  const saisie = prompt('Quantité reçue — ' + coucheLabel(type) + ' taille ' + taille + ' (' + creche + ')', '');
+  if (saisie === null) return;
+  const qty = parseInt(saisie, 10);
+  if (!Number.isFinite(qty) || qty <= 0) { alert('Quantité invalide.'); return; }
+  const c = await sbCoucheEnsureRow(creche, type, taille);
+  if (!c) return;
+  const nouveauStock = c.stock + qty;
+  try {
+    await sbUpdate('stock_couches', c.id, { stock: nouveauStock });
+    const mvts = await sbInsert('stock_couches_mouvements', { creche, type_couche: type, taille, delta: qty, motif: 'reception' });
+    c.stock = nouveauStock;
+    COUCHES_MVTS.unshift(rowToCoucheMvt(mvts[0]));
+    renderCouches();
+    showNotif('✅ +' + qty + ' — ' + coucheLabel(type) + ' T' + taille + ' (' + creche + ')');
+  } catch(e) {
+    console.error('[Couches] réception :', e);
+    showNotif('❌ Erreur lors de l’enregistrement : ' + (e.message || e));
+  }
+}
+
+async function coucheAjuster(creche, type, taille) {
+  const c = await sbCoucheEnsureRow(creche, type, taille);
+  if (!c) return;
+  const saisie = prompt('Corriger le stock — ' + coucheLabel(type) + ' taille ' + taille + ' (' + creche + '), actuellement ' + c.stock, c.stock);
+  if (saisie === null) return;
+  const val = parseInt(saisie, 10);
+  if (!Number.isFinite(val) || val < 0) { alert('Valeur invalide.'); return; }
+  const delta = val - c.stock;
+  if (delta === 0) return;
+  try {
+    await sbUpdate('stock_couches', c.id, { stock: val });
+    const mvts = await sbInsert('stock_couches_mouvements', { creche, type_couche: type, taille, delta, motif: 'ajustement' });
+    c.stock = val;
+    COUCHES_MVTS.unshift(rowToCoucheMvt(mvts[0]));
+    renderCouches();
+    showNotif('✅ Stock corrigé.');
+  } catch(e) {
+    console.error('[Couches] ajustement :', e);
+    showNotif('❌ Erreur lors de la correction : ' + (e.message || e));
+  }
+}
+
+function renderCouches() {
+  const box = document.getElementById('couches-grid');
+  const alertBox = document.getElementById('couches-alertes');
+  if (!box) return;
+  const crechesAffichees = currentCreche === 'all' ? CRECHES : [currentCreche];
+  const since14 = Date.now() - 14 * 24 * 3600 * 1000;
+  const alertes = [];
+  let html = '';
+
+  crechesAffichees.forEach(creche => {
+    html += `<div>
+      <div style="font-weight:800;font-size:15px;display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="width:10px;height:10px;border-radius:50%;background:${CRECHE_COLORS[creche]||'#888'}"></span>
+        ${creche}
+      </div>`;
+    COUCHES_PRODUITS.forEach(produit => {
+      html += `<div style="margin-bottom:14px">
+        <div style="font-size:12.5px;font-weight:700;color:var(--ink3);margin-bottom:6px">${produit.label}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">`;
+      produit.tailles.forEach(taille => {
+        const c = coucheFind(creche, produit.type, taille);
+        const stock = c ? c.stock : 0;
+        const seuil = c ? c.seuilAlerteJours : 15;
+        const conso14 = COUCHES_MVTS.filter(m =>
+          m.creche === creche && m.typeCouche === produit.type && m.taille === taille &&
+          m.motif === 'change_auto' && new Date(m.createdAt).getTime() >= since14
+        ).length;
+        const avgDaily = conso14 / 14;
+        const joursRestants = avgDaily > 0 ? Math.floor(stock / avgDaily) : null;
+        const enAlerte = stock <= 0 || (joursRestants !== null && joursRestants <= seuil);
+        if (enAlerte) alertes.push({ creche, produit: produit.label, taille, stock, joursRestants });
+        const bg = enAlerte ? 'var(--red-lt)' : 'var(--bg)';
+        const border = enAlerte ? '2px solid var(--red)' : '1px solid var(--border)';
+        html += `<div style="border:${border};background:${bg};border-radius:10px;padding:10px 12px">
+          <div style="font-size:11.5px;color:var(--ink3);font-weight:700">Taille ${taille}</div>
+          <div style="font-size:24px;font-weight:800;margin:2px 0">${stock}</div>
+          <div style="font-size:11px;color:var(--ink3);margin-bottom:8px">${joursRestants!==null ? joursRestants+' j restants (est.)' : (conso14===0 && stock>0 ? 'pas encore utilisée' : '—')}</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm btn-secondary" style="flex:1" onclick="coucheReception('${creche}','${produit.type}','${taille}')">+ Réception</button>
+            <button class="btn btn-sm btn-secondary" title="Corriger le stock" onclick="coucheAjuster('${creche}','${produit.type}','${taille}')">✏️</button>
+          </div>
+        </div>`;
+      });
+      html += `</div></div>`;
+    });
+    html += `</div>`;
+  });
+
+  box.innerHTML = html;
+
+  alertBox.innerHTML = alertes.length ? `<div style="background:var(--red-lt);border-left:4px solid var(--red);border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#991B1B">
+    <b>⚠️ Stock bas (moins de 15 jours estimés, ou épuisé)</b><br>` +
+    alertes.map(a => `${a.creche} — ${a.produit} taille ${a.taille} : ${a.stock} restante${a.stock>1?'s':''}${a.joursRestants!==null?' (~'+a.joursRestants+' j)':''}`).join('<br>') +
+    `</div>` : '';
 }
 
 // ─── MODALS ───────────────────────────────────────────────────────────────
@@ -3255,18 +3412,19 @@ function addHisto(type, article, qty, creche, user, note='') {
 // ─── PAGES ────────────────────────────────────────────────────────────────
 function showPage(page, btn) {
   currentPage = page;
-  ['inventaire','commandes','fournisseurs','historique','univers'].forEach(p => {
+  ['inventaire','commandes','fournisseurs','historique','univers','couches'].forEach(p => {
     document.getElementById(`page-${p}`).style.display = p === page ? 'block' : 'none';
   });
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const titles = { inventaire:'Inventaire', commandes:'Commandes', fournisseurs:'Fournisseurs', historique:'Historique des mouvements', univers:'Univers ludiques' };
+  const titles = { inventaire:'Inventaire', commandes:'Commandes', fournisseurs:'Fournisseurs', historique:'Historique des mouvements', univers:'Univers ludiques', couches:'Couches' };
   document.getElementById('pageTitle').textContent = titles[page];
   // Re-render page content when switching to ensure fresh data
   if (page === 'commandes') { renderCommandes(); }
   if (page === 'univers') { renderUnivers(); if(typeof updateSouscatFilters==='function') updateSouscatFilters(); }
   if (page === 'fournisseurs') { renderFournisseurs(); }
   if (page === 'historique') { renderHistorique(); }
+  if (page === 'couches') { renderCouches(); }
   if (page === 'inventaire') {
     switchInvTab(currentInvTab); // réaffiche le bon tableau
     renderStats();
@@ -4928,9 +5086,11 @@ async function syncFromCloud() {
       withTimeout(sbGet('historique', 'order=id.desc&limit=200')),
       withTimeout(sbGet('univers', 'order=id.desc')),
       withTimeout(sbGet('souscats', 'order=id.asc')),
+      withTimeout(sbGet('stock_couches')),
+      withTimeout(sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500')),
     ]);
 
-    const [artsR, cmdsR, fournsR, histosR, univsR, scR] = results;
+    const [artsR, cmdsR, fournsR, histosR, univsR, scR, couchesR, couchesMvtsR] = results;
 
     // On ne remplace les données en mémoire QUE si le fetch a réussi
     if (artsR.status === 'fulfilled' && Array.isArray(artsR.value))
@@ -4974,6 +5134,16 @@ async function syncFromCloud() {
     else if (scR.status === 'rejected')
       console.warn('[Sync] souscats (non-bloquant):', scR.reason?.message);
 
+    if (couchesR.status === 'fulfilled' && Array.isArray(couchesR.value))
+      COUCHES.splice(0, COUCHES.length, ...couchesR.value.map(rowToCouche));
+    else if (couchesR.status === 'rejected')
+      console.warn('[Sync] stock_couches (non-bloquant):', couchesR.reason?.message);
+
+    if (couchesMvtsR.status === 'fulfilled' && Array.isArray(couchesMvtsR.value))
+      COUCHES_MVTS.splice(0, COUCHES_MVTS.length, ...couchesMvtsR.value.map(rowToCoucheMvt));
+    else if (couchesMvtsR.status === 'rejected')
+      console.warn('[Sync] stock_couches_mouvements (non-bloquant):', couchesMvtsR.reason?.message);
+
     const savedCreche = currentCreche;
     saveData();
     currentCreche = savedCreche;
@@ -4982,6 +5152,7 @@ async function syncFromCloud() {
     else if (currentPage === 'fournisseurs') renderFournisseurs();
     else if (currentPage === 'historique') renderHistorique();
     else if (currentPage === 'univers') renderUnivers();
+    else if (currentPage === 'couches') renderCouches();
 
     // allOk = seulement les tables critiques (univers est optionnelle)
     const [artsOk, cmdsOk, fournsOk, histosOk] = [artsR, cmdsR, fournsR, histosR].map(r => r.status === 'fulfilled');
@@ -5161,6 +5332,15 @@ function rowToHisto(r) {
            creche: r.creche, user: r.utilisateur||'', date: r.date, note: r.note||'' };
 }
 
+function rowToCouche(r) {
+  return { id: r.id, creche: r.creche, typeCouche: r.type_couche || 'couche', taille: r.taille,
+           stock: r.stock, seuilAlerteJours: r.seuil_alerte_jours != null ? r.seuil_alerte_jours : 15 };
+}
+function rowToCoucheMvt(r) {
+  return { id: r.id, creche: r.creche, typeCouche: r.type_couche || 'couche', taille: r.taille,
+           delta: r.delta, motif: r.motif, createdAt: r.created_at };
+}
+
 // ── Load all data from Supabase ────────────────────────────────────────────
 
 
@@ -5173,7 +5353,7 @@ async function loadData() {
   try {
     // Timeout de 30s (Supabase peut mettre jusqu'à 30s à se réveiller après inactivité)
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000));
-    const [arts, cmds, fourns, histos, univs, souscats, config] = await Promise.race([
+    const [arts, cmds, fourns, histos, univs, souscats, config, couches, couchesMvts] = await Promise.race([
       Promise.all([
         sbGet('articles'),
         sbGet('commandes'),
@@ -5182,6 +5362,8 @@ async function loadData() {
         sbGet('univers', 'order=id.desc').catch(() => []),
         sbGet('souscats', 'order=id.asc').catch(() => []),
         sbGet('stock_config', 'order=cle.asc').catch(() => []),
+        sbGet('stock_couches').catch(() => []),
+        sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500').catch(() => []),
       ]),
       timeout.then(() => { throw new Error('Timeout Supabase'); })
     ]);
@@ -5223,6 +5405,12 @@ async function loadData() {
         try { localStorage.setItem(LS_NAME_KEY, n.valeur); } catch(e) {}
         applyNomCreche(n.valeur);
       }
+    }
+    if (Array.isArray(couches)) {
+      COUCHES.splice(0, COUCHES.length, ...couches.map(rowToCouche));
+    }
+    if (Array.isArray(couchesMvts)) {
+      COUCHES_MVTS.splice(0, COUCHES_MVTS.length, ...couchesMvts.map(rowToCoucheMvt));
     }
 
     const now = new Date();
