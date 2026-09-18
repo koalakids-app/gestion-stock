@@ -9791,6 +9791,29 @@ async function dossiersFamilleARelancer(crecheId){
    même logique que les dossiers famille ci-dessus. devis a son propre
    creche_id : filtre serveur direct, pas besoin de passer par la
    préinscription. */
+/* Préinscriptions dont la date « À relancer le » (module Inscriptions) est
+   atteinte ou dépassée, dossier pas déjà clos — même règle que estARelancer()
+   dans inscriptions.html. Le filtre crèche se fait côté client : une demande
+   peut n'avoir qu'une liste de crèches souhaitées (creches_souhaitees), pas
+   encore de crèche retenue (creche_id). */
+async function demandesARelancer(crecheId){
+  const t=todayStr();
+  const{data,error}=await sb.from('preinscriptions')
+    .select('id,prenom,nom,creche_id,creches_souhaitees,date_rappel,statut')
+    .not('date_rappel','is',null)
+    .lte('date_rappel',t)
+    .not('statut','in','(inscrit,refuse,sans_suite)');
+  if(error)throw error;
+  return(data||[])
+    .filter(p=>{
+      if(!crecheId)return true;
+      if(String(p.creche_id)===String(crecheId))return true;
+      const souh=Array.isArray(p.creches_souhaitees)?p.creches_souhaitees:[];
+      return souh.map(String).indexOf(String(crecheId))>=0;
+    })
+    .sort((a,b)=>String(a.date_rappel).localeCompare(String(b.date_rappel)));
+}
+
 async function devisARelancer(crecheId){
   const seuil=new Date(Date.now()-5*86400000).toISOString();
   const debutJour=new Date();debutJour.setHours(0,0,0,0);
@@ -9889,18 +9912,20 @@ async function brRender(){
   }catch(e){console.warn('[briefing] documents stagiaires',e);}
 
   // ── Vaccinations en retard, dossiers famille et devis à relancer ───────
-  // Les trois requêtes sont indépendantes : parallélisées pour ne pas
+  // Les quatre requêtes sont indépendantes : parallélisées pour ne pas
   // allonger le temps d'ouverture perçu de la modale.
   const criblage=isDirection?null:maCreche;
-  const[vaccRetard,dossiersRelance,devisRelance]=await Promise.all([
+  const[vaccRetard,dossiersRelance,devisRelance,demandesRelance]=await Promise.all([
     vaccinationsEnRetard(criblage).catch(e=>{console.warn('[briefing] vaccinations',e);return[];}),
     dossiersFamilleARelancer(criblage).catch(e=>{console.warn('[briefing] dossiers familles',e);return[];}),
-    devisARelancer(criblage).catch(e=>{console.warn('[briefing] devis',e);return[];})
+    devisARelancer(criblage).catch(e=>{console.warn('[briefing] devis',e);return[];}),
+    demandesARelancer(criblage).catch(e=>{console.warn('[briefing] demandes à relancer',e);return[];})
   ]);
 
   // ── En-tête : le compte de ce qui demande une action ───────────────────
   const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length
-    +stgRefuses.length+stgManquants.length+vaccRetard.length+dossiersRelance.length+devisRelance.length;
+    +stgRefuses.length+stgManquants.length+vaccRetard.length+dossiersRelance.length+devisRelance.length
+    +demandesRelance.length;
   const res=document.getElementById('br-resume');
   if(res){
     res.className='br-resume'+(nAction?' br-chaud':'');
@@ -10024,6 +10049,18 @@ async function brRender(){
         }).join('')+(devisRelance.length>8?'<div class="br-plus">+ '+(devisRelance.length-8)+' autres</div>':'')
       :brVide('✅ Aucun devis à relancer'),
     devisRelance.length?'accent':'');
+
+  // 5sexies. Préinscriptions à relancer (date « À relancer le » atteinte)
+  h+=brSection('bell','Préinscriptions à relancer',demandesRelance.length,
+    demandesRelance.length
+      ?demandesRelance.slice(0,8).map(p=>{
+          const nom=((p.prenom||'')+' '+(p.nom||'')).trim()||'Sans nom';
+          const j=Math.floor((new Date(t+'T12:00:00')-new Date(String(p.date_rappel).slice(0,10)+'T12:00:00'))/86400000);
+          return brLigneClic('🔔 '+escHtml(nom)+brSuffixeCreche(p.creche_id),
+            j>0?'depuis '+j+' j':'aujourd\'hui','brAllerInscriptions()',true);
+        }).join('')+(demandesRelance.length>8?'<div class="br-plus">+ '+(demandesRelance.length-8)+' autres</div>':'')
+      :brVide('✅ Aucune préinscription à relancer'),
+    demandesRelance.length?'accent':'');
 
   // 6. Événements du jour
   h+=brSection('calendar-event','Événements du jour',evts.length,

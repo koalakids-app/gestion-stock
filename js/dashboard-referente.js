@@ -102,22 +102,29 @@ function refDashChangeDay(delta){const d=new Date(refDashSelectedDate||todayStr(
 function refDashGoToday(){refDashSelectedDate=todayStr();renderRefDashboard();}
 function refDashSetDate(v){if(v){refDashSelectedDate=v;renderRefDashboard();}}
 
-/* Vaccinations en retard et dossiers famille à relancer, scopés à la crèche
-   de la directrice technique — mêmes fonctions que celles utilisées par « Ma journée »
-   et le tableau de bord réseau (cf. vaccinationsEnRetard/dossiersFamilleARelancer
-   plus bas dans le fichier), pour ne pas réécrire le calcul une troisième
-   fois. Pas de notion de réseau ici : la crèche est implicite, donc pas de
-   brSuffixeCreche à reprendre. */
+/* Vaccinations en retard, dossiers famille et devis/préinscriptions à
+   relancer, scopés à la crèche de la directrice technique — mêmes fonctions
+   que celles utilisées par « Ma journée » et le tableau de bord réseau (cf.
+   vaccinationsEnRetard/dossiersFamilleARelancer/devisARelancer/
+   demandesARelancer plus bas dans le fichier), pour ne pas réécrire le
+   calcul une troisième fois. Pas de notion de réseau ici : la crèche est
+   implicite, donc pas de brSuffixeCreche à reprendre. */
 async function loadRefDashAlertesExtra(crecheId,urgentesHtml){
   try{
-    const[vacc,dossiers]=await Promise.all([
+    const[vacc,dossiers,devis,demandes]=await Promise.all([
       vaccinationsEnRetard(crecheId).catch(e=>{console.warn('[RefDash] vaccinations',e);return[];}),
-      dossiersFamilleARelancer(crecheId).catch(e=>{console.warn('[RefDash] dossiers familles',e);return[];})
+      dossiersFamilleARelancer(crecheId).catch(e=>{console.warn('[RefDash] dossiers familles',e);return[];}),
+      devisARelancer(crecheId).catch(e=>{console.warn('[RefDash] devis',e);return[];}),
+      demandesARelancer(crecheId).catch(e=>{console.warn('[RefDash] demandes à relancer',e);return[];})
     ]);
     const box=document.getElementById('ref-dash-alerts');if(!box)return;
     let html=urgentesHtml;
     if(vacc.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'vaccinations\')"><i class="ti ti-vaccine" style="font-size:16px;flex-shrink:0"></i> <strong>'+vacc.length+' vaccination(s) en retard</strong></div>';
     if(dossiers.length)html+='<div class="alert-item warning"><i class="ti ti-mail-forward" style="font-size:16px;flex-shrink:0"></i> <strong>'+dossiers.length+' dossier(s) famille</strong> à relancer</div>';
+    // Les devis et préinscriptions vivent dans inscriptions.html, pas dans un
+    // onglet de cette page : un vrai lien plutôt qu'un showMain().
+    if(devis.length)html+='<a class="alert-item warning" href="inscriptions.html" style="text-decoration:none;color:inherit"><i class="ti ti-file-invoice" style="font-size:16px;flex-shrink:0"></i> <strong>'+devis.length+' devis</strong> en attente de signature</a>';
+    if(demandes.length)html+='<a class="alert-item warning" href="inscriptions.html" style="text-decoration:none;color:inherit"><i class="ti ti-bell" style="font-size:16px;flex-shrink:0"></i> <strong>'+demandes.length+' préinscription(s)</strong> à relancer</a>';
     box.innerHTML=html;
   }catch(e){console.warn('[RefDash] alertes',e);}
 }
@@ -266,6 +273,7 @@ function renderDashboard(){
   loadDashboardDossiersAlertes();
   loadDashboardStgDocsAlertes();
   loadDashboardDevisAlertes();
+  loadDashboardDemandesAlertes();
   document.getElementById('dash-stats').innerHTML='<div class="stat-card"><div class="stat-label">Crèches</div><div class="stat-val cv">'+cacheCreches.length+'</div><div class="stat-sub">'+cacheEnfants.length+' enfants</div></div><div class="stat-card" style="border-top-color:var(--orange)"><div class="stat-label">Demandes</div><div class="stat-val co">'+totalD+'</div><div class="stat-sub">'+cacheDemandes.filter(d=>d.status==='attente').length+' en attente</div></div><div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Incidents</div><div class="stat-val cr">'+cacheIncidents.length+'</div><div class="stat-sub">'+incNT+' non traités</div></div><div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Directeurs techniques</div><div class="stat-val cg">'+cacheReferents.filter(r=>r.role==='referent').length+'</div><div class="stat-sub">actifs</div></div>';
   const byCrecheRows=cacheCreches.map(c=>{const n=cacheDemandes.filter(d=>d.creche_id===c.id).length;const pct=totalD>0?Math.round(n/totalD*100):0;return'<div class="dash-list-item"><strong>'+c.name+'</strong><span style="font-weight:700;color:var(--koala)">'+n+'</span></div><div class="dash-bar"><div class="dash-bar-fill" style="width:'+pct+'%"></div></div>';}).join('')||'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune crèche</div>';
   const themes={};cacheDemandes.forEach(d=>{if(d.theme)themes[d.theme]=(themes[d.theme]||0)+1;});
@@ -319,6 +327,18 @@ async function loadDashboardDevisAlertes(){
       box.innerHTML+='<a class="alert-item warning" href="inscriptions.html" style="text-decoration:none;color:inherit"><i class="ti ti-file-invoice" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' devis</strong> en attente de signature</a>';
     }
   }catch(e){console.warn('[Dashboard] devis',e);}
+}
+// Même logique que loadDashboardDevisAlertes : les préinscriptions à
+// relancer (date « À relancer le » du module Inscriptions) vivent elles
+// aussi dans inscriptions.html.
+async function loadDashboardDemandesAlertes(){
+  try{
+    const n=(await demandesARelancer(null)).length;
+    if(n>0){
+      const box=document.getElementById('dash-alerts');if(!box)return;
+      box.innerHTML+='<a class="alert-item warning" href="inscriptions.html" style="text-decoration:none;color:inherit"><i class="ti ti-bell" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' préinscription(s)</strong> à relancer</a>';
+    }
+  }catch(e){console.warn('[Dashboard] demandes à relancer',e);}
 }
 
 // AUJOURD'HUI — widget temps réel du tableau de bord
