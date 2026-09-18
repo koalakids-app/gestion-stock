@@ -3262,7 +3262,7 @@ async function copierLienDevis(){
       const p=PRE.find(x=>String(x.id)===String(ficheId));
       if(p&&['nouvelle','en_contact'].indexOf(p.statut)>=0){
         await sb.from('preinscriptions').update({statut:'devis_envoye'}).eq('id',p.id);
-        p.statut='devis_envoye';render();
+        p.statut='devis_envoye';setVal('fStatut','devis_envoye');render();
       }
       renderDevisList();
     }
@@ -3361,7 +3361,7 @@ async function envoyerDevis(){
       const p=PRE.find(x=>String(x.id)===String(ficheId));
       if(p&&['nouvelle','en_contact'].indexOf(p.statut)>=0){
         await sb.from('preinscriptions').update({statut:'devis_envoye'}).eq('id',p.id);
-        p.statut='devis_envoye';render();
+        p.statut='devis_envoye';setVal('fStatut','devis_envoye');render();
       }
       toast('Devis envoyé ✅');
     }
