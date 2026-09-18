@@ -869,13 +869,15 @@ function carteEnfant(e){
   }
   const avt=av?'<span class="tag" style="background:var(--violet-l);color:var(--violet)">'
     +av+' avenant'+(av>1?'s':'')+'</span>':'';
+  const prov=e.naissance_provisoire?'<span class="tag" style="background:var(--amber-l);color:var(--amber)">'
+    +'<i class="ti ti-alert-triangle"></i> terme prévu, pas encore né(e)</span>':'';
   return '<div class="card" onclick="openDossier(\'enfant\',\''+e.id+'\')">'
     +'<div class="av"><i class="ti ti-mood-kid"></i></div><div class="bd">'
     +'<div class="nm">'+esc(nom)+'</div>'
     +'<div class="sub">'+esc(nomCreche(e.creche_id)||'crèche non renseignée')
-    +(e.dob?' · né(e) le '+dfr(e.dob):'')+'<br>'+sub+'</div>'
+    +(e.dob?' · né(e) le '+dfr(e.dob)+(e.naissance_provisoire?' (terme prévu)':''):'')+'<br>'+sub+'</div>'
     +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-    +tag+avt+act+'</div></div></div>';
+    +tag+prov+avt+act+'</div></div></div>';
 }
 
 /* ---------- LE SUJET DU CONTRAT ---------- */
@@ -888,7 +890,7 @@ function normaliser(kind,id){
     const e=ENFANTS.find(x=>String(x.id)===String(id));
     if(!e)return null;
     return{kind:'enfant',id:e.id,enfant_id:e.id,pre_id:null,
-      prenom:e.prenom,nom:e.nom,dob:e.dob,creche_id:e.creche_id,
+      prenom:e.prenom,nom:e.nom,dob:e.dob,naissance_provisoire:!!e.naissance_provisoire,creche_id:e.creche_id,
       date_ref:e.date_entree,repas:e.repas_base||null,source:e};
   }
   const p=DEMANDES.find(x=>String(x.id)===String(id));
@@ -995,8 +997,14 @@ function rendreDossier(){
   }
   h+='</div>';
 
+  if(CSUJ.naissance_provisoire){
+    h+='<div style="background:var(--amber-l);border-left:4px solid var(--amber);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--amber)">'
+      +'<i class="ti ti-alert-triangle"></i> La date de naissance ci-dessous est un <b>terme prévu</b> : l\'enfant '
+      +'n\'était pas encore né au moment de la bascule. Corrigez-la sur sa fiche enfant dès la naissance connue — '
+      +'un contrat établi avant la correction affichera cette date provisoire.</div>';
+  }
   h+='<div class="kvb"><span>Crèche</span><b>'+esc(nomCreche(CSUJ.creche_id)||'—')+'</b></div>'
-   +'<div class="kvb"><span>Date de naissance</span><b>'+(CSUJ.dob?dfr(CSUJ.dob):'—')+'</b></div>'
+   +'<div class="kvb"><span>'+(CSUJ.naissance_provisoire?'Date de naissance (terme prévu)':'Date de naissance')+'</span><b>'+(CSUJ.dob?dfr(CSUJ.dob):'—')+'</b></div>'
    +'<div class="kvb"><span>'+(CSUJ.kind==='pre'?'Entrée souhaitée':'Date d\'entrée')+'</span><b>'
    +(CSUJ.date_ref?dfr(CSUJ.date_ref):'—')+'</b></div>';
 

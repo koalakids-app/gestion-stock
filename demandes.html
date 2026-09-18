@@ -2239,6 +2239,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="overlay" id="modal-enfant-wrap">
   <div class="modal">
     <h3 id="modal-enfant-title">Ajouter un enfant</h3>
+    <div id="enf-avert-provisoire" style="display:none;background:var(--amber-lt);border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--orange)">
+      <i class="ti ti-alert-triangle"></i> Cette date de naissance est un <b>terme prévu</b> (fiche créée avant la naissance) — corrigez-la ci-dessous avec la vraie date dès qu'elle est connue. Elle sera considérée confirmée dès l'enregistrement de cette fiche.
+    </div>
     <div class="frow">
       <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="enf-prenom" placeholder="Léa"/></div>
       <div class="fg"><label class="flabel">Nom</label><input class="finput" id="enf-nom" placeholder="Martin"/></div>
@@ -6246,8 +6249,8 @@ function enfFillCreches(selectedId){
   sel.style.background=isDirection?'':'#f4f4f8';
   sel.style.cursor=isDirection?'':'not-allowed';
 }
-function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';document.getElementById('enf-gouter-base').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';document.getElementById('enf-gouter-base').value=e.gouter_base||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';document.getElementById('enf-avert-provisoire').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';document.getElementById('enf-gouter-base').value='';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');document.getElementById('enf-avert-provisoire').style.display=e.naissance_provisoire?'':'none';enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';document.getElementById('enf-gouter-base').value=e.gouter_base||'';enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
 /* Écriture d'une fiche enfant tolérante aux colonnes optionnelles absentes.
    `repas_base` et `gouter_base` sont ajoutées par des migrations SQL distinctes :
    si l'une manque, Postgres nomme la colonne fautive et on la retire du payload
@@ -6260,7 +6263,7 @@ async function enfEcritureTolerante(row,id){
     const r=id?await dbUpdate('enfants',id,row):await dbInsert('enfants',row);
     if(r)return{res:r,absentes:absentes};
     const err=window._lastDbError||'';
-    const col=/gouter_base/i.test(err)?'gouter_base':(/repas_base/i.test(err)?'repas_base':null);
+    const col=/gouter_base/i.test(err)?'gouter_base':(/repas_base/i.test(err)?'repas_base':(/naissance_provisoire/i.test(err)?'naissance_provisoire':null));
     if(!col||!(col in row))return{res:null,absentes:absentes};
     delete row[col];absentes.push(col);
   }
@@ -6268,7 +6271,7 @@ async function enfEcritureTolerante(row,id){
 }
 function enfAvertirColonnes(absentes){
   if(!absentes.length)return;
-  const libelles={repas_base:'type de repas',gouter_base:'choix du goûter'};
+  const libelles={repas_base:'type de repas',gouter_base:'choix du goûter',naissance_provisoire:'l\'avertissement de date provisoire'};
   const txt=absentes.map(function(c){return libelles[c]||c;}).join(' et ');
   setTimeout(function(){showBanner('Fiche enregistrée, mais le '+txt+' n’a pas pu l’être : colonne absente de la table enfants (migration SQL à exécuter).','error');},2500);
 }
@@ -6285,7 +6288,10 @@ async function saveEnfant(){
     allergies:document.getElementById('enf-allergies').value.trim(),
     regime_repas:document.getElementById('enf-regime-repas').value||null,
     repas_base:document.getElementById('enf-repas-base').value||null,
-    gouter_base:document.getElementById('enf-gouter-base').value||null
+    gouter_base:document.getElementById('enf-gouter-base').value||null,
+    // Enregistrer la fiche vaut confirmation de la date de naissance :
+    // l'avertissement « terme prévu » ne doit pas survivre à une correction.
+    naissance_provisoire:false
   };
   if(editingEnfantId){
     const out=await enfEcritureTolerante(row,editingEnfantId);
