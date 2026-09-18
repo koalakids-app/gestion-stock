@@ -4,13 +4,13 @@
 
 // Définition des vaccins obligatoires selon calendrier vaccinal français 2025
 const VAC_SCHEMA = [
-  {id:'dtp_coque',label:'DTCaP (Diphtérie, Tétanos, Coqueluche, Polio)',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
-  {id:'hib',label:'Haemophilus influenzae b',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
-  {id:'hepb',label:'Hépatite B',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
-  {id:'pneumo',label:'Pneumocoque',doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
-  {id:'menb',label:'Méningocoque B',doses:[{label:'3 mois',months:3},{label:'5 mois',months:5},{label:'12 mois',months:12}]},
-  {id:'menacwy',label:'Méningocoques ACWY',doses:[{label:'6 mois',months:6},{label:'12 mois',months:12}]},
-  {id:'ror',label:'ROR (Rougeole, Oreillons, Rubéole)',doses:[{label:'12 mois',months:12},{label:'18 mois',months:18}]},
+  {id:'dtp_coque',label:'DTCaP (Diphtérie, Tétanos, Coqueluche, Polio)',produits:['Infanrix Tétra','Infanrix Quinta ou Pentavac','Infanrix Hexa ou Hexyon ou Vaxelis'],doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
+  {id:'hib',label:'Haemophilus influenzae b',produits:['Infanrix Quinta ou Pentavac','Infanrix Hexa ou Hexyon ou Vaxelis'],doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
+  {id:'hepb',label:'Hépatite B',produits:['Infanrix Hexa ou Hexyon ou Vaxelis','EngerixB ou Hbvaxpro'],doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
+  {id:'pneumo',label:'Pneumocoque',produits:['Prevenar ou Pneumovax'],doses:[{label:'2 mois',months:2},{label:'4 mois',months:4},{label:'11 mois',months:11}]},
+  {id:'menb',label:'Méningocoque B',produits:['Bexsero'],doses:[{label:'3 mois',months:3},{label:'5 mois',months:5},{label:'12 mois',months:12}]},
+  {id:'menacwy',label:'Méningocoques ACWY',produits:['Nimenrix ou Menquadfi'],doses:[{label:'6 mois',months:6},{label:'12 mois',months:12}]},
+  {id:'ror',label:'ROR (Rougeole, Oreillons, Rubéole)',produits:['M-M-Rvaxpro ou Priorix'],doses:[{label:'12 mois',months:12},{label:'18 mois',months:18}]},
 ];
 
 let cacheVaccinations = [];
@@ -198,7 +198,8 @@ function vacRenderFicheBody(){
       }
       return `<td style="padding:5px 8px;text-align:center;vertical-align:middle">${cell}</td>`;
     }).join('');
-    return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600;color:var(--koala-dark);white-space:nowrap">${v.label}</td>${cells}</tr>`;
+    const produitsHtml = (v.produits||[]).map(n=>`<span style="display:block;font-size:10.5px;font-weight:400;color:var(--muted);line-height:1.4">${escHtml(n)}</span>`).join('');
+    return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600;color:var(--koala-dark);white-space:nowrap"><span style="display:block">${v.label}</span>${produitsHtml}</td>${cells}</tr>`;
   }).join('');
   body.innerHTML = `
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">né(e) le ${vacFmtDate(e.dob)} · ${ageStr}${creche?' · '+escHtml(creche.name):''}</div>
