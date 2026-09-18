@@ -714,15 +714,23 @@ async function choisirPdfImport(ev){
 }
 
 /* Extraction brute : une entrée par ligne du tableau, colonnes assemblées à
-   partir des positions x. Chaque ligne du tableau s'étale sur plusieurs
-   lignes physiques (retours à la ligne dans les cellules) — mais le petit
-   numéro d'ordre, souvent centré verticalement, ne tombe pas forcément sur la
-   toute première d'entre elles : une adresse ou un e-mail sur deux lignes
-   commence parfois avant que le numéro n'apparaisse. Rattacher « tout ce qui
-   suit le numéro » ferait glisser ce début de ligne — et donc des bouts de la
-   ligne suivante — dans la fiche précédente. On rattache donc chaque ligne
-   physique au numéro d'ordre le plus proche verticalement, jamais à celui
-   « déjà vu ». */
+   partir des positions x. Le générateur de ce PDF dessine chaque page en deux
+   passes : d'abord toutes les cellules qui tiennent sur une seule ligne
+   (numéro, dates…), ligne par ligne ; puis, à la suite, les cellules qui
+   débordent sur plusieurs lignes (parents, adresse, commentaires longs…) —
+   toujours dans l'ordre des lignes du tableau, mais bien après la première
+   passe. Résultat : la position verticale seule ne suffit pas à savoir à
+   quelle demande appartient un commentaire un peu long, car son texte peut
+   chevaucher plusieurs lignes suivantes du tableau à l'écran.
+   On repère donc les cellules débordantes par leur ordre d'apparition dans le
+   flux du PDF, qui reste toujours celui des lignes du tableau : on les
+   rattache l'une après l'autre à la ligne courante, et on passe à la ligne
+   suivante dès qu'une colonne déjà remplie pour cette ligne (par la première
+   passe ou par un bloc débordant précédent) réapparaît — signe qu'on est
+   passé à la demande suivante — ou dès qu'on retombe sur une colonne plus à
+   gauche que la précédente. */
+const PDFIMPORT_COL_ORDRE=PDFIMPORT_COLS.map(c=>c.key);
+
 async function pdfImportExtraire(file){
   const buf=await file.arrayBuffer();
   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
@@ -732,36 +740,49 @@ async function pdfImportExtraire(file){
   for(let p=1;p<=pdf.numPages;p++){
     const page=await pdf.getPage(p);
     const tc=await page.getTextContent();
-    let items=tc.items
-      .map(it=>({x:it.transform[4],y:it.transform[5],s:it.str}))
+    const items=tc.items
+      .map(it=>({x:it.transform[4],s:it.str}))
       .filter(it=>it.s&&it.s.trim()!==''&&entetes.indexOf(it.s.trim())<0);
-    // Regroupe les fragments qui partagent la même ligne physique.
-    const physiques=[];
-    items.sort((a,b)=>b.y-a.y||a.x-b.x);
+
+    // Passe 1 : les cellules à une ligne, dans l'ordre du flux. Chaque
+    // numéro d'ordre rencontré ouvre sa propre ligne de tableau ; on bascule
+    // en « débordement » dès qu'une colonne revient en arrière par rapport à
+    // la précédente — signe qu'on a quitté la première passe.
+    const lignesPage=[];
+    let rowPtr=-1,dernierIdx=-1,debordement=false;
+    const enAttente=[];
     for(const it of items){
-      let l=physiques.find(l=>Math.abs(l.y-it.y)<2.5);
-      if(!l){l={y:it.y,items:[]};physiques.push(l);}
-      l.items.push(it);
+      const c=pdfImportColonneDe(it.x);
+      if(c==='ordre'){
+        if(/^\d+$/.test(it.s.trim())){
+          const num=it.s.trim();
+          let ligne=parNumero.get(num);
+          if(!ligne){ligne={ordre:num,cols:{}};parNumero.set(num,ligne);ordreVu.push(num);}
+          if(lignesPage.indexOf(ligne)<0)lignesPage.push(ligne);
+          rowPtr=lignesPage.indexOf(ligne);
+          dernierIdx=0;debordement=false;
+        }
+        continue;
+      }
+      const idx=PDFIMPORT_COL_ORDRE.indexOf(c);
+      if(debordement||idx<dernierIdx){debordement=true;enAttente.push({s:it.s,c,idx});continue;}
+      if(rowPtr>=0)(lignesPage[rowPtr].cols[c]=lignesPage[rowPtr].cols[c]||[]).push(it.s);
+      dernierIdx=idx;
     }
-    physiques.sort((a,b)=>b.y-a.y);
-    physiques.forEach(l=>l.items.sort((a,b)=>a.x-b.x));
-    const marqueurs=physiques
-      .map(l=>{const it=l.items.find(it=>pdfImportColonneDe(it.x)==='ordre'&&/^\d+$/.test(it.s.trim()));return it?{y:l.y,num:it.s.trim()}:null;})
-      .filter(Boolean);
-    if(!marqueurs.length)continue;
-    for(const l of physiques){
-      let meilleur=marqueurs[0],ecart=Math.abs(marqueurs[0].y-l.y);
-      for(const m of marqueurs){
-        const e=Math.abs(m.y-l.y);
-        if(e<ecart){ecart=e;meilleur=m;}
+    if(!lignesPage.length)continue;
+
+    // Passe 2 : les cellules débordantes reprennent leur place derrière leur
+    // propre ligne, dans le même ordre.
+    let rowPtr2=0,dernierIdx2=-1;
+    for(const it of enAttente){
+      if(it.idx!==dernierIdx2){
+        while(rowPtr2<lignesPage.length-1
+          &&(it.idx<=dernierIdx2||(lignesPage[rowPtr2].cols[it.c]&&lignesPage[rowPtr2].cols[it.c].length))){
+          rowPtr2++;dernierIdx2=-1;
+        }
       }
-      let ligne=parNumero.get(meilleur.num);
-      if(!ligne){ligne={ordre:meilleur.num,cols:{}};parNumero.set(meilleur.num,ligne);ordreVu.push(meilleur.num);}
-      for(const it of l.items){
-        const c=pdfImportColonneDe(it.x);
-        if(c==='ordre')continue;
-        (ligne.cols[c]=ligne.cols[c]||[]).push(it.s);
-      }
+      (lignesPage[rowPtr2].cols[it.c]=lignesPage[rowPtr2].cols[it.c]||[]).push(it.s);
+      dernierIdx2=it.idx;
     }
   }
   return ordreVu.map(num=>{
