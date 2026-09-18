@@ -2111,6 +2111,9 @@ async function contresigner(){
     await recharger();
     rendreDossier();
     toast('Contrat contresigné ✅ — il est complet des deux côtés.');
+    // Ne bloque pas l'écran : la contresignature est déjà enregistrée, l'envoi
+    // du mail se fait en tâche de fond et prévient lui-même en cas d'échec.
+    envoyerContratSigneParMail(c);
   }catch(e){
     console.error('[contresigner]',e);
     const msg=(e.code==='23514')
@@ -2445,7 +2448,8 @@ async function pdfContrat(id){
   }
 }
 
-function dessineContrat(c,lignes){
+function dessineContrat(c,lignes,telecharger){
+  if(telecharger===undefined)telecharger=true;
   const jsPDF=window.jspdf.jsPDF;
   const doc=new jsPDF({unit:'mm',format:'a4'});
   const G=16, D=194, L=D-G, BAS=278;   // marges et bas de page utile
@@ -2799,8 +2803,47 @@ function dessineContrat(c,lignes){
 
   const enf=((suj.prenom||'')+'-'+(suj.nom||'')).replace(/[^A-Za-zÀ-ÿ0-9-]/g,'')
     .replace(/-+/g,'-').replace(/^-|-$/g,'');
-  doc.save((avenant?'avenant-':'contrat-')+(c.numero||auj())+(enf?'-'+enf:'')+'.pdf');
-  toast('PDF téléchargé ✅');
+  const nomFichier=(avenant?'avenant-':'contrat-')+(c.numero||auj())+(enf?'-'+enf:'')+'.pdf';
+  if(telecharger){
+    doc.save(nomFichier);
+    toast('PDF téléchargé ✅');
+  }
+  return{doc,nomFichier};
+}
+
+/* ---------- ENVOI DU CONTRAT SIGNÉ PAR MAIL ---------- */
+/* Déclenché juste après la contresignature (voir contresigner()) : le contrat
+   est alors complet des deux côtés, c'est le document que la famille doit
+   recevoir. Le PDF est redessiné ici plutôt que réutilisé depuis un éventuel
+   téléchargement précédent, pour la même raison qu'ailleurs dans ce fichier —
+   ce qui part par mail doit être ce qui est en base à l'instant de l'envoi,
+   pas un instantané pris plus tôt. Un échec d'envoi ne fait pas échouer la
+   contresignature : celle-ci est déjà actée, on prévient juste que le mail
+   n'est pas parti et le bouton « Le PDF » reste disponible pour l'envoyer à
+   la main. */
+async function envoyerContratSigneParMail(c){
+  try{
+    await Promise.all([chargeJsPdf(),loadReseau()]);
+    if(!CSUJ||String(CSUJ.id)!==String(c.enfant_id||c.preinscription_id)){
+      const kind=c.enfant_id?'enfant':'pre';
+      CSUJ=normaliser(kind,c.enfant_id||c.preinscription_id);
+      if(CSUJ)await loadContexte();
+    }
+    const{data,error}=await sb.from('contrats_lignes').select('*')
+      .eq('contrat_id',c.id).order('ordre');
+    if(error)throw error;
+    const{doc,nomFichier}=dessineContrat(c,data||[],false);
+    const pdfBase64=doc.output('datauristring').split(',')[1];
+
+    const{error:eFn}=await sb.functions.invoke('envoyer-contrat-signe',
+      {body:{contrat_id:c.id,pdf_base64:pdfBase64,nom_fichier:nomFichier}});
+    if(eFn)throw new Error(await detailFn(eFn));
+    toast('Contrat signé envoyé à la famille par e-mail ✅');
+  }catch(e){
+    console.error('[envoyerContratSigneParMail]',e);
+    toast('Contresignature enregistrée, mais l\'envoi du mail a échoué : '
+      +(e.message||'erreur inconnue')+' — le PDF reste disponible via « Le PDF ».',true);
+  }
 }
 
 /* ---------- NOTICE ---------- */
