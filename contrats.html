@@ -2457,7 +2457,7 @@ function dessineContrat(c,lignes,telecharger){
   if(telecharger===undefined)telecharger=true;
   const jsPDF=window.jspdf.jsPDF;
   const doc=new jsPDF({unit:'mm',format:'a4'});
-  const G=16, D=194, L=D-G, BAS=278;   // marges et bas de page utile
+  const G=16, D=194, L=D-G, BAS=281;   // marges et bas de page utile
   let y=0;
 
   const e=etabDe(c.creche_id);
@@ -2489,36 +2489,36 @@ function dessineContrat(c,lignes,telecharger){
      ici est un millimètre qui rapproche les signatures du contrat, et une page
      de signatures détachée est une faiblesse juridique. */
   function titreSection(s){
-    place(12);y+=4;
+    place(9);y+=2.5;
     ecrire(s.toUpperCase(),9,'bold',ORANGE);
-    y+=2;trait();y+=4.2;
+    y+=1.5;trait();y+=3.4;
   }
   function kv(k,v){
-    place(4.6);
+    place(4.2);
     police(9.5,'normal',GRIS);doc.text(String(k),G,y);
     police(9.5,'bold',NOIR);doc.text(String(v==null?'—':v),G+56,y);
-    y+=4.6;
+    y+=4.2;
   }
 
   /* ---- En-tête : qui édite le contrat ---- */
-  y=18;
+  y=15;
   ecrire(e.raison_sociale||'Koala Kids',15,'bold',VIOLET);
-  y+=5.6;
+  y+=5.2;
   [e.forme_juridique,
    e.adresse_siege,
    [e.siret?'SIRET '+e.siret:'',e.code_ape?'APE '+e.code_ape:''].filter(Boolean).join('  ·  '),
    [e.telephone,e.email].filter(Boolean).join('  ·  ')
-  ].filter(Boolean).forEach(t=>{ecrire(t,8.5,'normal',GRIS);y+=4;});
+  ].filter(Boolean).forEach(t=>{ecrire(t,8.5,'normal',GRIS);y+=3.6;});
 
-  let yd=18;
-  const dr=(s,t,st,k)=>{if(!s)return;police(t,st,k);doc.text(String(s),D,yd,{align:'right'});yd+=t<=8.5?4:5.4;};
+  let yd=15;
+  const dr=(s,t,st,k)=>{if(!s)return;police(t,st,k);doc.text(String(s),D,yd,{align:'right'});yd+=t<=8.5?3.6:5;};
   dr(cr||'',11,'bold',NOIR);
   dr(adrCreche(c.creche_id),8.5,'normal',GRIS);
   dr(e.pmi_numero?'Agrément PMI '+e.pmi_numero:'',8.5,'normal',GRIS);
   dr(e.pmi_date?'délivré le '+dfr(e.pmi_date):'',8.5,'normal',GRIS);
 
-  y=Math.max(y,yd)+4;
-  trait(VIOLET);y+=9;
+  y=Math.max(y,yd)+3;
+  trait(VIOLET);y+=7;
 
   /* ---- Le titre ---- */
   const titre=(avenant?'AVENANT ':'CONTRAT D\'ACCUEIL ')+(c.numero||'');
@@ -2539,10 +2539,10 @@ function dessineContrat(c,lignes,telecharger){
   }else if(c.statut==='resilie'){
     police(9,'bold',[198,40,40]);doc.text('RÉSILIÉ',D,y,{align:'right'});
   }
-  y+=5.5;
+  y+=5;
   ecrire('Établi le '+dfr(String(c.created_at||auj()).slice(0,10))
     +(avenant&&c.date_effet?'  ·  prend effet le '+dfr(c.date_effet):''),9,'normal',GRIS);
-  y+=8;
+  y+=6;
 
   /* ---- Les parties ---- */
   /* Un contrat nomme ceux qu'il engage. C'est la différence de fond avec un
@@ -2554,8 +2554,8 @@ function dessineContrat(c,lignes,telecharger){
     +(e.adresse_siege?', dont le siège est situé '+e.adresse_siege:'')
     +(e.representant_nom?', représentée par '+e.representant_nom
       +(e.representant_qualite?', '+e.representant_qualite:''):'')
-    +(cr?', pour son établissement '+cr:'')+'.',9.5,'normal',NOIR,L,4.4);
-  y+=2;
+    +(cr?', pour son établissement '+cr:'')+'.',9.5,'normal',NOIR,L,4.1);
+  y+=1.2;
   const foyer=[c.famille_adresse,
     [c.famille_code_postal,c.famille_ville].filter(Boolean).join(' ')]
     .filter(Boolean).join(', ');
@@ -2564,11 +2564,11 @@ function dessineContrat(c,lignes,telecharger){
     .filter(Boolean);
   para('D\'autre part, '+(signataires.length?signataires.join(' et '):'le ou les responsables légaux')
     +(foyer?', demeurant '+foyer:'')
-    +(c.num_allocataire?', n° allocataire '+c.num_allocataire:'')+'.',9.5,'normal',NOIR,L,4.4);
-  y+=2;
+    +(c.num_allocataire?', n° allocataire '+c.num_allocataire:'')+'.',9.5,'normal',NOIR,L,4.1);
+  y+=1.2;
   para('Il a été convenu ce qui suit pour l\'accueil de '
     +(((suj.prenom||'')+' '+(suj.nom||'')).trim()||'l\'enfant')
-    +(suj.dob?', né(e) le '+dfr(suj.dob):'')+'.',9.5,'normal',NOIR,L,4.4);
+    +(suj.dob?', né(e) le '+dfr(suj.dob):'')+'.',9.5,'normal',NOIR,L,4.1);
 
   /* ---- L'accueil ---- */
   titreSection(avenant?'Ce que l\'avenant modifie':'L\'accueil convenu');
@@ -2586,14 +2586,14 @@ function dessineContrat(c,lignes,telecharger){
   }else{
     kv('Semaines facturées',c.semaines_an+' semaines par an');
   }
-  y+=1;
+  y+=0.5;
   para(avecTerme
     ? 'La mensualité répartit les '+(c.jours_accueil!=null?c.jours_accueil:'—')+' jours d\'accueil de '
       +'la période sur '+nbFr(c.mois_factures||0)+' mensualités égales. Elle est identique chaque mois, '
       +'y compris pendant les périodes de fermeture, déjà déduites du nombre de jours facturés.'
     : 'La mensualité est lissée sur douze mois : elle est identique chaque mois, y compris '
       +'pendant les semaines de fermeture, déjà déduites du nombre de semaines facturées.',
-    8.5,'italic',GRIS,L,4);
+    8,'italic',GRIS,L,3.6);
 
   /* ---- Le détail chiffré ---- */
   titreSection('La mensualité');
@@ -2625,8 +2625,8 @@ function dessineContrat(c,lignes,telecharger){
     doc.text(detail(l),G+86,y);
     police(10,'bold',neg?VERT:NOIR);
     doc.text((neg?'- ':'')+eurPdf(Math.abs(l.total)),D,y,{align:'right'});
-    y+=h+2.4;
-    trait();y+=3.2;
+    y+=h+1.6;
+    trait();y+=2.4;
   }
 
   const recu=lignes.filter(l=>RECUR.indexOf(l.type)>=0);
@@ -2634,27 +2634,27 @@ function dessineContrat(c,lignes,telecharger){
   if(!recu.length)para('Aucune ligne récurrente.',9.5,'italic',GRIS);
   recu.forEach(ligne);
 
-  place(11);y+=1;
+  place(9);y+=0.5;
   police(11,'bold',VIOLET);
   doc.text('TOTAL MENSUEL',G,y);
   doc.setFontSize(14);
   doc.text(eurPdf(c.total_mensuel),D,y,{align:'right'});
-  y+=3.5;trait(VIOLET);y+=4;
+  y+=2.8;trait(VIOLET);y+=3.2;
 
   if(c.total_annuel){
-    place(5);
+    place(4.2);
     police(9,'normal',GRIS);
     doc.text(avecTerme
       ? 'Soit '+eurPdf(c.total_annuel)+' sur la durée du contrat ('+nbFr(c.mois_factures||0)+' mensualités).'
       : 'Soit '+eurPdf(c.total_annuel)+' sur douze mois.',G,y);
-    y+=5;
+    y+=4.2;
   }
 
   if(hors.length){
     titreSection('Hors mensualité');
     hors.forEach(ligne);
     para('Ces montants sont facturés en une seule fois ou une fois par an, en sus de la mensualité.',
-      8.5,'italic',GRIS,L,4);
+      8,'italic',GRIS,L,3.6);
   }
 
   /* ---- Le CMG ---- */
@@ -2662,18 +2662,18 @@ function dessineContrat(c,lignes,telecharger){
     titreSection('Estimation du complément de libre choix du mode de garde');
     [['Coût mensuel',eurPdf(c.total_mensuel),NOIR],
      ['CMG estimé, versé par la CAF','- '+eurPdf(c.cmg_estime),VERT]].forEach(([k,v,q])=>{
-      place(4.8);
+      place(4.4);
       police(9.5,'normal',GRIS);doc.text(k,G,y);
       police(9.5,'bold',q);doc.text(v,D,y,{align:'right'});
-      y+=4.8;
+      y+=4.4;
     });
-    y+=1;trait();y+=5;
+    y+=0.5;trait();y+=3.6;
     police(11,'bold',VIOLET);doc.text('RESTE À CHARGE MENSUEL',G,y);
     doc.setFontSize(14);doc.text(eurPdf(c.reste_a_charge),D,y,{align:'right'});
-    y+=5;
+    y+=4;
     para('Estimation indicative, calculée à partir des revenus communiqués par la famille et du '
       +'barème CAF en vigueur. Seule la CAF détermine le montant réellement versé. La crèche ne '
-      +'perçoit pas le CMG : elle facture la mensualité ci-dessus.',8.5,'italic',GRIS,L,4);
+      +'perçoit pas le CMG : elle facture la mensualité ci-dessus.',8,'italic',GRIS,L,3.6);
   }
 
   /* ---- La résiliation ---- */
@@ -2707,10 +2707,10 @@ function dessineContrat(c,lignes,telecharger){
   if(clauses.length){
     titreSection('Les conditions du contrat');
     clauses.forEach(x=>{
-      place(10);
-      ecrire(x[0],9.5,'bold',NOIR);y+=5;
-      para(x[1],9,'normal',NOIR,L,4.2);
-      y+=2;
+      place(7.5);
+      ecrire(x[0],9,'bold',NOIR);y+=4;
+      para(x[1],8.5,'normal',NOIR,L,3.8);
+      y+=1.2;
     });
   }
 
@@ -2724,8 +2724,8 @@ function dessineContrat(c,lignes,telecharger){
      et 8 pour la mention eIDAS. Réserver moins — c'était le cas — faisait
      basculer les deux cadres sur une page vide alors qu'il restait la place
      juste au-dessus. */
-  const H_CADRE=38;
-  const BESOIN=H_CADRE+23;
+  const H_CADRE=34;
+  const BESOIN=H_CADRE+21;
   if(y+BESOIN>BAS){
     doc.addPage();y=20;
     /* Une page de signatures détachée du contrat ne prouve pas grand-chose :
@@ -2744,12 +2744,12 @@ function dessineContrat(c,lignes,telecharger){
              ].filter(Boolean).join('  ·  '),G,y);
     y+=3;trait();y+=6;
   }else{
-    y+=4;
+    y+=3;
   }
   // Le titre est écrit sans place() : la réservation vient d'être faite en
   // bloc, et un second saut ici séparerait le titre de ses cadres.
   ecrire('SIGNATURES',9,'bold',ORANGE);
-  y+=2;trait();y+=5;
+  y+=1.5;trait();y+=4;
   const yc=y;
   const larg=(L-6)/2;
   doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.4);
@@ -2762,17 +2762,17 @@ function dessineContrat(c,lignes,telecharger){
     if(png){
       // Une signature tracée au doigt est plus large que haute. La hauteur est
       // bornée, la largeur suit : déformer un tracé le rend méconnaissable.
-      try{doc.addImage(png,'PNG',x+4,yc+9,larg-10,17);}
+      try{doc.addImage(png,'PNG',x+4,yc+9,larg-10,15);}
       catch(err){console.warn('[pdf signature]',err);
-        police(8,'italic',GRIS);doc.text('(signature illisible)',x+4,yc+17);}
+        police(8,'italic',GRIS);doc.text('(signature illisible)',x+4,yc+16);}
       police(7.5,'normal',GRIS);
-      doc.text('Le '+dfr(quand),x+4,yc+30);
-      if(qui)doc.splitTextToSize(String(qui),larg-8).slice(0,2)
-        .forEach((t,i)=>doc.text(t,x+4,yc+34+i*3.6));
+      doc.text('Le '+dfr(quand),x+4,yc+27);
+      if(qui)doc.splitTextToSize(String(qui),larg-8).slice(0,1)
+        .forEach((t,i)=>doc.text(t,x+4,yc+30.5+i*3.4));
     }else{
       doc.setDrawColor(210,204,230);doc.setLineWidth(.3);
-      doc.line(x+4,yc+28,x+larg-4,yc+28);
-      police(7.5,'normal',GRIS);doc.text('Date et signature',x+4,yc+32);
+      doc.line(x+4,yc+25,x+larg-4,yc+25);
+      police(7.5,'normal',GRIS);doc.text('Date et signature',x+4,yc+29);
     }
   }
   const signeFamille=!!(c.signature_png&&c.repondu_le
@@ -2783,12 +2783,12 @@ function dessineContrat(c,lignes,telecharger){
   cadre(G+larg+6,'LA CRÈCHE',
     c.contresignature_png?'Contresigné':'Pour l\'établissement',
     c.contresignature_png||null,c.contresigne_le,c.contresigne_par);
-  y=yc+H_CADRE+4;
+  y=yc+H_CADRE+3;
 
   if(signeFamille||c.contresignature_png){
-    place(8);
+    place(6.5);
     para('Signature électronique simple au sens du règlement eIDAS, recueillie sur la page de '
-      +'signature du contrat. Elle vaut preuve de l\'accord des parties.',7.5,'italic',GRIS,L,3.6);
+      +'signature du contrat. Elle vaut preuve de l\'accord des parties.',7,'italic',GRIS,L,3.2);
   }
 
   /* ---- Pieds de page, une fois toutes les pages connues ---- */
