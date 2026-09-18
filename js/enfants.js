@@ -248,6 +248,7 @@ function enfRenderIdentite(){
     + row('Groupe', escHtml(grp))
     + row('Crèche', creche?escHtml(creche.name):'')
     + row('Allergies', escHtml(e.allergies||''))
+    + row('Protection', e.taille_couche ? escHtml((e.type_couche==='culotte'?'Couche-culotte':'Couche classique')+' — taille '+e.taille_couche) : '')
     + row('Repas', enfRepasFicheLigne(e))
     + row('Goûter', enfGouterFicheLigne(e))
     + row('Code image (kiosque)', kkPictosLigne(e.code_pictos))
