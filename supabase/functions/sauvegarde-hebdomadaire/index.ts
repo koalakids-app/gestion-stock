@@ -181,7 +181,11 @@ Deno.serve(async (req) => {
   } catch (mailErr) {
     return json({ erreur: `Échec d'envoi e-mail : ${mailErr}` }, 502);
   } finally {
-    await client.close();
+    // client.close() lève elle-même une erreur si send() a échoué avant
+    // l'ouverture de la connexion (ex. destinataire invalide) — sans ce
+    // try/catch, cette erreur secondaire écrase la réponse ci-dessus et la
+    // fonction plante avec un 500 générique au lieu du message clair.
+    try { await client.close(); } catch { /* connexion jamais ouverte */ }
   }
 
   return json({ ok: true, tables: nbTables, lignes: nbLignes, erreurs }, 200);
