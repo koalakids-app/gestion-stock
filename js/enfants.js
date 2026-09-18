@@ -2241,11 +2241,20 @@ async function presApplyContrats(){
     return;
   }
   // Dates déjà pointées (présentes ou non) : on ne les retouche pas.
+  // Lecture paginée : PostgREST plafonne à 1000 lignes par requête, et un
+  // historique de présences dépasse vite ce seuil — une lecture tronquée
+  // ferait croire à tort que certaines dates ne sont pas encore pointées,
+  // et l'insertion qui suit percuterait alors la contrainte d'unicité.
   let dejaPres=[];
   try{
-    const{data,error}=await sb.from('presences').select('enfant_id,presence_date').in('enfant_id',enfantsConcernes);
-    if(error) throw error;
-    dejaPres=data||[];
+    const PAGE=1000;
+    for(let from=0;;from+=PAGE){
+      const{data,error}=await sb.from('presences').select('enfant_id,presence_date')
+        .in('enfant_id',enfantsConcernes).range(from,from+PAGE-1);
+      if(error) throw error;
+      dejaPres=dejaPres.concat(data||[]);
+      if(!data||data.length<PAGE) break;
+    }
   }catch(err){
     console.warn('presApplyContrats lecture presences',err);
     showBanner('Lecture des présences existantes impossible : '+((err&&err.message)||'droits insuffisants'),'error');
@@ -2275,9 +2284,14 @@ async function presApplyContrats(){
   if(!confirm('Marquer présents d’après la durée complète des contrats :\n\n• '+nbEnfants+' enfant(s)\n• '+nbJours+' jour(s) au total'+avertSansTerme+'\n\nContinuer ?')) return;
   // Insertion par lots : un contrat de plusieurs mois peut représenter des
   // centaines de lignes, mieux vaut ne pas tout envoyer en un seul appel.
+  // upsert + ignoreDuplicates plutôt qu'un simple insert : si une ligne a
+  // malgré tout déjà été pointée entre la lecture ci-dessus et l'écriture
+  // (ou par un autre appareil), la contrainte d'unicité ne fait plus
+  // échouer tout le lot — elle est silencieusement ignorée, comme voulu.
   const CHUNK=500;
   for(let i=0;i<rows.length;i+=CHUNK){
-    const{error}=await sb.from('presences').insert(rows.slice(i,i+CHUNK));
+    const{error}=await sb.from('presences').upsert(rows.slice(i,i+CHUNK),
+      {onConflict:'enfant_id,presence_date,slot',ignoreDuplicates:true});
     if(error){ console.warn('presApplyContrats insert',error); showBanner('Enregistrement impossible : '+(error.message||''),'error'); return; }
   }
   // On bascule sur « Présents uniquement » : les enfants sans contrat ce jour
