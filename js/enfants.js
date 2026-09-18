@@ -2274,7 +2274,7 @@ async function presApplyContrats(){
   // (source:'pointage') ou un horaire issu du planning importé reflètent du réel
   // et ne doivent jamais être effacés automatiquement.
   const autoGenerees=new Set(dejaPres.filter(function(p){
-    return p.status==='present'&&!p.source&&!p.heure_debut&&!p.heure_fin;
+    return p.status==='present'&&p.source!=='pointage'&&!p.heure_debut&&!p.heure_fin;
   }).map(function(p){return p.enfant_id+'_'+p.presence_date;}));
   const rows=[];
   let nbEnfants=0;
