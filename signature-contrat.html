@@ -267,6 +267,11 @@ function rendre(){
   /* Le formulaire de signature. Le nom est saisi et non pré-rempli : c'est
      lui qui figurera sur le contrat, et il peut différer de la fiche (nom
      d'usage, second parent, tuteur). */
+  /* La signature se fait en deux temps : tracé + nom, puis un code à 6
+     chiffres envoyé par e-mail à l'adresse du contrat — c'est lui qui prouve
+     que la personne qui trace signe aussi le mail au moment de signer, pas
+     seulement qu'elle a le lien. #codeStep reste masqué tant que le code n'a
+     pas été demandé. */
   h+='<div class="card">'
    +'<h2>Signer '+(avenant?'l\'avenant':'le contrat')+'</h2>'
    +'<div id="msg"></div>'
@@ -275,11 +280,21 @@ function rendre(){
    +'<label class="lb">Votre signature — tracez-la avec le doigt</label>'
    +'<div id="sigBox"><canvas id="sig"></canvas><div id="sigHint">Signez ici</div></div>'
    +'<button class="btn btn-g" style="margin-top:8px" onclick="effacer()">Effacer la signature</button>'
-   +'<p class="note">En signant, vous vous engagez aux conditions ci-dessus. '
-   +'La crèche contresignera à son tour, et vous recevrez le contrat complet.</p>'
-   +'<button class="btn btn-p" style="margin-top:12px" id="btnOk" onclick="signer()">Signer '
+   +'<p class="note">En signant, vous vous engagez aux conditions ci-dessus. Nous vous enverrons '
+   +'d\'abord un code de vérification par e-mail. La crèche contresignera ensuite à son tour, et '
+   +'vous recevrez le contrat complet.</p>'
+   +'<button class="btn btn-p" style="margin-top:12px" id="btnOk" onclick="demanderCode()" '
+   +'data-label="Signer '+(avenant?'l\'avenant':'le contrat')+'">Signer '
    +(avenant?'l\'avenant':'le contrat')+'</button>'
-   +'<button class="btn btn-g" style="margin-top:10px" onclick="refuser()">Je ne souhaite pas signer</button>'
+   +'<button class="btn btn-g" style="margin-top:10px" id="btnRefuser" onclick="refuser()">Je ne souhaite pas signer</button>'
+   +'<div id="codeStep" style="display:none;margin-top:16px;padding-top:16px;border-top:2px solid var(--line)">'
+   +'<label class="lb">Code reçu par e-mail</label>'
+   +'<input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" '
+   +'placeholder="123456" style="letter-spacing:4px;font-weight:800;text-align:center">'
+   +'<p class="note" id="codeNote">Un code à 6 chiffres, valable 10 minutes, vient de vous être envoyé par e-mail.</p>'
+   +'<button class="btn btn-p" style="margin-top:10px" id="btnConfirm" onclick="confirmerSignature()">Confirmer la signature</button>'
+   +'<button class="btn btn-g" style="margin-top:10px" id="btnRenvoi" onclick="renvoyerCode()">Renvoyer le code</button>'
+   +'</div>'
    +'</div>';
 
   h+='<p class="foot">'+esc(et.raison_sociale||'Koala Kids')
@@ -333,25 +348,91 @@ function message(txt,type){
   if(m)m.innerHTML='<div class="msg '+(type||'err')+'">'+txt+'</div>';
 }
 
-async function signer(){
+let renvoiJusqua=0;
+
+function nomEtSignatureValides(){
   const nom=(document.getElementById('nom').value||'').trim();
-  if(nom.length<3){message('Merci d\'indiquer votre nom et votre prénom.');return;}
-  if(!aTrace){message('Merci de tracer votre signature dans le cadre.');return;}
+  if(nom.length<3){message('Merci d\'indiquer votre nom et votre prénom.');return null;}
+  if(!aTrace){message('Merci de tracer votre signature dans le cadre.');return null;}
   const png=document.getElementById('sig').toDataURL('image/png');
   // Le même seuil que côté serveur : mieux vaut le dire ici que d'essuyer un
   // refus après l'aller-retour.
-  if(png.length<1500){message('La signature est trop brève — retracez-la un peu plus largement.');return;}
+  if(png.length<1500){message('La signature est trop brève — retracez-la un peu plus largement.');return null;}
+  return{nom:nom,signature:png};
+}
 
+/* Étape 1 : nom + tracé validés, on demande le code de vérification. Le
+   formulaire n'est pas verrouillé après coup — la famille peut retracer sa
+   signature avant de confirmer, elle est relue à la toute fin. */
+async function demanderCode(){
+  const v=nomEtSignatureValides();
+  if(!v)return;
   const b=document.getElementById('btnOk');
+  b.disabled=true;b.textContent='Envoi du code…';
+  try{
+    await appel('demander_code',{});
+    document.getElementById('msg').innerHTML='';
+    document.getElementById('codeStep').style.display='';
+    document.getElementById('btnRefuser').style.display='none';
+    b.style.display='none';
+    document.getElementById('code').focus();
+    demarrerCooldownRenvoi();
+  }catch(e){
+    message(esc(e.message||'Le code n\'a pas pu être envoyé.'));
+    b.disabled=false;b.textContent=b.getAttribute('data-label');
+  }
+}
+
+function demarrerCooldownRenvoi(){
+  renvoiJusqua=Date.now()+45000;
+  const btn=document.getElementById('btnRenvoi');
+  btn.disabled=true;
+  const tick=()=>{
+    const reste=Math.ceil((renvoiJusqua-Date.now())/1000);
+    if(reste<=0){btn.disabled=false;btn.textContent='Renvoyer le code';return;}
+    btn.textContent='Renvoyer le code ('+reste+'s)';
+    setTimeout(tick,1000);
+  };
+  tick();
+}
+
+async function renvoyerCode(){
+  const btn=document.getElementById('btnRenvoi');
+  btn.disabled=true;
+  try{
+    await appel('demander_code',{});
+    document.getElementById('codeNote').textContent=
+      'Nouveau code envoyé par e-mail, valable 10 minutes.';
+    document.getElementById('code').value='';
+    document.getElementById('code').focus();
+    demarrerCooldownRenvoi();
+  }catch(e){
+    message(esc(e.message||'Le code n\'a pas pu être renvoyé.'));
+    btn.disabled=false;btn.textContent='Renvoyer le code';
+  }
+}
+
+/* Étape 2 : le code confirme que la boîte mail du contrat est bien tenue par
+   la personne qui signe, à cet instant précis. */
+async function confirmerSignature(){
+  const v=nomEtSignatureValides();
+  if(!v){document.getElementById('codeStep').style.display='none';
+    document.getElementById('btnOk').style.display='';
+    document.getElementById('btnRefuser').style.display='';return;}
+  const code=(document.getElementById('code').value||'').trim();
+  if(!/^\d{6}$/.test(code)){message('Saisissez le code à 6 chiffres reçu par e-mail.');return;}
+
+  const b=document.getElementById('btnConfirm');
   b.disabled=true;b.textContent='Enregistrement…';
   try{
-    await appel('signer',{nom:nom,signature:png});
+    await appel('signer',{nom:v.nom,signature:v.signature,code:code});
     ecranSimple('✅','Merci !',
       'Votre contrat est signé. La crèche va le contresigner à son tour, et vous '
       +'recevrez ensuite le document complet.<br><br>Vous pouvez fermer cette page.');
   }catch(e){
     message(esc(e.message||'Enregistrement impossible.'));
-    b.disabled=false;b.textContent='Signer le contrat';
+    b.disabled=false;b.textContent='Confirmer la signature';
+    document.getElementById('code').focus();
   }
 }
 
