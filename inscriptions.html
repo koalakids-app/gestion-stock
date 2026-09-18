@@ -2937,8 +2937,7 @@ function rendreBascule(){
   // Ce qui manque et qui empêcherait la fiche d'être exploitable.
   const bloquants=[];
   if(!p.prenom&&!p.nom)bloquants.push('la demande n\'a ni prénom ni nom');
-  if(!p.dob)bloquants.push('la date de naissance n\'est pas renseignée');
-  if(p.ne_ou_a_naitre==='a_naitre')bloquants.push('l\'enfant est encore déclaré « à naître » — corrigez la fiche une fois né');
+  if(!p.dob)bloquants.push('la date de naissance (ou le terme prévu) n\'est pas renseignée');
   if(!BS.crecheId)bloquants.push('aucune crèche retenue');
   if(!BS.jours.length)bloquants.push('le contrat ne porte aucun jour d\'accueil');
   if(!ct.heure_debut||!ct.heure_fin)bloquants.push('le contrat ne porte pas d\'horaires');
@@ -2947,10 +2946,18 @@ function rendreBascule(){
     h+='<div class="warn"><i class="ti ti-alert-triangle"></i><span><b>Bascule impossible en l\'état.</b><br>'
       +bloquants.map(esc).join('<br>')+'</span></div>';
   }
+  // À naître : la bascule reste autorisée, mais avec le terme prévu en
+  // guise de date de naissance provisoire — à corriger dès la naissance,
+  // faute de quoi la fiche enfant garderait une date fictive.
+  if(!bloquants.length&&p.ne_ou_a_naitre==='a_naitre'){
+    h+='<div class="warn" style="background:var(--amber-l);color:var(--amber)"><i class="ti ti-alert-triangle"></i><span>'
+      +'<b>Enfant encore « à naître ».</b> La fiche sera créée avec le <b>terme prévu</b> ('+dfr(p.dob)+') '
+      +'en guise de date de naissance. Corrigez-la sur la fiche enfant dès que la naissance sera connue.</span></div>';
+  }
 
   h+='<div class="sec">L\'enfant qui sera créé</div>'
    +li('Prénom et nom',nom)
-   +li('Date de naissance',dfr(p.dob))
+   +li(p.ne_ou_a_naitre==='a_naitre'?'Date de naissance (terme prévu)':'Date de naissance',dfr(p.dob))
    +li('Crèche',nomCreche(BS.crecheId))
    +li('Allergies',p.allergies)
    +li('Régime particulier',p.regime_repas||'aucun');
