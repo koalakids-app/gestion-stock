@@ -3060,6 +3060,11 @@ async function lancerBascule(){
     const rowEnfant={
       prenom:p.prenom||'',nom:p.nom||'',
       dob:p.dob||null,
+      /* Signale aux autres modules (effectifs, vaccinations, CMG, documents
+         famille, contrat…) que cette date est un terme prévu et non une
+         naissance confirmée — sans ce marqueur, ils la traiteraient comme
+         une vraie date de naissance sans avertir personne. */
+      naissance_provisoire:p.ne_ou_a_naitre==='a_naitre',
       creche_id:BS.crecheId,
       date_entree:dateEntree,
       /* `date_sortie` reste vide, même quand une fin de contrat est connue :
