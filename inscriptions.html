@@ -446,9 +446,14 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 <div class="ov" id="ovImportPdf">
   <div class="md" style="max-width:1000px">
     <h3><i class="ti ti-file-upload"></i> Importer une liste de préinscriptions</h3>
-    <p class="hint">Sélectionnez le PDF exporté (« Liste inscriptions/préinscriptions »). Chaque ligne est analysée puis
-      proposée ci-dessous : relisez et corrigez si besoin avant d'importer — rien n'est enregistré tant que vous
-      n'avez pas cliqué sur « Importer la sélection ».</p>
+    <p class="hint">Choisissez d'abord la crèche visée par ce PDF, puis sélectionnez le fichier exporté
+      (« Liste inscriptions/préinscriptions »). Chaque ligne est analysée puis proposée ci-dessous : relisez et
+      corrigez si besoin avant d'importer — rien n'est enregistré tant que vous n'avez pas cliqué sur « Importer
+      la sélection ».</p>
+    <div class="bar">
+      <div class="f" style="min-width:220px;margin:0"><label class="lb">Crèche visée par ce PDF</label>
+        <select id="fPdfImportCreche"><option value="">— choisir une crèche —</option></select></div>
+    </div>
     <div class="bar">
       <button class="btn btn-s" onclick="document.getElementById('fPdfImport').click()"><i class="ti ti-file-type-pdf"></i> Choisir un PDF…</button>
       <input type="file" id="fPdfImport" accept="application/pdf,.pdf" style="display:none" onchange="choisirPdfImport(event)">
@@ -458,6 +463,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div id="pdfImportBar" class="bar" style="display:none">
       <button class="btn btn-s btn-sm" onclick="pdfImportToutCocher(true)">Tout cocher</button>
       <button class="btn btn-s btn-sm" onclick="pdfImportToutCocher(false)">Tout décocher</button>
+      <div class="f" style="min-width:200px;margin:0"><label class="lb">N'importer qu'à partir du</label>
+        <input type="date" id="fPdfImportDateMin" onchange="pdfImportAppliquerFiltreDate()"></div>
+      <label style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;color:var(--muted)">
+        <input type="checkbox" id="fPdfImportMasquer" onchange="renderPdfImportListe()"> masquer les lignes hors filtre</label>
       <span class="hint" style="margin:0" id="pdfImportCompte"></span>
     </div>
     <div id="pdfImportListe" style="max-height:55vh;overflow:auto"></div>
@@ -673,6 +682,10 @@ let PDFIMPORT_LIGNES=[];
 
 function openImportPdf(){
   PDFIMPORT_LIGNES=[];
+  document.getElementById('fPdfImportCreche').innerHTML='<option value="">— choisir une crèche —</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  setVal('fPdfImportDateMin','');
+  setChk('fPdfImportMasquer',false);
   document.getElementById('pdfImportNomFichier').textContent='';
   document.getElementById('pdfImportStatut').textContent='';
   document.getElementById('pdfImportBar').style.display='none';
@@ -690,6 +703,11 @@ function pdfImportColonneDe(x){
 async function choisirPdfImport(ev){
   const f=ev.target.files&&ev.target.files[0];
   if(!f)return;
+  if(!val('fPdfImportCreche')){
+    toast('Choisissez d\'abord la crèche visée par ce PDF.',true);
+    ev.target.value='';
+    return;
+  }
   document.getElementById('pdfImportNomFichier').textContent=f.name;
   const statut=document.getElementById('pdfImportStatut');
   statut.textContent='Analyse du PDF en cours…';
@@ -851,6 +869,7 @@ function pdfImportInterpreter(l){
     ordre:l.ordre,
     inclus:!suspect,
     suspect:suspect,
+    horsFiltre:false,
     prenom:enf.prenom,nom:enf.nom,aNaitre:enf.aNaitre,
     dob:pdfImportDateISO(l.dob),
     adresse:adrM?adrM[1].trim():(l.adresse||''),
@@ -863,15 +882,31 @@ function pdfImportInterpreter(l){
   };
 }
 
+/* Le filtre de date ne retire jamais une ligne de la liste : il la décoche et,
+   si la case « masquer » est cochée, l'efface simplement de l'affichage. Une
+   ligne sans date d'entrée renseignée reste visible et cochable — impossible
+   de savoir si elle est concernée sans cette information. */
+function pdfImportAppliquerFiltreDate(){
+  const min=val('fPdfImportDateMin');
+  PDFIMPORT_LIGNES.forEach(r=>{
+    r.horsFiltre=!!(min&&r.date_entree_souhaitee&&r.date_entree_souhaitee<min);
+    if(r.horsFiltre)r.inclus=false;
+  });
+  renderPdfImportListe();
+}
+
 function renderPdfImportListe(){
   const box=document.getElementById('pdfImportListe');
+  const masquer=chk('fPdfImportMasquer');
   box.innerHTML=PDFIMPORT_LIGNES.map((r,i)=>{
+    if(masquer&&r.horsFiltre)return '';
     const jrsHtml=JOURS.map(j=>'<label style="display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:600;margin-right:6px">'
       +'<input type="checkbox" data-i="'+i+'" data-f="jour" value="'+j[0]+'"'+(r.jours.indexOf(j[0])>=0?' checked':'')+' onchange="pdfImportMajJour(this)">'+j[1].slice(0,3)+'</label>').join('');
     const par=r.parents[0]||{prenom:'',nom:'',email:'',telephone:''};
     return '<div class="pdfrow'+(r.inclus?'':' off')+'" id="pdfrow'+i+'">'
       +'<div class="hd"><input type="checkbox" '+(r.inclus?'checked':'')+' onchange="pdfImportToggle('+i+',this.checked)">'
-      +'<b>Ligne n°'+esc(r.ordre)+'</b>'+(r.suspect?'<span class="flag">ressemble à une ligne de test</span>':'')+'</div>'
+      +'<b>Ligne n°'+esc(r.ordre)+'</b>'+(r.suspect?'<span class="flag">ressemble à une ligne de test</span>':'')
+      +(r.horsFiltre?'<span class="flag" style="color:var(--muted);background:#F1EFF7">avant le filtre de date</span>':'')+'</div>'
       +'<div class="g">'
       +'<div><label>Prénom enfant</label><input value="'+esc(r.prenom)+'" oninput="pdfImportMaj('+i+',\'prenom\',this.value)"></div>'
       +'<div><label>Nom enfant</label><input value="'+esc(r.nom)+'" oninput="pdfImportMaj('+i+',\'nom\',this.value)"></div>'
@@ -914,11 +949,15 @@ function pdfImportToutCocher(v){
 }
 function pdfImportMajCompte(){
   const n=PDFIMPORT_LIGNES.filter(r=>r.inclus).length;
-  document.getElementById('pdfImportCompte').textContent=n+' / '+PDFIMPORT_LIGNES.length+' ligne(s) sélectionnée(s)';
+  const hors=PDFIMPORT_LIGNES.filter(r=>r.horsFiltre).length;
+  document.getElementById('pdfImportCompte').textContent=n+' / '+PDFIMPORT_LIGNES.length+' ligne(s) sélectionnée(s)'
+    +(hors?' — '+hors+' avant le filtre de date':'');
 }
 
 async function importerPdfSelection(){
-  const aFaire=PDFIMPORT_LIGNES.filter(r=>r.inclus);
+  const crecheId=val('fPdfImportCreche');
+  if(!crecheId){toast('Choisissez la crèche visée par ce PDF avant d\'importer.',true);return;}
+  const aFaire=PDFIMPORT_LIGNES.filter(r=>r.inclus&&!r.horsFiltre);
   if(!aFaire.length){toast('Aucune ligne sélectionnée.',true);return;}
   const btn=document.getElementById('btnPdfImportGo');
   btn.disabled=true;
@@ -931,6 +970,7 @@ async function importerPdfSelection(){
         ne_ou_a_naitre:r.aNaitre?'a_naitre':'ne',
         dob:r.dob||null,
         adresse:r.adresse,code_postal:r.code_postal,ville:r.ville,
+        creches_souhaitees:[crecheId],
         date_entree_souhaitee:r.date_entree_souhaitee||null,
         jours:r.jours,
         notes_internes:r.commentaires,
