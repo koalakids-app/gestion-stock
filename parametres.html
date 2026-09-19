@@ -250,12 +250,32 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <p class="hint">Laissé vide, le contrat reprend les mentions du devis ci-dessus.</p>
       </div>
 
+      <!-- LA FACTURE
+           Ces réglages sont lus par le module Facturation, avec les mêmes
+           valeurs par défaut qu'avant l'ajout de cet écran (jour 10, jour 20,
+           40 €) : ne pas les câbler ici les rendait invisibles, jamais faux. -->
+      <div class="card">
+        <div class="sec"><i class="ti ti-receipt"></i> La facture</div>
+        <div class="g2">
+          <div class="f"><label class="lb">Jour d'envoi des factures</label><input id="rFacJourEnvoi" type="number" step="1" min="1" max="28"></div>
+          <div class="f"><label class="lb">Jour d'échéance</label><input id="rFacJourEch" type="number" step="1" min="1" max="28"></div>
+        </div>
+        <p class="hint">Jours du mois. Par défaut, envoi le 10, échéance le 20.</p>
+        <div class="f" style="max-width:240px"><label class="lb">Frais de dossier en cas d'impayé (€)</label><input id="rFacFraisImpaye" type="number" step="0.01" min="0"></div>
+        <div class="f"><label class="lb">Modes de règlement acceptés</label>
+          <input id="rModesReglement" placeholder="Virement, prélèvement, chèque…"></div>
+        <div class="f"><label class="lb">Mentions légales portées sur la facture</label>
+          <textarea id="rFacMentions" placeholder="En plus du pied de page commun ci-dessous — l'exonération de TVA, par exemple."></textarea></div>
+        <div class="f"><label class="lb">Déductions (CMG, avoir…)</label>
+          <textarea id="rFacDeductions" placeholder="Texte explicatif porté sur la facture lorsqu'une déduction s'applique."></textarea></div>
+      </div>
+
       <div class="card">
         <div class="sec"><i class="ti ti-file-text"></i> Tous les documents</div>
         <div class="f"><label class="lb">Pied de page commun</label><textarea id="rPied" placeholder="Apparaît en bas de chaque document sortant."></textarea></div>
       </div>
  <div class="card"> <div class="sec"><i class="ti ti-bell-off"></i> Notifications — droit à la déconnexion</div> <div class="g2"> <div class="f"><label class="lb">Silence à partir de</label><input id="rNotifDebut" type="time"></div> <div class="f"><label class="lb">Notifications reprises à</label><input id="rNotifFin" type="time"></div> </div> <p class="hint">Aucune notification push n'est envoyée entre ces deux heures, pour tout le réseau. Les demandes, événements et actions assignées restent bien enregistrés — ils sont simplement notifiés dès la reprise.</p> <div class="f"><label class="lb">Silence complet</label><div class="jr"><label><input type="checkbox" id="rNotifSamedi"><span>Samedi</span></label><label><input type="checkbox" id="rNotifDimanche"><span>Dimanche</span></label><label><input type="checkbox" id="rNotifFeries"><span>Jours fériés</span></label></div></div> <p class="hint">Ces jours-là, aucune notification push n'est envoyée, quelle que soit l'heure.</p> </div>
-      <div class="warn"><i class="ti ti-info-circle"></i><span>Le devis, le contrat d'accueil et le registre de sécurité lisent déjà ces valeurs.
+      <div class="warn"><i class="ti ti-info-circle"></i><span>Le devis, le contrat d'accueil, la facture et le registre de sécurité lisent déjà ces valeurs.
         Les autres documents restent à câbler au fil de l'eau : c'est un chantier par document.</span></div>
     </div>
   </div>
@@ -730,6 +750,12 @@ function renderReseau(){
   setVal('rPreavis',RCFG.preavis_resiliation);
   setVal('rCondResil',RCFG.conditions_resiliation);
   setVal('rCtMentions',RCFG.contrat_mentions);
+  setVal('rFacJourEnvoi',RCFG.facturation_jour_envoi!=null?RCFG.facturation_jour_envoi:10);
+  setVal('rFacJourEch',RCFG.facturation_jour_echeance!=null?RCFG.facturation_jour_echeance:20);
+  setVal('rFacFraisImpaye',RCFG.frais_dossier_impaye!=null?RCFG.frais_dossier_impaye:40);
+  setVal('rModesReglement',RCFG.modes_reglement);
+  setVal('rFacMentions',RCFG.facture_mentions);
+  setVal('rFacDeductions',RCFG.facture_deductions);
   setVal('rPied',RCFG.pied_page);
   setVal('rNotifDebut',RCFG.notif_silence_debut||'19:00');
   setVal('rNotifFin',RCFG.notif_silence_fin||'08:00');
@@ -866,14 +892,20 @@ async function save(){
   const amin=num('eAgeMin'),amax=num('eAgeMax');
   if((amin!=null&&!isFinite(amin))||(amax!=null&&!isFinite(amax))){
     toast('Âge illisible : indiquez un nombre de mois, 2,5 pour deux mois et demi.',true);return;}
-  let cap,semFerm,semFact,valid,ctValid;
+  let cap,semFerm,semFact,valid,ctValid,facJourEnvoi,facJourEch;
   try{
     cap    =entier('cCap','La capacité agréée');
     semFerm=entier('eSemFerm','Les semaines de fermeture');
     semFact=entier('eSemFact','Les semaines facturées');
     valid  =entier('rValid','La validité du devis');
     ctValid=entier('rCtValid','La validité du lien de signature');
+    facJourEnvoi=entier('rFacJourEnvoi','Le jour d\'envoi des factures');
+    facJourEch  =entier('rFacJourEch','Le jour d\'échéance des factures');
   }catch(e){toast(e.message,true);return;}
+  if(facJourEnvoi!=null&&(facJourEnvoi<1||facJourEnvoi>28)){toast('Le jour d\'envoi des factures doit être compris entre 1 et 28.',true);return;}
+  if(facJourEch!=null&&(facJourEch<1||facJourEch>28)){toast('Le jour d\'échéance des factures doit être compris entre 1 et 28.',true);return;}
+  const fraisImpaye=num('rFacFraisImpaye');
+  if(fraisImpaye!=null&&(!isFinite(fraisImpaye)||fraisImpaye<0)){toast('Les frais de dossier impayé doivent être un montant positif.',true);return;}
   if(amin!=null&&amax!=null&&amin>amax){toast('L\'âge minimum dépasse l\'âge maximum.',true);return;}
   /* Le préavis accepte le demi-mois — quinze jours est une durée courante —
      mais pas le négatif, qui ferait proposer une fin de préavis antérieure à
@@ -926,6 +958,12 @@ async function save(){
       preavis_resiliation:val('rPreavis'),
       conditions_resiliation:val('rCondResil'),
       contrat_mentions:val('rCtMentions'),
+      facturation_jour_envoi:facJourEnvoi!=null?facJourEnvoi:10,
+      facturation_jour_echeance:facJourEch!=null?facJourEch:20,
+      frais_dossier_impaye:fraisImpaye!=null?fraisImpaye:40,
+      modes_reglement:val('rModesReglement'),
+      facture_mentions:val('rFacMentions'),
+      facture_deductions:val('rFacDeductions'),
       pied_page:val('rPied'),notif_silence_debut:val('rNotifDebut')||'19:00', notif_silence_fin:val('rNotifFin')||'08:00',
       notif_silence_samedi:document.getElementById('rNotifSamedi').checked,
       notif_silence_dimanche:document.getElementById('rNotifDimanche').checked,
