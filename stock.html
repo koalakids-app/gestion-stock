@@ -58,6 +58,11 @@ body {
   background: var(--bg);
   color: var(--ink);
   min-height: 100dvh;
+  /* Empêche le « scroll anchoring » du navigateur : quand le contenu change
+     de taille au-dessus de la zone visible (changement d'onglet/crèche, ou
+     synchro qui redessine la page), Chrome essaie de garder le même élément
+     visible et peut recaler le défilement juste après un scrollTo(0,0). */
+  overflow-anchor: none;
   font-size: 14px;
 }
 
@@ -2249,9 +2254,12 @@ function filterCreche(creche, el) {
   // Filtrer sur une crèche réduit souvent beaucoup la hauteur de la page
   // (ex. Couches, ou un inventaire filtré) : sans remise à zéro, la position
   // de défilement héritée de la vue précédente laisse un grand vide en haut.
-  // Voir showPage() pour l'explication du reset d'overflow.
+  // Voir showPage() pour l'explication du reset d'overflow. Le second
+  // scrollTo (après le prochain paint) rattrape le cas où le rendu qui suit
+  // redimensionne encore la page après ce premier appel.
   document.body.style.overflow = '';
   window.scrollTo(0, 0);
+  requestAnimationFrame(() => window.scrollTo(0, 0));
   if (currentPage === 'inventaire') {
     if (currentInvTab === 'consommable') renderTableConso();
     else renderTable();
@@ -3567,6 +3575,7 @@ function showPage(page, btn) {
   // ça, scrollTo(0,0) n'a aucun effet, la page restant bloquée.
   document.body.style.overflow = '';
   window.scrollTo(0, 0);
+  requestAnimationFrame(() => window.scrollTo(0, 0));
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const titles = { inventaire:'Inventaire', commandes:'Commandes', fournisseurs:'Fournisseurs', historique:'Historique des mouvements', univers:'Univers ludiques', couches:'Couches' };
