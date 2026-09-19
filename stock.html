@@ -2477,20 +2477,17 @@ async function coucheEnregistrerPrix() {
       const existant = COUCHES_PRIX.find(x => x.typeCouche === l.type && x.taille === l.taille);
       if (existant && existant.prixUnitaire === l.prix) continue; // rien à faire
       const nowIso = new Date().toISOString();
-      let r;
-      if (existant) {
-        r = await sbFetchAuth(`${SUPA_URL}/rest/v1/stock_couches_prix?type_couche=eq.${l.type}&taille=eq.${l.taille}`, {
-          method: 'PATCH',
-          headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' },
-          body: JSON.stringify({ prix_unitaire: l.prix, updated_at: nowIso }),
-        });
-      } else {
-        r = await sbFetchAuth(`${SUPA_URL}/rest/v1/stock_couches_prix`, {
-          method: 'POST',
-          headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' },
-          body: JSON.stringify({ type_couche: l.type, taille: l.taille, prix_unitaire: l.prix, updated_at: nowIso }),
-        });
-      }
+      // Upsert plutôt que « existe en cache local ? PATCH : POST » : le cache
+      // COUCHES_PRIX peut être en retard sur la base (ex. prix créé par un
+      // autre appareil, ou par une tentative précédente restée invisible
+      // ici) — décider POST/PATCH sur sa seule présence locale a provoqué un
+      // « duplicate key value violates unique constraint » quand la ligne
+      // existait déjà côté serveur. on_conflict fait toujours la bonne chose.
+      const r = await sbFetchAuth(`${SUPA_URL}/rest/v1/stock_couches_prix?on_conflict=type_couche,taille`, {
+        method: 'POST',
+        headers: { ...SUPA_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=representation' },
+        body: JSON.stringify({ type_couche: l.type, taille: l.taille, prix_unitaire: l.prix, updated_at: nowIso }),
+      });
       // Une policy RLS qui refuse l'écriture ne renvoie pas d'erreur HTTP :
       // PostgREST répond 200/201 avec un tableau vide (0 ligne touchée). Sans
       // cette vérification, l'app affichait « enregistré » alors que rien
