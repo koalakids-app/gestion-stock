@@ -41,10 +41,24 @@ input:focus{outline:none;border-color:var(--orange)}
 .qbtn small{font-family:'Nunito';font-size:12px;font-weight:600;opacity:.8}
 .qbtn.suivi{background:var(--violet-l);color:var(--violet)}
 .qbtn.infi{background:var(--orange-l);color:#B4530F}
+.qbtn.inc{background:var(--red-l);color:var(--red)}
 .qbtn:active{transform:scale(.98)}
+.quick .qbtn:nth-child(3){grid-column:1/-1}
 @media(max-width:520px){
   .quick{grid-template-columns:1fr}
+  .quick .qbtn:nth-child(3){grid-column:auto}
 }
+
+/* ---- Panneau incident (overlay) ---- */
+select,textarea{font-family:'Nunito';font-size:15px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740;width:100%}
+select:focus,textarea:focus{outline:none;border-color:var(--orange)}
+.ov{position:fixed;inset:0;background:rgba(43,39,64,.55);display:none;align-items:flex-start;justify-content:center;z-index:300;padding:20px 12px;overflow-y:auto}
+.ov.on{display:flex}
+.ovcard{background:#fff;border-radius:22px;padding:22px;max-width:520px;width:100%;margin:10px auto}
+.ovcard h3{font-family:'Baloo 2',cursive;color:var(--violet);margin-bottom:14px;font-size:18px;display:flex;align-items:center;gap:8px}
+.inc-card{background:#fff;border:1px solid var(--line);border-left:4px solid var(--red);border-radius:0 14px 14px 0;padding:10px 14px;margin-bottom:8px}
+.inc-card.leger{border-left-color:var(--orange)}
+.inc-card.info{border-left-color:#378ADD}
 
 .devlist{background:#fff;border:2px solid var(--line);border-radius:16px;padding:6px;margin-top:6px}
 .devrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 12px;border-radius:12px;cursor:pointer}
@@ -113,9 +127,51 @@ input:focus{outline:none;border-color:var(--orange)}
         Registre d'infirmerie
         <small>soins, incidents, PAI, médicaments</small>
       </a>
+      <button class="qbtn inc" id="qIncident">
+        <i class="ti ti-alert-triangle"></i>
+        Signaler un incident
+        <small>comportement, matériel, sécurité, repas...</small>
+      </button>
     </div>
 
     <div id="suiviResult"></div>
+  </div>
+</div>
+
+<div class="ov" id="ovIncident" onclick="if(event.target===this)closeIncidentPanel()">
+  <div class="ovcard">
+    <h3><i class="ti ti-alert-triangle" style="color:var(--red)"></i> Signaler un incident</h3>
+    <div class="msg warn" style="margin-bottom:14px;font-size:12.5px">
+      <i class="ti ti-alert-circle"></i> Chute, morsure, malaise, allergie&nbsp;? Ces situations se consignent dans le
+      <a href="infirmerie.html" style="color:inherit;text-decoration:underline;font-weight:700">registre d'infirmerie</a>,
+      pas ici. En cas d'urgence médicale, appelez le 15 (SAMU) immédiatement.
+    </div>
+    <div class="f" style="display:flex;gap:10px">
+      <div style="flex:1"><label>Date</label><input type="date" id="incDate"></div>
+      <div style="flex:1"><label>Heure</label><input type="time" id="incTime"></div>
+    </div>
+    <div class="f"><label>Enfant concerné (facultatif)</label><input type="text" id="incChild" placeholder="Prénom Nom de l'enfant"></div>
+    <div class="f"><label>Type d'incident</label><select id="incType" onchange="toggleIncTypeLibreT()"></select></div>
+    <div class="f" id="incTypeLibreWrap" style="display:none"><label>Précisez le type d'incident (repas MCM)</label><input type="text" id="incTypeLibre" placeholder="Ex. plat non conforme au menu, allergène non signalé..."></div>
+    <div class="f"><label>Sévérité</label>
+      <select id="incSeverity">
+        <option value="info">ℹ️ Information</option>
+        <option value="leger">🟠 Léger</option>
+        <option value="grave">🔴 Grave / urgence médicale</option>
+      </select>
+    </div>
+    <div class="f"><label>Description</label><textarea id="incDesc" rows="3"></textarea></div>
+    <div class="f"><label>Actions menées</label><textarea id="incActions" rows="2"></textarea></div>
+    <div class="f"><label>Déclarant</label><input type="text" id="incReporter" placeholder="Prénom Nom"></div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-g" style="flex:1;justify-content:center" onclick="closeIncidentPanel()">Annuler</button>
+      <button class="btn btn-p" style="flex:1;justify-content:center" onclick="saveIncidentTerrain()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+
+    <div style="margin-top:22px;border-top:2px solid var(--line);padding-top:14px">
+      <div style="font-family:'Baloo 2',cursive;color:var(--violet);font-size:15px;margin-bottom:10px">Derniers incidents de votre crèche</div>
+      <div id="incidentListT"></div>
+    </div>
   </div>
 </div>
 
@@ -167,7 +223,7 @@ async function terrainGrantAccess(){
   document.getElementById('loginView').style.display='none';
   document.getElementById('appView').style.display='block';
   document.getElementById('whoAmI').textContent=(PROF.name||'')+(IS_DIRECTION?' · Direction':'');
-  document.getElementById('hello').innerHTML='Bonjour '+esc(PROF.name||'')+' <small>Suivi de l\'enfant et registre d\'infirmerie, en un tap.</small>';
+  document.getElementById('hello').innerHTML='Bonjour '+esc(PROF.name||'')+' <small>Suivi de l\'enfant, registre d\'infirmerie et signalement d\'incident, en un tap.</small>';
 }
 // --- Portail MFA obligatoire (identique à infirmerie.html) ---
 function mfaGateSwitchView(id){
@@ -318,11 +374,124 @@ async function openSuivi(){
   }
 }
 
+/* ================= SIGNALER UN INCIDENT =================
+   Formulaire de déclaration + liste des derniers incidents de SA crèche,
+   sur la table Supabase `incidents` déjà utilisée par demandes.html
+   (mêmes colonnes, même edge function notify-infirmerie pour les incidents
+   graves). Pas de duplication du module complet : on ne reprend que ce
+   dont un auxiliaire de terrain a besoin. */
+const INC_TYPE_LABELS_T={comportement:'Incident comportemental',materiel:'Incident matériel',securite:'Sécurité des locaux',famille:'Relation avec une famille',repas_corps_etranger:'Repas MCM – Corps étranger (arête, os...)',repas_grammage:'Repas MCM – Grammage insuffisant',repas_livraison:'Repas MCM – Livraison (retard, livreur inadapté...)',autre:'Autre'};
+function incTypeSelectHtmlT(){
+  const opts=[['comportement','Incident comportemental'],['materiel','Incident matériel'],['securite','Sécurité des locaux'],['famille','Relation avec une famille'],['repas_corps_etranger',"Repas MCM – Corps étranger (arête, os...)"],['repas_grammage','Repas MCM – Grammage insuffisant'],['repas_livraison','Repas MCM – Livraison (retard, livreur inadapté...)'],['repas_libre','Repas MCM – Autre (à préciser)'],['autre','Autre']];
+  return opts.map(o=>'<option value="'+o[0]+'">'+esc(o[1])+'</option>').join('');
+}
+function toggleIncTypeLibreT(){
+  const libre=document.getElementById('incType').value==='repas_libre';
+  document.getElementById('incTypeLibreWrap').style.display=libre?'':'none';
+}
+async function dbInsertT(table,row){
+  const{data,error}=await sb.from(table).insert(row).select().single();
+  if(error){console.error('[dbInsertT]',table,error);return null;}
+  return data;
+}
+async function callFnT(fn,body){
+  try{
+    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});
+    return r.ok;
+  }catch(e){console.error('[callFnT]',fn,e);return false;}
+}
+async function openIncidentPanel(){
+  if(!PROF.creche_id){
+    // Direction sans crèche unique rattachée : pas de cloisonnement évident,
+    // même logique que openSuivi() ci-dessus -> on renvoie vers demandes.html.
+    document.getElementById('suiviResult').innerHTML='<div class="msg warn"><i class="ti ti-info-circle"></i> La direction gère plusieurs crèches : déclarez l\'incident depuis demandes.html (module Incidents).</div>';
+    return;
+  }
+  const sel=document.getElementById('incType');
+  sel.innerHTML=incTypeSelectHtmlT();
+  sel.value='comportement';
+  toggleIncTypeLibreT();
+  document.getElementById('incDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('incTime').value=new Date().toTimeString().slice(0,5);
+  ['incChild','incDesc','incActions','incTypeLibre'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('incReporter').value=PROF.name||'';
+  document.getElementById('incSeverity').value='info';
+  document.getElementById('ovIncident').classList.add('on');
+  loadIncidentsTerrain();
+}
+function closeIncidentPanel(){document.getElementById('ovIncident').classList.remove('on');}
+async function loadIncidentsTerrain(){
+  const box=document.getElementById('incidentListT');
+  box.innerHTML='<div style="color:var(--muted);font-size:13px">Chargement…</div>';
+  try{
+    const{data,error}=await sb.from('incidents').select('*').eq('creche_id',PROF.creche_id).order('incident_date',{ascending:false}).order('incident_time',{ascending:false}).limit(20);
+    if(error)throw error;
+    renderIncidentsTerrain(data||[]);
+  }catch(e){
+    console.error('[loadIncidentsTerrain]',e);
+    box.innerHTML='<div class="msg warn" style="font-size:12.5px"><i class="ti ti-alert-triangle"></i> Impossible de charger les incidents.</div>';
+  }
+}
+function renderIncidentsTerrain(list){
+  const box=document.getElementById('incidentListT');
+  if(!list.length){box.innerHTML='<div style="color:var(--muted);font-size:13px">Aucun incident déclaré pour l\'instant.</div>';return;}
+  const si={grave:'🔴',leger:'🟠',info:'ℹ️'};
+  box.innerHTML=list.map(function(i){
+    const sev=i.severity||'info';
+    const label=INC_TYPE_LABELS_T[i.type]||i.type||'';
+    const childHtml=i.child_name?('<div style="font-size:12px;color:var(--violet);font-weight:600;margin-top:2px"><i class="ti ti-user" style="font-size:11px"></i> '+esc(i.child_name)+'</div>'):'';
+    const statusHtml=i.treated?'<span style="font-size:11px;background:var(--green-l);color:var(--green);padding:2px 8px;border-radius:8px;font-weight:700">✅ Traité</span>':'<span style="font-size:11px;background:#FFF3D6;color:#8A6100;padding:2px 8px;border-radius:8px;font-weight:700">⏳ En cours</span>';
+    return '<div class="inc-card '+esc(sev)+'">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
+        +'<b style="font-size:13.5px">'+(si[sev]||'ℹ️')+' '+esc(label)+'</b>'
+        +'<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+esc(i.incident_date||'')+(i.incident_time?(' à '+esc(i.incident_time)):'')+'</span>'
+      +'</div>'
+      +childHtml
+      +'<div style="font-size:13px;color:#555;margin-top:4px;line-height:1.4">'+esc(i.description||'—')+'</div>'
+      +'<div style="margin-top:6px">'+statusHtml+'</div>'
+    +'</div>';
+  }).join('');
+}
+async function saveIncidentTerrain(){
+  const desc=document.getElementById('incDesc').value.trim();
+  if(!desc){toast('Description requise.',true);return;}
+  let type=document.getElementById('incType').value;
+  if(type==='repas_libre'){
+    const libre=document.getElementById('incTypeLibre').value.trim();
+    if(!libre){toast("Précisez le type d'incident repas MCM.",true);return;}
+    type='Repas MCM – '+libre;
+  }
+  const row={
+    creche_id:PROF.creche_id,
+    child_name:document.getElementById('incChild').value.trim(),
+    incident_date:document.getElementById('incDate').value,
+    incident_time:document.getElementById('incTime').value,
+    type:type,
+    severity:document.getElementById('incSeverity').value,
+    description:desc,
+    actions:document.getElementById('incActions').value.trim(),
+    reporter:document.getElementById('incReporter').value.trim(),
+    treated:false
+  };
+  const saved=await dbInsertT('incidents',row);
+  if(!saved){toast('Erreur lors de l\'enregistrement.',true);return;}
+  // Alerte immediate a la direction et a la referente si l'incident est grave
+  // (meme edge function que demandes.html, aucun detail/nom transmis par courriel).
+  if(saved.severity==='grave'){
+    await callFnT('notify-infirmerie',{creche_id:saved.creche_id,motif:'grave',date:saved.incident_date,heure:saved.incident_time,source:'incident'});
+    toast('Incident enregistré. Direction et directrice technique alertées.');
+  }else{
+    toast('Incident enregistré.');
+  }
+  closeIncidentPanel();
+}
+
 /* ================= EVENEMENTS ================= */
 document.getElementById('btnLogin').onclick=doLogin;
 document.getElementById('liPwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 document.getElementById('btnLogout').onclick=async()=>{await sb.auth.signOut();location.reload();};
 document.getElementById('qSuivi').onclick=openSuivi;
+document.getElementById('qIncident').onclick=openIncidentPanel;
 
 boot();
 </script>
