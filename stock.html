@@ -474,14 +474,22 @@ textarea { resize: vertical; min-height: 72px; }
   transition: box-shadow 0.15s;
 }
 
+/* Une ligne d'article peut contenir un lien Amazon très long, sans espace :
+   sans ce min-width, une piste de grille "1fr" garde sa largeur de contenu
+   minimale (min-content) et déborde du conteneur — recouvert par le
+   overflow-x:hidden de .main, donc coupé net sur le bord droit plutôt que
+   visible via un défilement, en portrait comme sur mobile Android. */
+.commande-card > div:first-child { min-width: 0; }
+
 .commande-card:hover { box-shadow: var(--shadow-lg); }
 
 .commande-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
 .commande-meta { font-size: 12px; color: var(--ink3); display: flex; gap: 14px; flex-wrap: wrap; }
 .commande-meta span { display: flex; align-items: center; gap: 4px; }
 .commande-items { margin-top: 10px; }
-.commande-item-row { font-size: 12px; color: var(--ink2); padding: 4px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
+.commande-item-row { font-size: 12px; color: var(--ink2); padding: 4px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 8px; }
 .commande-item-row:last-child { border-bottom: none; }
+.commande-item-row > span:first-child { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .commande-total { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; text-align: right; }
 .commande-total-label { font-size: 11px; color: var(--ink3); text-align: right; }
 
