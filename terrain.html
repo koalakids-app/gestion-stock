@@ -146,6 +146,10 @@ select:focus,textarea:focus{outline:none;border-color:var(--orange)}
       <a href="infirmerie.html" style="color:inherit;text-decoration:underline;font-weight:700">registre d'infirmerie</a>,
       pas ici. En cas d'urgence médicale, appelez le 15 (SAMU) immédiatement.
     </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button type="button" class="btn btn-s inc-cat-t on" id="incCatEnfantBtn" onclick="setIncCategoryT('enfant',this)" style="flex:1;justify-content:center">👶 Enfants</button>
+      <button type="button" class="btn btn-g inc-cat-t" id="incCatRepasBtn" onclick="setIncCategoryT('repas',this)" style="flex:1;justify-content:center">🍽️ Prestataire repas</button>
+    </div>
     <div class="f" style="display:flex;gap:10px">
       <div style="flex:1"><label>Date</label><input type="date" id="incDate"></div>
       <div style="flex:1"><label>Heure</label><input type="time" id="incTime"></div>
@@ -153,7 +157,7 @@ select:focus,textarea:focus{outline:none;border-color:var(--orange)}
     <div class="f"><label>Enfant concerné (facultatif)</label><input type="text" id="incChild" placeholder="Prénom Nom de l'enfant"></div>
     <div class="f"><label>Type d'incident</label><select id="incType" onchange="toggleIncTypeLibreT()"></select></div>
     <div class="f" id="incTypeLibreWrap" style="display:none"><label>Précisez le type d'incident (repas MCM)</label><input type="text" id="incTypeLibre" placeholder="Ex. plat non conforme au menu, allergène non signalé..."></div>
-    <div class="f"><label>Sévérité</label>
+    <div class="f" id="incSeverityWrap"><label>Sévérité</label>
       <select id="incSeverity">
         <option value="info">ℹ️ Information</option>
         <option value="leger">🟠 Léger</option>
@@ -381,8 +385,10 @@ async function openSuivi(){
    graves). Pas de duplication du module complet : on ne reprend que ce
    dont un auxiliaire de terrain a besoin. */
 const INC_TYPE_LABELS_T={comportement:'Incident comportemental',materiel:'Incident matériel',securite:'Sécurité des locaux',famille:'Relation avec une famille',repas_corps_etranger:'Repas MCM – Corps étranger (arête, os...)',repas_grammage:'Repas MCM – Grammage insuffisant',repas_livraison:'Repas MCM – Livraison (retard, livreur inadapté...)',autre:'Autre'};
-function incTypeSelectHtmlT(){
-  const opts=[['comportement','Incident comportemental'],['materiel','Incident matériel'],['securite','Sécurité des locaux'],['famille','Relation avec une famille'],['repas_corps_etranger',"Repas MCM – Corps étranger (arête, os...)"],['repas_grammage','Repas MCM – Grammage insuffisant'],['repas_livraison','Repas MCM – Livraison (retard, livreur inadapté...)'],['repas_libre','Repas MCM – Autre (à préciser)'],['autre','Autre']];
+const INC_TYPE_OPTS_ENFANT_T=[['comportement','Incident comportemental'],['materiel','Incident matériel'],['securite','Sécurité des locaux'],['famille','Relation avec une famille'],['autre','Autre']];
+const INC_TYPE_OPTS_REPAS_T=[['repas_corps_etranger',"Repas MCM – Corps étranger (arête, os...)"],['repas_grammage','Repas MCM – Grammage insuffisant'],['repas_livraison','Repas MCM – Livraison (retard, livreur inadapté...)'],['repas_libre','Repas MCM – Autre (à préciser)']];
+function incTypeSelectHtmlT(cat){
+  const opts=cat==='repas'?INC_TYPE_OPTS_REPAS_T:INC_TYPE_OPTS_ENFANT_T;
   return opts.map(o=>'<option value="'+o[0]+'">'+esc(o[1])+'</option>').join('');
 }
 function toggleIncTypeLibreT(){
@@ -400,6 +406,18 @@ async function callFnT(fn,body){
     return r.ok;
   }catch(e){console.error('[callFnT]',fn,e);return false;}
 }
+let activeIncCategoryT='enfant',LAST_INCIDENTS_T=[];
+function setIncCategoryT(cat,btn){
+  activeIncCategoryT=cat;
+  document.querySelectorAll('.inc-cat-t').forEach(function(b){b.classList.remove('on');b.classList.remove('btn-s');b.classList.add('btn-g');});
+  btn.classList.add('on');btn.classList.remove('btn-g');btn.classList.add('btn-s');
+  const sel=document.getElementById('incType');
+  sel.innerHTML=incTypeSelectHtmlT(cat);
+  sel.value=cat==='repas'?'repas_corps_etranger':'comportement';
+  toggleIncTypeLibreT();
+  document.getElementById('incSeverityWrap').style.display=cat==='repas'?'none':'';
+  renderIncidentsTerrain(LAST_INCIDENTS_T);
+}
 async function openIncidentPanel(){
   if(!PROF.creche_id){
     // Direction sans crèche unique rattachée : pas de cloisonnement évident,
@@ -407,35 +425,36 @@ async function openIncidentPanel(){
     document.getElementById('suiviResult').innerHTML='<div class="msg warn"><i class="ti ti-info-circle"></i> La direction gère plusieurs crèches : déclarez l\'incident depuis demandes.html (module Incidents).</div>';
     return;
   }
-  const sel=document.getElementById('incType');
-  sel.innerHTML=incTypeSelectHtmlT();
-  sel.value='comportement';
-  toggleIncTypeLibreT();
   document.getElementById('incDate').value=new Date().toISOString().slice(0,10);
   document.getElementById('incTime').value=new Date().toTimeString().slice(0,5);
   ['incChild','incDesc','incActions','incTypeLibre'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('incReporter').value=PROF.name||'';
   document.getElementById('incSeverity').value='info';
   document.getElementById('ovIncident').classList.add('on');
+  setIncCategoryT('enfant',document.getElementById('incCatEnfantBtn'));
   loadIncidentsTerrain();
 }
 function closeIncidentPanel(){document.getElementById('ovIncident').classList.remove('on');}
+function isIncRepasT(i){return /^repas/i.test(i.type||'')||/^Repas MCM/i.test(i.type||'');}
 async function loadIncidentsTerrain(){
   const box=document.getElementById('incidentListT');
   box.innerHTML='<div style="color:var(--muted);font-size:13px">Chargement…</div>';
   try{
     const{data,error}=await sb.from('incidents').select('*').eq('creche_id',PROF.creche_id).order('incident_date',{ascending:false}).order('incident_time',{ascending:false}).limit(20);
     if(error)throw error;
-    renderIncidentsTerrain(data||[]);
+    LAST_INCIDENTS_T=data||[];
+    renderIncidentsTerrain(LAST_INCIDENTS_T);
   }catch(e){
     console.error('[loadIncidentsTerrain]',e);
     box.innerHTML='<div class="msg warn" style="font-size:12.5px"><i class="ti ti-alert-triangle"></i> Impossible de charger les incidents.</div>';
   }
 }
-function renderIncidentsTerrain(list){
+function renderIncidentsTerrain(fullList){
   const box=document.getElementById('incidentListT');
+  const list=(fullList||[]).filter(function(i){return activeIncCategoryT==='repas'?isIncRepasT(i):!isIncRepasT(i);});
   if(!list.length){box.innerHTML='<div style="color:var(--muted);font-size:13px">Aucun incident déclaré pour l\'instant.</div>';return;}
   const si={grave:'🔴',leger:'🟠',info:'ℹ️'};
+  const showSev=activeIncCategoryT!=='repas';
   box.innerHTML=list.map(function(i){
     const sev=i.severity||'info';
     const label=INC_TYPE_LABELS_T[i.type]||i.type||'';
@@ -443,7 +462,7 @@ function renderIncidentsTerrain(list){
     const statusHtml=i.treated?'<span style="font-size:11px;background:var(--green-l);color:var(--green);padding:2px 8px;border-radius:8px;font-weight:700">✅ Traité</span>':'<span style="font-size:11px;background:#FFF3D6;color:#8A6100;padding:2px 8px;border-radius:8px;font-weight:700">⏳ En cours</span>';
     return '<div class="inc-card '+esc(sev)+'">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
-        +'<b style="font-size:13.5px">'+(si[sev]||'ℹ️')+' '+esc(label)+'</b>'
+        +'<b style="font-size:13.5px">'+(showSev?(si[sev]||'ℹ️')+' ':'')+esc(label)+'</b>'
         +'<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+esc(i.incident_date||'')+(i.incident_time?(' à '+esc(i.incident_time)):'')+'</span>'
       +'</div>'
       +childHtml
@@ -467,7 +486,7 @@ async function saveIncidentTerrain(){
     incident_date:document.getElementById('incDate').value,
     incident_time:document.getElementById('incTime').value,
     type:type,
-    severity:document.getElementById('incSeverity').value,
+    severity:activeIncCategoryT==='repas'?'info':document.getElementById('incSeverity').value,
     description:desc,
     actions:document.getElementById('incActions').value.trim(),
     reporter:document.getElementById('incReporter').value.trim(),
