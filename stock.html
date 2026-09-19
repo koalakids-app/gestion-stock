@@ -5240,7 +5240,7 @@ async function syncFromCloud() {
       withTimeout(sbGet('souscats', 'order=id.asc')),
       withTimeout(sbGet('stock_couches')),
       withTimeout(sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500')),
-      withTimeout(sbGet('stock_couches_prix')),
+      withTimeout(sbGet('stock_couches_prix', 'order=type_couche.asc')),
     ]);
 
     const [artsR, cmdsR, fournsR, histosR, univsR, scR, couchesR, couchesMvtsR, couchesPrixR] = results;
@@ -5531,7 +5531,7 @@ async function loadData() {
         // réseau transitoire au rechargement de la page.
         sbGet('stock_couches').catch(() => null),
         sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500').catch(() => null),
-        sbGet('stock_couches_prix').catch(() => null),
+        sbGet('stock_couches_prix', 'order=type_couche.asc').catch(() => null),
       ]),
       timeout.then(() => { throw new Error('Timeout Supabase'); })
     ]);
