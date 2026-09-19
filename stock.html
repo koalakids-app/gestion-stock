@@ -2246,6 +2246,10 @@ function filterCreche(creche, el) {
   currentPageConso = 1;
   document.querySelectorAll('.creche-badge').forEach(e => e.classList.remove('active'));
   if (el) el.classList.add('active');
+  // Filtrer sur une crèche réduit souvent beaucoup la hauteur de la page
+  // (ex. Couches, ou un inventaire filtré) : sans remise à zéro, la position
+  // de défilement héritée de la vue précédente laisse un grand vide en haut.
+  window.scrollTo(0, 0);
   if (currentPage === 'inventaire') {
     if (currentInvTab === 'consommable') renderTableConso();
     else renderTable();
@@ -3549,6 +3553,11 @@ function showPage(page, btn) {
   ['inventaire','commandes','fournisseurs','historique','univers','couches'].forEach(p => {
     document.getElementById(`page-${p}`).style.display = p === page ? 'block' : 'none';
   });
+  // Le contenu défile avec la fenêtre (.main n'a pas son propre scroll) : sans
+  // ça, changer d'onglet après avoir fait défiler un long tableau (ex.
+  // Inventaire) garde la même position et affiche un grand vide en haut
+  // d'un onglet plus court comme Couches.
+  window.scrollTo(0, 0);
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const titles = { inventaire:'Inventaire', commandes:'Commandes', fournisseurs:'Fournisseurs', historique:'Historique des mouvements', univers:'Univers ludiques', couches:'Couches' };
