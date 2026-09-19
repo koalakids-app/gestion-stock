@@ -1446,8 +1446,9 @@ body.sk-locked{overflow:hidden}
         </div>
         <div class="form-group full">
           <label>Articles commandés</label>
-          <div class="picker-buttons-row" style="display:flex;gap:8px;margin-bottom:8px">
+          <div class="picker-buttons-row" style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
             <button type="button" class="btn btn-secondary btn-sm" onclick="openArticlePicker()" style="flex:1;justify-content:center">📋 Choisir depuis articles existants</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openCouchesPicker()" style="flex:1;justify-content:center">🧷 Choisir des couches</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="openOrderHistoryPicker()" style="flex:1;justify-content:center">🕘 Reprendre une commande précédente</button>
           </div>
           <div id="articles-table" style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
@@ -1495,6 +1496,26 @@ body.sk-locked{overflow:hidden}
       <div style="display:flex;gap:10px">
         <button class="btn btn-secondary" onclick="closeModal('modal-article-picker')">Annuler</button>
         <button class="btn btn-primary" onclick="confirmArticlePicker()">+ Ajouter à la commande</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL PICKER : CHOISIR DES COUCHES ── -->
+<div class="modal-overlay" id="modal-couches-picker" onclick="closeModalClick(event,'modal-couches-picker')">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <h2>🧷 Choisir des couches</h2>
+      <button class="modal-close" onclick="closeModal('modal-couches-picker')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="picker-couches-list" style="max-height:55vh;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm)"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;align-items:center">
+      <span id="picker-couches-count" style="font-size:12px;color:var(--ink2)">0 référence(s) sélectionnée(s)</span>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="closeModal('modal-couches-picker')">Annuler</button>
+        <button class="btn btn-primary" onclick="confirmCouchesPicker()">+ Ajouter à la commande</button>
       </div>
     </div>
   </div>
@@ -2389,25 +2410,48 @@ async function sbCoucheEnsureRow(creche, type, taille) {
   }
 }
 
+// Créditer une réception de couches — utilisé par le bouton manuel
+// (coucheReception) et par la réception d'une commande contenant des lignes
+// de couches (confirmerLivraison) : les deux doivent créditer stock_couches,
+// jamais l'inventaire générique ARTICLES, sous peine de créer une ligne
+// fantôme sans lien avec le vrai décompte automatique.
+async function coucheCrediterReception(creche, type, taille, qty) {
+  const c = await sbCoucheEnsureRow(creche, type, taille);
+  if (!c) return false;
+  const nouveauStock = c.stock + qty;
+  await sbUpdate('stock_couches', c.id, { stock: nouveauStock });
+  const mvts = await sbInsert('stock_couches_mouvements', { creche, type_couche: type, taille, delta: qty, motif: 'reception' });
+  c.stock = nouveauStock;
+  COUCHES_MVTS.unshift(rowToCoucheMvt(mvts[0]));
+  return true;
+}
+
 async function coucheReception(creche, type, taille) {
   const saisie = prompt('Quantité reçue — ' + coucheLabel(type) + ' taille ' + taille + ' (' + creche + ')', '');
   if (saisie === null) return;
   const qty = parseInt(saisie, 10);
   if (!Number.isFinite(qty) || qty <= 0) { alert('Quantité invalide.'); return; }
-  const c = await sbCoucheEnsureRow(creche, type, taille);
-  if (!c) return;
-  const nouveauStock = c.stock + qty;
   try {
-    await sbUpdate('stock_couches', c.id, { stock: nouveauStock });
-    const mvts = await sbInsert('stock_couches_mouvements', { creche, type_couche: type, taille, delta: qty, motif: 'reception' });
-    c.stock = nouveauStock;
-    COUCHES_MVTS.unshift(rowToCoucheMvt(mvts[0]));
+    await coucheCrediterReception(creche, type, taille, qty);
     renderCouches();
     showNotif('✅ +' + qty + ' — ' + coucheLabel(type) + ' T' + taille + ' (' + creche + ')');
   } catch(e) {
     console.error('[Couches] réception :', e);
     showNotif('❌ Erreur lors de l’enregistrement : ' + (e.message || e));
   }
+}
+
+// Reconnaît une ligne de commande ajoutée par le picker Couches
+// ("Couches classiques T3 — Cuers") et retrouve son type/taille/crèche.
+// Le format est celui produit par confirmCouchesPicker : on ne l'analyse
+// nulle part ailleurs, donc le coupler ici n'est pas plus fragile que
+// n'importe quel autre format de ligne de commande (déjà du texte parsé).
+function coucheParseNomLigne(nom) {
+  const m = nom.match(/^(.+?)\s+T(\d)\s+—\s+(.+)$/);
+  if (!m) return null;
+  const produit = COUCHES_PRODUITS.find(p => p.label === m[1]);
+  if (!produit) return null;
+  return { type: produit.type, taille: m[2], creche: m[3] };
 }
 
 async function coucheAjusterSeuil(creche, type, taille) {
@@ -2470,13 +2514,57 @@ async function coucheAjuster(creche, type, taille) {
   }
 }
 
+// Évaluation d'une référence (stock, estimation "jours restants", niveaux
+// d'alerte) — factorisé pour être réutilisé par l'affichage du stock
+// (renderCouches) et par le picker de commande (renderCouchesPickerList),
+// qui doivent rester rigoureusement d'accord sur ce qui est "bas" ou
+// "critique".
+function coucheEvaluer(creche, type, taille) {
+  const c = coucheFind(creche, type, taille);
+  const stock = c ? c.stock : 0;
+  const seuil = c ? c.seuilAlerteJours : 15;
+  const delaiLivraison = c ? c.delaiLivraisonJours : COUCHE_DELAI_LIVRAISON_JOURS;
+  const since14 = Date.now() - 14 * 24 * 3600 * 1000;
+  const conso14 = COUCHES_MVTS.filter(m =>
+    m.creche === creche && m.typeCouche === type && m.taille === taille &&
+    m.motif === 'change_auto' && new Date(m.createdAt).getTime() >= since14
+  ).length;
+  const avgDailyReel = conso14 / 14;
+  // En dessous de ce nombre de changes réels sur 14 jours, la moyenne
+  // extrapole n'importe quoi (ex. 1 change sur la période → des centaines de
+  // « jours restants » affichés). Ça ne se « réinitialise » pas à une
+  // réception, seul l'usage réel (Change dans le suivi) alimente cette
+  // moyenne — en attendant d'avoir assez d'historique, on retombe sur une
+  // estimation à partir du nombre d'enfants qui portent cette taille
+  // (4,5 couches/jour/enfant).
+  const MIN_CHANGES_FIABLE = 5;
+  const effectif = coucheEffectif(creche, type, taille);
+  let joursRestants = null, estimSource = null;
+  if (conso14 >= MIN_CHANGES_FIABLE && avgDailyReel > 0) {
+    joursRestants = Math.floor(stock / avgDailyReel);
+    estimSource = 'reel';
+  } else if (effectif > 0) {
+    joursRestants = Math.floor(stock / (effectif * COUCHE_CONSO_PAR_ENFANT_PAR_JOUR));
+    estimSource = 'effectif';
+  }
+  const enAlerte = stock <= 0 || (joursRestants !== null && joursRestants <= seuil);
+  // Rupture prévisible avant l'arrivée d'une commande passée aujourd'hui
+  // (délai de livraison propre à cette référence, réglable au 🚚) :
+  // distincte du simple stock bas, qui laisse encore le temps de
+  // commander tranquillement.
+  const enCritique = stock <= 0 || (joursRestants !== null && joursRestants <= delaiLivraison);
+  const estimTexte = estimSource === 'reel' ? joursRestants + ' j restants (est.)'
+    : estimSource === 'effectif' ? joursRestants + ' j restants (est. ' + effectif + ' enf.×4,5/j)'
+    : (stock > 0 ? 'aucun enfant sur cette taille' : '—');
+  return { stock, seuil, delaiLivraison, joursRestants, estimSource, estimTexte, enAlerte, enCritique };
+}
+
 function renderCouches() {
   const box = document.getElementById('couches-grid');
   const alertBox = document.getElementById('couches-alertes');
   if (!box) return;
   renderCouchesValorisation();
   const crechesAffichees = currentCreche === 'all' ? CRECHES : [currentCreche];
-  const since14 = Date.now() - 14 * 24 * 3600 * 1000;
   const alertes = [];
   let html = '';
 
@@ -2491,46 +2579,13 @@ function renderCouches() {
         <div style="font-size:12.5px;font-weight:700;color:var(--ink3);margin-bottom:6px">${produit.label}</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">`;
       produit.tailles.forEach(taille => {
-        const c = coucheFind(creche, produit.type, taille);
-        const stock = c ? c.stock : 0;
-        const seuil = c ? c.seuilAlerteJours : 15;
-        const delaiLivraison = c ? c.delaiLivraisonJours : COUCHE_DELAI_LIVRAISON_JOURS;
-        const conso14 = COUCHES_MVTS.filter(m =>
-          m.creche === creche && m.typeCouche === produit.type && m.taille === taille &&
-          m.motif === 'change_auto' && new Date(m.createdAt).getTime() >= since14
-        ).length;
-        const avgDailyReel = conso14 / 14;
-        // En dessous de ce nombre de changes réels sur 14 jours, la moyenne
-        // extrapole n'importe quoi (ex. 1 change sur la période → des
-        // centaines de « jours restants » affichés). Ça ne se
-        // « réinitialise » pas à une réception, seul l'usage réel (Change
-        // dans le suivi) alimente cette moyenne — en attendant d'avoir assez
-        // d'historique, on retombe sur une estimation à partir du nombre
-        // d'enfants qui portent cette taille (4,5 couches/jour/enfant).
-        const MIN_CHANGES_FIABLE = 5;
-        const effectif = coucheEffectif(creche, produit.type, taille);
-        let joursRestants = null, estimSource = null;
-        if (conso14 >= MIN_CHANGES_FIABLE && avgDailyReel > 0) {
-          joursRestants = Math.floor(stock / avgDailyReel);
-          estimSource = 'reel';
-        } else if (effectif > 0) {
-          joursRestants = Math.floor(stock / (effectif * COUCHE_CONSO_PAR_ENFANT_PAR_JOUR));
-          estimSource = 'effectif';
-        }
-        const enAlerte = stock <= 0 || (joursRestants !== null && joursRestants <= seuil);
-        // Rupture prévisible avant l'arrivée d'une commande passée aujourd'hui
-        // (délai de livraison propre à cette référence, réglable au 🚚) :
-        // distincte du simple stock bas, qui laisse encore le temps de
-        // commander tranquillement.
-        const enCritique = stock <= 0 || (joursRestants !== null && joursRestants <= delaiLivraison);
-        if (enAlerte) alertes.push({ creche, produit: produit.label, taille, stock, joursRestants, critique: enCritique, seuil, delaiLivraison });
+        const ev = coucheEvaluer(creche, produit.type, taille);
+        const { stock, seuil, delaiLivraison, enAlerte, enCritique, estimTexte } = ev;
+        if (enAlerte) alertes.push({ creche, produit: produit.label, taille, stock, joursRestants: ev.joursRestants, critique: enCritique, seuil, delaiLivraison });
         const bg = enCritique ? '#FCA5A5' : enAlerte ? 'var(--red-lt)' : 'var(--bg)';
         const border = enCritique ? '3px solid #991B1B' : enAlerte ? '2px solid var(--red)' : '1px solid var(--border)';
         const prixUnit = couchePrixUnitaire(produit.type, taille);
         const valeurLigne = prixUnit !== null ? (stock * prixUnit).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €' : null;
-        const estimTexte = estimSource === 'reel' ? joursRestants + ' j restants (est.)'
-          : estimSource === 'effectif' ? joursRestants + ' j restants (est. ' + effectif + ' enf.×4,5/j)'
-          : (stock > 0 ? 'aucun enfant sur cette taille' : '—');
         html += `<div style="border:${border};background:${bg};border-radius:10px;padding:10px 12px">
           <div style="font-size:11.5px;color:var(--ink3);font-weight:700">Taille ${taille}${enCritique ? ' 🚨' : ''}</div>
           <div style="font-size:24px;font-weight:800;margin:2px 0">${stock}</div>
@@ -2962,6 +3017,29 @@ async function confirmerLivraison(id) {
     const input = document.getElementById(`livraison-qty-${i}`);
     const qty = input ? parseInt(input.value) || 0 : art.qty;
     if (qty <= 0) continue;
+
+    // Ligne de couches (ajoutée via le picker 🧷) : créditer stock_couches,
+    // jamais l'inventaire générique — sinon la réception crée une ligne
+    // fantôme dans ARTICLES, invisible du décompte automatique et des
+    // alertes de l'onglet Couches.
+    if (art.cat === 'Couches') {
+      const cible = coucheParseNomLigne(art.nom);
+      // Une ligne éditée à la main peut ne plus correspondre à une vraie
+      // crèche : mieux vaut retomber sur le circuit générique (ARTICLES) que
+      // créer une ligne stock_couches sous un nom qui n'existe pas.
+      if (cible && CRECHES.includes(cible.creche)) {
+        try {
+          await coucheCrediterReception(cible.creche, cible.type, cible.taille, qty);
+          addHisto('entrée', art.nom, qty, cible.creche, 'Vous', `Réception ${c.bc}`);
+          histoToSave.push(HISTORIQUE[0]);
+          updated++;
+        } catch(e) {
+          console.error('[Couches] réception depuis commande :', e);
+          showNotif('❌ Réception de "' + art.nom + '" impossible : ' + (e.message || e));
+        }
+        continue;
+      }
+    }
 
     let article = ARTICLES.find(a =>
       a.creche === c.creche &&
@@ -3953,7 +4031,7 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='', photo=
     </div>
     <select id="row-cat-${idx}" style="border:none;border-right:1px solid var(--border);border-radius:0;padding:4px 6px;font-size:11px;background:var(--surface);color:var(--ink)">
       <option value="">— Cat. —</option>
-      ${['Sensoriel','Manipulation','Construction','Motricité','Imitation','Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration'].map(c=>`<option value="${c}" ${cat===c?'selected':''}>${c}</option>`).join('')}
+      ${['Sensoriel','Manipulation','Construction','Motricité','Imitation','Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration','Couches'].map(c=>`<option value="${c}" ${cat===c?'selected':''}>${c}</option>`).join('')}
     </select>
     <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00"
            oninput="calcCommandeTotal()" style="text-align:right">
@@ -4166,6 +4244,72 @@ function confirmArticlePicker() {
   });
   showNotif(`✅ ${pickerArticleSelection.size} article(s) ajouté(s) à la commande`);
   closeModal('modal-article-picker');
+}
+
+// ─── PICKER : CHOISIR DES COUCHES ──────────────────────────────────────────
+// Ajoute des lignes de couches à la commande en cours, exactement comme les
+// articles du catalogue (même addArticleRow) : une fois ajoutées, ce sont des
+// lignes de commande ordinaires — même formulaire, même historique, même
+// export, même réception. Scopé à la crèche du bon de commande quand elle est
+// choisie, pour ne pas noyer la liste avec les 6 structures.
+let pickerCoucheSelection = new Set(); // clés "creche|type|taille"
+
+function openCouchesPicker() {
+  pickerCoucheSelection = new Set();
+  renderCouchesPickerList();
+  document.getElementById('modal-couches-picker').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function renderCouchesPickerList() {
+  const crecheSel = document.getElementById('c-creche-select')?.value;
+  const crechesAffichees = crecheSel ? [crecheSel] : CRECHES;
+  const container = document.getElementById('picker-couches-list');
+  if (!container) return;
+  let html = '';
+  crechesAffichees.forEach(creche => {
+    COUCHES_PRODUITS.forEach(produit => {
+      produit.tailles.forEach(taille => {
+        const key = `${creche}|${produit.type}|${taille}`;
+        const ev = coucheEvaluer(creche, produit.type, taille);
+        const prixUnit = couchePrixUnitaire(produit.type, taille);
+        const checked = pickerCoucheSelection.has(key) ? 'checked' : '';
+        const badge = ev.enCritique ? '<span style="font-size:11px;font-weight:600;color:#991B1B">🚨 rupture proche</span>'
+          : ev.enAlerte ? '<span style="font-size:11px;font-weight:600;color:var(--red)">⚠️ stock bas</span>' : '';
+        html += `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+          <input type="checkbox" ${checked} onchange="togglePickerCouche('${key}', this.checked)" style="min-height:auto;width:16px;height:16px">
+          <span style="font-size:14px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:6px;flex-shrink:0">🧷</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--ink)">${produit.label} T${taille} — ${creche}</div>
+            <div style="font-size:11px;color:var(--ink3)">Stock actuel : ${ev.stock} · ${ev.estimTexte}${prixUnit!==null?` · ${prixUnit.toFixed(2)} €`:''}</div>
+          </div>
+          ${badge}
+        </label>`;
+      });
+    });
+  });
+  container.innerHTML = html || `<div style="padding:24px;text-align:center;color:var(--ink3);font-size:13px">Aucune référence de couche trouvée</div>`;
+}
+
+function togglePickerCouche(key, checked) {
+  if (checked) pickerCoucheSelection.add(key);
+  else pickerCoucheSelection.delete(key);
+  const cnt = document.getElementById('picker-couches-count');
+  if (cnt) cnt.textContent = `${pickerCoucheSelection.size} référence(s) sélectionnée(s)`;
+}
+
+function confirmCouchesPicker() {
+  if (pickerCoucheSelection.size === 0) { showNotif('⚠ Sélectionnez au moins une référence'); return; }
+  removeEmptyTrailingRow();
+  pickerCoucheSelection.forEach(key => {
+    const [creche, type, taille] = key.split('|');
+    const produit = COUCHES_PRODUITS.find(p => p.type === type);
+    const nom = `${produit ? produit.label : coucheLabel(type)} T${taille} — ${creche}`;
+    const prixUnit = couchePrixUnitaire(type, taille);
+    addArticleRow('1', nom, prixUnit !== null ? prixUnit.toFixed(2) : '', '', '', 'Couches', '');
+  });
+  showNotif(`✅ ${pickerCoucheSelection.size} référence(s) de couches ajoutée(s) à la commande`);
+  closeModal('modal-couches-picker');
 }
 
 // ─── PICKER 2 : REPRENDRE UNE COMMANDE PRÉCÉDENTE ──────────────────────────
