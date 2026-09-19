@@ -702,45 +702,6 @@ textarea { resize: vertical; min-height: 72px; }
   }
   .article-row .del-row:hover { color: var(--red); }
 
-  /* ── UNIVERS CARDS ── */
-  .univers-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    cursor: pointer;
-    transition: box-shadow 0.2s, transform 0.15s;
-    position: relative;
-  }
-  .univers-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
-  .univers-card-header { display:flex; align-items:flex-start; gap:12px; margin-bottom:12px; }
-  .univers-icon { font-size:28px; flex-shrink:0; }
-  .univers-card-title { font-weight:700; font-size:15px; color:var(--ink); margin-bottom:4px; }
-  .univers-card-meta { font-size:11px; color:var(--ink3); display:flex; flex-wrap:wrap; gap:8px; }
-  .univers-card-desc { font-size:12px; color:var(--ink2); margin:10px 0; line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-  .univers-articles { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-  .univers-article-tag { background:var(--accent-lt); color:var(--accent); font-size:11px; padding:3px 8px; border-radius:20px; font-weight:500; }
-  .univers-card-actions { display:flex; gap:8px; margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
-  .univers-card-gallery { display:flex; gap:0; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; border-radius:8px 8px 0 0; margin:-20px -20px 12px -20px; height:160px; background:var(--bg); }
-  .univers-card-gallery::-webkit-scrollbar { display:none; }
-  .univers-card-gallery img { width:100%; height:160px; object-fit:contain; flex-shrink:0; scroll-snap-align:start; background:var(--bg); }
-  .univers-card-gallery.single img { width:100%; }
-  .univers-card-gallery.multi img { width:100%; border-right:2px solid var(--border); }
-  .univers-gallery-dots { display:flex; gap:5px; justify-content:center; margin:-8px 0 10px; }
-  .univers-gallery-dots span { width:6px; height:6px; border-radius:50%; background:var(--border); transition:background 0.2s; }
-  .univers-gallery-dots span.active { background:var(--accent); }
-  /* Carrousel modal détail */
-  .univers-carousel { position:relative; }
-  .univers-carousel-track { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; border-radius:10px; }
-  .univers-carousel-track::-webkit-scrollbar { display:none; }
-  .univers-carousel-track img { width:100%; flex-shrink:0; height:260px; object-fit:contain; scroll-snap-align:start; border-radius:10px; background:var(--bg); }
-  .univers-carousel-btn { position:absolute; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.45); color:#fff; border:none; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
-  .univers-carousel-btn.prev { left:8px; }
-  .univers-carousel-btn.next { right:8px; }
-  .univers-carousel-dots { display:flex; gap:6px; justify-content:center; margin-top:8px; }
-  .univers-carousel-dots span { width:8px; height:8px; border-radius:50%; background:var(--border); transition:background 0.2s; cursor:pointer; }
-  .univers-carousel-dots span.active { background:var(--accent); }
-
   .article-picker-row { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--border); cursor:pointer; }
   .article-picker-row:last-child { border-bottom:none; }
   .article-picker-row:hover { background:var(--accent-lt); }
@@ -908,7 +869,6 @@ body.is-fullscreen .sidebar-trigger {
   .commande-total, .commande-total-label { text-align: left; }
   .filters { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
   .filter-chip { flex-shrink: 0; }
-  #univers-list { grid-template-columns: 1fr !important; }
   .notif { bottom: 16px; left: 12px; right: 12px; text-align: center; }
   button[onclick="openNotice()"] { bottom: 70px !important; right: 16px !important; width: 44px !important; height: 44px !important; font-size: 18px !important; }
   .section-header { flex-wrap: wrap; gap: 8px; }
@@ -1025,9 +985,6 @@ body.sk-locked{overflow:hidden}
   </button>
   <button class="nav-item" onclick="showPage('historique', this)">
     <span class="nav-icon">📋</span> Historique
-  </button>
-  <button class="nav-item" onclick="showPage('univers', this)">
-    <span class="nav-icon">🌟</span> Univers ludiques
   </button>
   <button class="nav-item" onclick="showPage('couches', this)">
     <span class="nav-icon">🍼</span> Couches
@@ -1304,51 +1261,6 @@ body.sk-locked{overflow:hidden}
       </div>
     </div>
 
-    <!-- ── PAGE UNIVERS LUDIQUES ── -->
-    <div id="page-univers" style="display:none">
-      <!-- Onglets internes -->
-      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);padding:0 20px;margin-bottom:0">
-        <button class="univers-tab-btn active" id="utab-univers" onclick="showUniversTab('univers', this)"
-          style="padding:12px 20px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--accent);margin-bottom:-2px;color:var(--accent)">
-          🌟 Univers
-        </button>
-        <button class="univers-tab-btn" id="utab-souscats" onclick="showUniversTab('souscats', this)"
-          style="padding:12px 20px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ink3)">
-          🏷 Sous-catégories
-        </button>
-      </div>
-
-      <!-- Onglet Univers -->
-      <div id="utab-content-univers">
-        <div class="section-header">
-          <div class="section-title">Univers ludiques</div>
-          <button class="btn btn-primary" onclick="openModal('univers')">+ Créer un univers</button>
-        </div>
-        <div style="padding:0 20px 16px;display:flex;flex-wrap:wrap;gap:8px" id="univers-cat-filters">
-          <div class="filter-chip active" onclick="filterUnivers('all', this)">Tout</div>
-          <div class="filter-chip" onclick="filterUnivers('Sensoriel', this)">👂 Sensoriel</div>
-          <div class="filter-chip" onclick="filterUnivers('Manipulation', this)">🤲 Manipulation</div>
-          <div class="filter-chip" onclick="filterUnivers('Construction', this)">🧱 Construction</div>
-          <div class="filter-chip" onclick="filterUnivers('Motricité', this)">🏃 Motricité</div>
-          <div class="filter-chip" onclick="filterUnivers('Imitation', this)">🎭 Imitation</div>
-          <div class="filter-chip" onclick="filterUnivers('Expression artistique', this)">🎨 Expression</div>
-          <div class="filter-chip" onclick="filterUnivers('Rangement', this)">🗂 Rangement</div>
-          <div class="filter-chip" onclick="filterUnivers('Décoration', this)">🎀 Décoration</div>
-          <div id="univers-subcat-filters"></div>
-        </div>
-        <div id="univers-list" style="padding:0 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px"></div>
-      </div>
-
-      <!-- Onglet Sous-catégories -->
-      <div id="utab-content-souscats" style="display:none">
-        <div class="section-header">
-          <div class="section-title">Sous-catégories</div>
-          <button class="btn btn-primary" onclick="openModal('souscat')">+ Créer une sous-catégorie</button>
-        </div>
-        <div id="souscats-list" style="padding:0 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
-      </div>
-    </div>
-
     <!-- ── PAGE COUCHES ── -->
     <div id="page-couches" style="display:none">
       <div class="section-header">
@@ -1367,146 +1279,6 @@ body.sk-locked{overflow:hidden}
   </div><!-- /content -->
 </main>
 </div><!-- /app -->
-
-<!-- ── MODAL SOUS-CATÉGORIE ── -->
-<div class="modal-overlay" id="modal-souscat" onclick="closeModalClick(event,'modal-souscat')">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-header">
-      <h2 id="modalSouscatTitle">Créer une sous-catégorie</h2>
-      <button class="modal-close" onclick="closeModal('modal-souscat')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group full">
-          <label>Nom *</label>
-          <input type="text" id="sc-nom" placeholder="Ex : Visuel, Tactile, Eau, Extérieur...">
-        </div>
-        <div class="form-group full">
-          <label>Catégorie parente</label>
-          <select id="sc-cat">
-            <option value="">— Toutes catégories —</option>
-            <option>Sensoriel</option>
-            <option>Manipulation</option>
-            <option>Construction</option>
-            <option>Motricité</option>
-            <option>Imitation</option>
-            <option>Expression artistique</option>
-            <option>Rangement</option>
-            <option>Décoration</option>
-          </select>
-        </div>
-        <div class="form-group full">
-          <label>Icône (emoji)</label>
-          <input type="text" id="sc-icon" placeholder="Ex : 💧 🌿 🔵 ✋" maxlength="4"
-                 style="font-size:24px;text-align:center;width:80px">
-        </div>
-        <div class="form-group full">
-          <label>Description</label>
-          <textarea id="sc-desc" rows="2" placeholder="Décrivez cette sous-catégorie..."></textarea>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-souscat')">Annuler</button>
-      <button class="btn btn-primary" id="btn-save-souscat" onclick="saveSouscat()">💾 Enregistrer</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── MODAL UNIVERS LUDIQUE ── -->
-<div class="modal-overlay" id="modal-univers" onclick="closeModalClick(event,'modal-univers')">
-  <div class="modal" style="max-width:640px">
-    <div class="modal-header">
-      <h2 id="modalUniversTitle">Créer un univers ludique</h2>
-      <button class="modal-close" onclick="closeModal('modal-univers')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group full">
-          <label>Nom de l'univers *</label>
-          <input type="text" id="u-nom" placeholder="Ex : Univers sensoriel automne">
-        </div>
-        <div class="form-group">
-          <label>Crèche *</label>
-          <select id="u-creche">
-            <option>Brunet</option><option>Cuers</option><option>Ollioules</option>
-            <option>St Jean</option><option>Picot 1</option><option>Picot 2</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Catégorie principale</label>
-          <select id="u-cat">
-            <option>Sensoriel</option>
-            <option>Manipulation</option>
-            <option>Construction</option>
-            <option>Motricité</option>
-            <option>Imitation</option>
-            <option>Expression artistique</option>
-            <option>Rangement</option>
-            <option>Décoration</option>
-            <option>Multi-catégories</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Sous-catégorie</label>
-          <select id="u-souscat">
-            <option value="">— Aucune —</option>
-          </select>
-        </div>
-        <input type="hidden" id="u-duree" value="">
-        <input type="hidden" id="u-age" value="">
-        <input type="hidden" id="u-enfants" value="">
-        <div class="form-group full">
-          <label>Description / Objectifs pédagogiques</label>
-          <textarea id="u-desc" rows="3" placeholder="Décrivez l'objectif, le déroulement, les compétences travaillées..."></textarea>
-        </div>
-        <div class="form-group full">
-          <label>📷 Photos de l'univers</label>
-          <div id="u-photos-preview" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
-          <label for="u-photos-input" id="u-photos-label"
-            style="display:flex;align-items:center;gap:10px;padding:12px 16px;border:2px dashed var(--border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink2);transition:border-color 0.2s"
-            onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-            <span style="font-size:22px">📷</span>
-            <span>Appuyer pour prendre une photo ou choisir depuis la galerie</span>
-          </label>
-          <input type="file" id="u-photos-input" accept="image/*" multiple
-            style="display:none" onchange="addUniversPhotos(event)">
-          <div style="font-size:11px;color:var(--ink3);margin-top:6px">Plusieurs photos possibles — appuyez sur une miniature pour la supprimer</div>
-        </div>
-        <div class="form-group full">
-          <label>🧸 Matériel principal <span style="font-weight:400;color:var(--ink3)">— articles de la crèche sélectionnée</span></label>
-          <div id="u-articles-picker" style="border:1px solid var(--border);border-radius:var(--radius-sm);max-height:220px;overflow-y:auto"></div>
-          <div style="font-size:11px;color:var(--ink3);margin-top:6px">Cochez les articles qui constituent le cœur de l'univers</div>
-        </div>
-        <div class="form-group full">
-          <label>✨ Enrichissement <span style="font-weight:400;color:var(--ink3)">— articles complémentaires (optionnel)</span></label>
-          <div id="u-articles-enrichissement-picker" style="border:1px solid var(--border);border-radius:var(--radius-sm);max-height:220px;overflow-y:auto"></div>
-          <div style="font-size:11px;color:var(--ink3);margin-top:6px">Articles pour enrichir ou faire évoluer l'univers dans le temps</div>
-        </div>
-        <div class="form-group full">
-          <label>Conseils de mise en scène</label>
-          <textarea id="u-conseils" rows="2" placeholder="Disposition, ambiance, musique d'ambiance..."></textarea>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-univers')">Annuler</button>
-      <button class="btn btn-primary" id="btn-save-univers" onclick="saveUnivers().catch(e=>{showNotif('⚠ '+e.message);console.error(e)})">✨ Enregistrer l'univers</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── MODAL DÉTAIL UNIVERS ── -->
-<div class="modal-overlay" id="modal-univers-detail" onclick="closeModalClick(event,'modal-univers-detail')">
-  <div class="modal" style="max-width:640px">
-    <div class="modal-header">
-      <h2 id="detail-univers-title">Univers</h2>
-      <button class="modal-close" onclick="closeModal('modal-univers-detail')">✕</button>
-    </div>
-    <div id="detail-univers-body" class="modal-body"></div>
-    <div class="modal-footer" id="detail-univers-footer"></div>
-  </div>
-</div>
 
 <!-- ── MODAL ARTICLE ── -->
 <div class="modal-overlay" id="modal-add" onclick="closeModalClick(event,'modal-add')">
@@ -1914,7 +1686,6 @@ let currentInvTab = 'materiel'; // 'materiel' | 'consommable'
 let currentCatConso = 'all';
 let currentStockStatus = 'all'; // 'all' | 'a-completer' | 'epuise'
 let editingId = null;
-let SOUSCATS = [];
 // ─── INIT ─────────────────────────────────────────────────────────────────
 function init() {
   const today = new Date().toISOString().split('T')[0];
@@ -2216,13 +1987,7 @@ function renderStats() {
 function updateCounts() {
   const page = typeof currentPage !== 'undefined' ? currentPage : 'inventaire';
   const el = document.getElementById('cnt-all');
-  if (page === 'univers') {
-    if (el) el.textContent = UNIVERS.length;
-    CRECHES.forEach((c,i) => {
-      const el2 = document.getElementById('cnt-'+i);
-      if (el2) el2.textContent = UNIVERS.filter(u => u.creche === c).length;
-    });
-  } else if (page === 'commandes') {
+  if (page === 'commandes') {
     const crecheFilter = currentCreche !== 'all' ? currentCreche : null;
     const enCours = COMMANDES.filter(c => c.status === 'en-cours' && (!crecheFilter || c.creche === crecheFilter));
     if (el) el.textContent = enCours.length;
@@ -2268,7 +2033,6 @@ function filterCreche(creche, el) {
     else renderTable();
   }
   else if (currentPage === 'commandes') renderCommandes();
-  else if (currentPage === 'univers') renderUnivers();
   else if (currentPage === 'historique') renderHistorique();
   else if (currentPage === 'couches') renderCouches();
   else renderTable();
@@ -2742,8 +2506,6 @@ function renderCouches() {
 
 // ─── MODALS ───────────────────────────────────────────────────────────────
 function openModal(type) {
-  if (type === 'univers') { openModal_univers(); return; }
-  if (type === 'souscat') { openModal_souscat(); return; }
   if (type === 'commande') {
     resetCommandeModal();
     resetArticleRows();
@@ -2825,8 +2587,7 @@ function closeModal(id) {
 // éviter la perte de saisie en cas de toucher accidentel (clavier virtuel, scroll, etc.)
 // Seuls le bouton ✕ ou "Annuler" permettent de les fermer (Échap reste actif partout).
 const MODALS_SANS_FERMETURE_EXTERIEURE = [
-  'modal-add', 'modal-commande', 'modal-fournisseur',
-  'modal-univers', 'modal-souscat', 'modal-import'
+  'modal-add', 'modal-commande', 'modal-fournisseur', 'modal-import'
 ];
 
 function closeModalClick(e, id) {
@@ -3594,7 +3355,7 @@ function addHisto(type, article, qty, creche, user, note='') {
 // ─── PAGES ────────────────────────────────────────────────────────────────
 function showPage(page, btn) {
   currentPage = page;
-  ['inventaire','commandes','fournisseurs','historique','univers','couches'].forEach(p => {
+  ['inventaire','commandes','fournisseurs','historique','couches'].forEach(p => {
     document.getElementById(`page-${p}`).style.display = p === page ? 'block' : 'none';
   });
   // Le contenu défile avec la fenêtre (.main n'a pas son propre scroll) : sans
@@ -3609,11 +3370,10 @@ function showPage(page, btn) {
   requestAnimationFrame(() => window.scrollTo(0, 0));
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const titles = { inventaire:'Inventaire', commandes:'Commandes', fournisseurs:'Fournisseurs', historique:'Historique des mouvements', univers:'Univers ludiques', couches:'Couches' };
+  const titles = { inventaire:'Inventaire', commandes:'Commandes', fournisseurs:'Fournisseurs', historique:'Historique des mouvements', couches:'Couches' };
   document.getElementById('pageTitle').textContent = titles[page];
   // Re-render page content when switching to ensure fresh data
   if (page === 'commandes') { renderCommandes(); }
-  if (page === 'univers') { renderUnivers(); if(typeof updateSouscatFilters==='function') updateSouscatFilters(); }
   if (page === 'fournisseurs') { renderFournisseurs(); }
   if (page === 'historique') { renderHistorique(); }
   if (page === 'couches') { renderCouches(); }
@@ -3964,590 +3724,6 @@ async function partagerBordereau() {
   telechargerBordereau();
 }
 
-// ─── UNIVERS LUDIQUES ────────────────────────────────────────────────────
-
-let UNIVERS = [];
-let editingUniversId = null;
-let currentUniversCatFilter = 'all';
-
-const CAT_UNIVERS_ICONS = {
-  'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃',
-  'Imitation':'🎭','Expression artistique':'🎨','Rangement':'🗂','Décoration':'🎀','Multi-catégories':'🌟'
-};
-
-function renderUnivers() {
-  const list = document.getElementById('univers-list');
-  if (!list) return;
-  let data = UNIVERS;
-  // Filter by sidebar creche
-  if (typeof currentCreche !== 'undefined' && currentCreche !== 'all') {
-    data = data.filter(u => u.creche === currentCreche);
-  }
-  // Filter by cat/subcat
-  if (currentUniversCatFilter !== 'all') {
-    if (currentUniversCatFilter.startsWith('subcat:')) {
-      const scId = parseInt(currentUniversCatFilter.split(':')[1]);
-      data = data.filter(u => u.souscat === scId || u.souscat === String(scId));
-    } else {
-      data = data.filter(u => u.cat === currentUniversCatFilter);
-    }
-  }
-
-  if (data.length === 0) {
-    list.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--ink3)">
-      <div style="font-size:48px;margin-bottom:12px">🌟</div>
-      <div style="font-weight:600;font-size:16px;margin-bottom:8px">Aucun univers créé</div>
-      <div style="font-size:13px">Cliquez sur "+ Créer un univers" pour commencer</div>
-    </div>`;
-    return;
-  }
-
-  list.innerHTML = data.map(u => {
-    const artIds = typeof u.articles === 'string' ? JSON.parse(u.articles||'[]') : (u.articles||[]);
-    const crecheColor = CRECHE_COLORS[u.creche] || '#888';
-    const articleNames = artIds
-      .map(id => ARTICLES.find(a => a.id === id))
-      .filter(Boolean)
-      .map(a => a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim());
-    const icon = CAT_UNIVERS_ICONS[u.cat] || '🌟';
-    const tags = articleNames.slice(0, 4).map(n =>
-      `<span class="univers-article-tag">${n}</span>`).join('') +
-      (articleNames.length > 4 ? `<span class="univers-article-tag">+${articleNames.length-4}</span>` : '');
-
-    // Galerie photos carte
-    let allPhotos = [];
-    if (u.photos) { try { allPhotos = JSON.parse(u.photos); } catch { allPhotos = [u.photos]; } }
-    else if (u.photo) { allPhotos = [u.photo]; }
-    const galleryId = 'gal-' + u.id;
-    const cardPhotoStr = allPhotos.length === 0 ? '' :
-      allPhotos.length === 1
-        ? `<div class="univers-card-gallery single" id="${galleryId}"><img src="${allPhotos[0]}" loading="lazy" onerror="this.parentElement.style.display='none'"></div>`
-        : `<div class="univers-card-gallery multi" id="${galleryId}" onscroll="updateGalleryDots('${galleryId}',${allPhotos.length})">
-            ${allPhotos.map(url => `<img src="${url}" loading="lazy" onerror="this.style.display='none'">`).join('')}
-           </div>
-           <div class="univers-gallery-dots" id="dots-${galleryId}">
-             ${allPhotos.map((_, i) => `<span class="${i===0?'active':''}"></span>`).join('')}
-           </div>`;
-    return `<div class="univers-card" onclick="showUniversDetail('${u.id}')">${cardPhotoStr}
-      <div class="univers-card-header">
-        <span class="univers-icon">${icon}</span>
-        <div style="flex:1">
-          <div class="univers-card-title">${u.nom}</div>
-          <div class="univers-card-meta">
-            <span class="creche-tag" style="background:${crecheColor}22;color:${crecheColor}">● ${u.creche||'—'}</span>
-            <span style="background:var(--accent-lt);color:var(--accent);padding:1px 6px;border-radius:10px;font-size:10px">${u.cat}</span>
-          </div>
-        </div>
-      </div>
-      ${u.desc ? `<div class="univers-card-desc">${u.desc}</div>` : ''}
-      <div class="univers-articles">${tags}</div>
-      <div class="univers-card-actions">
-        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();editUnivers('${u.id}')">✏️ Modifier</button>
-        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();printUnivers('${u.id}')">🖨 Fiche PDF</button>
-        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteUnivers('${u.id}')">🗑</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ─── GALERIE CARTE + CARROUSEL MODAL ─────────────────────────────────────
-
-function updateGalleryDots(galleryId, total) {
-  const el = document.getElementById(galleryId);
-  const dots = document.getElementById('dots-' + galleryId);
-  if (!el || !dots) return;
-  const idx = Math.round(el.scrollLeft / el.offsetWidth * (total-1));
-  dots.querySelectorAll('span').forEach((s, i) => s.classList.toggle('active', i === idx));
-}
-
-function scrollCarousel(uid, dir) {
-  const track = document.getElementById('ctrack-' + uid);
-  if (!track) return;
-  const w = track.offsetWidth;
-  track.scrollBy({ left: dir * w, behavior: 'smooth' });
-}
-
-function goCarousel(uid, idx) {
-  const track = document.getElementById('ctrack-' + uid);
-  if (!track) return;
-  track.scrollTo({ left: idx * track.offsetWidth, behavior: 'smooth' });
-}
-
-function updateCarouselDots(uid, total) {
-  const track = document.getElementById('ctrack-' + uid);
-  const dots  = document.getElementById('cdots-' + uid);
-  if (!track || !dots) return;
-  const idx = Math.round(track.scrollLeft / track.offsetWidth);
-  dots.querySelectorAll('span').forEach((s, i) => s.classList.toggle('active', i === idx));
-}
-
-function filterUnivers(cat, el) {
-  currentUniversCatFilter = cat;
-  document.querySelectorAll('#univers-cat-filters .filter-chip').forEach(b => b.classList.remove('active'));
-  if (el) el.classList.add('active');
-  renderUnivers();
-}
-
-// ─── PHOTOS MULTIPLES (UPLOAD) ───────────────────────────────────────────
-
-// Tableau en mémoire : { url, file?, local? }
-// url   = URL Supabase (photos déjà uploadées) ou blob: (aperçu local en attente)
-// file  = File object si upload en attente
-// local = true si pas encore uploadé
-let _universPhotos = []; // [{url, file, local}]
-
-function _renderUniversPhotosPreview() {
-  const container = document.getElementById('u-photos-preview');
-  if (!container) return;
-  if (_universPhotos.length === 0) { container.innerHTML = ''; return; }
-  container.innerHTML = _universPhotos.map((p, i) => `
-    <div style="position:relative;flex-shrink:0">
-      <img src="${p.url}" alt="Photo ${i+1}"
-        style="width:90px;height:70px;object-fit:contain;background:var(--bg);border-radius:8px;border:2px solid var(--border);display:block">
-      ${p.local ? '<div style="position:absolute;top:2px;left:2px;background:rgba(0,0,0,0.55);color:#fff;font-size:9px;padding:1px 4px;border-radius:4px">⏳</div>' : ''}
-      <button onclick="removeUniversPhoto(${i})"
-        style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;border:none;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>
-    </div>`).join('');
-}
-
-function addUniversPhotos(event) {
-  const files = Array.from(event.target.files || []);
-  if (!files.length) return;
-  files.forEach(file => {
-    if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté : ' + file.name); return; }
-    if (file.size > 10 * 1024 * 1024) { showNotif('⚠ Photo trop grande (max 10 Mo) : ' + file.name); return; }
-    const blobUrl = URL.createObjectURL(file);
-    _universPhotos.push({ url: blobUrl, file, local: true });
-  });
-  // Reset input pour permettre de re-sélectionner les mêmes fichiers
-  event.target.value = '';
-  _renderUniversPhotosPreview();
-}
-
-function removeUniversPhoto(i) {
-  const p = _universPhotos[i];
-  if (p && p.local && p.url.startsWith('blob:')) URL.revokeObjectURL(p.url);
-  _universPhotos.splice(i, 1);
-  _renderUniversPhotosPreview();
-}
-
-async function uploadPendingUniversPhotos(universId) {
-  // Upload tous les fichiers locaux, remplace blob: par URL Supabase
-  for (let i = 0; i < _universPhotos.length; i++) {
-    const p = _universPhotos[i];
-    if (!p.local || !p.file) continue;
-    try {
-      const url = await uploadPhotoToStorage(p.file, `${universId}-${i}`, 'univers-photos');
-      if (p.url.startsWith('blob:')) URL.revokeObjectURL(p.url);
-      _universPhotos[i] = { url, local: false };
-    } catch(e) {
-      console.error('[Photo univers upload]', e);
-      showNotif('⚠ Erreur upload photo ' + (i+1) + ' — conservée en local');
-    }
-  }
-}
-
-function getUniversPhotosUrls() {
-  return _universPhotos.filter(p => !p.local).map(p => p.url);
-}
-
-function resetUniversPhotoUI(photosData) {
-  // Libérer les blob URLs en cours
-  _universPhotos.forEach(p => { if (p.local && p.url.startsWith('blob:')) URL.revokeObjectURL(p.url); });
-  _universPhotos = [];
-  if (photosData) {
-    let urls = [];
-    try { urls = JSON.parse(photosData); if (!Array.isArray(urls)) urls = [photosData]; }
-    catch { urls = photosData ? [photosData] : []; }
-    urls.filter(Boolean).forEach(url => _universPhotos.push({ url, local: false }));
-  }
-  _renderUniversPhotosPreview();
-}
-
-// ─── PICKERS ARTICLES ────────────────────────────────────────────────────
-
-function _buildPickerHTML(creche, selectedIds, prefix) {
-  if (ARTICLES.length === 0) return '<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article dans l\'inventaire</div>';
-  const articlesSource = (creche && creche !== 'all') ? ARTICLES.filter(a => a.creche === creche) : ARTICLES;
-  if (articlesSource.length === 0) return `<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article pour la crèche "${creche}"</div>`;
-
-  function buildList(articles) {
-    if (articles.length === 0) return '<div style="padding:12px;color:var(--ink3);font-size:13px">Aucun article dans cette catégorie</div>';
-    const byCat = {};
-    articles.forEach(a => { if (!byCat[a.cat]) byCat[a.cat] = []; byCat[a.cat].push(a); });
-    return Object.entries(byCat).map(([cat, arts]) => `
-      <div style="background:var(--bg);padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--ink3);text-transform:uppercase;position:sticky;top:0">
-        ${CAT_ICONS[cat]||'📦'} ${cat}
-      </div>
-      ${arts.map(a => {
-        const nom = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
-        const checked = selectedIds.includes(a.id) ? 'checked' : '';
-        return `<div class="article-picker-row" onclick="document.getElementById('${prefix}${a.id}').click()">
-          <input type="checkbox" id="${prefix}${a.id}" ${checked} onclick="event.stopPropagation()">
-          <div class="article-picker-label">${nom}</div>
-          <span class="article-picker-cat">${a.stock} en stock</span>
-        </div>`;
-      }).join('')}
-    `).join('');
-  }
-
-  const materiel = articlesSource.filter(a => a.depreciable !== false);
-  const conso    = articlesSource.filter(a => a.depreciable === false);
-  const tabMat = `${prefix}tab-mat`;
-  const tabCon = `${prefix}tab-conso`;
-  const listMat = `${prefix}list-mat`;
-  const listCon = `${prefix}list-conso`;
-
-  return `
-    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface)">
-      <button id="${tabMat}" onclick="switchPickerTab('${prefix}')"
-        style="flex:1;padding:8px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--accent);color:var(--accent)">
-        🧸 Matériel (${materiel.length})
-      </button>
-      <button id="${tabCon}" onclick="switchPickerTab('${prefix}','conso')"
-        style="flex:1;padding:8px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--ink3)">
-        🧴 Consommables (${conso.length})
-      </button>
-    </div>
-    <div id="${listMat}">${buildList(materiel)}</div>
-    <div id="${listCon}" style="display:none">${buildList(conso)}</div>
-  `;
-}
-
-function buildArticlePicker(creche, selectedIds = []) {
-  const picker = document.getElementById('u-articles-picker');
-  if (picker) picker.innerHTML = _buildPickerHTML(creche, selectedIds, 'pick-');
-}
-
-function buildEnrichissementPicker(creche, selectedIds = []) {
-  const picker = document.getElementById('u-articles-enrichissement-picker');
-  if (picker) picker.innerHTML = _buildPickerHTML(creche, selectedIds, 'enrich-');
-}
-
-function switchPickerTab(prefix, tab) {
-  const isMat = !tab || tab === 'mat';
-  const tMat = document.getElementById(`${prefix}tab-mat`);
-  const tCon = document.getElementById(`${prefix}tab-conso`);
-  const lMat = document.getElementById(`${prefix}list-mat`);
-  const lCon = document.getElementById(`${prefix}list-conso`);
-  if (tMat) { tMat.style.borderBottomColor = isMat ? 'var(--accent)' : 'transparent'; tMat.style.color = isMat ? 'var(--accent)' : 'var(--ink3)'; }
-  if (tCon) { tCon.style.borderBottomColor = !isMat ? 'var(--accent)' : 'transparent'; tCon.style.color = !isMat ? 'var(--accent)' : 'var(--ink3)'; }
-  if (lMat) lMat.style.display = isMat ? 'block' : 'none';
-  if (lCon) lCon.style.display = !isMat ? 'block' : 'none';
-}
-
-function toggleArticlePick(id) {
-  const cb = document.getElementById(`pick-${id}`);
-  if (cb) cb.checked = !cb.checked;
-}
-
-function getSelectedArticleIds() {
-  return ARTICLES.filter(a => document.getElementById(`pick-${a.id}`)?.checked).map(a => a.id);
-}
-
-function getSelectedEnrichissementIds() {
-  return ARTICLES.filter(a => document.getElementById(`enrich-${a.id}`)?.checked).map(a => a.id);
-}
-
-function openModal_univers() {
-  editingUniversId = null;
-  document.getElementById('modalUniversTitle').textContent = 'Créer un univers ludique';
-  document.getElementById('btn-save-univers').textContent = '✨ Enregistrer l\'univers';
-  ['u-nom','u-age','u-duree','u-enfants','u-desc','u-conseils'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  const photosPreview = document.getElementById('u-photos-preview');
-  if (photosPreview) photosPreview.innerHTML = '';
-  const catSel = document.getElementById('u-cat');
-  if (catSel) catSel.value = 'Sensoriel';
-  const crecheEl = document.getElementById('u-creche');
-  if (crecheEl) {
-    crecheEl.value = (currentCreche && currentCreche !== 'all') ? currentCreche : CRECHES[0];
-    crecheEl.onchange = () => {
-      buildArticlePicker(crecheEl.value, []);
-      buildEnrichissementPicker(crecheEl.value, []);
-    };
-  }
-  updateSouscatSelectors();
-  const creche = (crecheEl?.value) || CRECHES[0];
-  buildArticlePicker(creche, []);
-  buildEnrichissementPicker(creche, []);
-  document.getElementById('modal-univers').classList.add('open');
-  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
-}
-
-async function saveUnivers() {
-  const nom = document.getElementById('u-nom').value.trim();
-  if (!nom) { showNotif('⚠ Nom obligatoire'); return; }
-
-  const universId = editingUniversId || Date.now();
-
-  // Upload des photos locales vers Supabase Storage
-  const hasLocal = _universPhotos.some(p => p.local);
-  if (hasLocal) showNotif('📤 Envoi des photos…');
-  if (!IS_LOCAL) await uploadPendingUniversPhotos(universId);
-
-  const photosUrls = getUniversPhotosUrls();
-  // photo = première URL pour compatibilité affichage carte, photos = JSON array complet
-  const photoUrl = photosUrls[0] || null;
-  const photosJson = photosUrls.length > 0 ? JSON.stringify(photosUrls) : null;
-
-  const creche = document.getElementById('u-creche')?.value || CRECHES[0];
-  const data = {
-    nom,
-    creche,
-    cat:                     document.getElementById('u-cat').value,
-    desc:                    document.getElementById('u-desc').value.trim(),
-    conseils:                document.getElementById('u-conseils').value.trim(),
-    articles:                JSON.stringify(getSelectedArticleIds()),
-    articles_enrichissement: JSON.stringify(getSelectedEnrichissementIds()),
-    souscat:                 parseInt(document.getElementById('u-souscat')?.value) || null,
-    photo:                   photoUrl,
-    photos:                  photosJson,
-    created_at:              new Date().toISOString(),
-  };
-
-  if (editingUniversId) {
-    const idx = UNIVERS.findIndex(u => u.id === editingUniversId);
-    if (idx >= 0) {
-      UNIVERS[idx] = { ...UNIVERS[idx], ...data };
-      if (!IS_LOCAL) await saveUniversDB(UNIVERS[idx], false).catch(e => console.warn(e));
-    }
-    showNotif('✅ Univers mis à jour');
-  } else {
-    const newU = { id: universId, ...data };
-    UNIVERS.unshift(newU);
-    if (!IS_LOCAL) await saveUniversDB(newU, true).catch(e => console.warn(e));
-    showNotif('✨ Univers créé !');
-  }
-  saveData();
-  closeModal('modal-univers');
-  renderUnivers();
-  updateCounts();
-}
-
-function editUnivers(id) {
-  const u = UNIVERS.find(x => x.id === id);
-  if (!u) return;
-  editingUniversId = id;
-  document.getElementById('modalUniversTitle').textContent = 'Modifier l\'univers';
-  document.getElementById('btn-save-univers').textContent = '💾 Mettre à jour';
-  document.getElementById('u-nom').value     = u.nom;
-  document.getElementById('u-cat').value     = u.cat;
-  document.getElementById('u-age').value     = u.age || '';
-  document.getElementById('u-duree').value   = u.duree || '';
-  document.getElementById('u-enfants').value = u.enfants || '';
-  document.getElementById('u-desc').value    = u.desc || '';
-  document.getElementById('u-conseils').value= u.conseils || '';
-  updateSouscatSelectors();
-  const scEl = document.getElementById('u-souscat'); if(scEl) scEl.value = u.souscat || '';
-  const selIds = typeof u.articles === 'string' ? JSON.parse(u.articles||'[]') : (u.articles||[]);
-  const enrichIds = typeof u.articles_enrichissement === 'string' ? JSON.parse(u.articles_enrichissement||'[]') : (u.articles_enrichissement||[]);
-  const creche2 = u.creche || CRECHES[0];
-  const crecheEl2 = document.getElementById('u-creche');
-  if (crecheEl2) {
-    crecheEl2.value = creche2;
-    crecheEl2.onchange = () => {
-      buildArticlePicker(crecheEl2.value, []);
-      buildEnrichissementPicker(crecheEl2.value, []);
-    };
-  }
-  buildArticlePicker(creche2, selIds);
-  buildEnrichissementPicker(creche2, enrichIds);
-  // Photos : u.photos (JSON array) prioritaire, sinon u.photo (string unique)
-  resetUniversPhotoUI(u.photos || u.photo || null);
-  document.getElementById('modal-univers').classList.add('open');
-  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
-}
-
-function deleteUnivers(id) {
-  const u = UNIVERS.find(x => x.id === id);
-  if (!u || !confirm(`Supprimer "${u.nom}" ?`)) return;
-  UNIVERS = UNIVERS.filter(x => x.id !== id);
-  saveData();
-  renderUnivers();
-  showNotif('🗑 Univers supprimé');
-  if (!IS_LOCAL) deleteUniversDB(id).catch(e => {
-    console.error('[Supabase] deleteUnivers:', e);
-    showNotif('⚠ Supprimé localement mais erreur Supabase — rechargez pour vérifier');
-  });
-}
-
-function showUniversDetail(id) {
-  const u = UNIVERS.find(x => x.id === id);
-  if (!u) return;
-  const icon = CAT_UNIVERS_ICONS[u.cat] || '🌟';
-  const artIds = typeof u.articles === 'string' ? JSON.parse(u.articles||'[]') : (u.articles||[]);
-  const arts = artIds.map(aid => ARTICLES.find(a => a.id === aid)).filter(Boolean);
-
-  // Photos multiples
-  let photosUrls = [];
-  if (u.photos) { try { photosUrls = JSON.parse(u.photos); } catch { photosUrls = [u.photos]; } }
-  else if (u.photo) { photosUrls = [u.photo]; }
-
-  const enrichIds = typeof u.articles_enrichissement === 'string' ? JSON.parse(u.articles_enrichissement||'[]') : (u.articles_enrichissement||[]);
-  const enrichArts = enrichIds.map(aid => ARTICLES.find(a => a.id === aid)).filter(Boolean);
-
-  function articleRow(a) {
-    const nom = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
-    const stockOk = a.stock > 0;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-      ${a.photo ? `<img src="${a.photo}" style="width:36px;height:36px;border-radius:6px;object-fit:contain;background:var(--bg)">` :
-        `<div style="width:36px;height:36px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:18px">${CAT_ICONS[a.cat]||'📦'}</div>`}
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:500">${nom}</div>
-        <div style="font-size:11px;color:var(--ink3)">${a.cat} · ${a.fourn||'—'}</div>
-      </div>
-      <span style="font-size:11px;font-weight:600;color:${stockOk?'var(--green)':'var(--red)'}">
-        ${stockOk ? `✅ ${a.stock} dispo` : '❌ Rupture'}
-      </span>
-    </div>`;
-  }
-
-  document.getElementById('detail-univers-title').textContent = u.nom;
-  document.getElementById('detail-univers-body').innerHTML = `
-    ${photosUrls.length > 0 ? `
-      <div class="univers-carousel" id="carousel-${u.id}">
-        <div class="univers-carousel-track" id="ctrack-${u.id}" onscroll="updateCarouselDots('${u.id}',${photosUrls.length})">
-          ${photosUrls.map((url, i) => `<img src="${url}" alt="Photo ${i+1}" loading="lazy" onerror="this.style.display='none'">`).join('')}
-        </div>
-        ${photosUrls.length > 1 ? `
-          <button class="univers-carousel-btn prev" onclick="event.stopPropagation();scrollCarousel('${u.id}',-1)">&#8249;</button>
-          <button class="univers-carousel-btn next" onclick="event.stopPropagation();scrollCarousel('${u.id}',1)">&#8250;</button>
-          <div class="univers-carousel-dots" id="cdots-${u.id}">
-            ${photosUrls.map((_, i) => `<span class="${i===0?'active':''}" onclick="event.stopPropagation();goCarousel('${u.id}',${i})"></span>`).join('')}
-          </div>` : ''}
-      </div>` : ''}
-    <div style="display:flex;gap:16px;align-items:center;margin-bottom:20px">
-      <span style="font-size:48px">${icon}</span>
-      <div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${u.age ? `<span class="badge badge-blue">👶 ${u.age}</span>` : ''}
-          ${u.enfants ? `<span class="badge badge-purple">👥 ${u.enfants}</span>` : ''}
-        </div>
-        <div style="margin-top:6px;font-size:12px;color:var(--ink3)">${u.cat}</div>
-      </div>
-    </div>
-    ${u.desc ? `<div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.6;color:var(--ink)"><strong>🎯 Objectifs :</strong><br>${u.desc}</div>` : ''}
-    <div style="margin-bottom:16px">
-      <div style="font-weight:700;font-size:13px;margin-bottom:10px">🧸 Matériel principal (${arts.length} article${arts.length>1?'s':''})</div>
-      ${arts.length === 0 ? '<div style="color:var(--ink3);font-size:13px">Aucun article sélectionné</div>' : arts.map(articleRow).join('')}
-    </div>
-    ${enrichArts.length > 0 ? `
-    <div style="margin-bottom:16px">
-      <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--accent)">✨ Enrichissement (${enrichArts.length} article${enrichArts.length>1?'s':''})</div>
-      ${enrichArts.map(articleRow).join('')}
-    </div>` : ''}
-    ${u.conseils ? `<div style="background:#FEF9C3;border:1px solid #FDE68A;border-radius:8px;padding:14px;font-size:13px;line-height:1.6"><strong>💡 Mise en scène :</strong><br>${u.conseils}</div>` : ''}
-  `;
-  document.getElementById('detail-univers-footer').innerHTML = `
-    <button class="btn btn-secondary" onclick="closeModal('modal-univers-detail')">Fermer</button>
-    <button class="btn btn-secondary" onclick="closeModal('modal-univers-detail');editUnivers('${u.id}')">✏️ Modifier</button>
-    <button class="btn btn-primary" onclick="printUnivers('${u.id}')">🖨 Fiche PDF</button>
-  `;
-  document.getElementById('modal-univers-detail').classList.add('open');
-  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
-}
-
-function printUnivers(id) {
-  const u = UNIVERS.find(x => x.id === id);
-  if (!u) return;
-  const icon = CAT_UNIVERS_ICONS[u.cat] || '🌟';
-  const artIds = typeof u.articles === 'string' ? JSON.parse(u.articles||'[]') : (u.articles||[]);
-  const arts = artIds.map(aid => ARTICLES.find(a => a.id === aid)).filter(Boolean);
-  const enrichIds = typeof u.articles_enrichissement === 'string' ? JSON.parse(u.articles_enrichissement||'[]') : (u.articles_enrichissement||[]);
-  const enrichArts = enrichIds.map(aid => ARTICLES.find(a => a.id === aid)).filter(Boolean);
-  const nom = getCrecheName();
-
-  // Photos
-  let pdfPhotos = [];
-  if (u.photos) { try { pdfPhotos = JSON.parse(u.photos); } catch { pdfPhotos = [u.photos]; } }
-  else if (u.photo) { pdfPhotos = [u.photo]; }
-  pdfPhotos = pdfPhotos.filter(Boolean);
-
-  function articleRows(list) {
-    return list.map(a => {
-      const n = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
-      return `<tr>
-        <td style="padding:8px 10px;border-bottom:1px solid #E7E5E0">${n}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #E7E5E0;text-align:center">${a.cat}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #E7E5E0;text-align:center;font-weight:600;color:${a.stock>0?'#16A34A':'#DC2626'}">${a.stock > 0 ? a.stock + ' dispo' : 'Rupture'}</td>
-      </tr>`;
-    }).join('');
-  }
-  const rowsHTML = articleRows(arts);
-  const enrichRowsHTML = articleRows(enrichArts);
-
-  const html = `<!DOCTYPE html><html lang="fr"><head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <title>Fiche univers — ${u.nom}</title>
-    <style>
-      * { margin:0; padding:0; box-sizing:border-box; }
-      body { font-family:Arial,sans-serif; font-size:14px; color:#111; padding:28px; max-width:800px; margin:0 auto; }
-      .header { border-bottom:3px solid #1C1917; padding-bottom:16px; margin-bottom:20px; }
-      .title { font-size:26px; font-weight:bold; margin-bottom:6px; }
-      .meta { display:flex; gap:20px; flex-wrap:wrap; font-size:13px; color:#555; }
-      .meta span { background:#F5F5F4; padding:3px 10px; border-radius:20px; }
-      .section { margin-bottom:20px; }
-      .section h3 { font-size:14px; font-weight:700; margin-bottom:10px; color:#444; text-transform:uppercase; letter-spacing:0.5px; }
-      .desc-box { background:#F5F5F4; border-radius:8px; padding:14px; font-size:13px; line-height:1.7; }
-      table { width:100%; border-collapse:collapse; }
-      thead tr { background:#1C1917; color:white; }
-      th { padding:9px 10px; font-size:12px; text-align:left; }
-      .conseils-box { background:#FEF9C3; border:1px solid #FDE68A; border-radius:8px; padding:14px; font-size:13px; line-height:1.7; }
-      .footer { margin-top:30px; font-size:10px; color:#999; border-top:1px solid #E7E5E0; padding-top:12px; }
-      @media print { @page { margin:1.5cm; } body { padding:0; } }
-    </style>
-    </head><body>
-    <div class="header">
-      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
-        <div style="flex:1;min-width:200px">
-          <div class="title">${icon} ${u.nom}</div>
-          <div class="meta" style="margin-top:8px">
-            ${u.age ? `<span>👶 ${u.age}</span>` : ''}
-            ${u.enfants ? `<span>👥 ${u.enfants}</span>` : ''}
-            <span>📂 ${u.cat}</span>
-          </div>
-        </div>` +
-        `</div>
-    </div>
-    ${pdfPhotos.length > 0 ? `<div class="section">
-      <h3>📷 Photos</h3>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
-        ${pdfPhotos.map((url,i) => `<div style="height:150px;border-radius:8px;overflow:hidden;border:1px solid #E7E5E0"><img src="${url}" alt="Photo ${i+1}" style="width:100%;height:100%;object-fit:contain;background:#F5F5F4" crossorigin="anonymous"></div>`).join('')}
-      </div></div>` : ''}
-    ${u.desc ? `<div class="section"><h3>🎯 Objectifs pédagogiques</h3><div class="desc-box">${u.desc}</div></div>` : ''}
-    <div class="section">
-      <h3>🧸 Matériel principal (${arts.length} article${arts.length>1?'s':''})</h3>
-      <table><thead><tr>
-        <th>Article</th><th style="text-align:center;width:140px">Catégorie</th><th style="text-align:center;width:100px">Disponibilité</th>
-      </tr></thead>
-      <tbody>${rowsHTML}</tbody></table>
-    </div>
-    ${enrichArts.length > 0 ? `<div class="section">
-      <h3>✨ Enrichissement (${enrichArts.length} article${enrichArts.length>1?'s':''})</h3>
-      <table><thead><tr>
-        <th>Article</th><th style="text-align:center;width:140px">Catégorie</th><th style="text-align:center;width:100px">Disponibilité</th>
-      </tr></thead>
-      <tbody>${enrichRowsHTML}</tbody></table>
-    </div>` : ''}
-    ${u.conseils ? `<div class="section"><h3>💡 Mise en scène</h3><div class="conseils-box">${u.conseils}</div></div>` : ''}
-    <div class="footer">Fiche générée le ${new Date().toLocaleDateString('fr-FR')} — ${nom}</div>
-    </body></html>`;
-
-  const blob = new Blob([html], { type:'text/html;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const win  = window.open(url, '_blank');
-  if (!win) showNotif('⚠ Autorisez les popups pour générer la fiche');
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
-}
-
-function exportBackupWithUnivers() {
-  // Override saveData to include UNIVERS
-  return { articles:ARTICLES, commandes:COMMANDES, fournisseurs:FOURNISSEURS, historique:HISTORIQUE, univers:UNIVERS };
-}
-
 // ─── SAUVEGARDE / RESTAURATION COMPLÈTE (JSON) ───────────────────────────
 
 function exportBackup() {
@@ -4560,7 +3736,6 @@ function exportBackup() {
     commandes:    COMMANDES,
     fournisseurs: FOURNISSEURS,
     historique:   HISTORIQUE,
-    univers:      UNIVERS,
   };
   const json = JSON.stringify(payload, null, 2);
   const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
@@ -5276,14 +4451,12 @@ async function syncFromCloud() {
       withTimeout(sbGet('commandes')),
       withTimeout(sbGet('fournisseurs')),
       withTimeout(sbGet('historique', 'order=id.desc&limit=200')),
-      withTimeout(sbGet('univers', 'order=id.desc')),
-      withTimeout(sbGet('souscats', 'order=id.asc')),
       withTimeout(sbGet('stock_couches')),
       withTimeout(sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500')),
       withTimeout(sbGet('stock_couches_prix', 'order=type_couche.asc')),
     ]);
 
-    const [artsR, cmdsR, fournsR, histosR, univsR, scR, couchesR, couchesMvtsR, couchesPrixR] = results;
+    const [artsR, cmdsR, fournsR, histosR, couchesR, couchesMvtsR, couchesPrixR] = results;
 
     // On ne remplace les données en mémoire QUE si le fetch a réussi
     if (artsR.status === 'fulfilled' && Array.isArray(artsR.value))
@@ -5309,24 +4482,6 @@ async function syncFromCloud() {
     else if (histosR.status === 'rejected')
       console.warn('[Sync] historique:', histosR.reason?.message);
 
-    if (univsR.status === 'fulfilled' && Array.isArray(univsR.value)) {
-      const mapped = univsR.value.map(u => ({ ...u, desc: u.desc || u.description || '' }));
-      UNIVERS.splice(0, UNIVERS.length, ...mapped);
-    }
-    // Note : univsR.rejected est géré plus bas dans allOk
-
-    // Sous-catégories : elles ne vivaient qu'en localStorage, donc celles créées
-    // sur un appareil restaient invisibles sur les autres. Elles suivent désormais
-    // le même chemin que les univers.
-    if (scR.status === 'fulfilled' && Array.isArray(scR.value)) {
-      // Pas de reprise ici : le premier chargement (loadData) s'en est chargé.
-      // Une base vide au bout d'une minute de polling est une vraie liste vide.
-      if (scR.value.length > 0 || SOUSCATS.length === 0)
-        SOUSCATS.splice(0, SOUSCATS.length, ...scR.value.map(rowToSouscat));
-    }
-    else if (scR.status === 'rejected')
-      console.warn('[Sync] souscats (non-bloquant):', scR.reason?.message);
-
     if (couchesR.status === 'fulfilled' && Array.isArray(couchesR.value))
       COUCHES.splice(0, COUCHES.length, ...couchesR.value.map(rowToCouche));
     else if (couchesR.status === 'rejected')
@@ -5349,14 +4504,10 @@ async function syncFromCloud() {
     if (currentPage === 'commandes') renderCommandes();
     else if (currentPage === 'fournisseurs') renderFournisseurs();
     else if (currentPage === 'historique') renderHistorique();
-    else if (currentPage === 'univers') renderUnivers();
     else if (currentPage === 'couches') renderCouches();
 
-    // allOk = seulement les tables critiques (univers est optionnelle)
     const [artsOk, cmdsOk, fournsOk, histosOk] = [artsR, cmdsR, fournsR, histosR].map(r => r.status === 'fulfilled');
     const allOk = artsOk && cmdsOk && fournsOk && histosOk;
-    if (univsR.status === 'rejected')
-      console.warn('[Sync] univers (non-bloquant):', univsR.reason?.message);
     const now = new Date();
     setIndicator(
       allOk
@@ -5575,14 +4726,12 @@ async function loadData() {
   try {
     // Timeout de 30s (Supabase peut mettre jusqu'à 30s à se réveiller après inactivité)
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000));
-    const [arts, cmds, fourns, histos, univs, souscats, config, couches, couchesMvts, couchesPrix, enfantsCouches] = await Promise.race([
+    const [arts, cmds, fourns, histos, config, couches, couchesMvts, couchesPrix, enfantsCouches] = await Promise.race([
       Promise.all([
         sbGet('articles'),
         sbGet('commandes'),
         sbGet('fournisseurs'),
         sbGet('historique', 'order=id.desc&limit=200'),
-        sbGet('univers', 'order=id.desc').catch(() => []),
-        sbGet('souscats', 'order=id.asc').catch(() => []),
         sbGet('stock_config', 'order=cle.asc').catch(() => []),
         // null (pas []) en cas d'échec : un tableau vide serait ensuite
         // interprété comme « la base est vide » et effacerait des données
@@ -5607,24 +4756,6 @@ async function loadData() {
     }
     if (histos.length > 0) {
       HISTORIQUE.splice(0, HISTORIQUE.length, ...histos.map(rowToHisto));
-    }
-    if (Array.isArray(univs) && univs.length > 0) {
-      const mapped = univs.map(u => ({ ...u, desc: u.desc || u.description || '' }));
-      UNIVERS.splice(0, UNIVERS.length, ...mapped);
-    }
-    // Sous-catégories : la base fait foi dès qu'elle répond, y compris vide —
-    // sinon une sous-catégorie supprimée sur un appareil réapparaîtrait sur l'autre.
-    // SAUF au tout premier passage : si la base est vide et que cet appareil en a
-    // en local, ce sont les nôtres, jamais synchronisées. On les remonte au lieu
-    // de les effacer. Les identifiants sont conservés, donc les univers qui les
-    // référencent restent rattachés.
-    if (Array.isArray(souscats)) {
-      if (souscats.length === 0 && SOUSCATS.length > 0) {
-        SOUSCATS.forEach(sc => saveSouscatDB(sc, true));
-        showNotif('☁️ ' + SOUSCATS.length + ' sous-catégorie(s) envoyée(s) vers le cloud');
-      } else {
-        SOUSCATS.splice(0, SOUSCATS.length, ...souscats.map(rowToSouscat));
-      }
     }
     // Nom de la crèche : réglage unique, partagé.
     if (Array.isArray(config)) {
@@ -5738,67 +4869,6 @@ async function saveHistoDB(h) {
   catch(e) { console.error('[Supabase] Insert histo :', e); }
 }
 
-async function saveUniversDB(u, isNew) {
-  if (IS_LOCAL) return;
-  try {
-    const row = {
-      id: u.id, nom: u.nom, creche: u.creche, cat: u.cat,
-      description: u.desc||null, conseils: u.conseils||null,
-      articles: typeof u.articles === 'string' ? u.articles : JSON.stringify(u.articles||[]),
-      articles_enrichissement: typeof u.articles_enrichissement === 'string' ? u.articles_enrichissement : JSON.stringify(u.articles_enrichissement||[]),
-      photo: u.photo||null,
-      photos: u.photos||null,
-      souscat: u.souscat||null,
-      created_at: u.created_at || new Date().toISOString(),
-    };
-    if (isNew) await sbInsert('univers', row);
-    else await sbUpdate('univers', u.id, row);
-    setSaved();
-  } catch(e) {
-    console.error('[Supabase] Univers save:', e);
-    showNotif('⚠ Erreur Supabase : ' + e.message);
-  }
-}
-
-async function deleteUniversDB(id) {
-  if (IS_LOCAL) return;
-  try { await sbDelete('univers', id); setSaved(); }
-  catch(e) { console.error('[Supabase] Univers delete:', e); }
-}
-
-// ── Sous-catégories ──────────────────────────────────────────────────────
-// Même schéma que les univers : id numérique généré côté client (Date.now()),
-// pour que les enregistrements déjà créés en local gardent leur identifiant et
-// que les univers qui les référencent (u.souscat) continuent de pointer juste.
-function rowToSouscat(r) {
-  return { id: r.id, nom: r.nom, cat: r.cat || '', icon: r.icon || '', desc: r.description || '' };
-}
-function souscatToRow(sc) {
-  return { id: sc.id, nom: sc.nom, cat: sc.cat || null, icon: sc.icon || null,
-           description: sc.desc || null };
-}
-
-async function saveSouscatDB(sc, isNew) {
-  if (IS_LOCAL) return;
-  try {
-    if (isNew) await sbInsert('souscats', souscatToRow(sc));
-    else await sbUpdate('souscats', sc.id, souscatToRow(sc));
-    setSaved();
-  } catch(e) {
-    console.error('[Supabase] Souscat save:', e);
-    showNotif('⚠ Sous-catégorie enregistrée localement seulement : ' + e.message);
-  }
-}
-
-async function deleteSouscatDB(id) {
-  if (IS_LOCAL) return;
-  try { await sbDelete('souscats', id); setSaved(); }
-  catch(e) {
-    console.error('[Supabase] Souscat delete:', e);
-    showNotif('⚠ Suppression non synchronisée : ' + e.message);
-  }
-}
-
 // ── Réglages partagés du module (table clé/valeur) ───────────────────────
 async function saveStockConfigDB(cle, valeur) {
   if (IS_LOCAL) return;
@@ -5893,8 +4963,6 @@ function saveData() {
       commandes:    COMMANDES,
       fournisseurs: FOURNISSEURS,
       historique:   HISTORIQUE.slice(0, 300),
-      univers:      UNIVERS,
-      souscats:     SOUSCATS,
       savedAt:      new Date().toISOString(),
     };
     // Essayer avec photos
@@ -5923,8 +4991,6 @@ function loadLocalData() {
     if (data.commandes    && Array.isArray(data.commandes))    COMMANDES.splice(0,    COMMANDES.length,    ...data.commandes);
     if (data.fournisseurs && Array.isArray(data.fournisseurs)) FOURNISSEURS.splice(0, FOURNISSEURS.length, ...data.fournisseurs);
     if (data.historique   && Array.isArray(data.historique))   HISTORIQUE.splice(0,   HISTORIQUE.length,   ...data.historique);
-    if (data.univers      && Array.isArray(data.univers))      UNIVERS.splice(0,      UNIVERS.length,      ...data.univers);
-    if (data.souscats     && Array.isArray(data.souscats))     SOUSCATS.splice(0,     SOUSCATS.length,     ...data.souscats);
     return data.savedAt || true;
   } catch(e) {
     console.error('[Solo] Chargement impossible:', e);
@@ -6698,152 +5764,6 @@ function importExcel(event) {
 
 function exportCommandesExcel() { showNotif('Utilisez le bouton ⬇ Excel sur chaque commande'); }
 
-// ─── SOUS-CATÉGORIES ─────────────────────────────────────────────────────
-
-let editingSouscatId = null;
-
-function renderSouscats() {
-  const list = document.getElementById('souscats-list');
-  if (!list) return;
-
-  if (SOUSCATS.length === 0) {
-    list.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--ink3)">
-      <div style="font-size:36px;margin-bottom:8px">🏷</div>
-      <div style="font-weight:600;margin-bottom:6px">Aucune sous-catégorie</div>
-      <div style="font-size:13px">Cliquez sur "+ Créer" pour commencer</div>
-    </div>`;
-    return;
-  }
-
-  list.innerHTML = SOUSCATS.map(sc => {
-    const nbUnivers = UNIVERS.filter(u => u.souscat === sc.id || u.souscat === String(sc.id)).length;
-    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;gap:14px;align-items:center">
-      <div style="font-size:32px;flex-shrink:0">${sc.icon || '🏷'}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:14px;margin-bottom:2px">${sc.nom}</div>
-        ${sc.cat ? `<div style="font-size:11px;color:var(--accent);margin-bottom:4px">${sc.cat}</div>` : ''}
-        ${sc.desc ? `<div style="font-size:12px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sc.desc}</div>` : ''}
-        <div style="font-size:11px;color:var(--ink3);margin-top:4px">${nbUnivers} univers</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
-        <button class="btn btn-secondary btn-sm" onclick="editSouscat(${sc.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteSouscat(${sc.id})">🗑</button>
-      </div>
-    </div>`;
-  }).join('');
-
-  // Rebuild sous-cat filter chips in univers tab
-  updateSouscatFilters();
-  // Update sous-cat selectors in forms
-  updateSouscatSelectors();
-}
-
-function updateSouscatFilters() {
-  const container = document.getElementById('univers-subcat-filters');
-  if (!container) return;
-  container.innerHTML = SOUSCATS.map(sc =>
-    `<div class="filter-chip" onclick="filterUniversSubcat(${sc.id}, this)">${sc.icon||'🏷'} ${sc.nom}</div>`
-  ).join('');
-}
-
-function updateSouscatSelectors() {
-  const sel = document.getElementById('u-souscat');
-  if (!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '<option value="">— Aucune —</option>' +
-    SOUSCATS.map(sc => `<option value="${sc.id}">${sc.icon||''} ${sc.nom}${sc.cat?' ('+sc.cat+')':''}</option>`).join('');
-  if (current) sel.value = current;
-}
-
-function filterUniversSubcat(id, el) {
-  currentUniversCatFilter = 'subcat:' + id;
-  document.querySelectorAll('#univers-cat-filters .filter-chip, #univers-subcat-filters .filter-chip')
-    .forEach(b => b.classList.remove('active'));
-  if (el) el.classList.add('active');
-  renderUnivers();
-}
-
-function showUniversTab(tab, btn) {
-  ['univers','souscats'].forEach(t => {
-    const el = document.getElementById('utab-content-' + t);
-    if (el) el.style.display = t === tab ? 'block' : 'none';
-  });
-  document.querySelectorAll('.univers-tab-btn').forEach(b => {
-    b.style.borderBottomColor = 'transparent';
-    b.style.color = 'var(--ink3)';
-  });
-  if (btn) {
-    btn.style.borderBottomColor = 'var(--accent)';
-    btn.style.color = 'var(--accent)';
-  }
-  if (tab === 'souscats') renderSouscats();
-  if (tab === 'univers')  renderUnivers();
-}
-
-function openModal_souscat() {
-  editingSouscatId = null;
-  document.getElementById('modalSouscatTitle').textContent = 'Créer une sous-catégorie';
-  document.getElementById('btn-save-souscat').textContent = '💾 Enregistrer';
-  ['sc-nom','sc-icon','sc-desc'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
-  const catEl = document.getElementById('sc-cat'); if (catEl) catEl.value = '';
-  document.getElementById('modal-souscat').classList.add('open');
-  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
-}
-
-function saveSouscat() {
-  const nom = document.getElementById('sc-nom').value.trim();
-  if (!nom) { showNotif('⚠ Nom obligatoire'); return; }
-  const data = {
-    nom,
-    cat:  document.getElementById('sc-cat').value,
-    icon: document.getElementById('sc-icon').value.trim(),
-    desc: document.getElementById('sc-desc').value.trim(),
-  };
-  if (editingScId) {
-    const idx = SOUSCATS.findIndex(s => s.id === editingScId);
-    if (idx >= 0) { SOUSCATS[idx] = { ...SOUSCATS[idx], ...data }; saveSouscatDB(SOUSCATS[idx], false); }
-    showNotif('✅ Sous-catégorie mise à jour');
-  } else {
-    const sc = { id: Date.now(), ...data };
-    SOUSCATS.push(sc);
-    saveSouscatDB(sc, true);
-    showNotif('✅ Sous-catégorie créée');
-  }
-  saveData();
-  closeModal('modal-souscat');
-  renderSouscats();
-}
-// alias pour le bouton
-let editingScId = null;
-
-function editSouscat(id) {
-  const sc = SOUSCATS.find(x => x.id === id); if (!sc) return;
-  editingScId = id;
-  editingScId = id;
-  document.getElementById('modalSouscatTitle').textContent = 'Modifier la sous-catégorie';
-  document.getElementById('btn-save-souscat').textContent = '💾 Mettre à jour';
-  document.getElementById('sc-nom').value  = sc.nom;
-  document.getElementById('sc-cat').value  = sc.cat || '';
-  document.getElementById('sc-icon').value = sc.icon || '';
-  document.getElementById('sc-desc').value = sc.desc || '';
-  document.getElementById('modal-souscat').classList.add('open');
-  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
-}
-
-function deleteSouscat(id) {
-  const sc = SOUSCATS.find(x => x.id === id); if (!sc) return;
-  const nb = UNIVERS.filter(u => u.souscat === id || u.souscat === String(id)).length;
-  const msg = nb > 0
-    ? `Supprimer "${sc.nom}" ?\n\n⚠ ${nb} univers utilisent cette sous-catégorie.`
-    : `Supprimer "${sc.nom}" ?`;
-  if (!confirm(msg)) return;
-  SOUSCATS = SOUSCATS.filter(x => x.id !== id);
-  deleteSouscatDB(id);
-  saveData();
-  renderSouscats();
-  showNotif('🗑 Sous-catégorie supprimée');
-}
-
 
 function showImportResult(type, html) {
   const el = document.getElementById('import-result');
@@ -6898,7 +5818,6 @@ function showImportResult(type, html) {
       <button class="notice-tab active" onclick="switchNoticeTab('inventaire',this)" style="padding:10px 16px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--accent);margin-bottom:-2px;color:var(--accent);white-space:nowrap">📦 Inventaire</button>
       <button class="notice-tab" onclick="switchNoticeTab('commandes',this)" style="padding:10px 16px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ink3);white-space:nowrap">🛒 Commandes</button>
       <button class="notice-tab" onclick="switchNoticeTab('fournisseurs',this)" style="padding:10px 16px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ink3);white-space:nowrap">🏭 Fournisseurs</button>
-      <button class="notice-tab" onclick="switchNoticeTab('univers',this)" style="padding:10px 16px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ink3);white-space:nowrap">🌟 Univers</button>
       <button class="notice-tab" onclick="switchNoticeTab('depreciation',this)" style="padding:10px 16px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ink3);white-space:nowrap">🔄 État articles</button>
       <button class="notice-tab" onclick="switchNoticeTab('historique',this)" style="padding:10px 16px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ink3);white-space:nowrap">📋 Historique</button>
       <button class="notice-tab" onclick="switchNoticeTab('sauvegardes',this)" style="padding:10px 16px;border:none;background:none;font-family:'Instrument Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ink3);white-space:nowrap">💾 Sauvegardes</button>
@@ -7068,45 +5987,6 @@ fournisseurs: `
   <div style="padding:12px 16px;font-size:13px;color:var(--ink2);line-height:1.7">Utilisez le bouton ✏️ Modifier sur la fiche fournisseur. Le nouveau nom est automatiquement répercuté sur tous les articles liés.</div>
 </details>`,
 
-univers: `
-<h3 style="font-family:'Syne',sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🌟 Univers ludiques</h3>
-
-<div style="background:var(--accent-lt);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#1E40AF">
-  💡 Un univers ludique est un regroupement thématique d'articles de l'inventaire. Il permet de préparer et documenter une installation pédagogique complète.
-</div>
-
-<div style="font-weight:700;font-size:14px;margin-bottom:12px;color:var(--ink)">✨ Créer un univers</div>
-<ol style="font-size:13px;line-height:2;color:var(--ink2);padding-left:20px;margin-bottom:20px">
-  <li>Cliquez sur <strong>+ Créer un univers</strong></li>
-  <li>Donnez-lui un <strong>nom évocateur</strong> (ex : "Bac sensoriel automne")</li>
-  <li>Choisissez la <strong>crèche</strong>, la <strong>catégorie</strong> et une sous-catégorie si besoin</li>
-  <li>Décrivez les <strong>objectifs pédagogiques</strong></li>
-  <li>Sélectionnez le <strong>🧸 Matériel principal</strong> — le cœur de l'univers (articles de la crèche choisie)</li>
-  <li>Ajoutez éventuellement des articles d'<strong>✨ Enrichissement</strong> — compléments pour faire évoluer l'univers dans le temps (optionnel)</li>
-  <li>Ajoutez vos <strong>conseils de mise en scène</strong> (disposition, ambiance...)</li>
-  <li>Enregistrez — la fiche PDF est générée automatiquement</li>
-</ol>
-
-<div style="font-weight:700;font-size:14px;margin-bottom:12px;color:var(--ink)">🖨 Générer une fiche PDF</div>
-<ul style="font-size:13px;line-height:2;color:var(--ink2);padding-left:20px;margin-bottom:20px">
-  <li>Depuis la carte d'un univers, cliquez sur <strong>🖨 Fiche PDF</strong></li>
-  <li>La fiche contient : nom, catégorie, objectifs, liste du matériel avec disponibilité, conseils</li>
-  <li>Elle s'ouvre dans un nouvel onglet — utilisez <strong>Ctrl+P</strong> pour imprimer</li>
-</ul>
-
-<hr style="border:none;border-top:1px solid var(--border);margin:24px 0">
-<div style="font-weight:700;font-size:14px;margin-bottom:12px;color:var(--ink)">❓ Questions fréquentes</div>
-
-<details style="margin-bottom:10px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-  <summary style="padding:12px 16px;cursor:pointer;font-size:13px;font-weight:600;background:var(--bg)">Puis-je utiliser le même article dans plusieurs univers ?</summary>
-  <div style="padding:12px 16px;font-size:13px;color:var(--ink2);line-height:1.7">Oui, un article peut apparaître dans autant d'univers que vous souhaitez. La fiche PDF indique si l'article est disponible en stock au moment de l'impression.</div>
-</details>
-
-<details style="margin-bottom:10px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-  <summary style="padding:12px 16px;cursor:pointer;font-size:13px;font-weight:600;background:var(--bg)">À quoi servent les sous-catégories ?</summary>
-  <div style="padding:12px 16px;font-size:13px;color:var(--ink2);line-height:1.7">Les sous-catégories permettent d'affiner le classement des univers. Ex : dans "Sensoriel", vous pouvez créer les sous-catégories "Eau", "Lumière", "Tactile". Gérez-les depuis l'onglet <strong>🏷 Sous-catégories</strong>.</div>
-</details>`,
-
 depreciation: `
 <h3 style="font-family:'Syne',sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🔄 État et dépréciation des articles</h3>
 
@@ -7247,7 +6127,7 @@ sauvegardes: `
 <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
   <div style="border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:13px">
     <strong>📦 Stock pédagogique</strong> — cette application<br>
-    <span style="color:var(--ink3)">Inventaire, commandes, fournisseurs, historique, univers ludiques.</span>
+    <span style="color:var(--ink3)">Inventaire, commandes, fournisseurs, historique.</span>
   </div>
   <div style="border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:13px">
     <strong>💬 Demandes RT</strong> — application complémentaire<br>
