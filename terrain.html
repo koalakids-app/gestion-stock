@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Koala Kids — Accès terrain</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--red:#C62828;--red-l:#FDE8E8;--green:#2E7D32;--green-l:#E7F4E8}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:#2B2740;min-height:100dvh}
+a{color:inherit;text-decoration:none}
+.topbar{background:#fff;border-bottom:2px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50}
+.topbar h1{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);flex:1}
+.topbar .who{font-size:12px;color:var(--muted);font-weight:600}
+.iconbtn{border:none;background:#F1EFF7;color:var(--muted);width:34px;height:34px;border-radius:10px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.iconbtn:hover{background:var(--violet-l);color:var(--violet)}
+.btn{border:none;border-radius:12px;padding:9px 14px;font-family:'Nunito';font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-p{background:var(--orange);color:#fff}
+.btn-s{background:var(--violet-l);color:var(--violet)}
+.btn-g{background:#F1EFF7;color:var(--muted)}
+.btn-d{background:var(--red-l);color:var(--red)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.wrap{max-width:760px;margin:0 auto;padding:16px}
+.f{margin-bottom:12px}
+.f label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+input{font-family:'Nunito';font-size:16px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740;width:100%}
+input:focus{outline:none;border-color:var(--orange)}
+.login{max-width:340px;margin:70px auto;background:#fff;border:2px solid var(--line);border-radius:22px;padding:26px}
+.login h2{font-family:'Baloo 2',cursive;font-size:22px;color:var(--violet);text-align:center;margin-bottom:16px}
+
+/* ---- Tuiles d'accès ---- */
+.hello{font-family:'Baloo 2',cursive;font-size:19px;color:var(--violet);margin:6px 2px 16px}
+.hello small{display:block;font-family:'Nunito';font-size:13px;color:var(--muted);font-weight:600;margin-top:3px}
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+.qbtn{border:none;border-radius:22px;padding:30px 16px;cursor:pointer;font-family:'Baloo 2',cursive;font-size:18px;
+  display:flex;flex-direction:column;align-items:center;gap:10px;line-height:1.25;text-align:center;min-height:150px;justify-content:center}
+.qbtn i{font-size:36px}
+.qbtn small{font-family:'Nunito';font-size:12px;font-weight:600;opacity:.8}
+.qbtn.suivi{background:var(--violet-l);color:var(--violet)}
+.qbtn.infi{background:var(--orange-l);color:#B4530F}
+.qbtn:active{transform:scale(.98)}
+@media(max-width:520px){
+  .quick{grid-template-columns:1fr}
+}
+
+.devlist{background:#fff;border:2px solid var(--line);border-radius:16px;padding:6px;margin-top:6px}
+.devrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 12px;border-radius:12px;cursor:pointer}
+.devrow:hover{background:var(--violet-l)}
+.devrow+.devrow{border-top:1px solid var(--line)}
+.devrow b{font-size:14.5px}
+.msg{background:#fff;border:2px solid var(--line);border-radius:16px;padding:16px;font-size:14px;line-height:1.6;color:#2B2740;margin-top:6px}
+.msg.warn{border-color:#E9A700;background:#FFF8E1;color:#7A5C00}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--violet);color:#fff;
+  padding:11px 18px;border-radius:14px;font-size:13px;font-weight:600;z-index:200;display:none;max-width:90%;text-align:center}
+.toast.on{display:block}
+.toast.err{background:var(--red)}
+</style>
+</head>
+<body>
+
+<div id="loginView" style="display:none">
+  <div class="login" id="liFormBox">
+    <h2>Accès terrain</h2>
+    <div class="f"><label>Email</label><input type="email" id="liMail" autocomplete="username"></div>
+    <div class="f"><label>Mot de passe</label><input type="password" id="liPwd" autocomplete="current-password"></div>
+    <button class="btn btn-p" style="width:100%;justify-content:center" id="btnLogin">Se connecter</button>
+    <p id="liErr" style="color:var(--red);font-size:12.5px;margin-top:10px;text-align:center"></p>
+  </div>
+  <div class="login" id="mfaGateBox" style="display:none">
+    <h2>Double authentification</h2>
+    <div id="mfaGateChallengeView" style="display:none">
+      <p style="color:#666;font-size:13px;margin-bottom:12px">Entrez le code à 6 chiffres généré par votre application d'authentification.</p>
+      <div class="f"><input type="text" id="mfaGateCode" maxlength="6" inputmode="numeric" placeholder="123456" style="letter-spacing:4px;text-align:center;font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();mfaGateVerifyChallenge();}"></div>
+      <p id="mfaGateChallengeErr" style="color:var(--red);font-size:12.5px;margin-top:6px;text-align:center;display:none"></p>
+      <button class="btn btn-p" style="width:100%;justify-content:center" onclick="mfaGateVerifyChallenge()">Valider</button>
+      <button class="btn" style="width:100%;justify-content:center;margin-top:8px" onclick="mfaGateCancel()">Annuler, se déconnecter</button>
+    </div>
+    <div id="mfaGateEnrollView" style="display:none">
+      <p style="color:#666;font-size:13px;margin-bottom:12px">La double authentification est désormais obligatoire. Scannez ce QR code avec une application d'authentification (Google Authenticator, Authy...), puis entrez le code généré pour continuer.</p>
+      <div id="mfaGateQr" style="text-align:center;margin:14px 0;min-height:190px;display:flex;align-items:center;justify-content:center;overflow:hidden"></div>
+      <p style="font-size:11.5px;color:#666;text-align:center">Impossible de scanner ? Code manuel : <code id="mfaGateSecret" style="user-select:all"></code></p>
+      <div class="f"><input type="text" id="mfaGateEnrollCode" maxlength="6" inputmode="numeric" placeholder="123456" style="letter-spacing:4px;text-align:center;font-size:18px" onkeydown="if(event.key==='Enter'){event.preventDefault();mfaGateConfirmEnroll();}"></div>
+      <p id="mfaGateEnrollErr" style="color:var(--red);font-size:12.5px;margin-top:6px;text-align:center;display:none"></p>
+      <button class="btn btn-p" style="width:100%;justify-content:center" onclick="mfaGateConfirmEnroll()">Activer et continuer</button>
+      <button class="btn" style="width:100%;justify-content:center;margin-top:8px" onclick="mfaGateCancel()">Annuler, se déconnecter</button>
+    </div>
+  </div>
+</div>
+
+<div id="appView" style="display:none">
+  <div class="topbar">
+    <a href="index.html" class="iconbtn"><i class="ti ti-arrow-left"></i></a>
+    <h1>Accès terrain</h1>
+    <span class="who" id="whoAmI"></span>
+    <button class="iconbtn" id="btnLogout" title="Déconnexion"><i class="ti ti-logout"></i></button>
+  </div>
+
+  <div class="wrap">
+    <div class="hello" id="hello"></div>
+
+    <div class="quick">
+      <button class="qbtn suivi" id="qSuivi">
+        <i class="ti ti-heart-handshake"></i>
+        Suivi de l'enfant
+        <small>ouvrir la tablette de suivi quotidien</small>
+      </button>
+      <a class="qbtn infi" id="qInfi" href="infirmerie.html">
+        <i class="ti ti-bandage"></i>
+        Registre d'infirmerie
+        <small>soins, incidents, PAI, médicaments</small>
+      </a>
+    </div>
+
+    <div id="suiviResult"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================================================================
+   ACCES TERRAIN — Koala Kids
+   Point d'entree simplifie pour les auxiliaires de terrain :
+   suivi quotidien (kiosque) + registre d'infirmerie.
+   Page dediee, autonome. Auth Supabase, RLS cote serveur.
+   ================================================================ */
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+let ME=null,PROF=null,IS_DIRECTION=false,IS_EMPLOYE=false;
+
+function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',3000);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+/* Même token que le pointage (tablette.html) : la tablette de suivi utilise
+   la même URL de base, juste une autre page. Voir parametres.html. */
+function suiviLinkFor(token){
+  try{return new URL('suivi.html?k='+token,location.href).href;}
+  catch(e){return location.href.replace(/[^/]*$/,'')+'suivi.html?k='+token;}
+}
+
+/* ================= AUTH ================= */
+async function boot(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){showLoginView();return;}
+  ME=session.user;
+  const {data:p}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
+  if(!p){toast("Profil introuvable. Contactez la direction.",true);await sb.auth.signOut();location.reload();return;}
+  PROF=p; IS_DIRECTION=(p.role==='direction'); IS_EMPLOYE=(p.role==='employe');
+  // MFA obligatoire à la connexion, même portail que infirmerie.html/demandes.html.
+  await mfaGateCheckAndProceed();
+}
+function showLoginView(msg){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liFormBox').style.display='block';
+  document.getElementById('mfaGateBox').style.display='none';
+  if(msg)document.getElementById('liErr').textContent=msg;
+}
+async function terrainGrantAccess(){
+  kkLoginAlertCheck(sb);
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('appView').style.display='block';
+  document.getElementById('whoAmI').textContent=(PROF.name||'')+(IS_DIRECTION?' · Direction':'');
+  document.getElementById('hello').innerHTML='Bonjour '+esc(PROF.name||'')+' <small>Suivi de l\'enfant et registre d\'infirmerie, en un tap.</small>';
+}
+// --- Portail MFA obligatoire (identique à infirmerie.html) ---
+function mfaGateSwitchView(id){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liFormBox').style.display='none';
+  document.getElementById('mfaGateBox').style.display='block';
+  ['mfaGateChallengeView','mfaGateEnrollView'].forEach(v=>{
+    document.getElementById(v).style.display=(v===id)?'block':'none';
+  });
+}
+async function mfaGateCheckAndProceed(){
+  try{
+    const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(error)throw error;
+    if(data.currentLevel==='aal2'){await terrainGrantAccess();return;}
+    if(data.nextLevel==='aal2'){mfaGateShowChallenge();return;}
+    await mfaGateShowEnroll();
+  }catch(e){
+    console.error('[MFA Gate]',e);
+    try{await sb.auth.signOut();}catch(_e){}
+    showLoginView('Erreur de vérification de la double authentification. Réessayez.');
+  }
+}
+function mfaGateShowChallenge(){
+  document.getElementById('mfaGateCode').value='';
+  document.getElementById('mfaGateChallengeErr').style.display='none';
+  mfaGateSwitchView('mfaGateChallengeView');
+  setTimeout(()=>{const el=document.getElementById('mfaGateCode');if(el)el.focus();},100);
+}
+let mfaGateFactorId=null;
+async function mfaGateShowEnroll(){
+  mfaGateSwitchView('mfaGateEnrollView');
+  const err=document.getElementById('mfaGateEnrollErr');
+  err.style.display='none';
+  try{
+    const{data:existing,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const stale=(existing.all||[]).filter(f=>f.factor_type==='totp'&&f.status!=='verified');
+    for(const f of stale){
+      try{await sb.auth.mfa.unenroll({factorId:f.id});}catch(e){console.warn('Nettoyage facteur MFA périmé échoué :',e.message);}
+    }
+    const{data,error}=await sb.auth.mfa.enroll({factorType:'totp'});
+    if(error)throw error;
+    mfaGateFactorId=data.id;
+    const qrEl=document.getElementById('mfaGateQr');
+    qrEl.innerHTML='';
+    const qr=data.totp.qr_code||'';
+    const svgMatch=qr.match(/<svg[\s\S]*<\/svg>/i);
+    if(svgMatch){
+      qrEl.innerHTML=svgMatch[0];
+      const svg=qrEl.querySelector('svg');
+      if(svg){svg.style.width='180px';svg.style.height='180px';}
+    }else{
+      const img=document.createElement('img');
+      img.alt='QR code MFA';
+      img.style.cssText='display:block;width:180px;height:180px;object-fit:contain';
+      img.src=qr;
+      qrEl.appendChild(img);
+    }
+    document.getElementById('mfaGateSecret').textContent=data.totp.secret;
+    document.getElementById('mfaGateEnrollCode').value='';
+  }catch(e){
+    console.error('[MFA Gate enroll]',e);
+    err.textContent="Erreur lors de la préparation de l'enrôlement : "+e.message;err.style.display='block';
+  }
+}
+async function mfaGateVerifyChallenge(){
+  const code=document.getElementById('mfaGateCode').value.trim();
+  const err=document.getElementById('mfaGateChallengeErr');
+  err.style.display='none';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';err.style.display='block';return;}
+  try{
+    const{data:factors,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const verified=(factors.totp||[])[0];
+    if(!verified)throw new Error('Aucun facteur MFA vérifié trouvé sur ce compte.');
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:verified.id});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:verified.id,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    await terrainGrantAccess();
+  }catch(e){
+    err.textContent='Code invalide ou expiré : '+e.message;err.style.display='block';
+  }
+}
+async function mfaGateConfirmEnroll(){
+  const code=document.getElementById('mfaGateEnrollCode').value.trim();
+  const err=document.getElementById('mfaGateEnrollErr');
+  err.style.display='none';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';err.style.display='block';return;}
+  if(!mfaGateFactorId){err.textContent="Session d'enrôlement expirée, réessayez.";err.style.display='block';return;}
+  try{
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:mfaGateFactorId});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:mfaGateFactorId,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    mfaGateFactorId=null;
+    await terrainGrantAccess();
+  }catch(e){
+    err.textContent='Code invalide ou expiré : '+e.message;err.style.display='block';
+  }
+}
+async function mfaGateCancel(){
+  if(mfaGateFactorId){try{await sb.auth.mfa.unenroll({factorId:mfaGateFactorId});}catch(e){console.warn('Nettoyage annulation MFA gate échoué :',e.message);}}
+  mfaGateFactorId=null;
+  try{await sb.auth.signOut();}catch(e){}
+  showLoginView();
+}
+async function doLogin(){
+  const e=document.getElementById('liMail').value.trim(),p=document.getElementById('liPwd').value;
+  const {error}=await sb.auth.signInWithPassword({email:e,password:p});
+  if(error){document.getElementById('liErr').textContent='Identifiants incorrects';return;}
+  location.reload();
+}
+
+/* ================= SUIVI DE L'ENFANT (kiosque) ================= */
+async function openSuivi(){
+  const box=document.getElementById('suiviResult');
+  box.innerHTML='';
+  if(!PROF.creche_id){
+    // Direction : rattachée à aucune crèche en particulier (accès à toutes),
+    // donc pas de redirection automatique possible sans ambiguïté.
+    box.innerHTML='<div class="msg warn"><i class="ti ti-info-circle"></i> La direction gère plusieurs crèches : ouvrez le suivi depuis Paramètres.</div>';
+    return;
+  }
+  try{
+    const{data,error}=await sb.from('kiosk_devices').select('*').eq('creche_id',PROF.creche_id).eq('active',true);
+    if(error)throw error;
+    const devices=data||[];
+    if(!devices.length){
+      box.innerHTML='<div class="msg warn"><i class="ti ti-alert-triangle"></i> Aucune tablette configurée pour votre crèche. Contactez la direction.</div>';
+      return;
+    }
+    if(devices.length===1){
+      location.href=suiviLinkFor(devices[0].token);
+      return;
+    }
+    // Plusieurs tablettes actives pour cette crèche : on laisse choisir.
+    box.innerHTML='<div class="devlist">'+devices.map(d=>
+      '<div class="devrow" onclick="location.href=\''+esc(suiviLinkFor(d.token))+'\'"><b>'+esc(d.label||'Tablette sans nom')+'</b><i class="ti ti-chevron-right"></i></div>'
+    ).join('')+'</div>';
+  }catch(e){
+    console.error('[openSuivi]',e);
+    const msg=e.code==='42P01'
+      ? 'Fonction indisponible pour le moment (contactez la direction).' : (e.message||'erreur inconnue');
+    box.innerHTML='<div class="msg warn"><i class="ti ti-alert-triangle"></i> Impossible de charger les tablettes : '+esc(msg)+'</div>';
+  }
+}
+
+/* ================= EVENEMENTS ================= */
+document.getElementById('btnLogin').onclick=doLogin;
+document.getElementById('liPwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+document.getElementById('btnLogout').onclick=async()=>{await sb.auth.signOut();location.reload();};
+document.getElementById('qSuivi').onclick=openSuivi;
+
+boot();
+</script>
+<script src="js/login-alert.js"></script>
+</body>
+</html>
