@@ -1357,6 +1357,7 @@ body.sk-locked{overflow:hidden}
         boutons ci-dessous seulement pour enregistrer une <b>réception</b> de commande ou corriger le stock.
       </div>
       <div id="couches-alertes" style="padding:12px 20px 0"></div>
+      <div id="couches-valorisation" style="padding:12px 20px 0"></div>
       <div id="couches-grid" style="padding:16px 20px;display:flex;flex-direction:column;gap:24px"></div>
     </div>
 
@@ -1887,6 +1888,10 @@ const COUCHES_PRODUITS = [
 ];
 let COUCHES = [];      // stock courant : { id, creche, typeCouche, taille, stock, seuilAlerteJours }
 let COUCHES_MVTS = []; // journal des mouvements (500 derniers), pour estimer la conso/jour
+// Prix d'achat unitaire par type×taille (sql/stock_couches_prix.sql), partagé
+// par les 6 crèches — saisi une fois par la direction depuis la vraie facture
+// fournisseur, jamais déduit d'un prix public scrapé.
+let COUCHES_PRIX = []; // { typeCouche, taille, prixUnitaire, updatedAt }
 
 // ─── STATE ─────────────────────────────────────────────────────────────
 // ─── PAGINATION ──────────────────────────────────────────────────────────
@@ -2444,6 +2449,101 @@ function coucheFind(creche, type, taille) {
   return COUCHES.find(c => c.creche === creche && c.typeCouche === type && c.taille === taille);
 }
 
+// ── Valorisation ────────────────────────────────────────────────────────
+// Prix d'achat unitaire par type×taille, saisi une fois par la direction
+// depuis la vraie facture fournisseur (sql/stock_couches_prix.sql) — jamais
+// déduit d'un tarif public en ligne, qui ne reflète pas un prix pro négocié.
+function couchePrixUnitaire(type, taille) {
+  const p = COUCHES_PRIX.find(x => x.typeCouche === type && x.taille === taille);
+  return p ? p.prixUnitaire : null;
+}
+
+async function coucheEnregistrerPrix() {
+  const lignes = [];
+  COUCHES_PRODUITS.forEach(produit => {
+    produit.tailles.forEach(taille => {
+      const input = document.getElementById('prix-' + produit.type + '-' + taille);
+      if (!input) return;
+      const val = input.value.trim();
+      lignes.push({ type: produit.type, taille, prix: val === '' ? null : parseFloat(val) });
+    });
+  });
+  if (lignes.some(l => l.prix !== null && (!Number.isFinite(l.prix) || l.prix < 0))) {
+    alert('Un des prix saisis est invalide.');
+    return;
+  }
+  try {
+    for (const l of lignes) {
+      const existant = COUCHES_PRIX.find(x => x.typeCouche === l.type && x.taille === l.taille);
+      if (existant && existant.prixUnitaire === l.prix) continue; // rien à faire
+      const payload = { type_couche: l.type, taille: l.taille, prix_unitaire: l.prix, updated_at: new Date().toISOString() };
+      if (existant) {
+        await sbFetchAuth(`${SUPA_URL}/rest/v1/stock_couches_prix?type_couche=eq.${l.type}&taille=eq.${l.taille}`, {
+          method: 'PATCH', headers: SUPA_HEADERS, body: JSON.stringify({ prix_unitaire: l.prix, updated_at: payload.updated_at }),
+        });
+        existant.prixUnitaire = l.prix;
+      } else {
+        await sbFetchAuth(`${SUPA_URL}/rest/v1/stock_couches_prix`, {
+          method: 'POST', headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' }, body: JSON.stringify(payload),
+        });
+        COUCHES_PRIX.push({ typeCouche: l.type, taille: l.taille, prixUnitaire: l.prix, updatedAt: payload.updated_at });
+      }
+    }
+    renderCouches();
+    showNotif('✅ Prix d’achat enregistrés.');
+  } catch(e) {
+    console.error('[Couches] enregistrement des prix :', e);
+    showNotif('❌ Erreur lors de l’enregistrement des prix : ' + (e.message || e));
+  }
+}
+
+function renderCouchesValorisation() {
+  const box = document.getElementById('couches-valorisation');
+  if (!box) return;
+  const estDirection = typeof SK_PROFILE !== 'undefined' && SK_PROFILE && SK_PROFILE.role === 'direction';
+
+  // Total valorisé (crèches affichées) + détail des tailles sans prix connu.
+  const crechesAffichees = currentCreche === 'all' ? CRECHES : [currentCreche];
+  let total = 0;
+  const taillesSansPrix = new Set();
+  crechesAffichees.forEach(creche => {
+    COUCHES_PRODUITS.forEach(produit => {
+      produit.tailles.forEach(taille => {
+        const c = coucheFind(creche, produit.type, taille);
+        const stock = c ? c.stock : 0;
+        const prix = couchePrixUnitaire(produit.type, taille);
+        if (prix === null) { if (stock > 0) taillesSansPrix.add(produit.label + ' T' + taille); return; }
+        total += stock * prix;
+      });
+    });
+  });
+
+  const formulaireEdition = estDirection ? `
+    <details style="margin-top:8px">
+      <summary style="cursor:pointer;font-size:12px;color:var(--accent);font-weight:600">Modifier les prix d'achat</summary>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px">
+        ${COUCHES_PRODUITS.map(produit => produit.tailles.map(taille => {
+          const prix = couchePrixUnitaire(produit.type, taille);
+          return `<div>
+            <label style="font-size:11px;color:var(--ink3)">${produit.label} T${taille} (€/couche)</label>
+            <input type="number" step="0.001" min="0" id="prix-${produit.type}-${taille}" value="${prix!==null?prix:''}"
+              style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          </div>`;
+        }).join('')).join('')}
+      </div>
+      <button class="btn btn-sm btn-primary" style="margin-top:8px" onclick="coucheEnregistrerPrix()">Enregistrer les prix</button>
+    </details>` : '';
+
+  box.innerHTML = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+    <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12.5px;color:var(--ink3);font-weight:700">💰 Valeur du stock</span>
+      <span style="font-size:22px;font-weight:800">${total.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})} €</span>
+    </div>
+    ${taillesSansPrix.size ? `<div style="font-size:11.5px;color:var(--amber);margin-top:4px">Prix non renseigné, exclu du total : ${[...taillesSansPrix].join(', ')}</div>` : ''}
+    ${formulaireEdition}
+  </div>`;
+}
+
 async function sbCoucheEnsureRow(creche, type, taille) {
   const existant = coucheFind(creche, type, taille);
   if (existant) return existant;
@@ -2506,6 +2606,7 @@ function renderCouches() {
   const box = document.getElementById('couches-grid');
   const alertBox = document.getElementById('couches-alertes');
   if (!box) return;
+  renderCouchesValorisation();
   const crechesAffichees = currentCreche === 'all' ? CRECHES : [currentCreche];
   const since14 = Date.now() - 14 * 24 * 3600 * 1000;
   const alertes = [];
@@ -2535,10 +2636,13 @@ function renderCouches() {
         if (enAlerte) alertes.push({ creche, produit: produit.label, taille, stock, joursRestants });
         const bg = enAlerte ? 'var(--red-lt)' : 'var(--bg)';
         const border = enAlerte ? '2px solid var(--red)' : '1px solid var(--border)';
+        const prixUnit = couchePrixUnitaire(produit.type, taille);
+        const valeurLigne = prixUnit !== null ? (stock * prixUnit).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €' : null;
         html += `<div style="border:${border};background:${bg};border-radius:10px;padding:10px 12px">
           <div style="font-size:11.5px;color:var(--ink3);font-weight:700">Taille ${taille}</div>
           <div style="font-size:24px;font-weight:800;margin:2px 0">${stock}</div>
-          <div style="font-size:11px;color:var(--ink3);margin-bottom:8px">${joursRestants!==null ? joursRestants+' j restants (est.)' : (conso14===0 && stock>0 ? 'pas encore utilisée' : '—')}</div>
+          <div style="font-size:11px;color:var(--ink3)">${joursRestants!==null ? joursRestants+' j restants (est.)' : (conso14===0 && stock>0 ? 'pas encore utilisée' : '—')}</div>
+          <div style="font-size:11px;color:var(--ink3);margin-bottom:8px">${valeurLigne ? valeurLigne+' valorisés' : 'prix non renseigné'}</div>
           <div style="display:flex;gap:6px">
             <button class="btn btn-sm btn-secondary" style="flex:1" onclick="coucheReception('${creche}','${produit.type}','${taille}')">+ Réception</button>
             <button class="btn btn-sm btn-secondary" title="Corriger le stock" onclick="coucheAjuster('${creche}','${produit.type}','${taille}')">✏️</button>
@@ -5088,9 +5192,10 @@ async function syncFromCloud() {
       withTimeout(sbGet('souscats', 'order=id.asc')),
       withTimeout(sbGet('stock_couches')),
       withTimeout(sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500')),
+      withTimeout(sbGet('stock_couches_prix')),
     ]);
 
-    const [artsR, cmdsR, fournsR, histosR, univsR, scR, couchesR, couchesMvtsR] = results;
+    const [artsR, cmdsR, fournsR, histosR, univsR, scR, couchesR, couchesMvtsR, couchesPrixR] = results;
 
     // On ne remplace les données en mémoire QUE si le fetch a réussi
     if (artsR.status === 'fulfilled' && Array.isArray(artsR.value))
@@ -5143,6 +5248,11 @@ async function syncFromCloud() {
       COUCHES_MVTS.splice(0, COUCHES_MVTS.length, ...couchesMvtsR.value.map(rowToCoucheMvt));
     else if (couchesMvtsR.status === 'rejected')
       console.warn('[Sync] stock_couches_mouvements (non-bloquant):', couchesMvtsR.reason?.message);
+
+    if (couchesPrixR.status === 'fulfilled' && Array.isArray(couchesPrixR.value))
+      COUCHES_PRIX.splice(0, COUCHES_PRIX.length, ...couchesPrixR.value.map(rowToCouchePrix));
+    else if (couchesPrixR.status === 'rejected')
+      console.warn('[Sync] stock_couches_prix (non-bloquant):', couchesPrixR.reason?.message);
 
     const savedCreche = currentCreche;
     saveData();
@@ -5340,6 +5450,11 @@ function rowToCoucheMvt(r) {
   return { id: r.id, creche: r.creche, typeCouche: r.type_couche || 'couche', taille: r.taille,
            delta: r.delta, motif: r.motif, createdAt: r.created_at };
 }
+function rowToCouchePrix(r) {
+  return { typeCouche: r.type_couche || 'couche', taille: r.taille,
+           prixUnitaire: r.prix_unitaire != null ? parseFloat(r.prix_unitaire) : null,
+           updatedAt: r.updated_at };
+}
 
 // ── Load all data from Supabase ────────────────────────────────────────────
 
@@ -5353,7 +5468,7 @@ async function loadData() {
   try {
     // Timeout de 30s (Supabase peut mettre jusqu'à 30s à se réveiller après inactivité)
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000));
-    const [arts, cmds, fourns, histos, univs, souscats, config, couches, couchesMvts] = await Promise.race([
+    const [arts, cmds, fourns, histos, univs, souscats, config, couches, couchesMvts, couchesPrix] = await Promise.race([
       Promise.all([
         sbGet('articles'),
         sbGet('commandes'),
@@ -5364,6 +5479,7 @@ async function loadData() {
         sbGet('stock_config', 'order=cle.asc').catch(() => []),
         sbGet('stock_couches').catch(() => []),
         sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500').catch(() => []),
+        sbGet('stock_couches_prix').catch(() => []),
       ]),
       timeout.then(() => { throw new Error('Timeout Supabase'); })
     ]);
@@ -5411,6 +5527,9 @@ async function loadData() {
     }
     if (Array.isArray(couchesMvts)) {
       COUCHES_MVTS.splice(0, COUCHES_MVTS.length, ...couchesMvts.map(rowToCoucheMvt));
+    }
+    if (Array.isArray(couchesPrix)) {
+      COUCHES_PRIX.splice(0, COUCHES_PRIX.length, ...couchesPrix.map(rowToCouchePrix));
     }
 
     const now = new Date();
