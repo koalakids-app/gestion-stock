@@ -2535,30 +2535,46 @@ function renderCouchesValorisation() {
     });
   });
 
-  const formulaireEdition = estDirection ? `
-    <details style="margin-top:8px">
-      <summary style="cursor:pointer;font-size:12px;color:var(--accent);font-weight:600">Modifier les prix d'achat</summary>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px">
-        ${COUCHES_PRODUITS.map(produit => produit.tailles.map(taille => {
-          const prix = couchePrixUnitaire(produit.type, taille);
-          return `<div>
-            <label style="font-size:11px;color:var(--ink3)">${produit.label} T${taille} (€/couche)</label>
-            <input type="number" step="0.001" min="0" id="prix-${produit.type}-${taille}" value="${prix!==null?prix:''}"
-              style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-          </div>`;
-        }).join('')).join('')}
-      </div>
-      <button class="btn btn-sm btn-primary" style="margin-top:8px" onclick="coucheEnregistrerPrix()">Enregistrer les prix</button>
-    </details>` : '';
+  // Le cadre (résumé + formulaire de prix) n'est construit qu'une seule fois.
+  // renderCouches() est appelé très souvent — y compris toutes les 30 s par
+  // la synchro automatique — et régénérer le formulaire à chaque fois
+  // effaçait les <input> en cours de saisie avant même que la direction ait
+  // cliqué sur « Enregistrer ». Seul le résumé (#couches-valeur-resume) est
+  // rafraîchi à chaque appel ; le formulaire, une fois affiché, n'est plus
+  // jamais reconstruit tout seul (il l'est de nouveau après un enregistrement
+  // réussi, où ses valeurs correspondent de toute façon à ce qui vient
+  // d'être tapé).
+  if (!document.getElementById('couches-prix-form')) {
+    const formulaireEdition = estDirection ? `
+      <details id="couches-prix-form" style="margin-top:8px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--accent);font-weight:600">Modifier les prix d'achat</summary>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px">
+          ${COUCHES_PRODUITS.map(produit => produit.tailles.map(taille => {
+            const prix = couchePrixUnitaire(produit.type, taille);
+            return `<div>
+              <label style="font-size:11px;color:var(--ink3)">${produit.label} T${taille} (€/couche)</label>
+              <input type="number" step="0.001" min="0" id="prix-${produit.type}-${taille}" value="${prix!==null?prix:''}"
+                style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>`;
+          }).join('')).join('')}
+        </div>
+        <button class="btn btn-sm btn-primary" style="margin-top:8px" onclick="coucheEnregistrerPrix()">Enregistrer les prix</button>
+      </details>` : '';
 
-  box.innerHTML = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-    <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+    box.innerHTML = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+      <div id="couches-valeur-resume"></div>
+      ${formulaireEdition}
+    </div>`;
+  }
+
+  const resume = document.getElementById('couches-valeur-resume');
+  if (resume) {
+    resume.innerHTML = `<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
       <span style="font-size:12.5px;color:var(--ink3);font-weight:700">💰 Valeur du stock</span>
       <span style="font-size:22px;font-weight:800">${total.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})} €</span>
     </div>
-    ${taillesSansPrix.size ? `<div style="font-size:11.5px;color:var(--amber);margin-top:4px">Prix non renseigné, exclu du total : ${[...taillesSansPrix].join(', ')}</div>` : ''}
-    ${formulaireEdition}
-  </div>`;
+    ${taillesSansPrix.size ? `<div style="font-size:11.5px;color:var(--amber);margin-top:4px">Prix non renseigné, exclu du total : ${[...taillesSansPrix].join(', ')}</div>` : ''}`;
+  }
 }
 
 async function sbCoucheEnsureRow(creche, type, taille) {
@@ -5494,9 +5510,13 @@ async function loadData() {
         sbGet('univers', 'order=id.desc').catch(() => []),
         sbGet('souscats', 'order=id.asc').catch(() => []),
         sbGet('stock_config', 'order=cle.asc').catch(() => []),
-        sbGet('stock_couches').catch(() => []),
-        sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500').catch(() => []),
-        sbGet('stock_couches_prix').catch(() => []),
+        // null (pas []) en cas d'échec : un tableau vide serait ensuite
+        // interprété comme « la base est vide » et effacerait des données
+        // déjà chargées en mémoire (ex. prix saisis) sur une simple erreur
+        // réseau transitoire au rechargement de la page.
+        sbGet('stock_couches').catch(() => null),
+        sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500').catch(() => null),
+        sbGet('stock_couches_prix').catch(() => null),
       ]),
       timeout.then(() => { throw new Error('Timeout Supabase'); })
     ]);
