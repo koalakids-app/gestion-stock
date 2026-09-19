@@ -1895,6 +1895,11 @@ let COUCHES_MVTS = []; // journal des mouvements (500 derniers), pour estimer la
 // par les 6 crèches — saisi une fois par la direction depuis la vraie facture
 // fournisseur, jamais déduit d'un prix public scrapé.
 let COUCHES_PRIX = []; // { typeCouche, taille, prixUnitaire, updatedAt }
+// Effectif actuel par crèche×type×taille (enfants.creche_id/taille_couche/
+// type_couche, enfants encore présents). Sert de repli pour l'estimation
+// « jours restants » tant que l'historique réel de changes est trop maigre
+// pour être fiable (4,5 couches/jour/enfant, une moyenne courante en crèche).
+let COUCHES_EFFECTIF = []; // { creche, typeCouche, taille, count }
 
 // ─── STATE ─────────────────────────────────────────────────────────────
 // ─── PAGINATION ──────────────────────────────────────────────────────────
@@ -2470,6 +2475,15 @@ function couchePrixUnitaire(type, taille) {
   return p ? p.prixUnitaire : null;
 }
 
+// Nombre d'enfants portant actuellement ce type/cette taille dans une crèche
+// (fiche enfant → Protection). Sert de repli pour l'estimation « jours
+// restants » — voir COUCHES_EFFECTIF plus haut.
+function coucheEffectif(creche, type, taille) {
+  const e = COUCHES_EFFECTIF.find(x => x.creche === creche && x.typeCouche === type && x.taille === taille);
+  return e ? e.count : 0;
+}
+const COUCHE_CONSO_PAR_ENFANT_PAR_JOUR = 4.5; // moyenne courante en crèche (4 à 5/jour)
+
 async function coucheEnregistrerPrix() {
   const lignes = [];
   COUCHES_PRODUITS.forEach(produit => {
@@ -2675,18 +2689,37 @@ function renderCouches() {
           m.creche === creche && m.typeCouche === produit.type && m.taille === taille &&
           m.motif === 'change_auto' && new Date(m.createdAt).getTime() >= since14
         ).length;
-        const avgDaily = conso14 / 14;
-        const joursRestants = avgDaily > 0 ? Math.floor(stock / avgDaily) : null;
+        const avgDailyReel = conso14 / 14;
+        // En dessous de ce nombre de changes réels sur 14 jours, la moyenne
+        // extrapole n'importe quoi (ex. 1 change sur la période → des
+        // centaines de « jours restants » affichés). Ça ne se
+        // « réinitialise » pas à une réception, seul l'usage réel (Change
+        // dans le suivi) alimente cette moyenne — en attendant d'avoir assez
+        // d'historique, on retombe sur une estimation à partir du nombre
+        // d'enfants qui portent cette taille (4,5 couches/jour/enfant).
+        const MIN_CHANGES_FIABLE = 5;
+        const effectif = coucheEffectif(creche, produit.type, taille);
+        let joursRestants = null, estimSource = null;
+        if (conso14 >= MIN_CHANGES_FIABLE && avgDailyReel > 0) {
+          joursRestants = Math.floor(stock / avgDailyReel);
+          estimSource = 'reel';
+        } else if (effectif > 0) {
+          joursRestants = Math.floor(stock / (effectif * COUCHE_CONSO_PAR_ENFANT_PAR_JOUR));
+          estimSource = 'effectif';
+        }
         const enAlerte = stock <= 0 || (joursRestants !== null && joursRestants <= seuil);
         if (enAlerte) alertes.push({ creche, produit: produit.label, taille, stock, joursRestants });
         const bg = enAlerte ? 'var(--red-lt)' : 'var(--bg)';
         const border = enAlerte ? '2px solid var(--red)' : '1px solid var(--border)';
         const prixUnit = couchePrixUnitaire(produit.type, taille);
         const valeurLigne = prixUnit !== null ? (stock * prixUnit).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €' : null;
+        const estimTexte = estimSource === 'reel' ? joursRestants + ' j restants (est.)'
+          : estimSource === 'effectif' ? joursRestants + ' j restants (est. ' + effectif + ' enf.×4,5/j)'
+          : (stock > 0 ? 'aucun enfant sur cette taille' : '—');
         html += `<div style="border:${border};background:${bg};border-radius:10px;padding:10px 12px">
           <div style="font-size:11.5px;color:var(--ink3);font-weight:700">Taille ${taille}</div>
           <div style="font-size:24px;font-weight:800;margin:2px 0">${stock}</div>
-          <div style="font-size:11px;color:var(--ink3)">${joursRestants!==null ? joursRestants+' j restants (est.)' : (conso14===0 && stock>0 ? 'pas encore utilisée' : '—')}</div>
+          <div style="font-size:11px;color:var(--ink3)">${estimTexte}</div>
           <div style="font-size:11px;color:var(--ink3);margin-bottom:8px">${valeurLigne ? valeurLigne+' valorisés' : 'prix non renseigné'}</div>
           <div style="display:flex;gap:6px">
             <button class="btn btn-sm btn-secondary" style="flex:1" onclick="coucheReception('${creche}','${produit.type}','${taille}')">+ Réception</button>
@@ -5511,6 +5544,25 @@ function rowToCouchePrix(r) {
            updatedAt: r.updated_at };
 }
 
+// Agrège des lignes `enfants` (creche_id, taille_couche, type_couche) en
+// effectif par crèche×type×taille. SK_CRECHE_NAMES fait la traduction
+// creche_id → nom court (même mapping que pour l'auth), sans avoir à charger
+// la table `creches` dans stock.html.
+function rowsToCouchesEffectif(rows) {
+  const compte = {};
+  (rows || []).forEach(r => {
+    if (!r.taille_couche) return;
+    const creche = (typeof SK_CRECHE_NAMES !== 'undefined' ? SK_CRECHE_NAMES[r.creche_id] : null);
+    if (!creche) return;
+    const cle = creche + '|' + (r.type_couche || 'couche') + '|' + r.taille_couche;
+    compte[cle] = (compte[cle] || 0) + 1;
+  });
+  return Object.entries(compte).map(([cle, count]) => {
+    const [creche, typeCouche, taille] = cle.split('|');
+    return { creche, typeCouche, taille, count };
+  });
+}
+
 // ── Load all data from Supabase ────────────────────────────────────────────
 
 
@@ -5523,7 +5575,7 @@ async function loadData() {
   try {
     // Timeout de 30s (Supabase peut mettre jusqu'à 30s à se réveiller après inactivité)
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000));
-    const [arts, cmds, fourns, histos, univs, souscats, config, couches, couchesMvts, couchesPrix] = await Promise.race([
+    const [arts, cmds, fourns, histos, univs, souscats, config, couches, couchesMvts, couchesPrix, enfantsCouches] = await Promise.race([
       Promise.all([
         sbGet('articles'),
         sbGet('commandes'),
@@ -5539,6 +5591,7 @@ async function loadData() {
         sbGet('stock_couches').catch(() => null),
         sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500').catch(() => null),
         sbGet('stock_couches_prix', 'order=type_couche.asc').catch(() => null),
+        sbGet('enfants', `select=creche_id,taille_couche,type_couche&taille_couche=not.is.null&or=(date_sortie.is.null,date_sortie.gte.${new Date().toISOString().slice(0,10)})`).catch(() => null),
       ]),
       timeout.then(() => { throw new Error('Timeout Supabase'); })
     ]);
@@ -5589,6 +5642,9 @@ async function loadData() {
     }
     if (Array.isArray(couchesPrix)) {
       COUCHES_PRIX.splice(0, COUCHES_PRIX.length, ...couchesPrix.map(rowToCouchePrix));
+    }
+    if (Array.isArray(enfantsCouches)) {
+      COUCHES_EFFECTIF.splice(0, COUCHES_EFFECTIF.length, ...rowsToCouchesEffectif(enfantsCouches));
     }
 
     const now = new Date();
