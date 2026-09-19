@@ -4335,9 +4335,35 @@ function c17CrecheHtml(v){
     if(mine)val=mine.name;
   }
   return '<div class="f" style="margin:0;min-width:180px"><label>Crèche concernée</label>'
-    +'<select id="ff_c17_creche" onchange="c17Touch()"><option value=""></option>'
+    +'<select id="ff_c17_creche" onchange="c17CrecheChanged()"><option value=""></option>'
     +list.map(n=>'<option'+(val===n?' selected':'')+'>'+esc(n)+'</option>').join('')+'</select></div>';
 }
+/* Pré-remplit depuis la fiche d'identité posée dans Paramètres (module
+   etablissements) : mêmes valeurs que le devis, le contrat et le registre de
+   sécurité. Ne touche jamais un champ déjà saisi — la CERFA reste modifiable
+   librement, et changer de crèche ne doit pas écraser une correction faite à
+   la main. */
+function c17PrefillFromEtab(){
+  const nom=(document.getElementById('ff_c17_creche')||{}).value||'';
+  const cr=(CRECHES||[]).find(c=>c.name===nom);
+  if(!cr)return;
+  const et=etabDe(cr.id);
+  const siret=String(et.siret||'').replace(/\s/g,'');
+  const map={
+    a_denom:et.raison_sociale,a_siren:siret?siret.slice(0,9):'',
+    a_email:et.email,a_qualite:et.representant_qualite,a_adresse:et.adresse_siege,
+    b_denom:cr.name,b_siret:siret,c_adresse:cr.addr,c_tel:et.telephone,c_email:et.email
+  };
+  let touche=false;
+  Object.keys(map).forEach(k=>{
+    const v=map[k];
+    if(!v)return;
+    const el=document.getElementById('ff_c17_'+k);
+    if(el&&!el.value){el.value=v;touche=true;}
+  });
+  if(touche)c17Touch();
+}
+function c17CrecheChanged(){c17PrefillFromEtab();c17Touch();}
 
 const C17_CSS=`<style>
 .c17 .c17-head{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;background:#F4F3FB;border:1px solid var(--border,#E7E4F0);border-radius:10px;padding:12px;margin-bottom:10px}
@@ -4502,7 +4528,7 @@ TPL.cerfa_17580={
    </div>`).join('')}
   </div>`;
  },
- mount:()=>{mountSig('gestionnaire');c17Toggle(0);c17Refresh();},
+ mount:()=>{mountSig('gestionnaire');c17Toggle(0);c17PrefillFromEtab();c17Refresh();},
 
  /* Export de secours : le formulaire est redessiné avec jsPDF (Times, cases
     vectorielles). Utilisé seulement si le PDF officiel vierge est introuvable. */
