@@ -574,6 +574,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
       <button class="btn-primary" onclick="openIncidentModal()"><i class="ti ti-plus"></i> Déclarer un incident</button>
     </div>
+    <div class="filters" id="incident-category-filters" style="margin-bottom:8px">
+      <button class="fchip active" onclick="setIncCategory('enfant',this)">👶 Incidents enfants</button>
+      <button class="fchip" onclick="setIncCategory('repas',this)">🍽️ Prestataire repas</button>
+    </div>
     <div class="filters" id="incident-filters">
       <button class="fchip active" onclick="setIncFilter('all',this)">Tous</button>
       <button class="fchip" onclick="setIncFilter('grave',this)">🔴 Grave</button>
@@ -2623,7 +2627,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
-let activeCrecheId=null,activeFilter='all',activeIncFilter='all',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='';
+let activeCrecheId=null,activeFilter='all',activeIncFilter='all',activeIncCategory='enfant',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='';
 let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 let calOnlyMine=(localStorage.getItem('calOnlyMine')==='1');
@@ -4150,11 +4154,14 @@ async function resetPassword(refId){
 const INC_TYPE_LABELS={comportement:'Incident comportemental',materiel:'Incident matériel',securite:'Sécurité des locaux',famille:'Relation avec une famille',repas_corps_etranger:'Repas MCM – Corps étranger (arête, os...)',repas_grammage:'Repas MCM – Grammage insuffisant',repas_livraison:'Repas MCM – Livraison (retard, livreur inadapté...)',autre:'Autre'};
 function toggleIncTypeLibre(){const libre=document.getElementById('inc-type').value==='repas_libre';document.getElementById('inc-type-libre-wrap').style.display=libre?'':'none';}
 function setIncFilter(f,btn){activeIncFilter=f;document.querySelectorAll('#incident-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderIncidents();}
+function isIncRepas(i){return /^repas/i.test(i.type||'')||/^Repas MCM/i.test(i.type||'');}
+function setIncCategory(c,btn){activeIncCategory=c;document.querySelectorAll('#incident-category-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderIncidents();}
 function renderIncidents(){
   const list=document.getElementById('incidents-list');
   const myCrecheId=isDirection?null:currentProfile?.creche_id;
   const filtered=cacheIncidents.filter(i=>{
     if(myCrecheId&&i.creche_id!==myCrecheId)return false;
+    if(activeIncCategory==='repas'&&!isIncRepas(i))return false;if(activeIncCategory==='enfant'&&isIncRepas(i))return false;
     if(activeIncFilter==='grave'&&i.severity!=='grave')return false;if(activeIncFilter==='leger'&&i.severity!=='leger')return false;if(activeIncFilter==='info'&&i.severity!=='info')return false;if(activeIncFilter==='non-traite'&&i.treated)return false;return true;});
   if(!filtered.length){list.innerHTML='<div class="empty-state"><i class="ti ti-shield-check"></i><p>Aucun incident.</p></div>';return;}
   const si={grave:'🔴',leger:'🟠',info:'ℹ️'};
