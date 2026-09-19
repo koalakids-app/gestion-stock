@@ -2249,6 +2249,8 @@ function filterCreche(creche, el) {
   // Filtrer sur une crèche réduit souvent beaucoup la hauteur de la page
   // (ex. Couches, ou un inventaire filtré) : sans remise à zéro, la position
   // de défilement héritée de la vue précédente laisse un grand vide en haut.
+  // Voir showPage() pour l'explication du reset d'overflow.
+  document.body.style.overflow = '';
   window.scrollTo(0, 0);
   if (currentPage === 'inventaire') {
     if (currentInvTab === 'consommable') renderTableConso();
@@ -3556,7 +3558,11 @@ function showPage(page, btn) {
   // Le contenu défile avec la fenêtre (.main n'a pas son propre scroll) : sans
   // ça, changer d'onglet après avoir fait défiler un long tableau (ex.
   // Inventaire) garde la même position et affiche un grand vide en haut
-  // d'un onglet plus court comme Couches.
+  // d'un onglet plus court comme Couches. On libère aussi un éventuel verrou
+  // de scroll oublié par une fenêtre modale (document.body.style.overflow =
+  // 'hidden' posé à l'ouverture, censé être retiré par closeModal()) : sans
+  // ça, scrollTo(0,0) n'a aucun effet, la page restant bloquée.
+  document.body.style.overflow = '';
   window.scrollTo(0, 0);
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
