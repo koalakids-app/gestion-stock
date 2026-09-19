@@ -170,6 +170,10 @@ select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 
     <div style="margin-top:22px;border-top:2px solid var(--line);padding-top:14px">
       <div style="font-family:'Baloo 2',cursive;color:var(--violet);font-size:15px;margin-bottom:10px">Derniers incidents de votre crèche</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button type="button" class="btn btn-s inc-cat-t on" id="incCatEnfantBtn" onclick="setIncCategoryT('enfant',this)" style="flex:1;justify-content:center">👶 Enfants</button>
+        <button type="button" class="btn btn-g inc-cat-t" id="incCatRepasBtn" onclick="setIncCategoryT('repas',this)" style="flex:1;justify-content:center">🍽️ Prestataire repas</button>
+      </div>
       <div id="incidentListT"></div>
     </div>
   </div>
@@ -420,20 +424,30 @@ async function openIncidentPanel(){
   loadIncidentsTerrain();
 }
 function closeIncidentPanel(){document.getElementById('ovIncident').classList.remove('on');}
+let activeIncCategoryT='enfant',LAST_INCIDENTS_T=[];
+function isIncRepasT(i){return /^repas/i.test(i.type||'')||/^Repas MCM/i.test(i.type||'');}
+function setIncCategoryT(c,btn){
+  activeIncCategoryT=c;
+  document.querySelectorAll('.inc-cat-t').forEach(function(b){b.classList.remove('on');b.classList.remove('btn-s');b.classList.add('btn-g');});
+  btn.classList.add('on');btn.classList.remove('btn-g');btn.classList.add('btn-s');
+  renderIncidentsTerrain(LAST_INCIDENTS_T);
+}
 async function loadIncidentsTerrain(){
   const box=document.getElementById('incidentListT');
   box.innerHTML='<div style="color:var(--muted);font-size:13px">Chargement…</div>';
   try{
     const{data,error}=await sb.from('incidents').select('*').eq('creche_id',PROF.creche_id).order('incident_date',{ascending:false}).order('incident_time',{ascending:false}).limit(20);
     if(error)throw error;
-    renderIncidentsTerrain(data||[]);
+    LAST_INCIDENTS_T=data||[];
+    renderIncidentsTerrain(LAST_INCIDENTS_T);
   }catch(e){
     console.error('[loadIncidentsTerrain]',e);
     box.innerHTML='<div class="msg warn" style="font-size:12.5px"><i class="ti ti-alert-triangle"></i> Impossible de charger les incidents.</div>';
   }
 }
-function renderIncidentsTerrain(list){
+function renderIncidentsTerrain(fullList){
   const box=document.getElementById('incidentListT');
+  const list=(fullList||[]).filter(function(i){return activeIncCategoryT==='repas'?isIncRepasT(i):!isIncRepasT(i);});
   if(!list.length){box.innerHTML='<div style="color:var(--muted);font-size:13px">Aucun incident déclaré pour l\'instant.</div>';return;}
   const si={grave:'🔴',leger:'🟠',info:'ℹ️'};
   box.innerHTML=list.map(function(i){
