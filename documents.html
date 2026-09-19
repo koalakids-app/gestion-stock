@@ -405,10 +405,16 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const RESEAU_CFG_ID='00000000-0000-0000-0000-000000000003';
 
 let ME=null,PROF=null,IS_ADMIN=false,IS_DIRECTION=false;
-let CATS=[],DOCS=[],CRECHES=[];
+let CATS=[],DOCS=[],CRECHES=[],ETABS=[],RESEAU={};
 let editDocId=null,fillDoc=null,fillRep=null,ENFANTS=[];
+
+/* Fiche d'identité (SIRET, PMI, coordonnées) posée par parametres.html :
+   la même donnée que le devis et le contrat, pour que l'en-tête du registre
+   de sécurité ne diverge jamais de celle des autres documents sortants. */
+function etabDe(id){return ETABS.find(x=>String(x.creche_id)===String(id))||{};}
 
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600);}
 function close_(id){document.getElementById(id).classList.remove('on');}
@@ -654,13 +660,19 @@ async function doLogout(){await sb.auth.signOut();location.reload();}
 
 /* ---------- LOAD ---------- */
 async function loadAll(){
-  const[c,d,cr,en]=await Promise.all([
+  const[c,d,cr,en,et,rz]=await Promise.all([
     sb.from('doc_categories').select('*').order('ordre'),
     sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
-    sb.from('creches').select('id,name').order('name'),
-    sb.from('enfants').select('id,prenom,nom,creche_id,dob').order('prenom')
+    sb.from('creches').select('id,name,addr').order('name'),
+    sb.from('enfants').select('id,prenom,nom,creche_id,dob').order('prenom'),
+    sb.from('etablissements').select('*'),
+    sb.from('reseau_config').select('config').eq('id',RESEAU_CFG_ID).maybeSingle()
   ]);
   CATS=c.data||[];DOCS=d.data||[];CRECHES=cr.data||[];ENFANTS=en.data||[];
+  // Absence de ligne (script 25a pas exécuté) : le registre de sécurité et les
+  // autres documents retombent alors sur les seules données de `creches`.
+  ETABS=et.data||[];
+  RESEAU=(rz&&rz.data&&rz.data.config)||{};
   const sel=document.getElementById('fCreche');
   sel.innerHTML='<option value="all">Toutes les crèches</option>'+CRECHES.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
   if(PROF&&PROF.role==='referent'&&PROF.creche_id)sel.value=PROF.creche_id;
@@ -6087,6 +6099,7 @@ async function rsPdf(){
   let y=pdfLogo(doc,20);
   const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
   const cr=(CRECHES||[]).find(c=>c.id===RS_CRECHE)||{};
+  const et=etabDe(RS_CRECHE);
   const titre=(t)=>{need(14);doc.setFillColor(74,63,159);doc.rect(14,y-4,W,8,'F');
     doc.setTextColor(255);doc.setFont('helvetica','bold');doc.setFontSize(11);
     doc.text(rsWA(t),16,y+1.5);doc.setTextColor(40);y+=11;};
@@ -6097,8 +6110,11 @@ async function rsPdf(){
   doc.setFont('helvetica','bold');doc.setFontSize(17);doc.setTextColor(74,63,159);
   doc.text(rsWA('Registre de sécurité'),14,y);y+=8;
   doc.setFontSize(12);doc.setTextColor(40);
-  doc.text(rsWA(cr.name||''),14,y);y+=6;
+  doc.text(rsWA(et.raison_sociale||cr.name||''),14,y);y+=6;
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(120);
+  const coord=[cr.addr,et.siret?'SIRET '+et.siret:null,et.pmi_numero?'Agrément PMI '+et.pmi_numero:null]
+    .filter(Boolean).join(' — ');
+  if(coord){doc.text(rsWA(coord),14,y);y+=5;}
   doc.text(rsWA('Article R.143-44 du code de la construction et de l’habitation — ERP type '
     +((RS_ETAB&&RS_ETAB.erp_type)||'R')+', '+((RS_ETAB&&RS_ETAB.erp_categorie)||'5e')+' catégorie'),14,y);y+=5;
   doc.text(rsWA('Édité le '+rsFr(rsToday())+' par '+((PROF&&PROF.name)||'')),14,y);y+=9;
@@ -6182,8 +6198,13 @@ async function rsPdf(){
   doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(120);
   doc.text(doc.splitTextToSize(rsWA('Extrait certifié conforme du registre de sécurité numérique. '
     +'Les écritures sont horodatées et nominatives, conservées de façon inaltérable dans le journal de la structure.'),W),14,y);
+  if(RESEAU.pied_page){
+    y+=6;need(10);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(120);
+    doc.text(doc.splitTextToSize(rsWA(RESEAU.pied_page),W),14,y);
+  }
 
-  pdfSortie(doc,'Registre_securite_'+slug(cr.name||'creche')+'_'+rsToday()+'.pdf');
+  pdfSortie(doc,'Registre_securite_'+slug(et.raison_sociale||cr.name||'creche')+'_'+rsToday()+'.pdf');
 }
 async function rsApercu(){PDF_APERCU=true;try{await rsPdf();}finally{PDF_APERCU=false;}}
 
