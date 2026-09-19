@@ -2538,16 +2538,19 @@ function renderCouchesValorisation() {
     });
   });
 
-  // Le cadre (résumé + formulaire de prix) n'est construit qu'une seule fois.
-  // renderCouches() est appelé très souvent — y compris toutes les 30 s par
-  // la synchro automatique — et régénérer le formulaire à chaque fois
-  // effaçait les <input> en cours de saisie avant même que la direction ait
-  // cliqué sur « Enregistrer ». Seul le résumé (#couches-valeur-resume) est
-  // rafraîchi à chaque appel ; le formulaire, une fois affiché, n'est plus
-  // jamais reconstruit tout seul (il l'est de nouveau après un enregistrement
-  // réussi, où ses valeurs correspondent de toute façon à ce qui vient
-  // d'être tapé).
-  if (!document.getElementById('couches-prix-form')) {
+  // Le formulaire de prix n'est reconstruit que tant qu'il est FERMÉ.
+  // renderCouches() est appelé très souvent — navigation, réception/ajustement
+  // de stock, et toutes les 30 s par la synchro automatique — donc reconstruire
+  // sans condition effaçait les <input> en cours de saisie avant que la
+  // direction ait cliqué sur « Enregistrer ». Mais ne plus JAMAIS le
+  // reconstruire une fois créé (première version de ce correctif) a son
+  // propre piège : si la page affiche l'onglet Couches avant que
+  // stock_couches_prix ait fini de charger, le formulaire se fige vide pour
+  // le reste de la session, même une fois les prix arrivés. Se baser sur
+  // l'état ouvert/fermé du <details> couvre les deux cas : fermé (personne
+  // n'édite), toujours sûr de rafraîchir ; ouvert, on ne touche à rien.
+  const formExistant = document.getElementById('couches-prix-form');
+  if (!formExistant || !formExistant.open) {
     const formulaireEdition = estDirection ? `
       <details id="couches-prix-form" style="margin-top:8px">
         <summary style="cursor:pointer;font-size:12px;color:var(--accent);font-weight:600">Modifier les prix d'achat</summary>
