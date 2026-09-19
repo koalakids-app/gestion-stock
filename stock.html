@@ -2476,18 +2476,35 @@ async function coucheEnregistrerPrix() {
     for (const l of lignes) {
       const existant = COUCHES_PRIX.find(x => x.typeCouche === l.type && x.taille === l.taille);
       if (existant && existant.prixUnitaire === l.prix) continue; // rien à faire
-      const payload = { type_couche: l.type, taille: l.taille, prix_unitaire: l.prix, updated_at: new Date().toISOString() };
+      const nowIso = new Date().toISOString();
+      let r;
       if (existant) {
-        await sbFetchAuth(`${SUPA_URL}/rest/v1/stock_couches_prix?type_couche=eq.${l.type}&taille=eq.${l.taille}`, {
-          method: 'PATCH', headers: SUPA_HEADERS, body: JSON.stringify({ prix_unitaire: l.prix, updated_at: payload.updated_at }),
+        r = await sbFetchAuth(`${SUPA_URL}/rest/v1/stock_couches_prix?type_couche=eq.${l.type}&taille=eq.${l.taille}`, {
+          method: 'PATCH',
+          headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' },
+          body: JSON.stringify({ prix_unitaire: l.prix, updated_at: nowIso }),
         });
-        existant.prixUnitaire = l.prix;
       } else {
-        await sbFetchAuth(`${SUPA_URL}/rest/v1/stock_couches_prix`, {
-          method: 'POST', headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' }, body: JSON.stringify(payload),
+        r = await sbFetchAuth(`${SUPA_URL}/rest/v1/stock_couches_prix`, {
+          method: 'POST',
+          headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' },
+          body: JSON.stringify({ type_couche: l.type, taille: l.taille, prix_unitaire: l.prix, updated_at: nowIso }),
         });
-        COUCHES_PRIX.push({ typeCouche: l.type, taille: l.taille, prixUnitaire: l.prix, updatedAt: payload.updated_at });
       }
+      // Une policy RLS qui refuse l'écriture ne renvoie pas d'erreur HTTP :
+      // PostgREST répond 200/201 avec un tableau vide (0 ligne touchée). Sans
+      // cette vérification, l'app affichait « enregistré » alors que rien
+      // n'était écrit — corrigé sur ce nouveau stock synchronisé 30s après.
+      if (!r.ok) {
+        const body = await r.text().catch(() => '');
+        throw new Error(`${l.type} T${l.taille} : ${r.status} — ${body}`);
+      }
+      const rows = await r.json();
+      if (!Array.isArray(rows) || rows.length === 0) {
+        throw new Error(`${l.type} T${l.taille} : écriture refusée par la base (compte direction requis).`);
+      }
+      if (existant) existant.prixUnitaire = l.prix;
+      else COUCHES_PRIX.push(rowToCouchePrix(rows[0]));
     }
     renderCouches();
     showNotif('✅ Prix d’achat enregistrés.');
