@@ -1842,11 +1842,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="thread-orig" style="margin-top:10px"></div>
     <div id="thread-messages" style="flex:1;overflow-y:auto;margin-top:12px;padding-right:4px;min-height:60px"></div>
     <div style="margin-top:10px;border-top:1px solid #eee;padding-top:10px">
+      <div id="thread-draft-note" style="display:none;font-size:12px;color:#92400E;background:#FEF3C7;border-radius:8px;padding:6px 10px;margin-bottom:6px"><i class="ti ti-file-pencil"></i> Brouillon repris · <a href="#" onclick="deleteMessageBrouillon();return false;" style="color:#92400E;font-weight:600">Supprimer le brouillon</a></div>
       <textarea class="finput" id="thread-input" rows="2" placeholder="Écrire une réponse…" style="resize:vertical"></textarea>
       <input type="file" id="thread-attach-input" style="display:none" onchange="threadHandleAttachment(event)"/>
       <div id="thread-attach-status" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
       <div class="mactions" style="margin-top:8px">
         <button class="btn-cancel" onclick="document.getElementById('thread-attach-input').click()" title="Joindre un fichier"><i class="ti ti-paperclip"></i></button>
+        <button class="btn-cancel" id="btn-draft-msg" onclick="saveMessageBrouillon()" title="Garder cette réponse pour plus tard"><i class="ti ti-file-pencil"></i> Brouillon</button>
         <button class="btn-primary" id="btn-send-msg" onclick="sendThreadMessage()"><i class="ti ti-send"></i> Envoyer</button>
       </div>
     </div>
@@ -2729,6 +2731,8 @@ async function loadAllData(){
   try{cacheConsigneBrouillons=await dbSelect('consignes_brouillons');}catch(e){cacheConsigneBrouillons=[];}
   // Brouillons de demandes (table sql/demandes_brouillons.sql) — non bloquant, la RLS ne renvoie que les miens
   try{cacheDemandeBrouillons=await dbSelect('demandes_brouillons');}catch(e){cacheDemandeBrouillons=[];}
+  // Brouillons de messages d'un fil (table sql/messages_brouillons.sql) — non bloquant, la RLS ne renvoie que les miens
+  try{cacheMessageBrouillons=await dbSelect('messages_brouillons');}catch(e){cacheMessageBrouillons=[];}
   // Annuaire des partenaires/institutions — table posée par sql/partenaires.sql,
   // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
   try{cachePartenaires=await dbSelect('partenaires');}catch(e){console.warn('[loadAllData] partenaires',e);cachePartenaires=[];}
@@ -2965,7 +2969,7 @@ window.syncDemarrer=syncDemarrer;
    ne le signale à l'écran. On nomme donc explicitement la colonne de tri des
    tables qui font exception, et un 42703 déclenche un second essai sans tri
    plutôt que de perdre les données. */
-const DB_ORDER_COL={consignes_lues:'lu_at',consignes_brouillons:'updated_at',demandes_brouillons:'updated_at'};
+const DB_ORDER_COL={consignes_lues:'lu_at',consignes_brouillons:'updated_at',demandes_brouillons:'updated_at',messages_brouillons:'updated_at'};
 async function dbSelect(table,filters={}){
   const col=DB_ORDER_COL[table]||'created_at';
   const build=function(orderCol){
@@ -3575,7 +3579,7 @@ function renderDemandsOnly(){
       const crecheBadge=crecheLabel?'<span class="badge" style="background:#f0f0ff;color:var(--koala)"><i class="ti ti-building" style="font-size:10px"></i> '+hl(crecheLabel)+'</span>':(d.to_referent_id?'<span class="badge" style="background:#F0EDE8;color:#666"><i class="ti ti-arrow-right" style="font-size:10px"></i> Message direct</span>':'');
       const canToggle=isDirection||(d.to_referent_id&&d.to_referent_id===currentProfile?.id);
       const msgCount=cacheMessages.filter(m=>m.demande_id===d.id).length;
-      const threadBadge='<span class="badge badge-thread" onclick="openThread(\''+d.id+'\')"><i class="ti ti-message-2" style="font-size:11px"></i> '+(msgCount>0?msgCount+' réponse'+(msgCount>1?'s':''):'Discuter')+'</span>';
+      const threadBadge='<span class="badge badge-thread" onclick="openThread(\''+d.id+'\')"><i class="ti ti-message-2" style="font-size:11px"></i> '+(msgCount>0?msgCount+' réponse'+(msgCount>1?'s':''):'Discuter')+'</span>'+(cacheMessageBrouillons.some(b=>b.demande_id===d.id)?'<span class="badge" style="background:#FEF3C7;color:#92400E;cursor:pointer;margin-left:4px" title="Réponse préparée, non envoyée" onclick="openThread(\''+d.id+'\')"><i class="ti ti-file-pencil" style="font-size:11px"></i> Brouillon</span>':'');
       html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+msgAttachmentHtml(d.attachment_url,d.attachment_name)+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+threadBadge+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
     });
   }
@@ -3829,6 +3833,16 @@ function openThread(demandId){
   threadPendingAttachment=null;
   document.getElementById('thread-attach-input').value='';
   document.getElementById('thread-attach-status').textContent='';
+  // Réponse préparée plus tôt pour ce fil : on la remet dans la zone de saisie.
+  const bd=msgBrouillonDe(demandId);
+  document.getElementById('thread-draft-note').style.display=bd?'block':'none';
+  if(bd){
+    document.getElementById('thread-input').value=bd.body||'';
+    if(bd.attachment_url){
+      threadPendingAttachment={url:bd.attachment_url,name:bd.attachment_name};
+      document.getElementById('thread-attach-status').textContent='📎 '+(bd.attachment_name||'Pièce jointe');
+    }
+  }
   renderThread();
   document.getElementById('modal-thread-wrap').classList.add('open');
   setTimeout(()=>document.getElementById('thread-input').focus(),100);
@@ -3844,6 +3858,44 @@ function renderThread(){
   }).join('');
   box.scrollTop=box.scrollHeight;
 }
+/* Brouillons de messages : une réponse préparée par fil et par personne, gardée dans
+   `messages_brouillons` (sql/messages_brouillons.sql), lisible par son seul auteur.
+   Reprise automatique à la réouverture du fil ; pastille « Brouillon » sur la demande. */
+let cacheMessageBrouillons=[];
+function msgBrouillonDe(demandeId){return cacheMessageBrouillons.find(b=>b.demande_id===demandeId)||null;}
+async function saveMessageBrouillon(){
+  const body=document.getElementById('thread-input').value.trim();
+  if((!body&&!threadPendingAttachment)||!currentThreadId){alert("Écrivez d'abord un message à garder en brouillon.");return;}
+  const btn=document.getElementById('btn-draft-msg');btn.disabled=true;
+  const row={body:body||null,attachment_url:threadPendingAttachment?.url||null,attachment_name:threadPendingAttachment?.name||null,updated_at:new Date().toISOString()};
+  const existant=msgBrouillonDe(currentThreadId);
+  let ok=false;
+  if(existant){
+    ok=await dbUpdate('messages_brouillons',existant.id,row);
+    if(ok)cacheMessageBrouillons=cacheMessageBrouillons.map(b=>b.id===existant.id?Object.assign({},b,row):b);
+  }else{
+    const saved=await dbInsert('messages_brouillons',Object.assign({demande_id:currentThreadId,created_by:currentUser.id},row));
+    if(saved){ok=true;cacheMessageBrouillons.push(saved);}
+  }
+  btn.disabled=false;
+  if(!ok){showBanner('Brouillon non enregistré'+(window._lastDbError?' : '+window._lastDbError:'')+'. La table messages_brouillons existe-t-elle ?','error');return;}
+  closeModal('modal-thread-wrap');
+  showBanner('Brouillon enregistré');
+  renderDemandsOnly();
+}
+async function deleteMessageBrouillon(){
+  const bd=msgBrouillonDe(currentThreadId);
+  if(!bd)return;
+  if(!confirm('Supprimer ce brouillon ?'))return;
+  if(!await dbDeleteStrict('messages_brouillons',bd.id)){showBanner('Suppression impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
+  cacheMessageBrouillons=cacheMessageBrouillons.filter(b=>b.id!==bd.id);
+  document.getElementById('thread-input').value='';
+  threadPendingAttachment=null;
+  document.getElementById('thread-attach-input').value='';
+  document.getElementById('thread-attach-status').textContent='';
+  document.getElementById('thread-draft-note').style.display='none';
+  renderDemandsOnly();
+}
 async function sendThreadMessage(){
   const inp=document.getElementById('thread-input');const body=inp.value.trim();
   if((!body&&!threadPendingAttachment)||!currentThreadId)return;
@@ -3852,6 +3904,13 @@ async function sendThreadMessage(){
   const saved=await dbInsert('messages',row);
   if(saved){
     cacheMessages.push(saved);inp.value='';
+    // Le brouillon de ce fil a rempli son rôle : on le retire.
+    const bd=msgBrouillonDe(currentThreadId);
+    if(bd){
+      await dbDelete('messages_brouillons',bd.id);
+      cacheMessageBrouillons=cacheMessageBrouillons.filter(b=>b.id!==bd.id);
+      document.getElementById('thread-draft-note').style.display='none';
+    }
     threadPendingAttachment=null;
     document.getElementById('thread-attach-input').value='';
     document.getElementById('thread-attach-status').textContent='';
