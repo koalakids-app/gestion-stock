@@ -519,6 +519,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="mnav-hub-col">
             <div class="mnav-hub-title">Suivi</div>
             <button class="mnav-hub-item david-only" onclick="showMain('afaire');closeHub()" id="mnav-afaire" style="display:none"><i class="ti ti-checklist"></i> À faire</button>
+            <button class="mnav-hub-item" onclick="showMain('notes');closeHub()" id="mnav-notes"><i class="ti ti-notes"></i> Notes</button>
             <button class="mnav-hub-item direction-only" onclick="showMain('actions');closeHub()" id="mnav-actions"><i class="ti ti-target-arrow"></i> Actions</button>
             <button class="mnav-hub-item" onclick="showMain('incidents');closeHub()" id="mnav-incidents"><i class="ti ti-alert-triangle"></i> Incidents <span class="mnav-badge" id="badge-incidents" style="display:none">0</span></button>
             <button class="mnav-hub-item" onclick="showMain('enfants');closeHub()" id="mnav-enfants"><i class="ti ti-mood-kid"></i> Enfants</button>
@@ -1190,6 +1191,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="af-events-day" style="margin-bottom:12px"></div>
     <div id="af-creche-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
     <div id="af-list" style="display:flex;flex-direction:column;gap:10px"></div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       NOTES / PENSE-BÊTE
+       Prise de notes libres, sans date ni priorité : pour se rappeler des
+       choses sans que ce soit une tâche à cocher.
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="main-notes" class="tab-content">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-title"><i class="ti ti-notes" style="color:var(--koala)"></i> Notes</span>
+      </div>
+    </div>
+
+    <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px">
+      <input class="finput" id="note-new-titre" type="text" placeholder="Titre (facultatif)" autocomplete="off"/>
+      <textarea class="finput" id="note-new-contenu" rows="2" placeholder="Écrire une note…" style="resize:vertical"></textarea>
+      <button class="btn-primary" style="align-self:flex-start" onclick="noteAdd()"><i class="ti ti-plus"></i> Ajouter</button>
+    </div>
+
+    <div id="note-list" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════
@@ -2811,7 +2833,7 @@ function fermetureLabel(f){
    une saisie en cours — la synchro est alors reportée à sa fermeture), jamais en
    arrière-plan, et jamais deux rechargements coup sur coup.
    ═════════════════════════════════════════════════════════════════════════ */
-const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','employes','planning','planning_equipe','enfants_contrats','taches_afaire','commandes_repas','actions_direction','reunions_direction','partenaires'];
+const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','employes','planning','planning_equipe','enfants_contrats','taches_afaire','notes_libres','commandes_repas','actions_direction','reunions_direction','partenaires'];
 const SYNC_PERIODE_MS=60000;   // rappel périodique quand l'onglet est visible
 const SYNC_MIN_MS=10000;       // anti-rafale entre deux rechargements
 let _mainCourant=null,_syncDernier=0,_syncEnCours=false,_syncEnAttente=false,
@@ -2863,6 +2885,7 @@ function syncRedessine(){
     else if(t==='vaccinations'&&typeof vacRender==='function')vacRender();
     else if(t==='enfants'&&typeof enfRender==='function')enfRender();
     else if(t==='afaire'&&typeof afRender==='function')afRender();
+    else if(t==='notes'&&typeof noteRender==='function')noteRender();
     else if(t==='actions'&&typeof adLoad==='function')adLoad();
     else if(t==='partenaires'&&typeof renderPartenaires==='function')renderPartenaires();
   }catch(err){console.warn('[Sync] redessin '+t,err);}
@@ -3478,7 +3501,7 @@ async function markConsignesRead(){
 
 function showMain(tab){
   _mainCourant=tab;
-  ['demands','incidents','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','actions','stagiaires','partenaires'].forEach(t=>{
+  ['demands','incidents','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','notes','actions','stagiaires','partenaires'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -3503,6 +3526,7 @@ function showMain(tab){
   if(tab==='vaccinations')vacInit();
   if(tab==='enfants')enfInit();
   if(tab==='afaire')afInit();
+  if(tab==='notes')noteInit();
   if(tab==='actions'){if(isDirection)adInit();else showMain('ref-dashboard');}
   if(tab==='stagiaires')stgInit();
   if(tab==='partenaires')renderPartenaires();
@@ -10039,6 +10063,7 @@ annexes: `
 <script src="js/vaccinations.js"></script>
 <script src="js/enfants.js"></script>
 <script src="js/afaire.js"></script>
+<script src="js/notes.js"></script>
 
 <!-- Modal fiche vaccins enfant -->
 <div class="overlay" id="modal-vac-fiche-wrap">
