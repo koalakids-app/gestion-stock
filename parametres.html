@@ -65,6 +65,16 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .kiosk-badge.on{background:var(--green-l);color:var(--green)}
 .kiosk-badge.off{background:#F1EFF7;color:var(--muted)}
 .kiosk-acts{display:flex;gap:6px;flex-wrap:wrap}
+.ferm-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.ferm-row:last-child{border-bottom:none}
+.ferm-badge{font-size:11px;font-weight:800;border-radius:20px;padding:3px 9px;white-space:nowrap}
+.ferm-badge.vacances{background:var(--violet-l);color:var(--violet)}
+.ferm-badge.ferie{background:var(--orange-l);color:var(--orange)}
+.ferm-badge.pedagogique{background:var(--green-l);color:var(--green)}
+.ferm-info{flex:1;min-width:0}
+.ferm-dates{font-weight:800;font-size:13.5px}
+.ferm-label{font-size:11.5px;color:var(--muted)}
+.ferm-empty{font-size:12.5px;color:var(--muted);padding:6px 0}
 .ov{position:fixed;inset:0;background:rgba(43,39,64,.45);display:none;align-items:flex-start;justify-content:center;padding:20px;z-index:100;overflow-y:auto}
 .ov.on{display:flex}
 .modal{background:#fff;border-radius:20px;width:100%;max-width:380px;padding:20px;margin:auto}
@@ -197,6 +207,24 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         </div>
         <p class="hint" id="hSem"></p>
         <div class="f"><label class="lb">Observations</label><textarea id="eObs" placeholder="Usage interne."></textarea></div>
+
+        <label class="lb" style="margin-top:6px">Jours de fermeture</label>
+        <p class="hint">Vacances, jours fériés propres à la crèche, journées pédagogiques… Ce calendrier
+          s'ajoute aux fermetures hebdomadaires ci-dessus.</p>
+        <div id="fermList"></div>
+        <div class="g3" style="align-items:end">
+          <div class="f"><label class="lb">Type</label>
+            <select id="fermType">
+              <option value="vacances">Vacances</option>
+              <option value="ferie">Jour férié</option>
+              <option value="pedagogique">Journée pédagogique</option>
+            </select>
+          </div>
+          <div class="f"><label class="lb">Du</label><input id="fermDebut" type="date"></div>
+          <div class="f"><label class="lb">Au (facultatif)</label><input id="fermFin" type="date"></div>
+        </div>
+        <div class="f"><label class="lb">Libellé (facultatif)</label><input id="fermLabel" placeholder="Fermeture d'été, pont de l'Ascension…"></div>
+        <button type="button" class="btn btn-s btn-sm" onclick="fermAdd()"><i class="ti ti-plus"></i> Ajouter cette fermeture</button>
       </div>
 
       <div class="card">
@@ -304,6 +332,8 @@ let ME=null,PROF=null;
 let CRECHES=[],ETABS=[],RCFG={},KIOSK_DEVICES=[];
 let crecheId=null;
 const JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi'],[6,'Samedi']];
+const FERM_TYPES={vacances:'Vacances',ferie:'Jour férié',pedagogique:'Journée pédagogique'};
+let FERMETURES=[];
 
 function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -566,7 +596,8 @@ function snapshot(){
   return ['cName','cAddr','cCap','eRaison','eForme','eSiret','eApe','eSiege','eRepNom','eRepQual',
     'eTel','eMail','ePmiNum','ePmiDate','ePmiEch','eAgeMin','eAgeMax','eHo','eHf',
     'eSemFerm','eSemFact','eObs'].map(val).join('|')
-    +'|'+[...document.querySelectorAll('.ckJour:checked')].map(x=>x.value).join(',');
+    +'|'+[...document.querySelectorAll('.ckJour:checked')].map(x=>x.value).join(',')
+    +'|'+JSON.stringify(FERMETURES);
 }
 function dirty(){return SNAP!==''&&SNAP!==snapshot();}
 
@@ -589,6 +620,9 @@ function renderEtab(){
   document.getElementById('eJours').innerHTML=JOURS.map(j=>
     '<label><input type="checkbox" class="ckJour" value="'+j[0]+'"'
     +(jrs.indexOf(j[0])>=0?' checked':'')+'><span>'+j[1]+'</span></label>').join('');
+
+  FERMETURES=toArr(e.jours_fermeture).slice();
+  renderFermetures();
 
   syncSiret();syncCap();syncPmi();syncSem();syncIdentite();
   document.getElementById('statut').textContent=etabDe(crecheId)
@@ -879,6 +913,34 @@ function syncSem(depuisFact){
   h.textContent='Les devis de cette crèche mensualiseront sur '+f+' semaines : montant hebdomadaire × '+f+' ÷ 12.';
 }
 
+/* ---------- JOURS DE FERMETURE ---------- */
+function fermDfr(d){return dfr(d);}
+function renderFermetures(){
+  const box=document.getElementById('fermList');
+  if(!FERMETURES.length){box.innerHTML='<p class="ferm-empty">Aucune fermeture particulière enregistrée.</p>';return;}
+  const tri=FERMETURES.map((f,i)=>({f,i})).sort((a,b)=>String(a.f.debut||'').localeCompare(String(b.f.debut||'')));
+  box.innerHTML=tri.map(({f,i})=>{
+    const dates=f.fin&&f.fin!==f.debut?(fermDfr(f.debut)+' → '+fermDfr(f.fin)):fermDfr(f.debut);
+    const type=FERM_TYPES[f.type]||f.type||'';
+    return '<div class="ferm-row">'
+      +'<span class="ferm-badge '+esc(f.type||'')+'">'+esc(type)+'</span>'
+      +'<div class="ferm-info"><div class="ferm-dates">'+esc(dates)+'</div>'
+      +(f.label?'<div class="ferm-label">'+esc(f.label)+'</div>':'')+'</div>'
+      +'<button type="button" class="btn btn-g btn-sm" onclick="fermRemove('+i+')"><i class="ti ti-trash"></i></button>'
+      +'</div>';
+  }).join('');
+}
+function fermAdd(){
+  const debut=val('fermDebut');
+  if(!debut){toast('Indiquez au moins une date de début.',true);return;}
+  let fin=val('fermFin')||debut;
+  if(fin<debut){toast('La date de fin ne peut pas précéder la date de début.',true);return;}
+  FERMETURES.push({type:val('fermType')||'vacances',debut,fin,label:val('fermLabel')});
+  setVal('fermDebut','');setVal('fermFin','');setVal('fermLabel','');
+  renderFermetures();
+}
+function fermRemove(i){FERMETURES.splice(i,1);renderFermetures();}
+
 /* ---------- ENREGISTREMENT ---------- */
 async function save(){
   const btn=document.getElementById('btnSave');
@@ -936,6 +998,7 @@ async function save(){
       heure_ouverture:val('eHo'),heure_fermeture:val('eHf'),
       semaines_fermeture:semFerm!=null?semFerm:5,
       semaines_facturees:semFact!=null?semFact:47,
+      jours_fermeture:FERMETURES,
       observations:val('eObs'),
       updated_at:new Date().toISOString()
     };
