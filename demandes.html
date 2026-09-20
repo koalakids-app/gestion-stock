@@ -619,6 +619,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="module-tabs" style="margin-top:2px">
       <button class="module-tab active" onclick="showPresenceTab('gantt',this)"><i class="ti ti-clock"></i> Jour</button>
       <button class="module-tab" onclick="showPresenceTab('hebdo',this)"><i class="ti ti-calendar-week"></i> Semaine</button>
+      <button class="module-tab" onclick="showPresenceTab('mois',this)"><i class="ti ti-calendar-stats"></i> Mois</button>
     </div>
     <div id="presence-gantt" class="module-tab-content active">
       <div id="presence-gantt-view"></div>
@@ -638,6 +639,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
       </div>
       <div id="presence-hebdo-view"></div>
+      <div id="hebdo-reel-view"></div>
+    </div>
+    <div id="presence-mois" class="module-tab-content">
+      <div id="presence-mois-view"></div>
     </div>
   </div>
 
@@ -4569,12 +4574,13 @@ function initPresenceDate(){
 function showPresenceTab(tab,btn){document.querySelectorAll('#main-presence .module-tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('#main-presence .module-tab-content').forEach(c=>c.classList.remove('active'));btn.classList.add('active');document.getElementById('presence-'+tab).classList.add('active');currentPresenceSlot=tab;presMajBarre();renderPresence();}
 // N'affiche que les commandes utiles à l'onglet courant.
 function presMajBarre(){
-  const jour=currentPresenceSlot!=='hebdo';
+  const jour=currentPresenceSlot==='gantt';
   document.querySelectorAll('#main-presence .pres-jour-only')
     .forEach(el=>el.classList.toggle('pres-masque',!jour));
 }
 async function renderPresence(){
-  if(currentPresenceSlot==='hebdo'){await renderPresenceHebdo();return;}
+  if(currentPresenceSlot==='hebdo'){await renderPresenceHebdo();prRenderSemaine();return;}
+  if(currentPresenceSlot==='mois'){await renderPresenceMois();return;}
   await renderPresenceGantt();
 }
 async function setPresence(enfantId,slot,dateStr,status){
@@ -4778,12 +4784,16 @@ async function renderPresenceGantt(){
     presAfficherDatesProches(crecheId,dateStr);
     return;
   }
+  // Dur\u00e9e r\u00e9elle / forfait \u00ab non point\u00e9 \u00bb (js/presences-reel.js)
+  const pr=await prCharger(enfants,dateStr,dateStr);
+  const DUR_W=112;
   // En-t\u00eate heures
   let hdrHtml='<div style="display:flex;align-items:center;border-bottom:2px solid var(--koala);margin-bottom:4px">';
   hdrHtml+='<div style="position:sticky;left:0;z-index:3;background:#fff;width:'+(NAME_W+30)+'px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--koala);padding-right:8px;text-align:right">'+presents.length+'\u00a0/\u00a0'+enfants.length+'</div>';
   for(let h=H_START;h<H_END;h++){
     hdrHtml+='<div style="width:'+(COL_W*2)+'px;flex-shrink:0;font-size:10px;font-weight:600;color:var(--muted);text-align:left;border-left:1px solid #e0dff0;padding-left:2px">'+h+'h</div>';
   }
+  hdrHtml+='<div style="width:'+DUR_W+'px;flex-shrink:0;font-size:10px;font-weight:600;color:var(--muted);text-align:right;padding-right:8px">Durée réelle</div>';
   hdrHtml+='</div>';
   // Lignes enfants
   let rowsHtml='';
@@ -4812,11 +4822,14 @@ async function renderPresenceGantt(){
     // Vert = pointé réellement (tablette/kiosque), violet = présence cochée à la main.
     const pointe=!!p.pointe;
     const barColor=pointe?'var(--green)':'var(--koala)';
+    // Barres plus douces : fond pastel + fine bordure + texte foncé (le rond garde la couleur pleine).
+    const _soft=pointe?{bg:'#c5ead6',bd:'#9fd6bb',tx:'#1f5c42'}:{bg:'#d6d2f5',bd:'#b9b3ec',tx:'#3a3380'};
+    const _hm=function(t){const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));return m?(parseInt(m[1],10)+'h'+(m[2]==='00'?'':m[2])):'';};
     const segments=[];
-    if(cA!==null&&cB!==null&&cB>cA)segments.push({start:cA,end:cB,color:barColor});
-    else if(hasM&&hasA)segments.push({start:0,end:COLS,color:barColor});
-    else if(hasM)segments.push({start:0,end:12,color:barColor});
-    else if(hasA)segments.push({start:12,end:COLS,color:barColor});
+    if(cA!==null&&cB!==null&&cB>cA)segments.push({start:cA,end:cB,color:barColor,soft:_soft,lbl:(p.hd&&p.hf)?[_hm(p.hd),_hm(p.hf)]:null});
+    else if(hasM&&hasA)segments.push({start:0,end:COLS,color:barColor,soft:_soft});
+    else if(hasM)segments.push({start:0,end:12,color:barColor,soft:_soft});
+    else if(hasA)segments.push({start:12,end:COLS,color:barColor,soft:_soft});
     /* Quand un pointage réel (tablette) existe pour ce jour, on affiche DEUX barres :
        - au premier plan, l'horaire réellement pointé (pointages.horodatage) ;
        - en arrière-plan (plus fine, teintée), l'horaire du contrat, pour comparer
@@ -4832,7 +4845,18 @@ async function renderPresenceGantt(){
       const enCours=!pt.fin;
       const ptBcol=pt.fin?_col(pt.fin,true):(dateStr===todayStr()?(function(){const now=new Date();const mn=(now.getHours()-H_START)*60+now.getMinutes();return Math.max(0,Math.min(COLS,Math.round(mn/30)));})():COLS);
       segments.length=0; // le pointage réel remplace le repli « ancien style »
-      if(ptA!==null&&ptBcol>ptA)segments.push({start:ptA,end:ptBcol,color:'var(--green)',ouvert:enCours});
+      if(ptA!==null&&ptBcol>ptA)segments.push({start:ptA,end:ptBcol,color:'var(--green)',ouvert:enCours,soft:{bg:'#c5ead6',bd:'#9fd6bb',tx:'#1f5c42'},lbl:[_hm(pt.debut),pt.fin?_hm(pt.fin):'en cours']});
+    }
+    /* Forfait : une barre « non pointé » orange remplace la barre cochée à la main
+       (le contrat en fond garde l'horaire prévu) ; un départ oublié colore la barre pointée. */
+    const rr=pr.calc.get(e.id+'|'+dateStr);
+    const _orange={bg:'#fbd9bd',bd:'#f3bb8f',tx:'#7a3d0c'};
+    if(rr&&(rr.statut==='non_pointe'||rr.statut==='absence_carence')&&!absent){
+      const oA=cA!==null?cA:0,oB=(cB!==null&&cB>oA)?cB:COLS;
+      segments.length=0;
+      segments.push({start:oA,end:oB,color:'var(--orange)',soft:_orange,lbl:['Non pointé','forfait']});
+    }else if(rr&&rr.statut==='depart_manquant'&&segments.length){
+      segments.forEach(function(sg){sg.soft=_orange;sg.ouvert=false;sg.lbl=[_hm(pt&&pt.debut),'départ oublié'];});
     }
     const horsJour=!ctMap[String(e.id)];
     // Une ligne « hors contrat » se voit sans avoir à chercher : fond teinté,
@@ -4847,7 +4871,7 @@ async function renderPresenceGantt(){
     rowsHtml+='<div onclick="enfOpenFiche(\''+e.id+'\')" style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--koala)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="Ouvrir le dossier de '+escHtml(e.prenom+' '+e.nom)+(e.dob?'':' (date de naissance manquante)')+'">'+escHtml(e.prenom+' '+e.nom)+(horsJour?' <span style="display:inline-flex;align-items:center;gap:2px;background:var(--orange);color:#fff;font-size:9.5px;font-weight:800;border-radius:8px;padding:1.5px 6px;margin-left:4px;vertical-align:middle" title="Aucun contrat ce jour de la semaine"><i class="ti ti-alert-triangle" style="font-size:10px"></i> Hors contrat</span>':'')+(e.dob?'':' <span style=\"color:var(--red);font-size:10px\">⚠</span>')+'</div>';
     rowsHtml+='</div>';
     // Barre Gantt
-    rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:22px;border-left:1px solid #e0dff0">';
+    rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:44px;border-left:1px solid #e0dff0">';
     // Lignes verticales des heures
     for(let c=0;c<COLS;c+=2){
       rowsHtml+='<div style="position:absolute;left:'+(c*COL_W)+'px;top:0;bottom:0;border-left:1px solid '+(c===0?'transparent':'#ece9f5')+';pointer-events:none"></div>';
@@ -4855,26 +4879,29 @@ async function renderPresenceGantt(){
     // Bande 12h (s\u00e9parateur matin/apm)
     rowsHtml+='<div style="position:absolute;left:'+(12*COL_W)+'px;top:0;bottom:0;border-left:1px dashed #b0a8d8;pointer-events:none"></div>';
     if(absent){
-      rowsHtml+='<div style="position:absolute;left:4px;right:4px;top:7px;height:8px;background:#f0eef8;border-radius:4px"></div>';
+      rowsHtml+='<div style="position:absolute;left:4px;right:4px;top:17px;height:10px;background:#f0eef8;border-radius:5px"></div>';
     }else{
       // Arrière-plan : horaire de contrat, seulement quand une barre de pointage réel est affichée par-dessus.
       bgCtSegments.forEach(seg=>{
         const left=seg.start*COL_W;const width=(seg.end-seg.start)*COL_W-2;
-        rowsHtml+='<div title="Horaire de contrat : '+escHtml((ct&&ct.heure_debut)||'')+'–'+escHtml((ct&&ct.heure_fin)||'')+'" style="position:absolute;left:'+left+'px;width:'+width+'px;top:5px;height:12px;background:var(--muted);opacity:.3;border-radius:4px"></div>';
+        rowsHtml+='<div title="Horaire de contrat : '+escHtml((ct&&ct.heure_debut)||'')+'–'+escHtml((ct&&ct.heure_fin)||'')+'" style="position:absolute;left:'+left+'px;width:'+width+'px;top:12px;height:20px;background:#e8e6ef;border:1px solid #d3d0e0;border-radius:7px"></div>';
       });
       segments.forEach(seg=>{
         const left=seg.start*COL_W;const width=(seg.end-seg.start)*COL_W-2;
-        rowsHtml+='<div title="'+(pointeReel?'Pointé : '+escHtml(pt.debut||'')+(pt.fin?'–'+escHtml(pt.fin):' (en cours)'):'')+'" style="position:absolute;left:'+left+'px;width:'+width+'px;top:2px;height:18px;background:'+seg.color+';border-radius:5px;box-shadow:0 1px 3px rgba(0,0,0,.18);display:flex;align-items:center;padding-left:3px'+(seg.ouvert?';border-right:2px dashed #fff':'')+'">'
-          +(pointe?'<i class="ti ti-device-tablet" style="color:#fff;font-size:11px;opacity:.95"></i>':'')+'</div>';
+        // Horaires écrits dans la barre seulement si elle est assez large (sinon ils se chevauchent).
+        const _lbl=(seg.lbl&&width>=110)?'<span>'+seg.lbl[0]+'</span><span style="font-weight:400;opacity:.85">'+seg.lbl[1]+'</span>':(pointe?'<i class="ti ti-device-tablet" style="font-size:13px"></i>':'');
+        rowsHtml+='<div title="'+(pointeReel?'Pointé : '+escHtml(pt.debut||'')+(pt.fin?'–'+escHtml(pt.fin):' (en cours)'):(seg.lbl?escHtml(seg.lbl[0]+' – '+seg.lbl[1]):''))+'" style="position:absolute;left:'+left+'px;width:'+width+'px;top:6px;height:32px;box-sizing:border-box;background:'+seg.soft.bg+';border:1px solid '+seg.soft.bd+';color:'+seg.soft.tx+';border-radius:9px;display:flex;align-items:center;justify-content:space-between;padding:0 9px;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden'+(seg.ouvert?';border-right:2px dashed '+seg.soft.tx:'')+'">'+_lbl+'</div>';
       });
     }
-    rowsHtml+='</div></div>';
+    rowsHtml+='</div>';
+    rowsHtml+='<div style="width:'+DUR_W+'px;flex-shrink:0;text-align:right;padding-right:8px;font-size:12px;font-variant-numeric:tabular-nums;line-height:1.25">'+prCelluleGantt(rr,e.id,dateStr)+'</div>';
+    rowsHtml+='</div>';
   });
   // Ligne de d\u00e9marcation 12h (l\u00e9gende)
   let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted);flex-wrap:wrap">';
   legendHtml+='<span><i class="ti ti-user-check" style="color:var(--koala);vertical-align:middle;margin-right:2px"></i>Cliquez le rond pour '+(presOnlyPresents?'retirer l\u2019enfant de la journ\u00e9e':'basculer pr\u00e9sent / absent')+'</span>';
-  legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><i class="ti ti-square-rounded-filled" style="color:var(--green);vertical-align:middle;margin-right:2px"></i>Point\u00e9 sur tablette <i class="ti ti-square-rounded-filled" style="color:var(--koala);vertical-align:middle;margin:0 2px 0 8px"></i>Pr\u00e9sence coch\u00e9e manuellement</span>';
-  legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:10px;height:6px;background:var(--muted);opacity:.3;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Horaire de contrat (fond) sous l\u2019horaire r\u00e9ellement point\u00e9</span>';
+  legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:10px;height:10px;background:#c5ead6;border:1px solid #9fd6bb;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Point\u00e9 sur tablette <span style="display:inline-block;width:10px;height:10px;background:#d6d2f5;border:1px solid #b9b3ec;border-radius:3px;vertical-align:middle;margin:0 4px 0 8px"></span>Pr\u00e9sence coch\u00e9e manuellement</span>';
+  legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:10px;height:8px;background:#e8e6ef;border:1px solid #d3d0e0;border-radius:3px;vertical-align:middle;margin-right:3px"></span>Horaire de contrat (fond) sous l\u2019horaire r\u00e9ellement point\u00e9</span>';
   legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:8px;height:8px;background:var(--orange);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Hors jour de contrat</span>';
   legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
   if(_nbPeriode) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px">'+_nbSousContrat+' enfant(s) sous contrat le '+((CT_JOURS.find(x=>x[0]===jourSem)||[jourSem,'ce jour'])[1].toLowerCase())+' \u00b7 '+_nbPeriode+' inscrit(s) en cours de contrat</span>';
@@ -4885,7 +4912,7 @@ async function renderPresenceGantt(){
   legendHtml+='</div>';
   const crecheLbl=(cacheCreches.find(c=>c.id===crecheId)||{}).name||'';
   const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+(crecheLbl?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml(crecheLbl)+'</span>':'')+'</div>';
-  view.innerHTML=fermBanner+dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
+  view.innerHTML=fermBanner+dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20+DUR_W)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
 }
 
 // ── VUE HEBDOMADAIRE ──
@@ -5513,7 +5540,7 @@ function crInfoKey(cid){return'cr_info_'+cid;}
    MCM doit rester conforme à l'original. */
 const TARIF_CFG_ID='00000000-0000-0000-0000-000000000001';
 const TARIF_LS_KEY='tarifs_repas';
-const TARIF_DEFAUT={bb6:0,bb18:0,grand:0,peri:0,temoin:0,gbb:0,ggr:0,bag:0};
+const TARIF_DEFAUT={bb6:0,bb18:0,grand:0,peri:0,temoin:0,gbb:0,ggr:0,bag:0,forfait_non_pointe:0};
 let crTarifs=Object.assign({},TARIF_DEFAUT);
 
 function crTarifsLocal(){
@@ -5538,7 +5565,11 @@ async function crSaveTarifs(){
     const el=document.getElementById('cr-t-'+r.k);
     cfg[r.k]=el?(parseFloat(String(el.value).replace(',','.'))||0):0;
   });
+  // Forfait « journée non pointée » (module Présences) : même config, montant unique.
+  const fEl=document.getElementById('cr-t-forfait');
+  cfg.forfait_non_pointe=fEl?(parseFloat(String(fEl.value).replace(',','.'))||0):(crTarifs.forfait_non_pointe||0);
   crTarifs=cfg;
+  if(typeof prForfaitVal!=='undefined')prForfaitVal=cfg.forfait_non_pointe||0;
   try{localStorage.setItem(TARIF_LS_KEY,JSON.stringify(cfg));}catch(e){}
   crRenderCouts();
   try{
@@ -5566,7 +5597,10 @@ function crRenderTarifsGrid(){
       +'<div style="display:flex;align-items:center;gap:6px">'
       +'<input class="finput" id="cr-t-'+r.k+'" type="number" min="0" step="0.01" value="'+(crTarifs[r.k]||0)+'" '
       +'style="text-align:right" oninput="crRenderCouts(true)"/><span style="font-size:12px;color:var(--muted)">€</span></div></div>';
-  }).join('');
+  }).join('')
+  +'<div class="fg" style="margin:0;grid-column:1/-1;border-top:1px solid var(--border);padding-top:8px"><label class="flabel" style="font-size:11px">Forfait journée non pointée (facturé aux familles, hors repas)</label>'
+  +'<div style="display:flex;align-items:center;gap:6px;max-width:190px"><input class="finput" id="cr-t-forfait" type="number" min="0" step="0.01" value="'+(crTarifs.forfait_non_pointe||0)+'" style="text-align:right"/><span style="font-size:12px;color:var(--muted)">€ / jour</span></div>'
+  +'<div style="font-size:11px;color:var(--muted);margin-top:3px">Jour de contrat sans pointage d’arrivée ou de départ. Un montant unique pour les 6 crèches.</div></div>';
 }
 
 /* Quantité facturable d'une case du bon.
@@ -10341,6 +10375,7 @@ window.brRappelProchaineFois=brRappelProchaineFois;
   <div id="kiosque-toast"></div>
 </div>
 <script src="js/kiosque.js"></script>
+<script src="js/presences-reel.js"></script>
 
 </body>
 </html>
