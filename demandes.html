@@ -2723,8 +2723,10 @@ async function loadAllData(){
   try{cacheEmployes=await dbSelect('employes');}catch(e){console.warn('[loadAllData] employes',e);cacheEmployes=[];}
   // Consignes lues (notifications in-app) — non bloquant
   try{cacheConsignesLues=await dbSelect('consignes_lues');}catch(e){cacheConsignesLues=[];}
-  // Brouillons de consignes (direction seulement, table sql/consignes_brouillons.sql) — non bloquant
-  try{cacheConsigneBrouillons=isDirection?await dbSelect('consignes_brouillons'):[];}catch(e){cacheConsigneBrouillons=[];}
+  // Brouillons de consignes (table sql/consignes_brouillons.sql) — non bloquant. Pas de test sur
+  // isDirection : à la connexion il n'est posé qu'APRÈS loadAllData(), et la RLS ne renvoie de
+  // toute façon que les brouillons de l'auteur connecté (direction).
+  try{cacheConsigneBrouillons=await dbSelect('consignes_brouillons');}catch(e){cacheConsigneBrouillons=[];}
   // Annuaire des partenaires/institutions — table posée par sql/partenaires.sql,
   // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
   try{cachePartenaires=await dbSelect('partenaires');}catch(e){console.warn('[loadAllData] partenaires',e);cachePartenaires=[];}
