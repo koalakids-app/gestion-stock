@@ -189,6 +189,33 @@ const QUIZ_APP_URL="https://koalakids-app.github.io/quiz-protocoles/index.html";
 const FORMATIONS_APP_URL="https://koalakids-app.github.io/quiz-protocoles/formations.html";
 
 let ME=null,COLLAB=null,COLLAB_TYPE=null,semaineDate=null;
+let FERMETURES_ETAB=[],FERMETURES_RESEAU=[];
+const FERM_TYPES={vacances:'Vacances',ferie:'Jour férié',pedagogique:'Journée pédagogique'};
+// Jours de fermeture (Paramètres/Fonctionnement) : propres à la crèche du
+// compte connecté et ceux du réseau entier, pour signaler sur « Mon planning »
+// les jours où la crèche n'accueille personne. Non bloquant.
+async function loadFermetures(){
+  try{
+    const{data}=await sb.from('etablissements').select('jours_fermeture').eq('creche_id',COLLAB.creche_id).maybeSingle();
+    FERMETURES_ETAB=(data&&Array.isArray(data.jours_fermeture))?data.jours_fermeture:[];
+  }catch(e){console.warn('[loadFermetures] etablissements',e);FERMETURES_ETAB=[];}
+  try{
+    const{data}=await sb.from('reseau_config').select('config').limit(1).maybeSingle();
+    FERMETURES_RESEAU=(data&&data.config&&Array.isArray(data.config.jours_fermeture_reseau))?data.config.jours_fermeture_reseau:[];
+  }catch(e){console.warn('[loadFermetures] reseau_config',e);FERMETURES_RESEAU=[];}
+}
+function fermetureAt(dateStr){
+  if(!dateStr)return null;
+  const d=String(dateStr).slice(0,10);
+  return FERMETURES_ETAB.concat(FERMETURES_RESEAU).find(function(f){
+    return f&&f.debut&&d>=f.debut&&d<=(f.fin||f.debut);
+  })||null;
+}
+function fermetureLabel(f){
+  if(!f)return'';
+  const type=FERM_TYPES[f.type]||f.type||'Fermeture';
+  return f.label?(type+' — '+f.label):type;
+}
 const JOURS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 
 function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
@@ -477,6 +504,7 @@ async function grantAccess(){
   const anneeSel=document.getElementById('anneeSelect');
   const anneeActuelle=new Date().getFullYear();
   anneeSel.innerHTML=[anneeActuelle,anneeActuelle-1].map(a=>'<option value="'+a+'">'+a+'</option>').join('');
+  await loadFermetures();
   await Promise.all([loadPlanning(),loadPointages(),loadCompteur(),loadFormation()]);
 }
 
@@ -505,8 +533,11 @@ async function loadPlanning(){
   rows=rows||[];
   grid.innerHTML=JOURS.map((nom,idx)=>{
     const evs=rows.filter(r=>r.jour===idx);
+    const ferm=fermetureAt(addDays(semaineDate,idx));
     let inner;
-    if(!evs.length){
+    if(ferm){
+      inner='<div class="pempty" style="color:var(--red,#C62828);font-weight:700"><i class="ti ti-door-off"></i> '+esc(fermetureLabel(ferm))+'</div>';
+    }else if(!evs.length){
       inner='<div class="pempty">Rien de prévu</div>';
     }else{
       inner=evs.map(r=>{
@@ -515,7 +546,7 @@ async function loadPlanning(){
         return'<div class="pslot">'+esc(label)+(horaire?'<span class="h">'+esc(horaire)+'</span>':'')+'</div>';
       }).join('');
     }
-    return'<div class="pday"><div class="dname">'+nom+'</div>'+inner+'</div>';
+    return'<div class="pday"'+(ferm?' style="background:var(--red-l,#FDE8E8)"':'')+'><div class="dname">'+nom+'</div>'+inner+'</div>';
   }).join('');
 }
 

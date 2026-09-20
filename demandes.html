@@ -523,7 +523,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </div>
           <div class="mnav-hub-col">
             <div class="mnav-hub-title">Équipe</div>
-            <button class="mnav-hub-item" onclick="showMain('employes');closeHub()" id="mnav-employes"><i class="ti ti-id-badge-2"></i> Employés</button>
+            <button class="mnav-hub-item" onclick="showMain('employes');closeHub()" id="mnav-employes"><i class="ti ti-id-badge-2"></i> Collaborateurs/trices</button>
             <button class="mnav-hub-item direction-only" onclick="showMain('referents');closeHub()" id="mnav-referents"><i class="ti ti-address-book"></i> Directeurs techniques</button>
             <button class="mnav-hub-item" onclick="showMain('remplacantes');closeHub()" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçantes</button>
             <button class="mnav-hub-item" onclick="showMain('stagiaires');closeHub()" id="mnav-stagiaires"><i class="ti ti-school"></i> Stagiaires &amp; alternants <span class="mnav-badge" id="badge-stagiaires" style="display:none">0</span></button>
@@ -649,8 +649,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <!-- EMPLOYÉS (personnel sans compte de connexion) -->
   <div id="main-employes" class="tab-content">
     <div class="section-header">
-      <span class="section-title">Employés (sans compte de connexion)</span>
-      <button class="btn-primary" onclick="openEmployeModal()"><i class="ti ti-plus"></i> Ajouter un employé</button>
+      <span class="section-title">Collaborateurs/trices (sans compte de connexion)</span>
+      <button class="btn-primary" onclick="openEmployeModal()"><i class="ti ti-plus"></i> Ajouter un(e) collaborateur/trice</button>
     </div>
     <p class="hint" style="font-size:12.5px;color:var(--muted);margin:-4px 0 12px">Pour le personnel qui n'a pas besoin de se connecter à l'application — agents d'entretien, remplaçantes ponctuelles… Chacun reçoit un code de pointage à 4 chiffres pour la tablette dédiée.</p>
     <div id="employe-creche-tabs-bar" class="creche-tabs-bar"></div>
@@ -1870,8 +1870,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fg"><label class="flabel">Crèche rattachée</label><select class="finput" id="r-creche"><option value="">-- Choisir --</option></select></div>
     <div class="fg"><label class="flabel">Poste</label><input class="finput" id="r-poste" placeholder="Éducatrice de jeunes enfants"/></div>
-    <div class="fg"><label class="flabel">Lier à une fiche Employé(e) (contrat)</label><select class="finput" id="r-employe"><option value="">-- Aucune —</option></select>
-      <p style="font-size:11.5px;color:var(--muted);margin-top:4px">Si cette personne a aussi une fiche dans l'espace Employés (type de contrat, heures hebdo), la lier ici évite la double fiche : une seule tuile apparaîtra au mode kiosque, et son pointage continuera d'alimenter son compteur d'heures.</p>
+    <div class="fg"><label class="flabel">Lier à une fiche Collaborateur/trice (contrat)</label><select class="finput" id="r-employe"><option value="">-- Aucune —</option></select>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:4px">Si cette personne a aussi une fiche dans l'espace Collaborateurs/trices (type de contrat, heures hebdo), la lier ici évite la double fiche : une seule tuile apparaîtra au mode kiosque, et son pointage continuera d'alimenter son compteur d'heures.</p>
     </div>
     <div class="fg" style="display:flex;align-items:center;gap:10px;background:var(--koala-light);border-radius:8px;padding:10px 14px;margin-top:2px">
       <input type="checkbox" id="r-is-direction" style="width:17px;height:17px;accent-color:#3D3580;cursor:pointer;flex-shrink:0"/>
@@ -1884,7 +1884,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <div class="overlay" id="modal-employe-wrap">
   <div class="modal" style="max-width:640px;width:100%;max-height:88vh;overflow-y:auto">
-    <h3 id="modal-employe-title">Ajouter un employé</h3>
+    <h3 id="modal-employe-title">Ajouter un(e) collaborateur/trice</h3>
 
     <div class="frow">
       <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="emp-prenom" placeholder="Julie"/></div>
@@ -2630,7 +2630,7 @@ if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https:/
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',activeIncCategory='enfant',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='';
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[],cacheEtablissements=[],cacheReseauFermetures=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 let calOnlyMine=(localStorage.getItem('calOnlyMine')==='1');
 
@@ -2717,6 +2717,15 @@ async function loadAllData(){
   // Annuaire des partenaires/institutions — table posée par sql/partenaires.sql,
   // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
   try{cachePartenaires=await dbSelect('partenaires');}catch(e){console.warn('[loadAllData] partenaires',e);cachePartenaires=[];}
+  // Jours de fermeture (Paramètres/Fonctionnement) — propres à chaque crèche et
+  // ceux du réseau entier. Non bloquant : sert seulement à signaler les jours
+  // fermés sur le planning et la feuille de présence.
+  try{cacheEtablissements=await dbSelect('etablissements');}catch(e){console.warn('[loadAllData] etablissements',e);cacheEtablissements=[];}
+  try{
+    const rc=await dbSelect('reseau_config');
+    const cfg=(rc&&rc[0]&&rc[0].config)||{};
+    cacheReseauFermetures=Array.isArray(cfg.jours_fermeture_reseau)?cfg.jours_fermeture_reseau:[];
+  }catch(e){console.warn('[loadAllData] reseau_config',e);cacheReseauFermetures=[];}
   // Salariés — non bloquant (alimente aussi le sélecteur de prénom du planning équipe)
   // Recalcul silencieux du groupe selon l'âge : corrige en base les enfants dont le groupe stocké est périmé.
   // Une seule fois par session : loadAllData() est aussi rappelée par la synchronisation
@@ -2732,6 +2741,32 @@ async function loadAllData(){
     }
   }catch(err){console.warn('recalcul groupe',err);}
 }
+
+/* ---------- JOURS DE FERMETURE (Paramètres/Fonctionnement) ----------
+   Fond les fermetures propres à une crèche (etablissements.jours_fermeture)
+   et celles du réseau entier (reseau_config.jours_fermeture_reseau), pour
+   signaler sur le planning et la feuille de présence les jours où la crèche
+   n'accueille personne. */
+const FERM_TYPES={vacances:'Vacances',ferie:'Jour férié',pedagogique:'Journée pédagogique'};
+function fermeturesDe(crecheId){
+  const e=cacheEtablissements.find(function(x){return String(x.creche_id)===String(crecheId);});
+  const propres=(e&&Array.isArray(e.jours_fermeture))?e.jours_fermeture:[];
+  return propres.concat(cacheReseauFermetures||[]);
+}
+// Renvoie la fermeture couvrant cette date pour cette crèche, ou null.
+function fermetureAt(crecheId,dateStr){
+  if(!dateStr)return null;
+  const d=String(dateStr).slice(0,10);
+  return fermeturesDe(crecheId).find(function(f){
+    return f&&f.debut&&d>=f.debut&&d<=(f.fin||f.debut);
+  })||null;
+}
+function fermetureLabel(f){
+  if(!f)return'';
+  const type=FERM_TYPES[f.type]||f.type||'Fermeture';
+  return f.label?(type+' — '+f.label):type;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    SYNCHRONISATION ENTRE POSTES
 
@@ -3766,7 +3801,7 @@ async function renderReferents(){
   const grid=document.getElementById('ref-grid');if(!grid)return;
   const refs=cacheReferents.filter(r=>r.role==='referent'||r.role==='direction');
   if(!refs.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-users"></i><p>Aucun directeur technique.</p></div>';return;}
-  grid.innerHTML=refs.map(r=>{const creche=cacheCreches.find(c=>c.id===r.creche_id);const empLie=r.employe_id?cacheEmployes.find(e=>e.id===r.employe_id):null;const contratTxt=empLie?[empLie.type_contrat,empLie.temps_travail==='temps_partiel'?'Temps partiel':empLie.temps_travail==='temps_plein'?'Temps plein':''].filter(Boolean).join(' · '):'';const initials=r.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);const isDir=r.role==='direction';const avatarBg=isDir?'var(--orange)':'var(--koala)';const roleBadge=isDir?'<span style="display:inline-flex;align-items:center;gap:3px;background:var(--orange-light);color:var(--orange-dark);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:4px">🔑 Direction</span>':'';return'<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:'+avatarBg+'">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+r.name+roleBadge+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+(r.poste||'Directeur technique')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div><div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+(r.email||'—')+'</div><div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkPictosLigne(r.code_pictos)+'</div>'+(empLie?'<div class="ref-detail"><i class="ti ti-file-certificate" style="font-size:11px"></i> '+(contratTxt?escHtml(contratTxt):'Contrat non renseigné')+' <button type="button" class="btn-sm" style="margin-left:6px;padding:2px 8px;font-size:10.5px" onclick="editEmploye(\''+empLie.id+'\')"><i class="ti ti-external-link"></i> Voir la fiche Employé(e)</button></div>':'')+'</div></div><div class="ref-actions"><button class="btn-primary" style="font-size:12px" onclick="resetPassword(\''+r.id+'\')" title="Envoie un e-mail avec un lien pour définir ou réinitialiser son mot de passe"><i class="ti ti-key" style="font-size:12px"></i> Envoyer le lien de connexion</button><button class="ibtn" onclick="editRef(\''+r.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteRef(\''+r.id+'\')"><i class="ti ti-trash"></i></button></div>'+(r.creche_id?'<div style="margin:0 14px 12px;padding-top:10px;border-top:1px dashed var(--border)"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-bottom:6px"><i class="ti ti-device-tablet" style="font-size:12px"></i> Code image (tablette) — sans rapport avec la connexion</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+kkPictosActions(r.id,r.creche_id,r.code_pictos,'referent')+'</div></div>':'')+'</div>';}).join('');
+  grid.innerHTML=refs.map(r=>{const creche=cacheCreches.find(c=>c.id===r.creche_id);const empLie=r.employe_id?cacheEmployes.find(e=>e.id===r.employe_id):null;const contratTxt=empLie?[empLie.type_contrat,empLie.temps_travail==='temps_partiel'?'Temps partiel':empLie.temps_travail==='temps_plein'?'Temps plein':''].filter(Boolean).join(' · '):'';const initials=r.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);const isDir=r.role==='direction';const avatarBg=isDir?'var(--orange)':'var(--koala)';const roleBadge=isDir?'<span style="display:inline-flex;align-items:center;gap:3px;background:var(--orange-light);color:var(--orange-dark);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:4px">🔑 Direction</span>':'';return'<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:'+avatarBg+'">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+r.name+roleBadge+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+(r.poste||'Directeur technique')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div><div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+(r.email||'—')+'</div><div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkPictosLigne(r.code_pictos)+'</div>'+(empLie?'<div class="ref-detail"><i class="ti ti-file-certificate" style="font-size:11px"></i> '+(contratTxt?escHtml(contratTxt):'Contrat non renseigné')+' <button type="button" class="btn-sm" style="margin-left:6px;padding:2px 8px;font-size:10.5px" onclick="editEmploye(\''+empLie.id+'\')"><i class="ti ti-external-link"></i> Voir la fiche Collaborateur/trice</button></div>':'')+'</div></div><div class="ref-actions"><button class="btn-primary" style="font-size:12px" onclick="resetPassword(\''+r.id+'\')" title="Envoie un e-mail avec un lien pour définir ou réinitialiser son mot de passe"><i class="ti ti-key" style="font-size:12px"></i> Envoyer le lien de connexion</button><button class="ibtn" onclick="editRef(\''+r.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteRef(\''+r.id+'\')"><i class="ti ti-trash"></i></button></div>'+(r.creche_id?'<div style="margin:0 14px 12px;padding-top:10px;border-top:1px dashed var(--border)"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-bottom:6px"><i class="ti ti-device-tablet" style="font-size:12px"></i> Code image (tablette) — sans rapport avec la connexion</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+kkPictosActions(r.id,r.creche_id,r.code_pictos,'referent')+'</div></div>':'')+'</div>';}).join('');
 }
 /* Fiches Employé(e) proposées au lien : pas déjà liées à un autre directeur
    technique (l'index unique referents.employe_id le refuserait de toute
@@ -3835,12 +3870,12 @@ function renderEmployes(){
   const list=isDirection
     ?(activeEmployeCrecheId==='all'?cacheEmployes:cacheEmployes.filter(e=>e.creche_id===activeEmployeCrecheId))
     :cacheEmployes.filter(e=>e.creche_id===currentProfile?.creche_id);
-  if(!list.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-id-badge-2"></i><p>Aucun employé.</p></div>';return;}
+  if(!list.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-id-badge-2"></i><p>Aucun(e) collaborateur/trice.</p></div>';return;}
   grid.innerHTML=list.map(e=>{
     const creche=cacheCreches.find(c=>c.id===e.creche_id);
     const initials=((e.prenom||'')+' '+(e.nom||'')).trim().split(' ').filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?';
     const contratTxt=[e.type_contrat,e.temps_travail==='temps_partiel'?'Temps partiel':e.temps_travail==='temps_plein'?'Temps plein':''].filter(Boolean).join(' · ');
-    return '<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:var(--muted)">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+escHtml(e.poste||'Employé(e)')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div>'+(e.email?'<div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+escHtml(e.email)+'</div>':'')+(contratTxt?'<div class="ref-detail"><i class="ti ti-file-certificate" style="font-size:11px"></i> '+escHtml(contratTxt)+'</div>':'<div class="ref-detail" style="color:var(--red)"><i class="ti ti-alert-triangle" style="font-size:11px"></i> Contrat non renseigné</div>')+'<div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkPictosLigne(e.code_pictos)+'</div>'+empHeuresLigne(e)+'</div></div><div class="ref-actions"><button class="ibtn" onclick="editEmploye(\''+e.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteEmploye(\''+e.id+'\')"><i class="ti ti-trash"></i></button></div>'+(e.creche_id?'<div style="margin:0 14px 12px;padding-top:10px;border-top:1px dashed var(--border)"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-bottom:6px"><i class="ti ti-device-tablet" style="font-size:12px"></i> Code image (tablette)</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+kkPictosActions(e.id,e.creche_id,e.code_pictos,'employe')+'</div></div>':'')+'</div>';
+    return '<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:var(--muted)">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+escHtml(e.poste||'Collaborateur/trice')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div>'+(e.email?'<div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+escHtml(e.email)+'</div>':'')+(contratTxt?'<div class="ref-detail"><i class="ti ti-file-certificate" style="font-size:11px"></i> '+escHtml(contratTxt)+'</div>':'<div class="ref-detail" style="color:var(--red)"><i class="ti ti-alert-triangle" style="font-size:11px"></i> Contrat non renseigné</div>')+'<div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkPictosLigne(e.code_pictos)+'</div>'+empHeuresLigne(e)+'</div></div><div class="ref-actions"><button class="ibtn" onclick="editEmploye(\''+e.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteEmploye(\''+e.id+'\')"><i class="ti ti-trash"></i></button></div>'+(e.creche_id?'<div style="margin:0 14px 12px;padding-top:10px;border-top:1px dashed var(--border)"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-bottom:6px"><i class="ti ti-device-tablet" style="font-size:12px"></i> Code image (tablette)</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+kkPictosActions(e.id,e.creche_id,e.code_pictos,'employe')+'</div></div>':'')+'</div>';
   }).join('');
 }
 
@@ -3925,7 +3960,7 @@ const EMP_NUM_FIELDS=[['emp-heures-hebdo','heures_hebdo'],['emp-salaire-brut','s
 
 function openEmployeModal(){
   editingEmployeId=null;
-  document.getElementById('modal-employe-title').textContent='Ajouter un employé';
+  document.getElementById('modal-employe-title').textContent='Ajouter un(e) collaborateur/trice';
   document.getElementById('emp-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';
   document.getElementById('emp-btn-delete').style.display='none';
   ['emp-prenom','emp-nom','emp-poste','emp-email'].forEach(id=>document.getElementById(id).value='');
@@ -3981,12 +4016,12 @@ async function saveEmploye(){
       if(!ok)throw new Error(window._lastDbError||'échec');
       const e=cacheEmployes.find(x=>String(x.id)===String(editingEmployeId));
       if(e)Object.assign(e,row);
-      showBanner('Employé modifié ✅');
+      showBanner('Collaborateur/trice modifié(e) ✅');
     }else{
       const saved=await dbInsert('employes',row);
       if(!saved)throw new Error(window._lastDbError||'échec');
       cacheEmployes.push(saved);
-      showBanner('Employé ajouté ✅');
+      showBanner('Collaborateur/trice ajouté(e) ✅');
     }
     closeModal('modal-employe-wrap');
     renderEmployes();
@@ -4000,13 +4035,13 @@ window.saveEmploye=saveEmploye;
 async function deleteEmploye(id){
   const targetId=id||editingEmployeId;
   if(!targetId)return;
-  if(!confirm('Supprimer cette fiche employé ?'))return;
+  if(!confirm('Supprimer cette fiche collaborateur/trice ?'))return;
   const ok=await dbDelete('employes',targetId);
   if(ok){
     cacheEmployes=cacheEmployes.filter(e=>e.id!==targetId);
     closeModal('modal-employe-wrap');
     renderEmployes();
-    showBanner('Employé supprimé.');
+    showBanner('Collaborateur/trice supprimé(e).');
   }else showBanner('Erreur lors de la suppression.','error');
 }
 
@@ -4691,6 +4726,8 @@ async function renderPresenceGantt(){
   const NAME_W=_isPhone?96:160;
   const d=new Date(dateStr+'T00:00:00');
   const dateLabel=d.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  const _ferm=fermetureAt(crecheId,dateStr);
+  const fermBanner=_ferm?'<div class="warn" style="background:var(--red-l,#FDE8E8);color:var(--red,#C62828);border-radius:12px;padding:9px 13px;font-size:12.5px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:7px"><i class="ti ti-door-off"></i> Crèche fermée ce jour — '+escHtml(fermetureLabel(_ferm))+'</div>':'';
   // Compter pr\u00e9sents
   const presents=allEnfants.filter(e=>{const p=presMap[e.id]||{};return p.M==='present'||p.A==='present'||p.M==='partial'||p.A==='partial';});
   const enfants=presOnlyPresents?presents:allEnfants;
@@ -4708,7 +4745,7 @@ async function renderPresenceGantt(){
       _aide+='<div style="font-size:12px;margin-top:8px">'+_tousCreche.length+' enfant(s) inscrit(s) dans cette cr\u00e8che, aucun point\u00e9 ce jour. <a href="#" onclick="presToggleFilterPresents();return false;" style="color:var(--koala);font-weight:600">Afficher la liste compl\u00e8te</a></div>';
     if(_nbHorsContrat&&!presShowHorsContrat)
       _aide+='<div style="font-size:12px;margin-top:6px"><a href="#" onclick="presToggleHorsContrat();return false;" style="color:var(--koala);font-weight:600">Afficher '+_nbHorsContrat+' enfant(s) hors p\u00e9riode de contrat</a></div>';
-    view.innerHTML='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+(_crecheLbl0?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml(_crecheLbl0)+'</span>':'')+'</div><div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant pr\u00e9sent ce jour.<br><span style="font-size:12px">Utilisez <strong>Ajouter \u00e0 la journ\u00e9e</strong> en haut de la page.</span></p>'+_aide+'<div id="pres-dates-proches" style="font-size:12px;color:var(--muted);margin-top:10px"></div></div>';
+    view.innerHTML=fermBanner+'<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+(_crecheLbl0?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml(_crecheLbl0)+'</span>':'')+'</div><div class="empty-state"><i class="ti ti-user-off"></i><p>Aucun enfant pr\u00e9sent ce jour.<br><span style="font-size:12px">Utilisez <strong>Ajouter \u00e0 la journ\u00e9e</strong> en haut de la page.</span></p>'+_aide+'<div id="pres-dates-proches" style="font-size:12px;color:var(--muted);margin-top:10px"></div></div>';
     presAfficherDatesProches(crecheId,dateStr);
     return;
   }
@@ -4819,7 +4856,7 @@ async function renderPresenceGantt(){
   legendHtml+='</div>';
   const crecheLbl=(cacheCreches.find(c=>c.id===crecheId)||{}).name||'';
   const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+(crecheLbl?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml(crecheLbl)+'</span>':'')+'</div>';
-  view.innerHTML=dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
+  view.innerHTML=fermBanner+dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
 }
 
 // ── VUE HEBDOMADAIRE ──
@@ -5031,8 +5068,9 @@ async function renderPresenceHebdo(){
       return '<span title="'+escHtml(repasLabel(t.code))+'" style="background:#fff;border-radius:6px;padding:2px 7px;font-size:10.5px;font-weight:700;color:'+(isSpe(t.code)?'var(--orange-dark)':'var(--koala)')+'">'+t.parJour[i]+'&nbsp;'+escHtml(t.code)+'</span>';
     }).join('');
     const manque=nbSansRepas[i]?'<span title="Date de naissance manquante" style="background:#fff;border-radius:6px;padding:2px 7px;font-size:10.5px;font-weight:700;color:var(--red)">'+nbSansRepas[i]+'&nbsp;?</span>':'';
-    stripHtml+='<div style="background:var(--koala-light);border-radius:12px;padding:11px 12px 12px">'
-      +'<div style="font-size:10.5px;font-weight:700;color:var(--koala);text-transform:uppercase;letter-spacing:.04em">'+JOURS_LBL[i]+'</div>'
+    const _fermJ=fermetureAt(crecheId,dateStrs[i]);
+    stripHtml+='<div style="background:'+(_fermJ?'var(--red-l,#FDE8E8)':'var(--koala-light)')+';border-radius:12px;padding:11px 12px 12px" title="'+(_fermJ?escHtml(fermetureLabel(_fermJ)):'')+'">'
+      +'<div style="font-size:10.5px;font-weight:700;color:'+(_fermJ?'var(--red,#C62828)':'var(--koala)')+';text-transform:uppercase;letter-spacing:.04em">'+JOURS_LBL[i]+(_fermJ?' · <i class="ti ti-door-off"></i> Fermé':'')+'</div>'
       +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'+dFr(d)+'</div>'
       +'<div style="font-size:26px;font-weight:800;color:var(--koala-dark);line-height:1">'+totalParJour[i]+'</div>'
       +'<div style="font-size:10.5px;color:var(--muted);margin-bottom:8px">enfant'+(totalParJour[i]>1?'s':'')+'</div>'
@@ -5055,7 +5093,10 @@ async function renderPresenceHebdo(){
   grille+='<thead><tr>';
   // Colonne des noms figée : sur tablette, la grille défile horizontalement.
   grille+='<th style="position:sticky;left:0;z-index:2;background:#fff;text-align:left;padding:11px 8px 11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">Enfant</th>';
-  days5.forEach(function(d,i){grille+='<th style="background:'+(jourCourant(i)?'#F7F5FF':'#fff')+';text-align:center;padding:11px 8px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:'+(jourCourant(i)?'var(--koala)':'var(--muted)')+';border-bottom:1px solid var(--border);white-space:nowrap">'+JOURS_LBL[i]+'<br><span style="font-weight:400;text-transform:none;font-size:10px">'+dFr(d)+'</span></th>';});
+  days5.forEach(function(d,i){
+    const _fermI=fermetureAt(crecheId,dateStrs[i]);
+    grille+='<th style="background:'+(_fermI?'var(--red-l,#FDE8E8)':jourCourant(i)?'#F7F5FF':'#fff')+';text-align:center;padding:11px 8px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:'+(_fermI?'var(--red,#C62828)':jourCourant(i)?'var(--koala)':'var(--muted)')+';border-bottom:1px solid var(--border);white-space:nowrap" title="'+(_fermI?escHtml(fermetureLabel(_fermI)):'')+'">'+JOURS_LBL[i]+'<br><span style="font-weight:400;text-transform:none;font-size:10px">'+dFr(d)+'</span>'+(_fermI?'<br><span style="font-size:9.5px;font-weight:800"><i class="ti ti-door-off"></i> Fermé</span>':'')+'</th>';
+  });
   grille+='</tr></thead><tbody>';
   rows.forEach(function(r,idxLigne){
     const code=r.enfant._repasCode||'';
@@ -7734,8 +7775,12 @@ async function saveEventCoord(){
 function getPlanningGrid(events,referentId,semaine,editable){
   const ws=weekStart();const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  const _pgCrecheId=(cacheReferents.find(r=>r.id===referentId)||{}).creche_id;
   let html='<div class="pg-hd"></div>';
-  days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
+  days5.forEach((d,i)=>{
+    const _fermD=fermetureAt(_pgCrecheId,ipDateToLocalISO(d));
+    html+='<div class="pg-hd"'+(_fermD?' style="background:var(--red-l,#FDE8E8);color:var(--red,#C62828)" title="'+escHtml(fermetureLabel(_fermD))+'"':'')+'>'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span>'+(_fermD?'<br><span style="font-size:9.5px;font-weight:800"><i class="ti ti-door-off"></i> Fermé</span>':'')+'</div>';
+  });
   html+='<div class="pg-time" style="font-size:10px">Journée</div>';
   days5.forEach((_,di)=>{
     const evs=events.filter(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
@@ -7767,12 +7812,16 @@ function pgEvVille(e){
   return'<span class="pg-ev-ville">📍 '+e.lieu+'</span>';
 }
 
-function getPlanningGridSimple(events,coordId,semaine){
+function getPlanningGridSimple(events,coordId,semaine,crecheIdHint){
   const ws=weekStart();const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
   const editable=!!coordId;
+  const _pgsCrecheId=crecheIdHint||(cacheReferents.find(r=>r.id===coordId)||{}).creche_id;
   let html='<div class="pg-hd"></div>';
-  days5.forEach((d,i)=>{html+='<div class="pg-hd">'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span></div>';});
+  days5.forEach((d,i)=>{
+    const _fermD=fermetureAt(_pgsCrecheId,ipDateToLocalISO(d));
+    html+='<div class="pg-hd"'+(_fermD?' style="background:var(--red-l,#FDE8E8);color:var(--red,#C62828)" title="'+escHtml(fermetureLabel(_fermD))+'"':'')+'>'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span>'+(_fermD?'<br><span style="font-size:9.5px;font-weight:800"><i class="ti ti-door-off"></i> Fermé</span>':'')+'</div>';
+  });
   ['Matin','Après-midi'].forEach((slot,si)=>{
     html+='<div class="pg-time">'+slot+'</div>';
     days5.forEach((_,di)=>{
@@ -7856,7 +7905,7 @@ async function renderPlanning(){
     if(gridOther){
       if(!viewedCoord)gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">—</div>';
       else{gridOther.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
-        const cEvs=await planningLoad(viewedCoord.id,semaine);gridOther.innerHTML=getPlanningGridSimple(cEvs,isOwnCoordPlanning?viewedCoord.id:null,semaine);}
+        const cEvs=await planningLoad(viewedCoord.id,semaine);gridOther.innerHTML=getPlanningGridSimple(cEvs,isOwnCoordPlanning?viewedCoord.id:null,semaine,viewedCoord.creche_id);}
     }
   }else{
     if(!userId||userId==='dir'){setTimeout(()=>renderPlanning(),500);return;}
@@ -7872,7 +7921,7 @@ async function renderPlanning(){
     if(gridOther){
       if(!coord)gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Coordinateur non disponible</div>';
       else{gridOther.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
-        const cEvs=await planningLoad(coord.id,semaine);gridOther.innerHTML=getPlanningGridSimple(cEvs,null,semaine);}
+        const cEvs=await planningLoad(coord.id,semaine);gridOther.innerHTML=getPlanningGridSimple(cEvs,null,semaine,coord.creche_id);}
     }
   }
   await renderPlanningEquipe();
@@ -8492,7 +8541,15 @@ async function renderPlanningEquipe(){
   if(iaBtn)iaBtn.style.display=editable?'':'none';
   if(rsBtn)rsBtn.style.display=(editable&&rows.length)?'':'none';
   peRenderRefNomRow(crecheId,editable);
-  wrap.innerHTML=getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
+  const _peFermBanner=(function(){
+    const jrs=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;})
+      .map(function(d){return fermetureAt(crecheId,ipDateToLocalISO(d));})
+      .filter(Boolean);
+    if(!jrs.length)return'';
+    const uniq=[...new Set(jrs.map(fermetureLabel))];
+    return '<div class="warn" style="background:var(--red-l,#FDE8E8);color:var(--red,#C62828);border-radius:12px;padding:9px 13px;font-size:12.5px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:7px"><i class="ti ti-door-off"></i> Crèche fermée cette semaine — '+escHtml(uniq.join(', '))+'</div>';
+  })();
+  wrap.innerHTML=_peFermBanner+getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable);
 
   const info=document.getElementById('pe-import-info');
   if(info){
@@ -8604,7 +8661,8 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   html+='<thead><tr><th style="position:sticky;left:0;z-index:2;padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:left;background:#fafafa;color:#333;white-space:nowrap">Horaire</th>';
   DAYS.forEach((d,i)=>{
     const dupIcon=(editable&&!forPrint)?' <i class="ti ti-copy" style="cursor:pointer;opacity:0.55;font-size:'+_peFSDay+'" title="Dupliquer ce jour vers d\'autres jours" onclick="event.stopPropagation();peOpenDuplicateDay('+i+')"></i>':'';
-    html+='<th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:center;background:#fafafa;color:#333">'+d+dupIcon+'<br><span style="font-size:'+_peFSDay+';font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span></th>';
+    const _fermD=fermetureAt(crecheId,ipDateToLocalISO(days5[i]));
+    html+='<th style="padding:'+_pePad+';border-bottom:2px solid var(--border);text-align:center;background:'+(_fermD?'var(--red-l,#FDE8E8)':'#fafafa')+';color:'+(_fermD?'var(--red,#C62828)':'#333')+'" title="'+(_fermD?escHtml(fermetureLabel(_fermD)):'')+'">'+d+dupIcon+'<br><span style="font-size:'+_peFSDay+';font-weight:400;opacity:0.7">'+fmt(days5[i])+'</span>'+(_fermD?'<br><span style="font-size:'+_peFSDay+';font-weight:800"><i class="ti ti-door-off"></i> Fermé</span>':'')+'</th>';
   });
   html+='</tr></thead><tbody>';
 
