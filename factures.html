@@ -221,6 +221,7 @@ table.lg td.r,table.lg th.r{text-align:right;white-space:nowrap}
 
 <div class="toast" id="toast"></div>
 
+<script src="js/presences-reel.js"></script>
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
@@ -636,7 +637,7 @@ async function preparer(){
   try{
     const[ct,en,fa]=await Promise.all([
       sb.from('contrats').select('*').eq('creche_id',crecheId).eq('statut','contresigne'),
-      sb.from('enfants').select('id,prenom,nom,date_sortie').eq('creche_id',crecheId),
+      sb.from('enfants').select('id,prenom,nom,date_sortie,creche_id').eq('creche_id',crecheId),
       sb.from('factures').select('id,contrat_id,mois,statut,numero').eq('creche_id',crecheId).eq('mois',m)
     ]);
     if(ct.error)throw ct.error;
@@ -665,6 +666,19 @@ async function preparer(){
     }).filter(x=>x.actif).sort((a,b)=>a.nom.localeCompare(b.nom));
 
     const aFaire=lignes.filter(x=>!x.deja);
+    /* Forfait « journée non pointée » : jours de contrat sans pointage d'arrivée
+       (ou sans départ) du mois, hors jours fériés et absences justifiées au-delà
+       de la carence de 3 jours. Calcul commun avec le module Présences
+       (js/presences-reel.js). Éditable ici comme le reste. */
+    PREP_FORF={};
+    const cibles=aFaire.map(x=>ENFANTS.find(e=>String(e.id)===String(x.c.enfant_id))).filter(Boolean);
+    let erreursForf=[];
+    if(cibles.length){
+      const rf=await prCharger(cibles,d1,d2);
+      erreursForf=rf.erreurs;
+      rf.calc.forEach(r=>{if(r.forfait)(PREP_FORF[r.enfant_id]=PREP_FORF[r.enfant_id]||[]).push(r);});
+    }
+    PREP_FO=prForfait();
     let h='';
     if(!lignes.length){
       h='<div class="warn"><i class="ti ti-info-circle"></i><span>Aucun contrat contresigné actif sur '
@@ -673,16 +687,25 @@ async function preparer(){
     }else{
       h+='<p class="hint">'+aFaire.length+' facture(s) à créer sur '+lignes.length+' contrat(s) actifs. '
         +'Les contrats déjà facturés ce mois-ci sont listés mais ne seront pas touchés.</p>';
-      h+='<table class="lg"><tr><th></th><th>Enfant</th><th class="r">Heures</th><th class="r">Mensualité</th><th>État</th></tr>';
+      h+='<table class="lg"><tr><th></th><th>Enfant</th><th class="r">Heures</th><th class="r">Mensualité</th><th class="r">Forfaits non pointés</th><th>État</th></tr>';
       lignes.forEach((x,i)=>{
+        const fj=PREP_FORF[x.c.enfant_id]||[];
+        const fjTxt=fj.length?'<div class="sub" style="font-size:11px;color:var(--muted)">'+esc(fj.map(libJourForfait).join(' · '))+'</div>':'';
         const av=x.alertes.length?'<div class="sub" style="color:var(--amber);font-size:11.5px">⚠ '+esc(x.alertes.join(' · '))+'</div>':'';
         h+='<tr><td>'+(x.deja?'':'<input type="checkbox" class="ckC" value="'+x.c.id+'" checked style="width:auto">')+'</td>'
           +'<td>'+esc(x.nom)+av+'</td>'
           +'<td class="r"><input class="hrC" data-c="'+x.c.id+'" value="'+(x.heures?String(x.heures).replace('.',','):'')+'" style="width:80px;text-align:right;font-size:14px;padding:5px 8px"'+(x.deja?' disabled':'')+'></td>'
           +'<td class="r"><input class="mnC" data-c="'+x.c.id+'" value="'+(x.mensu?String(x.mensu).replace('.',','):'')+'" style="width:110px;text-align:right;font-size:14px;padding:5px 8px"'+(x.deja?' disabled':'')+'></td>'
+          +'<td class="r">'+(x.deja||!PREP_FO?'':'<input class="fgC" data-c="'+x.c.id+'" data-e="'+x.c.enfant_id+'" value="'+fj.length+'" style="width:56px;text-align:right;font-size:14px;padding:5px 8px"> j'+fjTxt)+'</td>'
           +'<td>'+(x.deja?'<span class="bdg b-em">déjà facturé</span>':'<span class="bdg b-br">à créer</span>')+'</td></tr>';
       });
       h+='</table>';
+      h+=PREP_FO>0
+        ?'<p class="hint">Forfait journée non pointée : <b>'+eur(PREP_FO)+'</b> par jour, ajouté en ligne à la facture. Mettre 0 pour ne rien facturer. '
+          +(finDeMois(m)>auj()?'Le mois n\'est pas terminé : seuls les jours écoulés sont comptés. ':'')
+          +(erreursForf.length?'<span style="color:var(--amber)">Lecture incomplète des pointages ('+esc(erreursForf.join(', '))+') : vérifier les nombres.</span>':'')+'</p>'
+        :'<div class="warn"><i class="ti ti-info-circle"></i><span>Le forfait journée non pointée n\'est pas défini : aucun forfait ne sera facturé. '
+          +'Le renseigner dans Présences › Semaine › Commande repas › Modifier les tarifs.</span></div>';
       h+='<p class="hint">Les <b>heures</b> sont celles qui seront déclarées à la CAF, et celles que la facture portera : '
         +'sans elles, le CMG de la famille ne peut pas être liquidé.</p>';
       h+='<div class="warn"><i class="ti ti-info-circle"></i><span>Les factures sont créées <b>en brouillon</b> : '
@@ -725,12 +748,25 @@ function enteteFamille(ct){
   };
 }
 
+let PREP_FORF={},PREP_FO=0;
+/* « 9 sept. (non pointé) » — le détail imprimé sous la ligne de forfait. */
+function libJourForfait(r){
+  return new Date(r.date+'T00:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'})+' ('+(PR_LIBELLES[r.statut]||r.statut).toLowerCase()+')';
+}
+const LIB_FORFAIT='Forfait journée non pointée';
+function ligneForfait(factureId,ordre,n,fo,jours,mois){
+  const det=jours.length?'Jours : '+jours.map(libJourForfait).join(', '):'Jours de contrat sans pointage d\'arrivée ou de départ';
+  return {facture_id:factureId,ordre:ordre,type:'supplement',libelle:LIB_FORFAIT+' — '+moisLibelle(mois),
+    quantite:n,prix_unitaire:fo,montant:r2(n*fo),detail:det};
+}
+
 async function genererBrouillons(){
   const btn=document.getElementById('btnGen');if(btn)btn.disabled=true;
   const m=val('fMois'),d1=debutDeMois(m),d2=finDeMois(m);
   const ech=val('fEcheance')||null;
   const ids=[...document.querySelectorAll('.ckC:checked')].map(x=>x.value);
   const mns={};document.querySelectorAll('.mnC').forEach(i=>{mns[i.dataset.c]=nb(i.value);});
+  const fgs={};document.querySelectorAll('.fgC').forEach(i=>{fgs[i.dataset.c]=Math.max(0,Math.round(nb(i.value)));});
   const hrs={};document.querySelectorAll('.hrC').forEach(i=>{hrs[i.dataset.c]=nb(i.value);});
   let ok=0,ko=0,dernier=null;
   for(const id of ids){
@@ -761,6 +797,11 @@ async function genererBrouillons(){
           detail:'Mensualité lissée du contrat '+(ct.numero||'')
             +(heures?(' — '+String(heures).replace('.',',')+' h mensualisées'):'')});
         if(el)throw el;
+      }
+      const nF=fgs[id]||0;
+      if(nF>0&&PREP_FO>0){
+        const{error:ef}=await sb.from('factures_lignes').insert(ligneForfait(data.id,mensu>0?2:1,nF,PREP_FO,PREP_FORF[ct.enfant_id]||[],m));
+        if(ef)throw ef;
       }
       ok++;
     }catch(e){ko++;console.error('[generer]',e);toast('Échec sur un contrat : '+detail(e),true);}
@@ -832,6 +873,14 @@ function renderFacture(){
       +'<div class="tot" style="color:'+(Number(f.solde)>0?'var(--red)':'var(--muted)')+'"><span>Solde</span><span>'+eur(f.solde)+'</span></div>';
   }
   h+='</div>';
+
+  /* Forfait non pointé — pour un brouillon déjà créé (ou créé avant le mois écoulé) */
+  if(brouillon&&f.enfant_id&&f.mois&&f.type==='mensuelle'){
+    const deja=LIGNES.some(l=>String(l.libelle||'').indexOf(LIB_FORFAIT)===0);
+    h+='<div class="card"><div class="sec"><i class="ti ti-clock-x"></i> Forfait journée non pointée</div>'
+      +'<p class="hint">'+(deja?'Une ligne de forfait figure déjà sur ce brouillon. La recalculer la remplace.':'Ajoute les jours de '+esc(moisLibelle(f.mois))+' sans pointage d\'arrivée ou de départ, hors jours fériés et absences justifiées au-delà de la carence de 3 jours.')+'</p>'
+      +'<div style="display:flex;justify-content:flex-end"><button class="btn btn-s" onclick="ajouterForfaits()"><i class="ti ti-calculator"></i> '+(deja?'Recalculer':'Calculer et ajouter')+'</button></div></div>';
+  }
 
   /* Ajout de ligne — brouillon seulement */
   if(brouillon){
@@ -905,6 +954,29 @@ function renderFacture(){
   h+='</div>';
 
   document.getElementById('facCorps').innerHTML=h;
+}
+
+async function ajouterForfaits(){
+  try{
+    const d1=debutDeMois(FAC.mois),d2=finDeMois(FAC.mois);
+    const{data:en,error:ee}=await sb.from('enfants').select('id,prenom,nom,date_sortie,creche_id').eq('id',FAC.enfant_id);
+    if(ee)throw ee;
+    const rf=await prCharger(en||[],d1,d2);
+    const fo=prForfait();
+    if(!(fo>0)){toast('Le forfait n\'est pas défini (Présences › Commande repas › Modifier les tarifs).',true);return;}
+    if(rf.erreurs.length&&!confirm('Lecture incomplète ('+rf.erreurs.join(', ')+'). Continuer avec ce qui a été lu ?'))return;
+    const jours=[];rf.calc.forEach(r=>{if(r.forfait)jours.push(r);});
+    jours.sort((a,b)=>a.date.localeCompare(b.date));
+    const anciennes=LIGNES.filter(l=>String(l.libelle||'').indexOf(LIB_FORFAIT)===0);
+    for(const l of anciennes){const{error}=await sb.from('factures_lignes').delete().eq('id',l.id);if(error)throw error;}
+    if(jours.length){
+      const{error}=await sb.from('factures_lignes').insert(ligneForfait(FAC.id,LIGNES.length+1,jours.length,fo,jours,FAC.mois));
+      if(error)throw error;
+    }
+    await ouvrirFacture(FAC.id);
+    if(TAB==='mois')chargerMois();
+    toast(jours.length?jours.length+' jour(s) de forfait ajouté(s) ✅':'Aucun jour à facturer au forfait ce mois-ci.');
+  }catch(e){toast('Calcul impossible : '+detail(e),true);}
 }
 
 async function ajouterLigne(){
