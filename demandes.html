@@ -1829,7 +1829,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn-cancel" style="width:100%" onclick="document.getElementById('d-attach-input').click()"><i class="ti ti-paperclip"></i> Joindre un fichier</button>
       <div id="d-attach-status" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
     </div>
-    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-demand-wrap')">Annuler</button><button class="btn-primary" id="btn-save-demand" onclick="saveDemand()"><i class="ti ti-check"></i> Enregistrer</button></div>
+    <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-demand-wrap')">Annuler</button><button class="btn-cancel" id="btn-draft-demand" onclick="saveDemandeBrouillon()"><i class="ti ti-file-pencil"></i> Enregistrer en brouillon</button><button class="btn-primary" id="btn-save-demand" onclick="saveDemand()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
 </div>
 
@@ -2727,6 +2727,8 @@ async function loadAllData(){
   // isDirection : à la connexion il n'est posé qu'APRÈS loadAllData(), et la RLS ne renvoie de
   // toute façon que les brouillons de l'auteur connecté (direction).
   try{cacheConsigneBrouillons=await dbSelect('consignes_brouillons');}catch(e){cacheConsigneBrouillons=[];}
+  // Brouillons de demandes (table sql/demandes_brouillons.sql) — non bloquant, la RLS ne renvoie que les miens
+  try{cacheDemandeBrouillons=await dbSelect('demandes_brouillons');}catch(e){cacheDemandeBrouillons=[];}
   // Annuaire des partenaires/institutions — table posée par sql/partenaires.sql,
   // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
   try{cachePartenaires=await dbSelect('partenaires');}catch(e){console.warn('[loadAllData] partenaires',e);cachePartenaires=[];}
@@ -2963,7 +2965,7 @@ window.syncDemarrer=syncDemarrer;
    ne le signale à l'écran. On nomme donc explicitement la colonne de tri des
    tables qui font exception, et un 42703 déclenche un second essai sans tri
    plutôt que de perdre les données. */
-const DB_ORDER_COL={consignes_lues:'lu_at',consignes_brouillons:'updated_at'};
+const DB_ORDER_COL={consignes_lues:'lu_at',consignes_brouillons:'updated_at',demandes_brouillons:'updated_at'};
 async function dbSelect(table,filters={}){
   const col=DB_ORDER_COL[table]||'created_at';
   const build=function(orderCol){
@@ -3543,7 +3545,7 @@ function renderCrechePanel(){
   if(isAll){html+='<div class="creche-header-box"><div class="creche-header-name"><i class="ti ti-building-community" style="font-size:20px"></i> Toutes les crèches <span>'+cacheCreches.length+' établissements</span></div><div class="section-actions"><button class="btn-orange" onclick="openConsigneModal()"><i class="ti ti-send"></i> Envoyer une consigne</button><button class="btn-cancel" onclick="openConsigneBrouillons()" title="Consignes préparées, à envoyer plus tard" style="background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.7);font-weight:600"><i class="ti ti-file-pencil"></i> Brouillons ('+cacheConsigneBrouillons.length+')</button></div></div>';}
   else if(creche){html+='<div class="creche-header-box"><div class="creche-header-name"><i class="ti ti-building" style="font-size:20px"></i> '+creche.name+(creche.addr?'<span>'+creche.addr+'</span>':'')+(creche.capacity?'<span>Capacité : '+creche.capacity+' enfants</span>':'')+'</div><div class="section-actions">'+(isDirection?'<button class="btn-orange" onclick="openConsigneModal()"><i class="ti ti-send"></i> Envoyer une consigne</button><button class="btn-cancel" onclick="openConsigneBrouillons()" title="Consignes préparées, à envoyer plus tard" style="background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.7);font-weight:600"><i class="ti ti-file-pencil"></i> Brouillons ('+cacheConsigneBrouillons.length+')</button><button class="ibtn" style="background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.4);color:#fff" onclick="editCreche(\''+creche.id+'\')"><i class="ti ti-edit"></i></button><button class="btn-danger-sm" onclick="deleteCreche(\''+creche.id+'\')"><i class="ti ti-trash" style="font-size:13px"></i> Supprimer</button>':'')+'</div></div>';}
   html+='<div class="stats-row"><div class="stat-card"><div class="stat-label">Total</div><div class="stat-val cv">'+total+'</div></div><div class="stat-card" style="border-top-color:var(--orange)"><div class="stat-label">En attente</div><div class="stat-val co">'+attente+'</div></div><div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Urgentes</div><div class="stat-val cr">'+urgent+'</div></div><div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Traitées</div><div class="stat-val cg">'+traite+'</div></div></div>';
-  html+='<div class="section-header"><div class="section-left"><span class="section-title">Demandes & consignes</span><div style="position:relative"><input class="search-inp" id="search-d" type="text" placeholder="🔍 Rechercher…" value="'+searchTerm.replace(/"/g,'&quot;')+'" oninput="searchTerm=this.value;renderDemandsOnly()" autocomplete="off" style="width:240px"><span id="search-clear" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);color:#bbb;font-size:13px;cursor:pointer;'+(searchTerm?'':'display:none')+'" onclick="searchTerm=\'\';document.getElementById(\'search-d\').value=\'\';renderDemandsOnly()">✕</span></div></div><div style="display:flex;gap:8px;align-items:center"><button class="ibtn-fs" id="btn-fs-demands" onclick="toggleDemandsFullscreen()" title="Plein écran"><i class="ti ti-arrows-maximize" id="fs-icon-demands"></i></button><button class="btn-primary" onclick="openDemandModal()"><i class="ti ti-plus"></i> Nouvelle demande</button></div></div>';
+  html+='<div class="section-header"><div class="section-left"><span class="section-title">Demandes & consignes</span><div style="position:relative"><input class="search-inp" id="search-d" type="text" placeholder="🔍 Rechercher…" value="'+searchTerm.replace(/"/g,'&quot;')+'" oninput="searchTerm=this.value;renderDemandsOnly()" autocomplete="off" style="width:240px"><span id="search-clear" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);color:#bbb;font-size:13px;cursor:pointer;'+(searchTerm?'':'display:none')+'" onclick="searchTerm=\'\';document.getElementById(\'search-d\').value=\'\';renderDemandsOnly()">✕</span></div></div><div style="display:flex;gap:8px;align-items:center"><button class="ibtn-fs" id="btn-fs-demands" onclick="toggleDemandsFullscreen()" title="Plein écran"><i class="ti ti-arrows-maximize" id="fs-icon-demands"></i></button><button class="btn-primary" onclick="openDemandModal()"><i class="ti ti-plus"></i> Nouvelle demande</button><button class="btn-cancel" onclick="openDemandeBrouillons()" title="Demandes préparées, à envoyer plus tard"><i class="ti ti-file-pencil"></i> Brouillons ('+cacheDemandeBrouillons.length+')</button></div></div>';
   html+='<div class="filters"><button class="fchip'+(activeFilter==='all'?' active':'')+'" onclick="setFilter(\'all\',this)">En cours</button><button class="fchip'+(activeFilter==='urgent'?' active':'')+'" onclick="setFilter(\'urgent\',this)">Urgentes</button><button class="fchip'+(activeFilter==='attente'?' active':'')+'" onclick="setFilter(\'attente\',this)">En attente</button><button class="fchip'+(activeFilter==='traite'?' active':'')+'" onclick="setFilter(\'traite\',this)">Traitées</button><button class="fchip'+(activeFilter==='consigne'?' active':'')+'" onclick="setFilter(\'consigne\',this)">Consignes</button></div>';
   html+='<div id="demands-list-inner"></div>';
   panel.innerHTML=html;renderDemandsOnly();
@@ -3622,7 +3624,10 @@ async function threadHandleAttachment(event){
 }
 window.threadHandleAttachment=threadHandleAttachment;
 
-async function openDemandModal(){
+let cacheDemandeBrouillons=[],dDraftId=null;
+async function openDemandModal(draft){
+  dDraftId=draft?draft.id:null;
+  document.getElementById('modal-d-title').textContent=draft?'Brouillon de demande':'Nouvelle demande';
   const isAll=isDirection&&activeCrecheId==='all';
   // La crèche est toujours affichée pour la direction (utile pour les demandes liées à un directeur technique terrain),
   // mais devient optionnelle si au moins un destinataire choisi est admin (voir saveDemand()).
@@ -3647,6 +3652,23 @@ async function openDemandModal(){
   dPendingAttachment=null;
   document.getElementById('d-attach-input').value='';
   document.getElementById('d-attach-status').textContent='';
+  if(draft){
+    // Reprise d'un brouillon : on remet chaque champ tel qu'il a été laissé.
+    const sel=document.getElementById('d-creche-select');
+    if(isDirection&&sel)sel.value=draft.creche_id||'';
+    const ids=new Set(Array.isArray(draft.destinataires)?draft.destinataires:[]);
+    document.querySelectorAll('.ckDestDemand').forEach(ck=>{ck.checked=ids.has(ck.value);});
+    dRefSelectionChanged();
+    if(draft.email&&document.querySelectorAll('.ckDestDemand:checked').length===1)document.getElementById('d-email').value=draft.email;
+    document.getElementById('d-subj').value=draft.subject||'';
+    document.getElementById('d-desc').value=draft.description||'';
+    document.getElementById('d-prio').value=draft.priority||'normal';
+    if(draft.theme)document.getElementById('d-theme').value=draft.theme;
+    if(draft.attachment_url){
+      dPendingAttachment={url:draft.attachment_url,name:draft.attachment_name};
+      document.getElementById('d-attach-status').textContent='📎 '+(draft.attachment_name||'Pièce jointe');
+    }
+  }
   document.getElementById('modal-demand-wrap').classList.add('open');
 }
 /* L'e-mail ne peut être ajusté à la main que pour un seul destinataire à la
@@ -3687,9 +3709,102 @@ async function saveDemand(){
       await callFn('notify-push',{referent_ids:[row.to_referent_id],title:'Nouvelle demande',body:subj,url:'./demandes.html',tag:'demande-'+saved.id});
     }
   }
-  if(okCount){showBanner(okCount>1?okCount+' demandes envoyées !':'Demande enregistrée !');closeModal('modal-demand-wrap');renderCrecheTabs();}
+  if(okCount){
+    // Le brouillon d'origine a rempli son rôle : on le retire.
+    if(dDraftId){
+      await dbDelete('demandes_brouillons',dDraftId);
+      cacheDemandeBrouillons=cacheDemandeBrouillons.filter(b=>b.id!==dDraftId);
+      dDraftId=null;
+    }
+    showBanner(okCount>1?okCount+' demandes envoyées !':'Demande enregistrée !');closeModal('modal-demand-wrap');renderCrecheTabs();
+  }
   if(okCount<checked.length)showBanner('Certains envois ont échoué.','error');
   btn.disabled=false;
+}
+/* Brouillons de demandes : préparées ici, envoyées plus tard. Table à part
+   (sql/demandes_brouillons.sql), lisible par son seul auteur. Les destinataires
+   cochés sont gardés (ids) ; à l'envoi, saveDemand() crée une demande par destinataire. */
+async function saveDemandeBrouillon(){
+  const subj=document.getElementById('d-subj').value.trim(),desc=document.getElementById('d-desc').value.trim();
+  const ids=[...document.querySelectorAll('.ckDestDemand:checked')].map(c=>c.value);
+  if(!subj&&!desc&&!ids.length){alert("Renseignez au moins un destinataire, un sujet ou une description avant d'enregistrer le brouillon.");return;}
+  const btn=document.getElementById('btn-draft-demand');btn.disabled=true;
+  const row={
+    creche_id:isDirection?(document.getElementById('d-creche-select')?.value||null):null,
+    destinataires:ids,
+    email:ids.length===1?(document.getElementById('d-email').value.trim()||null):null,
+    subject:subj||null,description:desc||null,
+    priority:document.getElementById('d-prio').value,
+    theme:document.getElementById('d-theme').value,
+    attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null,
+    updated_at:new Date().toISOString()
+  };
+  let ok=false;
+  if(dDraftId){
+    ok=await dbUpdate('demandes_brouillons',dDraftId,row);
+    if(ok)cacheDemandeBrouillons=cacheDemandeBrouillons.map(b=>b.id===dDraftId?Object.assign({},b,row):b);
+  }else{
+    const saved=await dbInsert('demandes_brouillons',Object.assign({created_by:currentUser.id},row));
+    if(saved){ok=true;cacheDemandeBrouillons.unshift(saved);}
+  }
+  btn.disabled=false;
+  if(!ok){showBanner('Brouillon non enregistré'+(window._lastDbError?' : '+window._lastDbError:'')+'. La table demandes_brouillons existe-t-elle ?','error');return;}
+  dDraftId=null;
+  cacheDemandeBrouillons.sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||'')));
+  closeModal('modal-demand-wrap');
+  showBanner('Brouillon enregistré');
+  renderCrecheTabs();
+}
+function openDemandeBrouillons(){
+  let ov=document.getElementById('modal-dbrouillons-wrap');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.className='overlay';ov.id='modal-dbrouillons-wrap';
+    ov.onclick=function(ev){if(ev.target===ov)closeModal('modal-dbrouillons-wrap');};
+    ov.innerHTML='<div class="modal" style="max-width:520px;width:100%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">'
+      +'<h3 style="margin:0"><i class="ti ti-file-pencil"></i> Brouillons de demandes</h3>'
+      +'<button class="btn-cancel" onclick="closeModal(\'modal-dbrouillons-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
+      +'<div id="dbrouillons-liste"></div></div>';
+    document.body.appendChild(ov);
+  }
+  renderDemandeBrouillons();
+  ov.classList.add('open');
+}
+function renderDemandeBrouillons(){
+  const box=document.getElementById('dbrouillons-liste');
+  if(!box)return;
+  if(!cacheDemandeBrouillons.length){
+    box.innerHTML='<div class="empty-state"><i class="ti ti-file-pencil"></i><p>Aucun brouillon.<br><span style="font-size:12px">Dans « Nouvelle demande », le bouton « Enregistrer en brouillon » garde une demande à envoyer plus tard.</span></p></div>';
+    return;
+  }
+  box.innerHTML=cacheDemandeBrouillons.map(function(b){
+    const quand=b.updated_at?new Date(b.updated_at).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    const ids=Array.isArray(b.destinataires)?b.destinataires:[];
+    const noms=ids.map(id=>(cacheReferents.find(r=>r.id===id)||{}).name).filter(Boolean);
+    const dest=noms.length?('À '+noms.slice(0,3).join(', ')+(noms.length>3?' +'+(noms.length-3):'')):'Sans destinataire';
+    const apercu=String(b.description||'').slice(0,100);
+    return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+      +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13.5px">'+escHtml(b.subject||'(sans sujet)')+'</b>'
+      +(b.priority==='urgent'?'<span class="badge b-consigne">Urgente</span>':'')+'</div>'
+      +'<div style="font-size:12px;color:var(--muted);margin:3px 0 0">'+escHtml(dest)+'</div>'
+      +'<div style="font-size:12px;color:var(--muted);margin:2px 0 8px">'+escHtml(apercu)+(String(b.description||'').length>100?'…':'')+(b.attachment_name?' · 📎 '+escHtml(b.attachment_name):'')+'</div>'
+      +'<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--muted);flex:1">Modifié le '+escHtml(quand)+'</span>'
+      +'<button class="btn-cancel" data-id="'+b.id+'" onclick="deleteDemandeBrouillon(this.dataset.id)"><i class="ti ti-trash"></i> Supprimer</button>'
+      +'<button class="btn-primary" data-id="'+b.id+'" onclick="reprendreDemandeBrouillon(this.dataset.id)"><i class="ti ti-edit"></i> Reprendre</button></div></div>';
+  }).join('');
+}
+async function reprendreDemandeBrouillon(id){
+  const b=cacheDemandeBrouillons.find(x=>x.id===id);
+  if(!b)return;
+  closeModal('modal-dbrouillons-wrap');
+  await openDemandModal(b);
+}
+async function deleteDemandeBrouillon(id){
+  if(!confirm('Supprimer ce brouillon ?'))return;
+  if(!await dbDeleteStrict('demandes_brouillons',id)){showBanner('Suppression impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
+  cacheDemandeBrouillons=cacheDemandeBrouillons.filter(b=>b.id!==id);
+  renderDemandeBrouillons();
+  renderCrecheTabs();
 }
 async function toggleStatus(id,currentStatus){
   const newStatus=currentStatus==='traite'?'attente':'traite';
