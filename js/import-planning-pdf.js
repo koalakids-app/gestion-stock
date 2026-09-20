@@ -444,7 +444,7 @@ function spInjecterModale() {
       <div class="fg"><label class="flabel">Crèche concernée</label>
         <select class="finput" id="sp-creche"><option value="">— Sélectionner —</option></select>
       </div>
-      <div class="fg"><label class="flabel">Directrice technique titulaire</label>
+      <div class="fg"><label class="flabel">Directeur/trice technique titulaire</label>
         <select class="finput" id="sp-referent"><option value="">— Sélectionner —</option></select>
         <div style="font-size:11.5px;color:var(--ink2);margin-top:5px">Ses journées seront aussi écrites dans son planning individuel, comme le fait l\u2019import Excel.</div>
       </div>
@@ -506,7 +506,7 @@ function spPrenomReferente(nomReferente, mapping) {
 
 function spTriggerFile() {
   if (!document.getElementById('sp-creche').value) { alert('Choisissez d\u2019abord la crèche.'); return; }
-  if (!document.getElementById('sp-referent').value) { alert('Choisissez la directrice technique titulaire.'); return; }
+  if (!document.getElementById('sp-referent').value) { alert('Choisissez le/la directeur/trice technique titulaire.'); return; }
   document.getElementById('sp-file').click();
 }
 
@@ -572,7 +572,7 @@ function spRenderPreview() {
 
   if (_spData.referentId && !_spData.referentPrenom) {
     html += '<div style="background:var(--amber-lt);border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--orange)">'
-      + '<strong>⚠ Directrice technique non retrouvée.</strong><br>Aucun prénom ne correspond à '
+      + '<strong>⚠ Directeur/trice technique non retrouvée.</strong><br>Aucun prénom ne correspond à '
       + escHtml(_spData.referentNom) + '. Son planning individuel ne sera pas rempli. '
       + 'Corrigez son prénom ci-dessous pour rétablir le lien.</div>';
   }
@@ -586,7 +586,7 @@ function spRenderPreview() {
       ? '<span style="font-size:10.5px;background:var(--amber-lt);color:var(--orange);padding:2px 7px;border-radius:20px;font-weight:700">à vérifier</span>'
       : '<span style="font-size:10.5px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:20px;font-weight:700">reconnu</span>';
     const bRef = (_spData.referentPrenom && m.prenom === _spData.referentPrenom)
-      ? ' <span style="font-size:10px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:8px">directrice technique — planning individuel + équipe</span>'
+      ? ' <span style="font-size:10px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:8px">directeur/trice technique — planning individuel + équipe</span>'
       : ' <span style="font-size:10px;background:#f0f0f5;color:#888;padding:2px 7px;border-radius:8px">planning équipe</span>';
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">'
       + '<div style="flex:1;min-width:0"><div style="font-size:12.5px">' + escHtml(n) + '</div>' + badge + bRef + '</div>'
@@ -768,7 +768,7 @@ function openUnifiedImportModal() {
 
 function uniTriggerFile() {
   if (!document.getElementById('uni-creche').value) { alert('Choisissez d’abord la crèche.'); return; }
-  if (!document.getElementById('uni-referent').value) { alert('Choisissez la directrice technique titulaire.'); return; }
+  if (!document.getElementById('uni-referent').value) { alert('Choisissez le/la directeur/trice technique titulaire.'); return; }
   document.getElementById('uni-file').click();
 }
 
@@ -930,7 +930,7 @@ function uniRenderPreview() {
     html += '<label style="display:flex;align-items:flex-start;gap:8px;background:#EEEDF8;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;color:var(--koala);cursor:pointer"><input type="checkbox" id="uni-sal-replace" onchange="_uniData.sal.replace=this.checked" ' + (sal.replace ? 'checked' : '') + ' style="margin-top:2px"/><span><strong>Repartir à zéro sur ' + (semainesTouchees.length > 1 ? 'ces ' + semainesTouchees.length + ' semaines' : 'cette semaine') + '</strong><br><span style="font-weight:400;font-size:11.5px">Le planning équipe de cette crèche est effacé pour ' + (semainesTouchees.length > 1 ? 'ces semaines' : 'cette semaine') + ' avant l’import : le PDF fait foi. Cela supprime aussi les anciennes lignes d’un import précédent et les personnes ajoutées à la main. Décochez pour ne mettre à jour que les salariés lus dans le PDF.</span></span></label>';
     if (_uniData.referentId && !sal.referentPrenom) {
       html += '<div style="background:var(--amber-lt);border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--orange)">'
-        + '<strong>⚠ Directrice technique non retrouvée.</strong><br>Aucun prénom ne correspond à ' + escHtml(_uniData.referentNom) + '. Son planning individuel ne sera pas rempli. Corrigez son prénom ci-dessous pour rétablir le lien.</div>';
+        + '<strong>⚠ Directeur/trice technique non retrouvée.</strong><br>Aucun prénom ne correspond à ' + escHtml(_uniData.referentNom) + '. Son planning individuel ne sera pas rempli. Corrigez son prénom ci-dessous pour rétablir le lien.</div>';
     }
     const noms = Object.keys(sal.mapping).sort();
     html += '<div style="font-weight:700;margin-bottom:8px">Correspondance des prénoms</div>';
@@ -941,7 +941,7 @@ function uniRenderPreview() {
         ? '<span style="font-size:10.5px;background:var(--amber-lt);color:var(--orange);padding:2px 7px;border-radius:20px;font-weight:700">à vérifier</span>'
         : '<span style="font-size:10.5px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:20px;font-weight:700">reconnu</span>';
       const bRef = (sal.referentPrenom && m.prenom === sal.referentPrenom)
-        ? ' <span style="font-size:10px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:8px">directrice technique — planning individuel + équipe</span>'
+        ? ' <span style="font-size:10px;background:var(--koala-light);color:var(--koala);padding:2px 7px;border-radius:8px">directeur/trice technique — planning individuel + équipe</span>'
         : ' <span style="font-size:10px;background:#f0f0f5;color:#888;padding:2px 7px;border-radius:8px">planning équipe</span>';
       return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">'
         + '<div style="flex:1;min-width:0"><div style="font-size:12.5px">' + escHtml(n) + '</div>' + badge + bRef + '</div>'
