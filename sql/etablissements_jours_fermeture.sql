@@ -13,3 +13,9 @@
 -- ============================================================================
 
 alter table public.etablissements add column if not exists jours_fermeture jsonb not null default '[]'::jsonb;
+
+-- Une fermeture peut aussi concerner tout le réseau (vacances communes à
+-- toutes les crèches, par exemple) : elle est alors saisie une seule fois
+-- sous la clé jours_fermeture_reseau du jsonb libre reseau_config.config,
+-- plutôt que recopiée dans jours_fermeture de chaque établissement. Aucune
+-- migration n'est nécessaire pour cette clé : reseau_config.config existe déjà.
