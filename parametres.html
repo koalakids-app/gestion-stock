@@ -74,6 +74,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .ferm-info{flex:1;min-width:0}
 .ferm-dates{font-weight:800;font-size:13.5px}
 .ferm-label{font-size:11.5px;color:var(--muted)}
+.ferm-scope{font-size:11px;font-weight:700;color:var(--violet)}
 .ferm-empty{font-size:12.5px;color:var(--muted);padding:6px 0}
 .ov{position:fixed;inset:0;background:rgba(43,39,64,.45);display:none;align-items:flex-start;justify-content:center;padding:20px;z-index:100;overflow-y:auto}
 .ov.on{display:flex}
@@ -224,6 +225,9 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
           <div class="f"><label class="lb">Au (facultatif)</label><input id="fermFin" type="date"></div>
         </div>
         <div class="f"><label class="lb">Libellé (facultatif)</label><input id="fermLabel" placeholder="Fermeture d'été, pont de l'Ascension…"></div>
+        <label style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:var(--muted);margin:0 0 10px 3px;cursor:pointer">
+          <input type="checkbox" id="fermReseau" style="width:auto"> Concerne toutes les crèches du réseau
+        </label>
         <button type="button" class="btn btn-s btn-sm" onclick="fermAdd()"><i class="ti ti-plus"></i> Ajouter cette fermeture</button>
       </div>
 
@@ -333,7 +337,7 @@ let CRECHES=[],ETABS=[],RCFG={},KIOSK_DEVICES=[];
 let crecheId=null;
 const JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi'],[6,'Samedi']];
 const FERM_TYPES={vacances:'Vacances',ferie:'Jour férié',pedagogique:'Journée pédagogique'};
-let FERMETURES=[];
+let FERMETURES=[],FERMETURES_RESEAU=[];
 
 function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -552,6 +556,7 @@ async function loadAll(){
     if(e.error)throw e.error;
     CRECHES=c.data||[];ETABS=e.data||[];
     RCFG=(r&&r.data&&r.data.config)||{};
+    FERMETURES_RESEAU=toArr(RCFG.jours_fermeture_reseau).slice();
   }catch(err){
     console.error('[loadAll]',err);
     const msg=err.code==='42P01'
@@ -597,7 +602,7 @@ function snapshot(){
     'eTel','eMail','ePmiNum','ePmiDate','ePmiEch','eAgeMin','eAgeMax','eHo','eHf',
     'eSemFerm','eSemFact','eObs'].map(val).join('|')
     +'|'+[...document.querySelectorAll('.ckJour:checked')].map(x=>x.value).join(',')
-    +'|'+JSON.stringify(FERMETURES);
+    +'|'+JSON.stringify(FERMETURES)+'|'+JSON.stringify(FERMETURES_RESEAU);
 }
 function dirty(){return SNAP!==''&&SNAP!==snapshot();}
 
@@ -914,19 +919,26 @@ function syncSem(depuisFact){
 }
 
 /* ---------- JOURS DE FERMETURE ---------- */
+/* Une fermeture réseau vit dans reseau_config (une seule saisie pour les 6
+   crèches) ; une fermeture propre à l'établissement vit dans
+   etablissements.jours_fermeture. Les deux s'affichent fondues dans la même
+   liste, pour que la direction n'ait pas à se souvenir d'où vient quoi. */
 function fermDfr(d){return dfr(d);}
 function renderFermetures(){
   const box=document.getElementById('fermList');
-  if(!FERMETURES.length){box.innerHTML='<p class="ferm-empty">Aucune fermeture particulière enregistrée.</p>';return;}
-  const tri=FERMETURES.map((f,i)=>({f,i})).sort((a,b)=>String(a.f.debut||'').localeCompare(String(b.f.debut||'')));
-  box.innerHTML=tri.map(({f,i})=>{
+  const tous=FERMETURES.map((f,i)=>({f,i,scope:'creche'}))
+    .concat(FERMETURES_RESEAU.map((f,i)=>({f,i,scope:'reseau'})));
+  if(!tous.length){box.innerHTML='<p class="ferm-empty">Aucune fermeture particulière enregistrée.</p>';return;}
+  tous.sort((a,b)=>String(a.f.debut||'').localeCompare(String(b.f.debut||'')));
+  box.innerHTML=tous.map(({f,i,scope})=>{
     const dates=f.fin&&f.fin!==f.debut?(fermDfr(f.debut)+' → '+fermDfr(f.fin)):fermDfr(f.debut);
     const type=FERM_TYPES[f.type]||f.type||'';
     return '<div class="ferm-row">'
       +'<span class="ferm-badge '+esc(f.type||'')+'">'+esc(type)+'</span>'
       +'<div class="ferm-info"><div class="ferm-dates">'+esc(dates)+'</div>'
+      +(scope==='reseau'?'<div class="ferm-scope"><i class="ti ti-network"></i> Toutes les crèches</div>':'')
       +(f.label?'<div class="ferm-label">'+esc(f.label)+'</div>':'')+'</div>'
-      +'<button type="button" class="btn btn-g btn-sm" onclick="fermRemove('+i+')"><i class="ti ti-trash"></i></button>'
+      +'<button type="button" class="btn btn-g btn-sm" onclick="fermRemove(\''+scope+'\','+i+')"><i class="ti ti-trash"></i></button>'
       +'</div>';
   }).join('');
 }
@@ -935,11 +947,17 @@ function fermAdd(){
   if(!debut){toast('Indiquez au moins une date de début.',true);return;}
   let fin=val('fermFin')||debut;
   if(fin<debut){toast('La date de fin ne peut pas précéder la date de début.',true);return;}
-  FERMETURES.push({type:val('fermType')||'vacances',debut,fin,label:val('fermLabel')});
+  const entry={type:val('fermType')||'vacances',debut,fin,label:val('fermLabel')};
+  if(document.getElementById('fermReseau').checked)FERMETURES_RESEAU.push(entry);
+  else FERMETURES.push(entry);
   setVal('fermDebut','');setVal('fermFin','');setVal('fermLabel','');
+  document.getElementById('fermReseau').checked=false;
   renderFermetures();
 }
-function fermRemove(i){FERMETURES.splice(i,1);renderFermetures();}
+function fermRemove(scope,i){
+  (scope==='reseau'?FERMETURES_RESEAU:FERMETURES).splice(i,1);
+  renderFermetures();
+}
 
 /* ---------- ENREGISTREMENT ---------- */
 async function save(){
@@ -1030,7 +1048,8 @@ async function save(){
       pied_page:val('rPied'),notif_silence_debut:val('rNotifDebut')||'19:00', notif_silence_fin:val('rNotifFin')||'08:00',
       notif_silence_samedi:document.getElementById('rNotifSamedi').checked,
       notif_silence_dimanche:document.getElementById('rNotifDimanche').checked,
-      notif_silence_feries:document.getElementById('rNotifFeries').checked});
+      notif_silence_feries:document.getElementById('rNotifFeries').checked,
+      jours_fermeture_reseau:FERMETURES_RESEAU});
     const{error:er}=await sb.from('reseau_config')
       .upsert({id:RESEAU_CFG_ID,config:cfg,updated_at:new Date().toISOString()},{onConflict:'id'});
     if(er)throw er;
