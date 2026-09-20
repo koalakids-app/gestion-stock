@@ -118,7 +118,7 @@ function kioskRender(){
     const last=statusMap[key];
     const present=!!(last&&last.action==='arrivee');
     const label=p._kind==='referent'?(p.name||''):(p.prenom||'');
-    const sub=p._kind==='enfants'?(p.nom||''):p._kind==='employe'?(p.poste||'Collaborateur/trice'):(p.poste||(p.role==='direction'?'Direction':'Directrice technique'));
+    const sub=p._kind==='enfants'?(p.nom||''):p._kind==='employe'?(p.poste||'Collaborateur/trice'):(p.poste||(p.role==='direction'?'Direction':'Directeur/trice technique'));
     const heure=last?new Date(last.horodatage).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
     const statusTxt=present?('Présent(e) depuis '+heure):(last?('Parti(e) à '+heure):'Pas encore pointé(e)');
     return '<button class="kiosk-tile'+(present?' present':'')+'" onclick="kioskToggle(this,\''+p._kind+'\',\''+p.id+'\',\''+(p.employe_id||'')+'\')">'

@@ -192,7 +192,7 @@ function renderRefDashboard(){
   document.getElementById('ref-dash-async-grid').innerHTML=
     '<div class="dash-card" id="rdb-presences"><div class="dash-card-title"><i class="ti ti-users-group"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="rdb-equipe"><div class="dash-card-title"><i class="ti ti-calendar-week"></i> Planning équipe du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
-    '<div class="dash-card" id="rdb-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
+    '<div class="dash-card" id="rdb-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçants/tes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
 
   loadRefDashAsync(crecheId,t);
 }
@@ -200,7 +200,7 @@ function renderRefDashboard(){
 async function loadRefDashAsync(crecheId,t){
   const titlePresences='<div class="dash-card-title"><i class="ti ti-users-group"></i> Présences du jour</div>';
   const titleEquipe='<div class="dash-card-title"><i class="ti ti-calendar-week"></i> Planning équipe du jour</div>';
-  const titleRmp='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div>';
+  const titleRmp='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçants/tes du jour</div>';
   const empty=msg=>'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">'+msg+'</div>';
 
   // Présences enfants — filtrage via enfants (presences n'a pas creche_id)
@@ -248,7 +248,7 @@ async function loadRefDashAsync(crecheId,t){
   try{
     const{data:rmps}=await sb.from('remplacantes').select('*').eq('creche_id',crecheId).eq('date',t);
     const box=document.getElementById('rdb-remplacantes');if(!box)return;
-    if(!rmps||!rmps.length){box.innerHTML=titleRmp+empty('Aucune remplaçante prévue');
+    if(!rmps||!rmps.length){box.innerHTML=titleRmp+empty('Aucun remplaçant/te prévu');
     }else{
       box.innerHTML=titleRmp+rmps.map(r=>{
         const h=r.heure_debut?r.heure_debut+'–'+(r.heure_fin||''):'';
@@ -274,7 +274,7 @@ function renderDashboard(){
   loadDashboardStgDocsAlertes();
   loadDashboardDevisAlertes();
   loadDashboardDemandesAlertes();
-  document.getElementById('dash-stats').innerHTML='<div class="stat-card"><div class="stat-label">Crèches</div><div class="stat-val cv">'+cacheCreches.length+'</div><div class="stat-sub">'+cacheEnfants.length+' enfants</div></div><div class="stat-card" style="border-top-color:var(--orange)"><div class="stat-label">Demandes</div><div class="stat-val co">'+totalD+'</div><div class="stat-sub">'+cacheDemandes.filter(d=>d.status==='attente').length+' en attente</div></div><div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Incidents</div><div class="stat-val cr">'+cacheIncidents.length+'</div><div class="stat-sub">'+incNT+' non traités</div></div><div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Directeurs techniques</div><div class="stat-val cg">'+cacheReferents.filter(r=>r.role==='referent').length+'</div><div class="stat-sub">actifs</div></div>';
+  document.getElementById('dash-stats').innerHTML='<div class="stat-card"><div class="stat-label">Crèches</div><div class="stat-val cv">'+cacheCreches.length+'</div><div class="stat-sub">'+cacheEnfants.length+' enfants</div></div><div class="stat-card" style="border-top-color:var(--orange)"><div class="stat-label">Demandes</div><div class="stat-val co">'+totalD+'</div><div class="stat-sub">'+cacheDemandes.filter(d=>d.status==='attente').length+' en attente</div></div><div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Incidents</div><div class="stat-val cr">'+cacheIncidents.length+'</div><div class="stat-sub">'+incNT+' non traités</div></div><div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Directeurs/trices techniques</div><div class="stat-val cg">'+cacheReferents.filter(r=>r.role==='referent').length+'</div><div class="stat-sub">actifs</div></div>';
   const byCrecheRows=cacheCreches.map(c=>{const n=cacheDemandes.filter(d=>d.creche_id===c.id).length;const pct=totalD>0?Math.round(n/totalD*100):0;return'<div class="dash-list-item"><strong>'+c.name+'</strong><span style="font-weight:700;color:var(--koala)">'+n+'</span></div><div class="dash-bar"><div class="dash-bar-fill" style="width:'+pct+'%"></div></div>';}).join('')||'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune crèche</div>';
   const themes={};cacheDemandes.forEach(d=>{if(d.theme)themes[d.theme]=(themes[d.theme]||0)+1;});
   const themeRows=Object.keys(themes).length?Object.entries(themes).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'<div class="dash-list-item"><span>'+k+'</span><span style="font-weight:700;color:var(--koala)">'+v+'</span></div>').join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune donnée</div>';
@@ -412,7 +412,7 @@ function renderDashboardToday(){
     '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-planning"><div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span><select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning()"><option value="">-- Crèche --</option></select></div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Sélectionnez une crèche</div></div>'+
     '<div class="dash-card" id="dash-today-autres"><div class="dash-card-title"><i class="ti ti-user-off"></i> Absences et congés du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
-    '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
+    '<div class="dash-card" id="dash-today-remplacantes"><div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçants/tes du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-mapresence"><div class="dash-card-title"><i class="ti ti-map-pin"></i> Ma présence du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-afaire"><div class="dash-card-title"><i class="ti ti-checklist"></i> À faire du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>';
 
@@ -588,12 +588,12 @@ async function loadDashboardAutres(dateStr){
 async function loadDashboardRemplacantes(dateStr){
   const box=document.getElementById('dash-today-remplacantes');
   if(!box)return;
-  const title='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçantes du jour</div>';
+  const title='<div class="dash-card-title"><i class="ti ti-user-plus"></i> Remplaçants/tes du jour</div>';
   try{
     const{data,error}=await sb.from('remplacantes').select('*').eq('date',dateStr).order('creche_id',{ascending:true});
     if(error)throw error;
     const list=data||[];
-    if(!list.length){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucune remplaçante prévue</div>';return;}
+    if(!list.length){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun remplaçant/te prévu</div>';return;}
     const rows=list.map(ev=>{
       const creche=cacheCreches.find(c=>c.id===ev.creche_id);
       const horaire=ev.heure_debut?ev.heure_debut+'–'+ev.heure_fin:'';

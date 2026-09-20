@@ -521,7 +521,7 @@ function stgRemplirReferents(crecheId){
     +(r.poste?' — '+escHtml(r.poste):'')+'</option>';
   const val=sel.value;
   sel.innerHTML='<option value="">— Non désignée —</option>'
-    +(refs.length?'<optgroup label="Directrices techniques de la crèche">'+refs.map(opt).join('')+'</optgroup>':'')
+    +(refs.length?'<optgroup label="Directeurs/trices techniques de la crèche">'+refs.map(opt).join('')+'</optgroup>':'')
     +(dirs.length?'<optgroup label="Direction et coordination">'+dirs.map(opt).join('')+'</optgroup>':'');
   /* Une personne enregistrée sur la fiche mais absente des deux groupes (elle a
      changé de crèche depuis) resterait perdue en silence : on la remet. */
@@ -1908,7 +1908,7 @@ async function stgAjouterRess(){
     dire('');
     return showBanner('Ajout impossible'
       +(window._lastDbError?' : '+window._lastDbError
-        :(isDirection?'.':' — une directrice technique ne peut ajouter que pour sa crèche (script 36c).'))+'','error');
+        :(isDirection?'.':' — un/une directeur/trice technique ne peut ajouter que pour sa crèche (script 36c).'))+'','error');
   }
   dire('');
   ['stg-r-libelle','stg-r-desc','stg-r-url'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});

@@ -2018,7 +2018,7 @@ const GR_DEF_IDENT=[
   {key:'date',label:"Date de l'évaluation",type:'date'},
   {key:'eval',label:'Évaluateur',type:'text'}
 ];
-const GR_DEF_SIGS=[{role:'responsable',label:'Directeur technique'},{role:'salarie',label:'Salarié(e)'}];
+const GR_DEF_SIGS=[{role:'responsable',label:'Directeur/trice technique'},{role:'salarie',label:'Salarié(e)'}];
 function grSchema(){
   const s=(fillDoc&&fillDoc.schema_grille)||{};
   return {
@@ -2229,7 +2229,7 @@ const CTRL_SCHEMA = [
    {id:"nb_pro_jour", l:"Nombre de professionnels assurant l'encadrement direct le jour de la visite", t:"num"},
    {id:"eff_qualif_adaptes", l:"Effectif et qualifications adaptés", t:"oui_non", reg:true},
    {id:"sep_qualif", l:"Qualifications présentes (nom, prénom, ETP)", t:"sep"},
-   {id:"q_directrice", l:"Directrice — qualification / ETP / nom", t:"text"},
+   {id:"q_directrice", l:"Directeur/trice — qualification / ETP / nom", t:"text"},
    {id:"q_puer", l:"Puéricultrice — ETP / nom", t:"text"},
    {id:"q_inf", l:"Infirmière — ETP / nom", t:"text"},
    {id:"q_eje", l:"EJE — ETP / nom", t:"text"},
@@ -2262,7 +2262,7 @@ const CTRL_SCHEMA = [
    {id:"app_heures", l:"APP — heures (mois/quadrimestre)", t:"text"},
    {id:"app_derniere", l:"APP — dernière intervention", t:"text"},
    {id:"app_prochaine", l:"APP — prochaine intervention", t:"text"},
-   {id:"soutien_rt", l:"Soutien de la directrice technique (si qualif. non requise)", t:"oui_non", reg:true},
+   {id:"soutien_rt", l:"Soutien du/de la directeur/trice technique (si qualif. non requise)", t:"oui_non", reg:true},
    {id:"soutien_rt_nom", l:"Soutien RT — nom / qualification / heures", t:"text"},
    {id:"autres_interv", l:"Autres intervenants extérieurs", t:"oui_non"},
    {id:"autres_interv_detail", l:"Autres intervenants — noms / heures", t:"textarea"},
@@ -3317,7 +3317,7 @@ const TPL={
        .map(c=>`<option${v.sal_creche===c?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
    </div>
    <div class="f"><label>Fonction</label><div class="radios">${
-     ['Auxiliaire de puériculture','Educatrice de jeunes enfants','Accompagnante éducative petite enfance','Directrice technique','Autre']
+     ['Auxiliaire de puériculture','Educatrice de jeunes enfants','Accompagnante éducative petite enfance','Directeur/trice technique','Autre']
      .map(o=>`<label><input type="radio" name="ff_fonction" value="${esc(o)}"${v.fonction===o?' checked':''}> ${esc(o)}</label>`).join('')}</div>
      <input id="ff_fonction_autre" placeholder="Si autre, préciser…" style="margin-top:8px" value="${esc(v.fonction_autre)}"></div>
 
@@ -4472,7 +4472,7 @@ TPL.cerfa_17580={
     +'<div class="c17-tot">Total encadrement (sous-total 1 + sous-total 2) : <span id="c17-total">—</span> ETP</div>'
     +'<div class="c17-sep">Autres fonctions</div>'
     +c17F('Professionnels en charge de la restauration, de l’entretien ménager et de la lingerie — ETP envisagé',c17In('g_rest_etp',g('g_rest_etp'),'number'))
-    +c17F('Directeur technique santé et accueil inclusif (RSAI) — nombre d’heures annuelles',c17In('g_rsai_h',g('g_rsai_h'),'number'),'Articles R. 2324-39 et R. 2324-46-2 du CSP.')
+    +c17F('Directeur/trice technique santé et accueil inclusif (RSAI) — nombre d’heures annuelles',c17In('g_rsai_h',g('g_rsai_h'),'number'),'Articles R. 2324-39 et R. 2324-46-2 du CSP.')
     +c17F('Séances d’analyse de pratiques professionnelles — nombre d’heures annuelles',c17In('g_app_h',g('g_app_h'),'number'),'Article R. 2324-37 du CSP.')
   });
   /* H I J K L */
@@ -4686,7 +4686,7 @@ TPL.cerfa_17580={
   const tot=(parseFloat(g('g_p1_etp'))||0)+(parseFloat(g('g_p2_etp'))||0);
   champ('Total (sous-total 1 + sous-total 2)',tot?String(Math.round(tot*100)/100):'');
   champ('Professionnels en charge de la restauration, de l’entretien ménager et de la lingerie (ETP)',g('g_rest_etp'));
-  champ('Directeur technique santé et accueil inclusif — nombre d’heures annuelles',g('g_rsai_h'));
+  champ('Directeur/trice technique santé et accueil inclusif — nombre d’heures annuelles',g('g_rsai_h'));
   champ('Séances d’analyse de pratiques professionnelles — nombre d’heures annuelles',g('g_app_h'));
   y+=3;
 
@@ -5188,7 +5188,7 @@ categories: `
 
 documents: `
 <h3>📄 Ajouter et gérer les documents</h3>
-<div class="warn">🔒 <strong>Réservé à la direction.</strong> L’ajout, la modification et la suppression de documents et de catégories, ainsi que l’import de dossier, sont accessibles aux seuls comptes <strong>direction</strong>. Les directrices techniques disposent d’un accès en lecture : elles consultent, remplissent en ligne, signent et téléchargent, mais ne déposent pas de nouveau document.</div>
+<div class="warn">🔒 <strong>Réservé à la direction.</strong> L’ajout, la modification et la suppression de documents et de catégories, ainsi que l’import de dossier, sont accessibles aux seuls comptes <strong>direction</strong>. Les directeurs/trices techniques disposent d’un accès en lecture : elles consultent, remplissent en ligne, signent et téléchargent, mais ne déposent pas de nouveau document.</div>
 <div class="st">➕ Nouveau document</div>
 <ul>
   <li>Bouton <strong>Nouveau document</strong>, puis renseigner le titre, la description, la catégorie et éventuellement la crèche.</li>
@@ -5288,7 +5288,7 @@ reponses: `
   <li>Une réponse peut être supprimée définitivement — l’action est irréversible.</li>
   <li>Penser à exporter le PDF avant toute suppression si le document doit être conservé.</li>
   <li><strong>Direction</strong> — peut supprimer n’importe quelle réponse.</li>
-  <li><strong>Directrice technique</strong> — uniquement une réponse encore au statut <strong>Préparé</strong> et rattachée à sa propre crèche. Une réponse <strong>Signée</strong>, ou celle d’un autre site, n’affiche pas la corbeille.</li>
+  <li><strong>Directeur/trice technique</strong> — uniquement une réponse encore au statut <strong>Préparé</strong> et rattachée à sa propre crèche. Une réponse <strong>Signée</strong>, ou celle d’un autre site, n’affiche pas la corbeille.</li>
 </ul>
 <div class="tip">🖨️ La fonction <strong>Éditer le PDF</strong> reste disponible pour tous : elle génère le PDF puis vide le formulaire en cours de saisie, y compris s’il vient d’être signé.</div>
 <div class="warn">📁 Pour les documents à valeur administrative (entretiens annuels notamment), conserver systématiquement l’export PDF en dehors de l’application.</div>
@@ -5312,7 +5312,7 @@ eaje: `
   <li>Le bouton PDF exporte la fiche complète pour archivage ou transmission.</li>
   <li>Les fiches déjà saisies se retrouvent via le bouton « Réponses » du document.</li>
 </ul>
-<div class="warn">⚠️ Une directrice technique ne voit que les fiches de sa crèche. La direction accède à l’ensemble des établissements.</div>
+<div class="warn">⚠️ Un/une directeur/trice technique ne voit que les fiches de sa crèche. La direction accède à l’ensemble des établissements.</div>
 `,
 
 registre: `
@@ -5320,7 +5320,7 @@ registre: `
 <div class="tip">Le second onglet de cette page tient le registre de sécurité obligatoire de chaque crèche, au titre de l’article R.143-44 du code de la construction et de l’habitation. Il est présenté à la commission de sécurité, au maire, à la PMI ou à l’assureur sur simple demande.</div>
 <div class="st">🧭 Se repérer</div>
 <ul>
-  <li>Le sélecteur en haut choisit la crèche. Une directrice technique ne voit et ne modifie que la sienne ; la direction accède aux six.</li>
+  <li>Le sélecteur en haut choisit la crèche. Un/une directeur/trice technique ne voit et ne modifie que la sienne ; la direction accède aux six.</li>
   <li><strong>Synthèse</strong> — le tableau de bord : contrôles en retard, échéances proches, réserves ouvertes, obligation d’exercices remplie ou non.</li>
   <li><strong>Identité ERP</strong> — type, catégorie, effectifs, avis de la commission de sécurité, chargé de sécurité désigné, assurance.</li>
   <li><strong>Vérifications</strong> — l’échéancier réglementaire (27 contrôles pré-paramétrés) et l’historique des contrôles consignés.</li>
@@ -5956,7 +5956,7 @@ function rsSigBloc(mod){
   return '<div class="rs-sig"><h4>Signature de l’intervenant</h4>'+obl
     +'<div class="f"><label>Nom du signataire</label><input id="rsc_signataire_nom" value="'
       +esc((RS_EDIT&&RS_EDIT.signataire_nom)||'')+'"></div>'
-    +'<div class="f"><label>Qualité (technicien, directrice technique, entreprise…)</label><input id="rsc_signataire_qualite" value="'
+    +'<div class="f"><label>Qualité (technicien, directeur/trice technique, entreprise…)</label><input id="rsc_signataire_qualite" value="'
       +esc((RS_EDIT&&RS_EDIT.signataire_qualite)||'')+'"></div>'
     +'<div id="rsSigHost"></div>'
     +'<div class="acts">'
