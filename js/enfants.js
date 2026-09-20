@@ -342,7 +342,7 @@ function kkPictosActions(id,crecheId,codePictos,type){
 }
 async function kkSendPictos(id,type){
   type=type||'enfant';
-  const dest=type==='referent'?'à ce directeur/trice technique':(type==='employe'?'à cet employé/cette employée':'aux parents');
+  const dest=type==='referent'?'à ce directeur/trice technique':(type==='employe'?'à ce/cette collaborateur/trice':'aux parents');
   if(!confirm('Envoyer le code image par e-mail '+dest+' ?'))return;
   const fn=type==='referent'?'envoyer-code-pictos-referent':(type==='employe'?'envoyer-code-pictos-employe':'envoyer-code-pictos');
   const param=type==='referent'?{referent_id:id}:(type==='employe'?{employe_id:id}:{enfant_id:id});
