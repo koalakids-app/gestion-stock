@@ -267,6 +267,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .cal-evt-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;margin-top:4px}
 .cal-evt-title{font-size:13px;font-weight:700;color:var(--text)}
 .cal-evt-meta{font-size:11.5px;color:var(--muted);margin-top:2px}
+.cal-cell.ferm{background:var(--red-l,#FDE8E8)}
+.cal-ferm-tag{font-size:11px;line-height:1.3;padding:3px 6px;border-radius:5px;color:var(--red,#C62828);background:#fff;font-weight:700;white-space:normal;word-break:break-word}
+.cal-ferm-row{display:flex;align-items:flex-start;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);background:var(--red-l,#FDE8E8);margin:-12px -14px 4px;padding:9px 14px;border-radius:10px 10px 0 0}
+.cal-ferm-row .cal-evt-title{color:var(--red,#C62828)}
 
 /* INCIDENTS */
 .incident-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:0.875rem 1.1rem;display:flex;gap:12px;align-items:flex-start;border-left:4px solid var(--red);border-radius:0 12px 12px 0;margin-bottom:8px}
@@ -4351,13 +4355,32 @@ function renderCalendar(){
   calRenderLegend();
 }
 
+// Fermetures (Paramètres/Fonctionnement) couvrant ce jour : la fermeture réseau
+// prime et dispense d'énumérer chaque crèche (toutes sont alors fermées) ;
+// sinon, une entrée par crèche ayant sa propre fermeture ce jour-là.
+function calFermeturesForDay(dateISO){
+  const netw=(cacheReseauFermetures||[]).find(function(f){return f&&f.debut&&dateISO>=f.debut&&dateISO<=(f.fin||f.debut);});
+  if(netw)return[{crecheId:null,crecheName:'Réseau / toutes crèches',f:netw}];
+  const out=[];
+  cacheCreches.forEach(function(c){
+    const f=fermetureAt(c.id,dateISO);
+    if(f)out.push({crecheId:c.id,crecheName:c.name,f:f});
+  });
+  return out;
+}
 function calCellHtml(d,isOut,today){
   const dateISO=ipDateToLocalISO(d);
   const evts=calEventsForDay(dateISO);
+  const ferms=calFermeturesForDay(dateISO);
   const isToday=dateISO===today;
-  const cls='cal-cell'+(isOut?' out':'')+(isToday?' today':'')+(evts.length?' has-evt':'');
+  const cls='cal-cell'+(isOut?' out':'')+(isToday?' today':'')+(evts.length?' has-evt':'')+(ferms.length?' ferm':'');
   const EVT_MAX=3;
   let evtHtml='';
+  if(ferms.length){
+    const titre=ferms.length===1&&ferms[0].crecheId?ferms[0].crecheName:'Toutes crèches';
+    const detail=ferms.map(function(x){return x.crecheName+' — '+fermetureLabel(x.f);}).join(' · ');
+    evtHtml+='<div class="cal-ferm-tag" title="'+escHtml(detail)+'"><i class="ti ti-door-off"></i> Fermé — '+escHtml(titre)+'</div>';
+  }
   evts.slice(0,EVT_MAX).forEach(e=>{
     const info=CAL_TYPE_INFO[e.type]||CAL_TYPE_INFO.autre;
     const creche=cacheCreches.find(c=>c.id===e.creche_id);
@@ -4375,11 +4398,17 @@ function renderCalDayDetail(){
   const box=document.getElementById('cal-day-detail');if(!box)return;
   if(!calSelectedDay){box.style.display='none';return;}
   const evts=calEventsForDay(calSelectedDay);
+  const ferms=calFermeturesForDay(calSelectedDay);
   const d=new Date(calSelectedDay+'T00:00:00');
   const dateLabel=d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   box.style.display='block';
   let html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-size:13.5px;font-weight:700;color:var(--koala);text-transform:capitalize">'+dateLabel+'</span><button class="btn-sm" style="font-size:11.5px;padding:4px 10px" onclick="openEvenementModal(\''+calSelectedDay+'\')"><i class="ti ti-plus"></i> Ajouter</button></div>';
-  if(!evts.length){
+  ferms.forEach(function(x){
+    html+='<div class="cal-ferm-row"><div class="cal-evt-dot" style="background:var(--red,#C62828)"></div>'+
+      '<div style="flex:1;min-width:0"><div class="cal-evt-title"><i class="ti ti-door-off"></i> '+escHtml(fermetureLabel(x.f))+'</div>'+
+      '<div class="cal-evt-meta">'+escHtml(x.crecheName)+'</div></div></div>';
+  });
+  if(!evts.length&&!ferms.length){
     html+='<div class="empty-state" style="padding:1rem"><i class="ti ti-calendar-off"></i><p>Aucun événement ce jour.</p></div>';
   }else{
     html+=evts.map(e=>{
