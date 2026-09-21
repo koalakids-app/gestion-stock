@@ -723,6 +723,11 @@ async function empLoadDocs(employeId){
   }
   if(String(empFicheId)!==String(employeId))return;
   empRenderDocs();
+  /* Le bloc "Dépôt en ligne" (empRenderPiecesDossier) affiche aussi un
+     compteur basé sur empDocsCache : à redessiner ici, sans quoi il reste
+     figé si son propre chargement (empLoadPieces) a déjà rendu avant que
+     celui-ci ne finisse (course entre les deux requêtes). */
+  empRenderPiecesDossier();
 }
 function empPiecesPourCle(key){
   return empDocsCache.filter(d=>d.piece_key===key);
