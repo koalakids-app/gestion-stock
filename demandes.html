@@ -2668,7 +2668,7 @@ if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https:/
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',activeIncCategory='enfant',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='';
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[],cacheEtablissements=[],cacheReseauFermetures=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[],cacheEtablissements=[],cacheReseauFermetures=[],cacheDemandesMasquees=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 let calOnlyMine=(localStorage.getItem('calOnlyMine')==='1');
 
@@ -2752,6 +2752,10 @@ async function loadAllData(){
   try{cacheEmployes=await dbSelect('employes');}catch(e){console.warn('[loadAllData] employes',e);cacheEmployes=[];}
   // Consignes lues (notifications in-app) — non bloquant
   try{cacheConsignesLues=await dbSelect('consignes_lues');}catch(e){cacheConsignesLues=[];}
+  // Demandes masquées (corbeille personnelle, table sql/demandes_masquees.sql) — non
+  // bloquant, la RLS ne renvoie que les miennes : « supprimer » une demande ne fait que
+  // la retirer de la liste de la personne qui l'a supprimée, elle reste visible des autres.
+  try{cacheDemandesMasquees=await dbSelect('demandes_masquees');}catch(e){cacheDemandesMasquees=[];}
   // Brouillons de consignes (table sql/consignes_brouillons.sql) — non bloquant. Pas de test sur
   // isDirection : à la connexion il n'est posé qu'APRÈS loadAllData(), et la RLS ne renvoie de
   // toute façon que les brouillons de l'auteur connecté (direction).
@@ -2834,7 +2838,7 @@ function fermetureLabel(f){
    une saisie en cours — la synchro est alors reportée à sa fermeture), jamais en
    arrière-plan, et jamais deux rechargements coup sur coup.
    ═════════════════════════════════════════════════════════════════════════ */
-const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','employes','planning','planning_equipe','enfants_contrats','taches_afaire','notes_libres','commandes_repas','actions_direction','reunions_direction','partenaires'];
+const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','employes','planning','planning_equipe','enfants_contrats','taches_afaire','notes_libres','commandes_repas','actions_direction','reunions_direction','partenaires','demandes_masquees'];
 const SYNC_PERIODE_MS=60000;   // rappel périodique quand l'onglet est visible
 const SYNC_MIN_MS=10000;       // anti-rafale entre deux rechargements
 let _mainCourant=null,_syncDernier=0,_syncEnCours=false,_syncEnAttente=false,
@@ -2997,7 +3001,7 @@ window.syncDemarrer=syncDemarrer;
    ne le signale à l'écran. On nomme donc explicitement la colonne de tri des
    tables qui font exception, et un 42703 déclenche un second essai sans tri
    plutôt que de perdre les données. */
-const DB_ORDER_COL={consignes_lues:'lu_at',consignes_brouillons:'updated_at',demandes_brouillons:'updated_at',messages_brouillons:'updated_at'};
+const DB_ORDER_COL={consignes_lues:'lu_at',consignes_brouillons:'updated_at',demandes_brouillons:'updated_at',messages_brouillons:'updated_at',demandes_masquees:'masque_at'};
 async function dbSelect(table,filters={}){
   const col=DB_ORDER_COL[table]||'created_at';
   const build=function(orderCol){
@@ -3550,14 +3554,23 @@ document.addEventListener('fullscreenchange',function(){
 });
 
 // DEMANDES
+function demandesMasqueesIds(){
+  const myId=currentProfile?.id;
+  return new Set(cacheDemandesMasquees.filter(m=>m.masque_par===myId).map(m=>m.demande_id));
+}
+function demandesVisibles(){
+  const hidden=demandesMasqueesIds();
+  return hidden.size?cacheDemandes.filter(d=>!hidden.has(d.id)):cacheDemandes;
+}
 function renderCrecheTabs(){
   const bar=document.getElementById('creche-tabs-bar');if(!bar)return;
   if(!isDirection){activeCrecheId=currentProfile?.creche_id||null;bar.style.display='none';renderCrechePanel();return;}
   if(!cacheCreches.length){activeCrecheId=null;}
   else if(activeCrecheId!=='all'&&(!activeCrecheId||!cacheCreches.find(c=>c.id===activeCrecheId))){activeCrecheId='all';}
   let html='';
-  if(cacheCreches.length)html+='<button class="creche-tab'+(activeCrecheId==='all'?' active':'')+'" onclick="selectCreche(\'all\')"><i class="ti ti-building-community" style="font-size:13px"></i> Toutes<span class="tab-count">'+cacheDemandes.length+'</span></button>';
-  cacheCreches.forEach(c=>{const count=cacheDemandes.filter(d=>d.creche_id===c.id).length;html+='<button class="creche-tab'+(activeCrecheId===c.id?' active':'')+'" onclick="selectCreche(\''+c.id+'\')"><i class="ti ti-building" style="font-size:13px"></i> '+c.name+'<span class="tab-count">'+count+'</span></button>';});
+  const demandesVis=demandesVisibles();
+  if(cacheCreches.length)html+='<button class="creche-tab'+(activeCrecheId==='all'?' active':'')+'" onclick="selectCreche(\'all\')"><i class="ti ti-building-community" style="font-size:13px"></i> Toutes<span class="tab-count">'+demandesVis.length+'</span></button>';
+  cacheCreches.forEach(c=>{const count=demandesVis.filter(d=>d.creche_id===c.id).length;html+='<button class="creche-tab'+(activeCrecheId===c.id?' active':'')+'" onclick="selectCreche(\''+c.id+'\')"><i class="ti ti-building" style="font-size:13px"></i> '+c.name+'<span class="tab-count">'+count+'</span></button>';});
   html+='<button class="add-creche-btn" onclick="openCrecheModal()"><i class="ti ti-plus"></i> Ajouter une crèche</button>';
   bar.innerHTML=html;renderCrechePanel();
 }
@@ -3572,13 +3585,14 @@ function renderCrechePanel(){
   const creche=crecheId?cacheCreches.find(c=>c.id===crecheId):null;
   const myId=currentProfile?.id;
   // Inclut aussi les demandes adressées personnellement (admin-à-admin ou vers un directeur technique précis), même sans crèche.
-  const allD=isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId)||(d.type==='consigne'&&!d.creche_id));
+  const demandesVis0=demandesVisibles();
+  const allD=isAll?demandesVis0:demandesVis0.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId)||(d.type==='consigne'&&!d.creche_id));
   const total=allD.length,attente=allD.filter(d=>d.status==='attente').length,urgent=allD.filter(d=>d.priority==='urgent').length,traite=allD.filter(d=>d.status==='traite').length;
   let html='';
   if(isAll){html+='<div class="creche-header-box"><div class="creche-header-name"><i class="ti ti-building-community" style="font-size:20px"></i> Toutes les crèches <span>'+cacheCreches.length+' établissements</span></div><div class="section-actions"><button class="btn-orange" onclick="openConsigneModal()"><i class="ti ti-send"></i> Envoyer une consigne</button><button class="btn-cancel" onclick="openConsigneBrouillons()" title="Consignes préparées, à envoyer plus tard" style="background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.7);font-weight:600"><i class="ti ti-file-pencil"></i> Brouillons ('+cacheConsigneBrouillons.length+')</button></div></div>';}
   else if(creche){html+='<div class="creche-header-box"><div class="creche-header-name"><i class="ti ti-building" style="font-size:20px"></i> '+creche.name+(creche.addr?'<span>'+creche.addr+'</span>':'')+(creche.capacity?'<span>Capacité : '+creche.capacity+' enfants</span>':'')+'</div><div class="section-actions">'+(isDirection?'<button class="btn-orange" onclick="openConsigneModal()"><i class="ti ti-send"></i> Envoyer une consigne</button><button class="btn-cancel" onclick="openConsigneBrouillons()" title="Consignes préparées, à envoyer plus tard" style="background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.7);font-weight:600"><i class="ti ti-file-pencil"></i> Brouillons ('+cacheConsigneBrouillons.length+')</button><button class="ibtn" style="background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.4);color:#fff" onclick="editCreche(\''+creche.id+'\')"><i class="ti ti-edit"></i></button><button class="btn-danger-sm" onclick="deleteCreche(\''+creche.id+'\')"><i class="ti ti-trash" style="font-size:13px"></i> Supprimer</button>':'')+'</div></div>';}
   html+='<div class="stats-row"><div class="stat-card"><div class="stat-label">Total</div><div class="stat-val cv">'+total+'</div></div><div class="stat-card" style="border-top-color:var(--orange)"><div class="stat-label">En attente</div><div class="stat-val co">'+attente+'</div></div><div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Urgentes</div><div class="stat-val cr">'+urgent+'</div></div><div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Traitées</div><div class="stat-val cg">'+traite+'</div></div></div>';
-  html+='<div class="section-header"><div class="section-left"><span class="section-title">Demandes & consignes</span><div style="position:relative"><input class="search-inp" id="search-d" type="text" placeholder="🔍 Rechercher…" value="'+searchTerm.replace(/"/g,'&quot;')+'" oninput="searchTerm=this.value;renderDemandsOnly()" autocomplete="off" style="width:240px"><span id="search-clear" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);color:#bbb;font-size:13px;cursor:pointer;'+(searchTerm?'':'display:none')+'" onclick="searchTerm=\'\';document.getElementById(\'search-d\').value=\'\';renderDemandsOnly()">✕</span></div></div><div style="display:flex;gap:8px;align-items:center"><button class="ibtn-fs" id="btn-fs-demands" onclick="toggleDemandsFullscreen()" title="Plein écran"><i class="ti ti-arrows-maximize" id="fs-icon-demands"></i></button><button class="btn-primary" onclick="openDemandModal()"><i class="ti ti-plus"></i> Nouvelle demande</button><button class="btn-cancel" onclick="openDemandeBrouillons()" title="Demandes préparées, à envoyer plus tard"><i class="ti ti-file-pencil"></i> Brouillons ('+cacheDemandeBrouillons.length+')</button></div></div>';
+  html+='<div class="section-header"><div class="section-left"><span class="section-title">Demandes & consignes</span><div style="position:relative"><input class="search-inp" id="search-d" type="text" placeholder="🔍 Rechercher…" value="'+searchTerm.replace(/"/g,'&quot;')+'" oninput="searchTerm=this.value;renderDemandsOnly()" autocomplete="off" style="width:240px"><span id="search-clear" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);color:#bbb;font-size:13px;cursor:pointer;'+(searchTerm?'':'display:none')+'" onclick="searchTerm=\'\';document.getElementById(\'search-d\').value=\'\';renderDemandsOnly()">✕</span></div></div><div style="display:flex;gap:8px;align-items:center"><button class="ibtn-fs" id="btn-fs-demands" onclick="toggleDemandsFullscreen()" title="Plein écran"><i class="ti ti-arrows-maximize" id="fs-icon-demands"></i></button><button class="btn-primary" onclick="openDemandModal()"><i class="ti ti-plus"></i> Nouvelle demande</button><button class="btn-cancel" onclick="openDemandeBrouillons()" title="Demandes préparées, à envoyer plus tard"><i class="ti ti-file-pencil"></i> Brouillons ('+cacheDemandeBrouillons.length+')</button>'+(isDirection?'<button class="btn-cancel" onclick="openCorbeille()" title="Demandes que vous avez supprimées de votre liste"><i class="ti ti-trash"></i> Corbeille ('+demandesMasqueesIds().size+')</button>':'')+'</div></div>';
   html+='<div class="filters"><button class="fchip'+(activeFilter==='all'?' active':'')+'" onclick="setFilter(\'all\',this)">En cours</button><button class="fchip'+(activeFilter==='urgent'?' active':'')+'" onclick="setFilter(\'urgent\',this)">Urgentes</button><button class="fchip'+(activeFilter==='attente'?' active':'')+'" onclick="setFilter(\'attente\',this)">En attente</button><button class="fchip'+(activeFilter==='traite'?' active':'')+'" onclick="setFilter(\'traite\',this)">Traitées</button><button class="fchip'+(activeFilter==='consigne'?' active':'')+'" onclick="setFilter(\'consigne\',this)">Consignes</button></div>';
   html+='<div id="demands-list-inner"></div>';
   panel.innerHTML=html;renderDemandsOnly();
@@ -3590,7 +3604,8 @@ function renderDemandsOnly(){
   const crecheId=isAll?null:(isDirection?activeCrecheId:currentProfile?.creche_id);
   const myId=currentProfile?.id;
   const term=searchTerm.toLowerCase().trim();
-  const base=term?cacheDemandes:(isAll?cacheDemandes:cacheDemandes.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId)||(d.type==='consigne'&&!d.creche_id)));
+  const demandesVis=demandesVisibles();
+  const base=term?demandesVis:(isAll?demandesVis:demandesVis.filter(d=>d.creche_id===crecheId||(!d.creche_id&&d.to_referent_id===myId)||(d.type==='consigne'&&!d.creche_id)));
   const filtered=base.filter(d=>{
     if(!term){if(activeFilter==='all'&&d.status==='traite')return false;if(activeFilter==='urgent'&&d.priority!=='urgent')return false;if(activeFilter==='attente'&&d.status!=='attente')return false;if(activeFilter==='traite'&&d.status!=='traite')return false;if(activeFilter==='consigne'&&d.type!=='consigne')return false;}
     if(term){const cn=(cacheCreches.find(c=>c.id===d.creche_id)?.name||'').toLowerCase();if(!(d.subject||'').toLowerCase().includes(term)&&!(d.referent_name||'').toLowerCase().includes(term)&&!(d.description||'').toLowerCase().includes(term)&&!cn.includes(term)&&!(d.theme||'').toLowerCase().includes(term))return false;}
@@ -3609,7 +3624,7 @@ function renderDemandsOnly(){
       const canToggle=isDirection||(d.to_referent_id&&d.to_referent_id===currentProfile?.id);
       const msgCount=cacheMessages.filter(m=>m.demande_id===d.id).length;
       const threadBadge='<span class="badge badge-thread" onclick="openThread(\''+d.id+'\')"><i class="ti ti-message-2" style="font-size:11px"></i> '+(msgCount>0?msgCount+' réponse'+(msgCount>1?'s':''):'Discuter')+'</span>'+(cacheMessageBrouillons.some(b=>b.demande_id===d.id)?'<span class="badge" style="background:#FEF3C7;color:#92400E;cursor:pointer;margin-left:4px" title="Réponse préparée, non envoyée" onclick="openThread(\''+d.id+'\')"><i class="ti ti-file-pencil" style="font-size:11px"></i> Brouillon</span>':'');
-      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+msgAttachmentHtml(d.attachment_url,d.attachment_name)+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+threadBadge+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
+      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+msgAttachmentHtml(d.attachment_url,d.attachment_name)+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+threadBadge+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')" title="Retirer de ma liste (déplacé dans ma corbeille, reste visible des autres)"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
     });
   }
   inner.innerHTML=html;
@@ -3845,7 +3860,69 @@ async function toggleStatus(id,currentStatus){
   const ok=await dbUpdate('demandes',id,updates);
   if(ok){const d=cacheDemandes.find(x=>x.id===id);if(d)Object.assign(d,updates);const creche=cacheCreches.find(c=>c.id===d?.creche_id);await callFn('notify-status',{demand:{...d,creche:creche?.name||''},newStatus});showBanner('Statut mis à jour !');renderDemandsOnly();renderCrecheTabs();}
 }
-async function deleteDemand(id){if(!confirm('Supprimer ?'))return;await dbDelete('demandes',id);cacheDemandes=cacheDemandes.filter(d=>d.id!==id);renderDemandsOnly();renderCrecheTabs();}
+async function deleteDemand(id){
+  if(!confirm('Retirer cette demande de votre liste ? Elle restera visible des autres et vous pourrez la restaurer depuis la corbeille.'))return;
+  const myId=currentProfile?.id;if(!myId)return;
+  if(cacheDemandesMasquees.some(m=>m.demande_id===id&&m.masque_par===myId)){renderDemandsOnly();renderCrecheTabs();return;}
+  const row=await dbInsert('demandes_masquees',{demande_id:id,masque_par:myId});
+  if(!row){showBanner('Suppression impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
+  cacheDemandesMasquees.push(row);
+  renderDemandsOnly();renderCrecheTabs();
+}
+async function restoreDemand(id){
+  const myId=currentProfile?.id;if(!myId)return;
+  const row=cacheDemandesMasquees.find(m=>m.demande_id===id&&m.masque_par===myId);
+  if(!row)return;
+  if(!await dbDeleteStrict('demandes_masquees',row.id)){showBanner('Restauration impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
+  cacheDemandesMasquees=cacheDemandesMasquees.filter(m=>m.id!==row.id);
+  renderDemandsOnly();renderCrecheTabs();renderCorbeille();
+}
+async function permanentlyDeleteDemand(id){
+  if(!isDirection)return;
+  if(!confirm('Supprimer définitivement cette demande pour tout le monde ? Cette action est irréversible.'))return;
+  if(!await dbDeleteStrict('demandes',id)){showBanner('Suppression impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
+  cacheDemandes=cacheDemandes.filter(d=>d.id!==id);
+  cacheDemandesMasquees=cacheDemandesMasquees.filter(m=>m.demande_id!==id);
+  cacheMessages=cacheMessages.filter(m=>m.demande_id!==id);
+  renderDemandsOnly();renderCrecheTabs();renderCorbeille();
+}
+function openCorbeille(){
+  let ov=document.getElementById('modal-corbeille-wrap');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.className='overlay';ov.id='modal-corbeille-wrap';
+    ov.onclick=function(ev){if(ev.target===ov)closeModal('modal-corbeille-wrap');};
+    ov.innerHTML='<div class="modal" style="max-width:520px;width:100%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">'
+      +'<h3 style="margin:0"><i class="ti ti-trash"></i> Corbeille</h3>'
+      +'<button class="btn-cancel" onclick="closeModal(\'modal-corbeille-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
+      +'<div id="corbeille-liste"></div></div>';
+    document.body.appendChild(ov);
+  }
+  renderCorbeille();
+  ov.classList.add('open');
+}
+function renderCorbeille(){
+  const box=document.getElementById('corbeille-liste');
+  if(!box)return;
+  const myId=currentProfile?.id;
+  const mesMasquees=cacheDemandesMasquees.filter(m=>m.masque_par===myId).sort((a,b)=>new Date(b.masque_at)-new Date(a.masque_at));
+  if(!mesMasquees.length){
+    box.innerHTML='<div class="empty-state"><i class="ti ti-trash"></i><p>Corbeille vide.<br><span style="font-size:12px">Les demandes que vous supprimez de votre liste apparaissent ici, sans être effacées pour les autres.</span></p></div>';
+    return;
+  }
+  box.innerHTML=mesMasquees.map(function(m){
+    const d=cacheDemandes.find(x=>x.id===m.demande_id);
+    if(!d)return '';
+    const quand=m.masque_at?new Date(m.masque_at).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    const apercu=String(d.description||'').slice(0,100);
+    return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+      +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13.5px">'+escHtml(d.subject||'(sans sujet)')+'</b></div>'
+      +'<div style="font-size:12px;color:var(--muted);margin:2px 0 8px">'+escHtml(apercu)+(String(d.description||'').length>100?'…':'')+'</div>'
+      +'<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--muted);flex:1">Retirée de votre liste le '+escHtml(quand)+'</span>'
+      +(isDirection?'<button class="btn-cancel" data-id="'+d.id+'" onclick="permanentlyDeleteDemand(this.dataset.id)"><i class="ti ti-trash-x"></i> Supprimer définitivement</button>':'')
+      +'<button class="btn-primary" data-id="'+d.id+'" onclick="restoreDemand(this.dataset.id)"><i class="ti ti-arrow-back-up"></i> Restaurer</button></div></div>';
+  }).join('');
+}
 
 // FIL DE DISCUSSION
 let currentThreadId=null;
