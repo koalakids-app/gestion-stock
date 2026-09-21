@@ -1,29 +1,24 @@
 -- ============================================================================
--- Policies Storage pour le bucket privé `documents-employes`
+-- Correctif des policies Storage du bucket `documents-employes`
 -- ============================================================================
--- Étape manuelle requise AVANT ce script : créer le bucket dans le dashboard
--- Supabase (Storage → New bucket → name = documents-employes, Public = OFF),
--- avec des policies calquées sur celles du bucket `documents-admin`.
+-- Bug dans sql/employes_documents_storage_policies.sql : à l'intérieur du
+-- EXISTS (SELECT ... FROM referents r JOIN employes e ...), la colonne `name`
+-- utilisée dans `storage.foldername(name)` était résolue par Postgres vers
+-- `referents.name` (le nom du/de la référent·e — cette colonne existe aussi
+-- dans la sous-requête) au lieu du nom de fichier de `storage.objects`,
+-- shadowing silencieux confirmé par `select ... from pg_policies` :
+--   storage.foldername(r.name)   -- faux : nom du/de la référent·e
+-- au lieu de :
+--   storage.foldername(objects.name)  -- attendu : chemin du fichier
 --
--- Convention de chemin : <employe_id>/<timestamp>_<random>.<ext>
--- (voir employes.html, empHandleDocUpload, et l'edge function
--- dossier-pieces-employe) — le premier segment du chemin est l'id de la
--- fiche employé, ce qui permet de retrouver sa crèche.
---
--- Pas de policy `update` : l'appli ne fait jamais de remplacement de fichier
--- en place, seulement upload + suppression.
---
--- Aucune policy `anon` : le dépôt public via pieces-employe.html passe par
--- l'edge function `dossier-pieces-employe`, en service_role, qui contourne
--- RLS — l'accès direct au bucket reste réservé aux comptes référents.
---
--- `storage.objects.name` (et non `name` seul) : à l'intérieur du
--- EXISTS (SELECT ... FROM referents r JOIN employes e ...), une colonne
--- `name` non qualifiée est résolue par Postgres vers `referents.name` (le
--- nom du/de la référent·e, qui existe aussi dans cette sous-requête) plutôt
--- que vers le nom de fichier de `storage.objects` — bug silencieux qui a
--- cassé l'accès en production, corrigé en qualifiant pleinement la colonne.
+-- Ce script supprime puis recrée les 3 policies avec la colonne pleinement
+-- qualifiée (storage.objects.name), qui ne peut plus être capturée par la
+-- sous-requête.
 -- ============================================================================
+
+drop policy if exists documents_employes_select on storage.objects;
+drop policy if exists documents_employes_insert on storage.objects;
+drop policy if exists documents_employes_delete on storage.objects;
 
 create policy documents_employes_select on storage.objects
   for select to authenticated
