@@ -1828,7 +1828,11 @@ function enfRenderPiecesDossier(){
   const box=document.getElementById('enf-pieces-dossier-box');
   if(!box) return;
   if(!enfPiecesPret){ box.innerHTML=''; return; }
-  const actif=enfPiecesCache.find(d=>d.statut!=='annule' && new Date(d.expire_le)>new Date());
+  /* Un dossier "complet" (toutes les pièces obligatoires reçues, jeton
+     auto-invalidé côté serveur — cf. dossier-pieces) n'est plus actif non
+     plus : on propose d'envoyer un nouveau lien si besoin, sans reprendre
+     l'ancien qui ne fonctionne plus. */
+  const actif=enfPiecesCache.find(d=>d.statut!=='annule' && d.statut!=='complet' && new Date(d.expire_le)>new Date());
   const possibles=enfDestinataires();
 
   const cadre=(contenu,fond,bord)=>'<div style="background:'+fond+';border:1px solid '+bord
