@@ -43,6 +43,18 @@ const CORS_HEADERS = {
 const BUCKET = "documents-admin";
 const MAX_BYTES = 8 * 1024 * 1024;
 
+// Pièces obligatoires (hors "optionnel") — RECOPIÉ de js/enfants.js
+// (constante PIECES_ADMIN, entrées sans `optionnel:true`) : si vous
+// modifiez la liste là-bas, reportez-la ici — sert uniquement à détecter
+// quand un dossier est complet pour l'auto-clôturer (voir plus bas), les
+// deux versions ne se synchronisent pas (même choix assumé que pour cette
+// liste ailleurs dans l'appli).
+const REQUIRED_PIECE_KEYS = [
+  "livret_famille", "piece_identite_parents", "justificatif_domicile",
+  "acte_naissance", "attestation_vitale", "attestation_rc",
+  "avis_imposition", "bulletin_salaire", "rib",
+];
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -83,7 +95,7 @@ Deno.serve(async (req) => {
     return erreur("erreur_lecture", 500);
   }
   if (!dossier) return erreur("introuvable", 404);
-  if (dossier.statut === "annule") return erreur("annule", 410);
+  if (dossier.statut === "annule" || dossier.statut === "complet") return erreur("annule", 410);
   if (new Date(dossier.expire_le).getTime() < Date.now()) return erreur("expire", 410);
 
   if (action === "get") {
@@ -149,6 +161,23 @@ Deno.serve(async (req) => {
       console.error("[dossier-pieces] insertion", insErr);
       await supabase.storage.from(BUCKET).remove([path]).catch(() => {});
       return erreur("enregistrement_impossible", 500);
+    }
+
+    // Jeton à usage unique côté sécurité : dès que toutes les pièces
+    // obligatoires sont réunies, le dossier se clôture tout seul — le lien
+    // cesse de fonctionner sans attendre l'expiration ni une annulation
+    // manuelle par une référente.
+    const { data: recues } = await supabase
+      .from("enfants_documents_admin")
+      .select("piece_key")
+      .eq("enfant_id", dossier.enfant_id)
+      .not("piece_key", "is", null);
+    const clesRecues = new Set((recues || []).map((r) => r.piece_key));
+    const complet = REQUIRED_PIECE_KEYS.every((k) => clesRecues.has(k));
+    if (complet) {
+      await supabase.from("dossiers_pieces")
+        .update({ statut: "complet" })
+        .eq("id", dossier.id);
     }
 
     return json({ ok: true });
