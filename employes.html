@@ -173,6 +173,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     </div>
     <div class="f" id="ficheDocsWrap" style="display:none">
       <label class="lb">Documents d'embauche</label>
+      <div id="fiche-docs-dossier-box"></div>
       <div id="ficheDocsZone"></div>
     </div>
     <div id="ficheErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
@@ -492,7 +493,11 @@ function openFiche(id){
   const docsWrap=document.getElementById('ficheDocsWrap');
   if(e){
     formWrap.style.display='';loadFicheFormation(e);
-    docsWrap.style.display='';empLoadDocs(e.id);
+    docsWrap.style.display='';
+    empDocsCache=[];empPiecesCache=[];empPiecesPret=false;
+    document.getElementById('fiche-docs-dossier-box').innerHTML='';
+    empLoadDocs(e.id);
+    empLoadPieces(e.id);
   }else{
     formWrap.style.display='none';
     docsWrap.style.display='none';
@@ -824,6 +829,130 @@ async function empDocDelete(id){
   }
   empDocsCache=empDocsCache.filter(x=>String(x.id)!==String(id));
   empRenderDocs();
+}
+
+/* ---------- DOSSIER DE PIÈCES (envoi d'un lien au/à la salarié(e)) ----------
+   Même principe que le dossier de pièces famille (dossiers_pieces /
+   pieces.html, cf. js/enfants.js) : un envoi = un jeton = un lien public
+   (pieces-employe.html), valable PIECES_JOURS jours. Simplifié par rapport à
+   la version famille : une fiche employé n'a qu'une seule adresse e-mail,
+   pas de choix de destinataires. */
+const PIECES_JOURS=15;
+function piecesEmployeLien(token){
+  return location.origin+location.pathname.replace(/[^/]*$/,'')+'pieces-employe.html?t='+token;
+}
+function dossierTokenEmploye(){
+  if(window.crypto&&crypto.randomUUID)return crypto.randomUUID().replace(/-/g,'');
+  return String(Date.now())+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+}
+
+let empPiecesCache=[],empPiecesPret=false;
+async function empLoadPieces(employeId){
+  try{
+    const{data,error}=await sb.from('dossiers_pieces_employe')
+      .select('*')
+      .eq('employe_id',employeId)
+      .order('envoye_le',{ascending:false});
+    if(error)throw error;
+    empPiecesCache=data||[];
+  }catch(err){
+    console.warn('empLoadPieces',err);
+    empPiecesCache=[];
+  }
+  if(String(empFicheId)!==String(employeId))return;
+  empPiecesPret=true;
+  empRenderPiecesDossier();
+}
+function empRenderPiecesDossier(){
+  const box=document.getElementById('fiche-docs-dossier-box');
+  if(!box)return;
+  if(!empPiecesPret){box.innerHTML='';return;}
+  const actif=empPiecesCache.find(d=>d.statut!=='annule'&&new Date(d.expire_le)>new Date());
+  const e=EMPLOYES.find(x=>String(x.id)===String(empFicheId));
+  const email=e&&e.email;
+
+  const cadre=contenu=>'<div style="background:#F7F6FC;border:1px solid var(--line);border-radius:14px;padding:13px 15px;margin-bottom:12px">'
+    +'<div style="font-weight:700;font-size:13.5px;color:var(--violet);margin-bottom:7px">'
+    +'<i class="ti ti-cloud-upload"></i> Dépôt en ligne par le/la salarié(e)</div>'+contenu+'</div>';
+
+  if(!actif){
+    if(!email){
+      box.innerHTML=cadre('<p style="font-size:12.5px;color:var(--muted);margin:0;line-height:1.6">'
+        +"Aucune adresse e-mail sur cette fiche. Renseignez-en une ci-dessus pour pouvoir envoyer le lien.</p>");
+      return;
+    }
+    box.innerHTML=cadre(
+      '<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">Envoie à '+esc(email)
+      +' un lien personnel pour déposer en ligne les pièces ci-dessous. Valable '+PIECES_JOURS+' jours.</p>'
+      +'<button type="button" class="btn btn-s btn-sm" onclick="empConfirmerEnvoiPieces()"><i class="ti ti-send"></i> Envoyer le lien de dépôt</button>'
+    );
+    return;
+  }
+
+  const requis=PIECES_EMBAUCHE.filter(p=>!p.optionnel);
+  const recus=requis.filter(p=>empPiecesPourCle(p.key).length).length;
+  const badge=recus===requis.length
+    ?'<span style="background:var(--green-l);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">✅ Complet</span>'
+    :'<span style="background:var(--orange-l);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">🕓 En attente</span>';
+
+  box.innerHTML=cadre(
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+badge
+    +'<span style="font-size:12px;color:var(--muted)">envoyé le '+new Date(actif.envoye_le).toLocaleDateString('fr-FR')
+    +' · expire le '+new Date(actif.expire_le).toLocaleDateString('fr-FR')
+    +(actif.relances?' · '+actif.relances+' relance'+(actif.relances>1?'s':''):'')+'</span></div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:9px"><i class="ti ti-mail"></i> '+esc(actif.email||'')+'</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin-bottom:9px">'+recus+' pièce'+(recus>1?'s':'')+' reçue'+(recus>1?'s':'')
+    +' sur '+requis.length+' demandées (hors pièces non concernées)</div>'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
+    +'<button type="button" class="btn btn-g btn-sm" onclick="empCopierLienPieces(\''+actif.id+'\')"><i class="ti ti-link"></i> Copier le lien</button>'
+    +'<button type="button" class="btn btn-g btn-sm" onclick="empRelancerPieces(\''+actif.id+'\')"><i class="ti ti-bell"></i> Relancer</button>'
+    +'<button type="button" class="btn btn-g btn-sm" style="color:var(--red)" onclick="empAnnulerPieces(\''+actif.id+'\')"><i class="ti ti-x"></i> Annuler</button>'
+    +'</div>'
+  );
+}
+async function empConfirmerEnvoiPieces(){
+  const e=EMPLOYES.find(x=>String(x.id)===String(empFicheId));
+  if(!e||!e.email){toast('Aucune adresse e-mail sur cette fiche.',true);return;}
+  const token=dossierTokenEmploye();
+  const expire=new Date(Date.now()+PIECES_JOURS*86400000).toISOString();
+  const{data:saved,error}=await sb.from('dossiers_pieces_employe').insert({
+    employe_id:e.id,token,email:e.email,statut:'envoye',expire_le:expire,created_by:ME?ME.id:null
+  }).select().single();
+  if(error){toast('Impossible de créer le dossier : '+error.message,true);return;}
+  const{ok,data}=await callFn('envoyer-dossier-pieces-employe',{dossier_id:saved.id,relance:false,lien:piecesEmployeLien(token)});
+  empPiecesCache.unshift(saved);
+  empRenderPiecesDossier();
+  if(ok)toast('Lien envoyé à '+e.email+' ✅');
+  else toast('Dossier créé, mais l\'e-mail n\'est pas parti — utilisez « Copier le lien ».'+(data&&data.error?' ('+data.error+')':''),true);
+}
+async function empRelancerPieces(id){
+  const d=empPiecesCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  if(!confirm('Renvoyer le lien à '+d.email+' ?'))return;
+  const{ok,data}=await callFn('envoyer-dossier-pieces-employe',{dossier_id:d.id,relance:true,lien:piecesEmployeLien(d.token)});
+  if(!ok){toast('La relance n\'est pas partie.'+(data&&data.error?' ('+data.error+')':''),true);return;}
+  d.relances=(d.relances||0)+1;
+  empRenderPiecesDossier();
+  toast('Relance envoyée ✅');
+}
+function empCopierLienPieces(id){
+  const d=empPiecesCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  const url=piecesEmployeLien(d.token);
+  navigator.clipboard.writeText(url).then(
+    ()=>toast('Lien copié — à transmettre par SMS si besoin.'),
+    ()=>prompt('Copiez ce lien :',url)
+  );
+}
+async function empAnnulerPieces(id){
+  const d=empPiecesCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  if(!confirm('Annuler ce dossier ?\n\nLe lien déjà envoyé cessera immédiatement de fonctionner. Les pièces déjà déposées sont conservées.'))return;
+  const{error}=await sb.from('dossiers_pieces_employe').update({statut:'annule'}).eq('id',id);
+  if(error){toast('Annulation impossible : '+error.message,true);return;}
+  d.statut='annule';
+  empRenderPiecesDossier();
+  toast('Dossier annulé — le lien ne fonctionne plus.');
 }
 
 boot();
