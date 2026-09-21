@@ -3558,7 +3558,7 @@ document.addEventListener('fullscreenchange',function(){
 
 // DEMANDES
 function demandesMasqueesIds(){
-  const myId=currentProfile?.id;
+  const myId=currentUser?.id;
   return new Set(cacheDemandesMasquees.filter(m=>m.masque_par===myId).map(m=>m.demande_id));
 }
 function demandesVisibles(){
@@ -3872,7 +3872,7 @@ async function toggleStatus(id,currentStatus){
 }
 async function deleteDemand(id){
   if(!confirm('Retirer cette demande de votre liste ? Elle restera visible des autres et vous pourrez la restaurer depuis la corbeille.'))return;
-  const myId=currentProfile?.id;if(!myId)return;
+  const myId=currentUser?.id;if(!myId)return;
   if(cacheDemandesMasquees.some(m=>m.demande_id===id&&m.masque_par===myId)){renderDemandsOnly();renderCrecheTabs();return;}
   const row=await dbInsert('demandes_masquees',{demande_id:id,masque_par:myId});
   if(!row){showBanner('Suppression impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
@@ -3880,7 +3880,7 @@ async function deleteDemand(id){
   renderDemandsOnly();renderCrecheTabs();
 }
 async function restoreDemand(id){
-  const myId=currentProfile?.id;if(!myId)return;
+  const myId=currentUser?.id;if(!myId)return;
   const row=cacheDemandesMasquees.find(m=>m.demande_id===id&&m.masque_par===myId);
   if(!row)return;
   if(!await dbDeleteStrict('demandes_masquees',row.id)){showBanner('Restauration impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
@@ -3914,7 +3914,7 @@ function openCorbeille(){
 function renderCorbeille(){
   const box=document.getElementById('corbeille-liste');
   if(!box)return;
-  const myId=currentProfile?.id;
+  const myId=currentUser?.id;
   const mesMasquees=cacheDemandesMasquees.filter(m=>m.masque_par===myId).sort((a,b)=>new Date(b.masque_at)-new Date(a.masque_at));
   if(!mesMasquees.length){
     box.innerHTML='<div class="empty-state"><i class="ti ti-trash"></i><p>Corbeille vide.<br><span style="font-size:12px">Les demandes que vous supprimez de votre liste apparaissent ici, sans être effacées pour les autres.</span></p></div>';
