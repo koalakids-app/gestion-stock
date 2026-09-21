@@ -171,6 +171,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <label class="lb" style="margin-top:10px">Parcours de formation</label>
       <div id="ficheFormationBox"></div>
     </div>
+    <div class="f" id="ficheDocsWrap" style="display:none">
+      <label class="lb">Documents d'embauche</label>
+      <div id="ficheDocsZone"></div>
+    </div>
     <div id="ficheErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
     <div class="foot">
       <button class="btn btn-g" onclick="closeFiche()">Annuler</button>
@@ -485,8 +489,14 @@ function openFiche(id){
   setVal('fDateFin',e?e.date_fin:'');
   setVal('fPlanningNom',e?e.planning_nom:'');
   const formWrap=document.getElementById('ficheFormationWrap');
-  if(e){formWrap.style.display='';loadFicheFormation(e);}
-  else{formWrap.style.display='none';}
+  const docsWrap=document.getElementById('ficheDocsWrap');
+  if(e){
+    formWrap.style.display='';loadFicheFormation(e);
+    docsWrap.style.display='';empLoadDocs(e.id);
+  }else{
+    formWrap.style.display='none';
+    docsWrap.style.display='none';
+  }
   document.getElementById('modalFiche').classList.add('on');
 }
 function closeFiche(){document.getElementById('modalFiche').classList.remove('on');}
@@ -663,6 +673,149 @@ async function supprimerEmploye(id){
   }
   toast('Fiche supprimée.');
   await loadEmployes();
+}
+
+/* ---------- DOCUMENTS D'EMBAUCHE (fiche collaborateur/trice) ----------
+   Pièces liées à l'embauche, distinctes des champs texte ajoutés par
+   employes_contrat_travail.sql (état civil, contrat) : ici, une copie du
+   document lui-même. Même schéma de stockage que enfants_documents_admin
+   côté fiche enfant (js/enfants.js) : bucket PRIVÉ, aucune URL publique
+   enregistrée — seuls bucket et chemin sont gardés en base, une URL signée
+   est générée à chaque ouverture. */
+const EMP_DOCS_BUCKET='documents-employes';
+const EMP_DOCS_TTL=300; // durée de vie d'une URL signée, en secondes
+
+/* Liste figée des pièces habituellement demandées à l'embauche. Une fiche
+   incomplète n'est jamais bloquante : c'est un aide-mémoire, pas une
+   validation. */
+const PIECES_EMBAUCHE=[
+  {key:'piece_identite',    label:"Copie de la pièce d'identité"},
+  {key:'carte_vitale',      label:'Attestation de la carte vitale'},
+  {key:'rib',                label:"Relevé d'identité bancaire"},
+  {key:'justificatif_domicile',label:'Justificatif de domicile'},
+  {key:'diplomes',           label:'Copie des diplômes / qualifications'},
+  {key:'casier_judiciaire',  label:'Extrait de casier judiciaire (bulletin n°3)'},
+  {key:'cv',                 label:'CV'},
+  {key:'contrat_signe',      label:'Contrat de travail signé'}
+];
+
+let empDocsCache=[],empFicheId='';
+async function empLoadDocs(employeId){
+  empFicheId=employeId;
+  try{
+    const{data,error}=await sb.from('employes_documents')
+      .select('*')
+      .eq('employe_id',employeId)
+      .order('created_at',{ascending:false});
+    if(error)throw error;
+    empDocsCache=data||[];
+  }catch(err){
+    console.warn('empLoadDocs',err);
+    empDocsCache=[];
+  }
+  if(String(empFicheId)!==String(employeId))return;
+  empRenderDocs();
+}
+function empPiecesPourCle(key){
+  return empDocsCache.filter(d=>d.piece_key===key);
+}
+function empRenderDocs(){
+  const zone=document.getElementById('ficheDocsZone');
+  if(!zone)return;
+
+  const ligneFichier=d=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:5px 0">'
+    +'<i class="ti ti-paperclip" style="color:var(--orange);flex-shrink:0"></i>'
+    +'<button type="button" onclick="empDocOpen(\''+d.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;color:var(--violet);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(d.filename||'Document')+'</button>'
+    +'<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+new Date(d.created_at).toLocaleDateString('fr-FR')+'</span>'
+    +'<button onclick="empDocDelete(\''+d.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:14px;flex-shrink:0"><i class="ti ti-trash"></i></button>'
+    +'</div>';
+
+  const checklist=PIECES_EMBAUCHE.map(p=>{
+    const fichiers=empPiecesPourCle(p.key);
+    const dernier=fichiers[0];
+    const badge=dernier
+      ?'<span style="background:var(--green-l);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ Reçu le '+new Date(dernier.created_at).toLocaleDateString('fr-FR')+'</span>'
+      :'<span style="background:var(--orange-l);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⚠ Manquant</span>';
+    return '<div style="border-bottom:1px solid var(--line);padding:9px 2px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      +'<span style="font-size:12.5px;font-weight:600;color:#2B2740">'+esc(p.label)+'</span>'
+      +'<span style="display:flex;align-items:center;gap:6px;flex-shrink:0">'+badge
+      +'<button type="button" onclick="empOpenPieceUpload(\''+p.key+'\')" title="Importer" class="btn btn-g btn-sm"><i class="ti ti-upload"></i> Importer</button>'
+      +'</span></div>'
+      +(fichiers.length?'<div style="margin-top:4px">'+fichiers.map(ligneFichier).join('')+'</div>':'')
+      +'</div>';
+  }).join('');
+
+  const autres=empDocsCache.filter(d=>!d.piece_key);
+  const autresHtml='<div style="margin-top:14px">'
+    +'<div style="font-size:12px;font-weight:700;color:#2B2740;margin-bottom:6px">Autres documents importés</div>'
+    +(autres.length?autres.map(ligneFichier).join(''):'<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Aucun autre document.</div>')
+    +'<button class="btn btn-g btn-sm" style="margin-top:6px" onclick="empOpenPieceUpload(\'\')"><i class="ti ti-upload"></i> Importer un document hors liste</button>'
+    +'</div>';
+
+  zone.innerHTML=checklist+autresHtml
+    +'<span id="fiche-docs-input-status" style="display:block;margin-top:8px;font-size:12px;color:var(--muted)"></span>'
+    +'<input type="file" id="fiche-docs-input" accept="image/*,application/pdf" multiple style="display:none" onchange="empHandleDocUpload(event)"/>';
+}
+
+let empPieceKeyEnCours='';
+function empOpenPieceUpload(key){
+  empPieceKeyEnCours=key||'';
+  const input=document.getElementById('fiche-docs-input');
+  if(input)input.click();
+}
+async function empHandleDocUpload(event){
+  const input=event.target;
+  const files=Array.from(input.files||[]);
+  if(!files.length)return;
+  const eid=empFicheId;
+  const pieceKey=empPieceKeyEnCours||null;
+  const status=document.getElementById('fiche-docs-input-status');
+  for(const file of files){
+    if(status)status.textContent='⏳ Envoi de '+file.name+'…';
+    try{
+      const ext=(file.name.split('.').pop()||'bin');
+      const path=eid+'/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+      /* Client authentifié (référente/direction), pas le client anonyme :
+         le bucket est privé et ses policies exigent un compte référent. */
+      const{error}=await sb.storage.from(EMP_DOCS_BUCKET).upload(path,file);
+      if(error)throw error;
+      const{data:ins,error:insErr}=await sb.from('employes_documents')
+        .insert({employe_id:eid,bucket:EMP_DOCS_BUCKET,path:path,filename:file.name,piece_key:pieceKey}).select().single();
+      if(insErr)throw insErr;
+      if(ins)empDocsCache.unshift(ins);
+      empRenderDocs();
+    }catch(e){
+      console.error('[empDocs]',e.message);
+      if(status)status.textContent='⚠ Erreur : '+e.message;
+      return;
+    }
+  }
+  if(status)status.textContent='✅ Ajouté';
+  input.value='';
+  toast('Document(s) importé(s) ✅');
+}
+async function empDocOpen(id){
+  const d=empDocsCache.find(x=>String(x.id)===String(id));
+  if(!d){toast('Fichier introuvable.',true);return;}
+  const{data,error}=await sb.storage.from(d.bucket||EMP_DOCS_BUCKET).createSignedUrl(d.path,EMP_DOCS_TTL);
+  if(error||!data){toast('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'),true);return;}
+  window.open(data.signedUrl,'_blank','noopener');
+}
+async function empDocDelete(id){
+  if(!confirm('Supprimer ce document ?'))return;
+  const d=empDocsCache.find(x=>String(x.id)===String(id));
+  const{error}=await sb.from('employes_documents').delete().eq('id',id);
+  if(error){toast('Erreur : '+error.message,true);return;}
+  /* Le fichier lui-même est retiré du stockage : sans cela il resterait
+     indéfiniment dans le bucket, hors de toute fiche. */
+  if(d){
+    const{error:rmErr}=await sb.storage.from(d.bucket||EMP_DOCS_BUCKET).remove([d.path]);
+    if(rmErr)console.warn('[empDocs] fichier non supprimé du stockage',rmErr.message);
+  }
+  empDocsCache=empDocsCache.filter(x=>String(x.id)!==String(id));
+  empRenderDocs();
 }
 
 boot();
