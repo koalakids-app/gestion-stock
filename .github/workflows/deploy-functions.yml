@@ -1,0 +1,49 @@
+name: Déployer les fonctions Supabase
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Fonctions appelées sans session Supabase (familles, salarié(e)s sans
+      # compte...) : --no-verify-jwt, comme documenté en tête de chaque
+      # fichier index.ts. Toute nouvelle fonction publique doit être ajoutée
+      # ici ET porter le même commentaire de déploiement dans son code.
+      - name: Déployer les fonctions publiques
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          for fn in dossier-contrat dossier-pieces dossier-pieces-employe envoyer-devis envoyer-dossier-famille suivi-famille; do
+            echo "::group::$fn (--no-verify-jwt)"
+            supabase functions deploy "$fn" --project-ref juyrceadazrovlitxceb --no-verify-jwt
+            echo "::endgroup::"
+          done
+
+      # Toutes les autres : vérification JWT par défaut (appelées avec la clé
+      # anon depuis l'app, ou en tâche planifiée avec un secret dédié).
+      - name: Déployer les autres fonctions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          publiques="dossier-contrat dossier-pieces dossier-pieces-employe envoyer-devis envoyer-dossier-famille suivi-famille"
+          for dir in supabase/functions/*/; do
+            fn=$(basename "$dir")
+            if echo " $publiques " | grep -q " $fn "; then
+              continue
+            fi
+            echo "::group::$fn"
+            supabase functions deploy "$fn" --project-ref juyrceadazrovlitxceb
+            echo "::endgroup::"
+          done
