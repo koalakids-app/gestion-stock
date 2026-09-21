@@ -689,14 +689,17 @@ const EMP_DOCS_TTL=300; // durée de vie d'une URL signée, en secondes
    incomplète n'est jamais bloquante : c'est un aide-mémoire, pas une
    validation. */
 const PIECES_EMBAUCHE=[
-  {key:'piece_identite',    label:"Copie de la pièce d'identité"},
-  {key:'carte_vitale',      label:'Attestation de la carte vitale'},
-  {key:'rib',                label:"Relevé d'identité bancaire"},
-  {key:'justificatif_domicile',label:'Justificatif de domicile'},
-  {key:'diplomes',           label:'Copie des diplômes / qualifications'},
-  {key:'casier_judiciaire',  label:'Extrait de casier judiciaire (bulletin n°3)'},
-  {key:'cv',                 label:'CV'},
-  {key:'contrat_signe',      label:'Contrat de travail signé'}
+  {key:'cv',                     label:'CV'},
+  {key:'piece_identite',         label:"Carte d'identité recto/verso"},
+  {key:'carte_vitale',           label:'Carte vitale'},
+  {key:'justificatif_domicile',  label:'Justificatif de domicile (facture téléphone / EDF)'},
+  {key:'diplomes',                label:'Copie des derniers diplômes'},
+  {key:'certificat_formation',    label:'Certificat de formation (le cas échéant)',optionnel:true},
+  {key:'certificat_medical',      label:"Certificat médical d'aptitude"},
+  {key:'attestation_honorabilite',label:"Attestation d'honorabilité",optionnel:true},
+  {key:'casier_judiciaire',       label:'Extrait de casier judiciaire (bulletin n°3)'},
+  {key:'carnet_sante_vaccins',    label:'Extrait du carnet de santé (partie vaccins)'},
+  {key:'rib',                     label:"Relevé d'identité bancaire"}
 ];
 
 let empDocsCache=[],empFicheId='';
@@ -734,9 +737,14 @@ function empRenderDocs(){
   const checklist=PIECES_EMBAUCHE.map(p=>{
     const fichiers=empPiecesPourCle(p.key);
     const dernier=fichiers[0];
-    const badge=dernier
-      ?'<span style="background:var(--green-l);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ Reçu le '+new Date(dernier.created_at).toLocaleDateString('fr-FR')+'</span>'
-      :'<span style="background:var(--orange-l);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⚠ Manquant</span>';
+    let badge;
+    if(dernier){
+      badge='<span style="background:var(--green-l);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ Reçu le '+new Date(dernier.created_at).toLocaleDateString('fr-FR')+'</span>';
+    }else if(p.optionnel){
+      badge='<span style="background:#F1EFF7;color:var(--muted);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">— Le cas échéant</span>';
+    }else{
+      badge='<span style="background:var(--orange-l);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⚠ Manquant</span>';
+    }
     return '<div style="border-bottom:1px solid var(--line);padding:9px 2px">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
       +'<span style="font-size:12.5px;font-weight:600;color:#2B2740">'+esc(p.label)+'</span>'
