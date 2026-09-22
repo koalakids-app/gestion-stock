@@ -567,7 +567,20 @@ async function vacToggleDose(enfantId, vaccId, doseIdx){
         if(error.code==='23505'){
           const {data:dejaLa} = await sb.from('vaccinations').select('*')
             .eq('enfant_id',enfantId).eq('vaccin_id',vaccId).eq('dose_index',doseIdx).maybeSingle();
-          if(dejaLa && !vacGetRecord(enfantId,vaccId,doseIdx)) cacheVaccinations.push(dejaLa);
+          if(dejaLa){
+            if(!vacGetRecord(enfantId,vaccId,doseIdx)) cacheVaccinations.push(dejaLa);
+          }else{
+            /* La ligne existe bel et bien côté serveur (sinon pas de « duplicate
+               key »), mais cette relecture ne la voit pas : la politique de
+               sécurité (RLS) de la table `vaccinations` autorise l'écriture
+               sans autoriser la lecture correspondante pour ce compte. Ce
+               n'est pas réparable ici — sans le savoir, le clic resterait
+               bloqué en boucle silencieuse (nouvelle tentative, nouveau
+               « duplicate key », indéfiniment). On le dit clairement plutôt
+               que de laisser la pastille ne jamais « tenir » sans explication. */
+            alert('Cette vaccination est bien enregistrée en base, mais votre compte n’a pas le droit de la relire.\n\nContactez l’administrateur technique : politique de sécurité (RLS) à corriger sur la table vaccinations.');
+            return;
+          }
         }else{
           alert('Erreur : '+error.message);return;
         }
