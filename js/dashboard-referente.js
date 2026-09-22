@@ -120,7 +120,7 @@ async function loadRefDashAlertesExtra(crecheId,urgentesHtml){
     const box=document.getElementById('ref-dash-alerts');if(!box)return;
     let html=urgentesHtml;
     if(vacc.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'vaccinations\')"><i class="ti ti-vaccine" style="font-size:16px;flex-shrink:0"></i> <strong>'+vacc.length+' vaccination(s) en retard</strong></div>';
-    if(dossiers.length)html+='<div class="alert-item warning"><i class="ti ti-mail-forward" style="font-size:16px;flex-shrink:0"></i> <strong>'+dossiers.length+' dossier(s) famille</strong> à relancer</div>';
+    if(dossiers.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'enfants\')"><i class="ti ti-mail-forward" style="font-size:16px;flex-shrink:0"></i> <strong>'+dossiers.length+' dossier(s) famille</strong> à relancer</div>';
     // Les devis et préinscriptions vivent dans inscriptions.html, pas dans un
     // onglet de cette page : un vrai lien plutôt qu'un showMain().
     if(devis.length)html+='<a class="alert-item warning" href="inscriptions.html" style="text-decoration:none;color:inherit"><i class="ti ti-file-invoice" style="font-size:16px;flex-shrink:0"></i> <strong>'+devis.length+' devis</strong> en attente de signature</a>';
@@ -300,7 +300,7 @@ async function loadDashboardDossiersAlertes(){
     const n=(await dossiersFamilleARelancer(null)).length;
     if(n>0){
       const box=document.getElementById('dash-alerts');if(!box)return;
-      box.innerHTML+='<div class="alert-item warning"><i class="ti ti-mail-forward" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' dossier(s) famille</strong> à relancer</div>';
+      box.innerHTML+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'enfants\')"><i class="ti ti-mail-forward" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' dossier(s) famille</strong> à relancer</div>';
     }
   }catch(e){console.warn('[Dashboard] dossiers familles',e);}
 }
