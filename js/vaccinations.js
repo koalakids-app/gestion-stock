@@ -508,6 +508,7 @@ async function vacSaveDose(){
   }
   closeModal('modal-vac-dose-wrap');
   vacRender();
+  vacSyncFicheDocument(enfantId);
   showBanner('Vaccination enregistrée ✅');
 }
 
@@ -523,6 +524,7 @@ async function vacDeleteDose(){
   cacheVaccinations = cacheVaccinations.filter(v=>v.id!==existing.id);
   closeModal('modal-vac-dose-wrap');
   vacRender();
+  vacSyncFicheDocument(enfantId);
   showBanner('Vaccination supprimée.');
 }
 
@@ -541,6 +543,7 @@ async function vacToggleDose(enfantId, vaccId, doseIdx){
     vacRender();
     if(document.getElementById('modal-vac-fiche-wrap')?.classList.contains('open')) vacRenderFicheBody();
     vacRefreshFicheEnfantZone(enfantId);
+    vacSyncFicheDocument(enfantId);
     showBanner('Vaccin annulé.');
   }else{
     // Pas encore fait -> marquer fait avec la date du jour
@@ -551,8 +554,83 @@ async function vacToggleDose(enfantId, vaccId, doseIdx){
     vacRender();
     if(document.getElementById('modal-vac-fiche-wrap')?.classList.contains('open')) vacRenderFicheBody();
     vacRefreshFicheEnfantZone(enfantId);
+    vacSyncFicheDocument(enfantId);
     showBanner('Vaccin marqué comme fait ✅');
   }
+}
+
+/* ── Synchronisation avec la fiche « Suivi des vaccinations obligatoires »
+   de Documents (documents.html) ────────────────────────────────────────
+   Ce module (VAC_SCHEMA) et le document imprimable/signable de Documents
+   (VAC_DOC, dans documents.html) décrivent le même calendrier vaccinal sous
+   deux formes différentes : VAC_SCHEMA regroupe les vaccins combinés (ex.
+   DTCaP), VAC_DOC détaille une ligne par maladie comme le Cerfa officiel.
+   VAC_SYNC_GI fait la correspondance ; les index de dose (di), eux,
+   coïncident directement — mêmes âges, même ordre des deux côtés. */
+const VAC_SYNC_GI = {dtp_coque:[0,1,2,3], hib:[4], hepb:[5], pneumo:[6], menb:[7], menacwy:[8], ror:[9,10,11]};
+
+// documents_koala (template_key='vaccinations'), chargés une fois par session.
+let vacTplDocs = null;
+async function vacTplDocsLoad(){
+  if(vacTplDocs) return vacTplDocs;
+  const {data, error} = await sb.from('documents_koala').select('id,creche_id')
+    .eq('template_key','vaccinations').eq('actif',true);
+  if(error){console.warn('[vacSync] documents_koala',error);vacTplDocs=[];}
+  else vacTplDocs = data||[];
+  return vacTplDocs;
+}
+// Le document propre à la crèche de l'enfant prime sur un document réseau
+// (creche_id nul, valable partout).
+function vacTplDocPour(crecheId){
+  const docs = vacTplDocs||[];
+  return docs.find(d=>String(d.creche_id)===String(crecheId)) || docs.find(d=>!d.creche_id) || null;
+}
+
+/* Répercute l'état des doses de cet enfant sur sa fiche Documents
+   (documents_reponses, template_key='vaccinations') : la crée si elle
+   n'existe pas encore, la met à jour sinon. Best-effort — si aucun document
+   « Suivi des vaccinations » n'a été créé dans Documents, ou si l'écriture
+   échoue, on se contente d'un avertissement en console : ça ne doit jamais
+   faire échouer l'enregistrement de la dose elle-même. */
+async function vacSyncFicheDocument(enfantId){
+  try{
+    const e = cacheEnfants.find(x=>String(x.id)===String(enfantId));
+    if(!e) return;
+    await vacTplDocsLoad();
+    const doc = vacTplDocPour(e.creche_id);
+    if(!doc) return;
+
+    const {data:existants} = await sb.from('documents_reponses').select('id,donnees,statut')
+      .eq('document_id',doc.id).eq('enfant_id',enfantId)
+      .order('updated_at',{ascending:false}).limit(1);
+    const existant = (existants||[])[0]||null;
+
+    const donnees = Object.assign({}, existant?existant.donnees:{});
+    donnees.vac_enfant = ((e.prenom||'')+' '+(e.nom||'')).trim();
+    donnees.vac_naissance = e.dob||'';
+    const creche = cacheCreches.find(c=>c.id===e.creche_id);
+    if(creche) donnees.vac_creche = creche.name;
+    VAC_SCHEMA.forEach(v=>{
+      const gis = VAC_SYNC_GI[v.id]||[];
+      v.doses.forEach((dose,di)=>{
+        const rec = vacGetRecord(enfantId, v.id, di);
+        gis.forEach(gi=>{
+          donnees['vac_'+gi+'_'+di+'_d'] = rec?(rec.date_fait||''):'';
+          donnees['vac_'+gi+'_'+di+'_r'] = !!rec;
+        });
+      });
+    });
+
+    const row = {
+      document_id:doc.id, enfant_id:enfantId, creche_id:e.creche_id, donnees,
+      statut:(existant&&existant.statut)||'prepare',
+      rempli_par:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null,
+      rempli_par_nom:(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.name)||'Crèche',
+      updated_at:new Date().toISOString()
+    };
+    if(existant) await dbUpdate('documents_reponses',existant.id,row);
+    else await dbInsert('documents_reponses',row);
+  }catch(err){console.warn('[vacSyncFicheDocument]',err);}
 }
 /* Rafraichit le statut vaccinal affiche dans la fiche enfant (js/enfants.js,
    zone enf-vaccins-zone) si c'est bien cet enfant qui y est ouvert — meme
