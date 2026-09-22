@@ -51,10 +51,25 @@ async function vacInit(){
 }
 
 let vacDataLoaded = false;   // le cache peut etre demande par la fiche enfant avant l'ouverture du module Vaccinations
+/* PostgREST plafonne le nombre de lignes rendues par une requête sans
+   .range() (1000 par défaut chez Supabase) : au-delà, un select('*') sans
+   pagination se tait sur les lignes en trop plutôt que de renvoyer une
+   erreur. La table vaccinations a dépassé ce seuil (1098 lignes constatées
+   le 22/09/2026) — les vaccins les plus récents disparaissaient donc
+   silencieusement du cache à chaque rechargement, quel que soit le compte.
+   Même pagination que prPaged() dans js/presences-reel.js. */
 async function vacLoadData(){
-  const {data, error} = await sb.from('vaccinations').select('*');
-  if(error){console.warn('vaccinations load',error);cacheVaccinations=[];return;}
-  cacheVaccinations = data || [];
+  try{
+    let out=[],from=0;
+    for(;;){
+      const {data, error} = await sb.from('vaccinations').select('*').range(from,from+999);
+      if(error)throw error;
+      out=out.concat(data||[]);
+      if(!data||data.length<1000)break;
+      from+=1000;
+    }
+    cacheVaccinations = out;
+  }catch(error){console.warn('vaccinations load',error);cacheVaccinations=[];return;}
   vacDataLoaded = true;
   await vacLoadPJ();
 }
