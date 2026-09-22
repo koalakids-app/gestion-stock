@@ -1360,6 +1360,18 @@ async function loadAll(){
   sel.innerHTML='<option value="">Toutes les crèches</option>'
     +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   render();
+  ouvrirDepuisUrl();
+}
+
+/* Arrivée depuis une alerte du tableau de bord (« devis en attente », dossier
+   à relancer…) : ?open=<preinscriptionId> ouvre directement la bonne fiche
+   plutôt que de laisser deviner laquelle dans la liste. Paramètre retiré de
+   l'URL ensuite pour ne pas rouvrir la fiche à chaque rafraîchissement. */
+function ouvrirDepuisUrl(){
+  const id=new URLSearchParams(location.search).get('open');
+  if(!id)return;
+  history.replaceState(null,'',location.pathname);
+  if(PRE.some(p=>String(p.id)===String(id)))openFiche(id);
 }
 
 function nomCreche(id){const c=CRECHES.find(x=>String(x.id)===String(id));return c?c.name:'';}

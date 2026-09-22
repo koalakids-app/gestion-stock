@@ -122,8 +122,11 @@ async function loadRefDashAlertesExtra(crecheId,urgentesHtml){
     if(vacc.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'vaccinations\')"><i class="ti ti-vaccine" style="font-size:16px;flex-shrink:0"></i> <strong>'+vacc.length+' vaccination(s) en retard</strong></div>';
     if(dossiers.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'enfants\')"><i class="ti ti-mail-forward" style="font-size:16px;flex-shrink:0"></i> <strong>'+dossiers.length+' dossier(s) famille</strong> à relancer</div>';
     // Les devis et préinscriptions vivent dans inscriptions.html, pas dans un
-    // onglet de cette page : un vrai lien plutôt qu'un showMain().
-    if(devis.length)html+='<a class="alert-item warning" href="inscriptions.html" style="text-decoration:none;color:inherit"><i class="ti ti-file-invoice" style="font-size:16px;flex-shrink:0"></i> <strong>'+devis.length+' devis</strong> en attente de signature</a>';
+    // onglet de cette page : un vrai lien plutôt qu'un showMain(). Le lien
+    // pointe directement sur la fiche du devis le plus ancien (donc le plus
+    // urgent, cf. devisARelancer) : sans ça, impossible de savoir lequel
+    // relancer sans rouvrir toute la liste des préinscriptions.
+    if(devis.length)html+='<a class="alert-item warning" href="inscriptions.html?open='+devis[0].preinscription_id+'" style="text-decoration:none;color:inherit"><i class="ti ti-file-invoice" style="font-size:16px;flex-shrink:0"></i> <strong>'+devis.length+' devis</strong> en attente de signature</a>';
     if(demandes.length)html+='<a class="alert-item warning" href="inscriptions.html" style="text-decoration:none;color:inherit"><i class="ti ti-bell" style="font-size:16px;flex-shrink:0"></i> <strong>'+demandes.length+' préinscription(s)</strong> à relancer</a>';
     box.innerHTML=html;
   }catch(e){console.warn('[RefDash] alertes',e);}
@@ -319,12 +322,13 @@ async function loadDashboardStgDocsAlertes(){
 }
 async function loadDashboardDevisAlertes(){
   try{
-    const n=(await devisARelancer(null)).length;
-    if(n>0){
+    const devis=await devisARelancer(null);
+    if(devis.length){
       const box=document.getElementById('dash-alerts');if(!box)return;
       // showMain() ne gère que les onglets internes à demandes.html : les devis
-      // vivent dans inscriptions.html, on y renvoie donc par un vrai lien.
-      box.innerHTML+='<a class="alert-item warning" href="inscriptions.html" style="text-decoration:none;color:inherit"><i class="ti ti-file-invoice" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' devis</strong> en attente de signature</a>';
+      // vivent dans inscriptions.html, on y renvoie donc par un vrai lien —
+      // vers la fiche du plus ancien (le plus urgent), pas juste la liste.
+      box.innerHTML+='<a class="alert-item warning" href="inscriptions.html?open='+devis[0].preinscription_id+'" style="text-decoration:none;color:inherit"><i class="ti ti-file-invoice" style="font-size:16px;flex-shrink:0"></i> <strong>'+devis.length+' devis</strong> en attente de signature</a>';
     }
   }catch(e){console.warn('[Dashboard] devis',e);}
 }
