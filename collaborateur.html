@@ -46,6 +46,12 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .stat .n{font-family:'Baloo 2',cursive;font-size:22px;color:var(--violet)}
 .stat.pos .n{color:var(--red)}
 .stat .l{font-size:11px;color:var(--muted);font-weight:700;margin-top:2px}
+/* Zone de tracé pour la signature de validation des heures. touch-action:none
+   est indispensable : sans elle, le doigt fait défiler la page au lieu de
+   dessiner (même parti pris que signature-contrat.html). */
+#valSigBox{border:2px dashed #D9D3F2;border-radius:14px;background:#fff;position:relative;overflow:hidden}
+#valSig{display:block;width:100%;height:150px;touch-action:none;cursor:crosshair}
+#valSigHint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#C6C1DA;font-size:14px;font-weight:700;pointer-events:none}
 </style>
 </head>
 <body>
@@ -157,6 +163,14 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <p class="hint">Calcul annualisé : 1607h temps plein par an, proraté selon vos heures
         hebdomadaires contractuelles et la période couverte par votre contrat sur l'année. Un solde
         positif correspond à des heures supplémentaires.</p>
+    </div>
+
+    <div class="card">
+      <div class="sec">
+        <span><i class="ti ti-file-signature"></i> Validation mensuelle de mes heures</span>
+        <select id="valMoisSelect" onchange="loadValidationMois()" style="width:auto;padding:5px 9px;font-size:12.5px;border:2px solid var(--line);border-radius:10px"></select>
+      </div>
+      <div id="valBox"><p class="hint">Chargement…</p></div>
     </div>
 
     <div class="card">
@@ -505,7 +519,8 @@ async function grantAccess(){
   const anneeActuelle=new Date().getFullYear();
   anneeSel.innerHTML=[anneeActuelle,anneeActuelle-1].map(a=>'<option value="'+a+'">'+a+'</option>').join('');
   await loadFermetures();
-  await Promise.all([loadPlanning(),loadPointages(),loadCompteur(),loadFormation()]);
+  populateMoisValidation();
+  await Promise.all([loadPlanning(),loadPointages(),loadCompteur(),loadFormation(),loadValidationMois()]);
 }
 
 /* ---------- PLANNING ----------------------------------------------------
@@ -660,6 +675,111 @@ async function loadCompteur(){
     '<div class="stat"><div class="n">'+Number(r.heures_realisees||0).toFixed(1)+'h</div><div class="l">Heures réalisées</div></div>'
     +'<div class="stat"><div class="n">'+Number(r.heures_dues||0).toFixed(1)+'h</div><div class="l">Heures dues (1607h proraté)</div></div>'
     +'<div class="stat'+(solde>0?' pos':'')+'"><div class="n">'+(solde>0?'+':'')+solde.toFixed(1)+'h</div><div class="l">'+(solde>0?'Heures supplémentaires':'Solde')+'</div></div>';
+}
+
+/* ---------- VALIDATION MENSUELLE DES HEURES (signature électronique) -----
+   En fin de mois, le/la collaborateur/trice signe pour valider le total
+   d'heures que l'application a calculé à partir de ses pointages (même
+   calcul que le compteur d'heures supplémentaires, mais mois par mois). Le
+   total est recalculé et enregistré côté serveur par kk_signer_heures_mois
+   (jamais envoyé par le client) : une fois signé, un mois est figé et ne
+   peut plus être re-signé (cf. sql/validation_heures_mensuelle.sql). */
+function moisLabel(y,m){return new Date(y,m-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});}
+function capitalize(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+function populateMoisValidation(){
+  const sel=document.getElementById('valMoisSelect');
+  const now=new Date();
+  const opts=[];
+  for(let i=1;i<=12;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    opts.push({y:d.getFullYear(),m:d.getMonth()+1});
+  }
+  sel.innerHTML=opts.map(o=>'<option value="'+o.y+'-'+o.m+'">'+esc(capitalize(moisLabel(o.y,o.m)))+'</option>').join('');
+}
+let VAL_SIG_CTX=null,VAL_SIG_TRACE=false;
+async function loadValidationMois(){
+  const box=document.getElementById('valBox');
+  const[y,m]=document.getElementById('valMoisSelect').value.split('-').map(Number);
+  box.innerHTML='<p class="hint">Chargement…</p>';
+  const{data:sig,error:errSig}=await sb.from('heures_validations_mensuelles').select('*')
+    .eq('annee',y).eq('mois',m)
+    .eq(COLLAB_TYPE==='referent'?'referent_id':'employe_id',COLLAB.id)
+    .maybeSingle();
+  if(errSig){box.innerHTML='<p class="hint">Validation indisponible pour le moment.</p>';return;}
+  if(sig){
+    box.innerHTML='<div style="display:flex;align-items:center;gap:10px;background:var(--green-l);border-radius:14px;padding:14px 16px">'
+      +'<i class="ti ti-rosette-discount-check" style="font-size:26px;color:var(--green)"></i>'
+      +'<div><div style="font-weight:800;color:#1B6B47">'+Number(sig.heures_realisees).toFixed(1)+'h validées</div>'
+      +'<div style="font-size:12.5px;color:var(--muted)">Signé par '+esc(sig.signe_par)+' le '+dfr(sig.signe_le)+'</div></div></div>';
+    return;
+  }
+  const{data:heures,error:errH}=await sb.rpc('kk_heures_realisees_mois',{p_annee:y,p_mois:m});
+  if(errH){box.innerHTML='<p class="hint">Calcul des heures indisponible : '+esc(errH.message)+'</p>';return;}
+  const nomDefaut=COLLAB_TYPE==='referent'?(COLLAB.name||''):((COLLAB.prenom||'')+' '+(COLLAB.nom||'')).trim();
+  box.innerHTML=
+    '<p style="font-size:14.5px">Total calculé à partir de vos pointages pour <b>'+esc(capitalize(moisLabel(y,m)))+'</b> : '
+    +'<b style="font-family:\'Baloo 2\',cursive;font-size:20px;color:var(--violet)">'+Number(heures||0).toFixed(1)+'h</b></p>'
+    +'<div class="f" style="margin-top:12px"><label class="lb">Votre nom et prénom</label>'
+    +'<input id="valNom" value="'+esc(nomDefaut)+'"></div>'
+    +'<label class="lb">Votre signature — tracez-la avec le doigt ou la souris</label>'
+    +'<div id="valSigBox"><canvas id="valSig"></canvas><div id="valSigHint">Signez ici</div></div>'
+    +'<button class="btn btn-g btn-sm" style="margin-top:8px" onclick="effacerValSig()">Effacer la signature</button>'
+    +'<div id="valErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px;margin-top:8px"></div>'
+    +'<button class="btn btn-p" style="margin-top:6px" id="valBtn" data-label="Valider mes heures" onclick="signerHeuresMois('+y+','+m+')"><i class="ti ti-signature"></i> Valider mes heures</button>'
+    +'<p class="hint">En validant, vous confirmez que ce total d\'heures réalisées ce mois-ci est exact. Cette validation est '
+    +'définitive : contactez la direction avant de signer en cas de désaccord.</p>';
+  initValSignature();
+}
+function initValSignature(){
+  const cv=document.getElementById('valSig');
+  if(!cv)return;
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  const r=cv.getBoundingClientRect();
+  cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);
+  VAL_SIG_CTX=cv.getContext('2d');
+  VAL_SIG_CTX.scale(dpr,dpr);
+  VAL_SIG_CTX.lineWidth=2.4;VAL_SIG_CTX.lineCap='round';VAL_SIG_CTX.lineJoin='round';VAL_SIG_CTX.strokeStyle='#2B2740';
+  VAL_SIG_TRACE=false;
+  let dessine=false;
+  const pos=ev=>{const b=cv.getBoundingClientRect();return{x:ev.clientX-b.left,y:ev.clientY-b.top};};
+  cv.addEventListener('pointerdown',ev=>{
+    ev.preventDefault();cv.setPointerCapture(ev.pointerId);
+    dessine=true;VAL_SIG_TRACE=true;
+    document.getElementById('valSigHint').style.display='none';
+    const p=pos(ev);VAL_SIG_CTX.beginPath();VAL_SIG_CTX.moveTo(p.x,p.y);
+  });
+  cv.addEventListener('pointermove',ev=>{
+    if(!dessine)return;ev.preventDefault();
+    const p=pos(ev);VAL_SIG_CTX.lineTo(p.x,p.y);VAL_SIG_CTX.stroke();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(t=>cv.addEventListener(t,()=>{dessine=false;}));
+}
+function effacerValSig(){
+  const cv=document.getElementById('valSig');
+  if(!cv||!VAL_SIG_CTX)return;
+  VAL_SIG_CTX.clearRect(0,0,cv.width,cv.height);
+  VAL_SIG_TRACE=false;
+  const hint=document.getElementById('valSigHint');
+  if(hint)hint.style.display='';
+}
+async function signerHeuresMois(y,m){
+  const err=document.getElementById('valErr');
+  err.textContent='';
+  const nom=(document.getElementById('valNom').value||'').trim();
+  if(nom.length<3){err.textContent='Merci d\'indiquer votre nom et votre prénom.';return;}
+  if(!VAL_SIG_TRACE){err.textContent='Merci de tracer votre signature dans le cadre.';return;}
+  const png=document.getElementById('valSig').toDataURL('image/png');
+  if(png.length<1500){err.textContent='La signature est trop brève — retracez-la un peu plus largement.';return;}
+  const btn=document.getElementById('valBtn');
+  btn.disabled=true;btn.textContent='Enregistrement…';
+  const{error}=await sb.rpc('kk_signer_heures_mois',{p_annee:y,p_mois:m,p_nom:nom,p_signature:png});
+  if(error){
+    err.textContent=esc(error.message||'Enregistrement impossible.');
+    btn.disabled=false;btn.textContent=btn.getAttribute('data-label');
+    return;
+  }
+  toast('Heures validées.');
+  await loadValidationMois();
 }
 
 /* ---------- MON PARCOURS DE FORMATION ---------- */
