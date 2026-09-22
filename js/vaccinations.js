@@ -595,36 +595,41 @@ const VAC_SYNC_GI = {dtp_coque:[0,1,2,3], hib:[4], hepb:[5], pneumo:[6], menb:[7
 
 // documents_koala (template_key='vaccinations'), chargés une fois par session.
 let vacTplDocs = null;
+let vacTplDocsPromise = null;   // évite que deux appels concurrents créent chacun leur propre document modèle
 async function vacTplDocsLoad(){
   if(vacTplDocs) return vacTplDocs;
-  const {data, error} = await sb.from('documents_koala').select('id,creche_id')
-    .eq('template_key','vaccinations').eq('actif',true);
-  if(error){console.warn('[vacSync] documents_koala',error);vacTplDocs=[];return vacTplDocs;}
-  vacTplDocs = data||[];
-  /* Premier usage : la fiche modèle « Suivi des vaccinations obligatoires »
-     n'a encore jamais été créée dans Documents (elle n'existe que comme
-     modèle de code — TPL.vaccinations — tant que personne n'a cliqué
-     « Nouveau document » pour l'instancier). On la crée nous-mêmes, réseau
-     entier, pour que la synchronisation fonctionne sans configuration
-     manuelle préalable. */
-  if(!vacTplDocs.length){
-    const created=await dbInsert('documents_koala',{
-      titre:'Suivi des vaccinations obligatoires',
-      description:null, categorie_id:null, creche_id:null,
-      type:'remplissable', template_key:'vaccinations', schema_champs:[],
-      pack_familiarisation:false, pack_ordre:0, pack_imprimer:false,
-      actif:true, created_by:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null
-    });
-    if(created) vacTplDocs=[created];
-    else{
-      // Une autre session vient peut-être de le créer au même instant : on
-      // relit avant d'abandonner, plutôt que de bloquer la synchronisation.
-      const {data:retry}=await sb.from('documents_koala').select('id,creche_id')
-        .eq('template_key','vaccinations').eq('actif',true);
-      vacTplDocs=retry||[];
+  if(vacTplDocsPromise) return vacTplDocsPromise;
+  vacTplDocsPromise = (async()=>{
+    const {data, error} = await sb.from('documents_koala').select('id,creche_id')
+      .eq('template_key','vaccinations').eq('actif',true);
+    if(error){console.warn('[vacSync] documents_koala',error);vacTplDocs=[];return vacTplDocs;}
+    vacTplDocs = data||[];
+    /* Premier usage : la fiche modèle « Suivi des vaccinations obligatoires »
+       n'a encore jamais été créée dans Documents (elle n'existe que comme
+       modèle de code — TPL.vaccinations — tant que personne n'a cliqué
+       « Nouveau document » pour l'instancier). On la crée nous-mêmes, réseau
+       entier, pour que la synchronisation fonctionne sans configuration
+       manuelle préalable. */
+    if(!vacTplDocs.length){
+      const created=await dbInsert('documents_koala',{
+        titre:'Suivi des vaccinations obligatoires',
+        description:null, categorie_id:null, creche_id:null,
+        type:'remplissable', template_key:'vaccinations', schema_champs:[],
+        pack_familiarisation:false, pack_ordre:0, pack_imprimer:false,
+        actif:true, created_by:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null
+      });
+      if(created) vacTplDocs=[created];
+      else{
+        // Une autre session vient peut-être de le créer au même instant : on
+        // relit avant d'abandonner, plutôt que de bloquer la synchronisation.
+        const {data:retry}=await sb.from('documents_koala').select('id,creche_id')
+          .eq('template_key','vaccinations').eq('actif',true);
+        vacTplDocs=retry||[];
+      }
     }
-  }
-  return vacTplDocs;
+    return vacTplDocs;
+  })();
+  return vacTplDocsPromise;
 }
 // Le document propre à la crèche de l'enfant prime sur un document réseau
 // (creche_id nul, valable partout).
@@ -638,8 +643,22 @@ function vacTplDocPour(crecheId){
    n'existe pas encore, la met à jour sinon. Best-effort — si aucun document
    « Suivi des vaccinations » n'a été créé dans Documents, ou si l'écriture
    échoue, on se contente d'un avertissement en console : ça ne doit jamais
-   faire échouer l'enregistrement de la dose elle-même. */
-async function vacSyncFicheDocument(enfantId){
+   faire échouer l'enregistrement de la dose elle-même.
+
+   Enchaînée par enfant (vacSyncQueue) : deux clics rapprochés sur des doses
+   différentes du même enfant déclenchaient chacun un aller-retour « lire la
+   fiche existante puis l'insérer/la mettre à jour » — sans verrou, les deux
+   pouvaient se voir mutuellement absents et créer chacun leur propre fiche
+   en double, la plus récente masquant alors les doses écrites par l'autre. */
+const vacSyncQueue = {};
+function vacSyncFicheDocument(enfantId){
+  const suite = (vacSyncQueue[enfantId]||Promise.resolve())
+    .then(()=>vacSyncFicheDocumentImpl(enfantId))
+    .catch(err=>console.warn('[vacSyncFicheDocument]',err));
+  vacSyncQueue[enfantId] = suite;
+  return suite;
+}
+async function vacSyncFicheDocumentImpl(enfantId){
   try{
     const e = cacheEnfants.find(x=>String(x.id)===String(enfantId));
     if(!e) return;
