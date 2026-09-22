@@ -2860,9 +2860,16 @@ const VAC_GI_VACCIN=[
 
 /* Répercute cette fiche sur la table `vaccinations` (celle qu'utilisent les
    pastilles et les alertes de retard du module) : une dose datée et cochée
-   « Reçu » crée ou met à jour son enregistrement, une dose décochée
-   supprime le sien s'il existait. Best-effort — un souci ici ne doit
-   jamais faire échouer l'enregistrement de la fiche elle-même. */
+   « Reçu » crée ou met à jour son enregistrement. Volontairement additive
+   uniquement — jamais de suppression ici. Cette fiche peut être rouverte et
+   réenregistrée (ajout d'une observation, etc.) sans que toutes ses lignes
+   aient été retouchées : une ligne restée décochée dans CE formulaire ne
+   veut pas dire « annuler ce vaccin », qui a pu être marqué fait entre-temps
+   depuis le module lui-même — une suppression ici l'aurait silencieusement
+   effacé (dose « qui ne tient pas » après l'enregistrement de la fiche).
+   Pour annuler une dose, on repasse par le module (vacToggleDose). Best-
+   effort — un souci ici ne doit jamais faire échouer l'enregistrement de la
+   fiche elle-même. */
 async function vacSyncModuleDepuisFiche(enfantId,donnees){
   try{
     const{data:existants,error}=await sb.from('vaccinations').select('id,vaccin_id,dose_index,date_fait').eq('enfant_id',enfantId);
@@ -2876,15 +2883,12 @@ async function vacSyncModuleDepuisFiche(enfantId,donnees){
       for(let di=0;di<doses.length;di++){
         const date=donnees['vac_'+gi+'_'+di+'_d']||'';
         const recu=!!donnees['vac_'+gi+'_'+di+'_r'];
+        if(!(recu&&date))continue;
         const existant=parCle[info.id+'_'+di];
-        if(recu&&date){
-          if(existant){
-            if(existant.date_fait!==date)await sb.from('vaccinations').update({date_fait:date}).eq('id',existant.id);
-          }else{
-            await sb.from('vaccinations').insert({enfant_id:enfantId,vaccin_id:info.id,dose_index:di,date_fait:date});
-          }
-        }else if(existant){
-          await sb.from('vaccinations').delete().eq('id',existant.id);
+        if(existant){
+          if(existant.date_fait!==date)await sb.from('vaccinations').update({date_fait:date}).eq('id',existant.id);
+        }else{
+          await sb.from('vaccinations').insert({enfant_id:enfantId,vaccin_id:info.id,dose_index:di,date_fait:date});
         }
       }
     }
