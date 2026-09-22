@@ -532,30 +532,54 @@ function vacOpenEnfantModal(){
   // Re-use existing openEnfantModal if exists
   openEnfantModal();
 }
+/* Un clic touche déclenche parfois deux appels quasi simultanés (double-tap
+   tablette, ou second clic avant que le premier ait fini son aller-retour
+   réseau) : le cache local voit encore « pas fait » pour les deux, et le
+   second insert percute la contrainte unique (enfant_id, vaccin_id,
+   dose_index) en base — d'où l'alerte « duplicate key ». On verrouille donc
+   la combinaison le temps de la requête. */
+const vacTogglingKeys = new Set();
 // Clic simple : bascule fait / non-fait sans saisie de date (date du jour enregistrée automatiquement)
 async function vacToggleDose(enfantId, vaccId, doseIdx){
-  const existing = vacGetRecord(enfantId, vaccId, doseIdx);
-  if(existing){
-    // Déjà fait -> annuler
-    const {error} = await sb.from('vaccinations').delete().eq('id',existing.id);
-    if(error){alert('Erreur : '+error.message);return;}
-    cacheVaccinations = cacheVaccinations.filter(v=>v.id!==existing.id);
-    vacRender();
-    if(document.getElementById('modal-vac-fiche-wrap')?.classList.contains('open')) vacRenderFicheBody();
-    vacRefreshFicheEnfantZone(enfantId);
-    vacSyncFicheDocument(enfantId);
-    showBanner('Vaccin annulé.');
-  }else{
-    // Pas encore fait -> marquer fait avec la date du jour
-    const row = {enfant_id:enfantId, vaccin_id:vaccId, dose_index:doseIdx, date_fait:todayStr()};
-    const {data, error} = await sb.from('vaccinations').insert(row).select().single();
-    if(error){alert('Erreur : '+error.message);return;}
-    if(data) cacheVaccinations.push(data);
-    vacRender();
-    if(document.getElementById('modal-vac-fiche-wrap')?.classList.contains('open')) vacRenderFicheBody();
-    vacRefreshFicheEnfantZone(enfantId);
-    vacSyncFicheDocument(enfantId);
-    showBanner('Vaccin marqué comme fait ✅');
+  const key = vacGetDoseKey(enfantId, vaccId, doseIdx);
+  if(vacTogglingKeys.has(key)) return;
+  vacTogglingKeys.add(key);
+  try{
+    const existing = vacGetRecord(enfantId, vaccId, doseIdx);
+    if(existing){
+      // Déjà fait -> annuler
+      const {error} = await sb.from('vaccinations').delete().eq('id',existing.id);
+      if(error){alert('Erreur : '+error.message);return;}
+      cacheVaccinations = cacheVaccinations.filter(v=>v.id!==existing.id);
+      vacRender();
+      if(document.getElementById('modal-vac-fiche-wrap')?.classList.contains('open')) vacRenderFicheBody();
+      vacRefreshFicheEnfantZone(enfantId);
+      vacSyncFicheDocument(enfantId);
+      showBanner('Vaccin annulé.');
+    }else{
+      // Pas encore fait -> marquer fait avec la date du jour
+      const row = {enfant_id:enfantId, vaccin_id:vaccId, dose_index:doseIdx, date_fait:todayStr()};
+      const {data, error} = await sb.from('vaccinations').insert(row).select().single();
+      if(error){
+        // Contrainte unique déjà percutée malgré le verrou (onglet dupliqué,
+        // cache local en retard sur la base) : la dose existe déjà côté
+        // serveur, on se contente de resynchroniser au lieu d'alerter.
+        if(error.code==='23505'){
+          const {data:dejaLa} = await sb.from('vaccinations').select('*')
+            .eq('enfant_id',enfantId).eq('vaccin_id',vaccId).eq('dose_index',doseIdx).maybeSingle();
+          if(dejaLa && !vacGetRecord(enfantId,vaccId,doseIdx)) cacheVaccinations.push(dejaLa);
+        }else{
+          alert('Erreur : '+error.message);return;
+        }
+      }else if(data) cacheVaccinations.push(data);
+      vacRender();
+      if(document.getElementById('modal-vac-fiche-wrap')?.classList.contains('open')) vacRenderFicheBody();
+      vacRefreshFicheEnfantZone(enfantId);
+      vacSyncFicheDocument(enfantId);
+      showBanner('Vaccin marqué comme fait ✅');
+    }
+  }finally{
+    vacTogglingKeys.delete(key);
   }
 }
 
@@ -575,8 +599,31 @@ async function vacTplDocsLoad(){
   if(vacTplDocs) return vacTplDocs;
   const {data, error} = await sb.from('documents_koala').select('id,creche_id')
     .eq('template_key','vaccinations').eq('actif',true);
-  if(error){console.warn('[vacSync] documents_koala',error);vacTplDocs=[];}
-  else vacTplDocs = data||[];
+  if(error){console.warn('[vacSync] documents_koala',error);vacTplDocs=[];return vacTplDocs;}
+  vacTplDocs = data||[];
+  /* Premier usage : la fiche modèle « Suivi des vaccinations obligatoires »
+     n'a encore jamais été créée dans Documents (elle n'existe que comme
+     modèle de code — TPL.vaccinations — tant que personne n'a cliqué
+     « Nouveau document » pour l'instancier). On la crée nous-mêmes, réseau
+     entier, pour que la synchronisation fonctionne sans configuration
+     manuelle préalable. */
+  if(!vacTplDocs.length){
+    const created=await dbInsert('documents_koala',{
+      titre:'Suivi des vaccinations obligatoires',
+      description:null, categorie_id:null, creche_id:null,
+      type:'remplissable', template_key:'vaccinations', schema_champs:[],
+      pack_familiarisation:false, pack_ordre:0, pack_imprimer:false,
+      actif:true, created_by:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null
+    });
+    if(created) vacTplDocs=[created];
+    else{
+      // Une autre session vient peut-être de le créer au même instant : on
+      // relit avant d'abandonner, plutôt que de bloquer la synchronisation.
+      const {data:retry}=await sb.from('documents_koala').select('id,creche_id')
+        .eq('template_key','vaccinations').eq('actif',true);
+      vacTplDocs=retry||[];
+    }
+  }
   return vacTplDocs;
 }
 // Le document propre à la crèche de l'enfant prime sur un document réseau
