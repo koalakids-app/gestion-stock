@@ -1478,6 +1478,7 @@ async function saveFill(silent){
     return toast(SAVE_KO);
   }
   SAVE_KO=null;
+  if(enfantId&&fillDoc.template_key==='vaccinations')vacSyncModuleDepuisFiche(enfantId,donnees);
   if(!silent)toast(enfantId?'Enregistré dans le dossier de l\u2019enfant':'Enregistré');
   if(enfantId){
     /* Le document est parti dans le dossier de l’enfant : on detache la reponse
@@ -2840,6 +2841,55 @@ const VAC_FIELDS=(function(){
   VAC_DOC.forEach((g,gi)=>g.d.forEach((_,di)=>{f.push('vac_'+gi+'_'+di+'_d','vac_'+gi+'_'+di+'_r');}));
   return f;
 })();
+
+/* ── Synchronisation vers le module Vaccinations (demandes.html) ──────────
+   Cette fiche (VAC_DOC, une ligne par maladie comme le Cerfa) et le module
+   Vaccinations (VAC_SCHEMA dans js/vaccinations.js, non chargé sur cette
+   page) décrivent le même calendrier sous deux formes : un vaccin combiné
+   (DTCaP, ROR) y occupe plusieurs lignes ici mais un seul enregistrement
+   là-bas. Cette page ne charge pas vaccinations.js (application autonome),
+   d'où cette copie minimale de la correspondance plutôt qu'un import.
+   `canon:true` marque la ligne qui fait foi pour le groupe : les lignes
+   d'un même vaccin combiné partagent la même injection, donc la même date —
+   inutile d'exiger une cohérence stricte entre elles. */
+const VAC_GI_VACCIN=[
+  {id:'dtp_coque',canon:true},{id:'dtp_coque',canon:false},{id:'dtp_coque',canon:false},{id:'dtp_coque',canon:false},
+  {id:'hib',canon:true},{id:'hepb',canon:true},{id:'pneumo',canon:true},{id:'menb',canon:true},
+  {id:'menacwy',canon:true},{id:'ror',canon:true},{id:'ror',canon:false},{id:'ror',canon:false}
+];
+
+/* Répercute cette fiche sur la table `vaccinations` (celle qu'utilisent les
+   pastilles et les alertes de retard du module) : une dose datée et cochée
+   « Reçu » crée ou met à jour son enregistrement, une dose décochée
+   supprime le sien s'il existait. Best-effort — un souci ici ne doit
+   jamais faire échouer l'enregistrement de la fiche elle-même. */
+async function vacSyncModuleDepuisFiche(enfantId,donnees){
+  try{
+    const{data:existants,error}=await sb.from('vaccinations').select('id,vaccin_id,dose_index,date_fait').eq('enfant_id',enfantId);
+    if(error){console.warn('[vacSyncModule] lecture',error);return;}
+    const parCle={};
+    (existants||[]).forEach(r=>{parCle[r.vaccin_id+'_'+r.dose_index]=r;});
+    for(let gi=0;gi<VAC_DOC.length;gi++){
+      const info=VAC_GI_VACCIN[gi];
+      if(!info||!info.canon)continue;
+      const doses=VAC_DOC[gi].d;
+      for(let di=0;di<doses.length;di++){
+        const date=donnees['vac_'+gi+'_'+di+'_d']||'';
+        const recu=!!donnees['vac_'+gi+'_'+di+'_r'];
+        const existant=parCle[info.id+'_'+di];
+        if(recu&&date){
+          if(existant){
+            if(existant.date_fait!==date)await sb.from('vaccinations').update({date_fait:date}).eq('id',existant.id);
+          }else{
+            await sb.from('vaccinations').insert({enfant_id:enfantId,vaccin_id:info.id,dose_index:di,date_fait:date});
+          }
+        }else if(existant){
+          await sb.from('vaccinations').delete().eq('id',existant.id);
+        }
+      }
+    }
+  }catch(err){console.warn('[vacSyncModule]',err);}
+}
 
 /* Conversion locale : jamais toISOString() sur une date construite a minuit,
    qui recule d'un jour en UTC+2 (cf. notes techniques du projet). */
