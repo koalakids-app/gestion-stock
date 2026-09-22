@@ -51,10 +51,25 @@ async function vacInit(){
 }
 
 let vacDataLoaded = false;   // le cache peut etre demande par la fiche enfant avant l'ouverture du module Vaccinations
+/* PostgREST plafonne le nombre de lignes rendues par une requête sans
+   .range() (1000 par défaut chez Supabase) : au-delà, un select('*') sans
+   pagination se tait sur les lignes en trop plutôt que de renvoyer une
+   erreur. La table vaccinations a dépassé ce seuil (1098 lignes constatées
+   le 22/09/2026) — les vaccins les plus récents disparaissaient donc
+   silencieusement du cache à chaque rechargement, quel que soit le compte.
+   Même pagination que prPaged() dans js/presences-reel.js. */
 async function vacLoadData(){
-  const {data, error} = await sb.from('vaccinations').select('*');
-  if(error){console.warn('vaccinations load',error);cacheVaccinations=[];return;}
-  cacheVaccinations = data || [];
+  try{
+    let out=[],from=0;
+    for(;;){
+      const {data, error} = await sb.from('vaccinations').select('*').range(from,from+999);
+      if(error)throw error;
+      out=out.concat(data||[]);
+      if(!data||data.length<1000)break;
+      from+=1000;
+    }
+    cacheVaccinations = out;
+  }catch(error){console.warn('vaccinations load',error);cacheVaccinations=[];return;}
   vacDataLoaded = true;
   await vacLoadPJ();
 }
@@ -567,7 +582,20 @@ async function vacToggleDose(enfantId, vaccId, doseIdx){
         if(error.code==='23505'){
           const {data:dejaLa} = await sb.from('vaccinations').select('*')
             .eq('enfant_id',enfantId).eq('vaccin_id',vaccId).eq('dose_index',doseIdx).maybeSingle();
-          if(dejaLa && !vacGetRecord(enfantId,vaccId,doseIdx)) cacheVaccinations.push(dejaLa);
+          if(dejaLa){
+            if(!vacGetRecord(enfantId,vaccId,doseIdx)) cacheVaccinations.push(dejaLa);
+          }else{
+            /* La ligne existe bel et bien côté serveur (sinon pas de « duplicate
+               key »), mais cette relecture ne la voit pas : la politique de
+               sécurité (RLS) de la table `vaccinations` autorise l'écriture
+               sans autoriser la lecture correspondante pour ce compte. Ce
+               n'est pas réparable ici — sans le savoir, le clic resterait
+               bloqué en boucle silencieuse (nouvelle tentative, nouveau
+               « duplicate key », indéfiniment). On le dit clairement plutôt
+               que de laisser la pastille ne jamais « tenir » sans explication. */
+            alert('Cette vaccination est bien enregistrée en base, mais votre compte n’a pas le droit de la relire.\n\nContactez l’administrateur technique : politique de sécurité (RLS) à corriger sur la table vaccinations.');
+            return;
+          }
         }else{
           alert('Erreur : '+error.message);return;
         }
@@ -607,13 +635,22 @@ async function vacTplDocsLoad(){
     /* Premier usage : la fiche modèle « Suivi des vaccinations obligatoires »
        n'a encore jamais été créée dans Documents (elle n'existe que comme
        modèle de code — TPL.vaccinations — tant que personne n'a cliqué
-       « Nouveau document » pour l'instancier). On la crée nous-mêmes, réseau
-       entier, pour que la synchronisation fonctionne sans configuration
-       manuelle préalable. */
+       « Nouveau document » pour l'instancier). On la crée nous-mêmes pour
+       que la synchronisation fonctionne sans configuration manuelle
+       préalable. Une référente ne peut créer un document que pour SA
+       crèche (la création réseau entier, creche_id nul, est réservée à la
+       direction côté RLS comme côté UI — cf. blocDirection() dans
+       documents.html) : lui demander un document réseau entier se solde
+       par un refus silencieux et la synchronisation n'écrit jamais rien.
+       On adapte donc le creche_id créé au rôle de qui déclenche la
+       synchro. */
     if(!vacTplDocs.length){
+      const crecheCreation=(typeof isDirection!=='undefined'&&isDirection)
+        ? null
+        : ((typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.creche_id)||null);
       const created=await dbInsert('documents_koala',{
         titre:'Suivi des vaccinations obligatoires',
-        description:null, categorie_id:null, creche_id:null,
+        description:null, categorie_id:null, creche_id:crecheCreation,
         type:'remplissable', template_key:'vaccinations', schema_champs:[],
         pack_familiarisation:false, pack_ordre:0, pack_imprimer:false,
         actif:true, created_by:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null
