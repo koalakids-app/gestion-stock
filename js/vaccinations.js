@@ -607,13 +607,22 @@ async function vacTplDocsLoad(){
     /* Premier usage : la fiche modèle « Suivi des vaccinations obligatoires »
        n'a encore jamais été créée dans Documents (elle n'existe que comme
        modèle de code — TPL.vaccinations — tant que personne n'a cliqué
-       « Nouveau document » pour l'instancier). On la crée nous-mêmes, réseau
-       entier, pour que la synchronisation fonctionne sans configuration
-       manuelle préalable. */
+       « Nouveau document » pour l'instancier). On la crée nous-mêmes pour
+       que la synchronisation fonctionne sans configuration manuelle
+       préalable. Une référente ne peut créer un document que pour SA
+       crèche (la création réseau entier, creche_id nul, est réservée à la
+       direction côté RLS comme côté UI — cf. blocDirection() dans
+       documents.html) : lui demander un document réseau entier se solde
+       par un refus silencieux et la synchronisation n'écrit jamais rien.
+       On adapte donc le creche_id créé au rôle de qui déclenche la
+       synchro. */
     if(!vacTplDocs.length){
+      const crecheCreation=(typeof isDirection!=='undefined'&&isDirection)
+        ? null
+        : ((typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.creche_id)||null);
       const created=await dbInsert('documents_koala',{
         titre:'Suivi des vaccinations obligatoires',
-        description:null, categorie_id:null, creche_id:null,
+        description:null, categorie_id:null, creche_id:crecheCreation,
         type:'remplissable', template_key:'vaccinations', schema_champs:[],
         pack_familiarisation:false, pack_ordre:0, pack_imprimer:false,
         actif:true, created_by:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null
