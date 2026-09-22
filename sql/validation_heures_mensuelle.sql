@@ -82,7 +82,7 @@ returns numeric
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn_heures_realisees_mois$
 declare
   v_id          uuid;
   v_est_employe boolean;
@@ -117,7 +117,7 @@ begin
 
   return round(v_realisees, 2);
 end;
-$$;
+$fn_heures_realisees_mois$;
 
 revoke all on function public.kk_heures_realisees_mois(int, int) from public;
 grant execute on function public.kk_heures_realisees_mois(int, int) to authenticated;
@@ -132,7 +132,7 @@ returns public.heures_validations_mensuelles
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn_signer_heures_mois$
 declare
   v_employe     public.employes;
   v_referent    public.referents;
@@ -185,7 +185,7 @@ begin
 
   return v_row;
 end;
-$$;
+$fn_signer_heures_mois$;
 
 revoke all on function public.kk_signer_heures_mois(int, int, text, text) from public;
 grant execute on function public.kk_signer_heures_mois(int, int, text, text) to authenticated;
