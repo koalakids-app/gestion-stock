@@ -1099,28 +1099,61 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">
             <div style="background:var(--koala-light);padding:10px 15px;font-weight:700;font-size:13.5px;color:var(--koala-dark);display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border)">
               <i class="ti ti-heart-plus"></i> Dossier santé</div>
-            <div style="padding:13px 15px">
-              <div id="enf-fiche-sanitaire-zone" style="margin-bottom:14px"></div>
-              <!-- PAI (Projet d'Accueil Individualisé) : documents liés (protocole,
-                   ordonnances...), donnée de santé (table enfants_pai, bucket
-                   carnets — voir sql/enfants_pai.sql). -->
-              <div id="enf-pai-zone" style="margin-bottom:14px"></div>
+            <div style="padding:13px 15px;display:flex;flex-direction:column;gap:14px">
+
               <!-- Vaccinations : statut (tableau des doses ✓/⚠/!/·) suivi des
-                   photocopies du carnet, regroupés sous un même titre « Vaccinations »
+                   photocopies du carnet, regroupés sous cette même sous-carte
                    (le titre n'est affiché qu'une fois, par enfRenderVaccins() —
                    voir js/enfants.js et js/vaccinations.js/vacPJRenderZone qui
                    omet son propre titre pour enf-carnet-zone). Même source de
                    données que la fiche vaccins du module Vaccinations (tables
                    vaccinations et vaccins_pj) : une dose marquée faite ou une
                    photocopie importée d'un côté apparaît aussitôt de l'autre. -->
-              <div id="enf-vaccins-zone" style="margin-bottom:10px"></div>
-              <div id="enf-carnet-zone" style="margin-bottom:14px"></div>
-              <!-- Dossier de familiarisation (statut + documents remplis/signés
-                   en ligne) : sa réception compose le dossier santé (fiche
+              <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="background:#fff;padding:8px 12px;font-weight:700;font-size:12.5px;color:var(--koala-dark);display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border)">
+                  <i class="ti ti-vaccine" style="color:var(--koala)"></i> Vaccinations</div>
+                <div style="padding:12px">
+                  <div id="enf-vaccins-zone"></div>
+                  <div id="enf-carnet-zone" style="margin-top:10px"></div>
+                </div>
+              </div>
+
+              <!-- PAI (Projet d'Accueil Individualisé) : documents liés (protocole,
+                   ordonnances...), donnée de santé (table enfants_pai, bucket
+                   carnets — voir sql/enfants_pai.sql). -->
+              <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="background:#fff;padding:8px 12px;font-weight:700;font-size:12.5px;color:var(--koala-dark);display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border)">
+                  <i class="ti ti-first-aid-kit" style="color:var(--koala)"></i> PAI (Projet d'Accueil Individualisé)</div>
+                <div style="padding:12px">
+                  <div id="enf-pai-zone"></div>
+                </div>
+              </div>
+
+              <!-- Fiche sanitaire « à rapporter en papier » : PDF vierge à
+                   imprimer, faire remplir par le médecin, puis scanner/importer
+                   (voir estFicheSanitaire/packPapierSanitaire). -->
+              <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="background:#fff;padding:8px 12px;font-weight:700;font-size:12.5px;color:var(--koala-dark);display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border)">
+                  <i class="ti ti-file-download" style="color:var(--koala)"></i> Documents à télécharger</div>
+                <div style="padding:12px">
+                  <div id="enf-fiche-sanitaire-zone"></div>
+                </div>
+              </div>
+
+              <!-- Dossier de familiarisation (lien envoyé aux parents pour
+                   remplir/signer en ligne) suivi des documents déjà remplis/
+                   signés : sa réception compose le dossier santé (fiche
                    sanitaire, autorisations), donc affiché ici plutôt que dans
                    le dossier administratif. -->
-              <div id="enf-dossier-box" style="margin-top:14px"></div>
-              <div id="enf-docs-list" style="margin-top:8px"></div>
+              <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="background:#fff;padding:8px 12px;font-weight:700;font-size:12.5px;color:var(--koala-dark);display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border)">
+                  <i class="ti ti-send" style="color:var(--koala)"></i> Dossier sanitaire à envoyer aux parents</div>
+                <div style="padding:12px">
+                  <div id="enf-dossier-box"></div>
+                  <div id="enf-docs-list" style="margin-top:8px"></div>
+                </div>
+              </div>
+
             </div>
           </div>
           <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:14px">
@@ -10095,7 +10128,7 @@ evenements: `
 enfants: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">👶 Dossiers enfants</h3><div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Ce module rassemble, enfant par enfant, sa fiche d’identité et l’ensemble des documents remplis pour lui. Les directeurs/trices techniques voient les enfants de leur crèche, la direction voit les six sites.</div><div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Trouver un enfant</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>La barre de recherche filtre sur le prénom et le nom au fur et à mesure de la frappe.</li><li>La direction dispose en plus d’un sélecteur de crèche pour restreindre la liste à un site.</li><li>Chaque ligne rappelle la crèche et le groupe d’âge. Cliquer dessus ouvre la fiche.</li><li>La <strong>création</strong> d’un enfant ne se fait pas ici mais depuis le module Présences, bouton <strong>Ajouter enfant</strong>.</li><li>Le bouton <strong>⚠ Fiches à compléter</strong> filtre sur les enfants dont la date de naissance ou les allergies n’ont jamais été renseignées — utile pour repérer les enfants créés automatiquement par l’import du planning PDF (Gertrude n’exportant que le planning, jamais la fiche complète), et pour les compléter à la main.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">🆔 L’onglet Identité</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Reprend la crèche, la date de naissance, le groupe d’âge et les allergies connues.</li><li>La ligne <strong>Repas</strong> affiche le code utilisé sur la feuille hebdomadaire et le bon traiteur, et précise s’il suit l’âge ou s’il a été forcé à la main.</li><li>Le bouton <strong>Modifier la fiche</strong> ouvre la même fenêtre de saisie que le module Présences. On y règle le <strong>type de repas</strong> — laissé sur « Selon l’âge », il suit les anniversaires tout seul ; forcé sur BIB, BB, M ou G, il ne bouge plus — et le <strong>régime particulier</strong> (sans viande, sans protéine de vache ou animale). Le code obtenu s’affiche en direct sous les deux menus. <strong>BIB</strong> désigne un enfant au biberon : il n’est pas compté dans les repas commandés, et le régime ne s’y applique pas.</li><li>La suppression d’un enfant est réservée à la direction.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">📄 L’onglet Documents</div><div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:14px">Cet onglet regroupe deux dossiers distincts, aux destinataires et à la confidentialité différents : le <strong>dossier administratif</strong> (pièces d’inscription) et le <strong>dossier santé</strong>.</div>
 <div style="font-weight:700;font-size:13.5px;margin-bottom:8px">📁 Dossier administratif</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Checklist des <strong>pièces demandées à l’inscription</strong> (livret de famille, pièce d’identité, attestation RC…) avec leur statut : <strong style="color:#F47920">⚠ Manquant</strong>, <strong style="color:#2a9d4e">✅ Reçu le …</strong>, ou <strong>🔄 À renouveler</strong> pour les pièces à redéposer chaque année. Le bouton <strong>Importer</strong> dépose directement le scan d’une pièce.</li><li>Les <strong>documents remplis/signés</strong> via l’outil Documents (voir plus bas) apparaissent aussi ici, du plus récent au plus ancien, avec un badge <strong>✅ Signé</strong> ou <strong>🕓 Préparé</strong>. <strong>Ouvrir / signer</strong> bascule vers l’outil Documents ; <strong>Suppr.</strong> retire définitivement le document du dossier.</li></ul>
-<div style="font-weight:700;font-size:13.5px;margin-bottom:8px">💚 Dossier santé</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li><strong>Fiche sanitaire</strong> : statut de réception du document papier, ou copie scannée importée directement.</li><li><strong>PAI</strong> (Projet d’Accueil Individualisé) : zone d’import dédiée pour les documents liés — protocole, ordonnances associées.</li><li><strong>Vaccinations</strong> : le même tableau de statut (✓ fait, ⚠ en retard, ! à faire bientôt, · pas encore dû) que le module Vaccinations, cliquable directement depuis la fiche enfant — voir l’onglet <strong>💉 Vaccinations</strong> de cette notice. Les photocopies du carnet importées apparaissent juste en dessous.</li><li><strong>Dossier de familiarisation</strong> : statut de réception et documents remplis en ligne par la famille.</li></ul>
+<div style="font-weight:700;font-size:13.5px;margin-bottom:8px">💚 Dossier santé</div><div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:10px">Regroupé en quatre sous-parties bien distinctes, chacune avec son propre bouton d’import :</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li><strong>💉 Vaccinations</strong> : le même tableau de statut (✓ fait, ⚠ en retard, ! à faire bientôt, · pas encore dû) que le module Vaccinations, cliquable directement depuis la fiche enfant — voir l’onglet <strong>💉 Vaccinations</strong> de cette notice. Les photocopies du carnet importées apparaissent juste en dessous, avec leur propre bouton <strong>Importer</strong>.</li><li><strong>🩹 PAI</strong> (Projet d’Accueil Individualisé) : zone d’import dédiée pour les documents liés — protocole, ordonnances associées.</li><li><strong>📄 Documents à télécharger</strong> : la fiche sanitaire (et tout autre document configuré en type « À télécharger » dans l’outil Documents) — un PDF vierge à imprimer, faire remplir par le médecin, puis réimporter une fois scanné. Case à cocher pour le statut de réception, bouton <strong>Importer</strong> pour la copie scannée.</li><li><strong>📤 Dossier sanitaire à envoyer aux parents</strong> : lien personnel envoyé par mail pour remplir/signer en ligne (dossier de familiarisation), avec son statut de réception ; les documents déjà remplis/signés apparaissent juste en dessous.</li></ul>
 <div style="background:#e8f5e9;border-left:4px solid #2a9d4e;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#1B7A3E;margin-bottom:18px;line-height:1.6">🔒 Les documents du dossier santé (PAI, carnet, fiche sanitaire) sont stockés dans un espace <strong>privé</strong> : aucune URL publique, un lien de lecture est généré au clic et expire après quelques minutes.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🔗 Le lien avec l’outil Documents</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Un document se remplit dans l’outil <strong>Documents</strong>. Il suffit d’y choisir l’enfant concerné dans le sélecteur en haut du formulaire.</li><li>À l’enregistrement, le document quitte la liste des modèles et vient se classer ici, dans le dossier de l’enfant.</li><li>Le modèle redevient vierge côté Documents : il est immédiatement réutilisable pour un autre enfant, sans risque d’écraser le précédent.</li><li>Le dossier de l’enfant devient donc le point d’entrée unique pour retrouver, compléter ou faire signer un document déjà commencé.</li></ul>
 `,
