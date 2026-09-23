@@ -608,6 +608,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <button class="ibtn" onclick="presenceMoveDate(-1)" title="Jour précédent" style="padding:5px 9px;font-size:15px">◀</button>
           <input type="date" class="finput" id="presence-date" style="width:150px" onchange="renderPresence()">
           <button class="ibtn" onclick="presenceMoveDate(1)" title="Jour suivant" style="padding:5px 9px;font-size:15px">▶</button>
+          <span id="presence-date-week" style="font-size:12px;font-weight:700;color:var(--muted)"></span>
         </div>
         <select class="finput direction-only" id="presence-creche-select" style="display:none;width:160px" onchange="renderPresence()">
           <option value="">-- Crèche --</option>
@@ -5142,7 +5143,13 @@ function presMajBarre(){
   document.querySelectorAll('#main-presence .pres-jour-only')
     .forEach(el=>el.classList.toggle('pres-masque',!jour));
 }
+function presUpdateDateWeekLabel(){
+  const input=document.getElementById('presence-date'),lbl=document.getElementById('presence-date-week');
+  if(!lbl)return;
+  lbl.textContent=input?.value?('S'+hebdoNumSemaine(new Date(input.value+'T00:00:00'))):'';
+}
 async function renderPresence(){
+  presUpdateDateWeekLabel();
   if(currentPresenceSlot==='hebdo'){await renderPresenceHebdo();prRenderSemaine();return;}
   if(currentPresenceSlot==='mois'){await renderPresenceMois();return;}
   await renderPresenceGantt();
