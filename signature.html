@@ -50,6 +50,17 @@ function state(cls,title,msg){
   card.innerHTML=`<div class="state ${cls}"><h2>${esc(title)}</h2><p>${esc(msg)}</p></div>`;
 }
 
+let OTP_CTX=null;
+
+async function callOtp(body){
+  try{
+    const r=await fetch(SUPABASE_URL+'/functions/v1/signature-otp',{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
+      body:JSON.stringify(body)});
+    return await r.json().catch(()=>null);
+  }catch(e){return null;}
+}
+
 async function boot(){
   if(!TOKEN||TOKEN.length<20)return state('err','Lien invalide','Aucun jeton de signature valide dans ce lien.');
   const{data,error}=await sb.rpc('kk_sig_get',{p_token:TOKEN});
@@ -58,13 +69,69 @@ async function boot(){
     return state('err','Erreur',"Impossible de charger cette demande de signature.");
   }
   const row=Array.isArray(data)?data[0]:data;
-  if(!row)return state('err','Lien expiré','Ce lien de signature n\u2019est plus valable ou la signature a déjà été déposée. Demandez-en un nouveau.');
+  if(!row)return state('err','Lien expiré','Ce lien de signature n’est plus valable ou la signature a déjà été déposée. Demandez-en un nouveau.');
   REQ=row;
   sb.rpc('kk_sig_marquer_ouvert',{p_token:TOKEN}).catch(()=>{});
+
+  // Contrat de travail avec vérification par code activée : le/la salarié(e)
+  // doit d'abord confirmer son identité avant que le cadre de signature ne
+  // s'affiche. Pour tout autre document (ou si le code n'est pas exigé), rien
+  // ne change : on passe directement au tracé, comme avant.
+  const otp=await callOtp({action:'statut_token',token:TOKEN});
+  if(otp&&otp.ok&&otp.otp_required&&!otp.otp_verified){
+    OTP_CTX=otp;
+    return renderCode();
+  }
+  renderPad();
+}
+
+function renderCode(){
+  card.innerHTML=`
+    <h1>Vérification d'identité</h1>
+    <div class="ctx">${esc(REQ.contexte||'')}</div>
+    <div class="who">${esc(REQ.signataire||'Signataire')}</div>
+    <p class="tip" id="codeHint" style="margin:8px 0 14px;text-align:left">
+      Avant de signer, confirmez votre identité avec un code envoyé par e-mail${
+        OTP_CTX.destination_masquee?(' à '+esc(OTP_CTX.destination_masquee)):''}.</p>
+    <div class="acts" id="codeActs">
+      <button class="p" id="benv">Recevoir mon code</button>
+    </div>`;
+  document.getElementById('benv').onclick=envoyerCode;
+}
+
+async function envoyerCode(){
+  const b=document.getElementById('benv');b.disabled=true;b.textContent='Envoi…';
+  const r=await callOtp({action:'envoyer',reponse_id:OTP_CTX.reponse_id,employe_id:OTP_CTX.employe_id,canal:'email'});
+  if(!r||!r.ok){
+    b.disabled=false;b.textContent='Recevoir mon code';
+    return alert((r&&r.erreur)||'Le code n’a pas pu être envoyé. Réessayez dans un instant.');
+  }
+  document.getElementById('codeHint').textContent='Code envoyé'
+    +(r.destination_masquee?(' à '+r.destination_masquee):'')+' — valable 10 minutes.';
+  document.getElementById('codeActs').innerHTML=`
+    <input id="ffCode" maxlength="6" inputmode="numeric" placeholder="Code à 6 chiffres"
+      style="flex:1;border:1px solid var(--line);border-radius:12px;padding:0 12px;font-size:16px;text-align:center;letter-spacing:3px">
+    <button class="p" id="bver">Vérifier</button>`;
+  document.getElementById('bver').onclick=verifierCode;
+}
+
+async function verifierCode(){
+  const code=(document.getElementById('ffCode')||{}).value||'';
+  if(!/^[0-9]{6}$/.test(code))return alert('Saisissez le code à 6 chiffres reçu par e-mail.');
+  const b=document.getElementById('bver');b.disabled=true;b.textContent='Vérification…';
+  const r=await callOtp({action:'verifier',reponse_id:OTP_CTX.reponse_id,code});
+  if(!r||!r.ok){
+    b.disabled=false;b.textContent='Vérifier';
+    return alert((r&&r.erreur)||'Code incorrect ou expiré.');
+  }
+  renderPad();
+}
+
+function renderPad(){
   card.innerHTML=`
     <h1>Signature</h1>
-    <div class="ctx">${esc(row.contexte||'')}</div>
-    <div class="who">${esc(row.signataire||'Signataire')}</div>
+    <div class="ctx">${esc(REQ.contexte||'')}</div>
+    <div class="who">${esc(REQ.signataire||'Signataire')}</div>
     <canvas id="c"></canvas>
     <div class="tip">Signez avec le doigt dans le cadre ci-dessus</div>
     <div class="acts">
