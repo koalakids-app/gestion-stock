@@ -119,7 +119,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div class="card">
       <div class="sec" style="justify-content:space-between">
         <span><i class="ti ti-address-book"></i> Fiches collaborateurs/trices</span>
-        <button class="btn btn-p btn-sm" onclick="openFiche(null)"><i class="ti ti-plus"></i> Ajouter</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-g btn-sm" id="archivedToggle" onclick="toggleArchived()" title="Basculer entre les fiches actives et les fiches archivées (fin de contrat)"><i class="ti ti-archive"></i> Voir les archives<span id="archivedCount" style="display:none;background:var(--muted);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:4px"></span></button>
+          <button class="btn btn-p btn-sm" onclick="openFiche(null)"><i class="ti ti-plus"></i> Ajouter</button>
+        </div>
       </div>
       <p class="hint">Le compte de connexion permet à un(e) collaborateur/trice de consulter, depuis
         <b>collaborateur.html</b>, son planning et son compteur d'heures supplémentaires annualisées.
@@ -156,6 +159,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     </div>
     <p class="hint">Les heures hebdomadaires et les dates de contrat servent de référence au calcul du
       compteur d'heures supplémentaires annualisées (1607h temps plein, proraté).</p>
+    <div class="f" id="ficheArchivageWrap" style="display:none"></div>
     <div class="f"><label class="lb">Nom utilisé dans le planning équipe (si différent)</label><input id="fPlanningNom" placeholder="Laisser vide si le prénom suffit"></div>
     <p class="hint">À remplir seulement en cas d'homonymie : le planning équipe (import Excel) rapproche
       les créneaux par prénom, ce qui peut se tromper si deux personnes de la crèche portent le même
@@ -175,6 +179,13 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <label class="lb">Documents d'embauche</label>
       <div id="fiche-docs-dossier-box"></div>
       <div id="ficheDocsZone"></div>
+    </div>
+    <!-- Registre des pièces conservées hors appli (papier, coffre-fort,
+         classeur RH...) : trace leur existence et leur lieu de conservation
+         sans les scanner — voir sql/documents_externes.sql. -->
+    <div class="f" id="ficheDocExtWrap" style="display:none">
+      <label class="lb">Documents sur support externe</label>
+      <div id="ficheDocExtZone"></div>
     </div>
     <div class="f" id="ficheContratsWrap" style="display:none">
       <label class="lb">Contrat de travail</label>
@@ -480,20 +491,43 @@ async function loadEmployes(){
   EMPLOYES=data||[];
   renderListe();
 }
+// Un dossier est « archivé » quand archive_le est renseigné — toujours à la
+// main, depuis la fiche, jamais automatiquement (voir sql/archivage_dossiers.sql).
+function estArchive(e){return !!e.archive_le;}
+function estSorti(e){return !estArchive(e)&&!!e.date_fin&&e.date_fin<=todayISO();}
+function todayISO(){return new Date().toISOString().slice(0,10);}
+let showArchivedOnly=false;
+function toggleArchived(){
+  showArchivedOnly=!showArchivedOnly;
+  const btn=document.getElementById('archivedToggle');
+  if(btn){btn.style.borderColor=showArchivedOnly?'var(--orange)':'';btn.style.color=showArchivedOnly?'var(--orange)':'';}
+  renderListe();
+}
 function renderListe(){
   const box=document.getElementById('listeEmployes');
-  document.getElementById('empty').style.display=EMPLOYES.length?'none':'block';
-  box.innerHTML=EMPLOYES.map(e=>{
+  const archivedCount=document.getElementById('archivedCount');
+  if(archivedCount){
+    const n=EMPLOYES.filter(estArchive).length;
+    archivedCount.textContent=n;
+    archivedCount.style.display=n>0?'':'none';
+  }
+  const visibles=EMPLOYES.filter(e=>estArchive(e)===showArchivedOnly);
+  document.getElementById('empty').style.display=visibles.length?'none':'block';
+  document.getElementById('empty').textContent=showArchivedOnly?'Aucune fiche archivée pour cette crèche.':'Aucun(e) collaborateur/trice pour cette crèche.';
+  box.innerHTML=visibles.map(e=>{
     const compte=e.user_id
       ?'<span class="badge on"><i class="ti ti-lock-open"></i> Compte actif</span>'
       :'<span class="badge off">Pas de compte</span>';
+    const statut=estArchive(e)
+      ?'<span class="badge off" style="background:var(--violet-l);color:var(--violet)">Archivé</span>'
+      :(estSorti(e)?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)">Sorti</span>':'');
     const btnCompte=e.user_id
       ?''
       :'<button class="btn btn-s btn-sm" onclick="creerCompte(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant de créer le compte"')+'><i class="ti ti-mail-forward"></i> Créer le compte</button>';
     return'<div class="crow">'
       +'<div class="cinfo"><div class="cname">'+esc(e.prenom)+' '+esc(e.nom||'')+'</div>'
       +'<div class="cmeta">'+esc(e.poste||'—')+(e.email?' · '+esc(e.email):'')+'</div></div>'
-      +compte
+      +statut+compte
       +'<div class="acts">'
       +'<button class="btn btn-g btn-sm" onclick="openFiche(\''+e.id+'\')"><i class="ti ti-edit"></i></button>'
       +btnCompte
@@ -519,6 +553,8 @@ function openFiche(id){
   setVal('fPlanningNom',e?e.planning_nom:'');
   const formWrap=document.getElementById('ficheFormationWrap');
   const docsWrap=document.getElementById('ficheDocsWrap');
+  const archWrap=document.getElementById('ficheArchivageWrap');
+  const docExtWrap=document.getElementById('ficheDocExtWrap');
   if(e){
     formWrap.style.display='';loadFicheFormation(e);
     docsWrap.style.display='';
@@ -530,13 +566,74 @@ function openFiche(id){
     loadFicheHeures(e);
     document.getElementById('ficheContratsWrap').style.display='';
     empLoadContrats(e.id);
+    archWrap.style.display='';
+    renderArchivageBox(e);
+    docExtWrap.style.display='';
+    empDocExtCache=[];
+    document.getElementById('ficheDocExtZone').innerHTML='';
+    empLoadDocExt(e.id);
   }else{
     formWrap.style.display='none';
     docsWrap.style.display='none';
     document.getElementById('ficheHeuresWrap').style.display='none';
     document.getElementById('ficheContratsWrap').style.display='none';
+    archWrap.style.display='none';
+    docExtWrap.style.display='none';
   }
   document.getElementById('modalFiche').classList.add('on');
+}
+
+/* ---------- ARCHIVAGE (fin de contrat) ----------
+   archive_le/archive_par (voir sql/archivage_dossiers.sql) : toujours posés
+   à la main depuis ce bouton, jamais automatiquement. Le statut affiché se
+   déduit de date_fin + archive_le, sans colonne "statut" à garder synchronisée. */
+function renderArchivageBox(e){
+  const box=document.getElementById('ficheArchivageWrap');
+  if(!box)return;
+  if(estArchive(e)){
+    const purge=e.date_fin?datePlusAns(e.date_fin,5):null;
+    box.innerHTML='<div style="background:var(--violet-l);border-left:4px solid var(--violet);border-radius:0 10px 10px 0;padding:10px 14px;font-size:12.5px;color:var(--violet)">'
+      +'<i class="ti ti-archive"></i> Dossier archivé le '+esc(new Date(e.archive_le).toLocaleDateString('fr-FR'))+'.'
+      +(purge?' Conservation légale recommandée jusqu\'au '+esc(new Date(purge).toLocaleDateString('fr-FR'))+' (5 ans après la fin de contrat), au-delà duquel le dossier peut être purgé/anonymisé.':'')
+      +'<div style="margin-top:8px"><button type="button" class="btn btn-g btn-sm" onclick="desarchiverFiche(\''+e.id+'\')"><i class="ti ti-archive-off"></i> Réactiver ce dossier</button></div>'
+      +'</div>';
+  }else if(estSorti(e)){
+    box.innerHTML='<div style="background:var(--orange-l);border-left:4px solid var(--orange);border-radius:0 10px 10px 0;padding:10px 14px;font-size:12.5px;color:var(--orange)">'
+      +'<i class="ti ti-alert-triangle"></i> Ce contrat est terminé depuis le '+esc(new Date(e.date_fin).toLocaleDateString('fr-FR'))+'. '
+      +'Une fois les documents à jour, la fiche peut être archivée pour sortir des listes actives.'
+      +'<div style="margin-top:8px"><button type="button" class="btn btn-g btn-sm" onclick="archiverFiche(\''+e.id+'\')"><i class="ti ti-archive"></i> Archiver ce dossier</button></div>'
+      +'</div>';
+  }else{
+    box.innerHTML='';
+  }
+}
+function datePlusAns(iso,ans){
+  const d=new Date(iso+'T00:00:00');
+  d.setFullYear(d.getFullYear()+ans);
+  return d.toISOString().slice(0,10);
+}
+async function archiverFiche(id){
+  const e=EMPLOYES.find(x=>String(x.id)===String(id));
+  if(!e)return;
+  if(!confirm('Archiver le dossier de '+(e.prenom||'')+' '+(e.nom||'')+' ?\n\nLa fiche sortira des listes actives mais reste consultable dans les archives. Cette action est réversible.'))return;
+  const row={archive_le:new Date().toISOString(),archive_par:ME?ME.id:null};
+  const{error}=await sb.from('employes').update(row).eq('id',id);
+  if(error){toast('Erreur lors de l\'archivage : '+error.message,true);return;}
+  Object.assign(e,row);
+  renderArchivageBox(e);
+  renderListe();
+  toast('Dossier archivé.');
+}
+async function desarchiverFiche(id){
+  if(!confirm('Réactiver ce dossier et le remettre dans les fiches actives ?'))return;
+  const row={archive_le:null,archive_par:null};
+  const{error}=await sb.from('employes').update(row).eq('id',id);
+  if(error){toast('Erreur : '+error.message,true);return;}
+  const e=EMPLOYES.find(x=>String(x.id)===String(id));
+  if(e)Object.assign(e,row);
+  if(e)renderArchivageBox(e);
+  renderListe();
+  toast('Dossier réactivé.');
 }
 /* ---------- CONTRAT DE TRAVAIL (module Documents) ----------
    Le contrat n'est pas stocké ici : il vit dans documents_reponses (modèle
@@ -1069,6 +1166,105 @@ async function empAnnulerPieces(id){
   d.statut='annule';
   empRenderPiecesDossier();
   toast('Dossier annulé — le lien ne fonctionne plus.');
+}
+
+/* ---------- DOCUMENTS SUR SUPPORT EXTERNE (registre papier/coffre-fort) ----------
+   Table documents_externes (voir sql/documents_externes.sql) : ne stocke
+   aucun fichier, juste la trace qu'une pièce existe et où elle est
+   physiquement conservée — utile pour les pièces qu'on ne numérise pas (ex.
+   extrait de casier judiciaire, à ne pas conserver après vérification). Le
+   délai de conservation est calculé côté base, selon la catégorie choisie.
+   Même module que côté enfant (js/enfants.js), adapté au style de cette page. */
+const DOC_EXT_SUPPORTS={papier:'Papier','coffre-fort':'Coffre-fort',classeur:'Classeur',autre:'Autre'};
+const DOC_EXT_CATEGORIES={identite:'Identité',sante:'Santé',comptable:'Comptable',rh:'RH',autre:'Autre'};
+
+let empDocExtCache=[];
+async function empLoadDocExt(employeId){
+  try{
+    const{data,error}=await sb.from('documents_externes')
+      .select('*')
+      .eq('entite_type','employe')
+      .eq('entite_id',employeId)
+      .order('created_at',{ascending:false});
+    if(error)throw error;
+    empDocExtCache=data||[];
+  }catch(err){
+    console.warn('empLoadDocExt',err);
+    empDocExtCache=[];
+  }
+  if(String(empFicheId)!==String(employeId))return;
+  empRenderDocExt();
+}
+function empRenderDocExt(){
+  const zone=document.getElementById('ficheDocExtZone');
+  if(!zone)return;
+  const ligne=d=>{
+    const detruit=d.detruit_le
+      ?'<span style="background:var(--violet-l);color:var(--violet);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">Détruit le '+new Date(d.detruit_le).toLocaleDateString('fr-FR')+'</span>'
+      :'<button type="button" class="btn btn-g btn-sm" onclick="empDocExtDetruire(\''+d.id+'\')" title="Marquer cette pièce comme détruite/restituée"><i class="ti ti-flame"></i> Marquer détruit</button>';
+    return '<div style="border-bottom:1px solid var(--line);padding:9px 2px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      +'<div>'
+      +'<span style="font-size:12.5px;font-weight:600;color:#2B2740">'+esc(d.libelle)+'</span> '
+      +'<span style="font-size:11px;color:var(--muted)">'+(DOC_EXT_SUPPORTS[d.support]||d.support)+' · '+(DOC_EXT_CATEGORIES[d.categorie]||d.categorie)+(d.lieu_conservation?' · '+esc(d.lieu_conservation):'')+'</span>'
+      +(d.date_destruction_prevue&&!d.detruit_le?'<div style="font-size:11px;color:var(--muted)">Conservation jusqu\'au '+new Date(d.date_destruction_prevue).toLocaleDateString('fr-FR')+'</div>':'')
+      +'</div>'
+      +'<span style="display:flex;align-items:center;gap:6px;flex-shrink:0">'+detruit
+      +'<button onclick="empDocExtDelete(\''+d.id+'\')" title="Supprimer cette entrée du registre" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:14px"><i class="ti ti-trash"></i></button>'
+      +'</span></div></div>';
+  };
+  zone.innerHTML=
+      (empDocExtCache.length
+        ? empDocExtCache.map(ligne).join('')
+        : '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Aucune pièce enregistrée sur support externe.</div>')
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">'
+      + '<input id="docExtLibelle" placeholder="Libellé (ex. extrait de casier judiciaire)" style="flex:2;min-width:180px;font-size:12px;padding:6px 8px">'
+      + '<select id="docExtSupport" style="flex:1;min-width:110px;font-size:12px;padding:6px 8px">'
+        + Object.keys(DOC_EXT_SUPPORTS).map(k=>'<option value="'+k+'">'+DOC_EXT_SUPPORTS[k]+'</option>').join('')
+      + '</select>'
+      + '<select id="docExtCategorie" style="flex:1;min-width:110px;font-size:12px;padding:6px 8px">'
+        + Object.keys(DOC_EXT_CATEGORIES).map(k=>'<option value="'+k+'">'+DOC_EXT_CATEGORIES[k]+'</option>').join('')
+      + '</select>'
+      + '<input id="docExtLieu" placeholder="Lieu de conservation (ex. classeur RH, tiroir 2)" style="flex:2;min-width:180px;font-size:12px;padding:6px 8px">'
+      + '<button type="button" class="btn btn-s btn-sm" onclick="empDocExtAdd()"><i class="ti ti-plus"></i> Ajouter</button>'
+    + '</div>';
+}
+async function empDocExtAdd(){
+  const eid=empFicheId;
+  const libelle=(document.getElementById('docExtLibelle').value||'').trim();
+  if(!libelle){document.getElementById('docExtLibelle').focus();return;}
+  const row={
+    entite_type:'employe',
+    entite_id:eid,
+    libelle,
+    support:document.getElementById('docExtSupport').value||'papier',
+    categorie:document.getElementById('docExtCategorie').value||'autre',
+    lieu_conservation:(document.getElementById('docExtLieu').value||'').trim()||null,
+    created_by:ME?ME.id:null
+  };
+  const{data,error}=await sb.from('documents_externes').insert(row).select().single();
+  if(error){toast('Erreur lors de l\'ajout : '+error.message,true);return;}
+  empDocExtCache.unshift(data);
+  empRenderDocExt();
+  toast('Pièce ajoutée au registre.');
+}
+async function empDocExtDetruire(id){
+  if(!confirm('Marquer cette pièce comme détruite / restituée aujourd\'hui ?'))return;
+  const row={detruit_le:todayISO(),detruit_par:ME?ME.id:null};
+  const{error}=await sb.from('documents_externes').update(row).eq('id',id);
+  if(error){toast('Erreur : '+error.message,true);return;}
+  const d=empDocExtCache.find(x=>String(x.id)===String(id));
+  if(d)Object.assign(d,row);
+  empRenderDocExt();
+  toast('Pièce marquée détruite.');
+}
+async function empDocExtDelete(id){
+  if(!confirm('Supprimer cette entrée du registre ? (la pièce physique elle-même n\'est pas concernée, seule la trace ici disparaît)'))return;
+  const{error}=await sb.from('documents_externes').delete().eq('id',id);
+  if(error){toast('Erreur : '+error.message,true);return;}
+  empDocExtCache=empDocExtCache.filter(x=>String(x.id)!==String(id));
+  empRenderDocExt();
+  toast('Entrée supprimée.');
 }
 
 boot();
