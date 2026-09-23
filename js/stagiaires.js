@@ -485,7 +485,8 @@ function stgOpenFiche(id,typeDefaut){
   stgDocExtCache=[];
   const docExtZone=document.getElementById('stg-doc-ext-zone');
   if(docExtZone)docExtZone.innerHTML='';
-  if(s){stgRenderLien();stgRenderRessFiche();stgRenderDocs();stgRenderJours();stgRenderCollabZone();stgLoadDocExt(s.id);}
+  if(s){stgRenderLien();stgRenderRessFiche();stgRenderExportZone(s);stgRenderDocs();stgRenderJours();stgRenderCollabZone();stgLoadDocExt(s.id);}
+  else{const ez=document.getElementById('stg-export-zone');if(ez)ez.innerHTML='';}
   document.getElementById('modal-stagiaire-wrap').classList.add('open');
 }
 
@@ -1024,6 +1025,87 @@ async function stgDocExtDelete(id){
   showBanner('Entrée supprimée.');
 }
 window.stgDocExtDelete=stgDocExtDelete;
+
+/* ---------- EXPORT DES DOCUMENTS PUIS PURGE DU STOCKAGE ----------
+   Réservé aux dossiers clos (statut termine/refuse/annule — stgClos) :
+   contrairement aux enfants/employés, la fiche stagiaire n'a pas de colonne
+   archive_le dédiée, son statut sert déjà cet office. Télécharge un .zip des
+   documents (stagiaires_documents), puis — seulement après confirmation
+   explicite — supprime ces fichiers de Supabase Storage et les lignes
+   correspondantes en base. Trace permanente dans archivage_purges.
+   Irréversible : d'où la confirmation à deux temps. */
+function stgRenderExportZone(s){
+  const zone=document.getElementById('stg-export-zone');
+  if(!zone)return;
+  if(!s||!stgClos(s.statut)){zone.innerHTML='';return;}
+  zone.innerHTML='<div style="background:#F1EFF7;border-left:4px solid var(--muted);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#555">'
+    +'<i class="ti ti-archive"></i> Dossier clos.'
+    +'<div style="margin-top:8px"><button class="btn-sm" onclick="stgExporterDocuments(\''+s.id+'\')" title="Télécharge un .zip des documents du dossier, à conserver hors ligne (disque externe), puis les retire du stockage en ligne"><i class="ti ti-cloud-download"></i> Exporter les documents et libérer l\'espace</button></div>'
+    +'</div>';
+}
+async function stgExporterDocuments(id){
+  const s=stgCache.find(x=>String(x.id)===String(id));
+  if(!s||!stgClos(s.statut))return;
+  if(!confirm('Préparer un fichier .zip de tous les documents de '+stgNomComplet(s)+' ?\n\nUne fois le fichier téléchargé et sa sauvegarde confirmée, ces documents seront supprimés du stockage en ligne (Supabase) — à vous de les conserver ensuite hors ligne (disque externe) pour le reste du délai légal.'))return;
+
+  showBanner('Préparation du fichier .zip…');
+  const docs=stgDocsDe(id);
+  if(!docs.length){showBanner('Aucun document à exporter pour ce dossier.');return;}
+
+  const zip=new JSZip();
+  const reussis=[];
+  let nEchec=0;
+  for(const d of docs){
+    try{
+      const{data,error}=await sb.storage.from(d.bucket||STG_BUCKET).download(d.path);
+      if(error)throw error;
+      zip.file(d.filename||d.id,data);
+      reussis.push(d);
+    }catch(err){
+      console.warn('[stgExporterDocuments] échec sur',d.id,err);
+      nEchec++;
+    }
+  }
+  if(!reussis.length){showBanner('Aucun document n\'a pu être téléchargé — export annulé, rien n\'a été supprimé.','error');return;}
+
+  const contenu=await zip.generateAsync({type:'blob'});
+  const nomZip='documents_'+stgNomComplet(s).replace(/\s+/g,'_')+'_'+todayStr()+'.zip';
+  const url=URL.createObjectURL(contenu);
+  const a=document.createElement('a');a.href=url;a.download=nomZip;document.body.appendChild(a);a.click();a.remove();
+  URL.revokeObjectURL(url);
+
+  if(nEchec)showBanner(nEchec+' document(s) n\'ont pas pu être inclus dans le zip (ignorés, non supprimés) — '+reussis.length+' inclus.','error');
+
+  if(!confirm('Le fichier "'+nomZip+'" a été téléchargé.\n\nAvez-vous bien enregistré ce fichier sur un support externe (disque dur, coffre-fort numérique) ?\n\nEn confirmant, les '+reussis.length+' document(s) effectivement exportés seront DÉFINITIVEMENT supprimés du stockage en ligne'+(nEchec?' ('+nEchec+' document(s) en échec resteront en ligne, à retenter plus tard)':'')+'. Cette action est IRRÉVERSIBLE.'))return;
+
+  let suppOk=0,suppKo=0;
+  for(const d of reussis){
+    try{
+      const{error:rmErr}=await sb.storage.from(d.bucket||STG_BUCKET).remove([d.path]);
+      if(rmErr)console.warn('[stgExporterDocuments] fichier non supprimé du stockage',d.id,rmErr.message);
+      const{error:delErr}=await sb.from('stagiaires_documents').delete().eq('id',d.id);
+      if(delErr)throw delErr;
+      suppOk++;
+    }catch(err){
+      console.warn('[stgExporterDocuments] suppression échouée',d.id,err);
+      suppKo++;
+    }
+  }
+
+  await sb.from('archivage_purges').insert({
+    entite_type:'stagiaire',
+    entite_id:id,
+    creche_id:s.creche_id||null,
+    annee_sortie:s.date_fin?Number(String(s.date_fin).slice(0,4)):null,
+    motif:suppOk+' document(s) exportés en .zip puis supprimés du stockage en ligne'+(suppKo?' ('+suppKo+' échec(s) de suppression)':''),
+    purge_par:currentUser?currentUser.id:null
+  });
+
+  stgDocsCache=stgDocsCache.filter(x=>String(x.stagiaire_id)!==String(id)||!reussis.find(r=>String(r.id)===String(x.id)));
+  if(String(stgFicheId)===String(id)){stgRenderDocs();}
+  showBanner(suppOk+' document(s) supprimé(s) du stockage en ligne.'+(suppKo?' '+suppKo+' suppression(s) ont échoué.':''));
+}
+window.stgExporterDocuments=stgExporterDocuments;
 
 // ── Les jours de présence ─────────────────────────────────────────────────
 

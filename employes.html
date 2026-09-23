@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8;--amber:#B8860B;--amber-l:#FFF6DC}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -595,7 +596,10 @@ function renderArchivageBox(e){
     box.innerHTML='<div style="background:var(--violet-l);border-left:4px solid var(--violet);border-radius:0 10px 10px 0;padding:10px 14px;font-size:12.5px;color:var(--violet)">'
       +'<i class="ti ti-archive"></i> Dossier archivé le '+esc(new Date(e.archive_le).toLocaleDateString('fr-FR'))+'.'
       +(purge?' Conservation légale recommandée jusqu\'au '+esc(new Date(purge).toLocaleDateString('fr-FR'))+' (5 ans après la fin de contrat), au-delà duquel le dossier peut être purgé/anonymisé.':'')
-      +'<div style="margin-top:8px"><button type="button" class="btn btn-g btn-sm" onclick="desarchiverFiche(\''+e.id+'\')"><i class="ti ti-archive-off"></i> Réactiver ce dossier</button></div>'
+      +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button type="button" class="btn btn-g btn-sm" onclick="desarchiverFiche(\''+e.id+'\')"><i class="ti ti-archive-off"></i> Réactiver ce dossier</button>'
+      +'<button type="button" class="btn btn-g btn-sm" onclick="exporterDocuments(\''+e.id+'\')" title="Télécharge un .zip des documents du dossier, à conserver hors ligne (disque externe), puis les retire du stockage en ligne"><i class="ti ti-cloud-download"></i> Exporter les documents et libérer l\'espace</button>'
+      +'</div>'
       +'</div>';
   }else if(estSorti(e)){
     box.innerHTML='<div style="background:var(--orange-l);border-left:4px solid var(--orange);border-radius:0 10px 10px 0;padding:10px 14px;font-size:12.5px;color:var(--orange)">'
@@ -635,6 +639,86 @@ async function desarchiverFiche(id){
   renderListe();
   toast('Dossier réactivé.');
 }
+
+/* ---------- EXPORT DES DOCUMENTS PUIS PURGE DU STOCKAGE ----------
+   Réservé aux dossiers archivés (voir renderArchivageBox). Télécharge un
+   .zip des documents d'embauche (employes_documents), puis — seulement après
+   confirmation explicite que le fichier a bien été sauvegardé — supprime ces
+   fichiers de Supabase Storage et les lignes correspondantes en base. Trace
+   permanente dans archivage_purges, qui survit même une fois les documents
+   supprimés. Irréversible : d'où la confirmation à deux temps. */
+async function exporterDocuments(id){
+  const e=EMPLOYES.find(x=>String(x.id)===String(id));
+  if(!e||!estArchive(e))return;
+  if(!confirm('Préparer un fichier .zip de tous les documents de '+(e.prenom||'')+' '+(e.nom||'')+' ?\n\nUne fois le fichier téléchargé et sa sauvegarde confirmée, ces documents seront supprimés du stockage en ligne (Supabase) — à vous de les conserver ensuite hors ligne (disque externe) pour le reste du délai légal.'))return;
+
+  toast('Préparation du fichier .zip…');
+  let docs=[];
+  try{
+    const{data,error}=await sb.from('employes_documents').select('*').eq('employe_id',id);
+    if(error)throw error;
+    docs=data||[];
+  }catch(err){
+    toast('Erreur lors de la lecture des documents : '+err.message,true);
+    return;
+  }
+  if(!docs.length){toast('Aucun document à exporter pour ce dossier.');return;}
+
+  const zip=new JSZip();
+  const reussis=[];
+  let nEchec=0;
+  for(const d of docs){
+    try{
+      const{data,error}=await sb.storage.from(d.bucket||EMP_DOCS_BUCKET).download(d.path);
+      if(error)throw error;
+      zip.file('embauche/'+(d.filename||d.id),data);
+      reussis.push(d);
+    }catch(err){
+      console.warn('[exporterDocuments] échec sur',d.id,err);
+      nEchec++;
+    }
+  }
+  if(!reussis.length){toast('Aucun document n\'a pu être téléchargé — export annulé, rien n\'a été supprimé.',true);return;}
+
+  const contenu=await zip.generateAsync({type:'blob'});
+  const nomZip='documents_'+(e.prenom||'')+'_'+(e.nom||'')+'_'+todayISO()+'.zip';
+  const url=URL.createObjectURL(contenu);
+  const a=document.createElement('a');a.href=url;a.download=nomZip;document.body.appendChild(a);a.click();a.remove();
+  URL.revokeObjectURL(url);
+
+  if(nEchec)toast(nEchec+' document(s) n\'ont pas pu être inclus dans le zip (ignorés, non supprimés) — '+reussis.length+' inclus.',true);
+
+  if(!confirm('Le fichier "'+nomZip+'" a été téléchargé.\n\nAvez-vous bien enregistré ce fichier sur un support externe (disque dur, coffre-fort numérique) ?\n\nEn confirmant, les '+reussis.length+' document(s) effectivement exportés seront DÉFINITIVEMENT supprimés du stockage en ligne'+(nEchec?' ('+nEchec+' document(s) en échec resteront en ligne, à retenter plus tard)':'')+'. Cette action est IRRÉVERSIBLE.'))return;
+
+  let suppOk=0,suppKo=0;
+  for(const d of reussis){
+    try{
+      const{error:rmErr}=await sb.storage.from(d.bucket||EMP_DOCS_BUCKET).remove([d.path]);
+      if(rmErr)console.warn('[exporterDocuments] fichier non supprimé du stockage',d.id,rmErr.message);
+      const{error:delErr}=await sb.from('employes_documents').delete().eq('id',d.id);
+      if(delErr)throw delErr;
+      suppOk++;
+    }catch(err){
+      console.warn('[exporterDocuments] suppression échouée',d.id,err);
+      suppKo++;
+    }
+  }
+
+  await sb.from('archivage_purges').insert({
+    entite_type:'employe',
+    entite_id:id,
+    creche_id:e.creche_id||null,
+    annee_sortie:e.date_fin?Number(String(e.date_fin).slice(0,4)):null,
+    motif:suppOk+' document(s) exportés en .zip puis supprimés du stockage en ligne'+(suppKo?' ('+suppKo+' échec(s) de suppression)':''),
+    purge_par:ME?ME.id:null
+  });
+
+  empDocsCache=[];
+  document.getElementById('ficheDocsZone').innerHTML='';
+  if(String(empFicheId)===String(id))empLoadDocs(id);
+  toast(suppOk+' document(s) supprimé(s) du stockage en ligne.'+(suppKo?' '+suppKo+' suppression(s) ont échoué.':''));
+}
+
 /* ---------- CONTRAT DE TRAVAIL (module Documents) ----------
    Le contrat n'est pas stocké ici : il vit dans documents_reponses (modèle
    contrat_travail de documents.html), rattaché à cette fiche via le
