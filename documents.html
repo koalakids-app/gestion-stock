@@ -1375,6 +1375,13 @@ let SAVE_KO=null;
 async function saveFill(silent){
  SAVE_KO=null;
  try{
+  /* Contrat de travail signé : verrouillé, sauf override direction explicite
+     (bouton « Modifier quand même », tracé plus bas). Voir ctApplyLock(). */
+  if(fillDoc&&fillDoc.template_key==='contrat_travail'&&fillRep&&fillRep.statut==='signe'&&!CT_OVERRIDE){
+    SAVE_KO='Ce contrat est signé et verrouillé.';
+    if(silent)return;
+    return toast(SAVE_KO+' Utilisez « Modifier quand même » (direction) pour le corriger.');
+  }
   const donnees={};
   const tpl=TPL[fillDoc.template_key];
   if(tpl){
@@ -1412,6 +1419,18 @@ async function saveFill(silent){
   // reel en depasse largement plusieurs milliers.
   const sigReelle=v=>typeof v==='string'&&v.indexOf('data:image')===0&&v.length>1500;
   const aUneSignature=Object.keys(SIGS||{}).some(k=>sigReelle(SIGS[k]));
+  /* Renforcement contrat de travail : si l'OTP est exigé sur ce réseau, une
+     signature du/de la salarié(e) non vérifiée par code n'est pas acceptée.
+     ctGateSalarieSig() désactive déjà le cadre côté interface ; ce contrôle
+     serveur-side (ici, côté client mais indépendant du DOM désactivé) évite
+     qu'un tracé déjà présent en mémoire (SIGS) ne se glisse par un autre
+     chemin (bouton Entrée, saveFill(true) automatique…). */
+  if(fillDoc.template_key==='contrat_travail'&&RESEAU&&RESEAU.otp_signature_active
+     &&sigReelle(SIGS.salarie)&&!CT_OTP_VERIFIED){
+    SAVE_KO='Identité du/de la salarié(e) non vérifiée par code.';
+    if(silent)return;
+    return toast('Vérifiez l’identité du/de la salarié(e) par code avant d’enregistrer la signature.');
+  }
   /* Garde-fou : apres un enregistrement rattache a un enfant, le formulaire est
      remis a blanc et fillRep detache. Un second clic sur « Enregistrer » creerait
      alors une ligne vide dans le dossier de l’enfant. On refuse donc toute
@@ -1435,6 +1454,28 @@ async function saveFill(silent){
   let statut=(aUneSignature||(statutChoisi&&fillStatutManuel))?'signe':'prepare';
   // refléter la bascule dans le sélecteur pour cohérence visuelle
   const _st=document.getElementById('fillStatut');if(_st)_st.value=statut;
+  /* Piste d'audit du contrat de travail (donnees._audit — distinct des
+     champs du formulaire, jamais affiché dans le rendu normal du document).
+     ctDevientSigne capture la transition AVANT d'écraser fillRep plus bas. */
+  let ctDevientSigne=false;
+  if(fillDoc.template_key==='contrat_travail'){
+    const prevAudit=(fillRep&&fillRep.donnees&&fillRep.donnees._audit)||{};
+    const audit=Object.assign({},prevAudit);
+    if(CT_OVERRIDE){
+      const log=(audit.modifications_direction||[]).slice();
+      log.push({date:new Date().toISOString(),par:PROF?PROF.name:null});
+      audit.modifications_direction=log;
+    }
+    ctDevientSigne=statut==='signe'&&(!fillRep||fillRep.statut!=='signe');
+    if(ctDevientSigne){
+      audit.signature_datetime=new Date().toISOString();
+      audit.user_agent=navigator.userAgent;
+      audit.otp_verifie=!!CT_OTP_VERIFIED;
+      if(!RESEAU||!RESEAU.otp_signature_active)audit.mode='degrade_sans_otp';
+      if(CT_QR_AUDIT)audit.qr=CT_QR_AUDIT;
+    }
+    donnees._audit=audit;
+  }
   // creche_id aligné sur la crèche de l'enfant si un enfant est choisi,
   // pour que la directrice technique de cette crèche retrouve le document dans le dossier enfant
   let crecheId=fillDoc.creche_id||(PROF?PROF.creche_id:null);
@@ -1482,6 +1523,22 @@ async function saveFill(silent){
     return toast(SAVE_KO);
   }
   SAVE_KO=null;
+  if(fillDoc.template_key==='contrat_travail'){
+    // fillRep peut être resté sur l'ancien statut (chemin update, cf. plus haut) :
+    // on le resynchronise pour que ctApplyLock() verrouille immédiatement.
+    fillRep.statut=statut;fillRep.donnees=donnees;
+    if(CT_PDF_HASH&&fillRep.signature_empreinte!==CT_PDF_HASH){
+      fillRep.signature_empreinte=CT_PDF_HASH;
+      sb.from('documents_reponses').update({signature_empreinte:CT_PDF_HASH}).eq('id',fillRep.id).then(()=>{});
+    }
+    if(ctDevientSigne){
+      callFn('signature-otp',{action:'signature',reponse_id:fillRep.id,empreinte:CT_PDF_HASH}).catch(()=>{});
+    }else if(CT_OVERRIDE){
+      callFn('signature-otp',{action:'modification_direction',reponse_id:fillRep.id,par:PROF?PROF.name:null}).catch(()=>{});
+    }
+    CT_OVERRIDE=false;
+    ctApplyLock();
+  }
   if(enfantId&&fillDoc.template_key==='vaccinations')vacSyncModuleDepuisFiche(enfantId,donnees);
   if(!silent)toast(enfantId?'Enregistré dans le dossier de l\u2019enfant':'Enregistré');
   if(enfantId){
@@ -3403,7 +3460,7 @@ const TPL={
  contrat_travail:{
   fields:['raison_sociale','forme_juridique','capital','rcs_ville','siret','adresse_siege','representant_nom','representant_qualite',
           'site_nom','site_adresse',
-          'salarie_nom','salarie_naissance_date','salarie_naissance_lieu','salarie_nationalite','salarie_adresse','salarie_ss',
+          'salarie_employe_id','salarie_nom','salarie_naissance_date','salarie_naissance_lieu','salarie_nationalite','salarie_adresse','salarie_ss',
           'poste_intitule','statut','qualification',
           'type_contrat','cdd_debut','cdd_fin','cdd_motif','cdd_remplace','date_embauche',
           'temps_travail','heures_hebdo','repartition_horaires',
@@ -3431,8 +3488,11 @@ const TPL={
    <div class="f"><label>Adresse du site d'affectation</label><input id="ff_site_adresse" value="${esc(v.site_adresse)}"></div>
 
    <h3>Le/la salarié(e)</h3>
+   <div class="f"><label>Fiche collaborateur/trice <span class="hint" style="font-weight:400">(pré-remplit ce qui est connu et sert d'adresse pour le code de vérification)</span></label>
+     <select id="ff_salarie_employe_id" onchange="ctFillFromEmploye()"><option value="">Chargement…</option></select>
+   </div>
    <div class="grid2">
-     <div class="f"><label>Nom / Prénom</label><input id="ff_salarie_nom" value="${esc(v.salarie_nom)}"></div>
+     <div class="f"><label>Nom / Prénom</label><input id="ff_salarie_nom" value="${esc(v.salarie_nom)}" oninput="ctUpdateConsent()"></div>
      <div class="f"><label>Nationalité</label><input id="ff_salarie_nationalite" value="${esc(v.salarie_nationalite)}"></div>
    </div>
    <div class="grid2">
@@ -3491,13 +3551,28 @@ const TPL={
      <div class="f"><label>Ville</label><input id="ff_ville_signature" value="${esc(v.ville_signature)}"></div>
      <div class="f"><label>Date</label><input type="date" id="ff_date_signature" value="${esc(v.date_signature)}"></div>
    </div>
+   <div class="f" id="ctOtpWrap">
+     <label>Vérification d'identité avant signature (code à usage unique)</label>
+     <p class="hint" id="ctOtpHint">Chargement…</p>
+     <div id="ctOtpActions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px"></div>
+   </div>
+   <p class="hint" id="ctConsent" style="font-weight:600;color:var(--ink,#2B2740)"></p>
    <div class="grid2">
      ${sigBoxHtml('responsable','Pour l’Employeur')}
      ${sigBoxHtml('salarie','Le/la Salarié(e) — « Lu et approuvé »')}
    </div>
   </div>`,
-  mount:()=>{ctPrefillFromEtab();ctToggleCdd();['responsable','salarie'].forEach(mountSig);},
-  pdf:doc=>{
+  mount:()=>{
+    CT_OVERRIDE=false;CT_QR_AUDIT=null;
+    const prevAudit=(fillRep&&fillRep.donnees&&fillRep.donnees._audit)||{};
+    CT_OTP_VERIFIED=!!(fillRep&&fillRep.otp_verifie_le);
+    CT_OTP_VERIFIED_AT=(fillRep&&fillRep.otp_verifie_le)||null;
+    CT_OTP_SENT_AT=null;
+    CT_PDF_HASH=(fillRep&&fillRep.signature_empreinte)||prevAudit.pdf_sha256||null;
+    ctPrefillFromEtab();ctToggleCdd();ctLoadEmployes();ctUpdateConsent();ctRenderOtp();ctApplyLock();
+    ['responsable','salarie'].forEach(mountSig);
+  },
+  pdf:async doc=>{
     const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
     const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'……';
     const bl=s=>s||'……';
@@ -3611,6 +3686,19 @@ const TPL={
 
     para(`Fait à ${bl(g('ville_signature'))}, le ${dfr(g('date_signature'))}, en deux exemplaires originaux.`,true);
 
+    doc.setFont(undefined,'italic');doc.setFontSize(9);
+    const lignesConsent=doc.splitTextToSize(pdfSafe(ctConsentText(g('salarie_nom'))),W);
+    need(lignesConsent.length*4.5+3);
+    doc.text(lignesConsent,14,y);y+=lignesConsent.length*4.5+2;
+    doc.setFontSize(8.2);doc.setTextColor(120);
+    const verifTxt=CT_OTP_VERIFIED
+      ?('Identité vérifiée par code le '+new Date(CT_OTP_VERIFIED_AT).toLocaleString('fr-FR')+'.')
+      :'Identité non vérifiée par code (mode dégradé) — ce document ne constitue pas une signature électronique qualifiée au sens eIDAS.';
+    const lignesVerif=doc.splitTextToSize(verifTxt,W);
+    need(lignesVerif.length*4+4);
+    doc.text(lignesVerif,14,y);y+=lignesVerif.length*4+4;
+    doc.setTextColor(30);doc.setFont(undefined,'normal');doc.setFontSize(10);
+
     need(50);
     const put=(role,lab,x)=>{
       doc.setFontSize(9);doc.setFont(undefined,'bold');
@@ -3622,6 +3710,16 @@ const TPL={
     put('responsable',`Pour l'Employeur : ${bl(g('representant_nom'))}, ${bl(g('representant_qualite'))}`,14);
     put('salarie',"Le/la Salarié(e) — « Lu et approuvé »",110);
     y+=42;
+
+    // Empreinte du PDF exact généré — calculée côté client (jsPDF ne tourne
+    // pas côté serveur ici), conservée avec la réponse pour le dossier de
+    // preuve (cf. sql/documents_reponses_signature_renforcee.sql). Une panne
+    // de hachage ne doit jamais empêcher l'export du contrat.
+    try{
+      const bytes=doc.output('arraybuffer');
+      const digest=await crypto.subtle.digest('SHA-256',bytes);
+      CT_PDF_HASH=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+    }catch(e){console.warn('empreinte PDF',e);}
 
     pdfSortie(doc,slug(fillDoc.titre)+(g('salarie_nom')?'_'+slug(g('salarie_nom')):'')+'.pdf');
     return true;
@@ -4673,6 +4771,7 @@ function ctPrefillFromEtab(){
     const el=document.getElementById('ff_'+k);
     if(el&&!el.value)el.value=v;
   });
+  ctLoadEmployes();
 }
 /* Affiche les champs propres au CDD (dates, motif, remplacement) uniquement
    quand ce type de contrat est sélectionné. */
@@ -4682,6 +4781,203 @@ function ctToggleCdd(){
     const el=document.getElementById(id);
     if(el)el.style.display=show?'':'none';
   });
+}
+
+/* ---------- CONTRAT DE TRAVAIL — renforcement de la signature ----------
+   Vérification d'identité par code (OTP) avant d'accepter la signature du/de
+   la salarié(e), verrouillage du formulaire une fois signé, empreinte du PDF
+   et consentement explicite. Voir sql/documents_reponses_signature_renforcee.sql
+   et supabase/functions/signature-otp — ⚠️ CE RENFORCEMENT N'EST PAS UNE
+   SIGNATURE ÉLECTRONIQUE QUALIFIÉE AU SENS eIDAS (pas de prestataire de
+   confiance accrédité) : c'est un renforcement du dossier de preuve, à faire
+   valider par un avocat en droit social avant mise en production réelle. */
+let CT_OVERRIDE=false;             // direction : modification d'un contrat déjà signé, tracée
+let CT_OTP_VERIFIED=false, CT_OTP_VERIFIED_AT=null, CT_OTP_SENT_AT=null;
+let CT_PDF_HASH=null;              // SHA-256 du dernier PDF généré dans cette saisie
+let CT_QR_AUDIT=null;              // {envoye_le,ouvert_le,signe_le} si signature à distance
+let CT_EMPLOYES=[];
+
+async function callFn(fn,body){
+  try{
+    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
+      body:JSON.stringify(body)});
+    const data=await r.json().catch(()=>({}));
+    return{ok:r.ok,data};
+  }catch(err){
+    return{ok:false,data:{erreur:(err&&err.message)||'réseau injoignable'}};
+  }
+}
+
+/* Fiche employe (table `employes`) de la crèche choisie : sert à pré-remplir
+   les champs salarié connus ET à donner une adresse e-mail fiable pour le
+   code de vérification (l'adresse saisie librement dans le formulaire ne
+   serait pas assez sûre pour ça). */
+async function ctLoadEmployes(){
+  const sel=document.getElementById('ff_salarie_employe_id');
+  if(!sel)return;
+  const nomCreche=(document.getElementById('ff_site_nom')||{}).value||'';
+  const cr=(CRECHES||[]).find(c=>c.name===nomCreche);
+  if(!cr){
+    CT_EMPLOYES=[];
+    sel.innerHTML='<option value="">— Choisir une crèche d’abord —</option>';
+    return;
+  }
+  const cur=sel.value||((fillRep&&fillRep.donnees&&fillRep.donnees.salarie_employe_id)||'');
+  const{data,error}=await sb.from('employes').select('*').eq('creche_id',cr.id).order('prenom');
+  if(error){console.warn('ctLoadEmployes',error);return;}
+  CT_EMPLOYES=data||[];
+  sel.innerHTML='<option value="">— Salarié(e) non listé(e) : saisie libre —</option>'
+    +CT_EMPLOYES.map(e=>`<option value="${e.id}"${cur===e.id?' selected':''}>${esc(((e.prenom||'')+' '+(e.nom||'')).trim())}${e.poste?' — '+esc(e.poste):''}</option>`).join('');
+  ctRenderOtp();
+}
+function ctFillFromEmploye(){
+  const id=(document.getElementById('ff_salarie_employe_id')||{}).value||'';
+  ctRenderOtp();
+  if(!id)return;
+  const e=CT_EMPLOYES.find(x=>x.id===id);
+  if(!e)return;
+  const TT={temps_plein:'Temps plein',temps_partiel:'Temps partiel'};
+  const map={
+    salarie_nom:((e.prenom||'')+' '+(e.nom||'')).trim(),
+    salarie_naissance_date:e.date_naissance,salarie_naissance_lieu:e.lieu_naissance,
+    salarie_nationalite:e.nationalite,salarie_adresse:e.adresse,salarie_ss:e.numero_secu,
+    poste_intitule:e.poste,qualification:e.qualification,
+    type_contrat:e.type_contrat,date_embauche:e.date_debut,cdd_fin:e.date_fin,cdd_motif:e.motif_cdd,
+    temps_travail:TT[e.temps_travail]||'',heures_hebdo:e.heures_hebdo
+  };
+  Object.keys(map).forEach(k=>{
+    const v=map[k];
+    if(!v)return;
+    const el=document.getElementById('ff_'+k);
+    if(el&&!el.value)el.value=v;
+  });
+  ctToggleCdd();
+  ctUpdateConsent();
+}
+
+/* Texte de consentement explicite affiché avant la zone de signature du/de
+   la salarié(e), personnalisé avec son nom tel que saisi dans le formulaire. */
+function ctConsentText(nom){
+  return 'En signant électroniquement ce document, '+(nom&&nom.trim()?nom.trim():'le/la salarié(e) désigné(e) ci-dessus')
+    +' atteste avoir pris connaissance de l’intégralité du présent contrat de travail et en accepter les termes.';
+}
+function ctUpdateConsent(){
+  const nom=(document.getElementById('ff_salarie_nom')||{}).value||'';
+  const el=document.getElementById('ctConsent');
+  if(el)el.textContent=ctConsentText(nom);
+}
+
+function ctMask(email){
+  const parts=String(email||'').split('@');
+  if(parts.length<2)return '···';
+  return (parts[0][0]||'·')+'···@'+parts[1];
+}
+
+/* Assombrit et désactive le cadre de signature du/de la salarié(e) tant que
+   la vérification par code est exigée et pas encore faite — on ne bloque pas
+   la signature « responsable » (l'employeur), seulement celle qu'on cherche
+   à vérifier. */
+function ctGateSalarieSig(){
+  const box=document.getElementById('sb_salarie');
+  if(!box)return;
+  const verrouille=!!(RESEAU&&RESEAU.otp_signature_active)&&!CT_OTP_VERIFIED;
+  box.style.opacity=verrouille?'.45':'';
+  box.style.pointerEvents=verrouille?'none':'';
+  box.title=verrouille?'Vérifiez d’abord l’identité par code':'';
+}
+
+function ctRenderOtp(){
+  const hint=document.getElementById('ctOtpHint');
+  const box=document.getElementById('ctOtpActions');
+  if(!hint||!box)return;
+  if(!(RESEAU&&RESEAU.otp_signature_active)){
+    hint.innerHTML='⚠️ Vérification par code non activée sur ce réseau — signature du/de la salarié(e) non vérifiée par code. '
+      +'<span style="color:var(--muted)">(à activer dans Paramètres → Le réseau une fois l’envoi d’e-mail confirmé opérationnel)</span>';
+    hint.style.color='#B8860B';
+    box.innerHTML='';
+    ctGateSalarieSig();
+    return;
+  }
+  if(CT_OTP_VERIFIED){
+    hint.textContent='✅ Identité vérifiée par code'+(CT_OTP_VERIFIED_AT?(' le '+new Date(CT_OTP_VERIFIED_AT).toLocaleString('fr-FR')):'')+'.';
+    hint.style.color='#2E7D52';
+    box.innerHTML='';
+    ctGateSalarieSig();
+    return;
+  }
+  hint.style.color='';
+  const empId=(document.getElementById('ff_salarie_employe_id')||{}).value||'';
+  const emp=CT_EMPLOYES.find(x=>x.id===empId);
+  if(!emp||!emp.email){
+    hint.textContent='Sélectionnez la fiche du/de la salarié(e) (avec e-mail renseigné) pour envoyer un code de vérification.';
+    box.innerHTML='';
+    ctGateSalarieSig();
+    return;
+  }
+  hint.textContent=CT_OTP_SENT_AT
+    ?('Code envoyé à '+ctMask(emp.email)+' — valable 10 minutes.')
+    :'Aucun code envoyé pour l’instant.';
+  box.innerHTML='<button type="button" class="btn btn-s" onclick="ctEnvoyerOtp()"><i class="ti ti-mail"></i> '
+    +(CT_OTP_SENT_AT?'Renvoyer un code':'Envoyer un code')+'</button>'
+    +(CT_OTP_SENT_AT
+      ?'<input id="ff_ct_otp_saisie" maxlength="6" inputmode="numeric" placeholder="Code à 6 chiffres" style="width:130px">'
+        +'<button type="button" class="btn btn-p" onclick="ctVerifierOtp()">Vérifier</button>'
+      :'');
+  ctGateSalarieSig();
+}
+async function ctEnvoyerOtp(){
+  const empId=(document.getElementById('ff_salarie_employe_id')||{}).value||'';
+  if(!empId)return toast('Choisissez d’abord la fiche du/de la salarié(e).');
+  if(!fillRep||!fillRep.id)await saveFill(true);
+  if(!fillRep||!fillRep.id)return toast('Enregistrez d’abord le contrat avant d’envoyer un code.');
+  const r=await callFn('signature-otp',{action:'envoyer',reponse_id:fillRep.id,employe_id:empId,canal:'email'});
+  if(!r.ok||!r.data||r.data.erreur){toast('Erreur : '+((r.data&&r.data.erreur)||'envoi impossible'));return;}
+  CT_OTP_SENT_AT=new Date().toISOString();
+  toast('Code envoyé par e-mail.');
+  ctRenderOtp();
+}
+async function ctVerifierOtp(){
+  if(!fillRep||!fillRep.id)return toast('Enregistrez d’abord le contrat.');
+  const code=(document.getElementById('ff_ct_otp_saisie')||{}).value||'';
+  if(!/^[0-9]{6}$/.test(code))return toast('Saisissez le code à 6 chiffres reçu par e-mail.');
+  const r=await callFn('signature-otp',{action:'verifier',reponse_id:fillRep.id,code});
+  if(!r.ok||!r.data||!r.data.ok){toast('Code incorrect ou expiré.'+((r.data&&r.data.erreur)?(' '+r.data.erreur):''));return;}
+  CT_OTP_VERIFIED=true;CT_OTP_VERIFIED_AT=r.data.verified_at||new Date().toISOString();
+  toast('Identité vérifiée.');
+  ctRenderOtp();
+}
+
+/* Verrouillage du formulaire une fois le contrat signé : les champs restent
+   lisibles mais ne sont plus modifiables, sauf par la direction via
+   « Modifier quand même », ce qui est tracé (cf. saveFill()). */
+function ctApplyLock(){
+  const area=document.getElementById('fillArea');
+  if(!area)return;
+  const verrouille=!!(fillRep&&fillRep.statut==='signe')&&!CT_OVERRIDE;
+  area.querySelectorAll('input,select,textarea').forEach(el=>{
+    if(el.id==='ff_ct_otp_saisie')return;
+    el.disabled=verrouille;
+  });
+  let banner=document.getElementById('ctLockBanner');
+  if(verrouille){
+    if(!banner){
+      banner=document.createElement('div');
+      banner.id='ctLockBanner';
+      banner.style.cssText='margin:0 0 14px;padding:12px 14px;background:#FDECEA;border:1px solid #E39C97;border-radius:10px;font-size:13px;color:#7A2E27;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap';
+      area.parentNode.insertBefore(banner,area);
+    }
+    banner.innerHTML='<span>🔒 Contrat signé — verrouillé pour modification.</span>'
+      +(IS_DIRECTION?'<button type="button" class="btn btn-g" onclick="ctModifierQuandMeme()">Modifier quand même (direction)</button>':'');
+  }else if(banner){
+    banner.remove();
+  }
+}
+function ctModifierQuandMeme(){
+  if(!confirm('Cette modification sera tracée (date, auteure/auteur) dans le contrat. Continuer ?'))return;
+  CT_OVERRIDE=true;
+  ctApplyLock();
+  toast('Modification déverrouillée pour cette saisie — sera tracée à l’enregistrement.');
 }
 
 const C17_CSS=`<style>
@@ -5364,6 +5660,15 @@ async function pollQr(role){
     .eq('token',qrToken).maybeSingle();   /* lecture authentifiee : policy sigpend_auth_all */
   if(data&&data.signature_data){
     SIGS[role]=data.signature_data;
+    /* Contrat de travail : piste d'audit de la signature à distance (date
+       d'envoi/d'ouverture du lien QR), best-effort — une panne ici ne doit
+       jamais empêcher la réception de la signature elle-même. */
+    if(fillDoc&&fillDoc.template_key==='contrat_travail'&&role==='salarie'){
+      const tok=qrToken,signeLe=data.signed_at;
+      sb.from('signatures_pending').select('created_at,opened_at').eq('token',tok).maybeSingle()
+        .then(({data:aud})=>{if(aud)CT_QR_AUDIT={envoye_le:aud.created_at,ouvert_le:aud.opened_at,signe_le:signeLe};})
+        .catch(()=>{});
+    }
     stopQr();mountSig(role);toast('Signature reçue');
   }
 }

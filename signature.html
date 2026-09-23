@@ -60,6 +60,7 @@ async function boot(){
   const row=Array.isArray(data)?data[0]:data;
   if(!row)return state('err','Lien expiré','Ce lien de signature n\u2019est plus valable ou la signature a déjà été déposée. Demandez-en un nouveau.');
   REQ=row;
+  sb.rpc('kk_sig_marquer_ouvert',{p_token:TOKEN}).catch(()=>{});
   card.innerHTML=`
     <h1>Signature</h1>
     <div class="ctx">${esc(row.contexte||'')}</div>
