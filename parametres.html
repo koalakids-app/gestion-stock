@@ -185,8 +185,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <div class="g2">
           <div class="f"><label class="lb">N° d'autorisation</label><input id="ePmiNum"></div>
           <div class="f"><label class="lb">Capacité agréée (berceaux)</label><input id="cCap" type="number" step="1" min="1" max="12" oninput="syncCap()"></div>
+          <div class="f"><label class="lb">Effectif max en cas de surnombre (optionnel)</label><input id="cCapSurnombre" type="number" step="1" min="1"></div>
         </div>
         <p class="hint" id="hCap">La capacité agréée est le nombre de berceaux autorisés par la PMI — 12 au maximum pour une micro-crèche. À ne pas confondre avec l'effectif public du registre de sécurité, qui compte aussi les adultes.</p>
+        <p class="hint">L'effectif max en cas de surnombre ne concerne que les crèches ayant une autorisation d'accueil exceptionnel à 115% (ex. 14 pour une capacité de 12) — laisser vide sinon. Sur la grille de présence, l'alerte rouge se déclenche à ce seuil plutôt qu'à la capacité agréée.</p>
         <div class="g2">
           <div class="f"><label class="lb">Date de l'autorisation</label><input id="ePmiDate" type="date" onchange="syncPmi()"></div>
           <div class="f"><label class="lb">Échéance</label><input id="ePmiEch" type="date" onchange="syncPmi()"></div>
@@ -630,7 +632,7 @@ function dirty(){return SNAP!==''&&SNAP!==snapshot();}
 function renderEtab(){
   const c=crecheDe(crecheId),e=etabDe(crecheId)||{};
   if(!c)return;
-  setVal('cName',c.name);setVal('cAddr',c.addr);setVal('cCap',c.capacity);
+  setVal('cName',c.name);setVal('cAddr',c.addr);setVal('cCap',c.capacity);setVal('cCapSurnombre',c.capacity_surnombre);
   setVal('eRaison',e.raison_sociale);setVal('eForme',e.forme_juridique);
   setVal('eSiret',e.siret);setVal('eApe',e.code_ape);setVal('eSiege',e.adresse_siege);
   setVal('eCapital',e.capital_social);setVal('eRcsVille',e.rcs_ville);
@@ -996,9 +998,10 @@ async function save(){
   const amin=num('eAgeMin'),amax=num('eAgeMax');
   if((amin!=null&&!isFinite(amin))||(amax!=null&&!isFinite(amax))){
     toast('Âge illisible : indiquez un nombre de mois, 2,5 pour deux mois et demi.',true);return;}
-  let cap,semFerm,semFact,valid,ctValid,facJourEnvoi,facJourEch;
+  let cap,capSurnombre,semFerm,semFact,valid,ctValid,facJourEnvoi,facJourEch;
   try{
     cap    =entier('cCap','La capacité agréée');
+    capSurnombre=entier('cCapSurnombre','L\'effectif max en cas de surnombre');
     semFerm=entier('eSemFerm','Les semaines de fermeture');
     semFact=entier('eSemFact','Les semaines facturées');
     valid  =entier('rValid','La validité du devis');
@@ -1011,6 +1014,7 @@ async function save(){
   const fraisImpaye=num('rFacFraisImpaye');
   if(fraisImpaye!=null&&(!isFinite(fraisImpaye)||fraisImpaye<0)){toast('Les frais de dossier impayé doivent être un montant positif.',true);return;}
   if(amin!=null&&amax!=null&&amin>amax){toast('L\'âge minimum dépasse l\'âge maximum.',true);return;}
+  if(capSurnombre!=null&&cap!=null&&capSurnombre<cap){toast('L\'effectif max en cas de surnombre ne peut pas être inférieur à la capacité agréée.',true);return;}
   /* Le préavis accepte le demi-mois — quinze jours est une durée courante —
      mais pas le négatif, qui ferait proposer une fin de préavis antérieure à
      sa notification et se ferait refuser par contrats_preavis_ck. */
@@ -1021,7 +1025,7 @@ async function save(){
   btn.disabled=true;st.textContent='Enregistrement…';
   try{
     // 1. Les champs qui vivent déjà dans creches, modifiés sur place.
-    const cr={name:val('cName'),addr:val('cAddr'),capacity:cap};
+    const cr={name:val('cName'),addr:val('cAddr'),capacity:cap,capacity_surnombre:capSurnombre};
     const{error:ec}=await sb.from('creches').update(cr).eq('id',crecheId);
     if(ec)throw ec;
     Object.assign(crecheDe(crecheId),cr);
