@@ -8,6 +8,7 @@
 let enfFicheId = null;
 let enfDocsCache = [];
 let enfShowIncompleteOnly = false;
+let enfShowArchivedOnly = false;
 
 // Une fiche est "incomplète" quand la date de naissance ou les allergies n'ont jamais
 // été renseignées (allergies===null/undefined = jamais touché ; '' = vérifié, rien à signaler).
@@ -45,6 +46,26 @@ function enfToggleIncomplete(){
   enfRender();
 }
 
+/* ===================== ARCHIVAGE (enfants sortis) =====================
+   Un dossier est « archivé » quand archive_le est renseigné — toujours à la
+   main, depuis la fiche, jamais automatiquement (voir sql/archivage_dossiers.sql).
+   La liste principale exclut les dossiers archivés par défaut ; ce bouton
+   bascule vers la vue inverse, comme pour les fiches incomplètes. */
+function enfIsArchived(e){
+  return !!e.archive_le;
+}
+// « Sorti » : date de sortie passée, mais pas encore archivé — c'est ce qui
+// déclenche l'affichage du bouton « Archiver ce dossier » sur la fiche.
+function enfIsSorti(e){
+  return !enfIsArchived(e) && !!e.date_sortie && e.date_sortie <= todayStr();
+}
+function enfToggleArchived(){
+  enfShowArchivedOnly = !enfShowArchivedOnly;
+  const btn=document.getElementById('enf-archived-toggle');
+  if(btn){btn.style.background = enfShowArchivedOnly ? '#EEEDF8' : '';btn.style.borderColor = enfShowArchivedOnly ? 'var(--koala)' : '';}
+  enfRender();
+}
+
 function enfInit(){
   // remplir le sélecteur crèche (direction)
   const sel = document.getElementById('enf-creche-select');
@@ -69,6 +90,11 @@ function enfGetListe(opts){
   if(!opts.skipIncompleteFilter && enfShowIncompleteOnly){
     list = list.filter(enfIsIncomplete);
   }
+  // Les dossiers archivés sont exclus de la vue par défaut : ils ne sortent
+  // que via le bouton « Voir les archives », qui inverse le filtre.
+  if(!opts.skipArchivedFilter){
+    list = list.filter(e=>enfIsArchived(e)===enfShowArchivedOnly);
+  }
   const q = ((document.getElementById('enf-search')||{}).value || '').trim().toLowerCase();
   if(q){
     list = list.filter(e=>((e.prenom||'')+' '+(e.nom||'')).toLowerCase().includes(q));
@@ -84,9 +110,15 @@ function enfRender(){
   // Badge de comptage sur le bouton, calculé sur le périmètre crèche mais avant filtre incomplet/recherche.
   const countBadge = document.getElementById('enf-incomplete-count');
   if(countBadge){
-    const n = enfGetListe({skipIncompleteFilter:true}).filter(enfIsIncomplete).length;
+    const n = enfGetListe({skipIncompleteFilter:true,skipArchivedFilter:true}).filter(e=>!enfIsArchived(e)).filter(enfIsIncomplete).length;
     countBadge.textContent = n;
     countBadge.style.display = n>0 ? '' : 'none';
+  }
+  const archivedBadge = document.getElementById('enf-archived-count');
+  if(archivedBadge){
+    const n = enfGetListe({skipArchivedFilter:true}).filter(enfIsArchived).length;
+    archivedBadge.textContent = n;
+    archivedBadge.style.display = n>0 ? '' : 'none';
   }
   // Bouton de nettoyage des fausses fiches « Totaux » (toutes crèches confondues, direction only).
   const cleanupBtn = document.getElementById('enf-cleanup-totaux-btn');
@@ -97,14 +129,16 @@ function enfRender(){
     if(cleanupCount){cleanupCount.textContent = nBogus;cleanupCount.style.display = nBogus>0 ? '' : 'none';}
   }
   if(!enfants.length){
-    el.innerHTML = '<div class="empty-state"><i class="ti ti-mood-kid"></i><p>'+(enfShowIncompleteOnly?'Aucune fiche incomplète 🎉':'Aucun enfant.')+'</p></div>';
+    el.innerHTML = '<div class="empty-state"><i class="ti ti-mood-kid"></i><p>'+(enfShowArchivedOnly?'Aucun dossier archivé.':(enfShowIncompleteOnly?'Aucune fiche incomplète 🎉':'Aucun enfant.'))+'</p></div>';
     return;
   }
   el.innerHTML = enfants.map(e=>{
     const creche = cacheCreches.find(c=>c.id===e.creche_id);
     const grp = e.dob ? groupeFromDob(e.dob) : (e.groupe||'');
     const incomplete = enfIsIncomplete(e);
-    const warn = incomplete ? '<span title="Fiche incomplète : date de naissance ou allergies non renseignées" style="color:#e8a33d;font-size:15px;flex-shrink:0"><i class="ti ti-alert-triangle"></i></span>' : '';
+    let warn = incomplete ? '<span title="Fiche incomplète : date de naissance ou allergies non renseignées" style="color:#e8a33d;font-size:15px;flex-shrink:0"><i class="ti ti-alert-triangle"></i></span>' : '';
+    if(enfIsArchived(e)) warn = '<span style="background:var(--koala-light);color:var(--koala);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">Archivé</span>';
+    else if(enfIsSorti(e)) warn += '<span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">Sorti</span>';
     return '<button onclick="enfOpenFiche(\''+e.id+'\')" style="width:100%;text-align:left;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;box-shadow:0 1px 4px rgba(61,53,128,0.07)">'
       + '<div style="display:flex;align-items:center;gap:12px;min-width:0">'
       + '<span style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:var(--koala-light);color:var(--koala);display:inline-flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-mood-kid"></i></span>'
@@ -161,6 +195,7 @@ async function enfOpenFiche(id){
   document.getElementById('enf-dossier-box').innerHTML = '';
   document.getElementById('enf-pieces-dossier-box').innerHTML = '';
   document.getElementById('enf-admin-docs-zone').innerHTML = '';
+  document.getElementById('enf-doc-ext-zone').innerHTML = '';
   document.getElementById('enf-fiche-sanitaire-zone').innerHTML = '';
   document.getElementById('enf-pai-zone').innerHTML = '';
   enfRenderSuiviZone(e.id);
@@ -175,6 +210,7 @@ async function enfOpenFiche(id){
   enfLoadCarnet(e.id);
   enfLoadPai(e.id);
   enfLoadVaccinsStatus(e.id);
+  enfLoadDocExt(e.id);
 }
 
 const ENF_FICHE_TABS = ['identite','parents','contrat','documents'];
@@ -247,14 +283,80 @@ function enfRenderIdentite(){
         e.dob ? escHtml(vacFmtDate(e.dob)) : '')
     + row('Groupe', escHtml(grp))
     + row('Crèche', creche?escHtml(creche.name):'')
+    + row('Date de sortie', e.date_sortie ? escHtml(vacFmtDate(e.date_sortie)) : '')
+    + row('Statut du dossier', enfStatutBadge(e))
     + row('Allergies', escHtml(e.allergies||''))
     + row('Protection', e.taille_couche ? escHtml((e.type_couche==='culotte'?'Couche-culotte':'Couche classique')+' — taille '+e.taille_couche) : '')
     + row('Repas', enfRepasFicheLigne(e))
     + row('Goûter', enfGouterFicheLigne(e))
     + row('Code image (kiosque)', kkPictosLigne(e.code_pictos))
     + '<div style="display:flex;gap:6px;justify-content:flex-end;margin:-4px 0 10px;flex-wrap:wrap">'+kkPictosActions(e.id,e.creche_id,e.code_pictos)+'</div>'
+    + enfArchivageBox(e)
     + '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn-primary" onclick="editEnfant(\''+e.id+'\')"><i class="ti ti-edit"></i> Modifier la fiche</button></div>';
 }
+
+/* ===================== ARCHIVAGE (suite) : badge de statut + bloc d'action
+   sur la fiche. Le délai de conservation (5 ans après la sortie, prescription
+   contractuelle — voir la proposition d'archivage) n'est affiché qu'à titre
+   indicatif ici : rien n'est purgé automatiquement, c'est à la direction de
+   s'en charger le moment venu. */
+function enfDatePlusAns(iso,ans){
+  const d=new Date(iso+'T00:00:00');
+  d.setFullYear(d.getFullYear()+ans);
+  return d.toISOString().slice(0,10);
+}
+function enfStatutBadge(e){
+  if(enfIsArchived(e)){
+    return '<span style="background:var(--koala-light);color:var(--koala);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">Archivé le '+escHtml(vacFmtDate(e.archive_le.slice(0,10)))+'</span>';
+  }
+  if(enfIsSorti(e)){
+    return '<span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">Sorti</span>';
+  }
+  return '<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">Actif</span>';
+}
+function enfArchivageBox(e){
+  if(enfIsArchived(e)){
+    const purge=e.date_sortie?enfDatePlusAns(e.date_sortie,5):null;
+    return '<div style="background:var(--koala-light);border-left:4px solid var(--koala);border-radius:0 8px 8px 0;padding:10px 14px;margin-top:10px;font-size:12.5px;color:var(--koala-dark)">'
+      +'<i class="ti ti-archive"></i> Dossier archivé le '+escHtml(vacFmtDate(e.archive_le.slice(0,10)))+'.'
+      +(purge?' Conservation légale recommandée jusqu\'au '+escHtml(vacFmtDate(purge))+' (5 ans après la sortie), au-delà duquel le dossier peut être purgé/anonymisé.':'')
+      +'<div style="margin-top:8px"><button class="btn-sm" onclick="enfDesarchiverDossier(\''+e.id+'\')"><i class="ti ti-archive-off"></i> Réactiver ce dossier</button></div>'
+      +'</div>';
+  }
+  if(enfIsSorti(e)){
+    return '<div style="background:var(--orange-light,#FDEBD8);border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:10px 14px;margin-top:10px;font-size:12.5px;color:var(--orange-dark,#a15a12)">'
+      +'<i class="ti ti-alert-triangle"></i> Ce dossier est sorti depuis le '+escHtml(vacFmtDate(e.date_sortie))+'. '
+      +'Une fois les documents à jour, il peut être archivé pour sortir des listes actives.'
+      +'<div style="margin-top:8px"><button class="btn-sm" onclick="enfArchiverDossier(\''+e.id+'\')"><i class="ti ti-archive"></i> Archiver ce dossier</button></div>'
+      +'</div>';
+  }
+  return '';
+}
+async function enfArchiverDossier(id){
+  const e=cacheEnfants.find(x=>String(x.id)===String(id));
+  if(!e)return;
+  if(!confirm('Archiver le dossier de '+(e.prenom||'')+' '+(e.nom||'')+' ?\n\nLe dossier sortira des listes actives (planning, présences…) mais reste consultable dans les archives. Cette action est réversible.'))return;
+  const row={archive_le:new Date().toISOString(),archive_par:currentUser?currentUser.id:null};
+  const ok=await dbUpdateStrict('enfants',id,row);
+  if(!ok){showBanner('Erreur lors de l\'archivage'+(window._lastDbError?' : '+window._lastDbError:'.'),'error');return;}
+  Object.assign(e,row);
+  enfRenderIdentite();
+  enfRender();
+  showBanner('Dossier archivé.');
+}
+window.enfArchiverDossier=enfArchiverDossier;
+async function enfDesarchiverDossier(id){
+  if(!confirm('Réactiver ce dossier et le remettre dans les listes actives ?'))return;
+  const row={archive_le:null,archive_par:null};
+  const ok=await dbUpdateStrict('enfants',id,row);
+  if(!ok){showBanner('Erreur.','error');return;}
+  const e=cacheEnfants.find(x=>String(x.id)===String(id));
+  if(e)Object.assign(e,row);
+  enfRenderIdentite();
+  enfRender();
+  showBanner('Dossier réactivé.');
+}
+window.enfDesarchiverDossier=enfDesarchiverDossier;
 
 /* ===================== CODE DE POINTAGE (tablette sans compte) =====================
    Le code lui-même (4 chiffres, colonne enfants.code_pointage / referents.code_pointage)
@@ -1623,6 +1725,112 @@ window.enfAdminDocOpen = enfAdminDocOpen;
 window.enfAdminDocDelete = enfAdminDocDelete;
 window.enfHandleAdminDocUpload = enfHandleAdminDocUpload;
 window.enfOpenPieceUpload = enfOpenPieceUpload;
+
+/* ===== DOCUMENTS SUR SUPPORT EXTERNE (registre papier/coffre-fort) =========
+   Table documents_externes (voir sql/documents_externes.sql) : ne stocke
+   aucun fichier, juste la trace qu'une pièce existe et où elle est
+   physiquement conservée — utile pour les pièces qu'on ne numérise pas (ex.
+   extrait de casier judiciaire, à ne pas conserver après vérification). Le
+   délai de conservation est calculé côté base, selon la catégorie choisie. */
+const ENF_DOC_EXT_SUPPORTS = {papier:'Papier','coffre-fort':'Coffre-fort',classeur:'Classeur',autre:'Autre'};
+const ENF_DOC_EXT_CATEGORIES = {identite:'Identité',sante:'Santé',comptable:'Comptable',rh:'RH',autre:'Autre'};
+
+let enfDocExtCache = [];
+async function enfLoadDocExt(enfantId){
+  try{
+    const{data,error}=await sb.from('documents_externes')
+      .select('*')
+      .eq('entite_type','enfant')
+      .eq('entite_id',enfantId)
+      .order('created_at',{ascending:false});
+    if(error) throw error;
+    enfDocExtCache = data||[];
+  }catch(err){
+    console.warn('enfLoadDocExt',err);
+    enfDocExtCache = [];
+  }
+  if(String(enfFicheId)!==String(enfantId)) return;
+  enfRenderDocExt();
+}
+
+function enfRenderDocExt(){
+  const zone=document.getElementById('enf-doc-ext-zone');
+  if(!zone) return;
+  const ligne=d=>{
+    const detruit = d.detruit_le
+      ? '<span style="background:var(--koala-light);color:var(--koala);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">Détruit le '+new Date(d.detruit_le).toLocaleDateString('fr-FR')+'</span>'
+      : '<button class="btn-sm" onclick="enfDocExtDetruire(\''+d.id+'\')" title="Marquer cette pièce comme détruite/restituée" style="font-size:11px;padding:3px 8px"><i class="ti ti-flame"></i> Marquer détruit</button>';
+    return '<div style="border-bottom:1px solid var(--border);padding:9px 2px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      +'<div>'
+      +'<span style="font-size:12.5px;font-weight:600;color:var(--koala-dark)">'+escHtml(d.libelle)+'</span> '
+      +'<span style="font-size:11px;color:var(--muted)">'+(ENF_DOC_EXT_SUPPORTS[d.support]||d.support)+' · '+(ENF_DOC_EXT_CATEGORIES[d.categorie]||d.categorie)+(d.lieu_conservation?' · '+escHtml(d.lieu_conservation):'')+'</span>'
+      +(d.date_destruction_prevue&&!d.detruit_le?'<div style="font-size:11px;color:var(--muted)">Conservation jusqu\'au '+new Date(d.date_destruction_prevue).toLocaleDateString('fr-FR')+'</div>':'')
+      +(d.notes?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+escHtml(d.notes)+'</div>':'')
+      +'</div>'
+      +'<span style="display:flex;align-items:center;gap:6px;flex-shrink:0">'+detruit
+      +'<button onclick="enfDocExtDelete(\''+d.id+'\')" title="Supprimer cette entrée du registre" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:14px"><i class="ti ti-trash"></i></button>'
+      +'</span></div></div>';
+  };
+  zone.innerHTML =
+      (enfDocExtCache.length
+        ? enfDocExtCache.map(ligne).join('')
+        : '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Aucune pièce enregistrée sur support externe.</div>')
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">'
+      + '<input class="finput" id="enf-doc-ext-libelle" placeholder="Libellé (ex. extrait de casier judiciaire)" style="flex:2;min-width:180px;font-size:12px;padding:5px 8px">'
+      + '<select class="finput" id="enf-doc-ext-support" style="flex:1;min-width:110px;font-size:12px;padding:5px 8px">'
+        + Object.keys(ENF_DOC_EXT_SUPPORTS).map(k=>'<option value="'+k+'">'+ENF_DOC_EXT_SUPPORTS[k]+'</option>').join('')
+      + '</select>'
+      + '<select class="finput" id="enf-doc-ext-categorie" style="flex:1;min-width:110px;font-size:12px;padding:5px 8px">'
+        + Object.keys(ENF_DOC_EXT_CATEGORIES).map(k=>'<option value="'+k+'">'+ENF_DOC_EXT_CATEGORIES[k]+'</option>').join('')
+      + '</select>'
+      + '<input class="finput" id="enf-doc-ext-lieu" placeholder="Lieu de conservation (ex. classeur crèche, tiroir 2)" style="flex:2;min-width:180px;font-size:12px;padding:5px 8px">'
+      + '<button class="btn-sm" onclick="enfDocExtAdd()"><i class="ti ti-plus"></i> Ajouter</button>'
+    + '</div>';
+}
+
+async function enfDocExtAdd(){
+  const eid=enfFicheId;
+  const libelle=(document.getElementById('enf-doc-ext-libelle').value||'').trim();
+  if(!libelle){document.getElementById('enf-doc-ext-libelle').focus();return;}
+  const row={
+    entite_type:'enfant',
+    entite_id:eid,
+    libelle,
+    support:document.getElementById('enf-doc-ext-support').value||'papier',
+    categorie:document.getElementById('enf-doc-ext-categorie').value||'autre',
+    lieu_conservation:(document.getElementById('enf-doc-ext-lieu').value||'').trim()||null,
+    created_by:currentUser?currentUser.id:null
+  };
+  const{data,error}=await sb.from('documents_externes').insert(row).select().single();
+  if(error){showBanner('Erreur lors de l\'ajout : '+error.message,'error');return;}
+  enfDocExtCache.unshift(data);
+  enfRenderDocExt();
+  showBanner('Pièce ajoutée au registre.');
+}
+window.enfDocExtAdd=enfDocExtAdd;
+
+async function enfDocExtDetruire(id){
+  if(!confirm('Marquer cette pièce comme détruite / restituée aujourd\'hui ?'))return;
+  const row={detruit_le:todayStr(),detruit_par:currentUser?currentUser.id:null};
+  const{error}=await sb.from('documents_externes').update(row).eq('id',id);
+  if(error){showBanner('Erreur : '+error.message,'error');return;}
+  const d=enfDocExtCache.find(x=>String(x.id)===String(id));
+  if(d)Object.assign(d,row);
+  enfRenderDocExt();
+  showBanner('Pièce marquée détruite.');
+}
+window.enfDocExtDetruire=enfDocExtDetruire;
+
+async function enfDocExtDelete(id){
+  if(!confirm('Supprimer cette entrée du registre ? (la pièce physique elle-même n\'est pas concernée, seule la trace ici disparaît)'))return;
+  const{error}=await sb.from('documents_externes').delete().eq('id',id);
+  if(error){showBanner('Erreur : '+error.message,'error');return;}
+  enfDocExtCache=enfDocExtCache.filter(x=>String(x.id)!==String(id));
+  enfRenderDocExt();
+  showBanner('Entrée supprimée.');
+}
+window.enfDocExtDelete=enfDocExtDelete;
 
 /* ===== PAI — Projet d'Accueil Individualisé (fiche enfant) =================
    Documents liés au PAI d'un enfant (protocole, ordonnances associées...) :

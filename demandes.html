@@ -1058,6 +1058,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </select>
         <input class="finput" id="enf-search" placeholder="Rechercher un enfant…" style="width:auto;min-width:180px;font-size:12px;padding:4px 8px" oninput="enfRender()">
         <button class="btn-sm" id="enf-incomplete-toggle" style="font-size:11px;padding:5px 10px;display:flex;align-items:center;gap:5px" onclick="enfToggleIncomplete()" title="N'afficher que les fiches où la date de naissance ou les allergies n'ont jamais été renseignées"><i class="ti ti-alert-triangle" style="color:#e8a33d"></i> Fiches à compléter<span id="enf-incomplete-count" style="display:none;background:#e8a33d;color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700"></span></button>
+        <button class="btn-sm" id="enf-archived-toggle" style="font-size:11px;padding:5px 10px;display:flex;align-items:center;gap:5px" onclick="enfToggleArchived()" title="Basculer entre les dossiers actifs et les dossiers archivés (enfants sortis)"><i class="ti ti-archive"></i> Voir les archives<span id="enf-archived-count" style="display:none;background:var(--muted);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700"></span></button>
         <button class="btn-sm direction-only" id="enf-cleanup-totaux-btn" style="font-size:11px;padding:5px 10px;display:none;align-items:center;gap:5px;color:var(--red);border-color:var(--red)" onclick="enfCleanupTotauxFaux()" title="Supprime les fausses fiches « Totaux … » créées par un bug de l'import PDF"><i class="ti ti-trash"></i> Nettoyer les fiches « Totaux »<span id="enf-cleanup-totaux-count" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700"></span></button>
         <button class="btn-sm" onclick="icpOuvrir()" style="font-size:11px;padding:5px 10px;display:flex;align-items:center;gap:5px" title="Lire la liste PDF des coordonnées et créer les parents dans les fiches enfants"><i class="ti ti-address-book"></i> Importer les coordonnées (PDF)</button>
         <button class="btn-primary" onclick="openEnfantModal()"><i class="ti ti-plus"></i> Ajouter un enfant</button>
@@ -1095,6 +1096,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <div style="padding:13px 15px">
               <div id="enf-pieces-dossier-box"></div>
               <div id="enf-admin-docs-zone" style="margin-top:14px"></div>
+            </div>
+          </div>
+          <!-- Registre des pièces conservées hors appli (papier, coffre-fort,
+               classeur RH...) : trace leur existence et leur lieu de
+               conservation sans les scanner — voir sql/documents_externes.sql. -->
+          <div style="border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden">
+            <div style="background:var(--koala-light);padding:10px 15px;font-weight:700;font-size:13.5px;color:var(--koala-dark);display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border)">
+              <i class="ti ti-archive"></i> Documents sur support externe</div>
+            <div style="padding:13px 15px">
+              <div id="enf-doc-ext-zone"></div>
             </div>
           </div>
           <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">
@@ -2358,7 +2369,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label class="flabel">Date de naissance</label><input class="finput" id="enf-dob" type="date" onchange="enfSyncGroupe()"/></div>
       <div class="fg"><label class="flabel">Groupe <span style="font-weight:400;color:var(--muted);font-size:11px">(calculé selon l'âge)</span></label><select class="finput" id="enf-groupe" disabled style="background:#f4f4f8;cursor:not-allowed"><option>Bébés (0-1 an)</option><option>Moyens (1-2 ans)</option><option>Grands (2-3 ans)</option></select></div>
     </div>
-    <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="enf-creche"><option value="">-- Choisir --</option></select></div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="enf-creche"><option value="">-- Choisir --</option></select></div>
+      <div class="fg"><label class="flabel">Date de sortie <span style="font-weight:400;color:var(--muted);font-size:11px">(fin de contrat d'accueil)</span></label><input class="finput" id="enf-date-sortie" type="date"/></div>
+    </div>
     <div class="fg"><label class="flabel">Régime alimentaire / allergies</label><input class="finput" id="enf-allergies" placeholder="Ex. : sans gluten, allergie aux arachides"/></div>
     <div class="frow">
       <div class="fg"><label class="flabel">Protection <span style="font-weight:400;color:var(--muted);font-size:11px">(décompte automatique du stock à chaque change)</span></label>
@@ -6977,8 +6991,8 @@ function enfFillCreches(selectedId){
   sel.style.background=isDirection?'':'#f4f4f8';
   sel.style.cursor=isDirection?'':'not-allowed';
 }
-function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';document.getElementById('enf-avert-provisoire').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';document.getElementById('enf-gouter-base').value='';document.getElementById('enf-type-couche').value='couche';enfSyncTailleCouche('');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');document.getElementById('enf-avert-provisoire').style.display=e.naissance_provisoire?'':'none';enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';document.getElementById('enf-gouter-base').value=e.gouter_base||'';document.getElementById('enf-type-couche').value=e.type_couche||'couche';enfSyncTailleCouche(e.taille_couche||'');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';document.getElementById('enf-avert-provisoire').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies','enf-date-sortie'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';document.getElementById('enf-gouter-base').value='';document.getElementById('enf-type-couche').value='couche';enfSyncTailleCouche('');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');document.getElementById('enf-avert-provisoire').style.display=e.naissance_provisoire?'':'none';enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-date-sortie').value=e.date_sortie||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';document.getElementById('enf-gouter-base').value=e.gouter_base||'';document.getElementById('enf-type-couche').value=e.type_couche||'couche';enfSyncTailleCouche(e.taille_couche||'');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
 /* Écriture d'une fiche enfant tolérante aux colonnes optionnelles absentes.
    `repas_base` et `gouter_base` sont ajoutées par des migrations SQL distinctes :
    si l'une manque, Postgres nomme la colonne fautive et on la retire du payload
@@ -7013,6 +7027,7 @@ async function saveEnfant(){
     dob:document.getElementById('enf-dob').value||null,
     groupe:groupeFromDob(document.getElementById('enf-dob').value),
     creche_id:document.getElementById('enf-creche').value,
+    date_sortie:document.getElementById('enf-date-sortie').value||null,
     allergies:document.getElementById('enf-allergies').value.trim(),
     regime_repas:document.getElementById('enf-regime-repas').value||null,
     repas_base:document.getElementById('enf-repas-base').value||null,
