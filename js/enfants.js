@@ -1163,12 +1163,11 @@ function enfRenderFicheSanitaireZone(){
   if(!zone) return;
   const e=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
   const docs=packPapierSanitaire(e);
-  if(!docs.length){ zone.innerHTML=''; return; }
-  zone.innerHTML='<div style="background:var(--koala-light);border:1px solid var(--border);border-radius:12px;padding:13px 15px">'
-    +'<div style="font-weight:700;font-size:13.5px;color:var(--koala-dark);margin-bottom:7px">'
-    +'<i class="ti ti-file-heart"></i> Fiche sanitaire</div>'
-    + docs.map(enfPapierDocRowHtml).join('')
-    +'</div>';
+  if(!docs.length){
+    zone.innerHTML='<div style="font-size:12px;color:var(--muted)">Aucun document configuré (voir l\'outil Documents, type « À télécharger »).</div>';
+    return;
+  }
+  zone.innerHTML=docs.map(enfPapierDocRowHtml).join('');
 }
 
 /* Lien direct vers la synthèse du jour de cet enfant dans suivi.html — mode
@@ -1664,8 +1663,7 @@ function enfRenderPai(){
     +'<button onclick="enfPaiDelete(\''+d.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:15px"><i class="ti ti-trash"></i></button>'
     +'</div>'
   ).join('') : '<div style="font-size:12px;color:var(--muted)">Aucun document PAI pour le moment.</div>';
-  zone.innerHTML = '<div style="font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-first-aid-kit" style="color:var(--koala)"></i> PAI (Projet d\'Accueil Individualisé)</div>'
-    + '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">'+list+'</div>'
+  zone.innerHTML = '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">'+list+'</div>'
     + '<button class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;font-size:12.5px" onclick="document.getElementById(\'enf-pai-input\').click()"><i class="ti ti-upload"></i> Importer un document PAI</button>'
     + '<span id="enf-pai-input-status" style="margin-left:10px;font-size:12px;color:var(--muted)"></span>'
     + '<input type="file" id="enf-pai-input" accept="image/*,application/pdf" multiple style="display:none" onchange="enfHandlePaiUpload(event)"/>';
@@ -1748,7 +1746,7 @@ function enfRenderVaccins(enfantId){
   if(!zone) return;
   const e=cacheEnfants.find(x=>String(x.id)===String(enfantId));
   if(!e){zone.innerHTML='';return;}
-  const titre='<div style="font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-vaccine" style="color:var(--koala)"></i> Vaccinations</div>';
+  const titre='';   // le titre « Vaccinations » est désormais porté par la sous-carte HTML (voir demandes.html)
   if(!e.dob){
     zone.innerHTML=titre+'<div style="font-size:12px;color:var(--muted)">Date de naissance manquante : impossible de calculer les échéances vaccinales.</div>';
     return;
