@@ -244,6 +244,7 @@ function mondayOfISO(dateStr){
 function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function addDays(dateStr,n){const d=new Date(dateStr+'T00:00:00');d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
+function numSemaine(dateStr){const d=new Date(dateStr+'T00:00:00');const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const jour=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-jour);const debut=new Date(Date.UTC(t.getUTCFullYear(),0,1));return Math.ceil(((t-debut)/86400000+1)/7);}
 
 /* ---------- AUTH ---------- */
 /* MFA (TOTP) obligatoire, comme dans les modules direction/directrice technique
@@ -535,7 +536,7 @@ async function changeSemaine(n){
 const PLANNING_LABELS={present:'Présence',presence:'Présence',absent:'Absent(e)',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
 async function loadPlanning(){
   const grid=document.getElementById('planningGrid');
-  document.getElementById('semaineLabel').textContent='Semaine du '+dfr(semaineDate);
+  document.getElementById('semaineLabel').textContent='Semaine du '+dfr(semaineDate)+' (S'+numSemaine(semaineDate)+')';
   let rows,error;
   if(COLLAB_TYPE==='referent'){
     ({data:rows,error}=await sb.from('planning').select('*')
@@ -578,7 +579,7 @@ function dureeStr(mins){const h=Math.floor(mins/60),m=Math.round(mins%60);return
 
 async function loadPointages(){
   const grid=document.getElementById('pointagesGrid');
-  document.getElementById('semaineLabelPt').textContent='Semaine du '+dfr(semaineDate);
+  document.getElementById('semaineLabelPt').textContent='Semaine du '+dfr(semaineDate)+' (S'+numSemaine(semaineDate)+')';
   const finExclusive=addDays(semaineDate,7);
   const{data,error}=await sb.from('pointages').select('action,horodatage')
     .eq(pointageCol(),COLLAB.id)

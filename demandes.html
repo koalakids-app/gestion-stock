@@ -5572,7 +5572,8 @@ async function renderPresenceHebdo(){
     const memeMois=days5[0].getMonth()===days5[4].getMonth();
     lblEl.textContent=days5[0].getDate()
       +(memeMois?'':' '+days5[0].toLocaleDateString('fr-FR',{month:'long'}))
-      +' au '+days5[4].toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+      +' au '+days5[4].toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})
+      +' (S'+hebdoNumSemaine(days5[0])+')';
   }
   const allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistré.</p></div>';_hebdoExportCtx=null;return;}
@@ -8474,7 +8475,7 @@ async function renderPlanning(){
   const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
-  document.getElementById('week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
+  document.getElementById('week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4])+' (S'+hebdoNumSemaine(days5[0])+')';
   const iAmCoord=currentProfile?.role==='direction';
   const userId=currentProfile?.id||currentUser?.id||'dir';
   const coord=getCoordRef();
@@ -9750,7 +9751,7 @@ async function rmpRenderWeek(){
   const ws=rmpWeekStart();
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-  document.getElementById('rmp-week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4]);
+  document.getElementById('rmp-week-label').textContent=fmt(days5[0])+' – '+fmt(days5[4])+' (S'+hebdoNumSemaine(days5[0])+')';
   const fromISO=rmpDateStr(days5[0]),toISO=rmpDateStr(days5[4]);
   document.getElementById('rmp-grid-semaine').innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
   await rmpFetchRange(fromISO,toISO);
