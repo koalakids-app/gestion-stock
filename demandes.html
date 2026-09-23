@@ -5761,7 +5761,9 @@ async function renderPresenceHebdo(){
      change l'effectif de l'autre, c'est la seule information qui mérite d'attirer l'œil ici. */
   const DEMI={m:'Matin',a:'Aprèm'};
   const ajd=ipDateToLocalISO(new Date());
-  const capacite=(cacheCreches.find(function(c){return c.id===crecheId;})||{}).capacity||null;
+  const _crecheEff=cacheCreches.find(function(c){return c.id===crecheId;})||{};
+  const capacite=_crecheEff.capacity||null;
+  const capaciteSurnombre=_crecheEff.capacity_surnombre||null;
   const FOND_PAIR='#FAFAFC';
   const jourCourant=function(i){return dateStrs[i]===ajd;};
   const fondCol=function(i,pair){return jourCourant(i)?'#F7F5FF':(pair?FOND_PAIR:'#fff');};
@@ -5799,7 +5801,10 @@ async function renderPresenceHebdo(){
   });
   grille+='<tr><td style="position:sticky;left:0;z-index:1;background:var(--koala-light);padding:10px 8px 10px 16px;font-size:12px;font-weight:700;color:var(--koala)">Effectif</td>';
   totalParJour.forEach(function(n,i){
-    const depasse=capacite&&n>capacite;
+    /* Le seuil d'alerte rouge est l'effectif max en cas de surnombre quand la
+       crèche a cette autorisation (accueil exceptionnel à 115%), sinon la
+       capacité agréée elle-même — voir sql/creches_capacite_surnombre.sql. */
+    const depasse=capacite&&n>(capaciteSurnombre||capacite);
     grille+='<td style="text-align:center;padding:10px 8px;font-size:12px;background:'+(jourCourant(i)?'#E4E0F5':'var(--koala-light)')+'">'
       +'<span style="font-weight:700;color:'+(depasse?'var(--red)':'var(--koala)')+'">'+n+'</span>'
       +(capacite?'<span style="font-weight:500;color:var(--muted);font-size:11px"> / '+capacite+'</span>':'')+'</td>';
