@@ -56,8 +56,41 @@ function enfIsArchived(e){
 }
 // « Sorti » : date de sortie passée, mais pas encore archivé — c'est ce qui
 // déclenche l'affichage du bouton « Archiver ce dossier » sur la fiche.
+// date_sortie n'est pas toujours remise à jour à chaque renouvellement de
+// contrat (elle peut dater d'une année scolaire précédente) : avant de
+// conclure qu'un enfant est sorti, on vérifie qu'aucun contrat (ancien
+// enfants_contrats ou nouveau contrats signé/contresigné) ne couvre encore
+// une date future — voir enfChargerContratsFin().
 function enfIsSorti(e){
-  return !enfIsArchived(e) && !!e.date_sortie && e.date_sortie <= todayStr();
+  if(enfIsArchived(e) || !e.date_sortie || e.date_sortie > todayStr()) return false;
+  const finContrat = enfContratsFinCache[e.id];
+  if(finContrat && finContrat > e.date_sortie) return false;
+  return true;
+}
+
+// Date de fin la plus tardive connue, tous contrats confondus (les deux
+// tables coexistent : enfants_contrats est l'ancien système, contrats le
+// nouveau avec signature). Chargé une fois à l'ouverture du module,
+// suffisant pour un indicateur — pas besoin de le retenir à jour à la
+// seconde près.
+let enfContratsFinCache = {};
+async function enfChargerContratsFin(){
+  try{
+    const[{data:ec},{data:c}]=await Promise.all([
+      sb.from('enfants_contrats').select('enfant_id,date_fin'),
+      sb.from('contrats').select('enfant_id,date_fin').in('statut',['signe','contresigne'])
+    ]);
+    const cache={};
+    (ec||[]).concat(c||[]).forEach(row=>{
+      if(!row.enfant_id||!row.date_fin)return;
+      if(!cache[row.enfant_id]||row.date_fin>cache[row.enfant_id])cache[row.enfant_id]=row.date_fin;
+    });
+    enfContratsFinCache=cache;
+  }catch(err){
+    console.warn('enfChargerContratsFin',err);
+  }
+  enfRender();
+  if(enfFicheId)enfRenderIdentite();
 }
 function enfToggleArchived(){
   enfShowArchivedOnly = !enfShowArchivedOnly;
@@ -74,6 +107,7 @@ function enfInit(){
       cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
   }
   enfRender();
+  enfChargerContratsFin();
 }
 
 function enfGetListe(opts){
