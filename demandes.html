@@ -1984,7 +1984,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="emp-prenom" placeholder="Julie"/></div>
       <div class="fg"><label class="flabel">Nom</label><input class="finput" id="emp-nom" placeholder="Petit"/></div>
     </div>
-    <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="emp-creche"><option value="">-- Choisir --</option></select></div>
+    <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="emp-creche" onchange="empUpdateEssaiFin()"><option value="">-- Choisir --</option></select></div>
     <div class="frow">
       <div class="fg"><label class="flabel">Poste</label><input class="finput" id="emp-poste" placeholder="Agent d'entretien"/></div>
       <div class="fg"><label class="flabel">E-mail (optionnel)</label><input class="finput" id="emp-email" type="email" placeholder="Pour l'envoi du code de pointage"/></div>
@@ -4467,20 +4467,47 @@ const EMP_TEXT_FIELDS=[
 const EMP_NUM_FIELDS=[['emp-heures-hebdo','heures_hebdo'],['emp-salaire-brut','salaire_brut']];
 
 /* Fin de la période d'essai : 2 mois après la date de début, 4 mois si
-   renouvelée une fois — même règle côté client (affichage immédiat dans la
-   fiche) que côté base (trigger kk_trg_set_periode_essai_fin, cf.
-   sql/employes_periode_essai_fin.sql), pour ne pas dépendre d'un aller-retour
-   serveur avant de pouvoir alerter. */
-function empPeriodeEssaiFin(dateDebut,renouvelee){
+   renouvelée une fois, puis reportée de la durée des fermetures "vacances"
+   (etablissements.jours_fermeture / reseau_config.jours_fermeture_reseau)
+   qui tombent dans la période — un congé pendant lequel la crèche est fermée
+   suspend l'essai comme n'importe quelle absence. En boucle car repousser la
+   fin peut faire entrer une nouvelle fermeture dans la fenêtre (ex : la fin
+   recalculée tombe juste avant les vacances de la Toussaint). Même règle
+   côté client (affichage immédiat dans la fiche) que côté base (trigger
+   kk_trg_set_periode_essai_fin, cf. sql/employes_periode_essai_fin.sql),
+   pour ne pas dépendre d'un aller-retour serveur avant de pouvoir alerter. */
+function empPeriodeEssaiFin(dateDebut,renouvelee,crecheId){
   if(!dateDebut)return null;
   const d=new Date(dateDebut+'T00:00:00');
   d.setMonth(d.getMonth()+(renouvelee?4:2));
-  return ipDateToLocalISO(d);
+  let fin=ipDateToLocalISO(d);
+  if(crecheId){
+    const vacances=fermeturesDe(crecheId).filter(f=>f&&f.type==='vacances'&&f.debut);
+    const comptees=new Set();
+    let changed=true;
+    while(changed){
+      changed=false;
+      for(const f of vacances){
+        const key=f.debut+'|'+(f.fin||f.debut);
+        if(comptees.has(key))continue;
+        const fFin=f.fin||f.debut;
+        if(f.debut>fin||fFin<dateDebut)continue;
+        comptees.add(key);
+        const jours=Math.round((new Date(fFin+'T00:00:00')-new Date(f.debut+'T00:00:00'))/86400000)+1;
+        const nd=new Date(fin+'T00:00:00');
+        nd.setDate(nd.getDate()+jours);
+        fin=ipDateToLocalISO(nd);
+        changed=true;
+      }
+    }
+  }
+  return fin;
 }
 function empUpdateEssaiFin(){
   const dd=document.getElementById('emp-date-debut').value;
   const renouvelee=document.getElementById('emp-periode-essai-renouvelee').checked;
-  const fin=empPeriodeEssaiFin(dd,renouvelee);
+  const crecheId=document.getElementById('emp-creche').value||(isDirection?null:currentProfile?.creche_id);
+  const fin=empPeriodeEssaiFin(dd,renouvelee,crecheId);
   const el=document.getElementById('emp-essai-fin-calc');
   el.textContent=fin?new Date(fin+'T00:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'}):'—';
 }
@@ -4602,7 +4629,7 @@ async function saveEmploye(){
   // Recalculée ici aussi (le trigger la refait de son côté) pour que le
   // cache local reste à jour tout de suite : dbUpdate ne relit pas la ligne
   // après écriture, contrairement à dbInsert.
-  row.periode_essai_fin=empPeriodeEssaiFin(row.date_debut,row.periode_essai_renouvelee);
+  row.periode_essai_fin=empPeriodeEssaiFin(row.date_debut,row.periode_essai_renouvelee,row.creche_id);
   const btn=document.getElementById('emp-btn-save');btn.disabled=true;
   try{
     if(editingEmployeId){
@@ -10674,7 +10701,7 @@ function periodesEssaiARelancer(crecheId){
   const seuil=ipDateToLocalISO(new Date(Date.now()+15*86400000));
   return cacheEmployes
     .filter(e=>e.date_debut&&!e.periode_essai_actee&&(!crecheId||String(e.creche_id)===String(crecheId)))
-    .map(e=>Object.assign({},e,{_essaiFin:empPeriodeEssaiFin(e.date_debut,e.periode_essai_renouvelee)}))
+    .map(e=>Object.assign({},e,{_essaiFin:empPeriodeEssaiFin(e.date_debut,e.periode_essai_renouvelee,e.creche_id)}))
     .filter(e=>e._essaiFin&&e._essaiFin<=seuil)
     .sort((a,b)=>a._essaiFin.localeCompare(b._essaiFin));
 }
