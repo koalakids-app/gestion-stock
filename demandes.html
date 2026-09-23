@@ -1995,6 +1995,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fg"><label class="flabel">Lieu de travail</label><input class="finput" id="emp-lieu-travail" placeholder="Par défaut, l'adresse de la crèche"/></div>
 
+    <div class="fg" id="emp-contrat-wrap" style="display:none">
+      <div style="font-size:12.5px;font-weight:800;color:var(--koala);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 10px">Contrat de travail signé</div>
+      <div id="emp-contrat-box"></div>
+      <p class="hint" style="margin-top:4px">Généré et signé depuis le module Documents (modèle « Contrat de travail (salarié) »),
+        en sélectionnant cette fiche dans le champ « Fiche collaborateur/trice » du formulaire.</p>
+    </div>
+
     <div class="info-box"><i class="ti ti-info-circle" style="font-size:15px"></i> Pas de compte de connexion créé — seulement une fiche, ces informations et un code de pointage.</div>
     <div class="mactions"><button class="btn-cancel" id="emp-btn-delete" style="display:none;color:var(--red)" onclick="deleteEmploye()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-employe-wrap')">Annuler</button><button class="btn-primary" id="emp-btn-save" onclick="saveEmploye()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
@@ -4420,6 +4427,10 @@ function openEmployeModal(){
   document.getElementById('emp-periode-essai-actee').checked=false;
   empUpdateEssaiFin();
   empFillCreches(null);
+  // Un contrat de travail ne peut être rattaché qu'à une fiche déjà créée
+  // (le sélecteur du formulaire de contrat a besoin d'un id) : rien à
+  // afficher tant que celle-ci n'existe pas encore.
+  document.getElementById('emp-contrat-wrap').style.display='none';
   document.getElementById('modal-employe-wrap').classList.add('open');
 }
 window.openEmployeModal=openEmployeModal;
@@ -4440,9 +4451,55 @@ function editEmploye(id){
   document.getElementById('emp-periode-essai-actee').checked=!!e.periode_essai_actee;
   empUpdateEssaiFin();
   empFillCreches(e.creche_id);
+  document.getElementById('emp-contrat-wrap').style.display='';
+  empLoadContratTravail(e.id);
   document.getElementById('modal-employe-wrap').classList.add('open');
 }
 window.editEmploye=editEmploye;
+
+/* ---------- CONTRAT DE TRAVAIL (module Documents) ----------
+   Le contrat n'est pas stocké dans `employes` : il vit dans
+   documents_reponses (modèle contrat_travail de documents.html), rattaché
+   à cette fiche via le sélecteur « Fiche collaborateur/trice » du
+   formulaire (donnees.salarie_employe_id). On ne fait ici qu'y donner un
+   accès direct, en lecture, depuis la fiche collaborateur/trice — pas de
+   duplication des données ni de génération de PDF ici. */
+async function empLoadContratTravail(employeId){
+  const box=document.getElementById('emp-contrat-box');
+  if(box)box.innerHTML='<p class="hint">Chargement…</p>';
+  try{
+    const{data:docs,error:eDocs}=await sb.from('documents_koala').select('id,titre').eq('template_key','contrat_travail');
+    if(eDocs)throw eDocs;
+    const docIds=(docs||[]).map(d=>d.id);
+    if(!docIds.length){if(box)box.innerHTML='<p class="hint">Aucun modèle « Contrat de travail » configuré dans le module Documents.</p>';return;}
+    const{data:reps,error:eReps}=await sb.from('documents_reponses')
+      .select('id,document_id,statut,updated_at,created_at,donnees')
+      .in('document_id',docIds).order('updated_at',{ascending:false});
+    if(eReps)throw eReps;
+    const mine=(reps||[]).filter(r=>r.donnees&&r.donnees.salarie_employe_id===employeId);
+    if(!mine.length){
+      if(box)box.innerHTML='<p class="hint">Aucun contrat de travail rattaché à cette fiche pour l’instant.</p>';
+      return;
+    }
+    if(box)box.innerHTML=mine.map(r=>{
+      const doc=(docs||[]).find(d=>d.id===r.document_id)||{};
+      const url='documents.html?doc='+encodeURIComponent(r.document_id)+'&rep='+encodeURIComponent(r.id);
+      const badge=r.statut==='signe'
+        ?'<span style="background:var(--green-l,#E8F5E9);color:var(--green,#2E7D32);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ Signé</span>'
+        :'<span style="background:var(--orange-light);color:var(--orange-dark);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⏳ En préparation</span>';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'
+        +'<div><div style="font-size:12.5px;font-weight:600">'+escHtml(doc.titre||'Contrat de travail')+'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+new Date(r.updated_at||r.created_at).toLocaleDateString('fr-FR')+'</div></div>'
+        +badge
+        +'<a href="'+escHtml(url)+'" target="_blank" class="btn-sm"><i class="ti ti-eye"></i> Ouvrir</a>'
+        +'</div>';
+    }).join('');
+  }catch(err){
+    console.warn('empLoadContratTravail',err);
+    if(box)box.innerHTML='<p class="hint">Contrat indisponible pour le moment.</p>';
+  }
+}
+window.empLoadContratTravail=empLoadContratTravail;
 
 async function saveEmploye(){
   const prenom=document.getElementById('emp-prenom').value.trim();
