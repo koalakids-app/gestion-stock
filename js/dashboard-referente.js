@@ -120,6 +120,10 @@ async function loadRefDashAlertesExtra(crecheId,urgentesHtml){
     const box=document.getElementById('ref-dash-alerts');if(!box)return;
     let html=urgentesHtml;
     if(vacc.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'vaccinations\')"><i class="ti ti-vaccine" style="font-size:16px;flex-shrink:0"></i> <strong>'+vacc.length+' vaccination(s) en retard</strong></div>';
+    if(typeof periodesEssaiARelancer==='function'){
+      const essai=periodesEssaiARelancer(crecheId);
+      if(essai.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'employes\')"><i class="ti ti-hourglass" style="font-size:16px;flex-shrink:0"></i> <strong>'+essai.length+' période(s) d\'essai</strong> à échéance</div>';
+    }
     if(dossiers.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'enfants\')"><i class="ti ti-mail-forward" style="font-size:16px;flex-shrink:0"></i> <strong>'+dossiers.length+' dossier(s) famille</strong> à relancer</div>';
     // Les devis et préinscriptions vivent dans inscriptions.html, pas dans un
     // onglet de cette page : un vrai lien plutôt qu'un showMain(). Le lien
@@ -271,6 +275,10 @@ function renderDashboard(){
   if(urgentD>0)alerts+='<div class="alert-item" style="cursor:pointer" onclick="showMain(\'demands\')"><i class="ti ti-alert-triangle" style="font-size:16px;flex-shrink:0"></i> <strong>'+urgentD+' demande(s) urgente(s)</strong> en attente</div>';
   if(incGrave>0)alerts+='<div class="alert-item" style="cursor:pointer" onclick="showMain(\'incidents\')"><i class="ti ti-stethoscope" style="font-size:16px;flex-shrink:0"></i> <strong>'+incGrave+' incident(s) grave(s)</strong></div>';
   if(incNT>0)alerts+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'incidents\')"><i class="ti ti-clipboard-list" style="font-size:16px;flex-shrink:0"></i> <strong>'+incNT+' incident(s)</strong> non traité(s)</div>';
+  if(typeof periodesEssaiARelancer==='function'){
+    const essai=periodesEssaiARelancer(null);
+    if(essai.length)alerts+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'employes\')"><i class="ti ti-hourglass" style="font-size:16px;flex-shrink:0"></i> <strong>'+essai.length+' période(s) d\'essai</strong> à échéance</div>';
+  }
   document.getElementById('dash-alerts').innerHTML=alerts;
   loadDashboardVaccAlertes();
   loadDashboardDossiersAlertes();
