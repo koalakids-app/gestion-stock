@@ -1147,14 +1147,12 @@ async function afficherDetailOrdi(){
         ?`<span class="pill publiee" style="font-size:13px;padding:8px 14px">Publiée le ${new Date(synthese.publiee_le).toLocaleString('fr-FR')}</span>`
         :requiertValidation
           ?(estValidee
-            ?`<button class="btn btn-p" id="btnPublier" ${depart?'':'disabled'}><i class="ti ti-send"></i> Publier à la famille</button>
-              ${depart?'':'<span style="color:var(--muted);font-size:12.5px">Dernier jour d’accueil de la période non encore pointé au départ.</span>'}`
+            ?`<span style="color:var(--muted);font-size:12.5px">Publication à la famille désactivée — le suivi est désormais un outil interne à l'équipe.</span>`
             :`<button class="btn btn-s" id="btnEnregistrer" style="background:#F1EFF7;color:var(--violet)"><i class="ti ti-device-floppy"></i> Enregistrer le brouillon</button>
               <button class="btn btn-p" id="btnValiderRef" ${valideRef?'disabled':''}><i class="ti ti-check"></i> ${valideRef?'Validé par la référente':'Valider (référente)'}</button>
               ${requiertDirection?`<button class="btn btn-p" id="btnValiderDir" ${(!IS_DIRECTION||valideDir)?'disabled':''}><i class="ti ti-check"></i> ${valideDir?'Validé par la direction':'Valider (direction)'}</button>`:''}`
           )
-          :`<button class="btn btn-p" id="btnPublier" ${depart?'':'disabled'}><i class="ti ti-send"></i> Publier à la famille</button>
-            ${depart?'':'<span style="color:var(--muted);font-size:12.5px">Dernier jour d’accueil de la période non encore pointé au départ.</span>'}`
+          :`<span style="color:var(--muted);font-size:12.5px">Publication à la famille désactivée — le suivi est désormais un outil interne à l'équipe.</span>`
       }
     </div>
     <div class="mention2">Repères élaborés par l'équipe Koala Kids, inspirés des travaux de Francine Ferland.</div>
@@ -1184,60 +1182,15 @@ function suiviFamilleLienFor(token){
   catch(e){return location.href.replace(/[^/]*$/,'')+'famille-suivi.html?t='+token;}
 }
 
+/* Accès famille désactivé : le suivi de l'enfant est désormais un outil
+   interne à l'équipe, plus rien n'est transmis aux parents. On laisse la
+   table suivi_acces_famille et l'edge function suivi-famille en place
+   (au cas où la fonctionnalité serait réactivée plus tard), on coupe
+   juste la création/consultation de nouveaux accès depuis l'UI. */
 async function renderAccesFamille(enfantId){
   const zone=document.getElementById('accesFamilleZone');
   if(!zone)return;
-  zone.innerHTML='<div class="section-titre">Accès famille</div><div class="ordi-empty" style="padding:10px 0">Chargement…</div>';
-  const[{data:parents},{data:acces}]=await Promise.all([
-    sb.from('enfants_parents').select('id,prenom,nom,lien,destinataire').eq('enfant_id',enfantId).eq('destinataire',true),
-    sb.from('suivi_acces_famille').select('*').eq('enfant_id',enfantId)
-  ]);
-  const actifsParParent={};
-  (acces||[]).forEach(a=>{if(a.actif)actifsParParent[a.parent_id]=a;});
-
-  if(!parents||!parents.length){
-    zone.innerHTML='<div class="section-titre">Accès famille</div><div class="ordi-empty" style="padding:10px 0">Aucun parent marqué "destinataire" sur la fiche de cet enfant.</div>';
-    return;
-  }
-  zone.innerHTML=`<div class="section-titre">Accès famille</div>`+parents.map(p=>{
-    const a=actifsParParent[p.id];
-    return `<div class="ref-row" data-parent="${p.id}">
-      <span class="lib">${esc(p.prenom)} ${esc(p.nom||'')}${p.lien?' — '+esc(p.lien):''}</span>
-      ${a
-        ?`<button class="btn btn-s" style="background:#F1EFF7;color:var(--violet)" data-action="copier" data-token="${a.token}"><i class="ti ti-copy"></i> Copier le lien</button>
-          <button class="btn btn-s" style="background:#F1EFF7;color:var(--violet)" data-action="qr" data-token="${a.token}"><i class="ti ti-qrcode"></i> QR code</button>
-          <button class="btn btn-g" style="background:#FBE9E7;color:var(--err)" data-action="revoquer" data-acces="${a.id}"><i class="ti ti-ban"></i> Révoquer</button>`
-        :`<button class="btn btn-p" data-action="creer" data-parent="${p.id}"><i class="ti ti-link"></i> Créer un accès</button>`
-      }
-    </div>`;
-  }).join('');
-  zone.querySelectorAll('[data-action="copier"]').forEach(b=>b.addEventListener('click',()=>{
-    const lien=suiviFamilleLienFor(b.dataset.token);
-    navigator.clipboard.writeText(lien).then(
-      ()=>alert('Lien copié :\n'+lien),
-      ()=>prompt('Copiez ce lien :',lien)
-    );
-  }));
-  zone.querySelectorAll('[data-action="qr"]').forEach(b=>b.addEventListener('click',()=>{
-    afficherQrAcces(suiviFamilleLienFor(b.dataset.token));
-  }));
-  zone.querySelectorAll('[data-action="creer"]').forEach(b=>b.addEventListener('click',async()=>{
-    b.disabled=true;
-    const{error}=await sb.from('suivi_acces_famille').insert({
-      enfant_id:enfantId,creche_id:crecheCouranteOrdi(),parent_id:b.dataset.parent,cree_par:PROF.id
-    });
-    if(error){alert('Erreur : '+error.message);b.disabled=false;return;}
-    renderAccesFamille(enfantId);
-  }));
-  zone.querySelectorAll('[data-action="revoquer"]').forEach(b=>b.addEventListener('click',async()=>{
-    if(!confirm('Révoquer cet accès ? La famille ne pourra plus consulter le suivi avec ce lien.'))return;
-    b.disabled=true;
-    const{error}=await sb.from('suivi_acces_famille').update({
-      actif:false,revoque_le:new Date().toISOString(),revoque_par:PROF.id
-    }).eq('id',b.dataset.acces);
-    if(error){alert('Erreur : '+error.message);b.disabled=false;return;}
-    renderAccesFamille(enfantId);
-  }));
+  zone.innerHTML='<div class="section-titre">Accès famille</div><div class="ordi-empty" style="padding:10px 0">Fonctionnalité désactivée : le suivi n\'est plus transmis aux familles, il reste un outil interne à l\'équipe.</div>';
 }
 
 function afficherQrAcces(url){
