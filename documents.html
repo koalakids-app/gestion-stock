@@ -3684,22 +3684,33 @@ const TPL={
       `Le/la Salarié(e) déclare avoir pris connaissance du règlement intérieur et du projet pédagogique et `+
       `s'engage à s'y conformer. Toute modification fera l'objet d'un avenant signé des deux parties.`);
 
-    para(`Fait à ${bl(g('ville_signature'))}, le ${dfr(g('date_signature'))}, en deux exemplaires originaux.`,true);
-
+    // Bloc de clôture (date de signature, consentement, mention de
+    // vérification, cadres de signature) traité comme un tout indivisible :
+    // un seul need() global évite qu'il ne se scinde entre deux pages (le
+    // "Fait à…" restant seul en bas d'une page pendant que les cadres de
+    // signature démarrent, orphelins, la suivante).
+    doc.setFont(undefined,'bold');doc.setFontSize(11);
+    const ligneFait=doc.splitTextToSize(pdfSafe(
+      `Fait à ${bl(g('ville_signature'))}, le ${dfr(g('date_signature'))}, en deux exemplaires originaux.`),W);
     doc.setFont(undefined,'italic');doc.setFontSize(9);
     const lignesConsent=doc.splitTextToSize(pdfSafe(ctConsentText(g('salarie_nom'))),W);
-    need(lignesConsent.length*4.5+3);
-    doc.text(lignesConsent,14,y);y+=lignesConsent.length*4.5+2;
-    doc.setFontSize(8.2);doc.setTextColor(120);
+    doc.setFontSize(8.2);
     const verifTxt=CT_OTP_VERIFIED
       ?('Identité vérifiée par code le '+new Date(CT_OTP_VERIFIED_AT).toLocaleString('fr-FR')+'.')
       :'Identité non vérifiée par code (mode dégradé) — ce document ne constitue pas une signature électronique qualifiée au sens eIDAS.';
     const lignesVerif=doc.splitTextToSize(verifTxt,W);
-    need(lignesVerif.length*4+4);
-    doc.text(lignesVerif,14,y);y+=lignesVerif.length*4+4;
+    const hFait=ligneFait.length*5+4, hConsent=lignesConsent.length*4.5+2,
+      hVerif=lignesVerif.length*4+4, hSig=42;
+    need(hFait+hConsent+hVerif+hSig);
+
+    doc.setFont(undefined,'bold');doc.setFontSize(11);
+    doc.text(ligneFait,14,y);y+=hFait;
+    doc.setFont(undefined,'italic');doc.setFontSize(9);
+    doc.text(lignesConsent,14,y);y+=hConsent;
+    doc.setFontSize(8.2);doc.setTextColor(120);
+    doc.text(lignesVerif,14,y);y+=hVerif;
     doc.setTextColor(30);doc.setFont(undefined,'normal');doc.setFontSize(10);
 
-    need(50);
     const put=(role,lab,x)=>{
       doc.setFontSize(9);doc.setFont(undefined,'bold');
       const ls=doc.splitTextToSize(lab,84);
