@@ -430,6 +430,22 @@ async function grantAccess(){
   document.getElementById('appView').style.display='block';
   document.getElementById('whoAmI').textContent=PROF.name||PROF.email||'';
   await loadCreches();
+  // Retour depuis le contrat de travail ouvert dans documents.html (bouton
+  // « Revenir à la fiche collaborateur/trice », ?employe=<id>&empSrc=employes) :
+  // cette page déconnecte systématiquement à l'ouverture (cf. boot()), donc le
+  // retour repasse par un nouveau login — cette fiche s'ouvre juste ensuite.
+  const empId=new URLSearchParams(location.search).get('employe');
+  if(empId){
+    history.replaceState(null,'',location.pathname);
+    try{
+      const{data:emp}=await sb.from('employes').select('creche_id').eq('id',empId).maybeSingle();
+      if(emp&&emp.creche_id&&isDirection)crecheId=emp.creche_id;
+    }catch(e){console.warn('grantAccess employe',e);}
+    renderCrecheTabs();
+    await loadEmployes();
+    openFiche(empId);
+    return;
+  }
   await loadEmployes();
 }
 
@@ -550,7 +566,10 @@ async function empLoadContrats(employeId){
     }
     if(box)box.innerHTML=mine.map(r=>{
       const doc=(docs||[]).find(d=>d.id===r.document_id)||{};
-      const url='documents.html?doc='+encodeURIComponent(r.document_id)+'&rep='+encodeURIComponent(r.id);
+      // Sans target="_blank" : le même onglet navigue vers documents.html, et
+      // la bannière « Revenir à la fiche collaborateur/trice » (paramètres
+      // emp=/empSrc=employes) ramène ici à la fermeture du contrat.
+      const url='documents.html?doc='+encodeURIComponent(r.document_id)+'&rep='+encodeURIComponent(r.id)+'&emp='+encodeURIComponent(employeId)+'&empSrc=employes';
       const badge=r.statut==='signe'
         ?'<span style="background:var(--green-l);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ Signé</span>'
         :'<span style="background:var(--orange-l);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⏳ En préparation</span>';
@@ -558,7 +577,7 @@ async function empLoadContrats(employeId){
         +'<div><div style="font-size:12.5px;font-weight:600">'+esc(doc.titre||'Contrat de travail')+'</div>'
         +'<div style="font-size:11px;color:var(--muted)">'+new Date(r.updated_at||r.created_at).toLocaleDateString('fr-FR')+'</div></div>'
         +badge
-        +'<a href="'+esc(url)+'" target="_blank" class="btn btn-g btn-sm"><i class="ti ti-eye"></i> Ouvrir</a>'
+        +'<a href="'+esc(url)+'" class="btn btn-g btn-sm"><i class="ti ti-eye"></i> Ouvrir</a>'
         +'</div>';
     }).join('');
   }catch(err){

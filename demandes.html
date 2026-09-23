@@ -3341,11 +3341,12 @@ function showApp(){
      du jour, et non la messagerie, qui doit accueillir a la connexion. */
   showMain(isDirection?'dashboard':'ref-dashboard');
   enfMaybeOpenFromUrl();
+  empMaybeOpenFromUrl();
   syncDemarrer();
   /* Briefing du jour : une fois par jour et par poste. Il part apres le dessin
      de l'ecran, le temps que les caches soient en place. Retour depuis l'outil
      Documents (?enfant=) : on ne l'interrompt pas avec une fenetre. */
-  if(!new URLSearchParams(location.search).get('enfant')){
+  if(!new URLSearchParams(location.search).get('enfant')&&!new URLSearchParams(location.search).get('employe')){
     setTimeout(function(){try{brBriefingAuto();}catch(e){console.warn('[briefing]',e);}},500);
   }
 }
@@ -3368,6 +3369,20 @@ function enfMaybeOpenFromUrl(){
       },150);
     },200);
   }catch(e){console.warn('enfMaybeOpenFromUrl',e);}
+}
+
+/* Même principe qu'enfMaybeOpenFromUrl(), pour le retour depuis le contrat
+   de travail ouvert dans documents.html (bouton « Revenir à la fiche
+   collaborateur/trice », qui renvoie ici via ?employe=<id>). */
+function empMaybeOpenFromUrl(){
+  try{
+    const q=new URLSearchParams(location.search);
+    const empId=q.get('employe');
+    if(!empId)return;
+    history.replaceState(null,'',location.pathname);
+    showMain('employes');
+    setTimeout(()=>editEmploye(empId),200);
+  }catch(e){console.warn('empMaybeOpenFromUrl',e);}
 }
 
 function todayStr(){return ipDateToLocalISO(new Date());}
@@ -4483,7 +4498,11 @@ async function empLoadContratTravail(employeId){
     }
     if(box)box.innerHTML=mine.map(r=>{
       const doc=(docs||[]).find(d=>d.id===r.document_id)||{};
-      const url='documents.html?doc='+encodeURIComponent(r.document_id)+'&rep='+encodeURIComponent(r.id);
+      // Sans target="_blank" : le même onglet navigue vers documents.html, et
+      // la bannière « Revenir à la fiche collaborateur/trice » (installée là-bas
+      // via le paramètre emp=) ramène ici — même principe que le retour au
+      // dossier d'un enfant depuis un document.
+      const url='documents.html?doc='+encodeURIComponent(r.document_id)+'&rep='+encodeURIComponent(r.id)+'&emp='+encodeURIComponent(employeId);
       const badge=r.statut==='signe'
         ?'<span style="background:var(--green-l,#E8F5E9);color:var(--green,#2E7D32);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ Signé</span>'
         :'<span style="background:var(--orange-light);color:var(--orange-dark);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⏳ En préparation</span>';
@@ -4491,7 +4510,7 @@ async function empLoadContratTravail(employeId){
         +'<div><div style="font-size:12.5px;font-weight:600">'+escHtml(doc.titre||'Contrat de travail')+'</div>'
         +'<div style="font-size:11px;color:var(--muted)">'+new Date(r.updated_at||r.created_at).toLocaleDateString('fr-FR')+'</div></div>'
         +badge
-        +'<a href="'+escHtml(url)+'" target="_blank" class="btn-sm"><i class="ti ti-eye"></i> Ouvrir</a>'
+        +'<a href="'+escHtml(url)+'" class="btn-sm"><i class="ti ti-eye"></i> Ouvrir</a>'
         +'</div>';
     }).join('');
   }catch(err){
