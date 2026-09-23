@@ -482,7 +482,10 @@ function stgOpenFiche(id,typeDefaut){
   if(del)del.style.display=(s&&isDirection)?'':'none';
 
   stgTypeChange();
-  if(s){stgRenderLien();stgRenderRessFiche();stgRenderDocs();stgRenderJours();stgRenderCollabZone();}
+  stgDocExtCache=[];
+  const docExtZone=document.getElementById('stg-doc-ext-zone');
+  if(docExtZone)docExtZone.innerHTML='';
+  if(s){stgRenderLien();stgRenderRessFiche();stgRenderDocs();stgRenderJours();stgRenderCollabZone();stgLoadDocExt(s.id);}
   document.getElementById('modal-stagiaire-wrap').classList.add('open');
 }
 
@@ -918,6 +921,109 @@ async function stgSupprimerDoc(id){
   stgRenderDocs();stgRender();
   showBanner('Document supprimé.');
 }
+
+/* ===== DOCUMENTS SUR SUPPORT EXTERNE (registre papier/coffre-fort) =========
+   Table documents_externes (voir sql/documents_externes.sql et
+   sql/documents_externes_stagiaires.sql) : ne stocke aucun fichier, juste la
+   trace qu'une pièce existe et où elle est physiquement conservée. Même
+   module que côté enfants (js/enfants.js) et employés (employes.html),
+   entite_type='stagiaire' ici. Pas d'archivage propre à ajouter : le statut
+   du dossier (demande/en_cours/termine/refuse/annule) joue déjà ce rôle et
+   masque déjà les dossiers clos de la vue « actives » par défaut. */
+const STG_DOC_EXT_SUPPORTS={papier:'Papier','coffre-fort':'Coffre-fort',classeur:'Classeur',autre:'Autre'};
+const STG_DOC_EXT_CATEGORIES={identite:'Identité',sante:'Santé',comptable:'Comptable',rh:'RH',autre:'Autre'};
+
+let stgDocExtCache=[];
+async function stgLoadDocExt(stagiaireId){
+  try{
+    const{data,error}=await sb.from('documents_externes')
+      .select('*')
+      .eq('entite_type','stagiaire')
+      .eq('entite_id',stagiaireId)
+      .order('created_at',{ascending:false});
+    if(error)throw error;
+    stgDocExtCache=data||[];
+  }catch(err){
+    console.warn('stgLoadDocExt',err);
+    stgDocExtCache=[];
+  }
+  if(String(stgFicheId)!==String(stagiaireId))return;
+  stgRenderDocExt();
+}
+function stgRenderDocExt(){
+  const zone=document.getElementById('stg-doc-ext-zone');
+  if(!zone)return;
+  const ligne=d=>{
+    const detruit=d.detruit_le
+      ?'<span style="background:var(--koala-light,#EEEDF8);color:var(--koala);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">Détruit le '+new Date(d.detruit_le).toLocaleDateString('fr-FR')+'</span>'
+      :'<button type="button" class="btn-sm" onclick="stgDocExtDetruire(\''+d.id+'\')" title="Marquer cette pièce comme détruite/restituée"><i class="ti ti-flame"></i> Marquer détruit</button>';
+    return '<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-bottom:7px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      +'<div>'
+      +'<span style="font-weight:600;font-size:12.5px">'+escHtml(d.libelle)+'</span> '
+      +'<span style="font-size:11px;color:var(--muted)">'+(STG_DOC_EXT_SUPPORTS[d.support]||d.support)+' · '+(STG_DOC_EXT_CATEGORIES[d.categorie]||d.categorie)+(d.lieu_conservation?' · '+escHtml(d.lieu_conservation):'')+'</span>'
+      +(d.date_destruction_prevue&&!d.detruit_le?'<div style="font-size:11px;color:var(--muted)">Conservation jusqu\'au '+new Date(d.date_destruction_prevue).toLocaleDateString('fr-FR')+'</div>':'')
+      +'</div>'
+      +'<span style="display:flex;align-items:center;gap:6px;flex-shrink:0">'+detruit
+      +'<button onclick="stgDocExtDelete(\''+d.id+'\')" title="Supprimer cette entrée du registre" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:14px"><i class="ti ti-trash"></i></button>'
+      +'</span></div></div>';
+  };
+  zone.innerHTML=
+      (stgDocExtCache.length
+        ? stgDocExtCache.map(ligne).join('')
+        : '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Aucune pièce enregistrée sur support externe.</div>')
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'
+      + '<input class="finput" id="stg-doc-ext-libelle" placeholder="Libellé (ex. carte d\'identité)" style="flex:2;min-width:180px;font-size:12px;padding:6px 8px">'
+      + '<select class="finput" id="stg-doc-ext-support" style="flex:1;min-width:110px;font-size:12px;padding:6px 8px">'
+        + Object.keys(STG_DOC_EXT_SUPPORTS).map(k=>'<option value="'+k+'">'+STG_DOC_EXT_SUPPORTS[k]+'</option>').join('')
+      + '</select>'
+      + '<select class="finput" id="stg-doc-ext-categorie" style="flex:1;min-width:110px;font-size:12px;padding:6px 8px">'
+        + Object.keys(STG_DOC_EXT_CATEGORIES).map(k=>'<option value="'+k+'">'+STG_DOC_EXT_CATEGORIES[k]+'</option>').join('')
+      + '</select>'
+      + '<input class="finput" id="stg-doc-ext-lieu" placeholder="Lieu de conservation" style="flex:2;min-width:180px;font-size:12px;padding:6px 8px">'
+      + '<button type="button" class="btn-sm" onclick="stgDocExtAdd()"><i class="ti ti-plus"></i> Ajouter</button>'
+    + '</div>';
+}
+async function stgDocExtAdd(){
+  const sid=stgFicheId;
+  const libelle=(document.getElementById('stg-doc-ext-libelle').value||'').trim();
+  if(!libelle){document.getElementById('stg-doc-ext-libelle').focus();return;}
+  const row={
+    entite_type:'stagiaire',
+    entite_id:sid,
+    libelle,
+    support:document.getElementById('stg-doc-ext-support').value||'papier',
+    categorie:document.getElementById('stg-doc-ext-categorie').value||'autre',
+    lieu_conservation:(document.getElementById('stg-doc-ext-lieu').value||'').trim()||null,
+    created_by:currentUser?currentUser.id:null
+  };
+  const{data,error}=await sb.from('documents_externes').insert(row).select().single();
+  if(error){showBanner('Erreur lors de l\'ajout : '+error.message,'error');return;}
+  stgDocExtCache.unshift(data);
+  stgRenderDocExt();
+  showBanner('Pièce ajoutée au registre.');
+}
+window.stgDocExtAdd=stgDocExtAdd;
+async function stgDocExtDetruire(id){
+  if(!confirm('Marquer cette pièce comme détruite / restituée aujourd\'hui ?'))return;
+  const row={detruit_le:todayStr(),detruit_par:currentUser?currentUser.id:null};
+  const{error}=await sb.from('documents_externes').update(row).eq('id',id);
+  if(error){showBanner('Erreur : '+error.message,'error');return;}
+  const d=stgDocExtCache.find(x=>String(x.id)===String(id));
+  if(d)Object.assign(d,row);
+  stgRenderDocExt();
+  showBanner('Pièce marquée détruite.');
+}
+window.stgDocExtDetruire=stgDocExtDetruire;
+async function stgDocExtDelete(id){
+  if(!confirm('Supprimer cette entrée du registre ? (la pièce physique elle-même n\'est pas concernée, seule la trace ici disparaît)'))return;
+  const{error}=await sb.from('documents_externes').delete().eq('id',id);
+  if(error){showBanner('Erreur : '+error.message,'error');return;}
+  stgDocExtCache=stgDocExtCache.filter(x=>String(x.id)!==String(id));
+  stgRenderDocExt();
+  showBanner('Entrée supprimée.');
+}
+window.stgDocExtDelete=stgDocExtDelete;
 
 // ── Les jours de présence ─────────────────────────────────────────────────
 
