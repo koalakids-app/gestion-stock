@@ -5706,8 +5706,13 @@ async function openReps(id){
   else{
     el.innerHTML=data.map(r=>{
       const enf=r.enfant_id?ENFANTS.find(e=>e.id===r.enfant_id):null;
+      // Contrat de travail : le nom qui identifie la réponse dans la liste est
+      // celui du/de la salarié(e) concerné(e), pas celui de la direction/
+      // référente qui a rempli le formulaire — sinon toutes les réponses d'un
+      // même compte se ressemblent et on ne peut plus les distinguer.
+      const salarieNom=(d.template_key==='contrat_travail'&&r.donnees&&r.donnees.salarie_nom)?r.donnees.salarie_nom:null;
       return `<div class="rep">
-      <b>${esc(r.rempli_par_nom||'—')}</b>
+      <b>${esc(salarieNom||r.rempli_par_nom||'—')}</b>
       <span class="tag">${new Date(r.updated_at||r.created_at).toLocaleDateString('fr-FR')}</span>
       ${r.enfant_id?`<span class="tag">Dossier ${esc(enf?((enf.prenom||'')+' '+(enf.nom||'')).trim():'enfant')}</span>`:''}
       <span class="tag">${r.statut==='signe'?'Signé':'Préparé'}</span>
