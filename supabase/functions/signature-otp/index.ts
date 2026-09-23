@@ -35,16 +35,26 @@
 // avant mise en production réelle (texte de consentement, durée de
 // conservation du journal de preuve).
 //
-// Appelée depuis documents.html (ctEnvoyerOtp/ctVerifierOtp → callFn) avec
-// l'anon key, session direction/référente authentifiée. Le filtrage par
-// droits est fait côté client (module visible aux comptes direction/
-// référente seulement, RLS limite déjà ce que le client a pu charger) ;
-// cette fonction utilise le service role pour lire l'e-mail de l'employé et
+// Appelée depuis deux pages :
+//   - documents.html (ctEnvoyerOtp/ctVerifierOtp → callFn), avec l'anon key,
+//     session direction/référente authentifiée — filtrage par droits fait
+//     côté client (module visible aux comptes direction/référente seulement).
+//   - signature.html (page PUBLIQUE, sans session — signature à distance du
+//     contrat de travail par le/la salarié(e) sur son propre téléphone),
+//     avec l'anon key SEULE. C'est pour cette raison que 'envoyer' et
+//     'verifier' ne prennent en entrée que reponse_id/employe_id/code — des
+//     identifiants opaques (uuid), jamais une liste consultable — et que
+//     l'action 'statut_token' ne résout que depuis le jeton de
+//     `signatures_pending` (déjà secret, généré par startQr()), sans jamais
+//     exposer autre chose qu'un e-mail masqué.
+// Cette fonction utilise le service role pour lire l'e-mail de l'employé et
 // écrire le code/les preuves — elle ne renvoie jamais le code lui-même, ni
 // l'adresse e-mail complète (masquée), au client.
 //
 // Déploiement : supabase functions deploy signature-otp
-//   (vérification JWT par défaut — appelée avec la session direction/référente)
+//   (vérification JWT par défaut — la clé anon seule suffit à passer cette
+//   vérification, appelant authentifié ou non ; c'est ce qui permet l'appel
+//   public depuis signature.html)
 // Secrets nécessaires (mêmes noms que les autres fonctions d'envoi d'e-mail) :
 //   GMAIL_USER, GMAIL_APP_PASSWORD
 // ============================================================================
@@ -83,6 +93,8 @@ function genererCode(): string {
   crypto.getRandomValues(octet);
   return String(100000 + (octet[0] % 900000));
 }
+
+const RESEAU_CFG_ID = '00000000-0000-0000-0000-000000000003';
 
 function masquerEmail(email: string): string {
   const [u, d] = String(email).split('@');
@@ -144,6 +156,51 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const action = String(body.action || '');
+
+    // ---------------------------------------------------------- STATUT_TOKEN
+    // Signature à distance (signature.html, page publique, sans session) :
+    // le téléphone du/de la salarié(e) ne connaît que le jeton de
+    // `signatures_pending`, jamais l'identifiant de réponse — cette action
+    // fait la résolution jeton → réponse et dit si un code est exigé avant
+    // de laisser signer, sans jamais exposer autre chose qu'un e-mail masqué.
+    if (action === 'statut_token') {
+      const token = String(body.token || '');
+      if (!token) return json({ erreur: 'Jeton manquant.' }, 400);
+      const { data: sp, error: spErr } = await sb
+        .from('signatures_pending').select('reponse_id,role_sign,document_id,signed_at')
+        .eq('token', token).maybeSingle();
+      if (spErr) throw spErr;
+      if (!sp || !sp.reponse_id || sp.role_sign !== 'salarie') {
+        return json({ ok: true, otp_required: false });
+      }
+      const { data: docKoala } = await sb
+        .from('documents_koala').select('template_key').eq('id', sp.document_id).maybeSingle();
+      if (!docKoala || docKoala.template_key !== 'contrat_travail') {
+        return json({ ok: true, otp_required: false });
+      }
+      const { data: reseau } = await sb
+        .from('reseau_config').select('config').eq('id', RESEAU_CFG_ID).maybeSingle();
+      const otpActive = !!(reseau && reseau.config && (reseau.config as Record<string, unknown>).otp_signature_active);
+      const { data: rep } = await sb
+        .from('documents_reponses').select('otp_verifie_le,otp_employe_id,donnees')
+        .eq('id', sp.reponse_id).maybeSingle();
+      const donnees = (rep && (rep.donnees as Record<string, unknown>)) || {};
+      const employeId = (rep && rep.otp_employe_id) || (donnees.salarie_employe_id as string) || null;
+      let destinationMasquee: string | null = null;
+      if (employeId) {
+        const { data: emp } = await sb.from('employes').select('email').eq('id', employeId).maybeSingle();
+        if (emp && emp.email) destinationMasquee = masquerEmail(emp.email);
+      }
+      return json({
+        ok: true,
+        otp_required: otpActive,
+        otp_verified: !!(rep && rep.otp_verifie_le),
+        reponse_id: sp.reponse_id,
+        employe_id: employeId,
+        destination_masquee: destinationMasquee,
+      });
+    }
+
     const reponseId = String(body.reponse_id || '');
     if (!reponseId) return json({ erreur: 'Identifiant de réponse manquant.' }, 400);
 
