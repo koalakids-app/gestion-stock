@@ -158,6 +158,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <div class="f"><label class="lb">Adresse du siège social</label><input id="eSiege"></div>
         <p class="hint">Le siège n'est pas toujours l'adresse de la crèche : c'est celui qui figure sur les documents contractuels.</p>
         <div class="g2">
+          <div class="f"><label class="lb">Capital social</label><input id="eCapital" placeholder="10 000 €"></div>
+          <div class="f"><label class="lb">RCS — ville</label><input id="eRcsVille" placeholder="Toulon"></div>
+        </div>
+        <div class="g2">
           <div class="f"><label class="lb">Représentant légal</label><input id="eRepNom"></div>
           <div class="f"><label class="lb">Qualité</label><input id="eRepQual" placeholder="Président, gérante…"></div>
         </div>
@@ -598,7 +602,7 @@ function crecheDe(id){return CRECHES.find(x=>String(x.id)===String(id))||null;}
 /* Empreinte du formulaire, pour détecter une saisie non enregistrée. */
 let SNAP='';
 function snapshot(){
-  return ['cName','cAddr','cCap','eRaison','eForme','eSiret','eApe','eSiege','eRepNom','eRepQual',
+  return ['cName','cAddr','cCap','eRaison','eForme','eSiret','eApe','eSiege','eCapital','eRcsVille','eRepNom','eRepQual',
     'eTel','eMail','ePmiNum','ePmiDate','ePmiEch','eAgeMin','eAgeMax','eHo','eHf',
     'eSemFerm','eSemFact','eObs'].map(val).join('|')
     +'|'+[...document.querySelectorAll('.ckJour:checked')].map(x=>x.value).join(',')
@@ -612,6 +616,7 @@ function renderEtab(){
   setVal('cName',c.name);setVal('cAddr',c.addr);setVal('cCap',c.capacity);
   setVal('eRaison',e.raison_sociale);setVal('eForme',e.forme_juridique);
   setVal('eSiret',e.siret);setVal('eApe',e.code_ape);setVal('eSiege',e.adresse_siege);
+  setVal('eCapital',e.capital_social);setVal('eRcsVille',e.rcs_ville);
   setVal('eRepNom',e.representant_nom);setVal('eRepQual',e.representant_qualite);
   setVal('eTel',e.telephone);setVal('eMail',e.email);
   setVal('ePmiNum',e.pmi_numero);setVal('ePmiDate',e.pmi_date);setVal('ePmiEch',e.pmi_echeance);
@@ -1007,6 +1012,7 @@ async function save(){
       creche_id:crecheId,
       raison_sociale:val('eRaison'),forme_juridique:val('eForme'),
       siret:s,code_ape:val('eApe'),adresse_siege:val('eSiege'),
+      capital_social:val('eCapital'),rcs_ville:val('eRcsVille'),
       representant_nom:val('eRepNom'),representant_qualite:val('eRepQual'),
       telephone:val('eTel'),email:val('eMail'),
       pmi_numero:val('ePmiNum'),

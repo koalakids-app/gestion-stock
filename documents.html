@@ -1170,12 +1170,16 @@ const TPL_LABELS={
   entretien_annuel:'Entretien annuel professionnel (salarié)',
   grille:'Grille d’évaluation (salarié)',
   eaje:'Contrôle EAJE — grille d’auto-contrôle (établissement)',
-  cerfa_17580:'CERFA n° 17580*01 — autorisation EAJE (établissement)'
+  cerfa_17580:'CERFA n° 17580*01 — autorisation EAJE (établissement)',
+  contrat_travail:'Contrat de travail (salarié)'
 };
 const TPL_SALARIE=['entretien_annuel','grille'];
-/* Documents d’etablissement (contrôle EAJE…) : ils ne concernent ni un enfant
-   ni un salarie, la crec̀he est saisie dans le formulaire lui-même. */
-const TPL_ETABLISSEMENT=['eaje','cerfa_17580'];
+/* Documents d’etablissement (contrôle EAJE…) : ils ne concernent ni un enfant
+   ni un salarie, la crec̀he est saisie dans le formulaire lui-même.
+   contrat_travail est un hybride : salarie (pas d'enfant a choisir) ET site
+   choisi dans le formulaire pour pre-remplir l'employeur depuis Parametres
+   — cf. crecheIdDuFormulaire(). */
+const TPL_ETABLISSEMENT=['eaje','cerfa_17580','contrat_travail'];
 function docConcerneSalarie(){
   const k=fillDoc&&fillDoc.template_key;
   return !!(k&&(TPL_SALARIE.indexOf(k)>=0||TPL_ETABLISSEMENT.indexOf(k)>=0));
@@ -1190,7 +1194,7 @@ function docEstEtablissement(){
    Sans cette resolution, la reponse part avec la creche du PROFIL — donc null
    pour un compte direction, et la fiche devient invisible aux referentes. */
 function crecheIdDuFormulaire(){
-  const ids=['ff_ctrl_creche','ff_creche'];
+  const ids=['ff_ctrl_creche','ff_site_nom','ff_creche'];
   for(let i=0;i<ids.length;i++){
     const el=document.getElementById(ids[i]);
     const nom=el&&el.value?String(el.value).trim():'';
@@ -3396,6 +3400,233 @@ const TPL={
    </div>
   </div>`
  },
+ contrat_travail:{
+  fields:['raison_sociale','forme_juridique','capital','rcs_ville','siret','adresse_siege','representant_nom','representant_qualite',
+          'site_nom','site_adresse',
+          'salarie_nom','salarie_naissance_date','salarie_naissance_lieu','salarie_nationalite','salarie_adresse','salarie_ss',
+          'poste_intitule','statut','qualification',
+          'type_contrat','cdd_debut','cdd_fin','cdd_motif','cdd_remplace','date_embauche',
+          'temps_travail','heures_hebdo','repartition_horaires',
+          'remuneration_brute','heures_mensuelles','date_versement','primes',
+          'fermeture_dates','preavis_demission',
+          'ville_signature','date_signature'],
+  html:v=>`<div class="tpl">
+   <h3>L'employeur <span class="hint" style="font-weight:400">(pré-rempli depuis Paramètres selon la crèche choisie)</span></h3>
+   <div class="f"><label>Crèche concernée</label><select id="ff_site_nom" onchange="ctPrefillFromEtab()"><option value=""></option>${
+     (typeof CRECHES!=='undefined'?CRECHES:[]).map(c=>`<option${v.site_nom===c.name?' selected':''}>${esc(c.name)}</option>`).join('')}</select></div>
+   <div class="grid2">
+     <div class="f"><label>Raison sociale</label><input id="ff_raison_sociale" value="${esc(v.raison_sociale)}"></div>
+     <div class="f"><label>Forme juridique</label><input id="ff_forme_juridique" value="${esc(v.forme_juridique)}"></div>
+   </div>
+   <div class="grid2">
+     <div class="f"><label>Capital social (€)</label><input id="ff_capital" value="${esc(v.capital)}"></div>
+     <div class="f"><label>RCS — ville</label><input id="ff_rcs_ville" value="${esc(v.rcs_ville)}"></div>
+   </div>
+   <div class="f"><label>SIRET</label><input id="ff_siret" value="${esc(v.siret)}"></div>
+   <div class="f"><label>Adresse du siège social</label><input id="ff_adresse_siege" value="${esc(v.adresse_siege)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Représentant légal</label><input id="ff_representant_nom" value="${esc(v.representant_nom)}"></div>
+     <div class="f"><label>Qualité</label><input id="ff_representant_qualite" value="${esc(v.representant_qualite)}" placeholder="Président, gérante…"></div>
+   </div>
+   <div class="f"><label>Adresse du site d'affectation</label><input id="ff_site_adresse" value="${esc(v.site_adresse)}"></div>
+
+   <h3>Le/la salarié(e)</h3>
+   <div class="grid2">
+     <div class="f"><label>Nom / Prénom</label><input id="ff_salarie_nom" value="${esc(v.salarie_nom)}"></div>
+     <div class="f"><label>Nationalité</label><input id="ff_salarie_nationalite" value="${esc(v.salarie_nationalite)}"></div>
+   </div>
+   <div class="grid2">
+     <div class="f"><label>Né(e) le</label><input type="date" id="ff_salarie_naissance_date" value="${esc(v.salarie_naissance_date)}"></div>
+     <div class="f"><label>Lieu de naissance</label><input id="ff_salarie_naissance_lieu" value="${esc(v.salarie_naissance_lieu)}"></div>
+   </div>
+   <div class="f"><label>Adresse</label><input id="ff_salarie_adresse" value="${esc(v.salarie_adresse)}"></div>
+   <div class="f"><label>N° de sécurité sociale</label><input id="ff_salarie_ss" value="${esc(v.salarie_ss)}"></div>
+
+   <h3>Poste et qualification</h3>
+   <div class="grid2">
+     <div class="f"><label>Intitulé du poste</label><input id="ff_poste_intitule" value="${esc(v.poste_intitule)}" placeholder="EJE, auxiliaire de puériculture, animateur/trice petite enfance…"></div>
+     <div class="f"><label>Statut</label><select id="ff_statut">${
+       ['','Employé','Agent de maîtrise','Cadre'].map(o=>`<option${v.statut===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+   </div>
+   <div class="f"><label>Qualification déclarée</label><input id="ff_qualification" value="${esc(v.qualification)}"></div>
+   <p class="hint">Le coefficient de la convention collective (IDCC 3127) n'est volontairement pas calculé automatiquement — sa grille vise nativement les interventions à domicile, pas un établissement collectif.</p>
+
+   <h3>Type de contrat</h3>
+   <div class="grid2">
+     <div class="f"><label>CDI / CDD</label><select id="ff_type_contrat" onchange="ctToggleCdd()">${
+       ['','CDI','CDD'].map(o=>`<option${v.type_contrat===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Date d'embauche (prise d'effet)</label><input type="date" id="ff_date_embauche" value="${esc(v.date_embauche)}"></div>
+   </div>
+   <div id="ctCddWrap" class="grid2" style="${v.type_contrat==='CDD'?'':'display:none'}">
+     <div class="f"><label>Début du CDD</label><input type="date" id="ff_cdd_debut" value="${esc(v.cdd_debut)}"></div>
+     <div class="f"><label>Fin du CDD</label><input type="date" id="ff_cdd_fin" value="${esc(v.cdd_fin)}"></div>
+   </div>
+   <div id="ctCddWrap2" style="${v.type_contrat==='CDD'?'':'display:none'}">
+     <div class="f"><label>Motif du CDD</label><input id="ff_cdd_motif" value="${esc(v.cdd_motif)}"></div>
+     <div class="f"><label>Salarié(e) remplacé(e) (le cas échéant)</label><input id="ff_cdd_remplace" value="${esc(v.cdd_remplace)}"></div>
+   </div>
+
+   <h3>Durée et horaires de travail</h3>
+   <div class="grid2">
+     <div class="f"><label>Temps plein / partiel</label><select id="ff_temps_travail">${
+       ['','Temps plein','Temps partiel'].map(o=>`<option${v.temps_travail===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Heures hebdomadaires</label><input id="ff_heures_hebdo" value="${esc(v.heures_hebdo)}"></div>
+   </div>
+   <div class="f"><label>Répartition indicative des horaires (si temps partiel)</label><textarea id="ff_repartition_horaires">${esc(v.repartition_horaires)}</textarea></div>
+
+   <h3>Rémunération</h3>
+   <div class="grid2">
+     <div class="f"><label>Rémunération mensuelle brute (€)</label><input id="ff_remuneration_brute" value="${esc(v.remuneration_brute)}"></div>
+     <div class="f"><label>Heures mensuelles</label><input id="ff_heures_mensuelles" value="${esc(v.heures_mensuelles)}"></div>
+   </div>
+   <div class="f"><label>Date de versement</label><input id="ff_date_versement" value="${esc(v.date_versement)}" placeholder="ex. le 5 de chaque mois"></div>
+   <div class="f"><label>Primes et accessoires éventuels</label><textarea id="ff_primes">${esc(v.primes)}</textarea></div>
+
+   <h3>Congés et rupture</h3>
+   <div class="f"><label>Dates de fermeture de l'établissement</label><input id="ff_fermeture_dates" value="${esc(v.fermeture_dates)}"></div>
+   <div class="f"><label>Préavis de démission</label><input id="ff_preavis_demission" value="${esc(v.preavis_demission)}" placeholder="ex. 1 mois"></div>
+
+   <h3>Signatures</h3>
+   <div class="grid2">
+     <div class="f"><label>Ville</label><input id="ff_ville_signature" value="${esc(v.ville_signature)}"></div>
+     <div class="f"><label>Date</label><input type="date" id="ff_date_signature" value="${esc(v.date_signature)}"></div>
+   </div>
+   <div class="grid2">
+     ${sigBoxHtml('responsable','Pour l’Employeur')}
+     ${sigBoxHtml('salarie','Le/la Salarié(e) — « Lu et approuvé »')}
+   </div>
+  </div>`,
+  mount:()=>{ctPrefillFromEtab();ctToggleCdd();['responsable','salarie'].forEach(mountSig);},
+  pdf:doc=>{
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'……';
+    const bl=s=>s||'……';
+    const W=182;let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+    const para=(t,bold)=>{
+      doc.setFont(undefined,bold?'bold':'normal');doc.setFontSize(bold?11:10);
+      const lines=doc.splitTextToSize(pdfSafe(t),W);
+      need(lines.length*5+4);
+      doc.text(lines,14,y);y+=lines.length*5+4;
+    };
+    const h2=t=>{
+      need(12);doc.setFont(undefined,'bold');doc.setFontSize(11);
+      doc.text(pdfSafe(t),14,y);y+=7;doc.setFont(undefined,'normal');doc.setFontSize(10);
+    };
+
+    doc.setFont(undefined,'bold');doc.setFontSize(15);
+    doc.text('CONTRAT DE TRAVAIL',14+W/2,y,{align:'center'});y+=7;
+    doc.setFontSize(10.5);doc.setFont(undefined,'normal');
+    doc.text('PERSONNEL DE CRÈCHE',14+W/2,y,{align:'center'});y+=11;
+
+    para('Entre les soussignés',true);
+
+    h2("L'EMPLOYEUR");
+    para(`${bl(g('raison_sociale'))}, ${bl(g('forme_juridique'))}, au capital de ${bl(g('capital'))} €, `+
+      `immatriculée au RCS de ${bl(g('rcs_ville'))} sous le n° ${bl(g('siret'))}, dont le siège social est situé `+
+      `${bl(g('adresse_siege'))}, représentée par ${bl(g('representant_nom'))}, en qualité de ${bl(g('representant_qualite'))}, `+
+      `ci-après dénommée « l'Employeur », d'une part,`);
+
+    h2('ET');
+    para(`${bl(g('salarie_nom'))}, né(e) le ${dfr(g('salarie_naissance_date'))} à ${bl(g('salarie_naissance_lieu'))}, `+
+      `de nationalité ${bl(g('salarie_nationalite'))}, demeurant ${bl(g('salarie_adresse'))}, `+
+      `n° de sécurité sociale ${bl(g('salarie_ss'))}, ci-après dénommé(e) « le/la Salarié(e) », d'autre part,`);
+
+    para('Il a été convenu et arrêté ce qui suit :',true);
+
+    h2('ARTICLE 1 — OBJET, POSTE ET QUALIFICATION');
+    para(`Le/la Salarié(e) est engagé(e) en qualité de ${bl(g('poste_intitule'))}, statut ${bl(g('statut'))}.`);
+    para(`Missions : accueil et accompagnement des enfants et des familles dans le respect du projet pédagogique `+
+      `de la micro-crèche ; mise en œuvre des activités d'éveil et de la pédagogie de libre exploration éducative `+
+      `en vigueur dans le réseau ; participation aux transmissions, réunions d'équipe et temps de formation ; `+
+      `application des protocoles de santé, d'hygiène et de sécurité en vigueur dans l'établissement.`);
+    para(`Le/la Salarié(e) déclare posséder la qualification suivante : ${bl(g('qualification'))}, conforme aux `+
+      `exigences réglementaires des établissements d'accueil du jeune enfant.`);
+
+    h2("ARTICLE 2 — TYPE DE CONTRAT, PRISE D'EFFET ET PÉRIODE D'ESSAI");
+    para(`Contrat conclu pour une durée : ${bl(g('type_contrat'))}.`);
+    if(g('type_contrat')==='CDD'){
+      para(`Du ${dfr(g('cdd_debut'))} au ${dfr(g('cdd_fin'))}, motif : ${bl(g('cdd_motif'))} `+
+        `(salarié(e) remplacé(e) le cas échéant : ${bl(g('cdd_remplace'))}).`);
+    }
+    para(`Prise d'effet le ${dfr(g('date_embauche'))}.`);
+    para(`Période d'essai : 2 mois pour les employés / 3 mois pour les agents de maîtrise / 4 mois pour les cadres `+
+      `selon la catégorie retenue ci-dessus, renouvelable une fois pour une durée maximale de 2 mois (soit une durée `+
+      `totale maximale de 4, 5 ou 6 mois selon la catégorie), sous réserve d'un accord exprès entre les parties `+
+      `formalisé par écrit avant le terme de la période initiale. Pendant la période d'essai, chacune des parties `+
+      `peut rompre librement le contrat, sous réserve des délais de prévenance légaux (art. L.1221-25 et `+
+      `L.1221-26 du Code du travail).`);
+
+    h2('ARTICLE 3 — LIEU DE TRAVAIL');
+    para(`Le/la Salarié(e) exercera ses fonctions au sein de la micro-crèche de ${bl(g('site_nom'))}, `+
+      `sise ${bl(g('site_adresse'))}.`);
+    para(`Compte tenu de l'organisation du réseau en plusieurs sites, le/la Salarié(e) pourra être amené(e), de `+
+      `façon temporaire ou ponctuelle, à exercer ses fonctions sur l'un des autres établissements du réseau `+
+      `Koala Kids, dans un rayon géographique raisonnable, notamment pour assurer la continuité d'accueil des `+
+      `enfants. Cette clause de mobilité n'entraîne pas de modification du contrat de travail.`);
+
+    h2('ARTICLE 4 — DURÉE ET HORAIRES DE TRAVAIL');
+    para(`Le/la Salarié(e) est engagé(e) à ${bl(g('temps_travail'))}, pour une durée hebdomadaire de `+
+      `${bl(g('heures_hebdo'))} heures, réparties selon le planning établi par la direction. Si temps partiel, `+
+      `répartition indicative : ${bl(g('repartition_horaires'))}. Toute modification de cette répartition sera `+
+      `notifiée dans le respect du délai de prévenance légal ou conventionnel.`);
+
+    h2('ARTICLE 5 — RÉMUNÉRATION');
+    para(`Rémunération mensuelle brute de ${bl(g('remuneration_brute'))} €, pour ${bl(g('heures_mensuelles'))} `+
+      `heures mensuelles, versée le ${bl(g('date_versement'))} de chaque mois par virement bancaire.`);
+    para(`Primes et accessoires éventuels : ${bl(g('primes'))}.`);
+    para(`Révision conforme aux dispositions légales et conventionnelles applicables (SMIC, minima `+
+      `conventionnels).`);
+
+    h2('ARTICLE 6 — CONGÉS PAYÉS ET FERMETURES DE L’ÉTABLISSEMENT');
+    para(`2,5 jours ouvrables de congés payés par mois de travail effectif, sauf disposition conventionnelle plus `+
+      `favorable. Congés pris en tenant compte des périodes de fermeture annuelle : ${bl(g('fermeture_dates'))}, `+
+      `et des nécessités de continuité d'accueil des enfants.`);
+
+    h2("ARTICLE 7 — OBLIGATIONS PROPRES À L'ACCUEIL DU JEUNE ENFANT");
+    para(`Le/la Salarié(e) s'engage à : fournir un extrait de casier judiciaire (bulletin n° 3) conforme à `+
+      `l'article L.133-6 du CASF ; justifier d'un certificat médical d'aptitude et des vaccinations obligatoires `+
+      `prévues pour les EAJE ; respecter les protocoles d'hygiène, de sécurité et de santé de l'établissement ; `+
+      `se soumettre à la visite d'information et de prévention du service de santé au travail ; suivre les `+
+      `formations obligatoires ou recommandées par l'Employeur ; signaler sans délai à la direction toute `+
+      `situation de danger ou de suspicion de maltraitance concernant un enfant accueilli.`);
+
+    h2('ARTICLE 8 — CONFIDENTIALITÉ ET PROTECTION DES DONNÉES');
+    para(`Obligation de discrétion et de confidentialité absolue concernant les informations relatives aux `+
+      `enfants accueillis et à leur famille, y compris après la cessation du contrat de travail, dans le respect `+
+      `du RGPD. Obligation de confidentialité étendue à l'organisation, aux outils internes et à la gestion de `+
+      `l'Employeur et du réseau Koala Kids.`);
+
+    h2('ARTICLE 9 — RUPTURE DU CONTRAT');
+    para(`Hors période d'essai, rupture dans les conditions prévues par le Code du travail et la convention `+
+      `collective applicable. En cas de démission, préavis de ${bl(g('preavis_demission'))}, sauf dispense `+
+      `accordée par l'Employeur. Si CDD : cessation de plein droit à son terme, indemnité de fin de contrat et `+
+      `indemnité compensatrice de congés payés selon la loi, sauf cas de rupture anticipée légalement prévus.`);
+
+    h2('ARTICLE 10 — CONVENTION COLLECTIVE ET DISPOSITIONS DIVERSES');
+    para(`Contrat régi par le Code du travail et la convention collective nationale des services à la personne `+
+      `du 20 septembre 2012 (IDCC 3127), dont un exemplaire est tenu à disposition au siège de l'établissement. `+
+      `Le/la Salarié(e) déclare avoir pris connaissance du règlement intérieur et du projet pédagogique et `+
+      `s'engage à s'y conformer. Toute modification fera l'objet d'un avenant signé des deux parties.`);
+
+    para(`Fait à ${bl(g('ville_signature'))}, le ${dfr(g('date_signature'))}, en deux exemplaires originaux.`,true);
+
+    need(50);
+    const put=(role,lab,x)=>{
+      doc.setFontSize(9);doc.setFont(undefined,'bold');
+      const ls=doc.splitTextToSize(lab,84);
+      doc.text(ls,x,y);
+      doc.setDrawColor(200);doc.rect(x,y+3+(ls.length-1)*4,84,32);
+      if(SIGS[role]){try{doc.addImage(SIGS[role],'PNG',x+2,y+5+(ls.length-1)*4,80,28);}catch(e){}}
+    };
+    put('responsable',`Pour l'Employeur : ${bl(g('representant_nom'))}, ${bl(g('representant_qualite'))}`,14);
+    put('salarie',"Le/la Salarié(e) — « Lu et approuvé »",110);
+    y+=42;
+
+    pdfSortie(doc,slug(fillDoc.titre)+(g('salarie_nom')?'_'+slug(g('salarie_nom')):'')+'.pdf');
+    return true;
+  }
+ },
  antipyretique:{
   fields:['ap_civ1','ap_parent1','ap_qual1','ap_civ2','ap_parent2','ap_qual2','ap_enfant','ap_date',
           'ci_medicament','ci_date'],
@@ -4418,6 +4649,40 @@ function c17PrefillFromEtab(){
   if(touche)c17Touch();
 }
 function c17CrecheChanged(){c17PrefillFromEtab();c17Touch();}
+
+/* Pré-remplit l'employeur du contrat de travail depuis la fiche d'identité
+   posée dans Paramètres (module etablissements), selon la crèche choisie
+   dans le formulaire (ff_site_nom) — même principe que le devis, le contrat
+   d'accueil, le registre de sécurité et la CERFA ci-dessus. Ne touche jamais
+   un champ déjà saisi : changer de crèche ne doit pas écraser une correction
+   faite à la main. */
+function ctPrefillFromEtab(){
+  const nom=(document.getElementById('ff_site_nom')||{}).value||'';
+  const cr=(CRECHES||[]).find(c=>c.name===nom);
+  if(!cr)return;
+  const et=etabDe(cr.id);
+  const map={
+    raison_sociale:et.raison_sociale,forme_juridique:et.forme_juridique,
+    capital:et.capital_social,rcs_ville:et.rcs_ville,siret:et.siret,
+    adresse_siege:et.adresse_siege,representant_nom:et.representant_nom,
+    representant_qualite:et.representant_qualite,site_adresse:cr.addr
+  };
+  Object.keys(map).forEach(k=>{
+    const v=map[k];
+    if(!v)return;
+    const el=document.getElementById('ff_'+k);
+    if(el&&!el.value)el.value=v;
+  });
+}
+/* Affiche les champs propres au CDD (dates, motif, remplacement) uniquement
+   quand ce type de contrat est sélectionné. */
+function ctToggleCdd(){
+  const show=(document.getElementById('ff_type_contrat')||{}).value==='CDD';
+  ['ctCddWrap','ctCddWrap2'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.style.display=show?'':'none';
+  });
+}
 
 const C17_CSS=`<style>
 .c17 .c17-head{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;background:#F4F3FB;border:1px solid var(--border,#E7E4F0);border-radius:10px;padding:12px;margin-bottom:10px}
