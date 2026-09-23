@@ -1957,13 +1957,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label class="flabel">Qualification</label><input class="finput" id="emp-qualification" placeholder="Ex. : Auxiliaire de puériculture"/></div>
     </div>
     <div class="frow">
-      <div class="fg"><label class="flabel">Date de début</label><input class="finput" id="emp-date-debut" type="date"/></div>
+      <div class="fg"><label class="flabel">Date de début</label><input class="finput" id="emp-date-debut" type="date" onchange="empUpdateEssaiFin()"/></div>
       <div class="fg"><label class="flabel">Date de fin (si CDD)</label><input class="finput" id="emp-date-fin" type="date"/></div>
     </div>
     <div class="fg"><label class="flabel">Motif du CDD (si applicable)</label><input class="finput" id="emp-motif-cdd" placeholder="Ex. : remplacement d'une salariée absente"/></div>
     <div class="frow">
       <div class="fg"><label class="flabel">Période d'essai</label><input class="finput" id="emp-periode-essai" placeholder="Ex. : 2 mois renouvelable une fois"/></div>
       <div class="fg"><label class="flabel">Temps de travail</label><select class="finput" id="emp-temps-travail"><option value="">-- Non défini --</option><option value="temps_plein">Temps plein</option><option value="temps_partiel">Temps partiel</option></select></div>
+    </div>
+    <div class="frow">
+      <div class="fg">
+        <label class="flabel">Fin de la période d'essai</label>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:34px">
+          <span id="emp-essai-fin-calc" style="font-weight:700;color:var(--koala);font-size:13px">—</span>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer">
+            <input type="checkbox" id="emp-periode-essai-renouvelee" onchange="empUpdateEssaiFin()" style="width:15px;height:15px;accent-color:#3D3580;cursor:pointer"/>
+            Renouvelée une fois (+2 mois)
+          </label>
+        </div>
+        <p class="hint" style="margin-top:4px">Calculée automatiquement à 2 mois après la date de début (4 mois si renouvelée). Une alerte apparaît sur les tableaux de bord direction et crèche à l'approche de cette date.</p>
+      </div>
+      <div class="fg">
+        <label class="flabel">&nbsp;</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer">
+          <input type="checkbox" id="emp-periode-essai-actee" style="width:15px;height:15px;accent-color:#3D3580;cursor:pointer"/>
+          Décision prise (masquer l'alerte)
+        </label>
+      </div>
     </div>
     <div class="frow">
       <div class="fg"><label class="flabel">Heures hebdomadaires</label><input class="finput" id="emp-heures-hebdo" type="number" step="0.5" min="0"/></div>
@@ -4368,6 +4388,26 @@ const EMP_TEXT_FIELDS=[
 ];
 const EMP_NUM_FIELDS=[['emp-heures-hebdo','heures_hebdo'],['emp-salaire-brut','salaire_brut']];
 
+/* Fin de la période d'essai : 2 mois après la date de début, 4 mois si
+   renouvelée une fois — même règle côté client (affichage immédiat dans la
+   fiche) que côté base (trigger kk_trg_set_periode_essai_fin, cf.
+   sql/employes_periode_essai_fin.sql), pour ne pas dépendre d'un aller-retour
+   serveur avant de pouvoir alerter. */
+function empPeriodeEssaiFin(dateDebut,renouvelee){
+  if(!dateDebut)return null;
+  const d=new Date(dateDebut+'T00:00:00');
+  d.setMonth(d.getMonth()+(renouvelee?4:2));
+  return ipDateToLocalISO(d);
+}
+function empUpdateEssaiFin(){
+  const dd=document.getElementById('emp-date-debut').value;
+  const renouvelee=document.getElementById('emp-periode-essai-renouvelee').checked;
+  const fin=empPeriodeEssaiFin(dd,renouvelee);
+  const el=document.getElementById('emp-essai-fin-calc');
+  el.textContent=fin?new Date(fin+'T00:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'}):'—';
+}
+window.empUpdateEssaiFin=empUpdateEssaiFin;
+
 function openEmployeModal(){
   editingEmployeId=null;
   document.getElementById('modal-employe-title').textContent='Ajouter un(e) collaborateur/trice';
@@ -4376,6 +4416,9 @@ function openEmployeModal(){
   ['emp-prenom','emp-nom','emp-poste','emp-email'].forEach(id=>document.getElementById(id).value='');
   EMP_TEXT_FIELDS.forEach(([id])=>{const el=document.getElementById(id);if(el)el.value='';});
   EMP_NUM_FIELDS.forEach(([id])=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('emp-periode-essai-renouvelee').checked=false;
+  document.getElementById('emp-periode-essai-actee').checked=false;
+  empUpdateEssaiFin();
   empFillCreches(null);
   document.getElementById('modal-employe-wrap').classList.add('open');
 }
@@ -4393,6 +4436,9 @@ function editEmploye(id){
   document.getElementById('emp-email').value=e.email||'';
   EMP_TEXT_FIELDS.forEach(([id,col])=>{const el=document.getElementById(id);if(el)el.value=e[col]||'';});
   EMP_NUM_FIELDS.forEach(([id,col])=>{const el=document.getElementById(id);if(el)el.value=e[col]==null?'':e[col];});
+  document.getElementById('emp-periode-essai-renouvelee').checked=!!e.periode_essai_renouvelee;
+  document.getElementById('emp-periode-essai-actee').checked=!!e.periode_essai_actee;
+  empUpdateEssaiFin();
   empFillCreches(e.creche_id);
   document.getElementById('modal-employe-wrap').classList.add('open');
 }
@@ -4419,6 +4465,12 @@ async function saveEmploye(){
     const v=el?el.value.trim():'';
     row[col]=v===''?null:Number(v);
   });
+  row.periode_essai_renouvelee=document.getElementById('emp-periode-essai-renouvelee').checked;
+  row.periode_essai_actee=document.getElementById('emp-periode-essai-actee').checked;
+  // Recalculée ici aussi (le trigger la refait de son côté) pour que le
+  // cache local reste à jour tout de suite : dbUpdate ne relit pas la ligne
+  // après écriture, contrairement à dbInsert.
+  row.periode_essai_fin=empPeriodeEssaiFin(row.date_debut,row.periode_essai_renouvelee);
   const btn=document.getElementById('emp-btn-save');btn.disabled=true;
   try{
     if(editingEmployeId){
@@ -10472,6 +10524,19 @@ async function devisARelancer(crecheId){
   const{data,error}=await q;
   if(error)throw error;
   return(data||[]).sort((a,b)=>new Date(a.envoye_le)-new Date(b.envoye_le));
+}
+
+/* Périodes d'essai (fiches Collaborateurs/trices) arrivant à échéance dans
+   les 15 jours, ou déjà dépassées et pas encore actées — même fenêtre que
+   les autres relances ci-dessus, mais calcul entièrement client (cacheEmployes
+   est déjà chargée par loadAllData, pas besoin de requête dédiée). */
+function periodesEssaiARelancer(crecheId){
+  const seuil=ipDateToLocalISO(new Date(Date.now()+15*86400000));
+  return cacheEmployes
+    .filter(e=>e.date_debut&&!e.periode_essai_actee&&(!crecheId||String(e.creche_id)===String(crecheId)))
+    .map(e=>Object.assign({},e,{_essaiFin:empPeriodeEssaiFin(e.date_debut,e.periode_essai_renouvelee)}))
+    .filter(e=>e._essaiFin&&e._essaiFin<=seuil)
+    .sort((a,b)=>a._essaiFin.localeCompare(b._essaiFin));
 }
 
 async function brRender(){
