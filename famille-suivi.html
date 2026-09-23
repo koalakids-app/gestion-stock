@@ -98,10 +98,11 @@ async function appel(action,payload){
 }
 
 const PERIODE_LABEL={jour:'Jour',semaine:'Semaine',mois:'Mois',annee:'Année'};
+function numSemaine(dateStr){const d=new Date(dateStr+'T12:00:00');const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const jour=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-jour);const debut=new Date(Date.UTC(t.getUTCFullYear(),0,1));return Math.ceil(((t-debut)/86400000+1)/7);}
 function libellePeriode(s){
   const fmt=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
   if(s.periode_type==='jour')return new Date(s.periode_debut+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-  if(s.periode_type==='semaine')return 'Semaine du '+fmt(s.periode_debut)+' au '+fmt(s.periode_fin);
+  if(s.periode_type==='semaine')return 'Semaine du '+fmt(s.periode_debut)+' au '+fmt(s.periode_fin)+' (S'+numSemaine(s.periode_debut)+')';
   if(s.periode_type==='mois')return new Date(s.periode_debut+'T12:00:00').toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
   return 'Année '+s.periode_debut.slice(0,4)+'-'+s.periode_fin.slice(0,4);
 }

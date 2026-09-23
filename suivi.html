@@ -567,7 +567,7 @@ function periodeBornes(){
 function libellePeriode(debut,fin){
   const fmt=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
   if(PERIODE_TYPE==='jour')return new Date(debut+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-  if(PERIODE_TYPE==='semaine')return 'Semaine du '+fmt(debut)+' au '+fmt(fin);
+  if(PERIODE_TYPE==='semaine'){const w=(valeurPeriode.semaine||'').split('-W')[1];return 'Semaine du '+fmt(debut)+' au '+fmt(fin)+(w?' (S'+parseInt(w,10)+')':'');}
   if(PERIODE_TYPE==='mois')return new Date(debut+'T12:00:00').toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
   return 'Année '+debut.slice(0,4)+'-'+fin.slice(0,4);
 }
