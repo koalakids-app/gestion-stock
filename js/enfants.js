@@ -354,7 +354,10 @@ function enfArchivageBox(e){
     return '<div style="background:var(--koala-light);border-left:4px solid var(--koala);border-radius:0 8px 8px 0;padding:10px 14px;margin-top:10px;font-size:12.5px;color:var(--koala-dark)">'
       +'<i class="ti ti-archive"></i> Dossier archivé le '+escHtml(vacFmtDate(e.archive_le.slice(0,10)))+'.'
       +(purge?' Conservation légale recommandée jusqu\'au '+escHtml(vacFmtDate(purge))+' (5 ans après la sortie), au-delà duquel le dossier peut être purgé/anonymisé.':'')
-      +'<div style="margin-top:8px"><button class="btn-sm" onclick="enfDesarchiverDossier(\''+e.id+'\')"><i class="ti ti-archive-off"></i> Réactiver ce dossier</button></div>'
+      +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button class="btn-sm" onclick="enfDesarchiverDossier(\''+e.id+'\')"><i class="ti ti-archive-off"></i> Réactiver ce dossier</button>'
+      +'<button class="btn-sm" onclick="enfExporterDocuments(\''+e.id+'\')" title="Télécharge un .zip de tous les documents du dossier, à conserver hors ligne (disque externe), puis les retire du stockage en ligne"><i class="ti ti-cloud-download"></i> Exporter les documents et libérer l\'espace</button>'
+      +'</div>'
       +'</div>';
   }
   if(enfIsSorti(e)){
@@ -391,6 +394,114 @@ async function enfDesarchiverDossier(id){
   showBanner('Dossier réactivé.');
 }
 window.enfDesarchiverDossier=enfDesarchiverDossier;
+
+/* ===================== EXPORT DES DOCUMENTS PUIS PURGE DU STOCKAGE =========
+   Réservé aux dossiers archivés (voir enfArchivageBox). Télécharge un .zip de
+   tous les fichiers du dossier (pièces administratives, PAI, photocopies du
+   carnet de vaccination), puis — seulement après confirmation explicite que
+   le fichier a bien été sauvegardé — supprime ces fichiers de Supabase
+   Storage et les lignes correspondantes en base. Une trace permanente est
+   gardée dans archivage_purges (voir sql/archivage_purges.sql), qui survit
+   même une fois les documents supprimés.
+   Irréversible : aucun "annuler" possible passé ce point, d'où la
+   confirmation à deux temps (avant le zip, puis après le téléchargement). */
+async function enfExporterDocuments(id){
+  const e=cacheEnfants.find(x=>String(x.id)===String(id));
+  if(!e||!enfIsArchived(e))return;
+  if(!confirm('Préparer un fichier .zip de tous les documents de '+(e.prenom||'')+' '+(e.nom||'')+' ?\n\nUne fois le fichier téléchargé et sa sauvegarde confirmée, ces documents seront supprimés du stockage en ligne (Supabase) — à vous de les conserver ensuite hors ligne (disque externe) pour le reste du délai légal.'))return;
+
+  showBanner('Préparation du fichier .zip…');
+  let admin=[],pai=[],vaccins=[];
+  try{
+    [{data:admin=[]},{data:pai=[]},{data:vaccins=[]}]=await Promise.all([
+      sb.from('enfants_documents_admin').select('*').eq('enfant_id',id),
+      sb.from('enfants_pai').select('*').eq('enfant_id',id),
+      sb.from('vaccins_pj').select('*').eq('enfant_id',id)
+    ]);
+  }catch(err){
+    showBanner('Erreur lors de la lecture des documents : '+err.message,'error');
+    return;
+  }
+  const tous=[
+    ...admin.map(d=>({...d,dossier:'administratif'})),
+    ...pai.map(d=>({...d,dossier:'pai'})),
+    ...vaccins.map(d=>({...d,dossier:'vaccinations'}))
+  ];
+  if(!tous.length){showBanner('Aucun document à exporter pour ce dossier.');return;}
+
+  const zip=new JSZip();
+  const reussis=[];
+  let nEchec=0;
+  for(const d of tous){
+    try{
+      let blob;
+      if(d.bucket&&d.path){
+        const{data,error}=await sb.storage.from(d.bucket).download(d.path);
+        if(error)throw error;
+        blob=data;
+      }else if(d.url){
+        const resp=await fetch(d.url);
+        if(!resp.ok)throw new Error('HTTP '+resp.status);
+        blob=await resp.blob();
+      }else{
+        throw new Error('ni bucket/path ni url');
+      }
+      const nom=(d.filename||d.id)+((d.filename||'').includes('.')?'':'');
+      zip.file(d.dossier+'/'+nom,blob);
+      reussis.push(d);
+    }catch(err){
+      console.warn('[enfExporterDocuments] échec sur',d.id,err);
+      nEchec++;
+    }
+  }
+  if(!reussis.length){showBanner('Aucun document n\'a pu être téléchargé — export annulé, rien n\'a été supprimé.','error');return;}
+
+  const contenu=await zip.generateAsync({type:'blob'});
+  const nomZip='documents_'+(e.prenom||'')+'_'+(e.nom||'')+'_'+todayStr()+'.zip';
+  const url=URL.createObjectURL(contenu);
+  const a=document.createElement('a');a.href=url;a.download=nomZip;document.body.appendChild(a);a.click();a.remove();
+  URL.revokeObjectURL(url);
+
+  if(nEchec)showBanner(nEchec+' document(s) n\'ont pas pu être inclus dans le zip (ignorés, non supprimés) — '+reussis.length+' inclus.','error');
+
+  if(!confirm('Le fichier "'+nomZip+'" a été téléchargé.\n\nAvez-vous bien enregistré ce fichier sur un support externe (disque dur, coffre-fort numérique) ?\n\nEn confirmant, les '+reussis.length+' document(s) effectivement exportés seront DÉFINITIVEMENT supprimés du stockage en ligne'+(nEchec?' ('+nEchec+' document(s) en échec resteront en ligne, à retenter plus tard)':'')+'. Cette action est IRRÉVERSIBLE.'))return;
+
+  let suppOk=0,suppKo=0;
+  for(const d of reussis){
+    try{
+      if(d.bucket&&d.path){
+        const{error:rmErr}=await sb.storage.from(d.bucket).remove([d.path]);
+        if(rmErr)console.warn('[enfExporterDocuments] fichier non supprimé du stockage',d.id,rmErr.message);
+      }
+      const table=d.dossier==='administratif'?'enfants_documents_admin':(d.dossier==='pai'?'enfants_pai':'vaccins_pj');
+      const{error:delErr}=await sb.from(table).delete().eq('id',d.id);
+      if(delErr)throw delErr;
+      suppOk++;
+    }catch(err){
+      console.warn('[enfExporterDocuments] suppression échouée',d.id,err);
+      suppKo++;
+    }
+  }
+
+  await sb.from('archivage_purges').insert({
+    entite_type:'enfant',
+    entite_id:id,
+    creche_id:e.creche_id||null,
+    annee_sortie:e.date_sortie?Number(String(e.date_sortie).slice(0,4)):null,
+    motif:suppOk+' document(s) exportés en .zip puis supprimés du stockage en ligne'+(suppKo?' ('+suppKo+' échec(s) de suppression)':''),
+    purge_par:currentUser?currentUser.id:null
+  });
+
+  enfAdminDocsCache=[];enfPiecesCache=[];enfPaiCache=[];
+  document.getElementById('enf-admin-docs-zone').innerHTML='';
+  document.getElementById('enf-pai-zone').innerHTML='';
+  document.getElementById('enf-carnet-zone').innerHTML='';
+  if(String(enfFicheId)===String(id)){
+    enfLoadAdminDocs(id);enfLoadPieces(id);enfLoadPai(id);enfLoadCarnet(id);
+  }
+  showBanner(suppOk+' document(s) supprimé(s) du stockage en ligne.'+(suppKo?' '+suppKo+' suppression(s) ont échoué.':''));
+}
+window.enfExporterDocuments=enfExporterDocuments;
 
 /* ===================== CODE DE POINTAGE (tablette sans compte) =====================
    Le code lui-même (4 chiffres, colonne enfants.code_pointage / referents.code_pointage)
