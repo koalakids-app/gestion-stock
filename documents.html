@@ -3578,21 +3578,24 @@ const TPL={
     const bl=s=>s||'……';
     const W=182;let y=pdfLogo(doc,20);
     const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+    // Mise en page resserrée : interligne et espacements réduits pour que le
+    // contrat tienne sur moins de pages sans perdre de texte ni de lisibilité.
+    const LH=4.6,PARA_GAP=2.2,H2_GAP=5.5;
     const para=(t,bold)=>{
       doc.setFont(undefined,bold?'bold':'normal');doc.setFontSize(bold?11:10);
       const lines=doc.splitTextToSize(pdfSafe(t),W);
-      need(lines.length*5+4);
-      doc.text(lines,14,y);y+=lines.length*5+4;
+      need(lines.length*LH+PARA_GAP);
+      doc.text(lines,14,y);y+=lines.length*LH+PARA_GAP;
     };
     const h2=t=>{
-      need(12);doc.setFont(undefined,'bold');doc.setFontSize(11);
-      doc.text(pdfSafe(t),14,y);y+=7;doc.setFont(undefined,'normal');doc.setFontSize(10);
+      need(10);doc.setFont(undefined,'bold');doc.setFontSize(11);
+      doc.text(pdfSafe(t),14,y);y+=H2_GAP;doc.setFont(undefined,'normal');doc.setFontSize(10);
     };
 
     doc.setFont(undefined,'bold');doc.setFontSize(15);
-    doc.text('CONTRAT DE TRAVAIL',14+W/2,y,{align:'center'});y+=7;
+    doc.text('CONTRAT DE TRAVAIL',14+W/2,y,{align:'center'});y+=6;
     doc.setFontSize(10.5);doc.setFont(undefined,'normal');
-    doc.text('PERSONNEL DE CRÈCHE',14+W/2,y,{align:'center'});y+=11;
+    doc.text('PERSONNEL DE CRÈCHE',14+W/2,y,{align:'center'});y+=8;
 
     para('Entre les soussignés',true);
 
@@ -3699,8 +3702,8 @@ const TPL={
       ?('Identité vérifiée par code le '+new Date(CT_OTP_VERIFIED_AT).toLocaleString('fr-FR')+'.')
       :'Identité non vérifiée par code (mode dégradé) — ce document ne constitue pas une signature électronique qualifiée au sens eIDAS.';
     const lignesVerif=doc.splitTextToSize(verifTxt,W);
-    const hFait=ligneFait.length*5+4, hConsent=lignesConsent.length*4.5+2,
-      hVerif=lignesVerif.length*4+4, hSig=42;
+    const hFait=ligneFait.length*LH+PARA_GAP, hConsent=lignesConsent.length*4.2+1.5,
+      hVerif=lignesVerif.length*3.8+2.5, hSig=40;
     need(hFait+hConsent+hVerif+hSig);
 
     doc.setFont(undefined,'bold');doc.setFontSize(11);
@@ -3720,7 +3723,7 @@ const TPL={
     };
     put('responsable',`Pour l'Employeur : ${bl(g('representant_nom'))}, ${bl(g('representant_qualite'))}`,14);
     put('salarie',"Le/la Salarié(e) — « Lu et approuvé »",110);
-    y+=42;
+    y+=hSig;
 
     // Empreinte du PDF exact généré — calculée côté client (jsPDF ne tourne
     // pas côté serveur ici), conservée avec la réponse pour le dossier de
