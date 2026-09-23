@@ -176,6 +176,12 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <div id="fiche-docs-dossier-box"></div>
       <div id="ficheDocsZone"></div>
     </div>
+    <div class="f" id="ficheContratsWrap" style="display:none">
+      <label class="lb">Contrat de travail</label>
+      <div id="ficheContratsBox"></div>
+      <p class="hint">Généré et signé depuis le module Documents (modèle « Contrat de travail (salarié) »),
+        une fois cette fiche liée au contrat via le sélecteur « Fiche collaborateur/trice ».</p>
+    </div>
     <div class="f" id="ficheHeuresWrap" style="display:none">
       <label class="lb">Validation mensuelle des heures</label>
       <div id="ficheHeuresBox"></div>
@@ -506,12 +512,59 @@ function openFiche(id){
     empLoadPieces(e.id);
     document.getElementById('ficheHeuresWrap').style.display='';
     loadFicheHeures(e);
+    document.getElementById('ficheContratsWrap').style.display='';
+    empLoadContrats(e.id);
   }else{
     formWrap.style.display='none';
     docsWrap.style.display='none';
     document.getElementById('ficheHeuresWrap').style.display='none';
+    document.getElementById('ficheContratsWrap').style.display='none';
   }
   document.getElementById('modalFiche').classList.add('on');
+}
+/* ---------- CONTRAT DE TRAVAIL (module Documents) ----------
+   Le contrat n'est pas stocké ici : il vit dans documents_reponses (modèle
+   contrat_travail de documents.html), rattaché à cette fiche via le
+   sélecteur « Fiche collaborateur/trice » du formulaire (donnees.
+   salarie_employe_id). On ne fait ici qu'y donner un accès direct, en
+   lecture, depuis la fiche collaborateur/trice — pas de duplication des
+   données ni de génération de PDF ici. */
+async function empLoadContrats(employeId){
+  const box=document.getElementById('ficheContratsBox');
+  if(box)box.innerHTML='<p class="hint">Chargement…</p>';
+  try{
+    const{data:docs,error:eDocs}=await sb.from('documents_koala').select('id,titre').eq('template_key','contrat_travail');
+    if(eDocs)throw eDocs;
+    const docIds=(docs||[]).map(d=>d.id);
+    if(!docIds.length){if(box)box.innerHTML='<p class="hint">Aucun modèle « Contrat de travail » configuré dans Documents.</p>';return;}
+    const{data:reps,error:eReps}=await sb.from('documents_reponses')
+      .select('id,document_id,statut,updated_at,created_at,donnees')
+      .in('document_id',docIds).eq('creche_id',crecheId)
+      .order('updated_at',{ascending:false});
+    if(eReps)throw eReps;
+    const mine=(reps||[]).filter(r=>r.donnees&&r.donnees.salarie_employe_id===employeId);
+    if(!mine.length){
+      if(box)box.innerHTML='<p class="hint">Aucun contrat de travail rattaché à cette fiche pour l’instant — '
+        +'à générer depuis le module Documents, en sélectionnant cette fiche dans le formulaire.</p>';
+      return;
+    }
+    if(box)box.innerHTML=mine.map(r=>{
+      const doc=(docs||[]).find(d=>d.id===r.document_id)||{};
+      const url='documents.html?doc='+encodeURIComponent(r.document_id)+'&rep='+encodeURIComponent(r.id);
+      const badge=r.statut==='signe'
+        ?'<span style="background:var(--green-l);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ Signé</span>'
+        :'<span style="background:var(--orange-l);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⏳ En préparation</span>';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)">'
+        +'<div><div style="font-size:12.5px;font-weight:600">'+esc(doc.titre||'Contrat de travail')+'</div>'
+        +'<div style="font-size:11px;color:var(--muted)">'+new Date(r.updated_at||r.created_at).toLocaleDateString('fr-FR')+'</div></div>'
+        +badge
+        +'<a href="'+esc(url)+'" target="_blank" class="btn btn-g btn-sm"><i class="ti ti-eye"></i> Ouvrir</a>'
+        +'</div>';
+    }).join('');
+  }catch(err){
+    console.warn('empLoadContrats',err);
+    if(box)box.innerHTML='<p class="hint">Contrat indisponible pour le moment.</p>';
+  }
 }
 /* ---------- VALIDATION MENSUELLE DES HEURES (lecture seule, vue direction) ----------
    Les signatures sont déposées depuis collaborateur.html ("Mon espace") et ne
