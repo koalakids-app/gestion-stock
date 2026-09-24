@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v26';   // v26 : module Réunions d'équipe (js/reunions-equipe.js)
+const CACHE_NAME = 'stocks-v27';   // v27 : QR code MFA agrandi + fond blanc (zone de silence) pour un scan fiable
 
 self.addEventListener('install', event => {
   event.waitUntil(
