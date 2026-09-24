@@ -169,7 +169,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <i class="ti ti-file-certificate" style="font-size:22px;color:var(--orange)"></i>
     <h1>Contrats d'accueil</h1>
     <span class="who" id="whoAmI"></span>
-    <a class="tbtn" href="inscriptions.html" title="Inscriptions"><i class="ti ti-clipboard-list"></i><span>Inscriptions</span></a>
+    <a class="tbtn" href="inscriptions.html" title="Devis"><i class="ti ti-clipboard-list"></i><span>Devis</span></a>
     <a class="tbtn" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i><span>Accueil</span></a>
     <button class="tbtn" onclick="openNotice()" title="Mode d'emploi"><i class="ti ti-help"></i><span>Aide</span></button>
     <button class="tbtn danger" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i><span>Quitter</span></button>
@@ -298,7 +298,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     </div>
     <button class="btn btn-g btn-sm" style="margin-top:8px" onclick="csEffacer()"><i class="ti ti-eraser"></i> Effacer</button>
     <p class="hint" style="margin-top:10px">La contresignature rend le contrat complet des deux côtés. C'est elle qui
-      autorise ensuite la création de la fiche enfant, dans le module Inscriptions.</p>
+      autorise ensuite la création de la fiche enfant, dans le module Devis.</p>
     <div class="acts">
       <button class="btn btn-g" onclick="closeOv('ovContresign')">Annuler</button>
       <button class="btn btn-p" id="btnCsGo" onclick="contresigner()"><i class="ti ti-check"></i> Contresigner</button>
@@ -618,7 +618,7 @@ async function mfaGateCancel(){
   showLogin();
 }
 async function contratsGrantAccess(){
-  kkLoginAlertCheck(sb);
+  if(typeof kkLoginAlertCheck==='function')kkLoginAlertCheck(sb);
   document.getElementById('loginView').style.display='none';
   document.getElementById('appView').style.display='block';
   document.getElementById('whoAmI').textContent=(PROF.name||'')+' · Direction';
@@ -795,7 +795,7 @@ function render(){
     let pq;
     if(!ENFANTS.length&&!DEMANDES.length){
       pq='Rien à contractualiser. Les demandes arrivent ici dès qu\'un devis est accepté, '
-        +'dans le module Inscriptions.';
+        +'dans le module Devis.';
     }else if(filtreEtat){
       pq='Aucun dossier dans cet état. Recliquez le compteur pour tout revoir.';
     }else if(anneeFiltre){
@@ -1017,7 +1017,7 @@ function rendreDossier(){
     if(!destinatairesDe().length){
       h+='<div class="warn"><i class="ti ti-mail-off"></i><span>'
         +'Aucun parent destinataire avec une adresse e-mail : le contrat ne pourra pas être envoyé. '
-        +'Cochez « destinataire » sur au moins un parent, dans le module Inscriptions.</span></div>';
+        +'Cochez « destinataire » sur au moins un parent, dans le module Devis.</span></div>';
     }
   }
 
@@ -1609,7 +1609,7 @@ function cSync(){
     if(c.tarif.mode==='horaire'&&c.tarif.heures_min==null&&c.tarif.heures_max==null){
       alerte+='<div class="warn"><i class="ti ti-alert-triangle"></i><span>'
         +'Cette ligne ne porte <b>aucune borne horaire</b> : elle s\'applique à tout volume. '
-        +'Complétez sa fourchette dans l\'écran Tarifs du module Inscriptions.</span></div>';
+        +'Complétez sa fourchette dans l\'écran Tarifs du module Devis.</span></div>';
     }
     if(forceId&&auto&&String(auto.id)!==String(c.tarif.id)){
       alerte+='<div class="warn"><i class="ti ti-alert-triangle"></i><span>'
@@ -1955,7 +1955,7 @@ async function envoyerContrat(){
   const adresses=String(val('cDest')||c.destinataires||'')
     .split(',').map(x=>x.trim()).filter(x=>x.indexOf('@')>0);
   if(!adresses.length){
-    toast('Aucun destinataire avec une adresse e-mail : cochez « destinataire » sur au moins un parent, dans le module Inscriptions.',true);
+    toast('Aucun destinataire avec une adresse e-mail : cochez « destinataire » sur au moins un parent, dans le module Devis.',true);
     return;
   }
   if(!c.total_mensuel){
@@ -2871,7 +2871,7 @@ async function renvoyerContratSigne(){
 
 /* ---------- NOTICE ---------- */
 const NOTICE=`
-<p><b>Le parcours, dans l'ordre.</b> Préinscription → devis envoyé → devis accepté et signé → <b>contrat</b> établi, envoyé, signé par la famille → <b>contresigné</b> par la crèche → <b>alors seulement</b> la fiche enfant se crée, dans le module Inscriptions. Un enfant n'entre dans les effectifs, les présences et les commandes de repas qu'une fois son contrat complet des deux côtés.</p>
+<p><b>Le parcours, dans l'ordre.</b> Préinscription → devis envoyé → devis accepté et signé → <b>contrat</b> établi, envoyé, signé par la famille → <b>contresigné</b> par la crèche → <b>alors seulement</b> la fiche enfant se crée, dans le module Devis. Un enfant n'entre dans les effectifs, les présences et les commandes de repas qu'une fois son contrat complet des deux côtés.</p>
 <p style="margin-top:10px"><b>Deux files, un même travail.</b> En haut, les <b>demandes en attente de contrat</b> : devis accepté, fiche enfant pas encore créée. En dessous, les <b>enfants inscrits</b>, pour les renouvellements et les avenants. Une demande quitte la première file le jour où sa fiche enfant est créée.</p>
 <p style="margin-top:10px"><b>D'où viennent les chiffres.</b> Un contrat initial reprend le <b>devis accepté</b> — l'accord de la famille — et les recalcule sur la grille du jour. Si le total diffère de celui du devis, l'écran le dit : la famille a accepté un montant, et le contrat ne doit pas en engager un autre sans qu'on le sache.</p>
 <p style="margin-top:10px"><b>Le renouvellement</b> repart du contrat de l'année écoulée, décale les dates d'une année scolaire et applique la <b>grille en vigueur</b> : le tarif peut donc changer d'une année à l'autre.</p>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Koala Kids — Inscriptions</title>
+<title>Koala Kids — Devis</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -54,6 +54,32 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 textarea{resize:vertical;min-height:70px}
 label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 4px 3px}
 .search{flex:1;min-width:170px}
+.dash{background:#fff;border:2px solid var(--line);border-radius:18px;padding:14px;margin-bottom:14px}
+.dash h2{font-family:'Baloo 2',cursive;font-size:17px;color:var(--violet);margin:0 0 10px;display:flex;align-items:center;gap:6px}
+.dash h2 .sub2{font-family:inherit;font-size:11.5px;color:var(--muted);font-weight:600;margin-left:auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:14px}
+.kpi{border-radius:14px;padding:10px 12px;cursor:pointer;border:2px solid transparent}
+.kpi.on{border-color:var(--violet)}
+.kpi .n{font-family:'Baloo 2',cursive;font-size:28px;line-height:1}
+.kpi .l{font-size:11.5px;font-weight:700;margin-top:3px}
+.dgrid{display:grid;grid-template-columns:3fr 2fr;gap:14px}
+@media(max-width:760px){.dgrid{grid-template-columns:1fr}}
+.dtab{width:100%;border-collapse:collapse;font-size:13px}
+.dtab th{font-size:10.5px;text-transform:uppercase;color:var(--muted);text-align:center;padding:4px;font-weight:700}
+.dtab th:first-child,.dtab td:first-child{text-align:left}
+.dtab td{padding:7px 4px;border-top:1px solid var(--line);text-align:center;font-weight:700;color:var(--violet)}
+.dtab tr.cl{cursor:pointer}.dtab tr.cl:hover td{background:var(--cream)}
+.dtab tr.on td{background:var(--orange-l)}
+.dtab .z{color:#D4D0E4;font-weight:600}
+.dtab .pill{display:inline-block;min-width:24px;border-radius:10px;padding:1px 7px}
+.dsec{font-size:11px;font-weight:800;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.bar2{margin-bottom:7px;font-size:12.5px}
+.bar2 .t{display:flex;justify-content:space-between;font-weight:700;color:#4a4560}
+.bar2 .g{height:8px;background:var(--line);border-radius:6px;overflow:hidden;margin-top:3px}
+.bar2 .g i{display:block;height:100%;background:var(--red);border-radius:6px}
+.agenda{font-size:12.5px}
+.agenda div{padding:5px 0;border-top:1px solid var(--line);cursor:pointer;display:flex;gap:8px}
+.agenda b{color:var(--violet);white-space:nowrap}
 .stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .stat{background:#fff;border:2px solid var(--line);border-radius:14px;padding:9px 13px;cursor:pointer;flex:1;min-width:96px}
 .stat.on{border-color:var(--orange);background:var(--orange-l)}
@@ -181,7 +207,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
 <div id="loginView" style="display:none">
   <div class="md" id="liFormBox">
-    <h3><i class="ti ti-clipboard-list"></i> Inscriptions</h3>
+    <h3><i class="ti ti-clipboard-list"></i> Devis</h3>
     <div class="f"><label class="lb">Adresse e-mail</label><input id="liMail" type="email" autocomplete="username"></div>
     <div class="f"><label class="lb">Mot de passe</label><input id="liPwd" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div id="liErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
@@ -219,7 +245,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 <div id="appView" style="display:none">
   <div class="topbar">
     <i class="ti ti-clipboard-list" style="font-size:22px;color:var(--orange)"></i>
-    <h1>Inscriptions</h1>
+    <h1>Devis</h1>
     <span class="who" id="whoAmI"></span>
     <button class="tbtn accent" onclick="openTarifs()" title="Tarifs et frais"><i class="ti ti-cash"></i><span>Tarifs</span></button>
     <button class="tbtn" onclick="openImportPdf()" title="Importer une liste de préinscriptions (PDF)"><i class="ti ti-file-upload"></i><span>Importer PDF</span></button>
@@ -231,6 +257,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
   </div>
 
   <div class="wrap">
+    <div id="dash"></div>
     <div class="stats" id="stats"></div>
 
     <div class="bar">
@@ -241,6 +268,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <option value="debut">Trier par date de début souhaitée</option>
       </select>
       <button class="btn btn-s btn-sm" id="btnRappels" onclick="toggleRappels()"><i class="ti ti-bell"></i> À relancer <span id="nRappels"></span></button>
+      <button class="btn btn-s btn-sm" id="btnVisites" onclick="toggleVisites()"><i class="ti ti-door-enter"></i> Visites <span id="nVisites"></span></button>
       <button class="btn btn-p" onclick="openFiche(null)"><i class="ti ti-plus"></i> Nouvelle demande</button>
     </div>
 
@@ -309,10 +337,16 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
     <div class="sec">Suivi</div>
     <div class="g3">
-      <div class="f"><label class="lb">Statut</label><select id="fStatut"></select></div>
+      <div class="f"><label class="lb">Statut</label><select id="fStatut" onchange="syncMotif()"></select></div>
       <div class="f"><label class="lb">Origine</label><input id="fSource" list="dlSource" placeholder="site, téléphone…"><datalist id="dlSource"><option>Site internet</option><option>Téléphone</option><option>Bouche à oreille</option><option>Passage sur place</option><option>Mail</option></datalist></div>
       <div class="f"><label class="lb">À relancer le</label><input id="fRappel" type="date"></div>
     </div>
+    <div class="g3">
+      <div class="f"><label class="lb">Visite de la crèche le</label><input id="fVisite" type="date"></div>
+      <div class="f"><label class="lb">À</label><input id="fVisiteH" type="time"></div>
+      <div class="f"><label class="lb">&nbsp;</label><label class="ck"><input type="checkbox" id="fVisiteFaite"> Visite effectuée</label></div>
+    </div>
+    <div class="f" id="wrapMotif" style="display:none"><label class="lb">Motif du refus</label><select id="fMotif"></select></div>
     <div class="f"><label class="lb">Comment nous ont-ils connus ?</label><input id="fConnus"></div>
     <div class="f"><label class="lb">Notes internes</label><textarea id="fNotes" placeholder="Jamais transmis à la famille."></textarea></div>
 
@@ -659,7 +693,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 let ME=null,PROF=null,IS_DIRECTION=false;
 let PRE=[],CRECHES=[],PARENTS=[];
 let ficheId=null,parentId=null;
-let filtreStatut='',filtreRappels=false;
+let filtreStatut='',filtreRappels=false,filtreVisites=false;
 
 /* Statuts : libellé, couleur de fond, couleur de texte. L'ordre est celui du
    cycle de vie, pas alphabétique — la liste déroulante doit se lire comme une
@@ -674,6 +708,19 @@ const STATUTS={
   sans_suite:  {l:'Sans suite',     bg:'#F1EFF7', fg:'#8E8AA8'}
 };
 const ORDRE_STATUTS=['nouvelle','en_contact','devis_envoye','accepte','inscrit','refuse','sans_suite'];
+/* Dossiers « en cours » : ni inscrits (le devis signé est devenu une
+   inscription), ni clos. */
+const STATUTS_EN_COURS=['nouvelle','en_contact','devis_envoye','accepte'];
+const STATUTS_CLOS=['inscrit','refuse','sans_suite'];
+/* Motifs de refus — liste fermée (contrainte preinscriptions_motif_refus_ck)
+   pour que le reporting regroupe les réponses. */
+const MOTIFS_REFUS={
+  trop_cher:'Trop cher',
+  creche_municipale:'Crèche municipale',
+  concurrent_micro_creche:'Concurrent micro-crèche',
+  ne_repond_plus:'Ne répond plus',
+  autre:'Autre'
+};
 const LIENS={mere:'Mère',pere:'Père',tuteur:'Tuteur / tutrice',autre:'Responsable légal'};
 const JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi']];
 
@@ -1323,7 +1370,7 @@ async function mfaGateCancel(){
   showLogin();
 }
 async function inscriptionsGrantAccess(){
-  kkLoginAlertCheck(sb);
+  if(typeof kkLoginAlertCheck==='function')kkLoginAlertCheck(sb);
   document.getElementById('loginView').style.display='none';
   document.getElementById('appView').style.display='block';
   document.getElementById('whoAmI').textContent=(PROF.name||'')+' · Direction';
@@ -1368,7 +1415,15 @@ async function loadAll(){
    plutôt que de laisser deviner laquelle dans la liste. Paramètre retiré de
    l'URL ensuite pour ne pas rouvrir la fiche à chaque rafraîchissement. */
 function ouvrirDepuisUrl(){
-  const id=new URLSearchParams(location.search).get('open');
+  const qs=new URLSearchParams(location.search);
+  // ?vue=rappels / ?vue=visites : liens du tableau de bord général.
+  const vue=qs.get('vue');
+  if(vue==='rappels'||vue==='visites'){
+    history.replaceState(null,'',location.pathname);
+    if(vue==='rappels')toggleRappels();else toggleVisites();
+    return;
+  }
+  const id=qs.get('open');
   if(!id)return;
   history.replaceState(null,'',location.pathname);
   if(PRE.some(p=>String(p.id)===String(id)))openFiche(id);
@@ -1384,6 +1439,7 @@ function render(){
 
   // Les compteurs portent sur l'ensemble, indépendamment des filtres en cours :
   // sinon cliquer un statut ferait tomber tous les autres à zéro.
+  renderDash();
   const box=document.getElementById('stats');
   box.innerHTML=
     '<div class="stat'+(filtreStatut==='__tous__'?' on':'')+'" onclick="setStatut(\'__tous__\')">'
@@ -1395,26 +1451,39 @@ function render(){
         +'<div class="n">'+n+'</div><div class="l">'+esc(STATUTS[s].l)+'</div></div>';
     }).join('');
 
-  const nR=PRE.filter(estARelancer).length;
-  document.getElementById('nRappels').textContent=nR?'('+nR+')':'';
+  const nR=PRE.filter(estARelancer).length,nP=PRE.filter(aRelancePrevue).length;
+  document.getElementById('nRappels').textContent=nP?'('+(nR?nR+' en retard · ':'')+nP+' prévue'+(nP>1?'s':'')+')':'';
   document.getElementById('btnRappels').className='btn btn-sm '+(filtreRappels?'btn-p':'btn-s');
+  const nV=PRE.filter(aVisitePrevue).length;
+  document.getElementById('nVisites').textContent=nV?'('+nV+')':'';
+  document.getElementById('btnVisites').className='btn btn-sm '+(filtreVisites?'btn-p':'btn-s');
 
   let l=PRE.slice();
   /* Une demande basculée sort de la file active : le dossier est traité, et le
      laisser là remplirait la liste de dossiers clos au fil de l'année. Elle
      reste entière — devis, dates, origine — et se retrouve en cliquant sur le
      compteur « Inscrit ». */
-  if(!filtreStatut)l=l.filter(p=>p.statut!=='inscrit');
+  if(!filtreStatut){if(!filtreRappels&&!filtreVisites)l=l.filter(p=>p.statut!=='inscrit');}
   else if(filtreStatut!=='__tous__')l=l.filter(p=>p.statut===filtreStatut);
   if(cre)l=l.filter(p=>String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0);
-  if(filtreRappels)l=l.filter(estARelancer);
+  /* « À relancer » liste TOUTES les relances programmées, échues ou non,
+     de la plus proche à la plus lointaine : n'afficher que les échues
+     laissait la liste vide dès qu'on notait une date à venir. */
+  if(filtreRappels){
+    l=l.filter(aRelancePrevue);
+    l.sort((a,b)=>String(a.date_rappel).localeCompare(String(b.date_rappel)));
+  }
+  if(filtreVisites){
+    l=l.filter(aVisitePrevue);
+    l.sort((a,b)=>(String(a.date_visite)+(a.heure_visite||'')).localeCompare(String(b.date_visite)+(b.heure_visite||'')));
+  }
   if(q)l=l.filter(p=>((p.prenom||'')+' '+(p.nom||'')+' '+(p.ville||'')+' '+(p.notes_internes||'')).toLowerCase().indexOf(q)>=0);
 
   /* Par date d'ajout (l'ordre déjà chargé, le plus récent en tête) ou par
      date de début souhaitée — la plus proche en tête, les demandes sans date
      renseignée reléguées en bas plutôt qu'éparpillées par un tri « vide en
      premier ». */
-  if(val('fTri')==='debut'){
+  if(val('fTri')==='debut'&&!filtreRappels&&!filtreVisites){
     l.sort((a,b)=>{
       const da=a.date_entree_souhaitee||'9999',db=b.date_entree_souhaitee||'9999';
       return da<db?-1:da>db?1:0;
@@ -1434,14 +1503,23 @@ function render(){
     const jrs=toArr(p.jours).map(j=>(JOURS.find(x=>x[0]===Number(j))||[0,''])[1].slice(0,3)).filter(Boolean).join(' ');
     const naiss=p.dob?(p.ne_ou_a_naitre==='a_naitre'?'terme le '+dfr(p.dob):'né(e) le '+dfr(p.dob)):'naissance non renseignée';
     const rel=estARelancer(p)
-      ? '<span class="tag" style="background:var(--amber-l);color:var(--amber)"><i class="ti ti-bell"></i> à relancer</span>' : '';
+      ? '<span class="tag" style="background:var(--amber-l);color:var(--amber)"><i class="ti ti-bell"></i> à relancer'+(String(p.date_rappel).slice(0,10)<auj()?' (depuis le '+dfr(p.date_rappel)+')':' aujourd\'hui')+'</span>'
+      : aRelancePrevue(p)
+      ? '<span class="tag" style="background:var(--violet-l);color:var(--violet)"><i class="ti ti-bell"></i> relance le '+dfr(p.date_rappel)+'</span>' : '';
+    const vis=p.date_visite
+      ? (p.visite_effectuee
+        ? '<span class="tag" style="background:var(--green-l);color:var(--green)"><i class="ti ti-door-enter"></i> visite faite le '+dfr(p.date_visite)+'</span>'
+        : '<span class="tag" style="background:'+(String(p.date_visite)<auj()?'var(--red-l);color:var(--red)':'var(--orange-l);color:var(--orange)')+'"><i class="ti ti-door-enter"></i> visite '+dfr(p.date_visite)+(p.heure_visite?' à '+esc(p.heure_visite):'')+'</span>')
+      : '';
+    const mot=(p.statut==='refuse'||p.statut==='sans_suite')&&p.motif_refus
+      ? '<span class="tag" style="background:var(--red-l);color:var(--red)">'+esc(MOTIFS_REFUS[p.motif_refus]||p.motif_refus)+'</span>' : '';
     return '<div class="card" onclick="openFiche(\''+p.id+'\')">'
       +'<div class="av"><i class="ti ti-mood-kid"></i></div><div class="bd">'
       +'<div class="nm">'+esc(nom)+'</div>'
       +'<div class="sub">'+esc(naiss)+' · '+esc(cr)+(jrs?' · '+esc(jrs):'')
       +(p.date_entree_souhaitee?'<br>Entrée souhaitée le '+dfr(p.date_entree_souhaitee):'')+'</div>'
       +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'
-      +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>'+rel+'</div>'
+      +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>'+rel+vis+mot+'</div>'
       +'</div></div>';
   }).join('');
 }
@@ -1454,8 +1532,106 @@ function estARelancer(p){
   if(['inscrit','refuse','sans_suite'].indexOf(p.statut)>=0)return false;
   return String(p.date_rappel).slice(0,10)<=auj();
 }
-function setStatut(s){filtreStatut=(filtreStatut===s?'':s);render();}
-function toggleRappels(){filtreRappels=!filtreRappels;render();}
+/* Relance programmée (passée ou à venir) sur un dossier encore ouvert. */
+function aRelancePrevue(p){
+  return !!p.date_rappel&&STATUTS_CLOS.indexOf(p.statut)<0;
+}
+/* Visite fixée, pas encore faite, dossier ouvert. Une visite dont la date est
+   passée sans être cochée « effectuée » reste listée (en rouge) : soit elle a
+   eu lieu et il faut la cocher, soit la famille n'est pas venue. */
+function aVisitePrevue(p){
+  return !!p.date_visite&&!p.visite_effectuee&&STATUTS_CLOS.indexOf(p.statut)<0;
+}
+function setStatut(s){filtreStatut=(filtreStatut===s?'':s);filtreRappels=filtreVisites=false;render();}
+function toggleRappels(){filtreRappels=!filtreRappels;filtreVisites=false;if(filtreRappels)filtreStatut='';render();}
+function toggleVisites(){filtreVisites=!filtreVisites;filtreRappels=false;if(filtreVisites)filtreStatut='';render();}
+function filtrerCreche(id){
+  const sel=document.getElementById('fCreche');
+  sel.value=(sel.value===String(id)?'':String(id));
+  render();
+}
+
+/* ---------- TABLEAU DE BORD ---------- */
+/* Crèche de rattachement d'un dossier pour les compteurs : la crèche retenue,
+   sinon la première souhaitée — un dossier ne compte qu'une fois. */
+function crecheDe(p){
+  return p.creche_id?String(p.creche_id):(toArr(p.creches_souhaitees).map(String)[0]||'');
+}
+function renderDash(){
+  const el=document.getElementById('dash');
+  const cre=val('fCreche');
+  const L=cre?PRE.filter(p=>crecheDe(p)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0):PRE;
+  const enCours=L.filter(p=>STATUTS_EN_COURS.indexOf(p.statut)>=0);
+  const nRel=L.filter(estARelancer).length;
+  const nVis=L.filter(aVisitePrevue).length;
+  const nIns=L.filter(p=>p.statut==='inscrit').length;
+  const refus=L.filter(p=>p.statut==='refuse'||p.statut==='sans_suite');
+  const clos=nIns+refus.length;
+  const taux=clos?Math.round(nIns*100/clos):null;
+
+  const kpi=(n,l,bg,fg,on,click)=>'<div class="kpi'+(on?' on':'')+'" style="background:'+bg+';color:'+fg+'" onclick="'+click+'">'
+    +'<div class="n">'+n+'</div><div class="l">'+l+'</div></div>';
+  let h='<div class="dash"><h2><i class="ti ti-layout-dashboard"></i> Tableau de bord'
+    +(cre?' — '+esc(nomCreche(cre)):'')+'<span class="sub2">'+(cre?'cliquez à nouveau sur la crèche pour tout voir':'cliquez sur une crèche pour filtrer')+'</span></h2>'
+    +'<div class="kpis">'
+    +kpi(enCours.length,'devis en cours','var(--orange-l)','var(--orange)',false,"setStatut('')")
+    +kpi(nRel,'à relancer','var(--amber-l)','var(--amber)',filtreRappels,'toggleRappels()')
+    +kpi(nVis,'visite'+(nVis>1?'s':'')+' prévue'+(nVis>1?'s':''),'var(--violet-l)','var(--violet)',filtreVisites,'toggleVisites()')
+    +kpi(nIns,'inscrit'+(nIns>1?'s':'')+' (devis signés)','var(--green-l)','var(--green)',filtreStatut==='inscrit',"setStatut('inscrit')")
+    +kpi(refus.length,'refus / sans suite','var(--red-l)','var(--red)',filtreStatut==='refuse',"setStatut('refuse')")
+    +(taux!=null?kpi(taux+' %','taux de transformation','#F1EFF7','#4a4560',false,''):'')
+    +'</div><div class="dgrid"><div>';
+
+  // Par crèche
+  const ids=CRECHES.map(c=>String(c.id));
+  if(PRE.some(p=>!crecheDe(p)))ids.push('');
+  const cell=(n,bg,fg)=>n?'<span class="pill" style="background:'+bg+';color:'+fg+'">'+n+'</span>':'<span class="z">0</span>';
+  h+='<div class="dsec">Par crèche</div><table class="dtab"><tr><th>Crèche</th><th>Devis en cours</th><th>À relancer</th><th>Visites prévues</th><th>Inscrits</th><th>Refus</th></tr>'
+    +ids.map(id=>{
+      const l=PRE.filter(p=>crecheDe(p)===id);
+      const a=l.filter(p=>STATUTS_EN_COURS.indexOf(p.statut)>=0).length,
+            b=l.filter(estARelancer).length,c=l.filter(aVisitePrevue).length,
+            d=l.filter(p=>p.statut==='inscrit').length,
+            e=l.filter(p=>p.statut==='refuse'||p.statut==='sans_suite').length;
+      if(!id&&!(a+b+c+d+e))return '';
+      return '<tr class="'+(id?'cl':'')+(id&&cre===id?' on':'')+'"'+(id?' onclick="filtrerCreche(\''+id+'\')"':'')+'>'
+        +'<td>'+(id?esc(nomCreche(id)):'<i style="color:var(--muted)">Crèche à définir</i>')+'</td>'
+        +'<td>'+cell(a,'var(--orange-l)','var(--orange)')+'</td><td>'+cell(b,'var(--amber-l)','var(--amber)')+'</td>'
+        +'<td>'+cell(c,'var(--violet-l)','var(--violet)')+'</td><td>'+cell(d,'var(--green-l)','var(--green)')+'</td>'
+        +'<td>'+cell(e,'var(--red-l)','var(--red)')+'</td></tr>';
+    }).join('')+'</table>';
+
+  // Agenda : prochaines visites et relances
+  const ag=[];
+  L.filter(aVisitePrevue).forEach(p=>ag.push({d:String(p.date_visite).slice(0,10),h:p.heure_visite||'',t:'Visite',p:p}));
+  L.filter(aRelancePrevue).forEach(p=>ag.push({d:String(p.date_rappel).slice(0,10),h:'',t:'Relance',p:p}));
+  ag.sort((a,b)=>(a.d+a.h).localeCompare(b.d+b.h));
+  h+='<div class="dsec" style="margin-top:14px">À venir — visites et relances</div><div class="agenda">'
+    +(ag.length?ag.slice(0,8).map(x=>{
+      const late=x.d<auj();
+      return '<div onclick="openFiche(\''+x.p.id+'\')"><b style="'+(late?'color:var(--red)':'')+'">'+(x.d===auj()?'Aujourd\'hui':dfr(x.d))+(x.h?' '+esc(x.h):'')+'</b>'
+        +'<span><i class="ti '+(x.t==='Visite'?'ti-door-enter':'ti-bell')+'"></i> '+x.t+' — '+esc(((x.p.prenom||'')+' '+(x.p.nom||'')).trim())
+        +'<span style="color:var(--muted)"> · '+esc(nomCreche(crecheDe(x.p))||'')+'</span></span></div>';
+    }).join('')+(ag.length>8?'<div style="color:var(--muted);cursor:default">… et '+(ag.length-8)+' autre(s)</div>':'')
+    :'<div style="color:var(--muted);cursor:default">Rien de programmé.</div>')+'</div>';
+
+  // Motifs de refus
+  h+='</div><div><div class="dsec">Motifs des refus</div>';
+  if(!refus.length)h+='<div style="font-size:12.5px;color:var(--muted)">Aucun refus enregistré.</div>';
+  else{
+    const cpt={};refus.forEach(p=>{const k=p.motif_refus||'_';cpt[k]=(cpt[k]||0)+1;});
+    const max=Math.max.apply(null,Object.values(cpt));
+    h+=Object.keys(cpt).sort((a,b)=>cpt[b]-cpt[a]).map(k=>
+      '<div class="bar2"><div class="t"><span>'+esc(k==='_'?'Motif non renseigné':MOTIFS_REFUS[k]||k)+'</span><span>'+cpt[k]+' · '+Math.round(cpt[k]*100/refus.length)+' %</span></div>'
+      +'<div class="g"><i style="width:'+Math.round(cpt[k]*100/max)+'%'+(k==='_'?';background:#D4D0E4':'')+'"></i></div></div>').join('');
+  }
+  h+='</div></div></div>';
+  el.innerHTML=h;
+}
+function syncMotif(){
+  const s=val('fStatut');
+  document.getElementById('wrapMotif').style.display=(s==='refuse'||s==='sans_suite')?'':'none';
+}
 
 /* ---------- FICHE ---------- */
 function syncNe(){
@@ -1508,6 +1684,12 @@ function openFiche(id){
   setVal('fStatut',p?p.statut:'nouvelle');
   setVal('fSource',p?p.source:'');setVal('fRappel',p?(p.date_rappel||''):'');
   setVal('fConnus',p?p.comment_connus:'');setVal('fNotes',p?p.notes_internes:'');
+  setVal('fVisite',p?(p.date_visite||''):'');setVal('fVisiteH',p?(p.heure_visite||''):'');
+  setChk('fVisiteFaite',p&&p.visite_effectuee);
+  document.getElementById('fMotif').innerHTML='<option value="">— choisir —</option>'
+    +Object.keys(MOTIFS_REFUS).map(k=>'<option value="'+k+'">'+esc(MOTIFS_REFUS[k])+'</option>').join('');
+  setVal('fMotif',p?(p.motif_refus||''):'');
+  syncMotif();
 
   syncNe();syncPai();syncHeures();
   document.getElementById('fHd').onchange=syncHeures;
@@ -1565,12 +1747,22 @@ async function saveFiche(){
     toast('Le statut « Inscrit » se pose automatiquement lors de la bascule en fiche enfant.',true);
     return;
   }
+  const clos=statut==='refuse'||statut==='sans_suite';
+  if(statut==='refuse'&&!val('fMotif')){
+    toast('Indiquez le motif du refus.',true);
+    document.getElementById('fMotif').focus();
+    return;
+  }
 
   const row={
     statut:statut,
     source:val('fSource'),
     comment_connus:val('fConnus'),
     date_rappel:val('fRappel')||null,
+    date_visite:val('fVisite')||null,
+    heure_visite:val('fVisite')?(val('fVisiteH')||null):null,
+    visite_effectuee:!!val('fVisite')&&chk('fVisiteFaite'),
+    motif_refus:clos?(val('fMotif')||null):null,
     notes_internes:val('fNotes'),
     prenom:prenom,nom:nom,
     sexe:val('fSexe')||null,
