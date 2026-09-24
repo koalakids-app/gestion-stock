@@ -268,6 +268,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <option value="debut">Trier par date de début souhaitée</option>
       </select>
       <button class="btn btn-s btn-sm" id="btnRappels" onclick="toggleRappels()"><i class="ti ti-bell"></i> Rappels en retard <span id="nRappels"></span></button>
+      <button class="btn btn-s btn-sm" id="btnRelancesAVenir" onclick="toggleRelancesAVenir()"><i class="ti ti-calendar-time"></i> Relances à venir <span id="nRelancesAVenir"></span></button>
       <button class="btn btn-s btn-sm" id="btnVisites" onclick="toggleVisites()"><i class="ti ti-door-enter"></i> Visites <span id="nVisites"></span></button>
       <button class="btn btn-p" onclick="openFiche(null)"><i class="ti ti-plus"></i> Nouvelle demande</button>
     </div>
@@ -693,7 +694,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 let ME=null,PROF=null,IS_DIRECTION=false;
 let PRE=[],CRECHES=[],PARENTS=[];
 let ficheId=null,parentId=null;
-let filtreStatut='',filtreRappels=false,filtreVisites=false;
+let filtreStatut='',filtreRappels=false,filtreVisites=false,filtreRelancesAVenir=false;
 
 /* Statuts : libellé, couleur de fond, couleur de texte. L'ordre est celui du
    cycle de vie, pas alphabétique — la liste déroulante doit se lire comme une
@@ -1451,9 +1452,12 @@ function render(){
         +'<div class="n">'+n+'</div><div class="l">'+esc(STATUTS[s].l)+'</div></div>';
     }).join('');
 
-  const nR=PRE.filter(estARelancer).length,nP=PRE.filter(aRelancePrevue).length;
-  document.getElementById('nRappels').textContent=nP?'('+(nR?nR+' en retard · ':'')+nP+' prévue'+(nP>1?'s':'')+')':'';
+  const nR=PRE.filter(estARelancer).length;
+  document.getElementById('nRappels').textContent=nR?'('+nR+')':'';
   document.getElementById('btnRappels').className='btn btn-sm '+(filtreRappels?'btn-p':'btn-s');
+  const nA=PRE.filter(aRelanceAvenir).length;
+  document.getElementById('nRelancesAVenir').textContent=nA?'('+nA+')':'';
+  document.getElementById('btnRelancesAVenir').className='btn btn-sm '+(filtreRelancesAVenir?'btn-p':'btn-s');
   const nV=PRE.filter(aVisitePrevue).length;
   document.getElementById('nVisites').textContent=nV?'('+nV+')':'';
   document.getElementById('btnVisites').className='btn btn-sm '+(filtreVisites?'btn-p':'btn-s');
@@ -1463,14 +1467,19 @@ function render(){
      laisser là remplirait la liste de dossiers clos au fil de l'année. Elle
      reste entière — devis, dates, origine — et se retrouve en cliquant sur le
      compteur « Inscrit ». */
-  if(!filtreStatut){if(!filtreRappels&&!filtreVisites)l=l.filter(p=>p.statut!=='inscrit');}
+  if(!filtreStatut){if(!filtreRappels&&!filtreRelancesAVenir&&!filtreVisites)l=l.filter(p=>p.statut!=='inscrit');}
   else if(filtreStatut!=='__tous__')l=l.filter(p=>p.statut===filtreStatut);
   if(cre)l=l.filter(p=>String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0);
   /* Le filtre doit montrer exactement ce que compte la tuile « rappels en
      retard » (estARelancer) : lister aussi les relances à venir donnait une
-     liste non vide sous un compteur à 0, ce qui semblait contradictoire. */
+     liste non vide sous un compteur à 0, ce qui semblait contradictoire. Les
+     relances à venir ont leur propre bouton, avec le même principe. */
   if(filtreRappels){
     l=l.filter(estARelancer);
+    l.sort((a,b)=>String(a.date_rappel).localeCompare(String(b.date_rappel)));
+  }
+  if(filtreRelancesAVenir){
+    l=l.filter(aRelanceAvenir);
     l.sort((a,b)=>String(a.date_rappel).localeCompare(String(b.date_rappel)));
   }
   if(filtreVisites){
@@ -1483,7 +1492,7 @@ function render(){
      date de début souhaitée — la plus proche en tête, les demandes sans date
      renseignée reléguées en bas plutôt qu'éparpillées par un tri « vide en
      premier ». */
-  if(val('fTri')==='debut'&&!filtreRappels&&!filtreVisites){
+  if(val('fTri')==='debut'&&!filtreRappels&&!filtreRelancesAVenir&&!filtreVisites){
     l.sort((a,b)=>{
       const da=a.date_entree_souhaitee||'9999',db=b.date_entree_souhaitee||'9999';
       return da<db?-1:da>db?1:0;
@@ -1538,15 +1547,22 @@ function estARelancer(p){
 function aRelancePrevue(p){
   return !!p.date_rappel&&STATUTS_CLOS.indexOf(p.statut)<0;
 }
+/* Relance programmée pour une date future (pas encore en retard) sur un
+   dossier ouvert — le pendant complémentaire d'estARelancer, pour le
+   bouton « Relances à venir ». */
+function aRelanceAvenir(p){
+  return !!p.date_rappel&&STATUTS_CLOS.indexOf(p.statut)<0&&String(p.date_rappel).slice(0,10)>auj();
+}
 /* Visite fixée, pas encore faite, dossier ouvert. Une visite dont la date est
    passée sans être cochée « effectuée » reste listée (en rouge) : soit elle a
    eu lieu et il faut la cocher, soit la famille n'est pas venue. */
 function aVisitePrevue(p){
   return !!p.date_visite&&!p.visite_effectuee&&STATUTS_CLOS.indexOf(p.statut)<0;
 }
-function setStatut(s){filtreStatut=(filtreStatut===s?'':s);filtreRappels=filtreVisites=false;render();}
-function toggleRappels(){filtreRappels=!filtreRappels;filtreVisites=false;if(filtreRappels)filtreStatut='';render();}
-function toggleVisites(){filtreVisites=!filtreVisites;filtreRappels=false;if(filtreVisites)filtreStatut='';render();}
+function setStatut(s){filtreStatut=(filtreStatut===s?'':s);filtreRappels=filtreRelancesAVenir=filtreVisites=false;render();}
+function toggleRappels(){filtreRappels=!filtreRappels;filtreRelancesAVenir=filtreVisites=false;if(filtreRappels)filtreStatut='';render();}
+function toggleRelancesAVenir(){filtreRelancesAVenir=!filtreRelancesAVenir;filtreRappels=filtreVisites=false;if(filtreRelancesAVenir)filtreStatut='';render();}
+function toggleVisites(){filtreVisites=!filtreVisites;filtreRappels=filtreRelancesAVenir=false;if(filtreVisites)filtreStatut='';render();}
 function filtrerCreche(id){
   const sel=document.getElementById('fCreche');
   sel.value=(sel.value===String(id)?'':String(id));
