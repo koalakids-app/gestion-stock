@@ -1295,7 +1295,7 @@ function enfRenderDossier(){
         +'Envoie aux parents un lien personnel vers les documents à remplir et signer en ligne. '
         +'Valable '+DOSSIER_JOURS+' jours.</p>'
         +'<button class="btn-primary" onclick="enfOuvrirEnvoi()"><i class="ti ti-send"></i> Envoyer le dossier</button>';
-    box.innerHTML=intro+enfEnLigneHtml(enf);
+    box.innerHTML=intro+enfEnLigneHtml(enf)+enfAutresSanteHtml();
     return;
   }
 
@@ -1322,7 +1322,8 @@ function enfRenderDossier(){
     +'<button class="btn-sm" onclick="enfRelancerDossier(\''+actif.id+'\')"><i class="ti ti-bell"></i> Relancer</button>'
     +'<button class="btn-sm" style="color:var(--red);border-color:var(--red)" onclick="enfAnnulerDossier(\''+actif.id+'\')"><i class="ti ti-x"></i> Annuler</button>'
     +'</div>'
-    +enfEnLigneHtml(enf);
+    +enfEnLigneHtml(enf)
+    +enfAutresSanteHtml();
 }
 
 /* Le pack complet, chargé une fois par session. Deux sous-ensembles :
@@ -1442,6 +1443,32 @@ function enfEnLigneHtml(e){
     +'Documents à remplir en ligne</div>'
     +'<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Si une famille n\'utilise pas encore l\'appli, importez ici la version papier du document une fois rempli.</div>'
     + docs.map(enfEnLigneDocRowHtml).join('')
+    +'</div>';
+}
+
+/* Documents sanitaires hors liste : tout ce que le médecin fournit sans que
+   ce soit un document Koala configuré (ordonnance d'aptitude, certificat,
+   protocole ponctuel...). Même mécanique que « Autres documents importés »
+   du dossier administratif (piece_key null), mais avec une clé dédiée pour
+   rester dans la section santé plutôt que dans le dossier administratif —
+   voir enfRenderAdminDocs. */
+const SANTE_AUTRE_KEY='sante_autre';
+function enfAutresSanteHtml(){
+  const fichiers=enfPiecesPourCle(SANTE_AUTRE_KEY);
+  const listeFichiers=fichiers.length ? '<div style="margin:6px 0 0 0">'+fichiers.map(f=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">'
+    +'<i class="ti ti-paperclip" style="color:var(--koala);flex-shrink:0;font-size:13px"></i>'
+    +'<button type="button" onclick="enfAdminDocOpen(\''+f.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;color:var(--koala-dark);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(f.filename||'Document')+'</button>'
+    +'<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+new Date(f.created_at).toLocaleDateString('fr-FR')+'</span>'
+    +'<button onclick="enfAdminDocDelete(\''+f.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px;flex-shrink:0"><i class="ti ti-trash"></i></button>'
+    +'</div>'
+  ).join('')+'</div>' : '';
+  return '<div style="border-top:1px solid var(--border);margin:10px 0 9px;padding-top:9px">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--koala-dark);margin-bottom:2px">'
+    +'Autres documents sanitaires</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Ordonnance d\'aptitude, certificat ponctuel... tout document du médecin sans case dédiée.</div>'
+    + listeFichiers
+    +'<button type="button" class="btn-sm" onclick="enfOpenPieceUpload(\''+SANTE_AUTRE_KEY+'\')" style="margin-top:'+(fichiers.length?'6px':'0')+'"><i class="ti ti-upload"></i> Importer un document hors liste</button>'
     +'</div>';
 }
 
@@ -1873,6 +1900,10 @@ async function enfHandleAdminDocUpload(event){
         enfRenderDossier();
         enfRenderFicheSanitaireZone();
         enfRenderDocs();
+      }else if(pieceKey===SANTE_AUTRE_KEY){
+        /* Document sanitaire hors liste (ordonnance d'aptitude, certificat...) :
+           rien à marquer « remis », juste à afficher dans la section santé. */
+        enfRenderDossier();
       }
     }catch(e){
       console.error('[enfAdminDocs]',e.message);
@@ -1907,7 +1938,7 @@ async function enfAdminDocDelete(id){
   }
   enfAdminDocsCache=enfAdminDocsCache.filter(x=>String(x.id)!==String(id));
   enfRenderAdminDocs();
-  if(d&&d.piece_key&&(d.piece_key.startsWith('papier_')||d.piece_key.startsWith('enligne_'))){
+  if(d&&d.piece_key&&(d.piece_key.startsWith('papier_')||d.piece_key.startsWith('enligne_')||d.piece_key===SANTE_AUTRE_KEY)){
     enfRenderDossier();
     enfRenderFicheSanitaireZone();
   }
