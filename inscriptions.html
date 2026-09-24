@@ -1466,11 +1466,11 @@ function render(){
   if(!filtreStatut){if(!filtreRappels&&!filtreVisites)l=l.filter(p=>p.statut!=='inscrit');}
   else if(filtreStatut!=='__tous__')l=l.filter(p=>p.statut===filtreStatut);
   if(cre)l=l.filter(p=>String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0);
-  /* « À relancer » liste TOUTES les relances programmées, échues ou non,
-     de la plus proche à la plus lointaine : n'afficher que les échues
-     laissait la liste vide dès qu'on notait une date à venir. */
+  /* Le filtre doit montrer exactement ce que compte la tuile « rappels en
+     retard » (estARelancer) : lister aussi les relances à venir donnait une
+     liste non vide sous un compteur à 0, ce qui semblait contradictoire. */
   if(filtreRappels){
-    l=l.filter(aRelancePrevue);
+    l=l.filter(estARelancer);
     l.sort((a,b)=>String(a.date_rappel).localeCompare(String(b.date_rappel)));
   }
   if(filtreVisites){
