@@ -66,6 +66,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .user-chip{display:flex;align-items:center;gap:6px;background:var(--koala-light);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--koala);font-weight:600;cursor:pointer}
 .user-chip:hover{background:var(--red-light);color:var(--red)}
 
+/* CLOCHE NOTIFICATIONS (historique in-app, cf. showInAppNotif) */
+.notif-bell-wrap{position:relative}
+.notif-bell-btn.notif-open{background:rgba(255,255,255,.32) !important}
+.notif-bell-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:130}
+.notif-bell-panel.open{display:block}
+.notif-bell-card{background:#fff;border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 34px rgba(42,36,96,0.16);padding:10px;width:320px;max-width:calc(100vw - 24px);max-height:420px;overflow-y:auto}
+.notif-bell-empty{padding:22px 10px;text-align:center;color:var(--muted);font-size:13px}
+.notif-bell-item{display:flex;flex-direction:column;gap:2px;padding:9px 10px;border-radius:8px;font-size:12.5px;color:#444;margin-bottom:2px;cursor:pointer}
+.notif-bell-item:hover{background:var(--koala-light)}
+.notif-bell-item.non-lu{background:#F4F2FF}
+.notif-bell-item .nb-title{font-weight:700;color:var(--koala);display:flex;align-items:center;gap:5px}
+.notif-bell-item.non-lu .nb-title::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--orange);flex-shrink:0}
+.notif-bell-item .nb-body{color:#666;white-space:pre-wrap;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.notif-bell-item .nb-time{font-size:10.5px;color:var(--muted)}
+
 /* TAB CONTENT */
 .tab-content{display:none}.tab-content.active{display:block}
 
@@ -373,6 +388,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 @media(max-width:1024px){
   .mnav-hub-panel{position:fixed;top:68px;right:12px;left:auto;bottom:auto;background:transparent;padding:0;align-items:flex-start;justify-content:flex-end}
   .mnav-hub-card{flex-direction:column;flex-wrap:nowrap;width:250px;max-width:calc(100vw - 24px);max-height:calc(100vh - 90px);overflow-y:auto}
+  .notif-bell-panel{position:fixed;top:68px;right:12px;left:auto}
 }
 /* FRAIS IK */
 .ik-config-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:1rem}
@@ -561,6 +577,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <i class="ti ti-sun" style="font-size:15px"></i><span>Ma journée</span>
         <span id="btn-brief-n" style="display:none;background:var(--red,#e05252);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;font-weight:700">0</span>
       </button>
+     <div class="notif-bell-wrap" id="notif-bell-wrap">
+       <button class="mnav-btn notif-bell-btn" id="notif-bell-btn" onclick="toggleNotifBell(event)" title="Notifications récentes" style="background:rgba(255,255,255,.16);color:#fff;border:none;border-radius:20px;padding:5px 12px">
+         <i class="ti ti-bell" style="font-size:15px"></i> <span class="mnav-badge" id="badge-notifs" style="display:none">0</span>
+       </button>
+       <div class="notif-bell-panel" id="notif-bell-panel" onclick="if(event.target===this)closeNotifBell()">
+         <div class="notif-bell-card" id="notif-bell-card">
+           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding:0 2px">
+             <span style="font-size:12px;font-weight:700;color:var(--koala);text-transform:uppercase;letter-spacing:.03em">Notifications</span>
+             <button class="btn-sm" style="padding:3px 8px;font-size:11px" onclick="notifBellToutMarquerLu()">Tout marquer lu</button>
+           </div>
+           <div id="notif-bell-list"></div>
+         </div>
+       </div>
+     </div>
      <button id="btn-notif" onclick="toggleNotificationsPush()" title="Activer les notifications" style="display:inline-flex;align-items:center;gap:6px;background:var(--koala-light);color:#9ca3af;border:none;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer"><i class="ti ti-bell-off" style="font-size:15px"></i></button>
      <button id="btn-securite" onclick="openSecuriteModal()" title="Sécurité du compte (MFA)" style="display:inline-flex;align-items:center;gap:6px;background:var(--koala-light);color:#9ca3af;border:none;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer"><i class="ti ti-shield-lock" style="font-size:15px"></i></button>
                   <div class="user-chip" id="user-chip" onclick="doLogout()"><i class="ti ti-user" style="font-size:13px"></i> <span id="user-name">—</span> <i class="ti ti-logout" style="font-size:12px;opacity:0.7"></i></div>
@@ -3093,7 +3123,74 @@ function showInAppNotif(title,body){
   wrap.appendChild(card);
   requestAnimationFrame(()=>{card.style.opacity='1';card.style.transform='translateX(0)';});
   setTimeout(()=>{card.style.opacity='0';card.style.transform='translateX(24px)';setTimeout(()=>card.remove(),300);},6000);
+  notifBellAjouter(title,body);
 }
+
+/* Historique des notifications (cloche dans l'en-tête) : le toast disparaît en
+   quelques secondes, la cloche garde une trace consultable. Persisté en
+   localStorage par référent (un poste partagé ne mélange pas les historiques
+   de deux comptes), plafonné à 30 entrées. */
+const NOTIF_BELL_MAX=30;
+let notifBellListe=[];
+function notifBellCle(){return 'koala_notifs_'+(currentProfile?.id||'anon');}
+function notifBellCharger(){
+  try{notifBellListe=JSON.parse(localStorage.getItem(notifBellCle())||'[]');}catch(e){notifBellListe=[];}
+}
+function notifBellSauver(){
+  try{localStorage.setItem(notifBellCle(),JSON.stringify(notifBellListe.slice(0,NOTIF_BELL_MAX)));}catch(e){}
+}
+function notifBellAjouter(title,body){
+  notifBellListe.unshift({id:Date.now()+'-'+Math.random().toString(36).slice(2),title,body:body||'',ts:Date.now(),lu:false});
+  notifBellListe=notifBellListe.slice(0,NOTIF_BELL_MAX);
+  notifBellSauver();
+  notifBellRender();
+}
+function notifBellTempsRelatif(ts){
+  const s=Math.round((Date.now()-ts)/1000);
+  if(s<60)return 'à l\'instant';
+  if(s<3600)return 'il y a '+Math.floor(s/60)+' min';
+  if(s<86400)return 'il y a '+Math.floor(s/3600)+' h';
+  return new Date(ts).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' à '+new Date(ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+}
+function notifBellRender(){
+  const badge=document.getElementById('badge-notifs');
+  const nonLues=notifBellListe.filter(n=>!n.lu).length;
+  if(badge){badge.textContent=nonLues;badge.style.display=nonLues>0?'':'none';}
+  const list=document.getElementById('notif-bell-list');
+  if(!list)return;
+  if(!notifBellListe.length){list.innerHTML='<div class="notif-bell-empty">Aucune notification pour l\'instant.</div>';return;}
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  list.innerHTML=notifBellListe.map(n=>
+    '<div class="notif-bell-item'+(n.lu?'':' non-lu')+'" onclick="notifBellMarquerLu(\''+n.id+'\')">'
+    +'<div class="nb-title">'+esc(n.title)+'</div>'
+    +(n.body?'<div class="nb-body">'+esc(n.body)+'</div>':'')
+    +'<div class="nb-time">'+notifBellTempsRelatif(n.ts)+'</div>'
+    +'</div>'
+  ).join('');
+}
+function notifBellMarquerLu(id){
+  const n=notifBellListe.find(x=>x.id===id);
+  if(n&&!n.lu){n.lu=true;notifBellSauver();notifBellRender();}
+}
+function notifBellToutMarquerLu(){
+  notifBellListe.forEach(n=>n.lu=true);
+  notifBellSauver();notifBellRender();
+}
+function toggleNotifBell(e){
+  e.stopPropagation();
+  document.getElementById('notif-bell-panel').classList.toggle('open');
+  document.getElementById('notif-bell-btn').classList.toggle('notif-open');
+}
+function closeNotifBell(){
+  const p=document.getElementById('notif-bell-panel'),b=document.getElementById('notif-bell-btn');
+  if(p)p.classList.remove('open');
+  if(b)b.classList.remove('notif-open');
+}
+document.addEventListener('click',function(e){
+  const wrap=document.getElementById('notif-bell-wrap');
+  if(wrap&&!wrap.contains(e.target))closeNotifBell();
+});
+
 /* Le temps réel Postgres Changes de ce projet Supabase ne délivre aucun
    événement au client — vérifié y compris avec une policy RLS totalement
    ouverte (using(true)) sur `demandes`, qui n'a rien changé : la donnée ne
@@ -3492,6 +3589,7 @@ function showApp(){
   document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
   updateBadges();renderCrecheTabs();
   checkNotifSubscription();
+  notifBellCharger();notifBellRender();
   /* Ouverture sur le tableau de bord, direction comme referentes : c'est la vue
      du jour, et non la messagerie, qui doit accueillir a la connexion. */
   showMain(isDirection?'dashboard':'ref-dashboard');
