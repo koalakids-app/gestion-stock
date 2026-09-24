@@ -132,7 +132,7 @@ async function loadRefDashAlertesExtra(crecheId,urgentesHtml){
     // urgent, cf. devisARelancer) : sans ça, impossible de savoir lequel
     // relancer sans rouvrir toute la liste des préinscriptions.
     if(devis.length)html+='<a class="alert-item warning" href="inscriptions.html?open='+devis[0].preinscription_id+'" style="text-decoration:none;color:inherit"><i class="ti ti-file-invoice" style="font-size:16px;flex-shrink:0"></i> <strong>'+devis.length+' devis</strong> en attente de signature</a>';
-    if(demandes.length)html+='<a class="alert-item warning" href="inscriptions.html?vue=rappels" style="text-decoration:none;color:inherit"><i class="ti ti-bell" style="font-size:16px;flex-shrink:0"></i> <strong>'+demandes.length+' devis</strong> à relancer</a>';
+    if(demandes.length)html+='<a class="alert-item warning" href="inscriptions.html?vue=rappels" style="text-decoration:none;color:inherit"><i class="ti ti-bell" style="font-size:16px;flex-shrink:0"></i> <strong>'+demandes.length+' préinscription'+(demandes.length>1?'s':'')+'</strong> à relancer</a>';
     if(visites.length)html+='<a class="alert-item info" href="inscriptions.html?vue=visites" style="text-decoration:none;color:inherit"><i class="ti ti-door-enter" style="font-size:16px;flex-shrink:0"></i> <strong>'+visites.length+' visite(s)</strong> prévue(s) cette semaine</a>';
     box.innerHTML=html;
   }catch(e){console.warn('[RefDash] alertes',e);}
@@ -350,7 +350,7 @@ async function loadDashboardDemandesAlertes(){
     const n=(await demandesARelancer(null)).length;
     if(n>0){
       const box=document.getElementById('dash-alerts');if(!box)return;
-      box.innerHTML+='<a class="alert-item warning" href="inscriptions.html?vue=rappels" style="text-decoration:none;color:inherit"><i class="ti ti-bell" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' devis</strong> à relancer</a>';
+      box.innerHTML+='<a class="alert-item warning" href="inscriptions.html?vue=rappels" style="text-decoration:none;color:inherit"><i class="ti ti-bell" style="font-size:16px;flex-shrink:0"></i> <strong>'+n+' préinscription'+(n>1?'s':'')+'</strong> à relancer</a>';
     }
   }catch(e){console.warn('[Dashboard] demandes à relancer',e);}
   try{
