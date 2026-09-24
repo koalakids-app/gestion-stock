@@ -672,10 +672,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="fchip active" id="hebdo-chip-grille" onclick="hebdoSetView('grille')"><i class="ti ti-layout-grid"></i> Grille</button>
         <button class="fchip" id="hebdo-chip-synthese" onclick="hebdoSetView('synthese')"><i class="ti ti-tools-kitchen-2"></i> Synthèse repas</button>
         <div style="display:flex;gap:8px;margin-left:auto">
+          <button class="btn-cancel direction-only" onclick="document.getElementById('menu-semaine-file').click()"><i class="ti ti-upload"></i> Importer le menu</button>
+          <input type="file" id="menu-semaine-file" accept=".xlsx,.xls" style="display:none" onchange="handleImportMenusFile(event)"/>
           <button class="btn-primary" onclick="crOpen()"><i class="ti ti-clipboard-list"></i> Commande repas</button>
           <button class="btn-green" onclick="exportPresenceHebdoExcel()"><i class="ti ti-file-spreadsheet"></i> Exporter Excel</button>
         </div>
       </div>
+      <div id="menu-semaine-zone" style="margin-bottom:12px"></div>
       <div id="presence-hebdo-view"></div>
       <div id="hebdo-reel-view"></div>
     </div>
@@ -5425,7 +5428,7 @@ function presUpdateDateWeekLabel(){
 }
 async function renderPresence(){
   presUpdateDateWeekLabel();
-  if(currentPresenceSlot==='hebdo'){await renderPresenceHebdo();prRenderSemaine();return;}
+  if(currentPresenceSlot==='hebdo'){await renderPresenceHebdo();prRenderSemaine();renderMenuSemaine();return;}
   if(currentPresenceSlot==='mois'){await renderPresenceMois();return;}
   await renderPresenceGantt();
 }
@@ -6313,6 +6316,146 @@ async function exportPresenceHebdoExcel(){
   showBanner('Export Excel téléchargé (sans mise en forme).');
 }
 window.exportPresenceHebdoExcel=exportPresenceHebdoExcel;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MENU DE LA SEMAINE (traiteur) — bandeau affiché sur Présences > Semaine
+
+   Importé depuis le tableau Excel hebdomadaire du traiteur (un onglet par
+   semaine, mise en page fixe repérée sur « TABLEAUX DES MENUS ») dans la
+   table `menus_semaine`. Un seul menu pour tout le réseau (pas de colonne
+   crèche), avec les 3 profils du traiteur — pas les 5 tranches d'âge de la
+   fiche enfant : « Bébés − de 6 mois » (bb6), « Bébés 6-18 mois » (bb18),
+   « Grands 18 mois-3 ans » (grand), mêmes catégories que le bon de commande
+   (voir mcmLigne() plus bas).
+   ═════════════════════════════════════════════════════════════════════════ */
+
+const MENU_JOURS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
+
+/* Nettoie une cellule du tableau traiteur : espace superflu, et les
+   placeholders en étoiles ("*******", utilisés par le traiteur pour dire
+   « pas de plat alternatif ce jour-là ») deviennent une chaîne vide. */
+function menusCell(v){
+  const s=(v==null?'':String(v)).replace(/\s+/g,' ').trim();
+  if(!s||/^\*+$/.test(s))return'';
+  return s;
+}
+function menusDateISO(d){
+  if(!(d instanceof Date)||isNaN(d))return null;
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+/* Lit un classeur (un onglet = une semaine) et renvoie les lignes prêtes pour
+   `menus_semaine`. Positions de cellules fixes, repérées sur le fichier
+   traiteur (lignes Excel 1-indexées, ici en index 0 via header:1) :
+     ligne 1 (idx0)  : numéro de semaine en G
+     ligne 2 (idx1)  : date du lundi en F
+     lignes 6-7 (idx5-6)   : Bébés -6 mois (légume, fruit)
+     lignes 9-12 (idx8-11) : Bébés 6-18 mois (protéine, protéine alt, légume, fruit)
+     ligne 13 (idx12)      : goûter Bébés 6-18 mois
+     ligne 14 (idx13)      : thème du jour (facultatif, ex. « HALLOWEEN »)
+     lignes 15-20 (idx14-19) : Grands (entrée, plat, plat alt, garniture, laitage, dessert)
+     ligne 21 (idx20)      : goûter Grands
+   Colonnes C à G (idx2 à idx6) = Lundi à Vendredi. */
+function menusParseWorkbook(wb){
+  const weeks=[];
+  wb.SheetNames.forEach(function(sheetName){
+    const sheet=wb.Sheets[sheetName];
+    const aoa=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:true});
+    const row=function(i){return aoa[i]||[];};
+    const dateDebut=menusDateISO(row(1)[5]);
+    if(!dateDebut)return; // onglet illisible (pas la mise en page attendue) : ignoré silencieusement
+    const semaineNum=parseInt(row(0)[6],10)||null;
+    const jours=[];
+    for(let j=0;j<5;j++){
+      const col=2+j; // C..G
+      jours.push({
+        jour:j+1,
+        theme:menusCell(row(13)[col]),
+        bb6:[menusCell(row(5)[col]),menusCell(row(6)[col])].filter(Boolean),
+        bb18:[menusCell(row(8)[col]),menusCell(row(9)[col]),menusCell(row(10)[col]),menusCell(row(11)[col])].filter(Boolean),
+        bb18_gouter:menusCell(row(12)[col]),
+        grand:[menusCell(row(14)[col]),menusCell(row(15)[col]),menusCell(row(16)[col]),menusCell(row(17)[col]),menusCell(row(18)[col]),menusCell(row(19)[col])].filter(Boolean),
+        grand_gouter:menusCell(row(20)[col])
+      });
+    }
+    weeks.push({date_debut:dateDebut,semaine_num:semaineNum,jours:jours});
+  });
+  return weeks;
+}
+async function handleImportMenusFile(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array',cellDates:true});
+      const weeks=menusParseWorkbook(wb);
+      if(!weeks.length){alert('Aucune semaine reconnue dans ce fichier — vérifiez qu\'il suit la mise en page habituelle du traiteur.');return;}
+      const periodes=weeks.map(w=>'S'+(w.semaine_num||'?')+' ('+w.date_debut+')').join(', ');
+      if(!confirm('Importer '+weeks.length+' semaine(s) de menu ? '+periodes+'\n\nLes menus déjà enregistrés pour ces semaines seront remplacés.'))return;
+      const rows=[];
+      weeks.forEach(function(w){
+        w.jours.forEach(function(j){
+          rows.push({
+            date_debut:w.date_debut,semaine_num:w.semaine_num,jour:j.jour,theme:j.theme||null,
+            bb6:j.bb6,bb18:j.bb18,bb18_gouter:j.bb18_gouter||null,
+            grand:j.grand,grand_gouter:j.grand_gouter||null,
+            updated_at:new Date().toISOString()
+          });
+        });
+      });
+      const{error}=await sb.from('menus_semaine').upsert(rows,{onConflict:'date_debut,jour'});
+      if(error)throw error;
+      showBanner(weeks.length+' semaine(s) de menu importée(s) ✅');
+      if(currentPresenceSlot==='hebdo')renderMenuSemaine();
+    }catch(err){console.error('[Import menus]',err);alert('Erreur pendant l\'import : '+(err.message||err));}
+    finally{event.target.value='';}
+  };
+  reader.readAsArrayBuffer(file);
+}
+window.handleImportMenusFile=handleImportMenusFile;
+
+/* Bandeau menu de la semaine affichée, au-dessus de la grille de présence.
+   Une carte par profil traiteur (Bébés -6 mois / Bébés 6-18 mois + goûter /
+   Grands + goûter), une colonne par jour ouvré de la semaine en cours. */
+async function renderMenuSemaine(){
+  const zone=document.getElementById('menu-semaine-zone');
+  if(!zone)return;
+  const ws=weekStart();
+  const dateDebut=ipDateToLocalISO(ws);
+  let menu=null;
+  try{
+    const{data,error}=await sb.from('menus_semaine').select('*').eq('date_debut',dateDebut).order('jour');
+    if(error)throw error;
+    menu=(data&&data.length)?data:null;
+  }catch(err){console.warn('[Menu semaine] lecture',err);}
+  if(!menu){zone.innerHTML='';return;}
+  const parJour={};menu.forEach(function(m){parJour[m.jour]=m;});
+  function ligneListe(arr){return(arr&&arr.length)?'<ul style="margin:2px 0 0;padding-left:16px">'+arr.map(function(t){return'<li>'+escHtml(t)+'</li>';}).join('')+'</ul>':'<span style="color:var(--muted)">—</span>';}
+  function carte(titre,champ,gouterChamp){
+    let html='<div style="flex:1;min-width:220px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px">'
+      +'<div style="font-weight:800;color:var(--koala);font-size:12px;margin-bottom:6px">'+escHtml(titre)+'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">';
+    for(let j=1;j<=5;j++){
+      const m=parJour[j];
+      html+='<div style="font-size:11px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">'+MENU_JOURS[j-1]+'</div>'
+        +ligneListe(m?m[champ]:null)
+        +(gouterChamp&&m&&m[gouterChamp]?'<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border);color:var(--koala-dark)"><i class="ti ti-cookie" style="font-size:11px"></i> '+escHtml(m[gouterChamp])+'</div>':'')
+        +(m&&m.theme&&champ==='grand'?'<div style="margin-top:2px;font-style:italic;color:var(--orange-dark)">'+escHtml(m.theme)+'</div>':'')
+        +'</div>';
+    }
+    html+='</div></div>';
+    return html;
+  }
+  zone.innerHTML='<details style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--koala-lightest,#F7F6FC)">'
+    +'<summary style="cursor:pointer;font-weight:800;color:var(--koala-dark);font-size:13px"><i class="ti ti-tools-kitchen-2"></i> Menu de la semaine</summary>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">'
+    +carte('Bébés − de 6 mois','bb6',null)
+    +carte('Bébés 6-18 mois','bb18','bb18_gouter')
+    +carte('Grands 18 mois-3 ans','grand','grand_gouter')
+    +'</div></details>';
+}
+window.renderMenuSemaine=renderMenuSemaine;
 
 /* ══════════════════════════════════════════════════════════════════════════
    COMMANDE REPAS TRAITEUR (bon « Les mamans cuisinières du Monde »)
