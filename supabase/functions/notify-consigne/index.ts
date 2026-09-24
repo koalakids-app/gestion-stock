@@ -13,9 +13,23 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ADMIN_EMAIL = Deno.env.get("ADMIN_EMAIL") ?? "";
 const APP_URL      = Deno.env.get("APP_URL")      ?? "https://koalakids.fr";
+
+const sb = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+);
+
+// L'email est un filet de secours : si le destinataire a une notification push
+// active, il n'a pas besoin d'un email en plus pour la même chose.
+async function referentsWithActivePush(referentIds: string[]) {
+  if (!referentIds.length) return new Set<string>();
+  const { data } = await sb.from("push_subscriptions").select("referent_id").in("referent_id", referentIds);
+  return new Set((data ?? []).map((r) => r.referent_id));
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,10 +101,14 @@ serve(async (req) => {
 
     const errors: string[] = [];
     let envoyes = 0;
+    let ignoresPushActif = 0;
 
-    // ── 1. Email à CHAQUE référent destinataire ────────────────────
+    const pushActif = await referentsWithActivePush((destinataires ?? []).map((d: { id?: string }) => d?.id).filter(Boolean));
+
+    // ── 1. Email à CHAQUE référent destinataire sans push actif ────
     for (const dest of (destinataires ?? [])) {
       if (!dest?.email) continue;
+      if (dest.id && pushActif.has(dest.id)) { ignoresPushActif++; continue; }
       const replyUrl = `${APP_URL}/referent.html?id=${id}&name=${encodeURIComponent(dest.name || "")}&creche=${encodeURIComponent(creche || "")}`;
       try {
         await sendEmail(
@@ -123,7 +141,7 @@ serve(async (req) => {
     if (errors.length > 0) console.error("Email errors:", errors);
 
     return new Response(
-      JSON.stringify({ ok: true, envoyes, errors }),
+      JSON.stringify({ ok: true, envoyes, ignoresPushActif, errors }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

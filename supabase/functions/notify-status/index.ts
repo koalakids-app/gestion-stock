@@ -6,8 +6,22 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const APP_URL = Deno.env.get("APP_URL") ?? "https://koalakids.fr";
+
+const sb = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+);
+
+// L'email est un filet de secours : si le destinataire a une notification push
+// active, il n'a pas besoin d'un email en plus pour la même chose.
+async function hasActivePush(referentId: string | null | undefined) {
+  if (!referentId) return false;
+  const { data } = await sb.from("push_subscriptions").select("id").eq("referent_id", referentId).limit(1);
+  return !!(data && data.length);
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -47,10 +61,15 @@ serve(async (req) => {
   try {
     const { demand, newStatus } = await req.json();
     // Champs tels qu'envoyés par demandes.html : snake_case.
-    const { subject, referent_name: referent, referent_email: referentEmail, creche } = demand;
+    const { subject, referent_name: referent, referent_email: referentEmail, to_referent_id: referentId, creche } = demand;
 
     if (!referentEmail) {
       return new Response(JSON.stringify({ ok: false, reason: "no email" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (await hasActivePush(referentId)) {
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "push actif" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

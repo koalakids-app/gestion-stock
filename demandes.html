@@ -3971,7 +3971,11 @@ async function toggleStatus(id,currentStatus){
   const newStatus=currentStatus==='traite'?'attente':'traite';
   const updates={status:newStatus,treated_at:newStatus==='traite'?new Date().toISOString():null};
   const ok=await dbUpdate('demandes',id,updates);
-  if(ok){const d=cacheDemandes.find(x=>x.id===id);if(d)Object.assign(d,updates);const creche=cacheCreches.find(c=>c.id===d?.creche_id);await callFn('notify-status',{demand:{...d,creche:creche?.name||''},newStatus});showBanner('Statut mis à jour !');renderDemandsOnly();renderCrecheTabs();}
+  if(ok){const d=cacheDemandes.find(x=>x.id===id);if(d)Object.assign(d,updates);const creche=cacheCreches.find(c=>c.id===d?.creche_id);
+    // L'edge function n'envoie l'email que si le référent n'a pas de notification push active.
+    await callFn('notify-status',{demand:{...d,creche:creche?.name||''},newStatus});
+    if(d?.to_referent_id){await callFn('notify-push',{referent_ids:[d.to_referent_id],title:newStatus==='traite'?'Demande traitée':'Demande remise en attente',body:d.subject||'',url:'./demandes.html',tag:'statut-'+id});}
+    showBanner('Statut mis à jour !');renderDemandsOnly();renderCrecheTabs();}
 }
 async function deleteDemand(id){
   if(!confirm('Retirer cette demande de votre liste ? Elle restera visible des autres et vous pourrez la restaurer depuis la corbeille.'))return;
@@ -4136,20 +4140,11 @@ async function sendThreadMessage(){
     renderThread();renderDemandsOnly();
     const d=cacheDemandes.find(x=>x.id===currentThreadId);
     if(d){
-      // Destinataire de la notif : l'autre partie de la demande.
-      // Si l'auteur du message est le destinataire de la demande, on notifie l'émetteur (via sa crèche / son email connu) et inversement.
-      const dest=cacheReferents.find(r=>r.id===d.to_referent_id);
-      let toEmail='',toName='';
-      if(currentProfile?.id===d.to_referent_id){ // je suis le destinataire → je réponds à l'émetteur
-        toEmail=d.referent_email||'';toName=d.referent_name||'';
-      }else{ // je suis l'émetteur (ou direction) → je notifie le destinataire
-        toEmail=dest?.email||d.referent_email||'';toName=dest?.name||d.referent_name||'';
-      }
-      const creche=cacheCreches.find(c=>c.id===d.creche_id);
-      if(toEmail){await callFn('notify-message',{message:{to_email:toEmail,to_name:toName,author_name:row.author_name,body:body,subject:d.subject||'Demande',creche:creche?.name||'',demande_id:d.id}});}
-      // Destinataire du push : même logique, mais l'émetteur d'origine n'a pas
-      // de colonne dédiée sur la demande — on le retrouve via le dernier
-      // message existant (avant celui-ci) posté par quelqu'un d'autre.
+      // Destinataire de la notif (push ET email) : l'autre partie de la demande.
+      // Si l'auteur du message est le destinataire de la demande, on notifie l'émetteur
+      // et inversement. L'émetteur d'origine n'a pas de colonne dédiée sur la demande
+      // (referent_id/referent_email désignent le destinataire) — on le retrouve via le
+      // dernier message existant (avant celui-ci) posté par quelqu'un d'autre.
       let pushDestId=null;
       if(currentProfile?.id!==d.to_referent_id){
         pushDestId=d.to_referent_id||null;
@@ -4157,6 +4152,13 @@ async function sendThreadMessage(){
         const precedents=cacheMessages.filter(m=>m.demande_id===currentThreadId&&m.id!==saved.id&&m.author_id&&m.author_id!==currentProfile?.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
         pushDestId=precedents[0]?.author_id||null;
       }
+      const dest=cacheReferents.find(r=>r.id===pushDestId);
+      const toEmail=dest?.email||(currentProfile?.id!==d.to_referent_id?d.referent_email:'')||'';
+      const toName=dest?.name||(currentProfile?.id!==d.to_referent_id?d.referent_name:'')||'';
+      const creche=cacheCreches.find(c=>c.id===d.creche_id);
+      // L'edge function n'envoie l'email que si ce destinataire n'a pas de notification
+      // push active (to_referent_id lui sert à vérifier push_subscriptions).
+      if(toEmail){await callFn('notify-message',{message:{to_email:toEmail,to_name:toName,author_name:row.author_name,body:body,subject:d.subject||'Demande',creche:creche?.name||'',demande_id:d.id,to_referent_id:pushDestId}});}
       if(pushDestId){await callFn('notify-push',{referent_ids:[pushDestId],title:'Nouveau message',body:body,url:'./demandes.html',tag:'message-'+saved.id});}
     }
   }
@@ -4189,8 +4191,11 @@ async function saveConsigne(){
   const saved=await dbInsert('demandes',row);
   if(saved){
     cacheDemandes.unshift(saved);
-    const destinataires=cacheReferents.filter(r=>r.role==='referent'&&r.email).map(r=>({email:r.email,name:r.name}));
+    const destinataires=cacheReferents.filter(r=>r.role==='referent'&&r.email).map(r=>({id:r.id,email:r.email,name:r.name}));
+    // L'edge function n'envoie l'email à chaque destinataire que s'il n'a pas de
+    // notification push active (destinataires[].id lui sert à vérifier push_subscriptions).
     await callFn('notify-consigne',{consigne:{...row,id:saved.id,message:msg,creche:'Toutes les crèches'},destinataires});
+    if(destinataires.length){await callFn('notify-push',{referent_ids:destinataires.map(d=>d.id),title:'Nouvelle consigne',body:subj,url:'./demandes.html',tag:'consigne-'+saved.id});}
     // Le brouillon d'origine a rempli son rôle : on le retire.
     if(cDraftId){
       await dbDelete('consignes_brouillons',cDraftId);
