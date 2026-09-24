@@ -3089,6 +3089,7 @@ function showInAppNotif(title,body){
 // Reprend la même logique de ciblage que les appels notify-push correspondants
 // (cf. sendNewDemand, sendThreadMessage, saveConsigne, toggleStatus, saveEvenement).
 function inAppNotifDemande(payload){
+  console.info('[InAppNotif] demandes INSERT reçu',payload&&payload.new,'currentProfile=',currentProfile);
   const d=payload&&payload.new;if(!d||!currentProfile)return;
   if(d.type==='consigne'){
     if(currentProfile.role==='referent')showInAppNotif('Nouvelle consigne',d.subject||'');
@@ -3097,6 +3098,7 @@ function inAppNotifDemande(payload){
   }
 }
 function inAppNotifDemandeStatut(payload){
+  console.info('[InAppNotif] demandes UPDATE reçu',payload&&payload.new);
   const d=payload&&payload.new,ancien=payload&&payload.old;
   if(!d||!ancien||!currentProfile||d.status===ancien.status)return;
   if(d.to_referent_id&&d.to_referent_id===currentProfile.id){
@@ -3104,6 +3106,7 @@ function inAppNotifDemandeStatut(payload){
   }
 }
 function inAppNotifMessage(payload){
+  console.info('[InAppNotif] messages INSERT reçu',payload&&payload.new);
   const m=payload&&payload.new;if(!m||!currentProfile||m.author_id===currentProfile.id)return;
   const d=cacheDemandes.find(x=>x.id===m.demande_id);if(!d)return;
   const concerne=currentProfile.id===d.to_referent_id||currentProfile.id===d.referent_id
@@ -3111,6 +3114,7 @@ function inAppNotifMessage(payload){
   if(concerne)showInAppNotif('Nouveau message',m.body||'');
 }
 function inAppNotifEvenement(payload){
+  console.info('[InAppNotif] evenements INSERT reçu',payload&&payload.new);
   const e=payload&&payload.new;if(!e||!currentProfile||e.created_by===currentUser?.id)return;
   if(!e.creche_id||e.creche_id===currentProfile.creche_id)showInAppNotif('Nouvel événement',e.titre||'');
 }
