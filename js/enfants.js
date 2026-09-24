@@ -1281,22 +1281,24 @@ function enfRenderDossier(){
   if(!enfDossierPret){ box.innerHTML=''; return; }
   const actif=enfDossiersCache.find(d=>d.statut!=='annule' && new Date(d.expire_le)>new Date());
   const possibles=enfDestinataires();
+  const enf=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
 
   if(!actif){
-    if(!possibles.length){
-      box.innerHTML='<p style="background:#FFF8F0;border:1px solid #F3DEC2;border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">'
+    /* Pas de lien actif — toutes les familles ne sont pas encore équipées de
+       l'appli : l'import manuel (voir enfEnLigneHtml) reste possible même
+       sans avoir envoyé de lien. */
+    const intro=!possibles.length
+      ? '<p style="background:#FFF8F0;border:1px solid #F3DEC2;border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">'
         +'Aucun parent avec une adresse e-mail. Renseignez-en un dans l\'onglet '
-        +'<strong>Parents</strong> pour pouvoir envoyer le dossier.</p>';
-      return;
-    }
-    box.innerHTML='<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">'
-      +'Envoie aux parents un lien personnel vers les documents à remplir et signer en ligne. '
-      +'Valable '+DOSSIER_JOURS+' jours.</p>'
-      +'<button class="btn-primary" onclick="enfOuvrirEnvoi()"><i class="ti ti-send"></i> Envoyer le dossier</button>';
+        +'<strong>Parents</strong> pour pouvoir envoyer le dossier.</p>'
+      : '<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">'
+        +'Envoie aux parents un lien personnel vers les documents à remplir et signer en ligne. '
+        +'Valable '+DOSSIER_JOURS+' jours.</p>'
+        +'<button class="btn-primary" onclick="enfOuvrirEnvoi()"><i class="ti ti-send"></i> Envoyer le dossier</button>';
+    box.innerHTML=intro+enfEnLigneHtml(enf);
     return;
   }
 
-  const enf=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
   const attendusDocs=packEnLigne(enf);
   const attendus=attendusDocs.length;
   const rendus=enfDocsCache.filter(d=>d.dossier_id===actif.id&&d.statut==='signe').length;
@@ -1319,7 +1321,8 @@ function enfRenderDossier(){
     +'<button class="btn-sm" onclick="enfCopierLien(\''+actif.id+'\')"><i class="ti ti-link"></i> Copier le lien</button>'
     +'<button class="btn-sm" onclick="enfRelancerDossier(\''+actif.id+'\')"><i class="ti ti-bell"></i> Relancer</button>'
     +'<button class="btn-sm" style="color:var(--red);border-color:var(--red)" onclick="enfAnnulerDossier(\''+actif.id+'\')"><i class="ti ti-x"></i> Annuler</button>'
-    +'</div>';
+    +'</div>'
+    +enfEnLigneHtml(enf);
 }
 
 /* Le pack complet, chargé une fois par session. Deux sous-ensembles :
@@ -1399,6 +1402,46 @@ function enfPapierHtml(e){
     +'<div style="font-size:12px;font-weight:700;color:var(--koala-dark);margin-bottom:6px">'
     +'À rapporter en papier</div>'
     + papier.map(enfPapierDocRowHtml).join('')
+    +'</div>';
+}
+
+/* Une ligne pour un document normalement rempli/signé en ligne par la famille
+   (packEnLigne) : statut réel (signé en ligne / importé manuellement / non
+   reçu) + bouton d'import. Toutes les familles n'ont pas encore l'appli —
+   ce bouton permet de rattacher le scan/la photo du document rempli à la
+   main, sans dépendre de l'envoi ni de l'usage du lien famille.html. Même
+   mécanique que enfPapierDocRowHtml (bucket documents-admin, table
+   enfants_documents_admin), avec le préfixe piece_key 'enligne_' — voir
+   enfHandleAdminDocUpload, qui marque alors le document « remis ». */
+function enfEnLigneDocRowHtml(d){
+  const rep=enfDocsCache.find(r=>r.document_id===d.id&&(r.statut==='signe'||r.statut==='remis'));
+  const fichiers=enfPiecesPourCle('enligne_'+d.id);
+  const listeFichiers=fichiers.length ? '<div style="margin:4px 0 0 0">'+fichiers.map(f=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">'
+    +'<i class="ti ti-paperclip" style="color:var(--koala);flex-shrink:0;font-size:13px"></i>'
+    +'<button type="button" onclick="enfAdminDocOpen(\''+f.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;color:var(--koala-dark);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(f.filename||'Document')+'</button>'
+    +'<button onclick="enfAdminDocDelete(\''+f.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px;flex-shrink:0"><i class="ti ti-trash"></i></button>'
+    +'</div>'
+  ).join('')+'</div>' : '';
+  let statutTxt;
+  if(rep&&rep.statut==='signe') statutTxt='<span style="color:var(--green);font-weight:700">signé en ligne</span>';
+  else if(rep&&rep.statut==='remis') statutTxt='<span style="color:var(--green);font-weight:700">importé manuellement</span>';
+  else statutTxt='<span style="color:var(--orange);font-weight:700">non reçu</span>';
+  return '<div style="padding:4px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +'<span style="flex:1;font-size:12.5px">'+escHtml(d.titre)+' — '+statutTxt+'</span>'
+    +'<button type="button" onclick="enfOpenPieceUpload(\'enligne_'+d.id+'\')" title="Importer le document rempli, si le lien n\'a pas été utilisé" style="border:1px solid var(--border);background:#fff;border-radius:7px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--koala);display:inline-flex;align-items:center;gap:4px;flex-shrink:0"><i class="ti ti-upload"></i> Importer</button>'
+    +listeFichiers
+    +'</div>';
+}
+
+function enfEnLigneHtml(e){
+  const docs=packEnLigne(e);
+  if(!docs.length)return '';
+  return '<div style="border-top:1px solid var(--border);margin:10px 0 9px;padding-top:9px">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--koala-dark);margin-bottom:2px">'
+    +'Documents à remplir en ligne</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Si une famille n\'utilise pas encore l\'appli, importez ici la version papier du document une fois rempli.</div>'
+    + docs.map(enfEnLigneDocRowHtml).join('')
     +'</div>';
 }
 
@@ -1819,9 +1862,13 @@ async function enfHandleAdminDocUpload(event){
       enfRenderAdminDocs();
       /* Un document « à rapporter en papier » (droit à l'image, fiche
          sanitaire...) dont on importe le scan : l'import vaut confirmation
-         de réception, pas besoin de cocher la case à part. */
-      if(pieceKey && pieceKey.startsWith('papier_')){
-        const ok=await enfMarquerRecuSilencieux(pieceKey.slice('papier_'.length));
+         de réception, pas besoin de cocher la case à part. Même principe
+         pour un document normalement rempli en ligne (packEnLigne) : la
+         famille n'a pas encore l'appli, on importe la version papier à sa
+         place — l'import vaut « remis », sans attendre le lien. */
+      if(pieceKey && (pieceKey.startsWith('papier_')||pieceKey.startsWith('enligne_'))){
+        const prefixe=pieceKey.startsWith('papier_')?'papier_':'enligne_';
+        const ok=await enfMarquerRecuSilencieux(pieceKey.slice(prefixe.length));
         if(!ok)recuKo=true;
         enfRenderDossier();
         enfRenderFicheSanitaireZone();
@@ -1860,7 +1907,7 @@ async function enfAdminDocDelete(id){
   }
   enfAdminDocsCache=enfAdminDocsCache.filter(x=>String(x.id)!==String(id));
   enfRenderAdminDocs();
-  if(d&&d.piece_key&&d.piece_key.startsWith('papier_')){
+  if(d&&d.piece_key&&(d.piece_key.startsWith('papier_')||d.piece_key.startsWith('enligne_'))){
     enfRenderDossier();
     enfRenderFicheSanitaireZone();
   }
