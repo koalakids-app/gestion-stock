@@ -3598,19 +3598,14 @@ async function mfaGateShowEnroll(){
     mfaGateFactorId=data.id;
     const qrEl=document.getElementById('mfa-gate-qr');
     qrEl.innerHTML='';
-    const qr=data.totp.qr_code||'';
-    const svgMatch=qr.match(/<svg[\s\S]*<\/svg>/i);
-    if(svgMatch){
-      qrEl.innerHTML=svgMatch[0];
-      const svg=qrEl.querySelector('svg');
-      if(svg){svg.style.width='232px';svg.style.height='232px';}
-    }else{
-      const img=document.createElement('img');
-      img.alt='QR code MFA';
-      img.style.cssText='display:block;width:232px;height:232px;object-fit:contain';
-      img.src=qr;
-      qrEl.appendChild(img);
-    }
+    // data.totp.qr_code est une data-URL directement utilisable comme src
+    // d'<img> (c'est ce que fait l'exemple officiel Supabase) : on évite
+    // toute extraction/réinjection du SVG, qui peut le corrompre.
+    const img=document.createElement('img');
+    img.alt='QR code MFA';
+    img.style.cssText='display:block;width:232px;height:232px;object-fit:contain';
+    img.src=data.totp.qr_code||'';
+    qrEl.appendChild(img);
     document.getElementById('mfa-gate-secret').textContent=data.totp.secret;
     document.getElementById('mfa-gate-enroll-code').value='';
   }catch(e){
@@ -3839,24 +3834,14 @@ async function secMfaStartEnroll(){
     secMfaFactorId=data.id;
     const qrEl=document.getElementById('sec-mfa-qr');
     qrEl.innerHTML='';
-    const qr=data.totp.qr_code||'';
-    // qr_code peut être du SVG brut, ou une data-URI dont le payload SVG n'est pas
-    // encodé (donc plein de guillemets) : dans les deux cas, le concaténer dans une
-    // chaîne HTML (ex. src="'+qr+'") casse l'attribut au premier guillemet rencontré.
-    // On extrait le SVG s'il y en a un, sinon on assigne l'URL via la propriété DOM
-    // .src (jamais interprétée comme du HTML, donc jamais cassée par des guillemets).
-    const svgMatch=qr.match(/<svg[\s\S]*<\/svg>/i);
-    if(svgMatch){
-      qrEl.innerHTML=svgMatch[0];
-      const svg=qrEl.querySelector('svg');
-      if(svg){svg.style.width='232px';svg.style.height='232px';}
-    }else{
-      const img=document.createElement('img');
-      img.alt='QR code MFA';
-      img.style.cssText='display:block;width:232px;height:232px;object-fit:contain';
-      img.src=qr;
-      qrEl.appendChild(img);
-    }
+    // data.totp.qr_code est une data-URL directement utilisable comme src
+    // d'<img> (c'est ce que fait l'exemple officiel Supabase) : on évite
+    // toute extraction/réinjection du SVG, qui peut le corrompre.
+    const img=document.createElement('img');
+    img.alt='QR code MFA';
+    img.style.cssText='display:block;width:232px;height:232px;object-fit:contain';
+    img.src=data.totp.qr_code||'';
+    qrEl.appendChild(img);
     document.getElementById('sec-mfa-secret').textContent=data.totp.secret;
     document.getElementById('sec-mfa-code').value='';
     secMfaShowOnly('sec-mfa-enroll-step');

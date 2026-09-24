@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v27';   // v27 : QR code MFA agrandi + fond blanc (zone de silence) pour un scan fiable
+const CACHE_NAME = 'stocks-v28';   // v28 : QR code MFA affiché via data-URL directe (sans extraction SVG fragile)
 
 self.addEventListener('install', event => {
   event.waitUntil(
