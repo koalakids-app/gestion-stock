@@ -2407,7 +2407,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="frow">
       <div class="fg"><label class="flabel">Date de naissance</label><input class="finput" id="enf-dob" type="date" onchange="enfSyncGroupe()"/></div>
-      <div class="fg"><label class="flabel">Groupe <span style="font-weight:400;color:var(--muted);font-size:11px">(calculé selon l'âge)</span></label><select class="finput" id="enf-groupe" disabled style="background:#f4f4f8;cursor:not-allowed"><option>Bébés (0-1 an)</option><option>Moyens (1-2 ans)</option><option>Grands (2-3 ans)</option></select></div>
+      <div class="fg"><label class="flabel">Groupe <span style="font-weight:400;color:var(--muted);font-size:11px">(calculé selon l'âge)</span></label><select class="finput" id="enf-groupe" disabled style="background:#f4f4f8;cursor:not-allowed"><option>Bébés (0-6 mois)</option><option>Bébés (6-12 mois)</option><option>Moyens (12-18 mois)</option><option>Moyens (18-24 mois)</option><option>Grands (24-36 mois)</option></select></div>
     </div>
     <div class="frow">
       <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="enf-creche"><option value="">-- Choisir --</option></select></div>
@@ -6317,8 +6317,9 @@ window.exportPresenceHebdoExcel=exportPresenceHebdoExcel;
 /* ══════════════════════════════════════════════════════════════════════════
    COMMANDE REPAS TRAITEUR (bon « Les mamans cuisinières du Monde »)
 
-   Les lignes du bon ne sont pas les groupes de l'application (0-1 / 1-2 / 2-3 ans)
-   mais celles du traiteur : − 6 mois, 6-18 mois, + 18 mois, périscolaire 4/5 ans.
+   Les lignes du bon ne sont pas les tranches d'âge de l'application (0-6 / 6-12 /
+   12-18 / 18-24 / 24-36 mois) mais celles du traiteur : − 6 mois, 6-18 mois,
+   + 18 mois, périscolaire 4/5 ans.
    Le remplissage part du CODE REPAS de l'enfant (BB / M / G), le même que la
    feuille de présence hebdomadaire et l'export Excel, pour que les deux documents
    ne puissent jamais s'écarter ; l'âge au jour de la livraison ne tranche que
@@ -7162,12 +7163,28 @@ async function exportPresence(){
   cacheEnfants.forEach(e=>{const creche=cacheCreches.find(c=>c.id===e.creche_id);csv+='"'+(e.prenom+' '+e.nom)+'","'+(creche?.name||'')+'","'+(e.dob?groupeFromDob(e.dob):(e.groupe||''))+'","'+(e.allergies||'')+'","'+(pm[e.id+'_M']||'non saisi')+'","'+(pm[e.id+'_A']||'non saisi')+'"\n';});
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='presences_'+dateStr+'.csv';a.click();URL.revokeObjectURL(url);showBanner('Export CSV téléchargé !');
 }
+/* Âge en mois révolus depuis la date de naissance, jusqu'à aujourd'hui. Partagé par
+   groupeFromDob() (tranche affichée) et enfRepasBaseAuto()/enfGouterAuto() dans
+   js/enfants.js (choix du repas et du goûter), pour que les deux ne divergent jamais. */
+function ageMoisFromDob(dob){
+  if(!dob) return null;
+  return Math.floor((Date.now()-new Date(dob).getTime())/(1000*60*60*24*30.44));
+}
+window.ageMoisFromDob = ageMoisFromDob;
+/* Tranches d'âge affichées sur la fiche enfant, alignées sur les groupes du
+   GEM-RCN 2015 (recommandations nutritionnelles pour la restauration collective en
+   petite enfance, relayées par l'ARS) : avant/après diversification, puis les
+   paliers 12-18 mois et 15-18 mois qui bornent les structures de repas « Moyens »
+   et « Grands ». Voir enfRepasBaseAuto()/enfGouterAuto() dans js/enfants.js pour la
+   déduction du repas et du goûter à partir de ces tranches. */
 function groupeFromDob(dob){
-  if(!dob) return 'Bébés (0-1 an)';
-  const ageMois = Math.floor((Date.now()-new Date(dob).getTime())/(1000*60*60*24*30.44));
-  if(ageMois < 12) return 'Bébés (0-1 an)';
-  if(ageMois < 24) return 'Moyens (1-2 ans)';
-  return 'Grands (2-3 ans)';
+  const ageMois = ageMoisFromDob(dob);
+  if(ageMois === null) return 'Bébés (0-6 mois)';
+  if(ageMois < 6) return 'Bébés (0-6 mois)';
+  if(ageMois < 12) return 'Bébés (6-12 mois)';
+  if(ageMois < 18) return 'Moyens (12-18 mois)';
+  if(ageMois < 24) return 'Moyens (18-24 mois)';
+  return 'Grands (24-36 mois)';
 }
 function enfSyncGroupe(){
   const dob = document.getElementById('enf-dob').value;
@@ -7223,7 +7240,8 @@ function enfSyncRepas(){
   else if(forcee&&auto&&forcee!==auto)txt+=' <span style="color:var(--orange-dark)">(forcé ; l’âge donnerait '+escHtml(auto)+')</span>';
   else if(!forcee)txt+=' <span style="opacity:.8">(suit l’âge)</span>';
   /* Le goûter : sans plat, pas de goûter non plus — le menu est grisé sur BIB.
-     Sinon on annonce la ligne du bon traiteur qui sera incrémentée. */
+     Sinon on annonce la ligne du bon traiteur qui sera incrémentée (voir
+     enfGouterAuto() dans js/enfants.js pour les seuils d'âge). */
   const selGout=document.getElementById('enf-gouter-base');
   if(selGout){
     selGout.disabled=(forcee==='BIB');
@@ -7231,10 +7249,10 @@ function enfSyncRepas(){
     selGout.style.cursor=selGout.disabled?'not-allowed':'';
     if(selGout.disabled)selGout.value='';
     const gForce=selGout.value||'';
-    const gAuto=(base==='BB')?null:(base==='M')?'gbb':(base==='G')?'ggr':null;
+    const gAuto=enfGouterAuto({dob:dob,repas_base:forcee});
     const gFinal=gForce||gAuto;
     if(forcee!=='BIB'){
-      if(!gFinal)txt+='<div style="margin-top:2px">Goûter : <span style="color:var(--muted)">aucun (repas légumes sans protéines)</span></div>';
+      if(!gFinal)txt+='<div style="margin-top:2px">Goûter : <span style="color:var(--muted)">aucun (avant 6 mois)</span></div>';
       else{
         txt+='<div style="margin-top:2px">Goûter : <strong style="color:var(--koala)">'
           +(gFinal==='gbb'?'bébé':'grand')+'</strong>'
