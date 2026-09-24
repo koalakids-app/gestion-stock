@@ -10683,6 +10683,28 @@ async function demandesARelancer(crecheId){
     .sort((a,b)=>String(a.date_rappel).localeCompare(String(b.date_rappel)));
 }
 
+/* Visites de crèche (module Devis) prévues dans les 7 prochains jours, pas
+   encore effectuées, dossier ouvert. Même filtre crèche que ci-dessus. */
+async function visitesAVenir(crecheId){
+  const t=todayStr();
+  const f=new Date();f.setDate(f.getDate()+7);
+  const fin=f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0')+'-'+String(f.getDate()).padStart(2,'0');
+  const{data,error}=await sb.from('preinscriptions')
+    .select('id,prenom,nom,creche_id,creches_souhaitees,date_visite,heure_visite,statut')
+    .gte('date_visite',t).lte('date_visite',fin)
+    .eq('visite_effectuee',false)
+    .not('statut','in','(inscrit,refuse,sans_suite)');
+  if(error)throw error;
+  return(data||[])
+    .filter(p=>{
+      if(!crecheId)return true;
+      if(String(p.creche_id)===String(crecheId))return true;
+      const souh=Array.isArray(p.creches_souhaitees)?p.creches_souhaitees:[];
+      return souh.map(String).indexOf(String(crecheId))>=0;
+    })
+    .sort((a,b)=>(String(a.date_visite)+(a.heure_visite||'')).localeCompare(String(b.date_visite)+(b.heure_visite||'')));
+}
+
 async function devisARelancer(crecheId){
   const seuil=new Date(Date.now()-5*86400000).toISOString();
   const debutJour=new Date();debutJour.setHours(0,0,0,0);
