@@ -2363,16 +2363,18 @@ function repasLabel(code){ return code?(REPAS_TYPES[code]||code):''; }
 
    Seuils alignés sur les structures de repas du GEM-RCN 2015 (recommandations
    nutritionnelles pour la restauration collective en petite enfance, relayées
-   par l'ARS) et sur le déroulé habituel de la diversification alimentaire :
-   BIB avant 6 mois (lait exclusif, avant diversification), BB de 6 à 12 mois
-   (les légumes sont introduits vers 5-6 mois puis les protéines environ un mois
-   plus tard — encore dans cette même tranche, l'appli n'ayant pas de code plus
-   fin ; forcer `repas_base` dès l'introduction des protéines si besoin), M de 12
-   à 18 mois (groupe « Moyens »), G à partir de 18 mois (groupe « Grands », qui
-   démarre entre 15 et 18 mois selon le GEM-RCN, pas à 24). Les tranches
-   affichées sur la fiche (0-6 / 6-12 / 12-18 / 18-24 / 24-36 mois, voir
-   groupeFromDob() dans demandes.html) sont plus fines que ces quatre
-   préparations, qui restent celles du traiteur.
+   par l'ARS) et sur le calendrier de diversification alimentaire du PNNS
+   (Programme National Nutrition Santé / Santé publique France, tableau 0-3 ans) :
+   BIB avant 6 mois (lait exclusif ; le PNNS situe la fenêtre d'introduction de la
+   diversification entre 4 et 6 mois révolus selon la maturité de l'enfant — forcer
+   `repas_base` sur BB dès qu'elle démarre avant 6 mois), BB de 6 à 12 mois (les
+   légumes sont introduits en premier puis les protéines environ un mois plus tard,
+   textures lisses puis un peu plus épaisses — encore dans cette même tranche,
+   l'appli n'ayant pas de code plus fin), M de 12 à 18 mois (groupe « Moyens »), G
+   à partir de 18 mois (groupe « Grands », qui démarre entre 15 et 18 mois selon le
+   GEM-RCN, pas à 24). Les tranches affichées sur la fiche (0-6 / 6-12 / 12-18 /
+   18-24 / 24-36 mois, voir groupeFromDob() dans demandes.html) sont plus fines que
+   ces quatre préparations, qui restent celles du traiteur.
 
    Le suffixe (`regime_repas` : '' | 'SV' | 'SPV' | 'SPA') se combine à la
    lettre, y compris sur BB — un enfant intolérant aux protéines de vache doit
