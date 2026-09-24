@@ -1,9 +1,15 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// ============================================================================
+// supabase/functions/notify-demand/index.ts
+// Envoi par SMTP Gmail plutôt que Resend : Resend exige un domaine expéditeur
+// vérifié (DNS), pas encore disponible (koalakids.fr en attente d'accès DNS).
+// VARIABLES D'ENVIRONNEMENT : GMAIL_USER, GMAIL_APP_PASSWORD, ADMIN_EMAIL, APP_URL.
+// ============================================================================
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
-const ADMIN_EMAIL    = Deno.env.get("ADMIN_EMAIL")    ?? "";
-const FROM_EMAIL     = Deno.env.get("FROM_EMAIL")     ?? "noreply@koalakids.fr";
-const APP_URL        = Deno.env.get("APP_URL")        ?? "https://koalakids.fr";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+
+const ADMIN_EMAIL = Deno.env.get("ADMIN_EMAIL") ?? "";
+const APP_URL      = Deno.env.get("APP_URL")      ?? "https://koalakids.fr";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,17 +17,30 @@ const corsHeaders = {
 };
 
 async function sendEmail(to: string, subject: string, html: string) {
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json",
+  const user = Deno.env.get("GMAIL_USER");
+  const pass = Deno.env.get("GMAIL_APP_PASSWORD");
+  if (!user || !pass) {
+    throw new Error("Configuration Gmail manquante (GMAIL_USER / GMAIL_APP_PASSWORD).");
+  }
+  const client = new SMTPClient({
+    connection: {
+      hostname: "smtp.gmail.com",
+      port: 465,
+      tls: true,
+      auth: { username: user, password: pass },
     },
-    body: JSON.stringify({ from: FROM_EMAIL, to, subject, html }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(JSON.stringify(data));
-  return data;
+  try {
+    await client.send({
+      from: user,
+      to: [to],
+      subject,
+      content: "Ce message nécessite un client de messagerie compatible HTML.",
+      html,
+    });
+  } finally {
+    await client.close();
+  }
 }
 
 serve(async (req) => {
