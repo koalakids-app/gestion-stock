@@ -80,6 +80,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .notif-bell-item.non-lu .nb-title::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--orange);flex-shrink:0}
 .notif-bell-item .nb-body{color:#666;white-space:pre-wrap;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .notif-bell-item .nb-time{font-size:10.5px;color:var(--muted)}
+.mnav-btn.has-notif{position:relative}
+.mnav-btn.has-notif::after{content:'';position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:var(--orange);border:1.5px solid #fff}
 
 /* TAB CONTENT */
 .tab-content{display:none}.tab-content.active{display:block}
@@ -3107,7 +3109,7 @@ function playNotifSound(){
     o.start();o.stop(ctx.currentTime+0.35);
   }catch(e){}
 }
-function showInAppNotif(title,body){
+function showInAppNotif(title,body,section){
   playNotifSound();
   let wrap=document.getElementById('inapp-notif-wrap');
   if(!wrap){
@@ -3123,7 +3125,7 @@ function showInAppNotif(title,body){
   wrap.appendChild(card);
   requestAnimationFrame(()=>{card.style.opacity='1';card.style.transform='translateX(0)';});
   setTimeout(()=>{card.style.opacity='0';card.style.transform='translateX(24px)';setTimeout(()=>card.remove(),300);},6000);
-  notifBellAjouter(title,body);
+  notifBellAjouter(title,body,section);
 }
 
 /* Historique des notifications (cloche dans l'en-tête) : le toast disparaît en
@@ -3139,11 +3141,27 @@ function notifBellCharger(){
 function notifBellSauver(){
   try{localStorage.setItem(notifBellCle(),JSON.stringify(notifBellListe.slice(0,NOTIF_BELL_MAX)));}catch(e){}
 }
-function notifBellAjouter(title,body){
-  notifBellListe.unshift({id:Date.now()+'-'+Math.random().toString(36).slice(2),title,body:body||'',ts:Date.now(),lu:false});
+function notifBellAjouter(title,body,section){
+  notifBellListe.unshift({id:Date.now()+'-'+Math.random().toString(36).slice(2),title,body:body||'',ts:Date.now(),lu:false,section:section||null});
   notifBellListe=notifBellListe.slice(0,NOTIF_BELL_MAX);
   notifBellSauver();
   notifBellRender();
+}
+// Pastille sur le bouton de nav concerné (Messagerie/Événements), en plus du
+// badge de la cloche — se referme dès qu'on ouvre la section correspondante.
+const NOTIF_BELL_SECTIONS_BTN={demands:'mnav-demands',evenements:'mnav-evenements'};
+function notifBellMajPastilles(){
+  Object.keys(NOTIF_BELL_SECTIONS_BTN).forEach(section=>{
+    const btn=document.getElementById(NOTIF_BELL_SECTIONS_BTN[section]);
+    if(!btn)return;
+    const aDesNonLues=notifBellListe.some(n=>!n.lu&&n.section===section);
+    btn.classList.toggle('has-notif',aDesNonLues);
+  });
+}
+function notifBellMarquerSectionLue(section){
+  let change=false;
+  notifBellListe.forEach(n=>{if(!n.lu&&n.section===section){n.lu=true;change=true;}});
+  if(change){notifBellSauver();notifBellRender();}
 }
 function notifBellTempsRelatif(ts){
   const s=Math.round((Date.now()-ts)/1000);
@@ -3156,6 +3174,7 @@ function notifBellRender(){
   const badge=document.getElementById('badge-notifs');
   const nonLues=notifBellListe.filter(n=>!n.lu).length;
   if(badge){badge.textContent=nonLues;badge.style.display=nonLues>0?'':'none';}
+  notifBellMajPastilles();
   const list=document.getElementById('notif-bell-list');
   if(!list)return;
   if(!notifBellListe.length){list.innerHTML='<div class="notif-bell-empty">Aucune notification pour l\'instant.</div>';return;}
@@ -3205,14 +3224,14 @@ function detecterNouveautesEtNotifier(avant){
     const etaitLa=avant.demandes.has(d.id);
     if(!etaitLa){
       if(d.type==='consigne'){
-        if(currentProfile.role==='referent')showInAppNotif('Nouvelle consigne',d.subject||'');
+        if(currentProfile.role==='referent')showInAppNotif('Nouvelle consigne',d.subject||'','demands');
       }else if(d.to_referent_id&&d.to_referent_id===currentProfile.id){
-        showInAppNotif('Nouvelle demande',d.subject||'');
+        showInAppNotif('Nouvelle demande',d.subject||'','demands');
       }
     }else{
       const statutAvant=avant.statutsDemandes.get(d.id);
       if(statutAvant&&statutAvant!==d.status&&d.to_referent_id&&d.to_referent_id===currentProfile.id){
-        showInAppNotif(d.status==='traite'?'Demande traitée':'Demande remise en attente',d.subject||'');
+        showInAppNotif(d.status==='traite'?'Demande traitée':'Demande remise en attente',d.subject||'','demands');
       }
     }
   }
@@ -3221,11 +3240,11 @@ function detecterNouveautesEtNotifier(avant){
     const d=cacheDemandes.find(x=>x.id===m.demande_id);if(!d)continue;
     const concerne=currentProfile.id===d.to_referent_id||currentProfile.id===d.referent_id
       ||cacheMessages.some(x=>x.demande_id===d.id&&x.author_id===currentProfile.id);
-    if(concerne)showInAppNotif('Nouveau message',m.body||'');
+    if(concerne)showInAppNotif('Nouveau message',m.body||'','demands');
   }
   for(const e of cacheEvenements){
     if(avant.evenements.has(e.id)||e.created_by===currentUser?.id)continue;
-    if(!e.creche_id||e.creche_id===currentProfile.creche_id)showInAppNotif('Nouvel événement',e.titre||'');
+    if(!e.creche_id||e.creche_id===currentProfile.creche_id)showInAppNotif('Nouvel événement',e.titre||'','evenements');
   }
 }
 function capturerAvantSync(){
@@ -3815,12 +3834,12 @@ function showMain(tab){
     if(btn)btn.classList.toggle('active',t===tab);
   });
   if(tab==='planning')renderPlanning();
-  if(tab==='demands'){renderCrecheTabs();setTimeout(markConsignesRead,600);}
+  if(tab==='demands'){renderCrecheTabs();setTimeout(markConsignesRead,600);notifBellMarquerSectionLue('demands');}
   if(tab==='referents')renderReferents();
   if(tab==='employes'){renderEmployes();empChargerHeuresSemaine();}
   if(tab==='incidents')renderIncidents();
   if(tab==='presence'){initPresenceDate();presMajBarre();renderPresence();}
-  if(tab==='evenements')renderCalendar();
+  if(tab==='evenements'){renderCalendar();notifBellMarquerSectionLue('evenements');}
   if(tab==='dashboard')renderDashboard();
   if(tab==='ref-dashboard'){
     renderRefDashboard();
