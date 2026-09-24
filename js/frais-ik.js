@@ -473,6 +473,18 @@ function ikSetLoadInfo(origine){
   document.getElementById('ik-load-info').textContent=txt;
 }
 
+// Bouton « Recharger depuis planning » : confirmation avant d'écraser un mois déjà saisi.
+function ikReloadFromPlanning(){
+  const month=document.getElementById('ik-month').value;
+  if(!month){alert('Sélectionnez un mois.');return;}
+  if(ikRows.length){
+    const[y,m]=month.split('-').map(Number);
+    const nom=new Date(y,m-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+    if(!confirm(`Remplacer les ${ikRows.length} ligne(s) de ${nom} par le planning ?\n\nLes modifications faites à la main sur ce mois (km, lignes ajoutées, supprimées ou déplacées) seront perdues. Les autres mois ne sont pas touchés.`))return;
+  }
+  ikLoadFromPlanning();
+}
+
 async function ikLoadFromPlanning(){
   const month=document.getElementById('ik-month').value;
   if(!month){alert('Sélectionnez un mois.');return;}
