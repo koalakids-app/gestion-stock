@@ -456,9 +456,27 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <button class="btn btn-d" id="btnDelDev" style="display:none" onclick="delDevis()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn btn-s" id="btnPdfDev" style="display:none" onclick="pdfDevis(devisId)"><i class="ti ti-file-type-pdf"></i> Le PDF</button>
       <button class="btn btn-s" id="btnLienDev" style="display:none" onclick="copierLienDevis()"><i class="ti ti-link"></i> Le lien</button>
-      <button class="btn btn-p" id="btnEnvoiDev" style="display:none" onclick="envoyerDevis()"><i class="ti ti-send"></i> Envoyer</button>
+      <button class="btn btn-p" id="btnEnvoiDev" style="display:none" onclick="ouvrirEnvoiDevis()"><i class="ti ti-send"></i> Envoyer</button>
       <button class="btn btn-g" onclick="closeOv('ovDevis')">Fermer</button>
       <button class="btn btn-p" id="btnSaveDev" onclick="saveDevis()"><i class="ti ti-check"></i> Enregistrer le brouillon</button>
+    </div>
+  </div>
+</div>
+
+<!-- ENVOI DU DEVIS PAR MAIL -->
+<div class="ov" id="ovEnvoiDevis">
+  <div class="md" style="max-width:560px">
+    <h3><i class="ti ti-mail"></i> <span id="ieTitle">Envoyer le devis</span></h3>
+    <p class="hint">Destinataires : <b id="ieDest"></b></p>
+    <div class="f"><label class="lb">Objet</label><input id="ieObjet"></div>
+    <div class="f"><label class="lb">Message</label><textarea id="ieMessage" rows="6"></textarea></div>
+    <p class="hint">Le prénom, la crèche et les jours d'accueil sont déjà repris dans le texte
+      ci-dessus — modifiez-le librement, il partira tel quel. Le détail chiffré, le bouton de
+      signature et les mentions légales restent ajoutés automatiquement en dessous.</p>
+    <p class="hint" id="ieInfo"></p>
+    <div class="acts">
+      <button class="btn btn-g" onclick="closeOv('ovEnvoiDevis')">Annuler</button>
+      <button class="btn btn-p" id="btnEnvoiDevisOk" onclick="confirmerEnvoiDevis()"><i class="ti ti-send"></i> Envoyer</button>
     </div>
   </div>
 </div>
@@ -3546,7 +3564,36 @@ async function detailFn(e){
   return (e&&e.message)||'erreur inconnue';
 }
 
-async function envoyerDevis(){
+/* Le devis par défaut à personnaliser : les variables (prénom, crèche, jours)
+   sont substituées une fois pour toutes dans le texte qui s'affiche dans
+   l'overlay — la direction édite un texte final, pas une syntaxe à apprendre. */
+function texteEnvoiDevisParDefaut(d,relance){
+  const p=PRE.find(x=>String(x.id)===String(ficheId));
+  const prenom=(p&&p.prenom)||'votre enfant';
+  const creche=nomCreche(d.creche_id||val('dCreche'));
+  const joursTexte=joursTxt(d.jours)||'';
+  if(relance){
+    return{
+      objet:'Rappel — le devis d\'accueil de '+prenom,
+      message:'Nous n\'avons pas encore reçu votre réponse au devis d\'accueil de '+prenom
+        +'. Voici à nouveau votre lien personnel.',
+    };
+  }
+  return{
+    objet:'Le devis d\'accueil de '+prenom,
+    message:'Voici le devis d\'accueil de '+prenom
+      +(creche?' à notre micro-crèche de '+creche:'')
+      +(joursTexte?', pour un accueil les '+joursTexte:'')
+      +'. Le détail complet et le lien pour l\'accepter et le signer se trouvent ci-dessous.',
+  };
+}
+
+let ENVOI_DEVIS_CTX=null;
+
+/* Ouvre l'overlay d'envoi : rien n'est encore écrit en base, rien n'est
+   encore parti. Les vérifications qui bloquaient l'ancien confirm() restent
+   ici, avant même de montrer un texte à personnaliser. */
+async function ouvrirEnvoiDevis(){
   const d=DEVIS.find(x=>String(x.id)===String(devisId));
   if(!d){toast('Enregistrez d\'abord le devis.',true);return;}
   if(d.repondu_le){toast('Ce devis a déjà reçu une réponse.',true);return;}
@@ -3565,15 +3612,37 @@ async function envoyerDevis(){
   await loadReseau();
   const jours=Number(RESEAU.devis_validite_jours||30);
   const fin=new Date();fin.setDate(fin.getDate()+jours);
+  ENVOI_DEVIS_CTX={relance:relance,fin:fin};
 
-  const quoi=relance
-    ? 'Relancer '+adresses.join(', ')+' ?'
-    : 'Envoyer ce devis à '+adresses.join(', ')+' ?\n\n'
-      +'Le devis passera en « Envoyé » et ne sera plus modifiable.\n'
-      +'Le lien sera valable '+jours+' jours, jusqu\'au '+dfr(fin.toISOString())+'.';
-  if(!confirm(quoi))return;
+  document.getElementById('ieTitle').textContent=relance?'Relancer la famille':'Envoyer le devis';
+  document.getElementById('ieDest').textContent=adresses.join(', ');
+  const defaut=texteEnvoiDevisParDefaut(d,relance);
+  setVal('ieObjet',defaut.objet);
+  setVal('ieMessage',defaut.message);
+  document.getElementById('ieInfo').textContent=relance
+    ? ''
+    : 'Le devis passera en « Envoyé » et ne sera plus modifiable. Le lien sera valable '
+      +jours+' jours, jusqu\'au '+dfr(fin.toISOString())+'.';
+  document.getElementById('btnEnvoiDevisOk').innerHTML=relance
+    ? '<i class="ti ti-bell"></i> Relancer'
+    : '<i class="ti ti-send"></i> Envoyer';
+  openOv('ovEnvoiDevis');
+}
 
-  const b=document.getElementById('btnEnvoiDev');
+async function confirmerEnvoiDevis(){
+  const d=DEVIS.find(x=>String(x.id)===String(devisId));
+  if(!d||!ENVOI_DEVIS_CTX){toast('Rouvrez l\'envoi du devis.',true);return;}
+  const objet=val('ieObjet').trim(),message=val('ieMessage').trim();
+  if(!objet||!message){toast('L\'objet et le message ne peuvent pas être vides.',true);return;}
+
+  const{relance,fin}=ENVOI_DEVIS_CTX;
+  const adresses=destinatairesDevis();
+  if(!adresses.length){
+    toast('Aucun parent destinataire avec une adresse e-mail : cochez « destinataire » sur au moins un parent.',true);
+    return;
+  }
+
+  const b=document.getElementById('btnEnvoiDevisOk');
   b.disabled=true;b.textContent=relance?'Relance…':'Envoi…';
   try{
     /* Un jeton n'est fabriqué qu'au premier envoi. Une relance réutilise le
@@ -3594,7 +3663,7 @@ async function envoyerDevis(){
        le bouton « Le lien » permet de le transmettre à la main. L'inverse —
        mailer d'abord — aurait pu expédier un lien que la base n'a pas gardé. */
     const{error:eFn}=await sb.functions.invoke('envoyer-devis',
-      {body:{devis_id:d.id,relance:relance}});
+      {body:{devis_id:d.id,relance:relance,objet:objet,message:message}});
     if(eFn)throw new Error(await detailFn(eFn));
 
     if(relance){
@@ -3610,16 +3679,19 @@ async function envoyerDevis(){
       }
       toast('Devis envoyé ✅');
     }
+    closeOv('ovEnvoiDevis');
     closeOv('ovDevis');
     await loadDevis(ficheId);
   }catch(e){
-    console.error('[envoyerDevis]',e);
+    console.error('[confirmerEnvoiDevis]',e);
     toast('Envoi impossible : '+(e.message||'erreur inconnue')
       +' — le lien reste disponible par le bouton « Le lien ».',true);
   }finally{
     b.disabled=false;
-    b.innerHTML=relance?'<i class="ti ti-bell"></i> Relancer la famille'
-                       :'<i class="ti ti-send"></i> Envoyer à la famille';
+    b.innerHTML=relance?'<i class="ti ti-bell"></i> Relancer':'<i class="ti ti-send"></i> Envoyer';
+    document.getElementById('btnEnvoiDev').innerHTML=relance
+      ?'<i class="ti ti-bell"></i> Relancer la famille'
+      :'<i class="ti ti-send"></i> Envoyer à la famille';
   }
 }
 
