@@ -660,6 +660,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="module-tab" onclick="showPresenceTab('mois',this)"><i class="ti ti-calendar-stats"></i> Mois</button>
     </div>
     <div id="presence-gantt" class="module-tab-content active">
+      <div id="menu-jour-zone" style="margin-bottom:12px"></div>
       <div id="presence-gantt-view"></div>
     </div>
     <div id="presence-hebdo" class="module-tab-content">
@@ -5431,6 +5432,7 @@ async function renderPresence(){
   if(currentPresenceSlot==='hebdo'){await renderPresenceHebdo();prRenderSemaine();renderMenuSemaine();return;}
   if(currentPresenceSlot==='mois'){await renderPresenceMois();return;}
   await renderPresenceGantt();
+  renderMenuJour();
 }
 async function setPresence(enfantId,slot,dateStr,status){
   const{data:ex}=await sb.from('presences').select('id,status').eq('enfant_id',enfantId).eq('presence_date',dateStr).eq('slot',slot).maybeSingle();
@@ -6415,6 +6417,20 @@ async function handleImportMenusFile(event){
 }
 window.handleImportMenusFile=handleImportMenusFile;
 
+/* Liste à puces des lignes d'un profil traiteur pour un jour donné (ou tiret si
+   vide) — partagée entre le bandeau de la semaine et celui du jour. */
+function menusLigneListe(arr){return(arr&&arr.length)?'<ul style="margin:2px 0 0;padding-left:16px">'+arr.map(function(t){return'<li>'+escHtml(t)+'</li>';}).join('')+'</ul>':'<span style="color:var(--muted)">—</span>';}
+/* Lundi (date_debut de `menus_semaine`) de la semaine contenant `dateStr`
+   (YYYY-MM-DD), pour retrouver la ligne du jour depuis n'importe quelle date
+   sélectionnée dans l'onglet Jour (pas seulement le lundi affiché par
+   weekStart(), qui suit la navigation de l'onglet Semaine). */
+function menusMondayOf(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const day=d.getDay();
+  const diff=d.getDate()-(day===0?6:day-1);
+  return ipDateToLocalISO(new Date(d.getFullYear(),d.getMonth(),diff));
+}
+
 /* Bandeau menu de la semaine affichée, au-dessus de la grille de présence.
    Une carte par profil traiteur (Bébés -6 mois / Bébés 6-18 mois + goûter /
    Grands + goûter), une colonne par jour ouvré de la semaine en cours. */
@@ -6431,7 +6447,6 @@ async function renderMenuSemaine(){
   }catch(err){console.warn('[Menu semaine] lecture',err);}
   if(!menu){zone.innerHTML='';return;}
   const parJour={};menu.forEach(function(m){parJour[m.jour]=m;});
-  function ligneListe(arr){return(arr&&arr.length)?'<ul style="margin:2px 0 0;padding-left:16px">'+arr.map(function(t){return'<li>'+escHtml(t)+'</li>';}).join('')+'</ul>':'<span style="color:var(--muted)">—</span>';}
   function carte(titre,champ,gouterChamp){
     let html='<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px">'
       +'<div style="font-weight:800;color:var(--koala);font-size:12px;margin-bottom:6px">'+escHtml(titre)+'</div>'
@@ -6439,7 +6454,7 @@ async function renderMenuSemaine(){
     for(let j=1;j<=5;j++){
       const m=parJour[j];
       html+='<div style="font-size:11px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">'+MENU_JOURS[j-1]+'</div>'
-        +ligneListe(m?m[champ]:null)
+        +menusLigneListe(m?m[champ]:null)
         +(gouterChamp&&m&&m[gouterChamp]?'<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border);color:var(--koala-dark)"><i class="ti ti-cookie" style="font-size:11px"></i> '+escHtml(m[gouterChamp])+'</div>':'')
         +(m&&m.theme&&champ==='grand'?'<div style="margin-top:2px;font-style:italic;color:var(--orange-dark)">'+escHtml(m.theme)+'</div>':'')
         +'</div>';
@@ -6456,6 +6471,42 @@ async function renderMenuSemaine(){
     +'</div></details>';
 }
 window.renderMenuSemaine=renderMenuSemaine;
+
+/* Bandeau menu DU JOUR, au-dessus de la grille de présence journalière
+   (onglet Jour). Même source (`menus_semaine`) que le bandeau de la semaine,
+   mais une seule ligne (date_debut + jour déduits de la date sélectionnée
+   dans #presence-date), affichée en 3 blocs côte à côte plutôt qu'en grille
+   de 5 jours. Rien le week-end (le traiteur ne fournit pas de menu). */
+async function renderMenuJour(){
+  const zone=document.getElementById('menu-jour-zone');
+  if(!zone)return;
+  const dateStr=document.getElementById('presence-date')?.value||todayStr();
+  const dow=new Date(dateStr+'T00:00:00').getDay(); // 0=dimanche … 6=samedi
+  if(dow<1||dow>5){zone.innerHTML='';return;}
+  let m=null;
+  try{
+    const{data,error}=await sb.from('menus_semaine').select('*').eq('date_debut',menusMondayOf(dateStr)).eq('jour',dow).maybeSingle();
+    if(error)throw error;
+    m=data||null;
+  }catch(err){console.warn('[Menu jour] lecture',err);}
+  if(!m){zone.innerHTML='';return;}
+  function bloc(titre,champ,gouterChamp){
+    return'<div style="flex:1;min-width:180px">'
+      +'<div style="font-weight:800;color:var(--koala);font-size:11.5px;margin-bottom:4px">'+escHtml(titre)+'</div>'
+      +menusLigneListe(m[champ])
+      +(gouterChamp&&m[gouterChamp]?'<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border);color:var(--koala-dark)"><i class="ti ti-cookie" style="font-size:11px"></i> '+escHtml(m[gouterChamp])+'</div>':'')
+      +'</div>';
+  }
+  zone.innerHTML='<details open style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--koala-lightest,#F7F6FC)">'
+    +'<summary style="cursor:pointer;font-weight:800;color:var(--koala-dark);font-size:13px"><i class="ti ti-tools-kitchen-2"></i> Menu du jour'
+    +(m.theme?' — <span style="color:var(--orange-dark)">'+escHtml(m.theme)+'</span>':'')+'</summary>'
+    +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:11px">'
+    +bloc('Bébés − de 6 mois','bb6',null)
+    +bloc('Bébés 6-18 mois','bb18','bb18_gouter')
+    +bloc('Grands 18 mois-3 ans','grand','grand_gouter')
+    +'</div></details>';
+}
+window.renderMenuJour=renderMenuJour;
 
 /* ══════════════════════════════════════════════════════════════════════════
    COMMANDE REPAS TRAITEUR (bon « Les mamans cuisinières du Monde »)
