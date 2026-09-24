@@ -348,7 +348,6 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <div class="f"><label class="lb">&nbsp;</label><label class="ck"><input type="checkbox" id="fVisiteFaite"> Visite effectuée</label></div>
     </div>
     <div class="f" id="wrapMotif" style="display:none"><label class="lb">Motif du refus</label><select id="fMotif"></select></div>
-    <div class="f"><label class="lb">Comment nous ont-ils connus ?</label><input id="fConnus"></div>
     <div class="f"><label class="lb">Notes internes</label><textarea id="fNotes" placeholder="Jamais transmis à la famille."></textarea></div>
 
     <div class="sec">Les parents <span id="parCount" style="font-size:12px;color:var(--muted);font-weight:600"></span></div>
@@ -1701,7 +1700,7 @@ function openFiche(id){
   setVal('fHd',p?p.heure_debut:'07:30');setVal('fHf',p?p.heure_fin:'18:00');
   setVal('fStatut',p?p.statut:'nouvelle');
   setVal('fSource',p?p.source:'');setVal('fRappel',p?(p.date_rappel||''):'');
-  setVal('fConnus',p?p.comment_connus:'');setVal('fNotes',p?p.notes_internes:'');
+  setVal('fNotes',p?p.notes_internes:'');
   setVal('fVisite',p?(p.date_visite||''):'');setVal('fVisiteH',p?(p.heure_visite||''):'');
   setChk('fVisiteFaite',p&&p.visite_effectuee);
   document.getElementById('fMotif').innerHTML='<option value="">— choisir —</option>'
@@ -1775,7 +1774,6 @@ async function saveFiche(){
   const row={
     statut:statut,
     source:val('fSource'),
-    comment_connus:val('fConnus'),
     date_rappel:val('fRappel')||null,
     date_visite:val('fVisite')||null,
     heure_visite:val('fVisite')?(val('fVisiteH')||null):null,
@@ -1804,6 +1802,11 @@ async function saveFiche(){
     heure_debut:val('fHd'),heure_fin:val('fHf')
   };
 
+  // Une visite est « planifiée » quand sa date apparaît ou change — pas quand
+  // on coche juste « Visite effectuée » après coup, qui ne doit rien envoyer.
+  const visitePlanifiee=!!row.date_visite
+    &&(!p||p.date_visite!==row.date_visite||p.heure_visite!==row.heure_visite);
+
   const btn=document.getElementById('btnSave');
   btn.disabled=true;
   try{
@@ -1828,6 +1831,14 @@ async function saveFiche(){
       document.getElementById('btnAddDev').style.display='';
       document.getElementById('hintDev').textContent='Un devis fige les montants qu\'il facture : modifier la grille ensuite ne le réécrit pas.';
       toast('Demande créée — vous pouvez ajouter les parents.');
+    }
+    // Best-effort : la fiche est déjà enregistrée, un mail qui échoue ne doit
+    // pas repasser pour un échec de la sauvegarde. Silencieux quand la fiche
+    // n'a pas encore de parent destinataire (cas fréquent à la création).
+    if(visitePlanifiee){
+      sb.functions.invoke('envoyer-confirmation-visite',{body:{preinscription_id:ficheId}})
+        .then(({error})=>{if(!error)toast('Confirmation de visite envoyée ✅');})
+        .catch(e=>console.warn('[envoyer-confirmation-visite]',e));
     }
     render();
   }catch(e){
