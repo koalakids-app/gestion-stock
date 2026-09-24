@@ -129,16 +129,27 @@ Deno.serve(async (req) => {
       "S'il y a plusieurs pages, transcris-les dans l'ordre, à la suite. " +
       "Réponds uniquement par le texte transcrit, sans commentaire ni introduction.";
 
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-5",
-      max_tokens: 4000,
-      messages: [
-        {
-          role: "user",
-          content: [...blocks, { type: "text", text: consigne }],
-        },
-      ],
-    });
+    let response;
+    try {
+      response = await anthropic.messages.create({
+        model: "claude-opus-5",
+        max_tokens: 4000,
+        messages: [
+          {
+            role: "user",
+            content: [...blocks, { type: "text", text: consigne }],
+          },
+        ],
+      });
+    } catch (apiErr) {
+      // L'erreur ici vient du SDK/de l'API (statut HTTP, quota, modèle
+      // inconnu...) : elle ne peut pas contenir de texte transcrit, donc
+      // rien à protéger — on la logue pour pouvoir diagnostiquer.
+      const status = (apiErr as { status?: number })?.status;
+      const name = (apiErr as { name?: string })?.name;
+      console.error("[transcrire-notes] échec appel API Anthropic", { status, name });
+      return json({ ok: false, error: `Appel à l'IA refusé (${status || name || "erreur inconnue"}).` }, 502);
+    }
 
     if (response.stop_reason === "refusal") {
       return json({ ok: false, error: "La transcription a été refusée par l'IA." }, 502);
