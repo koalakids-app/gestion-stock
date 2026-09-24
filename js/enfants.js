@@ -285,16 +285,16 @@ function enfGouterFicheLigne(e){
   if(!base)return'<span style="color:var(--muted)">—</span>';
   if(base==='BIB')return'<span style="color:var(--muted)">aucun (biberon)</span>';
   const g=enfGouterLigne(e);
-  if(!g)return'<span style="color:var(--muted)">aucun (repas légumes sans protéines)</span>';
+  if(!g)return'<span style="color:var(--muted)">aucun (avant 6 mois)</span>';
   const forcee=e.gouter_base||'';
   const auto=enfGouterAuto(e);
   const lbl=function(v){return v==='gbb'?'bébé':'grand';};
   let s='<span style="display:inline-block;background:'+(forcee?'var(--orange-light)':'var(--koala-light)')
     +';color:'+(forcee?'var(--orange-dark)':'var(--koala)')
     +';border-radius:6px;padding:1px 7px;font-weight:800">Goûter '+lbl(g)+'</span>';
-  if(forcee&&auto&&forcee!==auto)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé — le repas donnerait '+lbl(auto)+'</div>';
+  if(forcee&&auto&&forcee!==auto)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé — l’âge donnerait '+lbl(auto)+'</div>';
   else if(forcee)s+='<div style="font-size:11px;color:var(--orange-dark);font-weight:400">forcé</div>';
-  else s+='<div style="font-size:11px;color:var(--muted);font-weight:400">suit le repas</div>';
+  else s+='<div style="font-size:11px;color:var(--muted);font-weight:400">suit l’âge</div>';
   return s;
 }
 
@@ -2354,22 +2354,46 @@ const REGIMES={SV:'Sans viande',SPV:'Sans protéine de vache',SPA:'Sans protéin
 function repasLabel(code){ return code?(REPAS_TYPES[code]||code):''; }
 /* Code repas = lettre de base + suffixe de régime particulier.
 
-   BB (repas légumes sans protéines), M (moyen) et G (grand) sont les trois
-   préparations du traiteur. La lettre est proposée d'après la tranche d'âge,
+   BIB (biberon), BB (repas légumes sans protéines), M (moyen) et G (grand) sont
+   les préparations du traiteur. La lettre est proposée d'après la tranche d'âge,
    mais l'âge ne décide pas de ce que l'enfant mange : le champ `repas_base` de
-   la fiche permet de la forcer. Laissé vide, il reste déduit de l'âge et suit
-   automatiquement les anniversaires.
+   la fiche permet de la forcer — en particulier pour suivre la diversification
+   réelle de l'enfant, qui ne tombe jamais pile sur un anniversaire de mois.
+   Laissé vide, il reste déduit de l'âge et suit automatiquement les anniversaires.
+
+   Seuils alignés sur les structures de repas du GEM-RCN 2015 (recommandations
+   nutritionnelles pour la restauration collective en petite enfance, relayées
+   par l'ARS) et sur le calendrier de diversification alimentaire du PNNS
+   (Programme National Nutrition Santé / Santé publique France, tableau 0-3 ans) :
+   BIB avant 6 mois (lait exclusif ; le PNNS situe la fenêtre d'introduction de la
+   diversification entre 4 et 6 mois révolus selon la maturité de l'enfant — forcer
+   `repas_base` sur BB dès qu'elle démarre avant 6 mois), BB de 6 à 12 mois (les
+   légumes sont introduits en premier puis les protéines environ un mois plus tard,
+   textures lisses puis un peu plus épaisses — encore dans cette même tranche,
+   l'appli n'ayant pas de code plus fin), M de 12 à 18 mois (groupe « Moyens »), G
+   à partir de 18 mois (groupe « Grands », qui démarre entre 15 et 18 mois selon le
+   GEM-RCN, pas à 24). Les tranches affichées sur la fiche (0-6 / 6-12 / 12-18 /
+   18-24 / 24-36 mois, voir groupeFromDob() dans demandes.html) sont plus fines que
+   ces quatre préparations, qui restent celles du traiteur.
 
    Le suffixe (`regime_repas` : '' | 'SV' | 'SPV' | 'SPA') se combine à la
    lettre, y compris sur BB — un enfant intolérant aux protéines de vache doit
    rester repérable partout, sans quoi l'écran contredirait le bon de commande. */
 function enfRepasBaseAuto(e){
   if(!e)return'';
-  const groupe=e.dob?groupeFromDob(e.dob):(e.groupe||'');
-  if(groupe.indexOf('Bébé')>=0)return'BB';
-  if(groupe.indexOf('Moyen')>=0)return'M';
-  if(groupe.indexOf('Grand')>=0)return'G';
-  return'';
+  if(!e.dob){
+    // Pas de date de naissance : on retombe sur le libellé de groupe stocké, à défaut de mieux.
+    const groupe=e.groupe||'';
+    if(groupe.indexOf('Bébé')>=0)return'BB';
+    if(groupe.indexOf('Moyen')>=0)return'M';
+    if(groupe.indexOf('Grand')>=0)return'G';
+    return'';
+  }
+  const m=window.ageMoisFromDob(e.dob);
+  if(m<6)return'BIB';
+  if(m<12)return'BB';
+  if(m<18)return'M';
+  return'G';
 }
 function enfRepasCode(e){
   if(!e)return'';
@@ -2381,17 +2405,25 @@ function enfRepasCode(e){
 }
 
 /* ── GOÛTER ────────────────────────────────────────────────────────────────
-   Le bon MCM n'a que deux lignes de goûter : « bébé » et « grand ». Par défaut
-   elles découlent du code repas — M en goûter bébé, G et périscolaire en goûter
-   grand, BB sans goûter. Mais manger un repas moyen n'empêche pas de prendre le
-   goûter des grands : le champ `gouter_base` de la fiche ('' | 'gbb' | 'ggr')
-   permet de dissocier les deux. Laissé vide, le goûter continue de suivre le repas
-   et donc les anniversaires. */
+   Le bon MCM n'a que deux lignes de goûter, « bébé (6 à 18 mois) » et
+   « grand (+ de 18 mois & périscolaire) » — ce sont ses propres bornes d'âge,
+   pas les codes repas. Le GEM-RCN (recommandations ARS) prévoit un goûter dès le
+   groupe « Bébés » (lait infantile, céréales infantiles, fruit), avant quoi
+   l'enfant reste au lait exclusif : donc aucun goûter avant 6 mois, goûter bébé
+   de 6 à 18 mois, goûter grand à partir de 18 mois (et en périscolaire). Un
+   enfant au biberon (BIB) n'a ni repas ni goûter. Manger un repas moyen ou
+   légumes n'empêche pas de prendre le goûter des grands : le champ `gouter_base`
+   de la fiche ('' | 'gbb' | 'ggr') permet de dissocier les deux. Laissé vide, le
+   goûter continue de suivre l'âge (ou, à défaut de date de naissance, le code
+   repas). */
 function enfGouterAuto(e){
   if(!e)return null;
   const base=e.repas_base||enfRepasBaseAuto(e);
-  if(!base||base==='BIB'||base==='BB')return null;
-  return base==='M'?'gbb':'ggr';
+  if(!base||base==='BIB')return null;
+  if(!e.dob)return base==='BB'?null:(base==='M'?'gbb':'ggr');
+  const m=window.ageMoisFromDob(e.dob);
+  if(m<6)return null;
+  return m<18?'gbb':'ggr';
 }
 function enfGouterLigne(e){
   if(!e)return null;
