@@ -2354,19 +2354,25 @@ const REGIMES={SV:'Sans viande',SPV:'Sans protéine de vache',SPA:'Sans protéin
 function repasLabel(code){ return code?(REPAS_TYPES[code]||code):''; }
 /* Code repas = lettre de base + suffixe de régime particulier.
 
-   BB (repas légumes sans protéines), M (moyen) et G (grand) sont les trois
-   préparations du traiteur. La lettre est proposée d'après la tranche d'âge,
+   BIB (biberon), BB (repas légumes sans protéines), M (moyen) et G (grand) sont
+   les préparations du traiteur. La lettre est proposée d'après la tranche d'âge,
    mais l'âge ne décide pas de ce que l'enfant mange : le champ `repas_base` de
-   la fiche permet de la forcer. Laissé vide, il reste déduit de l'âge et suit
-   automatiquement les anniversaires.
+   la fiche permet de la forcer — en particulier pour suivre la diversification
+   réelle de l'enfant, qui ne tombe jamais pile sur un anniversaire de mois.
+   Laissé vide, il reste déduit de l'âge et suit automatiquement les anniversaires.
 
    Seuils alignés sur les structures de repas du GEM-RCN 2015 (recommandations
    nutritionnelles pour la restauration collective en petite enfance, relayées
-   par l'ARS) : BB jusqu'à 12 mois (groupe « Bébés »), M de 12 à 18 mois (groupe
-   « Moyens »), G à partir de 18 mois (groupe « Grands », qui démarre entre 15 et
-   18 mois selon le GEM-RCN). Les tranches affichées sur la fiche (0-6 / 6-12 /
-   12-18 / 18-24 / 24-36 mois, voir groupeFromDob() dans demandes.html) sont plus
-   fines que ces trois préparations, qui restent celles du traiteur.
+   par l'ARS) et sur le déroulé habituel de la diversification alimentaire :
+   BIB avant 6 mois (lait exclusif, avant diversification), BB de 6 à 12 mois
+   (les légumes sont introduits vers 5-6 mois puis les protéines environ un mois
+   plus tard — encore dans cette même tranche, l'appli n'ayant pas de code plus
+   fin ; forcer `repas_base` dès l'introduction des protéines si besoin), M de 12
+   à 18 mois (groupe « Moyens »), G à partir de 18 mois (groupe « Grands », qui
+   démarre entre 15 et 18 mois selon le GEM-RCN, pas à 24). Les tranches
+   affichées sur la fiche (0-6 / 6-12 / 12-18 / 18-24 / 24-36 mois, voir
+   groupeFromDob() dans demandes.html) sont plus fines que ces quatre
+   préparations, qui restent celles du traiteur.
 
    Le suffixe (`regime_repas` : '' | 'SV' | 'SPV' | 'SPA') se combine à la
    lettre, y compris sur BB — un enfant intolérant aux protéines de vache doit
@@ -2382,6 +2388,7 @@ function enfRepasBaseAuto(e){
     return'';
   }
   const m=window.ageMoisFromDob(e.dob);
+  if(m<6)return'BIB';
   if(m<12)return'BB';
   if(m<18)return'M';
   return'G';
