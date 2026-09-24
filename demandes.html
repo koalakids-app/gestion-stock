@@ -2936,7 +2936,7 @@ function fermetureLabel(f){
    arrière-plan, et jamais deux rechargements coup sur coup.
    ═════════════════════════════════════════════════════════════════════════ */
 const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','employes','planning','planning_equipe','enfants_contrats','taches_afaire','notes_libres','commandes_repas','actions_direction','reunions_direction','partenaires','demandes_masquees'];
-const SYNC_PERIODE_MS=60000;   // rappel périodique quand l'onglet est visible
+const SYNC_PERIODE_MS=20000;   // rappel périodique quand l'onglet est visible — le temps réel ne délivrant rien sur ce projet, c'est ce minuteur qui porte la détection des nouveautés (cf. detecterNouveautesEtNotifier)
 const SYNC_MIN_MS=10000;       // anti-rafale entre deux rechargements
 let _mainCourant=null,_syncDernier=0,_syncEnCours=false,_syncEnAttente=false,
     _syncTimer=null,_syncCanal=null,_syncDebounce=null,_syncDemarre=false;
@@ -3042,9 +3042,11 @@ async function syncMaintenant(opts){
   _syncEnAttente=false;
   _syncEnCours=true;syncMajChip('encours');
   try{
+    const avant=capturerAvantSync();
     await loadAllData();
     _syncDernier=Date.now();
     syncRedessine();
+    detecterNouveautesEtNotifier(avant);
   }catch(err){console.warn('[Sync] rechargement',err);}
   finally{_syncEnCours=false;syncMajChip();}
 }
@@ -3092,48 +3094,63 @@ function showInAppNotif(title,body){
   requestAnimationFrame(()=>{card.style.opacity='1';card.style.transform='translateX(0)';});
   setTimeout(()=>{card.style.opacity='0';card.style.transform='translateX(24px)';setTimeout(()=>card.remove(),300);},6000);
 }
-// Reprend la même logique de ciblage que les appels notify-push correspondants
-// (cf. sendNewDemand, sendThreadMessage, saveConsigne, toggleStatus, saveEvenement).
-function inAppNotifDemande(payload){
-  console.info('[InAppNotif] demandes INSERT reçu',payload&&payload.new,'currentProfile=',currentProfile);
-  const d=payload&&payload.new;if(!d||!currentProfile)return;
-  if(d.type==='consigne'){
-    if(currentProfile.role==='referent')showInAppNotif('Nouvelle consigne',d.subject||'');
-  }else if(d.to_referent_id&&d.to_referent_id===currentProfile.id){
-    showInAppNotif('Nouvelle demande',d.subject||'');
+/* Le temps réel Postgres Changes de ce projet Supabase ne délivre aucun
+   événement au client — vérifié y compris avec une policy RLS totalement
+   ouverte (using(true)) sur `demandes`, qui n'a rien changé : la donnée ne
+   remonte que via le rechargement normal (retour sur l'onglet, minuteur
+   périodique). Plutôt que de dépendre de ce canal, on détecte les nouveautés
+   en comparant le contenu des caches avant/après chaque rechargement — ça
+   marche à coup sûr, avec le même délai que la synchro classique (déjà
+   fonctionnelle), au lieu de dépendre d'un mécanisme qui ne délivre rien. */
+function detecterNouveautesEtNotifier(avant){
+  if(!currentProfile)return;
+  for(const d of cacheDemandes){
+    const etaitLa=avant.demandes.has(d.id);
+    if(!etaitLa){
+      if(d.type==='consigne'){
+        if(currentProfile.role==='referent')showInAppNotif('Nouvelle consigne',d.subject||'');
+      }else if(d.to_referent_id&&d.to_referent_id===currentProfile.id){
+        showInAppNotif('Nouvelle demande',d.subject||'');
+      }
+    }else{
+      const statutAvant=avant.statutsDemandes.get(d.id);
+      if(statutAvant&&statutAvant!==d.status&&d.to_referent_id&&d.to_referent_id===currentProfile.id){
+        showInAppNotif(d.status==='traite'?'Demande traitée':'Demande remise en attente',d.subject||'');
+      }
+    }
+  }
+  for(const m of cacheMessages){
+    if(avant.messages.has(m.id)||m.author_id===currentProfile.id)continue;
+    const d=cacheDemandes.find(x=>x.id===m.demande_id);if(!d)continue;
+    const concerne=currentProfile.id===d.to_referent_id||currentProfile.id===d.referent_id
+      ||cacheMessages.some(x=>x.demande_id===d.id&&x.author_id===currentProfile.id);
+    if(concerne)showInAppNotif('Nouveau message',m.body||'');
+  }
+  for(const e of cacheEvenements){
+    if(avant.evenements.has(e.id)||e.created_by===currentUser?.id)continue;
+    if(!e.creche_id||e.creche_id===currentProfile.creche_id)showInAppNotif('Nouvel événement',e.titre||'');
   }
 }
-function inAppNotifDemandeStatut(payload){
-  console.info('[InAppNotif] demandes UPDATE reçu',payload&&payload.new);
-  const d=payload&&payload.new,ancien=payload&&payload.old;
-  if(!d||!ancien||!currentProfile||d.status===ancien.status)return;
-  if(d.to_referent_id&&d.to_referent_id===currentProfile.id){
-    showInAppNotif(d.status==='traite'?'Demande traitée':'Demande remise en attente',d.subject||'');
-  }
-}
-function inAppNotifMessage(payload){
-  console.info('[InAppNotif] messages INSERT reçu',payload&&payload.new);
-  const m=payload&&payload.new;if(!m||!currentProfile||m.author_id===currentProfile.id)return;
-  const d=cacheDemandes.find(x=>x.id===m.demande_id);if(!d)return;
-  const concerne=currentProfile.id===d.to_referent_id||currentProfile.id===d.referent_id
-    ||cacheMessages.some(x=>x.demande_id===d.id&&x.author_id===currentProfile.id);
-  if(concerne)showInAppNotif('Nouveau message',m.body||'');
-}
-function inAppNotifEvenement(payload){
-  console.info('[InAppNotif] evenements INSERT reçu',payload&&payload.new);
-  const e=payload&&payload.new;if(!e||!currentProfile||e.created_by===currentUser?.id)return;
-  if(!e.creche_id||e.creche_id===currentProfile.creche_id)showInAppNotif('Nouvel événement',e.titre||'');
+function capturerAvantSync(){
+  return{
+    demandes:new Set(cacheDemandes.map(d=>d.id)),
+    statutsDemandes:new Map(cacheDemandes.map(d=>[d.id,d.status])),
+    messages:new Set(cacheMessages.map(m=>m.id)),
+    evenements:new Set(cacheEvenements.map(e=>e.id))
+  };
 }
 
 async function syncDemarrerRealtime(){
   if(_syncCanal||typeof sb.channel!=='function')return;
   try{
-    // Les policies RLS de demandes/messages (dem_read, msg_read...) s'appuient sur
-    // auth.uid(), qui vient du JWT attaché à LA CONNEXION realtime elle-même — distinct
-    // des requêtes REST, qui portent chacune leur propre en-tête Authorization. Sans cet
-    // appel explicite, Supabase traite le socket comme anonyme et ignore silencieusement
-    // (sans erreur, sans log) tout postgres_changes protégé par RLS : le canal reste
-    // "SUBSCRIBED" mais aucun événement sur ces tables n'est jamais délivré.
+    // setAuth reste posé par bonne pratique (recommandation Supabase pour que les
+    // policies RLS basées sur auth.uid() s'appliquent aux postgres_changes), mais ne
+    // suffit pas ici : vérifié même avec une policy RLS totalement ouverte sur
+    // `demandes`, ce canal ne délivre jamais aucun postgres_changes au client (les
+    // données ne remontent que via loadAllData, au rechargement périodique/manuel —
+    // cf. detecterNouveautesEtNotifier). Cause probablement côté infra Supabase de ce
+    // projet, non résolue à ce jour ; on ne dépend donc plus de ce canal pour détecter
+    // les nouveautés, seulement pour la synchro générale (best-effort, inoffensif).
     try{
       const{data:{session}}=await sb.auth.getSession();
       if(session?.access_token)sb.realtime.setAuth(session.access_token);
@@ -3142,10 +3159,6 @@ async function syncDemarrerRealtime(){
     SYNC_TABLES.forEach(function(t){
       ch=ch.on('postgres_changes',{event:'*',schema:'public',table:t},syncSignalDistant);
     });
-    ch=ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'demandes'},inAppNotifDemande);
-    ch=ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'demandes'},inAppNotifDemandeStatut);
-    ch=ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},inAppNotifMessage);
-    ch=ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'evenements'},inAppNotifEvenement);
     _syncCanal=ch.subscribe(function(st){
       if(st==='SUBSCRIBED')console.info('[Sync] temps réel actif');
       else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT')
