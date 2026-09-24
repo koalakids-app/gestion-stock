@@ -1512,7 +1512,9 @@ function render(){
         : '<span class="tag" style="background:'+(String(p.date_visite)<auj()?'var(--red-l);color:var(--red)':'var(--orange-l);color:var(--orange)')+'"><i class="ti ti-door-enter"></i> visite '+dfr(p.date_visite)+(p.heure_visite?' à '+esc(p.heure_visite):'')+'</span>')
       : '';
     const mot=(p.statut==='refuse'||p.statut==='sans_suite')&&p.motif_refus
-      ? '<span class="tag" style="background:var(--red-l);color:var(--red)">'+esc(MOTIFS_REFUS[p.motif_refus]||p.motif_refus)+'</span>' : '';
+      ? '<span class="tag" style="background:var(--red-l);color:var(--red)">'+esc(MOTIFS_REFUS[p.motif_refus]||p.motif_refus)+'</span>'
+      : p.statut==='refuse'
+      ? '<span class="tag" style="background:var(--amber-l);color:var(--amber)"><i class="ti ti-alert-triangle"></i> motif à préciser</span>' : '';
     return '<div class="card" onclick="openFiche(\''+p.id+'\')">'
       +'<div class="av"><i class="ti ti-mood-kid"></i></div><div class="bd">'
       +'<div class="nm">'+esc(nom)+'</div>'
