@@ -423,6 +423,11 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <div class="f"><label class="lb">Dont jours de fermeture déduits</label><input id="dFerm" type="number" min="0" onchange="dFermChange()" oninput="dFermChange()"></div>
       <div class="f"><label class="lb">Mois facturés</label><input id="dMois" type="number" min="1" step="0.5" onchange="dSync()" oninput="dSync()"></div>
     </div>
+    <div class="warn" id="dFermWarn" style="display:none"><i class="ti ti-alert-triangle"></i><span>
+      Fermeture <b>estimée</b> au prorata (semaines de fermeture de l'établissement × jours par
+      semaine × durée du contrat) — ce n'est pas un décompte des vraies dates de vacances
+      scolaires. Vérifiez ce chiffre contre votre calendrier de fermeture avant d'envoyer le devis,
+      et corrigez-le à la main si besoin : le champ reste modifiable.</span></div>
     <p class="hint" id="dVol"></p>
 
     <div class="sec">Le tarif d'accueil</div>
@@ -2456,6 +2461,10 @@ function dAfficheRegime(){
   const pb=document.getElementById('dPeriodeBox');
   if(sb2)sb2.style.display=avecTerme?'none':'';
   if(pb)pb.style.display=avecTerme?'':'none';
+  // L'avertissement suit le même régime que le bloc période : il n'a de sens
+  // que là où « fermetures déduites » est un chiffre estimé, pas mensualisé.
+  const fw=document.getElementById('dFermWarn');
+  if(fw)fw.style.display=avecTerme?'':'none';
 }
 
 function dPeriodeChange(){
