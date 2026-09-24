@@ -956,7 +956,10 @@ function filParcours(){
     ['Devis', d?('accepté le '+dfr(d.repondu_le)):'en attente', !!d],
     ['Contrat', !c?'à établir':(c.statut==='brouillon'?'brouillon':
        (c.statut==='envoye'?'chez la famille':
-       (c.repondu_le?'signé le '+dfr(c.repondu_le):C_STATUTS[c.statut].l))),
+       /* repondu_le est posé aussi bien à la signature qu'au refus : c'est
+          le statut qui dit laquelle des deux, pas la date. */
+       (c.statut==='refuse'?'refusé'+(c.repondu_le?' le '+dfr(c.repondu_le):''):
+       (['signe','contresigne'].indexOf(c.statut)>=0&&c.repondu_le?'signé le '+dfr(c.repondu_le):C_STATUTS[c.statut].l)))),
        !!(c&&['signe','contresigne'].indexOf(c.statut)>=0)],
     ['Contresignature', (c&&c.contresigne_le)?('le '+dfr(c.contresigne_le)):'à faire',
        !!(c&&c.statut==='contresigne')],
