@@ -3053,6 +3053,68 @@ function syncSignalDistant(){
   _syncDebounce=setTimeout(function(){syncMaintenant();},900);
 }
 
+/* Notification in-app : indépendante du push OS (qui dépend de réglages système —
+   mode silencieux, permissions navigateur — hors de notre contrôle). Se déclenche
+   sur les mêmes événements métier que notify-push, tant que l'onglet est ouvert. */
+function playNotifSound(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx)return;
+    const ctx=new Ctx(),o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.value=880;
+    g.gain.setValueAtTime(0.0001,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.15,ctx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.35);
+    o.connect(g);g.connect(ctx.destination);
+    o.start();o.stop(ctx.currentTime+0.35);
+  }catch(e){}
+}
+function showInAppNotif(title,body){
+  playNotifSound();
+  let wrap=document.getElementById('inapp-notif-wrap');
+  if(!wrap){
+    wrap=document.createElement('div');
+    wrap.id='inapp-notif-wrap';
+    wrap.style.cssText='position:fixed;top:16px;right:16px;z-index:99999;display:flex;flex-direction:column;gap:8px;max-width:320px';
+    document.body.appendChild(wrap);
+  }
+  const card=document.createElement('div');
+  card.style.cssText='background:#3D3580;color:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.25);font-size:13px;opacity:0;transform:translateX(24px);transition:opacity .25s ease-out,transform .25s ease-out';
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  card.innerHTML='<div style="font-weight:700;margin-bottom:2px">🔔 '+esc(title)+'</div><div style="opacity:.9;white-space:pre-wrap">'+esc(String(body||'').slice(0,140))+'</div>';
+  wrap.appendChild(card);
+  requestAnimationFrame(()=>{card.style.opacity='1';card.style.transform='translateX(0)';});
+  setTimeout(()=>{card.style.opacity='0';card.style.transform='translateX(24px)';setTimeout(()=>card.remove(),300);},6000);
+}
+// Reprend la même logique de ciblage que les appels notify-push correspondants
+// (cf. sendNewDemand, sendThreadMessage, saveConsigne, toggleStatus, saveEvenement).
+function inAppNotifDemande(payload){
+  const d=payload&&payload.new;if(!d||!currentProfile)return;
+  if(d.type==='consigne'){
+    if(currentProfile.role==='referent')showInAppNotif('Nouvelle consigne',d.subject||'');
+  }else if(d.to_referent_id&&d.to_referent_id===currentProfile.id){
+    showInAppNotif('Nouvelle demande',d.subject||'');
+  }
+}
+function inAppNotifDemandeStatut(payload){
+  const d=payload&&payload.new,ancien=payload&&payload.old;
+  if(!d||!ancien||!currentProfile||d.status===ancien.status)return;
+  if(d.to_referent_id&&d.to_referent_id===currentProfile.id){
+    showInAppNotif(d.status==='traite'?'Demande traitée':'Demande remise en attente',d.subject||'');
+  }
+}
+function inAppNotifMessage(payload){
+  const m=payload&&payload.new;if(!m||!currentProfile||m.author_id===currentProfile.id)return;
+  const d=cacheDemandes.find(x=>x.id===m.demande_id);if(!d)return;
+  const concerne=currentProfile.id===d.to_referent_id||currentProfile.id===d.referent_id
+    ||cacheMessages.some(x=>x.demande_id===d.id&&x.author_id===currentProfile.id);
+  if(concerne)showInAppNotif('Nouveau message',m.body||'');
+}
+function inAppNotifEvenement(payload){
+  const e=payload&&payload.new;if(!e||!currentProfile||e.created_by===currentUser?.id)return;
+  if(!e.creche_id||e.creche_id===currentProfile.creche_id)showInAppNotif('Nouvel événement',e.titre||'');
+}
+
 function syncDemarrerRealtime(){
   if(_syncCanal||typeof sb.channel!=='function')return;
   try{
@@ -3060,6 +3122,10 @@ function syncDemarrerRealtime(){
     SYNC_TABLES.forEach(function(t){
       ch=ch.on('postgres_changes',{event:'*',schema:'public',table:t},syncSignalDistant);
     });
+    ch=ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'demandes'},inAppNotifDemande);
+    ch=ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'demandes'},inAppNotifDemandeStatut);
+    ch=ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},inAppNotifMessage);
+    ch=ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'evenements'},inAppNotifEvenement);
     _syncCanal=ch.subscribe(function(st){
       if(st==='SUBSCRIBED')console.info('[Sync] temps réel actif');
       else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT')
@@ -3861,7 +3927,10 @@ async function saveDemand(){
   const manualEmail=checked.length===1?document.getElementById('d-email').value.trim():'';
   let okCount=0;
   for(const c of checked){
-    const row={creche_id:crecheId,to_referent_id:c.value,referent_name:c.getAttribute('data-name')||'',referent_email:manualEmail||c.getAttribute('data-email')||'',subject:subj,description:desc,priority:prio,theme:theme,status:'attente',type:'demande',attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null};
+    // referent_id garde l'ÉMETTEUR de la demande (colonne jusqu'ici jamais renseignée) :
+    // sans elle, une réponse du destinataire ne pouvait pas savoir à qui répondre tant
+    // qu'aucun message n'existait encore dans le fil (cf. sendThreadMessage).
+    const row={creche_id:crecheId,referent_id:currentProfile?.id||null,to_referent_id:c.value,referent_name:c.getAttribute('data-name')||'',referent_email:manualEmail||c.getAttribute('data-email')||'',subject:subj,description:desc,priority:prio,theme:theme,status:'attente',type:'demande',attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null};
     const saved=await dbInsert('demandes',row);
     if(saved){
       okCount++;
@@ -4142,12 +4211,14 @@ async function sendThreadMessage(){
     if(d){
       // Destinataire de la notif (push ET email) : l'autre partie de la demande.
       // Si l'auteur du message est le destinataire de la demande, on notifie l'émetteur
-      // et inversement. L'émetteur d'origine n'a pas de colonne dédiée sur la demande
-      // (referent_id/referent_email désignent le destinataire) — on le retrouve via le
-      // dernier message existant (avant celui-ci) posté par quelqu'un d'autre.
+      // (d.referent_id, renseigné à la création — cf. sendNewDemand) et inversement.
+      // Pour les demandes créées avant l'ajout de cette colonne, on retombe sur
+      // l'ancienne heuristique : le dernier message du fil posté par quelqu'un d'autre.
       let pushDestId=null;
       if(currentProfile?.id!==d.to_referent_id){
         pushDestId=d.to_referent_id||null;
+      }else if(d.referent_id){
+        pushDestId=d.referent_id;
       }else{
         const precedents=cacheMessages.filter(m=>m.demande_id===currentThreadId&&m.id!==saved.id&&m.author_id&&m.author_id!==currentProfile?.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
         pushDestId=precedents[0]?.author_id||null;
