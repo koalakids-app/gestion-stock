@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v25';   // v25 : fix erreur JS bloquante sur famille-suivi.html (pdfSafe)
+const CACHE_NAME = 'stocks-v26';   // v26 : module Réunions d'équipe (js/reunions-equipe.js)
 
 self.addEventListener('install', event => {
   event.waitUntil(
