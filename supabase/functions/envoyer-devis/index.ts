@@ -100,12 +100,19 @@ async function sendEmail(to: string[], subject: string, html: string) {
 
 function corpsHtml(o: {
   enfant: string; creche: string; lien: string; expire: string;
-  mensuel: string; reste: string | null; relance: boolean;
+  mensuel: string; reste: string | null; relance: boolean; message?: string;
 }) {
-  const intro = o.relance
-    ? `Nous n'avons pas encore reçu votre réponse au devis d'accueil de
-       <b>${esc(o.enfant)}</b>. Voici à nouveau votre lien personnel.`
-    : `Voici le devis d'accueil de <b>${esc(o.enfant)}</b>${o.creche ? ` à notre micro-crèche de <b>${esc(o.creche)}</b>` : ''}.`;
+  // Un message personnalisé remplace l'intro par défaut, mais jamais le reste
+  // du mail : le détail chiffré, le bouton de signature et les mentions
+  // légales sortent toujours de la base, pas d'un texte libre saisi à la main.
+  // Les retours à la ligne du textarea deviennent des <br> — c'est la seule
+  // mise en forme qu'un texte tapé sans HTML peut porter.
+  const intro = o.message
+    ? esc(o.message).replace(/\n/g, '<br>')
+    : (o.relance
+      ? `Nous n'avons pas encore reçu votre réponse au devis d'accueil de
+         <b>${esc(o.enfant)}</b>. Voici à nouveau votre lien personnel.`
+      : `Voici le devis d'accueil de <b>${esc(o.enfant)}</b>${o.creche ? ` à notre micro-crèche de <b>${esc(o.creche)}</b>` : ''}.`);
 
   // Le reste à charge, quand il est estimé, est ce que la famille cherche en
   // premier. Le montre-t-on dans le mail ? Oui — mais toujours accompagné de
@@ -177,8 +184,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { devis_id, relance } = await req.json();
+    const { devis_id, relance, objet, message } = await req.json();
     if (!devis_id) return json({ erreur: 'Devis manquant' }, 400);
+    // Un objet/message vide n'est pas un objet/message : on retombe alors sur
+    // le texte par défaut plutôt que d'envoyer un mail à l'objet blanc.
+    const objetPerso = typeof objet === 'string' && objet.trim() ? objet.trim() : null;
+    const messagePerso = typeof message === 'string' && message.trim() ? message.trim() : null;
 
     const { data: devis } = await sb
       .from('devis').select('*').eq('id', devis_id).maybeSingle();
@@ -211,15 +222,16 @@ Deno.serve(async (req) => {
     try {
       await sendEmail(
         adresses,
-        relance
+        objetPerso || (relance
           ? `Rappel — le devis d'accueil de ${prenom}`
-          : `Le devis d'accueil de ${prenom}`,
+          : `Le devis d'accueil de ${prenom}`),
         corpsHtml({
           enfant: ((pre.data?.prenom || '') + ' ' + (pre.data?.nom || '')).trim() || 'votre enfant',
           creche: creche.data?.name || '',
           lien,
           expire: devis.expire_le,
           mensuel: eur(devis.total_mensuel),
+          message: messagePerso || undefined,
           reste: devis.reste_a_charge != null ? eur(devis.reste_a_charge) : null,
           relance: !!relance,
         }),
