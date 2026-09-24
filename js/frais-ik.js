@@ -411,6 +411,13 @@ function ikRowsKey(month){return`ik_rows_${ikPersonId()}_${month}`;}
 
 function ikPersonChanged(){ikLoad();}
 
+// Les chargements sont asynchrones : si le mois ou la personne change entre-temps,
+// le résultat d'un chargement obsolète doit être ignoré (sinon il écraserait le mois affiché).
+let ikLoadSeq=0;
+function ikIsStale(seq,month,personId){
+  return seq!==ikLoadSeq||document.getElementById('ik-month').value!==month||ikPersonId()!==personId;
+}
+
 function ikRenderPersonSelect(){
   const sel=document.getElementById('ik-person-select');
   if(!sel)return;
@@ -426,16 +433,19 @@ async function ikLoad(){
   const month=document.getElementById('ik-month').value;
   if(!month)return;
   const personId=ikPersonId();
+  const seq=++ikLoadSeq;
   const info=document.getElementById('ik-load-info');
   if(info)info.textContent='Synchronisation…';
 
   // 1. Config partagée : elle conditionne tous les kilométrages, on la relit avant les lignes.
   await ikConfigPull();
+  if(ikIsStale(seq,month,personId))return;
   ikRenderConfig();
 
   // 2. Lignes du mois : la base fait foi ; le localStorage ne sert que si la base n'a rien
   //    (premier passage, ancien mois saisi avant la synchronisation, ou appareil hors ligne).
   let saved=await ikRowsPull(personId,month);
+  if(ikIsStale(seq,month,personId))return;
   let origine='synchronisé';
   if(!saved){
     saved=JSON.parse(localStorage.getItem(ikRowsKey(month))||'null');
@@ -468,6 +478,7 @@ async function ikLoadFromPlanning(){
   if(!month){alert('Sélectionnez un mois.');return;}
   document.getElementById('ik-load-info').textContent='Chargement depuis Supabase…';
   const userId=ikPersonId();
+  const seq=++ikLoadSeq;
   const[year,monthNum]=month.split('-').map(Number);
   const firstDay=new Date(year,monthNum-1,1);
   const lastDay=new Date(year,monthNum,0);
@@ -478,6 +489,7 @@ async function ikLoadFromPlanning(){
   while(cursor<=lastDay){
     const semaine=ipDateToLocalISO(cursor);
     const events=await planningLoad(userId,semaine);
+    if(ikIsStale(seq,month,userId))return; // mois ou personne changé pendant le chargement
     events.forEach(ev=>{
       if(ev.type==='absent'||ev.type==='conge'||ev.type==='reunion')return;
       if(!ev.lieu)return;
