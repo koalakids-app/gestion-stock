@@ -7,9 +7,23 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ADMIN_EMAIL = Deno.env.get("ADMIN_EMAIL") ?? "";
 const APP_URL      = Deno.env.get("APP_URL")      ?? "https://koalakids.fr";
+
+const sb = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+);
+
+// L'email est un filet de secours : si le destinataire a une notification push
+// active, il n'a pas besoin d'un email en plus pour la même chose.
+async function hasActivePush(referentId: string | null | undefined) {
+  if (!referentId) return false;
+  const { data } = await sb.from("push_subscriptions").select("id").eq("referent_id", referentId).limit(1);
+  return !!(data && data.length);
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,7 +64,8 @@ serve(async (req) => {
     const { demand } = await req.json();
     // Champs tels qu'envoyés par demandes.html (sendNewDemand) : snake_case,
     // referent_name/referent_email désignent le REFERENT DESTINATAIRE de la demande.
-    const { subject, referent_name: referent, referent_email: referentEmail, creche, priority, description: desc, date } = demand;
+    const { subject, referent_name: referent, referent_email: referentEmail, to_referent_id: referentId, creche, priority, description: desc, date } = demand;
+    const referentPushActive = await hasActivePush(referentId);
 
     const priorityLabel = priority === "urgent" ? "🔴 URGENTE" : priority === "info" ? "ℹ️ Information" : "Normale";
     const priorityColor = priority === "urgent" ? "#e03e3e" : priority === "info" ? "#F47920" : "#3D3580";
@@ -88,8 +103,8 @@ serve(async (req) => {
 
     const errors: string[] = [];
 
-    // ── 1. Email au RÉFÉRENT destinataire ─────────────────────────
-    if (referentEmail) {
+    // ── 1. Email au RÉFÉRENT destinataire (sauf s'il a déjà le push) ─
+    if (referentEmail && !referentPushActive) {
       try {
         await sendEmail(
           referentEmail,
@@ -117,7 +132,7 @@ serve(async (req) => {
     if (errors.length > 0) console.error("Email errors:", errors);
 
     return new Response(
-      JSON.stringify({ ok: true, sent: { referent: !!referentEmail, admin: !!ADMIN_EMAIL }, errors }),
+      JSON.stringify({ ok: true, sent: { referent: !!referentEmail && !referentPushActive, admin: !!ADMIN_EMAIL }, referentPushActive, errors }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

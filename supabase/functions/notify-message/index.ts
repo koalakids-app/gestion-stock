@@ -3,12 +3,26 @@
 // Envoi par SMTP Gmail plutôt que Resend (cf. notify-demand).
 //
 // Payload attendu (envoyé par demandes.html → sendThreadMessage) :
-// { message: { to_email, to_name, author_name, body, subject, creche, demande_id } }
+// { message: { to_email, to_name, author_name, body, subject, creche, demande_id, to_referent_id } }
 //
 // VARIABLES D'ENVIRONNEMENT : GMAIL_USER, GMAIL_APP_PASSWORD.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const sb = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+);
+
+// L'email est un filet de secours : si le destinataire a une notification push
+// active, il n'a pas besoin d'un email en plus pour la même chose.
+async function hasActivePush(referentId: string | null | undefined) {
+  if (!referentId) return false;
+  const { data } = await sb.from("push_subscriptions").select("id").eq("referent_id", referentId).limit(1);
+  return !!(data && data.length);
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -63,7 +77,15 @@ serve(async (req) => {
       body = "",
       subject = "Demande",
       creche = "",
+      to_referent_id = null,
     } = message;
+
+    if (await hasActivePush(to_referent_id)) {
+      return new Response(
+        JSON.stringify({ ok: true, skipped: true, reason: "push actif" }),
+        { headers: { ...cors, "Content-Type": "application/json" } },
+      );
+    }
 
     const safe = (s: string) =>
       String(s || "")
