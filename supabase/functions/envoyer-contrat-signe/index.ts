@@ -149,7 +149,11 @@ Deno.serve(async (req) => {
 
     const html = `<!doctype html><html lang="fr"><body style="margin:0;padding:0;background:#FDF8F2;font-family:Helvetica,Arial,sans-serif;color:#2B2740">
 <div style="max-width:560px;margin:0 auto;padding:24px 18px">
-  <div style="background:#4A3F9F;color:#fff;border-radius:16px 16px 0 0;padding:22px 20px">
+  <div style="background:#fff;border-radius:16px 16px 0 0;padding:18px 20px;text-align:center">
+    <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
+      width="180" style="display:inline-block;height:auto">
+  </div>
+  <div style="background:#4A3F9F;color:#fff;padding:18px 20px">
     <div style="font-size:21px;font-weight:800">${esc(enseigne)}</div>
     <div style="font-size:14px;opacity:.85;margin-top:2px">${avenant ? 'Avenant signé' : 'Contrat d\'accueil signé'}${c.numero ? ' · ' + esc(c.numero) : ''}</div>
   </div>
