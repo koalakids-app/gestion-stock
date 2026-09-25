@@ -51,6 +51,14 @@ const esc = (s: unknown) =>
   String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
+// Le prénom du membre de l'équipe qui a cliqué sur « Envoyer », transmis par
+// l'appli. Jamais inséré tel quel dans un en-tête : un retour à la ligne y
+// glisserait un en-tête arbitraire (injection SMTP).
+const nomExpediteur = (s: unknown) => {
+  const v = typeof s === 'string' ? s.replace(/[\r\n<>]/g, '').trim() : '';
+  return v.slice(0, 60) || 'Koala Kids';
+};
+
 const eur = (n: unknown) => {
   const v = Math.round(Number(n || 0) * 100) / 100;
   const p = Math.abs(v).toFixed(2).replace('.', ',').split(',');
@@ -63,7 +71,7 @@ const dfr = (d: unknown) => {
   return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : '';
 };
 
-async function sendEmail(to: string[], subject: string, html: string) {
+async function sendEmail(to: string[], subject: string, html: string, expediteur?: string) {
   const user = Deno.env.get('GMAIL_USER');
   const pass = Deno.env.get('GMAIL_APP_PASSWORD');
   if (!user || !pass) {
@@ -71,6 +79,7 @@ async function sendEmail(to: string[], subject: string, html: string) {
   }
   // "From" doit obligatoirement être l'adresse authentifiée elle-même : Gmail
   // rejette silencieusement tout expéditeur différent du compte SMTP utilisé.
+  // Seul le nom affiché varie, selon qui a cliqué sur « Envoyer ».
   const client = new SMTPClient({
     connection: {
       hostname: 'smtp.gmail.com',
@@ -81,7 +90,7 @@ async function sendEmail(to: string[], subject: string, html: string) {
   });
   try {
     await client.send({
-      from: user,
+      from: `${nomExpediteur(expediteur)} de Koalakids <${user}>`,
       to,
       subject,
       content: 'Ce message nécessite un client de messagerie compatible HTML.',
@@ -109,6 +118,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const id = String(body.contrat_id || '');
     const relance = !!body.relance;
+    const expediteur = body.expediteur;
     if (!id) return json({ erreur: 'Identifiant de contrat manquant.' }, 400);
 
     const { data: c, error } = await sb.from('contrats').select('*').eq('id', id).maybeSingle();
@@ -201,7 +211,7 @@ Deno.serve(async (req) => {
 </body></html>`;
 
     try {
-      await sendEmail(adresses, objet, html);
+      await sendEmail(adresses, objet, html, expediteur);
     } catch (mailErr) {
       // Le message d'erreur (identifiants Gmail refusés, quota dépassé…) part
       // dans les logs : il doit dire quoi faire, pas seulement que ça a

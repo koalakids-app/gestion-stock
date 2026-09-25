@@ -40,12 +40,23 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function sendEmail(to: string[], subject: string, html: string) {
+// Le prénom du membre de l'équipe qui a cliqué sur « Envoyer », transmis par
+// l'appli. Jamais inséré tel quel dans un en-tête : un retour à la ligne y
+// glisserait un en-tête arbitraire (injection SMTP).
+function nomExpediteur(s: unknown) {
+  const v = typeof s === "string" ? s.replace(/[\r\n<>]/g, "").trim() : "";
+  return v.slice(0, 60) || "Koala Kids";
+}
+
+async function sendEmail(to: string[], subject: string, html: string, expediteur?: string) {
   const user = Deno.env.get("GMAIL_USER");
   const pass = Deno.env.get("GMAIL_APP_PASSWORD");
   if (!user || !pass) {
     throw new Error("Configuration Gmail manquante (GMAIL_USER / GMAIL_APP_PASSWORD).");
   }
+  // "From" doit obligatoirement être l'adresse authentifiée elle-même : Gmail
+  // rejette silencieusement tout expéditeur différent du compte SMTP utilisé.
+  // Seul le nom affiché varie, selon qui a cliqué sur « Envoyer ».
   const client = new SMTPClient({
     connection: {
       hostname: "smtp.gmail.com",
@@ -56,7 +67,7 @@ async function sendEmail(to: string[], subject: string, html: string) {
   });
   try {
     await client.send({
-      from: user,
+      from: `${nomExpediteur(expediteur)} de Koalakids <${user}>`,
       to,
       subject,
       content: "Ce message nécessite un client de messagerie compatible HTML.",
@@ -110,13 +121,13 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { envoi_id?: string };
+  let body: { envoi_id?: string; expediteur?: string };
   try {
     body = await req.json();
   } catch {
     return json({ error: "corps_invalide" }, 400);
   }
-  const { envoi_id } = body;
+  const { envoi_id, expediteur } = body;
   if (!envoi_id) return json({ error: "envoi_id_manquant" }, 400);
 
   const supabase = createClient(
@@ -172,6 +183,7 @@ Deno.serve(async (req) => {
         lien: envoi.lien,
         creche: creche?.name || "",
       }),
+      expediteur,
     );
     return json({ ok: true, sent_to: 1 });
   } catch (err) {

@@ -2007,7 +2007,7 @@ async function envoyerContrat(){
        le bouton « Le lien » permet de le transmettre à la main. L'inverse —
        mailer d'abord — aurait pu expédier un lien que la base n'a pas gardé. */
     const{error:eFn}=await sb.functions.invoke('envoyer-contrat',
-      {body:{contrat_id:c.id,relance:relance}});
+      {body:{contrat_id:c.id,relance:relance,expediteur:(PROF&&PROF.name)||undefined}});
     if(eFn)throw new Error(await detailFn(eFn));
 
     if(relance){
@@ -2849,7 +2849,7 @@ async function envoyerContratSigneParMail(c){
     const pdfBase64=doc.output('datauristring').split(',')[1];
 
     const{error:eFn}=await sb.functions.invoke('envoyer-contrat-signe',
-      {body:{contrat_id:c.id,pdf_base64:pdfBase64,nom_fichier:nomFichier}});
+      {body:{contrat_id:c.id,pdf_base64:pdfBase64,nom_fichier:nomFichier,expediteur:(PROF&&PROF.name)||undefined}});
     if(eFn)throw new Error(await detailFn(eFn));
     toast('Contrat signé envoyé à la famille par e-mail ✅');
   }catch(e){

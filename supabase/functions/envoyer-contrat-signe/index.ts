@@ -47,11 +47,20 @@ const esc = (s: unknown) =>
   String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
+// Le prénom du membre de l'équipe qui a cliqué sur « Envoyer », transmis par
+// l'appli. Jamais inséré tel quel dans un en-tête : un retour à la ligne y
+// glisserait un en-tête arbitraire (injection SMTP).
+const nomExpediteur = (s: unknown) => {
+  const v = typeof s === 'string' ? s.replace(/[\r\n<>]/g, '').trim() : '';
+  return v.slice(0, 60) || 'Koala Kids';
+};
+
 async function sendEmail(
   to: string[],
   subject: string,
   html: string,
   attachment: { filename: string; content: string },
+  expediteur?: string,
 ) {
   const user = Deno.env.get('GMAIL_USER');
   const pass = Deno.env.get('GMAIL_APP_PASSWORD');
@@ -70,7 +79,7 @@ async function sendEmail(
   });
   try {
     await client.send({
-      from: user,
+      from: `${nomExpediteur(expediteur)} de Koalakids <${user}>`,
       to,
       subject,
       content: 'Ce message nécessite un client de messagerie compatible HTML.',
@@ -104,6 +113,7 @@ Deno.serve(async (req) => {
     const id = String(body.contrat_id || '');
     const pdfBase64 = String(body.pdf_base64 || '');
     const nomFichier = String(body.nom_fichier || 'contrat.pdf');
+    const expediteur = body.expediteur;
     if (!id) return json({ erreur: 'Identifiant de contrat manquant.' }, 400);
     if (!pdfBase64) return json({ erreur: 'PDF du contrat manquant.' }, 400);
 
@@ -169,7 +179,7 @@ Deno.serve(async (req) => {
 </body></html>`;
 
     try {
-      await sendEmail(adresses, objet, html, { filename: nomFichier, content: pdfBase64 });
+      await sendEmail(adresses, objet, html, { filename: nomFichier, content: pdfBase64 }, expediteur);
     } catch (mailErr) {
       // Le message d'erreur (identifiants Gmail refusés, quota dépassé…) part
       // dans les logs : il doit dire quoi faire, pas seulement que ça a

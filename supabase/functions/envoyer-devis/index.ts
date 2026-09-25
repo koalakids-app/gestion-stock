@@ -51,6 +51,14 @@ const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
+// Le prénom du membre de l'équipe qui a cliqué sur « Envoyer », transmis par
+// l'appli. Jamais inséré tel quel dans un en-tête : un retour à la ligne y
+// glisserait un en-tête arbitraire (injection SMTP).
+const nomExpediteur = (s: unknown) => {
+  const v = typeof s === 'string' ? s.replace(/[\r\n<>]/g, '').trim() : '';
+  return v.slice(0, 60) || 'Koala Kids';
+};
+
 const dfr = (d: string) => {
   try { return new Date(d).toLocaleDateString('fr-FR'); } catch { return ''; }
 };
@@ -69,7 +77,7 @@ const sb = createClient(
   { auth: { persistSession: false } },
 );
 
-async function sendEmail(to: string[], subject: string, html: string) {
+async function sendEmail(to: string[], subject: string, html: string, expediteur?: string) {
   const user = Deno.env.get('GMAIL_USER');
   const pass = Deno.env.get('GMAIL_APP_PASSWORD');
   if (!user || !pass) {
@@ -77,6 +85,7 @@ async function sendEmail(to: string[], subject: string, html: string) {
   }
   // "From" doit obligatoirement être l'adresse authentifiée elle-même : Gmail
   // rejette silencieusement tout expéditeur différent du compte SMTP utilisé.
+  // Seul le nom affiché varie, selon qui a cliqué sur « Envoyer ».
   const client = new SMTPClient({
     connection: {
       hostname: 'smtp.gmail.com',
@@ -87,7 +96,7 @@ async function sendEmail(to: string[], subject: string, html: string) {
   });
   try {
     await client.send({
-      from: user,
+      from: `${nomExpediteur(expediteur)} de Koalakids <${user}>`,
       to,
       subject,
       content: 'Ce message nécessite un client de messagerie compatible HTML.',
@@ -194,7 +203,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { devis_id, relance, objet, message } = await req.json();
+    const { devis_id, relance, objet, message, expediteur } = await req.json();
     if (!devis_id) return json({ erreur: 'Devis manquant' }, 400);
     // Un objet/message vide n'est pas un objet/message : on retombe alors sur
     // le texte par défaut plutôt que d'envoyer un mail à l'objet blanc.
@@ -245,6 +254,7 @@ Deno.serve(async (req) => {
           reste: devis.reste_a_charge != null ? eur(devis.reste_a_charge) : null,
           relance: !!relance,
         }),
+        expediteur,
       );
     } catch (mailErr) {
       console.error('[envoyer-devis] SMTP', mailErr);
