@@ -219,6 +219,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <p class="hint">Vacances, jours fériés propres à la crèche, journées pédagogiques… Ce calendrier
           s'ajoute aux fermetures hebdomadaires ci-dessus.</p>
         <div id="fermList"></div>
+        <p class="hint" id="hFermCal"></p>
         <div class="g3" style="align-items:end">
           <div class="f"><label class="lb">Type</label>
             <select id="fermType">
@@ -647,7 +648,7 @@ function renderEtab(){
 
   const jrs=e.jours_ouverture?toArr(e.jours_ouverture).map(Number):[1,2,3,4,5];
   document.getElementById('eJours').innerHTML=JOURS.map(j=>
-    '<label><input type="checkbox" class="ckJour" value="'+j[0]+'"'
+    '<label><input type="checkbox" class="ckJour" value="'+j[0]+'" onchange="majFermCalHint()"'
     +(jrs.indexOf(j[0])>=0?' checked':'')+'><span>'+j[1]+'</span></label>').join('');
 
   FERMETURES=toArr(e.jours_fermeture).slice();
@@ -942,6 +943,65 @@ function syncSem(depuisFact){
   }
   h.style.color='';
   h.textContent='Les devis de cette crèche mensualiseront sur '+f+' semaines : montant hebdomadaire × '+f+' ÷ 12.';
+  majFermCalHint();
+}
+
+/* Estime, à partir du calendrier de fermeture réellement saisi (établissement
+   + réseau) plutôt que de la seule déclaration ci-dessus, le nombre de
+   semaines fermées sur l'année scolaire en cours (1er septembre → 31 août) —
+   jour par jour, sur les seuls jours d'ouverture de la crèche. Une fenêtre
+   glissante de 365 jours depuis aujourd'hui exclurait à tort les fermetures
+   d'été déjà passées quand on regarde ça à la rentrée ; l'année scolaire est
+   le repère que suit le calendrier de fermeture saisi dans Paramètres.
+   Sert uniquement à repérer un écart : on ne réécrit jamais "Semaines de
+   fermeture par an" tout seul, car c'est ce chiffre qui mensualise les
+   contrats sans terme, et le changer sans validation reviendrait à modifier
+   des montants facturés dans le dos de la direction. */
+function fermetureCalendrierSemaines(){
+  const jrsOuverture=[...document.querySelectorAll('.ckJour:checked')].map(c=>Number(c.value));
+  if(!jrsOuverture.length)return null;
+  const set={};jrsOuverture.forEach(j=>{set[j]=1;});
+  const auj=new Date();auj.setHours(12,0,0,0);
+  const anneeDebut=auj.getMonth()>=8?auj.getFullYear():auj.getFullYear()-1;   // 8 = septembre
+  const d0=new Date(anneeDebut,8,1,12,0,0);
+  const d1=new Date(anneeDebut+1,7,31,12,0,0);
+  const fermees=new Set();
+  FERMETURES.concat(FERMETURES_RESEAU).forEach(f=>{
+    if(!f||!f.debut)return;
+    const a=new Date(String(f.debut).slice(0,10)+'T12:00:00');
+    const b=f.fin?new Date(String(f.fin).slice(0,10)+'T12:00:00'):a;
+    if(isNaN(a)||isNaN(b)||b<a)return;
+    for(const d=new Date(a);d<=b;d.setDate(d.getDate()+1)){
+      if(d>=d0&&d<=d1)fermees.add(d.toISOString().slice(0,10));
+    }
+  });
+  if(!fermees.size)return null;
+  let joursFermes=0;
+  fermees.forEach(iso=>{
+    const d=new Date(iso+'T12:00:00');
+    const js=d.getDay()===0?7:d.getDay();
+    if(set[js])joursFermes++;
+  });
+  return Math.round(joursFermes/jrsOuverture.length*10)/10;
+}
+function majFermCalHint(){
+  const h=document.getElementById('hFermCal');
+  if(!h)return;
+  const calc=fermetureCalendrierSemaines();
+  if(calc==null){h.textContent='';return;}
+  const manuel=num('eSemFerm');
+  const calcTxt=String(calc).replace('.',',');
+  if(manuel!=null&&Math.abs(calc-manuel)>=1){
+    h.innerHTML='<i class="ti ti-alert-triangle"></i> Le calendrier de fermeture ci-dessus indique environ <b>'
+      +calcTxt+' semaines</b> fermées sur l\'année scolaire en cours, contre <b>'+manuel
+      +'</b> saisies dans « Semaines de fermeture par an ». Ajustez ce champ si le calendrier est à jour — '
+      +'les contrats sans terme se mensualisent dessus.';
+    h.style.color='var(--amber)';
+  }else{
+    h.innerHTML='Cohérent avec le calendrier de fermeture ci-dessus : environ '+calcTxt
+      +' semaines sur l\'année scolaire en cours.';
+    h.style.color='';
+  }
 }
 
 /* ---------- JOURS DE FERMETURE ---------- */
@@ -954,7 +1014,7 @@ function renderFermetures(){
   const box=document.getElementById('fermList');
   const tous=FERMETURES.map((f,i)=>({f,i,scope:'creche'}))
     .concat(FERMETURES_RESEAU.map((f,i)=>({f,i,scope:'reseau'})));
-  if(!tous.length){box.innerHTML='<p class="ferm-empty">Aucune fermeture particulière enregistrée.</p>';return;}
+  if(!tous.length){box.innerHTML='<p class="ferm-empty">Aucune fermeture particulière enregistrée.</p>';majFermCalHint();return;}
   tous.sort((a,b)=>String(a.f.debut||'').localeCompare(String(b.f.debut||'')));
   box.innerHTML=tous.map(({f,i,scope})=>{
     const dates=f.fin&&f.fin!==f.debut?(fermDfr(f.debut)+' → '+fermDfr(f.fin)):fermDfr(f.debut);
@@ -967,6 +1027,7 @@ function renderFermetures(){
       +'<button type="button" class="btn btn-g btn-sm" onclick="fermRemove(\''+scope+'\','+i+')"><i class="ti ti-trash"></i></button>'
       +'</div>';
   }).join('');
+  majFermCalHint();
 }
 function fermAdd(){
   const debut=val('fermDebut');

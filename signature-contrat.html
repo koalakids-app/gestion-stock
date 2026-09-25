@@ -84,6 +84,9 @@ const TOKEN=new URLSearchParams(location.search).get('t')||'';
 let D=null;
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+/* Le libellé de la tranche tarifaire ("Plus de 40 heures par semaine"…) est
+   un repère interne à la direction ; la famille voit « Frais de garde ». */
+function libelleLigne(l){return l.type==='accueil'?'Frais de garde':l.libelle;}
 function eur(n){
   const v=Math.round(Number(n||0)*100)/100;
   const p=Math.abs(v).toFixed(2).replace('.',',').split(',');
@@ -158,7 +161,7 @@ function rendre(){
     return nb(q)+(u?' '+u:'')+' × '+eur(Math.abs(l.montant_unitaire));
   };
   const tr=l=>'<tr'+(Number(l.total)<0?' class="neg"':'')+'>'
-    +'<td>'+esc(l.libelle)
+    +'<td>'+esc(libelleLigne(l))
     +(l.description?'<div class="d">'+esc(l.description)+'</div>':'')
     +(detail(l)?'<div class="d">'+esc(detail(l))+'</div>':'')+'</td>'
     +'<td class="m">'+(Number(l.total)<0?'− ':'')+eur(Math.abs(l.total))+'</td></tr>';

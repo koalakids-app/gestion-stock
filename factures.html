@@ -253,6 +253,75 @@ function auj(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()
 const MOIS_FR=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 function moisLibelle(m){if(!m)return'';const p=String(m).split('-');return MOIS_FR[Number(p[1])-1]+' '+p[0];}
 function finDeMois(m){const a=Number(m.slice(0,4)),mo=Number(m.slice(5,7));const d=new Date(Date.UTC(a,mo,0));return m+'-'+String(d.getUTCDate()).padStart(2,'0');}
+/* Un tableau JSON peut revenir en tableau ou en chaîne selon la façon dont la
+   ligne a été écrite. On accepte les deux plutôt que de planter à l'affichage. */
+function toArr(v){
+  if(Array.isArray(v))return v;
+  if(typeof v==='string'){try{const p=JSON.parse(v);return Array.isArray(p)?p:[];}catch(e){return[];}}
+  return [];
+}
+/* Le calendrier de fermeture (établissement + réseau) tel que saisi dans
+   Paramètres, fondu en un seul ensemble de dates fermées — même principe que
+   fermetureReelle() dans inscriptions.html, pour la même source de vérité. */
+function joursFermesSet(crecheId){
+  const e=etabDe(crecheId);
+  const fermees=new Set();
+  toArr(e.jours_fermeture).concat(toArr(RCFG.jours_fermeture_reseau)).forEach(f=>{
+    if(!f||!f.debut)return;
+    const a=new Date(String(f.debut).slice(0,10)+'T12:00:00');
+    const b=f.fin?new Date(String(f.fin).slice(0,10)+'T12:00:00'):a;
+    if(isNaN(a)||isNaN(b)||b<a)return;
+    for(const d=new Date(a);d<=b;d.setDate(d.getDate()+1))fermees.add(d.toISOString().slice(0,10));
+  });
+  return fermees;
+}
+/* Jours de contrat réellement ouvrés sur une période : les jours de la
+   semaine du contrat qui tombent entre d1 et d2, fermetures de la crèche et
+   du réseau déduites — jour par jour, comme partout ailleurs dans l'appli. */
+function joursOuvresEntre(joursSemaine,crecheId,d1,d2){
+  const jrs=toArr(joursSemaine).map(Number);
+  if(!jrs.length)return 0;
+  const set={};jrs.forEach(j=>{set[j]=1;});
+  const fermees=joursFermesSet(crecheId);
+  const dd0=new Date(String(d1).slice(0,10)+'T12:00:00');
+  const dd1=new Date(String(d2).slice(0,10)+'T12:00:00');
+  let n=0;
+  for(const d=new Date(dd0);d<=dd1;d.setDate(d.getDate()+1)){
+    const js=d.getDay()===0?7:d.getDay();
+    if(!set[js])continue;
+    if(fermees.has(d.toISOString().slice(0,10)))continue;
+    n++;
+  }
+  return n;
+}
+/* Parmi ces mêmes jours ouvrés, ceux couverts par une absence dont le préavis
+   (signalee_le → date_debut) atteint 15 jours calendaires : c'est sur ces
+   jours-là, et seulement ceux-là, que le repas se déduit — l'entretien lui-
+   même reste dû que l'enfant soit là ou non. */
+function joursRepasDeductiblesEntre(joursSemaine,crecheId,d1,d2,absencesEnfant){
+  const jrs=toArr(joursSemaine).map(Number);
+  if(!jrs.length||!absencesEnfant||!absencesEnfant.length)return 0;
+  const eligibles=absencesEnfant.filter(a=>{
+    if(!a.signalee_le)return false;
+    const preavis=Math.round((new Date(String(a.date_debut).slice(0,10)+'T12:00:00')
+      -new Date(String(a.signalee_le).slice(0,10)+'T12:00:00'))/86400000);
+    return preavis>=15;
+  });
+  if(!eligibles.length)return 0;
+  const set={};jrs.forEach(j=>{set[j]=1;});
+  const fermees=joursFermesSet(crecheId);
+  const dd0=new Date(String(d1).slice(0,10)+'T12:00:00');
+  const dd1=new Date(String(d2).slice(0,10)+'T12:00:00');
+  let n=0;
+  for(const d=new Date(dd0);d<=dd1;d.setDate(d.getDate()+1)){
+    const js=d.getDay()===0?7:d.getDay();
+    if(!set[js])continue;
+    const iso=d.toISOString().slice(0,10);
+    if(fermees.has(iso))continue;
+    if(eligibles.some(a=>iso>=String(a.date_debut).slice(0,10)&&iso<=String(a.date_fin).slice(0,10)))n++;
+  }
+  return n;
+}
 function debutDeMois(m){return m+'-01';}
 function plusMois(iso,n){const d=new Date(iso+'T00:00:00');const j=d.getDate();d.setDate(1);d.setMonth(d.getMonth()+n);
   const dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(j,dim));
@@ -644,26 +713,73 @@ async function preparer(){
     CONTRATS=ct.data||[];ENFANTS=(en&&en.data)||[];
     const dejaFait={};((fa&&fa.data)||[]).forEach(f=>{if(f.contrat_id&&f.statut!=='annulee')dejaFait[f.contrat_id]=f;});
 
+    /* Le détail figé à la signature (contrats_lignes) dit combien de la
+       mensualité vient de l'accueil (lissé, inchangé) et combien vient d'un
+       frais facturé par jour d'accueil, comme les frais d'entretien — celui-
+       là se facture désormais aux jours réellement ouvrés du mois, fermetures
+       de la crèche déduites, plutôt qu'à une moyenne figée sur toute la durée
+       du contrat. Un vieux contrat sans lignes enregistrées retombe sur son
+       montant global, non scindé : le comportement d'avant cette fonction. */
+    const idsActifs=CONTRATS.filter(c=>{
+      const deb=champ(c,C_DEBUT), fin=champ(c,C_FIN);
+      const finEff=c.resilie_fin_preavis||fin;
+      return (!deb||deb<=d2)&&(!finEff||finEff>=d1);
+    }).map(c=>c.id);
+    const[cl,frA,abs]=await Promise.all([
+      idsActifs.length?sb.from('contrats_lignes').select('contrat_id,type,libelle,montant_unitaire,total').in('contrat_id',idsActifs):Promise.resolve({data:[]}),
+      sb.from('frais_annexes').select('libelle,creche_id,part_repas').eq('type','unitaire'),
+      sb.from('enfants_absences').select('enfant_id,date_debut,date_fin,signalee_le').lte('date_debut',d2).gte('date_fin',d1)
+    ]);
+    const LIGNES_PAR_CONTRAT={};
+    (cl.data||[]).forEach(l=>{(LIGNES_PAR_CONTRAT[l.contrat_id]=LIGNES_PAR_CONTRAT[l.contrat_id]||[]).push(l);});
+    const nrm=s=>String(s||'').trim().toLowerCase();
+    const partRepasDe=(libelle,cId)=>{
+      const f=(frA.data||[]).find(x=>nrm(x.libelle)===nrm(libelle)&&(x.creche_id==null||String(x.creche_id)===String(cId)));
+      return f&&f.part_repas!=null?Number(f.part_repas):null;
+    };
+    const absencesDe=eid=>(abs.data||[]).filter(a=>String(a.enfant_id)===String(eid));
+
+    PREP_ENTRETIEN={};
     const lignes=CONTRATS.map(c=>{
       const deb=champ(c,C_DEBUT), fin=champ(c,C_FIN);
       const finEff=c.resilie_fin_preavis||fin;
       const actif=(!deb||deb<=d2)&&(!finEff||finEff>=d1);
-      const mensu=Number(champ(c,C_MENSU,0));
+      const mensuBrut=Number(champ(c,C_MENSU,0));
       const tarif=Number(champ(c,C_TARIF,0));
+      const lignesCt=LIGNES_PAR_CONTRAT[c.id]||[];
+      const fraisUnitaires=lignesCt.filter(l=>l.type==='unitaire').map(l=>({
+        libelle:l.libelle,pu:Number(l.montant_unitaire)||0,
+        partRepas:partRepasDe(l.libelle,c.creche_id||crecheId)
+      }));
+      const accueilLisse=lignesCt.length
+        ? r2(lignesCt.filter(l=>l.type==='accueil'||l.type==='mensuel').reduce((s,l)=>s+Number(l.total||0),0))
+        : mensuBrut;
+      let joursReels=0,joursRepas=0;
+      if(actif&&fraisUnitaires.length){
+        joursReels=joursOuvresEntre(c.jours,c.creche_id||crecheId,d1,d2);
+        if(fraisUnitaires.some(f=>f.partRepas!=null)){
+          joursRepas=joursRepasDeductiblesEntre(c.jours,c.creche_id||crecheId,d1,d2,absencesDe(c.enfant_id));
+        }
+      }
+      const mensu=fraisUnitaires.length?accueilLisse:mensuBrut;
       /* Les heures mensualisées : c'est ce nombre que le réseau déclare à la
-         CAF, et la CAF ne verse le CMG que sur cette base. On le déduit de la
-         mensualité et du tarif horaire — le contrat porte les deux — et il
-         reste modifiable, comme tout le reste de cet écran. */
+         CAF, et la CAF ne verse le CMG que sur cette base. On le déduit du
+         seul accueil — les frais d'entretien n'ont jamais été des heures — et
+         du tarif horaire, et il reste modifiable, comme tout le reste ici. */
       const heures=tarif>0?r2(mensu/tarif):0;
       const enf=ENFANTS.find(e=>String(e.id)===String(c.enfant_id));
       const nom=enf?((enf.prenom||'')+' '+(enf.nom||'')).trim():(c.enfant_nom||'contrat '+(c.numero||''));
       const alertes=[];
       if(deb&&deb>d1&&deb<=d2)alertes.push('entrée le '+dfr(deb)+' — mois incomplet');
       if(finEff&&finEff>=d1&&finEff<d2)alertes.push('fin le '+dfr(finEff)+' — mois incomplet'+(c.resilie_fin_preavis?' (fin de préavis)':''));
-      if(!mensu)alertes.push('aucune mensualité lisible sur le contrat — à saisir sur le brouillon');
+      if(!mensuBrut)alertes.push('aucune mensualité lisible sur le contrat — à saisir sur le brouillon');
       if(!heures)alertes.push('heures mensualisées introuvables (tarif horaire absent du contrat) — à saisir');
-      return {c:c,actif:actif,mensu:mensu,heures:heures,nom:nom,alertes:alertes,deja:dejaFait[c.id]||null};
+      const entretien=fraisUnitaires.length?{fraisUnitaires,joursReels,joursRepas}:null;
+      if(entretien)PREP_ENTRETIEN[c.id]=entretien;
+      return {c:c,actif:actif,mensu:mensu,heures:heures,nom:nom,alertes:alertes,deja:dejaFait[c.id]||null,entretien:entretien};
     }).filter(x=>x.actif).sort((a,b)=>a.nom.localeCompare(b.nom));
+    const avecEntretien=lignes.some(x=>x.entretien);
+    const avecRepas=lignes.some(x=>x.entretien&&x.entretien.fraisUnitaires.some(f=>f.partRepas!=null));
 
     const aFaire=lignes.filter(x=>!x.deja);
     /* Forfait « journée non pointée » : jours de contrat sans pointage d'arrivée
@@ -687,19 +803,30 @@ async function preparer(){
     }else{
       h+='<p class="hint">'+aFaire.length+' facture(s) à créer sur '+lignes.length+' contrat(s) actifs. '
         +'Les contrats déjà facturés ce mois-ci sont listés mais ne seront pas touchés.</p>';
-      h+='<table class="lg"><tr><th></th><th>Enfant</th><th class="r">Heures</th><th class="r">Mensualité</th><th class="r">Forfaits non pointés</th><th>État</th></tr>';
+      h+='<table class="lg"><tr><th></th><th>Enfant</th><th class="r">Heures</th>'
+        +'<th class="r">'+(avecEntretien?'Accueil (lissé)':'Mensualité')+'</th>'
+        +(avecEntretien?'<th class="r">Entretien (j réels)</th>':'')
+        +(avecRepas?'<th class="r">Dont repas déduits (j)</th>':'')
+        +'<th class="r">Forfaits non pointés</th><th>État</th></tr>';
       lignes.forEach((x,i)=>{
         const fj=PREP_FORF[x.c.enfant_id]||[];
         const fjTxt=fj.length?'<div class="sub" style="font-size:11px;color:var(--muted)">'+esc(fj.map(libJourForfait).join(' · '))+'</div>':'';
         const av=x.alertes.length?'<div class="sub" style="color:var(--amber);font-size:11.5px">⚠ '+esc(x.alertes.join(' · '))+'</div>':'';
+        const ent=x.entretien;
         h+='<tr><td>'+(x.deja?'':'<input type="checkbox" class="ckC" value="'+x.c.id+'" checked style="width:auto">')+'</td>'
           +'<td>'+esc(x.nom)+av+'</td>'
           +'<td class="r"><input class="hrC" data-c="'+x.c.id+'" value="'+(x.heures?String(x.heures).replace('.',','):'')+'" style="width:80px;text-align:right;font-size:14px;padding:5px 8px"'+(x.deja?' disabled':'')+'></td>'
           +'<td class="r"><input class="mnC" data-c="'+x.c.id+'" value="'+(x.mensu?String(x.mensu).replace('.',','):'')+'" style="width:110px;text-align:right;font-size:14px;padding:5px 8px"'+(x.deja?' disabled':'')+'></td>'
+          +(avecEntretien?'<td class="r">'+(ent?'<input class="enC" data-c="'+x.c.id+'" value="'+ent.joursReels+'" style="width:64px;text-align:right;font-size:14px;padding:5px 8px"'+(x.deja?' disabled':'')+'> j':'—')+'</td>':'')
+          +(avecRepas?'<td class="r">'+(ent&&ent.fraisUnitaires.some(f=>f.partRepas!=null)?'<input class="rpC" data-c="'+x.c.id+'" value="'+ent.joursRepas+'" style="width:56px;text-align:right;font-size:14px;padding:5px 8px"'+(x.deja?' disabled':'')+'> j':'—')+'</td>':'')
           +'<td class="r">'+(x.deja||!PREP_FO?'':'<input class="fgC" data-c="'+x.c.id+'" data-e="'+x.c.enfant_id+'" value="'+fj.length+'" style="width:56px;text-align:right;font-size:14px;padding:5px 8px"> j'+fjTxt)+'</td>'
           +'<td>'+(x.deja?'<span class="bdg b-em">déjà facturé</span>':'<span class="bdg b-br">à créer</span>')+'</td></tr>';
       });
       h+='</table>';
+      if(avecEntretien)h+='<p class="hint">« Entretien (j réels) » compte les jours de contrat qui tombent ce mois-ci, '
+        +'fermetures de la crèche déduites du calendrier de Paramètres — modifiable si un jour doit être ajusté à la main. '
+        +(avecRepas?'« Dont repas déduits » reprend les jours couverts par une absence signalée au moins 15 jours à l\'avance '
+          +'(Présences › Déclarer une absence) : seule la part repas du tarif en est retirée, l\'entretien reste dû.':'')+'</p>';
       h+=PREP_FO>0
         ?'<p class="hint">Forfait journée non pointée : <b>'+eur(PREP_FO)+'</b> par jour, ajouté en ligne à la facture. Mettre 0 pour ne rien facturer. '
           +(finDeMois(m)>auj()?'Le mois n\'est pas terminé : seuls les jours écoulés sont comptés. ':'')
@@ -748,7 +875,7 @@ function enteteFamille(ct){
   };
 }
 
-let PREP_FORF={},PREP_FO=0;
+let PREP_FORF={},PREP_FO=0,PREP_ENTRETIEN={};
 /* « 9 sept. (non pointé) » — le détail imprimé sous la ligne de forfait. */
 function libJourForfait(r){
   return new Date(r.date+'T00:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'})+' ('+(PR_LIBELLES[r.statut]||r.statut).toLowerCase()+')';
@@ -768,18 +895,28 @@ async function genererBrouillons(){
   const mns={};document.querySelectorAll('.mnC').forEach(i=>{mns[i.dataset.c]=nb(i.value);});
   const fgs={};document.querySelectorAll('.fgC').forEach(i=>{fgs[i.dataset.c]=Math.max(0,Math.round(nb(i.value)));});
   const hrs={};document.querySelectorAll('.hrC').forEach(i=>{hrs[i.dataset.c]=nb(i.value);});
+  const ens={};document.querySelectorAll('.enC').forEach(i=>{ens[i.dataset.c]=Math.max(0,Math.round(nb(i.value)));});
+  const rps={};document.querySelectorAll('.rpC').forEach(i=>{rps[i.dataset.c]=Math.max(0,Math.round(nb(i.value)));});
   let ok=0,ko=0,dernier=null;
   for(const id of ids){
     const ct=CONTRATS.find(c=>String(c.id)===String(id));
     if(!ct)continue;
     const mensu=r2(mns[id]||0);
     const heures=r2(hrs[id]||0);
+    const ent=PREP_ENTRETIEN[id]||null;
+    const joursEnt=ent?(ens[id]!=null?ens[id]:ent.joursReels):0;
+    const joursRep=ent?(rps[id]!=null?rps[id]:ent.joursRepas):0;
+    // Le total gelé sur la facture inclut l'entretien au réel, pour que ce
+    // champ reste un repère fidèle du montant facturé — même s'il n'est plus
+    // le seul poste, le détail vivant dans les lignes ci-dessous.
+    const entretienTotal=ent?r2(ent.fraisUnitaires.reduce((s,f)=>
+      s+joursEnt*f.pu-(f.partRepas!=null?joursRep*f.partRepas:0),0)):0;
     const row=Object.assign({
       creche_id:crecheId, contrat_id:ct.id, enfant_id:ct.enfant_id||null,
       type:'mensuelle', statut:'brouillon',
       mois:m, periode_debut:d1, periode_fin:d2, date_echeance:ech,
       ct_numero:ct.numero||null,
-      ct_mensualite:mensu||null,
+      ct_mensualite:(mensu+entretienTotal)||null,
       ct_heures_hebdo:Number(champ(ct,C_HEURES,0))||null,
       ct_tarif_horaire:Number(champ(ct,C_TARIF,0))||null,
       heures_facturees:heures||null,
@@ -789,18 +926,41 @@ async function genererBrouillons(){
       const{data,error}=await sb.from('factures').insert(row).select().single();
       if(error)throw error;
       dernier=data.id;
+      let ordre=1;
       if(mensu>0){
         const{error:el}=await sb.from('factures_lignes').insert({
-          facture_id:data.id, ordre:1, type:'mensualite',
+          facture_id:data.id, ordre:ordre++, type:'mensualite',
           libelle:'Accueil régulier — '+moisLibelle(m),
           quantite:heures||1, prix_unitaire:heures?r2(mensu/heures):mensu, montant:mensu,
           detail:'Mensualité lissée du contrat '+(ct.numero||'')
             +(heures?(' — '+String(heures).replace('.',',')+' h mensualisées'):'')});
         if(el)throw el;
       }
+      if(ent){
+        for(const f of ent.fraisUnitaires){
+          if(joursEnt>0){
+            const montant=r2(joursEnt*f.pu);
+            const{error:ee}=await sb.from('factures_lignes').insert({
+              facture_id:data.id, ordre:ordre++, type:'repas',
+              libelle:f.libelle+' — '+moisLibelle(m),
+              quantite:joursEnt, prix_unitaire:f.pu, montant:montant,
+              detail:joursEnt+' jour(s) d\'accueil réellement ouvré(s) ce mois, fermetures déduites'});
+            if(ee)throw ee;
+          }
+          if(f.partRepas!=null&&joursRep>0){
+            const montantRepas=-r2(joursRep*f.partRepas);
+            const{error:er}=await sb.from('factures_lignes').insert({
+              facture_id:data.id, ordre:ordre++, type:'deduction',
+              libelle:'Repas déduits — '+moisLibelle(m),
+              quantite:joursRep, prix_unitaire:-f.partRepas, montant:montantRepas,
+              detail:joursRep+' jour(s) d\'absence signalée au moins 15 jours à l\'avance'});
+            if(er)throw er;
+          }
+        }
+      }
       const nF=fgs[id]||0;
       if(nF>0&&PREP_FO>0){
-        const{error:ef}=await sb.from('factures_lignes').insert(ligneForfait(data.id,mensu>0?2:1,nF,PREP_FO,PREP_FORF[ct.enfant_id]||[],m));
+        const{error:ef}=await sb.from('factures_lignes').insert(ligneForfait(data.id,ordre++,nF,PREP_FO,PREP_FORF[ct.enfant_id]||[],m));
         if(ef)throw ef;
       }
       ok++;
