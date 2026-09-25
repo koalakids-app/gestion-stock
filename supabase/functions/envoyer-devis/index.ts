@@ -130,15 +130,17 @@ function corpsHtml(o: {
     font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#2B2740;line-height:1.6">
     <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;
       border:1px solid #E3E1EF">
-      <table role="presentation" width="100%" style="background:#3D3580;color:#fff;border-collapse:collapse">
+      <table role="presentation" width="100%" style="border-collapse:collapse">
         <tr>
-          <td style="padding:22px 24px;vertical-align:top">
+          <td style="background:#fff;padding:20px 24px;text-align:center">
+            <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
+              width="220" style="display:inline-block;height:auto">
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#3D3580;color:#fff;padding:18px 24px">
             <div style="font-size:20px;font-weight:700">Votre devis d'accueil</div>
             <div style="font-size:14px;opacity:.85;margin-top:3px">Koala Kids${o.creche ? ' · ' + esc(o.creche) : ''}</div>
-          </td>
-          <td style="padding:14px 18px 0 0;vertical-align:top;text-align:right;width:1%">
-            <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
-              width="92" style="display:inline-block;height:auto;background:#fff;border-radius:8px;padding:5px 8px">
           </td>
         </tr>
       </table>
