@@ -45,7 +45,9 @@ function json(body: unknown, status = 200) {
 // glisserait un en-tête arbitraire (injection SMTP).
 function nomExpediteur(s: unknown) {
   const v = typeof s === "string" ? s.replace(/[\r\n<>]/g, "").trim() : "";
-  return v.slice(0, 60) || "Koala Kids";
+  // Seul le prénom du directeur ou de l'admin qui envoie, jamais le nom complet.
+  const prenom = v.split(/\s+/)[0] || "";
+  return prenom.slice(0, 60) || "Koala Kids";
 }
 
 async function sendEmail(to: string[], subject: string, html: string, expediteur?: string) {

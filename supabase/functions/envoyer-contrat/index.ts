@@ -56,7 +56,9 @@ const esc = (s: unknown) =>
 // glisserait un en-tête arbitraire (injection SMTP).
 const nomExpediteur = (s: unknown) => {
   const v = typeof s === 'string' ? s.replace(/[\r\n<>]/g, '').trim() : '';
-  return v.slice(0, 60) || 'Koala Kids';
+  // Seul le prénom du directeur ou de l'admin qui envoie, jamais le nom complet.
+  const prenom = v.split(/\s+/)[0] || '';
+  return prenom.slice(0, 60) || 'Koala Kids';
 };
 
 const eur = (n: unknown) => {
