@@ -750,6 +750,12 @@ const JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi']];
 
 function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+/* La ligne d'accueil garde en base le libellé de la tranche tarifaire
+   ("Plus de 40 heures par semaine", "Entre 24 et 40 heures par semaine"…) :
+   c'est ce qui dit à la direction quelle tranche s'est appliquée. Mais ce
+   jargon interne n'a rien à faire sous les yeux d'une famille — on affiche
+   donc « Frais de garde » à sa place, sur tous les documents qui la voient. */
+function libelleLigne(l){return l.type==='accueil'?'Frais de garde':l.libelle;}
 function closeOv(id){document.getElementById(id).classList.remove('on');}
 function openOv(id){document.getElementById(id).classList.add('on');}
 function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
@@ -2746,7 +2752,7 @@ function dSync(){
   else{
     const recur=['accueil','mensuel','unitaire'];
     const q=l=>l.unite?(Math.round(l.quantite*100)/100).toLocaleString('fr-FR')+' '+l.unite+' × '+euro(Math.abs(l.montant_unitaire)):'';
-    const tr=l=>'<tr'+(l.total<0?' class="neg"':'')+'><td>'+esc(l.libelle)
+    const tr=l=>'<tr'+(l.total<0?' class="neg"':'')+'><td>'+esc(libelleLigne(l))
       +(l.description?'<div class="q">'+esc(l.description)+'</div>':'')+'</td>'
       +'<td class="q">'+q(l)+'</td><td class="m">'+(l.total<0?'− ':'')+euro(Math.abs(l.total))+'</td></tr>';
     let html='<table class="lg">'+c.lignes.filter(l=>recur.indexOf(l.type)>=0).map(tr).join('')
@@ -4023,7 +4029,7 @@ function dessineDevis(d,lignes){
   function ligne(l){
     const neg=Number(l.total)<0;
     police(9.5,'normal',NOIR);
-    const nom=doc.splitTextToSize(String(l.libelle||''),82);
+    const nom=doc.splitTextToSize(String(libelleLigne(l)||''),82);
     const des=l.description?doc.splitTextToSize(String(l.description),82):[];
     const h=nom.length*4.3+des.length*3.6;
     place(h+3);

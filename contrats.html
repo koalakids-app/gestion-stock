@@ -405,6 +405,10 @@ const ETATS=[
 
 function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',3200);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+/* Même règle que côté devis (inscriptions.html) : le libellé de la tranche
+   tarifaire reste en base pour la direction, mais une famille ne voit que
+   « Frais de garde » sur ses documents. */
+function libelleLigne(l){return l.type==='accueil'?'Frais de garde':l.libelle;}
 function closeOv(id){document.getElementById(id).classList.remove('on');}
 function openOv(id){document.getElementById(id).classList.add('on');}
 function val(id){const e=document.getElementById(id);return e?String(e.value).trim():'';}
@@ -1641,7 +1645,7 @@ function cSync(){
   else{
     const recur=['accueil','mensuel','unitaire'];
     const q=l=>l.unite?(Math.round(l.quantite*100)/100).toLocaleString('fr-FR')+' '+l.unite+' × '+euro(Math.abs(l.montant_unitaire)):'';
-    const tr=l=>'<tr'+(l.total<0?' class="neg"':'')+'><td>'+esc(l.libelle)
+    const tr=l=>'<tr'+(l.total<0?' class="neg"':'')+'><td>'+esc(libelleLigne(l))
       +(l.description?'<div class="q">'+esc(l.description)+'</div>':'')+'</td>'
       +'<td class="q">'+q(l)+'</td><td class="m">'+(l.total<0?'− ':'')+euro(Math.abs(l.total))+'</td></tr>';
     let html='<table class="lg">'+c.lignes.filter(l=>recur.indexOf(l.type)>=0).map(tr).join('')
@@ -2615,7 +2619,7 @@ function dessineContrat(c,lignes,telecharger){
   function ligne(l){
     const neg=Number(l.total)<0;
     police(9.5,'normal',NOIR);
-    const nom=doc.splitTextToSize(String(l.libelle||''),82);
+    const nom=doc.splitTextToSize(String(libelleLigne(l)||''),82);
     const des=l.description?doc.splitTextToSize(String(l.description),82):[];
     const h=nom.length*4.3+des.length*3.6;
     place(h+3);
