@@ -6774,14 +6774,27 @@ function menusCell(v){
   if(!s||/^\*+$/.test(s))return'';
   return s;
 }
-/* SheetJS (cellDates:true) construit les dates de cellule en UTC (un
-   nombre de série Excel n'a pas de fuseau horaire) : il faut donc lire le
-   quantième en UTC, pas en heure locale. Avec les accesseurs locaux, la
-   date obtenue dépendait du fuseau horaire de la machine qui importait —
-   sur certains imports le lundi retombait un dimanche, créant une semaine
+/* La conversion `cellDates:true` de SheetJS (numéro de série Excel -> objet
+   Date JS) passe par le fuseau horaire de la machine qui lit le fichier, et
+   souffre d'un bug d'arrondi connu de la librairie qui peut la faire
+   retomber sur la veille selon ce fuseau (constaté avec Europe/Paris) — le
+   lundi de la semaine retombait alors un dimanche, créant une semaine
    « fantôme » décalée d'un jour à côté de la bonne (doublons dans MCM >
-   Menus). */
-function menusDateISO(d){
+   Menus). Un numéro de série Excel n'a lui-même aucun fuseau horaire : on
+   lit donc le fichier SANS cellDates (menusParseWorkbook reçoit la cellule
+   brute, valeur numérique + format) et on décode nous-mêmes le quantième
+   avec XLSX.SSF.parse_date_code, qui fait une conversion arithmétique pure,
+   fiable quel que soit le fuseau horaire du navigateur. */
+function menusDateISO(cell){
+  if(!cell)return null;
+  if(cell.t==='n'&&typeof cell.v==='number'){
+    const dc=XLSX.SSF.parse_date_code(cell.v);
+    if(!dc)return null;
+    return dc.y+'-'+String(dc.m).padStart(2,'0')+'-'+String(dc.d).padStart(2,'0');
+  }
+  // Filet de sécurité si la cellule arrive déjà convertie en Date (ne devrait
+  // pas se produire, le classeur étant lu sans cellDates).
+  const d=cell instanceof Date?cell:cell.v;
   if(!(d instanceof Date)||isNaN(d))return null;
   return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
 }
@@ -6803,7 +6816,7 @@ function menusParseWorkbook(wb){
     const sheet=wb.Sheets[sheetName];
     const aoa=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:true});
     const row=function(i){return aoa[i]||[];};
-    const dateDebut=menusDateISO(row(1)[5]);
+    const dateDebut=menusDateISO(sheet[XLSX.utils.encode_cell({r:1,c:5})]);
     if(!dateDebut)return; // onglet illisible (pas la mise en page attendue) : ignoré silencieusement
     const semaineNum=parseInt(row(0)[6],10)||null;
     const jours=[];
@@ -6830,7 +6843,7 @@ async function handleImportMenusFile(event){
   reader.onload=async function(e){
     try{
       const data=new Uint8Array(e.target.result);
-      const wb=XLSX.read(data,{type:'array',cellDates:true});
+      const wb=XLSX.read(data,{type:'array'}); // pas de cellDates : voir menusDateISO
       const weeks=menusParseWorkbook(wb);
       if(!weeks.length){alert('Aucune semaine reconnue dans ce fichier — vérifiez qu\'il suit la mise en page habituelle du traiteur.');return;}
       const periodes=weeks.map(w=>'S'+(w.semaine_num||'?')+' ('+w.date_debut+')').join(', ');
