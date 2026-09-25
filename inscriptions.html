@@ -679,6 +679,12 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       </select></div>
     </div>
     <div class="f" style="max-width:180px"><label class="lb">Montant (€)</label><input id="xMontant" type="number" step="0.01" min="0"></div>
+    <div class="f" id="wrapRepas" style="max-width:280px">
+      <label class="lb">Dont repas (€/jour)</label>
+      <input id="xRepas" type="number" step="0.01" min="0" placeholder="Facultatif">
+      <p class="hint">Part du montant journalier déduite quand l'absence de l'enfant ce jour-là a été
+        signalée au moins 15 jours à l'avance. Laisser vide si ce frais ne comprend pas de repas.</p>
+    </div>
     <div class="f">
       <label class="ck"><input type="checkbox" id="xRed" onchange="syncRed()"> C'est une réduction</label>
       <label class="ck"><input type="checkbox" id="xDef"> Proposée par défaut sur un devis</label>
@@ -4613,6 +4619,7 @@ function openFrais(id){
   // sortir les frais d'entretien de la mensualite.
   setVal('xCreche',f?(f.creche_id||''):'');setVal('xType',f?f.type:'unitaire');
   setVal('xMontant',f?f.montant:'');
+  setVal('xRepas',f&&f.part_repas!=null?f.part_repas:'');
   setChk('xRed',f&&f.est_reduction);setChk('xDef',f&&f.par_defaut);
   setChk('xActif',f?f.actif:true);
   setVal('xOrdre',f?f.ordre:(FRAIS.length?Math.max(...FRAIS.map(x=>x.ordre))+10:10));
@@ -4635,6 +4642,9 @@ function syncRed(){
   const t=val('xType')||'unitaire';
   document.getElementById('xHint').textContent=AIDE_TYPE[t]
     +(chk('xRed')?' Saisissez le montant en positif : il se soustraira du total.':'');
+  // La part repas n'a de sens que sur un frais facturé par jour d'accueil, et
+  // jamais sur une réduction : il n'y a rien à en déduire une seconde fois.
+  document.getElementById('wrapRepas').style.display=(t==='unitaire'&&!chk('xRed'))?'':'none';
 }
 
 async function saveFrais(){
@@ -4642,10 +4652,14 @@ async function saveFrais(){
   if(!lib){toast('Indiquez un libellé.',true);return;}
   const m=num('xMontant');
   if(m==null||isNaN(m)||m<0){toast('Le montant se saisit en positif, même pour une réduction.',true);return;}
+  const repasVisible=val('xType')==='unitaire'&&!chk('xRed');
+  const repas=repasVisible?num('xRepas'):null;
+  if(repas!=null&&(isNaN(repas)||repas<0)){toast('La part repas se saisit en positif.',true);return;}
+  if(repas!=null&&repas>m){toast('La part repas ne peut pas dépasser le montant journalier.',true);return;}
   const row={
     libelle:lib,description:val('xDesc'),
     creche_id:val('xCreche')||null,
-    type:val('xType'),montant:m,
+    type:val('xType'),montant:m,part_repas:repas,
     est_reduction:chk('xRed'),par_defaut:chk('xDef'),
     actif:chk('xActif'),ordre:Number(val('xOrdre')||0)
   };

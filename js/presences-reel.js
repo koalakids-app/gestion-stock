@@ -330,8 +330,14 @@ async function renderPresenceMois(){
   const nomE={};enfants.forEach(function(e){nomE[e.id]=e.prenom+' '+e.nom;});
   res.abs.slice().sort((a,b)=>a.date_debut.localeCompare(b.date_debut)).forEach(function(a){
     const f=s=>new Date(s+'T00:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+    // Le préavis se compte en jours calendaires entre le signalement et le
+    // premier jour d'absence — pas en jours ouvrés, pour rester simple à
+    // vérifier d'un coup d'œil comme la règle elle-même.
+    const preavis=a.signalee_le?Math.round((new Date(a.date_debut+'T00:00:00')-new Date(a.signalee_le+'T00:00:00'))/86400000):null;
+    const repasOk=preavis!=null&&preavis>=15;
     absHtml+='<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0"><span><b>'+escHtml(nomE[a.enfant_id]||'')+'</b> — '+f(a.date_debut)+(a.date_fin!==a.date_debut?' au '+f(a.date_fin):'')
-      +' · '+(a.justifiee===false?'non justifiée':'justifiée')+(a.motif?' · '+escHtml(a.motif):'')+'</span>'
+      +' · '+(a.justifiee===false?'non justifiée':'justifiée')+(a.motif?' · '+escHtml(a.motif):'')
+      +(repasOk?' · <span style="color:#0f6e56">repas déductible</span>':(a.signalee_le?' · signalée '+preavis+'j avant (repas non déductible, <15j)':''))+'</span>'
       +'<button class="ibtn" title="Supprimer" onclick="prSupprAbsence(\''+a.id+'\')" style="padding:2px 6px"><i class="ti ti-trash"></i></button></div>';
   });
   box.innerHTML=nav
@@ -378,6 +384,8 @@ function prOuvrirAbsence(enfantId,dateStr){
       +'<div class="fg" style="flex:1"><label class="flabel">Au</label><input type="date" class="finput" id="abs-fin"></div></div>'
       +'<div class="fg"><label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" id="abs-justifiee" checked> Absence justifiée (certificat, prévenance)</label>'
       +'<div style="font-size:11.5px;color:var(--muted);margin-top:4px">Les 3 premiers jours restent facturés au forfait (délai de carence), les suivants ne le sont plus.</div></div>'
+      +'<div class="fg"><label class="flabel">Signalée le (optionnel)</label><input type="date" class="finput" id="abs-signalee">'
+      +'<div style="font-size:11.5px;color:var(--muted);margin-top:4px">Date à laquelle la famille a prévenu. Signalée au moins 15 jours avant le premier jour d\'absence, elle ouvre droit à la déduction des repas sur la facture.</div></div>'
       +'<div class="fg"><label class="flabel">Motif (optionnel)</label><input class="finput" id="abs-motif" placeholder="Maladie, hospitalisation…"></div>'
       +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn-cancel" onclick="closeModal(\'modal-abs-wrap\')">Annuler</button>'
       +'<button class="btn-primary" onclick="prEnregistrerAbsence()"><i class="ti ti-check"></i> Enregistrer</button></div></div>';
@@ -391,6 +399,7 @@ function prOuvrirAbsence(enfantId,dateStr){
   const d=dateStr||document.getElementById('presence-date').value||todayStr();
   document.getElementById('abs-debut').value=d;document.getElementById('abs-fin').value=d;
   document.getElementById('abs-justifiee').checked=true;document.getElementById('abs-motif').value='';
+  document.getElementById('abs-signalee').value='';
   ov.classList.add('open');
 }
 async function prEnregistrerAbsence(){
@@ -398,9 +407,10 @@ async function prEnregistrerAbsence(){
   const date_debut=document.getElementById('abs-debut').value,date_fin=document.getElementById('abs-fin').value;
   if(!enfant_id||!date_debut||!date_fin){showBanner('Renseignez l’enfant et les dates.','error');return;}
   if(date_fin<date_debut){showBanner('La date de fin précède celle de début.','error');return;}
+  const signalee_le=document.getElementById('abs-signalee').value||null;
   const{error}=await sb.from('enfants_absences').insert({enfant_id:enfant_id,date_debut:date_debut,date_fin:date_fin,
     justifiee:document.getElementById('abs-justifiee').checked,motif:document.getElementById('abs-motif').value.trim()||null,
-    created_by:(currentUser&&currentUser.id)||null});
+    signalee_le:signalee_le,created_by:(currentUser&&currentUser.id)||null});
   if(error){console.warn('[PR] absence',error);showBanner('Absence non enregistrée : '+(error.message||'erreur')+'. La table enfants_absences existe-t-elle ?','error');return;}
   closeModal('modal-abs-wrap');
   showBanner('Absence enregistrée');
