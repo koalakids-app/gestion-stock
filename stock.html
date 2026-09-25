@@ -2114,7 +2114,7 @@ function filterHisto(type, el) {
 function renderCommandes() {
   const statusMap = { 'en-cours': ['badge-amber','⏳ En attente'], 'livrees': ['badge-green','✅ Livrée'], 'annulees': ['badge-red','❌ Annulée'] };
 
-  function renderCards(list, showActions) {
+  function renderCards(list, showActions, showDelete) {
     if (list.length === 0) return `<div class="empty"><div class="icon">🛒</div><p>Aucune commande.</p></div>`;
     return list.map(c => {
       const [badgeCls, badgeTxt] = statusMap[c.status] || ['badge-gray','—'];
@@ -2152,6 +2152,8 @@ function renderCommandes() {
           <button class="btn btn-secondary btn-sm" style="margin-top:6px;width:100%" onclick="editCommande(${c.id})">✏️ Modifier</button>
           <button class="btn btn-secondary btn-sm" style="margin-top:8px;width:100%" onclick="onMarkLivree(${c.id})">✅ Marquer livré</button>
           <button class="btn btn-danger btn-sm" style="margin-top:6px;width:100%" onclick="onAnnulerCommande(${c.id})">❌ Annuler</button>` : ''}
+          ${showDelete ? `
+          <button class="btn btn-danger btn-sm" style="margin-top:6px;width:100%" onclick="onDeleteCommande(${c.id})">🗑 Supprimer</button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -2165,7 +2167,7 @@ function renderCommandes() {
 
   document.getElementById('tab-en-cours').innerHTML  = renderCards(enCours, true);
   document.getElementById('tab-livrees').innerHTML   = renderCards(livrees, false);
-  document.getElementById('tab-annulees').innerHTML  = renderCards(annulees, false);
+  document.getElementById('tab-annulees').innerHTML  = renderCards(annulees, false, true);
 
   // Mettre à jour les compteurs dans les onglets
   const tabBtns = document.querySelectorAll('#page-commandes .tab-btn');
@@ -3322,6 +3324,26 @@ async function annulerCommande(id) {
   renderHistorique();
   renderStats();
   showNotif('❌ Commande annulée');
+}
+
+async function deleteCommande(id) {
+  const c = COMMANDES.find(x => x.id === id);
+  if (!c) { showNotif('⚠ Commande introuvable'); return; }
+  if (c.status !== 'annulees') { showNotif('⚠ Seule une commande annulée peut être supprimée'); return; }
+  if (!skCanWrite(c.creche)) return;
+  if (!confirm(`Supprimer définitivement la commande ${c.bc} (${c.fourn}) ?`)) return;
+  COMMANDES = COMMANDES.filter(x => x.id !== id);
+  saveData();
+  if (!IS_LOCAL) {
+    try { await deleteCommandeDB(id); }
+    catch(e) { console.warn('deleteCommande DB:', e.message); }
+  }
+  addHisto('sortie', `Commande ${c.bc} (supprimée)`, 0, c.creche, 'Vous');
+  await saveHistoDB(HISTORIQUE[0]).catch(()=>{});
+  renderCommandes();
+  renderHistorique();
+  renderStats();
+  showNotif('🗑 Commande supprimée');
 }
 
 // ─── SAVE FOURNISSEUR ─────────────────────────────────────────────────────
@@ -5056,6 +5078,12 @@ async function deleteArticleDB(id) {
   catch(e) { console.error('[Supabase] Delete article :', e); }
 }
 
+async function deleteCommandeDB(id) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try { await sbDelete('commandes', id); setSaved(); }
+  catch(e) { console.error('[Supabase] Delete commande :', e); }
+}
+
 async function saveCommandeDB(commande) {
   if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
   try {
@@ -5455,6 +5483,7 @@ const saveCommande = saveCommande_db;
 function onSaveCommande()      { saveCommande().catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onMarkLivree(id)      { markLivree(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onAnnulerCommande(id) { annulerCommande(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onDeleteCommande(id)  { deleteCommande(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 
 function onSaveFournisseur()   { saveFournisseur().catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onQuickAdjust(id,d)   { quickAdjust(id,d).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
