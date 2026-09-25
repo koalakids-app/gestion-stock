@@ -130,12 +130,18 @@ function corpsHtml(o: {
     font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#2B2740;line-height:1.6">
     <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;
       border:1px solid #E3E1EF">
-      <div style="background:#3D3580;color:#fff;padding:22px 24px">
-        <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
-          width="140" style="display:block;height:auto;margin-bottom:8px">
-        <div style="font-size:20px;font-weight:700">Votre devis d'accueil</div>
-        <div style="font-size:14px;opacity:.85;margin-top:3px">Koala Kids${o.creche ? ' · ' + esc(o.creche) : ''}</div>
-      </div>
+      <table role="presentation" width="100%" style="background:#3D3580;color:#fff;border-collapse:collapse">
+        <tr>
+          <td style="padding:22px 24px;vertical-align:top">
+            <div style="font-size:20px;font-weight:700">Votre devis d'accueil</div>
+            <div style="font-size:14px;opacity:.85;margin-top:3px">Koala Kids${o.creche ? ' · ' + esc(o.creche) : ''}</div>
+          </td>
+          <td style="padding:14px 18px 0 0;vertical-align:top;text-align:right;width:1%">
+            <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
+              width="92" style="display:inline-block;height:auto;background:#fff;border-radius:8px;padding:5px 8px">
+          </td>
+        </tr>
+      </table>
       <div style="padding:24px">
         <p style="margin:0 0 16px;font-size:15px">Bonjour,</p>
         <p style="margin:0 0 18px;font-size:15px">${intro}</p>
