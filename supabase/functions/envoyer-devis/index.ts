@@ -138,7 +138,7 @@ function corpsHtml(o: {
           </td>
           <td style="padding:12px 16px 0 0;vertical-align:top;text-align:right;width:1%">
             <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
-              width="170" style="display:inline-block;height:auto;background:#fff;border-radius:8px;padding:8px 12px">
+              width="260" style="display:inline-block;height:auto;background:#fff;border-radius:10px;padding:10px 14px">
           </td>
         </tr>
       </table>
