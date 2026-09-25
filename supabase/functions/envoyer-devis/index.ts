@@ -136,9 +136,9 @@ function corpsHtml(o: {
             <div style="font-size:20px;font-weight:700">Votre devis d'accueil</div>
             <div style="font-size:14px;opacity:.85;margin-top:3px">Koala Kids${o.creche ? ' · ' + esc(o.creche) : ''}</div>
           </td>
-          <td style="padding:14px 18px 0 0;vertical-align:top;text-align:right;width:1%">
+          <td style="padding:12px 16px 0 0;vertical-align:top;text-align:right;width:1%">
             <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
-              width="92" style="display:inline-block;height:auto;background:#fff;border-radius:8px;padding:5px 8px">
+              width="170" style="display:inline-block;height:auto;background:#fff;border-radius:8px;padding:8px 12px">
           </td>
         </tr>
       </table>
