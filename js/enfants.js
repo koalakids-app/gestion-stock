@@ -215,6 +215,7 @@ async function enfOpenFiche(id){
   enfPiecesCache = [];
   enfPiecesPret = false;
   enfContratsCache = [];
+  enfAbsencesCache = []; enfAbsencesPret = false;
   document.getElementById('enf-fiche-title').innerHTML = '<i class="ti ti-mood-kid"></i> '+escHtml((e.prenom||'')+' '+(e.nom||''));
   // onglet identité par défaut
   document.querySelectorAll('#modal-enf-fiche-wrap .module-tab').forEach((b,i)=>b.classList.toggle('active',i===0));
@@ -226,6 +227,8 @@ async function enfOpenFiche(id){
   enfLoadParents(e.id);
   document.getElementById('enf-fiche-contrat').innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
   enfLoadContrats(e.id);
+  enfLoadAbsences(e.id);
+  enfEnsureFermetures();
   document.getElementById('enf-docs-list').innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
   document.getElementById('enf-dossier-box').innerHTML = '';
   document.getElementById('enf-pieces-dossier-box').innerHTML = '';
@@ -2545,25 +2548,78 @@ function ctBadge(st){
   return '<span style="background:#eee;color:var(--muted);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">Terminé</span>';
 }
 
-/* Besoin mensuel de couches = 4 couches/jour × nombre de jours de présence
-   dans le mois. Les jours de présence viennent du contrat en cours (`jours`,
-   le rythme hebdomadaire) : on ramène ça à un nombre de jours par mois avec
-   la moyenne 52/12 semaines, et on arrondit au supérieur (mieux vaut prévoir
-   un peu large que d'être en rupture). Sans contrat en cours ou sans jour
-   renseigné, impossible à estimer — on l'affiche plutôt que de deviner. */
-const COUCHE_CONSO_PAR_ENFANT_PAR_JOUR_FICHE = 4;
-const SEMAINES_PAR_MOIS_MOYENNE = 52/12;
+/* Besoin de couches du mois en cours = 4 couches/jour × nombre de jours de
+   présence RÉELS du mois : jours du contrat qui tombent sur un jour de la
+   semaine travaillé, moins les jours fériés, les fermetures de la crèche/du
+   réseau (vacances, journées pédagogiques — même source que le forfait
+   « journée non pointée » du module Présences, js/presences-reel.js) et les
+   absences déjà programmées (justifiées ou non : un enfant annoncé absent
+   ne sera pas changé, quel qu'en soit le motif). Fermetures et absences se
+   chargent en tâche de fond (enfEnsureFermetures / enfLoadAbsences) : tant
+   qu'elles ne sont pas là, la ligne affiche « calcul… » plutôt qu'un
+   nombre approximatif. */
+const COUCHE_BESOIN_PAR_JOUR_FICHE = 4;
+let enfAbsencesCache = [], enfAbsencesPret = false;
+function enfJoursPresenceMois(e, an, moisIndex){
+  const dernierJour = new Date(an, moisIndex+1, 0).getDate();
+  let jours = 0;
+  for(let j=1; j<=dernierJour; j++){
+    const d = new Date(an, moisIndex, j);
+    const iso = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    const contrat = enfContratsCache.find(c=>(!c.date_debut||c.date_debut<=iso)&&(!c.date_fin||c.date_fin>=iso));
+    if(!contrat) continue;
+    if(!ctParseJours(contrat.jours).includes(d.getDay())) continue;
+    if(typeof prEstFerie==='function' && prEstFerie(iso)) continue;
+    if(typeof prEstFerme==='function' && prEstFerme(e.creche_id, iso)) continue;
+    if(enfAbsencesCache.some(a=>a.date_debut<=iso && a.date_fin>=iso)) continue;
+    jours++;
+  }
+  return jours;
+}
 function enfBesoinMensuelCouches(e){
-  const c = enfContratsCache.find(x=>ctStatut(x)==='encours');
-  if(!c) return null;
-  const joursSemaine = ctParseJours(c.jours).length;
-  if(!joursSemaine) return null;
-  return Math.ceil(joursSemaine * SEMAINES_PAR_MOIS_MOYENNE * COUCHE_CONSO_PAR_ENFANT_PAR_JOUR_FICHE);
+  if(!enfContratsCache.some(c=>ctStatut(c)==='encours')) return null;
+  if(typeof _prFerm==='undefined' || !_prFerm || !enfAbsencesPret) return undefined; // encore en cours de chargement
+  const now = new Date();
+  const jours = enfJoursPresenceMois(e, now.getFullYear(), now.getMonth());
+  return { jours, besoin: jours*COUCHE_BESOIN_PAR_JOUR_FICHE };
 }
 function enfBesoinCoucheLigne(e){
-  const besoin = enfBesoinMensuelCouches(e);
-  if(besoin===null) return '<span style="color:var(--muted);font-weight:400">contrat en cours requis pour l’estimer</span>';
-  return besoin+' couches/mois';
+  const r = enfBesoinMensuelCouches(e);
+  if(r===null) return '<span style="color:var(--muted);font-weight:400">contrat en cours requis pour l’estimer</span>';
+  if(r===undefined) return '<span style="color:var(--muted);font-weight:400">calcul…</span>';
+  return r.besoin+' couches <span style="color:var(--muted);font-weight:400">('+r.jours+' j de présence ce mois-ci)</span>';
+}
+// Absences déclarées (justifiées ou non) de l'enfant — table enfants_absences,
+// voir sql/absences_forfait.sql. Chargées à l'ouverture de la fiche, comme
+// les contrats, pour affiner le besoin mensuel de couches ci-dessus.
+async function enfLoadAbsences(enfantId){
+  enfAbsencesPret = false;
+  try{
+    const{data,error}=await sb.from('enfants_absences').select('date_debut,date_fin').eq('enfant_id',enfantId);
+    if(error) throw error;
+    enfAbsencesCache = data||[];
+  }catch(err){
+    console.warn('enfLoadAbsences',err);
+    enfAbsencesCache = [];
+  }
+  enfAbsencesPret = true;
+  if(String(enfFicheId)!==String(enfantId)) return;
+  enfRenderIdentite();
+}
+// Fermetures crèche/réseau (prChargerFermetures, js/presences-reel.js) : une
+// donnée globale, pas propre à un enfant, chargée une seule fois puis
+// réutilisée. stock.html a sa propre copie de ce calcul (n'inclut pas ce
+// fichier) ; ici on réutilise directement presences-reel.js, déjà chargé
+// par demandes.html.
+let _enfFermeturesEnCours = false;
+async function enfEnsureFermetures(){
+  if(typeof _prFerm==='undefined' || typeof prChargerFermetures!=='function') return; // fichier non chargé sur cette page
+  if(_prFerm || _enfFermeturesEnCours) return;
+  _enfFermeturesEnCours = true;
+  try{ await prChargerFermetures(); }
+  catch(err){ console.warn('enfEnsureFermetures',err); }
+  _enfFermeturesEnCours = false;
+  enfRenderIdentite();
 }
 
 async function enfLoadContrats(enfantId){
