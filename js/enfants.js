@@ -214,6 +214,7 @@ async function enfOpenFiche(id){
   enfAdminDocsCache = [];
   enfPiecesCache = [];
   enfPiecesPret = false;
+  enfContratsCache = [];
   document.getElementById('enf-fiche-title').innerHTML = '<i class="ti ti-mood-kid"></i> '+escHtml((e.prenom||'')+' '+(e.nom||''));
   // onglet identité par défaut
   document.querySelectorAll('#modal-enf-fiche-wrap .module-tab').forEach((b,i)=>b.classList.toggle('active',i===0));
@@ -321,6 +322,7 @@ function enfRenderIdentite(){
     + row('Statut du dossier', enfStatutBadge(e))
     + row('Allergies', escHtml(e.allergies||''))
     + row('Protection', e.taille_couche ? escHtml((e.type_couche==='culotte'?'Couche-culotte':'Couche classique')+' — taille '+e.taille_couche) : '')
+    + (e.taille_couche ? row('Besoin mensuel de couches', enfBesoinCoucheLigne(e)) : '')
     + row('Repas', enfRepasFicheLigne(e))
     + row('Goûter', enfGouterFicheLigne(e))
     + row('Code image (kiosque)', kkPictosLigne(e.code_pictos))
@@ -2543,6 +2545,27 @@ function ctBadge(st){
   return '<span style="background:#eee;color:var(--muted);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">Terminé</span>';
 }
 
+/* Besoin mensuel de couches = 4 couches/jour × nombre de jours de présence
+   dans le mois. Les jours de présence viennent du contrat en cours (`jours`,
+   le rythme hebdomadaire) : on ramène ça à un nombre de jours par mois avec
+   la moyenne 52/12 semaines, et on arrondit au supérieur (mieux vaut prévoir
+   un peu large que d'être en rupture). Sans contrat en cours ou sans jour
+   renseigné, impossible à estimer — on l'affiche plutôt que de deviner. */
+const COUCHE_CONSO_PAR_ENFANT_PAR_JOUR_FICHE = 4;
+const SEMAINES_PAR_MOIS_MOYENNE = 52/12;
+function enfBesoinMensuelCouches(e){
+  const c = enfContratsCache.find(x=>ctStatut(x)==='encours');
+  if(!c) return null;
+  const joursSemaine = ctParseJours(c.jours).length;
+  if(!joursSemaine) return null;
+  return Math.ceil(joursSemaine * SEMAINES_PAR_MOIS_MOYENNE * COUCHE_CONSO_PAR_ENFANT_PAR_JOUR_FICHE);
+}
+function enfBesoinCoucheLigne(e){
+  const besoin = enfBesoinMensuelCouches(e);
+  if(besoin===null) return '<span style="color:var(--muted);font-weight:400">contrat en cours requis pour l’estimer</span>';
+  return besoin+' couches/mois';
+}
+
 async function enfLoadContrats(enfantId){
   const box=document.getElementById('enf-fiche-contrat');
   try{
@@ -2557,6 +2580,7 @@ async function enfLoadContrats(enfantId){
   }
   if(String(enfFicheId)!==String(enfantId)) return;
   enfRenderContrat();
+  enfRenderIdentite(); // le besoin mensuel de couches dépend du contrat, chargé après l'identité
 }
 
 function enfRenderContrat(){

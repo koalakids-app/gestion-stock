@@ -1701,6 +1701,12 @@ let COUCHES_PRIX = []; // { typeCouche, taille, prixUnitaire, updatedAt }
 // « jours restants » tant que l'historique réel de changes est trop maigre
 // pour être fiable (4,5 couches/jour/enfant, une moyenne courante en crèche).
 let COUCHES_EFFECTIF = []; // { creche, typeCouche, taille, count }
+// Besoin mensuel prévisionnel par crèche×type×taille (4 couches/jour ×
+// jours de présence du mois, d'après le rythme hebdomadaire du contrat en
+// cours de chaque enfant). Plus précis que COUCHES_EFFECTIF pour prévoir une
+// commande : un enfant présent 2 j/semaine ne pèse pas comme un enfant à
+// temps plein, alors qu'ils comptent pareil dans l'effectif brut.
+let COUCHES_BESOIN = []; // { creche, typeCouche, taille, besoinMensuel }
 
 // ─── STATE ─────────────────────────────────────────────────────────────
 // ─── PAGINATION ──────────────────────────────────────────────────────────
@@ -2277,6 +2283,12 @@ function coucheEffectif(creche, type, taille) {
   const e = COUCHES_EFFECTIF.find(x => x.creche === creche && x.typeCouche === type && x.taille === taille);
   return e ? e.count : 0;
 }
+// Besoin mensuel prévisionnel (4 couches/j × jours de présence du mois,
+// contrat en cours) par crèche×type×taille — voir COUCHES_BESOIN plus haut.
+function coucheBesoinMensuel(creche, type, taille) {
+  const b = COUCHES_BESOIN.find(x => x.creche === creche && x.typeCouche === type && x.taille === taille);
+  return b ? b.besoinMensuel : 0;
+}
 const COUCHE_CONSO_PAR_ENFANT_PAR_JOUR = 4.5; // moyenne courante en crèche (4 à 5/jour)
 // Délai de livraison par défaut (environ 72 h), utilisé tant qu'aucune ligne
 // stock_couches n'existe encore pour une référence — sinon c'est
@@ -2596,10 +2608,12 @@ function renderCouches() {
         const border = enCritique ? '3px solid #991B1B' : enAlerte ? '2px solid var(--red)' : '1px solid var(--border)';
         const prixUnit = couchePrixUnitaire(produit.type, taille);
         const valeurLigne = prixUnit !== null ? (stock * prixUnit).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €' : null;
+        const besoinMensuel = coucheBesoinMensuel(creche, produit.type, taille);
         html += `<div style="border:${border};background:${bg};border-radius:10px;padding:10px 12px">
           <div style="font-size:11.5px;color:var(--ink3);font-weight:700">Taille ${taille}${enCritique ? ' 🚨' : ''}</div>
           <div style="font-size:24px;font-weight:800;margin:2px 0">${stock}</div>
           <div style="font-size:11px;color:var(--ink3)">${estimTexte}</div>
+          <div style="font-size:11px;color:var(--ink3);margin-bottom:2px">${besoinMensuel > 0 ? '📅 Besoin mensuel : ' + besoinMensuel + ' couches' : ''}</div>
           <div style="font-size:11px;color:var(--ink3);margin-bottom:8px">${valeurLigne ? valeurLigne+' valorisés' : 'prix non renseigné'}</div>
           <div style="font-size:10.5px;color:var(--ink3);margin-bottom:8px">Seuil d'alerte : ${seuil} j · Livraison : ${delaiLivraison} j</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -4983,6 +4997,58 @@ function rowsToCouchesEffectif(rows) {
   });
 }
 
+// `enfants_contrats.jours` peut revenir en tableau (jsonb), en chaîne JSON
+// "[1,2]" ou en "1,2" selon la façon dont la ligne a été créée (même format
+// que ctParseJours dans js/enfants.js, dupliqué ici car stock.html ne charge
+// pas ce fichier).
+function coucheParseJours(j) {
+  if (j == null) return [];
+  let v = j;
+  if (typeof v === 'string') {
+    const t = v.trim();
+    try { v = JSON.parse(t); } catch (e) { v = t.replace(/[{}\[\]"']/g, '').split(','); }
+  }
+  if (!Array.isArray(v)) v = [v];
+  return v.map(x => parseInt(x, 10)).filter(n => n >= 1 && n <= 7);
+}
+// Contrat en cours à la date du jour (même règle que ctStatut côté fiche
+// enfant : pas de date de fin = contrat toujours actif).
+function coucheContratEnCours(c) {
+  const t = new Date().toISOString().slice(0, 10);
+  if (c.date_debut && c.date_debut > t) return false;
+  if (c.date_fin && c.date_fin < t) return false;
+  return true;
+}
+const COUCHE_SEMAINES_PAR_MOIS_MOYENNE = 52 / 12;
+// 4 couches/jour de présence : le besoin théorique demandé pour la prévision
+// de commande — distinct de COUCHE_CONSO_PAR_ENFANT_PAR_JOUR (4,5), la
+// moyenne réelle constatée, utilisée elle pour l'estimation "jours restants".
+const COUCHE_BESOIN_PAR_JOUR = 4;
+// Agrège les enfants (avec leurs contrats imbriqués via la relation
+// enfants_contrats) en besoin mensuel par crèche×type×taille : 4 couches/jour
+// × jours de présence du contrat en cours, ramenés à un mois avec la moyenne
+// 52/12 semaines. Un enfant sans contrat en cours ne contribue à rien —
+// mieux vaut sous-estimer que d'inventer une présence.
+function rowsToCouchesBesoin(rows) {
+  const total = {};
+  (rows || []).forEach(r => {
+    if (!r.taille_couche) return;
+    const creche = (typeof SK_CRECHE_NAMES !== 'undefined' ? SK_CRECHE_NAMES[r.creche_id] : null);
+    if (!creche) return;
+    const contrat = (r.enfants_contrats || []).find(coucheContratEnCours);
+    if (!contrat) return;
+    const joursSemaine = coucheParseJours(contrat.jours).length;
+    if (!joursSemaine) return;
+    const besoin = joursSemaine * COUCHE_SEMAINES_PAR_MOIS_MOYENNE * COUCHE_BESOIN_PAR_JOUR;
+    const cle = creche + '|' + (r.type_couche || 'couche') + '|' + r.taille_couche;
+    total[cle] = (total[cle] || 0) + besoin;
+  });
+  return Object.entries(total).map(([cle, besoinMensuel]) => {
+    const [creche, typeCouche, taille] = cle.split('|');
+    return { creche, typeCouche, taille, besoinMensuel: Math.ceil(besoinMensuel) };
+  });
+}
+
 // ── Load all data from Supabase ────────────────────────────────────────────
 
 
@@ -5009,7 +5075,7 @@ async function loadData() {
         sbGet('stock_couches').catch(() => null),
         sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500').catch(() => null),
         sbGet('stock_couches_prix', 'order=type_couche.asc').catch(() => null),
-        sbGet('enfants', `select=creche_id,taille_couche,type_couche&taille_couche=not.is.null&or=(date_sortie.is.null,date_sortie.gte.${new Date().toISOString().slice(0,10)})`).catch(() => null),
+        sbGet('enfants', `select=creche_id,taille_couche,type_couche,enfants_contrats(jours,date_debut,date_fin)&taille_couche=not.is.null&or=(date_sortie.is.null,date_sortie.gte.${new Date().toISOString().slice(0,10)})`).catch(() => null),
       ]),
       timeout.then(() => { throw new Error('Timeout Supabase'); })
     ]);
@@ -5045,6 +5111,7 @@ async function loadData() {
     }
     if (Array.isArray(enfantsCouches)) {
       COUCHES_EFFECTIF.splice(0, COUCHES_EFFECTIF.length, ...rowsToCouchesEffectif(enfantsCouches));
+      COUCHES_BESOIN.splice(0, COUCHES_BESOIN.length, ...rowsToCouchesBesoin(enfantsCouches));
     }
 
     const now = new Date();
