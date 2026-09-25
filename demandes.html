@@ -3382,11 +3382,13 @@ function detecterNouveautesEtNotifier(avant){
   }
   // Nouvelle commande passée dans le Stock pédagogique (module stock.html) : la
   // direction voit toutes les commandes, un(e) référent(e) uniquement celles de sa
-  // propre crèche (la table `commandes` ne stocke que le nom de la crèche, pas son id).
+  // propre crèche. stock.html stocke un nom court ('Cuers', 'Picot 1'…, cf. sa
+  // constante CRECHES) alors que `creches.name` ici est le nom complet ('Koalakids
+  // Cuers', 'Koalakids Toulon Picot 1'…) : comparaison par inclusion, pas égalité.
   const monNomCreche=cacheCreches.find(c=>c.id===currentProfile.creche_id)?.name;
   for(const c of cacheCommandes){
     if(avant.commandes.has(c.id))continue;
-    if(isDirection||(monNomCreche&&c.creche===monNomCreche)){
+    if(isDirection||(monNomCreche&&c.creche&&monNomCreche.includes(c.creche))){
       showInAppNotif('Nouvelle commande',(c.fourn?c.fourn+' — ':'')+(c.creche||''),'stock');
     }
   }
