@@ -68,24 +68,42 @@ async function sendEmail(to: string[], subject: string, html: string) {
 }
 
 function formationEmailHtml(opts: { prenom: string; kindLabel: string; titre: string; lien: string; creche: string }) {
-  return `
-    <div style="font-family:'Nunito',Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-      <h2 style="color:#4A3F9F;margin:0 0 4px">Bonjour ${opts.prenom || ""}</h2>
-      <p style="color:#2B2740;font-size:14px;line-height:1.6;margin:14px 0">
-        La direction vous a transmis ${opts.kindLabel} à réaliser${opts.creche ? " — " + opts.creche : ""} :
-      </p>
-      <div style="background:#F1EFF7;border-radius:16px;padding:18px 20px;margin:0 0 18px">
-        <div style="font-size:15px;font-weight:800;color:#4A3F9F">${opts.titre}</div>
+  return `<!doctype html><html lang="fr"><body style="margin:0;background:#F7F6FC;padding:24px 12px;
+    font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#2B2740;line-height:1.6">
+    <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;
+      border:1px solid #E3E1EF">
+      <table role="presentation" width="100%" style="border-collapse:collapse">
+        <tr>
+          <td style="background:#fff;padding:20px 24px;text-align:center">
+            <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
+              width="220" style="display:inline-block;height:auto">
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#3D3580;color:#fff;padding:18px 24px">
+            <div style="font-size:20px;font-weight:700">Formation &amp; quiz</div>
+            <div style="font-size:14px;opacity:.85;margin-top:3px">Koala Kids${opts.creche ? ' · ' + opts.creche : ''}</div>
+          </td>
+        </tr>
+      </table>
+      <div style="padding:24px">
+        <p style="margin:0 0 18px;font-size:15px">
+          Bonjour ${opts.prenom || ""}, la direction vous a transmis ${opts.kindLabel} à réaliser :
+        </p>
+        <div style="background:#F1EFF7;border-radius:16px;padding:18px 20px;margin:0 0 22px">
+          <div style="font-size:15px;font-weight:800;color:#4A3F9F">${opts.titre}</div>
+        </div>
+        <p style="margin:0 0 22px;text-align:center">
+          <a href="${opts.lien}" style="display:inline-block;background:#F47920;color:#fff;text-decoration:none;
+            font-weight:700;font-size:16px;padding:14px 30px;border-radius:11px">Commencer</a>
+        </p>
+        <p style="margin:0;font-size:12px;color:#8E8AA8;line-height:1.6">
+          Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
+          <a href="${opts.lien}" style="color:#8E8AA8">${opts.lien}</a>
+        </p>
       </div>
-      <div style="text-align:center;margin-bottom:18px">
-        <a href="${opts.lien}" style="display:inline-block;background:#F47920;color:#fff;font-weight:700;
-          font-size:14px;text-decoration:none;padding:12px 24px;border-radius:12px">Commencer</a>
-      </div>
-      <p style="color:#8E8AA8;font-size:12px;line-height:1.6">
-        Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
-        <a href="${opts.lien}" style="color:#8E8AA8">${opts.lien}</a>
-      </p>
-    </div>`;
+    </div>
+  </body></html>`;
 }
 
 Deno.serve(async (req) => {
