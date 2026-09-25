@@ -1701,11 +1701,12 @@ let COUCHES_PRIX = []; // { typeCouche, taille, prixUnitaire, updatedAt }
 // « jours restants » tant que l'historique réel de changes est trop maigre
 // pour être fiable (4,5 couches/jour/enfant, une moyenne courante en crèche).
 let COUCHES_EFFECTIF = []; // { creche, typeCouche, taille, count }
-// Besoin mensuel prévisionnel par crèche×type×taille (4 couches/jour ×
-// jours de présence du mois, d'après le rythme hebdomadaire du contrat en
-// cours de chaque enfant). Plus précis que COUCHES_EFFECTIF pour prévoir une
-// commande : un enfant présent 2 j/semaine ne pèse pas comme un enfant à
-// temps plein, alors qu'ils comptent pareil dans l'effectif brut.
+// Besoin prévisionnel du mois en cours par crèche×type×taille (4 couches/jour
+// × jours de présence réels : jours du contrat, moins fériés, fermetures
+// vacances/pédagogiques et absences programmées). Plus précis que
+// COUCHES_EFFECTIF pour prévoir une commande : un enfant présent 2 j/semaine
+// ne pèse pas comme un enfant à temps plein, alors qu'ils comptent pareil
+// dans l'effectif brut.
 let COUCHES_BESOIN = []; // { creche, typeCouche, taille, besoinMensuel }
 
 // ─── STATE ─────────────────────────────────────────────────────────────
@@ -5011,41 +5012,83 @@ function coucheParseJours(j) {
   if (!Array.isArray(v)) v = [v];
   return v.map(x => parseInt(x, 10)).filter(n => n >= 1 && n <= 7);
 }
-// Contrat en cours à la date du jour (même règle que ctStatut côté fiche
-// enfant : pas de date de fin = contrat toujours actif).
-function coucheContratEnCours(c) {
-  const t = new Date().toISOString().slice(0, 10);
-  if (c.date_debut && c.date_debut > t) return false;
-  if (c.date_fin && c.date_fin < t) return false;
-  return true;
-}
-const COUCHE_SEMAINES_PAR_MOIS_MOYENNE = 52 / 12;
 // 4 couches/jour de présence : le besoin théorique demandé pour la prévision
 // de commande — distinct de COUCHE_CONSO_PAR_ENFANT_PAR_JOUR (4,5), la
 // moyenne réelle constatée, utilisée elle pour l'estimation "jours restants".
 const COUCHE_BESOIN_PAR_JOUR = 4;
-// Agrège les enfants (avec leurs contrats imbriqués via la relation
-// enfants_contrats) en besoin mensuel par crèche×type×taille : 4 couches/jour
-// × jours de présence du contrat en cours, ramenés à un mois avec la moyenne
-// 52/12 semaines. Un enfant sans contrat en cours ne contribue à rien —
-// mieux vaut sous-estimer que d'inventer une présence.
-function rowsToCouchesBesoin(rows) {
+
+// Jours fériés français (métropole) d'une année, en ISO — même algorithme
+// (calcul de Pâques) que prFeries dans js/presences-reel.js, dupliqué ici
+// car stock.html ne charge pas ce fichier.
+const _coucheFeriesCache = {};
+function coucheAddDays(iso, n) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function coucheFeries(an) {
+  if (_coucheFeriesCache[an]) return _coucheFeriesCache[an];
+  const a = an % 19, b = Math.floor(an / 100), c = an % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
+    g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4,
+    l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+    mois = Math.floor((h + l - 7 * m + 114) / 31), jour = ((h + l - 7 * m + 114) % 31) + 1;
+  const paques = an + '-' + String(mois).padStart(2, '0') + '-' + String(jour).padStart(2, '0');
+  const s = new Set([an + '-01-01', an + '-05-01', an + '-05-08', an + '-07-14', an + '-08-15', an + '-11-01', an + '-11-11', an + '-12-25',
+    coucheAddDays(paques, 1), coucheAddDays(paques, 39), coucheAddDays(paques, 50)]);
+  return _coucheFeriesCache[an] = s;
+}
+function coucheEstFerie(iso) { return coucheFeries(parseInt(iso.slice(0, 4), 10)).has(iso); }
+
+// Fermeture (vacances, journée pédagogique…) de la crèche ou du réseau à une
+// date donnée — même source (etablissements.jours_fermeture,
+// reseau_config.config.jours_fermeture_reseau) que prEstFerme côté module
+// Présences, dupliquée ici pour la même raison.
+function coucheEstFerme(fermetures, crecheId, iso) {
+  if (!fermetures) return false;
+  return ((fermetures.parCreche[crecheId] || []).concat(fermetures.reseau)).some(f => f && f.debut && iso >= f.debut && iso <= (f.fin || f.debut));
+}
+
+// Nombre de jours de présence réels du mois en cours pour un enfant : jours
+// du contrat couvrant la date qui tombent sur un jour de la semaine
+// travaillé, moins les jours fériés, les fermetures (vacances) et les
+// absences déjà programmées (justifiées ou non — un enfant annoncé absent
+// ne sera pas changé, peu importe le motif).
+function coucheJoursPresenceMois(contrats, absences, fermetures, crecheId, an, moisIndex) {
+  const dernierJour = new Date(an, moisIndex + 1, 0).getDate();
+  let jours = 0;
+  for (let j = 1; j <= dernierJour; j++) {
+    const d = new Date(an, moisIndex, j);
+    const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const contrat = (contrats || []).find(c => (!c.date_debut || c.date_debut <= iso) && (!c.date_fin || c.date_fin >= iso));
+    if (!contrat) continue;
+    if (!coucheParseJours(contrat.jours).includes(d.getDay())) continue;
+    if (coucheEstFerie(iso)) continue;
+    if (coucheEstFerme(fermetures, crecheId, iso)) continue;
+    if ((absences || []).some(a => a.date_debut <= iso && a.date_fin >= iso)) continue;
+    jours++;
+  }
+  return jours;
+}
+// Agrège les enfants (avec leurs contrats et absences imbriqués via
+// enfants_contrats / enfants_absences) en besoin mensuel par crèche×type×
+// taille : 4 couches/jour × jours de présence réels du mois en cours.
+function rowsToCouchesBesoin(rows, fermetures) {
   const total = {};
+  const now = new Date();
+  const an = now.getFullYear(), moisIndex = now.getMonth();
   (rows || []).forEach(r => {
     if (!r.taille_couche) return;
     const creche = (typeof SK_CRECHE_NAMES !== 'undefined' ? SK_CRECHE_NAMES[r.creche_id] : null);
     if (!creche) return;
-    const contrat = (r.enfants_contrats || []).find(coucheContratEnCours);
-    if (!contrat) return;
-    const joursSemaine = coucheParseJours(contrat.jours).length;
-    if (!joursSemaine) return;
-    const besoin = joursSemaine * COUCHE_SEMAINES_PAR_MOIS_MOYENNE * COUCHE_BESOIN_PAR_JOUR;
+    const jours = coucheJoursPresenceMois(r.enfants_contrats, r.enfants_absences, fermetures, r.creche_id, an, moisIndex);
+    if (!jours) return;
+    const besoin = jours * COUCHE_BESOIN_PAR_JOUR;
     const cle = creche + '|' + (r.type_couche || 'couche') + '|' + r.taille_couche;
     total[cle] = (total[cle] || 0) + besoin;
   });
   return Object.entries(total).map(([cle, besoinMensuel]) => {
     const [creche, typeCouche, taille] = cle.split('|');
-    return { creche, typeCouche, taille, besoinMensuel: Math.ceil(besoinMensuel) };
+    return { creche, typeCouche, taille, besoinMensuel };
   });
 }
 
@@ -5061,7 +5104,7 @@ async function loadData() {
   try {
     // Timeout de 30s (Supabase peut mettre jusqu'à 30s à se réveiller après inactivité)
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000));
-    const [arts, cmds, fourns, histos, config, couches, couchesMvts, couchesPrix, enfantsCouches] = await Promise.race([
+    const [arts, cmds, fourns, histos, config, couches, couchesMvts, couchesPrix, enfantsCouches, etabsFermeture, reseauCfg] = await Promise.race([
       Promise.all([
         sbGet('articles'),
         sbGet('commandes'),
@@ -5075,7 +5118,12 @@ async function loadData() {
         sbGet('stock_couches').catch(() => null),
         sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500').catch(() => null),
         sbGet('stock_couches_prix', 'order=type_couche.asc').catch(() => null),
-        sbGet('enfants', `select=creche_id,taille_couche,type_couche,enfants_contrats(jours,date_debut,date_fin)&taille_couche=not.is.null&or=(date_sortie.is.null,date_sortie.gte.${new Date().toISOString().slice(0,10)})`).catch(() => null),
+        sbGet('enfants', `select=creche_id,taille_couche,type_couche,enfants_contrats(jours,date_debut,date_fin),enfants_absences(date_debut,date_fin)&taille_couche=not.is.null&or=(date_sortie.is.null,date_sortie.gte.${new Date().toISOString().slice(0,10)})`).catch(() => null),
+        // Fermetures (vacances, journées pédagogiques) — même source que le
+        // module Présences (prChargerFermetures), relue ici car stock.html
+        // ne charge pas js/presences-reel.js.
+        sbGet('etablissements', 'select=creche_id,jours_fermeture').catch(() => null),
+        sbGet('reseau_config', 'select=config').catch(() => null),
       ]),
       timeout.then(() => { throw new Error('Timeout Supabase'); })
     ]);
@@ -5111,7 +5159,11 @@ async function loadData() {
     }
     if (Array.isArray(enfantsCouches)) {
       COUCHES_EFFECTIF.splice(0, COUCHES_EFFECTIF.length, ...rowsToCouchesEffectif(enfantsCouches));
-      COUCHES_BESOIN.splice(0, COUCHES_BESOIN.length, ...rowsToCouchesBesoin(enfantsCouches));
+      const fermetures = { parCreche: {}, reseau: [] };
+      (etabsFermeture || []).forEach(e => { fermetures.parCreche[e.creche_id] = Array.isArray(e.jours_fermeture) ? e.jours_fermeture : []; });
+      const reseauConfigRow = (reseauCfg && reseauCfg[0] && reseauCfg[0].config) || {};
+      fermetures.reseau = Array.isArray(reseauConfigRow.jours_fermeture_reseau) ? reseauConfigRow.jours_fermeture_reseau : [];
+      COUCHES_BESOIN.splice(0, COUCHES_BESOIN.length, ...rowsToCouchesBesoin(enfantsCouches, fermetures));
     }
 
     const now = new Date();
