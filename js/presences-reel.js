@@ -334,10 +334,10 @@ async function renderPresenceMois(){
     // premier jour d'absence — pas en jours ouvrés, pour rester simple à
     // vérifier d'un coup d'œil comme la règle elle-même.
     const preavis=a.signalee_le?Math.round((new Date(a.date_debut+'T00:00:00')-new Date(a.signalee_le+'T00:00:00'))/86400000):null;
-    const repasOk=preavis!=null&&preavis>=15;
+    const entretienDeductible=preavis!=null&&preavis>=15;
     absHtml+='<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0"><span><b>'+escHtml(nomE[a.enfant_id]||'')+'</b> — '+f(a.date_debut)+(a.date_fin!==a.date_debut?' au '+f(a.date_fin):'')
       +' · '+(a.justifiee===false?'non justifiée':'justifiée')+(a.motif?' · '+escHtml(a.motif):'')
-      +(repasOk?' · <span style="color:#0f6e56">repas déductible</span>':(a.signalee_le?' · signalée '+preavis+'j avant (repas non déductible, <15j)':''))+'</span>'
+      +(entretienDeductible?' · <span style="color:#0f6e56">entretien non facturé</span>':(a.signalee_le?' · signalée '+preavis+'j avant (entretien facturé, <15j)':''))+'</span>'
       +'<button class="ibtn" title="Supprimer" onclick="prSupprAbsence(\''+a.id+'\')" style="padding:2px 6px"><i class="ti ti-trash"></i></button></div>';
   });
   box.innerHTML=nav
@@ -385,7 +385,7 @@ function prOuvrirAbsence(enfantId,dateStr){
       +'<div class="fg"><label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" id="abs-justifiee" checked> Absence justifiée (certificat, prévenance)</label>'
       +'<div style="font-size:11.5px;color:var(--muted);margin-top:4px">Les 3 premiers jours restent facturés au forfait (délai de carence), les suivants ne le sont plus.</div></div>'
       +'<div class="fg"><label class="flabel">Signalée le (optionnel)</label><input type="date" class="finput" id="abs-signalee">'
-      +'<div style="font-size:11.5px;color:var(--muted);margin-top:4px">Date à laquelle la famille a prévenu. Signalée au moins 15 jours avant le premier jour d\'absence, elle ouvre droit à la déduction des repas sur la facture.</div></div>'
+      +'<div style="font-size:11.5px;color:var(--muted);margin-top:4px">Date à laquelle la famille a prévenu. Signalée au moins 15 jours avant le premier jour d\'absence, elle dispense de facturer le frais d\'entretien (repas et couches compris) sur les jours concernés.</div></div>'
       +'<div class="fg"><label class="flabel">Motif (optionnel)</label><input class="finput" id="abs-motif" placeholder="Maladie, hospitalisation…"></div>'
       +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn-cancel" onclick="closeModal(\'modal-abs-wrap\')">Annuler</button>'
       +'<button class="btn-primary" onclick="prEnregistrerAbsence()"><i class="ti ti-check"></i> Enregistrer</button></div></div>';
