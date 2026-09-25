@@ -548,6 +548,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <button class="mnav-hub-item" onclick="showMain('reunions-equipe');closeHub()" id="mnav-reunions-equipe"><i class="ti ti-notebook"></i> Réunions d'équipe</button>
             <button class="mnav-hub-item direction-only" onclick="showMain('actions');closeHub()" id="mnav-actions"><i class="ti ti-target-arrow"></i> Actions</button>
             <button class="mnav-hub-item" onclick="showMain('incidents');closeHub()" id="mnav-incidents"><i class="ti ti-alert-triangle"></i> Incidents <span class="mnav-badge" id="badge-incidents" style="display:none">0</span></button>
+            <button class="mnav-hub-item" onclick="showMain('mcm');closeHub()" id="mnav-mcm"><i class="ti ti-tools-kitchen-2"></i> MCM (repas) <span class="mnav-badge" id="badge-mcm" style="display:none">0</span></button>
             <button class="mnav-hub-item" onclick="showMain('enfants');closeHub()" id="mnav-enfants"><i class="ti ti-mood-kid"></i> Enfants</button>
             <button class="mnav-hub-item" onclick="showMain('vaccinations');closeHub()" id="mnav-vaccinations"><i class="ti ti-vaccine"></i> Vaccinations</button>
             <button class="mnav-hub-item" onclick="showMain('partenaires');closeHub()" id="mnav-partenaires"><i class="ti ti-building-community"></i> Partenaires</button>
@@ -617,22 +618,66 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="section-left">
         <span class="section-title"><i class="ti ti-alert-triangle" style="color:var(--red)"></i> Registre des incidents</span>
       </div>
-      <button class="btn-primary" onclick="openIncidentModal()"><i class="ti ti-plus"></i> Déclarer un incident</button>
-    </div>
-    <div class="filters" id="incident-category-filters" style="margin-bottom:8px">
-      <button class="fchip active" onclick="setIncCategory('enfant',this)">👶 Incidents enfants</button>
-      <button class="fchip" onclick="setIncCategory('repas',this)">🍽️ Prestataire repas</button>
+      <button class="btn-primary" onclick="openIncidentModal('enfant')"><i class="ti ti-plus"></i> Déclarer un incident</button>
     </div>
     <div class="filters" id="incident-filters">
       <button class="fchip active" onclick="setIncFilter('all',this)">Tous</button>
-      <span id="inc-sev-chips">
-        <button class="fchip" onclick="setIncFilter('grave',this)">🔴 Grave</button>
-        <button class="fchip" onclick="setIncFilter('leger',this)">🟠 Léger</button>
-        <button class="fchip" onclick="setIncFilter('info',this)">🔵 Info</button>
-      </span>
+      <button class="fchip" onclick="setIncFilter('grave',this)">🔴 Grave</button>
+      <button class="fchip" onclick="setIncFilter('leger',this)">🟠 Léger</button>
+      <button class="fchip" onclick="setIncFilter('info',this)">🔵 Info</button>
       <button class="fchip" onclick="setIncFilter('non-traite',this)">Non traités</button>
     </div>
     <div id="incidents-list"></div>
+  </div>
+
+  <!-- MCM (prestataire repas) -->
+  <div id="main-mcm" class="tab-content">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-title"><i class="ti ti-tools-kitchen-2" style="color:var(--koala)"></i> MCM — Prestataire repas</span>
+      </div>
+    </div>
+    <div class="module-tabs" style="margin-top:2px">
+      <button class="module-tab active" onclick="showMcmTab('incidents',this)"><i class="ti ti-alert-triangle"></i> Incidents repas</button>
+      <button class="module-tab" onclick="showMcmTab('menus',this)"><i class="ti ti-tools-kitchen-2"></i> Menus</button>
+      <button class="module-tab" onclick="showMcmTab('avis',this)"><i class="ti ti-mood-smile"></i> Avis des enfants</button>
+    </div>
+
+    <div id="mcm-incidents" class="module-tab-content active">
+      <div class="section-header" style="margin-top:10px">
+        <div class="section-left"></div>
+        <button class="btn-primary" onclick="openIncidentModal('repas')"><i class="ti ti-plus"></i> Déclarer un incident repas</button>
+      </div>
+      <div class="filters" id="mcm-incident-filters">
+        <button class="fchip active" onclick="setMcmIncFilter('all',this)">Tous</button>
+        <button class="fchip" onclick="setMcmIncFilter('non-traite',this)">Non traités</button>
+      </div>
+      <div id="mcm-incidents-list"></div>
+    </div>
+
+    <div id="mcm-menus" class="module-tab-content">
+      <div class="section-header" style="margin-top:10px">
+        <div class="section-left"></div>
+        <button class="btn-cancel direction-only" onclick="document.getElementById('mcm-menu-file').click()"><i class="ti ti-upload"></i> Importer le menu</button>
+        <input type="file" id="mcm-menu-file" accept=".xlsx,.xls" style="display:none" onchange="handleImportMenusFile(event)"/>
+      </div>
+      <div id="mcm-menus-list"></div>
+    </div>
+
+    <div id="mcm-avis" class="module-tab-content">
+      <div style="display:flex;align-items:center;gap:8px;margin:10px 0;flex-wrap:wrap">
+        <button class="ibtn" onclick="mcmAvisMoveWeek(-1)" title="Semaine précédente" style="padding:5px 9px;font-size:15px">◀</button>
+        <span id="mcm-avis-week-label" style="font-weight:700;color:var(--koala);font-size:13px;white-space:nowrap"></span>
+        <button class="ibtn" onclick="mcmAvisMoveWeek(1)" title="Semaine suivante" style="padding:5px 9px;font-size:15px">▶</button>
+        <button class="btn-sm" onclick="mcmAvisMoveWeek('today')">Semaine actuelle</button>
+        <select class="finput direction-only" id="mcm-avis-creche-select" style="display:none;width:160px" onchange="mcmRenderAvis()">
+          <option value="">-- Crèche --</option>
+        </select>
+        <button class="fchip" style="margin-left:auto" onclick="mcmToggleSynthese()" id="mcm-synthese-chip"><i class="ti ti-chart-bar"></i> Synthèse des avis</button>
+      </div>
+      <div id="mcm-synthese-zone" style="display:none;margin-bottom:14px"></div>
+      <div id="mcm-avis-zone"></div>
+    </div>
   </div>
 
   <!-- PRÉSENCES -->
@@ -2921,7 +2966,7 @@ sb.auth.onAuthStateChange(function(event,session){
 if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
-let activeCrecheId=null,activeFilter='all',activeIncFilter='all',activeIncCategory='enfant',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='';
+let activeCrecheId=null,activeFilter='all',activeIncFilter='all',activeMcmIncFilter='all',incModalCategory='enfant',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='',mcmWeekOffset=0,mcmActiveTab='incidents',mcmMenusCache=[],mcmAvisCache={},mcmSyntheseOpen=false;
 let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[],cacheEtablissements=[],cacheReseauFermetures=[],cacheDemandesMasquees=[],cacheHeuresValidations=[],cacheCommandes=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 let calOnlyMine=(localStorage.getItem('calOnlyMine')==='1');
@@ -3922,14 +3967,17 @@ document.addEventListener('click',function(e){
 });
 function updateHubBadge(){
   const n=(parseInt(document.getElementById('badge-incidents')?.textContent,10)||0)
+    +(parseInt(document.getElementById('badge-mcm')?.textContent,10)||0)
     +(parseInt(document.getElementById('badge-stagiaires')?.textContent,10)||0);
   const b=document.getElementById('badge-hub');
   if(b){b.textContent=n;b.style.display=n>0?'':'none';}
 }
 function updateBadges(){
   const myCrecheId=isDirection?null:currentProfile?.creche_id;
-  const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!i.treated).length;
+  const inc=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&!isIncRepas(i)&&!i.treated).length;
+  const incRepas=cacheIncidents.filter(i=>(!myCrecheId||i.creche_id===myCrecheId)&&isIncRepas(i)&&!i.treated).length;
   const b=document.getElementById('badge-incidents');if(b){b.textContent=inc;b.style.display=inc>0?'':'none';}
+  const bm=document.getElementById('badge-mcm');if(bm){bm.textContent=incRepas;bm.style.display=incRepas>0?'':'none';}
   updateConsigneBadge();
   updateHubBadge();
 }
@@ -3960,7 +4008,7 @@ async function markConsignesRead(){
 
 function showMain(tab){
   _mainCourant=tab;
-  ['demands','incidents','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','notes','actions','reunions-equipe','stagiaires','partenaires'].forEach(t=>{
+  ['demands','incidents','mcm','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','notes','actions','reunions-equipe','stagiaires','partenaires'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -3970,6 +4018,7 @@ function showMain(tab){
   if(tab==='referents')renderReferents();
   if(tab==='employes'){renderEmployes();empChargerHeuresSemaine();}
   if(tab==='incidents')renderIncidents();
+  if(tab==='mcm')mcmInit();
   if(tab==='presence'){initPresenceDate();presMajBarre();renderPresence();}
   if(tab==='evenements'){renderCalendar();notifBellMarquerSectionLue('evenements');}
   if(tab==='dashboard')renderDashboard();
@@ -5174,40 +5223,56 @@ const INC_TYPE_OPTS_REPAS=[['repas_corps_etranger',"Repas MCM – Corps étrange
 function incTypeOptionsHtml(cat){const opts=cat==='repas'?INC_TYPE_OPTS_REPAS:INC_TYPE_OPTS_ENFANT;return opts.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('');}
 function toggleIncTypeLibre(){const libre=document.getElementById('inc-type').value==='repas_libre';document.getElementById('inc-type-libre-wrap').style.display=libre?'':'none';}
 function setIncFilter(f,btn){activeIncFilter=f;document.querySelectorAll('#incident-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderIncidents();}
+function setMcmIncFilter(f,btn){activeMcmIncFilter=f;document.querySelectorAll('#mcm-incident-filters .fchip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderMcmIncidents();}
 function isIncRepas(i){return /^repas/i.test(i.type||'')||/^Repas MCM/i.test(i.type||'');}
-function setIncCategory(c,btn){
-  activeIncCategory=c;
-  document.querySelectorAll('#incident-category-filters .fchip').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  const sevChips=document.getElementById('inc-sev-chips');
-  sevChips.style.display=c==='repas'?'none':'';
-  if(c==='repas'&&['grave','leger','info'].includes(activeIncFilter)){
-    activeIncFilter='all';
-    document.querySelectorAll('#incident-filters .fchip').forEach(b=>b.classList.remove('active'));
-    document.querySelector('#incident-filters .fchip').classList.add('active');
-  }
-  renderIncidents();
+function incidentCardHtml(i,showSev){
+  const creche=cacheCreches.find(c=>c.id===i.creche_id);
+  const si={grave:'🔴',leger:'🟠',info:'ℹ️'};
+  return'<div class="incident-card '+i.severity+'">'+(showSev?'<div style="font-size:22px;flex-shrink:0">'+si[i.severity]+'</div>':'')+'<div class="inc-meta"><div class="inc-child"><i class="ti ti-user" style="font-size:11px"></i> '+(i.child_name||'Enfant non précisé')+(creche?' — '+creche.name:'')+'</div><div class="inc-title">'+(INC_TYPE_LABELS[i.type]||i.type||'')+' · '+(i.incident_date||'')+' '+(i.incident_time?'à '+i.incident_time:'')+'</div><div class="inc-body" style="margin-top:4px">'+(i.description||'—')+'</div>'+(i.actions?'<div style="margin-top:6px;font-size:12px;color:var(--green);background:var(--green-light);border-radius:6px;padding:4px 8px"><strong>Actions :</strong> '+i.actions+'</div>':'')+'<div class="inc-foot">'+(showSev?'<span class="badge" style="background:'+(i.severity==='grave'?'var(--red-light)':i.severity==='leger'?'var(--orange-light)':'var(--blue-light)')+';color:'+(i.severity==='grave'?'#c0392b':i.severity==='leger'?'var(--orange-dark)':'var(--blue)')+'">'+({grave:'Grave',leger:'Léger',info:'Information'}[i.severity]||i.severity)+'</span>':'')+(i.reporter?'<span class="meta-txt">'+i.reporter+'</span>':'')+(i.treated?'<span class="badge b-traite">✅ Traité</span>':'<span class="badge b-attente">⏳ En cours</span>')+'</div></div><div class="dactions"><button class="ibtn" onclick="toggleIncident(\''+i.id+'\','+i.treated+')"><i class="ti ti-'+(i.treated?'rotate-clockwise':'check')+'"></i></button>'+(isDirection?'<button class="ibtn del" onclick="deleteIncident(\''+i.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
 }
 function renderIncidents(){
   const list=document.getElementById('incidents-list');
+  if(!list)return;
   const myCrecheId=isDirection?null:currentProfile?.creche_id;
   const filtered=cacheIncidents.filter(i=>{
     if(myCrecheId&&i.creche_id!==myCrecheId)return false;
-    if(activeIncCategory==='repas'&&!isIncRepas(i))return false;if(activeIncCategory==='enfant'&&isIncRepas(i))return false;
+    if(isIncRepas(i))return false;
     if(activeIncFilter==='grave'&&i.severity!=='grave')return false;if(activeIncFilter==='leger'&&i.severity!=='leger')return false;if(activeIncFilter==='info'&&i.severity!=='info')return false;if(activeIncFilter==='non-traite'&&i.treated)return false;return true;});
   if(!filtered.length){list.innerHTML='<div class="empty-state"><i class="ti ti-shield-check"></i><p>Aucun incident.</p></div>';return;}
-  const si={grave:'🔴',leger:'🟠',info:'ℹ️'};
-  const showSev=activeIncCategory!=='repas';
-  list.innerHTML=filtered.map(i=>{const creche=cacheCreches.find(c=>c.id===i.creche_id);return'<div class="incident-card '+i.severity+'">'+(showSev?'<div style="font-size:22px;flex-shrink:0">'+si[i.severity]+'</div>':'')+'<div class="inc-meta"><div class="inc-child"><i class="ti ti-user" style="font-size:11px"></i> '+(i.child_name||'Enfant non précisé')+(creche?' — '+creche.name:'')+'</div><div class="inc-title">'+(INC_TYPE_LABELS[i.type]||i.type||'')+' · '+(i.incident_date||'')+' '+(i.incident_time?'à '+i.incident_time:'')+'</div><div class="inc-body" style="margin-top:4px">'+(i.description||'—')+'</div>'+(i.actions?'<div style="margin-top:6px;font-size:12px;color:var(--green);background:var(--green-light);border-radius:6px;padding:4px 8px"><strong>Actions :</strong> '+i.actions+'</div>':'')+'<div class="inc-foot">'+(showSev?'<span class="badge" style="background:'+(i.severity==='grave'?'var(--red-light)':i.severity==='leger'?'var(--orange-light)':'var(--blue-light)')+';color:'+(i.severity==='grave'?'#c0392b':i.severity==='leger'?'var(--orange-dark)':'var(--blue)')+'">'+({grave:'Grave',leger:'Léger',info:'Information'}[i.severity]||i.severity)+'</span>':'')+(i.reporter?'<span class="meta-txt">'+i.reporter+'</span>':'')+(i.treated?'<span class="badge b-traite">✅ Traité</span>':'<span class="badge b-attente">⏳ En cours</span>')+'</div></div><div class="dactions"><button class="ibtn" onclick="toggleIncident(\''+i.id+'\','+i.treated+')"><i class="ti ti-'+(i.treated?'rotate-clockwise':'check')+'"></i></button>'+(isDirection?'<button class="ibtn del" onclick="deleteIncident(\''+i.id+'\')"><i class="ti ti-trash"></i></button>':'')+'</div></div>';}).join('');
+  list.innerHTML=filtered.map(i=>incidentCardHtml(i,true)).join('');
 }
-function openIncidentModal(){document.getElementById('inc-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');document.getElementById('inc-date').value=todayStr();document.getElementById('inc-time').value=new Date().toTimeString().slice(0,5);['inc-child','inc-desc','inc-actions','inc-reporter','inc-type-libre'].forEach(id=>document.getElementById(id).value='');const isRepas=activeIncCategory==='repas';document.getElementById('inc-type').innerHTML=incTypeOptionsHtml(activeIncCategory);document.getElementById('inc-type').value=isRepas?'repas_corps_etranger':'comportement';document.getElementById('inc-severity-wrap').style.display=isRepas?'none':'';toggleIncTypeLibre();document.getElementById('modal-incident-wrap').classList.add('open');}
-async function saveIncident(){const desc=document.getElementById('inc-desc').value.trim();if(!desc){alert('Description requise.');return;}let type=document.getElementById('inc-type').value;if(type==='repas_libre'){const libre=document.getElementById('inc-type-libre').value.trim();if(!libre){alert('Précisez le type d\'incident repas MCM.');return;}type='Repas MCM – '+libre;}const severity=activeIncCategory==='repas'?'info':document.getElementById('inc-severity').value;const row={creche_id:document.getElementById('inc-creche').value,child_name:document.getElementById('inc-child').value.trim(),incident_date:document.getElementById('inc-date').value,incident_time:document.getElementById('inc-time').value,type:type,severity:severity,description:desc,actions:document.getElementById('inc-actions').value.trim(),reporter:document.getElementById('inc-reporter').value.trim(),treated:false};const saved=await dbInsert('incidents',row);if(saved){cacheIncidents.unshift(saved);updateBadges();
+function renderMcmIncidents(){
+  const list=document.getElementById('mcm-incidents-list');
+  if(!list)return;
+  const myCrecheId=isDirection?null:currentProfile?.creche_id;
+  const filtered=cacheIncidents.filter(i=>{
+    if(myCrecheId&&i.creche_id!==myCrecheId)return false;
+    if(!isIncRepas(i))return false;
+    if(activeMcmIncFilter==='non-traite'&&i.treated)return false;
+    return true;
+  });
+  if(!filtered.length){list.innerHTML='<div class="empty-state"><i class="ti ti-shield-check"></i><p>Aucun incident repas.</p></div>';return;}
+  list.innerHTML=filtered.map(i=>incidentCardHtml(i,false)).join('');
+}
+function openIncidentModal(cat){
+  incModalCategory=cat==='repas'?'repas':'enfant';
+  document.getElementById('inc-creche').innerHTML='<option value="">-- Choisir --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+((!isDirection&&c.id===currentProfile?.creche_id)?' selected':'')+'>'+c.name+'</option>').join('');
+  document.getElementById('inc-date').value=todayStr();document.getElementById('inc-time').value=new Date().toTimeString().slice(0,5);
+  ['inc-child','inc-desc','inc-actions','inc-reporter','inc-type-libre'].forEach(id=>document.getElementById(id).value='');
+  const isRepas=incModalCategory==='repas';
+  document.getElementById('inc-type').innerHTML=incTypeOptionsHtml(incModalCategory);
+  document.getElementById('inc-type').value=isRepas?'repas_corps_etranger':'comportement';
+  document.getElementById('inc-severity-wrap').style.display=isRepas?'none':'';
+  toggleIncTypeLibre();
+  document.getElementById('modal-incident-wrap').classList.add('open');
+}
+async function saveIncident(){const desc=document.getElementById('inc-desc').value.trim();if(!desc){alert('Description requise.');return;}let type=document.getElementById('inc-type').value;if(type==='repas_libre'){const libre=document.getElementById('inc-type-libre').value.trim();if(!libre){alert('Précisez le type d\'incident repas MCM.');return;}type='Repas MCM – '+libre;}const severity=incModalCategory==='repas'?'info':document.getElementById('inc-severity').value;const row={creche_id:document.getElementById('inc-creche').value,child_name:document.getElementById('inc-child').value.trim(),incident_date:document.getElementById('inc-date').value,incident_time:document.getElementById('inc-time').value,type:type,severity:severity,description:desc,actions:document.getElementById('inc-actions').value.trim(),reporter:document.getElementById('inc-reporter').value.trim(),treated:false};const saved=await dbInsert('incidents',row);if(saved){cacheIncidents.unshift(saved);updateBadges();
 /* Alerte immediate a la direction et a la referente si l'incident est grave.
    Aucun nom d'enfant ni detail n'est transmis par courriel (cf. notify-infirmerie). */
 if(saved.severity==='grave'){callFn('notify-infirmerie',{creche_id:saved.creche_id,motif:'grave',date:saved.incident_date,heure:saved.incident_time,source:'incident'});showBanner('Incident enregistré. Direction et directeur/trice technique alertées.');}else showBanner('Incident enregistré.');
-closeModal('modal-incident-wrap');renderIncidents();}else showBanner('Erreur.','error');}
-async function toggleIncident(id,treated){const ok=await dbUpdate('incidents',id,{treated:!treated});if(ok){const i=cacheIncidents.find(x=>x.id===id);if(i)i.treated=!treated;updateBadges();renderIncidents();}}
-async function deleteIncident(id){if(!confirm('Supprimer ?'))return;await dbDelete('incidents',id);cacheIncidents=cacheIncidents.filter(i=>i.id!==id);updateBadges();renderIncidents();}
+closeModal('modal-incident-wrap');renderIncidents();renderMcmIncidents();}else showBanner('Erreur.','error');}
+async function toggleIncident(id,treated){const ok=await dbUpdate('incidents',id,{treated:!treated});if(ok){const i=cacheIncidents.find(x=>x.id===id);if(i)i.treated=!treated;updateBadges();renderIncidents();renderMcmIncidents();}}
+async function deleteIncident(id){if(!confirm('Supprimer ?'))return;await dbDelete('incidents',id);cacheIncidents=cacheIncidents.filter(i=>i.id!==id);updateBadges();renderIncidents();renderMcmIncidents();}
 
 // EVENEMENTS / RENDEZ-VOUS (CALENDRIER)
 const CAL_TYPE_INFO={
@@ -5545,6 +5610,243 @@ function initPresenceDate(){
   }
 }
 function showPresenceTab(tab,btn){document.querySelectorAll('#main-presence .module-tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('#main-presence .module-tab-content').forEach(c=>c.classList.remove('active'));btn.classList.add('active');document.getElementById('presence-'+tab).classList.add('active');currentPresenceSlot=tab;presMajBarre();renderPresence();}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MCM — PRESTATAIRE REPAS (onglet Plus > MCM)
+   Regroupe ce qui concerne le traiteur : les incidents repas (retirés du
+   registre Incidents enfants), l'import/consultation des menus des semaines
+   à venir (table `menus_semaine`, déjà utilisée par Présences > Semaine) et
+   les avis des enfants sur les plats (table `mcm_avis_repas`).
+   ═════════════════════════════════════════════════════════════════════════ */
+function mcmInit(){
+  renderMcmIncidents();
+  if(!mcmMenusCache.length)mcmLoadMenusList();else mcmRenderMenusList();
+  mcmRenderAvis();
+}
+function showMcmTab(tab,btn){
+  document.querySelectorAll('#main-mcm .module-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#main-mcm .module-tab-content').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('mcm-'+tab).classList.add('active');
+  mcmActiveTab=tab;
+  if(tab==='incidents')renderMcmIncidents();
+  if(tab==='menus'){if(!mcmMenusCache.length)mcmLoadMenusList();else mcmRenderMenusList();}
+  if(tab==='avis')mcmRenderAvis();
+}
+
+/* --- Menus des semaines à venir (import + liste) --- */
+async function mcmLoadMenusList(){
+  const zone=document.getElementById('mcm-menus-list');
+  if(zone)zone.innerHTML='<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
+  try{
+    const{data,error}=await sb.from('menus_semaine').select('*').order('date_debut',{ascending:true}).order('jour');
+    if(error)throw error;
+    mcmMenusCache=data||[];
+  }catch(err){console.warn('[MCM menus] lecture',err);mcmMenusCache=[];}
+  mcmRenderMenusList();
+}
+function mcmRenderMenusList(){
+  const zone=document.getElementById('mcm-menus-list');
+  if(!zone)return;
+  const todayMonday=menusMondayOf(todayStr());
+  const weeks={};
+  mcmMenusCache.forEach(function(m){(weeks[m.date_debut]=weeks[m.date_debut]||[]).push(m);});
+  const dates=Object.keys(weeks).sort();
+  if(!dates.length){zone.innerHTML='<div class="empty-state"><i class="ti ti-tools-kitchen-2"></i><p>Aucun menu importé pour le moment.</p></div>';return;}
+  zone.innerHTML=dates.map(function(d){
+    const jours=weeks[d].sort(function(a,b){return a.jour-b.jour;});
+    const parJour={};jours.forEach(function(j){parJour[j.jour]=j;});
+    const semaineNum=jours[0].semaine_num;
+    const isPast=d<todayMonday;
+    function carte(titre,champ,gouterChamp){
+      let html='<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+        +'<div style="font-weight:800;color:var(--koala);font-size:12px;margin-bottom:6px">'+escHtml(titre)+'</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px">';
+      for(let j=1;j<=5;j++){
+        const m=parJour[j];
+        html+='<div style="font-size:11px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">'+MENU_JOURS[j-1]+'</div>'
+          +menusLigneListe(m?m[champ]:null)
+          +(gouterChamp&&m&&m[gouterChamp]?'<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border);color:var(--koala-dark)"><i class="ti ti-cookie" style="font-size:11px"></i> '+escHtml(m[gouterChamp])+'</div>':'')
+          +'</div>';
+      }
+      html+='</div></div>';
+      return html;
+    }
+    return'<details'+(isPast?'':' open')+' style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;background:'+(isPast?'#fafafa':'var(--koala-lightest,#F7F6FC)')+'">'
+      +'<summary style="cursor:pointer;font-weight:800;color:var(--koala-dark);font-size:13px;display:flex;align-items:center;gap:8px">'
+      +'<span style="flex:1">'+(isPast?'':'🟢 ')+'Semaine du '+escHtml(d)+(semaineNum?' (S'+semaineNum+')':'')+(isPast?' — passée':'')+'</span>'
+      +(isDirection?'<button class="ibtn del" onclick="event.preventDefault();event.stopPropagation();mcmDeleteMenuWeek(\''+d+'\')" title="Supprimer ce menu"><i class="ti ti-trash"></i></button>':'')
+      +'</summary>'
+      +'<div style="margin-top:10px">'
+      +carte('Bébés − de 6 mois','bb6',null)
+      +carte('Bébés 6-18 mois','bb18','bb18_gouter')
+      +carte('Grands 18 mois-3 ans','grand','grand_gouter')
+      +'</div></details>';
+  }).join('');
+}
+async function mcmDeleteMenuWeek(dateDebut){
+  if(!confirm('Supprimer le menu de la semaine du '+dateDebut+' ?'))return;
+  const{error}=await sb.from('menus_semaine').delete().eq('date_debut',dateDebut);
+  if(error){showBanner('Erreur lors de la suppression.','error');return;}
+  mcmMenusCache=mcmMenusCache.filter(function(m){return m.date_debut!==dateDebut;});
+  mcmRenderMenusList();
+  showBanner('Menu supprimé.');
+}
+window.mcmDeleteMenuWeek=mcmDeleteMenuWeek;
+
+/* --- Avis des enfants sur les plats --- */
+let mcmAvisMenuRows=[],mcmAvisMapCurrent={},mcmAvisRowsIndex=[];
+function mcmWeekStart(){const n=new Date();const day=n.getDay();const diff=n.getDate()-(day===0?6:day-1);const m=new Date(n.getFullYear(),n.getMonth(),diff+mcmWeekOffset*7);m.setHours(0,0,0,0);return m;}
+function mcmAvisMoveWeek(delta){if(delta==='today')mcmWeekOffset=0;else mcmWeekOffset+=delta;mcmRenderAvis();}
+function mcmInitAvisCrecheSelect(){
+  const sel=document.getElementById('mcm-avis-creche-select');
+  if(!sel||!isDirection)return;
+  sel.style.display='';
+  if(!sel.options.length||sel.options.length<=1)
+    sel.innerHTML='<option value="">-- Crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+  if(activeCrecheId&&activeCrecheId!=='all'&&!sel.value)sel.value=activeCrecheId;
+}
+function mcmGetAvisCrecheId(){
+  if(isDirection){const sel=document.getElementById('mcm-avis-creche-select');return sel?.value||null;}
+  return currentProfile?.creche_id||null;
+}
+async function mcmRenderAvis(){
+  const zone=document.getElementById('mcm-avis-zone');
+  if(!zone)return;
+  const label=document.getElementById('mcm-avis-week-label');
+  const ws=mcmWeekStart();
+  const dateDebut=ipDateToLocalISO(ws);
+  const we=new Date(ws);we.setDate(we.getDate()+4);
+  if(label)label.textContent='Semaine du '+ws.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})+' au '+we.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+  mcmInitAvisCrecheSelect();
+  const crecheId=mcmGetAvisCrecheId();
+  if(!crecheId){zone.innerHTML='<div class="empty-state"><i class="ti ti-building-community"></i><p>Choisissez une crèche.</p></div>';return;}
+  zone.innerHTML='<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
+  try{
+    const[mRes,aRes]=await Promise.all([
+      sb.from('menus_semaine').select('*').eq('date_debut',dateDebut).order('jour'),
+      sb.from('mcm_avis_repas').select('*').eq('date_debut',dateDebut).eq('creche_id',crecheId)
+    ]);
+    if(mRes.error)throw mRes.error;
+    if(aRes.error)throw aRes.error;
+    mcmAvisMenuRows=mRes.data||[];
+    mcmAvisMapCurrent={};
+    (aRes.data||[]).forEach(function(a){mcmAvisMapCurrent[a.jour+'|'+a.profil+'|'+a.plat]=a;});
+  }catch(err){console.warn('[MCM avis] lecture',err);zone.innerHTML='<div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Erreur de chargement.</p></div>';return;}
+  mcmRenderAvisBody();
+}
+function mcmAvisBtn(idx,value,emoji,current){
+  const active=current===value;
+  const titres={aime:'Aime',neutre:'Neutre',naime_pas:"N'aime pas"};
+  return'<button class="ibtn" onclick="mcmSetAvis('+idx+',\''+value+'\')" title="'+titres[value]+'" style="font-size:15px;padding:3px 7px'+(active?';background:var(--koala);color:#fff;border-radius:6px':'')+'">'+emoji+'</button>';
+}
+function mcmRenderAvisBody(){
+  const zone=document.getElementById('mcm-avis-zone');
+  if(!zone)return;
+  mcmAvisRowsIndex=[];
+  if(!mcmAvisMenuRows.length){zone.innerHTML='<div class="empty-state"><i class="ti ti-tools-kitchen-2"></i><p>Aucun menu importé pour cette semaine.</p></div>';return;}
+  const parJour={};mcmAvisMenuRows.forEach(function(m){parJour[m.jour]=m;});
+  let html='';
+  for(let j=1;j<=5;j++){
+    const m=parJour[j];
+    if(!m)continue;
+    let jourHtml='';
+    [['bb18','Bébés 6-18 mois'],['grand','Grands 18 mois-3 ans']].forEach(function(pr){
+      const profil=pr[0],titre=pr[1];
+      const plats=m[profil]||[];
+      if(!plats.length)return;
+      jourHtml+='<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:6px 0 4px">'+titre+'</div>';
+      plats.forEach(function(plat){
+        const a=mcmAvisMapCurrent[j+'|'+profil+'|'+plat];
+        const app=a?a.appreciation:null;
+        const idx=mcmAvisRowsIndex.length;
+        mcmAvisRowsIndex.push({jour:j,profil:profil,plat:plat});
+        jourHtml+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 0;border-top:1px dashed var(--border)">'
+          +'<div style="flex:1;min-width:160px;font-size:12.5px">'+escHtml(plat)+'</div>'
+          +'<div style="display:flex;gap:2px">'
+          +mcmAvisBtn(idx,'aime','😍',app)
+          +mcmAvisBtn(idx,'neutre','😐',app)
+          +mcmAvisBtn(idx,'naime_pas','😖',app)
+          +'</div>'
+          +'<input type="text" class="finput" placeholder="Commentaire (optionnel)" value="'+escHtml(a&&a.commentaire||'')+'" style="width:200px;font-size:12px;padding:4px 8px" onchange="mcmSetAvisComment('+idx+',this.value)">'
+          +'</div>';
+      });
+    });
+    if(!jourHtml)continue;
+    html+='<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#fff">'
+      +'<div style="font-weight:800;color:var(--koala-dark);font-size:13px;margin-bottom:4px">'+MENU_JOURS[j-1]+(m.theme?' — <span style="font-style:italic;color:var(--orange-dark)">'+escHtml(m.theme)+'</span>':'')+'</div>'
+      +jourHtml+'</div>';
+  }
+  zone.innerHTML=html||'<div class="empty-state"><i class="ti ti-tools-kitchen-2"></i><p>Aucun plat évaluable (bébés 6-18 mois / grands) cette semaine.</p></div>';
+}
+async function mcmUpsertAvis(jour,profil,plat,patch){
+  const crecheId=mcmGetAvisCrecheId();
+  if(!crecheId){showBanner('Choisissez une crèche.','error');return;}
+  const dateDebut=ipDateToLocalISO(mcmWeekStart());
+  const existing=mcmAvisMapCurrent[jour+'|'+profil+'|'+plat];
+  const row=Object.assign({
+    date_debut:dateDebut,jour:jour,creche_id:crecheId,profil:profil,plat:plat,
+    appreciation:(existing&&existing.appreciation)||'neutre',
+    commentaire:(existing&&existing.commentaire)||null,
+    referent_id:currentProfile?.id||null,
+    updated_at:new Date().toISOString()
+  },patch);
+  try{
+    const{data,error}=await sb.from('mcm_avis_repas').upsert(row,{onConflict:'date_debut,jour,creche_id,profil,plat'}).select().single();
+    if(error)throw error;
+    mcmAvisMapCurrent[jour+'|'+profil+'|'+plat]=data;
+    mcmRenderAvisBody();
+  }catch(err){console.error('[MCM avis] upsert',err);showBanner('Erreur lors de l\'enregistrement de l\'avis.','error');}
+}
+function mcmSetAvis(idx,appreciation){
+  const r=mcmAvisRowsIndex[idx];if(!r)return;
+  mcmUpsertAvis(r.jour,r.profil,r.plat,{appreciation:appreciation});
+}
+function mcmSetAvisComment(idx,commentaire){
+  const r=mcmAvisRowsIndex[idx];if(!r)return;
+  mcmUpsertAvis(r.jour,r.profil,r.plat,{commentaire:commentaire.trim()||null});
+}
+window.mcmSetAvis=mcmSetAvis;
+window.mcmSetAvisComment=mcmSetAvisComment;
+
+/* --- Synthèse (tous plats confondus, toutes semaines) --- */
+async function mcmToggleSynthese(){
+  mcmSyntheseOpen=!mcmSyntheseOpen;
+  const chip=document.getElementById('mcm-synthese-chip');
+  if(chip)chip.classList.toggle('active',mcmSyntheseOpen);
+  const zone=document.getElementById('mcm-synthese-zone');
+  if(!zone)return;
+  zone.style.display=mcmSyntheseOpen?'':'none';
+  if(!mcmSyntheseOpen)return;
+  zone.innerHTML='<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
+  try{
+    const{data,error}=await sb.from('mcm_avis_repas').select('plat,appreciation');
+    if(error)throw error;
+    mcmRenderSynthese(data||[]);
+  }catch(err){console.warn('[MCM synthèse]',err);zone.innerHTML='<div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Erreur de chargement.</p></div>';}
+}
+function mcmRenderSynthese(rows){
+  const zone=document.getElementById('mcm-synthese-zone');
+  if(!zone)return;
+  const stats={};
+  rows.forEach(function(r){
+    const s=stats[r.plat]=stats[r.plat]||{aime:0,neutre:0,naime_pas:0};
+    s[r.appreciation]=(s[r.appreciation]||0)+1;
+  });
+  const entries=Object.keys(stats).map(function(plat){const s=stats[plat];return{plat:plat,aime:s.aime,neutre:s.neutre,naime_pas:s.naime_pas,total:s.aime+s.neutre+s.naime_pas};});
+  const aimes=entries.slice().sort(function(a,b){return b.aime-a.aime||b.total-a.total;}).filter(function(e){return e.aime>0;}).slice(0,8);
+  const naimes=entries.slice().sort(function(a,b){return b.naime_pas-a.naime_pas||b.total-a.total;}).filter(function(e){return e.naime_pas>0;}).slice(0,8);
+  function liste(titre,icon,arr,champ){
+    if(!arr.length)return'<div style="flex:1;min-width:220px"><div style="font-weight:800;font-size:12.5px;color:var(--koala-dark);margin-bottom:6px">'+icon+' '+titre+'</div><div style="font-size:12px;color:var(--muted)">Pas encore assez de données.</div></div>';
+    return'<div style="flex:1;min-width:220px"><div style="font-weight:800;font-size:12.5px;color:var(--koala-dark);margin-bottom:6px">'+icon+' '+titre+'</div><ul style="margin:0;padding-left:18px;font-size:12.5px;line-height:1.9">'+arr.map(function(e){return'<li>'+escHtml(e.plat)+' <span style="color:var(--muted)">('+e[champ]+'/'+e.total+')</span></li>';}).join('')+'</ul></div>';
+  }
+  zone.innerHTML='<div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--koala-lightest,#F7F6FC);display:flex;gap:20px;flex-wrap:wrap">'
+    +liste('Plats les plus appréciés','😍',aimes,'aime')
+    +liste('Plats les moins appréciés','😖',naimes,'naime_pas')
+    +'</div>';
+}
+window.mcmToggleSynthese=mcmToggleSynthese;
+
 // N'affiche que les commandes utiles à l'onglet courant.
 function presMajBarre(){
   const jour=currentPresenceSlot==='gantt';
@@ -6539,6 +6841,8 @@ async function handleImportMenusFile(event){
       if(error)throw error;
       showBanner(weeks.length+' semaine(s) de menu importée(s) ✅');
       if(currentPresenceSlot==='hebdo')renderMenuSemaine();
+      if(typeof mcmLoadMenusList==='function')mcmLoadMenusList();
+      if(typeof mcmRenderAvis==='function'&&mcmActiveTab==='avis')mcmRenderAvis();
     }catch(err){console.error('[Import menus]',err);alert('Erreur pendant l\'import : '+(err.message||err));}
     finally{event.target.value='';}
   };
