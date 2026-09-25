@@ -1871,7 +1871,7 @@ async function saveFiche(){
     // pas repasser pour un échec de la sauvegarde. Silencieux quand la fiche
     // n'a pas encore de parent destinataire (cas fréquent à la création).
     if(visitePlanifiee){
-      sb.functions.invoke('envoyer-confirmation-visite',{body:{preinscription_id:ficheId}})
+      sb.functions.invoke('envoyer-confirmation-visite',{body:{preinscription_id:ficheId,expediteur:(PROF&&PROF.name)||undefined}})
         .then(({error})=>{if(!error)toast('Confirmation de visite envoyée ✅');})
         .catch(e=>console.warn('[envoyer-confirmation-visite]',e));
     }
@@ -3748,7 +3748,7 @@ async function confirmerEnvoiDevis(){
        le bouton « Le lien » permet de le transmettre à la main. L'inverse —
        mailer d'abord — aurait pu expédier un lien que la base n'a pas gardé. */
     const{error:eFn}=await sb.functions.invoke('envoyer-devis',
-      {body:{devis_id:d.id,relance:relance,objet:objet,message:message}});
+      {body:{devis_id:d.id,relance:relance,objet:objet,message:message,expediteur:(PROF&&PROF.name)||undefined}});
     if(eFn)throw new Error(await detailFn(eFn));
 
     if(relance){

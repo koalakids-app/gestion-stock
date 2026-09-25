@@ -869,7 +869,7 @@ async function envoyerFormation(){
      dépend pas du navigateur — le presse-papiers ne reste qu'un confort
      silencieux en plus, jamais le seul moyen de transmission. */
   if(e.email){
-    const{ok,data}=await callFn('envoyer-formation',{envoi_id:saved.id});
+    const{ok,data}=await callFn('envoyer-formation',{envoi_id:saved.id,expediteur:PROF?.name});
     if(ok)toast('E-mail envoyé à '+e.email+'.');
     else toast('Enregistré, mais l\'e-mail n\'a pas pu être envoyé : '+(data.error||'erreur inconnue')+'. Copiez le lien manuellement : '+lien,true);
   }else{
@@ -1216,7 +1216,7 @@ async function empConfirmerEnvoiPieces(){
     employe_id:e.id,token,email:e.email,statut:'envoye',expire_le:expire,created_by:ME?ME.id:null
   }).select().single();
   if(error){toast('Impossible de créer le dossier : '+error.message,true);return;}
-  const{ok,data}=await callFn('envoyer-dossier-pieces-employe',{dossier_id:saved.id,relance:false,lien:piecesEmployeLien(token)});
+  const{ok,data}=await callFn('envoyer-dossier-pieces-employe',{dossier_id:saved.id,relance:false,lien:piecesEmployeLien(token),expediteur:PROF?.name});
   empPiecesCache.unshift(saved);
   empRenderPiecesDossier();
   if(ok)toast('Lien envoyé à '+e.email+' ✅');
@@ -1226,7 +1226,7 @@ async function empRelancerPieces(id){
   const d=empPiecesCache.find(x=>String(x.id)===String(id));
   if(!d)return;
   if(!confirm('Renvoyer le lien à '+d.email+' ?'))return;
-  const{ok,data}=await callFn('envoyer-dossier-pieces-employe',{dossier_id:d.id,relance:true,lien:piecesEmployeLien(d.token)});
+  const{ok,data}=await callFn('envoyer-dossier-pieces-employe',{dossier_id:d.id,relance:true,lien:piecesEmployeLien(d.token),expediteur:PROF?.name});
   if(!ok){toast('La relance n\'est pas partie.'+(data&&data.error?' ('+data.error+')':''),true);return;}
   d.relances=(d.relances||0)+1;
   empRenderPiecesDossier();

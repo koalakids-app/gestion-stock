@@ -1591,7 +1591,7 @@ async function enfConfirmerEnvoi(){
   /* La fonction ne reçoit qu'un identifiant : elle relit elle-même les adresses,
      l'enfant et l'échéance en base, et compose le lien depuis APP_URL. Rien
      d'expédiable ne transite par le navigateur. */
-  const ok=await callFn('envoyer-dossier-famille',{dossier_id:saved.id,relance:false});
+  const ok=await callFn('envoyer-dossier-famille',{dossier_id:saved.id,relance:false,expediteur:currentProfile?.name});
   enfDossiersCache.unshift(saved);
   closeModal('modal-envoi-wrap');
   enfRenderDossier();
@@ -1604,7 +1604,7 @@ async function enfRelancerDossier(id){
   if(!d)return;
   if(!confirm('Renvoyer le lien à '+d.email+' ?'))return;
   showBanner('Relance en cours…');
-  const ok=await callFn('envoyer-dossier-famille',{dossier_id:d.id,relance:true});
+  const ok=await callFn('envoyer-dossier-famille',{dossier_id:d.id,relance:true,expediteur:currentProfile?.name});
   if(!ok)return showBanner('La relance n\'est pas partie.','error');
   /* Le compteur est incrémenté par la fonction, une fois l'envoi accepté :
      on se contente de relire. */
@@ -2347,7 +2347,7 @@ async function enfConfirmerEnvoiPieces(){
   /* La fonction ne reçoit que l'identifiant du dossier et le lien déjà
      composé côté client : elle n'a besoin de connaître ni l'origine de
      l'app, ni aucun secret supplémentaire. */
-  const ok=await callFn('envoyer-dossier-pieces',{dossier_id:saved.id,relance:false,lien:piecesLien(token)});
+  const ok=await callFn('envoyer-dossier-pieces',{dossier_id:saved.id,relance:false,lien:piecesLien(token),expediteur:currentProfile?.name});
   enfPiecesCache.unshift(saved);
   closeModal('modal-envoi-pieces-wrap');
   enfRenderPiecesDossier();
@@ -2360,7 +2360,7 @@ async function enfRelancerPieces(id){
   if(!d)return;
   if(!confirm('Renvoyer le lien à '+d.email+' ?'))return;
   showBanner('Relance en cours…');
-  const ok=await callFn('envoyer-dossier-pieces',{dossier_id:d.id,relance:true,lien:piecesLien(d.token)});
+  const ok=await callFn('envoyer-dossier-pieces',{dossier_id:d.id,relance:true,lien:piecesLien(d.token),expediteur:currentProfile?.name});
   if(!ok)return showBanner('La relance n\'est pas partie.','error');
   d.relances=(d.relances||0)+1;
   enfRenderPiecesDossier();
