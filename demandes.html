@@ -5672,9 +5672,11 @@ function mcmRenderMenusList(){
       html+='</div></div>';
       return html;
     }
+    const fichierPath=jours[0].fichier_path;
     return'<details'+(isPast?'':' open')+' style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;background:'+(isPast?'#fafafa':'var(--koala-lightest,#F7F6FC)')+'">'
       +'<summary style="cursor:pointer;font-weight:800;color:var(--koala-dark);font-size:13px;display:flex;align-items:center;gap:8px">'
       +'<span style="flex:1">'+(isPast?'':'🟢 ')+'Semaine du '+escHtml(d)+(semaineNum?' (S'+semaineNum+')':'')+(isPast?' — passée':'')+'</span>'
+      +(fichierPath?'<a class="ibtn" href="'+escHtml(menusFichierUrl(fichierPath))+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Ouvrir et imprimer le menu original ('+escHtml(jours[0].fichier_nom||'')+')"><i class="ti ti-printer"></i></a>':'')
       +(isDirection?'<button class="ibtn del" onclick="event.preventDefault();event.stopPropagation();mcmDeleteMenuWeek(\''+d+'\')" title="Supprimer ce menu"><i class="ti ti-trash"></i></button>':'')
       +'</summary>'
       +'<div style="margin-top:10px">'
@@ -6772,9 +6774,16 @@ function menusCell(v){
   if(!s||/^\*+$/.test(s))return'';
   return s;
 }
+/* SheetJS (cellDates:true) construit les dates de cellule en UTC (un
+   nombre de série Excel n'a pas de fuseau horaire) : il faut donc lire le
+   quantième en UTC, pas en heure locale. Avec les accesseurs locaux, la
+   date obtenue dépendait du fuseau horaire de la machine qui importait —
+   sur certains imports le lundi retombait un dimanche, créant une semaine
+   « fantôme » décalée d'un jour à côté de la bonne (doublons dans MCM >
+   Menus). */
 function menusDateISO(d){
   if(!(d instanceof Date)||isNaN(d))return null;
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
 }
 /* Lit un classeur (un onglet = une semaine) et renvoie les lignes prêtes pour
    `menus_semaine`. Positions de cellules fixes, repérées sur le fichier
@@ -6826,6 +6835,21 @@ async function handleImportMenusFile(event){
       if(!weeks.length){alert('Aucune semaine reconnue dans ce fichier — vérifiez qu\'il suit la mise en page habituelle du traiteur.');return;}
       const periodes=weeks.map(w=>'S'+(w.semaine_num||'?')+' ('+w.date_debut+')').join(', ');
       if(!confirm('Importer '+weeks.length+' semaine(s) de menu ? '+periodes+'\n\nLes menus déjà enregistrés pour ces semaines seront remplacés.'))return;
+      /* Le fichier original (mise en page du traiteur) est conservé tel quel dans
+         le bucket public `menus-repas`, pour pouvoir le rouvrir et l'imprimer plus
+         tard (affichage aux familles) — indépendamment des données extraites
+         ci-dessous, qui elles alimentent les bandeaux menu de l'appli. */
+      let fichierPath=null,fichierNom=null;
+      try{
+        fichierNom=file.name;
+        fichierPath=Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+        const{error:upErr}=await sb.storage.from('menus-repas').upload(fichierPath,file,{contentType:file.type||undefined});
+        if(upErr)throw upErr;
+      }catch(err){
+        console.warn('[Import menus] envoi du fichier original',err);
+        fichierPath=null;fichierNom=null;
+        showBanner('Menu importé, mais l\'original n\'a pas pu être conservé pour impression.','error');
+      }
       const rows=[];
       weeks.forEach(function(w){
         w.jours.forEach(function(j){
@@ -6833,6 +6857,7 @@ async function handleImportMenusFile(event){
             date_debut:w.date_debut,semaine_num:w.semaine_num,jour:j.jour,theme:j.theme||null,
             bb6:j.bb6,bb18:j.bb18,bb18_gouter:j.bb18_gouter||null,
             grand:j.grand,grand_gouter:j.grand_gouter||null,
+            fichier_path:fichierPath,fichier_nom:fichierNom,
             updated_at:new Date().toISOString()
           });
         });
@@ -6857,6 +6882,10 @@ function menusLigneListe(arr){return(arr&&arr.length)?'<ul style="margin:2px 0 0
    (YYYY-MM-DD), pour retrouver la ligne du jour depuis n'importe quelle date
    sélectionnée dans l'onglet Jour (pas seulement le lundi affiché par
    weekStart(), qui suit la navigation de l'onglet Semaine). */
+/* URL publique du fichier original (Excel/PDF) du traiteur, conservé dans le
+   bucket `menus-repas` lors de l'import — permet de rouvrir et d'imprimer le
+   menu tel qu'affiché aux familles, indépendamment des données extraites. */
+function menusFichierUrl(path){return sb.storage.from('menus-repas').getPublicUrl(path).data.publicUrl;}
 function menusMondayOf(dateStr){
   const d=new Date(dateStr+'T00:00:00');
   const day=d.getDay();
