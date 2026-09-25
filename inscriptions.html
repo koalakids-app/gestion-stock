@@ -425,9 +425,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     </div>
     <div class="warn" id="dFermWarn" style="display:none"><i class="ti ti-alert-triangle"></i><span>
       Fermeture <b>estimée</b> au prorata (semaines de fermeture de l'établissement × jours par
-      semaine × durée du contrat) — ce n'est pas un décompte des vraies dates de vacances
-      scolaires. Vérifiez ce chiffre contre votre calendrier de fermeture avant d'envoyer le devis,
-      et corrigez-le à la main si besoin : le champ reste modifiable.</span></div>
+      semaine × durée du contrat), faute de fermetures enregistrées dans Paramètres pour cette
+      période — ce n'est pas un décompte des vraies dates de vacances scolaires. Complétez le
+      calendrier de fermeture de la crèche dans Paramètres pour un calcul exact, ou corrigez ce
+      chiffre à la main : le champ reste modifiable.</span></div>
     <p class="hint" id="dVol"></p>
 
     <div class="sec">Le tarif d'accueil</div>
@@ -2212,7 +2213,7 @@ function ageAns(dob,dateRef){
 async function openDevis(id){
   const p=ficheId?PRE.find(x=>String(x.id)===String(ficheId)):null;
   if(!p){toast('Enregistrez d\'abord la demande.',true);return;}
-  await Promise.all([loadCmg(),loadEtabs(),TARIFS.length?Promise.resolve():chargeGrille()]);
+  await Promise.all([loadCmg(),loadEtabs(),loadReseau(),TARIFS.length?Promise.resolve():chargeGrille()]);
 
   devisId=id;
   DCUR=id?DEVIS.find(x=>String(x.id)===String(id)):null;
@@ -2338,6 +2339,7 @@ async function openDevis(id){
     setVal('dJours',DCUR.jours_accueil!=null?DCUR.jours_accueil:'');
     setVal('dMois',DCUR.mois_factures!=null?DCUR.mois_factures:'');
     setVal('dFerm','');
+    dMajFermWarn(false);
     dSync();
   }else if(val('dFin')){
     dPeriodeChange();
@@ -2439,12 +2441,57 @@ function moisEntre(deb,fin){
 
 /* Jours de fermeture à déduire, estimés au prorata de la durée du contrat.
    Cinq semaines de fermeture sur douze mois, trois jours d'accueil par
-   semaine, onze mois de contrat → 5 × 3 × 11/12 ≈ 14 jours. */
+   semaine, onze mois de contrat → 5 × 3 × 11/12 ≈ 14 jours.
+   N'intervient plus qu'en repli, quand le calendrier de Paramètres ne couvre
+   pas la période du devis — voir fermetureReelle() ci-dessous. */
 function fermetureEstimee(crecheId,nbJoursSemaine,mois){
   const e=etabDe(crecheId);
   const sem=e&&e.semaines_fermeture!=null?Number(e.semaines_fermeture):5;
   if(!nbJoursSemaine||!mois)return 0;
   return Math.round(sem*nbJoursSemaine*(mois/12));
+}
+
+/* Les vraies dates de fermeture : le calendrier saisi dans Paramètres, à la
+   fois propre à l'établissement (etablissements.jours_fermeture) et commun au
+   réseau (reseau_config.jours_fermeture_reseau) — vacances, jours fériés
+   propres à la crèche, journées pédagogiques. Chaque entrée a un début et,
+   pour une plage, une fin ; sans fin, elle ne couvre qu'un jour. */
+function joursFermesCalendrier(crecheId){
+  return toArr(etabDe(crecheId).jours_fermeture).concat(toArr(RESEAU.jours_fermeture_reseau));
+}
+
+/* Décompte réel des jours de fermeture qui tombent sur un jour d'accueil de la
+   période du devis, à partir de ce calendrier — jour par jour, comme
+   joursAccueilEntre(). Renvoie null quand le calendrier ne contient AUCUNE
+   date dans l'intervalle [deb,fin] : c'est le signe qu'il n'a pas été rempli
+   pour cette période plutôt que d'une fermeture nulle, et l'appelant retombe
+   alors sur l'estimation au prorata. */
+function fermetureReelle(crecheId,jours,deb,fin){
+  if(!deb||!fin||!jours||!jours.length)return null;
+  const d0=new Date(String(deb).slice(0,10)+'T12:00:00');
+  const d1=new Date(String(fin).slice(0,10)+'T12:00:00');
+  if(isNaN(d0)||isNaN(d1)||d1<d0)return null;
+
+  const fermees=new Set();
+  joursFermesCalendrier(crecheId).forEach(x=>{
+    if(!x||!x.debut)return;
+    const a=new Date(String(x.debut).slice(0,10)+'T12:00:00');
+    if(isNaN(a))return;
+    const b=x.fin?new Date(String(x.fin).slice(0,10)+'T12:00:00'):a;
+    if(isNaN(b)||b<a)return;
+    for(const d=new Date(a);d<=b;d.setDate(d.getDate()+1))fermees.add(d.toISOString().slice(0,10));
+  });
+  if(!fermees.size)return null;
+
+  const set={};jours.forEach(j=>{set[Number(j)]=1;});
+  let n=0,couverte=false;
+  for(const d=new Date(d0);d<=d1;d.setDate(d.getDate()+1)){
+    if(!fermees.has(d.toISOString().slice(0,10)))continue;
+    couverte=true;
+    const js=d.getDay()===0?7:d.getDay();
+    if(set[js])n++;
+  }
+  return couverte?n:null;
 }
 
 /* Recalcule les trois champs de période à partir des dates. Appelée quand une
@@ -2461,10 +2508,21 @@ function dAfficheRegime(){
   const pb=document.getElementById('dPeriodeBox');
   if(sb2)sb2.style.display=avecTerme?'none':'';
   if(pb)pb.style.display=avecTerme?'':'none';
-  // L'avertissement suit le même régime que le bloc période : il n'a de sens
-  // que là où « fermetures déduites » est un chiffre estimé, pas mensualisé.
+  // Par défaut caché : dPeriodeChange le montre lui-même, et seulement quand
+  // le chiffre affiché est une estimation, pas un décompte calendaire réel.
+  if(!avecTerme){
+    const fw=document.getElementById('dFermWarn');
+    if(fw)fw.style.display='none';
+  }
+}
+
+/* Bascule le texte d'avertissement selon l'origine du chiffre : « estimee »
+   quand aucune fermeture du calendrier de Paramètres ne couvre la période
+   (repli sur le prorata), masqué quand le décompte vient du vrai calendrier. */
+function dMajFermWarn(estimee){
   const fw=document.getElementById('dFermWarn');
-  if(fw)fw.style.display=avecTerme?'':'none';
+  if(!fw)return;
+  fw.style.display=estimee?'':'none';
 }
 
 function dPeriodeChange(){
@@ -2474,14 +2532,21 @@ function dPeriodeChange(){
   // Sans date de début, ou avec des dates inversées, il n'y a rien à compter :
   // on vide plutôt que de laisser à l'écran les chiffres d'une période
   // précédente. dSync se charge d'expliquer pourquoi.
-  if(!deb||fin<=deb){setVal('dJours','');setVal('dFerm','');setVal('dMois','');dSync();return;}
+  if(!deb||fin<=deb){
+    setVal('dJours','');setVal('dFerm','');setVal('dMois','');
+    dMajFermWarn(false);dSync();return;
+  }
   const jours=[...document.querySelectorAll('.ckDJour:checked')].map(c=>Number(c.value));
   const bruts=joursAccueilEntre(deb,fin,jours);
   const mois=moisEntre(deb,fin);
-  const ferm=fermetureEstimee(val('dCreche'),jours.length,mois);
+  // Le calendrier de Paramètres prime dès qu'il couvre la période ; sinon on
+  // retombe sur l'estimation au prorata, moins fiable mais toujours disponible.
+  const reel=fermetureReelle(val('dCreche'),jours,deb,fin);
+  const ferm=reel!=null?reel:fermetureEstimee(val('dCreche'),jours.length,mois);
   setVal('dMois',mois||'');
   setVal('dFerm',mois?ferm:'');
   setVal('dJours',bruts==null?'':Math.max(0,bruts-ferm));
+  dMajFermWarn(reel==null);
   dSync();
 }
 /* Corriger les fermetures met à jour les jours facturés, sans toucher au reste. */
