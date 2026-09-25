@@ -2922,7 +2922,7 @@ if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https:/
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',activeIncCategory='enfant',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='';
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[],cacheEtablissements=[],cacheReseauFermetures=[],cacheDemandesMasquees=[],cacheHeuresValidations=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[],cacheEtablissements=[],cacheReseauFermetures=[],cacheDemandesMasquees=[],cacheHeuresValidations=[],cacheCommandes=[];
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 let calOnlyMine=(localStorage.getItem('calOnlyMine')==='1');
 
@@ -3026,6 +3026,10 @@ async function loadAllData(){
   // Annuaire des partenaires/institutions — table posée par sql/partenaires.sql,
   // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
   try{cachePartenaires=await dbSelect('partenaires');}catch(e){console.warn('[loadAllData] partenaires',e);cachePartenaires=[];}
+  // Commandes du Stock pédagogique (module stock.html) — chargées ici uniquement pour
+  // détecter les nouvelles commandes et notifier (cf. detecterNouveautesEtNotifier),
+  // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
+  try{cacheCommandes=await dbSelect('commandes');}catch(e){console.warn('[loadAllData] commandes',e);cacheCommandes=[];}
   // Jours de fermeture (Paramètres/Fonctionnement) — propres à chaque crèche et
   // ceux du réseau entier. Non bloquant : sert seulement à signaler les jours
   // fermés sur le planning et la feuille de présence.
@@ -3097,7 +3101,7 @@ function fermetureLabel(f){
    une saisie en cours — la synchro est alors reportée à sa fermeture), jamais en
    arrière-plan, et jamais deux rechargements coup sur coup.
    ═════════════════════════════════════════════════════════════════════════ */
-const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','employes','planning','planning_equipe','enfants_contrats','taches_afaire','notes_libres','commandes_repas','actions_direction','reunions_direction','partenaires','demandes_masquees'];
+const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','employes','planning','planning_equipe','enfants_contrats','taches_afaire','notes_libres','commandes_repas','commandes','actions_direction','reunions_direction','partenaires','demandes_masquees'];
 const SYNC_PERIODE_MS=20000;   // rappel périodique quand l'onglet est visible — le temps réel ne délivrant rien sur ce projet, c'est ce minuteur qui porte la détection des nouveautés (cf. detecterNouveautesEtNotifier)
 const SYNC_MIN_MS=10000;       // anti-rafale entre deux rechargements
 let _mainCourant=null,_syncDernier=0,_syncEnCours=false,_syncEnAttente=false,
@@ -3376,13 +3380,24 @@ function detecterNouveautesEtNotifier(avant){
     if(avant.evenements.has(e.id)||e.created_by===currentUser?.id)continue;
     if(!e.creche_id||e.creche_id===currentProfile.creche_id)showInAppNotif('Nouvel événement',e.titre||'','evenements');
   }
+  // Nouvelle commande passée dans le Stock pédagogique (module stock.html) : la
+  // direction voit toutes les commandes, un(e) référent(e) uniquement celles de sa
+  // propre crèche (la table `commandes` ne stocke que le nom de la crèche, pas son id).
+  const monNomCreche=cacheCreches.find(c=>c.id===currentProfile.creche_id)?.name;
+  for(const c of cacheCommandes){
+    if(avant.commandes.has(c.id))continue;
+    if(isDirection||(monNomCreche&&c.creche===monNomCreche)){
+      showInAppNotif('Nouvelle commande',(c.fourn?c.fourn+' — ':'')+(c.creche||''),'stock');
+    }
+  }
 }
 function capturerAvantSync(){
   return{
     demandes:new Set(cacheDemandes.map(d=>d.id)),
     statutsDemandes:new Map(cacheDemandes.map(d=>[d.id,d.status])),
     messages:new Set(cacheMessages.map(m=>m.id)),
-    evenements:new Set(cacheEvenements.map(e=>e.id))
+    evenements:new Set(cacheEvenements.map(e=>e.id)),
+    commandes:new Set(cacheCommandes.map(c=>c.id))
   };
 }
 
