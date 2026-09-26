@@ -27,31 +27,13 @@ L'application est installable en PWA (`manifest.json` + `sw.js`).
 ## Multi-tenant
 
 Une seule base Supabase héberge plusieurs organisations clientes (réseaux de
-crèches). Chaque organisation est une ligne de la table `organisations`
-(nom, couleurs, logo, `app_url`, adresse d'expédition) ; les tables métier
-(`creches`, `referents`, `employes`, `demandes`, `reseau_config`, etc.)
-portent une colonne `org_id` qui les rattache à leur organisation.
+crèches). Chaque organisation est une ligne de la table `organisations` ;
+les tables métier portent une colonne `org_id` qui les rattache à leur
+organisation, et l'isolation entre organisations est assurée par les
+politiques RLS de Postgres.
 
-L'isolation entre organisations est assurée par les **politiques RLS** de
-Postgres — jamais par du filtrage côté client. La fonction SQL
-`kk_mon_org()` résout l'organisation du compte connecté (via sa fiche
-`referents`) et est utilisée par la plupart des policies. Une edge function
-qui tourne en `service_role` (donc hors RLS) doit refaire cette
-vérification elle-même avant d'agir — voir les fonctions `create-referent`,
-`delete-referent`, `reset-referent-password` et `creer-compte-collaborateur`
-pour le motif à suivre : décoder le `sub` du jeton de l'appelant·e (déjà
-validé par la plateforme via `verify_jwt`), vérifier son rôle et son
-`org_id`, puis comparer à l'organisation de la ressource visée. Les
-fonctions d'envoi d'e-mail (`notify-*`) ne font jamais confiance à un
-contenu ou un destinataire fourni par le client : elles relisent toujours
-le sujet, le corps et l'adresse depuis la ligne concernée en base.
-
-Le branding (couleurs, logo, nom) des pages internes est appliqué au
-chargement par `js/branding.js`, à partir de l'organisation du compte
-connecté (RLS, pas de filtre explicite nécessaire). Les pages publiques
-sans session (dépôt de pièces, signature de devis/contrat, manifest PWA)
-résolvent leur branding via l'edge function correspondante, à partir de
-la crèche ou du jeton concerné.
+Le branding (couleurs, logo, nom) est appliqué automatiquement selon
+l'organisation du compte connecté ou de la ressource concernée.
 
 Pour activer une nouvelle organisation cliente, suivre
 [`docs/onboarding-nouvelle-organisation.md`](docs/onboarding-nouvelle-organisation.md).
