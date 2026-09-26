@@ -124,7 +124,8 @@ function recapSemaine(d){
     return '<tr><td>'+cap(nom)+'</td><td>'+(actif?esc(d.heure_debut||''):'')
       +'</td><td>'+(actif?esc(d.heure_fin||''):'')+'</td><td class="m">'+fmtDuree(mins)+'</td></tr>';
   }).join('');
-  return '<table class="lg recap"><tr><th>Jour</th><th>Arrivée</th><th>Départ</th><th class="m">Présence</th></tr>'
+  return '<table class="lg recap"><tr><th>Jours de la semaine</th><th>Heure d\'arrivée</th>'
+    +'<th>Heure de départ</th><th class="m">Nombre heures de présence</th></tr>'
     +lignes+'<tr class="tot"><td colspan="3">Total</td><td class="m">'+fmtDuree(totalMin)+'</td></tr></table>';
 }
 function joursTxt(v){
@@ -224,9 +225,6 @@ function dessinerDevisPdf(){
     ['Crèche',c.name||'—'],
     ['Début de l\'accueil',d.date_debut?dfr(d.date_debut):'à convenir'],
     ['Fin de l\'accueil',avecTerme?dfr(d.date_fin):'sans terme prévu'],
-    ['Jours d\'accueil',joursTxt(d.jours)||'—'],
-    ['Horaires',(d.heure_debut||'')+' – '+(d.heure_fin||'')],
-    ['Volume hebdomadaire',nb(d.heures_hebdo)+' h par semaine'],
     avecTerme
       ? ['Jours facturés',(d.jours_accueil!=null?d.jours_accueil+' jours':'—')
           +(d.mois_factures?' sur '+nb(d.mois_factures)+' mois':'')]
@@ -238,7 +236,38 @@ function dessinerDevisPdf(){
     police(9.5,'bold',NOIR);doc.text(String(v),G+52,y);
     y+=5;
   });
-  y+=1;
+  y+=4;
+
+  /* Le récap semaine, en tableau, pour visualiser la semaine d'un coup d'œil
+     plutôt que de déduire les horaires du volume hebdomadaire. */
+  const jset=joursSet(d.jours);
+  const colsSem=[46,42,42,48];
+  const xsSem=[G,G+colsSem[0],G+colsSem[0]+colsSem[1],G+colsSem[0]+colsSem[1]+colsSem[2]];
+  function ligneSemaine(cells,h,gras,taille){
+    place(h);
+    const top=y;
+    doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.25);
+    let xc=G;
+    colsSem.forEach(w=>{doc.rect(xc,top,w,h);xc+=w;});
+    police(taille||8.5,gras?'bold':'normal',NOIR);
+    const baseline=top+h-2.4;
+    cells.forEach((t,i)=>{
+      const align=i===colsSem.length-1?'right':'left';
+      const px=align==='right'?xsSem[i]+colsSem[i]-2:xsSem[i]+2;
+      doc.text(String(t),px,baseline,{align});
+    });
+    y=top+h;
+  }
+  ligneSemaine(['Jours de la semaine','Heure d\'arrivée','Heure de départ','Nombre heures de présences'],9,true,7.3);
+  let totalMinSem=0;
+  JOURS.forEach(([num,nom])=>{
+    const actif=jset.indexOf(num)>=0;
+    const mins=actif?dureeMin(d.heure_debut,d.heure_fin):0;
+    totalMinSem+=mins;
+    ligneSemaine([cap(nom),actif?(d.heure_debut||''):'',actif?(d.heure_fin||''):'',fmtDuree(mins)],7,false);
+  });
+  ligneSemaine(['Total','','',fmtDuree(totalMinSem)],7.5,true);
+  y+=5;
   para(avecTerme
     ? 'La mensualité répartit les '+(d.jours_accueil!=null?d.jours_accueil:'—')+' jours d\'accueil de '
       +'la période sur '+nb(d.mois_factures||0)+' mensualités égales. Elle est identique chaque mois, '
