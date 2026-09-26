@@ -2,6 +2,14 @@
 // supabase/functions/notify-status/index.ts
 // Envoi par SMTP Gmail plutôt que Resend (cf. notify-demand).
 // VARIABLES D'ENVIRONNEMENT : GMAIL_USER, GMAIL_APP_PASSWORD, APP_URL.
+//
+// SÉCURITÉ (26/09/2026) : cette fonction acceptait auparavant un objet
+// `demand` (destinataire ET contenu de l'e-mail) fourni tel quel par le
+// client — même trou que notify-demand. Corrigé : le client ne fournit plus
+// que `demande_id`, tout est relu depuis `demandes` (y compris le statut :
+// la mise à jour a déjà eu lieu en base avant l'appel à cette fonction, donc
+// `demandes.status` EST la vérité, pas besoin de faire confiance à un
+// `newStatus` envoyé séparément).
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -68,9 +76,32 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { demand, newStatus } = await req.json();
-    // Champs tels qu'envoyés par demandes.html : snake_case.
-    const { subject, referent_name: referent, referent_email: referentEmail, to_referent_id: referentId, creche, creche_id: crecheId } = demand;
+    const { demande_id: demandeId } = await req.json();
+    if (!demandeId) {
+      return new Response(JSON.stringify({ ok: false, error: "demande_id requis" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: row, error: dErr } = await sb
+      .from("demandes")
+      .select("subject, referent_name, referent_email, to_referent_id, creche_id, status, type")
+      .eq("id", demandeId)
+      .maybeSingle();
+    if (dErr) throw dErr;
+    if (!row || row.type !== "demande") {
+      return new Response(JSON.stringify({ ok: false, error: "demande_introuvable" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { subject, referent_name: referent, referent_email: referentEmail, to_referent_id: referentId, creche_id: crecheId, status: newStatus } = row;
+    const { data: crecheRow } = crecheId
+      ? await sb.from("creches").select("name").eq("id", crecheId).maybeSingle()
+      : { data: null };
+    const creche = crecheRow?.name || "";
     const APP_URL = await resolveAppUrl(crecheId);
 
     if (!referentEmail) {

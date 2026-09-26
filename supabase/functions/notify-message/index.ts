@@ -2,8 +2,18 @@
 // Envoie un e-mail lorsqu'une réponse est postée dans le fil de discussion d'une demande.
 // Envoi par SMTP Gmail plutôt que Resend (cf. notify-demand).
 //
+// SÉCURITÉ (26/09/2026) : cette fonction acceptait auparavant `to_email`,
+// `body`, `subject` et `author_name` fournis tels quels par le client —
+// n'importe quel compte authentifié pouvait faire envoyer un e-mail à
+// N'IMPORTE QUELLE adresse avec un contenu arbitraire. Corrigé : le client
+// ne fournit plus que `message_id` (+ `to_referent_id`, pour savoir QUI
+// notifier — un choix métier, pas une donnée sensible puisque l'adresse
+// réelle est de toute façon relue depuis `referents`) ; le corps du message
+// et son auteur sont relus depuis la ligne `messages` déjà insérée sous RLS,
+// jamais depuis la requête.
+//
 // Payload attendu (envoyé par demandes.html → sendThreadMessage) :
-// { message: { to_email, to_name, author_name, body, subject, creche, demande_id, to_referent_id } }
+// { message_id, to_referent_id }
 //
 // VARIABLES D'ENVIRONNEMENT : GMAIL_USER, GMAIL_APP_PASSWORD.
 
@@ -71,27 +81,52 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const { message } = await req.json();
-    if (!message || !message.to_email) {
+    const { message_id: messageId, to_referent_id: toReferentId } = await req.json();
+    if (!messageId) {
       return new Response(
-        JSON.stringify({ error: "to_email manquant" }),
+        JSON.stringify({ error: "message_id manquant" }),
         { status: 400, headers: { ...cors, "Content-Type": "application/json" } },
       );
     }
 
-    const {
-      to_email,
-      to_name = "",
-      author_name = "Un collègue",
-      body = "",
-      subject = "Demande",
-      creche = "",
-      creche_id = null,
-      to_referent_id = null,
-    } = message;
+    const { data: message, error: mErr } = await sb
+      .from("messages").select("demande_id, author_name, body").eq("id", messageId).maybeSingle();
+    if (mErr) throw mErr;
+    if (!message) {
+      return new Response(
+        JSON.stringify({ error: "message_introuvable" }),
+        { status: 404, headers: { ...cors, "Content-Type": "application/json" } },
+      );
+    }
+
+    const { data: demande } = await sb
+      .from("demandes").select("subject, creche_id, referent_name, referent_email")
+      .eq("id", message.demande_id).maybeSingle();
+
+    // Destinataire : la fiche referents visée, avec repli sur les coordonnées
+    // figées de la demande (cas d'un référent supprimé depuis) — même
+    // logique que sendThreadMessage côté client, mais l'adresse elle-même
+    // vient toujours de la base, jamais de la requête.
+    const { data: destRef } = toReferentId
+      ? await sb.from("referents").select("email, name").eq("id", toReferentId).maybeSingle()
+      : { data: null };
+    const to_email = destRef?.email || demande?.referent_email || "";
+    const to_name = destRef?.name || demande?.referent_name || "";
+
+    if (!to_email) {
+      return new Response(
+        JSON.stringify({ ok: true, skipped: true, reason: "aucun destinataire" }),
+        { headers: { ...cors, "Content-Type": "application/json" } },
+      );
+    }
+
+    const author_name = message.author_name || "Un collègue";
+    const body = message.body || "";
+    const subject = demande?.subject || "Demande";
+    const creche_id = demande?.creche_id || null;
     const orgNom = await nomOrganisation(creche_id);
 
-    if (await hasActivePush(to_referent_id)) {
+    if (await hasActivePush(toReferentId)) {
       return new Response(
         JSON.stringify({ ok: true, skipped: true, reason: "push actif" }),
         { headers: { ...cors, "Content-Type": "application/json" } },
@@ -108,7 +143,7 @@ serve(async (req) => {
       <div style="font-family:system-ui,Arial,sans-serif;max-width:520px;margin:0 auto;color:#333">
         <div style="background:#6C5CE7;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0">
           <div style="font-size:15px;font-weight:700">💬 Nouvelle réponse</div>
-          <div style="font-size:12px;opacity:.9;margin-top:2px">${safe(subject)}${creche ? " · " + safe(creche) : ""}</div>
+          <div style="font-size:12px;opacity:.9;margin-top:2px">${safe(subject)}</div>
         </div>
         <div style="border:1px solid #eee;border-top:none;padding:18px 20px;border-radius:0 0 10px 10px">
           <p style="margin:0 0 8px;font-size:13px;color:#666">Bonjour ${safe(to_name) || ""},</p>

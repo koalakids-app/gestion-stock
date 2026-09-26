@@ -3,6 +3,16 @@
 // Envoi par SMTP Gmail plutôt que Resend : Resend exige un domaine expéditeur
 // vérifié (DNS), pas encore disponible (koalakids.fr en attente d'accès DNS).
 // VARIABLES D'ENVIRONNEMENT : GMAIL_USER, GMAIL_APP_PASSWORD, ADMIN_EMAIL, APP_URL.
+//
+// SÉCURITÉ (26/09/2026) : cette fonction acceptait auparavant un objet
+// `demand` fourni tel quel par le client (destinataire ET contenu de
+// l'e-mail), sans jamais le confronter à une ligne réelle en base —
+// n'importe quel compte authentifié pouvait ainsi faire envoyer, via le
+// compte Gmail de l'appli et son gabarit officiel, un e-mail à N'IMPORTE
+// QUELLE adresse avec N'IMPORTE QUEL contenu (vecteur de phishing/spam).
+// Corrigé : le client ne fournit plus que `demande_id`, tout le contenu de
+// l'e-mail (sujet, description, priorité, destinataire) est relu depuis la
+// table `demandes`, jamais fait confiance à ce qu'envoie l'appelant.
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -70,10 +80,33 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { demand } = await req.json();
-    // Champs tels qu'envoyés par demandes.html (sendNewDemand) : snake_case,
-    // referent_name/referent_email désignent le REFERENT DESTINATAIRE de la demande.
-    const { subject, referent_name: referent, referent_email: referentEmail, to_referent_id: referentId, creche, creche_id: crecheId, priority, description: desc, date } = demand;
+    const { demande_id: demandeId } = await req.json();
+    if (!demandeId) {
+      return new Response(JSON.stringify({ ok: false, error: "demande_id requis" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: row, error: dErr } = await sb
+      .from("demandes")
+      .select("subject, description, priority, referent_name, referent_email, to_referent_id, creche_id, type")
+      .eq("id", demandeId)
+      .maybeSingle();
+    if (dErr) throw dErr;
+    if (!row || row.type !== "demande") {
+      return new Response(JSON.stringify({ ok: false, error: "demande_introuvable" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { subject, description: desc, priority, referent_name: referent, referent_email: referentEmail, to_referent_id: referentId, creche_id: crecheId } = row;
+    const { data: crecheRow } = crecheId
+      ? await sb.from("creches").select("name").eq("id", crecheId).maybeSingle()
+      : { data: null };
+    const creche = crecheRow?.name || "";
+
     const referentPushActive = await hasActivePush(referentId);
     const APP_URL = await resolveAppUrl(crecheId);
 
@@ -98,7 +131,6 @@ serve(async (req) => {
             <p style="margin:0 0 12px;color:#555;font-size:14px;line-height:1.5">${desc || "—"}</p>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <span style="background:${priorityColor};color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700">${priorityLabel}</span>
-              ${date ? `<span style="background:#f0f0f0;color:#555;padding:3px 10px;border-radius:12px;font-size:12px">${date}</span>` : ""}
               ${referent ? `<span style="background:#eeedf8;color:#3D3580;padding:3px 10px;border-radius:12px;font-size:12px">👤 ${referent}</span>` : ""}
             </div>
           </div>
@@ -113,7 +145,6 @@ serve(async (req) => {
 
     const errors: string[] = [];
 
-    // ── 1. Email au RÉFÉRENT destinataire (sauf s'il a déjà le push) ─
     if (referentEmail && !referentPushActive) {
       try {
         await sendEmail(
@@ -126,7 +157,6 @@ serve(async (req) => {
       }
     }
 
-    // ── 2. Email à l'ADMIN ───────────────────────────────────────
     if (ADMIN_EMAIL) {
       try {
         await sendEmail(
