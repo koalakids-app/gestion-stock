@@ -171,7 +171,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 
 <div id="loginView" style="display:none">
   <div class="login" id="liFormBox">
-    <h2>Documents Koala Kids</h2>
+    <h2 data-branding-nom>Documents Koala Kids</h2>
     <form autocomplete="on" onsubmit="event.preventDefault();doLogin();">
     <div class="f"><label>Email</label><input type="email" id="liMail" name="email" autocomplete="username"></div>
     <div class="f"><label>Mot de passe</label><input type="password" id="liPwd" name="password" autocomplete="current-password"></div>
@@ -401,6 +401,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 
 <div class="toast" id="toast"></div>
 
+<script src="js/branding.js"></script>
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
@@ -495,6 +496,7 @@ async function boot(){
     return;
   }
   PROF=p;
+  if(window.KKBranding)KKBranding.applyBranding(sb);
   IS_ADMIN=!!p&&(p.role==='direction'||p.role==='referent');
   /* Seule la direction cree, modifie ou supprime des documents et des categories.
      Les referentes consultent, remplissent en ligne et telechargent (lecture seule

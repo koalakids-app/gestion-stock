@@ -222,6 +222,7 @@ table.lg td.r,table.lg th.r{text-align:right;white-space:nowrap}
 <div class="toast" id="toast"></div>
 
 <script src="js/presences-reel.js"></script>
+<script src="js/branding.js"></script>
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
@@ -371,6 +372,7 @@ async function boot(){
   }catch(e){showLogin('Session expirée ou profil inaccessible — merci de vous reconnecter.');return;}
   if(!p){try{await sb.auth.signOut();}catch(e){}showLogin('Compte non reconnu — contactez la direction.');return;}
   PROF=p;
+  if(window.KKBranding)KKBranding.applyBranding(sb);
   if(p.role!=='direction'){
     try{await sb.auth.signOut();}catch(e){}
     showLogin('La facturation est réservée à la direction.');return;

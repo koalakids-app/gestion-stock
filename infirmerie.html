@@ -397,6 +397,7 @@ textarea{resize:vertical;min-height:66px}
 
 <div class="toast" id="toast"></div>
 
+<script src="js/branding.js"></script>
 <script>
 /* ================================================================
    REGISTRE D'INFIRMERIE — Koala Kids
@@ -487,6 +488,7 @@ async function boot(){
   const {data:p}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
   if(!p){toast("Profil introuvable. Contactez la direction.",true);await sb.auth.signOut();location.reload();return;}
   PROF=p; IS_DIRECTION=(p.role==='direction'); IS_EMPLOYE=(p.role==='employe');
+  if(window.KKBranding)KKBranding.applyBranding(sb);
   // MFA obligatoire \u00e0 la connexion, m\u00eame portail que demandes.html/documents.html.
   await mfaGateCheckAndProceed();
 }

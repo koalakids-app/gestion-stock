@@ -182,6 +182,7 @@ select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 
 <div class="toast" id="toast"></div>
 
+<script src="js/branding.js"></script>
 <script>
 /* ================================================================
    ACCES TERRAIN — Koala Kids
@@ -230,6 +231,7 @@ async function boot(){
   const {data:p}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
   if(!p){toast("Profil introuvable. Contactez la direction.",true);await sb.auth.signOut();location.reload();return;}
   PROF=p; IS_DIRECTION=(p.role==='direction'); IS_EMPLOYE=(p.role==='employe');
+  if(window.KKBranding)KKBranding.applyBranding(sb);
   // MFA obligatoire à la connexion, même portail que infirmerie.html/demandes.html.
   await mfaGateCheckAndProceed();
 }
