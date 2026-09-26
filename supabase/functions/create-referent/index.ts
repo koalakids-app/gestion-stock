@@ -18,8 +18,9 @@
 //
 // Déploiement :
 //   supabase functions deploy create-referent
-// Secrets nécessaires : SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY, injectées
-// automatiquement par la plateforme Supabase Edge Functions.
+// Secrets nécessaires : SUPABASE_URL, SUPABASE_ANON_KEY et
+// SUPABASE_SERVICE_ROLE_KEY, injectées automatiquement par la plateforme
+// Supabase Edge Functions.
 // L'URL passée en `redirect_to` (demandes.html) doit figurer dans la liste
 // des "Redirect URLs" autorisées du projet Supabase (Auth > URL
 // Configuration) — déjà fait pour collaborateur.html, à vérifier pour
@@ -55,6 +56,22 @@ Deno.serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
+    // `referents.org_id` est NOT NULL, mais cette fonction tourne en
+    // service_role : elle contourne la RLS et ne connaît donc pas
+    // spontanément l'organisation de la personne appelante. On la résout
+    // via son propre jeton (transmis par la plateforme, verify_jwt étant
+    // actif pour cette fonction), avec kk_mon_org() qui fait exactement ce
+    // calcul pour les policies RLS.
+    const appelant = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } },
+    );
+    const { data: orgId, error: orgErr } = await appelant.rpc("kk_mon_org");
+    if (orgErr || !orgId) {
+      return json({ ok: false, error: "Organisation introuvable pour ce compte." }, 403);
+    }
+
     // Vérifier si l'email existe déjà dans Auth (ex. compte collaborateur/trice
     // ou référent(e) déjà invité(e)) — on ne réinvite pas un compte existant,
     // on se contente de relier sa fiche referents à ce compte.
@@ -87,6 +104,7 @@ Deno.serve(async (req) => {
       poste: poste || "",
       creche_id: creche_id || null,
       role: role || "referent",
+      org_id: orgId,
     };
 
     if (existingRef) {
