@@ -3,12 +3,17 @@
 // Envoi par SMTP Gmail plutôt que Resend (cf. notify-demand).
 // VARIABLES D'ENVIRONNEMENT : GMAIL_USER, GMAIL_APP_PASSWORD, ADMIN_EMAIL, APP_URL.
 //
-// Une consigne s'adresse à PLUSIEURS référents à la fois : le front
-// (demandes.html → saveConsigne) envoie un tableau `destinataires`
-// ([{email, name}, ...]), pas un référent unique — contrairement à une
-// demande. La version précédente ne lisait que consigne.referentEmail,
-// qui est toujours vide pour une consigne (referent_email:'' à la création),
-// donc n'envoyait jamais aucun mail.
+// Une consigne s'adresse à TOUS les référent·es de l'organisation à la fois
+// (demandes.html → saveConsigne) : une ligne `demandes` avec type='consigne'.
+//
+// SÉCURITÉ (26/09/2026) : cette fonction acceptait auparavant `consigne`
+// (sujet/message/priorité) ET `destinataires` (liste d'e-mails) fournis tels
+// quels par le client — n'importe quel compte authentifié pouvait faire
+// envoyer un e-mail à une liste arbitraire d'adresses avec un contenu
+// arbitraire. Corrigé : le client ne fournit plus que `consigne_id`, le
+// contenu est relu depuis `demandes` et la liste des destinataires est
+// recalculée côté serveur (tous les référent·es de l'organisation de la
+// consigne), jamais fait confiance à ce qu'envoie l'appelant.
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -74,9 +79,37 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { consigne, destinataires } = await req.json();
-    const { id, subject, message, creche, priority, org_id } = consigne;
-    const APP_URL = await resolveAppUrl(org_id);
+    const { consigne_id: consigneId } = await req.json();
+    if (!consigneId) {
+      return new Response(JSON.stringify({ ok: false, error: "consigne_id requis" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: row, error: cErr } = await sb
+      .from("demandes")
+      .select("id, subject, description, priority, org_id, type")
+      .eq("id", consigneId)
+      .maybeSingle();
+    if (cErr) throw cErr;
+    if (!row || row.type !== "consigne") {
+      return new Response(JSON.stringify({ ok: false, error: "consigne_introuvable" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { id, subject, description: message, priority, org_id: orgId } = row;
+    const creche = "Toutes les crèches";
+    const APP_URL = await resolveAppUrl(orgId);
+
+    // Destinataires recalculés côté serveur — jamais la liste fournie par
+    // l'appelant : tous les référent·es (hors direction) de cette organisation.
+    const { data: destinataires, error: destErr } = orgId
+      ? await sb.from("referents").select("id, name, email").eq("org_id", orgId).eq("role", "referent").not("email", "is", null)
+      : { data: [], error: null };
+    if (destErr) throw destErr;
 
     const priorityColor = priority === "urgent" ? "#e03e3e" : priority === "info" ? "#F47920" : "#3D3580";
     const priorityLabel = priority === "urgent" ? "🔴 Urgente" : priority === "info" ? "ℹ️ Information" : "Normale";
@@ -111,9 +144,8 @@ serve(async (req) => {
     let envoyes = 0;
     let ignoresPushActif = 0;
 
-    const pushActif = await referentsWithActivePush((destinataires ?? []).map((d: { id?: string }) => d?.id).filter(Boolean));
+    const pushActif = await referentsWithActivePush((destinataires ?? []).map((d) => d.id).filter(Boolean));
 
-    // ── 1. Email à CHAQUE référent destinataire sans push actif ────
     for (const dest of (destinataires ?? [])) {
       if (!dest?.email) continue;
       if (dest.id && pushActif.has(dest.id)) { ignoresPushActif++; continue; }
@@ -130,9 +162,8 @@ serve(async (req) => {
       }
     }
 
-    // ── 2. Confirmation à l'ADMIN ────────────────────────────────
     if (ADMIN_EMAIL) {
-      const noms = (destinataires ?? []).map((d: { name?: string }) => d?.name).filter(Boolean).join(", ") || "aucun destinataire";
+      const noms = (destinataires ?? []).map((d) => d?.name).filter(Boolean).join(", ") || "aucun destinataire";
       const adminConfirm = `
         <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
           <h2 style="color:#3D3580">Consigne envoyée ✅</h2>

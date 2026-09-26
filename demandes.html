@@ -4298,7 +4298,7 @@ async function saveDemand(){
     if(saved){
       okCount++;
       cacheDemandes.unshift(saved);
-      await callFn('notify-demand',{demand:{...row,creche:cacheCreches.find(c2=>c2.id===crecheId)?.name||''}});
+      await callFn('notify-demand',{demande_id:saved.id});
       await callFn('notify-push',{referent_ids:[row.to_referent_id],title:'Nouvelle demande',body:subj,url:'./demandes.html',tag:'demande-'+saved.id});
     }
   }
@@ -4403,9 +4403,9 @@ async function toggleStatus(id,currentStatus){
   const newStatus=currentStatus==='traite'?'attente':'traite';
   const updates={status:newStatus,treated_at:newStatus==='traite'?new Date().toISOString():null};
   const ok=await dbUpdate('demandes',id,updates);
-  if(ok){const d=cacheDemandes.find(x=>x.id===id);if(d)Object.assign(d,updates);const creche=cacheCreches.find(c=>c.id===d?.creche_id);
+  if(ok){const d=cacheDemandes.find(x=>x.id===id);if(d)Object.assign(d,updates);
     // L'edge function n'envoie l'email que si le référent n'a pas de notification push active.
-    await callFn('notify-status',{demand:{...d,creche:creche?.name||''},newStatus});
+    await callFn('notify-status',{demande_id:id});
     if(d?.to_referent_id){await callFn('notify-push',{referent_ids:[d.to_referent_id],title:newStatus==='traite'?'Demande traitée':'Demande remise en attente',body:d.subject||'',url:'./demandes.html',tag:'statut-'+id});}
     showBanner('Statut mis à jour !');renderDemandsOnly();renderCrecheTabs();}
 }
@@ -4586,13 +4586,10 @@ async function sendThreadMessage(){
         const precedents=cacheMessages.filter(m=>m.demande_id===currentThreadId&&m.id!==saved.id&&m.author_id&&m.author_id!==currentProfile?.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
         pushDestId=precedents[0]?.author_id||null;
       }
-      const dest=cacheReferents.find(r=>r.id===pushDestId);
-      const toEmail=dest?.email||(currentProfile?.id!==d.to_referent_id?d.referent_email:'')||'';
-      const toName=dest?.name||(currentProfile?.id!==d.to_referent_id?d.referent_name:'')||'';
-      const creche=cacheCreches.find(c=>c.id===d.creche_id);
-      // L'edge function n'envoie l'email que si ce destinataire n'a pas de notification
-      // push active (to_referent_id lui sert à vérifier push_subscriptions).
-      if(toEmail){await callFn('notify-message',{message:{to_email:toEmail,to_name:toName,author_name:row.author_name,body:body,subject:d.subject||'Demande',creche:creche?.name||'',creche_id:d.creche_id||null,demande_id:d.id,to_referent_id:pushDestId}});}
+      // Le destinataire réel (adresse, nom) et le contenu de l'e-mail sont
+      // relus côté serveur depuis `messages`/`demandes` (voir notify-message) —
+      // on ne lui transmet que les identifiants, jamais le contenu ni l'adresse.
+      if(pushDestId){await callFn('notify-message',{message_id:saved.id,to_referent_id:pushDestId});}
       if(pushDestId){await callFn('notify-push',{referent_ids:[pushDestId],title:'Nouveau message',body:body,url:'./demandes.html',tag:'message-'+saved.id});}
     }
   }
@@ -4626,9 +4623,10 @@ async function saveConsigne(){
   if(saved){
     cacheDemandes.unshift(saved);
     const destinataires=cacheReferents.filter(r=>r.role==='referent'&&r.email).map(r=>({id:r.id,email:r.email,name:r.name}));
-    // L'edge function n'envoie l'email à chaque destinataire que s'il n'a pas de
-    // notification push active (destinataires[].id lui sert à vérifier push_subscriptions).
-    await callFn('notify-consigne',{consigne:{...row,id:saved.id,message:msg,creche:'Toutes les crèches',org_id:currentProfile?.org_id||null},destinataires});
+    // Le contenu et la liste des destinataires sont recalculés côté serveur
+    // depuis la ligne `demandes` elle-même (voir notify-consigne) — on ne lui
+    // transmet que l'id, jamais le contenu ni les adresses.
+    await callFn('notify-consigne',{consigne_id:saved.id});
     if(destinataires.length){await callFn('notify-push',{referent_ids:destinataires.map(d=>d.id),title:'Nouvelle consigne',body:subj,url:'./demandes.html',tag:'consigne-'+saved.id});}
     // Le brouillon d'origine a rempli son rôle : on le retire.
     if(cDraftId){
