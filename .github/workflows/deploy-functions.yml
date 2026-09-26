@@ -26,7 +26,7 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          for fn in dossier-contrat dossier-pieces dossier-pieces-employe envoyer-devis envoyer-dossier-famille suivi-famille sauvegarde-hebdomadaire; do
+          for fn in dossier-contrat dossier-famille dossier-pieces dossier-pieces-employe envoyer-devis envoyer-dossier-famille suivi-famille sauvegarde-hebdomadaire manifest; do
             echo "::group::$fn (--no-verify-jwt)"
             supabase functions deploy "$fn" --project-ref juyrceadazrovlitxceb --no-verify-jwt
             echo "::endgroup::"
@@ -38,7 +38,7 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          publiques="dossier-contrat dossier-pieces dossier-pieces-employe envoyer-devis envoyer-dossier-famille suivi-famille sauvegarde-hebdomadaire"
+          publiques="dossier-contrat dossier-famille dossier-pieces dossier-pieces-employe envoyer-devis envoyer-dossier-famille suivi-famille sauvegarde-hebdomadaire manifest"
           for dir in supabase/functions/*/; do
             fn=$(basename "$dir")
             if echo " $publiques " | grep -q " $fn "; then

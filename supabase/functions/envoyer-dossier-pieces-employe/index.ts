@@ -53,7 +53,7 @@ function nomExpediteur(s: unknown) {
   return prenom.slice(0, 60) || "Koala Kids";
 }
 
-async function sendEmail(to: string[], subject: string, html: string, expediteur?: string) {
+async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string) {
   const user = Deno.env.get("GMAIL_USER");
   const pass = Deno.env.get("GMAIL_APP_PASSWORD");
   if (!user || !pass) {
@@ -72,7 +72,7 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
   });
   try {
     await client.send({
-      from: `${nomExpediteur(expediteur)} de Koalakids <${user}>`,
+      from: `${nomExpediteur(expediteur)} de ${orgNom || "Koalakids"} <${user}>`,
       to,
       subject,
       content: "Ce message nécessite un client de messagerie compatible HTML.",
@@ -83,7 +83,9 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
   }
 }
 
-function piecesEmailHtml(opts: { employe: string; creche: string; lien: string; relance: boolean; expire: string }) {
+function piecesEmailHtml(opts: { employe: string; creche: string; lien: string; relance: boolean; expire: string; orgNom?: string; logoUrl?: string }) {
+  const orgNom = opts.orgNom || "Koala Kids";
+  const logoUrl = opts.logoUrl || "https://koalakids-app.github.io/gestion-stock/logo-koalakids.png";
   return `<!doctype html><html lang="fr"><body style="margin:0;background:#F7F6FC;padding:24px 12px;
     font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#2B2740;line-height:1.6">
     <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;
@@ -91,14 +93,14 @@ function piecesEmailHtml(opts: { employe: string; creche: string; lien: string; 
       <table role="presentation" width="100%" style="border-collapse:collapse">
         <tr>
           <td style="background:#fff;padding:20px 24px;text-align:center">
-            <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
+            <img src="${logoUrl}" alt="${orgNom}"
               width="220" style="display:inline-block;height:auto">
           </td>
         </tr>
         <tr>
           <td style="background:#3D3580;color:#fff;padding:18px 24px">
             <div style="font-size:20px;font-weight:700">${opts.relance ? "Rappel — " : ""}Documents d'embauche de ${opts.employe}</div>
-            <div style="font-size:14px;opacity:.85;margin-top:3px">Koala Kids${opts.creche ? ' · ' + opts.creche : ''}</div>
+            <div style="font-size:14px;opacity:.85;margin-top:3px">${orgNom}${opts.creche ? ' · ' + opts.creche : ''}</div>
           </td>
         </tr>
       </table>
@@ -152,8 +154,15 @@ Deno.serve(async (req) => {
     const { data: employe } = await supabase
       .from("employes").select("prenom, nom, creche_id").eq("id", dossier.employe_id).maybeSingle();
     const { data: creche } = employe
-      ? await supabase.from("creches").select("name").eq("id", employe.creche_id).maybeSingle()
+      ? await supabase.from("creches").select("name, org_id").eq("id", employe.creche_id).maybeSingle()
       : { data: null };
+    let orgNom: string | undefined, logoUrl: string | undefined;
+    if (creche?.org_id) {
+      const { data: org } = await supabase.from("organisations")
+        .select("nom, logo_url").eq("id", creche.org_id).maybeSingle();
+      orgNom = org?.nom || undefined;
+      logoUrl = org?.logo_url || undefined;
+    }
 
     await sendEmail(
       emails,
@@ -164,8 +173,11 @@ Deno.serve(async (req) => {
         lien,
         relance: !!relance,
         expire: new Date(dossier.expire_le).toLocaleDateString("fr-FR"),
+        orgNom,
+        logoUrl,
       }),
       expediteur,
+      orgNom,
     );
 
     if (relance) {

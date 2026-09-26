@@ -165,6 +165,7 @@ async function boot(){
   try{
     const d=await appel('get');
     DOSSIER=d.dossier;ENFANT=d.enfant;DOCS=d.documents||[];
+    if(Array.isArray(d.creches)&&d.creches.length)KK_CRECHES=['',...d.creches];
     document.getElementById('sousTitre').textContent=
       (ENFANT.prenom||'')+(ENFANT.creche_nom?' · '+ENFANT.creche_nom:'');
     renderListe();
@@ -330,7 +331,10 @@ function champsLibresHtml(champs,v){
    Un modèle absent de ce registre s'affiche comme « à remplir avec la crèche »
    plutôt que comme un formulaire vide. */
 
-const KK_CRECHES=['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
+// Valeur de secours si l'edge function dossier-famille ne renvoie pas encore
+// `creches` (ancienne version déployée) — remplacée dans boot() une fois la
+// vraie liste de l'organisation reçue.
+let KK_CRECHES=['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
 const ON_OPTS=['','Oui','Non'];
 const CIV_OPTS=['','Monsieur','Madame'];
 const FL_PHOTOS=['Afficher à la crèche','Newsletters','Le site internet','Les pages Facebook',

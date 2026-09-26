@@ -79,7 +79,7 @@ const sb = createClient(
   { auth: { persistSession: false } },
 );
 
-async function sendEmail(to: string[], subject: string, html: string, expediteur?: string) {
+async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string) {
   const user = Deno.env.get('GMAIL_USER');
   const pass = Deno.env.get('GMAIL_APP_PASSWORD');
   if (!user || !pass) {
@@ -98,7 +98,7 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
   });
   try {
     await client.send({
-      from: `${nomExpediteur(expediteur)} de Koalakids <${user}>`,
+      from: `${nomExpediteur(expediteur)} de ${orgNom || 'Koalakids'} <${user}>`,
       to,
       subject,
       content: 'Ce message nécessite un client de messagerie compatible HTML.',
@@ -112,7 +112,10 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
 function corpsHtml(o: {
   enfant: string; creche: string; lien: string; expire: string;
   mensuel: string; reste: string | null; relance: boolean; message?: string;
+  orgNom?: string; logoUrl?: string;
 }) {
+  const orgNom = o.orgNom || 'Koala Kids';
+  const logoUrl = o.logoUrl || 'https://koalakids-app.github.io/gestion-stock/logo-koalakids.png';
   // Un message personnalisé remplace l'intro par défaut, mais jamais le reste
   // du mail : le détail chiffré, le bouton de signature et les mentions
   // légales sortent toujours de la base, pas d'un texte libre saisi à la main.
@@ -144,14 +147,14 @@ function corpsHtml(o: {
       <table role="presentation" width="100%" style="border-collapse:collapse">
         <tr>
           <td style="background:#fff;padding:20px 24px;text-align:center">
-            <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
+            <img src="${esc(logoUrl)}" alt="${esc(orgNom)}"
               width="220" style="display:inline-block;height:auto">
           </td>
         </tr>
         <tr>
           <td style="background:#3D3580;color:#fff;padding:18px 24px">
             <div style="font-size:20px;font-weight:700">Votre devis d'accueil</div>
-            <div style="font-size:14px;opacity:.85;margin-top:3px">Koala Kids${o.creche ? ' · ' + esc(o.creche) : ''}</div>
+            <div style="font-size:14px;opacity:.85;margin-top:3px">${esc(orgNom)}${o.creche ? ' · ' + esc(o.creche) : ''}</div>
           </td>
         </tr>
       </table>
@@ -181,7 +184,7 @@ function corpsHtml(o: {
           Si le bouton ne fonctionne pas, copiez cette adresse dans votre navigateur :<br>
           <span style="word-break:break-all;color:#3D3580">${esc(o.lien)}</span>
         </p>
-        <p style="margin:0;font-size:15px">À très vite,<br>L'équipe Koala Kids</p>
+        <p style="margin:0;font-size:15px">À très vite,<br>L'équipe ${esc(orgNom)}</p>
       </div>
     </div>
     <p style="max-width:540px;margin:14px auto 0;font-size:12px;color:#9A96AC;text-align:center">
@@ -232,9 +235,16 @@ Deno.serve(async (req) => {
       sb.from('preinscriptions').select('prenom,nom')
         .eq('id', devis.preinscription_id).maybeSingle(),
       devis.creche_id
-        ? sb.from('creches').select('name').eq('id', devis.creche_id).maybeSingle()
+        ? sb.from('creches').select('name,org_id').eq('id', devis.creche_id).maybeSingle()
         : Promise.resolve({ data: null }),
     ]);
+    let orgNom: string | undefined, logoUrl: string | undefined;
+    if (creche.data?.org_id) {
+      const { data: org } = await sb.from('organisations')
+        .select('nom,logo_url').eq('id', creche.data.org_id).maybeSingle();
+      orgNom = org?.nom || undefined;
+      logoUrl = org?.logo_url || undefined;
+    }
 
     const racine = base.replace(/[^/]*\.html?(\?.*)?$/i, '').replace(/\/*$/, '/');
     const lien = racine + 'devis.html?t=' + devis.token;
@@ -255,8 +265,11 @@ Deno.serve(async (req) => {
           message: messagePerso || undefined,
           reste: devis.reste_a_charge != null ? eur(devis.reste_a_charge) : null,
           relance: !!relance,
+          orgNom,
+          logoUrl,
         }),
         expediteur,
+        orgNom,
       );
     } catch (mailErr) {
       console.error('[envoyer-devis] SMTP', mailErr);

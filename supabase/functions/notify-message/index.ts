@@ -24,6 +24,15 @@ async function hasActivePush(referentId: string | null | undefined) {
   return !!(data && data.length);
 }
 
+/** Nom de l'organisation via la crèche, avec repli sur "Koala Kids". */
+async function nomOrganisation(crecheId: string | null | undefined) {
+  if (!crecheId) return "Koala Kids";
+  const { data: creche } = await sb.from("creches").select("org_id").eq("id", crecheId).maybeSingle();
+  if (!creche?.org_id) return "Koala Kids";
+  const { data: org } = await sb.from("organisations").select("nom").eq("id", creche.org_id).maybeSingle();
+  return org?.nom || "Koala Kids";
+}
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -77,8 +86,10 @@ serve(async (req) => {
       body = "",
       subject = "Demande",
       creche = "",
+      creche_id = null,
       to_referent_id = null,
     } = message;
+    const orgNom = await nomOrganisation(creche_id);
 
     if (await hasActivePush(to_referent_id)) {
       return new Response(
@@ -103,7 +114,7 @@ serve(async (req) => {
           <p style="margin:0 0 8px;font-size:13px;color:#666">Bonjour ${safe(to_name) || ""},</p>
           <p style="margin:0 0 12px;font-size:14px"><strong>${safe(author_name)}</strong> a répondu à la demande :</p>
           <div style="background:#F4F2EF;border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.5;white-space:pre-wrap">${safe(body)}</div>
-          <p style="margin:16px 0 0;font-size:12px;color:#999">Connectez-vous à l'application Koala Kids pour répondre à votre tour.</p>
+          <p style="margin:16px 0 0;font-size:12px;color:#999">Connectez-vous à l'application ${safe(orgNom)} pour répondre à votre tour.</p>
         </div>
       </div>`;
 

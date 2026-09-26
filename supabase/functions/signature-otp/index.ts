@@ -178,14 +178,28 @@ Deno.serve(async (req) => {
       if (!docKoala || docKoala.template_key !== 'contrat_travail') {
         return json({ ok: true, otp_required: false });
       }
-      const { data: reseau } = await sb
-        .from('reseau_config').select('config').eq('id', RESEAU_CFG_ID).maybeSingle();
-      const otpActive = !!(reseau && reseau.config && (reseau.config as Record<string, unknown>).otp_signature_active);
       const { data: rep } = await sb
         .from('documents_reponses').select('otp_verifie_le,otp_employe_id,donnees')
         .eq('id', sp.reponse_id).maybeSingle();
       const donnees = (rep && (rep.donnees as Record<string, unknown>)) || {};
       const employeId = (rep && rep.otp_employe_id) || (donnees.salarie_employe_id as string) || null;
+      // reseau_config est propre à chaque organisation : on la résout via
+      // l'org_id de la crèche du/de la salarié(e), avec la ligne historique
+      // Koala Kids en secours si l'employé ou sa crèche est introuvable.
+      let orgId: string | null = null;
+      if (employeId) {
+        const { data: emp0 } = await sb
+          .from('employes').select('creche_id').eq('id', employeId).maybeSingle();
+        if (emp0?.creche_id) {
+          const { data: crecheOrg } = await sb
+            .from('creches').select('org_id').eq('id', emp0.creche_id).maybeSingle();
+          orgId = crecheOrg?.org_id || null;
+        }
+      }
+      const { data: reseau } = orgId
+        ? await sb.from('reseau_config').select('config').eq('org_id', orgId).maybeSingle()
+        : await sb.from('reseau_config').select('config').eq('id', RESEAU_CFG_ID).maybeSingle();
+      const otpActive = !!(reseau && reseau.config && (reseau.config as Record<string, unknown>).otp_signature_active);
       let destinationMasquee: string | null = null;
       if (employeId) {
         const { data: emp } = await sb.from('employes').select('email').eq('id', employeId).maybeSingle();

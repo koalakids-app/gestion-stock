@@ -458,8 +458,12 @@ const IS_LOCAL = (typeof location !== 'undefined') &&
    (location.hostname && location.hostname.includes('claudeusercontent')));
 
 // ─── DATA ─────────────────────────────────────────────────────────────────
-const CRECHES = ['Brunet', 'Cuers', 'Ollioules', 'St Jean', 'Picot 1', 'Picot 2'];
-const CRECHE_COLORS = { 'Brunet': '#F59E0B', 'Cuers': '#10B981', 'Ollioules': '#EF4444', 'St Jean': '#8B5CF6', 'Picot 1': '#0EA5E9', 'Picot 2': '#F43F5E' };
+// Valeurs de secours affichées avant la connexion (mode local / hors ligne) —
+// la vraie liste des crèches de l'organisation est chargée après login,
+// voir loadCreches() / SK_CRECHE_NAMES.
+let CRECHES = ['Brunet', 'Cuers', 'Ollioules', 'St Jean', 'Picot 1', 'Picot 2'];
+let CRECHE_COLORS = { 'Brunet': '#F59E0B', 'Cuers': '#10B981', 'Ollioules': '#EF4444', 'St Jean': '#8B5CF6', 'Picot 1': '#0EA5E9', 'Picot 2': '#F43F5E' };
+const CRECHE_PALETTE = ['#F59E0B', '#10B981', '#EF4444', '#8B5CF6', '#0EA5E9', '#F43F5E', '#22C55E', '#F97316', '#6366F1', '#EC4899'];
 const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
 const CAT_PROPOSITION_ICONS = {
   'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃',
@@ -1370,14 +1374,44 @@ function deleteSouscat(id) {
 
 // ─── AUTHENTIFICATION (comptes stock pédagogique, réutilisés) ────────────
 const SK_ROLES_OK = ['direction', 'referent', 'employe'];
-const SK_CRECHE_NAMES = {
-  '6b66fa60-030e-4843-acae-4d85c666f805': 'Brunet',
-  '65f2756d-9fe7-4c1f-ac69-c207348110ae': 'Cuers',
-  '5be11869-0987-46c8-9a86-43efb0891647': 'Ollioules',
-  '373dae53-d601-4984-9ba4-8fb00f0cf015': 'Picot 1',
-  'dc6074c4-c0fc-4d07-848a-0ba16b421d15': 'Picot 2',
-  '097b5a81-6496-4c1f-a4c7-e5e8676da4d5': 'St Jean',
-};
+// Rempli par loadCreches() une fois connecté — id (uuid) -> nom de la crèche.
+let SK_CRECHE_NAMES = {};
+
+// creches.name porte la raison sociale complète ("Koalakids Toulon Brunet") ;
+// les articles/propositions déjà en base référencent le libellé court
+// ("Brunet"). Tant que la table n'a pas de colonne dédiée à ce libellé, on le
+// dérive en retirant les préfixes d'enseigne/ville — ce qui reproduit
+// exactement les libellés historiques Koala Kids. Une organisation dont les
+// noms ne suivent pas ce schéma affichera son nom complet, ce qui reste correct.
+function shortCrecheName(nom) {
+  return String(nom || '').replace(/^Koalakids\s+/i, '').replace(/^Toulon\s+/i, '').trim() || nom;
+}
+
+/** Charge les crèches de l'organisation connectée (RLS: creches_select filtre
+ *  déjà par org_id = kk_mon_org()) et reconstruit CRECHES, CRECHE_COLORS,
+ *  SK_CRECHE_NAMES ainsi que les <select> de crèche en dur dans le HTML. */
+async function loadCreches() {
+  try {
+    const rows = await sbGet('creches', 'select=id,name');
+    if (!Array.isArray(rows) || !rows.length) return;
+    const noms = rows.map(r => shortCrecheName(r.name));
+    CRECHES = noms;
+    CRECHE_COLORS = {};
+    SK_CRECHE_NAMES = {};
+    rows.forEach((r, i) => {
+      const nom = shortCrecheName(r.name);
+      CRECHE_COLORS[nom] = CRECHE_PALETTE[i % CRECHE_PALETTE.length];
+      SK_CRECHE_NAMES[r.id] = nom;
+    });
+    const optionsHtml = noms.map(n => `<option>${n}</option>`).join('');
+    const filterSel = document.getElementById('creche-filter');
+    if (filterSel) filterSel.innerHTML = '<option value="all">Toutes les crèches</option>' + optionsHtml;
+    const pCrecheSel = document.getElementById('p-creche');
+    if (pCrecheSel) pCrecheSel.innerHTML = optionsHtml;
+  } catch (e) {
+    console.warn('[Ludo] loadCreches — repli sur la liste par défaut :', e);
+  }
+}
 let SK_LOCKED_CRECHE = null;
 let SK_WRITE_CRECHE = null;
 function skCanWrite(crecheNom) {
@@ -1456,6 +1490,7 @@ async function skDoLogin() {
   const nameEl = document.getElementById('sk-user-name');
   if (nameEl) nameEl.textContent = (SK_PROFILE && SK_PROFILE.name) || (SK_USER && SK_USER.email) || '';
 
+  await loadCreches();
   skApplyCrecheLock();
   skRestrictCrecheSelects();
   skBootApp();

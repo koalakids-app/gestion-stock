@@ -727,7 +727,8 @@ function stgMailtoRess(s){
    d'ici, et il n'y a donc pas d'adresse d'expédition à configurer. */
 function stgMailto(s){
   const p=stgProfil(s);
-  const sujet='Vos documents '+(stgType(s)==='alternant'?"d'alternance":'de stage')+' — Koala Kids';
+  const orgNom=(window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids';
+  const sujet='Vos documents '+(stgType(s)==='alternant'?"d'alternance":'de stage')+' — '+orgNom;
   const corps='Bonjour '+(s.prenom||'')+',\n\n'
     +'Voici le lien pour nous transmettre les documents nécessaires à votre '+p.periode
     +(s.creche_id?' à la crèche '+stgCrecheName(s.creche_id):'')+' :\n\n'
@@ -735,7 +736,7 @@ function stgMailto(s){
     +stgMailtoRess(s)
     +'Vous pouvez photographier vos pièces directement avec votre téléphone, en plusieurs fois.\n'
     +'Ce lien est valable jusqu\'au '+stgDateFr(s.token_expire_le)+'.\n\n'
-    +'À bientôt,\nL\'équipe Koala Kids';
+    +'À bientôt,\nL\'équipe '+orgNom;
   return 'mailto:'+encodeURIComponent(s.email||'')
     +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);
 }

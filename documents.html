@@ -171,7 +171,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 
 <div id="loginView" style="display:none">
   <div class="login" id="liFormBox">
-    <h2>Documents Koala Kids</h2>
+    <h2 data-branding-nom>Documents Koala Kids</h2>
     <form autocomplete="on" onsubmit="event.preventDefault();doLogin();">
     <div class="f"><label>Email</label><input type="email" id="liMail" name="email" autocomplete="username"></div>
     <div class="f"><label>Mot de passe</label><input type="password" id="liPwd" name="password" autocomplete="current-password"></div>
@@ -401,15 +401,25 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 
 <div class="toast" id="toast"></div>
 
+<script src="js/branding.js"></script>
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-const RESEAU_CFG_ID='00000000-0000-0000-0000-000000000003';
 
 let ME=null,PROF=null,IS_ADMIN=false,IS_DIRECTION=false;
 let CATS=[],DOCS=[],CRECHES=[],ETABS=[],RESEAU={};
 let editDocId=null,fillDoc=null,fillRep=null,ENFANTS=[];
+
+// creches.name porte la raison sociale complète ("Koalakids Toulon Brunet") ;
+// plusieurs formulaires stockent le libellé court ("Brunet") depuis toujours.
+// On le dérive en retirant les préfixes d'enseigne/ville — ce qui reproduit
+// exactement les libellés historiques Koala Kids. Repli sur le nom complet
+// si une organisation ne suit pas ce schéma.
+function shortCrecheName(nom){
+  return String(nom||'').replace(/^Koalakids\s+/i,'').replace(/^Toulon\s+/i,'').trim()||nom;
+}
+let CRECHE_NOMS_COURTS=['Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
 
 /* Fiche d'identité (SIRET, PMI, coordonnées) posée par parametres.html :
    la même donnée que le devis et le contrat, pour que l'en-tête du registre
@@ -486,6 +496,7 @@ async function boot(){
     return;
   }
   PROF=p;
+  if(window.KKBranding)KKBranding.applyBranding(sb);
   IS_ADMIN=!!p&&(p.role==='direction'||p.role==='referent');
   /* Seule la direction cree, modifie ou supprime des documents et des categories.
      Les referentes consultent, remplissent en ligne et telechargent (lecture seule
@@ -666,9 +677,10 @@ async function loadAll(){
     sb.from('creches').select('id,name,addr').order('name'),
     sb.from('enfants').select('id,prenom,nom,creche_id,dob').order('prenom'),
     sb.from('etablissements').select('*'),
-    sb.from('reseau_config').select('config').eq('id',RESEAU_CFG_ID).maybeSingle()
+    sb.from('reseau_config').select('config').maybeSingle()
   ]);
   CATS=c.data||[];DOCS=d.data||[];CRECHES=cr.data||[];ENFANTS=en.data||[];
+  if(CRECHES.length)CRECHE_NOMS_COURTS=CRECHES.map(x=>shortCrecheName(x.name));
   // Absence de ligne (script 25a pas exécuté) : le registre de sécurité et les
   // autres documents retombent alors sur les seules données de `creches`.
   ETABS=et.data||[];
@@ -2156,7 +2168,7 @@ function grRadio(name,val,cur){
 function grIdentField(f,v){
   const id='ff_id_'+f.key,val=v['id_'+f.key]||'';
   if(f.type==='creche'){
-    const opts=['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
+    const opts=['',...CRECHE_NOMS_COURTS];
     return `<div class="f"><label>${esc(f.label)}</label><select id="${id}">${
       opts.map(c=>`<option${val===c?' selected':''}>${esc(c)}</option>`).join('')}</select></div>`;
   }
@@ -2252,7 +2264,6 @@ const FT_CSS=`<style>
 const FS_VACCINS=['Diphtérie – Tétanos – Poliomyélite – Coqueluche – Hib','Pneumocoque','Hépatite B','Rubéole – Oreillons – Rougeole','Méningocoque B','Méningocoque C ou ACWY','Autres (précisez)'];
 const FS_ALLERGIES=['Pollens – Acariens et graminées','Alimentaires','Médicamenteuses','Autres'];
 const ON_OPTS=['','Oui','Non'];
-const KK_CRECHES=['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
 function selHtml(id,opts,val){
   return `<select id="ff_${id}">${opts.map(o=>`<option${val===o?' selected':''}>${esc(o)}</option>`).join('')}</select>`;
 }
@@ -2810,7 +2821,7 @@ function eajeMetaHtml(f,v){
   if(f.t==='creche'){
     const list=(typeof CRECHES!=='undefined'&&CRECHES.length)
       ?CRECHES.map(c=>c.name)
-      :['Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
+      :CRECHE_NOMS_COURTS;
     if(!val&&PROF&&PROF.role==='referent'&&PROF.creche_id){
       const mine=(CRECHES||[]).find(c=>c.id===PROF.creche_id);
       if(mine)val=mine.name;
@@ -3461,7 +3472,7 @@ const TPL={
    <div class="grid2">
      <div class="f"><label>Nom / Prénom</label><input id="ff_sal_nom" value="${esc(v.sal_nom)}"></div>
      <div class="f"><label>Crèche</label><select id="ff_sal_creche">${
-       ['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean']
+       ['',...CRECHE_NOMS_COURTS]
        .map(c=>`<option${v.sal_creche===c?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
    </div>
    <div class="f"><label>Fonction</label><div class="radios">${
@@ -3705,9 +3716,14 @@ const TPL={
 
     h2('ARTICLE 1 — OBJET, POSTE ET QUALIFICATION');
     para(`Le/la Salarié(e) est engagé(e) en qualité de ${bl(g('poste_intitule'))}, statut ${bl(g('statut'))}.`);
+    // La pédagogie citée ici est propre à Koala Kids ; paramétrable via
+    // reseau_config.pedagogie_texte pour qu'un autre réseau puisse décrire
+    // la sienne sans toucher au code (pas encore de champ dédié dans
+    // Paramètres — à ajouter si un futur réseau en a besoin).
+    const pedagogie=(RESEAU&&RESEAU.pedagogie_texte)||"la pédagogie de libre exploration éducative en vigueur dans le réseau";
     para(`Missions : accueil et accompagnement des enfants et des familles dans le respect du projet pédagogique `+
-      `de la micro-crèche ; mise en œuvre des activités d'éveil et de la pédagogie de libre exploration éducative `+
-      `en vigueur dans le réseau ; participation aux transmissions, réunions d'équipe et temps de formation ; `+
+      `de la micro-crèche ; mise en œuvre des activités d'éveil et de ${pedagogie} ; `+
+      `participation aux transmissions, réunions d'équipe et temps de formation ; `+
       `application des protocoles de santé, d'hygiène et de sécurité en vigueur dans l'établissement.`);
     para(`Le/la Salarié(e) déclare posséder la qualification suivante : ${bl(g('qualification'))}, conforme aux `+
       `exigences réglementaires des établissements d'accueil du jeune enfant.`);
@@ -4350,7 +4366,7 @@ const TPL={
   html:v=>`<div class="tpl">${FT_CSS}
    <h3>Fiche de liaison</h3>
    <div class="grid2">
-     <div class="f"><label>Crèche</label>${selHtml('fl_creche',KK_CRECHES,v.fl_creche)}</div>
+     <div class="f"><label>Crèche</label>${selHtml('fl_creche',['',...CRECHE_NOMS_COURTS],v.fl_creche)}</div>
      <div class="f"><label>Date</label>${inHtml('fl_date',v.fl_date,'date')}</div>
    </div>
    <div class="grid2">
@@ -4482,7 +4498,7 @@ const TPL={
 
    <h3>Engagement</h3>
    <div class="grid2">
-     <div class="f"><label>Crèche</label>${selHtml('rm_creche',KK_CRECHES,v.rm_creche)}</div>
+     <div class="f"><label>Crèche</label>${selHtml('rm_creche',['',...CRECHE_NOMS_COURTS],v.rm_creche)}</div>
      <div class="f"><label>Date</label>${inHtml('rm_date',v.rm_date,'date')}</div>
    </div>
    <div class="grid2">
@@ -4872,7 +4888,7 @@ function c17F(lab,inner,hint){
   return '<div class="f"><label>'+esc(lab)+'</label>'+inner+(hint?'<div class="c17-aide">'+esc(hint)+'</div>':'')+'</div>';
 }
 function c17CrecheHtml(v){
-  const list=(typeof CRECHES!=='undefined'&&CRECHES.length)?CRECHES.map(c=>c.name):KK_CRECHES.filter(Boolean);
+  const list=(typeof CRECHES!=='undefined'&&CRECHES.length)?CRECHES.map(c=>c.name):CRECHE_NOMS_COURTS.filter(Boolean);
   let val=v.c17_creche||'';
   if(!val&&typeof PROF!=='undefined'&&PROF&&PROF.creche_id){
     const mine=(CRECHES||[]).find(c=>c.id===PROF.creche_id);

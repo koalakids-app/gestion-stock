@@ -48,6 +48,15 @@ import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 //   - "module" / "quiz" (employes.html, collaborateur.html) : vivent dans
 //     un second projet Supabase séparé (QUIZ_SUPABASE_URL), pas celui-ci —
 //     à sauvegarder par une fonction dédiée si besoin un jour.
+//
+// MULTI-TENANT : cette liste est codée en dur pour le schéma actuel, commun
+// à toutes les organisations (une seule existe à ce jour : koala-kids). Elle
+// sauvegarde donc les données de TOUTES les organisations mélangées, sans
+// distinction ni séparation par org_id. Tant qu'une seule organisation
+// existe, ce n'est pas un problème. Le jour où une 2e organisation est
+// onboardée, revoir cette fonction : soit une sauvegarde par organisation
+// (filtrée par org_id, envoyée à l'adresse de contact de cette organisation),
+// soit accepter que le dump reste global mais le documenter clairement.
 const TABLES = [
   'creches', 'etablissements', 'reseau_config',
   'demandes', 'referents', 'referents_lien_employe', 'referents_espace',

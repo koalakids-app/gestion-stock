@@ -46,7 +46,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { to, subject, message, filename, pdf_base64 } = await req.json();
+    // org_nom : optionnel, à envoyer par le front une fois qu'il connaît le nom
+    // de l'organisation de l'expéditeur (cf. Part 4 — cette fonction n'a accès
+    // à aucune table, elle ne peut pas le résoudre elle-même). Tant qu'aucun
+    // appelant ne le fournit, on garde "Koala Kids" en repli.
+    const { to, subject, message, filename, pdf_base64, org_nom } = await req.json();
+    const orgNom = org_nom || "Koala Kids";
 
     // Vérifications de base
     if (!Array.isArray(to) || to.length === 0) {
@@ -72,7 +77,7 @@ Deno.serve(async (req) => {
     const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6">
       ${texte}
       <hr style="border:none;border-top:1px solid #E7E5E0;margin:20px 0">
-      <div style="font-size:11px;color:#888">Envoye depuis l'application Koala Kids.</div>
+      <div style="font-size:11px;color:#888">Envoye depuis l'application ${orgNom}.</div>
     </div>`;
 
     // "From" doit obligatoirement être l'adresse authentifiée elle-même :
@@ -90,7 +95,7 @@ Deno.serve(async (req) => {
       await client.send({
         from: user,
         to,
-        subject: asciiSafe(subject || "Planning equipe - Koala Kids"),
+        subject: asciiSafe(subject || `Planning equipe - ${orgNom}`),
         content: "Ce message nécessite un client de messagerie compatible HTML.",
         html,
         attachments: [

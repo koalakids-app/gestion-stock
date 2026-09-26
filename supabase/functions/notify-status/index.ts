@@ -8,12 +8,21 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const APP_URL = Deno.env.get("APP_URL") ?? "https://koalakids.fr";
+const APP_URL_DEFAUT = Deno.env.get("APP_URL") ?? "https://koalakids.fr";
 
 const sb = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
+
+/** app_url de l'organisation de la crèche si connue, sinon la valeur historique Koala Kids. */
+async function resolveAppUrl(crecheId: string | null | undefined): Promise<string> {
+  if (!crecheId) return APP_URL_DEFAUT;
+  const { data: creche } = await sb.from("creches").select("org_id").eq("id", crecheId).maybeSingle();
+  if (!creche?.org_id) return APP_URL_DEFAUT;
+  const { data: org } = await sb.from("organisations").select("app_url").eq("id", creche.org_id).maybeSingle();
+  return org?.app_url || APP_URL_DEFAUT;
+}
 
 // L'email est un filet de secours : si le destinataire a une notification push
 // active, il n'a pas besoin d'un email en plus pour la même chose.
@@ -61,7 +70,8 @@ serve(async (req) => {
   try {
     const { demand, newStatus } = await req.json();
     // Champs tels qu'envoyés par demandes.html : snake_case.
-    const { subject, referent_name: referent, referent_email: referentEmail, to_referent_id: referentId, creche } = demand;
+    const { subject, referent_name: referent, referent_email: referentEmail, to_referent_id: referentId, creche, creche_id: crecheId } = demand;
+    const APP_URL = await resolveAppUrl(crecheId);
 
     if (!referentEmail) {
       return new Response(JSON.stringify({ ok: false, reason: "no email" }), {

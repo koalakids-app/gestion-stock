@@ -168,13 +168,13 @@ async function sujetDuContrat(c: Record<string, unknown>) {
  *  MÊME fonction : l'empreinte doit porter exactement ce qui a été affiché,
  *  jamais un recalcul séparé qui pourrait diverger. */
 async function vueFamille(contrat: Record<string, unknown>) {
-  const [lignes, sujet, creche, etab, reseau] = await Promise.all([
+  const [lignes, sujet, creche, etab] = await Promise.all([
     sb.from('contrats_lignes')
       .select('libelle,description,type,quantite,montant_unitaire,total,ordre')
       .eq('contrat_id', contrat.id).order('ordre'),
     sujetDuContrat(contrat),
     contrat.creche_id
-      ? sb.from('creches').select('name,addr').eq('id', contrat.creche_id).maybeSingle()
+      ? sb.from('creches').select('name,addr,org_id').eq('id', contrat.creche_id).maybeSingle()
       : Promise.resolve({ data: null }),
     contrat.creche_id
       ? sb.from('etablissements').select(
@@ -182,8 +182,13 @@ async function vueFamille(contrat: Record<string, unknown>) {
           'pmi_numero,representant_nom,representant_qualite'
         ).eq('creche_id', contrat.creche_id).maybeSingle()
       : Promise.resolve({ data: null }),
-    sb.from('reseau_config').select('config').eq('id', RESEAU_CFG_ID).maybeSingle(),
   ]);
+
+  // reseau_config est propre à chaque organisation : on le résout via l'org_id
+  // de la crèche du contrat, avec la ligne historique Koala Kids en secours.
+  const reseau = creche.data?.org_id
+    ? await sb.from('reseau_config').select('config').eq('org_id', creche.data.org_id).maybeSingle()
+    : await sb.from('reseau_config').select('config').eq('id', RESEAU_CFG_ID).maybeSingle();
 
   // Les clauses figées du contrat priment ; reseau_config ne sert que de
   // filet pour un contrat créé avant qu'elles ne soient recopiées.

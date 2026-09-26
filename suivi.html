@@ -231,6 +231,7 @@ input,select,textarea{font-family:'Nunito';font-size:16px;padding:9px 11px;borde
 
 <div id="appOrdi" class="ordi-wrap hidden"></div>
 
+<script src="js/branding.js"></script>
 <script>
 /* Hauteur réelle en JS plutôt que vh/dvh : sur certains Android/Chrome,
    avec body en overflow:hidden (pas de scroll de page), la hauteur
@@ -362,6 +363,7 @@ async function bootOrdinateur(){
   const{data:p}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
   if(!p){alert('Profil introuvable. Contactez la direction.');await sb.auth.signOut();location.reload();return;}
   PROF=p;IS_DIRECTION=(p.role==='direction');
+  if(window.KKBranding)KKBranding.applyBranding(sb);
   await mfaGateCheckAndProceed();
 }
 function showLoginView(msg){

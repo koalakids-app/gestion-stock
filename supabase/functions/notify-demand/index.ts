@@ -10,12 +10,21 @@ import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ADMIN_EMAIL = Deno.env.get("ADMIN_EMAIL") ?? "";
-const APP_URL      = Deno.env.get("APP_URL")      ?? "https://koalakids.fr";
+const APP_URL_DEFAUT = Deno.env.get("APP_URL") ?? "https://koalakids.fr";
 
 const sb = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
+
+/** app_url de l'organisation de la crèche si connue, sinon la valeur historique Koala Kids. */
+async function resolveAppUrl(crecheId: string | null | undefined): Promise<string> {
+  if (!crecheId) return APP_URL_DEFAUT;
+  const { data: creche } = await sb.from("creches").select("org_id").eq("id", crecheId).maybeSingle();
+  if (!creche?.org_id) return APP_URL_DEFAUT;
+  const { data: org } = await sb.from("organisations").select("app_url").eq("id", creche.org_id).maybeSingle();
+  return org?.app_url || APP_URL_DEFAUT;
+}
 
 // L'email est un filet de secours : si le destinataire a une notification push
 // active, il n'a pas besoin d'un email en plus pour la même chose.
@@ -64,8 +73,9 @@ serve(async (req) => {
     const { demand } = await req.json();
     // Champs tels qu'envoyés par demandes.html (sendNewDemand) : snake_case,
     // referent_name/referent_email désignent le REFERENT DESTINATAIRE de la demande.
-    const { subject, referent_name: referent, referent_email: referentEmail, to_referent_id: referentId, creche, priority, description: desc, date } = demand;
+    const { subject, referent_name: referent, referent_email: referentEmail, to_referent_id: referentId, creche, creche_id: crecheId, priority, description: desc, date } = demand;
     const referentPushActive = await hasActivePush(referentId);
+    const APP_URL = await resolveAppUrl(crecheId);
 
     const priorityLabel = priority === "urgent" ? "🔴 URGENTE" : priority === "info" ? "ℹ️ Information" : "Normale";
     const priorityColor = priority === "urgent" ? "#e03e3e" : priority === "info" ? "#F47920" : "#3D3580";

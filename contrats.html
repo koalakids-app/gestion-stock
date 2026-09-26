@@ -354,6 +354,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
 <div class="toast" id="toast"></div>
 
+<script src="js/branding.js"></script>
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
@@ -364,7 +365,6 @@ let ENFANTS=[],CRECHES=[],ETABS=[],CONTRATS=[],TARIFS=[],FRAIS=[];
 let DEMANDES=[],DEVIS_OK=[];
 let CMG_BAREME=[],CMG_CFG={taux_max:0.85,ratio_3_6:0.5,plafond_horaire:10};
 const CMG_CFG_ID='00000000-0000-0000-0000-000000000002';
-const RESEAU_CFG_ID='00000000-0000-0000-0000-000000000003';
 let RESEAU={contrat_validite_jours:30,devis_validite_jours:30,
             preavis_resiliation:'',conditions_resiliation:'',contrat_mentions:'',pied_page:''};
 let reseauCharge=false;
@@ -484,6 +484,7 @@ async function boot(){
   }
   PROF=p;
   IS_DIRECTION=(p.role==='direction');
+  if(window.KKBranding)KKBranding.applyBranding(sb);
   if(!IS_DIRECTION){
     try{await sb.auth.signOut();}catch(e){}
     showLogin('Ce module est réservé à la direction.');
@@ -1123,7 +1124,7 @@ async function loadCmg(){
 async function loadReseau(){
   if(reseauCharge)return;
   try{
-    const{data,error}=await sb.from('reseau_config').select('config').eq('id',RESEAU_CFG_ID).maybeSingle();
+    const{data,error}=await sb.from('reseau_config').select('config').maybeSingle();
     if(error)throw error;
     if(data&&data.config)RESEAU=Object.assign({},RESEAU,data.config);
   }catch(e){console.warn('[loadReseau]',e);}

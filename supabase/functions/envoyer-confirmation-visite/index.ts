@@ -72,7 +72,7 @@ const sb = createClient(
   { auth: { persistSession: false } },
 );
 
-async function sendEmail(to: string[], subject: string, html: string, expediteur?: string) {
+async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string) {
   const user = Deno.env.get('GMAIL_USER');
   const pass = Deno.env.get('GMAIL_APP_PASSWORD');
   if (!user || !pass) {
@@ -91,7 +91,7 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
   });
   try {
     await client.send({
-      from: `${nomExpediteur(expediteur)} de Koalakids <${user}>`,
+      from: `${nomExpediteur(expediteur)} de ${orgNom || 'Koalakids'} <${user}>`,
       to,
       subject,
       content: 'Ce message nécessite un client de messagerie compatible HTML.',
@@ -104,8 +104,9 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
 
 function corpsHtml(o: {
   enfant: string; creche: string; adresse: string; date: string; heure: string;
-  telephone: string; enseigne: string;
+  telephone: string; enseigne: string; logoUrl?: string;
 }) {
+  const logoUrl = o.logoUrl || 'https://koalakids-app.github.io/gestion-stock/logo-koalakids.png';
   return `<!doctype html><html lang="fr"><body style="margin:0;background:#F7F6FC;padding:24px 12px;
     font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#2B2740;line-height:1.6">
     <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;
@@ -113,7 +114,7 @@ function corpsHtml(o: {
       <table role="presentation" width="100%" style="border-collapse:collapse">
         <tr>
           <td style="background:#fff;padding:20px 24px;text-align:center">
-            <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
+            <img src="${esc(logoUrl)}" alt="${esc(o.enseigne)}"
               width="220" style="display:inline-block;height:auto">
           </td>
         </tr>
@@ -179,16 +180,21 @@ Deno.serve(async (req) => {
       .map((p: { email: string }) => p.email.trim());
     if (!adresses.length) return json({ erreur: 'Aucune adresse e-mail de destinataire sur cette fiche' }, 400);
 
-    let creche = '', adresse = '', etab: Record<string, unknown> = {};
+    let creche = '', adresse = '', etab: Record<string, unknown> = {}, logoUrl: string | undefined;
     if (pre.creche_id) {
       const [cr, et] = await Promise.all([
-        sb.from('creches').select('name,addr').eq('id', pre.creche_id).maybeSingle(),
+        sb.from('creches').select('name,addr,org_id').eq('id', pre.creche_id).maybeSingle(),
         sb.from('etablissements').select('raison_sociale,telephone')
           .eq('creche_id', pre.creche_id).maybeSingle(),
       ]);
       creche = (cr.data && cr.data.name) || '';
       adresse = (cr.data && cr.data.addr) || '';
       etab = et.data || {};
+      if (cr.data?.org_id) {
+        const { data: org } = await sb.from('organisations')
+          .select('logo_url').eq('id', cr.data.org_id).maybeSingle();
+        logoUrl = org?.logo_url || undefined;
+      }
     }
 
     const prenom = (pre.prenom || 'votre enfant').trim();
@@ -207,8 +213,10 @@ Deno.serve(async (req) => {
           heure: pre.heure_visite ? String(pre.heure_visite).slice(0, 5) : '',
           telephone: String(etab.telephone || ''),
           enseigne,
+          logoUrl,
         }),
         expediteur,
+        enseigne,
       );
     } catch (mailErr) {
       console.error('[envoyer-confirmation-visite] SMTP', mailErr);
