@@ -4592,7 +4592,7 @@ async function sendThreadMessage(){
       const creche=cacheCreches.find(c=>c.id===d.creche_id);
       // L'edge function n'envoie l'email que si ce destinataire n'a pas de notification
       // push active (to_referent_id lui sert à vérifier push_subscriptions).
-      if(toEmail){await callFn('notify-message',{message:{to_email:toEmail,to_name:toName,author_name:row.author_name,body:body,subject:d.subject||'Demande',creche:creche?.name||'',demande_id:d.id,to_referent_id:pushDestId}});}
+      if(toEmail){await callFn('notify-message',{message:{to_email:toEmail,to_name:toName,author_name:row.author_name,body:body,subject:d.subject||'Demande',creche:creche?.name||'',creche_id:d.creche_id||null,demande_id:d.id,to_referent_id:pushDestId}});}
       if(pushDestId){await callFn('notify-push',{referent_ids:[pushDestId],title:'Nouveau message',body:body,url:'./demandes.html',tag:'message-'+saved.id});}
     }
   }

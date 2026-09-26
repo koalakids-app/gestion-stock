@@ -78,8 +78,19 @@ Deno.serve(async (req) => {
 
     // Nom de la creche (jamais fourni par le client : on le relit en base)
     const { data: creche } = await sb
-      .from("creches").select("name").eq("id", creche_id).maybeSingle();
+      .from("creches").select("name, org_id").eq("id", creche_id).maybeSingle();
     const crecheNom = creche?.name ?? "une creche du reseau";
+
+    // Branding par organisation, avec repli sur les valeurs historiques
+    // Koala Kids si l'organisation ne peut pas etre resolue.
+    let orgNom = "Koala Kids";
+    let orgAppUrl: string | null = null;
+    if (creche?.org_id) {
+      const { data: org } = await sb
+        .from("organisations").select("nom, app_url").eq("id", creche.org_id).maybeSingle();
+      if (org?.nom) orgNom = org.nom;
+      orgAppUrl = org?.app_url || null;
+    }
 
     // Destinataires : toute la direction + la referente de cette creche
     const { data: refs, error: refErr } = await sb
@@ -102,7 +113,7 @@ Deno.serve(async (req) => {
         { headers: { ...CORS, "Content-Type": "application/json" } });
     }
 
-    const appUrl = Deno.env.get("APP_URL") ?? "";
+    const appUrl = orgAppUrl ?? Deno.env.get("APP_URL") ?? "";
     const lien = source === "incident"
       ? `${appUrl}/demandes.html`
       : `${appUrl}/infirmerie.html`;
@@ -135,13 +146,13 @@ Deno.serve(async (req) => {
   </p>
 
   <p style="font-size:11.5px;color:#8E8AA8;line-height:1.6;border-top:1px solid #EFE9F5;padding-top:12px">
-    Message automatique de la suite Koala Kids. Aucune donnee de sante n'y figure :
+    Message automatique de la suite ${orgNom}. Aucune donnee de sante n'y figure :
     le contenu du registre reste accessible uniquement apres authentification.
   </p>
 </div>`.trim();
 
     try {
-      await sendEmail(uniques, `[Koala Kids] ${crecheNom} - evenement a signaler`, html);
+      await sendEmail(uniques, `[${orgNom}] ${crecheNom} - evenement a signaler`, html);
     } catch (e) {
       return new Response(JSON.stringify({ error: "smtp", detail: String(e) }),
         { status: 502, headers: { ...CORS, "Content-Type": "application/json" } });

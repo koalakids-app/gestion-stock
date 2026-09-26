@@ -63,7 +63,7 @@ async function sendEmail(to: string, subject: string, html: string) {
   }
 }
 
-function alerteEmailHtml(opts: { nom: string; date: string; userAgent: string }) {
+function alerteEmailHtml(opts: { nom: string; date: string; userAgent: string; orgNom: string }) {
   return `
     <div style="font-family:'Nunito',Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
       <h2 style="color:#4A3F9F;margin:0 0 4px">Nouvelle connexion détectée</h2>
@@ -73,12 +73,19 @@ function alerteEmailHtml(opts: { nom: string; date: string; userAgent: string })
         <p style="margin:0;color:#2B2740"><strong>Appareil/navigateur :</strong> ${opts.userAgent}</p>
       </div>
       <p style="color:#2B2740;font-size:14px;line-height:1.6">
-        Votre compte Koala Kids vient de se connecter depuis un appareil ou un navigateur
+        Votre compte ${opts.orgNom} vient de se connecter depuis un appareil ou un navigateur
         jamais utilisé jusqu'ici. Si c'est bien vous, vous pouvez ignorer ce message.
         Si ce n'est <strong>pas</strong> vous, changez votre mot de passe dès maintenant
         (page Réglages) et prévenez la direction.
       </p>
     </div>`;
+}
+
+/** Nom de l'organisation à partir de son id, avec repli sur "Koala Kids". */
+async function nomOrganisation(admin: ReturnType<typeof createClient>, orgId: string | null) {
+  if (!orgId) return "Koala Kids";
+  const { data } = await admin.from("organisations").select("nom").eq("id", orgId).maybeSingle();
+  return data?.nom || "Koala Kids";
 }
 
 Deno.serve(async (req) => {
@@ -111,19 +118,30 @@ Deno.serve(async (req) => {
   );
 
   // Identifie la personne (référent·e direction/référente, ou collaborateur·rice)
-  // pour son nom et, pour un·e référent·e, ses abonnements push.
+  // pour son nom, son organisation (branding de l'email) et, pour un·e
+  // référent·e, ses abonnements push.
   let nom = "";
   let referentId: string | null = null;
+  let orgId: string | null = null;
   const { data: referent } = await admin
-    .from("referents").select("id, name, email").eq("user_id", user.id).maybeSingle();
+    .from("referents").select("id, name, email, org_id").eq("user_id", user.id).maybeSingle();
   if (referent) {
     nom = referent.name || "";
     referentId = referent.id;
+    orgId = referent.org_id || null;
   } else {
     const { data: employe } = await admin
-      .from("employes").select("prenom, nom").eq("user_id", user.id).maybeSingle();
-    if (employe) nom = `${employe.prenom || ""} ${employe.nom || ""}`.trim();
+      .from("employes").select("prenom, nom, creche_id").eq("user_id", user.id).maybeSingle();
+    if (employe) {
+      nom = `${employe.prenom || ""} ${employe.nom || ""}`.trim();
+      if (employe.creche_id) {
+        const { data: creche } = await admin
+          .from("creches").select("org_id").eq("id", employe.creche_id).maybeSingle();
+        orgId = creche?.org_id || null;
+      }
+    }
   }
+  const orgNom = await nomOrganisation(admin, orgId);
 
   const results: Record<string, unknown> = {};
 
@@ -168,7 +186,7 @@ Deno.serve(async (req) => {
   try {
     const email = referent?.email || user.email;
     if (email) {
-      await sendEmail(email, "Nouvelle connexion détectée — Koala Kids", alerteEmailHtml({ nom, date, userAgent }));
+      await sendEmail(email, `Nouvelle connexion détectée — ${orgNom}`, alerteEmailHtml({ nom, date, userAgent, orgNom }));
       results.email_sent = true;
     }
   } catch (e) {
