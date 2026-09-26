@@ -988,10 +988,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="ik-total-label">Total du mois</div>
         <div style="display:flex;gap:16px;margin-top:4px;flex-wrap:wrap">
           <span style="font-size:12px;opacity:0.8"><span id="ik-tot-km">0</span> km</span>
-          <span style="font-size:12px;opacity:0.8">Picot : <span id="ik-tot-picot">0,00 €</span></span>
-          <span style="font-size:12px;opacity:0.8">Brunet : <span id="ik-tot-brunet">0,00 €</span></span>
-          <span style="font-size:12px;opacity:0.8">Ollioules/StJean : <span id="ik-tot-osj">0,00 €</span></span>
-          <span style="font-size:12px;opacity:0.8">Cuers : <span id="ik-tot-cuers">0,00 €</span></span>
+          <span id="ik-tot-groupes" style="display:contents"></span>
         </div>
       </div>
       <div class="ik-total-val"><span id="ik-tot-eur">0,00</span> €</div>
@@ -3078,6 +3075,7 @@ async function loadAllData(){
     timeout
   ]);
   populateLieuSelects();
+  if(typeof ikInitSites==='function')ikInitSites(cacheCreches.map(c=>shortCrecheName(c.name)));
   // Employés (personnel sans compte) — table posée par sql/module_employes.sql,
   // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
   try{cacheEmployes=await dbSelect('employes');}catch(e){console.warn('[loadAllData] employes',e);cacheEmployes=[];}
