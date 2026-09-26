@@ -124,7 +124,8 @@ function recapSemaine(d){
     return '<tr><td>'+cap(nom)+'</td><td>'+(actif?esc(d.heure_debut||''):'')
       +'</td><td>'+(actif?esc(d.heure_fin||''):'')+'</td><td class="m">'+fmtDuree(mins)+'</td></tr>';
   }).join('');
-  return '<table class="lg recap"><tr><th>Jour</th><th>Arrivée</th><th>Départ</th><th class="m">Présence</th></tr>'
+  return '<table class="lg recap"><tr><th>Jours de la semaine</th><th>Heure d\'arrivée</th>'
+    +'<th>Heure de départ</th><th class="m">Nombre heures de présence</th></tr>'
     +lignes+'<tr class="tot"><td colspan="3">Total</td><td class="m">'+fmtDuree(totalMin)+'</td></tr></table>';
 }
 function joursTxt(v){
@@ -171,51 +172,62 @@ function dessinerDevisPdf(){
     });
   }
   function titreSection(s){
-    place(14);y+=5;
+    place(9);y+=2.5;
     police(9,'bold',ORANGE);doc.text(s.toUpperCase(),G,y);
-    y+=2;trait();y+=5;
+    y+=1.2;trait();y+=2.5;
   }
 
   /* ---- En-tête : l'établissement, puis la crèche d'accueil ---- */
+  /* Le logo est repris tel quel du <img> de l'en-tête (data URI déjà en
+     mémoire) : pas de second base64 à maintenir dans ce fichier. */
   y=18;
-  police(15,'bold',VIOLET);doc.text(et.raison_sociale||'Koala Kids',G,y);
-  y+=5.6;
+  const logoImg=document.querySelector('.hd img.logo');
+  let yNom=y;
+  if(logoImg&&logoImg.src){
+    const logoH=8.2,logoW=logoH*(365/138);
+    try{doc.addImage(logoImg.src,'PNG',G,12,logoW,logoH);}catch(err){}
+    yNom=12+logoH+4.5;
+  }else{
+    police(15,'bold',VIOLET);doc.text(et.raison_sociale||'Koala Kids',G,y);
+    yNom=y+4.8;
+  }
+  y=yNom;
   [et.forme_juridique,
    et.adresse_siege,
    et.siret?'SIRET '+et.siret:'',
    [et.telephone,et.email].filter(Boolean).join('  ·  ')
-  ].filter(Boolean).forEach(t=>{police(8.5,'normal',GRIS);doc.text(t,G,y);y+=4;});
+  ].filter(Boolean).forEach(t=>{police(8.5,'normal',GRIS);doc.text(t,G,y);y+=3.6;});
 
   let yd=18;
-  const dr=(s,t,st,col)=>{if(!s)return;police(t,st,col);doc.text(String(s),DR,yd,{align:'right'});yd+=t<=8.5?4:5.4;};
+  const dr=(s,t,st,col)=>{if(!s)return;police(t,st,col);doc.text(String(s),DR,yd,{align:'right'});yd+=t<=8.5?3.6:4.8;};
   dr(c.name||'',11,'bold',NOIR);
   dr(c.addr||'',8.5,'normal',GRIS);
   dr(et.pmi_numero?'Agrément PMI '+et.pmi_numero:'',8.5,'normal',GRIS);
 
-  y=Math.max(y,yd)+4;
-  trait(VIOLET);y+=9;
+  y=Math.max(y,yd)+3;
+  trait(VIOLET);y+=6;
 
   /* ---- Le titre ---- */
   const titre='DEVIS '+(d.numero||'');
   police(16,'bold',VIOLET);doc.text(titre,G,y);
   const apresTitre=G+doc.getTextWidth(titre)+5;
   if(d.revision>1){police(9.5,'normal',GRIS);doc.text('révision '+d.revision,apresTitre,y);}
-  y+=5.5;
+  y+=4.5;
   police(9,'normal',GRIS);
   doc.text('Envoyé le '+dfr(d.envoye_le)+(d.expire_le?'  ·  valable jusqu\'au '+dfr(d.expire_le):''),G,y);
-  y+=8;
+  y+=6;
 
   /* ---- L'enfant ---- */
   police(9,'bold',ORANGE);doc.text('L\'ENFANT',G,y);
-  y+=5;
+  y+=4;
   const nomEnfant=((e.prenom||'')+' '+(e.nom||'')).trim()||'—';
-  police(9.5,'normal',NOIR);doc.text(nomEnfant,G,y);y+=4.6;
+  police(9.5,'normal',NOIR);doc.text(nomEnfant,G,y);y+=4;
   if(e.dob){
     police(9.5,'normal',NOIR);
     doc.text(e.ne_ou_a_naitre==='a_naitre'?'terme prévu le '+dfr(e.dob):'né(e) le '+dfr(e.dob),G,y);
-    y+=4.6;
+    y+=4;
   }
-  y+=6;
+  y+=4;
 
   /* ---- Le contrat proposé ---- */
   titreSection('L\'accueil proposé');
@@ -224,21 +236,51 @@ function dessinerDevisPdf(){
     ['Crèche',c.name||'—'],
     ['Début de l\'accueil',d.date_debut?dfr(d.date_debut):'à convenir'],
     ['Fin de l\'accueil',avecTerme?dfr(d.date_fin):'sans terme prévu'],
-    ['Jours d\'accueil',joursTxt(d.jours)||'—'],
-    ['Horaires',(d.heure_debut||'')+' – '+(d.heure_fin||'')],
-    ['Volume hebdomadaire',nb(d.heures_hebdo)+' h par semaine'],
     avecTerme
       ? ['Jours facturés',(d.jours_accueil!=null?d.jours_accueil+' jours':'—')
           +(d.mois_factures?' sur '+nb(d.mois_factures)+' mois':'')]
       : ['Semaines facturées',d.semaines_an+' semaines par an']
   ];
   contrat.forEach(([k,v])=>{
-    place(5);
-    police(9.5,'normal',GRIS);doc.text(k,G,y);
-    police(9.5,'bold',NOIR);doc.text(String(v),G+52,y);
-    y+=5;
+    place(3.8);
+    police(9,'normal',GRIS);doc.text(k,G,y);
+    police(9,'bold',NOIR);doc.text(String(v),G+52,y);
+    y+=3.8;
   });
   y+=1;
+
+  /* Le récap semaine, en tableau, pour visualiser la semaine d'un coup d'œil
+     plutôt que de déduire les horaires du volume hebdomadaire. Lignes
+     resserrées : sept lignes (entête + 5 jours + total) n'ont pas besoin
+     de la même hauteur qu'un tableau chiffré. */
+  const jset=joursSet(d.jours);
+  const colsSem=[46,42,42,48];
+  const xsSem=[G,G+colsSem[0],G+colsSem[0]+colsSem[1],G+colsSem[0]+colsSem[1]+colsSem[2]];
+  function ligneSemaine(cells,h,gras,taille){
+    place(h);
+    const top=y;
+    doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.25);
+    let xc=G;
+    colsSem.forEach(w=>{doc.rect(xc,top,w,h);xc+=w;});
+    police(taille||8,gras?'bold':'normal',NOIR);
+    const baseline=top+h-1.6;
+    cells.forEach((t,i)=>{
+      const align=i===colsSem.length-1?'right':'left';
+      const px=align==='right'?xsSem[i]+colsSem[i]-2:xsSem[i]+2;
+      doc.text(String(t),px,baseline,{align});
+    });
+    y=top+h;
+  }
+  ligneSemaine(['Jours de la semaine','Heure d\'arrivée','Heure de départ','Nombre heures de présences'],5,true,6.8);
+  let totalMinSem=0;
+  JOURS.forEach(([num,nom])=>{
+    const actif=jset.indexOf(num)>=0;
+    const mins=actif?dureeMin(d.heure_debut,d.heure_fin):0;
+    totalMinSem+=mins;
+    ligneSemaine([cap(nom),actif?(d.heure_debut||''):'',actif?(d.heure_fin||''):'',fmtDuree(mins)],4.2,false);
+  });
+  ligneSemaine(['Total','','',fmtDuree(totalMinSem)],4.8,true);
+  y+=1.2;
   para(avecTerme
     ? 'La mensualité répartit les '+(d.jours_accueil!=null?d.jours_accueil:'—')+' jours d\'accueil de '
       +'la période sur '+nb(d.mois_factures||0)+' mensualités égales. Elle est identique chaque mois, '
@@ -277,8 +319,8 @@ function dessinerDevisPdf(){
     doc.text(detailLigne(l),G+86,y);
     police(10,'bold',neg?VERT:NOIR);
     doc.text((neg?'- ':'')+eur(Math.abs(l.total)),DR,y,{align:'right'});
-    y+=h+2.4;
-    trait();y+=3.2;
+    y+=h+1.8;
+    trait();y+=2.4;
   }
   const lignes=D.lignes||[];
   const recu=lignes.filter(l=>RECUR.indexOf(l.type)>=0);
@@ -286,19 +328,19 @@ function dessinerDevisPdf(){
   if(!recu.length)para('Aucune ligne récurrente.',9.5,'italic',GRIS);
   recu.forEach(ligne);
 
-  place(12);
-  y+=1;
+  place(10);
+  y+=0.7;
   police(11,'bold',VIOLET);doc.text('TOTAL MENSUEL',G,y);
   doc.setFontSize(14);doc.text(eur(d.total_mensuel),DR,y,{align:'right'});
-  y+=4;trait(VIOLET);y+=4;
+  y+=3;trait(VIOLET);y+=3;
 
   if(d.total_annuel){
-    place(6);
+    place(5);
     police(9,'normal',GRIS);
     doc.text(avecTerme
       ? 'Soit '+eur(d.total_annuel)+' sur la durée du contrat ('+nb(d.mois_factures||0)+' mensualités).'
       : 'Soit '+eur(d.total_annuel)+' sur douze mois.',G,y);
-    y+=7;
+    y+=5;
   }
 
   if(hors.length){
@@ -314,15 +356,15 @@ function dessinerDevisPdf(){
     const bl=[['Coût mensuel',eur(d.total_mensuel),NOIR],
               ['CMG estimé, versé par la CAF','- '+eur(d.cmg_estime),VERT]];
     bl.forEach(([k,v,col])=>{
-      place(5.4);
+      place(4.8);
       police(9.5,'normal',GRIS);doc.text(k,G,y);
       police(9.5,'bold',col);doc.text(v,DR,y,{align:'right'});
-      y+=5.4;
+      y+=4.8;
     });
-    y+=1;trait();y+=5.6;
+    y+=0.7;trait();y+=4.2;
     police(11,'bold',VIOLET);doc.text('RESTE À CHARGE MENSUEL',G,y);
     doc.setFontSize(14);doc.text(eur(d.reste_a_charge),DR,y,{align:'right'});
-    y+=6;
+    y+=4.5;
     para('Estimation indicative, calculée à partir des revenus communiqués par la famille et du '
       +'barème CAF en vigueur. Seule la CAF détermine le montant réellement versé. La crèche ne '
       +'perçoit pas le CMG : elle facture la mensualité ci-dessus.',8.5,'italic',GRIS,L,4);
@@ -339,31 +381,31 @@ function dessinerDevisPdf(){
   if(mentions.length||d.expire_le){
     titreSection('Conditions');
     if(d.expire_le)para('Ce devis est valable jusqu\'au '+dfr(d.expire_le)+'. Passé cette date, il devient '
-      +'caduc et un nouveau devis doit être établi.',9,'normal',NOIR,L,4.2);
-    mentions.forEach(m=>{y+=1.5;para(m,9,'normal',NOIR,L,4.2);});
+      +'caduc et un nouveau devis doit être établi.',9,'normal',NOIR,L,4);
+    mentions.forEach(m=>{y+=1;para(m,9,'normal',NOIR,L,4);});
   }
 
   /* ---- L'acceptation ---- */
   /* La page publique ne renvoie jamais le tracé de signature déjà enregistré :
      le PDF téléchargé depuis ici porte donc toujours un cadre à signer à la
      main, y compris une fois le devis accepté en ligne. */
-  place(52);
-  y+=6;
+  place(42);
+  y+=3;
   titreSection('Acceptation');
   const yc=y;
   doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.4);
-  doc.roundedRect(G,yc-2,L,36,3,3);
+  doc.roundedRect(G,yc-2,L,30,3,3);
   y=yc+4;
   police(9,'normal',GRIS);
   doc.text('Écrire « Bon pour accord », dater et signer :',G+5,y);
-  y+=8;
+  y+=7;
   doc.setDrawColor(210,204,230);doc.setLineWidth(.3);
-  doc.line(G+5,y+12,G+62,y+12);
-  doc.line(G+72,y+12,DR-5,y+12);
+  doc.line(G+5,y+9,G+62,y+9);
+  doc.line(G+72,y+9,DR-5,y+9);
   police(8,'normal',GRIS);
-  doc.text('Date',G+5,y+16);
-  doc.text('Signature du responsable légal',G+72,y+16);
-  y=yc+36+4;
+  doc.text('Date',G+5,y+13);
+  doc.text('Signature du responsable légal',G+72,y+13);
+  y=yc+30+4;
 
   /* ---- Pieds de page ---- */
   const np=doc.getNumberOfPages();
