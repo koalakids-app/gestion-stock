@@ -2407,6 +2407,10 @@ async function resilier(){
    leurs dates. Tant qu'il n'est pas signé, il porte les deux cadres vides,
    pour être imprimé et signé à la main : la voie papier reste ouverte. */
 const JSPDF_URL='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+/* Même logo que la page publique devis.html et le PDF interne d'inscriptions.html
+   (data URI identique), pour que l'en-tête du contrat corresponde partout. */
+const LOGO_KOALA_PNG='data:image/png;base64,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';
+
 
 /* jsPDF n'est chargé qu'au premier clic : 300 ko qu'il serait absurde de faire
    payer à l'ouverture du module à quelqu'un qui vient consulter une liste. */
@@ -2436,6 +2440,13 @@ function joursTxt(v){
   const j=toArr(v).map(Number);
   return JOURS.filter(x=>j.indexOf(x[0])>=0).map(x=>x[1].toLowerCase()).join(', ');
 }
+function dureeMin(hd,hf){
+  if(!hd||!hf)return 0;
+  const a=String(hd).slice(0,5).split(':').map(Number),b=String(hf).slice(0,5).split(':').map(Number);
+  const mins=(b[0]*60+b[1])-(a[0]*60+a[1]);
+  return mins>0?mins:0;
+}
+function fmtDuree(mins){return Math.floor(mins/60)+'h'+String(mins%60).padStart(2,'0');}
 
 async function pdfContrat(id){
   const c=CONTRATS.find(x=>String(x.id)===String(id));
@@ -2496,9 +2507,9 @@ function dessineContrat(c,lignes,telecharger){
      ici est un millimètre qui rapproche les signatures du contrat, et une page
      de signatures détachée est une faiblesse juridique. */
   function titreSection(s){
-    place(9);y+=2.5;
+    place(7);y+=2;
     ecrire(s.toUpperCase(),9,'bold',ORANGE);
-    y+=1.5;trait();y+=3.4;
+    y+=1.2;trait();y+=2.8;
   }
   function kv(k,v){
     place(4.2);
@@ -2509,8 +2520,11 @@ function dessineContrat(c,lignes,telecharger){
 
   /* ---- En-tête : qui édite le contrat ---- */
   y=15;
-  ecrire(e.raison_sociale||'Koala Kids',15,'bold',VIOLET);
-  y+=5.2;
+  const logoH=8.2,logoW=logoH*(365/138);
+  let yNom;
+  try{doc.addImage(LOGO_KOALA_PNG,'PNG',G,9,logoW,logoH);yNom=9+logoH+4.5;}
+  catch(err){ecrire(e.raison_sociale||'Koala Kids',15,'bold',VIOLET);yNom=y+5.2;}
+  y=yNom;
   [e.forme_juridique,
    e.adresse_siege,
    [e.siret?'SIRET '+e.siret:'',e.code_ape?'APE '+e.code_ape:''].filter(Boolean).join('  ·  '),
@@ -2562,7 +2576,7 @@ function dessineContrat(c,lignes,telecharger){
     +(e.representant_nom?', représentée par '+e.representant_nom
       +(e.representant_qualite?', '+e.representant_qualite:''):'')
     +(cr?', pour son établissement '+cr:'')+'.',9.5,'normal',NOIR,L,4.1);
-  y+=1.2;
+  y+=0.8;
   const foyer=[c.famille_adresse,
     [c.famille_code_postal,c.famille_ville].filter(Boolean).join(' ')]
     .filter(Boolean).join(', ');
@@ -2572,7 +2586,7 @@ function dessineContrat(c,lignes,telecharger){
   para('D\'autre part, '+(signataires.length?signataires.join(' et '):'le ou les responsables légaux')
     +(foyer?', demeurant '+foyer:'')
     +(c.num_allocataire?', n° allocataire '+c.num_allocataire:'')+'.',9.5,'normal',NOIR,L,4.1);
-  y+=1.2;
+  y+=0.8;
   para('Il a été convenu ce qui suit pour l\'accueil de '
     +(((suj.prenom||'')+' '+(suj.nom||'')).trim()||'l\'enfant')
     +(suj.dob?', né(e) le '+dfr(suj.dob):'')+'.',9.5,'normal',NOIR,L,4.1);
@@ -2584,16 +2598,45 @@ function dessineContrat(c,lignes,telecharger){
   kv('Début de l\'accueil',c.date_debut?dfr(c.date_debut):'à convenir');
   kv('Fin de l\'accueil',avecTerme?dfr(c.date_fin):'sans terme prévu');
   if(avenant&&c.date_effet)kv('Date d\'effet',dfr(c.date_effet));
-  kv('Jours d\'accueil',joursTxt(c.jours)||'—');
-  kv('Horaires',(String(c.heure_debut||'').slice(0,5))+' – '+(String(c.heure_fin||'').slice(0,5)));
-  kv('Volume hebdomadaire',nbFr(c.heures_hebdo)+' h par semaine');
   if(avecTerme){
     kv('Jours facturés',(c.jours_accueil!=null?c.jours_accueil+' jours':'—')
       +(c.mois_factures?' sur '+nbFr(c.mois_factures)+' mois':''));
   }else{
     kv('Semaines facturées',c.semaines_an+' semaines par an');
   }
-  y+=0.5;
+  y+=0.6;
+
+  /* Le récap semaine, en tableau, pour visualiser la semaine d'un coup d'œil
+     plutôt que de déduire les horaires du volume hebdomadaire — même
+     présentation que le devis (devis.html, inscriptions.html). */
+  const jset=toArr(c.jours).map(Number);
+  const colsSem=[46,42,42,48];
+  const xsSem=[G,G+colsSem[0],G+colsSem[0]+colsSem[1],G+colsSem[0]+colsSem[1]+colsSem[2]];
+  function ligneSemaine(cells,h,gras,taille){
+    place(h);
+    const top=y;
+    doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.25);
+    let xc=G;
+    colsSem.forEach(w=>{doc.rect(xc,top,w,h);xc+=w;});
+    police(taille||8,gras?'bold':'normal',NOIR);
+    const baseline=top+h-1.6;
+    cells.forEach((t,i)=>{
+      const align=i===colsSem.length-1?'right':'left';
+      const px=align==='right'?xsSem[i]+colsSem[i]-2:xsSem[i]+2;
+      doc.text(String(t),px,baseline,{align});
+    });
+    y=top+h;
+  }
+  ligneSemaine(['Jours de la semaine','Heure d\'arrivée','Heure de départ','Nombre heures de présences'],4.4,true,6.8);
+  let totalMinSem=0;
+  JOURS.forEach(([num,nom])=>{
+    const actif=jset.indexOf(num)>=0;
+    const mins=actif?dureeMin(c.heure_debut,c.heure_fin):0;
+    totalMinSem+=mins;
+    ligneSemaine([nom,actif?(String(c.heure_debut||'').slice(0,5)):'',actif?(String(c.heure_fin||'').slice(0,5)):'',fmtDuree(mins)],3.8,false);
+  });
+  ligneSemaine(['Total','','',fmtDuree(totalMinSem)],4.4,true);
+  y+=0.8;
   para(avecTerme
     ? 'La mensualité répartit les '+(c.jours_accueil!=null?c.jours_accueil:'—')+' jours d\'accueil de '
       +'la période sur '+nbFr(c.mois_factures||0)+' mensualités égales. Elle est identique chaque mois, '
@@ -2714,10 +2757,10 @@ function dessineContrat(c,lignes,telecharger){
   if(clauses.length){
     titreSection('Les conditions du contrat');
     clauses.forEach(x=>{
-      place(7.5);
-      ecrire(x[0],9,'bold',NOIR);y+=4;
-      para(x[1],8.5,'normal',NOIR,L,3.8);
-      y+=1.2;
+      place(6.5);
+      ecrire(x[0],9,'bold',NOIR);y+=3.4;
+      para(x[1],8.5,'normal',NOIR,L,3.6);
+      y+=0.8;
     });
   }
 
