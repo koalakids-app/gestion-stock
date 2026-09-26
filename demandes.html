@@ -4628,7 +4628,7 @@ async function saveConsigne(){
     const destinataires=cacheReferents.filter(r=>r.role==='referent'&&r.email).map(r=>({id:r.id,email:r.email,name:r.name}));
     // L'edge function n'envoie l'email à chaque destinataire que s'il n'a pas de
     // notification push active (destinataires[].id lui sert à vérifier push_subscriptions).
-    await callFn('notify-consigne',{consigne:{...row,id:saved.id,message:msg,creche:'Toutes les crèches'},destinataires});
+    await callFn('notify-consigne',{consigne:{...row,id:saved.id,message:msg,creche:'Toutes les crèches',org_id:currentProfile?.org_id||null},destinataires});
     if(destinataires.length){await callFn('notify-push',{referent_ids:destinataires.map(d=>d.id),title:'Nouvelle consigne',body:subj,url:'./demandes.html',tag:'consigne-'+saved.id});}
     // Le brouillon d'origine a rempli son rôle : on le retire.
     if(cDraftId){

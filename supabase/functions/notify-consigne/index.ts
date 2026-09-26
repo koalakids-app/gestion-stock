@@ -16,12 +16,19 @@ import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ADMIN_EMAIL = Deno.env.get("ADMIN_EMAIL") ?? "";
-const APP_URL      = Deno.env.get("APP_URL")      ?? "https://koalakids.fr";
+const APP_URL_DEFAUT = Deno.env.get("APP_URL") ?? "https://koalakids.fr";
 
 const sb = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
+
+/** app_url de l'organisation si connue, sinon la valeur historique Koala Kids. */
+async function resolveAppUrl(orgId: string | null | undefined): Promise<string> {
+  if (!orgId) return APP_URL_DEFAUT;
+  const { data } = await sb.from("organisations").select("app_url").eq("id", orgId).maybeSingle();
+  return data?.app_url || APP_URL_DEFAUT;
+}
 
 // L'email est un filet de secours : si le destinataire a une notification push
 // active, il n'a pas besoin d'un email en plus pour la même chose.
@@ -68,7 +75,8 @@ serve(async (req) => {
 
   try {
     const { consigne, destinataires } = await req.json();
-    const { id, subject, message, creche, priority } = consigne;
+    const { id, subject, message, creche, priority, org_id } = consigne;
+    const APP_URL = await resolveAppUrl(org_id);
 
     const priorityColor = priority === "urgent" ? "#e03e3e" : priority === "info" ? "#F47920" : "#3D3580";
     const priorityLabel = priority === "urgent" ? "🔴 Urgente" : priority === "info" ? "ℹ️ Information" : "Normale";

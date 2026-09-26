@@ -11,16 +11,29 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const vapidPublicKey = (Deno.env.get("VAPID_PUBLIC_KEY") || "").trim();
 const vapidPrivateKey = (Deno.env.get("VAPID_PRIVATE_KEY") || "").trim();
-const fromEmail = Deno.env.get("FROM_EMAIL") || "contact@koalakids.fr";
+const fromEmailDefaut = Deno.env.get("FROM_EMAIL") || "contact@koalakids.fr";
 
 const sb = createClient(supabaseUrl, serviceRoleKey);
 
 let vapidError = null;
 try {
-  webpush.setVapidDetails(`mailto:${fromEmail}`, vapidPublicKey, vapidPrivateKey);
+  webpush.setVapidDetails(`mailto:${fromEmailDefaut}`, vapidPublicKey, vapidPrivateKey);
 } catch (e) {
   vapidError = "Clés VAPID invalides : " + e.message;
   console.error(vapidError);
+}
+
+/** org_id déduit d'un des référents destinataires — sert à retrouver la
+ *  config réseau et l'adresse d'expédition de son organisation. */
+async function resolveOrgId(referentIds) {
+  if (!referentIds || !referentIds.length) return null;
+  const { data } = await sb.from("referents").select("org_id").eq("id", referentIds[0]).maybeSingle();
+  return data?.org_id || null;
+}
+async function resolveFromEmail(orgId) {
+  if (!orgId) return fromEmailDefaut;
+  const { data } = await sb.from("organisations").select("email_expediteur").eq("id", orgId).maybeSingle();
+  return data?.email_expediteur || fromEmailDefaut;
 }
 
 function estEnSilence(debut, fin) {
@@ -57,14 +70,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: cfgRow } = await sb
-      .from("reseau_config")
-      .select("config")
-      .eq("id", "00000000-0000-0000-0000-000000000003")
-      .maybeSingle();
+    const orgId = await resolveOrgId(referent_ids);
+
+    const { data: cfgRow } = orgId
+      ? await sb.from("reseau_config").select("config").eq("org_id", orgId).maybeSingle()
+      : { data: null };
     const cfg = (cfgRow && cfgRow.config) || {};
     const debut = cfg.notif_silence_debut || "19:00";
     const fin = cfg.notif_silence_fin || "08:00";
+
+    // Le mailto: VAPID est un contact technique pour le service de push, pas
+    // une adresse visible par les familles/référents ; on le fait correspondre
+    // à l'organisation par cohérence plutôt que par nécessité fonctionnelle.
+    try {
+      webpush.setVapidDetails(`mailto:${await resolveFromEmail(orgId)}`, vapidPublicKey, vapidPrivateKey);
+    } catch (e) {
+      console.error("[notify-push] setVapidDetails", e);
+    }
 
     if (estEnSilence(debut, fin)) {
       console.log("[notify-push] skipped (silence)", { referent_ids });
