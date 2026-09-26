@@ -1005,6 +1005,10 @@ body.sk-locked{overflow:hidden}
     <span class="creche-name">Toutes les crèches</span>
     <span class="creche-count" id="cnt-all">0</span>
   </div>
+  <div id="creche-badges-list">
+  <!-- Reconstruit par renderCrecheBadges() une fois les crèches de
+       l'organisation chargées — voir loadCrecheUI(). Contenu ci-dessous
+       affiché avant connexion / hors ligne uniquement. -->
   <div class="creche-badge" onclick="filterCreche('Brunet', this)">
     <span class="creche-dot" style="background:#F59E0B"></span>
     <span class="creche-name">Brunet</span>
@@ -1034,6 +1038,7 @@ body.sk-locked{overflow:hidden}
     <span class="creche-dot" style="background:#F43F5E"></span>
     <span class="creche-name">Picot 2</span>
     <span class="creche-count" id="cnt-5">0</span>
+  </div>
   </div>
 
   <div class="sidebar-creches">
@@ -1634,8 +1639,12 @@ const IS_LOCAL = (typeof location !== 'undefined') &&
 
 // ─── DATA ─────────────────────────────────────────────────────────────────
 
-const CRECHES = ['Brunet', 'Cuers', 'Ollioules', 'St Jean', 'Picot 1', 'Picot 2'];
-const CRECHE_COLORS = { 'Brunet': '#F59E0B', 'Cuers': '#10B981', 'Ollioules': '#EF4444', 'St Jean': '#8B5CF6', 'Picot 1': '#0EA5E9', 'Picot 2': '#F43F5E' };
+// Valeurs de secours affichées avant la connexion (mode local / hors ligne) —
+// la vraie liste des crèches de l'organisation est chargée après login,
+// voir loadCrecheUI().
+let CRECHES = ['Brunet', 'Cuers', 'Ollioules', 'St Jean', 'Picot 1', 'Picot 2'];
+let CRECHE_COLORS = { 'Brunet': '#F59E0B', 'Cuers': '#10B981', 'Ollioules': '#EF4444', 'St Jean': '#8B5CF6', 'Picot 1': '#0EA5E9', 'Picot 2': '#F43F5E' };
+const CRECHE_PALETTE = ['#F59E0B', '#10B981', '#EF4444', '#8B5CF6', '#0EA5E9', '#F43F5E', '#22C55E', '#F97316', '#6366F1', '#EC4899'];
 const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
 
 let ARTICLES = [
@@ -5756,14 +5765,56 @@ const SK_ROLES_OK = ['direction', 'referent', 'employe'];
 
 // Correspondance UUID -> nom de creche. Les noms doivent rester identiques
 // aux libelles des badges de la sidebar (filterCreche les compare en texte).
-const SK_CRECHE_NAMES = {
-  '6b66fa60-030e-4843-acae-4d85c666f805': 'Brunet',
-  '65f2756d-9fe7-4c1f-ac69-c207348110ae': 'Cuers',
-  '5be11869-0987-46c8-9a86-43efb0891647': 'Ollioules',
-  '373dae53-d601-4984-9ba4-8fb00f0cf015': 'Picot 1',
-  'dc6074c4-c0fc-4d07-848a-0ba16b421d15': 'Picot 2',
-  '097b5a81-6496-4c1f-a4c7-e5e8676da4d5': 'St Jean',
-};
+// Rempli par loadCrecheUI() une fois connecté.
+let SK_CRECHE_NAMES = {};
+
+// creches.name porte la raison sociale complète ("Koalakids Toulon Brunet") ;
+// les articles/commandes déjà en base référencent le libellé court
+// ("Brunet"). On le dérive en retirant les préfixes d'enseigne/ville — ce qui
+// reproduit exactement les libellés historiques Koala Kids. Repli sur le nom
+// complet si une organisation ne suit pas ce schéma.
+function shortCrecheName(nom) {
+  return String(nom || '').replace(/^Koalakids\s+/i, '').replace(/^Toulon\s+/i, '').trim() || nom;
+}
+
+/** Reconstruit les badges de la barre latérale à partir de CRECHES/CRECHE_COLORS.
+ *  L'index i doit rester aligné avec les id="cnt-i" que updateCounts() cible. */
+function renderCrecheBadges() {
+  const list = document.getElementById('creche-badges-list');
+  if (!list) return;
+  list.innerHTML = CRECHES.map((nom, i) => `
+    <div class="creche-badge" onclick="filterCreche('${nom.replace(/'/g, "\\'")}', this)">
+      <span class="creche-dot" style="background:${CRECHE_COLORS[nom] || '#888'}"></span>
+      <span class="creche-name">${nom}</span>
+      <span class="creche-count" id="cnt-${i}">0</span>
+    </div>`).join('');
+}
+
+/** Charge les crèches de l'organisation connectée (RLS: creches_select filtre
+ *  déjà par org_id = kk_mon_org()) et reconstruit CRECHES, CRECHE_COLORS,
+ *  SK_CRECHE_NAMES, les badges de la sidebar et les <select> de structure. */
+async function loadCrecheUI() {
+  try {
+    const rows = await sbGet('creches', 'select=id,name');
+    if (!Array.isArray(rows) || !rows.length) return;
+    CRECHES = rows.map(r => shortCrecheName(r.name));
+    CRECHE_COLORS = {};
+    SK_CRECHE_NAMES = {};
+    rows.forEach((r, i) => {
+      const nom = shortCrecheName(r.name);
+      CRECHE_COLORS[nom] = CRECHE_PALETTE[i % CRECHE_PALETTE.length];
+      SK_CRECHE_NAMES[r.id] = nom;
+    });
+    renderCrecheBadges();
+    const optionsHtml = CRECHES.map(n => `<option>${n}</option>`).join('');
+    const fCreche = document.getElementById('f-creche');
+    if (fCreche) fCreche.innerHTML = optionsHtml;
+    const cCreche = document.getElementById('c-creche-select');
+    if (cCreche) cCreche.innerHTML = optionsHtml;
+  } catch (e) {
+    console.warn('[Stock] loadCrecheUI — repli sur la liste par défaut :', e);
+  }
+}
 
 // Non nul uniquement pour les employees : verrouille la vue sur leur structure.
 let SK_LOCKED_CRECHE = null;
@@ -5854,6 +5905,7 @@ async function skDoLogin() {
   const nameEl = document.getElementById('sk-user-name');
   if (nameEl) nameEl.textContent = (SK_PROFILE && SK_PROFILE.name) || (SK_USER && SK_USER.email) || '';
 
+  await loadCrecheUI();
   skApplyCrecheLock();
   skRestrictCrecheSelects();
   skBootApp();
@@ -6077,7 +6129,7 @@ function importExcel(event) {
 
       const CATS_VALID    = ['Sensoriel','Manipulation','Construction','Motricité','Imitation',
                              'Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration'];
-      const STRUCTS_VALID = ['Brunet','Cuers','Ollioules','St Jean','Picot 1','Picot 2'];
+      const STRUCTS_VALID = CRECHES;
 
       let imported = 0, skipped = 0, warnings = [];
       const newArticles = [];
