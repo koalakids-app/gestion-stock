@@ -2234,7 +2234,10 @@ async function openDevis(id){
   const st=DCUR?(D_STATUTS[DCUR.statut]||D_STATUTS.brouillon):null;
   document.getElementById('dStatut').innerHTML=st
     ? '<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>':'';
-  document.getElementById('btnDelDev').style.display=(DCUR&&brouillon)?'':'none';
+  // Un devis se supprime quel que soit son statut : chaque devis a ses propres
+  // lignes (devis_lignes.devis_id) et rien d'autre ne le référence, donc en
+  // effacer un ne touche jamais les autres devis de la même famille.
+  document.getElementById('btnDelDev').style.display=DCUR?'':'none';
   document.getElementById('btnSaveDev').style.display=brouillon?'':'none';
   // Le PDF ne s'imprime que depuis la base : un devis jamais enregistré n'a ni
   // numéro ni lignes, et sortirait un document sans identité.
@@ -2883,7 +2886,16 @@ async function saveDevis(){
 
 async function delDevis(){
   if(!devisId)return;
-  if(!confirm('Supprimer ce devis ? Ses lignes seront supprimées avec lui.'))return;
+  // Chaque devis a ses propres lignes et n'est référencé par rien d'autre :
+  // le supprimer n'affecte jamais les autres devis de la même famille.
+  const avertissement=DCUR&&DCUR.statut==='accepte'
+    ? 'Ce devis a été accepté par la famille. Le supprimer ne modifiera aucun autre devis, '
+      +'mais effacera cet engagement — êtes-vous sûr(e) ?'
+    : DCUR&&DCUR.statut==='envoye'
+    ? 'Ce devis a été envoyé à la famille et son lien deviendra invalide. '
+      +'Les autres devis de la famille ne seront pas affectés — confirmer la suppression ?'
+    : 'Supprimer ce devis ? Ses lignes seront supprimées avec lui, sans toucher aux autres devis de la famille.';
+  if(!confirm(avertissement))return;
   try{
     await sb.from('devis_lignes').delete().eq('devis_id',devisId);
     const{error}=await sb.from('devis').delete().eq('id',devisId);
