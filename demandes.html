@@ -2968,6 +2968,36 @@ const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',activeMcmIncFilter='all',incModalCategory='enfant',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='',mcmWeekOffset=0,mcmActiveTab='incidents',mcmMenusCache=[],mcmAvisCache={},mcmSyntheseOpen=false;
 let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[],cacheEtablissements=[],cacheReseauFermetures=[],cacheDemandesMasquees=[],cacheHeuresValidations=[],cacheCommandes=[];
+
+// creches.name porte la raison sociale complète ("Koalakids Toulon Brunet") ;
+// les champs "lieu" en texte libre (événements, incidents, imports de planning)
+// utilisent depuis toujours le libellé court ("Brunet"). On le dérive en
+// retirant les préfixes d'enseigne/ville, ce qui reproduit exactement les
+// libellés historiques Koala Kids ; repli sur le nom complet sinon.
+function shortCrecheName(nom){
+  return String(nom||'').replace(/^Koalakids\s+/i,'').replace(/^Toulon\s+/i,'').trim()||nom;
+}
+/** Reconstruit les <select> de "Crèche / Lieu" (e-lieu, ip-lieu, ec-lieu) à
+ *  partir de cacheCreches, en conservant les options spéciales qui ne sont pas
+ *  des crèches (Autre, Absent, Formation, Réunion). */
+function populateLieuSelects(){
+  if(!cacheCreches.length)return;
+  const noms=cacheCreches.map(c=>shortCrecheName(c.name));
+  const optsHtml=noms.map(n=>'<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>').join('');
+  const specs={
+    'e-lieu':['<option value="">— Sélectionner —</option>',optsHtml,'<option value="Autre">Autre (préciser)</option>'],
+    'ip-lieu':['<option value="">— Sélectionner —</option>',optsHtml],
+    'ec-lieu':['<option value="">— Sélectionner —</option>',optsHtml,
+      '<option value="Absent">Absent</option><option value="Formation">Formation</option><option value="Réunion">Réunion</option>'],
+  };
+  for(const id in specs){
+    const sel=document.getElementById(id);
+    if(!sel)continue;
+    const cur=sel.value;
+    sel.innerHTML=specs[id].join('');
+    if(noms.includes(cur)||['Autre','Absent','Formation','Réunion'].includes(cur))sel.value=cur;
+  }
+}
 let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
 let calOnlyMine=(localStorage.getItem('calOnlyMine')==='1');
 
@@ -3046,6 +3076,7 @@ async function loadAllData(){
     Promise.all([dbSelect('creches'),dbSelect('demandes'),dbSelect('referents'),dbSelect('incidents'),dbSelect('enfants'),dbSelect('evenements'),dbSelect('messages')]),
     timeout
   ]);
+  populateLieuSelects();
   // Employés (personnel sans compte) — table posée par sql/module_employes.sql,
   // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
   try{cacheEmployes=await dbSelect('employes');}catch(e){console.warn('[loadAllData] employes',e);cacheEmployes=[];}
