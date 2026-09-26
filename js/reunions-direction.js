@@ -1001,9 +1001,9 @@ async function adExportCR(date){
     +'*{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}'
     +'</style></head><body>'
     +'<h1>Compte rendu — réunion de direction</h1>'
-    +'<div class="sub">Koala Kids · '+adFmtDateLongue(d)+'</div>'
+    +'<div class="sub">'+((window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids')+' · '+adFmtDateLongue(d)+'</div>'
     +adCRHtml(r,true)
-    +'<div class="footer">Document généré le '+new Date().toLocaleDateString('fr-FR')+' à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' — Koala Kids</div>'
+    +'<div class="footer">Document généré le '+new Date().toLocaleDateString('fr-FR')+' à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' — '+((window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids')+'</div>'
     +'</body></html>';
   const old=document.getElementById('_print-frame-cr');if(old)old.remove();
   const iframe=document.createElement('iframe');
@@ -1025,7 +1025,7 @@ function adExportExcel(){
   if(!l.length){showBanner('Rien à exporter avec ce filtre.','error');return;}
   const aoa=[
     ['SUIVI DES ACTIONS — RÉUNIONS DE DIRECTION'],
-    ['Koala Kids — export du '+new Date().toLocaleDateString('fr-FR')
+    [((window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids')+' — export du '+new Date().toLocaleDateString('fr-FR')
       +' — '+({ouvertes:'actions non closes',retard:'actions en retard',closes:'actions closes',toutes:'toutes les actions'}[adFilter])],
     [],
     ['N°','Réunion du','Thème','Action / décision','Responsable','Échéance','Statut','Retard (j)','Suivi / commentaire','Date de clôture','Crèche']

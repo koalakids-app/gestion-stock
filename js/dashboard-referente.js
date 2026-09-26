@@ -7,7 +7,7 @@ async function peOpenMail(){
   _peMailData=d;
   document.getElementById('pe-mail-sub').textContent=d.subtitle;
   document.getElementById('pe-mail-to').value='';
-  document.getElementById('pe-mail-msg').value='Bonjour,\n\nVeuillez trouver ci-joint le planning de la semaine du '+d.dateDebut+' pour la crèche '+d.crecheName+'.\n\nBonne réception,\nKoala Kids';
+  document.getElementById('pe-mail-msg').value='Bonjour,\n\nVeuillez trouver ci-joint le planning de la semaine du '+d.dateDebut+' pour la crèche '+d.crecheName+'.\n\nBonne réception,\n'+((window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids');
   const btn=document.getElementById('pe-mail-send');
   btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
   document.getElementById('modal-pe-mail-wrap').classList.add('open');
@@ -27,7 +27,7 @@ async function peBuildPdfBase64(d){
     'tr:nth-child(even) td{background:#F9F9F8}'+
     '.footer{margin-top:1.5rem;font-size:10px;color:#888;border-top:1px solid #E7E5E0;padding-top:10px}'+
     '</style></head><body><h1>Planning équipe</h1><div class="sub">'+d.subtitle+'</div>'+d.bodyHTML+
-    '<div class="footer">Document généré le '+new Date().toLocaleDateString('fr-FR')+' — Koala Kids</div></body></html>';
+    '<div class="footer">Document généré le '+new Date().toLocaleDateString('fr-FR')+' — '+((window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids')+'</div></body></html>';
 
   const old=document.getElementById('_pdf-frame-planning');
   if(old)old.remove();
