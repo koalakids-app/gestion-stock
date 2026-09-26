@@ -67,7 +67,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--orange)}
 <body>
 
 <div class="hd">
-  <h1>Koala Kids</h1>
+  <h1 id="hdNom">Koala Kids</h1>
   <div class="s" id="hdSub">Votre contrat d'accueil</div>
 </div>
 
@@ -462,6 +462,16 @@ async function refuser(){
   }
   try{
     D=await appel('get');
+    // Branding cosmétique : nom/logo de l'organisation, jamais utilisé pour
+    // une décision de sécurité (l'edge function a déjà tout vérifié).
+    if(D.organisation?.nom){
+      document.title=document.title.replace(/Koala ?Kids/i,D.organisation.nom);
+      document.getElementById('hdNom').textContent=D.organisation.nom;
+    }
+    if(D.organisation?.logo_url){
+      document.getElementById('hdNom').outerHTML=
+        '<img id="hdNom" src="'+esc(D.organisation.logo_url)+'" alt="'+esc(D.organisation.nom||'')+'" style="max-height:44px">';
+    }
     rendre();
   }catch(e){
     const m=String(e.message||'');
