@@ -102,7 +102,11 @@ Deno.serve(async (req) => {
     const { data: enfant } = await supabase
       .from("enfants").select("prenom, nom, creche_id").eq("id", dossier.enfant_id).maybeSingle();
     const { data: creche } = enfant
-      ? await supabase.from("creches").select("name").eq("id", enfant.creche_id).maybeSingle()
+      ? await supabase.from("creches").select("name, org_id").eq("id", enfant.creche_id).maybeSingle()
+      : { data: null };
+    // Branding cosmétique de la page publique (logo, nom).
+    const { data: organisation } = creche?.org_id
+      ? await supabase.from("organisations").select("nom, logo_url").eq("id", creche.org_id).maybeSingle()
       : { data: null };
 
     const { data: pieces, error: pErr } = await supabase
@@ -119,6 +123,7 @@ Deno.serve(async (req) => {
       dossier: { expire_le: dossier.expire_le, statut: dossier.statut },
       enfant: { prenom: enfant?.prenom || "", creche_nom: creche?.name || "" },
       pieces: pieces || [],
+      organisation: organisation || null,
     });
   }
 

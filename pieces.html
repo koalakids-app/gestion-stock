@@ -147,6 +147,9 @@ async function boot(){
   try{
     const d=await appel('get');
     DOSSIER=d.dossier;ENFANT=d.enfant;PIECES_DEPOSEES=d.pieces||[];
+    // Branding cosmétique : nom de l'organisation, jamais utilisé pour une
+    // décision de sécurité (l'edge function a déjà tout vérifié).
+    if(d.organisation?.nom)document.title=document.title.replace(/Koala ?Kids/i,d.organisation.nom);
     document.getElementById('sousTitre').textContent=
       (ENFANT.prenom||'')+(ENFANT.creche_nom?' · '+ENFANT.creche_nom:'');
     render();

@@ -40,6 +40,7 @@ const DEFAUT = {
   nom: 'Koala Kids',
   app_url: 'https://koalakids.fr',
   couleur_secondaire: '#E8620C',
+  logo_url: null as string | null,
 };
 
 function origineDe(req: Request): string | null {
@@ -53,14 +54,14 @@ function origineDe(req: Request): string | null {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
 
-  let org = null as null | { nom: string; app_url: string; couleur_secondaire: string | null };
+  let org = null as null | { nom: string; app_url: string; couleur_secondaire: string | null; logo_url: string | null };
   const origine = origineDe(req);
   if (origine) {
     // app_url est stockée sans slash final ; on compare origine à origine,
     // jamais de préfixe partiel (éviterait une confusion entre deux domaines
     // dont l'un serait préfixe de l'autre).
     const { data } = await sb.from('organisations')
-      .select('nom,app_url,couleur_secondaire')
+      .select('nom,app_url,couleur_secondaire,logo_url')
       .eq('app_url', origine.replace(/\/+$/, ''))
       .maybeSingle();
     if (data) org = data;
@@ -68,6 +69,7 @@ Deno.serve(async (req) => {
   const nom = org?.nom || DEFAUT.nom;
   const appUrl = (org?.app_url || DEFAUT.app_url).replace(/\/+$/, '');
   const themeColor = org?.couleur_secondaire || DEFAUT.couleur_secondaire;
+  const logoUrl = org?.logo_url || DEFAUT.logo_url;
 
   const manifest = {
     name: `${nom} — Gestion`,
@@ -89,6 +91,12 @@ Deno.serve(async (req) => {
       { name: 'Stock', short_name: 'Stock', description: 'Inventaire et commandes', url: `${appUrl}/stock.html` },
       { name: 'Documents', short_name: 'Documents', description: 'Documents et signatures', url: `${appUrl}/documents.html` },
     ],
+    // Champ non standard, ignoré par les navigateurs qui lisent ce document
+    // comme un manifeste PWA — réutilisé par index.html (page sans session,
+    // qui ne peut pas interroger `organisations` directement) pour afficher
+    // son propre logo par organisation sans dupliquer la logique de
+    // résolution par origine.
+    _logo_url: logoUrl,
   };
 
   return new Response(JSON.stringify(manifest), {

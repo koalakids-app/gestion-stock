@@ -190,6 +190,12 @@ async function vueFamille(contrat: Record<string, unknown>) {
     ? await sb.from('reseau_config').select('config').eq('org_id', creche.data.org_id).maybeSingle()
     : await sb.from('reseau_config').select('config').eq('id', RESEAU_CFG_ID).maybeSingle();
 
+  // Branding de la page publique (logo, nom) — purement cosmétique, jamais
+  // inclus dans l'empreinte de signature.
+  const organisation = creche.data?.org_id
+    ? (await sb.from('organisations').select('nom,logo_url').eq('id', creche.data.org_id).maybeSingle()).data
+    : null;
+
   // Les clauses figées du contrat priment ; reseau_config ne sert que de
   // filet pour un contrat créé avant qu'elles ne soient recopiées.
   const rz = (reseau.data && reseau.data.config) || {};
@@ -237,6 +243,7 @@ async function vueFamille(contrat: Record<string, unknown>) {
   return {
     contratOut, lignes: lignes.data || [],
     sujet, creche: creche.data || null, etablissement: etab.data || null,
+    organisation,
   };
 }
 
@@ -297,7 +304,7 @@ Deno.serve(async (req) => {
 
     // ---------------------------------------------------------------- GET
     if (action === 'get') {
-      const { contratOut, lignes, sujet, creche, etablissement } = await vueFamille(contrat);
+      const { contratOut, lignes, sujet, creche, etablissement, organisation } = await vueFamille(contrat);
 
       // Première ouverture : on l'horodate une seule fois, et on journalise
       // l'événement à ce même moment seulement — pas à chaque rechargement de
@@ -308,7 +315,7 @@ Deno.serve(async (req) => {
         await journaliser(contrat.id, 'ouverture', req);
       }
 
-      return json({ contrat: contratOut, lignes, enfant: sujet, creche, etablissement });
+      return json({ contrat: contratOut, lignes, enfant: sujet, creche, etablissement, organisation });
     }
 
     // --------------------------------------------------------- DEMANDER_CODE

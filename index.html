@@ -9,10 +9,30 @@
        manifest.json statique historique si elle est indisponible. -->
   <link rel="manifest" href="https://juyrceadazrovlitxceb.supabase.co/functions/v1/manifest" id="dynamic-manifest">
 <script>
-// Repli sur le manifest statique si l'edge function est injoignable (panne,
-// hors ligne à la toute première visite) : sans ça, l'app resterait
-// simplement non installable, sans erreur visible pour l'utilisateur.
-fetch(document.getElementById('dynamic-manifest').href, { method: 'HEAD' })
+// Cette page n'a pas de session (pas encore connectée) : elle ne peut pas
+// interroger `organisations` directement comme les pages internes le font
+// via js/branding.js. Elle réutilise donc la même résolution par origine que
+// le manifest.json dynamique, en lisant ce même document une fois de plus
+// côté JS pour en tirer le nom/couleur/logo affichés sur cette page.
+fetch(document.getElementById('dynamic-manifest').href)
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(m => {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (m.short_name) document.title = document.title.replace(/Koala ?Kids/i, m.short_name);
+      if (m.theme_color) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', m.theme_color);
+      if (m._logo_url) {
+        const wm = document.getElementById('wordmark');
+        if (wm) wm.outerHTML = `<img id="wordmark" src="${m._logo_url}" alt="${m.short_name || ''}" style="max-height:64px">`;
+      } else if (m.short_name && m.short_name !== 'Koala Kids') {
+        const wm = document.getElementById('wordmark');
+        if (wm) wm.textContent = m.short_name;
+      }
+    });
+  })
+  // Repli sur le manifest statique si l'edge function est injoignable (panne,
+  // hors ligne à la toute première visite) : sans ça, l'app resterait
+  // simplement non installable, sans erreur visible pour l'utilisateur — le
+  // wordmark et le titre restent alors sur leurs valeurs Koala Kids par défaut.
   .catch(() => { document.getElementById('dynamic-manifest').href = './manifest.json'; });
 </script>
 <meta name="theme-color" content="#E8620C">
@@ -262,8 +282,8 @@ body {
 <div class="container">
 
   <div class="logo">
-    <h1>ko<span class="a">a</span>l<span class="a">a</span><span class="kids">kids</span></h1>
-    <p>Réseau Micro-Crèches</p>
+    <h1 id="wordmark">ko<span class="a">a</span>l<span class="a">a</span><span class="kids">kids</span></h1>
+    <p id="wordmarkSub">Réseau Micro-Crèches</p>
   </div>
 
   <div class="cards" id="mainGrid">
