@@ -79,7 +79,7 @@ const sb = createClient(
   { auth: { persistSession: false } },
 );
 
-async function sendEmail(to: string[], subject: string, html: string, expediteur?: string) {
+async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string) {
   const user = Deno.env.get('GMAIL_USER');
   const pass = Deno.env.get('GMAIL_APP_PASSWORD');
   if (!user || !pass) {
@@ -98,7 +98,7 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
   });
   try {
     await client.send({
-      from: `${nomExpediteur(expediteur)} de Koalakids <${user}>`,
+      from: `${nomExpediteur(expediteur)} de ${orgNom || 'Koalakids'} <${user}>`,
       to,
       subject,
       content: 'Ce message nécessite un client de messagerie compatible HTML.',
@@ -125,8 +125,10 @@ async function genererCodePointageUnique(): Promise<string> {
 
 function corpsHtml(o: {
   enfant: string; prenom: string; creche: string; lien: string; expire: string;
-  relance: boolean; code: string | null;
+  relance: boolean; code: string | null; orgNom?: string; logoUrl?: string;
 }) {
+  const orgNom = o.orgNom || 'Koala Kids';
+  const logoUrl = o.logoUrl || 'https://koalakids-app.github.io/gestion-stock/logo-koalakids.png';
   const intro = o.relance
     ? `Le dossier de familiarisation de <b>${esc(o.enfant)}</b> n'est pas encore complet.
        Voici à nouveau votre lien personnel — il ne reste que quelques minutes de saisie.`
@@ -153,14 +155,14 @@ function corpsHtml(o: {
       <table role="presentation" width="100%" style="border-collapse:collapse">
         <tr>
           <td style="background:#fff;padding:20px 24px;text-align:center">
-            <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
+            <img src="${esc(logoUrl)}" alt="${esc(orgNom)}"
               width="220" style="display:inline-block;height:auto">
           </td>
         </tr>
         <tr>
           <td style="background:#3D3580;color:#fff;padding:18px 24px">
             <div style="font-size:20px;font-weight:700">Dossier de familiarisation</div>
-            <div style="font-size:14px;opacity:.85;margin-top:3px">Koala Kids${o.creche ? ' · ' + esc(o.creche) : ''}</div>
+            <div style="font-size:14px;opacity:.85;margin-top:3px">${esc(orgNom)}${o.creche ? ' · ' + esc(o.creche) : ''}</div>
           </td>
         </tr>
       </table>
@@ -187,7 +189,7 @@ function corpsHtml(o: {
           <span style="word-break:break-all;color:#3D3580">${esc(o.lien)}</span>
         </p>
         ${blocCode}
-        <p style="margin:0;font-size:15px">À très vite,<br>L'équipe Koala Kids</p>
+        <p style="margin:0;font-size:15px">À très vite,<br>L'équipe ${esc(orgNom)}</p>
       </div>
     </div>
     <p style="max-width:540px;margin:14px auto 0;font-size:12px;color:#9A96AC;text-align:center">
@@ -230,8 +232,15 @@ Deno.serve(async (req) => {
     const { data: enfant } = await sb
       .from('enfants').select('prenom,nom,creche_id,code_pointage').eq('id', dossier.enfant_id).maybeSingle();
     const { data: creche } = enfant?.creche_id
-      ? await sb.from('creches').select('name').eq('id', enfant.creche_id).maybeSingle()
+      ? await sb.from('creches').select('name,org_id').eq('id', enfant.creche_id).maybeSingle()
       : { data: null };
+    let orgNom: string | undefined, logoUrl: string | undefined;
+    if (creche?.org_id) {
+      const { data: org } = await sb.from('organisations')
+        .select('nom,logo_url').eq('id', creche.org_id).maybeSingle();
+      orgNom = org?.nom || undefined;
+      logoUrl = org?.logo_url || undefined;
+    }
 
     // Le code de pointage kiosque : réutilisé s'il existe déjà, généré sinon.
     // Une panne de génération ne doit jamais bloquer l'envoi du dossier — le
@@ -268,8 +277,11 @@ Deno.serve(async (req) => {
           expire: dossier.expire_le,
           relance: !!relance,
           code: codePointage,
+          orgNom,
+          logoUrl,
         }),
         expediteur,
+        orgNom,
       );
     } catch (mailErr) {
       // Le détail (identifiants Gmail refusés, quota dépassé…) part dans les

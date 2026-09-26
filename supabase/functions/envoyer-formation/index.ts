@@ -50,7 +50,7 @@ function nomExpediteur(s: unknown) {
   return prenom.slice(0, 60) || "Koala Kids";
 }
 
-async function sendEmail(to: string[], subject: string, html: string, expediteur?: string) {
+async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string) {
   const user = Deno.env.get("GMAIL_USER");
   const pass = Deno.env.get("GMAIL_APP_PASSWORD");
   if (!user || !pass) {
@@ -69,7 +69,7 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
   });
   try {
     await client.send({
-      from: `${nomExpediteur(expediteur)} de Koalakids <${user}>`,
+      from: `${nomExpediteur(expediteur)} de ${orgNom || "Koalakids"} <${user}>`,
       to,
       subject,
       content: "Ce message nécessite un client de messagerie compatible HTML.",
@@ -80,7 +80,9 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
   }
 }
 
-function formationEmailHtml(opts: { prenom: string; kindLabel: string; titre: string; lien: string; creche: string }) {
+function formationEmailHtml(opts: { prenom: string; kindLabel: string; titre: string; lien: string; creche: string; orgNom?: string; logoUrl?: string }) {
+  const orgNom = opts.orgNom || "Koala Kids";
+  const logoUrl = opts.logoUrl || "https://koalakids-app.github.io/gestion-stock/logo-koalakids.png";
   return `<!doctype html><html lang="fr"><body style="margin:0;background:#F7F6FC;padding:24px 12px;
     font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#2B2740;line-height:1.6">
     <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;
@@ -88,14 +90,14 @@ function formationEmailHtml(opts: { prenom: string; kindLabel: string; titre: st
       <table role="presentation" width="100%" style="border-collapse:collapse">
         <tr>
           <td style="background:#fff;padding:20px 24px;text-align:center">
-            <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
+            <img src="${logoUrl}" alt="${orgNom}"
               width="220" style="display:inline-block;height:auto">
           </td>
         </tr>
         <tr>
           <td style="background:#3D3580;color:#fff;padding:18px 24px">
             <div style="font-size:20px;font-weight:700">Formation &amp; quiz</div>
-            <div style="font-size:14px;opacity:.85;margin-top:3px">Koala Kids${opts.creche ? ' · ' + opts.creche : ''}</div>
+            <div style="font-size:14px;opacity:.85;margin-top:3px">${orgNom}${opts.creche ? ' · ' + opts.creche : ''}</div>
           </td>
         </tr>
       </table>
@@ -149,6 +151,7 @@ Deno.serve(async (req) => {
     let prenom = "";
     let email: string | null = null;
     let creche_id: string | null = null;
+    let org_id: string | null = null;
 
     if (envoi.employe_id) {
       const { data: employe, error } = await supabase
@@ -160,32 +163,46 @@ Deno.serve(async (req) => {
       creche_id = employe.creche_id;
     } else {
       const { data: referent, error } = await supabase
-        .from("referents").select("name, email, creche_id").eq("id", envoi.referent_id).maybeSingle();
+        .from("referents").select("name, email, creche_id, org_id").eq("id", envoi.referent_id).maybeSingle();
       if (error) throw error;
       if (!referent) return json({ error: "collaborateur_introuvable" }, 404);
       prenom = referent.name || "";
       email = referent.email;
       creche_id = referent.creche_id;
+      org_id = referent.org_id;
     }
 
     if (!email) return json({ error: "aucun_email" }, 400);
 
     const { data: creche } = creche_id
-      ? await supabase.from("creches").select("name").eq("id", creche_id).maybeSingle()
+      ? await supabase.from("creches").select("name, org_id").eq("id", creche_id).maybeSingle()
       : { data: null };
+    // Un compte direction n'a pas de creche_id : org_id vient alors directement
+    // du référent (déjà lu ci-dessus), pas de la crèche.
+    org_id = org_id || creche?.org_id || null;
+    let orgNom: string | undefined, logoUrl: string | undefined;
+    if (org_id) {
+      const { data: org } = await supabase.from("organisations")
+        .select("nom, logo_url").eq("id", org_id).maybeSingle();
+      orgNom = org?.nom || undefined;
+      logoUrl = org?.logo_url || undefined;
+    }
 
     const kindLabel = envoi.kind === "quiz" ? "un quiz" : "une micro-formation";
     await sendEmail(
       [email],
-      (envoi.kind === "quiz" ? "Un quiz vous a été envoyé" : "Une formation vous a été envoyée") + " — Koala Kids",
+      (envoi.kind === "quiz" ? "Un quiz vous a été envoyé" : "Une formation vous a été envoyée") + ` — ${orgNom || "Koala Kids"}`,
       formationEmailHtml({
         prenom,
         kindLabel,
         titre: envoi.item_titre,
         lien: envoi.lien,
         creche: creche?.name || "",
+        orgNom,
+        logoUrl,
       }),
       expediteur,
+      orgNom,
     );
     return json({ ok: true, sent_to: 1 });
   } catch (err) {

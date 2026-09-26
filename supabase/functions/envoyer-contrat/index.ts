@@ -73,7 +73,7 @@ const dfr = (d: unknown) => {
   return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : '';
 };
 
-async function sendEmail(to: string[], subject: string, html: string, expediteur?: string) {
+async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string) {
   const user = Deno.env.get('GMAIL_USER');
   const pass = Deno.env.get('GMAIL_APP_PASSWORD');
   if (!user || !pass) {
@@ -92,7 +92,7 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
   });
   try {
     await client.send({
-      from: `${nomExpediteur(expediteur)} de Koalakids <${user}>`,
+      from: `${nomExpediteur(expediteur)} de ${orgNom || 'Koalakids'} <${user}>`,
       to,
       subject,
       content: 'Ce message nécessite un client de messagerie compatible HTML.',
@@ -150,15 +150,20 @@ Deno.serve(async (req) => {
       prenom = (data && data.prenom) || '';
     }
 
-    let creche = '', etab: Record<string, unknown> = {};
+    let creche = '', etab: Record<string, unknown> = {}, logoUrl = 'https://koalakids-app.github.io/gestion-stock/logo-koalakids.png';
     if (c.creche_id) {
       const [cr, et] = await Promise.all([
-        sb.from('creches').select('name').eq('id', c.creche_id).maybeSingle(),
+        sb.from('creches').select('name,org_id').eq('id', c.creche_id).maybeSingle(),
         sb.from('etablissements').select('raison_sociale,telephone,email')
           .eq('creche_id', c.creche_id).maybeSingle(),
       ]);
       creche = (cr.data && cr.data.name) || '';
       etab = et.data || {};
+      if (cr.data?.org_id) {
+        const { data: org } = await sb.from('organisations')
+          .select('logo_url').eq('id', cr.data.org_id).maybeSingle();
+        logoUrl = org?.logo_url || logoUrl;
+      }
     }
 
     const racine = String(appUrl).replace(/\/+$/, '');
@@ -182,7 +187,7 @@ Deno.serve(async (req) => {
     const html = `<!doctype html><html lang="fr"><body style="margin:0;padding:0;background:#FDF8F2;font-family:Helvetica,Arial,sans-serif;color:#2B2740">
 <div style="max-width:560px;margin:0 auto;padding:24px 18px">
   <div style="background:#fff;border-radius:16px 16px 0 0;padding:18px 20px;text-align:center">
-    <img src="https://koalakids-app.github.io/gestion-stock/logo-koalakids.png" alt="Koala Kids"
+    <img src="${esc(logoUrl)}" alt="${esc(enseigne)}"
       width="180" style="display:inline-block;height:auto">
   </div>
   <div style="background:#4A3F9F;color:#fff;padding:18px 20px">
@@ -213,7 +218,7 @@ Deno.serve(async (req) => {
 </body></html>`;
 
     try {
-      await sendEmail(adresses, objet, html, expediteur);
+      await sendEmail(adresses, objet, html, expediteur, enseigne);
     } catch (mailErr) {
       // Le message d'erreur (identifiants Gmail refusés, quota dépassé…) part
       // dans les logs : il doit dire quoi faire, pas seulement que ça a
