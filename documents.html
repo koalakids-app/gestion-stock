@@ -3495,7 +3495,10 @@ const TPL={
           'site_nom','site_adresse',
           'salarie_employe_id','salarie_nom','salarie_naissance_date','salarie_naissance_lieu','salarie_nationalite','salarie_adresse','salarie_ss',
           'poste_intitule','statut','qualification',
-          'type_contrat','cdd_debut','cdd_fin','cdd_motif','cdd_remplace','date_embauche',
+          'nature_contrat',
+          'type_contrat','cdd_debut','cdd_fin','cdd_terme_imprecis','cdd_evenement_terme','cdd_motif','cdd_remplace','date_embauche',
+          'diplome_vise','organisme_formation','duree_formation_heures','date_debut_formation','date_fin_formation',
+          'tuteur_nom','tuteur_qualite','opco',
           'temps_travail','heures_hebdo','repartition_horaires',
           'remuneration_brute','heures_mensuelles','date_versement','primes',
           'fermeture_dates','preavis_demission',
@@ -3544,6 +3547,13 @@ const TPL={
    <div class="f"><label>Qualification déclarée</label><input id="ff_qualification" value="${esc(v.qualification)}"></div>
    <p class="hint">Le coefficient de la convention collective (IDCC 3127) n'est volontairement pas calculé automatiquement — sa grille vise nativement les interventions à domicile, pas un établissement collectif.</p>
 
+   <h3>Nature du contrat</h3>
+   <div class="f"><label>Nature</label><select id="ff_nature_contrat" onchange="ctToggleNature()">${
+     [['standard','Contrat de travail classique'],['apprentissage',"Contrat d'apprentissage"],
+      ['professionnalisation','Contrat de professionnalisation']]
+       .map(([val,lab])=>`<option value="${val}"${(v.nature_contrat||'standard')===val?' selected':''}>${esc(lab)}</option>`).join('')}</select></div>
+   <p class="hint" id="ctNatureHint"></p>
+
    <h3>Type de contrat</h3>
    <div class="grid2">
      <div class="f"><label>CDI / CDD</label><select id="ff_type_contrat" onchange="ctToggleCdd()">${
@@ -3552,11 +3562,50 @@ const TPL={
    </div>
    <div id="ctCddWrap" class="grid2" style="${v.type_contrat==='CDD'?'':'display:none'}">
      <div class="f"><label>Début du CDD</label><input type="date" id="ff_cdd_debut" value="${esc(v.cdd_debut)}"></div>
-     <div class="f"><label>Fin du CDD</label><input type="date" id="ff_cdd_fin" value="${esc(v.cdd_fin)}"></div>
+     <div class="f">
+       <label>Fin du CDD</label>
+       <input type="date" id="ff_cdd_fin" value="${esc(v.cdd_fin)}" style="${v.cdd_terme_imprecis?'display:none':''}">
+       <input id="ff_cdd_evenement_terme" placeholder="ex. retour de Mme X, congé maternité, de son congé"
+         value="${esc(v.cdd_evenement_terme)}" style="${v.cdd_terme_imprecis?'':'display:none'}">
+       <label style="font-weight:400;display:flex;align-items:center;gap:6px;margin-top:4px">
+         <input type="checkbox" id="ff_cdd_terme_imprecis" style="width:auto" ${v.cdd_terme_imprecis?'checked':''} onchange="ctToggleCddTerme()">
+         Terme imprécis (date de fin non connue à l'avance — durée minimale requise)
+       </label>
+     </div>
    </div>
    <div id="ctCddWrap2" style="${v.type_contrat==='CDD'?'':'display:none'}">
-     <div class="f"><label>Motif du CDD</label><input id="ff_cdd_motif" value="${esc(v.cdd_motif)}"></div>
+     <div class="f"><label>Motif du CDD</label><select id="ff_cdd_motif_select" onchange="ctCddMotifChange()">${
+       ['','Remplacement d\'un(e) salarié(e) en congé de maternité','Remplacement d\'un(e) salarié(e) en congé de paternité et d\'accueil de l\'enfant',
+        'Remplacement d\'un(e) salarié(e) en congé parental d\'éducation','Remplacement d\'un(e) salarié(e) en arrêt maladie',
+        'Remplacement d\'un(e) salarié(e) absent(e) (autre motif)','Accroissement temporaire d\'activité','Autre motif (à préciser)']
+        .map(o=>`<option${v.cdd_motif===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f" id="ctCddMotifAutreWrap" style="${v.cdd_motif&&!['','Remplacement d\'un(e) salarié(e) en congé de maternité','Remplacement d\'un(e) salarié(e) en congé de paternité et d\'accueil de l\'enfant','Remplacement d\'un(e) salarié(e) en congé parental d\'éducation','Remplacement d\'un(e) salarié(e) en arrêt maladie','Remplacement d\'un(e) salarié(e) absent(e) (autre motif)','Accroissement temporaire d\'activité'].includes(v.cdd_motif)?'':'display:none'}">
+       <label>Motif détaillé</label><input id="ff_cdd_motif" value="${esc(v.cdd_motif)}"></div>
      <div class="f"><label>Salarié(e) remplacé(e) (le cas échéant)</label><input id="ff_cdd_remplace" value="${esc(v.cdd_remplace)}"></div>
+   </div>
+
+   <div id="ctNatureFormationWrap" style="${(v.nature_contrat||'standard')==='standard'?'display:none':''}">
+     <h3 id="ctNatureFormationTitre">Formation</h3>
+     <p class="hint">
+       ⚠️ La rémunération d'un(e) apprenti(e) ou d'un(e) salarié(e) en contrat de professionnalisation est fixée en
+       pourcentage du SMIC (ou du minimum conventionnel CCN SAP, IDCC 3127) selon l'âge et l'année du contrat ou le
+       niveau de qualification — ce pourcentage n'est pas calculé automatiquement ici : à vérifier auprès de l'OPCO
+       ou d'un professionnel avant de fixer le montant en « Rémunération » ci-dessous.
+     </p>
+     <div class="grid2">
+       <div class="f"><label id="ctLabelDiplome">Diplôme ou titre visé</label><input id="ff_diplome_vise" value="${esc(v.diplome_vise)}" placeholder="CAP AEPE, titre pro AEPE, titre IEPE…"></div>
+       <div class="f"><label id="ctLabelOrganisme">Organisme de formation</label><input id="ff_organisme_formation" value="${esc(v.organisme_formation)}" placeholder="CFA, organisme de formation…"></div>
+     </div>
+     <div class="grid2">
+       <div class="f"><label>Début de la formation</label><input type="date" id="ff_date_debut_formation" value="${esc(v.date_debut_formation)}"></div>
+       <div class="f"><label>Fin de la formation</label><input type="date" id="ff_date_fin_formation" value="${esc(v.date_fin_formation)}"></div>
+     </div>
+     <div class="f"><label>Durée de la formation (heures)</label><input id="ff_duree_formation_heures" value="${esc(v.duree_formation_heures)}"></div>
+     <div class="grid2">
+       <div class="f"><label id="ctLabelTuteur">Maître d'apprentissage / tuteur</label><input id="ff_tuteur_nom" value="${esc(v.tuteur_nom)}"></div>
+       <div class="f"><label>Qualité / fonction du tuteur</label><input id="ff_tuteur_qualite" value="${esc(v.tuteur_qualite)}"></div>
+     </div>
+     <div class="f"><label>OPCO en charge du financement</label><input id="ff_opco" value="${esc(v.opco)}" placeholder="ex. AKTO, OPCO EP…"></div>
    </div>
 
    <h3>Durée et horaires de travail</h3>
@@ -3602,7 +3651,16 @@ const TPL={
     CT_OTP_VERIFIED_AT=(fillRep&&fillRep.otp_verifie_le)||null;
     CT_OTP_SENT_AT=null;
     CT_PDF_HASH=(fillRep&&fillRep.signature_empreinte)||prevAudit.pdf_sha256||null;
-    ctPrefillFromEtab();ctToggleCdd();ctLoadEmployes();ctUpdateConsent();ctRenderOtp();ctApplyLock();
+    ctPrefillFromEtab();ctToggleCdd();ctToggleCddTerme();ctToggleNature();
+    (()=>{
+      const sel=document.getElementById('ff_cdd_motif_select'),hidden=document.getElementById('ff_cdd_motif');
+      if(sel&&hidden&&hidden.value){
+        const connu=Array.from(sel.options).some(o=>o.value===hidden.value);
+        sel.value=connu?hidden.value:'Autre motif (à préciser)';
+      }
+    })();
+    ctCddMotifChange();
+    ctLoadEmployes();ctUpdateConsent();ctRenderOtp();ctApplyLock();
     ['responsable','salarie'].forEach(mountSig);
   },
   pdf:async doc=>{
@@ -3654,19 +3712,41 @@ const TPL={
     para(`Le/la Salarié(e) déclare posséder la qualification suivante : ${bl(g('qualification'))}, conforme aux `+
       `exigences réglementaires des établissements d'accueil du jeune enfant.`);
 
+    const nature=g('nature_contrat')||'standard';
+    const libNature={apprentissage:"CONTRAT D'APPRENTISSAGE",professionnalisation:'CONTRAT DE PROFESSIONNALISATION'}[nature];
     h2("ARTICLE 2 — TYPE DE CONTRAT, PRISE D'EFFET ET PÉRIODE D'ESSAI");
-    para(`Contrat conclu pour une durée : ${bl(g('type_contrat'))}.`);
+    if(libNature){
+      para(`Le présent contrat est conclu sous la forme d'un ${libNature}, à durée : ${bl(g('type_contrat'))}, `+
+        (nature==='apprentissage'
+          ?"conformément aux articles L.6221-1 et suivants du Code du travail."
+          :"conformément aux articles L.6325-1 et suivants du Code du travail."));
+    }else{
+      para(`Contrat conclu pour une durée : ${bl(g('type_contrat'))}.`);
+    }
     if(g('type_contrat')==='CDD'){
-      para(`Du ${dfr(g('cdd_debut'))} au ${dfr(g('cdd_fin'))}, motif : ${bl(g('cdd_motif'))} `+
-        `(salarié(e) remplacé(e) le cas échéant : ${bl(g('cdd_remplace'))}).`);
+      const termeImprecis=!!document.getElementById('ff_cdd_terme_imprecis')&&document.getElementById('ff_cdd_terme_imprecis').checked;
+      if(termeImprecis){
+        para(`À compter du ${dfr(g('cdd_debut'))}, à terme imprécis : le contrat prendra fin à l'événement `+
+          `suivant : ${bl(g('cdd_evenement_terme'))}, conformément à l'article L.1242-7 du Code du travail. `+
+          `Motif : ${bl(g('cdd_motif'))} (salarié(e) remplacé(e) le cas échéant : ${bl(g('cdd_remplace'))}).`);
+      }else{
+        para(`Du ${dfr(g('cdd_debut'))} au ${dfr(g('cdd_fin'))}, motif : ${bl(g('cdd_motif'))} `+
+          `(salarié(e) remplacé(e) le cas échéant : ${bl(g('cdd_remplace'))}).`);
+      }
     }
     para(`Prise d'effet le ${dfr(g('date_embauche'))}.`);
-    para(`Période d'essai : 2 mois pour les employés / 3 mois pour les agents de maîtrise / 4 mois pour les cadres `+
-      `selon la catégorie retenue ci-dessus, renouvelable une fois pour une durée maximale de 2 mois (soit une durée `+
-      `totale maximale de 4, 5 ou 6 mois selon la catégorie), sous réserve d'un accord exprès entre les parties `+
-      `formalisé par écrit avant le terme de la période initiale. Pendant la période d'essai, chacune des parties `+
-      `peut rompre librement le contrat, sous réserve des délais de prévenance légaux (art. L.1221-25 et `+
-      `L.1221-26 du Code du travail).`);
+    if(nature==='apprentissage'){
+      para(`Période d'essai : les deux premiers mois d'exécution du contrat, décomptés en jours travaillés effectifs `+
+        `dans l'entreprise (article L.6222-18 du Code du travail). Pendant cette période, le contrat peut être rompu `+
+        `unilatéralement par l'une ou l'autre des parties.`);
+    }else{
+      para(`Période d'essai : 2 mois pour les employés / 3 mois pour les agents de maîtrise / 4 mois pour les cadres `+
+        `selon la catégorie retenue ci-dessus, renouvelable une fois pour une durée maximale de 2 mois (soit une durée `+
+        `totale maximale de 4, 5 ou 6 mois selon la catégorie), sous réserve d'un accord exprès entre les parties `+
+        `formalisé par écrit avant le terme de la période initiale. Pendant la période d'essai, chacune des parties `+
+        `peut rompre librement le contrat, sous réserve des délais de prévenance légaux (art. L.1221-25 et `+
+        `L.1221-26 du Code du travail).`);
+    }
 
     h2('ARTICLE 3 — LIEU DE TRAVAIL');
     para(`Le/la Salarié(e) exercera ses fonctions au sein de la micro-crèche de ${bl(g('site_nom'))}, `+
@@ -3686,8 +3766,35 @@ const TPL={
     para(`Rémunération mensuelle brute de ${bl(g('remuneration_brute'))} €, pour ${bl(g('heures_mensuelles'))} `+
       `heures mensuelles, versée le ${bl(g('date_versement'))} de chaque mois par virement bancaire.`);
     para(`Primes et accessoires éventuels : ${bl(g('primes'))}.`);
-    para(`Révision conforme aux dispositions légales et conventionnelles applicables (SMIC, minima `+
-      `conventionnels).`);
+    if(nature==='apprentissage'){
+      para(`⚠️ Rémunération d'apprenti(e) : exprimée en pourcentage du SMIC (ou du salaire minimum conventionnel si `+
+        `plus favorable), variable selon l'âge du/de la Salarié(e) et l'année d'exécution du contrat (articles `+
+        `D.6222-26 et suivants du Code du travail). Le montant ci-dessus doit être vérifié avant signature.`);
+    }else if(nature==='professionnalisation'){
+      para(`⚠️ Rémunération en contrat de professionnalisation : exprimée en pourcentage du SMIC (ou du salaire `+
+        `minimum conventionnel si plus favorable), variable selon l'âge du/de la Salarié(e) et son niveau de `+
+        `formation (articles L.6325-1-1 et D.6325-14 et suivants du Code du travail). Le montant ci-dessus doit `+
+        `être vérifié avant signature.`);
+    }else{
+      para(`Révision conforme aux dispositions légales et conventionnelles applicables (SMIC, minima `+
+        `conventionnels).`);
+    }
+
+    if(nature!=='standard'){
+      h2('ARTICLE 5 BIS — ACTION DE FORMATION');
+      para(`Diplôme, titre ou certification visé(e) : ${bl(g('diplome_vise'))}.`);
+      para(`${nature==='apprentissage'?'CFA (centre de formation d’apprentis)':'Organisme de formation'} : `+
+        `${bl(g('organisme_formation'))}, du ${dfr(g('date_debut_formation'))} au ${dfr(g('date_fin_formation'))}, `+
+        `pour une durée de ${bl(g('duree_formation_heures'))} heures.`);
+      para(`${nature==='apprentissage'?"Maître d'apprentissage" : 'Tuteur'} désigné(e) : ${bl(g('tuteur_nom'))}`+
+        (g('tuteur_qualite')?`, ${bl(g('tuteur_qualite'))}`:'')+
+        `, chargé(e) d'accompagner le/la Salarié(e) dans l'acquisition des compétences visées par la formation.`);
+      para(`OPCO en charge du financement : ${bl(g('opco'))}.`);
+      if(nature==='professionnalisation'){
+        para(`Lorsque la formation prépare le titre IEPE (Intervenant Éducatif Petite Enfance), la voie de `+
+          `reconversion instaurée par le décret n°2025-1207 est applicable dans les conditions qu'il fixe.`);
+      }
+    }
 
     h2('ARTICLE 6 — CONGÉS PAYÉS ET FERMETURES DE L’ÉTABLISSEMENT');
     para(`2,5 jours ouvrables de congés payés par mois de travail effectif, sauf disposition conventionnelle plus `+
@@ -3713,6 +3820,13 @@ const TPL={
       `collective applicable. En cas de démission, préavis de ${bl(g('preavis_demission'))}, sauf dispense `+
       `accordée par l'Employeur. Si CDD : cessation de plein droit à son terme, indemnité de fin de contrat et `+
       `indemnité compensatrice de congés payés selon la loi, sauf cas de rupture anticipée légalement prévus.`);
+    if(nature==='apprentissage'){
+      para(`Au-delà de la période d'essai, le contrat d'apprentissage ne peut être rompu que par accord écrit `+
+        `signé des deux parties, ou, à défaut, par décision du conseil de prud'hommes en cas de faute grave, `+
+        `d'inaptitude constatée par le médecin du travail, de force majeure, d'exclusion définitive du CFA, ou de `+
+        `rupture à l'initiative de l'apprenti(e) après respect de la procédure de médiation prévue à l'article `+
+        `L.6222-18 du Code du travail.`);
+    }
 
     h2('ARTICLE 10 — CONVENTION COLLECTIVE ET DISPOSITIONS DIVERSES');
     para(`Contrat régi par le Code du travail et la convention collective nationale des services à la personne `+
@@ -4829,6 +4943,63 @@ function ctToggleCdd(){
     if(el)el.style.display=show?'':'none';
   });
 }
+/* CDD à terme imprécis (ex. remplacement d'un congé maternité dont la date de
+   retour n'est pas connue à l'avance, art. L.1242-7 du Code du travail) :
+   remplace la date de fin par la description de l'événement y mettant fin. */
+function ctToggleCddTerme(){
+  const imprecis=!!(document.getElementById('ff_cdd_terme_imprecis')||{}).checked;
+  const dEl=document.getElementById('ff_cdd_fin');
+  const eEl=document.getElementById('ff_cdd_evenement_terme');
+  if(dEl)dEl.style.display=imprecis?'none':'';
+  if(eEl)eEl.style.display=imprecis?'':'none';
+}
+/* Le motif du CDD est choisi dans une liste des cas légaux les plus courants
+   (art. L.1242-2 du Code du travail) ; « Autre motif » ouvre un champ libre
+   pour préciser un cas non listé. Le select et le champ libre partagent le
+   même id logique (ff_cdd_motif) : la valeur retenue est toujours reflétée
+   dans ff_cdd_motif pour que la génération du PDF n'ait qu'une seule source. */
+function ctCddMotifChange(){
+  const sel=document.getElementById('ff_cdd_motif_select');
+  const wrap=document.getElementById('ctCddMotifAutreWrap');
+  const hidden=document.getElementById('ff_cdd_motif');
+  if(!sel||!hidden)return;
+  const autre=sel.value==='Autre motif (à préciser)';
+  if(wrap)wrap.style.display=autre?'':'none';
+  if(!autre)hidden.value=sel.value;
+  else if(hidden.value===sel.value)hidden.value='';
+}
+/* Bascule les libellés et l'affichage du bloc « Formation » selon la nature
+   du contrat (apprentissage / professionnalisation) — voir
+   sql/employes_contrat_travail_nature.sql. */
+function ctToggleNature(){
+  const nat=(document.getElementById('ff_nature_contrat')||{}).value||'standard';
+  const wrap=document.getElementById('ctNatureFormationWrap');
+  if(wrap)wrap.style.display=nat==='standard'?'none':'';
+  const titre=document.getElementById('ctNatureFormationTitre');
+  const hint=document.getElementById('ctNatureHint');
+  const labDip=document.getElementById('ctLabelDiplome');
+  const labOrg=document.getElementById('ctLabelOrganisme');
+  const labTut=document.getElementById('ctLabelTuteur');
+  if(nat==='apprentissage'){
+    if(titre)titre.textContent="Formation en alternance (contrat d'apprentissage)";
+    if(hint)hint.innerHTML="Contrat d'apprentissage : régi par les articles L.6221-1 et suivants du Code du travail. "
+      +"Le contrat prend la forme d'un CDD (durée du cycle de formation) ou d'un CDI (période d'apprentissage puis droit "
+      +"commun) — choix à faire ci-dessous dans « Type de contrat ».";
+    if(labDip)labDip.textContent='Diplôme ou titre visé';
+    if(labOrg)labOrg.textContent='CFA (centre de formation d’apprentis)';
+    if(labTut)labTut.textContent="Maître d'apprentissage";
+  }else if(nat==='professionnalisation'){
+    if(titre)titre.textContent='Action de professionnalisation';
+    if(hint)hint.innerHTML='Contrat de professionnalisation : régi par les articles L.6325-1 et suivants du Code du '
+      +'travail. Permet notamment la préparation du titre IEPE (Intervenant Éducatif Petite Enfance) — voie de '
+      +'reconversion instaurée par le décret n°2025-1207. Peut être conclu en CDD ou en CDI.';
+    if(labDip)labDip.textContent='Diplôme, titre ou certification visé(e)';
+    if(labOrg)labOrg.textContent='Organisme de formation';
+    if(labTut)labTut.textContent='Tuteur';
+  }else if(hint){
+    hint.textContent='';
+  }
+}
 
 /* ---------- CONTRAT DE TRAVAIL — renforcement de la signature ----------
    Vérification d'identité par code (OTP) avant d'accepter la signature du/de
@@ -4891,7 +5062,11 @@ function ctFillFromEmploye(){
     salarie_nationalite:e.nationalite,salarie_adresse:e.adresse,salarie_ss:e.numero_secu,
     poste_intitule:e.poste,qualification:e.qualification,
     type_contrat:e.type_contrat,date_embauche:e.date_debut,cdd_fin:e.date_fin,cdd_motif:e.motif_cdd,
-    temps_travail:TT[e.temps_travail]||'',heures_hebdo:e.heures_hebdo
+    temps_travail:TT[e.temps_travail]||'',heures_hebdo:e.heures_hebdo,
+    diplome_vise:e.diplome_vise,organisme_formation:e.organisme_formation,
+    duree_formation_heures:e.duree_formation_heures,
+    date_debut_formation:e.date_debut_formation,date_fin_formation:e.date_fin_formation,
+    tuteur_nom:e.tuteur_nom,tuteur_qualite:e.tuteur_qualite,opco:e.opco
   };
   Object.keys(map).forEach(k=>{
     const v=map[k];
@@ -4899,7 +5074,17 @@ function ctFillFromEmploye(){
     const el=document.getElementById('ff_'+k);
     if(el&&!el.value)el.value=v;
   });
+  const natSel=document.getElementById('ff_nature_contrat');
+  if(natSel&&e.nature_contrat)natSel.value=e.nature_contrat;
+  const motifSel=document.getElementById('ff_cdd_motif_select');
+  if(motifSel&&e.motif_cdd){
+    const connu=Array.from(motifSel.options).some(o=>o.value===e.motif_cdd);
+    motifSel.value=connu?e.motif_cdd:'Autre motif (à préciser)';
+  }
   ctToggleCdd();
+  ctToggleCddTerme();
+  ctToggleNature();
+  ctCddMotifChange();
   ctUpdateConsent();
 }
 
