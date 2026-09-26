@@ -10694,7 +10694,13 @@ let _lastFnErr='';
 async function callFn(fn,body){
   _lastFnErr='';
   try{
-    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});
+    // Jeton de la session en cours, et non la clé anon statique : les
+    // fonctions à verify_jwt actif (ex. create-referent) doivent pouvoir
+    // identifier qui appelle (résolution de son org_id) — la clé anon,
+    // elle, ne porte aucune identité d'utilisateur·rice.
+    const{data:{session}}=await sb.auth.getSession();
+    const jeton=session?.access_token||SUPABASE_ANON_KEY;
+    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jeton},body:JSON.stringify(body)});
     if(!r.ok){
       let txt='';try{txt=await r.text();}catch(e){}
       _lastFnErr='HTTP '+r.status+(txt?' — '+txt.slice(0,300):'');
