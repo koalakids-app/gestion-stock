@@ -16,11 +16,27 @@ Pas de framework, pas d'étape de build : chaque outil est un **fichier HTML aut
 |---|---|
 | Frontend | HTML/CSS/JS vanilla, fichier unique par application |
 | Backend | Supabase (PostgreSQL + Auth + Storage + Edge Functions) |
-| Emails | Resend (via Edge Functions) |
+| Emails | SMTP Gmail, envoyés depuis les Edge Functions |
 | Hébergement | GitHub Pages |
 | Client cible | Chrome sur tablette / mobile Android |
 
 L'application est installable en PWA (`manifest.json` + `sw.js`).
+
+---
+
+## Multi-tenant
+
+Une seule base Supabase héberge plusieurs organisations clientes (réseaux de
+crèches). Chaque organisation est une ligne de la table `organisations` ;
+les tables métier portent une colonne `org_id` qui les rattache à leur
+organisation, et l'isolation entre organisations est assurée par les
+politiques RLS de Postgres.
+
+Le branding (couleurs, logo, nom) est appliqué automatiquement selon
+l'organisation du compte connecté ou de la ressource concernée.
+
+Pour activer une nouvelle organisation cliente, suivre
+[`docs/onboarding-nouvelle-organisation.md`](docs/onboarding-nouvelle-organisation.md).
 
 ---
 
@@ -47,11 +63,13 @@ via un lien à durée limitée (`signature.html`, `famille.html`, `pieces.html`,
 
 | Rôle | Portée |
 |---|---|
-| `direction` | Accès complet, toutes crèches |
-| `referent` | Sa crèche uniquement |
-| `employe` | Accès restreint |
+| `direction` | Accès complet, toutes les crèches de son organisation |
+| `referent` | Sa crèche uniquement, dans son organisation |
+| `employe` | Accès restreint, dans son organisation |
 
-Le cloisonnement est assuré par les politiques RLS de Supabase.
+Le cloisonnement — entre crèches d'une même organisation, et entre
+organisations — est assuré par les politiques RLS de Supabase (voir
+section Multi-tenant ci-dessus).
 
 ---
 
