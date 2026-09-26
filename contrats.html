@@ -2507,15 +2507,15 @@ function dessineContrat(c,lignes,telecharger){
      ici est un millimètre qui rapproche les signatures du contrat, et une page
      de signatures détachée est une faiblesse juridique. */
   function titreSection(s){
-    place(7);y+=2;
+    place(5.5);y+=1.5;
     ecrire(s.toUpperCase(),9,'bold',ORANGE);
-    y+=1.2;trait();y+=2.8;
+    y+=1;trait();y+=2.2;
   }
   function kv(k,v){
-    place(4.2);
+    place(3.8);
     police(9.5,'normal',GRIS);doc.text(String(k),G,y);
     police(9.5,'bold',NOIR);doc.text(String(v==null?'—':v),G+56,y);
-    y+=4.2;
+    y+=3.8;
   }
 
   /* ---- En-tête : qui édite le contrat ---- */
@@ -2575,7 +2575,7 @@ function dessineContrat(c,lignes,telecharger){
     +(e.adresse_siege?', dont le siège est situé '+e.adresse_siege:'')
     +(e.representant_nom?', représentée par '+e.representant_nom
       +(e.representant_qualite?', '+e.representant_qualite:''):'')
-    +(cr?', pour son établissement '+cr:'')+'.',9.5,'normal',NOIR,L,4.1);
+    +(cr?', pour son établissement '+cr:'')+'.',9.5,'normal',NOIR,L,3.8);
   y+=0.8;
   const foyer=[c.famille_adresse,
     [c.famille_code_postal,c.famille_ville].filter(Boolean).join(' ')]
@@ -2585,11 +2585,11 @@ function dessineContrat(c,lignes,telecharger){
     .filter(Boolean);
   para('D\'autre part, '+(signataires.length?signataires.join(' et '):'le ou les responsables légaux')
     +(foyer?', demeurant '+foyer:'')
-    +(c.num_allocataire?', n° allocataire '+c.num_allocataire:'')+'.',9.5,'normal',NOIR,L,4.1);
+    +(c.num_allocataire?', n° allocataire '+c.num_allocataire:'')+'.',9.5,'normal',NOIR,L,3.8);
   y+=0.8;
   para('Il a été convenu ce qui suit pour l\'accueil de '
     +(((suj.prenom||'')+' '+(suj.nom||'')).trim()||'l\'enfant')
-    +(suj.dob?', né(e) le '+dfr(suj.dob):'')+'.',9.5,'normal',NOIR,L,4.1);
+    +(suj.dob?', né(e) le '+dfr(suj.dob):'')+'.',9.5,'normal',NOIR,L,3.8);
 
   /* ---- L'accueil ---- */
   titreSection(avenant?'Ce que l\'avenant modifie':'L\'accueil convenu');
@@ -2604,7 +2604,7 @@ function dessineContrat(c,lignes,telecharger){
   }else{
     kv('Semaines facturées',c.semaines_an+' semaines par an');
   }
-  y+=0.6;
+  y+=0.4;
 
   /* Le récap semaine, en tableau, pour visualiser la semaine d'un coup d'œil
      plutôt que de déduire les horaires du volume hebdomadaire — même
@@ -2627,23 +2627,23 @@ function dessineContrat(c,lignes,telecharger){
     });
     y=top+h;
   }
-  ligneSemaine(['Jours de la semaine','Heure d\'arrivée','Heure de départ','Nombre heures de présences'],4.4,true,6.8);
+  ligneSemaine(['Jours de la semaine','Heure d\'arrivée','Heure de départ','Nombre heures de présences'],4,true,6.8);
   let totalMinSem=0;
   JOURS.forEach(([num,nom])=>{
     const actif=jset.indexOf(num)>=0;
     const mins=actif?dureeMin(c.heure_debut,c.heure_fin):0;
     totalMinSem+=mins;
-    ligneSemaine([nom,actif?(String(c.heure_debut||'').slice(0,5)):'',actif?(String(c.heure_fin||'').slice(0,5)):'',fmtDuree(mins)],3.8,false);
+    ligneSemaine([nom,actif?(String(c.heure_debut||'').slice(0,5)):'',actif?(String(c.heure_fin||'').slice(0,5)):'',fmtDuree(mins)],3.5,false);
   });
-  ligneSemaine(['Total','','',fmtDuree(totalMinSem)],4.4,true);
-  y+=0.8;
+  ligneSemaine(['Total','','',fmtDuree(totalMinSem)],4,true);
+  y+=0.5;
   para(avecTerme
     ? 'La mensualité répartit les '+(c.jours_accueil!=null?c.jours_accueil:'—')+' jours d\'accueil de '
       +'la période sur '+nbFr(c.mois_factures||0)+' mensualités égales. Elle est identique chaque mois, '
       +'y compris pendant les périodes de fermeture, déjà déduites du nombre de jours facturés.'
     : 'La mensualité est lissée sur douze mois : elle est identique chaque mois, y compris '
       +'pendant les semaines de fermeture, déjà déduites du nombre de semaines facturées.',
-    8,'italic',GRIS,L,3.6);
+    8,'italic',GRIS,L,3.2);
 
   /* ---- Le détail chiffré ---- */
   titreSection('La mensualité');
@@ -2675,8 +2675,8 @@ function dessineContrat(c,lignes,telecharger){
     doc.text(detail(l),G+86,y);
     police(10,'bold',neg?VERT:NOIR);
     doc.text((neg?'- ':'')+eurPdf(Math.abs(l.total)),D,y,{align:'right'});
-    y+=h+1.6;
-    trait();y+=2.4;
+    y+=h+1.2;
+    trait();y+=2;
   }
 
   const recu=lignes.filter(l=>RECUR.indexOf(l.type)>=0);
@@ -2684,20 +2684,20 @@ function dessineContrat(c,lignes,telecharger){
   if(!recu.length)para('Aucune ligne récurrente.',9.5,'italic',GRIS);
   recu.forEach(ligne);
 
-  place(9);y+=0.5;
+  place(8);y+=0.3;
   police(11,'bold',VIOLET);
   doc.text('TOTAL MENSUEL',G,y);
   doc.setFontSize(14);
   doc.text(eurPdf(c.total_mensuel),D,y,{align:'right'});
-  y+=2.8;trait(VIOLET);y+=3.2;
+  y+=2.2;trait(VIOLET);y+=2.6;
 
   if(c.total_annuel){
-    place(4.2);
+    place(3.6);
     police(9,'normal',GRIS);
     doc.text(avecTerme
       ? 'Soit '+eurPdf(c.total_annuel)+' sur la durée du contrat ('+nbFr(c.mois_factures||0)+' mensualités).'
       : 'Soit '+eurPdf(c.total_annuel)+' sur douze mois.',G,y);
-    y+=4.2;
+    y+=3.2;
   }
 
   if(hors.length){
@@ -2712,18 +2712,18 @@ function dessineContrat(c,lignes,telecharger){
     titreSection('Estimation du complément de libre choix du mode de garde');
     [['Coût mensuel',eurPdf(c.total_mensuel),NOIR],
      ['CMG estimé, versé par la CAF','- '+eurPdf(c.cmg_estime),VERT]].forEach(([k,v,q])=>{
-      place(4.4);
+      place(4);
       police(9.5,'normal',GRIS);doc.text(k,G,y);
       police(9.5,'bold',q);doc.text(v,D,y,{align:'right'});
-      y+=4.4;
+      y+=4;
     });
-    y+=0.5;trait();y+=3.6;
+    y+=0.3;trait();y+=2.8;
     police(11,'bold',VIOLET);doc.text('RESTE À CHARGE MENSUEL',G,y);
     doc.setFontSize(14);doc.text(eurPdf(c.reste_a_charge),D,y,{align:'right'});
-    y+=4;
+    y+=3;
     para('Estimation indicative, calculée à partir des revenus communiqués par la famille et du '
       +'barème CAF en vigueur. Seule la CAF détermine le montant réellement versé. La crèche ne '
-      +'perçoit pas le CMG : elle facture la mensualité ci-dessus.',8,'italic',GRIS,L,3.6);
+      +'perçoit pas le CMG : elle facture la mensualité ci-dessus.',8,'italic',GRIS,L,3.2);
   }
 
   /* ---- La résiliation ---- */
@@ -2757,10 +2757,10 @@ function dessineContrat(c,lignes,telecharger){
   if(clauses.length){
     titreSection('Les conditions du contrat');
     clauses.forEach(x=>{
-      place(6.5);
-      ecrire(x[0],9,'bold',NOIR);y+=3.4;
-      para(x[1],8.5,'normal',NOIR,L,3.6);
-      y+=0.8;
+      place(5.5);
+      ecrire(x[0],9,'bold',NOIR);y+=3;
+      para(x[1],8.5,'normal',NOIR,L,3.3);
+      y+=0.5;
     });
   }
 
