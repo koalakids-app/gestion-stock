@@ -1,33 +1,78 @@
 // FRAIS IK
 // ============================================================
-// Sites du réseau (crèches). Les distances par défaut sont celles depuis Cuers.
-const IK_DEFAULT_DIST={'Brunet':22,'Cuers':0,'Ollioules':30,'St Jean':20,'Picot 1':25,'Picot 2':25};
-const IK_SITES=Object.keys(IK_DEFAULT_DIST);
-const IK_GROUPS={'Picot 1':'Picot 1 - Picot 2','Picot 2':'Picot 1 - Picot 2','Brunet':'Brunet','Ollioules':'Ollioules - St Jean','St Jean':'Ollioules - St Jean','Cuers':'Cuers'};
-const IK_GROUP_ORDER=['Picot 1 - Picot 2','Brunet','Ollioules - St Jean','Cuers'];
-const IK_DEFAULT_DEPART='Cuers';
-
-// Distances inter-sites PRÉ-REMPLIES À TITRE INDICATIF (estimations à vérifier
-// et à corriger dans l'onglet — elles n'ont aucune valeur justificative en l'état).
-const IK_ESTIM_INTER={
+// Distances et groupements réels du réseau Koala Kids — n'ont de sens QUE
+// pour ses 6 sites précis (relevés terrain, pas des estimations génériques).
+// Servent de valeurs par défaut uniquement quand les crèches de
+// l'organisation connectée correspondent exactement à ces 6 noms ; toute
+// autre organisation démarre sur une matrice à zéro (voir ikInitSites) —
+// chaque distance reste éditable dans l'onglet quoi qu'il arrive.
+const IK_KOALA_SEED_DIST={'Brunet':22,'Cuers':0,'Ollioules':30,'St Jean':20,'Picot 1':25,'Picot 2':25};
+const IK_KOALA_SEED_INTER={
   'Brunet|Ollioules':9,'Brunet|Picot 1':5,'Brunet|Picot 2':5,'Brunet|St Jean':4,
   'Ollioules|Picot 1':7,'Ollioules|Picot 2':7,'Ollioules|St Jean':11,
   'Picot 1|Picot 2':2,'Picot 1|St Jean':6,'Picot 2|St Jean':6
 };
+const IK_KOALA_GROUPS={'Picot 1':'Picot 1 - Picot 2','Picot 2':'Picot 1 - Picot 2','Brunet':'Brunet','Ollioules':'Ollioules - St Jean','St Jean':'Ollioules - St Jean','Cuers':'Cuers'};
+const IK_KOALA_GROUP_ORDER=['Picot 1 - Picot 2','Brunet','Ollioules - St Jean','Cuers'];
+const IK_KOALA_DEFAULT_DEPART='Cuers';
+
+// Sites de l'organisation connectée et valeurs par défaut associées — posés
+// par ikInitSites() une fois les crèches chargées (voir demandes.html,
+// loadAllData()). Vides tant que ikInitSites() n'a pas tourné : les
+// fonctions de cet onglet ne sont appelées qu'après ouverture de l'onglet
+// Frais IK, donc après le chargement des données de la page.
+let IK_DEFAULT_DIST={};
+let IK_SITES=[];
+let IK_GROUPS={};
+let IK_GROUP_ORDER=[];
+let IK_DEFAULT_DEPART=null;
+let IK_ESTIM_INTER={};
+
+/** À appeler une fois cacheCreches chargé (demandes.html). Reprend les
+ *  distances réelles Koala Kids si les crèches de l'organisation sont
+ *  exactement les 6 sites historiques (déploiement actuel) ; toute autre
+ *  organisation démarre avec une matrice à zéro sur ses propres crèches,
+ *  à compléter dans l'onglet — jamais de topologie Koala Kids appliquée par
+ *  erreur à un autre réseau. */
+function ikInitSites(nomsCourts){
+  const noms=(nomsCourts||[]).filter(Boolean);
+  if(!noms.length)return;
+  const estKoala=noms.length===Object.keys(IK_KOALA_SEED_DIST).length
+    &&noms.every(n=>Object.prototype.hasOwnProperty.call(IK_KOALA_SEED_DIST,n));
+  if(estKoala){
+    IK_SITES=Object.keys(IK_KOALA_SEED_DIST);
+    IK_DEFAULT_DIST=Object.assign({},IK_KOALA_SEED_DIST);
+    IK_ESTIM_INTER=Object.assign({},IK_KOALA_SEED_INTER);
+    IK_GROUPS=Object.assign({},IK_KOALA_GROUPS);
+    IK_GROUP_ORDER=IK_KOALA_GROUP_ORDER.slice();
+    IK_DEFAULT_DEPART=IK_KOALA_DEFAULT_DEPART;
+  }else{
+    IK_SITES=noms.slice();
+    IK_DEFAULT_DIST={};noms.forEach(n=>{IK_DEFAULT_DIST[n]=0;});
+    IK_ESTIM_INTER={};
+    // Pas de regroupement prédéfini pour un autre réseau : chaque site est
+    // son propre groupe, pour que les exports par groupe restent corrects.
+    IK_GROUPS={};noms.forEach(n=>{IK_GROUPS[n]=n;});
+    IK_GROUP_ORDER=noms.slice();
+    IK_DEFAULT_DEPART=noms[0];
+  }
+}
 
 let ikRows=[];
 
 function ikPairKey(a,b){return[a,b].sort().join('|');}
 
-// Matrice complète par défaut : ligne Cuers = IK_DEFAULT_DIST, le reste = estimations.
+// Matrice complète par défaut : ligne du site de référence (IK_DEFAULT_DEPART,
+// "Cuers" pour Koala Kids) = IK_DEFAULT_DIST, le reste = estimations.
 function ikBuildDefaultMatrix(){
   const m={};
+  const hub=IK_DEFAULT_DEPART;
   IK_SITES.forEach(a=>{
     m[a]={};
     IK_SITES.forEach(b=>{
       if(a===b){m[a][b]=0;return;}
-      if(a==='Cuers'){m[a][b]=IK_DEFAULT_DIST[b]||0;return;}
-      if(b==='Cuers'){m[a][b]=IK_DEFAULT_DIST[a]||0;return;}
+      if(a===hub){m[a][b]=IK_DEFAULT_DIST[b]||0;return;}
+      if(b===hub){m[a][b]=IK_DEFAULT_DIST[a]||0;return;}
       m[a][b]=IK_ESTIM_INTER[ikPairKey(a,b)]||0;
     });
   });
@@ -64,9 +109,10 @@ function ikGetConfig(){
 // ses propres distances et ses propres lignes, d'où des totaux différents entre l'ordinateur
 // et la tablette. Le localStorage reste utilisé comme miroir local (lecture synchrone par
 // ikGetConfig, et repli hors ligne), mais la référence est désormais Supabase.
-//   frais_ik_config  : une ligne unique 'global' — matrice des distances, lieux, barème.
+//   frais_ik_config  : une ligne par organisation (org_id, contrainte unique) — matrice des
+//                      distances, lieux, barème. Avant le multi-tenant, une ligne unique
+//                      id='global' servait à tout le déploiement ; ce n'est plus le cas.
 //   frais_ik_lignes  : une ligne par (personne, mois) — le tableau des trajets en jsonb.
-const IK_CFG_ID='global';
 let ikSyncOk=true;
 
 function ikSyncWarn(op,e){
@@ -76,7 +122,7 @@ function ikSyncWarn(op,e){
 
 async function ikConfigPull(){
   try{
-    const{data,error}=await sb.from('frais_ik_config').select('config').eq('id',IK_CFG_ID).maybeSingle();
+    const{data,error}=await sb.from('frais_ik_config').select('config').maybeSingle();
     if(error)throw error;
     ikSyncOk=true;
     if(data&&data.config)localStorage.setItem('ik_config',JSON.stringify(data.config));
@@ -86,8 +132,13 @@ async function ikConfigPull(){
 
 async function ikConfigPush(cfg){
   try{
+    // org_id est requis à la création de la ligne (pas de valeur par défaut
+    // en base) : currentProfile est posé par demandes.html, seule page à
+    // charger ce module.
+    const orgId=(typeof currentProfile!=='undefined'&&currentProfile)?currentProfile.org_id:null;
+    if(!orgId){ikSyncWarn('écriture config','org_id introuvable (profil non chargé)');return false;}
     const{error}=await sb.from('frais_ik_config')
-      .upsert({id:IK_CFG_ID,config:cfg,updated_at:new Date().toISOString()},{onConflict:'id'});
+      .upsert({org_id:orgId,config:cfg,updated_at:new Date().toISOString()},{onConflict:'org_id'});
     if(error)throw error;
     ikSyncOk=true;return true;
   }catch(e){ikSyncWarn('écriture config',e);return false;}
@@ -139,16 +190,17 @@ function ikRowKm(row,matrix){
 }
 
 // Onglet Excel d'une ligne : groupe de la destination, sinon groupe du site de départ,
-// sinon rattachement à Cuers (site de rattachement administratif).
+// sinon rattachement au site de référence (IK_DEFAULT_DEPART, "Cuers" pour Koala Kids).
 function ikRowGroup(row){
+  const hub=IK_DEFAULT_DEPART;
   const dep=row.depart;
-  const depGroup=(dep&&dep!=='Cuers'&&IK_GROUPS[dep])?IK_GROUPS[dep]:null;
+  const depGroup=(dep&&dep!==hub&&IK_GROUPS[dep])?IK_GROUPS[dep]:null;
   // trajet de retour vers le site de rattachement : on garde l'onglet du site quitté,
   // pour qu'une journée chaînée ne soit pas éclatée sur trois onglets.
-  if(row.creche==='Cuers'&&depGroup)return depGroup;
+  if(row.creche===hub&&depGroup)return depGroup;
   if(row.creche&&IK_GROUPS[row.creche])return IK_GROUPS[row.creche];
   if(depGroup)return depGroup;
-  return 'Cuers';
+  return hub;
 }
 
 // ---------------- Configuration des lieux et distances ----------------
@@ -538,11 +590,16 @@ function ikRenderTable(){
     const tKm=row.nbr*km;
     const mont=tKm*bareme;
     const group=ikRowGroup(row);
+    // Les 4 badges nommés correspondent aux groupes réels Koala Kids
+    // (IK_KOALA_GROUPS) ; toute autre organisation, dont les groupes sont
+    // un par site (voir ikInitSites), retombe sur un badge générique portant
+    // le nom du groupe lui-même plutôt qu'un libellé Koala Kids erroné.
     const badge=row.ignored?'<span class="ik-ignored-badge">ignoré</span>':
       group==='Picot 1 - Picot 2'?'<span class="ik-group-badge ik-g1">Picot</span>':
       group==='Brunet'?'<span class="ik-group-badge ik-g2">Brunet</span>':
       group==='Cuers'?'<span class="ik-group-badge ik-g4">Cuers</span>':
-      '<span class="ik-group-badge ik-g3">Ollio/SJ</span>';
+      group==='Ollioules - St Jean'?'<span class="ik-group-badge ik-g3">Ollio/SJ</span>':
+      `<span class="ik-group-badge ik-g3">${(group||'').slice(0,10)}</span>`;
     const inp=(f,v,w='120px',t='text',extra='')=>`<input type="${t}" ${extra} value="${String(v).replace(/"/g,'&quot;')}" onchange="ikUpdateRow(${idx},'${f}',this.value)" style="width:${w};padding:4px 7px;border:1.5px solid transparent;border-radius:6px;font-size:12.5px;font-family:inherit;background:transparent" onfocus="this.style.borderColor='var(--koala)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">`;
     const departSel=`<select onchange="ikUpdateRow(${idx},'depart',this.value)" style="width:130px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12.5px;font-family:inherit;background:#fff">${ikDepartOptions(row.depart||IK_DEFAULT_DEPART)}</select>`;
     const destInp=inp('lieu',row.lieu||'','150px','text','list="ik-lieux-list"');
@@ -628,26 +685,32 @@ function ikRechainDate(date){
   showBanner('Journée du '+ikFmtDate(date)+' rechaînée.');
 }
 
+// Libellés courts pour les 4 groupes réels Koala Kids ; toute autre
+// organisation affiche directement le nom de son groupe (un par site, voir
+// ikInitSites), qui est déjà court.
+const IK_KOALA_GROUP_LABELS={'Picot 1 - Picot 2':'Picot','Brunet':'Brunet','Ollioules - St Jean':'Ollioules/StJean','Cuers':'Cuers'};
+
 function ikUpdateTotals(){
   const matrix=ikGetCurrentMatrix();
   const bareme=parseFloat(document.getElementById('ik-bareme').value)||0.248;
-  let tKm=0,tEur=0,tP=0,tB=0,tO=0,tC=0;
+  let tKm=0,tEur=0;
+  const parGroupe={};
   ikRows.filter(r=>!r.ignored).forEach(r=>{
     const km=ikRowKm(r,matrix),tk=r.nbr*km,m=tk*bareme;
     tKm+=tk;tEur+=m;
     const g=ikRowGroup(r);
-    if(g==='Picot 1 - Picot 2')tP+=m;
-    else if(g==='Brunet')tB+=m;
-    else if(g==='Ollioules - St Jean')tO+=m;
-    else if(g==='Cuers')tC+=m;
+    parGroupe[g]=(parGroupe[g]||0)+m;
   });
   document.getElementById('ik-tot-km').textContent=tKm;
   document.getElementById('ik-tot-eur').textContent=tEur.toFixed(2).replace('.',',');
-  document.getElementById('ik-tot-picot').textContent=tP.toFixed(2).replace('.',',')+' €';
-  document.getElementById('ik-tot-brunet').textContent=tB.toFixed(2).replace('.',',')+' €';
-  document.getElementById('ik-tot-osj').textContent=tO.toFixed(2).replace('.',',')+' €';
-  const cuersEl=document.getElementById('ik-tot-cuers');
-  if(cuersEl)cuersEl.textContent=tC.toFixed(2).replace('.',',')+' €';
+  const zone=document.getElementById('ik-tot-groupes');
+  if(zone){
+    zone.innerHTML=IK_GROUP_ORDER.map(g=>{
+      const label=IK_KOALA_GROUP_LABELS[g]||g;
+      const val=(parGroupe[g]||0).toFixed(2).replace('.',',');
+      return `<span style="font-size:12px;opacity:0.8">${escHtml(label)} : ${val} €</span>`;
+    }).join('');
+  }
 }
 
 function ikInit(){
