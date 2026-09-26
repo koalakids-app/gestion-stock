@@ -364,7 +364,6 @@ let ENFANTS=[],CRECHES=[],ETABS=[],CONTRATS=[],TARIFS=[],FRAIS=[];
 let DEMANDES=[],DEVIS_OK=[];
 let CMG_BAREME=[],CMG_CFG={taux_max:0.85,ratio_3_6:0.5,plafond_horaire:10};
 const CMG_CFG_ID='00000000-0000-0000-0000-000000000002';
-const RESEAU_CFG_ID='00000000-0000-0000-0000-000000000003';
 let RESEAU={contrat_validite_jours:30,devis_validite_jours:30,
             preavis_resiliation:'',conditions_resiliation:'',contrat_mentions:'',pied_page:''};
 let reseauCharge=false;
@@ -1123,7 +1122,7 @@ async function loadCmg(){
 async function loadReseau(){
   if(reseauCharge)return;
   try{
-    const{data,error}=await sb.from('reseau_config').select('config').eq('id',RESEAU_CFG_ID).maybeSingle();
+    const{data,error}=await sb.from('reseau_config').select('config').maybeSingle();
     if(error)throw error;
     if(data&&data.config)RESEAU=Object.assign({},RESEAU,data.config);
   }catch(e){console.warn('[loadReseau]',e);}

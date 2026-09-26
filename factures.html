@@ -226,7 +226,6 @@ table.lg td.r,table.lg th.r{text-align:right;white-space:nowrap}
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-const RESEAU_CFG_ID='00000000-0000-0000-0000-000000000003';
 
 let ME=null,PROF=null;
 let CRECHES=[],ETABS=[],RCFG={};
@@ -531,7 +530,7 @@ async function loadAll(){
     const[c,e,r]=await Promise.all([
       sb.from('creches').select('*').order('name'),
       sb.from('etablissements').select('*'),
-      sb.from('reseau_config').select('config').eq('id',RESEAU_CFG_ID).maybeSingle()
+      sb.from('reseau_config').select('config').maybeSingle()
     ]);
     if(c.error)throw c.error;
     CRECHES=c.data||[];ETABS=(e&&e.data)||[];RCFG=(r&&r.data&&r.data.config)||{};

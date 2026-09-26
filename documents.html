@@ -405,7 +405,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-const RESEAU_CFG_ID='00000000-0000-0000-0000-000000000003';
 
 let ME=null,PROF=null,IS_ADMIN=false,IS_DIRECTION=false;
 let CATS=[],DOCS=[],CRECHES=[],ETABS=[],RESEAU={};
@@ -666,7 +665,7 @@ async function loadAll(){
     sb.from('creches').select('id,name,addr').order('name'),
     sb.from('enfants').select('id,prenom,nom,creche_id,dob').order('prenom'),
     sb.from('etablissements').select('*'),
-    sb.from('reseau_config').select('config').eq('id',RESEAU_CFG_ID).maybeSingle()
+    sb.from('reseau_config').select('config').maybeSingle()
   ]);
   CATS=c.data||[];DOCS=d.data||[];CRECHES=cr.data||[];ENFANTS=en.data||[];
   // Absence de ligne (script 25a pas exécuté) : le registre de sécurité et les
