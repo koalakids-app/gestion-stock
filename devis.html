@@ -178,9 +178,20 @@ function dessinerDevisPdf(){
   }
 
   /* ---- En-tête : l'établissement, puis la crèche d'accueil ---- */
+  /* Le logo est repris tel quel du <img> de l'en-tête (data URI déjà en
+     mémoire) : pas de second base64 à maintenir dans ce fichier. */
   y=18;
-  police(15,'bold',VIOLET);doc.text(et.raison_sociale||'Koala Kids',G,y);
-  y+=4.8;
+  const logoImg=document.querySelector('.hd img.logo');
+  let yNom=y;
+  if(logoImg&&logoImg.src){
+    const logoH=8.2,logoW=logoH*(365/138);
+    try{doc.addImage(logoImg.src,'PNG',G,12,logoW,logoH);}catch(err){}
+    yNom=12+logoH+4.5;
+  }else{
+    police(15,'bold',VIOLET);doc.text(et.raison_sociale||'Koala Kids',G,y);
+    yNom=y+4.8;
+  }
+  y=yNom;
   [et.forme_juridique,
    et.adresse_siege,
    et.siret?'SIRET '+et.siret:'',
