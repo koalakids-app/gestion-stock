@@ -18,9 +18,8 @@
 //
 // Déploiement :
 //   supabase functions deploy create-referent
-// Secrets nécessaires : SUPABASE_URL, SUPABASE_ANON_KEY et
-// SUPABASE_SERVICE_ROLE_KEY, injectées automatiquement par la plateforme
-// Supabase Edge Functions.
+// Secrets nécessaires : SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY, injectées
+// automatiquement par la plateforme Supabase Edge Functions.
 // L'URL passée en `redirect_to` (demandes.html) doit figurer dans la liste
 // des "Redirect URLs" autorisées du projet Supabase (Auth > URL
 // Configuration) — déjà fait pour collaborateur.html, à vérifier pour
@@ -41,6 +40,28 @@ function json(body: unknown, status = 200) {
   });
 }
 
+/** Extrait le `sub` (user_id) du JWT porté par l'en-tête Authorization, sans
+ *  revérifier sa signature : cette fonction a verify_jwt actif (voir
+ *  supabase/config.toml ou le dashboard), donc la plateforme a déjà rejeté
+ *  toute requête dont le jeton serait invalide ou expiré avant même que ce
+ *  code ne s'exécute. Décoder le payload suffit donc pour connaître
+ *  l'identité de l'appelant. (Évite de dépendre d'un deuxième client
+ *  Supabase avec la clé anon, dont l'injection automatique en variable
+ *  d'environnement s'est révélée peu fiable en pratique.) */
+function subDuJeton(authHeader: string | null): string | null {
+  const token = (authHeader || "").replace(/^Bearer\s+/i, "").trim();
+  const partiePayload = token.split(".")[1];
+  if (!partiePayload) return null;
+  try {
+    let b64 = partiePayload.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    const payload = JSON.parse(atob(b64));
+    return typeof payload.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -58,19 +79,20 @@ Deno.serve(async (req) => {
 
     // `referents.org_id` est NOT NULL, mais cette fonction tourne en
     // service_role : elle contourne la RLS et ne connaît donc pas
-    // spontanément l'organisation de la personne appelante. On la résout
-    // via son propre jeton (transmis par la plateforme, verify_jwt étant
-    // actif pour cette fonction), avec kk_mon_org() qui fait exactement ce
-    // calcul pour les policies RLS.
-    const appelant = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } },
-    );
-    const { data: orgId, error: orgErr } = await appelant.rpc("kk_mon_org");
-    if (orgErr || !orgId) {
+    // spontanément l'organisation de la personne appelante. On la résout à
+    // partir de sa propre fiche referents (même principe que kk_mon_org(),
+    // utilisée par les policies RLS, mais en lecture directe via le rôle
+    // service pour ne pas dépendre d'un deuxième client anon).
+    const callerId = subDuJeton(req.headers.get("Authorization"));
+    if (!callerId) {
+      return json({ ok: false, error: "Authentification manquante." }, 401);
+    }
+    const { data: callerRef, error: callerErr } = await admin
+      .from("referents").select("org_id").eq("user_id", callerId).maybeSingle();
+    if (callerErr || !callerRef?.org_id) {
       return json({ ok: false, error: "Organisation introuvable pour ce compte." }, 403);
     }
+    const orgId = callerRef.org_id;
 
     // Vérifier si l'email existe déjà dans Auth (ex. compte collaborateur/trice
     // ou référent(e) déjà invité(e)) — on ne réinvite pas un compte existant,
