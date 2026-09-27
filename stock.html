@@ -4116,7 +4116,8 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='', photo=
     <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00"
            oninput="calcCommandeTotal()" style="text-align:right">
     <button class="del-row" onclick="removeArticleRow(${idx})" title="Supprimer">×</button>
-    <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:4px 8px 6px;border-top:1px solid var(--border);background:var(--bg)">
+    <div id="row-photo-zone-${idx}" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:4px 8px 6px;border-top:1px solid var(--border);background:var(--bg);transition:background .15s"
+         ondragover="handleRowDragOver(event,${idx})" ondragleave="handleRowDragLeave(event,${idx})" ondrop="handleRowDrop(event,${idx})">
       <label style="font-size:11px;color:var(--ink2);cursor:pointer;display:flex;align-items:center;gap:6px;margin:0">
         <input type="file" accept="image/*" style="display:none"
                onchange="handleRowPhoto(event,${idx})">
@@ -4125,6 +4126,7 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='', photo=
           📷 ${photo ? 'Photo ✅' : 'Photo article'}
         </span>
       </label>
+      <span style="font-size:10px;color:var(--ink3)">ou glissez-déposez une image</span>
       <img id="row-photo-prev-${idx}" src="${photo||''}" alt="" style="display:${photo?'block':'none'};height:36px;width:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">
       <button type="button" id="row-photo-del-${idx}" style="display:${photo?'inline-block':'none'};background:none;border:none;cursor:pointer;font-size:14px;color:var(--red);padding:0 4px" onclick="deleteRowPhoto(${idx})" title="Supprimer la photo">✕</button>
     </div>
@@ -4137,6 +4139,10 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='', photo=
 function handleRowPhoto(event, idx) {
   const file = event.target.files[0];
   if (!file) return;
+  processRowPhotoFile(file, idx);
+}
+
+function processRowPhotoFile(file, idx) {
   if (file.size > 5 * 1024 * 1024) { showNotif('⚠ Photo trop grande — max 5 Mo'); return; }
   if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
   const reader = new FileReader();
@@ -4151,6 +4157,25 @@ function handleRowPhoto(event, idx) {
     if (btn)  btn.textContent = '📷 Photo ✅';
   };
   reader.readAsDataURL(file);
+}
+
+function handleRowDragOver(event, idx) {
+  event.preventDefault();
+  const z = document.getElementById(`row-photo-zone-${idx}`);
+  if (z) z.style.background = 'var(--accent-lt)';
+}
+
+function handleRowDragLeave(event, idx) {
+  const z = document.getElementById(`row-photo-zone-${idx}`);
+  if (z) z.style.background = 'var(--bg)';
+}
+
+function handleRowDrop(event, idx) {
+  event.preventDefault();
+  const z = document.getElementById(`row-photo-zone-${idx}`);
+  if (z) z.style.background = 'var(--bg)';
+  const file = event.dataTransfer.files[0];
+  if (file) processRowPhotoFile(file, idx);
 }
 
 function deleteRowPhoto(idx) {
