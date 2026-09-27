@@ -1091,6 +1091,11 @@ async function importerPdfSelection(){
         dob:r.dob||null,
         adresse:r.adresse,code_postal:r.code_postal,ville:r.ville,
         creches_souhaitees:[crecheId],
+        // creche_id ("crèche retenue") doit être posé dès l'import : la RLS
+        // n'affiche que les préinscriptions dont la crèche appartient au
+        // réseau, et creches_souhaitees seul ne suffit pas à les rendre
+        // visibles. Sans ce champ, tout un import disparaît silencieusement.
+        creche_id:crecheId,
         date_entree_souhaitee:r.date_entree_souhaitee||null,
         jours:r.jours,
         notes_internes:r.commentaires,
