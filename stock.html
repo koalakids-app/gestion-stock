@@ -2693,6 +2693,14 @@ function openModal(type) {
     const fDep = document.getElementById('f-depreciable'); if (fDep) fDep.checked = true;
     resetPhotoUpload();
   }
+  if (type === 'fournisseur') {
+    editingFournisseurId = null;
+    document.getElementById('modalFournisseurTitle').textContent = 'Ajouter un fournisseur';
+    ['fn-nom','fn-contact','fn-tel','fn-email','fn-web','fn-delai','fn-notes'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    const fnSpec = document.getElementById('fn-spec'); if (fnSpec) fnSpec.value = 'Général';
+  }
   document.getElementById(`modal-${type}`).classList.add('open');
   if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
 }
