@@ -663,7 +663,8 @@ textarea { resize: vertical; min-height: 72px; }
   cursor: pointer;
   transition: all 0.15s;
 }
-.detail-photo-placeholder:hover { border-color: var(--accent); background: var(--accent-lt); }
+.detail-photo-placeholder:hover,
+.detail-photo-placeholder.drag-over { border-color: var(--accent); background: var(--accent-lt); }
 .detail-photo { height: 260px; }
 
 /* ── PWA INSTALL BAR ── */
@@ -3480,10 +3481,11 @@ function showDetail(id) {
         <img src="${a.photo}" class="detail-photo" alt="${a.nom}">
         <button class="photo-preview-remove" style="top:8px;right:8px;width:30px;height:30px;font-size:13px" onclick="onRemoveArticlePhoto(${a.id})" title="Supprimer la photo">✕</button>
       </div>`
-    : `<div class="detail-photo-placeholder" onclick="triggerDetailPhotoUpload(${a.id})">
+    : `<div class="detail-photo-placeholder" id="detail-photo-zone-${a.id}" onclick="triggerDetailPhotoUpload(${a.id})"
+        ondragover="handleDetailDragOver(event, ${a.id})" ondragleave="handleDetailDragLeave(event, ${a.id})" ondrop="handleDetailDrop(event, ${a.id})">
         <div style="font-size:36px">${CAT_ICONS[a.cat]||'📦'}</div>
         <div style="font-size:13px;color:var(--ink2);font-weight:500">📷 Ajouter une photo</div>
-        <div style="font-size:11px;color:var(--ink3)">Cliquez pour uploader</div>
+        <div style="font-size:11px;color:var(--ink3)">Cliquez ou glissez-déposez une image ici</div>
         <input type="file" id="detail-photo-input-${a.id}" accept="image/*" style="display:none" onchange="handleDetailPhotoUpload(event, ${a.id})">
       </div>`;
   document.getElementById('detail-body').innerHTML = `
@@ -4620,6 +4622,10 @@ function triggerDetailPhotoUpload(id) {
 function handleDetailPhotoUpload(event, id) {
   const file = event.target.files[0];
   if (!file) return;
+  uploadDetailPhotoFile(file, id);
+}
+
+function uploadDetailPhotoFile(file, id) {
   if (file.size > 5 * 1024 * 1024) { showNotif('⚠ Photo trop grande — max 5 Mo'); return; }
   if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
   showNotif('📤 Envoi de la photo…');
@@ -4637,6 +4643,25 @@ function handleDetailPhotoUpload(event, id) {
     console.error('[Photo]', err.message);
     showNotif('❌ Erreur envoi photo — réessayez');
   });
+}
+
+function handleDetailDragOver(event, id) {
+  event.preventDefault();
+  const z = document.getElementById(`detail-photo-zone-${id}`);
+  if (z) z.classList.add('drag-over');
+}
+
+function handleDetailDragLeave(event, id) {
+  const z = document.getElementById(`detail-photo-zone-${id}`);
+  if (z) z.classList.remove('drag-over');
+}
+
+function handleDetailDrop(event, id) {
+  event.preventDefault();
+  const z = document.getElementById(`detail-photo-zone-${id}`);
+  if (z) z.classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (file) uploadDetailPhotoFile(file, id);
 }
 
 async function removeArticlePhoto(id) {
