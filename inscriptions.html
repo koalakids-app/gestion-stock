@@ -2815,6 +2815,13 @@ async function saveDevis(){
     toast('La fin de l\'accueil doit être postérieure au début — vérifiez l\'année.',true);
     return;
   }
+  /* Un devis sans crèche passe la sauvegarde (la colonne est nullable) mais
+     devient invisible partout : la règle de sécurité par organisation ne
+     laisse remonter que les devis dont la crèche appartient au réseau. */
+  if(!val('dCreche')){
+    toast('Choisissez la crèche concernée avant d\'enregistrer ce devis.',true);
+    return;
+  }
   const cm=dCmgCalcule(c.mensuel);
   const row={
     preinscription_id:ficheId,
