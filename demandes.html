@@ -4776,7 +4776,7 @@ async function saveRef(){
   }
   closeModal('modal-ref-wrap');renderReferents();
 }
-async function deleteRef(id){if(!confirm('Supprimer ce/cette directeur/trice technique ?'))return;const ok=await callFn('delete-referent',{referent_id:id});if(ok){cacheReferents=cacheReferents.filter(r=>r.id!==id);renderReferents();showBanner('Directeur/trice technique supprimé.');}else showBanner('Erreur lors de la suppression.','error');}
+async function deleteRef(id){if(!confirm('Supprimer ce/cette directeur/trice technique ?'))return;const ok=await callFn('delete-referent',{referent_id:id});if(ok){cacheReferents=cacheReferents.filter(r=>r.id!==id);renderReferents();showBanner('Directeur/trice technique supprimé.');}else showBanner(_lastFnErr||'Erreur lors de la suppression.','error');}
 
 // EMPLOYÉS (personnel sans compte de connexion — table `employes`, cf. sql/module_employes.sql)
 let editingEmployeId=null;
@@ -10701,8 +10701,10 @@ async function callFn(fn,body){
     const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jeton},body:JSON.stringify(body)});
     if(!r.ok){
       let txt='';try{txt=await r.text();}catch(e){}
-      _lastFnErr='HTTP '+r.status+(txt?' — '+txt.slice(0,300):'');
-      console.error('[callFn] '+fn,_lastFnErr);
+      let msg=txt;
+      try{const j=JSON.parse(txt);if(j&&j.error)msg=j.error;}catch(e){}
+      _lastFnErr=msg||('HTTP '+r.status);
+      console.error('[callFn] '+fn,'HTTP '+r.status,txt);
     }
     return r.ok;
   }catch(err){
