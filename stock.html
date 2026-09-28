@@ -2947,6 +2947,7 @@ async function saveCommande_db() {
     const commandeId = Date.now();
 
     // Upload des photos de lignes vers Supabase Storage (au lieu de stocker le base64 en base)
+    remapRowPhotosToLineIndex();
     if (Object.keys(articleRowFiles).length > 0) showNotif('📤 Envoi des photos…');
     const photosJson = await uploadRowPhotos(commandeId);
 
@@ -3328,6 +3329,7 @@ async function onUpdateCommande(id) {
     c.creche   = document.getElementById('c-creche-select')?.value || c.creche;
 
     // Upload des nouvelles photos de lignes vers Supabase Storage avant sauvegarde
+    remapRowPhotosToLineIndex();
     if (Object.keys(articleRowFiles).length > 0) showNotif('📤 Envoi des photos…');
     const newPhotosJson = await uploadRowPhotos(id);
     c.photos_json = newPhotosJson || c.photos_json || null;
@@ -4553,6 +4555,36 @@ function getArticlesFromRows() {
     }
   });
   return lines.join('\n');
+}
+
+// articleRowPhotos/articleRowFiles sont indexés par l'idx DOM de la ligne
+// (compteur qui ne se réaligne jamais, y compris après suppression d'une
+// ligne). Mais getArticlesFromRows() saute les lignes sans nom/qté et
+// getPhotoFromCommandeLine() relit les photos par position dans le texte
+// "articles" une fois sauvegardé : dès qu'une ligne est supprimée ou
+// laissée vide, ces deux indexations divergent et les photos se
+// retrouvent affichées sur le mauvais article. On réaligne donc les clés
+// de articleRowPhotos/articleRowFiles sur la position réelle dans les
+// lignes produites par getArticlesFromRows() juste avant l'upload/sauvegarde.
+function remapRowPhotosToLineIndex() {
+  const rows = document.querySelectorAll('.article-row');
+  const photoMap = {};
+  const fileMap = {};
+  let lineIdx = 0;
+  rows.forEach(row => {
+    const idx = row.id.replace('article-row-', '');
+    const qty = document.getElementById(`row-qty-${idx}`)?.value?.trim();
+    const nom = document.getElementById(`row-nom-${idx}`)?.value?.trim();
+    if (nom && qty) {
+      if (articleRowPhotos.hasOwnProperty(idx)) photoMap[lineIdx] = articleRowPhotos[idx];
+      if (articleRowFiles.hasOwnProperty(idx))  fileMap[lineIdx]  = articleRowFiles[idx];
+      lineIdx++;
+    }
+  });
+  Object.keys(articleRowPhotos).forEach(k => delete articleRowPhotos[k]);
+  Object.keys(articleRowFiles).forEach(k => delete articleRowFiles[k]);
+  Object.assign(articleRowPhotos, photoMap);
+  Object.assign(articleRowFiles, fileMap);
 }
 
 // ─── PHOTO UPLOAD ─────────────────────────────────────────────────────────
