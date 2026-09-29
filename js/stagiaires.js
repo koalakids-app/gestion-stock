@@ -230,6 +230,8 @@ function stgATraiter(s){return s.statut==='demande'||s.statut==='contact';}
 function stgDansPuce(s,puce){
   if(puce==='demandes')return stgATraiter(s);
   if(puce==='actives')return s.statut==='accepte'||s.statut==='en_cours';
+  if(puce==='encours')return s.statut==='en_cours';
+  if(puce==='avenir')return s.statut==='accepte';
   if(puce==='terminees')return stgClos(s.statut);
   if(puce==='alternants')return stgType(s)==='alternant'&&!stgClos(s.statut);
   if(puce==='incomplets')return !stgClos(s.statut)&&!stgAvancement(s.id).complet;
@@ -340,9 +342,9 @@ function stgStatCard(label,val,icon,color,filter){
 function stgMessageVide(){
   if(!stgCache.length)
     return 'Aucune fiche enregistrée. Commencez par « Nouvelle fiche ».';
-  const ailleurs=['demandes','actives','terminees']
+  const ailleurs=['demandes','encours','avenir','terminees']
     .filter(p=>p!==stgFilter&&stgCache.some(s=>stgDansPuce(s,p)));
-  const nom={demandes:'Demandes à traiter',actives:'En cours et à venir',terminees:'Terminées'};
+  const nom={demandes:'Demandes à traiter',encours:'En cours',avenir:'Acceptés, à venir',terminees:'Terminées'};
   if(!ailleurs.length)
     return 'Aucune fiche ne correspond à ce filtre.';
   return 'Aucune fiche sous ce filtre.<br><span style="font-size:12px">'
@@ -364,8 +366,8 @@ function stgRender(){
     const toutes=base.length;
     stats.innerHTML=
        stgStatCard('Demandes à traiter',aTraiter,'ti-inbox',aTraiter?'var(--blue)':'var(--muted)','demandes')
-      +stgStatCard('En cours',enCours,'ti-run','var(--green)','actives')
-      +stgStatCard('Acceptés, à venir',aVenir,'ti-calendar-plus','var(--koala)','actives')
+      +stgStatCard('En cours',enCours,'ti-run','var(--green)','encours')
+      +stgStatCard('Acceptés, à venir',aVenir,'ti-calendar-plus','var(--koala)','avenir')
       +stgStatCard('Alternants en cours et à venir',alt,'ti-briefcase',alt?'var(--orange-dark)':'var(--muted)','alternants')
       +stgStatCard('Dossiers incomplets',incomplets,'ti-file-alert',incomplets?'var(--orange-dark)':'var(--muted)','incomplets')
       +stgStatCard('Liens à envoyer',aEnvoyer,'ti-send',aEnvoyer?'var(--orange-dark)':'var(--muted)','aenvoyer')
