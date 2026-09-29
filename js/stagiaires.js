@@ -187,10 +187,6 @@ function stgShowView(v,btn){
 
 function stgSetFilter(f){
   stgFilter=f;
-  ['terminees','toutes'].forEach(x=>{
-    const a=document.getElementById('stg-lnk-'+x);
-    if(a)a.style.fontWeight=x===f?'700':'';
-  });
   stgRender();
 }
 
@@ -360,13 +356,17 @@ function stgRender(){
     const alt=stgCache.filter(s=>stgType(s)==='alternant'&&!stgClos(s.statut)).length;
     const incomplets=stgCache.filter(s=>!stgClos(s.statut)&&!stgAvancement(s.id).complet).length;
     const aEnvoyer=stgCache.filter(stgLienAEnvoyer).length;
+    const terminees=stgCache.filter(s=>stgClos(s.statut)).length;
+    const toutes=stgCache.length;
     stats.innerHTML=
        stgStatCard('Demandes à traiter',aTraiter,'ti-inbox',aTraiter?'var(--blue)':'var(--muted)','demandes')
       +stgStatCard('En cours',enCours,'ti-run','var(--green)','actives')
       +stgStatCard('Acceptés, à venir',aVenir,'ti-calendar-plus','var(--koala)','actives')
       +stgStatCard('Alternants en cours et à venir',alt,'ti-briefcase',alt?'var(--orange-dark)':'var(--muted)','alternants')
       +stgStatCard('Dossiers incomplets',incomplets,'ti-file-alert',incomplets?'var(--orange-dark)':'var(--muted)','incomplets')
-      +stgStatCard('Liens à envoyer',aEnvoyer,'ti-send',aEnvoyer?'var(--orange-dark)':'var(--muted)','aenvoyer');
+      +stgStatCard('Liens à envoyer',aEnvoyer,'ti-send',aEnvoyer?'var(--orange-dark)':'var(--muted)','aenvoyer')
+      +stgStatCard('Terminées',terminees,'ti-check','var(--muted)','terminees')
+      +stgStatCard('Toutes',toutes,'ti-list','var(--muted)','toutes');
   }
   const badge=document.getElementById('stg-badge-encours');
   if(badge){
