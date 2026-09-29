@@ -114,6 +114,8 @@ async function adInit(){
   if(selN)selN.innerHTML='<option value="">— Transverse / réseau —</option>'+optsC;
   const selR=document.getElementById('ad-r-creche');
   if(selR)selR.innerHTML='<option value="">— Siège / non précisé —</option>'+optsC;
+  const selRP=document.getElementById('ad-r-prochaine-creche');
+  if(selRP)selRP.innerHTML='<option value="">— Siège / non précisé —</option>'+optsC;
   adFillRespSelects();
   // Le vidéoprojecteur de la salle ne change pas d'une réunion à l'autre :
   // le réglage se retrouve tel qu'on l'avait laissé.
@@ -503,6 +505,7 @@ function adRenderReunion(){
     set('ad-r-presents',r&&r.presents);
     set('ad-r-excuses',r&&r.excuses);
     set('ad-r-prochaine',r&&r.prochaine_reunion);
+    set('ad-r-prochaine-creche',r&&r.prochaine_reunion_creche_id);
     set('ad-r-points',r&&r.points);
     set('ad-r-divers',r&&r.divers);
   }
@@ -781,23 +784,24 @@ async function adAjoutRapide(){
 // L'événement est retrouvé par son titre et son ancienne date : si la date
 // change il est déplacé, si elle est effacée il est supprimé, jamais dupliqué.
 const AD_EVT_TITRE='Réunion de coordination';
-async function adSyncEvenementProchaine(ancienne,nouvelle,heure){
+async function adSyncEvenementProchaine(ancienne,nouvelle,heure,crecheId){
   try{
     if(typeof cacheEvenements==='undefined')return;
     const trouve=d=>d?cacheEvenements.find(e=>e.titre===AD_EVT_TITRE&&e.date_debut===d):null;
     const existant=trouve(ancienne)||trouve(nouvelle);
+    const nomCreche=(c=>c?c.name:'')((cacheCreches||[]).find(c=>String(c.id)===String(crecheId||'')));
     if(!nouvelle){
       if(existant&&await dbDeleteStrict('evenements',existant.id)){
         cacheEvenements=cacheEvenements.filter(e=>e.id!==existant.id);
       }
     }else if(existant){
-      if(existant.date_debut===nouvelle)return;
-      const maj={date_debut:nouvelle,date_fin:null};
+      if(existant.date_debut===nouvelle&&String(existant.creche_id||'')===String(crecheId||''))return;
+      const maj={date_debut:nouvelle,date_fin:null,creche_id:crecheId||null,lieu:nomCreche};
       if(await dbUpdateStrict('evenements',existant.id,maj))Object.assign(existant,maj);
     }else{
-      const row={titre:AD_EVT_TITRE,type:'reunion',creche_id:null,date_debut:nouvelle,date_fin:null,
+      const row={titre:AD_EVT_TITRE,type:'reunion',creche_id:crecheId||null,date_debut:nouvelle,date_fin:null,
         heure_debut:/^\d{1,2}[:h]\d{2}$/.test(heure||'')?heure.replace('h',':'):null,heure_fin:null,
-        lieu:'',description:'Ajoutée automatiquement depuis le mode réunion.',
+        lieu:nomCreche,description:'Ajoutée automatiquement depuis le mode réunion.',
         auteur:(currentProfile&&currentProfile.name)||''};
       const saved=await dbInsert('evenements',{...row,created_by:currentUser?currentUser.id:null});
       if(saved)cacheEvenements.push(saved);
@@ -821,13 +825,14 @@ async function adReunionEnregistrer(silencieux){
     excuses:(document.getElementById('ad-r-excuses').value||'').trim()||null,
     points:(document.getElementById('ad-r-points').value||'').trim()||null,
     divers:(document.getElementById('ad-r-divers').value||'').trim()||null,
-    prochaine_reunion:document.getElementById('ad-r-prochaine').value||null
+    prochaine_reunion:document.getElementById('ad-r-prochaine').value||null,
+    prochaine_reunion_creche_id:document.getElementById('ad-r-prochaine-creche').value||null
   };
   if(adReunionCourante)row.cloturee=adReunionCourante.cloturee;
   const ancienneProchaine=adReunionCourante&&adReunionCourante.prochaine_reunion||null;
   const{data,error}=await sb.from('reunions_direction').upsert(row,{onConflict:'date_reunion'}).select().single();
   if(error){showBanner('Enregistrement refusé : '+error.message,'error');return false;}
-  await adSyncEvenementProchaine(ancienneProchaine,row.prochaine_reunion,row.heure);
+  await adSyncEvenementProchaine(ancienneProchaine,row.prochaine_reunion,row.heure,row.prochaine_reunion_creche_id);
   adReunions=adReunions.filter(x=>x.date_reunion!==row.date_reunion);
   adReunions.push(data);
   adReunions.sort((a,b)=>String(b.date_reunion).localeCompare(String(a.date_reunion)));
@@ -868,7 +873,7 @@ function adRenderCRList(){
         +(r.presents?'<div class="dbody"><strong>Présents :</strong> '+escHtml(r.presents)+(r.excuses?' · <em>Excusés : '+escHtml(r.excuses)+'</em>':'')+'</div>':'')
         +'<div class="dfoot">'
           +'<span class="badge b-ref">'+decidees.length+' action'+(decidees.length>1?'s':'')+' décidée'+(decidees.length>1?'s':'')+(decidees.length?' · '+closes+' close'+(closes>1?'s':''):'')+'</span>'
-          +(r.prochaine_reunion?'<span class="meta-txt">prochaine réunion : '+adFmtDate(r.prochaine_reunion)+'</span>':'')
+          +(r.prochaine_reunion?'<span class="meta-txt">prochaine réunion : '+adFmtDate(r.prochaine_reunion)+(adLieuProchaine(r)?' ('+escHtml(adLieuProchaine(r))+')':'')+'</span>':'')
         +'</div>'
       +'</div>'
       +'<div class="dactions">'
@@ -929,6 +934,11 @@ function adSnapshot(r){
 function adLieuReunion(r){
   if(!r||!r.creche_id)return null;
   const c=(cacheCreches||[]).find(x=>String(x.id)===String(r.creche_id));
+  return c?c.name:null;
+}
+function adLieuProchaine(r){
+  if(!r||!r.prochaine_reunion_creche_id)return null;
+  const c=(cacheCreches||[]).find(x=>String(x.id)===String(r.prochaine_reunion_creche_id));
   return c?c.name:null;
 }
 function adCRHtml(r,pourImpression){
@@ -1003,7 +1013,7 @@ function adCRHtml(r,pourImpression){
     +adCRMentionEtat(r,gel)
     +s1+s2+s3+s4+s5
     +h2('Prochaine réunion')
-    +'<p style="font-size:12.5px">'+(r.prochaine_reunion?adFmtDateLongue(r.prochaine_reunion):'à fixer')+'</p>'
+    +'<p style="font-size:12.5px">'+(r.prochaine_reunion?adFmtDateLongue(r.prochaine_reunion)+(adLieuProchaine(r)?' — '+escHtml(adLieuProchaine(r)):''):'à fixer')+'</p>'
     +'</div>';
 }
 
