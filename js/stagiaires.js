@@ -187,9 +187,9 @@ function stgShowView(v,btn){
 
 function stgSetFilter(f){
   stgFilter=f;
-  ['actives','demandes','terminees','toutes'].forEach(x=>{
-    const c=document.getElementById('stg-chip-'+x);
-    if(c)c.classList.toggle('active',x===f);
+  ['terminees','toutes'].forEach(x=>{
+    const a=document.getElementById('stg-lnk-'+x);
+    if(a)a.style.fontWeight=x===f?'700':'';
   });
   stgRender();
 }
@@ -235,6 +235,9 @@ function stgDansPuce(s,puce){
   if(puce==='demandes')return stgATraiter(s);
   if(puce==='actives')return s.statut==='accepte'||s.statut==='en_cours';
   if(puce==='terminees')return stgClos(s.statut);
+  if(puce==='alternants')return stgType(s)==='alternant'&&!stgClos(s.statut);
+  if(puce==='incomplets')return !stgClos(s.statut)&&!stgAvancement(s.id).complet;
+  if(puce==='aenvoyer')return stgLienAEnvoyer(s);
   return true;
 }
 
@@ -325,8 +328,10 @@ function stgFiltrees(){
   });
 }
 
-function stgStatCard(label,val,icon,color){
-  return '<div class="stat-card"><div class="stat-val" style="color:'+color+'">'+val+'</div>'
+function stgStatCard(label,val,icon,color,filter){
+  const actif=filter&&stgFilter===filter;
+  return '<div class="stat-card clickable'+(actif?' active':'')+'" data-filter="'+filter+'" onclick="stgSetFilter(\''+filter+'\')">'
+    +'<div class="stat-val" style="color:'+color+'">'+val+'</div>'
     +'<div class="stat-label"><i class="ti '+icon+'" style="color:'+color+'"></i> '+label+'</div></div>';
 }
 
@@ -356,12 +361,12 @@ function stgRender(){
     const incomplets=stgCache.filter(s=>!stgClos(s.statut)&&!stgAvancement(s.id).complet).length;
     const aEnvoyer=stgCache.filter(stgLienAEnvoyer).length;
     stats.innerHTML=
-       stgStatCard('Demandes à traiter',aTraiter,'ti-inbox',aTraiter?'var(--blue)':'var(--muted)')
-      +stgStatCard('En cours',enCours,'ti-run','var(--green)')
-      +stgStatCard('Acceptés, à venir',aVenir,'ti-calendar-plus','var(--koala)')
-      +stgStatCard('Alternants en cours et à venir',alt,'ti-briefcase',alt?'var(--orange-dark)':'var(--muted)')
-      +stgStatCard('Dossiers incomplets',incomplets,'ti-file-alert',incomplets?'var(--orange-dark)':'var(--muted)')
-      +stgStatCard('Liens à envoyer',aEnvoyer,'ti-send',aEnvoyer?'var(--orange-dark)':'var(--muted)');
+       stgStatCard('Demandes à traiter',aTraiter,'ti-inbox',aTraiter?'var(--blue)':'var(--muted)','demandes')
+      +stgStatCard('En cours',enCours,'ti-run','var(--green)','actives')
+      +stgStatCard('Acceptés, à venir',aVenir,'ti-calendar-plus','var(--koala)','actives')
+      +stgStatCard('Alternants en cours et à venir',alt,'ti-briefcase',alt?'var(--orange-dark)':'var(--muted)','alternants')
+      +stgStatCard('Dossiers incomplets',incomplets,'ti-file-alert',incomplets?'var(--orange-dark)':'var(--muted)','incomplets')
+      +stgStatCard('Liens à envoyer',aEnvoyer,'ti-send',aEnvoyer?'var(--orange-dark)':'var(--muted)','aenvoyer');
   }
   const badge=document.getElementById('stg-badge-encours');
   if(badge){
