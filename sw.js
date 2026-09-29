@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v29';   // v29 : bannière de notification passe au-dessus des fenêtres modales (position:fixed + z-index)
+const CACHE_NAME = 'stocks-v30';   // v30 : accueil par thématiques (tuiles Modules) + barre du bas smartphone
 
 self.addEventListener('install', event => {
   event.waitUntil(

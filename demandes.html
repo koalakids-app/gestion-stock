@@ -86,6 +86,63 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* TAB CONTENT */
 .tab-content{display:none}.tab-content.active{display:block}
 
+/* ACCUEIL PAR THEMES (vue « Modules ») */
+.acc-hello{font-size:22px;font-weight:700;color:var(--text);margin:4px 0 14px}
+.acc-page{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:22px 12px}
+.acc-sec{grid-column:span 6;min-width:0}
+.acc-sec.s2{grid-column:span 2}.acc-sec.s3{grid-column:span 3}.acc-sec.s5{grid-column:span 5}
+.acc-h{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--text);margin-bottom:10px}
+.acc-h::before{content:'';width:10px;height:10px;border-radius:50%;background:var(--c)}
+.acc-tiles{display:grid;grid-template-columns:repeat(var(--n,6),minmax(0,1fr));gap:12px}
+.acc-tile{display:flex;flex-direction:column;justify-content:space-between;gap:10px;min-height:104px;padding:12px;border:none;border-radius:16px;background:var(--c);color:#fff;text-align:left;font-family:inherit;cursor:pointer;transition:transform .12s,box-shadow .12s}
+.acc-tile:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.16)}
+.acc-tile:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+.acc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
+.acc-top>span:last-child{display:flex;align-items:center;gap:4px}
+.acc-ic{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:21px}
+.acc-lbl{font-size:14.5px;font-weight:700;line-height:1.2}
+.acc-chip{font-size:10px;font-weight:700;background:#fff;color:var(--c);border-radius:999px;padding:2px 7px}
+.acc-tile .mnav-badge{background:#fff;color:var(--c);font-size:11.5px;padding:1px 7px}
+[data-t=equipe]{--c:#3D3580}[data-t=enfants]{--c:#B4490A}[data-t=finance]{--c:#0F6B5E}[data-t=comm]{--c:#1F5A99}[data-t=pilotage]{--c:#3B3757}
+.acc-lbl{overflow-wrap:anywhere}
+@media(max-width:899px){
+  .acc-page{grid-template-columns:1fr}
+  .acc-sec,.acc-sec.s2,.acc-sec.s3,.acc-sec.s5{grid-column:auto}
+  .acc-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:599px){
+  .acc-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+/* Tablette / tactile : cibles plus grandes, pas d'effet de survol */
+@media(pointer:coarse){
+  .acc-tile{min-height:116px;padding:14px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .acc-tile:active{transform:scale(.97)}
+  .acc-ic{width:44px;height:44px;font-size:24px}
+  .acc-lbl{font-size:15px}
+  .acc-chip{font-size:11px}
+  .acc-h{font-size:17px}
+  .acc-hello{font-size:24px}
+}
+@media(pointer:coarse) and (max-width:899px){.acc-lbl{font-size:16.5px}}
+@media(hover:none){.acc-tile:hover{transform:none;box-shadow:none}}
+
+/* Menu du haut simplifié : seul « Modules » reste ; les autres accès passent par les tuiles.
+   Les boutons sont masqués, pas supprimés : les pastilles et le code qui s'y réfèrent restent valides. */
+.main-nav>.mnav-btn:not(#mnav-accueil),.main-nav>.mnav-hub-wrap{display:none!important}
+/* Barre du bas (smartphone) */
+.acc-bottom{display:none}
+@media(max-width:599px){
+  .main-nav{display:none!important}
+  .acc-bottom{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));position:fixed;left:0;right:0;bottom:0;z-index:90;background:#fff;border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 10px rgba(0,0,0,.06)}
+  .acc-bottom button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:60px;border:none;background:transparent;color:var(--muted);font-family:inherit;font-size:11.5px;font-weight:600;line-height:1.1;position:relative;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .acc-bottom button i{font-size:23px}
+  .acc-bottom button.active{color:var(--koala)}
+  .acc-bottom .mnav-badge{position:absolute;top:6px;left:calc(50% + 6px);font-size:10.5px;padding:1px 6px}
+  #app-wrap .app{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+}
+@media(pointer:coarse) and (max-width:599px){.acc-lbl{font-size:14px}.acc-tile{padding:12px}}
+@media print{.acc-bottom{display:none!important}}
+
 /* NOTIFICATIONS */
 /* position:fixed + z-index au-dessus des modales (.overlay = 100) : sinon un
    message affiché pendant qu'une fenêtre est ouverte est peint sous elle et
@@ -529,6 +586,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </a>
     <div class="logo"><img id="app-logo" src="" alt="Koala Kids" data-branding-logo/></div>
     <nav class="main-nav" id="main-nav">
+      <button class="mnav-btn" onclick="showMain('accueil')" id="mnav-accueil"><i class="ti ti-layout-grid"></i> Modules</button>
       <button class="mnav-btn referent-only" onclick="showMain('ref-dashboard')" id="mnav-ref-dashboard"><i class="ti ti-layout-dashboard"></i> Mon tableau de bord</button>
       <button class="mnav-btn direction-only" onclick="showMain('dashboard')" id="mnav-dashboard"><i class="ti ti-chart-bar"></i> Tableau de bord</button>
       <button class="mnav-btn" onclick="showMain('evenements')" id="mnav-evenements"><i class="ti ti-calendar"></i> Événements</button>
@@ -605,6 +663,68 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 
   <div id="notif-banner" class="notif-banner"></div>
+
+  <!-- ACCUEIL PAR THEMES (vue « Modules ») -->
+  <div id="main-accueil" class="tab-content">
+    <div class="acc-hello" id="acc-hello">Bonjour</div>
+    <div class="acc-page">
+      <section class="acc-sec " data-t="equipe">
+        <h2 class="acc-h">Équipe</h2>
+        <div class="acc-tiles" style="--n:6">
+          <button type="button" class="acc-tile" onclick="showMain('planning')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-calendar-event" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Planning</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('employes')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-id-badge-2" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Collaborateurs/trices</span></button>
+          <button type="button" class="acc-tile direction-only" onclick="showMain('referents')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-address-book" aria-hidden="true"></i></span><span><span class="acc-chip">Direction</span></span></span><span class="acc-lbl">Directeurs/trices techniques</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('remplacantes')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-user-plus" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Remplaçants/tes</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('stagiaires')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-school" aria-hidden="true"></i></span><span><span class="mnav-badge" id="acc-badge-stagiaires" style="display:none">0</span></span></span><span class="acc-lbl">Stagiaires &amp; alternants</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('reunions-equipe')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-notebook" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Réunions d'équipe</span></button>
+        </div>
+      </section>
+      <section class="acc-sec " data-t="enfants">
+        <h2 class="acc-h">Enfants &amp; suivi</h2>
+        <div class="acc-tiles" style="--n:6">
+          <button type="button" class="acc-tile" onclick="showMain('enfants')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-mood-kid" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Enfants</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('presence')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-users-group" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Présences</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('vaccinations')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-vaccine" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Vaccinations</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('incidents')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-alert-triangle" aria-hidden="true"></i></span><span><span class="mnav-badge" id="acc-badge-incidents" style="display:none">0</span></span></span><span class="acc-lbl">Incidents</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('mcm')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-tools-kitchen-2" aria-hidden="true"></i></span><span><span class="mnav-badge" id="acc-badge-mcm" style="display:none">0</span></span></span><span class="acc-lbl">MCM (repas)</span></button>
+          <button type="button" class="acc-tile" onclick="openKiosque()"><span class="acc-top"><span class="acc-ic"><i class="ti ti-device-tablet" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Mode kiosque</span></button>
+        </div>
+      </section>
+      <section class="acc-sec s2" data-t="finance">
+        <h2 class="acc-h">Finance</h2>
+        <div class="acc-tiles" style="--n:2">
+          <button type="button" class="acc-tile direction-only" onclick="showMain('fraisik')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-car" aria-hidden="true"></i></span><span><span class="acc-chip">Direction</span></span></span><span class="acc-lbl">Frais IK</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('fraispro')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-receipt" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Frais pro</span></button>
+        </div>
+      </section>
+      <section class="acc-sec s3" data-t="comm">
+        <h2 class="acc-h">Communication</h2>
+        <div class="acc-tiles" style="--n:3">
+          <button type="button" class="acc-tile" onclick="showMain('demands')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-message-circle" aria-hidden="true"></i></span><span><span class="mnav-badge" id="acc-badge-demands" style="display:none">0</span></span></span><span class="acc-lbl">Messagerie</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('evenements')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-calendar" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Événements</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('partenaires')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-building-community" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Partenaires</span></button>
+        </div>
+      </section>
+      <section class="acc-sec s5" data-t="pilotage">
+        <h2 class="acc-h">Pilotage</h2>
+        <div class="acc-tiles" style="--n:5">
+          <button type="button" class="acc-tile direction-only" onclick="showMain('dashboard')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-chart-bar" aria-hidden="true"></i></span><span><span class="acc-chip">Direction</span></span></span><span class="acc-lbl">Tableau de bord</span></button>
+          <button type="button" class="acc-tile referent-only" onclick="showMain('ref-dashboard')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-layout-dashboard" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Mon tableau de bord</span></button>
+          <button type="button" class="acc-tile direction-only" onclick="showMain('actions')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-target-arrow" aria-hidden="true"></i></span><span><span class="acc-chip">Direction</span></span></span><span class="acc-lbl">Actions</span></button>
+          <button type="button" class="acc-tile david-only" style="display:none" onclick="showMain('afaire')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-checklist" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">À faire</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('notes')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-notes" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Notes</span></button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- BARRE DU BAS (smartphone) -->
+  <nav class="acc-bottom" id="acc-bottom" aria-label="Navigation principale">
+    <button type="button" id="acc-b-accueil" class="active" onclick="showMain('accueil')"><i class="ti ti-layout-grid" aria-hidden="true"></i><span>Modules</span></button>
+    <button type="button" id="acc-b-demands" onclick="showMain('demands')"><i class="ti ti-message-circle" aria-hidden="true"></i><span>Messagerie</span><span class="mnav-badge" id="acc-bb-demands" style="display:none">0</span></button>
+    <button type="button" id="acc-b-planning" onclick="showMain('planning')"><i class="ti ti-calendar-event" aria-hidden="true"></i><span>Planning</span></button>
+    <button type="button" id="acc-b-presence" onclick="showMain('presence')"><i class="ti ti-users-group" aria-hidden="true"></i><span>Présences</span></button>
+  </nav>
 
   <!-- DEMANDES -->
   <div id="main-demands" class="tab-content active">
@@ -4084,13 +4204,57 @@ async function markConsignesRead(){
   updateConsigneBadge();
 }
 
+/* ACCUEIL PAR THEMES : bonjour + recopie des pastilles du menu sur les tuiles */
+function accMirrorBadges(){
+  ['demands','incidents','mcm','stagiaires'].forEach(function(k){
+    var src=document.getElementById('badge-'+k);
+    if(!src)return;
+    var n=parseInt(src.textContent,10)||0;
+    var visible=(n>0&&src.style.display!=='none');
+    ['acc-badge-','acc-bb-'].forEach(function(pre){
+      var dst=document.getElementById(pre+k);
+      if(!dst)return;
+      dst.textContent=n;
+      dst.style.display=visible?'':'none';
+    });
+  });
+}
+/* Barre du bas : met en évidence l'écran courant (Modules pour tous les autres écrans) */
+function accBottomMaj(tab){
+  var cible=(['demands','planning','presence'].indexOf(tab)>=0)?tab:'accueil';
+  ['accueil','demands','planning','presence'].forEach(function(k){
+    var b=document.getElementById('acc-b-'+k);
+    if(b)b.classList.toggle('active',k===cible);
+  });
+}
+function accRender(){
+  var el=document.getElementById('acc-hello');
+  if(el){
+    var pre=((currentProfile&&currentProfile.name)||'').split(' ')[0];
+    el.textContent=pre?('Bonjour '+pre):'Bonjour';
+  }
+  accMirrorBadges();
+}
+function accObserveBadges(){
+  if(typeof MutationObserver==='undefined')return;
+  var mo=new MutationObserver(accMirrorBadges);
+  ['demands','incidents','mcm','stagiaires'].forEach(function(k){
+    var src=document.getElementById('badge-'+k);
+    if(src)mo.observe(src,{childList:true,characterData:true,subtree:true,attributes:true,attributeFilter:['style']});
+  });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',accObserveBadges);
+else accObserveBadges();
+
 function showMain(tab){
   _mainCourant=tab;
-  ['demands','incidents','mcm','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','notes','actions','reunions-equipe','stagiaires','partenaires'].forEach(t=>{
+  ['accueil','demands','incidents','mcm','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','enfants','afaire','notes','actions','reunions-equipe','stagiaires','partenaires'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
   });
+  accBottomMaj(tab);
+  if(tab==='accueil')accRender();
   if(tab==='planning')renderPlanning();
   if(tab==='demands'){renderCrecheTabs();setTimeout(markConsignesRead,600);notifBellMarquerSectionLue('demands');}
   if(tab==='referents')renderReferents();
