@@ -774,6 +774,35 @@ async function adAjoutRapide(){
   showBanner('Action n°'+data.numero+' ajoutée ✅');
 }
 
+// La prochaine réunion de coordination doit aussi figurer dans « Événements ».
+// L'événement est retrouvé par son titre et son ancienne date : si la date
+// change il est déplacé, si elle est effacée il est supprimé, jamais dupliqué.
+const AD_EVT_TITRE='Réunion de coordination';
+async function adSyncEvenementProchaine(ancienne,nouvelle,heure){
+  try{
+    if(typeof cacheEvenements==='undefined')return;
+    const trouve=d=>d?cacheEvenements.find(e=>e.titre===AD_EVT_TITRE&&e.date_debut===d):null;
+    const existant=trouve(ancienne)||trouve(nouvelle);
+    if(!nouvelle){
+      if(existant&&await dbDeleteStrict('evenements',existant.id)){
+        cacheEvenements=cacheEvenements.filter(e=>e.id!==existant.id);
+      }
+    }else if(existant){
+      if(existant.date_debut===nouvelle)return;
+      const maj={date_debut:nouvelle,date_fin:null};
+      if(await dbUpdateStrict('evenements',existant.id,maj))Object.assign(existant,maj);
+    }else{
+      const row={titre:AD_EVT_TITRE,type:'reunion',creche_id:null,date_debut:nouvelle,date_fin:null,
+        heure_debut:/^\d{1,2}[:h]\d{2}$/.test(heure||'')?heure.replace('h',':'):null,heure_fin:null,
+        lieu:'',description:'Ajoutée automatiquement depuis le mode réunion.',
+        auteur:(currentProfile&&currentProfile.name)||''};
+      const saved=await dbInsert('evenements',{...row,created_by:currentUser?currentUser.id:null});
+      if(saved)cacheEvenements.push(saved);
+    }
+    if(typeof renderCalendar==='function')renderCalendar();
+  }catch(e){console.warn('sync événement prochaine réunion',e);}
+}
+
 async function adReunionEnregistrer(silencieux){
   adCapturePointsCreches();
   // On ne stocke que les sites réellement documentés : garder les blocs vides
@@ -791,8 +820,10 @@ async function adReunionEnregistrer(silencieux){
     prochaine_reunion:document.getElementById('ad-r-prochaine').value||null
   };
   if(adReunionCourante)row.cloturee=adReunionCourante.cloturee;
+  const ancienneProchaine=adReunionCourante&&adReunionCourante.prochaine_reunion||null;
   const{data,error}=await sb.from('reunions_direction').upsert(row,{onConflict:'date_reunion'}).select().single();
   if(error){showBanner('Enregistrement refusé : '+error.message,'error');return false;}
+  await adSyncEvenementProchaine(ancienneProchaine,row.prochaine_reunion,row.heure);
   adReunions=adReunions.filter(x=>x.date_reunion!==row.date_reunion);
   adReunions.push(data);
   adReunions.sort((a,b)=>String(b.date_reunion).localeCompare(String(a.date_reunion)));
