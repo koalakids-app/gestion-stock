@@ -25,9 +25,22 @@ async function kkLoginAlertCheck(sb) {
     });
     if (error) { console.warn('[LoginAlert]', error); return; }
     if (estNouveau) {
-      sb.functions.invoke('envoyer-alerte-connexion', {
-        body: { user_agent: navigator.userAgent },
-      }).catch(e => console.warn('[LoginAlert] envoi alerte', e));
+      // functions.invoke ne lève pas d'exception sur une erreur HTTP : elle est
+      // renvoyée dans `error`. On la vérifie (avant, elle était ignorée en
+      // silence, l'alerte pouvait donc échouer sans aucune trace) et on retente
+      // une fois, la session pouvant ne pas être encore prête juste après le login.
+      for (let essai = 1; essai <= 2; essai++) {
+        try {
+          const { error: errAlerte } = await sb.functions.invoke('envoyer-alerte-connexion', {
+            body: { user_agent: navigator.userAgent },
+          });
+          if (!errAlerte) break;
+          console.warn('[LoginAlert] envoi alerte (essai ' + essai + ')', errAlerte);
+        } catch (e) {
+          console.warn('[LoginAlert] envoi alerte (essai ' + essai + ')', e);
+        }
+        if (essai < 2) await new Promise(r => setTimeout(r, 1500));
+      }
     }
   } catch (e) {
     console.warn('[LoginAlert]', e);
