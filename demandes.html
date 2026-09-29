@@ -1400,6 +1400,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <label class="flabel">Heure</label>
             <input class="finput" id="ad-r-heure" placeholder="9h30" onchange="adReunionDirty()">
           </div>
+          <div style="width:170px">
+            <label class="flabel">Lieu</label>
+            <select class="finput" id="ad-r-creche" onchange="adReunionDirty()"><option value="">— Siège / non précisé —</option></select>
+          </div>
           <div style="flex:1;min-width:200px">
             <label class="flabel">Présents</label>
             <input class="finput" id="ad-r-presents" placeholder="Prénoms, séparés par des virgules" onchange="adReunionDirty()">
@@ -2956,7 +2960,32 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 // canal comme anonyme et n'y délivrent silencieusement aucun postgres_changes.
 sb.auth.onAuthStateChange(function(event,session){
   if(session?.access_token)sb.realtime.setAuth(session.access_token);
+  if(event==='SIGNED_OUT')gererDeconnexionInattendue();
 });
+// Repéré via la surveillance post-déploiement (29/09/2026) : quand supabase-js perd la
+// session en tâche de fond (jeton expiré après une longue mise en veille de l'onglet,
+// échec de rafraîchissement du refresh token...), il déclenche SIGNED_OUT, mais l'appli
+// continuait silencieusement d'interroger la base avec la clé anon — écrans qui se
+// vident sans le moindre message, toutes les 20 s (cf. syncDemarrer), jusqu'à ce que la
+// personne recharge la page d'elle-même. On coupe désormais la synchro et on demande
+// explicitement de recharger, plutôt que de laisser deviner pourquoi les données ont
+// disparu. Le signOut initial de boot() (avant tout login, sur poste partagé) ne doit
+// pas déclencher cet écran : currentUser n'est alors pas encore défini.
+let _sessionExpireeGeree=false;
+function gererDeconnexionInattendue(){
+  if(!currentUser||_sessionExpireeGeree)return;
+  _sessionExpireeGeree=true;
+  if(_syncTimer)clearInterval(_syncTimer);
+  const b=document.createElement('div');
+  b.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(20,18,40,.75);display:flex;align-items:center;justify-content:center;padding:20px';
+  b.innerHTML='<div style="background:#fff;border-radius:14px;padding:28px;max-width:360px;text-align:center;font-family:-apple-system,sans-serif">'
+    +'<div style="font-size:32px;margin-bottom:10px">🔒</div>'
+    +'<div style="font-weight:700;margin-bottom:8px;color:#1a1a1a">Session expirée</div>'
+    +'<div style="color:#666;font-size:13.5px;margin-bottom:18px;line-height:1.5">Votre connexion a expiré (mise en veille prolongée). Les données affichées ne sont plus à jour — rechargez la page pour vous reconnecter.</div>'
+    +'<button onclick="location.reload()" style="background:#3D3580;color:#fff;border:none;border-radius:8px;padding:11px 22px;font-weight:700;font-size:13.5px;cursor:pointer">Recharger</button>'
+    +'</div>';
+  document.body.appendChild(b);
+}
 if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;

@@ -112,6 +112,8 @@ async function adInit(){
   if(selC)selC.innerHTML='<option value="">— Transverse / réseau —</option>'+optsC;
   const selN=document.getElementById('ad-new-creche');
   if(selN)selN.innerHTML='<option value="">— Transverse / réseau —</option>'+optsC;
+  const selR=document.getElementById('ad-r-creche');
+  if(selR)selR.innerHTML='<option value="">— Siège / non précisé —</option>'+optsC;
   adFillRespSelects();
   // Le vidéoprojecteur de la salle ne change pas d'une réunion à l'autre :
   // le réglage se retrouve tel qu'on l'avait laissé.
@@ -497,6 +499,7 @@ function adRenderReunion(){
   if(!_adDirty){
     _adPointsCreches=Object.assign({},(r&&r.points_creches)||{});
     set('ad-r-heure',r&&r.heure);
+    set('ad-r-creche',r&&r.creche_id);
     set('ad-r-presents',r&&r.presents);
     set('ad-r-excuses',r&&r.excuses);
     set('ad-r-prochaine',r&&r.prochaine_reunion);
@@ -813,6 +816,7 @@ async function adReunionEnregistrer(silencieux){
     points_creches:notes,
     date_reunion:adReunionDate||todayStr(),
     heure:(document.getElementById('ad-r-heure').value||'').trim()||null,
+    creche_id:document.getElementById('ad-r-creche').value||null,
     presents:(document.getElementById('ad-r-presents').value||'').trim()||null,
     excuses:(document.getElementById('ad-r-excuses').value||'').trim()||null,
     points:(document.getElementById('ad-r-points').value||'').trim()||null,
@@ -859,7 +863,7 @@ function adRenderCRList(){
     const closes=decidees.filter(a=>adEstClos(a.statut)).length;
     return '<div class="dcard" style="border-left:4px solid '+(r.cloturee?'var(--green)':'var(--orange)')+'">'
       +'<div class="dmeta">'
-        +'<div class="dtop"><span class="dsubject">Réunion du '+adFmtDateLongue(r.date_reunion)+(r.heure?' — '+escHtml(r.heure):'')+'</span>'
+        +'<div class="dtop"><span class="dsubject">Réunion du '+adFmtDateLongue(r.date_reunion)+(r.heure?' — '+escHtml(r.heure):'')+(adLieuReunion(r)?' · '+escHtml(adLieuReunion(r)):'')+'</span>'
         +'<span class="badge" style="background:'+(r.cloturee?'var(--green-light)':'var(--orange-light)')+';color:'+(r.cloturee?'var(--green)':'var(--orange-dark)')+'">'+(r.cloturee?'✅ Clôturée':'✏️ En cours')+'</span></div>'
         +(r.presents?'<div class="dbody"><strong>Présents :</strong> '+escHtml(r.presents)+(r.excuses?' · <em>Excusés : '+escHtml(r.excuses)+'</em>':'')+'</div>':'')
         +'<div class="dfoot">'
@@ -922,6 +926,11 @@ function adSnapshot(r){
   return{revue:sel.revue.map(adPhoto),decidees:sel.decidees.map(adPhoto),fige_le:todayStr()};
 }
 
+function adLieuReunion(r){
+  if(!r||!r.creche_id)return null;
+  const c=(cacheCreches||[]).find(x=>String(x.id)===String(r.creche_id));
+  return c?c.name:null;
+}
 function adCRHtml(r,pourImpression){
   // Une réunion clôturée montre l'état photographié ce jour-là. Sans ça, un
   // compte rendu relu six mois plus tard racontait une réunion où tout était
@@ -987,6 +996,7 @@ function adCRHtml(r,pourImpression){
   return '<div style="font-size:12.5px">'
     +'<table style="font-size:12.5px;margin-bottom:6px"><tbody>'
       +'<tr><td style="padding:2px 10px 2px 0;color:#888">Date</td><td><strong>'+adFmtDateLongue(r.date_reunion)+(r.heure?' — '+escHtml(r.heure):'')+'</strong></td></tr>'
+      +'<tr><td style="padding:2px 10px 2px 0;color:#888">Lieu</td><td>'+escHtml(adLieuReunion(r)||'Siège / non précisé')+'</td></tr>'
       +'<tr><td style="padding:2px 10px 2px 0;color:#888">Présents</td><td>'+escHtml(r.presents||'—')+'</td></tr>'
       +'<tr><td style="padding:2px 10px 2px 0;color:#888">Excusés</td><td>'+escHtml(r.excuses||'—')+'</td></tr>'
     +'</tbody></table>'
