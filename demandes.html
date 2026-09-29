@@ -3314,7 +3314,7 @@ function playNotifSound(){
     o.start();o.stop(ctx.currentTime+0.35);
   }catch(e){}
 }
-function showInAppNotif(title,body,section){
+function showInAppNotif(title,body,section,cible){
   playNotifSound();
   let wrap=document.getElementById('inapp-notif-wrap');
   if(!wrap){
@@ -3330,7 +3330,8 @@ function showInAppNotif(title,body,section){
   wrap.appendChild(card);
   requestAnimationFrame(()=>{card.style.opacity='1';card.style.transform='translateX(0)';});
   setTimeout(()=>{card.style.opacity='0';card.style.transform='translateX(24px)';setTimeout(()=>card.remove(),300);},6000);
-  notifBellAjouter(title,body,section);
+  const nid=notifBellAjouter(title,body,section,cible);
+  if(cible){card.style.cursor='pointer';card.onclick=()=>notifBellOuvrir(nid);}
 }
 
 /* Historique des notifications (cloche dans l'en-tête) : le toast disparaît en
@@ -3346,11 +3347,13 @@ function notifBellCharger(){
 function notifBellSauver(){
   try{localStorage.setItem(notifBellCle(),JSON.stringify(notifBellListe.slice(0,NOTIF_BELL_MAX)));}catch(e){}
 }
-function notifBellAjouter(title,body,section){
-  notifBellListe.unshift({id:Date.now()+'-'+Math.random().toString(36).slice(2),title,body:body||'',ts:Date.now(),lu:false,section:section||null});
+function notifBellAjouter(title,body,section,cible){
+  const id=Date.now()+'-'+Math.random().toString(36).slice(2);
+  notifBellListe.unshift({id,title,body:body||'',ts:Date.now(),lu:false,section:section||null,cible:cible||null});
   notifBellListe=notifBellListe.slice(0,NOTIF_BELL_MAX);
   notifBellSauver();
   notifBellRender();
+  return id;
 }
 // Pastille sur le bouton de nav concerné (Messagerie/Événements), en plus du
 // badge de la cloche — se referme dès qu'on ouvre la section correspondante.
@@ -3385,16 +3388,31 @@ function notifBellRender(){
   if(!notifBellListe.length){list.innerHTML='<div class="notif-bell-empty">Aucune notification pour l\'instant.</div>';return;}
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   list.innerHTML=notifBellListe.map(n=>
-    '<div class="notif-bell-item'+(n.lu?'':' non-lu')+'" onclick="notifBellMarquerLu(\''+n.id+'\')">'
+    '<div class="notif-bell-item'+(n.lu?'':' non-lu')+'" onclick="'+(n.cible||n.section?'notifBellOuvrir':'notifBellMarquerLu')+'(\''+n.id+'\')">'
     +'<div class="nb-title">'+esc(n.title)+'</div>'
     +(n.body?'<div class="nb-body">'+esc(n.body)+'</div>':'')
-    +'<div class="nb-time">'+notifBellTempsRelatif(n.ts)+'</div>'
+    +'<div class="nb-time">'+notifBellTempsRelatif(n.ts)
+    +(n.cible||n.section?' · <a href="#" style="color:var(--koala);font-weight:600;text-decoration:none" onclick="event.stopPropagation();event.preventDefault();notifBellOuvrir(\''+n.id+'\')">Ouvrir →</a>':'')+'</div>'
     +'</div>'
   ).join('');
 }
 function notifBellMarquerLu(id){
   const n=notifBellListe.find(x=>x.id===id);
   if(n&&!n.lu){n.lu=true;notifBellSauver();notifBellRender();}
+}
+/* Ouvre ce à quoi la notification renvoie (discussion, événement, commande) et
+   la marque lue. Élément disparu depuis (supprimé) : on retombe sur la section. */
+function notifBellOuvrir(id){
+  const n=notifBellListe.find(x=>x.id===id);if(!n)return;
+  notifBellMarquerLu(id);closeNotifBell();
+  const c=n.cible||{};
+  if(n.section==='stock'){window.location.href='stock.html';return;}
+  if(!n.section)return;
+  showMain(n.section);
+  try{
+    if(c.type==='demande'&&cacheDemandes.some(d=>d.id===c.id))openThread(c.id);
+    else if(c.type==='evenement'&&cacheEvenements.some(e=>e.id===c.id))openEvenementModal(null,c.id);
+  }catch(e){console.warn('[Notif] ouverture',e);}
 }
 function notifBellToutMarquerLu(){
   notifBellListe.forEach(n=>n.lu=true);
@@ -3429,14 +3447,14 @@ function detecterNouveautesEtNotifier(avant){
     const etaitLa=avant.demandes.has(d.id);
     if(!etaitLa){
       if(d.type==='consigne'){
-        if(currentProfile.role==='referent')showInAppNotif('Nouvelle consigne',d.subject||'','demands');
+        if(currentProfile.role==='referent')showInAppNotif('Nouvelle consigne',d.subject||'','demands',{type:'demande',id:d.id});
       }else if(d.to_referent_id&&d.to_referent_id===currentProfile.id){
-        showInAppNotif('Nouvelle demande',d.subject||'','demands');
+        showInAppNotif('Nouvelle demande',d.subject||'','demands',{type:'demande',id:d.id});
       }
     }else{
       const statutAvant=avant.statutsDemandes.get(d.id);
       if(statutAvant&&statutAvant!==d.status&&d.to_referent_id&&d.to_referent_id===currentProfile.id){
-        showInAppNotif(d.status==='traite'?'Demande traitée':'Demande remise en attente',d.subject||'','demands');
+        showInAppNotif(d.status==='traite'?'Demande traitée':'Demande remise en attente',d.subject||'','demands',{type:'demande',id:d.id});
       }
     }
   }
@@ -3445,11 +3463,11 @@ function detecterNouveautesEtNotifier(avant){
     const d=cacheDemandes.find(x=>x.id===m.demande_id);if(!d)continue;
     const concerne=currentProfile.id===d.to_referent_id||currentProfile.id===d.referent_id
       ||cacheMessages.some(x=>x.demande_id===d.id&&x.author_id===currentProfile.id);
-    if(concerne)showInAppNotif('Nouveau message',m.body||'','demands');
+    if(concerne)showInAppNotif('Nouveau message',m.body||'','demands',{type:'demande',id:d.id});
   }
   for(const e of cacheEvenements){
     if(avant.evenements.has(e.id)||e.created_by===currentUser?.id)continue;
-    if(!e.creche_id||e.creche_id===currentProfile.creche_id)showInAppNotif('Nouvel événement',e.titre||'','evenements');
+    if(!e.creche_id||e.creche_id===currentProfile.creche_id)showInAppNotif('Nouvel événement',e.titre||'','evenements',{type:'evenement',id:e.id});
   }
   // Nouvelle commande passée dans le Stock pédagogique (module stock.html) : la
   // direction voit toutes les commandes, un(e) référent(e) uniquement celles de sa
