@@ -239,14 +239,17 @@ function stgDansPuce(s,puce){
 
 /* Le nombre de fiches derrière chaque puce, crèche et type courants compris :
    une fiche rangée ailleurs reste visible depuis la puce ouverte. */
-function stgMajCompteurs(){
+function stgBaseFiltre(){
   const creche=(document.getElementById('stg-f-creche-liste')||{}).value||'';
   const type=(document.getElementById('stg-f-type-liste')||{}).value||'';
-  const base=stgCache.filter(s=>{
+  return stgCache.filter(s=>{
     if(creche&&String(s.creche_id||'')!==String(creche))return false;
     if(type&&stgType(s)!==type)return false;
     return true;
   });
+}
+function stgMajCompteurs(){
+  const base=stgBaseFiltre();
   ['actives','demandes','terminees','toutes'].forEach(p=>{
     const el=document.getElementById('stg-n-'+p);
     if(!el)return;
@@ -350,14 +353,15 @@ function stgMessageVide(){
 function stgRender(){
   const stats=document.getElementById('stg-stats');
   if(stats){
-    const aTraiter=stgCache.filter(s=>stgATraiter(s)).length;
-    const enCours=stgCache.filter(s=>s.statut==='en_cours').length;
-    const aVenir=stgCache.filter(s=>s.statut==='accepte').length;
-    const alt=stgCache.filter(s=>stgType(s)==='alternant'&&!stgClos(s.statut)).length;
-    const incomplets=stgCache.filter(s=>!stgClos(s.statut)&&!stgAvancement(s.id).complet).length;
-    const aEnvoyer=stgCache.filter(stgLienAEnvoyer).length;
-    const terminees=stgCache.filter(s=>stgClos(s.statut)).length;
-    const toutes=stgCache.length;
+    const base=stgBaseFiltre();
+    const aTraiter=base.filter(s=>stgATraiter(s)).length;
+    const enCours=base.filter(s=>s.statut==='en_cours').length;
+    const aVenir=base.filter(s=>s.statut==='accepte').length;
+    const alt=base.filter(s=>stgType(s)==='alternant'&&!stgClos(s.statut)).length;
+    const incomplets=base.filter(s=>!stgClos(s.statut)&&!stgAvancement(s.id).complet).length;
+    const aEnvoyer=base.filter(stgLienAEnvoyer).length;
+    const terminees=base.filter(s=>stgClos(s.statut)).length;
+    const toutes=base.length;
     stats.innerHTML=
        stgStatCard('Demandes à traiter',aTraiter,'ti-inbox',aTraiter?'var(--blue)':'var(--muted)','demandes')
       +stgStatCard('En cours',enCours,'ti-run','var(--green)','actives')
