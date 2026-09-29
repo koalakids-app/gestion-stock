@@ -23,23 +23,16 @@
 --
 -- Appliqué directement en prod le 27/09/2026 (hors session Claude Code —
 -- dashboard Supabase), documenté ici après coup pour traçabilité.
+--
+-- MISE À JOUR 29/09/2026 : le même bug a ensuite été retrouvé sur
+-- evenements.org_id et documents_reponses.org_id (voir
+-- sql/evenements_documents_reponses_set_org_id_trigger.sql), avec la même
+-- fonction de trigger à la virgule près. Pour éviter trois fonctions
+-- identiques, ce trigger a été basculé sur la fonction mutualisée
+-- public.set_org_id_from_session() et l'ancienne fonction
+-- fournisseurs_set_org_id() a été supprimée.
 -- ============================================================================
 
-create or replace function public.fournisseurs_set_org_id()
-returns trigger
-language plpgsql
-security definer
-set search_path to 'public'
-as $function$
-begin
-  if new.org_id is null then
-    new.org_id := public.kk_mon_org();
-  end if;
-  return new;
-end;
-$function$;
-
-drop trigger if exists trg_fournisseurs_set_org_id on public.fournisseurs;
 create trigger trg_fournisseurs_set_org_id
 before insert on public.fournisseurs
-for each row execute function public.fournisseurs_set_org_id();
+for each row execute function public.set_org_id_from_session();
