@@ -613,14 +613,24 @@ async function kkRegenPictos(id,crecheId,type){
     if(error)throw error;
     const ok=await dbUpdateStrict(table,id,{code_pictos:data});
     if(!ok)throw new Error(window._lastDbError||'écriture refusée');
+    /* Un directeur/trice lié·e à sa fiche collaborateur (referents.employe_id) n'a
+       qu'un seul code : le trigger SQL (kiosque_code_pictos_lien_employe.sql) le
+       recopie sur l'autre fiche, on aligne ici les caches. */
     if(type==='referent'){
       const r=cacheReferents.find(x=>String(x.id)===String(id));
-      if(r)r.code_pictos=data;
+      if(r){
+        r.code_pictos=data;
+        const lie=r.employe_id&&cacheEmployes.find(x=>String(x.id)===String(r.employe_id));
+        if(lie)lie.code_pictos=data;
+      }
       renderReferents();
+      if(typeof renderEmployes==='function')renderEmployes();
     }else if(type==='employe'){
       const e=cacheEmployes.find(x=>String(x.id)===String(id));
       if(e)e.code_pictos=data;
+      cacheReferents.filter(x=>x.employe_id&&String(x.employe_id)===String(id)).forEach(x=>{x.code_pictos=data;});
       renderEmployes();
+      if(typeof renderReferents==='function')renderReferents();
     }else{
       const e=cacheEnfants.find(x=>String(x.id)===String(id));
       if(e)e.code_pictos=data;
@@ -629,7 +639,7 @@ async function kkRegenPictos(id,crecheId,type){
     showBanner('Nouveau code image généré.');
   }catch(e){
     console.error('[kkRegenPictos]',e);
-    const msg=e.code==='42883'?'Fonction absente — exécutez sql/claude_37-kiosque-code-images.sql, sql/kiosque_code_pictos_personnel.sql et sql/kiosque_code_pictos_employes.sql.':(e.message||'erreur inconnue');
+    const msg=e.code==='42883'?'Fonction absente — exécutez sql/claude_37-kiosque-code-images.sql, sql/kiosque_code_pictos_personnel.sql, sql/kiosque_code_pictos_employes.sql et sql/kiosque_code_pictos_lien_employe.sql.':(e.message||'erreur inconnue');
     showBanner('Génération impossible : '+msg,'error');
   }
 }
