@@ -1,3 +1,13 @@
+// Continuité de direction du jour (même règle que le planning équipe), en pied de carte.
+async function peContinuiteJourHtml(rows,crecheId,ws,jourIdx){
+  try{
+    await peLoadRemplacantes(crecheId,ws);
+    const l=(peContinuiteDirection((rows||[]).filter(r=>r.creneau_label),crecheId,ws)[jourIdx])||[];
+    if(!l.length)return'';
+    return'<div style="font-size:12px;font-weight:700;color:var(--koala);margin-top:8px;padding:6px 8px;background:var(--koala-light,#EFEEF7);border-radius:8px"><i class="ti ti-shield-check"></i> Continuité de direction : '+l.map(x=>escHtml(x)).join(' — ')+'</div>';
+  }catch(e){return'';}
+}
+
 // ── ENVOI DU PLANNING ÉQUIPE PAR MAIL ────────────────────────────────────
 let _peMailData=null;
 
@@ -250,6 +260,7 @@ async function loadRefDashAsync(crecheId,t){
           return'<div class="dash-list-item"><span>👤 '+escHtml(r.prenom||'—')+'</span><span style="font-size:11px;color:var(--muted)">'+escHtml(horaire)+'</span></div>';
         }).join('')
         :empty('Aucun staff présent ce jour'));
+      box.innerHTML+=await peContinuiteJourHtml(rows,crecheId,ws,jourIdx);
     }
   }catch(e){const b=document.getElementById('rdb-equipe');if(b)b.innerHTML=titleEquipe+empty('Indisponible');}
 
@@ -558,7 +569,7 @@ async function loadDashboardPlanning(){
     if(absents.length){
       html+='<div style="font-size:11px;color:var(--muted);margin-top:6px;padding:0 4px">Absent(e)s : '+absents.map(r=>escHtml(r.prenom||'—')).join(', ')+'</div>';
     }
-    box.innerHTML=title+html;
+    box.innerHTML=title+html+await peContinuiteJourHtml(rows,crecheId,ws,jourIdx);
   }catch(e){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Indisponible</div>';}
 }
 // Absences et conges du jour (direction).
