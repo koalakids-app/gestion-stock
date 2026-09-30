@@ -10,23 +10,15 @@
 -- Même classe de bug que evenements / documents_reponses / fournisseurs : un
 -- trigger BEFORE INSERT résout l'organisation via kk_mon_org(), sans jamais
 -- écraser une valeur déjà fournie.
+--
+-- MISE À JOUR 30/09/2026 : basculé sur la fonction mutualisée
+-- public.set_org_id_from_session() (créée pour evenements/documents_reponses,
+-- puis reprise par fournisseurs et reunions_direction) plutôt que de garder
+-- une fonction dédiée de plus faisant exactement la même chose ; l'ancienne
+-- fonction documents_koala_set_org_id() a été supprimée.
 -- ============================================================================
-
-create or replace function public.documents_koala_set_org_id()
-returns trigger
-language plpgsql
-security definer
-set search_path to 'public'
-as $function$
-begin
-  if new.org_id is null then
-    new.org_id := public.kk_mon_org();
-  end if;
-  return new;
-end;
-$function$;
 
 drop trigger if exists trg_documents_koala_set_org_id on public.documents_koala;
 create trigger trg_documents_koala_set_org_id
 before insert on public.documents_koala
-for each row execute function public.documents_koala_set_org_id();
+for each row execute function public.set_org_id_from_session();
