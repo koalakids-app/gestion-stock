@@ -10613,6 +10613,7 @@ function peEstRemplacante(prenom,crecheId,semaine){
 // - Directrice présente, du matin (début avant 9h30) → la pro qui termine à 18h30.
 // - Directrice présente, du soir → la pro qui commence à 7h30.
 // - Directrice absente → la pro du matin (7h30) puis la pro du soir (18h30).
+// Si un horaire n'a aucune pro éligible (remplaçante écartée), la pro de l'autre horaire la remplace.
 function peContinuiteDirection(rows,crecheId,semaine){
   const out=[];
   for(let d=0;d<5;d++){
@@ -10622,8 +10623,11 @@ function peContinuiteDirection(rows,crecheId,semaine){
     const dir=jour.filter(x=>peFindReferentIdForPrenom(crecheId,x.r.prenom,true));
     const dirNoms=new Set(dir.map(x=>ipNormStr(x.r.prenom)));
     const autres=jour.filter(x=>!dirNoms.has(ipNormStr(x.r.prenom))&&!peEstRemplacante(x.r.prenom,crecheId,semaine));
-    const ouv=autres.filter(x=>x.segs[0][0]===450);
-    const fer=autres.filter(x=>x.segs[x.segs.length-1][1]===1110);
+    let ouv=autres.filter(x=>x.segs[0][0]===450);
+    let fer=autres.filter(x=>x.segs[x.segs.length-1][1]===1110);
+    // Personne d'éligible sur un horaire (ex. remplaçante écartée) : la pro de l'autre horaire prend le rôle.
+    if(!ouv.length)ouv=fer;
+    if(!fer.length)fer=ouv;
     const lignes=[];
     if(!dir.length){
       if(ouv.length)lignes.push('Matin : '+noms(ouv));
