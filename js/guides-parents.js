@@ -37,7 +37,7 @@ async function gp_loadGuides(){
     +'<button class="btn btn-g btn-sm" style="color:var(--red)" onclick="gp_delGuide(\''+g.id+'\')" title="Supprimer"><i class="ti ti-trash"></i></button></div></div>').join('');
 }
 async function gp_newGuide(){
-  const{data,error}=await sb.from('guides_parents').insert({titre:'Nouveau guide',created_by:ME.id}).select().single();
+  const{data,error}=await sb.from('guides_parents').insert({titre:'Nouveau livret',created_by:ME.id}).select().single();
   if(error){toast('Création impossible : '+error.message,true);return;}
   // Trame de départ : une section et un bloc question/réponse à remplir.
   const blocs=[{guide_id:data.id,ordre:0,type:'section',contenu:gp_VIDE.section()},{guide_id:data.id,ordre:1,type:'qr',contenu:gp_VIDE.qr()}];
@@ -46,7 +46,7 @@ async function gp_newGuide(){
 }
 async function gp_openGuide(id){
   const{data:g,error}=await sb.from('guides_parents').select('*').eq('id',id).maybeSingle();
-  if(error||!g){toast('Guide introuvable',true);return;}
+  if(error||!g){toast('Livret introuvable',true);return;}
   const{data:bl,error:e2}=await sb.from('guides_parents_blocs').select('*').eq('guide_id',id).order('ordre');
   if(e2){toast('Erreur : '+e2.message,true);return;}
   gp_G=g;gp_DEL=[];
@@ -71,24 +71,24 @@ async function gp_backToList(){
 }
 async function gp_delGuide(id){
   const g=gp_GUIDES.find(x=>x.id===id);
-  if(!confirm('Supprimer définitivement « '+(g&&g.titre||'ce guide')+' » et tout son contenu ?'))return;
+  if(!confirm('Supprimer définitivement « '+(g&&g.titre||'ce livret')+' » et tout son contenu ?'))return;
   const{error}=await sb.from('guides_parents').delete().eq('id',id);
   if(error){toast('Suppression impossible : '+error.message,true);return;}
-  toast('Guide supprimé');gp_loadGuides();
+  toast('Livret supprimé');gp_loadGuides();
 }
 async function gp_dupGuide(id){
   const{data:g}=await sb.from('guides_parents').select('*').eq('id',id).maybeSingle();
   if(!g)return;
   const{data:bl}=await sb.from('guides_parents_blocs').select('*').eq('guide_id',id).order('ordre');
   const c={...g};['id','org_id','created_at','updated_at'].forEach(k=>delete c[k]);
-  c.titre=(g.titre||'Guide')+' (copie)';c.publie=false;c.created_by=ME.id;
+  c.titre=(g.titre||'Livret')+' (copie)';c.publie=false;c.created_by=ME.id;
   const{data:n,error}=await sb.from('guides_parents').insert(c).select().single();
   if(error){toast('Duplication impossible : '+error.message,true);return;}
   if(bl&&bl.length){
     const{error:e2}=await sb.from('guides_parents_blocs').insert(bl.map((b,i)=>({guide_id:n.id,ordre:i,type:b.type,contenu:b.contenu})));
     if(e2){toast('Blocs non copiés : '+e2.message,true);}
   }
-  toast('Guide dupliqué');gp_loadGuides();
+  toast('Livret dupliqué');gp_loadGuides();
 }
 
 /* ----- édition ----- */
@@ -104,8 +104,8 @@ function gp_guideUrl(){
 }
 function gp_copyLink(){
   const url=gp_guideUrl();
-  const warn=gp_G.publie?'':'\n\n⚠ Ce guide est en brouillon : le lien ne fonctionnera qu\'une fois publié et enregistré.';
-  navigator.clipboard.writeText(url).then(()=>toast('Lien copié'+(gp_G.publie?'':' (guide non publié)')),()=>prompt('Copiez ce lien :',url));
+  const warn=gp_G.publie?'':'\n\n⚠ Ce livret est en brouillon : le lien ne fonctionnera qu\'une fois publié et enregistré.';
+  navigator.clipboard.writeText(url).then(()=>toast('Lien copié'+(gp_G.publie?'':' (livret non publié)')),()=>prompt('Copiez ce lien :',url));
   if(!gp_G.publie)alert('Lien : '+url+warn);
 }
 function gp_addBloc(type){
@@ -206,7 +206,7 @@ function gp_renderBlocs(){
 
 async function gp_saveGuide(){
   if(!gp_G)return;
-  if(!(gp_G.titre||'').trim()){toast('Donnez un titre au guide.',true);return;}
+  if(!(gp_G.titre||'').trim()){toast('Donnez un titre au livret.',true);return;}
   const{error}=await sb.from('guides_parents').update({
     titre:gp_G.titre.trim(),sous_titre:gp_G.sous_titre||null,structure:gp_G.structure||null,accueil:gp_G.accueil||null,
     intro:gp_G.intro||null,conclusion:gp_G.conclusion||null,signature:gp_G.signature||null,publie:!!gp_G.publie
@@ -221,7 +221,7 @@ async function gp_saveGuide(){
     if(e3){toast('Suppression de blocs impossible : '+e3.message,true);return;}
     gp_DEL=[];
   }
-  gp_markSaved();toast('Guide enregistré');
+  gp_markSaved();toast('Livret enregistré');
 }
 
 function gp_openPreview(){
