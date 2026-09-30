@@ -10573,7 +10573,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   }
 
   // Continuité de direction : en l'absence de la directrice, la pro qui termine à 18h30
-  // (directrice du matin) ou qui commence à 7h30 (directrice du soir) fait office de directeur.
+  // (directrice du matin) ou qui commence le plus tôt (directrice du soir) fait office de directeur.
   const _peCont=peContinuiteDirection(withCreneau,crecheId,semaine);
   if(_peCont.some(x=>x.length)){
     html+='<tr><td style="position:sticky;left:0;z-index:1;padding:'+_pePad+';border-top:2px solid var(--border);background:#FBFBFD;vertical-align:middle;font-weight:700;font-size:'+_peFSCell+';color:#3D3580"><i class="ti ti-shield-check"></i> Continuité de direction</td>';
@@ -10623,8 +10623,12 @@ function peContinuiteDirection(rows,crecheId,semaine){
     const dir=jour.filter(x=>peFindReferentIdForPrenom(crecheId,x.r.prenom,true));
     const dirNoms=new Set(dir.map(x=>ipNormStr(x.r.prenom)));
     const autres=jour.filter(x=>!dirNoms.has(ipNormStr(x.r.prenom))&&!peEstRemplacante(x.r.prenom,crecheId,semaine));
-    let ouv=autres.filter(x=>x.segs[0][0]===450);
-    let fer=autres.filter(x=>x.segs[x.segs.length-1][1]===1110);
+    // Ouverture = celle qui commence le plus tôt, fermeture = celle qui termine le plus tard
+    // (hors directrice et remplaçantes) : les horaires ne tombent pas toujours pile à 7h30 / 18h30.
+    const debutMin=autres.length?Math.min(...autres.map(x=>x.segs[0][0])):null;
+    const finMax=autres.length?Math.max(...autres.map(x=>x.segs[x.segs.length-1][1])):null;
+    let ouv=autres.filter(x=>x.segs[0][0]===debutMin);
+    let fer=autres.filter(x=>x.segs[x.segs.length-1][1]===finMax);
     // Personne d'éligible sur un horaire (ex. remplaçante écartée) : la pro de l'autre horaire prend le rôle.
     if(!ouv.length)ouv=fer;
     if(!fer.length)fer=ouv;
