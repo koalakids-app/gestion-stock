@@ -1037,15 +1037,22 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       stats.heuresEntretien+=choixEntretien.length*0.25;
     }
 
-    // 6 bis) ligne « Continuité de direction » : la ligne libre sous « Entretien/restauration ».
-    //    Le texte est écrit en D et déborde sur les cases vides à droite.
-    const rCont=day.total+3;
-    ws.getCell(rCont,2).value='Continuité de direction';
-    ws.getCell(rCont,2).font={bold:true,name:'Calibri',size:10};
+    // 6 bis) continuité de direction : écrite sur la ligne « Direction » du document, dans
+    //    des cases libres (le texte déborde sur les cases vides à droite). Placée avant le
+    //    temps de bureau s'il tient avant, sinon juste après, pour ne pas le recouvrir.
     const contTxt=(continuite[day.jour]||[]).join(' — ');
-    ws.getCell(rCont,PMI_TPL_COL_FIRST).value=contTxt||null;
-    ws.getCell(rCont,PMI_TPL_COL_FIRST).font={bold:true,name:'Calibri',size:10};
-    ws.getCell(rCont,PMI_TPL_COL_FIRST).alignment={horizontal:'left',vertical:'middle',wrapText:false};
+    if(contTxt){
+      const largeur=Math.ceil(contTxt.length/2)+1;   // cases d'un quart d'heure nécessaires, environ
+      let colTxt=PMI_TPL_COL_FIRST;
+      if(colsBureau.length){
+        const cMin=Math.min(...colsBureau),cMax=Math.max(...colsBureau);
+        colTxt=(cMin-PMI_TPL_COL_FIRST>=largeur)?PMI_TPL_COL_FIRST:Math.min(cMax+1,PMI_TPL_COL_LAST);
+      }
+      const cell=ws.getCell(rDirection,colTxt);
+      cell.value='Continuité : '+contTxt;
+      cell.font={bold:true,name:'Calibri',size:10,color:{argb:'FF000000'}};
+      cell.alignment={horizontal:'left',vertical:'middle',wrapText:false};
+    }
 
     // 7) nombre d'enfants accueillis, quart d'heure par quart d'heure
     if(!ws.getCell(day.enfants,2).value)ws.getCell(day.enfants,2).value=PMI_LIBELLE_ENFANTS;
