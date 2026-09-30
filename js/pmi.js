@@ -1266,6 +1266,7 @@ async function peBuildPrintHTML(){
     const semaineW=ipDateToLocalISO(wsW);
     const days5=Array.from({length:5},(_,i)=>{const d=new Date(wsW);d.setDate(wsW.getDate()+i);return d;});
     const rows=await peLoad(crecheId,semaineW);
+    await peLoadRemplacantes(crecheId,semaineW);
     bodyHTML+='<div style="margin-top:'+(w>0?'18px':'0')+'">'+
       '<div style="font-weight:700;font-size:13px;color:#3D3580;margin-bottom:4px">Semaine du '+fmt(days5[0])+' au '+fmt(days5[4])+'</div>'+
       (rows.length?getPlanningEquipeTable(rows,semaineW,crecheName,crecheId,false,true,nbWeeks):'<div style="font-size:11px;color:#999;padding:6px 0">Aucune donnée pour cette semaine.</div>')+

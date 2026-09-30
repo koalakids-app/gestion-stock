@@ -10399,6 +10399,7 @@ async function renderPlanningEquipe(){
   const ws=weekStart();const semaine=ipDateToLocalISO(ws);
   wrap.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
   const rows=await peLoad(crecheId,semaine);
+  await peLoadRemplacantes(crecheId,semaine);
   const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
   // Éditable pour : la direction, OU la directrice technique dont la propre crèche correspond à celle affichée
   const editable=isDirection||(currentProfile?.creche_id===crecheId);
@@ -10573,7 +10574,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
 
   // Continuité de direction : en l'absence de la directrice, la pro qui termine à 18h30
   // (directrice du matin) ou qui commence à 7h30 (directrice du soir) fait office de directeur.
-  const _peCont=peContinuiteDirection(withCreneau,crecheId);
+  const _peCont=peContinuiteDirection(withCreneau,crecheId,semaine);
   if(_peCont.some(x=>x.length)){
     html+='<tr><td style="position:sticky;left:0;z-index:1;padding:'+_pePad+';border-top:2px solid var(--border);background:#FBFBFD;vertical-align:middle;font-weight:700;font-size:'+_peFSCell+';color:#3D3580"><i class="ti ti-shield-check"></i> Continuité de direction</td>';
     _peCont.forEach(x=>{
@@ -10586,12 +10587,23 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   return html;
 }
 
-// Remplaçante : la fiche employé de même prénom (crèche de la fiche si renseignée) a un poste ou
-// un type de contrat contenant « remplaçant/e ». Une remplaçante ne peut pas être en continuité
-// de direction : c'est l'autre pro qui prend le rôle.
-function peEstRemplacante(prenom,crecheId){
+const _peRemplCache={};
+// Charge les noms de l'onglet Remplaçants/tes présents dans la crèche sur la semaine affichée.
+async function peLoadRemplacantes(crecheId,semaine){
+  const k=crecheId+'_'+semaine;
+  const fin=new Date(semaine+'T00:00:00');fin.setDate(fin.getDate()+6);
+  const{data,error}=await sb.from('remplacantes').select('nom').eq('creche_id',crecheId).gte('date',semaine).lte('date',ipDateToLocalISO(fin));
+  if(error){console.warn('[PlanningEquipe] remplaçantes',error.message);return;}
+  _peRemplCache[k]=new Set((data||[]).map(r=>ipNormStr(r.nom)));
+}
+// Une remplaçante ne peut pas être en continuité de direction : c'est l'autre pro qui prend le
+// rôle. Elle est repérée par l'onglet Remplaçants/tes (prénom = nom saisi ou son premier mot),
+// ou par une fiche employé de même prénom dont le poste / type de contrat contient « remplaçant/e ».
+function peEstRemplacante(prenom,crecheId,semaine){
   const t=ipNormStr(prenom);
   if(!t)return false;
+  const noms=_peRemplCache[crecheId+'_'+semaine];
+  if(noms&&[...noms].some(n=>n===t||n.split(/\s+/)[0]===t))return true;
   return (cacheEmployes||[]).some(e=>ipNormStr(e.prenom)===t
     &&(!e.creche_id||e.creche_id===crecheId)
     &&ipNormStr((e.poste||'')+' '+(e.type_contrat||'')).includes('remplac'));
@@ -10601,7 +10613,7 @@ function peEstRemplacante(prenom,crecheId){
 // - Directrice présente, du matin (début avant 9h30) → la pro qui termine à 18h30.
 // - Directrice présente, du soir → la pro qui commence à 7h30.
 // - Directrice absente → la pro du matin (7h30) puis la pro du soir (18h30).
-function peContinuiteDirection(rows,crecheId){
+function peContinuiteDirection(rows,crecheId,semaine){
   const out=[];
   for(let d=0;d<5;d++){
     const jour=rows.filter(r=>r.jour===d).map(r=>({r,segs:peCreneauSegments(r.creneau_label)})).filter(x=>x.segs);
@@ -10609,7 +10621,7 @@ function peContinuiteDirection(rows,crecheId){
     const noms=l=>[...new Set(l.map(x=>x.r.prenom))].join(', ');
     const dir=jour.filter(x=>peFindReferentIdForPrenom(crecheId,x.r.prenom,true));
     const dirNoms=new Set(dir.map(x=>ipNormStr(x.r.prenom)));
-    const autres=jour.filter(x=>!dirNoms.has(ipNormStr(x.r.prenom))&&!peEstRemplacante(x.r.prenom,crecheId));
+    const autres=jour.filter(x=>!dirNoms.has(ipNormStr(x.r.prenom))&&!peEstRemplacante(x.r.prenom,crecheId,semaine));
     const ouv=autres.filter(x=>x.segs[0][0]===450);
     const fer=autres.filter(x=>x.segs[x.segs.length-1][1]===1110);
     const lignes=[];
