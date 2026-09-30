@@ -2163,6 +2163,9 @@ function renderCommandes() {
           <div class="commande-total-label">Total</div>
           <div class="commande-total">${(c.montant||0).toFixed(2)} €</div>
           <span class="badge ${badgeCls}" style="margin-top:8px;display:block;text-align:center">${badgeTxt}</span>
+          ${c.traitee_le ? `<span class="badge badge-green" style="margin-top:6px;display:block;text-align:center" title="Vue et traitée le ${new Date(c.traitee_le).toLocaleString('fr-FR')}">👁 Vue et traitée le ${new Date(c.traitee_le).toLocaleDateString('fr-FR')}</span>` : ''}
+          ${showActions ? `
+          <button class="btn ${c.traitee_le ? 'btn-secondary' : 'btn-primary'} btn-sm" style="margin-top:6px;width:100%" onclick="onToggleTraitee(${c.id})">${c.traitee_le ? '↩️ Marquer non traitée' : '👁 Vue et traitée'}</button>` : ''}
           <button class="btn btn-secondary btn-sm" style="margin-top:6px;width:100%" onclick="exportCommandeExcel(${c.id})">⬇ Excel</button>
           <button class="btn btn-secondary btn-sm" style="margin-top:6px;width:100%" onclick="printBordereau(${c.id})">🖨 PDF / Imprimer</button>
           ${showActions ? `
@@ -3343,6 +3346,17 @@ async function onUpdateCommande(id) {
   } finally {
     if (saveBtn) saveBtn.disabled = false;
   }
+}
+
+async function toggleTraitee(id) {
+  const c = COMMANDES.find(x => x.id === id);
+  if (!c) return;
+  c.traitee_le = c.traitee_le ? null : new Date().toISOString();
+  c.traitee_touched = true;
+  saveData();
+  if (!IS_LOCAL) await updateCommandeDB(c).catch(()=>{});
+  renderCommandes();
+  showNotif(c.traitee_le ? '👁 Commande marquée vue et traitée' : '↩️ Commande marquée non traitée');
 }
 
 async function annulerCommande(id) {
@@ -5039,13 +5053,16 @@ function rowToArticle(r) {
   };
   // photos_json uniquement si la colonne existe (ajout progressif)
   if (c.photos_json) row.photos_json = c.photos_json;
+  // traitee_le : idem, envoyé seulement une fois utilisé (sql/commandes_traitee.sql)
+  if (c.traitee_le || c.traitee_touched) row.traitee_le = c.traitee_le || null;
   return row;
 }
 function rowToCommande(r) {
   return { id: r.id, fourn: r.fourn, creche: r.creche, date: r.date,
            livraison: r.livraison, montant: parseFloat(r.montant)||0,
            bc: r.bc, status: r.status, articles: r.articles||'',
-           notes: r.notes||'', url: r.url||'', photos_json: r.photos_json||null };
+           notes: r.notes||'', url: r.url||'', photos_json: r.photos_json||null,
+           traitee_le: r.traitee_le||null };
 }
 function fournisseurToRow(f) {
   return { nom: f.nom, contact: f.contact, tel: f.tel, email: f.email,
@@ -5702,6 +5719,7 @@ const saveCommande = saveCommande_db;
 
 function onSaveCommande()      { saveCommande().catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onMarkLivree(id)      { markLivree(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onToggleTraitee(id)   { toggleTraitee(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onAnnulerCommande(id) { annulerCommande(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 function onDeleteCommande(id)  { deleteCommande(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
 
