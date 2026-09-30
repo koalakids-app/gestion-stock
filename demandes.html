@@ -9819,7 +9819,7 @@ function peInvalidateAll(crecheId){
 // correspond à la directrice technique titulaire de la crèche voit aussi son
 // planning individuel (table "planning", celui affiché en haut de l'onglet
 // et sur collaborateur.html) mis à jour automatiquement.
-function peFindReferentIdForPrenom(crecheId,prenom){
+function peFindReferentIdForPrenom(crecheId,prenom,silent){
   const target=ipNormStr(prenom);
   if(!target)return null;
   // Clé de rapprochement, par ordre de priorité : le prénom réglé explicitement sur
@@ -9836,7 +9836,7 @@ function peFindReferentIdForPrenom(crecheId,prenom){
     // Tolère "Prénom Nom" comme "Nom Prénom" : on compare à chaque mot du nom complet.
     return String(r.name).trim().split(/\s+/).some(w=>ipNormStr(w)===target);
   });
-  if(!ref)console.warn('[PlanningEquipe] Aucun directeur/trice technique de cette crèche ne correspond au prénom "'+prenom+'" — son planning individuel ne sera pas mis à jour. Vérifiez l\'Annuaire des directeurs/trices techniques (ou employes.planning_nom en cas d\'homonymie).');
+  if(!ref&&!silent)console.warn('[PlanningEquipe] Aucun directeur/trice technique de cette crèche ne correspond au prénom "'+prenom+'" — son planning individuel ne sera pas mis à jour. Vérifiez l\'Annuaire des directeurs/trices techniques (ou employes.planning_nom en cas d\'homonymie).');
   return ref?ref.id:null;
 }
 async function peSyncReferentPlanning(crecheId,semaine,jour,prenom,ev){
@@ -10571,8 +10571,38 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
       +withoutCreneau.length+' activité(s) sans horaire (congé, absence, journée combinée) — voir « Absences et congés du jour » sur le dashboard</td></tr>';
   }
 
+  // Continuité de direction : en l'absence de la directrice, la pro qui termine à 18h30
+  // (directrice du matin) ou qui commence à 7h30 (directrice du soir) fait office de directeur.
+  const _peCont=peContinuiteDirection(withCreneau,crecheId);
+  if(_peCont.some(x=>x)){
+    html+='<tr><td style="position:sticky;left:0;z-index:1;padding:'+_pePad+';border-top:2px solid var(--border);background:#FBFBFD;vertical-align:middle;font-weight:700;font-size:'+_peFSCell+';color:#3D3580"><i class="ti ti-shield-check"></i> Continuité de direction</td>';
+    _peCont.forEach(x=>{
+      html+='<td style="padding:'+_pePadCell+';border-top:2px solid var(--border);text-align:center;font-size:'+_peFSCell+';font-weight:700;color:#3D3580;background:#F4F3FB">'+(x?escHtml(x):'<span style="color:#ddd;font-weight:400">—</span>')+'</td>';
+    });
+    html+='</tr>';
+  }
+
   html+='</tbody></table>';
   return html;
+}
+
+// Pour chaque jour (0-4), prénom(s) de la personne en continuité de direction, ou '' si
+// la directrice est absente / non identifiable. Directrice du matin (début avant 9h30)
+// → la pro qui termine à 18h30 ; directrice du soir → la pro qui commence à 7h30.
+function peContinuiteDirection(rows,crecheId){
+  const out=[];
+  for(let d=0;d<5;d++){
+    const jour=rows.filter(r=>r.jour===d).map(r=>({r,segs:peCreneauSegments(r.creneau_label)})).filter(x=>x.segs);
+    const dir=jour.filter(x=>peFindReferentIdForPrenom(crecheId,x.r.prenom,true));
+    if(!dir.length){out.push('');continue;}
+    const dirNoms=new Set(dir.map(x=>ipNormStr(x.r.prenom)));
+    const debut=Math.min(...dir.map(x=>x.segs[0][0]));
+    const matin=debut<570;
+    const autres=jour.filter(x=>!dirNoms.has(ipNormStr(x.r.prenom)));
+    const cand=autres.filter(x=>matin?x.segs[x.segs.length-1][1]===1110:x.segs[0][0]===450);
+    out.push([...new Set(cand.map(x=>x.r.prenom))].join(', '));
+  }
+  return out;
 }
 
 // ════════════════════════════════════════════════════════════
