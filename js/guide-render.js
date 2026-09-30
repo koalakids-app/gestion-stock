@@ -41,7 +41,7 @@ window.KKGuide=(function(){
   }
   function render(g,blocs){
     return '<header class="g-cover">'
-        +'<img class="g-banner" src="guide-banniere.jpg" alt="">'
+        +'<img class="g-banner" src="'+esc(g.banniere_url||'guide-banniere.jpg')+'" alt="">'
         +'<h1>Bienvenue</h1>'
         +'<div class="g-struct">dans l’univers de '+esc(g.structure||'la crèche')+'</div>'
         +(g.titre?'<div class="g-title">'+esc(g.titre)+'</div>':'')
@@ -56,7 +56,7 @@ window.KKGuide=(function(){
 .g-doc{max-width:760px;margin:0 auto;color:#333;font-family:'Nunito',sans-serif;font-size:16px;line-height:1.65}
 .g-doc p{margin:0 0 12px}
 .g-cover{text-align:center;margin-bottom:28px}
-.g-banner{width:100%;border-radius:18px;display:block;margin-bottom:22px}
+.g-banner{width:100%;aspect-ratio:7/3;object-fit:cover;border-radius:18px;display:block;margin-bottom:22px}
 .g-cover h1{font-family:'Baloo 2',cursive;font-size:44px;color:#33446B;line-height:1.1;margin:0}
 .g-struct{font-family:'Baloo 2',cursive;font-size:28px;color:#8B52FF;line-height:1.2;margin:4px 0 14px}
 .g-title{font-weight:800;font-size:19px;color:#FF66C3;margin-top:6px}

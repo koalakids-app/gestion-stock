@@ -140,3 +140,9 @@ create policy guides_parents_img_delete on storage.objects
     bucket_id = 'guides-parents'
     and exists (select 1 from public.referents r where r.user_id = auth.uid())
   );
+
+-- ----------------------------------------------------------------------------
+-- Image d'en-tête personnalisable (défaut : guide-banniere.jpg côté front).
+-- Appliqué via la migration guides_parents_banniere.
+-- ----------------------------------------------------------------------------
+alter table public.guides_parents add column if not exists banniere_url text;

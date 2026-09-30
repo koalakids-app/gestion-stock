@@ -54,6 +54,7 @@ async function gp_openGuide(id){
   document.getElementById('gTitre').value=gp_G.titre||'';
   document.getElementById('gStructure').value=gp_G.structure||'';
   document.getElementById('gSous').value=gp_G.sous_titre||'';
+  gp_renderBan();
   document.getElementById('gAccueil').value=gp_G.accueil||'';
   document.getElementById('gIntro').value=gp_G.intro||'';
   document.getElementById('gConclusion').value=gp_G.conclusion||'';
@@ -93,6 +94,28 @@ async function gp_dupGuide(id){
 
 /* ----- édition ----- */
 function gp_setG(k,v){gp_G[k]=v;gp_markDirty();}
+function gp_renderBan(){
+  const url=gp_G.banniere_url;
+  document.getElementById('gBanRow').innerHTML=
+    '<img src="'+esc(url||'guide-banniere.jpg')+'" alt="" style="width:170px;height:73px;object-fit:cover">'
+    +'<div class="ff"><div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +'<button type="button" class="mini" onclick="document.getElementById(\'gBanFile\').click()"><i class="ti ti-upload"></i> Choisir une image</button>'
+    +(url?'<button type="button" class="mini danger" onclick="gp_resetBan()">Image par défaut</button>':'')
+    +'</div><span style="font-size:12px;color:var(--muted)">'+(url?'Image personnalisée':'Bannière koala par défaut')+'</span></div>';
+}
+async function gp_uploadBanniere(input){
+  const f=input.files&&input.files[0];input.value='';if(!f)return;
+  if(!/^image\//.test(f.type)){toast('Choisissez un fichier image.',true);return;}
+  if(f.size>8*1024*1024){toast('Image trop lourde (8 Mo maximum).',true);return;}
+  const ext=(f.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,5)||'jpg';
+  const path=gp_G.id+'/banniere_'+gp_uuid()+'.'+ext;
+  toast('Envoi de l\'image…');
+  const{error}=await sb.storage.from(gp_BUCKET).upload(path,f,{contentType:f.type,upsert:false});
+  if(error){toast('Envoi impossible : '+error.message,true);return;}
+  gp_G.banniere_url=sb.storage.from(gp_BUCKET).getPublicUrl(path).data.publicUrl;
+  gp_markDirty();gp_renderBan();toast('Image d\'en-tête choisie');
+}
+function gp_resetBan(){gp_G.banniere_url=null;gp_markDirty();gp_renderBan();}
 function gp_renderPub(){
   const b=document.getElementById('pubBtn');
   b.innerHTML=gp_G.publie?'<i class="ti ti-eye-off"></i> Dépublier':'<i class="ti ti-world-upload"></i> Publier';
@@ -208,7 +231,7 @@ async function gp_saveGuide(){
   if(!gp_G)return;
   if(!(gp_G.titre||'').trim()){toast('Donnez un titre au livret.',true);return;}
   const{error}=await sb.from('guides_parents').update({
-    titre:gp_G.titre.trim(),sous_titre:gp_G.sous_titre||null,structure:gp_G.structure||null,accueil:gp_G.accueil||null,
+    titre:gp_G.titre.trim(),banniere_url:gp_G.banniere_url||null,sous_titre:gp_G.sous_titre||null,structure:gp_G.structure||null,accueil:gp_G.accueil||null,
     intro:gp_G.intro||null,conclusion:gp_G.conclusion||null,signature:gp_G.signature||null,publie:!!gp_G.publie
   }).eq('id',gp_G.id);
   if(error){toast('Enregistrement impossible : '+error.message,true);return;}
