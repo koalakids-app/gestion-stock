@@ -305,7 +305,8 @@ async function pmiOpenExportModal(){
     const semaine=ipDateToLocalISO(wsW);
     const days5=Array.from({length:5},(_,i)=>{const d=new Date(wsW);d.setDate(wsW.getDate()+i);return d;});
     const rows=await peLoad(crecheId,semaine);
-    weeks.push({semaine,dateDebut:fmt(days5[0]),dateFin:fmt(days5[4]),rows,dates:days5.map(ipDateToLocalISO)});
+    await peLoadRemplacantes(crecheId,semaine);
+    weeks.push({crecheId,semaine,dateDebut:fmt(days5[0]),dateFin:fmt(days5[4]),rows,dates:days5.map(ipDateToLocalISO)});
   }
   const withData=weeks.filter(w=>w.rows.length);
   if(!withData.length){alert('Aucune donnée de planning équipe pour cette crèche sur la période choisie.');return;}
@@ -901,6 +902,9 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
     o[champ]+=heures;
   };
 
+  // Continuité de direction de chaque jour (même règle que le planning équipe à l'écran).
+  const continuite=peContinuiteDirection(weekInfo.rows.filter(x=>x.creneau_label),weekInfo.crecheId,weekInfo.semaine);
+
   PMI_TPL_DAYS.forEach(day=>{
     // 1) remise à zéro : le modèle fourni contient encore quelques valeurs d'un remplissage
     //    manuel antérieur (des totaux en AZ notamment) qu'il ne faut pas laisser passer.
@@ -1031,6 +1035,23 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       stats.entretien.push(PMI_NOMS_JOURS[day.jour]+' '+segs.join(', ')
         +' ('+hEntretien+' h)');
       stats.heuresEntretien+=choixEntretien.length*0.25;
+    }
+
+    // 6 bis) continuité de direction : écrite sur la ligne « Direction » du document, dans
+    //    des cases libres (le texte déborde sur les cases vides à droite). Placée avant le
+    //    temps de bureau s'il tient avant, sinon juste après, pour ne pas le recouvrir.
+    const contTxt=(continuite[day.jour]||[]).join(' — ');
+    if(contTxt){
+      const largeur=Math.ceil(contTxt.length/2)+1;   // cases d'un quart d'heure nécessaires, environ
+      let colTxt=PMI_TPL_COL_FIRST;
+      if(colsBureau.length){
+        const cMin=Math.min(...colsBureau),cMax=Math.max(...colsBureau);
+        colTxt=(cMin-PMI_TPL_COL_FIRST>=largeur)?PMI_TPL_COL_FIRST:Math.min(cMax+1,PMI_TPL_COL_LAST);
+      }
+      const cell=ws.getCell(rDirection,colTxt);
+      cell.value='Continuité : '+contTxt;
+      cell.font={bold:true,name:'Calibri',size:10,color:{argb:'FF000000'}};
+      cell.alignment={horizontal:'left',vertical:'middle',wrapText:false};
     }
 
     // 7) nombre d'enfants accueillis, quart d'heure par quart d'heure
