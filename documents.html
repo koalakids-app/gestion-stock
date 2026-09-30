@@ -165,7 +165,21 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
 .rs-note{font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:16px;background:#F7F6FC;
   border-left:3px solid var(--violet-l);border-radius:0 10px 10px 0;padding:10px 12px}
 @media(max-width:600px){.rs-f{flex-direction:column;gap:2px}.rs-f span{flex:none}}
+#viewGuides .gl{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}#viewGuides .gl:last-child{border-bottom:none}#viewGuides .gl .gi{flex:1;min-width:200px}#viewGuides .gl .gt{font-weight:800;font-size:15px}#viewGuides .gl .gm{font-size:11.5px;color:var(--muted)}#viewGuides .blk{background:#fff;border:2px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:12px}#viewGuides .blk-h{display:flex;align-items:center;gap:8px;margin-bottom:10px}#viewGuides .blk-h .tag{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 10px;border-radius:20px;background:var(--violet-l);color:var(--violet)}#viewGuides .blk-h .sp{flex:1}#viewGuides .mini{border:none;background:#F1EFF7;color:var(--muted);border-radius:9px;padding:5px 9px;font:700 12px 'Nunito';cursor:pointer}#viewGuides .mini.danger{color:var(--red)}#viewGuides .mini:disabled{opacity:.35;cursor:default}#viewGuides .addbar{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px}#viewGuides .subl{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 4px 2px}#viewGuides .imgrow{display:flex;gap:10px;align-items:flex-start;background:var(--cream);border-radius:12px;padding:10px;margin-bottom:8px}#viewGuides .imgrow img{width:78px;height:78px;object-fit:cover;border-radius:10px;flex-shrink:0;background:#eee}#viewGuides .imgrow .ff{flex:1;display:flex;flex-direction:column;gap:6px}#viewGuides .imgrow input{padding:6px 9px;font-size:14px}#viewGuides .split{display:grid;grid-template-columns:1fr;gap:16px}#viewGuides .savebar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:2px solid var(--line);padding:10px 70px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;align-items:center;justify-content:flex-end;z-index:60;flex-wrap:wrap}#viewGuides .savebar .st{flex:1;font-size:12.5px;font-weight:700;color:var(--muted)}#viewGuides .savebar .st.dirty{color:var(--orange)}.prevwrap{position:fixed;inset:0;background:#FDF8F2;z-index:120;overflow:auto;padding:16px 16px 40px;display:none}.prevwrap.on{display:block}.prevbar{max-width:760px;margin:0 auto 12px;display:flex;justify-content:flex-end}
+#viewGuides .card{background:#fff;border:2px solid var(--line);border-radius:18px;padding:16px 18px;margin-bottom:14px}
+#viewGuides .sec{font-family:'Baloo 2',cursive;font-size:15px;color:var(--orange);margin:0 0 12px;padding-bottom:6px;border-bottom:2px solid var(--line);display:flex;align-items:center;gap:7px}
+#viewGuides .hint{font-size:12px;color:var(--muted);line-height:1.6;margin:-4px 0 10px 3px}
+#viewGuides .lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 4px 3px}
+#viewGuides .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:620px){#viewGuides .g2{grid-template-columns:1fr}}
+#viewGuides .badge{font-size:11px;font-weight:800;border-radius:20px;padding:3px 9px;white-space:nowrap}
+#viewGuides .badge.on{background:#E6F5EE;color:#2E9E6B}
+#viewGuides .badge.off{background:#F1EFF7;color:var(--muted)}
+#viewGuides .acts{display:flex;gap:6px;flex-wrap:wrap}
+#viewGuides .btn-sm{padding:6px 10px;font-size:12px}
+.prevwrap .g-doc{margin-top:8px}
 </style>
+<style id="gcss"></style>
 </head>
 <body>
 
@@ -215,6 +229,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
     <div class="tabs">
       <button class="tab on" id="tabDocs" onclick="goTab('docs')"><i class="ti ti-folders"></i> Documents</button>
       <button class="tab" id="tabRS" onclick="goTab('rs')"><i class="ti ti-shield-check"></i> Registre de sécurité</button>
+      <button class="tab" id="tabGuides" onclick="goTab('guides')"><i class="ti ti-book-2"></i> Guides parents</button>
     </div>
 
     <div id="viewDocs">
@@ -234,6 +249,58 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
       <span id="bulkProg" style="font-size:12px;font-weight:700;color:var(--violet)"></span>
     </div>
     <div id="list"></div>
+    </div>
+
+    <div id="viewGuides" style="display:none">
+    <div id="gpListView">
+      <div class="card">
+        <div class="sec" style="justify-content:space-between">
+          <span><i class="ti ti-books"></i> Mes guides</span>
+          <button class="btn btn-p btn-sm" onclick="gp_newGuide()"><i class="ti ti-plus"></i> Nouveau guide</button>
+        </div>
+        <p class="hint">Un guide se remplit en ligne, bloc par bloc (question des parents, réponse de l'équipe, images…).
+          Une fois <b>publié</b>, il se partage aux familles par un simple lien, et s'imprime ou s'enregistre en PDF.</p>
+        <div id="guidesList"></div>
+        <div class="empty" id="guidesEmpty" style="display:none">Aucun guide pour le moment.</div>
+      </div>
+    </div>
+    <div id="gpEditView" style="display:none">
+      <button class="btn btn-g btn-sm" style="margin-bottom:12px" onclick="gp_backToList()"><i class="ti ti-arrow-left"></i> Mes guides</button>
+      <div class="card">
+        <div class="sec"><i class="ti ti-id"></i> Couverture et introduction</div>
+        <div class="f"><label class="lb">Titre du guide</label><input id="gTitre" oninput="gp_setG('titre',this.value)" placeholder="Guide ludique pour les parents"></div>
+        <div class="g2">
+          <div class="f"><label class="lb">Nom de la structure (« Bienvenue dans l'univers de … »)</label><input id="gStructure" oninput="gp_setG('structure',this.value)" placeholder="la crèche"></div>
+          <div class="f"><label class="lb">Sous-titre</label><input id="gSous" oninput="gp_setG('sous_titre',this.value)" placeholder="Les réponses aux questions que les parents se posent"></div>
+        </div>
+        <div class="f"><label class="lb">Encadré « Un livret pour échanger »</label><textarea id="gAccueil" rows="3" oninput="gp_setG('accueil',this.value)" placeholder="Chaque enfant avance à son rythme. Les questions des parents sont les bienvenues…"></textarea></div>
+        <div class="f"><label class="lb">Introduction</label><textarea id="gIntro" rows="4" oninput="gp_setG('intro',this.value)" placeholder="À qui s'adresse le livret, ce qu'il présente… (un retour à la ligne = un nouveau paragraphe)"></textarea></div>
+      </div>
+
+      <div class="sec" style="margin-top:6px"><i class="ti ti-layout-list"></i> Contenu</div>
+      <div id="blocsBox"></div>
+      <div class="addbar" id="addBar">
+        <button class="btn btn-s btn-sm" onclick="gp_addBloc('section')"><i class="ti ti-heading"></i> Titre de section</button>
+        <button class="btn btn-p btn-sm" onclick="gp_addBloc('qr')"><i class="ti ti-message-question"></i> Question / réponse</button>
+        <button class="btn btn-s btn-sm" onclick="gp_addBloc('texte')"><i class="ti ti-align-left"></i> Texte</button>
+        <button class="btn btn-s btn-sm" onclick="gp_addBloc('citation')"><i class="ti ti-quote"></i> Citation</button>
+        <button class="btn btn-s btn-sm" onclick="gp_addBloc('image')"><i class="ti ti-photo"></i> Image</button>
+      </div>
+
+      <div class="card">
+        <div class="sec"><i class="ti ti-heart-handshake"></i> Mot de fin</div>
+        <div class="f"><label class="lb">Remerciements / conclusion</label><textarea id="gConclusion" rows="4" oninput="gp_setG('conclusion',this.value)" placeholder="À la crèche, derrière chaque choix se cache une intention…"></textarea></div>
+        <div class="f"><label class="lb">Signature</label><input id="gSignature" oninput="gp_setG('signature',this.value)" placeholder="L'équipe Koala Kids !!!"></div>
+      </div>
+      <div style="height:70px"></div>
+      <div class="savebar">
+        <span class="st" id="saveSt">Enregistré</span>
+        <button class="btn btn-g btn-sm" onclick="gp_openPreview()"><i class="ti ti-eye"></i> Aperçu</button>
+        <button class="btn btn-s btn-sm" id="pubBtn" onclick="gp_togglePublie()"></button>
+        <button class="btn btn-s btn-sm" onclick="gp_copyLink()"><i class="ti ti-link"></i> Lien</button>
+        <button class="btn btn-p" onclick="gp_saveGuide()"><i class="ti ti-check"></i> Enregistrer</button>
+      </div>
+    </div>
     </div>
 
     <div id="viewRS" style="display:none">
@@ -399,13 +466,20 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
   <div class="mf"><button class="btn btn-g" onclick="cancelQr()">Annuler</button></div>
 </div></div>
 
+<div class="prevwrap" id="prevWrap">
+  <div class="prevbar"><button class="btn btn-g btn-sm" onclick="gp_closePreview()"><i class="ti ti-x"></i> Fermer l'aperçu</button></div>
+  <div class="g-doc" id="prevDoc"></div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script src="js/branding.js"></script>
+<script src="js/guide-render.js"></script>
+<script src="js/guides-parents.js"></script>
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+document.getElementById('gcss').textContent=KKGuide.css;
 
 let ME=null,PROF=null,IS_ADMIN=false,IS_DIRECTION=false;
 let CATS=[],DOCS=[],CRECHES=[],ETABS=[],RESEAU={};
@@ -6368,12 +6442,14 @@ const RS_MODULES={
 
 /* ---------- Navigation entre les deux onglets de la page ---------- */
 function goTab(t){
-  const d=t==='docs';
-  document.getElementById('viewDocs').style.display=d?'':'none';
-  document.getElementById('viewRS').style.display=d?'none':'';
-  document.getElementById('tabDocs').classList.toggle('on',d);
-  document.getElementById('tabRS').classList.toggle('on',!d);
-  if(!d&&!RS_LOADED)rsInit();
+  document.getElementById('viewDocs').style.display=t==='docs'?'':'none';
+  document.getElementById('viewRS').style.display=t==='rs'?'':'none';
+  document.getElementById('viewGuides').style.display=t==='guides'?'':'none';
+  document.getElementById('tabDocs').classList.toggle('on',t==='docs');
+  document.getElementById('tabRS').classList.toggle('on',t==='rs');
+  document.getElementById('tabGuides').classList.toggle('on',t==='guides');
+  if(t==='rs'&&!RS_LOADED)rsInit();
+  if(t==='guides'&&!window.GP_LOADED){window.GP_LOADED=true;gp_init();}
 }
 
 /* ---------- Chargement ---------- */

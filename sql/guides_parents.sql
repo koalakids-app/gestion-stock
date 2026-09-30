@@ -1,5 +1,5 @@
 -- ============================================================================
--- Guides pour les parents : trame à remplir en ligne (guides.html) et page de
+-- Guides pour les parents : trame à remplir en ligne (onglet « Guides parents » de documents.html) et page de
 -- lecture publique par lien (guide.html)
 -- ============================================================================
 -- Reprend le principe des micro-formations (quiz-protocoles) : un guide est
@@ -10,7 +10,7 @@
 -- (direction et directrices techniques). Lecture publique : uniquement via la
 -- fonction kk_guide_public(), qui ne renvoie que les guides publiés — jamais
 -- d'accès anonyme direct aux tables (même principe que kk_resultats_par_ref).
--- À appliquer sur le projet Supabase de gestion-stock (pas encore appliqué).
+-- Appliqué sur le projet Supabase de gestion-stock (migration guides_parents).
 -- ============================================================================
 
 create table if not exists public.guides_parents (
