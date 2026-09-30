@@ -305,7 +305,8 @@ async function pmiOpenExportModal(){
     const semaine=ipDateToLocalISO(wsW);
     const days5=Array.from({length:5},(_,i)=>{const d=new Date(wsW);d.setDate(wsW.getDate()+i);return d;});
     const rows=await peLoad(crecheId,semaine);
-    weeks.push({semaine,dateDebut:fmt(days5[0]),dateFin:fmt(days5[4]),rows,dates:days5.map(ipDateToLocalISO)});
+    await peLoadRemplacantes(crecheId,semaine);
+    weeks.push({crecheId,semaine,dateDebut:fmt(days5[0]),dateFin:fmt(days5[4]),rows,dates:days5.map(ipDateToLocalISO)});
   }
   const withData=weeks.filter(w=>w.rows.length);
   if(!withData.length){alert('Aucune donnée de planning équipe pour cette crèche sur la période choisie.');return;}
@@ -901,6 +902,9 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
     o[champ]+=heures;
   };
 
+  // Continuité de direction de chaque jour (même règle que le planning équipe à l'écran).
+  const continuite=peContinuiteDirection(weekInfo.rows.filter(x=>x.creneau_label),weekInfo.crecheId,weekInfo.semaine);
+
   PMI_TPL_DAYS.forEach(day=>{
     // 1) remise à zéro : le modèle fourni contient encore quelques valeurs d'un remplissage
     //    manuel antérieur (des totaux en AZ notamment) qu'il ne faut pas laisser passer.
@@ -1032,6 +1036,16 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
         +' ('+hEntretien+' h)');
       stats.heuresEntretien+=choixEntretien.length*0.25;
     }
+
+    // 6 bis) ligne « Continuité de direction » : la ligne libre sous « Entretien/restauration ».
+    //    Le texte est écrit en D et déborde sur les cases vides à droite.
+    const rCont=day.total+3;
+    ws.getCell(rCont,2).value='Continuité de direction';
+    ws.getCell(rCont,2).font={bold:true,name:'Calibri',size:10};
+    const contTxt=(continuite[day.jour]||[]).join(' — ');
+    ws.getCell(rCont,PMI_TPL_COL_FIRST).value=contTxt||null;
+    ws.getCell(rCont,PMI_TPL_COL_FIRST).font={bold:true,name:'Calibri',size:10};
+    ws.getCell(rCont,PMI_TPL_COL_FIRST).alignment={horizontal:'left',vertical:'middle',wrapText:false};
 
     // 7) nombre d'enfants accueillis, quart d'heure par quart d'heure
     if(!ws.getCell(day.enfants,2).value)ws.getCell(day.enfants,2).value=PMI_LIBELLE_ENFANTS;
