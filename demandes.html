@@ -10586,6 +10586,17 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   return html;
 }
 
+// Remplaçante : la fiche employé de même prénom (crèche de la fiche si renseignée) a un poste ou
+// un type de contrat contenant « remplaçant/e ». Une remplaçante ne peut pas être en continuité
+// de direction : c'est l'autre pro qui prend le rôle.
+function peEstRemplacante(prenom,crecheId){
+  const t=ipNormStr(prenom);
+  if(!t)return false;
+  return (cacheEmployes||[]).some(e=>ipNormStr(e.prenom)===t
+    &&(!e.creche_id||e.creche_id===crecheId)
+    &&ipNormStr((e.poste||'')+' '+(e.type_contrat||'')).includes('remplac'));
+}
+
 // Pour chaque jour (0-4), liste de lignes de texte de la continuité de direction.
 // - Directrice présente, du matin (début avant 9h30) → la pro qui termine à 18h30.
 // - Directrice présente, du soir → la pro qui commence à 7h30.
@@ -10598,7 +10609,7 @@ function peContinuiteDirection(rows,crecheId){
     const noms=l=>[...new Set(l.map(x=>x.r.prenom))].join(', ');
     const dir=jour.filter(x=>peFindReferentIdForPrenom(crecheId,x.r.prenom,true));
     const dirNoms=new Set(dir.map(x=>ipNormStr(x.r.prenom)));
-    const autres=jour.filter(x=>!dirNoms.has(ipNormStr(x.r.prenom)));
+    const autres=jour.filter(x=>!dirNoms.has(ipNormStr(x.r.prenom))&&!peEstRemplacante(x.r.prenom,crecheId));
     const ouv=autres.filter(x=>x.segs[0][0]===450);
     const fer=autres.filter(x=>x.segs[x.segs.length-1][1]===1110);
     const lignes=[];
