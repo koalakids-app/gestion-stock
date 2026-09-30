@@ -4370,15 +4370,26 @@ function renderDemandsOnly(){
   if(!filtered.length){html=term?'<div class="empty-state"><i class="ti ti-zoom-cancel"></i><p>Aucun résultat pour "'+term+'"</p></div>':'<div class="empty-state"><i class="ti ti-inbox"></i><p>Aucune demande.</p></div>';}
   else{
     if(term)html+='<div class="info-box" style="margin-bottom:10px"><i class="ti ti-search" style="font-size:15px"></i> <strong>'+filtered.length+'</strong> demande(s) trouvée(s)</div>';
-    filtered.forEach(d=>{
+    // Regroupe les lignes issues d'un même envoi multi-destinataires en une seule carte.
+    const seenG=new Set(),items=[];
+    filtered.forEach(x=>{
+      if(x.groupe_envoi){if(seenG.has(x.groupe_envoi))return;seenG.add(x.groupe_envoi);items.push(filtered.filter(y=>y.groupe_envoi===x.groupe_envoi));}
+      else items.push([x]);
+    });
+    items.forEach(g=>{
+      const d=g[0],grouped=g.length>1;
       const isC=d.type==='consigne';
       const crecheLabel=(cacheCreches.find(c=>c.id===d.creche_id)?.name||'');
       const dateLabel=new Date(d.created_at).toLocaleDateString('fr-FR');
       const crecheBadge=crecheLabel?'<span class="badge" style="background:#f0f0ff;color:var(--koala)"><i class="ti ti-building" style="font-size:10px"></i> '+hl(crecheLabel)+'</span>':(d.to_referent_id?'<span class="badge" style="background:#F0EDE8;color:#666"><i class="ti ti-arrow-right" style="font-size:10px"></i> Message direct</span>':'');
       const canToggle=isDirection||(d.to_referent_id&&d.to_referent_id===currentProfile?.id);
+      const allTraite=g.every(x=>x.status==='traite');
+      const nbTraite=g.filter(x=>x.status==='traite').length;
+      const idsJs=g.map(x=>"'"+x.id+"'").join(',');
       const msgCount=cacheMessages.filter(m=>m.demande_id===d.id).length;
-      const threadBadge='<span class="badge badge-thread" onclick="openThread(\''+d.id+'\')"><i class="ti ti-message-2" style="font-size:11px"></i> '+(msgCount>0?msgCount+' réponse'+(msgCount>1?'s':''):'Discuter')+'</span>'+(cacheMessageBrouillons.some(b=>b.demande_id===d.id)?'<span class="badge" style="background:#FEF3C7;color:#92400E;cursor:pointer;margin-left:4px" title="Réponse préparée, non envoyée" onclick="openThread(\''+d.id+'\')"><i class="ti ti-file-pencil" style="font-size:11px"></i> Brouillon</span>':'');
-      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+msgAttachmentHtml(d.attachment_url,d.attachment_name)+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(d.referent_name)+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+threadBadge+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="toggleStatus(\''+d.id+'\',\''+d.status+'\')"><i class="ti ti-'+(d.status==='traite'?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')" title="Retirer de ma liste (déplacé dans ma corbeille, reste visible des autres)"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
+      const threadBadgeGroup=g.map(x=>{const n=cacheMessages.filter(m=>m.demande_id===x.id).length;return '<span class="badge badge-thread" onclick="openThread(\''+x.id+'\')" title="Fil de discussion avec '+escHtml(x.referent_name||'')+'"><i class="ti ti-message-2" style="font-size:11px"></i> '+escHtml(x.referent_name||'')+' '+(x.status==='traite'?'✅':'⏳')+(n>0?' · '+n:'')+'</span>';}).join('');
+      const threadBadge=grouped?threadBadgeGroup:'<span class="badge badge-thread" onclick="openThread(\''+d.id+'\')"><i class="ti ti-message-2" style="font-size:11px"></i> '+(msgCount>0?msgCount+' réponse'+(msgCount>1?'s':''):'Discuter')+'</span>'+(cacheMessageBrouillons.some(b=>b.demande_id===d.id)?'<span class="badge" style="background:#FEF3C7;color:#92400E;cursor:pointer;margin-left:4px" title="Réponse préparée, non envoyée" onclick="openThread(\''+d.id+'\')"><i class="ti ti-file-pencil" style="font-size:11px"></i> Brouillon</span>':'');
+      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+msgAttachmentHtml(d.attachment_url,d.attachment_name)+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(grouped?g.map(x=>x.referent_name).filter(Boolean).join(', '):(d.destinataires_noms||d.referent_name))+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC||grouped?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+threadBadge+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="'+(grouped?'toggleStatusGroup(['+idsJs+'],'+(allTraite?'false':'true')+')':'toggleStatus(\''+d.id+'\',\''+d.status+'\')')+'" title="'+(grouped?(allTraite?'Remettre tout le monde en attente':'Marquer traitée pour tous ('+nbTraite+'/'+g.length+' traitée(s))'):'')+'"><i class="ti ti-'+((grouped?allTraite:d.status==='traite')?'rotate-clockwise':'check')+'"></i></button>':'')+(isDirection?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')" title="Retirer de ma liste (déplacé dans ma corbeille, reste visible des autres)"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
     });
   }
   inner.innerHTML=html;
@@ -4501,11 +4512,16 @@ async function saveDemand(){
   const theme=document.getElementById('d-theme').value;
   const manualEmail=checked.length===1?document.getElementById('d-email').value.trim():'';
   let okCount=0;
+  // Une demande à plusieurs destinataires = une ligne par personne (statut et fil propres),
+  // regroupées à l'affichage via groupe_envoi (cf. sql/demandes_envoi_groupe.sql).
+  const groupeEnvoi=checked.length>1?(crypto.randomUUID?crypto.randomUUID():null):null;
+  const destNoms=checked.map(c=>c.getAttribute('data-name')||'').filter(Boolean).join(', ');
   for(const c of checked){
     // referent_id garde l'ÉMETTEUR de la demande (colonne jusqu'ici jamais renseignée) :
     // sans elle, une réponse du destinataire ne pouvait pas savoir à qui répondre tant
     // qu'aucun message n'existait encore dans le fil (cf. sendThreadMessage).
     const row={creche_id:crecheId,referent_id:currentProfile?.id||null,to_referent_id:c.value,referent_name:c.getAttribute('data-name')||'',referent_email:manualEmail||c.getAttribute('data-email')||'',subject:subj,description:desc,priority:prio,theme:theme,status:'attente',type:'demande',attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null};
+    if(groupeEnvoi){row.groupe_envoi=groupeEnvoi;row.destinataires_noms=destNoms;}
     const saved=await dbInsert('demandes',row);
     if(saved){
       okCount++;
@@ -4521,7 +4537,7 @@ async function saveDemand(){
       cacheDemandeBrouillons=cacheDemandeBrouillons.filter(b=>b.id!==dDraftId);
       dDraftId=null;
     }
-    showBanner(okCount>1?okCount+' demandes envoyées !':'Demande enregistrée !');closeModal('modal-demand-wrap');renderCrecheTabs();
+    showBanner(okCount>1?'Demande envoyée à '+okCount+' destinataires !':'Demande enregistrée !');closeModal('modal-demand-wrap');renderCrecheTabs();
   }
   if(okCount<checked.length)showBanner('Certains envois ont échoué.','error');
   btn.disabled=false;
@@ -4621,13 +4637,24 @@ async function toggleStatus(id,currentStatus){
     if(d?.to_referent_id){await callFn('notify-push',{referent_ids:[d.to_referent_id],title:newStatus==='traite'?'Demande traitée':'Demande remise en attente',body:d.subject||'',url:'./demandes.html',tag:'statut-'+id});}
     showBanner('Statut mis à jour !');renderDemandsOnly();renderCrecheTabs();}
 }
+async function toggleStatusGroup(ids,traiter){
+  for(const id of ids){
+    const d=cacheDemandes.find(x=>x.id===id);
+    if(d&&(d.status==='traite')!==traiter)await toggleStatus(id,d.status);
+  }
+}
 async function deleteDemand(id){
   if(!confirm('Retirer cette demande de votre liste ? Elle restera visible des autres et vous pourrez la restaurer depuis la corbeille.'))return;
   const myId=currentUser?.id;if(!myId)return;
-  if(cacheDemandesMasquees.some(m=>m.demande_id===id&&m.masque_par===myId)){renderDemandsOnly();renderCrecheTabs();return;}
-  const row=await dbInsert('demandes_masquees',{demande_id:id,masque_par:myId});
-  if(!row){showBanner('Suppression impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
-  cacheDemandesMasquees.push(row);
+  // Une demande envoyée à plusieurs destinataires est retirée en un bloc.
+  const d0=cacheDemandes.find(x=>x.id===id);
+  const ids=d0?.groupe_envoi?cacheDemandes.filter(x=>x.groupe_envoi===d0.groupe_envoi).map(x=>x.id):[id];
+  for(const did of ids){
+    if(cacheDemandesMasquees.some(m=>m.demande_id===did&&m.masque_par===myId))continue;
+    const row=await dbInsert('demandes_masquees',{demande_id:did,masque_par:myId});
+    if(!row){showBanner('Suppression impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
+    cacheDemandesMasquees.push(row);
+  }
   renderDemandsOnly();renderCrecheTabs();
 }
 async function restoreDemand(id){
@@ -11155,7 +11182,7 @@ demandes: `
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📝 Créer une demande</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Cliquez sur <strong>+ Nouvelle demande</strong></li>
-  <li>Cochez <strong>un ou plusieurs destinataires</strong> dans la liste à cases à cocher : elle mélange les directeurs/trices techniques et les admins (repérables avec 🔑). Une demande est enregistrée séparément pour chaque personne cochée</li>
+  <li>Cochez <strong>un ou plusieurs destinataires</strong> dans la liste à cases à cocher : elle mélange les directeurs/trices techniques et les admins (repérables avec 🔑). La demande apparaît comme <strong>une seule carte</strong> listant tous les destinataires, avec un fil de discussion et un statut propres à chacun</li>
   <li>Si <strong>au moins un</strong> destinataire coché est admin, la <strong>crèche</strong> devient facultative — laissez-la vide pour un message direct</li>
   <li>Un seul destinataire coché : le champ <strong>E-mail destinataire</strong> apparaît et se pré-remplit, modifiable si besoin. Il disparaît dès que plusieurs cases sont cochées</li>
   <li>Renseignez le <strong>sujet</strong> et la <strong>description</strong> précise</li>
