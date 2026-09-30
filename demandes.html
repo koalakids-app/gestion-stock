@@ -10574,10 +10574,10 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   // Continuité de direction : en l'absence de la directrice, la pro qui termine à 18h30
   // (directrice du matin) ou qui commence à 7h30 (directrice du soir) fait office de directeur.
   const _peCont=peContinuiteDirection(withCreneau,crecheId);
-  if(_peCont.some(x=>x)){
+  if(_peCont.some(x=>x.length)){
     html+='<tr><td style="position:sticky;left:0;z-index:1;padding:'+_pePad+';border-top:2px solid var(--border);background:#FBFBFD;vertical-align:middle;font-weight:700;font-size:'+_peFSCell+';color:#3D3580"><i class="ti ti-shield-check"></i> Continuité de direction</td>';
     _peCont.forEach(x=>{
-      html+='<td style="padding:'+_pePadCell+';border-top:2px solid var(--border);text-align:center;font-size:'+_peFSCell+';font-weight:700;color:#3D3580;background:#F4F3FB">'+(x?escHtml(x):'<span style="color:#ddd;font-weight:400">—</span>')+'</td>';
+      html+='<td style="padding:'+_pePadCell+';border-top:2px solid var(--border);text-align:center;font-size:'+_peFSCell+';font-weight:700;color:#3D3580;background:#F4F3FB">'+(x.length?x.map(l=>escHtml(l)).join('<br>'):'<span style="color:#ddd;font-weight:400">—</span>')+'</td>';
     });
     html+='</tr>';
   }
@@ -10586,21 +10586,31 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   return html;
 }
 
-// Pour chaque jour (0-4), prénom(s) de la personne en continuité de direction, ou '' si
-// la directrice est absente / non identifiable. Directrice du matin (début avant 9h30)
-// → la pro qui termine à 18h30 ; directrice du soir → la pro qui commence à 7h30.
+// Pour chaque jour (0-4), liste de lignes de texte de la continuité de direction.
+// - Directrice présente, du matin (début avant 9h30) → la pro qui termine à 18h30.
+// - Directrice présente, du soir → la pro qui commence à 7h30.
+// - Directrice absente → la pro du matin (7h30) puis la pro du soir (18h30).
 function peContinuiteDirection(rows,crecheId){
   const out=[];
   for(let d=0;d<5;d++){
     const jour=rows.filter(r=>r.jour===d).map(r=>({r,segs:peCreneauSegments(r.creneau_label)})).filter(x=>x.segs);
+    if(!jour.length){out.push([]);continue;}
+    const noms=l=>[...new Set(l.map(x=>x.r.prenom))].join(', ');
     const dir=jour.filter(x=>peFindReferentIdForPrenom(crecheId,x.r.prenom,true));
-    if(!dir.length){out.push('');continue;}
     const dirNoms=new Set(dir.map(x=>ipNormStr(x.r.prenom)));
-    const debut=Math.min(...dir.map(x=>x.segs[0][0]));
-    const matin=debut<570;
     const autres=jour.filter(x=>!dirNoms.has(ipNormStr(x.r.prenom)));
-    const cand=autres.filter(x=>matin?x.segs[x.segs.length-1][1]===1110:x.segs[0][0]===450);
-    out.push([...new Set(cand.map(x=>x.r.prenom))].join(', '));
+    const ouv=autres.filter(x=>x.segs[0][0]===450);
+    const fer=autres.filter(x=>x.segs[x.segs.length-1][1]===1110);
+    const lignes=[];
+    if(!dir.length){
+      if(ouv.length)lignes.push('Matin : '+noms(ouv));
+      if(fer.length)lignes.push('Soir : '+noms(fer));
+    }else{
+      const matin=Math.min(...dir.map(x=>x.segs[0][0]))<570;
+      const cand=matin?fer:ouv;
+      if(cand.length)lignes.push(noms(cand));
+    }
+    out.push(lignes);
   }
   return out;
 }
