@@ -49,6 +49,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Le sujet contient emoji + accents + texte libre : denomailer le plie mal en
+// mots encodés (retour à la ligne vide dans l'en-tête), ce qui fait apparaître
+// les en-têtes MIME bruts dans le corps du mail. On l'encode donc nous-mêmes
+// (RFC 2047, base64, mots courts séparés par des espaces) en ASCII pur.
+function encodeSubject(subject: string): string {
+  const enc = new TextEncoder();
+  const words: string[] = [];
+  let chunk = "";
+  const flush = () => {
+    if (!chunk) return;
+    words.push(`=?UTF-8?B?${btoa(String.fromCharCode(...enc.encode(chunk)))}?=`);
+    chunk = "";
+  };
+  for (const ch of subject.replace(/[\r\n]+/g, " ")) {
+    if (enc.encode(chunk + ch).length > 30) flush();
+    chunk += ch;
+  }
+  flush();
+  return words.join(" ");
+}
+
 async function sendEmail(to: string, subject: string, html: string) {
   const user = Deno.env.get("GMAIL_USER");
   const pass = Deno.env.get("GMAIL_APP_PASSWORD");
@@ -67,7 +88,7 @@ async function sendEmail(to: string, subject: string, html: string) {
     await client.send({
       from: user,
       to: [to],
-      subject,
+      subject: encodeSubject(subject),
       content: "Ce message nécessite un client de messagerie compatible HTML.",
       html,
     });
