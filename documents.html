@@ -754,7 +754,7 @@ async function loadAll(){
     sb.from('doc_categories').select('*').order('ordre'),
     sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
     sb.from('creches').select('id,name,addr').order('name'),
-    sb.from('enfants').select('id,prenom,nom,creche_id,dob').order('prenom'),
+    sb.from('enfants').select('id,prenom,nom,creche_id,dob,regime_repas').order('prenom'),
     sb.from('etablissements').select('*'),
     sb.from('reseau_config').select('config').maybeSingle()
   ]);
@@ -1388,8 +1388,9 @@ function fillEnfantOptions(selEnfant){
     list.map(e=>`<option value="${e.id}">${esc((e.prenom||'')+' '+(e.nom||''))}</option>`).join('');
   sel.value=(selEnfant&&list.some(e=>e.id===selEnfant))?selEnfant:'';
   // libellé du bouton PDF selon le contexte, et mise à jour si l’enfant change
-  sel.onchange=fillUpdatePdfBtnLabel;
+  sel.onchange=()=>{fillUpdatePdfBtnLabel();prefillEnfant();};
   fillUpdatePdfBtnLabel();
+  prefillEnfant();
 }
 
 /* « Générer le PDF » (conserve) si un enfant est rattaché ou si on vient de la fiche enfant ;
@@ -1453,7 +1454,7 @@ async function openFill(id,repId,forceNew){
       : 'Nouvelle saisie';
     // 1) remplir les métadonnées (enfant/statut) et 2) afficher la modale AVANT
     //    de monter les canvas de signature, pour que getBoundingClientRect() soit fiable.
-    fillMetaOptions(fillRep?fillRep.enfant_id:'',fillRep?fillRep.statut:'prepare');
+    fillMetaOptions(fillRep?fillRep.enfant_id:(RETURN_ENFANT_ID||''),fillRep?fillRep.statut:'prepare');
     close_('ovReps');
     document.getElementById('ovFill').classList.add('on');
     // 3) monter les signatures une fois le layout stabilisé (double rAF)
@@ -1471,7 +1472,7 @@ async function openFill(id,repId,forceNew){
     else inp=`<input type="${c.type}" id="ff_${c.key}" value="${esc(v)}">`;
     return `<div class="f"><label>${esc(c.label)}</label>${inp}</div>`;
   }).join('')||'<p style="color:var(--muted);font-size:13px">Ce document n\'a pas encore de champs configurés.</p>';
-  fillMetaOptions(fillRep?fillRep.enfant_id:'',fillRep?fillRep.statut:'prepare');
+  fillMetaOptions(fillRep?fillRep.enfant_id:(RETURN_ENFANT_ID||''),fillRep?fillRep.statut:'prepare');
   close_('ovReps');
   document.getElementById('ovFill').classList.add('on');
 }
@@ -3181,6 +3182,71 @@ function vacFromEnfant(){
 function vacHookEnfant(){
   const se=document.getElementById('fillEnfant');
   if(se&&!se._vacHook){se.addEventListener('change',vacFromEnfant);se._vacHook=1;}
+}
+
+/* ---------- PREREMPLISSAGE DEPUIS L'ENFANT ET LA CRECHE CHOISIS ----------
+   Les modeles lies a un enfant reprennent le prenom/nom, la date de naissance,
+   l'age, le regime et la creche de l'enfant selectionne dans l'en-tete de la
+   modale (ou, a defaut, la creche filtree / celle de la directrice technique).
+   Une valeur saisie a la main n'est jamais ecrasee : seules les valeurs posees
+   par ce prérempli sont remplacees quand on change d'enfant. Les noms des
+   parents ne sont pas en base : ils restent a saisir. */
+function ageTexte(dob){
+  if(!dob)return '';
+  const n=new Date(dob),t=new Date();
+  if(isNaN(n))return '';
+  let m=(t.getFullYear()-n.getFullYear())*12+t.getMonth()-n.getMonth();
+  if(t.getDate()<n.getDate())m--;
+  if(m<0)return '';
+  if(m<24)return m+' mois';
+  const a=Math.floor(m/12),r=m%12;
+  return a+' ans'+(r?' '+r+' mois':'');
+}
+function prefillContexte(){
+  const eid=((document.getElementById('fillEnfant')||{}).value)||'';
+  const enfant=ENFANTS.find(e=>e.id===eid)||null;
+  const cid=(enfant&&enfant.creche_id)||((document.getElementById('fillCreche')||{}).value)||(PROF&&PROF.creche_id)||'';
+  const creche=CRECHES.find(c=>c.id===cid)||null;
+  return {enfant,creche,jour:new Date().toISOString().slice(0,10)};
+}
+const nomComplet=e=>e?((e.prenom||'')+' '+(e.nom||'')).trim():'';
+const PREFILL_ENFANT={
+  antipyretique:c=>({ap_enfant:c.enfant&&c.enfant.prenom,ap_date:c.jour}),
+  creme_solaire:c=>({cs_enfant:c.enfant&&c.enfant.prenom,cs_date:c.jour}),
+  medicament_ponctuel:c=>({mp_enfant:c.enfant&&c.enfant.prenom,mp_date:c.jour}),
+  reglement_medicaments:c=>({rm_creche:c.creche&&c.creche.name,rm_enfant:nomComplet(c.enfant),rm_date:c.jour}),
+  fiche_liaison:c=>({fl_creche:c.creche&&c.creche.name,fl_enfant:nomComplet(c.enfant),
+    fl_naiss:c.enfant&&c.enfant.dob,fl_date:c.jour}),
+  fiche_renseignements:c=>({fr_nom:c.enfant&&c.enfant.nom,fr_prenom:c.enfant&&c.enfant.prenom,
+    fr_naiss:c.enfant&&c.enfant.dob,fr_age:c.enfant&&ageTexte(c.enfant.dob),fr_date:c.jour}),
+  fiche_sanitaire:c=>({fs_nom:c.enfant&&c.enfant.nom,fs_prenom:c.enfant&&c.enfant.prenom,
+    fs_naiss:c.enfant&&c.enfant.dob,fs_regime:c.enfant&&c.enfant.regime_repas,
+    fs_doc_enfant:nomComplet(c.enfant)})
+};
+function prefillSet(id,val){
+  const el=document.getElementById('ff_'+id);
+  if(!el||val==null||val==='')return;
+  if(el.value&&el.dataset.auto!=='1')return;          // saisie manuelle conservee
+  if(el.tagName==='SELECT'){
+    /* Les listes de creches portent le nom court (« Brunet »), la base le nom
+       complet : on retient l'option qui correspond a l'un ou a l'autre. */
+    const v=String(val),court=shortCrecheName(v);
+    const opt=[...el.options].find(o=>o.value===v)||[...el.options].find(o=>o.value===court);
+    if(!opt)return;
+    el.value=opt.value;
+  }else el.value=val;
+  el.dataset.auto='1';
+  if(!el._autoHook){
+    el._autoHook=1;
+    ['input','change'].forEach(ev=>el.addEventListener(ev,()=>{delete el.dataset.auto;}));
+  }
+}
+function prefillEnfant(){
+  const k=fillDoc&&fillDoc.template_key,fn=k&&PREFILL_ENFANT[k];
+  if(!fn)return;
+  const c=prefillContexte();
+  const vals=fn(c);
+  Object.keys(vals).forEach(id=>prefillSet(id,vals[id]));
 }
 
 const TPL={
