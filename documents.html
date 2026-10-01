@@ -3281,6 +3281,58 @@ function prefillEnfant(){
   }
 }
 
+/* ---------- ORDONNANCE JOINTE (autorisation de medicament ponctuelle) ----------
+   Piece medicale : bucket PRIVE « carnets » (PDF / images, 8 Mo, referents),
+   lue ensuite par URL signee de courte duree, jamais par lien public. Le
+   formulaire ne garde que le chemin et le nom d'origine (champs caches). */
+const MP_ORD_BUCKET='carnets',MP_ORD_MAX=8*1024*1024,MP_ORD_TYPES=['application/pdf','image/jpeg','image/png','image/webp','image/heic','image/heif'];
+function mpOrdRender(){
+  const box=document.getElementById('mpOrdEtat');if(!box)return;
+  const path=(document.getElementById('ff_mp_ord_path')||{}).value||'';
+  const nom=(document.getElementById('ff_mp_ord_nom')||{}).value||'';
+  box.innerHTML=path
+    ?'<i class="ti ti-paperclip"></i> <b>'+esc(nom||'Ordonnance')+'</b> '
+      +'<button type="button" class="btn btn-s" onclick="mpOrdVoir()">Voir</button> '
+      +'<button type="button" class="btn btn-g" onclick="mpOrdRetirer()">Retirer</button>'
+    :'<span style="color:var(--muted)">Aucune ordonnance jointe.</span>';
+}
+async function mpOrdChoisir(input){
+  const f=input.files&&input.files[0];input.value='';
+  if(!f)return;
+  if(MP_ORD_TYPES.indexOf(f.type)<0)return toast('Format non accepté : PDF ou image (JPG, PNG, WEBP, HEIC).');
+  if(f.size>MP_ORD_MAX)return toast('Fichier trop volumineux (8 Mo maximum).');
+  const eid=((document.getElementById('fillEnfant')||{}).value)||'sans-enfant';
+  const path='ordonnances/'+eid+'/'+Date.now()+'_'+slug(f.name);
+  const{error}=await sb.storage.from(MP_ORD_BUCKET).upload(path,f,{contentType:f.type});
+  if(error){console.warn('mpOrdChoisir',error);return toast('Import impossible : '+(error.message||'erreur'));}
+  mpOrdLiberer();
+  document.getElementById('ff_mp_ord_path').value=path;
+  document.getElementById('ff_mp_ord_nom').value=f.name;
+  mpOrdRender();
+  toast('Ordonnance importée. Pensez à enregistrer le document.');
+}
+/* Retire du stockage un fichier remplace/retire, sauf s'il est deja reference par la reponse enregistree. */
+function mpOrdLiberer(){
+  const cur=(document.getElementById('ff_mp_ord_path')||{}).value||'';
+  const saved=(fillRep&&fillRep.donnees&&fillRep.donnees.mp_ord_path)||'';
+  if(cur&&cur!==saved)sb.storage.from(MP_ORD_BUCKET).remove([cur]).catch(()=>{});
+}
+async function mpOrdVoir(){
+  const path=(document.getElementById('ff_mp_ord_path')||{}).value||'';
+  if(!path)return;
+  const w=window.open('','_blank');
+  const{data,error}=await sb.storage.from(MP_ORD_BUCKET).createSignedUrl(path,300);
+  if(error||!data){if(w)w.close();return toast('Ordonnance introuvable ou accès refusé.');}
+  if(w)w.location=data.signedUrl;else location.href=data.signedUrl;
+}
+function mpOrdRetirer(){
+  if(!confirm('Retirer l’ordonnance jointe ?'))return;
+  mpOrdLiberer();
+  document.getElementById('ff_mp_ord_path').value='';
+  document.getElementById('ff_mp_ord_nom').value='';
+  mpOrdRender();
+}
+
 const TPL={
  eaje:{
   get fields(){return eajeFields();},
@@ -4240,7 +4292,7 @@ const TPL={
   }
  },
  medicament_ponctuel:{
-  fields:['mp_civ1','mp_parent1','mp_qual1','mp_civ2','mp_parent2','mp_qual2','mp_enfant','mp_medicaments','mp_date'],
+  fields:['mp_civ1','mp_parent1','mp_qual1','mp_civ2','mp_parent2','mp_qual2','mp_enfant','mp_medicament','mp_posologie','mp_duree','mp_ord_path','mp_ord_nom','mp_date'],
   html:v=>`<div class="tpl">
    <h3>Autorisation famille — prise de médicament ponctuelle</h3>
    <p class="hint">Autorise le référent technique ou le personnel de la structure à administrer à l’enfant le(s) médicament(s) indiqué(s), selon le protocole établi par son médecin (ordonnance transmise à la structure).</p>
@@ -4260,14 +4312,27 @@ const TPL={
      <div class="f"><label>Prénom de l’enfant</label><input id="ff_mp_enfant" value="${esc(v.mp_enfant)}"></div>
      <div class="f"><label>Date</label><input type="date" id="ff_mp_date" value="${esc(v.mp_date)}"></div>
    </div>
-   <div class="f"><label>Médicament(s) à administrer</label><textarea id="ff_mp_medicaments" rows="4">${esc(v.mp_medicaments)}</textarea></div>
+   <h3>Médicament à administrer</h3>
+   <div class="f"><label>Nom du médicament</label><input id="ff_mp_medicament" value="${esc(v.mp_medicament)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Posologie</label><input id="ff_mp_posologie" value="${esc(v.mp_posologie)}" placeholder="ex. 1 dose-poids toutes les 6 h"></div>
+     <div class="f"><label>Durée du traitement</label><input id="ff_mp_duree" value="${esc(v.mp_duree)}" placeholder="ex. 5 jours, du 02/10 au 06/10"></div>
+   </div>
+   <div class="f"><label>Ordonnance du médecin (pièce jointe)</label>
+     <input type="hidden" id="ff_mp_ord_path" value="${esc(v.mp_ord_path)}">
+     <input type="hidden" id="ff_mp_ord_nom" value="${esc(v.mp_ord_nom)}">
+     <input type="file" id="mpOrdFile" accept="application/pdf,image/*" style="display:none" onchange="mpOrdChoisir(this)">
+     <button type="button" class="btn btn-s" onclick="document.getElementById('mpOrdFile').click()"><i class="ti ti-upload"></i> Importer l’ordonnance</button>
+     <p id="mpOrdEtat" style="font-size:13px;margin-top:8px"></p>
+     <p class="hint">PDF ou photo, 8 Mo maximum. Visible uniquement par l’équipe de la crèche.</p>
+   </div>
    <p class="hint">En signant, le(s) parent(s) atteste(nt) que le médicament concerné a déjà été administré à l’enfant.</p>
    <div class="grid2">
      ${sigBoxHtml('parent1','Signature du parent 1')}
      ${sigBoxHtml('parent2','Signature du parent 2')}
    </div>
   </div>`,
-  mount:()=>{['parent1','parent2'].forEach(mountSig);},
+  mount:()=>{['parent1','parent2'].forEach(mountSig);mpOrdRender();},
   pdf:doc=>{
     const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
     const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
@@ -4287,12 +4352,17 @@ const TPL={
       soussPhrase(g('mp_civ1'),g('mp_parent1'),g('mp_qual1')),
       soussPhrase(g('mp_civ2'),g('mp_parent2'),g('mp_qual2')),
       'de l’enfant '+(g('mp_enfant')||dots(55)),
-      'autorise (autorisons) le référent technique ou le personnel de la structure à administrer à mon (notre) enfant le(s) médicament(s) suivant(s) :'
+      'autorise (autorisons) le référent technique ou le personnel de la structure à administrer à mon (notre) enfant le médicament suivant :'
     ];
     para.forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*5+4);doc.text(L,14,y);y+=L.length*5+4;});
-    const med=g('mp_medicaments').trim();
-    if(med){doc.setFont(undefined,'bold');const L=doc.splitTextToSize(med,W-6);need(L.length*5+4);doc.text(L,17,y);y+=L.length*5+4;doc.setFont(undefined,'normal');}
-    else{for(let i=0;i<3;i++){need(8);doc.text(dots(110),14,y);y+=8;}}
+    [['Médicament',g('mp_medicament')],['Posologie',g('mp_posologie')],['Durée du traitement',g('mp_duree')]].forEach(([lab,val])=>{
+      need(9);doc.setFont(undefined,'bold');doc.text(lab+' : ',17,y);
+      const lw=doc.getTextWidth(lab+' : ');
+      doc.setFont(undefined,'normal');
+      const L=doc.splitTextToSize((val||'').trim()||'.'.repeat(60),W-6-lw);
+      doc.text(L,17+lw,y);y+=L.length*5+3;
+    });
+    if(g('mp_ord_nom')){need(8);doc.setFont(undefined,'italic');doc.text('Ordonnance du médecin jointe au dossier : '+g('mp_ord_nom'),17,y);doc.setFont(undefined,'normal');y+=7;}
     y+=3;
     ['Selon le protocole établi par le médecin de mon (notre) enfant, l’ordonnance a d’ailleurs été transmise au personnel de la structure.',
      'J’atteste (nous attestons) également que le médicament, concerné par cette autorisation, a déjà été administré à mon (notre) enfant.'
