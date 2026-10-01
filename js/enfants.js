@@ -2224,14 +2224,20 @@ function enfRenderVaccins(enfantId){
     }).join('');
     return '<tr><td style="padding:4px 6px;font-size:11.5px;font-weight:600;color:var(--koala-dark);white-space:nowrap">'+escHtml(v.label)+'</td>'+cells+'</tr>';
   }).join('');
+  // Le redessin remplace tout le tableau : sans cela le defilement horizontal
+  // de l'utilisateur est remis a zero (le tableau « revient » a gauche).
+  const oldScroller=zone.querySelector('[data-vac-scroll]');
+  const prevScroll=oldScroller?oldScroller.scrollLeft:0;
   zone.innerHTML=titre
-    +'<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">'
+    +'<div data-vac-scroll style="overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;border:1px solid var(--border);border-radius:10px">'
     +'<table style="width:100%;border-collapse:collapse">'
     +'<thead><tr style="background:var(--koala-light)">'
     +'<th style="padding:5px 6px;font-size:10.5px;font-weight:700;color:var(--koala);text-align:left;min-width:150px">Vaccin</th>'
     +allMonths.map(function(m){return '<th style="padding:5px 6px;font-size:10.5px;font-weight:700;color:var(--koala);text-align:center;white-space:nowrap">'+m+' mois</th>';}).join('')
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
     +'<div style="margin-top:8px;font-size:11px;color:var(--muted)">Cliquez une pastille pour la marquer faite (ou l\'annuler).</div>';
+  const newScroller=zone.querySelector('[data-vac-scroll]');
+  if(newScroller&&prevScroll) newScroller.scrollLeft=prevScroll;
 }
 window.enfLoadVaccinsStatus = enfLoadVaccinsStatus;
 window.enfRenderVaccins = enfRenderVaccins;
