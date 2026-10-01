@@ -71,7 +71,10 @@ async function boot(){
   const row=Array.isArray(data)?data[0]:data;
   if(!row)return state('err','Lien expiré','Ce lien de signature n’est plus valable ou la signature a déjà été déposée. Demandez-en un nouveau.');
   REQ=row;
-  sb.rpc('kk_sig_marquer_ouvert',{p_token:TOKEN}).catch(()=>{});
+  /* Le builder supabase-js n'a pas de .catch() (seulement .then()) : l'appeler
+     directement levait une TypeError avant renderPad() et laissait la page sur
+     « Chargement… ». Best-effort : un echec ici ne bloque jamais la signature. */
+  Promise.resolve(sb.rpc('kk_sig_marquer_ouvert',{p_token:TOKEN})).then(()=>{},()=>{});
 
   // Contrat de travail avec vérification par code activée : le/la salarié(e)
   // doit d'abord confirmer son identité avant que le cadre de signature ne
@@ -179,7 +182,12 @@ async function send(){
   state('ok','Signature enregistrée','Vous pouvez refermer cette page.');
 }
 
-boot();
+/* Filet de securite : toute erreur inattendue au demarrage doit s'afficher,
+   jamais laisser la page figee sur « Chargement… ». */
+boot().catch(e=>{
+  console.error('boot',e);
+  state('err','Erreur','Impossible de charger cette demande de signature. Rechargez la page ou demandez un nouveau lien.');
+});
 </script>
 </body>
 </html>
