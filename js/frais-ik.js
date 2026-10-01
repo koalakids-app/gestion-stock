@@ -125,7 +125,11 @@ async function ikConfigPull(){
     const{data,error}=await sb.from('frais_ik_config').select('config').maybeSingle();
     if(error)throw error;
     ikSyncOk=true;
+    // La base fait foi : sans ligne côté Supabase, un ik_config resté dans ce navigateur
+    // (anciennes distances/barème saisis hors synchro) faussait les totaux de ce compte
+    // par rapport à ceux de la direction. On repart alors des valeurs par défaut.
     if(data&&data.config)localStorage.setItem('ik_config',JSON.stringify(data.config));
+    else localStorage.removeItem('ik_config');
     return true;
   }catch(e){ikSyncWarn('lecture config',e);return false;}
 }
