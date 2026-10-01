@@ -754,7 +754,7 @@ async function loadAll(){
     sb.from('doc_categories').select('*').order('ordre'),
     sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
     sb.from('creches').select('id,name,addr').order('name'),
-    sb.from('enfants').select('id,prenom,nom,creche_id,dob').order('prenom'),
+    sb.from('enfants').select('id,prenom,nom,creche_id,dob,regime_repas').order('prenom'),
     sb.from('etablissements').select('*'),
     sb.from('reseau_config').select('config').maybeSingle()
   ]);
@@ -1388,8 +1388,9 @@ function fillEnfantOptions(selEnfant){
     list.map(e=>`<option value="${e.id}">${esc((e.prenom||'')+' '+(e.nom||''))}</option>`).join('');
   sel.value=(selEnfant&&list.some(e=>e.id===selEnfant))?selEnfant:'';
   // libellé du bouton PDF selon le contexte, et mise à jour si l’enfant change
-  sel.onchange=fillUpdatePdfBtnLabel;
+  sel.onchange=()=>{fillUpdatePdfBtnLabel();prefillEnfant();};
   fillUpdatePdfBtnLabel();
+  prefillEnfant();
 }
 
 /* « Générer le PDF » (conserve) si un enfant est rattaché ou si on vient de la fiche enfant ;
@@ -1453,7 +1454,7 @@ async function openFill(id,repId,forceNew){
       : 'Nouvelle saisie';
     // 1) remplir les métadonnées (enfant/statut) et 2) afficher la modale AVANT
     //    de monter les canvas de signature, pour que getBoundingClientRect() soit fiable.
-    fillMetaOptions(fillRep?fillRep.enfant_id:'',fillRep?fillRep.statut:'prepare');
+    fillMetaOptions(fillRep?fillRep.enfant_id:(RETURN_ENFANT_ID||''),fillRep?fillRep.statut:'prepare');
     close_('ovReps');
     document.getElementById('ovFill').classList.add('on');
     // 3) monter les signatures une fois le layout stabilisé (double rAF)
@@ -1471,7 +1472,7 @@ async function openFill(id,repId,forceNew){
     else inp=`<input type="${c.type}" id="ff_${c.key}" value="${esc(v)}">`;
     return `<div class="f"><label>${esc(c.label)}</label>${inp}</div>`;
   }).join('')||'<p style="color:var(--muted);font-size:13px">Ce document n\'a pas encore de champs configurés.</p>';
-  fillMetaOptions(fillRep?fillRep.enfant_id:'',fillRep?fillRep.statut:'prepare');
+  fillMetaOptions(fillRep?fillRep.enfant_id:(RETURN_ENFANT_ID||''),fillRep?fillRep.statut:'prepare');
   close_('ovReps');
   document.getElementById('ovFill').classList.add('on');
 }
@@ -3183,6 +3184,155 @@ function vacHookEnfant(){
   if(se&&!se._vacHook){se.addEventListener('change',vacFromEnfant);se._vacHook=1;}
 }
 
+/* ---------- PREREMPLISSAGE DEPUIS L'ENFANT ET LA CRECHE CHOISIS ----------
+   Les modeles lies a un enfant reprennent le prenom/nom, la date de naissance,
+   l'age, le regime et la creche de l'enfant selectionne dans l'en-tete de la
+   modale (ou, a defaut, la creche filtree / celle de la directrice technique).
+   Une valeur saisie a la main n'est jamais ecrasee : seules les valeurs posees
+   par ce prérempli sont remplacees quand on change d'enfant. Les noms des
+   parents ne sont pas en base : ils restent a saisir. */
+function ageTexte(dob){
+  if(!dob)return '';
+  const n=new Date(dob),t=new Date();
+  if(isNaN(n))return '';
+  let m=(t.getFullYear()-n.getFullYear())*12+t.getMonth()-n.getMonth();
+  if(t.getDate()<n.getDate())m--;
+  if(m<0)return '';
+  if(m<24)return m+' mois';
+  const a=Math.floor(m/12),r=m%12;
+  return a+' ans'+(r?' '+r+' mois':'');
+}
+function prefillContexte(){
+  const eid=((document.getElementById('fillEnfant')||{}).value)||'';
+  const enfant=ENFANTS.find(e=>e.id===eid)||null;
+  const cid=(enfant&&enfant.creche_id)||((document.getElementById('fillCreche')||{}).value)||(PROF&&PROF.creche_id)||'';
+  const creche=CRECHES.find(c=>c.id===cid)||null;
+  const parents=(enfant&&PARENTS_CACHE[enfant.id])||[];
+  return {enfant,creche,parents,p1:parents[0]||null,p2:parents[1]||null,jour:new Date().toISOString().slice(0,10)};
+}
+/* Responsables legaux de la fiche enfant (table enfants_parents), tries mere,
+   pere, tuteur puis autre. Charges une fois par enfant ; un echec de lecture
+   (droits, reseau) laisse simplement les champs parents a saisir. */
+const PARENTS_CACHE={};
+const PARENT_ORDRE={mere:0,pere:1,tuteur:2,autre:3};
+const PARENT_CIV={mere:'Madame',pere:'Monsieur'};
+const PARENT_QUAL={mere:'mère',pere:'père',tuteur:'tuteur',autre:'responsable légal'};
+async function chargerParents(enfantId){
+  if(PARENTS_CACHE[enfantId])return;
+  try{
+    const{data,error}=await sb.from('enfants_parents').select('*').eq('enfant_id',enfantId).order('created_at');
+    if(error)throw error;
+    PARENTS_CACHE[enfantId]=(data||[]).slice().sort((a,b)=>(PARENT_ORDRE[a.lien]??9)-(PARENT_ORDRE[b.lien]??9));
+  }catch(e){console.warn('chargerParents',e);PARENTS_CACHE[enfantId]=[];}
+}
+const pNom=p=>p?((p.prenom||'')+' '+(p.nom||'')).trim():'';
+const pCiv=p=>p&&PARENT_CIV[p.lien]||'';
+const pQual=p=>p?(PARENT_QUAL[p.lien]||''):'';
+const sousParents=(x,c)=>({[x+'_civ1']:pCiv(c.p1),[x+'_parent1']:pNom(c.p1),[x+'_qual1']:pQual(c.p1),
+  [x+'_civ2']:pCiv(c.p2),[x+'_parent2']:pNom(c.p2),[x+'_qual2']:pQual(c.p2)});
+const nomComplet=e=>e?((e.prenom||'')+' '+(e.nom||'')).trim():'';
+const PREFILL_ENFANT={
+  antipyretique:c=>Object.assign({ap_enfant:c.enfant&&c.enfant.prenom,ap_date:c.jour},sousParents('ap',c)),
+  creme_solaire:c=>Object.assign({cs_enfant:c.enfant&&c.enfant.prenom,cs_date:c.jour},sousParents('cs',c)),
+  medicament_ponctuel:c=>Object.assign({mp_enfant:c.enfant&&c.enfant.prenom,mp_date:c.jour},sousParents('mp',c)),
+  reglement_medicaments:c=>({rm_creche:c.creche&&c.creche.name,rm_nom:pNom(c.p1),rm_enfant:nomComplet(c.enfant),rm_date:c.jour}),
+  fiche_liaison:c=>({fl_creche:c.creche&&c.creche.name,fl_enfant:nomComplet(c.enfant),
+    fl_naiss:c.enfant&&c.enfant.dob,fl_date:c.jour,
+    fl_parents:c.parents.slice(0,2).map(pNom).filter(Boolean).join(' et '),
+    fl_tel1:c.p1&&c.p1.telephone,fl_tel2:c.p2&&c.p2.telephone}),
+  fiche_renseignements:c=>({fr_nom:c.enfant&&c.enfant.nom,fr_prenom:c.enfant&&c.enfant.prenom,
+    fr_naiss:c.enfant&&c.enfant.dob,fr_age:c.enfant&&ageTexte(c.enfant.dob),fr_date:c.jour}),
+  fiche_sanitaire:c=>({fs_nom:c.enfant&&c.enfant.nom,fs_prenom:c.enfant&&c.enfant.prenom,
+    fs_naiss:c.enfant&&c.enfant.dob,fs_regime:c.enfant&&c.enfant.regime_repas,
+    fs_doc_enfant:nomComplet(c.enfant)})
+};
+function prefillSet(id,val){
+  const el=document.getElementById('ff_'+id);
+  if(!el||val==null||val==='')return;
+  if(el.value&&el.dataset.auto!=='1')return;          // saisie manuelle conservee
+  if(el.tagName==='SELECT'){
+    /* Les listes de creches portent le nom court (« Brunet »), la base le nom
+       complet : on retient l'option qui correspond a l'un ou a l'autre. */
+    const v=String(val),court=shortCrecheName(v);
+    const opt=[...el.options].find(o=>o.value===v)||[...el.options].find(o=>o.value===court);
+    if(!opt)return;
+    el.value=opt.value;
+  }else el.value=val;
+  el.dataset.auto='1';
+  if(!el._autoHook){
+    el._autoHook=1;
+    ['input','change'].forEach(ev=>el.addEventListener(ev,()=>{delete el.dataset.auto;}));
+  }
+}
+function prefillEnfant(){
+  const k=fillDoc&&fillDoc.template_key,fn=k&&PREFILL_ENFANT[k];
+  if(!fn)return;
+  const c=prefillContexte();
+  const vals=fn(c);
+  Object.keys(vals).forEach(id=>prefillSet(id,vals[id]));
+  /* Les parents arrivent apres : on rejoue le prerempli, sauf si l'enfant
+     choisi ou le document ouvert ont change entre-temps. */
+  if(c.enfant&&!PARENTS_CACHE[c.enfant.id]){
+    const eid=c.enfant.id,doc=fillDoc;
+    chargerParents(eid).then(()=>{
+      const cur=((document.getElementById('fillEnfant')||{}).value)||'';
+      if(cur===eid&&fillDoc===doc)prefillEnfant();
+    });
+  }
+}
+
+/* ---------- ORDONNANCE JOINTE (autorisation de medicament ponctuelle) ----------
+   Piece medicale : bucket PRIVE « carnets » (PDF / images, 8 Mo, referents),
+   lue ensuite par URL signee de courte duree, jamais par lien public. Le
+   formulaire ne garde que le chemin et le nom d'origine (champs caches). */
+const MP_ORD_BUCKET='carnets',MP_ORD_MAX=8*1024*1024,MP_ORD_TYPES=['application/pdf','image/jpeg','image/png','image/webp','image/heic','image/heif'];
+function mpOrdRender(){
+  const box=document.getElementById('mpOrdEtat');if(!box)return;
+  const path=(document.getElementById('ff_mp_ord_path')||{}).value||'';
+  const nom=(document.getElementById('ff_mp_ord_nom')||{}).value||'';
+  box.innerHTML=path
+    ?'<i class="ti ti-paperclip"></i> <b>'+esc(nom||'Ordonnance')+'</b> '
+      +'<button type="button" class="btn btn-s" onclick="mpOrdVoir()">Voir</button> '
+      +'<button type="button" class="btn btn-g" onclick="mpOrdRetirer()">Retirer</button>'
+    :'<span style="color:var(--muted)">Aucune ordonnance jointe.</span>';
+}
+async function mpOrdChoisir(input){
+  const f=input.files&&input.files[0];input.value='';
+  if(!f)return;
+  if(MP_ORD_TYPES.indexOf(f.type)<0)return toast('Format non accepté : PDF ou image (JPG, PNG, WEBP, HEIC).');
+  if(f.size>MP_ORD_MAX)return toast('Fichier trop volumineux (8 Mo maximum).');
+  const eid=((document.getElementById('fillEnfant')||{}).value)||'sans-enfant';
+  const path='ordonnances/'+eid+'/'+Date.now()+'_'+slug(f.name);
+  const{error}=await sb.storage.from(MP_ORD_BUCKET).upload(path,f,{contentType:f.type});
+  if(error){console.warn('mpOrdChoisir',error);return toast('Import impossible : '+(error.message||'erreur'));}
+  mpOrdLiberer();
+  document.getElementById('ff_mp_ord_path').value=path;
+  document.getElementById('ff_mp_ord_nom').value=f.name;
+  mpOrdRender();
+  toast('Ordonnance importée. Pensez à enregistrer le document.');
+}
+/* Retire du stockage un fichier remplace/retire, sauf s'il est deja reference par la reponse enregistree. */
+function mpOrdLiberer(){
+  const cur=(document.getElementById('ff_mp_ord_path')||{}).value||'';
+  const saved=(fillRep&&fillRep.donnees&&fillRep.donnees.mp_ord_path)||'';
+  if(cur&&cur!==saved)sb.storage.from(MP_ORD_BUCKET).remove([cur]).catch(()=>{});
+}
+async function mpOrdVoir(){
+  const path=(document.getElementById('ff_mp_ord_path')||{}).value||'';
+  if(!path)return;
+  const w=window.open('','_blank');
+  const{data,error}=await sb.storage.from(MP_ORD_BUCKET).createSignedUrl(path,300);
+  if(error||!data){if(w)w.close();return toast('Ordonnance introuvable ou accès refusé.');}
+  if(w)w.location=data.signedUrl;else location.href=data.signedUrl;
+}
+function mpOrdRetirer(){
+  if(!confirm('Retirer l’ordonnance jointe ?'))return;
+  mpOrdLiberer();
+  document.getElementById('ff_mp_ord_path').value='';
+  document.getElementById('ff_mp_ord_nom').value='';
+  mpOrdRender();
+}
+
 const TPL={
  eaje:{
   get fields(){return eajeFields();},
@@ -4142,7 +4292,7 @@ const TPL={
   }
  },
  medicament_ponctuel:{
-  fields:['mp_civ1','mp_parent1','mp_qual1','mp_civ2','mp_parent2','mp_qual2','mp_enfant','mp_medicaments','mp_date'],
+  fields:['mp_civ1','mp_parent1','mp_qual1','mp_civ2','mp_parent2','mp_qual2','mp_enfant','mp_medicament','mp_posologie','mp_duree','mp_ord_path','mp_ord_nom','mp_date'],
   html:v=>`<div class="tpl">
    <h3>Autorisation famille — prise de médicament ponctuelle</h3>
    <p class="hint">Autorise le référent technique ou le personnel de la structure à administrer à l’enfant le(s) médicament(s) indiqué(s), selon le protocole établi par son médecin (ordonnance transmise à la structure).</p>
@@ -4162,14 +4312,27 @@ const TPL={
      <div class="f"><label>Prénom de l’enfant</label><input id="ff_mp_enfant" value="${esc(v.mp_enfant)}"></div>
      <div class="f"><label>Date</label><input type="date" id="ff_mp_date" value="${esc(v.mp_date)}"></div>
    </div>
-   <div class="f"><label>Médicament(s) à administrer</label><textarea id="ff_mp_medicaments" rows="4">${esc(v.mp_medicaments)}</textarea></div>
+   <h3>Médicament à administrer</h3>
+   <div class="f"><label>Nom du médicament</label><input id="ff_mp_medicament" value="${esc(v.mp_medicament)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Posologie</label><input id="ff_mp_posologie" value="${esc(v.mp_posologie)}" placeholder="ex. 1 dose-poids toutes les 6 h"></div>
+     <div class="f"><label>Durée du traitement</label><input id="ff_mp_duree" value="${esc(v.mp_duree)}" placeholder="ex. 5 jours, du 02/10 au 06/10"></div>
+   </div>
+   <div class="f"><label>Ordonnance du médecin (pièce jointe)</label>
+     <input type="hidden" id="ff_mp_ord_path" value="${esc(v.mp_ord_path)}">
+     <input type="hidden" id="ff_mp_ord_nom" value="${esc(v.mp_ord_nom)}">
+     <input type="file" id="mpOrdFile" accept="application/pdf,image/*" style="display:none" onchange="mpOrdChoisir(this)">
+     <button type="button" class="btn btn-s" onclick="document.getElementById('mpOrdFile').click()"><i class="ti ti-upload"></i> Importer l’ordonnance</button>
+     <p id="mpOrdEtat" style="font-size:13px;margin-top:8px"></p>
+     <p class="hint">PDF ou photo, 8 Mo maximum. Visible uniquement par l’équipe de la crèche.</p>
+   </div>
    <p class="hint">En signant, le(s) parent(s) atteste(nt) que le médicament concerné a déjà été administré à l’enfant.</p>
    <div class="grid2">
      ${sigBoxHtml('parent1','Signature du parent 1')}
      ${sigBoxHtml('parent2','Signature du parent 2')}
    </div>
   </div>`,
-  mount:()=>{['parent1','parent2'].forEach(mountSig);},
+  mount:()=>{['parent1','parent2'].forEach(mountSig);mpOrdRender();},
   pdf:doc=>{
     const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
     const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
@@ -4189,12 +4352,17 @@ const TPL={
       soussPhrase(g('mp_civ1'),g('mp_parent1'),g('mp_qual1')),
       soussPhrase(g('mp_civ2'),g('mp_parent2'),g('mp_qual2')),
       'de l’enfant '+(g('mp_enfant')||dots(55)),
-      'autorise (autorisons) le référent technique ou le personnel de la structure à administrer à mon (notre) enfant le(s) médicament(s) suivant(s) :'
+      'autorise (autorisons) le référent technique ou le personnel de la structure à administrer à mon (notre) enfant le médicament suivant :'
     ];
     para.forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*5+4);doc.text(L,14,y);y+=L.length*5+4;});
-    const med=g('mp_medicaments').trim();
-    if(med){doc.setFont(undefined,'bold');const L=doc.splitTextToSize(med,W-6);need(L.length*5+4);doc.text(L,17,y);y+=L.length*5+4;doc.setFont(undefined,'normal');}
-    else{for(let i=0;i<3;i++){need(8);doc.text(dots(110),14,y);y+=8;}}
+    [['Médicament',g('mp_medicament')],['Posologie',g('mp_posologie')],['Durée du traitement',g('mp_duree')]].forEach(([lab,val])=>{
+      need(9);doc.setFont(undefined,'bold');doc.text(lab+' : ',17,y);
+      const lw=doc.getTextWidth(lab+' : ');
+      doc.setFont(undefined,'normal');
+      const L=doc.splitTextToSize((val||'').trim()||'.'.repeat(60),W-6-lw);
+      doc.text(L,17+lw,y);y+=L.length*5+3;
+    });
+    if(g('mp_ord_nom')){need(8);doc.setFont(undefined,'italic');doc.text('Ordonnance du médecin jointe au dossier : '+g('mp_ord_nom'),17,y);doc.setFont(undefined,'normal');y+=7;}
     y+=3;
     ['Selon le protocole établi par le médecin de mon (notre) enfant, l’ordonnance a d’ailleurs été transmise au personnel de la structure.',
      'J’atteste (nous attestons) également que le médicament, concerné par cette autorisation, a déjà été administré à mon (notre) enfant.'
