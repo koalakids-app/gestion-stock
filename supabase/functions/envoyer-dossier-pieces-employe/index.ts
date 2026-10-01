@@ -53,25 +53,22 @@ function nomExpediteur(s: unknown) {
   return prenom.slice(0, 60) || "Koala Kids";
 }
 
-// Le sujet contient emoji + accents + texte libre : denomailer le plie mal en
-// mots encodés (retour à la ligne vide dans l'en-tête), ce qui fait apparaître
-// les en-têtes MIME bruts dans le corps du mail. On l'encode donc nous-mêmes
-// (RFC 2047, base64, mots courts séparés par des espaces) en ASCII pur.
+// denomailer encode lui-même tout sujet non ASCII en « quoted-printable » et le
+// coupe tous les 74 caractères par un « =\r\n » SANS espace de continuation :
+// l'en-tête Subject est alors interrompu et la suite des en-têtes MIME
+// (From, To, Content-Type…) s'affiche dans le corps du mail. On envoie donc un
+// sujet en ASCII pur (accents retirés, emojis et tirets longs remplacés), que
+// denomailer laisse intact — même parade que send-planning.
 function encodeSubject(subject: string): string {
-  const enc = new TextEncoder();
-  const words: string[] = [];
-  let chunk = "";
-  const flush = () => {
-    if (!chunk) return;
-    words.push(`=?UTF-8?B?${btoa(String.fromCharCode(...enc.encode(chunk)))}?=`);
-    chunk = "";
-  };
-  for (const ch of subject.replace(/[\r\n]+/g, " ")) {
-    if (enc.encode(chunk + ch).length > 30) flush();
-    chunk += ch;
-  }
-  flush();
-  return words.join(" ");
+  const s = subject
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[—–]/g, "-")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[=\s]+/, "")
+    .trim();
+  return s || "Notification";
 }
 
 async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string) {
