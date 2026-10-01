@@ -503,6 +503,19 @@ const TPL={
     + sigHtml('parent2','Signature du parent 2 (facultatif)')
  },
 
+ medicament_ponctuel:{
+  fields:['mp_civ1','mp_parent1','mp_qual1','mp_civ2','mp_parent2','mp_qual2','mp_enfant','mp_medicaments','mp_date'],
+  html:v=>
+      '<div class="txtbox">Vous autorisez le référent technique ou le personnel de la structure à '
+    + 'administrer à votre enfant le(s) médicament(s) indiqué(s) ci-dessous, selon le protocole '
+    + 'établi par son médecin (l’ordonnance a été transmise à la structure).<br><br>'
+    + 'En signant, vous attestez que ce médicament a déjà été administré à votre enfant.</div>'
+    + soussignes('mp',v)
+    + champ('Médicament(s) à administrer','<textarea id="ff_mp_medicaments">'+esc(v.mp_medicaments||'')+'</textarea>')
+    + sigHtml('parent1','Signature du parent 1')
+    + sigHtml('parent2','Signature du parent 2 (facultatif)')
+ },
+
  reglement_medicaments:{
   fields:['rm_creche','rm_nom','rm_enfant','rm_date'],
   html:v=>

@@ -1290,6 +1290,7 @@ const TPL_LABELS={
   fiche_renseignements:'Fiche de renseignements sur l’enfant (enfant)',
   antipyretique:'Autorisation d’administrer un antipyrétique (enfant)',
   creme_solaire:'Autorisation d’application de crème solaire (enfant)',
+  medicament_ponctuel:'Autorisation famille — prise de médicament ponctuelle (enfant)',
   reglement_medicaments:'Règlement produits d’hygiène et médicaments (enfant)',
   entretien_annuel:'Entretien annuel professionnel (salarié)',
   grille:'Grille d’évaluation (salarié)',
@@ -4137,6 +4138,77 @@ const TPL={
     });
     y+=42;
     pdfSortie(doc,slug(fillDoc.titre)+(g('cs_enfant')?'_'+slug(g('cs_enfant')):'')+'.pdf');
+    return true;
+  }
+ },
+ medicament_ponctuel:{
+  fields:['mp_civ1','mp_parent1','mp_qual1','mp_civ2','mp_parent2','mp_qual2','mp_enfant','mp_medicaments','mp_date'],
+  html:v=>`<div class="tpl">
+   <h3>Autorisation famille — prise de médicament ponctuelle</h3>
+   <p class="hint">Autorise le référent technique ou le personnel de la structure à administrer à l’enfant le(s) médicament(s) indiqué(s), selon le protocole établi par son médecin (ordonnance transmise à la structure).</p>
+   <div class="grid2">
+     <div class="f"><label>Parent 1 — civilité</label><select id="ff_mp_civ1">${
+       ['','Monsieur','Madame'].map(o=>`<option${v.mp_civ1===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Parent 1 — nom</label><input id="ff_mp_parent1" value="${esc(v.mp_parent1)}"></div>
+   </div>
+   <div class="f"><label>Parent 1 — en qualité de (père, mère…)</label><input id="ff_mp_qual1" value="${esc(v.mp_qual1)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Parent 2 — civilité</label><select id="ff_mp_civ2">${
+       ['','Monsieur','Madame'].map(o=>`<option${v.mp_civ2===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Parent 2 — nom</label><input id="ff_mp_parent2" value="${esc(v.mp_parent2)}"></div>
+   </div>
+   <div class="f"><label>Parent 2 — en qualité de (père, mère…)</label><input id="ff_mp_qual2" value="${esc(v.mp_qual2)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Prénom de l’enfant</label><input id="ff_mp_enfant" value="${esc(v.mp_enfant)}"></div>
+     <div class="f"><label>Date</label><input type="date" id="ff_mp_date" value="${esc(v.mp_date)}"></div>
+   </div>
+   <div class="f"><label>Médicament(s) à administrer</label><textarea id="ff_mp_medicaments" rows="4">${esc(v.mp_medicaments)}</textarea></div>
+   <p class="hint">En signant, le(s) parent(s) atteste(nt) que le médicament concerné a déjà été administré à l’enfant.</p>
+   <div class="grid2">
+     ${sigBoxHtml('parent1','Signature du parent 1')}
+     ${sigBoxHtml('parent2','Signature du parent 2')}
+   </div>
+  </div>`,
+  mount:()=>{['parent1','parent2'].forEach(mountSig);},
+  pdf:doc=>{
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?e.value:'';};
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
+    const W=182;let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+    doc.setFontSize(12);doc.setFont(undefined,'bold');
+    doc.setDrawColor(120);doc.rect(14,y-5,W,10);
+    doc.text('AUTORISATION ADMINISTRATION MEDICAMENT',14+W/2,y+1,{align:'center'});
+    y+=18;
+    doc.setFontSize(10.5);doc.setFont(undefined,'normal');
+    const dots=n=>'.'.repeat(n);
+    const soussPhrase=(civ,nom,qual)=>{
+      const e=(civ||'').toLowerCase()==='madame'?'e':'';
+      const civTxt=(civ||'').toLowerCase();
+      return 'Je soussigné'+e+', '+(civTxt?civTxt+' ':'')+(nom||dots(55))+' en qualité de '+(qual||dots(32));};
+    const para=[
+      soussPhrase(g('mp_civ1'),g('mp_parent1'),g('mp_qual1')),
+      soussPhrase(g('mp_civ2'),g('mp_parent2'),g('mp_qual2')),
+      'de l’enfant '+(g('mp_enfant')||dots(55)),
+      'autorise (autorisons) le référent technique ou le personnel de la structure à administrer à mon (notre) enfant le(s) médicament(s) suivant(s) :'
+    ];
+    para.forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*5+4);doc.text(L,14,y);y+=L.length*5+4;});
+    const med=g('mp_medicaments').trim();
+    if(med){doc.setFont(undefined,'bold');const L=doc.splitTextToSize(med,W-6);need(L.length*5+4);doc.text(L,17,y);y+=L.length*5+4;doc.setFont(undefined,'normal');}
+    else{for(let i=0;i<3;i++){need(8);doc.text(dots(110),14,y);y+=8;}}
+    y+=3;
+    ['Selon le protocole établi par le médecin de mon (notre) enfant, l’ordonnance a d’ailleurs été transmise au personnel de la structure.',
+     'J’atteste (nous attestons) également que le médicament, concerné par cette autorisation, a déjà été administré à mon (notre) enfant.'
+    ].forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*5+4);doc.text(L,14,y);y+=L.length*5+4;});
+    y+=4;
+    doc.text('Date : '+dfr(g('mp_date')),14,y);y+=12;
+    need(46);
+    [['parent1','Signature du parent 1',14],['parent2','Signature du parent 2',110]].forEach(([role,lab,px])=>{
+      doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text(lab+' :',px,y);
+      doc.setDrawColor(200);doc.rect(px,y+3,84,32);
+      if(SIGS[role]){try{doc.addImage(SIGS[role],'PNG',px+2,y+5,80,28);}catch(e){}}
+    });
+    y+=42;
+    pdfSortie(doc,slug(fillDoc.titre)+(g('mp_enfant')?'_'+slug(g('mp_enfant')):'')+'.pdf');
     return true;
   }
  },
