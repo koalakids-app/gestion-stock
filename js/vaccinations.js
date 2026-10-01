@@ -216,9 +216,12 @@ function vacRenderFicheBody(){
     const produitsHtml = (v.produits||[]).map(n=>`<span style="display:block;font-size:10.5px;font-weight:400;color:var(--muted);line-height:1.4">${escHtml(n)}</span>`).join('');
     return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600;color:var(--koala-dark);white-space:nowrap"><span style="display:block">${v.label}</span>${produitsHtml}</td>${cells}</tr>`;
   }).join('');
+  // Conserve le defilement horizontal d'un eventuel rendu precedent.
+  const oldScroller = body.querySelector('[data-vac-scroll]');
+  const prevScroll = oldScroller ? oldScroller.scrollLeft : 0;
   body.innerHTML = `
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">né(e) le ${vacFmtDate(e.dob)} · ${ageStr}${creche?' · '+escHtml(creche.name):''}</div>
-    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">
+    <div data-vac-scroll style="overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;border:1px solid var(--border);border-radius:10px">
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="background:var(--koala-light)">
@@ -237,6 +240,8 @@ function vacRenderFicheBody(){
       Cliquez une pastille pour la marquer faite (ou l'annuler).
     </div>
     <div id="vac-pj-zone" style="margin-top:16px"></div>`;
+  const newScroller = body.querySelector('[data-vac-scroll]');
+  if(newScroller && prevScroll) newScroller.scrollLeft = prevScroll;
   vacRenderPJ();
 }
 
