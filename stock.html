@@ -4856,6 +4856,9 @@ async function syncFromCloud() {
 
     const [artsR, cmdsR, fournsR, histosR, couchesR, couchesMvtsR, couchesPrixR] = results;
 
+    // Signature avant/après : si rien n'a changé, on ne redessine rien (sinon l'écran clignote toutes les 60 s)
+    const _sig = () => { try { return JSON.stringify([ARTICLES, COMMANDES, FOURNISSEURS, HISTORIQUE, COUCHES, COUCHES_MVTS, COUCHES_PRIX]); } catch(e) { return String(Math.random()); } };
+    const _sigAvant = _sig();
     // On ne remplace les données en mémoire QUE si le fetch a réussi
     if (artsR.status === 'fulfilled' && Array.isArray(artsR.value))
       ARTICLES.splice(0, ARTICLES.length, ...artsR.value.map(rowToArticle));
@@ -4895,14 +4898,16 @@ async function syncFromCloud() {
     else if (couchesPrixR.status === 'rejected')
       console.warn('[Sync] stock_couches_prix (non-bloquant):', couchesPrixR.reason?.message);
 
-    const savedCreche = currentCreche;
-    saveData();
-    currentCreche = savedCreche;
-    renderActiveInvTable(); renderStats(); updateCounts();
-    if (currentPage === 'commandes') renderCommandes();
-    else if (currentPage === 'fournisseurs') renderFournisseurs();
-    else if (currentPage === 'historique') renderHistorique();
-    else if (currentPage === 'couches') renderCouches();
+    if (_sig() !== _sigAvant) {
+      const savedCreche = currentCreche;
+      saveData();
+      currentCreche = savedCreche;
+      renderActiveInvTable(); renderStats(); updateCounts();
+      if (currentPage === 'commandes') renderCommandes();
+      else if (currentPage === 'fournisseurs') renderFournisseurs();
+      else if (currentPage === 'historique') renderHistorique();
+      else if (currentPage === 'couches') renderCouches();
+    }
 
     const [artsOk, cmdsOk, fournsOk, histosOk] = [artsR, cmdsR, fournsR, histosR].map(r => r.status === 'fulfilled');
     const allOk = artsOk && cmdsOk && fournsOk && histosOk;
