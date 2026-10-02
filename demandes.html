@@ -6520,6 +6520,36 @@ async function renderPresenceGantt(){
     rowsHtml+='<div title="'+n+' enfant(s) de '+(H_START+Math.floor(_mm/60))+'h'+String(_mm%60).padStart(2,'0')+' \u00e0 '+(H_START+Math.floor((_mm+15)/60))+'h'+String((_mm+15)%60).padStart(2,'0')+'" style="width:'+(COL_W/2)+'px;flex-shrink:0;box-sizing:border-box;text-align:center;font-size:'+(COL_W<24?8:10)+'px;font-weight:700;line-height:24px;color:'+(n?'#3a3380':'#c9c5e0')+';background:rgba(107,92,200,'+a.toFixed(2)+')">'+n+'</div>';
   });
   rowsHtml+='</div><div style="width:'+DUR_W+'px;flex-shrink:0"></div></div>';
+  // Professionnelles présentes par quart d'heure (planning équipe de la crèche, jour courant)
+  if(crecheId&&jourSem<=5){
+    const occPro=new Array(COLS*2).fill(0);
+    let _pros=[];
+    try{_pros=await peLoad(crecheId,mondayOfISO(dateStr));}catch(err){console.warn('[Gantt] planning équipe',err);}
+    _pros.filter(function(r){return r.jour===jourSem-1&&r.type==='presence';}).forEach(function(r){
+      let segs=peCreneauSegments(r.creneau_label);
+      if(!segs){
+        const hm=function(t){const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));return m?parseInt(m[1],10)*60+parseInt(m[2],10):null;};
+        const d0=hm(r.hdebut),d1=hm(r.hfin);
+        if(d0===null||d1===null||d1<=d0)return;
+        const pz=String(r.pause||'').split('-'),p0=hm(pz[0]),p1=hm(pz[1]);
+        segs=(p0!==null&&p1!==null&&p0>d0&&p1<d1&&p1>p0)?[[d0,p0],[p1,d1]]:[[d0,d1]];
+      }
+      segs.forEach(function(sg){
+        const a0=sg[0]-H_START*60,a1=sg[1]-H_START*60;
+        for(let q=0;q<occPro.length;q++){if(a0<(q+1)*15&&a1>q*15)occPro[q]++;}
+      });
+    });
+    const _proMax=Math.max.apply(null,occPro.concat([1]));
+    rowsHtml+='<div style="display:flex;align-items:center;padding:4px 0">';
+    rowsHtml+='<div style="position:sticky;left:0;z-index:2;background:#fff;width:'+(NAME_W+30)+'px;flex-shrink:0;font-size:11px;font-weight:700;color:#0F6B5E;padding-right:8px;text-align:right;box-sizing:border-box">Professionnelles</div>';
+    rowsHtml+='<div style="display:flex;width:'+(COLS*COL_W)+'px;flex-shrink:0;border-left:1px solid #e0dff0">';
+    occPro.forEach(function(n,q){
+      const al=n?(0.12+0.5*n/_proMax):0;
+      const _mm=q*15;
+      rowsHtml+='<div title="'+n+' professionnelle(s) de '+(H_START+Math.floor(_mm/60))+'h'+String(_mm%60).padStart(2,'0')+' \u00e0 '+(H_START+Math.floor((_mm+15)/60))+'h'+String((_mm+15)%60).padStart(2,'0')+'" style="width:'+(COL_W/2)+'px;flex-shrink:0;box-sizing:border-box;text-align:center;font-size:'+(COL_W<24?8:10)+'px;font-weight:700;line-height:24px;color:'+(n?'#0F6B5E':'#c5ddd8')+';background:rgba(15,107,94,'+al.toFixed(2)+')">'+n+'</div>';
+    });
+    rowsHtml+='</div><div style="width:'+DUR_W+'px;flex-shrink:0"></div></div>';
+  }
   // Ligne de d\u00e9marcation 12h (l\u00e9gende)
   let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted);flex-wrap:wrap">';
   legendHtml+='<span><i class="ti ti-user-check" style="color:var(--koala);vertical-align:middle;margin-right:2px"></i>Cliquez le rond pour '+(presOnlyPresents?'retirer l\u2019enfant de la journ\u00e9e':'basculer pr\u00e9sent / absent')+'</span>';
