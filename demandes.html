@@ -6401,6 +6401,8 @@ async function renderPresenceGantt(){
   hdrHtml+='</div>';
   // Lignes enfants
   let rowsHtml='';
+  const occ=new Array(COLS*2).fill(0); // enfants présents par quart d'heure
+
   enfants.forEach((e,idx)=>{
     const p=presMap[e.id]||{};
     const hasM=p.M==='present'||p.M==='partial';
@@ -6429,8 +6431,10 @@ async function renderPresenceGantt(){
     // Barres plus douces : fond pastel + fine bordure + texte foncé (le rond garde la couleur pleine).
     const _soft=pointe?{bg:'#c5ead6',bd:'#9fd6bb',tx:'#1f5c42'}:{bg:'#d6d2f5',bd:'#b9b3ec',tx:'#3a3380'};
     const _hm=function(t){const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));return m?(parseInt(m[1],10)+'h'+(m[2]==='00'?'':m[2])):'';};
+    // Minutes depuis H_START (précision au quart d'heure pour l'effectif sous le Gantt)
+    const _mn=function(t){const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));return m?(parseInt(m[1],10)-H_START)*60+parseInt(m[2],10):null;};
     const segments=[];
-    if(cA!==null&&cB!==null&&cB>cA)segments.push({start:cA,end:cB,color:barColor,soft:_soft,lbl:(_hm(srcDeb)&&_hm(srcFin))?[_hm(srcDeb),_hm(srcFin)]:null});
+    if(cA!==null&&cB!==null&&cB>cA)segments.push({m0:_mn(srcDeb),m1:_mn(srcFin),start:cA,end:cB,color:barColor,soft:_soft,lbl:(_hm(srcDeb)&&_hm(srcFin))?[_hm(srcDeb),_hm(srcFin)]:null});
     else if(hasM&&hasA)segments.push({start:0,end:COLS,color:barColor,soft:_soft});
     else if(hasM)segments.push({start:0,end:12,color:barColor,soft:_soft});
     else if(hasA)segments.push({start:12,end:COLS,color:barColor,soft:_soft});
@@ -6449,7 +6453,7 @@ async function renderPresenceGantt(){
       const enCours=!pt.fin;
       const ptBcol=pt.fin?_col(pt.fin,true):(dateStr===todayStr()?(function(){const now=new Date();const mn=(now.getHours()-H_START)*60+now.getMinutes();return Math.max(0,Math.min(COLS,Math.round(mn/30)));})():COLS);
       segments.length=0; // le pointage réel remplace le repli « ancien style »
-      if(ptA!==null&&ptBcol>ptA)segments.push({start:ptA,end:ptBcol,color:'var(--green)',ouvert:enCours,soft:{bg:'#c5ead6',bd:'#9fd6bb',tx:'#1f5c42'},lbl:[_hm(pt.debut),pt.fin?_hm(pt.fin):'en cours']});
+      if(ptA!==null&&ptBcol>ptA)segments.push({m0:_mn(pt.debut),m1:pt.fin?_mn(pt.fin):null,start:ptA,end:ptBcol,color:'var(--green)',ouvert:enCours,soft:{bg:'#c5ead6',bd:'#9fd6bb',tx:'#1f5c42'},lbl:[_hm(pt.debut),pt.fin?_hm(pt.fin):'en cours']});
     }
     /* Forfait : une barre « non pointé » orange remplace la barre cochée à la main
        (le contrat en fond garde l'horaire prévu) ; un départ oublié colore la barre pointée. */
@@ -6458,10 +6462,14 @@ async function renderPresenceGantt(){
     if(rr&&(rr.statut==='non_pointe'||rr.statut==='absence_carence')&&!absent){
       const oA=cA!==null?cA:0,oB=(cB!==null&&cB>oA)?cB:COLS;
       segments.length=0;
-      segments.push({start:oA,end:oB,color:'var(--orange)',soft:_orange,lbl:['Non pointé','forfait']});
+      segments.push({m0:cA!==null?_mn(srcDeb):null,m1:(cB!==null&&cB>oA)?_mn(srcFin):null,start:oA,end:oB,color:'var(--orange)',soft:_orange,lbl:['Non pointé','forfait']});
     }else if(rr&&rr.statut==='depart_manquant'&&segments.length){
       segments.forEach(function(sg){sg.soft=_orange;sg.ouvert=false;sg.lbl=[_hm(pt&&pt.debut),'départ oublié'];});
     }
+    if(!absent)segments.forEach(function(sg){
+      const a0=(sg.m0!=null)?sg.m0:sg.start*30,a1=(sg.m1!=null)?sg.m1:sg.end*30;
+      for(let q=0;q<occ.length;q++){if(a0<(q+1)*15&&a1>q*15)occ[q]++;}
+    });
     const horsJour=!ctMap[String(e.id)];
     // Une ligne « hors contrat » se voit sans avoir à chercher : fond teinté,
     // pas juste un petit repère à côté du prénom (trop discret dans un groupe).
@@ -6501,6 +6509,17 @@ async function renderPresenceGantt(){
     rowsHtml+='<div style="width:'+DUR_W+'px;flex-shrink:0;text-align:right;padding-right:8px;font-size:12px;font-variant-numeric:tabular-nums;line-height:1.25">'+prCelluleGantt(rr,e.id,dateStr)+'</div>';
     rowsHtml+='</div>';
   });
+  // Effectif présent par demi-heure, sous le Gantt (lecture des arrivées / départs échelonnés)
+  const _occMax=Math.max.apply(null,occ.concat([1]));
+  rowsHtml+='<div style="display:flex;align-items:center;padding:4px 0;border-top:2px solid var(--koala);margin-top:4px">';
+  rowsHtml+='<div style="position:sticky;left:0;z-index:2;background:#fff;width:'+(NAME_W+30)+'px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--koala);padding-right:8px;text-align:right;box-sizing:border-box">Enfants pr\u00e9sents</div>';
+  rowsHtml+='<div style="display:flex;width:'+(COLS*COL_W)+'px;flex-shrink:0;border-left:1px solid #e0dff0">';
+  occ.forEach(function(n,q){
+    const a=n?(0.12+0.5*n/_occMax):0;
+    const _mm=q*15;
+    rowsHtml+='<div title="'+n+' enfant(s) de '+(H_START+Math.floor(_mm/60))+'h'+String(_mm%60).padStart(2,'0')+' \u00e0 '+(H_START+Math.floor((_mm+15)/60))+'h'+String((_mm+15)%60).padStart(2,'0')+'" style="width:'+(COL_W/2)+'px;flex-shrink:0;box-sizing:border-box;text-align:center;font-size:'+(COL_W<24?8:10)+'px;font-weight:700;line-height:24px;color:'+(n?'#3a3380':'#c9c5e0')+';background:rgba(107,92,200,'+a.toFixed(2)+')">'+n+'</div>';
+  });
+  rowsHtml+='</div><div style="width:'+DUR_W+'px;flex-shrink:0"></div></div>';
   // Ligne de d\u00e9marcation 12h (l\u00e9gende)
   let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted);flex-wrap:wrap">';
   legendHtml+='<span><i class="ti ti-user-check" style="color:var(--koala);vertical-align:middle;margin-right:2px"></i>Cliquez le rond pour '+(presOnlyPresents?'retirer l\u2019enfant de la journ\u00e9e':'basculer pr\u00e9sent / absent')+'</span>';
