@@ -2338,6 +2338,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label class="flabel">Qualification</label><input class="finput" id="emp-qualification" placeholder="Ex. : Auxiliaire de puériculture"/></div>
     </div>
     <div class="frow">
+      <div class="fg"><label class="flabel">Années d'expérience petite enfance</label><input class="finput" id="emp-experience" type="number" step="0.5" min="0" placeholder="Ex. : 3"/><div class="hint" style="margin-top:3px">Sert au Gantt des présences : une auxiliaire de puériculture avec 3 ans d'expérience (comme un(e) EJE ou psychomotricien(ne), sans condition d'expérience) peut être seul(e) avec 3 enfants maximum.</div></div>
+    </div>
+    <div class="frow">
       <div class="fg"><label class="flabel">Date de début</label><input class="finput" id="emp-date-debut" type="date" onchange="empUpdateEssaiFin()"/></div>
       <div class="fg"><label class="flabel">Date de fin (si CDD)</label><input class="finput" id="emp-date-fin" type="date"/></div>
     </div>
@@ -5249,6 +5252,7 @@ function openEmployeModal(){
   ['emp-prenom','emp-nom','emp-poste','emp-email'].forEach(id=>document.getElementById(id).value='');
   EMP_TEXT_FIELDS.forEach(([id])=>{const el=document.getElementById(id);if(el)el.value='';});
   EMP_NUM_FIELDS.forEach(([id])=>{const el=document.getElementById(id);if(el)el.value='';});
+  {const el=document.getElementById('emp-experience');if(el)el.value='';}
   document.getElementById('emp-periode-essai-renouvelee').checked=false;
   document.getElementById('emp-periode-essai-actee').checked=false;
   empUpdateEssaiFin();
@@ -5273,6 +5277,7 @@ function editEmploye(id){
   document.getElementById('emp-email').value=e.email||'';
   EMP_TEXT_FIELDS.forEach(([id,col])=>{const el=document.getElementById(id);if(el)el.value=e[col]||'';});
   EMP_NUM_FIELDS.forEach(([id,col])=>{const el=document.getElementById(id);if(el)el.value=e[col]==null?'':e[col];});
+  {const el=document.getElementById('emp-experience');if(el)el.value=e.experience_annees==null?'':e.experience_annees;}
   document.getElementById('emp-periode-essai-renouvelee').checked=!!e.periode_essai_renouvelee;
   document.getElementById('emp-periode-essai-actee').checked=!!e.periode_essai_actee;
   empUpdateEssaiFin();
@@ -5352,6 +5357,14 @@ async function saveEmploye(){
     const v=el?el.value.trim():'';
     row[col]=v===''?null:Number(v);
   });
+  /* Colonne ajoutée par sql/employes_experience_annees.sql : n'est envoyée que si renseignée
+     (ou déjà renseignée avant), pour ne pas bloquer l'enregistrement tant que le SQL n'est pas passé. */
+  {
+    const exv=(document.getElementById('emp-experience')||{value:''}).value.trim();
+    const prev=editingEmployeId?(cacheEmployes.find(x=>x.id===editingEmployeId)||{}).experience_annees:null;
+    if(exv!=='')row.experience_annees=Number(exv);
+    else if(prev!=null)row.experience_annees=null;
+  }
   row.periode_essai_renouvelee=document.getElementById('emp-periode-essai-renouvelee').checked;
   row.periode_essai_actee=document.getElementById('emp-periode-essai-actee').checked;
   // Recalculée ici aussi (le trigger la refait de son côté) pour que le
@@ -6523,6 +6536,17 @@ async function renderPresenceGantt(){
   // Professionnelles présentes par quart d'heure (planning équipe de la crèche, jour courant)
   if(crecheId&&jourSem<=5){
     const occPro=new Array(COLS*2).fill(0);
+    const proSeule=new Array(COLS*2).fill(false); // true si la seule pro présente peut rester seule avec 3 enfants
+    const _isQualif=function(prenom){
+      const t=ipNormStr(prenom);
+      let emp=(cacheEmployes||[]).find(function(x){return x.creche_id===crecheId&&ipNormStr(x.planning_nom||x.prenom)===t;});
+      if(!emp){const rid=peFindReferentIdForPrenom(crecheId,prenom,true);const rf=rid?(cacheReferents||[]).find(function(x){return x.id===rid;}):null;if(rf&&rf.employe_id)emp=(cacheEmployes||[]).find(function(x){return x.id===rf.employe_id;});}
+      if(!emp)return false;
+      const q=ipNormStr((emp.qualification||'')+' '+(emp.poste||''));
+      // EJE et psychomotricien(ne) : seuls d\u00e8s le dipl\u00f4me ; auxiliaire de pu\u00e9riculture : 3 ans d'exp\u00e9rience requis
+      if(/(^|[^a-z])eje([^a-z]|$)|educateur.*jeunes? enfants?|psychomot/.test(q))return true;
+      return /auxiliaire.*puericultur/.test(q)&&Number(emp.experience_annees)>=3;
+    };
     let _pros=[];
     try{_pros=await peLoad(crecheId,mondayOfISO(dateStr));}catch(err){console.warn('[Gantt] planning équipe',err);}
     _pros.filter(function(r){return r.jour===jourSem-1&&r.type==='presence';}).forEach(function(r){
@@ -6534,9 +6558,10 @@ async function renderPresenceGantt(){
         const pz=String(r.pause||'').split('-'),p0=hm(pz[0]),p1=hm(pz[1]);
         segs=(p0!==null&&p1!==null&&p0>d0&&p1<d1&&p1>p0)?[[d0,p0],[p1,d1]]:[[d0,d1]];
       }
+      const qual=_isQualif(r.prenom);
       segs.forEach(function(sg){
         const a0=sg[0]-H_START*60,a1=sg[1]-H_START*60;
-        for(let q=0;q<occPro.length;q++){if(a0<(q+1)*15&&a1>q*15)occPro[q]++;}
+        for(let q=0;q<occPro.length;q++){if(a0<(q+1)*15&&a1>q*15){occPro[q]++;proSeule[q]=qual;}}
       });
     });
     const _proMax=Math.max.apply(null,occPro.concat([1]));
@@ -6549,6 +6574,34 @@ async function renderPresenceGantt(){
       rowsHtml+='<div title="'+n+' professionnelle(s) de '+(H_START+Math.floor(_mm/60))+'h'+String(_mm%60).padStart(2,'0')+' \u00e0 '+(H_START+Math.floor((_mm+15)/60))+'h'+String((_mm+15)%60).padStart(2,'0')+'" style="width:'+(COL_W/2)+'px;flex-shrink:0;box-sizing:border-box;text-align:center;font-size:'+(COL_W<24?8:10)+'px;font-weight:700;line-height:24px;color:'+(n?'#0F6B5E':'#c5ddd8')+';background:rgba(15,107,94,'+al.toFixed(2)+')">'+n+'</div>';
     });
     rowsHtml+='</div><div style="width:'+DUR_W+'px;flex-shrink:0"></div></div>';
+    // Taux d'encadrement : enfants présents / professionnelles présentes, par quart d'heure
+    rowsHtml+='<div style="display:flex;align-items:center;padding:4px 0">';
+    rowsHtml+='<div style="position:sticky;left:0;z-index:2;background:#fff;width:'+(NAME_W+30)+'px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--ink2,#5b5775);padding-right:8px;text-align:right;box-sizing:border-box" title="Nombre d\u2019enfants pr\u00e9sents par professionnelle pr\u00e9sente">Enfants / pro</div>';
+    rowsHtml+='<div style="display:flex;width:'+(COLS*COL_W)+'px;flex-shrink:0;border-left:1px solid #e0dff0">';
+    occ.forEach(function(nE,q){
+      const nP=occPro[q];
+      let txt='',col='#3a3380',bg='transparent',tip='Aucun enfant';
+      /* Règles d'encadrement : 6 enfants maximum par professionnelle ; le matin (avant 9h) et le soir
+         (à partir de 17h), 2 professionnelles dès le premier enfant — sauf une seule professionnelle
+         EJE / psychomotricienne, ou auxiliaire de puériculture avec 3 ans d'expérience, pour 3 enfants maximum. */
+      const _deb=H_START*60+q*15;
+      const _bord=_deb<9*60||_deb>=17*60;
+      const _seuleOk=nP===1&&proSeule[q]&&nE<=3;
+      const _min=Math.max(Math.ceil(nE/6),(_bord&&!_seuleOk)?2:1);
+      if(nE>0&&nP===0){txt='!';col='#fff';bg='var(--red,#C62828)';tip=nE+' enfant(s) sans professionnelle';}
+      else if(nE>0){
+        const r=nE/nP;
+        const rs=(Math.round(r*10)/10).toString().replace('.',',');
+        txt=_isPhone?String(Math.round(r)):rs;
+        tip=nE+' enfant(s) pour '+nP+' professionnelle(s) = '+rs+' par pro';
+        if(nP<_min){
+          bg='#fbd9bd';col='#7a3d0c';
+          tip+=' \u2014 il faut au moins '+_min+' professionnelle(s)'+((_bord&&r<=6)?' (2 d\u00e8s le premier enfant le matin et le soir)':' (6 enfants maximum par professionnelle)');
+        }else if(_bord&&nP===1)tip+=' \u2014 autoris\u00e9 : professionnelle qualifi\u00e9e (EJE, psychomotricien(ne), ou aux. de pu\u00e9riculture avec 3 ans d\u2019exp\u00e9rience) avec 3 enfants maximum';
+      }
+      rowsHtml+='<div title="'+tip+'" style="width:'+(COL_W/2)+'px;flex-shrink:0;box-sizing:border-box;text-align:center;overflow:hidden;white-space:nowrap;letter-spacing:-.4px;font-size:'+(COL_W<24?8:9)+'px;font-weight:700;line-height:24px;color:'+col+';background:'+bg+'">'+txt+'</div>';
+    });
+    rowsHtml+='</div><div style="width:'+DUR_W+'px;flex-shrink:0"></div></div>';
   }
   // Ligne de d\u00e9marcation 12h (l\u00e9gende)
   let legendHtml='<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:11px;color:var(--muted);flex-wrap:wrap">';
@@ -6556,6 +6609,7 @@ async function renderPresenceGantt(){
   legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:10px;height:10px;background:#c5ead6;border:1px solid #9fd6bb;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Point\u00e9 sur tablette <span style="display:inline-block;width:10px;height:10px;background:#d6d2f5;border:1px solid #b9b3ec;border-radius:3px;vertical-align:middle;margin:0 4px 0 8px"></span>Pr\u00e9sence coch\u00e9e manuellement</span>';
   legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:10px;height:8px;background:#e8e6ef;border:1px solid #d3d0e0;border-radius:3px;vertical-align:middle;margin-right:3px"></span>Horaire de contrat (fond) sous l\u2019horaire r\u00e9ellement point\u00e9</span>';
   legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:8px;height:8px;background:var(--orange);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Hors jour de contrat</span>';
+  legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:10px;height:10px;background:#fbd9bd;border:1px solid #f3bb8f;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Encadrement insuffisant : 6 enfants max par pro, 2 pros d\u00e8s le 1er enfant avant 9h et apr\u00e8s 17h (sauf EJE, psychomotricien(ne), ou aux. de pu\u00e9riculture avec 3 ans d\u2019exp\u00e9rience : seul(e) avec 3 enfants max)</span>';
   legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
   if(_nbPeriode) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px">'+_nbSousContrat+' enfant(s) sous contrat le '+((CT_JOURS.find(x=>x[0]===jourSem)||[jourSem,'ce jour'])[1].toLowerCase())+' \u00b7 '+_nbPeriode+' inscrit(s) en cours de contrat</span>';
   else if(ctLus) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px;color:var(--orange)">Aucun contrat en cours \u00e0 cette date \u2014 liste compl\u00e8te affich\u00e9e</span>';
