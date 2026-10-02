@@ -153,7 +153,7 @@ serve(async (req) => {
             </div>
           </div>
           <div style="text-align:center;margin:24px 0 8px">
-            <a href="${APP_URL}/demandes.html" style="background:#3D3580;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">
+            <a href="${APP_URL}/demandes.html?demande=${encodeURIComponent(String(demandeId))}" style="background:#3D3580;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">
               ${isAdmin ? "Gérer la demande →" : "Voir l'application →"}
             </a>
           </div>

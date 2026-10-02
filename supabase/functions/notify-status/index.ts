@@ -153,7 +153,7 @@ serve(async (req) => {
             ${isTraite ? `<p style="margin:10px 0 0;color:#2a9d4e;font-size:13px">Traitée le ${treatedDate}</p>` : ""}
           </div>
           <div style="text-align:center;margin:20px 0">
-            <a href="${APP_URL}/demandes.html" style="background:#3D3580;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">Voir l'application →</a>
+            <a href="${APP_URL}/demandes.html?demande=${encodeURIComponent(String(demandeId))}" style="background:#3D3580;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">Voir l'application →</a>
           </div>
         </div>
         <p style="text-align:center;color:#aaa;font-size:11px;margin-top:12px">© Koala Kids — Ce message est automatique.</p>
