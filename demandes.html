@@ -3600,7 +3600,7 @@ function detecterNouveautesEtNotifier(avant){
     const etaitLa=avant.demandes.has(d.id);
     if(!etaitLa){
       if(d.type==='consigne'){
-        if(currentProfile.role==='referent')showInAppNotif('Nouvelle consigne',d.subject||'','demands',{type:'demande',id:d.id});
+        if(currentProfile.role==='referent'||currentProfile.role==='direction')showInAppNotif('Nouvelle consigne',d.subject||'','demands',{type:'demande',id:d.id});
       }else if(d.to_referent_id&&d.to_referent_id===currentProfile.id){
         showInAppNotif('Nouvelle demande',d.subject||'','demands',{type:'demande',id:d.id});
       }
@@ -4879,12 +4879,15 @@ async function saveConsigne(){
   const saved=await dbInsert('demandes',row);
   if(saved){
     cacheDemandes.unshift(saved);
-    const destinataires=cacheReferents.filter(r=>r.role==='referent'&&r.email).map(r=>({id:r.id,email:r.email,name:r.name}));
     // Le contenu et la liste des destinataires sont recalculés côté serveur
     // depuis la ligne `demandes` elle-même (voir notify-consigne) — on ne lui
     // transmet que l'id, jamais le contenu ni les adresses.
+    // Push d'abord (instantané), e-mails ensuite (SMTP séquentiel, plus lent) : le
+    // push n'attend plus la fin des envois d'e-mails. Les comptes direction autres
+    // que l'expéditeur sont notifiés aussi (push + cloche in-app), sans e-mail.
+    const pushIds=cacheReferents.filter(r=>(r.role==='referent'||r.role==='direction')&&r.id!==currentProfile?.id).map(r=>r.id);
+    if(pushIds.length){await callFn('notify-push',{referent_ids:pushIds,title:'Nouvelle consigne',body:subj,url:'./demandes.html',tag:'consigne-'+saved.id});}
     await callFn('notify-consigne',{consigne_id:saved.id});
-    if(destinataires.length){await callFn('notify-push',{referent_ids:destinataires.map(d=>d.id),title:'Nouvelle consigne',body:subj,url:'./demandes.html',tag:'consigne-'+saved.id});}
     // Le brouillon d'origine a rempli son rôle : on le retire.
     if(cDraftId){
       await dbDelete('consignes_brouillons',cDraftId);
