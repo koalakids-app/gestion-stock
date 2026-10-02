@@ -169,7 +169,9 @@ serve(async (req) => {
     for (const dest of (destinataires ?? [])) {
       if (!dest?.email) continue;
       if (dest.id && pushActif.has(dest.id)) { ignoresPushActif++; continue; }
-      const replyUrl = `${APP_URL}/referent.html?id=${id}&name=${encodeURIComponent(dest.name || "")}&creche=${encodeURIComponent(creche || "")}`;
+      // Une consigne est une ligne `demandes` (type='consigne') : demandes.html?demande=<id>
+      // ouvre son fil après connexion (l'ancien lien referent.html n'existe plus).
+      const replyUrl = `${APP_URL}/demandes.html?demande=${encodeURIComponent(String(id))}`;
       try {
         await sendEmail(
           dest.email,
