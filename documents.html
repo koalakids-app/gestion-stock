@@ -6262,8 +6262,10 @@ async function openReps(id){
       // référente qui a rempli le formulaire — sinon toutes les réponses d'un
       // même compte se ressemblent et on ne peut plus les distinguer.
       const salarieNom=(d.template_key==='contrat_travail'&&r.donnees&&r.donnees.salarie_nom)?r.donnees.salarie_nom:null;
+      const crNom=r.creche_id?(CRECHES.find(c=>String(c.id)===String(r.creche_id))||{}).name:null;
       return `<div class="rep">
       <b>${esc(salarieNom||r.rempli_par_nom||'—')}</b>
+      ${crNom?`<span class="tag"><i class="ti ti-building"></i> ${esc(crNom)}</span>`:''}
       <span class="tag">${new Date(r.updated_at||r.created_at).toLocaleDateString('fr-FR')}</span>
       ${r.enfant_id?`<span class="tag">Dossier ${esc(enf?((enf.prenom||'')+' '+(enf.nom||'')).trim():'enfant')}</span>`:''}
       <span class="tag">${r.statut==='signe'?'Signé':'Préparé'}</span>
