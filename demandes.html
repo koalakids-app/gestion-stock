@@ -3331,6 +3331,7 @@ function fermetureLabel(f){
 const SYNC_TABLES=['presences','demandes','incidents','messages','enfants','evenements','referents','employes','planning','planning_equipe','enfants_contrats','taches_afaire','notes_libres','commandes_repas','commandes','actions_direction','reunions_direction','partenaires','demandes_masquees'];
 const SYNC_PERIODE_MS=20000;   // rappel périodique quand l'onglet est visible — le temps réel ne délivrant rien sur ce projet, c'est ce minuteur qui porte la détection des nouveautés (cf. detecterNouveautesEtNotifier)
 const SYNC_MIN_MS=10000;       // anti-rafale entre deux rechargements
+let _syncSilencieuse=false; // vrai pendant le redessin déclenché par la synchro (pas de « Chargement… »)
 let _mainCourant=null,_syncDernier=0,_syncEnCours=false,_syncEnAttente=false,
     _syncTimer=null,_syncCanal=null,_syncDebounce=null,_syncDemarre=false;
 
@@ -3367,6 +3368,7 @@ function syncEcranCourant(){
 function syncRedessine(){
   const t=syncEcranCourant();
   const scrollYAvant=window.scrollY;
+  _syncSilencieuse=true;
   try{
     if(t==='presence'&&typeof renderPresence==='function')renderPresence();
     else if(t==='demands'&&typeof renderCrecheTabs==='function')renderCrecheTabs();
@@ -3384,6 +3386,8 @@ function syncRedessine(){
     else if(t==='actions'&&typeof adLoad==='function')adLoad();
     else if(t==='partenaires'&&typeof renderPartenaires==='function')renderPartenaires();
   }catch(err){console.warn('[Sync] redessin '+t,err);}
+  // Les rendus asynchrones (Gantt…) lisent le drapeau avant leur premier await : on le relâche juste après.
+  setTimeout(function(){_syncSilencieuse=false;},0);
   // Fiche enfant ouverte en lecture : on remet à jour son titre et son onglet
   // Identité, sans toucher aux onglets Contrat / Documents chargés à part.
   try{
@@ -3401,6 +3405,11 @@ function syncRedessine(){
   // Les réécritures innerHTML ci-dessus peuvent faire sauter le scroll (perte
   // de focus, redimensionnement) — on le restaure une fois le DOM stabilisé.
   requestAnimationFrame(()=>window.scrollTo(0,scrollYAvant));
+}
+
+function syncSignature(){
+  try{return JSON.stringify([cacheCreches,cacheDemandes,cacheReferents,cacheIncidents,cacheEnfants,cacheEvenements,cacheMessages,cacheEmployes,cachePartenaires,cacheCommandes,cacheDemandesMasquees]);}
+  catch(e){return String(Date.now());}
 }
 
 /* Horodatage discret dans l'en-tête : sans lui, impossible de distinguer
@@ -3433,12 +3442,17 @@ async function syncMaintenant(opts){
     if(Date.now()-_syncDernier<SYNC_MIN_MS){_syncEnAttente=true;return;}
   }
   _syncEnAttente=false;
-  _syncEnCours=true;syncMajChip('encours');
+  _syncEnCours=true;
+  if(opts.immediat)syncMajChip('encours'); // synchro automatique : aucun clignotement
   try{
     const avant=capturerAvantSync();
+    const sigAvant=syncSignature();
     await loadAllData();
     _syncDernier=Date.now();
-    syncRedessine();
+    /* Écrans qui ne lisent que les caches : si rien n'a changé, on ne les redessine pas
+       (sinon tout l'écran clignote toutes les 20 s pour rien). */
+    const _ecransCache=['demands','incidents','referents','employes','enfants'];
+    if(opts.immediat||_ecransCache.indexOf(syncEcranCourant())<0||syncSignature()!==sigAvant)syncRedessine();
     detecterNouveautesEtNotifier(avant);
   }catch(err){console.warn('[Sync] rechargement',err);}
   finally{_syncEnCours=false;syncMajChip();}
@@ -6284,7 +6298,9 @@ async function renderPresenceGantt(){
   presSyncFilterChip();
   let allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistr\u00e9.</p></div>';return;}
-  view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement\u2026</div>';
+  // Synchro silencieuse : on garde l'ancien affichage jusqu'à ce que le nouveau soit prêt
+  // (sinon la page se vide et se redessine toutes les 20 s, avec saut de défilement).
+  if(!_syncSilencieuse)view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement\u2026</div>';
   const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr).in('enfant_id',allEnfants.map(e=>e.id));
   // presMap: enfant_id -> {M, A}
   const presMap={};
@@ -6619,7 +6635,9 @@ async function renderPresenceGantt(){
   legendHtml+='</div>';
   const crecheLbl=(cacheCreches.find(c=>c.id===crecheId)||{}).name||'';
   const dateTitle='<div style="font-size:13px;font-weight:600;color:var(--koala);text-transform:capitalize;margin-bottom:8px">'+escHtml(dateLabel)+(crecheLbl?' <span style="color:var(--muted);font-weight:500;text-transform:none">\u2014 '+escHtml(crecheLbl)+'</span>':'')+'</div>';
-  view.innerHTML=fermBanner+dateTitle+'<div style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20+DUR_W)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
+  const _scrollX=(view.querySelector('[data-gantt-scroll]')||{}).scrollLeft||0;
+  view.innerHTML=fermBanner+dateTitle+'<div data-gantt-scroll style="overflow-x:auto"><div style="min-width:'+(NAME_W+30+COLS*COL_W+20+DUR_W)+'px">'+hdrHtml+rowsHtml+'</div></div>'+legendHtml;
+  if(_scrollX){const _sc=view.querySelector('[data-gantt-scroll]');if(_sc)_sc.scrollLeft=_scrollX;}
 }
 
 // ── VUE HEBDOMADAIRE ──
@@ -6720,7 +6738,7 @@ async function renderPresenceHebdo(){
   }
   const allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistré.</p></div>';_hebdoExportCtx=null;return;}
-  view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement…</div>';
+  if(!_syncSilencieuse)view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement…</div>';
   let presData=[];
   try{
     const{data,error}=await sb.from('presences').select('*').in('presence_date',dateStrs).in('enfant_id',allEnfants.map(e=>e.id));
