@@ -3927,7 +3927,38 @@ const VAPID_PUBLIC_KEY='BAYWoYbzpxn-poxeKn-7CPccnX-aGN5y8kXLVCgcgC8a025oz8HMdNj7
 function urlBase64ToUint8Array(base64String){const padding='='.repeat((4-base64String.length%4)%4);const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');const rawData=atob(base64);return Uint8Array.from([...rawData].map(c=>c.charCodeAt(0)));}
 if('serviceWorker'in navigator&&location.protocol==='https:'&&!location.hostname.includes('claudeusercontent')){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').then(r=>console.log('SW registered:',r.scope)).catch(e=>console.log('SW error:',e));});}
 function updateNotifIcon(subscribed){const btn=document.getElementById('btn-notif');if(!btn)return;const icon=btn.querySelector('i');if(subscribed){if(icon)icon.className='ti ti-bell';btn.style.color='var(--koala)';btn.title='Désactiver les notifications';}else{if(icon)icon.className='ti ti-bell-off';btn.style.color='#9ca3af';btn.title='Activer les notifications';}}
-async function checkNotifSubscription(){if(!('serviceWorker'in navigator)||!('PushManager'in window))return;try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();updateNotifIcon(!!sub);}catch(e){console.warn('[Notif] check subscription',e);}}
+async function checkNotifSubscription(){if(!('serviceWorker'in navigator)||!('PushManager'in window))return;try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();updateNotifIcon(!!sub);
+  if(sub){
+    // Abonnement déjà présent dans le navigateur : on le (ré)enregistre pour ce compte
+    // (poste partagé, ou ligne supprimée côté base) — sans effet s'il existe déjà.
+    if(currentProfile?.id){const j=sub.toJSON();if(j.endpoint&&j.keys)sb.from('push_subscriptions').upsert({referent_id:currentProfile.id,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth_key:j.keys.auth,user_agent:navigator.userAgent},{onConflict:'endpoint'}).then(function(r){if(r.error)console.warn('[Notif] resync abonnement',r.error);});}
+    return;
+  }
+  proposerActivationNotifs();
+}catch(e){console.warn('[Notif] check subscription',e);}}
+/* Invitation à activer les notifications : le navigateur exige un clic pour afficher
+   sa demande d'autorisation, on propose donc un bandeau avec un bouton « Activer ».
+   « Plus tard » la masque 7 jours sur cet appareil ; non proposée si déjà refusée. */
+function proposerActivationNotifs(){
+  if(typeof Notification==='undefined'||Notification.permission==='denied'||!currentProfile?.id)return;
+  const cle='koala_notif_invite_'+currentProfile.id;
+  try{const t=parseInt(localStorage.getItem(cle)||'0',10);if(t&&Date.now()-t<7*86400000)return;}catch(e){}
+  if(document.getElementById('notif-invite'))return;
+  const box=document.createElement('div');
+  box.id='notif-invite';
+  box.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:99998;background:#3D3580;color:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-size:13px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;max-width:min(92vw,520px)';
+  box.innerHTML='<span style="flex:1;min-width:180px">🔔 Activer les notifications pour être prévenu·e des consignes, demandes et messages ?</span>';
+  const ok=document.createElement('button');
+  ok.textContent='Activer';
+  ok.style.cssText='background:#F47920;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer';
+  ok.onclick=async function(){box.remove();await toggleNotificationsPush();};
+  const later=document.createElement('button');
+  later.textContent='Plus tard';
+  later.style.cssText='background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:7px 12px;cursor:pointer';
+  later.onclick=function(){try{localStorage.setItem(cle,String(Date.now()));}catch(e){}box.remove();};
+  box.appendChild(ok);box.appendChild(later);
+  document.body.appendChild(box);
+}
 async function toggleNotificationsPush(){
   if(!('serviceWorker'in navigator)||!('PushManager'in window)){alert('Les notifications push ne sont pas supportées sur cet appareil/navigateur.');return;}
   const reg=await navigator.serviceWorker.ready;
