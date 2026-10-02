@@ -3369,25 +3369,30 @@ function syncRedessine(){
   const t=syncEcranCourant();
   const scrollYAvant=window.scrollY;
   _syncSilencieuse=true;
+  let _rendus=null;
   try{
-    if(t==='presence'&&typeof renderPresence==='function')renderPresence();
-    else if(t==='demands'&&typeof renderCrecheTabs==='function')renderCrecheTabs();
-    else if(t==='incidents'&&typeof renderIncidents==='function')renderIncidents();
-    else if(t==='referents'&&typeof renderReferents==='function')renderReferents();
-    else if(t==='employes'&&typeof renderEmployes==='function')renderEmployes();
-    else if(t==='planning'&&typeof renderPlanning==='function')renderPlanning();
-    else if(t==='evenements'&&typeof renderCalendar==='function')renderCalendar();
-    else if(t==='dashboard'&&typeof renderDashboard==='function')renderDashboard();
-    else if(t==='ref-dashboard'&&typeof renderRefDashboard==='function')renderRefDashboard();
-    else if(t==='vaccinations'&&typeof vacRender==='function')vacRender();
-    else if(t==='enfants'&&typeof enfRender==='function')enfRender();
-    else if(t==='afaire'&&typeof afRender==='function')afRender();
-    else if(t==='notes'&&typeof noteRender==='function')noteRender();
-    else if(t==='actions'&&typeof adLoad==='function')adLoad();
-    else if(t==='partenaires'&&typeof renderPartenaires==='function')renderPartenaires();
+    if(t==='presence'&&typeof renderPresence==='function')_rendus=renderPresence();
+    else if(t==='demands'&&typeof renderCrecheTabs==='function')_rendus=renderCrecheTabs();
+    else if(t==='incidents'&&typeof renderIncidents==='function')_rendus=renderIncidents();
+    else if(t==='referents'&&typeof renderReferents==='function')_rendus=renderReferents();
+    else if(t==='employes'&&typeof renderEmployes==='function')_rendus=renderEmployes();
+    else if(t==='planning'&&typeof renderPlanning==='function')_rendus=renderPlanning();
+    else if(t==='evenements'&&typeof renderCalendar==='function')_rendus=renderCalendar();
+    else if(t==='dashboard'&&typeof renderDashboard==='function')_rendus=renderDashboard();
+    else if(t==='ref-dashboard'&&typeof renderRefDashboard==='function')_rendus=renderRefDashboard();
+    else if(t==='vaccinations'&&typeof vacRender==='function')_rendus=vacRender();
+    else if(t==='enfants'&&typeof enfRender==='function')_rendus=enfRender();
+    else if(t==='afaire'&&typeof afRender==='function')_rendus=afRender();
+    else if(t==='notes'&&typeof noteRender==='function')_rendus=noteRender();
+    else if(t==='actions'&&typeof adLoad==='function')_rendus=adLoad();
+    else if(t==='partenaires'&&typeof renderPartenaires==='function')_rendus=renderPartenaires();
   }catch(err){console.warn('[Sync] redessin '+t,err);}
-  // Les rendus asynchrones (Gantt…) lisent le drapeau avant leur premier await : on le relâche juste après.
-  setTimeout(function(){_syncSilencieuse=false;},0);
+  /* Les rendus asynchrones (Gantt, planning…) remplacent leur contenu après plusieurs await :
+     le drapeau reste levé jusqu'à la fin de leur promesse (8 s au plus), pour qu'aucun
+     « Chargement… » ne vide l'écran entre-temps. */
+  const _fin=function(){_syncSilencieuse=false;};
+  Promise.resolve(_rendus).then(_fin,_fin);
+  setTimeout(_fin,8000);
   // Fiche enfant ouverte en lecture : on remet à jour son titre et son onglet
   // Identité, sans toucher aux onglets Contrat / Documents chargés à part.
   try{
@@ -9922,7 +9927,7 @@ async function renderPlanning(){
     const selectedId=refSelect?.value;
     if(gridMine){
       if(!selectedId)gridMine.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Sélectionnez un/une directeur/trice technique</div>';
-      else{gridMine.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+      else{if(!_syncSilencieuse)gridMine.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
         const evs=await planningLoad(selectedId,semaine);gridMine.innerHTML=getPlanningGrid(evs,selectedId,semaine,false);}
     }
     // Bloc du bas : tout compte direction peut choisir de voir/éditer SON propre planning,
@@ -9950,7 +9955,7 @@ async function renderPlanning(){
     if(coordAdd)coordAdd.style.display=isOwnCoordPlanning?'':'none';
     if(gridOther){
       if(!viewedCoord)gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">—</div>';
-      else{gridOther.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+      else{if(!_syncSilencieuse)gridOther.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
         const cEvs=await planningLoad(viewedCoord.id,semaine);gridOther.innerHTML=getPlanningGridSimple(cEvs,isOwnCoordPlanning?viewedCoord.id:null,semaine,viewedCoord.creche_id);}
     }
   }else{
@@ -9960,13 +9965,13 @@ async function renderPlanning(){
     if(refSelect)refSelect.style.display='none';
     if(refLabel){refLabel.style.display='';refLabel.textContent=currentProfile?.name||'Mon planning';}
     if(topBadge){topBadge.textContent='✏️ Modifiable';topBadge.style.background='var(--koala-light)';topBadge.style.color='var(--koala)';}
-    if(gridMine){gridMine.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+    if(gridMine){if(!_syncSilencieuse)gridMine.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
       const evs=await planningLoad(userId,semaine);gridMine.innerHTML=getPlanningGrid(evs,userId,semaine,true);}
     if(coordBadge){coordBadge.textContent='👁 Lecture seule';coordBadge.style.background='#f0f0f5';coordBadge.style.color='#888';}
     if(coordAdd)coordAdd.style.display='none';
     if(gridOther){
       if(!coord)gridOther.innerHTML='<div style="text-align:center;padding:2rem;color:#bbb;font-size:13px">Coordinateur non disponible</div>';
-      else{gridOther.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+      else{if(!_syncSilencieuse)gridOther.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
         const cEvs=await planningLoad(coord.id,semaine);gridOther.innerHTML=getPlanningGridSimple(cEvs,null,semaine,coord.creche_id);}
     }
   }
@@ -10570,7 +10575,7 @@ async function renderPlanningEquipe(){
   }
 
   const ws=weekStart();const semaine=ipDateToLocalISO(ws);
-  wrap.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
+  if(!_syncSilencieuse)wrap.innerHTML='<div style="padding:1rem;text-align:center;color:#bbb;font-size:12px">Chargement…</div>';
   const rows=await peLoad(crecheId,semaine);
   await peLoadRemplacantes(crecheId,semaine);
   const crecheName=cacheCreches.find(c=>c.id===crecheId)?.name||'';
