@@ -131,7 +131,8 @@ Deno.serve(async (req) => {
         { headers: { ...CORS, "Content-Type": "application/json" } });
     }
 
-    const appUrl = orgAppUrl ?? Deno.env.get("APP_URL") ?? "";
+    // organisations.app_url vaut https://koalakids.fr (site vitrine) : on vise l'appli.
+    const appUrl = (Deno.env.get("APP_URL_APPLI") ?? "https://koalakids-app.github.io/gestion-stock").replace(/\/+$/, "");
     const lien = source === "incident"
       ? `${appUrl}/demandes.html`
       : `${appUrl}/infirmerie.html`;

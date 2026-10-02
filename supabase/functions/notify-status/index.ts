@@ -16,20 +16,20 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const APP_URL_DEFAUT = Deno.env.get("APP_URL") ?? "https://koalakids.fr";
+// Adresse réelle de l'APPLICATION (GitHub Pages). On n'utilise plus
+// organisations.app_url pour les liens des e-mails : il vaut aujourd'hui
+// https://koalakids.fr, le site vitrine, et le bouton y renvoyait au lieu
+// d'ouvrir l'appli. Surchargeable par le secret APP_URL_APPLI.
+const APP_URL_DEFAUT = (Deno.env.get("APP_URL_APPLI") ?? "https://koalakids-app.github.io/gestion-stock").replace(/\/+$/, "");
 
 const sb = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
-/** app_url de l'organisation de la crèche si connue, sinon la valeur historique Koala Kids. */
-async function resolveAppUrl(crecheId: string | null | undefined): Promise<string> {
-  if (!crecheId) return APP_URL_DEFAUT;
-  const { data: creche } = await sb.from("creches").select("org_id").eq("id", crecheId).maybeSingle();
-  if (!creche?.org_id) return APP_URL_DEFAUT;
-  const { data: org } = await sb.from("organisations").select("app_url").eq("id", creche.org_id).maybeSingle();
-  return org?.app_url || APP_URL_DEFAUT;
+/** Adresse de l'application pour les liens des e-mails (voir APP_URL_DEFAUT). */
+function resolveAppUrl(_crecheId?: string | null): string {
+  return APP_URL_DEFAUT;
 }
 
 // L'email est un filet de secours : si le destinataire a une notification push
@@ -120,7 +120,7 @@ serve(async (req) => {
       ? await sb.from("creches").select("name").eq("id", crecheId).maybeSingle()
       : { data: null };
     const creche = crecheRow?.name || "";
-    const APP_URL = await resolveAppUrl(crecheId);
+    const APP_URL = resolveAppUrl(crecheId);
 
     if (!referentEmail) {
       return new Response(JSON.stringify({ ok: false, reason: "no email" }), {
@@ -153,7 +153,7 @@ serve(async (req) => {
             ${isTraite ? `<p style="margin:10px 0 0;color:#2a9d4e;font-size:13px">Traitée le ${treatedDate}</p>` : ""}
           </div>
           <div style="text-align:center;margin:20px 0">
-            <a href="${APP_URL}" style="background:#3D3580;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">Voir l'application →</a>
+            <a href="${APP_URL}/demandes.html" style="background:#3D3580;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">Voir l'application →</a>
           </div>
         </div>
         <p style="text-align:center;color:#aaa;font-size:11px;margin-top:12px">© Koala Kids — Ce message est automatique.</p>
