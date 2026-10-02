@@ -4000,11 +4000,12 @@ function showApp(){
   showMain('accueil');
   enfMaybeOpenFromUrl();
   empMaybeOpenFromUrl();
+  demandeMaybeOpenFromUrl();
   syncDemarrer();
   /* Briefing du jour : une fois par jour et par poste. Il part apres le dessin
      de l'ecran, le temps que les caches soient en place. Retour depuis l'outil
      Documents (?enfant=) : on ne l'interrompt pas avec une fenetre. */
-  if(!new URLSearchParams(location.search).get('enfant')&&!new URLSearchParams(location.search).get('employe')){
+  if(!_ouvertureDemandeUrl&&!new URLSearchParams(location.search).get('enfant')&&!new URLSearchParams(location.search).get('employe')){
     setTimeout(function(){try{brBriefingAuto();}catch(e){console.warn('[briefing]',e);}},500);
   }
 }
@@ -4027,6 +4028,23 @@ function enfMaybeOpenFromUrl(){
       },150);
     },200);
   }catch(e){console.warn('enfMaybeOpenFromUrl',e);}
+}
+
+/* Ouverture directe d'une demande depuis le lien d'un e-mail de notification
+   (?demande=<id>) : on garde le paramètre pendant la connexion, puis, une fois
+   les données chargées, on ouvre l'onglet Demandes et le fil de la demande.
+   Si elle n'est plus visible (supprimée, autre organisation), on reste sur la
+   liste des demandes. */
+let _ouvertureDemandeUrl=false;
+function demandeMaybeOpenFromUrl(){
+  try{
+    const id=new URLSearchParams(location.search).get('demande');
+    if(!id)return;
+    _ouvertureDemandeUrl=true;
+    history.replaceState(null,'',location.pathname);
+    showMain('demands');
+    setTimeout(()=>{ if(cacheDemandes.some(d=>d.id===id))openThread(id); },300);
+  }catch(e){console.warn('demandeMaybeOpenFromUrl',e);}
 }
 
 /* Même principe qu'enfMaybeOpenFromUrl(), pour le retour depuis le contrat
