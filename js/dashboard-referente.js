@@ -161,7 +161,8 @@ function renderRefDashboard(){
   if(lbl)lbl.textContent=new Date(t+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})+(isToday?' — Aujourd\'hui':'');
 
   // Alertes : demandes urgentes non traitées qui me concernent
-  const urgentes=cacheDemandes.filter(d=>d.creche_id===crecheId&&d.priority==='urgent'&&d.status==='attente');
+  const mesTraitees=demandesTraiteesIds();
+  const urgentes=demandesVisibles().filter(d=>d.creche_id===crecheId&&d.priority==='urgent'&&d.status==='attente'&&!mesTraitees.has(d.id));
   if(typeof adRenderRefDashBloc==='function'){try{adRenderRefDashBloc();}catch(e){}}
   const urgentesHtml=urgentes.length
     ?urgentes.map(d=>'<div class="alert-item" style="cursor:pointer" onclick="showMain(\'demands\')"><i class="ti ti-alert-triangle" style="font-size:16px;flex-shrink:0"></i> <strong>Demande urgente</strong> — '+escHtml(d.subject||'—')+'</div>').join('')
@@ -187,7 +188,7 @@ function renderRefDashboard(){
   }).join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun événement</div>';
 
   // ── Carte 2 : Demandes en attente me concernant
-  const demandesAttenteRaw=cacheDemandes.filter(d=>d.creche_id===crecheId&&d.status==='attente');
+  const demandesAttenteRaw=demandesVisibles().filter(d=>d.creche_id===crecheId&&d.status==='attente'&&!mesTraitees.has(d.id));
   const demandesHtml=demandesAttenteRaw.length?demandesAttenteRaw.slice(0,8).map(d=>{
     const age=Math.floor((new Date()-new Date(d.created_at))/(1000*86400));
     return'<div class="dash-list-item" style="cursor:pointer" onclick="showMain(\'demands\')"><span>'+(d.priority==='urgent'?'🔴':'⏳')+' '+escHtml(d.subject||d.theme||'Demande')+'</span><span style="font-size:11px;font-weight:700;color:'+(d.priority==='urgent'?'var(--red)':'var(--muted)')+'">'+age+' j</span></div>';
@@ -287,7 +288,8 @@ async function loadRefDashAsync(crecheId,t){
 // DASHBOARD
 function renderDashboard(){
   document.getElementById('dash-date').textContent='Mis à jour le '+new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
-  const totalD=cacheDemandes.length,urgentD=cacheDemandes.filter(d=>d.priority==='urgent'&&d.status==='attente').length,incNT=cacheIncidents.filter(i=>!i.treated).length,incGrave=cacheIncidents.filter(i=>i.severity==='grave').length;
+  const mesTraiteesD=demandesTraiteesIds(),demandesVis=demandesVisibles();
+  const totalD=demandesVis.length,urgentD=demandesVis.filter(d=>d.priority==='urgent'&&d.status==='attente'&&!mesTraiteesD.has(d.id)).length,incNT=cacheIncidents.filter(i=>!i.treated).length,incGrave=cacheIncidents.filter(i=>i.severity==='grave').length;
   let alerts='';
   if(urgentD>0)alerts+='<div class="alert-item" style="cursor:pointer" onclick="showMain(\'demands\')"><i class="ti ti-alert-triangle" style="font-size:16px;flex-shrink:0"></i> <strong>'+urgentD+' demande(s) urgente(s)</strong> en attente</div>';
   if(incGrave>0)alerts+='<div class="alert-item" style="cursor:pointer" onclick="showMain(\'incidents\')"><i class="ti ti-stethoscope" style="font-size:16px;flex-shrink:0"></i> <strong>'+incGrave+' incident(s) grave(s)</strong></div>';
@@ -303,8 +305,8 @@ function renderDashboard(){
   loadDashboardDevisAlertes();
   loadDashboardDemandesAlertes();
   document.getElementById('dash-stats').innerHTML='<div class="stat-card"><div class="stat-label">Crèches</div><div class="stat-val cv">'+cacheCreches.length+'</div><div class="stat-sub">'+cacheEnfants.length+' enfants</div></div><div class="stat-card" style="border-top-color:var(--orange)"><div class="stat-label">Demandes</div><div class="stat-val co">'+totalD+'</div><div class="stat-sub">'+cacheDemandes.filter(d=>d.status==='attente').length+' en attente</div></div><div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Incidents</div><div class="stat-val cr">'+cacheIncidents.length+'</div><div class="stat-sub">'+incNT+' non traités</div></div><div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Directeurs/trices techniques</div><div class="stat-val cg">'+cacheReferents.filter(r=>r.role==='referent').length+'</div><div class="stat-sub">actifs</div></div>';
-  const byCrecheRows=cacheCreches.map(c=>{const n=cacheDemandes.filter(d=>d.creche_id===c.id).length;const pct=totalD>0?Math.round(n/totalD*100):0;return'<div class="dash-list-item"><strong>'+c.name+'</strong><span style="font-weight:700;color:var(--koala)">'+n+'</span></div><div class="dash-bar"><div class="dash-bar-fill" style="width:'+pct+'%"></div></div>';}).join('')||'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune crèche</div>';
-  const themes={};cacheDemandes.forEach(d=>{if(d.theme)themes[d.theme]=(themes[d.theme]||0)+1;});
+  const byCrecheRows=cacheCreches.map(c=>{const n=demandesVis.filter(d=>d.creche_id===c.id).length;const pct=totalD>0?Math.round(n/totalD*100):0;return'<div class="dash-list-item"><strong>'+c.name+'</strong><span style="font-weight:700;color:var(--koala)">'+n+'</span></div><div class="dash-bar"><div class="dash-bar-fill" style="width:'+pct+'%"></div></div>';}).join('')||'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune crèche</div>';
+  const themes={};demandesVis.forEach(d=>{if(d.theme)themes[d.theme]=(themes[d.theme]||0)+1;});
   const themeRows=Object.keys(themes).length?Object.entries(themes).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'<div class="dash-list-item"><span>'+k+'</span><span style="font-weight:700;color:var(--koala)">'+v+'</span></div>').join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:1rem">Aucune donnée</div>';
   document.getElementById('dash-grid').innerHTML='<div class="dash-card"><div class="dash-card-title"><i class="ti ti-building"></i> Demandes par crèche</div>'+byCrecheRows+'</div><div class="dash-card"><div class="dash-card-title"><i class="ti ti-chart-pie"></i> Thèmes</div>'+themeRows+'</div>';
   renderDashboardToday();
@@ -435,7 +437,8 @@ function renderDashboardToday(){
     return'<div class="dash-list-item"><span>🎂 '+escHtml((e.prenom||'')+' '+(e.nom||''))+' <span style="color:var(--muted);font-size:11px">(équipe)</span></span><span style="font-weight:700;color:var(--koala);font-size:11px;white-space:nowrap">'+age+' an'+(age>1?'s':'')+(creche?' · '+escHtml(creche.name):'')+'</span></div>';
   }).join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun anniversaire aujourd\'hui</div>';
 
-  const demT=cacheDemandes.filter(d=>(d.created_at||'').slice(0,10)===t);
+  const mesTraiteesA=demandesTraiteesIds();
+  const demT=demandesVisibles().filter(d=>(d.created_at||'').slice(0,10)===t);
   const incT=cacheIncidents.filter(i=>i.incident_date===t);
   let actHtml='';
   if(!demT.length&&!incT.length){
@@ -443,7 +446,7 @@ function renderDashboardToday(){
   }else{
     actHtml+=demT.map(d=>{
       const creche=cacheCreches.find(c=>c.id===d.creche_id);
-      return'<div class="dash-list-item"><span>'+(d.type==='consigne'?'📌':'✉️')+' '+escHtml(d.subject||d.theme||'Demande')+(creche?' <span style="color:var(--muted);font-size:11px">('+escHtml(creche.name)+')</span>':'')+'</span><span style="font-size:11px;font-weight:700;color:'+(d.priority==='urgent'?'var(--red)':'var(--muted)')+'">'+(d.priority==='urgent'?'Urgent':(d.status==='traite'?'Traité':'En attente'))+'</span></div>';
+      return'<div class="dash-list-item"><span>'+(d.type==='consigne'?'📌':'✉️')+' '+escHtml(d.subject||d.theme||'Demande')+(creche?' <span style="color:var(--muted);font-size:11px">('+escHtml(creche.name)+')</span>':'')+'</span><span style="font-size:11px;font-weight:700;color:'+(d.priority==='urgent'?'var(--red)':'var(--muted)')+'">'+(d.priority==='urgent'?'Urgent':(mesTraiteesA.has(d.id)?'Traité':'En attente'))+'</span></div>';
     }).join('');
     actHtml+=incT.map(i=>{
       const creche=cacheCreches.find(c=>c.id===i.creche_id);
