@@ -2334,7 +2334,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
     <div style="font-size:12.5px;font-weight:800;color:var(--koala);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 10px">Contrat de travail</div>
     <div class="frow">
-      <div class="fg"><label class="flabel">Type de contrat</label><select class="finput" id="emp-type-contrat"><option value="">-- Non défini --</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select></div>
+      <div class="fg"><label class="flabel">Type de contrat</label><select class="finput" id="emp-type-contrat" onchange="empUpdateEssaiFin()"><option value="">-- Non défini --</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select></div>
       <div class="fg"><label class="flabel">Qualification</label><input class="finput" id="emp-qualification" placeholder="Ex. : Auxiliaire de puériculture"/></div>
     </div>
     <div class="frow">
@@ -2342,7 +2342,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="frow">
       <div class="fg"><label class="flabel">Date de début</label><input class="finput" id="emp-date-debut" type="date" onchange="empUpdateEssaiFin()"/></div>
-      <div class="fg"><label class="flabel">Date de fin (si CDD)</label><input class="finput" id="emp-date-fin" type="date"/></div>
+      <div class="fg"><label class="flabel">Date de fin (si CDD)</label><input class="finput" id="emp-date-fin" type="date" onchange="empUpdateEssaiFin()"/></div>
     </div>
     <div class="fg"><label class="flabel">Motif du CDD (si applicable)</label><input class="finput" id="emp-motif-cdd" placeholder="Ex. : remplacement d'une salariée absente"/></div>
     <div class="frow">
@@ -5244,20 +5244,35 @@ const EMP_TEXT_FIELDS=[
 ];
 const EMP_NUM_FIELDS=[['emp-heures-hebdo','heures_hebdo'],['emp-salaire-brut','salaire_brut']];
 
-/* Fin de la période d'essai : 2 mois après la date de début, 4 mois si
-   renouvelée une fois, puis reportée de la durée des fermetures "vacances"
-   (etablissements.jours_fermeture / reseau_config.jours_fermeture_reseau)
+/* Fin de la période d'essai.
+   CDI (ou type non défini) : 2 mois après la date de début, 4 mois si
+   renouvelée une fois.
+   CDD (art. L1242-10 du Code du travail) : 1 jour par semaine de contrat,
+   plafonné à 2 semaines si le contrat dure 6 mois au plus, 1 mois au-delà ;
+   pas de renouvellement. Sans date de fin (terme imprécis), la durée minimale
+   n'est pas connue : on retient le plafond de 2 semaines.
+   Dans les deux cas, la fin est ensuite reportée de la durée des fermetures
+   "vacances" (etablissements.jours_fermeture / reseau_config.jours_fermeture_reseau)
    qui tombent dans la période — un congé pendant lequel la crèche est fermée
    suspend l'essai comme n'importe quelle absence. En boucle car repousser la
    fin peut faire entrer une nouvelle fermeture dans la fenêtre (ex : la fin
    recalculée tombe juste avant les vacances de la Toussaint). Même règle
    côté client (affichage immédiat dans la fiche) que côté base (trigger
-   kk_trg_set_periode_essai_fin, cf. sql/employes_periode_essai_fin.sql),
+   kk_trg_set_periode_essai_fin, cf. sql/employes_periode_essai_fin_cdd.sql),
    pour ne pas dépendre d'un aller-retour serveur avant de pouvoir alerter. */
-function empPeriodeEssaiFin(dateDebut,renouvelee,crecheId){
+function empPeriodeEssaiFin(dateDebut,renouvelee,crecheId,typeContrat,dateFin){
   if(!dateDebut)return null;
   const d=new Date(dateDebut+'T00:00:00');
-  d.setMonth(d.getMonth()+(renouvelee?4:2));
+  if(typeContrat==='CDD'){
+    if(dateFin&&dateFin>=dateDebut){
+      const jours=Math.round((new Date(dateFin+'T00:00:00')-d)/86400000)+1;
+      const limite=new Date(dateDebut+'T00:00:00');
+      limite.setMonth(limite.getMonth()+6);
+      if(jours<=Math.round((limite-d)/86400000)){
+        d.setDate(d.getDate()+Math.min(Math.floor(jours/7),14));
+      }else d.setMonth(d.getMonth()+1);
+    }else d.setDate(d.getDate()+14);
+  }else d.setMonth(d.getMonth()+(renouvelee?4:2));
   let fin=ipDateToLocalISO(d);
   if(crecheId){
     const vacances=fermeturesDe(crecheId).filter(f=>f&&f.type==='vacances'&&f.debut);
@@ -5285,7 +5300,7 @@ function empUpdateEssaiFin(){
   const dd=document.getElementById('emp-date-debut').value;
   const renouvelee=document.getElementById('emp-periode-essai-renouvelee').checked;
   const crecheId=document.getElementById('emp-creche').value||(isDirection?null:currentProfile?.creche_id);
-  const fin=empPeriodeEssaiFin(dd,renouvelee,crecheId);
+  const fin=empPeriodeEssaiFin(dd,renouvelee,crecheId,document.getElementById('emp-type-contrat').value,document.getElementById('emp-date-fin').value);
   const el=document.getElementById('emp-essai-fin-calc');
   el.textContent=fin?new Date(fin+'T00:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'}):'—';
 }
@@ -5417,7 +5432,7 @@ async function saveEmploye(){
   // Recalculée ici aussi (le trigger la refait de son côté) pour que le
   // cache local reste à jour tout de suite : dbUpdate ne relit pas la ligne
   // après écriture, contrairement à dbInsert.
-  row.periode_essai_fin=empPeriodeEssaiFin(row.date_debut,row.periode_essai_renouvelee,row.creche_id);
+  row.periode_essai_fin=empPeriodeEssaiFin(row.date_debut,row.periode_essai_renouvelee,row.creche_id,row.type_contrat,row.date_fin);
   const btn=document.getElementById('emp-btn-save');btn.disabled=true;
   try{
     if(editingEmployeId){
@@ -12203,7 +12218,7 @@ function periodesEssaiARelancer(crecheId){
   const seuil=ipDateToLocalISO(new Date(Date.now()+15*86400000));
   return cacheEmployes
     .filter(e=>e.date_debut&&!e.periode_essai_actee&&(!crecheId||String(e.creche_id)===String(crecheId)))
-    .map(e=>Object.assign({},e,{_essaiFin:empPeriodeEssaiFin(e.date_debut,e.periode_essai_renouvelee,e.creche_id)}))
+    .map(e=>Object.assign({},e,{_essaiFin:empPeriodeEssaiFin(e.date_debut,e.periode_essai_renouvelee,e.creche_id,e.type_contrat,e.date_fin)}))
     .filter(e=>e._essaiFin&&e._essaiFin<=seuil)
     .sort((a,b)=>a._essaiFin.localeCompare(b._essaiFin));
 }
