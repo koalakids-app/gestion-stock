@@ -197,9 +197,13 @@ function renderRefDashboard(){
   // ── Carte 3 : Anniversaires enfants de la crèche
   const md=t.slice(5);
   const bdays=cacheEnfants.filter(e=>e.creche_id===crecheId&&e.dob&&e.dob.slice(5)===md);
-  const bdaysHtml=bdays.length?bdays.map(e=>{
+  const bdaysEmp=dashBirthdaysEmployes(t,crecheId);
+  const bdaysHtml=(bdays.length||bdaysEmp.length)?bdays.map(e=>{
     const age=Number(t.slice(0,4))-Number(e.dob.slice(0,4));
     return'<div class="dash-list-item"><span>🎂 '+escHtml((e.prenom||'')+' '+(e.nom||'').trim())+'</span><span style="font-weight:700;color:var(--koala);font-size:11px">'+age+' an'+(age>1?'s':'')+'</span></div>';
+  }).join('')+bdaysEmp.map(e=>{
+    const age=Number(t.slice(0,4))-Number(e.date_naissance.slice(0,4));
+    return'<div class="dash-list-item"><span>🎂 '+escHtml((e.prenom||'')+' '+(e.nom||'').trim())+' <span style="color:var(--muted);font-size:11px">(équipe)</span></span><span style="font-weight:700;color:var(--koala);font-size:11px">'+age+' an'+(age>1?'s':'')+'</span></div>';
   }).join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun anniversaire</div>';
 
   document.getElementById('ref-dash-grid').innerHTML=
@@ -393,6 +397,11 @@ function dashTodayBirthdays(t){
   const md=t.slice(5);
   return cacheEnfants.filter(e=>e.dob&&e.dob.slice(5)===md);
 }
+// Salarié·es dont c'est l'anniversaire (fiches employes) ; crecheId optionnel.
+function dashBirthdaysEmployes(t,crecheId){
+  const md=t.slice(5);
+  return (typeof cacheEmployes!=='undefined'?cacheEmployes:[]).filter(e=>e.date_naissance&&e.date_naissance.slice(5)===md&&(!crecheId||e.creche_id===crecheId));
+}
 function renderDashboardToday(){
   // Capturé avant la réécriture de #dash-today-grid : une fois le innerHTML
   // remplacé, le select est recréé vide et sa valeur ne peut plus être lue.
@@ -415,10 +424,15 @@ function renderDashboardToday(){
   }).join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun événement aujourd\'hui</div>';
 
   const bdays=dashTodayBirthdays(t);
-  const bdaysHtml=bdays.length?bdays.map(e=>{
+  const bdaysEmp=dashBirthdaysEmployes(t);
+  const bdaysHtml=(bdays.length||bdaysEmp.length)?bdays.map(e=>{
     const creche=cacheCreches.find(c=>c.id===e.creche_id);
     const age=Number(t.slice(0,4))-Number(e.dob.slice(0,4));
     return'<div class="dash-list-item"><span>🎂 '+escHtml((e.prenom||'')+' '+(e.nom||''))+'</span><span style="font-weight:700;color:var(--koala);font-size:11px;white-space:nowrap">'+age+' an'+(age>1?'s':'')+(creche?' · '+escHtml(creche.name):'')+'</span></div>';
+  }).join('')+bdaysEmp.map(e=>{
+    const creche=cacheCreches.find(c=>c.id===e.creche_id);
+    const age=Number(t.slice(0,4))-Number(e.date_naissance.slice(0,4));
+    return'<div class="dash-list-item"><span>🎂 '+escHtml((e.prenom||'')+' '+(e.nom||''))+' <span style="color:var(--muted);font-size:11px">(équipe)</span></span><span style="font-weight:700;color:var(--koala);font-size:11px;white-space:nowrap">'+age+' an'+(age>1?'s':'')+(creche?' · '+escHtml(creche.name):'')+'</span></div>';
   }).join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun anniversaire aujourd\'hui</div>';
 
   const demT=cacheDemandes.filter(d=>(d.created_at||'').slice(0,10)===t);
