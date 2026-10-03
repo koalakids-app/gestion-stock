@@ -3957,7 +3957,10 @@ async function checkNotifSubscription(){if(!('serviceWorker'in navigator)||!('Pu
   if(sub){
     // Abonnement déjà présent dans le navigateur : on le (ré)enregistre pour ce compte
     // (poste partagé, ou ligne supprimée côté base) — sans effet s'il existe déjà.
-    if(currentProfile?.id){const j=sub.toJSON();if(j.endpoint&&j.keys)sb.from('push_subscriptions').upsert({referent_id:currentProfile.id,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth_key:j.keys.auth,user_agent:navigator.userAgent},{onConflict:'endpoint'}).then(function(r){if(r.error)console.warn('[Notif] resync abonnement',r.error);});}
+    // RPC plutôt qu'un upsert direct : sur un poste partagé, l'endpoint (propre au
+    // navigateur) peut encore appartenir à la personne précédente, et un upsert direct
+    // se heurte alors à la policy RLS "own" en update (cf. sql/push_subscriptions_reassign_rpc.sql).
+    if(currentProfile?.id){const j=sub.toJSON();if(j.endpoint&&j.keys)sb.rpc('upsert_push_subscription',{p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth_key:j.keys.auth,p_user_agent:navigator.userAgent}).then(function(r){if(r.error)console.warn('[Notif] resync abonnement',r.error);});}
     return;
   }
   proposerActivationNotifs();
@@ -4002,7 +4005,7 @@ async function toggleNotificationsPush(){
   let sub=await reg.pushManager.getSubscription();if(sub){await sub.unsubscribe();}
   sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
   const subJson=sub.toJSON();
-  const{error}=await sb.from('push_subscriptions').upsert({referent_id:currentProfile?.id,endpoint:subJson.endpoint,p256dh:subJson.keys.p256dh,auth_key:subJson.keys.auth,user_agent:navigator.userAgent},{onConflict:'endpoint'});
+  const{error}=await sb.rpc('upsert_push_subscription',{p_endpoint:subJson.endpoint,p_p256dh:subJson.keys.p256dh,p_auth_key:subJson.keys.auth,p_user_agent:navigator.userAgent});
   if(error){console.error(error);alert("Erreur lors de l'activation des notifications.");return;}
   updateNotifIcon(true);
   if(typeof showBanner==='function')showBanner('Notifications activées !');else alert('Notifications activées !');
