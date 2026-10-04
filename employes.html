@@ -881,21 +881,40 @@ async function envoyerFormation(){
   sel.value='';
   await loadFicheFormation(e);
 }
+/* Envois faits depuis l'écran « Envoyer par mail » de l'admin du quiz (table
+   envois_quiz, projet quiz), lus par le `ref` de la fiche via kk_envois_par_ref
+   (cf. docs/quiz-envoi/envois_par_ref.sql). Même logique que collaborateur.html.
+   Si la fonction n'existe pas ou échoue, le parcours s'affiche sans ces envois. */
+async function envoisDepuisAdminQuiz(e){
+  try{
+    const{data,error}=await sbQuiz.rpc('kk_envois_par_ref',{p_ref:e.id});
+    if(error)return[];
+    return(data||[]).map(x=>{
+      const params=new URLSearchParams({ref:e.id,prenom:e.prenom||'',nom:e.nom||'',statut:'Salarié(e) en poste'});
+      params.set(x.kind==='quiz'?'quiz':'module',x.item_id);
+      return{kind:x.kind,item_id:x.item_id,item_titre:x.item_titre,envoye_le:x.envoye_le,
+        lien:(x.kind==='quiz'?QUIZ_APP_URL:FORMATIONS_APP_URL)+'?'+params.toString()};
+    });
+  }catch(err){return[];}
+}
 async function loadFicheFormation(e){
   FICHE_FORMATION_EMPLOYE=e;
   await loadFicheFormationOptions();
   const box=document.getElementById('ficheFormationBox');
   box.innerHTML='<p class="hint">Chargement…</p>';
   try{
-    const[envois,qz,md]=await Promise.all([
+    const[envois,qz,md,admin]=await Promise.all([
       sb.from('formations_envois').select('*').eq('employe_id',e.id).order('envoye_le',{ascending:false}),
       sbQuiz.rpc('kk_resultats_par_ref',{p_ref:e.id}),
-      sbQuiz.rpc('kk_formations_par_ref',{p_ref:e.id})
+      sbQuiz.rpc('kk_formations_par_ref',{p_ref:e.id}),
+      envoisDepuisAdminQuiz(e)
     ]);
     if(envois.error)throw envois.error;
     if(qz.error)throw qz.error;
     if(md.error)throw md.error;
-    box.innerHTML=renderParcoursHtml(envois.data||[],qz.data||[],md.data||[]);
+    const vus=new Set((envois.data||[]).map(x=>x.kind+':'+x.item_id));
+    const tous=[...(envois.data||[]),...admin.filter(x=>!vus.has(x.kind+':'+x.item_id))];
+    box.innerHTML=renderParcoursHtml(tous,qz.data||[],md.data||[]);
   }catch(err){
     box.innerHTML='<p class="hint">Parcours de formation indisponible pour le moment.</p>';
   }
