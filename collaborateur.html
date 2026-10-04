@@ -797,36 +797,62 @@ async function signerHeuresMois(y,m){
 function envoisCol(){return COLLAB_TYPE==='referent'?'referent_id':'employe_id';}
 /* Même logique que renderParcoursHtml (employes.html) : dupliquée faute de
    module JS partagé entre les deux pages. */
-function renderParcoursHtml(envois,resultats,formationsLues){
+/* Une micro-formation n'est « faite » qu'après : lecture (ou quiz réussi),
+   quiz du thème réussi à SEUIL_QUIZ % minimum (s'il y en a un), puis
+   attestation « j'ai lu et compris » du/de la collaborateur/trice. Si
+   kk_modules_quiz est indisponible, rien n'est validable (on ne dégrade pas
+   la preuve). Logique dupliquée entre collaborateur.html et employes.html. */
+const SEUIL_QUIZ=80;
+function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
+  const meilleur=qid=>resultats.filter(x=>x.quiz_id===qid).reduce((m,x)=>Math.max(m,x.pourcentage),-1);
+  const lienQuizDe=(env,qid)=>{
+    try{const u=new URL(env.lien);const p=new URLSearchParams(u.search);p.delete('module');p.set('quiz',qid);return QUIZ_APP_URL+'?'+p.toString();}
+    catch(e){return env.lien;}
+  };
   const items=envois.map(env=>{
     if(env.kind==='quiz'){
       const r=resultats.find(x=>x.quiz_id===env.item_id);
       return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',score:r.score,total:r.total,pourcentage:r.pourcentage}
-              :{type:'quiz',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',lien:env.lien};
+              :{type:'quiz',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',etape:'quiz',lien:env.lien};
     }
-    const f=formationsLues.find(x=>x.module_id===env.item_id);
-    if(f)return{type:'formation',titre:env.item_titre,date:f.lu_le,statut:'fait'};
-    if(env.valide_le)return{type:'formation',titre:env.item_titre,date:env.valide_le,statut:'fait'};
-    return{type:'formation',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',lien:env.lien,envoiId:env.id};
+    const lu=formationsLues.find(x=>x.module_id===env.item_id);
+    const mq=modulesQuiz?modulesQuiz.find(x=>x.module_id===env.item_id):null;
+    const base={type:'formation',titre:env.item_titre,date:env.envoye_le,lien:env.lien,envoiId:env.id};
+    if(!mq)return{...base,statut:'a_faire',etape:lu?'indispo':'lire'};
+    const best=mq.quiz_id?meilleur(mq.quiz_id):-1;
+    const quizOk=!mq.quiz_id||best>=SEUIL_QUIZ;
+    if(quizOk&&env.valide_le)return{...base,statut:'fait',date:env.valide_le,quizPct:mq.quiz_id?best:null};
+    if(mq.quiz_id&&!quizOk)return lu||best>=0
+      ?{...base,statut:'a_faire',etape:'quiz',lien:lienQuizDe(env,mq.quiz_id),best}
+      :{...base,statut:'a_faire',etape:'lire'};
+    if(!lu&&!mq.quiz_id)return{...base,statut:'a_faire',etape:'lire'};
+    return{...base,statut:'a_faire',etape:'attester',quizPct:mq.quiz_id?best:null};
   }).sort((a,b)=>(a.statut==='a_faire')-(b.statut==='a_faire')||new Date(b.date)-new Date(a.date));
   if(!items.length)return'<p class="hint">Rien ne vous a encore été envoyé.</p>';
   return items.map(r=>{
     const d=new Date(r.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
     const icone=r.type==='quiz'?'ti-clipboard-check':'ti-book-2';
-    let droite;
+    let droite,info='';
     if(r.statut==='a_faire'){
-      droite='<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><a href="'+esc(r.lien)+'" target="_blank" rel="noopener" class="btn btn-p btn-sm" style="font-size:11.5px"><i class="ti ti-player-play"></i> À faire</a>'
-        +(r.envoiId?'<button class="btn btn-sm" style="font-size:11.5px" onclick="validerFormation(\''+r.envoiId+'\')"><i class="ti ti-check"></i> J\'ai lu et fait cette formation</button>':'')+'</div>';
+      if(r.etape==='quiz'&&r.type==='formation')info='<div style="font-size:11.5px;color:var(--muted)">Quiz à réussir ('+SEUIL_QUIZ+' % minimum)'+(r.best>=0?' — meilleur score : '+r.best+' %':'')+'</div>';
+      if(r.etape==='attester')info='<div style="font-size:11.5px;color:var(--muted)">'+(r.quizPct!=null?'Quiz réussi ('+r.quizPct+' %) — ':'')+'attestation en attente</div>';
+      if(r.etape==='indispo')info='<div style="font-size:11.5px;color:var(--muted)">Vérification du quiz indisponible pour le moment</div>';
+      const lab={lire:'Lire la formation',quiz:'Passer le quiz',indispo:'Ouvrir'}[r.etape];
+      droite=r.etape==='attester'
+        ?'<button class="btn btn-p btn-sm" style="font-size:11.5px" onclick="validerFormation(\''+r.envoiId+'\')"><i class="ti ti-check"></i> J\'ai lu et compris cette formation</button>'
+        :'<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" class="btn btn-p btn-sm" style="font-size:11.5px"><i class="ti ti-player-play"></i> '+lab+'</a>';
     }else if(r.type==='quiz'){
       const col=r.pourcentage>=80?'var(--green)':r.pourcentage>=60?'var(--violet)':'var(--red)';
       droite='<span style="font-weight:800;font-size:13px;color:'+col+';white-space:nowrap">'+r.score+'/'+r.total+' · '+r.pourcentage+'%</span>';
     }else{
-      droite='<span style="font-weight:700;font-size:11.5px;color:var(--green);white-space:nowrap"><i class="ti ti-check"></i> Lue</span>';
+      info='<div style="font-size:11.5px;color:var(--muted)">Validée le '+d+(r.quizPct!=null?' · quiz '+r.quizPct+' %':'')+'</div>';
+      droite='<span style="font-weight:700;font-size:11.5px;color:var(--green);white-space:nowrap"><i class="ti ti-check"></i> Validée</span>';
     }
     return'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">'
       +'<div style="display:flex;align-items:center;gap:8px"><i class="ti '+icone+'" style="color:var(--orange);font-size:16px"></i>'
       +'<div><div style="font-weight:700;font-size:13px">'+esc(r.titre)+'</div>'
-      +'<div style="font-size:11.5px;color:var(--muted)">'+(r.statut==='a_faire'?'Envoyé le ':'')+d+'</div></div></div>'+droite+'</div>';
+      +(r.statut==='fait'&&r.type==='formation'?'':'<div style="font-size:11.5px;color:var(--muted)">'+(r.statut==='a_faire'?'Envoyé le ':'')+d+'</div>')
+      +info+'</div></div>'+droite+'</div>';
   }).join('');
 }
 /* Envois faits depuis l'écran « Envoyer par mail » de l'admin du quiz
@@ -849,7 +875,7 @@ async function envoisDepuisAdminQuiz(){
   }catch(e){return[];}
 }
 async function validerFormation(id){
-  if(!confirm('Confirmez-vous avoir lu et fait cette formation ?'))return;
+  if(!confirm('Confirmez-vous avoir lu et compris cette formation ?'))return;
   const{error}=await sb.from('formations_envois').update({valide_le:new Date().toISOString()}).eq('id',id);
   if(error){toast('Échec de la validation : '+error.message,true);return;}
   toast('Formation validée.');
@@ -870,7 +896,10 @@ async function loadFormation(){
     if(md.error)throw md.error;
     const vus=new Set((envois.data||[]).map(e=>e.kind+':'+e.item_id));
     const tous=[...(envois.data||[]),...admin.filter(e=>!vus.has(e.kind+':'+e.item_id))];
-    box.innerHTML=renderParcoursHtml(tous,qz.data||[],md.data||[]);
+    const ids=tous.filter(x=>x.kind==='module').map(x=>x.item_id);
+    let mq=null;
+    if(ids.length){const r=await sbQuiz.rpc('kk_modules_quiz',{p_ids:ids});if(!r.error)mq=r.data||[];}else mq=[];
+    box.innerHTML=renderParcoursHtml(tous,qz.data||[],md.data||[],mq);
   }catch(e){
     box.innerHTML='<p class="hint">Parcours de formation indisponible pour le moment.</p>';
   }
