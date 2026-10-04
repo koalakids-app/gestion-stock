@@ -805,8 +805,9 @@ function renderParcoursHtml(envois,resultats,formationsLues){
               :{type:'quiz',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',lien:env.lien};
     }
     const f=formationsLues.find(x=>x.module_id===env.item_id);
-    return f?{type:'formation',titre:env.item_titre,date:f.lu_le,statut:'fait'}
-            :{type:'formation',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',lien:env.lien};
+    if(f)return{type:'formation',titre:env.item_titre,date:f.lu_le,statut:'fait'};
+    if(env.valide_le)return{type:'formation',titre:env.item_titre,date:env.valide_le,statut:'fait'};
+    return{type:'formation',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',lien:env.lien,envoiId:env.id};
   }).sort((a,b)=>(a.statut==='a_faire')-(b.statut==='a_faire')||new Date(b.date)-new Date(a.date));
   if(!items.length)return'<p class="hint">Rien ne vous a encore été envoyé.</p>';
   return items.map(r=>{
@@ -814,7 +815,8 @@ function renderParcoursHtml(envois,resultats,formationsLues){
     const icone=r.type==='quiz'?'ti-clipboard-check':'ti-book-2';
     let droite;
     if(r.statut==='a_faire'){
-      droite='<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" class="btn btn-p btn-sm" style="font-size:11.5px"><i class="ti ti-player-play"></i> À faire</a>';
+      droite='<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><a href="'+esc(r.lien)+'" target="_blank" rel="noopener" class="btn btn-p btn-sm" style="font-size:11.5px"><i class="ti ti-player-play"></i> À faire</a>'
+        +(r.envoiId?'<button class="btn btn-sm" style="font-size:11.5px" onclick="validerFormation(\''+r.envoiId+'\')"><i class="ti ti-check"></i> J\'ai lu et fait cette formation</button>':'')+'</div>';
     }else if(r.type==='quiz'){
       const col=r.pourcentage>=80?'var(--green)':r.pourcentage>=60?'var(--violet)':'var(--red)';
       droite='<span style="font-weight:800;font-size:13px;color:'+col+';white-space:nowrap">'+r.score+'/'+r.total+' · '+r.pourcentage+'%</span>';
@@ -845,6 +847,13 @@ async function envoisDepuisAdminQuiz(){
         lien:(e.kind==='quiz'?QUIZ_APP_URL:FORMATIONS_APP_URL)+'?'+params.toString()};
     });
   }catch(e){return[];}
+}
+async function validerFormation(id){
+  if(!confirm('Confirmez-vous avoir lu et fait cette formation ?'))return;
+  const{error}=await sb.from('formations_envois').update({valide_le:new Date().toISOString()}).eq('id',id);
+  if(error){toast('Échec de la validation : '+error.message,true);return;}
+  toast('Formation validée.');
+  await loadFormation();
 }
 async function loadFormation(){
   const box=document.getElementById('formationBox');
