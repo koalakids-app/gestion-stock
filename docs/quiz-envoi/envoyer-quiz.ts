@@ -156,8 +156,13 @@ Deno.serve(async (req) => {
   }
 
   // Titre et publication relus en base.
-  const { data: item } = await sb.from(kind === 'quiz' ? 'quiz' : 'module')
+  const { data: item, error: eItem } = await sb.from(kind === 'quiz' ? 'quiz' : 'module')
     .select('id,titre,publie').eq('id', corps.item_id).maybeSingle();
+  if (eItem) {
+    // Lecture refusée ou impossible (droits, table) : ne pas la faire passer pour un quiz absent.
+    console.error('[envoyer-quiz] lecture', kind, eItem);
+    return json({ erreur: 'Lecture du ' + kind + ' impossible : ' + eItem.message }, 500);
+  }
   if (!item) return json({ erreur: kind === 'quiz' ? 'Quiz introuvable' : 'Module introuvable' }, 404);
   if (!item.publie) return json({ erreur: 'Publiez-le avant de l\'envoyer : le lien ne fonctionnerait pas.' }, 409);
 
