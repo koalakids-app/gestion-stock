@@ -514,7 +514,9 @@ async function submitSetPassword(){
 }
 
 async function grantAccess(){
-  document.getElementById('loginView').style.display='none';
+  /* Le portail MFA (et l'écran de mot de passe) restaient affichés au-dessus de
+     « Mon espace » une fois le code validé : on les masque aussi. */
+  ['loginView','mfaGateView','setPwdView'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   document.getElementById('appView').style.display='block';
   document.getElementById('whoAmI').textContent=COLLAB_TYPE==='referent'?(COLLAB.name||''):((COLLAB.prenom||'')+' '+(COLLAB.nom||''));
   semaineDate=mondayOfISO(todayStr());
@@ -825,19 +827,41 @@ function renderParcoursHtml(envois,resultats,formationsLues){
       +'<div style="font-size:11.5px;color:var(--muted)">'+(r.statut==='a_faire'?'Envoyé le ':'')+d+'</div></div></div>'+droite+'</div>';
   }).join('');
 }
+/* Envois faits depuis l'écran « Envoyer par mail » de l'admin du quiz
+   (table envois_quiz, projet quiz) : lus par le `ref` de la fiche, via la
+   fonction kk_envois_par_ref (cf. docs/quiz-envoi/envois_par_ref.sql). Si elle
+   n'existe pas encore ou échoue, le parcours s'affiche sans ces envois. */
+async function envoisDepuisAdminQuiz(){
+  try{
+    const{data,error}=await sbQuiz.rpc('kk_envois_par_ref',{p_ref:COLLAB.id});
+    if(error)return[];
+    const statut='Salarié(e) en poste';
+    const prenom=COLLAB_TYPE==='referent'?String(COLLAB.name||'').split(/\s+/)[0]:(COLLAB.prenom||'');
+    const nom=COLLAB_TYPE==='referent'?String(COLLAB.name||'').split(/\s+/).slice(1).join(' '):(COLLAB.nom||'');
+    return(data||[]).map(e=>{
+      const params=new URLSearchParams({ref:COLLAB.id,prenom,nom,statut});
+      params.set(e.kind==='quiz'?'quiz':'module',e.item_id);
+      return{kind:e.kind,item_id:e.item_id,item_titre:e.item_titre,envoye_le:e.envoye_le,
+        lien:(e.kind==='quiz'?QUIZ_APP_URL:FORMATIONS_APP_URL)+'?'+params.toString()};
+    });
+  }catch(e){return[];}
+}
 async function loadFormation(){
   const box=document.getElementById('formationBox');
   box.innerHTML='<p class="hint">Chargement…</p>';
   try{
-    const[envois,qz,md]=await Promise.all([
+    const[envois,qz,md,admin]=await Promise.all([
       sb.from('formations_envois').select('*').eq(envoisCol(),COLLAB.id).order('envoye_le',{ascending:false}),
       sbQuiz.rpc('kk_resultats_par_ref',{p_ref:COLLAB.id}),
-      sbQuiz.rpc('kk_formations_par_ref',{p_ref:COLLAB.id})
+      sbQuiz.rpc('kk_formations_par_ref',{p_ref:COLLAB.id}),
+      envoisDepuisAdminQuiz()
     ]);
     if(envois.error)throw envois.error;
     if(qz.error)throw qz.error;
     if(md.error)throw md.error;
-    box.innerHTML=renderParcoursHtml(envois.data||[],qz.data||[],md.data||[]);
+    const vus=new Set((envois.data||[]).map(e=>e.kind+':'+e.item_id));
+    const tous=[...(envois.data||[]),...admin.filter(e=>!vus.has(e.kind+':'+e.item_id))];
+    box.innerHTML=renderParcoursHtml(tous,qz.data||[],md.data||[]);
   }catch(e){
     box.innerHTML='<p class="hint">Parcours de formation indisponible pour le moment.</p>';
   }
