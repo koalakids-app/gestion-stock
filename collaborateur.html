@@ -817,7 +817,7 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
     }
     const lu=formationsLues.find(x=>x.module_id===env.item_id);
     const mq=modulesQuiz?modulesQuiz.find(x=>x.module_id===env.item_id):null;
-    const base={type:'formation',titre:env.item_titre,date:env.envoye_le,lien:env.lien,envoiId:env.id};
+    const base={type:'formation',titre:env.item_titre,date:env.envoye_le,lien:env.lien,itemId:env.item_id,envoyeLe:env.envoye_le};
     if(!mq)return{...base,statut:'a_faire',etape:lu?'indispo':'lire'};
     const best=mq.quiz_id?meilleur(mq.quiz_id):-1;
     const quizOk=!mq.quiz_id||best>=SEUIL_QUIZ;
@@ -839,7 +839,7 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
       if(r.etape==='indispo')info='<div style="font-size:11.5px;color:var(--muted)">Vérification du quiz indisponible pour le moment</div>';
       const lab={lire:'Lire la formation',quiz:'Passer le quiz',indispo:'Ouvrir'}[r.etape];
       droite=r.etape==='attester'
-        ?'<button class="btn btn-p btn-sm" style="font-size:11.5px" onclick="validerFormation(\''+r.envoiId+'\')"><i class="ti ti-check"></i> J\'ai lu et compris cette formation</button>'
+        ?'<button class="btn btn-p btn-sm" style="font-size:11.5px" onclick="validerFormation(\''+r.itemId+'\')"><i class="ti ti-check"></i> J\'ai lu et compris cette formation</button>'
         :'<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" class="btn btn-p btn-sm" style="font-size:11.5px"><i class="ti ti-player-play"></i> '+lab+'</a>';
     }else if(r.type==='quiz'){
       const col=r.pourcentage>=80?'var(--green)':r.pourcentage>=60?'var(--violet)':'var(--red)';
@@ -874,9 +874,12 @@ async function envoisDepuisAdminQuiz(){
     });
   }catch(e){return[];}
 }
-async function validerFormation(id){
+let PARCOURS_ENVOIS=[];
+async function validerFormation(itemId){
   if(!confirm('Confirmez-vous avoir lu et compris cette formation ?'))return;
-  const{error}=await sb.from('formations_envois').update({valide_le:new Date().toISOString()}).eq('id',id);
+  const env=PARCOURS_ENVOIS.find(x=>x.kind==='module'&&x.item_id===itemId);
+  if(!env){toast('Formation introuvable, rechargez la page.',true);return;}
+  const{error}=await sb.rpc('valider_formation',{p_item_id:itemId,p_titre:env.item_titre,p_lien:env.lien,p_envoye_le:env.envoye_le});
   if(error){toast('Échec de la validation : '+error.message,true);return;}
   toast('Formation validée.');
   await loadFormation();
@@ -896,6 +899,7 @@ async function loadFormation(){
     if(md.error)throw md.error;
     const vus=new Set((envois.data||[]).map(e=>e.kind+':'+e.item_id));
     const tous=[...(envois.data||[]),...admin.filter(e=>!vus.has(e.kind+':'+e.item_id))];
+    PARCOURS_ENVOIS=tous;
     const ids=tous.filter(x=>x.kind==='module').map(x=>x.item_id);
     let mq=null;
     if(ids.length){const r=await sbQuiz.rpc('kk_modules_quiz',{p_ids:ids});if(!r.error)mq=r.data||[];}else mq=[];
