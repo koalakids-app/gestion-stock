@@ -2256,6 +2256,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="thread-messages" style="flex:1;overflow-y:auto;margin-top:12px;padding-right:4px;min-height:60px"></div>
     <div style="margin-top:10px;border-top:1px solid #eee;padding-top:10px">
       <div id="thread-draft-note" style="display:none;font-size:12px;color:#92400E;background:#FEF3C7;border-radius:8px;padding:6px 10px;margin-bottom:6px"><i class="ti ti-file-pencil"></i> Brouillon repris · <a href="#" onclick="deleteMessageBrouillon();return false;" style="color:#92400E;font-weight:600">Supprimer le brouillon</a></div>
+      <label id="thread-all-wrap" style="display:none;align-items:center;gap:6px;font-size:12.5px;margin-bottom:6px;cursor:pointer"><input type="checkbox" id="thread-all"/> <span id="thread-all-label"></span></label>
       <textarea class="finput" id="thread-input" rows="2" placeholder="Écrire une réponse…" style="resize:vertical"></textarea>
       <input type="file" id="thread-attach-input" style="display:none" onchange="threadHandleAttachment(event)"/>
       <div id="thread-attach-status" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
@@ -4473,7 +4474,7 @@ function renderDemandsOnly(){
       const nbTraite=g.filter(x=>mesTraitees.has(x.id)).length;
       const idsJs=g.map(x=>"'"+x.id+"'").join(',');
       const msgCount=cacheMessages.filter(m=>m.demande_id===d.id).length;
-      const threadBadgeGroup=g.map(x=>{const n=cacheMessages.filter(m=>m.demande_id===x.id).length;return '<span class="badge badge-thread" onclick="openThread(\''+x.id+'\')" title="Fil de discussion avec '+escHtml(x.referent_name||'')+'"><i class="ti ti-message-2" style="font-size:11px"></i> '+escHtml(x.referent_name||'')+' '+(x.status==='traite'?'✅':'⏳')+(n>0?' · '+n:'')+'</span>';}).join('');
+      const threadBadgeGroup=g.map(x=>{const n=cacheMessages.filter(m=>m.demande_id===x.id).length;return '<span class="badge badge-thread" onclick="openThread(\''+x.id+'\')" title="Fil de discussion avec '+escHtml(x.referent_name||'')+'"><i class="ti ti-message-2" style="font-size:11px"></i> '+escHtml(x.referent_name||'')+' '+(x.status==='traite'?'✅':'⏳')+(n>0?' · '+n:'')+'</span>';}).join('')+((isDirection||d.referent_id===currentProfile?.id)?'<span class="badge badge-thread" onclick="openThread(\''+d.id+'\',true)" title="Répondre à tous les destinataires"><i class="ti ti-messages" style="font-size:11px"></i> Répondre à tous</span>':'');
       const threadBadge=grouped?threadBadgeGroup:'<span class="badge badge-thread" onclick="openThread(\''+d.id+'\')"><i class="ti ti-message-2" style="font-size:11px"></i> '+(msgCount>0?msgCount+' réponse'+(msgCount>1?'s':''):'Discuter')+'</span>'+(cacheMessageBrouillons.some(b=>b.demande_id===d.id)?'<span class="badge" style="background:#FEF3C7;color:#92400E;cursor:pointer;margin-left:4px" title="Réponse préparée, non envoyée" onclick="openThread(\''+d.id+'\')"><i class="ti ti-file-pencil" style="font-size:11px"></i> Brouillon</span>':'');
       html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+msgAttachmentHtml(d.attachment_url,d.attachment_name)+'</div><div class="dfoot">'+(demandeDeNom(d)?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> De : '+hl(demandeDeNom(d))+'</span>':'')+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À : '+hl(grouped?g.map(x=>x.referent_name).filter(Boolean).join(', '):(d.destinataires_noms||d.referent_name))+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC||grouped?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+threadBadge+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="'+(grouped?'toggleStatusGroup(['+idsJs+'],'+(allTraite?'false':'true')+')':'toggleStatus(\''+d.id+'\')')+'" title="'+(grouped?(allTraite?'Remettre tout en cours dans ma liste':'Marquer traitée dans ma liste ('+nbTraite+'/'+g.length+' traitée(s))'):'')+'"><i class="ti ti-'+((grouped?allTraite:mesTraitees.has(d.id))?'rotate-clockwise':'check')+'"></i></button>':'')+(currentUser?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')" title="Retirer de ma liste (déplacé dans ma corbeille, reste visible des autres)"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
     });
@@ -4825,9 +4826,20 @@ function messageANom(m,d){
   return demandeDeNom(d);
 }
 function deAHtml(de,a){return '<div class="tdea" style="font-size:11px;font-weight:400;color:#777;margin-bottom:2px"><b>De :</b> '+escHtml(de||'—')+' &nbsp; <b>À :</b> '+escHtml(a||'—')+'</div>';}
+// Autres lignes issues du même envoi multi-destinataires (une ligne par destinataire).
+function demandesDuGroupe(d){return d&&d.groupe_envoi?cacheDemandes.filter(x=>x.groupe_envoi===d.groupe_envoi):(d?[d]:[]);}
+function majRepondreATous(d,coche){
+  const grp=demandesDuGroupe(d);
+  const wrap=document.getElementById('thread-all-wrap');
+  // Proposé à l'émetteur (ou à la direction) d'un envoi à plusieurs destinataires.
+  const ok=grp.length>1&&(d.referent_id===currentProfile?.id||isDirection);
+  wrap.style.display=ok?'flex':'none';
+  document.getElementById('thread-all').checked=!!(ok&&coche);
+  if(ok)document.getElementById('thread-all-label').textContent='Répondre à tous ('+grp.map(x=>x.referent_name).filter(Boolean).join(', ')+')';
+}
 // FIL DE DISCUSSION
 let currentThreadId=null;
-function openThread(demandId){
+function openThread(demandId,repondreATous){
   const d=cacheDemandes.find(x=>x.id===demandId);if(!d)return;
   currentThreadId=demandId;
   document.getElementById('thread-subject').textContent=d.subject||'Discussion';
@@ -4850,6 +4862,7 @@ function openThread(demandId){
       document.getElementById('thread-attach-status').textContent='📎 '+(bd.attachment_name||'Pièce jointe');
     }
   }
+  majRepondreATous(d,repondreATous);
   renderThread();
   document.getElementById('modal-thread-wrap').classList.add('open');
   setTimeout(()=>document.getElementById('thread-input').focus(),100);
@@ -4908,10 +4921,38 @@ async function sendThreadMessage(){
   const inp=document.getElementById('thread-input');const body=inp.value.trim();
   if((!body&&!threadPendingAttachment)||!currentThreadId)return;
   const btn=document.getElementById('btn-send-msg');btn.disabled=true;
-  const row={demande_id:currentThreadId,author_id:currentProfile?.id||null,author_name:currentProfile?.name||'Moi',body:body,attachment_url:threadPendingAttachment?.url||null,attachment_name:threadPendingAttachment?.name||null};
-  const saved=await dbInsert('messages',row);
-  if(saved){
-    cacheMessages.push(saved);inp.value='';
+  const d0=cacheDemandes.find(x=>x.id===currentThreadId);
+  const toutes=document.getElementById('thread-all-wrap').style.display!=='none'&&document.getElementById('thread-all').checked;
+  const cibles=toutes?demandesDuGroupe(d0):[d0];
+  let savedCourant=null,nbErr=0;
+  for(const d of cibles){
+    const row={demande_id:d.id,author_id:currentProfile?.id||null,author_name:currentProfile?.name||'Moi',body:body,attachment_url:threadPendingAttachment?.url||null,attachment_name:threadPendingAttachment?.name||null};
+    const saved=await dbInsert('messages',row);
+    if(!saved){nbErr++;continue;}
+    cacheMessages.push(saved);
+    if(d.id===currentThreadId)savedCourant=saved;
+    // Destinataire de la notif (push ET email) : l'autre partie de la demande.
+    // Si l'auteur du message est le destinataire de la demande, on notifie l'émetteur
+    // (d.referent_id, renseigné à la création — cf. sendNewDemand) et inversement.
+    // Pour les demandes créées avant l'ajout de cette colonne, on retombe sur
+    // l'ancienne heuristique : le dernier message du fil posté par quelqu'un d'autre.
+    let pushDestId=null;
+    if(currentProfile?.id!==d.to_referent_id){
+      pushDestId=d.to_referent_id||null;
+    }else if(d.referent_id){
+      pushDestId=d.referent_id;
+    }else{
+      const precedents=cacheMessages.filter(m=>m.demande_id===d.id&&m.id!==saved.id&&m.author_id&&m.author_id!==currentProfile?.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+      pushDestId=precedents[0]?.author_id||null;
+    }
+    // Le destinataire réel (adresse, nom) et le contenu de l'e-mail sont
+    // relus côté serveur depuis `messages`/`demandes` (voir notify-message) —
+    // on ne lui transmet que les identifiants, jamais le contenu ni l'adresse.
+    if(pushDestId){await callFn('notify-message',{message_id:saved.id,to_referent_id:pushDestId});}
+    if(pushDestId){await callFn('notify-push',{referent_ids:[pushDestId],title:'Nouveau message',body:body,url:'./demandes.html',tag:'message-'+saved.id});}
+  }
+  if(savedCourant||cibles.length>nbErr){
+    inp.value='';
     // Le brouillon de ce fil a rempli son rôle : on le retire.
     const bd=msgBrouillonDe(currentThreadId);
     if(bd){
@@ -4923,28 +4964,7 @@ async function sendThreadMessage(){
     document.getElementById('thread-attach-input').value='';
     document.getElementById('thread-attach-status').textContent='';
     renderThread();renderDemandsOnly();
-    const d=cacheDemandes.find(x=>x.id===currentThreadId);
-    if(d){
-      // Destinataire de la notif (push ET email) : l'autre partie de la demande.
-      // Si l'auteur du message est le destinataire de la demande, on notifie l'émetteur
-      // (d.referent_id, renseigné à la création — cf. sendNewDemand) et inversement.
-      // Pour les demandes créées avant l'ajout de cette colonne, on retombe sur
-      // l'ancienne heuristique : le dernier message du fil posté par quelqu'un d'autre.
-      let pushDestId=null;
-      if(currentProfile?.id!==d.to_referent_id){
-        pushDestId=d.to_referent_id||null;
-      }else if(d.referent_id){
-        pushDestId=d.referent_id;
-      }else{
-        const precedents=cacheMessages.filter(m=>m.demande_id===currentThreadId&&m.id!==saved.id&&m.author_id&&m.author_id!==currentProfile?.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-        pushDestId=precedents[0]?.author_id||null;
-      }
-      // Le destinataire réel (adresse, nom) et le contenu de l'e-mail sont
-      // relus côté serveur depuis `messages`/`demandes` (voir notify-message) —
-      // on ne lui transmet que les identifiants, jamais le contenu ni l'adresse.
-      if(pushDestId){await callFn('notify-message',{message_id:saved.id,to_referent_id:pushDestId});}
-      if(pushDestId){await callFn('notify-push',{referent_ids:[pushDestId],title:'Nouveau message',body:body,url:'./demandes.html',tag:'message-'+saved.id});}
-    }
+    if(nbErr)showBanner(nbErr+' envoi(s) en erreur.','error');
   }
   else showBanner('Erreur envoi.','error');
   btn.disabled=false;inp.focus();
