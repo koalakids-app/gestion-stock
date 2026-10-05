@@ -6356,10 +6356,32 @@ async function togglePresence(enfantId,dateStr){
     // Actuellement absent -> marquer présent sur toute la journée (créneaux M et A)
     const ids=(rows||[]).map(r=>r.id);
     if(ids.length)await sb.from('presences').delete().eq('enfant_id',enfantId).eq('presence_date',dateStr);
-    await sb.from('presences').insert([
-      {enfant_id:enfantId,presence_date:dateStr,slot:'M',status:'present'},
-      {enfant_id:enfantId,presence_date:dateStr,slot:'A',status:'present'}
-    ]);
+    /* Marquage manuel : on applique l'horaire du contrat (celui qui couvre la date,
+       de préférence ce jour de la semaine) et non une journée entière — y compris
+       pour un enfant qui ne vient pas d'habitude ce jour-là. Gantt : l'horaire est
+       lu sur presences.heure_debut / heure_fin. Sans contrat horaire : journée entière. */
+    let hd=null,hf=null;
+    try{
+      const{data:cts}=await sb.from('enfants_contrats').select('*').eq('enfant_id',enfantId);
+      const dow=((new Date(dateStr+'T00:00:00').getDay()+6)%7)+1;
+      const couvrants=(cts||[]).filter(function(c){
+        return c.heure_debut&&c.heure_fin&&(!c.date_debut||c.date_debut<=dateStr)&&(!c.date_fin||c.date_fin>=dateStr);
+      }).sort(function(a,b){return String(b.date_debut||'').localeCompare(String(a.date_debut||''));});
+      const ct=couvrants.find(function(c){return ctParseJours(c.jours).indexOf(dow)>=0;})||couvrants[0]||null;
+      if(ct){hd=String(ct.heure_debut).slice(0,5);hf=String(ct.heure_fin).slice(0,5);}
+    }catch(err){console.warn('[Presence] lecture contrat',err);}
+    const toMin=function(t){const m=/^(\d{1,2}):(\d{2})/.exec(t||'');return m?parseInt(m[1],10)*60+parseInt(m[2],10):null;};
+    const nouv=[];
+    if(hd&&hf){
+      if(toMin(hd)<13*60)nouv.push({enfant_id:enfantId,presence_date:dateStr,slot:'M',status:'present',heure_debut:hd,heure_fin:hf});
+      if(toMin(hf)>13*60)nouv.push({enfant_id:enfantId,presence_date:dateStr,slot:'A',status:'present',heure_debut:hd,heure_fin:hf});
+    }
+    if(!nouv.length){
+      nouv.push({enfant_id:enfantId,presence_date:dateStr,slot:'M',status:'present'},
+                {enfant_id:enfantId,presence_date:dateStr,slot:'A',status:'present'});
+    }
+    const{error:insErr}=await sb.from('presences').insert(nouv);
+    if(insErr){showBanner('Ajout impossible : '+insErr.message,'error');}
   }
   renderPresence();
 }
