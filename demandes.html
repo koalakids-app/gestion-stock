@@ -4824,7 +4824,7 @@ function messageANom(m,d){
   if(m.author_id&&d.referent_id&&m.author_id===d.referent_id)return demandeANom(d);
   return demandeDeNom(d);
 }
-function deAHtml(de,a){return '<div class="tdea" style="font-size:11px;color:#777;margin-bottom:2px"><b>De :</b> '+escHtml(de||'—')+' &nbsp; <b>À :</b> '+escHtml(a||'—')+'</div>';}
+function deAHtml(de,a){return '<div class="tdea" style="font-size:11px;font-weight:400;color:#777;margin-bottom:2px"><b>De :</b> '+escHtml(de||'—')+' &nbsp; <b>À :</b> '+escHtml(a||'—')+'</div>';}
 // FIL DE DISCUSSION
 let currentThreadId=null;
 function openThread(demandId){
@@ -4862,7 +4862,7 @@ function renderThread(){
   const dd=cacheDemandes.find(x=>x.id===currentThreadId)||{};
   box.innerHTML=msgs.map(m=>{
     const mine=m.author_id===myId;
-    return '<div class="tmsg'+(mine?' mine':'')+'"><div class="tauthor">'+escHtml(m.author_name||'—')+'</div>'+deAHtml(m.author_name,messageANom(m,dd))+'<div class="tbubble">'+linkify(escHtml(m.body||''))+msgAttachmentHtml(m.attachment_url,m.attachment_name)+'</div><div class="ttime">'+new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>';
+    return '<div class="tmsg'+(mine?' mine':'')+'"><div class="tauthor">'+deAHtml(m.author_name,messageANom(m,dd))+'</div><div class="tbubble">'+linkify(escHtml(m.body||''))+msgAttachmentHtml(m.attachment_url,m.attachment_name)+'</div><div class="ttime">'+new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>';
   }).join('');
   box.scrollTop=box.scrollHeight;
 }
