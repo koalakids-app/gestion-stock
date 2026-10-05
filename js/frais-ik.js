@@ -60,6 +60,16 @@ function ikInitSites(nomsCourts){
 
 let ikRows=[];
 
+// À compter du 1er octobre 2026, les IK d'un créneau du planning coordinateur se calculent
+// par demi-journée : 1 aller-retour le matin et 1 aller-retour l'après-midi, même si c'est la
+// même crèche (soit 2 allers-retours par jour au lieu d'un seul). Avant cette date, l'ancienne
+// règle (un aller-retour par jour, chaîne si plusieurs sites) reste appliquée.
+const IK_CRENEAU_DEPUIS='2026-10-01';
+const IK_CRENEAUX={M:'Matin',A:'Après-midi'};
+function ikCreneauDepuis(date){return String(date||'')>=IK_CRENEAU_DEPUIS;}
+// slot du planning coordinateur : 0 = matin, 1 = après-midi, null = journée
+function ikCreneauFromSlot(slot){return slot===0?'M':slot===1?'A':null;}
+
 function ikPairKey(a,b){return[a,b].sort().join('|');}
 
 // Matrice complète par défaut : ligne du site de référence (IK_DEFAULT_DEPART,
@@ -376,7 +386,7 @@ function ikReadPlanning(yearMonth){
         if(ev.type==='absent'||ev.type==='reunion')return;
         const evDate=new Date(cursor.getFullYear(),cursor.getMonth(),cursor.getDate()+ev.day);
         if(evDate.getMonth()+1!==month||evDate.getFullYear()!==year)return;
-        rows.push({id:`${ev.id}_${ikLocalDate(evDate)}`,date:ikLocalDate(evDate),lieu:ev.lieu,slot:ev.slot});
+        rows.push({id:`${ev.id}_${ikLocalDate(evDate)}`,date:ikLocalDate(evDate),lieu:ev.lieu,slot:ev.slot,creneau:ikCreneauFromSlot(ev.slot)});
       });
     }
     cursor.setDate(cursor.getDate()+7);
@@ -394,7 +404,16 @@ function ikChainDays(raw){
   raw.forEach(r=>{(byDate[r.date]=byDate[r.date]||[]).push(r);});
   const out=[];
   Object.keys(byDate).sort().forEach(date=>{
-    const evs=byDate[date].slice().sort((a,b)=>(a.slot||0)-(b.slot||0));
+    let evs=byDate[date].slice().sort((a,b)=>(a.slot||0)-(b.slot||0));
+    // Règle par créneau (dès le 1er octobre 2026) : un aller-retour par demi-journée renseignée,
+    // départ → lieu → départ, sans fusionner matin et après-midi même sur la même crèche.
+    if(ikCreneauDepuis(date)){
+      Object.keys(IK_CRENEAUX).forEach(c=>{
+        const ev=evs.find(e=>e.creneau===c&&(e.lieu||'').trim());
+        if(ev)out.push(ikMakeRow(`${ev.id}_${c}`,date,depart,ev.lieu,2,c==='M'?-1:999,c));
+      });
+      evs=evs.filter(e=>e.creneau!=='M'&&e.creneau!=='A');
+    }
     // séquence des lieux visités, sans doublon consécutif
     const etapes=[];
     evs.forEach(e=>{
@@ -419,12 +438,12 @@ function ikChainDays(raw){
   return out;
 }
 
-function ikMakeRow(id,date,depart,lieu,nbr,slot){
+function ikMakeRow(id,date,depart,lieu,nbr,slot,creneau){
   const creche=ikDetectCreche(lieu);
   const dep=ikDetectCreche(depart)||depart;
   const ignored=!lieu||!String(lieu).trim()||(creche&&creche===dep)||(!creche&&String(lieu).trim()===dep);
   return{
-    id,date,depart:dep,lieu:String(lieu).trim(),creche,nbr,slot:slot||0,
+    id,date,depart:dep,lieu:String(lieu).trim(),creche,nbr,slot:slot||0,creneau:creneau||null,
     km:0,ignored:!!ignored,
     trajet:ignored?String(lieu).trim():`${dep}/${String(lieu).trim()}`
   };
@@ -435,7 +454,7 @@ function ikReeval(rows){
   return rows.map(r=>{
     const depart=r.depart||IK_DEFAULT_DEPART;
     const lieu=(r.lieu||(r.trajet||'').split('/').pop()||'').trim();
-    const base=ikMakeRow(r.id,r.date,depart,lieu,r.nbr||2,r.slot);
+    const base=ikMakeRow(r.id,r.date,depart,lieu,r.nbr||2,r.slot,r.creneau);
     // on conserve le km saisi manuellement pour les lieux libres
     return Object.assign(base,{km:r.km!==undefined?r.km:0});
   });
@@ -564,7 +583,7 @@ async function ikLoadFromPlanning(){
       const day=ev.jour!==undefined?ev.jour:ev.day;
       const evDate=new Date(cursor.getFullYear(),cursor.getMonth(),cursor.getDate()+day);
       if(evDate.getMonth()+1!==monthNum||evDate.getFullYear()!==year)return;
-      raw.push({id:`${ev.id}_${ikLocalDate(evDate)}`,date:ikLocalDate(evDate),lieu:ev.lieu,slot:ev.slot});
+      raw.push({id:`${ev.id}_${ikLocalDate(evDate)}`,date:ikLocalDate(evDate),lieu:ev.lieu,slot:ev.slot,creneau:ikCreneauFromSlot(ev.slot)});
     });
     cursor.setDate(cursor.getDate()+7);
   }
@@ -607,6 +626,9 @@ function ikRenderTable(){
     const inp=(f,v,w='120px',t='text',extra='')=>`<input type="${t}" ${extra} value="${String(v).replace(/"/g,'&quot;')}" onchange="ikUpdateRow(${idx},'${f}',this.value)" style="width:${w};padding:4px 7px;border:1.5px solid transparent;border-radius:6px;font-size:12.5px;font-family:inherit;background:transparent" onfocus="this.style.borderColor='var(--koala)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">`;
     const departSel=`<select onchange="ikUpdateRow(${idx},'depart',this.value)" style="width:130px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12.5px;font-family:inherit;background:#fff">${ikDepartOptions(row.depart||IK_DEFAULT_DEPART)}</select>`;
     const destInp=inp('lieu',row.lieu||'','150px','text','list="ik-lieux-list"');
+    const creneauSel=row.creneau
+      ?`<select onchange="ikUpdateRow(${idx},'creneau',this.value)" title="Créneau : un aller-retour par demi-journée" style="display:block;margin-top:2px;padding:1px 4px;border:1px solid var(--border);border-radius:6px;font-size:11px;font-family:inherit;background:#fff">${Object.keys(IK_CRENEAUX).map(c=>`<option value="${c}"${c===row.creneau?' selected':''}>${IK_CRENEAUX[c]}</option>`).join('')}</select>`
+      :'';
     // séparateur visuel entre journées, pour lire les chaînes multi-sites
     const sep=(lastDate!==null&&row.date!==lastDate)?' style="border-top:2px solid var(--border)"':'';
     lastDate=row.date;
@@ -615,12 +637,12 @@ function ikRenderTable(){
     const canDown=idx<ikRows.length-1&&ikRows[idx+1].date===row.date;
     const arrow=(dir,ok,icon,titre)=>`<button class="ik-row-del" ${ok?`onclick="ikMoveRow(${idx},${dir})" title="${titre}"`:'disabled title="Première ou dernière étape de la journée"'} style="${ok?'':'opacity:0.25;cursor:default'}"><i class="ti ti-${icon}" style="font-size:12px"></i></button>`;
     const actions=`<div style="display:flex;gap:2px;align-items:center">${arrow(-1,canUp,'chevron-up','Monter dans la journée')}${arrow(1,canDown,'chevron-down','Descendre dans la journée')}<button class="ik-row-del" onclick="ikDeleteRow(${idx})" title="Supprimer"><i class="ti ti-x"></i></button></div>`;
-    if(row.ignored)return`<tr${sep?' style="opacity:0.4;border-top:2px solid var(--border)"':' style="opacity:0.4"'}><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td class="ik-ignored">${destInp}</td><td colspan="4" style="text-align:center;font-size:12px;color:#bbb;font-style:italic">— destination vide ou identique au départ, non comptabilisé —</td><td style="text-align:center">${badge}</td><td>${actions}</td></tr>`;
+    if(row.ignored)return`<tr${sep?' style="opacity:0.4;border-top:2px solid var(--border)"':' style="opacity:0.4"'}><td>${inp('date',row.date,'95px')}${creneauSel}</td><td>${departSel}</td><td class="ik-ignored">${destInp}</td><td colspan="4" style="text-align:center;font-size:12px;color:#bbb;font-style:italic">— destination vide ou identique au départ, non comptabilisé —</td><td style="text-align:center">${badge}</td><td>${actions}</td></tr>`;
     // lieu libre (hors liste) : km saisissable + bouton d'enregistrement du lieu
     const kmCell=row.creche
       ?`<td style="text-align:center;font-weight:600">${km}${km>0?'':' <span title="Distance non renseignée entre ces deux lieux — complétez la grille des distances" style="color:var(--orange);font-size:11px">⚠️</span>'}</td>`
       :`<td style="text-align:center">${inp('km',row.km||0,'55px','number')}${Number(row.km)>0?` <button class="ik-row-del" title="Enregistrer ce lieu dans la liste" onclick="ikSaveRowLieu(${idx})"><i class="ti ti-map-pin-plus" style="font-size:12px"></i></button>`:' <span title="Kilométrage à saisir" style="color:var(--orange);font-size:11px">⚠️</span>'}</td>`;
-    return`<tr${sep}><td>${inp('date',row.date,'95px')}</td><td>${departSel}</td><td>${destInp}</td><td style="text-align:center">${inp('nbr',row.nbr,'50px','number')}</td>${kmCell}<td class="ik-val">${tKm}</td><td class="ik-val">${mont.toFixed(2)} €</td><td style="text-align:center">${badge}</td><td>${actions}</td></tr>`;
+    return`<tr${sep}><td>${inp('date',row.date,'95px')}${creneauSel}</td><td>${departSel}</td><td>${destInp}</td><td style="text-align:center">${inp('nbr',row.nbr,'50px','number')}</td>${kmCell}<td class="ik-val">${tKm}</td><td class="ik-val">${mont.toFixed(2)} €</td><td style="text-align:center">${badge}</td><td>${actions}</td></tr>`;
   }).join('');
   ikUpdateTotals();
 }
@@ -630,13 +652,14 @@ function ikUpdateRow(idx,field,value){
   if(field==='nbr')row.nbr=parseInt(value)||1;
   else if(field==='km')row.km=parseFloat(value)||0;
   else row[field]=value;
+  if(field==='creneau')row.slot=value==='M'?-1:999;
   if(field==='lieu'||field==='depart'||field==='trajet'){
     const depart=ikDetectCreche(row.depart)||row.depart||IK_DEFAULT_DEPART;
     const lieu=(field==='trajet'?String(value).split('/').pop():(row.lieu||'')).trim();
-    const rebuilt=ikMakeRow(row.id,row.date,depart,lieu,row.nbr,row.slot);
+    const rebuilt=ikMakeRow(row.id,row.date,depart,lieu,row.nbr,row.slot,row.creneau);
     Object.assign(row,rebuilt,{km:row.km||0});
   }
-  if(field==='date')ikSortRows();
+  if(field==='date'||field==='creneau')ikSortRows();
   ikSaveRows();
   ikRenderTable();
 }
@@ -668,6 +691,17 @@ function ikMoveRow(idx,dir){
   ikSaveRows();ikRenderTable();
 }
 
+// Ajoute un créneau (matin ou après-midi) : un aller-retour depuis le départ par défaut,
+// à compléter avec le lieu. Calcul par créneau applicable à partir du 1er octobre 2026.
+function ikAddCreneau(c){
+  const month=document.getElementById('ik-month').value;
+  const derniere=ikRows.length?ikRows[ikRows.length-1].date:null;
+  const date=derniere||(month?month+'-01':ipDateToLocalISO(new Date()));
+  ikRows.push(ikMakeRow(Date.now().toString(),date,ikDefaultDepart(),'',2,c==='M'?-1:999,c));
+  ikSortRows();
+  ikSaveRows();ikRenderTable();
+}
+
 function ikAddRow(){
   const month=document.getElementById('ik-month').value;
   const derniere=ikRows.length?ikRows[ikRows.length-1].date:null;
@@ -680,8 +714,8 @@ function ikAddRow(){
 
 // Recompose la chaîne d'une journée après modification manuelle des lieux.
 function ikRechainDate(date){
-  const raw=ikRows.filter(r=>r.date===date).map(r=>({id:r.id,date:r.date,lieu:r.lieu,slot:r.slot}));
-  if(raw.length<2)return;
+  const raw=ikRows.filter(r=>r.date===date).map(r=>({id:r.id,date:r.date,lieu:r.lieu,slot:r.slot,creneau:r.creneau}));
+  if(raw.length<2&&!raw.some(r=>r.creneau))return;
   const chained=ikChainDays(raw);
   ikRows=ikRows.filter(r=>r.date!==date).concat(chained)
     .sort((a,b)=>a.date.localeCompare(b.date)||a.slot-b.slot);
