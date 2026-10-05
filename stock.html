@@ -2146,9 +2146,9 @@ function renderCommandes() {
           <div class="commande-items">
             ${items.map(i => {
               // Parser le lien éventuel : "3× Nom (prix€) [https://...]" — uniquement une vraie URL, pas [cat:...]
-              const urlMatch = i.match(/\[(https?:\/\/[^\]]+)\]/);
+              const urlMatch = i.match(/\[(?!cat:)((?:https?:\/\/)?[^\]\s]+\.[^\]\s]+)\]/);
               const lineUrl = urlMatch ? urlMatch[1] : null;
-              const lineText = i.replace(/\s*\[https?:\/\/[^\]]+\]\s*$/, '');
+              const lineText = i.replace(/\s*\[(?!cat:)(?:https?:\/\/)?[^\]\s]+\.[^\]\s]+\]\s*$/, '');
               return `<div class="commande-item-row">
                 <span>${lineText}</span>
                 ${lineUrl ? `<a href="#" onclick="openUrl('${jsAttr(lineUrl)}',event)"
@@ -3659,7 +3659,7 @@ function exportCommandeExcel(id) {
   function parseArts(str) {
     return (str||'').split('\n').filter(Boolean).map(ligne => {
       const m    = ligne.match(/^[-•]?\s*(\d+)\s*[×xX]\s*(.+)/);
-      const urlM = ligne.match(/\[(https?:\/\/[^\]]+)\]/); // URL réelle uniquement, pas [cat:...]
+      const urlM = ligne.match(/\[(?!cat:)((?:https?:\/\/)?[^\]\s]+\.[^\]\s]+)\]/); // URL réelle uniquement, pas [cat:...]
       const pM   = ligne.match(/\((\d+[.,]?\d*)\s*€?\)/);
       const fM   = ligne.match(/\{(.+?)\}/);
       return {
@@ -4076,7 +4076,10 @@ function cleanUrl(raw) {
   if (!raw) return '';
   // Extraire la première URL valide (http/https) dans la chaîne
   const match = raw.match(/https?:\/\/[^\s\]\)"'<>]+/);
-  return match ? match[0] : '';
+  if (match) return match[0];
+  // Lien collé sans schéma (ex. "amazon.fr/dp/...") : on ajoute https://
+  const bare = raw.trim().match(/^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+\/?[^\s\]\)"'<>]*$/i);
+  return bare ? 'https://' + bare[0] : '';
 }
 
 // Échappe une valeur pour l'injecter en toute sécurité dans un onclick="...('...')"
