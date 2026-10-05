@@ -5024,7 +5024,9 @@ async function saveConsigne(){
   const subj=document.getElementById('c-subj').value.trim(),msg=document.getElementById('c-msg').value.trim();
   if(!subj||!msg){alert('Le sujet et le message sont requis.');return;}
   const btn=document.getElementById('btn-save-consigne');btn.disabled=true;
-  const row={creche_id:null,referent_name:'',referent_email:'',subject:subj,description:msg,priority:document.getElementById('c-prio').value,status:'envoyee',type:'consigne',attachment_url:cPendingAttachment?.url||null,attachment_name:cPendingAttachment?.name||null};
+  // referent_id = expéditeur (lu par demandeDeNom pour l'affichage « De ») ;
+  // destinataires_noms = libellé « À » (une consigne part à tous, sans referent_name).
+  const row={creche_id:null,referent_id:currentProfile?.id||null,destinataires_noms:'Tous les directeurs/trices techniques',referent_name:'',referent_email:'',subject:subj,description:msg,priority:document.getElementById('c-prio').value,status:'envoyee',type:'consigne',attachment_url:cPendingAttachment?.url||null,attachment_name:cPendingAttachment?.name||null};
   const saved=await dbInsert('demandes',row);
   if(saved){
     cacheDemandes.unshift(saved);
