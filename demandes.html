@@ -7951,9 +7951,11 @@ function crCompute(notify){
       const reg=r.enfant.regime_repas||'';
       if(cell.slot==='j'||cell.slot==='m')repas[t][reg]=(repas[t][reg]||0)+1;
       if(cell.slot==='j'||cell.slot==='a'){
-        /* La ligne de goûter ne se déduit plus de la ligne de repas : elle vient de
-           enfGouterLigne(), qui respecte le choix éventuellement forcé sur la fiche. */
-        const g=enfGouterLigne(r.enfant);
+        /* Goûter forcé sur la fiche, sinon même ligne que le repas du même jour :
+           l'âge est celui du jour de livraison (et non celui d'aujourd'hui) et la
+           lettre forcée du repas est respectée, sans quoi un enfant pouvait être
+           « Grand » au repas et « Bébé » au goûter. Aucun goûter avant 6 mois. */
+        const g=r.enfant.gouter_base||(t==='bb6'?null:(t==='bb18'?'gbb':'ggr'));
         /* Un goûter ne contient jamais de viande : la mention « SV » n'a pas de
            sens sur ces deux lignes et faisait apparaître un régime particulier
            là où le traiteur sert le goûter standard. L'enfant est donc compté
