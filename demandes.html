@@ -3168,7 +3168,7 @@ function populateLieuSelects(){
     if(noms.includes(cur)||['Autre','Absent','Formation','Réunion'].includes(cur))sel.value=cur;
   }
 }
-let calMonthOffset=0,calFilterType='all',editingEvtId=null,calSelectedDay=null;
+let calMonthOffset=0,calFilterType='all',calFilterCreche=null,editingEvtId=null,calSelectedDay=null;
 let calOnlyMine=(localStorage.getItem('calOnlyMine')==='1');
 
 // Init au chargement complet de la page
@@ -5768,9 +5768,13 @@ function calColorForCreche(crecheId){
 function calRenderLegend(){
   const box=document.getElementById('cal-legend');if(!box)return;
   const sorted=[...cacheCreches].sort((a,b)=>(a.name||'').localeCompare(b.name||'','fr'));
-  box.innerHTML=sorted.map(c=>'<div class="leg-item"><div class="leg-dot" style="background:'+calColorForCreche(c.id)+'"></div>'+escHtml(c.name)+'</div>').join('')
-    +'<div class="leg-item"><div class="leg-dot" style="background:#888"></div>Réseau / toutes crèches</div>';
+  const item=(key,color,name)=>{
+    const on=calFilterCreche===key,dim=calFilterCreche&&!on;
+    return '<div class="leg-item" role="button" tabindex="0" title="'+(on?'Cliquer pour tout réafficher':'Cliquer pour ne voir que cette crèche')+'" style="cursor:pointer;user-select:none;'+(on?'font-weight:700;':'')+(dim?'opacity:.4;':'')+'" onclick="calSetCrecheFilter(\''+key+'\')"><div class="leg-dot" style="background:'+color+'"></div>'+escHtml(name)+'</div>';
+  };
+  box.innerHTML=sorted.map(c=>item(c.id,calColorForCreche(c.id),c.name)).join('')+item('__reseau','#888','Réseau / toutes crèches');
 }
+function calSetCrecheFilter(key){calFilterCreche=(calFilterCreche===key)?null:key;renderCalendar();}
 
 function calCurrentMonthDate(){const n=new Date();return new Date(n.getFullYear(),n.getMonth()+calMonthOffset,1);}
 function calChangeMonth(delta){calMonthOffset+=delta;calSelectedDay=null;renderCalendar();}
@@ -5817,6 +5821,7 @@ function calEventsForDay(dateISO){
   return cacheEvenements.filter(e=>{
     if(calFilterType!=='all'&&e.type!==calFilterType)return false;
     if(calOnlyMine&&!calEvtConcerneMoi(e))return false;
+    if(calFilterCreche&&(calFilterCreche==='__reseau'?!!e.creche_id:e.creche_id!==calFilterCreche))return false;
     const start=e.date_debut,end=e.date_fin||e.date_debut;
     return dateISO>=start&&dateISO<=end;
   }).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
@@ -5863,6 +5868,10 @@ function renderCalendar(){
 // prime et dispense d'énumérer chaque crèche (toutes sont alors fermées) ;
 // sinon, une entrée par crèche ayant sa propre fermeture ce jour-là.
 function calFermeturesForDay(dateISO){
+  if(calFilterCreche)return calFermeturesAll(dateISO).filter(function(x){return calFilterCreche==='__reseau'?!x.crecheId:(!x.crecheId||x.crecheId===calFilterCreche);});
+  return calFermeturesAll(dateISO);
+}
+function calFermeturesAll(dateISO){
   const netw=(cacheReseauFermetures||[]).find(function(f){return f&&f.debut&&dateISO>=f.debut&&dateISO<=(f.fin||f.debut);});
   if(netw)return[{crecheId:null,crecheName:'Réseau / toutes crèches',f:netw}];
   const out=[];
