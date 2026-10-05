@@ -505,6 +505,7 @@ function adRenderReunion(){
     set('ad-r-presents',r&&r.presents);
     set('ad-r-excuses',r&&r.excuses);
     set('ad-r-prochaine',r&&r.prochaine_reunion);
+    set('ad-r-prochaine-heure',r&&r.prochaine_reunion_heure);
     set('ad-r-prochaine-creche',r&&r.prochaine_reunion_creche_id);
     set('ad-r-points',r&&r.points);
     set('ad-r-divers',r&&r.divers);
@@ -795,8 +796,9 @@ async function adSyncEvenementProchaine(ancienne,nouvelle,heure,crecheId){
         cacheEvenements=cacheEvenements.filter(e=>e.id!==existant.id);
       }
     }else if(existant){
-      if(existant.date_debut===nouvelle&&String(existant.creche_id||'')===String(crecheId||''))return;
-      const maj={date_debut:nouvelle,date_fin:null,creche_id:crecheId||null,lieu:nomCreche};
+      const hd=/^\d{1,2}[:h]\d{2}$/.test(heure||'')?heure.replace('h',':'):null;
+      if(existant.date_debut===nouvelle&&String(existant.creche_id||'')===String(crecheId||'')&&(existant.heure_debut||null)===hd)return;
+      const maj={date_debut:nouvelle,date_fin:null,heure_debut:hd,creche_id:crecheId||null,lieu:nomCreche};
       if(await dbUpdateStrict('evenements',existant.id,maj))Object.assign(existant,maj);
     }else{
       const row={titre:AD_EVT_TITRE,type:'reunion',creche_id:crecheId||null,date_debut:nouvelle,date_fin:null,
@@ -826,13 +828,14 @@ async function adReunionEnregistrer(silencieux){
     points:(document.getElementById('ad-r-points').value||'').trim()||null,
     divers:(document.getElementById('ad-r-divers').value||'').trim()||null,
     prochaine_reunion:document.getElementById('ad-r-prochaine').value||null,
+    prochaine_reunion_heure:(document.getElementById('ad-r-prochaine-heure').value||'').trim()||null,
     prochaine_reunion_creche_id:document.getElementById('ad-r-prochaine-creche').value||null
   };
   if(adReunionCourante)row.cloturee=adReunionCourante.cloturee;
   const ancienneProchaine=adReunionCourante&&adReunionCourante.prochaine_reunion||null;
   const{data,error}=await sb.from('reunions_direction').upsert(row,{onConflict:'date_reunion'}).select().single();
   if(error){showBanner('Enregistrement refusé : '+error.message,'error');return false;}
-  await adSyncEvenementProchaine(ancienneProchaine,row.prochaine_reunion,row.heure,row.prochaine_reunion_creche_id);
+  await adSyncEvenementProchaine(ancienneProchaine,row.prochaine_reunion,row.prochaine_reunion_heure,row.prochaine_reunion_creche_id);
   adReunions=adReunions.filter(x=>x.date_reunion!==row.date_reunion);
   adReunions.push(data);
   adReunions.sort((a,b)=>String(b.date_reunion).localeCompare(String(a.date_reunion)));
@@ -873,7 +876,7 @@ function adRenderCRList(){
         +(r.presents?'<div class="dbody"><strong>Présents :</strong> '+escHtml(r.presents)+(r.excuses?' · <em>Excusés : '+escHtml(r.excuses)+'</em>':'')+'</div>':'')
         +'<div class="dfoot">'
           +'<span class="badge b-ref">'+decidees.length+' action'+(decidees.length>1?'s':'')+' décidée'+(decidees.length>1?'s':'')+(decidees.length?' · '+closes+' close'+(closes>1?'s':''):'')+'</span>'
-          +(r.prochaine_reunion?'<span class="meta-txt">prochaine réunion : '+adFmtDate(r.prochaine_reunion)+(adLieuProchaine(r)?' ('+escHtml(adLieuProchaine(r))+')':'')+'</span>':'')
+          +(r.prochaine_reunion?'<span class="meta-txt">prochaine réunion : '+adFmtDate(r.prochaine_reunion)+(r.prochaine_reunion_heure?' à '+escHtml(r.prochaine_reunion_heure):'')+(adLieuProchaine(r)?' ('+escHtml(adLieuProchaine(r))+')':'')+'</span>':'')
         +'</div>'
       +'</div>'
       +'<div class="dactions">'
@@ -1013,7 +1016,7 @@ function adCRHtml(r,pourImpression){
     +adCRMentionEtat(r,gel)
     +s1+s2+s3+s4+s5
     +h2('Prochaine réunion')
-    +'<p style="font-size:12.5px">'+(r.prochaine_reunion?adFmtDateLongue(r.prochaine_reunion)+(adLieuProchaine(r)?' — '+escHtml(adLieuProchaine(r)):''):'à fixer')+'</p>'
+    +'<p style="font-size:12.5px">'+(r.prochaine_reunion?adFmtDateLongue(r.prochaine_reunion)+(r.prochaine_reunion_heure?' à '+escHtml(r.prochaine_reunion_heure):'')+(adLieuProchaine(r)?' — '+escHtml(adLieuProchaine(r)):''):'à fixer')+'</p>'
     +'</div>';
 }
 
