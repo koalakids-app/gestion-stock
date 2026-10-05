@@ -4565,7 +4565,7 @@ async function openDemandModal(draft){
     const creche=cacheCreches.find(c=>c.id===r.creche_id);
     const tag=isAdmin?' — 🔑 Admin':(creche?' ('+creche.name+')':'');
     return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:3px 2px">'
-      +'<input type="checkbox" class="ckDestDemand" value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'" data-admin="'+(isAdmin?'1':'0')+'" onchange="dRefSelectionChanged()"/>'
+      +'<input type="checkbox" class="ckDestDemand" value="'+r.id+'" data-email="'+(r.email||'')+'" data-name="'+r.name+'" data-admin="'+(isAdmin?'1':'0')+'" data-creche="'+(r.creche_id||'')+'" onchange="dRefSelectionChanged()"/>'
       +escHtml(r.name)+tag+'</label>';
   }).join('');
   document.getElementById('d-email-fg').style.display='none';
@@ -4611,10 +4611,11 @@ async function saveDemand(){
   const isAll=isDirection&&activeCrecheId==='all';
   const checked=[...document.querySelectorAll('.ckDestDemand:checked')];
   if(!checked.length){alert('Veuillez sélectionner au moins un destinataire.');return;}
-  const anyAdmin=checked.some(c=>c.getAttribute('data-admin')==='1');
   let crecheId=isDirection?(document.getElementById('d-creche-select')?.value||null):(isAll?null:currentProfile?.creche_id);
   if(!isDirection)crecheId=currentProfile?.creche_id||null;
-  if(!crecheId&&!anyAdmin){alert('Veuillez sélectionner une crèche, ou choisir au moins un destinataire admin.');return;}
+  // Sans crèche choisie, chaque ligne prend la crèche de son destinataire ; on ne bloque que
+  // si un destinataire non-admin n'en a aucune.
+  if(!crecheId&&checked.some(c=>c.getAttribute('data-admin')!=='1'&&!c.getAttribute('data-creche'))){alert('Veuillez sélectionner une crèche, ou choisir uniquement des destinataires admin ou rattachés à une crèche.');return;}
   const btn=document.getElementById('btn-save-demand');btn.disabled=true;
   const desc=document.getElementById('d-desc').value.trim();
   const prio=document.getElementById('d-prio').value;
@@ -4629,7 +4630,7 @@ async function saveDemand(){
     // referent_id garde l'ÉMETTEUR de la demande (colonne jusqu'ici jamais renseignée) :
     // sans elle, une réponse du destinataire ne pouvait pas savoir à qui répondre tant
     // qu'aucun message n'existait encore dans le fil (cf. sendThreadMessage).
-    const row={creche_id:crecheId,referent_id:currentProfile?.id||null,to_referent_id:c.value,referent_name:c.getAttribute('data-name')||'',referent_email:manualEmail||c.getAttribute('data-email')||'',subject:subj,description:desc,priority:prio,theme:theme,status:'attente',type:'demande',attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null};
+    const row={creche_id:crecheId||c.getAttribute('data-creche')||null,referent_id:currentProfile?.id||null,to_referent_id:c.value,referent_name:c.getAttribute('data-name')||'',referent_email:manualEmail||c.getAttribute('data-email')||'',subject:subj,description:desc,priority:prio,theme:theme,status:'attente',type:'demande',attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null};
     if(groupeEnvoi){row.groupe_envoi=groupeEnvoi;row.destinataires_noms=destNoms;}
     const saved=await dbInsert('demandes',row);
     if(saved){
