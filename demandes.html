@@ -4475,7 +4475,7 @@ function renderDemandsOnly(){
       const msgCount=cacheMessages.filter(m=>m.demande_id===d.id).length;
       const threadBadgeGroup=g.map(x=>{const n=cacheMessages.filter(m=>m.demande_id===x.id).length;return '<span class="badge badge-thread" onclick="openThread(\''+x.id+'\')" title="Fil de discussion avec '+escHtml(x.referent_name||'')+'"><i class="ti ti-message-2" style="font-size:11px"></i> '+escHtml(x.referent_name||'')+' '+(x.status==='traite'?'✅':'⏳')+(n>0?' · '+n:'')+'</span>';}).join('');
       const threadBadge=grouped?threadBadgeGroup:'<span class="badge badge-thread" onclick="openThread(\''+d.id+'\')"><i class="ti ti-message-2" style="font-size:11px"></i> '+(msgCount>0?msgCount+' réponse'+(msgCount>1?'s':''):'Discuter')+'</span>'+(cacheMessageBrouillons.some(b=>b.demande_id===d.id)?'<span class="badge" style="background:#FEF3C7;color:#92400E;cursor:pointer;margin-left:4px" title="Réponse préparée, non envoyée" onclick="openThread(\''+d.id+'\')"><i class="ti ti-file-pencil" style="font-size:11px"></i> Brouillon</span>':'');
-      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+msgAttachmentHtml(d.attachment_url,d.attachment_name)+'</div><div class="dfoot">'+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À '+hl(grouped?g.map(x=>x.referent_name).filter(Boolean).join(', '):(d.destinataires_noms||d.referent_name))+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC||grouped?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+threadBadge+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="'+(grouped?'toggleStatusGroup(['+idsJs+'],'+(allTraite?'false':'true')+')':'toggleStatus(\''+d.id+'\')')+'" title="'+(grouped?(allTraite?'Remettre tout en cours dans ma liste':'Marquer traitée dans ma liste ('+nbTraite+'/'+g.length+' traitée(s))'):'')+'"><i class="ti ti-'+((grouped?allTraite:mesTraitees.has(d.id))?'rotate-clockwise':'check')+'"></i></button>':'')+(currentUser?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')" title="Retirer de ma liste (déplacé dans ma corbeille, reste visible des autres)"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
+      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div><div class="dbody">'+hl(d.description||'—')+msgAttachmentHtml(d.attachment_url,d.attachment_name)+'</div><div class="dfoot">'+(demandeDeNom(d)?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> De : '+hl(demandeDeNom(d))+'</span>':'')+(d.referent_name?'<span class="badge b-ref"><i class="ti ti-user" style="font-size:11px"></i> À : '+hl(grouped?g.map(x=>x.referent_name).filter(Boolean).join(', '):(d.destinataires_noms||d.referent_name))+'</span>':'')+'<span class="meta-txt">'+dateLabel+'</span>'+(isC||grouped?'':'<span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style=\"font-weight:400;opacity:0.85\">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span>')+threadBadge+'</div></div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="'+(grouped?'toggleStatusGroup(['+idsJs+'],'+(allTraite?'false':'true')+')':'toggleStatus(\''+d.id+'\')')+'" title="'+(grouped?(allTraite?'Remettre tout en cours dans ma liste':'Marquer traitée dans ma liste ('+nbTraite+'/'+g.length+' traitée(s))'):'')+'"><i class="ti ti-'+((grouped?allTraite:mesTraitees.has(d.id))?'rotate-clockwise':'check')+'"></i></button>':'')+(currentUser?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')" title="Retirer de ma liste (déplacé dans ma corbeille, reste visible des autres)"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
     });
   }
   inner.innerHTML=html;
@@ -4816,6 +4816,15 @@ function renderCorbeille(){
   }).join('');
 }
 
+// Expéditeur / destinataire d'une demande (referent_id = émetteur, to_referent_id = destinataire).
+function demandeDeNom(d){return(cacheReferents.find(r=>r.id===d.referent_id)||{}).name||'';}
+function demandeANom(d){return d.destinataires_noms||d.referent_name||(cacheReferents.find(r=>r.id===d.to_referent_id)||{}).name||'';}
+// Pour un message du fil : l'autre partie de la conversation.
+function messageANom(m,d){
+  if(m.author_id&&d.referent_id&&m.author_id===d.referent_id)return demandeANom(d);
+  return demandeDeNom(d);
+}
+function deAHtml(de,a){return '<div class="tdea" style="font-size:11px;font-weight:400;color:#777;margin-bottom:2px"><b>De :</b> '+escHtml(de||'—')+' &nbsp; <b>À :</b> '+escHtml(a||'—')+'</div>';}
 // FIL DE DISCUSSION
 let currentThreadId=null;
 function openThread(demandId){
@@ -4826,7 +4835,7 @@ function openThread(demandId){
   const ctx=[crecheLabel,d.referent_name?'À '+d.referent_name:''].filter(Boolean).join(' · ');
   document.getElementById('thread-context').textContent=ctx;
   const origAuthor=d.referent_name||'Demande initiale';
-  document.getElementById('thread-orig').innerHTML='<div class="torig"><div style="font-weight:700;font-size:11px;color:#B08900;margin-bottom:4px">📌 '+escHtml(d.subject)+'</div>'+escHtml(d.description||'—')+'<div style="font-size:10.5px;color:#aaa;margin-top:6px">'+new Date(d.created_at).toLocaleString('fr-FR')+'</div></div>';
+  document.getElementById('thread-orig').innerHTML='<div class="torig"><div style="font-weight:700;font-size:11px;color:#B08900;margin-bottom:4px">📌 '+escHtml(d.subject)+'</div>'+deAHtml(demandeDeNom(d),demandeANom(d))+escHtml(d.description||'—')+'<div style="font-size:10.5px;color:#aaa;margin-top:6px">'+new Date(d.created_at).toLocaleString('fr-FR')+'</div></div>';
   document.getElementById('thread-input').value='';
   threadPendingAttachment=null;
   document.getElementById('thread-attach-input').value='';
@@ -4850,9 +4859,10 @@ function renderThread(){
   const msgs=cacheMessages.filter(m=>m.demande_id===currentThreadId).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   if(!msgs.length){box.innerHTML='<div style="text-align:center;color:#bbb;font-size:12.5px;padding:14px 0">Aucune réponse pour l\'instant. Lancez la discussion 👇</div>';return;}
   const myId=currentProfile?.id;
+  const dd=cacheDemandes.find(x=>x.id===currentThreadId)||{};
   box.innerHTML=msgs.map(m=>{
     const mine=m.author_id===myId;
-    return '<div class="tmsg'+(mine?' mine':'')+'"><div class="tauthor">'+escHtml(m.author_name||'—')+'</div><div class="tbubble">'+linkify(escHtml(m.body||''))+msgAttachmentHtml(m.attachment_url,m.attachment_name)+'</div><div class="ttime">'+new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>';
+    return '<div class="tmsg'+(mine?' mine':'')+'"><div class="tauthor">'+deAHtml(m.author_name,messageANom(m,dd))+'</div><div class="tbubble">'+linkify(escHtml(m.body||''))+msgAttachmentHtml(m.attachment_url,m.attachment_name)+'</div><div class="ttime">'+new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>';
   }).join('');
   box.scrollTop=box.scrollHeight;
 }
