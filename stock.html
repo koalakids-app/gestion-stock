@@ -3283,10 +3283,13 @@ function editCommande(id) {
       const cat  = catM ? catM[1] : '';
       const prix = pM ? pM[1].replace(',','.') : '';
       const url  = urlM ? urlM[1] : '';
+      // Ordre important : retirer l'URL finale AVANT les prix, sinon "(prix€) [url]"
+      // laisse le prix dans le nom et chaque modification en ajoute un de plus.
       const nom  = (m ? m[2] : ligne)
-        .replace(/\s*\{.*?\}\s*/g,'')
-        .replace(/\s*\[cat:[^\]]*\]\s*/g,'')
-        .replace(/(?:\s*\(\d+[.,]?\d*\s*€?\))+\s*$/,'').replace(/\s*\[.*?\]\s*$/,'').trim();
+        .replace(/\s*\[cat:[^\]]*\]\s*/g,' ')
+        .replace(/\s*\[.*?\]\s*$/,'')
+        .replace(/\s*\{.*?\}\s*/g,' ')
+        .replace(/(?:\s*\(\d+[.,]?\d*\s*€\))+\s*$/,'').trim();
       addArticleRow(qty, nom, prix, url, fourn, cat);
     });
     // Restaurer les aperçus photos dans les rows
@@ -4554,7 +4557,8 @@ function getArticlesFromRows() {
   rows.forEach(row => {
     const idx = row.id.replace('article-row-', '');
     const qty   = document.getElementById(`row-qty-${idx}`)?.value?.trim();
-    const nom   = document.getElementById(`row-nom-${idx}`)?.value?.trim();
+    // Purge les prix "(12.50€)" déjà dupliqués en fin de nom (anciennes éditions)
+    const nom   = document.getElementById(`row-nom-${idx}`)?.value?.trim().replace(/(?:\s*\(\d+[.,]?\d*\s*€\))+\s*$/,'').trim();
     const fourn = document.getElementById(`row-fourn-${idx}`)?.value?.trim();
     const cat   = document.getElementById(`row-cat-${idx}`)?.value?.trim();
     const prix  = document.getElementById(`row-prix-${idx}`)?.value?.trim();
