@@ -171,6 +171,7 @@ function reqOpenModal(id){
   document.getElementById('req-f-contenu').value=r?(r.contenu||''):'';
   document.getElementById('req-f-decisions').value=r?(r.decisions||''):'';
   document.getElementById('req-f-prochaine').value=r?(r.prochaine_reunion||''):'';
+  document.getElementById('req-f-prochaine-heure').value=r?(r.prochaine_reunion_heure||''):'';
   reqTypeChange();
 
   const wrapC=document.getElementById('req-f-creche-wrap');
@@ -180,7 +181,7 @@ function reqOpenModal(id){
   }
 
   // Formulaire verrouillé : lecture seule tant qu'on n'est pas direction.
-  ['req-f-date','req-f-heure','req-f-type','req-f-type-autre','req-f-creche','req-f-participants','req-f-excuses','req-f-contenu','req-f-decisions','req-f-prochaine']
+  ['req-f-date','req-f-heure','req-f-type','req-f-type-autre','req-f-creche','req-f-participants','req-f-excuses','req-f-contenu','req-f-decisions','req-f-prochaine','req-f-prochaine-heure']
     .forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=verrouille;});
   document.getElementById('req-f-save-brouillon').style.display=verrouille?'none':'';
   document.getElementById('req-f-save-valide').style.display=verrouille?'none':'';
@@ -222,6 +223,7 @@ async function reqSave(statutCible){
     contenu:contenu||null,
     decisions:decisions||null,
     prochaine_reunion:document.getElementById('req-f-prochaine').value||null,
+    prochaine_reunion_heure:(document.getElementById('req-f-prochaine-heure').value||'').trim()||null,
     statut:statutCible
   };
   if(!ancien)row.auteur_id=currentProfile?.id||null;
@@ -411,7 +413,7 @@ function reqCRHtml(r){
     +'<p style="font-size:11px;color:#888;font-style:italic;margin:2px 0 10px">'+etat+'</p>'
     +h2('Compte rendu')+((r.contenu||'').trim()?texte(r.contenu):vide('—'))
     +h2('Décisions')+((r.decisions||'').trim()?texte(r.decisions):vide('—'))
-    +h2('Prochaine réunion')+'<p style="font-size:12.5px">'+(r.prochaine_reunion?reqFmtDateLongue(r.prochaine_reunion):'à fixer')+'</p>'
+    +h2('Prochaine réunion')+'<p style="font-size:12.5px">'+(r.prochaine_reunion?reqFmtDateLongue(r.prochaine_reunion)+(r.prochaine_reunion_heure?' à '+escHtml(r.prochaine_reunion_heure):''):'à fixer')+'</p>'
     +'</div>';
 }
 
