@@ -4839,7 +4839,18 @@ function demandeDeNom(d){return(cacheReferents.find(r=>r.id===d.referent_id)||{}
 function demandeANom(d){return d.destinataires_noms||d.referent_name||(cacheReferents.find(r=>r.id===d.to_referent_id)||{}).name||'';}
 // Pour un message du fil : l'autre partie de la conversation.
 function messageANom(m,d){
-  if(m.author_id&&d.referent_id&&m.author_id===d.referent_id)return demandeANom(d);
+  if(m.author_id&&d.referent_id&&m.author_id===d.referent_id){
+    // L'expéditeur écrit dans ce fil : il s'adresse à ce destinataire seulement…
+    const noms=[d.referent_name||(cacheReferents.find(r=>r.id===d.to_referent_id)||{}).name||''];
+    // …sauf « Répondre à tous » : même texte posté au même moment dans les fils frères.
+    const t=new Date(m.created_at).getTime();
+    demandesDuGroupe(d).forEach(x=>{
+      if(x.id===d.id)return;
+      const jumeau=cacheMessages.some(y=>y.demande_id===x.id&&y.author_id===m.author_id&&(y.body||'')===(m.body||'')&&Math.abs(new Date(y.created_at).getTime()-t)<60000);
+      if(jumeau)noms.push(x.referent_name||'');
+    });
+    return noms.filter(Boolean).join(', ');
+  }
   return demandeDeNom(d);
 }
 function deAHtml(de,a){return '<div class="tdea" style="font-size:11px;font-weight:400;color:#777;margin-bottom:2px"><b>De :</b> '+escHtml(de||'—')+' &nbsp; <b>À :</b> '+escHtml(a||'—')+'</div>';}
