@@ -2254,9 +2254,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label class="flabel">Thème</label><select class="finput" id="d-theme"><option>Pédagogie</option><option>Matériel</option><option>Formation</option><option>Organisation</option><option>Sécurité</option><option>Autre</option></select></div>
     </div>
     <div class="fg">
-      <label class="flabel">Pièce jointe (optionnel)</label>
-      <input type="file" id="d-attach-input" style="display:none" onchange="dHandleAttachment(event)"/>
-      <button class="btn-cancel" style="width:100%" onclick="document.getElementById('d-attach-input').click()"><i class="ti ti-paperclip"></i> Joindre un fichier</button>
+      <label class="flabel">Pièces jointes (optionnel)</label>
+      <input type="file" id="d-attach-input" multiple style="display:none" onchange="dHandleAttachment(event)"/>
+      <button class="btn-cancel" style="width:100%" onclick="document.getElementById('d-attach-input').click()"><i class="ti ti-paperclip"></i> Joindre des fichiers</button>
       <div id="d-attach-status" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
     </div>
     <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-demand-wrap')">Annuler</button><button class="btn-cancel" id="btn-draft-demand" onclick="saveDemandeBrouillon()"><i class="ti ti-file-pencil"></i> Enregistrer en brouillon</button><button class="btn-primary" id="btn-save-demand" onclick="saveDemand()"><i class="ti ti-check"></i> Enregistrer</button></div>
@@ -2275,10 +2275,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div id="thread-draft-note" style="display:none;font-size:12px;color:#92400E;background:#FEF3C7;border-radius:8px;padding:6px 10px;margin-bottom:6px"><i class="ti ti-file-pencil"></i> Brouillon repris · <a href="#" onclick="deleteMessageBrouillon();return false;" style="color:#92400E;font-weight:600">Supprimer le brouillon</a></div>
       <label id="thread-all-wrap" style="display:none;align-items:center;gap:6px;font-size:12.5px;margin-bottom:6px;cursor:pointer"><input type="checkbox" id="thread-all"/> <span id="thread-all-label"></span></label>
       <textarea class="finput" id="thread-input" rows="2" placeholder="Écrire une réponse…" style="resize:vertical"></textarea>
-      <input type="file" id="thread-attach-input" style="display:none" onchange="threadHandleAttachment(event)"/>
+      <input type="file" id="thread-attach-input" multiple style="display:none" onchange="threadHandleAttachment(event)"/>
       <div id="thread-attach-status" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
       <div class="mactions" style="margin-top:8px">
-        <button class="btn-cancel" onclick="document.getElementById('thread-attach-input').click()" title="Joindre un fichier"><i class="ti ti-paperclip"></i></button>
+        <button class="btn-cancel" onclick="document.getElementById('thread-attach-input').click()" title="Joindre des fichiers"><i class="ti ti-paperclip"></i></button>
         <button class="btn-cancel" id="btn-draft-msg" onclick="saveMessageBrouillon()" title="Garder cette réponse pour plus tard"><i class="ti ti-file-pencil"></i> Brouillon</button>
         <button class="btn-primary" id="btn-send-msg" onclick="sendThreadMessage()"><i class="ti ti-send"></i> Envoyer</button>
       </div>
@@ -2294,9 +2294,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fg"><label class="flabel">Message</label><textarea class="finput" id="c-msg" rows="4" style="resize:vertical"></textarea></div>
     <div class="fg"><label class="flabel">Priorité</label><select class="finput" id="c-prio"><option value="normal">Normale</option><option value="urgent">Urgente</option><option value="info">Information</option></select></div>
     <div class="fg">
-      <label class="flabel">Pièce jointe (optionnel)</label>
-      <input type="file" id="c-attach-input" style="display:none" onchange="cHandleAttachment(event)"/>
-      <button class="btn-cancel" style="width:100%" onclick="document.getElementById('c-attach-input').click()"><i class="ti ti-paperclip"></i> Joindre un fichier</button>
+      <label class="flabel">Pièces jointes (optionnel)</label>
+      <input type="file" id="c-attach-input" multiple style="display:none" onchange="cHandleAttachment(event)"/>
+      <button class="btn-cancel" style="width:100%" onclick="document.getElementById('c-attach-input').click()"><i class="ti ti-paperclip"></i> Joindre des fichiers</button>
       <div id="c-attach-status" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
     </div>
     <div class="mactions"><button class="btn-cancel" onclick="closeModal('modal-consigne-wrap')">Annuler</button><button class="btn-cancel" id="btn-draft-consigne" onclick="saveConsigneBrouillon()"><i class="ti ti-file-pencil"></i> Enregistrer en brouillon</button><button class="btn-primary" id="btn-save-consigne" onclick="saveConsigne()"><i class="ti ti-send"></i> Envoyer</button></div>
@@ -4498,7 +4498,7 @@ function renderDemandsOnly(){
       const aNom=grouped?g.map(x=>x.referent_name).filter(Boolean).join(', '):demandeANom(d);
       const ligneDeA='<div class="dline"><span class="dl-lbl">De</span><b>'+hl(deNom)+'</b><span class="dl-arrow">→</span><span class="dl-lbl">À</span><b>'+hl(aNom||'—')+'</b><span class="dl-date">'+dateLabel+'</span></div>';
       const statut=(isC||grouped)?'':'<div class="dfoot"><span class="badge b-'+(d.status||'attente')+'">'+(d.status==='traite'?'✅ Traitée'+(d.treated_at?' <span style="font-weight:400;opacity:0.85">le '+new Date(d.treated_at).toLocaleDateString('fr-FR')+'</span>':''):'⏳ En attente')+'</span></div>';
-      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div>'+ligneDeA+'<div class="dbody">'+hl(d.description||'—')+msgAttachmentHtml(d.attachment_url,d.attachment_name)+'</div>'+statut+blocs+'</div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="'+(grouped?'toggleStatusGroup(['+idsJs+'],'+(allTraite?'false':'true')+')':'toggleStatus(\''+d.id+'\')')+'" title="'+(grouped?(allTraite?'Remettre tout en cours dans ma liste':'Marquer traitée dans ma liste ('+nbTraite+'/'+g.length+' traitée(s))'):'')+'"><i class="ti ti-'+((grouped?allTraite:mesTraitees.has(d.id))?'rotate-clockwise':'check')+'"></i></button>':'')+(currentUser?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')" title="Retirer de ma liste (déplacé dans ma corbeille, reste visible des autres)"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
+      html+='<div class="dcard '+(isC?'consigne':d.priority)+'"><div class="dmeta"><div class="dtop"><span class="dsubject">'+hl(d.subject)+'</span>'+(isC?'<span class="badge b-consigne"><i class="ti ti-send" style="font-size:10px"></i> Consigne</span>':'<span class="badge b-'+d.priority+'">'+(d.priority==='urgent'?'🔴 Urgent':d.priority==='info'?'ℹ️ Info':'Normal')+'</span>')+(d.theme&&!isC?'<span class="badge b-ref">'+d.theme+'</span>':'')+crecheBadge+'</div>'+ligneDeA+'<div class="dbody">'+hl(d.description||'—')+msgAttachmentHtml(msgAttList(d))+'</div>'+statut+blocs+'</div><div class="dactions">'+((!isC&&canToggle)?'<button class="ibtn" onclick="'+(grouped?'toggleStatusGroup(['+idsJs+'],'+(allTraite?'false':'true')+')':'toggleStatus(\''+d.id+'\')')+'" title="'+(grouped?(allTraite?'Remettre tout en cours dans ma liste':'Marquer traitée dans ma liste ('+nbTraite+'/'+g.length+' traitée(s))'):'')+'"><i class="ti ti-'+((grouped?allTraite:mesTraitees.has(d.id))?'rotate-clockwise':'check')+'"></i></button>':'')+(currentUser?'<button class="ibtn del" onclick="deleteDemand(\''+d.id+'\')" title="Retirer de ma liste (déplacé dans ma corbeille, reste visible des autres)"><i class="ti ti-trash"></i></button>':'')+'</div></div>';
     });
   }
   inner.innerHTML=html;
@@ -4508,43 +4508,64 @@ function setFilter(f,el){activeFilter=f;document.querySelectorAll('.stats-row.ti
 
 /* ---------- PIÈCES JOINTES (demandes, consignes, fil de discussion) ----------
    Même bucket `assets` que Frais pro/Stagiaires : jamais de base64 en base. */
-function msgAttachmentHtml(url,name){
-  if(!url)return'';
-  return '<div style="margin-top:6px"><a href="'+escHtml(url)+'" target="_blank" rel="noopener" style="font-size:12px;color:var(--koala);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-paperclip"></i> '+escHtml(name||'Pièce jointe')+'</a></div>';
+/* Plusieurs pièces jointes par message : colonne jsonb `attachments` ([{url,name}]),
+   voir sql/messagerie_plusieurs_pieces_jointes.sql. attachment_url/attachment_name
+   gardent la première pièce (anciennes lignes, et compatibilité). */
+function msgAttList(row){
+  if(!row)return[];
+  if(Array.isArray(row.attachments)&&row.attachments.length)return row.attachments.filter(a=>a&&a.url);
+  return row.attachment_url?[{url:row.attachment_url,name:row.attachment_name}]:[];
 }
-async function msgUploadFile(file,statusElId){
-  const el=document.getElementById(statusElId);
-  if(el)el.textContent='⏳ Envoi en cours…';
+function msgAttCols(list){
+  const l=list||[];
+  return{attachment_url:l[0]?.url||null,attachment_name:l[0]?.name||null,attachments:l};
+}
+function msgAttachmentHtml(list){
+  if(!list||!list.length)return'';
+  return '<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">'+list.map(a=>'<a href="'+escHtml(a.url)+'" target="_blank" rel="noopener" style="font-size:12px;color:var(--koala);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-paperclip"></i> '+escHtml(a.name||'Pièce jointe')+'</a>').join('')+'</div>';
+}
+async function msgUploadFile(file){
   try{
     const ext=(file.name.split('.').pop()||'').toLowerCase();
     const path='messagerie/'+Date.now()+'_'+Math.random().toString(36).slice(2)+(ext?'.'+ext:'');
     const{error}=await sb.storage.from('assets').upload(path,file);
     if(error)throw error;
     const{data}=sb.storage.from('assets').getPublicUrl(path);
-    if(el)el.textContent='✅ '+file.name;
     return{url:data.publicUrl,name:file.name};
   }catch(e){
     console.error('[msgUploadFile]',e);
-    if(el)el.textContent='⚠ Erreur upload : '+(e.message||'inconnue');
+    window._lastUploadError=e.message||'inconnue';
     return null;
   }
 }
-let dPendingAttachment=null,cPendingAttachment=null,threadPendingAttachment=null;
-async function dHandleAttachment(event){
-  const file=event.target.files[0];if(!file)return;
-  dPendingAttachment=await msgUploadFile(file,'d-attach-status');
+/* Liste des pièces en attente d'envoi, par zone (d / c / thread), avec retrait au clic. */
+const msgPending={d:[],c:[],thread:[]};
+const msgPendingZone={d:'d-attach-status',c:'c-attach-status',thread:'thread-attach-status'};
+function msgRenderPending(k){
+  const el=document.getElementById(msgPendingZone[k]);if(!el)return;
+  el.innerHTML=msgPending[k].map((a,i)=>'<div style="display:flex;align-items:center;gap:6px;margin-top:2px">📎 <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(a.name||'Pièce jointe')+'</span><button type="button" class="btn-cancel" style="padding:0 6px" title="Retirer" onclick="msgRemovePending(\''+k+'\','+i+')">✕</button></div>').join('');
 }
-window.dHandleAttachment=dHandleAttachment;
-async function cHandleAttachment(event){
-  const file=event.target.files[0];if(!file)return;
-  cPendingAttachment=await msgUploadFile(file,'c-attach-status');
+function msgRemovePending(k,i){msgPending[k].splice(i,1);msgRenderPending(k);}
+window.msgRemovePending=msgRemovePending;
+function msgSetPending(k,list){msgPending[k]=(list||[]).slice();const inp=document.getElementById({d:'d-attach-input',c:'c-attach-input',thread:'thread-attach-input'}[k]);if(inp)inp.value='';msgRenderPending(k);}
+async function msgHandleFiles(k,event){
+  const files=[...(event.target.files||[])];event.target.value='';
+  if(!files.length)return;
+  const el=document.getElementById(msgPendingZone[k]);
+  let echecs=0;
+  for(let i=0;i<files.length;i++){
+    if(el)el.insertAdjacentHTML('beforeend','<div class="msg-uploading" style="margin-top:2px">⏳ Envoi '+(i+1)+'/'+files.length+' : '+escHtml(files[i].name)+'</div>');
+    const up=await msgUploadFile(files[i]);
+    if(up)msgPending[k].push(up);else echecs++;
+    el?.querySelectorAll('.msg-uploading').forEach(n=>n.remove());
+  }
+  msgRenderPending(k);
+  if(echecs&&el)el.insertAdjacentHTML('beforeend','<div style="margin-top:2px">⚠ '+echecs+' fichier(s) non envoyé(s) : '+escHtml(window._lastUploadError||'erreur')+'</div>');
 }
-window.cHandleAttachment=cHandleAttachment;
-async function threadHandleAttachment(event){
-  const file=event.target.files[0];if(!file)return;
-  threadPendingAttachment=await msgUploadFile(file,'thread-attach-status');
-}
-window.threadHandleAttachment=threadHandleAttachment;
+function dHandleAttachment(event){return msgHandleFiles('d',event);}
+function cHandleAttachment(event){return msgHandleFiles('c',event);}
+function threadHandleAttachment(event){return msgHandleFiles('thread',event);}
+window.dHandleAttachment=dHandleAttachment;window.cHandleAttachment=cHandleAttachment;window.threadHandleAttachment=threadHandleAttachment;
 
 let cacheDemandeBrouillons=[],dDraftId=null;
 async function openDemandModal(draft){
@@ -4571,9 +4592,7 @@ async function openDemandModal(draft){
   document.getElementById('d-email-fg').style.display='none';
   ['d-email','d-subj','d-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('d-prio').value='normal';
-  dPendingAttachment=null;
-  document.getElementById('d-attach-input').value='';
-  document.getElementById('d-attach-status').textContent='';
+  msgSetPending('d',[]);
   if(draft){
     // Reprise d'un brouillon : on remet chaque champ tel qu'il a été laissé.
     const sel=document.getElementById('d-creche-select');
@@ -4586,10 +4605,7 @@ async function openDemandModal(draft){
     document.getElementById('d-desc').value=draft.description||'';
     document.getElementById('d-prio').value=draft.priority||'normal';
     if(draft.theme)document.getElementById('d-theme').value=draft.theme;
-    if(draft.attachment_url){
-      dPendingAttachment={url:draft.attachment_url,name:draft.attachment_name};
-      document.getElementById('d-attach-status').textContent='📎 '+(draft.attachment_name||'Pièce jointe');
-    }
+    msgSetPending('d',msgAttList(draft));
   }
   document.getElementById('modal-demand-wrap').classList.add('open');
 }
@@ -4630,7 +4646,8 @@ async function saveDemand(){
     // referent_id garde l'ÉMETTEUR de la demande (colonne jusqu'ici jamais renseignée) :
     // sans elle, une réponse du destinataire ne pouvait pas savoir à qui répondre tant
     // qu'aucun message n'existait encore dans le fil (cf. sendThreadMessage).
-    const row={creche_id:crecheId||c.getAttribute('data-creche')||null,referent_id:currentProfile?.id||null,to_referent_id:c.value,referent_name:c.getAttribute('data-name')||'',referent_email:manualEmail||c.getAttribute('data-email')||'',subject:subj,description:desc,priority:prio,theme:theme,status:'attente',type:'demande',attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null};
+    const row={creche_id:crecheId||c.getAttribute('data-creche')||null,referent_id:currentProfile?.id||null,to_referent_id:c.value,referent_name:c.getAttribute('data-name')||'',referent_email:manualEmail||c.getAttribute('data-email')||'',subject:subj,description:desc,priority:prio,theme:theme,status:'attente',type:'demande',};
+    Object.assign(row,msgAttCols(msgPending.d));
     if(groupeEnvoi){row.groupe_envoi=groupeEnvoi;row.destinataires_noms=destNoms;}
     const saved=await dbInsert('demandes',row);
     if(saved){
@@ -4667,7 +4684,7 @@ async function saveDemandeBrouillon(){
     subject:subj||null,description:desc||null,
     priority:document.getElementById('d-prio').value,
     theme:document.getElementById('d-theme').value,
-    attachment_url:dPendingAttachment?.url||null,attachment_name:dPendingAttachment?.name||null,
+    ...msgAttCols(msgPending.d),
     updated_at:new Date().toISOString()
   };
   let ok=false;
@@ -4718,7 +4735,7 @@ function renderDemandeBrouillons(){
       +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13.5px">'+escHtml(b.subject||'(sans sujet)')+'</b>'
       +(b.priority==='urgent'?'<span class="badge b-consigne">Urgente</span>':'')+'</div>'
       +'<div style="font-size:12px;color:var(--muted);margin:3px 0 0">'+escHtml(dest)+'</div>'
-      +'<div style="font-size:12px;color:var(--muted);margin:2px 0 8px">'+escHtml(apercu)+(String(b.description||'').length>100?'…':'')+(b.attachment_name?' · 📎 '+escHtml(b.attachment_name):'')+'</div>'
+      +'<div style="font-size:12px;color:var(--muted);margin:2px 0 8px">'+escHtml(apercu)+(String(b.description||'').length>100?'…':'')+(msgAttList(b).length?' · 📎 '+msgAttList(b).map(a=>escHtml(a.name||'Pièce jointe')).join(', '):'')+'</div>'
       +'<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--muted);flex:1">Modifié le '+escHtml(quand)+'</span>'
       +'<button class="btn-cancel" data-id="'+b.id+'" onclick="deleteDemandeBrouillon(this.dataset.id)"><i class="ti ti-trash"></i> Supprimer</button>'
       +'<button class="btn-primary" data-id="'+b.id+'" onclick="reprendreDemandeBrouillon(this.dataset.id)"><i class="ti ti-edit"></i> Reprendre</button></div></div>';
@@ -4883,18 +4900,13 @@ function openThread(demandId,repondreATous){
   const origAuthor=d.referent_name||'Demande initiale';
   document.getElementById('thread-orig').innerHTML='<div class="torig"><div style="font-weight:700;font-size:11px;color:#B08900;margin-bottom:4px">📌 '+escHtml(d.subject)+'</div>'+deAHtml(demandeDeNom(d),demandeANom(d))+escHtml(d.description||'—')+'<div style="font-size:10.5px;color:#aaa;margin-top:6px">'+new Date(d.created_at).toLocaleString('fr-FR')+'</div></div>';
   document.getElementById('thread-input').value='';
-  threadPendingAttachment=null;
-  document.getElementById('thread-attach-input').value='';
-  document.getElementById('thread-attach-status').textContent='';
+  msgSetPending('thread',[]);
   // Réponse préparée plus tôt pour ce fil : on la remet dans la zone de saisie.
   const bd=msgBrouillonDe(demandId);
   document.getElementById('thread-draft-note').style.display=bd?'block':'none';
   if(bd){
     document.getElementById('thread-input').value=bd.body||'';
-    if(bd.attachment_url){
-      threadPendingAttachment={url:bd.attachment_url,name:bd.attachment_name};
-      document.getElementById('thread-attach-status').textContent='📎 '+(bd.attachment_name||'Pièce jointe');
-    }
+    msgSetPending('thread',msgAttList(bd));
   }
   majRepondreATous(d,repondreATous);
   renderThread();
@@ -4909,7 +4921,7 @@ function renderThread(){
   const dd=cacheDemandes.find(x=>x.id===currentThreadId)||{};
   box.innerHTML=msgs.map(m=>{
     const mine=m.author_id===myId;
-    return '<div class="tmsg'+(mine?' mine':'')+'"><div class="tauthor">'+deAHtml(m.author_name,messageANom(m,dd))+'</div><div class="tbubble">'+linkify(escHtml(m.body||''))+msgAttachmentHtml(m.attachment_url,m.attachment_name)+'</div><div class="ttime">'+new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>';
+    return '<div class="tmsg'+(mine?' mine':'')+'"><div class="tauthor">'+deAHtml(m.author_name,messageANom(m,dd))+'</div><div class="tbubble">'+linkify(escHtml(m.body||''))+msgAttachmentHtml(msgAttList(m))+'</div><div class="ttime">'+new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>';
   }).join('');
   box.scrollTop=box.scrollHeight;
 }
@@ -4920,9 +4932,9 @@ let cacheMessageBrouillons=[];
 function msgBrouillonDe(demandeId){return cacheMessageBrouillons.find(b=>b.demande_id===demandeId)||null;}
 async function saveMessageBrouillon(){
   const body=document.getElementById('thread-input').value.trim();
-  if((!body&&!threadPendingAttachment)||!currentThreadId){alert("Écrivez d'abord un message à garder en brouillon.");return;}
+  if((!body&&!msgPending.thread.length)||!currentThreadId){alert("Écrivez d'abord un message à garder en brouillon.");return;}
   const btn=document.getElementById('btn-draft-msg');btn.disabled=true;
-  const row={body:body||null,attachment_url:threadPendingAttachment?.url||null,attachment_name:threadPendingAttachment?.name||null,updated_at:new Date().toISOString()};
+  const row={body:body||null,...msgAttCols(msgPending.thread),updated_at:new Date().toISOString()};
   const existant=msgBrouillonDe(currentThreadId);
   let ok=false;
   if(existant){
@@ -4945,22 +4957,20 @@ async function deleteMessageBrouillon(){
   if(!await dbDeleteStrict('messages_brouillons',bd.id)){showBanner('Suppression impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
   cacheMessageBrouillons=cacheMessageBrouillons.filter(b=>b.id!==bd.id);
   document.getElementById('thread-input').value='';
-  threadPendingAttachment=null;
-  document.getElementById('thread-attach-input').value='';
-  document.getElementById('thread-attach-status').textContent='';
+  msgSetPending('thread',[]);
   document.getElementById('thread-draft-note').style.display='none';
   renderDemandsOnly();
 }
 async function sendThreadMessage(){
   const inp=document.getElementById('thread-input');const body=inp.value.trim();
-  if((!body&&!threadPendingAttachment)||!currentThreadId)return;
+  if((!body&&!msgPending.thread.length)||!currentThreadId)return;
   const btn=document.getElementById('btn-send-msg');btn.disabled=true;
   const d0=cacheDemandes.find(x=>x.id===currentThreadId);
   const toutes=document.getElementById('thread-all-wrap').style.display!=='none'&&document.getElementById('thread-all').checked;
   const cibles=toutes?demandesDuGroupe(d0):[d0];
   let savedCourant=null,nbErr=0;
   for(const d of cibles){
-    const row={demande_id:d.id,author_id:currentProfile?.id||null,author_name:currentProfile?.name||'Moi',body:body,attachment_url:threadPendingAttachment?.url||null,attachment_name:threadPendingAttachment?.name||null};
+    const row={demande_id:d.id,author_id:currentProfile?.id||null,author_name:currentProfile?.name||'Moi',body:body,...msgAttCols(msgPending.thread)};
     const saved=await dbInsert('messages',row);
     if(!saved){nbErr++;continue;}
     cacheMessages.push(saved);
@@ -4994,9 +5004,7 @@ async function sendThreadMessage(){
       cacheMessageBrouillons=cacheMessageBrouillons.filter(b=>b.id!==bd.id);
       document.getElementById('thread-draft-note').style.display='none';
     }
-    threadPendingAttachment=null;
-    document.getElementById('thread-attach-input').value='';
-    document.getElementById('thread-attach-status').textContent='';
+    msgSetPending('thread',[]);
     renderThread();renderDemandsOnly();
     if(nbErr)showBanner(nbErr+' envoi(s) en erreur.','error');
   }
@@ -5015,9 +5023,7 @@ function openConsigneModal(draft){
   document.getElementById('c-subj').value=draft?(draft.subject||''):'';
   document.getElementById('c-msg').value=draft?(draft.description||''):'';
   document.getElementById('c-prio').value=draft?(draft.priority||'normal'):'normal';
-  cPendingAttachment=(draft&&draft.attachment_url)?{url:draft.attachment_url,name:draft.attachment_name}:null;
-  document.getElementById('c-attach-input').value='';
-  document.getElementById('c-attach-status').textContent=cPendingAttachment?('📎 '+(cPendingAttachment.name||'Pièce jointe')):'';
+  msgSetPending('c',draft?msgAttList(draft):[]);
   document.getElementById('c-title').textContent=draft?'Brouillon de consigne':'Envoyer une consigne';
   document.getElementById('modal-consigne-wrap').classList.add('open');
 }
@@ -5027,7 +5033,7 @@ async function saveConsigne(){
   const btn=document.getElementById('btn-save-consigne');btn.disabled=true;
   // referent_id = expéditeur (lu par demandeDeNom pour l'affichage « De ») ;
   // destinataires_noms = libellé « À » (une consigne part à tous, sans referent_name).
-  const row={creche_id:null,referent_id:currentProfile?.id||null,destinataires_noms:'Tous les directeurs/trices techniques',referent_name:'',referent_email:'',subject:subj,description:msg,priority:document.getElementById('c-prio').value,status:'envoyee',type:'consigne',attachment_url:cPendingAttachment?.url||null,attachment_name:cPendingAttachment?.name||null};
+  const row={creche_id:null,referent_id:currentProfile?.id||null,destinataires_noms:'Tous les directeurs/trices techniques',referent_name:'',referent_email:'',subject:subj,description:msg,priority:document.getElementById('c-prio').value,status:'envoyee',type:'consigne',...msgAttCols(msgPending.c)};
   const saved=await dbInsert('demandes',row);
   if(saved){
     cacheDemandes.unshift(saved);
@@ -5056,7 +5062,7 @@ async function saveConsigneBrouillon(){
   if(!subj&&!msg){alert('Écrivez au moins un sujet ou un message avant d\'enregistrer le brouillon.');return;}
   const btn=document.getElementById('btn-draft-consigne');btn.disabled=true;
   const row={subject:subj||null,description:msg||null,priority:document.getElementById('c-prio').value,
-    attachment_url:cPendingAttachment?.url||null,attachment_name:cPendingAttachment?.name||null,updated_at:new Date().toISOString()};
+    ...msgAttCols(msgPending.c),updated_at:new Date().toISOString()};
   let ok=false;
   if(cDraftId){
     ok=await dbUpdate('consignes_brouillons',cDraftId,row);
@@ -5102,7 +5108,7 @@ function renderConsigneBrouillons(){
     return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
       +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13.5px">'+escHtml(b.subject||'(sans sujet)')+'</b>'
       +(b.priority==='urgent'?'<span class="badge b-consigne">Urgente</span>':'')+'</div>'
-      +'<div style="font-size:12px;color:var(--muted);margin:3px 0 8px">'+escHtml(apercu)+(String(b.description||'').length>110?'…':'')+(b.attachment_name?' · 📎 '+escHtml(b.attachment_name):'')+'</div>'
+      +'<div style="font-size:12px;color:var(--muted);margin:3px 0 8px">'+escHtml(apercu)+(String(b.description||'').length>110?'…':'')+(msgAttList(b).length?' · 📎 '+msgAttList(b).map(a=>escHtml(a.name||'Pièce jointe')).join(', '):'')+'</div>'
       +'<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--muted);flex:1">Modifié le '+escHtml(quand)+'</span>'
       +'<button class="btn-cancel" data-id="'+b.id+'" onclick="deleteConsigneBrouillon(this.dataset.id)"><i class="ti ti-trash"></i> Supprimer</button>'
       +'<button class="btn-primary" data-id="'+b.id+'" onclick="reprendreConsigneBrouillon(this.dataset.id)"><i class="ti ti-edit"></i> Reprendre</button></div></div>';
