@@ -581,7 +581,7 @@ function adRenderPointsCreches(reprendreSaisie){
         +'</div>'
       +'</div>'
       +'<textarea class="finput" data-creche="'+c.id+'" rows="3" style="resize:vertical" placeholder="Sujets, échanges et décisions pour '+escHtml(c.name)+'…" '
-        +'onchange="adPointsCrecheChange(\''+c.id+'\',this.value)">'+escHtml(_adPointsCreches[c.id]||'')+'</textarea>'
+        +'oninput="adPointsCrecheChange(\''+c.id+'\',this.value)" onchange="adPointsCrecheChange(\''+c.id+'\',this.value)">'+escHtml(_adPointsCreches[c.id]||'')+'</textarea>'
     +'</div>';
   }).join('');
 }
@@ -628,6 +628,10 @@ function adAppliqueProjection(){
 
 function adRenderRevue(){
   const zone=document.getElementById('ad-revue-zone');if(!zone)return;
+  /* Un commentaire est en cours de frappe : le redessin (synchro) l'effacerait
+     avant qu'il ne parte en base à la sortie du champ. */
+  const actif=document.activeElement;
+  if(actif&&actif.tagName==='TEXTAREA'&&zone.contains(actif))return;
   const l=adOuvertesReunion();
   const cpt=document.getElementById('ad-revue-compteur');
   if(!l.length){
