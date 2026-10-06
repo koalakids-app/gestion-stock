@@ -48,3 +48,14 @@ jobs:
             supabase functions deploy "$fn" --project-ref juyrceadazrovlitxceb
             echo "::endgroup::"
           done
+
+      # Fonctions retirées du dépôt (e-mails du module Demandes, remplacés par le
+      # push) : supprimées de Supabase, sinon elles y resteraient déployées.
+      # Idempotent : sans effet si elles n'existent déjà plus.
+      - name: Supprimer les fonctions retirées
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          for fn in notify-demand notify-message notify-consigne notify-status; do
+            supabase functions delete "$fn" --project-ref juyrceadazrovlitxceb --yes || echo "$fn déjà supprimée"
+          done
