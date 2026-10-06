@@ -1,4 +1,4 @@
-// ══════════════ MODULE À FAIRE (David uniquement) ══════════════
+// ══════════════ MODULE À FAIRE (direction et directeurs/trices) ══════════════
 let afCache=[];
 let afCurrentDate=null;
 let afCrecheFilter='all';
@@ -31,7 +31,9 @@ async function afInit(){
 }
 
 async function afLoad(){
-  const{data,error}=await sb.from('taches_afaire').select('*').order('created_at',{ascending:true});
+  let q=sb.from('taches_afaire').select('*');
+  if(!isDirection&&currentUser)q=q.eq('user_id',currentUser.id); // un·e directeur/trice ne voit que ses propres tâches
+  const{data,error}=await q.order('created_at',{ascending:true});
   if(error){showBanner('Erreur chargement tâches.','error');afCache=[];}
   else afCache=data||[];
   afRender();

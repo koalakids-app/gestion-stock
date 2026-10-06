@@ -2666,7 +2666,7 @@ function enfRenderContrat(){
   box.innerHTML=btnNew+enfContratsCache.map(c=>{
     const st=ctStatut(c);
     const periode=ctFmtDate(c.date_debut)+' → '+(c.date_fin?ctFmtDate(c.date_fin):'sans terme');
-    const horaires=(c.heure_debut||c.heure_fin)?(ctFmtHeure(c.heure_debut)||'?')+' – '+(ctFmtHeure(c.heure_fin)||'?'):'horaires non renseignés';
+    const horaires=ctHorairesLabel(c);
     return '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
       + '<div style="font-weight:700;color:var(--koala-dark);font-size:13.5px">'+escHtml(periode)+'</div>'
@@ -2681,6 +2681,49 @@ function enfRenderContrat(){
   + '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">Le bouton « Appliquer les contrats » du module Présences marque présents tous les enfants sur toute la durée de leurs contrats (de la date de début à la date de fin). Un contrat sans date de fin est ignoré.</p>';
 }
 
+/* Horaires propres à un jour : {"1":{"debut":"08:00","fin":"17:00"}}. Absent = horaires par défaut du contrat. */
+function ctParseHoraires(h){
+  let v=h;
+  if(typeof v==='string'){try{v=JSON.parse(v);}catch(e){v=null;}}
+  return (v&&typeof v==='object'&&!Array.isArray(v))?v:{};
+}
+function ctHorairesJour(c,wd){
+  const o=ctParseHoraires(c&&c.horaires_jours)[wd]||{};
+  return {debut:o.debut||c.heure_debut||null,fin:o.fin||c.heure_fin||null};
+}
+function ctHorairesLabel(c){
+  const h=ctParseHoraires(c.horaires_jours);
+  const jours=ctParseJours(c.jours).filter(function(n){return h[n]&&(h[n].debut||h[n].fin);});
+  if(!jours.length) return (c.heure_debut||c.heure_fin)?(ctFmtHeure(c.heure_debut)||'?')+' \u2013 '+(ctFmtHeure(c.heure_fin)||'?'):'horaires non renseign\u00e9s';
+  return ctParseJours(c.jours).map(function(n){
+    const x=ctHorairesJour(c,n),j=CT_JOURS.filter(function(k){return k[0]===n;})[0];
+    return (j?j[1].slice(0,3):n)+' '+(ctFmtHeure(x.debut)||'?')+'\u2013'+(ctFmtHeure(x.fin)||'?');
+  }).join(' \u00b7 ');
+}
+/* Une ligne d'horaires par jour coch\u00e9 ; vide = horaires par d\u00e9faut. */
+function ctRenderHorairesJours(h){
+  const box=document.getElementById('ct-horaires-jours');
+  if(!box) return;
+  if(!h) h=ctLireHorairesJours();
+  const jours=ctJoursSel.slice().sort(function(a,b){return a-b;});
+  box.innerHTML=jours.length?('<div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">Horaires par jour \u2014 laissez vide pour reprendre les horaires par d\u00e9faut ci-dessus.</div>'
+    +jours.map(function(n){
+      const j=CT_JOURS.filter(function(k){return k[0]===n;})[0],o=h[n]||{};
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:78px;font-size:12.5px;font-weight:600">'+(j?j[1]:n)+'</span>'
+        +'<input type="time" class="finput" data-ct-jour="'+n+'" data-k="debut" value="'+escHtml(String(o.debut||'').slice(0,5))+'" style="flex:1">'
+        +'<input type="time" class="finput" data-ct-jour="'+n+'" data-k="fin" value="'+escHtml(String(o.fin||'').slice(0,5))+'" style="flex:1"></div>';
+    }).join('')):'';
+}
+function ctLireHorairesJours(){
+  const h={};
+  document.querySelectorAll('#ct-horaires-jours input[data-ct-jour]').forEach(function(i){
+    if(!i.value) return;
+    const n=i.getAttribute('data-ct-jour');
+    (h[n]=h[n]||{})[i.getAttribute('data-k')]=i.value;
+  });
+  return h;
+}
+
 function ctRenderJours(){
   const box=document.getElementById('ct-jours');
   if(!box) return;
@@ -2692,6 +2735,7 @@ function ctToggleJour(n){
   const i=ctJoursSel.indexOf(n);
   if(i>=0) ctJoursSel.splice(i,1); else ctJoursSel.push(n);
   ctRenderJours();
+  ctRenderHorairesJours();
 }
 
 function ctOpen(id){
@@ -2706,8 +2750,16 @@ function ctOpen(id){
   document.getElementById('ct-notes').value=c&&c.notes?c.notes:'';
   ctJoursSel=c?ctParseJours(c.jours):[1,2,3,4,5];
   ctRenderJours();
+  ctRenderHorairesJours(c?ctParseHoraires(c.horaires_jours):{});
   document.getElementById('ct-btn-delete').style.display=c?'':'none';
   document.getElementById('modal-contrat-wrap').classList.add('open');
+}
+
+/* Seuls les jours cochés sont conservés ; null si aucun horaire particulier. */
+function ctHorairesJoursSaisis(){
+  const h=ctLireHorairesJours(),r={};
+  ctJoursSel.forEach(function(n){if(h[n]) r[n]=h[n];});
+  return Object.keys(r).length?r:null;
 }
 
 async function ctSave(){
@@ -2723,6 +2775,7 @@ async function ctSave(){
     heure_debut:document.getElementById('ct-h1').value||null,
     heure_fin:document.getElementById('ct-h2').value||null,
     jours:ctJoursSel.slice().sort(function(a,b){return a-b;}),
+    horaires_jours:ctHorairesJoursSaisis(),
     notes:(document.getElementById('ct-notes').value||'').trim()||null
   };
   let ok;
@@ -2754,6 +2807,7 @@ window.ctOpen=ctOpen;
 window.ctToggleJour=ctToggleJour;
 window.ctSave=ctSave;
 window.ctDelete=ctDelete;
+window.ctRenderHorairesJours=ctRenderHorairesJours;
 
 /* --- Lien avec le module Présences ------------------------------------- */
 /* Marque présents (matin + après-midi) les enfants de la crèche affichée pour

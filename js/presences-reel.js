@@ -149,9 +149,10 @@ async function prCharger(enfants,d1,d2){
       const jr=ptsJour[e.id+'|'+date]||[];
       const arr=jr.filter(x=>x.action==='arrivee'),dep=jr.filter(x=>x.action==='depart');
       if(!ct&&!arr.length)continue;
-      const cmA=ct?prHeureMin(ct.heure_debut):null,cmB=ct?prHeureMin(ct.heure_fin):null;
+      const hj=ct?(function(){let o=ct.horaires_jours;if(typeof o==='string'){try{o=JSON.parse(o);}catch(e){o=null;}}o=(o&&o[wd])||{};return{debut:o.debut||ct.heure_debut,fin:o.fin||ct.heure_fin};})():null;
+      const cmA=hj?prHeureMin(hj.debut):null,cmB=hj?prHeureMin(hj.fin):null;
       const r={enfant_id:e.id,date:date,statut:'',forfait:false,debut:null,fin:null,minutes:null,
-        contratMin:(cmA!=null&&cmB!=null&&cmB>cmA)?cmB-cmA:null,contratFin:ct?String(ct.heure_fin||'').slice(0,5):'',sousContrat:!!ct};
+        contratMin:(cmA!=null&&cmB!=null&&cmB>cmA)?cmB-cmA:null,contratFin:hj?String(hj.fin||'').slice(0,5):'',sousContrat:!!ct};
       if(arr.length){
         const d0=arr[0].t;
         r.debut=String(d0.getHours()).padStart(2,'0')+':'+String(d0.getMinutes()).padStart(2,'0');
