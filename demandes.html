@@ -2988,12 +2988,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg" style="flex:1"><label class="flabel">Fin du contrat</label><input type="date" class="finput" id="ct-fin"></div>
     </div>
     <div style="display:flex;gap:10px">
-      <div class="fg" style="flex:1"><label class="flabel">Heure d’arrivée</label><input type="time" class="finput" id="ct-h1"></div>
+      <div class="fg" style="flex:1"><label class="flabel">Heure d’arrivée (par défaut)</label><input type="time" class="finput" id="ct-h1"></div>
       <div class="fg" style="flex:1"><label class="flabel">Heure de départ</label><input type="time" class="finput" id="ct-h2"></div>
     </div>
     <div class="fg"><label class="flabel">Jours de présence</label>
       <div id="ct-jours" style="display:flex;gap:6px;flex-wrap:wrap"></div>
     </div>
+    <div class="fg" id="ct-horaires-jours"></div>
     <div class="fg"><label class="flabel">Note <span style="font-weight:400;color:var(--muted)">(facultatif)</span></label><textarea class="finput" id="ct-notes" rows="2" style="resize:vertical"></textarea></div>
     <div class="mactions">
       <button class="btn-cancel" id="ct-btn-delete" style="display:none;color:var(--red)" onclick="ctDelete()"><i class="ti ti-trash"></i> Supprimer</button>
@@ -4068,7 +4069,7 @@ function showApp(){
   document.getElementById('app-wrap').style.display='block';
   document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
   document.querySelectorAll('.referent-only').forEach(el=>el.style.display=(!isDirection)?'':'none');
-  const isDavid=currentProfile?.role==='direction'||(currentUser?.email||'').toLowerCase()==='cp1.koalakids@outlook.fr';
+  const isDavid=currentProfile?.role==='direction'||currentProfile?.role==='referent'||(currentUser?.email||'').toLowerCase()==='cp1.koalakids@outlook.fr';
   document.querySelectorAll('.david-only').forEach(el=>el.style.display=isDavid?'':'none');
   document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
   updateBadges();renderCrecheTabs();
@@ -8535,7 +8536,7 @@ function enfFillCreches(selectedId){
   sel.style.cursor=isDirection?'':'not-allowed';
 }
 function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';document.getElementById('enf-avert-provisoire').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies','enf-date-sortie'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';document.getElementById('enf-gouter-base').value='';document.getElementById('enf-type-couche').value='couche';enfSyncTailleCouche('');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display=(isDirection?'':'none');document.getElementById('enf-avert-provisoire').style.display=e.naissance_provisoire?'':'none';enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-date-sortie').value=e.date_sortie||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';document.getElementById('enf-gouter-base').value=e.gouter_base||'';document.getElementById('enf-type-couche').value=e.type_couche||'couche';enfSyncTailleCouche(e.taille_couche||'');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display='';document.getElementById('enf-avert-provisoire').style.display=e.naissance_provisoire?'':'none';enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-date-sortie').value=e.date_sortie||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';document.getElementById('enf-gouter-base').value=e.gouter_base||'';document.getElementById('enf-type-couche').value=e.type_couche||'couche';enfSyncTailleCouche(e.taille_couche||'');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
 /* Écriture d'une fiche enfant tolérante aux colonnes optionnelles absentes.
    `repas_base` et `gouter_base` sont ajoutées par des migrations SQL distinctes :
    si l'une manque, Postgres nomme la colonne fautive et on la retire du payload

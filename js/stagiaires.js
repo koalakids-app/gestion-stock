@@ -477,7 +477,7 @@ function stgOpenFiche(id,typeDefaut){
   v('stg-f-email',s&&s.email);         v('stg-f-tel',s&&s.telephone);
   v('stg-f-ecole',s&&s.ecole);         v('stg-f-formation',s&&s.formation);
   v('stg-f-niveau',s&&s.niveau);       v('stg-f-creche',s?(s.creche_id||''):(isDirection?'':(currentProfile&&currentProfile.creche_id)||''));
-  v('stg-f-referent',s&&s.referent_id);
+  v('stg-f-referent',s?(s.accompagnant_employe_id?'e:'+s.accompagnant_employe_id:(s.referent_id?'r:'+s.referent_id:'')):'');
   v('stg-f-statut',s?s.statut:'demande');
   v('stg-f-demande',s?s.demande_le:todayStr());
   v('stg-f-padlet',s&&s.padlet_url);
@@ -490,7 +490,7 @@ function stgOpenFiche(id,typeDefaut){
   const apres=document.getElementById('stg-apres-creation');
   if(apres)apres.style.display=s?'':'none';
   const del=document.getElementById('stg-f-del');
-  if(del)del.style.display=(s&&isDirection)?'':'none';
+  if(del)del.style.display=s?'':'none';
 
   stgTypeChange();
   stgDocExtCache=[];
@@ -532,19 +532,30 @@ function stgRemplirReferents(crecheId){
   const cid=crecheId||((document.getElementById('stg-f-creche')||{}).value||'');
   const refs=cacheReferents.filter(r=>r.role==='referent'&&(!cid||String(r.creche_id)===String(cid)));
   const dirs=cacheReferents.filter(r=>r.role==='direction');
-  const opt=r=>'<option value="'+escHtml(String(r.id))+'">'+escHtml(r.name||'—')
+  const opt=r=>'<option value="r:'+escHtml(String(r.id))+'">'+escHtml(r.name||'—')
     +(r.poste?' — '+escHtml(r.poste):'')+'</option>';
+  const nomEmp=e=>((e.prenom||'')+' '+(e.nom||'')).trim()||'—';
+  const optEmp=e=>'<option value="e:'+escHtml(String(e.id))+'">'+escHtml(nomEmp(e))
+    +(e.poste?' — '+escHtml(e.poste):'')+'</option>';
+  /* Tous les salariés de la crèche peuvent accompagner, pas seulement les
+     comptes referents : on évite de se proposer soi-même un·e alternant·e. */
+  const fiche=stgFicheId?stgCache.find(x=>String(x.id)===String(stgFicheId)):null;
+  const emps=(typeof cacheEmployes!=='undefined'?cacheEmployes:[])
+    .filter(e=>(!cid||String(e.creche_id)===String(cid))&&!(fiche&&fiche.employe_id&&String(fiche.employe_id)===String(e.id)))
+    .sort((a,b)=>nomEmp(a).localeCompare(nomEmp(b),'fr'));
   const val=sel.value;
   sel.innerHTML='<option value="">— Non désignée —</option>'
     +(refs.length?'<optgroup label="Directeurs/trices techniques de la crèche">'+refs.map(opt).join('')+'</optgroup>':'')
-    +(dirs.length?'<optgroup label="Direction et coordination">'+dirs.map(opt).join('')+'</optgroup>':'');
-  /* Une personne enregistrée sur la fiche mais absente des deux groupes (elle a
+    +(dirs.length?'<optgroup label="Direction et coordination">'+dirs.map(opt).join('')+'</optgroup>':'')
+    +(emps.length?'<optgroup label="Salariés de la structure">'+emps.map(optEmp).join('')+'</optgroup>':'');
+  /* Une personne enregistrée sur la fiche mais absente des groupes (elle a
      changé de crèche depuis) resterait perdue en silence : on la remet. */
   if(val){
     sel.value=val;
     if(sel.value!==val){
-      const r=cacheReferents.find(x=>String(x.id)===String(val));
-      if(r){sel.insertAdjacentHTML('beforeend','<optgroup label="Déjà enregistrée">'+opt(r)+'</optgroup>');sel.value=val;}
+      const id=val.slice(2);
+      const r=val.startsWith('e:')?cacheEmployes.find(x=>String(x.id)===id):cacheReferents.find(x=>String(x.id)===id);
+      if(r){sel.insertAdjacentHTML('beforeend','<optgroup label="Déjà enregistrée">'+(val.startsWith('e:')?optEmp(r):opt(r))+'</optgroup>');sel.value=val;}
     }
   }
 }
@@ -574,7 +585,8 @@ async function stgSave(){
     formation:val('stg-f-formation')||null,
     niveau:val('stg-f-niveau')||null,
     creche_id:val('stg-f-creche')||null,
-    referent_id:val('stg-f-referent')||null,
+    referent_id:(val('stg-f-referent')||'').startsWith('r:')?val('stg-f-referent').slice(2):null,
+    accompagnant_employe_id:(val('stg-f-referent')||'').startsWith('e:')?val('stg-f-referent').slice(2):null,
     statut:val('stg-f-statut')||'demande',
     demande_le:val('stg-f-demande')||null,
     padlet_url:val('stg-f-padlet')||null,
