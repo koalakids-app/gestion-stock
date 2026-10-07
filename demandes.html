@@ -7829,7 +7829,8 @@ async function crOpen(){
      appareil (localStorage) ou déjà enregistrée en base (_crSaved.infos)
      reste prioritaire, pour ne pas écraser une correction ponctuelle. */
   const nonEmpty=function(o){const r={};Object.keys(o||{}).forEach(function(k){if(o[k])r[k]=o[k];});return r;};
-  let info={adresse:creche.addr||'',tel:creche.repas_tel||'',mail:creche.repas_mail||'',contact:creche.repas_contact||'',responsable:creche.repas_responsable||''};
+  const etab=(typeof cacheEtablissements!=='undefined'&&cacheEtablissements.find(function(x){return x.creche_id===ctx.crecheId;}))||{};
+  let info={adresse:creche.addr||'',tel:etab.telephone||creche.repas_tel||'',mail:etab.email||creche.repas_mail||'',contact:creche.repas_contact||'',responsable:creche.repas_responsable||''};
   try{info=Object.assign(info,nonEmpty(JSON.parse(localStorage.getItem(crInfoKey(ctx.crecheId))||'{}')));}catch(e){}
   if(_crSaved&&_crSaved.infos)info=Object.assign(info,nonEmpty(_crSaved.infos));
   document.getElementById('cr-adresse').value=info.adresse||'';
