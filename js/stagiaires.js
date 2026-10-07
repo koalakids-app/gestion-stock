@@ -470,7 +470,7 @@ function stgOpenFiche(id,typeDefaut){
   v('stg-f-type',type);
 
   const selC=document.getElementById('stg-f-creche');
-  if(selC)selC.innerHTML=stgOptionsCreches('— Pas encore orientée —');
+  if(selC)selC.innerHTML=stgOptionsCreches('— Choisir la crèche —');
   stgRemplirReferents(s?s.creche_id:null);
 
   v('stg-f-prenom',s&&s.prenom);       v('stg-f-nom',s&&s.nom);
@@ -574,6 +574,10 @@ async function stgSave(){
   const val=id=>{const e=document.getElementById(id);return e?e.value.trim():'';};
   const prenom=val('stg-f-prenom');
   if(!prenom)return showBanner('Le prénom est obligatoire.','error');
+  /* La règle de sécurité de la table n'admet que les fiches rattachées à une
+     crèche (de son organisation, ou de la référente qui saisit) : sans crèche,
+     Supabase refuse l'enregistrement avec un message incompréhensible. */
+  if(!val('stg-f-creche'))return showBanner('Choisissez la crèche : une fiche sans crèche ne peut pas être enregistrée.','error');
 
   const row={
     type_contrat:val('stg-f-type')==='alternant'?'alternant':'stagiaire',
