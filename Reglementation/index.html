@@ -3258,6 +3258,29 @@ function openModal(id) {
   document.body.style.overflow = 'hidden';
 }
 
+// Associe une source à son site officiel (recherche limitée au domaine officiel,
+// pour éviter les liens profonds qui changent). Premier motif qui correspond.
+const OFFICIAL_SOURCES = [
+  [/CSP|CASF|CSS\b|Code (du travail|pénal|des assurances|construction|général des impôts)|CGI|Décret|Arrêté|Loi n|Règlement CE|Règlement UE|RGPD|Circulaire|JO du|IDCC|CCN|Avenant|Norme/i, 'legifrance.gouv.fr'],
+  [/Sénat|sénat/, 'senat.fr'],
+  [/CNAF|CAF|COG|FNAS|Barème/i, 'caf.fr'],
+  [/HAS|RNQAJE/, 'has-sante.fr'],
+  [/DGCS|DGS|DGAL|DGESCO|Solidarités|SPPE|min\. /i, 'solidarites.gouv.fr'],
+  [/CNIL/, 'cnil.fr'],
+  [/INRS/, 'inrs.fr'],
+  [/ANSES/, 'anses.fr'],
+  [/SPF|Santé publique/, 'santepubliquefrance.fr'],
+  [/AMF|Maire-info/, 'amf.asso.fr'],
+  [/SNPPE/, 'snppe.fr'],
+  [/Pros de la P/, 'lesprosdelapetiteenfance.fr'],
+  [/Lassmat/, 'lassmat.fr'],
+];
+function officialSourceUrl(label) {
+  const hit = OFFICIAL_SOURCES.find(([re]) => re.test(label));
+  const q = (hit ? 'site:' + hit[1] + ' ' : '') + label;
+  return 'https://www.google.com/search?q=' + encodeURIComponent(q);
+}
+
 // Source cliquable : accepte "texte", "texte https://url" ou {label, url}.
 // Sans URL explicite, le lien ouvre une recherche web sur l'intitulé de la source.
 function sourceBadge(s) {
@@ -3268,7 +3291,7 @@ function sourceBadge(s) {
     label = m ? (m[1] || m[2]) : String(s);
     url = m ? m[2] : null;
   }
-  if (!url) url = 'https://www.google.com/search?q=' + encodeURIComponent(label);
+  if (!url) url = officialSourceUrl(label);
   return `<a class="source-badge source-link" href="${url}" target="_blank" rel="noopener noreferrer" title="Ouvrir la source">📄 ${label} <span class="source-ext">↗</span></a>`;
 }
 
