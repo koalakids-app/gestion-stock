@@ -2927,11 +2927,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       modifiables avant génération du PDF.</div>
 
     <div class="frow">
-      <div class="fg" style="flex:2"><label class="flabel">Adresse</label><input class="finput" id="cr-adresse" placeholder="48 rue Picot – 83000 TOULON"/></div>
-      <div class="fg" style="flex:1"><label class="flabel">Téléphone</label><input class="finput" id="cr-tel" placeholder="07 86 61 56 19"/></div>
+      <div class="fg" style="flex:2"><label class="flabel">Adresse</label><input class="finput" id="cr-adresse" placeholder="Adresse de la crèche"/></div>
+      <div class="fg" style="flex:1"><label class="flabel">Téléphone</label><input class="finput" id="cr-tel" placeholder="Téléphone de la crèche"/></div>
     </div>
     <div class="frow">
-      <div class="fg" style="flex:2"><label class="flabel">Mail</label><input class="finput" id="cr-mail" placeholder="rt.toulon.picot@koalakids.fr"/></div>
+      <div class="fg" style="flex:2"><label class="flabel">Mail</label><input class="finput" id="cr-mail" placeholder="Mail de la crèche"/></div>
       <div class="fg" style="flex:1"><label class="flabel">Contact</label><input class="finput" id="cr-contact" placeholder="Nom du contact"/></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin:6px 0 14px;flex-wrap:wrap">
@@ -8137,6 +8137,19 @@ async function crSave(envoi){
     responsable:document.getElementById('cr-responsable').value.trim()
   };
   try{localStorage.setItem(crInfoKey(ctx.crecheId),JSON.stringify(infos));}catch(e){}
+  /* Coordonnées saisies ici et absentes de la fiche crèche : on les y mémorise,
+     pour qu'elles soient pré-remplies la prochaine fois sur tous les postes.
+     Une valeur déjà présente sur la fiche n'est jamais écrasée. */
+  try{
+    const cr=cacheCreches.find(function(c){return c.id===ctx.crecheId;});
+    if(cr){
+      const maj={};
+      [['repas_tel','tel'],['repas_mail','mail'],['repas_contact','contact'],['repas_responsable','responsable']].forEach(function(p){
+        if(!cr[p[0]]&&infos[p[1]])maj[p[0]]=infos[p[1]];
+      });
+      if(Object.keys(maj).length){await dbUpdate('creches',cr.id,maj);Object.assign(cr,maj);}
+    }
+  }catch(e){console.warn('[CommandeRepas] fiche crèche',e);}
   const row={
     creche_id:ctx.crecheId,
     semaine:ctx.dateStrs[0],
