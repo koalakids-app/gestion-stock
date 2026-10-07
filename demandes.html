@@ -11504,18 +11504,20 @@ async function rmpSave(){
   const date=document.getElementById('rmp-date').value;
   const nom=document.getElementById('rmp-nom').value.trim();
   if(!creche_id||!date||!nom){alert('Crèche, date et nom requis.');return;}
+  const heure_debut=document.getElementById('rmp-hdebut').value;
+  const heure_fin=document.getElementById('rmp-hfin').value;
+  if(!heure_debut||!heure_fin){alert('Heure de début et heure de fin requises.');return;}
+  // Une pause vide doit etre NULL : '' est refuse par les colonnes time.
   const row={
-    creche_id,date,nom,
-    heure_debut:document.getElementById('rmp-hdebut').value,
-    heure_fin:document.getElementById('rmp-hfin').value,
-    pause_debut:document.getElementById('rmp-pdebut').value,
-    pause_fin:document.getElementById('rmp-pfin').value
+    creche_id,date,nom,heure_debut,heure_fin,
+    pause_debut:document.getElementById('rmp-pdebut').value||null,
+    pause_fin:document.getElementById('rmp-pfin').value||null
   };
   let ok;
-  if(rmpEditingId)ok=await dbUpdate('remplacantes',rmpEditingId,row);
+  if(rmpEditingId)ok=await dbUpdateStrict('remplacantes',rmpEditingId,row);
   else{const saved=await dbInsert('remplacantes',row);ok=!!saved;}
   if(ok){showBanner('Créneau enregistré !');closeModal('modal-remplacante-wrap');rmpRefreshCurrentView();}
-  else showBanner('Erreur lors de l\'enregistrement.','error');
+  else showBanner('Erreur lors de l\'enregistrement'+(window._lastDbError?' : '+window._lastDbError:'.'),'error');
 }
 
 async function rmpDelete(){
