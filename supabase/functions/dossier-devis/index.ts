@@ -21,6 +21,7 @@
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resoudreJeton } from '../_shared/session-lien.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -75,7 +76,11 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const action = String(body.action || '');
-    const devis = await devisValide(String(body.token || ''));
+    // Le lien n'ouvre qu'une session (voir _shared/session-lien.ts) : ensuite la
+    // page ne renvoie plus que celle-ci, qui expire à l'inactivité.
+    const r = await resoudreJeton(body, 'dossier-devis');
+    if ('reponse' in r) return r.reponse;
+    const devis = await devisValide(r.token);
 
     // ---------------------------------------------------------------- GET
     if (action === 'get') {

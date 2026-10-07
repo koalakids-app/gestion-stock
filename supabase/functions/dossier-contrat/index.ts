@@ -57,6 +57,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
+import { resoudreJeton } from '../_shared/session-lien.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -318,7 +319,11 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const action = String(body.action || '');
-    const contrat = await contratValide(String(body.token || ''));
+    // Le lien n'ouvre qu'une session (voir _shared/session-lien.ts) : ensuite la
+    // page ne renvoie plus que celle-ci, qui expire à l'inactivité.
+    const r = await resoudreJeton(body, 'dossier-contrat');
+    if ('reponse' in r) return r.reponse;
+    const contrat = await contratValide(r.token);
 
     // ---------------------------------------------------------------- GET
     if (action === 'get') {

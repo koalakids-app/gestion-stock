@@ -32,6 +32,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resoudreJeton } from "../_shared/session-lien.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -76,8 +77,11 @@ Deno.serve(async (req) => {
     return erreur("corps_invalide");
   }
   const action = body.action as string;
-  const token = ((body.token as string) || "").trim();
-  if (!token) return erreur("jeton_manquant");
+  // Le lien n'ouvre qu'une session (voir _shared/session-lien.ts) : ensuite la
+  // page ne renvoie plus que celle-ci, qui expire à l'inactivité.
+  const r = await resoudreJeton(body, "dossier-pieces-employe");
+  if ("reponse" in r) return r.reponse;
+  const token = r.token;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

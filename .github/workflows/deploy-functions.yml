@@ -41,6 +41,10 @@ jobs:
           publiques="dossier-contrat dossier-devis dossier-famille dossier-pieces dossier-pieces-employe envoyer-devis envoyer-dossier-famille liste-destinataires-quiz suivi-famille sauvegarde-hebdomadaire manifest"
           for dir in supabase/functions/*/; do
             fn=$(basename "$dir")
+            # _shared : code importé par plusieurs fonctions, pas une fonction.
+            if [ "$fn" = "_shared" ]; then
+              continue
+            fi
             if echo " $publiques " | grep -q " $fn "; then
               continue
             fi

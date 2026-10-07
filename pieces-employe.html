@@ -70,6 +70,7 @@ a{color:var(--violet)}
 
 <div class="toast" id="toast"></div>
 
+<script src="js/session-lien.js"></script>
 <script>
 /* ===========================================================================
    PIECES-EMPLOYE.HTML — page publique de dépôt des documents d'embauche
@@ -93,7 +94,9 @@ const SUPABASE_URL = "https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const FN_URL = SUPABASE_URL + '/functions/v1/dossier-pieces-employe';
 
-const TOKEN = new URLSearchParams(location.search).get('t') || '';
+/* Le lien n'ouvre qu'une session courte (js/session-lien.js) : jeton retiré de l'adresse,
+   fermeture après inactivité, avertissement avant la fin. */
+const TOKEN = SessionLien.init({url:FN_URL,anonKey:SUPABASE_ANON_KEY});
 const wrap  = document.getElementById('wrap');
 
 const PIECES = [
@@ -128,17 +131,8 @@ function etat(cls,titre,msg,icone){
     +'<h2>'+esc(titre)+'</h2><p>'+esc(msg)+'</p></div>';
 }
 
-async function appel(action,payload){
-  const r=await fetch(FN_URL,{
-    method:'POST',
-    headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,
-             'Authorization':'Bearer '+SUPABASE_ANON_KEY},
-    body:JSON.stringify(Object.assign({action,token:TOKEN},payload||{}))
-  });
-  let j=null;
-  try{j=await r.json();}catch(e){}
-  if(!r.ok||!j||j.erreur)throw new Error((j&&j.erreur)||('Erreur '+r.status));
-  return j;
+function appel(action,payload){
+  return SessionLien.appel(action,payload);
 }
 
 async function boot(){
