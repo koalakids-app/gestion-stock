@@ -2927,11 +2927,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       modifiables avant génération du PDF.</div>
 
     <div class="frow">
-      <div class="fg" style="flex:2"><label class="flabel">Adresse</label><input class="finput" id="cr-adresse" placeholder="48 rue Picot – 83000 TOULON"/></div>
-      <div class="fg" style="flex:1"><label class="flabel">Téléphone</label><input class="finput" id="cr-tel" placeholder="07 86 61 56 19"/></div>
+      <div class="fg" style="flex:2"><label class="flabel">Adresse</label><input class="finput" id="cr-adresse" placeholder="Adresse de la crèche"/></div>
+      <div class="fg" style="flex:1"><label class="flabel">Téléphone</label><input class="finput" id="cr-tel" placeholder="Téléphone de la crèche"/></div>
     </div>
     <div class="frow">
-      <div class="fg" style="flex:2"><label class="flabel">Mail</label><input class="finput" id="cr-mail" placeholder="rt.toulon.picot@koalakids.fr"/></div>
+      <div class="fg" style="flex:2"><label class="flabel">Mail</label><input class="finput" id="cr-mail" placeholder="Mail de la crèche"/></div>
       <div class="fg" style="flex:1"><label class="flabel">Contact</label><input class="finput" id="cr-contact" placeholder="Nom du contact"/></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin:6px 0 14px;flex-wrap:wrap">
@@ -7954,7 +7954,12 @@ function crCompute(notify){
            l'âge est celui du jour de livraison (et non celui d'aujourd'hui) et la
            lettre forcée du repas est respectée, sans quoi un enfant pouvait être
            « Grand » au repas et « Bébé » au goûter. Aucun goûter avant 6 mois. */
-        const g=r.enfant.gouter_base||(t==='bb6'?null:(t==='bb18'?'gbb':'ggr'));
+        /* L'âge prime sur tout : un enfant de moins de 6 mois à la date de livraison
+           n'a jamais de goûter, même avec un repas forcé (M, G) ou un goûter forcé
+           sur la fiche. */
+        const mois=mcmAgeMois(r.enfant.dob,ctx.dateStrs[i]);
+        const g=(mois!==null&&mois<6)?null
+          :(r.enfant.gouter_base||(t==='bb6'?null:(t==='bb18'?'gbb':'ggr')));
         /* Un goûter ne contient jamais de viande : la mention « SV » n'a pas de
            sens sur ces deux lignes et faisait apparaître un régime particulier
            là où le traiteur sert le goûter standard. L'enfant est donc compté
@@ -8132,6 +8137,19 @@ async function crSave(envoi){
     responsable:document.getElementById('cr-responsable').value.trim()
   };
   try{localStorage.setItem(crInfoKey(ctx.crecheId),JSON.stringify(infos));}catch(e){}
+  /* Coordonnées saisies ici et absentes de la fiche crèche : on les y mémorise,
+     pour qu'elles soient pré-remplies la prochaine fois sur tous les postes.
+     Une valeur déjà présente sur la fiche n'est jamais écrasée. */
+  try{
+    const cr=cacheCreches.find(function(c){return c.id===ctx.crecheId;});
+    if(cr){
+      const maj={};
+      [['repas_tel','tel'],['repas_mail','mail'],['repas_contact','contact'],['repas_responsable','responsable']].forEach(function(p){
+        if(!cr[p[0]]&&infos[p[1]])maj[p[0]]=infos[p[1]];
+      });
+      if(Object.keys(maj).length){await dbUpdate('creches',cr.id,maj);Object.assign(cr,maj);}
+    }
+  }catch(e){console.warn('[CommandeRepas] fiche crèche',e);}
   const row={
     creche_id:ctx.crecheId,
     semaine:ctx.dateStrs[0],
