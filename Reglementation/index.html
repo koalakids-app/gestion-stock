@@ -616,6 +616,9 @@
     font-weight: 500;
     margin: 4px 4px 4px 0;
   }
+  a.source-link { text-decoration: none; cursor: pointer; transition: background .15s, border-color .15s; }
+  a.source-link:hover { background: #fff; border-color: var(--brown); text-decoration: underline; }
+  .source-ext { font-size: 11px; opacity: .6; }
 
   /* EMPTY STATE */
   .empty-state {
@@ -3247,12 +3250,26 @@ function openModal(id) {
 
     <div class="modal-section">
       <div class="modal-section-title">Sources & références</div>
-      <div>${det.sources.map(s => `<span class="source-badge">📄 ${s}</span>`).join('')}</div>
+      <div>${det.sources.map(sourceBadge).join('')}</div>
     </div>
   `;
 
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+// Source cliquable : accepte "texte", "texte https://url" ou {label, url}.
+// Sans URL explicite, le lien ouvre une recherche web sur l'intitulé de la source.
+function sourceBadge(s) {
+  let label, url;
+  if (s && typeof s === 'object') { label = s.label || s.url || ''; url = s.url; }
+  else {
+    const m = String(s).match(/^(.*?)\s*(https?:\/\/\S+)\s*$/);
+    label = m ? (m[1] || m[2]) : String(s);
+    url = m ? m[2] : null;
+  }
+  if (!url) url = 'https://www.google.com/search?q=' + encodeURIComponent(label);
+  return `<a class="source-badge source-link" href="${url}" target="_blank" rel="noopener noreferrer" title="Ouvrir la source">📄 ${label} <span class="source-ext">↗</span></a>`;
 }
 
 function closeModal() {
