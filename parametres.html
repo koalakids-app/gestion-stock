@@ -181,6 +181,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
           <div class="f"><label class="lb">Nom de la responsable</label><input id="rpResp"></div>
         </div>
         <p class="hint">Coordonnées pré-remplies sur les documents qui en ont besoin (par exemple la commande repas du module Présences).</p>
+        <div style="margin-top:10px"><button class="btn" type="button" style="color:#b91c1c;border-color:#b91c1c" onclick="supprimerCreche()"><i class="ti ti-trash"></i> Supprimer cette crèche</button></div>
       </div>
 
       <div class="card">
@@ -611,7 +612,32 @@ async function loadAll(){
 function renderChips(){
   document.getElementById('chips').innerHTML=CRECHES.map(c=>
     '<button class="chip'+(String(c.id)===String(crecheId)?' on':'')+'" onclick="pick(\''+c.id+'\')">'
-    +esc(c.name)+'</button>').join('');
+    +esc(c.name)+'</button>').join('')
+    +'<button class="chip" onclick="ajouterCreche()" title="Ajouter une crèche"><i class="ti ti-plus"></i> Ajouter une crèche</button>';
+}
+
+async function ajouterCreche(){
+  if(dirty()&&!confirm('Les modifications non enregistrées seront perdues. Continuer ?'))return;
+  const name=(prompt('Nom de la nouvelle crèche :')||'').trim();
+  if(!name)return;
+  const{data,error}=await sb.from('creches').insert({name:name}).select().single();
+  if(error||!data){toast('Ajout impossible : '+((error&&error.message)||'droits insuffisants'),true);return;}
+  CRECHES.push(data);
+  crecheId=data.id;renderChips();renderEtab();
+  toast('Crèche ajoutée — complétez sa fiche puis enregistrez.');
+}
+
+async function supprimerCreche(){
+  const c=crecheDe(crecheId);if(!c)return;
+  if(CRECHES.length<2){toast('Impossible de supprimer la seule crèche.',true);return;}
+  const saisie=prompt('Supprimer définitivement « '+c.name+' » et ses données ?\nPour confirmer, recopiez exactement son nom :');
+  if(saisie===null)return;
+  if(saisie.trim()!==c.name){toast('Le nom ne correspond pas : suppression annulée.',true);return;}
+  const{data,error}=await sb.from('creches').delete().eq('id',c.id).select('id');
+  if(error||!data||!data.length){toast('Suppression impossible : '+((error&&error.message)||'droits insuffisants ou données liées'),true);return;}
+  CRECHES=CRECHES.filter(x=>String(x.id)!==String(c.id));
+  crecheId=CRECHES[0].id;renderChips();renderEtab();
+  toast('Crèche supprimée.');
 }
 function pick(id){
   // Changer de crèche abandonne la saisie en cours : mieux vaut le dire que
