@@ -7954,7 +7954,12 @@ function crCompute(notify){
            l'âge est celui du jour de livraison (et non celui d'aujourd'hui) et la
            lettre forcée du repas est respectée, sans quoi un enfant pouvait être
            « Grand » au repas et « Bébé » au goûter. Aucun goûter avant 6 mois. */
-        const g=r.enfant.gouter_base||(t==='bb6'?null:(t==='bb18'?'gbb':'ggr'));
+        /* L'âge prime sur tout : un enfant de moins de 6 mois à la date de livraison
+           n'a jamais de goûter, même avec un repas forcé (M, G) ou un goûter forcé
+           sur la fiche. */
+        const mois=mcmAgeMois(r.enfant.dob,ctx.dateStrs[i]);
+        const g=(mois!==null&&mois<6)?null
+          :(r.enfant.gouter_base||(t==='bb6'?null:(t==='bb18'?'gbb':'ggr')));
         /* Un goûter ne contient jamais de viande : la mention « SV » n'a pas de
            sens sur ces deux lignes et faisait apparaître un régime particulier
            là où le traiteur sert le goûter standard. L'enfant est donc compté

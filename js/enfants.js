@@ -2528,6 +2528,8 @@ function enfGouterLigne(e){
   if(!e)return null;
   const base=e.repas_base||enfRepasBaseAuto(e);
   if(base==='BIB')return null;              // au biberon : ni repas ni goûter
+  // Moins de 6 mois : jamais de goûter, même si un goûter est forcé sur la fiche.
+  if(e.dob&&window.ageMoisFromDob(e.dob)<6)return null;
   return e.gouter_base||enfGouterAuto(e);
 }
 let enfContratsCache=[], editingContratId=null, ctJoursSel=[];
