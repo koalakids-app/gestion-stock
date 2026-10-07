@@ -73,6 +73,17 @@ section Multi-tenant ci-dessus).
 
 ---
 
+## Pages publiques ouvertes par un lien
+
+Les pages sans compte (`pieces.html`, `pieces-employe.html`, `famille.html`, `famille-suivi.html`, `stagiaire.html`, `devis.html`, `signature-contrat.html`) fonctionnent avec une **session courte** :
+
+- le lien (`?t=jeton`) n'ouvre qu'une session et le jeton est retiré de l'adresse ;
+- la session se ferme après **15 minutes d'inactivité**, ou au plus tard **2 heures** après l'ouverture ; un avertissement avec compte à rebours s'affiche 2 minutes avant (« Rester connecté(e) ») ;
+- passé ce délai la page est vidée : il faut **recliquer sur le lien reçu** (tant que le lien lui-même n'a pas expiré) ;
+- côté serveur, `supabase/functions/_shared/session-lien.ts` applique la même règle (session signée HMAC, liée à une fonction, sans table ni secret supplémentaire). Les fonctions `dossier-*` (dont `dossier-stagiaire`) et `suivi-famille` n'acceptent plus le jeton brut, sauf pour l'action `ouvrir`.
+
+Côté page : `js/session-lien.js`. Les délais sont dans ce fichier (`MINUTES`, `DUREE_MAX_H`) et dans `_shared/session-lien.ts` (`INACTIVITE_S`, `DUREE_MAX_S`) : les garder alignés.
+
 ## Déploiement
 
 Publication automatique via GitHub Pages.

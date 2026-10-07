@@ -78,12 +78,15 @@ input:focus,textarea:focus{outline:none;border-color:var(--orange)}
   <div class="center"><div class="big">⏳</div><p>Chargement de votre devis…</p></div>
 </div>
 
+<script src="js/session-lien.js"></script>
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const FN=SUPABASE_URL+"/functions/v1/dossier-devis";
 
-const TOKEN=new URLSearchParams(location.search).get('t')||'';
+/* Le lien n'ouvre qu'une session courte (js/session-lien.js) : jeton retiré de l'adresse,
+   fermeture après inactivité, avertissement avant la fin. */
+const TOKEN = SessionLien.init({url:FN,anonKey:SUPABASE_ANON_KEY});
 let D=null;
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -437,16 +440,8 @@ async function telechargerPdf(){
   if(btn){btn.disabled=false;btn.textContent='Télécharger le devis en PDF';}
 }
 
-async function appel(action,extra){
-  const r=await fetch(FN,{
-    method:'POST',
-    headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,
-             'Authorization':'Bearer '+SUPABASE_ANON_KEY},
-    body:JSON.stringify(Object.assign({action:action,token:TOKEN},extra||{}))
-  });
-  const j=await r.json().catch(()=>({erreur:'Réponse illisible'}));
-  if(!r.ok)throw new Error(j.erreur||'Erreur');
-  return j;
+function appel(action,extra){
+  return SessionLien.appel(action,extra);
 }
 
 function ecranSimple(emoji,titre,texte){
