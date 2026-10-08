@@ -168,19 +168,21 @@ async function stgLoad(){
 function stgRenderTout(){
   stgRender();
   stgRenderCal();
+  stgRenderDispo();
   stgRenderTypes();
   stgRenderRess();
   stgMajBadge();
 }
 
 function stgShowView(v,btn){
-  ['fiches','cal','types','ress'].forEach(x=>{
+  ['fiches','cal','dispo','types','ress'].forEach(x=>{
     const el=document.getElementById('stg-view-'+x);
     if(el)el.classList.toggle('active',x===v);
   });
   document.querySelectorAll('#main-stagiaires .module-tab').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   if(v==='cal')stgRenderCal();
+  if(v==='dispo')stgRenderDispo();
   if(v==='types')stgRenderTypes();
   if(v==='ress')stgRenderRess();
 }
@@ -1771,6 +1773,96 @@ function stgCalClic(id,iso){
   const j=stgJoursDe(id).find(x=>String(x.jour)===String(iso));
   stgJourCourant.nouveau=!j;
   stgOuvrirModalJour(j,iso);
+}
+
+// ── Vue : les disponibilités par crèche ───────────────────────────────────
+
+/* La fiche occupe-t-elle une place ce jour-là ? Un jour saisi dit oui, une
+   absence dit non. Sans aucun jour saisi, la période prévue occupe les jours
+   ouvrés ; dès qu'un planning précis existe, ce qui n'y figure pas est libre. */
+function stgOccupe(s,iso){
+  const jours=stgJoursDe(s.id);
+  const j=jours.find(x=>String(x.jour)===iso);
+  if(j)return !j.absent;
+  if(jours.length)return false;
+  if(!(s.date_debut&&s.date_fin&&iso>=s.date_debut&&iso<=s.date_fin))return false;
+  const g=new Date(iso+'T12:00:00').getDay();
+  return g!==0&&g!==6;
+}
+
+function stgRenderDispo(){
+  const box=document.getElementById('stg-dispo');
+  if(!box)return;
+  const el=id=>document.getElementById(id);
+  const debut=el('stg-d-debut').value;
+  if(!debut){
+    box.innerHTML='<div style="text-align:center;padding:34px 20px;color:var(--muted);font-size:13px">'
+      +'Choisissez une date (ou une période) pour voir quelles crèches ont encore de la place.</div>';
+    return;
+  }
+  let fin=el('stg-d-fin').value||debut;
+  if(fin<debut)fin=debut;
+  const type=el('stg-d-type').value;
+  const cap=Math.max(1,parseInt(el('stg-d-cap').value,10)||1);
+
+  /* Les jours ouvrés de la période demandée (plafonnée à un an). */
+  const jours=[];
+  for(let d=new Date(debut+'T12:00:00');ipDateToLocalISO(d)<=fin&&jours.length<370;d.setDate(d.getDate()+1)){
+    if(d.getDay()!==0&&d.getDay()!==6)jours.push(ipDateToLocalISO(d));
+  }
+  if(!jours.length){
+    box.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Cette période ne contient que des week-ends.</div>';
+    return;
+  }
+
+  const ferme=['accepte','en_cours','termine'];
+  const base=stgCache.filter(s=>s.creche_id&&(!type||stgType(s)===type));
+  const cartes=stgCrechesVisibles().map(c=>{
+    const siennes=base.filter(s=>String(s.creche_id)===String(c.id));
+    const fermes=siennes.filter(s=>ferme.includes(s.statut));
+    const attente=siennes.filter(s=>s.statut==='demande'||s.statut==='contact')
+      .filter(s=>jours.some(iso=>stgOccupe(s,iso)));
+    let pic=0;const presents=new Map();
+    jours.forEach(iso=>{
+      const la=fermes.filter(s=>stgOccupe(s,iso));
+      la.forEach(s=>{(presents.get(s.id)||presents.set(s.id,[]).get(s.id)).push(iso);});
+      pic=Math.max(pic,la.length);
+    });
+    return {c,pic,presents,attente,reste:cap-pic};
+  }).sort((a,b)=>b.reste-a.reste||String(a.c.name).localeCompare(String(b.c.name),'fr'));
+
+  const libres=cartes.filter(x=>x.reste>0).length;
+  const quand=stgDateFr(debut)+(fin!==debut?' → '+stgDateFr(fin):'');
+  let h='<div style="font-size:13px;margin-bottom:10px"><b>'+libres+' crèche'+(libres>1?'s':'')+' avec de la place</b> sur '
+    +escHtml(quand)+' <span style="color:var(--muted)">('+jours.length+' jour'+(jours.length>1?'s':'')+' ouvré'+(jours.length>1?'s':'')+')</span></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px">';
+  cartes.forEach(x=>{
+    const ok=x.reste>0;
+    const coul=ok?'var(--green)':'var(--red)';
+    h+='<div style="border:1px solid var(--border);border-left:4px solid '+coul+';border-radius:10px;padding:10px 12px;background:#fff">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'
+      +'<b>'+escHtml(x.c.name)+'</b>'
+      +'<span style="font-size:11px;font-weight:700;color:'+coul+'">'
+      +(ok?(x.pic?x.reste+' place'+(x.reste>1?'s':'')+' libre'+(x.reste>1?'s':''):'Libre'):'Complet')+'</span></div>';
+    if(x.presents.size){
+      h+='<div style="margin-top:6px;font-size:12px">';
+      x.presents.forEach((isos,id)=>{
+        const s=stgCache.find(y=>String(y.id)===String(id));
+        const p=stgProfil(s);
+        h+='<div onclick="stgOpenFiche(\''+id+'\')" style="cursor:pointer;margin-top:2px">'
+          +'<i class="ti '+p.ic+'" style="color:'+p.couleur+'"></i> '+escHtml(stgNomComplet(s))
+          +' <span style="color:var(--muted)">· '+isos.length+' j'
+          +(s.date_debut?' ('+escHtml(stgDateFr(s.date_debut))+(s.date_fin?' → '+escHtml(stgDateFr(s.date_fin)):'')+')':'')+'</span></div>';
+      });
+      h+='</div>';
+    }
+    if(x.attente.length){
+      h+='<div style="margin-top:6px;font-size:11.5px;color:var(--orange-dark)"><i class="ti ti-clock"></i> En attente (non comptée'
+        +(x.attente.length>1?'s':'')+') : '+x.attente.map(s=>escHtml(stgNomComplet(s))).join(', ')+'</div>';
+    }
+    h+='</div>';
+  });
+  box.innerHTML=h+'</div>';
 }
 
 // ── Vue 3 : les pièces demandées ──────────────────────────────────────────
