@@ -770,28 +770,14 @@ function stgMailto(s){
     +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);
 }
 
-/* Directeur/trice technique qui signe le mail : celle de la crèche de la fiche
-   (la personne désignée sur la fiche si c'est une directrice technique, sinon
-   la première de la crèche). Son téléphone vient de sa fiche salarié liée. */
-function stgSignataire(s){
-  const cid=s&&s.creche_id;
-  const refs=cacheReferents.filter(r=>r.role==='referent'&&cid&&String(r.creche_id)===String(cid));
-  const r=refs.find(x=>s.referent_id&&String(x.id)===String(s.referent_id))||refs[0]||null;
-  if(!r)return null;
-  const emp=r.employe_id&&typeof cacheEmployes!=='undefined'
-    ?cacheEmployes.find(e=>String(e.id)===String(r.employe_id)):null;
-  return {nom:r.name||'',poste:r.poste||'Directeur/trice Technique',tel:(emp&&emp.telephone)||''};
-}
-
 /* Premier contact après une demande de stage, AVANT toute fiche : on propose un
-   entretien et on demande les disponibilités, pour savoir si l'on enclenche le
+   entretien et on demande les disponibilités (sans signature : Outlook ajoute la sienne), pour savoir si l'on enclenche le
    recrutement. Composé dans le client de messagerie — rien ne part d'ici.
    `s` n'est pas une fiche : {prenom, nom, email, type, creche_id}. */
 function stgMailtoInfos(s){
   const orgNom=(window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids';
   const alt=s.type==='alternant';
   const crNom=stgCrecheName(s.creche_id);
-  const sig=stgSignataire(s);
   const sujet='Votre demande '+(alt?"d'alternance":'de stage')+' — '+orgNom;
   const corps='Bonjour '+((s.prenom+' '+s.nom).trim())+',\n\n'
     +'Je vous écris suite à votre demande '+(alt?"d'alternance":'de stage')+' au sein du groupe '+orgNom
@@ -799,8 +785,7 @@ function stgMailtoInfos(s){
     +(alt?'alternance':'stage')+'. '
     +'Donnez-moi vos disponibilités afin que je vous propose un rendez-vous pour un entretien'
     +(crNom?' sur la crèche '+crNom:'')+'.\n\n'
-    +'Je vous souhaite une bonne fin de journée.\n\n'
-    +(sig?sig.nom+'\n'+sig.poste+(crNom?' chez '+crNom:'')+(sig.tel?'\n'+sig.tel:''):'');
+    +'Je vous souhaite une bonne fin de journée.\n\n';
   return 'mailto:'+encodeURIComponent(s.email||'')
     +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);
 }
