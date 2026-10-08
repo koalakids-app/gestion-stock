@@ -1170,6 +1170,8 @@ body.sk-locked{overflow:hidden}
           <div class="filter-chip" onclick="filterCat('Bureautique', this)">Bureautique</div>
           <div class="filter-chip" onclick="filterCat('Rangement', this)">Rangement</div>
           <div class="filter-chip" onclick="filterCat('Décoration', this)">Décoration</div>
+          <div class="filter-chip" onclick="filterCat('Entretien', this)">Entretien</div>
+          <div class="filter-chip" onclick="filterCat('Cuisine', this)">Cuisine</div>
         </div>
       </div>
       <div id="inv-filters-consommable" style="display:none;margin-bottom:16px">
@@ -1180,6 +1182,8 @@ body.sk-locked{overflow:hidden}
           <div class="filter-chip" onclick="filterCatConso('Sensoriel', this)">Sensoriel</div>
           <div class="filter-chip" onclick="filterCatConso('Expression artistique', this)">Expression artistique</div>
           <div class="filter-chip" onclick="filterCatConso('Décoration', this)">Décoration</div>
+          <div class="filter-chip" onclick="filterCatConso('Entretien', this)">Entretien</div>
+          <div class="filter-chip" onclick="filterCatConso('Cuisine', this)">Cuisine</div>
         </div>
       </div>
 
@@ -1326,6 +1330,8 @@ body.sk-locked{overflow:hidden}
             <option>Bureautique</option>
             <option>Rangement</option>
             <option>Décoration</option>
+            <option>Entretien</option>
+            <option>Cuisine</option>
           </select>
         </div>
         <div class="form-group">
@@ -1646,7 +1652,7 @@ const IS_LOCAL = (typeof location !== 'undefined') &&
 let CRECHES = ['Brunet', 'Cuers', 'Ollioules', 'St Jean', 'Picot 1', 'Picot 2'];
 let CRECHE_COLORS = { 'Brunet': '#F59E0B', 'Cuers': '#10B981', 'Ollioules': '#EF4444', 'St Jean': '#8B5CF6', 'Picot 1': '#0EA5E9', 'Picot 2': '#F43F5E' };
 const CRECHE_PALETTE = ['#F59E0B', '#10B981', '#EF4444', '#8B5CF6', '#0EA5E9', '#F43F5E', '#22C55E', '#F97316', '#6366F1', '#EC4899'];
-const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
+const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀','Entretien':'🧹','Cuisine':'🍳' };
 
 let ARTICLES = [
   { id:1, nom:'Puzzles encastrement 4 pièces', ref:'MAT-001', cat:'Sensoriel', creche:'Brunet', stock:8, min:3, prix:12.50, fourn:'Nathan Pédagogique', notes:'Bois certifié FSC. Âge : 12-36 mois.' },
@@ -1797,7 +1803,7 @@ const tb = document.getElementById('tableBody');
   const slicedData = data.slice((currentPageMat - 1) * PAGE_SIZE, currentPageMat * PAGE_SIZE);
 
   tb.innerHTML = slicedData.map(a => {
-    const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
+    const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀','Entretien':'🧹','Cuisine':'🍳' };
     const thumb = a.photo
       ? `<img class="article-thumb" src="${a.photo}" alt="${a.nom}" loading="lazy">`
       : `<div class="article-thumb-placeholder">${CAT_ICONS[a.cat]||'📦'}</div>`;
@@ -1953,7 +1959,7 @@ function renderTableConso() {
   const slicedDataConso = data.slice((currentPageConso - 1) * PAGE_SIZE, currentPageConso * PAGE_SIZE);
 
   tb.innerHTML = slicedDataConso.map(a => {
-    const CAT_ICONS_L = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
+    const CAT_ICONS_L = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀','Entretien':'🧹','Cuisine':'🍳' };
     const thumb = a.photo
       ? `<img class="article-thumb" src="${a.photo}" alt="${a.nom}" loading="lazy">`
       : `<div class="article-thumb-placeholder">${CAT_ICONS_L[a.cat]||'🧴'}</div>`;
@@ -3501,7 +3507,7 @@ function showDetail(id) {
   const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
   document.getElementById('detail-title').textContent = nomClean;
 
-  const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
+  const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀','Entretien':'🧹','Cuisine':'🍳' };
 
   const photoBlock = a.photo
     ? `<div style="position:relative;margin-bottom:16px">
@@ -4141,7 +4147,7 @@ function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='', photo=
     </div>
     <select id="row-cat-${idx}" style="border:none;border-right:1px solid var(--border);border-radius:0;padding:4px 6px;font-size:11px;background:var(--surface);color:var(--ink)">
       <option value="">— Cat. —</option>
-      ${['Sensoriel','Manipulation','Construction','Motricité','Imitation','Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration','Couches'].map(c=>`<option value="${c}" ${cat===c?'selected':''}>${c}</option>`).join('')}
+      ${['Sensoriel','Manipulation','Construction','Motricité','Imitation','Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration','Entretien','Cuisine','Couches'].map(c=>`<option value="${c}" ${cat===c?'selected':''}>${c}</option>`).join('')}
     </select>
     <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00"
            oninput="calcCommandeTotal()" style="text-align:right">
@@ -4335,7 +4341,7 @@ function renderArticlePickerList() {
     return a.nom.localeCompare(b.nom);
   });
 
-  const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀' };
+  const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀','Entretien':'🧹','Cuisine':'🍳' };
   const container = document.getElementById('picker-article-list');
   if (!container) return;
   if (list.length === 0) {
@@ -6250,7 +6256,7 @@ function importExcel(event) {
       }
 
       const CATS_VALID    = ['Sensoriel','Manipulation','Construction','Motricité','Imitation',
-                             'Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration'];
+                             'Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration','Entretien','Cuisine'];
       const STRUCTS_VALID = CRECHES;
 
       let imported = 0, skipped = 0, warnings = [];
