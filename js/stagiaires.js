@@ -436,9 +436,6 @@ function stgCarte(s){
     +'<span><i class="ti ti-file-text"></i> '+p.contratCourt+' : '+escHtml(STG_CONV[s.convention_statut]||'—')+'</span>'
     +(lien?'<span>'+lien+'</span>':'')
     +'</div>'
-    +(stgATraiter(s)&&s.email
-      ?'<div style="margin-top:9px"><a class="btn-sm" style="text-decoration:none" onclick="event.stopPropagation()" href="'+stgMailtoInfos(s)+'">'
-        +'<i class="ti ti-mail"></i> Demander des informations</a></div>':'')
     +'<div style="display:flex;align-items:center;gap:9px;margin-top:9px">'
     +'<div style="flex:1;height:7px;background:var(--border);border-radius:99px;overflow:hidden">'
     +'<div style="height:100%;width:'+pct+'%;background:'+(av.complet?'var(--green)':'var(--orange)')+';border-radius:99px"></div></div>'
@@ -773,38 +770,42 @@ function stgMailto(s){
     +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);
 }
 
-/* Directeur/trice technique qui signe le mail : celle de la crèche de la fiche
-   (la personne désignée sur la fiche si c'est une directrice technique, sinon
-   la première de la crèche). Son téléphone vient de sa fiche salarié liée. */
-function stgSignataire(s){
-  const cid=s&&s.creche_id;
-  const refs=cacheReferents.filter(r=>r.role==='referent'&&cid&&String(r.creche_id)===String(cid));
-  const r=refs.find(x=>s.referent_id&&String(x.id)===String(s.referent_id))||refs[0]||null;
-  if(!r)return null;
-  const emp=r.employe_id&&typeof cacheEmployes!=='undefined'
-    ?cacheEmployes.find(e=>String(e.id)===String(r.employe_id)):null;
-  return {nom:r.name||'',poste:r.poste||'Directeur/trice Technique',tel:(emp&&emp.telephone)||''};
-}
-
-/* Premier contact après une demande de stage : on propose un entretien et on
-   demande les disponibilités. Composé dans le client de messagerie, comme le
-   mail du lien — rien ne part d'ici. */
+/* Premier contact après une demande de stage, AVANT toute fiche : on propose un
+   entretien et on demande les disponibilités (sans signature : Outlook ajoute la sienne), pour savoir si l'on enclenche le
+   recrutement. Composé dans le client de messagerie — rien ne part d'ici.
+   `s` n'est pas une fiche : {prenom, nom, email, type, creche_id}. */
 function stgMailtoInfos(s){
   const orgNom=(window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids';
-  const alt=stgType(s)==='alternant';
+  const alt=s.type==='alternant';
   const crNom=stgCrecheName(s.creche_id);
-  const sig=stgSignataire(s);
   const sujet='Votre demande '+(alt?"d'alternance":'de stage')+' — '+orgNom;
-  const corps='Bonjour '+stgNomComplet(s)+',\n\n'
+  const corps='Bonjour '+((s.prenom+' '+s.nom).trim())+',\n\n'
     +'Je vous écris suite à votre demande '+(alt?"d'alternance":'de stage')+' au sein du groupe '+orgNom
     +', je souhaiterais vous rencontrer afin de discuter de votre projet professionnel, et de voir ensemble si nous pouvons convenir de dates pour votre '
     +(alt?'alternance':'stage')+'. '
     +'Donnez-moi vos disponibilités afin que je vous propose un rendez-vous pour un entretien'
     +(crNom?' sur la crèche '+crNom:'')+'.\n\n'
-    +'Je vous souhaite une bonne fin de journée.\n\n'
-    +(sig?sig.nom+'\n'+sig.poste+(crNom?' chez '+crNom:'')+(sig.tel?'\n'+sig.tel:''):'');
+    +'Je vous souhaite une bonne fin de journée.\n\n';
   return 'mailto:'+encodeURIComponent(s.email||'')
     +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);
+}
+
+function stgOuvrirInfos(){
+  const sel=document.getElementById('stg-i-creche');
+  sel.innerHTML=stgOptionsCreches('— Choisir la crèche —');
+  if(!isDirection&&currentProfile&&currentProfile.creche_id)sel.value=currentProfile.creche_id;
+  ['stg-i-prenom','stg-i-nom','stg-i-email'].forEach(id=>{document.getElementById(id).value='';});
+  document.getElementById('stg-i-type').value='stagiaire';
+  document.getElementById('modal-stg-infos-wrap').classList.add('open');
+}
+
+function stgEnvoyerInfos(){
+  const v=id=>document.getElementById(id).value.trim();
+  if(!v('stg-i-email'))return showBanner("Renseignez l'e-mail de la personne.",'error');
+  if(!v('stg-i-creche'))return showBanner('Choisissez la crèche.','error');
+  closeModal('modal-stg-infos-wrap');
+  location.href=stgMailtoInfos({prenom:v('stg-i-prenom'),nom:v('stg-i-nom'),email:v('stg-i-email'),
+    type:v('stg-i-type'),creche_id:v('stg-i-creche')});
 }
 
 async function stgCreerLien(renouveler){
