@@ -185,6 +185,15 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       </div>
 
       <div class="card">
+        <div class="sec"><i class="ti ti-school"></i> Accueil des stagiaires et alternants</div>
+        <div class="g2">
+          <div class="f"><label class="lb">Stagiaires / alternants accueillis en même temps</label><input id="cStgCap" type="number" step="1" min="1" max="20" placeholder="1"></div>
+          <div class="f"><label class="lb">Chevauchement toléré (semaines)</label><input id="cStgChev" type="number" step="1" min="0" max="8" placeholder="0"></div>
+        </div>
+        <p class="hint">Sert à l'onglet « Disponibilités » du module Stagiaires. Vide = 1 place. Avec un chevauchement de 1 semaine, deux stagiaires peuvent se croiser pendant 5 jours ouvrés au plus (passation) : la crèche accepte alors une personne de plus que sa capacité, sur cette durée seulement.</p>
+      </div>
+
+      <div class="card">
         <div class="sec"><i class="ti ti-certificate"></i> Agrément PMI</div>
         <div class="g2">
           <div class="f"><label class="lb">N° d'autorisation</label><input id="ePmiNum"></div>
@@ -652,7 +661,7 @@ function crecheDe(id){return CRECHES.find(x=>String(x.id)===String(id))||null;}
 /* Empreinte du formulaire, pour détecter une saisie non enregistrée. */
 let SNAP='';
 function snapshot(){
-  return ['cName','cAddr','cCap','rpContact','rpResp','eRaison','eForme','eSiret','eApe','eSiege','eCapital','eRcsVille','eRepNom','eRepQual',
+  return ['cName','cAddr','cCap','cStgCap','cStgChev','rpContact','rpResp','eRaison','eForme','eSiret','eApe','eSiege','eCapital','eRcsVille','eRepNom','eRepQual',
     'eTel','eMail','ePmiNum','ePmiDate','ePmiEch','eAgeMin','eAgeMax','eHo','eHf',
     'eSemFerm','eSemFact','eObs'].map(val).join('|')
     +'|'+[...document.querySelectorAll('.ckJour:checked')].map(x=>x.value).join(',')
@@ -664,6 +673,7 @@ function renderEtab(){
   const c=crecheDe(crecheId),e=etabDe(crecheId)||{};
   if(!c)return;
   setVal('cName',c.name);setVal('cAddr',c.addr);setVal('cCap',c.capacity);setVal('cCapSurnombre',c.capacity_surnombre);
+  setVal('cStgCap',c.stagiaires_capacite);setVal('cStgChev',c.stagiaires_chevauchement_semaines);
   setVal('rpContact',c.repas_contact);setVal('rpResp',c.repas_responsable);
   setVal('eRaison',e.raison_sociale);setVal('eForme',e.forme_juridique);
   setVal('eSiret',e.siret);setVal('eApe',e.code_ape);setVal('eSiege',e.adresse_siege);
@@ -1090,9 +1100,11 @@ async function save(){
   const amin=num('eAgeMin'),amax=num('eAgeMax');
   if((amin!=null&&!isFinite(amin))||(amax!=null&&!isFinite(amax))){
     toast('Âge illisible : indiquez un nombre de mois, 2,5 pour deux mois et demi.',true);return;}
-  let cap,capSurnombre,semFerm,semFact,valid,ctValid,facJourEnvoi,facJourEch;
+  let stgCap,stgChev,cap,capSurnombre,semFerm,semFact,valid,ctValid,facJourEnvoi,facJourEch;
   try{
     cap    =entier('cCap','La capacité agréée');
+    stgCap =entier('cStgCap','La capacité stagiaires');
+    stgChev=entier('cStgChev','Le chevauchement toléré');
     capSurnombre=entier('cCapSurnombre','L\'effectif max en cas de surnombre');
     semFerm=entier('eSemFerm','Les semaines de fermeture');
     semFact=entier('eSemFact','Les semaines facturées');
@@ -1106,6 +1118,8 @@ async function save(){
   const fraisImpaye=num('rFacFraisImpaye');
   if(fraisImpaye!=null&&(!isFinite(fraisImpaye)||fraisImpaye<0)){toast('Les frais de dossier impayé doivent être un montant positif.',true);return;}
   if(amin!=null&&amax!=null&&amin>amax){toast('L\'âge minimum dépasse l\'âge maximum.',true);return;}
+  if((stgCap!=null&&(stgCap<1||stgCap>20))||(stgChev!=null&&(stgChev<0||stgChev>8))){
+    toast('Stagiaires : entre 1 et 20 places, et un chevauchement de 0 à 8 semaines.',true);return;}
   if(capSurnombre!=null&&cap!=null&&capSurnombre<cap){toast('L\'effectif max en cas de surnombre ne peut pas être inférieur à la capacité agréée.',true);return;}
   /* Le préavis accepte le demi-mois — quinze jours est une durée courante —
      mais pas le négatif, qui ferait proposer une fin de préavis antérieure à
@@ -1118,6 +1132,7 @@ async function save(){
   try{
     // 1. Les champs qui vivent déjà dans creches, modifiés sur place.
     const cr={name:val('cName'),addr:val('cAddr'),capacity:cap,capacity_surnombre:capSurnombre,
+      stagiaires_capacite:stgCap,stagiaires_chevauchement_semaines:stgChev,
       repas_contact:val('rpContact')||null,repas_responsable:val('rpResp')||null};
     const{error:ec}=await sb.from('creches').update(cr).eq('id',crecheId);
     if(ec)throw ec;

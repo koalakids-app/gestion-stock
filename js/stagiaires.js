@@ -1803,7 +1803,6 @@ function stgRenderDispo(){
   let fin=el('stg-d-fin').value||debut;
   if(fin<debut)fin=debut;
   const type=el('stg-d-type').value;
-  const cap=Math.max(1,parseInt(el('stg-d-cap').value,10)||1);
 
   /* Les jours ouvrés de la période demandée (plafonnée à un an). */
   const jours=[];
@@ -1822,28 +1821,41 @@ function stgRenderDispo(){
     const fermes=siennes.filter(s=>ferme.includes(s.statut));
     const attente=siennes.filter(s=>s.statut==='demande'||s.statut==='contact')
       .filter(s=>jours.some(iso=>stgOccupe(s,iso)));
-    let pic=0;const presents=new Map();
+    /* Capacité et chevauchement viennent des paramètres de la crèche. Un
+       chevauchement de N semaines autorise UN stagiaire de plus que la
+       capacité, pendant N×5 jours ouvrés au plus (passation). */
+    const cap=Math.max(1,Number(c.stagiaires_capacite)||1);
+    const tol=Math.max(0,Number(c.stagiaires_chevauchement_semaines)||0)*5;
+    let pic=0,pleins=0;const presents=new Map();
     jours.forEach(iso=>{
       const la=fermes.filter(s=>stgOccupe(s,iso));
       la.forEach(s=>{(presents.get(s.id)||presents.set(s.id,[]).get(s.id)).push(iso);});
       pic=Math.max(pic,la.length);
+      if(la.length>=cap)pleins++;
     });
-    return {c,pic,presents,attente,reste:cap-pic};
-  }).sort((a,b)=>b.reste-a.reste||String(a.c.name).localeCompare(String(b.c.name),'fr'));
+    let etat='complet';
+    if(pic<cap)etat='libre';
+    else if(pic===cap&&tol>0&&pleins<=tol)etat='chevauche';
+    return {c,cap,pic,pleins,presents,attente,etat,reste:cap-pic};
+  }).sort((a,b)=>{
+    const o={libre:0,chevauche:1,complet:2};
+    return o[a.etat]-o[b.etat]||b.reste-a.reste||String(a.c.name).localeCompare(String(b.c.name),'fr');
+  });
 
-  const libres=cartes.filter(x=>x.reste>0).length;
+  const libres=cartes.filter(x=>x.etat!=='complet').length;
   const quand=stgDateFr(debut)+(fin!==debut?' → '+stgDateFr(fin):'');
   let h='<div style="font-size:13px;margin-bottom:10px"><b>'+libres+' crèche'+(libres>1?'s':'')+' avec de la place</b> sur '
     +escHtml(quand)+' <span style="color:var(--muted)">('+jours.length+' jour'+(jours.length>1?'s':'')+' ouvré'+(jours.length>1?'s':'')+')</span></div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px">';
   cartes.forEach(x=>{
-    const ok=x.reste>0;
-    const coul=ok?'var(--green)':'var(--red)';
+    const coul=x.etat==='libre'?'var(--green)':x.etat==='chevauche'?'var(--orange-dark)':'var(--red)';
     h+='<div style="border:1px solid var(--border);border-left:4px solid '+coul+';border-radius:10px;padding:10px 12px;background:#fff">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'
       +'<b>'+escHtml(x.c.name)+'</b>'
       +'<span style="font-size:11px;font-weight:700;color:'+coul+'">'
-      +(ok?(x.pic?x.reste+' place'+(x.reste>1?'s':'')+' libre'+(x.reste>1?'s':''):'Libre'):'Complet')+'</span></div>';
+      +(x.etat==='libre'?(x.pic?x.reste+' place'+(x.reste>1?'s':'')+' libre'+(x.reste>1?'s':''):'Libre')
+      :x.etat==='chevauche'?'Possible en chevauchement ('+x.pleins+' j)':'Complet')+'</span></div>'
+      +'<div style="font-size:11px;color:var(--muted)">Capacité : '+x.cap+(x.c.stagiaires_chevauchement_semaines?' · chevauchement toléré '+x.c.stagiaires_chevauchement_semaines+' sem.':'')+'</div>';
     if(x.presents.size){
       h+='<div style="margin-top:6px;font-size:12px">';
       x.presents.forEach((isos,id)=>{
