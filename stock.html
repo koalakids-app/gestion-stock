@@ -2787,7 +2787,9 @@ async function saveArticle() {
   const cat = document.getElementById('f-cat').value;
   let creche = document.getElementById('f-creche').value;
   if (!creche && CATS_SANS_CRECHE.includes(cat)) {
-    creche = SK_WRITE_CRECHE || (currentCreche !== 'all' ? currentCreche : '') || CRECHES[0] || '';
+    // Dernier recours : première vraie crèche proposée par le formulaire (valeur acceptée par la base)
+    const optsReelles = Array.from(document.getElementById('f-creche').options).map(o => o.value).filter(Boolean);
+    creche = SK_WRITE_CRECHE || (currentCreche !== 'all' ? currentCreche : '') || optsReelles[0] || CRECHES[0] || '';
   }
   const stock = parseInt(document.getElementById('f-stock').value) || 0;
   if (!nom || !cat || !creche) { showNotif('⚠ Remplissez les champs obligatoires'); return; }
@@ -5334,7 +5336,12 @@ async function saveArticleDB(article, isNew) {
       await sbUpdate('articles', article.id, articleToRow(article));
     }
     setSaved();
-  } catch(e) { setIndicator('⚠️ Erreur sauvegarde', 'var(--red)'); console.error(e); }
+  } catch(e) {
+    setIndicator('⚠️ Erreur sauvegarde', 'var(--red)'); console.error(e);
+    // Message de la base visible à l'écran (sinon l'article disparaît à la synchro sans explication)
+    const detail = String((e && e.message) || e).replace(/^INSERT articles : /, '').slice(0, 220);
+    showNotif('❌ Article non enregistré en base : ' + detail);
+  }
 }
 
 async function deleteArticleDB(id) {
