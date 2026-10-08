@@ -1694,6 +1694,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="btn-primary" onclick="stgOpenFiche()"><i class="ti ti-plus"></i> Nouvelle fiche</button>
+        <button class="btn-sm" onclick="stgOuvrirInfos()"><i class="ti ti-mail"></i> Demander des informations</button>
         <button class="btn-sm" onclick="stgExportExcel()"><i class="ti ti-file-spreadsheet"></i> Export Excel</button>
       </div>
     </div>
@@ -2119,6 +2120,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn-cancel" id="stg-f-del" onclick="stgSupprimer()" style="margin-right:auto;color:var(--red);border-color:var(--red-light);display:none"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn-cancel" onclick="closeModal('modal-stagiaire-wrap')">Fermer</button>
       <button class="btn-primary" id="stg-f-save" onclick="stgSave()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Premier contact avant toute fiche : mail d'entretien + disponibilités -->
+<div class="overlay" id="modal-stg-infos-wrap" onclick="if(event.target===this)closeModal('modal-stg-infos-wrap')">
+  <div class="modal" style="max-width:480px;width:100%">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <h3 style="margin:0">Demander des informations</h3>
+      <button class="ibtn" onclick="closeModal('modal-stg-infos-wrap')"><i class="ti ti-x"></i></button>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin:8px 0 12px">Propose un entretien et demande les disponibilités, avant de créer une fiche. Le mail est signé par la direction technique de la crèche choisie.</p>
+    <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="stg-i-prenom"></div>
+    <div class="fg"><label class="flabel">Nom</label><input class="finput" id="stg-i-nom"></div>
+    <div class="fg"><label class="flabel">E-mail</label><input class="finput" type="email" id="stg-i-email"></div>
+    <div class="fg"><label class="flabel">Demande de</label><select class="finput" id="stg-i-type"><option value="stagiaire">Stage</option><option value="alternant">Alternance</option></select></div>
+    <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="stg-i-creche"></select></div>
+    <div class="mactions">
+      <button class="btn-cancel" onclick="closeModal('modal-stg-infos-wrap')">Fermer</button>
+      <button class="btn-primary" onclick="stgEnvoyerInfos()"><i class="ti ti-mail"></i> Ouvrir le mail</button>
     </div>
   </div>
 </div>
