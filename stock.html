@@ -1317,7 +1317,7 @@ body.sk-locked{overflow:hidden}
         </div>
         <div class="form-group">
           <label>Catégorie *</label>
-          <select id="f-cat">
+          <select id="f-cat" onchange="majChampStructure()">
             <option value="">-- Choisir --</option>
             <option>Sensoriel</option>
             <option>Manipulation</option>
@@ -1334,9 +1334,10 @@ body.sk-locked{overflow:hidden}
             <option>Cuisine</option>
           </select>
         </div>
-        <div class="form-group">
-          <label>Structure *</label>
+        <div class="form-group" id="f-creche-group">
+          <label id="f-creche-label">Structure *</label>
           <select id="f-creche">
+            <option value="" id="f-creche-vide" hidden>— Aucune —</option>
             <option>Brunet</option>
             <option>Cuers</option>
             <option>Ollioules</option>
@@ -1652,6 +1653,10 @@ const IS_LOCAL = (typeof location !== 'undefined') &&
 let CRECHES = ['Brunet', 'Cuers', 'Ollioules', 'St Jean', 'Picot 1', 'Picot 2'];
 let CRECHE_COLORS = { 'Brunet': '#F59E0B', 'Cuers': '#10B981', 'Ollioules': '#EF4444', 'St Jean': '#8B5CF6', 'Picot 1': '#0EA5E9', 'Picot 2': '#F43F5E' };
 const CRECHE_PALETTE = ['#F59E0B', '#10B981', '#EF4444', '#8B5CF6', '#0EA5E9', '#F43F5E', '#22C55E', '#F97316', '#6366F1', '#EC4899'];
+// Entretien et Cuisine ne dépendent pas d'une crèche : l'article est rattaché
+// à la valeur commune « Toutes » et le choix de la structure est masqué.
+const STRUCTURE_COMMUNE = 'Toutes';
+const CATS_SANS_CRECHE = ['Entretien', 'Cuisine'];
 const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀','Entretien':'🧹','Cuisine':'🍳' };
 
 let ARTICLES = [
@@ -1771,7 +1776,7 @@ function renderTable() {
   let data = ARTICLES.filter(a => {
     const isMateriel = a.depreciable !== false; // exclure consommables
     const matchCat = currentCat === 'all' || a.cat === currentCat;
-    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche || a.creche === STRUCTURE_COMMUNE;
     const matchQ = !q || a.nom.toLowerCase().includes(q) || a.ref.toLowerCase().includes(q) || a.fourn.toLowerCase().includes(q);
     const matchStatus = currentStockStatus === 'all'
       || (currentStockStatus === 'a-completer' && getStockStatus(a) === 'À compléter')
@@ -1822,7 +1827,7 @@ const tb = document.getElementById('tableBody');
           </div>
         </div>
       </td>
-      <td><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:${CRECHE_COLORS[a.creche]}"></span>${a.creche}</span></td>
+      <td><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:${CRECHE_COLORS[a.creche]||'#888'}"></span>${a.creche}</span></td>
       <td><span class="badge badge-blue">${a.cat}</span></td>
       <td style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px">${a.stock}</td>
       
@@ -1931,7 +1936,7 @@ function renderTableConso() {
   const q = document.getElementById('searchInput').value.toLowerCase();
   let data = ARTICLES.filter(a => {
     const isConso = a.depreciable === false;
-    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche || a.creche === STRUCTURE_COMMUNE;
     const matchCat = currentCatConso === 'all' || a.cat === currentCatConso;
     const matchQ = !q || a.nom.toLowerCase().includes(q) || (a.ref||'').toLowerCase().includes(q);
     const matchStatus = currentStockStatus === 'all'
@@ -1975,7 +1980,7 @@ function renderTableConso() {
           </div>
         </div>
       </td>
-      <td><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:${CRECHE_COLORS[a.creche]}"></span>${a.creche}</span></td>
+      <td><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:${CRECHE_COLORS[a.creche]||'#888'}"></span>${a.creche}</span></td>
       <td><span class="badge badge-blue">${a.cat}</span></td>
       <td style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:${stockAlert?'#DC2626':'inherit'}">${a.stock}${stockAlert?` <span style="font-size:10px">⚠</span>`:''}</td>
       <td style="font-size:12px;color:var(--ink3)">${a.min > 0 ? a.min : '—'}</td>
@@ -2007,7 +2012,7 @@ function updateInvTabCounts() {
 }
 
 function renderStats() {
-  const data = currentCreche !== 'all' ? ARTICLES.filter(a => a.creche === currentCreche) : ARTICLES;
+  const data = currentCreche !== 'all' ? ARTICLES.filter(a => a.creche === currentCreche || a.creche === STRUCTURE_COMMUNE) : ARTICLES;
   const el = document.getElementById('stat-total');
   if (el) el.textContent = data.length;
   const valeur = data.reduce((s,a) => s + a.stock * a.prix, 0);
@@ -2017,7 +2022,7 @@ function renderStats() {
   if (elCmd) elCmd.textContent = COMMANDES.filter(c => c.status === 'en-cours' && (currentCreche === 'all' || c.creche === currentCreche)).length;
   // Tuile "À remplacer" — filtré par crèche comme les autres stats
   const rem = ARTICLES.filter(a => {
-    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche || a.creche === STRUCTURE_COMMUNE;
     return matchCreche && getArticleEtat(a) === 'À remplacer';
   });
   const elRem = document.getElementById('stat-remplacer');
@@ -2026,7 +2031,7 @@ function renderStats() {
   if (cardRem) cardRem.style.borderLeft = rem.length > 0 ? '3px solid #DC2626' : '';
   // Tuile "À compléter" — articles dont le stock est ≤ au seuil minimum
   const completer = ARTICLES.filter(a => {
-    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche || a.creche === STRUCTURE_COMMUNE;
     return matchCreche && getStockStatus(a) === 'À compléter';
   });
   const elCompleter = document.getElementById('stat-completer');
@@ -2696,6 +2701,7 @@ function openModal(type) {
         fc.value = SK_WRITE_CRECHE;
       }
     }
+    majChampStructure();
     document.getElementById('f-url').value = '';
     const fDA = document.getElementById('f-date-achat'); if (fDA) fDA.value = '';
     const fEt = document.getElementById('f-etat'); if (fEt) fEt.value = '';
@@ -2723,6 +2729,7 @@ function editArticle(id) {
   document.getElementById('f-ref').value = a.ref;
   document.getElementById('f-cat').value = a.cat;
   document.getElementById('f-creche').value = a.creche;
+  majChampStructure();
   document.getElementById('f-stock').value = a.stock;
   document.getElementById('f-prix').value = a.prix;
   document.getElementById('f-fourn').value = a.fourn;
@@ -2778,7 +2785,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') document.que
 async function saveArticle() {
   const nom = document.getElementById('f-nom').value.trim();
   const cat = document.getElementById('f-cat').value;
-  const creche = document.getElementById('f-creche').value;
+  const creche = document.getElementById('f-creche').value || (CATS_SANS_CRECHE.includes(cat) ? STRUCTURE_COMMUNE : '');
   const stock = parseInt(document.getElementById('f-stock').value) || 0;
   if (!nom || !cat || !creche) { showNotif('⚠ Remplissez les champs obligatoires'); return; }
   if (!skCanWrite(creche)) return;
@@ -5936,12 +5943,24 @@ async function loadCrecheUI() {
     renderCrecheBadges();
     const optionsHtml = CRECHES.map(n => `<option>${n}</option>`).join('');
     const fCreche = document.getElementById('f-creche');
-    if (fCreche) fCreche.innerHTML = optionsHtml;
+    if (fCreche) {
+      fCreche.innerHTML = '<option value="" id="f-creche-vide" hidden>— Aucune —</option>' + optionsHtml;
+      majChampStructure();
+    }
     const cCreche = document.getElementById('c-creche-select');
     if (cCreche) cCreche.innerHTML = optionsHtml;
   } catch (e) {
     console.warn('[Stock] loadCrecheUI — repli sur la liste par défaut :', e);
   }
+}
+
+function majChampStructure() {
+  // Entretien / Cuisine : la structure est facultative (« Aucune » = commun à toutes).
+  const facultatif = CATS_SANS_CRECHE.includes(document.getElementById('f-cat').value);
+  const lbl = document.getElementById('f-creche-label');
+  if (lbl) lbl.textContent = facultatif ? 'Structure (facultatif)' : 'Structure *';
+  const vide = document.getElementById('f-creche-vide');
+  if (vide) vide.hidden = !facultatif;
 }
 
 // Non nul uniquement pour les employees : verrouille la vue sur leur structure.
@@ -5955,6 +5974,7 @@ let SK_WRITE_CRECHE = null;
 // Retourne true si l'action peut se poursuivre.
 function skCanWrite(crecheNom) {
   if (!SK_WRITE_CRECHE) return true;
+  if (crecheNom === STRUCTURE_COMMUNE) return true;
   if (crecheNom === SK_WRITE_CRECHE) return true;
   if (typeof showNotif === 'function') {
     showNotif('\u26A0 Modification reservee a ' + SK_WRITE_CRECHE);
