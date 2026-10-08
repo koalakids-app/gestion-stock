@@ -436,6 +436,9 @@ function stgCarte(s){
     +'<span><i class="ti ti-file-text"></i> '+p.contratCourt+' : '+escHtml(STG_CONV[s.convention_statut]||'—')+'</span>'
     +(lien?'<span>'+lien+'</span>':'')
     +'</div>'
+    +(stgATraiter(s)&&s.email
+      ?'<div style="margin-top:9px"><a class="btn-sm" style="text-decoration:none" onclick="event.stopPropagation()" href="'+stgMailtoInfos(s)+'">'
+        +'<i class="ti ti-mail"></i> Demander des informations</a></div>':'')
     +'<div style="display:flex;align-items:center;gap:9px;margin-top:9px">'
     +'<div style="flex:1;height:7px;background:var(--border);border-radius:99px;overflow:hidden">'
     +'<div style="height:100%;width:'+pct+'%;background:'+(av.complet?'var(--green)':'var(--orange)')+';border-radius:99px"></div></div>'
@@ -498,7 +501,7 @@ function stgOpenFiche(id,typeDefaut){
   stgDocExtCache=[];
   const docExtZone=document.getElementById('stg-doc-ext-zone');
   if(docExtZone)docExtZone.innerHTML='';
-  if(s){stgRenderContact();stgRenderLien();stgRenderRessFiche();stgRenderExportZone(s);stgRenderDocs();stgRenderJours();stgRenderCollabZone();stgLoadDocExt(s.id);}
+  if(s){stgRenderLien();stgRenderRessFiche();stgRenderExportZone(s);stgRenderDocs();stgRenderJours();stgRenderCollabZone();stgLoadDocExt(s.id);}
   else{const ez=document.getElementById('stg-export-zone');if(ez)ez.innerHTML='';}
   document.getElementById('modal-stagiaire-wrap').classList.add('open');
 }
@@ -802,21 +805,6 @@ function stgMailtoInfos(s){
     +(sig?sig.nom+'\n'+sig.poste+(crNom?' chez '+crNom:'')+(sig.tel?'\n'+sig.tel:''):'');
   return 'mailto:'+encodeURIComponent(s.email||'')
     +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);
-}
-
-function stgRenderContact(){
-  const zone=document.getElementById('stg-contact-zone');
-  if(!zone)return;
-  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
-  if(!s){zone.innerHTML='';return;}
-  zone.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:8px">'
-    +'<i class="ti ti-mail" style="color:var(--koala)"></i> Premier contact</div>'
-    +(s.email
-      ?'<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.5">'
-        +'Propose un entretien et demande ses disponibilités, signé par '
-        +escHtml((stgSignataire(s)||{}).nom||'la direction technique de la crèche')+'.</p>'
-        +'<a class="btn-sm" style="text-decoration:none" href="'+stgMailtoInfos(s)+'"><i class="ti ti-mail"></i> Demander des informations par mail</a>'
-      :'<p style="font-size:12.5px;color:var(--muted);margin:0">Renseignez l\'e-mail de la personne pour pouvoir lui écrire.</p>');
 }
 
 async function stgCreerLien(renouveler){
