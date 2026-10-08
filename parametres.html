@@ -370,7 +370,7 @@ const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
 let ME=null,PROF=null;
-let CRECHES=[],ETABS=[],RCFG={},KIOSK_DEVICES=[];
+let CRECHES=[],ETABS=[],RCFG={},RCFG_ID=null,KIOSK_DEVICES=[];
 let crecheId=null;
 const JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi'],[6,'Samedi']];
 const FERM_TYPES={vacances:'Vacances',ferie:'Jour férié',pedagogique:'Journée pédagogique'};
@@ -588,12 +588,13 @@ async function loadAll(){
     const[c,e,r]=await Promise.all([
       sb.from('creches').select('*').order('name'),
       sb.from('etablissements').select('*'),
-      sb.from('reseau_config').select('config').maybeSingle()
+      sb.from('reseau_config').select('id,config').maybeSingle()
     ]);
     if(c.error)throw c.error;
     if(e.error)throw e.error;
     CRECHES=c.data||[];ETABS=e.data||[];
     RCFG=(r&&r.data&&r.data.config)||{};
+    RCFG_ID=(r&&r.data&&r.data.id)||null;
     FERMETURES_RESEAU=toArr(RCFG.jours_fermeture_reseau).slice();
   }catch(err){
     console.error('[loadAll]',err);
@@ -1189,8 +1190,10 @@ async function save(){
       notif_silence_dimanche:document.getElementById('rNotifDimanche').checked,
       notif_silence_feries:document.getElementById('rNotifFeries').checked,
       jours_fermeture_reseau:FERMETURES_RESEAU});
+    /* La base refuse un UPDATE sans WHERE : on cible la ligne chargée. */
+    if(!RCFG_ID)throw new Error('Configuration réseau introuvable : rechargez la page.');
     const{error:er}=await sb.from('reseau_config')
-      .update({config:cfg,updated_at:new Date().toISOString()});
+      .update({config:cfg,updated_at:new Date().toISOString()}).eq('id',RCFG_ID);
     if(er)throw er;
     RCFG=cfg;
 
