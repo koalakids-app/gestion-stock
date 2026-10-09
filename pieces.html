@@ -222,24 +222,65 @@ function fileToBase64(file){
   });
 }
 
+/* Types acceptés par le bucket (voir sql/documents_admin_carnets_bucket_hardening.sql).
+   Certains téléphones envoient un type vide ou « image/jpg » : on le déduit de l'extension. */
+const TYPES_EXT={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',
+  heic:'image/heic',heif:'image/heif',pdf:'application/pdf'};
+function typeFichier(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(TYPES_EXT[ext])return TYPES_EXT[ext];
+  const t=(file.type||'').toLowerCase();
+  return t==='image/jpg'?'image/jpeg':t;
+}
+
+/* Réduit les grosses photos (JPEG/PNG/WebP) avant l'envoi : une photo de téléphone
+   fait souvent plus de 8 Mo en base64 et l'envoi échouait sur réseau mobile. */
+async function reduireImage(file,type){
+  if(!/^image\/(jpeg|png|webp)$/.test(type)||file.size<600*1024)return {blob:file,type};
+  try{
+    const bmp=await createImageBitmap(file);
+    const max=2200,k=Math.min(1,max/Math.max(bmp.width,bmp.height));
+    const c=document.createElement('canvas');
+    c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+    c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.85));
+    if(blob&&blob.size<file.size)return {blob,type:'image/jpeg'};
+  }catch(e){}
+  return {blob:file,type};
+}
+
+function messageErreur(e){
+  const m=(e&&e.message||'').toLowerCase();
+  if(m.includes('expir'))return 'Ce lien a expiré. Contactez la crèche.';
+  if(m.includes('fichier_trop_volumineux'))return 'Fichier trop volumineux (8 Mo max). Reprenez la photo.';
+  if(m.includes('format'))return 'Format non accepté : envoyez une photo (JPG, PNG) ou un PDF.';
+  if(m.includes('session'))return 'Session terminée : rouvrez le lien reçu.';
+  if(m.includes('upload_impossible')||m.includes('enregistrement_impossible')||/erreur 5/.test(m))
+    return 'Le serveur n’a pas pu enregistrer ce fichier. Réessayez dans un instant ou avec un autre format.';
+  return 'Envoi impossible. Vérifiez votre connexion et réessayez.';
+}
+
 async function deposer(key,input){
   const file=input.files&&input.files[0];
   if(!file)return;
   const status=document.getElementById('st-'+key);
-  if(file.size>MAX_BYTES){
+  if(file.size>MAX_BYTES*3){
     if(status){status.textContent='⚠ Fichier trop volumineux (8 Mo max). Compressez-le ou reprenez la photo.';status.style.color='var(--red)';}
     input.value='';
     return;
   }
   if(status){status.textContent='⏳ Envoi en cours…';status.style.color='var(--muted)';}
   try{
-    const b64=await fileToBase64(file);
-    await appel('upload',{piece_key:key,filename:file.name,content_type:file.type||'application/octet-stream',content_base64:b64});
+    const r=await reduireImage(file,typeFichier(file));
+    if(!Object.values(TYPES_EXT).includes(r.type))throw new Error('format');
+    if(r.blob.size>MAX_BYTES)throw new Error('fichier_trop_volumineux');
+    const b64=await fileToBase64(r.blob);
+    await appel('upload',{piece_key:key,filename:file.name,content_type:r.type,content_base64:b64});
     PIECES_DEPOSEES.unshift({piece_key:key,filename:file.name,created_at:new Date().toISOString()});
     toast('Document envoyé ✅');
     render();
   }catch(e){
-    if(status){status.textContent='⚠ Erreur : '+e.message;status.style.color='var(--red)';}
+    if(status){status.textContent='⚠ '+messageErreur(e);status.style.color='var(--red)';}
   }
   input.value='';
 }
