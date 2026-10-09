@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Signature</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+<!-- Police chargée sans bloquer l'affichage : si le réseau la bloque, la page s'affiche quand même. -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'">
 <style>
 :root{--violet:#4A3F9F;--orange:#F47920;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -47,8 +47,23 @@ button:disabled{opacity:.5}
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,
-  {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+/* Appels RPC directs vers l'API REST de Supabase (aucune librairie externe à
+   télécharger : cette page doit s'afficher même sur un réseau lent ou filtré). */
+const sb={
+  async rpc(name,args){
+    const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),15000);
+    try{
+      const r=await fetch(SUPABASE_URL+'/rest/v1/rpc/'+name,{method:'POST',signal:ctl.signal,
+        headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY},
+        body:JSON.stringify(args||{})});
+      const txt=await r.text();
+      let data=null;try{data=txt?JSON.parse(txt):null;}catch(e){}
+      if(!r.ok)return{data:null,error:data||{message:'HTTP '+r.status}};
+      return{data,error:null};
+    }catch(e){return{data:null,error:{message:String(e&&e.message||e)}};}
+    finally{clearTimeout(t);}
+  }
+};
 
 const TOKEN=new URLSearchParams(location.search).get('t')||'';
 const card=document.getElementById('card');
