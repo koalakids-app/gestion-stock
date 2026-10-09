@@ -1334,6 +1334,7 @@ function enfRenderDossier(){
     +enfPapierHtml(enf)
     +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px">'
     +'<button class="btn-sm" onclick="enfCopierLien(\''+actif.id+'\')"><i class="ti ti-link"></i> Copier le lien</button>'
+    +(PartageLien.disponible()?'<button class="btn-sm" onclick="enfPartagerLien(\''+actif.id+'\')"><i class="ti ti-share"></i> Partager…</button>':'')
     +'<button class="btn-sm" onclick="enfRelancerDossier(\''+actif.id+'\')"><i class="ti ti-bell"></i> Relancer</button>'
     +'<button class="btn-sm" style="color:var(--red);border-color:var(--red)" onclick="enfAnnulerDossier(\''+actif.id+'\')"><i class="ti ti-x"></i> Annuler</button>'
     +'</div>'
@@ -1636,6 +1637,14 @@ function enfCopierLien(id){
     ()=>showBanner('Lien copié — à transmettre par SMS si besoin.'),
     ()=>prompt('Copiez ce lien :',url)
   );
+}
+
+function enfPartagerLien(id){
+  const d=enfDossiersCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  PartageLien.partager(dossierLien(d.token),{titre:"Dossier d'inscription",
+    texte:'Bonjour, voici le lien pour compléter le dossier de votre enfant :'})
+    .then(r=>{if(r==='copie')showBanner('Partage indisponible — lien copié.');});
 }
 
 async function enfAnnulerDossier(id){
@@ -2325,6 +2334,7 @@ function enfRenderPiecesDossier(){
     +recus+' pièce'+(recus>1?'s':'')+' reçue'+(recus>1?'s':'')+' sur '+requis.length+' demandées (hors pièces non concernées)</div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
     +'<button class="btn-sm" onclick="enfCopierLienPieces(\''+actif.id+'\')"><i class="ti ti-link"></i> Copier le lien</button>'
+    +(PartageLien.disponible()?'<button class="btn-sm" onclick="enfPartagerLienPieces(\''+actif.id+'\')"><i class="ti ti-share"></i> Partager…</button>':'')
     +'<button class="btn-sm" onclick="enfRelancerPieces(\''+actif.id+'\')"><i class="ti ti-bell"></i> Relancer</button>'
     +'<button class="btn-sm" style="color:var(--red);border-color:var(--red)" onclick="enfAnnulerPieces(\''+actif.id+'\')"><i class="ti ti-x"></i> Annuler</button>'
     +'</div>','var(--koala-light)','var(--border)');
@@ -2396,6 +2406,14 @@ function enfCopierLienPieces(id){
     ()=>showBanner('Lien copié — à transmettre par SMS si besoin.'),
     ()=>prompt('Copiez ce lien :',url)
   );
+}
+
+function enfPartagerLienPieces(id){
+  const d=enfPiecesCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  PartageLien.partager(piecesLien(d.token),{titre:'Pièces à fournir',
+    texte:'Bonjour, voici le lien pour déposer les pièces demandées pour votre enfant :'})
+    .then(r=>{if(r==='copie')showBanner('Partage indisponible — lien copié.');});
 }
 
 async function enfAnnulerPieces(id){

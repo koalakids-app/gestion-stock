@@ -462,6 +462,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <button class="btn btn-d" id="btnDelDev" style="display:none" onclick="delDevis()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn btn-s" id="btnPdfDev" style="display:none" onclick="pdfDevis(devisId)"><i class="ti ti-file-type-pdf"></i> Le PDF</button>
       <button class="btn btn-s" id="btnLienDev" style="display:none" onclick="copierLienDevis()"><i class="ti ti-link"></i> Le lien</button>
+      <button class="btn btn-s" id="btnPartagerDev" style="display:none" onclick="copierLienDevis(true)"><i class="ti ti-share"></i> Partager…</button>
       <button class="btn btn-p" id="btnEnvoiDev" style="display:none" onclick="ouvrirEnvoiDevis()"><i class="ti ti-send"></i> Envoyer</button>
       <button class="btn btn-g" onclick="closeOv('ovDevis')">Fermer</button>
       <button class="btn btn-p" id="btnSaveDev" onclick="saveDevis()"><i class="ti ti-check"></i> Enregistrer le brouillon</button>
@@ -714,6 +715,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
 <div class="toast" id="toast"></div>
 
+<script src="js/partage-lien.js"></script>
 <script src="js/branding.js"></script>
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
@@ -2271,6 +2273,7 @@ async function openDevis(id){
      bon fonctionnement du mail automatique. */
   const bLien=document.getElementById('btnLienDev');
   bLien.style.display=(DCUR&&!clos)?'':'none';
+  document.getElementById('btnPartagerDev').style.display=(DCUR&&!clos&&PartageLien.disponible())?'':'none';
   bLien.innerHTML=(DCUR&&DCUR.token)
     ? '<i class="ti ti-link"></i> Le lien'
     : '<i class="ti ti-link"></i> Créer le lien';
@@ -3586,7 +3589,7 @@ function destinatairesDevis(){
    Le jeton n'est fabriqué qu'une fois : rappeler ce bouton recopie le même
    lien, et n'invalide pas celui qui est déjà parti. Il n'est renouvelé que
    s'il a expiré. */
-async function copierLienDevis(){
+async function copierLienDevis(partager){
   const d=DEVIS.find(x=>String(x.id)===String(devisId));
   if(!d){toast('Enregistrez d\'abord le devis.',true);return;}
   if(d.repondu_le){toast('Ce devis a déjà reçu une réponse.',true);return;}
@@ -3643,6 +3646,12 @@ async function copierLienDevis(){
   }
 
   const url=lienDevis(jeton);
+  if(partager===true){
+    const r=await PartageLien.partager(url,{titre:'Devis',
+      texte:'Bonjour, voici le lien pour consulter et signer votre devis :'});
+    if(r==='copie')toast('Partage indisponible — lien copié.');
+    return;
+  }
   try{
     await navigator.clipboard.writeText(url);
     toast('Lien copié — collez-le dans votre mail ou un SMS.');
