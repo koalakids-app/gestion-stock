@@ -275,6 +275,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <button class="btn btn-s" id="btnPdfCt" style="display:none" onclick="pdfContrat(contratId)"><i class="ti ti-file-type-pdf"></i> Le PDF</button>
       <button class="btn btn-s" id="btnMailCt" style="display:none" onclick="renvoyerContratSigne()"><i class="ti ti-mail"></i> Envoyer par mail</button>
       <button class="btn btn-s" id="btnLienCt" style="display:none" onclick="copierLienContrat()"><i class="ti ti-link"></i> Le lien</button>
+      <button class="btn btn-s" id="btnPartagerCt" style="display:none" onclick="copierLienContrat(true)"><i class="ti ti-share"></i> Partager…</button>
       <button class="btn btn-p" id="btnEnvoiCt" style="display:none" onclick="envoyerContrat()"><i class="ti ti-send"></i> Envoyer</button>
       <button class="btn btn-p" id="btnSignerCt" style="display:none" onclick="openContresignature()"><i class="ti ti-stamp"></i> Contresigner</button>
       <button class="btn btn-d" id="btnResilCt" style="display:none" onclick="openResiliation()"><i class="ti ti-file-x"></i> Résilier</button>
@@ -354,6 +355,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
 <div class="toast" id="toast"></div>
 
+<script src="js/partage-lien.js"></script>
 <script src="js/branding.js"></script>
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
@@ -1346,6 +1348,7 @@ async function openContrat(id,type){
      du bon fonctionnement du mail automatique. */
   const bLien=document.getElementById('btnLienCt');
   bLien.style.display=(CCUR&&!clos)?'':'none';
+  document.getElementById('btnPartagerCt').style.display=(CCUR&&!clos&&PartageLien.disponible())?'':'none';
   bLien.innerHTML=(CCUR&&CCUR.token)
     ? '<i class="ti ti-link"></i> Le lien'
     : '<i class="ti ti-link"></i> Créer le lien';
@@ -1893,7 +1896,7 @@ function clausesFigees(){
    Le jeton n'est fabriqué qu'une fois : rappeler ce bouton recopie le même
    lien, et n'invalide pas celui qui est déjà parti. Il n'est renouvelé que
    s'il a expiré. */
-async function copierLienContrat(){
+async function copierLienContrat(partager){
   const c=CONTRATS.find(x=>String(x.id)===String(contratId));
   if(!c){toast('Enregistrez d\'abord le contrat.',true);return;}
   if(c.repondu_le){toast('Ce contrat a déjà reçu une réponse.',true);return;}
@@ -1944,6 +1947,12 @@ async function copierLienContrat(){
   }
 
   const url=lienContrat(jeton);
+  if(partager===true){
+    const r=await PartageLien.partager(url,{titre:"Contrat d'accueil",
+      texte:'Bonjour, voici le lien pour consulter et signer votre contrat d\'accueil :'});
+    if(r==='copie')toast('Partage indisponible — lien copié.');
+    return;
+  }
   try{
     await navigator.clipboard.writeText(url);
     toast('Lien copié — collez-le dans votre mail ou un SMS.');

@@ -210,6 +210,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
 <div class="toast" id="toast"></div>
 
+<script src="js/partage-lien.js"></script>
 <script src="js/branding.js"></script>
 <script>
 const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
@@ -1251,6 +1252,7 @@ function empRenderPiecesDossier(){
     +' sur '+requis.length+' demandées (hors pièces non concernées)</div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
     +'<button type="button" class="btn btn-g btn-sm" onclick="empCopierLienPieces(\''+actif.id+'\')"><i class="ti ti-link"></i> Copier le lien</button>'
+    +(PartageLien.disponible()?'<button type="button" class="btn btn-g btn-sm" onclick="empPartagerLienPieces(\''+actif.id+'\')"><i class="ti ti-share"></i> Partager…</button>':'')
     +'<button type="button" class="btn btn-g btn-sm" onclick="empRelancerPieces(\''+actif.id+'\')"><i class="ti ti-bell"></i> Relancer</button>'
     +'<button type="button" class="btn btn-g btn-sm" style="color:var(--red)" onclick="empAnnulerPieces(\''+actif.id+'\')"><i class="ti ti-x"></i> Annuler</button>'
     +'</div>'
@@ -1289,6 +1291,13 @@ function empCopierLienPieces(id){
     ()=>toast('Lien copié — à transmettre par SMS si besoin.'),
     ()=>prompt('Copiez ce lien :',url)
   );
+}
+function empPartagerLienPieces(id){
+  const d=empPiecesCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  PartageLien.partager(piecesEmployeLien(d.token),{titre:'Pièces à fournir',
+    texte:'Bonjour, voici le lien pour déposer vos pièces :'})
+    .then(r=>{if(r==='copie')toast('Partage indisponible — lien copié.');});
 }
 async function empAnnulerPieces(id){
   const d=empPiecesCache.find(x=>String(x.id)===String(id));

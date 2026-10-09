@@ -6,6 +6,7 @@
 <title>Koala Kids — Documents</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="js/partage-lien.js"></script>
 <script src="js/livret-stagiaire.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -6431,6 +6432,14 @@ async function startQr(role,label){
   cp.innerHTML='<i class="ti ti-copy"></i> Copier le lien';
   cp.onclick=()=>{navigator.clipboard.writeText(QR_URL).then(()=>toast('Lien copié'),()=>toast('Copie impossible'));};
   box.appendChild(cp);
+  if(PartageLien.disponible()){
+    const pt=document.createElement('button');
+    pt.className='btn btn-s';pt.style.cssText='margin-top:8px;margin-left:6px';
+    pt.innerHTML='<i class="ti ti-share"></i> Partager…';
+    pt.onclick=()=>{PartageLien.partager(QR_URL,{titre:'Signature',texte:'Voici le lien pour signer :'})
+      .then(r=>{if(r==='copie')toast('Partage indisponible — lien copié.');});};
+    box.appendChild(pt);
+  }
   document.getElementById('qrWait').textContent='En attente de la signature… (lien valable 30 min)';
   document.getElementById('ovQr').classList.add('on');
   qrTimer=setInterval(()=>pollQr(role),3000);
@@ -7456,6 +7465,14 @@ async function rsSigQr(){
   cp.innerHTML='<i class="ti ti-copy"></i> Copier le lien';
   cp.onclick=()=>{navigator.clipboard.writeText(QR_URL).then(()=>toast('Lien copié'),()=>toast('Copie impossible'));};
   box.appendChild(cp);
+  if(PartageLien.disponible()){
+    const pt=document.createElement('button');
+    pt.className='btn btn-s';pt.style.cssText='margin-top:8px;margin-left:6px';
+    pt.innerHTML='<i class="ti ti-share"></i> Partager…';
+    pt.onclick=()=>{PartageLien.partager(QR_URL,{titre:'Signature',texte:'Voici le lien pour signer :'})
+      .then(r=>{if(r==='copie')toast('Partage indisponible — lien copié.');});};
+    box.appendChild(pt);
+  }
   document.getElementById('qrWait').textContent='En attente de la signature… (lien valable 30 min)';
   document.getElementById('ovQr').classList.add('on');
   qrTimer=setInterval(rsPollSig,3000);
