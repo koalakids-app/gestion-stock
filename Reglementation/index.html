@@ -3179,6 +3179,7 @@ function renderListItem(d, i) {
 
 function openModal(id) {
   const d = FICHES.find(x => x.id === id);
+  if (!d) return;
   const cat = CAT[d.category];
   const overlay = document.getElementById('modalOverlay');
 
@@ -3191,9 +3192,10 @@ function openModal(id) {
   document.getElementById('modalTitle').innerHTML = d.title + badge2025 + badgeCaduque + badgeNew;
   document.getElementById('modalRef').textContent = d.ref;
 
-  const det = d.detail;
+  const det = d.detail || {};
+  const arr = v => Array.isArray(v) ? v : [];
 
-  const update2025Block = d.update2025 ? `
+  const update2025Block = Array.isArray(d.update2025) ? `
     <div class="modal-section">
       <div class="modal-section-title" style="color:#7C3AED">⚡ Modifications — Décret 2025-304</div>
       <div class="decret-box">
@@ -3220,20 +3222,20 @@ function openModal(id) {
     </div>
     <div class="modal-section">
       <div class="modal-section-title">Description</div>
-      <p class="modal-text">${det.description}</p>
+      <p class="modal-text">${det.description || ''}</p>
     </div>
 
     <div class="modal-section">
       <div class="modal-section-title">Points réglementaires clés</div>
       <ul class="requirement-list">
-        ${det.points.map(p => `<li>${p}</li>`).join('')}
+        ${arr(det.points).map(p => `<li>${p}</li>`).join('')}
       </ul>
     </div>
 
     <div class="modal-section">
       <div class="modal-section-title">Chiffres & paramètres</div>
       <div class="detail-grid">
-        ${det.details.map(d => `
+        ${arr(det.details).map(d => `
           <div class="detail-item">
             <div class="detail-label">${d.label}</div>
             <div class="detail-value">${d.value}</div>
@@ -3245,12 +3247,12 @@ function openModal(id) {
 
     <div class="modal-section">
       <div class="modal-section-title">⚠ Points d'attention</div>
-      <div class="alert-box">${det.alert}</div>
+      <div class="alert-box">${det.alert || ''}</div>
     </div>
 
     <div class="modal-section">
       <div class="modal-section-title">Sources & références</div>
-      <div>${det.sources.map(sourceBadge).join('')}</div>
+      <div>${arr(det.sources).filter(Boolean).map(sourceBadge).join('')}</div>
     </div>
   `;
 
