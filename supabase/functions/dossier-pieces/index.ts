@@ -134,7 +134,16 @@ Deno.serve(async (req) => {
   if (action === "upload") {
     const pieceKey = ((body.piece_key as string) || "").trim();
     const filename = ((body.filename as string) || "fichier").trim();
-    const contentType = (body.content_type as string) || "application/octet-stream";
+    const ext0 = (filename.split(".").pop() || "").toLowerCase();
+    const TYPES: Record<string, string> = {
+      jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
+      heic: "image/heic", heif: "image/heif", pdf: "application/pdf",
+    };
+    // Le bucket n'accepte que ces formats : on déduit le type de l'extension
+    // quand le téléphone envoie un type vide ou « image/jpg ».
+    const fourni = ((body.content_type as string) || "").toLowerCase().replace("image/jpg", "image/jpeg");
+    const contentType = Object.values(TYPES).includes(fourni) ? fourni : (TYPES[ext0] || fourni);
+    if (!Object.values(TYPES).includes(contentType)) return erreur("format_non_accepte");
     const contentBase64 = body.content_base64 as string;
     if (!pieceKey) return erreur("piece_key_manquant");
     if (!contentBase64) return erreur("fichier_manquant");
