@@ -2131,7 +2131,11 @@ async function stgRenderRessFiche(typeForce){
   const{data}=await sb.from('documents_reponses').select('id,document_id,statut,donnees,updated_at')
     .filter('donnees->>lv_stagiaire_id','eq',String(id)).filter('donnees->>lv_envoye','eq','true');
   if(!data||!data.length||String(stgFicheId)!==String(id)||!document.body.contains(zone))return;
-  zone.insertAdjacentHTML('beforeend','<div style="margin-top:14px;font-weight:700;font-size:13px">'
+  /* La fiche est redessinée plusieurs fois à l'ouverture et ce bloc arrive en
+     différé : on remplace l'éventuel bloc déjà posé au lieu d'en ajouter un. */
+  const ancien=document.getElementById('stg-livrets-bloc');
+  if(ancien)ancien.remove();
+  zone.insertAdjacentHTML('beforeend','<div id="stg-livrets-bloc"><div style="margin-top:14px;font-weight:700;font-size:13px">'
     +'<i class="ti ti-signature" style="color:var(--orange-dark)"></i> Documents envoyés à signer</div>'
     +data.map(r=>{
       const d=r.donnees||{},signe=r.statut==='signe';
@@ -2144,7 +2148,7 @@ async function stgRenderRessFiche(typeForce){
         +'<span style="font-weight:600;font-size:12.5px;flex:1;min-width:120px">Livret d\'accueil — Koalakids '+escHtml(d.lv_creche||'')+'</span>'+b
         +'<a class="ibtn" style="width:26px;height:26px;font-size:13px;display:inline-grid;place-items:center" title="Ouvrir dans Documents" '
         +'href="documents.html?doc='+encodeURIComponent(r.document_id)+'&rep='+encodeURIComponent(r.id)+'"><i class="ti ti-external-link"></i></a></div>';
-    }).join(''));
+    }).join('')+'</div>');
 }
 
 /* ── L'écran de réglage ─────────────────────────────────────────────────── */
