@@ -2065,7 +2065,7 @@ function stgRessVue(stagiaireId,ressourceId){
 
 /* ── Dans la fiche : qui a lu quoi ──────────────────────────────────────── */
 
-function stgRenderRessFiche(typeForce){
+function stgRenderRessFicheBase(typeForce){
   const zone=document.getElementById('stg-ressources-zone');
   if(!zone||!stgFicheId)return;
   const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
@@ -2119,6 +2119,32 @@ function stgRenderRessFiche(typeForce){
     +'de son lien de dépôt. La confirmation est déclarative : elle dit que la personne a coché la case, '
     +'pas qu\'elle a tout lu.</p>';
   zone.innerHTML=h;
+}
+
+/* Dans la fiche : les documents préparés dans documents.html (livret d'accueil)
+   et mis à signer sur le lien, avec l'état de la signature. */
+async function stgRenderRessFiche(typeForce){
+  stgRenderRessFicheBase(typeForce);
+  const zone=document.getElementById('stg-ressources-zone');
+  const id=stgFicheId;
+  if(!zone||!id)return;
+  const{data}=await sb.from('documents_reponses').select('id,document_id,statut,donnees,updated_at')
+    .filter('donnees->>lv_stagiaire_id','eq',String(id)).filter('donnees->>lv_envoye','eq','true');
+  if(!data||!data.length||String(stgFicheId)!==String(id)||!document.body.contains(zone))return;
+  zone.insertAdjacentHTML('beforeend','<div style="margin-top:14px;font-weight:700;font-size:13px">'
+    +'<i class="ti ti-signature" style="color:var(--orange-dark)"></i> Documents envoyés à signer</div>'
+    +data.map(r=>{
+      const d=r.donnees||{},signe=r.statut==='signe';
+      const b=signe
+        ?'<span style="background:var(--green-light);color:var(--green);border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700">Signé le '
+          +escHtml(stgDateFr((d._signature&&d._signature.signe_le)||r.updated_at))+'</span>'
+        :'<span style="background:var(--orange-light);color:var(--orange-dark);border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700">En attente de signature</span>';
+      return '<div style="display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-top:7px;flex-wrap:wrap">'
+        +'<i class="ti ti-file-text" style="color:'+(signe?'var(--green)':'var(--muted)')+'"></i>'
+        +'<span style="font-weight:600;font-size:12.5px;flex:1;min-width:120px">Livret d\'accueil — Koalakids '+escHtml(d.lv_creche||'')+'</span>'+b
+        +'<a class="ibtn" style="width:26px;height:26px;font-size:13px;display:inline-grid;place-items:center" title="Ouvrir dans Documents" '
+        +'href="documents.html?doc='+encodeURIComponent(r.document_id)+'&rep='+encodeURIComponent(r.id)+'"><i class="ti ti-external-link"></i></a></div>';
+    }).join(''));
 }
 
 /* ── L'écran de réglage ─────────────────────────────────────────────────── */
