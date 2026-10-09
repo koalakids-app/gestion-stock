@@ -725,6 +725,10 @@ function stgRenderLien(){
       +'<input class="finput" id="stg-lien-url" readonly value="'+escHtml(stgLienUrl(s.token))+'" style="flex:1;min-width:220px;font-size:12px">'
       +'<button class="btn-sm" onclick="stgCopierLien()"><i class="ti ti-copy"></i> Copier</button>'
       +(s.email?'<a class="btn-sm" style="text-decoration:none" href="'+stgMailto(s)+'"><i class="ti ti-mail"></i> Envoyer par mail</a>':'')
+      +(stgTelIntl(s.telephone)?'<a class="btn-sm" style="text-decoration:none" href="'+stgSmsUrl(s)+'"><i class="ti ti-message"></i> SMS</a>'
+        +'<a class="btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="'+stgWhatsAppUrl(s)+'"><i class="ti ti-brand-whatsapp"></i> WhatsApp</a>':'')
+      +(navigator.share?'<button class="btn-sm" onclick="stgPartagerLien()"><i class="ti ti-share"></i> Partager…</button>':'')
+      +'<button class="btn-sm" onclick="stgAfficherQr()"><i class="ti ti-qrcode"></i> QR code</button>'
       +'<button class="btn-sm" onclick="stgCreerLien(true)"><i class="ti ti-refresh"></i> Renouveler</button>'
       +'</div>'
       +'<div style="font-size:12px;color:'+(actif?'var(--muted)':'var(--red)')+'">'
@@ -752,13 +756,12 @@ function stgMailtoRess(s){
   return t+'\n';
 }
 
-/* Le mail est composé dans le client de messagerie du poste : rien ne part
-   d'ici, et il n'y a donc pas d'adresse d'expédition à configurer. */
-function stgMailto(s){
+/* Le message qui accompagne le lien, quel que soit le canal (mail, SMS,
+   WhatsApp, partage) : un seul texte, donc un seul endroit à corriger. */
+function stgMessageLien(s){
   const p=stgProfil(s);
   const orgNom=(window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids';
-  const sujet='Vos documents '+(stgType(s)==='alternant'?"d'alternance":'de stage')+' — '+orgNom;
-  const corps='Bonjour '+(s.prenom||'')+',\n\n'
+  return 'Bonjour '+(s.prenom||'')+',\n\n'
     +'Voici le lien pour nous transmettre les documents nécessaires à votre '+p.periode
     +(s.creche_id?' à la crèche '+stgCrecheName(s.creche_id):'')+' :\n\n'
     +stgLienUrl(s.token)+'\n\n'
@@ -766,8 +769,59 @@ function stgMailto(s){
     +'Vous pouvez photographier vos pièces directement avec votre téléphone, en plusieurs fois.\n'
     +'Ce lien est valable jusqu\'au '+stgDateFr(s.token_expire_le)+'.\n\n'
     +'À bientôt,\nL\'équipe '+orgNom;
+}
+
+/* Le mail est composé dans le client de messagerie du poste : rien ne part
+   d'ici, et il n'y a donc pas d'adresse d'expédition à configurer. */
+function stgMailto(s){
+  const orgNom=(window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids';
+  const sujet='Vos documents '+(stgType(s)==='alternant'?"d'alternance":'de stage')+' — '+orgNom;
   return 'mailto:'+encodeURIComponent(s.email||'')
-    +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);
+    +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(stgMessageLien(s));
+}
+
+/* Numéro au format international sans « + » (06 12 34 56 78 -> 33612345678),
+   ou '' si ce n'est pas un numéro exploitable. Un numéro à 10 chiffres sans
+   indicatif est pris pour un numéro français. */
+function stgTelIntl(tel){
+  let t=String(tel||'').trim();
+  if(!t)return '';
+  const plus=t.startsWith('+');
+  t=t.replace(/\D/g,'');
+  if(!plus&&t.startsWith('00'))t=t.slice(2);
+  else if(!plus&&/^0\d{9}$/.test(t))t='33'+t.slice(1);
+  return /^\d{9,15}$/.test(t)?t:'';
+}
+/* SMS et WhatsApp s'ouvrent sur le téléphone / l'application de la personne qui
+   envoie : rien ne transite par nos serveurs, et aucun compte n'est à configurer. */
+function stgSmsUrl(s){
+  return 'sms:+'+stgTelIntl(s.telephone)+'?&body='+encodeURIComponent(stgMessageLien(s));
+}
+function stgWhatsAppUrl(s){
+  return 'https://wa.me/'+stgTelIntl(s.telephone)+'?text='+encodeURIComponent(stgMessageLien(s));
+}
+/* Feuille de partage du téléphone ou de l'ordinateur (Messenger, Signal, AirDrop…). */
+function stgPartagerLien(){
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  if(!s||!s.token||!navigator.share)return;
+  navigator.share({title:'Vos documents de '+(stgType(s)==='alternant'?'alternance':'stage'),text:stgMessageLien(s)})
+    .catch(()=>{});   // fermeture de la feuille par l'utilisateur : pas une erreur
+}
+/* QR code à scanner avec le téléphone de la personne, quand elle est là en face
+   (visite, entretien) : aucune saisie de numéro ni d'adresse. Généré dans le
+   navigateur, le lien ne part vers aucun service tiers. */
+function stgAfficherQr(){
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  if(!s||!s.token)return;
+  const box=document.getElementById('stg-qr-box');
+  box.innerHTML='';
+  if(typeof QRCode==='function'){
+    new QRCode(box,{text:stgLienUrl(s.token),width:240,height:240,correctLevel:QRCode.CorrectLevel.M});
+  }else{
+    return showBanner('QR code indisponible — copiez le lien à la place.','error');
+  }
+  document.getElementById('stg-qr-nom').textContent=((s.prenom||'')+' '+(s.nom||'')).trim();
+  document.getElementById('modal-stg-qr-wrap').classList.add('open');
 }
 
 /* Premier contact après une demande de stage, AVANT toute fiche : on propose un
