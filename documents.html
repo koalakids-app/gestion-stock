@@ -13,6 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
@@ -951,8 +952,7 @@ function docRowHtml(d){
               <button class="iconbtn" title="Réponses" onclick="openReps('${d.id}')"><i class="ti ti-list"></i></button>`
             :(d.fichier_url?`<button class="iconbtn" title="Aperçu" onclick="apercuFichier('${d.id}')"><i class="ti ti-eye"></i></button>
               <a class="iconbtn" title="Télécharger" href="${esc(d.fichier_url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i></a>`:'')}
-      ${IS_DIRECTION&&d.signature_distance?`<button class="iconbtn" title="${d.fichier_pdf_url?'Remplacer':'Joindre'} le PDF d'origine" onclick="sdJoindrePdf('${d.id}')"><i class="ti ti-file-upload"></i></button>`:''}
-      ${d.signature_distance&&d.fichier_url&&SD_ETATS[d.id]&&SD_ETATS[d.id].signed_at?`<button class="iconbtn" title="Télécharger le PDF signé" onclick="sdTelechargerPdf('${d.id}')"><i class="ti ti-file-type-pdf"></i></button>`:''}
+      ${d.signature_distance&&d.fichier_url&&/\.docx(\?|$)/i.test(d.fichier_url)&&SD_ETATS[d.id]&&SD_ETATS[d.id].signed_at?`<button class="iconbtn" title="Télécharger le Word signé" onclick="sdTelechargerDocx('${d.id}')"><i class="ti ti-file-type-doc"></i></button>`:''}
       ${d.signature_distance&&d.fichier_url?`<button class="iconbtn" title="Envoyer pour signature à ${esc(d.signataire_nom||'')}" onclick="sdEnvoyer('${d.id}')"><i class="ti ti-signature"></i></button>`:''}
       ${IS_DIRECTION?`<button class="iconbtn" title="Modifier" onclick="openDoc('${d.id}')"><i class="ti ti-edit"></i></button>
       <button class="iconbtn d" title="Supprimer" onclick="delDoc('${d.id}')"><i class="ti ti-trash"></i></button>`:''}
@@ -1846,7 +1846,6 @@ const PDF_MIMES={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'im
 async function apercuFichier(id){
   const d=DOCS.find(x=>x.id===id);
   if(!d||!d.fichier_url)return toast('Aucun fichier joint');
-  if(d.fichier_pdf_url)return sdApercuPdf(d);
   const nom=d.fichier_nom||d.titre||'document';
   const ext=(String(d.fichier_url).split('?')[0].split('.').pop()||'').toLowerCase();
   const mime=PDF_MIMES[ext];
@@ -6524,134 +6523,88 @@ async function sdBlocSignature(d){
   }catch(err){console.warn('bloc signature',err);return '';}
 }
 
-/* ---------- PDF D'ORIGINE + CACHET DE SIGNATURE ----------
-   Le PDF joint (documents_koala.fichier_pdf_url) reste intact : on en fabrique
-   une copie en mémoire où la dernière page reçoit un cadre « Lu et approuvé »
-   (signataire, date de signature, image de la signature). */
-async function sdJoindrePdf(id){
-  if(blocDirection())return;
-  const d=DOCS.find(x=>x.id===id);
-  if(!d)return;
-  const inp=document.createElement('input');
-  inp.type='file';inp.accept='application/pdf,.pdf';
-  inp.onchange=async()=>{
-    const f=inp.files[0];
-    if(!f)return;
-    if(!/\.pdf$/i.test(f.name)&&f.type!=='application/pdf')return toast('Choisir un fichier PDF');
-    toast('Envoi du PDF…');
-    try{
-      const path='documents/'+Date.now()+'_'+slug(f.name);
-      const{error:ue}=await sb.storage.from('assets').upload(path,f,{upsert:true,contentType:'application/pdf'});
-      if(ue)throw ue;
-      const url=sb.storage.from('assets').getPublicUrl(path).data.publicUrl;
-      const{error}=await sb.from('documents_koala').update({fichier_pdf_url:url}).eq('id',id);
-      if(error)throw error;
-      d.fichier_pdf_url=url;
-      toast('PDF d’origine enregistré');render();
-    }catch(e){console.error('sdJoindrePdf',e);toast('Erreur : '+(e&&e.message?e.message:e));}
-  };
-  inp.click();
-}
-async function sdPdfSigne(d){
-  const r=await fetch(d.fichier_pdf_url);
-  if(!r.ok)throw new Error('HTTP '+r.status);
-  const octets=await r.arrayBuffer();
+/* ---------- WORD SIGNÉ ----------
+   La signature (image), le signataire et la date de signature sont ajoutés en
+   fin du .docx d'origine (même fichier que dans la bibliothèque) : mise en page
+   intacte, aucun fichier à rejoindre. Le fichier stocké n'est pas modifié, on
+   télécharge une copie « … - signé.docx ». */
+async function sdDocxSigne(d){
+  if(!window.JSZip)throw new Error('JSZip non chargé — recharger la page');
   const e=SD_ETATS[d.id];
-  if(!d.signature_distance||!e||!e.signed_at)return{octets,signe:false};
+  if(!e||!e.signed_at)throw new Error('aucune signature enregistrée');
   const{data}=await sb.from('signatures_pending').select('signature_data,signed_at,signataire').eq('token',e.token).maybeSingle();
-  if(!data||!data.signature_data)return{octets,signe:false};
-  const{PDFDocument,StandardFonts,rgb}=PDFLib;
-  const pdf=await PDFDocument.load(octets);
-  const page=pdf.getPages()[pdf.getPageCount()-1];
-  const{width}=page.getSize();
-  const gras=await pdf.embedFont(StandardFonts.HelveticaBold),norm=await pdf.embedFont(StandardFonts.Helvetica);
-  const img=await pdf.embedPng(data.signature_data);
+  if(!data||!data.signature_data)throw new Error('signature introuvable');
+  const r=await fetch(d.fichier_url);
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const zip=await JSZip.loadAsync(await r.arrayBuffer());
+  const docFile=zip.file('word/document.xml'),relFile=zip.file('word/_rels/document.xml.rels'),ctFile=zip.file('[Content_Types].xml');
+  if(!docFile||!relFile||!ctFile)throw new Error('fichier Word illisible');
+  let xml=await docFile.async('string');
+  const i=xml.lastIndexOf('<w:sectPr');                    // sectPr du corps = celui de la dernière page
+  if(i<0)throw new Error('structure Word inattendue');
+  const sect=xml.slice(i);
+  const num=(re,def)=>{const m=sect.match(re);return m?parseInt(m[1],10):def;};
+  const pgW=num(/<w:pgSz[^>]*w:w="(\d+)"/,11906),pgH=num(/<w:pgSz[^>]*w:h="(\d+)"/,16838);
+  const mL=num(/<w:pgMar[^>]*w:left="(\d+)"/,1417),mR=num(/<w:pgMar[^>]*w:right="(\d+)"/,1417),mB=num(/<w:pgMar[^>]*w:bottom="(\d+)"/,1417);
+  const EMU=635;                                           // 1 twip = 635 EMU
+  // Cachet = image (texte + signature) flottante dans la marge basse de la dernière
+  // page : le texte du protocole n'est jamais déplacé ni recouvert.
+  const largeur=(pgW-mL-mR)*EMU,hauteur=Math.min(Math.round(1.9*360000),Math.max(0,(mB-300)*EMU));
+  if(hauteur<600000)throw new Error('marge basse trop petite pour le cachet');
   const quand=new Date(data.signed_at);
   const date=quand.toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})
-    +' \u00e0 '+quand.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-  const x=36,y=20,w=width-72,h=66,gris=rgb(.55,.53,.66);
-  page.drawRectangle({x,y,width:w,height:h,borderColor:gris,borderWidth:.8,color:rgb(1,1,1)});
-  const ligne=(t,f,taille,dy)=>page.drawText(t,{x:x+10,y:y+h-dy,size:taille,font:f,color:rgb(.17,.15,.25)});
-  ligne('Lu et approuv\u00e9 \u2014 sign\u00e9 \u00e0 distance',gras,9.5,16);
-  ligne('Signataire : '+(data.signataire||''),norm,9,31);
-  ligne('Date de signature : '+date,gras,9,45);
-  const maxW=170,maxH=h-12,k=Math.min(maxW/img.width,maxH/img.height);
-  page.drawImage(img,{x:x+w-maxW-10+(maxW-img.width*k)/2,y:y+(h-img.height*k)/2,width:img.width*k,height:img.height*k});
-  return{octets:await pdf.save(),signe:true};
+    +' à '+quand.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  const W=1400,H=Math.round(W*hauteur/largeur);
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const g=cv.getContext('2d');
+  g.fillStyle='#fff';g.fillRect(0,0,W,H);
+  g.strokeStyle='#8E8AA8';g.lineWidth=3;g.strokeRect(2,2,W-4,H-4);
+  g.fillStyle='#2B2740';g.textBaseline='alphabetic';
+  const t=H/100;
+  g.font='bold '+Math.round(t*17)+'px Arial,Helvetica,sans-serif';g.fillText('Lu et approuvé — signé à distance',28,Math.round(t*30));
+  g.font=Math.round(t*15)+'px Arial,Helvetica,sans-serif';g.fillText('Signataire : '+(data.signataire||''),28,Math.round(t*57));
+  g.font='bold '+Math.round(t*15)+'px Arial,Helvetica,sans-serif';g.fillText('Date de signature : '+date,28,Math.round(t*82));
+  const im=new Image();im.src=data.signature_data;await im.decode();
+  const zw=W*0.36,zh=H-24,k=Math.min(zw/im.width,zh/im.height);
+  g.drawImage(im,W-zw-20+(zw-im.width*k)/2,12+(zh-im.height*k)/2,im.width*k,im.height*k);
+  const png=Uint8Array.from(atob(cv.toDataURL('image/png').split(',')[1]),c=>c.charCodeAt(0));
+  zip.file('word/media/kk_signature_distance.png',png);
+  let rels=await relFile.async('string');
+  rels=rels.replace('</Relationships>','<Relationship Id="rIdKkSigDist" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/kk_signature_distance.png"/></Relationships>');
+  zip.file('word/_rels/document.xml.rels',rels);
+  let ct=await ctFile.async('string');
+  if(!/Extension="png"/i.test(ct))ct=ct.replace('<Override','<Default Extension="png" ContentType="image/png"/><Override');
+  zip.file('[Content_Types].xml',ct);
+  const y=(pgH-mB)*EMU+Math.round(0.12*360000);
+  const dessin='<w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:drawing><wp:anchor xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="251659264" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">'
+    +'<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>'+(mL*EMU)+'</wp:posOffset></wp:positionH>'
+    +'<wp:positionV relativeFrom="page"><wp:posOffset>'+y+'</wp:posOffset></wp:positionV>'
+    +'<wp:extent cx="'+largeur+'" cy="'+hauteur+'"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>'
+    +'<wp:docPr id="90901" name="Signature à distance" descr="Lu et approuvé — signature et date de signature"/><wp:cNvGraphicFramePr/>'
+    +'<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+    +'<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="90901" name="signature.png"/><pic:cNvPicPr/></pic:nvPicPr>'
+    +'<pic:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rIdKkSigDist"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+    +'<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+largeur+'" cy="'+hauteur+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>'
+    +'</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
+  // paragraphe d'ancrage quasi invisible (1 pt) : ne décale pas le contenu
+  const bloc='<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr>'+dessin+'</w:p>';
+  xml=xml.slice(0,i)+bloc+xml.slice(i);
+  zip.file('word/document.xml',xml);
+  return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
 }
-async function sdApercuPdf(d,telecharger){
-  toast('Préparation du PDF…');
-  try{
-    const{octets,signe}=await sdPdfSigne(d);
-    const nom=(d.titre||'document').replace(/[\\/:*?"<>|]+/g,' ').trim()+(signe?' - sign\u00e9':'')+'.pdf';
-    if(telecharger&&!signe)return toast('Aucune signature enregistrée pour ce document');
-    const url=URL.createObjectURL(new Blob([octets],{type:'application/pdf'}));
-    pdfAfficher(url,nom,url);
-    if(telecharger)pdfTelecharger();
-  }catch(e){
-    console.error('sdApercuPdf',e);
-    toast('PDF impossible : '+(e&&e.message?e.message:e));
-  }
-}
-
-/* Capture d'un bloc HTML (700 px de large) en PDF A4 multi-pages. Le bloc de
-   signature (sélecteur blocSel) est repoussé à la page suivante s'il tombait à
-   cheval sur deux pages. Renvoie le jsPDF. */
-async function sdHtmlEnPdf(host,blocSel){
-  const MARGE=40,LARGE=595.28-2*MARGE,HAUT=841.89-2*MARGE;
-  const pxParPage=Math.floor(HAUT/(LARGE/700));
-  const bloc=host.querySelector(blocSel);
-  if(bloc){
-    const top=bloc.offsetTop,h=bloc.offsetHeight;
-    if(Math.floor(top/pxParPage)!==Math.floor((top+h)/pxParPage)&&h<pxParPage)
-      bloc.style.marginTop=(34+(Math.ceil(top/pxParPage)*pxParPage-top))+'px';
-  }
-  const canvas=await window.html2canvas(host,{scale:2,backgroundColor:'#ffffff',useCORS:true,windowWidth:700});
-  const doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'});
-  const pageHpx=pxParPage*2;                       // hauteur d'une page en px du canvas (scale 2)
-  for(let y=0,n=0;y<canvas.height;y+=pageHpx,n++){
-    const h=Math.min(pageHpx,canvas.height-y);
-    const part=document.createElement('canvas');
-    part.width=canvas.width;part.height=h;
-    const g=part.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,part.width,h);
-    g.drawImage(canvas,0,y,canvas.width,h,0,0,canvas.width,h);
-    if(n>0)doc.addPage();
-    doc.addImage(part.toDataURL('image/jpeg',0.92),'JPEG',MARGE,MARGE,LARGE,h*(LARGE/canvas.width));
-  }
-  return doc;
-}
-
-/* PDF du protocole signé : le Word est converti en HTML (mammoth), le bloc
-   « Lu et approuvé » (signature + date) est ajouté, puis le tout est paginé en
-   A4 par jsPDF. Le fichier Word d'origine reste inchangé. */
-async function sdTelechargerPdf(id){
+async function sdTelechargerDocx(id){
   const d=DOCS.find(x=>x.id===id);
   if(!d||!d.fichier_url)return;
-  if(d.fichier_pdf_url)return sdApercuPdf(d,true);
-  if(!window.jspdf||!window.mammoth||!window.html2canvas)return toast('Librairies PDF non chargées — recharger la page');
-  const bloc=await sdBlocSignature(d);
-  if(!bloc)return toast('Aucune signature enregistrée pour ce document');
-  toast('Génération du PDF signé…');
-  const host=document.createElement('div');
-  host.style.cssText='position:absolute;left:0;top:0;z-index:-1;width:700px;background:#fff;color:#000;'
-    +'font:13px/1.5 Arial,Helvetica,sans-serif;padding:0';
+  toast('Préparation du Word signé…');
   try{
-    const r=await fetch(d.fichier_url);
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const res=await window.mammoth.convertToHtml({arrayBuffer:await r.arrayBuffer()});
-    host.innerHTML='<style>h1,h2,h3{color:#4A3F9F;line-height:1.3}img{max-width:100%}'
-      +'table{border-collapse:collapse;width:100%}td,th{border:1px solid #bbb;padding:3px 6px;vertical-align:top}</style>'
-      +'<h2 style="margin:0 0 10px">'+esc(d.titre)+'</h2>'+(res.value||'')+bloc;
-    document.body.appendChild(host);
-    // les images (dont la signature) doivent être décodées avant la capture
-    await Promise.all([...host.querySelectorAll('img')].map(im=>im.decode?im.decode().catch(()=>{}):0));
-    const cv=await sdHtmlEnPdf(host,'#sdSigBloc');
-    cv.save((d.titre||'document').replace(/[\\/:*?"<>|]+/g,' ').trim()+' - signé.pdf');
-    toast('PDF signé téléchargé');
-  }catch(e){
-    console.error('sdTelechargerPdf',e);
-    toast('PDF impossible : '+(e&&e.message?e.message:e));
-  }finally{host.remove();}
+    const blob=await sdDocxSigne(d);
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=(d.titre||'document').replace(/[\\/:*?"<>|]+/g,' ').trim()+' - signé.docx';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+    toast('Word signé téléchargé');
+  }catch(e){console.error('sdTelechargerDocx',e);toast('Word signé impossible : '+(e&&e.message?e.message:e));}
 }
 
 /* ---------- QR SIGNATURE A DISTANCE ---------- */
