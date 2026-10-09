@@ -473,6 +473,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
   <div class="mf"><button class="btn btn-g" onclick="cancelQr()">Annuler</button></div>
 </div></div>
 
+<!-- Modal envoi d'un document à signer à distance -->
+<div class="ov" id="ovSd"><div class="modal" style="max-width:400px">
+  <h2 id="sdTitle">Envoyer pour signature</h2>
+  <p class="hint" id="sdInfo"></p>
+  <div id="sdBox" style="text-align:center"></div>
+  <div class="mf"><button class="btn btn-g" onclick="sdFermer()">Fermer</button></div>
+</div></div>
+
 <div class="prevwrap" id="prevWrap">
   <div class="prevbar"><button class="btn btn-g btn-sm" onclick="gp_closePreview()"><i class="ti ti-x"></i> Fermer l'aperçu</button></div>
   <div class="g-doc" id="prevDoc"></div>
@@ -769,6 +777,7 @@ async function loadAll(){
   const sel=document.getElementById('fCreche');
   sel.innerHTML='<option value="all">Toutes les crèches</option>'+CRECHES.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
   if(PROF&&PROF.role==='referent'&&PROF.creche_id)sel.value=PROF.creche_id;
+  await sdChargerEtats();
   render();
   openFromUrl();
 }
@@ -935,12 +944,13 @@ function docRowHtml(d){
   return `<div class="doc">
     <div class="doc-i ${fill?'fill':'dl'}"><i class="ti ti-${fill?'forms':'file-download'}"></i></div>
     <div class="doc-t"><h3>${esc(d.titre)}</h3>
-      <p>${esc(d.description||'')}${crName?' <span class="tag">'+esc(crName)+'</span>':' <span class="tag">Tous sites</span>'}${d.pack_familiarisation?' <span class="tag" style="background:#EEEDF8;color:#3D3580;font-weight:700">👪 Familiarisation'+(d.pack_ordre?' · '+d.pack_ordre:'')+(d.pack_imprimer?' · à imprimer':'')+'</span>':''}</p></div>
+      <p>${esc(d.description||'')}${sdTag(d)}${crName?' <span class="tag">'+esc(crName)+'</span>':' <span class="tag">Tous sites</span>'}${d.pack_familiarisation?' <span class="tag" style="background:#EEEDF8;color:#3D3580;font-weight:700">👪 Familiarisation'+(d.pack_ordre?' · '+d.pack_ordre:'')+(d.pack_imprimer?' · à imprimer':'')+'</span>':''}</p></div>
     <div class="doc-a">
       ${fill?`<button class="iconbtn" title="Remplir" onclick="openFill('${d.id}')"><i class="ti ti-pencil"></i></button>
               <button class="iconbtn" title="Réponses" onclick="openReps('${d.id}')"><i class="ti ti-list"></i></button>`
             :(d.fichier_url?`<button class="iconbtn" title="Aperçu" onclick="apercuFichier('${d.id}')"><i class="ti ti-eye"></i></button>
               <a class="iconbtn" title="Télécharger" href="${esc(d.fichier_url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i></a>`:'')}
+      ${d.signature_distance&&d.fichier_url?`<button class="iconbtn" title="Envoyer pour signature à ${esc(d.signataire_nom||'')}" onclick="sdEnvoyer('${d.id}')"><i class="ti ti-signature"></i></button>`:''}
       ${IS_DIRECTION?`<button class="iconbtn" title="Modifier" onclick="openDoc('${d.id}')"><i class="ti ti-edit"></i></button>
       <button class="iconbtn d" title="Supprimer" onclick="delDoc('${d.id}')"><i class="ti ti-trash"></i></button>`:''}
     </div></div>`;
@@ -6392,6 +6402,101 @@ function clearSig(role){
     const st=document.getElementById('fillStatut');
     if(st)st.value='prepare';
   }
+}
+
+/* ---------- DOCUMENT A SIGNER A DISTANCE (lien envoyé au signataire attendu) ----------
+   documents_koala.signature_distance / signataire_nom / signataire_fonction
+   (sql/documents_signature_distance.sql). Le lien ouvre signature.html, qui
+   affiche le document puis recueille la signature (valable 7 jours). L'état
+   (en attente / signé) est relu dans signatures_pending à chaque chargement. */
+let SD_ETATS={};      // document_id -> dernière demande {token,signed_at,expire_at,created_at}
+let sdTimer=null,sdToken=null;
+async function sdChargerEtats(){
+  SD_ETATS={};
+  const ids=DOCS.filter(d=>d.signature_distance).map(d=>d.id);
+  if(!ids.length)return;
+  try{
+    const{data}=await sb.from('signatures_pending')
+      .select('token,document_id,signed_at,expire_at,created_at,signataire')
+      .in('document_id',ids).eq('role_sign','document_distance')
+      .order('created_at',{ascending:false});
+    (data||[]).forEach(r=>{
+      const cur=SD_ETATS[r.document_id];
+      // une demande signée prime sur une demande plus récente restée en attente
+      if(!cur||(!cur.signed_at&&r.signed_at))SD_ETATS[r.document_id]=r;
+    });
+  }catch(e){console.warn('etats signature',e);}
+}
+function sdTag(d){
+  if(!d.signature_distance)return '';
+  const e=SD_ETATS[d.id],qui=esc(d.signataire_nom||'le signataire');
+  const dt=x=>new Date(x).toLocaleDateString('fr-FR');
+  if(e&&e.signed_at)return ' <span class="tag" style="background:#E6F4EA;color:#2E7D32;font-weight:700;cursor:pointer" onclick="sdVoirSignature(\''+d.id+'\')">✅ Signé par '+qui+' le '+dt(e.signed_at)+'</span>';
+  if(e&&new Date(e.expire_at)>new Date())return ' <span class="tag" style="background:#FFF3E0;color:#B45F06;font-weight:700">⏳ En attente de '+qui+' (envoyé le '+dt(e.created_at)+')</span>';
+  return ' <span class="tag" style="background:#F1EFF7;color:#8E8AA8;font-weight:700">À faire signer par '+qui+(e?' (lien expiré)':'')+'</span>';
+}
+function sdUrl(tok){return location.origin+location.pathname.replace(/[^/]*$/,'')+'signature.html?t='+tok;}
+async function sdEnvoyer(id){
+  const d=DOCS.find(x=>x.id===id);
+  if(!d)return;
+  const e=SD_ETATS[id];
+  if(e&&e.signed_at&&!confirm('Ce document a déjà été signé. Envoyer une nouvelle demande de signature ?'))return;
+  sdToken=mkToken();
+  const nom=d.signataire_nom||'Signataire',fct=d.signataire_fonction?' ('+d.signataire_fonction+')':'';
+  const exp=new Date(Date.now()+7*864e5).toISOString();
+  const{error}=await sb.from('signatures_pending').insert({
+    token:sdToken,document_id:d.id,role_sign:'document_distance',
+    signataire:nom+fct,contexte:d.titre,expire_at:exp,created_by:ME.id
+  });
+  if(error){sdToken=null;return toast('Erreur : '+error.message);}
+  const url=sdUrl(sdToken);
+  document.getElementById('sdTitle').textContent=d.titre;
+  document.getElementById('sdInfo').textContent='Lien de signature pour '+nom+fct+', valable 7 jours. Il ouvre le document, puis le cadre de signature.';
+  const box=document.getElementById('sdBox');box.innerHTML='';
+  const lien=document.createElement('div');
+  lien.style.cssText='margin:6px 0 12px;font-size:11px;word-break:break-all;color:var(--muted);line-height:1.4';
+  lien.textContent=url;box.appendChild(lien);
+  const cp=document.createElement('button');
+  cp.className='btn btn-s';cp.innerHTML='<i class="ti ti-copy"></i> Copier le lien';
+  cp.onclick=()=>{navigator.clipboard.writeText(url).then(()=>toast('Lien copié'),()=>toast('Copie impossible'));};
+  box.appendChild(cp);
+  if(PartageLien.disponible()){
+    const pt=document.createElement('button');
+    pt.className='btn btn-s';pt.style.marginLeft='6px';
+    pt.innerHTML='<i class="ti ti-share"></i> Partager…';
+    pt.onclick=()=>{PartageLien.partager(url,{titre:'Signature',texte:'Bonjour, voici le lien pour signer « '+d.titre+' » :'})
+      .then(r=>{if(r==='copie')toast('Partage indisponible — lien copié.');});};
+    box.appendChild(pt);
+  }
+  const wa=document.createElement('a');
+  wa.className='btn btn-s';wa.style.cssText='margin-left:6px;text-decoration:none';
+  wa.target='_blank';wa.rel='noopener';
+  wa.href='https://wa.me/?text='+encodeURIComponent('Bonjour, voici le lien pour signer « '+d.titre+' » : '+url);
+  wa.innerHTML='<i class="ti ti-brand-whatsapp"></i> WhatsApp';
+  box.appendChild(wa);
+  document.getElementById('ovSd').classList.add('on');
+  // Relève la signature tant que la fenêtre reste ouverte ; sinon l'état est relu au chargement.
+  clearInterval(sdTimer);
+  sdTimer=setInterval(async()=>{
+    if(!sdToken)return;
+    const{data}=await sb.from('signatures_pending').select('signed_at').eq('token',sdToken).maybeSingle();
+    if(data&&data.signed_at){toast('Signature reçue');sdFermer();await sdChargerEtats();render();}
+  },4000);
+  await sdChargerEtats();render();
+}
+function sdFermer(){
+  clearInterval(sdTimer);sdTimer=null;sdToken=null;
+  document.getElementById('ovSd').classList.remove('on');
+}
+async function sdVoirSignature(id){
+  const e=SD_ETATS[id],d=DOCS.find(x=>x.id===id);
+  if(!e||!d)return;
+  const{data}=await sb.from('signatures_pending').select('signature_data,signed_at,signataire').eq('token',e.token).maybeSingle();
+  if(!data||!data.signature_data)return toast('Signature introuvable');
+  document.getElementById('sdTitle').textContent=d.titre;
+  document.getElementById('sdInfo').textContent='Signé par '+(data.signataire||'')+' le '+new Date(data.signed_at).toLocaleString('fr-FR');
+  document.getElementById('sdBox').innerHTML='<img alt="signature" style="max-width:100%;border:1px solid var(--line);border-radius:12px" src="'+esc(data.signature_data)+'">';
+  document.getElementById('ovSd').classList.add('on');
 }
 
 /* ---------- QR SIGNATURE A DISTANCE ---------- */
