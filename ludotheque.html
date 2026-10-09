@@ -1000,14 +1000,14 @@ function openModal_proposition() {
   if (catSel) catSel.value = 'Sensoriel';
   const crecheEl = document.getElementById('p-creche');
   if (crecheEl) {
-    crecheEl.value = (currentCreche && currentCreche !== 'all') ? currentCreche : CRECHES[0];
+    crecheEl.value = (currentCreche && currentCreche !== 'all') ? currentCreche : (SK_WRITE_CRECHE || CRECHES[0]);
     crecheEl.onchange = () => {
       buildArticlePicker(crecheEl.value, []);
       buildEnrichissementPicker(crecheEl.value, []);
     };
   }
   updateSouscatSelectors();
-  const creche = (crecheEl?.value) || CRECHES[0];
+  const creche = (crecheEl?.value) || SK_WRITE_CRECHE || CRECHES[0];
   buildArticlePicker(creche, []);
   buildEnrichissementPicker(creche, []);
   document.getElementById('modal-proposition').classList.add('open');
@@ -1028,7 +1028,7 @@ async function saveProposition() {
   const photoUrl = photosUrls[0] || null;
   const photosJson = photosUrls.length > 0 ? JSON.stringify(photosUrls) : null;
 
-  const creche = document.getElementById('p-creche')?.value || CRECHES[0];
+  const creche = document.getElementById('p-creche')?.value || SK_WRITE_CRECHE || CRECHES[0];
   const data = {
     nom,
     creche,
