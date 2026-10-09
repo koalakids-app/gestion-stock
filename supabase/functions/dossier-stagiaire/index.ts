@@ -208,6 +208,39 @@ async function marquer(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Documents à signer (livret d'accueil du stagiaire, préparé dans documents.html)
+// ---------------------------------------------------------------------------
+
+// Seuls ces champs du livret quittent la base : le texte et les coordonnées de la
+// crèche. Jamais les notes, ni les données d'un autre document.
+const LV_CHAMPS_PUBLICS = ['lv_texte', 'lv_creche', 'lv_adresse', 'lv_capacite', 'lv_gestionnaires', 'lv_ages',
+  'lv_horaires', 'lv_accueil', 'lv_equipe', 'sal_nom', 'lv_formation', 'lv_periode', 'lv_tuteur', 'lv_lieu', 'lv_date'];
+
+/** Les livrets que la crèche a mis à signer pour CE dossier. Le rattachement est
+ *  fait par la crèche (donnees.lv_stagiaire_id) : un identifiant deviné par le
+ *  client ne suffit pas, il faut qu'il corresponde au jeton. */
+async function livretsDe(stagiaireId: string) {
+  const { data, error } = await sb
+    .from('documents_reponses')
+    .select('id,document_id,statut,donnees,updated_at')
+    .filter('donnees->>lv_stagiaire_id', 'eq', stagiaireId)
+    .filter('donnees->>lv_envoye', 'eq', 'true')
+    .order('created_at');
+  if (error || !data?.length) return [];
+  const { data: docs } = await sb
+    .from('documents_koala')
+    .select('id,titre,template_key')
+    .in('id', [...new Set(data.map(r => r.document_id))]);
+  const ok = new Map((docs || []).filter(d => d.template_key === 'livret_stagiaire').map(d => [d.id, d]));
+  return data.filter(r => ok.has(r.document_id)).map(r => ({ ...r, titre: ok.get(r.document_id)!.titre }));
+}
+
+async function empreinte(txt: string) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt));
+  return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 /** Décode le base64 d'un dépôt. Renvoie null si ce n'en est pas. */
 function versOctets(b64: string): Uint8Array | null {
   try {
@@ -257,6 +290,20 @@ Deno.serve(async (req) => {
 
       const ress = await ressourcesDe(profil, stag.creche_id);
       const vues = await vuesDe(stag.id);
+      const livrets = (await livretsDe(stag.id)).map(r => {
+        const d = (r.donnees || {}) as Record<string, any>;
+        const champs: Record<string, unknown> = {};
+        LV_CHAMPS_PUBLICS.forEach(k => { champs[k] = d[k] ?? ''; });
+        return {
+          id: r.id,
+          titre: r.titre,
+          signe: r.statut === 'signe' && !!d._sigs?.salarie,
+          signe_le: d._signature?.signe_le || null,
+          signature: d._sigs?.salarie || null,
+          signature_tuteur: d._sigs?.responsable || null,
+          champs,
+        };
+      });
 
       return json({
         // On ne renvoie que ce dont la page a besoin : ni identifiants
@@ -275,6 +322,7 @@ Deno.serve(async (req) => {
           // rattacher sa réponse à la bonne fiche.
           ref: stag.id,
         },
+        livrets,
         pieces: types.map(t => ({
           id: t.id, libelle: t.libelle, aide: t.aide, lien: t.lien,
           obligatoire: t.obligatoire,
@@ -423,13 +471,55 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    // ----------------------------------------------------- LIVRET_SIGNER
+    // La stagiaire signe le livret que sa crèche a préparé. Une seule fois : un
+    // livret signé ne se modifie plus depuis ce lien (la crèche garde la main).
+    if (action === 'livret_signer') {
+      const id = String(body.reponse_id || '');
+      const rep = (await livretsDe(stag.id)).find(r => String(r.id) === id);
+      if (!rep) return json({ erreur: 'Document introuvable' }, 404);
+      if (rep.statut === 'signe') return json({ erreur: 'Document déjà signé' }, 409);
+
+      const png = String(body.signature || '');
+      // Un tracé réel pèse plusieurs ko ; un cadre vide ou un fichier géant sont refusés.
+      if (!/^data:image\/png;base64,[A-Za-z0-9+\/=]+$/.test(png) || png.length < 1500 || png.length > 800_000) {
+        return json({ erreur: 'Signature illisible' }, 400);
+      }
+      const nom = String(body.nom || '').replace(/[\r\n]/g, ' ').trim().slice(0, 120);
+      if (nom.length < 3) return json({ erreur: 'Signature illisible' }, 400);
+      if (body.lu !== true) return json({ erreur: 'Signature illisible' }, 400);
+
+      const d = (rep.donnees || {}) as Record<string, any>;
+      const lu: Record<string, unknown> = {};
+      LV_CHAMPS_PUBLICS.forEach(k => { lu[k] = d[k] ?? ''; });
+      const signeLe = new Date().toISOString();
+      const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null;
+      const ua = (req.headers.get('user-agent') || '').slice(0, 300) || null;
+      const donnees = {
+        ...d,
+        _sigs: { ...(d._sigs || {}), salarie: png },
+        _signature: { signe_le: signeLe, nom, via: 'lien_stagiaire', stagiaire_id: stag.id },
+      };
+      const { data: maj, error: ue } = await sb.from('documents_reponses').update({
+        donnees,
+        statut: 'signe',
+        signature_empreinte: await empreinte(JSON.stringify(lu)),
+        signature_ip: ip,
+        signature_user_agent: ua,
+        updated_at: signeLe,
+      }).eq('id', rep.id).neq('statut', 'signe').select('id');
+      if (ue) throw ue;
+      if (!maj?.length) return json({ erreur: 'Document déjà signé' }, 409);
+      return json({ ok: true, signe_le: signeLe });
+    }
+
     return json({ erreur: 'Action inconnue' }, 400);
   } catch (e) {
     const msg = (e as Error).message || 'Erreur';
     // « Jeton introuvable » et « Lien expiré » sont attendus : stagiaire.html
     // s'en sert pour afficher le bon écran. Tout le reste reste volontairement
     // vague côté client, et détaillé côté logs.
-    const attendu = /introuvable|expiré|accepté|trop lourd|illisible|inconnue|validée/i.test(msg);
+    const attendu = /introuvable|expiré|accepté|trop lourd|illisible|inconnue|validée|signé/i.test(msg);
     if (!attendu) console.error('[dossier-stagiaire]', e);
     return json({ erreur: attendu ? msg : 'Erreur serveur' }, attendu ? 403 : 500);
   }

@@ -86,6 +86,14 @@ a{color:var(--violet)}
   color:var(--ink);cursor:pointer;background:#FAFAFD;border:1px solid var(--line);
   border-radius:10px;padding:9px 11px}
 .accuse input{width:18px;height:18px;accent-color:var(--green);flex:0 0 auto}
+.livret{background:#fff;border:1px solid #E1DCF2;border-left:4px solid var(--violet);border-radius:0 14px 14px 0;padding:13px 14px;margin-bottom:10px}
+.livret.fait{border-left-color:var(--green);background:#FCFEFC}
+.livret .texte{border:1px solid var(--line);border-radius:12px;padding:4px 14px 10px;margin:12px 0;max-height:420px;overflow:auto;font-size:13.5px;background:#fff}
+.livret .texte h4{margin:14px 0 4px;color:var(--violet);font-family:'Baloo 2',system-ui,sans-serif;font-size:15px}
+.livret .texte p{margin:4px 0}.livret .texte ul{margin:4px 0 4px 18px;padding:0}
+.livret input[type=text]{width:100%;font:inherit;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:4px 0 8px}
+.livret canvas{width:100%;height:170px;border:1px dashed var(--violet-l);border-radius:12px;background:#fff;touch-action:none;display:block}
+.livret .sigimg{max-height:90px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:4px}
 </style>
 </head>
 <body>
@@ -102,6 +110,7 @@ a{color:var(--violet)}
 <div class="toast" id="toast"></div>
 
 <script src="js/session-lien.js"></script>
+<script src="js/livret-stagiaire.js"></script>
 <script>
 /* ===========================================================================
    STAGIAIRE.HTML — page publique du dossier (stage ou alternance)
@@ -143,6 +152,7 @@ let STAG = null;   // {prenom, nom, creche_nom, date_debut, date_fin, expire_le,
 let PIECES = [];   // catalogue + fichiers déposés
 let AUTRES = [];   // pièces dont le type ne figure plus dans la liste demandée
 let RESS = [];     // ce que la crèche transmet (documents et liens)
+let LIVRETS = [];  // documents préparés par la crèche, à lire et à signer
 
 /* Le vocabulaire, et rien d'autre. */
 const MOTS = {
@@ -191,7 +201,7 @@ async function boot(){
 
 async function recharger(){
   const d=await appel('get');
-  STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];RESS=d.ressources||[];
+  STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];RESS=d.ressources||[];LIVRETS=d.livrets||[];
   document.getElementById('titrePage').textContent=mots().titre;
   document.title=mots().titre+' — Koala Kids';
   document.getElementById('sousTitre').textContent=
@@ -220,6 +230,15 @@ function render(){
     +'<br><br>Photographiez-les avec votre téléphone ou envoyez le PDF : '
     +'vous pouvez le faire en plusieurs fois, tout ce qui est envoyé est conservé.'
     +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(STAG.expire_le))+'</b>.</div>';
+
+  /* Les documents à signer passent avant tout : ils engagent la personne. */
+  if(LIVRETS.length){
+    const reste=LIVRETS.filter(l=>!l.signe).length;
+    h+='<h3 class="sec"><i class="ti ti-signature"></i> Documents à signer</h3>'
+      +'<p class="hint">'+(reste?'Lisez le document puis signez-le avec votre doigt, directement ici.'
+        :'Merci, tout est signé ✔')+'</p>';
+    LIVRETS.forEach((l,i)=>h+=htmlLivret(l,i));
+  }
 
   /* Ce que la crèche transmet vient EN PREMIER : le projet pédagogique se lit
      avant de remplir un questionnaire, et le questionnaire se remplit avant
@@ -257,6 +276,104 @@ function render(){
 
   wrap.innerHTML=h;
   window.scrollTo(0,0);
+}
+
+/* ------------------------------------------------------ DOCUMENTS À SIGNER */
+
+let LV_PAD=null, LV_DESSIN=false;
+
+function htmlLivret(l,i){
+  const c=l.champs||{};
+  const creche=c.lv_creche?'Koalakids '+c.lv_creche:(STAG.creche_nom||'');
+  const etat=l.signe
+    ? '<span class="badge b-ok">Signé le '+esc(dfr(l.signe_le))+'</span>'
+    : '<span class="badge b-att">À signer</span>';
+  return '<div class="livret'+(l.signe?' fait':'')+'" id="lv_'+i+'">'
+    +'<div class="ptop"><span class="ic'+(l.signe?' ok':'')+'"><i class="ti ti-'+(l.signe?'circle-check':'signature')+'"></i></span>'
+    +'<span class="tx"><b>'+esc(l.titre||'Livret d’accueil')+'</b>'
+    +'<span class="aide">'+esc(creche)+'</span>'
+    +'<span style="display:block;margin-top:5px">'+etat+'</span></span></div>'
+    +'<div style="margin-top:10px"><button class="btn btn-g btn-s" onclick="ouvrirLivret('+i+')">'
+    +'<i class="ti ti-'+(l.signe?'eye':'writing-sign')+'"></i> '+(l.signe?'Relire mon exemplaire':'Lire et signer')+'</button></div>'
+    +'<div id="lvz_'+i+'"></div></div>';
+}
+
+function textLivret(l){
+  const g=k=>(l.champs||{})[k]||'';
+  const S=lvSections(g,g('lv_texte'));
+  return S.map(s=>{
+    let h=s.t?'<h4>'+esc(s.t)+'</h4>':'',ul=false;
+    s.items.forEach(it=>{
+      if(it.k==='li'){if(!ul){h+='<ul>';ul=true;}h+='<li>'+esc(it.t)+'</li>';}
+      else{if(ul){h+='</ul>';ul=false;}h+='<p>'+esc(it.t)+'</p>';}
+    });
+    return h+(ul?'</ul>':'');
+  }).join('');
+}
+
+function ouvrirLivret(i){
+  const l=LIVRETS[i],z=document.getElementById('lvz_'+i);
+  if(z.innerHTML){z.innerHTML='';return;}
+  let h='<div class="texte">'+textLivret(l)+'</div>'
+    +'<h4 style="margin:6px 0;font-family:\'Baloo 2\',system-ui,sans-serif;color:var(--violet)">Acte d’engagement</h4>'
+    +'<p class="hint">Nous nous engageons à vous accompagner au mieux lors de ce stage, nous attendons que vous fassiez de même en signant ce document.</p>';
+  if(l.signe){
+    h+='<p class="hint">Signé par <b>'+esc((l.champs||{}).sal_nom||STAG.prenom)+'</b> le '+esc(dfr(l.signe_le))+'.</p>'
+      +(l.signature?'<img class="sigimg" alt="Votre signature" src="'+esc(l.signature)+'">':'');
+  }else{
+    h+='<label class="hint" for="lvn_'+i+'">Votre nom et prénom</label>'
+      +'<input type="text" id="lvn_'+i+'" value="'+esc((STAG.prenom||'')+' '+(STAG.nom||''))+'" autocomplete="name">'
+      +'<label class="accuse"><input type="checkbox" id="lvl_'+i+'"> J’ai lu le livret d’accueil et je m’engage à en respecter les règles</label>'
+      +'<p class="hint" style="margin-top:12px">Signez avec le doigt dans le cadre :</p>'
+      +'<canvas id="lvc_'+i+'"></canvas>'
+      +'<div style="display:flex;gap:8px;margin-top:10px">'
+      +'<button class="btn btn-g btn-s" onclick="effacerSignature('+i+')"><i class="ti ti-eraser"></i> Effacer</button>'
+      +'<button class="btn btn-p btn-s" id="lvb_'+i+'" onclick="signerLivret('+i+')"><i class="ti ti-check"></i> Valider ma signature</button></div>';
+  }
+  z.innerHTML=h;
+  if(!l.signe)initPad(i);
+}
+
+function initPad(i){
+  const c=document.getElementById('lvc_'+i),r=c.getBoundingClientRect();
+  c.width=r.width*2;c.height=r.height*2;
+  const x=c.getContext('2d');x.scale(2,2);
+  x.lineWidth=2.4;x.lineCap='round';x.lineJoin='round';x.strokeStyle='#2B2740';
+  LV_PAD={i,c,x,encre:0,dernier:null};
+  let on=false;
+  const pt=e=>{const b=c.getBoundingClientRect(),p=e.touches?e.touches[0]:e;return[p.clientX-b.left,p.clientY-b.top];};
+  const dn=e=>{e.preventDefault();on=true;LV_PAD.dernier=pt(e);x.beginPath();x.moveTo(...LV_PAD.dernier);};
+  const mv=e=>{if(!on)return;e.preventDefault();const p=pt(e);
+    LV_PAD.encre+=Math.hypot(p[0]-LV_PAD.dernier[0],p[1]-LV_PAD.dernier[1]);LV_PAD.dernier=p;x.lineTo(...p);x.stroke();};
+  const up=()=>{on=false;};
+  c.addEventListener('touchstart',dn,{passive:false});c.addEventListener('touchmove',mv,{passive:false});
+  c.addEventListener('touchend',up);c.addEventListener('mousedown',dn);c.addEventListener('mousemove',mv);
+  window.addEventListener('mouseup',up);
+}
+function effacerSignature(i){
+  if(!LV_PAD)return;
+  LV_PAD.x.clearRect(0,0,LV_PAD.c.width,LV_PAD.c.height);LV_PAD.encre=0;
+}
+
+async function signerLivret(i){
+  const l=LIVRETS[i];
+  const nom=(document.getElementById('lvn_'+i).value||'').trim();
+  if(nom.length<3)return toast('Indiquez votre nom et prénom.');
+  if(!document.getElementById('lvl_'+i).checked)return toast('Cochez la case pour confirmer avoir lu le livret.');
+  if(!LV_PAD||LV_PAD.i!==i||LV_PAD.encre<60)return toast('Merci de signer dans le cadre.');
+  const b=document.getElementById('lvb_'+i);b.disabled=true;
+  try{
+    await appel('livret_signer',{reponse_id:l.id,nom,lu:true,signature:LV_PAD.c.toDataURL('image/png')});
+    LV_PAD=null;
+    await recharger();
+    toast('Signature enregistrée — merci !');
+  }catch(e){
+    b.disabled=false;
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('déjà'))toast('Ce document est déjà signé.');
+    else if(m.includes('expir'))toast('Ce lien a expiré. Contactez la crèche.');
+    else toast('Signature impossible. Vérifiez votre connexion et réessayez.');
+  }
 }
 
 /* ------------------------------------------- CE QUE LA CRÈCHE TRANSMET */

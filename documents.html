@@ -6,6 +6,7 @@
 <title>Koala Kids — Documents</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="js/livret-stagiaire.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1304,7 +1305,7 @@ const TPL_SALARIE=['entretien_annuel','grille'];
    contrat_travail est un hybride : salarie (pas d'enfant a choisir) ET site
    choisi dans le formulaire pour pre-remplir l'employeur depuis Parametres
    — cf. crecheIdDuFormulaire(). */
-const TPL_ETABLISSEMENT=['eaje','cerfa_17580','contrat_travail'];
+const TPL_ETABLISSEMENT=['eaje','cerfa_17580','contrat_travail','livret_stagiaire'];
 function docConcerneSalarie(){
   const k=fillDoc&&fillDoc.template_key;
   return !!(k&&(TPL_SALARIE.indexOf(k)>=0||TPL_ETABLISSEMENT.indexOf(k)>=0));
@@ -1525,6 +1526,9 @@ async function saveFill(silent){
         const src=vis(a)?a:(vis(b)?b:(a||b));
         donnees[f]=!!(src&&src.checked);return;
       }
+      if(f==='lv_stagiaire_id'){
+        donnees[f]=(document.getElementById('ff_lv_stagiaire_id')||{}).value||(document.getElementById('ff_lv_stagiaire_val')||{}).value||'';return;
+      }
       const el=document.getElementById('ff_'+f);
       if(!el)return;
       donnees[f]=(el.type==='checkbox')?el.checked:el.value;
@@ -1544,7 +1548,11 @@ async function saveFill(silent){
   // Un PNG uniforme se compresse en quelques centaines de caracteres ; un trace
   // reel en depasse largement plusieurs milliers.
   const sigReelle=v=>typeof v==='string'&&v.indexOf('data:image')===0&&v.length>1500;
-  const aUneSignature=Object.keys(SIGS||{}).some(k=>sigReelle(SIGS[k]));
+  /* Livret du stagiaire : seul le stagiaire rend le document « signé » ; la
+     signature du tuteur seule laisse le livret en attente. */
+  const aUneSignature=fillDoc.template_key==='livret_stagiaire'
+    ?sigReelle(SIGS.salarie)
+    :Object.keys(SIGS||{}).some(k=>sigReelle(SIGS[k]));
   /* Renforcement contrat de travail : si l'OTP est exigé sur ce réseau, une
      signature du/de la salarié(e) non vérifiée par code n'est pas acceptée.
      ctGateSalarieSig() désactive déjà le cadre côté interface ; ce contrôle
@@ -6114,6 +6122,214 @@ TPL.cerfa_17580.pdf=function(doc,mode){
 };
 
 
+/* ---------- LIVRET D'ACCUEIL DU STAGIAIRE ----------
+   Le texte est commun à toutes les crèches ; seuls le nom, l'adresse, la
+   capacité, les horaires, les âges accueillis, les gestionnaires et la
+   composition de l'équipe changent. Ils sont préremplis depuis la crèche
+   choisie puis restent modifiables. Le même texte (lvSections) alimente
+   l'aperçu à l'écran et le PDF : les deux ne peuvent pas diverger.
+   La stagiaire signe sur son téléphone (« Signer sur mobile » -> signature.html),
+   le tuteur de stage dans le cadre de gauche. */
+function lvCreche(nomCourt){
+  return CRECHES.find(c=>shortCrecheName(c.name)===nomCourt)||null;
+}
+const LV_SUIVI=[['Accueil','Cuisine','Changes','Siestes','Activités'],['Repas','Ménage','Sorties','Transmissions','Aménagement']];
+/* Les fiches stagiaires de la crèche choisie (RLS : une référente ne voit que
+   les siennes). Chargées à l'ouverture et à chaque changement de crèche. */
+let LV_STAG=[];
+async function lvChargerStagiaires(){
+  const sel=document.getElementById('ff_lv_stagiaire_id');if(!sel)return;
+  const cible=(document.getElementById('ff_lv_stagiaire_val')||{}).value||'';
+  const c=lvCreche((document.getElementById('ff_lv_creche')||{}).value);
+  let q=sb.from('stagiaires').select('id,prenom,nom,ecole,formation,date_debut,date_fin,creche_id,statut').order('nom');
+  if(c)q=q.eq('creche_id',String(c.id));
+  const{data}=await q;
+  LV_STAG=(data||[]).filter(x=>x.statut!=='annule'&&x.statut!=='refuse');
+  sel.innerHTML='<option value="">— Choisir —</option>'+LV_STAG.map(x=>`<option value="${esc(x.id)}"${x.id===cible?' selected':''}>${esc((x.prenom||'')+' '+(x.nom||''))}</option>`).join('');
+}
+function lvChoisirStagiaire(){
+  const id=document.getElementById('ff_lv_stagiaire_id').value;
+  document.getElementById('ff_lv_stagiaire_val').value=id;
+  const x=LV_STAG.find(r=>r.id===id);if(!x)return;
+  const set=(k,v)=>{const e=document.getElementById('ff_'+k);if(e&&v)e.value=v;};
+  const fr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'';
+  set('sal_nom',((x.prenom||'')+' '+(x.nom||'')).trim());
+  set('lv_formation',[x.formation,x.ecole].filter(Boolean).join(' — '));
+  if(x.date_debut)set('lv_periode','du '+fr(x.date_debut)+(x.date_fin?' au '+fr(x.date_fin):''));
+  lvRefresh();
+}
+function lvVals(){
+  const o={};LV_CHAMPS.forEach(k=>{const e=document.getElementById('ff_'+k);o[k]=e?String(e.value||'').trim():'';});
+  return o;
+}
+function lvRefresh(){
+  const el=document.getElementById('lv-apercu');if(!el)return;
+  const o=lvVals(),g=k=>o[k]||'';
+  el.innerHTML=lvHtmlSections(lvSections(g,o.lv_texte));
+}
+function lvHtmlSections(S){
+  return S.map(s=>(s.t?`<h4>${esc(s.t)}</h4>`:'')+lvHtmlItems(s.items)).join('');
+}
+function lvHtmlItems(items){
+  let h='',ul=false;
+  items.forEach(i=>{
+    if(i.k==='li'){if(!ul){h+='<ul>';ul=true;}h+=`<li>${esc(i.t)}</li>`;}
+    else{if(ul){h+='</ul>';ul=false;}h+=`<p>${esc(i.t)}</p>`;}
+  });
+  return h+(ul?'</ul>':'');
+}
+/* Éditeur du texte : une zone par section (titre + contenu, « - » devant une
+   ligne pour une puce). Le résultat est gardé dans un champ caché et enregistré
+   avec le livret : modifier un livret ne touche ni aux autres ni au texte type. */
+function lvEditerTexte(){
+  const o=lvVals();
+  const S=lvSections(k=>o[k]||'',o.lv_texte);
+  const zone=document.getElementById('lv-editeur');
+  zone.style.display='block';
+  zone.innerHTML=S.map((s,i)=>`<div class="f"><input class="lv-t" data-i="${i}" value="${esc(s.t)}" placeholder="(sans titre)" style="font-weight:700" oninput="lvMajTexte()">
+    <textarea class="lv-c" data-i="${i}" rows="${Math.min(10,Math.max(3,s.items.length*2))}" oninput="lvMajTexte()">${esc(lvSectionsEnTexte(s.items))}</textarea></div>`).join('')
+    +'<button type="button" class="btn btn-g" onclick="lvRetourTexteType()"><i class="ti ti-restore"></i> Revenir au texte type de la crèche</button>';
+  lvMajTexte();
+}
+function lvMajTexte(){
+  const ts=[...document.querySelectorAll('#lv-editeur .lv-t')],cs=[...document.querySelectorAll('#lv-editeur .lv-c')];
+  const S=ts.map((t,i)=>({t:t.value.trim(),items:lvTexteEnItems(cs[i].value)}));
+  document.getElementById('ff_lv_texte').value=JSON.stringify(S);
+  lvRefresh();
+}
+function lvRetourTexteType(){
+  if(!confirm('Effacer vos modifications du texte et revenir au texte type ?'))return;
+  document.getElementById('ff_lv_texte').value='';
+  const z=document.getElementById('lv-editeur');z.style.display='none';z.innerHTML='';
+  lvRefresh();
+}
+/* Changer de crèche recharge ses coordonnées ; ce qui a déjà été saisi à la
+   main pour l'équipe n'est écrasé que s'il vient du texte par défaut. */
+function lvChangeCreche(){
+  const c=lvCreche(document.getElementById('ff_lv_creche').value);
+  const set=(id,v)=>{const e=document.getElementById('ff_'+id);if(e)e.value=v||'';};
+  if(c){set('lv_adresse',c.addr);set('lv_capacite',c.capacity);}
+  const eq=document.getElementById('ff_lv_equipe');
+  const defs=Object.values(LV_EQUIPE_DEFAUT);
+  if(eq&&(!eq.value.trim()||defs.includes(eq.value.trim())))eq.value=LV_EQUIPE_DEFAUT[document.getElementById('ff_lv_creche').value]||'';
+  lvRefresh();
+}
+TPL.livret_stagiaire={
+  fields:LV_CHAMPS.concat(['lv_stagiaire_id','lv_envoye']),
+  large:true,
+  html:v=>{
+    if(!v.lv_creche&&PROF&&PROF.creche_id){const c=CRECHES.find(x=>x.id===PROF.creche_id);if(c)v.lv_creche=shortCrecheName(c.name);}
+    const c=lvCreche(v.lv_creche);
+    if(c){if(!v.lv_adresse)v.lv_adresse=c.addr||'';if(!v.lv_capacite)v.lv_capacite=c.capacity||'';}
+    if(!v.lv_equipe&&LV_EQUIPE_DEFAUT[v.lv_creche])v.lv_equipe=LV_EQUIPE_DEFAUT[v.lv_creche];
+    if(!v.lv_gestionnaires)v.lv_gestionnaires=LV_GESTIONNAIRES;
+    if(!v.lv_date)v.lv_date=new Date().toISOString().slice(0,10);
+    const inp=(k,lab,ph)=>`<div class="f"><label>${lab}</label><input id="ff_${k}" value="${esc(v[k])}" placeholder="${esc(ph||'')}" oninput="lvRefresh()"></div>`;
+    setTimeout(()=>{lvRefresh();if(v.lv_texte)lvEditerTexte();},0);setTimeout(lvChargerStagiaires,0);
+    return `<div class="tpl lv">
+     <style>.lv .apercu{border:1px solid var(--line,#E3E1EF);border-radius:12px;padding:6px 16px 12px;background:#fff;max-height:340px;overflow:auto;font-size:13px;line-height:1.55}
+     .lv .apercu h4{margin:14px 0 4px;color:var(--violet)}.lv .apercu p{margin:4px 0}.lv .apercu ul{margin:4px 0 4px 18px}</style>
+     <h3>Crèche qui accueille</h3>
+     <div class="grid2">
+       <div class="f"><label>Crèche (le livret est établi à son nom)</label><select id="ff_lv_creche" onchange="lvChangeCreche();lvChargerStagiaires()">${
+         ['',...CRECHE_NOMS_COURTS].map(n=>`<option${v.lv_creche===n?' selected':''}>${esc(n)}</option>`).join('')}</select></div>
+       ${inp('lv_adresse','Adresse')}
+       ${inp('lv_capacite','Capacité d’accueil (places)')}
+     </div>
+     ${inp('lv_gestionnaires','Gérée par')}
+     ${inp('lv_ages','Âges accueillis','de 2 mois 1/2 à 4 ans (6 ans pour les enfants porteurs de handicap)')}
+     <div class="grid2">
+       ${inp('lv_horaires','Horaires de la structure','Les horaires de la structure sont de 7h à 19h')}
+       ${inp('lv_accueil','Horaires d’accueil des enfants','avec un accueil de l’enfant de 7h30 à 18h30 (selon les contrats)')}
+     </div>
+     <div class="f"><label>Composition de l’équipe</label><textarea id="ff_lv_equipe" rows="3" oninput="lvRefresh()">${esc(v.lv_equipe)}</textarea></div>
+     <h3>Stagiaire</h3>
+     <div class="f"><label>Fiche stagiaire (module Stagiaires &amp; alternants)</label>
+       <select id="ff_lv_stagiaire_id" onchange="lvChoisirStagiaire()"><option value="">— Choisir —</option></select></div>
+     <input type="hidden" id="ff_lv_stagiaire_val" value="${esc(v.lv_stagiaire_id)}">
+     <label class="radios" style="display:block;margin:4px 0 10px"><input type="checkbox" id="ff_lv_envoye"${v.lv_envoye?' checked':''}> Mettre ce livret à signer sur le lien du stagiaire (rubrique « Documents à signer »)</label>
+     <div class="grid2">
+       ${inp('sal_nom','Nom / Prénom')}
+       ${inp('lv_formation','Formation / école')}
+       ${inp('lv_periode','Période de stage','du … au …')}
+     </div>
+     ${inp('lv_tuteur','Tuteur / tutrice de stage (nom et fonction)')}
+     <h3>Le livret (aperçu)</h3>
+     <input type="hidden" id="ff_lv_texte" value="${esc(v.lv_texte)}">
+     <div style="margin-bottom:8px"><button type="button" class="btn btn-g" onclick="lvEditerTexte()"><i class="ti ti-edit"></i> Modifier le texte de ce livret</button></div>
+     <div id="lv-editeur" style="display:none;margin-bottom:10px"></div>
+     <div class="apercu" id="lv-apercu"></div>
+     <h3>Acte d’engagement</h3>
+     <p class="hint">Nous nous engageons à vous accompagner au mieux lors de ce stage, nous attendons que vous fassiez de même en signant ce document.</p>
+     <div class="grid2">${inp('lv_lieu','Fait à')}<div class="f"><label>Date</label><input type="date" id="ff_lv_date" value="${esc(v.lv_date)}"></div></div>
+     <div class="grid2">
+       ${sigBoxHtml('responsable','Signature du tuteur de stage')}
+       ${sigBoxHtml('salarie','Signature du stagiaire')}
+     </div>
+     <p class="hint">« Signer sur mobile » affiche un QR code et un lien : le stagiaire signe avec son doigt sur son propre téléphone, sans compte. La fiche de suivi est jointe au PDF.</p>
+    </div>`;
+  },
+  pdf:function(doc){
+    const o=lvVals(),g=k=>o[k]||'';
+    const nomC=g('lv_creche')?'Koalakids '+g('lv_creche'):'Koala Kids';
+    const W=182,dfrl=d=>d?new Date(d).toLocaleDateString('fr-FR'):'';
+    let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>280){doc.addPage();y=pdfLogo(doc,20);}};
+    doc.setTextColor(74,63,159);doc.setFont(undefined,'bold');doc.setFontSize(18);
+    doc.text('Livret d’accueil du stagiaire',14,y);y+=8;
+    doc.setFontSize(13);doc.text(nomC,14,y);y+=6;
+    doc.setFontSize(9.5);doc.setFont(undefined,'normal');doc.setTextColor(90);
+    if(g('lv_adresse')){doc.text(g('lv_adresse'),14,y);y+=5;}
+    if(g('sal_nom')){doc.text('Stagiaire : '+g('sal_nom')+(g('lv_formation')?' — '+g('lv_formation'):'')+(g('lv_periode')?' — '+g('lv_periode'):''),14,y);y+=5;}
+    doc.setTextColor(30);y+=4;
+    const para=(txt,x0)=>{const lines=doc.splitTextToSize(txt,W-(x0||0));
+      lines.forEach(l=>{need(5);doc.text(l,14+(x0||0),y);y+=4.8;});y+=1.5;};
+    doc.setFontSize(10);
+    lvSections(k=>g(k),g('lv_texte')).forEach(s=>{
+      if(s.t){need(14);y+=2;doc.setFont(undefined,'bold');doc.setFontSize(11.5);doc.setTextColor(74,63,159);
+        doc.text(s.t,14,y);y+=6;doc.setTextColor(30);doc.setFontSize(10);doc.setFont(undefined,'normal');}
+      s.items.forEach(i=>{
+        if(i.k!=='li'){para(i.t);return;}
+        doc.splitTextToSize(i.t,W-6).forEach((l,n)=>{need(5);if(n===0)doc.text('•',16,y);doc.text(l,21,y);y+=4.8;});y+=1;
+      });
+    });
+    /* Acte d'engagement : bloc indivisible */
+    doc.addPage();y=pdfLogo(doc,20);
+    doc.setFont(undefined,'bold');doc.setFontSize(15);doc.setTextColor(74,63,159);
+    doc.text('Acte d’engagement',14,y);y+=10;doc.setTextColor(30);doc.setFontSize(10.5);doc.setFont(undefined,'normal');
+    para('Nous nous engageons à vous accompagner au mieux lors de ce stage, nous attendons que vous fassiez de même en signant ce document.');
+    y+=4;para('Fait à '+(g('lv_lieu')||'……………………')+', le '+(dfrl(g('lv_date'))||'……………………'));y+=4;
+    doc.setFont(undefined,'bold');doc.setFontSize(9);
+    doc.text('Signature du tuteur de stage'+(g('lv_tuteur')?' ('+g('lv_tuteur')+')':''),14,y);
+    doc.text('Signature du stagiaire'+(g('sal_nom')?' ('+g('sal_nom')+')':''),110,y);
+    doc.setDrawColor(200);doc.rect(14,y+3,84,34);doc.rect(110,y+3,84,34);
+    if(SIGS.responsable){try{doc.addImage(SIGS.responsable,'PNG',16,y+5,80,30);}catch(e){}}
+    if(SIGS.salarie){try{doc.addImage(SIGS.salarie,'PNG',112,y+5,80,30);}catch(e){}}
+    y+=44;
+    doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(120);
+    doc.text(nomC,14,y);doc.setTextColor(30);
+    /* Fiche de suivi (à remplir pendant le stage) */
+    doc.addPage();y=pdfLogo(doc,20);
+    doc.setFont(undefined,'bold');doc.setFontSize(15);doc.setTextColor(74,63,159);
+    doc.text('Fiche de suivi — '+nomC,14,y);y+=9;doc.setTextColor(30);
+    LV_SUIVI.forEach(ligne=>{
+      const cw=W/5;
+      doc.setFontSize(9);
+      ligne.forEach((t,i)=>{
+        const x=14+i*cw;
+        doc.setFillColor(238,236,250);doc.rect(x,y,cw,7,'F');doc.setFont(undefined,'bold');doc.text(t,x+2,y+5);
+        doc.setDrawColor(200);doc.rect(x,y,cw,62);
+        doc.setFont(undefined,'normal');doc.setFontSize(7.5);
+        doc.text('Dates :',x+2,y+12);doc.text('Ce qui a été fait :',x+2,y+30);doc.setFontSize(9);
+      });
+      y+=68;
+    });
+    pdfSortie(doc,slug(fillDoc.titre)+(g('lv_creche')?'_'+slug(g('lv_creche')):'')+(g('sal_nom')?'_'+slug(g('sal_nom')):'')+'.pdf');
+    return true;
+  }
+};
+TPL_LABELS.livret_stagiaire='Livret d’accueil du stagiaire (crèche)';
+
 function sigBoxHtml(role,label){
   return `<div class="sigbox" id="sb_${role}">
     <div class="lbl">${esc(label)}</div>
@@ -6188,7 +6404,7 @@ async function startQr(role,label){
   const{error}=await sb.from('signatures_pending').insert({
     token:qrToken,document_id:fillDoc.id,reponse_id:fillRep?fillRep.id:null,
     role_sign:role,signataire:(role==='salarie'?nom:((PROF&&PROF.name)||''))||'Signataire',
-    contexte:fillDoc.titre+(nom?' — '+nom:''),created_by:ME.id
+    contexte:fillDoc.titre+(fillDoc.template_key==='livret_stagiaire'&&(document.getElementById('ff_lv_creche')||{}).value?' — Koalakids '+document.getElementById('ff_lv_creche').value:'')+(nom?' — '+nom:''),created_by:ME.id
   });
   if(error){qrToken=null;return toast('Erreur : '+error.message);}
   const url=location.origin+location.pathname.replace(/[^/]*$/,'')+'signature.html?t='+qrToken;
@@ -6261,7 +6477,8 @@ async function openReps(id){
       // celui du/de la salarié(e) concerné(e), pas celui de la direction/
       // référente qui a rempli le formulaire — sinon toutes les réponses d'un
       // même compte se ressemblent et on ne peut plus les distinguer.
-      const salarieNom=(d.template_key==='contrat_travail'&&r.donnees&&r.donnees.salarie_nom)?r.donnees.salarie_nom:null;
+      const salarieNom=(d.template_key==='contrat_travail'&&r.donnees&&r.donnees.salarie_nom)?r.donnees.salarie_nom
+        :(d.template_key==='livret_stagiaire'&&r.donnees&&r.donnees.sal_nom)?(r.donnees.sal_nom+(r.donnees.lv_creche?' — '+r.donnees.lv_creche:'')):null;
       const crNom=r.creche_id?(CRECHES.find(c=>String(c.id)===String(r.creche_id))||{}).name:null;
       return `<div class="rep">
       <b>${esc(salarieNom||r.rempli_par_nom||'—')}</b>
