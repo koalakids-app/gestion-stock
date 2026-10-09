@@ -453,6 +453,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
     <div class="mf">
       <button class="btn btn-g" onclick="pdfFermer()">Fermer</button>
       <button class="btn btn-s" onclick="pdfOnglet()"><i class="ti ti-external-link"></i> Ouvrir dans un onglet</button>
+      <button class="btn btn-s" onclick="pdfImprimer()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
       <button class="btn btn-p" onclick="pdfTelecharger()"><i class="ti ti-download"></i> Télécharger</button>
     </div>
   </div>
@@ -1769,6 +1770,11 @@ function pdfAfficherHtml(interieur,nom,srcTelechargement){
   const url=URL.createObjectURL(new Blob([page],{type:'text/html;charset=utf-8'}));
   pdfAfficher(url,nom,url,srcTelechargement,' \u2014 aper\u00e7u de lecture, mise en page approch\u00e9e');
 }
+function pdfImprimer(){
+  const f=document.getElementById('pdfFrame');
+  try{f.contentWindow.focus();f.contentWindow.print();}
+  catch(e){toast('Impression impossible ici — utiliser « Ouvrir dans un onglet »');}
+}
 function pdfSortie(doc,nom){
   if(!PDF_APERCU){doc.save(nom);return;}
   const url=URL.createObjectURL(doc.output('blob'));
@@ -1848,7 +1854,7 @@ async function apercuFichier(id){
       const r=await fetch(d.fichier_url);
       if(!r.ok)throw new Error('HTTP '+r.status);
       const res=await window.mammoth.convertToHtml({arrayBuffer:await r.arrayBuffer()});
-      pdfAfficherHtml(res.value||'<p><i>Document vide.</i></p>',nom,d.fichier_url);
+      pdfAfficherHtml((res.value||'<p><i>Document vide.</i></p>')+await sdBlocSignature(d),nom,d.fichier_url);
     }catch(e){
       console.error('apercuFichier docx',e);
       toast('Aper\u00e7u impossible : '+(e&&e.message?e.message:e));
@@ -6497,6 +6503,21 @@ async function sdVoirSignature(id){
   document.getElementById('sdInfo').textContent='Signé par '+(data.signataire||'')+' le '+new Date(data.signed_at).toLocaleString('fr-FR');
   document.getElementById('sdBox').innerHTML='<img alt="signature" style="max-width:100%;border:1px solid var(--line);border-radius:12px" src="'+esc(data.signature_data)+'">';
   document.getElementById('ovSd').classList.add('on');
+}
+
+/* Bloc de signature ajouté en fin d'aperçu des documents signés à distance
+   (le fichier Word d'origine n'est pas modifié). Vide si non signé. */
+async function sdBlocSignature(d){
+  const e=SD_ETATS[d.id];
+  if(!d.signature_distance||!e||!e.signed_at)return '';
+  try{
+    const{data}=await sb.from('signatures_pending').select('signature_data,signed_at,signataire').eq('token',e.token).maybeSingle();
+    if(!data||!data.signature_data)return '';
+    return '<div style="margin-top:34px;padding-top:14px;border-top:2px solid #DED8EE;page-break-inside:avoid">'
+      +'<p style="margin:0 0 6px"><b>Lu et approuvé</b> — signé à distance par <b>'+esc(data.signataire||'')+'</b>'
+      +' le '+new Date(data.signed_at).toLocaleString('fr-FR')+'</p>'
+      +'<img alt="Signature" style="max-height:110px;width:auto;border:1px solid #DED8EE;border-radius:8px;padding:4px;background:#fff" src="'+esc(data.signature_data)+'"></div>';
+  }catch(err){console.warn('bloc signature',err);return '';}
 }
 
 /* ---------- QR SIGNATURE A DISTANCE ---------- */
