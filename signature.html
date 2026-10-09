@@ -106,29 +106,22 @@ async function chargerDocument(){
     const{data,error}=await sb.rpc('kk_sig_document',{p_token:TOKEN});
     if(error)return null;
     const row=Array.isArray(data)?data[0]:data;
-    if(!(row&&row.fichier_url))return null;
-    // PDF d'origine rattaché au document : c'est lui que le signataire lit.
-    try{
-      const pdf=await sb.rpc('kk_sig_document_pdf',{p_token:TOKEN});
-      if(!pdf.error&&pdf.data)row.fichier_pdf_url=pdf.data;
-    }catch(e){}
-    return row;
+    return(row&&row.fichier_url)?row:null;
   }catch(e){return null;}
 }
 async function afficherDocument(){
   const box=document.getElementById('docbox');
   if(!box||!DOC)return;
-  const src=DOC.fichier_pdf_url||DOC.fichier_url;
-  const ext=(String(src).split('?')[0].split('.').pop()||'').toLowerCase();
+  const ext=(String(DOC.fichier_url).split('?')[0].split('.').pop()||'').toLowerCase();
   try{
     if(ext==='docx'&&window.mammoth){
-      const r=await fetch(src);
+      const r=await fetch(DOC.fichier_url);
       if(!r.ok)throw new Error('HTTP '+r.status);
       const res=await window.mammoth.convertToHtml({arrayBuffer:await r.arrayBuffer()});
       box.innerHTML=res.value||'<p>Document vide.</p>';
     }else if(ext==='pdf'){
       box.style.padding='0';
-      box.innerHTML='<iframe src="'+esc(src)+'" style="width:100%;height:42vh;border:0;border-radius:14px"></iframe>';
+      box.innerHTML='<iframe src="'+esc(DOC.fichier_url)+'" style="width:100%;height:42vh;border:0;border-radius:14px"></iframe>';
     }else{
       box.textContent='Aperçu indisponible pour ce format : utilisez le lien « Ouvrir le document » ci-dessus.';
     }
@@ -182,7 +175,7 @@ async function verifierCode(){
 
 function renderPad(){
   const lecture=DOC?`
-    <a class="dl" href="${esc(DOC.fichier_pdf_url||DOC.fichier_url)}" target="_blank" rel="noopener">📄 Ouvrir le document</a>
+    <a class="dl" href="${esc(DOC.fichier_url)}" target="_blank" rel="noopener">📄 Ouvrir le document</a>
     <div class="docbox" id="docbox">Chargement du document…</div>
     <label class="lu"><input type="checkbox" id="lu"> J’ai pris connaissance de ce document et je le signe.</label>`:'';
   card.innerHTML=`
