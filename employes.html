@@ -170,9 +170,11 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <select id="ficheFormationSelect" style="flex:1"><option value="">Chargement…</option></select>
         <button type="button" class="btn btn-s btn-sm" onclick="envoyerFormation()"><i class="ti ti-send"></i> Envoyer</button>
+        <button type="button" class="btn btn-g btn-sm" id="btnPartagerFormation" style="display:none" onclick="envoyerFormation(true)"><i class="ti ti-share"></i> Partager…</button>
       </div>
       <p class="hint">L'envoi transmet le lien par e-mail à l'adresse de la fiche (ou vous prévient s'il n'y en
-        a pas de renseignée) et l'ajoute au parcours de ce/cette collaborateur/trice, dans "À faire".</p>
+        a pas de renseignée) et l'ajoute au parcours de ce/cette collaborateur/trice, dans "À faire".
+        « Partager… » fait de même sans e-mail : le lien part par l'application de votre choix (WhatsApp, SMS…).</p>
       <label class="lb" style="margin-top:10px">Parcours de formation</label>
       <div id="ficheFormationBox"></div>
     </div>
@@ -849,7 +851,11 @@ async function loadFicheFormationOptions(){
       +'<optgroup label="Micro-formations">'+FICHE_FORMATION_OPTIONS.filter(o=>o.kind==='module').map(o=>'<option value="'+o.value+'">'+esc(o.titre)+'</option>').join('')+'</optgroup>';
   }catch(e){sel.innerHTML='<option value="">Liste indisponible</option>';}
 }
-async function envoyerFormation(){
+document.addEventListener('DOMContentLoaded',()=>{
+  const b=document.getElementById('btnPartagerFormation');
+  if(b&&PartageLien.disponible())b.style.display='';
+});
+async function envoyerFormation(partager){
   const e=FICHE_FORMATION_EMPLOYE;
   if(!e)return;
   const sel=document.getElementById('ficheFormationSelect');
@@ -871,6 +877,19 @@ async function envoyerFormation(){
      e-mail depuis le serveur (edge function envoyer-formation), qui ne
      dépend pas du navigateur — le presse-papiers ne reste qu'un confort
      silencieux en plus, jamais le seul moyen de transmission. */
+  if(partager===true){
+    /* Même enregistrement que l'envoi par mail (le lien entre dans le parcours,
+       « À faire »), mais le lien part par la feuille de partage de l'appareil. */
+    const r=await PartageLien.partager(lien,{titre:opt.titre,
+      texte:'Bonjour '+(e.prenom||'')+', voici le lien pour réaliser '
+        +(opt.kind==='quiz'?'le quiz':'la formation')+' « '+opt.titre+' » :'});
+    toast(r==='copie'?'Enregistré — partage indisponible, lien copié.'
+      :r==='annule'?'Ajouté au parcours, mais le lien n\'a pas été partagé (feuille de partage fermée).'
+      :'Enregistré dans le parcours de '+(e.prenom||'la personne')+'.',r==='annule');
+    sel.value='';
+    await loadFicheFormation(e);
+    return;
+  }
   if(e.email){
     const{ok,data}=await callFn('envoyer-formation',{envoi_id:saved.id,expediteur:PROF?.name});
     if(ok)toast('E-mail envoyé à '+e.email+'.');
