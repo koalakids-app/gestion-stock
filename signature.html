@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Signature</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
 :root{--violet:#4A3F9F;--orange:#F47920;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5}
@@ -95,7 +94,7 @@ async function boot(){
     OTP_CTX=otp;
     return renderCode();
   }
-  DOC=await chargerDocument();
+  DOC=await avecDelai(chargerDocument(),4000);
   renderPad();
 }
 
@@ -109,12 +108,27 @@ async function chargerDocument(){
     return(row&&row.fichier_url)?row:null;
   }catch(e){return null;}
 }
+/* mammoth (conversion Word -> HTML) est volumineux : il n'est chargé qu'après
+   l'affichage du cadre de signature, avec un délai maximal, pour qu'un réseau
+   lent ou bloqué ne laisse jamais la page blanche. */
+function chargerMammoth(){
+  if(window.mammoth)return Promise.resolve(true);
+  return new Promise(res=>{
+    const sc=document.createElement('script');
+    const fin=ok=>{clearTimeout(t);res(ok);};
+    const t=setTimeout(()=>res(false),8000);
+    sc.src='https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js';
+    sc.onload=()=>fin(!!window.mammoth);sc.onerror=()=>fin(false);
+    document.head.appendChild(sc);
+  });
+}
+function avecDelai(p,ms){return Promise.race([p,new Promise(r=>setTimeout(()=>r(null),ms))]);}
 async function afficherDocument(){
   const box=document.getElementById('docbox');
   if(!box||!DOC)return;
   const ext=(String(DOC.fichier_url).split('?')[0].split('.').pop()||'').toLowerCase();
   try{
-    if(ext==='docx'&&window.mammoth){
+    if(ext==='docx'&&await chargerMammoth()){
       const r=await fetch(DOC.fichier_url);
       if(!r.ok)throw new Error('HTTP '+r.status);
       const res=await window.mammoth.convertToHtml({arrayBuffer:await r.arrayBuffer()});
