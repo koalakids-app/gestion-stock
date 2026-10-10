@@ -469,6 +469,8 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
     <div class="acts">
       <button class="btn btn-d" id="btnDelDev" style="display:none" onclick="delDevis()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn btn-d" id="btnRefusDev" style="display:none" onclick="repondreDevis(devisId,'refuse')"><i class="ti ti-x"></i> Refuser ce devis</button>
+      <button class="btn btn-s" id="btnAccepteDev" style="display:none" onclick="repondreDevis(devisId,'accepte')"><i class="ti ti-check"></i> Accepter ce devis</button>
       <button class="btn btn-s" id="btnPdfDev" style="display:none" onclick="pdfDevis(devisId)"><i class="ti ti-file-type-pdf"></i> Le PDF</button>
       <button class="btn btn-s" id="btnLienDev" style="display:none" onclick="copierLienDevis()"><i class="ti ti-link"></i> Le lien</button>
       <button class="btn btn-s" id="btnPartagerDev" style="display:none" onclick="copierLienDevis(true)"><i class="ti ti-share"></i> Partager…</button>
@@ -2313,6 +2315,11 @@ function renderDevisList(){
     return '<div class="par" onclick="openDevis(\''+d.id+'\')" style="cursor:pointer">'
       +'<div class="h"><b>'+esc(d.numero||'Sans numéro')+'</b>'
       +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>'
+      +((d.statut==='brouillon'||d.statut==='envoye')&&!d.repondu_le
+        ? '<button class="pdf" style="color:var(--red)" onclick="event.stopPropagation();repondreDevis(\''+d.id+'\',\'refuse\')" title="Marquer ce devis comme refusé">'
+          +'<i class="ti ti-x"></i> Refuser</button>'
+          +'<button class="pdf" style="color:var(--green)" onclick="event.stopPropagation();repondreDevis(\''+d.id+'\',\'accepte\')" title="Marquer ce devis comme accepté">'
+          +'<i class="ti ti-check"></i> Accepter</button>':'')
       +'<button class="pdf" onclick="event.stopPropagation();pdfDevis(\''+d.id+'\')" title="Télécharger le PDF">'
       +'<i class="ti ti-file-type-pdf"></i> PDF</button></div>'
       +'<div class="li" style="color:var(--muted)">'+euro(d.total_mensuel)+' par mois'
@@ -2356,6 +2363,12 @@ async function openDevis(id){
   // effacer un ne touche jamais les autres devis de la même famille.
   document.getElementById('btnDelDev').style.display=DCUR?'':'none';
   document.getElementById('btnSaveDev').style.display=brouillon?'':'none';
+  /* Le refus (ou l'acceptation) se pose sur le devis lui-même : une famille peut
+     recevoir plusieurs devis, en refuser trois et retenir le quatrième. Seul un
+     devis encore vivant peut être tranché ; un devis clos se supprime. */
+  const vivant=!!(DCUR&&['brouillon','envoye'].indexOf(DCUR.statut)>=0&&!DCUR.repondu_le);
+  document.getElementById('btnRefusDev').style.display=vivant?'':'none';
+  document.getElementById('btnAccepteDev').style.display=vivant?'':'none';
   // Le PDF ne s'imprime que depuis la base : un devis jamais enregistré n'a ni
   // numéro ni lignes, et sortirait un document sans identité.
   document.getElementById('btnPdfDev').style.display=DCUR?'':'none';
@@ -3061,6 +3074,34 @@ async function saveDevis(){
     console.error('[saveDevis]',e);
     toast('Enregistrement impossible : '+(e.message||'erreur inconnue'),true);
   }finally{btn.disabled=false;}
+}
+
+/* Réponse de la famille saisie par la direction (appel, mail, passage sur place).
+   Elle porte sur UN devis ; les autres devis de la famille ne bougent pas. Le
+   statut de la demande suit tout seul via le déclencheur devis_statut_suivre :
+   « Refusé » seulement quand plus aucun devis ni contrat n'est vivant. */
+async function repondreDevis(id,statut){
+  const d=DEVIS.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  const refus=statut==='refuse';
+  let motif='';
+  if(refus){
+    const m=prompt('Refuser le devis '+(d.numero||'')+' ?\nMotif (facultatif) :','');
+    if(m===null)return;
+    motif=m.trim().slice(0,500);
+  }else if(!confirm('Marquer le devis '+(d.numero||'')+' comme accepté par la famille ?'))return;
+  try{
+    const upd={statut:statut,repondu_le:new Date().toISOString()};
+    if(refus)upd.motif_refus=motif;
+    const{error}=await sb.from('devis').update(upd).eq('id',id).is('repondu_le',null);
+    if(error)throw error;
+    closeOv('ovDevis');
+    await loadDevis(ficheId);
+    toast(refus?'Devis refusé.':'Devis accepté.');
+  }catch(e){
+    console.error('[repondreDevis]',e);
+    toast('Mise à jour impossible : '+(e.message||'erreur inconnue'),true);
+  }
 }
 
 async function delDevis(){
