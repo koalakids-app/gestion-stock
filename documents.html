@@ -6517,6 +6517,19 @@ async function sdCreerLien(id){
   const box=document.getElementById('sdBox');box.innerHTML='';
   const lien=document.createElement('div');
   lien.style.cssText='margin:6px 0 12px;font-size:11px;word-break:break-all;color:var(--muted);line-height:1.4';
+  // QR code : à scanner avec le téléphone du signataire (présent sur place) pour ouvrir la
+  // page de signature. Généré localement (qrcodejs) : le lien ne part vers aucun service tiers.
+  if(typeof QRCode==='function'){
+    const qr=document.createElement('div');
+    qr.style.cssText='display:flex;justify-content:center;margin:4px 0 6px';
+    box.appendChild(qr);
+    try{new QRCode(qr,{text:url,width:200,height:200,correctLevel:QRCode.CorrectLevel.M});}
+    catch(e){console.warn('QRCode lib KO',e);qr.remove();}
+    const lg=document.createElement('p');
+    lg.className='hint';lg.style.margin='0 0 6px';
+    lg.textContent='Scanner avec le téléphone de '+prenom+' pour ouvrir la signature.';
+    box.appendChild(lg);
+  }
   lien.textContent=url;box.appendChild(lien);
   const cp=document.createElement('button');
   cp.className='btn btn-s';cp.innerHTML='<i class="ti ti-copy"></i> Copier le lien';
