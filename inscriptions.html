@@ -828,7 +828,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 let ME=null,PROF=null,IS_DIRECTION=false;
 let PRE=[],CRECHES=[],PARENTS=[];
 let ficheId=null,parentId=null;
-let filtreStatut='',filtreRappels=false,filtreVisites=false,filtreVisitesFaites=false,filtreRelancesAVenir=false;
+let filtreStatut='',filtreRappels=false,filtreVisites=false,filtreVisitesFaites=false,filtreRelancesAVenir=false,crecheStrict=null;
 
 /* Statuts : libellé, couleur de fond, couleur de texte. L'ordre est celui du
    cycle de vie, pas alphabétique — la liste déroulante doit se lire comme une
@@ -2134,8 +2134,13 @@ function render(){
      compteur « Inscrit ». */
   if(!filtreStatut){if(!filtreRappels&&!filtreRelancesAVenir&&!filtreVisites&&!filtreVisitesFaites)l=l.filter(p=>p.statut!=='inscrit');}
   else if(filtreStatut==='__perdus__')l=l.filter(p=>p.statut==='refuse'||p.statut==='sans_suite');
+  else if(filtreStatut==='__encours__')l=l.filter(p=>STATUTS_EN_COURS.indexOf(p.statut)>=0);
   else if(filtreStatut!=='__tous__')l=l.filter(p=>p.statut===filtreStatut);
-  if(cre)l=l.filter(p=>String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0);
+  /* Clic sur un chiffre du tableau « Par crèche » : le tableau rattache chaque
+     dossier à une seule crèche (crecheDe), la liste doit donc faire pareil pour
+     montrer exactement autant de lignes que le chiffre cliqué. */
+  if(cre&&crecheStrict===cre)l=l.filter(p=>crecheDe(p)===cre);
+  else if(cre)l=l.filter(p=>String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0);
   /* Le filtre doit montrer exactement ce que compte la tuile « relances en
      retard » (estARelancer) : lister aussi les relances à venir donnait une
      liste non vide sous un compteur à 0, ce qui semblait contradictoire. Les
@@ -2255,12 +2260,13 @@ function aVisitePrevue(p){
 function aVisiteFaite(p){
   return !!p.date_visite&&!!p.visite_effectuee;
 }
-function setStatut(s){filtreStatut=(filtreStatut===s?'':s);filtreRappels=filtreRelancesAVenir=filtreVisites=filtreVisitesFaites=false;render();}
-function toggleRappels(){filtreRappels=!filtreRappels;filtreRelancesAVenir=filtreVisites=filtreVisitesFaites=false;if(filtreRappels)filtreStatut='';render();}
-function toggleRelancesAVenir(){filtreRelancesAVenir=!filtreRelancesAVenir;filtreRappels=filtreVisites=filtreVisitesFaites=false;if(filtreRelancesAVenir)filtreStatut='';render();}
-function toggleVisites(){filtreVisites=!filtreVisites;filtreRappels=filtreRelancesAVenir=filtreVisitesFaites=false;if(filtreVisites)filtreStatut='';render();}
-function toggleVisitesFaites(){filtreVisitesFaites=!filtreVisitesFaites;filtreRappels=filtreRelancesAVenir=filtreVisites=false;if(filtreVisitesFaites)filtreStatut='';render();}
+function setStatut(s){filtreStatut=(filtreStatut===s?'':s);crecheStrict=null;filtreRappels=filtreRelancesAVenir=filtreVisites=filtreVisitesFaites=false;render();}
+function toggleRappels(){crecheStrict=null;filtreRappels=!filtreRappels;filtreRelancesAVenir=filtreVisites=filtreVisitesFaites=false;if(filtreRappels)filtreStatut='';render();}
+function toggleRelancesAVenir(){crecheStrict=null;filtreRelancesAVenir=!filtreRelancesAVenir;filtreRappels=filtreVisites=filtreVisitesFaites=false;if(filtreRelancesAVenir)filtreStatut='';render();}
+function toggleVisites(){crecheStrict=null;filtreVisites=!filtreVisites;filtreRappels=filtreRelancesAVenir=filtreVisitesFaites=false;if(filtreVisites)filtreStatut='';render();}
+function toggleVisitesFaites(){crecheStrict=null;filtreVisitesFaites=!filtreVisitesFaites;filtreRappels=filtreRelancesAVenir=filtreVisites=false;if(filtreVisitesFaites)filtreStatut='';render();}
 function filtrerCreche(id){
+  crecheStrict=null;
   const sel=document.getElementById('fCreche');
   sel.value=(sel.value===String(id)?'':String(id));
   render();
@@ -2271,6 +2277,25 @@ function filtrerCreche(id){
    sinon la première souhaitée — un dossier ne compte qu'une fois. */
 function crecheDe(p){
   return p.creche_id?String(p.creche_id):(toArr(p.creches_souhaitees).map(String)[0]||'');
+}
+/* Clic sur un chiffre du tableau « Par crèche » : sélectionne la crèche et applique
+   le filtre de la colonne. Un second clic sur le même chiffre retire le filtre. */
+function clicCellule(id,col){
+  const sel=document.getElementById('fCreche');
+  const actif=sel.value===String(id)&&crecheStrict===String(id)&&(
+    col==='encours'?filtreStatut==='__encours__':col==='relances'?filtreRappels:col==='prevues'?filtreVisites:
+    col==='faites'?filtreVisitesFaites:col==='inscrits'?filtreStatut==='inscrit':filtreStatut==='__perdus__');
+  filtreStatut='';filtreRappels=filtreRelancesAVenir=filtreVisites=filtreVisitesFaites=false;crecheStrict=null;
+  if(!actif){
+    sel.value=String(id);crecheStrict=String(id);
+    if(col==='encours')filtreStatut='__encours__';
+    else if(col==='relances')filtreRappels=true;
+    else if(col==='prevues')filtreVisites=true;
+    else if(col==='faites')filtreVisitesFaites=true;
+    else if(col==='inscrits')filtreStatut='inscrit';
+    else filtreStatut='__perdus__';
+  }
+  render();
 }
 function renderDash(){
   const el=document.getElementById('dash');
@@ -2302,7 +2327,7 @@ function renderDash(){
   // Par crèche
   const ids=CRECHES.map(c=>String(c.id));
   if(PRE.some(p=>!crecheDe(p)))ids.push('');
-  const cell=(n,bg,fg)=>n?'<span class="pill" style="background:'+bg+';color:'+fg+'">'+n+'</span>':'<span class="z">0</span>';
+  const cell=(n,bg,fg,id,col)=>n?'<span class="pill"'+(id?' style="cursor:pointer;background:'+bg+';color:'+fg+'" onclick="event.stopPropagation();clicCellule(\''+id+'\',\''+col+'\')" title="Voir ces dossiers"':' style="background:'+bg+';color:'+fg+'"')+'>'+n+'</span>':'<span class="z">0</span>';
   h+='<div class="dsec">Par crèche</div><table class="dtab"><tr><th>Crèche</th><th>Devis en cours</th><th>Relances en retard</th><th>Visites prévues</th><th>Visites réalisées</th><th>Inscrits</th><th>Refus</th></tr>'
     +ids.map(id=>{
       const l=PRE.filter(p=>crecheDe(p)===id);
@@ -2313,9 +2338,9 @@ function renderDash(){
       if(!id&&!(a+b+c+vf+d+e))return '';
       return '<tr class="'+(id?'cl':'')+(id&&cre===id?' on':'')+'"'+(id?' onclick="filtrerCreche(\''+id+'\')"':'')+'>'
         +'<td>'+(id?esc(nomCreche(id)):'<i style="color:var(--muted)">Crèche à définir</i>')+'</td>'
-        +'<td>'+cell(a,'var(--orange-l)','var(--orange)')+'</td><td>'+cell(b,'var(--amber-l)','var(--amber)')+'</td>'
-        +'<td>'+cell(c,'var(--violet-l)','var(--violet)')+'</td><td>'+cell(vf,'var(--green-l)','var(--green)')+'</td><td>'+cell(d,'var(--green-l)','var(--green)')+'</td>'
-        +'<td>'+cell(e,'var(--red-l)','var(--red)')+'</td></tr>';
+        +'<td>'+cell(a,'var(--orange-l)','var(--orange)',id,'encours')+'</td><td>'+cell(b,'var(--amber-l)','var(--amber)',id,'relances')+'</td>'
+        +'<td>'+cell(c,'var(--violet-l)','var(--violet)',id,'prevues')+'</td><td>'+cell(vf,'var(--green-l)','var(--green)',id,'faites')+'</td><td>'+cell(d,'var(--green-l)','var(--green)',id,'inscrits')+'</td>'
+        +'<td>'+cell(e,'var(--red-l)','var(--red)',id,'refus')+'</td></tr>';
     }).join('')+'</table>';
 
   // Agenda : prochaines visites et relances
