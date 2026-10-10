@@ -302,9 +302,9 @@ function tableauDevis(c: { lignes: any[]; mensuel: number; cmg: number | null; r
 // ---------------------------------------------------------------------------
 // Le PDF de la demande
 // ---------------------------------------------------------------------------
-// Dessiné ici, à partir des valeurs déjà validées : c'est le même fichier que
-// la famille reçoit en pièce jointe et qu'elle télécharge depuis la page. Le
-// navigateur n'envoie jamais de fichier à joindre à un e-mail.
+// Dessiné ici, à partir des valeurs déjà validées, puis joint à l'e-mail de
+// confirmation de la famille. Le navigateur n'envoie jamais de fichier à
+// joindre à un e-mail.
 
 type SectionPdf = [string, [string, string][]];
 
@@ -591,7 +591,7 @@ async function action_envoyer(p: any) {
       mensuel: c.mensuel, cmg: c.cmg, reste: c.reste,
       lignes: c.lignes.map(l => ({ libelle: l.type === 'accueil' ? 'Frais de garde' : l.libelle, type: l.type, total: l.total })),
     },
-    pdf: pdf ? { nom: pdfNom, base64: enBase64(pdf) } : null,
+    pdf_joint: !!pdf && mails.length > 0,
   };
 }
 
