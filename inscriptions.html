@@ -2001,6 +2001,7 @@ async function saveFiche(){
     // La fiche est déjà enregistrée : on propose seulement d'envoyer la
     // confirmation, dont le texte reste modifiable. Rien si la fiche n'a pas
     // encore de parent destinataire (cas fréquent à la création).
+    await syncEvenementVisite(ficheId,row);
     if(visitePlanifiee)ouvrirEnvoiVisite(row);
     render();
   }catch(e){
@@ -3996,6 +3997,48 @@ async function confirmerEnvoiDevis(){
     document.getElementById('btnEnvoiDev').innerHTML=relance
       ?'<i class="ti ti-bell"></i> Relancer la famille'
       :'<i class="ti ti-send"></i> Envoyer à la famille';
+  }
+}
+
+/* ---------- VISITE → ÉVÉNEMENTS ---------- */
+/* La date de visite est reportée dans le calendrier des événements (demandes.html),
+   en type « Visite ». evenements.preinscription_id relie les deux : une visite
+   déplacée met à jour son événement au lieu d'en créer un second, une visite
+   retirée le supprime. Best-effort : la fiche est déjà enregistrée. */
+async function syncEvenementVisite(preId,row){
+  try{
+    const{data:ex,error:eEx}=await sb.from('evenements').select('id').eq('preinscription_id',preId).maybeSingle();
+    if(eEx)throw eEx;
+    if(!row.date_visite){
+      if(ex){const{error}=await sb.from('evenements').delete().eq('id',ex.id);if(error)throw error;}
+      return;
+    }
+    const cr=CRECHES.find(c=>String(c.id)===String(row.creche_id));
+    const nom=((row.prenom||'')+' '+(row.nom||'')).trim();
+    const ev={
+      titre:'Visite — '+(nom||'famille'),
+      type:'visite',
+      creche_id:row.creche_id||null,
+      date_debut:row.date_visite,
+      date_fin:null,
+      heure_debut:row.heure_visite||null,
+      heure_fin:null,
+      lieu:(cr&&cr.addr)||'',
+      description:'Visite de la crèche (préinscription).',
+      auteur:(PROF&&PROF.name)||'',
+      preinscription_id:preId
+    };
+    if(ex){
+      const{error}=await sb.from('evenements').update(ev).eq('id',ex.id);
+      if(error)throw error;
+    }else{
+      ev.created_by=ME?ME.id:null;
+      const{error}=await sb.from('evenements').insert(ev);
+      if(error)throw error;
+    }
+  }catch(e){
+    console.warn('[syncEvenementVisite]',e);
+    toast('La visite n\'a pas pu être reportée dans les événements.',true);
   }
 }
 
