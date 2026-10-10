@@ -762,14 +762,16 @@ async function doLogout(){await sb.auth.signOut();location.reload();}
 
 /* ---------- LOAD ---------- */
 async function loadAll(){
-  const[c,d,cr,en,et,rz]=await Promise.all([
+  const[c,d,cr,en,et,rz,sg]=await Promise.all([
     sb.from('doc_categories').select('*').order('ordre'),
     sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
     sb.from('creches').select('id,name,addr').order('name'),
     sb.from('enfants').select('id,prenom,nom,creche_id,dob,regime_repas').order('prenom'),
     sb.from('etablissements').select('*'),
-    sb.from('reseau_config').select('config').maybeSingle()
+    sb.from('reseau_config').select('config').maybeSingle(),
+    sb.from('doc_signataires').select('*').eq('actif',true).order('ordre')
   ]);
+  SIGNATAIRES=(sg&&sg.data)||[];
   CATS=c.data||[];DOCS=d.data||[];CRECHES=cr.data||[];ENFANTS=en.data||[];
   if(CRECHES.length)CRECHE_NOMS_COURTS=CRECHES.map(x=>shortCrecheName(x.name));
   // Absence de ligne (script 25a pas exécuté) : le registre de sécurité et les
@@ -952,8 +954,8 @@ function docRowHtml(d){
               <button class="iconbtn" title="Réponses" onclick="openReps('${d.id}')"><i class="ti ti-list"></i></button>`
             :(d.fichier_url?`<button class="iconbtn" title="Aperçu" onclick="apercuFichier('${d.id}')"><i class="ti ti-eye"></i></button>
               <a class="iconbtn" title="Télécharger" href="${esc(d.fichier_url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i></a>`:'')}
-      ${d.signature_distance&&d.fichier_url&&/\.docx(\?|$)/i.test(d.fichier_url)&&SD_ETATS[d.id]&&SD_ETATS[d.id].signed_at?`<button class="iconbtn" title="Télécharger le Word signé" onclick="sdTelechargerDocx('${d.id}')"><i class="ti ti-file-type-doc"></i></button>`:''}
-      ${d.signature_distance&&d.fichier_url?`<button class="iconbtn" title="Envoyer pour signature à ${esc(d.signataire_nom||'')}" onclick="sdEnvoyer('${d.id}')"><i class="ti ti-signature"></i></button>`:''}
+      ${sdEligible(d)&&/\.docx(\?|$)/i.test(d.fichier_url)&&sdSignes(d).length?`<button class="iconbtn" title="Télécharger le Word signé" onclick="sdTelechargerDocx('${d.id}')"><i class="ti ti-file-type-doc"></i></button>`:''}
+      ${sdEligible(d)?`<button class="iconbtn" title="Envoyer pour signature" onclick="sdEnvoyer('${d.id}')"><i class="ti ti-signature"></i></button>`:''}
       ${IS_DIRECTION?`<button class="iconbtn" title="Modifier" onclick="openDoc('${d.id}')"><i class="ti ti-edit"></i></button>
       <button class="iconbtn d" title="Supprimer" onclick="delDoc('${d.id}')"><i class="ti ti-trash"></i></button>`:''}
     </div></div>`;
@@ -6412,16 +6414,36 @@ function clearSig(role){
   }
 }
 
-/* ---------- DOCUMENT A SIGNER A DISTANCE (lien envoyé au signataire attendu) ----------
-   documents_koala.signature_distance / signataire_nom / signataire_fonction
-   (sql/documents_signature_distance.sql). Le lien ouvre signature.html, qui
-   affiche le document puis recueille la signature (valable 7 jours). L'état
-   (en attente / signé) est relu dans signatures_pending à chaque chargement. */
-let SD_ETATS={};      // document_id -> dernière demande {token,signed_at,expire_at,created_at}
+/* ---------- DOCUMENT A SIGNER A DISTANCE (lien envoyé au signataire choisi) ----------
+   Éligibles : documents « à télécharger » dont la catégorie (ou une catégorie
+   parente) porte doc_categories.signature_distance (Protocoles obligatoires,
+   médicaux, règles d'hygiène), ou marqués documents_koala.signature_distance.
+   Signataires proposés : table doc_signataires (RSAI par périmètre de crèches).
+   Le lien ouvre signature.html (document d'origine + signature, valable 7 jours).
+   Un même document peut recevoir une signature par signataire ; l'état est relu
+   dans signatures_pending à chaque chargement (sql/documents_signataires.sql). */
+let SIGNATAIRES=[];   // doc_signataires actifs, par ordre
+let SD_ETATS={};      // document_id -> { 'Nom (Fonction)': {token,signed_at,expire_at,created_at,signataire} }
 let sdTimer=null,sdToken=null;
+const sdLabel=s=>s.nom+(s.fonction?' ('+s.fonction+')':'');
+const sdNomCourt=l=>String(l||'').replace(/\s*\(.*\)\s*$/,'');
+function sdCatFlag(catId){
+  let id=catId,n=0;
+  while(id&&n++<6){
+    const c=CATS.find(x=>x.id===id);
+    if(!c)return false;
+    if(c.signature_distance)return true;
+    id=c.parent_id;
+  }
+  return false;
+}
+function sdEligible(d){
+  return d.type!=='remplissable'&&!!d.fichier_url&&(!!d.signature_distance||sdCatFlag(d.categorie_id));
+}
+const sdSignes=d=>Object.values(SD_ETATS[d.id]||{}).filter(e=>e.signed_at).sort((a,b)=>a.signed_at<b.signed_at?-1:1);
 async function sdChargerEtats(){
   SD_ETATS={};
-  const ids=DOCS.filter(d=>d.signature_distance).map(d=>d.id);
+  const ids=DOCS.filter(sdEligible).map(d=>d.id);
   if(!ids.length)return;
   try{
     const{data}=await sb.from('signatures_pending')
@@ -6429,37 +6451,69 @@ async function sdChargerEtats(){
       .in('document_id',ids).eq('role_sign','document_distance')
       .order('created_at',{ascending:false});
     (data||[]).forEach(r=>{
-      const cur=SD_ETATS[r.document_id];
+      const par=SD_ETATS[r.document_id]=SD_ETATS[r.document_id]||{};
+      const cur=par[r.signataire];
       // une demande signée prime sur une demande plus récente restée en attente
-      if(!cur||(!cur.signed_at&&r.signed_at))SD_ETATS[r.document_id]=r;
+      if(!cur||(!cur.signed_at&&r.signed_at))par[r.signataire]=r;
     });
   }catch(e){console.warn('etats signature',e);}
 }
 function sdTag(d){
-  if(!d.signature_distance)return '';
-  const e=SD_ETATS[d.id],qui=esc(d.signataire_nom||'le signataire');
+  if(!sdEligible(d))return '';
+  const par=SD_ETATS[d.id]||{},labels=Object.keys(par);
   const dt=x=>new Date(x).toLocaleDateString('fr-FR');
-  if(e&&e.signed_at)return ' <span class="tag" style="background:#E6F4EA;color:#2E7D32;font-weight:700;cursor:pointer" onclick="sdVoirSignature(\''+d.id+'\')">✅ Signé par '+qui+' le '+dt(e.signed_at)+'</span>';
-  if(e&&new Date(e.expire_at)>new Date())return ' <span class="tag" style="background:#FFF3E0;color:#B45F06;font-weight:700">⏳ En attente de '+qui+' (envoyé le '+dt(e.created_at)+')</span>';
-  return ' <span class="tag" style="background:#F1EFF7;color:#8E8AA8;font-weight:700">À faire signer par '+qui+(e?' (lien expiré)':'')+'</span>';
+  if(!labels.length)return ' <span class="tag" style="background:#F1EFF7;color:#8E8AA8;font-weight:700">À faire signer</span>';
+  return labels.map(l=>{
+    const e=par[l],qui=esc(sdNomCourt(l));
+    if(e.signed_at)return ' <span class="tag" style="background:#E6F4EA;color:#2E7D32;font-weight:700;cursor:pointer" data-l="'+esc(l)+'" onclick="sdVoirSignature(\''+d.id+'\',this.dataset.l)">✅ Signé par '+qui+' le '+dt(e.signed_at)+'</span>';
+    if(new Date(e.expire_at)>new Date())return ' <span class="tag" style="background:#FFF3E0;color:#B45F06;font-weight:700">⏳ En attente de '+qui+' (envoyé le '+dt(e.created_at)+')</span>';
+    return ' <span class="tag" style="background:#F1EFF7;color:#8E8AA8;font-weight:700">Lien expiré — '+qui+'</span>';
+  }).join('');
 }
 function sdUrl(tok){return location.origin+location.pathname.replace(/[^/]*$/,'')+'signature.html?t='+tok;}
-async function sdEnvoyer(id){
+/* Signataire présélectionné quand le titre ou la crèche du document désigne un seul périmètre. */
+function sdPreselection(d){
+  const cr=d.creche_id?((CRECHES.find(c=>c.id===d.creche_id)||{}).name||''):'';
+  const txt=((d.titre||'')+' '+cr).toLowerCase();
+  const ok=SIGNATAIRES.filter(s=>(s.perimetre||'').split(',').map(x=>x.trim().toLowerCase().replace(/\s*\d+$/,'')).filter(Boolean)
+    .some(p=>txt.includes(p)||(p==='ollioules'&&/\boll\b/.test(txt))));
+  return ok.length===1?ok[0].id:null;
+}
+/* Étape 1 : choisir à qui envoyer ; étape 2 (sdCreerLien) : lien à transmettre. */
+function sdEnvoyer(id){
   const d=DOCS.find(x=>x.id===id);
   if(!d)return;
-  const e=SD_ETATS[id];
-  if(e&&e.signed_at&&!confirm('Ce document a déjà été signé. Envoyer une nouvelle demande de signature ?'))return;
+  if(!SIGNATAIRES.length)return toast('Aucun signataire configuré (table doc_signataires)');
+  const pre=sdPreselection(d),deja=SD_ETATS[id]||{};
+  document.getElementById('sdTitle').textContent=d.titre;
+  document.getElementById('sdInfo').textContent='À qui envoyer ce document à signer ?';
+  const box=document.getElementById('sdBox');
+  box.innerHTML='<div style="text-align:left">'+SIGNATAIRES.map(s=>{
+    const e=deja[sdLabel(s)],etat=e?(e.signed_at?' — ✅ déjà signé':(new Date(e.expire_at)>new Date()?' — ⏳ en attente':'')):'';
+    return '<label style="display:block;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin:0 0 8px;cursor:pointer">'
+      +'<input type="radio" name="sdSig" value="'+esc(s.id)+'"'+(s.id===pre?' checked':'')+' onchange="document.getElementById(\'sdGo\').disabled=false"> '
+      +'<b>'+esc(s.nom)+'</b>'+(s.fonction?' <span style="color:var(--muted)">· '+esc(s.fonction)+'</span>':'')+esc(etat)
+      +(s.perimetre?'<br><span style="font-size:12px;color:var(--muted);margin-left:22px">'+esc(s.perimetre)+'</span>':'')+'</label>';
+  }).join('')+'</div>'
+  +'<button class="btn btn-p" id="sdGo" style="margin-top:6px"'+(pre?'':' disabled')+' onclick="sdCreerLien(\''+id+'\')"><i class="ti ti-link"></i> Générer le lien</button>';
+  document.getElementById('ovSd').classList.add('on');
+}
+async function sdCreerLien(id){
+  const d=DOCS.find(x=>x.id===id);
+  const sel=document.querySelector('input[name="sdSig"]:checked');
+  const s=sel&&SIGNATAIRES.find(x=>x.id===sel.value);
+  if(!d||!s)return toast('Choisir un signataire');
+  const deja=(SD_ETATS[id]||{})[sdLabel(s)];
+  if(deja&&deja.signed_at&&!confirm('Ce document a déjà été signé par '+s.nom+'. Envoyer une nouvelle demande de signature ?'))return;
   sdToken=mkToken();
-  const nom=d.signataire_nom||'Signataire',fct=d.signataire_fonction?' ('+d.signataire_fonction+')':'';
   const exp=new Date(Date.now()+7*864e5).toISOString();
   const{error}=await sb.from('signatures_pending').insert({
     token:sdToken,document_id:d.id,role_sign:'document_distance',
-    signataire:nom+fct,contexte:d.titre,expire_at:exp,created_by:ME.id
+    signataire:sdLabel(s),contexte:d.titre,expire_at:exp,created_by:ME.id
   });
   if(error){sdToken=null;return toast('Erreur : '+error.message);}
-  const url=sdUrl(sdToken);
-  document.getElementById('sdTitle').textContent=d.titre;
-  document.getElementById('sdInfo').textContent='Lien de signature pour '+nom+fct+', valable 7 jours. Il ouvre le document, puis le cadre de signature.';
+  const url=sdUrl(sdToken),prenom=(s.nom||'').trim().split(/\s+/)[0]||'';
+  document.getElementById('sdInfo').textContent='Lien de signature pour '+sdLabel(s)+', valable 7 jours. Il ouvre le document, puis le cadre de signature.';
   const box=document.getElementById('sdBox');box.innerHTML='';
   const lien=document.createElement('div');
   lien.style.cssText='margin:6px 0 12px;font-size:11px;word-break:break-all;color:var(--muted);line-height:1.4';
@@ -6472,16 +6526,15 @@ async function sdEnvoyer(id){
     const pt=document.createElement('button');
     pt.className='btn btn-s';pt.style.marginLeft='6px';
     pt.innerHTML='<i class="ti ti-share"></i> Partager…';
-    pt.onclick=()=>{PartageLien.partager(url,{titre:'Signature',texte:'Bonjour, voici le lien pour signer « '+d.titre+' » :'})
+    pt.onclick=()=>{PartageLien.partager(url,{titre:'Signature',texte:'Bonjour '+prenom+', voici le lien pour signer « '+d.titre+' » :'})
       .then(r=>{if(r==='copie')toast('Partage indisponible — lien copié.');});};
     box.appendChild(pt);
   }
   // E-mail : mailto ouvre la messagerie (Outlook…) avec objet et texte rédigés ; le corps
   // se place avant la signature automatique, contrairement à la feuille de partage.
-  const prenom=((d.signataire_nom||'').trim().split(/\s+/)[0])||'';
   const mail=document.createElement('a');
   mail.className='btn btn-s';mail.style.cssText='margin-left:6px;text-decoration:none';
-  mail.href='mailto:?subject='+encodeURIComponent('Document à signer : '+d.titre)
+  mail.href='mailto:'+encodeURIComponent(s.email||'')+'?subject='+encodeURIComponent('Document à signer : '+d.titre)
     +'&body='+encodeURIComponent('Bonjour'+(prenom?' '+prenom:'')+',\r\n\r\nMerci de lire puis signer le document « '+d.titre
       +' » en ouvrant ce lien :\r\n\r\n'+url+'\r\n\r\nCe lien est valable 7 jours.\r\n\r\nCordialement,');
   mail.innerHTML='<i class="ti ti-mail"></i> E-mail';
@@ -6489,10 +6542,9 @@ async function sdEnvoyer(id){
   const wa=document.createElement('a');
   wa.className='btn btn-s';wa.style.cssText='margin-left:6px;text-decoration:none';
   wa.target='_blank';wa.rel='noopener';
-  wa.href='https://wa.me/?text='+encodeURIComponent('Bonjour, voici le lien pour signer « '+d.titre+' » : '+url);
+  wa.href='https://wa.me/?text='+encodeURIComponent('Bonjour'+(prenom?' '+prenom:'')+', voici le lien pour signer « '+d.titre+' » : '+url);
   wa.innerHTML='<i class="ti ti-brand-whatsapp"></i> WhatsApp';
   box.appendChild(wa);
-  document.getElementById('ovSd').classList.add('on');
   // Relève la signature tant que la fenêtre reste ouverte ; sinon l'état est relu au chargement.
   clearInterval(sdTimer);
   sdTimer=setInterval(async()=>{
@@ -6506,8 +6558,8 @@ function sdFermer(){
   clearInterval(sdTimer);sdTimer=null;sdToken=null;
   document.getElementById('ovSd').classList.remove('on');
 }
-async function sdVoirSignature(id){
-  const e=SD_ETATS[id],d=DOCS.find(x=>x.id===id);
+async function sdVoirSignature(id,label){
+  const e=(SD_ETATS[id]||{})[label],d=DOCS.find(x=>x.id===id);
   if(!e||!d)return;
   const{data}=await sb.from('signatures_pending').select('signature_data,signed_at,signataire').eq('token',e.token).maybeSingle();
   if(!data||!data.signature_data)return toast('Signature introuvable');
@@ -6517,33 +6569,40 @@ async function sdVoirSignature(id){
   document.getElementById('ovSd').classList.add('on');
 }
 
-/* Bloc de signature ajouté en fin d'aperçu des documents signés à distance
+/* Blocs de signature ajoutés en fin d'aperçu des documents signés à distance
    (le fichier Word d'origine n'est pas modifié). Vide si non signé. */
 async function sdBlocSignature(d){
-  const e=SD_ETATS[d.id];
-  if(!d.signature_distance||!e||!e.signed_at)return '';
-  try{
-    const{data}=await sb.from('signatures_pending').select('signature_data,signed_at,signataire').eq('token',e.token).maybeSingle();
-    if(!data||!data.signature_data)return '';
-    return '<div id="sdSigBloc" style="margin-top:34px;padding-top:14px;border-top:2px solid #DED8EE;page-break-inside:avoid">'
-      +'<p style="margin:0 0 4px"><b>Lu et approuvé</b> — signé à distance par <b>'+esc(data.signataire||'')+'</b></p>'
-      +'<p style="margin:0 0 8px"><b>Date de signature :</b> '+new Date(data.signed_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'})
-      +' à '+new Date(data.signed_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+'</p>'
-      +'<img alt="Signature" style="max-height:110px;width:auto;border:1px solid #DED8EE;border-radius:8px;padding:4px;background:#fff" src="'+esc(data.signature_data)+'"></div>';
-  }catch(err){console.warn('bloc signature',err);return '';}
+  let out='';
+  for(const e of sdSignes(d)){
+    try{
+      const{data}=await sb.from('signatures_pending').select('signature_data,signed_at,signataire').eq('token',e.token).maybeSingle();
+      if(!data||!data.signature_data)continue;
+      out+='<div style="margin-top:26px;padding-top:12px;border-top:2px solid #DED8EE;page-break-inside:avoid">'
+        +'<p style="margin:0 0 4px"><b>Lu et approuvé</b> — signé à distance par <b>'+esc(data.signataire||'')+'</b></p>'
+        +'<p style="margin:0 0 8px"><b>Date de signature :</b> '+new Date(data.signed_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'})
+        +' à '+new Date(data.signed_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+'</p>'
+        +'<img alt="Signature" style="max-height:110px;width:auto;border:1px solid #DED8EE;border-radius:8px;padding:4px;background:#fff" src="'+esc(data.signature_data)+'"></div>';
+    }catch(err){console.warn('bloc signature',err);}
+  }
+  return out;
 }
 
 /* ---------- WORD SIGNÉ ----------
-   La signature (image), le signataire et la date de signature sont ajoutés en
+   Les signatures reçues (une par signataire : image, nom, date) sont ajoutées en
    fin du .docx d'origine (même fichier que dans la bibliothèque) : mise en page
-   intacte, aucun fichier à rejoindre. Le fichier stocké n'est pas modifié, on
-   télécharge une copie « … - signé.docx ». */
+   intacte, aucun fichier à rejoindre. Les cachets sont flottants dans la marge
+   basse de la dernière page, côte à côte (3 au plus). Le fichier stocké n'est
+   pas modifié, on télécharge une copie « … - signé.docx ». */
 async function sdDocxSigne(d){
   if(!window.JSZip)throw new Error('JSZip non chargé — recharger la page');
-  const e=SD_ETATS[d.id];
-  if(!e||!e.signed_at)throw new Error('aucune signature enregistrée');
-  const{data}=await sb.from('signatures_pending').select('signature_data,signed_at,signataire').eq('token',e.token).maybeSingle();
-  if(!data||!data.signature_data)throw new Error('signature introuvable');
+  const lignes=sdSignes(d).slice(0,3);
+  if(!lignes.length)throw new Error('aucune signature enregistrée');
+  const sigs=[];
+  for(const e of lignes){
+    const{data}=await sb.from('signatures_pending').select('signature_data,signed_at,signataire').eq('token',e.token).maybeSingle();
+    if(data&&data.signature_data)sigs.push(data);
+  }
+  if(!sigs.length)throw new Error('signature introuvable');
   const r=await fetch(d.fichier_url);
   if(!r.ok)throw new Error('HTTP '+r.status);
   const zip=await JSZip.loadAsync(await r.arrayBuffer());
@@ -6557,47 +6616,56 @@ async function sdDocxSigne(d){
   const pgW=num(/<w:pgSz[^>]*w:w="(\d+)"/,11906),pgH=num(/<w:pgSz[^>]*w:h="(\d+)"/,16838);
   const mL=num(/<w:pgMar[^>]*w:left="(\d+)"/,1417),mR=num(/<w:pgMar[^>]*w:right="(\d+)"/,1417),mB=num(/<w:pgMar[^>]*w:bottom="(\d+)"/,1417);
   const EMU=635;                                           // 1 twip = 635 EMU
-  // Cachet = image (texte + signature) flottante dans la marge basse de la dernière
-  // page : le texte du protocole n'est jamais déplacé ni recouvert.
-  const largeur=(pgW-mL-mR)*EMU,hauteur=Math.min(Math.round(1.9*360000),Math.max(0,(mB-300)*EMU));
+  const n=sigs.length,gap=n>1?72000:0;
+  const total=(pgW-mL-mR)*EMU,cellW=Math.floor((total-(n-1)*gap)/n);
+  const hauteur=Math.min(Math.round(1.9*360000),Math.max(0,(mB-300)*EMU));
   if(hauteur<600000)throw new Error('marge basse trop petite pour le cachet');
-  const quand=new Date(data.signed_at);
-  const date=quand.toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})
-    +' à '+quand.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-  const W=1400,H=Math.round(W*hauteur/largeur);
-  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
-  const g=cv.getContext('2d');
-  g.fillStyle='#fff';g.fillRect(0,0,W,H);
-  g.strokeStyle='#8E8AA8';g.lineWidth=3;g.strokeRect(2,2,W-4,H-4);
-  g.fillStyle='#2B2740';g.textBaseline='alphabetic';
-  const t=H/100;
-  g.font='bold '+Math.round(t*17)+'px Arial,Helvetica,sans-serif';g.fillText('Lu et approuvé — signé à distance',28,Math.round(t*30));
-  g.font=Math.round(t*15)+'px Arial,Helvetica,sans-serif';g.fillText('Signataire : '+(data.signataire||''),28,Math.round(t*57));
-  g.font='bold '+Math.round(t*15)+'px Arial,Helvetica,sans-serif';g.fillText('Date de signature : '+date,28,Math.round(t*82));
-  const im=new Image();im.src=data.signature_data;await im.decode();
-  const zw=W*0.36,zh=H-24,k=Math.min(zw/im.width,zh/im.height);
-  g.drawImage(im,W-zw-20+(zw-im.width*k)/2,12+(zh-im.height*k)/2,im.width*k,im.height*k);
-  const png=Uint8Array.from(atob(cv.toDataURL('image/png').split(',')[1]),c=>c.charCodeAt(0));
-  zip.file('word/media/kk_signature_distance.png',png);
-  let rels=await relFile.async('string');
-  rels=rels.replace('</Relationships>','<Relationship Id="rIdKkSigDist" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/kk_signature_distance.png"/></Relationships>');
-  zip.file('word/_rels/document.xml.rels',rels);
-  let ct=await ctFile.async('string');
-  if(!/Extension="png"/i.test(ct))ct=ct.replace('<Override','<Default Extension="png" ContentType="image/png"/><Override');
-  zip.file('[Content_Types].xml',ct);
   const y=(pgH-mB)*EMU+Math.round(0.12*360000);
-  const dessin='<w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:drawing><wp:anchor xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="251659264" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">'
-    +'<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>'+(mL*EMU)+'</wp:posOffset></wp:positionH>'
-    +'<wp:positionV relativeFrom="page"><wp:posOffset>'+y+'</wp:posOffset></wp:positionV>'
-    +'<wp:extent cx="'+largeur+'" cy="'+hauteur+'"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>'
-    +'<wp:docPr id="90901" name="Signature à distance" descr="Lu et approuvé — signature et date de signature"/><wp:cNvGraphicFramePr/>'
-    +'<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
-    +'<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="90901" name="signature.png"/><pic:cNvPicPr/></pic:nvPicPr>'
-    +'<pic:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rIdKkSigDist"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
-    +'<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+largeur+'" cy="'+hauteur+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>'
-    +'</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
+  let rels=await relFile.async('string'),ct=await ctFile.async('string');
+  if(!/Extension="png"/i.test(ct))ct=ct.replace('<Override','<Default Extension="png" ContentType="image/png"/><Override');
+  let runs='';
+  for(let k=0;k<n;k++){
+    const data=sigs[k];
+    const quand=new Date(data.signed_at);
+    const date=quand.toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})
+      +' à '+quand.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    // Cachet = image (texte + signature) : le texte du protocole n'est jamais déplacé ni recouvert.
+    const W=Math.round(1400/n),H=Math.round(W*hauteur/cellW);
+    const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+    const g=cv.getContext('2d');
+    g.fillStyle='#fff';g.fillRect(0,0,W,H);
+    g.strokeStyle='#8E8AA8';g.lineWidth=3;g.strokeRect(2,2,W-4,H-4);
+    g.fillStyle='#2B2740';g.textBaseline='alphabetic';
+    const t=H/100,maxT=W*0.62-28;
+    const ligne=(txt,gras,px,yy)=>{
+      let f=Math.round(t*px);
+      for(;f>8;f-=2){g.font=(gras?'bold ':'')+f+'px Arial,Helvetica,sans-serif';if(g.measureText(txt).width<=maxT)break;}
+      g.font=(gras?'bold ':'')+f+'px Arial,Helvetica,sans-serif';g.fillText(txt,28,Math.round(t*yy));
+    };
+    ligne('Lu et approuvé — signé à distance',true,17,30);
+    ligne('Signataire : '+(data.signataire||''),false,15,57);
+    ligne('Date de signature : '+date,true,15,82);
+    const im=new Image();im.src=data.signature_data;await im.decode();
+    const zw=W*0.32,zh=H-24,sc=Math.min(zw/im.width,zh/im.height);
+    g.drawImage(im,W-zw-20+(zw-im.width*sc)/2,12+(zh-im.height*sc)/2,im.width*sc,im.height*sc);
+    zip.file('word/media/kk_signature_distance_'+k+'.png',Uint8Array.from(atob(cv.toDataURL('image/png').split(',')[1]),c=>c.charCodeAt(0)));
+    rels=rels.replace('</Relationships>','<Relationship Id="rIdKkSigDist'+k+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/kk_signature_distance_'+k+'.png"/></Relationships>');
+    const x=mL*EMU+k*(cellW+gap),pid=90901+k;
+    runs+='<w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:drawing><wp:anchor xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="'+(251659264+k)+'" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">'
+      +'<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>'+x+'</wp:posOffset></wp:positionH>'
+      +'<wp:positionV relativeFrom="page"><wp:posOffset>'+y+'</wp:posOffset></wp:positionV>'
+      +'<wp:extent cx="'+cellW+'" cy="'+hauteur+'"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>'
+      +'<wp:docPr id="'+pid+'" name="Signature à distance '+(k+1)+'" descr="Lu et approuvé — signature et date de signature"/><wp:cNvGraphicFramePr/>'
+      +'<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+      +'<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="'+pid+'" name="signature'+(k+1)+'.png"/><pic:cNvPicPr/></pic:nvPicPr>'
+      +'<pic:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rIdKkSigDist'+k+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+      +'<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+cellW+'" cy="'+hauteur+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>'
+      +'</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
+  }
+  zip.file('word/_rels/document.xml.rels',rels);
+  zip.file('[Content_Types].xml',ct);
   // paragraphe d'ancrage quasi invisible (1 pt) : ne décale pas le contenu
-  const bloc='<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr>'+dessin+'</w:p>';
+  const bloc='<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr>'+runs+'</w:p>';
   xml=xml.slice(0,i)+bloc+xml.slice(i);
   zip.file('word/document.xml',xml);
   return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
