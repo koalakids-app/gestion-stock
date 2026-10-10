@@ -30,6 +30,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
+import { PDFDocument, StandardFonts, rgb } from 'https://esm.sh/pdf-lib@1.17.1';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -261,7 +262,9 @@ function encodeSubject(subject: string): string {
   return s || 'Notification';
 }
 
-async function sendEmail(to: string[], subject: string, html: string, orgNom: string) {
+type PieceJointe = { filename: string; content: string; encoding: 'base64'; contentType: string };
+
+async function sendEmail(to: string[], subject: string, html: string, orgNom: string, attachments?: PieceJointe[]) {
   const user = Deno.env.get('GMAIL_USER'), pass = Deno.env.get('GMAIL_APP_PASSWORD');
   if (!user || !pass) throw new Error('Configuration Gmail manquante');
   const client = new SMTPClient({
@@ -271,6 +274,7 @@ async function sendEmail(to: string[], subject: string, html: string, orgNom: st
     await client.send({
       from: `${orgNom} <${user}>`, to, subject: encodeSubject(subject),
       content: 'Ce message nécessite un client de messagerie compatible HTML.', html,
+      ...(attachments?.length ? { attachments } : {}),
     });
   } finally { await client.close(); }
 }
@@ -294,6 +298,97 @@ function tableauDevis(c: { lignes: any[]; mensuel: number; cmg: number | null; r
       : '')
     + `</table>`;
 }
+
+// ---------------------------------------------------------------------------
+// Le PDF de la demande
+// ---------------------------------------------------------------------------
+// Dessiné ici, à partir des valeurs déjà validées, puis joint à l'e-mail de
+// confirmation de la famille. Le navigateur n'envoie jamais de fichier à
+// joindre à un e-mail.
+
+type SectionPdf = [string, [string, string][]];
+
+// Les polices standard du PDF n'encodent que le WinAnsi : tout autre caractère
+// ferait échouer l'écriture. On le remplace plutôt que de perdre la demande.
+const pdfSafe = (v: unknown) =>
+  String(v ?? '').replace(/−/g, '-').replace(/[  ]/g, ' ').replace(/[\r\n\t]+/g, ' ')
+    .replace(/[^ -~¡-ÿ€Œœ–—‘’“”…]/g, ' ');
+
+async function genererPdf(d: {
+  org: string; creche: string; date: string; sections: SectionPdf[];
+  lignes: { libelle: string; total: number }[]; mensuel: number; cmg: number | null; reste: number | null;
+}): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const W = 595.28, H = 841.89, M = 51;
+  const violet = rgb(0.29, 0.25, 0.62), orange = rgb(0.96, 0.47, 0.13);
+  const encre = rgb(0.17, 0.15, 0.25), gris = rgb(0.56, 0.54, 0.66), vert = rgb(0.18, 0.62, 0.42);
+  let page = doc.addPage([W, H]);
+  let y = H - 90;
+
+  page.drawRectangle({ x: 0, y: H - 80, width: W, height: 80, color: violet });
+  page.drawText(pdfSafe(d.org + ' - Demande de préinscription'), { x: M, y: H - 38, size: 17, font: bold, color: rgb(1, 1, 1) });
+  page.drawText(pdfSafe('Demande transmise le ' + d.date + ' - ' + d.creche), { x: M, y: H - 60, size: 10, font, color: rgb(1, 1, 1) });
+
+  const nouvellePage = () => { page = doc.addPage([W, H]); y = H - M; };
+  const place = (h: number) => { if (y - h < M) nouvellePage(); };
+  // Retour à la ligne par largeur mesurée avec la vraie police.
+  const coupe = (t: string, f: typeof font, size: number, max: number) => {
+    const mots = pdfSafe(t).split(' '); const lignes: string[] = []; let cur = '';
+    for (const m of mots) {
+      const essai = cur ? cur + ' ' + m : m;
+      if (f.widthOfTextAtSize(essai, size) <= max) cur = essai;
+      else { if (cur) lignes.push(cur); cur = m; }
+    }
+    if (cur) lignes.push(cur);
+    return lignes.length ? lignes : [''];
+  };
+  const titre = (t: string) => {
+    place(34);
+    page.drawText(pdfSafe(t), { x: M, y, size: 12, font: bold, color: orange });
+    y -= 6; page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.8, color: rgb(0.94, 0.91, 0.96) }); y -= 16;
+  };
+
+  for (const [nom, rows] of d.sections) {
+    titre(nom);
+    for (const [k, v] of rows) {
+      const val = coupe(v || '-', bold, 10, W - 2 * M - 170);
+      place(val.length * 14 + 4);
+      page.drawText(pdfSafe(k), { x: M, y, size: 10, font, color: gris });
+      val.forEach((l, i) => page.drawText(l, { x: M + 170, y: y - i * 14, size: 10, font: bold, color: encre }));
+      y -= val.length * 14 + 3;
+    }
+    y -= 8;
+  }
+
+  titre('Estimation de la facturation mensuelle');
+  const ligne = (a: string, m: string, gras = false, couleur = encre) => {
+    place(18);
+    const f = gras ? bold : font;
+    page.drawText(pdfSafe(a), { x: M, y, size: 10, font: f, color: couleur });
+    const mm = pdfSafe(m);
+    page.drawText(mm, { x: W - M - f.widthOfTextAtSize(mm, 10), y, size: 10, font: f, color: couleur });
+    y -= 16;
+  };
+  d.lignes.forEach(l => ligne(l.libelle, eur(l.total)));
+  if (d.reste != null) {
+    ligne('Aide CAF estimée (CMG)', '- ' + eur(d.cmg), false, vert);
+    ligne('Reste à charge estimé', eur(d.reste), true);
+  } else ligne('Total mensuel estimé', eur(d.mensuel), true);
+
+  y -= 10;
+  const pied = coupe('Cette demande ne vous engage pas. L\'estimation est indicative et non contractuelle, avant aide de la CAF (seule habilitée à en fixer le montant). La direction vous recontacte pour proposer une visite, puis vous envoie le devis définitif.', font, 8.5, W - 2 * M);
+  place(pied.length * 12 + 4);
+  pied.forEach((l, i) => page.drawText(l, { x: M, y: y - i * 12, size: 8.5, font, color: gris }));
+
+  return await doc.save();
+}
+
+const enBase64 = (u: Uint8Array) => {
+  let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
+  return btoa(s);
+};
 
 // ---------------------------------------------------------------------------
 // Envoi du formulaire
@@ -413,6 +508,57 @@ async function action_envoyer(p: any) {
   const enfantNom = `${prenom} ${nom}`;
   const semaine = s.jours.map(j => ['', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'][j]).join(', ');
 
+  // Le PDF de la demande. En cas d'échec la demande reste enregistrée : la
+  // famille reçoit alors son e-mail sans pièce jointe.
+  let pdf: Uint8Array | null = null;
+  try {
+    const oui = (b: unknown) => (b ? 'Oui' : 'Non');
+    const fr = (d: string | null) => (d ? d.split('-').reverse().join('/') : '');
+    const nomLien: Record<string, string> = { mere: 'Mère', pere: 'Père', tuteur: 'Tuteur / tutrice', autre: 'Autre' };
+    const sections: SectionPdf[] = [
+      ['L\'enfant', [
+        ['Prénom et nom', enfantNom],
+        ['Sexe', e.sexe === 'F' ? 'Fille' : e.sexe === 'M' ? 'Garçon' : ''],
+        [aNaitre ? 'Terme prévu' : 'Date de naissance', fr(s.dob)],
+        ['Allergies', txt(e.allergies, 300)],
+        ['Frère ou sœur déjà accueilli(e)', oui(e.fratrie)],
+        ['PAI', e.pai ? 'Oui - ' + txt(e.pai_detail, 300) : 'Non'],
+      ]],
+      ...parents.map((x: any, i: number): SectionPdf => ['Parent ' + (i + 1), [
+        ['Lien', nomLien[x.lien]],
+        ['Prénom et nom', `${x.prenom} ${x.nom}`.trim()],
+        ['Téléphone', x.telephone],
+        ['E-mail', x.email],
+        ...(x.profession ? [['Profession', x.profession] as [string, string]] : []),
+      ]]),
+      ['Le foyer', [
+        ['Adresse', [txt(f.adresse, 200), `${txt(f.code_postal, 10)} ${txt(f.ville, 80)}`.trim()].filter(Boolean).join(', ')],
+        ['N° allocataire CAF / MSA', txt(f.num_allocataire, 30)],
+        ['Revenus annuels du foyer', s.revenus != null ? eur(s.revenus) : ''],
+        ['Parent isolé / majoration PAJE', oui(s.isole)],
+        ['Parents séparés', oui(f.separes)],
+        ['Garde alternée', oui(f.alternee)],
+      ]],
+      ['L\'accueil souhaité', [
+        ['Crèche', c.creche.name],
+        ['Date d\'entrée souhaitée', fr(s.date_entree)],
+        ['Jours', semaine],
+        ['Horaires', `${s.heure_debut} à ${s.heure_fin}`],
+        ['Message à la crèche', txt(p.message, 1500)],
+      ]],
+    ];
+    pdf = await genererPdf({
+      org: orgNom, creche: c.creche.name, date: new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }),
+      sections,
+      lignes: c.lignes.map(l => ({ libelle: l.type === 'accueil' ? 'Frais de garde' : l.libelle, total: l.total })),
+      mensuel: c.mensuel, cmg: c.cmg, reste: c.reste,
+    });
+  } catch (err) {
+    console.error('[preinscription] pdf', err);
+  }
+  const pdfNom = 'preinscription-' + (prenom + '-' + nom).normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf';
+
   if (Deno.env.get('GMAIL_USER') && Deno.env.get('GMAIL_APP_PASSWORD')) {
     const aFamille = sendEmail(mails, `Votre demande de préinscription - ${prenom}`, enveloppe(orgNom, logo,
       'Nous avons bien reçu votre demande',
@@ -421,8 +567,10 @@ async function action_envoyer(p: any) {
        <b>${esc(c.creche.name)}</b> est bien enregistrée. La directrice vous recontacte très vite pour vous proposer une visite.</p>
        <p style="margin:0 0 8px;font-size:15px">Accueil souhaité : ${esc(semaine)}, de ${esc(s.heure_debut)} à ${esc(s.heure_fin)}.
        Voici une <b>estimation</b> de la facturation mensuelle :</p>${tableauDevis(c)}
-       <p style="margin:0;font-size:13px;color:#78748C">Estimation indicative, non contractuelle. Le devis définitif vous sera envoyé par la direction. Le CMG est calculé par la CAF, seule habilitée à en fixer le montant.</p>`
-    ), orgNom).catch(err => console.error('[preinscription] mail famille', err));
+       <p style="margin:0;font-size:13px;color:#78748C">Estimation indicative, non contractuelle. Le devis définitif vous sera envoyé par la direction. Le CMG est calculé par la CAF, seule habilitée à en fixer le montant.</p>
+       ${pdf ? '<p style="margin:14px 0 0;font-size:13px;color:#78748C">Votre demande complète est jointe à ce message en PDF.</p>' : ''}`
+    ), orgNom, pdf ? [{ filename: pdfNom, content: enBase64(pdf), encoding: 'base64', contentType: 'application/pdf' }] : undefined)
+      .catch(err => console.error('[preinscription] mail famille', err));
 
     const dest = txt(c.etab?.email, 160);
     const aDirection = dest && MAIL.test(dest)
@@ -443,6 +591,7 @@ async function action_envoyer(p: any) {
       mensuel: c.mensuel, cmg: c.cmg, reste: c.reste,
       lignes: c.lignes.map(l => ({ libelle: l.type === 'accueil' ? 'Frais de garde' : l.libelle, type: l.type, total: l.total })),
     },
+    pdf_joint: !!pdf && mails.length > 0,
   };
 }
 
