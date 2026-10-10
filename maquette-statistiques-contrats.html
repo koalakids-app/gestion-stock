@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Maquette — Statistiques contrats</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+/* MAQUETTE : données de démonstration, aucune lecture ni écriture en base.
+   En production, les mêmes chiffres se calculent depuis `contrats`
+   (statut signé/contresigné, creche_id, jours, heures_hebdo, date_debut/fin)
+   et `creches.capacity` / `creches.capacity_surnombre`. */
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;
+  --green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8;--amber:#B8860B;--amber-l:#FFF6DC}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:#2B2740;min-height:100dvh}
+.proto{background:#2B2740;color:#fff;font-size:12.5px;padding:7px 12px;text-align:center;font-weight:600}
+.topbar{background:#fff;border-bottom:2px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:9px}
+.topbar h1{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);flex:1}
+.tbtn{min-height:44px;padding:0 14px;border-radius:14px;border:2px solid #D9D3F2;background:var(--violet-l);color:var(--violet);font:800 13.5px Nunito;display:inline-flex;align-items:center;gap:7px}
+.tbtn i{font-size:20px}
+.wrap{max-width:1040px;margin:0 auto;padding:16px 16px 40px}
+/* onglets */
+.tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:2px solid var(--line)}
+.tab{border:none;background:none;font:800 14px Nunito;color:var(--muted);padding:10px 16px;cursor:pointer;display:inline-flex;gap:7px;align-items:center;border-bottom:3px solid transparent;margin-bottom:-2px}
+.tab.on{color:var(--orange);border-bottom-color:var(--orange)}
+.tab .ct{background:var(--violet-l);color:var(--violet);border-radius:20px;font-size:11px;padding:1px 8px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+select{font:600 14px Nunito;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740}
+/* cartes */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:#fff;border:2px solid var(--line);border-radius:16px;padding:12px 14px}
+.kpi .l{font-size:11.5px;font-weight:700;color:var(--muted);display:flex;gap:5px;align-items:center}
+.kpi .n{font-family:'Baloo 2',cursive;font-size:28px;color:var(--violet);line-height:1.15}
+.kpi .s{font-size:11.5px;color:var(--muted);font-weight:600}
+.kpi.hi{border-color:var(--orange);background:var(--orange-l)}
+.kpi.hi .n{color:var(--orange)}
+.up{color:var(--green)}.dn{color:var(--red)}
+.panel{background:#fff;border:2px solid var(--line);border-radius:18px;padding:14px 16px;margin-bottom:14px}
+.panel h3{font-family:'Baloo 2',cursive;font-size:16px;color:var(--violet);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.panel h3 small{font:600 12px Nunito;color:var(--muted)}
+.panel .hint{font-size:12px;color:var(--muted);margin:2px 0 12px;line-height:1.6}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.cols{grid-template-columns:1fr}}
+/* remplissage par crèche */
+.cr{display:grid;grid-template-columns:150px 1fr 64px;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.cr:first-of-type{border-top:none}
+.cr .nm{font-weight:800;font-size:13.5px;color:#2B2740;line-height:1.25}
+.cr .nm span{display:block;font-size:11.5px;color:var(--muted);font-weight:600}
+.cr .pc{font-family:'Baloo 2',cursive;font-size:20px;text-align:right}
+.jauge{position:relative;height:22px;background:#F1EFF7;border-radius:11px;overflow:visible}
+.jauge .f{position:absolute;left:0;top:0;bottom:0;border-radius:11px;min-width:6px}
+.jauge .f.p2{background:repeating-linear-gradient(45deg,#fff3,#fff3 4px,transparent 4px,transparent 8px)}
+.jauge .mk{position:absolute;top:-4px;bottom:-4px;width:2px;background:#2B2740;opacity:.55}
+.jauge .mk::after{content:attr(data-l);position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:9.5px;font-weight:700;color:var(--muted);white-space:nowrap}
+.c-ok{background:var(--green)}.c-mid{background:var(--orange)}.c-low{background:#E0B14B}.c-over{background:var(--red)}
+.t-ok{color:var(--green)}.t-mid{color:var(--orange)}.t-low{color:var(--amber)}.t-over{color:var(--red)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;font-weight:700;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+@media(max-width:560px){.cr{grid-template-columns:1fr 54px}.cr .jauge{grid-column:1/-1;order:3}}
+/* heatmap */
+.hm{width:100%;border-collapse:separate;border-spacing:4px;font-size:12.5px}
+.hm th{font-size:11.5px;color:var(--muted);font-weight:700;text-align:center}
+.hm th:first-child,.hm td:first-child{text-align:left;font-weight:800;white-space:nowrap;padding-right:6px}
+.hm td{text-align:center;border-radius:9px;padding:9px 2px;font-weight:800;font-size:12.5px}
+.hm td small{display:block;font-size:10px;font-weight:600;opacity:.75}
+/* tableaux */
+.tb{width:100%;border-collapse:collapse;font-size:13px}
+.tb th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);text-align:left;padding:6px 6px;border-bottom:2px solid var(--line)}
+.tb td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tb td.r,.tb th.r{text-align:right}
+.tag{display:inline-flex;gap:4px;align-items:center;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+.tg-g{background:var(--green-l);color:var(--green)}.tg-o{background:var(--orange-l);color:var(--orange)}
+.tg-r{background:var(--red-l);color:var(--red)}.tg-v{background:var(--violet-l);color:var(--violet)}.tg-a{background:var(--amber-l);color:var(--amber)}
+/* barres simples */
+.hb{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:12.5px;font-weight:700}
+.hb .lab{width:118px;color:#2B2740}
+.hb .tr{flex:1;height:14px;background:#F1EFF7;border-radius:7px;overflow:hidden}
+.hb .tr b{display:block;height:100%;border-radius:7px;background:var(--violet)}
+.hb .v{width:46px;text-align:right;color:var(--muted)}
+.seg{display:flex;height:22px;border-radius:11px;overflow:hidden;margin:6px 0 10px}
+.seg div{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800}
+svg text{font-family:Nunito}
+.note{font-size:12px;color:var(--muted);background:#fff;border:2px dashed var(--line);border-radius:14px;padding:10px 14px;line-height:1.7}
+.note b{color:var(--violet)}
+#panelContrats{display:none}
+</style>
+</head>
+<body>
+<div class="proto">MAQUETTE · données de démonstration · onglet « Statistiques » proposé pour la page Contrats d'accueil</div>
+
+<div class="topbar">
+  <i class="ti ti-file-certificate" style="font-size:22px;color:var(--orange)"></i>
+  <h1>Contrats d'accueil</h1>
+  <span class="tbtn"><i class="ti ti-home"></i> Accueil</span>
+</div>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab" id="tabC" onclick="onglet('c')"><i class="ti ti-list"></i> Contrats <span class="ct">142</span></button>
+    <button class="tab on" id="tabS" onclick="onglet('s')"><i class="ti ti-chart-bar"></i> Statistiques</button>
+  </div>
+
+  <div id="panelContrats">
+    <div class="note"><b>Onglet « Contrats »</b> : la liste actuelle, inchangée (recherche, filtres crèche / année, cartes par enfant).<br>Cliquez sur « Statistiques » pour voir la proposition.</div>
+  </div>
+
+  <div id="panelStats">
+    <div class="bar">
+      <select id="fCr" onchange="rendre()"></select>
+      <select id="fAn" onchange="rendre()">
+        <option value="2026">Année 2026-2027</option>
+        <option value="2025">Année 2025-2026</option>
+      </select>
+      <select id="fDate" onchange="rendre()">
+        <option value="auj">Situation à aujourd'hui (10 oct.)</option>
+        <option value="jan">Projection au 1er janvier</option>
+        <option value="sep">Projection au 1er septembre</option>
+      </select>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="panel">
+      <h3><i class="ti ti-building-community" style="color:var(--orange)"></i> Taux de remplissage par crèche <small id="subRempl"></small></h3>
+      <p class="hint">Places contractées en moyenne sur la semaine ÷ capacité agréée PMI. Le trait noir marque l'agrément ; au-delà, le surnombre autorisé (115 %) quand la crèche en bénéficie.</p>
+      <div id="remplissage"></div>
+      <div class="legend">
+        <span><i class="c-low"></i>&lt; 70 % — berceaux à pourvoir</span>
+        <span><i class="c-mid"></i>70–89 %</span>
+        <span><i class="c-ok"></i>90–100 % — bien rempli</span>
+        <span><i class="c-over"></i>&gt; 100 % — surnombre</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3><i class="ti ti-calendar-week" style="color:var(--orange)"></i> Où il reste de la place <small>places contractées / capacité, par jour</small></h3>
+      <p class="hint">Pour répondre vite à une famille : les cases vertes sont complètes, les cases pâles ont des berceaux disponibles ce jour-là.</p>
+      <div style="overflow-x:auto"><table class="hm" id="heat"></table></div>
+    </div>
+
+    <div class="panel">
+      <h3><i class="ti ti-armchair" style="color:var(--orange)"></i> Places libres par crèche et par période
+        <select id="fPer" onchange="rendre()" style="margin-left:auto"><option value="m">Par mois</option><option value="t">Par trimestre</option></select></h3>
+      <p class="hint">Berceaux non contractés (capacité agréée − places contractées), contrats signés et entrées déjà connues. Les mois à venir tiennent compte des fins de contrat : c'est là qu'on repère les places à proposer aux familles en attente.</p>
+      <div style="overflow-x:auto"><table class="hm" id="libres"></table></div>
+      <div class="legend"><span><i style="background:#BFE6D3"></i>complet (0–1 libre)</span><span><i style="background:#FFE2C4"></i>2–3 libres</span><span><i style="background:#FBF0CF"></i>4 libres ou plus</span><span><i style="background:#F5C6C6"></i>surnombre</span></div>
+    </div>
+
+    <div class="panel">
+      <h3><i class="ti ti-chart-line" style="color:var(--orange)"></i> Évolution sur l'année scolaire <small>taux de remplissage mensuel, contrats signés + à venir</small></h3>
+      <p class="hint">Les départs (fin de contrat, passage à l'école) et les entrées déjà signées sont pris en compte : on voit les trous de rentrée à anticiper.</p>
+      <div id="courbe"></div>
+    </div>
+
+    <div class="cols">
+      <div class="panel">
+        <h3><i class="ti ti-file-check" style="color:var(--orange)"></i> État des contrats</h3>
+        <p class="hint">Où en sont les contrats de l'année.</p>
+        <div id="statuts"></div>
+      </div>
+      <div class="panel">
+        <h3><i class="ti ti-clock-hour-4" style="color:var(--orange)"></i> Profil d'accueil</h3>
+        <p class="hint">Rythme contracté par les familles.</p>
+        <div id="profil"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3><i class="ti ti-alarm" style="color:var(--orange)"></i> Échéances à venir <small>90 prochains jours</small></h3>
+      <p class="hint">Contrats qui se terminent (berceaux qui se libèrent) et entrées déjà signées (berceaux qui se remplissent).</p>
+      <div style="overflow-x:auto"><table class="tb" id="echeances"></table></div>
+    </div>
+
+    <div class="panel">
+      <h3><i class="ti ti-hourglass" style="color:var(--orange)"></i> Demande vs capacité <small>devis acceptés sans contrat</small></h3>
+      <p class="hint">Familles qui attendent un contrat, face aux berceaux encore libres de la crèche demandée.</p>
+      <div style="overflow-x:auto"><table class="tb" id="attente"></table></div>
+    </div>
+
+    <div class="note">
+      <b>Données utilisées en production :</b> <code>contrats</code> (statut, creche_id, jours, heures_hebdo, date_debut, date_fin, total_mensuel, reste_a_charge), <code>creches.capacity</code> et <code>capacity_surnombre</code>, <code>devis</code> acceptés, <code>enfants.dob</code> pour les tranches d'âge. Aucune table ni migration supplémentaire.
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- DONNÉES DE DÉMO ---------- */
+const JOURS=['Lun','Mar','Mer','Jeu','Ven'];
+/* cap = agrément PMI, surn = plafond de surnombre (null = aucun),
+   places[] = places contractées par jour (lun→ven) à aujourd'hui */
+const CRECHES=[
+  {id:1,nom:'Les Petits Loups',ville:'Lyon 3e',cap:12,surn:14,places:[12,12,11,12,10],enf:19,mois:[8,9,10,11,11,12,12,12,12,12,12,8]},
+  {id:2,nom:'Les Écureuils',ville:'Villeurbanne',cap:12,surn:null,places:[11,11,10,11,9],enf:17,mois:[7,9,10,10,11,11,11,11,12,12,11,7]},
+  {id:3,nom:'Les P\'tits Choux',ville:'Caluire',cap:10,surn:null,places:[8,9,6,8,7],enf:12,mois:[5,7,8,8,8,9,9,9,9,9,8,5]},
+  {id:4,nom:'Les Coccinelles',ville:'Bron',cap:12,surn:null,places:[7,8,5,7,5],enf:11,mois:[4,6,7,7,8,8,8,9,9,9,8,4]},
+  {id:5,nom:'Les Lutins',ville:'Vénissieux',cap:10,surn:null,places:[10,10,9,10,8],enf:14,mois:[6,8,9,10,10,10,10,10,10,10,9,6]},
+  {id:6,nom:'Les Marmousets',ville:'Oullins',cap:12,surn:null,places:[5,6,4,5,3],enf:8,mois:[3,4,5,5,6,6,7,7,7,7,6,3]}
+];
+const MOIS=['Sept','Oct','Nov','Déc','Janv','Févr','Mars','Avr','Mai','Juin','Juil','Août'];
+const STATUTS=[['Contresigné',96,'#2E9E6B'],['Signé par la famille',14,'#7DBF9D'],['Envoyé, en attente',17,'#F47920'],['Brouillon',9,'#B8860B'],['Refusé / annulé',6,'#C62828']];
+const ECH=[
+  ['12 nov.','Fin de contrat','Léo M.',2,'Les Petits Loups','Déménagement','Libère 3 j/sem.'],
+  ['30 nov.','Entrée signée','Inès B.',4,'Les Coccinelles','','+ 4 j/sem.'],
+  ['19 déc.','Fin de contrat','Hugo R.',1,'Les Écureuils','Fin d\'accueil','Libère 5 j/sem.'],
+  ['02 janv.','Entrée signée','Jade P.',3,'Les P\'tits Choux','','+ 3 j/sem.'],
+  ['31 janv.','Fin de contrat','Noah T.',5,'Les Marmousets','Rentrée scolaire anticipée','Libère 4 j/sem.']
+];
+const ATT=[
+  ['Les Coccinelles',5,'Mer, Ven',5,4],['Les Marmousets',3,'Mer, Ven',7,3],
+  ['Les Petits Loups',4,'Aucune (complet)',0,2],['Les P\'tits Choux',2,'Mer',4,1]
+];
+
+/* ---------- OUTILS ---------- */
+const $=id=>document.getElementById(id);
+const pct=(a,b)=>b?Math.round(a/b*100):0;
+const classe=p=>p>100?'over':p>=90?'ok':p>=70?'mid':'low';
+function jusque(an,date){ /* facteur de projection de démonstration */
+  return date==='auj'?1:date==='jan'?0.96:0.83;
+}
+function crList(){const v=$('fCr').value;return v?CRECHES.filter(c=>String(c.id)===v):CRECHES;}
+function moy(c,f){return c.places.reduce((s,x)=>s+x,0)/5*f;}
+function onglet(w){
+  $('panelContrats').style.display=w==='c'?'block':'none';
+  $('panelStats').style.display=w==='s'?'block':'none';
+  $('tabC').classList.toggle('on',w==='c');$('tabS').classList.toggle('on',w==='s');
+}
+
+/* ---------- RENDU ---------- */
+function rendre(){
+  const f=jusque($('fAn').value,$('fDate').value),L=crList();
+  const cap=L.reduce((s,c)=>s+c.cap,0),occ=L.reduce((s,c)=>s+moy(c,f),0);
+  const nbEnf=Math.round(L.reduce((s,c)=>s+c.enf,0)*f);
+  const taux=pct(occ,cap);
+
+  $('kpis').innerHTML=
+   kpi('Taux de remplissage',taux+' %','<span class="'+(taux>=90?'up':'dn')+'">'+(taux>=90?'▲':'▼')+' 3 pts vs même date N-1</span>','hi','ti-gauge')+
+   kpi('Enfants accueillis',nbEnf,'sur '+L.length+' crèche'+(L.length>1?'s':''),'','ti-baby-carriage')+
+   kpi('Berceaux libres',Math.round(cap-occ),'moyenne sur la semaine','','ti-armchair')+
+   kpi('Contrats à signer',26,'17 envoyés · 9 brouillons','','ti-signature')+
+   kpi('À renouveler',11,'échéance &lt; 90 jours','','ti-refresh')+
+   kpi('Heures / enfant / sem.',(31.4).toFixed(1).replace('.',',')+' h','durée contractuelle moyenne','','ti-clock');
+
+  $('subRempl').textContent=cap+' berceaux agréés · '+Math.round(occ)+' occupés';
+
+  /* remplissage par crèche, trié du moins au plus rempli */
+  $('remplissage').innerHTML=L.slice().sort((a,b)=>moy(a,f)/a.cap-moy(b,f)/b.cap).map(c=>{
+    const o=moy(c,f),p=pct(o,c.cap),k=classe(p);
+    const max=c.surn||c.cap,echelle=Math.max(max*1.0,c.cap*1.15);
+    const w=Math.min(o/echelle*100,100),mk=c.cap/echelle*100,mk2=c.surn?c.surn/echelle*100:null;
+    return '<div class="cr"><div class="nm">'+c.nom+'<span>'+c.ville+' · '+c.enf+' enfants</span></div>'+
+      '<div class="jauge"><div class="f c-'+k+'" style="width:'+w+'%"></div>'+
+      '<div class="mk" style="left:'+mk+'%" data-l="'+c.cap+'"></div>'+
+      (mk2?'<div class="mk" style="left:'+mk2+'%;opacity:.25" data-l="'+c.surn+' (115 %)"></div>':'')+'</div>'+
+      '<div class="pc t-'+k+'">'+p+' %</div></div>';
+  }).join('');
+
+  /* carte de chaleur jours × crèches */
+  let h='<tr><th></th>'+JOURS.map(j=>'<th>'+j+'</th>').join('')+'<th>Libres (moy.)</th></tr>';
+  L.forEach(c=>{
+    h+='<tr><td>'+c.nom+'</td>'+c.places.map(n=>{
+      const v=Math.min(Math.round(n*f),c.cap+3),p=pct(v,c.cap),
+        bg=p>100?'#F5C6C6':p>=90?'#BFE6D3':p>=70?'#FFE2C4':'#FBF0CF',
+        co=p>100?'#C62828':p>=90?'#1E7A50':p>=70?'#B35A0E':'#8A6A0A';
+      return '<td style="background:'+bg+';color:'+co+'">'+v+'<small>/ '+c.cap+'</small></td>';
+    }).join('')+'<td style="color:var(--muted)">'+Math.max(0,(c.cap-moy(c,f))).toFixed(1).replace('.',',')+'</td></tr>';
+  });
+  $('heat').innerHTML=h;
+
+  /* places libres par crèche et par période */
+  const tri=$('fPer').value==='t';
+  const per=tri?[['Sept–Nov',[0,1,2]],['Déc–Févr',[3,4,5]],['Mars–Mai',[6,7,8]],['Juin–Août',[9,10,11]]]:MOIS.map((m,i)=>[m,[i]]);
+  const libre=(c,ix)=>c.cap-ix.reduce((a,i)=>a+c.mois[i],0)/ix.length*f;
+  let lh='<tr><th></th>'+per.map(p=>'<th>'+p[0]+'</th>').join('')+'</tr>';
+  L.forEach(c=>{lh+='<tr><td>'+c.nom+'<small style="display:block;font-weight:600;color:var(--muted)">'+c.cap+' berceaux</small></td>'+per.map(p=>{
+    const v=libre(c,p[1]),r=Math.round(v),
+      bg=v<0?'#F5C6C6':v<1.5?'#BFE6D3':v<3.5?'#FFE2C4':'#FBF0CF',
+      co=v<0?'#C62828':v<1.5?'#1E7A50':v<3.5?'#B35A0E':'#8A6A0A';
+    return '<td style="background:'+bg+';color:'+co+'">'+r+'</td>';}).join('')+'</tr>';});
+  lh+='<tr><td style="border-top:2px solid var(--line)">Total</td>'+per.map(p=>'<td style="border-top:2px solid var(--line);color:var(--violet);font-family:\'Baloo 2\';font-size:15px">'+Math.round(L.reduce((a,c)=>a+libre(c,p[1]),0))+'</td>').join('')+'</tr>';
+  $('libres').innerHTML=lh;
+
+  /* courbe SVG */
+  $('courbe').innerHTML=courbe(L,f);
+
+  /* statuts */
+  const tot=STATUTS.reduce((s,x)=>s+x[1],0);
+  $('statuts').innerHTML='<div class="seg">'+STATUTS.map(s=>'<div style="width:'+pct(s[1],tot)+'%;background:'+s[2]+'">'+(pct(s[1],tot)>7?s[1]:'')+'</div>').join('')+'</div>'+
+    STATUTS.map(s=>'<div class="hb"><span class="lab"><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:'+s[2]+';margin-right:6px"></i>'+s[0]+'</span><span class="tr"><b style="width:'+pct(s[1],tot)+'%;background:'+s[2]+'"></b></span><span class="v">'+s[1]+'</span></div>').join('')+
+    '<p class="hint" style="margin-top:10px">Délai moyen d\'envoi → signature : <b>4,2 jours</b> · contrats envoyés depuis plus de 10 jours : <span class="tag tg-r">5 à relancer</span></p>';
+
+  /* profil */
+  const bars=[['Temps plein (5 j)',38],['4 jours',27],['3 jours',21],['1 à 2 jours',14]];
+  const ages=[['0–12 mois',16],['12–24 mois',44],['24–36 mois',32],['> 36 mois',8]];
+  $('profil').innerHTML='<b style="font-size:12px;color:var(--muted)">JOURS CONTRACTÉS / SEMAINE</b>'+
+    bars.map(b=>hb(b[0],b[1])).join('')+
+    '<b style="font-size:12px;color:var(--muted);display:block;margin-top:12px">TRANCHES D\'ÂGE</b>'+
+    ages.map(b=>hb(b[0],b[1])).join('')+
+    '<p class="hint" style="margin-top:10px">Reste à charge moyen : <b>312 €/mois</b> · CMG moyen : <b>486 €/mois</b></p>';
+
+  /* échéances */
+  const E=ECH.filter(r=>!$('fCr').value||CRECHES.find(c=>String(c.id)===$('fCr').value).nom===r[4]);
+  $('echeances').innerHTML='<tr><th>Date</th><th>Événement</th><th>Enfant</th><th>Crèche</th><th>Motif</th><th class="r">Effet</th></tr>'+
+    (E.length?E.map(r=>'<tr><td><b>'+r[0]+'</b></td><td><span class="tag '+(r[1][0]==='F'?'tg-a':'tg-g')+'">'+r[1]+'</span></td><td>'+r[2]+'</td><td>'+r[4]+'</td><td style="color:var(--muted)">'+(r[5]||'—')+'</td><td class="r"><b>'+r[6]+'</b></td></tr>').join('')
+    :'<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:18px">Aucune échéance pour cette crèche.</td></tr>');
+
+  /* attente */
+  $('attente').innerHTML='<tr><th>Crèche</th><th class="r">Familles en attente</th><th>Jours disponibles</th><th class="r">Berceaux libres</th><th class="r">Couverture</th></tr>'+
+    ATT.map(r=>{const ok=r[3]>=r[1];return '<tr><td><b>'+r[0]+'</b></td><td class="r">'+r[1]+'</td><td>'+r[2]+'</td><td class="r">'+r[3]+'</td><td class="r"><span class="tag '+(ok?'tg-g':r[3]===0?'tg-r':'tg-o')+'">'+(ok?'Peut tout absorber':r[3]===0?'Complet':'Partielle')+'</span></td></tr>';}).join('');
+}
+function kpi(l,n,s,cl,ic){return '<div class="kpi '+cl+'"><div class="l"><i class="ti '+ic+'"></i>'+l+'</div><div class="n">'+n+'</div><div class="s">'+s+'</div></div>';}
+function hb(l,v){return '<div class="hb"><span class="lab">'+l+'</span><span class="tr"><b style="width:'+v*2+'%"></b></span><span class="v">'+v+' %</span></div>';}
+
+function courbe(L,f){
+  const W=900,H=230,pl=38,pr=12,pt=14,pb=26,pw=W-pl-pr,ph=H-pt-pb;
+  const capT=L.reduce((s,c)=>s+c.cap,0);
+  const tot=MOIS.map((_,i)=>pct(L.reduce((s,c)=>s+c.mois[i],0),capT));
+  const x=i=>pl+i*pw/11,y=p=>pt+ph-(Math.min(p,110)/110)*ph;
+  let s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto">';
+  [0,25,50,75,100].forEach(g=>{s+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y(g)+'" y2="'+y(g)+'" stroke="#EFE9F5"/><text x="'+(pl-6)+'" y="'+(y(g)+4)+'" text-anchor="end" font-size="11" fill="#8E8AA8">'+g+'%</text>';});
+  s+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y(90)+'" y2="'+y(90)+'" stroke="#2E9E6B" stroke-dasharray="4 4"/><text x="'+(W-pr)+'" y="'+(y(90)-4)+'" text-anchor="end" font-size="10.5" fill="#2E9E6B" font-weight="700">objectif 90 %</text>';
+  MOIS.forEach((m,i)=>{s+='<text x="'+x(i)+'" y="'+(H-6)+'" text-anchor="middle" font-size="11" fill="#8E8AA8">'+m+'</text>';});
+  /* mois en cours (octobre = index 1) : réel avant, projeté après */
+  const cut=1;
+  const pts=tot.map((p,i)=>[x(i),y(p)]);
+  const reel=pts.slice(0,cut+1).map(p=>p.join(',')).join(' '),proj=pts.slice(cut).map(p=>p.join(',')).join(' ');
+  s+='<polygon points="'+pl+','+y(0)+' '+pts.map(p=>p.join(',')).join(' ')+' '+x(11)+','+y(0)+'" fill="#F4792014"/>';
+  s+='<polyline points="'+proj+'" fill="none" stroke="#F47920" stroke-width="2.5" stroke-dasharray="6 5"/>';
+  s+='<polyline points="'+reel+'" fill="none" stroke="#F47920" stroke-width="3"/>';
+  pts.forEach((p,i)=>{s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+(i===cut?5.5:3.5)+'" fill="'+(i<=cut?'#F47920':'#fff')+'" stroke="#F47920" stroke-width="2"/>';
+    if(i===cut||i===0||i===5||i===11)s+='<text x="'+p[0]+'" y="'+(p[1]-10)+'" text-anchor="middle" font-size="11.5" font-weight="800" fill="#4A3F9F">'+tot[i]+' %</text>';});
+  s+='<text x="'+x(cut)+'" y="'+(pt+2)+'" text-anchor="middle" font-size="10" fill="#8E8AA8" font-weight="700">aujourd\'hui</text>';
+  s+='</svg><div class="legend"><span><i style="background:#F47920"></i>Réel (contrats signés)</span><span><i style="background:#fff;border:2px solid #F47920"></i>Projeté (fins de contrat et entrées signées connues)</span></div>';
+  return s;
+}
+
+$('fCr').innerHTML='<option value="">Toutes les crèches</option>'+CRECHES.map(c=>'<option value="'+c.id+'">'+c.nom+'</option>').join('');
+rendre();
+</script>
+</body>
+</html>
