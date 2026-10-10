@@ -123,41 +123,24 @@ async function chargerDocument(){
     return(row&&row.fichier_url)?row:null;
   }catch(e){return null;}
 }
-/* mammoth (conversion Word -> HTML) est volumineux : il n'est chargé qu'après
-   l'affichage du cadre de signature, avec un délai maximal, pour qu'un réseau
-   lent ou bloqué ne laisse jamais la page blanche. */
-function chargerMammoth(){
-  if(window.mammoth)return Promise.resolve(true);
-  return new Promise(res=>{
-    const sc=document.createElement('script');
-    const fin=ok=>{clearTimeout(t);res(ok);};
-    const t=setTimeout(()=>res(false),8000);
-    sc.src='https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js';
-    sc.onload=()=>fin(!!window.mammoth);sc.onerror=()=>fin(false);
-    document.head.appendChild(sc);
-  });
-}
 function avecDelai(p,ms){return Promise.race([p,new Promise(r=>setTimeout(()=>r(null),ms))]);}
-async function afficherDocument(){
+/* Le signataire lit le document ORIGINAL (mise en page d'origine) : un Word est
+   affiché par la visionneuse Office en ligne (fichier public du stockage), un PDF
+   directement. Aucune conversion de notre côté. Le lien « Ouvrir le document
+   d'origine » reste disponible si la visionneuse ne s'affiche pas. */
+function afficherDocument(){
   const box=document.getElementById('docbox');
   if(!box||!DOC)return;
   const ext=(String(DOC.fichier_url).split('?')[0].split('.').pop()||'').toLowerCase();
-  try{
-    if(ext==='docx'&&await chargerMammoth()){
-      const r=await fetch(DOC.fichier_url);
-      if(!r.ok)throw new Error('HTTP '+r.status);
-      const res=await window.mammoth.convertToHtml({arrayBuffer:await r.arrayBuffer()});
-      box.innerHTML=res.value||'<p>Document vide.</p>';
-    }else if(ext==='pdf'){
-      box.style.padding='0';
-      box.innerHTML='<iframe src="'+esc(DOC.fichier_url)+'" style="width:100%;height:42vh;border:0;border-radius:14px"></iframe>';
-    }else{
-      box.textContent='Aperçu indisponible pour ce format : utilisez le lien « Ouvrir le document » ci-dessus.';
-    }
-  }catch(e){
-    console.warn('apercu document',e);
-    box.textContent='Aperçu indisponible : utilisez le lien « Ouvrir le document » ci-dessus.';
+  let src=null;
+  if(ext==='docx'||ext==='doc')src='https://view.officeapps.live.com/op/embed.aspx?src='+encodeURIComponent(DOC.fichier_url);
+  else if(ext==='pdf')src=DOC.fichier_url;
+  if(!src){
+    box.textContent='Aperçu indisponible pour ce format : utilisez le lien « Ouvrir le document d’origine » ci-dessus.';
+    return;
   }
+  box.style.padding='0';box.style.maxHeight='none';box.style.overflow='hidden';
+  box.innerHTML='<iframe title="Document à signer" src="'+esc(src)+'" style="width:100%;height:62vh;min-height:360px;border:0;border-radius:14px;background:#fff"></iframe>';
 }
 
 function renderCode(){
@@ -204,8 +187,9 @@ async function verifierCode(){
 
 function renderPad(){
   const lecture=DOC?`
-    <a class="dl" href="${esc(DOC.fichier_url)}" target="_blank" rel="noopener">📄 Ouvrir le document</a>
+    <a class="dl" href="${esc(DOC.fichier_url)}" target="_blank" rel="noopener">📄 Ouvrir le document d’origine</a>
     <div class="docbox" id="docbox">Chargement du document…</div>
+    <p class="tip" style="margin:-4px 0 10px;text-align:left">Le document s’affiche ci-dessus. S’il reste vide, touchez « Ouvrir le document d’origine ».</p>
     <label class="lu"><input type="checkbox" id="lu"> J’ai pris connaissance de ce document et je le signe.</label>`:'';
   card.innerHTML=`
     <h1>Signature</h1>
