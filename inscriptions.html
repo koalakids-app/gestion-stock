@@ -919,6 +919,7 @@ async function choisirPdfImport(ev){
   try{
     const lignes=await pdfImportExtraire(f);
     PDFIMPORT_LIGNES=lignes.map(pdfImportInterpreter);
+    pdfImportMarquerDoublons();
     if(!PDFIMPORT_LIGNES.length){
       statut.textContent="Aucune ligne n'a pu être reconnue dans ce PDF. Vérifiez qu'il s'agit bien d'un export « Liste inscriptions/préinscriptions ».";
       return;
@@ -1084,6 +1085,29 @@ function pdfImportInterpreter(l){
   };
 }
 
+/* Détection de doublons : une ligne est un doublon si un enfant de même nom,
+   prénom (ordre et accents ignorés) et même date de naissance existe déjà dans
+   les demandes, ou plus haut dans le même PDF. Elle est signalée et décochée,
+   jamais retirée : on peut la recocher si c'est volontaire (vrai homonyme). */
+function pdfImportCle(prenom,nom,dob){
+  const mots=(String(prenom||'')+' '+String(nom||'')).normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).sort().join(' ');
+  return mots?mots+'|'+(dob||''):'';
+}
+function pdfImportMarquerDoublons(){
+  const vus={};
+  PRE.forEach(p=>{const k=pdfImportCle(p.prenom,p.nom,p.dob);if(k)vus[k]='base';});
+  PDFIMPORT_LIGNES.forEach(r=>{
+    const k=pdfImportCle(r.prenom,r.nom,r.dob);
+    r.doublon=k&&vus[k]?vus[k]:'';
+    if(k&&!vus[k])vus[k]='pdf';
+    if(r.doublon)r.inclus=false;
+  });
+}
+function pdfImportLibelleDoublon(r){
+  return r.doublon==='base'?'déjà présent dans les demandes':r.doublon==='pdf'?'déjà présent plus haut dans ce PDF':'';
+}
+
 /* Le filtre de date ne retire jamais une ligne de la liste : il la décoche et,
    si la case « masquer » est cochée, l'efface simplement de l'affichage. Une
    ligne sans date d'entrée renseignée reste visible et cochable — impossible
@@ -1108,6 +1132,7 @@ function renderPdfImportListe(){
     return '<div class="pdfrow'+(r.inclus?'':' off')+'" id="pdfrow'+i+'">'
       +'<div class="hd"><input type="checkbox" '+(r.inclus?'checked':'')+' onchange="pdfImportToggle('+i+',this.checked)">'
       +'<b>Ligne n°'+esc(r.ordre)+'</b>'+(r.suspect?'<span class="flag">ressemble à une ligne de test</span>':'')
+      +(r.doublon?'<span class="flag" id="pdfdup'+i+'">doublon : '+pdfImportLibelleDoublon(r)+'</span>':'')
       +(r.horsFiltre?'<span class="flag" style="color:var(--muted);background:#F1EFF7">avant le filtre de date</span>':'')+'</div>'
       +'<div class="g">'
       +'<div><label>Prénom enfant</label><input value="'+esc(r.prenom)+'" oninput="pdfImportMaj('+i+',\'prenom\',this.value)"></div>'
@@ -1129,7 +1154,25 @@ function renderPdfImportListe(){
   pdfImportMajCompte();
 }
 
-function pdfImportMaj(i,champ,v){PDFIMPORT_LIGNES[i][champ]=v;}
+function pdfImportMaj(i,champ,v){
+  PDFIMPORT_LIGNES[i][champ]=v;
+  if(champ==='prenom'||champ==='nom'||champ==='dob'){
+    // Re-vérifie sans toucher aux cases cochées à la main ni re-dessiner la
+    // liste (la saisie en cours perdrait le focus) : seul le badge est mis à jour.
+    const cochees=PDFIMPORT_LIGNES.map(r=>r.inclus);
+    pdfImportMarquerDoublons();
+    PDFIMPORT_LIGNES.forEach((r,k)=>{
+      r.inclus=cochees[k];
+      const hd=document.querySelector('#pdfrow'+k+' .hd');
+      if(!hd)return;
+      let b=document.getElementById('pdfdup'+k);
+      if(r.doublon){
+        if(!b){b=document.createElement('span');b.className='flag';b.id='pdfdup'+k;hd.appendChild(b);}
+        b.textContent='doublon : '+pdfImportLibelleDoublon(r);
+      }else if(b)b.remove();
+    });
+  }
+}
 function pdfImportMajParent(i,champ,v){
   const r=PDFIMPORT_LIGNES[i];
   if(!r.parents.length)r.parents.push({prenom:'',nom:'',email:'',telephone:''});
