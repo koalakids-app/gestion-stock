@@ -6476,6 +6476,16 @@ async function sdEnvoyer(id){
       .then(r=>{if(r==='copie')toast('Partage indisponible — lien copié.');});};
     box.appendChild(pt);
   }
+  // E-mail : mailto ouvre la messagerie (Outlook…) avec objet et texte rédigés ; le corps
+  // se place avant la signature automatique, contrairement à la feuille de partage.
+  const prenom=((d.signataire_nom||'').trim().split(/\s+/)[0])||'';
+  const mail=document.createElement('a');
+  mail.className='btn btn-s';mail.style.cssText='margin-left:6px;text-decoration:none';
+  mail.href='mailto:?subject='+encodeURIComponent('Document à signer : '+d.titre)
+    +'&body='+encodeURIComponent('Bonjour'+(prenom?' '+prenom:'')+',\r\n\r\nMerci de lire puis signer le document « '+d.titre
+      +' » en ouvrant ce lien :\r\n\r\n'+url+'\r\n\r\nCe lien est valable 7 jours.\r\n\r\nCordialement,');
+  mail.innerHTML='<i class="ti ti-mail"></i> E-mail';
+  box.appendChild(mail);
   const wa=document.createElement('a');
   wa.className='btn btn-s';wa.style.cssText='margin-left:6px;text-decoration:none';
   wa.target='_blank';wa.rel='noopener';
