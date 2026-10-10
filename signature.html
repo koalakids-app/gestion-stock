@@ -128,6 +128,14 @@ function avecDelai(p,ms){return Promise.race([p,new Promise(r=>setTimeout(()=>r(
    affiché par la visionneuse Office en ligne (fichier public du stockage), un PDF
    directement. Aucune conversion de notre côté. Le lien « Ouvrir le document
    d'origine » reste disponible si la visionneuse ne s'affiche pas. */
+/* Lien « Ouvrir » : un Word ouvert directement se télécharge sur téléphone ; on l'ouvre
+   donc dans la visionneuse Office en plein écran. Un PDF s'ouvre directement. */
+function urlOuverture(){
+  const ext=(String(DOC.fichier_url).split('?')[0].split('.').pop()||'').toLowerCase();
+  return(ext==='docx'||ext==='doc')
+    ?'https://view.officeapps.live.com/op/view.aspx?src='+encodeURIComponent(DOC.fichier_url)
+    :DOC.fichier_url;
+}
 function afficherDocument(){
   const box=document.getElementById('docbox');
   if(!box||!DOC)return;
@@ -136,7 +144,7 @@ function afficherDocument(){
   if(ext==='docx'||ext==='doc')src='https://view.officeapps.live.com/op/embed.aspx?src='+encodeURIComponent(DOC.fichier_url);
   else if(ext==='pdf')src=DOC.fichier_url;
   if(!src){
-    box.textContent='Aperçu indisponible pour ce format : utilisez le lien « Ouvrir le document d’origine » ci-dessus.';
+    box.textContent='Aperçu indisponible pour ce format : utilisez le lien « Ouvrir le document d’origine en plein écran » ci-dessus.';
     return;
   }
   box.style.padding='0';box.style.maxHeight='none';box.style.overflow='hidden';
@@ -187,9 +195,9 @@ async function verifierCode(){
 
 function renderPad(){
   const lecture=DOC?`
-    <a class="dl" href="${esc(DOC.fichier_url)}" target="_blank" rel="noopener">📄 Ouvrir le document d’origine</a>
+    <a class="dl" href="${esc(urlOuverture())}" target="_blank" rel="noopener">📄 Ouvrir le document d’origine en plein écran</a>
     <div class="docbox" id="docbox">Chargement du document…</div>
-    <p class="tip" style="margin:-4px 0 10px;text-align:left">Le document s’affiche ci-dessus. S’il reste vide, touchez « Ouvrir le document d’origine ».</p>
+    <p class="tip" style="margin:-4px 0 10px;text-align:left">Le document s’affiche ci-dessus. S’il reste vide, touchez « Ouvrir le document d’origine en plein écran ».</p>
     <label class="lu"><input type="checkbox" id="lu"> J’ai pris connaissance de ce document et je le signe.</label>`:'';
   card.innerHTML=`
     <h1>Signature</h1>
