@@ -215,6 +215,30 @@ function renderPad(){
   document.getElementById('bv').onclick=send;
   afficherDocument();
   afficherQrMobile();
+  surveillerStatut();
+}
+
+/* Page restée ouverte pendant que la signature est faite ailleurs (téléphone après
+   scan du QR code) : on interroge régulièrement le statut du lien et on affiche
+   « Signature enregistrée » dès qu'elle est reçue. Arrêt dès qu'un état final est
+   affiché ; une erreur réseau est ignorée (nouvel essai au prochain tour). */
+let surveillance=null;
+function arreterSurveillance(){if(surveillance){clearInterval(surveillance);surveillance=null;}}
+function surveillerStatut(){
+  arreterSurveillance();
+  let enCours=false;
+  const verifier=async()=>{
+    if(enCours||!document.getElementById('c'))return;     // cadre plus affiché : rien à surveiller
+    enCours=true;
+    try{
+      const{data,error}=await sb.rpc('kk_sig_statut',{p_token:TOKEN});
+      if(error)return;
+      if(data==='signe'){arreterSurveillance();state('ok','Signature enregistrée','Ce document a été signé (depuis un autre appareil). Vous pouvez refermer cette page.');}
+      else if(data==='expire'||data==='inconnu'){arreterSurveillance();state('err','Lien expiré','Ce lien n\u2019est plus valable. Demandez-en un nouveau.');}
+    }finally{enCours=false;}
+  };
+  surveillance=setInterval(verifier,4000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)verifier();});
 }
 
 /* Sur ordinateur : QR code de cette même page, à scanner pour signer au doigt sur
@@ -282,6 +306,7 @@ async function send(){
   if(data!==true){
     return state('err','Lien expiré','Ce lien n\u2019est plus valable ou une signature a déjà été déposée. Demandez-en un nouveau.');
   }
+  arreterSurveillance();
   state('ok','Signature enregistrée','Vous pouvez refermer cette page.');
 }
 
