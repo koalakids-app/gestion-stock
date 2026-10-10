@@ -87,6 +87,8 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .stat .l{font-size:11px;font-weight:700;color:var(--muted)}
 .stat .d{font-size:10.5px;font-weight:600;color:var(--muted);opacity:.85;line-height:1.3}
 .stat .s{font-size:10.5px;font-weight:800;color:var(--orange);margin-top:3px}
+.stat.av{border-style:dashed;border-color:var(--violet)}
+.stat.av .n{color:var(--green)}
 .statscap{font-size:12px;color:var(--muted);margin:0 0 6px;line-height:1.5}
 .card{background:#fff;border:2px solid var(--line);border-radius:18px;padding:13px 15px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
 .card:hover{border-color:#DED6EE}
@@ -655,6 +657,22 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <button class="btn btn-g" onclick="closeOv('ovCloture')">Fermer</button>
       <button class="btn btn-p" id="btnClGo" style="display:none" onclick="cloturerSelection()"><i class="ti ti-archive"></i> Passer la sélection en « Sans suite »</button>
     </div>
+  </div>
+</div>
+
+<!-- ENTRÉES À VENIR (enfants au contrat, pas encore arrivés) -->
+<div class="ov" id="ovEntrees">
+  <div class="md" style="max-width:900px">
+    <h3><i class="ti ti-door-enter"></i> Entrées à venir</h3>
+    <p class="hint">Des <b>enfants déjà inscrits</b> (fiche enfant et ligne d'accueil créées) dont l'accueil <b>n'a pas encore
+      commencé</b>. À ne pas confondre avec les <b>préinscriptions</b> (« Nouvelle », « Devis envoyé »…), qui sont de simples
+      demandes de place, sans contrat.</p>
+    <div class="bar">
+      <select id="enCreche" style="width:auto;min-width:170px" onchange="renderEntrees()"></select>
+      <span class="hint" style="margin:0" id="enCompte"></span>
+    </div>
+    <div id="enListe" style="max-height:55vh;overflow:auto"></div>
+    <div class="acts"><button class="btn btn-g" onclick="closeOv('ovEntrees')">Fermer</button></div>
   </div>
 </div>
 
@@ -1613,6 +1631,83 @@ async function cloturerSelection(){
   rechercherCloture();
 }
 
+/* ---------- ENTRÉES À VENIR ----------
+   Un enfant « à venir » n'est pas une préinscription : la famille a signé, la
+   fiche existe, seul l'accueil n'a pas commencé. La date d'entrée de la fiche
+   enfant est trop souvent vide (ou fausse) pour s'y fier : on lit le début de
+   la ligne d'accueil, qui est ce que les présences et la facturation utilisent. */
+let ENTREES=[],ENTREES_CHARGEES=false;
+
+async function chargerEntrees(){
+  try{
+    const[en,li,ct]=await Promise.all([
+      sb.from('enfants').select('id,prenom,nom,dob,creche_id,date_entree'),
+      sb.from('enfants_contrats').select('enfant_id,date_debut,date_fin'),
+      sb.from('contrats').select('enfant_id,statut,origine,type,date_debut')
+    ]);
+    if(en.error)throw en.error;
+    if(li.error)throw li.error;
+    const aujourdhui=auj();
+    const lignes={},contrats={};
+    (li.data||[]).forEach(l=>{(lignes[l.enfant_id]=lignes[l.enfant_id]||[]).push(l);});
+    ((ct&&ct.data)||[]).forEach(c=>{if(c.enfant_id)(contrats[c.enfant_id]=contrats[c.enfant_id]||[]).push(c);});
+    ENTREES=(en.data||[]).map(e=>{
+      const ls=lignes[e.id]||[];
+      const enCours=ls.some(l=>String(l.date_debut).slice(0,10)<=aujourdhui
+        &&(!l.date_fin||String(l.date_fin).slice(0,10)>=aujourdhui));
+      if(enCours)return null;
+      const futures=ls.map(l=>String(l.date_debut).slice(0,10)).filter(d=>d>aujourdhui).sort();
+      let entree=futures[0]||'';
+      // Sans ligne d'accueil : la date de la fiche, si elle est plausible.
+      if(!entree&&/^\d{4}-\d{2}-\d{2}$/.test(String(e.date_entree||''))&&String(e.date_entree)>aujourdhui)entree=String(e.date_entree);
+      if(!entree)return null;
+      const cts=(contrats[e.id]||[]).filter(c=>c.type!=='avenant');
+      const complet=cts.find(c=>c.statut==='contresigne');
+      const etat=complet?(complet.origine==='reprise'?'Contrat repris':'Contrat contresigné')
+        :(cts.find(c=>['signe','envoye','brouillon'].indexOf(c.statut)>=0)?'Contrat en cours de signature':'Pas de contrat dans l\'appli');
+      return {e,entree,etat,ok:!!complet};
+    }).filter(Boolean).sort((a,b)=>a.entree.localeCompare(b.entree));
+    ENTREES_CHARGEES=true;
+  }catch(err){
+    console.warn('[chargerEntrees]',err);
+    ENTREES=[];ENTREES_CHARGEES=false;
+  }
+  render();
+}
+
+function tuileEntrees(cre){
+  if(!ENTREES_CHARGEES)return '';
+  const n=ENTREES.length;
+  const ici=cre?ENTREES.filter(x=>String(x.e.creche_id)===String(cre)).length:0;
+  return '<div class="stat av" onclick="openEntrees()" title="Enfants déjà inscrits (fiche et ligne d\'accueil) dont l\'accueil n\'a pas encore commencé — toutes crèches. Ce ne sont pas des préinscriptions.">'
+    +'<div class="n">'+n+'</div><div class="l">Entrées à venir</div>'
+    +'<div class="d">déjà inscrits, pas encore arrivés</div>'+(cre?'<div class="s">dont '+ici+' ici</div>':'')+'</div>';
+}
+
+function openEntrees(){
+  document.getElementById('enCreche').innerHTML='<option value="">Toutes les crèches</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  setVal('enCreche',val('fCreche'));
+  renderEntrees();
+  openOv('ovEntrees');
+}
+function renderEntrees(){
+  const cre=val('enCreche');
+  const L=ENTREES.filter(x=>!cre||String(x.e.creche_id)===String(cre));
+  document.getElementById('enCompte').textContent=L.length+' enfant'+(L.length>1?'s':'')+' à venir';
+  document.getElementById('enListe').innerHTML=L.length?L.map(x=>{
+    const e=x.e;
+    const nom=((e.prenom||'')+' '+(e.nom||'')).trim()||'Sans nom';
+    const naiss=e.dob?'né(e) le '+dfr(e.dob):'naissance non renseignée';
+    return '<div class="hl"><div class="t">'
+      +'<span class="n">'+esc(nom)+'</span><span class="c">'+esc(naiss)+' · '+esc(nomCreche(e.creche_id)||'crèche non précisée')
+      +' · <b>entrée le '+dfr(x.entree)+'</b></span>'
+      +'<span class="tag" style="background:'+(x.ok?'var(--green-l)':'var(--amber-l)')+';color:'+(x.ok?'var(--green)':'var(--amber)')+'">'+esc(x.etat)+'</span>'
+      +'<a class="btn btn-s btn-sm" href="contrats.html?enfant='+esc(e.id)+'">Dossier contrat</a>'
+      +'</div></div>';
+  }).join(''):'<p class="hint">Aucune entrée à venir pour cette sélection.</p>';
+}
+
 /* Date locale, jamais toISOString() : en UTC+2 celui-ci renvoie la veille pour
    tout ce qui est saisi avant 2h du matin. */
 function auj(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -1852,6 +1947,7 @@ async function loadAll(){
   sel.innerHTML='<option value="">Toutes les crèches</option>'
     +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   render();
+  chargerEntrees();
   ouvrirDepuisUrl();
 }
 
@@ -1884,6 +1980,7 @@ async function actualiser(auto){
     PRE=data||[];
     ACTU_DERNIERE=Date.now();
     render();
+    chargerEntrees();
     if(nouvelles)toast(nouvelles+' nouvelle'+(nouvelles>1?'s':'')+' demande'+(nouvelles>1?'s':'')+' 🔔');
     else if(!auto)toast('Liste à jour ✅');
   }catch(e){
@@ -1939,7 +2036,7 @@ function render(){
   const sousLigne=n=>cre?'<div class="s">dont '+n+' ici</div>':'';
   const nomCre=cre?(nomCreche(cre)||'cette crèche'):'';
   document.getElementById('statsCap').innerHTML='<b>Nombre de demandes par statut, toutes crèches confondues.</b> '
-    +'Cliquez sur un statut pour filtrer la liste.'
+    +'Cliquez sur un statut pour filtrer la liste. La tuile en pointillés « Entrées à venir » compte des enfants déjà inscrits, pas des préinscriptions.'
     +(cre?' <span style="color:var(--orange);font-weight:700">« dont N ici » = '+esc(nomCre)+', la crèche choisie dans le filtre.</span>':'');
   box.innerHTML=
     '<div class="stat'+(filtreStatut==='__tous__'?' on':'')+'" onclick="setStatut(\'__tous__\')" title="Toutes les demandes, tous statuts et toutes crèches">'
@@ -1952,7 +2049,7 @@ function render(){
         +'<div class="n">'+n+'</div><div class="l">'+esc(STATUTS[s].l)+'</div>'
         +'<div class="d">'+esc(AIDE_STATUT[s]||'')+'</div>'
         +sousLigne(cre?PRE.filter(p=>p.statut===s&&dansCreche(p)).length:0)+'</div>';
-    }).join('');
+    }).join('')+tuileEntrees(cre);
 
   /* Ces trois boutons filtrent la liste, qui suit la crèche choisie : leurs
      chiffres comptent donc la même chose — ce que la liste montrera au clic.
