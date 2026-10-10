@@ -3,8 +3,8 @@
 -- ============================================================================
 -- * doc_categories.signature_distance : les documents « à télécharger » de ces
 --   catégories (et de leurs sous-catégories) proposent « Envoyer pour signature ».
---   Activé pour : Protocoles obligatoires, Protocoles médicaux, Protocoles règles
---   d'hygiène. (Les documents marqués documents_koala.signature_distance restent
+--   Activé pour : Protocoles obligatoires, médicaux, règles d'hygiène, situations
+--   urgences, sorties. (Les documents marqués documents_koala.signature_distance restent
 --   éligibles, ex. protocoles sorties / situations d'urgence d'Ollioules.)
 -- * doc_signataires : personnes à qui l'on peut envoyer un document à signer,
 --   avec le périmètre de crèches dont elles sont responsables.
@@ -60,7 +60,9 @@ update public.doc_categories set signature_distance = true
  where id in (
    '4291c83e-30df-47f4-8696-d1f15c365427',  -- Protocoles obligatoires
    'ee018c7f-49d6-4eb6-aaf0-5048e15800a8',  -- Protocoles médicaux
-   'e06a195f-b685-4c76-a612-0f46841ddff4'   -- Protocoles règles d'hygiène
+   'e06a195f-b685-4c76-a612-0f46841ddff4',  -- Protocoles règles d'hygiène
+   '21f0b1cb-303f-4fa6-9ff2-7344afeb7398',  -- Protocoles situations urgences
+   '6ad25a52-2f68-41cb-9b52-87003453bdc3'   -- Protocole sorties
  );
 
 -- Adresses e-mail : reprises de la table `partenaires` (même nom), uniquement si
