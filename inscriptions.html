@@ -276,11 +276,11 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
         <option value="creation">Trier par date d'ajout</option>
         <option value="debut">Trier par date de début souhaitée</option>
       </select>
-      <button class="btn btn-s btn-sm" id="btnRappels" onclick="toggleRappels()"><i class="ti ti-bell"></i> Relances en retard <span id="nRappels"></span></button>
-      <button class="btn btn-s btn-sm" id="btnRelancesAVenir" onclick="toggleRelancesAVenir()"><i class="ti ti-calendar-time"></i> Relances à venir <span id="nRelancesAVenir"></span></button>
-      <button class="btn btn-s btn-sm" id="btnVisites" onclick="toggleVisites()"><i class="ti ti-door-enter"></i> Visites <span id="nVisites"></span></button>
-      <button class="btn btn-s btn-sm" onclick="openLienPrein()"><i class="ti ti-link"></i> Lien de préinscription</button>
-      <button class="btn btn-p" onclick="openFiche(null)"><i class="ti ti-plus"></i> Nouvelle demande</button>
+      <button class="btn btn-s btn-sm" id="btnRappels" onclick="toggleRappels()"><i class="ti ti-bell"></i> À relancer <span id="nRappels"></span></button>
+      <button class="btn btn-s btn-sm" id="btnRelancesAVenir" onclick="toggleRelancesAVenir()"><i class="ti ti-calendar-time"></i> Relances programmées <span id="nRelancesAVenir"></span></button>
+      <button class="btn btn-s btn-sm" id="btnVisites" onclick="toggleVisites()"><i class="ti ti-door-enter"></i> Visites prévues <span id="nVisites"></span></button>
+      <button class="btn btn-s btn-sm" onclick="openLienPrein()" title="Copier ou partager le lien du formulaire en ligne que les familles remplissent elles-mêmes"><i class="ti ti-link"></i> Lien à envoyer aux familles</button>
+      <button class="btn btn-p" onclick="openFiche(null)" title="Saisir à la main une demande reçue par téléphone, sur place ou par mail"><i class="ti ti-plus"></i> Saisir une demande</button>
     </div>
 
     <div id="list"></div>
@@ -1954,15 +1954,23 @@ function render(){
         +sousLigne(cre?PRE.filter(p=>p.statut===s&&dansCreche(p)).length:0)+'</div>';
     }).join('');
 
-  const nR=PRE.filter(estARelancer).length;
+  /* Ces trois boutons filtrent la liste, qui suit la crèche choisie : leurs
+     chiffres comptent donc la même chose — ce que la liste montrera au clic.
+     Compter toutes les crèches ici affichait « (1) » devant une liste vide. */
+  const portee=cre?nomCre:'toutes les crèches';
+  const dansPortee=p=>!cre||dansCreche(p);
+  const nR=PRE.filter(p=>dansPortee(p)&&estARelancer(p)).length;
   document.getElementById('nRappels').textContent=nR?'('+nR+')':'';
   document.getElementById('btnRappels').className='btn btn-sm '+(filtreRappels?'btn-p':'btn-s');
-  const nA=PRE.filter(aRelanceAvenir).length;
+  document.getElementById('btnRappels').title='Demandes ouvertes dont la date de rappel est atteinte ou dépassée : la famille est à rappeler — '+portee;
+  const nA=PRE.filter(p=>dansPortee(p)&&aRelanceAvenir(p)).length;
   document.getElementById('nRelancesAVenir').textContent=nA?'('+nA+')':'';
   document.getElementById('btnRelancesAVenir').className='btn btn-sm '+(filtreRelancesAVenir?'btn-p':'btn-s');
-  const nV=PRE.filter(aVisitePrevue).length;
+  document.getElementById('btnRelancesAVenir').title='Demandes ouvertes avec un rappel programmé à une date future — '+portee;
+  const nV=PRE.filter(p=>dansPortee(p)&&aVisitePrevue(p)).length;
   document.getElementById('nVisites').textContent=nV?'('+nV+')':'';
   document.getElementById('btnVisites').className='btn btn-sm '+(filtreVisites?'btn-p':'btn-s');
+  document.getElementById('btnVisites').title='Demandes ouvertes avec une visite planifiée, pas encore effectuée — '+portee;
 
   let l=PRE.slice();
   /* Une demande basculée sort de la file active : le dossier est traité, et le
@@ -5397,7 +5405,7 @@ const NOTICE_INS=`
 <p style="margin-top:10px"><b>Le cycle d'une demande.</b> Nouvelle → En contact → Devis envoyé → Devis accepté → Inscrit. Les statuts Refusé et Sans suite ferment le dossier sans le supprimer : l'historique des demandes reste consultable.</p>
 <p style="margin-top:10px"><b>Le statut « Inscrit »</b> ne se pose pas à la main. Il s'appliquera automatiquement au moment de la bascule en fiche enfant, une fois le contrat signé — c'est ce qui garantit qu'une demande marquée traitée est bien rattachée à un enfant réel.</p>
 <p style="margin-top:10px"><b>Crèches souhaitées et crèche retenue.</b> La famille peut en viser plusieurs ; la crèche retenue ne se renseigne qu'une fois la place attribuée. Les autres choix sont conservés : si une place se libère ailleurs, l'information est encore là.</p>
-<p style="margin-top:10px"><b>Les relances.</b> Renseignez une date de rappel : la demande remonte dans « Relances en retard » le jour venu. Les dossiers clos en sont exclus.</p>
+<p style="margin-top:10px"><b>Les relances.</b> Renseignez une date de rappel : la demande remonte dans « À relancer » le jour venu (et se trouve dans « Relances programmées » d'ici là). Les dossiers clos en sont exclus.</p>
 <p style="margin-top:10px"><b>Les revenus.</b> Ils ne servent qu'à estimer le CMG. Une fois le dossier clos, ils peuvent être effacés en base — l'estimation, elle, est conservée.</p>
 <p style="margin-top:10px"><b>Les tarifs et les frais.</b> Le bouton « Tarifs » de la barre du haut ouvre la grille. Un tarif d'accueil s'applique sur une fourchette horaire — borne basse incluse, borne haute exclue, de sorte qu'un contrat de 40 h pile ne puisse jamais relever de deux lignes à la fois. Les frais et les réductions se saisissent tous en montant positif : c'est la case « réduction » qui fait qu'une ligne se soustrait.</p>
 <p style="margin-top:10px"><b>Sauvegarder la grille.</b> En bas de cette même fenêtre, « Exporter » télécharge un fichier .json daté contenant tous les tarifs et tous les frais. Conservez-le hors de l'application : il permet de retrouver la grille si une ligne est écrasée ou supprimée par erreur. « Restaurer » relit ce fichier et présente les écarts avant d'écrire quoi que ce soit ; les lignes créées depuis l'export ne sont jamais supprimées.</p>
