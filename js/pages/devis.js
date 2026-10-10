@@ -1,0 +1,607 @@
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const FN=SUPABASE_URL+"/functions/v1/dossier-devis";
+
+/* Le lien n'ouvre qu'une session courte (js/session-lien.js) : jeton retiré de l'adresse,
+   fermeture après inactivité, avertissement avant la fin. */
+const TOKEN = SessionLien.init({url:FN,anonKey:SUPABASE_ANON_KEY});
+let D=null;
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+/* Le libellé de la tranche tarifaire ("Plus de 40 heures par semaine"…) est
+   un repère interne à la direction ; la famille voit « Frais de garde ». */
+function libelleLigne(l){return l.type==='accueil'?'Frais de garde':l.libelle;}
+function eur(n){
+  const v=Math.round(Number(n||0)*100)/100;
+  const p=Math.abs(v).toFixed(2).replace('.',',').split(',');
+  return (v<0?'− ':'')+p[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ')+','+p[1]+' €';
+}
+function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
+const JOURS=[[1,'lundi'],[2,'mardi'],[3,'mercredi'],[4,'jeudi'],[5,'vendredi']];
+function nb(n){return String(Math.round(Number(n||0)*100)/100).replace('.',',');}
+function joursSet(v){
+  let j=v;
+  if(typeof j==='string'){try{j=JSON.parse(j);}catch(e){j=[];}}
+  return Array.isArray(j)?j.map(Number):[];
+}
+function dureeMin(hd,hf){
+  if(!hd||!hf)return 0;
+  const a=hd.split(':').map(Number),b=hf.split(':').map(Number);
+  const mins=(b[0]*60+b[1])-(a[0]*60+a[1]);
+  return mins>0?mins:0;
+}
+function fmtDuree(mins){return Math.floor(mins/60)+'h'+String(mins%60).padStart(2,'0');}
+function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+/* Le récap semaine type, à la Gertrude : un jour par ligne, présence à zéro
+   pour les jours non accueillis, pour que la famille visualise sa semaine
+   d'un coup d'œil plutôt que de déduire les horaires du volume hebdomadaire. */
+function recapSemaine(d){
+  const jset=joursSet(d.jours);
+  let totalMin=0;
+  const lignes=JOURS.map(([num,nom])=>{
+    const actif=jset.indexOf(num)>=0;
+    const mins=actif?dureeMin(d.heure_debut,d.heure_fin):0;
+    totalMin+=mins;
+    return '<tr><td>'+cap(nom)+'</td><td>'+(actif?esc(d.heure_debut||''):'')
+      +'</td><td>'+(actif?esc(d.heure_fin||''):'')+'</td><td class="m">'+fmtDuree(mins)+'</td></tr>';
+  }).join('');
+  return '<table class="lg recap"><tr><th>Jours de la semaine</th><th>Heure d\'arrivée</th>'
+    +'<th>Heure de départ</th><th class="m">Nombre heures de présence</th></tr>'
+    +lignes+'<tr class="tot"><td colspan="3">Total</td><td class="m">'+fmtDuree(totalMin)+'</td></tr></table>';
+}
+function joursTxt(v){
+  const j=joursSet(v);
+  return JOURS.filter(x=>j.indexOf(x[0])>=0).map(x=>x[1]).join(', ');
+}
+
+/* ---------- Téléchargement du devis en PDF ---------- */
+/* jsPDF n'est chargé qu'au premier clic : la page reste 100% autonome tant
+   que personne ne demande le PDF, et un CDN indisponible n'empêche jamais de
+   signer — seul le bouton de téléchargement échoue, proprement. Le dessin
+   reprend celui d'inscriptions.html (mêmes couleurs, même mise en page) pour
+   que le PDF envoyé ressemble à celui que la direction imprime. */
+const JSPDF_URL='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+function chargeJsPdf(){
+  if(window.jspdf&&window.jspdf.jsPDF)return Promise.resolve();
+  return new Promise((ok,ko)=>{
+    const s=document.createElement('script');
+    s.src=JSPDF_URL;
+    s.onload=()=>(window.jspdf&&window.jspdf.jsPDF)?ok():ko(new Error('jsPDF chargé mais introuvable.'));
+    s.onerror=()=>ko(new Error('jsPDF n\'a pas pu être téléchargé — vérifiez votre connexion.'));
+    document.head.appendChild(s);
+  });
+}
+function dessinerDevisPdf(){
+  const d=D.devis,e=D.enfant||{},c=D.creche||{},et=D.etablissement||{},rz=D.reseau||{};
+  const jsPDF=window.jspdf.jsPDF;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const G=16,DR=194,L=DR-G,BAS=278;
+  let y=0;
+  const VIOLET=[74,63,159],ORANGE=[244,121,32],GRIS=[142,138,168],
+        NOIR=[43,39,64],VERT=[46,158,107],TRAIT=[228,222,240];
+
+  function police(t,s,col){doc.setFontSize(t);doc.setFont('helvetica',s||'normal');
+    const k=col||NOIR;doc.setTextColor(k[0],k[1],k[2]);}
+  function trait(col){const k=col||TRAIT;doc.setDrawColor(k[0],k[1],k[2]);doc.setLineWidth(.3);doc.line(G,y,DR,y);}
+  function place(h){if(y+h>BAS){doc.addPage();y=20;}}
+  function para(s,t,st,col,larg,inter){
+    if(s==null||String(s).trim()==='')return;
+    police(t||9.5,st,col);
+    doc.splitTextToSize(String(s),larg||L).forEach(l=>{
+      place(inter||4.4);
+      doc.text(l,G,y);y+=(inter||4.4);
+    });
+  }
+  function titreSection(s){
+    place(9);y+=2.5;
+    police(9,'bold',ORANGE);doc.text(s.toUpperCase(),G,y);
+    y+=1.2;trait();y+=2.5;
+  }
+
+  /* ---- En-tête : l'établissement, puis la crèche d'accueil ---- */
+  /* Le logo est repris tel quel du <img> de l'en-tête (data URI déjà en
+     mémoire) : pas de second base64 à maintenir dans ce fichier. */
+  y=18;
+  const logoImg=document.querySelector('.hd img.logo');
+  let yNom=y;
+  if(logoImg&&logoImg.src){
+    const logoH=8.2,logoW=logoH*(365/138);
+    try{doc.addImage(logoImg.src,'PNG',G,12,logoW,logoH);}catch(err){}
+    yNom=12+logoH+4.5;
+  }else{
+    police(15,'bold',VIOLET);doc.text(et.raison_sociale||'Koala Kids',G,y);
+    yNom=y+4.8;
+  }
+  y=yNom;
+  [et.forme_juridique,
+   et.adresse_siege,
+   et.siret?'SIRET '+et.siret:'',
+   [et.telephone,et.email].filter(Boolean).join('  ·  ')
+  ].filter(Boolean).forEach(t=>{police(8.5,'normal',GRIS);doc.text(t,G,y);y+=3.6;});
+
+  let yd=18;
+  const dr=(s,t,st,col)=>{if(!s)return;police(t,st,col);doc.text(String(s),DR,yd,{align:'right'});yd+=t<=8.5?3.6:4.8;};
+  dr(c.name||'',11,'bold',NOIR);
+  dr(c.addr||'',8.5,'normal',GRIS);
+  dr(et.pmi_numero?'Agrément PMI '+et.pmi_numero:'',8.5,'normal',GRIS);
+
+  y=Math.max(y,yd)+3;
+  trait(VIOLET);y+=6;
+
+  /* ---- Le titre ---- */
+  const titre='DEVIS '+(d.numero||'');
+  police(16,'bold',VIOLET);doc.text(titre,G,y);
+  const apresTitre=G+doc.getTextWidth(titre)+5;
+  if(d.revision>1){police(9.5,'normal',GRIS);doc.text('révision '+d.revision,apresTitre,y);}
+  y+=4.5;
+  police(9,'normal',GRIS);
+  doc.text('Envoyé le '+dfr(d.envoye_le)+(d.expire_le?'  ·  valable jusqu\'au '+dfr(d.expire_le):''),G,y);
+  y+=6;
+
+  /* ---- L'enfant ---- */
+  police(9,'bold',ORANGE);doc.text('L\'ENFANT',G,y);
+  y+=4;
+  const nomEnfant=((e.prenom||'')+' '+(e.nom||'')).trim()||'—';
+  police(9.5,'normal',NOIR);doc.text(nomEnfant,G,y);y+=4;
+  if(e.dob){
+    police(9.5,'normal',NOIR);
+    doc.text(e.ne_ou_a_naitre==='a_naitre'?'terme prévu le '+dfr(e.dob):'né(e) le '+dfr(e.dob),G,y);
+    y+=4;
+  }
+  y+=4;
+
+  /* ---- Le contrat proposé ---- */
+  titreSection('L\'accueil proposé');
+  const avecTerme=!!d.date_fin;
+  const contrat=[
+    ['Crèche',c.name||'—'],
+    ['Début de l\'accueil',d.date_debut?dfr(d.date_debut):'à convenir'],
+    ['Fin de l\'accueil',avecTerme?dfr(d.date_fin):'sans terme prévu'],
+    avecTerme
+      ? ['Jours facturés',(d.jours_accueil!=null?d.jours_accueil+' jours':'—')
+          +(d.mois_factures?' sur '+nb(d.mois_factures)+' mois':'')]
+      : ['Semaines facturées',d.semaines_an+' semaines par an']
+  ];
+  contrat.forEach(([k,v])=>{
+    place(3.8);
+    police(9,'normal',GRIS);doc.text(k,G,y);
+    police(9,'bold',NOIR);doc.text(String(v),G+52,y);
+    y+=3.8;
+  });
+  y+=1;
+
+  /* Le récap semaine, en tableau, pour visualiser la semaine d'un coup d'œil
+     plutôt que de déduire les horaires du volume hebdomadaire. Lignes
+     resserrées : sept lignes (entête + 5 jours + total) n'ont pas besoin
+     de la même hauteur qu'un tableau chiffré. */
+  const jset=joursSet(d.jours);
+  const colsSem=[46,42,42,48];
+  const xsSem=[G,G+colsSem[0],G+colsSem[0]+colsSem[1],G+colsSem[0]+colsSem[1]+colsSem[2]];
+  function ligneSemaine(cells,h,gras,taille){
+    place(h);
+    const top=y;
+    doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.25);
+    let xc=G;
+    colsSem.forEach(w=>{doc.rect(xc,top,w,h);xc+=w;});
+    police(taille||8,gras?'bold':'normal',NOIR);
+    const baseline=top+h-1.6;
+    cells.forEach((t,i)=>{
+      const align=i===colsSem.length-1?'right':'left';
+      const px=align==='right'?xsSem[i]+colsSem[i]-2:xsSem[i]+2;
+      doc.text(String(t),px,baseline,{align});
+    });
+    y=top+h;
+  }
+  ligneSemaine(['Jours de la semaine','Heure d\'arrivée','Heure de départ','Nombre heures de présences'],5,true,6.8);
+  let totalMinSem=0;
+  JOURS.forEach(([num,nom])=>{
+    const actif=jset.indexOf(num)>=0;
+    const mins=actif?dureeMin(d.heure_debut,d.heure_fin):0;
+    totalMinSem+=mins;
+    ligneSemaine([cap(nom),actif?(d.heure_debut||''):'',actif?(d.heure_fin||''):'',fmtDuree(mins)],4.2,false);
+  });
+  ligneSemaine(['Total','','',fmtDuree(totalMinSem)],4.8,true);
+  y+=1.2;
+  para(avecTerme
+    ? 'La mensualité répartit les '+(d.jours_accueil!=null?d.jours_accueil:'—')+' jours d\'accueil de '
+      +'la période sur '+nb(d.mois_factures||0)+' mensualités égales. Elle est identique chaque mois, '
+      +'y compris pendant les périodes de fermeture, déjà déduites du nombre de jours facturés.'
+    : 'La mensualité est lissée sur douze mois : elle est identique chaque mois, y compris '
+      +'pendant les semaines de fermeture, qui sont déjà déduites du nombre de semaines facturées.',
+    8.5,'italic',GRIS,L,4);
+
+  /* ---- Le détail chiffré ---- */
+  titreSection('Le détail de la mensualité');
+  const RECUR=['accueil','mensuel','unitaire'];
+  function unite(l){
+    if(l.type==='accueil')return d.tarif_mode==='horaire'?'h':(d.tarif_mode==='journee'?'j':'mois');
+    if(l.type==='unitaire')return 'j';
+    return '';
+  }
+  function detailLigne(l){
+    const q=Number(l.quantite);
+    if(!q||q===1)return '';
+    const u=unite(l);
+    return nb(Math.round(q*100)/100)+(u?' '+u:'')+' × '+eur(Math.abs(l.montant_unitaire));
+  }
+  function ligne(l){
+    const neg=Number(l.total)<0;
+    police(9.5,'normal',NOIR);
+    const nom=doc.splitTextToSize(String(libelleLigne(l)||''),82);
+    const des=l.description?doc.splitTextToSize(String(l.description),82):[];
+    const h=nom.length*4.3+des.length*3.6;
+    place(h+3);
+    nom.forEach((t,i)=>doc.text(t,G,y+i*4.3));
+    if(des.length){
+      police(8,'italic',GRIS);
+      des.forEach((t,i)=>doc.text(t,G,y+nom.length*4.3+i*3.6));
+    }
+    police(8.5,'normal',GRIS);
+    doc.text(detailLigne(l),G+86,y);
+    police(10,'bold',neg?VERT:NOIR);
+    doc.text((neg?'- ':'')+eur(Math.abs(l.total)),DR,y,{align:'right'});
+    y+=h+1.8;
+    trait();y+=2.4;
+  }
+  const lignes=D.lignes||[];
+  const recu=lignes.filter(l=>RECUR.indexOf(l.type)>=0);
+  const hors=lignes.filter(l=>RECUR.indexOf(l.type)<0);
+  if(!recu.length)para('Aucune ligne récurrente.',9.5,'italic',GRIS);
+  recu.forEach(ligne);
+
+  place(10);
+  y+=0.7;
+  police(11,'bold',VIOLET);doc.text('TOTAL MENSUEL',G,y);
+  doc.setFontSize(14);doc.text(eur(d.total_mensuel),DR,y,{align:'right'});
+  y+=3;trait(VIOLET);y+=3;
+
+  if(d.total_annuel){
+    place(5);
+    police(9,'normal',GRIS);
+    doc.text(avecTerme
+      ? 'Soit '+eur(d.total_annuel)+' sur la durée du contrat ('+nb(d.mois_factures||0)+' mensualités).'
+      : 'Soit '+eur(d.total_annuel)+' sur douze mois.',G,y);
+    y+=5;
+  }
+
+  if(hors.length){
+    titreSection('Hors mensualité');
+    hors.forEach(ligne);
+    para('Ces montants sont facturés en une seule fois ou une fois par an, en sus de la mensualité.',
+      8.5,'italic',GRIS,L,4);
+  }
+
+  /* ---- Le CMG ---- */
+  if(d.cmg_estime!=null){
+    titreSection('Estimation du complément de libre choix du mode de garde');
+    const bl=[['Coût mensuel',eur(d.total_mensuel),NOIR],
+              ['CMG estimé, versé par la CAF','- '+eur(d.cmg_estime),VERT]];
+    bl.forEach(([k,v,col])=>{
+      place(4.8);
+      police(9.5,'normal',GRIS);doc.text(k,G,y);
+      police(9.5,'bold',col);doc.text(v,DR,y,{align:'right'});
+      y+=4.8;
+    });
+    y+=0.7;trait();y+=4.2;
+    police(11,'bold',VIOLET);doc.text('RESTE À CHARGE MENSUEL',G,y);
+    doc.setFontSize(14);doc.text(eur(d.reste_a_charge),DR,y,{align:'right'});
+    y+=4.5;
+    para('Estimation indicative, calculée à partir des revenus communiqués par la famille et du '
+      +'barème CAF en vigueur. Seule la CAF détermine le montant réellement versé. La crèche ne '
+      +'perçoit pas le CMG : elle facture la mensualité ci-dessus.',8.5,'italic',GRIS,L,4);
+  }
+
+  /* ---- Le mot de la crèche ---- */
+  if(d.commentaire&&String(d.commentaire).trim()){
+    titreSection('Précisions');
+    para(d.commentaire,9.5,'normal',NOIR);
+  }
+
+  /* ---- Les mentions du réseau ---- */
+  const mentions=[rz.devis_mentions,rz.preavis_resiliation].filter(x=>x&&String(x).trim());
+  if(mentions.length||d.expire_le){
+    titreSection('Conditions');
+    if(d.expire_le)para('Ce devis est valable jusqu\'au '+dfr(d.expire_le)+'. Passé cette date, il devient '
+      +'caduc et un nouveau devis doit être établi.',9,'normal',NOIR,L,4);
+    mentions.forEach(m=>{y+=1;para(m,9,'normal',NOIR,L,4);});
+  }
+
+  /* ---- L'acceptation ---- */
+  /* La page publique ne renvoie jamais le tracé de signature déjà enregistré :
+     le PDF téléchargé depuis ici porte donc toujours un cadre à signer à la
+     main, y compris une fois le devis accepté en ligne. */
+  place(42);
+  y+=3;
+  titreSection('Acceptation');
+  const yc=y;
+  doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.4);
+  doc.roundedRect(G,yc-2,L,30,3,3);
+  y=yc+4;
+  police(9,'normal',GRIS);
+  doc.text('Écrire « Bon pour accord », dater et signer :',G+5,y);
+  y+=7;
+  doc.setDrawColor(210,204,230);doc.setLineWidth(.3);
+  doc.line(G+5,y+9,G+62,y+9);
+  doc.line(G+72,y+9,DR-5,y+9);
+  police(8,'normal',GRIS);
+  doc.text('Date',G+5,y+13);
+  doc.text('Signature du responsable légal',G+72,y+13);
+  y=yc+30+4;
+
+  /* ---- Pieds de page ---- */
+  const np=doc.getNumberOfPages();
+  const pied=[et.raison_sociale||'Koala Kids',
+              et.siret?'SIRET '+et.siret:'',
+              rz.pied_page||''].filter(Boolean).join('  ·  ');
+  for(let i=1;i<=np;i++){
+    doc.setPage(i);
+    doc.setDrawColor(TRAIT[0],TRAIT[1],TRAIT[2]);doc.setLineWidth(.3);
+    doc.line(G,285,DR,285);
+    doc.setFontSize(7.5);doc.setFont('helvetica','normal');
+    doc.setTextColor(GRIS[0],GRIS[1],GRIS[2]);
+    doc.text(doc.splitTextToSize(pied,L-24)[0]||'',G,289);
+    doc.text(i+' / '+np,DR,289,{align:'right'});
+  }
+
+  const enf=((e.prenom||'')+'-'+(e.nom||'')).replace(/[^A-Za-zÀ-ÿ0-9-]/g,'').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  doc.save('devis-'+(d.numero||'')+(enf?'-'+enf:'')+'.pdf');
+}
+async function telechargerPdf(){
+  const btn=document.getElementById('btnPdf');
+  if(btn){btn.disabled=true;btn.textContent='Préparation du PDF…';}
+  try{
+    await chargeJsPdf();
+    dessinerDevisPdf();
+  }catch(e){
+    message(esc(e.message||'Le PDF n\'a pas pu être généré.'));
+  }
+  if(btn){btn.disabled=false;btn.textContent='Télécharger le devis en PDF';}
+}
+
+function appel(action,extra){
+  return SessionLien.appel(action,extra);
+}
+
+function ecranSimple(emoji,titre,texte){
+  document.getElementById('wrap').innerHTML=
+    '<div class="center"><div class="big">'+emoji+'</div><h3>'+esc(titre)+'</h3><p>'+texte+'</p></div>';
+}
+
+/* ---------- L'affichage du devis ---------- */
+function rendre(){
+  const d=D.devis, e=D.enfant||{}, c=D.creche||{}, et=D.etablissement||{}, rz=D.reseau||{};
+  const nomEnfant=((e.prenom||'')+' '+(e.nom||'')).trim()||'votre enfant';
+  document.getElementById('hdSub').textContent=
+    'Devis '+(d.numero||'')+(c.name?' · '+c.name:'');
+
+  // Déjà clos : on montre l'état, pas le formulaire.
+  if(d.signe_le){
+    ecranSimple('✅','Devis accepté',
+      'Vous avez signé ce devis le <b>'+dfr(d.signe_le)+'</b>'
+      +(d.signe_par?' au nom de <b>'+esc(d.signe_par)+'</b>':'')+'.<br><br>'
+      +'La crèche revient vers vous pour la suite du dossier. Vous pouvez fermer cette page.');
+    return;
+  }
+  if(d.refuse_le){
+    ecranSimple('📄','Devis refusé',
+      'Vous avez décliné ce devis le <b>'+dfr(d.refuse_le)+'</b>.<br><br>'
+      +'Si c\'était une erreur, ou si votre situation a changé, appelez-nous : nous vous en établirons un nouveau.');
+    return;
+  }
+
+  const RECUR=['accueil','mensuel','unitaire'];
+  const lignes=D.lignes||[];
+  const unite=l=>l.type==='accueil'
+    ? (d.tarif_mode==='horaire'?'h':(d.tarif_mode==='journee'?'j':'mois'))
+    : (l.type==='unitaire'?'j':'');
+  const detail=l=>{
+    const q=Number(l.quantite);
+    if(!q||q===1)return '';
+    const u=unite(l);
+    return nb(q)+(u?' '+u:'')+' × '+eur(Math.abs(l.montant_unitaire));
+  };
+  const tr=l=>'<tr'+(Number(l.total)<0?' class="neg"':'')+'>'
+    +'<td>'+esc(libelleLigne(l))
+    +(l.description?'<div class="d">'+esc(l.description)+'</div>':'')
+    +(detail(l)?'<div class="d">'+esc(detail(l))+'</div>':'')+'</td>'
+    +'<td class="m">'+(Number(l.total)<0?'− ':'')+eur(Math.abs(l.total))+'</td></tr>';
+
+  const recu=lignes.filter(l=>RECUR.indexOf(l.type)>=0);
+  const hors=lignes.filter(l=>RECUR.indexOf(l.type)<0);
+
+  let h='';
+
+  h+='<button class="btn btn-g" id="btnPdf" onclick="telechargerPdf()" style="margin-bottom:14px">'
+   +'Télécharger le devis en PDF</button>';
+
+  h+='<div class="card"><h2>L\'accueil proposé</h2>'
+   +'<div class="kv"><span class="k">Enfant</span><span class="v">'+esc(nomEnfant)+'</span></div>'
+   +(c.name?'<div class="kv"><span class="k">Crèche</span><span class="v">'+esc(c.name)+'</span></div>':'')
+   +(d.date_debut?'<div class="kv"><span class="k">Début de l\'accueil</span><span class="v">'+dfr(d.date_debut)+'</span></div>':'')
+   +(d.date_fin?'<div class="kv"><span class="k">Fin de l\'accueil</span><span class="v">'+dfr(d.date_fin)+'</span></div>':'')
+   +recapSemaine(d)
+   +(d.date_fin
+      ? '<div class="kv"><span class="k">Jours facturés</span><span class="v">'
+        +(d.jours_accueil!=null?esc(d.jours_accueil)+' jours':'—')
+        +(d.mois_factures?' sur '+nb(d.mois_factures)+' mois':'')+'</span></div>'
+      : '<div class="kv"><span class="k">Semaines facturées</span><span class="v">'+esc(d.semaines_an)+' / an</span></div>')
+   +'<p class="note">'+(d.date_fin
+      ? 'La mensualité répartit les jours d\'accueil de la période sur '+nb(d.mois_factures||0)
+        +' mensualités égales. Elle est identique chaque mois, y compris pendant les périodes de '
+        +'fermeture, déjà déduites du nombre de jours facturés.'
+      : 'La mensualité est lissée sur douze mois : elle est identique chaque mois, y compris '
+        +'pendant les semaines de fermeture, déjà déduites du nombre de semaines facturées.')
+   +'</p></div>';
+
+  h+='<div class="card"><h2>Le détail de la mensualité</h2><table class="lg">'
+   +recu.map(tr).join('')
+   +'<tr class="tot"><td>Total mensuel</td><td class="m">'+eur(d.total_mensuel)+'</td></tr>'
+   +'</table>';
+  if(hors.length){
+    h+='<div style="margin-top:16px"><table class="lg">'+hors.map(tr).join('')+'</table>'
+     +'<p class="note">Facturés en une seule fois ou une fois par an, en sus de la mensualité.</p></div>';
+  }
+  h+='</div>';
+
+  if(d.cmg_estime!=null){
+    h+='<div class="card"><h2>Estimation du CMG</h2>'
+     +'<div class="kv"><span class="k">Coût mensuel</span><span class="v">'+eur(d.total_mensuel)+'</span></div>'
+     +'<div class="kv"><span class="k" style="color:var(--green)">CMG estimé, versé par la CAF</span>'
+     +'<span class="v" style="color:var(--green)">− '+eur(d.cmg_estime)+'</span></div>'
+     +'<div class="rac"><span>Reste à charge</span><b>'+eur(d.reste_a_charge)+'</b></div>'
+     +'<p class="note">Estimation calculée à partir des revenus que vous nous avez communiqués et du '
+     +'barème CAF en vigueur. <b>Seule la CAF détermine le montant réellement versé.</b> La crèche ne '
+     +'perçoit pas le CMG : elle facture la mensualité ci-dessus.</p></div>';
+  }
+
+  if(d.commentaire&&String(d.commentaire).trim()){
+    h+='<div class="card"><h2>Précisions</h2><p style="font-size:14.5px">'+esc(d.commentaire)+'</p></div>';
+  }
+
+  const mentions=[rz.devis_mentions,rz.preavis_resiliation].filter(x=>x&&String(x).trim());
+  if(mentions.length||d.expire_le){
+    h+='<div class="card"><h2>Conditions</h2>'
+     +(d.expire_le?'<p class="note" style="margin-top:0">Ce devis est valable jusqu\'au <b>'+dfr(d.expire_le)+'</b>.</p>':'')
+     +mentions.map(m=>'<p class="note">'+esc(m)+'</p>').join('')+'</div>';
+  }
+
+  /* Le formulaire d'acceptation. Le nom est saisi et non pré-rempli : c'est
+     lui qui figurera sur le devis, et il peut différer de la fiche (nom
+     d'usage, second parent, tuteur). */
+  h+='<div class="card">'
+   +'<h2>Accepter et signer</h2>'
+   +'<div id="msg"></div>'
+   +'<div style="margin-bottom:12px"><label class="lb">Votre nom et prénom</label>'
+   +'<input id="nom" autocomplete="name" placeholder="Marie Durand"></div>'
+   +'<label class="lb">Votre signature — tracez-la avec le doigt</label>'
+   +'<div id="sigBox"><canvas id="sig"></canvas><div id="sigHint">Signez ici</div></div>'
+   +'<button class="btn btn-g" style="margin-top:8px" onclick="effacer()">Effacer la signature</button>'
+   +'<p class="note">En signant, vous acceptez ce devis aux conditions ci-dessus. '
+   +'Vous recevrez ensuite le dossier d\'inscription.</p>'
+   +'<button class="btn btn-p" style="margin-top:12px" id="btnOk" onclick="signer()">Accepter et signer le devis</button>'
+   +'<button class="btn btn-g" style="margin-top:10px" onclick="refuser()">Je ne souhaite pas donner suite</button>'
+   +'</div>';
+
+  h+='<p class="foot">'+esc(et.raison_sociale||'Koala Kids')
+   +(et.siret?' · SIRET '+esc(et.siret):'')
+   +(et.pmi_numero?'<br>Agrément PMI '+esc(et.pmi_numero):'')
+   +(et.telephone||et.email?'<br>'+esc([et.telephone,et.email].filter(Boolean).join(' · ')):'')
+   +'</p>';
+
+  document.getElementById('wrap').innerHTML=h;
+  initSignature();
+}
+
+/* ---------- La signature ---------- */
+/* Canvas redimensionné à la densité réelle de l'écran : dessiné en pixels CSS
+   sur un mobile récent, le tracé sort flou et pixelisé une fois collé dans le
+   PDF, qui l'agrandit. */
+let ctx=null,dessine=false,aTrace=false;
+function initSignature(){
+  const cv=document.getElementById('sig');
+  if(!cv)return;
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  const r=cv.getBoundingClientRect();
+  cv.width=Math.round(r.width*dpr);
+  cv.height=Math.round(r.height*dpr);
+  ctx=cv.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#2B2740';
+  const pos=ev=>{const b=cv.getBoundingClientRect();return{x:ev.clientX-b.left,y:ev.clientY-b.top};};
+  cv.addEventListener('pointerdown',ev=>{
+    ev.preventDefault();cv.setPointerCapture(ev.pointerId);
+    dessine=true;aTrace=true;
+    document.getElementById('sigHint').style.display='none';
+    const p=pos(ev);ctx.beginPath();ctx.moveTo(p.x,p.y);
+  });
+  cv.addEventListener('pointermove',ev=>{
+    if(!dessine)return;ev.preventDefault();
+    const p=pos(ev);ctx.lineTo(p.x,p.y);ctx.stroke();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(t=>
+    cv.addEventListener(t,()=>{dessine=false;}));
+}
+function effacer(){
+  const cv=document.getElementById('sig');
+  if(!cv||!ctx)return;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  aTrace=false;
+  document.getElementById('sigHint').style.display='';
+}
+function message(txt,type){
+  const m=document.getElementById('msg');
+  if(m)m.innerHTML='<div class="msg '+(type||'err')+'">'+txt+'</div>';
+}
+
+async function signer(){
+  const nom=(document.getElementById('nom').value||'').trim();
+  if(nom.length<3){message('Merci d\'indiquer votre nom et votre prénom.');return;}
+  if(!aTrace){message('Merci de tracer votre signature dans le cadre.');return;}
+  const png=document.getElementById('sig').toDataURL('image/png');
+  // Le même seuil que côté serveur : mieux vaut le dire ici que d'essuyer un
+  // refus après l'aller-retour.
+  if(png.length<1500){message('La signature est trop brève — retracez-la un peu plus largement.');return;}
+
+  const b=document.getElementById('btnOk');
+  b.disabled=true;b.textContent='Enregistrement…';
+  try{
+    await appel('signer',{nom:nom,signature:png});
+    ecranSimple('✅','Merci !',
+      'Votre devis est accepté et signé. La crèche en est informée et revient vers vous '
+      +'pour la suite du dossier.<br><br>Vous pouvez fermer cette page.');
+  }catch(e){
+    message(esc(e.message||'Enregistrement impossible.'));
+    b.disabled=false;b.textContent='Accepter et signer le devis';
+  }
+}
+
+async function refuser(){
+  if(!confirm('Confirmez-vous que vous ne souhaitez pas donner suite à ce devis ?'))return;
+  const motif=prompt('Souhaitez-vous nous en dire la raison ? (facultatif)')||'';
+  try{
+    await appel('refuser',{motif:motif});
+    ecranSimple('📄','C\'est noté',
+      'Merci de nous avoir répondu. Si votre situation change, appelez-nous : '
+      +'nous serons heureux de vous établir un nouveau devis.');
+  }catch(e){
+    message(esc(e.message||'Enregistrement impossible.'));
+  }
+}
+
+/* ---------- Démarrage ---------- */
+(async function(){
+  if(!TOKEN){
+    ecranSimple('🔗','Lien incomplet',
+      'Cette adresse ne contient pas de devis. Ouvrez le lien tel qu\'il figure dans notre e-mail, '
+      +'sans le raccourcir.');
+    return;
+  }
+  try{
+    D=await appel('get');
+    // Branding cosmétique : nom/logo de l'organisation, jamais utilisé pour
+    // une décision de sécurité (l'edge function a déjà tout vérifié).
+    if(D.organisation?.nom)document.title=document.title.replace(/Koala ?Kids/i,D.organisation.nom);
+    if(D.organisation?.logo_url){
+      const img=document.getElementById('pageLogo');
+      if(img){img.src=D.organisation.logo_url;img.alt=D.organisation.nom||'';}
+    }
+    rendre();
+  }catch(e){
+    const m=String(e.message||'');
+    if(/expiré/i.test(m)){
+      ecranSimple('⏳','Lien expiré',
+        'Ce devis n\'est plus valable. Appelez-nous ou répondez à notre e-mail : '
+        +'nous vous en enverrons un nouveau tout de suite.');
+    }else if(/annulé/i.test(m)){
+      ecranSimple('📄','Devis annulé',
+        'Ce devis a été annulé par la crèche. Contactez-nous pour en savoir plus.');
+    }else if(/introuvable/i.test(m)){
+      ecranSimple('🔗','Lien introuvable',
+        'Ce lien ne correspond à aucun devis. Vérifiez que vous l\'avez copié en entier, '
+        +'ou répondez à notre e-mail.');
+    }else{
+      ecranSimple('⚠️','Chargement impossible',
+        'Le devis n\'a pas pu être chargé. Vérifiez votre connexion et réessayez dans un instant.');
+    }
+  }
+})();

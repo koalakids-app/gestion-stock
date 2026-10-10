@@ -1,0 +1,495 @@
+/* ===========================================================================
+   STAGIAIRE.HTML — page publique du dossier (stage ou alternance)
+   ---------------------------------------------------------------------------
+   Aucune session Supabase ici : la stagiaire n'a pas de compte. Tout passe par
+   l'edge function `dossier-stagiaire`, qui s'exécute en service_role et ne
+   traite que le dossier correspondant au jeton de l'URL. Aucune table n'est
+   interrogée directement, et le bucket est privé — voir 23b et 23c.
+
+   Le fichier est lu en base64 côté navigateur et posté à la fonction : pas de
+   dépôt direct dans le stockage, donc aucune clé d'écriture dans cette page.
+
+   La page va dans les deux sens (script 36) : en haut, ce que la crèche
+   transmet — le projet pédagogique à lire, le questionnaire à remplir ; en
+   dessous, les pièces à envoyer. Le projet pédagogique n'est PAS un lien
+   public : la page en demande une URL signée au moment du clic, valable
+   quelques minutes.
+
+   La page sert aussi bien un stage qu'une alternance : c'est la fonction qui
+   dit lequel (`type_contrat`) et qui n'envoie que les pièces demandées à ce
+   profil. Ici, ce champ ne change QUE le vocabulaire — jamais ce qu'on peut
+   déposer, sans quoi il suffirait de le modifier dans le navigateur.
+   =========================================================================== */
+
+const SUPABASE_URL = "https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const FN_URL = SUPABASE_URL + '/functions/v1/dossier-stagiaire';
+
+/* Le lien n'ouvre qu'une session courte (js/session-lien.js) : jeton retiré de l'adresse,
+   fermeture après inactivité, avertissement avant la fin. */
+const TOKEN = SessionLien.init({url:FN_URL,anonKey:SUPABASE_ANON_KEY});
+const wrap  = document.getElementById('wrap');
+
+/* Doit rester aligné sur TAILLE_MAX de l'edge function : ici c'est du confort
+   (message immédiat, pas d'envoi inutile), là-bas c'est la règle. */
+const TAILLE_MAX = 12 * 1024 * 1024;
+
+let STAG = null;   // {prenom, nom, creche_nom, date_debut, date_fin, expire_le, type_contrat}
+let PIECES = [];   // catalogue + fichiers déposés
+let AUTRES = [];   // pièces dont le type ne figure plus dans la liste demandée
+let RESS = [];     // ce que la crèche transmet (documents et liens)
+let LIVRETS = [];  // documents préparés par la crèche, à lire et à signer
+
+/* Le vocabulaire, et rien d'autre. */
+const MOTS = {
+  stagiaire:{titre:'Mes documents de stage',  nom:'stage',      art:'votre stage',
+             prevu:'Votre stage est prévu'},
+  alternant:{titre:"Mes documents d'alternance", nom:'alternance', art:'votre alternance',
+             prevu:'Votre alternance est prévue'}
+};
+const mots = () => MOTS[(STAG&&STAG.type_contrat==='alternant')?'alternant':'stagiaire'];
+
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dfr = d => d ? new Date(d).toLocaleDateString('fr-FR') : '';
+
+let toastT=null;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('on');
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),3000);
+}
+
+function etat(cls,titre,msg,icone){
+  wrap.innerHTML='<div class="state '+cls+'"><i class="ti ti-'+(icone||'alert-circle')+'"></i>'
+    +'<h2>'+esc(titre)+'</h2><p>'+esc(msg)+'</p></div>';
+}
+
+function appel(action,payload){
+  return SessionLien.appel(action,payload);
+}
+
+/* ---------------------------------------------------------------- ACCUEIL */
+
+async function boot(){
+  if(!TOKEN)return etat('err','Lien incomplet','Ce lien ne contient pas de jeton. Utilisez celui reçu de la crèche.','link-off');
+  try{
+    await recharger();
+  }catch(e){
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('expir'))
+      etat('err','Lien expiré','Ce lien n’est plus valable. Contactez la crèche, elle vous en enverra un nouveau.','clock-off');
+    else if(m.includes('introuvable'))
+      etat('err','Lien invalide','Ce lien ne correspond à aucun dossier. Vérifiez que vous l’avez copié en entier.','link-off');
+    else
+      etat('err','Erreur','Votre dossier n’a pas pu être chargé. Réessayez dans un instant.','alert-triangle');
+  }
+}
+
+async function recharger(){
+  const d=await appel('get');
+  STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];RESS=d.ressources||[];LIVRETS=d.livrets||[];
+  document.getElementById('titrePage').textContent=mots().titre;
+  document.title=mots().titre+' — Koala Kids';
+  document.getElementById('sousTitre').textContent=
+    (STAG.prenom||'')+(STAG.creche_nom?' · '+STAG.creche_nom:'');
+  render();
+}
+
+/* Une pièce est « fournie » dès qu'un fichier non refusé a été déposé.
+   Un refus la fait repasser en attente : c'est le seul moyen pour la crèche
+   de dire « recommencez celle-là » sans passer un coup de fil. */
+const fournie = p => (p.fichiers||[]).some(f=>f.statut!=='refuse');
+
+function render(){
+  const M=mots();
+  const oblig=PIECES.filter(p=>p.obligatoire);
+  const faits=oblig.filter(fournie).length;
+  const pct=oblig.length?Math.round(faits/oblig.length*100):100;
+
+  const periode = STAG.date_debut
+    ? ' '+M.prevu+' du <b>'+esc(dfr(STAG.date_debut))+'</b>'
+      +(STAG.date_fin?' au <b>'+esc(dfr(STAG.date_fin))+'</b>':'')+'.'
+    : '';
+
+  let h='<div class="intro">Bonjour '+esc(STAG.prenom||'')+' ! Voici les documents à '
+    +'nous transmettre avant le début de '+M.art+'.'+periode
+    +'<br><br>Photographiez-les avec votre téléphone ou envoyez le PDF : '
+    +'vous pouvez le faire en plusieurs fois, tout ce qui est envoyé est conservé.'
+    +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(STAG.expire_le))+'</b>.</div>';
+
+  /* Les documents à signer passent avant tout : ils engagent la personne. */
+  if(LIVRETS.length){
+    const reste=LIVRETS.filter(l=>!l.signe).length;
+    h+='<h3 class="sec"><i class="ti ti-signature"></i> Documents à signer</h3>'
+      +'<p class="hint">'+(reste?'Lisez le document puis signez-le avec votre doigt, directement ici.'
+        :'Merci, tout est signé ✔')+'</p>';
+    LIVRETS.forEach((l,i)=>h+=htmlLivret(l,i));
+  }
+
+  /* Ce que la crèche transmet vient EN PREMIER : le projet pédagogique se lit
+     avant de remplir un questionnaire, et le questionnaire se remplit avant
+     l'arrivée — les pièces d'identité, elles, peuvent attendre le week-end. */
+  if(RESS.length){
+    const reste=RESS.filter(r=>r.accuse&&!r.accuse_le).length;
+    h+='<h3 class="sec"><i class="ti ti-mail-opened"></i> À lire et à faire</h3>'
+      +'<p class="hint">'+(reste
+        ? 'Il vous reste '+reste+' chose'+(reste>1?'s':'')+' à confirmer ci-dessous.'
+        : 'Merci, vous avez tout confirmé ✔')+'</p>';
+    RESS.forEach((r,i)=>h+=htmlRessource(r,i));
+    h+='<h3 class="sec"><i class="ti ti-file-upload"></i> Les documents à nous envoyer</h3>';
+  }
+
+  h+='<div class="card"><div style="font-weight:700;font-size:14px">Votre avancement</div>'
+    +'<div class="prog"><i style="width:'+pct+'%"></i></div>'
+    +'<div class="progtxt">'+faits+' document'+(faits>1?'s':'')+' sur '+oblig.length
+    +' transmis</div></div>';
+
+  PIECES.forEach((p,i)=>h+=htmlPiece(p,i));
+
+  if(AUTRES.length){
+    h+='<h3 class="sec">Autres documents transmis</h3>'
+      +'<div class="card">'+AUTRES.map(f=>htmlFichier(f)).join('')+'</div>';
+  }
+
+  if(oblig.length&&faits===oblig.length){
+    h+='<div class="card" style="background:var(--green-bg);border-color:#BFE3CB;color:var(--green);font-weight:600;margin-top:14px">'
+      +'<i class="ti ti-circle-check"></i> Tout est transmis — merci ! '
+      +'L’équipe de la crèche vérifie vos documents et revient vers vous si besoin.</div>';
+  }else{
+    h+='<p class="hint" style="margin-top:16px">Il vous reste des pièces à envoyer ? '
+      +'Revenez sur ce lien quand vous les aurez, rien n’est perdu.</p>';
+  }
+
+  wrap.innerHTML=h;
+  window.scrollTo(0,0);
+}
+
+/* ------------------------------------------------------ DOCUMENTS À SIGNER */
+
+let LV_PAD=null, LV_DESSIN=false;
+
+function htmlLivret(l,i){
+  const c=l.champs||{};
+  const creche=c.lv_creche?'Koalakids '+c.lv_creche:(STAG.creche_nom||'');
+  const etat=l.signe
+    ? '<span class="badge b-ok">Signé le '+esc(dfr(l.signe_le))+'</span>'
+    : '<span class="badge b-att">À signer</span>';
+  return '<div class="livret'+(l.signe?' fait':'')+'" id="lv_'+i+'">'
+    +'<div class="ptop"><span class="ic'+(l.signe?' ok':'')+'"><i class="ti ti-'+(l.signe?'circle-check':'signature')+'"></i></span>'
+    +'<span class="tx"><b>'+esc(l.titre||'Livret d’accueil')+'</b>'
+    +'<span class="aide">'+esc(creche)+'</span>'
+    +'<span style="display:block;margin-top:5px">'+etat+'</span></span></div>'
+    +'<div style="margin-top:10px"><button class="btn btn-g btn-s" onclick="ouvrirLivret('+i+')">'
+    +'<i class="ti ti-'+(l.signe?'eye':'writing-sign')+'"></i> '+(l.signe?'Relire mon exemplaire':'Lire et signer')+'</button></div>'
+    +'<div id="lvz_'+i+'"></div></div>';
+}
+
+function textLivret(l){
+  const g=k=>(l.champs||{})[k]||'';
+  const S=lvSections(g,g('lv_texte'));
+  return S.map(s=>{
+    let h=s.t?'<h4>'+esc(s.t)+'</h4>':'',ul=false;
+    s.items.forEach(it=>{
+      if(it.k==='li'){if(!ul){h+='<ul>';ul=true;}h+='<li>'+esc(it.t)+'</li>';}
+      else{if(ul){h+='</ul>';ul=false;}h+='<p>'+esc(it.t)+'</p>';}
+    });
+    return h+(ul?'</ul>':'');
+  }).join('');
+}
+
+function ouvrirLivret(i){
+  const l=LIVRETS[i],z=document.getElementById('lvz_'+i);
+  if(z.innerHTML){z.innerHTML='';return;}
+  let h='<div class="texte">'+textLivret(l)+'</div>'
+    +'<h4 style="margin:6px 0;font-family:\'Baloo 2\',system-ui,sans-serif;color:var(--violet)">Acte d’engagement</h4>'
+    +'<p class="hint">Nous nous engageons à vous accompagner au mieux lors de ce stage, nous attendons que vous fassiez de même en signant ce document.</p>';
+  if(l.signe){
+    h+='<p class="hint">Signé par <b>'+esc((l.champs||{}).sal_nom||STAG.prenom)+'</b> le '+esc(dfr(l.signe_le))+'.</p>'
+      +(l.signature?'<img class="sigimg" alt="Votre signature" src="'+esc(l.signature)+'">':'');
+  }else{
+    h+='<label class="hint" for="lvn_'+i+'">Votre nom et prénom</label>'
+      +'<input type="text" id="lvn_'+i+'" value="'+esc((STAG.prenom||'')+' '+(STAG.nom||''))+'" autocomplete="name">'
+      +'<label class="accuse"><input type="checkbox" id="lvl_'+i+'"> J’ai lu le livret d’accueil et je m’engage à en respecter les règles</label>'
+      +'<p class="hint" style="margin-top:12px">Signez avec le doigt dans le cadre :</p>'
+      +'<canvas id="lvc_'+i+'"></canvas>'
+      +'<div style="display:flex;gap:8px;margin-top:10px">'
+      +'<button class="btn btn-g btn-s" onclick="effacerSignature('+i+')"><i class="ti ti-eraser"></i> Effacer</button>'
+      +'<button class="btn btn-p btn-s" id="lvb_'+i+'" onclick="signerLivret('+i+')"><i class="ti ti-check"></i> Valider ma signature</button></div>';
+  }
+  z.innerHTML=h;
+  if(!l.signe)initPad(i);
+}
+
+function initPad(i){
+  const c=document.getElementById('lvc_'+i),r=c.getBoundingClientRect();
+  c.width=r.width*2;c.height=r.height*2;
+  const x=c.getContext('2d');x.scale(2,2);
+  x.lineWidth=2.4;x.lineCap='round';x.lineJoin='round';x.strokeStyle='#2B2740';
+  LV_PAD={i,c,x,encre:0,dernier:null};
+  let on=false;
+  const pt=e=>{const b=c.getBoundingClientRect(),p=e.touches?e.touches[0]:e;return[p.clientX-b.left,p.clientY-b.top];};
+  const dn=e=>{e.preventDefault();on=true;LV_PAD.dernier=pt(e);x.beginPath();x.moveTo(...LV_PAD.dernier);};
+  const mv=e=>{if(!on)return;e.preventDefault();const p=pt(e);
+    LV_PAD.encre+=Math.hypot(p[0]-LV_PAD.dernier[0],p[1]-LV_PAD.dernier[1]);LV_PAD.dernier=p;x.lineTo(...p);x.stroke();};
+  const up=()=>{on=false;};
+  c.addEventListener('touchstart',dn,{passive:false});c.addEventListener('touchmove',mv,{passive:false});
+  c.addEventListener('touchend',up);c.addEventListener('mousedown',dn);c.addEventListener('mousemove',mv);
+  window.addEventListener('mouseup',up);
+}
+function effacerSignature(i){
+  if(!LV_PAD)return;
+  LV_PAD.x.clearRect(0,0,LV_PAD.c.width,LV_PAD.c.height);LV_PAD.encre=0;
+}
+
+async function signerLivret(i){
+  const l=LIVRETS[i];
+  const nom=(document.getElementById('lvn_'+i).value||'').trim();
+  if(nom.length<3)return toast('Indiquez votre nom et prénom.');
+  if(!document.getElementById('lvl_'+i).checked)return toast('Cochez la case pour confirmer avoir lu le livret.');
+  if(!LV_PAD||LV_PAD.i!==i||LV_PAD.encre<60)return toast('Merci de signer dans le cadre.');
+  const b=document.getElementById('lvb_'+i);b.disabled=true;
+  try{
+    await appel('livret_signer',{reponse_id:l.id,nom,lu:true,signature:LV_PAD.c.toDataURL('image/png')});
+    LV_PAD=null;
+    await recharger();
+    toast('Signature enregistrée — merci !');
+  }catch(e){
+    b.disabled=false;
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('déjà'))toast('Ce document est déjà signé.');
+    else if(m.includes('expir'))toast('Ce lien a expiré. Contactez la crèche.');
+    else toast('Signature impossible. Vérifiez votre connexion et réessayez.');
+  }
+}
+
+/* ------------------------------------------- CE QUE LA CRÈCHE TRANSMET */
+
+/* Une ressource est « faite » quand la confirmation a été cochée, ou — si
+   aucune confirmation n'est demandée — dès qu'elle a été ouverte. */
+const ressFaite = r => r.accuse ? !!r.accuse_le : !!r.ouvert_le;
+
+function htmlRessource(r,i){
+  const fait=ressFaite(r);
+  const lien=r.nature==='lien';
+  const ic = fait ? 'circle-check' : (lien?'clipboard-list':'file-text');
+
+  let etat='';
+  if(r.accuse_le)      etat='<span class="badge b-ok">Confirmé le '+esc(dfr(r.accuse_le))+'</span>';
+  else if(r.ouvert_le) etat='<span class="badge b-att">'+(lien?'Ouvert':'Consulté')+' le '+esc(dfr(r.ouvert_le))+'</span>';
+  else                 etat='<span class="badge b-att">'+(lien?'À remplir':'À lire')+'</span>';
+
+  return '<div class="ress'+(fait?' fait':'')+'">'
+    +'<div class="rtop">'
+    +'<span class="ic"><i class="ti ti-'+ic+'"></i></span>'
+    +'<span class="tx"><b>'+esc(r.libelle)+'</b>'
+    +(r.description?'<span class="desc">'+esc(r.description)+'</span>':'')
+    +'<span style="display:block;margin-top:6px">'+etat+'</span>'
+    +'</span></div>'
+    +'<div style="margin-top:10px">'
+    +'<button class="btn btn-g btn-s" onclick="ouvrirRessource('+i+')">'
+    +'<i class="ti ti-'+(lien?'external-link':'download')+'"></i> '
+    +(lien?'Ouvrir le questionnaire':'Lire le document')+'</button>'
+    +'<span id="rst_'+i+'" style="margin-left:10px;font-size:12.5px;color:var(--muted)"></span>'
+    +'</div>'
+    +(r.accuse
+      ? '<label class="accuse"><input type="checkbox" '+(r.accuse_le?'checked':'')+' '
+        +'onchange="confirmerRessource('+i+',this.checked)"> '
+        +(lien?'J’ai répondu au questionnaire':'J’ai lu ce document')+'</label>'
+      : '')
+    +'</div>';
+}
+
+/* L'adresse d'un questionnaire maison, complétée de ce que la crèche sait
+   déjà : la personne n'a plus rien à ressaisir, et sa réponse pourra être
+   rattachée à son dossier (`ref`).
+
+   Uniquement si la ressource le prévoit (`identite`, script 36d) : envoyer le
+   nom d'une stagiaire dans l'adresse d'un site tiers reviendrait à le lui
+   confier sans l'avoir décidé.
+
+   `ref` est l'identifiant du dossier, pas le jeton : il n'ouvre rien, et le
+   jeton, lui, ne quitte jamais cette page. */
+function urlRessource(r){
+  if(!r.url)return '';
+  if(!r.identite)return r.url;
+  try{
+    const u=new URL(r.url,location.href);
+    const mettre=(k,v)=>{ if(v)u.searchParams.set(k,v); };
+    mettre('prenom',STAG.prenom);
+    mettre('nom',STAG.nom);
+    mettre('statut',STAG.type_contrat==='alternant'?'Alternant(e)':'Stagiaire');
+    mettre('creche',STAG.creche_nom);
+    mettre('ref',STAG.ref);
+    return u.toString();
+  }catch(e){
+    /* Adresse mal formée : on l'ouvre telle quelle plutôt que de bloquer. */
+    return r.url;
+  }
+}
+
+/* Le fichier n'est pas servi par une URL en dur : on en demande une, signée
+   pour quelques minutes. L'ouverture est datée côté serveur — pas ici, où
+   elle serait déclarative. */
+async function ouvrirRessource(i){
+  const r=RESS[i];
+  if(!r)return;
+  const st=document.getElementById('rst_'+i);
+
+  if(r.nature==='lien'){
+    if(!r.url)return toast('Ce lien n’est pas encore disponible.');
+    /* La fenêtre s'ouvre AVANT l'appel réseau : ouverte depuis le retour
+       d'une promesse, elle serait bloquée par le navigateur. */
+    window.open(urlRessource(r),'_blank','noopener');
+    try{
+      await appel('ressource_marque',{ressource_id:r.id});
+      await recharger();
+    }catch(e){/* le questionnaire est ouvert, le suivi peut attendre */}
+    return;
+  }
+
+  if(st)st.textContent='⏳ Ouverture…';
+  try{
+    const d=await appel('ressource_url',{ressource_id:r.id});
+    window.open(d.url,'_blank','noopener');
+    await recharger();
+  }catch(e){
+    if(st)st.textContent='';
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('expir'))toast('Ce lien a expiré. Contactez la crèche.');
+    else toast('Ouverture impossible. Réessayez dans un instant.');
+  }
+}
+
+async function confirmerRessource(i,coche){
+  const r=RESS[i];
+  if(!r)return;
+  try{
+    await appel('ressource_marque',{ressource_id:r.id,accuse:!!coche,ouvert:false});
+    await recharger();
+    if(coche)toast('Merci, c’est noté ✔');
+  }catch(e){
+    toast('Impossible d’enregistrer. Vérifiez votre connexion.');
+    await recharger();
+  }
+}
+
+/* ----------------------------------------------- LES PIÈCES À ENVOYER */
+
+function htmlPiece(p,i){
+  const fs=p.fichiers||[];
+  const ok=fournie(p);
+  const refuse=fs.length&&fs.every(f=>f.statut==='refuse');
+  const st = refuse ? '<span class="badge b-ko">À renvoyer</span>'
+           : ok     ? '<span class="badge b-ok">Transmis</span>'
+           :          '<span class="badge b-att">À envoyer</span>';
+  const fac = p.obligatoire ? '' : ' <span class="badge b-fac">facultatif</span>';
+
+  return '<div class="piece'+(ok?' ok':'')+'">'
+    +'<div class="ptop">'
+    +'<span class="ic'+(ok?' ok':'')+'"><i class="ti ti-'+(ok?'check':'file-upload')+'"></i></span>'
+    +'<span class="tx"><b>'+esc(p.libelle)+'</b>'
+    +(p.aide?'<span class="aide">'+esc(p.aide)+'</span>':'')
+    +'<span style="display:block;margin-top:5px">'+st+fac+'</span>'
+    +(p.lien?'<a class="lienoff" href="'+esc(p.lien)+'" target="_blank" rel="noopener">'
+      +'<i class="ti ti-external-link"></i> Faire la demande en ligne</a>':'')
+    +'</span></div>'
+    +(fs.length?'<div class="files">'+fs.map(f=>htmlFichier(f)).join('')+'</div>':'')
+    +'<div style="margin-top:10px">'
+    +'<button class="btn btn-g btn-s" onclick="choisir('+i+')">'
+    +'<i class="ti ti-camera"></i> '+(fs.length?'Ajouter une autre page':'Envoyer')+'</button>'
+    +'<span id="st_'+i+'" style="margin-left:10px;font-size:12.5px;color:var(--muted)"></span>'
+    +'</div>'
+    +'<input type="file" id="inp_'+i+'" accept="image/*,application/pdf" capture="environment" '
+    +'style="display:none" onchange="envoyer(event,'+i+')">'
+    +'</div>';
+}
+
+function htmlFichier(f){
+  const st = f.statut==='valide' ? '<span class="badge b-ok">Validé</span>'
+           : f.statut==='refuse' ? '<span class="badge b-ko">Refusé</span>'
+           :                       '<span class="badge b-att">Reçu</span>';
+  /* Un document validé n'est plus supprimable ici : la crèche l'a vu et
+     accepté, c'est à elle de décider s'il doit être remplacé. */
+  const sup = f.statut==='valide' ? ''
+    : '<button title="Retirer" onclick="retirer(\''+f.id+'\')"><i class="ti ti-trash"></i></button>';
+  return '<div class="file"><i class="ti ti-paperclip" style="color:var(--violet-l)"></i>'
+    +'<span class="nm">'+esc(f.filename||'Document')+'</span>'+st+sup
+    +(f.statut==='refuse'&&f.commentaire
+      ? '<div style="flex:0 0 100%;font-size:12px;color:var(--red);margin-top:2px">'
+        +esc(f.commentaire)+'</div>' : '')
+    +'</div>';
+}
+
+function choisir(i){document.getElementById('inp_'+i).click();}
+
+/* ------------------------------------------------------------------ ENVOI */
+
+/* Le HEIC des iPhone n'est pas toujours reconnu par le navigateur, qui renvoie
+   alors un type vide : on le déduit de l'extension plutôt que de refuser un
+   fichier parfaitement valable. */
+function typeDe(file){
+  if(file.type)return file.type;
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  return {jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',heic:'image/heic',
+          heif:'image/heif',webp:'image/webp',pdf:'application/pdf'}[ext]||'';
+}
+
+function lireBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(String(r.result));
+    r.onerror=()=>rej(new Error('Lecture impossible'));
+    r.readAsDataURL(file);
+  });
+}
+
+async function envoyer(ev,i){
+  const input=ev.target;
+  const file=(input.files||[])[0];
+  input.value='';                       // pour pouvoir renvoyer le même fichier
+  if(!file)return;
+  const st=document.getElementById('st_'+i);
+  const mime=typeDe(file);
+
+  if(file.size>TAILLE_MAX){
+    toast('Ce fichier est trop lourd (12 Mo maximum).');return;
+  }
+  if(!['image/jpeg','image/png','image/heic','image/heif','image/webp','application/pdf'].includes(mime)){
+    toast('Envoyez une photo ou un PDF.');return;
+  }
+
+  if(st)st.textContent='⏳ Envoi…';
+  try{
+    const data=await lireBase64(file);
+    await appel('upload',{
+      type_id:PIECES[i].id,
+      mime,
+      filename:file.name,
+      data
+    });
+    await recharger();
+    toast('Document envoyé — merci !');
+  }catch(e){
+    if(st)st.textContent='';
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('expir'))toast('Ce lien a expiré. Contactez la crèche.');
+    else if(m.includes('lourd'))toast('Ce fichier est trop lourd (12 Mo maximum).');
+    else if(m.includes('format'))toast('Envoyez une photo ou un PDF.');
+    else toast('Envoi impossible. Vérifiez votre connexion et réessayez.');
+  }
+}
+
+async function retirer(id){
+  if(!confirm('Retirer ce document ?'))return;
+  try{
+    await appel('delete',{document_id:id});
+    await recharger();
+    toast('Document retiré.');
+  }catch(e){
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('validée'))toast('La crèche a déjà validé cette pièce.');
+    else toast('Suppression impossible.');
+  }
+}
+
+boot();

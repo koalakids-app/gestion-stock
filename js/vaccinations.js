@@ -73,7 +73,7 @@ async function vacLoadData(){
   vacDataLoaded = true;
   await vacLoadPJ();
 }
-/* Appele depuis la fiche enfant (js/enfants.js) pour le statut vaccinal :
+/* Appele depuis la fiche enfant (js/enfants/) pour le statut vaccinal :
    le module Vaccinations peut ne jamais avoir ete ouvert dans la session. */
 async function vacEnsureDataLoaded(){
   if(!vacDataLoaded) await vacLoadData();
@@ -740,7 +740,7 @@ async function vacSyncFicheDocumentImpl(enfantId){
     else await dbInsert('documents_reponses',row);
   }catch(err){console.warn('[vacSyncFicheDocument]',err);}
 }
-/* Rafraichit le statut vaccinal affiche dans la fiche enfant (js/enfants.js,
+/* Rafraichit le statut vaccinal affiche dans la fiche enfant (js/enfants/,
    zone enf-vaccins-zone) si c'est bien cet enfant qui y est ouvert — meme
    principe que vacPJRefresh pour les photocopies du carnet. */
 function vacRefreshFicheEnfantZone(enfantId){
