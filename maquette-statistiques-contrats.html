@@ -174,6 +174,15 @@ svg text{font-family:Nunito}
     </div>
 
     <div class="panel">
+      <h3><i class="ti ti-filter" style="color:var(--orange)"></i> Taux de réalisation devis → contrat <small>sur l'année scolaire</small></h3>
+      <p class="hint">Combien de devis envoyés aboutissent à un contrat signé, et où les familles décrochent.</p>
+      <div class="cols" style="align-items:start">
+        <div id="entonnoir"></div>
+        <div style="overflow-x:auto"><table class="tb" id="transfo"></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
       <h3><i class="ti ti-hourglass" style="color:var(--orange)"></i> Demande vs capacité <small>devis acceptés sans contrat</small></h3>
       <p class="hint">Familles qui attendent un contrat, face aux berceaux encore libres de la crèche demandée.</p>
       <div style="overflow-x:auto"><table class="tb" id="attente"></table></div>
@@ -200,6 +209,8 @@ const CRECHES=[
 ];
 const MOIS=['Sept','Oct','Nov','Déc','Janv','Févr','Mars','Avr','Mai','Juin','Juil','Août'];
 const STATUTS=[['Contresigné',96,'#2E9E6B'],['Signé par la famille',14,'#7DBF9D'],['Envoyé, en attente',17,'#F47920'],['Brouillon',9,'#B8860B'],['Refusé / annulé',6,'#C62828']];
+/* devis envoyés, acceptés, contrats créés, signés, délai moyen devis→signature (jours) */
+const TRANSFO={1:[26,22,21,20,9],2:[24,19,18,17,11],3:[22,15,14,12,14],4:[28,15,13,11,16],5:[20,17,16,16,8],6:[24,12,10,8,19]};
 const ECH=[
   ['12 nov.','Fin de contrat','Léo M.',2,'Les Petits Loups','Déménagement','Libère 3 j/sem.'],
   ['30 nov.','Entrée signée','Inès B.',4,'Les Coccinelles','','+ 4 j/sem.'],
@@ -238,6 +249,7 @@ function rendre(){
    kpi('Taux de remplissage',taux+' %','<span class="'+(taux>=90?'up':'dn')+'">'+(taux>=90?'▲':'▼')+' 3 pts vs même date N-1</span>','hi','ti-gauge')+
    kpi('Enfants accueillis',nbEnf,'sur '+L.length+' crèche'+(L.length>1?'s':''),'','ti-baby-carriage')+
    kpi('Berceaux libres',Math.round(cap-occ),'moyenne sur la semaine','','ti-armchair')+
+   kpi('Devis → contrat',pct(L.reduce((a,c)=>a+TRANSFO[c.id][3],0),L.reduce((a,c)=>a+TRANSFO[c.id][0],0))+' %','devis envoyés aboutis en contrat signé','','ti-filter')+
    kpi('Contrats à signer',26,'17 envoyés · 9 brouillons','','ti-signature')+
    kpi('À renouveler',11,'échéance &lt; 90 jours','','ti-refresh')+
    kpi('Heures / enfant / sem.',(31.4).toFixed(1).replace('.',',')+' h','durée contractuelle moyenne','','ti-clock');
@@ -280,6 +292,17 @@ function rendre(){
     return '<td style="background:'+bg+';color:'+co+'">'+r+'</td>';}).join('')+'</tr>';});
   lh+='<tr><td style="border-top:2px solid var(--line)">Total</td>'+per.map(p=>'<td style="border-top:2px solid var(--line);color:var(--violet);font-family:\'Baloo 2\';font-size:15px">'+Math.round(L.reduce((a,c)=>a+libre(c,p[1]),0))+'</td>').join('')+'</tr>';
   $('libres').innerHTML=lh;
+
+  /* devis -> contrat */
+  const T=L.reduce((a,c)=>a.map((v,i)=>v+(i<4?TRANSFO[c.id][i]:0)),[0,0,0,0,0]);
+  const dl=Math.round(L.reduce((a,c)=>a+TRANSFO[c.id][4]*TRANSFO[c.id][3],0)/Math.max(1,T[3]));
+  const etapes=[['Devis envoyés',T[0],'#8E8AA8'],['Devis acceptés',T[1],'#F47920'],['Contrats créés',T[2],'#7B6FD0'],['Contrats signés',T[3],'#2E9E6B']];
+  $('entonnoir').innerHTML=etapes.map((e,i)=>'<div class="hb" style="margin:9px 0"><span class="lab" style="width:112px">'+e[0]+'</span><span class="tr" style="height:22px;border-radius:11px"><b style="width:'+pct(e[1],T[0])+'%;background:'+e[2]+';border-radius:11px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;color:#fff;font-size:11.5px">'+e[1]+'</b></span><span class="v" style="width:92px;text-align:left">'+(i?'<span class="'+(pct(e[1],etapes[i-1][1])>=80?'up':'dn')+'">'+pct(e[1],etapes[i-1][1])+' %</span> de l\'étape préc.':'')+'</span></div>').join('')+
+    '<div style="margin-top:12px;padding:10px 14px;border-radius:14px;background:var(--orange-l);display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:13px">Taux de réalisation global<br><span style="font-size:11.5px;color:var(--muted)">devis envoyé → contrat signé · délai moyen '+dl+' j</span></span><span style="font-family:\'Baloo 2\';font-size:30px;color:var(--orange)">'+pct(T[3],T[0])+' %</span></div>';
+  $('transfo').innerHTML='<tr><th>Crèche</th><th class="r">Devis</th><th class="r">Signés</th><th class="r">Réalisation</th><th class="r">Délai</th></tr>'+
+    L.slice().sort((a,b)=>TRANSFO[b.id][3]/TRANSFO[b.id][0]-TRANSFO[a.id][3]/TRANSFO[a.id][0]).map(c=>{const t=TRANSFO[c.id],p=pct(t[3],t[0]);
+      return '<tr><td><b>'+c.nom+'</b></td><td class="r">'+t[0]+'</td><td class="r">'+t[3]+'</td><td class="r"><span class="tag '+(p>=75?'tg-g':p>=50?'tg-o':'tg-r')+'">'+p+' %</span></td><td class="r" style="color:var(--muted)">'+t[4]+' j</td></tr>';}).join('')+
+    '<tr><td colspan="5" style="color:var(--muted);font-size:12px;border:none;padding-top:10px">Pertes : '+(T[0]-T[1])+' devis refusés ou sans réponse, '+(T[1]-T[2])+' acceptés sans contrat créé, '+(T[2]-T[3])+' contrats non signés.</td></tr>';
 
   /* courbe SVG */
   $('courbe').innerHTML=courbe(L,f);
