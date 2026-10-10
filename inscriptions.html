@@ -3944,8 +3944,18 @@ async function confirmerEnvoiDevis(){
     /* Le mail part APRÈS l'écriture : si l'envoi échoue, le lien existe déjà et
        le bouton « Le lien » permet de le transmettre à la main. L'inverse —
        mailer d'abord — aurait pu expédier un lien que la base n'a pas gardé. */
+    /* Le PDF est tiré de devis_lignes comme le bouton « Le PDF ». S'il échoue,
+       le mail part quand même : le lien suffit à la famille pour répondre. */
+    let pdf;
+    try{
+      await Promise.all([chargeJsPdf(),loadEtabs(),loadReseau()]);
+      const{data:lg,error:eLg}=await sb.from('devis_lignes').select('*').eq('devis_id',d.id).order('ordre');
+      if(eLg)throw eLg;
+      pdf=dessineDevis(d,lg||[],true);
+    }catch(ePdf){console.warn('[devis pdf joint]',ePdf);toast('PDF non joint : le mail part avec le lien seul.',true);}
+
     const{error:eFn}=await sb.functions.invoke('envoyer-devis',
-      {body:{devis_id:d.id,relance:relance,objet:objet,message:message,expediteur:(PROF&&PROF.name)||undefined}});
+      {body:{devis_id:d.id,relance:relance,objet:objet,message:message,expediteur:(PROF&&PROF.name)||undefined,pdf:pdf}});
     if(eFn)throw new Error(await detailFn(eFn));
 
     if(relance){
@@ -4082,7 +4092,9 @@ async function pdfDevis(id){
   }
 }
 
-function dessineDevis(d,lignes){
+/* envoi=true : le PDF n'est pas téléchargé mais rendu en base64, pour être joint
+   au mail de la famille. Même dessin, mêmes lignes lues en base. */
+function dessineDevis(d,lignes,envoi){
   const jsPDF=window.jspdf.jsPDF;
   const doc=new jsPDF({unit:'mm',format:'a4'});
   const G=16, D=194, L=D-G, BAS=278;   // marges et bas de page utile
@@ -4419,7 +4431,9 @@ function dessineDevis(d,lignes){
   }
 
   const enf=((p.prenom||'')+'-'+(p.nom||'')).replace(/[^A-Za-zÀ-ÿ0-9-]/g,'').replace(/-+/g,'-').replace(/^-|-$/g,'');
-  doc.save('devis-'+(d.numero||auj())+(enf?'-'+enf:'')+'.pdf');
+  const nomPdf='devis-'+(d.numero||auj())+(enf?'-'+enf:'')+'.pdf';
+  if(envoi)return{nom:nomPdf,base64:doc.output('datauristring').split(',')[1]};
+  doc.save(nomPdf);
   toast('PDF téléchargé ✅');
 }
 

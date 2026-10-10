@@ -97,7 +97,24 @@ function encodeSubject(subject: string): string {
   return s || "Notification";
 }
 
-async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string) {
+type PieceJointe = { filename: string; content: string; encoding: 'base64'; contentType: string };
+
+// Le PDF est dessiné par l'application (le même que le bouton « Le PDF »). Comme
+// cette fonction n'a pas de JWT, on ne lui fait pas confiance : seul un vrai PDF
+// de taille raisonnable est joint, sous un nom rendu inoffensif. Le destinataire
+// reste, lui, celui que la base a figé sur le devis.
+function pieceJointe(pdf: unknown): PieceJointe | undefined {
+  const p = pdf as { nom?: unknown; base64?: unknown } | null;
+  if (!p || typeof p.base64 !== 'string') return undefined;
+  const b64 = p.base64.replace(/\s/g, '');
+  if (!b64 || b64.length > 2_000_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) return undefined;
+  // « %PDF » en base64 commence toujours par « JVBER ».
+  if (!b64.startsWith('JVBER')) return undefined;
+  const nom = (typeof p.nom === 'string' ? p.nom : '').replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 80);
+  return { filename: /\.pdf$/i.test(nom) && nom.length > 4 ? nom : 'devis.pdf', content: b64, encoding: 'base64', contentType: 'application/pdf' };
+}
+
+async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string, attachments?: PieceJointe[]) {
   const user = Deno.env.get('GMAIL_USER');
   const pass = Deno.env.get('GMAIL_APP_PASSWORD');
   if (!user || !pass) {
@@ -121,6 +138,7 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
       subject: encodeSubject(subject),
       content: 'Ce message nécessite un client de messagerie compatible HTML.',
       html,
+      ...(attachments?.length ? { attachments } : {}),
     });
   } finally {
     await client.close();
@@ -130,7 +148,7 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
 function corpsHtml(o: {
   enfant: string; creche: string; lien: string; expire: string;
   mensuel: string; reste: string | null; relance: boolean; message?: string;
-  orgNom?: string; logoUrl?: string;
+  orgNom?: string; logoUrl?: string; pdfJoint?: boolean;
 }) {
   const orgNom = o.orgNom || 'Koala Kids';
   const logoUrl = o.logoUrl || 'https://koalakids-app.github.io/gestion-stock/logo-koalakids.png';
@@ -184,7 +202,7 @@ function corpsHtml(o: {
           ${chiffres}
         </table>
         <p style="margin:0 0 22px;font-size:15px">
-          Le détail complet vous attend en ligne. Si le devis vous convient, vous pouvez
+          ${o.pdfJoint ? 'Le devis est également joint à ce message en PDF. ' : ''}Le détail complet vous attend en ligne. Si le devis vous convient, vous pouvez
           l'accepter et le signer directement depuis votre téléphone — rien à imprimer,
           rien à renvoyer.
         </p>
@@ -226,7 +244,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { devis_id, relance, objet, message, expediteur } = await req.json();
+    const { devis_id, relance, objet, message, expediteur, pdf } = await req.json();
+    const pj = pieceJointe(pdf);
     if (!devis_id) return json({ erreur: 'Devis manquant' }, 400);
     // Un objet/message vide n'est pas un objet/message : on retombe alors sur
     // le texte par défaut plutôt que d'envoyer un mail à l'objet blanc.
@@ -285,9 +304,11 @@ Deno.serve(async (req) => {
           relance: !!relance,
           orgNom,
           logoUrl,
+          pdfJoint: !!pj,
         }),
         expediteur,
         orgNom,
+        pj ? [pj] : undefined,
       );
     } catch (mailErr) {
       console.error('[envoyer-devis] SMTP', mailErr);
