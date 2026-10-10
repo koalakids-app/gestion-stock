@@ -1,6 +1,6 @@
 // Service Worker — Réglementation Micro-Crèches
 // Version du cache — incrémenter à chaque mise à jour de l'app
-const CACHE_NAME = 'microcreches-v1';
+const CACHE_NAME = 'microcreches-v2';
 
 // Ressources à mettre en cache immédiatement à l'installation
 const PRECACHE_URLS = [
