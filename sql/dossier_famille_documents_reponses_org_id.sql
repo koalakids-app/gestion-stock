@@ -1,0 +1,27 @@
+-- ============================================================================
+-- documents_reponses.org_id non résolu pour les signatures famille
+-- (« null value in column "org_id" of relation "documents_reponses" violates
+-- not-null constraint », 24 occurrences entre 11h21 et 12h11 UTC le 09/10) —
+-- repéré via la surveillance post-déploiement.
+-- ============================================================================
+-- documents_reponses a déjà le trigger mutualisé trg_documents_reponses_set_org_id
+-- (voir sql/evenements_documents_reponses_set_org_id_trigger.sql) qui résout
+-- org_id via kk_mon_org(), lui-même basé sur auth.uid().
+--
+-- Mais ce trigger ne peut rien résoudre pour les insertions venant de l'edge
+-- function dossier-famille : les familles n'ont pas de compte Supabase (juste
+-- un jeton signé), et la fonction tourne en service_role — donc sans
+-- auth.uid() du tout, quelle que soit la crèche de l'enfant.
+--
+-- Ce n'est donc PAS une nouvelle table à rattraper par le trigger (déjà posé
+-- ici), mais un trou côté application : dossier-famille/index.ts connaissait
+-- déjà creche.org_id (utilisé juste au-dessus pour la liste des crèches du
+-- réseau) sans jamais le transmettre à l'insert/update sur documents_reponses.
+--
+-- CORRECTIF (code, pas SQL) : ajout de `org_id: creche?.org_id || null` à
+-- l'objet row de l'action "save" dans supabase/functions/dossier-famille/
+-- index.ts, puis redéploiement de la fonction (version 24).
+--
+-- Ce fichier documente le correctif pour l'historique du chantier multi-tenant ;
+-- aucune migration SQL n'est nécessaire ici.
+-- ============================================================================

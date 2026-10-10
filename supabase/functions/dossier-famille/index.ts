@@ -197,6 +197,7 @@ Deno.serve(async (req) => {
         document_id: doc.id,
         enfant_id: enfant.id,
         creche_id: enfant.creche_id,
+        org_id: creche?.org_id || null,
         dossier_id: dossier.id,
         donnees,
         statut: signer ? 'signe' : 'prepare',
