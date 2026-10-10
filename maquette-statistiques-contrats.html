@@ -84,6 +84,10 @@ select{font:600 14px Nunito;padding:9px 11px;border:2px solid var(--line);border
 svg text{font-family:Nunito}
 .note{font-size:12px;color:var(--muted);background:#fff;border:2px dashed var(--line);border-radius:14px;padding:10px 14px;line-height:1.7}
 .note b{color:var(--violet)}
+.stab{border:2px solid #D9D3F2;background:#fff;color:var(--violet);font:800 13px Nunito;border-radius:20px;padding:7px 16px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.stab.on{background:var(--violet);border-color:var(--violet);color:#fff}
+.gl{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;font-weight:700;color:var(--muted);margin-top:8px}
+.gl i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 #panelContrats{display:none}
 </style>
 </head>
@@ -120,6 +124,28 @@ svg text{font-family:Nunito}
       </select>
     </div>
 
+    <div class="tabs" style="border-bottom:none;margin-bottom:10px;gap:8px">
+      <button class="stab on" id="stS" onclick="sousOnglet('s')"><i class="ti ti-layout-dashboard"></i> Synthèse</button>
+      <button class="stab" id="stG" onclick="sousOnglet('g')"><i class="ti ti-chart-pie"></i> Graphiques</button>
+    </div>
+
+    <div id="subGraph" style="display:none">
+      <div class="cols">
+        <div class="panel"><h3>Taux de remplissage global <small id="gDonutSub"></small></h3><div id="gDonut"></div></div>
+        <div class="panel"><h3>Places occupées et libres par crèche</h3><div id="gStack"></div></div>
+      </div>
+      <div class="panel"><h3>Taux de remplissage par crèche, mois par mois</h3><p class="hint">Une courbe par crèche : on voit celles qui décrochent à la rentrée ou en été.</p><div id="gLines"></div></div>
+      <div class="cols">
+        <div class="panel"><h3>Places libres du réseau par mois</h3><p class="hint">Total des berceaux non contractés : le creux de juillet-août se prépare dès maintenant.</p><div id="gLibres"></div></div>
+        <div class="panel"><h3>Places contractées par jour</h3><p class="hint">Réseau entier, face à la capacité agréée.</p><div id="gJours"></div></div>
+      </div>
+      <div class="cols">
+        <div class="panel"><h3>Devis envoyés et contrats signés</h3><p class="hint">Par crèche, avec le taux de réalisation au-dessus.</p><div id="gDevis"></div></div>
+        <div class="panel"><h3>État des contrats</h3><div id="gStat"></div></div>
+      </div>
+    </div>
+
+    <div id="subSynth">
     <div class="kpis" id="kpis"></div>
 
     <div class="panel">
@@ -190,6 +216,7 @@ svg text{font-family:Nunito}
 
     <div class="note">
       <b>Données utilisées en production :</b> <code>contrats</code> (statut, creche_id, jours, heures_hebdo, date_debut, date_fin, total_mensuel, reste_a_charge), <code>creches.capacity</code> et <code>capacity_surnombre</code>, <code>devis</code> acceptés, <code>enfants.dob</code> pour les tranches d'âge. Aucune table ni migration supplémentaire.
+    </div>
     </div>
   </div>
 </div>
@@ -304,6 +331,8 @@ function rendre(){
       return '<tr><td><b>'+c.nom+'</b></td><td class="r">'+t[0]+'</td><td class="r">'+t[3]+'</td><td class="r"><span class="tag '+(p>=75?'tg-g':p>=50?'tg-o':'tg-r')+'">'+p+' %</span></td><td class="r" style="color:var(--muted)">'+t[4]+' j</td></tr>';}).join('')+
     '<tr><td colspan="5" style="color:var(--muted);font-size:12px;border:none;padding-top:10px">Pertes : '+(T[0]-T[1])+' devis refusés ou sans réponse, '+(T[1]-T[2])+' acceptés sans contrat créé, '+(T[2]-T[3])+' contrats non signés.</td></tr>';
 
+  graphiques(L,f);
+
   /* courbe SVG */
   $('courbe').innerHTML=courbe(L,f);
 
@@ -331,6 +360,74 @@ function rendre(){
   /* attente */
   $('attente').innerHTML='<tr><th>Crèche</th><th class="r">Familles en attente</th><th>Jours disponibles</th><th class="r">Berceaux libres</th><th class="r">Couverture</th></tr>'+
     ATT.map(r=>{const ok=r[3]>=r[1];return '<tr><td><b>'+r[0]+'</b></td><td class="r">'+r[1]+'</td><td>'+r[2]+'</td><td class="r">'+r[3]+'</td><td class="r"><span class="tag '+(ok?'tg-g':r[3]===0?'tg-r':'tg-o')+'">'+(ok?'Peut tout absorber':r[3]===0?'Complet':'Partielle')+'</span></td></tr>';}).join('');
+}
+
+function sousOnglet(w){
+  $('subSynth').style.display=w==='s'?'block':'none';
+  $('subGraph').style.display=w==='g'?'block':'none';
+  $('stS').classList.toggle('on',w==='s');$('stG').classList.toggle('on',w==='g');
+}
+const PAL=['#4A3F9F','#F47920','#2E9E6B','#C2548F','#2F8FBF','#B8860B'];
+const axe=(W,H,pl,pt,pb,max,step,fmt)=>{let o='';for(let g=0;g<=max;g+=step){const y=pt+(H-pt-pb)*(1-g/max);o+='<line x1="'+pl+'" x2="'+(W-8)+'" y1="'+y+'" y2="'+y+'" stroke="#EFE9F5"/><text x="'+(pl-6)+'" y="'+(y+4)+'" text-anchor="end" font-size="11" fill="#8E8AA8">'+g+(fmt||'')+'</text>';}return o;};
+const leg=(items)=>'<div class="gl">'+items.map(i=>'<span><i style="background:'+i[1]+'"></i>'+i[0]+'</span>').join('')+'</div>';
+function donut(parts,centre,sous){
+  const R=70,r=46,cx=90,cy=90;let a=-Math.PI/2,o='<svg viewBox="0 0 180 180" style="width:100%;max-width:200px;display:block;margin:auto">';
+  const tot=parts.reduce((x,p)=>x+p[1],0);
+  parts.forEach(p=>{const d=p[1]/tot*2*Math.PI;if(d<=0)return;const x0=cx+R*Math.cos(a),y0=cy+R*Math.sin(a),x1=cx+R*Math.cos(a+d-.0001),y1=cy+R*Math.sin(a+d-.0001),
+    x2=cx+r*Math.cos(a+d-.0001),y2=cy+r*Math.sin(a+d-.0001),x3=cx+r*Math.cos(a),y3=cy+r*Math.sin(a),big=d>Math.PI?1:0;
+    o+='<path d="M'+x0+' '+y0+' A'+R+' '+R+' 0 '+big+' 1 '+x1+' '+y1+' L'+x2+' '+y2+' A'+r+' '+r+' 0 '+big+' 0 '+x3+' '+y3+' Z" fill="'+p[2]+'"/>';a+=d;});
+  return o+'<text x="90" y="92" text-anchor="middle" font-size="26" font-weight="800" fill="#4A3F9F" style="font-family:\'Baloo 2\'">'+centre+'</text><text x="90" y="110" text-anchor="middle" font-size="10.5" font-weight="700" fill="#8E8AA8">'+sous+'</text></svg>';
+}
+function graphiques(L,f){
+  const cap=L.reduce((s,c)=>s+c.cap,0),occ=L.reduce((s,c)=>s+moy(c,f),0);
+  /* 1. donut remplissage */
+  $('gDonutSub').textContent=Math.round(occ)+' / '+cap+' berceaux';
+  $('gDonut').innerHTML=donut([['Occupés',occ,'#F47920'],['Libres',Math.max(0,cap-occ),'#EEECFA']],pct(occ,cap)+' %','remplis')+leg([['Occupés','#F47920'],['Libres','#D9D3F2']]);
+  /* 2. barres empilées par crèche */
+  const W=520,H=230,pl=30,pt=12,pb=44,mx=Math.max(...L.map(c=>c.cap))+2,bw=Math.min(46,(W-pl-10)/L.length*.6);
+  let o='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto">'+axe(W,H,pl,pt,pb,Math.ceil(mx/2)*2,2);
+  const yy=v=>pt+(H-pt-pb)*(1-v/(Math.ceil(mx/2)*2));
+  L.forEach((c,i)=>{const x=pl+(i+.5)*(W-pl-10)/L.length-bw/2,m=moy(c,f),k=m/c.cap>=.9?'#2E9E6B':m/c.cap>=.7?'#F47920':'#E0B14B';
+    o+='<rect x="'+x+'" y="'+yy(m)+'" width="'+bw+'" height="'+(yy(0)-yy(m))+'" rx="4" fill="'+k+'"/>'+
+       '<rect x="'+x+'" y="'+yy(c.cap)+'" width="'+bw+'" height="'+(yy(m)-yy(c.cap))+'" rx="4" fill="#EEECFA"/>'+
+       '<text x="'+(x+bw/2)+'" y="'+(yy(c.cap)-4)+'" text-anchor="middle" font-size="10.5" font-weight="800" fill="#4A3F9F">'+pct(m,c.cap)+'%</text>'+
+       '<text x="'+(x+bw/2)+'" y="'+(H-pb+14)+'" text-anchor="middle" font-size="10" fill="#555">'+c.nom.replace('Les ','').replace('P\'tits ','Ptits ').slice(0,11)+'</text>';});
+  $('gStack').innerHTML=o+'</svg>'+leg([['Occupées (≥ 90 %)','#2E9E6B'],['Occupées (70–89 %)','#F47920'],['Occupées (< 70 %)','#E0B14B'],['Libres','#D9D3F2']]);
+  /* 3. courbes par crèche */
+  const W3=900,H3=250,p3=36,pt3=12,pb3=26,x3=i=>p3+i*(W3-p3-12)/11,y3=v=>pt3+(H3-pt3-pb3)*(1-Math.min(v,110)/110);
+  o='<svg viewBox="0 0 '+W3+' '+H3+'" style="width:100%;height:auto">'+axe(W3,H3,p3,pt3,pb3,100,25,'%').replace(/y1="([\d.]+)"/g,'y1="$1"');
+  /* l'axe ci-dessus est sur 0-100 : on le refait proprement */
+  o='<svg viewBox="0 0 '+W3+' '+H3+'" style="width:100%;height:auto">';
+  [0,25,50,75,100].forEach(g=>{o+='<line x1="'+p3+'" x2="'+(W3-12)+'" y1="'+y3(g)+'" y2="'+y3(g)+'" stroke="#EFE9F5"/><text x="'+(p3-6)+'" y="'+(y3(g)+4)+'" text-anchor="end" font-size="11" fill="#8E8AA8">'+g+'%</text>';});
+  o+='<line x1="'+p3+'" x2="'+(W3-12)+'" y1="'+y3(90)+'" y2="'+y3(90)+'" stroke="#2E9E6B" stroke-dasharray="4 4"/>';
+  MOIS.forEach((m,i)=>{o+='<text x="'+x3(i)+'" y="'+(H3-6)+'" text-anchor="middle" font-size="11" fill="#8E8AA8">'+m+'</text>';});
+  L.forEach(c=>{const col=PAL[CRECHES.indexOf(c)%6];
+    o+='<polyline fill="none" stroke="'+col+'" stroke-width="2.5" points="'+c.mois.map((v,i)=>x3(i)+','+y3(pct(v,c.cap))).join(' ')+'"/>'+
+       c.mois.map((v,i)=>'<circle cx="'+x3(i)+'" cy="'+y3(pct(v,c.cap))+'" r="3" fill="'+col+'"/>').join('');});
+  $('gLines').innerHTML=o+'</svg>'+leg(L.map(c=>[c.nom,PAL[CRECHES.indexOf(c)%6]]).concat([['objectif 90 %','#2E9E6B']]));
+  /* 4. places libres du réseau par mois */
+  const lib=MOIS.map((_,i)=>Math.round(L.reduce((a,c)=>a+(c.cap-c.mois[i]*f),0))),mxl=Math.max(...lib,4),W4=520,H4=230,p4=30,pt4=18,pb4=26,bw4=(W4-p4-10)/12*.62;
+  const y4=v=>pt4+(H4-pt4-pb4)*(1-v/mxl);
+  o='<svg viewBox="0 0 '+W4+' '+H4+'" style="width:100%;height:auto">'+axe(W4,H4,p4,pt4,pb4,mxl,Math.max(1,Math.ceil(mxl/5)));
+  lib.forEach((v,i)=>{const x=p4+(i+.5)*(W4-p4-10)/12-bw4/2;
+    o+='<rect x="'+x+'" y="'+y4(v)+'" width="'+bw4+'" height="'+(y4(0)-y4(v))+'" rx="3" fill="'+(i===1?'#F47920':'#B7B0E3')+'"/><text x="'+(x+bw4/2)+'" y="'+(y4(v)-4)+'" text-anchor="middle" font-size="10" font-weight="800" fill="#4A3F9F">'+v+'</text><text x="'+(x+bw4/2)+'" y="'+(H4-8)+'" text-anchor="middle" font-size="9.5" fill="#8E8AA8">'+MOIS[i]+'</text>';});
+  $('gLibres').innerHTML=o+'</svg>'+leg([['Mois en cours','#F47920'],['Autres mois','#B7B0E3']]);
+  /* 5. places par jour */
+  const pj=JOURS.map((_,j)=>Math.round(L.reduce((a,c)=>a+c.places[j]*f,0))),W5=520,H5=230,p5=30,pt5=18,pb5=26,mx5=cap+2,y5=v=>pt5+(H5-pt5-pb5)*(1-v/mx5),bw5=(W5-p5-10)/5*.55;
+  o='<svg viewBox="0 0 '+W5+' '+H5+'" style="width:100%;height:auto">'+axe(W5,H5,p5,pt5,pb5,Math.ceil(mx5/10)*10>mx5?mx5:mx5,Math.max(2,Math.round(mx5/5)));
+  o+='<line x1="'+p5+'" x2="'+(W5-10)+'" y1="'+y5(cap)+'" y2="'+y5(cap)+'" stroke="#2B2740" stroke-dasharray="5 4"/><text x="'+(W5-10)+'" y="'+(y5(cap)-4)+'" text-anchor="end" font-size="10.5" font-weight="700" fill="#2B2740">capacité '+cap+'</text>';
+  pj.forEach((v,j)=>{const x=p5+(j+.5)*(W5-p5-10)/5-bw5/2;o+='<rect x="'+x+'" y="'+y5(v)+'" width="'+bw5+'" height="'+(y5(0)-y5(v))+'" rx="4" fill="#4A3F9F"/><text x="'+(x+bw5/2)+'" y="'+(y5(v)-4)+'" text-anchor="middle" font-size="11" font-weight="800" fill="#4A3F9F">'+v+'</text><text x="'+(x+bw5/2)+'" y="'+(H5-8)+'" text-anchor="middle" font-size="11" fill="#8E8AA8">'+JOURS[j]+'</text>';});
+  $('gJours').innerHTML=o+'</svg>';
+  /* 6. devis vs contrats */
+  const W6=520,H6=230,p6=30,pt6=24,pb6=44,mx6=Math.max(...L.map(c=>TRANSFO[c.id][0]))+2,y6=v=>pt6+(H6-pt6-pb6)*(1-v/mx6),gw=(W6-p6-10)/L.length,bw6=Math.min(22,gw*.32);
+  o='<svg viewBox="0 0 '+W6+' '+H6+'" style="width:100%;height:auto">'+axe(W6,H6,p6,pt6,pb6,Math.ceil(mx6/5)*5,5);
+  L.forEach((c,i)=>{const t=TRANSFO[c.id],x=p6+i*gw+gw/2;
+    o+='<rect x="'+(x-bw6-1)+'" y="'+y6(t[0])+'" width="'+bw6+'" height="'+(y6(0)-y6(t[0]))+'" rx="3" fill="#B7B0E3"/><rect x="'+(x+1)+'" y="'+y6(t[3])+'" width="'+bw6+'" height="'+(y6(0)-y6(t[3]))+'" rx="3" fill="#2E9E6B"/>'+
+       '<text x="'+x+'" y="'+(y6(t[0])-5)+'" text-anchor="middle" font-size="10.5" font-weight="800" fill="#2E9E6B">'+pct(t[3],t[0])+'%</text><text x="'+x+'" y="'+(H6-pb6+14)+'" text-anchor="middle" font-size="10" fill="#555">'+c.nom.replace('Les ','').replace('P\'tits ','Ptits ').slice(0,11)+'</text>';});
+  $('gDevis').innerHTML=o+'</svg>'+leg([['Devis envoyés','#B7B0E3'],['Contrats signés','#2E9E6B']]);
+  /* 7. donut statuts */
+  const tt=STATUTS.reduce((a,x)=>a+x[1],0);
+  $('gStat').innerHTML=donut(STATUTS.map(x=>[x[0],x[1],x[2]]),tt,'contrats')+leg(STATUTS.map(x=>[x[0]+' ('+x[1]+')',x[2]]));
 }
 function kpi(l,n,s,cl,ic){return '<div class="kpi '+cl+'"><div class="l"><i class="ti '+ic+'"></i>'+l+'</div><div class="n">'+n+'</div><div class="s">'+s+'</div></div>';}
 function hb(l,v){return '<div class="hb"><span class="lab">'+l+'</span><span class="tr"><b style="width:'+v*2+'%"></b></span><span class="v">'+v+' %</span></div>';}
