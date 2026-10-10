@@ -201,6 +201,8 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
   cursor:pointer;display:inline-flex;align-items:center;gap:5px}
 .par .pdf:hover{background:#E3DEF8}
 .par .pdf i{font-size:16px}
+@keyframes tourne{to{transform:rotate(360deg)}}
+.tourne{animation:tourne .8s linear infinite}
 </style>
 </head>
 <body>
@@ -248,6 +250,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <h1>Devis</h1>
     <span class="who" id="whoAmI"></span>
     <button class="tbtn accent" onclick="openTarifs()" title="Tarifs et frais"><i class="ti ti-cash"></i><span>Tarifs</span></button>
+    <button class="tbtn" id="btnActualiser" onclick="actualiser(false)" title="Recharger la liste des demandes"><i class="ti ti-refresh"></i><span>Actualiser</span></button>
     <button class="tbtn" onclick="openImportPdf()" title="Importer une liste de préinscriptions (PDF)"><i class="ti ti-file-upload"></i><span>Importer PDF</span></button>
     <button class="tbtn danger" onclick="openSupprGroupe()" title="Supprimer un import en groupe"><i class="ti ti-trash-x"></i><span>Suppr. import</span></button>
     <a class="tbtn" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i><span>Accueil</span></a>
@@ -1508,6 +1511,49 @@ async function loadAll(){
   render();
   ouvrirDepuisUrl();
 }
+
+/* ---------- ACTUALISATION ----------
+   La liste n'était chargée qu'à l'ouverture de la page : une demande arrivée
+   depuis le formulaire en ligne (ou saisie par une collègue) n'apparaissait
+   qu'après une reconnexion. On recharge donc :
+     - quand l'onglet redevient visible ou reprend le focus ;
+     - toutes les 60 s tant que la page est visible ;
+     - à la demande, avec le bouton « Actualiser ».
+   Les rechargements automatiques sont silencieux et se mettent en pause
+   quand une fenêtre (fiche, devis…) est ouverte, pour ne jamais perturber une
+   saisie en cours. */
+let ACTU_EN_COURS=false,ACTU_DERNIERE=0;
+async function actualiser(auto){
+  if(ACTU_EN_COURS)return;
+  if(document.getElementById('appView').style.display!=='block')return;
+  if(auto){
+    if(document.hidden||document.querySelector('.ov.on'))return;
+    if(Date.now()-ACTU_DERNIERE<15000)return;
+  }
+  ACTU_EN_COURS=true;
+  const ic=document.querySelector('#btnActualiser i');
+  if(!auto&&ic)ic.classList.add('tourne');
+  try{
+    const{data,error}=await sb.from('preinscriptions').select('*').order('created_at',{ascending:false});
+    if(error)throw error;
+    const connus=new Set(PRE.map(p=>String(p.id)));
+    const nouvelles=(data||[]).filter(p=>!connus.has(String(p.id))).length;
+    PRE=data||[];
+    ACTU_DERNIERE=Date.now();
+    render();
+    if(nouvelles)toast(nouvelles+' nouvelle'+(nouvelles>1?'s':'')+' demande'+(nouvelles>1?'s':'')+' 🔔');
+    else if(!auto)toast('Liste à jour ✅');
+  }catch(e){
+    console.warn('[actualiser]',e);
+    if(!auto)toast('Actualisation impossible — vérifiez votre connexion.',true);
+  }finally{
+    ACTU_EN_COURS=false;
+    if(ic)ic.classList.remove('tourne');
+  }
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)actualiser(true);});
+window.addEventListener('focus',()=>actualiser(true));
+setInterval(()=>actualiser(true),60000);
 
 /* Arrivée depuis une alerte du tableau de bord (« devis en attente », dossier
    à relancer…) : ?open=<preinscriptionId> ouvre directement la bonne fiche
