@@ -214,6 +214,38 @@ function renderPad(){
   document.getElementById('bc').onclick=clear;
   document.getElementById('bv').onclick=send;
   afficherDocument();
+  afficherQrMobile();
+}
+
+/* Sur ordinateur : QR code de cette même page, à scanner pour signer au doigt sur
+   le téléphone (le lien reste valable sur les deux appareils jusqu'à la signature).
+   Librairie chargée après l'affichage, avec délai maximal : sans elle, pas de QR. */
+function chargerQr(){
+  if(typeof QRCode==='function')return Promise.resolve(true);
+  return new Promise(res=>{
+    const sc=document.createElement('script');
+    const fin=ok=>{clearTimeout(t);res(ok);};
+    const t=setTimeout(()=>res(false),8000);
+    sc.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    sc.onload=()=>fin(typeof QRCode==='function');sc.onerror=()=>fin(false);
+    document.head.appendChild(sc);
+  });
+}
+async function afficherQrMobile(){
+  try{
+    // seulement avec souris + grand écran : sur téléphone ce QR serait inutile
+    if(!(window.matchMedia&&matchMedia('(hover:hover) and (pointer:fine)').matches&&innerWidth>=700))return;
+    if(!await chargerQr()||!document.getElementById('c'))return;
+    const bloc=document.createElement('div');
+    bloc.id='qrMobile';
+    bloc.style.cssText='display:flex;align-items:center;gap:14px;margin:0 0 14px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:#FBFAFE';
+    bloc.innerHTML='<div id="qrMobileImg" style="flex:none;line-height:0"></div>'
+      +'<div><div class="who" style="margin-bottom:2px">📱 Signer depuis votre téléphone</div>'
+      +'<div class="tip" style="margin:0;text-align:left">Scannez ce QR code avec l’appareil photo de votre téléphone pour signer au doigt. Sinon, signez ici avec la souris.</div></div>';
+    const qui=card.querySelector('.who');          // juste sous le nom du signataire
+    if(qui&&qui.nextSibling)card.insertBefore(bloc,qui.nextSibling);else card.appendChild(bloc);
+    new QRCode(document.getElementById('qrMobileImg'),{text:location.href,width:110,height:110,correctLevel:QRCode.CorrectLevel.M});
+  }catch(e){console.warn('QR mobile',e);}
 }
 
 function initPad(){
