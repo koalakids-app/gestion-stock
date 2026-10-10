@@ -1631,26 +1631,84 @@ async function cloturerSelection(){
   rechercherCloture();
 }
 
+/* ---------- RECHERCHE ----------
+   Insensible aux accents et aux majuscules, tolérante aux fautes de frappe
+   (« aliénore » trouve « aléinore »), et qui cherche aussi dans les parents et
+   dans les fiches enfants — pas seulement dans le nom de la demande. */
+function normRech(s){
+  return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
+    .replace(/[^a-z0-9]+/g,' ').trim();
+}
+/* Distance de Damerau-Levenshtein (substitution, insertion, suppression,
+   inversion de deux lettres voisines), plafonnée : au-delà de `max` on s'arrête. */
+function distRech(a,b,max){
+  if(Math.abs(a.length-b.length)>max)return max+1;
+  const d=[];
+  for(let i=0;i<=a.length;i++){d[i]=[i];}
+  for(let j=1;j<=b.length;j++)d[0][j]=j;
+  for(let i=1;i<=a.length;i++){
+    for(let j=1;j<=b.length;j++){
+      const c=a[i-1]===b[j-1]?0:1;
+      d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+c);
+      if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1])d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);
+    }
+  }
+  return d[a.length][b.length];
+}
+/* Chaque mot cherché doit se retrouver dans le texte : tel quel, ou à une
+   ou deux lettres près (selon sa longueur), y compris en début de mot pour
+   qu'une saisie en cours de frappe fonctionne déjà. */
+function correspondRech(requete,texte){
+  const qs=normRech(requete).split(' ').filter(Boolean);
+  if(!qs.length)return true;
+  const brut=normRech(texte);
+  const mots=brut.split(' ').filter(Boolean);
+  return qs.every(q=>{
+    if(brut.indexOf(q)>=0)return true;
+    if(q.length<5)return false;   // un mot court se cherche tel quel : « lina » ne doit pas ramener « lana »
+    const tol=q.length>=8?2:1;
+    return mots.some(m=>distRech(q,m,tol)<=tol||(m.length>q.length&&distRech(q,m.slice(0,q.length),1)<=1));
+  });
+}
+
 /* ---------- ENTRÉES À VENIR ----------
    Un enfant « à venir » n'est pas une préinscription : la famille a signé, la
    fiche existe, seul l'accueil n'a pas commencé. La date d'entrée de la fiche
    enfant est trop souvent vide (ou fausse) pour s'y fier : on lit le début de
    la ligne d'accueil, qui est ce que les présences et la facturation utilisent. */
 let ENTREES=[],ENTREES_CHARGEES=false;
+let PARENTS_PRE={},ENFANTS_REC=[];   // texte des parents par demande ; fiches enfants pour la recherche
 
 async function chargerEntrees(){
   try{
-    const[en,li,ct]=await Promise.all([
+    const[en,li,ct,pp,ep]=await Promise.all([
       sb.from('enfants').select('id,prenom,nom,dob,creche_id,date_entree'),
       sb.from('enfants_contrats').select('enfant_id,date_debut,date_fin'),
-      sb.from('contrats').select('enfant_id,statut,origine,type,date_debut')
+      sb.from('contrats').select('enfant_id,statut,origine,type,date_debut'),
+      sb.from('preinscriptions_parents').select('preinscription_id,prenom,nom,email,telephone'),
+      sb.from('enfants_parents').select('enfant_id,prenom,nom,email,telephone')
     ]);
     if(en.error)throw en.error;
     if(li.error)throw li.error;
+    /* La recherche sur les parents est un confort : si leur lecture échoue, on
+       cherche quand même sur les enfants et les demandes. */
+    const txtParent=x=>[x.prenom,x.nom,x.email,x.telephone,String(x.telephone||'').replace(/\D/g,'')].join(' ');
+    PARENTS_PRE={};
+    ((pp&&pp.data)||[]).forEach(x=>{PARENTS_PRE[x.preinscription_id]=(PARENTS_PRE[x.preinscription_id]||'')+' '+txtParent(x);});
+    const parentsEnf={};
+    ((ep&&ep.data)||[]).forEach(x=>{parentsEnf[x.enfant_id]=(parentsEnf[x.enfant_id]||'')+' '+txtParent(x);});
     const aujourdhui=auj();
     const lignes={},contrats={};
     (li.data||[]).forEach(l=>{(lignes[l.enfant_id]=lignes[l.enfant_id]||[]).push(l);});
     ((ct&&ct.data)||[]).forEach(c=>{if(c.enfant_id)(contrats[c.enfant_id]=contrats[c.enfant_id]||[]).push(c);});
+    ENFANTS_REC=(en.data||[]).map(e=>{
+      const ls=lignes[e.id]||[];
+      const enCours=ls.find(l=>String(l.date_debut).slice(0,10)<=aujourdhui&&(!l.date_fin||String(l.date_fin).slice(0,10)>=aujourdhui));
+      const futur=ls.map(l=>String(l.date_debut).slice(0,10)).filter(d=>d>aujourdhui).sort()[0];
+      return {e,parents:parentsEnf[e.id]||'',
+        accueil:enCours?'accueil en cours depuis le '+dfr(enCours.date_debut)
+          :(futur?'entrée à venir le '+dfr(futur):(ls.length?'accueil terminé':'aucune ligne d\'accueil'))};
+    });
     ENTREES=(en.data||[]).map(e=>{
       const ls=lignes[e.id]||[];
       const enCours=ls.some(l=>String(l.date_debut).slice(0,10)<=aujourdhui
@@ -2093,7 +2151,8 @@ function render(){
     l=l.filter(aVisitePrevue);
     l.sort((a,b)=>(String(a.date_visite)+(a.heure_visite||'')).localeCompare(String(b.date_visite)+(b.heure_visite||'')));
   }
-  if(q)l=l.filter(p=>((p.prenom||'')+' '+(p.nom||'')+' '+(p.ville||'')+' '+(p.notes_internes||'')).toLowerCase().indexOf(q)>=0);
+  if(q)l=l.filter(p=>correspondRech(q,(p.prenom||'')+' '+(p.nom||'')+' '+(p.ville||'')+' '+(p.notes_internes||'')+' '+(PARENTS_PRE[p.id]||'')));
+  const blocEnfants=q?blocEnfantsRecherche(q,cre):'';
 
   /* Par date d'ajout (l'ordre déjà chargé, le plus récent en tête) ou par
      date de début souhaitée — la plus proche en tête, les demandes sans date
@@ -2109,7 +2168,7 @@ function render(){
   const el=document.getElementById('list');
   if(!l.length){
     el.innerHTML='<div class="empty"><i class="ti ti-inbox"></i><p>'
-      +(PRE.length?'Aucune demande ne correspond à ces filtres.':'Aucune demande enregistrée pour le moment.')+'</p></div>';
+      +(PRE.length?'Aucune demande ne correspond à ces filtres.':'Aucune demande enregistrée pour le moment.')+'</p></div>'+blocEnfants;
     return;
   }
   el.innerHTML=l.map(p=>{
@@ -2139,7 +2198,28 @@ function render(){
       +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'
       +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>'+rel+vis+mot+'</div>'
       +'</div></div>';
-  }).join('');
+  }).join('')+blocEnfants;
+}
+
+/* Les fiches enfants qui correspondent à la recherche : un enfant importé ou
+   déjà accueilli n'a pas de demande, il serait sinon introuvable ici. */
+function blocEnfantsRecherche(q,cre){
+  const L=ENFANTS_REC.filter(x=>(!cre||String(x.e.creche_id)===String(cre))
+    &&correspondRech(q,(x.e.prenom||'')+' '+(x.e.nom||'')+' '+x.parents));
+  if(!L.length)return '';
+  return '<div class="statscap" style="margin-top:16px"><b>Fiches enfants correspondantes ('+L.length+')</b> — déjà inscrits, '
+    +'sans demande dans cette liste. Cliquez pour ouvrir leur dossier contrat.</div>'
+    +L.slice(0,30).map(x=>{
+      const e=x.e;
+      const nom=((e.prenom||'')+' '+(e.nom||'')).trim()||'Sans nom';
+      const naiss=e.dob?'né(e) le '+dfr(e.dob):'naissance non renseignée';
+      return '<div class="card" onclick="location.href=\'contrats.html?enfant='+esc(e.id)+'\'">'
+        +'<div class="av"><i class="ti ti-user-check"></i></div><div class="bd">'
+        +'<div class="nm">'+esc(nom)+'</div>'
+        +'<div class="sub">'+esc(naiss)+' · '+esc(nomCreche(e.creche_id)||'crèche non précisée')+'</div>'
+        +'<div style="margin-top:6px"><span class="tag" style="background:var(--green-l);color:var(--green)">Fiche enfant · '+esc(x.accueil)+'</span></div>'
+        +'</div></div>';
+    }).join('')+(L.length>30?'<p class="hint">… et '+(L.length-30)+' autres : affinez la recherche.</p>':'');
 }
 
 /* Une demande est à relancer si sa date de rappel est passée ou tombe
