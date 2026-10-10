@@ -467,6 +467,60 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
   </div>
 </div>
 
+<!-- LA REPRISE D'UN CONTRAT EXISTANT (signé hors application) -->
+<div class="ov" id="ovReprise">
+  <div class="md" style="max-width:760px">
+    <h3><i class="ti ti-file-import"></i> Reprendre un contrat existant — <span id="rprNom"></span></h3>
+    <div class="warn"><i class="ti ti-info-circle"></i><span>Pour un contrat <b>déjà signé</b> hors de l'application (Gertrude, papier…).
+      Il est enregistré tel quel, <b>comme contresigné</b>, sans signature ni envoi : l'original signé reste celui d'origine,
+      à conserver. Saisissez les montants qui figurent <b>sur ce contrat</b>, pas ceux de la grille actuelle.</span></div>
+
+    <div class="sec">L'accueil</div>
+    <div class="g3">
+      <div class="f"><label class="lb">Crèche</label><select id="rprCreche"></select></div>
+      <div class="f"><label class="lb">Début de l'accueil</label><input id="rprDebut" type="date" onchange="rprRecalcul()"></div>
+      <div class="f"><label class="lb">Fin de l'accueil</label><input id="rprFin" type="date" onchange="rprRecalcul()"></div>
+    </div>
+    <div class="f"><label class="lb">Jours d'accueil</label><div id="rprJoursBox" class="jr"></div></div>
+    <div class="g3">
+      <div class="f"><label class="lb">Arrivée</label><input id="rprHd" type="time" onchange="rprRecalcul()"></div>
+      <div class="f"><label class="lb">Départ</label><input id="rprHf" type="time" onchange="rprRecalcul()"></div>
+      <div class="f"><label class="lb">Semaines facturées / an</label><input id="rprSem" type="number" min="1" max="52" value="47" onchange="rprRecalcul()"></div>
+    </div>
+    <div class="g3">
+      <div class="f"><label class="lb">Repas</label><select id="rprRepas">
+        <option value="">— non précisé —</option>
+        <option value="BIB">Biberon</option><option value="BB">Repas bébé</option>
+        <option value="M">Repas moyen</option><option value="G">Repas grand</option></select></div>
+      <div class="f"><label class="lb">Tarif horaire du contrat (€/h)</label><input id="rprTarif" type="number" step="0.01" min="0" onchange="rprRecalcul()"></div>
+      <div class="f"><label class="lb">N° allocataire CAF / MSA</label><input id="rprAlloc"></div>
+    </div>
+    <p class="hint" id="rprVol"></p>
+
+    <div class="sec">Le détail chiffré du contrat</div>
+    <p class="hint">Une ligne par poste facturé chaque mois : l'accueil, puis les frais (entretien, repas…). Les lignes
+      « par jour d'accueil » se calculent sur les jours du mois ; le total mensuel est ce que la famille paie, hors frais uniques.</p>
+    <div id="rprLignes"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
+      <button class="btn btn-s" type="button" onclick="rprAjouterLigne()"><i class="ti ti-plus"></i> Ajouter une ligne</button>
+      <select id="rprFraisGrille" onchange="rprAjouterFrais(this.value);this.value=''" style="max-width:260px"></select>
+    </div>
+    <div id="rprTotaux"></div>
+
+    <div class="sec">Traçabilité</div>
+    <div class="g2">
+      <div class="f"><label class="lb">Référence dans l'ancien logiciel</label><input id="rprRef" placeholder="facultatif"></div>
+      <div class="f"><label class="lb">Signé par la famille le</label><input id="rprSigneLe" type="date"></div>
+    </div>
+    <div class="f"><label class="lb">Notes internes</label><textarea id="rprNotes" placeholder="Jamais transmis à la famille."></textarea></div>
+
+    <div class="acts">
+      <button class="btn btn-g" onclick="closeOv('ovReprise')">Annuler</button>
+      <button class="btn btn-p" id="btnRprGo" onclick="rprEnregistrer()"><i class="ti ti-check"></i> Enregistrer comme contrat en cours</button>
+    </div>
+  </div>
+</div>
+
 <!-- LA CONTRESIGNATURE DE LA CRÈCHE -->
 <div class="ov" id="ovContresign">
   <div class="md" style="max-width:540px">
@@ -1184,6 +1238,8 @@ function rendreDossier(){
       +(courant?'<i class="ti ti-refresh"></i> Renouveler le contrat'
                :'<i class="ti ti-file-plus"></i> Établir le contrat')+'</button>';
   }
+  if(CSUJ.kind==='enfant')h+='<button class="btn btn-s" onclick="openReprise()" title="Contrat déjà signé hors application">'
+    +'<i class="ti ti-file-import"></i> Reprendre un contrat existant</button>';
   if(peutAmender)h+='<button class="btn btn-s" onclick="openContrat(null,\'avenant\')">'
     +'<i class="ti ti-file-diff"></i> Établir un avenant</button>';
   if(courant&&courant.statut==='contresigne'&&CSUJ.kind==='pre'){
@@ -1234,10 +1290,11 @@ function rendreDossier(){
         +'<div class="h"><b>'+esc(c.numero||'Sans numéro')+'</b>'
         +'<span class="tag" style="background:var(--violet-l);color:var(--violet)">'+esc(C_TYPES[c.type]||c.type)+'</span>'
         +'<span class="tag" style="background:'+st.bg+';color:'+st.fg+'">'+esc(st.l)+'</span>'
-        +'<button class="pdf" style="border:none;background:var(--violet-l);color:var(--violet);'
+        +(c.origine==='reprise'?'<span class="tag" style="background:var(--amber-l);color:var(--amber)">Repris</span>':'')
+        +(c.origine==='reprise'?'':'<button class="pdf" style="border:none;background:var(--violet-l);color:var(--violet);'
         +'border-radius:10px;min-height:34px;padding:0 11px;font-family:Nunito;font-weight:800;'
         +'font-size:12px;cursor:pointer" onclick="event.stopPropagation();pdfContrat(\''+c.id+'\')" '
-        +'title="Télécharger le PDF"><i class="ti ti-file-type-pdf"></i> PDF</button>'
+        +'title="Télécharger le PDF"><i class="ti ti-file-type-pdf"></i> PDF</button>')
         /* Résilier est posé ICI, sur la carte, et non plus seulement au fond de
            la modale du contrat : cette barre d'actions passe sous le pli dès
            que le contrat a quelques clauses, et un bouton qu'on ne voit pas
@@ -1546,11 +1603,12 @@ async function openContrat(id,type){
     (CCUR&&CCUR.statut==='contresigne')?'':'none';
   // Le PDF ne s'imprime que depuis la base : un contrat jamais enregistré n'a
   // ni numéro ni lignes, et sortirait un document sans identité.
-  document.getElementById('btnPdfCt').style.display=CCUR?'':'none';
+  const reprise=!!(CCUR&&CCUR.origine==='reprise');
+  document.getElementById('btnPdfCt').style.display=(CCUR&&!reprise)?'':'none';
   // Renvoi manuel : pour un contrat déjà contresigné avant la mise en place de
   // l'envoi automatique, ou simplement si la famille redemande une copie.
   document.getElementById('btnMailCt').style.display=
-    (CCUR&&CCUR.statut==='contresigne')?'':'none';
+    (CCUR&&CCUR.statut==='contresigne'&&!reprise)?'':'none';
 
   const lock=document.getElementById('cLock');
   lock.style.display=brouillon?'none':'';
@@ -1689,6 +1747,13 @@ async function openContrat(id,type){
 
 function etatContrat(c){
   if(!c)return '';
+  if(c.origine==='reprise'){
+    return '<b style="color:var(--amber)">Contrat repris d\'un ancien logiciel</b>'
+      +(c.reprise_reference?' (réf. '+esc(c.reprise_reference)+')':'')
+      +(c.reprise_signe_le?', signé par la famille le '+dfr(c.reprise_signe_le):'')
+      +', saisi le '+dfr(c.contresigne_le)+'. L\'original signé reste celui d\'origine : à conserver au dossier.'
+      +(c.statut==='resilie'?' Résilié le '+dfr(c.resilie_le)+'.':'');
+  }
   if(c.statut==='contresigne'){
     return '<b style="color:var(--green)">Contrat complet.</b> Signé par la famille le '+dfr(c.repondu_le)
       +(c.repondu_par?' au nom de '+esc(c.repondu_par):'')+', contresigné le '+dfr(c.contresigne_le)
@@ -2222,6 +2287,202 @@ async function envoyerContrat(){
     b.innerHTML=relance?'<i class="ti ti-bell"></i> Relancer la famille'
                        :'<i class="ti ti-send"></i> Envoyer à la famille';
   }
+}
+
+/* ---------- LA REPRISE D'UN CONTRAT EXISTANT ---------- */
+/* Un contrat signé ailleurs ne peut pas repasser par l'envoi, la signature de
+   la famille et la contresignature : ce serait refaire signer ce qui l'est
+   déjà, ou fabriquer une signature. On l'enregistre donc tel quel, au statut
+   « contresigné » et avec origine = 'reprise' (script sql/contrats_reprise.sql).
+   Sans cette marque, un contrôle PMI ne distinguerait pas un contrat signé dans
+   l'application d'un contrat recopié. */
+const RPR_TYPES=[['accueil','Accueil (mensualité)'],['unitaire','Frais par jour d\'accueil'],
+  ['mensuel','Frais mensuel'],['annuel','Frais annuel'],['unique','Frais unique']];
+let RPR_LIGNES=[];
+
+async function openReprise(){
+  if(!CSUJ||CSUJ.kind!=='enfant'){toast('La reprise concerne un enfant déjà accueilli.',true);return;}
+  await loadGrille();
+  document.getElementById('rprNom').textContent=((CSUJ.prenom||'')+' '+(CSUJ.nom||'')).trim();
+  document.getElementById('rprCreche').innerHTML=CRECHES.map(c=>
+    '<option value="'+c.id+'"'+(String(c.id)===String(CSUJ.creche_id)?' selected':'')+'>'+esc(c.name)+'</option>').join('');
+  setVal('rprDebut',CSUJ.date_ref?String(CSUJ.date_ref).slice(0,10):'');
+  setVal('rprFin','');setVal('rprHd','');setVal('rprHf','');
+  setVal('rprSem',semainesDe(CSUJ.creche_id)||47);
+  setVal('rprRepas',CSUJ.repas||'');setVal('rprTarif','');setVal('rprAlloc','');
+  setVal('rprRef','');setVal('rprSigneLe','');setVal('rprNotes','');
+  document.getElementById('rprJoursBox').innerHTML=JOURS.map(j=>
+    '<label><input type="checkbox" class="ckRJour" value="'+j[0]+'" onchange="rprRecalcul()"><span>'+j[1]+'</span></label>').join('');
+  document.getElementById('rprFraisGrille').innerHTML='<option value="">+ Ajouter un frais de la grille…</option>'
+    +FRAIS.map(f=>'<option value="'+f.id+'">'+esc(f.libelle)+'</option>').join('');
+  RPR_LIGNES=[{libelle:'Accueil',type:'accueil',quantite:'',pu:''}];
+  rprRendreLignes();rprRecalcul();
+  openOv('ovReprise');
+}
+
+function rprJours(){return [...document.querySelectorAll('.ckRJour:checked')].map(x=>Number(x.value));}
+function rprHeuresHebdo(){
+  const m=t=>{const a=String(t||'').split(':');return a.length>=2?Number(a[0])*60+Number(a[1]):null;};
+  const a=m(val('rprHd')),b=m(val('rprHf'));
+  const n=rprJours().length;
+  if(a==null||b==null||b<=a||!n)return null;
+  return Math.round((b-a)/60*n*100)/100;
+}
+/* Jours d'accueil par mois : sur la durée du contrat s'il a un terme (comme le
+   module Contrat), sinon lissé sur l'année. */
+function rprJoursParMois(){
+  const nj=rprJours().length,sem=Number(val('rprSem'))||47;
+  if(val('rprDebut')&&val('rprFin')){
+    const j=joursAccueilEntre(val('rprDebut'),val('rprFin'),rprJours()),m=moisEntre(val('rprDebut'),val('rprFin'));
+    if(j!=null&&m)return j/m;
+  }
+  return nj*sem/12;
+}
+function rprRendreLignes(){
+  document.getElementById('rprLignes').innerHTML='<table class="lg">'+RPR_LIGNES.map((l,i)=>
+    '<tr><td><input value="'+esc(l.libelle)+'" placeholder="Libellé" oninput="RPR_LIGNES['+i+'].libelle=this.value"></td>'
+    +'<td><select onchange="RPR_LIGNES['+i+'].type=this.value;rprRecalcul()">'
+    +RPR_TYPES.map(t=>'<option value="'+t[0]+'"'+(t[0]===l.type?' selected':'')+'>'+esc(t[1])+'</option>').join('')+'</select></td>'
+    +'<td><input type="number" step="any" style="width:84px" placeholder="Qté" value="'+esc(l.quantite)+'" oninput="RPR_LIGNES['+i+'].quantite=this.value;rprRecalcul(true)"></td>'
+    +'<td><input type="number" step="any" style="width:96px" placeholder="€ unit." value="'+esc(l.pu)+'" oninput="RPR_LIGNES['+i+'].pu=this.value;rprRecalcul(true)"></td>'
+    +'<td class="m" id="rprTot'+i+'"></td>'
+    +'<td><button class="btn btn-g btn-sm" type="button" onclick="RPR_LIGNES.splice('+i+',1);rprRendreLignes();rprRecalcul()" title="Retirer"><i class="ti ti-x"></i></button></td></tr>'
+  ).join('')+'</table>';
+}
+function rprAjouterLigne(){RPR_LIGNES.push({libelle:'',type:'mensuel',quantite:1,pu:''});rprRendreLignes();rprRecalcul();}
+function rprAjouterFrais(id){
+  const f=FRAIS.find(x=>String(x.id)===String(id));
+  if(!f)return;
+  const signe=f.est_reduction?-1:1;
+  RPR_LIGNES.push({libelle:f.libelle,type:f.type,
+    quantite:f.type==='unitaire'?Math.round(rprJoursParMois()*1000)/1000:1,
+    pu:signe*Number(f.montant)});
+  rprRendreLignes();rprRecalcul();
+}
+function rprTotalLigne(l){return Math.round((Number(l.quantite)||0)*(Number(l.pu)||0)*100)/100;}
+/* `saisie` : on vient de taper dans une ligne — on ne re-dessine pas la table
+   (le curseur sauterait), on ne met à jour que les totaux. */
+function rprRecalcul(saisie){
+  const h=rprHeuresHebdo(),sem=Number(val('rprSem'))||47,tarif=Number(val('rprTarif'))||0;
+  const vol=document.getElementById('rprVol');
+  if(h==null)vol.textContent='';
+  else{
+    const hMois=Math.round(h*sem/12*100)/100;
+    vol.innerHTML='Volume : <b>'+h+' h</b> par semaine, soit environ <b>'+hMois+' h</b> par mois'
+      +(tarif?' — accueil théorique '+euro(hMois*tarif)+' ; <button class="btn btn-g btn-sm" type="button" onclick="rprPreremplirAccueil()">préremplir la ligne d\'accueil</button>':'')+'.';
+  }
+  RPR_LIGNES.forEach((l,i)=>{const e=document.getElementById('rprTot'+i);if(e)e.textContent=euro(rprTotalLigne(l));});
+  const recur=['accueil','mensuel','unitaire'];
+  const mensuel=RPR_LIGNES.filter(l=>recur.indexOf(l.type)>=0).reduce((s,l)=>s+rprTotalLigne(l),0);
+  const uniques=RPR_LIGNES.filter(l=>l.type==='unique').reduce((s,l)=>s+rprTotalLigne(l),0);
+  document.getElementById('rprTotaux').innerHTML='<div class="box"><div style="display:flex;justify-content:space-between">'
+    +'<span>Total mensuel</span><b>'+euro(mensuel)+'</b></div>'
+    +(uniques?'<div style="display:flex;justify-content:space-between;margin-top:4px"><span>Frais uniques</span><b>'+euro(uniques)+'</b></div>':'')+'</div>';
+  if(!saisie&&!document.getElementById('rprLignes').children.length)rprRendreLignes();
+}
+function rprPreremplirAccueil(){
+  const h=rprHeuresHebdo(),sem=Number(val('rprSem'))||47,tarif=Number(val('rprTarif'))||0;
+  if(h==null||!tarif)return;
+  const l=RPR_LIGNES.find(x=>x.type==='accueil');
+  if(!l)return;
+  l.quantite=Math.round(h*sem/12*100)/100;l.pu=tarif;
+  rprRendreLignes();rprRecalcul();
+}
+
+async function rprEnregistrer(){
+  const jours=rprJours(),deb=val('rprDebut'),fin=val('rprFin')||null;
+  const lignes=RPR_LIGNES.filter(l=>(l.libelle||'').trim()||rprTotalLigne(l)).map((l,i)=>({
+    libelle:(l.libelle||'').trim()||'Ligne '+(i+1),description:'',type:l.type,
+    quantite:Number(l.quantite)||0,montant_unitaire:Number(l.pu)||0,total:rprTotalLigne(l),ordre:(i+1)*10}));
+  if(!deb){toast('La date de début est obligatoire.',true);return;}
+  if(fin&&fin<=deb){toast('La fin de l\'accueil doit être postérieure au début.',true);return;}
+  if(!jours.length){toast('Cochez au moins un jour d\'accueil.',true);return;}
+  const h=rprHeuresHebdo();
+  if(h==null){toast('Renseignez des horaires d\'arrivée et de départ cohérents.',true);return;}
+  if(!lignes.some(l=>l.type==='accueil'&&l.total)){toast('Saisissez la ligne d\'accueil avec son montant : c\'est elle que la facturation lit.',true);return;}
+  const recur=['accueil','mensuel','unitaire'];
+  const mensuel=Math.round(lignes.filter(l=>recur.indexOf(l.type)>=0).reduce((s,l)=>s+l.total,0)*100)/100;
+  const uniques=Math.round(lignes.filter(l=>l.type==='unique').reduce((s,l)=>s+l.total,0)*100)/100;
+  const annuels=lignes.filter(l=>l.type==='annuel').reduce((s,l)=>s+l.total,0);
+  const mois=fin?(moisEntre(deb,fin)||12):12;
+  const tarif=Number(val('rprTarif'))||0;
+  const precedent=contratsDe('enfant',CSUJ.id).find(c=>c.type!=='avenant'
+    &&['signe','contresigne','resilie'].indexOf(c.statut)>=0);
+  const maintenant=new Date().toISOString();
+  const row={
+    enfant_id:CSUJ.enfant_id,preinscription_id:null,
+    type:precedent?'renouvellement':'initial',
+    creche_id:val('rprCreche')||null,
+    statut:'contresigne',origine:'reprise',
+    contresigne_le:maintenant,contresigne_par:'Repris de l\'ancien logiciel',
+    reprise_reference:val('rprRef')||null,reprise_signe_le:val('rprSigneLe')||null,
+    date_debut:deb,date_fin:fin,jours:jours,
+    heure_debut:val('rprHd'),heure_fin:val('rprHf'),
+    heures_hebdo:h,semaines_an:Number(val('rprSem'))||47,
+    jours_accueil:fin?joursAccueilEntre(deb,fin,jours):null,mois_factures:fin?mois:null,
+    repas:val('rprRepas')||null,
+    tarif_id:null,tarif_libelle:'Repris du contrat d\'origine',
+    tarif_mode:tarif?'horaire':'mensuel',tarif_montant:tarif||mensuel,
+    total_mensuel:mensuel,total_annuel:Math.round((mensuel*mois+annuels)*100)/100,frais_uniques:uniques,
+    num_allocataire:val('rprAlloc'),
+    notes_internes:val('rprNotes'),created_by:ME?ME.id:null
+  };
+  const btn=document.getElementById('btnRprGo');
+  btn.disabled=true;
+  try{
+    const annee=anneeScolaireDe(deb)||new Date().getFullYear();
+    let ins=null;
+    for(let essai=0;essai<5;essai++){
+      row.numero=prochainNumero(annee);
+      ins=await sb.from('contrats').insert(row).select().single();
+      if(!ins.error)break;
+      if(ins.error.code!=='23505')throw ins.error;
+      const{data}=await sb.from('contrats').select('id,numero,parent_contrat_id');
+      if(data)CONTRATS=data.map(x=>Object.assign(CONTRATS.find(y=>String(y.id)===String(x.id))||{},x));
+    }
+    if(ins.error)throw ins.error;
+    const id=ins.data.id;
+    const el=await sb.from('contrats_lignes').insert(lignes.map(l=>Object.assign({contrat_id:id},l)));
+    if(el.error){
+      await sb.from('contrats').delete().eq('id',id);   // pas de contrat sans détail chiffré
+      throw el.error;
+    }
+    /* La ligne d'accueil technique (présences, repas, effectifs) : on complète
+       celle que l'import des présences a pu créer plutôt que d'en poser une
+       seconde qui ferait doublon. */
+    let lien='';
+    try{
+      const ex=await sb.from('enfants_contrats').select('id,date_debut').eq('enfant_id',CSUJ.enfant_id);
+      const l=ex.data||[];
+      const cible=l.find(x=>String(x.date_debut).slice(0,10)===deb)||(l.length===1?l[0]:null);
+      const champs={date_debut:deb,date_fin:fin,jours:jours,heure_debut:row.heure_debut,heure_fin:row.heure_fin,
+        repas:row.repas,updated_at:maintenant};
+      if(cible){
+        const u=await sb.from('enfants_contrats').update(champs).eq('id',cible.id);
+        if(u.error)throw u.error;
+        lien=cible.id;
+      }else{
+        const i2=await sb.from('enfants_contrats').insert(Object.assign({enfant_id:CSUJ.enfant_id,
+          notes:'Repris du contrat '+ins.data.numero},champs)).select().single();
+        if(i2.error)throw i2.error;
+        lien=i2.data.id;
+      }
+      await sb.from('contrats').update({enfants_contrat_id:lien}).eq('id',id);
+    }catch(e){
+      console.warn('[reprise/ligne d\'accueil]',e);
+      toast('Contrat repris, mais la ligne d\'accueil des présences n\'a pas pu être mise à jour : '+(e.message||e),true);
+    }
+    closeOv('ovReprise');
+    await recharger();
+    rendreDossier();
+    toast('Contrat '+ins.data.numero+' repris ✅');
+  }catch(e){
+    console.error('[rprEnregistrer]',e);
+    const msg=(/origine|reprise_/.test(e.message||'')||e.code==='PGRST204'||e.code==='42703')
+      ? 'la base n\'est pas à jour — exécutez d\'abord sql/contrats_reprise.sql.'
+      : (e.code==='23514'?'une contrainte de la base refuse cette combinaison : ':'')+(e.message||'erreur inconnue');
+    toast('Reprise impossible : '+msg,true);
+  }finally{btn.disabled=false;}
 }
 
 /* ---------- LA CONTRESIGNATURE ---------- */
