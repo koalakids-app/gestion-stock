@@ -828,7 +828,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 let ME=null,PROF=null,IS_DIRECTION=false;
 let PRE=[],CRECHES=[],PARENTS=[];
 let ficheId=null,parentId=null;
-let filtreStatut='',filtreRappels=false,filtreVisites=false,filtreRelancesAVenir=false;
+let filtreStatut='',filtreRappels=false,filtreVisites=false,filtreVisitesFaites=false,filtreRelancesAVenir=false;
 
 /* Statuts : libellé, couleur de fond, couleur de texte. L'ordre est celui du
    cycle de vie, pas alphabétique — la liste déroulante doit se lire comme une
@@ -2132,7 +2132,8 @@ function render(){
      laisser là remplirait la liste de dossiers clos au fil de l'année. Elle
      reste entière — devis, dates, origine — et se retrouve en cliquant sur le
      compteur « Inscrit ». */
-  if(!filtreStatut){if(!filtreRappels&&!filtreRelancesAVenir&&!filtreVisites)l=l.filter(p=>p.statut!=='inscrit');}
+  if(!filtreStatut){if(!filtreRappels&&!filtreRelancesAVenir&&!filtreVisites&&!filtreVisitesFaites)l=l.filter(p=>p.statut!=='inscrit');}
+  else if(filtreStatut==='__perdus__')l=l.filter(p=>p.statut==='refuse'||p.statut==='sans_suite');
   else if(filtreStatut!=='__tous__')l=l.filter(p=>p.statut===filtreStatut);
   if(cre)l=l.filter(p=>String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0);
   /* Le filtre doit montrer exactement ce que compte la tuile « relances en
@@ -2151,6 +2152,10 @@ function render(){
     l=l.filter(aVisitePrevue);
     l.sort((a,b)=>(String(a.date_visite)+(a.heure_visite||'')).localeCompare(String(b.date_visite)+(b.heure_visite||'')));
   }
+  if(filtreVisitesFaites){
+    l=l.filter(aVisiteFaite);
+    l.sort((a,b)=>(String(b.date_visite)+(b.heure_visite||'')).localeCompare(String(a.date_visite)+(a.heure_visite||'')));
+  }
   if(q)l=l.filter(p=>correspondRech(q,(p.prenom||'')+' '+(p.nom||'')+' '+(p.ville||'')+' '+(p.notes_internes||'')+' '+(PARENTS_PRE[p.id]||'')));
   const blocEnfants=q?blocEnfantsRecherche(q,cre):'';
 
@@ -2158,7 +2163,7 @@ function render(){
      date de début souhaitée — la plus proche en tête, les demandes sans date
      renseignée reléguées en bas plutôt qu'éparpillées par un tri « vide en
      premier ». */
-  if(val('fTri')==='debut'&&!filtreRappels&&!filtreRelancesAVenir&&!filtreVisites){
+  if(val('fTri')==='debut'&&!filtreRappels&&!filtreRelancesAVenir&&!filtreVisites&&!filtreVisitesFaites){
     l.sort((a,b)=>{
       const da=a.date_entree_souhaitee||'9999',db=b.date_entree_souhaitee||'9999';
       return da<db?-1:da>db?1:0;
@@ -2250,10 +2255,11 @@ function aVisitePrevue(p){
 function aVisiteFaite(p){
   return !!p.date_visite&&!!p.visite_effectuee;
 }
-function setStatut(s){filtreStatut=(filtreStatut===s?'':s);filtreRappels=filtreRelancesAVenir=filtreVisites=false;render();}
-function toggleRappels(){filtreRappels=!filtreRappels;filtreRelancesAVenir=filtreVisites=false;if(filtreRappels)filtreStatut='';render();}
-function toggleRelancesAVenir(){filtreRelancesAVenir=!filtreRelancesAVenir;filtreRappels=filtreVisites=false;if(filtreRelancesAVenir)filtreStatut='';render();}
-function toggleVisites(){filtreVisites=!filtreVisites;filtreRappels=filtreRelancesAVenir=false;if(filtreVisites)filtreStatut='';render();}
+function setStatut(s){filtreStatut=(filtreStatut===s?'':s);filtreRappels=filtreRelancesAVenir=filtreVisites=filtreVisitesFaites=false;render();}
+function toggleRappels(){filtreRappels=!filtreRappels;filtreRelancesAVenir=filtreVisites=filtreVisitesFaites=false;if(filtreRappels)filtreStatut='';render();}
+function toggleRelancesAVenir(){filtreRelancesAVenir=!filtreRelancesAVenir;filtreRappels=filtreVisites=filtreVisitesFaites=false;if(filtreRelancesAVenir)filtreStatut='';render();}
+function toggleVisites(){filtreVisites=!filtreVisites;filtreRappels=filtreRelancesAVenir=filtreVisitesFaites=false;if(filtreVisites)filtreStatut='';render();}
+function toggleVisitesFaites(){filtreVisitesFaites=!filtreVisitesFaites;filtreRappels=filtreRelancesAVenir=filtreVisites=false;if(filtreVisitesFaites)filtreStatut='';render();}
 function filtrerCreche(id){
   const sel=document.getElementById('fCreche');
   sel.value=(sel.value===String(id)?'':String(id));
@@ -2287,9 +2293,9 @@ function renderDash(){
     +kpi(enCours.length,'devis en cours','var(--orange-l)','var(--orange)',false,"setStatut('')")
     +kpi(nRel,'relance'+(nRel>1?'s':'')+' en retard','var(--amber-l)','var(--amber)',filtreRappels,'toggleRappels()')
     +kpi(nVis,'visite'+(nVis>1?'s':'')+' prévue'+(nVis>1?'s':''),'var(--violet-l)','var(--violet)',filtreVisites,'toggleVisites()')
-    +kpi(nVisF,'visite'+(nVisF>1?'s':'')+' réalisée'+(nVisF>1?'s':''),'var(--green-l)','var(--green)',false,'')
+    +kpi(nVisF,'visite'+(nVisF>1?'s':'')+' réalisée'+(nVisF>1?'s':''),'var(--green-l)','var(--green)',filtreVisitesFaites,'toggleVisitesFaites()')
     +kpi(nIns,'inscrit'+(nIns>1?'s':'')+' (devis signés)','var(--green-l)','var(--green)',filtreStatut==='inscrit',"setStatut('inscrit')")
-    +kpi(refus.length,'refus / sans suite','var(--red-l)','var(--red)',filtreStatut==='refuse',"setStatut('refuse')")
+    +kpi(refus.length,'refus / sans suite','var(--red-l)','var(--red)',filtreStatut==='__perdus__',"setStatut('__perdus__')")
     +(taux!=null?kpi(taux+' %','taux de transformation','#F1EFF7','#4a4560',false,''):'')
     +'</div><div class="dgrid"><div>';
 
