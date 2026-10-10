@@ -1,0 +1,4544 @@
+// ─── DÉTECTION CONTEXTE ──────────────────────────────────────────────────────
+const IS_LOCAL = (typeof location !== 'undefined') &&
+  (location.protocol === 'file:' ||
+   (location.hostname && location.hostname.includes('claudeusercontent')));
+
+// ─── DATA ─────────────────────────────────────────────────────────────────
+
+// Valeurs de secours affichées avant la connexion (mode local / hors ligne) —
+// la vraie liste des crèches de l'organisation est chargée après login,
+// voir loadCrecheUI().
+let CRECHES = ['Brunet', 'Cuers', 'Ollioules', 'St Jean', 'Picot 1', 'Picot 2'];
+let CRECHE_COLORS = { 'Brunet': '#F59E0B', 'Cuers': '#10B981', 'Ollioules': '#EF4444', 'St Jean': '#8B5CF6', 'Picot 1': '#0EA5E9', 'Picot 2': '#F43F5E' };
+const CRECHE_PALETTE = ['#F59E0B', '#10B981', '#EF4444', '#8B5CF6', '#0EA5E9', '#F43F5E', '#22C55E', '#F97316', '#6366F1', '#EC4899'];
+// Entretien et Cuisine : la structure est facultative à la saisie. La base
+// (RLS kk_acces_creche_nom) n'accepte qu'une vraie crèche, donc sans choix
+// l'article est rattaché à la structure de l'utilisateur (voir saveArticle).
+const CATS_SANS_CRECHE = ['Entretien', 'Cuisine'];
+const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀','Entretien':'🧹','Cuisine':'🍳' };
+
+let ARTICLES = [
+  { id:1, nom:'Puzzles encastrement 4 pièces', ref:'MAT-001', cat:'Sensoriel', creche:'Brunet', stock:8, min:3, prix:12.50, fourn:'Nathan Pédagogique', notes:'Bois certifié FSC. Âge : 12-36 mois.' },
+  { id:2, nom:'Tapis d\'éveil musical', ref:'MAT-002', cat:'Sensoriel', creche:'Brunet', stock:2, min:2, prix:34.90, fourn:'Halilit', notes:'Vérifier piles régulièrement.' },
+  { id:3, nom:'Balles sensorielles (lot 6)', ref:'MAT-003', cat:'Sensoriel', creche:'Cuers', stock:5, min:2, prix:18.00, fourn:'Wesco France', notes:'Nettoyer après chaque usage.' },
+  { id:4, nom:'Portique de motricité', ref:'MAT-004', cat:'Motricité', creche:'Ollioules', stock:1, min:1, prix:189.00, fourn:'Wesco France', notes:'Vérifier stabilité mensuelle.' },
+  { id:5, nom:'Tunnels de gatage (lot 2)', ref:'MAT-005', cat:'Motricité', creche:'Cuers', stock:3, min:1, prix:45.00, fourn:'Wesco France', notes:'' },
+  { id:6, nom:'Livres bain bébé (lot 5)', ref:'MAT-006', cat:'Imitation', creche:'Brunet', stock:0, min:3, prix:8.50, fourn:'Nathan Pédagogique', notes:'Stock épuisé — à commander.' },
+  { id:7, nom:'Albums imagier 1-2 ans', ref:'MAT-007', cat:'Imitation', creche:'Ollioules', stock:12, min:4, prix:6.90, fourn:'Nathan Pédagogique', notes:'' },
+  { id:8, nom:'Peintures aux doigts (6 couleurs)', ref:'MAT-008', cat:'Expression artistique', creche:'Cuers', stock:4, min:2, prix:14.00, fourn:'Nathan Pédagogique', notes:'Péremption : vérifier dates.' },
+  { id:9, nom:'Tampons mousse formes géo.', ref:'MAT-009', cat:'Expression artistique', creche:'Ollioules', stock:6, min:2, prix:9.50, fourn:'Nathan Pédagogique', notes:'' },
+  { id:10, nom:'Toboggan extérieur 3 marches', ref:'MAT-010', cat:'Motricité', creche:'Brunet', stock:1, min:1, prix:299.00, fourn:'Wesco France', notes:'Inspection sécurité trimestrielle.' },
+  { id:11, nom:'Bac à sable avec couvercle', ref:'MAT-011', cat:'Motricité', creche:'Cuers', stock:2, min:1, prix:85.00, fourn:'Wesco France', notes:'Couvrir systématiquement après usage.' },
+  { id:12, nom:'Jouets de plage (lot 10)', ref:'MAT-012', cat:'Motricité', creche:'Ollioules', stock:3, min:2, prix:22.00, fourn:'Hape Toys', notes:'' },
+  { id:13, nom:'Cubes d\'empilage en bois', ref:'MAT-013', cat:'Motricité', creche:'Brunet', stock:7, min:3, prix:28.00, fourn:'Goki Spielzeug', notes:'Bois naturel non traité.' },
+  { id:14, nom:'Xylophone bois 8 notes', ref:'MAT-014', cat:'Sensoriel', creche:'Cuers', stock:2, min:2, prix:19.50, fourn:'Halilit', notes:'' },
+  { id:15, nom:'Gel hydroalcoolique 500mL (lot 6)', ref:'HYG-001', cat:'Puériculture', creche:'Brunet', stock:1, min:4, prix:22.50, fourn:'Nathan Pédagogique', notes:'Péremption à surveiller.' },
+  { id:16, nom:'Couches taille 1 (lot 50)', ref:'HYG-002', cat:'Puériculture', creche:'Ollioules', stock:6, min:3, prix:12.00, fourn:'Nathan Pédagogique', notes:'' },
+  { id:17, nom:'Anneau de dentition silicone', ref:'MAT-015', cat:'Sensoriel', creche:'Cuers', stock:8, min:4, prix:7.90, fourn:'Hape Toys', notes:'Stériliser hebdomadairement.' },
+  { id:18, nom:'Marionnettes animaux (lot 4)', ref:'MAT-016', cat:'Imitation', creche:'Brunet', stock:5, min:2, prix:32.00, fourn:'Goki Spielzeug', notes:'' },
+];
+
+let COMMANDES = [];
+
+let FOURNISSEURS = [
+  { id:1, nom:'Nathan Pédagogique', contact:'Marie Dumont', tel:'01 42 55 33 21', email:'commandes@nathan-ped.fr', web:'https://nathan-pedagogique.fr', delai:'3-5 jours', spec:'Général', notes:'Remise 10% dès 200€ HT.' },
+  { id:2, nom:'Wesco France', contact:'Pierre Martin', tel:'03 88 52 11 44', email:'pro@wesco.fr', web:'https://wesco.fr', delai:'5-7 jours', spec:'Motricité', notes:'Compte pro référence 48291.' },
+  { id:3, nom:'Goki Spielzeug', contact:'—', tel:'—', email:'france@goki.de', web:'https://goki.de', delai:'7-10 jours', spec:'Imitation & Expression', notes:'Jouets bois certifiés FSC, peintures sans solvant.' },
+  { id:4, nom:'Hape Toys', contact:'Sophie Bernard', tel:'01 56 89 12 00', email:'france@hape.com', web:'https://hape.com', delai:'4-6 jours', spec:'Expression artistique', notes:'Gamme 0-3 ans très complète.' },
+  { id:5, nom:'Halilit', contact:'—', tel:'—', email:'contact@halilit.fr', web:'https://halilit.fr', delai:'5-8 jours', spec:'Sensoriel', notes:'Spécialiste instruments musique bébé.' },
+];
+
+let HISTORIQUE = [
+  { id:1, type:'sortie', article:'Tapis d\'éveil musical', qty:-1, creche:'Brunet', user:'Sophie M.', date:'2024-04-03 09:15', note:'Mise au rebut — défectueux' },
+  { id:2, type:'entrée', article:'Anneau dentition silicone', qty:+8, creche:'Cuers', user:'Lucie B.', date:'2024-04-03 08:30', note:'Réception commande BC-2024-039' },
+  { id:3, type:'commande', article:'Commande BC-2024-042', qty:0, creche:'Brunet', user:'Admin', date:'2024-04-02 16:45', note:'Nathan Pédagogique — 156,50€' },
+  { id:4, type:'entrée', article:'Albums imagier 1-2 ans', qty:+6, creche:'Ollioules', user:'Camille R.', date:'2024-04-02 14:00', note:'Réception commande BC-2024-038' },
+  { id:5, type:'commande', article:'Commande BC-2024-041', qty:0, creche:'Ollioules', user:'Admin', date:'2024-04-01 11:30', note:'Wesco France — 312,00€' },
+  { id:6, type:'sortie', article:'Livres bain bébé (lot 5)', qty:-3, creche:'Brunet', user:'Sophie M.', date:'2024-03-30 10:00', note:'Utilisation courante' },
+  { id:7, type:'entrée', article:'Peintures aux doigts', qty:+4, creche:'Cuers', user:'Lucie B.', date:'2024-03-29 09:00', note:'Réception commande BC-2024-037' },
+  { id:8, type:'commande', article:'Commande BC-2024-040', qty:0, creche:'Cuers', user:'Admin', date:'2024-03-28 15:00', note:'Halilit — 97,50€' },
+];
+
+// ─── COUCHES ────────────────────────────────────────────────────────────
+// Une ligne par crèche × taille (3/4/5/6). Alimenté par stock_couches et
+// stock_couches_mouvements (Supabase) — le décompte automatique se fait côté
+// base (trigger sur suivi_saisies), voir sql/stock_couches.sql.
+// Deux familles d'articles : couche classique (3 à 6) et couche-culotte
+// (4/5 seulement, apprentissage de la propreté) — voir sql/stock_couches.sql.
+const COUCHES_PRODUITS = [
+  { type: 'couche',  label: 'Couches classiques', tailles: ['3','4','5','6'] },
+  { type: 'culotte', label: 'Couches-culottes',   tailles: ['4','5'] },
+];
+let COUCHES = [];      // stock courant : { id, creche, typeCouche, taille, stock, seuilAlerteJours }
+let COUCHES_MVTS = []; // journal des mouvements (500 derniers), pour estimer la conso/jour
+// Prix d'achat unitaire par type×taille (sql/stock_couches_prix.sql), partagé
+// par les 6 crèches — saisi une fois par la direction depuis la vraie facture
+// fournisseur, jamais déduit d'un prix public scrapé.
+let COUCHES_PRIX = []; // { typeCouche, taille, prixUnitaire, updatedAt }
+// Effectif actuel par crèche×type×taille (enfants.creche_id/taille_couche/
+// type_couche, enfants encore présents). Sert de repli pour l'estimation
+// « jours restants » tant que l'historique réel de changes est trop maigre
+// pour être fiable (4,5 couches/jour/enfant, une moyenne courante en crèche).
+let COUCHES_EFFECTIF = []; // { creche, typeCouche, taille, count }
+// Besoin prévisionnel du mois en cours par crèche×type×taille (4 couches/jour
+// × jours de présence réels : jours du contrat, moins fériés, fermetures
+// vacances/pédagogiques et absences programmées). Plus précis que
+// COUCHES_EFFECTIF pour prévoir une commande : un enfant présent 2 j/semaine
+// ne pèse pas comme un enfant à temps plein, alors qu'ils comptent pareil
+// dans l'effectif brut.
+let COUCHES_BESOIN = []; // { creche, typeCouche, taille, besoinMensuel }
+
+// ─── STATE ─────────────────────────────────────────────────────────────
+// ─── PAGINATION ──────────────────────────────────────────────────────────
+const PAGE_SIZE = 10;
+let currentPageMat = 1;
+let currentPageConso = 1;
+let currentPage = 'inventaire';
+let currentCat = 'all';
+let currentCreche = 'all';
+let currentHisto = 'all';
+let currentInvTab = 'materiel'; // 'materiel' | 'consommable'
+let currentCatConso = 'all';
+let currentStockStatus = 'all'; // 'all' | 'a-completer' | 'epuise'
+let editingId = null;
+// ─── INIT ─────────────────────────────────────────────────────────────────
+function init() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('c-date').value = today;
+  const next = new Date(); next.setDate(next.getDate()+7);
+  document.getElementById('c-livraison').value = next.toISOString().split('T')[0];
+
+  // Charger depuis localStorage (cache)
+  loadLocalData();
+
+  // Interface immédiate
+  switchInvTab('materiel'); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique();updateCounts();
+
+  // Sync Supabase en arrière-plan (cold start possible jusqu'à 30s)
+  // Afficher un message intermédiaire après 5s si toujours en attente
+  const coldStartTimer = setTimeout(() => setIndicator('⏳ Démarrage du serveur… (peut prendre jusqu\'à 30s)', 'var(--amber)'), 5000);
+  loadData().then(ok => {
+    clearTimeout(coldStartTimer);
+    switchInvTab(currentInvTab); renderStats(); renderCommandes(); renderFournisseurs(); renderHistorique(); updateCounts();
+    if (typeof startPolling === 'function') startPolling(60);
+  }).catch(e => {
+    clearTimeout(coldStartTimer);
+    console.warn('Supabase unavailable:', e.message);
+    setIndicator('💻 Mode local', 'var(--ink3)');
+  });
+}
+
+// ─── RENDER TABLE ─────────────────────────────────────────────────────────
+function renderTable() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  let data = ARTICLES.filter(a => {
+    const isMateriel = a.depreciable !== false; // exclure consommables
+    const matchCat = currentCat === 'all' || a.cat === currentCat;
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    const matchQ = !q || a.nom.toLowerCase().includes(q) || a.ref.toLowerCase().includes(q) || a.fourn.toLowerCase().includes(q);
+    const matchStatus = currentStockStatus === 'all'
+      || (currentStockStatus === 'a-completer' && getStockStatus(a) === 'À compléter')
+      || (currentStockStatus === 'epuise' && getStockStatus(a) === 'Épuisé');
+    return isMateriel && matchCat && matchCreche && matchQ && matchStatus;
+  });
+
+  let sortCol = window._sortCol || 'nom';
+let sortDir = window._sortDir || 'asc';
+data.sort((a,b) => {
+  const va = String(a[sortCol]||'').toLowerCase();
+  const vb = String(b[sortCol]||'').toLowerCase();
+  return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+});
+const tb = document.getElementById('tableBody');
+  // Toujours supprimer l'ancien footer d'abord
+  const oldFootEarly = document.getElementById('tableFooter');
+  if (oldFootEarly && oldFootEarly.parentNode) oldFootEarly.parentNode.removeChild(oldFootEarly);
+
+  if (data.length === 0) {
+    tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink3)">Aucun article trouvé</td></tr>`;
+    return;
+  }
+
+  // Pagination
+  const totalMat = data.length;
+  const totalPagesMat = Math.ceil(totalMat / PAGE_SIZE);
+  if (currentPageMat > totalPagesMat) currentPageMat = 1;
+  const slicedData = data.slice((currentPageMat - 1) * PAGE_SIZE, currentPageMat * PAGE_SIZE);
+
+  tb.innerHTML = slicedData.map(a => {
+    const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀','Entretien':'🧹','Cuisine':'🍳' };
+    const thumb = a.photo
+      ? `<img class="article-thumb" src="${a.photo}" alt="${a.nom}" loading="lazy">`
+      : `<div class="article-thumb-placeholder">${CAT_ICONS[a.cat]||'📦'}</div>`;
+
+    const montant = a.stock * a.prix;
+
+    return `<tr onclick="showDetail(${a.id})">
+      <td>
+        <div class="article-name-cell">
+          ${thumb}
+          <div>
+            <div class="item-name">${a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim()}</div>
+            <div class="item-ref">${a.ref}</div>
+            ${(() => { const e = getArticleEtat(a); return e ? getEtatBadgeHtml(e) : ''; })()}
+            ${getStockStatusBadgeHtml(a)}
+          </div>
+        </div>
+      </td>
+      <td><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:${CRECHE_COLORS[a.creche]||'#888'}"></span>${a.creche}</span></td>
+      <td><span class="badge badge-blue">${a.cat}</span></td>
+      <td style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px">${a.stock}</td>
+      
+      <td style="font-weight:500">${a.prix > 0 ? a.prix.toFixed(2)+' €' : '—'}</td>
+      <td style="font-weight:500;color:var(--accent)">
+  ${(() => {
+    if (!a.depreciable || !a.date_achat || !a.prix) return '<span style="color:var(--ink3)">—</span>';
+    const v = valeurDepreciee(a);
+    return v.toFixed(2) + ' €';
+  })()}
+</td>
+      <td style="font-family:'Syne',sans-serif;font-weight:700;color:var(--accent)">
+        ${(() => {
+  const vLot = (a.depreciable && a.date_achat) ? valeurDepreciee(a) * a.stock : montant;
+  return vLot > 0 ? vLot.toFixed(2) + ' €' : '—';
+})()}
+      </td>
+      <td style="color:var(--ink2);font-size:12px">${a.fourn || '—'}</td>
+      <td onclick="event.stopPropagation()">
+        <div class="action-btns">
+          <button class="btn btn-secondary btn-sm" onclick="editArticle(${a.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="onDeleteArticle(${a.id})">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Barre de pagination matériel
+  renderPaginationBar('inv-table-materiel', totalMat, currentPageMat, (p) => {
+    currentPageMat = p;
+    renderTable();
+  });
+
+  // ── FOOTER TOTAL PAR STRUCTURE ──────────────────────────────────────────
+  const totalGlobal = data.reduce((s,a) => s + a.stock * a.prix, 0);
+  const totauxParStructure = CRECHES.map(c => {
+    const items = data.filter(a => a.creche === c);
+    const total = items.reduce((s,a) => s + a.stock * a.prix, 0);
+    return items.length > 0 ? { c, total, count: items.length } : null;
+  }).filter(Boolean);
+
+  // Remove old footer if present
+  const oldFoot = document.getElementById('tableFooter');
+  if (oldFoot && oldFoot.parentNode) oldFoot.parentNode.removeChild(oldFoot);
+
+  const tfoot = document.createElement('tfoot');
+  tfoot.id = 'tableFooter';
+  tfoot.innerHTML = `
+    <tr style="background:var(--bg);border-top:2px solid var(--border)">
+      <td colspan="2" style="padding:14px 16px">
+        <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink3)">Coût par structure</span>
+          ${totauxParStructure.map(({c, total, count}) => `
+            <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600">
+              <span style="width:8px;height:8px;border-radius:50%;background:${CRECHE_COLORS[c]};flex-shrink:0"></span>
+              ${c} :&nbsp;
+              <span style="font-family:'Syne',sans-serif;font-weight:800;color:${CRECHE_COLORS[c]}">${total.toFixed(2)} €</span>
+              <span style="color:var(--ink3);font-weight:400;font-size:11px">(${count})</span>
+            </span>`).join('')}
+        </div>
+      </td>
+      <td colspan="2" style="padding:14px 16px"></td>
+      <td style="padding:14px 16px;text-align:right">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink3);margin-bottom:4px">Total général</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:20px;color:var(--accent)">${totalGlobal.toFixed(2)} €</div>
+      </td>
+      <td colspan="2" style="padding:14px 16px"></td>
+    </tr>`;
+  tb.parentNode.appendChild(tfoot);
+
+  renderStats();
+  updateCounts();
+  updateInvTabCounts();
+}
+function switchInvTab(tab) {
+  currentInvTab = tab;
+  const isMat = tab === 'materiel';
+  // Onglets
+  const tMat = document.getElementById('inv-tab-materiel');
+  const tCon = document.getElementById('inv-tab-consommable');
+  if (tMat) { tMat.style.borderBottomColor = isMat ? 'var(--accent)' : 'transparent'; tMat.style.color = isMat ? 'var(--accent)' : 'var(--ink3)'; }
+  if (tCon) { tCon.style.borderBottomColor = !isMat ? 'var(--accent)' : 'transparent'; tCon.style.color = !isMat ? 'var(--accent)' : 'var(--ink3)'; }
+  // Filtres
+  const fMat = document.getElementById('inv-filters-materiel');
+  const fCon = document.getElementById('inv-filters-consommable');
+  if (fMat) fMat.style.display = isMat ? 'block' : 'none';
+  if (fCon) fCon.style.display = !isMat ? 'block' : 'none';
+  // Tableaux
+  const tbMat = document.getElementById('inv-table-materiel');
+  const tbCon = document.getElementById('inv-table-consommable');
+  if (tbMat) tbMat.style.display = isMat ? 'block' : 'none';
+  if (tbCon) tbCon.style.display = !isMat ? 'block' : 'none';
+  if (isMat) renderTable();
+  else renderTableConso();
+}
+
+function filterCatConso(cat, el) {
+  currentCatConso = cat;
+  currentPageConso = 1;
+  document.querySelectorAll('#inv-filters-consommable .filter-chip').forEach(e => e.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderTableConso();
+}
+
+function renderTableConso() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  let data = ARTICLES.filter(a => {
+    const isConso = a.depreciable === false;
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    const matchCat = currentCatConso === 'all' || a.cat === currentCatConso;
+    const matchQ = !q || a.nom.toLowerCase().includes(q) || (a.ref||'').toLowerCase().includes(q);
+    const matchStatus = currentStockStatus === 'all'
+      || (currentStockStatus === 'a-completer' && getStockStatus(a) === 'À compléter')
+      || (currentStockStatus === 'epuise' && getStockStatus(a) === 'Épuisé');
+    return isConso && matchCreche && matchCat && matchQ && matchStatus;
+  });
+  const sortCol = window._sortCol || 'nom';
+  const sortDir = window._sortDir || 'asc';
+  data.sort((a,b) => {
+    const va = String(a[sortCol]||'').toLowerCase();
+    const vb = String(b[sortCol]||'').toLowerCase();
+    return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+  const tb = document.getElementById('tableBodyConso');
+  if (!tb) return;
+  if (data.length === 0) {
+    tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink3)">Aucun consommable trouvé</td></tr>`;
+    return;
+  }
+  // Pagination
+  const totalConso = data.length;
+  const totalPagesConso = Math.ceil(totalConso / PAGE_SIZE);
+  if (currentPageConso > totalPagesConso) currentPageConso = 1;
+  const slicedDataConso = data.slice((currentPageConso - 1) * PAGE_SIZE, currentPageConso * PAGE_SIZE);
+
+  tb.innerHTML = slicedDataConso.map(a => {
+    const CAT_ICONS_L = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀','Entretien':'🧹','Cuisine':'🍳' };
+    const thumb = a.photo
+      ? `<img class="article-thumb" src="${a.photo}" alt="${a.nom}" loading="lazy">`
+      : `<div class="article-thumb-placeholder">${CAT_ICONS_L[a.cat]||'🧴'}</div>`;
+    const stockAlert = a.min > 0 && a.stock <= a.min;
+    return `<tr onclick="showDetail(${a.id})">
+      <td>
+        <div class="article-name-cell">
+          ${thumb}
+          <div>
+            <div class="item-name">${a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').trim()}</div>
+            <div class="item-ref">${a.ref}</div>
+            <div style="margin-top:2px">${getStockStatusBadgeHtml(a)}</div>
+          </div>
+        </div>
+      </td>
+      <td><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:${CRECHE_COLORS[a.creche]||'#888'}"></span>${a.creche}</span></td>
+      <td><span class="badge badge-blue">${a.cat}</span></td>
+      <td style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:${stockAlert?'#DC2626':'inherit'}">${a.stock}${stockAlert?` <span style="font-size:10px">⚠</span>`:''}</td>
+      <td style="font-size:12px;color:var(--ink3)">${a.min > 0 ? a.min : '—'}</td>
+      <td style="font-weight:500">${a.prix > 0 ? a.prix.toFixed(2)+' €' : '—'}</td>
+      <td style="font-size:12px">${a.expiry ? `<span style="color:${expiryColor(a.expiry)};font-weight:600">${formatExpiry(a.expiry)}</span>` : '—'}</td>
+      <td style="color:var(--ink2);font-size:12px">${a.fourn || '—'}</td>
+      <td onclick="event.stopPropagation()">
+        <div class="action-btns">
+          <button class="btn btn-secondary btn-sm" onclick="editArticle(${a.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="onDeleteArticle(${a.id})">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Barre de pagination consommables
+  renderPaginationBar('inv-table-consommable', totalConso, currentPageConso, (p) => {
+    currentPageConso = p;
+    renderTableConso();
+  });
+}
+
+function updateInvTabCounts() {
+  const crecheFilter = currentCreche !== 'all' ? currentCreche : null;
+  const mat = ARTICLES.filter(a => a.depreciable !== false && (!crecheFilter || a.creche === crecheFilter)).length;
+  const con = ARTICLES.filter(a => a.depreciable === false && (!crecheFilter || a.creche === crecheFilter)).length;
+  const elM = document.getElementById('inv-count-materiel'); if (elM) elM.textContent = mat;
+  const elC = document.getElementById('inv-count-consommable'); if (elC) elC.textContent = con;
+}
+
+function renderStats() {
+  const data = currentCreche !== 'all' ? ARTICLES.filter(a => a.creche === currentCreche) : ARTICLES;
+  const el = document.getElementById('stat-total');
+  if (el) el.textContent = data.length;
+  const valeur = data.reduce((s,a) => s + a.stock * a.prix, 0);
+  const elVal = document.getElementById('stat-valeur');
+  if (elVal) elVal.textContent = valeur.toFixed(0)+' €';
+  const elCmd = document.getElementById('stat-commandes');
+  if (elCmd) elCmd.textContent = COMMANDES.filter(c => c.status === 'en-cours' && (currentCreche === 'all' || c.creche === currentCreche)).length;
+  // Tuile "À remplacer" — filtré par crèche comme les autres stats
+  const rem = ARTICLES.filter(a => {
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    return matchCreche && getArticleEtat(a) === 'À remplacer';
+  });
+  const elRem = document.getElementById('stat-remplacer');
+  if (elRem) elRem.textContent = rem.length;
+  const cardRem = document.getElementById('stat-card-remplacer');
+  if (cardRem) cardRem.style.borderLeft = rem.length > 0 ? '3px solid #DC2626' : '';
+  // Tuile "À compléter" — articles dont le stock est ≤ au seuil minimum
+  const completer = ARTICLES.filter(a => {
+    const matchCreche = currentCreche === 'all' || a.creche === currentCreche;
+    return matchCreche && getStockStatus(a) === 'À compléter';
+  });
+  const elCompleter = document.getElementById('stat-completer');
+  if (elCompleter) elCompleter.textContent = completer.length;
+  const cardCompleter = document.getElementById('stat-card-completer');
+  if (cardCompleter) cardCompleter.style.borderLeft = completer.length > 0 ? '3px solid #D97706' : '';
+  updateAlertBadge();
+}
+  
+function updateCounts() {
+  const page = typeof currentPage !== 'undefined' ? currentPage : 'inventaire';
+  const el = document.getElementById('cnt-all');
+  if (page === 'commandes') {
+    const crecheFilter = currentCreche !== 'all' ? currentCreche : null;
+    const enCours = COMMANDES.filter(c => c.status === 'en-cours' && (!crecheFilter || c.creche === crecheFilter));
+    if (el) el.textContent = enCours.length;
+    CRECHES.forEach((c,i) => {
+      const el2 = document.getElementById('cnt-'+i);
+      if (el2) el2.textContent = COMMANDES.filter(cmd => cmd.creche === c && cmd.status === 'en-cours').length;
+    });
+  } else {
+    if (el) el.textContent = ARTICLES.length;
+    CRECHES.forEach((c,i) => {
+      const el2 = document.getElementById('cnt-'+i);
+      if (el2) el2.textContent = ARTICLES.filter(a => a.creche === c).length;
+    });
+  }
+}
+
+// ─── FILTERS ──────────────────────────────────────────────────────────────
+function filterCat(cat, el) {
+  currentCat = cat;
+  currentPageMat = 1;
+  document.querySelectorAll('.filter-chip').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderTable();
+}
+
+function filterCreche(creche, el) {
+  currentCreche = creche;
+  currentPageMat = 1;
+  currentPageConso = 1;
+  document.querySelectorAll('.creche-badge').forEach(e => e.classList.remove('active'));
+  if (el) el.classList.add('active');
+  // Filtrer sur une crèche réduit souvent beaucoup la hauteur de la page
+  // (ex. Couches, ou un inventaire filtré) : sans remise à zéro, la position
+  // de défilement héritée de la vue précédente laisse un grand vide en haut.
+  // Voir showPage() pour l'explication du reset d'overflow. Le second
+  // scrollTo (après le prochain paint) rattrape le cas où le rendu qui suit
+  // redimensionne encore la page après ce premier appel.
+  document.body.style.overflow = '';
+  window.scrollTo(0, 0);
+  requestAnimationFrame(() => window.scrollTo(0, 0));
+  if (currentPage === 'inventaire') {
+    if (currentInvTab === 'consommable') renderTableConso();
+    else renderTable();
+  }
+  else if (currentPage === 'commandes') renderCommandes();
+  else if (currentPage === 'historique') renderHistorique();
+  else if (currentPage === 'couches') renderCouches();
+  else renderTable();
+}
+
+function filterTable() {
+  currentPageMat = 1;
+  currentPageConso = 1;
+  if (currentInvTab === 'consommable') renderTableConso();
+  else renderTable();
+}
+
+// Déclenché par les cartes stat (ex: "À compléter") : active le filtre statut
+function filterStockStatus(status) {
+  currentStockStatus = (currentStockStatus === status) ? 'all' : status;
+  currentPageMat = 1;
+  currentPageConso = 1;
+  renderActiveInvTable();
+  const target = document.getElementById('articles-table');
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const label = status === 'a-completer' ? '🟠 À compléter' : status === 'epuise' ? '🔴 Épuisé' : null;
+  if (currentStockStatus === 'all') {
+    showNotif('Filtre statut désactivé');
+  } else if (label) {
+    showNotif(`Filtre actif : ${label}`);
+  }
+}
+
+function renderActiveInvTable() {
+  if (currentInvTab === 'consommable') renderTableConso();
+  else renderTable();
+}
+function toggleSort(col) {
+  if (window._sortCol === col) {
+    window._sortDir = window._sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    window._sortCol = col;
+    window._sortDir = 'asc';
+  }
+  renderActiveInvTable();
+}
+function filterHisto(type, el) {
+  currentHisto = type;
+  document.querySelectorAll('#page-historique .filter-chip').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderHistorique();
+}
+
+// ─── RENDER COMMANDES ─────────────────────────────────────────────────────
+function renderCommandes() {
+  const statusMap = { 'en-cours': ['badge-amber','⏳ En attente'], 'livrees': ['badge-green','✅ Livrée'], 'annulees': ['badge-red','❌ Annulée'] };
+
+  function renderCards(list, showActions, showDelete) {
+    if (list.length === 0) return `<div class="empty"><div class="icon">🛒</div><p>Aucune commande.</p></div>`;
+    return list.map(c => {
+      const [badgeCls, badgeTxt] = statusMap[c.status] || ['badge-gray','—'];
+      const items = (c.articles||'').split('\n').filter(Boolean);
+      return `<div class="commande-card">
+        <div>
+          <div class="commande-title">🏭 ${c.fourn} — <span style="color:var(--ink2);font-weight:400">${c.creche}</span></div>
+          <div class="commande-meta">
+            <span>📅 Commandé le ${c.date}</span>
+            <span>📄 ${c.bc}</span>
+          </div>
+          <div class="commande-items">
+            ${items.map(i => {
+              // Parser le lien éventuel : "3× Nom (prix€) [https://...]" — uniquement une vraie URL, pas [cat:...]
+              const urlMatch = i.match(/\[(?!cat:)((?:https?:\/\/)?[^\]\s]+\.[^\]\s]+)\]/);
+              const lineUrl = urlMatch ? urlMatch[1] : null;
+              const lineText = i.replace(/\s*\[(?!cat:)(?:https?:\/\/)?[^\]\s]+\.[^\]\s]+\]\s*$/, '');
+              return `<div class="commande-item-row">
+                <span>${lineText}</span>
+                ${lineUrl ? `<a href="#" onclick="openUrl('${jsAttr(lineUrl)}',event)"
+                   style="font-size:11px;color:var(--accent);text-decoration:none;white-space:nowrap">🔗 Voir</a>` : ''}
+              </div>`;
+            }).join('')}
+          </div>
+          ${c.notes ? `<div style="margin-top:8px;font-size:12px;color:var(--amber);background:var(--amber-lt);padding:6px 10px;border-radius:6px">📌 ${c.notes}</div>` : ''}
+          ${c.url ? `<div style="margin-top:8px"><a href="#" onclick="openUrl('${jsAttr(c.url)}', event)" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);background:var(--accent-lt);padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:500">🔗 Accéder à la commande en ligne</a></div>` : ''}
+        </div>
+        <div>
+          <div class="commande-total-label">Total</div>
+          <div class="commande-total">${(c.montant||0).toFixed(2)} €</div>
+          <span class="badge ${badgeCls}" style="margin-top:8px;display:block;text-align:center">${badgeTxt}</span>
+          ${c.traitee_le ? `<span class="badge badge-green" style="margin-top:6px;display:block;text-align:center" title="Vue et traitée le ${new Date(c.traitee_le).toLocaleString('fr-FR')}">👁 Vue et traitée le ${new Date(c.traitee_le).toLocaleDateString('fr-FR')}</span>` : ''}
+          ${showActions ? `
+          <button class="btn ${c.traitee_le ? 'btn-secondary' : 'btn-primary'} btn-sm" style="margin-top:6px;width:100%" onclick="onToggleTraitee(${c.id})">${c.traitee_le ? '↩️ Marquer non traitée' : '👁 Vue et traitée'}</button>` : ''}
+          <button class="btn btn-secondary btn-sm" style="margin-top:6px;width:100%" onclick="exportCommandeExcel(${c.id})">⬇ Excel</button>
+          <button class="btn btn-secondary btn-sm" style="margin-top:6px;width:100%" onclick="printBordereau(${c.id})">🖨 PDF / Imprimer</button>
+          ${showActions ? `
+          <button class="btn btn-secondary btn-sm" style="margin-top:6px;width:100%" onclick="editCommande(${c.id})">✏️ Modifier</button>
+          <button class="btn btn-secondary btn-sm" style="margin-top:8px;width:100%" onclick="onMarkLivree(${c.id})">✅ Marquer livré</button>
+          <button class="btn btn-danger btn-sm" style="margin-top:6px;width:100%" onclick="onAnnulerCommande(${c.id})">❌ Annuler</button>` : ''}
+          ${showDelete ? `
+          <button class="btn btn-danger btn-sm" style="margin-top:6px;width:100%" onclick="onDeleteCommande(${c.id})">🗑 Supprimer</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  const crecheFilter = (typeof currentCreche !== 'undefined' && currentCreche !== 'all') ? currentCreche : null;
+  const filterCmd = c => !crecheFilter || c.creche === crecheFilter;
+  const enCours  = COMMANDES.filter(c => c.status === 'en-cours'  && filterCmd(c));
+  const livrees  = COMMANDES.filter(c => c.status === 'livrees'   && filterCmd(c));
+  const annulees = COMMANDES.filter(c => c.status === 'annulees'  && filterCmd(c));
+
+  document.getElementById('tab-en-cours').innerHTML  = renderCards(enCours, true);
+  document.getElementById('tab-livrees').innerHTML   = renderCards(livrees, false);
+  document.getElementById('tab-annulees').innerHTML  = renderCards(annulees, false, true);
+
+  // Mettre à jour les compteurs dans les onglets
+  const tabBtns = document.querySelectorAll('#page-commandes .tab-btn');
+  const counts = [enCours.length, livrees.length, annulees.length];
+  const labels = ['En cours', 'Livrées', 'Annulées'];
+  tabBtns.forEach((btn, i) => {
+    if (counts[i] !== undefined) btn.textContent = `${labels[i]} (${counts[i]})`;
+  });
+}
+
+// ─── RENDER FOURNISSEURS ──────────────────────────────────────────────────
+const FOURN_ICONS = { 'Général':'🧩','Imitation & Expression':'📚','Motricité':'🏃','Expression artistique':'🎨','Motricité':'🌳','Puériculture':'🧴' };
+
+// ─── MISE À JOUR DYNAMIQUE DES LISTES FOURNISSEURS ───────────────────────
+function updateFournisseurSelects() {
+  const options = '<option value="">-- Choisir --</option>' +
+    FOURNISSEURS.map(f => `<option value="${f.nom}">${f.nom}</option>`).join('');
+  ['f-fourn', 'c-fourn'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const current = sel.value; // conserver la valeur sélectionnée
+    sel.innerHTML = options;
+    sel.value = current; // restaurer si possible
+  });
+}
+
+function renderFournisseurs() {
+  updateFournisseurSelects();
+  document.getElementById('fournisseursList').innerHTML = FOURNISSEURS.map(f => `
+    <div class="fournisseur-card">
+      <div class="fournisseur-avatar" style="background:var(--bg)">${FOURN_ICONS[f.spec]||'🏭'}</div>
+      <div class="fournisseur-info">
+        <div class="fournisseur-name">${f.nom}</div>
+        <div class="fournisseur-meta">
+          ${f.contact !== '—' ? `👤 ${f.contact} &nbsp;` : ''}
+          ${f.tel !== '—' ? `📞 ${f.tel} &nbsp;` : ''}
+          📧 ${f.email} &nbsp;
+          🚚 ${f.delai}
+          ${f.notes ? `<br>📌 ${f.notes}` : ''}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        <span class="badge badge-purple">${f.spec}</span>
+        <span style="font-size:12px;color:var(--ink3)">${ARTICLES.filter(a=>a.fourn===f.nom).length} articles</span>
+        ${f.web && f.web !== '—' ? `<a href="#" onclick="openUrl('${jsAttr(f.web)}', event)" class="btn btn-secondary btn-sm">🌐 Site</a>` : ''}
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();editFournisseur(${f.id})">✏️ Modifier</button>
+          <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteFournisseur(${f.id})">🗑 Supprimer</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+// ─── RENDER HISTORIQUE ────────────────────────────────────────────────────
+const HISTO_ICONS = { entrée:['📥','var(--green-lt)'], sortie:['📤','var(--amber-lt)'], commande:['🛒','var(--accent-lt)'] };
+
+function renderHistorique() {
+  let data = currentHisto === 'all' ? HISTORIQUE : HISTORIQUE.filter(h => h.type === currentHisto);
+  document.getElementById('histoList').innerHTML = data.map((h,i) => {
+    const [icon, bg] = HISTO_ICONS[h.type] || ['📋','var(--bg)'];
+    const qtyStr = h.qty > 0 ? `<span class="histo-qty" style="color:var(--green)">+${h.qty}</span>` :
+                   h.qty < 0 ? `<span class="histo-qty" style="color:var(--red)">${h.qty}</span>` : '';
+    return `<div class="histo-row" style="animation-delay:${i*0.04}s">
+      <div class="histo-icon" style="background:${bg}">${icon}</div>
+      <div class="histo-info">
+        <div class="histo-action">${h.article}</div>
+        <div class="histo-detail">
+          <span style="display:inline-flex;align-items:center;gap:4px">
+            <span style="width:6px;height:6px;border-radius:50%;background:${CRECHE_COLORS[h.creche]||'#888'}"></span>
+            ${h.creche}
+          </span>
+          &nbsp;·&nbsp; ${h.user}
+          ${h.note ? `&nbsp;·&nbsp; ${h.note}` : ''}
+        </div>
+      </div>
+      ${qtyStr}
+      <div class="histo-date">${h.date}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── COUCHES ──────────────────────────────────────────────────────────────
+// Le stock lui-même se décompte tout seul (trigger côté base sur chaque
+// « Change » du suivi — sql/stock_couches.sql). Ici on affiche juste l'état
+// courant, une estimation « jours restants » à partir de la conso des 14
+// derniers jours, et deux actions manuelles : réception d'une commande et
+// correction ponctuelle du stock.
+function coucheLabel(type) { return type === 'culotte' ? 'Couches-culottes' : 'Couches classiques'; }
+
+function coucheFind(creche, type, taille) {
+  return COUCHES.find(c => c.creche === creche && c.typeCouche === type && c.taille === taille);
+}
+
+// ── Valorisation ────────────────────────────────────────────────────────
+// Prix d'achat unitaire par type×taille, saisi une fois par la direction
+// depuis la vraie facture fournisseur (sql/stock_couches_prix.sql) — jamais
+// déduit d'un tarif public en ligne, qui ne reflète pas un prix pro négocié.
+function couchePrixUnitaire(type, taille) {
+  const p = COUCHES_PRIX.find(x => x.typeCouche === type && x.taille === taille);
+  return p ? p.prixUnitaire : null;
+}
+
+// Nombre d'enfants portant actuellement ce type/cette taille dans une crèche
+// (fiche enfant → Protection). Sert de repli pour l'estimation « jours
+// restants » — voir COUCHES_EFFECTIF plus haut.
+function coucheEffectif(creche, type, taille) {
+  const e = COUCHES_EFFECTIF.find(x => x.creche === creche && x.typeCouche === type && x.taille === taille);
+  return e ? e.count : 0;
+}
+// Besoin mensuel prévisionnel (4 couches/j × jours de présence du mois,
+// contrat en cours) par crèche×type×taille — voir COUCHES_BESOIN plus haut.
+function coucheBesoinMensuel(creche, type, taille) {
+  const b = COUCHES_BESOIN.find(x => x.creche === creche && x.typeCouche === type && x.taille === taille);
+  return b ? b.besoinMensuel : 0;
+}
+const COUCHE_CONSO_PAR_ENFANT_PAR_JOUR = 4.5; // moyenne courante en crèche (4 à 5/jour)
+// Délai de livraison par défaut (environ 72 h), utilisé tant qu'aucune ligne
+// stock_couches n'existe encore pour une référence — sinon c'est
+// delaiLivraisonJours (réglable par crèche × type × taille, bouton 🚚) qui
+// fait foi. En dessous de ce nombre de jours restants, une commande passée
+// aujourd'hui n'arriverait pas à temps — une alerte de rupture, pas juste un
+// stock à surveiller.
+const COUCHE_DELAI_LIVRAISON_JOURS = 3;
+
+async function coucheEnregistrerPrix() {
+  const lignes = [];
+  COUCHES_PRODUITS.forEach(produit => {
+    produit.tailles.forEach(taille => {
+      const input = document.getElementById('prix-' + produit.type + '-' + taille);
+      if (!input) return;
+      const val = input.value.trim();
+      lignes.push({ type: produit.type, taille, prix: val === '' ? null : parseFloat(val) });
+    });
+  });
+  if (lignes.some(l => l.prix !== null && (!Number.isFinite(l.prix) || l.prix < 0))) {
+    alert('Un des prix saisis est invalide.');
+    return;
+  }
+  try {
+    for (const l of lignes) {
+      const existant = COUCHES_PRIX.find(x => x.typeCouche === l.type && x.taille === l.taille);
+      if (existant && existant.prixUnitaire === l.prix) continue; // rien à faire
+      const nowIso = new Date().toISOString();
+      // Upsert plutôt que « existe en cache local ? PATCH : POST » : le cache
+      // COUCHES_PRIX peut être en retard sur la base (ex. prix créé par un
+      // autre appareil, ou par une tentative précédente restée invisible
+      // ici) — décider POST/PATCH sur sa seule présence locale a provoqué un
+      // « duplicate key value violates unique constraint » quand la ligne
+      // existait déjà côté serveur. on_conflict fait toujours la bonne chose.
+      const r = await sbFetchAuth(`${SUPA_URL}/rest/v1/stock_couches_prix?on_conflict=type_couche,taille`, {
+        method: 'POST',
+        headers: { ...SUPA_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=representation' },
+        body: JSON.stringify({ type_couche: l.type, taille: l.taille, prix_unitaire: l.prix, updated_at: nowIso }),
+      });
+      // Une policy RLS qui refuse l'écriture ne renvoie pas d'erreur HTTP :
+      // PostgREST répond 200/201 avec un tableau vide (0 ligne touchée). Sans
+      // cette vérification, l'app affichait « enregistré » alors que rien
+      // n'était écrit — corrigé sur ce nouveau stock synchronisé 30s après.
+      if (!r.ok) {
+        const body = await r.text().catch(() => '');
+        throw new Error(`${l.type} T${l.taille} : ${r.status} — ${body}`);
+      }
+      const rows = await r.json();
+      if (!Array.isArray(rows) || rows.length === 0) {
+        throw new Error(`${l.type} T${l.taille} : écriture refusée par la base (compte direction requis).`);
+      }
+      if (existant) existant.prixUnitaire = l.prix;
+      else COUCHES_PRIX.push(rowToCouchePrix(rows[0]));
+    }
+    renderCouches();
+    showNotif('✅ Prix d’achat enregistrés.');
+  } catch(e) {
+    console.error('[Couches] enregistrement des prix :', e);
+    showNotif('❌ Erreur lors de l’enregistrement des prix : ' + (e.message || e));
+  }
+}
+
+function renderCouchesValorisation() {
+  const box = document.getElementById('couches-valorisation');
+  if (!box) return;
+  const estDirection = typeof SK_PROFILE !== 'undefined' && SK_PROFILE && SK_PROFILE.role === 'direction';
+
+  // Total valorisé (crèches affichées) + détail des tailles sans prix connu.
+  const crechesAffichees = currentCreche === 'all' ? CRECHES : [currentCreche];
+  let total = 0;
+  const taillesSansPrix = new Set();
+  crechesAffichees.forEach(creche => {
+    COUCHES_PRODUITS.forEach(produit => {
+      produit.tailles.forEach(taille => {
+        const c = coucheFind(creche, produit.type, taille);
+        const stock = c ? c.stock : 0;
+        const prix = couchePrixUnitaire(produit.type, taille);
+        if (prix === null) { if (stock > 0) taillesSansPrix.add(produit.label + ' T' + taille); return; }
+        total += stock * prix;
+      });
+    });
+  });
+
+  // Le formulaire de prix n'est reconstruit que tant qu'il est FERMÉ.
+  // renderCouches() est appelé très souvent — navigation, réception/ajustement
+  // de stock, et toutes les 30 s par la synchro automatique — donc reconstruire
+  // sans condition effaçait les <input> en cours de saisie avant que la
+  // direction ait cliqué sur « Enregistrer ». Mais ne plus JAMAIS le
+  // reconstruire une fois créé (première version de ce correctif) a son
+  // propre piège : si la page affiche l'onglet Couches avant que
+  // stock_couches_prix ait fini de charger, le formulaire se fige vide pour
+  // le reste de la session, même une fois les prix arrivés. Se baser sur
+  // l'état ouvert/fermé du <details> couvre les deux cas : fermé (personne
+  // n'édite), toujours sûr de rafraîchir ; ouvert, on ne touche à rien.
+  const formExistant = document.getElementById('couches-prix-form');
+  if (!formExistant || !formExistant.open) {
+    const formulaireEdition = estDirection ? `
+      <details id="couches-prix-form" style="margin-top:8px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--accent);font-weight:600">Modifier les prix d'achat</summary>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px">
+          ${COUCHES_PRODUITS.map(produit => produit.tailles.map(taille => {
+            const prix = couchePrixUnitaire(produit.type, taille);
+            return `<div>
+              <label style="font-size:11px;color:var(--ink3)">${produit.label} T${taille} (€/couche)</label>
+              <input type="number" step="0.001" min="0" id="prix-${produit.type}-${taille}" value="${prix!==null?prix:''}"
+                style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>`;
+          }).join('')).join('')}
+        </div>
+        <button class="btn btn-sm btn-primary" style="margin-top:8px" onclick="coucheEnregistrerPrix()">Enregistrer les prix</button>
+      </details>` : '';
+
+    box.innerHTML = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+      <div id="couches-valeur-resume"></div>
+      ${formulaireEdition}
+    </div>`;
+  }
+
+  const resume = document.getElementById('couches-valeur-resume');
+  if (resume) {
+    resume.innerHTML = `<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12.5px;color:var(--ink3);font-weight:700">💰 Valeur du stock</span>
+      <span style="font-size:22px;font-weight:800">${total.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})} €</span>
+    </div>
+    ${taillesSansPrix.size ? `<div style="font-size:11.5px;color:var(--amber);margin-top:4px">Prix non renseigné, exclu du total : ${[...taillesSansPrix].join(', ')}</div>` : ''}`;
+  }
+}
+
+async function sbCoucheEnsureRow(creche, type, taille) {
+  const existant = coucheFind(creche, type, taille);
+  if (existant) return existant;
+  try {
+    const rows = await sbInsert('stock_couches', { creche, type_couche: type, taille, stock: 0 });
+    const nc = rowToCouche(rows[0]);
+    COUCHES.push(nc);
+    return nc;
+  } catch(e) {
+    console.error('[Couches] création ligne stock :', e);
+    showNotif('❌ Impossible de créer la ligne de stock : ' + (e.message || e));
+    return null;
+  }
+}
+
+// Créditer une réception de couches — utilisé par le bouton manuel
+// (coucheReception) et par la réception d'une commande contenant des lignes
+// de couches (confirmerLivraison) : les deux doivent créditer stock_couches,
+// jamais l'inventaire générique ARTICLES, sous peine de créer une ligne
+// fantôme sans lien avec le vrai décompte automatique.
+async function coucheCrediterReception(creche, type, taille, qty) {
+  const c = await sbCoucheEnsureRow(creche, type, taille);
+  if (!c) return false;
+  const nouveauStock = c.stock + qty;
+  await sbUpdate('stock_couches', c.id, { stock: nouveauStock });
+  const mvts = await sbInsert('stock_couches_mouvements', { creche, type_couche: type, taille, delta: qty, motif: 'reception' });
+  c.stock = nouveauStock;
+  COUCHES_MVTS.unshift(rowToCoucheMvt(mvts[0]));
+  return true;
+}
+
+async function coucheReception(creche, type, taille) {
+  const saisie = prompt('Quantité reçue — ' + coucheLabel(type) + ' taille ' + taille + ' (' + creche + ')', '');
+  if (saisie === null) return;
+  const qty = parseInt(saisie, 10);
+  if (!Number.isFinite(qty) || qty <= 0) { alert('Quantité invalide.'); return; }
+  try {
+    await coucheCrediterReception(creche, type, taille, qty);
+    renderCouches();
+    showNotif('✅ +' + qty + ' — ' + coucheLabel(type) + ' T' + taille + ' (' + creche + ')');
+  } catch(e) {
+    console.error('[Couches] réception :', e);
+    showNotif('❌ Erreur lors de l’enregistrement : ' + (e.message || e));
+  }
+}
+
+// Reconnaît une ligne de commande ajoutée par le picker Couches
+// ("Couches classiques T3 — Cuers") et retrouve son type/taille/crèche.
+// Le format est celui produit par confirmCouchesPicker : on ne l'analyse
+// nulle part ailleurs, donc le coupler ici n'est pas plus fragile que
+// n'importe quel autre format de ligne de commande (déjà du texte parsé).
+function coucheParseNomLigne(nom) {
+  const m = nom.match(/^(.+?)\s+T(\d)\s+—\s+(.+)$/);
+  if (!m) return null;
+  const produit = COUCHES_PRODUITS.find(p => p.label === m[1]);
+  if (!produit) return null;
+  return { type: produit.type, taille: m[2], creche: m[3] };
+}
+
+async function coucheAjusterSeuil(creche, type, taille) {
+  const c = await sbCoucheEnsureRow(creche, type, taille);
+  if (!c) return;
+  const saisie = prompt('Seuil d\'alerte « stock bas » (jours restants estimés) — ' + coucheLabel(type) + ' taille ' + taille + ' (' + creche + '), actuellement ' + c.seuilAlerteJours, c.seuilAlerteJours);
+  if (saisie === null) return;
+  const val = parseInt(saisie, 10);
+  if (!Number.isFinite(val) || val < 0) { alert('Valeur invalide.'); return; }
+  if (val === c.seuilAlerteJours) return;
+  try {
+    await sbUpdate('stock_couches', c.id, { seuil_alerte_jours: val });
+    c.seuilAlerteJours = val;
+    renderCouches();
+    showNotif('✅ Seuil d\'alerte corrigé.');
+  } catch(e) {
+    console.error('[Couches] seuil d\'alerte :', e);
+    showNotif('❌ Erreur lors de la correction : ' + (e.message || e));
+  }
+}
+
+async function coucheAjusterDelai(creche, type, taille) {
+  const c = await sbCoucheEnsureRow(creche, type, taille);
+  if (!c) return;
+  const saisie = prompt('Délai de livraison du fournisseur (jours) — ' + coucheLabel(type) + ' taille ' + taille + ' (' + creche + '), actuellement ' + c.delaiLivraisonJours, c.delaiLivraisonJours);
+  if (saisie === null) return;
+  const val = parseInt(saisie, 10);
+  if (!Number.isFinite(val) || val < 0) { alert('Valeur invalide.'); return; }
+  if (val === c.delaiLivraisonJours) return;
+  try {
+    await sbUpdate('stock_couches', c.id, { delai_livraison_jours: val });
+    c.delaiLivraisonJours = val;
+    renderCouches();
+    showNotif('✅ Délai de livraison corrigé.');
+  } catch(e) {
+    console.error('[Couches] délai de livraison :', e);
+    showNotif('❌ Erreur lors de la correction : ' + (e.message || e));
+  }
+}
+
+async function coucheAjuster(creche, type, taille) {
+  const c = await sbCoucheEnsureRow(creche, type, taille);
+  if (!c) return;
+  const saisie = prompt('Corriger le stock — ' + coucheLabel(type) + ' taille ' + taille + ' (' + creche + '), actuellement ' + c.stock, c.stock);
+  if (saisie === null) return;
+  const val = parseInt(saisie, 10);
+  if (!Number.isFinite(val) || val < 0) { alert('Valeur invalide.'); return; }
+  const delta = val - c.stock;
+  if (delta === 0) return;
+  try {
+    await sbUpdate('stock_couches', c.id, { stock: val });
+    const mvts = await sbInsert('stock_couches_mouvements', { creche, type_couche: type, taille, delta, motif: 'ajustement' });
+    c.stock = val;
+    COUCHES_MVTS.unshift(rowToCoucheMvt(mvts[0]));
+    renderCouches();
+    showNotif('✅ Stock corrigé.');
+  } catch(e) {
+    console.error('[Couches] ajustement :', e);
+    showNotif('❌ Erreur lors de la correction : ' + (e.message || e));
+  }
+}
+
+// Évaluation d'une référence (stock, estimation "jours restants", niveaux
+// d'alerte) — factorisé pour être réutilisé par l'affichage du stock
+// (renderCouches) et par le picker de commande (renderCouchesPickerList),
+// qui doivent rester rigoureusement d'accord sur ce qui est "bas" ou
+// "critique".
+function coucheEvaluer(creche, type, taille) {
+  const c = coucheFind(creche, type, taille);
+  const stock = c ? c.stock : 0;
+  const seuil = c ? c.seuilAlerteJours : 15;
+  const delaiLivraison = c ? c.delaiLivraisonJours : COUCHE_DELAI_LIVRAISON_JOURS;
+  const since14 = Date.now() - 14 * 24 * 3600 * 1000;
+  const conso14 = COUCHES_MVTS.filter(m =>
+    m.creche === creche && m.typeCouche === type && m.taille === taille &&
+    m.motif === 'change_auto' && new Date(m.createdAt).getTime() >= since14
+  ).length;
+  const avgDailyReel = conso14 / 14;
+  // En dessous de ce nombre de changes réels sur 14 jours, la moyenne
+  // extrapole n'importe quoi (ex. 1 change sur la période → des centaines de
+  // « jours restants » affichés). Ça ne se « réinitialise » pas à une
+  // réception, seul l'usage réel (Change dans le suivi) alimente cette
+  // moyenne — en attendant d'avoir assez d'historique, on retombe sur une
+  // estimation à partir du nombre d'enfants qui portent cette taille
+  // (4,5 couches/jour/enfant).
+  const MIN_CHANGES_FIABLE = 5;
+  const effectif = coucheEffectif(creche, type, taille);
+  let joursRestants = null, estimSource = null;
+  if (conso14 >= MIN_CHANGES_FIABLE && avgDailyReel > 0) {
+    joursRestants = Math.floor(stock / avgDailyReel);
+    estimSource = 'reel';
+  } else if (effectif > 0) {
+    joursRestants = Math.floor(stock / (effectif * COUCHE_CONSO_PAR_ENFANT_PAR_JOUR));
+    estimSource = 'effectif';
+  }
+  const enAlerte = stock <= 0 || (joursRestants !== null && joursRestants <= seuil);
+  // Rupture prévisible avant l'arrivée d'une commande passée aujourd'hui
+  // (délai de livraison propre à cette référence, réglable au 🚚) :
+  // distincte du simple stock bas, qui laisse encore le temps de
+  // commander tranquillement.
+  const enCritique = stock <= 0 || (joursRestants !== null && joursRestants <= delaiLivraison);
+  const estimTexte = estimSource === 'reel' ? joursRestants + ' j restants (est.)'
+    : estimSource === 'effectif' ? joursRestants + ' j restants (est. ' + effectif + ' enf.×4,5/j)'
+    : (stock > 0 ? 'aucun enfant sur cette taille' : '—');
+  return { stock, seuil, delaiLivraison, joursRestants, estimSource, estimTexte, enAlerte, enCritique };
+}
+
+function renderCouches() {
+  const box = document.getElementById('couches-grid');
+  const alertBox = document.getElementById('couches-alertes');
+  if (!box) return;
+  renderCouchesValorisation();
+  const crechesAffichees = currentCreche === 'all' ? CRECHES : [currentCreche];
+  const alertes = [];
+  let html = '';
+
+  crechesAffichees.forEach(creche => {
+    html += `<div>
+      <div style="font-weight:800;font-size:15px;display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="width:10px;height:10px;border-radius:50%;background:${CRECHE_COLORS[creche]||'#888'}"></span>
+        ${creche}
+      </div>`;
+    COUCHES_PRODUITS.forEach(produit => {
+      html += `<div style="margin-bottom:14px">
+        <div style="font-size:12.5px;font-weight:700;color:var(--ink3);margin-bottom:6px">${produit.label}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">`;
+      produit.tailles.forEach(taille => {
+        const ev = coucheEvaluer(creche, produit.type, taille);
+        const { stock, seuil, delaiLivraison, enAlerte, enCritique, estimTexte } = ev;
+        if (enAlerte) alertes.push({ creche, produit: produit.label, taille, stock, joursRestants: ev.joursRestants, critique: enCritique, seuil, delaiLivraison });
+        const bg = enCritique ? '#FCA5A5' : enAlerte ? 'var(--red-lt)' : 'var(--bg)';
+        const border = enCritique ? '3px solid #991B1B' : enAlerte ? '2px solid var(--red)' : '1px solid var(--border)';
+        const prixUnit = couchePrixUnitaire(produit.type, taille);
+        const valeurLigne = prixUnit !== null ? (stock * prixUnit).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €' : null;
+        const besoinMensuel = coucheBesoinMensuel(creche, produit.type, taille);
+        html += `<div style="border:${border};background:${bg};border-radius:10px;padding:10px 12px">
+          <div style="font-size:11.5px;color:var(--ink3);font-weight:700">Taille ${taille}${enCritique ? ' 🚨' : ''}</div>
+          <div style="font-size:24px;font-weight:800;margin:2px 0">${stock}</div>
+          <div style="font-size:11px;color:var(--ink3)">${estimTexte}</div>
+          <div style="font-size:11px;color:var(--ink3);margin-bottom:2px">${besoinMensuel > 0 ? '📅 Besoin mensuel : ' + besoinMensuel + ' couches' : ''}</div>
+          <div style="font-size:11px;color:var(--ink3);margin-bottom:8px">${valeurLigne ? valeurLigne+' valorisés' : 'prix non renseigné'}</div>
+          <div style="font-size:10.5px;color:var(--ink3);margin-bottom:8px">Seuil d'alerte : ${seuil} j · Livraison : ${delaiLivraison} j</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-secondary" style="flex:1" onclick="coucheReception('${creche}','${produit.type}','${taille}')">+ Réception</button>
+            <button class="btn btn-sm btn-secondary" title="Corriger le stock" onclick="coucheAjuster('${creche}','${produit.type}','${taille}')">✏️</button>
+            <button class="btn btn-sm btn-secondary" title="Régler le seuil d'alerte" onclick="coucheAjusterSeuil('${creche}','${produit.type}','${taille}')">⚙️</button>
+            <button class="btn btn-sm btn-secondary" title="Régler le délai de livraison" onclick="coucheAjusterDelai('${creche}','${produit.type}','${taille}')">🚚</button>
+          </div>
+        </div>`;
+      });
+      html += `</div></div>`;
+    });
+    html += `</div>`;
+  });
+
+  box.innerHTML = html;
+
+  const critiques = alertes.filter(a => a.critique);
+  const surveiller = alertes.filter(a => !a.critique);
+  const ligne = a => `${a.creche} — ${a.produit} taille ${a.taille} : ${a.stock} restante${a.stock>1?'s':''}${a.joursRestants!==null?' (~'+a.joursRestants+' j)':''}`;
+  // Le seuil et le délai de livraison se règlent référence par référence
+  // (⚙️ / 🚚 sur chaque carte) : on ne peut plus annoncer un nombre de jours
+  // unique dès que des lignes s'en écartent des défauts (15 j / 3 j).
+  const ligneSurveiller = a => ligne(a) + ' — seuil ' + a.seuil + ' j';
+  const ligneCritique = a => ligne(a) + ' — livraison ' + a.delaiLivraison + ' j';
+  let alertHtml = '';
+  if (critiques.length) {
+    alertHtml += `<div style="background:#FCA5A5;border-left:4px solid #991B1B;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#7F1D1D;margin-bottom:8px">
+      <b>🚨 Rupture imminente — le délai de livraison dépasse le stock restant, commandez aujourd'hui</b><br>` +
+      critiques.map(ligneCritique).join('<br>') + `</div>`;
+  }
+  if (surveiller.length) {
+    alertHtml += `<div style="background:var(--red-lt);border-left:4px solid var(--red);border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#991B1B">
+      <b>⚠️ Stock bas (sous le seuil réglé pour chaque référence)</b><br>` +
+      surveiller.map(ligneSurveiller).join('<br>') + `</div>`;
+  }
+  alertBox.innerHTML = alertHtml;
+}
+
+// ─── MODALS ───────────────────────────────────────────────────────────────
+function openModal(type) {
+  if (type === 'commande') {
+    resetCommandeModal();
+    resetArticleRows();
+    const bcField = document.getElementById('c-bc');
+    if (bcField && !bcField.dataset.editing) bcField.value = generateBC();
+  }
+  if (type === 'add') {
+    editingId = null;
+    document.getElementById('modalAddTitle').textContent = 'Ajouter un article';
+    ['f-nom','f-ref'].forEach(id => document.getElementById(id).value = '');
+    ['f-stock','f-prix'].forEach(id => document.getElementById(id).value = '');
+    ['f-min','f-notes'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    ['f-cat','f-creche','f-fourn'].forEach(id => document.getElementById(id).value = '');
+    // Directrice technique / employée : sa structure est la seule option, on la pose d'office
+    // plutôt que de laisser un select vide qui bloque sur « champs obligatoires ».
+    if (SK_WRITE_CRECHE) {
+      const fc = document.getElementById('f-creche');
+      if (fc && Array.from(fc.options).some(o => o.value === SK_WRITE_CRECHE)) {
+        fc.value = SK_WRITE_CRECHE;
+      }
+    }
+    majChampStructure();
+    document.getElementById('f-url').value = '';
+    const fDA = document.getElementById('f-date-achat'); if (fDA) fDA.value = '';
+    const fEt = document.getElementById('f-etat'); if (fEt) fEt.value = '';
+    const fDep = document.getElementById('f-depreciable'); if (fDep) fDep.checked = true;
+    resetPhotoUpload();
+  }
+  if (type === 'fournisseur') {
+    editingFournisseurId = null;
+    document.getElementById('modalFournisseurTitle').textContent = 'Ajouter un fournisseur';
+    ['fn-nom','fn-contact','fn-tel','fn-email','fn-web','fn-delai','fn-notes'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    const fnSpec = document.getElementById('fn-spec'); if (fnSpec) fnSpec.value = 'Général';
+  }
+  document.getElementById(`modal-${type}`).classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function editArticle(id) {
+  const a = ARTICLES.find(x => x.id === id);
+  if (!a) return;
+  editingId = id;
+  document.getElementById('modalAddTitle').textContent = 'Modifier l\'article';
+  document.getElementById('f-nom').value = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+  document.getElementById('f-ref').value = a.ref;
+  document.getElementById('f-cat').value = a.cat;
+  document.getElementById('f-creche').value = a.creche;
+  majChampStructure();
+  document.getElementById('f-stock').value = a.stock;
+  document.getElementById('f-prix').value = a.prix;
+  document.getElementById('f-fourn').value = a.fourn;
+  document.getElementById('f-url').value = a.url || '';
+  const fDateAchat = document.getElementById('f-date-achat');
+  if (fDateAchat) fDateAchat.value = a.date_achat || '';
+  const fEtat = document.getElementById('f-etat');
+  if (fEtat) fEtat.value = a.etat_override || '';
+  const fDep = document.getElementById('f-depreciable');
+  if (fDep) fDep.checked = a.depreciable !== false;
+  // f-min et f-notes supprimés — utiliser les champs cachés si présents
+  const fMin = document.getElementById('f-min');
+  if (fMin) fMin.value = a.min || 0;
+  const fNotes = document.getElementById('f-notes');
+  if (fNotes) fNotes.value = a.notes || '';
+
+  // Restore photo preview if article has one
+  if (a.photo) {
+    showPhotoPreview(a.photo, a.photoName || 'Photo existante');
+  } else {
+    resetPhotoUpload();
+  }
+
+  document.getElementById('modal-add').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  document.body.style.overflow = '';
+  // Réinitialiser les inputs photo si on ferme le modal-add
+  if (id === 'modal-add') {
+    const fp = document.getElementById('f-photo'); if(fp) fp.value='';
+    const fc = document.getElementById('f-photo-camera'); if(fc) fc.value='';
+  }
+}
+
+// Modales de saisie : la fermeture au clic/toucher extérieur est désactivée pour
+// éviter la perte de saisie en cas de toucher accidentel (clavier virtuel, scroll, etc.)
+// Seuls le bouton ✕ ou "Annuler" permettent de les fermer (Échap reste actif partout).
+const MODALS_SANS_FERMETURE_EXTERIEURE = [
+  'modal-add', 'modal-commande', 'modal-fournisseur', 'modal-import'
+];
+
+function closeModalClick(e, id) {
+  if (MODALS_SANS_FERMETURE_EXTERIEURE.includes(id)) return;
+  if (e.target.classList.contains('modal-overlay')) closeModal(id);
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => { m.classList.remove('open'); document.body.style.overflow = ''; }); });
+
+// ─── SAVE ARTICLE ─────────────────────────────────────────────────────────
+async function saveArticle() {
+  const nom = document.getElementById('f-nom').value.trim();
+  const cat = document.getElementById('f-cat').value;
+  let creche = document.getElementById('f-creche').value;
+  if (!creche && CATS_SANS_CRECHE.includes(cat)) {
+    // Dernier recours : première vraie crèche proposée par le formulaire (valeur acceptée par la base)
+    const optsReelles = Array.from(document.getElementById('f-creche').options).map(o => o.value).filter(Boolean);
+    creche = SK_WRITE_CRECHE || (currentCreche !== 'all' ? currentCreche : '') || optsReelles[0] || CRECHES[0] || '';
+  }
+  const stock = parseInt(document.getElementById('f-stock').value) || 0;
+  if (!nom || !cat || !creche) { showNotif('⚠ Remplissez les champs obligatoires'); return; }
+  if (!skCanWrite(creche)) return;
+  // Article existant rattache a une autre structure : modification refusee.
+  if (editingId) {
+    const prev = ARTICLES.find(a => a.id === editingId);
+    if (prev && !skCanWrite(prev.creche)) return;
+  }
+
+  const articleId = editingId || Date.now();
+
+  // Upload de la photo vers Supabase Storage (au lieu de stocker le base64 en base)
+  let photoUrl = editingId ? (ARTICLES.find(a=>a.id===editingId)||{}).photo : null;
+  if (currentPhotoFile) {
+    try {
+      showNotif('📤 Envoi de la photo…');
+      photoUrl = await uploadPhotoToStorage(currentPhotoFile, articleId);
+    } catch (err) {
+      console.error('[Photo]', err.message);
+      showNotif('❌ Erreur envoi photo — article enregistré sans photo');
+      photoUrl = editingId ? (ARTICLES.find(a=>a.id===editingId)||{}).photo : null;
+    }
+  }
+
+  const article = {
+    id: articleId,
+    nom,
+    ref: document.getElementById('f-ref').value.trim() || `MAT-${String(Date.now()).slice(-4)}`,
+    cat,
+    creche,
+    stock,
+    min: parseInt((document.getElementById('f-min')||{}).value) || 0,
+    prix: parseFloat(document.getElementById('f-prix').value) || 0,
+    fourn: document.getElementById('f-fourn').value,
+    notes: ((document.getElementById('f-notes')||{}).value||'').trim(),
+    url:   document.getElementById('f-url').value.trim(),
+    date_achat: (document.getElementById('f-date-achat')||{}).value || null,
+    etat_override: (document.getElementById('f-etat')||{}).value || null,
+    depreciable: document.getElementById('f-depreciable')?.checked !== false,
+    photo: photoUrl,
+    photoName: currentPhotoName || null,
+  };
+
+  // ── Optimistic update : UI immédiate, Supabase en arrière-plan ────────────
+  const isNew = !editingId;
+  if (isNew) {
+    ARTICLES.push(article);
+    addHisto('entrée', nom, stock, creche, 'Vous');
+  } else {
+    const idx = ARTICLES.findIndex(a => a.id === editingId);
+    ARTICLES[idx] = article;
+    addHisto('sortie', `${nom} mis à jour`, 0, creche, 'Vous');
+  }
+  saveData();
+
+  currentPhotoData = null;
+  currentPhotoName = null;
+  currentPhotoFile = null;
+  resetPhotoUpload();
+  closeModal('modal-add');
+  renderActiveInvTable();
+  renderHistorique();
+  updateCounts();
+  showNotif(isNew ? '✅ Article ajouté' : '✅ Article mis à jour');
+
+  // Persistance Supabase en arrière-plan (sans bloquer)
+  if (!IS_LOCAL) {
+    saveArticleDB(article, isNew).then(() => {
+      if (isNew) saveHistoDB(HISTORIQUE[0]).catch(()=>{});
+    }).catch(e => {
+      console.error('[Supabase] saveArticle:', e);
+      showNotif('⚠ Article enregistré localement — erreur Supabase');
+    });
+  }
+}
+
+async function deleteArticle(id) {
+  const a = ARTICLES.find(x => x.id === id);
+  if (!a) { showNotif('⚠ Article introuvable'); return; }
+  if (!skCanWrite(a.creche)) return;
+  if (!confirm('Supprimer "' + a.nom + '" définitivement ?')) return;
+  ARTICLES = ARTICLES.filter(x => x.id !== id);
+  saveData();
+  if (!IS_LOCAL) {
+    try { await deleteArticleDB(id); }
+    catch(e) { console.warn('deleteArticle DB:', e.message); }
+  }
+  addHisto('sortie', a.nom + ' (supprimé)', 0, a.creche, 'Vous');
+  await saveHistoDB(HISTORIQUE[0]).catch(()=>{});
+  renderActiveInvTable();
+  renderHistorique();
+  updateCounts();
+  showNotif('🗑 ' + a.nom + ' supprimé');
+}
+
+// ─── SAVE COMMANDE ────────────────────────────────────────────────────────
+function generateBC() {
+  // Utiliser la crèche sélectionnée dans le menu déroulant du bon de commande
+  const sel = document.getElementById('c-creche-select');
+  const crecheActive = (sel && sel.value) ? sel.value
+    : ((currentCreche && currentCreche !== 'all') ? currentCreche : getCrecheName());
+  const nom = crecheActive.replace(/\s+/g, '').substring(0, 8).toUpperCase();
+  const now = new Date();
+  const date = String(now.getFullYear()).slice(2) +
+    String(now.getMonth()+1).padStart(2,'0') +
+    String(now.getDate()).padStart(2,'0');
+  const seq = COMMANDES.length + 1;
+  return `${nom}-${date}-${String(seq).padStart(2,'0')}`;
+}
+
+// Upload toutes les photos de lignes nouvellement choisies (articleRowFiles) vers Storage,
+// met à jour articleRowPhotos avec les URLs obtenues, et retourne le JSON final à persister.
+// Les entrées déjà présentes dans articleRowPhotos sans fichier associé (URLs ou base64 résiduel
+// d'une commande existante non modifiée) sont conservées telles quelles.
+async function uploadRowPhotos(commandeId) {
+  const idxToUpload = Object.keys(articleRowFiles);
+  for (const idx of idxToUpload) {
+    try {
+      const url = await uploadPhotoToStorage(articleRowFiles[idx], `${commandeId}-${idx}`, 'commandes-photos');
+      articleRowPhotos[idx] = url;
+    } catch (err) {
+      console.error('[Photo ligne commande]', idx, err.message);
+      showNotif(`⚠ Photo ligne ${parseInt(idx)+1} non envoyée — ${err.message}`);
+      // on laisse l'aperçu base64 existant dans articleRowPhotos[idx] plutôt que de le perdre
+    }
+    delete articleRowFiles[idx];
+  }
+  return Object.keys(articleRowPhotos).length > 0 ? JSON.stringify(articleRowPhotos) : null;
+}
+
+async function saveCommande_db() {
+  // Un double-clic (ou un double-tap tactile, très facile sur "Passer la
+  // commande") relançait cette fonction avant que le premier appel n'ait fini
+  // d'attendre uploadRowPhotos — chaque appel poussait sa propre commande,
+  // identique, avec le même BC déjà figé dans le champ. D'où des commandes
+  // dupliquées à l'identique. Le bouton se désactive donc dès le premier
+  // clic et jusqu'à la fin de l'opération, succès ou échec.
+  const saveBtn = document.getElementById('btn-save-commande');
+  if (saveBtn) { if (saveBtn.disabled) return; saveBtn.disabled = true; }
+  try {
+    const montant = parseFloat(document.getElementById('c-montant').value) || 0;
+    const bc = document.getElementById('c-bc').value.trim() || generateBC();
+    const articles = getArticlesFromRows();
+
+    // Crèche = celle choisie dans le menu déroulant du bon de commande
+    // Jamais de repli sur CRECHES[0] : une crèche devinée est une commande perdue,
+    // soit refusée par skCanWrite, soit enregistrée sur la mauvaise structure.
+    const crecheSel = document.getElementById('c-creche-select')?.value;
+    const creche = crecheSel
+      || SK_WRITE_CRECHE
+      || (currentCreche && currentCreche !== 'all' ? currentCreche : '');
+    if (!creche) {
+      alert('Aucune structure sélectionnée — la commande n\'a pas été enregistrée.\n'
+          + 'Choisissez la crèche dans le menu « Structure » puis réessayez.');
+      return;
+    }
+    if (!skCanWrite(creche)) {
+      alert('Commande non enregistrée : vous ne pouvez commander que pour '
+          + SK_WRITE_CRECHE + ' (structure demandée : ' + creche + ').');
+      return;
+    }
+
+    // Fournisseur = extraire du premier article renseigné
+    const rows = document.querySelectorAll('.article-row');
+    let fourn = '';
+    rows.forEach(row => {
+      if (!fourn) {
+        const idx = row.id.replace('article-row-', '');
+        const f = document.getElementById(`row-fourn-${idx}`)?.value?.trim();
+        if (f) fourn = f;
+      }
+    });
+    if (!fourn) fourn = '—';
+
+    const commandeId = Date.now();
+
+    // Upload des photos de lignes vers Supabase Storage (au lieu de stocker le base64 en base)
+    remapRowPhotosToLineIndex();
+    if (Object.keys(articleRowFiles).length > 0) showNotif('📤 Envoi des photos…');
+    const photosJson = await uploadRowPhotos(commandeId);
+
+    COMMANDES.push({
+      id: commandeId,
+      fourn, creche,
+      date: document.getElementById('c-date').value,
+      livraison: '',
+      montant, bc,
+      status: 'en-cours',
+      articles: articles || '—',
+      notes: document.getElementById('c-notes').value.trim(),
+      url: '',
+      photos_json: photosJson,
+    });
+
+    addHisto('commande', `Commande ${bc}`, 0, creche, 'Vous', `${fourn} — ${montant.toFixed(2)}€`);
+    saveData();
+
+    // UI immédiate, Supabase en arrière-plan
+    closeModal('modal-commande');
+    renderCommandes();
+    renderHistorique();
+    renderStats();
+    showNotif('🛒 Commande enregistrée');
+
+    if (!IS_LOCAL) {
+      saveCommandeDB(COMMANDES[COMMANDES.length-1]).catch(e => {
+        console.error('[Supabase] saveCommande:', e);
+        showNotif('⚠ Commande locale — erreur Supabase : ' + e.message);
+      });
+    }
+  } finally {
+    // resetCommandeModal() (fermeture normale) ne touche pas .disabled : il
+    // faut le réactiver explicitement, y compris sur les sorties anticipées
+    // ci-dessus (structure manquante, droits insuffisants).
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+async function markLivree(id) {
+  const c = COMMANDES.find(x => x.id === id);
+  if (!c) return;
+
+  // Parser les articles de la commande pour proposer la mise à jour des stocks
+  const lignes = (c.articles || '').split('\n').filter(Boolean);
+
+  // Trouver les articles correspondants dans l'inventaire (même crèche)
+  const updates = [];
+  lignes.forEach(ligne => {
+    // Format attendu : "3× Nom article" ou "3 x Nom article" ou "- 3 Nom article"
+    const match = ligne.match(/^[-•]?\s*(\d+)\s*[×xX]\s*(.+)/);
+    if (match) {
+      const qty = parseInt(match[1]);
+      const nom = match[2].trim().replace(/\s*\(.*?\)\s*$/, '').replace(/\s*\[.*?\]\s*$/, '').trim(); // enlever "(prix)"
+      const article = ARTICLES.find(a =>
+        a.creche === c.creche &&
+        a.nom.toLowerCase().includes(nom.toLowerCase().substring(0, 10))
+      );
+      updates.push({ ligne, qty, nom, article });
+    } else {
+      updates.push({ ligne, qty: 0, nom: ligne, article: null });
+    }
+  });
+
+  // Construire le modal de confirmation
+  const lignesHtml = updates.map((u, i) => `
+    <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;
+                padding:8px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px;font-weight:500">${u.nom}</div>
+        ${u.article
+          ? `<div style="font-size:11px;color:var(--green)">✅ Trouvé : ${u.article.nom} (stock actuel : ${u.article.stock})</div>`
+          : `<div style="font-size:11px;color:var(--accent)">🆕 Sera créé automatiquement dans l'inventaire de ${c.creche}</div>`}
+      </div>
+      <div style="font-size:12px;color:var(--ink2)">Qté reçue :</div>
+      <input type="number" id="livraison-qty-${i}" value="${u.qty}" min="0"
+             style="width:60px;padding:4px 8px;border:1px solid var(--border);
+                    border-radius:6px;font-family:inherit;font-size:13px;text-align:center">
+    </div>`).join('');
+
+  document.getElementById('modal-detail').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+  document.getElementById('detail-title').textContent = `📦 Réception commande ${c.bc}`;
+  document.getElementById('detail-body').innerHTML = `
+    <div style="font-size:13px;color:var(--ink2);margin-bottom:16px">
+      Vérifiez les quantités reçues et validez pour mettre à jour l'inventaire de <strong>${c.creche}</strong>.
+    </div>
+    ${lignesHtml || '<div style="color:var(--ink3);font-size:13px">Aucun article à parser — stocks non mis à jour automatiquement.</div>'}
+  `;
+  document.getElementById('detail-footer').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal('modal-detail')">Annuler</button>
+    <button class="btn btn-primary" onclick="confirmerLivraison(${id})">✅ Confirmer la réception</button>
+  `;
+}
+
+async function confirmerLivraison(id) {
+  const c = COMMANDES.find(x => x.id === id);
+  if (!c) return;
+
+  const lignes = (c.articles || '').split('\n').filter(Boolean);
+  let updated = 0, created = 0;
+  const articlesToSave = []; // { article, isNew }
+  const histoToSave = [];    // entrées d'historique à pousser vers Supabase
+
+  for (let i = 0; i < lignes.length; i++) {
+    const ligne = lignes[i];
+    const m     = ligne.match(/^[-•]?\s*(\d+)\s*[×xX]\s*(.+)/);
+    if (!m) continue;
+
+    const urlM  = ligne.match(/\[(?!cat:)(.+?)\]$/);
+    const pM    = ligne.match(/\((\d+[.,]?\d*)\s*€?\)/);
+    const fM    = ligne.match(/\{(.+?)\}/);
+    const catM  = ligne.match(/\[cat:([^\]]+)\]/);
+    const art = {
+      url:   urlM ? urlM[1] : '',
+      prix:  pM   ? parseFloat(pM[1].replace(',','.')) : 0,
+      fourn: fM   ? fM[1] : '',
+      cat:   catM ? catM[1] : '',
+      qty:   parseInt(m[1]) || 0,
+      nom:   m[2].replace(/\s*\{.*?\}\s*/g,'')
+                  .replace(/\s*\(\d+[.,]?\d*\s*€?\)\s*/g,'')
+                  .replace(/\s*\[cat:[^\]]+\]\s*/g,'')
+                  .replace(/\s*\[.*?\]\s*$/,'').trim(),
+    };
+
+    const input = document.getElementById(`livraison-qty-${i}`);
+    const qty = input ? parseInt(input.value) || 0 : art.qty;
+    if (qty <= 0) continue;
+
+    // Ligne de couches (ajoutée via le picker 🧷) : créditer stock_couches,
+    // jamais l'inventaire générique — sinon la réception crée une ligne
+    // fantôme dans ARTICLES, invisible du décompte automatique et des
+    // alertes de l'onglet Couches.
+    if (art.cat === 'Couches') {
+      const cible = coucheParseNomLigne(art.nom);
+      // Une ligne éditée à la main peut ne plus correspondre à une vraie
+      // crèche : mieux vaut retomber sur le circuit générique (ARTICLES) que
+      // créer une ligne stock_couches sous un nom qui n'existe pas.
+      if (cible && CRECHES.includes(cible.creche)) {
+        try {
+          await coucheCrediterReception(cible.creche, cible.type, cible.taille, qty);
+          addHisto('entrée', art.nom, qty, cible.creche, 'Vous', `Réception ${c.bc}`);
+          histoToSave.push(HISTORIQUE[0]);
+          updated++;
+        } catch(e) {
+          console.error('[Couches] réception depuis commande :', e);
+          showNotif('❌ Réception de "' + art.nom + '" impossible : ' + (e.message || e));
+        }
+        continue;
+      }
+    }
+
+    let article = ARTICLES.find(a =>
+      a.creche === c.creche &&
+      a.nom.toLowerCase().includes(art.nom.toLowerCase().substring(0, 10))
+    );
+
+    let isNew = false;
+    if (!article) {
+      // Récupérer la photo de la ligne de commande si disponible
+      let rowPhoto = null;
+      if (c.photos_json) {
+        try { const photos = JSON.parse(c.photos_json); rowPhoto = photos[i] || null; } catch(e) {}
+      }
+      article = {
+        id: Date.now() + i,
+        nom: art.nom,
+        ref: `REC-${String(Date.now()).slice(-4)}`,
+        cat: art.cat || 'Sensoriel',
+        creche: c.creche,
+        stock: qty,
+        min: 0,
+        prix: art.prix,
+        fourn: art.fourn || '',
+        notes: '',
+        url: art.url || '',
+        photo: rowPhoto,
+        date_achat: c.livraison || c.date || new Date().toISOString().split('T')[0],
+        etat_override: null,
+      };
+      ARTICLES.push(article);
+      created++;
+      isNew = true;
+    } else {
+      article.stock += qty;
+      if (art.prix > 0 && article.prix === 0) article.prix = art.prix;
+      if (art.url && !article.url) article.url = art.url;
+      if (art.fourn && !article.fourn) article.fourn = art.fourn;
+      // Mettre à jour la date d'achat avec la date de livraison
+      article.date_achat = c.livraison || c.date || new Date().toISOString().split('T')[0];
+      article.etat_override = null; // reset l'override — l'état repart de zéro (Neuf)
+      updated++;
+    }
+    // Transférer la photo de commande si l'article n'en a pas encore
+    if (!article.photo && c.photos_json) {
+      try {
+        const photos = JSON.parse(c.photos_json);
+        if (photos[i]) article.photo = photos[i];
+      } catch(e) { /* photos_json invalide */ }
+    }
+    articlesToSave.push({ article, isNew });
+    addHisto('entrée', article.nom, qty, article.creche, 'Vous', `Réception ${c.bc}`);
+    histoToSave.push(HISTORIQUE[0]);
+  }
+
+  c.status = 'livrees';
+  saveData();
+  closeModal('modal-detail');
+  renderActiveInvTable();
+  renderCommandes();
+  renderHistorique();
+  renderStats();
+  updateCounts();
+
+  // Persister dans Supabase : articles créés/mis à jour, statut de la commande, historique
+  if (!IS_LOCAL) {
+    for (const { article, isNew } of articlesToSave) {
+      await saveArticleDB(article, isNew).catch(e => console.warn('[Livraison] article DB:', e.message));
+    }
+    await updateCommandeDB(c).catch(e => console.warn('[Livraison] commande DB:', e.message));
+    for (const h of histoToSave) {
+      await saveHistoDB(h).catch(e => console.warn('[Livraison] histo DB:', e.message));
+    }
+  }
+
+  let msg = '✅ Livraison confirmée';
+  if (updated > 0) msg += ` — ${updated} stock(s) mis à jour`;
+  if (created > 0) msg += ` — ${created} article(s) créé(s)`;
+  showNotif(msg);
+}
+
+function resetCommandeModal() {
+  // Reset titre
+  const h2 = document.querySelector('#modal-commande h2');
+  if (h2) h2.textContent = 'Nouvelle commande';
+  // Reset bouton via id (plus fiable que querySelector)
+  const saveBtn = document.getElementById('btn-save-commande');
+  if (saveBtn) {
+    saveBtn.textContent = '🛒 Passer la commande';
+    saveBtn.onclick = () => onSaveCommande();
+  }
+  // Reset BC editing state
+  const bcField = document.getElementById('c-bc');
+  if (bcField) delete bcField.dataset.editing;
+  // Reset notes
+  const notesField = document.getElementById('c-notes');
+  if (notesField) notesField.value = '';
+  // Reset date to today
+  const dateField = document.getElementById('c-date');
+  if (dateField) dateField.value = new Date().toISOString().split('T')[0];
+  // Pré-sélectionner la crèche.
+  // Attention : pour une directrice technique, skRestrictCrecheSelects() a retiré toutes les
+  // options sauf la sienne. Affecter une valeur absente de la liste vide le select
+  // (selectedIndex = -1) sans erreur, et la commande partait alors sur CRECHES[0],
+  // où l'écriture lui est refusée : elle n'était jamais enregistrée.
+  const crecheSel = document.getElementById('c-creche-select');
+  if (crecheSel) {
+    const dispo = Array.from(crecheSel.options).map(o => o.value);
+    const voulue = SK_WRITE_CRECHE
+      || ((currentCreche && currentCreche !== 'all') ? currentCreche : CRECHES[0]);
+    crecheSel.value = dispo.includes(voulue) ? voulue : (dispo[0] || '');
+  }
+}
+
+// Régénère le N° de bon de commande quand on change de crèche (sauf en modification)
+function onChangeCommandeCreche() {
+  const bcField = document.getElementById('c-bc');
+  if (!bcField) return;
+  if (!bcField.dataset.editing) {
+    // Nouvelle commande : on régénère entièrement le numéro
+    bcField.value = generateBC();
+    return;
+  }
+  // Commande existante : on remplace seulement le préfixe (nom de crèche)
+  // tout en gardant la date et le numéro de séquence d'origine
+  const sel = document.getElementById('c-creche-select');
+  const nom = (sel?.value || '').replace(/\s+/g, '').substring(0, 8).toUpperCase();
+  if (!nom) return;
+  const parts = bcField.value.split('-');
+  if (parts.length >= 2) {
+    parts[0] = nom;
+    bcField.value = parts.join('-');
+  } else {
+    bcField.value = nom;
+  }
+}
+
+function editCommande(id) {
+  const c = COMMANDES.find(x => x.id === id);
+  if (!c) return;
+
+  // Open modal
+  document.getElementById('modal-commande').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+  document.querySelector('#modal-commande h2').textContent = '✏️ Modifier la commande';
+
+  // Fill fields
+  const bcField = document.getElementById('c-bc');
+  if (bcField) { bcField.value = c.bc; bcField.dataset.editing = id; }
+  const dateField = document.getElementById('c-date');
+  if (dateField) dateField.value = c.date || '';
+  const notesField = document.getElementById('c-notes');
+  if (notesField) notesField.value = c.notes || '';
+  const crecheSel = document.getElementById('c-creche-select');
+  if (crecheSel && c.creche) crecheSel.value = c.creche;
+
+  // Reset and fill article rows
+  resetArticleRows();
+  // Recharger les photos existantes de la commande
+  if (c.photos_json) {
+    try {
+      const savedPhotos = JSON.parse(c.photos_json);
+      Object.assign(articleRowPhotos, savedPhotos);
+    } catch(e) {}
+  }
+  const lignes = (c.articles || '').split('\n').filter(Boolean);
+  if (lignes.length > 0) {
+    // Remove the empty row added by resetArticleRows
+    const container = document.getElementById('articles-rows');
+    if (container) container.innerHTML = '';
+    articleRowCount = 0;
+    lignes.forEach(ligne => {
+      const m    = ligne.match(/^[-•]?\s*(\d+)\s*[×xX]\s*(.+)/);
+      const urlM = ligne.match(/\[(?!cat:)(.+?)\]$/);
+      const pM   = ligne.match(/\((\d+[.,]?\d*)\s*€?\)/);
+      const fM   = ligne.match(/\{(.+?)\}/);
+      const catM = ligne.match(/\[cat:([^\]]+)\]/);
+      const qty  = m ? m[1] : '';
+      const fourn= fM ? fM[1] : '';
+      const cat  = catM ? catM[1] : '';
+      const prix = pM ? pM[1].replace(',','.') : '';
+      const url  = urlM ? urlM[1] : '';
+      // Ordre important : retirer l'URL finale AVANT les prix, sinon "(prix€) [url]"
+      // laisse le prix dans le nom et chaque modification en ajoute un de plus.
+      const nom  = (m ? m[2] : ligne)
+        .replace(/\s*\[cat:[^\]]*\]\s*/g,' ')
+        .replace(/\s*\[.*?\]\s*$/,'')
+        .replace(/\s*\{.*?\}\s*/g,' ')
+        .replace(/(?:\s*\(\d+[.,]?\d*\s*€\))+\s*$/,'').trim();
+      addArticleRow(qty, nom, prix, url, fourn, cat);
+    });
+    // Restaurer les aperçus photos dans les rows
+    Object.entries(articleRowPhotos).forEach(([idx, dataUrl]) => {
+      const prev = document.getElementById(`row-photo-prev-${idx}`);
+      const del  = document.getElementById(`row-photo-del-${idx}`);
+      const btn  = document.getElementById(`row-photo-btn-${idx}`);
+      if (prev) { prev.src = dataUrl; prev.style.display = 'block'; }
+      if (del)  del.style.display = 'inline-block';
+      if (btn)  btn.textContent = '📷 Photo ✅';
+    });
+  }
+
+  // Update montant
+  const montField = document.getElementById('c-montant');
+  if (montField) montField.value = c.montant || '';
+
+  // Change save button to update
+  const saveBtn = document.getElementById('btn-save-commande');
+  if (saveBtn) {
+    saveBtn.textContent = '💾 Mettre à jour';
+    saveBtn.onclick = () => onUpdateCommande(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); });
+  }
+}
+
+async function onUpdateCommande(id) {
+  const c = COMMANDES.find(x => x.id === id);
+  if (!c) return;
+  if (!skCanWrite(c.creche)) return;
+  const cibleCreche = document.getElementById('c-creche-select')?.value;
+  if (cibleCreche && !skCanWrite(cibleCreche)) return;
+  // Même précaution qu'à la création (saveCommande_db) : un double-clic ne
+  // dupliquerait pas la commande ici (c'est une mise à jour en place), mais
+  // relancerait l'upload des photos et l'appel Supabase en double.
+  const saveBtn = document.getElementById('btn-save-commande');
+  if (saveBtn) { if (saveBtn.disabled) return; saveBtn.disabled = true; }
+  try {
+    c.date     = document.getElementById('c-date')?.value || c.date;
+    c.notes    = document.getElementById('c-notes')?.value.trim() || '';
+    c.articles = getArticlesFromRows();
+    c.montant  = parseFloat(document.getElementById('c-montant')?.value) || c.montant;
+    c.bc       = document.getElementById('c-bc')?.value.trim() || c.bc;
+    c.creche   = document.getElementById('c-creche-select')?.value || c.creche;
+
+    // Upload des nouvelles photos de lignes vers Supabase Storage avant sauvegarde
+    remapRowPhotosToLineIndex();
+    if (Object.keys(articleRowFiles).length > 0) showNotif('📤 Envoi des photos…');
+    const newPhotosJson = await uploadRowPhotos(id);
+    c.photos_json = newPhotosJson || c.photos_json || null;
+
+    resetCommandeModal();
+    saveData();
+    closeModal('modal-commande');
+    if (!IS_LOCAL) updateCommandeDB(c).then(() => saveData()).catch(()=>{});
+    renderCommandes();
+    showNotif('✅ Commande mise à jour');
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function toggleTraitee(id) {
+  const c = COMMANDES.find(x => x.id === id);
+  if (!c) return;
+  c.traitee_le = c.traitee_le ? null : new Date().toISOString();
+  c.traitee_touched = true;
+  saveData();
+  if (!IS_LOCAL) await updateCommandeDB(c).catch(()=>{});
+  renderCommandes();
+  showNotif(c.traitee_le ? '👁 Commande marquée vue et traitée' : '↩️ Commande marquée non traitée');
+}
+
+async function annulerCommande(id) {
+  const c = COMMANDES.find(x => x.id === id);
+  if (!c) return;
+  if (!skCanWrite(c.creche)) return;
+  if (!confirm(`Annuler la commande ${c.bc} (${c.fourn}) ?`)) return;
+  c.status = 'annulees';
+  saveData();
+  if (!IS_LOCAL) await updateCommandeDB(c).catch(()=>{});
+  addHisto('sortie', `Annulation ${c.bc}`, 0, c.creche, 'Vous', `${c.fourn}`);
+  await saveHistoDB(HISTORIQUE[0]).catch(()=>{});
+  renderCommandes();
+  renderHistorique();
+  renderStats();
+  showNotif('❌ Commande annulée');
+}
+
+async function deleteCommande(id) {
+  const c = COMMANDES.find(x => x.id === id);
+  if (!c) { showNotif('⚠ Commande introuvable'); return; }
+  if (c.status !== 'annulees') { showNotif('⚠ Seule une commande annulée peut être supprimée'); return; }
+  if (!skCanWrite(c.creche)) return;
+  if (!confirm(`Supprimer définitivement la commande ${c.bc} (${c.fourn}) ?`)) return;
+  COMMANDES = COMMANDES.filter(x => x.id !== id);
+  saveData();
+  if (!IS_LOCAL) {
+    try { await deleteCommandeDB(id); }
+    catch(e) { console.warn('deleteCommande DB:', e.message); }
+  }
+  addHisto('sortie', `Commande ${c.bc} (supprimée)`, 0, c.creche, 'Vous');
+  await saveHistoDB(HISTORIQUE[0]).catch(()=>{});
+  renderCommandes();
+  renderHistorique();
+  renderStats();
+  showNotif('🗑 Commande supprimée');
+}
+
+// ─── SAVE FOURNISSEUR ─────────────────────────────────────────────────────
+let editingFournisseurId = null;
+
+function editFournisseur(id) {
+  const f = FOURNISSEURS.find(x => x.id === id);
+  if (!f) return;
+  editingFournisseurId = id;
+  document.getElementById('modalFournisseurTitle').textContent = 'Modifier le fournisseur';
+  document.getElementById('fn-nom').value     = f.nom;
+  document.getElementById('fn-contact').value = f.contact !== '—' ? f.contact : '';
+  document.getElementById('fn-tel').value     = f.tel !== '—' ? f.tel : '';
+  document.getElementById('fn-email').value   = f.email || '';
+  document.getElementById('fn-web').value     = f.web || '';
+  document.getElementById('fn-delai').value   = f.delai || '';
+  document.getElementById('fn-spec').value    = f.spec || 'Général';
+  document.getElementById('fn-notes').value   = f.notes || '';
+  document.getElementById('modal-fournisseur').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function deleteFournisseur(id) {
+  const f = FOURNISSEURS.find(x => x.id === id);
+  if (!f) return;
+  const nb = ARTICLES.filter(a => a.fourn === f.nom).length;
+  const msg = nb > 0
+    ? `Supprimer "${f.nom}" ?
+
+⚠ Ce fournisseur est utilisé par ${nb} article(s). Il sera retiré de leur fiche.`
+    : `Supprimer "${f.nom}" ?`;
+  if (!confirm(msg)) return;
+  // Remove from articles
+  if (nb > 0) ARTICLES.forEach(a => { if (a.fourn === f.nom) a.fourn = ''; });
+  FOURNISSEURS = FOURNISSEURS.filter(x => x.id !== id);
+  saveData();
+  if (!IS_LOCAL) sbDelete('fournisseurs', id).catch(e => console.warn(e.message));
+  renderFournisseurs();
+  renderActiveInvTable();
+  showNotif(`🗑 ${f.nom} supprimé`);
+}
+
+async function saveFournisseur() {
+  const nom = document.getElementById('fn-nom').value.trim();
+  if (!nom) { showNotif('⚠ Nom obligatoire'); return; }
+
+  const data = {
+    nom,
+    contact: document.getElementById('fn-contact').value.trim() || '—',
+    tel:     document.getElementById('fn-tel').value.trim() || '—',
+    email:   document.getElementById('fn-email').value.trim(),
+    web:     document.getElementById('fn-web').value.trim(),
+    delai:   document.getElementById('fn-delai').value.trim(),
+    spec:    document.getElementById('fn-spec').value,
+    notes:   document.getElementById('fn-notes').value.trim(),
+  };
+
+  // Capture l'id AVANT de le remettre à null
+  const isFournEdit = !!editingFournisseurId;
+  const fournEditId  = editingFournisseurId;
+
+  if (isFournEdit) {
+    // Mode modification
+    const oldNom = (FOURNISSEURS.find(f => f.id === fournEditId)||{}).nom;
+    const idx = FOURNISSEURS.findIndex(f => f.id === fournEditId);
+    if (idx >= 0) {
+      FOURNISSEURS[idx] = { ...FOURNISSEURS[idx], ...data };
+      // Mettre à jour le nom dans les articles si changé
+      if (oldNom && oldNom !== nom) {
+        ARTICLES.forEach(a => { if (a.fourn === oldNom) a.fourn = nom; });
+        renderActiveInvTable();
+      }
+    }
+    document.getElementById('modalFournisseurTitle').textContent = 'Ajouter un fournisseur';
+    showNotif('✅ Fournisseur mis à jour');
+    if (!IS_LOCAL) updateFournisseurDB({ id: fournEditId, ...data }).catch(()=>{});
+  } else {
+    // Mode ajout
+    FOURNISSEURS.push({ id: Date.now(), ...data });
+    showNotif('✅ Fournisseur ajouté');
+    if (!IS_LOCAL) saveFournisseurDB(FOURNISSEURS[FOURNISSEURS.length-1]).catch(e => {
+      showNotif('⚠ Erreur sauvegarde fournisseur : ' + e.message);
+      console.error('[Fournisseur] Insert échoué :', e);
+    });
+  }
+
+  editingFournisseurId = null;
+  saveData();
+  closeModal('modal-fournisseur');
+  renderFournisseurs();
+}
+
+// ─── SHOW DETAIL ──────────────────────────────────────────────────────────
+function showDetail(id) {
+  const a = ARTICLES.find(x => x.id === id);
+  if (!a) return;
+  const pct = a.min === 0 ? 100 : Math.min(100, Math.round(a.stock / (a.min * 3) * 100));
+  const [statusClass, statusLabel, barColor] =
+    a.stock === 0 ? ['badge-red','Épuisé','#DC2626'] :
+    a.stock <= a.min ? ['badge-amber','Stock bas','#D97706'] :
+    ['badge-green','OK','#16A34A'];
+
+  const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+  document.getElementById('detail-title').textContent = nomClean;
+
+  const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀','Entretien':'🧹','Cuisine':'🍳' };
+
+  const photoBlock = a.photo
+    ? `<div style="position:relative;margin-bottom:16px">
+        <img src="${a.photo}" class="detail-photo" alt="${a.nom}">
+        <button class="photo-preview-remove" style="top:8px;right:8px;width:30px;height:30px;font-size:13px" onclick="onRemoveArticlePhoto(${a.id})" title="Supprimer la photo">✕</button>
+      </div>`
+    : `<div class="detail-photo-placeholder" id="detail-photo-zone-${a.id}" onclick="triggerDetailPhotoUpload(${a.id})"
+        ondragover="handleDetailDragOver(event, ${a.id})" ondragleave="handleDetailDragLeave(event, ${a.id})" ondrop="handleDetailDrop(event, ${a.id})">
+        <div style="font-size:36px">${CAT_ICONS[a.cat]||'📦'}</div>
+        <div style="font-size:13px;color:var(--ink2);font-weight:500">📷 Ajouter une photo</div>
+        <div style="font-size:11px;color:var(--ink3)">Cliquez ou glissez-déposez une image ici</div>
+        <input type="file" id="detail-photo-input-${a.id}" accept="image/*" style="display:none" onchange="handleDetailPhotoUpload(event, ${a.id})">
+      </div>`;
+  document.getElementById('detail-body').innerHTML = `
+    ${photoBlock}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div style="background:var(--bg);border-radius:10px;padding:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--ink3);margin-bottom:6px">Stock actuel</div>
+        <div style="font-family:'Syne',sans-serif;font-size:36px;font-weight:800;color:${barColor}">${a.stock}</div>
+        <div class="stock-bar" style="margin-top:8px;width:100%"><div class="stock-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+        <span class="badge ${statusClass}" style="margin-top:8px">${statusLabel}</span>
+      </div>
+      <div style="background:var(--bg);border-radius:10px;padding:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--ink3);margin-bottom:6px">Informations</div>
+        <table style="font-size:12px;width:100%;border-collapse:collapse">
+          <tr><td style="color:var(--ink3);padding:3px 0">Référence</td><td style="font-weight:500">${a.ref}</td></tr>
+          <tr><td style="color:var(--ink3);padding:3px 0">Catégorie</td><td style="font-weight:500">${a.cat}</td></tr>
+          <tr><td style="color:var(--ink3);padding:3px 0">Structure</td><td style="font-weight:500">${a.creche}</td></tr>
+          <tr><td style="color:var(--ink3);padding:3px 0">Stock min.</td><td style="font-weight:500">${a.min}</td></tr>
+          <tr><td style="color:var(--ink3);padding:3px 0">Prix unitaire</td><td style="font-weight:500">${a.prix > 0 ? a.prix.toFixed(2)+' €' : '—'}</td></tr>
+          <tr><td style="color:var(--ink3);padding:3px 0">Fournisseur</td><td style="font-weight:500">${a.fourn || '—'}</td></tr>
+          <tr><td style="color:var(--ink3);padding:3px 0">Valeur stock</td><td style="font-weight:600;color:var(--accent)">${(a.stock*a.prix).toFixed(2)} €</td></tr>
+          ${a.url ? `<tr><td style="color:var(--ink3);padding:3px 0">Lien</td><td><a href="#" onclick="openUrl('${jsAttr(a.url)}', event)" rel="noopener" style="color:var(--accent);font-size:12px">🔗 Voir</a></td></tr>` : ''}
+          ${a.date_achat ? `<tr><td style="color:var(--ink3);padding:3px 0">Date d'achat</td><td style="font-weight:500">${new Date(a.date_achat).toLocaleDateString('fr-FR')}</td></tr>` : ''}
+          ${a.depreciable === false
+            ? `<tr><td style="color:var(--ink3);padding:3px 0">Type</td><td><span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:#F0FDF4;color:#065F46">🧴 Consommable</span></td></tr>`
+            : (() => {
+                const etat = getArticleEtat(a);
+                if (!etat) return '';
+                const annees = a.date_achat ? ((Date.now() - new Date(a.date_achat)) / (365.25*24*3600*1000)).toFixed(1) : null;
+                const residuel = annees ? Math.max(0, Math.round((1 - 0.20 * parseFloat(annees)) * 100)) : null;
+                return `<tr><td style="color:var(--ink3);padding:3px 0">État</td><td>${getEtatBadgeHtml(etat)}${annees ? `<span style="font-size:11px;color:var(--ink3);margin-left:6px">${annees} ans · résiduel ${residuel}%</span>` : ''}</td></tr>`;
+              })()
+          }
+        </table>
+      </div>
+    </div>
+    ${a.notes ? `<div style="background:var(--amber-lt);border:1px solid #FDE68A;border-radius:8px;padding:12px;font-size:13px;color:#92400E;margin-bottom:16px">📌 ${a.notes}</div>` : ''}
+    ${a.url ? `<div style="margin-bottom:16px"><a href="#" onclick="openUrl('${jsAttr(a.url)}', event)" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:var(--accent-lt);color:var(--accent);padding:10px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;border:1px solid #BFDBFE">🔗 Voir la fiche produit</a></div>` : ''}
+    <div style="margin-bottom:8px;font-weight:600;font-size:13px">Ajuster le stock</div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="btn btn-secondary" onclick="onAdjustStock(${a.id}, -1)">− Retirer 1</button>
+      <button class="btn btn-secondary" onclick="onAdjustStock(${a.id}, +1)">+ Ajouter 1</button>
+      <input type="number" id="adj-qty" placeholder="Quantité" style="width:100px">
+      <button class="btn btn-primary" onclick="onAdjustStockCustom(${a.id})">Valider</button>
+    </div>`;
+
+  document.getElementById('detail-footer').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal('modal-detail')">Fermer</button>
+    <button class="btn btn-secondary" onclick="editArticleFromDetail(${a.id})">✏️ Modifier</button>
+    <button class="btn btn-primary" onclick="closeModal('modal-detail');commanderArticle(${a.id})">🛒 Commander</button>`;
+
+  document.getElementById('modal-detail').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+async function quickAdjust(id, delta) {
+  const a = ARTICLES.find(x => x.id === id);
+  if (!a) return;
+  if (!skCanWrite(a.creche)) return;
+  if (delta < 0 && a.stock === 0) { showNotif('⚠ Stock déjà à zéro'); return; }
+  a.stock = Math.max(0, a.stock + delta);
+  addHisto(delta > 0 ? 'entrée' : 'sortie', a.nom, delta, a.creche, 'Vous', 'Ajustement rapide');
+  saveData();
+  renderActiveInvTable();
+  renderHistorique();
+  showNotif(`${delta > 0 ? '📥 +1 entrée' : '📤 -1 sortie'} — ${a.nom} : ${a.stock} en stock`);
+}
+
+async function adjustStock(id, delta) {
+  const a = ARTICLES.find(x => x.id === id);
+  if (!a) return;
+  if (!skCanWrite(a.creche)) return;
+  a.stock = Math.max(0, a.stock + delta);
+  addHisto(delta > 0 ? 'entrée' : 'sortie', a.nom, delta, a.creche, 'Vous', 'Ajustement manuel');
+  saveData();
+  renderActiveInvTable();
+  renderHistorique();
+  showDetail(id);
+  showNotif(`${delta > 0 ? '📥' : '📤'} Stock mis à jour : ${a.stock} unité(s)`);
+}
+
+async function adjustStockCustom(id) {
+  const qty = parseInt(document.getElementById('adj-qty').value);
+  if (!qty || isNaN(qty)) { showNotif('⚠ Entrez une quantité'); return; }
+  await adjustStock(id, qty);
+}
+
+// ─── HISTORIQUE HELPER ────────────────────────────────────────────────────
+function addHisto(type, article, qty, creche, user, note='') {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('fr-FR')+' '+now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  HISTORIQUE.unshift({ id: Date.now(), type, article, qty, creche, user, date: dateStr, note });
+}
+
+// ─── PAGES ────────────────────────────────────────────────────────────────
+function showPage(page, btn) {
+  currentPage = page;
+  ['inventaire','commandes','fournisseurs','historique','couches'].forEach(p => {
+    document.getElementById(`page-${p}`).style.display = p === page ? 'block' : 'none';
+  });
+  // Le contenu défile avec la fenêtre (.main n'a pas son propre scroll) : sans
+  // ça, changer d'onglet après avoir fait défiler un long tableau (ex.
+  // Inventaire) garde la même position et affiche un grand vide en haut
+  // d'un onglet plus court comme Couches. On libère aussi un éventuel verrou
+  // de scroll oublié par une fenêtre modale (document.body.style.overflow =
+  // 'hidden' posé à l'ouverture, censé être retiré par closeModal()) : sans
+  // ça, scrollTo(0,0) n'a aucun effet, la page restant bloquée.
+  document.body.style.overflow = '';
+  window.scrollTo(0, 0);
+  requestAnimationFrame(() => window.scrollTo(0, 0));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const titles = { inventaire:'Inventaire', commandes:'Commandes', fournisseurs:'Fournisseurs', historique:'Historique des mouvements', couches:'Couches' };
+  document.getElementById('pageTitle').textContent = titles[page];
+  // Re-render page content when switching to ensure fresh data
+  if (page === 'commandes') { renderCommandes(); }
+  if (page === 'fournisseurs') { renderFournisseurs(); }
+  if (page === 'historique') { renderHistorique(); }
+  if (page === 'couches') { renderCouches(); }
+  if (page === 'inventaire') {
+    switchInvTab(currentInvTab); // réaffiche le bon tableau
+    renderStats();
+  }
+}
+
+function showTab(tab, btn) {
+  ['en-cours','livrees','annulees'].forEach(t => {
+    const el = document.getElementById(`tab-${t}`);
+    if (el) el.style.display = t === tab ? 'block' : 'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Re-render when switching tabs to ensure fresh content
+  renderCommandes();
+}
+
+// ─── EXPORT EXCEL PAR COMMANDE ───────────────────────────────────────────
+
+function exportCommandeExcel(id) {
+  if (typeof XLSX === 'undefined') { showNotif('⚠ SheetJS non disponible'); return; }
+  const c = COMMANDES.find(x => x.id === id);
+  if (!c) return;
+
+  function parseArts(str) {
+    return (str||'').split('\n').filter(Boolean).map(ligne => {
+      const m    = ligne.match(/^[-•]?\s*(\d+)\s*[×xX]\s*(.+)/);
+      const urlM = ligne.match(/\[(?!cat:)((?:https?:\/\/)?[^\]\s]+\.[^\]\s]+)\]/); // URL réelle uniquement, pas [cat:...]
+      const pM   = ligne.match(/\((\d+[.,]?\d*)\s*€?\)/);
+      const fM   = ligne.match(/\{(.+?)\}/);
+      return {
+        url:   urlM ? urlM[1] : '',
+        prix:  pM   ? parseFloat(pM[1].replace(',','.')) : 0,
+        fourn: fM   ? fM[1] : '',
+        qty:   m    ? parseInt(m[1]) : 0,
+        nom:   (m ? m[2] : ligne)
+          .replace(/\s*\{.*?\}\s*/g,'')
+          .replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'')
+          .replace(/\s*\[.*?\]\s*$/,'').trim(),
+      };
+    });
+  }
+
+  const arts = parseArts(c.articles);
+  const nom  = getCrecheName().toUpperCase();
+  const wb   = XLSX.utils.book_new();
+
+  // ── Feuille identique au modèle ─────────────────────────────────────────
+  // Rows 1-4 vides, Row 5 = BC, Row 6 = crèche+date, Row 7 = headers
+  // Articles : ligne nom/fourn/qty/prix/total puis ligne URL dessous
+  const aoa = [
+    ['', '', '', '', '', ''],  // row 1
+    ['', '', '', '', '', ''],  // row 2
+    ['', '', '', '', '', ''],  // row 3
+    ['', '', '', '', '', ''],  // row 4
+    ['Bon de commande :', c.bc || '—', '', '', '', ''],
+    ['Nom de la crèche  :', nom, c.date || '', '', '', ''],
+    ['Désignation', 'Fournisseur', 'Quantité', 'Prix Unitaire', 'Total', ''],
+  ];
+
+  const hyperlinks = {};
+  let totalGeneral = 0;
+
+  arts.forEach(art => {
+    const total = Math.round((art.qty || 0) * (art.prix || 0) * 100) / 100;
+    totalGeneral += total;
+    aoa.push([
+      art.nom,
+      art.fourn || '',
+      art.qty || 0,
+      art.prix || 0,
+      total || '',
+      '',
+    ]);
+    // URL sur la ligne suivante — vrai hyperlien cliquable
+    if (art.url) {
+      const rowIdx = aoa.length;
+      const ref = XLSX.utils.encode_cell({ r: rowIdx, c: 0 });
+      hyperlinks[ref] = { Target: art.url, Tooltip: 'Voir le produit' };
+      aoa.push(['🔗 Voir le produit', '', '', '', '', '']);
+    } else {
+      aoa.push(['', '', '', '', '', '']);
+    }
+  });
+
+  // Total achats
+  aoa.push(['Total achats', '', '', '', Math.round(totalGeneral * 100) / 100, '']);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Appliquer les hyperliens
+  Object.entries(hyperlinks).forEach(([ref, link]) => {
+    if (!ws[ref]) ws[ref] = { t:'s', v: link.Tooltip || link.Target };
+    ws[ref].l = { Target: link.Target, Tooltip: link.Tooltip };
+  });
+
+  // Largeurs identiques au modèle
+  ws['!cols'] = [
+    { wch: 35.43 },
+    { wch: 16.43 },
+    { wch: 14.57 },
+    { wch: 11.43 },
+    { wch:  9.43 },
+    { wch: 12.00 },
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Feuil1');
+  const bc = (c.bc || 'bordereau').replace(/[^a-zA-Z0-9-]/g, '_');
+  XLSX.writeFile(wb, `bordereau_${bc}.xlsx`);
+  showNotif(`⬇ Bordereau ${c.bc || ''} exporté`);
+}
+
+let _currentBordereauHTML = '';
+
+function printBordereau(id) {
+  try {
+    const c = COMMANDES.find(x => x.id === id);
+    if (!c) { showNotif('⚠ Commande introuvable'); return; }
+
+    function parseArts(str) {
+      return (str||'').split('\n').filter(Boolean).map(ligne => {
+        const m    = ligne.match(/^[-•]?\s*(\d+)\s*[×xX]\s*(.+)/);
+        const urlM = ligne.match(/\[(.+?)\]$/);
+        const pM   = ligne.match(/\((\d+[.,]?\d*)\s*€?\)/);
+        const fM   = ligne.match(/\{(.+?)\}/);
+        return {
+          url:   urlM ? urlM[1] : '',
+          prix:  pM   ? parseFloat(pM[1].replace(',','.')) : 0,
+          fourn: fM   ? fM[1] : '',
+          qty:   m    ? parseInt(m[1]) : 0,
+          nom:   (m ? m[2] : ligne)
+            .replace(/\s*\{.*?\}\s*/g,'')
+            .replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'')
+            .replace(/\s*\[.*?\]\s*$/,'').trim(),
+        };
+      });
+    }
+
+    const arts  = parseArts(c.articles);
+    const nom   = getCrecheName();
+    const total = arts.reduce((s,a) => s + (a.qty||0)*(a.prix||0), 0);
+
+    const lignesHTML = arts.map(a => `
+      <tr>
+        <td style="padding:8px 10px;vertical-align:top;border-bottom:1px solid #E7E5E0"><strong>${a.nom}</strong></td>
+        <td style="padding:8px 10px;text-align:center;border-bottom:1px solid #E7E5E0;vertical-align:top">${a.fourn||'—'}</td>
+        <td style="padding:8px 10px;text-align:center;border-bottom:1px solid #E7E5E0;vertical-align:top">${a.qty||0}</td>
+        <td style="padding:8px 10px;text-align:right;border-bottom:1px solid #E7E5E0;vertical-align:top">${a.prix ? a.prix.toFixed(2)+' €' : '—'}</td>
+        <td style="padding:8px 10px;text-align:right;border-bottom:1px solid #E7E5E0;vertical-align:top;font-weight:600">${((a.qty||0)*(a.prix||0)).toFixed(2)} €</td>
+      </tr>`).join('');
+
+    const bordereauHTML = `
+      <div style="background:white;padding:32px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.08);font-family:Arial,sans-serif;font-size:12px;color:#111;max-width:780px;margin:0 auto">
+        <div style="border-bottom:3px solid #1C1917;padding-bottom:16px;margin-bottom:20px">
+          <div style="font-size:20px;font-weight:bold;margin-bottom:8px">Bon de commande</div>
+          <div style="display:flex;gap:32px;flex-wrap:wrap">
+            <div><span style="color:#888">N° BC :</span> <strong>${c.bc||'—'}</strong></div>
+            <div><span style="color:#888">Crèche :</span> <strong>${nom}</strong></div>
+            <div><span style="color:#888">Date :</span> <strong>${c.date||'—'}</strong></div>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#1C1917;color:white">
+              <th style="padding:8px 10px;text-align:left;font-size:11px;width:28%">Désignation</th>
+              <th style="padding:8px 10px;text-align:center;font-size:11px;width:16%">Fournisseur</th>
+              <th style="padding:8px 10px;text-align:center;font-size:11px;width:8%">Qté</th>
+              <th style="padding:8px 10px;text-align:right;font-size:11px;width:12%">Prix unit.</th>
+              <th style="padding:8px 10px;text-align:right;font-size:11px;width:12%">Total</th>
+              <th style="padding:8px 10px;text-align:center;font-size:11px;width:12%">Lien</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lignesHTML}
+            <tr style="background:#EFF6FF">
+              <td colspan="4" style="padding:10px;text-align:right;font-weight:bold;font-size:13px">Total achats</td>
+              <td style="padding:10px;text-align:right;font-weight:bold;font-size:14px;color:#2563EB">${total.toFixed(2)} €</td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+        ${c.notes ? `<div style="margin-top:20px;background:#FEF9C3;border:1px solid #FDE68A;border-radius:6px;padding:12px"><strong>📌 Notes :</strong> ${c.notes}</div>` : ''}
+        <div style="margin-top:32px;font-size:10px;color:#888;border-top:1px solid #E7E5E0;padding-top:12px">
+          Bordereau généré le ${new Date().toLocaleDateString('fr-FR')} — ${nom}
+        </div>
+      </div>`;
+
+    // Build print rows HTML (no nested template literals)
+    const printRowsHTML = arts.map(a => {
+      const lien = a.url ? '<a href="' + cleanUrl(a.url) + '" target="_blank" rel="noopener" style="color:#2563EB;text-decoration:none">🔗 Voir</a>' : '—';
+      const t = ((a.qty||0)*(a.prix||0)).toFixed(2);
+      return '<tr><td><strong>' + a.nom + '</strong></td>' +
+        '<td style="text-align:center">' + (a.fourn||'—') + '</td>' +
+        '<td style="text-align:center">' + (a.qty||0) + '</td>' +
+        '<td style="text-align:right">' + (a.prix ? a.prix.toFixed(2)+' €' : '—') + '</td>' +
+        '<td style="text-align:right;font-weight:600">' + t + ' €</td>' +
+        '<td style="text-align:center">' + lien + '</td></tr>';
+    }).join('');
+    const notesHTML = c.notes ? '<div class="notes"><strong>📌 Notes :</strong> ' + c.notes + '</div>' : '';
+
+    _currentBordereauHTML = '<!DOCTYPE html><html lang="fr"><head>' +
+      '<meta charset="UTF-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">' +
+      '<title>Bordereau ' + (c.bc||'') + '</title>' +
+      '<style>' +
+        'html { font-size: 18px !important; -webkit-text-size-adjust: 100%; }' +
+        '* { margin:0; padding:0; box-sizing:border-box; }' +
+        'body { font-family:Arial,sans-serif; color:#111; padding:24px; max-width:960px; margin:0 auto; }' +
+        'h1 { font-size:1.8rem; font-weight:bold; margin-bottom:0.6rem; }' +
+        '.meta { display:flex; gap:1.4rem; flex-wrap:wrap; margin-bottom:1.2rem; font-size:0.85rem; }' +
+        '.meta span { color:#888; }' +
+        'table { width:100%; border-collapse:collapse; margin-top:0.4rem; }' +
+        'thead tr { background:#1C1917; color:white; }' +
+        'th { padding:0.55rem 0.7rem; font-size:0.75rem; }' +
+        'td { padding:0.55rem 0.7rem; border-bottom:1px solid #E7E5E0; font-size:0.8rem; vertical-align:top; }' +
+        'tr:nth-child(even) td { background:#F9F9F8; }' +
+        '.total-row td { background:#EFF6FF !important; font-weight:bold; font-size:0.9rem; }' +
+        'a { color:#2563EB; text-decoration:none; }' +
+        '.footer { margin-top:1.6rem; font-size:0.65rem; color:#888; border-top:1px solid #E7E5E0; padding-top:0.7rem; }' +
+        '.notes { margin-top:1.1rem; background:#FEF9C3; border:1px solid #FDE68A; border-radius:4px; padding:0.7rem; font-size:0.8rem; }' +
+        '@media print { html { font-size:12px; } @page { margin:1.5cm; } body { padding:0; } }' +
+      '</style>' +
+      '</head><body>' +
+      '<h1>Bon de commande</h1>' +
+      '<div class="meta">' +
+        '<div><span>N° BC : </span><strong>' + (c.bc||'—') + '</strong></div>' +
+        '<div><span>Crèche : </span><strong>' + getCrecheName() + '</strong></div>' +
+        '<div><span>Date : </span><strong>' + (c.date||'—') + '</strong></div>' +
+      '</div>' +
+      '<table><thead><tr>' +
+        '<th style="text-align:left;width:30%">Désignation</th>' +
+        '<th style="text-align:center;width:16%">Fournisseur</th>' +
+        '<th style="text-align:center;width:8%">Qté</th>' +
+        '<th style="text-align:right;width:13%">Prix unit.</th>' +
+        '<th style="text-align:right;width:13%">Total</th>' +
+        '<th style="text-align:center;width:12%">Lien</th>' +
+      '</tr></thead><tbody>' +
+      printRowsHTML +
+      '<tr class="total-row">' +
+        '<td colspan="4" style="text-align:right">Total achats</td>' +
+        '<td style="text-align:right;color:#2563EB">' + total.toFixed(2) + ' €</td>' +
+        '<td></td>' +
+      '</tr></tbody></table>' +
+      notesHTML +
+      '<div class="footer">Bordereau généré le ' + new Date().toLocaleDateString('fr-FR') + ' — ' + getCrecheName() + '</div>' +
+      '</body></html>';
+
+    // Ouvrir le modal de prévisualisation
+    const previewBody  = document.getElementById('preview-body');
+    const previewModal = document.getElementById('modal-preview');
+
+    if (previewBody && previewModal) {
+      previewBody.innerHTML = bordereauHTML;
+      previewModal.classList.add('open');
+      if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+    } else {
+      // Modal introuvable — ouvrir directement
+      console.error('modal-preview introuvable dans le DOM');
+      doPrint();
+    }
+  } catch(e) {
+    console.error('printBordereau error:', e);
+    showNotif('⚠ Erreur : ' + e.message);
+  }
+}
+
+function doPrint() {
+  try {
+    // Utiliser un iframe caché pour l'impression (compatible mobile/Chrome)
+    const existing = document.getElementById('_print-frame');
+    if (existing) existing.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = '_print-frame';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(_currentBordereauHTML);
+    doc.close();
+
+    // Attendre le chargement des images/styles avant d'imprimer
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch(e) {
+        showNotif('⚠ Erreur impression : ' + e.message);
+      }
+    };
+  } catch(e) {
+    showNotif('⚠ Erreur : ' + e.message);
+  }
+}
+
+function telechargerBordereau() {
+  // Télécharge le bordereau comme fichier HTML — peut être joint à un mail
+  const bc = (_currentBordereauHTML.match(/Bordereau ([A-Z0-9-]+)/) || [])[1] || 'bordereau';
+  const blob = new Blob([_currentBordereauHTML], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `bordereau_${bc}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showNotif('⬇ Bordereau téléchargé — joignez-le à votre mail');
+}
+
+function ouvrirMailBordereau() {
+  const bc  = _currentBordereauHTML.match(/N° BC.*?<strong>([^<]+)<\/strong>/)?.[1] || 'Bordereau';
+  const nom = getCrecheName();
+  const subject = encodeURIComponent(`Bon de commande ${bc} — ${nom}`);
+  const body = encodeURIComponent(
+    `Bonjour,\n\nVeuillez trouver ci-joint le bon de commande ${bc} de la crèche ${nom}.\n\n` +
+    `(Pensez à joindre le fichier téléchargé via le bouton ⬇ Télécharger)\n\nCordialement`
+  );
+  // Télécharger en même temps pour que le fichier soit prêt à joindre
+  telechargerBordereau();
+  // Ouvrir le client mail avec sujet et corps pré-remplis
+  setTimeout(() => {
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  }, 500);
+}
+
+async function partagerBordereau() {
+  const bc = (_currentBordereauHTML.match(/Bordereau ([A-Z0-9-]+)</) || [])[1] || 'bordereau';
+  const blob = new Blob([_currentBordereauHTML], { type: 'text/html;charset=utf-8' });
+  const file = new File([blob], `bordereau_${bc}.html`, { type: 'text/html' });
+
+  // Web Share API — fonctionne sur Android Chrome
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        title: `Bordereau ${bc}`,
+        files: [file],
+      });
+      return;
+    } catch(e) {
+      if (e.name !== 'AbortError') console.warn('Share failed:', e);
+    }
+  }
+  // Fallback : téléchargement
+  telechargerBordereau();
+}
+
+// ─── SAUVEGARDE / RESTAURATION COMPLÈTE (JSON) ───────────────────────────
+
+function exportBackup() {
+  const nom = getCrecheName();
+  const payload = {
+    version:      '1.0',
+    creche:       nom,
+    exportedAt:   new Date().toISOString(),
+    articles:     ARTICLES,
+    commandes:    COMMANDES,
+    fournisseurs: FOURNISSEURS,
+    historique:   HISTORIQUE,
+  };
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `sauvegarde-${nom.replace(/\s+/g,'-')}-${date}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showNotif(`💾 Sauvegarde téléchargée — ${ARTICLES.length} articles, ${COMMANDES.length} commandes`);
+}
+
+function importBackup(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.articles || !Array.isArray(data.articles)) {
+        showNotif('⚠ Fichier invalide — format non reconnu'); return;
+      }
+      const dateStr = data.exportedAt
+        ? new Date(data.exportedAt).toLocaleDateString('fr-FR') : '?';
+      const msg = `Restaurer la sauvegarde "${data.creche||'?'}" du ${dateStr} ?\n\n`
+        + `${data.articles.length} articles · ${(data.commandes||[]).length} commandes `
+        + `· ${(data.fournisseurs||[]).length} fournisseurs\n\n⚠ Les données actuelles seront remplacées.`;
+      if (!confirm(msg)) { event.target.value = ''; return; }
+
+      ARTICLES.splice(0,     ARTICLES.length,     ...(data.articles     || []));
+      COMMANDES.splice(0,    COMMANDES.length,    ...(data.commandes    || []));
+      FOURNISSEURS.splice(0, FOURNISSEURS.length, ...(data.fournisseurs || []));
+      HISTORIQUE.splice(0,   HISTORIQUE.length,   ...(data.historique   || []));
+
+      if (data.creche) {
+        localStorage.setItem(LS_NAME_KEY, data.creche);
+        applyNomCreche(data.creche);
+      }
+      saveData();
+      renderActiveInvTable(); renderStats(); renderCommandes();
+      renderFournisseurs(); renderHistorique(); updateCounts();
+      showNotif(`✅ Restauration réussie — ${data.articles.length} articles chargés`);
+    } catch(err) {
+      showNotif('⚠ Erreur de lecture : ' + err.message);
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function exportCSV() {
+  const headers = ['Référence','Nom','Catégorie','Structure','Stock','Stock min','Prix unitaire','Montant total','Fournisseur','Notes'];
+  const rows = ARTICLES.map(a => [
+    a.ref, a.nom, a.cat, a.creche, a.stock, a.min,
+    a.prix, (a.stock * a.prix).toFixed(2), a.fourn, a.notes
+  ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
+
+  // Add per-structure totals at the bottom
+  rows.push('');
+  rows.push('"Récapitulatif par structure"');
+  CRECHES.forEach(c => {
+    const items = ARTICLES.filter(a => a.creche === c);
+    const total = items.reduce((s,a) => s + a.stock * a.prix, 0);
+    rows.push(`"${c}","","","","${items.length} articles","","","${total.toFixed(2)} €","",""`);
+  });
+  const totalGlobal = ARTICLES.reduce((s,a) => s + a.stock * a.prix, 0);
+  rows.push(`"TOTAL GÉNÉRAL","","","","${ARTICLES.length} articles","","","${totalGlobal.toFixed(2)} €","",""`);
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `stocks-creches-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showNotif('⬇ Export CSV téléchargé');
+}
+
+// ─── NOTIFICATION ─────────────────────────────────────────────────────────
+let notifTimer;
+function cleanUrl(raw) {
+  if (!raw) return '';
+  // Extraire la première URL valide (http/https) dans la chaîne
+  const match = raw.match(/https?:\/\/[^\s\]\)"'<>]+/);
+  if (match) return match[0];
+  // Lien collé sans schéma (ex. "amazon.fr/dp/...") : on ajoute https://
+  const bare = raw.trim().match(/^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+\/?[^\s\]\)"'<>]*$/i);
+  return bare ? 'https://' + bare[0] : '';
+}
+
+// Échappe une valeur pour l'injecter en toute sécurité dans un onclick="...('...')"
+function jsAttr(raw) {
+  return String(raw || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;')
+    .replace(/\n/g, '');
+}
+
+function openUrl(raw, e) {
+  if (e) e.stopPropagation();
+  const url = cleanUrl(raw);
+  if (!url) return;
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+window.openUrl = openUrl;
+
+function showNotif(msg) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => el.classList.remove('show'), 6000);
+}
+
+// ─── LIGNES D'ARTICLES DANS FORMULAIRE COMMANDE ──────────────────────────
+
+let articleRowCount = 0;
+const articleRowPhotos = {}; // idx → URL (ou base64 résiduel d'avant migration) pour l'aperçu
+const articleRowFiles = {};  // idx → File brut, uniquement pour les photos nouvellement choisies cette session
+
+function addArticleRow(qty='', nom='', prix='', url='', fourn='', cat='', photo='') {
+  const idx = articleRowCount++;
+  const container = document.getElementById('articles-rows');
+  if (!container) return;
+  const row = document.createElement('div');
+  row.className = 'article-row';
+  row.id = `article-row-${idx}`;
+  row.innerHTML = `
+    <input type="number" id="row-qty-${idx}" value="${qty}" min="1" placeholder="Qté"
+           oninput="calcCommandeTotal()" style="text-align:center">
+    <div style="display:flex;flex-direction:column;border-right:1px solid var(--border)">
+      <input type="text" id="row-nom-${idx}" value="${nom}" placeholder="Nom de l'article"
+             style="border:none;border-bottom:1px solid var(--border);border-radius:0;flex:1">
+      <input type="text" id="row-fourn-${idx}" value="${fourn||''}" placeholder="Fournisseur"
+             list="fourn-list-${idx}"
+             style="border:none;border-bottom:1px solid var(--border);border-radius:0;flex:1;font-size:11px;color:var(--ink2)">
+      <datalist id="fourn-list-${idx}">${FOURNISSEURS.map(f=>`<option value="${f.nom}">`).join('')}</datalist>
+      <input type="url" id="row-url-${idx}" value="${url}" placeholder="https://..."
+             style="border:none;border-radius:0;flex:1;font-size:11px;color:var(--accent)">
+    </div>
+    <select id="row-cat-${idx}" style="border:none;border-right:1px solid var(--border);border-radius:0;padding:4px 6px;font-size:11px;background:var(--surface);color:var(--ink)">
+      <option value="">— Cat. —</option>
+      ${['Sensoriel','Manipulation','Construction','Motricité','Imitation','Expression artistique','Mobilier','Puériculture','Bureautique','Rangement','Décoration','Entretien','Cuisine','Couches'].map(c=>`<option value="${c}" ${cat===c?'selected':''}>${c}</option>`).join('')}
+    </select>
+    <input type="number" id="row-prix-${idx}" value="${prix}" min="0" step="0.01" placeholder="0.00"
+           oninput="calcCommandeTotal()" style="text-align:right">
+    <button class="del-row" onclick="removeArticleRow(${idx})" title="Supprimer">×</button>
+    <div id="row-photo-zone-${idx}" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:4px 8px 6px;border-top:1px solid var(--border);background:var(--bg);transition:background .15s"
+         ondragover="handleRowDragOver(event,${idx})" ondragleave="handleRowDragLeave(event,${idx})" ondrop="handleRowDrop(event,${idx})">
+      <label style="font-size:11px;color:var(--ink2);cursor:pointer;display:flex;align-items:center;gap:6px;margin:0">
+        <input type="file" accept="image/*" style="display:none"
+               onchange="handleRowPhoto(event,${idx})">
+        <span id="row-photo-btn-${idx}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px dashed var(--border);border-radius:5px;font-size:11px;color:var(--ink2);cursor:pointer;transition:border-color .15s"
+              onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          📷 ${photo ? 'Photo ✅' : 'Photo article'}
+        </span>
+      </label>
+      <span style="font-size:10px;color:var(--ink3)">ou glissez-déposez une image</span>
+      <img id="row-photo-prev-${idx}" src="${photo||''}" alt="" style="display:${photo?'block':'none'};height:36px;width:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">
+      <button type="button" id="row-photo-del-${idx}" style="display:${photo?'inline-block':'none'};background:none;border:none;cursor:pointer;font-size:14px;color:var(--red);padding:0 4px" onclick="deleteRowPhoto(${idx})" title="Supprimer la photo">✕</button>
+    </div>
+  `;
+  container.appendChild(row);
+  if (photo) articleRowPhotos[idx] = photo; // reprend la photo de l'article/de la commande d'origine
+  calcCommandeTotal();
+}
+
+function handleRowPhoto(event, idx) {
+  const file = event.target.files[0];
+  if (!file) return;
+  processRowPhotoFile(file, idx);
+}
+
+function processRowPhotoFile(file, idx) {
+  if (file.size > 5 * 1024 * 1024) { showNotif('⚠ Photo trop grande — max 5 Mo'); return; }
+  if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    articleRowFiles[idx] = file; // fichier brut conservé pour upload Storage à la sauvegarde
+    articleRowPhotos[idx] = e.target.result; // aperçu local uniquement, jamais envoyé en base
+    const prev = document.getElementById(`row-photo-prev-${idx}`);
+    const del  = document.getElementById(`row-photo-del-${idx}`);
+    const btn  = document.getElementById(`row-photo-btn-${idx}`);
+    if (prev) { prev.src = e.target.result; prev.style.display = 'block'; }
+    if (del)  del.style.display = 'inline-block';
+    if (btn)  btn.textContent = '📷 Photo ✅';
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleRowDragOver(event, idx) {
+  event.preventDefault();
+  const z = document.getElementById(`row-photo-zone-${idx}`);
+  if (z) z.style.background = 'var(--accent-lt)';
+}
+
+function handleRowDragLeave(event, idx) {
+  const z = document.getElementById(`row-photo-zone-${idx}`);
+  if (z) z.style.background = 'var(--bg)';
+}
+
+function handleRowDrop(event, idx) {
+  event.preventDefault();
+  const z = document.getElementById(`row-photo-zone-${idx}`);
+  if (z) z.style.background = 'var(--bg)';
+  const file = event.dataTransfer.files[0];
+  if (file) processRowPhotoFile(file, idx);
+}
+
+function deleteRowPhoto(idx) {
+  delete articleRowPhotos[idx];
+  delete articleRowFiles[idx];
+  const prev = document.getElementById(`row-photo-prev-${idx}`);
+  const del  = document.getElementById(`row-photo-del-${idx}`);
+  const btn  = document.getElementById(`row-photo-btn-${idx}`);
+  if (prev) { prev.src = ''; prev.style.display = 'none'; }
+  if (del)  del.style.display = 'none';
+  if (btn)  btn.textContent = '📷 Photo article';
+}
+
+function removeArticleRow(idx) {
+  const row = document.getElementById(`article-row-${idx}`);
+  if (row) { row.remove(); calcCommandeTotal(); }
+  delete articleRowPhotos[idx];
+  delete articleRowFiles[idx];
+}
+
+function calcCommandeTotal() {
+  const rows = document.querySelectorAll('.article-row');
+  let total = 0;
+  rows.forEach(row => {
+    const idx = row.id.replace('article-row-', '');
+    const qty  = parseFloat(document.getElementById(`row-qty-${idx}`)?.value) || 0;
+    const prix = parseFloat(document.getElementById(`row-prix-${idx}`)?.value) || 0;
+    total += qty * prix;
+  });
+  const field = document.getElementById('c-montant');
+  if (field) field.value = total > 0 ? total.toFixed(2) : '';
+}
+
+function editArticleFromDetail(id) {
+  // Fermer le modal détail sans remettre overflow à ''
+  const detailModal = document.getElementById('modal-detail');
+  if (detailModal) detailModal.classList.remove('open');
+  // Ouvrir immédiatement le modal de modification
+  editArticle(id);
+}
+
+function commanderArticle(id) {
+  const a = ARTICLES.find(x => x.id === id);
+  if (!a) { openModal('commande'); return; }
+
+  // Open and reset modal
+  resetCommandeModal();
+  document.getElementById('modal-commande').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+
+  // Set BC and date
+  const bcField = document.getElementById('c-bc');
+  const dateField = document.getElementById('c-date');
+  if (dateField) dateField.value = new Date().toISOString().split('T')[0];
+
+  // Pré-sélectionner la crèche de l'article
+  const crecheSel = document.getElementById('c-creche-select');
+  if (crecheSel && a.creche) crecheSel.value = a.creche;
+  if (bcField) bcField.value = generateBC();
+
+  // Pre-fill one article row with article data
+  const container = document.getElementById('articles-rows');
+  if (container) container.innerHTML = '';
+  articleRowCount = 0;
+  Object.keys(articleRowPhotos).forEach(k => delete articleRowPhotos[k]);
+  Object.keys(articleRowFiles).forEach(k => delete articleRowFiles[k]);
+  // Clean nom from any price/fourn suffixes
+  const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+  addArticleRow('1', nomClean, a.prix > 0 ? a.prix.toFixed(2) : '', a.url || '', a.fourn || '');
+}
+
+function resetArticleRows() {
+  const container = document.getElementById('articles-rows');
+  if (container) container.innerHTML = '';
+  articleRowCount = 0;
+  Object.keys(articleRowPhotos).forEach(k => delete articleRowPhotos[k]);
+  Object.keys(articleRowFiles).forEach(k => delete articleRowFiles[k]);
+  addArticleRow(); // Toujours au moins une ligne vide
+}
+
+// ─── PICKER : PARSER UNE LIGNE DE COMMANDE "3× Nom {Fourn} [cat:Cat] (12.50€) [url]" ──
+function parseLigneArticle(ligne) {
+  const m = ligne.match(/^[-•]?\s*(\d+)\s*[×xX]\s*(.+)/);
+  if (!m) return null;
+  const urlM = ligne.match(/\[(?!cat:)(.+?)\]$/);
+  const pM   = ligne.match(/\((\d+[.,]?\d*)\s*€?\)/);
+  const fM   = ligne.match(/\{(.+?)\}/);
+  const catM = ligne.match(/\[cat:([^\]]+)\]/);
+  return {
+    qty:   parseInt(m[1]) || 1,
+    url:   urlM ? urlM[1] : '',
+    prix:  pM   ? parseFloat(pM[1].replace(',','.')) : 0,
+    fourn: fM   ? fM[1] : '',
+    cat:   catM ? catM[1] : '',
+    nom:   m[2].replace(/\s*\{.*?\}\s*/g,'')
+                .replace(/\s*\(\d+[.,]?\d*\s*€?\)\s*/g,'')
+                .replace(/\s*\[cat:[^\]]+\]\s*/g,'')
+                .replace(/\s*\[.*?\]\s*$/,'').trim(),
+  };
+}
+
+// ─── PICKER 1 : CHOISIR DEPUIS LES ARTICLES EXISTANTS ──────────────────────
+let pickerArticleSelection = new Set();
+
+function openArticlePicker() {
+  pickerArticleSelection = new Set();
+  const search = document.getElementById('picker-article-search');
+  if (search) search.value = '';
+  renderArticlePickerList();
+  document.getElementById('modal-article-picker').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function renderArticlePickerList() {
+  const q = (document.getElementById('picker-article-search')?.value || '').toLowerCase();
+  const crecheSel = document.getElementById('c-creche-select')?.value;
+  let list = ARTICLES.filter(a =>
+    (!q || a.nom.toLowerCase().includes(q) || (a.ref||'').toLowerCase().includes(q) || (a.fourn||'').toLowerCase().includes(q))
+  );
+  // Prioriser les articles de la crèche sélectionnée dans le tri, sans exclure les autres
+  list = list.slice().sort((a,b) => {
+    if (crecheSel) {
+      const am = a.creche === crecheSel ? 0 : 1;
+      const bm = b.creche === crecheSel ? 0 : 1;
+      if (am !== bm) return am - bm;
+    }
+    return a.nom.localeCompare(b.nom);
+  });
+
+  const CAT_ICONS = { 'Sensoriel':'👂','Manipulation':'🤲','Construction':'🧱','Motricité':'🏃','Imitation':'🎭','Expression artistique':'🎨','Mobilier':'🪑','Puériculture':'🍼','Bureautique':'💻','Rangement':'🗂','Décoration':'🎀','Entretien':'🧹','Cuisine':'🍳' };
+  const container = document.getElementById('picker-article-list');
+  if (!container) return;
+  if (list.length === 0) {
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--ink3);font-size:13px">Aucun article trouvé</div>`;
+    return;
+  }
+  container.innerHTML = list.map(a => {
+    const checked = pickerArticleSelection.has(a.id) ? 'checked' : '';
+    const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+    const thumb = a.photo
+      ? `<img src="${a.photo}" alt="${nomClean}" style="width:32px;height:32px;border-radius:6px;object-fit:contain;background:var(--bg);flex-shrink:0" loading="lazy">`
+      : `<span style="font-size:14px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:6px;flex-shrink:0">${CAT_ICONS[a.cat]||'📦'}</span>`;
+    return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+      <input type="checkbox" ${checked} onchange="togglePickerArticle(${a.id}, this.checked)" style="min-height:auto;width:16px;height:16px">
+      ${thumb}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--ink)">${nomClean}</div>
+        <div style="font-size:11px;color:var(--ink3)">${a.creche} · ${a.fourn||'—'} ${a.prix>0?`· ${a.prix.toFixed(2)} €`:''}</div>
+      </div>
+      ${getStockStatusBadgeHtml(a)}
+    </label>`;
+  }).join('');
+}
+
+function togglePickerArticle(id, checked) {
+  if (checked) pickerArticleSelection.add(id);
+  else pickerArticleSelection.delete(id);
+  const cnt = document.getElementById('picker-article-count');
+  if (cnt) cnt.textContent = `${pickerArticleSelection.size} article(s) sélectionné(s)`;
+}
+
+function confirmArticlePicker() {
+  if (pickerArticleSelection.size === 0) { showNotif('⚠ Sélectionnez au moins un article'); return; }
+  // Si la seule ligne présente est vide, on la retire avant d'ajouter les sélections
+  removeEmptyTrailingRow();
+  pickerArticleSelection.forEach(id => {
+    const a = ARTICLES.find(x => x.id === id);
+    if (!a) return;
+    const nomClean = a.nom.replace(/\s*\([\d.,]+[\s€]*\)\s*/g,'').replace(/\s*\{.*?\}\s*/g,'').trim();
+    addArticleRow('1', nomClean, a.prix > 0 ? a.prix.toFixed(2) : '', a.url || '', a.fourn || '', a.cat || '', a.photo || '');
+  });
+  showNotif(`✅ ${pickerArticleSelection.size} article(s) ajouté(s) à la commande`);
+  closeModal('modal-article-picker');
+}
+
+// ─── PICKER : CHOISIR DES COUCHES ──────────────────────────────────────────
+// Ajoute des lignes de couches à la commande en cours, exactement comme les
+// articles du catalogue (même addArticleRow) : une fois ajoutées, ce sont des
+// lignes de commande ordinaires — même formulaire, même historique, même
+// export, même réception. Scopé à la crèche du bon de commande quand elle est
+// choisie, pour ne pas noyer la liste avec les 6 structures.
+let pickerCoucheSelection = new Set(); // clés "creche|type|taille"
+
+function openCouchesPicker() {
+  pickerCoucheSelection = new Set();
+  renderCouchesPickerList();
+  document.getElementById('modal-couches-picker').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function renderCouchesPickerList() {
+  const crecheSel = document.getElementById('c-creche-select')?.value;
+  const crechesAffichees = crecheSel ? [crecheSel] : CRECHES;
+  const container = document.getElementById('picker-couches-list');
+  if (!container) return;
+  let html = '';
+  crechesAffichees.forEach(creche => {
+    COUCHES_PRODUITS.forEach(produit => {
+      produit.tailles.forEach(taille => {
+        const key = `${creche}|${produit.type}|${taille}`;
+        const ev = coucheEvaluer(creche, produit.type, taille);
+        const prixUnit = couchePrixUnitaire(produit.type, taille);
+        const checked = pickerCoucheSelection.has(key) ? 'checked' : '';
+        const badge = ev.enCritique ? '<span style="font-size:11px;font-weight:600;color:#991B1B">🚨 rupture proche</span>'
+          : ev.enAlerte ? '<span style="font-size:11px;font-weight:600;color:var(--red)">⚠️ stock bas</span>' : '';
+        html += `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+          <input type="checkbox" ${checked} onchange="togglePickerCouche('${key}', this.checked)" style="min-height:auto;width:16px;height:16px">
+          <span style="font-size:14px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:6px;flex-shrink:0">🧷</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--ink)">${produit.label} T${taille} — ${creche}</div>
+            <div style="font-size:11px;color:var(--ink3)">Stock actuel : ${ev.stock} · ${ev.estimTexte}${prixUnit!==null?` · ${prixUnit.toFixed(2)} €`:''}</div>
+          </div>
+          ${badge}
+        </label>`;
+      });
+    });
+  });
+  container.innerHTML = html || `<div style="padding:24px;text-align:center;color:var(--ink3);font-size:13px">Aucune référence de couche trouvée</div>`;
+}
+
+function togglePickerCouche(key, checked) {
+  if (checked) pickerCoucheSelection.add(key);
+  else pickerCoucheSelection.delete(key);
+  const cnt = document.getElementById('picker-couches-count');
+  if (cnt) cnt.textContent = `${pickerCoucheSelection.size} référence(s) sélectionnée(s)`;
+}
+
+function confirmCouchesPicker() {
+  if (pickerCoucheSelection.size === 0) { showNotif('⚠ Sélectionnez au moins une référence'); return; }
+  removeEmptyTrailingRow();
+  pickerCoucheSelection.forEach(key => {
+    const [creche, type, taille] = key.split('|');
+    const produit = COUCHES_PRODUITS.find(p => p.type === type);
+    const nom = `${produit ? produit.label : coucheLabel(type)} T${taille} — ${creche}`;
+    const prixUnit = couchePrixUnitaire(type, taille);
+    addArticleRow('1', nom, prixUnit !== null ? prixUnit.toFixed(2) : '', '', '', 'Couches', '');
+  });
+  showNotif(`✅ ${pickerCoucheSelection.size} référence(s) de couches ajoutée(s) à la commande`);
+  closeModal('modal-couches-picker');
+}
+
+// ─── PICKER 2 : REPRENDRE UNE COMMANDE PRÉCÉDENTE ──────────────────────────
+let pickerOrderSelection = new Set(); // clés "commandeId:ligneIdx"
+
+function openOrderHistoryPicker() {
+  pickerOrderSelection = new Set();
+  renderOrderHistoryPickerList();
+  document.getElementById('modal-order-history-picker').classList.add('open');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function renderOrderHistoryPickerList() {
+  const crecheSel = document.getElementById('c-creche-select')?.value;
+  let list = COMMANDES.filter(c => !crecheSel || c.creche === crecheSel);
+  // Plus récentes en premier
+  list = list.slice().sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+
+  const container = document.getElementById('picker-order-list');
+  if (!container) return;
+  if (list.length === 0) {
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--ink3);font-size:13px">Aucune commande antérieure pour cette crèche</div>`;
+    return;
+  }
+  container.innerHTML = list.map(c => {
+    const lignes = (c.articles||'').split('\n').filter(Boolean);
+    const items = lignes.map((ligne, idx) => ({ idx, art: parseLigneArticle(ligne) })).filter(x => x.art);
+    return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg)">
+        <div>
+          <div style="font-size:13px;font-weight:700">🏭 ${c.fourn} <span style="color:var(--ink3);font-weight:400">· ${c.date||''}</span></div>
+          <div style="font-size:11px;color:var(--ink3)">${c.bc||''} · ${items.length} article(s) · ${(c.montant||0).toFixed(2)} €</div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="reprendreCommandeEntiere(${c.id})">🔁 Tout reprendre</button>
+      </div>
+      <div>
+        ${items.map(({idx, art}) => {
+          const key = `${c.id}:${idx}`;
+          const checked = pickerOrderSelection.has(key) ? 'checked' : '';
+          return `<label style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+            <input type="checkbox" ${checked} onchange="togglePickerOrderLine('${key}', this.checked)" style="min-height:auto;width:16px;height:16px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:600">${art.qty}× ${art.nom}</div>
+              <div style="font-size:11px;color:var(--ink3)">${art.fourn||'—'} ${art.prix>0?`· ${art.prix.toFixed(2)} €`:''}</div>
+            </div>
+          </label>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function togglePickerOrderLine(key, checked) {
+  if (checked) pickerOrderSelection.add(key);
+  else pickerOrderSelection.delete(key);
+  const cnt = document.getElementById('picker-order-count');
+  if (cnt) cnt.textContent = `${pickerOrderSelection.size} ligne(s) sélectionnée(s)`;
+}
+
+// Récupère la photo associée à une ligne d'une commande (stockée séparément dans photos_json)
+function getPhotoFromCommandeLine(c, idx) {
+  if (!c.photos_json) return '';
+  try { return JSON.parse(c.photos_json)[idx] || ''; } catch(e) { return ''; }
+}
+
+function reprendreCommandeEntiere(commandeId) {
+  const c = COMMANDES.find(x => x.id === commandeId);
+  if (!c) return;
+  const lignes = (c.articles||'').split('\n').filter(Boolean);
+  const items = lignes.map((ligne, idx) => { const art = parseLigneArticle(ligne); if (art) art._idx = idx; return art; }).filter(Boolean);
+  if (items.length === 0) { showNotif('⚠ Aucun article exploitable dans cette commande'); return; }
+  removeEmptyTrailingRow();
+  items.forEach(art => {
+    addArticleRow(String(art.qty), art.nom, art.prix > 0 ? art.prix.toFixed(2) : '', art.url || '', art.fourn || '', art.cat || '', getPhotoFromCommandeLine(c, art._idx));
+  });
+  showNotif(`✅ ${items.length} article(s) repris de la commande ${c.bc||''}`);
+  closeModal('modal-order-history-picker');
+}
+
+function confirmOrderHistoryPicker() {
+  if (pickerOrderSelection.size === 0) { showNotif('⚠ Sélectionnez au moins une ligne'); return; }
+  removeEmptyTrailingRow();
+  let count = 0;
+  pickerOrderSelection.forEach(key => {
+    const [cIdStr, idxStr] = key.split(':');
+    const c = COMMANDES.find(x => x.id === parseInt(cIdStr) || String(x.id) === cIdStr);
+    if (!c) return;
+    const idx = parseInt(idxStr);
+    const lignes = (c.articles||'').split('\n').filter(Boolean);
+    const art = parseLigneArticle(lignes[idx] || '');
+    if (!art) return;
+    addArticleRow(String(art.qty), art.nom, art.prix > 0 ? art.prix.toFixed(2) : '', art.url || '', art.fourn || '', art.cat || '', getPhotoFromCommandeLine(c, idx));
+    count++;
+  });
+  showNotif(`✅ ${count} article(s) ajouté(s) à la commande`);
+  closeModal('modal-order-history-picker');
+}
+
+// Si la seule ligne du formulaire est vide (cas du formulaire vierge), on la retire
+// avant d'injecter des lignes choisies depuis un picker, pour éviter une ligne vide parasite.
+function removeEmptyTrailingRow() {
+  const rows = document.querySelectorAll('.article-row');
+  if (rows.length !== 1) return;
+  const row = rows[0];
+  const idx = row.id.replace('article-row-', '');
+  const nom = document.getElementById(`row-nom-${idx}`)?.value?.trim();
+  if (!nom) row.remove();
+}
+
+function getArticlesFromRows() {
+  const rows = document.querySelectorAll('.article-row');
+  const lines = [];
+  rows.forEach(row => {
+    const idx = row.id.replace('article-row-', '');
+    const qty   = document.getElementById(`row-qty-${idx}`)?.value?.trim();
+    // Purge les prix "(12.50€)" déjà dupliqués en fin de nom (anciennes éditions)
+    const nom   = document.getElementById(`row-nom-${idx}`)?.value?.trim().replace(/(?:\s*\(\d+[.,]?\d*\s*€\))+\s*$/,'').trim();
+    const fourn = document.getElementById(`row-fourn-${idx}`)?.value?.trim();
+    const cat   = document.getElementById(`row-cat-${idx}`)?.value?.trim();
+    const prix  = document.getElementById(`row-prix-${idx}`)?.value?.trim();
+    const url   = document.getElementById(`row-url-${idx}`)?.value?.trim();
+    if (nom && qty) {
+      let line = `${qty}× ${nom}`;
+      if (fourn) line += ` {${fourn}}`;
+      if (cat)   line += ` [cat:${cat}]`;
+      if (prix && parseFloat(prix) > 0) line += ` (${parseFloat(prix).toFixed(2)}€)`;
+      if (url) line += ` [${url}]`;
+      lines.push(line);
+    }
+  });
+  return lines.join('\n');
+}
+
+// articleRowPhotos/articleRowFiles sont indexés par l'idx DOM de la ligne
+// (compteur qui ne se réaligne jamais, y compris après suppression d'une
+// ligne). Mais getArticlesFromRows() saute les lignes sans nom/qté et
+// getPhotoFromCommandeLine() relit les photos par position dans le texte
+// "articles" une fois sauvegardé : dès qu'une ligne est supprimée ou
+// laissée vide, ces deux indexations divergent et les photos se
+// retrouvent affichées sur le mauvais article. On réaligne donc les clés
+// de articleRowPhotos/articleRowFiles sur la position réelle dans les
+// lignes produites par getArticlesFromRows() juste avant l'upload/sauvegarde.
+function remapRowPhotosToLineIndex() {
+  const rows = document.querySelectorAll('.article-row');
+  const photoMap = {};
+  const fileMap = {};
+  let lineIdx = 0;
+  rows.forEach(row => {
+    const idx = row.id.replace('article-row-', '');
+    const qty = document.getElementById(`row-qty-${idx}`)?.value?.trim();
+    const nom = document.getElementById(`row-nom-${idx}`)?.value?.trim();
+    if (nom && qty) {
+      if (articleRowPhotos.hasOwnProperty(idx)) photoMap[lineIdx] = articleRowPhotos[idx];
+      if (articleRowFiles.hasOwnProperty(idx))  fileMap[lineIdx]  = articleRowFiles[idx];
+      lineIdx++;
+    }
+  });
+  Object.keys(articleRowPhotos).forEach(k => delete articleRowPhotos[k]);
+  Object.keys(articleRowFiles).forEach(k => delete articleRowFiles[k]);
+  Object.assign(articleRowPhotos, photoMap);
+  Object.assign(articleRowFiles, fileMap);
+}
+
+// ─── PHOTO UPLOAD ─────────────────────────────────────────────────────────
+
+let currentPhotoData = null;
+let currentPhotoName = null;
+let currentPhotoFile = null;
+
+function handlePhotoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  // Réinitialiser l'autre input pour éviter les doublons
+  const otherId = event.target.id === 'f-photo' ? 'f-photo-camera' : 'f-photo';
+  const other = document.getElementById(otherId);
+  if (other) other.value = '';
+  processPhotoFile(file);
+}
+
+function processPhotoFile(file) {
+  if (file.size > 5 * 1024 * 1024) {
+    showNotif('⚠ Photo trop grande — maximum 5 Mo');
+    return;
+  }
+  if (!file.type.startsWith('image/')) {
+    showNotif('⚠ Format non supporté — JPG, PNG ou WEBP uniquement');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = async e => {
+    currentPhotoFile = file; // fichier brut conservé pour upload Storage à la sauvegarde
+    currentPhotoData = e.target.result; // aperçu local uniquement, jamais envoyé en base
+    currentPhotoName = file.name;
+    showPhotoPreview(e.target.result, file.name);
+    showNotif('📷 Photo chargée');
+  };
+  reader.readAsDataURL(file);
+}
+
+function showPhotoPreview(dataUrl, filename) {
+  const ph = document.getElementById('photo-placeholder');
+  if (ph) ph.style.display = 'none';
+  const pz = document.getElementById('photo-upload-zone');
+  if (pz) pz.style.display = 'none';
+  const pc = document.getElementById('photo-preview-container');
+  if (pc) pc.style.display = 'block';
+  const pi = document.getElementById('photo-preview-img');
+  if (pi) pi.src = dataUrl;
+  const pf = document.getElementById('photo-filename');
+  if (pf) pf.textContent = filename;
+}
+
+function resetPhotoUpload() {
+  const ph = document.getElementById('photo-placeholder');
+  if (ph) ph.style.display = 'flex';
+  const pz = document.getElementById('photo-upload-zone');
+  if (pz) pz.style.display = 'flex';
+  const pc = document.getElementById('photo-preview-container');
+  if (pc) pc.style.display = 'none';
+  const pi = document.getElementById('photo-preview-img');
+  if (pi) pi.src = '';
+  const pf = document.getElementById('photo-filename');
+  if (pf) pf.textContent = '';
+  const fp = document.getElementById('f-photo');
+  if (fp) fp.value = '';
+  const fc = document.getElementById('f-photo-camera');
+  if (fc) fc.value = '';
+  currentPhotoData = null;
+  currentPhotoName = null;
+  currentPhotoFile = null;
+}
+
+function removePhoto(event) {
+  event.stopPropagation();
+  resetPhotoUpload();
+  const pz = document.getElementById('photo-upload-zone');
+  if (pz) pz.style.display = 'flex';
+  showNotif('🗑 Photo supprimée');
+}
+
+// Drag & drop
+function handleDragOver(event) {
+  event.preventDefault();
+  document.getElementById('photo-upload-zone').classList.add('drag-over');
+}
+
+function handleDragLeave(event) {
+  document.getElementById('photo-upload-zone').classList.remove('drag-over');
+}
+
+function handleDrop(event) {
+  event.preventDefault();
+  document.getElementById('photo-upload-zone').classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (file) processPhotoFile(file);
+}
+
+// Photo from detail modal (add photo directly on existing article)
+function triggerDetailPhotoUpload(id) {
+  document.getElementById(`detail-photo-input-${id}`).click();
+}
+
+function handleDetailPhotoUpload(event, id) {
+  const file = event.target.files[0];
+  if (!file) return;
+  uploadDetailPhotoFile(file, id);
+}
+
+function uploadDetailPhotoFile(file, id) {
+  if (file.size > 5 * 1024 * 1024) { showNotif('⚠ Photo trop grande — max 5 Mo'); return; }
+  if (!file.type.startsWith('image/')) { showNotif('⚠ Format non supporté'); return; }
+  showNotif('📤 Envoi de la photo…');
+  uploadPhotoToStorage(file, id).then(url => {
+    const a = ARTICLES.find(x => x.id === id);
+    if (a) {
+      a.photo = url;
+      a.photoName = file.name;
+      saveData();
+      showNotif('📷 Photo ajoutée');
+      renderActiveInvTable();
+      showDetail(id);
+    }
+  }).catch(err => {
+    console.error('[Photo]', err.message);
+    showNotif('❌ Erreur envoi photo — réessayez');
+  });
+}
+
+function handleDetailDragOver(event, id) {
+  event.preventDefault();
+  const z = document.getElementById(`detail-photo-zone-${id}`);
+  if (z) z.classList.add('drag-over');
+}
+
+function handleDetailDragLeave(event, id) {
+  const z = document.getElementById(`detail-photo-zone-${id}`);
+  if (z) z.classList.remove('drag-over');
+}
+
+function handleDetailDrop(event, id) {
+  event.preventDefault();
+  const z = document.getElementById(`detail-photo-zone-${id}`);
+  if (z) z.classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (file) uploadDetailPhotoFile(file, id);
+}
+
+async function removeArticlePhoto(id) {
+  const a = ARTICLES.find(x => x.id === id);
+  if (a) {
+    a.photo = null;
+    a.photoName = null;
+    saveData();
+    showNotif('🗑 Photo supprimée');
+    renderActiveInvTable();
+    showDetail(id);
+  }
+}
+
+// ─── SUPABASE CLOUD SYNC ──────────────────────────────────────────────────
+
+const SUPA_URL = 'https://juyrceadazrovlitxceb.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug';
+// Jeton de la session utilisateur : renseigne apres connexion (cf. skDoLogin).
+// Tant qu'il est nul les requetes partent avec la cle anon et sont bloquees par RLS.
+let SK_TOKEN = null;
+function skAuthToken(){ return SK_TOKEN || SUPA_KEY; }
+
+// Les navigateurs mobiles gelent les timers quand l'application passe en
+// arriere-plan : le renouvellement programme du jeton n'a alors pas lieu et la
+// premiere ecriture au retour part avec un jeton expire (401). On rejoue la
+// requete une fois, apres avoir force le renouvellement.
+// Le 403 n'est volontairement pas traite ici : c'est un refus RLS legitime,
+// le masquer par un rejeu rendrait les erreurs de droits invisibles.
+async function sbFetchAuth(url, opts) {
+  const build = () => {
+    const o = Object.assign({}, opts);
+    o.headers = Object.assign({}, opts.headers, {
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + skAuthToken(),
+    });
+    return o;
+  };
+  let r = await fetch(url, build());
+  if (r.status === 401 && SK_REFRESH) {
+    console.warn('[Auth] 401 sur ecriture — renouvellement du jeton puis rejeu');
+    await skRefreshToken();
+    r = await fetch(url, build());
+  }
+  return r;
+}
+
+// SUPA_HEADERS reste un objet mais ses valeurs sont recalculees a chaque lecture,
+// ce qui evite de toucher aux 3 spreads `...SUPA_HEADERS` existants.
+const SUPA_HEADERS = {
+  'Content-Type': 'application/json',
+  'Prefer': 'return=minimal',
+  get apikey(){ return SUPA_KEY; },
+  get Authorization(){ return 'Bearer ' + skAuthToken(); },
+};
+
+// ── UPLOAD PHOTO VERS SUPABASE STORAGE ──────────────────────────────────
+// Remplace le stockage base64 en base par un upload direct vers le bucket "assets",
+// suivi du retour de l'URL publique. Évite de surcharger l'egress (cf. migration-photos-storage.html).
+const PHOTO_BUCKET = 'assets';
+async function uploadPhotoToStorage(file, idHint, folder = 'articles-photos') {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'') || 'jpg';
+  const path = `${folder}/${idHint}-${Date.now()}.${ext}`;
+  const res = await sbFetchAuth(`${SUPA_URL}/storage/v1/object/${PHOTO_BUCKET}/${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': file.type || 'image/jpeg',
+      'x-upsert': 'true',
+    },
+    body: file,
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(()=>'');
+    throw new Error(`Upload photo : ${res.status} — ${body}`);
+  }
+  return `${SUPA_URL}/storage/v1/object/public/${PHOTO_BUCKET}/${path}`;
+}
+
+// ── FIX : Supabase en mode dégradé si la clé ne fonctionne pas ──────────
+// L'app fonctionne avec les données d'exemple si Supabase est inaccessible
+
+function setIndicator(msg, color='var(--ink3)') {
+  const el = document.getElementById('save-indicator');
+  if (el) { el.textContent = msg; el.style.color = color; el.style.display = 'inline'; }
+}
+
+// ─── SYNCHRONISATION TEMPS RÉEL ──────────────────────────────────────────
+// Rafraîchissement automatique toutes les 30 secondes
+// Détecte les modifications faites depuis d'autres appareils
+
+let pollingInterval = null;
+let isPolling = false;
+
+async function syncFromCloud() {
+  if (IS_LOCAL) return;
+  if (isPolling) return;
+  isPolling = true;
+  // Timeout par requête : 20s max (évite que syncFromCloud reste bloqué indéfiniment)
+  const withTimeout = (p, ms=20000) => Promise.race([p, new Promise((_,r)=>setTimeout(()=>r(new Error('Timeout')),ms))]);
+  try {
+    // Fetch chaque table indépendamment — une erreur sur l'une ne détruit pas les autres
+    const results = await Promise.allSettled([
+      withTimeout(sbGet('articles')),
+      withTimeout(sbGet('commandes')),
+      withTimeout(sbGet('fournisseurs')),
+      withTimeout(sbGet('historique', 'order=id.desc&limit=200')),
+      withTimeout(sbGet('stock_couches')),
+      withTimeout(sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500')),
+      withTimeout(sbGet('stock_couches_prix', 'order=type_couche.asc')),
+    ]);
+
+    const [artsR, cmdsR, fournsR, histosR, couchesR, couchesMvtsR, couchesPrixR] = results;
+
+    // Signature avant/après : si rien n'a changé, on ne redessine rien (sinon l'écran clignote toutes les 60 s)
+    const _sig = () => { try { return JSON.stringify([ARTICLES, COMMANDES, FOURNISSEURS, HISTORIQUE, COUCHES, COUCHES_MVTS, COUCHES_PRIX]); } catch(e) { return String(Math.random()); } };
+    const _sigAvant = _sig();
+    // On ne remplace les données en mémoire QUE si le fetch a réussi
+    if (artsR.status === 'fulfilled' && Array.isArray(artsR.value))
+      ARTICLES.splice(0, ARTICLES.length, ...artsR.value.map(rowToArticle));
+    else if (artsR.status === 'rejected')
+      console.warn('[Sync] articles:', artsR.reason?.message);
+
+    if (cmdsR.status === 'fulfilled' && Array.isArray(cmdsR.value)) {
+      // Fusionner : garder les commandes locales non encore persistées (id numérique local > id Supabase)
+      const dbIds = new Set(cmdsR.value.map(r => r.id));
+      const localOnly = COMMANDES.filter(c => !dbIds.has(c.id));
+      COMMANDES.splice(0, COMMANDES.length, ...cmdsR.value.map(rowToCommande), ...localOnly);
+    } else if (cmdsR.status === 'rejected')
+      console.warn('[Sync] commandes:', cmdsR.reason?.message);
+
+    if (fournsR.status === 'fulfilled' && Array.isArray(fournsR.value))
+      FOURNISSEURS.splice(0, FOURNISSEURS.length, ...fournsR.value.map(rowToFournisseur));
+    else if (fournsR.status === 'rejected')
+      console.warn('[Sync] fournisseurs:', fournsR.reason?.message);
+
+    if (histosR.status === 'fulfilled' && Array.isArray(histosR.value))
+      HISTORIQUE.splice(0, HISTORIQUE.length, ...histosR.value.map(rowToHisto));
+    else if (histosR.status === 'rejected')
+      console.warn('[Sync] historique:', histosR.reason?.message);
+
+    if (couchesR.status === 'fulfilled' && Array.isArray(couchesR.value))
+      COUCHES.splice(0, COUCHES.length, ...couchesR.value.map(rowToCouche));
+    else if (couchesR.status === 'rejected')
+      console.warn('[Sync] stock_couches (non-bloquant):', couchesR.reason?.message);
+
+    if (couchesMvtsR.status === 'fulfilled' && Array.isArray(couchesMvtsR.value))
+      COUCHES_MVTS.splice(0, COUCHES_MVTS.length, ...couchesMvtsR.value.map(rowToCoucheMvt));
+    else if (couchesMvtsR.status === 'rejected')
+      console.warn('[Sync] stock_couches_mouvements (non-bloquant):', couchesMvtsR.reason?.message);
+
+    if (couchesPrixR.status === 'fulfilled' && Array.isArray(couchesPrixR.value))
+      COUCHES_PRIX.splice(0, COUCHES_PRIX.length, ...couchesPrixR.value.map(rowToCouchePrix));
+    else if (couchesPrixR.status === 'rejected')
+      console.warn('[Sync] stock_couches_prix (non-bloquant):', couchesPrixR.reason?.message);
+
+    if (_sig() !== _sigAvant) {
+      const savedCreche = currentCreche;
+      saveData();
+      currentCreche = savedCreche;
+      renderActiveInvTable(); renderStats(); updateCounts();
+      if (currentPage === 'commandes') renderCommandes();
+      else if (currentPage === 'fournisseurs') renderFournisseurs();
+      else if (currentPage === 'historique') renderHistorique();
+      else if (currentPage === 'couches') renderCouches();
+    }
+
+    const [artsOk, cmdsOk, fournsOk, histosOk] = [artsR, cmdsR, fournsR, histosR].map(r => r.status === 'fulfilled');
+    const allOk = artsOk && cmdsOk && fournsOk && histosOk;
+    const now = new Date();
+    setIndicator(
+      allOk
+        ? '☁️ À jour — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'})
+        : '⚠️ Sync partiel — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}),
+      allOk ? 'var(--green)' : 'var(--amber)'
+    );
+  } catch(e) {
+    console.warn('[Sync]', e.message);
+    setIndicator('⚠️ Hors ligne', 'var(--amber)');
+  } finally {
+    isPolling = false;
+  }
+}
+
+function startPolling(intervalSec = 60) {
+  if (pollingInterval) clearInterval(pollingInterval);
+  pollingInterval = setInterval(syncFromCloud, intervalSec * 1000);
+}
+
+function stopPolling() {
+  if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
+}
+
+// Pause le polling quand l'onglet est en arrière-plan (économie batterie)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopPolling();
+  } else {
+    syncFromCloud(); // Sync immédiate au retour en avant-plan
+    startPolling(60);
+  }
+});
+
+// Sync immédiate au retour en ligne
+window.addEventListener('online', () => {
+  setIndicator('🔄 Reconnexion…', 'var(--amber)');
+  syncFromCloud().then(() => startPolling(60));
+});
+
+// ── API helpers ────────────────────────────────────────────────────────────
+
+async function sbGet(table, params='') {
+  // Construire l'URL proprement selon que params est vide ou contient déjà un order
+  let query;
+  if (!params) {
+    query = 'order=id.asc';
+  } else if (params.includes('order=')) {
+    query = params; // déjà un order=, on ne rajoute rien
+  } else {
+    query = params + '&order=id.asc';
+  }
+  const r = await sbFetchAuth(`${SUPA_URL}/rest/v1/${table}?${query}`, { headers: {} });
+  if (!r.ok) {
+    const body = await r.text().catch(() => '');
+    throw new Error(`GET ${table} : ${r.status} — ${body}`);
+  }
+  return r.json();
+}
+
+async function sbInsert(table, data) {
+  const r = await sbFetchAuth(`${SUPA_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) {
+    const errBody = await r.text();
+    console.error(`INSERT ${table} body envoyé:`, JSON.stringify(data));
+    console.error(`INSERT ${table} réponse Supabase:`, errBody);
+    throw new Error(`INSERT ${table} : ${r.status} — ${errBody}`);
+  }
+  return r.json();
+}
+
+async function sbUpdate(table, id, data) {
+  const r = await sbFetchAuth(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { ...SUPA_HEADERS, 'Prefer': 'return=representation' },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`UPDATE ${table} : ${r.status}`);
+  return r.json();
+}
+
+async function sbDelete(table, id) {
+  const r = await sbFetchAuth(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: SUPA_HEADERS,
+  });
+  if (!r.ok) throw new Error(`DELETE ${table} : ${r.status}`);
+}
+
+// ── Map between app object ↔ DB row ───────────────────────────────────────
+// Valeur dépréciée : -20%/an depuis la date d'achat, plancher à 0
+function valeurDepreciee(a) {
+  if (!a.depreciable || !a.date_achat || !a.prix) return a.prix || 0;
+  const achat = new Date(a.date_achat);
+  if (isNaN(achat)) return a.prix;
+  const ans = (Date.now() - achat.getTime()) / (365.25 * 24 * 3600 * 1000);
+  const taux = Math.max(0, 1 - 0.20 * ans);
+  return Math.round(a.prix * taux * 100) / 100;
+}
+
+// État de l'article : manuel si défini, sinon automatique via dépréciation
+function getArticleEtat(a) {
+  if (a.etat_override) return a.etat_override;
+  if (a.depreciable && a.date_achat && a.prix) {
+    const reste = valeurDepreciee(a) / a.prix;
+    if (reste <= 0.20) return 'À remplacer';
+    if (reste <= 0.45) return 'Usagé';
+    if (reste <= 0.70) return 'Bon état';
+    return 'Neuf';
+  }
+  return 'Neuf';
+}
+function articleToRow(a) {
+  return { nom: a.nom, ref: a.ref, cat: a.cat, creche: a.creche,
+           stock: a.stock, min: a.min, prix: a.prix, fourn: a.fourn,
+           notes: a.notes, photo: a.photo||null, photo_name: a.photoName||null,
+           url: a.url||null, date_achat: a.date_achat||null,
+           etat: a.etat||'Neuf', depreciable: a.depreciable !== false,
+           etat_override: a.etat_override||null };
+}
+function rowToArticle(r) {
+  return { id: r.id, nom: r.nom, ref: r.ref, cat: r.cat, creche: r.creche,
+           stock: r.stock, min: r.min, prix: parseFloat(r.prix)||0,
+           fourn: r.fourn||'', notes: r.notes||'',
+           photo: r.photo||null, photoName: r.photo_name||null,
+           url: r.url||null, date_achat: r.date_achat||null,
+           etat: r.etat||'Neuf', depreciable: r.depreciable !== false,
+           etat_override: r.etat_override||null };
+}function commandeToRow(c) {
+  const row = {
+    fourn:    c.fourn || '—',
+    creche:   c.creche || '',
+    date:     c.date || new Date().toISOString().split('T')[0],
+    livraison: c.livraison || '',
+    montant:  parseFloat(c.montant) || 0,
+    bc:       c.bc || '',
+    status:   c.status || 'en-cours',
+    articles: c.articles || '',
+    notes:    c.notes || '',
+    url:      c.url || '',
+  };
+  // photos_json uniquement si la colonne existe (ajout progressif)
+  if (c.photos_json) row.photos_json = c.photos_json;
+  // traitee_le : idem, envoyé seulement une fois utilisé (sql/commandes_traitee.sql)
+  if (c.traitee_le || c.traitee_touched) row.traitee_le = c.traitee_le || null;
+  return row;
+}
+function rowToCommande(r) {
+  return { id: r.id, fourn: r.fourn, creche: r.creche, date: r.date,
+           livraison: r.livraison, montant: parseFloat(r.montant)||0,
+           bc: r.bc, status: r.status, articles: r.articles||'',
+           notes: r.notes||'', url: r.url||'', photos_json: r.photos_json||null,
+           traitee_le: r.traitee_le||null };
+}
+function fournisseurToRow(f) {
+  return { nom: f.nom, contact: f.contact, tel: f.tel, email: f.email,
+           web: f.web, delai: f.delai, spec: f.spec, notes: f.notes };
+}
+function rowToFournisseur(r) {
+  return { id: r.id, nom: r.nom, contact: r.contact||'—', tel: r.tel||'—',
+           email: r.email||'', web: r.web||'', delai: r.delai||'',
+           spec: r.spec||'', notes: r.notes||'' };
+}
+function histoToRow(h) {
+  return { type: h.type, article: h.article, qty: h.qty,
+           creche: h.creche, utilisateur: h.user, date: h.date, note: h.note||'' };
+}
+function rowToHisto(r) {
+  return { id: r.id, type: r.type, article: r.article, qty: r.qty,
+           creche: r.creche, user: r.utilisateur||'', date: r.date, note: r.note||'' };
+}
+
+function rowToCouche(r) {
+  return { id: r.id, creche: r.creche, typeCouche: r.type_couche || 'couche', taille: r.taille,
+           stock: r.stock, seuilAlerteJours: r.seuil_alerte_jours != null ? r.seuil_alerte_jours : 15,
+           delaiLivraisonJours: r.delai_livraison_jours != null ? r.delai_livraison_jours : 3 };
+}
+function rowToCoucheMvt(r) {
+  return { id: r.id, creche: r.creche, typeCouche: r.type_couche || 'couche', taille: r.taille,
+           delta: r.delta, motif: r.motif, createdAt: r.created_at };
+}
+function rowToCouchePrix(r) {
+  return { typeCouche: r.type_couche || 'couche', taille: r.taille,
+           prixUnitaire: r.prix_unitaire != null ? parseFloat(r.prix_unitaire) : null,
+           updatedAt: r.updated_at };
+}
+
+// Agrège des lignes `enfants` (creche_id, taille_couche, type_couche) en
+// effectif par crèche×type×taille. SK_CRECHE_NAMES fait la traduction
+// creche_id → nom court (même mapping que pour l'auth), sans avoir à charger
+// la table `creches` dans stock.html.
+function rowsToCouchesEffectif(rows) {
+  const compte = {};
+  (rows || []).forEach(r => {
+    if (!r.taille_couche) return;
+    const creche = (typeof SK_CRECHE_NAMES !== 'undefined' ? SK_CRECHE_NAMES[r.creche_id] : null);
+    if (!creche) return;
+    const cle = creche + '|' + (r.type_couche || 'couche') + '|' + r.taille_couche;
+    compte[cle] = (compte[cle] || 0) + 1;
+  });
+  return Object.entries(compte).map(([cle, count]) => {
+    const [creche, typeCouche, taille] = cle.split('|');
+    return { creche, typeCouche, taille, count };
+  });
+}
+
+// `enfants_contrats.jours` peut revenir en tableau (jsonb), en chaîne JSON
+// "[1,2]" ou en "1,2" selon la façon dont la ligne a été créée (même format
+// que ctParseJours dans js/enfants.js, dupliqué ici car stock.html ne charge
+// pas ce fichier).
+function coucheParseJours(j) {
+  if (j == null) return [];
+  let v = j;
+  if (typeof v === 'string') {
+    const t = v.trim();
+    try { v = JSON.parse(t); } catch (e) { v = t.replace(/[{}\[\]"']/g, '').split(','); }
+  }
+  if (!Array.isArray(v)) v = [v];
+  return v.map(x => parseInt(x, 10)).filter(n => n >= 1 && n <= 7);
+}
+// 4 couches/jour de présence : le besoin théorique demandé pour la prévision
+// de commande — distinct de COUCHE_CONSO_PAR_ENFANT_PAR_JOUR (4,5), la
+// moyenne réelle constatée, utilisée elle pour l'estimation "jours restants".
+const COUCHE_BESOIN_PAR_JOUR = 4;
+
+// Jours fériés français (métropole) d'une année, en ISO — même algorithme
+// (calcul de Pâques) que prFeries dans js/presences-reel.js, dupliqué ici
+// car stock.html ne charge pas ce fichier.
+const _coucheFeriesCache = {};
+function coucheAddDays(iso, n) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function coucheFeries(an) {
+  if (_coucheFeriesCache[an]) return _coucheFeriesCache[an];
+  const a = an % 19, b = Math.floor(an / 100), c = an % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
+    g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4,
+    l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+    mois = Math.floor((h + l - 7 * m + 114) / 31), jour = ((h + l - 7 * m + 114) % 31) + 1;
+  const paques = an + '-' + String(mois).padStart(2, '0') + '-' + String(jour).padStart(2, '0');
+  const s = new Set([an + '-01-01', an + '-05-01', an + '-05-08', an + '-07-14', an + '-08-15', an + '-11-01', an + '-11-11', an + '-12-25',
+    coucheAddDays(paques, 1), coucheAddDays(paques, 39), coucheAddDays(paques, 50)]);
+  return _coucheFeriesCache[an] = s;
+}
+function coucheEstFerie(iso) { return coucheFeries(parseInt(iso.slice(0, 4), 10)).has(iso); }
+
+// Fermeture (vacances, journée pédagogique…) de la crèche ou du réseau à une
+// date donnée — même source (etablissements.jours_fermeture,
+// reseau_config.config.jours_fermeture_reseau) que prEstFerme côté module
+// Présences, dupliquée ici pour la même raison.
+function coucheEstFerme(fermetures, crecheId, iso) {
+  if (!fermetures) return false;
+  return ((fermetures.parCreche[crecheId] || []).concat(fermetures.reseau)).some(f => f && f.debut && iso >= f.debut && iso <= (f.fin || f.debut));
+}
+
+// Nombre de jours de présence réels du mois en cours pour un enfant : jours
+// du contrat couvrant la date qui tombent sur un jour de la semaine
+// travaillé, moins les jours fériés, les fermetures (vacances) et les
+// absences déjà programmées (justifiées ou non — un enfant annoncé absent
+// ne sera pas changé, peu importe le motif).
+function coucheJoursPresenceMois(contrats, absences, fermetures, crecheId, an, moisIndex) {
+  const dernierJour = new Date(an, moisIndex + 1, 0).getDate();
+  let jours = 0;
+  for (let j = 1; j <= dernierJour; j++) {
+    const d = new Date(an, moisIndex, j);
+    const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const contrat = (contrats || []).find(c => (!c.date_debut || c.date_debut <= iso) && (!c.date_fin || c.date_fin >= iso));
+    if (!contrat) continue;
+    if (!coucheParseJours(contrat.jours).includes(d.getDay())) continue;
+    if (coucheEstFerie(iso)) continue;
+    if (coucheEstFerme(fermetures, crecheId, iso)) continue;
+    if ((absences || []).some(a => a.date_debut <= iso && a.date_fin >= iso)) continue;
+    jours++;
+  }
+  return jours;
+}
+// Agrège les enfants (avec leurs contrats et absences imbriqués via
+// enfants_contrats / enfants_absences) en besoin mensuel par crèche×type×
+// taille : 4 couches/jour × jours de présence réels du mois en cours.
+function rowsToCouchesBesoin(rows, fermetures) {
+  const total = {};
+  const now = new Date();
+  const an = now.getFullYear(), moisIndex = now.getMonth();
+  (rows || []).forEach(r => {
+    if (!r.taille_couche) return;
+    const creche = (typeof SK_CRECHE_NAMES !== 'undefined' ? SK_CRECHE_NAMES[r.creche_id] : null);
+    if (!creche) return;
+    const jours = coucheJoursPresenceMois(r.enfants_contrats, r.enfants_absences, fermetures, r.creche_id, an, moisIndex);
+    if (!jours) return;
+    const besoin = jours * COUCHE_BESOIN_PAR_JOUR;
+    const cle = creche + '|' + (r.type_couche || 'couche') + '|' + r.taille_couche;
+    total[cle] = (total[cle] || 0) + besoin;
+  });
+  return Object.entries(total).map(([cle, besoinMensuel]) => {
+    const [creche, typeCouche, taille] = cle.split('|');
+    return { creche, typeCouche, taille, besoinMensuel };
+  });
+}
+
+// ── Load all data from Supabase ────────────────────────────────────────────
+
+
+async function loadData() {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) {
+    setIndicator('💻 Mode local — déployez sur Netlify pour activer Supabase', 'var(--ink3)');
+    return false;
+  }
+  setIndicator('⏳ Connexion à Supabase…', 'var(--amber)');
+  try {
+    // Timeout de 30s (Supabase peut mettre jusqu'à 30s à se réveiller après inactivité)
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000));
+    const [arts, cmds, fourns, histos, config, couches, couchesMvts, couchesPrix, enfantsCouches, etabsFermeture, reseauCfg] = await Promise.race([
+      Promise.all([
+        sbGet('articles'),
+        sbGet('commandes'),
+        sbGet('fournisseurs'),
+        sbGet('historique', 'order=id.desc&limit=200'),
+        sbGet('stock_config', 'order=cle.asc').catch(() => []),
+        // null (pas []) en cas d'échec : un tableau vide serait ensuite
+        // interprété comme « la base est vide » et effacerait des données
+        // déjà chargées en mémoire (ex. prix saisis) sur une simple erreur
+        // réseau transitoire au rechargement de la page.
+        sbGet('stock_couches').catch(() => null),
+        sbGet('stock_couches_mouvements', 'order=created_at.desc&limit=500').catch(() => null),
+        sbGet('stock_couches_prix', 'order=type_couche.asc').catch(() => null),
+        sbGet('enfants', `select=creche_id,taille_couche,type_couche,enfants_contrats(jours,date_debut,date_fin),enfants_absences(date_debut,date_fin)&taille_couche=not.is.null&or=(date_sortie.is.null,date_sortie.gte.${new Date().toISOString().slice(0,10)})`).catch(() => null),
+        // Fermetures (vacances, journées pédagogiques) — même source que le
+        // module Présences (prChargerFermetures), relue ici car stock.html
+        // ne charge pas js/presences-reel.js.
+        sbGet('etablissements', 'select=creche_id,jours_fermeture').catch(() => null),
+        sbGet('reseau_config', 'select=config').catch(() => null),
+      ]),
+      timeout.then(() => { throw new Error('Timeout Supabase'); })
+    ]);
+
+    if (arts.length > 0) {
+      ARTICLES.splice(0, ARTICLES.length, ...arts.map(rowToArticle));
+    }
+    if (cmds.length > 0) {
+      COMMANDES.splice(0, COMMANDES.length, ...cmds.map(rowToCommande));
+    }
+    if (fourns.length > 0) {
+      FOURNISSEURS.splice(0, FOURNISSEURS.length, ...fourns.map(rowToFournisseur));
+    }
+    if (histos.length > 0) {
+      HISTORIQUE.splice(0, HISTORIQUE.length, ...histos.map(rowToHisto));
+    }
+    // Nom de la crèche : réglage unique, partagé.
+    if (Array.isArray(config)) {
+      const n = config.find(c => c.cle === 'creche_name');
+      if (n && n.valeur) {
+        try { localStorage.setItem(LS_NAME_KEY, n.valeur); } catch(e) {}
+        applyNomCreche(n.valeur);
+      }
+    }
+    if (Array.isArray(couches)) {
+      COUCHES.splice(0, COUCHES.length, ...couches.map(rowToCouche));
+    }
+    if (Array.isArray(couchesMvts)) {
+      COUCHES_MVTS.splice(0, COUCHES_MVTS.length, ...couchesMvts.map(rowToCoucheMvt));
+    }
+    if (Array.isArray(couchesPrix)) {
+      COUCHES_PRIX.splice(0, COUCHES_PRIX.length, ...couchesPrix.map(rowToCouchePrix));
+    }
+    if (Array.isArray(enfantsCouches)) {
+      COUCHES_EFFECTIF.splice(0, COUCHES_EFFECTIF.length, ...rowsToCouchesEffectif(enfantsCouches));
+      const fermetures = { parCreche: {}, reseau: [] };
+      (etabsFermeture || []).forEach(e => { fermetures.parCreche[e.creche_id] = Array.isArray(e.jours_fermeture) ? e.jours_fermeture : []; });
+      const reseauConfigRow = (reseauCfg && reseauCfg[0] && reseauCfg[0].config) || {};
+      fermetures.reseau = Array.isArray(reseauConfigRow.jours_fermeture_reseau) ? reseauConfigRow.jours_fermeture_reseau : [];
+      COUCHES_BESOIN.splice(0, COUCHES_BESOIN.length, ...rowsToCouchesBesoin(enfantsCouches, fermetures));
+    }
+
+    const now = new Date();
+    setIndicator('☁️ Sync cloud — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}), 'var(--green)');
+    return true;
+  } catch(e) {
+    setIndicator('⚠️ Hors ligne — données locales', 'var(--amber)');
+    console.error('[Supabase] Erreur chargement :', e);
+    return false;
+  }
+}
+
+// ── Save / update / delete per entity ─────────────────────────────────────
+
+async function saveArticleDB(article, isNew) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try {
+    if (isNew) {
+      const rows = await sbInsert('articles', articleToRow(article));
+      if (rows && rows[0]) article.id = rows[0].id; // use DB id
+    } else {
+      await sbUpdate('articles', article.id, articleToRow(article));
+    }
+    setSaved();
+  } catch(e) {
+    setIndicator('⚠️ Erreur sauvegarde', 'var(--red)'); console.error(e);
+    // Message de la base visible à l'écran (sinon l'article disparaît à la synchro sans explication)
+    const detail = String((e && e.message) || e).replace(/^INSERT articles : /, '').slice(0, 220);
+    showNotif('❌ Article non enregistré en base : ' + detail);
+  }
+}
+
+async function deleteArticleDB(id) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try { await sbDelete('articles', id); setSaved(); }
+  catch(e) { console.error('[Supabase] Delete article :', e); }
+}
+
+async function deleteCommandeDB(id) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try { await sbDelete('commandes', id); setSaved(); }
+  catch(e) { console.error('[Supabase] Delete commande :', e); }
+}
+
+async function saveCommandeDB(commande) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try {
+    const rows = await sbInsert('commandes', commandeToRow(commande));
+    if (rows && rows[0] && rows[0].id) {
+      // Remplacer l'id local par l'id Supabase dans COMMANDES
+      const idx = COMMANDES.findIndex(c => c.bc === commande.bc);
+      if (idx >= 0) COMMANDES[idx].id = rows[0].id;
+      commande.id = rows[0].id;
+    }
+    setSaved();
+  } catch(e) {
+    console.error('[Supabase] Insert commande :', e);
+    throw e; // remonter l'erreur pour que saveCommande_db puisse l'afficher
+  }
+}
+
+async function updateCommandeDB(commande) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try {
+    const rows = await sbUpdate('commandes', commande.id, commandeToRow(commande));
+    if (Array.isArray(rows) && rows.length === 0) {
+      // Aucune ligne ne correspond à cet id dans Supabase (ex : commande jamais
+      // réellement enregistrée côté serveur) → on la recrée pour ne pas la perdre
+      // au prochain sync.
+      const inserted = await sbInsert('commandes', commandeToRow(commande));
+      if (inserted && inserted[0] && inserted[0].id) commande.id = inserted[0].id;
+    }
+    setSaved();
+  }
+  catch(e) { console.error('[Supabase] Update commande :', e); }
+}
+
+async function saveFournisseurDB(f) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try {
+    const rows = await sbInsert('fournisseurs', fournisseurToRow(f));
+    if (rows && rows[0]) f.id = rows[0].id;
+    else showNotif('⚠ Fournisseur créé mais id non confirmé — rechargez la page');
+    setSaved();
+  } catch(e) {
+    console.error('[Supabase] Insert fournisseur :', e);
+    showNotif('⚠ Erreur sauvegarde fournisseur : ' + e.message);
+  }
+}
+
+async function updateFournisseurDB(f) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try {
+    await sbUpdate('fournisseurs', f.id, fournisseurToRow(f));
+    setSaved();
+  } catch(e) { console.error('[Supabase] Update fournisseur :', e); }
+}
+
+async function saveHistoDB(h) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try { await sbInsert('historique', histoToRow(h)); }
+  catch(e) { console.error('[Supabase] Insert histo :', e); }
+}
+
+// ── Réglages partagés du module (table clé/valeur) ───────────────────────
+async function saveStockConfigDB(cle, valeur) {
+  if (IS_LOCAL) return;
+  try {
+    // upsert : Prefer resolution=merge-duplicates sur la clé primaire
+    const r = await fetch(`${SUPA_URL}/rest/v1/stock_config`, {
+      method: 'POST',
+      headers: { ...SUPA_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ cle: cle, valeur: valeur, updated_at: new Date().toISOString() }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    setSaved();
+  } catch(e) { console.error('[Supabase] stock_config:', e); }
+}
+
+async function updateArticleStockDB(article) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try { await sbUpdate('articles', article.id, { stock: article.stock }); setSaved(); }
+  catch(e) { console.error('[Supabase] Update stock :', e); }
+}
+
+async function updateArticlePhotoDB(article) {
+  if (typeof IS_LOCAL !== 'undefined' && IS_LOCAL) return;
+  try {
+    await sbUpdate('articles', article.id, { photo: article.photo||null, photo_name: article.photoName||null });
+    setSaved();
+  } catch(e) { console.error('[Supabase] Update photo :', e); }
+}
+
+function setSaved() {
+  const now = new Date();
+  setIndicator('☁️ Sync cloud — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}), 'var(--green)');
+}
+
+// ── saveData : no-op (kept for compatibility) ─────────────────────────────
+// ─── NOM DE LA CRÈCHE ────────────────────────────────────────────────────
+const LS_NAME_KEY = 'stocks-solo-creche-name';
+
+function getCrecheName() {
+  return localStorage.getItem(LS_NAME_KEY) || 'Ma Crèche';
+}
+
+function applyNomCreche(nom) {
+  // Mettre à jour l'affichage sidebar
+  const display = document.getElementById('creche-name-display');
+  if (display) display.innerHTML = `${nom} <span style="font-size:9px;opacity:0.5">✏️</span>`;
+  // Mettre à jour le titre de la page
+  document.title = `Stocks Pédagogiques — ${nom}`;
+  // Mettre à jour les selects de structure
+  ['f-creche', 'c-creche-select'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel) sel.innerHTML = `<option value="${nom}">${nom}</option>`;
+  });
+  // Mettre à jour les données en mémoire
+  CRECHES[0] = nom;
+  CRECHE_COLORS[nom] = '#2563EB';
+  // Mettre à jour les articles existants si besoin
+  ARTICLES.forEach(a => { if (a.creche === 'Ma Crèche' || !CRECHE_COLORS[a.creche]) a.creche = nom; });
+}
+
+function editCrecheName() {
+  const nom = getCrecheName();
+  const input = document.getElementById('creche-name-input');
+  const display = document.getElementById('creche-name-display');
+  input.value = nom;
+  input.style.display = 'block';
+  display.style.display = 'none';
+  input.focus();
+  input.select();
+}
+
+function saveCrecheName() {
+  const input = document.getElementById('creche-name-input');
+  const display = document.getElementById('creche-name-display');
+  const nom = input.value.trim() || 'Ma Crèche';
+  localStorage.setItem(LS_NAME_KEY, nom);
+  saveStockConfigDB('creche_name', nom);
+  input.style.display = 'none';
+  display.style.display = 'flex';
+  applyNomCreche(nom);
+  saveData();
+  showNotif(`✅ Nom mis à jour : ${nom}`);
+  renderActiveInvTable();
+  renderStats();
+}
+const LS_KEY = 'stocks-solo-v1';
+
+function saveData() {
+  try {
+    const data = {
+      articles:     ARTICLES,
+      commandes:    COMMANDES,
+      fournisseurs: FOURNISSEURS,
+      historique:   HISTORIQUE.slice(0, 300),
+      savedAt:      new Date().toISOString(),
+    };
+    // Essayer avec photos
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+    } catch(e) {
+      // localStorage plein → sauvegarder sans photos
+      const dataLight = { ...data, articles: ARTICLES.map(a => ({...a, photo:null, photoName:null})) };
+      localStorage.setItem(LS_KEY, JSON.stringify(dataLight));
+      console.warn('[Solo] Photos omises — localStorage plein');
+    }
+    const now = new Date();
+    setIndicator('💾 Sauvegardé à ' + now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), 'var(--green)');
+  } catch(e) {
+    console.error('[Solo] Sauvegarde impossible:', e);
+    setIndicator('⚠ Sauvegarde échouée', 'var(--red)');
+  }
+}
+
+function loadLocalData() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (data.articles     && Array.isArray(data.articles))     ARTICLES.splice(0,     ARTICLES.length,     ...data.articles);
+    if (data.commandes    && Array.isArray(data.commandes))    COMMANDES.splice(0,    COMMANDES.length,    ...data.commandes);
+    if (data.fournisseurs && Array.isArray(data.fournisseurs)) FOURNISSEURS.splice(0, FOURNISSEURS.length, ...data.fournisseurs);
+    if (data.historique   && Array.isArray(data.historique))   HISTORIQUE.splice(0,   HISTORIQUE.length,   ...data.historique);
+    return data.savedAt || true;
+  } catch(e) {
+    console.error('[Solo] Chargement impossible:', e);
+    return false;
+  }
+}
+
+function clearData() {
+  if (!confirm('⚠️ Supprimer toutes les données et repartir de zéro ?\n\nCette action est irréversible.')) return;
+  localStorage.removeItem(LS_KEY);
+  location.reload();
+}
+
+// ─── PWA ────────────────────────────────────────────────────────────────────
+
+// Service Worker : uniquement sur HTTPS (Netlify, pas en local ni dans Claude)
+if ('serviceWorker' in navigator &&
+    location.protocol === 'https:' &&
+    !location.hostname.includes('claudeusercontent')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(r => console.log('SW registered:', r.scope))
+      .catch(e => console.log('SW error:', e));
+  });
+}
+
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!sessionStorage.getItem('pwa-stocks-dismissed')) {
+    setTimeout(() => document.getElementById('installBar').classList.add('visible'), 4000);
+  }
+});
+
+function triggerInstall() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(c => {
+    if (c.outcome === 'accepted') document.getElementById('installBar').classList.remove('visible');
+    deferredPrompt = null;
+  });
+}
+
+function dismissInstall() {
+  document.getElementById('installBar').classList.remove('visible');
+  sessionStorage.setItem('pwa-stocks-dismissed', '1');
+}
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('installBar').classList.remove('visible');
+  deferredPrompt = null;
+});
+
+window.addEventListener('online',  () => document.getElementById('offlineBadge').classList.remove('visible'));
+window.addEventListener('offline', () => document.getElementById('offlineBadge').classList.add('visible'));
+if (!navigator.onLine) document.getElementById('offlineBadge').classList.add('visible');
+
+
+// ─── FULLSCREEN ──────────────────────────────────────────────────────────
+// ─── PAGINATION HELPER ───────────────────────────────────────────────────
+function renderPaginationBar(containerId, totalItems, currentPage, onPageChange) {
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // Supprimer ancienne barre
+  const old = document.getElementById(containerId + '-pager');
+  if (old) old.remove();
+
+  if (totalPages <= 1) return;
+
+  const bar = document.createElement('div');
+  bar.className = 'pagination';
+  bar.id = containerId + '-pager';
+
+  const start = (currentPage - 1) * PAGE_SIZE + 1;
+  const end = Math.min(currentPage * PAGE_SIZE, totalItems);
+
+  // Bouton précédent
+  const prev = document.createElement('button');
+  prev.className = 'pagination-btn';
+  prev.textContent = '‹';
+  prev.disabled = currentPage === 1;
+  prev.onclick = () => onPageChange(currentPage - 1);
+  bar.appendChild(prev);
+
+  // Pages numérotées (max 5 autour de la page courante)
+  let pages = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages = [1];
+    let lo = Math.max(2, currentPage - 1);
+    let hi = Math.min(totalPages - 1, currentPage + 1);
+    if (lo > 2) pages.push('…');
+    for (let i = lo; i <= hi; i++) pages.push(i);
+    if (hi < totalPages - 1) pages.push('…');
+    pages.push(totalPages);
+  }
+
+  pages.forEach(p => {
+    if (p === '…') {
+      const span = document.createElement('span');
+      span.className = 'pagination-info';
+      span.textContent = '…';
+      bar.appendChild(span);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'pagination-btn' + (p === currentPage ? ' active' : '');
+      btn.textContent = p;
+      btn.onclick = () => onPageChange(p);
+      bar.appendChild(btn);
+    }
+  });
+
+  // Bouton suivant
+  const next = document.createElement('button');
+  next.className = 'pagination-btn';
+  next.textContent = '›';
+  next.disabled = currentPage === totalPages;
+  next.onclick = () => onPageChange(currentPage + 1);
+  bar.appendChild(next);
+
+  // Info
+  const info = document.createElement('span');
+  info.className = 'pagination-info';
+  info.textContent = start + '–' + end + ' / ' + totalItems;
+  bar.appendChild(info);
+
+  container.appendChild(bar);
+}
+
+// ─── WRAPPERS SYNCHRONES pour les onclick HTML ────────────────────────────
+// Les fonctions async ne peuvent pas être appelées directement depuis onclick
+// sur certains navigateurs mobiles — on les enveloppe
+// ── DÉPRÉCIATION 20%/AN ──────────────────────────────────────────────────
+function getArticleEtat(a) {
+  if (a.depreciable === false) return null; // consommable → pas d'état
+  if (a.etat_override) return a.etat_override;
+  if (!a.date_achat) return null;
+  const annees = (Date.now() - new Date(a.date_achat)) / (365.25 * 24 * 3600 * 1000);
+  const residuel = Math.max(0, 1 - 0.20 * annees);
+  if (residuel >= 0.80) return 'Neuf';
+  if (residuel >= 0.60) return 'Bon état';
+  if (residuel >= 0.40) return 'Usagé';
+  return 'À remplacer';
+}
+
+function getEtatBadgeHtml(etat) {
+  if (!etat) return '';
+  const map = {
+    'Neuf':        { bg:'#D1FAE5', color:'#065F46', icon:'🟢' },
+    'Bon état':    { bg:'#DBEAFE', color:'#1E40AF', icon:'🔵' },
+    'Usagé':       { bg:'#FEF3C7', color:'#92400E', icon:'🟠' },
+    'À remplacer': { bg:'#FEE2E2', color:'#991B1B', icon:'🔴' },
+  };
+  const s = map[etat] || { bg:'var(--bg)', color:'var(--ink2)', icon:'⚪' };
+  return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${s.bg};color:${s.color}">${s.icon} ${etat}</span>`;
+}
+
+function getArticlesToRemplacer() {
+  return ARTICLES.filter(a => getArticleEtat(a) === 'À remplacer');
+}
+
+// Statut de stock : "Épuisé" (0), "À compléter" (≤ seuil min, mais seuil renseigné), "OK"
+function getStockStatus(a) {
+  if (a.stock === 0) return 'Épuisé';
+  if (a.min > 0 && a.stock <= a.min) return 'À compléter';
+  return 'OK';
+}
+
+function getStockStatusBadgeHtml(a) {
+  const s = getStockStatus(a);
+  const map = {
+    'Épuisé':      { bg:'#FEE2E2', color:'#991B1B', icon:'🔴' },
+    'À compléter': { bg:'#FFEDD5', color:'#9A3412', icon:'🟠' },
+  };
+  const cfg = map[s];
+  if (!cfg) return '';
+  return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${cfg.bg};color:${cfg.color}">${cfg.icon} ${s}</span>`;
+}
+
+function getArticlesACompleter() {
+  return ARTICLES.filter(a => getStockStatus(a) === 'À compléter');
+}
+
+function getLowStockArticles() {
+  return ARTICLES.filter(a => a.stock <= a.min && a.min > 0);
+}
+
+function getExpiryAlerts() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  return ARTICLES.filter(a => {
+    if (!a.expiry) return false;
+    const exp = new Date(a.expiry); exp.setHours(0,0,0,0);
+    return Math.round((exp - today) / 86400000) <= 30;
+  }).sort((a,b) => new Date(a.expiry) - new Date(b.expiry));
+}
+
+function updateAlertBadge() {
+  const total = getLowStockArticles().length + getExpiryAlerts().length + getArticlesToRemplacer().length;
+  const badge = document.getElementById('nav-alert-badge');
+  if (!badge) return;
+  badge.style.display = total > 0 ? 'inline-block' : 'none';
+  badge.textContent = total;
+}
+
+function onSaveArticle()       { saveArticle().catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onDeleteArticle(id)   { deleteArticle(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+// Alias pour compatibilité avec onSaveCommande
+const saveCommande = saveCommande_db;
+
+function onSaveCommande()      { saveCommande().catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onMarkLivree(id)      { markLivree(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onToggleTraitee(id)   { toggleTraitee(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onAnnulerCommande(id) { annulerCommande(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onDeleteCommande(id)  { deleteCommande(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+
+function onSaveFournisseur()   { saveFournisseur().catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onQuickAdjust(id,d)   { quickAdjust(id,d).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onAdjustStock(id,d)   { adjustStock(id,d).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onAdjustStockCustom(id){ adjustStockCustom(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onRemoveArticlePhoto(id){ removeArticlePhoto(id).catch(e => { showNotif('⚠ Erreur : '+e.message); console.error(e); }); }
+function onClearData()         { clearData().catch(e => console.error(e)); }
+// ── SIDEBAR : PWA fullscreen + drawer mobile ──────────────────────────────
+function toggleSidebar() {
+  // Mode plein écran uniquement (languette latérale)
+  const sidebar = document.getElementById('mainSidebar');
+  if (sidebar) sidebar.classList.toggle('open');
+}
+
+// ── PLEIN ÉCRAN (bouton) ──────────────────────────────────────────────────
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(err => {
+      showNotif('⚠ Plein écran impossible : ' + err.message);
+    });
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+document.addEventListener('fullscreenchange', () => {
+  const isFs = !!document.fullscreenElement;
+  document.body.classList.toggle('is-fullscreen', isFs);
+
+  const icon = document.getElementById('fullscreenIcon');
+  if (icon) icon.textContent = isFs ? '⤓' : '⛶';
+
+  // En sortant du plein écran, on referme la sidebar repliée
+  if (!isFs) {
+    const sidebar = document.getElementById('mainSidebar');
+    if (sidebar) sidebar.classList.remove('open');
+  }
+});
+
+
+function openMobileMenu() {
+  const sidebar = document.getElementById('mainSidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar) sidebar.classList.add('open');
+  if (overlay) overlay.classList.add('visible');
+  if (window.innerWidth > 768) document.body.style.overflow = 'hidden';
+}
+
+function closeMobileMenu() {
+  const sidebar = document.getElementById('mainSidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar) sidebar.classList.remove('open');
+  if (overlay) overlay.classList.remove('visible');
+  document.body.style.overflow = '';
+}
+
+// Ferme la sidebar mobile au clic sur un nav-item ou une crèche
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.nav-item, .creche-badge').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (window.innerWidth <= 768) closeMobileMenu();
+    });
+  });
+});
+
+// Ferme la sidebar si on clique en dehors (plein écran uniquement)
+document.addEventListener('click', (e) => {
+  const sidebar = document.getElementById('mainSidebar');
+  const trigger = document.getElementById('sidebarTrigger');
+  if (!sidebar) return;
+  if (document.body.classList.contains('is-fullscreen')) {
+    if (
+      sidebar.classList.contains('open') &&
+      !sidebar.contains(e.target) &&
+      e.target !== trigger
+    ) {
+      sidebar.classList.remove('open');
+    }
+  }
+});
+// Lancer l'app — differe : appele par skDoLogin() une fois la session ouverte.
+function skBootApp() {
+try {
+  init();
+} catch(e) {
+  console.error('[Init error]', e.message, e.stack);
+  // Ne montrer l'erreur que si l'inventaire n'a pas pu se charger
+  const tableBody = document.getElementById('tableBody');
+  if (!tableBody || tableBody.innerHTML === '') {
+    setIndicator('⚠️ Erreur : ' + e.message, 'var(--red)');
+  } else {
+    // App fonctionnelle malgré l'erreur mineure — silencieux
+    console.warn('[Init] Erreur mineure ignorée:', e.message);
+  }
+}
+}
+// ─── LOGO SUPABASE ────────────────────────────────────────────────────────
+const LOGO_SUPABASE_URL = 'https://juyrceadazrovlitxceb.supabase.co';
+const LOGO_ANON = 'sb_publishable_juEwd3M1wOvOXnM3frvDJA_FIeHQB-Q';
+const LOGO_BUCKET = 'assets';
+const LOGO_FILE = 'logo/koalakids-logo';
+
+async function loadLogo() {
+  const extensions = ['png','jpg','jpeg','webp','svg'];
+  for (const ext of extensions) {
+    const url = `${LOGO_SUPABASE_URL}/storage/v1/object/public/${LOGO_BUCKET}/${LOGO_FILE}.${ext}`;
+    try {
+      const res = await fetch(url, { method: 'HEAD' });
+      if (res.ok) {
+        const img = document.getElementById('logo-img');
+        const placeholder = document.getElementById('logo-placeholder');
+        img.src = url + '?t=' + Date.now();
+        img.style.display = 'block';
+        if (placeholder) placeholder.style.display = 'none';
+        img.onclick = () => document.getElementById('logo-input').click();
+        return;
+      }
+    } catch(e) {}
+  }
+}
+
+async function uploadLogo(file) {
+  const ext = file.name.split('.').pop();
+  const path = `${LOGO_FILE}.${ext}`;
+  const res = await fetch(`${LOGO_SUPABASE_URL}/storage/v1/object/${LOGO_BUCKET}/${path}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOGO_ANON}`,
+      'Content-Type': file.type,
+      'x-upsert': 'true'
+    },
+    body: file
+  });
+  if (res.ok) {
+    const url = `${LOGO_SUPABASE_URL}/storage/v1/object/public/${LOGO_BUCKET}/${path}`;
+    const img = document.getElementById('logo-img');
+    const placeholder = document.getElementById('logo-placeholder');
+    img.src = url + '?t=' + Date.now();
+    img.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+    img.onclick = () => document.getElementById('logo-input').click();
+    showNotif('✅ Logo enregistré !');
+  } else {
+    showNotif('❌ Erreur upload logo (' + res.status + ')');
+  }
+}
+
+// ─── AUTHENTIFICATION (stock pedagogique) ────────────────────────────────
+// Roles autorises : direction, referent, employe. Les comptes kiosque sont refuses.
+const SK_ROLES_OK = ['direction', 'referent', 'employe'];
+
+// Correspondance UUID -> nom de creche. Les noms doivent rester identiques
+// aux libelles des badges de la sidebar (filterCreche les compare en texte).
+// Rempli par loadCrecheUI() une fois connecté.
+let SK_CRECHE_NAMES = {};
+
+// creches.name porte la raison sociale complète ("Koalakids Toulon Brunet") ;
+// les articles/commandes déjà en base référencent le libellé court
+// ("Brunet"). On le dérive en retirant les préfixes d'enseigne/ville — ce qui
+// reproduit exactement les libellés historiques Koala Kids. Repli sur le nom
+// complet si une organisation ne suit pas ce schéma.
+function shortCrecheName(nom) {
+  return String(nom || '').replace(/^Koalakids\s+/i, '').replace(/^Toulon\s+/i, '').trim() || nom;
+}
+
+/** Reconstruit les badges de la barre latérale à partir de CRECHES/CRECHE_COLORS.
+ *  L'index i doit rester aligné avec les id="cnt-i" que updateCounts() cible. */
+function renderCrecheBadges() {
+  const list = document.getElementById('creche-badges-list');
+  if (!list) return;
+  list.innerHTML = CRECHES.map((nom, i) => `
+    <div class="creche-badge" onclick="filterCreche('${nom.replace(/'/g, "\\'")}', this)">
+      <span class="creche-dot" style="background:${CRECHE_COLORS[nom] || '#888'}"></span>
+      <span class="creche-name">${nom}</span>
+      <span class="creche-count" id="cnt-${i}">0</span>
+    </div>`).join('');
+}
+
+/** Charge les crèches de l'organisation connectée (RLS: creches_select filtre
+ *  déjà par org_id = kk_mon_org()) et reconstruit CRECHES, CRECHE_COLORS,
+ *  SK_CRECHE_NAMES, les badges de la sidebar et les <select> de structure. */
+async function loadCrecheUI() {
+  try {
+    const rows = await sbGet('creches', 'select=id,name');
+    if (!Array.isArray(rows) || !rows.length) return;
+    CRECHES = rows.map(r => shortCrecheName(r.name));
+    CRECHE_COLORS = {};
+    SK_CRECHE_NAMES = {};
+    rows.forEach((r, i) => {
+      const nom = shortCrecheName(r.name);
+      CRECHE_COLORS[nom] = CRECHE_PALETTE[i % CRECHE_PALETTE.length];
+      SK_CRECHE_NAMES[r.id] = nom;
+    });
+    renderCrecheBadges();
+    const optionsHtml = CRECHES.map(n => `<option>${n}</option>`).join('');
+    const fCreche = document.getElementById('f-creche');
+    if (fCreche) {
+      fCreche.innerHTML = '<option value="" id="f-creche-vide" hidden>— Aucune —</option>' + optionsHtml;
+      majChampStructure();
+    }
+    const cCreche = document.getElementById('c-creche-select');
+    if (cCreche) cCreche.innerHTML = optionsHtml;
+  } catch (e) {
+    console.warn('[Stock] loadCrecheUI — repli sur la liste par défaut :', e);
+  }
+}
+
+function majChampStructure() {
+  // Entretien / Cuisine : la structure est facultative (« Aucune » = ma structure).
+  const facultatif = CATS_SANS_CRECHE.includes(document.getElementById('f-cat').value);
+  const lbl = document.getElementById('f-creche-label');
+  if (lbl) lbl.textContent = facultatif ? 'Structure (facultatif)' : 'Structure *';
+  const vide = document.getElementById('f-creche-vide');
+  if (vide) vide.hidden = !facultatif;
+}
+
+// Non nul uniquement pour les employees : verrouille la vue sur leur structure.
+let SK_LOCKED_CRECHE = null;
+
+// Non nul pour les referentes : lecture des 6 crèches, ecriture sur la sienne
+// uniquement. La direction reste nulle (aucune restriction).
+let SK_WRITE_CRECHE = null;
+
+// Verifie qu'une ecriture est permise sur la structure visee.
+// Retourne true si l'action peut se poursuivre.
+function skCanWrite(crecheNom) {
+  if (!SK_WRITE_CRECHE) return true;
+  if (crecheNom === SK_WRITE_CRECHE) return true;
+  if (typeof showNotif === 'function') {
+    showNotif('\u26A0 Modification reservee a ' + SK_WRITE_CRECHE);
+  }
+  return false;
+}
+let SK_USER = null, SK_PROFILE = null, SK_REFRESH = null, SK_REFRESH_TIMER = null;
+
+function skTogglePwd(btn) {
+  const i = document.getElementById('sk-login-pwd');
+  i.type = (i.type === 'password') ? 'text' : 'password';
+}
+
+function skLoginError(msg) {
+  const e = document.getElementById('sk-login-err');
+  e.textContent = msg; e.style.display = 'block';
+  const b = document.getElementById('sk-login-btn');
+  b.disabled = false; b.textContent = 'Se connecter';
+}
+
+async function skDoLogin() {
+  const email = document.getElementById('sk-login-email').value.trim();
+  const pwd = document.getElementById('sk-login-pwd').value;
+  const btn = document.getElementById('sk-login-btn');
+  document.getElementById('sk-login-err').style.display = 'none';
+  if (!email || !pwd) { skLoginError('Email et mot de passe requis.'); return; }
+  btn.disabled = true; btn.textContent = 'Connexion...';
+
+  let session;
+  try {
+    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+      body: JSON.stringify({ email, password: pwd }),
+    });
+    session = await r.json();
+    if (!r.ok || !session.access_token) {
+      const m = (session && (session.error_description || session.msg || session.message)) || '';
+      skLoginError(m.toLowerCase().includes('confirm')
+        ? 'Compte non confirme — contactez la direction.'
+        : 'Identifiants incorrects.');
+      return;
+    }
+  } catch (e) {
+    skLoginError('Erreur reseau. Reessayez.');
+    return;
+  }
+
+  // Verification du role avant d'ouvrir l'application
+  try {
+    const uid = session.user && session.user.id;
+    const pr = await fetch(
+      `${SUPA_URL}/rest/v1/referents?user_id=eq.${uid}&select=id,name,role,creche_id`,
+      { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + session.access_token } }
+    );
+    const rows = await pr.json();
+    SK_PROFILE = Array.isArray(rows) && rows.length ? rows[0] : null;
+    if (!SK_PROFILE || SK_ROLES_OK.indexOf(SK_PROFILE.role) === -1) {
+      skLoginError('Acces non autorise pour ce compte.');
+      return;
+    }
+  } catch (e) {
+    skLoginError('Profil introuvable. Contactez la direction.');
+    return;
+  }
+
+  SK_TOKEN = session.access_token;
+  SK_REFRESH = session.refresh_token || null;
+  SK_USER = session.user;
+  skScheduleRefresh(session.expires_in);
+
+  const ov = document.getElementById('sk-login-overlay');
+  if (ov) ov.remove();
+  document.body.classList.remove('sk-locked');
+
+  const nameEl = document.getElementById('sk-user-name');
+  if (nameEl) nameEl.textContent = (SK_PROFILE && SK_PROFILE.name) || (SK_USER && SK_USER.email) || '';
+
+  await loadCrecheUI();
+  skApplyCrecheLock();
+  skRestrictCrecheSelects();
+  skBootApp();
+  loadLogo();
+}
+
+// ── Verrouillage sur une seule structure (role employe) ──────────────────
+// Direction et referentes gardent la vue sur les 6 crèches. Les employees
+// sont limitees a leur structure pour eviter les erreurs de saisie.
+function skApplyCrecheLock() {
+  if (!SK_PROFILE) return;
+
+  // Referente : lecture globale, ecriture limitee a sa structure.
+  if (SK_PROFILE.role === 'referent') {
+    const n = SK_CRECHE_NAMES[SK_PROFILE.creche_id];
+    if (n) SK_WRITE_CRECHE = n;
+    else console.warn('[Auth] creche_id inconnu pour la referente :', SK_PROFILE.creche_id);
+    return;
+  }
+
+  if (SK_PROFILE.role !== 'employe') return;
+  const nom = SK_CRECHE_NAMES[SK_PROFILE.creche_id];
+  if (!nom) {
+    console.warn('[Auth] creche_id inconnu, verrouillage ignore :', SK_PROFILE.creche_id);
+    return;
+  }
+  SK_LOCKED_CRECHE = nom;
+  SK_WRITE_CRECHE = nom;
+  currentCreche = nom;
+
+  // Ne laisser que le badge de sa structure, marque actif.
+  document.querySelectorAll('.creche-badge').forEach(b => {
+    const el = b.querySelector('.creche-name');
+    const label = el ? el.textContent.trim() : '';
+    const onclick = b.getAttribute('onclick') || '';
+    const isAll = onclick.indexOf("'all'") !== -1;
+    if (isAll || (label && label !== nom)) {
+      b.style.display = 'none';
+      b.classList.remove('active');
+    } else if (label === nom) {
+      b.classList.add('active');
+    }
+  });
+
+  const nameEl = document.getElementById('sk-user-name');
+  if (nameEl) nameEl.textContent += ' — ' + nom;
+}
+
+// Restreint les listes deroulantes de structure aux seules crèches ou
+// l'utilisateur peut ecrire, pour eviter un refus apres coup a l'enregistrement.
+function skRestrictCrecheSelects() {
+  if (!SK_WRITE_CRECHE) return;
+  ['f-creche', 'c-creche-select'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    Array.from(sel.options).forEach(o => {
+      if (o.textContent.trim() !== SK_WRITE_CRECHE) o.remove();
+    });
+    sel.value = SK_WRITE_CRECHE;
+  });
+}
+
+// ── Rafraichissement du jeton ────────────────────────────────────────────
+// Le jeton Supabase expire par defaut au bout d'une heure. On le renouvelle
+// 60 s avant l'echeance pour eviter les echecs d'ecriture silencieux.
+function skScheduleRefresh(expiresIn) {
+  const delay = Math.max(30, (Number(expiresIn) || 3600) - 60) * 1000;
+  if (SK_REFRESH_TIMER) clearTimeout(SK_REFRESH_TIMER);
+  SK_REFRESH_TIMER = setTimeout(skRefreshToken, delay);
+}
+
+async function skRefreshToken() {
+  if (!SK_REFRESH) return;
+  try {
+    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPA_KEY },
+      body: JSON.stringify({ refresh_token: SK_REFRESH }),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.access_token) throw new Error('refresh refuse');
+    SK_TOKEN = d.access_token;
+    SK_REFRESH = d.refresh_token || SK_REFRESH;
+    skScheduleRefresh(d.expires_in);
+  } catch (e) {
+    console.warn('[Auth] Rafraichissement impossible', e);
+    setIndicator('Session expiree — rechargez la page', 'var(--red)');
+  }
+}
+
+// Filet de securite : au retour sur l'onglet apres une longue mise en veille,
+// le timer peut avoir ete gele par le navigateur (frequent sur Android).
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && SK_TOKEN) skRefreshToken();
+});
+
+async function skLogout() {
+  if (!confirm('Se deconnecter ?')) return;
+  try {
+    await fetch(`${SUPA_URL}/auth/v1/logout`, {
+      method: 'POST',
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SK_TOKEN },
+    });
+  } catch (e) {}
+  SK_TOKEN = null; SK_REFRESH = null; SK_USER = null; SK_PROFILE = null;
+  if (SK_REFRESH_TIMER) clearTimeout(SK_REFRESH_TIMER);
+  window.location.reload();
+}
+
+// Verrouillage immediat : aucune donnee n'est chargee avant connexion.
+document.body.classList.add('sk-locked');
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadLogo();
+  const input = document.getElementById('logo-input');
+  if (input) input.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) uploadLogo(file);
+  });
+});
+  

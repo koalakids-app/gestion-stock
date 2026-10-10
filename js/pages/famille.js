@@ -1,0 +1,576 @@
+/* ===========================================================================
+   FAMILLE.HTML — page publique du dossier de familiarisation
+   ---------------------------------------------------------------------------
+   Aucune session Supabase ici : la famille n'a pas de compte. Tout passe par
+   l'edge function `dossier-famille`, qui s'exécute en service_role et ne
+   renvoie que le dossier correspondant au jeton de l'URL. Aucune table n'est
+   interrogée directement — voir 15c-dossiers-policies.sql.
+
+   Les modèles de formulaires sont RECOPIÉS de documents.html (choix assumé :
+   ne pas toucher à l'outil qui tourne). Si vous en modifiez un là-bas,
+   reportez-le ici — les deux versions ne se synchronisent pas.
+   =========================================================================== */
+
+const SUPABASE_URL = "https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const FN_URL = SUPABASE_URL + '/functions/v1/dossier-famille';
+
+/* Le lien n'ouvre qu'une session courte (js/session-lien.js) : jeton retiré de l'adresse,
+   fermeture après inactivité, avertissement avant la fin. */
+const TOKEN = SessionLien.init({url:FN_URL,anonKey:SUPABASE_ANON_KEY});
+const wrap  = document.getElementById('wrap');
+
+let DOSSIER = null;   // {expire_le, statut}
+let ENFANT  = null;   // {prenom, nom, creche_nom}
+let DOCS    = [];     // documents du pack + leur réponse éventuelle
+let COURANT = null;   // document ouvert
+let SIGS    = {};     // signatures tracées sur le document ouvert
+
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dfr = d => d ? new Date(d).toLocaleDateString('fr-FR') : '';
+
+let toastT=null;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('on');
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600);
+}
+
+function etat(cls,titre,msg,icone){
+  wrap.innerHTML='<div class="state '+cls+'"><i class="ti ti-'+(icone||'alert-circle')+'"></i>'
+    +'<h2>'+esc(titre)+'</h2><p>'+esc(msg)+'</p></div>';
+}
+
+function appel(action,payload){
+  return SessionLien.appel(action,payload);
+}
+
+/* ---------------------------------------------------------------- ACCUEIL */
+
+async function boot(){
+  if(!TOKEN)return etat('err','Lien incomplet','Ce lien ne contient pas de jeton. Utilisez celui reçu par e-mail.','link-off');
+  try{
+    const d=await appel('get');
+    DOSSIER=d.dossier;ENFANT=d.enfant;DOCS=d.documents||[];
+    if(Array.isArray(d.creches)&&d.creches.length)KK_CRECHES=['',...d.creches];
+    document.getElementById('sousTitre').textContent=
+      (ENFANT.prenom||'')+(ENFANT.creche_nom?' · '+ENFANT.creche_nom:'');
+    renderListe();
+  }catch(e){
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('expir'))
+      etat('err','Lien expiré','Ce lien n’est plus valable. Contactez la crèche, elle vous en enverra un nouveau.','clock-off');
+    else if(m.includes('introuvable'))
+      etat('err','Lien invalide','Ce lien ne correspond à aucun dossier. Vérifiez que vous l’avez copié en entier.','link-off');
+    else
+      etat('err','Erreur','Le dossier n’a pas pu être chargé. Réessayez dans un instant.','alert-triangle');
+  }
+}
+
+/* Trois usages, décidés côté crèche sur chaque document du pack :
+   - à remplir en ligne  : remplissable et non marqué « à imprimer » ;
+   - à imprimer          : pack_imprimer — la fiche sanitaire, que le médecin
+                           doit compléter et signer. Rien à faire en ligne ;
+   - à consulter         : le reste (règlement, projet éducatif). */
+const aRemplirEnLigne = d => d.type==='remplissable' && !d.pack_imprimer;
+
+function lienDoc(d,titre,sousTitre,icone){
+  const url=d.fichier_url||'';
+  const inner='<span class="ic"><i class="ti ti-'+icone+'"></i></span>'
+    +'<span class="tx"><b>'+esc(titre)+'</b><span>'+sousTitre+'</span></span>'
+    +'<span class="go"><i class="ti ti-'+(url?'external-link':'info-circle')+'"></i></span>';
+  return url
+    ? '<a class="doc" href="'+esc(url)+'" target="_blank" rel="noopener" style="text-decoration:none">'+inner+'</a>'
+    : '<div class="doc" style="cursor:default">'+inner+'</div>';
+}
+
+function renderListe(){
+  const enLigne=DOCS.filter(aRemplirEnLigne);
+  const aImprimer=DOCS.filter(d=>d.pack_imprimer);
+  const aLire=DOCS.filter(d=>!aRemplirEnLigne(d)&&!d.pack_imprimer);
+  const faits=enLigne.filter(d=>d.reponse&&d.reponse.statut==='signe').length;
+  const pct=enLigne.length?Math.round(faits/enLigne.length*100):100;
+
+  let h='<div class="intro">Bienvenue ! Voici les documents à préparer avant l’arrivée de '
+    +esc(ENFANT.prenom||'votre enfant')+' à la crèche. '
+    +'Vous pouvez les remplir en plusieurs fois, depuis votre téléphone : '
+    +'tout ce que vous enregistrez est conservé. Un document signé n’est plus modifiable.'
+    +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(DOSSIER.expire_le))+'</b>.</div>';
+
+  if(enLigne.length){
+    h+='<div class="card"><div style="font-weight:700;font-size:14px">Votre avancement</div>'
+      +'<div class="prog"><i style="width:'+pct+'%"></i></div>'
+      +'<div class="progtxt">'+faits+' document'+(faits>1?'s':'')+' signé'+(faits>1?'s':'')
+      +' sur '+enLigne.length+' à remplir en ligne</div></div>';
+
+    h+='<h3 class="sec">À remplir en ligne</h3>';
+    enLigne.forEach(d=>{
+      const i=DOCS.indexOf(d);
+      const signe=d.reponse&&d.reponse.statut==='signe';
+      const st=signe?{cls:'b-ok',txt:'Signé',ic:'check'}
+                    :(d.reponse?{cls:'b-att',txt:'Commencé',ic:'pencil'}
+                               :{cls:'b-att',txt:'À remplir',ic:'forms'});
+      h+='<button class="doc" onclick="ouvrir('+i+')">'
+        +'<span class="ic'+(signe?' ok':'')+'"><i class="ti ti-'+st.ic+'"></i></span>'
+        +'<span class="tx"><b>'+esc(d.titre)+'</b>'
+        +'<span><span class="badge '+st.cls+'">'+st.txt+'</span></span></span>'
+        +'<span class="go"><i class="ti ti-chevron-right"></i></span></button>';
+    });
+  }
+
+  if(aImprimer.length){
+    h+='<h3 class="sec">À imprimer et rapporter</h3>'
+      +'<p class="hint">Ces documents ne se remplissent pas en ligne : ils doivent être complétés '
+      +'et signés par votre médecin. Imprimez-les, faites-les remplir, et rapportez-les à la crèche '
+      +'le jour de la familiarisation.</p>';
+    aImprimer.forEach(d=>{
+      h+=lienDoc(d,d.titre,
+        d.fichier_url
+          ? esc(d.description||'Télécharger, imprimer, faire remplir par le médecin')
+          : '<span class="badge b-att">Document remis par la crèche</span>',
+        'printer');
+    });
+  }
+
+  if(aLire.length){
+    h+='<h3 class="sec">À consulter</h3>';
+    aLire.forEach(d=>{
+      h+=lienDoc(d,d.titre,esc(d.description||'À lire et conserver'),'file-download');
+    });
+  }
+
+  if(enLigne.length&&faits===enLigne.length){
+    h+='<div class="card" style="background:var(--green-bg);border-color:#BFE3CB;color:var(--green);font-weight:600;margin-top:14px">'
+      +'<i class="ti ti-circle-check"></i> Tout est signé en ligne — merci ! '
+      +(aImprimer.length?'Il ne reste que les documents à rapporter en papier.'
+                        :'L’équipe de la crèche a bien reçu vos documents.')+'</div>';
+  }
+  wrap.innerHTML=h;
+  window.scrollTo(0,0);
+}
+
+/* -------------------------------------------------------------- UN DOCUMENT */
+
+function ouvrir(i){
+  COURANT=DOCS[i];SIGS={};
+  const rep=COURANT.reponse;
+  const v=(rep&&rep.donnees)||{};
+  const verrou=!!(rep&&rep.statut==='signe');
+  if(v._sigs)SIGS=Object.assign({},v._sigs);
+
+  const tpl=COURANT.template_key?TPL[COURANT.template_key]:null;
+  /* Un modèle prédéfini que cette page ne connaît pas ne doit surtout pas
+     s'afficher comme un formulaire vide « à signer » : la famille signerait
+     un document sans contenu. On le dit, et on n'offre aucun bouton. */
+  if(COURANT.template_key&&!tpl){
+    wrap.innerHTML='<button class="btn btn-g" onclick="renderListe()" style="margin-bottom:14px">'
+      +'<i class="ti ti-arrow-left"></i> Retour à la liste</button>'
+      +'<div class="card"><h3 class="sec">'+esc(COURANT.titre)+'</h3>'
+      +'<div class="txtbox">Ce document se remplit avec l’équipe de la crèche, sur place. '
+      +'Rien à faire ici.</div></div>';
+    window.scrollTo(0,0);
+    return;
+  }
+
+  let corps;
+  if(tpl)corps=tpl.html(v);
+  else corps=champsLibresHtml(COURANT.schema_champs||[],v);
+
+  wrap.innerHTML='<button class="btn btn-g" onclick="renderListe()" style="margin-bottom:14px">'
+    +'<i class="ti ti-arrow-left"></i> Retour à la liste</button>'
+    +(verrou?'<div class="lock"><i class="ti ti-lock"></i> Ce document est signé : il n’est plus modifiable. '
+      +'Une erreur ? Prévenez la crèche, elle peut le rouvrir.</div>':'')
+    +'<div class="card"><h3 class="sec">'+esc(COURANT.titre)+'</h3>'
+    +(COURANT.description?'<p class="hint">'+esc(COURANT.description)+'</p>':'')
+    +corps
+    +(verrou?'':'<div class="acts">'
+      +'<button class="btn btn-g" onclick="enregistrer(false)"><i class="ti ti-device-floppy"></i> Enregistrer</button>'
+      +'<button class="btn btn-p" onclick="enregistrer(true)"><i class="ti ti-signature"></i> Valider et signer</button>'
+      +'</div><p class="hint" style="margin-top:10px">« Enregistrer » garde votre saisie sans rien figer : '
+      +'vous pourrez revenir. « Valider et signer » verrouille le document.</p>')
+    +'</div>';
+
+  if(!verrou)montrerSignatures();
+  else figerSignatures();
+  window.scrollTo(0,0);
+}
+
+/* Champs personnalisés (documents « formulaire libre ») */
+function champsLibresHtml(champs,v){
+  if(!champs.length)return '<p class="hint">Ce document ne contient aucun champ à remplir.</p>';
+  return champs.map(c=>{
+    const val=v[c.key];
+    let inp;
+    if(c.type==='textarea')inp='<textarea id="ff_'+c.key+'">'+esc(val||'')+'</textarea>';
+    else if(c.type==='checkbox')inp='<input type="checkbox" id="ff_'+c.key+'"'+(val?' checked':'')
+      +' style="width:auto;height:20px">';
+    else inp='<input type="'+(c.type||'text')+'" id="ff_'+c.key+'" value="'+esc(val||'')+'">';
+    return '<div class="f"><label>'+esc(c.label||c.key)+'</label>'+inp+'</div>';
+  }).join('')+sigHtml('parent1','Signature du parent');
+}
+
+/* ---------------------------------------------------------- LES MODÈLES
+   Recopiés de documents.html (objet TPL), adaptés au format téléphone : mêmes
+   clés de champs, donc un document rempli ici s'ouvre et s'exporte en PDF côté
+   crèche sans conversion. Si vous modifiez un de ces modèles dans
+   documents.html, reportez-le ici — les deux versions ne se synchronisent pas.
+
+   Un modèle absent de ce registre s'affiche comme « à remplir avec la crèche »
+   plutôt que comme un formulaire vide. */
+
+// Valeur de secours si l'edge function dossier-famille ne renvoie pas encore
+// `creches` (ancienne version déployée) — remplacée dans boot() une fois la
+// vraie liste de l'organisation reçue.
+let KK_CRECHES=['','Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jean'];
+const ON_OPTS=['','Oui','Non'];
+const CIV_OPTS=['','Monsieur','Madame'];
+const FL_PHOTOS=['Afficher à la crèche','Newsletters','Le site internet','Les pages Facebook',
+  'Éventuellement, à l’occasion de reportages télévisés','Dossier « souvenir de crèche »'];
+const RM_TABLE=[
+ ['Savon liquide','Sirop antibiotique'],
+ ['Crème pour le change','Collyre'],
+ ['Liniment oléo-calcaire','Médicaments pour les reflux (gaviscon…)'],
+ ['Huile d’amande douce','Médicaments pour le transit (smecta, débridat, tiorfan…)'],
+ ['Les produits anti-moustiques : lotions, crèmes, sprays et bracelets… Si besoin, les parents en mettent à leur enfant AVANT de le déposer à la crèche, ou dans un contexte médical particulier = PAI','Homéopathie sous toutes ses formes (granules, gouttes) : Apis mellifica, Arnica'],
+ ['Les crèmes solaires : les parents apportent la crème solaire pour leur(s) enfant(s) ET signent l’autorisation','Gouttes et pipettes pour les poussées dentaires…'],
+ ['','Les boîtes de lait']
+];
+
+const selHtml=(id,opts,val)=>'<select id="ff_'+id+'">'
+  +opts.map(o=>'<option'+(val===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>';
+const inHtml=(id,val,type)=>'<input'+(type?' type="'+type+'"':'')+' id="ff_'+id+'" value="'+esc(val||'')+'">';
+const champ=(lab,html)=>'<div class="f"><label>'+lab+'</label>'+html+'</div>';
+const ckHtml=(id,label,val)=>'<label style="display:inline-flex;align-items:center;gap:6px;'
+  +'margin:0 16px 8px 0;font-weight:500;color:var(--ink);cursor:pointer">'
+  +'<input type="checkbox" id="ff_'+id+'"'+(val?' checked':'')+' style="width:auto;height:20px;margin:0">'
+  +esc(label)+'</label>';
+
+/* Ce que la crèche connaît déjà n'a pas à être ressaisi par la famille. */
+const nomEnfant=()=>((ENFANT.prenom||'')+' '+(ENFANT.nom||'')).trim();
+const auj=()=>new Date().toISOString().slice(0,10);
+
+/* Bloc « je soussigné(e) » commun à l'antipyrétique et à la crème solaire. */
+function soussignes(p,v){
+  return '<div class="grid2">'
+    + champ('Parent 1 — civilité',selHtml(p+'_civ1',CIV_OPTS,v[p+'_civ1']))
+    + champ('Parent 1 — nom',inHtml(p+'_parent1',v[p+'_parent1']))+'</div>'
+    + champ('Parent 1 — en qualité de',inHtml(p+'_qual1',v[p+'_qual1']))
+    + '<div class="grid2">'
+    + champ('Parent 2 — civilité',selHtml(p+'_civ2',CIV_OPTS,v[p+'_civ2']))
+    + champ('Parent 2 — nom',inHtml(p+'_parent2',v[p+'_parent2']))+'</div>'
+    + champ('Parent 2 — en qualité de',inHtml(p+'_qual2',v[p+'_qual2']))
+    + '<div class="grid2">'
+    + champ('Prénom de l’enfant',inHtml(p+'_enfant',v[p+'_enfant']||ENFANT.prenom||''))
+    + champ('Date',inHtml(p+'_date',v[p+'_date']||auj(),'date'))+'</div>';
+}
+
+const TPL={
+
+ fiche_renseignements:{
+  fields:['fr_nom','fr_prenom','fr_naiss','fr_age','fr_j1','fr_j2','fr_j3','fr_j4','fr_j5',
+          'fr_horaires','fr_grossesse','fr_antecedents',
+          'fr_lait','fr_lait_recup','fr_quantites','fr_diversification','fr_morceaux','fr_regime',
+          'fr_sieste','fr_tetine','fr_turbulette','fr_doudou','fr_sommeil_autre',
+          'fr_couche_jour','fr_couche_sieste','fr_pot','fr_wc','fr_change','fr_change_autre',
+          'fr_date'],
+  html:v=>
+      '<div class="grid2">'
+    + champ('Nom',inHtml('fr_nom',v.fr_nom||ENFANT.nom||''))
+    + champ('Prénom',inHtml('fr_prenom',v.fr_prenom||ENFANT.prenom||''))+'</div>'
+    + '<div class="grid2">'
+    + champ('Date de naissance',inHtml('fr_naiss',v.fr_naiss||ENFANT.dob||'','date'))
+    + champ('Âge',inHtml('fr_age',v.fr_age))+'</div>'
+    + champ('Jours de présence',['Lundi','Mardi','Mercredi','Jeudi','Vendredi']
+        .map((j,i)=>ckHtml('fr_j'+(i+1),j,v['fr_j'+(i+1)])).join(''))
+    + champ('Horaires',inHtml('fr_horaires',v.fr_horaires))
+
+    + '<h3 class="sec">Avant la crèche</h3>'
+    + '<div class="f"><label>Comment s’est passée la grossesse, la naissance de votre enfant ?</label>'
+    + '<textarea id="ff_fr_grossesse">'+esc(v.fr_grossesse||'')+'</textarea></div>'
+    + '<div class="f"><label>Antécédents (hospitalisation, maladies, difficultés, kiné…)</label>'
+    + '<textarea id="ff_fr_antecedents">'+esc(v.fr_antecedents||'')+'</textarea></div>'
+
+    + '<h3 class="sec">À la maison — repas</h3>'
+    + champ('Lait',selHtml('fr_lait',['','Maternel','Artificiel','Mixte'],v.fr_lait))
+    + champ('Souhaitez-vous récupérer le lait non consommé en fin de journée ?',
+            selHtml('fr_lait_recup',ON_OPTS,v.fr_lait_recup))
+    + champ('Quantités des biberons',inHtml('fr_quantites',v.fr_quantites))
+    + '<div class="grid2">'
+    + champ('Diversification',selHtml('fr_diversification',ON_OPTS,v.fr_diversification))
+    + champ('Morceaux',selHtml('fr_morceaux',ON_OPTS,v.fr_morceaux))+'</div>'
+    + champ('Régime particulier',inHtml('fr_regime',v.fr_regime))
+
+    + '<h3 class="sec">Sommeil</h3>'
+    + '<div class="f"><label>Sieste — rythme et habitudes</label>'
+    + '<textarea id="ff_fr_sieste">'+esc(v.fr_sieste||'')+'</textarea></div>'
+    + champ('Pour s’endormir',
+        ckHtml('fr_tetine','Tétine',v.fr_tetine)+ckHtml('fr_turbulette','Turbulette',v.fr_turbulette)
+        +ckHtml('fr_doudou','Doudou',v.fr_doudou))
+    + champ('Autre',inHtml('fr_sommeil_autre',v.fr_sommeil_autre))
+
+    + '<h3 class="sec">Acquisition de la continence</h3>'
+    + champ('Couche',
+        ckHtml('fr_couche_jour','Journée',v.fr_couche_jour)+ckHtml('fr_couche_sieste','Sieste',v.fr_couche_sieste)
+        +ckHtml('fr_pot','Pot',v.fr_pot)+ckHtml('fr_wc','WC',v.fr_wc))
+    + champ('Change',selHtml('fr_change',
+        ['','Protocole crèche (eau et savon)','Produits personnels (liniment, coton…)'],v.fr_change))
+    + champ('Autre',inHtml('fr_change_autre',v.fr_change_autre))
+
+    + '<h3 class="sec">Signature</h3>'
+    + champ('Date',inHtml('fr_date',v.fr_date||auj(),'date'))
+    + sigHtml('parent1','Signature du parent')
+ },
+
+ fiche_liaison:{
+  fields:['fl_creche','fl_enfant','fl_naiss','fl_parents','fl_tel1','fl_tel2','fl_autorisees',
+          'fl_p1','fl_p2','fl_p3','fl_p4','fl_p5','fl_p6','fl_date'],
+  html:v=>
+      '<div class="grid2">'
+    + champ('Crèche',selHtml('fl_creche',KK_CRECHES,v.fl_creche||ENFANT.creche_nom||''))
+    + champ('Date',inHtml('fl_date',v.fl_date||auj(),'date'))+'</div>'
+    + '<div class="grid2">'
+    + champ('Nom et prénom de l’enfant',inHtml('fl_enfant',v.fl_enfant||nomEnfant()))
+    + champ('Date de naissance',inHtml('fl_naiss',v.fl_naiss||ENFANT.dob||'','date'))+'</div>'
+    + champ('Nom et prénom des parents',inHtml('fl_parents',v.fl_parents))
+    + '<div class="grid2">'
+    + champ('Téléphone parent 1',inHtml('fl_tel1',v.fl_tel1,'tel'))
+    + champ('Téléphone parent 2',inHtml('fl_tel2',v.fl_tel2,'tel'))+'</div>'
+
+    + '<h3 class="sec">Personnes autorisées à venir le chercher</h3>'
+    + '<p class="hint">Une personne par ligne : nom, prénom, lien avec l’enfant, téléphone.</p>'
+    + '<div class="f"><textarea id="ff_fl_autorisees">'+esc(v.fl_autorisees||'')+'</textarea></div>'
+
+    + '<h3 class="sec">Autorisation de photos</h3>'
+    + '<p class="hint">Dans le cadre de la crèche, nous sommes amenés à utiliser des photos des enfants pour :</p>'
+    + '<div class="ftw"><table class="ft">'
+    + '<tr><th style="width:62%">Utilisation</th><th>Autorisation</th></tr>'
+    + FL_PHOTOS.map((lab,i)=>'<tr><td class="lab">'+esc(lab)+'</td><td>'
+        +selHtml('fl_p'+(i+1),ON_OPTS,v['fl_p'+(i+1)])+'</td></tr>').join('')
+    + '</table></div>'
+    + '<div class="txtbox">Il ne s’agit pas de photographies individuelles d’identité mais de photos '
+    + 'de groupe ou de vues montrant les enfants en activité.<br><br>'
+    + 'En application de la loi informatique et libertés et des règles de protection des mineurs, les '
+    + 'légendes accompagnant les photos ne communiqueront aucune information susceptible d’identifier '
+    + 'directement ou indirectement les enfants ou leur famille. La loi nous fait obligation d’avoir '
+    + 'l’autorisation écrite des parents pour cette utilisation.</div>'
+
+    + '<h3 class="sec">Signature des parents</h3>'
+    + sigHtml('parent1','Signature du parent 1')
+    + sigHtml('parent2','Signature du parent 2 (facultatif)')
+ },
+
+ antipyretique:{
+  fields:['ap_civ1','ap_parent1','ap_qual1','ap_civ2','ap_parent2','ap_qual2','ap_enfant','ap_date',
+          'ci_medicament','ci_date'],
+  html:v=>
+      '<div class="txtbox">Vous autorisez le personnel de la structure à administrer à votre enfant '
+    + 'un antipyrétique (type Doliprane) selon la prescription établie par son médecin, puis à vous '
+    + 'prévenir dans les plus brefs délais.</div>'
+    + soussignes('ap',v)
+    + sigHtml('parent1','Signature du parent 1')
+    + sigHtml('parent2','Signature du parent 2 (facultatif)')
+
+    + '<h3 class="sec">Contre-indication</h3>'
+    + '<p class="hint">À remplir seulement si un antipyrétique est contre-indiqué pour votre enfant.</p>'
+    + champ('Nom du médicament contre-indiqué',inHtml('ci_medicament',v.ci_medicament))
+    + champ('Date',inHtml('ci_date',v.ci_date,'date'))
+    + sigHtml('ci_parent','Signature du parent (contre-indication)')
+ },
+
+ creme_solaire:{
+  fields:['cs_civ1','cs_parent1','cs_qual1','cs_civ2','cs_parent2','cs_qual2','cs_enfant','cs_date'],
+  html:v=>
+      '<div class="txtbox">Durant la période estivale, la crème solaire (indice 50+ minimum, flacon '
+    + 'neuf, péremption après ouverture de 12 mois) est fournie par la famille. Sans crème '
+    + 'personnelle, l’enfant ne peut pas profiter des sorties extérieures.<br><br>'
+    + 'En signant, vous autorisez le personnel à appliquer à votre enfant la crème solaire que vous '
+    + 'fournissez.</div>'
+    + soussignes('cs',v)
+    + sigHtml('parent1','Signature du parent 1')
+    + sigHtml('parent2','Signature du parent 2 (facultatif)')
+ },
+
+ medicament_ponctuel:{
+  fields:['mp_civ1','mp_parent1','mp_qual1','mp_civ2','mp_parent2','mp_qual2','mp_enfant','mp_medicament','mp_posologie','mp_duree','mp_date'],
+  html:v=>
+      '<div class="txtbox">Vous autorisez le référent technique ou le personnel de la structure à '
+    + 'administrer à votre enfant le médicament indiqué ci-dessous, selon le protocole '
+    + 'établi par son médecin (l’ordonnance a été transmise à la structure).</div>'
+    + soussignes('mp',v)
+    + champ('Nom du médicament',inHtml('mp_medicament',v.mp_medicament))
+    + champ('Posologie',inHtml('mp_posologie',v.mp_posologie))
+    + champ('Durée du traitement',inHtml('mp_duree',v.mp_duree))
+    + sigHtml('parent1','Signature du parent 1')
+    + sigHtml('parent2','Signature du parent 2 (facultatif)')
+ },
+
+ reglement_medicaments:{
+  fields:['rm_creche','rm_nom','rm_enfant','rm_date'],
+  html:v=>
+      '<div class="txtbox"><b>Réglementation concernant les ordonnances</b>'
+    + '<ul style="margin:6px 0 6px 18px;padding:0">'
+    + '<li>Les parents sont responsables de la surveillance médicale de leur enfant et de '
+    + 'l’administration des médicaments prescrits par le médecin.</li>'
+    + '<li>L’administration des médicaments en crèche est faite par le personnel, sur délégation '
+    + 'écrite du (des) parent(s) et sous condition de fournir l’ordonnance en lien avec le '
+    + 'traitement.</li></ul>'
+    + 'L’ordonnance doit comporter de manière précise et lisible : nom ET prénom de l’enfant, date '
+    + 'de prescription, nom complet du médicament (mention et nom lisible du générique le cas '
+    + 'échéant), posologie précise (quantité, nombre de prises…), durée du traitement.<br><br>'
+    + '<b>Réglementation concernant les appareillages</b><br>'
+    + 'Dans l’intérêt de l’enfant, tout appareillage médical ou paramédical (attelle, casque, '
+    + 'plâtre…) doit faire l’objet d’une prescription médicale précise et détaillée, réévaluée par '
+    + 'le médecin si besoin.<br><br>'
+    + '<b>Les bijoux sont INTERDITS (collier d’ambre inclus).</b></div>'
+    + '<div class="ftw"><table class="ft">'
+    + '<tr><th style="width:50%">Produits d’hygiène — produits neufs et fermés, avec date limite '
+    + 'd’utilisation optimale</th><th>Médicaments avec ordonnance — même ceux obtenus sans '
+    + 'prescription médicale, et autorisation parentale d’administrer</th></tr>'
+    + RM_TABLE.map(r=>'<tr><td>'+esc(r[0])+'</td><td>'+esc(r[1])+'</td></tr>').join('')
+    + '</table></div>'
+
+    + '<h3 class="sec">Engagement</h3>'
+    + '<div class="grid2">'
+    + champ('Crèche',selHtml('rm_creche',KK_CRECHES,v.rm_creche||ENFANT.creche_nom||''))
+    + champ('Date',inHtml('rm_date',v.rm_date||auj(),'date'))+'</div>'
+    + '<div class="grid2">'
+    + champ('Je soussigné(e)',inHtml('rm_nom',v.rm_nom))
+    + champ('Parent de l’enfant',inHtml('rm_enfant',v.rm_enfant||nomEnfant()))+'</div>'
+    + '<p class="hint">Déclare avoir pris connaissance du règlement de fonctionnement et m’engage '
+    + 'à en respecter les règles.</p>'
+    + sigHtml('parent1','Signature du parent')
+ }
+
+};
+
+/* ------------------------------------------------------------- SIGNATURES */
+
+function sigHtml(role,label){
+  return '<div class="sig" id="sig_'+role+'"><div class="lbl">'+esc(label)+'</div>'
+    +'<div id="sigc_'+role+'"></div>'
+    +'<button class="btn btn-g" onclick="effacerSig(\''+role+'\')"><i class="ti ti-eraser"></i> Effacer</button>'
+    +'</div>';
+}
+
+function rolesPresents(){
+  return [...document.querySelectorAll('.sig')].map(e=>e.id.replace('sig_',''));
+}
+
+function montrerSignatures(){rolesPresents().forEach(monterPad);}
+function figerSignatures(){
+  rolesPresents().forEach(role=>{
+    const host=document.getElementById('sigc_'+role);
+    if(!host)return;
+    host.innerHTML=SIGS[role]
+      ? '<img src="'+SIGS[role]+'" alt="Signature">'
+      : '<div class="txtbox" style="margin:0">Non signé.</div>';
+    const b=host.parentNode.querySelector('.btn');if(b)b.remove();
+  });
+}
+
+/* Longueur minimale de tracé (px) pour qu'un geste compte comme signature :
+   un effleurement accidentel ne doit pas verrouiller le document. */
+const SIG_MIN=24;
+
+function monterPad(role){
+  const host=document.getElementById('sigc_'+role);
+  if(!host)return;
+  if(SIGS[role]){
+    host.innerHTML='<img src="'+SIGS[role]+'" alt="Signature">';
+    return;
+  }
+  host.innerHTML='<canvas></canvas>';
+  const c=host.querySelector('canvas');
+  const r=c.getBoundingClientRect();
+  c.width=r.width*2;c.height=r.height*2;
+  const ctx=c.getContext('2d');ctx.scale(2,2);
+  ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#2B2740';
+  let on=false,encre=0,last=null;
+  const pt=e=>{const b=c.getBoundingClientRect();const p=e.touches?e.touches[0]:e;
+    return[p.clientX-b.left,p.clientY-b.top];};
+  const dn=e=>{e.preventDefault();on=true;const[x,y]=pt(e);last=[x,y];ctx.beginPath();ctx.moveTo(x,y);};
+  const mv=e=>{if(!on)return;e.preventDefault();const[x,y]=pt(e);
+    if(last)encre+=Math.hypot(x-last[0],y-last[1]);
+    last=[x,y];ctx.lineTo(x,y);ctx.stroke();};
+  const up=()=>{
+    if(!on)return;
+    on=false;
+    if(encre<SIG_MIN){ctx.clearRect(0,0,c.width,c.height);delete SIGS[role];encre=0;last=null;return;}
+    SIGS[role]=c.toDataURL('image/png');
+  };
+  c.addEventListener('touchstart',dn,{passive:false});
+  c.addEventListener('touchmove',mv,{passive:false});
+  c.addEventListener('touchend',up);c.addEventListener('touchcancel',up);
+  c.addEventListener('mousedown',dn);c.addEventListener('mousemove',mv);
+  window.addEventListener('mouseup',up);
+}
+
+function effacerSig(role){
+  delete SIGS[role];
+  monterPad(role);
+}
+
+/* ----------------------------------------------------------- ENREGISTREMENT */
+
+function collecter(){
+  const donnees={};
+  const tpl=COURANT.template_key?TPL[COURANT.template_key]:null;
+  if(tpl){
+    tpl.fields.forEach(f=>{
+      const el=document.getElementById('ff_'+f);
+      if(!el)return;
+      donnees[f]=(el.type==='checkbox')?el.checked:el.value;
+    });
+  }else{
+    (COURANT.schema_champs||[]).forEach(c=>{
+      const el=document.getElementById('ff_'+c.key);
+      if(!el)return;
+      donnees[c.key]=c.type==='checkbox'?el.checked:el.value;
+    });
+  }
+  donnees._sigs=Object.assign({},SIGS);
+  return donnees;
+}
+
+/* Une image de signature quasi vide ne doit pas passer pour un tracé réel :
+   un PNG uniforme pèse quelques centaines de caractères, un vrai tracé bien plus. */
+const sigReelle=v=>typeof v==='string'&&v.indexOf('data:image')===0&&v.length>1500;
+
+async function enregistrer(signer){
+  const donnees=collecter();
+  const aSigne=Object.keys(SIGS).some(k=>sigReelle(SIGS[k]));
+
+  if(signer&&!aSigne)
+    return toast('Signez dans le cadre avant de valider.');
+
+  const vide=Object.keys(donnees).every(k=>k==='_sigs'||donnees[k]===''||donnees[k]===false||donnees[k]==null);
+  if(vide&&!aSigne)return toast('Rien à enregistrer pour le moment.');
+
+  const btns=[...document.querySelectorAll('.acts .btn')];
+  btns.forEach(b=>b.disabled=true);
+  try{
+    const r=await appel('save',{
+      document_id:COURANT.id,
+      donnees,
+      signer:!!signer
+    });
+    COURANT.reponse=r.reponse;
+    toast(signer?'Document signé — merci !':'Enregistré.');
+    if(signer){
+      /* Recharger : le dossier a pu passer à « complet ». */
+      const d=await appel('get');
+      DOSSIER=d.dossier;DOCS=d.documents||[];
+      renderListe();
+    }else{
+      btns.forEach(b=>b.disabled=false);
+    }
+  }catch(e){
+    btns.forEach(b=>b.disabled=false);
+    const m=(e.message||'').toLowerCase();
+    if(m.includes('expir'))toast('Ce lien a expiré. Contactez la crèche.');
+    else if(m.includes('verrou')||m.includes('signe'))toast('Ce document est déjà signé.');
+    else toast('Enregistrement impossible. Vérifiez votre connexion.');
+  }
+}
+
+boot();

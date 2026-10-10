@@ -1,0 +1,722 @@
+const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+/* Le module Formation et quiz (koalakids-app/quiz-protocoles) vit sur un
+   projet Supabase distinct, sans lien de compte avec celui-ci : on ne peut
+   donc pas s'y authentifier, seulement l'interroger avec sa clé anonyme via
+   la fonction kk_resultats_par_ref (cf. quiz-protocoles/sql/resultats_par_ref.sql),
+   qui ne renvoie que les résultats rattachés au `ref` demandé. */
+const QUIZ_SUPABASE_URL="https://phbcqxjzobzwuzetgbem.supabase.co";
+const QUIZ_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoYmNxeGp6b2J6d3V6ZXRnYmVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1Mjg3ODMsImV4cCI6MjEwMDEwNDc4M30.Cz7_0WN_pWoXeamk484hJr2iCVdKZEatR-m_f0bKj3w";
+const sbQuiz=supabase.createClient(QUIZ_SUPABASE_URL,QUIZ_SUPABASE_ANON_KEY);
+const QUIZ_APP_URL="https://koalakids-app.github.io/quiz-protocoles/index.html";
+const FORMATIONS_APP_URL="https://koalakids-app.github.io/quiz-protocoles/formations.html";
+
+let ME=null,COLLAB=null,COLLAB_TYPE=null,semaineDate=null;
+let FERMETURES_ETAB=[],FERMETURES_RESEAU=[];
+const FERM_TYPES={vacances:'Vacances',ferie:'Jour férié',pedagogique:'Journée pédagogique'};
+// Jours de fermeture (Paramètres/Fonctionnement) : propres à la crèche du
+// compte connecté et ceux du réseau entier, pour signaler sur « Mon planning »
+// les jours où la crèche n'accueille personne. Non bloquant.
+async function loadFermetures(){
+  try{
+    const{data}=await sb.from('etablissements').select('jours_fermeture').eq('creche_id',COLLAB.creche_id).maybeSingle();
+    FERMETURES_ETAB=(data&&Array.isArray(data.jours_fermeture))?data.jours_fermeture:[];
+  }catch(e){console.warn('[loadFermetures] etablissements',e);FERMETURES_ETAB=[];}
+  try{
+    const{data}=await sb.from('reseau_config').select('config').limit(1).maybeSingle();
+    FERMETURES_RESEAU=(data&&data.config&&Array.isArray(data.config.jours_fermeture_reseau))?data.config.jours_fermeture_reseau:[];
+  }catch(e){console.warn('[loadFermetures] reseau_config',e);FERMETURES_RESEAU=[];}
+}
+function fermetureAt(dateStr){
+  if(!dateStr)return null;
+  const d=String(dateStr).slice(0,10);
+  return FERMETURES_ETAB.concat(FERMETURES_RESEAU).find(function(f){
+    return f&&f.debut&&d>=f.debut&&d<=(f.fin||f.debut);
+  })||null;
+}
+function fermetureLabel(f){
+  if(!f)return'';
+  const type=FERM_TYPES[f.type]||f.type||'Fermeture';
+  return f.label?(type+' — '+f.label):type;
+}
+const JOURS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
+
+function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function mondayOfISO(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const day=d.getDay();
+  const diff=(day===0?-6:1-day);
+  d.setDate(d.getDate()+diff);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function addDays(dateStr,n){const d=new Date(dateStr+'T00:00:00');d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function dfr(d){if(!d)return'';const p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
+function numSemaine(dateStr){const d=new Date(dateStr+'T00:00:00');const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const jour=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-jour);const debut=new Date(Date.UTC(t.getUTCFullYear(),0,1));return Math.ceil(((t-debut)/86400000+1)/7);}
+
+/* ---------- AUTH ---------- */
+/* MFA (TOTP) obligatoire, comme dans les modules direction/directrice technique
+   (demandes.html) : même portail mfaGateCheckAndProceed, imposé après le mot de
+   passe (AAL1) et avant l'accès à l'espace. */
+let JUSTE_CONNECTE=false;
+function showLogin(msg){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('setPwdView').style.display='none';
+  document.getElementById('mfaGateView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liErr').textContent=msg||'';
+}
+function showSetPassword(){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('mfaGateView').style.display='none';
+  document.getElementById('setPwdView').style.display='block';
+}
+/* Un lien d'invitation (ou de réinitialisation) Supabase revient avec
+   #access_token=...&type=invite (ou type=recovery) : sb-js détecte le hash et
+   crée une session automatiquement (detectSessionInUrl, activé par défaut),
+   mais aucun mot de passe n'a encore été choisi par la personne — sans cet
+   écran intermédiaire, elle se retrouverait connectée sans jamais en définir
+   un, donc incapable de se reconnecter ensuite. */
+function parseHashParams(){
+  const h=location.hash.startsWith('#')?location.hash.slice(1):location.hash;
+  const p=new URLSearchParams(h);
+  return{type:p.get('type'),access_token:p.get('access_token')};
+}
+const HASH_INFO=parseHashParams();
+if(HASH_INFO.access_token){JUSTE_CONNECTE=true;}
+
+/* Lien du mail (template Supabase personnalisé) au format
+   ?token_hash=...&type=invite|recovery : on vérifie nous-mêmes le token via
+   verifyOtp au moment du clic plutôt que de laisser Supabase le valider dès la
+   première requête GET — ça évite qu'un scanner de sécurité du client mail ne
+   "grille" le lien à usage unique avant que la personne n'ait cliqué dessus. */
+async function consumeTokenHashLink(){
+  const qp=new URLSearchParams(location.search);
+  const tokenHash=qp.get('token_hash'),otpType=qp.get('type');
+  if(!tokenHash||(otpType!=='recovery'&&otpType!=='invite'))return null;
+  history.replaceState(null,'',location.pathname);
+  try{
+    const{error}=await sb.auth.verifyOtp({token_hash:tokenHash,type:otpType});
+    if(error)throw error;
+    JUSTE_CONNECTE=true;
+    return otpType;
+  }catch(e){
+    console.warn('[verifyOtp]',e);
+    await sb.auth.signOut();
+    showLogin('Lien invalide ou expiré — merci de redemander un nouveau lien.');
+    return 'error';
+  }
+}
+
+async function boot(){
+  const linkResult=await consumeTokenHashLink();
+  if(linkResult==='error')return;
+  if(linkResult==='invite'||linkResult==='recovery'){showSetPassword();return;}
+  if(!JUSTE_CONNECTE){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin();return;
+  }
+  let session=null;
+  try{
+    const r=await sb.auth.getSession();
+    session=(r&&r.data&&r.data.session)||null;
+  }catch(e){session=null;}
+  if(!session||!session.user){showLogin();return;}
+  ME=session.user;
+  if(HASH_INFO.type==='invite'||HASH_INFO.type==='recovery'){
+    showSetPassword();
+    return;
+  }
+  await mfaGateCheckAndProceed();
+}
+async function loadProfileAndGrant(){
+  if(typeof kkLoginAlertCheck==='function')kkLoginAlertCheck(sb);
+  let c=null,type=null;
+  try{
+    const{data,error}=await sb.from('employes').select('*').eq('user_id',ME.id).maybeSingle();
+    if(error)throw error;
+    c=data;type='employe';
+    if(!c){
+      const{data:rd,error:rerr}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
+      if(rerr)throw rerr;
+      c=rd;type='referent';
+    }
+  }catch(e){
+    showLogin('Session expirée ou profil inaccessible — merci de vous reconnecter.');
+    return;
+  }
+  if(!c){
+    try{await sb.auth.signOut();}catch(e){}
+    showLogin('Compte non reconnu — contactez la direction.');
+    return;
+  }
+  COLLAB=c;COLLAB_TYPE=type;
+  if(window.KKBranding)KKBranding.applyBranding(sb);
+  await grantAccess();
+}
+async function doLogin(){
+  const e=val('liMail'),p=val('liPwd');
+  if(!e||!p){document.getElementById('liErr').textContent='E-mail et mot de passe requis.';return;}
+  document.getElementById('liErr').textContent='';
+  const{data,error}=await sb.auth.signInWithPassword({email:e,password:p});
+  if(error){document.getElementById('liErr').textContent='Identifiants incorrects.';return;}
+  JUSTE_CONNECTE=true;
+  ME=data.user;
+  await mfaGateCheckAndProceed();
+}
+
+/* Mémorisation de l'appareil : évite de redemander le code à chaque reconnexion
+   (déconnexion systématique à chaque ouverture, cf. plus haut) sur le même
+   navigateur, en le limitant à 24h glissantes. Stocké en localStorage (propre à
+   ce navigateur/appareil), pas en base : ne dispense donc jamais du mot de
+   passe, seulement du code à 6 chiffres. */
+const MFA_TRUST_MS=24*60*60*1000;
+function mfaTrustKey(){return 'kk_mfa_trust_'+(ME&&ME.id||'');}
+function mfaIsTrusted(){
+  try{
+    const t=Number(localStorage.getItem(mfaTrustKey())||0);
+    return t>0&&(Date.now()-t)<MFA_TRUST_MS;
+  }catch(e){return false;}
+}
+function mfaMarkTrusted(){
+  try{localStorage.setItem(mfaTrustKey(),String(Date.now()));}catch(e){}
+}
+
+/* ---------- Portail MFA obligatoire (aal2), même mécanique que demandes.html ---------- */
+async function mfaGateCheckAndProceed(){
+  try{
+    const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    if(error)throw error;
+    if(data.currentLevel==='aal2'){await loadProfileAndGrant();return;}
+    if(data.nextLevel==='aal2'){
+      if(mfaIsTrusted()){await loadProfileAndGrant();return;}
+      mfaShowChallenge();return;
+    }
+    await mfaShowEnroll();
+  }catch(e){
+    console.error('[MFA Gate]',e);
+    try{await sb.auth.signOut();}catch(e2){}
+    showLogin('Erreur de vérification de la double authentification. Réessayez.');
+  }
+}
+function mfaSwitchView(id){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('setPwdView').style.display='none';
+  document.getElementById('mfaGateView').style.display='block';
+  ['mfaChallengeView','mfaEnrollView'].forEach(v=>{
+    document.getElementById(v).style.display=(v===id?'block':'none');
+  });
+}
+function mfaShowChallenge(){
+  document.getElementById('mfaCode').value='';
+  document.getElementById('mfaChallengeErr').textContent='';
+  mfaSwitchView('mfaChallengeView');
+  setTimeout(()=>{const el=document.getElementById('mfaCode');if(el)el.focus();},100);
+}
+let MFA_FACTOR_ID=null;
+async function mfaShowEnroll(){
+  mfaSwitchView('mfaEnrollView');
+  const err=document.getElementById('mfaEnrollErr');
+  err.textContent='';
+  try{
+    const{data:existing,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const stale=(existing.all||[]).filter(f=>f.factor_type==='totp'&&f.status!=='verified');
+    for(const f of stale){
+      try{await sb.auth.mfa.unenroll({factorId:f.id});}catch(e){console.warn('Nettoyage facteur MFA périmé échoué :',e.message);}
+    }
+    const{data,error}=await sb.auth.mfa.enroll({factorType:'totp'});
+    if(error)throw error;
+    MFA_FACTOR_ID=data.id;
+    const qrEl=document.getElementById('mfaQr');
+    qrEl.innerHTML='';
+    const qr=data.totp.qr_code||'';
+    const svgMatch=qr.match(/<svg[\s\S]*<\/svg>/i);
+    if(svgMatch){
+      qrEl.innerHTML=svgMatch[0];
+      const svg=qrEl.querySelector('svg');
+      if(svg){svg.style.width='180px';svg.style.height='180px';}
+    }else{
+      const img=document.createElement('img');
+      img.alt='QR code MFA';
+      img.style.cssText='display:block;width:180px;height:180px;object-fit:contain';
+      img.src=qr;
+      qrEl.appendChild(img);
+    }
+    document.getElementById('mfaSecret').textContent=data.totp.secret;
+    document.getElementById('mfaEnrollCode').value='';
+  }catch(e){
+    console.error('[MFA enroll]',e);
+    err.textContent="Erreur lors de la préparation de l'enrôlement : "+e.message;
+  }
+}
+async function mfaVerifyChallenge(){
+  const code=val('mfaCode');
+  const err=document.getElementById('mfaChallengeErr');
+  err.textContent='';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';return;}
+  try{
+    const{data:factors,error:listError}=await sb.auth.mfa.listFactors();
+    if(listError)throw listError;
+    const verified=(factors.totp||[])[0];
+    if(!verified)throw new Error('Aucun facteur MFA vérifié trouvé sur ce compte.');
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:verified.id});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:verified.id,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    mfaMarkTrusted();
+    await loadProfileAndGrant();
+  }catch(e){
+    err.textContent='Code invalide ou expiré : '+e.message;
+  }
+}
+async function mfaConfirmEnroll(){
+  const code=val('mfaEnrollCode');
+  const err=document.getElementById('mfaEnrollErr');
+  err.textContent='';
+  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';return;}
+  if(!MFA_FACTOR_ID){err.textContent='Session d\'enrôlement expirée, réessayez.';return;}
+  try{
+    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:MFA_FACTOR_ID});
+    if(chErr)throw chErr;
+    const{error:vErr}=await sb.auth.mfa.verify({factorId:MFA_FACTOR_ID,challengeId:ch.id,code});
+    if(vErr)throw vErr;
+    MFA_FACTOR_ID=null;
+    mfaMarkTrusted();
+    await loadProfileAndGrant();
+  }catch(e){
+    err.textContent='Code invalide ou expiré : '+e.message;
+  }
+}
+async function mfaCancel(){
+  if(MFA_FACTOR_ID){try{await sb.auth.mfa.unenroll({factorId:MFA_FACTOR_ID});}catch(e){console.warn('Nettoyage annulation MFA échoué :',e.message);}}
+  MFA_FACTOR_ID=null;
+  try{await sb.auth.signOut();}catch(e){}
+  JUSTE_CONNECTE=false;
+  showLogin();
+}
+function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
+async function doLogout(){
+  try{await sb.auth.signOut();}catch(e){}
+  JUSTE_CONNECTE=false;
+  showLogin();
+}
+async function submitSetPassword(){
+  const p1=val('spPwd'),p2=val('spPwd2');
+  const err=document.getElementById('spErr');
+  err.textContent='';
+  if(p1.length<8){err.textContent='8 caractères minimum.';return;}
+  if(p1!==p2){err.textContent='Les deux mots de passe ne correspondent pas.';return;}
+  const btn=document.getElementById('spBtn');
+  btn.disabled=true;
+  const{error}=await sb.auth.updateUser({password:p1});
+  btn.disabled=false;
+  if(error){err.textContent='Erreur : '+error.message;return;}
+  HASH_INFO.type=null;
+  try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
+  toast('Mot de passe défini.');
+  await boot();
+}
+
+async function grantAccess(){
+  /* Le portail MFA (et l'écran de mot de passe) restaient affichés au-dessus de
+     « Mon espace » une fois le code validé : on les masque aussi. */
+  ['loginView','mfaGateView','setPwdView'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  document.getElementById('appView').style.display='block';
+  document.getElementById('whoAmI').textContent=COLLAB_TYPE==='referent'?(COLLAB.name||''):((COLLAB.prenom||'')+' '+(COLLAB.nom||''));
+  semaineDate=mondayOfISO(todayStr());
+  const anneeSel=document.getElementById('anneeSelect');
+  const anneeActuelle=new Date().getFullYear();
+  anneeSel.innerHTML=[anneeActuelle,anneeActuelle-1].map(a=>'<option value="'+a+'">'+a+'</option>').join('');
+  await loadFermetures();
+  populateMoisValidation();
+  await Promise.all([loadPlanning(),loadPointages(),loadCompteur(),loadFormation(),loadValidationMois()]);
+}
+
+/* ---------- PLANNING ----------------------------------------------------
+   Employé(e) : planning_equipe (import Excel, rapproché par prénom, cf.
+   RLS planning_equipe_select_self).
+   Directeur technique(e) : table planning individuelle, indexée par referent_id — pas
+   de rapprochement fragile nécessaire, elle a déjà un planning dédié. */
+async function changeSemaine(n){
+  semaineDate=addDays(semaineDate,n*7);
+  await Promise.all([loadPlanning(),loadPointages()]);
+}
+const PLANNING_LABELS={present:'Présence',presence:'Présence',absent:'Absent(e)',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement'};
+async function loadPlanning(){
+  const grid=document.getElementById('planningGrid');
+  document.getElementById('semaineLabel').textContent='Semaine du '+dfr(semaineDate)+' (S'+numSemaine(semaineDate)+')';
+  let rows,error;
+  if(COLLAB_TYPE==='referent'){
+    ({data:rows,error}=await sb.from('planning').select('*')
+      .eq('referent_id',COLLAB.id).eq('semaine',semaineDate));
+  }else{
+    ({data:rows,error}=await sb.from('planning_equipe').select('*')
+      .eq('creche_id',COLLAB.creche_id).eq('semaine',semaineDate));
+  }
+  if(error){grid.innerHTML='<p class="hint">Planning indisponible pour le moment.</p>';return;}
+  rows=rows||[];
+  grid.innerHTML=JOURS.map((nom,idx)=>{
+    const evs=rows.filter(r=>r.jour===idx);
+    const ferm=fermetureAt(addDays(semaineDate,idx));
+    let inner;
+    if(ferm){
+      inner='<div class="pempty" style="color:var(--red,#C62828);font-weight:700"><i class="ti ti-door-off"></i> '+esc(fermetureLabel(ferm))+'</div>';
+    }else if(!evs.length){
+      inner='<div class="pempty">Rien de prévu</div>';
+    }else{
+      inner=evs.map(r=>{
+        const horaire=(r.hdebut&&r.hfin)?r.hdebut+'–'+r.hfin:'';
+        const label=r.label||PLANNING_LABELS[r.type]||r.type||'';
+        return'<div class="pslot">'+esc(label)+(horaire?'<span class="h">'+esc(horaire)+'</span>':'')+'</div>';
+      }).join('');
+    }
+    return'<div class="pday"'+(ferm?' style="background:var(--red-l,#FDE8E8)"':'')+'><div class="dname">'+nom+'</div>'+inner+'</div>';
+  }).join('');
+}
+
+/* ---------- MES POINTAGES (détail journalier) ----------------------------
+   Colonne de rapprochement : employe_id pour un(e) collaborateur/trice,
+   salarie_id pour une directrice technique (cf. sql/collaborateurs_comptes.sql et
+   sql/referents_espace.sql — même distinction que pour le compteur
+   d'heures). Lecture directe, RLS déjà en place, pas de rapprochement par
+   prénom nécessaire ici (employe_id/salarie_id est fiable). */
+function pointageCol(){return COLLAB_TYPE==='referent'?'salarie_id':'employe_id';}
+function isoLocalDate(iso){const d=new Date(iso);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function heureLocale(iso){return new Date(iso).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+function dureeStr(mins){const h=Math.floor(mins/60),m=Math.round(mins%60);return h+'h'+String(m).padStart(2,'0');}
+
+async function loadPointages(){
+  const grid=document.getElementById('pointagesGrid');
+  document.getElementById('semaineLabelPt').textContent='Semaine du '+dfr(semaineDate)+' (S'+numSemaine(semaineDate)+')';
+  const finExclusive=addDays(semaineDate,7);
+  const{data,error}=await sb.from('pointages').select('action,horodatage')
+    .eq(pointageCol(),COLLAB.id)
+    .gte('horodatage',semaineDate+'T00:00:00')
+    .lt('horodatage',finExclusive+'T00:00:00')
+    .order('horodatage',{ascending:true});
+  if(error){grid.innerHTML='<p class="hint">Pointages indisponibles pour le moment.</p>';return;}
+  const rows=data||[];
+  const jours=Array.from({length:5},(_,i)=>addDays(semaineDate,i));
+  grid.innerHTML=JOURS.map((nom,idx)=>{
+    const dayRows=rows.filter(r=>isoLocalDate(r.horodatage)===jours[idx]);
+    let inner,totalMin=0;
+    if(!dayRows.length){
+      inner='<div class="pempty">Aucun pointage</div>';
+    }else{
+      const segs=[];
+      for(let i=0;i<dayRows.length;i++){
+        const r=dayRows[i];
+        if(r.action!=='arrivee')continue;
+        const next=dayRows[i+1];
+        if(next&&next.action==='depart'){
+          const mins=(new Date(next.horodatage)-new Date(r.horodatage))/60000;
+          totalMin+=mins;
+          segs.push('<div class="pslot">'+heureLocale(r.horodatage)+' → '+heureLocale(next.horodatage)+'<span class="h">'+dureeStr(mins)+'</span></div>');
+          i++;
+        }else{
+          segs.push('<div class="pslot">'+heureLocale(r.horodatage)+' → en cours</div>');
+        }
+      }
+      if(totalMin>0)segs.push('<div class="pslot" style="color:var(--green)">Total '+dureeStr(totalMin)+'</div>');
+      inner=segs.join('')||'<div class="pempty">Aucun pointage</div>';
+    }
+    return'<div class="pday"><div class="dname">'+nom+'</div>'+inner+'</div>';
+  }).join('');
+}
+
+/* Export CSV du mois contenant la semaine actuellement affichée. */
+function monthBoundsFromDate(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const first=new Date(d.getFullYear(),d.getMonth(),1);
+  const last=new Date(d.getFullYear(),d.getMonth()+1,0);
+  const fmt=x=>x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+  return{first:fmt(first),last:fmt(last)};
+}
+async function exportPointagesMois(){
+  const{first,last}=monthBoundsFromDate(semaineDate);
+  const finExclusive=addDays(last,1);
+  const{data,error}=await sb.from('pointages').select('action,horodatage')
+    .eq(pointageCol(),COLLAB.id)
+    .gte('horodatage',first+'T00:00:00')
+    .lt('horodatage',finExclusive+'T00:00:00')
+    .order('horodatage',{ascending:true});
+  if(error){toast('Export impossible : '+error.message,true);return;}
+  const rows=data||[];
+  const parJour={};
+  rows.forEach(r=>{const d=isoLocalDate(r.horodatage);(parJour[d]=parJour[d]||[]).push(r);});
+  const lignes=[['Date','Arrivée','Départ','Durée (h)']];
+  Object.keys(parJour).sort().forEach(dateStr=>{
+    const dayRows=parJour[dateStr];
+    for(let i=0;i<dayRows.length;i++){
+      const r=dayRows[i];
+      if(r.action!=='arrivee')continue;
+      const next=dayRows[i+1];
+      if(next&&next.action==='depart'){
+        const mins=(new Date(next.horodatage)-new Date(r.horodatage))/60000;
+        lignes.push([dfr(dateStr),heureLocale(r.horodatage),heureLocale(next.horodatage),(mins/60).toFixed(2).replace('.',',')]);
+        i++;
+      }else{
+        lignes.push([dfr(dateStr),heureLocale(r.horodatage),'(en cours)','']);
+      }
+    }
+  });
+  if(lignes.length===1){toast('Aucun pointage ce mois-ci.',true);return;}
+  const csv=lignes.map(l=>l.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const moisLabel=String(new Date(first+'T00:00:00').getMonth()+1).padStart(2,'0')+'-'+new Date(first+'T00:00:00').getFullYear();
+  a.href=url;a.download='pointages_'+moisLabel+'.csv';
+  document.body.appendChild(a);a.click();a.remove();
+  URL.revokeObjectURL(url);
+  toast('Export terminé.');
+}
+
+/* ---------- COMPTEUR D'HEURES SUPPLÉMENTAIRES ---------- */
+async function loadCompteur(){
+  const box=document.getElementById('counterBox');
+  const annee=Number(document.getElementById('anneeSelect').value)||new Date().getFullYear();
+  const{data,error}=await sb.rpc('kk_collaborateur_heures_annuelles',{p_annee:annee});
+  if(error){box.innerHTML='<p class="hint">Compteur indisponible : '+esc(error.message)+'</p>';return;}
+  const r=(data&&data[0])||{heures_realisees:0,heures_dues:0,solde:0};
+  const solde=Number(r.solde||0);
+  box.innerHTML=
+    '<div class="stat"><div class="n">'+Number(r.heures_realisees||0).toFixed(1)+'h</div><div class="l">Heures réalisées</div></div>'
+    +'<div class="stat"><div class="n">'+Number(r.heures_dues||0).toFixed(1)+'h</div><div class="l">Heures dues (1607h proraté)</div></div>'
+    +'<div class="stat'+(solde>0?' pos':'')+'"><div class="n">'+(solde>0?'+':'')+solde.toFixed(1)+'h</div><div class="l">'+(solde>0?'Heures supplémentaires':'Solde')+'</div></div>';
+}
+
+/* ---------- VALIDATION MENSUELLE DES HEURES (signature électronique) -----
+   En fin de mois, le/la collaborateur/trice signe pour valider le total
+   d'heures que l'application a calculé à partir de ses pointages (même
+   calcul que le compteur d'heures supplémentaires, mais mois par mois). Le
+   total est recalculé et enregistré côté serveur par kk_signer_heures_mois
+   (jamais envoyé par le client) : une fois signé, un mois est figé et ne
+   peut plus être re-signé (cf. sql/validation_heures_mensuelle.sql). */
+function moisLabel(y,m){return new Date(y,m-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});}
+function capitalize(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+function populateMoisValidation(){
+  const sel=document.getElementById('valMoisSelect');
+  const now=new Date();
+  const opts=[];
+  for(let i=1;i<=12;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    opts.push({y:d.getFullYear(),m:d.getMonth()+1});
+  }
+  sel.innerHTML=opts.map(o=>'<option value="'+o.y+'-'+o.m+'">'+esc(capitalize(moisLabel(o.y,o.m)))+'</option>').join('');
+}
+let VAL_SIG_CTX=null,VAL_SIG_TRACE=false;
+async function loadValidationMois(){
+  const box=document.getElementById('valBox');
+  const[y,m]=document.getElementById('valMoisSelect').value.split('-').map(Number);
+  box.innerHTML='<p class="hint">Chargement…</p>';
+  const{data:sig,error:errSig}=await sb.from('heures_validations_mensuelles').select('*')
+    .eq('annee',y).eq('mois',m)
+    .eq(COLLAB_TYPE==='referent'?'referent_id':'employe_id',COLLAB.id)
+    .maybeSingle();
+  if(errSig){box.innerHTML='<p class="hint">Validation indisponible pour le moment.</p>';return;}
+  if(sig){
+    box.innerHTML='<div style="display:flex;align-items:center;gap:10px;background:var(--green-l);border-radius:14px;padding:14px 16px">'
+      +'<i class="ti ti-rosette-discount-check" style="font-size:26px;color:var(--green)"></i>'
+      +'<div><div style="font-weight:800;color:#1B6B47">'+Number(sig.heures_realisees).toFixed(1)+'h validées</div>'
+      +'<div style="font-size:12.5px;color:var(--muted)">Signé par '+esc(sig.signe_par)+' le '+dfr(sig.signe_le)+'</div></div></div>';
+    return;
+  }
+  const{data:heures,error:errH}=await sb.rpc('kk_heures_realisees_mois',{p_annee:y,p_mois:m});
+  if(errH){box.innerHTML='<p class="hint">Calcul des heures indisponible : '+esc(errH.message)+'</p>';return;}
+  const nomDefaut=COLLAB_TYPE==='referent'?(COLLAB.name||''):((COLLAB.prenom||'')+' '+(COLLAB.nom||'')).trim();
+  box.innerHTML=
+    '<p style="font-size:14.5px">Total calculé à partir de vos pointages pour <b>'+esc(capitalize(moisLabel(y,m)))+'</b> : '
+    +'<b style="font-family:\'Baloo 2\',cursive;font-size:20px;color:var(--violet)">'+Number(heures||0).toFixed(1)+'h</b></p>'
+    +'<div class="f" style="margin-top:12px"><label class="lb">Votre nom et prénom</label>'
+    +'<input id="valNom" value="'+esc(nomDefaut)+'"></div>'
+    +'<label class="lb">Votre signature — tracez-la avec le doigt ou la souris</label>'
+    +'<div id="valSigBox"><canvas id="valSig"></canvas><div id="valSigHint">Signez ici</div></div>'
+    +'<button class="btn btn-g btn-sm" style="margin-top:8px" onclick="effacerValSig()">Effacer la signature</button>'
+    +'<div id="valErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px;margin-top:8px"></div>'
+    +'<button class="btn btn-p" style="margin-top:6px" id="valBtn" data-label="Valider mes heures" onclick="signerHeuresMois('+y+','+m+')"><i class="ti ti-signature"></i> Valider mes heures</button>'
+    +'<p class="hint">En validant, vous confirmez que ce total d\'heures réalisées ce mois-ci est exact. Cette validation est '
+    +'définitive : contactez la direction avant de signer en cas de désaccord.</p>';
+  initValSignature();
+}
+function initValSignature(){
+  const cv=document.getElementById('valSig');
+  if(!cv)return;
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  const r=cv.getBoundingClientRect();
+  cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);
+  VAL_SIG_CTX=cv.getContext('2d');
+  VAL_SIG_CTX.scale(dpr,dpr);
+  VAL_SIG_CTX.lineWidth=2.4;VAL_SIG_CTX.lineCap='round';VAL_SIG_CTX.lineJoin='round';VAL_SIG_CTX.strokeStyle='#2B2740';
+  VAL_SIG_TRACE=false;
+  let dessine=false;
+  const pos=ev=>{const b=cv.getBoundingClientRect();return{x:ev.clientX-b.left,y:ev.clientY-b.top};};
+  cv.addEventListener('pointerdown',ev=>{
+    ev.preventDefault();cv.setPointerCapture(ev.pointerId);
+    dessine=true;VAL_SIG_TRACE=true;
+    document.getElementById('valSigHint').style.display='none';
+    const p=pos(ev);VAL_SIG_CTX.beginPath();VAL_SIG_CTX.moveTo(p.x,p.y);
+  });
+  cv.addEventListener('pointermove',ev=>{
+    if(!dessine)return;ev.preventDefault();
+    const p=pos(ev);VAL_SIG_CTX.lineTo(p.x,p.y);VAL_SIG_CTX.stroke();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(t=>cv.addEventListener(t,()=>{dessine=false;}));
+}
+function effacerValSig(){
+  const cv=document.getElementById('valSig');
+  if(!cv||!VAL_SIG_CTX)return;
+  VAL_SIG_CTX.clearRect(0,0,cv.width,cv.height);
+  VAL_SIG_TRACE=false;
+  const hint=document.getElementById('valSigHint');
+  if(hint)hint.style.display='';
+}
+async function signerHeuresMois(y,m){
+  const err=document.getElementById('valErr');
+  err.textContent='';
+  const nom=(document.getElementById('valNom').value||'').trim();
+  if(nom.length<3){err.textContent='Merci d\'indiquer votre nom et votre prénom.';return;}
+  if(!VAL_SIG_TRACE){err.textContent='Merci de tracer votre signature dans le cadre.';return;}
+  const png=document.getElementById('valSig').toDataURL('image/png');
+  if(png.length<1500){err.textContent='La signature est trop brève — retracez-la un peu plus largement.';return;}
+  const btn=document.getElementById('valBtn');
+  btn.disabled=true;btn.textContent='Enregistrement…';
+  const{error}=await sb.rpc('kk_signer_heures_mois',{p_annee:y,p_mois:m,p_nom:nom,p_signature:png});
+  if(error){
+    err.textContent=esc(error.message||'Enregistrement impossible.');
+    btn.disabled=false;btn.textContent=btn.getAttribute('data-label');
+    return;
+  }
+  toast('Heures validées.');
+  await loadValidationMois();
+}
+
+/* ---------- MON PARCOURS DE FORMATION ---------- */
+/* L'initiative revient à la direction/directrice technique, depuis la fiche
+   collaborateur (employes.html, bouton "Envoyer") : "Mon espace" n'affiche
+   ici que ce qui a été envoyé, à faire ou déjà réalisé — jamais de libre
+   choix. Le rattachement du résultat, lui, passe par le `ref` opaque déjà
+   présent dans le lien envoyé (l'id de la fiche) : une faute de frappe sur
+   le nom côté quiz n'empêche donc jamais l'affichage ici. */
+function envoisCol(){return COLLAB_TYPE==='referent'?'referent_id':'employe_id';}
+/* Même logique que renderParcoursHtml (employes.html) : dupliquée faute de
+   module JS partagé entre les deux pages. */
+/* Une micro-formation n'est « faite » qu'après : lecture (ou quiz réussi),
+   quiz du thème réussi à SEUIL_QUIZ % minimum (s'il y en a un), puis
+   attestation « j'ai lu et compris » du/de la collaborateur/trice. Si
+   kk_modules_quiz est indisponible, rien n'est validable (on ne dégrade pas
+   la preuve). Logique dupliquée entre collaborateur.html et employes.html. */
+const SEUIL_QUIZ=80;
+function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
+  const meilleur=qid=>resultats.filter(x=>x.quiz_id===qid).reduce((m,x)=>Math.max(m,x.pourcentage),-1);
+  const lienQuizDe=(env,qid)=>{
+    try{const u=new URL(env.lien);const p=new URLSearchParams(u.search);p.delete('module');p.set('quiz',qid);return QUIZ_APP_URL+'?'+p.toString();}
+    catch(e){return env.lien;}
+  };
+  const items=envois.map(env=>{
+    if(env.kind==='quiz'){
+      const r=resultats.find(x=>x.quiz_id===env.item_id);
+      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',score:r.score,total:r.total,pourcentage:r.pourcentage}
+              :{type:'quiz',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',etape:'quiz',lien:env.lien};
+    }
+    const lu=formationsLues.find(x=>x.module_id===env.item_id);
+    const mq=modulesQuiz?modulesQuiz.find(x=>x.module_id===env.item_id):null;
+    const base={type:'formation',titre:env.item_titre,date:env.envoye_le,lien:env.lien,itemId:env.item_id,envoyeLe:env.envoye_le};
+    if(!mq)return{...base,statut:'a_faire',etape:lu?'indispo':'lire'};
+    const best=mq.quiz_id?meilleur(mq.quiz_id):-1;
+    const quizOk=!mq.quiz_id||best>=SEUIL_QUIZ;
+    if(quizOk&&env.valide_le)return{...base,statut:'fait',date:env.valide_le,quizPct:mq.quiz_id?best:null};
+    if(mq.quiz_id&&!quizOk)return lu||best>=0
+      ?{...base,statut:'a_faire',etape:'quiz',lien:lienQuizDe(env,mq.quiz_id),best}
+      :{...base,statut:'a_faire',etape:'lire'};
+    if(!lu&&!mq.quiz_id)return{...base,statut:'a_faire',etape:'lire'};
+    return{...base,statut:'a_faire',etape:'attester',quizPct:mq.quiz_id?best:null};
+  }).sort((a,b)=>(a.statut==='a_faire')-(b.statut==='a_faire')||new Date(b.date)-new Date(a.date));
+  if(!items.length)return'<p class="hint">Rien ne vous a encore été envoyé.</p>';
+  return items.map(r=>{
+    const d=new Date(r.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const icone=r.type==='quiz'?'ti-clipboard-check':'ti-book-2';
+    let droite,info='';
+    if(r.statut==='a_faire'){
+      if(r.etape==='quiz'&&r.type==='formation')info='<div style="font-size:11.5px;color:var(--muted)">Quiz à réussir ('+SEUIL_QUIZ+' % minimum)'+(r.best>=0?' — meilleur score : '+r.best+' %':'')+'</div>';
+      if(r.etape==='attester')info='<div style="font-size:11.5px;color:var(--muted)">'+(r.quizPct!=null?'Quiz réussi ('+r.quizPct+' %) — ':'')+'attestation en attente</div>';
+      if(r.etape==='indispo')info='<div style="font-size:11.5px;color:var(--muted)">Vérification du quiz indisponible pour le moment</div>';
+      const lab={lire:'Lire la formation',quiz:'Passer le quiz',indispo:'Ouvrir'}[r.etape];
+      droite=r.etape==='attester'
+        ?'<button class="btn btn-p btn-sm" style="font-size:11.5px" onclick="validerFormation(\''+r.itemId+'\')"><i class="ti ti-check"></i> J\'ai lu et compris cette formation</button>'
+        :'<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" class="btn btn-p btn-sm" style="font-size:11.5px"><i class="ti ti-player-play"></i> '+lab+'</a>';
+    }else if(r.type==='quiz'){
+      const col=r.pourcentage>=80?'var(--green)':r.pourcentage>=60?'var(--violet)':'var(--red)';
+      droite='<span style="font-weight:800;font-size:13px;color:'+col+';white-space:nowrap">'+r.score+'/'+r.total+' · '+r.pourcentage+'%</span>';
+    }else{
+      info='<div style="font-size:11.5px;color:var(--muted)">Validée le '+d+(r.quizPct!=null?' · quiz '+r.quizPct+' %':'')+'</div>';
+      droite='<span style="font-weight:700;font-size:11.5px;color:var(--green);white-space:nowrap"><i class="ti ti-check"></i> Validée</span>';
+    }
+    return'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">'
+      +'<div style="display:flex;align-items:center;gap:8px"><i class="ti '+icone+'" style="color:var(--orange);font-size:16px"></i>'
+      +'<div><div style="font-weight:700;font-size:13px">'+esc(r.titre)+'</div>'
+      +(r.statut==='fait'&&r.type==='formation'?'':'<div style="font-size:11.5px;color:var(--muted)">'+(r.statut==='a_faire'?'Envoyé le ':'')+d+'</div>')
+      +info+'</div></div>'+droite+'</div>';
+  }).join('');
+}
+/* Envois faits depuis l'écran « Envoyer par mail » de l'admin du quiz
+   (table envois_quiz, projet quiz) : lus par le `ref` de la fiche, via la
+   fonction kk_envois_par_ref (cf. docs/quiz-envoi/envois_par_ref.sql). Si elle
+   n'existe pas encore ou échoue, le parcours s'affiche sans ces envois. */
+async function envoisDepuisAdminQuiz(){
+  try{
+    const{data,error}=await sbQuiz.rpc('kk_envois_par_ref',{p_ref:COLLAB.id});
+    if(error)return[];
+    const statut='Salarié(e) en poste';
+    const prenom=COLLAB_TYPE==='referent'?String(COLLAB.name||'').split(/\s+/)[0]:(COLLAB.prenom||'');
+    const nom=COLLAB_TYPE==='referent'?String(COLLAB.name||'').split(/\s+/).slice(1).join(' '):(COLLAB.nom||'');
+    return(data||[]).map(e=>{
+      const params=new URLSearchParams({ref:COLLAB.id,prenom,nom,statut});
+      params.set(e.kind==='quiz'?'quiz':'module',e.item_id);
+      return{kind:e.kind,item_id:e.item_id,item_titre:e.item_titre,envoye_le:e.envoye_le,
+        lien:(e.kind==='quiz'?QUIZ_APP_URL:FORMATIONS_APP_URL)+'?'+params.toString()};
+    });
+  }catch(e){return[];}
+}
+let PARCOURS_ENVOIS=[];
+async function validerFormation(itemId){
+  if(!confirm('Confirmez-vous avoir lu et compris cette formation ?'))return;
+  const env=PARCOURS_ENVOIS.find(x=>x.kind==='module'&&x.item_id===itemId);
+  if(!env){toast('Formation introuvable, rechargez la page.',true);return;}
+  const{error}=await sb.rpc('valider_formation',{p_item_id:itemId,p_titre:env.item_titre,p_lien:env.lien,p_envoye_le:env.envoye_le});
+  if(error){toast('Échec de la validation : '+error.message,true);return;}
+  toast('Formation validée.');
+  await loadFormation();
+}
+async function loadFormation(){
+  const box=document.getElementById('formationBox');
+  box.innerHTML='<p class="hint">Chargement…</p>';
+  try{
+    const[envois,qz,md,admin]=await Promise.all([
+      sb.from('formations_envois').select('*').eq(envoisCol(),COLLAB.id).order('envoye_le',{ascending:false}),
+      sbQuiz.rpc('kk_resultats_par_ref',{p_ref:COLLAB.id}),
+      sbQuiz.rpc('kk_formations_par_ref',{p_ref:COLLAB.id}),
+      envoisDepuisAdminQuiz()
+    ]);
+    if(envois.error)throw envois.error;
+    if(qz.error)throw qz.error;
+    if(md.error)throw md.error;
+    const vus=new Set((envois.data||[]).map(e=>e.kind+':'+e.item_id));
+    const tous=[...(envois.data||[]),...admin.filter(e=>!vus.has(e.kind+':'+e.item_id))];
+    PARCOURS_ENVOIS=tous;
+    const ids=tous.filter(x=>x.kind==='module').map(x=>x.item_id);
+    let mq=null;
+    if(ids.length){const r=await sbQuiz.rpc('kk_modules_quiz',{p_ids:ids});if(!r.error)mq=r.data||[];}else mq=[];
+    box.innerHTML=renderParcoursHtml(tous,qz.data||[],md.data||[],mq);
+  }catch(e){
+    box.innerHTML='<p class="hint">Parcours de formation indisponible pour le moment.</p>';
+  }
+}
+
+boot();
