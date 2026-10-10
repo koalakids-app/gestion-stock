@@ -85,6 +85,9 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .stat.on{border-color:var(--orange);background:var(--orange-l)}
 .stat .n{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);line-height:1.1}
 .stat .l{font-size:11px;font-weight:700;color:var(--muted)}
+.stat .d{font-size:10.5px;font-weight:600;color:var(--muted);opacity:.85;line-height:1.3}
+.stat .s{font-size:10.5px;font-weight:800;color:var(--orange);margin-top:3px}
+.statscap{font-size:12px;color:var(--muted);margin:0 0 6px;line-height:1.5}
 .card{background:#fff;border:2px solid var(--line);border-radius:18px;padding:13px 15px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;cursor:pointer}
 .card:hover{border-color:#DED6EE}
 .card .av{width:42px;height:42px;border-radius:14px;background:var(--violet-l);color:var(--violet);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
@@ -263,6 +266,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 
   <div class="wrap">
     <div id="dash"></div>
+    <p class="statscap" id="statsCap"></p>
     <div class="stats" id="stats"></div>
 
     <div class="bar">
@@ -1925,14 +1929,29 @@ function render(){
   // sinon cliquer un statut ferait tomber tous les autres à zéro.
   renderDash();
   const box=document.getElementById('stats');
+  /* Ce que dit chaque compteur, en clair : un chiffre seul ne dit ni de quel
+     statut il parle, ni sur quelles crèches il porte. */
+  const AIDE_STATUT={
+    nouvelle:'sans devis envoyé',en_contact:'famille contactée',devis_envoye:'réponse attendue',
+    accepte:'contrat à établir',inscrit:'contrat signé, fiche créée',refuse:'refusée par la famille',
+    sans_suite:'clôturées, plus de suite'};
+  const dansCreche=p=>crecheDe(p)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0;
+  const sousLigne=n=>cre?'<div class="s">dont '+n+' ici</div>':'';
+  const nomCre=cre?(nomCreche(cre)||'cette crèche'):'';
+  document.getElementById('statsCap').innerHTML='<b>Nombre de demandes par statut, toutes crèches confondues.</b> '
+    +'Cliquez sur un statut pour filtrer la liste.'
+    +(cre?' <span style="color:var(--orange);font-weight:700">« dont N ici » = '+esc(nomCre)+', la crèche choisie dans le filtre.</span>':'');
   box.innerHTML=
-    '<div class="stat'+(filtreStatut==='__tous__'?' on':'')+'" onclick="setStatut(\'__tous__\')">'
-    +'<div class="n">'+PRE.length+'</div><div class="l">Tous</div></div>'
+    '<div class="stat'+(filtreStatut==='__tous__'?' on':'')+'" onclick="setStatut(\'__tous__\')" title="Toutes les demandes, tous statuts et toutes crèches">'
+    +'<div class="n">'+PRE.length+'</div><div class="l">Toutes les demandes</div>'
+    +'<div class="d">tous statuts</div>'+sousLigne(cre?PRE.filter(dansCreche).length:0)+'</div>'
     +ORDRE_STATUTS.map(s=>{
       const n=PRE.filter(p=>p.statut===s).length;
       if(!n&&s!=='nouvelle'&&filtreStatut!==s)return '';
-      return '<div class="stat'+(filtreStatut===s?' on':'')+'" onclick="setStatut(\''+s+'\')">'
-        +'<div class="n">'+n+'</div><div class="l">'+esc(STATUTS[s].l)+'</div></div>';
+      return '<div class="stat'+(filtreStatut===s?' on':'')+'" onclick="setStatut(\''+s+'\')" title="'+esc(STATUTS[s].l+' — '+AIDE_STATUT[s]+' (toutes crèches)')+'">'
+        +'<div class="n">'+n+'</div><div class="l">'+esc(STATUTS[s].l)+'</div>'
+        +'<div class="d">'+esc(AIDE_STATUT[s]||'')+'</div>'
+        +sousLigne(cre?PRE.filter(p=>p.statut===s&&dansCreche(p)).length:0)+'</div>';
     }).join('');
 
   const nR=PRE.filter(estARelancer).length;
