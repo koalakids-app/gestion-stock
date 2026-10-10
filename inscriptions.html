@@ -1724,6 +1724,10 @@ function aRelanceAvenir(p){
 function aVisitePrevue(p){
   return !!p.date_visite&&!p.visite_effectuee&&STATUTS_CLOS.indexOf(p.statut)<0;
 }
+/* Visite réalisée : date fixée et cochée « effectuée », quel que soit le statut du dossier. */
+function aVisiteFaite(p){
+  return !!p.date_visite&&!!p.visite_effectuee;
+}
 function setStatut(s){filtreStatut=(filtreStatut===s?'':s);filtreRappels=filtreRelancesAVenir=filtreVisites=false;render();}
 function toggleRappels(){filtreRappels=!filtreRappels;filtreRelancesAVenir=filtreVisites=false;if(filtreRappels)filtreStatut='';render();}
 function toggleRelancesAVenir(){filtreRelancesAVenir=!filtreRelancesAVenir;filtreRappels=filtreVisites=false;if(filtreRelancesAVenir)filtreStatut='';render();}
@@ -1747,6 +1751,7 @@ function renderDash(){
   const enCours=L.filter(p=>STATUTS_EN_COURS.indexOf(p.statut)>=0);
   const nRel=L.filter(estARelancer).length;
   const nVis=L.filter(aVisitePrevue).length;
+  const nVisF=L.filter(aVisiteFaite).length;
   const nIns=L.filter(p=>p.statut==='inscrit').length;
   const refus=L.filter(p=>p.statut==='refuse'||p.statut==='sans_suite');
   const clos=nIns+refus.length;
@@ -1760,6 +1765,7 @@ function renderDash(){
     +kpi(enCours.length,'devis en cours','var(--orange-l)','var(--orange)',false,"setStatut('')")
     +kpi(nRel,'relance'+(nRel>1?'s':'')+' en retard','var(--amber-l)','var(--amber)',filtreRappels,'toggleRappels()')
     +kpi(nVis,'visite'+(nVis>1?'s':'')+' prévue'+(nVis>1?'s':''),'var(--violet-l)','var(--violet)',filtreVisites,'toggleVisites()')
+    +kpi(nVisF,'visite'+(nVisF>1?'s':'')+' réalisée'+(nVisF>1?'s':''),'var(--green-l)','var(--green)',false,'')
     +kpi(nIns,'inscrit'+(nIns>1?'s':'')+' (devis signés)','var(--green-l)','var(--green)',filtreStatut==='inscrit',"setStatut('inscrit')")
     +kpi(refus.length,'refus / sans suite','var(--red-l)','var(--red)',filtreStatut==='refuse',"setStatut('refuse')")
     +(taux!=null?kpi(taux+' %','taux de transformation','#F1EFF7','#4a4560',false,''):'')
@@ -1769,18 +1775,18 @@ function renderDash(){
   const ids=CRECHES.map(c=>String(c.id));
   if(PRE.some(p=>!crecheDe(p)))ids.push('');
   const cell=(n,bg,fg)=>n?'<span class="pill" style="background:'+bg+';color:'+fg+'">'+n+'</span>':'<span class="z">0</span>';
-  h+='<div class="dsec">Par crèche</div><table class="dtab"><tr><th>Crèche</th><th>Devis en cours</th><th>Relances en retard</th><th>Visites prévues</th><th>Inscrits</th><th>Refus</th></tr>'
+  h+='<div class="dsec">Par crèche</div><table class="dtab"><tr><th>Crèche</th><th>Devis en cours</th><th>Relances en retard</th><th>Visites prévues</th><th>Visites réalisées</th><th>Inscrits</th><th>Refus</th></tr>'
     +ids.map(id=>{
       const l=PRE.filter(p=>crecheDe(p)===id);
       const a=l.filter(p=>STATUTS_EN_COURS.indexOf(p.statut)>=0).length,
-            b=l.filter(estARelancer).length,c=l.filter(aVisitePrevue).length,
+            b=l.filter(estARelancer).length,c=l.filter(aVisitePrevue).length,vf=l.filter(aVisiteFaite).length,
             d=l.filter(p=>p.statut==='inscrit').length,
             e=l.filter(p=>p.statut==='refuse'||p.statut==='sans_suite').length;
-      if(!id&&!(a+b+c+d+e))return '';
+      if(!id&&!(a+b+c+vf+d+e))return '';
       return '<tr class="'+(id?'cl':'')+(id&&cre===id?' on':'')+'"'+(id?' onclick="filtrerCreche(\''+id+'\')"':'')+'>'
         +'<td>'+(id?esc(nomCreche(id)):'<i style="color:var(--muted)">Crèche à définir</i>')+'</td>'
         +'<td>'+cell(a,'var(--orange-l)','var(--orange)')+'</td><td>'+cell(b,'var(--amber-l)','var(--amber)')+'</td>'
-        +'<td>'+cell(c,'var(--violet-l)','var(--violet)')+'</td><td>'+cell(d,'var(--green-l)','var(--green)')+'</td>'
+        +'<td>'+cell(c,'var(--violet-l)','var(--violet)')+'</td><td>'+cell(vf,'var(--green-l)','var(--green)')+'</td><td>'+cell(d,'var(--green-l)','var(--green)')+'</td>'
         +'<td>'+cell(e,'var(--red-l)','var(--red)')+'</td></tr>';
     }).join('')+'</table>';
 
