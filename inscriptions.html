@@ -2133,6 +2133,7 @@ function render(){
      reste entière — devis, dates, origine — et se retrouve en cliquant sur le
      compteur « Inscrit ». */
   if(!filtreStatut){if(!filtreRappels&&!filtreRelancesAVenir&&!filtreVisites&&!filtreVisitesFaites)l=l.filter(p=>p.statut!=='inscrit');}
+  else if(filtreStatut==='__perdus__')l=l.filter(p=>p.statut==='refuse'||p.statut==='sans_suite');
   else if(filtreStatut!=='__tous__')l=l.filter(p=>p.statut===filtreStatut);
   if(cre)l=l.filter(p=>String(p.creche_id)===cre||toArr(p.creches_souhaitees).map(String).indexOf(cre)>=0);
   /* Le filtre doit montrer exactement ce que compte la tuile « relances en
@@ -2294,7 +2295,7 @@ function renderDash(){
     +kpi(nVis,'visite'+(nVis>1?'s':'')+' prévue'+(nVis>1?'s':''),'var(--violet-l)','var(--violet)',filtreVisites,'toggleVisites()')
     +kpi(nVisF,'visite'+(nVisF>1?'s':'')+' réalisée'+(nVisF>1?'s':''),'var(--green-l)','var(--green)',filtreVisitesFaites,'toggleVisitesFaites()')
     +kpi(nIns,'inscrit'+(nIns>1?'s':'')+' (devis signés)','var(--green-l)','var(--green)',filtreStatut==='inscrit',"setStatut('inscrit')")
-    +kpi(refus.length,'refus / sans suite','var(--red-l)','var(--red)',filtreStatut==='refuse',"setStatut('refuse')")
+    +kpi(refus.length,'refus / sans suite','var(--red-l)','var(--red)',filtreStatut==='__perdus__',"setStatut('__perdus__')")
     +(taux!=null?kpi(taux+' %','taux de transformation','#F1EFF7','#4a4560',false,''):'')
     +'</div><div class="dgrid"><div>';
 
