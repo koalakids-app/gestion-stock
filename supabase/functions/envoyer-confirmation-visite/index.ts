@@ -122,8 +122,13 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
 
 function corpsHtml(o: {
   enfant: string; creche: string; adresse: string; date: string; heure: string;
-  telephone: string; enseigne: string; logoUrl?: string;
+  telephone: string; enseigne: string; logoUrl?: string; message?: string;
 }) {
+  // Un message personnalisé (modifié par la direction avant l'envoi) remplace
+  // la phrase d'intro, jamais le récapitulatif date / heure / crèche / adresse.
+  const intro = o.message
+    ? esc(o.message).replace(/\n/g, '<br>')
+    : `Nous confirmons la visite de la crèche pour <b>${esc(o.enfant)}</b>.`;
   const logoUrl = o.logoUrl || 'https://koalakids-app.github.io/gestion-stock/logo-koalakids.png';
   return `<!doctype html><html lang="fr"><body style="margin:0;background:#F7F6FC;padding:24px 12px;
     font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#2B2740;line-height:1.6">
@@ -146,7 +151,7 @@ function corpsHtml(o: {
       <div style="padding:24px">
         <p style="margin:0 0 16px;font-size:15px">Bonjour,</p>
         <p style="margin:0 0 18px;font-size:15px">
-          Nous confirmons la visite de la crèche pour <b>${esc(o.enfant)}</b>.
+          ${intro}
         </p>
         <table style="width:100%;border-collapse:collapse;margin:0 0 20px;
           border-top:1px solid #E3E1EF;border-bottom:1px solid #E3E1EF;padding:8px 0">
@@ -182,7 +187,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { preinscription_id, expediteur } = await req.json();
+    const { preinscription_id, expediteur, objet, message } = await req.json();
+    // Vide = texte par défaut, jamais un mail à l'objet blanc.
+    const objetPerso = typeof objet === 'string' && objet.trim() ? objet.trim() : null;
+    const messagePerso = typeof message === 'string' && message.trim() ? message.trim() : null;
     if (!preinscription_id) return json({ erreur: 'Préinscription manquante' }, 400);
 
     const { data: pre } = await sb.from('preinscriptions')
@@ -222,7 +230,7 @@ Deno.serve(async (req) => {
     try {
       await sendEmail(
         adresses,
-        `Confirmation de votre visite — ${prenom}`,
+        objetPerso || `Confirmation de votre visite — ${prenom}`,
         corpsHtml({
           enfant,
           creche,
@@ -232,6 +240,7 @@ Deno.serve(async (req) => {
           telephone: String(etab.telephone || ''),
           enseigne,
           logoUrl,
+          message: messagePerso || undefined,
         }),
         expediteur,
         enseigne,
