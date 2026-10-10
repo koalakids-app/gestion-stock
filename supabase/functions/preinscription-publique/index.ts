@@ -422,7 +422,7 @@ async function action_envoyer(p: any) {
        <p style="margin:0 0 8px;font-size:15px">Accueil souhaité : ${esc(semaine)}, de ${esc(s.heure_debut)} à ${esc(s.heure_fin)}.
        Voici une <b>estimation</b> de la facturation mensuelle :</p>${tableauDevis(c)}
        <p style="margin:0;font-size:13px;color:#78748C">Estimation indicative, non contractuelle. Le devis définitif vous sera envoyé par la direction. Le CMG est calculé par la CAF, seule habilitée à en fixer le montant.</p>`
-    ).catch(err => console.error('[preinscription] mail famille', err));
+    ), orgNom).catch(err => console.error('[preinscription] mail famille', err));
 
     const dest = txt(c.etab?.email, 160);
     const aDirection = dest && MAIL.test(dest)
