@@ -3,7 +3,7 @@
 
    Comptes rendus rédigés par les directeurs/trices techniques pour leur
    propre crèche (réunion d'équipe, famille, partenaire, PMI…). Distinct du
-   suivi des réunions de direction (js/reunions-direction.js, tables
+   suivi des réunions de direction (js/reunions-direction/, tables
    actions_direction / reunions_direction) : on n'y touche pas ici.
 
    Un compte rendu est un brouillon modifiable jusqu'à sa validation. Une
