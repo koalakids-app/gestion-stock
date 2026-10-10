@@ -253,6 +253,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <button class="tbtn" id="btnActualiser" onclick="actualiser(false)" title="Recharger la liste des demandes"><i class="ti ti-refresh"></i><span>Actualiser</span></button>
     <button class="tbtn" onclick="openImportPdf()" title="Importer une liste de préinscriptions (PDF)"><i class="ti ti-file-upload"></i><span>Importer PDF</span></button>
     <button class="tbtn danger" onclick="openSupprGroupe()" title="Supprimer un import en groupe"><i class="ti ti-trash-x"></i><span>Suppr. import</span></button>
+    <button class="tbtn" onclick="openCloture()" title="Clôturer les demandes dont le début d'accueil est dépassé"><i class="ti ti-archive"></i><span>Clôturer</span></button>
     <a class="tbtn" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i><span>Accueil</span></a>
     <a class="tbtn" href="contrats.html" title="Aller aux contrats"><i class="ti ti-file-certificate"></i><span>Contrats</span></a>
     <button class="tbtn" onclick="openHisto()" title="Historique des demandes"><i class="ti ti-history"></i><span>Historique</span></button>
@@ -621,6 +622,34 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div class="acts">
       <button class="btn btn-g" onclick="closeOv('ovSupprGroupe')">Fermer</button>
       <button class="btn btn-d" id="btnSgGo" style="display:none" onclick="supprimerSelectionGroupee()"><i class="ti ti-trash"></i> Supprimer la sélection</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLÔTURE DES DEMANDES PÉRIMÉES -->
+<div class="ov" id="ovCloture">
+  <div class="md" style="max-width:900px">
+    <h3><i class="ti ti-archive"></i> Clôturer les demandes périmées</h3>
+    <p class="hint">Liste les demandes encore ouvertes (« Nouvelle » ou « En contact ») dont la <b>date d'entrée souhaitée est
+      antérieure</b> à la date choisie. Les cochées passent en <b>« Sans suite »</b> : elles sortent de la file active mais
+      restent consultables et comptées dans l'historique — rien n'est supprimé. Une demande qui a un devis, un contrat ou
+      une fiche enfant n'est jamais proposée ici.</p>
+    <div class="bar">
+      <select id="clCreche" style="width:auto;min-width:170px"><option value="">Toutes les crèches</option></select>
+      <div class="f" style="margin:0"><label class="lb">Date d'entrée souhaitée avant le</label><input type="date" id="clAvant"></div>
+      <div class="f" style="margin:0;min-width:170px"><label class="lb">Motif</label><select id="clMotif"></select></div>
+      <button class="btn btn-s" onclick="rechercherCloture()"><i class="ti ti-search"></i> Rechercher</button>
+    </div>
+    <p class="hint" id="clStatut"></p>
+    <div id="clBar" class="bar" style="display:none">
+      <button class="btn btn-s btn-sm" onclick="clToutCocher(true)">Tout cocher</button>
+      <button class="btn btn-s btn-sm" onclick="clToutCocher(false)">Tout décocher</button>
+      <span class="hint" style="margin:0" id="clCompte"></span>
+    </div>
+    <div id="clListe" style="max-height:50vh;overflow:auto"></div>
+    <div class="acts">
+      <button class="btn btn-g" onclick="closeOv('ovCloture')">Fermer</button>
+      <button class="btn btn-p" id="btnClGo" style="display:none" onclick="cloturerSelection()"><i class="ti ti-archive"></i> Passer la sélection en « Sans suite »</button>
     </div>
   </div>
 </div>
@@ -1460,6 +1489,124 @@ async function supprimerSelectionGroupee(){
   render();
   toast(ok+' demande(s) supprimée(s)'+(ko?', '+ko+' échec(s)':''),!!ko&&!ok);
   rechercherSupprGroupe();
+}
+
+/* ---------- CLÔTURE DES DEMANDES PÉRIMÉES ----------
+   Une demande dont la date d'entrée souhaitée est passée n'a plus lieu d'être
+   suivie, mais la supprimer effacerait aussi ses devis et l'historique de la
+   famille. On la passe donc en « Sans suite » : réversible, et elle reste
+   comptée. Seules les demandes encore ouvertes et sans devis ni contrat sont
+   proposées : un dossier en cours ne se clôture pas en bloc sur une date. */
+let CL_RESULTATS=[];
+const CL_STATUTS_OUVERTS=['nouvelle','en_contact'];
+
+function openCloture(){
+  document.getElementById('clCreche').innerHTML='<option value="">Toutes les crèches</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  document.getElementById('clMotif').innerHTML=Object.keys(MOTIFS_REFUS).map(k=>
+    '<option value="'+k+'"'+(k==='ne_repond_plus'?' selected':'')+'>'+esc(MOTIFS_REFUS[k])+'</option>').join('');
+  setVal('clAvant',auj());
+  document.getElementById('clStatut').textContent='';
+  document.getElementById('clBar').style.display='none';
+  document.getElementById('clListe').innerHTML='';
+  document.getElementById('btnClGo').style.display='none';
+  CL_RESULTATS=[];
+  openOv('ovCloture');
+}
+
+async function rechercherCloture(){
+  const cre=val('clCreche'),avant=val('clAvant');
+  const statut=document.getElementById('clStatut');
+  if(!avant){toast('Choisissez la date limite.',true);return;}
+  statut.textContent='Recherche…';
+  /* Les demandes qui portent un devis ou un contrat sont écartées : on les lit
+     en base plutôt que de se fier à la liste chargée, qui ne les contient pas. */
+  const occupees={};
+  try{
+    const[d,c]=await Promise.all([
+      sb.from('devis').select('preinscription_id'),
+      sb.from('contrats').select('preinscription_id')
+    ]);
+    if(d.error)throw d.error;
+    if(c.error)throw c.error;
+    (d.data||[]).concat(c.data||[]).forEach(x=>{if(x.preinscription_id)occupees[String(x.preinscription_id)]=1;});
+  }catch(e){
+    console.error('[rechercherCloture]',e);
+    statut.textContent='Impossible de vérifier les devis et contrats : '+(e.message||'erreur inconnue');
+    return;
+  }
+  CL_RESULTATS=PRE.filter(p=>{
+    if(p.enfant_id)return false;
+    if(CL_STATUTS_OUVERTS.indexOf(p.statut)<0)return false;
+    if(occupees[String(p.id)])return false;
+    if(!p.date_entree_souhaitee)return false;       // sans date : rien ne dit qu'elle est périmée
+    if(String(p.date_entree_souhaitee).slice(0,10)>=avant)return false;
+    if(cre&&toArr(p.creches_souhaitees).map(String).indexOf(cre)<0&&String(p.creche_id)!==cre)return false;
+    return true;
+  }).sort((a,b)=>String(a.date_entree_souhaitee).localeCompare(String(b.date_entree_souhaitee)))
+    .map(p=>({p,inclus:true}));
+  if(!CL_RESULTATS.length){
+    statut.textContent='Aucune demande périmée ne correspond à ces critères.';
+    document.getElementById('clBar').style.display='none';
+    document.getElementById('clListe').innerHTML='';
+    document.getElementById('btnClGo').style.display='none';
+    return;
+  }
+  statut.textContent=CL_RESULTATS.length+' demande(s) périmée(s) trouvée(s). Décochez celles à garder ouvertes.';
+  document.getElementById('clBar').style.display='';
+  document.getElementById('btnClGo').style.display='';
+  renderClListe();
+}
+
+function renderClListe(){
+  document.getElementById('clListe').innerHTML=CL_RESULTATS.map((r,i)=>{
+    const p=r.p;
+    const nom=((p.prenom||'')+' '+(p.nom||'')).trim()||'Sans nom';
+    const cr=toArr(p.creches_souhaitees).map(nomCreche).filter(Boolean).join(' · ')||'crèche non précisée';
+    return '<div class="hl"><div class="t">'
+      +'<input type="checkbox" '+(r.inclus?'checked':'')+' onchange="clToggle('+i+',this.checked)">'
+      +'<span class="n">'+esc(nom)+'</span><span class="c">entrée souhaitée le '+dfr(p.date_entree_souhaitee)
+      +' · '+esc(STATUTS[p.statut]?STATUTS[p.statut].l:p.statut)+' · '+esc(cr)+'</span></div></div>';
+  }).join('');
+  clMajCompte();
+}
+function clToggle(i,v){CL_RESULTATS[i].inclus=v;clMajCompte();}
+function clToutCocher(v){CL_RESULTATS.forEach(r=>r.inclus=v);renderClListe();}
+function clMajCompte(){
+  const n=CL_RESULTATS.filter(r=>r.inclus).length;
+  document.getElementById('clCompte').textContent=n+' / '+CL_RESULTATS.length+' sélectionnée(s)';
+}
+
+async function cloturerSelection(){
+  const aFaire=CL_RESULTATS.filter(r=>r.inclus);
+  if(!aFaire.length){toast('Aucune demande sélectionnée.',true);return;}
+  const motif=val('clMotif')||'ne_repond_plus';
+  if(!confirm('Passer '+aFaire.length+' demande(s) en « Sans suite » (motif : '+(MOTIFS_REFUS[motif]||motif)+') ? '
+    +'Elles sortent de la file active mais restent consultables.'))return;
+  const btn=document.getElementById('btnClGo');
+  btn.disabled=true;
+  const trace='Clôturée le '+dfr(auj())+' : date d\'entrée souhaitée dépassée.';
+  let ok=0,ko=0;
+  for(const r of aFaire){
+    try{
+      const notes=(r.p.notes_internes?r.p.notes_internes+'\n':'')+trace;
+      /* `.in('statut', …)` : si quelqu'un a fait avancer la demande entre-temps
+         (devis, contact), on ne la clôture pas par-dessus. */
+      const{data,error}=await sb.from('preinscriptions')
+        .update({statut:'sans_suite',motif_refus:motif,notes_internes:notes})
+        .eq('id',r.p.id).in('statut',CL_STATUTS_OUVERTS).is('enfant_id',null).select();
+      if(error)throw error;
+      if(!data||!data.length)throw new Error('demande modifiée entre-temps');
+      Object.assign(r.p,data[0]);
+      ok++;
+    }catch(e){
+      console.error('[cloturerSelection]',e);ko++;
+    }
+  }
+  btn.disabled=false;
+  render();
+  toast(ok+' demande(s) passée(s) en « Sans suite »'+(ko?', '+ko+' non modifiée(s)':'')+' ✅',!!ko&&!ok);
+  rechercherCloture();
 }
 
 /* Date locale, jamais toISOString() : en UTC+2 celui-ci renvoie la veille pour
