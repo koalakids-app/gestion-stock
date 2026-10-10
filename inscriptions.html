@@ -445,6 +445,11 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div id="dFraisBox"></div>
     <p class="hint" id="dFraisHint"></p>
 
+    <div class="sec">Remise ou ajustement sur mesure</div>
+    <div id="dAjustBox"></div>
+    <button type="button" class="btn btn-s" id="btnAddAjust" onclick="ajustAjoute()"><i class="ti ti-plus"></i> Ajouter une remise</button>
+    <p class="hint">Pour un cas qui n'est pas dans la grille — berceau d'entreprise, geste commercial, fratrie. Une remise en % s'applique à la mensualité calculée avant ces lignes.</p>
+
     <div class="sec">Le détail chiffré</div>
     <div id="dLignes"></div>
 
@@ -2117,6 +2122,8 @@ async function delParent(){
    ne les touche plus. C'est la raison d'etre de devis_lignes : sans elle, une
    hausse de tarif reecrirait retroactivement des devis deja envoyes. */
 let DEVIS=[],devisId=null,DCUR=null,DCALC=null;
+/* Remises libres du devis en cours : {libelle,sens:'remise'|'majoration',mode:'eur'|'pct',valeur}. */
+let AJUST=[];
 /* Les semaines facturées vivent désormais sur la crèche (module Paramètres) :
    le devis les lit au lieu de proposer 47 en dur. semManuel retient que la
    direction a corrigé le nombre à la main, pour qu'un changement de crèche
@@ -2436,10 +2443,21 @@ async function openDevis(id){
 
   // Les frais cochés : ceux du devis s'il existe, sinon les « par défaut ».
   let coches=null;
+  AJUST=[];
   if(DCUR){
     try{
-      const{data}=await sb.from('devis_lignes').select('libelle').eq('devis_id',DCUR.id);
+      const{data}=await sb.from('devis_lignes').select('libelle,description,type,montant_unitaire,total').eq('devis_id',DCUR.id).order('ordre');
       coches=(data||[]).map(x=>x.libelle);
+      /* Tout ce qui n'est ni l'accueil ni un frais de la grille est une ligne
+         saisie à la main : on la remet dans l'éditeur. Un pourcentage se relit
+         dans sa description (« 10 % de la mensualité »), sinon c'est un montant. */
+      const connus=FRAIS.map(f=>f.libelle);
+      AJUST=(data||[]).filter(x=>x.type!=='accueil'&&connus.indexOf(x.libelle)<0).map(x=>{
+        const m=/^(\d+(?:[.,]\d+)?) % de la mensualité/.exec(x.description||'');
+        const neg=Number(x.total)<0;
+        return{libelle:x.libelle,sens:neg?'remise':'majoration',
+          mode:m?'pct':'eur',valeur:m?Number(m[1].replace(',','.')):Math.abs(Number(x.montant_unitaire))};
+      });
     }catch(e){console.warn('[devis lignes]',e);}
   }
   document.getElementById('dFraisBox').innerHTML=FRAIS.filter(f=>f.actif).map(f=>{
@@ -2455,6 +2473,8 @@ async function openDevis(id){
     const e=document.getElementById(i);if(e)e.disabled=!brouillon;
   });
   document.querySelectorAll('.ckDJour,.ckFrais').forEach(c=>c.disabled=!brouillon);
+  ajustRend(brouillon);
+  document.getElementById('btnAddAjust').style.display=brouillon?'':'none';
 
   /* Un devis enregistré relit ses propres chiffres de période plutôt que de les
      recalculer : ils sont figés, comme ses libellés et ses montants. Un devis
@@ -2688,6 +2708,32 @@ function dFermChange(){
      frais unitaires  = jours hebdo  × semaines ÷ 12 × montant
    Les frais mensuels s'ajoutent tels quels ; les frais uniques et annuels
    sortent du récurrent et sont présentés à part. */
+/* ---------- REMISES LIBRES ---------- */
+function ajustRend(editable){
+  const box=document.getElementById('dAjustBox');
+  if(!AJUST.length){box.innerHTML='';return;}
+  const dis=editable===false?' disabled':'';
+  box.innerHTML=AJUST.map((a,i)=>
+    '<div class="g3" style="grid-template-columns:2fr 1fr 1fr auto;align-items:end;margin-bottom:8px">'
+    +'<div class="f"><label class="lb">Libellé</label><input value="'+esc(a.libelle)+'" placeholder="Ex. Berceau d\'entreprise"'+dis+' oninput="ajustMaj('+i+',\'libelle\',this.value)"></div>'
+    +'<div class="f"><label class="lb">Nature</label><select'+dis+' onchange="ajustMaj('+i+',\'sens\',this.value)">'
+      +'<option value="remise"'+(a.sens==='remise'?' selected':'')+'>Remise</option>'
+      +'<option value="majoration"'+(a.sens==='majoration'?' selected':'')+'>Majoration</option></select></div>'
+    +'<div class="f"><label class="lb">Valeur</label><div style="display:flex;gap:4px">'
+      +'<input type="number" step="0.01" min="0" value="'+(a.valeur===''?'':esc(a.valeur))+'"'+dis+' oninput="ajustMaj('+i+',\'valeur\',this.value)">'
+      +'<select'+dis+' style="max-width:84px" onchange="ajustMaj('+i+',\'mode\',this.value)">'
+        +'<option value="eur"'+(a.mode==='eur'?' selected':'')+'>€/mois</option>'
+        +'<option value="pct"'+(a.mode==='pct'?' selected':'')+'>%</option></select></div></div>'
+    +(editable===false?'<span></span>':'<button type="button" class="btn btn-g" title="Retirer" onclick="ajustRetire('+i+')"><i class="ti ti-x"></i></button>')
+    +'</div>').join('');
+}
+function ajustAjoute(){
+  AJUST.push({libelle:'',sens:'remise',mode:'eur',valeur:''});
+  ajustRend(true);dSync();
+}
+function ajustRetire(i){AJUST.splice(i,1);ajustRend(true);dSync();}
+function ajustMaj(i,k,v){AJUST[i][k]=v;dSync();}
+
 function dCalcule(){
   const h=dHeuresHebdo();
   const nj=document.querySelectorAll('.ckDJour:checked').length;
@@ -2740,6 +2786,21 @@ function dCalcule(){
     lignes.push({libelle:f.libelle,description:f.description||'',type:f.type,
       quantite:Math.round(q*1000)/1000,montant_unitaire:signe*Number(f.montant),
       total:Math.round(signe*Number(f.montant)*q*100)/100,unite:unite});
+  });
+
+  /* Remises libres : calculées après la grille, car un pourcentage porte sur
+     la mensualité telle qu'elle sort des lignes ci-dessus. */
+  const baseMens=lignes.filter(l=>['accueil','mensuel','unitaire'].indexOf(l.type)>=0)
+    .reduce((t,l)=>t+l.total,0);
+  AJUST.forEach(a=>{
+    const v=Number(a.valeur);
+    if(!(v>0)||!String(a.libelle||'').trim())return;
+    const signe=a.sens==='remise'?-1:1;
+    const m=a.mode==='pct'?Math.round(baseMens*v)/100:v;
+    lignes.push({libelle:String(a.libelle).trim(),
+      description:a.mode==='pct'?nbFr(v)+' % de la mensualité':'',
+      type:'mensuel',quantite:1,montant_unitaire:signe*m,
+      total:Math.round(signe*m*100)/100,unite:''});
   });
 
   const recur=['accueil','mensuel','unitaire'];
