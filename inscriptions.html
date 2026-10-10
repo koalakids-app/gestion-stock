@@ -497,6 +497,22 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
   </div>
 </div>
 
+<!-- ENVOI DE LA CONFIRMATION DE VISITE -->
+<div class="ov" id="ovEnvoiVisite">
+  <div class="md" style="max-width:560px">
+    <h3><i class="ti ti-mail"></i> Confirmer la visite à la famille</h3>
+    <p class="hint">Destinataires : <b id="ivDest"></b></p>
+    <div class="f"><label class="lb">Objet</label><input id="ivObjet"></div>
+    <div class="f"><label class="lb">Message</label><textarea id="ivMessage" rows="5"></textarea></div>
+    <p class="hint">Modifiez librement ce texte, il partira tel quel. Le récapitulatif
+      (date, heure, nom et adresse de la crèche) est ajouté automatiquement en dessous.</p>
+    <div class="acts">
+      <button class="btn btn-g" onclick="closeOv('ovEnvoiVisite')">Ne pas envoyer</button>
+      <button class="btn btn-p" id="btnEnvoiVisiteOk" onclick="confirmerEnvoiVisite()"><i class="ti ti-send"></i> Envoyer</button>
+    </div>
+  </div>
+</div>
+
 <!-- HISTORIQUE DES DEMANDES -->
 <div class="ov" id="ovHisto">
   <div class="md" style="max-width:900px">
@@ -1982,14 +1998,10 @@ async function saveFiche(){
       document.getElementById('hintDev').textContent='Un devis fige les montants qu\'il facture : modifier la grille ensuite ne le réécrit pas.';
       toast('Demande créée — vous pouvez ajouter les parents.');
     }
-    // Best-effort : la fiche est déjà enregistrée, un mail qui échoue ne doit
-    // pas repasser pour un échec de la sauvegarde. Silencieux quand la fiche
-    // n'a pas encore de parent destinataire (cas fréquent à la création).
-    if(visitePlanifiee){
-      sb.functions.invoke('envoyer-confirmation-visite',{body:{preinscription_id:ficheId,expediteur:(PROF&&PROF.name)||undefined}})
-        .then(({error})=>{if(!error)toast('Confirmation de visite envoyée ✅');})
-        .catch(e=>console.warn('[envoyer-confirmation-visite]',e));
-    }
+    // La fiche est déjà enregistrée : on propose seulement d'envoyer la
+    // confirmation, dont le texte reste modifiable. Rien si la fiche n'a pas
+    // encore de parent destinataire (cas fréquent à la création).
+    if(visitePlanifiee)ouvrirEnvoiVisite(row);
     render();
   }catch(e){
     console.error('[saveFiche]',e);
@@ -3984,6 +3996,44 @@ async function confirmerEnvoiDevis(){
     document.getElementById('btnEnvoiDev').innerHTML=relance
       ?'<i class="ti ti-bell"></i> Relancer la famille'
       :'<i class="ti ti-send"></i> Envoyer à la famille';
+  }
+}
+
+/* ---------- CONFIRMATION DE VISITE ---------- */
+let ENVOI_VISITE_ID=null;
+
+function ouvrirEnvoiVisite(row){
+  const adresses=destinatairesDevis();
+  if(!adresses.length)return;
+  const p=PRE.find(x=>String(x.id)===String(ficheId));
+  const prenom=((p&&p.prenom)||'').trim()||'votre enfant';
+  const creche=nomCreche(row.creche_id||(p&&p.creche_id));
+  ENVOI_VISITE_ID=ficheId;
+  document.getElementById('ivDest').textContent=adresses.join(', ');
+  setVal('ivObjet','Confirmation de votre visite — '+prenom);
+  setVal('ivMessage','Nous avons le plaisir de vous confirmer la visite de notre micro-crèche'
+    +(creche?' '+creche:'')+' pour '+prenom+', le '+dfr(row.date_visite)
+    +(row.heure_visite?' à '+String(row.heure_visite).slice(0,5):'')+'.');
+  openOv('ovEnvoiVisite');
+}
+
+async function confirmerEnvoiVisite(){
+  const objet=val('ivObjet').trim(),message=val('ivMessage').trim();
+  if(!ENVOI_VISITE_ID){closeOv('ovEnvoiVisite');return;}
+  if(!objet||!message){toast('L\'objet et le message ne peuvent pas être vides.',true);return;}
+  const b=document.getElementById('btnEnvoiVisiteOk');
+  b.disabled=true;b.textContent='Envoi…';
+  try{
+    const{error}=await sb.functions.invoke('envoyer-confirmation-visite',
+      {body:{preinscription_id:ENVOI_VISITE_ID,objet:objet,message:message,expediteur:(PROF&&PROF.name)||undefined}});
+    if(error)throw new Error(await detailFn(error));
+    toast('Confirmation de visite envoyée ✅');
+    closeOv('ovEnvoiVisite');
+  }catch(e){
+    console.error('[confirmerEnvoiVisite]',e);
+    toast('Envoi impossible : '+(e.message||'erreur inconnue'),true);
+  }finally{
+    b.disabled=false;b.innerHTML='<i class="ti ti-send"></i> Envoyer';
   }
 }
 
