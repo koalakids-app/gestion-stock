@@ -10,7 +10,7 @@
 --   avec le périmètre de crèches dont elles sont responsables.
 --     - Laurence Borodine, RSAI : Ollioules
 --     - Pauline Arrighi Gozzo, RSAI : Brunet, Cuers, Picot 1, Picot 2, St Jean
---   Le champ `email` (facultatif) pré-remplit le destinataire du bouton « E-mail ».
+--   Le champ `email` (repris de `partenaires`) pré-remplit le destinataire du bouton « E-mail ».
 -- Idempotent pour les colonnes / la table ; les lignes ne sont insérées qu'une fois.
 -- ============================================================================
 
@@ -62,3 +62,9 @@ update public.doc_categories set signature_distance = true
    'ee018c7f-49d6-4eb6-aaf0-5048e15800a8',  -- Protocoles médicaux
    'e06a195f-b685-4c76-a612-0f46841ddff4'   -- Protocoles règles d'hygiène
  );
+
+-- Adresses e-mail : reprises de la table `partenaires` (même nom), uniquement si
+-- elles ne sont pas déjà renseignées.
+update public.doc_signataires s set email = p.email
+  from public.partenaires p
+ where lower(p.nom) = lower(s.nom) and s.email is null;
