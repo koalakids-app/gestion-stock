@@ -270,6 +270,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
       <button class="btn btn-s btn-sm" id="btnRappels" onclick="toggleRappels()"><i class="ti ti-bell"></i> Relances en retard <span id="nRappels"></span></button>
       <button class="btn btn-s btn-sm" id="btnRelancesAVenir" onclick="toggleRelancesAVenir()"><i class="ti ti-calendar-time"></i> Relances à venir <span id="nRelancesAVenir"></span></button>
       <button class="btn btn-s btn-sm" id="btnVisites" onclick="toggleVisites()"><i class="ti ti-door-enter"></i> Visites <span id="nVisites"></span></button>
+      <button class="btn btn-s btn-sm" onclick="openLienPrein()"><i class="ti ti-link"></i> Lien de préinscription</button>
       <button class="btn btn-p" onclick="openFiche(null)"><i class="ti ti-plus"></i> Nouvelle demande</button>
     </div>
 
@@ -508,6 +509,26 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
     <div id="hListe"></div>
     <p class="hint" id="hNote" style="margin-top:10px"></p>
     <div class="acts"><button class="btn btn-p" onclick="closeOv('ovHisto')">Fermer</button></div>
+  </div>
+</div>
+
+<!-- LIEN DE PRÉINSCRIPTION (formulaire public) -->
+<div class="ov" id="ovLienPrein">
+  <div class="md" style="max-width:560px">
+    <h3><i class="ti ti-link"></i> Lien de préinscription</h3>
+    <p class="hint">Les familles remplissent ce formulaire sans compte : la fiche famille et un devis en brouillon
+      sont créés automatiquement ici, dans « Nouvelle ». À placer sur le site internet ou à envoyer à une famille.</p>
+    <div class="f"><label class="lb">Crèche</label>
+      <select id="lpCreche" onchange="majLienPrein()"></select></div>
+    <div class="f"><label class="lb">Adresse du formulaire</label>
+      <input id="lpUrl" readonly onclick="this.select()"></div>
+    <div class="acts" style="justify-content:flex-start;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="copierLienPrein()"><i class="ti ti-copy"></i> Copier</button>
+      <button class="btn btn-s" id="lpPartager" style="display:none" onclick="partagerLienPrein()"><i class="ti ti-share"></i> Partager…</button>
+      <a class="btn btn-s" id="lpMail" style="text-decoration:none"><i class="ti ti-mail"></i> Par e-mail</a>
+      <a class="btn btn-s" id="lpOuvrir" target="_blank" rel="noopener" style="text-decoration:none"><i class="ti ti-external-link"></i> Voir le formulaire</a>
+    </div>
+    <div class="acts"><button class="btn btn-g" onclick="closeOv('ovLienPrein')">Fermer</button></div>
   </div>
 </div>
 
@@ -801,6 +822,40 @@ const PDFIMPORT_ENTETES=['Ordre','arrivée','Nom des parents','Email','Télépho
 const PDFIMPORT_JOURS={lundi:1,mardi:2,mercredi:3,jeudi:4,vendredi:5,samedi:6,dimanche:7};
 
 let PDFIMPORT_LIGNES=[];
+
+/* ---------- LIEN DE PRÉINSCRIPTION ----------
+   Le formulaire public (preinscription.html) se trouve à côté de cette page.
+   Sans paramètre, la famille choisit sa crèche ; avec ?c=<id>, elle est
+   présélectionnée. L'identifiant d'une crèche n'est pas un secret : il ne
+   donne accès à rien d'autre qu'à ce formulaire. */
+function urlLienPrein(){
+  const u=new URL('preinscription.html',location.href);
+  const c=document.getElementById('lpCreche').value;
+  if(c)u.searchParams.set('c',c);
+  return u.toString();
+}
+function openLienPrein(){
+  document.getElementById('lpCreche').innerHTML='<option value="">Toutes les crèches (la famille choisit)</option>'
+    +CRECHES.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  document.getElementById('lpPartager').style.display=PartageLien.disponible()?'':'none';
+  majLienPrein();openOv('ovLienPrein');
+}
+function majLienPrein(){
+  const u=urlLienPrein();
+  document.getElementById('lpUrl').value=u;
+  document.getElementById('lpOuvrir').href=u;
+  document.getElementById('lpMail').href='mailto:?subject='+encodeURIComponent('Préinscription en crèche')
+    +'&body='+encodeURIComponent('Bonjour,\n\nVoici le lien pour préinscrire votre enfant (environ 5 minutes) :\n'+u+'\n\nÀ très vite.');
+}
+async function copierLienPrein(){
+  const u=document.getElementById('lpUrl').value;
+  try{await navigator.clipboard.writeText(u);toast('Lien copié ✅');}
+  catch(e){document.getElementById('lpUrl').select();toast('Sélectionné : copiez-le avec Ctrl+C.');}
+}
+async function partagerLienPrein(){
+  await PartageLien.partager(document.getElementById('lpUrl').value,
+    {titre:'Préinscription en crèche',texte:'Voici le lien pour préinscrire votre enfant :'});
+}
 
 function openImportPdf(){
   PDFIMPORT_LIGNES=[];

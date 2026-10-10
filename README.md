@@ -55,7 +55,7 @@ Pour activer une nouvelle organisation cliente, suivre
 
 Pages de dépôt/signature à usage ponctuel, ouvertes par des personnes externes au réseau
 via un lien à durée limitée (`signature.html`, `famille.html`, `pieces.html`,
-`stagiaire.html`), et configuration PWA (`manifest.json`, `sw.js`).
+`stagiaire.html`), le formulaire public `preinscription.html` (voir ci-dessous), et configuration PWA (`manifest.json`, `sw.js`).
 
 ---
 
@@ -83,6 +83,25 @@ Les pages sans compte (`pieces.html`, `pieces-employe.html`, `famille.html`, `fa
 - côté serveur, `supabase/functions/_shared/session-lien.ts` applique la même règle (session signée HMAC, liée à une fonction, sans table ni secret supplémentaire). Les fonctions `dossier-*` (dont `dossier-stagiaire`) et `suivi-famille` n'acceptent plus le jeton brut, sauf pour l'action `ouvrir`.
 
 Côté page : `js/session-lien.js`. Les délais sont dans ce fichier (`MINUTES`, `DUREE_MAX_H`) et dans `_shared/session-lien.ts` (`INACTIVITE_S`, `DUREE_MAX_S`) : les garder alignés.
+
+## Formulaire de préinscription
+
+`preinscription.html` est ouvert par les familles **sans compte et sans jeton** : lien sur le site
+internet, ou lien envoyé depuis l'appli (Devis › « Lien de préinscription », un lien par crèche,
+`?c=<id de la crèche>` présélectionne la crèche).
+
+À l'envoi, l'Edge Function `preinscription-publique` (déployée avec `--no-verify-jwt`) :
+
+- crée la **fiche famille** (`preinscriptions` + `preinscriptions_parents`, statut « Nouvelle »,
+  origine « Formulaire en ligne ») ;
+- génère un **devis en brouillon** (`devis` + `devis_lignes`) avec la grille `tarifs`, les
+  `frais_annexes` par défaut et une estimation CMG — même règle de calcul que `inscriptions.html` ;
+- envoie à la famille un e-mail de confirmation avec l'estimation, et à la direction (adresse de
+  `etablissements.email` de la crèche) une alerte.
+
+Le devis n'est **jamais envoyé automatiquement** : la direction le relit, puis l'envoie comme
+d'habitude. Garde-fous : champ piège anti-robot, au plus 20 demandes par heure et par crèche,
+3 par adresse e-mail et par jour. Le tarif est toujours relu côté serveur.
 
 ## Déploiement
 

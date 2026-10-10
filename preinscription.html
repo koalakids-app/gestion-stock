@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Koala Kids — Préinscription</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Formulaire ouvert par une famille, sans compte, depuis le site internet ou
+   un lien envoyé par la crèche. Aucune dépendance : ni Supabase JS, ni
+   bibliothèque d'icônes. Un CDN indisponible ne doit pas empêcher quelqu'un
+   de demander une place. La seule porte vers la base est l'Edge Function
+   preinscription-publique. */
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--cream:#FDF8F2;
+  --muted:#8E8AA8;--line:#EFE9F5;--green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',system-ui,sans-serif;background:var(--cream);color:#2B2740;
+  line-height:1.6;padding-bottom:calc(40px + env(safe-area-inset-bottom))}
+.hd{background:var(--violet);color:#fff;padding:22px 18px;padding-top:calc(22px + env(safe-area-inset-top))}
+.hd-in{max-width:680px;margin:0 auto}
+.hd img.logo{height:34px;display:block;margin-bottom:6px;background:#fff;border-radius:8px;padding:3px 8px}
+.hd h1{font-family:'Baloo 2',cursive;font-size:22px;font-weight:800}
+.hd .s{font-size:13.5px;opacity:.85;margin-top:2px}
+.wrap{max-width:680px;margin:0 auto;padding:16px}
+.card{background:#fff;border:2px solid var(--line);border-radius:18px;padding:16px 18px;margin-bottom:14px}
+h2{font-family:'Baloo 2',cursive;font-size:16px;color:var(--orange);margin-bottom:10px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:1fr 2fr;gap:10px}
+.f{margin-bottom:10px;min-width:0}
+label.lb{display:block;font-size:13px;font-weight:700;color:var(--muted);margin:0 0 4px 3px}
+label.lb i{color:var(--orange);font-style:normal}
+input,select,textarea{font-family:'Nunito';font-size:16px;padding:12px;border:2px solid var(--line);
+  border-radius:13px;width:100%;background:#fff;color:#2B2740}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)}
+.bad{border-color:var(--red)!important}
+.ck{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;margin:8px 0}
+.ck input{width:20px;height:20px;flex:none;margin-top:2px}
+.jr{display:flex;gap:8px;flex-wrap:wrap}
+.jr label{flex:1;min-width:58px;text-align:center;border:2px solid var(--line);border-radius:12px;
+  padding:10px 4px;font-weight:700;font-size:14px;cursor:pointer;background:#fff}
+.jr label{position:relative}
+.jr input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.jr label:has(input:focus-visible){outline:2px solid var(--violet)}
+.jr label:has(input:checked){background:var(--orange-l);border-color:var(--orange);color:var(--orange)}
+.steps{display:flex;gap:6px;margin-bottom:6px}
+.steps i{flex:1;height:6px;border-radius:9px;background:var(--line)}.steps i.on{background:var(--orange)}
+.stl{font-size:12.5px;color:var(--muted);font-weight:700;margin-bottom:14px}
+.btn{border:none;border-radius:14px;padding:15px 22px;font-family:'Nunito';font-weight:800;
+  font-size:16px;cursor:pointer;width:100%;min-height:52px}
+.btn-p{background:var(--orange);color:#fff}
+.btn-g{background:#F1EFF7;color:var(--muted);font-size:14px;min-height:46px;padding:12px}
+.btn:disabled{opacity:.5}
+.row{display:flex;gap:10px}.row .btn{flex:1}.row .btn-g{flex:0 0 36%}
+.note{font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:8px}
+.msg{border-radius:14px;padding:14px 16px;font-size:14.5px;font-weight:600;margin-bottom:14px}
+.msg.err{background:var(--red-l);color:var(--red)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:14.5px;border-bottom:1px solid var(--line)}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--muted)}.kv .v{font-weight:700;text-align:right}
+table.lg{width:100%;border-collapse:collapse;font-size:14px}
+table.lg td{padding:9px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+table.lg td.m{text-align:right;font-weight:700;white-space:nowrap}
+table.lg tr.neg td.m{color:var(--green)}
+table.lg tr.tot td{border-top:2px solid var(--line);border-bottom:none;padding-top:12px;font-weight:800}
+table.lg tr.tot td.m{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet)}
+.live{background:var(--violet-l);border-radius:14px;padding:12px 16px;display:flex;justify-content:space-between;
+  align-items:baseline;gap:10px;font-size:14px;color:var(--violet);font-weight:700;margin-top:6px}
+.live b{font-family:'Baloo 2',cursive;font-size:22px;white-space:nowrap}
+.center{text-align:center;padding:30px 10px 18px}.center .big{font-size:46px}
+.center h3{font-family:'Baloo 2',cursive;font-size:21px;color:var(--violet);margin:6px 0}
+.center p{color:var(--muted)}
+.pot{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.step{display:none}.step.on{display:block}
+@media(max-width:520px){.g2,.g3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="hd"><div class="hd-in">
+  <img class="logo" id="logo" src="logo-koalakids.png" alt="Koala Kids">
+  <h1>Préinscription</h1>
+  <div class="s" id="sub">Environ 5 minutes — vous recevez une estimation de tarif tout de suite</div>
+</div></div>
+
+<div class="wrap" id="wrap">
+  <div class="center" id="chargement"><div class="big">⏳</div><p>Chargement…</p></div>
+
+  <form id="form" style="display:none" onsubmit="return false" novalidate>
+    <div class="steps"><i id="st1" class="on"></i><i id="st2"></i><i id="st3"></i><i id="st4"></i></div>
+    <div class="stl" id="stl"></div>
+    <div class="msg err" id="err" style="display:none"></div>
+
+    <!-- Champ piège : invisible pour une personne, rempli par les robots. -->
+    <div class="pot" aria-hidden="true"><label>Site web <input type="text" id="site_web" tabindex="-1" autocomplete="off"></label></div>
+
+    <!-- 1. L'enfant -->
+    <div class="step on" id="p1">
+      <div class="card"><h2>L'enfant</h2>
+        <div class="g2">
+          <div class="f"><label class="lb" for="ePrenom">Prénom <i>*</i></label><input id="ePrenom" autocomplete="off"></div>
+          <div class="f"><label class="lb" for="eNom">Nom <i>*</i></label><input id="eNom" autocomplete="off"></div>
+        </div>
+        <div class="g2">
+          <div class="f"><label class="lb" for="eSexe">Sexe</label>
+            <select id="eSexe"><option value="">—</option><option value="F">Fille</option><option value="M">Garçon</option></select></div>
+          <div class="f"><label class="lb" for="eNe">Situation</label>
+            <select id="eNe" onchange="syncNe()"><option value="ne">Déjà né(e)</option><option value="a_naitre">À naître</option></select></div>
+        </div>
+        <div class="f"><label class="lb" for="eDob" id="lbDob">Date de naissance <i>*</i></label><input id="eDob" type="date"></div>
+        <div class="f"><label class="lb" for="eAllergies">Allergies connues</label><input id="eAllergies" placeholder="aucune connue"></div>
+        <label class="ck"><input type="checkbox" id="eFratrie"> <span>Un frère ou une sœur est déjà accueilli(e) dans une de nos crèches</span></label>
+        <label class="ck"><input type="checkbox" id="ePai" onchange="syncPai()"> <span>Mon enfant a un PAI (projet d'accueil individualisé)</span></label>
+        <div class="f" id="wrapPai" style="display:none"><label class="lb" for="ePaiDetail">Motif du PAI</label><input id="ePaiDetail"></div>
+      </div>
+      <button type="button" class="btn btn-p" onclick="suivant(2)">Continuer</button>
+    </div>
+
+    <!-- 2. Les parents et le foyer -->
+    <div class="step" id="p2">
+      <div class="card"><h2>Parent 1</h2>
+        <div class="f"><label class="lb" for="p1Lien">Vous êtes</label>
+          <select id="p1Lien"><option value="mere">la mère</option><option value="pere">le père</option><option value="tuteur">le tuteur / la tutrice</option><option value="autre">autre</option></select></div>
+        <div class="g2">
+          <div class="f"><label class="lb" for="p1Prenom">Prénom <i>*</i></label><input id="p1Prenom" autocomplete="given-name"></div>
+          <div class="f"><label class="lb" for="p1Nom">Nom <i>*</i></label><input id="p1Nom" autocomplete="family-name"></div>
+        </div>
+        <div class="g2">
+          <div class="f"><label class="lb" for="p1Tel">Téléphone <i>*</i></label><input id="p1Tel" type="tel" autocomplete="tel"></div>
+          <div class="f"><label class="lb" for="p1Mail">E-mail <i>*</i></label><input id="p1Mail" type="email" autocomplete="email"></div>
+        </div>
+        <div class="f"><label class="lb" for="p1Pro">Profession</label><input id="p1Pro"></div>
+      </div>
+      <div class="card"><h2>Parent 2 <span class="note" style="margin:0">(facultatif)</span></h2>
+        <div class="f"><label class="lb" for="p2Lien">Lien</label>
+          <select id="p2Lien"><option value="pere">le père</option><option value="mere">la mère</option><option value="tuteur">le tuteur / la tutrice</option><option value="autre">autre</option></select></div>
+        <div class="g2">
+          <div class="f"><label class="lb" for="p2Prenom">Prénom</label><input id="p2Prenom"></div>
+          <div class="f"><label class="lb" for="p2Nom">Nom</label><input id="p2Nom"></div>
+        </div>
+        <div class="g2">
+          <div class="f"><label class="lb" for="p2Tel">Téléphone</label><input id="p2Tel" type="tel"></div>
+          <div class="f"><label class="lb" for="p2Mail">E-mail</label><input id="p2Mail" type="email"></div>
+        </div>
+      </div>
+      <div class="card"><h2>Votre foyer</h2>
+        <div class="f"><label class="lb" for="fAdresse">Adresse</label><input id="fAdresse" autocomplete="street-address"></div>
+        <div class="g3">
+          <div class="f"><label class="lb" for="fCp">Code postal</label><input id="fCp" inputmode="numeric" autocomplete="postal-code"></div>
+          <div class="f"><label class="lb" for="fVille">Ville</label><input id="fVille" autocomplete="address-level2"></div>
+        </div>
+        <div class="g2">
+          <div class="f"><label class="lb" for="fAlloc">N° allocataire CAF / MSA</label><input id="fAlloc"></div>
+          <div class="f"><label class="lb" for="fRev">Revenus annuels du foyer (€)</label><input id="fRev" type="number" min="0" step="1" inputmode="numeric" placeholder="avis d'imposition"></div>
+        </div>
+        <p class="note" style="margin:0 0 6px">Les revenus servent uniquement à estimer l'aide de la CAF (CMG).</p>
+        <label class="ck"><input type="checkbox" id="fIsole"> <span>Parent isolé (ou majoration PAJE)</span></label>
+        <label class="ck"><input type="checkbox" id="fSepares"> <span>Parents séparés</span></label>
+        <label class="ck"><input type="checkbox" id="fAlternee"> <span>Garde alternée</span></label>
+      </div>
+      <div class="row"><button type="button" class="btn btn-g" onclick="suivant(1)">Retour</button><button type="button" class="btn btn-p" onclick="suivant(3)">Continuer</button></div>
+    </div>
+
+    <!-- 3. L'accueil souhaité -->
+    <div class="step" id="p3">
+      <div class="card"><h2>L'accueil souhaité</h2>
+        <div class="f"><label class="lb" for="aCreche">Crèche <i>*</i></label><select id="aCreche" onchange="estimer()"></select></div>
+        <div class="f"><label class="lb" for="aEntree">Date d'entrée souhaitée</label><input id="aEntree" type="date" onchange="estimer()"></div>
+        <div class="f"><label class="lb">Jours souhaités <i>*</i></label>
+          <div class="jr" id="jours">
+            <label><input type="checkbox" value="1" onchange="estimer()">Lun</label>
+            <label><input type="checkbox" value="2" onchange="estimer()">Mar</label>
+            <label><input type="checkbox" value="3" onchange="estimer()">Mer</label>
+            <label><input type="checkbox" value="4" onchange="estimer()">Jeu</label>
+            <label><input type="checkbox" value="5" onchange="estimer()">Ven</label>
+          </div></div>
+        <div class="g2">
+          <div class="f"><label class="lb" for="aHd">Arrivée <i>*</i></label><input id="aHd" type="time" value="08:30" onchange="estimer()"></div>
+          <div class="f"><label class="lb" for="aHf">Départ <i>*</i></label><input id="aHf" type="time" value="17:30" onchange="estimer()"></div>
+        </div>
+        <div class="live"><span>Estimation mensuelle<br><span class="note" style="margin:0;color:var(--violet);font-weight:600" id="liveSub">avant aides</span></span><b id="liveTot">—</b></div>
+        <div class="f" style="margin-top:14px"><label class="lb" for="aConnu">Comment nous avez-vous connus ?</label>
+          <select id="aConnu"><option value="">—</option><option>Site internet</option><option>Bouche à oreille</option><option>Réseaux sociaux</option><option>PMI / mairie</option><option>Passage devant la crèche</option><option>Autre</option></select></div>
+        <div class="f"><label class="lb" for="aMessage">Un mot pour la crèche (facultatif)</label><textarea id="aMessage" rows="3" maxlength="1500"></textarea></div>
+      </div>
+      <div class="row"><button type="button" class="btn btn-g" onclick="suivant(2)">Retour</button><button type="button" class="btn btn-p" onclick="suivant(4)">Continuer</button></div>
+    </div>
+
+    <!-- 4. Récapitulatif -->
+    <div class="step" id="p4">
+      <div class="card"><h2>Récapitulatif</h2>
+        <div id="recap"></div>
+        <label class="ck" style="margin-top:12px"><input type="checkbox" id="cRgpd"> <span>J'accepte que ces informations soient utilisées pour traiter ma demande de préinscription. Elles ne sont pas transmises à des tiers.</span></label>
+        <label class="ck"><input type="checkbox" id="cVrai"> <span>Je certifie l'exactitude des informations transmises.</span></label>
+        <p class="note">Envoyer cette demande ne vous engage pas : la directrice vous recontacte pour une visite, puis vous envoie le devis définitif.</p>
+      </div>
+      <div class="row"><button type="button" class="btn btn-g" onclick="suivant(3)">Retour</button><button type="button" class="btn btn-p" id="btnEnvoi" onclick="envoyer()">Envoyer ma demande</button></div>
+    </div>
+  </form>
+
+  <!-- Confirmation -->
+  <div id="merci" style="display:none">
+    <div class="center"><div class="big">🎉</div><h3>Merci, votre demande est enregistrée !</h3>
+      <p id="merciTxt">Un e-mail de confirmation vient de vous être envoyé. La directrice vous recontacte très vite pour vous proposer une visite.</p></div>
+    <div class="card"><h2>Votre estimation</h2><table class="lg" id="merciDevis"></table>
+      <p class="note">Estimation indicative, non contractuelle, avant aide de la CAF. Le devis définitif vous sera envoyé par la direction après validation de votre demande.</p></div>
+  </div>
+
+  <div class="msg err" id="fatal" style="display:none"></div>
+</div>
+
+<script>
+const FN="https://juyrceadazrovlitxceb.supabase.co/functions/v1/preinscription-publique";
+const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function eur(n){const v=Math.round(Number(n||0)*100)/100;const p=Math.abs(v).toFixed(2).replace('.',',').split(',');
+  return (v<0?'− ':'')+p[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ')+','+p[1]+' €';}
+const JN=['','lundi','mardi','mercredi','jeudi','vendredi'];
+const TITRES=['','1 sur 4 · L\'enfant','2 sur 4 · Les parents et le foyer','3 sur 4 · L\'accueil souhaité','4 sur 4 · Récapitulatif'];
+
+async function appel(corps){
+  const r=await fetch(FN,{method:'POST',headers:{'Content-Type':'application/json',apikey:ANON,Authorization:'Bearer '+ANON},body:JSON.stringify(corps)});
+  let d=null;try{d=await r.json();}catch(e){}
+  if(!r.ok)throw new Error((d&&d.erreur)||'Une erreur est survenue. Réessayez dans un instant.');
+  return d;
+}
+
+/* L'adresse peut porter ?c=<identifiant de crèche> (présélection) ou ?o=<slug
+   d'organisation>. Ce ne sont pas des secrets : rien n'ouvre de session. */
+const Q=new URLSearchParams(location.search);
+const CRECHE_URL=Q.get('c')||'',ORG_URL=Q.get('o')||'';
+
+async function init(){
+  try{
+    const d=await appel({action:'config',creche_id:CRECHE_URL,org:ORG_URL});
+    if(d.org.logo_url)$('logo').src=d.org.logo_url;
+    $('logo').alt=d.org.nom;document.title=d.org.nom+' — Préinscription';
+    if(!d.creches.length)throw new Error('Aucune crèche n\'est ouverte à la préinscription pour le moment.');
+    $('aCreche').innerHTML=(d.creches.length>1?'<option value="">— choisir —</option>':'')
+      +d.creches.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.nom)+'</option>').join('');
+    if(CRECHE_URL&&d.creches.some(c=>c.id===CRECHE_URL))$('aCreche').value=CRECHE_URL;
+    $('chargement').style.display='none';$('form').style.display='';
+    suivant(1);
+  }catch(e){
+    $('chargement').style.display='none';
+    const f=$('fatal');f.textContent=e.message;f.style.display='';
+  }
+}
+
+function syncNe(){$('lbDob').innerHTML=($('eNe').value==='a_naitre'?'Terme prévu':'Date de naissance')+' <i>*</i>';}
+function syncPai(){$('wrapPai').style.display=$('ePai').checked?'':'none';}
+function erreur(m,ids){
+  document.querySelectorAll('.bad').forEach(e=>e.classList.remove('bad'));
+  (ids||[]).forEach(i=>$(i)&&$(i).classList.add('bad'));
+  const e=$('err');e.textContent=m||'';e.style.display=m?'':'none';
+  if(m)e.scrollIntoView({block:'center',behavior:'smooth'});
+}
+const valide={
+  1(){
+    const ids=[];['ePrenom','eNom','eDob'].forEach(i=>{if(!$(i).value.trim())ids.push(i);});
+    return ids.length?[ 'Indiquez le prénom, le nom et la '+($('eNe').value==='a_naitre'?'date de terme':'date de naissance')+' de l\'enfant.',ids]:null;
+  },
+  2(){
+    const ids=[];['p1Prenom','p1Nom'].forEach(i=>{if(!$(i).value.trim())ids.push(i);});
+    if(ids.length)return['Indiquez le prénom et le nom du premier parent.',ids];
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test($('p1Mail').value.trim()))return['Indiquez une adresse e-mail valide.',['p1Mail']];
+    if($('p1Tel').value.replace(/\D/g,'').length<9)return['Indiquez un numéro de téléphone valide.',['p1Tel']];
+    const m2=$('p2Mail').value.trim();
+    if(m2&&!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m2))return['L\'adresse e-mail du parent 2 est incorrecte.',['p2Mail']];
+    return null;
+  },
+  3(){
+    if(!$('aCreche').value)return['Choisissez une crèche.',['aCreche']];
+    if(!jours().length)return['Choisissez au moins un jour d\'accueil.',[]];
+    if(!$('aHd').value||!$('aHf').value||$('aHf').value<=$('aHd').value)return['L\'arrivée doit précéder le départ.',['aHd','aHf']];
+    return null;
+  }
+};
+function jours(){return[...document.querySelectorAll('#jours input:checked')].map(i=>Number(i.value));}
+
+function suivant(n){
+  /* Avancer exige que les étapes précédentes soient valides ; reculer est libre. */
+  const cur=Number((document.querySelector('.step.on')||{id:'p1'}).id.slice(1));
+  if(n>cur){for(let i=cur;i<n;i++){const v=valide[i]&&valide[i]();if(v){erreur(v[0],v[1]);return;}}}
+  erreur('');
+  document.querySelectorAll('.step').forEach(s=>s.classList.toggle('on',s.id==='p'+n));
+  for(let i=1;i<=4;i++)$('st'+i).classList.toggle('on',i<=n);
+  $('stl').textContent=TITRES[n];
+  if(n===3)estimer();
+  if(n===4)recap();
+  scrollTo(0,0);
+}
+
+/* L'estimation vient du serveur, qui relit la grille tarifaire : la page n'a
+   aucun tarif en dur. Les saisies rapides sont regroupées (250 ms) et une
+   réponse tardive ne remplace jamais une plus récente. */
+let tEst=null,seqEst=0,EST=null;
+function corpsAccueil(){
+  return{creche_id:$('aCreche').value,jours:jours(),heure_debut:$('aHd').value,heure_fin:$('aHf').value,
+    date_entree:$('aEntree').value||null,revenus:$('fRev').value===''?null:Number($('fRev').value),
+    isole:$('fIsole').checked,dob:$('eDob').value||null};
+}
+function estimer(){
+  clearTimeout(tEst);EST=null;
+  if(!$('aCreche').value||!jours().length||!$('aHd').value||!$('aHf').value||$('aHf').value<=$('aHd').value){
+    $('liveTot').textContent='—';$('liveSub').textContent='Choisissez une crèche, des jours et des horaires';return;
+  }
+  tEst=setTimeout(async()=>{
+    const m=++seqEst;
+    try{
+      const d=await appel(Object.assign({action:'estimer'},corpsAccueil()));
+      if(m!==seqEst)return;
+      EST=d;$('liveTot').textContent=eur(d.mensuel)+' / mois';
+      $('liveSub').textContent=d.reste!=null?'soit environ '+eur(d.reste)+' après aide CAF (CMG)':'avant aide CAF (CMG)';
+    }catch(e){if(m===seqEst){$('liveTot').textContent='—';$('liveSub').textContent=e.message;}}
+  },250);
+}
+
+function recap(){
+  const sel=$('aCreche');
+  const kv=(k,v)=>'<div class="kv"><span class="k">'+k+'</span><span class="v">'+esc(v||'—')+'</span></div>';
+  const d=$('eDob').value.split('-').reverse().join('/');
+  $('recap').innerHTML=
+    kv('Enfant',$('ePrenom').value.trim()+' '+$('eNom').value.trim())
+   +kv($('eNe').value==='a_naitre'?'Terme prévu':'Naissance',d)
+   +kv('Parent 1',$('p1Prenom').value.trim()+' '+$('p1Nom').value.trim()+' · '+$('p1Tel').value.trim())
+   +kv('E-mail',$('p1Mail').value.trim())
+   +kv('Crèche',sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:'')
+   +kv('Accueil',jours().map(j=>JN[j]).join(', ')+' · '+$('aHd').value+'–'+$('aHf').value)
+   +kv('Estimation',EST?eur(EST.mensuel)+' / mois (avant aides)':'—');
+}
+
+async function envoyer(){
+  if(!$('cRgpd').checked||!$('cVrai').checked){erreur('Cochez les deux cases pour envoyer votre demande.',[]);return;}
+  for(let i=1;i<=3;i++){const v=valide[i]();if(v){suivant(i);erreur(v[0],v[1]);return;}}
+  const b=$('btnEnvoi');b.disabled=true;b.textContent='Envoi en cours…';erreur('');
+  const parents=[{lien:$('p1Lien').value,prenom:$('p1Prenom').value,nom:$('p1Nom').value,email:$('p1Mail').value,telephone:$('p1Tel').value,profession:$('p1Pro').value}];
+  if($('p2Prenom').value.trim()||$('p2Nom').value.trim()||$('p2Mail').value.trim()||$('p2Tel').value.trim())
+    parents.push({lien:$('p2Lien').value,prenom:$('p2Prenom').value,nom:$('p2Nom').value,email:$('p2Mail').value,telephone:$('p2Tel').value});
+  try{
+    const d=await appel(Object.assign({action:'envoyer',
+      site_web:$('site_web').value,consentement:true,
+      enfant:{prenom:$('ePrenom').value,nom:$('eNom').value,sexe:$('eSexe').value,ne_ou_a_naitre:$('eNe').value,
+        allergies:$('eAllergies').value,fratrie:$('eFratrie').checked,pai:$('ePai').checked,pai_detail:$('ePaiDetail').value},
+      parents:parents,
+      foyer:{adresse:$('fAdresse').value,code_postal:$('fCp').value,ville:$('fVille').value,num_allocataire:$('fAlloc').value,
+        separes:$('fSepares').checked,alternee:$('fAlternee').checked},
+      comment_connus:$('aConnu').value,message:$('aMessage').value},corpsAccueil()));
+    $('form').style.display='none';$('merci').style.display='';
+    const e=d.estimation||EST;
+    if(e){
+      $('merciDevis').innerHTML=(e.lignes||[]).map(l=>'<tr><td>'+esc(l.libelle)+'</td><td class="m">'+eur(l.total)+'</td></tr>').join('')
+        +(e.reste!=null?'<tr class="neg"><td>Aide CAF estimée (CMG)</td><td class="m">− '+eur(e.cmg)+'</td></tr>':'')
+        +'<tr class="tot"><td>'+(e.reste!=null?'Reste à charge estimé':'Total mensuel estimé')+'</td><td class="m">'+eur(e.reste!=null?e.reste:e.mensuel)+'</td></tr>';
+    }else $('merciDevis').closest('.card').style.display='none';
+    scrollTo(0,0);
+  }catch(e){
+    erreur(e.message,[]);b.disabled=false;b.textContent='Envoyer ma demande';
+  }
+}
+
+['fRev','fIsole','eDob'].forEach(i=>$(i).addEventListener('change',()=>{if($('p3').classList.contains('on'))estimer();}));
+init();
+</script>
+</body>
+</html>
