@@ -1058,8 +1058,54 @@ function renderDevisList(){
       +(d.repondu_le?'<div class="li"><i class="ti ti-writing-sign" style="color:'
         +(d.statut==='accepte'?'var(--green)':'var(--red)')+'"></i>'
         +(d.statut==='accepte'?'Accepté':'Réponse')+' le '+dfr(d.repondu_le)+'</div>':'')
+      +blocRelanceDevis(d)
       +'</div>';
   }).join('');
+}
+
+/* Relances automatiques (relances-devis-auto) : une relance proposée attend la
+   validation de l'équipe ; sinon on indique l'état des relances et on permet
+   d'exclure ce devis. stopPropagation : la carte ne doit pas s'ouvrir derrière. */
+function blocRelanceDevis(d){
+  if(d.statut!=='envoye'||d.repondu_le)return '';
+  const nb=d.relances?'<div class="li"><i class="ti ti-bell" style="color:var(--muted)"></i>'+d.relances
+    +' relance'+(d.relances>1?'s':'')+(d.derniere_relance?', la dernière le '+dfr(d.derniere_relance):'')+'</div>':'';
+  if(d.relance_a_valider_le){
+    return nb+'<div class="li" style="background:var(--amber-l);color:var(--amber);border-radius:8px;padding:6px 8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
+      +'<span><i class="ti ti-bell-ringing"></i> <b>Relance à valider</b> — sans réponse de la famille</span>'
+      +'<button class="pdf" onclick="event.stopPropagation();validerRelanceDevis(\''+d.id+'\')"><i class="ti ti-check"></i> Relire et envoyer</button>'
+      +'<button class="pdf" onclick="event.stopPropagation();reporterRelanceDevis(\''+d.id+'\')"><i class="ti ti-clock-pause"></i> Reporter</button></div>';
+  }
+  return nb+'<div class="li"><button class="pdf" onclick="event.stopPropagation();basculerRelanceAuto(\''+d.id+'\')" title="Exclure ou réintégrer ce devis des relances automatiques">'
+    +(d.relance_auto_stop?'<i class="ti ti-bell-off"></i> Relances auto désactivées — réactiver':'<i class="ti ti-bell-off"></i> Ne plus relancer ce devis automatiquement')
+    +'</button></div>';
+}
+/* Ouvre le devis puis la fenêtre d'envoi habituelle : le message est relu,
+   modifiable, et rien ne part avant le clic sur « Relancer ». */
+async function validerRelanceDevis(id){
+  await openDevis(id);
+  await ouvrirEnvoiDevis();
+}
+/* Reporter : on repart du jour même, la prochaine proposition viendra après
+   l'intervalle réglé. */
+async function reporterRelanceDevis(id){
+  const d=DEVIS.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  const maj={relance_a_valider_le:null,derniere_relance:new Date().toISOString()};
+  const{error}=await sb.from('devis').update(maj).eq('id',id);
+  if(error){toast('Report impossible : '+(error.message||'erreur inconnue'),true);return;}
+  Object.assign(d,maj);renderDevisList();
+  toast('Relance reportée.');
+}
+async function basculerRelanceAuto(id){
+  const d=DEVIS.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  const maj={relance_auto_stop:!d.relance_auto_stop};
+  if(maj.relance_auto_stop)maj.relance_a_valider_le=null;
+  const{error}=await sb.from('devis').update(maj).eq('id',id);
+  if(error){toast('Mise à jour impossible : '+(error.message||'erreur inconnue'),true);return;}
+  Object.assign(d,maj);renderDevisList();
+  toast(maj.relance_auto_stop?'Ce devis ne sera plus relancé automatiquement.':'Relances automatiques réactivées pour ce devis.');
 }
 
 /* Age en annees revolues a la date d'entree : le CMG est divise par deux a

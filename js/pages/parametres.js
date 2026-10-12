@@ -499,12 +499,33 @@ function renderReseau(){
   setVal('rFacDeductions',RCFG.facture_deductions);
   setVal('rPied',RCFG.pied_page);
   document.getElementById('rOtpSignature').checked=RCFG.otp_signature_active===true;
+  document.getElementById('rRelAuto').checked=RCFG.relances_devis_auto_active===true;
+  setVal('rRelDelai',RCFG.relances_devis_delai_jours!=null?RCFG.relances_devis_delai_jours:3);
+  setVal('rRelInterv',RCFG.relances_devis_intervalle_jours!=null?RCFG.relances_devis_intervalle_jours:5);
+  setVal('rRelMax',RCFG.relances_devis_max!=null?RCFG.relances_devis_max:2);
+  setVal('rRelFinale',RCFG.relances_devis_finale_jours!=null?RCFG.relances_devis_finale_jours:3);
+  setVal('rRelMode',RCFG.relances_devis_mode==='auto'?'auto':'validation');
+  syncRelances();
   setVal('rNotifDebut',RCFG.notif_silence_debut||'19:00');
   setVal('rNotifFin',RCFG.notif_silence_fin||'08:00');
   document.getElementById('rNotifSamedi').checked=RCFG.notif_silence_samedi!==false;
   document.getElementById('rNotifDimanche').checked=RCFG.notif_silence_dimanche!==false;
   document.getElementById('rNotifFeries').checked=RCFG.notif_silence_feries!==false;
   syncPreavis();
+}
+
+/* Les réglages de relance n'ont de sens que si l'option est cochée. */
+function syncRelances(){
+  const on=document.getElementById('rRelAuto').checked;
+  document.getElementById('rRelOpts').style.opacity=on?'':'.5';
+  ['rRelMode','rRelDelai','rRelInterv','rRelMax','rRelFinale'].forEach(i=>{document.getElementById(i).disabled=!on;});
+}
+
+function bornInt(id,defaut,min,max){
+  const v=val(id);
+  if(v===''||v==null)return defaut;
+  const n=Math.round(Number(v));
+  return isNaN(n)?defaut:Math.min(max,Math.max(min,n));
 }
 
 function showTab(t){
@@ -893,6 +914,12 @@ async function save(){
       facture_deductions:val('rFacDeductions'),
       pied_page:val('rPied'),
       otp_signature_active:document.getElementById('rOtpSignature').checked,
+      relances_devis_auto_active:document.getElementById('rRelAuto').checked,
+      relances_devis_mode:val('rRelMode')==='auto'?'auto':'validation',
+      relances_devis_delai_jours:bornInt('rRelDelai',3,1,60),
+      relances_devis_intervalle_jours:bornInt('rRelInterv',5,1,60),
+      relances_devis_max:bornInt('rRelMax',2,0,10),
+      relances_devis_finale_jours:bornInt('rRelFinale',3,0,30),
       notif_silence_debut:val('rNotifDebut')||'19:00', notif_silence_fin:val('rNotifFin')||'08:00',
       notif_silence_samedi:document.getElementById('rNotifSamedi').checked,
       notif_silence_dimanche:document.getElementById('rNotifDimanche').checked,

@@ -321,6 +321,9 @@ Deno.serve(async (req) => {
       await sb.from('devis').update({
         relances: (devis.relances || 0) + 1,
         derniere_relance: new Date().toISOString(),
+        // Une relance en attente de validation (relances-devis-auto) est
+        // soldée dès qu'une relance part, quelle qu'en soit l'origine.
+        relance_a_valider_le: null,
       }).eq('id', devis.id);
     }
 

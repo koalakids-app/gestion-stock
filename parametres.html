@@ -283,6 +283,24 @@
           pas une signature électronique qualifiée au sens eIDAS.</p>
       </div>
  <div class="card"> <div class="sec"><i class="ti ti-bell-off"></i> Notifications — droit à la déconnexion</div> <div class="g2"> <div class="f"><label class="lb">Silence à partir de</label><input id="rNotifDebut" type="time"></div> <div class="f"><label class="lb">Notifications reprises à</label><input id="rNotifFin" type="time"></div> </div> <p class="hint">Aucune notification push n'est envoyée entre ces deux heures, pour tout le réseau. Les demandes, événements et actions assignées restent bien enregistrés — ils sont simplement notifiés dès la reprise.</p> <div class="f"><label class="lb">Silence complet</label><div class="jr"><label><input type="checkbox" id="rNotifSamedi"><span>Samedi</span></label><label><input type="checkbox" id="rNotifDimanche"><span>Dimanche</span></label><label><input type="checkbox" id="rNotifFeries"><span>Jours fériés</span></label></div></div> <p class="hint">Ces jours-là, aucune notification push n'est envoyée, quelle que soit l'heure.</p> </div>
+      <div class="card">
+        <div class="sec"><i class="ti ti-mail-fast"></i> Relances automatiques de devis</div>
+        <div class="f"><label class="jr"><label><input type="checkbox" id="rRelAuto" onchange="syncRelances()"><span>Relancer automatiquement les familles qui n'ont pas répondu à leur devis</span></label></label></div>
+        <div id="rRelOpts">
+          <div class="f"><label class="lb">Envoi des relances</label>
+            <select id="rRelMode">
+              <option value="validation">Avec validation — l'équipe relit et valide chaque relance avant l'envoi</option>
+              <option value="auto">Automatique — le mail part sans intervention</option>
+            </select></div>
+          <div class="g2">
+            <div class="f"><label class="lb">Première relance après (jours)</label><input id="rRelDelai" type="number" min="1" max="60" step="1"></div>
+            <div class="f"><label class="lb">Puis une relance tous les (jours)</label><input id="rRelInterv" type="number" min="1" max="60" step="1"></div>
+            <div class="f"><label class="lb">Nombre maximum de relances</label><input id="rRelMax" type="number" min="0" max="10" step="1"></div>
+            <div class="f"><label class="lb">Dernier rappel avant expiration (jours)</label><input id="rRelFinale" type="number" min="0" max="30" step="1"></div>
+          </div>
+          <p class="hint">En mode validation, la direction et la référente de la crèche sont notifiées : le devis affiche « Relance à valider », avec le message modifiable avant l'envoi. Les relances partent du lundi au vendredi (hors jours fériés), entre 8 h et 19 h, tant que le devis est envoyé et sans réponse. Une relance faite à la main décale d'autant la suivante. Le « dernier rappel » est un unique mail, quelques jours avant l'expiration du lien (0 pour le supprimer). Une fois les relances épuisées et resté sans réponse, la direction et la référente de la crèche reçoivent une notification pour appeler la famille, et la demande remonte dans « relances en retard ». Un devis peut être exclu des relances depuis sa fiche.</p>
+        </div>
+      </div>
       <div class="warn"><i class="ti ti-info-circle"></i><span>Le devis, le contrat d'accueil, la facture et le registre de sécurité lisent déjà ces valeurs.
         Les autres documents restent à câbler au fil de l'eau : c'est un chantier par document.</span></div>
     </div>
