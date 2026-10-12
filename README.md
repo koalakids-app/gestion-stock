@@ -107,7 +107,7 @@ d'habitude. Garde-fous : champ piège anti-robot, au plus 20 demandes par heure 
 
 Une bulle 💬 (en bas à droite, au-dessus du bouton **?**) est présente sur les pages connectées
 (`demandes`, `documents`, `employes`, `collaborateur`, `contrats`, `factures`, `infirmerie`,
-`inscriptions`, `parametres`, `suivi`, `terrain`). Code : `js/support-chat.js` ; données :
+`inscriptions`, `parametres`, `suivi`, `terrain`, et l'accueil `index.html` pour un compte déjà connecté). Code : `js/support-chat.js` ; données :
 table `support_messages` (`sql/support_chat.sql`, à exécuter une fois dans Supabase).
 
 - **Équipe** (référent·e, collaborateur·trice) : décrit son problème ; la page et l'appareil sont joints
