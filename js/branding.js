@@ -47,6 +47,44 @@
     secondaryDarkVars: ['--orange-dark'],
   };
 
+  // --- Logo dans les PDF générés côté navigateur (jsPDF) -------------------
+  // jsPDF veut une image décodée (PNG/JPEG) : on charge le logo de
+  // l'organisation, on le redessine dans un canvas (ce qui convertit aussi
+  // le SVG/WebP) et on garde le résultat. Tant qu'il n'est pas prêt, ou si
+  // l'organisation n'a pas de logo, addLogo() retombe sur le logo Koala Kids
+  // fourni par la page appelante — un PDF ne part donc jamais sans logo.
+  let pdfLogoData = null; // { data: 'data:image/png;base64,…', ratio: largeur/hauteur }
+
+  function chargerLogoPdf(url) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const h = Math.min(img.naturalHeight || 200, 300);
+          const w = Math.round(h * ((img.naturalWidth || 1) / (img.naturalHeight || 1)));
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          pdfLogoData = { data: c.toDataURL('image/png'), ratio: w / h };
+        } catch (e) { console.warn('[branding] logo PDF illisible', e); }
+        resolve(pdfLogoData);
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  }
+
+  // Dessine le logo dans la boîte (x, y, w, h) en conservant ses proportions.
+  // align 'right' : collé au bord droit de la boîte (logos en haut à droite).
+  function addLogo(doc, fallback, x, y, w, h, align) {
+    if (!pdfLogoData) return doc.addImage(fallback, 'PNG', x, y, w, h);
+    let lw = h * pdfLogoData.ratio, lh = h;
+    if (lw > w) { lw = w; lh = w / pdfLogoData.ratio; }
+    const lx = align === 'right' ? x + w - lw : x;
+    return doc.addImage(pdfLogoData.data, 'PNG', lx, y, lw, lh);
+  }
+
   async function applyBranding(sb, opts) {
     const cfg = Object.assign({}, DEFAUT, opts || {});
     try {
@@ -77,6 +115,7 @@
         document.querySelectorAll('[data-branding-logo]').forEach(el => {
           el.src = org.logo_url;
         });
+        chargerLogoPdf(org.logo_url);
       }
       window.KK_ORG = org;
       return org;
@@ -86,5 +125,5 @@
     }
   }
 
-  window.KKBranding = { applyBranding, lighten, darken };
+  window.KKBranding = { applyBranding, addLogo, lighten, darken };
 })(window);

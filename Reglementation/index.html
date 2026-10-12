@@ -6,7 +6,17 @@
 <title>Réglementation Micro-Crèches</title>
 
 <!-- PWA -->
-<link rel="manifest" href="manifest.json">
+<!-- Manifest par organisation (edge function `manifest`, variante du sous-site) ;
+     repli sur manifest.json si elle est injoignable, comme index.html à la racine. -->
+<link rel="manifest" href="https://juyrceadazrovlitxceb.supabase.co/functions/v1/manifest?app=reglementation" id="dynamic-manifest">
+<script>
+fetch(document.getElementById('dynamic-manifest').href)
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(m => {
+    if (m._icon_192) document.querySelector('link[rel="apple-touch-icon"]').href = m._icon_192;
+  })
+  .catch(() => { document.getElementById('dynamic-manifest').href = 'manifest.json'; });
+</script>
 <meta name="theme-color" content="#1A1208">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -77,7 +87,7 @@
 <header>
   <div class="header-inner">
     <div class="logo">
-      <div class="logo-icon">🏠</div>
+      <div class="logo-icon" id="reglo-header-logo">🏠</div>
       <div class="logo-text">
         <h1>Micro-Crèches</h1>
         <span>Base réglementaire</span>
@@ -335,5 +345,6 @@
 <script src="../js/pages/reglementation-index/02-state.js"></script>
 <script src="../js/pages/reglementation-index/03-suppression-d-une-fiche-direction-only.js"></script>
 <script src="../js/login-alert.js"></script>
+<script src="../js/branding.js"></script>
 </body>
 </html>

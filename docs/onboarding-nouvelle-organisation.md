@@ -40,18 +40,47 @@ PWA/branding public tant qu'un domaine dédié n'est pas mis en place.
 
 ## 2. Logo
 
-Uploader le logo dans le bucket Storage public dédié (même mécanisme que les autres
-assets publics de l'app), récupérer l'URL publique, puis :
+Prérequis (une seule fois sur le projet) : exécuter `sql/organisations_logo_storage.sql`
+(bucket public `logos-organisations` + droits d'écriture de la direction sur sa propre
+organisation).
+
+Ensuite, la direction de l'organisation téléverse elle-même son logo depuis
+**Paramètres > Le réseau > Le logo de l'organisation** (PNG, JPG, WebP ou SVG, 2 Mo max).
+Pour le premier envoi, on peut aussi le faire en base :
 
 ```sql
 update public.organisations set logo_url = 'https://.../logo.png' where id = '<org_id>';
 ```
 
-Le logo apparaît automatiquement partout où `[data-branding-logo]` est posé sur un
-`<img>` (pages avec `js/branding.js`) et dans les pages publiques par jeton qui
-renvoient `organisation.logo_url` (`dossier-contrat`, `dossier-devis`,
-`dossier-pieces`, `dossier-pieces-employe`) ainsi que dans le manifest PWA
-(`_logo_url`, consommé par `index.html`).
+Le logo remplace celui de Koala Kids :
+- sur les pages internes portant `[data-branding-logo]` (`js/branding.js`) ;
+- dans les **PDF générés côté navigateur** (documents, contrats, inscriptions,
+  infirmerie) via `KKBranding.addLogo()` — repli sur le logo Koala Kids tant que
+  l'organisation n'en a pas ;
+- dans les pages publiques par jeton qui renvoient `organisation.logo_url`
+  (`dossier-contrat`, `dossier-devis`, `dossier-pieces`, `dossier-pieces-employe`),
+  les e-mails sortants et le manifest PWA (`_logo_url`, consommé par `index.html`).
+
+- dans la barre latérale du module Stock : il lit aussi `organisations.logo_url`, et
+  la direction peut le changer en cliquant dessus. L'ancien logo partagé du bucket
+  `assets` ne sert plus de repli que pour l'organisation dont le nom contient « Koala ».
+
+- **icône de l'application installée (PWA)**, favicon et icône iOS : à l'envoi du logo,
+  Paramètres génère `icon-192.png` et `icon-512.png` (logo centré sur fond blanc) dans
+  `logos-organisations/<org_id>/`. L'edge function `manifest` les utilise dès que
+  `logo_url` est renseigné et que ces fichiers existent (sinon icônes statiques Koala
+  Kids). Un logo posé uniquement par SQL n'a donc pas d'icône dédiée : repasser par
+  Paramètres. **Redéployer `manifest`** (`supabase functions deploy manifest --no-verify-jwt`).
+  Une icône déjà installée sur un téléphone ne se met pas à jour toute seule.
+- **sous-site Réglementation** (`Reglementation/`) : le logo remplace l'emoji 🏠 de
+  l'en-tête après connexion, et son manifest PWA est servi par la même edge function
+  (`manifest?app=reglementation`, mêmes icônes, repli sur `Reglementation/manifest.json`).
+  Les emojis de l'écran de connexion restent (organisation inconnue avant connexion).
+- la carte « Site internet » (lien koalakids.fr) de l'accueil n'est affichée que pour Koala Kids.
+
+Non couverts : les illustrations des cartes de modules de l'accueil (`*-icon.jpg`,
+dessins génériques et non logos) et le logo Koala Kids de l'écran de connexion de
+`stock.html`, affiché avant que l'organisation ne soit connue.
 
 ## 3. Crèche(s) / site(s)
 

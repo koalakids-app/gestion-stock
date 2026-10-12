@@ -402,53 +402,89 @@ try {
   }
 }
 }
-// ─── LOGO SUPABASE ────────────────────────────────────────────────────────
-const LOGO_SUPABASE_URL = 'https://juyrceadazrovlitxceb.supabase.co';
-const LOGO_ANON = 'sb_publishable_juEwd3M1wOvOXnM3frvDJA_FIeHQB-Q';
-const LOGO_BUCKET = 'assets';
-const LOGO_FILE = 'logo/koalakids-logo';
+// ─── LOGO DE L'ORGANISATION ───────────────────────────────────────────────
+// Le logo vient de organisations.logo_url (une ligne par organisation, RLS :
+// on ne voit que la sienne) — le même que celui des autres modules, réglé dans
+// Paramètres > Le réseau. Seule la direction peut le modifier ici aussi.
+// Repli historique : l'ancien logo partagé du bucket `assets`, uniquement pour
+// l'organisation Koala Kids, afin de ne pas afficher son logo chez les autres.
+const LOGO_BUCKET_ORG = 'logos-organisations';
+const LOGO_LEGACY_FILE = 'logo/koalakids-logo';
+let SK_ORG = null;
 
-async function loadLogo() {
-  const extensions = ['png','jpg','jpeg','webp','svg'];
-  for (const ext of extensions) {
-    const url = `${LOGO_SUPABASE_URL}/storage/v1/object/public/${LOGO_BUCKET}/${LOGO_FILE}.${ext}`;
+function skAfficherLogo(url) {
+  const img = document.getElementById('logo-img');
+  const placeholder = document.getElementById('logo-placeholder');
+  const peutModifier = typeof SK_PROFILE !== 'undefined' && SK_PROFILE && SK_PROFILE.role === 'direction';
+  if (url) {
+    img.src = url;
+    img.style.display = 'block';
+    img.title = peutModifier ? 'Cliquer pour changer le logo' : '';
+    img.style.cursor = peutModifier ? 'pointer' : 'default';
+    img.onclick = peutModifier ? () => document.getElementById('logo-input').click() : null;
+  } else {
+    img.style.display = 'none';
+  }
+  // Pas de logo : la direction voit « Ajouter logo », les autres rien.
+  if (placeholder) placeholder.style.display = (!url && peutModifier) ? '' : 'none';
+}
+
+async function skLogoLegacy() {
+  for (const ext of ['png', 'jpg', 'jpeg', 'webp', 'svg']) {
+    const url = `${SUPA_URL}/storage/v1/object/public/assets/${LOGO_LEGACY_FILE}.${ext}`;
     try {
       const res = await fetch(url, { method: 'HEAD' });
-      if (res.ok) {
-        const img = document.getElementById('logo-img');
-        const placeholder = document.getElementById('logo-placeholder');
-        img.src = url + '?t=' + Date.now();
-        img.style.display = 'block';
-        if (placeholder) placeholder.style.display = 'none';
-        img.onclick = () => document.getElementById('logo-input').click();
-        return;
-      }
-    } catch(e) {}
+      if (res.ok) return url;
+    } catch (e) {}
   }
+  return null;
+}
+
+async function loadLogo() {
+  if (!SK_TOKEN) return; // avant connexion : RLS ne renverrait rien
+  try {
+    const rows = await sbGet('organisations', 'select=id,nom,logo_url');
+    SK_ORG = Array.isArray(rows) && rows.length ? rows[0] : null;
+  } catch (e) { console.warn('[logo] organisation illisible', e); }
+  let url = SK_ORG && SK_ORG.logo_url;
+  if (!url && SK_ORG && /koala/i.test(SK_ORG.nom || '')) url = await skLogoLegacy();
+  skAfficherLogo(url || null);
 }
 
 async function uploadLogo(file) {
-  const ext = file.name.split('.').pop();
-  const path = `${LOGO_FILE}.${ext}`;
-  const res = await fetch(`${LOGO_SUPABASE_URL}/storage/v1/object/${LOGO_BUCKET}/${path}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOGO_ANON}`,
-      'Content-Type': file.type,
-      'x-upsert': 'true'
-    },
-    body: file
-  });
-  if (res.ok) {
-    const url = `${LOGO_SUPABASE_URL}/storage/v1/object/public/${LOGO_BUCKET}/${path}`;
-    const img = document.getElementById('logo-img');
-    const placeholder = document.getElementById('logo-placeholder');
-    img.src = url + '?t=' + Date.now();
-    img.style.display = 'block';
-    if (placeholder) placeholder.style.display = 'none';
-    img.onclick = () => document.getElementById('logo-input').click();
+  if (!SK_ORG || !SK_PROFILE || SK_PROFILE.role !== 'direction') {
+    showNotif('❌ Seule la direction peut modifier le logo');
+    return;
+  }
+  if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(file.type)) {
+    showNotif('❌ Format non accepté (PNG, JPG, WebP ou SVG)');
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    showNotif('❌ Logo trop lourd (2 Mo maximum)');
+    return;
+  }
+  const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/svg+xml': 'svg' }[file.type];
+  const path = `${SK_ORG.id}/logo-${Date.now()}.${ext}`;
+  try {
+    const up = await sbFetchAuth(`${SUPA_URL}/storage/v1/object/${LOGO_BUCKET_ORG}/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type },
+      body: file
+    });
+    if (!up.ok) throw new Error('upload ' + up.status);
+    const url = `${SUPA_URL}/storage/v1/object/public/${LOGO_BUCKET_ORG}/${path}`;
+    const upd = await sbFetchAuth(`${SUPA_URL}/rest/v1/organisations?id=eq.${SK_ORG.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ logo_url: url })
+    });
+    if (!upd.ok) throw new Error('enregistrement ' + upd.status);
+    SK_ORG.logo_url = url;
+    skAfficherLogo(url);
     showNotif('✅ Logo enregistré !');
-  } else {
-    showNotif('❌ Erreur upload logo (' + res.status + ')');
+  } catch (e) {
+    console.error('[logo]', e);
+    showNotif('❌ Erreur upload logo (' + e.message + ')');
   }
 }

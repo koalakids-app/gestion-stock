@@ -229,6 +229,7 @@ async function loadAll(){
     RCFG=(r&&r.data&&r.data.config)||{};
     RCFG_ID=(r&&r.data&&r.data.id)||null;
     FERMETURES_RESEAU=toArr(RCFG.jours_fermeture_reseau).slice();
+    loadOrgLogo().catch(x=>console.warn('[logo]',x));
   }catch(err){
     console.error('[loadAll]',err);
     const msg=err.code==='42P01'
@@ -511,6 +512,80 @@ function showTab(t){
   document.getElementById('paneReseau').style.display=t==='reseau'?'':'none';
   document.getElementById('tabEtab').className='tab'+(t==='etab'?' on':'');
   document.getElementById('tabReseau').className='tab'+(t==='reseau'?' on':'');
+}
+
+/* ---------- LOGO DE L'ORGANISATION ---------- */
+/* Bucket public `logos-organisations`, dossier <org_id>/ (voir
+   sql/organisations_logo_storage.sql). L'URL publique est stockée dans
+   organisations.logo_url, lue ensuite par js/branding.js. */
+let ORG_ID=null,ORG_LOGO='';
+function renderOrgLogo(){
+  const img=document.getElementById('orgLogoPreview');
+  img.style.display=ORG_LOGO?'':'none';
+  if(ORG_LOGO)img.src=ORG_LOGO;
+  document.getElementById('orgLogoVide').style.display=ORG_LOGO?'none':'';
+  document.getElementById('orgLogoDel').style.display=ORG_LOGO?'':'none';
+}
+async function loadOrgLogo(){
+  const{data}=await sb.from('organisations').select('id,logo_url').maybeSingle();
+  ORG_ID=data&&data.id||null;ORG_LOGO=data&&data.logo_url||'';
+  renderOrgLogo();
+}
+async function saveOrgLogo(url){
+  const{error}=await sb.from('organisations').update({logo_url:url}).eq('id',ORG_ID);
+  if(error)throw error;
+  ORG_LOGO=url||'';renderOrgLogo();
+  if(window.KK_ORG)window.KK_ORG.logo_url=ORG_LOGO;
+}
+/* Icônes PWA : carrés 192 et 512, logo centré sur fond blanc avec une marge de
+   20 % (zone de sécurité « maskable »). Chemins STABLES <org_id>/icon-N.png :
+   l'edge function `manifest` les déduit de l'id de l'organisation. */
+function orgIconBlob(file,taille){
+  return new Promise((ok,ko)=>{
+    const u=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>{
+      try{
+        const c=document.createElement('canvas');c.width=c.height=taille;
+        const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,taille,taille);
+        const w0=img.naturalWidth||taille,h0=img.naturalHeight||taille;
+        const zone=taille*0.6,k=Math.min(zone/w0,zone/h0),w=w0*k,h=h0*k;
+        g.drawImage(img,(taille-w)/2,(taille-h)/2,w,h);
+        c.toBlob(b=>b?ok(b):ko(new Error('canvas')),'image/png');
+      }catch(e){ko(e);}finally{URL.revokeObjectURL(u);}
+    };
+    img.onerror=()=>{URL.revokeObjectURL(u);ko(new Error('image illisible'));};
+    img.src=u;
+  });
+}
+async function uploadOrgIcons(file){
+  for(const n of [192,512]){
+    const blob=await orgIconBlob(file,n);
+    const r=await sb.storage.from('logos-organisations')
+      .upload(ORG_ID+'/icon-'+n+'.png',blob,{contentType:'image/png',upsert:true,cacheControl:'300'});
+    if(r.error)throw r.error;
+  }
+}
+async function uploadOrgLogo(inp){
+  const f=inp.files&&inp.files[0];inp.value='';
+  if(!f)return;
+  if(!ORG_ID)return toast('Organisation introuvable',true);
+  if(!/^image\/(png|jpeg|webp|svg\+xml)$/.test(f.type))return toast('Format non accepté (PNG, JPG, WebP ou SVG)',true);
+  if(f.size>2*1024*1024)return toast('Logo trop lourd (2 Mo maximum)',true);
+  try{
+    const ext={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/svg+xml':'svg'}[f.type];
+    const path=ORG_ID+'/logo-'+Date.now()+'.'+ext;
+    const up=await sb.storage.from('logos-organisations').upload(path,f,{contentType:f.type,upsert:false});
+    if(up.error)throw up.error;
+    const url=sb.storage.from('logos-organisations').getPublicUrl(path).data.publicUrl;
+    await saveOrgLogo(url);
+    try{await uploadOrgIcons(f);toast('Logo et icône de l\'application enregistrés');}
+    catch(e2){console.warn('[logo] icônes PWA',e2);toast('Logo enregistré, mais pas l\'icône de l\'application',true);}
+  }catch(e){console.error('[logo]',e);toast('Échec de l\'envoi du logo',true);}
+}
+async function removeOrgLogo(){
+  if(!confirm('Retirer le logo de l\'organisation ? Le logo par défaut sera réaffiché.'))return;
+  try{await saveOrgLogo(null);toast('Logo retiré');}
+  catch(e){console.error('[logo]',e);toast('Échec de la suppression',true);}
 }
 
 /* ---------- CONTRÔLES DE SAISIE ---------- */

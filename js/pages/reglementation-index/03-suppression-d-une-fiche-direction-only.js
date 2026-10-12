@@ -16,8 +16,26 @@ async function regloDeleteFiche(id){
   }
 }
 
+/* Logo de l'organisation dans l'en-tête, à la place de l'emoji. Les couleurs de
+   cette page ne sont pas rebrandées (listes de variables vides) : seul le logo
+   l'est. Sans logo ou en cas d'échec, l'emoji reste. Asynchrone, non bloquant. */
+async function regloApplyBranding(){
+  if(!window.KKBranding) return;
+  const vide = {primaryVars:[],secondaryVars:[],primaryLightVars:[],secondaryLightVars:[],primaryDarkVars:[],secondaryDarkVars:[]};
+  const org = await KKBranding.applyBranding(sbReglo, vide);
+  if(!org || !org.logo_url) return;
+  const box = document.getElementById('reglo-header-logo');
+  if(!box) return;
+  box.style.background = '#fff';
+  box.style.padding = '3px';
+  box.innerHTML = '<img alt="" style="max-width:100%;max-height:100%;object-fit:contain">';
+  box.firstChild.src = org.logo_url;
+  box.firstChild.alt = org.nom || '';
+}
+
 async function enterApp(){
   kkLoginAlertCheck(sbReglo);
+  regloApplyBranding();
   document.getElementById('reglo-login-wrap').style.display = 'none';
   document.getElementById('reglo-app').style.display = 'block';
   await loadFichesFromSupabase();
