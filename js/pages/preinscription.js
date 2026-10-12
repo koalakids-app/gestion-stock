@@ -136,6 +136,11 @@ async function envoyer(){
     $('form').style.display='none';$('merci').style.display='';
     const e=d.estimation||EST;
     if(e){
+      const aReste=e.reste!=null;
+      $('merciReste').innerHTML='<div style="font-size:.85rem;color:var(--violet);font-weight:600">'+(aReste?'Reste à charge estimé':'Total mensuel estimé')+'</div>'
+        +'<div style="font-size:2rem;font-weight:800;line-height:1.2">'+eur(aReste?e.reste:e.mensuel)+' <span style="font-size:.9rem;font-weight:600">/ mois</span></div>'
+        +(aReste?'<div style="font-size:.75rem;opacity:.7">Montant avant aides : '+eur(e.mensuel)+' / mois</div>':'');
+      $('merciFiscal').style.display='';
       $('merciDevis').innerHTML=(e.lignes||[]).map(l=>'<tr><td>'+esc(l.libelle)+'</td><td class="m">'+eur(l.total)+'</td></tr>').join('')
         +(e.reste!=null?'<tr class="neg"><td>Aide CAF estimée (CMG)</td><td class="m">− '+eur(e.cmg)+'</td></tr>':'')
         +'<tr class="tot"><td>'+(e.reste!=null?'Reste à charge estimé':'Total mensuel estimé')+'</td><td class="m">'+eur(e.reste!=null?e.reste:e.mensuel)+'</td></tr>';
