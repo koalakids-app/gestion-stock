@@ -14,7 +14,7 @@
 --      relances automatiques (famille jointe par téléphone, par exemple).
 --   2. devis_relances_log : trace de tout ce que le robot a fait (relance n°N,
 --      dernier rappel, alerte à l'équipe, échec d'envoi). Écrite par la
---      fonction Edge (service_role), lue par la direction et les référentes.
+--      fonction Edge (service_role), lue par la direction.
 -- À exécuter une fois sur le projet Supabase de l'application.
 -- ============================================================================
 
@@ -43,9 +43,9 @@ create index if not exists devis_relances_log_devis_idx
 
 alter table public.devis_relances_log enable row level security;
 
--- Lecture seule pour l'application, limitée à l'organisation. Aucune politique
+-- Lecture seule pour l'application, réservée à la direction de l'organisation. Aucune politique
 -- d'écriture : seul le service_role (fonction Edge) insère.
 drop policy if exists devis_relances_log_select on public.devis_relances_log;
 create policy devis_relances_log_select on public.devis_relances_log
   for select to authenticated
-  using (org_id = public.kk_mon_org());
+  using (org_id = public.kk_mon_org() and public.kk_est_direction());
