@@ -130,7 +130,7 @@ function dessineContrat(c,lignes,telecharger){
   y=15;
   const logoH=8.2,logoW=logoH*(365/138);
   let yNom;
-  try{doc.addImage(LOGO_KOALA_PNG,'PNG',G,9,logoW,logoH);yNom=9+logoH+4.5;}
+  try{KKBranding.addLogo(doc,LOGO_KOALA_PNG,G,9,logoW,logoH);yNom=9+logoH+4.5;}
   catch(err){ecrire(e.raison_sociale||'Koala Kids',15,'bold',VIOLET);yNom=y+5.2;}
   y=yNom;
   [e.forme_juridique,

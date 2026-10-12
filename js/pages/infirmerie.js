@@ -780,7 +780,7 @@ async function exportPdf(){
 
   let py=0;
   const header=()=>{
-    try{doc.addImage(LOGO_KK,'PNG',14,10,26,12);}catch(err){}
+    try{KKBranding.addLogo(doc,LOGO_KK,14,10,26,12);}catch(err){}
     doc.setFont('helvetica','bold'); doc.setFontSize(14);
     doc.text("Registre d'infirmerie",46,16);
     doc.setFont('helvetica','normal'); doc.setFontSize(9);

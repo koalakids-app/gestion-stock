@@ -529,7 +529,7 @@ function dessineDevis(d,lignes,envoi){
   y=18;
   const logoH=8.2,logoW=logoH*(365/138);
   let yNom;
-  try{doc.addImage(LOGO_KOALA_PNG,'PNG',G,12,logoW,logoH);yNom=12+logoH+4.5;}
+  try{KKBranding.addLogo(doc,LOGO_KOALA_PNG,G,12,logoW,logoH);yNom=12+logoH+4.5;}
   catch(err){ecrire(e.raison_sociale||'Koala Kids',15,'bold',VIOLET);yNom=y+4.8;}
   y=yNom;
   [e.forme_juridique,

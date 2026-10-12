@@ -12,7 +12,7 @@ function pdfLogoVar(doc,y){
 
 /* Place le logo en haut a droite et renvoie le y de depart du contenu */
 function pdfLogo(doc,y){
-  try{doc.addImage(LOGO_KK,'PNG',196-LOGO_W,10,LOGO_W,LOGO_H);}catch(e){console.warn('logo PDF',e);}
+  try{KKBranding.addLogo(doc,LOGO_KK,196-LOGO_W,10,LOGO_W,LOGO_H,'right');}catch(e){console.warn('logo PDF',e);}
   return Math.max(y,10+LOGO_H+6);
 }
 
@@ -278,7 +278,7 @@ function exportMatricePdf(){
   let y=0;
 
   function bandeau(){
-    try{doc.addImage(LOGO_KK,'PNG',PW-ML-LOGO_W,8,LOGO_W,LOGO_H);}catch(e){console.warn('logo PDF',e);}
+    try{KKBranding.addLogo(doc,LOGO_KK,PW-ML-LOGO_W,8,LOGO_W,LOGO_H,'right');}catch(e){console.warn('logo PDF',e);}
     y=14+LOGO_H;
     doc.setTextColor(74,63,159);doc.setFontSize(15);doc.setFont(undefined,'bold');
     doc.text(String(fillDoc.titre||''),ML,y);
