@@ -60,7 +60,7 @@ grant execute on function public.kk_support_destinataires() to authenticated;
 
 -- >>> À ADAPTER : e-mail de connexion du compte responsable du support. <<<
 insert into public.support_responsables (user_id)
-select id from auth.users where lower(email) = lower('koalakids.app@gmail.com')
+select id from auth.users where lower(email) = lower('cp1.koalakids@outlook.fr')
 on conflict do nothing;
 
 create table if not exists public.support_messages (
