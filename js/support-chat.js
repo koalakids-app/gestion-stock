@@ -27,7 +27,8 @@
   let timer = null;
   let canal = null;
   let chargement = false;
-  let profilAbsent = null;    // compte connecté sans profil équipe : on n'insiste pas
+  let profilAbsent = null;    // { id, t } : profil introuvable ; on réessaie après DELAI_RETENTE_MS
+  const DELAI_RETENTE_MS = 60000;
   let els = null;
   const titreOrigine = document.title;
 
@@ -440,10 +441,12 @@
     try { session = (await client.auth.getSession()).data.session; } catch (e) { return; }
     const userId = session && session.user ? session.user.id : null;
     if (!userId) { if (uid) detruireUI(); return; }
-    if (uid === userId || profilAbsent === userId) return;
+    if (uid === userId) return;
+    if (profilAbsent && profilAbsent.id === userId && Date.now() - profilAbsent.t < DELAI_RETENTE_MS) return;
     if (uid) detruireUI();
     const profil = await chargerProfil(client, userId);
-    if (!profil) { profilAbsent = userId; return; } // compte sans profil équipe
+    if (!profil) { profilAbsent = { id: userId, t: Date.now() }; return; } // introuvable (ou échec passager) : on réessaie plus tard
+    profilAbsent = null;
     uid = userId; me = profil;
     creerUI();
     ecouterTempsReel(client);
