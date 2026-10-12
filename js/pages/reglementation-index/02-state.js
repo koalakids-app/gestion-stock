@@ -72,6 +72,21 @@ async function regloLogin(){
   }
 }
 
+// --- Mémorisation de l'appareil : pas de nouveau code à 6 chiffres pendant 24h
+// glissantes sur ce navigateur (localStorage, jamais en base) ; le mot de passe
+// reste toujours exigé.
+const REGLO_MFA_TRUST_MS = 24*60*60*1000;
+function regloMfaTrustKey(){ return 'kk_mfa_trust_' + (currentUser && currentUser.id || ''); }
+function regloMfaIsTrusted(){
+  try{
+    const t = Number(localStorage.getItem(regloMfaTrustKey()) || 0);
+    return t > 0 && (Date.now() - t) < REGLO_MFA_TRUST_MS;
+  }catch(e){ return false; }
+}
+function regloMfaMarkTrusted(){
+  try{ localStorage.setItem(regloMfaTrustKey(), String(Date.now())); }catch(e){}
+}
+
 // --- Portail MFA obligatoire ---
 function regloShowLoginForm(msg){
   document.getElementById('reglo-app').style.display = 'none';
@@ -95,7 +110,10 @@ async function regloMfaGateCheckAndProceed(){
     const { data, error } = await sbReglo.auth.mfa.getAuthenticatorAssuranceLevel();
     if(error) throw error;
     if(data.currentLevel === 'aal2'){ await enterApp(); return; }
-    if(data.nextLevel === 'aal2'){ regloMfaShowChallenge(); return; }
+    if(data.nextLevel === 'aal2'){
+      if(regloMfaIsTrusted()){ await enterApp(); return; }
+      regloMfaShowChallenge(); return;
+    }
     await regloMfaShowEnroll();
   }catch(e){
     console.error('[MFA Gate]', e);
@@ -161,6 +179,7 @@ async function regloMfaVerifyChallenge(){
     if(chErr) throw chErr;
     const { error: vErr } = await sbReglo.auth.mfa.verify({ factorId: verified.id, challengeId: ch.id, code });
     if(vErr) throw vErr;
+    regloMfaMarkTrusted();
     await enterApp();
   }catch(e){
     err.textContent = 'Code invalide ou expiré : ' + e.message;
@@ -179,6 +198,7 @@ async function regloMfaConfirmEnroll(){
     const { error: vErr } = await sbReglo.auth.mfa.verify({ factorId: regloMfaFactorId, challengeId: ch.id, code });
     if(vErr) throw vErr;
     regloMfaFactorId = null;
+    regloMfaMarkTrusted();
     await enterApp();
   }catch(e){
     err.textContent = 'Code invalide ou expiré : ' + e.message;
