@@ -29,6 +29,16 @@ create policy logos_organisations_insert on storage.objects
     and (storage.foldername(name))[1] = public.kk_mon_org()::text
   );
 
+-- Les icônes PWA (icon-192.png / icon-512.png) sont réécrites à chaque changement
+-- de logo, avec upsert : Storage exige alors aussi un droit de lecture.
+drop policy if exists logos_organisations_select on storage.objects;
+create policy logos_organisations_select on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'logos-organisations'
+    and (storage.foldername(name))[1] = public.kk_mon_org()::text
+  );
+
 drop policy if exists logos_organisations_update on storage.objects;
 create policy logos_organisations_update on storage.objects
   for update to authenticated

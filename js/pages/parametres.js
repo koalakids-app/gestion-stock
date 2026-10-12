@@ -537,6 +537,34 @@ async function saveOrgLogo(url){
   ORG_LOGO=url||'';renderOrgLogo();
   if(window.KK_ORG)window.KK_ORG.logo_url=ORG_LOGO;
 }
+/* Icônes PWA : carrés 192 et 512, logo centré sur fond blanc avec une marge de
+   20 % (zone de sécurité « maskable »). Chemins STABLES <org_id>/icon-N.png :
+   l'edge function `manifest` les déduit de l'id de l'organisation. */
+function orgIconBlob(file,taille){
+  return new Promise((ok,ko)=>{
+    const u=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>{
+      try{
+        const c=document.createElement('canvas');c.width=c.height=taille;
+        const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,taille,taille);
+        const w0=img.naturalWidth||taille,h0=img.naturalHeight||taille;
+        const zone=taille*0.6,k=Math.min(zone/w0,zone/h0),w=w0*k,h=h0*k;
+        g.drawImage(img,(taille-w)/2,(taille-h)/2,w,h);
+        c.toBlob(b=>b?ok(b):ko(new Error('canvas')),'image/png');
+      }catch(e){ko(e);}finally{URL.revokeObjectURL(u);}
+    };
+    img.onerror=()=>{URL.revokeObjectURL(u);ko(new Error('image illisible'));};
+    img.src=u;
+  });
+}
+async function uploadOrgIcons(file){
+  for(const n of [192,512]){
+    const blob=await orgIconBlob(file,n);
+    const r=await sb.storage.from('logos-organisations')
+      .upload(ORG_ID+'/icon-'+n+'.png',blob,{contentType:'image/png',upsert:true,cacheControl:'300'});
+    if(r.error)throw r.error;
+  }
+}
 async function uploadOrgLogo(inp){
   const f=inp.files&&inp.files[0];inp.value='';
   if(!f)return;
@@ -550,7 +578,8 @@ async function uploadOrgLogo(inp){
     if(up.error)throw up.error;
     const url=sb.storage.from('logos-organisations').getPublicUrl(path).data.publicUrl;
     await saveOrgLogo(url);
-    toast('Logo enregistré');
+    try{await uploadOrgIcons(f);toast('Logo et icône de l\'application enregistrés');}
+    catch(e2){console.warn('[logo] icônes PWA',e2);toast('Logo enregistré, mais pas l\'icône de l\'application',true);}
   }catch(e){console.error('[logo]',e);toast('Échec de l\'envoi du logo',true);}
 }
 async function removeOrgLogo(){

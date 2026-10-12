@@ -65,8 +65,17 @@ Le logo remplace celui de Koala Kids :
   la direction peut le changer en cliquant dessus. L'ancien logo partagé du bucket
   `assets` ne sert plus de repli que pour l'organisation dont le nom contient « Koala ».
 
-Non couverts : les icônes de l'accueil (`*-icon.jpg`), les icônes PWA
-(`icon-192.png`/`icon-512.png`) et le logo Koala Kids de l'écran de connexion de
+- **icône de l'application installée (PWA)**, favicon et icône iOS : à l'envoi du logo,
+  Paramètres génère `icon-192.png` et `icon-512.png` (logo centré sur fond blanc) dans
+  `logos-organisations/<org_id>/`. L'edge function `manifest` les utilise dès que
+  `logo_url` est renseigné et que ces fichiers existent (sinon icônes statiques Koala
+  Kids). Un logo posé uniquement par SQL n'a donc pas d'icône dédiée : repasser par
+  Paramètres. **Redéployer `manifest`** (`supabase functions deploy manifest --no-verify-jwt`).
+  Une icône déjà installée sur un téléphone ne se met pas à jour toute seule.
+- la carte « Site internet » (lien koalakids.fr) de l'accueil n'est affichée que pour Koala Kids.
+
+Non couverts : les illustrations des cartes de modules de l'accueil (`*-icon.jpg`,
+dessins génériques et non logos) et le logo Koala Kids de l'écran de connexion de
 `stock.html`, affiché avant que l'organisation ne soit connue.
 
 ## 3. Crèche(s) / site(s)

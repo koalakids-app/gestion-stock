@@ -20,6 +20,15 @@ fetch(document.getElementById('dynamic-manifest').href)
     document.addEventListener('DOMContentLoaded', () => {
       if (m.short_name) document.title = document.title.replace(/Koala ?Kids/i, m.short_name);
       if (m.theme_color) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', m.theme_color);
+      // Favicon et icône d'écran d'accueil iOS : celles de l'organisation.
+      if (m._icon_192) {
+        document.querySelectorAll('link[rel="icon"][sizes="192x192"], link[rel="apple-touch-icon"]').forEach(l => l.href = m._icon_192);
+        document.querySelector('link[rel="icon"][sizes="512x512"]')?.setAttribute('href', m._icon_512 || m._icon_192);
+      }
+      // Carte propre à Koala Kids (lien vers son site vitrine) : masquée ailleurs.
+      if (m.short_name && !/koala ?kids/i.test(m.short_name)) {
+        document.querySelectorAll('[data-org-koalakids]').forEach(el => el.remove());
+      }
       if (m._logo_url) {
         const wm = document.getElementById('wordmark');
         if (wm) wm.outerHTML = `<img id="wordmark" src="${m._logo_url}" alt="${m.short_name || ''}" style="max-height:64px">`;
@@ -249,7 +258,7 @@ fetch(document.getElementById('dynamic-manifest').href)
       </div>
       <div class="card-arrow">›</div>
     </a>
-<a href="https://koalakids.fr/" target="_blank" rel="noopener" class="card card-site">
+<a href="https://koalakids.fr/" target="_blank" rel="noopener" class="card card-site" data-org-koalakids>
       <div class="card-icon"><img src="koalakids-site-icon.png" alt="Site internet Koala Kids"></div>
       <div class="card-text">
         <h2>Site internet</h2>
