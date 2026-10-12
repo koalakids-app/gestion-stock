@@ -57,6 +57,14 @@ const PU_BLEU=[
   ['Couvertures de survie / plaids','',''],
   ['Livres, jeux calmes et silencieux','Pour apaiser et occuper','']]}
 ];
+const PU_INTRO=[
+ "Ce document a pour objectif de vous aider à anticiper ces situations, à faciliter l’organisation de l’équipe et à disposer du matériel essentiel en cas de besoin.",
+ "Je vous invite à vous approprier ce support en l’adaptant à votre structure, à vos locaux, à votre organisation et aux spécificités des enfants accueillis. Vous pourrez également y intégrer le logo de votre crèche afin de disposer d’un document personnalisé, identifié à votre établissement et facilement accessible à l’ensemble de l’équipe.",
+ "Il est important que la composition des sacs, leur emplacement, les responsabilités de chacun et les modalités de vérification du matériel soient définis collectivement et connus de tous les professionnels.",
+ "Ce support constitue une base de travail à adapter et à valider au regard de vos procédures internes, de votre organisation de sécurité et, le cas échéant, de votre plan particulier de mise en sûreté (PPMS).",
+ "N’hésitez pas à me solliciter si vous souhaitez échanger sur son adaptation à votre structure ou sur les points qui nécessitent une réflexion collective avec votre équipe.",
+ "L’objectif est de vous permettre de disposer d’un outil simple, concret et opérationnel, au service de la sécurité des enfants et des professionnels."
+];
 const PU_NB_CTRL=8;
 const PU_NB_SPEC=2;
 const PU_NUMS=[['SAMU','15'],['Pompiers','18'],['Police / Gendarmerie','17'],['Numéro d’urgence européen','112'],['Urgence par SMS (sourds et malentendants)','114']];
@@ -136,6 +144,8 @@ TPL.protocole_urgence={
     <div class="f"><label>Capacité d’accueil (enfants / professionnels)</label>
       <div style="display:flex;gap:8px"><input id="ff_pu_nb_enf" value="${esc(v.pu_nb_enf)}" placeholder="Enfants"><input id="ff_pu_nb_pro" value="${esc(v.pu_nb_pro)}" placeholder="Professionnels"></div></div>
   </div>
+
+  <div class="txtbox">${PU_INTRO.map(t=>esc(t)).join('<br><br>')}</div>
 
   <h3>Qu’est-ce que l’urgence ?</h3>
   <div class="txtbox">
@@ -301,6 +311,7 @@ TPL.protocole_urgence={
   if(g('pu_nb_enf')||g('pu_nb_pro')){
     P('Capacité d’accueil : '+(g('pu_nb_enf')||dots(4))+' enfants / '+(g('pu_nb_pro')||dots(4))+' professionnels',9.5,false);
   }
+  PU_INTRO.forEach(t=>P(t,9.5));
   H('QU’EST-CE QUE L’URGENCE ?');
   P('Le sac « Urgence » répond aux besoins de sortie immédiate, rapide et sécuritaire. La sortie hors de l’enceinte de la structure implique nécessairement la prise de contact avec l’extérieur (cf. Fiche annexe 1 – ROUGE).');
   P('→ On sort vite, de manière sécuritaire, en regroupant et en alertant',10,true);
