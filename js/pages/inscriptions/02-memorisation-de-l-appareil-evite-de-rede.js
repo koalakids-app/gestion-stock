@@ -865,7 +865,7 @@ let CMG_BAREME=[],CMG_CFG={taux_max:0.85,ratio_3_6:0.5,plafond_horaire:10};
 const CMG_CFG_ID='00000000-0000-0000-0000-000000000002';
 
 const D_STATUTS={
-  brouillon:{l:'Brouillon',bg:'#F1EFF7',fg:'#8E8AA8'},
+  brouillon:{l:'Devis à envoyer',bg:'#F1EFF7',fg:'#8E8AA8'},
   envoye:   {l:'Envoyé',   bg:'#FFF1E3',fg:'#F47920'},
   accepte:  {l:'Accepté',  bg:'#E6F5EE',fg:'#2E9E6B'},
   refuse:   {l:'Refusé',   bg:'#FDE8E8',fg:'#C62828'},
