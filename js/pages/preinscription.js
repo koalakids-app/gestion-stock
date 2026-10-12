@@ -115,7 +115,19 @@ function recap(){
    +kv('E-mail',$('p1Mail').value.trim())
    +kv('Crèche',sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:'')
    +kv('Accueil',jours().map(j=>JN[j]).join(', ')+' · '+$('aHd').value+'–'+$('aHf').value)
-   +kv('Estimation',EST?eur(EST.mensuel)+' / mois (avant aides)':'—');
+   +(EST?estimationHtml(EST)
+        +'<p class="note" style="margin-top:6px">💡 Les frais de garde sont déductibles des impôts à hauteur de 50 % sur votre déclaration d\'impôts de l\'année suivante.</p>'
+      :kv('Estimation',''));
+}
+
+/* Reste à charge en grand, montant avant aides en petit (récap et confirmation). */
+function estimationHtml(e){
+  const aReste=e.reste!=null;
+  return '<div class="center" style="margin:10px 0">'
+    +'<div style="font-size:.85rem;color:var(--violet);font-weight:600">'+(aReste?'Reste à charge estimé':'Total mensuel estimé')+'</div>'
+    +'<div style="font-size:2rem;font-weight:800;line-height:1.2">'+eur(aReste?e.reste:e.mensuel)+' <span style="font-size:.9rem;font-weight:600">/ mois</span></div>'
+    +(aReste?'<div style="font-size:.75rem;opacity:.7">Montant avant aides : '+eur(e.mensuel)+' / mois</div>':'')
+    +'</div>';
 }
 
 async function envoyer(){
@@ -136,10 +148,7 @@ async function envoyer(){
     $('form').style.display='none';$('merci').style.display='';
     const e=d.estimation||EST;
     if(e){
-      const aReste=e.reste!=null;
-      $('merciReste').innerHTML='<div style="font-size:.85rem;color:var(--violet);font-weight:600">'+(aReste?'Reste à charge estimé':'Total mensuel estimé')+'</div>'
-        +'<div style="font-size:2rem;font-weight:800;line-height:1.2">'+eur(aReste?e.reste:e.mensuel)+' <span style="font-size:.9rem;font-weight:600">/ mois</span></div>'
-        +(aReste?'<div style="font-size:.75rem;opacity:.7">Montant avant aides : '+eur(e.mensuel)+' / mois</div>':'');
+      $('merciReste').innerHTML=estimationHtml(e);
       $('merciFiscal').style.display='';
       $('merciDevis').innerHTML=(e.lignes||[]).map(l=>'<tr><td>'+esc(l.libelle)+'</td><td class="m">'+eur(l.total)+'</td></tr>').join('')
         +(e.reste!=null?'<tr class="neg"><td>Aide CAF estimée (CMG)</td><td class="m">− '+eur(e.cmg)+'</td></tr>':'')
