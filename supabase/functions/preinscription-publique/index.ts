@@ -591,7 +591,7 @@ async function action_envoyer(p: any) {
       'Nous avons bien reçu votre demande',
       `<p style="margin:0 0 14px;font-size:15px">Bonjour ${esc(p1.prenom)},</p>
        <p style="margin:0 0 14px;font-size:15px">Merci : la demande de préinscription de <b>${esc(enfantNom)}</b> à la micro-crèche
-       <b>${esc(c.creche.name)}</b> est bien enregistrée. La directrice vous recontacte très vite pour vous proposer une visite.</p>
+       <b>${esc(c.creche.name)}</b> est bien enregistrée. La direction vous recontacte très vite pour vous proposer une visite.</p>
        <p style="margin:0 0 8px;font-size:15px">Accueil souhaité : ${esc(semaine)}, de ${esc(s.heure_debut)} à ${esc(s.heure_fin)}.
        Voici une <b>estimation</b> de la facturation mensuelle :</p>${tableauDevis(c)}
        <p style="margin:0;font-size:13px;color:#78748C">Estimation indicative, non contractuelle. Le devis définitif vous sera envoyé par la direction. Le CMG est calculé par la CAF, seule habilitée à en fixer le montant.</p>
