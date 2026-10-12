@@ -38,10 +38,21 @@
   const SB_URL = 'https://juyrceadazrovlitxceb.supabase.co';
   const SB_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug';
   let sbPropre = null;
+  // Page qui gère elle-même sa connexion (stock.html) : elle définit
+  // window.kkSupportSession = () => ({ user, access_token }) | null.
+  // Le widget n'ouvre alors AUCUNE session Supabase de son côté (pas de
+  // renouvellement concurrent du jeton) : il emprunte le jeton de la page.
+  const sessionPage = () => (typeof window.kkSupportSession === 'function' ? window.kkSupportSession() : null);
   const getSb = () => {
     try { if (typeof sb !== 'undefined' && sb) return sb; } catch (e) { /* pas de client de page */ }
     if (!sbPropre && window.supabase && window.supabase.createClient) {
-      try { sbPropre = window.supabase.createClient(SB_URL, SB_ANON_KEY); } catch (e) { return null; }
+      try {
+        sbPropre = typeof window.kkSupportSession === 'function'
+          ? window.supabase.createClient(SB_URL, SB_ANON_KEY, {
+              accessToken: async () => { const s = sessionPage(); return s ? s.access_token : null; }
+            })
+          : window.supabase.createClient(SB_URL, SB_ANON_KEY);
+      } catch (e) { return null; }
     }
     return sbPropre;
   };
@@ -436,9 +447,14 @@
   // ───────── Démarrage : suit la connexion de la page ─────────
   async function verifierSession() {
     const client = getSb();
-    if (!client || !client.auth) return;
+    if (!client) return;
     let session = null;
-    try { session = (await client.auth.getSession()).data.session; } catch (e) { return; }
+    if (typeof window.kkSupportSession === 'function') {
+      session = sessionPage();
+    } else {
+      if (!client.auth) return;
+      try { session = (await client.auth.getSession()).data.session; } catch (e) { return; }
+    }
     const userId = session && session.user ? session.user.id : null;
     if (!userId) { if (uid) detruireUI(); return; }
     if (uid === userId) return;

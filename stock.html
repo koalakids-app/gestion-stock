@@ -855,6 +855,16 @@ if (location.protocol === 'https:') {
 
 <script src="js/pages/stock-3.js"></script>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// Chat d'assistance : le stock gère lui-même sa connexion (jeton SK_TOKEN), on le
+// prête au widget sans qu'il ouvre de session Supabase de son côté.
+window.kkSupportSession = function () {
+  return (typeof SK_TOKEN !== 'undefined' && SK_TOKEN && typeof SK_USER !== 'undefined' && SK_USER)
+    ? { user: SK_USER, access_token: SK_TOKEN } : null;
+};
+</script>
+<script src="js/support-chat.js?v=4"></script>
 <script src="js/garde-modales.js"></script>
 </body>
 </html>
