@@ -37,7 +37,6 @@ async function init(){
 }
 
 function syncNe(){$('lbDob').innerHTML=($('eNe').value==='a_naitre'?'Terme prévu':'Date de naissance')+' <i>*</i>';}
-function syncPai(){$('wrapPai').style.display=$('ePai').checked?'':'none';}
 function erreur(m,ids){
   document.querySelectorAll('.bad').forEach(e=>e.classList.remove('bad'));
   (ids||[]).forEach(i=>$(i)&&$(i).classList.add('bad'));
@@ -129,11 +128,9 @@ async function envoyer(){
   try{
     const d=await appel(Object.assign({action:'envoyer',
       site_web:$('site_web').value,consentement:true,
-      enfant:{prenom:$('ePrenom').value,nom:$('eNom').value,sexe:$('eSexe').value,ne_ou_a_naitre:$('eNe').value,
-        allergies:$('eAllergies').value,fratrie:$('eFratrie').checked,pai:$('ePai').checked,pai_detail:$('ePaiDetail').value},
+      enfant:{prenom:$('ePrenom').value,nom:$('eNom').value,sexe:$('eSexe').value,ne_ou_a_naitre:$('eNe').value},
       parents:parents,
-      foyer:{adresse:$('fAdresse').value,code_postal:$('fCp').value,ville:$('fVille').value,num_allocataire:$('fAlloc').value,
-        separes:$('fSepares').checked,alternee:$('fAlternee').checked},
+      foyer:{adresse:$('fAdresse').value,code_postal:$('fCp').value,ville:$('fVille').value,num_allocataire:$('fAlloc').value},
       comment_connus:$('aConnu').value,message:$('aMessage').value},corpsAccueil()));
     if(d.pdf_joint)$('merciTxt').textContent+=' Votre demande est aussi jointe à l\'e-mail en PDF.';
     $('form').style.display='none';$('merci').style.display='';
