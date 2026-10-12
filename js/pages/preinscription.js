@@ -91,16 +91,20 @@ function corpsAccueil(){
 function estimer(){
   clearTimeout(tEst);EST=null;
   if(!$('aCreche').value||!jours().length||!$('aHd').value||!$('aHf').value||$('aHf').value<=$('aHd').value){
-    $('liveTot').textContent='—';$('liveSub').textContent='Choisissez une crèche, des jours et des horaires';return;
+    $('liveTot').textContent='—';$('liveLib').textContent='Estimation mensuelle';$('liveFiscal').style.display='none';
+    $('liveSub').textContent='Choisissez une crèche, des jours et des horaires';return;
   }
   tEst=setTimeout(async()=>{
     const m=++seqEst;
     try{
       const d=await appel(Object.assign({action:'estimer'},corpsAccueil()));
       if(m!==seqEst)return;
-      EST=d;$('liveTot').textContent=eur(d.mensuel)+' / mois';
-      $('liveSub').textContent=d.reste!=null?'soit environ '+eur(d.reste)+' après aide CAF (CMG)':'avant aide CAF (CMG)';
-    }catch(e){if(m===seqEst){$('liveTot').textContent='—';$('liveSub').textContent=e.message;}}
+      EST=d;const aReste=d.reste!=null;
+      $('liveLib').textContent=aReste?'Reste à charge estimé':'Estimation mensuelle';
+      $('liveTot').textContent=eur(aReste?d.reste:d.mensuel)+' / mois';
+      $('liveSub').textContent=aReste?'Montant avant aides : '+eur(d.mensuel)+' / mois':'avant aide CAF (CMG)';
+      $('liveFiscal').style.display='';
+    }catch(e){if(m===seqEst){$('liveTot').textContent='—';$('liveLib').textContent='Estimation mensuelle';$('liveFiscal').style.display='none';$('liveSub').textContent=e.message;}}
   },250);
 }
 
