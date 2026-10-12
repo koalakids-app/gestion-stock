@@ -61,6 +61,7 @@
     <button class="tbtn" onclick="openCloture()" title="Clôturer les demandes dont le début d'accueil est dépassé"><i class="ti ti-archive"></i><span>Clôturer</span></button>
     <a class="tbtn" href="index.html" title="Retour à l'accueil"><i class="ti ti-home"></i><span>Accueil</span></a>
     <a class="tbtn" href="contrats.html" title="Aller aux contrats"><i class="ti ti-file-certificate"></i><span>Contrats</span></a>
+    <button class="tbtn" onclick="openRelances()" title="Récapitulatif des relances de devis"><i class="ti ti-mail-fast"></i><span>Relances</span></button>
     <button class="tbtn" onclick="openHisto()" title="Historique des demandes"><i class="ti ti-history"></i><span>Historique</span></button>
     <button class="tbtn" onclick="openNotice()" title="Mode d'emploi"><i class="ti ti-help"></i><span>Aide</span></button>
     <button class="tbtn danger" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i><span>Quitter</span></button>
@@ -275,6 +276,8 @@
     <div class="f" style="margin-top:14px"><label class="lb">Commentaire porté sur le devis</label><textarea id="dCom" placeholder="Visible par la famille."></textarea></div>
     <div class="f"><label class="lb">Notes internes</label><textarea id="dNotes" placeholder="Jamais transmis à la famille."></textarea></div>
 
+    <div id="dRelHisto"></div>
+
     <div class="acts">
       <button class="btn btn-d" id="btnDelDev" style="display:none" onclick="delDevis()"><i class="ti ti-trash"></i> Supprimer</button>
       <button class="btn btn-d" id="btnRefusDev" style="display:none" onclick="repondreDevis(devisId,'refuse')"><i class="ti ti-x"></i> Refuser ce devis</button>
@@ -320,6 +323,36 @@
       <button class="btn btn-g" onclick="closeOv('ovEnvoiVisite')">Ne pas envoyer</button>
       <button class="btn btn-p" id="btnEnvoiVisiteOk" onclick="confirmerEnvoiVisite()"><i class="ti ti-send"></i> Envoyer</button>
     </div>
+  </div>
+</div>
+
+<!-- RELANCES DE DEVIS : RÉCAPITULATIF -->
+<div class="ov" id="ovRelances">
+  <div class="md" style="max-width:1000px">
+    <h3><i class="ti ti-mail-fast"></i> Relances de devis</h3>
+    <div class="bar">
+      <select id="rlPeriode" style="width:auto;min-width:150px" onchange="renderRelances()">
+        <option value="7">7 derniers jours</option>
+        <option value="30" selected>30 derniers jours</option>
+        <option value="90">3 derniers mois</option>
+        <option value="">Tout</option>
+      </select>
+      <select id="rlType" style="width:auto;min-width:170px" onchange="renderRelances()">
+        <option value="">Tous les événements</option>
+        <option value="relance">Relances envoyées</option>
+        <option value="finale">Derniers rappels</option>
+        <option value="a_valider">Relances proposées</option>
+        <option value="alerte">À appeler</option>
+        <option value="echec">Échecs d'envoi</option>
+      </select>
+      <select id="rlCreche" style="width:auto;min-width:150px" onchange="renderRelances()"></select>
+      <input class="search" id="rlSearch" placeholder="Rechercher un enfant ou un n° de devis…" oninput="renderRelances()">
+      <button class="btn btn-s" onclick="exporterRelances()"><i class="ti ti-download"></i> Exporter</button>
+    </div>
+    <div id="rlStats" class="stats"></div>
+    <div id="rlListe"></div>
+    <p class="hint" id="rlNote" style="margin-top:10px"></p>
+    <div class="acts"><button class="btn btn-p" onclick="closeOv('ovRelances')">Fermer</button></div>
   </div>
 </div>
 
@@ -627,6 +660,7 @@
 <script src="js/pages/inscriptions/03-part.js"></script>
 <script src="js/pages/inscriptions/04-part.js"></script>
 <script src="js/pages/inscriptions/05-part.js"></script>
+<script src="js/pages/inscriptions/06-relances.js"></script>
 <script src="js/login-alert.js"></script>
 <script src="js/garde-modales.js"></script>
 </body>
