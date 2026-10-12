@@ -296,7 +296,7 @@ function tableauDevis(c: { lignes: any[]; mensuel: number; cmg: number | null; r
     + `<div style="font-size:30px;font-weight:800;color:#2B2640;line-height:1.2">${eur(aReste ? c.reste : c.mensuel)} <span style="font-size:14px">/ mois</span></div>`
     + (aReste ? `<div style="font-size:12px;color:#78748C">Montant avant aides : ${eur(c.mensuel)} / mois</div>` : '')
     + `</div>`;
-  const fiscal = `<p style="margin:0 0 14px;font-size:13px;color:#78748C">💡 Les frais de garde sont déductibles des impôts à hauteur de 50 % sur votre déclaration d'impôts de l'année suivante.</p>`;
+  const fiscal = `<p style="margin:0 0 14px;font-size:13px;color:#78748C">💡 Les frais de garde sont déductibles des impôts à hauteur de 50 % sur votre déclaration d'impôts de l'année suivante, soit environ ${eur((aReste ? c.reste! : c.mensuel) / 2)} / mois (montant mensuel après aides ÷ 2).</p>`;
   return vedette + `<table style="width:100%;border-collapse:collapse;margin:0 0 18px;border-top:1px solid #E3E1EF;border-bottom:1px solid #E3E1EF">`
     + c.lignes.map(l => tr(esc(l.type === 'accueil' ? 'Frais de garde' : l.libelle), eur(l.total))).join('')
     + tr('<b>Mensualité estimée</b>', eur(c.mensuel))
@@ -401,7 +401,7 @@ async function genererPdf(d: {
   } else ligne('Total mensuel estimé', eur(d.mensuel), true);
 
   y -= 6;
-  const fisc = coupe('Les frais de garde sont déductibles des impôts à hauteur de 50 % sur votre déclaration d\'impôts de l\'année suivante.', bold, 9, W - 2 * M);
+  const fisc = coupe('Les frais de garde sont déductibles des impôts à hauteur de 50 % sur votre déclaration d\'impôts de l\'année suivante, soit environ ' + eur((d.reste != null ? d.reste : d.mensuel) / 2) + ' / mois (montant mensuel apres aides / 2).', bold, 9, W - 2 * M);
   place(fisc.length * 13 + 4);
   fisc.forEach((l, i) => page.drawText(l, { x: M, y: y - i * 13, size: 9, font: bold, color: violet }));
   y -= fisc.length * 13 + 10;
