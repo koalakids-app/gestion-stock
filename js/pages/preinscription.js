@@ -103,7 +103,7 @@ function estimer(){
       $('liveLib').textContent=aReste?'Reste à charge estimé':'Estimation mensuelle';
       $('liveTot').textContent=eur(aReste?d.reste:d.mensuel)+' / mois';
       $('liveSub').textContent=aReste?'Montant avant aides : '+eur(d.mensuel)+' / mois':'avant aide CAF (CMG)';
-      $('liveFiscal').style.display='';
+      $('liveFiscal').textContent=fiscalTxt(d);$('liveFiscal').style.display='';
     }catch(e){if(m===seqEst){$('liveTot').textContent='—';$('liveLib').textContent='Estimation mensuelle';$('liveFiscal').style.display='none';$('liveSub').textContent=e.message;}}
   },250);
 }
@@ -120,8 +120,14 @@ function recap(){
    +kv('Crèche',sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:'')
    +kv('Accueil',jours().map(j=>JN[j]).join(', ')+' · '+$('aHd').value+'–'+$('aHf').value)
    +(EST?estimationHtml(EST)
-        +'<p class="note" style="margin-top:6px">💡 Les frais de garde sont déductibles des impôts à hauteur de 50 % sur votre déclaration d\'impôts de l\'année suivante.</p>'
+        +'<p class="note" style="margin-top:6px">'+fiscalTxt(EST)+'</p>'
       :kv('Estimation',''));
+}
+
+/* Mention fiscale : 50 % déductibles, soit la moitié du montant mensuel après aides. */
+function fiscalTxt(e){
+  const net=e.reste!=null?e.reste:e.mensuel;
+  return '💡 Les frais de garde sont déductibles des impôts à hauteur de 50 % sur votre déclaration d\'impôts de l\'année suivante, soit environ '+eur(net/2)+' / mois (montant mensuel après aides ÷ 2).';
 }
 
 /* Reste à charge en grand, montant avant aides en petit (récap et confirmation). */
@@ -153,7 +159,7 @@ async function envoyer(){
     const e=d.estimation||EST;
     if(e){
       $('merciReste').innerHTML=estimationHtml(e);
-      $('merciFiscal').style.display='';
+      $('merciFiscal').textContent=fiscalTxt(e);$('merciFiscal').style.display='';
       $('merciDevis').innerHTML=(e.lignes||[]).map(l=>'<tr><td>'+esc(l.libelle)+'</td><td class="m">'+eur(l.total)+'</td></tr>').join('')
         +(e.reste!=null?'<tr class="neg"><td>Aide CAF estimée (CMG)</td><td class="m">− '+eur(e.cmg)+'</td></tr>':'')
         +'<tr class="tot"><td>'+(e.reste!=null?'Reste à charge estimé':'Total mensuel estimé')+'</td><td class="m">'+eur(e.reste!=null?e.reste:e.mensuel)+'</td></tr>';
