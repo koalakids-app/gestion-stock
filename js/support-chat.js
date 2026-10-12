@@ -438,13 +438,7 @@
     if (!client || !client.auth) return;
     let session = null;
     try { session = (await client.auth.getSession()).data.session; } catch (e) { return; }
-    let userId = session && session.user ? session.user.id : null;
-    if (userId) {
-      try { // mot de passe saisi mais double authentification pas encore validée : pas de bulle
-        const { data: aal } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
-        if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') userId = null;
-      } catch (e) { /* on ne bloque pas le chat pour autant */ }
-    }
+    const userId = session && session.user ? session.user.id : null;
     if (!userId) { if (uid) detruireUI(); return; }
     if (uid === userId || profilAbsent === userId) return;
     if (uid) detruireUI();
