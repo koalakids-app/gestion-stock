@@ -61,8 +61,13 @@ Le logo remplace celui de Koala Kids :
   (`dossier-contrat`, `dossier-devis`, `dossier-pieces`, `dossier-pieces-employe`),
   les e-mails sortants et le manifest PWA (`_logo_url`, consommé par `index.html`).
 
+- dans la barre latérale du module Stock : il lit aussi `organisations.logo_url`, et
+  la direction peut le changer en cliquant dessus. L'ancien logo partagé du bucket
+  `assets` ne sert plus de repli que pour l'organisation dont le nom contient « Koala ».
+
 Non couverts : les icônes de l'accueil (`*-icon.jpg`), les icônes PWA
-(`icon-192.png`/`icon-512.png`) et le logo propre au module Stock (`stock.html`).
+(`icon-192.png`/`icon-512.png`) et le logo Koala Kids de l'écran de connexion de
+`stock.html`, affiché avant que l'organisation ne soit connue.
 
 ## 3. Crèche(s) / site(s)
 
