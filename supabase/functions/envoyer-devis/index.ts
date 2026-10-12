@@ -245,7 +245,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { devis_id, relance, objet, message, expediteur, pdf } = await req.json();
+    const { devis_id, relance, objet, message, expediteur, pdf, origine } = await req.json();
     const pj = pieceJointe(pdf);
     if (!devis_id) return json({ erreur: 'Devis manquant' }, 400);
     // Un objet/message vide n'est pas un objet/message : on retombe alors sur
@@ -325,6 +325,15 @@ Deno.serve(async (req) => {
       );
     } catch (mailErr) {
       console.error('[envoyer-devis] SMTP', mailErr);
+      // Une relance manuelle qui échoue laisse une trace dans l'historique du
+      // devis ; les relances automatiques journalisent elles-mêmes leur échec.
+      if (relance && origine !== 'auto') {
+        await sb.from('devis_relances_log').insert({
+          devis_id: devis.id, preinscription_id: devis.preinscription_id,
+          org_id: creche.data?.org_id ?? null, type: 'echec', numero: (devis.relances || 0) + 1,
+          detail: 'Relance manuelle : envoi refusé par le service de mail',
+        });
+      }
       return json({ erreur: "L'e-mail n'a pas pu être envoyé" }, 502);
     }
 
@@ -338,6 +347,17 @@ Deno.serve(async (req) => {
         // soldée dès qu'une relance part, quelle qu'en soit l'origine.
         relance_a_valider_le: null,
       }).eq('id', devis.id);
+      // Historique du devis (devis_relances_log). Les relances parties du robot
+      // (origine « auto ») sont journalisées par relances-devis-auto, qui sait
+      // s'il s'agit d'un dernier rappel : on ne les compte pas deux fois.
+      if (origine !== 'auto') {
+        const par = typeof expediteur === 'string' && expediteur.trim() ? ` par ${nomExpediteur(expediteur)}` : '';
+        await sb.from('devis_relances_log').insert({
+          devis_id: devis.id, preinscription_id: devis.preinscription_id,
+          org_id: creche.data?.org_id ?? null, type: 'relance', numero: (devis.relances || 0) + 1,
+          detail: `Relance manuelle${par} — mail envoyé à ${adresses.join(', ')}`,
+        });
+      }
     }
 
     return json({ ok: true });

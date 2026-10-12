@@ -1128,6 +1128,7 @@ async function openDevis(id){
 
   devisId=id;
   DCUR=id?DEVIS.find(x=>String(x.id)===String(id)):null;
+  chargerHistoRelances(DCUR);
   const brouillon=!DCUR||DCUR.statut==='brouillon';
 
   document.getElementById('dTitle').textContent=DCUR?(DCUR.numero||'Devis'):'Nouveau devis';

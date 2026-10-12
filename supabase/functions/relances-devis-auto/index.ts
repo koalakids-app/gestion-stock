@@ -288,7 +288,7 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const corps: Record<string, unknown> = { devis_id: d.id, relance: true, expediteur: "L'équipe" };
+        const corps: Record<string, unknown> = { devis_id: d.id, relance: true, origine: 'auto', expediteur: "L'équipe" };
         if (finale) {
           corps.objet = `Dernier rappel - le devis d'accueil de ${prenom} expire le ${dfr(d.expire_le)}`;
           corps.message = `Le lien vers le devis d'accueil de ${enfant} expire le ${dfr(d.expire_le)}.\n`
