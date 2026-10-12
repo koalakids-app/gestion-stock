@@ -103,6 +103,22 @@ Le devis n'est **jamais envoyé automatiquement** : la direction le relit, puis 
 d'habitude. Garde-fous : champ piège anti-robot, au plus 20 demandes par heure et par crèche,
 3 par adresse e-mail et par jour. Le tarif est toujours relu côté serveur.
 
+## Chat d'assistance en direct
+
+Une bulle 💬 (en bas à droite, au-dessus du bouton **?**) est présente sur les pages connectées
+(`demandes`, `documents`, `employes`, `collaborateur`, `contrats`, `factures`, `infirmerie`,
+`inscriptions`, `parametres`, `suivi`, `terrain`). Code : `js/support-chat.js` ; données :
+table `support_messages` (`sql/support_chat.sql`, à exécuter une fois dans Supabase).
+
+- **Équipe** (référent·e, collaborateur·trice) : décrit son problème ; la page et l'appareil sont joints
+  automatiquement. Les réponses s'affichent dans la même bulle (pastille rouge si non lues).
+- **Direction** : la bulle liste toutes les conversations de son organisation (non lues en rouge),
+  un clic ouvre le fil et permet de répondre. Une alerte push (`notify-push`) est envoyée au premier
+  message, puis au plus une toutes les 3 minutes par conversation.
+- Mise à jour par temps réel si la table est dans la publication `supabase_realtime`, sinon par
+  interrogation toutes les 4 s (bulle ouverte) / 20 s (fermée).
+- Cloisonnement par RLS : chacun ne voit que sa conversation, la direction que celles de son organisation.
+
 ## Déploiement
 
 Publication automatique via GitHub Pages.
