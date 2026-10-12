@@ -72,6 +72,10 @@ Le logo remplace celui de Koala Kids :
   Kids). Un logo posé uniquement par SQL n'a donc pas d'icône dédiée : repasser par
   Paramètres. **Redéployer `manifest`** (`supabase functions deploy manifest --no-verify-jwt`).
   Une icône déjà installée sur un téléphone ne se met pas à jour toute seule.
+- **sous-site Réglementation** (`Reglementation/`) : le logo remplace l'emoji 🏠 de
+  l'en-tête après connexion, et son manifest PWA est servi par la même edge function
+  (`manifest?app=reglementation`, mêmes icônes, repli sur `Reglementation/manifest.json`).
+  Les emojis de l'écran de connexion restent (organisation inconnue avant connexion).
 - la carte « Site internet » (lien koalakids.fr) de l'accueil n'est affichée que pour Koala Kids.
 
 Non couverts : les illustrations des cartes de modules de l'accueil (`*-icon.jpg`,

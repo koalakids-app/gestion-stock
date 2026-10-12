@@ -66,6 +66,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (data) org = data;
   }
+  // ?app=reglementation : manifest du sous-site /Reglementation/, qui est une
+  // PWA à part (propre start_url/scope) mais porte la même identité visuelle.
+  const sousSite = new URL(req.url).searchParams.get('app') === 'reglementation';
   const nom = org?.nom || DEFAUT.nom;
   const appUrl = (org?.app_url || DEFAUT.app_url).replace(/\/+$/, '');
   const themeColor = org?.couleur_secondaire || DEFAUT.couleur_secondaire;
@@ -75,8 +78,9 @@ Deno.serve(async (req) => {
   // direction a (re)généré icon-192/512.png à côté (cf. parametres.js). On
   // vérifie qu'ils existent avant de s'y fier — logo posé à la main en base,
   // par exemple — sinon repli sur les icônes statiques Koala Kids.
-  let icon192 = `${appUrl}/icon-192.png`;
-  let icon512 = `${appUrl}/icon-512.png`;
+  const dossierIcones = sousSite ? `${appUrl}/Reglementation/icons` : appUrl;
+  let icon192 = sousSite ? `${dossierIcones}/icon-192.png` : `${appUrl}/icon-192.png`;
+  let icon512 = sousSite ? `${dossierIcones}/icon-512.png` : `${appUrl}/icon-512.png`;
   if (org?.logo_url && org.id) {
     const base = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/logos-organisations/${org.id}`;
     try {
@@ -85,7 +89,28 @@ Deno.serve(async (req) => {
     } catch { /* repli statique */ }
   }
 
-  const manifest = {
+  const manifest = sousSite ? {
+    name: `Réglementation ${nom}`,
+    short_name: 'Réglementation',
+    description: `Base réglementaire des micro-crèches — ${nom}`,
+    start_url: `${appUrl}/Reglementation/index.html`,
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: '#1A1208',
+    theme_color: '#1A1208',
+    lang: 'fr',
+    categories: ['education', 'business'],
+    icons: [
+      { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+      { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+    ],
+    shortcuts: [
+      { name: 'Décret 2025-304', short_name: 'Décret 2025', description: 'Voir les fiches du Décret 2025-304', url: `${appUrl}/Reglementation/index.html#decret2025` },
+      { name: 'Encadrement & Personnel', short_name: 'Personnel', description: 'Voir les fiches encadrement', url: `${appUrl}/Reglementation/index.html#encadrement` },
+    ],
+    _icon_192: icon192,
+    _icon_512: icon512,
+  } : {
     name: `${nom} — Gestion`,
     short_name: nom,
     description: `Portail de gestion de ${nom}`,
