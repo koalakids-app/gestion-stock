@@ -290,13 +290,20 @@ const enveloppe = (orgNom: string, logo: string, titre: string, corps: string) =
 function tableauDevis(c: { lignes: any[]; mensuel: number; cmg: number | null; reste: number | null }) {
   const tr = (a: string, b: string, style = '') =>
     `<tr><td style="padding:5px 0;font-size:15px;${style}">${a}</td><td style="padding:5px 0;font-size:15px;text-align:right;font-weight:700;white-space:nowrap;${style}">${b}</td></tr>`;
-  return `<table style="width:100%;border-collapse:collapse;margin:0 0 18px;border-top:1px solid #E3E1EF;border-bottom:1px solid #E3E1EF">`
+  const aReste = c.reste != null;
+  const vedette = `<div style="text-align:center;margin:0 0 16px">`
+    + `<div style="font-size:13px;font-weight:700;color:#4A3F9E">${aReste ? 'Reste à charge estimé' : 'Total mensuel estimé'}</div>`
+    + `<div style="font-size:30px;font-weight:800;color:#2B2640;line-height:1.2">${eur(aReste ? c.reste : c.mensuel)} <span style="font-size:14px">/ mois</span></div>`
+    + (aReste ? `<div style="font-size:12px;color:#78748C">Montant avant aides : ${eur(c.mensuel)} / mois</div>` : '')
+    + `</div>`;
+  const fiscal = `<p style="margin:0 0 14px;font-size:13px;color:#78748C">💡 Les frais de garde sont déductibles des impôts à hauteur de 50 % sur votre déclaration d'impôts de l'année suivante.</p>`;
+  return vedette + `<table style="width:100%;border-collapse:collapse;margin:0 0 18px;border-top:1px solid #E3E1EF;border-bottom:1px solid #E3E1EF">`
     + c.lignes.map(l => tr(esc(l.type === 'accueil' ? 'Frais de garde' : l.libelle), eur(l.total))).join('')
     + tr('<b>Mensualité estimée</b>', eur(c.mensuel))
     + (c.reste != null
       ? tr('CMG estimé', '− ' + eur(c.cmg), 'color:#2E9E6B') + tr('<b>Reste à charge estimé</b>', eur(c.reste))
       : '')
-    + `</table>`;
+    + `</table>` + fiscal;
 }
 
 // ---------------------------------------------------------------------------
@@ -363,6 +370,22 @@ async function genererPdf(d: {
   }
 
   titre('Estimation de la facturation mensuelle');
+  {
+    // Reste à charge en grand, montant avant aides en petit.
+    const aReste = d.reste != null;
+    place(70);
+    const lib = aReste ? 'Reste à charge estimé' : 'Total mensuel estimé';
+    const gros = pdfSafe(eur(aReste ? d.reste : d.mensuel) + ' / mois');
+    page.drawText(pdfSafe(lib), { x: M, y, size: 10, font: bold, color: violet });
+    y -= 24;
+    page.drawText(gros, { x: M, y, size: 22, font: bold, color: encre });
+    y -= 16;
+    if (aReste) {
+      page.drawText(pdfSafe('Montant avant aides : ' + eur(d.mensuel) + ' / mois'), { x: M, y, size: 8, font, color: gris });
+      y -= 14;
+    }
+    y -= 6;
+  }
   const ligne = (a: string, m: string, gras = false, couleur = encre) => {
     place(18);
     const f = gras ? bold : font;
@@ -377,7 +400,11 @@ async function genererPdf(d: {
     ligne('Reste à charge estimé', eur(d.reste), true);
   } else ligne('Total mensuel estimé', eur(d.mensuel), true);
 
-  y -= 10;
+  y -= 6;
+  const fisc = coupe('Les frais de garde sont déductibles des impôts à hauteur de 50 % sur votre déclaration d\'impôts de l\'année suivante.', bold, 9, W - 2 * M);
+  place(fisc.length * 13 + 4);
+  fisc.forEach((l, i) => page.drawText(l, { x: M, y: y - i * 13, size: 9, font: bold, color: violet }));
+  y -= fisc.length * 13 + 10;
   const pied = coupe('Cette demande ne vous engage pas. L\'estimation est indicative et non contractuelle, avant aide de la CAF (seule habilitée à en fixer le montant). La direction vous recontacte pour proposer une visite, puis vous envoie le devis définitif.', font, 8.5, W - 2 * M);
   place(pied.length * 12 + 4);
   pied.forEach((l, i) => page.drawText(l, { x: M, y: y - i * 12, size: 8.5, font, color: gris }));
