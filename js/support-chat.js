@@ -1,9 +1,10 @@
 // ══════════════ CHAT D'ASSISTANCE EN DIRECT ══════════════
 // Bulle flottante présente sur toutes les pages connectées.
-//   - Membre de l'équipe : écrit à la direction pour signaler un problème
-//     d'utilisation (la page et l'appareil sont joints automatiquement).
-//   - Direction : voit toutes les conversations de son organisation, répond
-//     en direct et est alertée (pastille, notification push) à chaque message.
+//   - Membre de l'équipe (direction comprise) : écrit au support pour signaler
+//     un problème d'utilisation (la page et l'appareil sont joints automatiquement).
+//   - Responsable du support (table `support_responsables`, un seul compte) :
+//     voit toutes les conversations de son organisation, répond en direct et est
+//     alerté·e (pastille, notification push) à chaque message.
 // Données : table `support_messages` (sql/support_chat.sql). Mise à jour par
 // temps réel quand il est disponible, et par interrogation régulière sinon.
 // S'appuie sur le client Supabase `sb` défini par chaque page.
@@ -156,15 +157,21 @@
 
   // ───────── Données ─────────
   async function chargerProfil(client, userId) {
+    let estSupport = false;
+    try {
+      const { data: s } = await client.from('support_responsables').select('user_id').eq('user_id', userId).maybeSingle();
+      estSupport = !!s;
+    } catch (e) { /* table absente ou erreur : simple membre de l'équipe */ }
+    // `direction` = « côté support » (voit la liste, répond) dans tout ce fichier.
     try {
       const { data: r } = await client.from('referents').select('*').eq('user_id', userId).maybeSingle();
-      if (r) return { nom: r.name || r.nom || 'Référent·e', direction: r.role === 'direction' };
+      if (r) return { nom: r.name || r.nom || 'Référent·e', direction: estSupport };
     } catch (e) { /* on tente la fiche collaborateur */ }
     try {
       const { data: e } = await client.from('employes').select('*').eq('user_id', userId).maybeSingle();
-      if (e) return { nom: [e.prenom, e.nom].filter(Boolean).join(' ') || 'Collaborateur·trice', direction: false };
+      if (e) return { nom: [e.prenom, e.nom].filter(Boolean).join(' ') || 'Collaborateur·trice', direction: estSupport };
     } catch (e) { /* ignoré */ }
-    return null;
+    return estSupport ? { nom: 'Support', direction: true } : null;
   }
 
   async function charger() {
@@ -203,7 +210,7 @@
       const dernier = nonLus().slice(-1)[0];
       afficherToast(me.direction
         ? '💬 ' + (dernier.auteur_nom || 'Un membre de l’équipe') + ' : ' + dernier.contenu
-        : '💬 Réponse de la direction : ' + dernier.contenu);
+        : '💬 Réponse du support : ' + dernier.contenu);
     }
     nonLusPrec = n;
   }
@@ -302,7 +309,7 @@
           pre = '<div class="kk-sc-ctx">📍 ' + esc(ctx) + '</div>';
           derniereCtx = ctx;
         }
-        const qui = moi ? '' : (m.from_support ? 'Direction · ' : '');
+        const qui = moi ? '' : (m.from_support ? 'Support · ' : '');
         return pre + '<div class="kk-sc-msg ' + (moi ? 'moi' : 'autre') + '">' + esc(m.contenu) +
           '<span class="kk-sc-meta">' + esc(qui + hhmm(m.created_at)) + '</span></div>';
       }).join('');
@@ -356,14 +363,14 @@
         const { data } = await client.from('referents').select('id').eq('user_id', conv);
         ids = (data || []).map(r => r.id);
       } else {
-        const { data } = await client.from('referents').select('id').eq('role', 'direction');
-        ids = (data || []).map(r => r.id);
+        const { data } = await client.rpc('kk_support_destinataires');
+        ids = data || [];
       }
       if (!ids.length) return;
       await client.functions.invoke('notify-push', {
         body: {
           referent_ids: ids,
-          title: me.direction ? 'Réponse de la direction' : 'Chat assistance — ' + me.nom,
+          title: me.direction ? 'Réponse du support' : 'Chat assistance — ' + me.nom,
           body: texte.slice(0, 120),
           url: './demandes.html',
           tag: 'support-chat-' + conv

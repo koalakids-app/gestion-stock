@@ -112,12 +112,15 @@ table `support_messages` (`sql/support_chat.sql`, à exécuter une fois dans Sup
 
 - **Équipe** (référent·e, collaborateur·trice) : décrit son problème ; la page et l'appareil sont joints
   automatiquement. Les réponses s'affichent dans la même bulle (pastille rouge si non lues).
-- **Direction** : la bulle liste toutes les conversations de son organisation (non lues en rouge),
-  un clic ouvre le fil et permet de répondre. Une alerte push (`notify-push`) est envoyée au premier
+- **Responsable du support** (uniquement les comptes listés dans `support_responsables`, un seul compte
+  par défaut) : la bulle liste toutes les conversations de son organisation (non lues en rouge),
+  un clic ouvre le fil et permet de répondre. Les autres directeurs/trices utilisent la bulle comme
+  l'équipe : ils n'ont accès qu'à leur propre conversation. Une alerte push (`notify-push`) est envoyée au premier
   message, puis au plus une toutes les 3 minutes par conversation.
 - Mise à jour par temps réel si la table est dans la publication `supabase_realtime`, sinon par
   interrogation toutes les 4 s (bulle ouverte) / 20 s (fermée).
-- Cloisonnement par RLS : chacun ne voit que sa conversation, la direction que celles de son organisation.
+- Cloisonnement par RLS : chacun ne voit que sa conversation, le/la responsable du support celles de son
+  organisation. Pour changer de responsable : `insert/delete` dans `support_responsables`.
 
 ## Déploiement
 

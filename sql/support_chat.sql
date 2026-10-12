@@ -3,17 +3,65 @@
 -- ============================================================================
 -- Une bulle de discussion flottante sur toutes les pages de l'appli permet à
 -- un membre de l'équipe (référent·e, directeur/trice, collaborateur/trice) de
--- signaler un problème d'utilisation. La direction de son organisation voit
--- toutes les conversations dans la même bulle et répond en direct.
+-- signaler un problème d'utilisation. Seul(e)s les comptes listés dans
+-- `support_responsables` (le/la responsable du support) voient toutes les
+-- conversations de leur organisation dans la bulle et répondent en direct.
 --
 -- Une conversation = tous les messages partageant le même
 -- `conversation_user_id` (le compte qui a posé la question).
---   * le membre de l'équipe ne voit et n'écrit que dans SA conversation ;
---   * la direction voit/écrit dans les conversations de SON organisation.
+--   * tout membre de l'équipe (direction comprise) ne voit et n'écrit que
+--     dans SA conversation ;
+--   * le/la responsable du support voit/écrit dans celles de SON organisation.
 --
 -- Pas de colonne « lu » modifiable par tout le monde : le marquage « lu » passe
 -- par deux fonctions qui ne touchent que le bon côté de la conversation.
 -- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- Responsable(s) du support : seuls comptes à voir toutes les conversations.
+-- Table sans policy d'écriture : on ajoute/retire un compte depuis le SQL Editor.
+-- ----------------------------------------------------------------------------
+create table if not exists public.support_responsables (
+  user_id uuid primary key references auth.users(id) on delete cascade
+);
+alter table public.support_responsables enable row level security;
+
+drop policy if exists support_responsables_select_self on public.support_responsables;
+create policy support_responsables_select_self on public.support_responsables
+  for select to authenticated
+  using (user_id = auth.uid());
+
+create or replace function public.kk_est_support()
+returns boolean
+language sql
+stable
+security definer
+set search_path to 'public'
+as $$
+  select exists (select 1 from public.support_responsables where user_id = auth.uid());
+$$;
+revoke all on function public.kk_est_support() from public;
+grant execute on function public.kk_est_support() to authenticated;
+
+-- Référents (pour les notifications push) des responsables du support de mon organisation.
+create or replace function public.kk_support_destinataires()
+returns setof uuid
+language sql
+stable
+security definer
+set search_path to 'public'
+as $$
+  select r.id from public.referents r
+   where r.user_id in (select user_id from public.support_responsables)
+     and r.org_id = public.kk_mon_org();
+$$;
+revoke all on function public.kk_support_destinataires() from public;
+grant execute on function public.kk_support_destinataires() to authenticated;
+
+-- >>> À ADAPTER : e-mail de connexion du compte responsable du support. <<<
+insert into public.support_responsables (user_id)
+select id from auth.users where lower(email) = lower('koalakids.app@gmail.com')
+on conflict do nothing;
 
 create table if not exists public.support_messages (
   id uuid primary key default gen_random_uuid(),
@@ -84,17 +132,21 @@ create policy support_messages_insert_self on public.support_messages
     and from_support = false
   );
 
--- Direction : toutes les conversations de son organisation.
 drop policy if exists support_messages_select_direction on public.support_messages;
-create policy support_messages_select_direction on public.support_messages
-  for select to authenticated
-  using (public.kk_est_direction() and org_id = public.kk_mon_org());
-
 drop policy if exists support_messages_insert_direction on public.support_messages;
-create policy support_messages_insert_direction on public.support_messages
+drop policy if exists support_messages_delete_direction on public.support_messages;
+
+-- Responsable du support : toutes les conversations de son organisation.
+drop policy if exists support_messages_select_support on public.support_messages;
+create policy support_messages_select_support on public.support_messages
+  for select to authenticated
+  using (public.kk_est_support() and org_id = public.kk_mon_org());
+
+drop policy if exists support_messages_insert_support on public.support_messages;
+create policy support_messages_insert_support on public.support_messages
   for insert to authenticated
   with check (
-    public.kk_est_direction()
+    public.kk_est_support()
     and auteur_id = auth.uid()
     and from_support = true
     and exists (
@@ -104,11 +156,11 @@ create policy support_messages_insert_direction on public.support_messages
     )
   );
 
--- Suppression d'une conversation (ménage) : direction de l'organisation.
-drop policy if exists support_messages_delete_direction on public.support_messages;
-create policy support_messages_delete_direction on public.support_messages
+-- Suppression d'une conversation (ménage) : responsable du support.
+drop policy if exists support_messages_delete_support on public.support_messages;
+create policy support_messages_delete_support on public.support_messages
   for delete to authenticated
-  using (public.kk_est_direction() and org_id = public.kk_mon_org());
+  using (public.kk_est_support() and org_id = public.kk_mon_org());
 
 -- Pas de policy UPDATE : le « lu » passe par ces deux fonctions.
 create or replace function public.kk_support_marquer_lu_utilisateur()
@@ -134,7 +186,7 @@ as $$
      set lu_par_support = true
    where conversation_user_id = p_conversation_user_id
      and org_id = public.kk_mon_org()
-     and public.kk_est_direction()
+     and public.kk_est_support()
      and not from_support
      and not lu_par_support;
 $$;
