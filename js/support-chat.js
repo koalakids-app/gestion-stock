@@ -31,7 +31,19 @@
   let els = null;
   const titreOrigine = document.title;
 
-  const getSb = () => { try { return typeof sb !== 'undefined' ? sb : null; } catch (e) { return null; } };
+  // Client Supabase : celui de la page (`sb`) ; sur l'accueil (index.html), qui n'en a
+  // pas, on en crée un avec la même clé publique : la session ouverte sur une autre
+  // page de l'appli est partagée (même stockage navigateur).
+  const SB_URL = 'https://juyrceadazrovlitxceb.supabase.co';
+  const SB_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug';
+  let sbPropre = null;
+  const getSb = () => {
+    try { if (typeof sb !== 'undefined' && sb) return sb; } catch (e) { /* pas de client de page */ }
+    if (!sbPropre && window.supabase && window.supabase.createClient) {
+      try { sbPropre = window.supabase.createClient(SB_URL, SB_ANON_KEY); } catch (e) { return null; }
+    }
+    return sbPropre;
+  };
   const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   function hhmm(iso) {
@@ -426,7 +438,13 @@
     if (!client || !client.auth) return;
     let session = null;
     try { session = (await client.auth.getSession()).data.session; } catch (e) { return; }
-    const userId = session && session.user ? session.user.id : null;
+    let userId = session && session.user ? session.user.id : null;
+    if (userId) {
+      try { // mot de passe saisi mais double authentification pas encore validée : pas de bulle
+        const { data: aal } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') userId = null;
+      } catch (e) { /* on ne bloque pas le chat pour autant */ }
+    }
     if (!userId) { if (uid) detruireUI(); return; }
     if (uid === userId || profilAbsent === userId) return;
     if (uid) detruireUI();
