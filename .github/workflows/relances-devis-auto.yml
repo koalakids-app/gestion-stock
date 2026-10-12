@@ -1,0 +1,33 @@
+name: Relances automatiques de devis
+
+on:
+  schedule:
+    # Du lundi au vendredi à 9h00 (hiver) / 10h00 (été) heure de Paris.
+    # La fonction vérifie elle-même jours fériés et plage 8h-19h.
+    - cron: '0 8 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Essai à blanc : liste ce qui serait envoyé, sans rien envoyer"
+        type: boolean
+        default: true
+
+jobs:
+  relances:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lancer les relances de devis
+        run: |
+          dry='${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}'
+          status=$(curl -s -o /tmp/reponse.json -w "%{http_code}" \
+            -X POST "https://juyrceadazrovlitxceb.supabase.co/functions/v1/relances-devis-auto" \
+            -H "x-relance-secret: ${{ secrets.RELANCE_TRIGGER_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"dry_run\": ${dry}}")
+          echo "Réponse (HTTP $status) :"
+          cat /tmp/reponse.json
+          echo
+          if [ "$status" -ne 200 ]; then
+            echo "::error::Relances de devis en échec (HTTP $status)"
+            exit 1
+          fi

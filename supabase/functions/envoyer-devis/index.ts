@@ -114,7 +114,7 @@ function pieceJointe(pdf: unknown): PieceJointe | undefined {
   return { filename: /\.pdf$/i.test(nom) && nom.length > 4 ? nom : 'devis.pdf', content: b64, encoding: 'base64', contentType: 'application/pdf' };
 }
 
-async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string, attachments?: PieceJointe[]) {
+async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string, attachments?: PieceJointe[], replyTo?: string) {
   const user = Deno.env.get('GMAIL_USER');
   const pass = Deno.env.get('GMAIL_APP_PASSWORD');
   if (!user || !pass) {
@@ -135,6 +135,7 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
     await client.send({
       from: `${nomExpediteur(expediteur)} de ${orgNom || 'Koalakids'} <${user}>`,
       to,
+      ...(replyTo ? { replyTo } : {}),
       subject: encodeSubject(subject),
       content: 'Ce message nécessite un client de messagerie compatible HTML.',
       html,
@@ -283,6 +284,17 @@ Deno.serve(async (req) => {
       logoUrl = org?.logo_url || undefined;
     }
 
+    // Gmail impose l'adresse d'envoi (celle du compte SMTP) ; en revanche les
+    // réponses de la famille peuvent aller à l'adresse de la crèche, saisie
+    // dans Paramètres > Établissement. Valable pour tous les mails de devis.
+    let replyTo: string | undefined;
+    if (devis.creche_id) {
+      const { data: etab } = await sb.from('etablissements')
+        .select('email').eq('creche_id', devis.creche_id).maybeSingle();
+      const m = String(etab?.email || '').trim();
+      if (/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(m)) replyTo = m;
+    }
+
     const racine = base.replace(/[^/]*\.html?(\?.*)?$/i, '').replace(/\/*$/, '/');
     const lien = racine + 'devis.html?t=' + devis.token;
     const prenom = (pre.data?.prenom || 'votre enfant').trim();
@@ -309,6 +321,7 @@ Deno.serve(async (req) => {
         expediteur,
         orgNom,
         pj ? [pj] : undefined,
+        replyTo,
       );
     } catch (mailErr) {
       console.error('[envoyer-devis] SMTP', mailErr);
@@ -321,6 +334,9 @@ Deno.serve(async (req) => {
       await sb.from('devis').update({
         relances: (devis.relances || 0) + 1,
         derniere_relance: new Date().toISOString(),
+        // Une relance en attente de validation (relances-devis-auto) est
+        // soldée dès qu'une relance part, quelle qu'en soit l'origine.
+        relance_a_valider_le: null,
       }).eq('id', devis.id);
     }
 
