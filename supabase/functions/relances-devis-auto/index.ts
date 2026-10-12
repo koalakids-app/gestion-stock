@@ -27,7 +27,7 @@
 //      régulière si les deux tombent le même jour : jamais deux mails.
 //   3. ALERTE ÉQUIPE — quand les relances sont épuisées et que la famille n'a
 //      toujours pas répondu après un dernier intervalle : notification push à
-//      la direction et à la référente de la crèche, et date de rappel posée
+//      la direction, et date de rappel posée
 //      sur la demande (elle remonte dans « relances en retard »). On ne
 //      relance plus : c'est à une personne d'appeler.
 //
@@ -157,7 +157,7 @@ async function journal(l: {
   if (error) console.error('[relances-devis-auto] journal', error);
 }
 
-// Prévient la direction et la référente de la crèche, et fait remonter la
+// Prévient la direction (c'est elle qui gère les relances), et fait remonter la
 // demande dans « relances en retard ». Les deux, car le push peut être coupé
 // (droit à la déconnexion) : la date de rappel, elle, reste visible.
 async function alerterEquipe(d: Record<string, any>, orgId: string | null, enfant: string, relances: number) {
@@ -172,8 +172,7 @@ async function alerterEquipe(d: Record<string, any>, orgId: string | null, enfan
   }
   const { data: refs } = await sb.from('referents').select('id,role,creche_id,org_id');
   const ids = (refs ?? [])
-    .filter(r => (!orgId || r.org_id === orgId)
-      && (r.role === 'direction' || (r.role === 'referent' && r.creche_id && r.creche_id === d.creche_id)))
+    .filter(r => (!orgId || r.org_id === orgId) && r.role === 'direction')
     .map(r => r.id);
   if (!ids.length) return 'aucun destinataire';
   const push = await appelFonction('notify-push', {
@@ -331,15 +330,13 @@ Deno.serve(async (req) => {
     }
 
     // Une seule notification par organisation et par passage, quel que soit le
-    // nombre de relances proposées : direction + référentes des crèches concernées.
+    // nombre de relances proposées : direction uniquement.
     if (!dryRun) {
       for (const [, liste] of aValider) {
         const orgId = liste[0].orgId;
-        const creches = new Set(liste.map(x => x.crecheId));
         const { data: refs } = await sb.from('referents').select('id,role,creche_id,org_id');
         const dest = (refs ?? [])
-          .filter(r => (!orgId || r.org_id === orgId)
-            && (r.role === 'direction' || (r.role === 'referent' && creches.has(r.creche_id))))
+          .filter(r => (!orgId || r.org_id === orgId) && r.role === 'direction')
           .map(r => r.id);
         if (!dest.length) continue;
         const n = liste.length;
