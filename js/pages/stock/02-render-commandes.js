@@ -142,10 +142,10 @@ function renderHistorique() {
 }
 
 // ─── COUCHES ──────────────────────────────────────────────────────────────
-// Le stock lui-même se décompte tout seul (trigger côté base sur chaque
-// « Change » du suivi — sql/stock_couches.sql). Ici on affiche juste l'état
-// courant, une estimation « jours restants » à partir de la conso des 14
-// derniers jours, et deux actions manuelles : réception d'une commande et
+// Le stock lui-même se décompte à la saisie des « Couches du jour »
+// (sql/stock_couches_jour.sql ; le décompte automatique par « Change » est
+// désactivé). Ici on affiche juste l'état courant, une estimation « jours
+// restants » à partir de la conso des 14 derniers jours, et deux actions manuelles : réception d'une commande et
 // correction ponctuelle du stock.
 function coucheLabel(type) { return type === 'culotte' ? 'Couches-culottes' : 'Couches classiques'; }
 
@@ -175,7 +175,7 @@ function coucheBesoinMensuel(creche, type, taille) {
   const b = COUCHES_BESOIN.find(x => x.creche === creche && x.typeCouche === type && x.taille === taille);
   return b ? b.besoinMensuel : 0;
 }
-const COUCHE_CONSO_PAR_ENFANT_PAR_JOUR = 4.5; // moyenne courante en crèche (4 à 5/jour)
+const COUCHE_CONSO_PAR_ENFANT_PAR_JOUR = 4; // même hypothèse que le besoin mensuel (COUCHE_BESOIN_PAR_JOUR)
 // Délai de livraison par défaut (environ 72 h), utilisé tant qu'aucune ligne
 // stock_couches n'existe encore pour une référence — sinon c'est
 // delaiLivraisonJours (réglable par crèche × type × taille, bouton 🚚) qui
@@ -432,23 +432,20 @@ function coucheEvaluer(creche, type, taille) {
   const stock = c ? c.stock : 0;
   const seuil = c ? c.seuilAlerteJours : 15;
   const delaiLivraison = c ? c.delaiLivraisonJours : COUCHE_DELAI_LIVRAISON_JOURS;
-  const since14 = Date.now() - 14 * 24 * 3600 * 1000;
-  const conso14 = COUCHES_MVTS.filter(m =>
-    m.creche === creche && m.typeCouche === type && m.taille === taille &&
-    m.motif === 'change_auto' && new Date(m.createdAt).getTime() >= since14
-  ).length;
-  const avgDailyReel = conso14 / 14;
-  // En dessous de ce nombre de changes réels sur 14 jours, la moyenne
-  // extrapole n'importe quoi (ex. 1 change sur la période → des centaines de
-  // « jours restants » affichés). Ça ne se « réinitialise » pas à une
-  // réception, seul l'usage réel (Change dans le suivi) alimente cette
-  // moyenne — en attendant d'avoir assez d'historique, on retombe sur une
-  // estimation à partir du nombre d'enfants qui portent cette taille
-  // (4,5 couches/jour/enfant).
-  const MIN_CHANGES_FIABLE = 5;
+  // Consommation réelle : nombre de couches saisies dans « Couches du jour »
+  // sur les 14 derniers jours, rapporté aux jours où une saisie a eu lieu
+  // (une crèche qui vient de commencer à saisir n'a pas 14 jours d'historique).
+  // En dessous de MIN_COUCHES_FIABLE couches ou de MIN_JOURS_FIABLE jours
+  // saisis, la moyenne extrapole n'importe quoi : on retombe alors sur
+  // l'estimation « nombre d'enfants × 4 couches/jour ».
+  const MIN_COUCHES_FIABLE = 5, MIN_JOURS_FIABLE = 3;
+  const cons = COUCHES_CONSO14.find(x => x.creche === creche && x.typeCouche === type && x.taille === taille);
+  const conso14 = cons ? cons.conso14 : 0;
+  const joursSaisis = cons ? cons.jours : 0;
+  const avgDailyReel = joursSaisis > 0 ? conso14 / joursSaisis : 0;
   const effectif = coucheEffectif(creche, type, taille);
   let joursRestants = null, estimSource = null;
-  if (conso14 >= MIN_CHANGES_FIABLE && avgDailyReel > 0) {
+  if (conso14 >= MIN_COUCHES_FIABLE && joursSaisis >= MIN_JOURS_FIABLE && avgDailyReel > 0) {
     joursRestants = Math.floor(stock / avgDailyReel);
     estimSource = 'reel';
   } else if (effectif > 0) {
@@ -462,7 +459,7 @@ function coucheEvaluer(creche, type, taille) {
   // commander tranquillement.
   const enCritique = stock <= 0 || (joursRestants !== null && joursRestants <= delaiLivraison);
   const estimTexte = estimSource === 'reel' ? joursRestants + ' j restants (est.)'
-    : estimSource === 'effectif' ? joursRestants + ' j restants (est. ' + effectif + ' enf.×4,5/j)'
+    : estimSource === 'effectif' ? joursRestants + ' j restants (est. ' + effectif + ' enf.×' + COUCHE_CONSO_PAR_ENFANT_PAR_JOUR + '/j)'
     : (stock > 0 ? 'aucun enfant sur cette taille' : '—');
   return { stock, seuil, delaiLivraison, joursRestants, estimSource, estimTexte, enAlerte, enCritique };
 }

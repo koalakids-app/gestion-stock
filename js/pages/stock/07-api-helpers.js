@@ -184,9 +184,22 @@ function coucheParseJours(j) {
   return v.map(x => parseInt(x, 10)).filter(n => n >= 1 && n <= 7);
 }
 // 4 couches/jour de présence : le besoin théorique demandé pour la prévision
-// de commande — distinct de COUCHE_CONSO_PAR_ENFANT_PAR_JOUR (4,5), la
-// moyenne réelle constatée, utilisée elle pour l'estimation "jours restants".
+// de commande. Même valeur que COUCHE_CONSO_PAR_ENFANT_PAR_JOUR, utilisée en
+// repli pour l'estimation "jours restants" tant que les saisies manquent.
 const COUCHE_BESOIN_PAR_JOUR = 4;
+
+// Consommation réelle saisie dans « Couches du jour » sur les 14 derniers jours
+// (vue stock_couches_conso14, sql/stock_couches_conso14.sql).
+async function coucheChargerConso14() {
+  try {
+    const rows = await sbGet('stock_couches_conso14', 'order=creche.asc');
+    if (Array.isArray(rows)) {
+      COUCHES_CONSO14.splice(0, COUCHES_CONSO14.length, ...rows.map(r => ({
+        creche: r.creche, typeCouche: r.type_couche, taille: r.taille, conso14: r.conso14, jours: r.jours
+      })));
+    }
+  } catch (e) { console.warn('[Couches] consommation 14 j (non-bloquant) :', e.message); }
+}
 
 // Jours fériés français (métropole) d'une année, en ISO — même algorithme
 // (calcul de Pâques) que prFeries dans js/presences-reel.js, dupliqué ici
@@ -325,6 +338,7 @@ async function loadData() {
     if (Array.isArray(couchesMvts)) {
       COUCHES_MVTS.splice(0, COUCHES_MVTS.length, ...couchesMvts.map(rowToCoucheMvt));
     }
+    await coucheChargerConso14();
     if (Array.isArray(couchesPrix)) {
       COUCHES_PRIX.splice(0, COUCHES_PRIX.length, ...couchesPrix.map(rowToCouchePrix));
     }
