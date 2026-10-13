@@ -174,10 +174,10 @@ async function renderPresenceHebdo(){
     const cells=days5.map(function(d,i){
       if(prevision){
         const s=(prevision[e.id]||[])[i];
-        return s?{present:true,slot:s,horaires:hebdoHoraires(e.id,i,s),repas:repas}:{present:false,slot:null,horaires:'',repas:''};
+        return s?{present:true,slot:s,horaires:hebdoHoraires(e.id,i,s),repas:enfRepasCode(e,dateStrs[i])}:{present:false,slot:null,horaires:'',repas:''};
       }
       const st=statutJour(e.id,dateStrs[i]);
-      return st.present?{present:true,slot:st.slot,horaires:hebdoHoraires(e.id,i,st.slot),repas:repas}:{present:false,slot:null,horaires:'',repas:''};
+      return st.present?{present:true,slot:st.slot,horaires:hebdoHoraires(e.id,i,st.slot),repas:enfRepasCode(e,dateStrs[i])}:{present:false,slot:null,horaires:'',repas:''};
     });
     if(cells.some(function(c){return c.present;})){
       e._repasCode=repas;

@@ -246,7 +246,7 @@ function repasLabel(code){ return code?(REPAS_TYPES[code]||code):''; }
    Le suffixe (`regime_repas` : '' | 'SV' | 'SPV' | 'SPA') se combine à la
    lettre, y compris sur BB — un enfant intolérant aux protéines de vache doit
    rester repérable partout, sans quoi l'écran contredirait le bon de commande. */
-function enfRepasBaseAuto(e){
+function enfRepasBaseAuto(e,dateStr){
   if(!e)return'';
   if(!e.dob){
     // Pas de date de naissance : on retombe sur le libellé de groupe stocké, à défaut de mieux.
@@ -256,15 +256,17 @@ function enfRepasBaseAuto(e){
     if(groupe.indexOf('Grand')>=0)return'G';
     return'';
   }
-  const m=window.ageMoisFromDob(e.dob);
+  /* À une date donnée (jour de livraison), on raisonne en mois civils révolus,
+     comme le bon ; sans date, on garde l'âge d'aujourd'hui. */
+  const m=(dateStr&&typeof mcmAgeMois==='function')?mcmAgeMois(e.dob,dateStr):window.ageMoisFromDob(e.dob);
   if(m<6)return'BIB';
   if(m<12)return'BB';
   if(m<18)return'M';
   return'G';
 }
-function enfRepasCode(e){
+function enfRepasCode(e,dateStr){
   if(!e)return'';
-  const base=e.repas_base||enfRepasBaseAuto(e);
+  const base=e.repas_base||enfRepasBaseAuto(e,dateStr);
   if(!base)return'';
   // Un enfant au biberon ne reçoit pas de plat : lui accoler un régime n'aurait aucun sens.
   if(base==='BIB')return'BIB';
