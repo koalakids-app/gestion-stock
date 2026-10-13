@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Maquette — MCM commande repas</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="stylesheet" href="css/pages/maquette-mcm-commande-repas.css">
+</head>
+<body>
+<div class="proto">MAQUETTE · données de démonstration · onglet « Commande repas » proposé dans Demandes › MCM (repas)</div>
+
+<div class="topbar">
+  <i class="ti ti-tools-kitchen-2" style="font-size:22px;color:var(--orange)"></i>
+  <h1>MCM — Prestataire repas</h1>
+  <span class="tbtn"><i class="ti ti-home"></i> Accueil</span>
+</div>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab" onclick="vue('autre')"><i class="ti ti-alert-triangle"></i> Incidents repas</button>
+    <button class="tab on" id="tabC" onclick="vue('cmd')"><i class="ti ti-clipboard-list"></i> Commande repas</button>
+    <button class="tab" onclick="vue('autre')"><i class="ti ti-tools-kitchen-2"></i> Menus</button>
+    <button class="tab" onclick="vue('autre')"><i class="ti ti-mood-smile"></i> Avis des enfants</button>
+    <button class="tab" onclick="vue('pres')"><i class="ti ti-users-group"></i> (rappel) Présences › Semaine</button>
+  </div>
+
+  <div id="vAutre" style="display:none">
+    <div class="note">Les autres onglets MCM (Incidents, Menus, Avis) restent <b>inchangés</b>. Cliquez sur « Commande repas » pour la proposition.</div>
+  </div>
+
+  <div id="vPres" style="display:none">
+    <div class="note"><b>Présences › Semaine : rien ne change.</b> Le bouton « Commande repas » reste en place et ouvre la même fenêtre qu'aujourd'hui.
+      Les deux entrées partagent la même commande : ce qui est enregistré ou envoyé d'un côté apparaît de l'autre.</div>
+    <div class="panel mini">
+      <div class="bar">
+        <button class="ib">◀</button><b style="color:var(--violet)">Sem. 42 · 12 → 16 oct.</b><button class="ib">▶</button>
+        <span class="chip">Grille</span><span class="chip">Synthèse repas</span>
+        <span style="margin-left:auto;display:flex;gap:8px">
+          <span class="btn ghost"><i class="ti ti-upload"></i> Importer le menu</span>
+          <span class="btn pri keep"><i class="ti ti-clipboard-list"></i> Commande repas</span>
+          <span class="btn grn"><i class="ti ti-file-spreadsheet"></i> Exporter Excel</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div id="vCmd">
+    <div class="bar">
+      <button class="ib" title="Semaine précédente">◀</button>
+      <b class="wk">Semaine 43 · du 19 au 23 octobre 2026</b>
+      <button class="ib" title="Semaine suivante">▶</button>
+      <button class="btn ghost sm">Semaine actuelle</button>
+      <select id="cr" onchange="rendre()"></select>
+      <span class="chip ok" id="srcChip">D'après le planning importé</span>
+      <span class="chip bro">Brouillon enregistré — rien n'est parti</span>
+    </div>
+
+    <div class="alerte" id="alerte" style="display:none">
+      <i class="ti ti-bell-ringing"></i>
+      <div><b>Commande déjà transmise au traiteur</b> — le lundi 12 octobre 2026 à 09:41 par Sandrine · 2 envois pour cette semaine.<br>
+      Un nouvel envoi <b>annule et remplace</b> le précédent. Vérifiez les chiffres avant de renvoyer.</div>
+    </div>
+
+    <!-- ① RAPPEL DES EFFECTIFS -->
+    <div class="panel">
+      <h3><i class="ti ti-users-group"></i> Rappel des effectifs de la semaine
+        <small>d'après Présences › Semaine · sert de base à la commande ci-dessous</small></h3>
+
+      <div class="kpis" id="kpis"></div>
+
+      <div class="tw"><table class="eff" id="effTab"></table></div>
+
+      <div class="legend">
+        <span><i class="dot bib"></i> BIB : biberon, exclu du bon</span>
+        <span><i class="dot bb"></i> BB : bébé</span>
+        <span><i class="dot m"></i> M : moyen</span>
+        <span><i class="dot g"></i> G : grand</span>
+        <span><i class="dot rg"></i> Régime particulier</span>
+      </div>
+      <div class="warn" id="warnSans"><i class="ti ti-alert-triangle"></i>
+        <span><b>1 enfant sans code repas</b> n'est pas compté (date de naissance manquante). <a href="#" onclick="return false">Voir la fiche</a></span></div>
+    </div>
+
+    <!-- ② LA COMMANDE -->
+    <div class="panel">
+      <h3><i class="ti ti-clipboard-list"></i> Bon de commande
+        <small>pré-rempli depuis les effectifs · toutes les cases restent modifiables</small></h3>
+
+      <div class="frow">
+        <label>Adresse<input value="12 rue des Tilleuls, 78000 Versailles"></label>
+        <label>Téléphone<input value="01 39 00 00 00"></label>
+      </div>
+      <div class="frow">
+        <label>Mail<input value="creche.versailles@koalakids.fr"></label>
+        <label>Contact<input value="Marie Dupont"></label>
+      </div>
+      <label class="chk"><input type="checkbox" onchange="document.getElementById('annDate').style.display=this.checked?'':'none'">
+        Annule et remplace la commande envoyée le <input type="date" id="annDate" style="display:none;width:150px"></label>
+
+      <div class="tw"><table class="cmd" id="cmdTab"></table></div>
+      <div class="ecart" id="ecart"></div>
+
+      <div class="frow" style="margin-top:12px">
+        <label>Date de validation<input type="date" value="2026-10-14"></label>
+        <label style="flex:2">Nom de la responsable<input value="Marie Dupont"></label>
+      </div>
+
+      <div class="actions">
+        <span class="btn ghost"><i class="ti ti-refresh"></i> Recalculer depuis les effectifs</span>
+        <span class="btn ghost"><i class="ti ti-device-floppy"></i> Enregistrer</span>
+        <span class="btn ghost"><i class="ti ti-file-download"></i> Générer le PDF</span>
+        <span class="btn pri"><i class="ti ti-send"></i> Envoyer au traiteur</span>
+      </div>
+    </div>
+
+    <div class="note dir"><b>Direction uniquement</b> : sous le bon, le bloc « Coût de la commande » (grille de tarifs, total par jour) reste identique à la fenêtre actuelle. Il ne figure jamais sur le PDF du traiteur.</div>
+  </div>
+</div>
+<script src="js/pages/maquette-mcm-commande-repas.js"></script>
+</body>
+</html>
