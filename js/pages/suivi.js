@@ -346,20 +346,22 @@ function renderOrdiShell(){
   wrap.innerHTML=`
     <div class="ordi-top">
       <span class="title"><i class="ti ti-heart-handshake"></i> Suivi</span>
-      ${IS_DIRECTION?`
-        <div class="ordi-nav">
-          <button class="ordi-nav-btn${ordiVue==='syntheses'?' on':''}" id="navSyntheses">Synthèses</button>
-          <button class="ordi-nav-btn${ordiVue==='referentiel'?' on':''}" id="navReferentiel">Référentiel</button>
-        </div>`:''}
+      <div class="ordi-nav">
+        <button class="ordi-nav-btn${ordiVue==='syntheses'?' on':''}" id="navSyntheses">Synthèses</button>
+        <button class="ordi-nav-btn${ordiVue==='couches'?' on':''}" id="navCouches">Couches</button>
+        ${IS_DIRECTION?`<button class="ordi-nav-btn${ordiVue==='referentiel'?' on':''}" id="navReferentiel">Référentiel</button>`:''}
+      </div>
       <span id="ordiOutils"></span>
       <button class="btn btn-g" style="background:#F1EFF7;color:var(--muted);margin-left:auto" onclick="sb.auth.signOut().then(()=>location.reload())"><i class="ti ti-logout"></i> Déconnexion</button>
     </div>
     <div id="ordiContenu"></div>`;
+  document.getElementById('navSyntheses').addEventListener('click',()=>{ordiVue='syntheses';renderOrdiShell();});
+  document.getElementById('navCouches').addEventListener('click',()=>{ordiVue='couches';renderOrdiShell();});
   if(IS_DIRECTION){
-    document.getElementById('navSyntheses').addEventListener('click',()=>{ordiVue='syntheses';renderOrdiShell();});
     document.getElementById('navReferentiel').addEventListener('click',()=>{ordiVue='referentiel';renderOrdiShell();});
   }
   if(ordiVue==='referentiel'&&IS_DIRECTION){renderOrdiReferentiel();return;}
+  if(ordiVue==='couches'){renderOrdiCouches();return;}
   renderOrdiSyntheses();
 }
 
@@ -406,6 +408,53 @@ function renderPeriodeValeur(){
     wrap.innerHTML=`<select id="ordiValeur">${options.map(y=>`<option value="${y}"${String(y)===valeurPeriode.annee?' selected':''}>${y}-${y+1}</option>`).join('')}</select>`;
   }
   document.getElementById('ordiValeur').addEventListener('change',e=>{valeurPeriode[PERIODE_TYPE]=e.target.value;chargerListeOrdi();});
+}
+
+/* ---- Couches du jour (vue ordinateur) ---- */
+let ordiCouchesJour=ipDateToLocalISO();
+let ORDI_COUCHES=[];
+function renderOrdiCouches(){
+  document.getElementById('ordiOutils').innerHTML=`
+    ${IS_DIRECTION?`<select id="ordiCreche"></select>`:''}
+    <input type="date" id="ordiCouchesJour" value="${ordiCouchesJour}" max="${ipDateToLocalISO()}">`;
+  document.getElementById('ordiContenu').innerHTML='<div class="ordi-body" style="display:block;overflow-y:auto;padding:16px 20px"><div id="ordiCouchesListe" style="max-width:640px"></div></div>';
+  if(IS_DIRECTION){
+    const sel=document.getElementById('ordiCreche');
+    sel.innerHTML=CRECHES_ORDI.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    sel.value=crecheCibleParam||PROF.creche_id||CRECHES_ORDI[0]?.id||'';
+    sel.addEventListener('change',chargerOrdiCouches);
+  }
+  document.getElementById('ordiCouchesJour').addEventListener('change',e=>{ordiCouchesJour=e.target.value||ipDateToLocalISO();chargerOrdiCouches();});
+  chargerOrdiCouches();
+}
+async function chargerOrdiCouches(){
+  const l=document.getElementById('ordiCouchesListe');
+  l.innerHTML='<div class="ordi-empty">Chargement…</div>';
+  const{data,error}=await sb.rpc('kk_couches_ordi_enfants',{p_creche_id:crecheCouranteOrdi(),p_jour:ordiCouchesJour});
+  if(error){l.innerHTML='<div class="ordi-empty">Chargement impossible.</div>';return;}
+  ORDI_COUCHES=data||[];
+  afficherOrdiCouches();
+}
+function afficherOrdiCouches(){
+  const l=document.getElementById('ordiCouchesListe');
+  if(!ORDI_COUCHES.length){l.innerHTML='<div class="ordi-empty">Aucun enfant.</div>';return;}
+  const total=ORDI_COUCHES.reduce((a,c)=>a+c.nb,0);
+  l.innerHTML=`<div style="font-weight:800;color:var(--violet);margin-bottom:6px">${total} couche${total>1?'s':''} utilisée${total>1?'s':''} ce jour</div>`
+    +ORDI_COUCHES.map(c=>`
+    <div class="couche-row" data-id="${c.id}" style="${c.present||c.nb?'':'opacity:.55'}">
+      <div class="lib">${esc(c.prenom)} ${esc(c.nom||'')} <span class="couche-taille">${c.taille_couche?(c.type_couche==='culotte'?'Culotte ':'Couche ')+'T'+esc(c.taille_couche):'taille non renseignée (fiche enfant)'}${c.present?'':' · non pointé'}</span></div>
+      ${c.taille_couche?`<div class="couche-ctl"><button data-d="-1">−</button><span class="couche-nb">${c.nb}</span><button data-d="1">+</button></div>`:''}
+    </div>`).join('');
+  l.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('click',()=>majOrdiCouches(b.closest('.couche-row').dataset.id,parseInt(b.dataset.d,10))));
+}
+async function majOrdiCouches(id,d){
+  const c=ORDI_COUCHES.find(x=>x.id===id);if(!c)return;
+  const nb=Math.max(0,Math.min(30,c.nb+d));
+  if(nb===c.nb)return;
+  const{data,error}=await sb.rpc('kk_couches_ordi_saisir',{p_enfant_id:id,p_jour:ordiCouchesJour,p_nb:nb});
+  const r=data&&data[0];
+  if(error||!r||!r.ok){alert(r&&r.error==='taille_inconnue'?'Taille de couche non renseignée sur la fiche enfant.':'Échec de l\'enregistrement, réessayez.');return;}
+  c.nb=r.nb;afficherOrdiCouches();
 }
 
 function crecheCouranteOrdi(){
@@ -1114,7 +1163,11 @@ function renderGrille(){
       <div class="grille" id="grille"></div>
     </div>`;
   const g=document.getElementById('grille');
-  g.innerHTML=ENFANTS.map(e=>`
+  g.innerHTML=`
+    <div class="tile tile-couches" id="tileCouches">
+      <div class="av"><i class="ti ti-baby-bottle"></i></div>
+      <div class="nom">Couches du jour</div>
+    </div>`+ENFANTS.map(e=>`
     <div class="tile${selection.has(e.id)?' sel':''}" data-id="${e.id}">
       <div class="badges">
         ${e.allergies?'<span class="badge allergie" title="Allergie / régime"><i class="ti ti-alert-triangle"></i></span>':''}
@@ -1124,7 +1177,8 @@ function renderGrille(){
       <div class="nom">${esc(e.prenom)}</div>
       <button class="btn-jalons" data-jalons="${e.id}"><i class="ti ti-chart-line"></i> Repères</button>
     </div>`).join('');
-  g.querySelectorAll('.tile').forEach(t=>t.addEventListener('click',ev=>{
+  document.getElementById('tileCouches').addEventListener('click',ouvrirCouches);
+  g.querySelectorAll('.tile[data-id]').forEach(t=>t.addEventListener('click',ev=>{
     if(ev.target.closest('.btn-jalons'))return;
     const id=t.dataset.id;
     if(selection.has(id))selection.delete(id);else selection.add(id);
@@ -1135,6 +1189,54 @@ function renderGrille(){
     ouvrirJalons(b.dataset.jalons);
   }));
   renderBarre();
+}
+
+/* ======================= COUCHES DU JOUR (stock) =======================
+   Nombre de couches utilisées aujourd'hui par enfant. Le total saisi fixe la
+   consommation du jour ; le serveur (kk_couches_kiosk_saisir) décompte du
+   stock la taille/type portés par la fiche enfant, sans double compter les
+   « Change » déjà saisis. */
+let COUCHES=[];
+async function ouvrirCouches(){
+  retirerBarre();selection.clear();ecran='couches';
+  app.innerHTML='<i class="ti ti-loader-2"></i><h2>Chargement…</h2>';
+  const{data,error}=await sb.rpc('kk_couches_kiosk_enfants',{p_token:TOKEN});
+  if(error){
+    app.innerHTML='<i class="ti ti-wifi-off"></i><h2>Connexion impossible</h2><button class="chip orange" style="margin-top:14px" onclick="ouvrirCouches()">Réessayer</button>';
+    return;
+  }
+  COUCHES=data||[];
+  renderCouches();
+}
+function renderCouches(){
+  app.innerHTML=`
+    <div class="jalons-wrap">
+      <div class="jalons-head"><button class="retour" id="cRetour"><i class="ti ti-arrow-left"></i> Retour</button>
+        <span class="qui"><i class="ti ti-baby-bottle"></i> Couches du jour</span></div>
+      <div class="jalons-list" id="cListe"></div>
+    </div>`;
+  document.getElementById('cRetour').addEventListener('click',chargerEnfants);
+  const l=document.getElementById('cListe');
+  if(!COUCHES.length){l.innerHTML='<div class="empty-grille">Aucun enfant présent aujourd\'hui.</div>';return;}
+  l.innerHTML=COUCHES.map(c=>`
+    <div class="couche-row" data-id="${c.id}">
+      <div class="lib">${esc(c.prenom)} <span class="couche-taille">${c.taille_couche?(c.type_couche==='culotte'?'Culotte ':'Couche ')+'T'+esc(c.taille_couche):'taille non renseignée'}</span></div>
+      ${c.taille_couche?`<div class="couche-ctl"><button data-d="-1">−</button><span class="couche-nb">${c.nb}</span><button data-d="1">+</button></div>`:''}
+    </div>`).join('');
+  l.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('click',()=>majCouches(b.closest('.couche-row').dataset.id,parseInt(b.dataset.d,10))));
+}
+async function majCouches(id,d){
+  const c=COUCHES.find(x=>x.id===id);if(!c)return;
+  const nb=Math.max(0,Math.min(30,c.nb+d));
+  if(nb===c.nb)return;
+  const{data,error}=await sb.rpc('kk_couches_kiosk_saisir',{p_token:TOKEN,p_auteur_type:AUTEUR_TYPE,p_auteur_id:AUTEUR_ID,p_enfant_id:id,p_nb:nb});
+  const r=data&&data[0];
+  if(error||!r||!r.ok){
+    if(r&&r.error==='auteur_absent'){afficherIdentification();alert('Identification perdue. Merci de vous identifier à nouveau.');return;}
+    toast(r&&r.error==='taille_inconnue'?'Taille de couche non renseignée sur la fiche enfant.':'Échec de l\'enregistrement, réessayez.',null);
+    return;
+  }
+  c.nb=r.nb;renderCouches();
 }
 
 function retirerBarre(){
