@@ -1114,7 +1114,11 @@ function renderGrille(){
       <div class="grille" id="grille"></div>
     </div>`;
   const g=document.getElementById('grille');
-  g.innerHTML=ENFANTS.map(e=>`
+  g.innerHTML=`
+    <div class="tile tile-couches" id="tileCouches">
+      <div class="av"><i class="ti ti-baby-bottle"></i></div>
+      <div class="nom">Couches du jour</div>
+    </div>`+ENFANTS.map(e=>`
     <div class="tile${selection.has(e.id)?' sel':''}" data-id="${e.id}">
       <div class="badges">
         ${e.allergies?'<span class="badge allergie" title="Allergie / régime"><i class="ti ti-alert-triangle"></i></span>':''}
@@ -1124,7 +1128,8 @@ function renderGrille(){
       <div class="nom">${esc(e.prenom)}</div>
       <button class="btn-jalons" data-jalons="${e.id}"><i class="ti ti-chart-line"></i> Repères</button>
     </div>`).join('');
-  g.querySelectorAll('.tile').forEach(t=>t.addEventListener('click',ev=>{
+  document.getElementById('tileCouches').addEventListener('click',ouvrirCouches);
+  g.querySelectorAll('.tile[data-id]').forEach(t=>t.addEventListener('click',ev=>{
     if(ev.target.closest('.btn-jalons'))return;
     const id=t.dataset.id;
     if(selection.has(id))selection.delete(id);else selection.add(id);
@@ -1135,6 +1140,54 @@ function renderGrille(){
     ouvrirJalons(b.dataset.jalons);
   }));
   renderBarre();
+}
+
+/* ======================= COUCHES DU JOUR (stock) =======================
+   Nombre de couches utilisées aujourd'hui par enfant. Le total saisi fixe la
+   consommation du jour ; le serveur (kk_couches_kiosk_saisir) décompte du
+   stock la taille/type portés par la fiche enfant, sans double compter les
+   « Change » déjà saisis. */
+let COUCHES=[];
+async function ouvrirCouches(){
+  retirerBarre();selection.clear();ecran='couches';
+  app.innerHTML='<i class="ti ti-loader-2"></i><h2>Chargement…</h2>';
+  const{data,error}=await sb.rpc('kk_couches_kiosk_enfants',{p_token:TOKEN});
+  if(error){
+    app.innerHTML='<i class="ti ti-wifi-off"></i><h2>Connexion impossible</h2><button class="chip orange" style="margin-top:14px" onclick="ouvrirCouches()">Réessayer</button>';
+    return;
+  }
+  COUCHES=data||[];
+  renderCouches();
+}
+function renderCouches(){
+  app.innerHTML=`
+    <div class="jalons-wrap">
+      <div class="jalons-head"><button class="retour" id="cRetour"><i class="ti ti-arrow-left"></i> Retour</button>
+        <span class="qui"><i class="ti ti-baby-bottle"></i> Couches du jour</span></div>
+      <div class="jalons-list" id="cListe"></div>
+    </div>`;
+  document.getElementById('cRetour').addEventListener('click',chargerEnfants);
+  const l=document.getElementById('cListe');
+  if(!COUCHES.length){l.innerHTML='<div class="empty-grille">Aucun enfant présent aujourd\'hui.</div>';return;}
+  l.innerHTML=COUCHES.map(c=>`
+    <div class="couche-row" data-id="${c.id}">
+      <div class="lib">${esc(c.prenom)} <span class="couche-taille">${c.taille_couche?(c.type_couche==='culotte'?'Culotte ':'Couche ')+'T'+esc(c.taille_couche):'taille non renseignée'}</span></div>
+      ${c.taille_couche?`<div class="couche-ctl"><button data-d="-1">−</button><span class="couche-nb">${c.nb}</span><button data-d="1">+</button></div>`:''}
+    </div>`).join('');
+  l.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('click',()=>majCouches(b.closest('.couche-row').dataset.id,parseInt(b.dataset.d,10))));
+}
+async function majCouches(id,d){
+  const c=COUCHES.find(x=>x.id===id);if(!c)return;
+  const nb=Math.max(0,Math.min(30,c.nb+d));
+  if(nb===c.nb)return;
+  const{data,error}=await sb.rpc('kk_couches_kiosk_saisir',{p_token:TOKEN,p_auteur_type:AUTEUR_TYPE,p_auteur_id:AUTEUR_ID,p_enfant_id:id,p_nb:nb});
+  const r=data&&data[0];
+  if(error||!r||!r.ok){
+    if(r&&r.error==='auteur_absent'){afficherIdentification();alert('Identification perdue. Merci de vous identifier à nouveau.');return;}
+    toast(r&&r.error==='taille_inconnue'?'Taille de couche non renseignée sur la fiche enfant.':'Échec de l\'enregistrement, réessayez.',null);
+    return;
+  }
+  c.nb=r.nb;renderCouches();
 }
 
 function retirerBarre(){
