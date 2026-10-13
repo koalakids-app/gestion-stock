@@ -262,9 +262,12 @@ function encodeSubject(subject: string): string {
   return s || 'Notification';
 }
 
+// Les réponses des parents au mail de confirmation arrivent sur cette adresse.
+const REPONSE_FAMILLE = 'a.janin@koalakids.fr';
+
 type PieceJointe = { filename: string; content: string; encoding: 'base64'; contentType: string };
 
-async function sendEmail(to: string[], subject: string, html: string, orgNom: string, attachments?: PieceJointe[]) {
+async function sendEmail(to: string[], subject: string, html: string, orgNom: string, attachments?: PieceJointe[], replyTo?: string) {
   const user = Deno.env.get('GMAIL_USER'), pass = Deno.env.get('GMAIL_APP_PASSWORD');
   if (!user || !pass) throw new Error('Configuration Gmail manquante');
   const client = new SMTPClient({
@@ -275,6 +278,7 @@ async function sendEmail(to: string[], subject: string, html: string, orgNom: st
       from: `${orgNom} <${user}>`, to, subject: encodeSubject(subject),
       content: 'Ce message nécessite un client de messagerie compatible HTML.', html,
       ...(attachments?.length ? { attachments } : {}),
+      ...(replyTo ? { replyTo } : {}),
     });
   } finally { await client.close(); }
 }
@@ -596,7 +600,7 @@ async function action_envoyer(p: any) {
        Voici une <b>estimation</b> de la facturation mensuelle :</p>${tableauDevis(c)}
        <p style="margin:0;font-size:13px;color:#78748C">Estimation indicative, non contractuelle. Le devis définitif vous sera envoyé par la direction. Le CMG est calculé par la CAF, seule habilitée à en fixer le montant.</p>
        ${pdf ? '<p style="margin:14px 0 0;font-size:13px;color:#78748C">Votre demande complète est jointe à ce message en PDF.</p>' : ''}`
-    ), orgNom, pdf ? [{ filename: pdfNom, content: enBase64(pdf), encoding: 'base64', contentType: 'application/pdf' }] : undefined)
+    ), orgNom, pdf ? [{ filename: pdfNom, content: enBase64(pdf), encoding: 'base64', contentType: 'application/pdf' }] : undefined, REPONSE_FAMILLE)
       .catch(err => console.error('[preinscription] mail famille', err));
 
     const dest = txt(c.etab?.email, 160);
