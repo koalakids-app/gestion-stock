@@ -649,12 +649,11 @@ function crRenderAlerte(){
    (journée ou matin seul) ; goûter = enfant présent l'après-midi (journée ou aprèm seul).
    Les enfants au biberon (code repas BIB) sont exclus du bon : ni repas, ni goûter
    ne sont commandés pour eux, même s'ils sont bien présents ce jour-là. */
-function crCompute(notify){
-  const ctx=_hebdoExportCtx;
-  if(!ctx)return;
-  const vals={};
-  MCM_ROWS.forEach(function(r){vals[r.k]=['','','','',''];});
-  ctx.days5.forEach(function(d,i){
+/* Effectifs par jour et par ligne du bon : [{bb6,bb18,grand,peri,gbb,ggr}] où chaque
+   ligne est {'':standard, SV:n, SPV:n, SPA:n}. Source unique pour le bon (crCompute)
+   et le rappel d'effectifs (mcmCmdRenderEffectifs) : les deux ne peuvent plus diverger. */
+function crCountsParJour(ctx){
+  return ctx.days5.map(function(d,i){
     const repas={bb6:{},bb18:{},grand:{},peri:{}},gouter={gbb:{},ggr:{}};
     ctx.rows.forEach(function(r){
       const cell=r.cells[i];
@@ -684,9 +683,16 @@ function crCompute(notify){
         if(g)gouter[g][gReg]=(gouter[g][gReg]||0)+1;
       }
     });
-    ['bb6','bb18','grand','peri'].forEach(function(k){vals[k][i]=crFmtCell(repas[k]);});
-    vals.gbb[i]=crFmtCell(gouter.gbb);
-    vals.ggr[i]=crFmtCell(gouter.ggr);
+    return Object.assign({},repas,gouter);
+  });
+}
+function crCompute(notify){
+  const ctx=_hebdoExportCtx;
+  if(!ctx)return;
+  const vals={};
+  MCM_ROWS.forEach(function(r){vals[r.k]=['','','','',''];});
+  crCountsParJour(ctx).forEach(function(c,i){
+    ['bb6','bb18','grand','peri','gbb','ggr'].forEach(function(k){vals[k][i]=crFmtCell(c[k]);});
     vals.temoin[i]='OUI';   // un plat témoin est prélevé chaque jour
     vals.bag[i]='';
   });
