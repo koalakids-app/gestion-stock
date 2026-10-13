@@ -70,6 +70,7 @@ const COUCHES_PRODUITS = [
   { type: 'culotte', label: 'Couches-culottes',   tailles: ['4','5'] },
 ];
 let COUCHES = [];      // stock courant : { id, creche, typeCouche, taille, stock, seuilAlerteJours }
+let COUCHES_CONSO14 = []; // { creche, typeCouche, taille, conso14, jours } — consommation nette saisie sur 14 j (vue stock_couches_conso14)
 let COUCHES_MVTS = []; // journal des mouvements (500 derniers), pour estimer la conso/jour
 // Prix d'achat unitaire par type×taille (sql/stock_couches_prix.sql), partagé
 // par les 6 crèches — saisi une fois par la direction depuis la vraie facture
@@ -77,8 +78,8 @@ let COUCHES_MVTS = []; // journal des mouvements (500 derniers), pour estimer la
 let COUCHES_PRIX = []; // { typeCouche, taille, prixUnitaire, updatedAt }
 // Effectif actuel par crèche×type×taille (enfants.creche_id/taille_couche/
 // type_couche, enfants encore présents). Sert de repli pour l'estimation
-// « jours restants » tant que l'historique réel de changes est trop maigre
-// pour être fiable (4,5 couches/jour/enfant, une moyenne courante en crèche).
+// « jours restants » tant que l'historique réel des saisies « Couches du jour » est trop maigre
+// pour être fiable (4 couches/jour/enfant).
 let COUCHES_EFFECTIF = []; // { creche, typeCouche, taille, count }
 // Besoin prévisionnel du mois en cours par crèche×type×taille (4 couches/jour
 // × jours de présence réels : jours du contrat, moins fériés, fermetures

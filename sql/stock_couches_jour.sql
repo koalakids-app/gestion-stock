@@ -103,7 +103,7 @@ begin
     return query select false, 'taille_inconnue', null::integer; return;
   end if;
 
-  select name into v_creche from public.creches where id = v_device.creche_id;
+  select public.kk_stock_couches_nom_court(name) into v_creche from public.creches where id = v_device.creche_id;
 
   select cj.nb into v_deja from public.couches_jour cj
     where cj.enfant_id = p_enfant_id and cj.jour = current_date;
@@ -191,7 +191,7 @@ begin
     return query select false, 'taille_inconnue', null::integer; return;
   end if;
 
-  select name into v_creche from public.creches where id = v_enfant.creche_id;
+  select public.kk_stock_couches_nom_court(name) into v_creche from public.creches where id = v_enfant.creche_id;
   select id into v_ref from public.referents where user_id = auth.uid() limit 1;
 
   select cj.nb into v_deja from public.couches_jour cj

@@ -416,7 +416,7 @@ async function syncFromCloud() {
     const [artsR, cmdsR, fournsR, histosR, couchesR, couchesMvtsR, couchesPrixR] = results;
 
     // Signature avant/après : si rien n'a changé, on ne redessine rien (sinon l'écran clignote toutes les 60 s)
-    const _sig = () => { try { return JSON.stringify([ARTICLES, COMMANDES, FOURNISSEURS, HISTORIQUE, COUCHES, COUCHES_MVTS, COUCHES_PRIX]); } catch(e) { return String(Math.random()); } };
+    const _sig = () => { try { return JSON.stringify([ARTICLES, COMMANDES, FOURNISSEURS, HISTORIQUE, COUCHES, COUCHES_MVTS, COUCHES_CONSO14, COUCHES_PRIX]); } catch(e) { return String(Math.random()); } };
     const _sigAvant = _sig();
     // On ne remplace les données en mémoire QUE si le fetch a réussi
     if (artsR.status === 'fulfilled' && Array.isArray(artsR.value))
@@ -451,6 +451,8 @@ async function syncFromCloud() {
       COUCHES_MVTS.splice(0, COUCHES_MVTS.length, ...couchesMvtsR.value.map(rowToCoucheMvt));
     else if (couchesMvtsR.status === 'rejected')
       console.warn('[Sync] stock_couches_mouvements (non-bloquant):', couchesMvtsR.reason?.message);
+
+    await coucheChargerConso14();
 
     if (couchesPrixR.status === 'fulfilled' && Array.isArray(couchesPrixR.value))
       COUCHES_PRIX.splice(0, COUCHES_PRIX.length, ...couchesPrixR.value.map(rowToCouchePrix));
