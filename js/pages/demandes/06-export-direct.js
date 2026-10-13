@@ -318,7 +318,7 @@ function mcmAgeMois(dob,dateStr){
    4/5 ans » pour G. Sans date de naissance, on retient la ligne la plus courante
    (6-18 mois pour BB, + 18 mois pour G) plutôt que d'écarter l'enfant du bon. */
 function mcmLigne(enf,dateStr){
-  const code=enfRepasCode(enf);
+  const code=enfRepasCode(enf,dateStr);
   if(!code||code==='BIB')return null;
   const base=code.replace(/(SV|SPV|SPA)$/,'');
   const m=mcmAgeMois(enf.dob,dateStr);
