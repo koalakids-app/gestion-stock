@@ -86,48 +86,55 @@ async function mcmCmdRender(){
 /* Rappel : mêmes règles de comptage que crCompute (BIB exclu, pas de goûter avant
    6 mois), pour que les chiffres du rappel retombent sur ceux du bon. */
 function mcmCmdRenderEffectifs(ctx){
-  const baseCode=function(c){return c==='BIB'?'BIB':String(c||'').replace(/(SV|SPV|SPA)$/,'');};
+  const cnt=crCountsParJour(ctx);
+  const sum=function(o){return Object.keys(o).reduce(function(s,k){return s+o[k];},0);};
   const jours=ctx.days5.map(function(d,i){
-    const j={present:0,midi:0,gouter:0,G:0,M:0,BB:0,BIB:0,SV:0,SPV:0,SPA:0,sans:0};
+    const c=cnt[i],j={present:0,BIB:0,sans:0};
     ctx.rows.forEach(function(r){
-      const c=r.cells[i];if(!c.present)return;
+      const cell=r.cells[i];if(!cell.present)return;
       j.present++;
-      const code=baseCode(c.repas);
-      if(!code){j.sans++;return;}
-      if(code==='BIB'){j.BIB++;return;}
-      if(j[code]!==undefined)j[code]++;
-      const reg=r.enfant.regime_repas;if(reg&&j[reg]!==undefined)j[reg]++;
-      if(c.slot==='j'||c.slot==='m')j.midi++;
-      if(c.slot==='j'||c.slot==='a'){
-        const mois=mcmAgeMois(r.enfant.dob,ctx.dateStrs[i]);
-        if(mois===null||mois>=6)j.gouter++;
-      }
+      if(cell.repas==='BIB')j.BIB++;
+      else if(!enfRepasCode(r.enfant))j.sans++;
     });
+    ['bb6','bb18','grand','peri','gbb','ggr'].forEach(function(k){j[k]=c[k];j[k+'_n']=sum(c[k]);});
+    j.midi=j.bb6_n+j.bb18_n+j.grand_n+j.peri_n;
+    j.gouter=j.gbb_n+j.ggr_n;
+    j.reg={SV:0,SPV:0,SPA:0};
+    ['bb6','bb18','grand','peri'].forEach(function(k){Object.keys(j.reg).forEach(function(r){j.reg[r]+=c[k][r]||0;});});
     return j;
   });
   const tot=function(k){return jours.reduce(function(s,j){return s+j[k];},0);};
-  const reg=function(j){return['SV','SPV','SPA'].filter(function(k){return j[k];}).map(function(k){return j[k]+' '+k;}).join(' · ');};
-  const nbReg=tot('SV')+tot('SPV')+tot('SPA');
+  const regTxt=function(j){return['SV','SPV','SPA'].filter(function(k){return j.reg[k];}).map(function(k){return j.reg[k]+' '+k;}).join(' · ');};
+  const nbReg=jours.reduce(function(s,j){return s+j.reg.SV+j.reg.SPV+j.reg.SPA;},0);
   const kpi=function(l,n,hi){return'<div class="mcmc-kpi'+(hi?' hi':'')+'"><div class="l">'+l+'</div><div class="n">'+n+'</div></div>';};
-  const cellN=function(n,mut){return'<td'+(n?'':' class="z"')+'>'+n+'</td>';};
+  const cellTxt=function(txt){return'<td'+(txt?'':' class="z"')+'>'+(txt||'0')+'</td>';};
   const ligne=function(titre,sous,k,cls,dot){
     return'<tr'+(cls?' class="'+cls+'"':'')+'><td>'+(dot?'<i class="mcmc-dot '+dot+'"></i>':'')+titre+'<small>'+sous+'</small></td>'
-      +jours.map(function(j){return cellN(j[k]);}).join('')+'<td>'+tot(k)+'</td></tr>';
+      +jours.map(function(j){return cellTxt(String(j[k]||''));}).join('')+'<td>'+tot(k)+'</td></tr>';
   };
-  let h='<div class="mcmc-panel"><h3><i class="ti ti-users-group"></i> Rappel des effectifs de la semaine <small>d’après Présences › Semaine · base de la commande ci-dessous</small></h3>'
-    +'<div class="mcmc-kpis">'+kpi('Repas du midi',tot('midi'),true)+kpi('Goûters',tot('gouter'))
+  /* Ligne du bon : « standard+régimes » comme sur le bordereau . */
+  const ligneBon=function(titre,sous,k,cls,dot,stdSeul){
+    return'<tr'+(cls?' class="'+cls+'"':'')+'><td>'+(dot?'<i class="mcmc-dot '+dot+'"></i>':'')+titre+'<small>'+sous+'</small></td>'
+      +jours.map(function(j){return cellTxt(stdSeul?String(j[k]['']||''):crFmtCell(j[k]));}).join('')+'<td>'+tot(k+'_n')+'</td></tr>';
+  };
+  let h='<div class="mcmc-panel"><h3><i class="ti ti-users-group"></i> Rappel des effectifs de la semaine <small>d’après Présences › Semaine · mêmes chiffres que le bon ci-dessous</small></h3>'
+    +'<div class="mcmc-kpis">'+kpi('Goûters',tot('gouter'),true)
     +kpi('Pic de la semaine',Math.max.apply(null,jours.map(function(j){return j.present;})))
     +kpi('Régimes particuliers',nbReg)+kpi('Au biberon (exclus)',tot('BIB'))+'</div>'
     +'<div style="overflow-x:auto"><table class="mcmc-eff"><thead><tr><th>Effectifs</th>'
     +ctx.days5.map(function(d){return'<th>'+d.toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','')+'<small>'+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</small></th>';}).join('')
     +'<th>Semaine</th></tr></thead><tbody>'
     +ligne('Enfants présents','journée ou demi-journée','present','')
-    +ligne('Repas du midi','présents le matin, hors biberon','midi','tot')
-    +ligne('Goûters','présents l’après-midi, hors biberon','gouter','')
-    +ligne('G','grands','G','','g')+ligne('M','moyens','M','','m')+ligne('BB','bébés','BB','','bb')
+    +ligneBon('Bébés − de 6 mois','repas classiques','bb6','','bb',true)
+    +ligneBon('Bébés 6 à 18 mois','repas classiques','bb18','','m',true)
+    +ligneBon('Grands (+ de 18 mois)','repas classiques','grand','','g',true)
+    +ligneBon('Périscolaire 4/5 ans','repas classiques','peri','','g',true)
+    +ligne('Goûters','présents l’après-midi, hors biberon et − de 6 mois','gouter','tot')
+    +ligneBon('Goûters Bébés','6 à 18 mois','gbb','','bb')
+    +ligneBon('Goûters Grands','+ de 18 mois & périscolaire','ggr','','g')
     +ligne('BIB','biberon · exclu du bon','BIB','mut','bib')
     +'<tr><td><i class="mcmc-dot rg"></i>Régimes particuliers<small>SV sans viande · SPV sans protéine de vache · SPA sans protéine animale</small></td>'
-    +jours.map(function(j){return'<td'+(reg(j)?'':' class="z"')+'>'+(reg(j)||'0')+'</td>';}).join('')+'<td>'+nbReg+'</td></tr>'
+    +jours.map(function(j){return cellTxt(regTxt(j));}).join('')+'<td>'+nbReg+'</td></tr>'
     +'</tbody></table></div>';
   const sans=ctx.rows.filter(function(r){return !enfRepasCode(r.enfant);}).length;
   if(sans)h+='<div class="mcmc-warn"><i class="ti ti-alert-triangle"></i><span><b>'+sans+' enfant(s) sans code repas</b> ne sont pas comptés : renseignez leur date de naissance ou leur type de repas sur la fiche.</span></div>';
