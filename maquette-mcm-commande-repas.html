@@ -6,7 +6,80 @@
 <title>Maquette — MCM commande repas</title>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="css/pages/maquette-mcm-commande-repas.css">
+<style>
+/* MAQUETTE : données de démonstration, aucune lecture ni écriture en base.
+   En production, les effectifs viennent de _hebdoExportCtx (vue hebdomadaire des
+   présences) et le bon reprend crCompute / crRenderTable / crSave (06-export-direct.js). */
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--orange-d:#B25200;--violet-l:#EEECFA;--cream:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;
+  --green:#2E9E6B;--green-l:#E6F5EE;--red:#C62828;--red-l:#FDE8E8}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:#2B2740;min-height:100dvh}
+.proto{background:#2B2740;color:#fff;font-size:12.5px;padding:7px 12px;text-align:center;font-weight:600}
+.topbar{background:#fff;border-bottom:2px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:9px}
+.topbar h1{font-family:'Baloo 2',cursive;font-size:20px;color:var(--violet);flex:1}
+.tbtn{min-height:44px;padding:0 14px;border-radius:14px;border:2px solid #D9D3F2;background:var(--violet-l);color:var(--violet);font:800 13.5px Nunito;display:inline-flex;align-items:center;gap:7px}
+.wrap{max-width:1040px;margin:0 auto;padding:16px 16px 40px}
+.tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:2px solid var(--line);overflow-x:auto}
+.tab{border:none;background:none;font:800 14px Nunito;color:var(--muted);padding:10px 14px;cursor:pointer;display:inline-flex;gap:7px;align-items:center;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+.tab.on{color:var(--orange);border-bottom-color:var(--orange)}
+.note{background:var(--violet-l);border-radius:12px;padding:11px 14px;font-size:13px;line-height:1.6;margin-bottom:14px}
+.note.dir{background:#fff;border:2px dashed var(--line);color:var(--muted)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.wk{color:var(--violet);font-size:14px}
+select,input{font:600 14px Nunito;padding:9px 11px;border:2px solid var(--line);border-radius:12px;background:#fff;color:#2B2740}
+.ib{border:2px solid var(--line);background:#fff;border-radius:10px;padding:5px 10px;font-size:14px;cursor:pointer}
+.chip{border-radius:20px;padding:3px 11px;font-size:11.5px;font-weight:800;background:var(--violet-l);color:var(--violet)}
+.chip.ok{background:var(--green-l);color:var(--green)}
+.chip.bro{background:#EEEDF8;color:#3D3580}
+.btn{display:inline-flex;gap:6px;align-items:center;border-radius:12px;padding:9px 14px;font:800 13px Nunito;border:2px solid transparent;cursor:pointer}
+.btn.sm{padding:6px 10px;font-size:12px}
+.btn.pri{background:var(--orange);color:#fff}
+.btn.grn{background:var(--green);color:#fff}
+.btn.ghost{background:#fff;border-color:var(--line);color:var(--violet)}
+.btn.keep{outline:3px solid var(--orange-l);outline-offset:2px}
+.alerte{display:flex;gap:10px;background:var(--orange-l);border:1px solid var(--orange);color:var(--orange-d);border-radius:12px;padding:11px 13px;font-size:12.5px;line-height:1.55;margin-bottom:14px}
+.alerte i{font-size:18px;flex-shrink:0}
+.panel{background:#fff;border:2px solid var(--line);border-radius:18px;padding:14px 16px;margin-bottom:14px}
+.panel.mini{padding:10px 14px}
+.panel h3{font-family:'Baloo 2',cursive;font-size:16px;color:var(--violet);display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.panel h3 small{font:600 12px Nunito;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--cream);border:2px solid var(--line);border-radius:14px;padding:9px 12px}
+.kpi .l{font-size:11.5px;font-weight:700;color:var(--muted)}
+.kpi .n{font-family:'Baloo 2',cursive;font-size:26px;color:var(--violet);line-height:1.15}
+.kpi.hi{border-color:var(--orange);background:var(--orange-l)}.kpi.hi .n{color:var(--orange)}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+.eff th{background:var(--violet);color:#fff;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.eff th:first-child{text-align:left}
+.eff th small{display:block;font-weight:600;opacity:.8;text-transform:none;letter-spacing:0}
+.eff td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:center;font-weight:700}
+.eff td:first-child{text-align:left;font-weight:700}
+.eff td:first-child small{display:block;font-weight:400;font-size:11px;color:var(--muted)}
+.eff tr.tot td{background:var(--violet-l);color:var(--violet);font-weight:800;font-size:15px}
+.eff tr.mut td{color:var(--muted)}
+.eff td.z{color:#D3CFE2}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px}
+.dot.bib{background:#9a96b3}.dot.bb{background:#E9C400}.dot.m{background:#5B8FD0}.dot.g{background:#2E9E6B}.dot.rg{background:var(--orange)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:10px}
+.warn{display:flex;gap:8px;align-items:center;background:var(--red-l);color:var(--red);border-radius:10px;padding:8px 12px;font-size:12.5px;margin-top:10px}
+.warn a{color:var(--red);font-weight:800}
+.frow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.frow label{flex:1;min-width:200px;font-size:11.5px;font-weight:800;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.chk{display:flex;gap:8px;align-items:center;font-size:13px;margin:4px 0 14px;font-weight:600}
+.chk input[type=checkbox]{width:16px;height:16px}
+.cmd th{border:1px solid #999;padding:6px 4px;font-size:11px;text-align:center;background:#fff}
+.cmd th small{display:block;font-weight:400;color:var(--muted)}
+.cmd td{border:1px solid #999;padding:0}
+.cmd td.l{padding:6px 8px;font-size:11.5px;font-weight:700;width:210px}
+.cmd td.l small{display:block;font-size:9.5px;font-weight:400;font-style:italic}
+.cmd td input{width:100%;border:none;background:transparent;text-align:center;padding:9px 2px;font-size:13px;font-weight:800;border-radius:0}
+.cmd td input.diff{background:#fff3b0}
+.ecart{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
+.ecart b{color:var(--orange-d)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px}
+@media(max-width:640px){.bar .btn{flex:1}}
+</style>
 </head>
 <body>
 <div class="proto">MAQUETTE · données de démonstration · onglet « Commande repas » proposé dans Demandes › MCM (repas)</div>
@@ -118,6 +191,100 @@
     <div class="note dir"><b>Direction uniquement</b> : sous le bon, le bloc « Coût de la commande » (grille de tarifs, total par jour) reste identique à la fenêtre actuelle. Il ne figure jamais sur le PDF du traiteur.</div>
   </div>
 </div>
-<script src="js/pages/maquette-mcm-commande-repas.js"></script>
+<script>
+/* MAQUETTE : données fictives. Une crèche = 5 jours (lun→ven) d'effectifs par code repas. */
+const JOURS=['LUNDI','MARDI','MERCREDI','JEUDI','VENDREDI'],DATES=['19/10','20/10','21/10','22/10','23/10'];
+const CRECHES={
+  'Versailles':{
+    bib:[1,1,1,1,0], bb:[2,2,3,2,2], m:[4,5,4,5,3], g:[11,12,9,12,10],
+    bb6:[1,1,1,1,0], apmAbs:[1,1,0,1,1], sv:[1,1,1,1,1], spv:[0,1,0,0,0], sans:1,
+    transmise:true},
+  'Sèvres':{
+    bib:[0,0,1,0,0], bb:[3,3,3,3,2], m:[5,5,6,5,5], g:[14,15,14,14,12],
+    bb6:[0,0,0,0,0], apmAbs:[1,1,1,1,1], sv:[0,1,0,1,0], spv:[0,0,0,0,0], sans:0,
+    transmise:false}
+};
+const ROWS=[
+  ['bb6','Bébés - de 6 mois','(sans lait, sans sel, sans féculent)','#FFFECF'],
+  ['bb18','Bébés (6 à 18 mois)','','#FFFECF'],
+  ['grand','Grands (+ de 18 mois)','','#DEEAF6'],
+  ['peri','Périscolaire 4/5 ans','','#E2EFDA'],
+  ['temoin','REPAS TEMOIN','','#D9D9D9'],
+  ['gbb','Goûters Bébés','(6 à 18 mois)','#FCE4D6'],
+  ['ggr','Goûters Grands','(+ de 18 mois & périscol)','#FCE4D6'],
+  ['bag','BAGUETTES TRADITION','(crèche livrée le matin uniquement)','#FFFFFF']
+];
+/* Le bon se déduit des effectifs : repas = présents le matin hors BIB ; M va avec les bébés,
+   G avec les grands ; les sans-viande sont notés « +nSV ». */
+Object.values(CRECHES).forEach(c=>{
+  c.matin=c.bib.map((n,i)=>n+c.bb[i]+c.m[i]+c.g[i]);
+  c.apm=c.matin.map((n,i)=>n-c.apmAbs[i]);
+  c.cmd={bb6:c.bb6.map(String),
+    bb18:c.bb.map((n,i)=>String(n+c.m[i]-c.bb6[i])),
+    grand:c.g.map((n,i)=>c.sv[i]?(n-c.sv[i])+'+'+c.sv[i]+'SV':String(n)),
+    peri:['','','','',''],temoin:Array(5).fill('OUI'),
+    gbb:c.bb.map((n,i)=>String(Math.max(0,n+c.m[i]-c.bb6[i]-(i===0?1:0)))),
+    ggr:c.g.map((n,i)=>String(n)),bag:['','','','','']};
+});
+const sum=a=>a.reduce((s,n)=>s+n,0);
+const $=id=>document.getElementById(id);
+const cell=(v,cls)=>'<td'+(cls?' class="'+cls+'"':'')+'>'+(v||'<span style="color:#D3CFE2">—</span>')+'</td>';
+
+function vue(v){
+  $('vCmd').style.display=v==='cmd'?'':'none';
+  $('vPres').style.display=v==='pres'?'':'none';
+  $('vAutre').style.display=v==='autre'?'':'none';
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  if(v==='cmd')$('tabC').classList.add('on');
+}
+
+function rendre(){
+  const c=CRECHES[$('cr').value];
+  const present=c.matin.map((m,i)=>Math.max(m,c.apm[i]));
+  const lignes=[
+    ['Enfants présents','journée ou demi-journée',present,''],
+    ['Repas du midi','présents le matin',c.matin,''],
+    ['Goûters','présents l\'après-midi',c.apm,'']
+  ];
+  const codes=[['G','grands',c.g],['M','moyens',c.m],['BB','bébés',c.bb],['BIB','biberon · exclu du bon',c.bib]];
+  const regimes=c.sv.map((n,i)=>n+c.spv[i]);
+  let h='<thead><tr><th>Effectifs</th>'+JOURS.map((j,i)=>'<th>'+j.slice(0,3)+'<small>'+DATES[i]+'</small></th>').join('')+'<th>Semaine</th></tr></thead><tbody>';
+  lignes.forEach((l,k)=>{
+    h+='<tr'+(k===1?' class="tot"':'')+'><td>'+l[0]+'<small>'+l[1]+'</small></td>'+l[2].map(n=>'<td>'+n+'</td>').join('')+'<td>'+sum(l[2])+'</td></tr>';
+  });
+  codes.forEach(k=>{
+    h+='<tr'+(k[0]==='BIB'?' class="mut"':'')+'><td><i class="dot '+k[0].toLowerCase()+'"></i>'+k[0]+'<small>'+k[1]+'</small></td>'
+      +k[2].map(n=>n?'<td>'+n+'</td>':'<td class="z">0</td>').join('')+'<td>'+sum(k[2])+'</td></tr>';
+  });
+  h+='<tr><td><i class="dot rg"></i>Régimes particuliers<small>SV sans viande · SPV sans porc/viande</small></td>'
+    +c.sv.map((n,i)=>'<td>'+(regimes[i]?n+' SV'+(c.spv[i]?' · '+c.spv[i]+' SPV':''):'<span class="z">0</span>')+'</td>').join('')+'<td>'+sum(regimes)+'</td></tr></tbody>';
+  $('effTab').innerHTML=h;
+
+  const nbEnf=Math.max(...present);
+  $('kpis').innerHTML=
+    '<div class="kpi hi"><div class="l">Repas du midi</div><div class="n">'+sum(c.matin)+'</div></div>'
+   +'<div class="kpi"><div class="l">Goûters</div><div class="n">'+sum(c.apm)+'</div></div>'
+   +'<div class="kpi"><div class="l">Pic de la semaine</div><div class="n">'+nbEnf+'</div></div>'
+   +'<div class="kpi"><div class="l">Régimes particuliers</div><div class="n">'+sum(regimes)+'</div></div>'
+   +'<div class="kpi"><div class="l">Au biberon (exclus)</div><div class="n">'+sum(c.bib)+'</div></div>';
+  $('warnSans').style.display=c.sans?'':'none';
+  $('alerte').style.display=c.transmise?'':'none';
+
+  let t='<thead><tr><th></th>'+JOURS.map((j,i)=>'<th>'+j+'<small>'+DATES[i]+'</small></th>').join('')+'</tr></thead><tbody>';
+  ROWS.forEach(r=>{
+    if(r[0]==='gbb'||r[0]==='bag')t+='<tr><td colspan="6" style="height:10px;border:none"></td></tr>';
+    t+='<tr style="background:'+r[3]+'"><td class="l">'+r[1]+(r[2]?'<small>'+r[2]+'</small>':'')+'</td>'
+      +c.cmd[r[0]].map(v=>'<td><input value="'+v+'"></td>').join('')+'</tr>';
+  });
+  $('cmdTab').innerHTML=t+'</tbody>';
+
+  /* Rappel visuel : le total commandé (repas) doit retomber sur les effectifs hors BIB. */
+  const cmdRepas=JOURS.map((_,i)=>['bb6','bb18','grand','peri'].reduce((s,k)=>s+(parseInt(c.cmd[k][i])||0)+(/\+(\d+)SV/.test(c.cmd[k][i])?parseInt(c.cmd[k][i].match(/\+(\d+)SV/)[1]):0),0));
+  $('ecart').innerHTML='Contrôle : repas commandés <b>'+cmdRepas.join(' · ')+'</b> (lun → ven) pour <b>'+c.matin.map((m,i)=>m-c.bib[i]).join(' · ')+'</b> repas hors biberon dans les effectifs.';
+}
+
+Object.keys(CRECHES).forEach(n=>{const o=document.createElement('option');o.textContent=n;$('cr').appendChild(o);});
+rendre();
+</script>
 </body>
 </html>
