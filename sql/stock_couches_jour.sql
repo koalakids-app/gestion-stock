@@ -5,12 +5,18 @@
 -- La taille et le type (couche / culotte) viennent de la fiche enfant
 -- (enfants.taille_couche / enfants.type_couche, sql/enfants_taille_couche.sql).
 --
--- Pas de double décompte avec les « Change » du suivi (trigger de
--- stock_couches.sql) : le nombre saisi est le TOTAL de la journée pour
--- l'enfant. Le stock n'est décrémenté que de la différence entre ce total et
--- ce qui a déjà été décompté ce jour-là pour cet enfant (changes automatiques
--- + saisies précédentes). Corriger le nombre à la baisse recrédite le stock.
+-- Cette saisie est la SEULE source de décompte : le trigger qui décomptait
+-- une couche à chaque « Change » du suivi est désactivé ci-dessous (la
+-- fonction reste en place, pour le réactiver : create trigger
+-- trg_stock_couches_change after insert or delete on public.suivi_saisies
+-- for each row execute function public.kk_stock_couches_appliquer_saisie();).
+--
+-- Le nombre saisi est le TOTAL de la journée pour l'enfant. Le stock n'est
+-- décrémenté que de la différence avec les saisies précédentes du jour.
+-- Corriger le nombre à la baisse recrédite le stock.
 -- ============================================================================
+
+drop trigger if exists trg_stock_couches_change on public.suivi_saisies;
 
 create table if not exists public.couches_jour (
   enfant_id   uuid not null references public.enfants(id) on delete cascade,
@@ -99,11 +105,11 @@ begin
 
   select name into v_creche from public.creches where id = v_device.creche_id;
 
-  -- Déjà décompté aujourd'hui pour cet enfant (changes auto, saisies précédentes).
+  -- Déjà décompté aujourd'hui pour cet enfant par les saisies précédentes.
   select coalesce(-sum(delta), 0) into v_deja
     from public.stock_couches_mouvements
     where enfant_id = p_enfant_id
-      and motif in ('change_auto','annulation_change','couches_jour')
+      and motif = 'couches_jour'
       and created_at::date = current_date;
 
   v_delta := -(p_nb - v_deja);
