@@ -118,7 +118,7 @@ function mcmCmdRenderEffectifs(ctx){
       +jours.map(function(j){return cellTxt(stdSeul?String(j[k]['']||''):crFmtCell(j[k]));}).join('')+'<td>'+tot(k+'_n')+'</td></tr>';
   };
   let h='<div class="mcmc-panel"><h3><i class="ti ti-users-group"></i> Rappel des effectifs de la semaine <small>d’après Présences › Semaine · mêmes chiffres que le bon ci-dessous</small></h3>'
-    +'<div class="mcmc-kpis">'+kpi('Repas du midi',tot('midi'),true)+kpi('Goûters',tot('gouter'))
+    +'<div class="mcmc-kpis">'+kpi('Goûters',tot('gouter'),true)
     +kpi('Pic de la semaine',Math.max.apply(null,jours.map(function(j){return j.present;})))
     +kpi('Régimes particuliers',nbReg)+kpi('Au biberon (exclus)',tot('BIB'))+'</div>'
     +'<div style="overflow-x:auto"><table class="mcmc-eff"><thead><tr><th>Effectifs</th>'
