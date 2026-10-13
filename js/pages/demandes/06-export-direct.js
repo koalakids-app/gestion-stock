@@ -511,10 +511,29 @@ async function crLoadSaved(crecheId,semaineISO){
   return row;
 }
 
+/* Le bon de commande existe en un seul exemplaire (mêmes ids cr-*). Il s'affiche
+   soit dans sa fenêtre (Présences > Semaine), soit à l'intérieur de l'onglet
+   MCM > Commande repas : on déplace le bloc d'un conteneur à l'autre. */
+function crDock(inline){
+  const modal=document.getElementById('cr-modal');
+  const cible=document.getElementById(inline?'mcm-cmd-bon':'modal-commande-wrap');
+  if(!modal||!cible)return;
+  if(modal.parentNode!==cible)cible.appendChild(modal);
+  modal.classList.toggle('cr-inline',!!inline);
+}
+
 async function crOpen(){
   if(!_hebdoExportCtx||!_hebdoExportCtx.rows.length){
     showBanner('Aucune présence ni prévision sur cette semaine — rien à commander.','error');return;
   }
+  crDock(false);
+  await crPrepare();
+  document.getElementById('modal-commande-wrap').classList.add('open');
+}
+
+/* Remplit le bon (coordonnées, brouillon ou commande déjà transmise, chiffres)
+   d'après la semaine courante de _hebdoExportCtx. Sans ouvrir la fenêtre. */
+async function crPrepare(){
   const ctx=_hebdoExportCtx;
   document.getElementById('cr-creche-name').textContent=ctx.crecheLbl;
   const creche=cacheCreches.find(function(c){return c.id===ctx.crecheId;})||{};
@@ -554,7 +573,6 @@ async function crOpen(){
   if(_crSaved&&_crSaved.valeurs)crRenderTable(_crSaved.valeurs);
   else crCompute(false);
   crRenderSource();
-  document.getElementById('modal-commande-wrap').classList.add('open');
 }
 
 /* Bandeau d'origine des chiffres : c'est ce qui dit à l'utilisateur s'il regarde

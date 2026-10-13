@@ -35,7 +35,106 @@ function showMcmTab(tab,btn){
   if(tab==='incidents')renderMcmIncidents();
   if(tab==='menus'){if(!mcmMenusCache.length)mcmLoadMenusList();else mcmRenderMenusList();}
   if(tab==='avis')mcmRenderAvis();
+  if(tab==='commande')mcmCmdRender();
 }
+
+/* --- Commande repas : rappel des effectifs + bon de commande ---
+   Les effectifs viennent de la même lecture que Présences > Semaine
+   (renderPresenceHebdo → _hebdoExportCtx), donc de la même semaine et de la même
+   crèche : la navigation partage weekOffset avec l'onglet Présences. */
+let _mcmCmdSeq=0;
+function mcmCmdMoveWeek(delta){
+  if(delta==='today')weekOffset=0;else weekOffset+=delta;
+  mcmCmdRender();
+}
+function mcmCmdLabelSemaine(){
+  const d0=weekStart(),d4=new Date(d0);d4.setDate(d4.getDate()+4);
+  return 'Semaine '+hebdoNumSemaine(d0)+' · du '+d0.toLocaleDateString('fr-FR',{day:'numeric',month:'long'})+' au '+d4.toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+}
+async function mcmCmdRender(){
+  const zone=document.getElementById('mcm-cmd-effectifs'),bon=document.getElementById('mcm-cmd-bon');
+  if(!zone||!bon)return;
+  const seq=++_mcmCmdSeq;
+  const lbl=document.getElementById('mcm-cmd-week-label');
+  if(lbl)lbl.textContent=mcmCmdLabelSemaine();
+  initPresenceDate();                     // remplit la liste des crèches de Présences
+  const sel=document.getElementById('mcm-cmd-creche-select'),ps=document.getElementById('presence-creche-select');
+  if(sel&&isDirection){
+    sel.style.display='';
+    if(sel.options.length<=1)sel.innerHTML='<option value="">-- Crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
+    if(!sel.value&&ps&&ps.value)sel.value=ps.value;
+    if(ps)ps.value=sel.value;             // même crèche que la feuille de présence
+  }
+  if(isDirection&&!(sel&&sel.value)){
+    zone.innerHTML='<div class="empty-state"><i class="ti ti-building-community"></i><p>Choisissez une crèche.</p></div>';
+    bon.style.display='none';return;
+  }
+  zone.innerHTML='<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
+  bon.style.display='none';
+  await renderPresenceHebdo();
+  if(seq!==_mcmCmdSeq)return;             // une navigation plus récente a pris le relais
+  const ctx=_hebdoExportCtx;
+  if(!ctx||!ctx.rows.length){
+    zone.innerHTML='<div class="empty-state"><i class="ti ti-user-off"></i><p>Aucune présence ni prévision sur cette semaine — rien à commander.<br><span style="font-size:12px">Importez le planning (Présences) ou attendez d’avoir quelques semaines d’historique.</span></p></div>';
+    return;
+  }
+  mcmCmdRenderEffectifs(ctx);
+  crDock(true);
+  bon.style.display='';
+  await crPrepare();
+}
+/* Rappel : mêmes règles de comptage que crCompute (BIB exclu, pas de goûter avant
+   6 mois), pour que les chiffres du rappel retombent sur ceux du bon. */
+function mcmCmdRenderEffectifs(ctx){
+  const baseCode=function(c){return c==='BIB'?'BIB':String(c||'').replace(/(SV|SPV|SPA)$/,'');};
+  const jours=ctx.days5.map(function(d,i){
+    const j={present:0,midi:0,gouter:0,G:0,M:0,BB:0,BIB:0,SV:0,SPV:0,SPA:0,sans:0};
+    ctx.rows.forEach(function(r){
+      const c=r.cells[i];if(!c.present)return;
+      j.present++;
+      const code=baseCode(c.repas);
+      if(!code){j.sans++;return;}
+      if(code==='BIB'){j.BIB++;return;}
+      if(j[code]!==undefined)j[code]++;
+      const reg=r.enfant.regime_repas;if(reg&&j[reg]!==undefined)j[reg]++;
+      if(c.slot==='j'||c.slot==='m')j.midi++;
+      if(c.slot==='j'||c.slot==='a'){
+        const mois=mcmAgeMois(r.enfant.dob,ctx.dateStrs[i]);
+        if(mois===null||mois>=6)j.gouter++;
+      }
+    });
+    return j;
+  });
+  const tot=function(k){return jours.reduce(function(s,j){return s+j[k];},0);};
+  const reg=function(j){return['SV','SPV','SPA'].filter(function(k){return j[k];}).map(function(k){return j[k]+' '+k;}).join(' · ');};
+  const nbReg=tot('SV')+tot('SPV')+tot('SPA');
+  const kpi=function(l,n,hi){return'<div class="mcmc-kpi'+(hi?' hi':'')+'"><div class="l">'+l+'</div><div class="n">'+n+'</div></div>';};
+  const cellN=function(n,mut){return'<td'+(n?'':' class="z"')+'>'+n+'</td>';};
+  const ligne=function(titre,sous,k,cls,dot){
+    return'<tr'+(cls?' class="'+cls+'"':'')+'><td>'+(dot?'<i class="mcmc-dot '+dot+'"></i>':'')+titre+'<small>'+sous+'</small></td>'
+      +jours.map(function(j){return cellN(j[k]);}).join('')+'<td>'+tot(k)+'</td></tr>';
+  };
+  let h='<div class="mcmc-panel"><h3><i class="ti ti-users-group"></i> Rappel des effectifs de la semaine <small>d’après Présences › Semaine · base de la commande ci-dessous</small></h3>'
+    +'<div class="mcmc-kpis">'+kpi('Repas du midi',tot('midi'),true)+kpi('Goûters',tot('gouter'))
+    +kpi('Pic de la semaine',Math.max.apply(null,jours.map(function(j){return j.present;})))
+    +kpi('Régimes particuliers',nbReg)+kpi('Au biberon (exclus)',tot('BIB'))+'</div>'
+    +'<div style="overflow-x:auto"><table class="mcmc-eff"><thead><tr><th>Effectifs</th>'
+    +ctx.days5.map(function(d){return'<th>'+d.toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','')+'<small>'+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</small></th>';}).join('')
+    +'<th>Semaine</th></tr></thead><tbody>'
+    +ligne('Enfants présents','journée ou demi-journée','present','')
+    +ligne('Repas du midi','présents le matin, hors biberon','midi','tot')
+    +ligne('Goûters','présents l’après-midi, hors biberon','gouter','')
+    +ligne('G','grands','G','','g')+ligne('M','moyens','M','','m')+ligne('BB','bébés','BB','','bb')
+    +ligne('BIB','biberon · exclu du bon','BIB','mut','bib')
+    +'<tr><td><i class="mcmc-dot rg"></i>Régimes particuliers<small>SV sans viande · SPV sans protéine de vache · SPA sans protéine animale</small></td>'
+    +jours.map(function(j){return'<td'+(reg(j)?'':' class="z"')+'>'+(reg(j)||'0')+'</td>';}).join('')+'<td>'+nbReg+'</td></tr>'
+    +'</tbody></table></div>';
+  const sans=ctx.rows.filter(function(r){return !enfRepasCode(r.enfant);}).length;
+  if(sans)h+='<div class="mcmc-warn"><i class="ti ti-alert-triangle"></i><span><b>'+sans+' enfant(s) sans code repas</b> ne sont pas comptés : renseignez leur date de naissance ou leur type de repas sur la fiche.</span></div>';
+  document.getElementById('mcm-cmd-effectifs').innerHTML=h+'</div>';
+}
+window.mcmCmdMoveWeek=mcmCmdMoveWeek;
+window.mcmCmdRender=mcmCmdRender;
 
 /* --- Menus des semaines à venir (import + liste) --- */
 async function mcmLoadMenusList(){
