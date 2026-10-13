@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v30';   // v30 : accueil par thématiques (tuiles Modules) + barre du bas smartphone
+const CACHE_NAME = 'stocks-v31';   // v31 : lien « Document MCM » dans MCM — Prestataire repas (à côté d'Avis des enfants)
 
 self.addEventListener('install', event => {
   event.waitUntil(
