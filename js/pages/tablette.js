@@ -26,7 +26,6 @@ const PICTOS=[
 ];
 const pictoById=Object.fromEntries(PICTOS.map(p=>[p.id,p]));
 let pictoCode=[];
-let crecheId=null;
 
 const pictoSlotsEl=document.getElementById('pictoSlots');
 const pictoGridEl=document.getElementById('pictoGrid');
@@ -92,16 +91,16 @@ async function submitPictoCode(){
   if(busy)return;
   busy=true;
   showState(`<div class="state busy"><i>⏳</i><h2>Vérification…</h2></div>`);
-  if(!crecheId){
+  if(!TOKEN||TOKEN.length<20){
     busy=false;
     showErrorPictosThenReset('Tablette non configurée','Contactez la direction pour reconfigurer cet appareil.',0);
     return;
   }
-  const{data,error}=await sb.rpc('verifier_code_pointage',{p_creche_id:crecheId,p_code:pictoCode});
+  const{data,error}=await sb.rpc('kk_kiosk_pointer_enfant_pictos',{p_token:TOKEN,p_code:pictoCode});
   busy=false;
   const row=Array.isArray(data)?data[0]:data;
   if(error||!row){
-    console.error('verifier_code_pointage',error);
+    console.error('kk_kiosk_pointer_enfant_pictos',error);
     showErrorPictosThenReset('Connexion impossible','Vérifiez le Wi-Fi de la tablette et réessayez.',3000);
     return;
   }
@@ -123,7 +122,7 @@ async function submitPictoCode(){
 
 function handlePictoError(err){
   const messages={
-    creche_invalide:['Tablette non configurée','Contactez la direction pour reconfigurer cet appareil.',0],
+    token_invalide:['Tablette non configurée','Contactez la direction pour reconfigurer cet appareil.',0],
     trop_de_tentatives:['Trop de tentatives','Merci de patienter quelques minutes avant de réessayer.',4000],
     code_invalide:['Code invalide','Choisissez 4 images distinctes.',2000],
     code_inconnu:['Code inconnu','Vérifiez les images et réessayez.',2000]
@@ -147,8 +146,8 @@ function showErrorPictosThenReset(title,msg,delay){
    séquence de 4 pictogrammes (à la place du code à 4 chiffres). Grille et
    emplacements dédiés (pictoGridPerso/pictoSlotsPerso), distincts de ceux du
    mode enfant : kk_kiosk_pointer_pictos(token, code_pictos[]) exige le token de la
-   tablette en plus du code (contrairement à verifier_code_pointage, réservé
-   aux enfants), donc un chemin de vérification séparé. */
+   tablette en plus du code, comme kk_kiosk_pointer_enfant_pictos (enfants) ;
+   chemin de vérification séparé car le personnel a sa propre table de codes. */
 let pictoCodePerso=[];
 const pictoSlotsPersoEl=document.getElementById('pictoSlotsPerso');
 const pictoGridPersoEl=document.getElementById('pictoGridPerso');
@@ -252,9 +251,4 @@ renderPictoGrid();
 
 if(!TOKEN||TOKEN.length<20){
   showState('<div class="state err"><i>✕</i><h2>Lien invalide</h2><p>Cette tablette n’a pas de jeton de configuration valide dans son URL.</p></div>');
-}else{
-  sb.rpc('kk_resolve_creche_id',{p_token:TOKEN}).then(({data,error})=>{
-    if(error)console.error('kk_resolve_creche_id',error);
-    crecheId=data||null;
-  });
 }
