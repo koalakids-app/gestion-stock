@@ -619,7 +619,7 @@ function renderCrechePanel(){
    +'<div class="stat-card clickable" style="border-top-color:#999" onclick="openDemandeBrouillons()" title="Demandes préparées, à envoyer plus tard"><div class="stat-label">Brouillons</div><div class="stat-val" style="color:#666">'+brouillonsN+'</div></div>'
    +(currentUser?'<div class="stat-card clickable" style="border-top-color:#999" onclick="openCorbeille()" title="Demandes que vous avez supprimées de votre liste"><div class="stat-label">Corbeille</div><div class="stat-val" style="color:#666">'+corbeilleN+'</div></div>':'')
    +'</div>';
-  html+='<div class="section-header"><div class="section-left"><span class="section-title">Demandes & consignes</span><div style="position:relative"><input class="search-inp" id="search-d" type="text" placeholder="🔍 Rechercher…" value="'+searchTerm.replace(/"/g,'&quot;')+'" oninput="searchTerm=this.value;renderDemandsOnly()" autocomplete="off" style="width:240px"><span id="search-clear" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);color:#bbb;font-size:13px;cursor:pointer;'+(searchTerm?'':'display:none')+'" onclick="searchTerm=\'\';document.getElementById(\'search-d\').value=\'\';renderDemandsOnly()">✕</span></div></div><div style="display:flex;gap:8px;align-items:center"><button class="ibtn-fs" id="btn-fs-demands" onclick="toggleDemandsFullscreen()" title="Plein écran"><i class="ti ti-arrows-maximize" id="fs-icon-demands"></i></button><button class="btn-primary" onclick="openDemandModal()"><i class="ti ti-plus"></i> Nouvelle demande</button></div></div>';
+  html+='<div class="section-header"><div class="section-left"><span class="section-title">Demandes & consignes</span><div style="position:relative"><input class="search-inp" id="search-d" type="text" placeholder="🔍 Rechercher…" value="'+searchTerm.replace(/"/g,'&quot;')+'" oninput="searchTerm=this.value;renderDemandsOnly()" autocomplete="off" style="width:240px"><span id="search-clear" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);color:#bbb;font-size:13px;cursor:pointer;'+(searchTerm?'':'display:none')+'" onclick="searchTerm=\'\';document.getElementById(\'search-d\').value=\'\';renderDemandsOnly()">✕</span></div></div><div style="display:flex;gap:8px;align-items:center"><button class="ibtn-fs" id="btn-fs-demands" onclick="toggleDemandsFullscreen()" title="Plein écran"><i class="ti ti-arrows-maximize" id="fs-icon-demands"></i></button><button class="btn-primary" onclick="openDemandModal()"><i class="ti ti-plus"></i> Nouveau message</button></div></div>';
   html+='<div id="demands-list-inner"></div>';
   panel.innerHTML=html;renderDemandsOnly();
 }
@@ -739,7 +739,7 @@ window.dHandleAttachment=dHandleAttachment;window.cHandleAttachment=cHandleAttac
 let cacheDemandeBrouillons=[],dDraftId=null;
 async function openDemandModal(draft){
   dDraftId=draft?draft.id:null;
-  document.getElementById('modal-d-title').textContent=draft?'Brouillon de demande':'Nouvelle demande';
+  document.getElementById('modal-d-title').textContent=draft?'Brouillon de demande':'Nouveau message';
   const isAll=isDirection&&activeCrecheId==='all';
   // La crèche est toujours affichée pour la direction (utile pour les demandes liées à un directeur technique terrain),
   // mais devient optionnelle si au moins un destinataire choisi est admin (voir saveDemand()).
@@ -822,7 +822,7 @@ async function saveDemand(){
     if(saved){
       okCount++;
       cacheDemandes.unshift(saved);
-      await callFn('notify-push',{referent_ids:[row.to_referent_id],title:'Nouvelle demande',body:subj,url:'./demandes.html',tag:'demande-'+saved.id});
+      await callFn('notify-push',{referent_ids:[row.to_referent_id],title:'Nouveau message',body:subj,url:'./demandes.html',tag:'demande-'+saved.id});
     }
   }
   if(okCount){
@@ -890,7 +890,7 @@ function renderDemandeBrouillons(){
   const box=document.getElementById('dbrouillons-liste');
   if(!box)return;
   if(!cacheDemandeBrouillons.length){
-    box.innerHTML='<div class="empty-state"><i class="ti ti-file-pencil"></i><p>Aucun brouillon.<br><span style="font-size:12px">Dans « Nouvelle demande », le bouton « Enregistrer en brouillon » garde une demande à envoyer plus tard.</span></p></div>';
+    box.innerHTML='<div class="empty-state"><i class="ti ti-file-pencil"></i><p>Aucun brouillon.<br><span style="font-size:12px">Dans « Nouveau message », le bouton « Enregistrer en brouillon » garde une demande à envoyer plus tard.</span></p></div>';
     return;
   }
   box.innerHTML=cacheDemandeBrouillons.map(function(b){

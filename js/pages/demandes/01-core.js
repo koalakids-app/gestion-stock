@@ -548,7 +548,7 @@ function detecterNouveautesEtNotifier(avant){
       if(d.type==='consigne'){
         if(currentProfile.role==='referent'||currentProfile.role==='direction')showInAppNotif('Nouvelle consigne',d.subject||'','demands',{type:'demande',id:d.id});
       }else if(d.to_referent_id&&d.to_referent_id===currentProfile.id){
-        showInAppNotif('Nouvelle demande',d.subject||'','demands',{type:'demande',id:d.id});
+        showInAppNotif('Nouveau message',d.subject||'','demands',{type:'demande',id:d.id});
       }
     }else{
       const statutAvant=avant.statutsDemandes.get(d.id);
