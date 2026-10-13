@@ -39,7 +39,19 @@ async function afLoad(){
   afRender();
 }
 
+let afMode='jour';
+function afSetMode(m){afMode=m;afRender();}
+// Lundi et dimanche de la semaine contenant `iso`
+function afWeekBounds(iso){
+  const d=new Date(iso+'T12:00:00');
+  const dow=(d.getDay()+6)%7; // lundi = 0
+  const lun=new Date(d);lun.setDate(d.getDate()-dow);
+  const dim=new Date(lun);dim.setDate(lun.getDate()+6);
+  return{debut:ipDateToLocalISO(lun),fin:ipDateToLocalISO(dim)};
+}
+
 function afShiftDay(delta){
+  if(afMode==='semaine')delta*=7;
   const d=new Date(afCurrentDate+'T12:00:00');
   d.setDate(d.getDate()+delta);
   afCurrentDate=ipDateToLocalISO(d);
@@ -181,10 +193,25 @@ function afSortTasks(arr){
 
 function afRender(){
   afCurrentDate=document.getElementById('af-nav-date').value||afCurrentDate||todayStr();
-  document.getElementById('af-title-day').textContent=afFmtDayLabel(afCurrentDate);
-  afRenderEventsOfDay(afCurrentDate);
-  if(typeof adRenderAfaireBloc==='function'){try{adRenderAfaireBloc(afCurrentDate);}catch(e){console.warn('[afaire] miroir actions',e);}}
-  const dayItems=afCache.filter(t=>t.date_jour===afCurrentDate);
+  const semaine=afMode==='semaine';
+  ['jour','semaine'].forEach(m=>{
+    const b=document.getElementById('af-mode-'+m);
+    if(b)b.style.cssText=afFbtnStyle(afMode===m);
+  });
+  const wk=afWeekBounds(afCurrentDate);
+  document.getElementById('af-title-day').textContent=semaine
+    ?'Semaine du '+afFmtDayLabel(wk.debut)+' au '+afFmtDayLabel(wk.fin)
+    :afFmtDayLabel(afCurrentDate);
+  if(semaine){
+    document.getElementById('af-events-day').innerHTML='';
+    const ba=document.getElementById('af-actions-dir');if(ba)ba.innerHTML='';
+  }else{
+    afRenderEventsOfDay(afCurrentDate);
+    if(typeof adRenderAfaireBloc==='function'){try{adRenderAfaireBloc(afCurrentDate);}catch(e){console.warn('[afaire] miroir actions',e);}}
+  }
+  const dayItems=semaine
+    ?afCache.filter(t=>t.date_jour>=wk.debut&&t.date_jour<=wk.fin)
+    :afCache.filter(t=>t.date_jour===afCurrentDate);
   afRenderCrecheFilter(dayItems);
   // s'assurer que le filtre courant est encore valide
   if(afCrecheFilter!=='all'&&afCrecheFilter!=='none'&&!cacheCreches.find(c=>c.id===afCrecheFilter))afCrecheFilter='all';
@@ -197,6 +224,18 @@ function afRender(){
     const bloc=document.getElementById('af-actions-dir');
     const avecActions=bloc&&bloc.innerHTML.trim();
     list.innerHTML='<div style="text-align:center;color:var(--muted);padding:30px;font-size:13px"><i class="ti ti-coffee" style="font-size:28px;display:block;margin-bottom:6px;opacity:0.5"></i>Aucune tâche personnelle pour ce jour'+(afCrecheFilter!=='all'?' (avec ce filtre)':'')+(avecActions?' — seules les actions de direction ci-dessus attendent.':'.')+'</div>';
+    return;
+  }
+  // Vue semaine → regroupement par jour (lundi → dimanche)
+  if(semaine){
+    const jours=[...new Set(items.map(t=>t.date_jour))].sort();
+    list.innerHTML=jours.map(j=>{
+      const g=items.filter(t=>t.date_jour===j);
+      return '<div style="margin-bottom:4px">'
+        +'<div style="font-size:12px;font-weight:700;color:var(--koala);text-transform:uppercase;letter-spacing:0.5px;padding:4px 2px;display:flex;align-items:center;gap:6px"><i class="ti ti-calendar"></i> '+afFmtDayLabel(j)+(j===todayStr()?' · aujourd\'hui':'')+' <span style="color:var(--muted);font-weight:600">('+g.length+')</span></div>'
+        +'<div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">'+afSortTasks(g).map(afTaskCard).join('')+'</div>'
+        +'</div>';
+    }).join('');
     return;
   }
   // Si "Toutes" → regrouper par crèche sous des titres. Sinon → liste simple.
