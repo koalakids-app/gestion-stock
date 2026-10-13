@@ -272,6 +272,7 @@
     </div>
     <div class="module-tabs" style="margin-top:2px">
       <button class="module-tab active" onclick="showMcmTab('incidents',this)"><i class="ti ti-alert-triangle"></i> Incidents repas</button>
+      <button class="module-tab" onclick="showMcmTab('commande',this)"><i class="ti ti-clipboard-list"></i> Commande repas</button>
       <button class="module-tab" onclick="showMcmTab('menus',this)"><i class="ti ti-tools-kitchen-2"></i> Menus</button>
       <button class="module-tab" onclick="showMcmTab('avis',this)"><i class="ti ti-mood-smile"></i> Avis des enfants</button>
       <a class="module-tab" href="https://www.cedis.asso.fr/menu_mcm.pdf" target="_blank" rel="noopener noreferrer" style="text-decoration:none"><i class="ti ti-file-text"></i> Menus MCM</a>
@@ -287,6 +288,23 @@
         <button class="fchip" onclick="setMcmIncFilter('non-traite',this)">Non traités</button>
       </div>
       <div id="mcm-incidents-list"></div>
+    </div>
+
+    <!-- Commande repas : rappel des effectifs de la semaine + bon de commande.
+         Le bon est la même fenêtre que Présences > Semaine > « Commande repas » :
+         son contenu est simplement déplacé ici (crDock), jamais dupliqué. -->
+    <div id="mcm-commande" class="module-tab-content">
+      <div style="display:flex;align-items:center;gap:8px;margin:10px 0;flex-wrap:wrap">
+        <button class="ibtn" onclick="mcmCmdMoveWeek(-1)" title="Semaine précédente" style="padding:5px 9px;font-size:15px">◀</button>
+        <span id="mcm-cmd-week-label" style="font-weight:700;color:var(--koala);font-size:13px;white-space:nowrap"></span>
+        <button class="ibtn" onclick="mcmCmdMoveWeek(1)" title="Semaine suivante" style="padding:5px 9px;font-size:15px">▶</button>
+        <button class="btn-sm" onclick="mcmCmdMoveWeek('today')">Semaine actuelle</button>
+        <select class="finput direction-only" id="mcm-cmd-creche-select" style="display:none;width:160px" onchange="mcmCmdRender()">
+          <option value="">-- Crèche --</option>
+        </select>
+      </div>
+      <div id="mcm-cmd-effectifs"></div>
+      <div id="mcm-cmd-bon" style="margin-top:14px"></div>
     </div>
 
     <div id="mcm-menus" class="module-tab-content">
@@ -2451,19 +2469,19 @@
 <!-- PRÉVISUALISATION DE L'EXPORT EXCEL -->
 <!-- COMMANDE REPAS TRAITEUR (bon MCM) -->
 <div class="overlay" id="modal-commande-wrap">
-  <div class="modal" style="max-width:980px">
+  <div class="modal" id="cr-modal" style="max-width:980px">
     <h3><i class="ti ti-clipboard-list"></i> Commande repas — <span id="cr-creche-name"></span></h3>
     <div id="cr-source" style="margin-bottom:12px"></div>
     <!-- Alerte « commande déjà transmise » : évite qu'une deuxième commande parte
          sans que la personne sache qu'il y en a déjà eu une, et par qui. -->
     <div id="cr-alerte" style="display:none;margin-bottom:14px"></div>
     <div class="info-box" style="margin-bottom:14px"><i class="ti ti-info-circle" style="font-size:15px"></i>
-      Chiffres pré-remplis d'après les présences de la semaine et le <strong>code repas de chaque enfant</strong>
+      <span>Chiffres pré-remplis d'après les présences de la semaine et le <strong>code repas de chaque enfant</strong>
       (BB / M / G, celui de la feuille de présence) : M va en « Bébés 6-18 mois », G en « Grands + 18 mois ».
       L'âge au jour de la livraison ne sert qu'à isoler les « − 6 mois » et le « périscolaire 4/5 ans ». Les régimes sont notés
       <strong>6+1SV</strong> (6 repas standard + 1 sans viande). Les enfants dont la fiche indique
       <strong>BIB (biberon)</strong> sont exclus du bon — ni repas, ni goûter. Toutes les cases restent
-      modifiables avant génération du PDF.</div>
+      modifiables avant génération du PDF.</span></div>
 
     <div class="frow">
       <div class="fg" style="flex:2"><label class="flabel">Adresse</label><input class="finput" id="cr-adresse" placeholder="Adresse de la crèche"/></div>
@@ -2511,7 +2529,7 @@
 
     <div class="mactions">
       <button class="btn-cancel" onclick="crCompute(true)" title="Réinitialiser toutes les cases depuis les présences de la semaine"><i class="ti ti-refresh"></i> Recalculer</button>
-      <button class="btn-cancel" onclick="closeModal('modal-commande-wrap')">Fermer</button>
+      <button class="btn-cancel cr-fermer" onclick="closeModal('modal-commande-wrap')">Fermer</button>
       <button class="btn-sm" onclick="crSaveOnly()" title="Enregistrer sans générer le bon"><i class="ti ti-device-floppy"></i> Enregistrer</button>
       <button class="btn-sm" id="cr-btn-pdf" onclick="crExportPdf()"><i class="ti ti-file-download"></i> Générer le PDF</button>
       <button class="btn-primary" onclick="crOpenMail()"><i class="ti ti-send"></i> Envoyer au traiteur</button>
