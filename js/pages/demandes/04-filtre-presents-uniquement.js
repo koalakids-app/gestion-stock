@@ -112,10 +112,10 @@ function mcmCmdRenderEffectifs(ctx){
     return'<tr'+(cls?' class="'+cls+'"':'')+'><td>'+(dot?'<i class="mcmc-dot '+dot+'"></i>':'')+titre+'<small>'+sous+'</small></td>'
       +jours.map(function(j){return cellTxt(String(j[k]||''));}).join('')+'<td>'+tot(k)+'</td></tr>';
   };
-  /* Ligne du bon : « standard+régimes » comme sur le bordereau (ex. 4+2SV). */
-  const ligneBon=function(titre,sous,k,cls,dot){
+  /* Ligne du bon : « standard+régimes » comme sur le bordereau . */
+  const ligneBon=function(titre,sous,k,cls,dot,stdSeul){
     return'<tr'+(cls?' class="'+cls+'"':'')+'><td>'+(dot?'<i class="mcmc-dot '+dot+'"></i>':'')+titre+'<small>'+sous+'</small></td>'
-      +jours.map(function(j){return cellTxt(crFmtCell(j[k]));}).join('')+'<td>'+tot(k+'_n')+'</td></tr>';
+      +jours.map(function(j){return cellTxt(stdSeul?String(j[k]['']||''):crFmtCell(j[k]));}).join('')+'<td>'+tot(k+'_n')+'</td></tr>';
   };
   let h='<div class="mcmc-panel"><h3><i class="ti ti-users-group"></i> Rappel des effectifs de la semaine <small>d’après Présences › Semaine · mêmes chiffres que le bon ci-dessous</small></h3>'
     +'<div class="mcmc-kpis">'+kpi('Repas du midi',tot('midi'),true)+kpi('Goûters',tot('gouter'))
@@ -126,10 +126,10 @@ function mcmCmdRenderEffectifs(ctx){
     +'<th>Semaine</th></tr></thead><tbody>'
     +ligne('Enfants présents','journée ou demi-journée','present','')
     +ligne('Repas du midi','présents le matin, hors biberon','midi','tot')
-    +ligneBon('Bébés − de 6 mois','repas','bb6','','bb')
-    +ligneBon('Bébés 6 à 18 mois','repas','bb18','','m')
-    +ligneBon('Grands (+ de 18 mois)','repas','grand','','g')
-    +ligneBon('Périscolaire 4/5 ans','repas','peri','','g')
+    +ligneBon('Bébés − de 6 mois','repas classiques','bb6','','bb',true)
+    +ligneBon('Bébés 6 à 18 mois','repas classiques','bb18','','m',true)
+    +ligneBon('Grands (+ de 18 mois)','repas classiques','grand','','g',true)
+    +ligneBon('Périscolaire 4/5 ans','repas classiques','peri','','g',true)
     +ligne('Goûters','présents l’après-midi, hors biberon et − de 6 mois','gouter','tot')
     +ligneBon('Goûters Bébés','6 à 18 mois','gbb','','bb')
     +ligneBon('Goûters Grands','+ de 18 mois & périscolaire','ggr','','g')
