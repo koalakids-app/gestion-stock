@@ -125,7 +125,6 @@ function mcmCmdRenderEffectifs(ctx){
     +ctx.days5.map(function(d){return'<th>'+d.toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','')+'<small>'+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</small></th>';}).join('')
     +'<th>Semaine</th></tr></thead><tbody>'
     +ligne('Enfants présents','journée ou demi-journée','present','')
-    +ligne('Repas du midi','présents le matin, hors biberon','midi','tot')
     +ligneBon('Bébés − de 6 mois','repas classiques','bb6','','bb',true)
     +ligneBon('Bébés 6 à 18 mois','repas classiques','bb18','','m',true)
     +ligneBon('Grands (+ de 18 mois)','repas classiques','grand','','g',true)
