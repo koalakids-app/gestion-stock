@@ -119,6 +119,15 @@ signature: `
   <li>Pour un document signé sur papier, basculer soi-même le sélecteur de statut sur <strong>Signé</strong> : ce choix est conservé.</li>
 </ul>
 <div class="tip">C’est ce statut qui s’affiche dans la fiche de l’enfant : ✅ Signé ou 🕓 Préparé.</div>
+<div class="st">📨 Envoyer un protocole à signer à distance</div>
+<div style="font-size:13px;line-height:1.7;margin-bottom:10px">Pour les documents <strong>à télécharger</strong> des catégories concernées (protocoles obligatoires, médicaux, règles d’hygiène), un bouton d’envoi permet de faire signer le document à un signataire désigné, par exemple le directeur/la directrice technique santé et accueil inclusif (RSAI).</div>
+<ul>
+  <li>Choisir le <strong>signataire</strong> dans la liste ; il est présélectionné quand le titre du document ou la crèche correspond à son périmètre. Les signataires déjà sollicités sont marqués « ⏳ en attente » ou « ✅ déjà signé ».</li>
+  <li><strong>Générer le lien</strong> : un QR code, un lien à copier ou à partager, un e-mail pré-rédigé ou un message WhatsApp.</li>
+  <li>Le signataire ouvre le document d’origine, puis le cadre de signature, sans compte ni application.</li>
+  <li>Ce lien est valable <strong>7 jours</strong>, contrairement au QR code de signature sur un document rempli en ligne (30 minutes). La fenêtre vérifie la signature toutes les quelques secondes ; sinon, l’état est relu à chaque ouverture de la page.</li>
+  <li>Un même document peut recevoir une signature par signataire. Renvoyer à quelqu’un qui a déjà signé demande une confirmation.</li>
+</ul>
 <div class="st">💡 Bon à savoir</div>
 <ul>
   <li>La personne qui signe à distance n’a besoin d’aucun compte ni d’aucune application : un simple navigateur suffit.</li>
@@ -149,6 +158,28 @@ reponses: `
 <div class="warn">📁 Pour les documents à valeur administrative (entretiens annuels notamment), conserver systématiquement l’export PDF en dehors de l’application.</div>
 `,
 
+urgence: `
+<h3 style="font-size:17px;font-weight:700;margin-bottom:12px">🚨 Protocole urgence et confinement</h3>
+<div class="warn" style="background:var(--green-lt,#ecfdf5)">Modèle <strong>à remplir en ligne</strong> : chaque crèche adapte son exemplaire, le signe et l’exporte en PDF.</div>
+<div class="st">🆕 Renseigner le protocole</div>
+<ul>
+  <li>Ouvrir le document, puis choisir la <strong>crèche</strong>, la <strong>date</strong>, le N° / version et la capacité d’accueil (enfants / professionnels). Il y a une réponse par crèche.</li>
+  <li>Trois textes à adapter : <strong>Qu’est-ce que l’urgence ?</strong>, <strong>Qu’est-ce que le confinement ?</strong> et la <strong>conclusion</strong>.</li>
+  <li><strong>Annexe 1 – Sac URGENCE</strong> (contenant rouge, sortie immédiate) et <strong>Annexe 2 – Sac CONFINEMENT</strong> (contenant bleu) : lieu de rangement et liste du matériel par rubrique.</li>
+  <li>Les numéros utiles sont préremplis (15, 18, 17, 112, 114).</li>
+</ul>
+<div class="st">✏️ Tout est modifiable</div>
+<ul>
+  <li>Dans chaque annexe : <strong>Ajouter une rubrique</strong>, <strong>Ajouter un article</strong>, renommer, supprimer (corbeille ou ✕) ou ajuster les quantités.</li>
+  <li><strong>Revenir au modèle</strong> restaure le contenu type d’une annexe.</li>
+  <li>La <strong>fiche de contrôle périodique</strong> accepte autant de lignes que nécessaire (<strong>Ajouter une ligne de contrôle</strong>), chacune avec sa date, le sac concerné, les produits vérifiés, la personne qui contrôle et sa propre signature.</li>
+</ul>
+<div class="st">🖊️ Signatures et export</div>
+<ul>
+  <li>Signatures de la <strong>direction</strong> et du/de la <strong>référent(e) sécurité</strong> en pied de protocole, à l’écran ou par QR code (voir l’onglet 🖊️ Signatures).</li>
+  <li>L’export PDF reprend exactement ce qui est affiché, signatures comprises.</li>
+</ul>
+`,
 eaje: `
 <div class="st">📋 Support de contrôle EAJE</div>
 <p>Grille d’auto-contrôle réglementaire reprenant les points vérifiés lors d’une inspection PMI. Utile pour préparer une visite ou faire un point annuel. Elle se trouve dans les documents à remplir, sous « Support de contrôle EAJE ».</p>
