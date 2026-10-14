@@ -91,6 +91,9 @@ function encodeSubject(subject: string): string {
   return s || "Notification";
 }
 
+// Les réponses des familles arrivent chez la gestionnaire, pas à la crèche.
+const REPONSE_FAMILLE = 'a.janin@koalakids.fr';
+
 async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string) {
   const user = Deno.env.get('GMAIL_USER');
   const pass = Deno.env.get('GMAIL_APP_PASSWORD');
@@ -112,6 +115,7 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
     await client.send({
       from: `${nomExpediteur(expediteur)} de ${orgNom || 'Koalakids'} <${user}>`,
       to,
+      replyTo: REPONSE_FAMILLE,
       subject: encodeSubject(subject),
       content: 'Ce message nécessite un client de messagerie compatible HTML.',
       html,
@@ -230,7 +234,7 @@ Deno.serve(async (req) => {
     <p style="margin:0;font-size:14.5px;line-height:1.6">À très bientôt,<br>L'équipe ${esc(enseigne)}</p>
   </div>
   <p style="text-align:center;font-size:12px;color:#8E8AA8;margin:16px 0 0;line-height:1.7">
-    ${esc(enseigne)}${etab.telephone ? ' · ' + esc(etab.telephone) : ''}${etab.email ? ' · ' + esc(etab.email) : ''}
+    ${esc(enseigne)}${etab.telephone ? ' · ' + esc(etab.telephone) : ''} · ${REPONSE_FAMILLE}
   </p>
 </div>
 </body></html>`;
