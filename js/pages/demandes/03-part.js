@@ -856,7 +856,7 @@ function calEventsForDay(dateISO){
   return cacheEvenements.filter(e=>{
     if(calFilterType!=='all'&&e.type!==calFilterType)return false;
     if(calOnlyMine&&!calEvtConcerneMoi(e))return false;
-    if(calFilterCreche&&(calFilterCreche==='__reseau'?!!e.creche_id:e.creche_id!==calFilterCreche))return false;
+    if(calFilterCreche&&(calFilterCreche==='__reseau'?!!e.creche_id:(!!e.creche_id&&e.creche_id!==calFilterCreche)))return false;
     const start=e.date_debut,end=e.date_fin||e.date_debut;
     return dateISO>=start&&dateISO<=end;
   }).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
