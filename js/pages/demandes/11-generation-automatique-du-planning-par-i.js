@@ -411,7 +411,9 @@ function peEstRemplacante(prenom,crecheId,semaine){
 function peContinuiteDirection(rows,crecheId,semaine){
   const out=[];
   for(let d=0;d<5;d++){
-    const jour=rows.filter(r=>r.jour===d).map(r=>({r,segs:peCreneauSegments(r.creneau_label)})).filter(x=>x.segs);
+    // Seules les présences comptent : une absence / formation / réunion / congé portant un
+    // horaire ne doit ni faire passer la directrice pour présente, ni désigner la personne.
+    const jour=rows.filter(r=>r.jour===d&&(!r.type||r.type==='presence')).map(r=>({r,segs:peCreneauSegments(r.creneau_label)})).filter(x=>x.segs);
     if(!jour.length){out.push([]);continue;}
     const noms=l=>[...new Set(l.map(x=>x.r.prenom))].join(', ');
     const dir=jour.filter(x=>peFindReferentIdForPrenom(crecheId,x.r.prenom,true));
