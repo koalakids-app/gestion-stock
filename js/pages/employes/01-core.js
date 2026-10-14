@@ -715,6 +715,16 @@ async function loadFicheFormation(e){
     if(envois.error)throw envois.error;
     if(qz.error)throw qz.error;
     if(md.error)throw md.error;
+    /* Qui a envoyé : envoye_par est un auth.users.id, on le résout en prénom
+       via referents.user_id. Échec silencieux : le parcours s'affiche sans. */
+    const parIds=[...new Set((envois.data||[]).map(x=>x.envoye_par).filter(Boolean))];
+    if(parIds.length){
+      try{
+        const{data:refs}=await sb.from('referents').select('user_id,name').in('user_id',parIds);
+        const noms=Object.fromEntries((refs||[]).map(r=>[r.user_id,String(r.name||'').split(/\s+/)[0]]));
+        (envois.data||[]).forEach(x=>{x.envoye_par_nom=noms[x.envoye_par]||'';});
+      }catch(err){}
+    }
     const vus=new Set((envois.data||[]).map(x=>x.kind+':'+x.item_id));
     const tous=[...(envois.data||[]),...admin.filter(x=>!vus.has(x.kind+':'+x.item_id))];
     const ids=tous.filter(x=>x.kind==='module').map(x=>x.item_id);
@@ -744,12 +754,12 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
   const items=envois.map(env=>{
     if(env.kind==='quiz'){
       const r=resultats.find(x=>x.quiz_id===env.item_id);
-      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',score:r.score,total:r.total,pourcentage:r.pourcentage}
-              :{type:'quiz',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',etape:'quiz',lien:env.lien};
+      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',score:r.score,total:r.total,pourcentage:r.pourcentage,par:env.envoye_par_nom}
+              :{type:'quiz',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',etape:'quiz',lien:env.lien,par:env.envoye_par_nom};
     }
     const lu=formationsLues.find(x=>x.module_id===env.item_id);
     const mq=modulesQuiz?modulesQuiz.find(x=>x.module_id===env.item_id):null;
-    const base={type:'formation',titre:env.item_titre,date:env.envoye_le,lien:env.lien};
+    const base={type:'formation',titre:env.item_titre,date:env.envoye_le,lien:env.lien,par:env.envoye_par_nom};
     if(!mq)return{...base,statut:'a_faire',etape:lu?'indispo':'lire'};
     const best=mq.quiz_id?meilleur(mq.quiz_id):-1;
     const quizOk=!mq.quiz_id||best>=SEUIL_QUIZ;
@@ -781,7 +791,9 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
       +'<div style="display:flex;align-items:center;gap:8px"><i class="ti '+icone+'" style="color:var(--orange);font-size:16px"></i>'
       +'<div><div style="font-weight:700;font-size:13px">'+esc(r.titre)+'</div>'
       +(r.statut==='fait'&&r.type==='formation'?'':'<div style="font-size:11.5px;color:var(--muted)">'+(r.statut==='a_faire'?'Envoyé le ':'')+d+'</div>')
-      +info+'</div></div>'+droite+'</div>';
+      +info
+      +(r.par?'<div style="font-size:11.5px;color:var(--muted)">Envoyé par '+esc(r.par)+'</div>':'')
+      +'</div></div>'+droite+'</div>';
   }).join('');
 }
 
