@@ -449,7 +449,8 @@ function getPlanningGridSimple(events,coordId,semaine,crecheIdHint){
     const _fermD=fermetureAt(_pgsCrecheId,ipDateToLocalISO(d));
     html+='<div class="pg-hd"'+(_fermD?' style="background:var(--red-l,#FDE8E8);color:var(--red,#C62828)" title="'+escHtml(fermetureLabel(_fermD))+'"':'')+'>'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span>'+(_fermD?'<br><span style="font-size:9.5px;font-weight:800"><i class="ti ti-door-off"></i> Fermé</span>':'')+'</div>';
   });
-  ['Matin','Après-midi'].forEach((slot,si)=>{
+  // Valeurs de slot : 0 = Matin, 1 = Après-midi, 2 = second créneau du matin, 3 = second de l'après-midi.
+  [['Matin',0],['Matin (2)',2],['Après-midi',1],['Après-midi (2)',3]].forEach(([slot,si])=>{
     html+='<div class="pg-time">'+slot+'</div>';
     days5.forEach((_,di)=>{
       const evs=events.filter(e=>(e.jour===di||e.day===di)&&e.slot===si);

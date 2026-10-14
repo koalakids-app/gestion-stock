@@ -540,11 +540,12 @@ async function loadDashboardMaPresence(dateStr){
     box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Erreur de chargement</div>';return;
   }
   if(!rows.length){box.innerHTML=title+'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Rien de planifié ce jour</div>';return;}
-  const bySlot=[{n:'Matin',v:0},{n:'Après-midi',v:1}];
+  const bySlot=[{n:'Matin',v:0},{n:'Matin (2)',v:2,opt:true},{n:'Après-midi',v:1},{n:'Après-midi (2)',v:3,opt:true}];
   let html='';
   bySlot.forEach(sl=>{
     const evs=rows.filter(r=>r.slot===sl.v||(r.slot===null&&sl.v===0));
     if(!evs.length){
+      if(sl.opt)return; // second créneau : affiché seulement s'il est renseigné
       html+='<div class="dash-list-item"><span style="color:var(--muted)">'+sl.n+'</span><span style="font-size:11px;color:var(--muted)">—</span></div>';
       return;
     }
