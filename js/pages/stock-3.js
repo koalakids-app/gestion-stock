@@ -224,6 +224,32 @@ historique: `
 </div>
 `,
 
+couches: `
+<h3 style="font-family:'Syne',sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🍼 Stock de couches</h3>
+<div style="background:var(--green-lt);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#065F46">
+  ✅ Le stock se <strong>décompte tout seul</strong> : chaque saisie « Couches du jour » (module Demandes › Enfants &amp; suivi › Couches, ou tablette du suivi) retire des couches de la taille portée par l'enfant (fiche enfant › taille et type de couche).
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📋 Ce que montre la page</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>Une carte par <strong>crèche</strong>, type (couches classiques T3 à T6, couches-culottes T4 et T5) et taille, avec le stock restant et une estimation des <strong>jours restants</strong>, calculée sur la consommation des 14 derniers jours (à défaut, sur 4 couches par enfant et par jour).</li>
+  <li>Le cadre est <strong>rouge</strong> sous le seuil d'alerte, et rouge foncé en <strong>rupture imminente</strong> : le délai de livraison dépasse le stock restant, il faut commander aujourd'hui. Un récapitulatif des alertes s'affiche en haut de page.</li>
+  <li>La <strong>valeur du stock</strong> est calculée avec les prix d'achat unitaires ; les tailles sans prix sont signalées et exclues du total. La direction renseigne les prix avec « Modifier les prix d'achat ».</li>
+</ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🛠 Les boutons de chaque carte</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li><strong>+ Réception</strong> : enregistre une livraison reçue (ajoute au stock).</li>
+  <li><strong>✏️</strong> : corrige le stock après un comptage.</li>
+  <li><strong>⚙️</strong> : règle le seuil d'alerte, en jours de consommation.</li>
+  <li><strong>🚚</strong> : règle le délai de livraison de cette référence (environ 3 jours par défaut).</li>
+</ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🛒 Commander des couches</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>Dans une commande, le bouton <strong>🧷 Choisir des couches</strong> ajoute les références voulues.</li>
+  <li>À la confirmation de livraison, les lignes de couches alimentent ce stock (et non l'inventaire général).</li>
+</ul>
+<div style="font-size:13px;color:var(--ink3)">Un enfant sans taille de couche sur sa fiche n'est pas décompté : renseignez-la dans le dossier de l'enfant.</div>
+`,
+
 sauvegardes: `
 <h3 style="font-family:'Syne',sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">💾 Sauvegardes & restauration</h3>
 
@@ -286,7 +312,7 @@ sauvegardes: `
 <hr style="border:none;border-top:1px solid var(--border);margin:24px 0">
 <div style="font-weight:700;font-size:14px;margin-bottom:12px;color:var(--ink)">🏠 Navigation entre les applications</div>
 <div style="font-size:13px;color:var(--ink2);line-height:1.7;margin-bottom:12px">
-  Le réseau Koala Kids dispose de deux applications complémentaires accessibles depuis le portail d'accueil :
+  Le réseau Koala Kids dispose de plusieurs applications complémentaires (stock, demandes, documents, suivi de l'enfant, familles et contrats…), toutes accessibles depuis le portail d'accueil. Les deux plus liées à celle-ci :
 </div>
 <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
   <div style="border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:13px">
@@ -295,7 +321,7 @@ sauvegardes: `
   </div>
   <div style="border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:13px">
     <strong>💬 Demandes RT</strong> — application complémentaire<br>
-    <span style="color:var(--ink3)">Demandes terrain, incidents, présences, planning, directeurs/trices techniques.</span>
+    <span style="color:var(--ink3)">Demandes terrain, incidents, présences, planning, directeurs/trices techniques, couches du jour qui alimentent le stock de couches.</span>
   </div>
 </div>
 <div style="font-size:13px;color:var(--ink2)">Utilisez le bouton <strong>← Accueil</strong> en haut à gauche pour revenir au portail à tout moment.</div>`
