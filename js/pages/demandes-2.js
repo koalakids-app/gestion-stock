@@ -879,6 +879,55 @@ fraispro: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🧾 Frais professionnels</h3><div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Permet de consigner les dépenses professionnelles du mois et d’en produire un récapitulatif exportable.</div><div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Saisir une dépense</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li>Choisir le <strong>mois</strong> en haut de page.</li><li>Cliquer sur <strong>Ajouter une dépense</strong> : date, libellé, montant, catégorie.</li><li>Il est possible de joindre le justificatif (photo ou PDF) à la dépense.</li></ul><div style="font-weight:700;font-size:14px;margin-bottom:10px">📤 Export et envoi</div><ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0"><li><strong>Exporter Excel</strong> : télécharge le récapitulatif du mois au format .xlsx.</li><li><strong>Envoyer par email</strong> : transmet directement le récapitulatif au destinataire configuré.</li><li>Toujours vérifier que toutes les dépenses du mois sont saisies avant l’export.</li></ul>
 `,
 
+mcm: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🍽 MCM — Commande repas</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Le module <strong>MCM (repas)</strong> regroupe les échanges avec le prestataire : incidents repas, commande de la semaine, menus et avis des enfants. L’onglet <strong>Commande repas</strong> prépare le bon à envoyer au traiteur à partir des présences déjà saisies : rien à ressaisir.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🚀 Préparer la commande</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Ouvrez <strong>MCM (repas)</strong> › <strong>Commande repas</strong>.</li>
+  <li>Choisissez la semaine avec les flèches ◀ ▶ ou <strong>Semaine actuelle</strong>. La direction choisit aussi la <strong>crèche</strong> ; la semaine et la crèche sont les mêmes que dans l’onglet Présences › Semaine.</li>
+  <li>Vérifiez le <strong>rappel des effectifs</strong> : repas du midi et goûters par jour, par profil (bébés de moins de 6 mois, bébés de 6 à 18 mois, grands et périscolaire) et avec les régimes particuliers (SV, SPV, SPA).</li>
+  <li>Complétez le bon qui s’affiche dessous : coordonnées de la crèche, éventuelle mention « annule et remplace », date de validation, nom de la responsable.</li>
+  <li><strong>Enregistrer</strong> garde un brouillon, <strong>Générer le PDF</strong> télécharge le bon, <strong>Envoyer au traiteur</strong> le transmet par mail.</li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📏 Règles de comptage</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>Les chiffres du rappel et ceux du bon viennent de la même source : ils ne peuvent pas diverger.</li>
+  <li>Le <strong>code repas</strong> de l’enfant (BB, M, G) fait foi, calculé à la <strong>date de livraison</strong> et non à la date du jour. Un repas forcé sur la fiche est respecté.</li>
+  <li>Le <strong>repas</strong> est compté pour un enfant présent le matin ou la journée ; le <strong>goûter</strong> pour un enfant présent l’après-midi ou la journée.</li>
+  <li><strong>Aucun goûter</strong> avant 6 mois, même si un repas ou un goûter est forcé sur la fiche.</li>
+  <li>Les enfants au <strong>biberon (BIB)</strong> sont exclus : ni repas ni goûter.</li>
+  <li>Un goûter ne contient pas de viande : le régime « SV » y est compté dans l’effectif standard. SPV et SPA restent signalés.</li>
+</ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">⚠️ Enfants non comptés</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Un enfant sans code repas (ni date de naissance, ni type de repas sur la fiche) n’est pas compté : un bandeau le signale. Renseignez sa fiche, puis cliquez sur <strong>Recalculer</strong> pour repartir des présences de la semaine. Si aucune présence ni prévision n’existe pour la semaine, le module indique qu’il n’y a rien à commander : importez d’abord le planning (onglet Présences).</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Les autres onglets</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li><strong>Incidents repas</strong> : voir l’onglet 🚨 Incidents de cette notice.</li>
+  <li><strong>Menus</strong> : consultation des menus ; la direction peut importer le fichier Excel du menu.</li>
+  <li><strong>Avis des enfants</strong> et lien <strong>Menus MCM</strong> (PDF du prestataire).</li>
+</ul>
+`,
+
+couches: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🍼 Couches du jour</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Cette tuile, dans <strong>Enfants &amp; suivi</strong>, sert à saisir chaque jour le nombre de couches utilisées par enfant. Le stock de couches est décompté automatiquement.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📝 Saisir les couches</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Ouvrez <strong>Couches</strong> (tuile Enfants &amp; suivi). La direction choisit d’abord la <strong>crèche</strong>.</li>
+  <li>Le jour affiché est aujourd’hui ; le sélecteur de date permet de corriger un jour passé (pas de date future).</li>
+  <li>Pour chaque enfant, utilisez <strong>−</strong> et <strong>+</strong>. L’enregistrement est immédiat.</li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📦 Ce qu’il faut savoir</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>Le chiffre saisi est la <strong>consommation totale du jour</strong> de l’enfant : le stock est ajusté de la différence, dans la taille et le type (couche ou culotte) de la fiche enfant.</li>
+  <li>Sous chaque nom figurent le type et la taille (ex. « Couche T4 ») ; la mention « non pointé » signale un enfant sans présence ce jour-là.</li>
+  <li>Si la <strong>taille n’est pas renseignée</strong> sur la fiche enfant, les boutons n’apparaissent pas : complétez d’abord la fiche.</li>
+  <li>Le total du jour s’affiche en haut de la liste.</li>
+  <li>La même saisie existe sur la tablette du suivi de l’enfant.</li>
+</ul>
+`,
+
 kiosque: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📱 Mode kiosque</h3>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
