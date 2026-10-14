@@ -300,7 +300,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
     if(!ev)return '<span style="color:#ddd">—</span>';
     const color=peColorForName(ev.prenom);
     const ailleurs=ev.lieu&&ev.lieu!==crecheName;
-    const clickAttr=editable?'onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"':'style="background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"';
+    const clickAttr=editable?'draggable="true" data-dnd-item="pe" data-id="'+ev.id+'" onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"':'style="background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"';
     return '<div '+clickAttr+'>'+
       '<strong>'+ev.prenom+'</strong>'+(ailleurs?' <span style="opacity:0.85">('+ev.lieu+')</span>':'')+
       '</div>';
@@ -342,7 +342,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
     for(let d=0;d<5;d++){
       // Plusieurs personnes peuvent partager le même créneau le même jour
       const evs=evsThisCreneau.filter(e=>e.jour===d);
-      html+='<td style="padding:'+_pePadCell+';border-bottom:1px solid var(--border);word-wrap:break-word;overflow-wrap:break-word">';
+      html+='<td'+(editable?' data-dnd-zone="pe" data-creneau="'+escHtml(creneau||'')+'" data-day="'+d+'" data-creche="'+crecheId+'" data-sem="'+semaine+'"':'')+' style="padding:'+_pePadCell+';border-bottom:1px solid var(--border);word-wrap:break-word;overflow-wrap:break-word">';
       if(evs.length){
         html+=evs.map(e=>renderCell(e,crecheName)).join('<div style="height:4px"></div>');
         if(editable)html+='<div class="pe-add-more" onclick="peOpenCellEdit(null,\''+creneauEsc+'\',\''+d+'\',\''+crecheId+'\',\''+semaine+'\')" title="Ajouter quelqu\'un d\'autre sur ce créneau"><i class="ti ti-plus"></i></div>';

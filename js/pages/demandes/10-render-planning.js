@@ -488,3 +488,86 @@ async function peSaveDuplicateWeek(){
   await renderPlanning();
   showBanner(count>1?count+' semaines dupliquées ✅':'Semaine dupliquée ✅');
 }
+
+// ── GLISSER-DÉPOSER (plannings individuel, coordinateur et équipe) ──
+// Les cartes portent data-dnd-item="pg|pgc|pe" + data-id, les cases data-dnd-zone du même type.
+// Écouteurs délégués : ils survivent aux re-rendus des grilles.
+let _dndCur=null;
+document.addEventListener('dragstart',e=>{
+  const it=e.target.closest&&e.target.closest('[data-dnd-item]');
+  if(!it)return;
+  _dndCur={kind:it.dataset.dndItem,id:it.dataset.id,el:it};
+  e.dataTransfer.effectAllowed='move';
+  try{e.dataTransfer.setData('text/plain',it.dataset.id);}catch(_){}
+  setTimeout(()=>it.classList.add('dnd-dragging'),0);
+});
+document.addEventListener('dragend',()=>{
+  if(_dndCur)_dndCur.el.classList.remove('dnd-dragging');
+  document.querySelectorAll('.dnd-over').forEach(z=>z.classList.remove('dnd-over'));
+  _dndCur=null;
+});
+function _dndZone(e){
+  if(!_dndCur)return null;
+  const z=e.target.closest&&e.target.closest('[data-dnd-zone]');
+  return z&&z.dataset.dndZone===_dndCur.kind?z:null;
+}
+document.addEventListener('dragover',e=>{
+  const z=_dndZone(e);
+  if(!z)return;
+  e.preventDefault();e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.dnd-over').forEach(o=>{if(o!==z)o.classList.remove('dnd-over');});
+  z.classList.add('dnd-over');
+});
+document.addEventListener('dragleave',e=>{
+  const z=e.target.closest&&e.target.closest('[data-dnd-zone]');
+  if(z&&!z.contains(e.relatedTarget))z.classList.remove('dnd-over');
+});
+document.addEventListener('drop',async e=>{
+  const z=_dndZone(e);
+  if(!z)return;
+  e.preventDefault();
+  const cur=_dndCur;_dndCur=null;
+  document.querySelectorAll('.dnd-over').forEach(o=>o.classList.remove('dnd-over'));
+  try{
+    if(cur.kind==='pg'||cur.kind==='pgc')await _dndDropPlanning(cur,z);
+    else if(cur.kind==='pe')await _dndDropEquipe(cur,z);
+  }catch(err){console.error('[Planning] drag&drop',err);showBanner('Erreur lors du déplacement.','error');}
+});
+
+async function _dndDropPlanning(cur,z){
+  const ref=z.dataset.ref,sem=z.dataset.sem,day=parseInt(z.dataset.day,10);
+  const evs=_planningCache[ref+'_'+sem]||[];
+  const ev=evs.find(x=>x.id===cur.id);
+  if(!ev)return;
+  const slot=cur.kind==='pgc'?parseInt(z.dataset.slot,10):(ev.slot===undefined?null:ev.slot);
+  if(ev.jour===day&&(cur.kind==='pg'||ev.slot===slot))return;
+  if(cur.kind==='pgc'&&evs.some(x=>x.id!==ev.id&&x.jour===day&&x.slot===slot)){
+    showBanner('Cette case est déjà occupée.','error');return;
+  }
+  const upd=cur.kind==='pgc'?{jour:day,slot}:{jour:day};
+  const{error}=await sb.from('planning').update(upd).eq('id',cur.id);
+  planningInvalidate(ref,sem);
+  if(error){console.error('[Planning] move:',error.message);showBanner('Erreur lors du déplacement.','error');return;}
+  await renderPlanning();
+  showBanner('Événement déplacé ✅');
+}
+
+async function _dndDropEquipe(cur,z){
+  const crecheId=z.dataset.creche,sem=z.dataset.sem,jour=parseInt(z.dataset.day,10),label=z.dataset.creneau;
+  const rows=_peCache[crecheId+'_'+sem]||[];
+  const row=rows.find(r=>r.id===cur.id);
+  if(!row)return;
+  if(row.jour===jour&&row.creneau_label===label)return;
+  const cible=ipParseCreneauLabel(label);
+  if(rows.some(r=>r.id!==row.id&&r.jour===jour&&r.creneau_label===label&&r.prenom===row.prenom)){
+    showBanner(row.prenom+' est déjà sur ce créneau.','error');return;
+  }
+  const upd={jour,creneau_label:label,hdebut:cible?.hdebut||row.hdebut||null,hfin:cible?.hfin||row.hfin||null,pause:cible?cible.pause:(row.pause||null)};
+  const{error}=await sb.from('planning_equipe').update(upd).eq('id',row.id);
+  if(error){console.error('[PlanningEquipe] move:',error.message);showBanner('Erreur lors du déplacement.','error');return;}
+  await peUnsyncReferentPlanning(crecheId,sem,row.jour,row.prenom);
+  await peSyncReferentPlanning(crecheId,sem,jour,row.prenom,{type:row.type,label:row.label||row.prenom,lieu:row.lieu,hdebut:upd.hdebut,hfin:upd.hfin,pause:upd.pause});
+  peInvalidate(crecheId,sem);
+  await renderPlanning();
+  showBanner(row.prenom+' déplacé(e) ✅');
+}

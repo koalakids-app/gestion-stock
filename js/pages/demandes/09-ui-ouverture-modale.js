@@ -411,7 +411,7 @@ function getPlanningGrid(events,referentId,semaine,editable){
   html+='<div class="pg-time" style="font-size:10px">Journée</div>';
   days5.forEach((_,di)=>{
     const evs=events.filter(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
-    html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'">';
+    html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'"'+(editable?' data-dnd-zone="pg" data-ref="'+referentId+'" data-sem="'+semaine+'" data-day="'+di+'"':'')+'>';
     if(evs.length){
       const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement',ferie:'Férié',vacances:'Vacances'};
       evs.forEach(ev=>{
@@ -421,7 +421,7 @@ function getPlanningGrid(events,referentId,semaine,editable){
         if(ev.hdebut&&ev.hfin)detail+='<div style="font-size:10px;margin-top:3px;opacity:0.85">⏱ '+formatHeure(ev.hdebut)+'–'+formatHeure(ev.hfin)+'</div>';
         if(ev.pause)detail+='<div style="font-size:10px;opacity:0.7">☕ '+ev.pause+'</div>';
         if(ev.detach_desc||ev.detachDesc)detail+='<div style="font-size:10px;margin-top:2px;opacity:0.8;font-style:italic">'+(ev.detach_desc||ev.detachDesc)+'</div>';
-        html+='<div class="pg-card '+ev.type+'" '+(editable?'onclick="event.stopPropagation();openEventAt('+di+',\''+ev.id+'\')"':'')+'>'+del+titre+detail+'</div>';
+        html+='<div class="pg-card '+ev.type+'" '+(editable?'draggable="true" data-dnd-item="pg" data-id="'+ev.id+'" onclick="event.stopPropagation();openEventAt('+di+',\''+ev.id+'\')"':'')+'>'+del+titre+detail+'</div>';
       });
       if(editable)html+='<div class="pg-add-more" onclick="event.stopPropagation();openEventAt('+di+')" title="Ajouter un autre événement ce jour"><i class="ti ti-plus"></i></div>';
     }else if(editable){html+='<div class="pg-add" onclick="openEventAt('+di+')">+ ajouter</div>';}
@@ -454,9 +454,9 @@ function getPlanningGridSimple(events,coordId,semaine,crecheIdHint){
     days5.forEach((_,di)=>{
       const evs=events.filter(e=>(e.jour===di||e.day===di)&&e.slot===si);
       if(editable){
-        html+='<div class="pg-cell" onclick="openCoordEventAt('+di+','+si+')">';
+        html+='<div class="pg-cell" data-dnd-zone="pgc" data-ref="'+coordId+'" data-sem="'+semaine+'" data-day="'+di+'" data-slot="'+si+'" onclick="openCoordEventAt('+di+','+si+')">';
         if(!evs.length)html+='<span style="font-size:10px;color:#ccc">+ ajouter</span>';
-        evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" onclick="event.stopPropagation();delPlanningEvent(\''+e.id+'\',\''+coordId+'\',\''+semaine+'\')">'+
+        evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" draggable="true" data-dnd-item="pgc" data-id="'+e.id+'" onclick="event.stopPropagation();delPlanningEvent(\''+e.id+'\',\''+coordId+'\',\''+semaine+'\')">'+
           pgEvLabel(e)+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i>'+pgEvVille(e)+'</div>';});
       }else{
         html+='<div class="pg-cell-ro">';
