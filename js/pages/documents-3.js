@@ -283,7 +283,8 @@ function rsVueEtab(){
 function rsVueControles(){
   const w=rsEcrit();
   let h='<div class="rs-bar">';
-  if(w)h+='<button class="btn btn-p" onclick="rsOpen(\'controles\')"><i class="ti ti-plus"></i> Consigner un contrôle</button>';
+  if(w)h+='<button class="btn btn-p" onclick="rsOpen(\'controles\')"><i class="ti ti-plus"></i> Consigner un contrôle</button>'
+    +'<button class="btn btn-s" onclick="rsLienSaisie()"><i class="ti ti-qrcode"></i> Lien de saisie pour un intervenant</button>';
   h+='</div><h3 class="rs-h">Échéancier réglementaire</h3><div class="rs-list">';
   rsEcheancier().forEach(e=>{
     h+=`<div class="rs-i"><div class="rs-i-m"><b>${esc(e.type.libelle)}</b>
@@ -299,6 +300,7 @@ function rsVueControles(){
     const cl=r.resultat==='non_conforme'?'rs-r':(r.resultat==='conforme_reserves'?'rs-o':'rs-v');
     h+=`<div class="rs-i"><div class="rs-i-m"><b>${esc(t?t.libelle:(r.libelle_libre||'Contrôle'))}</b>
       <span class="rs-s">${rsFr(r.date_controle)}${r.organisme?' · '+esc(r.organisme):''}${r.cout_ht?' · '+r.cout_ht+' € HT':''}</span>
+      ${r.origine_externe?'<span class="rs-s"><i class="ti ti-user-share"></i> Saisi par '+esc(r.intervenant||'un intervenant externe')+(r.signataire_qualite?' ('+esc(r.signataire_qualite)+')':'')+' via le lien de saisie</span>':''}
       ${r.observations?'<span class="rs-s">'+esc(r.observations)+'</span>':''}
       ${r.rapport_url?'<a class="rs-a" target="_blank" href="'+esc(r.rapport_url)+'"><i class="ti ti-paperclip"></i> Rapport</a>':''}
       ${rsSigLigne(r)}
@@ -405,6 +407,56 @@ function rsActions(mod,r){
   if(PROF&&PROF.role==='direction')
     h+=`<button class="iconbtn d" title="Supprimer" onclick="rsDel('${mod}','${r.id}')"><i class="ti ti-trash"></i></button>`;
   return h+'</div>';
+}
+
+/* ---------- Lien de saisie pour un intervenant externe ---------- */
+/* Contrôles hors échéancier (eau du robinet…) : la personne de passage ouvre
+   registre-visiteur.html via ce lien / QR, sans compte. Lien par crèche, durable
+   et révocable ; voir sql/registre_securite_saisie_visiteur.sql. */
+async function rsLienSaisie(renouveler){
+  let{data,error}=await sb.from('rs_liens_saisie').select('id,token').eq('creche_id',RS_CRECHE).eq('actif',true)
+    .order('created_at',{ascending:false}).limit(1);
+  if(error)return toast('Lien indisponible (script SQL non exécuté ?)');
+  let lien=(data||[])[0];
+  if(lien&&renouveler){
+    await sb.from('rs_liens_saisie').update({actif:false}).eq('creche_id',RS_CRECHE).eq('actif',true);
+    lien=null;
+  }
+  if(!lien){
+    const token=Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const r=await sb.from('rs_liens_saisie').insert({creche_id:RS_CRECHE,token:token,created_by:PROF?PROF.id:null})
+      .select('id,token').single();
+    if(r.error)return toast('Création du lien impossible');
+    lien=r.data;
+  }
+  const url=location.origin+location.pathname.replace(/[^/]*$/,'')+'registre-visiteur.html?t='+lien.token;
+  QR_URL=url;
+  document.getElementById('qrTitle').textContent='Saisie d’un contrôle par un intervenant';
+  const box=document.getElementById('qrBox');box.innerHTML='';
+  let fait=false;
+  if(typeof QRCode==='function'){
+    try{new QRCode(box,{text:url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});fait=true;}catch(e){console.warn('QRCode lib KO',e);}
+  }
+  if(!fait){
+    const img=document.createElement('img');img.width=220;img.height=220;img.alt='QR';
+    img.src='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(url);
+    box.appendChild(img);
+  }
+  const lb=document.createElement('div');
+  lb.style.cssText='margin-top:12px;font-size:11px;word-break:break-all;color:var(--muted);line-height:1.4';
+  lb.textContent=url;box.appendChild(lb);
+  const cp=document.createElement('button');
+  cp.className='btn btn-s';cp.style.marginTop='8px';
+  cp.innerHTML='<i class="ti ti-copy"></i> Copier le lien';
+  cp.onclick=()=>{navigator.clipboard.writeText(QR_URL).then(()=>toast('Lien copié'),()=>toast('Copie impossible'));};
+  box.appendChild(cp);
+  const rn=document.createElement('button');
+  rn.className='btn btn-g';rn.style.cssText='margin-top:8px;margin-left:6px';
+  rn.innerHTML='<i class="ti ti-refresh"></i> Désactiver et renouveler';
+  rn.onclick=()=>{if(confirm('L’ancien lien (et son QR affiché) ne fonctionnera plus. Continuer ?'))rsLienSaisie(true);};
+  box.appendChild(rn);
+  document.getElementById('qrWait').textContent='Lien permanent : à afficher ou transmettre à la personne qui contrôle. Chaque dépôt arrive dans « Vérifications ».';
+  document.getElementById('ovQr').classList.add('on');
 }
 
 /* ---------- Libellés lisibles ---------- */
@@ -821,6 +873,7 @@ async function rsPdf(){
     const t=RS_TYPES.find(x=>x.id===r.type_id);
     ligne(rsFr(r.date_controle)+' — '+(t?t.libelle:(r.libelle_libre||'Contrôle'))
       +' — '+(r.organisme||'organisme non précisé')+' — '+rsLib('resultat',r.resultat),true);
+    if(r.origine_externe)ligne('   Saisi par '+(r.intervenant||'un intervenant externe')+(r.signataire_qualite?' ('+r.signataire_qualite+')':'')+' via le lien de saisie');
     if(r.observations)ligne('   '+r.observations);
     sig(r);
   });
