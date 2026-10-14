@@ -285,15 +285,9 @@ Deno.serve(async (req) => {
     }
 
     // Gmail impose l'adresse d'envoi (celle du compte SMTP) ; en revanche les
-    // réponses de la famille peuvent aller à l'adresse de la crèche, saisie
-    // dans Paramètres > Établissement. Valable pour tous les mails de devis.
-    let replyTo: string | undefined;
-    if (devis.creche_id) {
-      const { data: etab } = await sb.from('etablissements')
-        .select('email').eq('creche_id', devis.creche_id).maybeSingle();
-      const m = String(etab?.email || '').trim();
-      if (/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(m)) replyTo = m;
-    }
+    // réponses de la famille vont à la gestionnaire, et non à la crèche.
+    // Valable pour tous les mails de devis (envoi, relances manuelles et auto).
+    const replyTo = 'a.janin@koalakids.fr';
 
     const racine = base.replace(/[^/]*\.html?(\?.*)?$/i, '').replace(/\/*$/, '/');
     const lien = racine + 'devis.html?t=' + devis.token;
