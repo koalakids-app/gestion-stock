@@ -604,6 +604,23 @@ document.addEventListener('touchcancel',_tdndClear);
 document.addEventListener('dragstart',e=>{if(_tdnd&&_tdnd.active)e.preventDefault();},true);
 document.addEventListener('contextmenu',e=>{if(_tdnd&&_tdnd.active)e.preventDefault();});
 
+// Redessine sans « Chargement… » (qui raccourcit la page) et restaure le défilement,
+// pour que la vue ne remonte pas après un déplacement.
+async function _dndRefresh(z){
+  const pos=[];
+  for(let n=z;n&&n!==document.documentElement;n=n.parentElement){
+    if(n.scrollTop||n.scrollLeft)pos.push([n,n.scrollLeft,n.scrollTop]);
+  }
+  const x=window.scrollX,y=window.scrollY,prev=_syncSilencieuse;
+  _syncSilencieuse=true;
+  try{await renderPlanning();}
+  finally{
+    _syncSilencieuse=prev;
+    pos.forEach(([n,l,t])=>{if(n.isConnected){n.scrollLeft=l;n.scrollTop=t;}});
+    window.scrollTo(x,y);
+  }
+}
+
 async function _dndDropPlanning(cur,z){
   const ref=z.dataset.ref,sem=z.dataset.sem,day=parseInt(z.dataset.day,10);
   const evs=_planningCache[ref+'_'+sem]||[];
@@ -618,7 +635,7 @@ async function _dndDropPlanning(cur,z){
   const{error}=await sb.from('planning').update(upd).eq('id',cur.id);
   planningInvalidate(ref,sem);
   if(error){console.error('[Planning] move:',error.message);showBanner('Erreur lors du déplacement.','error');return;}
-  await renderPlanning();
+  await _dndRefresh(z);
   showBanner('Événement déplacé ✅');
 }
 
@@ -638,6 +655,6 @@ async function _dndDropEquipe(cur,z){
   await peUnsyncReferentPlanning(crecheId,sem,row.jour,row.prenom);
   await peSyncReferentPlanning(crecheId,sem,jour,row.prenom,{type:row.type,label:row.label||row.prenom,lieu:row.lieu,hdebut:upd.hdebut,hfin:upd.hfin,pause:upd.pause});
   peInvalidate(crecheId,sem);
-  await renderPlanning();
+  await _dndRefresh(z);
   showBanner(row.prenom+' déplacé(e) ✅');
 }
