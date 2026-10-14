@@ -67,8 +67,9 @@ let ikRows=[];
 const IK_CRENEAU_DEPUIS='2026-10-01';
 const IK_CRENEAUX={M:'Matin',A:'Après-midi'};
 function ikCreneauDepuis(date){return String(date||'')>=IK_CRENEAU_DEPUIS;}
-// slot du planning coordinateur : 0 = matin, 1 = après-midi, null = journée
-function ikCreneauFromSlot(slot){return slot===0?'M':slot===1?'A':null;}
+// slot du planning coordinateur : 0 = matin, 2 = second créneau du matin, 1 = après-midi,
+// 3 = second créneau de l'après-midi, null = journée
+function ikCreneauFromSlot(slot){return slot===0||slot===2?'M':slot===1||slot===3?'A':null;}
 
 function ikPairKey(a,b){return[a,b].sort().join('|');}
 
@@ -407,10 +408,33 @@ function ikChainDays(raw){
     let evs=byDate[date].slice().sort((a,b)=>(a.slot||0)-(b.slot||0));
     // Règle par créneau (dès le 1er octobre 2026) : un aller-retour par demi-journée renseignée,
     // départ → lieu → départ, sans fusionner matin et après-midi même sur la même crèche.
+    // Si la demi-journée a un second créneau sur un autre lieu (slot 2 ou 3), les deux lieux
+    // s'enchaînent : départ → lieu 1 → lieu 2 → départ (un trajet par ligne).
     if(ikCreneauDepuis(date)){
+      const dep=ikDetectCreche(depart)||depart;
       Object.keys(IK_CRENEAUX).forEach(c=>{
-        const ev=evs.find(e=>e.creneau===c&&(e.lieu||'').trim());
-        if(ev)out.push(ikMakeRow(`${ev.id}_${c}`,date,depart,ev.lieu,2,c==='M'?-1:999,c));
+        const base=c==='M'?-1:999;
+        const duC=evs.filter(e=>e.creneau===c&&(e.lieu||'').trim());
+        if(!duC.length)return;
+        const cle=l=>ikDetectCreche(l)||String(l).trim();
+        const stops=[];
+        duC.forEach(e=>{
+          const k=cle(e.lieu);
+          if(k===dep)return;
+          if(stops.length&&cle(stops[stops.length-1].lieu)===k)return;
+          stops.push(e);
+        });
+        if(stops.length<2){
+          const ev=stops[0]||duC[0];
+          out.push(ikMakeRow(`${ev.id}_${c}`,date,depart,ev.lieu,2,base,c));
+          return;
+        }
+        let from=depart;
+        stops.forEach((e,i)=>{
+          out.push(ikMakeRow(`${e.id}_${c}_s${i}`,date,from,e.lieu,1,base+i*0.1,c));
+          from=ikDetectCreche(e.lieu)||e.lieu;
+        });
+        out.push(ikMakeRow(`${stops[stops.length-1].id}_${c}_ret`,date,from,depart,1,base+stops.length*0.1,c));
       });
       evs=evs.filter(e=>e.creneau!=='M'&&e.creneau!=='A');
     }
