@@ -45,18 +45,19 @@ create policy menus_gouters_creche_delete on public.menus_gouters_creche
 -- ============================================================================
 -- Page publique : menu_public(date, crèche)
 -- ============================================================================
--- Remplace menu_public(date) (sql/menu_public.sql). Sans crèche (ou crèche
--- sans goûter saisi) le résultat est identique à avant. Avec une crèche, son
+-- S'ajoute à menu_public(date) (sql/menu_public.sql), qui reste en place pour
+-- les anciens liens. Sans goûter de crèche le résultat est identique. Avec une crèche, son
 -- goûter remplace celui du traiteur pour chaque jour où il est renseigné, et
 -- `gouter_creche` vaut true pour que la page l'indique. Un jour sans menu
 -- traiteur mais avec un goûter de crèche est renvoyé (menus encore non
 -- importés). Toujours une seule semaine, colonnes d'affichage uniquement.
--- Un appel `menu_public({p_date})` sans crèche reste valide (valeur par défaut).
+-- Les deux versions coexistent (arguments différents) : un appel avec
+-- {p_date} seul utilise l'ancienne, un appel avec {p_date, p_creche} la nouvelle
+-- (p_creche peut être null). Pas de valeur par défaut, pour éviter toute
+-- ambiguïté entre les deux.
 -- ============================================================================
 
-drop function if exists public.menu_public(date);
-
-create or replace function public.menu_public(p_date date, p_creche uuid default null)
+create or replace function public.menu_public(p_date date, p_creche uuid)
 returns jsonb
 language sql
 stable
