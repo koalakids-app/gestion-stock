@@ -638,7 +638,16 @@ document.addEventListener('DOMContentLoaded',()=>{
   const b=document.getElementById('btnPartagerFormation');
   if(b&&PartageLien.disponible())b.style.display='';
 });
+let ENVOI_FORMATION_EN_COURS=false;
 async function envoyerFormation(partager){
+  if(ENVOI_FORMATION_EN_COURS)return;
+  ENVOI_FORMATION_EN_COURS=true;
+  const btns=[...document.querySelectorAll('button[onclick^="envoyerFormation"]')];
+  btns.forEach(b=>{b.disabled=true;});
+  try{await envoyerFormationInner(partager);}
+  finally{ENVOI_FORMATION_EN_COURS=false;btns.forEach(b=>{b.disabled=false;});}
+}
+async function envoyerFormationInner(partager){
   const e=FICHE_FORMATION_EMPLOYE;
   if(!e)return;
   const sel=document.getElementById('ficheFormationSelect');
@@ -650,9 +659,18 @@ async function envoyerFormation(partager){
   const base=opt.kind==='quiz'?QUIZ_APP_URL:FORMATIONS_APP_URL;
   params.set(opt.kind==='quiz'?'quiz':'module',opt.id);
   const lien=base+'?'+params.toString();
-  const{data:saved,error}=await sb.from('formations_envois').insert({
-    employe_id:e.id,kind:opt.kind,item_id:opt.id,item_titre:opt.titre,lien,envoye_par:ME.id
-  }).select().single();
+  /* Déjà dans le parcours et pas encore validé : on ne crée pas de doublon,
+     on renvoie seulement le lien (e-mail ou partage) pour cette ligne. */
+  let saved=null,error=null,dejaLa=false;
+  const ex=await sb.from('formations_envois').select('*')
+    .eq('employe_id',e.id).eq('kind',opt.kind).eq('item_id',opt.id).is('valide_le',null)
+    .order('envoye_le',{ascending:false}).limit(1);
+  if(!ex.error&&ex.data&&ex.data.length){saved=ex.data[0];dejaLa=true;}
+  else{
+    ({data:saved,error}=await sb.from('formations_envois').insert({
+      employe_id:e.id,kind:opt.kind,item_id:opt.id,item_titre:opt.titre,lien,envoye_par:ME.id
+    }).select().single());
+  }
   if(error){toast('Échec de l\'envoi : '+error.message,true);return;}
   /* Le presse-papiers du navigateur échoue silencieusement dans de nombreux
      contextes (permission refusée, page non sécurisée...) : la personne
@@ -675,7 +693,7 @@ async function envoyerFormation(partager){
   }
   if(e.email){
     const{ok,data}=await callFn('envoyer-formation',{envoi_id:saved.id,expediteur:PROF?.name});
-    if(ok)toast('E-mail envoyé à '+e.email+'.');
+    if(ok)toast((dejaLa?'Déjà dans le parcours — e-mail renvoyé à ':'E-mail envoyé à ')+e.email+'.');
     else toast('Enregistré, mais l\'e-mail n\'a pas pu être envoyé : '+(data.error||'erreur inconnue')+'. Copiez le lien manuellement : '+lien,true);
   }else{
     toast('Envoyé — mais aucun e-mail sur cette fiche : copiez le lien manuellement : '+lien,true);
@@ -759,7 +777,15 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
     try{const u=new URL(env.lien);const p=new URLSearchParams(u.search);p.delete('module');p.set('quiz',qid);return QUIZ_APP_URL+'?'+p.toString();}
     catch(e){return env.lien;}
   };
-  const items=envois.map(env=>{
+  /* Une seule ligne par quiz/formation, même si l'envoi a été enregistré
+     plusieurs fois : on garde la ligne validée, sinon la plus récente (la liste
+     arrive triée du plus récent au plus ancien). */
+  const uniques=new Map();
+  envois.forEach(env=>{
+    const k=env.kind+':'+env.item_id,deja=uniques.get(k);
+    if(!deja||(!deja.valide_le&&env.valide_le))uniques.set(k,env);
+  });
+  const items=[...uniques.values()].map(env=>{
     if(env.kind==='quiz'){
       const r=resultats.find(x=>x.quiz_id===env.item_id);
       return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',profil:r.mode==='profil'?(r.axes||[]):null,score:r.score,total:r.total,pourcentage:r.pourcentage,par:env.envoye_par_nom}
