@@ -292,6 +292,8 @@ function enfGouterFicheLigne(e){
   if(!g)return'<span style="color:var(--muted)">aucun (avant 6 mois)</span>';
   const forcee=e.gouter_base||'';
   const auto=enfGouterAuto(e);
+  if(g==='creche')return'<span style="display:inline-block;background:var(--orange-light);color:var(--orange-dark);border-radius:6px;padding:1px 7px;font-weight:800">Goûter crèche</span>'
+    +'<div style="font-size:11px;color:var(--orange-dark);font-weight:400">fourni par la crèche — 0 sur la commande traiteur</div>';
   const lbl=function(v){return v==='gbb'?'bébé':'grand';};
   let s='<span style="display:inline-block;background:'+(forcee?'var(--orange-light)':'var(--koala-light)')
     +';color:'+(forcee?'var(--orange-dark)':'var(--koala)')
