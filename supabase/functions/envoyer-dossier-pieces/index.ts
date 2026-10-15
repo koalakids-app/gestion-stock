@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
 
     if (relance) {
       await supabase.from("dossiers_pieces")
-        .update({ relances: (dossier.relances || 0) + 1 })
+        .update({ relances: (dossier.relances || 0) + 1, derniere_relance: new Date().toISOString() })
         .eq("id", dossier_id);
     }
 

@@ -208,6 +208,7 @@ async function enfOpenFiche(id){
   const e = cacheEnfants.find(x=>String(x.id)===String(id));
   if(!e) return;
   enfFicheId = e.id;
+  if(typeof depotsMarquerVusPour==='function') depotsMarquerVusPour('enfant', e.id);   // documents déposés par la famille : vus
   await enfPaiCharger();   // PAI du registre de soins à jour à chaque ouverture de fiche
   enfParentsCache = [];
   enfDossiersCache = [];

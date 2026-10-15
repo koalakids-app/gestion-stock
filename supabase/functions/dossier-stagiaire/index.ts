@@ -34,6 +34,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { resoudreJeton } from '../_shared/session-lien.ts';
+import { signalerDepot } from '../_shared/depot-externe.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -404,6 +405,11 @@ Deno.serve(async (req) => {
         await sb.storage.from(BUCKET).remove([path]);
         throw insErr;
       }
+
+      await signalerDepot(sb, {
+        source: 'stagiaire', creche_id: stag.creche_id ?? null, stagiaire_id: stag.id,
+        libelle: type.libelle, nom: stag.prenom || 'Une stagiaire',
+      });
 
       return json({ document: ligne });
     }
