@@ -637,8 +637,9 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
   });
   const items=[...uniques.values()].map(env=>{
     if(env.kind==='quiz'){
-      const r=resultats.find(x=>x.quiz_id===env.item_id);
-      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',profil:r.mode==='profil'?(r.axes||[]):null,score:r.score,total:r.total,pourcentage:r.pourcentage}
+      const tent=resultats.filter(x=>x.quiz_id===env.item_id);
+      const r=tent[0]; /* la plus récente (liste triée par date décroissante) */
+      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',tentatives:tent.length,meilleur:tent.reduce((m,x)=>Math.max(m,x.pourcentage),0),profil:r.mode==='profil'?(r.axes||[]):null,score:r.score,total:r.total,pourcentage:r.pourcentage}
               :{type:'quiz',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',etape:'quiz',lien:env.lien};
     }
     const lu=formationsLues.find(x=>x.module_id===env.item_id);
@@ -672,7 +673,11 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
       droite='<span style="font-weight:700;font-size:11.5px;color:var(--green);white-space:nowrap"><i class="ti ti-check"></i> Profil établi</span>';
     }else if(r.type==='quiz'){
       const col=r.pourcentage>=80?'var(--green)':r.pourcentage>=60?'var(--violet)':'var(--red)';
-      droite='<span style="font-weight:800;font-size:13px;color:'+col+';white-space:nowrap">'+r.score+'/'+r.total+' · '+r.pourcentage+'%</span>';
+      /* Acquis dès qu'une tentative atteint SEUIL_QUIZ % (même règle que le quiz d'une micro-formation). */
+      const acquis=r.meilleur>=SEUIL_QUIZ;
+      info='<div style="font-size:11.5px;color:var(--muted)">'+r.tentatives+' tentative'+(r.tentatives>1?'s':'')+(r.tentatives>1?' · meilleure note '+r.meilleur+' %':'')+'</div>';
+      droite='<div style="text-align:right"><div style="font-weight:800;font-size:13px;color:'+col+';white-space:nowrap">'+r.score+'/'+r.total+' · '+r.pourcentage+'%</div>'
+        +'<div style="font-weight:700;font-size:11.5px;white-space:nowrap;color:'+(acquis?'var(--green)':'var(--orange)')+'"><i class="ti '+(acquis?'ti-check':'ti-refresh')+'"></i> '+(acquis?'Acquis':'À revoir')+'</div></div>';
     }else{
       info='<div style="font-size:11.5px;color:var(--muted)">Validée le '+d+(r.quizPct!=null?' · quiz '+r.quizPct+' %':'')+'</div>';
       droite='<span style="font-weight:700;font-size:11.5px;color:var(--green);white-space:nowrap"><i class="ti ti-check"></i> Validée</span>';
