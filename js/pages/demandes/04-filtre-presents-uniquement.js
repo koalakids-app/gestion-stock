@@ -171,6 +171,7 @@ async function mcmLoadMenusList(){
     if(error)throw error;
     mcmMenusCache=data||[];
   }catch(err){console.warn('[MCM menus] lecture',err);mcmMenusCache=[];}
+  mcmGcMap=await gouterCrecheMap(gouterCrecheCourante(),true);
   mcmRenderMenusList();
 }
 function mcmRenderMenusList(){
@@ -194,7 +195,7 @@ function mcmRenderMenusList(){
         const m=parJour[j];
         html+='<div style="font-size:11px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">'+MENU_JOURS[j-1]+'</div>'
           +menusLigneListe(m?m[champ]:null)
-          +(gouterChamp&&m&&m[gouterChamp]?'<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border);color:var(--koala-dark)"><i class="ti ti-cookie" style="font-size:11px"></i> '+escHtml(m[gouterChamp])+'</div>':'')
+          +(gouterChamp?gouterLigneHtml(gouterAffiche(mcmGcMap[d],j,m?m[gouterChamp]:'')):'')
           +'</div>';
       }
       html+='</div></div>';
@@ -205,6 +206,7 @@ function mcmRenderMenusList(){
       +'<summary class="menus-summary" style="cursor:pointer;font-weight:800;color:var(--koala-dark);font-size:13px">'
       +'<span class="menus-summary-titre">'+(isPast?'':'🟢 ')+'Semaine du '+escHtml(d)+(semaineNum?' (S'+semaineNum+')':'')+(isPast?' — passée':'')+'</span>'
       +(fichierPath?'<a class="ibtn" href="'+escHtml(menusFichierUrl(fichierPath))+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Ouvrir et imprimer le menu original ('+escHtml(jours[0].fichier_nom||'')+')"><i class="ti ti-printer"></i></a>':'')
+      +(gouterCrechePeutEditer()?'<button class="ibtn" onclick="event.preventDefault();event.stopPropagation();gouterCrecheOuvrir(\''+d+'\')" title="Goûters de la crèche pour cette semaine"><i class="ti ti-cookie"></i></button>':'')
       +'<button class="ibtn" onclick="event.preventDefault();event.stopPropagation();mcmMenuQr(\''+d+'\')" title="Partager ce menu par QR code"><i class="ti ti-qrcode"></i></button>'
       +(isDirection?'<button class="ibtn del" onclick="event.preventDefault();event.stopPropagation();mcmDeleteMenuWeek(\''+d+'\')" title="Supprimer ce menu"><i class="ti ti-trash"></i></button>':'')
       +'</summary>'
@@ -219,14 +221,26 @@ function mcmRenderMenusList(){
    connexion, adaptée au téléphone) alimentée par la fonction `menu_public`
    (sql/menu_public.sql). Deux versions : la semaine choisie, ou « toujours la
    semaine en cours » (sans date) pour un QR permanent affiché à l'entrée. */
-function menuPublicUrl(dateDebut){
+function menuPublicUrl(dateDebut,crecheId){
   const base=location.origin+location.pathname.replace(/[^/]*$/,'')+'menu.html';
-  return dateDebut?base+'?d='+encodeURIComponent(dateDebut):base;
+  const q=[];
+  if(dateDebut)q.push('d='+encodeURIComponent(dateDebut));
+  if(crecheId)q.push('c='+encodeURIComponent(crecheId));
+  return q.length?base+'?'+q.join('&'):base;
 }
-function mcmMenuQr(dateDebut,permanent){
+/* Sélecteur de crèche du QR / de l'affiche : réservé à la direction (un référent
+   a toujours le QR de sa propre crèche, avec ses goûters). */
+function menuCrecheSelectHtml(id,crecheId){
+  if(!isDirection||!cacheCreches.length)return'';
+  return'<select class="finput" id="'+id+'" style="margin:6px 0"><option value="">Toutes crèches (goûters du traiteur)</option>'
+    +cacheCreches.map(function(c){return'<option value="'+escHtml(c.id)+'"'+(c.id===crecheId?' selected':'')+'>'+escHtml(c.name)+'</option>';}).join('')+'</select>';
+}
+function menuCrecheQr(){return isDirection?null:(currentProfile?.creche_id||null);}
+function mcmMenuQr(dateDebut,permanent,crecheSel){
   const m=mcmMenusCache.find(function(x){return x.date_debut===dateDebut;});
   if(!m){showBanner('Menu introuvable pour cette semaine.','error');return;}
-  const url=menuPublicUrl(permanent?null:dateDebut);
+  const crecheId=isDirection?(crecheSel||null):menuCrecheQr();
+  const url=menuPublicUrl(permanent?null:dateDebut,crecheId);
   const titre='Menu de la semaine du '+dateDebut+(m.semaine_num?' (S'+m.semaine_num+')':'');
   let ov=document.getElementById('modal-menu-qr-wrap');
   if(ov)ov.remove();
@@ -237,11 +251,12 @@ function mcmMenuQr(dateDebut,permanent){
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem"><h3 style="margin:0"><i class="ti ti-qrcode"></i> '+escHtml(permanent?'QR permanent du menu':titre)+'</h3>'
     +'<button class="btn-cancel" onclick="closeModal(\'modal-menu-qr-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
     +'<p style="font-size:12px;color:var(--muted);margin:4px 0">'+(permanent?'Affiche toujours le menu de la semaine en cours : à imprimer une fois pour l\'entrée.':'Affiche uniquement cette semaine.')+'</p>'
+    +'<div>'+menuCrecheSelectHtml('menu-qr-creche',crecheId)+'</div>'
     +'<div id="menu-qr-box" style="display:flex;align-items:center;justify-content:center;margin:14px 0;min-height:220px"></div>'
     +'<p style="font-size:11px;color:var(--muted);word-break:break-all;margin-bottom:10px">'+escHtml(url)+'</p>'
     +'<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
     +'<a class="btn-cancel" href="'+escHtml(url)+'" target="_blank" rel="noopener" style="text-decoration:none"><i class="ti ti-eye"></i> Voir la page</a>'
-    +'<button class="btn-cancel" onclick="mcmMenuQr(\''+dateDebut+'\','+(permanent?'false':'true')+')">'+(permanent?'QR de cette semaine':'QR permanent')+'</button>'
+    +'<button class="btn-cancel" onclick="mcmMenuQr(\''+dateDebut+'\','+(permanent?'false':'true')+',\''+(crecheId||'')+'\')">'+(permanent?'QR de cette semaine':'QR permanent')+'</button>'
     +(window.PartageLien&&PartageLien.disponible()?'<button class="btn-cancel" id="menu-qr-share"><i class="ti ti-share"></i> Partager</button>':'')
     +'</div></div>';
   document.body.appendChild(ov);
@@ -253,6 +268,8 @@ function mcmMenuQr(dateDebut,permanent){
   }
   /* Pas de service tiers en secours : le lien ne doit pas quitter l'appli. */
   if(!ok)box.innerHTML='<p style="font-size:12px;color:var(--muted)">QR code indisponible (bibliothèque non chargée). Rechargez la page, ou utilisez le lien ci-dessous.</p>';
+  const selC=document.getElementById('menu-qr-creche');
+  if(selC)selC.onchange=function(){mcmMenuQr(dateDebut,permanent,selC.value);};
   const sh=document.getElementById('menu-qr-share');
   if(sh)sh.onclick=function(){PartageLien.partager(url,{titre:titre,texte:titre+' :'});};
   ov.classList.add('open');
