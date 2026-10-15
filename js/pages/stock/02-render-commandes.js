@@ -237,13 +237,21 @@ async function coucheEnregistrerPrix() {
   }
 }
 
+// Une référente ne voit que le stock de couches de sa propre crèche (le reste
+// de l'inventaire reste en lecture globale). Direction : toutes les crèches.
+function couchesCrechesVisibles() {
+  const estReferente = typeof SK_PROFILE !== 'undefined' && SK_PROFILE && SK_PROFILE.role === 'referent';
+  if (estReferente && typeof SK_WRITE_CRECHE !== 'undefined' && SK_WRITE_CRECHE) return [SK_WRITE_CRECHE];
+  return currentCreche === 'all' ? CRECHES : [currentCreche];
+}
+
 function renderCouchesValorisation() {
   const box = document.getElementById('couches-valorisation');
   if (!box) return;
   const estDirection = typeof SK_PROFILE !== 'undefined' && SK_PROFILE && SK_PROFILE.role === 'direction';
 
   // Total valorisé (crèches affichées) + détail des tailles sans prix connu.
-  const crechesAffichees = currentCreche === 'all' ? CRECHES : [currentCreche];
+  const crechesAffichees = couchesCrechesVisibles();
   let total = 0;
   const taillesSansPrix = new Set();
   crechesAffichees.forEach(creche => {
@@ -469,7 +477,7 @@ function renderCouches() {
   const alertBox = document.getElementById('couches-alertes');
   if (!box) return;
   renderCouchesValorisation();
-  const crechesAffichees = currentCreche === 'all' ? CRECHES : [currentCreche];
+  const crechesAffichees = couchesCrechesVisibles();
   const alertes = [];
   let html = '';
 
