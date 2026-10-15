@@ -108,7 +108,6 @@ function mcmCmdRenderEffectifs(ctx){
     return j;
   });
   const tot=function(k){return jours.reduce(function(s,j){return s+j[k];},0);};
-  const regTxt=function(j){return['SV','SPV','SPA'].filter(function(k){return j.reg[k];}).map(function(k){return j.reg[k]+' '+k;}).join(' · ');};
   const nbReg=jours.reduce(function(s,j){return s+j.reg.SV+j.reg.SPV+j.reg.SPA;},0);
   const kpi=function(l,n,hi){return'<div class="mcmc-kpi'+(hi?' hi':'')+'"><div class="l">'+l+'</div><div class="n">'+n+'</div></div>';};
   const cellTxt=function(txt){return'<td'+(txt?'':' class="z"')+'>'+(txt||'0')+'</td>';};
@@ -121,6 +120,15 @@ function mcmCmdRenderEffectifs(ctx){
     return'<tr'+(cls?' class="'+cls+'"':'')+'><td>'+(dot?'<i class="mcmc-dot '+dot+'"></i>':'')+titre+'<small>'+sous+'</small></td>'
       +jours.map(function(j){return cellTxt(stdSeul?String(j[k]['']||''):crFmtCell(j[k]));}).join('')+'<td>'+tot(k+'_n')+'</td></tr>';
   };
+  /* Régimes particuliers : sous la ligne de repas dont ils dépendent (SV sans viande,
+     SPV sans protéine de vache, SPA sans protéine animale) ; masqué si aucun cette semaine. */
+  const ligneReg=function(k){
+    const parJour=jours.map(function(j){return['SV','SPV','SPA'].filter(function(r){return j[k][r];}).map(function(r){return j[k][r]+' '+r;}).join(' · ');});
+    const n=jours.reduce(function(sum,j){return sum+['SV','SPV','SPA'].reduce(function(a,r){return a+(j[k][r]||0);},0);},0);
+    if(!n)return'';
+    return'<tr class="reg"><td><i class="mcmc-dot rg"></i>dont régimes particuliers<small>SV sans viande · SPV sans protéine de vache · SPA sans protéine animale</small></td>'
+      +parJour.map(function(t){return cellTxt(t);}).join('')+'<td>'+n+'</td></tr>';
+  };
   let h='<div class="mcmc-panel"><h3><i class="ti ti-users-group"></i> Rappel des effectifs de la semaine <small>d’après Présences › Semaine · mêmes chiffres que le bon ci-dessous</small></h3>'
     +'<div class="mcmc-kpis">'+kpi('Goûters',tot('gouter'),true)
     +kpi('Pic de la semaine',Math.max.apply(null,jours.map(function(j){return j.present;})))
@@ -130,9 +138,13 @@ function mcmCmdRenderEffectifs(ctx){
     +'<th>Semaine</th></tr></thead><tbody>'
     +ligne('Enfants présents','journée ou demi-journée','present','')
     +ligneBon('Bébés − de 6 mois','repas classiques','bb6','','bb',true)
+    +ligneReg('bb6')
     +ligneBon('Bébés 6 à 18 mois','repas classiques','bb18','','m',true)
+    +ligneReg('bb18')
     +ligneBon('Grands (+ de 18 mois)','repas classiques','grand','','g',true)
+    +ligneReg('grand')
     +ligneBon('Périscolaire 4/5 ans','repas classiques','peri','','g',true)
+    +ligneReg('peri')
     +'<tr><td><i class="mcmc-dot bib"></i>Repas témoin<small>un plat témoin prélevé chaque jour</small></td>'
     +jours.map(function(){return'<td>OUI</td>';}).join('')+'<td>'+jours.length+'</td></tr>'
     +ligneBon('Goûters Moyens','6 à 18 mois','gbb','','bb')
@@ -140,8 +152,6 @@ function mcmCmdRenderEffectifs(ctx){
     +ligne('Total goûters','présents l’après-midi, hors biberon et − de 6 mois','gouter','tot')
     +ligne('BIB','biberon · exclu du bon','BIB','mut','bib')
     +ligne('PAI panier repas','repas et goûter fournis par la famille · exclu du bon','PAI','mut','bib')
-    +'<tr><td><i class="mcmc-dot rg"></i>Régimes particuliers<small>SV sans viande · SPV sans protéine de vache · SPA sans protéine animale</small></td>'
-    +jours.map(function(j){return cellTxt(regTxt(j));}).join('')+'<td>'+nbReg+'</td></tr>'
     +'</tbody></table></div>';
   const nomsPai=Object.keys(paiNoms).map(function(k){return paiNoms[k];});
   if(nomsPai.length)h+='<div class="mcmc-warn"><i class="ti ti-first-aid-kit"></i><span><b>PAI avec panier repas (non commandés au traiteur) :</b> '+nomsPai.map(escHtml).join(', ')+'.</span></div>';
