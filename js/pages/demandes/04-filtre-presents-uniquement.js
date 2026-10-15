@@ -205,6 +205,7 @@ function mcmRenderMenusList(){
       +'<summary style="cursor:pointer;font-weight:800;color:var(--koala-dark);font-size:13px;display:flex;align-items:center;gap:8px">'
       +'<span style="flex:1">'+(isPast?'':'🟢 ')+'Semaine du '+escHtml(d)+(semaineNum?' (S'+semaineNum+')':'')+(isPast?' — passée':'')+'</span>'
       +(fichierPath?'<a class="ibtn" href="'+escHtml(menusFichierUrl(fichierPath))+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Ouvrir et imprimer le menu original ('+escHtml(jours[0].fichier_nom||'')+')"><i class="ti ti-printer"></i></a>':'')
+      +(fichierPath?'<button class="ibtn" onclick="event.preventDefault();event.stopPropagation();mcmMenuQr(\''+d+'\')" title="Partager ce menu par QR code"><i class="ti ti-qrcode"></i></button>':'')
       +(isDirection?'<button class="ibtn del" onclick="event.preventDefault();event.stopPropagation();mcmDeleteMenuWeek(\''+d+'\')" title="Supprimer ce menu"><i class="ti ti-trash"></i></button>':'')
       +'</summary>'
       +'<div style="margin-top:10px">'
@@ -214,6 +215,45 @@ function mcmRenderMenusList(){
       +'</div></details>';
   }).join('');
 }
+/* QR code du menu d'une semaine : il pointe vers le fichier original du traiteur
+   (bucket public `menus-repas`), donc lisible par les familles sans connexion.
+   À imprimer et afficher à l'entrée, ou à partager via la feuille de partage. */
+function mcmMenuQr(dateDebut){
+  const m=mcmMenusCache.find(function(x){return x.date_debut===dateDebut&&x.fichier_path;});
+  if(!m){showBanner('Aucun fichier de menu à partager pour cette semaine.','error');return;}
+  const url=menusFichierUrl(m.fichier_path);
+  const titre='Menu de la semaine du '+dateDebut+(m.semaine_num?' (S'+m.semaine_num+')':'');
+  let ov=document.getElementById('modal-menu-qr-wrap');
+  if(ov)ov.remove();
+  ov=document.createElement('div');
+  ov.className='overlay';ov.id='modal-menu-qr-wrap';
+  ov.onclick=function(ev){if(ev.target===ov)closeModal('modal-menu-qr-wrap');};
+  ov.innerHTML='<div class="modal" style="max-width:380px;width:100%;text-align:center">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem"><h3 style="margin:0"><i class="ti ti-qrcode"></i> '+escHtml(titre)+'</h3>'
+    +'<button class="btn-cancel" onclick="closeModal(\'modal-menu-qr-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
+    +'<div id="menu-qr-box" style="display:flex;align-items:center;justify-content:center;margin:14px 0;min-height:220px"></div>'
+    +'<p style="font-size:11px;color:var(--muted);word-break:break-all;margin-bottom:10px">'+escHtml(url)+'</p>'
+    +'<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
+    +(window.PartageLien&&PartageLien.disponible()?'<button class="btn-cancel" id="menu-qr-share"><i class="ti ti-share"></i> Partager</button>':'')
+    +'</div></div>';
+  document.body.appendChild(ov);
+  const box=document.getElementById('menu-qr-box');
+  let ok=false;
+  if(typeof QRCode==='function'){
+    try{new QRCode(box,{text:url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});ok=true;}
+    catch(e){console.warn('QRCode lib KO',e);}
+  }
+  if(!ok){
+    const img=document.createElement('img');
+    img.width=220;img.height=220;img.alt='QR code';
+    img.src='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(url);
+    box.appendChild(img);
+  }
+  const sh=document.getElementById('menu-qr-share');
+  if(sh)sh.onclick=function(){PartageLien.partager(url,{titre:titre,texte:titre+' :'});};
+  ov.classList.add('open');
+}
+window.mcmMenuQr=mcmMenuQr;
 async function mcmDeleteMenuWeek(dateDebut){
   if(!confirm('Supprimer le menu de la semaine du '+dateDebut+' ?'))return;
   const{error}=await sb.from('menus_semaine').delete().eq('date_debut',dateDebut);

@@ -909,7 +909,7 @@ mcm: `
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Les autres onglets</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li><strong>Incidents repas</strong> : voir l’onglet 🚨 Incidents de cette notice.</li>
-  <li><strong>Menus</strong> : consultation des menus ; la direction peut importer le fichier Excel du menu.</li>
+  <li><strong>Menus</strong> : consultation des menus ; la direction peut importer le fichier Excel du menu. Le bouton <strong>QR code</strong> de chaque semaine affiche un QR (à capturer pour l’afficher à l’entrée, ou à partager) qui ouvre le menu du traiteur sur le téléphone des familles, sans connexion.</li>
   <li><strong>Avis des enfants</strong> et lien <strong>Menus MCM</strong> (PDF du prestataire).</li>
 </ul>
 `,
