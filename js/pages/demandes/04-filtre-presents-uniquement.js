@@ -243,12 +243,8 @@ function mcmMenuQr(dateDebut){
     try{new QRCode(box,{text:url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});ok=true;}
     catch(e){console.warn('QRCode lib KO',e);}
   }
-  if(!ok){
-    const img=document.createElement('img');
-    img.width=220;img.height=220;img.alt='QR code';
-    img.src='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(url);
-    box.appendChild(img);
-  }
+  /* Pas de service tiers en secours : le lien ne doit pas quitter l'appli. */
+  if(!ok)box.innerHTML='<p style="font-size:12px;color:var(--muted)">QR code indisponible (bibliothèque non chargée). Rechargez la page, ou utilisez le lien ci-dessous.</p>';
   const sh=document.getElementById('menu-qr-share');
   if(sh)sh.onclick=function(){PartageLien.partager(url,{titre:titre,texte:titre+' :'});};
   ov.classList.add('open');
@@ -256,11 +252,27 @@ function mcmMenuQr(dateDebut){
 window.mcmMenuQr=mcmMenuQr;
 async function mcmDeleteMenuWeek(dateDebut){
   if(!confirm('Supprimer le menu de la semaine du '+dateDebut+' ?'))return;
+  const ligne=mcmMenusCache.find(function(x){return x.date_debut===dateDebut&&x.fichier_path;});
+  const fichierPath=ligne?ligne.fichier_path:null;
   const{error}=await sb.from('menus_semaine').delete().eq('date_debut',dateDebut);
   if(error){showBanner('Erreur lors de la suppression.','error');return;}
+  /* Le fichier original est partagé par toutes les semaines d'un même import :
+     on ne le retire du bucket public (donc des QR codes déjà diffusés) que
+     lorsqu'aucune semaine ne s'y rattache plus. */
+  let fichierResteEnLigne=false;
+  if(fichierPath){
+    try{
+      const{data:encore,error:errRef}=await sb.from('menus_semaine').select('id').eq('fichier_path',fichierPath).limit(1);
+      if(errRef)throw errRef;
+      if(!encore||!encore.length){
+        const{error:errRm}=await sb.storage.from('menus-repas').remove([fichierPath]);
+        if(errRm)throw errRm;
+      }
+    }catch(err){console.warn('[MCM menus] suppression du fichier original',err);fichierResteEnLigne=true;}
+  }
   mcmMenusCache=mcmMenusCache.filter(function(m){return m.date_debut!==dateDebut;});
   mcmRenderMenusList();
-  showBanner('Menu supprimé.');
+  if(fichierResteEnLigne)showBanner('Menu supprimé, mais son fichier original est resté en ligne.','error');else showBanner('Menu supprimé.');
 }
 window.mcmDeleteMenuWeek=mcmDeleteMenuWeek;
 
