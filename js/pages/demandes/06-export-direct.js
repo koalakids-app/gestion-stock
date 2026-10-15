@@ -659,6 +659,7 @@ function crCountsParJour(ctx){
       const cell=r.cells[i];
       if(!cell.present)return;
       if(cell.repas==='BIB')return;            // au biberon : rien à commander
+      if(enfPaiPanier(r.enfant))return;        // PAI actif avec panier repas : la famille fournit repas et goûter
       const t=mcmLigne(r.enfant,ctx.dateStrs[i]);
       if(!t)return;
       const reg=r.enfant.regime_repas||'';

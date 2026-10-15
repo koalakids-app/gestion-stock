@@ -208,6 +208,7 @@ async function enfOpenFiche(id){
   const e = cacheEnfants.find(x=>String(x.id)===String(id));
   if(!e) return;
   enfFicheId = e.id;
+  await enfPaiCharger();   // PAI du registre de soins à jour à chaque ouverture de fiche
   enfParentsCache = [];
   enfDossiersCache = [];
   enfDossierPret = false;
@@ -266,9 +267,38 @@ function enfFicheTab(tab, btn){
 }
 
 
+/* PAI actifs du registre de soins (table `pai`) : c'est le registre qui renseigne la
+   fiche enfant, jamais l'inverse. Un PAI clôturé retire donc tout seul le panier repas.
+   Lecture non bloquante : sans accès à la table, la liste reste vide. */
+let cachePaiActifs=[];
+async function enfPaiCharger(){
+  try{
+    const{data,error}=await sb.from('pai').select('enfant_id,motif,panier_repas,date_revision').eq('actif',true);
+    cachePaiActifs=error?[]:(data||[]);
+  }catch(err){cachePaiActifs=[];}
+}
+function enfPaiActifs(e){return e?cachePaiActifs.filter(p=>String(p.enfant_id)===String(e.id)):[];}
+/* Panier repas (PAI) : la famille fournit repas et goûter, rien à commander au traiteur. */
+function enfPaiPanier(e){return enfPaiActifs(e).some(p=>p.panier_repas);}
+function enfPaiPanierBadge(){
+  return '<span style="display:inline-block;background:var(--red-light,#fde8e8);color:var(--red);border-radius:6px;padding:1px 7px;font-weight:800">Panier repas (PAI)</span>'
+    +'<div style="font-size:11px;color:var(--muted);font-weight:400">fourni par la famille — 0 sur la commande traiteur</div>';
+}
+function enfPaiFicheLigne(e){
+  const l=enfPaiActifs(e);
+  if(!l.length)return'';
+  return l.map(function(p){
+    return '<div><span style="display:inline-block;background:var(--red-light,#fde8e8);color:var(--red);border-radius:6px;padding:1px 7px;font-weight:800"><i class="ti ti-first-aid-kit"></i> PAI</span> '
+      +escHtml(p.motif||'')+(p.panier_repas?' — <b>panier repas</b>':'')
+      +(p.date_revision?'<div style="font-size:11px;color:var(--muted);font-weight:400">à réviser le '+escHtml(vacFmtDate(p.date_revision))+' · saisi dans le registre de soins</div>':'<div style="font-size:11px;color:var(--muted);font-weight:400">saisi dans le registre de soins</div>')
+      +'</div>';
+  }).join('');
+}
+
 /* Ligne « Repas » de l'onglet Identité : le code tel qu'il partira sur la feuille
    hebdomadaire et le bon traiteur, en précisant s'il est forcé ou déduit de l'âge. */
 function enfRepasFicheLigne(e){
+  if(enfPaiPanier(e))return enfPaiPanierBadge();
   const code=enfRepasCode(e);
   if(!code)return'<span style="color:var(--red)">— date de naissance manquante</span>';
   const auto=enfRepasBaseAuto(e);
@@ -285,6 +315,7 @@ function enfRepasFicheLigne(e){
    goûter suit le repas : c'est une information que la directrice technique doit pouvoir lire
    sans ouvrir le formulaire de modification. */
 function enfGouterFicheLigne(e){
+  if(enfPaiPanier(e))return enfPaiPanierBadge();
   const base=e.repas_base||enfRepasBaseAuto(e);
   if(!base)return'<span style="color:var(--muted)">—</span>';
   if(base==='BIB')return'<span style="color:var(--muted)">aucun (biberon)</span>';
@@ -328,6 +359,7 @@ function enfRenderIdentite(){
     + row('Allergies', escHtml(e.allergies||''))
     + row('Protection', e.taille_couche ? escHtml((e.type_couche==='culotte'?'Couche-culotte':'Couche classique')+' — taille '+e.taille_couche) : '')
     + (e.taille_couche ? row('Besoin mensuel de couches', enfBesoinCoucheLigne(e)) : '')
+    + (enfPaiActifs(e).length ? row('PAI', enfPaiFicheLigne(e)) : '')
     + row('Repas', enfRepasFicheLigne(e))
     + row('Goûter', enfGouterFicheLigne(e))
     + row('Code image (kiosque)', kkPictosLigne(e.code_pictos))

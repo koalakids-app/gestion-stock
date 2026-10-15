@@ -674,6 +674,7 @@ function openPai(id){
   if(p)setEnfantPicker('iEnfantSearch','iEnfantId',p.enfant_id,p.enfant_nom);
   v('iMotif',p&&p.motif); v('iMedecin',p&&p.medecin_nom); v('iTel',p&&p.medecin_tel);
   v('iTraitement',p&&p.traitement_habituel); v('iProtocole',p&&p.protocole);
+  document.getElementById('iPanier').checked=!!(p&&p.panier_repas);
   v('iSignature',p&&p.date_signature); v('iRevision',p&&p.date_revision);
   pjPath   = p&&p.piece_jointe     ? p.piece_jointe     : null;
   pjNom    = p&&p.piece_jointe_nom ? p.piece_jointe_nom : null;
@@ -731,6 +732,7 @@ async function savePai(){
     protocole:document.getElementById('iProtocole').value.trim()||null,
     date_signature:document.getElementById('iSignature').value||null,
     date_revision:document.getElementById('iRevision').value||null,
+    panier_repas:document.getElementById('iPanier').checked,
     piece_jointe:pjPath, piece_jointe_nom:pjNom};
 
   /* Televersement avant l'enregistrement : si le depot echoue, on n'ecrit
