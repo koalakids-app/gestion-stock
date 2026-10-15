@@ -128,11 +128,12 @@ function enfSyncRepas(){
     const gFinal=gForce||gAuto;
     if(forcee!=='BIB'){
       if(gForce==='creche')txt+='<div style="margin-top:2px">Goûter : <strong style="color:var(--orange-dark)">crèche</strong> <span style="color:var(--orange-dark)">(non compté sur la commande traiteur)</span></div>';
+      else if(base==='BB')txt+='<div style="margin-top:2px">Goûter : <span style="color:var(--muted)">compris dans le repas</span></div>';
       else if(!gFinal)txt+='<div style="margin-top:2px">Goûter : <span style="color:var(--muted)">aucun (avant 6 mois)</span></div>';
       else{
         txt+='<div style="margin-top:2px">Goûter : <strong style="color:var(--koala)">'
-          +(gFinal==='gbb'?'bébé':'grand')+'</strong>'
-          +(gForce&&gAuto&&gForce!==gAuto?' <span style="color:var(--orange-dark)">(forcé ; le repas donnerait '+(gAuto==='gbb'?'bébé':'grand')+')</span>'
+          +(gFinal==='gbb'?'moyen':'grand')+'</strong>'
+          +(gForce&&gAuto&&gForce!==gAuto?' <span style="color:var(--orange-dark)">(forcé ; le repas donnerait '+(gAuto==='gbb'?'moyen':'grand')+')</span>'
             :(gForce&&!gAuto?' <span style="color:var(--orange-dark)">(forcé)</span>':' <span style="opacity:.8">(suit le repas)</span>'))
           +'</div>';
       }

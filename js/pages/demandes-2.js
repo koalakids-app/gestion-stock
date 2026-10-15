@@ -887,7 +887,7 @@ mcm: `
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Ouvrez <strong>MCM (repas)</strong> › <strong>Commande repas</strong>.</li>
   <li>Choisissez la semaine avec les flèches ◀ ▶ ou <strong>Semaine actuelle</strong>. La direction choisit aussi la <strong>crèche</strong> ; la semaine et la crèche sont les mêmes que dans l’onglet Présences › Semaine.</li>
-  <li>Vérifiez le <strong>rappel des effectifs</strong> : repas du midi et goûters par jour, par profil (bébés de moins de 6 mois, bébés de 6 à 18 mois, grands et périscolaire) et avec les régimes particuliers (SV, SPV, SPA).</li>
+  <li>Vérifiez le <strong>rappel des effectifs</strong> : repas du midi et goûters par jour, par profil (bébés de moins de 6 mois, moyens de 6 à 18 mois, grands et périscolaire) et avec les régimes particuliers (SV, SPV, SPA).</li>
   <li>Complétez le bon qui s’affiche dessous : coordonnées de la crèche, éventuelle mention « annule et remplace », date de validation, nom de la responsable.</li>
   <li><strong>Enregistrer</strong> garde un brouillon, <strong>Générer le PDF</strong> télécharge le bon, <strong>Envoyer au traiteur</strong> le transmet par mail.</li>
 </ol>
@@ -897,6 +897,7 @@ mcm: `
   <li>Le <strong>code repas</strong> de l’enfant (BB, M, G) fait foi, calculé à la <strong>date de livraison</strong> et non à la date du jour. Un repas forcé sur la fiche est respecté.</li>
   <li>Le <strong>repas</strong> est compté pour un enfant présent le matin ou la journée ; le <strong>goûter</strong> pour un enfant présent l’après-midi ou la journée.</li>
   <li><strong>Aucun goûter</strong> avant 6 mois, même si un repas ou un goûter est forcé sur la fiche.</li>
+  <li>Un enfant en <strong>repas bébé sans protéines (BB)</strong> n’a pas de goûter : il est compris dans le repas, même si un goûter est forcé sur la fiche.</li>
   <li>Les enfants au <strong>biberon (BIB)</strong> sont exclus : ni repas ni goûter.</li>
   <li>Un enfant en <strong>Goûter crèche</strong> (réglé sur sa fiche) n’est pas compté dans les goûters : la crèche fournit le goûter. Son repas du midi reste commandé.</li>
   <li>Un enfant ayant un <strong>PAI actif avec panier repas</strong> (case cochée dans le registre de soins) est exclu du bon : ni repas ni goûter, la famille fournit le panier. Il apparaît dans la ligne <strong>PAI panier repas</strong> du rappel des effectifs, avec son nom sous le tableau. Clôturer le PAI le remet dans la commande.</li>
