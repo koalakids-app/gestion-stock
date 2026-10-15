@@ -196,7 +196,7 @@ function mcmRenderMenusList(){
         const m=parJour[j];
         html+='<div style="font-size:11px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">'+MENU_JOURS[j-1]+'</div>'
           +menusLigneListe(m?m[champ]:null)
-          +(gouterChamp?gouterLigneHtml(gouterAffiche(mcmGcMap[d],j,m?m[gouterChamp]:'',mcmGcTous)):'')
+          +(gouterChamp?gouterLigneHtml(gouterAffiche(mcmGcMap[d],j,m?m[gouterChamp]:'',mcmGcTous,gouterProfil(gouterChamp))):'')
           +'</div>';
       }
       html+='</div></div>';

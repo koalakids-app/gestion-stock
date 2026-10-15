@@ -9,8 +9,8 @@ const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const JOURS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 const PROFILS=[
   {cle:'bb6',titre:'Bébés − de 6 mois',gouter:null},
-  {cle:'bb18',titre:'Bébés 6-18 mois',gouter:'bb18_gouter'},
-  {cle:'grand',titre:'Grands',gouter:'grand_gouter'}
+  {cle:'bb18',titre:'Bébés 6-18 mois',gouter:'bb18_gouter',creche:'bb18_gouter_creche'},
+  {cle:'grand',titre:'Grands',gouter:'grand_gouter',creche:'grand_gouter_creche'}
 ];
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -77,7 +77,7 @@ function afficher(){
     if(m&&m.theme)html+='<div class="theme">'+esc(m.theme)+'</div>';
     const lignes=m&&Array.isArray(m[p.cle])?m[p.cle]:[];
     html+=lignes.length?'<ul>'+lignes.map(function(t){return'<li>'+esc(t)+'</li>';}).join('')+'</ul>':'<div class="vide">—</div>';
-    if(p.gouter&&m&&m[p.gouter])html+='<div class="gouter">🍪 Goûter : '+esc(m[p.gouter])+(m.gouter_creche?' <span class="fait">préparé par la crèche</span>':'')+'</div>';
+    if(p.gouter&&m&&m[p.gouter])html+='<div class="gouter">🍪 Goûter : '+esc(m[p.gouter])+(m[p.creche]?' <span class="fait">préparé par la crèche</span>':'')+'</div>';
     html+='</section>';
   }
   contenu.innerHTML=html;
