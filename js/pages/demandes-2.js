@@ -682,6 +682,7 @@ evenements: `
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
   💡 Le calendrier centralise tous les rendez-vous du réseau : entretiens de recrutement, formations, réunions, visites… Il est partagé entre la direction et tous les directeurs/trices techniques.
 </div>
+<div style="background:#FFF7ED;border-left:4px solid #B45309;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#92400E">📖 Un événement de type <strong>Les contes de Miline</strong> rattaché à une crèche (ex. Ollioules) s'affiche automatiquement dans le <strong>planning de l'équipe</strong> de cette crèche, sur la ligne d'horaire qui recouvre son heure (ou sur une ligne « Contes de Miline » s'il n'a pas d'horaire).</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Créer un événement</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Cliquez sur <strong>Nouvel événement</strong>, ou directement sur un <strong>jour du calendrier</strong></li>

@@ -411,6 +411,19 @@ function pgReunionsDuJour(dateISO,crecheId){
     return !e.creche_id||String(e.creche_id)===String(crecheId||'')||e.titre==='Réunion de coordination';
   }).sort((a,b)=>String(a.heure_debut||'').localeCompare(String(b.heure_debut||'')));
 }
+// « Les contes de Miline » (onglet Événements) : uniquement ceux rattachés à la crèche.
+function pgContesDuJour(dateISO,crecheId){
+  return (typeof cacheEvenements!=='undefined'?cacheEvenements:[]).filter(e=>{
+    if(e.type!=='contes-miline'||!e.date_debut||!e.creche_id)return false;
+    if(String(e.creche_id)!==String(crecheId||''))return false;
+    return dateISO>=e.date_debut&&dateISO<=(e.date_fin||e.date_debut);
+  }).sort((a,b)=>String(a.heure_debut||'').localeCompare(String(b.heure_debut||'')));
+}
+function pgContesLibelle(e){
+  const h=e.heure_debut?formatHeure(e.heure_debut)+(e.heure_fin?'–'+formatHeure(e.heure_fin):''):'';
+  return '<strong>📖 '+escHtml(e.titre||'Les contes de Miline')+'</strong>'+(h?'<div style="font-size:10px;opacity:0.85">⏱ '+h+'</div>':'');
+}
+
 function pgReunionLibelle(e){
   const h=e.heure_debut?formatHeure(e.heure_debut)+(e.heure_fin?'–'+formatHeure(e.heure_fin):''):'';
   return '<strong>'+escHtml(e.titre||'Réunion')+'</strong>'+(h?'<div style="font-size:10px;opacity:0.85">⏱ '+h+'</div>':'')+(e.lieu?'<div style="font-size:10px;opacity:0.8">📍 '+escHtml(e.lieu)+'</div>':'');
