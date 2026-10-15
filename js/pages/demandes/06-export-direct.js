@@ -214,7 +214,7 @@ async function renderMenuSemaine(){
       const m=parJour[j];
       html+='<div style="font-size:11px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">'+MENU_JOURS[j-1]+'</div>'
         +menusLigneListe(m?m[champ]:null)
-        +(gouterChamp?gouterLigneHtml(gouterAffiche(gcSem,j,m?m[gouterChamp]:'',gouterTous(gouterCrecheCourante()))):'')
+        +(gouterChamp?gouterLigneHtml(gouterAffiche(gcSem,j,m?m[gouterChamp]:'',gouterTous(gouterCrecheCourante()),gouterProfil(gouterChamp))):'')
         +(m&&m.theme&&champ==='grand'?'<div style="margin-top:2px;font-style:italic;color:var(--orange-dark)">'+escHtml(m.theme)+'</div>':'')
         +'</div>';
     }
@@ -254,7 +254,7 @@ async function renderMenuJour(){
     return'<div style="flex:1;min-width:180px">'
       +'<div style="font-weight:800;color:var(--koala);font-size:11.5px;margin-bottom:4px">'+escHtml(titre)+'</div>'
       +menusLigneListe(m[champ])
-      +(gouterChamp?gouterLigneHtml(gouterAffiche(gcSem,dow,m[gouterChamp],gouterTous(gouterCrecheCourante()))):'')
+      +(gouterChamp?gouterLigneHtml(gouterAffiche(gcSem,dow,m[gouterChamp],gouterTous(gouterCrecheCourante()),gouterProfil(gouterChamp))):'')
       +'</div>';
   }
   zone.innerHTML='<details open style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--koala-lightest,#F7F6FC)">'

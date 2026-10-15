@@ -5,11 +5,12 @@
    pour une semaine, le goûter de chaque jour (table `menus_gouters_creche`,
    voir sql/menus_gouters_creche.sql). Pour cette crèche, il REMPLACE le goûter
    du traiteur (bb18_gouter / grand_gouter) partout où le menu s'affiche :
-   liste MCM › Menus, bandeaux Présences, page publique du QR code. Un seul
-   texte par jour, valable pour les 6-18 mois et les grands (pas de goûter
-   avant 6 mois).
+   liste MCM › Menus, bandeaux Présences, page publique du QR code. Deux
+   goûters par jour, comme le traiteur : « moyens » (bébés 6-18 mois, colonne
+   `gouter`) et « grands » (colonne `gouter_grand`) ; pas de goûter avant
+   6 mois. Une case permet de saisir le même goûter pour les deux.
    ═════════════════════════════════════════════════════════════════════════ */
-const gcCache={}; // crecheId -> { date_debut -> { jour -> texte } }
+const gcCache={}; // crecheId -> { date_debut -> { jour -> {moyen,grand} } }
 let mcmGcMap={};  // goûters de la crèche courante, pour la liste MCM › Menus
 let mcmGcTous=false; // option « cette crèche fait tous ses goûters » (crèche courante)
 const gcTousCache={}; // crecheId -> boolean
@@ -29,9 +30,9 @@ async function gouterCrecheMap(crecheId,force){
   if(!force&&gcCache[crecheId])return gcCache[crecheId];
   const map={};
   try{
-    const{data,error}=await sb.from('menus_gouters_creche').select('date_debut,jour,gouter').eq('creche_id',crecheId);
+    const{data,error}=await sb.from('menus_gouters_creche').select('date_debut,jour,gouter,gouter_grand').eq('creche_id',crecheId);
     if(error)throw error;
-    (data||[]).forEach(function(r){(map[r.date_debut]=map[r.date_debut]||{})[r.jour]=r.gouter;});
+    (data||[]).forEach(function(r){(map[r.date_debut]=map[r.date_debut]||{})[r.jour]={moyen:r.gouter||'',grand:r.gouter_grand||''};});
     const{data:opt,error:errOpt}=await sb.from('gouters_creche_options').select('tous_gouters').eq('creche_id',crecheId).maybeSingle();
     if(errOpt)throw errOpt;
     gcTousCache[crecheId]=!!(opt&&opt.tous_gouters);
@@ -40,11 +41,14 @@ async function gouterCrecheMap(crecheId,force){
   return map;
 }
 
-/* Goûter à afficher pour un jour : celui de la crèche s'il existe, sinon celui
-   du traiteur. `creche` vaut true quand il vient de la crèche. */
-function gouterAffiche(gcSemaine,jour,gouterTraiteur,tous){
+/* Profil (« moyen » ou « grand ») d'une colonne de goûter du traiteur. */
+function gouterProfil(champ){return champ==='bb18_gouter'?'moyen':'grand';}
+/* Goûter à afficher pour un jour et un profil : celui de la crèche s'il existe,
+   sinon celui du traiteur. `creche` vaut true quand il vient de la crèche. */
+function gouterAffiche(gcSemaine,jour,gouterTraiteur,tous,profil){
   const g=gcSemaine&&gcSemaine[jour];
-  if(g)return{texte:g,creche:true};
+  const t=g&&g[profil];
+  if(t)return{texte:t,creche:true};
   return{texte:tous?'':(gouterTraiteur||''),creche:false}; // « fait tous ses goûters » : jamais celui du traiteur
 }
 /* Option « cette crèche fait tous ses goûters » (lue après gouterCrecheMap). */
@@ -76,9 +80,10 @@ async function gouterCrecheOuvrir(dateDebut){
   ov.innerHTML='<div class="modal" style="max-width:520px;width:100%">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem"><h3 style="margin:0"><i class="ti ti-cookie"></i> Goûters de la crèche</h3>'
     +'<button class="btn-cancel" onclick="closeModal(\'modal-gouters-creche-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
-    +'<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Le goûter saisi remplace celui du traiteur pour votre crèche (bébés 6-18 mois et grands). Laissez un jour vide pour garder le goûter du traiteur, sauf si vous cochez ci-dessous.</p>'
+    +'<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Le goûter saisi remplace celui du traiteur pour votre crèche. Il y a un goûter pour les moyens (bébés 6-18 mois) et un pour les grands. Laissez une case vide pour garder le goûter du traiteur, sauf si vous cochez ci-dessous.</p>'
     +selCreche
     +'<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 10px;cursor:pointer"><input type="checkbox" id="gc-tous" style="margin-top:3px"/><span><strong>Cette crèche fait tous ses goûters</strong><br><span style="color:var(--muted);font-size:12px">Un jour sans goûter saisi n\'affiche aucun goûter (pas celui du traiteur), et le bon de commande ne compte aucun goûter pour cette crèche.</span></span></label>'
+    +'<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:0 0 10px;cursor:pointer"><input type="checkbox" id="gc-meme"/><span>Même goûter pour les moyens et les grands</span></label>'
     +'<div class="fg"><label class="flabel">Semaine du (lundi)</label><input class="finput" type="date" id="gc-semaine"/></div>'
     +'<div id="gc-jours"></div>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px">'
@@ -88,6 +93,7 @@ async function gouterCrecheOuvrir(dateDebut){
   const inputSem=document.getElementById('gc-semaine');
   const zone=document.getElementById('gc-jours');
   const tousEl=document.getElementById('gc-tous');
+  const memeEl=document.getElementById('gc-meme');
 
   async function charger(){
     inputSem.value=semaine;
@@ -95,26 +101,48 @@ async function gouterCrecheOuvrir(dateDebut){
     let traiteur={};
     try{
       const{data}=await sb.from('menus_semaine').select('jour,bb18_gouter,grand_gouter').eq('date_debut',semaine);
-      (data||[]).forEach(function(r){traiteur[r.jour]=r.grand_gouter||r.bb18_gouter||'';});
+      (data||[]).forEach(function(r){traiteur[r.jour]={moyen:r.bb18_gouter||'',grand:r.grand_gouter||''};});
     }catch(e){console.warn('[Goûters crèche] menu traiteur',e);}
     const existants=(await gouterCrecheMap(crecheId,true))[semaine]||{};
     tousEl.checked=gouterTous(crecheId);
+    // « Même goûter » coché par défaut tant que les moyens et les grands saisis sont identiques.
+    memeEl.checked=Object.keys(existants).every(function(j){return existants[j].moyen===existants[j].grand;});
     const [y,m,d]=semaine.split('-').map(Number);
     zone.innerHTML=MENU_JOURS.map(function(nom,i){
-      const j=i+1;
+      const j=i+1,e=existants[j]||{moyen:'',grand:''},t=traiteur[j]||{moyen:'',grand:''};
       const date=new Date(y,m-1,d+i).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
-      return'<div class="fg"><label class="flabel">'+nom+' '+escHtml(date)+'</label>'
-        +'<input class="finput gc-jour" data-jour="'+j+'" maxlength="200" value="'+escHtml(existants[j]||'')+'" data-traiteur="'+escHtml(traiteur[j]||'')+'"/></div>';
+      return'<div class="fg gc-bloc" data-jour="'+j+'"><label class="flabel">'+nom+' '+escHtml(date)+'</label>'
+        +'<div class="gc-moyen-wrap"><span class="gc-lbl gc-lbl-moyen"></span>'
+        +'<input class="finput gc-moyen" maxlength="200" value="'+escHtml(e.moyen)+'" data-traiteur="'+escHtml(t.moyen)+'" data-traiteur-grand="'+escHtml(t.grand)+'"/></div>'
+        +'<div class="gc-grand-wrap"><span class="gc-lbl">Grands</span>'
+        +'<input class="finput gc-grand" maxlength="200" value="'+escHtml(e.grand)+'" data-traiteur="'+escHtml(t.grand)+'"/></div></div>';
     }).join('');
-    placeholders();
+    majMode();
   }
-  function placeholders(){
-    Array.prototype.forEach.call(zone.querySelectorAll('.gc-jour'),function(i){
-      const t=i.dataset.traiteur;
-      i.placeholder=tousEl.checked?'Aucun goûter ce jour':(t?'Traiteur : '+t:'Ex. compote maison et biscuit');
+  /* Affichage selon « même goûter » et « fait tous ses goûters » : une seule case par
+     jour quand c'est le même goûter, indications du traiteur sinon « Aucun goûter ». */
+  function majMode(){
+    const meme=memeEl.checked;
+    Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b){
+      b.querySelector('.gc-grand-wrap').style.display=meme?'none':'';
+      b.querySelector('.gc-lbl-moyen').textContent=meme?'':'Moyens (6-18 mois)';
+      const mo=b.querySelector('.gc-moyen'),gr=b.querySelector('.gc-grand');
+      const tm=mo.dataset.traiteur,tg=gr.dataset.traiteur;
+      const ph=function(t){return tousEl.checked?'Aucun goûter ce jour':(t?'Traiteur : '+t:'Ex. compote maison et biscuit');};
+      mo.placeholder=ph(meme?(tg||tm):tm);
+      gr.placeholder=ph(tg);
     });
   }
-  tousEl.onchange=placeholders;
+  tousEl.onchange=majMode;
+  memeEl.onchange=function(){
+    if(!memeEl.checked){ // on sépare : les grands reprennent le goûter des moyens
+      Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b){
+        const gr=b.querySelector('.gc-grand');
+        if(!gr.value)gr.value=b.querySelector('.gc-moyen').value;
+      });
+    }
+    majMode();
+  };
   inputSem.onchange=function(){
     if(!inputSem.value)return;
     semaine=menusMondayOf(inputSem.value); // recale sur le lundi
@@ -124,13 +152,15 @@ async function gouterCrecheOuvrir(dateDebut){
   if(selEl)selEl.onchange=function(){crecheId=selEl.value;charger();};
 
   async function enregistrer(vider){
-    const lignes=Array.prototype.map.call(zone.querySelectorAll('.gc-jour'),function(i){
-      return{jour:+i.dataset.jour,gouter:vider?'':i.value.trim()};
+    const lignes=Array.prototype.map.call(zone.querySelectorAll('.gc-bloc'),function(b){
+      const moyen=vider?'':b.querySelector('.gc-moyen').value.trim();
+      const grand=vider?'':(memeEl.checked?moyen:b.querySelector('.gc-grand').value.trim());
+      return{jour:+b.dataset.jour,moyen:moyen,grand:grand};
     });
-    const aEcrire=lignes.filter(function(l){return l.gouter;}).map(function(l){
-      return{creche_id:crecheId,date_debut:semaine,jour:l.jour,gouter:l.gouter,updated_at:new Date().toISOString()};
+    const aEcrire=lignes.filter(function(l){return l.moyen||l.grand;}).map(function(l){
+      return{creche_id:crecheId,date_debut:semaine,jour:l.jour,gouter:l.moyen||null,gouter_grand:l.grand||null,updated_at:new Date().toISOString()};
     });
-    const aSupprimer=lignes.filter(function(l){return !l.gouter;}).map(function(l){return l.jour;});
+    const aSupprimer=lignes.filter(function(l){return !l.moyen&&!l.grand;}).map(function(l){return l.jour;});
     try{
       {
         const{error}=await sb.from('gouters_creche_options').upsert({creche_id:crecheId,tous_gouters:tousEl.checked,updated_at:new Date().toISOString()},{onConflict:'creche_id'});
