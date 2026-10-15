@@ -253,13 +253,21 @@ async function renderPresenceHebdo(){
     grille+='<th style="background:'+(_fermI?'var(--red-l,#FDE8E8)':jourCourant(i)?'#F7F5FF':'#fff')+';text-align:center;padding:11px 8px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:'+(_fermI?'var(--red,#C62828)':jourCourant(i)?'var(--koala)':'var(--muted)')+';border-bottom:1px solid var(--border);white-space:nowrap" title="'+(_fermI?escHtml(fermetureLabel(_fermI)):'')+'">'+JOURS_LBL[i]+'<br><span style="font-weight:400;text-transform:none;font-size:10px">'+dFr(d)+'</span>'+(_fermI?'<br><span style="font-size:9.5px;font-weight:800"><i class="ti ti-door-off"></i> Fermé</span>':'')+'</th>';
   });
   grille+='</tr></thead><tbody>';
+    /* PAI actif (registre de soins) : pastille rouge près du nom ; « panier » si la famille fournit repas et goûter. */
+    const paiBadge=function(e){
+      const l=typeof enfPaiActifs==='function'?enfPaiActifs(e):[];
+      if(!l.length)return'';
+      const panier=l.some(function(p){return p.panier_repas;});
+      const tip='PAI'+l.map(function(p){return p.motif?' — '+p.motif:'';}).join('')+(panier?' · panier repas fourni par la famille (hors commande traiteur)':'');
+      return'<span title="'+escHtml(tip)+'" style="display:inline-block;background:var(--red-light,#fde8e8);color:var(--red);border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:800;margin-left:5px;vertical-align:1px"><i class="ti ti-first-aid-kit"></i> PAI'+(panier?' panier':'')+'</span>';
+    };
   rows.forEach(function(r,idxLigne){
     const code=r.enfant._repasCode||'';
     const badge=code
       ?'<span title="'+escHtml(repasLabel(code))+'" style="display:inline-block;background:'+(isSpe(code)?'var(--orange-light)':'var(--koala-light)')+';color:'+(isSpe(code)?'var(--orange-dark)':'var(--koala)')+';border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:800;margin-left:7px;vertical-align:1px">'+escHtml(code)+'</span>'
       :'<span title="Date de naissance manquante — repas non calculé" style="display:inline-block;background:#FDE8E8;color:var(--red);border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:800;margin-left:7px;vertical-align:1px">?</span>';
     const pair=idxLigne%2===1;
-    grille+='<tr><td style="position:sticky;left:0;z-index:1;background:'+(pair?FOND_PAIR:'#fff')+';padding:9px 8px 9px 16px;white-space:nowrap"><span onclick="enfOpenFiche(\''+r.enfant.id+'\')" style="font-weight:600;color:var(--koala-dark);cursor:pointer">'+escHtml(r.enfant.prenom+' '+(r.enfant.nom||''))+'</span>'+badge+'</td>';
+    grille+='<tr><td style="position:sticky;left:0;z-index:1;background:'+(pair?FOND_PAIR:'#fff')+';padding:9px 8px 9px 16px;white-space:nowrap"><span onclick="enfOpenFiche(\''+r.enfant.id+'\')" style="font-weight:600;color:var(--koala-dark);cursor:pointer">'+escHtml(r.enfant.prenom+' '+(r.enfant.nom||''))+'</span>'+badge+paiBadge(r.enfant)+'</td>';
     r.cells.forEach(function(c,i){
       const fond=fondCol(i,pair);
       if(c.present){
@@ -291,6 +299,7 @@ async function renderPresenceHebdo(){
     +'<span><span style="font-size:11px;font-weight:700;color:var(--orange-dark)">Matin</span> / <span style="font-size:11px;font-weight:700;color:var(--orange-dark)">Aprèm</span> demi-journée&nbsp;: l\'enfant n\'est là qu\'une partie du jour</span>'
     +'<span><span style="display:inline-block;background:var(--koala-light);color:var(--koala);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">G</span> repas déduit de l’âge</span>'
     +'<span><span style="display:inline-block;background:var(--orange-light);color:var(--orange-dark);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">GSV</span> régime particulier</span>'
+    +'<span><span style="display:inline-block;background:var(--red-light,#fde8e8);color:var(--red);border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800"><i class="ti ti-first-aid-kit"></i> PAI</span> projet d’accueil individualisé actif (« panier » : repas fourni par la famille)</span>'
     +'</div>';
 
   /* ── Vue C : synthèse repas d'abord, détail replié en dessous ── */
