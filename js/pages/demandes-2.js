@@ -757,11 +757,11 @@ stagiaires: `
   ⚠ Tant qu'une stagiaire n'a <strong>pas de crèche</strong>, seule la direction la voit. C'est voulu : une demande Padlet vous appartient tant que vous ne l'avez pas orientée.
 </div>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#3D3580;margin-bottom:18px;line-height:1.6">
-  ⏳ <strong>La durée du lien suit les dates de la fiche</strong> : il reste valable jusqu'à 30 jours après la fin du stage, jamais moins de 30 jours à compter de sa création. Créé un mois avant l'arrivée, il couvre donc tout le stage — le temps de réclamer une pièce oubliée. Le bouton <strong>Renouveler</strong> reste là pour les cas particuliers ; l'ancien lien cesse alors immédiatement de fonctionner.
+  ⏳ <strong>Le lien est valable 14 jours</strong> à compter de sa création, quelles que soient les dates du stage (il donne accès à des pièces d'identité). La fiche passe en « lien à envoyer » 14 jours avant l'arrivée. Si une pièce manque ensuite, le bouton <strong>Renouveler</strong> crée un nouveau lien ; l'ancien cesse alors immédiatement de fonctionner.
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📎 Les documents</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
-  <li>Dans la fiche, bouton <strong>Créer le lien</strong> : un lien valable <strong>30 jours</strong> est généré</li>
+  <li>Dans la fiche, bouton <strong>Créer le lien</strong> : un lien valable <strong>14 jours</strong> est généré</li>
   <li><strong>Copier le lien</strong> puis l'envoyer par SMS ou par mail — la stagiaire n'a besoin d'aucun compte</li>
   <li>Elle photographie ses pièces ; elles apparaissent dans la fiche au fur et à mesure</li>
   <li>Vous <strong>validez</strong> ✓ ou <strong>refusez</strong> ✗ chaque pièce (un refus la remet en « à envoyer » chez elle, avec votre motif)</li>
