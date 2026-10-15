@@ -312,16 +312,12 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
 
   function renderCell(ev,crecheName){
     if(!ev)return '<span style="color:#ddd">—</span>';
-    const contes=peContesSurCellule(ev,days5);
-    if(contes.length){
-      return '<div title="Absente de son créneau : '+escHtml(contes.map(c=>c.titre||'Les contes de Miline').join(', '))+'" style="background:repeating-linear-gradient(45deg,#FFF7ED,#FFF7ED 6px,#FDE7CC 6px,#FDE7CC 12px);color:#92400E;border:1.5px dashed #B45309;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center">'
-        +'<strong style="text-decoration:line-through;opacity:0.7">'+ev.prenom+'</strong><div>📖 '+contes.map(pgContesLibelleCourt).join(' · ')+'</div></div>';
-    }
     const color=peColorForName(ev.prenom);
     const ailleurs=ev.lieu&&ev.lieu!==crecheName;
     const clickAttr=editable?'draggable="true" data-dnd-item="pe" data-id="'+ev.id+'" onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"':'style="background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"';
     return '<div '+clickAttr+'>'+
       '<strong>'+ev.prenom+'</strong>'+(ailleurs?' <span style="opacity:0.85">('+ev.lieu+')</span>':'')+
+      peContesSurCellule(ev,days5).map(c=>'<div title="Absente le temps des contes" style="margin-top:3px;background:repeating-linear-gradient(45deg,#FFF7ED,#FFF7ED 5px,#FDE7CC 5px,#FDE7CC 10px);color:#92400E;border:1px dashed #B45309;border-radius:3px;padding:2px 4px;font-size:'+_peFSCell+'"><i class="ti ti-book-2"></i> '+pgContesLibelleCourt(c)+'</div>').join('')+
       '</div>';
   }
 
@@ -402,7 +398,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
 
   // Continuité de direction : en l'absence de la directrice, la pro qui termine à 18h30
   // (directrice du matin) ou qui commence le plus tôt (directrice du soir) fait office de directeur.
-  const _peCont=peContinuiteDirection(withCreneau.filter(r=>!peContesSurCellule(r,days5).length),crecheId,semaine);
+  const _peCont=peContinuiteDirection(withCreneau,crecheId,semaine);
   if(_peCont.some(x=>x.length)){
     html+='<tr><td style="position:sticky;left:0;z-index:1;padding:'+_pePad+';border-top:2px solid var(--border);background:#FBFBFD;vertical-align:middle;font-weight:700;font-size:'+_peFSCell+';color:#3D3580"><i class="ti ti-shield-check"></i> Continuité de direction</td>';
     _peCont.forEach(x=>{
