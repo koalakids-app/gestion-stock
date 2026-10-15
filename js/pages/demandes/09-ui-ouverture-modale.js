@@ -411,17 +411,34 @@ function pgReunionsDuJour(dateISO,crecheId){
     return !e.creche_id||String(e.creche_id)===String(crecheId||'')||e.titre==='Réunion de coordination';
   }).sort((a,b)=>String(a.heure_debut||'').localeCompare(String(b.heure_debut||'')));
 }
-// « Les contes de Miline » (onglet Événements) : uniquement ceux rattachés à la crèche.
-function pgContesDuJour(dateISO,crecheId){
+// « Les contes de Miline » (onglet Événements) : pendant ces contes, Miline (en poste sur
+// une crèche) n'est plus sur son créneau habituel. L'événement peut avoir lieu dans
+// n'importe quelle crèche : seule compte la date/heure.
+const PE_CONTES_PRENOM='miline';
+function pgContesDuJour(dateISO){
   return (typeof cacheEvenements!=='undefined'?cacheEvenements:[]).filter(e=>{
-    if(e.type!=='contes-miline'||!e.date_debut||!e.creche_id)return false;
-    if(String(e.creche_id)!==String(crecheId||''))return false;
+    if(e.type!=='contes-miline'||!e.date_debut)return false;
     return dateISO>=e.date_debut&&dateISO<=(e.date_fin||e.date_debut);
   }).sort((a,b)=>String(a.heure_debut||'').localeCompare(String(b.heure_debut||'')));
 }
-function pgContesLibelle(e){
+function pgContesLibelleCourt(e){
   const h=e.heure_debut?formatHeure(e.heure_debut)+(e.heure_fin?'–'+formatHeure(e.heure_fin):''):'';
-  return '<strong>📖 '+escHtml(e.titre||'Les contes de Miline')+'</strong>'+(h?'<div style="font-size:10px;opacity:0.85">⏱ '+h+'</div>':'');
+  return 'contes'+(h?' '+h:'');
+}
+// Contes qui recouvrent la case planning_equipe `row` (jour = index lundi→vendredi).
+// Sans horaire sur l'événement, toute la journée de Miline est concernée.
+function peContesSurCellule(row,days5){
+  if(!row||ipNormStr(row.prenom)!==PE_CONTES_PRENOM||!days5[row.jour])return [];
+  const evs=pgContesDuJour(ipDateToLocalISO(days5[row.jour]));
+  if(!evs.length)return [];
+  const segs=peCreneauSegments(row.creneau_label);
+  const hm=t=>{const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));return m?parseInt(m[1],10)*60+parseInt(m[2],10):null;};
+  return evs.filter(e=>{
+    const d0=hm(e.heure_debut);
+    if(d0===null||!segs)return true;
+    const d1=hm(e.heure_fin)!==null?hm(e.heure_fin):d0+1;
+    return segs.some(sg=>d0<sg[1]&&d1>sg[0]);
+  });
 }
 
 function pgReunionLibelle(e){

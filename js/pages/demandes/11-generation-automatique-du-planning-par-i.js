@@ -312,6 +312,11 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
 
   function renderCell(ev,crecheName){
     if(!ev)return '<span style="color:#ddd">—</span>';
+    const contes=peContesSurCellule(ev,days5);
+    if(contes.length){
+      return '<div title="Absente de son créneau : '+escHtml(contes.map(c=>c.titre||'Les contes de Miline').join(', '))+'" style="background:repeating-linear-gradient(45deg,#FFF7ED,#FFF7ED 6px,#FDE7CC 6px,#FDE7CC 12px);color:#92400E;border:1.5px dashed #B45309;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center">'
+        +'<strong style="text-decoration:line-through;opacity:0.7">'+ev.prenom+'</strong><div>📖 '+contes.map(pgContesLibelleCourt).join(' · ')+'</div></div>';
+    }
     const color=peColorForName(ev.prenom);
     const ailleurs=ev.lieu&&ev.lieu!==crecheName;
     const clickAttr=editable?'draggable="true" data-dnd-item="pe" data-id="'+ev.id+'" onclick="peOpenCellEdit(\''+ev.id+'\',\''+ev.creneau_label.replace(/'/g,"\\'")+'\',\''+ev.jour+'\',\''+crecheId+'\',\''+semaine+'\')" style="cursor:pointer;'+'background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"':'style="background:'+color+';color:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center"';
@@ -359,31 +364,6 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
     html+='</tr>';
   }
 
-  // Contes de Miline (onglet Événements) : placés sur la ligne d'horaire qui recouvre leur
-  // créneau ; sans horaire ou sans ligne correspondante, ils vont dans une ligne dédiée.
-  const contesByKey={},contesLibres=days5.map(()=>[]);
-  const _hm=t=>{const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));return m?parseInt(m[1],10)*60+parseInt(m[2],10):null;};
-  days5.forEach((dj,di)=>{
-    pgContesDuJour(ipDateToLocalISO(dj),crecheId).forEach(ev=>{
-      const d0=_hm(ev.heure_debut);
-      const d1=_hm(ev.heure_fin)!==null?_hm(ev.heure_fin):(d0!==null?d0+1:null);
-      const cle=d0===null?null:creneauOrder.find(k=>{
-        const segs=peCreneauSegments(labelOf[k]);
-        return segs&&segs.some(sg=>d0<sg[1]&&d1>sg[0]);
-      });
-      if(cle){(contesByKey[cle]=contesByKey[cle]||{});(contesByKey[cle][di]=contesByKey[cle][di]||[]).push(ev);}
-      else contesLibres[di].push(ev);
-    });
-  });
-  const _contesBadge=ev=>'<div style="background:#B45309;color:#fff;border-radius:4px;padding:'+_peBadgePad+';margin-top:4px;text-align:center;font-size:'+_peFSCell+'" title="Les contes de Miline (onglet Événements)">'+pgContesLibelle(ev)+'</div>';
-  if(contesLibres.some(l=>l.length)){
-    html+='<tr><td style="position:sticky;left:0;z-index:1;padding:'+_pePad+';border-bottom:1px solid var(--border);background:#FFF7ED;vertical-align:middle;font-weight:700;font-size:'+_peFSCell+';color:#B45309">📖 Contes de Miline</td>';
-    contesLibres.forEach(l=>{
-      html+='<td style="padding:'+_pePadCell+';border-bottom:1px solid var(--border);background:#FFF7ED;text-align:center;font-size:'+_peFSCell+'">'+(l.length?l.map(_contesBadge).join(''):'<span style="color:#ddd">—</span>')+'</td>';
-    });
-    html+='</tr>';
-  }
-
   creneauOrder.forEach(cleCreneau=>{
     const evsThisCreneau=byCreneau[cleCreneau];
     const creneau=labelOf[cleCreneau];
@@ -405,7 +385,6 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
       }else{
         html+='<div style="text-align:center"><span style="color:#ddd">—</span></div>';
       }
-      html+=((contesByKey[cleCreneau]||{})[d]||[]).map(_contesBadge).join('');
       html+='</td>';
     }
     html+='</tr>';
@@ -423,7 +402,7 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
 
   // Continuité de direction : en l'absence de la directrice, la pro qui termine à 18h30
   // (directrice du matin) ou qui commence le plus tôt (directrice du soir) fait office de directeur.
-  const _peCont=peContinuiteDirection(withCreneau,crecheId,semaine);
+  const _peCont=peContinuiteDirection(withCreneau.filter(r=>!peContesSurCellule(r,days5).length),crecheId,semaine);
   if(_peCont.some(x=>x.length)){
     html+='<tr><td style="position:sticky;left:0;z-index:1;padding:'+_pePad+';border-top:2px solid var(--border);background:#FBFBFD;vertical-align:middle;font-weight:700;font-size:'+_peFSCell+';color:#3D3580"><i class="ti ti-shield-check"></i> Continuité de direction</td>';
     _peCont.forEach(x=>{
