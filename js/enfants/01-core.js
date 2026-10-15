@@ -320,13 +320,14 @@ function enfGouterFicheLigne(e){
   const base=e.repas_base||enfRepasBaseAuto(e);
   if(!base)return'<span style="color:var(--muted)">—</span>';
   if(base==='BIB')return'<span style="color:var(--muted)">aucun (biberon)</span>';
+  if(base==='BB')return'<span style="color:var(--muted)">compris dans le repas</span>';
   const g=enfGouterLigne(e);
   if(!g)return'<span style="color:var(--muted)">aucun (avant 6 mois)</span>';
   const forcee=e.gouter_base||'';
   const auto=enfGouterAuto(e);
   if(g==='creche')return'<span style="display:inline-block;background:var(--orange-light);color:var(--orange-dark);border-radius:6px;padding:1px 7px;font-weight:800">Goûter crèche</span>'
     +'<div style="font-size:11px;color:var(--orange-dark);font-weight:400">fourni par la crèche — 0 sur la commande traiteur</div>';
-  const lbl=function(v){return v==='gbb'?'bébé':'grand';};
+  const lbl=function(v){return v==='gbb'?'moyen':'grand';};
   let s='<span style="display:inline-block;background:'+(forcee?'var(--orange-light)':'var(--koala-light)')
     +';color:'+(forcee?'var(--orange-dark)':'var(--koala)')
     +';border-radius:6px;padding:1px 7px;font-weight:800">Goûter '+lbl(g)+'</span>';

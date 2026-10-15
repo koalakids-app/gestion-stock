@@ -290,7 +290,7 @@ const MCM_ROWS=[
   {k:'grand',lbl:'Grands (+ de 18 mois)',sub:'',                                     bg:'#DEEAF6'},
   {k:'peri', lbl:'Périscolaire 4/5 ans', sub:'',                                     bg:'#E2EFDA'},
   {k:'temoin',lbl:'REPAS TEMOIN',        sub:'',                                     bg:'#D9D9D9'},
-  {k:'gbb',  lbl:'Goûters Bébés',        sub:'(6 à 18 mois)',                        bg:'#FCE4D6'},
+  {k:'gbb',  lbl:'Goûters Moyens',        sub:'(6 à 18 mois)',                        bg:'#FCE4D6'},
   {k:'ggr',  lbl:'Goûters Grands',       sub:'(+ de 18 mois & périscol)',            bg:'#FCE4D6'},
   {k:'bag',  lbl:'BAGUETTES TRADITION',  sub:'(crèche livrée le matin uniquement)',  bg:'#FFFFFF'}
 ];
@@ -674,6 +674,7 @@ function crCountsParJour(ctx){
            sur la fiche. */
         const mois=mcmAgeMois(r.enfant.dob,ctx.dateStrs[i]);
         const g=(mois!==null&&mois<6)?null
+          :String(cell.repas||'').replace(/(SV|SPV|SPA)$/,'')==='BB'?null   // goûter compris dans le repas BB
           :(r.enfant.gouter_base||(t==='bb6'?null:(t==='bb18'?'gbb':'ggr')));
         /* Un goûter ne contient jamais de viande : la mention « SV » n'a pas de
            sens sur ces deux lignes et faisait apparaître un régime particulier

@@ -132,7 +132,7 @@ function mcmCmdRenderEffectifs(ctx){
     +ligneBon('Grands (+ de 18 mois)','repas classiques','grand','','g',true)
     +ligneBon('Périscolaire 4/5 ans','repas classiques','peri','','g',true)
     +ligne('Goûters','présents l’après-midi, hors biberon et − de 6 mois','gouter','tot')
-    +ligneBon('Goûters Bébés','6 à 18 mois','gbb','','bb')
+    +ligneBon('Goûters Moyens','6 à 18 mois','gbb','','bb')
     +ligneBon('Goûters Grands','+ de 18 mois & périscolaire','ggr','','g')
     +ligne('BIB','biberon · exclu du bon','BIB','mut','bib')
     +ligne('PAI panier repas','repas et goûter fournis par la famille · exclu du bon','PAI','mut','bib')

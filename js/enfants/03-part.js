@@ -278,7 +278,7 @@ function enfRepasCode(e,dateStr){
    « grand (+ de 18 mois & périscolaire) » — ce sont ses propres bornes d'âge,
    pas les codes repas. Le GEM-RCN (recommandations ARS) prévoit un goûter dès le
    groupe « Bébés » (lait infantile, céréales infantiles, fruit), avant quoi
-   l'enfant reste au lait exclusif : donc aucun goûter avant 6 mois, goûter bébé
+   l'enfant reste au lait exclusif : donc aucun goûter avant 6 mois, goûter moyen
    de 6 à 18 mois, goûter grand à partir de 18 mois (et en périscolaire). Un
    enfant au biberon (BIB) n'a ni repas ni goûter. Manger un repas moyen ou
    légumes n'empêche pas de prendre le goûter des grands : le champ `gouter_base`
@@ -288,7 +288,7 @@ function enfRepasCode(e,dateStr){
 function enfGouterAuto(e){
   if(!e)return null;
   const base=e.repas_base||enfRepasBaseAuto(e);
-  if(!base||base==='BIB')return null;
+  if(!base||base==='BIB'||base==='BB')return null;   // BB : goûter compris dans le repas
   if(!e.dob)return base==='BB'?null:(base==='M'?'gbb':'ggr');
   const m=window.ageMoisFromDob(e.dob);
   if(m<6)return null;
@@ -298,6 +298,7 @@ function enfGouterLigne(e){
   if(!e)return null;
   const base=e.repas_base||enfRepasBaseAuto(e);
   if(base==='BIB')return null;              // au biberon : ni repas ni goûter
+  if(base==='BB')return null;               // repas légumes sans protéines : goûter compris dans le repas
   // Moins de 6 mois : jamais de goûter, même si un goûter est forcé sur la fiche.
   if(e.dob&&window.ageMoisFromDob(e.dob)<6)return null;
   return e.gouter_base||enfGouterAuto(e);

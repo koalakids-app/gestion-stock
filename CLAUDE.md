@@ -16,6 +16,7 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 - Le comptage vient d'une source unique : `crCountsParJour` (`js/pages/demandes/06-export-direct.js`), utilisée par le bon et par le rappel des effectifs (`mcmCmdRenderEffectifs`, `04-filtre-presents-uniquement.js`).
 - Exclus du bon : enfants au biberon (BIB), **goûter crèche** (`enfants.gouter_base = 'creche'`, uniquement le goûter), **PAI actif avec panier repas** (repas et goûter).
 - Aucun goûter avant 6 mois ; le régime SV n'existe pas au goûter.
+- Repas BB (légumes sans protéines, avec ou sans régime) : goûter compris dans le repas, donc aucun goûter ; le goûter « bébé » (`gbb`) s'appelle désormais « goûter moyen » à l'écran.
 - Le PAI se saisit **dans le registre de soins** (`infirmerie.html`, table `pai`, case « Panier repas »). La fiche enfant le **lit** (`enfPaiCharger`, `enfPaiPanier` dans `js/enfants/01-core.js`), elle ne le modifie pas. Un PAI clôturé remet l'enfant dans la commande.
 
 ## Notice de l'application
