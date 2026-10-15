@@ -805,7 +805,7 @@ function crBuildFormHtml(ctx,vals,info,opts){
         +'<span>MAIL : '+escHtml(info.mail)+'</span></div>'
       +'<div style="font-size:10.5px">Contact : '+escHtml(info.contact)+'</div>'
     +'</div>'
-    +'<div style="font-size:10.5px;margin-bottom:7px">La commande des repas est à transmettre le <b>MARDI <u>avant 10h</u></b> de la semaine précédente de la livraison</div>'
+    +'<div style="font-size:10.5px;margin-bottom:7px">La commande des repas est à transmettre le <b>LUNDI <u>avant 12h</u></b> de la semaine précédente de la livraison</div>'
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">'
       +'<span style="display:inline-block;width:17px;height:17px;border:1px solid #C00000">'+(annule?'<span style="font-size:13px;line-height:15px;padding-left:2px">✕</span>':'')+'</span>'
       +'<span style="font-size:10.5px">Annule et remplace la commande envoyée le : '+escHtml(fmtFr(annuleDate))+'</span>'
@@ -1015,14 +1015,14 @@ async function crExportPdf(){
 }
 
 /* ── Envoi du bon au traiteur ─────────────────────────────────────────────
-   La commande est à transmettre le mardi avant 10h de la semaine précédant la
+   La commande est à transmettre le lundi avant 12h de la semaine précédant la
    livraison : on calcule cette échéance pour signaler un envoi hors délai. */
 const MCM_MAIL='secretariat.mcm@cedis.fr';
 
 function crDeadline(lundiLivraison){
   const d=new Date(lundiLivraison);
-  d.setDate(d.getDate()-6);       // mardi de la semaine précédente
-  d.setHours(10,0,0,0);
+  d.setDate(d.getDate()-7);       // lundi de la semaine précédente
+  d.setHours(12,0,0,0);
   return d;
 }
 
@@ -1074,7 +1074,7 @@ function crOpenMail(){
   box.innerHTML='<i class="ti ti-clock" style="font-size:15px"></i> '
     +(retard?'<strong>Hors délai</strong> — la commande était à transmettre avant le '
       :'Dans les délais — à transmettre avant le ')
-    +dl.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})+' à 10h.';
+    +dl.toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})+' à 12h.';
 
   const btn=document.getElementById('crm-send');
   btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Envoyer';
