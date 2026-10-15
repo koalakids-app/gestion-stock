@@ -313,16 +313,18 @@ function mcmAgeMois(dob,dateStr){
    « Bébés 6-18 mois » dès que son code avait été forcé — l'écran et le bon se
    contredisaient.
 
-   L'âge ne sert plus qu'à départager les deux lignes que le code ne distingue
-   pas : « − 6 mois » / « 6-18 mois » pour BB, et « + 18 mois » / « périscolaire
-   4/5 ans » pour G. Sans date de naissance, on retient la ligne la plus courante
-   (6-18 mois pour BB, + 18 mois pour G) plutôt que d'écarter l'enfant du bon. */
+   BB → « Bébés − de 6 mois » (repas sans lait, sans sel, sans féculent), M →
+   « Bébés 6-18 mois » : la ligne suit le code, pas l'âge (un BB de 7 mois, encore
+   en légumes seuls, reste sur la ligne BB, comme sur la feuille de présence).
+   L'âge ne sert plus qu'à départager « + 18 mois » / « périscolaire 4/5 ans »
+   pour G. Sans date de naissance, on retient « + 18 mois » plutôt que d'écarter
+   l'enfant du bon. */
 function mcmLigne(enf,dateStr){
   const code=enfRepasCode(enf,dateStr);
   if(!code||code==='BIB')return null;
   const base=code.replace(/(SV|SPV|SPA)$/,'');
   const m=mcmAgeMois(enf.dob,dateStr);
-  if(base==='BB')return(m!==null&&m<6)?'bb6':'bb18';
+  if(base==='BB')return'bb6';              // repas légumes sans protéines : ligne « Bébés − de 6 mois », quel que soit l'âge
   if(base==='M')return'bb18';
   if(base==='G')return(m!==null&&m>=48)?'peri':'grand';
   return null;
