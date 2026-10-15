@@ -138,8 +138,6 @@ function enfSyncRepas(){
       }
     }
   }
-  const paiChk=document.getElementById('enf-pai-panier');
-  if(paiChk&&paiChk.checked)txt+='<div style="margin-top:2px;color:var(--orange-dark)"><b>PAI avec panier repas</b> : repas et goûter non commandés au traiteur</div>';
   box.innerHTML=txt;
 }
 window.enfSyncRepas = enfSyncRepas;
@@ -153,8 +151,8 @@ function enfFillCreches(selectedId){
   sel.style.background=isDirection?'':'#f4f4f8';
   sel.style.cursor=isDirection?'':'not-allowed';
 }
-function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';document.getElementById('enf-avert-provisoire').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies','enf-date-sortie'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';document.getElementById('enf-gouter-base').value='';document.getElementById('enf-pai-panier').checked=false;document.getElementById('enf-type-couche').value='couche';enfSyncTailleCouche('');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
-async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display='';document.getElementById('enf-avert-provisoire').style.display=e.naissance_provisoire?'':'none';enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-date-sortie').value=e.date_sortie||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';document.getElementById('enf-gouter-base').value=e.gouter_base||'';document.getElementById('enf-pai-panier').checked=!!e.pai_panier_repas;document.getElementById('enf-type-couche').value=e.type_couche||'couche';enfSyncTailleCouche(e.taille_couche||'');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+function openEnfantModal(){editingEnfantId=null;document.getElementById('modal-enfant-title').textContent='Ajouter un enfant';document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Ajouter';document.getElementById('enf-btn-delete').style.display='none';document.getElementById('enf-avert-provisoire').style.display='none';enfFillCreches(null);['enf-prenom','enf-nom','enf-dob','enf-allergies','enf-date-sortie'].forEach(id=>document.getElementById(id).value='');document.getElementById('enf-regime-repas').value='';document.getElementById('enf-repas-base').value='';document.getElementById('enf-gouter-base').value='';document.getElementById('enf-type-couche').value='couche';enfSyncTailleCouche('');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
+async function editEnfant(id){await enfRelire(id);const e=cacheEnfants.find(x=>String(x.id)===String(id));if(!e)return;editingEnfantId=e.id;document.getElementById('modal-enfant-title').textContent='Modifier '+(e.prenom||'')+' '+(e.nom||'');document.getElementById('enf-btn-save').innerHTML='<i class="ti ti-check"></i> Enregistrer';document.getElementById('enf-btn-delete').style.display='';document.getElementById('enf-avert-provisoire').style.display=e.naissance_provisoire?'':'none';enfFillCreches(e.creche_id);document.getElementById('enf-prenom').value=e.prenom||'';document.getElementById('enf-nom').value=e.nom||'';document.getElementById('enf-dob').value=e.dob||'';document.getElementById('enf-date-sortie').value=e.date_sortie||'';document.getElementById('enf-allergies').value=e.allergies||'';document.getElementById('enf-regime-repas').value=e.regime_repas||'';document.getElementById('enf-repas-base').value=e.repas_base||'';document.getElementById('enf-gouter-base').value=e.gouter_base||'';document.getElementById('enf-type-couche').value=e.type_couche||'couche';enfSyncTailleCouche(e.taille_couche||'');enfSyncGroupe();document.getElementById('modal-enfant-wrap').classList.add('open');}
 /* Écriture d'une fiche enfant tolérante aux colonnes optionnelles absentes.
    `repas_base` et `gouter_base` sont ajoutées par des migrations SQL distinctes :
    si l'une manque, Postgres nomme la colonne fautive et on la retire du payload
@@ -167,7 +165,7 @@ async function enfEcritureTolerante(row,id){
     const r=id?await dbUpdate('enfants',id,row):await dbInsert('enfants',row);
     if(r)return{res:r,absentes:absentes};
     const err=window._lastDbError||'';
-    const col=/pai_panier_repas/i.test(err)?'pai_panier_repas':/gouter_base/i.test(err)?'gouter_base':(/repas_base/i.test(err)?'repas_base':(/naissance_provisoire/i.test(err)?'naissance_provisoire':(/type_couche/i.test(err)?'type_couche':(/taille_couche/i.test(err)?'taille_couche':null))));
+    const col=/gouter_base/i.test(err)?'gouter_base':(/repas_base/i.test(err)?'repas_base':(/naissance_provisoire/i.test(err)?'naissance_provisoire':(/type_couche/i.test(err)?'type_couche':(/taille_couche/i.test(err)?'taille_couche':null))));
     if(!col||!(col in row))return{res:null,absentes:absentes};
     delete row[col];absentes.push(col);
   }
@@ -175,7 +173,7 @@ async function enfEcritureTolerante(row,id){
 }
 function enfAvertirColonnes(absentes){
   if(!absentes.length)return;
-  const libelles={repas_base:'type de repas',gouter_base:'choix du goûter',pai_panier_repas:'PAI avec panier repas',naissance_provisoire:'l\'avertissement de date provisoire',taille_couche:'la taille de couche',type_couche:'le type de couche'};
+  const libelles={repas_base:'type de repas',gouter_base:'choix du goûter',naissance_provisoire:'l\'avertissement de date provisoire',taille_couche:'la taille de couche',type_couche:'le type de couche'};
   const txt=absentes.map(function(c){return libelles[c]||c;}).join(' et ');
   setTimeout(function(){showBanner('Fiche enregistrée, mais le '+txt+' n’a pas pu l’être : colonne absente de la table enfants (migration SQL à exécuter).','error');},2500);
 }
@@ -194,7 +192,6 @@ async function saveEnfant(){
     regime_repas:document.getElementById('enf-regime-repas').value||null,
     repas_base:document.getElementById('enf-repas-base').value||null,
     gouter_base:document.getElementById('enf-gouter-base').value||null,
-    pai_panier_repas:document.getElementById('enf-pai-panier').checked,
     taille_couche:document.getElementById('enf-taille-couche').value||null,
     type_couche:document.getElementById('enf-type-couche').value||'couche',
     // Enregistrer la fiche vaut confirmation de la date de naissance :

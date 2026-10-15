@@ -80,6 +80,7 @@ window.hebdoMoveWeek=hebdoMoveWeek;
 window.hebdoSetView=hebdoSetView;
 
 async function renderPresenceHebdo(){
+  if(typeof enfPaiCharger==='function')await enfPaiCharger();   // PAI saisis entre-temps dans le registre de soins
   const ws=weekStart(),view=document.getElementById('presence-hebdo-view');
   if(!view)return;
   const crecheId=getPresenceCrecheId();
