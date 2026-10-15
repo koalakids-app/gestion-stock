@@ -613,6 +613,14 @@ function envoisCol(){return COLLAB_TYPE==='referent'?'referent_id':'employe_id';
    kk_modules_quiz est indisponible, rien n'est validable (on ne dégrade pas
    la preuve). Logique dupliquée entre collaborateur.html et employes.html. */
 const SEUIL_QUIZ=80;
+const NIV_PROFIL={appui:{l:"Point d'appui",c:'var(--green)',bg:'var(--green-bg,#E6F4EA)'},construction:{l:'En construction',c:'var(--violet)',bg:'var(--violet-bg,#EDEAF8)'},accompagner:{l:'À accompagner',c:'var(--orange)',bg:'var(--orange-bg,#FDEBDD)'}};
+/* Profil d'un quiz « sans note » (mode profil) : une pastille par axe plutôt qu'un score. */
+function profilHtml(axes){
+  return'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">'+(axes||[]).map(a=>{
+    const v=NIV_PROFIL[a.niveau];if(!v)return'';
+    return'<span title="'+esc(v.l)+'" style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:'+v.bg+';color:'+v.c+'">'+esc(a.libelle||a.code||'')+' : '+v.l+'</span>';
+  }).join('')+'</div>';
+}
 function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
   const meilleur=qid=>resultats.filter(x=>x.quiz_id===qid).reduce((m,x)=>Math.max(m,x.pourcentage),-1);
   const lienQuizDe=(env,qid)=>{
@@ -622,7 +630,7 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
   const items=envois.map(env=>{
     if(env.kind==='quiz'){
       const r=resultats.find(x=>x.quiz_id===env.item_id);
-      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',score:r.score,total:r.total,pourcentage:r.pourcentage}
+      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',profil:r.mode==='profil'?(r.axes||[]):null,score:r.score,total:r.total,pourcentage:r.pourcentage}
               :{type:'quiz',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',etape:'quiz',lien:env.lien};
     }
     const lu=formationsLues.find(x=>x.module_id===env.item_id);
@@ -651,6 +659,9 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
       droite=r.etape==='attester'
         ?'<button class="btn btn-p btn-sm" style="font-size:11.5px" onclick="validerFormation(\''+r.itemId+'\')"><i class="ti ti-check"></i> J\'ai lu et compris cette formation</button>'
         :'<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" class="btn btn-p btn-sm" style="font-size:11.5px"><i class="ti ti-player-play"></i> '+lab+'</a>';
+    }else if(r.type==='quiz'&&r.profil){
+      info=profilHtml(r.profil);
+      droite='<span style="font-weight:700;font-size:11.5px;color:var(--green);white-space:nowrap"><i class="ti ti-check"></i> Profil établi</span>';
     }else if(r.type==='quiz'){
       const col=r.pourcentage>=80?'var(--green)':r.pourcentage>=60?'var(--violet)':'var(--red)';
       droite='<span style="font-weight:800;font-size:13px;color:'+col+';white-space:nowrap">'+r.score+'/'+r.total+' · '+r.pourcentage+'%</span>';
