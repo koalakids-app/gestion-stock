@@ -367,9 +367,10 @@ async function peSaveNewCreneau(){
     creche_id:_peCurCrecheId,prenom,semaine:_peCurSemaine,jour,type:'presence',label:prenom,
     lieu:null,hdebut,hfin,pause,creneau_label:creneauLabel
   }));
-  const{error}=await sb.from('planning_equipe').insert(rowsToInsert);
+  // upsert : une seule ligne par (salarié, semaine, jour) — un créneau existant est remplacé
+  const{error}=await sb.from('planning_equipe').upsert(rowsToInsert,{onConflict:'creche_id,prenom,semaine,jour'});
   if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Ajouter';}
-  if(error){console.error('[PlanningEquipe] new:',error.message);showBanner('Erreur lors de l\'enregistrement.','error');return;}
+  if(error){console.error('[PlanningEquipe] new:',error.message);showBanner('Erreur lors de l\'enregistrement : '+error.message,'error');return;}
 
   for(const jour of jours){
     await peSyncReferentPlanning(_peCurCrecheId,_peCurSemaine,jour,prenom,{type:'presence',label:prenom,lieu:null,hdebut,hfin,pause});
