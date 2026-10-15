@@ -205,6 +205,7 @@ async function renderMenuSemaine(){
   }catch(err){console.warn('[Menu semaine] lecture',err);}
   if(!menu){zone.innerHTML='';return;}
   const parJour={};menu.forEach(function(m){parJour[m.jour]=m;});
+  const gcSem=(await gouterCrecheMap(gouterCrecheCourante()))[dateDebut];
   function carte(titre,champ,gouterChamp){
     let html='<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px">'
       +'<div style="font-weight:800;color:var(--koala);font-size:12px;margin-bottom:6px">'+escHtml(titre)+'</div>'
@@ -213,7 +214,7 @@ async function renderMenuSemaine(){
       const m=parJour[j];
       html+='<div style="font-size:11px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">'+MENU_JOURS[j-1]+'</div>'
         +menusLigneListe(m?m[champ]:null)
-        +(gouterChamp&&m&&m[gouterChamp]?'<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border);color:var(--koala-dark)"><i class="ti ti-cookie" style="font-size:11px"></i> '+escHtml(m[gouterChamp])+'</div>':'')
+        +(gouterChamp?gouterLigneHtml(gouterAffiche(gcSem,j,m?m[gouterChamp]:'')):'')
         +(m&&m.theme&&champ==='grand'?'<div style="margin-top:2px;font-style:italic;color:var(--orange-dark)">'+escHtml(m.theme)+'</div>':'')
         +'</div>';
     }
@@ -248,11 +249,12 @@ async function renderMenuJour(){
     m=data||null;
   }catch(err){console.warn('[Menu jour] lecture',err);}
   if(!m){zone.innerHTML='';return;}
+  const gcSem=(await gouterCrecheMap(gouterCrecheCourante()))[menusMondayOf(dateStr)];
   function bloc(titre,champ,gouterChamp){
     return'<div style="flex:1;min-width:180px">'
       +'<div style="font-weight:800;color:var(--koala);font-size:11.5px;margin-bottom:4px">'+escHtml(titre)+'</div>'
       +menusLigneListe(m[champ])
-      +(gouterChamp&&m[gouterChamp]?'<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border);color:var(--koala-dark)"><i class="ti ti-cookie" style="font-size:11px"></i> '+escHtml(m[gouterChamp])+'</div>':'')
+      +(gouterChamp?gouterLigneHtml(gouterAffiche(gcSem,dow,m[gouterChamp])):'')
       +'</div>';
   }
   zone.innerHTML='<details open style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--koala-lightest,#F7F6FC)">'

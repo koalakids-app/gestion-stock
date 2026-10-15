@@ -71,8 +71,8 @@ function afficheHtml(v,qr){
 
 function afficheMenuOuvrir(){
   const v=afficheLire();
-  const url=menuPublicUrl(null);
-  const qr=afficheQrDataUrl(url);
+  let crecheId=menuCrecheQr();
+  let qr=afficheQrDataUrl(menuPublicUrl(null,crecheId));
   let ov=document.getElementById('modal-affiche-menu-wrap');
   if(ov)ov.remove();
   ov=document.createElement('div');
@@ -86,6 +86,7 @@ function afficheMenuOuvrir(){
     +'<div class="fg"><label class="flabel">Titre</label><input class="finput" id="aff-titre" maxlength="60"/></div>'
     +'<div class="fg"><label class="flabel">Message</label><textarea class="finput" id="aff-message" rows="4" maxlength="200"></textarea></div>'
     +'<div class="fg"><label class="flabel">Pied de page (facultatif)</label><input class="finput" id="aff-pied" maxlength="80" placeholder="Ex. Crèche Koala Kids — Lyon 3e"/></div>'
+    +menuCrecheSelectHtml('aff-creche',crecheId)
     +'<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Le QR code est permanent : il affiche toujours le menu de la semaine en cours. Imprimez l\'affiche une seule fois.</p>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-primary" id="aff-imprimer"><i class="ti ti-printer"></i> Imprimer / PDF</button>'
     +'<button class="btn-cancel" id="aff-reset">Remettre les textes par défaut</button></div>'
@@ -106,6 +107,8 @@ function afficheMenuOuvrir(){
   function remplir(x){champs.titre.value=x.titre;champs.message.value=x.message;champs.pied.value=x.pied;}
   remplir(v);
   Object.keys(champs).forEach(function(k){champs[k].addEventListener('input',rendre);});
+  const selC=document.getElementById('aff-creche');
+  if(selC)selC.onchange=function(){crecheId=selC.value||null;qr=afficheQrDataUrl(menuPublicUrl(null,crecheId));rendre();};
   document.getElementById('aff-reset').onclick=function(){remplir(AFFICHE_DEFAUTS);rendre();};
   document.getElementById('aff-imprimer').onclick=function(){
     if(!qr){showBanner('QR code indisponible : rechargez la page.','error');return;}

@@ -1,4 +1,4 @@
-/* Menu du traiteur ouvert par une famille via QR code, sans compte. Aucune
+/* Menu du traiteur (et goûters de la crèche, paramètre ?c=<id crèche>) ouvert par une famille via QR code, sans compte. Aucune
    dépendance externe : seule la fonction publique `menu_public` est appelée
    (voir sql/menu_public.sql). Paramètre ?d=AAAA-MM-JJ (lundi de la semaine) ;
    sans paramètre, on affiche la semaine en cours (le week-end : la suivante),
@@ -28,6 +28,8 @@ function dateLisible(s){
 
 const param=new URLSearchParams(location.search).get('d')||'';
 const DEBUT=/^\d{4}-\d{2}-\d{2}$/.test(param)?param:lundiCourant();
+const crecheParam=new URLSearchParams(location.search).get('c')||'';
+const CRECHE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(crecheParam)?crecheParam:null;
 const contenu=document.getElementById('contenu');
 const tabs=document.getElementById('tabs');
 let MENU=[],profil=1;
@@ -41,7 +43,7 @@ async function charger(){
   try{
     const r=await fetch(SUPABASE_URL+'/rest/v1/rpc/menu_public',{method:'POST',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY},
-      body:JSON.stringify({p_date:DEBUT})});
+      body:JSON.stringify({p_date:DEBUT,p_creche:CRECHE})});
     if(!r.ok)throw new Error('HTTP '+r.status);
     MENU=await r.json();
   }catch(e){
@@ -52,7 +54,7 @@ async function charger(){
     etat('🍽️','Menu pas encore disponible','Le menu de la semaine du '+dateLisible(DEBUT)+' n’a pas encore été publié.');
     return;
   }
-  const num=MENU[0].semaine_num;
+  const num=(MENU.find(function(x){return x.semaine_num;})||{}).semaine_num;
   document.getElementById('sub').textContent='Semaine du '+dateLisible(DEBUT)+(num?' (S'+num+')':'');
   tabs.style.display='flex';
   tabs.innerHTML=PROFILS.map((p,i)=>'<button type="button" role="tab" data-i="'+i+'">'+esc(p.titre)+'</button>').join('');
@@ -75,7 +77,7 @@ function afficher(){
     if(m&&m.theme)html+='<div class="theme">'+esc(m.theme)+'</div>';
     const lignes=m&&Array.isArray(m[p.cle])?m[p.cle]:[];
     html+=lignes.length?'<ul>'+lignes.map(function(t){return'<li>'+esc(t)+'</li>';}).join('')+'</ul>':'<div class="vide">—</div>';
-    if(p.gouter&&m&&m[p.gouter])html+='<div class="gouter">🍪 Goûter : '+esc(m[p.gouter])+'</div>';
+    if(p.gouter&&m&&m[p.gouter])html+='<div class="gouter">🍪 Goûter : '+esc(m[p.gouter])+(m.gouter_creche?' <span class="fait">préparé par la crèche</span>':'')+'</div>';
     html+='</section>';
   }
   contenu.innerHTML=html;
