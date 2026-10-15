@@ -621,7 +621,7 @@ function profilHtml(axes){
     return'<span title="'+esc(v.l)+'" style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:'+v.bg+';color:'+v.c+'">'+esc(a.libelle||a.code||'')+' : '+v.l+'</span>';
   }).join('')+'</div>';
 }
-function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
+function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggestions,peutProposer){
   const meilleur=qid=>resultats.filter(x=>x.quiz_id===qid).reduce((m,x)=>Math.max(m,x.pourcentage),-1);
   const lienQuizDe=(env,qid)=>{
     try{const u=new URL(env.lien);const p=new URLSearchParams(u.search);p.delete('module');p.set('quiz',qid);return QUIZ_APP_URL+'?'+p.toString();}
@@ -639,7 +639,7 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
     if(env.kind==='quiz'){
       const tent=resultats.filter(x=>x.quiz_id===env.item_id);
       const r=tent[0]; /* la plus récente (liste triée par date décroissante) */
-      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',tentatives:tent.length,meilleur:tent.reduce((m,x)=>Math.max(m,x.pourcentage),0),profil:r.mode==='profil'?(r.axes||[]):null,score:r.score,total:r.total,pourcentage:r.pourcentage}
+      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',itemId:env.item_id,tentatives:tent.length,meilleur:tent.reduce((m,x)=>Math.max(m,x.pourcentage),0),profil:r.mode==='profil'?(r.axes||[]):null,score:r.score,total:r.total,pourcentage:r.pourcentage}
               :{type:'quiz',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',etape:'quiz',lien:env.lien};
     }
     const lu=formationsLues.find(x=>x.module_id===env.item_id);
@@ -676,6 +676,14 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
       /* Acquis dès qu'une tentative atteint SEUIL_QUIZ % (même règle que le quiz d'une micro-formation). */
       const acquis=r.meilleur>=SEUIL_QUIZ;
       info='<div style="font-size:11.5px;color:var(--muted)">'+r.tentatives+' tentative'+(r.tentatives>1?'s':'')+(r.tentatives>1?' · meilleure note '+r.meilleur+' %':'')+'</div>';
+      /* Formation conseillée : première formation publiée du thème du quiz pas
+         encore dans le parcours, tant que le quiz n'est pas acquis. */
+      if(!acquis){
+        const dejaEnvoyes=new Set(envois.filter(x=>x.kind==='module').map(x=>x.item_id));
+        const sg=(suggestions||[]).filter(x=>x.quiz_id===r.itemId&&!dejaEnvoyes.has(x.module_id))[0];
+        if(sg)info+='<div style="font-size:11.5px;color:var(--orange);margin-top:2px"><i class="ti ti-bulb"></i> Formation conseillée : '+esc(sg.module_titre)
+          +(peutProposer?' <button type="button" class="btn btn-s btn-sm" style="font-size:11px;padding:2px 8px;margin-left:4px" onclick="proposerFormation(\''+esc(sg.module_id)+'\')">Proposer</button>':'')+'</div>';
+      }
       droite='<div style="text-align:right"><div style="font-weight:800;font-size:13px;color:'+col+';white-space:nowrap">'+r.score+'/'+r.total+' · '+r.pourcentage+'%</div>'
         +'<div style="font-weight:700;font-size:11.5px;white-space:nowrap;color:'+(acquis?'var(--green)':'var(--orange)')+'"><i class="ti '+(acquis?'ti-check':'ti-refresh')+'"></i> '+(acquis?'Acquis':'À revoir')+'</div></div>';
     }else{
@@ -737,7 +745,12 @@ async function loadFormation(){
     const ids=tous.filter(x=>x.kind==='module').map(x=>x.item_id);
     let mq=null;
     if(ids.length){const r=await sbQuiz.rpc('kk_modules_quiz',{p_ids:ids});if(!r.error)mq=r.data||[];}else mq=[];
-    box.innerHTML=renderParcoursHtml(tous,qz.data||[],md.data||[],mq);
+    /* Suggestions de formation pour les quiz à revoir : échec silencieux (fonction
+       à appliquer côté quiz, cf. docs/quiz-profil/formations_pour_quiz.sql). */
+    let sugg=[];
+    const qids=tous.filter(x=>x.kind==='quiz').map(x=>x.item_id);
+    if(qids.length){try{const r=await sbQuiz.rpc('kk_formations_pour_quiz',{p_quiz_ids:qids});if(!r.error)sugg=r.data||[];}catch(e){}}
+    box.innerHTML=renderParcoursHtml(tous,qz.data||[],md.data||[],mq,sugg,false);
   }catch(e){
     box.innerHTML='<p class="hint">Parcours de formation indisponible pour le moment.</p>';
   }
