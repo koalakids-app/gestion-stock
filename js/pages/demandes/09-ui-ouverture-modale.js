@@ -422,11 +422,12 @@ function pgContesDuJour(dateISO){
   }).sort((a,b)=>String(a.heure_debut||'').localeCompare(String(b.heure_debut||'')));
 }
 function pgContesLibelleCourt(e){
-  const h=e.heure_debut?formatHeure(e.heure_debut)+(e.heure_fin?'–'+formatHeure(e.heure_fin):''):'';
-  return 'contes'+(h?' '+h:'');
+  const hh=t=>String(t||'').slice(0,5).replace(':','h');
+  const h=e.heure_debut?hh(e.heure_debut)+(e.heure_fin?'–'+hh(e.heure_fin):''):'';
+  return 'absente – contes'+(h?' '+h:'');
 }
 // Contes qui recouvrent la case planning_equipe `row` (jour = index lundi→vendredi).
-// Sans horaire sur l'événement, toute la journée de Miline est concernée.
+// Seul le créneau des contes la concerne ; sans horaire sur l'événement, tous ses créneaux du jour.
 function peContesSurCellule(row,days5){
   if(!row||ipNormStr(row.prenom)!==PE_CONTES_PRENOM||!days5[row.jour])return [];
   const evs=pgContesDuJour(ipDateToLocalISO(days5[row.jour]));
