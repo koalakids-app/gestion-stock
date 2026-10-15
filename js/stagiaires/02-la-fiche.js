@@ -239,9 +239,8 @@ function stgRenderLien(){
     const tard=stgLienAEnvoyer(s);
     h+='<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.5">'
       +'La personne dépose ses pièces elle-même depuis son téléphone, sans compte ni application. '
-      +'Le lien restera valable jusqu\'au <b>'+escHtml(stgDateFr(stgLienExpiration(s)))+'</b>'
-      +(s.date_fin?' — soit '+STG_LIEN_APRES+' jours après la fin '
-        +(stgType(s)==='alternant'?"de l'alternance":'du stage'):'')+'.</p>';
+      +'Le lien restera valable jusqu\'au <b>'+escHtml(stgDateFr(stgLienExpiration()))+'</b>'
+      +' ('+STG_LIEN_JOURS+' jours à compter de sa création).</p>';
     /* Une demande arrivée six mois à l'avance n'a pas besoin de son lien tout
        de suite : il se perdrait, et la personne aurait tout oublié le jour du
        stage. On dit quand ce sera le moment, sans l'empêcher de le créer. */
@@ -408,7 +407,7 @@ async function stgCreerLien(renouveler){
   if(renouveler&&!confirm('Créer un nouveau lien ?\n\nL\'ancien cessera immédiatement de fonctionner.'))return;
   const token=stgToken();
   const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
-  const expire=stgLienExpiration(s);
+  const expire=stgLienExpiration();
   const ok=await dbUpdate('stagiaires',stgFicheId,{
     token:token,token_expire_le:expire,lien_envoye_le:new Date().toISOString()
   });

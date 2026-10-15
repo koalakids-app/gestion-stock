@@ -24,10 +24,9 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 const STG_BUCKET     = 'stagiaires';
-const STG_LIEN_JOURS = 30;    // durée de vie du lien de dépôt
+const STG_LIEN_JOURS = 14;    // durée de vie du lien de dépôt, fixe à partir de sa création
 const STG_URL_TTL    = 300;   // 5 min pour un lien de lecture signé
-const STG_LIEN_AVANT = 30;    // on prévient qu'il est temps d'envoyer le lien, J-30
-const STG_LIEN_APRES = 30;    // et il reste valable 30 jours après la fin du stage
+const STG_LIEN_AVANT = 14;    // on prévient qu'il est temps d'envoyer le lien, J-14
 
 let stgCache=[], stgTypes=[], stgJoursCache=[], stgDocsCache=[];
 /* Script 36 — ce que la crèche transmet, et qui l'a ouvert. Tables absentes
@@ -272,21 +271,16 @@ function stgMajCompteurs(){
       donc jamais toute seule : elle signale, à J-30 du début, que c'est le
       moment. Rien n'empêche de le créer plus tôt si la stagiaire le réclame.
 
-   2. Une durée fixe de 30 jours à partir de la création tombe au milieu du
-      stage. L'expiration se cale donc sur les DATES DE LA FICHE : 30 jours
-      après la fin, ce qui laisse aussi le temps de réclamer une pièce
-      manquante pendant le stage. Sans dates, on retombe sur les 30 jours. */
+   2. Le lien est un accès à des pièces d'identité et à des certificats
+      médicaux : il vaut 14 jours à compter de sa création, quelles que soient
+      les dates du stage. Le rappel à J-14 garantit qu'il couvre l'arrivée ;
+      « Renouveler » en crée un autre si une pièce manque ensuite. */
 
-function stgLienExpiration(s){
-  const plancher=Date.now()+STG_LIEN_JOURS*86400000;
-  const apres=d=>new Date(String(d).slice(0,10)+'T12:00:00').getTime()+STG_LIEN_APRES*86400000;
-  let cible=plancher;
-  if(s&&s.date_fin)        cible=Math.max(cible,apres(s.date_fin));
-  else if(s&&s.date_debut) cible=Math.max(cible,apres(s.date_debut)+30*86400000);
-  return new Date(cible).toISOString();
+function stgLienExpiration(){
+  return new Date(Date.now()+STG_LIEN_JOURS*86400000).toISOString();
 }
 
-/* « Il est temps » : le stage commence dans moins de 30 jours (ou a commencé),
+/* « Il est temps » : le stage commence dans moins de 14 jours (ou a commencé),
    et il n'y a pas de lien utilisable. Une fiche refusée, annulée ou terminée
    ne réclame rien. */
 function stgLienAEnvoyer(s){
