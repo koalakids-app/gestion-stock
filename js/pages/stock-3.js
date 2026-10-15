@@ -229,6 +229,7 @@ couches: `
 <div style="background:var(--green-lt);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#065F46">
   ✅ Le stock se <strong>décompte tout seul</strong> : chaque saisie « Couches du jour » (module Demandes › Enfants &amp; suivi › Couches, ou tablette du suivi) retire des couches de la taille portée par l'enfant (fiche enfant › taille et type de couche).
 </div>
+<div style="background:var(--amber-lt);border-left:4px solid var(--amber);border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#92400E">🔒 <strong>Référente</strong> : tu ne vois et ne modifies que le stock de couches de <strong>ta propre crèche</strong>. Seule la direction voit toutes les crèches.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📋 Ce que montre la page</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li>Une carte par <strong>crèche</strong>, type (couches classiques T3 à T6, couches-culottes T4 et T5) et taille, avec le stock restant et une estimation des <strong>jours restants</strong>, calculée sur la consommation des 14 derniers jours (à défaut, sur 4 couches par enfant et par jour).</li>
