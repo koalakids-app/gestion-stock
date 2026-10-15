@@ -170,6 +170,7 @@ async function renderPresenceHebdo(){
   }
   const SLOT_LBL={j:'Journée',m:'Matin',a:'Après-midi'};
   const rows=[];
+  let contratSeul=false;
   allEnfants.forEach(function(e){
     const repas=enfRepasCode(e);
     const cells=days5.map(function(d,i){
@@ -180,6 +181,12 @@ async function renderPresenceHebdo(){
         const s=aContrat?(ctHebdo[String(e.id)+'_'+i]?'j':null):(prevision[e.id]||[])[i];
         return s?{present:true,slot:s,horaires:hebdoHoraires(e.id,i,s),repas:enfRepasCode(e,dateStrs[i])}:{present:false,slot:null,horaires:'',repas:''};
       }
+      /* Enfant créé sans passer par l'import (fiche ou inscription + contrat) : aucune
+         présence enregistrée cette semaine, on déduit ses jours de son contrat. */
+      if(!presData.some(function(p){return p.enfant_id===e.id;})&&[0,1,2,3,4].some(function(j){return ctHebdo[String(e.id)+'_'+j];})){
+        contratSeul=true;
+        return ctHebdo[String(e.id)+'_'+i]?{present:true,slot:'j',horaires:hebdoHoraires(e.id,i,'j'),repas:enfRepasCode(e,dateStrs[i])}:{present:false,slot:null,horaires:'',repas:''};
+      }
       const st=statutJour(e.id,dateStrs[i]);
       return st.present?{present:true,slot:st.slot,horaires:hebdoHoraires(e.id,i,st.slot),repas:enfRepasCode(e,dateStrs[i])}:{present:false,slot:null,horaires:'',repas:''};
     });
@@ -188,6 +195,7 @@ async function renderPresenceHebdo(){
       rows.push({enfant:e,cells:cells});
     }
   });
+  if(contratSeul)_hebdoSource='prevision';
   if(!rows.length){
     view.innerHTML='<div class="empty-state"><i class="ti ti-user-off"></i><p>Aucune présence enregistrée cette semaine'+(crecheId?'':' — sélectionnez une crèche')+'.<br><span style="font-size:12px">Importez le planning (PDF), pointez les présences dans l’onglet « Jour »,<br>ou attendez d’avoir quelques semaines d’historique pour que la prévision fonctionne.</span></p></div>';
     _hebdoExportCtx=null;
@@ -315,8 +323,8 @@ async function renderPresenceHebdo(){
 
   const bandeauPrev=_hebdoSource==='prevision'
     ?'<div class="info-box" style="background:var(--orange-light);border-color:var(--orange);color:var(--orange-dark);margin-bottom:10px">'
-      +'<i class="ti ti-chart-dots" style="font-size:15px"></i> <strong>Prévision</strong> — le planning de cette semaine n’est pas encore importé. '
-      +'Les jours affichés sont la semaine type de chaque enfant, déduite des 4 semaines précédentes. '
+      +'<i class="ti ti-chart-dots" style="font-size:15px"></i> <strong>Prévision</strong> — le planning de cette semaine n’est pas (entièrement) importé. '
+      +'Les jours affichés sont déduits du contrat de l’enfant, ou à défaut de ses 4 semaines précédentes. '
       +'Vérifiez-les avant de commander : ils seront remplacés dès l’import du vrai planning.</div>'
     :'';
   const entete='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'
