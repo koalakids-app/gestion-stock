@@ -909,7 +909,7 @@ mcm: `
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Les autres onglets</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li><strong>Incidents repas</strong> : voir l’onglet 🚨 Incidents de cette notice.</li>
-  <li><strong>Menus</strong> : consultation des menus ; la direction peut importer le fichier Excel du menu. Le bouton <strong>QR code</strong> de chaque semaine affiche un QR (à capturer pour l’afficher à l’entrée, ou à partager) qui ouvre le menu sur le téléphone des familles, sans connexion, dans une page lisible (un onglet par profil, le jour en cours en évidence). Le <strong>QR permanent</strong> affiche toujours la semaine en cours : il suffit de l’imprimer une fois.</li>
+  <li><strong>Menus</strong> : consultation des menus ; la direction peut importer le fichier Excel du menu. Le bouton <strong>QR code</strong> de chaque semaine affiche un QR (à capturer pour l’afficher à l’entrée, ou à partager) qui ouvre le menu sur le téléphone des familles, sans connexion, dans une page lisible (un onglet par profil, le jour en cours en évidence). Le <strong>QR permanent</strong> affiche toujours la semaine en cours : il suffit de l’imprimer une fois. Le bouton <strong>Affiche QR</strong> (en haut de l’onglet) ouvre l’éditeur d’affiche : modifiez le titre, le message et le pied de page, vérifiez l’aperçu, puis <strong>Imprimer / PDF</strong> pour afficher le QR permanent dans la crèche.</li>
   <li><strong>Avis des enfants</strong> : avis des enfants sur les plats.</li>
 </ul>
 `,
