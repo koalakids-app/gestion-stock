@@ -3,6 +3,7 @@
 
 function stgOpenFiche(id,typeDefaut){
   stgFicheId=id||null;
+  if(id&&typeof depotsMarquerVusPour==='function')depotsMarquerVusPour('stagiaire',id);   // documents déposés par la stagiaire : vus
   const s=id?stgCache.find(x=>String(x.id)===String(id)):null;
   const v=(el,val)=>{const e=document.getElementById(el);if(e)e.value=val==null?'':val;};
   const type=s?stgType(s):(typeDefaut==='alternant'?'alternant':'stagiaire');

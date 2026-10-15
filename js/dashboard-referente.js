@@ -121,15 +121,19 @@ function refDashSetDate(v){if(v){refDashSelectedDate=v;renderRefDashboard();}}
    implicite, donc pas de brSuffixeCreche à reprendre. */
 async function loadRefDashAlertesExtra(crecheId,urgentesHtml){
   try{
-    const[vacc,dossiers,devis,demandes,visites]=await Promise.all([
+    const[vacc,dossiers,devis,demandes,visites,depots,pieces]=await Promise.all([
       vaccinationsEnRetard(crecheId).catch(e=>{console.warn('[RefDash] vaccinations',e);return[];}),
       dossiersFamilleARelancer(crecheId).catch(e=>{console.warn('[RefDash] dossiers familles',e);return[];}),
       devisARelancer(crecheId).catch(e=>{console.warn('[RefDash] devis',e);return[];}),
       demandesARelancer(crecheId).catch(e=>{console.warn('[RefDash] demandes à relancer',e);return[];}),
-      visitesAVenir(crecheId).catch(e=>{console.warn('[RefDash] visites',e);return[];})
+      visitesAVenir(crecheId).catch(e=>{console.warn('[RefDash] visites',e);return[];}),
+      depotsARegarder(crecheId).catch(e=>{console.warn('[RefDash] dépôts',e);return[];}),
+      piecesARelancer(crecheId).catch(e=>{console.warn('[RefDash] pièces',e);return[];})
     ]);
     const box=document.getElementById('ref-dash-alerts');if(!box)return;
     let html=urgentesHtml;
+    if(depots.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="brBriefingManuel()"><i class="ti ti-file-download" style="font-size:16px;flex-shrink:0"></i> <strong>'+depots.length+' personne'+(depots.length>1?'s ont':' a')+'</strong> déposé de nouveaux documents</div>';
+    if(pieces.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="brBriefingManuel()"><i class="ti ti-paperclip" style="font-size:16px;flex-shrink:0"></i> <strong>'+pieces.length+' dossier(s) de pièces</strong> à relancer</div>';
     if(vacc.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'vaccinations\')"><i class="ti ti-vaccine" style="font-size:16px;flex-shrink:0"></i> <strong>'+vacc.length+' vaccination(s) en retard</strong></div>';
     if(typeof periodesEssaiARelancer==='function'){
       const essai=periodesEssaiARelancer(crecheId);

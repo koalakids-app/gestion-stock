@@ -33,6 +33,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { signalerDepot } from "../_shared/depot-externe.ts";
 import { resoudreJeton } from "../_shared/session-lien.ts";
 
 const CORS_HEADERS = {
@@ -179,6 +180,16 @@ Deno.serve(async (req) => {
       console.error("[dossier-pieces] insertion", insErr);
       await supabase.storage.from(BUCKET).remove([path]).catch(() => {});
       return erreur("enregistrement_impossible", 500);
+    }
+
+    // Prévient la référente de la crèche (liste « Ma journée » + notification).
+    {
+      const { data: enf } = await supabase.from("enfants")
+        .select("prenom, creche_id").eq("id", dossier.enfant_id).maybeSingle();
+      await signalerDepot(supabase, {
+        source: "enfant", creche_id: enf?.creche_id ?? null, enfant_id: dossier.enfant_id,
+        libelle: filename, nom: enf?.prenom || "Un enfant",
+      });
     }
 
     // Jeton à usage unique côté sécurité : dès que toutes les pièces

@@ -62,7 +62,12 @@ function brBriefingOuvrir(){
 }
 
 function brVide(msg){return '<div class="br-vide">'+msg+'</div>';}
-function brSection(icone,titre,n,corps,accent){
+/* Une section sans rien à traiter n'est pas affichée : son titre est gardé
+   pour la ligne « Rien à signaler » en bas de la fenêtre. `toujours` force
+   l'affichage (quand le message « vide » a lui-même un intérêt). */
+let brSectionsVides=[];
+function brSection(icone,titre,n,corps,accent,toujours){
+  if(!n&&!toujours){brSectionsVides.push(titre);return '';}
   return '<div class="br-sec'+(accent?' br-'+accent:'')+'">'
     +'<div class="br-sec-t"><i class="ti ti-'+icone+'"></i> <span>'+titre+'</span>'
     +(n?'<span class="br-n">'+n+'</span>':'')+'</div>'+corps+'</div>';
@@ -144,6 +149,78 @@ async function demandesARelancer(crecheId){
       return souh.map(String).indexOf(String(crecheId))>=0;
     })
     .sort((a,b)=>String(a.date_rappel).localeCompare(String(b.date_rappel)));
+}
+
+/* Documents déposés par une famille ou une stagiaire (liens de dépôt) que
+   personne n'a encore regardés — file alimentée par les edge functions
+   dossier-pieces / dossier-stagiaire (sql/depots_externes.sql). Regroupés par
+   personne : dix photos d'un même enfant = une ligne. */
+async function depotsARegarder(crecheId){
+  let q=sb.from('depots_externes').select('*').is('vu_le',null).order('depose_le',{ascending:true});
+  if(crecheId)q=q.eq('creche_id',crecheId);
+  const{data,error}=await q;
+  if(error)throw error;
+  const groupes=new Map();
+  (data||[]).forEach(d=>{
+    const cle=d.source+':'+(d.enfant_id||d.stagiaire_id);
+    if(!groupes.has(cle))groupes.set(cle,{source:d.source,enfant_id:d.enfant_id,stagiaire_id:d.stagiaire_id,
+      creche_id:d.creche_id,ids:[],libelles:[],depuis:d.depose_le});
+    const g=groupes.get(cle);g.ids.push(d.id);g.libelles.push(d.libelle);
+  });
+  return[...groupes.values()];
+}
+async function depotsMarquerVus(ids){
+  if(!ids||!ids.length)return;
+  try{
+    await sb.from('depots_externes').update({vu_le:new Date().toISOString(),vu_par:currentUser?currentUser.id:null}).in('id',ids).is('vu_le',null);
+  }catch(e){console.warn('[depots] marquer vus',e);}
+}
+/* À l'ouverture d'une fiche : tout ce qui y a été déposé est considéré vu. */
+async function depotsMarquerVusPour(source,id){
+  try{
+    await sb.from('depots_externes').update({vu_le:new Date().toISOString(),vu_par:currentUser?currentUser.id:null})
+      .eq(source==='enfant'?'enfant_id':'stagiaire_id',id).is('vu_le',null);
+  }catch(e){console.warn('[depots] marquer vus',e);}
+}
+function depotNomPersonne(g){
+  if(g.source==='enfant'){
+    const e=cacheEnfants.find(x=>String(x.id)===String(g.enfant_id));
+    return e?((e.prenom||'')+' '+(e.nom||'')).trim():'Enfant';
+  }
+  const x=(typeof stgCache!=='undefined')?stgCache.find(y=>String(y.id)===String(g.stagiaire_id)):null;
+  return x&&typeof stgNomComplet==='function'?stgNomComplet(x):'Stagiaire';
+}
+function depotResume(g){
+  const n=g.ids.length;
+  return n===1?g.libelles[0]:n+' documents';
+}
+async function depotOuvrir(source,id,ids){
+  await depotsMarquerVus(ids);
+  brBriefingFermer();
+  if(source==='enfant'){showMain('enfants');if(typeof enfOpenFiche==='function')enfOpenFiche(id);}
+  else{showMain('stagiaires');if(typeof stgOpenFiche==='function')stgOpenFiche(id);}
+  brRefreshBadge();
+}
+/* Recompte le badge du bouton « Ma journée » sans réafficher la fenêtre. */
+function brRefreshBadge(){ if(document.getElementById('br-body'))brRender().catch(()=>{}); }
+
+/* Dossiers de pièces administratives (pieces.html) envoyés depuis ≥ 5 jours,
+   pas complets (statut « complet » posé par l'edge function dès que tout est
+   reçu), non expirés, pas déjà relancés aujourd'hui. Même règle que les
+   dossiers de familiarisation ci-dessus. */
+async function piecesARelancer(crecheId){
+  const seuil=new Date(Date.now()-5*86400000).toISOString();
+  const debutJour=new Date();debutJour.setHours(0,0,0,0);
+  const{data,error}=await sb.from('dossiers_pieces')
+    .select('*, enfants(prenom,nom,creche_id)')
+    .eq('statut','envoye')
+    .lte('envoye_le',seuil)
+    .gt('expire_le',new Date().toISOString())
+    .or('derniere_relance.is.null,derniere_relance.lt.'+debutJour.toISOString());
+  if(error)throw error;
+  return(data||[])
+    .filter(d=>d.enfants&&(!crecheId||String(d.enfants.creche_id)===String(crecheId)))
+    .sort((a,b)=>new Date(a.envoye_le)-new Date(b.envoye_le));
 }
 
 /* Visites de crèche (module Devis) prévues dans les 7 prochains jours, pas
@@ -282,17 +359,19 @@ async function brRender(){
   // Les quatre requêtes sont indépendantes : parallélisées pour ne pas
   // allonger le temps d'ouverture perçu de la modale.
   const criblage=isDirection?null:maCreche;
-  const[vaccRetard,dossiersRelance,devisRelance,demandesRelance]=await Promise.all([
+  const[vaccRetard,dossiersRelance,devisRelance,demandesRelance,piecesRelance,depots]=await Promise.all([
     vaccinationsEnRetard(criblage).catch(e=>{console.warn('[briefing] vaccinations',e);return[];}),
     dossiersFamilleARelancer(criblage).catch(e=>{console.warn('[briefing] dossiers familles',e);return[];}),
     devisARelancer(criblage).catch(e=>{console.warn('[briefing] devis',e);return[];}),
-    demandesARelancer(criblage).catch(e=>{console.warn('[briefing] demandes à relancer',e);return[];})
+    demandesARelancer(criblage).catch(e=>{console.warn('[briefing] demandes à relancer',e);return[];}),
+    piecesARelancer(criblage).catch(e=>{console.warn('[briefing] pièces à relancer',e);return[];}),
+    depotsARegarder(criblage).catch(e=>{console.warn('[briefing] dépôts',e);return[];})
   ]);
 
   // ── En-tête : le compte de ce qui demande une action ───────────────────
   const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length
     +stgRefuses.length+stgManquants.length+vaccRetard.length+dossiersRelance.length+devisRelance.length
-    +demandesRelance.length;
+    +demandesRelance.length+piecesRelance.length+depots.length;
   const res=document.getElementById('br-resume');
   if(res){
     res.className='br-resume'+(nAction?' br-chaud':'');
@@ -304,6 +383,18 @@ async function brRender(){
   if(badge){badge.textContent=nAction;badge.style.display=nAction?'':'none';}
 
   let h='';
+  brSectionsVides=[];
+
+  // 0. Documents déposés par les familles / stagiaires : en tête, c'est ce
+  // qui attend quelqu'un tout de suite.
+  h+=brSection('file-download','Nouveaux documents déposés',depots.length,
+    depots.slice(0,8).map(g=>brLigneClic(
+        (g.source==='enfant'?'👶 ':'🎓 ')+escHtml(depotNomPersonne(g))+brSuffixeCreche(g.creche_id),
+        escHtml(depotResume(g)),
+        'depotOuvrir(\''+g.source+'\',\''+(g.enfant_id||g.stagiaire_id)+'\',['+g.ids.map(i=>'\''+i+'\'').join(',')+'])',true)
+      ).join('')+(depots.length>8?'<div class="br-plus">+ '+(depots.length-8)+' autres</div>':'')
+      +'<div style="text-align:right;margin-top:4px"><button class="btn-sm" onclick="depotsToutVu()">Tout marquer comme vu</button></div>',
+    'accent');
 
   // 1. Tâches personnelles du jour
   if(isDirection){
@@ -403,6 +494,17 @@ async function brRender(){
       :brVide('✅ Aucun dossier à relancer'),
     dossiersRelance.length?'accent':'');
 
+  // 5quater-bis. Dossiers de pièces administratives à relancer
+  h+=brSection('paperclip','Pièces administratives à relancer',piecesRelance.length,
+    piecesRelance.slice(0,8).map(d=>{
+      const nom=((d.enfants.prenom||'')+' '+(d.enfants.nom||'')).trim();
+      const j=Math.floor((new Date()-new Date(d.envoye_le))/86400000);
+      return brLigneClic('📄 '+escHtml(nom)+brSuffixeCreche(d.enfants.creche_id),
+        'envoyé il y a '+j+' j'+(d.relances?', '+d.relances+' relance'+(d.relances>1?'s':''):''),
+        'brAllerEnfant(\''+d.enfant_id+'\')',true);
+    }).join('')+(piecesRelance.length>8?'<div class="br-plus">+ '+(piecesRelance.length-8)+' autres</div>':''),
+    'accent');
+
   // 5quinquies. Devis en attente de signature
   h+=brSection('file-invoice','Devis en attente de signature',devisRelance.length,
     devisRelance.length
@@ -449,9 +551,22 @@ async function brRender(){
         }).join('')
       :brVide('Aucun anniversaire'));
 
+  if(brSectionsVides.filter(t=>t!=='Événements du jour'&&t!=='Anniversaires').length){
+    h+='<div class="br-vide" style="text-align:left;padding:6px 2px">✅ Rien à signaler : '+brSectionsVides.filter(t=>t!=='Événements du jour'&&t!=='Anniversaires').join(' · ')+'</div>';
+  }
   box.innerHTML=h;
 }
+async function depotsToutVu(){
+  try{
+    const{data}=await sb.from('depots_externes').select('id').is('vu_le',null);
+    await depotsMarquerVus((data||[]).map(x=>x.id));
+  }catch(e){console.warn(e);}
+  brRender();
+}
 
+window.depotsToutVu=depotsToutVu;
+window.depotOuvrir=depotOuvrir;
+window.depotsMarquerVusPour=depotsMarquerVusPour;
 window.brBriefingAuto=brBriefingAuto;
 window.brBriefingManuel=brBriefingManuel;
 window.brBriefingOuvrir=brBriefingOuvrir;

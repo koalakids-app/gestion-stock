@@ -143,7 +143,7 @@ async function enfRelancerPieces(id){
   showBanner('Relance en cours…');
   const ok=await callFn('envoyer-dossier-pieces',{dossier_id:d.id,relance:true,lien:piecesLien(d.token),expediteur:currentProfile?.name});
   if(!ok)return showBanner('La relance n\'est pas partie.','error');
-  d.relances=(d.relances||0)+1;
+  d.relances=(d.relances||0)+1;d.derniere_relance=new Date().toISOString();
   enfRenderPiecesDossier();
   showBanner('Relance envoyée ✅');
 }
