@@ -398,6 +398,24 @@ async function saveEventCoord(){
   closeModal('modal-event-coord-wrap');await renderPlanning();
 }
 
+// ── RÉUNIONS (onglet Événements, type « reunion ») AFFICHÉES DANS LES PLANNINGS ──
+// Lecture seule : l'événement reste la source, rien n'est copié dans planning /
+// planning_equipe (pas de doublon à synchroniser). Une réunion rattachée à une
+// crèche n'apparaît que pour cette crèche ; sans crèche (ou « Réunion de
+// coordination ») elle concerne toutes les directrices techniques.
+function pgReunionsDuJour(dateISO,crecheId){
+  return (typeof cacheEvenements!=='undefined'?cacheEvenements:[]).filter(e=>{
+    if(e.type!=='reunion'||!e.date_debut)return false;
+    const fin=e.date_fin||e.date_debut;
+    if(dateISO<e.date_debut||dateISO>fin)return false;
+    return !e.creche_id||String(e.creche_id)===String(crecheId||'')||e.titre==='Réunion de coordination';
+  }).sort((a,b)=>String(a.heure_debut||'').localeCompare(String(b.heure_debut||'')));
+}
+function pgReunionLibelle(e){
+  const h=e.heure_debut?formatHeure(e.heure_debut)+(e.heure_fin?'–'+formatHeure(e.heure_fin):''):'';
+  return '<strong>'+escHtml(e.titre||'Réunion')+'</strong>'+(h?'<div style="font-size:10px;opacity:0.85">⏱ '+h+'</div>':'')+(e.lieu?'<div style="font-size:10px;opacity:0.8">📍 '+escHtml(e.lieu)+'</div>':'');
+}
+
 // ── GRILLES ──
 function getPlanningGrid(events,referentId,semaine,editable){
   const ws=weekStart();const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
@@ -412,6 +430,9 @@ function getPlanningGrid(events,referentId,semaine,editable){
   days5.forEach((_,di)=>{
     const evs=events.filter(e=>(e.jour===di||e.day===di)&&(e.slot===null||e.slot===undefined));
     html+='<div class="'+(editable?'pg-cell':'pg-cell-ro')+'"'+(editable?' data-dnd-zone="pg" data-ref="'+referentId+'" data-sem="'+semaine+'" data-day="'+di+'"':'')+'>';
+    // Réunions de l'onglet Événements (sauf si déjà saisies à la main ce jour-là dans le planning)
+    const reus=evs.some(e=>e.type==='reunion')?[]:pgReunionsDuJour(ipDateToLocalISO(days5[di]),_pgCrecheId);
+    reus.forEach(r=>{html+='<div class="pg-card reunion" title="Réunion (onglet Événements)" style="cursor:default">'+pgReunionLibelle(r)+'</div>';});
     if(evs.length){
       const labels={presence:'Présence',absent:'Absent',conge:'Congé',formation:'Formation',reunion:'Réunion',detachement:'Détachement',ferie:'Férié',vacances:'Vacances'};
       evs.forEach(ev=>{
@@ -425,7 +446,7 @@ function getPlanningGrid(events,referentId,semaine,editable){
       });
       if(editable)html+='<div class="pg-add-more" onclick="event.stopPropagation();openEventAt('+di+')" title="Ajouter un autre événement ce jour"><i class="ti ti-plus"></i></div>';
     }else if(editable){html+='<div class="pg-add" onclick="openEventAt('+di+')">+ ajouter</div>';}
-    else{html+='<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';}
+    else if(!reus.length){html+='<div style="text-align:center;padding:1rem;color:#ddd;font-size:11px">—</div>';}
     html+='</div>';
   });
   return html;

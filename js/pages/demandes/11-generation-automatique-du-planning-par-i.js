@@ -334,6 +334,17 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
   });
   html+='</tr></thead><tbody>';
 
+  // Réunions de l'onglet Événements (ex. réunion DT) : une ligne dédiée, seulement si la semaine en compte.
+  const _peReus=days5.map(d=>pgReunionsDuJour(ipDateToLocalISO(d),crecheId));
+  if(_peReus.some(l=>l.length)){
+    html+='<tr><td style="position:sticky;left:0;z-index:1;padding:'+_pePad+';border-bottom:1px solid var(--border);background:#F4F3FB;vertical-align:middle;font-weight:700;font-size:'+_peFSCell+';color:#3D3580"><i class="ti ti-users-group"></i> Réunions</td>';
+    _peReus.forEach(l=>{
+      html+='<td style="padding:'+_pePadCell+';border-bottom:1px solid var(--border);background:#F4F3FB;text-align:center;font-size:'+_peFSCell+'">'
+        +(l.length?l.map(r=>'<div style="background:#3D3580;color:#fff;border-radius:4px;padding:'+_peBadgePad+';margin-bottom:3px">'+pgReunionLibelle(r)+'</div>').join(''):'<span style="color:#ddd">—</span>')+'</td>';
+    });
+    html+='</tr>';
+  }
+
   creneauOrder.forEach(cleCreneau=>{
     const evsThisCreneau=byCreneau[cleCreneau];
     const creneau=labelOf[cleCreneau];
