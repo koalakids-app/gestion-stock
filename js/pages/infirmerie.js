@@ -882,7 +882,9 @@ retaper le protocole et les erreurs de posologie.<br>
 Le <b>PAI sign\u00e9</b> peut y \u00eatre joint en PDF ou en photo. Il est conserv\u00e9 dans
 un espace priv\u00e9, distinct des autres documents, et n\u2019est consultable que par
 les r\u00e9f\u00e9rentes et la direction. Un PAI \u00e9tant valable un an \u00e0 dater de la
-signature, la date de r\u00e9vision se calcule seule.</p>
+signature, la date de r\u00e9vision se calcule seule.<br>
+Cochez <b>Panier repas</b> si la famille fournit le repas et le go\u00fbter de l\u2019enfant : tant que le PAI est actif,
+l\u2019enfant est exclu de la commande repas au traiteur et sa fiche enfant l\u2019indique. Cl\u00f4turer le PAI le remet dans la commande.</p>
 
 <p style="margin-top:12px"><b>Signaler \u00e0 la direction</b><br>
 Depuis le d\u00e9tail d\u2019un soin, le bouton \u00ab Signaler \u00e0 la direction \u00bb cr\u00e9e un
