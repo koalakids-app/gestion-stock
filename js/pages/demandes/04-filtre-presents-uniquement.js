@@ -83,6 +83,8 @@ async function mcmCmdRender(){
   bon.style.display='';
   await crPrepare();
 }
+/* Lignes dans l'ordre du bon MCM : Bébés − de 6 mois, Bébés 6-18 mois, Grands, Périscolaire,
+   repas témoin, goûters Moyens, goûters Grands ; puis les lignes d'information (total, BIB, PAI, régimes). */
 /* Rappel : mêmes règles de comptage que crCompute (BIB exclu, pas de goûter avant
    6 mois), pour que les chiffres du rappel retombent sur ceux du bon. */
 function mcmCmdRenderEffectifs(ctx){
@@ -131,9 +133,11 @@ function mcmCmdRenderEffectifs(ctx){
     +ligneBon('Bébés 6 à 18 mois','repas classiques','bb18','','m',true)
     +ligneBon('Grands (+ de 18 mois)','repas classiques','grand','','g',true)
     +ligneBon('Périscolaire 4/5 ans','repas classiques','peri','','g',true)
-    +ligne('Goûters','présents l’après-midi, hors biberon et − de 6 mois','gouter','tot')
+    +'<tr><td><i class="mcmc-dot bib"></i>Repas témoin<small>un plat témoin prélevé chaque jour</small></td>'
+    +jours.map(function(){return'<td>OUI</td>';}).join('')+'<td>'+jours.length+'</td></tr>'
     +ligneBon('Goûters Moyens','6 à 18 mois','gbb','','bb')
     +ligneBon('Goûters Grands','+ de 18 mois & périscolaire','ggr','','g')
+    +ligne('Total goûters','présents l’après-midi, hors biberon et − de 6 mois','gouter','tot')
     +ligne('BIB','biberon · exclu du bon','BIB','mut','bib')
     +ligne('PAI panier repas','repas et goûter fournis par la famille · exclu du bon','PAI','mut','bib')
     +'<tr><td><i class="mcmc-dot rg"></i>Régimes particuliers<small>SV sans viande · SPV sans protéine de vache · SPA sans protéine animale</small></td>'
