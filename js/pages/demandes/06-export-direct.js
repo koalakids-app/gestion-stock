@@ -766,7 +766,7 @@ function crBuildFormHtml(ctx,vals,info,opts){
       return '<tr><td style="border:'+bd+';padding:17px 9px;background:'+r.bg+';font-size:11px;font-weight:bold;width:29%">'+escHtml(r.lbl)
         +(r.sub?'<br><span style="font-size:8.5px;font-weight:normal;font-style:italic">'+escHtml(r.sub)+'</span>':'')+'</td>'
         +[0,1,2,3,4].map(function(i){
-          return '<td style="border:'+bd+';padding:17px 4px;background:'+r.bg+';text-align:center;font-size:13px;font-weight:bold">'+escHtml(vals[k][i]||'')+'</td>';
+          return '<td style="border:'+bd+';padding:17px 4px;background:'+r.bg+';text-align:center;font-size:13px;font-weight:bold">'+escHtml(vals[k][i]||'0')+'</td>';
         }).join('')+'</tr>';
     }).join('');
   };
