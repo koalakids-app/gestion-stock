@@ -266,9 +266,17 @@ function enfFicheTab(tab, btn){
 }
 
 
+/* PAI avec panier repas : la famille apporte repas et goûter, l'enfant n'est donc pas
+   compté dans la commande au traiteur (voir crCountsParJour). */
+function enfPaiPanierBadge(){
+  return '<span style="display:inline-block;background:var(--red-light,#fde8e8);color:var(--red);border-radius:6px;padding:1px 7px;font-weight:800">Panier repas (PAI)</span>'
+    +'<div style="font-size:11px;color:var(--muted);font-weight:400">fourni par la famille — 0 sur la commande traiteur</div>';
+}
+
 /* Ligne « Repas » de l'onglet Identité : le code tel qu'il partira sur la feuille
    hebdomadaire et le bon traiteur, en précisant s'il est forcé ou déduit de l'âge. */
 function enfRepasFicheLigne(e){
+  if(e.pai_panier_repas)return enfPaiPanierBadge();
   const code=enfRepasCode(e);
   if(!code)return'<span style="color:var(--red)">— date de naissance manquante</span>';
   const auto=enfRepasBaseAuto(e);
@@ -285,6 +293,7 @@ function enfRepasFicheLigne(e){
    goûter suit le repas : c'est une information que la directrice technique doit pouvoir lire
    sans ouvrir le formulaire de modification. */
 function enfGouterFicheLigne(e){
+  if(e.pai_panier_repas)return enfPaiPanierBadge();
   const base=e.repas_base||enfRepasBaseAuto(e);
   if(!base)return'<span style="color:var(--muted)">—</span>';
   if(base==='BIB')return'<span style="color:var(--muted)">aucun (biberon)</span>';
@@ -328,6 +337,7 @@ function enfRenderIdentite(){
     + row('Allergies', escHtml(e.allergies||''))
     + row('Protection', e.taille_couche ? escHtml((e.type_couche==='culotte'?'Couche-culotte':'Couche classique')+' — taille '+e.taille_couche) : '')
     + (e.taille_couche ? row('Besoin mensuel de couches', enfBesoinCoucheLigne(e)) : '')
+    + (e.pai_panier_repas ? row('PAI', '<span style="display:inline-block;background:var(--red-light,#fde8e8);color:var(--red);border-radius:6px;padding:1px 7px;font-weight:800"><i class="ti ti-first-aid-kit"></i> PAI avec panier repas</span>') : '')
     + row('Repas', enfRepasFicheLigne(e))
     + row('Goûter', enfGouterFicheLigne(e))
     + row('Code image (kiosque)', kkPictosLigne(e.code_pictos))
