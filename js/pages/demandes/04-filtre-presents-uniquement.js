@@ -88,12 +88,14 @@ async function mcmCmdRender(){
 function mcmCmdRenderEffectifs(ctx){
   const cnt=crCountsParJour(ctx);
   const sum=function(o){return Object.keys(o).reduce(function(s,k){return s+o[k];},0);};
+  const paiNoms={};
   const jours=ctx.days5.map(function(d,i){
-    const c=cnt[i],j={present:0,BIB:0,sans:0};
+    const c=cnt[i],j={present:0,BIB:0,sans:0,PAI:0};
     ctx.rows.forEach(function(r){
       const cell=r.cells[i];if(!cell.present)return;
       j.present++;
       if(cell.repas==='BIB')j.BIB++;
+      else if(enfPaiPanier(r.enfant)){j.PAI++;paiNoms[r.enfant.id]=((r.enfant.prenom||'')+' '+(r.enfant.nom||'')).trim();}  // PAI avec panier repas : exclu du bon
       else if(!enfRepasCode(r.enfant))j.sans++;
     });
     ['bb6','bb18','grand','peri','gbb','ggr'].forEach(function(k){j[k]=c[k];j[k+'_n']=sum(c[k]);});
@@ -133,9 +135,12 @@ function mcmCmdRenderEffectifs(ctx){
     +ligneBon('Goûters Bébés','6 à 18 mois','gbb','','bb')
     +ligneBon('Goûters Grands','+ de 18 mois & périscolaire','ggr','','g')
     +ligne('BIB','biberon · exclu du bon','BIB','mut','bib')
+    +ligne('PAI panier repas','repas et goûter fournis par la famille · exclu du bon','PAI','mut','bib')
     +'<tr><td><i class="mcmc-dot rg"></i>Régimes particuliers<small>SV sans viande · SPV sans protéine de vache · SPA sans protéine animale</small></td>'
     +jours.map(function(j){return cellTxt(regTxt(j));}).join('')+'<td>'+nbReg+'</td></tr>'
     +'</tbody></table></div>';
+  const nomsPai=Object.keys(paiNoms).map(function(k){return paiNoms[k];});
+  if(nomsPai.length)h+='<div class="mcmc-warn"><i class="ti ti-first-aid-kit"></i><span><b>PAI avec panier repas (non commandés au traiteur) :</b> '+nomsPai.map(escHtml).join(', ')+'.</span></div>';
   const sans=ctx.rows.filter(function(r){return !enfRepasCode(r.enfant);}).length;
   if(sans)h+='<div class="mcmc-warn"><i class="ti ti-alert-triangle"></i><span><b>'+sans+' enfant(s) sans code repas</b> ne sont pas comptés : renseignez leur date de naissance ou leur type de repas sur la fiche.</span></div>';
   document.getElementById('mcm-cmd-effectifs').innerHTML=h+'</div>';
