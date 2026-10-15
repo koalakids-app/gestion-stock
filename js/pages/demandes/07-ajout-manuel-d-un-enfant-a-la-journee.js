@@ -127,7 +127,8 @@ function enfSyncRepas(){
     const gAuto=enfGouterAuto({dob:dob,repas_base:forcee});
     const gFinal=gForce||gAuto;
     if(forcee!=='BIB'){
-      if(!gFinal)txt+='<div style="margin-top:2px">Goûter : <span style="color:var(--muted)">aucun (avant 6 mois)</span></div>';
+      if(gForce==='creche')txt+='<div style="margin-top:2px">Goûter : <strong style="color:var(--orange-dark)">crèche</strong> <span style="color:var(--orange-dark)">(non compté sur la commande traiteur)</span></div>';
+      else if(!gFinal)txt+='<div style="margin-top:2px">Goûter : <span style="color:var(--muted)">aucun (avant 6 mois)</span></div>';
       else{
         txt+='<div style="margin-top:2px">Goûter : <strong style="color:var(--koala)">'
           +(gFinal==='gbb'?'bébé':'grand')+'</strong>'

@@ -680,7 +680,8 @@ function crCountsParJour(ctx){
            dans l'effectif normal. SPV et SPA restent signalés : le lait et les
            produits laitiers, eux, sont bien présents au goûter. */
         const gReg=reg==='SV'?'':reg;
-        if(g)gouter[g][gReg]=(gouter[g][gReg]||0)+1;
+        /* « Goûter crèche » : c'est la crèche qui fournit le goûter, rien à commander au traiteur. */
+        if(g&&g!=='creche')gouter[g][gReg]=(gouter[g][gReg]||0)+1;
       }
     });
     return Object.assign({},repas,gouter);
