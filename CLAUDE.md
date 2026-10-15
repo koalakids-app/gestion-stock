@@ -20,6 +20,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 - Repas BB (légumes sans protéines, avec ou sans régime) : goûter compris dans le repas, donc aucun goûter ; le goûter « bébé » (`gbb`) s'appelle désormais « goûter moyen » à l'écran.
 - Le PAI se saisit **dans le registre de soins** (`infirmerie.html`, table `pai`, case « Panier repas »). La fiche enfant le **lit** (`enfPaiCharger`, `enfPaiPanier` dans `js/enfants/01-core.js`), elle ne le modifie pas. Un PAI clôturé remet l'enfant dans la commande.
 
+## Menu du traiteur par QR code
+- `menu.html` (page publique, sans compte) lit la fonction `menu_public(date)` (`sql/menu_public.sql`, à appliquer à la main) : une seule semaine, colonnes d'affichage uniquement. Le QR se génère dans MCM › Menus (`mcmMenuQr`) ; version « permanente » sans date = semaine en cours.
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.
