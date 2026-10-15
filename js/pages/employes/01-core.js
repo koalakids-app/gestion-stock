@@ -23,7 +23,12 @@ function num(id){const v=val(id);return v===''?null:Number(String(v).replace(','
 
 async function callFn(fn,body){
   try{
-    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify(body)});
+    // Jeton de la session en cours, pas la clé anon statique : les fonctions
+    // creer/supprimer-compte-collaborateur lisent le `sub` du JWT pour
+    // identifier l'appelant·e (sinon « authentification_manquante »).
+    const{data:{session}}=await sb.auth.getSession();
+    const jeton=session?.access_token||SUPABASE_ANON_KEY;
+    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jeton},body:JSON.stringify(body)});
     const data=await r.json().catch(()=>({}));
     return{ok:r.ok,data};
   }catch(err){
