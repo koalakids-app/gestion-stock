@@ -887,7 +887,7 @@ mcm: `
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Ouvrez <strong>MCM (repas)</strong> › <strong>Commande repas</strong>.</li>
   <li>Choisissez la semaine avec les flèches ◀ ▶ ou <strong>Semaine actuelle</strong>. La direction choisit aussi la <strong>crèche</strong> ; la semaine et la crèche sont les mêmes que dans l’onglet Présences › Semaine.</li>
-  <li>Vérifiez le <strong>rappel des effectifs</strong> : repas du midi et goûters par jour, par profil (bébés de moins de 6 mois, moyens de 6 à 18 mois, grands et périscolaire) et avec les régimes particuliers (SV, SPV, SPA).</li>
+  <li>Vérifiez le <strong>rappel des effectifs</strong> : repas du midi et goûters par jour, par profil (bébés « − de 6 mois » = repas BB quel que soit l’âge, bébés 6 à 18 mois = repas M, grands et périscolaire) et avec les régimes particuliers (SV, SPV, SPA).</li>
   <li>Complétez le bon qui s’affiche dessous : coordonnées de la crèche, éventuelle mention « annule et remplace », date de validation, nom de la responsable.</li>
   <li><strong>Enregistrer</strong> garde un brouillon, <strong>Générer le PDF</strong> télécharge le bon, <strong>Envoyer au traiteur</strong> le transmet par mail.</li>
 </ol>
