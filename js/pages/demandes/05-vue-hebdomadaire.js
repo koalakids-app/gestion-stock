@@ -84,6 +84,7 @@ async function renderPresenceHebdo(){
   const ws=weekStart(),view=document.getElementById('presence-hebdo-view');
   if(!view)return;
   const crecheId=getPresenceCrecheId();
+  if(crecheId)await gouterCrecheMap(crecheId);   // option « fait tous ses goûters » : sert au comptage du bon
   const lblEl=document.getElementById('hebdo-week-label');
   if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';_hebdoExportCtx=null;if(lblEl)lblEl.textContent='';return;}
   const days5=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
