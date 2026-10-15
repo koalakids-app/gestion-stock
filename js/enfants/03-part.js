@@ -702,17 +702,49 @@ async function presApplyContrats(){
       aSupprimerParEnfant.set(c.enfant_id,set);
     }
   });
+  // Restes d'un contrat terminé : une présence À VENIR portant exactement les
+  // horaires d'un contrat déjà échu de l'enfant a été générée par ce contrat.
+  // Si la date n'est plus couverte par aucun contrat → on la retire ; si un
+  // contrat à jour la couvre → on efface l'ancien horaire (le contrat actuel
+  // s'affiche alors). Un horaire différent (planning importé), un pointage ou
+  // une date passée ne sont jamais touchés.
+  const aliberer=new Map();   // enfant_id -> Set(presence_date ISO) à remettre sans horaire
+  let nbReset=0;
+  const auj=ipDateToLocalISO(new Date());
+  const hh=function(t){return t?String(t).slice(0,5):'';};
+  const dejaVus=new Set();
+  dejaPres.forEach(function(p){
+    if(p.status!=='present'||p.source==='pointage'||!p.heure_debut||!p.heure_fin) return;
+    if(p.presence_date<auj) return;
+    const cle=p.enfant_id+'_'+p.presence_date;
+    if(dejaVus.has(cle)) return;
+    const perime=avecTerme.some(function(c){
+      return c.enfant_id===p.enfant_id&&c.date_fin<p.presence_date
+        &&hh(c.heure_debut)===hh(p.heure_debut)&&hh(c.heure_fin)===hh(p.heure_fin);
+    });
+    if(!perime) return;
+    dejaVus.add(cle);
+    if((datesParEnfant.get(p.enfant_id)||new Set()).has(p.presence_date)){
+      const s=aliberer.get(p.enfant_id)||new Set();
+      s.add(p.presence_date); aliberer.set(p.enfant_id,s); nbReset++;
+    }else{
+      const s=aSupprimerParEnfant.get(p.enfant_id)||new Set();
+      if(!s.has(p.presence_date)){ s.add(p.presence_date); nbSuppr++; }
+      aSupprimerParEnfant.set(p.enfant_id,s);
+    }
+  });
   const avertSansTerme=sansTerme.length
     ? '\n\n⚠ '+sansTerme.length+' contrat(s) sans date de fin ignoré(s) : renseignez une date de fin pour les inclure.'
     : '';
-  if(!rows.length&&!nbSuppr){
+  if(!rows.length&&!nbSuppr&&!nbReset){
     showBanner('Toutes les dates des contrats sont déjà à jour.'+avertSansTerme);
     return;
   }
   const nbJours=rows.length/2;
   const msgAjout=nbJours?('• '+nbEnfants+' enfant(s), '+nbJours+' jour(s) marqué(s) présent(s)\n'):'';
   const msgSuppr=nbSuppr?('• '+nbSuppr+' jour(s) retiré(s) (plus dans le contrat)\n'):'';
-  if(!confirm('Appliquer les contrats :\n\n'+msgAjout+msgSuppr+avertSansTerme+'\n\nContinuer ?')) return;
+  const msgReset=nbReset?('• '+nbReset+' jour(s) : ancien horaire d’un contrat terminé remplacé par celui du contrat actuel\n'):'';
+  if(!confirm('Appliquer les contrats :\n\n'+msgAjout+msgSuppr+msgReset+avertSansTerme+'\n\nContinuer ?')) return;
   // Insertion par lots : un contrat de plusieurs mois peut représenter des
   // centaines de lignes, mieux vaut ne pas tout envoyer en un seul appel.
   // upsert + ignoreDuplicates plutôt qu'un simple insert : si une ligne a
@@ -728,6 +760,10 @@ async function presApplyContrats(){
   for(const[id,dates]of aSupprimerParEnfant){
     const{error}=await sb.from('presences').delete().eq('enfant_id',id).in('presence_date',[...dates]);
     if(error){ console.warn('presApplyContrats suppression',error); showBanner('Nettoyage des présences impossible : '+(error.message||''),'error'); return; }
+  }
+  for(const[id,dates]of aliberer){
+    const{error}=await sb.from('presences').update({heure_debut:null,heure_fin:null}).eq('enfant_id',id).in('presence_date',[...dates]);
+    if(error){ console.warn('presApplyContrats horaires',error); showBanner('Mise à jour des horaires impossible : '+(error.message||''),'error'); return; }
   }
   // On bascule sur « Présents uniquement » : les enfants sans contrat ce jour
   // n’encombrent plus la feuille de présence (le chip permet de les réafficher).
