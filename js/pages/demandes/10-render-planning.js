@@ -84,6 +84,17 @@ async function renderPlanning(){
   await renderPlanningEquipe();
 }
 
+// Direction : choisir un/une directeur/trice technique affiche aussi le planning équipe de sa crèche.
+async function planningRefChange(){
+  const ref=cacheReferents.find(r=>r.id===document.getElementById('planning-ref-select')?.value);
+  const peSel=document.getElementById('pe-creche-select');
+  if(ref&&ref.creche_id&&peSel){
+    if(peSel.options.length<=1)peSel.innerHTML='<option value="">-- Choisir une crèche --</option>'+cacheCreches.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+    peSel.value=ref.creche_id;
+  }
+  await renderPlanning();
+}
+
 // ── PLANNING ÉQUIPE (toutes les salariées d'une crèche, importé depuis Excel) ──
 let _peCache={};
 async function peLoad(crecheId,semaineDate){
