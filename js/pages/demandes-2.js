@@ -593,7 +593,7 @@ Désactivez le filtre pour retrouver la <strong>liste complète</strong> des ins
   <li><strong>Grille</strong> : une ligne par enfant, une colonne par jour, avec les horaires réels. En tête, une carte par jour donne l’effectif et sa répartition par tranche d’âge.</li>
   <li><strong>Synthèse repas</strong> : les totaux repas par jour d’abord, le détail enfant replié dessous. C’est la vue qui prépare la commande du traiteur.</li>
   <li><strong>Commande repas</strong> génère le bon du traiteur, <strong>Exporter Excel</strong> produit la feuille de présence hebdomadaire mise en forme.</li>
-  <li>Si la semaine n’est pas encore importée, l’application affiche une <strong>prévision</strong> déduite des semaines précédentes, clairement signalée. Vérifiez-la avant de commander des repas.</li>
+  <li>Si la semaine n’est pas encore importée, l’application affiche une <strong>prévision</strong> déduite des semaines précédentes (ou, pour un enfant dont un contrat couvre la semaine, des jours et horaires de ce contrat), clairement signalée. Vérifiez-la avant de commander des repas.</li>
 </ul>`,
 
 planning: `

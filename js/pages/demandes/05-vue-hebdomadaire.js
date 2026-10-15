@@ -174,7 +174,10 @@ async function renderPresenceHebdo(){
     const repas=enfRepasCode(e);
     const cells=days5.map(function(d,i){
       if(prevision){
-        const s=(prevision[e.id]||[])[i];
+        /* Un contrat qui couvre la semaine prime sur l'historique : un changement de
+           contrat (nouveaux jours) ne se lit pas encore dans les 4 semaines précédentes. */
+        const aContrat=[0,1,2,3,4].some(function(j){return ctHebdo[String(e.id)+'_'+j];});
+        const s=aContrat?(ctHebdo[String(e.id)+'_'+i]?'j':null):(prevision[e.id]||[])[i];
         return s?{present:true,slot:s,horaires:hebdoHoraires(e.id,i,s),repas:enfRepasCode(e,dateStrs[i])}:{present:false,slot:null,horaires:'',repas:''};
       }
       const st=statutJour(e.id,dateStrs[i]);
