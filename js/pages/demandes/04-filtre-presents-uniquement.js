@@ -189,7 +189,7 @@ function mcmRenderMenusList(){
     function carte(titre,champ,gouterChamp){
       let html='<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'
         +'<div style="font-weight:800;color:var(--koala);font-size:12px;margin-bottom:6px">'+escHtml(titre)+'</div>'
-        +'<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px">';
+        +'<div class="menus-grid">';
       for(let j=1;j<=5;j++){
         const m=parJour[j];
         html+='<div style="font-size:11px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">'+MENU_JOURS[j-1]+'</div>'
@@ -202,8 +202,8 @@ function mcmRenderMenusList(){
     }
     const fichierPath=jours[0].fichier_path;
     return'<details'+(isPast?'':' open')+' style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;background:'+(isPast?'#fafafa':'var(--koala-lightest,#F7F6FC)')+'">'
-      +'<summary style="cursor:pointer;font-weight:800;color:var(--koala-dark);font-size:13px;display:flex;align-items:center;gap:8px">'
-      +'<span style="flex:1">'+(isPast?'':'🟢 ')+'Semaine du '+escHtml(d)+(semaineNum?' (S'+semaineNum+')':'')+(isPast?' — passée':'')+'</span>'
+      +'<summary class="menus-summary" style="cursor:pointer;font-weight:800;color:var(--koala-dark);font-size:13px">'
+      +'<span class="menus-summary-titre">'+(isPast?'':'🟢 ')+'Semaine du '+escHtml(d)+(semaineNum?' (S'+semaineNum+')':'')+(isPast?' — passée':'')+'</span>'
       +(fichierPath?'<a class="ibtn" href="'+escHtml(menusFichierUrl(fichierPath))+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Ouvrir et imprimer le menu original ('+escHtml(jours[0].fichier_nom||'')+')"><i class="ti ti-printer"></i></a>':'')
       +(fichierPath?'<button class="ibtn" onclick="event.preventDefault();event.stopPropagation();mcmMenuQr(\''+d+'\')" title="Partager ce menu par QR code"><i class="ti ti-qrcode"></i></button>':'')
       +(isDirection?'<button class="ibtn del" onclick="event.preventDefault();event.stopPropagation();mcmDeleteMenuWeek(\''+d+'\')" title="Supprimer ce menu"><i class="ti ti-trash"></i></button>':'')

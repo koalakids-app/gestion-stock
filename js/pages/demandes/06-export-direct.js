@@ -208,7 +208,7 @@ async function renderMenuSemaine(){
   function carte(titre,champ,gouterChamp){
     let html='<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px">'
       +'<div style="font-weight:800;color:var(--koala);font-size:12px;margin-bottom:6px">'+escHtml(titre)+'</div>'
-      +'<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px">';
+      +'<div class="menus-grid">';
     for(let j=1;j<=5;j++){
       const m=parJour[j];
       html+='<div style="font-size:11px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">'+MENU_JOURS[j-1]+'</div>'
