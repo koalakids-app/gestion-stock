@@ -627,7 +627,15 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz){
     try{const u=new URL(env.lien);const p=new URLSearchParams(u.search);p.delete('module');p.set('quiz',qid);return QUIZ_APP_URL+'?'+p.toString();}
     catch(e){return env.lien;}
   };
-  const items=envois.map(env=>{
+  /* Une seule ligne par quiz/formation, même si l'envoi a été enregistré
+     plusieurs fois : on garde la ligne validée, sinon la plus récente (la liste
+     arrive triée du plus récent au plus ancien). */
+  const uniques=new Map();
+  envois.forEach(env=>{
+    const k=env.kind+':'+env.item_id,deja=uniques.get(k);
+    if(!deja||(!deja.valide_le&&env.valide_le))uniques.set(k,env);
+  });
+  const items=[...uniques.values()].map(env=>{
     if(env.kind==='quiz'){
       const r=resultats.find(x=>x.quiz_id===env.item_id);
       return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',profil:r.mode==='profil'?(r.axes||[]):null,score:r.score,total:r.total,pourcentage:r.pourcentage}
