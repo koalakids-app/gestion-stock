@@ -291,8 +291,22 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
     if(!byCreneau[k]){byCreneau[k]=[];labelOf[k]=r.creneau_label;creneauOrder.push(k);}
     byCreneau[k].push(r);
   });
+  // Remplaçantes de la crèche (onglet Remplaçants/tes) : placées sur la ligne d'horaire qui
+  // correspond à leur créneau ; une ligne dédiée est créée si aucun horaire du planning ne colle.
+  const remplByKey={},remplHd={};
+  const _hh=t=>String(t||'').slice(0,5).replace(':','h');
+  (_peRemplRows[crecheId+'_'+semaine]||[]).forEach(r=>{
+    const jour=days5.findIndex(d=>ipDateToLocalISO(d)===r.date);
+    if(jour<0||!r.heure_debut||!r.heure_fin)return;
+    const lbl=(r.pause_debut&&r.pause_fin)
+      ?_hh(r.heure_debut)+'-'+_hh(r.pause_debut)+'/'+_hh(r.pause_fin)+'-'+_hh(r.heure_fin)
+      :_hh(r.heure_debut)+'-'+_hh(r.heure_fin);
+    const k=peCreneauKey(lbl);
+    if(!byCreneau[k]){byCreneau[k]=[];labelOf[k]=lbl;creneauOrder.push(k);remplHd[k]=String(r.heure_debut).slice(0,5);}
+    (remplByKey[k]=remplByKey[k]||{});(remplByKey[k][jour]=remplByKey[k][jour]||[]).push(r.nom);
+  });
   creneauOrder.sort((a,b)=>{
-    const ha=byCreneau[a][0].hdebut||'99:99',hb=byCreneau[b][0].hdebut||'99:99';
+    const ha=(byCreneau[a][0]&&byCreneau[a][0].hdebut)||remplHd[a]||'99:99',hb=(byCreneau[b][0]&&byCreneau[b][0].hdebut)||remplHd[b]||'99:99';
     return ha.localeCompare(hb);
   });
 
@@ -353,12 +367,16 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
     for(let d=0;d<5;d++){
       // Plusieurs personnes peuvent partager le même créneau le même jour
       const evs=evsThisCreneau.filter(e=>e.jour===d);
+      const rempl=((remplByKey[cleCreneau]||{})[d]||[]).map(n=>'<div style="border:1.5px dashed #3D3580;color:#3D3580;background:#fff;border-radius:4px;padding:'+_peBadgePad+';font-size:'+_peFSCell+';text-align:center" title="Remplaçante"><strong>'+escHtml(n)+'</strong> <span style="opacity:0.8">(rempl.)</span></div>');
       html+='<td'+(editable?' data-dnd-zone="pe" data-creneau="'+escHtml(creneau||'')+'" data-day="'+d+'" data-creche="'+crecheId+'" data-sem="'+semaine+'"':'')+' style="padding:'+_pePadCell+';border-bottom:1px solid var(--border);word-wrap:break-word;overflow-wrap:break-word">';
       if(evs.length){
-        html+=evs.map(e=>renderCell(e,crecheName)).join('<div style="height:4px"></div>');
+        html+=evs.map(e=>renderCell(e,crecheName)).concat(rempl).join('<div style="height:4px"></div>');
         if(editable)html+='<div class="pe-add-more" onclick="peOpenCellEdit(null,\''+creneauEsc+'\',\''+d+'\',\''+crecheId+'\',\''+semaine+'\')" title="Ajouter quelqu\'un d\'autre sur ce créneau"><i class="ti ti-plus"></i></div>';
       }else if(editable){
+        if(rempl.length)html+=rempl.join('<div style="height:4px"></div>');
         html+='<div class="pe-add-empty" onclick="peOpenCellEdit(null,\''+creneauEsc+'\',\''+d+'\',\''+crecheId+'\',\''+semaine+'\')">+ ajouter</div>';
+      }else if(rempl.length){
+        html+=rempl.join('<div style="height:4px"></div>');
       }else{
         html+='<div style="text-align:center"><span style="color:#ddd">—</span></div>';
       }
@@ -393,13 +411,15 @@ function getPlanningEquipeTable(rows,semaine,crecheName,crecheId,editable,forPri
 }
 
 const _peRemplCache={};
+const _peRemplRows={};
 // Charge les noms de l'onglet Remplaçants/tes présents dans la crèche sur la semaine affichée.
 async function peLoadRemplacantes(crecheId,semaine){
   const k=crecheId+'_'+semaine;
   const fin=new Date(semaine+'T00:00:00');fin.setDate(fin.getDate()+6);
-  const{data,error}=await sb.from('remplacantes').select('nom').eq('creche_id',crecheId).gte('date',semaine).lte('date',ipDateToLocalISO(fin));
+  const{data,error}=await sb.from('remplacantes').select('nom,date,heure_debut,heure_fin,pause_debut,pause_fin').eq('creche_id',crecheId).gte('date',semaine).lte('date',ipDateToLocalISO(fin));
   if(error){console.warn('[PlanningEquipe] remplaçantes',error.message);return;}
   _peRemplCache[k]=new Set((data||[]).map(r=>ipNormStr(r.nom)));
+  _peRemplRows[k]=data||[];
 }
 // Une remplaçante ne peut pas être en continuité de direction : c'est l'autre pro qui prend le
 // rôle. Elle est repérée par l'onglet Remplaçants/tes (prénom = nom saisi ou son premier mot),
