@@ -172,6 +172,7 @@ async function mcmLoadMenusList(){
     mcmMenusCache=data||[];
   }catch(err){console.warn('[MCM menus] lecture',err);mcmMenusCache=[];}
   mcmGcMap=await gouterCrecheMap(gouterCrecheCourante(),true);
+  mcmGcTous=gouterTous(gouterCrecheCourante());
   mcmRenderMenusList();
 }
 function mcmRenderMenusList(){
@@ -195,7 +196,7 @@ function mcmRenderMenusList(){
         const m=parJour[j];
         html+='<div style="font-size:11px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">'+MENU_JOURS[j-1]+'</div>'
           +menusLigneListe(m?m[champ]:null)
-          +(gouterChamp?gouterLigneHtml(gouterAffiche(mcmGcMap[d],j,m?m[gouterChamp]:'')):'')
+          +(gouterChamp?gouterLigneHtml(gouterAffiche(mcmGcMap[d],j,m?m[gouterChamp]:'',mcmGcTous)):'')
           +'</div>';
       }
       html+='</div></div>';

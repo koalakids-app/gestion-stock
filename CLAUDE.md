@@ -23,6 +23,7 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Menu du traiteur par QR code
 - `menu.html` (page publique, sans compte) lit la fonction `menu_public(date)` (`sql/menu_public.sql`, à appliquer à la main) : une seule semaine, colonnes d'affichage uniquement. Le QR se génère dans MCM › Menus (`mcmMenuQr`) ; version « permanente » sans date = semaine en cours.
 - Goûters faits par la crèche : table `menus_gouters_creche` (`sql/menus_gouters_creche.sql`, à appliquer à la main ; accès via `kk_acces_creche`), un texte par crèche et par jour, qui remplace `bb18_gouter`/`grand_gouter` du traiteur pour cette crèche (`js/pages/demandes/13-gouters-creche.js`). `menu_public(date, crèche)` fusionne les deux ; le QR d'un référent porte `?c=<id crèche>`.
+- Option « cette crèche fait tous ses goûters » : table `gouters_creche_options` (`sql/gouters_creche_option_tous.sql`) ; jour vide = aucun goûter affiché, et `crCountsParJour` ne compte aucun goûter pour cette crèche (`gouterTous`).
 
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).

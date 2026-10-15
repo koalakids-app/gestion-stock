@@ -214,7 +214,7 @@ async function renderMenuSemaine(){
       const m=parJour[j];
       html+='<div style="font-size:11px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">'+MENU_JOURS[j-1]+'</div>'
         +menusLigneListe(m?m[champ]:null)
-        +(gouterChamp?gouterLigneHtml(gouterAffiche(gcSem,j,m?m[gouterChamp]:'')):'')
+        +(gouterChamp?gouterLigneHtml(gouterAffiche(gcSem,j,m?m[gouterChamp]:'',gouterTous(gouterCrecheCourante()))):'')
         +(m&&m.theme&&champ==='grand'?'<div style="margin-top:2px;font-style:italic;color:var(--orange-dark)">'+escHtml(m.theme)+'</div>':'')
         +'</div>';
     }
@@ -254,7 +254,7 @@ async function renderMenuJour(){
     return'<div style="flex:1;min-width:180px">'
       +'<div style="font-weight:800;color:var(--koala);font-size:11.5px;margin-bottom:4px">'+escHtml(titre)+'</div>'
       +menusLigneListe(m[champ])
-      +(gouterChamp?gouterLigneHtml(gouterAffiche(gcSem,dow,m[gouterChamp])):'')
+      +(gouterChamp?gouterLigneHtml(gouterAffiche(gcSem,dow,m[gouterChamp],gouterTous(gouterCrecheCourante()))):'')
       +'</div>';
   }
   zone.innerHTML='<details open style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--koala-lightest,#F7F6FC)">'
@@ -687,7 +687,7 @@ function crCountsParJour(ctx){
            produits laitiers, eux, sont bien présents au goûter. */
         const gReg=reg==='SV'?'':reg;
         /* « Goûter crèche » : c'est la crèche qui fournit le goûter, rien à commander au traiteur. */
-        if(g&&g!=='creche')gouter[g][gReg]=(gouter[g][gReg]||0)+1;
+        if(g&&g!=='creche'&&!gouterTous(ctx.crecheId))gouter[g][gReg]=(gouter[g][gReg]||0)+1;   // crèche qui fait tous ses goûters : rien à commander
       }
     });
     return Object.assign({},repas,gouter);
