@@ -5,35 +5,20 @@
    réseau. Seul garde-fou conservé : une confirmation quand la semaine repose
    sur une PRÉVISION et non sur le planning réel — c'est le cas où l'on risque
    de commander des repas sur des présences supposées. */
-async function exportPresenceHebdoExcel(){
+function exportPresenceHebdoPdf(){
   const ctx=_hebdoExportCtx;
   if(!ctx||!ctx.rows.length){showBanner('Rien à exporter pour cette semaine.','error');return;}
   if(ctx.source==='prevision'
      && !confirm('Cette semaine repose sur une PRÉVISION : le planning n’est pas encore importé.\n\n'
         +'Les présences exportées sont déduites des semaines précédentes, pas réelles.\n\nExporter quand même ?'))return;
-  const sheets=hebdoBuildSheets(ctx);
-  const nomFichier=hebdoFileName(ctx);
-  if(typeof ExcelJS!=='undefined'){
-    try{
-      const wb=new ExcelJS.Workbook();
-      wb.creator='Koala Kids';
-      hebdoRemplirClasseur(wb,sheets);
-      const buf=await wb.xlsx.writeBuffer();
-      const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
-      const a=document.createElement('a');a.href=url;a.download=nomFichier;
-      document.body.appendChild(a);a.click();a.remove();
-      setTimeout(function(){URL.revokeObjectURL(url);},4000);
-      showBanner('Export Excel téléchargé !');
-      return;
-    }catch(e){console.error('[Export hebdo] ExcelJS',e);}
-  }
-  // Repli sans mise en forme si ExcelJS n'a pas pu être chargé.
-  const wb=XLSX.utils.book_new();
-  sheets.forEach(function(s){XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s.aoa),s.nom);});
-  XLSX.writeFile(wb,nomFichier);
-  showBanner('Export Excel téléchargé (sans mise en forme).');
+  if(!window.jspdf){showBanner('Librairie PDF non chargée.','error');return;}
+  const titre='Présence hebdomadaire enfant — '+ctx.crecheLbl+(ctx.source==='prevision'?' (PRÉVISION)':'');
+  const doc=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  hebdoRemplirPdf(doc,hebdoBuildSheets(ctx),titre);
+  doc.save(hebdoFileName(ctx));
+  showBanner('Export PDF téléchargé !');
 }
-window.exportPresenceHebdoExcel=exportPresenceHebdoExcel;
+window.exportPresenceHebdoPdf=exportPresenceHebdoPdf;
 
 /* ══════════════════════════════════════════════════════════════════════════
    MENU DE LA SEMAINE (traiteur) — bandeau affiché sur Présences > Semaine

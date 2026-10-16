@@ -592,7 +592,7 @@ Désactivez le filtre pour retrouver la <strong>liste complète</strong> des ins
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li><strong>Grille</strong> : une ligne par enfant, une colonne par jour, avec les horaires réels. En tête, une carte par jour donne l’effectif et sa répartition par tranche d’âge.</li>
   <li><strong>Synthèse repas</strong> : les totaux repas par jour d’abord, le détail enfant replié dessous. C’est la vue qui prépare la commande du traiteur.</li>
-  <li><strong>Commande repas</strong> génère le bon du traiteur, <strong>Exporter Excel</strong> produit la feuille de présence hebdomadaire mise en forme.</li>
+  <li><strong>Commande repas</strong> génère le bon du traiteur, <strong>Exporter PDF</strong> produit la feuille de présence hebdomadaire mise en forme (une page par tableau : présence, effectifs repas, effectifs enfants).</li>
   <li>Si la semaine n’est pas encore importée, l’application affiche une <strong>prévision</strong> déduite des semaines précédentes (ou, pour un enfant dont un contrat couvre la semaine — y compris un enfant créé sans import —, des jours et horaires de ce contrat), clairement signalée. Vérifiez-la avant de commander des repas.</li>
   <li>Un enfant ayant un <strong>PAI actif</strong> (registre de soins) porte une pastille rouge <strong>PAI</strong> à côté de son nom, avec « panier » si la famille fournit son repas ; survolez-la pour voir le motif.</li>
 </ul>`,

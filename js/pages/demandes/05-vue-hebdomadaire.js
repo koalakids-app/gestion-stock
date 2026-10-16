@@ -488,57 +488,62 @@ function hebdoBuildSheets(ctx) {
   ];
 }
 
-/* ── Mise en forme du fichier Excel (ExcelJS) ─────────────────────────────────
-   SheetJS, déjà chargé pour les autres exports, ne sait pas écrire couleurs,
-   gras ni bordures dans sa version gratuite : ce classeur-ci passe donc par
-   ExcelJS. Si la bibliothèque n'a pas pu être chargée, l'export retombe sur
-   SheetJS — le fichier reste correct, seulement sans mise en forme. */
-const HEBDO_ROSE='FFFFA8A8';           // bande alternée de la feuille d'origine
-const HEBDO_ROUGE='FFC9211E';          // numéro de ligne
-const HEBDO_BORD={style:'thin',color:{argb:'FF000000'}};
-
-function hebdoStyleCase(cell,nature){
-  if(nature==='')return;
-  cell.border={top:HEBDO_BORD,left:HEBDO_BORD,bottom:HEBDO_BORD,right:HEBDO_BORD};
-  cell.alignment={horizontal:'center',vertical:'middle'};
-  if(nature.slice(-1)==='b')cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:HEBDO_ROSE}};
-  switch(nature){
-    case 't':  cell.font={name:'Calibri',size:14,bold:true};cell.border=undefined;break;
-    case 'w':  cell.font={name:'Calibri',size:11,bold:true};
-               cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};break;
-    case 'h':  cell.font={name:'Calibri',size:14,bold:true};break;
-    case 'hr': cell.font={name:'Calibri',size:10,bold:true};break;
-    case 'i': case 'ib':
-               cell.font={name:'Calibri',size:12,color:{argb:HEBDO_ROUGE}};break;
-    case 'e':  cell.font={name:'Calibri',size:14,bold:true};break;
-    case 'rl': cell.font={name:'Calibri',size:14};
-               cell.alignment={horizontal:'right',vertical:'middle'};break;
-    case 'rc': cell.font={name:'Calibri',size:14};break;
-    default:   cell.font={name:'Calibri',size:12};
-  }
+/* ── Mise en page PDF (jsPDF) ─────────────────────────────────────────────────
+   Une page A4 paysage par feuille (présence, effectifs repas, effectifs
+   enfants), au même découpage que l'ancien classeur : un bloc par jour, bande
+   rose une ligne sur deux, croix pour les absents. Les polices jsPDF (WinAnsi)
+   n'ont ni œ ni apostrophe typographique : hebdoPdfTxt les remplace. */
+function hebdoPdfTxt(v){
+  return String(v==null?'':v).replace(/œ/g,'oe').replace(/Œ/g,'OE').replace(/[’‘]/g,"'");
 }
 
-function hebdoRemplirClasseur(wb,sheets){
-  sheets.forEach(function(s){
-    const ws=wb.addWorksheet(s.nom,{
-      views:[{state:'frozen',ySplit:s.headerRow}],
-      pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}
-    });
-    ws.columns=s.cols.map(function(w){return{width:w};});
-    s.aoa.forEach(function(ligne,r){
-      const row=ws.getRow(r+1);
-      ligne.forEach(function(v,c){
-        if(v!==''&&v!==null&&v!==undefined)row.getCell(c+1).value=v;
-        hebdoStyleCase(row.getCell(c+1),(s.kinds[r]||[])[c]||'');
+function hebdoRemplirPdf(doc,sheets,titre){
+  const PAGE_W=297,PAGE_H=210,MARGE=8,LARGEUR=PAGE_W-2*MARGE;
+  const ROSE=[255,168,168],ROUGE=[201,33,30],H=4.6;
+  sheets.forEach(function(s,idx){
+    if(idx>0)doc.addPage('a4','landscape');
+    const colonnes=s.cols.slice(1);                       // la colonne A (marge) n'a pas lieu d'être sur papier
+    const somme=colonnes.reduce(function(a,b){return a+b;},0);
+    const xs=[MARGE];
+    colonnes.forEach(function(w){xs.push(xs[xs.length-1]+w/somme*LARGEUR);});
+    doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(0);
+    doc.text(hebdoPdfTxt(titre),PAGE_W/2,MARGE+3,{align:'center'});
+    doc.setFontSize(9);
+    const semaine=hebdoPdfTxt(s.aoa[1][2]).split('\n');
+    doc.text(semaine.join(' - '),MARGE,MARGE+3);
+    doc.setFontSize(8);
+    doc.text(hebdoPdfTxt(s.nom),PAGE_W-MARGE,MARGE+3,{align:'right'});
+    const ligneDessin=function(r,y){
+      const kinds=s.kinds[r]||[];
+      s.aoa[r].slice(1).forEach(function(v,c){
+        const nature=kinds[c+1]||'';
+        if(nature==='')return;
+        const x=xs[c],w=xs[c+1]-xs[c];
+        if(nature.slice(-1)==='b'){doc.setFillColor(ROSE[0],ROSE[1],ROSE[2]);doc.rect(x,y,w,H,'F');}
+        doc.setDrawColor(0);doc.setLineWidth(0.15);doc.rect(x,y,w,H);
+        const gras=nature==='h'||nature==='hr'||nature==='e';
+        doc.setFont('helvetica',gras?'bold':'normal');
+        doc.setFontSize(nature==='hr'?6:7);
+        if(nature==='i'||nature==='ib')doc.setTextColor(ROUGE[0],ROUGE[1],ROUGE[2]);else doc.setTextColor(0);
+        const t=hebdoPdfTxt(v);
+        if(t!=='')doc.text(t,nature==='rl'?x+w-1:x+w/2,y+H-1.3,{align:nature==='rl'?'right':'center',maxWidth:w-0.6});
       });
-      row.height=r===0?18:(r===1?24:15.75);
-    });
-    s.merges.forEach(function(m){ws.mergeCells(m.top,m.left,m.bottom,m.right);});
+    };
+    let y=MARGE+8;
+    const debut=4;                                         // lignes 0-3 : titre, semaine, 2 vides
+    for(let r=debut;r<s.aoa.length;r++){
+      if(y+H>PAGE_H-MARGE){                                // débordement : nouvelle page, en-têtes répétés
+        doc.addPage('a4','landscape');y=MARGE;
+        ligneDessin(s.headerRow-1,y);y+=H;
+      }
+      if(r!==s.headerRow-1&&s.kinds[r].every(function(k){return k==='';})){y+=H/2;continue;}
+      ligneDessin(r,y);y+=H;
+    }
   });
-  return wb;
+  return doc;
 }
 
 function hebdoFileName(ctx){
   const slug=(ctx.crecheLbl||'creche').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
-  return 'presence_hebdo_'+slug+'_'+ctx.dateStrs[0]+'.xlsx';
+  return 'presence_hebdo_'+slug+'_'+ctx.dateStrs[0]+'.pdf';
 }
