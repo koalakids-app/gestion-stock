@@ -64,20 +64,18 @@ function gouterLigneHtml(g){
    « ggr ». Contrairement au bon traiteur, les enfants en « goûter crèche » sont
    comptés : c'est la crèche qui prépare leur goûter. Retourne aussi, par jour, les
    enfants présents avec leurs allergies (pour l'alerte allergènes). */
-function gouterEffectifsSemaine(crecheId,semaine){
-  const ctx=typeof _hebdoExportCtx!=='undefined'?_hebdoExportCtx:null;
-  if(!ctx||ctx.crecheId!==crecheId||!ctx.dateStrs||ctx.dateStrs[0]!==semaine)return null;
+function gouterEffectifsDepuisLignes(rows,days5,dateStrs){
   const res={moyen:[],grand:[],enfants:[]};
-  ctx.days5.forEach(function(d,i){
+  days5.forEach(function(d,i){
     let m=0,g=0;const enfs=[];
-    ctx.rows.forEach(function(r){
+    rows.forEach(function(r){
       const c=r.cells[i];
       if(!c.present||(c.slot!=='j'&&c.slot!=='a'))return;
       if(c.repas==='BIB'||enfPaiPanier(r.enfant))return;
       if(String(c.repas||'').replace(/(SV|SPV|SPA)$/,'')==='BB')return; // goûter compris dans le repas
-      const mois=mcmAgeMois(r.enfant.dob,ctx.dateStrs[i]);
+      const mois=mcmAgeMois(r.enfant.dob,dateStrs[i]);
       if(mois!==null&&mois<6)return;
-      const t=mcmLigne(r.enfant,ctx.dateStrs[i]);
+      const t=mcmLigne(r.enfant,dateStrs[i]);
       if(!t)return;
       const base=r.enfant.gouter_base;
       const prof=(base&&base!=='creche')?base:(t==='bb6'?null:(t==='bb18'?'gbb':'ggr'));
@@ -88,6 +86,56 @@ function gouterEffectifsSemaine(crecheId,semaine){
     res.moyen.push(m);res.grand.push(g);res.enfants.push(enfs);
   });
   return res;
+}
+/* Effectifs de n'importe quelle semaine, calculés comme Présences › Semaine : présences
+   enregistrées, sinon contrat d'accueil, sinon semaine type de l'historique. */
+async function gouterEffectifsSemaine(crecheId,semaine){
+  const ctx=typeof _hebdoExportCtx!=='undefined'?_hebdoExportCtx:null;
+  if(ctx&&ctx.crecheId===crecheId&&ctx.dateStrs&&ctx.dateStrs[0]===semaine)return gouterEffectifsDepuisLignes(ctx.rows,ctx.days5,ctx.dateStrs);
+  try{
+    if(typeof enfPaiCharger==='function')await enfPaiCharger();
+    const enfants=cacheEnfants.filter(function(e){return e.creche_id===crecheId;});
+    if(!enfants.length)return null;
+    const [y,m,d]=semaine.split('-').map(Number);
+    const days5=Array.from({length:5},function(_,i){return new Date(y,m-1,d+i);});
+    const dateStrs=days5.map(function(x){return ipDateToLocalISO(x);});
+    const ids=enfants.map(function(e){return e.id;});
+    const[pr,ct]=await Promise.all([
+      sb.from('presences').select('enfant_id,presence_date,slot,status').in('presence_date',dateStrs).in('enfant_id',ids),
+      sb.from('enfants_contrats').select('*').in('enfant_id',ids)
+    ]);
+    if(pr.error)throw pr.error;
+    const pres=pr.data||[],pm={};
+    pres.forEach(function(p){pm[p.enfant_id+'_'+p.presence_date+'_'+p.slot]=p.status;});
+    const ctJ={};
+    (ct.data||[]).forEach(function(c){
+      const jours=ctParseJours(c.jours);
+      dateStrs.forEach(function(ds,i){
+        if(c.date_debut&&c.date_debut>ds)return;
+        if(c.date_fin&&c.date_fin<ds)return;
+        if(jours.indexOf(i+1)<0)return;
+        ctJ[String(c.enfant_id)+'_'+i]=true;
+      });
+    });
+    const prevision=pres.length?null:(typeof hebdoPrevision==='function'?await hebdoPrevision(enfants,days5):null);
+    const rows=enfants.map(function(e){
+      const aPres=pres.some(function(p){return p.enfant_id===e.id;});
+      const aContrat=[0,1,2,3,4].some(function(j){return ctJ[String(e.id)+'_'+j];});
+      const cells=dateStrs.map(function(ds,i){
+        let slot=null;
+        if(prevision)slot=aContrat?(ctJ[String(e.id)+'_'+i]?'j':null):(prevision[e.id]||[])[i]||null;
+        else if(!aPres&&aContrat)slot=ctJ[String(e.id)+'_'+i]?'j':null;
+        else{
+          const mm=pm[e.id+'_'+ds+'_M'],aa=pm[e.id+'_'+ds+'_A'];
+          const mOk=mm==='present'||mm==='partial',aOk=aa==='present'||aa==='partial';
+          slot=mOk&&aOk?'j':mOk?'m':aOk?'a':null;
+        }
+        return slot?{present:true,slot:slot,repas:enfRepasCode(e,ds)}:{present:false,slot:null,repas:''};
+      });
+      return{enfant:e,cells:cells};
+    });
+    return gouterEffectifsDepuisLignes(rows,days5,dateStrs);
+  }catch(err){console.warn('[Goûters crèche] effectifs depuis les présences',err);return null;}
 }
 
 async function gouterCrecheOuvrir(dateDebut){
@@ -171,16 +219,22 @@ async function gouterCrecheOuvrir(dateDebut){
         +'<div class="gc-alertes"></div></div>';
     }).join('');
     // Effectifs : valeurs enregistrées, sinon Présences › Semaine (même semaine), sinon à saisir.
-    const eff=gouterEffectifsSemaine(crecheId,semaine);
+    const eff=await gouterEffectifsSemaine(crecheId,semaine);
     enfantsJour=eff?eff.enfants:null;
     const val=function(p,i){const sv=effSaved[i+1];if(sv)return sv[p==='moyen'?'moyens':'grands'];return eff?eff[p][i]:'';};
-    document.getElementById('gc-eff').innerHTML='<label class="flabel">Enfants au goûter'+(eff?' <span style="font-weight:400;color:var(--muted)">(d’après Présences, modifiable)</span>':' <span style="font-weight:400;color:var(--muted)">(à saisir)</span>')+'</label>'
+    document.getElementById('gc-eff').innerHTML='<label class="flabel">Enfants au goûter'+(eff?' <span style="font-weight:400;color:var(--muted)">(calculés d’après les présences, modifiables)</span>':' <span style="font-weight:400;color:var(--muted)">(à saisir)</span>')+'</label>'
       +['moyen','grand'].map(function(p){
         return'<div style="font-size:11px;color:var(--muted);margin-top:4px">'+(p==='moyen'?'Moyens (6-18 mois)':'Grands')+'</div>'
           +'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">'
           +MENU_JOURS.map(function(nom,i){return'<div style="text-align:center;font-size:11px;color:var(--muted)">'+escHtml(nom.slice(0,3))
             +'<input class="finput gc-eff-j" data-p="'+p+'" type="number" min="0" max="99" style="text-align:center;padding:6px 2px" value="'+val(p,i)+'"/></div>';}).join('')+'</div>';
       }).join('');
+    if(eff){
+      const bt=document.createElement('button');bt.type='button';bt.className='btn-cancel';bt.style.cssText='margin-top:6px;padding:3px 9px;font-size:12px';
+      bt.innerHTML='<i class="ti ti-refresh"></i> Recalculer d’après les présences';
+      bt.onclick=function(){['moyen','grand'].forEach(function(p){Array.prototype.forEach.call(document.querySelectorAll('.gc-eff-j[data-p="'+p+'"]'),function(el,i){el.value=eff[p][i];});});majProduits();};
+      document.getElementById('gc-eff').appendChild(bt);
+    }
     Array.prototype.forEach.call(document.querySelectorAll('.gc-eff-j'),function(el){el.oninput=majProduits;});
     Array.prototype.forEach.call(zone.querySelectorAll('input'),function(el){el.addEventListener('input',majProduits);});
     Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),majRecettes);
