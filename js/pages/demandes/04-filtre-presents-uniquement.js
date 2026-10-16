@@ -202,12 +202,10 @@ function mcmRenderMenusList(){
       html+='</div></div>';
       return html;
     }
-    const fichierPath=jours[0].fichier_path;
     return'<details'+(isPast?'':' open')+' style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;background:'+(isPast?'#fafafa':'var(--koala-lightest,#F7F6FC)')+'">'
       +'<summary class="menus-summary" style="cursor:pointer;font-weight:800;color:var(--koala-dark);font-size:13px">'
       +'<span class="menus-summary-titre">'+(isPast?'':'🟢 ')+'Semaine du '+escHtml(d)+(semaineNum?' (S'+semaineNum+')':'')+(isPast?' — passée':'')+'</span>'
       +'<button class="ibtn" onclick="event.preventDefault();event.stopPropagation();mcmMenuPdf(\''+d+'\')" title="Générer le PDF du menu puis l\'imprimer"><i class="ti ti-printer"></i></button>'
-      +(fichierPath?'<a class="ibtn" href="'+escHtml(menusFichierUrl(fichierPath))+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Ouvrir le fichier original du traiteur ('+escHtml(jours[0].fichier_nom||'')+')"><i class="ti ti-file-spreadsheet"></i></a>':'')
       +(gouterCrechePeutEditer()?'<button class="ibtn" onclick="event.preventDefault();event.stopPropagation();gouterCrecheOuvrir(\''+d+'\')" title="Goûters de la crèche pour cette semaine"><i class="ti ti-cookie"></i></button>':'')
       +'<button class="ibtn" onclick="event.preventDefault();event.stopPropagation();mcmMenuQr(\''+d+'\')" title="Partager ce menu par QR code"><i class="ti ti-qrcode"></i></button>'
       +(isDirection?'<button class="ibtn del" onclick="event.preventDefault();event.stopPropagation();mcmDeleteMenuWeek(\''+d+'\')" title="Supprimer ce menu"><i class="ti ti-trash"></i></button>':'')
