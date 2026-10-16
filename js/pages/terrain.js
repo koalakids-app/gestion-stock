@@ -61,7 +61,7 @@ async function terrainGrantAccess(){
   document.getElementById('loginView').style.display='none';
   document.getElementById('appView').style.display='block';
   document.getElementById('whoAmI').textContent=(PROF.name||'')+(IS_DIRECTION?' · Direction':'');
-  document.getElementById('hello').innerHTML='Bonjour '+esc(PROF.name||'')+' <small>Suivi de l\'enfant, registre d\'infirmerie, incidents et autorisations parentales, en un tap.</small>';
+  document.getElementById('hello').innerHTML='Bonjour '+esc(PROF.name||'')+' <small>Suivi de l\'enfant, registre d\'infirmerie, incidents et autorisation de médicament, en un tap.</small>';
 }
 // --- Portail MFA obligatoire (identique à infirmerie.html) ---
 function mfaGateSwitchView(id){
