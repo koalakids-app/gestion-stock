@@ -59,6 +59,49 @@ function gouterLigneHtml(g){
     +escHtml(g.texte)+(g.creche?' <span style="font-size:10px;font-weight:700;color:var(--orange-dark)">(crèche)</span>':'')+'</div>';
 }
 
+/* Effectifs « goûter » d'une semaine, d'après Présences › Semaine si c'est la semaine
+   affichée là (sinon vide : à saisir). Contrairement au bon traiteur, les enfants en
+   « goûter crèche » sont comptés : c'est la crèche qui prépare leur goûter. */
+function gouterEffectifsSemaine(crecheId,semaine){
+  const ctx=typeof _hebdoExportCtx!=='undefined'?_hebdoExportCtx:null;
+  if(!ctx||ctx.crecheId!==crecheId||!ctx.dateStrs||ctx.dateStrs[0]!==semaine)return null;
+  return ctx.days5.map(function(d,i){
+    let n=0;
+    ctx.rows.forEach(function(r){
+      const c=r.cells[i];
+      if(!c.present||(c.slot!=='j'&&c.slot!=='a'))return;
+      if(c.repas==='BIB'||enfPaiPanier(r.enfant))return;
+      if(String(c.repas||'').replace(/(SV|SPV|SPA)$/,'')==='BB')return; // goûter compris dans le repas
+      const mois=mcmAgeMois(r.enfant.dob,ctx.dateStrs[i]);
+      if(mois!==null&&mois<6)return;
+      n++;
+    });
+    return n;
+  });
+}
+/* Liste « produits à commander » : chaque goûter s'écrit « laitage / pain / fruit » ;
+   on découpe sur « / » et on additionne, produit par produit, l'effectif de chaque
+   jour où il apparaît (jours fériés ignorés). */
+function gouterProduits(jours){
+  const tot={};
+  jours.forEach(function(j){
+    if(!j.n)return;
+    const vus={};
+    j.textes.forEach(function(t){
+      if(/f[ée]ri[ée]/i.test(t))return;
+      t.split('/').forEach(function(p){
+        const nom=p.trim().replace(/\s+/g,' ');
+        const cle=nom.toLowerCase();
+        if(!cle||vus[cle])return; // même produit chez les moyens et les grands : compté une fois
+        vus[cle]=1;
+        const e=tot[cle]=tot[cle]||{nom:nom,n:0};
+        e.n+=j.n;
+      });
+    });
+  });
+  return Object.keys(tot).map(function(k){return tot[k];}).sort(function(a,b){return b.n-a.n||a.nom.localeCompare(b.nom,'fr');});
+}
+
 async function gouterCrecheOuvrir(dateDebut){
   if(!gouterCrechePeutEditer()){showBanner('Réservé aux référents et à la direction.','error');return;}
   const aujourdhui=todayStr();
@@ -80,12 +123,14 @@ async function gouterCrecheOuvrir(dateDebut){
   ov.innerHTML='<div class="modal" style="max-width:520px;width:100%">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem"><h3 style="margin:0"><i class="ti ti-cookie"></i> Goûters de la crèche</h3>'
     +'<button class="btn-cancel" onclick="closeModal(\'modal-gouters-creche-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
-    +'<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Le goûter saisi remplace celui du traiteur pour votre crèche. Il y a un goûter pour les moyens (bébés 6-18 mois) et un pour les grands. Laissez une case vide pour garder le goûter du traiteur, sauf si vous cochez ci-dessous.</p>'
+    +'<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Le goûter saisi remplace celui du traiteur pour votre crèche. Il y a un goûter pour les moyens (bébés 6-18 mois) et un pour les grands. Laissez une case vide pour garder le goûter du traiteur, sauf si vous cochez ci-dessous. Écrivez chaque goûter en séparant les produits par « / » (ex. <em>yaourt / madeleine / fruit</em>) : la liste des produits à commander se calcule toute seule à partir des effectifs.</p>'
     +selCreche
     +'<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 10px;cursor:pointer"><input type="checkbox" id="gc-tous" style="margin-top:3px"/><span><strong>Cette crèche fait tous ses goûters</strong><br><span style="color:var(--muted);font-size:12px">Un jour sans goûter saisi n\'affiche aucun goûter (pas celui du traiteur), et le bon de commande ne compte aucun goûter pour cette crèche.</span></span></label>'
     +'<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:0 0 10px;cursor:pointer"><input type="checkbox" id="gc-meme"/><span>Même goûter pour les moyens et les grands</span></label>'
     +'<div class="fg"><label class="flabel">Semaine du (lundi)</label><input class="finput" type="date" id="gc-semaine"/></div>'
+    +'<div id="gc-eff" class="fg"></div>'
     +'<div id="gc-jours"></div>'
+    +'<div id="gc-produits" style="margin-top:10px"></div>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px">'
     +'<button class="btn-cancel" id="gc-vider">Tout effacer</button>'
     +'<button class="btn-primary" id="gc-enregistrer"><i class="ti ti-device-floppy"></i> Enregistrer</button></div></div>';
@@ -117,7 +162,30 @@ async function gouterCrecheOuvrir(dateDebut){
         +'<div class="gc-grand-wrap"><span class="gc-lbl">Grands</span>'
         +'<input class="finput gc-grand" maxlength="200" value="'+escHtml(e.grand)+'" data-traiteur="'+escHtml(t.grand)+'"/></div></div>';
     }).join('');
+    // Effectifs goûter : repris de Présences › Semaine quand c'est la même semaine, modifiables.
+    const eff=gouterEffectifsSemaine(crecheId,semaine);
+    document.getElementById('gc-eff').innerHTML='<label class="flabel">Enfants au goûter'+(eff?' <span style="font-weight:400;color:var(--muted)">(d’après Présences)</span>':' <span style="font-weight:400;color:var(--muted)">(à saisir)</span>')+'</label>'
+      +'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">'
+      +MENU_JOURS.map(function(nom,i){return'<div style="text-align:center;font-size:11px;color:var(--muted)">'+escHtml(nom.slice(0,3))
+        +'<input class="finput gc-eff-j" type="number" min="0" max="99" style="text-align:center;padding:6px 2px" value="'+(eff?eff[i]:'')+'"/></div>';}).join('')+'</div>';
+    Array.prototype.forEach.call(document.querySelectorAll('.gc-eff-j'),function(el){el.oninput=majProduits;});
+    Array.prototype.forEach.call(zone.querySelectorAll('input'),function(el){el.addEventListener('input',majProduits);});
     majMode();
+  }
+  /* Produits à commander, recalculés à chaque frappe. */
+  function majProduits(){
+    const effs=Array.prototype.map.call(document.querySelectorAll('.gc-eff-j'),function(el){return parseInt(el.value,10)||0;});
+    const jours=Array.prototype.map.call(zone.querySelectorAll('.gc-bloc'),function(b,i){
+      const mo=b.querySelector('.gc-moyen').value,gr=memeEl.checked?mo:b.querySelector('.gc-grand').value;
+      return{n:effs[i]||0,textes:[mo,gr]};
+    });
+    const liste=gouterProduits(jours);
+    const box=document.getElementById('gc-produits');
+    if(!liste.length){box.innerHTML='';return;}
+    box.innerHTML='<div class="flabel">Produits à commander</div>'
+      +'<div style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;max-height:200px;overflow:auto">'
+      +liste.map(function(p){return'<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0"><span>'+escHtml(p.nom)+'</span><strong>'+p.n+'</strong></div>';}).join('')+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-top:4px">Quantité = nombre d’enfants × jours où le produit figure. Renseignez les effectifs ci-dessus si vide.</div>';
   }
   /* Affichage selon « même goûter » et « fait tous ses goûters » : une seule case par
      jour quand c'est le même goûter, indications du traiteur sinon « Aucun goûter ». */
@@ -132,6 +200,7 @@ async function gouterCrecheOuvrir(dateDebut){
       mo.placeholder=ph(meme?(tg||tm):tm);
       gr.placeholder=ph(tg);
     });
+    majProduits();
   }
   tousEl.onchange=majMode;
   memeEl.onchange=function(){
