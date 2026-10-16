@@ -409,6 +409,7 @@ function setupEnfantPicker(searchId,idFieldId,listId,crecheId){
       if(e)inp.value=nomEnfant(e);
     }
     box.classList.remove('on');
+    if(searchId==='eEnfantSearch')fillOrdReuse();
   };
 }
 /* Fermeture au clic exterieur, sans casser le clic sur un resultat */
@@ -427,6 +428,35 @@ function readEnfantPicker(searchId,idFieldId){
   return {id:id||null, nom:nom};
 }
 
+/* ---------- Ordonnance jointe (bucket prive "sante") ---------- */
+let ordPath=null, ordNom=null, ordFile=null;
+function renderOrd(){
+  const has=!!(ordFile||ordPath);
+  document.getElementById('oPjBox').classList.toggle('has',has);
+  document.getElementById('oPjNom').textContent = ordFile ? ordFile.name+' (à envoyer)' : (ordNom||(ordPath?'Ordonnance jointe':'Aucune ordonnance jointe'));
+  document.getElementById('btnOPjOpen').style.display=(ordPath&&!ordFile)?'':'none';
+  document.getElementById('btnOPjDel').style.display=has?'':'none';
+  document.getElementById('btnOPjPick').textContent=has?'Remplacer':'Choisir';
+}
+/* Propose les ordonnances deja jointes pour l'enfant : un traitement "si besoin"
+   est donne plusieurs jours apres, avec la meme ordonnance. */
+function fillOrdReuse(){
+  const s=document.getElementById('eOrdReuse');
+  const id=document.getElementById('eEnfantId').value;
+  const vues=new Set(), list=[];
+  if(id)ENTRIES.forEach(e=>{
+    if(e.enfant_id===id&&e.ordonnance_pj&&!vues.has(e.ordonnance_pj)){vues.add(e.ordonnance_pj);list.push(e);}});
+  s.style.display=list.length?'':'none';
+  s.innerHTML='<option value="">— Réutiliser une ordonnance déjà jointe —</option>'
+    +list.map(e=>`<option value="${esc(e.ordonnance_pj)}" data-nom="${esc(e.ordonnance_pj_nom||'')}">${esc(e.ordonnance_pj_nom||'Ordonnance')} — ${esc(e.medicament||'')} (${frDate(e.ordonnance_date||e.date_acte)})</option>`).join('');
+}
+async function ouvrirOrd(){
+  if(!ordPath)return;
+  const {data,error}=await sb.storage.from('sante').createSignedUrl(ordPath,300);
+  if(error||!data){toast('Ouverture impossible : '+(error?error.message:'lien indisponible'),true);return;}
+  window.open(data.signedUrl,'_blank','noopener');
+}
+
 function openEntry(nature,source){
   curNature=nature; rectifSource=source||null;
   document.getElementById('entryTitle').textContent=
@@ -442,13 +472,14 @@ function openEntry(nature,source){
    'eMedicament','eDosage','eAction','eDuree','eOrdRef','eOrdDate','eSecoursDetail','eTemoin']
    .forEach(id=>document.getElementById(id).value='');
   ['chType','chLieu','chLoc','chSoins','chVoie','chAction','chMoyen'].forEach(chipClear);
-  ['eAutorisation','eParents','eSecours','eEviction'].forEach(id=>{
+  ['eAutorisation','eSiBesoin','eParents','eSecours','eEviction'].forEach(id=>{
     const c=document.getElementById(id);c.checked=false;c.closest('.ck').classList.remove('on');});
   document.getElementById('parentsDetail').style.display='none';
   document.getElementById('secoursDetail').style.display='none';
   document.getElementById('eDate').value=todayISO();
   document.getElementById('eHeure').value=nowHM();
   document.getElementById('ePai').value='';
+  ordPath=null; ordNom=null; ordFile=null; renderOrd(); fillOrdReuse();
 
   /* pre-remplissage si rectification */
   if(source){
@@ -470,7 +501,8 @@ function openEntry(nature,source){
     document.getElementById('eOrdDate').value=e.ordonnance_date||'';
     document.getElementById('eTemoin').value=e.temoin_nom||'';
     if(e.pai_id)document.getElementById('ePai').value=e.pai_id;
-    [['eAutorisation',e.autorisation_parentale],['eParents',e.parents_informes],
+    ordPath=e.ordonnance_pj||null; ordNom=e.ordonnance_pj_nom||null; renderOrd();
+    [['eAutorisation',e.autorisation_parentale],['eSiBesoin',e.si_besoin],['eParents',e.parents_informes],
      ['eSecours',e.appel_secours],['eEviction',e.eviction]].forEach(([id,v])=>{
       const c=document.getElementById(id);c.checked=!!v;c.closest('.ck').classList.toggle('on',!!v);});
     document.getElementById('eSecoursDetail').value=e.secours_detail||'';
@@ -540,6 +572,8 @@ async function saveEntry(){
     row.ordonnance_ref=document.getElementById('eOrdRef').value.trim()||null;
     row.ordonnance_date=document.getElementById('eOrdDate').value||null;
     row.autorisation_parentale=document.getElementById('eAutorisation').checked;
+    row.si_besoin=document.getElementById('eSiBesoin').checked;
+    row.ordonnance_pj=ordPath; row.ordonnance_pj_nom=ordNom;
     row.circonstances=document.getElementById('eCirconstances2').value.trim()||null;
     if(!row.medicament){toast('Le nom du m\u00e9dicament est obligatoire.',true);return;}
     if(!row.autorisation_parentale && !row.pai_id){
@@ -548,12 +582,20 @@ async function saveEntry(){
   }
 
   btn.disabled=true;
+  /* Televersement avant l'enregistrement : pas de reference vers un fichier inexistant. */
+  if(!soin&&ordFile){
+    const ext=(ordFile.name.split('.').pop()||'bin').toLowerCase();
+    const chemin='ordonnances/'+crecheId+'_'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+    const {error:upErr}=await sb.storage.from('sante').upload(chemin,ordFile,{upsert:false});
+    if(upErr){btn.disabled=false;toast("Envoi de l’ordonnance impossible : "+upErr.message,true);return;}
+    row.ordonnance_pj=chemin; row.ordonnance_pj_nom=ordFile.name;
+  }
   const {data,error}=await sb.from('registre_infirmerie').insert(row).select().single();
   btn.disabled=false;
   if(error){toast('Erreur : '+error.message,true);return;}
   ENTRIES.unshift(data);
   ENTRIES.sort((a,b)=>(b.date_acte+b.heure_acte).localeCompare(a.date_acte+a.heure_acte));
-  rectifSource=null;
+  rectifSource=null; ordPath=null; ordNom=null; ordFile=null;
   document.getElementById('rMotif').value='';
   closeOv('ovEntry');
   renderRegistre();
@@ -589,6 +631,8 @@ function openDetail(id){
     add('M\u00e9dicament',e.medicament); add('Posologie',e.dosage); add('Voie',e.voie);
     add('Action',e.action); add('Dur\u00e9e du traitement',e.duree_traitement);
     add('Ordonnance',[e.ordonnance_ref,e.ordonnance_date?frDate(e.ordonnance_date):''].filter(Boolean).join(' \u00b7 '));
+    if(e.si_besoin)add('Prescription','Si besoin');
+    if(e.ordonnance_pj)L.push(`<div><span>Ordonnance jointe</span><p><a href="#" data-ordview="${e.id}" style="color:var(--violet);font-weight:700;text-decoration:underline"><i class="ti ti-paperclip"></i> ${esc(e.ordonnance_pj_nom||'Ordonnance')}</a></p></div>`);
     add('Autorisation parentale',e.autorisation_parentale?'Oui, au dossier':'Non renseign\u00e9e');
     add('Motif',e.circonstances);
   }
@@ -823,6 +867,8 @@ async function exportPdf(){
     }else{
       push('M\u00e9dicament',e.medicament); push('Posologie',e.dosage); push('Voie',e.voie);
       push('Action',e.action); push('Dur\u00e9e',e.duree_traitement);
+      if(e.si_besoin)push('Prescription','Si besoin');
+      if(e.ordonnance_pj)push('Ordonnance jointe',e.ordonnance_pj_nom||'oui');
       push('Ordonnance',[e.ordonnance_ref,e.ordonnance_date?frDate(e.ordonnance_date):''].filter(Boolean).join(' \u00b7 '));
       push('Autorisation',e.autorisation_parentale?'Oui':'Non renseign\u00e9e');
     }
@@ -867,6 +913,12 @@ d\u2019un m\u00e9dicament</b>, avec ou sans PAI.</p>
 Les deux gros boutons en haut ouvrent directement le bon formulaire. La date et l\u2019heure
 sont d\u00e9j\u00e0 remplies. Les pastilles color\u00e9es se cliquent : pas besoin de taper.
 Comptez moins d\u2019une minute par entr\u00e9e.</p>
+
+<p style="margin-top:12px"><b>Ordonnance et traitement « si besoin »</b><br>
+Pour une administration de médicament, joignez l’<b>ordonnance du médecin</b> (PDF ou
+photo, 10 Mo maximum). Un traitement prescrit <b>« si besoin »</b> n’est pas forcément donné
+le jour de l’ordonnance : cochez la case, saisissez la date réelle de l’administration et la
+date de l’ordonnance, puis « Réutiliser une ordonnance déjà jointe » pour ne pas la renvoyer à chaque dose.</p>
 
 <p style="margin-top:12px"><b>Pourquoi je ne peux plus modifier ?</b><br>
 Un registre n\u2019a de valeur que s\u2019il ne peut pas \u00eatre r\u00e9\u00e9crit apr\u00e8s coup.
@@ -940,6 +992,22 @@ document.getElementById('iPjInput').onchange=ev=>{
   pjFile=f; renderPj();
 };
 
+/* Ordonnance jointe a une administration */
+document.getElementById('btnOPjPick').onclick=()=>document.getElementById('oPjInput').click();
+document.getElementById('btnOPjOpen').onclick=ouvrirOrd;
+document.getElementById('btnOPjDel').onclick=()=>{ordFile=null;ordPath=null;ordNom=null;renderOrd();};
+document.getElementById('oPjInput').onchange=ev=>{
+  const f=ev.target.files&&ev.target.files[0]; ev.target.value='';
+  if(!f)return;
+  if(f.size>10*1024*1024){toast('Document trop volumineux (10 Mo maximum).',true);return;}
+  ordFile=f; ordPath=null; ordNom=null; renderOrd();
+};
+document.getElementById('eOrdReuse').onchange=ev=>{
+  const o=ev.target.selectedOptions[0];
+  if(!o||!o.value)return;
+  ordPath=o.value; ordNom=o.dataset.nom||null; ordFile=null; renderOrd(); ev.target.value='';
+};
+
 /* Le PAI est valable un an a dater de la signature : on propose la date
    de revision, sans l'imposer. */
 document.getElementById('iSignature').onchange=ev=>{
@@ -957,7 +1025,7 @@ document.getElementById('ePai').onchange=e=>{
   }};
 
 /* Cases a cocher : etat visuel + sections conditionnelles */
-[['eParents','parentsDetail'],['eSecours','secoursDetail'],['eEviction',null],['eAutorisation',null]]
+[['eParents','parentsDetail'],['eSecours','secoursDetail'],['eEviction',null],['eAutorisation',null],['eSiBesoin',null]]
 .forEach(([id,detail])=>{
   const c=document.getElementById(id);
   c.onchange=()=>{
@@ -984,6 +1052,11 @@ document.addEventListener('click',e=>{
   if(ed){openPai(ed.dataset.pai);return;}
   const tg=e.target.closest('[data-paitoggle]');
   if(tg){togglePai(tg.dataset.paitoggle);return;}
+  const ov=e.target.closest('[data-ordview]');
+  if(ov){e.preventDefault();
+    const x=ENTRIES.find(y=>y.id===ov.dataset.ordview);
+    if(x&&x.ordonnance_pj){ordPath=x.ordonnance_pj;ouvrirOrd();}
+    return;}
   const pv=e.target.closest('[data-pjview]');
   if(pv){e.preventDefault();
     const p=PAIS.find(x=>x.id===pv.dataset.pjview);
