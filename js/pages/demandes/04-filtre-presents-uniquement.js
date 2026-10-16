@@ -417,7 +417,7 @@ function mcmMenuQr(dateDebut,permanent,crecheSel){
   if(!m){showBanner('Menu introuvable pour cette semaine.','error');return;}
   const crecheId=isDirection?(crecheSel||null):menuCrecheQr();
   const url=menuPublicUrl(permanent?null:dateDebut,crecheId);
-  const titre='Menu de la semaine du '+dateDebut+(m.semaine_num?' (S'+m.semaine_num+')':'');
+  const titre='Menus des 2 semaines à partir du '+dateDebut+(m.semaine_num?' (S'+m.semaine_num+')':'');
   let ov=document.getElementById('modal-menu-qr-wrap');
   if(ov)ov.remove();
   ov=document.createElement('div');
@@ -426,7 +426,7 @@ function mcmMenuQr(dateDebut,permanent,crecheSel){
   ov.innerHTML='<div class="modal" style="max-width:380px;width:100%;text-align:center">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem"><h3 style="margin:0"><i class="ti ti-qrcode"></i> '+escHtml(permanent?'QR permanent du menu':titre)+'</h3>'
     +'<button class="btn-cancel" onclick="closeModal(\'modal-menu-qr-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
-    +'<p style="font-size:12px;color:var(--muted);margin:4px 0">'+(permanent?'Affiche toujours le menu de la semaine en cours : à imprimer une fois pour l\'entrée.':'Affiche uniquement cette semaine.')+'</p>'
+    +'<p style="font-size:12px;color:var(--muted);margin:4px 0">'+(permanent?'Affiche toujours la semaine en cours et la suivante : à imprimer une fois pour l\'entrée.':'Affiche cette semaine et la suivante (si elle est publiée), avec un choix de semaine.')+'</p>'
     +'<div>'+menuCrecheSelectHtml('menu-qr-creche',crecheId)+'</div>'
     +'<div id="menu-qr-box" style="display:flex;align-items:center;justify-content:center;margin:14px 0;min-height:220px"></div>'
     +'<p style="font-size:11px;color:var(--muted);word-break:break-all;margin-bottom:10px">'+escHtml(url)+'</p>'

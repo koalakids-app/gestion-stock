@@ -81,7 +81,7 @@ function gouterEffectifsDepuisLignes(rows,days5,dateStrs){
       const prof=(base&&base!=='creche')?base:(t==='bb6'?null:(t==='bb18'?'gbb':'ggr'));
       if(!prof)return;
       if(prof==='gbb')m++;else g++;
-      enfs.push({nom:((r.enfant.prenom||'')+' '+(r.enfant.nom||'').slice(0,1)+'.').trim(),al:rcAllergenesDeTexte(r.enfant.allergies)});
+      enfs.push({nom:((r.enfant.prenom||'')+' '+(r.enfant.nom||'').slice(0,1)+'.').trim(),al:rcAllergenesDeTexte([r.enfant.allergies].concat(enfPaiActifs(r.enfant).map(function(p){return p.motif;})).join(' '))});  // fiche + motif des PAI actifs
     });
     res.moyen.push(m);res.grand.push(g);res.enfants.push(enfs);
   });
