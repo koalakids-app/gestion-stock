@@ -28,50 +28,6 @@ window.presAddDayCreate=presAddDayCreate;
 window.presOpenAddDay=presOpenAddDay;
 window.presAddDayConfirm=presAddDayConfirm;
 
-async function exportPresence(){
-  if(!window.jspdf){showBanner('Librairie PDF non chargée.','error');return;}
-  const dateStr=document.getElementById('presence-date')?.value||todayStr();
-  const{data:presData}=await sb.from('presences').select('*').eq('presence_date',dateStr);
-  const pm={};(presData||[]).forEach(p=>pm[p.enfant_id+'_'+p.slot]=p.status);
-  /* Crèche affichée à l'écran : le sélecteur pour la direction, sinon celle du profil. */
-  const crId=(isDirection?document.getElementById('presence-creche-select')?.value:currentProfile?.creche_id)||'';
-  const crNom=function(id){const c=cacheCreches.find(c=>c.id===id);return c?c.name:'';};
-  const liste=cacheEnfants.filter(e=>!crId||e.creche_id===crId)
-    .sort((x,y)=>crNom(x.creche_id).localeCompare(crNom(y.creche_id),'fr')||(x.prenom+' '+x.nom).localeCompare(y.prenom+' '+y.nom,'fr'));
-  if(!liste.length){showBanner('Rien à exporter pour cette journée.','error');return;}
-  /* Les polices jsPDF (WinAnsi) n'ont ni œ ni apostrophe typographique. */
-  const tx=v=>String(v==null?'':v).replace(/œ/g,'oe').replace(/Œ/g,'OE').replace(/[’‘]/g,"'");
-  const jour=new Date(dateStr+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const entetes=['Enfant','Crèche','Groupe','Allergies','Matin','Après-midi'];
-  const largeurs=[50,48,45,60,32,32];                     // total 267 mm
-  const lignes=liste.map(e=>[e.prenom+' '+e.nom,crNom(e.creche_id),e.dob?groupeFromDob(e.dob):(e.groupe||''),e.allergies||'',pm[e.id+'_M']||'non saisi',pm[e.id+'_A']||'non saisi'].map(tx));
-  const doc=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
-  const M=15,H=6.5,PAGE_H=210;
-  const titre=tx('Feuille de présence — '+(crId?crNom(crId)+' — ':'')+jour);
-  let y;
-  const enTete=()=>{
-    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setFillColor(230,230,240);doc.setDrawColor(0);doc.setLineWidth(0.15);
-    let x=M;entetes.forEach((h,i)=>{doc.rect(x,y,largeurs[i],H,'FD');doc.text(tx(h),x+1.5,y+H-2);x+=largeurs[i];});
-    y+=H;
-  };
-  doc.setFont('helvetica','bold');doc.setFontSize(13);doc.text(titre,M,M+3);
-  y=M+9;enTete();
-  doc.setFont('helvetica','normal');doc.setFontSize(8.5);
-  lignes.forEach((l,r)=>{
-    if(y+H>PAGE_H-M){doc.addPage('a4','landscape');y=M;enTete();}
-    let x=M;
-    l.forEach((v,i)=>{
-      if(r%2===0){doc.setFillColor(255,238,238);doc.rect(x,y,largeurs[i],H,'F');}
-      doc.setDrawColor(0);doc.rect(x,y,largeurs[i],H);
-      doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(v==='non saisi'?150:0);
-      doc.text(doc.splitTextToSize(v,largeurs[i]-3)[0]||'',x+1.5,y+H-2);
-      x+=largeurs[i];
-    });
-    doc.setTextColor(0);y+=H;
-  });
-  doc.save('presences_'+dateStr+'.pdf');
-  showBanner('Export PDF téléchargé !');
-}
 /* Âge en mois révolus depuis la date de naissance, jusqu'à aujourd'hui. Partagé par
    groupeFromDob() (tranche affichée) et enfRepasBaseAuto()/enfGouterAuto() dans
    js/enfants.js (choix du repas et du goûter), pour que les deux ne divergent jamais. */
