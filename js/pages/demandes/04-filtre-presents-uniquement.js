@@ -223,11 +223,29 @@ function mcmRenderMenusList(){
    données de la semaine — 3 profils × 5 jours, goûters compris (ceux de la
    crèche remplacent ceux du traiteur) — puis on l'affiche dans une fenêtre de l'appli (Imprimer / Télécharger). Mise en page calquée sur le tableau du traiteur. Les polices jsPDF (WinAnsi) n'ont ni œ ni apostrophe
    typographique : on les remplace. */
-function mcmMenuPdf(dateDebut){
-  try{mcmMenuPdfAfficher(dateDebut);}
+let mcmLogoTraiteur=null;
+/* Logo du traiteur (logo-mamans-cuisinieres.png) en data URL pour jsPDF ; null s'il est introuvable. */
+function mcmLogoTraiteurCharger(){
+  if(mcmLogoTraiteur)return Promise.resolve(mcmLogoTraiteur);
+  return new Promise(function(resolve){
+    const img=new Image();
+    img.onload=function(){
+      try{
+        const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
+        c.getContext('2d').drawImage(img,0,0);
+        mcmLogoTraiteur={data:c.toDataURL('image/png'),ratio:img.naturalWidth/img.naturalHeight};
+      }catch(e){console.warn('[MCM menu PDF] logo',e);}
+      resolve(mcmLogoTraiteur);
+    };
+    img.onerror=function(){resolve(null);};
+    img.src='logo-mamans-cuisinieres.png';
+  });
+}
+async function mcmMenuPdf(dateDebut){
+  try{mcmMenuPdfAfficher(dateDebut,await mcmLogoTraiteurCharger());}
   catch(e){console.error('[MCM menu PDF]',e);showBanner('Génération du PDF impossible : '+(e.message||e),'error');}
 }
-function mcmMenuPdfAfficher(dateDebut){
+function mcmMenuPdfAfficher(dateDebut,logo){
   if(!window.jspdf){showBanner('Librairie PDF non chargée.','error');return;}
   const jours=mcmMenusCache.filter(function(x){return x.date_debut===dateDebut;});
   if(!jours.length){showBanner('Menu introuvable pour cette semaine.','error');return;}
@@ -283,9 +301,9 @@ function mcmMenuPdfAfficher(dateDebut){
   doc.setLineWidth(0.25);doc.setDrawColor(0,0,0);
   /* En-tête : titre à gauche, cadre « Semaine n° / du … au … » à droite. */
   doc.setTextColor(0,0,0);
-  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('MENU',M+labelW,M+10);
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('MENU',M+46,M+10);
   const wm=doc.getTextWidth('MENU ');
-  doc.setFont('helvetica','bolditalic');doc.setFontSize(12);doc.text('(Liaison froide)',M+labelW+wm+1,M+10);
+  doc.setFont('helvetica','bolditalic');doc.setFontSize(12);doc.text('(Liaison froide)',M+46+wm+1,M+10);
   const bx=gx(3)+colW*0.1,bw=W-M-bx;
   doc.rect(bx,M,bw,8);doc.rect(bx,M+8,bw,9);
   doc.setFont('helvetica','bold');doc.setFontSize(11);
@@ -294,9 +312,10 @@ function mcmMenuPdfAfficher(dateDebut){
   doc.setFontSize(13);doc.text(fmt(dateDebut),bx+bw*0.33,M+14.4,{align:'center'});
   doc.setFontSize(10);doc.text('au',bx+bw*0.58,M+14.2);
   doc.setFontSize(13);doc.text(fmt(vendredi),bx+bw*0.82,M+14.4,{align:'center'});
-  doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(90);
-  doc.text('Les mamans cuisinieres du Monde',M+labelW,M+18);
-  doc.setTextColor(0,0,0);
+  if(logo){
+    const lh=24,lw=lh*logo.ratio;
+    doc.addImage(logo.data,'PNG',M,M-3,lw,lh);
+  }
   let y=top;
   /* Bandeau des jours */
   doc.setFillColor(BLEU[0],BLEU[1],BLEU[2]);doc.rect(M+labelW,y,colW*5,7,'FD');
