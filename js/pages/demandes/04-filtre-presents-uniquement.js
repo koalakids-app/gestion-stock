@@ -242,10 +242,10 @@ function mcmLogoTraiteurCharger(){
   });
 }
 async function mcmMenuPdf(dateDebut){
-  try{mcmMenuPdfAfficher(dateDebut,await mcmLogoTraiteurCharger());}
+  try{mcmMenuPdfAfficher(dateDebut,await mcmLogoTraiteurCharger(),afficheQrDataUrl(menuPublicUrl(dateDebut,menuCrecheQr())));}
   catch(e){console.error('[MCM menu PDF]',e);showBanner('Génération du PDF impossible : '+(e.message||e),'error');}
 }
-function mcmMenuPdfAfficher(dateDebut,logo){
+function mcmMenuPdfAfficher(dateDebut,logo,qr){
   if(!window.jspdf){showBanner('Librairie PDF non chargée.','error');return;}
   const jours=mcmMenusCache.filter(function(x){return x.date_debut===dateDebut;});
   if(!jours.length){showBanner('Menu introuvable pour cette semaine.','error');return;}
@@ -312,6 +312,12 @@ function mcmMenuPdfAfficher(dateDebut,logo){
   doc.setFontSize(13);doc.text(fmt(dateDebut),bx+bw*0.33,M+14.4,{align:'center'});
   doc.setFontSize(10);doc.text('au',bx+bw*0.58,M+14.2);
   doc.setFontSize(13);doc.text(fmt(vendredi),bx+bw*0.82,M+14.4,{align:'center'});
+  /* QR du menu en ligne (menu.html, cette semaine), à gauche du cadre « Semaine ». */
+  if(qr){
+    doc.addImage(qr,'PNG',bx-27,M-2,19.5,19.5);
+    doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(0,0,0);
+    doc.text('Menu en ligne',bx-17.25,M+19,{align:'center'});
+  }
   if(logo){
     const lh=24,lw=lh*logo.ratio;
     doc.addImage(logo.data,'PNG',M,M-3,lw,lh);
