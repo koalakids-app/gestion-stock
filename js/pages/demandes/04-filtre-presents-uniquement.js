@@ -243,10 +243,18 @@ async function mcmMenuPdf(dateDebut){
   try{mcmMenuPdfAfficher(dateDebut,await mcmLogoTraiteurCharger(),afficheQrDataUrl(menuPublicUrl(dateDebut,menuCrecheQr())));}
   catch(e){console.error('[MCM menu PDF]',e);showBanner('Génération du PDF impossible : '+(e.message||e),'error');}
 }
-function mcmMenuPdfAfficher(dateDebut,logo,qr){
+/* Une page A4 par semaine : la semaine choisie, et la suivante quand son menu est publié
+   (le QR ouvre de toute façon les deux semaines). */
+function mcmMenuPdfAfficher(dateDebut0,logo,qr){
   if(!window.jspdf){showBanner('Librairie PDF non chargée.','error');return;}
+  if(!mcmMenusCache.some(function(x){return x.date_debut===dateDebut0;})){showBanner('Menu introuvable pour cette semaine.','error');return;}
+  const suivante=ipDateToLocalISO(new Date(new Date(dateDebut0+'T00:00:00').getTime()+7*864e5));
+  const debuts=mcmMenusCache.some(function(x){return x.date_debut===suivante;})?[dateDebut0,suivante]:[dateDebut0];
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  debuts.forEach(function(dateDebut,page){
+  if(page)doc.addPage();
   const jours=mcmMenusCache.filter(function(x){return x.date_debut===dateDebut;});
-  if(!jours.length){showBanner('Menu introuvable pour cette semaine.','error');return;}
   const parJour={};jours.forEach(function(j){parJour[j.jour]=j;});
   const san=function(s){return String(s==null?'':s).replace(/[’‘]/g,"'").replace(/œ/g,'oe').replace(/Œ/g,'Oe').replace(/[“”]/g,'"').replace(/[–—−]/g,'-').replace(/[^\x20-\xFF]/g,'');};
   const fmt=function(iso){const p=iso.split('-');return p[2]+'/'+p[1]+'/'+p[0];};
@@ -258,8 +266,6 @@ function mcmMenuPdfAfficher(dateDebut,logo,qr){
     {titre:'Repas Bébés',sous:'de 6 à 18 mois',champ:'bb18',gouter:'bb18_gouter',gTitre:'Goûter Bébés',gSous:'de 6 à 18 mois'},
     {titre:'Repas Grands',sous:'de 18 mois à 3 ans',champ:'grand',gouter:'grand_gouter',gTitre:'Goûter Grands',gSous:'de 18 mois à 3 ans'}
   ];
-  const{jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   const W=297,H=210,M=8,labelW=36,colW=(W-2*M-labelW)/5;
   const gx=function(j){return M+labelW+colW*j;};
   /* Lignes du tableau : une par plat (rang i de chaque jour), puis le goûter. */
@@ -368,9 +374,10 @@ function mcmMenuPdfAfficher(dateDebut,logo,qr){
     doc.setLineWidth(0.6);doc.rect(M,y,W-2*M,hb);doc.setLineWidth(0.25);
     y+=hb+2;
   });
+  });
   /* Aperçu dans une fenêtre de l'appli (une nouvelle fenêtre est souvent bloquée
      ou ne montre pas les PDF) : Imprimer / Télécharger. */
-  const nom='menu-semaine-'+dateDebut+'.pdf';
+  const nom='menu-semaine'+(debuts.length>1?'s':'')+'-'+dateDebut0+'.pdf';
   const url=URL.createObjectURL(doc.output('blob'));
   let ov=document.getElementById('modal-menu-pdf-wrap');
   if(ov)ov.remove();
