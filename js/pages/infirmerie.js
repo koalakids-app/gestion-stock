@@ -79,6 +79,21 @@ document.addEventListener('click',e=>{
   if(cl){closeOv(cl.dataset.close);}
 });
 
+/* M\u00e9morisation de l\u2019appareil : \u00e9vite de redemander le code \u00e0 6 chiffres pendant 24 h
+   sur le m\u00eame navigateur (localStorage, jamais en base). Ne dispense pas du mot de passe.
+   M\u00eame m\u00e9canique que terrain.html/collaborateur.html/suivi.html. */
+const MFA_TRUST_MS=24*60*60*1000;
+function mfaTrustKey(){return 'kk_mfa_trust_'+(ME&&ME.id||'');}
+function mfaIsTrusted(){
+  try{
+    const t=Number(localStorage.getItem(mfaTrustKey())||0);
+    return t>0&&(Date.now()-t)<MFA_TRUST_MS;
+  }catch(e){return false;}
+}
+function mfaMarkTrusted(){
+  try{localStorage.setItem(mfaTrustKey(),String(Date.now()));}catch(e){}
+}
+
 /* ================= AUTH ================= */
 async function boot(){
   const {data:{session}}=await sb.auth.getSession();
@@ -131,7 +146,10 @@ async function mfaGateCheckAndProceed(){
     const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
     if(error)throw error;
     if(data.currentLevel==='aal2'){await infirmerieGrantAccess();return;}
-    if(data.nextLevel==='aal2'){mfaGateShowChallenge();return;}
+    if(data.nextLevel==='aal2'){
+      if(mfaIsTrusted()){await infirmerieGrantAccess();return;}
+      mfaGateShowChallenge();return;
+    }
     await mfaGateShowEnroll();
   }catch(e){
     console.error('[MFA Gate]',e);
@@ -196,6 +214,7 @@ async function mfaGateVerifyChallenge(){
     if(chErr)throw chErr;
     const{error:vErr}=await sb.auth.mfa.verify({factorId:verified.id,challengeId:ch.id,code});
     if(vErr)throw vErr;
+    mfaMarkTrusted();
     await infirmerieGrantAccess();
   }catch(e){
     err.textContent='Code invalide ou expir\u00e9 : '+e.message;err.style.display='block';
@@ -912,7 +931,8 @@ d\u2019un m\u00e9dicament</b>, avec ou sans PAI.</p>
 <p style="margin-top:12px"><b>Comment saisir</b><br>
 Les deux gros boutons en haut ouvrent directement le bon formulaire. La date et l\u2019heure
 sont d\u00e9j\u00e0 remplies. Les pastilles color\u00e9es se cliquent : pas besoin de taper.
-Comptez moins d\u2019une minute par entr\u00e9e.</p>
+Comptez moins d\u2019une minute par entr\u00e9e.<br>
+Le code de double authentification est m\u00e9moris\u00e9 <b>24 h</b> sur l\u2019appareil\u00a0: le mot de passe reste demand\u00e9 \u00e0 chaque connexion.</p>
 
 <p style="margin-top:12px"><b>Ordonnance et traitement « si besoin »</b><br>
 Pour une administration de médicament, joignez l’<b>ordonnance du médecin</b> (PDF ou
