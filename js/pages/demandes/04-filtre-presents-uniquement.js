@@ -221,8 +221,7 @@ function mcmRenderMenusList(){
 }
 /* Impression du menu : on génère d'abord un PDF (A4 paysage, jsPDF) à partir des
    données de la semaine — 3 profils × 5 jours, goûters compris (ceux de la
-   crèche remplacent ceux du traiteur) — puis on l'ouvre dans un onglet avec la
-   boîte d'impression. Les polices jsPDF (WinAnsi) n'ont ni œ ni apostrophe
+   crèche remplacent ceux du traiteur) — puis on l'affiche dans une fenêtre de l'appli (Imprimer / Télécharger). Mise en page calquée sur le tableau du traiteur. Les polices jsPDF (WinAnsi) n'ont ni œ ni apostrophe
    typographique : on les remplace. */
 function mcmMenuPdf(dateDebut){
   try{mcmMenuPdfAfficher(dateDebut);}
@@ -233,72 +232,118 @@ function mcmMenuPdfAfficher(dateDebut){
   const jours=mcmMenusCache.filter(function(x){return x.date_debut===dateDebut;});
   if(!jours.length){showBanner('Menu introuvable pour cette semaine.','error');return;}
   const parJour={};jours.forEach(function(j){parJour[j.jour]=j;});
-  const san=function(s){return String(s==null?'':s).replace(/[’‘]/g,"'").replace(/œ/g,'oe').replace(/Œ/g,'OE').replace(/[“”]/g,'"').replace(/[–—−]/g,'-').replace(/[^\x20-\xFF]/g,'');};
+  const san=function(s){return String(s==null?'':s).replace(/[’‘]/g,"'").replace(/œ/g,'oe').replace(/Œ/g,'Oe').replace(/[“”]/g,'"').replace(/[–—−]/g,'-').replace(/[^\x20-\xFF]/g,'');};
+  const fmt=function(iso){const p=iso.split('-');return p[2]+'/'+p[1]+'/'+p[0];};
+  const vendredi=ipDateToLocalISO(new Date(new Date(dateDebut+'T00:00:00').getTime()+4*864e5));
+  /* Palette et mise en page calquées sur le tableau du traiteur (liaison froide). */
+  const BLEU=[180,199,231];
   const profils=[
-    {titre:'Bébés - de 6 mois',champ:'bb6',gouter:null},
-    {titre:'Bébés 6-18 mois',champ:'bb18',gouter:'bb18_gouter'},
-    {titre:'Grands 18 mois-3 ans',champ:'grand',gouter:'grand_gouter'}
+    {titre:'Repas Bébés',sous:'moins de 6 MOIS',champ:'bb6',gouter:null},
+    {titre:'Repas Bébés',sous:'de 6 à 18 mois',champ:'bb18',gouter:'bb18_gouter',gTitre:'Goûter Bébés',gSous:'de 6 à 18 mois'},
+    {titre:'Repas Grands',sous:'de 18 mois à 3 ans',champ:'grand',gouter:'grand_gouter',gTitre:'Goûter Grands',gSous:'de 18 mois à 3 ans'}
   ];
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
-  const W=297,H=210,M=10,labelW=26,colW=(W-2*M-labelW)/5;
-  const semaineNum=jours[0].semaine_num;
-  doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(74,63,159);
-  doc.text(san('Menu de la semaine du '+dateDebut+(semaineNum?' (S'+semaineNum+')':'')),M,M+6);
-  doc.setDrawColor(244,121,32);doc.setLineWidth(0.6);doc.line(M,M+9,W-M,M+9);
-  const top=M+13;
-  /* Contenu de chaque case (liste de lignes déjà découpées) pour une taille de police donnée. */
-  function cases(fs){
-    doc.setFontSize(fs);doc.setFont('helvetica','normal');
+  const W=297,H=210,M=8,labelW=36,colW=(W-2*M-labelW)/5;
+  const gx=function(j){return M+labelW+colW*j;};
+  /* Lignes du tableau : une par plat (rang i de chaque jour), puis le goûter. */
+  function blocs(fs){
+    doc.setFont('helvetica','bolditalic');doc.setFontSize(fs);
+    const lh=fs*0.3528*1.2;
     return profils.map(function(p){
-      return[1,2,3,4,5].map(function(j){
-        const m=parJour[j];
-        const plats=((m&&m[p.champ])||[]).map(function(t){return doc.splitTextToSize('- '+san(t),colW-4);});
-        const g=p.gouter?gouterAffiche(mcmGcMap[dateDebut],j,m?m[p.gouter]:'',mcmGcTous,gouterProfil(p.gouter)):null;
-        const gl=(g&&g.texte)?doc.splitTextToSize('Gouter : '+san(g.texte)+(g.creche?' (creche)':''),colW-4):[];
-        return{plats:plats,gouter:gl};
-      });
-    });
-  }
-  const lh=function(fs){return fs*0.3528*1.25;};
-  let fs=9,data,hauteurs;
-  for(;fs>=5;fs-=0.5){
-    data=cases(fs);
-    hauteurs=data.map(function(ligne){
-      return Math.max.apply(null,ligne.map(function(c){
-        const n=c.plats.reduce(function(a,b){return a+b.length;},0);
-        return(n+c.gouter.length)*lh(fs)+(c.gouter.length?2:0)+7;
-      }));
-    });
-    if(hauteurs.reduce(function(a,b){return a+b;},0)+3*5+8<=H-top-M)break;
-  }
-  let y=top;
-  /* En-tête des jours */
-  doc.setFillColor(74,63,159);doc.rect(M+labelW,y,colW*5,7,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(255,255,255);
-  MENU_JOURS.forEach(function(nom,i){doc.text(nom,M+labelW+colW*i+colW/2,y+4.8,{align:'center'});});
-  y+=8;
-  profils.forEach(function(p,pi){
-    const h=hauteurs[pi];
-    doc.setFillColor(247,246,252);doc.setDrawColor(200,196,225);doc.setLineWidth(0.2);
-    doc.rect(M,y,labelW,h,'FD');
-    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(74,63,159);
-    doc.text(doc.splitTextToSize(san(p.titre),labelW-4),M+2,y+5);
-    for(let j=0;j<5;j++){
-      const x=M+labelW+colW*j;
-      doc.setDrawColor(200,196,225);doc.rect(x,y,colW,h);
-      const c=data[pi][j];
-      let ty=y+5;
-      doc.setFont('helvetica','normal');doc.setFontSize(fs);doc.setTextColor(43,39,64);
-      if(!c.plats.length&&!c.gouter.length){doc.setTextColor(150);doc.text('-',x+2,ty);continue;}
-      c.plats.forEach(function(bloc){bloc.forEach(function(l){doc.text(l,x+2,ty);ty+=lh(fs);});});
-      if(c.gouter.length){
-        ty+=1;doc.setDrawColor(190);doc.setLineDashPattern([0.8,0.8],0);doc.line(x+2,ty-lh(fs)+1.5,x+colW-2,ty-lh(fs)+1.5);doc.setLineDashPattern([],0);
-        doc.setTextColor(74,63,159);
-        c.gouter.forEach(function(l){doc.text(l,x+2,ty);ty+=lh(fs);});
+      const n=Math.max.apply(null,[1,2,3,4,5].map(function(j){const m=parJour[j];return((m&&m[p.champ])||[]).length;}).concat([1]));
+      const lignes=[];
+      for(let i=0;i<n;i++){
+        lignes.push({gouter:false,cases:[1,2,3,4,5].map(function(j){
+          const m=parJour[j];const t=((m&&m[p.champ])||[])[i];
+          return t?doc.splitTextToSize(san(t),colW-4):[];
+        })});
       }
+      if(p.gouter){
+        lignes.push({gouter:true,cases:[1,2,3,4,5].map(function(j){
+          const m=parJour[j];
+          const g=gouterAffiche(mcmGcMap[dateDebut],j,m?m[p.gouter]:'',mcmGcTous,gouterProfil(p.gouter));
+          return g.texte?doc.splitTextToSize(san(g.texte)+(g.creche?' (creche)':''),colW-4):[];
+        })});
+      }
+      lignes.forEach(function(l){
+        l.h=Math.max(6,Math.max.apply(null,l.cases.map(function(c){return c.length;}))*lh+3.2);
+      });
+      return{p:p,lignes:lignes,lh:lh};
+    });
+  }
+  const hasTheme=[1,2,3,4,5].some(function(j){return parJour[j]&&parJour[j].theme;});
+  const top=32;
+  let fs=11,data;
+  for(;fs>=5;fs-=0.5){
+    data=blocs(fs);
+    const tot=data.reduce(function(a,b){return a+b.lignes.reduce(function(s,l){return s+l.h;},0)+2;},0)+7+(hasTheme?6:0);
+    if(tot<=H-top-M)break;
+  }
+  doc.setLineWidth(0.25);doc.setDrawColor(0,0,0);
+  /* En-tête : titre à gauche, cadre « Semaine n° / du … au … » à droite. */
+  doc.setTextColor(0,0,0);
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('MENU',M+labelW,M+10);
+  const wm=doc.getTextWidth('MENU ');
+  doc.setFont('helvetica','bolditalic');doc.setFontSize(12);doc.text('(Liaison froide)',M+labelW+wm+1,M+10);
+  const bx=gx(3)+colW*0.1,bw=W-M-bx;
+  doc.rect(bx,M,bw,8);doc.rect(bx,M+8,bw,9);
+  doc.setFont('helvetica','bold');doc.setFontSize(11);
+  doc.text('Semaine n° '+(jours[0].semaine_num||''),bx+bw/2,M+5.5,{align:'center'});
+  doc.setFontSize(10);doc.text('du',bx+4,M+14.2);
+  doc.setFontSize(13);doc.text(fmt(dateDebut),bx+bw*0.33,M+14.4,{align:'center'});
+  doc.setFontSize(10);doc.text('au',bx+bw*0.58,M+14.2);
+  doc.setFontSize(13);doc.text(fmt(vendredi),bx+bw*0.82,M+14.4,{align:'center'});
+  doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(90);
+  doc.text('Les mamans cuisinieres du Monde',M+labelW,M+18);
+  doc.setTextColor(0,0,0);
+  let y=top;
+  /* Bandeau des jours */
+  doc.setFillColor(BLEU[0],BLEU[1],BLEU[2]);doc.rect(M+labelW,y,colW*5,7,'FD');
+  doc.setFont('helvetica','bold');doc.setFontSize(10);
+  MENU_JOURS.forEach(function(nom,i){doc.rect(gx(i),y,colW,7);doc.text(nom.toUpperCase(),gx(i)+colW/2,y+4.9,{align:'center'});});
+  y+=7;
+  data.forEach(function(b,bi){
+    if(bi===2&&hasTheme){
+      doc.setFont('helvetica','bolditalic');doc.setFontSize(9);
+      [1,2,3,4,5].forEach(function(j){
+        const m=parJour[j];if(!m||!m.theme)return;
+        const veg=/veg/i.test(m.theme.normalize('NFD').replace(/[̀-ͯ]/g,''));
+        if(veg)doc.setFillColor(248,203,173);else doc.setFillColor(255,255,0);
+        doc.rect(gx(j-1),y+0.5,colW,5,'F');
+        doc.text(san(m.theme),gx(j-1)+colW/2,y+4.2,{align:'center'});
+      });
+      doc.setFont('helvetica','bold');doc.setFontSize(7);doc.text('(SV = Sans viande)',M+1,y+4);
+      y+=6;
     }
-    y+=h+5;
+    const hb=b.lignes.reduce(function(s,l){return s+l.h;},0);
+    /* Colonne de gauche : titre du profil (et du goûter) sur fond bleu. */
+    const gl=b.lignes[b.lignes.length-1];
+    const hRepas=b.p.gouter?hb-gl.h:hb;
+    doc.setFillColor(BLEU[0],BLEU[1],BLEU[2]);
+    doc.rect(M,y,labelW,hRepas,'FD');
+    doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(0,0,0);doc.text(b.p.titre,M+2,y+6);
+    doc.setFontSize(8);doc.text(b.p.sous,M+2,y+10.5);
+    let yy=y;
+    b.lignes.forEach(function(l){
+      if(l.gouter){
+        doc.setFillColor(BLEU[0],BLEU[1],BLEU[2]);
+        doc.rect(M,yy,labelW,l.h,'FD');
+        doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text(b.p.gTitre,M+2,yy+l.h/2-0.3);
+        doc.setFontSize(7.5);doc.text(b.p.gSous,M+2,yy+l.h/2+3.5);
+      }
+      l.cases.forEach(function(c,j){
+        if(l.gouter)doc.setFillColor(BLEU[0],BLEU[1],BLEU[2]);
+        else doc.setFillColor(255,255,255);
+        doc.rect(gx(j),yy,colW,l.h,'FD');
+        doc.setFont('helvetica','bolditalic');doc.setFontSize(fs);doc.setTextColor(0,0,0);
+        const th=c.length*b.lh;let ty=yy+(l.h-th)/2+b.lh*0.78;
+        c.forEach(function(t){doc.text(t,gx(j)+colW/2,ty,{align:'center'});ty+=b.lh;});
+      });
+      yy+=l.h;
+    });
+    doc.setLineWidth(0.6);doc.rect(M,y,W-2*M,hb);doc.setLineWidth(0.25);
+    y+=hb+2;
   });
   /* Aperçu dans une fenêtre de l'appli (une nouvelle fenêtre est souvent bloquée
      ou ne montre pas les PDF) : Imprimer / Télécharger. */
