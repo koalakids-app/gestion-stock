@@ -55,7 +55,7 @@ async function boot(){
      documentaire sans aucune identification, avec la session laissee par
      l'utilisateur precedent. */
   const _q=new URLSearchParams(location.search);
-  const VENANT_DE_DEMANDES=_q.has('doc')||_q.has('rep')||_q.has('enf');
+  const VENANT_DE_DEMANDES=_q.has('doc')||_q.has('rep')||_q.has('enf')||_q.has('tpl');
   if(!VENANT_DE_DEMANDES&&!JUSTE_CONNECTE){
     try{await sb.auth.signOut();}catch(e){console.warn('[boot] signOut',e);}
     showLoginView();
@@ -301,8 +301,11 @@ let RETURN_EMPLOYE_SRC=null; // 'demandes' (par défaut) ou 'employes' : quelle 
 function openFromUrl(){
   try{
     const q=new URLSearchParams(location.search);
-    const docId=q.get('doc');
-    if(!docId)return;
+    /* ?tpl=<template_key> : ouverture directe d'un modele (Acces terrain), sans
+       connaitre l'id du document, qui differe d'une organisation a l'autre. */
+    const tpl=q.get('tpl');
+    const docId=q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id);
+    if(!docId){if(tpl)toast('Document introuvable ou inaccessible');return;}
     const repId=q.get('rep')||null;
     RETURN_ENFANT_ID=q.get('enf')||null;
     if(RETURN_ENFANT_ID)installerRetourEnfant();
