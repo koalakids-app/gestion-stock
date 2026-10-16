@@ -225,6 +225,10 @@ function mcmRenderMenusList(){
    boîte d'impression. Les polices jsPDF (WinAnsi) n'ont ni œ ni apostrophe
    typographique : on les remplace. */
 function mcmMenuPdf(dateDebut){
+  try{mcmMenuPdfAfficher(dateDebut);}
+  catch(e){console.error('[MCM menu PDF]',e);showBanner('Génération du PDF impossible : '+(e.message||e),'error');}
+}
+function mcmMenuPdfAfficher(dateDebut){
   if(!window.jspdf){showBanner('Librairie PDF non chargée.','error');return;}
   const jours=mcmMenusCache.filter(function(x){return x.date_debut===dateDebut;});
   if(!jours.length){showBanner('Menu introuvable pour cette semaine.','error');return;}
@@ -296,10 +300,29 @@ function mcmMenuPdf(dateDebut){
     }
     y+=h+5;
   });
-  doc.autoPrint();
-  const url=doc.output('bloburl');
-  const w=window.open(url,'_blank');
-  if(!w){doc.save('menu-semaine-'+dateDebut+'.pdf');showBanner('PDF téléchargé : ouvrez-le pour l\'imprimer.');}
+  /* Aperçu dans une fenêtre de l'appli (une nouvelle fenêtre est souvent bloquée
+     ou ne montre pas les PDF) : Imprimer / Télécharger. */
+  const nom='menu-semaine-'+dateDebut+'.pdf';
+  const url=URL.createObjectURL(doc.output('blob'));
+  let ov=document.getElementById('modal-menu-pdf-wrap');
+  if(ov)ov.remove();
+  ov=document.createElement('div');
+  ov.className='overlay';ov.id='modal-menu-pdf-wrap';
+  const fermer=function(){URL.revokeObjectURL(url);ov.remove();};
+  ov.onclick=function(ev){if(ev.target===ov)fermer();};
+  ov.innerHTML='<div class="modal" style="max-width:1000px;width:100%">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.75rem;flex-wrap:wrap"><h3 style="margin:0"><i class="ti ti-printer"></i> Menu en PDF</h3>'
+    +'<div style="display:flex;gap:8px"><button class="btn-primary" id="mpdf-imprimer"><i class="ti ti-printer"></i> Imprimer</button>'
+    +'<a class="btn-cancel" id="mpdf-dl" href="'+url+'" download="'+nom+'" style="text-decoration:none"><i class="ti ti-download"></i> Télécharger</a>'
+    +'<button class="btn-cancel" id="mpdf-x" style="padding:4px 8px"><i class="ti ti-x"></i></button></div></div>'
+    +'<iframe id="mpdf-frame" src="'+url+'" title="Menu PDF" style="width:100%;height:70vh;border:1px solid var(--border);background:#fff"></iframe></div>';
+  document.body.appendChild(ov);
+  ov.classList.add('open');
+  document.getElementById('mpdf-x').onclick=fermer;
+  document.getElementById('mpdf-imprimer').onclick=function(){
+    try{const f=document.getElementById('mpdf-frame').contentWindow;f.focus();f.print();}
+    catch(e){document.getElementById('mpdf-dl').click();showBanner('Impression directe impossible : PDF téléchargé, ouvrez-le pour l\'imprimer.');}
+  };
 }
 window.mcmMenuPdf=mcmMenuPdf;
 /* QR code du menu : il ouvre la page publique menu.html (lecture seule, sans
