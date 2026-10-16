@@ -206,7 +206,8 @@ function mcmRenderMenusList(){
     return'<details'+(isPast?'':' open')+' style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;background:'+(isPast?'#fafafa':'var(--koala-lightest,#F7F6FC)')+'">'
       +'<summary class="menus-summary" style="cursor:pointer;font-weight:800;color:var(--koala-dark);font-size:13px">'
       +'<span class="menus-summary-titre">'+(isPast?'':'🟢 ')+'Semaine du '+escHtml(d)+(semaineNum?' (S'+semaineNum+')':'')+(isPast?' — passée':'')+'</span>'
-      +(fichierPath?'<a class="ibtn" href="'+escHtml(menusFichierUrl(fichierPath))+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Ouvrir et imprimer le menu original ('+escHtml(jours[0].fichier_nom||'')+')"><i class="ti ti-printer"></i></a>':'')
+      +'<button class="ibtn" onclick="event.preventDefault();event.stopPropagation();mcmMenuPdf(\''+d+'\')" title="Générer le PDF du menu puis l\'imprimer"><i class="ti ti-printer"></i></button>'
+      +(fichierPath?'<a class="ibtn" href="'+escHtml(menusFichierUrl(fichierPath))+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Ouvrir le fichier original du traiteur ('+escHtml(jours[0].fichier_nom||'')+')"><i class="ti ti-file-spreadsheet"></i></a>':'')
       +(gouterCrechePeutEditer()?'<button class="ibtn" onclick="event.preventDefault();event.stopPropagation();gouterCrecheOuvrir(\''+d+'\')" title="Goûters de la crèche pour cette semaine"><i class="ti ti-cookie"></i></button>':'')
       +'<button class="ibtn" onclick="event.preventDefault();event.stopPropagation();mcmMenuQr(\''+d+'\')" title="Partager ce menu par QR code"><i class="ti ti-qrcode"></i></button>'
       +(isDirection?'<button class="ibtn del" onclick="event.preventDefault();event.stopPropagation();mcmDeleteMenuWeek(\''+d+'\')" title="Supprimer ce menu"><i class="ti ti-trash"></i></button>':'')
@@ -218,6 +219,89 @@ function mcmRenderMenusList(){
       +'</div></details>';
   }).join('');
 }
+/* Impression du menu : on génère d'abord un PDF (A4 paysage, jsPDF) à partir des
+   données de la semaine — 3 profils × 5 jours, goûters compris (ceux de la
+   crèche remplacent ceux du traiteur) — puis on l'ouvre dans un onglet avec la
+   boîte d'impression. Les polices jsPDF (WinAnsi) n'ont ni œ ni apostrophe
+   typographique : on les remplace. */
+function mcmMenuPdf(dateDebut){
+  if(!window.jspdf){showBanner('Librairie PDF non chargée.','error');return;}
+  const jours=mcmMenusCache.filter(function(x){return x.date_debut===dateDebut;});
+  if(!jours.length){showBanner('Menu introuvable pour cette semaine.','error');return;}
+  const parJour={};jours.forEach(function(j){parJour[j.jour]=j;});
+  const san=function(s){return String(s==null?'':s).replace(/[’‘]/g,"'").replace(/œ/g,'oe').replace(/Œ/g,'OE').replace(/[“”]/g,'"').replace(/[–—−]/g,'-').replace(/[^\x20-\xFF]/g,'');};
+  const profils=[
+    {titre:'Bébés - de 6 mois',champ:'bb6',gouter:null},
+    {titre:'Bébés 6-18 mois',champ:'bb18',gouter:'bb18_gouter'},
+    {titre:'Grands 18 mois-3 ans',champ:'grand',gouter:'grand_gouter'}
+  ];
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  const W=297,H=210,M=10,labelW=26,colW=(W-2*M-labelW)/5;
+  const semaineNum=jours[0].semaine_num;
+  doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(74,63,159);
+  doc.text(san('Menu de la semaine du '+dateDebut+(semaineNum?' (S'+semaineNum+')':'')),M,M+6);
+  doc.setDrawColor(244,121,32);doc.setLineWidth(0.6);doc.line(M,M+9,W-M,M+9);
+  const top=M+13;
+  /* Contenu de chaque case (liste de lignes déjà découpées) pour une taille de police donnée. */
+  function cases(fs){
+    doc.setFontSize(fs);doc.setFont('helvetica','normal');
+    return profils.map(function(p){
+      return[1,2,3,4,5].map(function(j){
+        const m=parJour[j];
+        const plats=((m&&m[p.champ])||[]).map(function(t){return doc.splitTextToSize('- '+san(t),colW-4);});
+        const g=p.gouter?gouterAffiche(mcmGcMap[dateDebut],j,m?m[p.gouter]:'',mcmGcTous,gouterProfil(p.gouter)):null;
+        const gl=(g&&g.texte)?doc.splitTextToSize('Gouter : '+san(g.texte)+(g.creche?' (creche)':''),colW-4):[];
+        return{plats:plats,gouter:gl};
+      });
+    });
+  }
+  const lh=function(fs){return fs*0.3528*1.25;};
+  let fs=9,data,hauteurs;
+  for(;fs>=5;fs-=0.5){
+    data=cases(fs);
+    hauteurs=data.map(function(ligne){
+      return Math.max.apply(null,ligne.map(function(c){
+        const n=c.plats.reduce(function(a,b){return a+b.length;},0);
+        return(n+c.gouter.length)*lh(fs)+(c.gouter.length?2:0)+7;
+      }));
+    });
+    if(hauteurs.reduce(function(a,b){return a+b;},0)+3*5+8<=H-top-M)break;
+  }
+  let y=top;
+  /* En-tête des jours */
+  doc.setFillColor(74,63,159);doc.rect(M+labelW,y,colW*5,7,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(255,255,255);
+  MENU_JOURS.forEach(function(nom,i){doc.text(nom,M+labelW+colW*i+colW/2,y+4.8,{align:'center'});});
+  y+=8;
+  profils.forEach(function(p,pi){
+    const h=hauteurs[pi];
+    doc.setFillColor(247,246,252);doc.setDrawColor(200,196,225);doc.setLineWidth(0.2);
+    doc.rect(M,y,labelW,h,'FD');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(74,63,159);
+    doc.text(doc.splitTextToSize(san(p.titre),labelW-4),M+2,y+5);
+    for(let j=0;j<5;j++){
+      const x=M+labelW+colW*j;
+      doc.setDrawColor(200,196,225);doc.rect(x,y,colW,h);
+      const c=data[pi][j];
+      let ty=y+5;
+      doc.setFont('helvetica','normal');doc.setFontSize(fs);doc.setTextColor(43,39,64);
+      if(!c.plats.length&&!c.gouter.length){doc.setTextColor(150);doc.text('-',x+2,ty);continue;}
+      c.plats.forEach(function(bloc){bloc.forEach(function(l){doc.text(l,x+2,ty);ty+=lh(fs);});});
+      if(c.gouter.length){
+        ty+=1;doc.setDrawColor(190);doc.setLineDashPattern([0.8,0.8],0);doc.line(x+2,ty-lh(fs)+1.5,x+colW-2,ty-lh(fs)+1.5);doc.setLineDashPattern([],0);
+        doc.setTextColor(74,63,159);
+        c.gouter.forEach(function(l){doc.text(l,x+2,ty);ty+=lh(fs);});
+      }
+    }
+    y+=h+5;
+  });
+  doc.autoPrint();
+  const url=doc.output('bloburl');
+  const w=window.open(url,'_blank');
+  if(!w){doc.save('menu-semaine-'+dateDebut+'.pdf');showBanner('PDF téléchargé : ouvrez-le pour l\'imprimer.');}
+}
+window.mcmMenuPdf=mcmMenuPdf;
 /* QR code du menu : il ouvre la page publique menu.html (lecture seule, sans
    connexion, adaptée au téléphone) alimentée par la fonction `menu_public`
    (sql/menu_public.sql). Deux versions : la semaine choisie, ou « toujours la
