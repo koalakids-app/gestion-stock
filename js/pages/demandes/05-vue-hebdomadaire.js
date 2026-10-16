@@ -184,7 +184,12 @@ async function renderPresenceHebdo(){
       }
       /* Enfant créé sans passer par l'import (fiche ou inscription + contrat) : aucune
          présence enregistrée cette semaine, on déduit ses jours de son contrat. */
-      if(!presData.some(function(p){return p.enfant_id===e.id;})&&[0,1,2,3,4].some(function(j){return ctHebdo[String(e.id)+'_'+j];})){
+      /* Une absence se saisit en supprimant les créneaux : un enfant marqué absent toute la
+         semaine n'a donc plus aucune ligne, comme un enfant jamais importé. On ne se fie au
+         contrat que pour un contrat récent (enfant nouvellement arrivé) ; sinon l'enfant est absent. */
+      const recent=ipDateToLocalISO(new Date(days5[0].getFullYear(),days5[0].getMonth(),days5[0].getDate()-28));
+      const contratRecent=[0,1,2,3,4].some(function(j){const c=ctHebdo[String(e.id)+'_'+j];return c&&(c.date_debut||'')>=recent;});
+      if(!presData.some(function(p){return p.enfant_id===e.id;})&&contratRecent){
         contratSeul=true;
         return ctHebdo[String(e.id)+'_'+i]?{present:true,slot:'j',horaires:hebdoHoraires(e.id,i,'j'),repas:enfRepasCode(e,dateStrs[i])}:{present:false,slot:null,horaires:'',repas:''};
       }
