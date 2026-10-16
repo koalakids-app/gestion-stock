@@ -25,6 +25,8 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 - Goûters faits par la crèche : table `menus_gouters_creche` (`sql/menus_gouters_creche.sql`, à appliquer à la main ; accès via `kk_acces_creche`), deux textes par crèche et par jour (`gouter` = moyens, `gouter_grand` = grands ; `sql/gouters_creche_moyen_grand.sql`), qui remplacent `bb18_gouter`/`grand_gouter` du traiteur pour cette crèche (`js/pages/demandes/13-gouters-creche.js`). `menu_public(date, crèche)` fusionne les deux ; le QR d'un référent porte `?c=<id crèche>`.
 - Option « cette crèche fait tous ses goûters » : table `gouters_creche_options` (`sql/gouters_creche_option_tous.sql`) ; jour vide = aucun goûter affiché, et `crCountsParJour` ne compte aucun goûter pour cette crèche (`gouterTous`).
 
+- Recettes des goûters : tables `recettes`, `recettes_ingredients`, `gouters_creche_effectifs` (moyens/grands par jour), `gouters_creche_recettes` (`sql/recettes_gouters.sql`, à appliquer à la main). Recettes communes aux crèches (écriture direction via `kk_est_direction()`), allergènes par ingrédient. Logique et récapitulatif 2 semaines dans `js/pages/demandes/14-recettes-gouters.js` (`gcLignes` calcule les produits à commander).
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.
