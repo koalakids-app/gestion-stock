@@ -583,7 +583,7 @@ Désactivez le filtre pour retrouver la <strong>liste complète</strong> des ins
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Les deux onglets : Jour et Semaine</div>
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:10px">La barre d’outils du haut s’adapte à l’onglet ouvert : elle n’affiche que les commandes qui s’y appliquent.</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
-  <li><strong>Jour</strong> — la vue Gantt décrite ci-dessus. C’est le seul onglet où l’on pointe les présences. On y trouve le sélecteur de date et ses flèches, <strong>Appliquer les contrats</strong>, <strong>Ajouter à la journée</strong> et <strong>Exporter</strong> (récapitulatif de la journée choisie).</li>
+  <li><strong>Jour</strong> — la vue Gantt décrite ci-dessus. C’est le seul onglet où l’on pointe les présences. On y trouve le sélecteur de date et ses flèches, <strong>Appliquer les contrats</strong>, <strong>Ajouter à la journée</strong> et <strong>Exporter PDF</strong> (récapitulatif de la journée choisie, pour la crèche affichée).</li>
   <li><strong>Semaine</strong> — la vue de contrôle et d’export hebdomadaire, avec sa propre navigation de semaine en semaine. Elle remplace l’ancienne vue « Semaine » en carrés matin/après-midi, qui n’apportait rien de plus.</li>
 </ul>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🕒 Depuis quand les données datent-elles&nbsp;?</div>
