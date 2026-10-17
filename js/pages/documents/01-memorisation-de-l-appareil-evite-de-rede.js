@@ -275,7 +275,9 @@ async function doLogout(){await sb.auth.signOut();location.reload();}
 async function loadAll(){
   const[c,d,cr,en,et,rz,sg]=await Promise.all([
     sb.from('doc_categories').select('*').order('ordre'),
-    sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
+    (PROF&&PROF.role==='employe'
+      ?sb.from('documents_koala').select('*').eq('actif',true).eq('acces_employe',true).order('titre')
+      :sb.from('documents_koala').select('*').eq('actif',true).order('titre')),
     sb.from('creches').select('id,name,addr').order('name'),
     sb.from('enfants').select('id,prenom,nom,creche_id,dob,regime_repas').order('prenom'),
     sb.from('etablissements').select('*'),
@@ -684,6 +686,7 @@ function openDoc(id){
     if(d.fichier_nom)document.getElementById('dFileCur').textContent='Fichier actuel : '+d.fichier_nom;
     (d.schema_champs||[]).forEach(c=>addChamp(c.label,c.type));
     document.getElementById('dPack').checked=!!d.pack_familiarisation;
+    document.getElementById('dAccesEmploye').checked=!!d.acces_employe;
     document.getElementById('dPackOrdre').value=d.pack_ordre||0;
     document.getElementById('dPackImprimer').checked=!!d.pack_imprimer;
   }else{
@@ -692,6 +695,7 @@ function openDoc(id){
     document.getElementById('dType').value='telechargeable';
     if(PROF&&PROF.role==='referent'&&PROF.creche_id)document.getElementById('dCreche').value=PROF.creche_id;
     document.getElementById('dPack').checked=false;
+    document.getElementById('dAccesEmploye').checked=false;
     document.getElementById('dPackOrdre').value=0;
     document.getElementById('dPackImprimer').checked=false;
   }
@@ -712,6 +716,7 @@ async function saveDoc(){
       categorie_id:document.getElementById('dCat').value||null,
       creche_id:document.getElementById('dCreche').value||null,
       type,
+      acces_employe:document.getElementById('dAccesEmploye').checked,
       pack_familiarisation:document.getElementById('dPack').checked,
       pack_ordre:parseInt(document.getElementById('dPackOrdre').value,10)||0,
       pack_imprimer:document.getElementById('dPack').checked&&document.getElementById('dPackImprimer').checked
