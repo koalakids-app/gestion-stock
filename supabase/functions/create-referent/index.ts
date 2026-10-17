@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { email, name, creche_id, poste, role, redirect_to } = await req.json();
+    const { email, name, creche_id, poste, role, redirect_to, partager } = await req.json();
     if (!email || !name) {
       return json({ ok: false, error: "Champs requis" }, 400);
     }
@@ -101,16 +101,36 @@ Deno.serve(async (req) => {
     const existingUser = existingUsers?.users?.find((u) => u.email === email);
 
     let userId: string | undefined;
+    // partager : pas d'e-mail ; on renvoie le lien d'invitation (ou de
+    // définition du mot de passe pour un compte jamais utilisé) que l'appareil
+    // de l'appelant·e transmet. Un compte déjà utilisé n'a besoin d'aucun lien.
+    let lien: string | undefined;
+    const meta = { name, creche_id, poste };
 
     if (existingUser) {
       userId = existingUser.id;
+      if (partager && !existingUser.last_sign_in_at) {
+        const { data: rec, error: recErr } = await admin.auth.admin.generateLink({
+          type: "recovery",
+          email,
+          options: { redirectTo: redirect_to || undefined },
+        });
+        if (recErr) return json({ ok: false, error: recErr.message }, 400);
+        lien = rec.properties.action_link;
+      }
+    } else if (partager) {
+      const { data: gen, error: genErr } = await admin.auth.admin.generateLink({
+        type: "invite",
+        email,
+        options: { redirectTo: redirect_to || undefined, data: meta },
+      });
+      if (genErr) return json({ ok: false, error: genErr.message }, 400);
+      userId = gen.user?.id;
+      lien = gen.properties.action_link;
     } else {
       const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
         email,
-        {
-          redirectTo: redirect_to || undefined,
-          data: { name, creche_id, poste },
-        },
+        { redirectTo: redirect_to || undefined, data: meta },
       );
       if (inviteErr) {
         return json({ ok: false, error: inviteErr.message }, 400);
@@ -137,7 +157,7 @@ Deno.serve(async (req) => {
       if (dbError) return json({ ok: false, error: dbError.message }, 400);
     }
 
-    return json({ ok: true, user_id: userId });
+    return json({ ok: true, user_id: userId, lien });
   } catch (err) {
     return json({ ok: false, error: String(err) }, 500);
   }
