@@ -278,7 +278,10 @@ async function loadAll(){
     sb.from('doc_categories').select('*').order('ordre'),
     sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
     sb.from('creches').select('id,name,addr').order('name'),
-    sb.from('enfants').select('id,prenom,nom,creche_id,dob,regime_repas').order('prenom'),
+    (PROF&&PROF.role==='employe'
+      /* Un employé ne lit pas la table enfants (fiches complètes) : fonction limitée à ces 6 champs, sa crèche. */
+      ?sb.rpc('kk_enfants_pour_documents')
+      :sb.from('enfants').select('id,prenom,nom,creche_id,dob,regime_repas').order('prenom')),
     sb.from('etablissements').select('*'),
     sb.from('reseau_config').select('config').maybeSingle(),
     sb.from('doc_signataires').select('*').eq('actif',true).order('ordre')
