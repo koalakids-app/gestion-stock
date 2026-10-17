@@ -14,12 +14,12 @@
 --   * enfants : déjà limité à referent/direction (enf_read, direction_all_enfants) ;
 --   * tables du terrain : registre_infirmerie, pai, vaccinations, pointages,
 --     planning, kiosk_devices, documents_koala, goûters/menus de crèche,
---     enfants_absences (lu par presences-reel.js) — à traiter au lot 2 après
+--     enfants_absences et enfants_contrats (lus par presences-reel.js) — à traiter au lot 2 après
 --     test avec un compte employé.
 --
 -- Lot 1 — tables sans usage côté employé :
 --   personnel   : employes, employes_documents, dossiers_pieces_employe
---   enfants     : dossiers_pieces, enfants_documents_admin, enfants_contrats
+--   enfants     : dossiers_pieces, enfants_documents_admin
 --   contrats    : contrats, contrats_lignes, contrats_preuves
 --   suivi       : suivi_observations, suivi_saisies, suivi_syntheses,
 --                 suivi_acces_famille, suivi_consultations
@@ -47,7 +47,7 @@ begin
     where schemaname = 'public'
       and tablename in (
         'employes','employes_documents','dossiers_pieces_employe',
-        'dossiers_pieces','enfants_documents_admin','enfants_contrats',
+        'dossiers_pieces','enfants_documents_admin',
         'contrats','contrats_lignes','contrats_preuves',
         'suivi_observations','suivi_saisies','suivi_syntheses',
         'suivi_acces_famille','suivi_consultations',
