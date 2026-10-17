@@ -275,9 +275,7 @@ async function doLogout(){await sb.auth.signOut();location.reload();}
 async function loadAll(){
   const[c,d,cr,en,et,rz,sg]=await Promise.all([
     sb.from('doc_categories').select('*').order('ordre'),
-    (PROF&&PROF.role==='employe'
-      ?sb.from('documents_koala').select('*').eq('actif',true).eq('acces_employe',true).order('titre')
-      :sb.from('documents_koala').select('*').eq('actif',true).order('titre')),
+    sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
     sb.from('creches').select('id,name,addr').order('name'),
     sb.from('enfants').select('id,prenom,nom,creche_id,dob,regime_repas').order('prenom'),
     sb.from('etablissements').select('*'),
@@ -532,6 +530,7 @@ function openCat(id){
   document.getElementById('catTitle').textContent=cur?'Modifier la catégorie':'Nouvelle catégorie';
   document.getElementById('cNom').value=cur?(cur.nom||''):'';
   document.getElementById('cCoul').value=cur?(cur.couleur||'#4A3F9F'):'#4A3F9F';
+  document.getElementById('cAccesEmploye').checked=!!(cur&&cur.acces_employe);
   /* Parents possibles : toute catégorie qui n'est ni elle-même ni un de ses descendants,
      et dont la profondeur additionnée à la hauteur du sous-arbre déplacé reste <= MAX_CAT_DEPTH. */
   const h=cur?catHeight(cur.id):1;
@@ -569,11 +568,12 @@ async function saveCat(){
       return toast('Profondeur maximale de '+MAX_CAT_DEPTH+' niveaux atteinte');
   }
   const coul=document.getElementById('cCoul').value;
+  const acc=document.getElementById('cAccesEmploye').checked;
   let error;
   if(editCatId){
-    ({error}=await sb.from('doc_categories').update({nom,parent_id:parent,couleur:coul}).eq('id',editCatId));
+    ({error}=await sb.from('doc_categories').update({nom,parent_id:parent,couleur:coul,acces_employe:acc}).eq('id',editCatId));
   }else{
-    ({error}=await sb.from('doc_categories').insert({nom,parent_id:parent,couleur:coul,ordre:CATS.length+1}));
+    ({error}=await sb.from('doc_categories').insert({nom,parent_id:parent,couleur:coul,acces_employe:acc,ordre:CATS.length+1}));
   }
   if(error)return toast('Erreur : '+error.message);
   close_('ovCat');document.getElementById('ovCat').style.zIndex='';
@@ -595,7 +595,7 @@ function renderCatMgr(){
     const dot=depth===0?'11px':(depth===1?'9px':'8px');
     return `<div class="chip" style="margin-left:${depth*18}px">
       <span class="cat-dot" style="width:${dot};height:${dot};background:${esc(c.couleur||'#4A3F9F')}"></span>
-      <span style="flex:1">${esc(c.nom)} <span style="color:var(--muted)">(${n})</span></span>
+      <span style="flex:1">${esc(c.nom)} <span style="color:var(--muted)">(${n})</span>${c.acces_employe?' <span class="tag" title="Ouverte aux employés">👷</span>':''}</span>
       <button class="iconbtn" title="Modifier" onclick="openCat('${c.id}')"><i class="ti ti-edit"></i></button>
       <button class="iconbtn d" title="Supprimer" onclick="delCat('${c.id}')"><i class="ti ti-trash"></i></button>
     </div>`;
