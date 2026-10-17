@@ -56,10 +56,25 @@ function showLoginView(msg){
   document.getElementById('mfaGateBox').style.display='none';
   if(msg)document.getElementById('liErr').textContent=msg;
 }
+/* Documents « Ouvert aux employés » (case cochée dans Documents), en plus de
+   l'autorisation de médicament déjà affichée en dur. */
+async function terrainChargerDocuments(){
+  const box=document.getElementById('docsEmployes');
+  if(!box)return;
+  try{
+    const {data,error}=await sb.from('documents_koala').select('id,titre,description,template_key')
+      .eq('actif',true).eq('acces_employe',true).eq('type','remplissable').order('titre');
+    if(error)throw error;
+    box.innerHTML=(data||[]).filter(d=>d.template_key!=='medicament_ponctuel').map(d=>
+      '<a class="qbtn auto" href="documents.html?doc='+encodeURIComponent(d.id)+'"><i class="ti ti-file-text"></i>'
+      +esc(d.titre)+(d.description?'<small>'+esc(d.description)+'</small>':'')+'</a>').join('');
+  }catch(e){console.error('[terrainChargerDocuments]',e);}
+}
 async function terrainGrantAccess(){
   if(typeof kkLoginAlertCheck==='function')kkLoginAlertCheck(sb);
   document.getElementById('loginView').style.display='none';
   document.getElementById('appView').style.display='block';
+  terrainChargerDocuments();
   document.getElementById('whoAmI').textContent=(PROF.name||'')+(IS_DIRECTION?' · Direction':'');
   document.getElementById('hello').innerHTML='Bonjour '+esc(PROF.name||'')+' <small>Suivi de l\'enfant, registre d\'infirmerie, incidents et autorisation de médicament, en un tap.</small>';
 }

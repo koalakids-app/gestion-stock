@@ -23,7 +23,13 @@ let CRECHE_NOMS_COURTS=['Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jea
 function etabDe(id){return ETABS.find(x=>String(x.creche_id)===String(id))||{};}
 
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600);}
-function close_(id){document.getElementById(id).classList.remove('on');}
+function close_(id){
+  document.getElementById(id).classList.remove('on');
+  /* Un(e) employé(e) n'arrive ici que depuis l'Acces terrain, pour un seul
+     modele : en fermant le formulaire il/elle retourne a l'Acces terrain, sans
+     jamais voir le fonds documentaire. */
+  if(id==='ovFill'&&PROF&&PROF.role==='employe')location.href='terrain.html';
+}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function slug(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9.\-_]/g,'_');}
 
@@ -269,7 +275,9 @@ async function doLogout(){await sb.auth.signOut();location.reload();}
 async function loadAll(){
   const[c,d,cr,en,et,rz,sg]=await Promise.all([
     sb.from('doc_categories').select('*').order('ordre'),
-    sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
+    (PROF&&PROF.role==='employe'
+      ?sb.from('documents_koala').select('*').eq('actif',true).eq('acces_employe',true).order('titre')
+      :sb.from('documents_koala').select('*').eq('actif',true).order('titre')),
     sb.from('creches').select('id,name,addr').order('name'),
     sb.from('enfants').select('id,prenom,nom,creche_id,dob,regime_repas').order('prenom'),
     sb.from('etablissements').select('*'),
@@ -304,7 +312,12 @@ function openFromUrl(){
     /* ?tpl=<template_key> : ouverture directe d'un modele (Acces terrain), sans
        connaitre l'id du document, qui differe d'une organisation a l'autre. */
     const tpl=q.get('tpl');
-    const docId=q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id);
+    /* Employé(e) : DOCS ne contient deja que les documents coches « Ouvert aux employes ». */
+    const estEmploye=!!PROF&&PROF.role==='employe';
+    const docId=estEmploye
+      ?(q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id))
+      :(q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id));
+    if(estEmploye&&!docId){location.replace('terrain.html');return;}
     if(!docId){if(tpl)toast('Document introuvable ou inaccessible');return;}
     const repId=q.get('rep')||null;
     RETURN_ENFANT_ID=q.get('enf')||null;
@@ -673,6 +686,7 @@ function openDoc(id){
     if(d.fichier_nom)document.getElementById('dFileCur').textContent='Fichier actuel : '+d.fichier_nom;
     (d.schema_champs||[]).forEach(c=>addChamp(c.label,c.type));
     document.getElementById('dPack').checked=!!d.pack_familiarisation;
+    document.getElementById('dAccesEmploye').checked=!!d.acces_employe;
     document.getElementById('dPackOrdre').value=d.pack_ordre||0;
     document.getElementById('dPackImprimer').checked=!!d.pack_imprimer;
   }else{
@@ -681,6 +695,7 @@ function openDoc(id){
     document.getElementById('dType').value='telechargeable';
     if(PROF&&PROF.role==='referent'&&PROF.creche_id)document.getElementById('dCreche').value=PROF.creche_id;
     document.getElementById('dPack').checked=false;
+    document.getElementById('dAccesEmploye').checked=false;
     document.getElementById('dPackOrdre').value=0;
     document.getElementById('dPackImprimer').checked=false;
   }
@@ -701,6 +716,7 @@ async function saveDoc(){
       categorie_id:document.getElementById('dCat').value||null,
       creche_id:document.getElementById('dCreche').value||null,
       type,
+      acces_employe:document.getElementById('dAccesEmploye').checked,
       pack_familiarisation:document.getElementById('dPack').checked,
       pack_ordre:parseInt(document.getElementById('dPackOrdre').value,10)||0,
       pack_imprimer:document.getElementById('dPack').checked&&document.getElementById('dPackImprimer').checked
