@@ -78,6 +78,13 @@ function stgEvalHtmlCibles(cibles,cles){
 function stgEvalHtmlEje(ev,stage){
   const notes=ev.eje||{}, comp=ev.eje_comp||{}, comm=ev.eje_comm||{}, cibles=ev.eje_cibles||[];
   const mi=(ev.mi&&ev.mi.eje_comp)||{};
+  const auto=(ev.auto&&ev.auto.eje_comp)||{};
+  const autoLib=ck=>{
+    const n=auto[ck], l=STG_EVAL_EJE_NIV.find(x=>x[0]===n);
+    if(!l)return '';
+    const mien=(comp[ck]||{}).n, ecart=mien&&mien!=='n'&&n!=='n'&&mien!==n;
+    return '<div style="font-weight:400;font-size:10.5px;color:'+(ecart?'#C95F0A':'#777')+'">Auto-évaluation : '+escHtml(l[1])+(ecart?' — écart avec votre note':'')+'</div>';
+  };
   const miLib=ck=>{const n=(mi[ck]||{}).n, l=STG_EVAL_EJE_NIV.find(x=>x[0]===n);return l?'<div style="font-weight:400;font-size:10.5px;color:#777">À mi-parcours : '+escHtml(l[1])+'</div>':'';};
   const cles=stgEvalEjeCles();
   const html=STG_EVAL_EJE.map(d=>{
@@ -90,7 +97,7 @@ function stgEvalHtmlEje(ev,stage){
         const n=notes[it.k]||''; if(!stage){total++; if(n)faits++;}
         return '<tr><td style="padding:4px 6px;font-size:12px">'+escHtml(it.lib)+'</td>'+stgEvalRadios('stg-eje-'+it.k,'data-ke',it.k,n)+'</tr>';
       }).join('');
-      const entete='<tr style="background:var(--koala-light,#EEEDF8)"><th style="text-align:left;padding:5px 6px;font-size:12px">'+escHtml(x.comp.lib)+(stage?miLib(x.ck):'')+'</th>'
+      const entete='<tr style="background:var(--koala-light,#EEEDF8)"><th style="text-align:left;padding:5px 6px;font-size:12px">'+escHtml(x.comp.lib)+(stage?miLib(x.ck)+autoLib(x.ck):'')+'</th>'
         +(stage?stgEvalRadios('stg-comp-'+x.ck,'data-kp',x.ck,(comp[x.ck]||{}).n||''):stgEvalEnteteNiv())+'</tr>';
       if(!stage)return entete+rows;
       const c=(comp[x.ck]||{}).c||'';
@@ -143,6 +150,28 @@ function stgEvalHtmlMi(ev){
     +'</details>';
 }
 
+/* Auto-évaluation du stagiaire (stage EJE) : le stagiaire note lui-même les compétences
+   visées avec les mêmes niveaux, en général lors de l'entretien de mi-parcours ou de fin de
+   stage, pour comparer ensuite avec l'avis du tuteur. */
+function stgEvalHtmlAuto(ev){
+  const auto=ev.auto||{}, notes=auto.eje_comp||{}, cib=ev.eje_cibles||[];
+  const cles=stgEvalEjeCles().filter(x=>!cib.length||cib.indexOf(x.ck)>=0);
+  const faits=cles.filter(x=>notes[x.ck]).length;
+  return '<details style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:6px 10px"'+(faits||auto.commentaire?' open':'')+'>'
+    +'<summary style="cursor:pointer;font-weight:700;font-size:12.5px">Auto-évaluation du stagiaire <span style="font-weight:400;color:#777">('+faits+'/'+cles.length+' compétences)</span></summary>'
+    +'<p style="font-size:11.5px;color:#777;margin:6px 0">À remplir avec le stagiaire (entretien de mi-parcours ou de fin de stage) : ce qu\'il pense avoir acquis. Un écart avec votre note est signalé dans la grille.</p>'
+    +STG_EVAL_EJE.map(d=>{
+      const l=cles.filter(x=>x.dc===d);
+      if(!l.length)return '';
+      return '<table style="width:100%;border-collapse:collapse;margin:4px 0"><tr style="background:var(--koala-light,#EEEDF8)"><th style="text-align:left;padding:5px 6px;font-size:12px">'+escHtml(d.titre)+'</th>'+stgEvalEnteteNiv()+'</tr>'
+        +l.map(x=>'<tr><td style="padding:4px 6px;font-size:12px">'+escHtml(x.comp.lib)+'</td>'+stgEvalRadios('stg-auto-'+x.ck,'data-ka',x.ck,notes[x.ck]||'')+'</tr>').join('')+'</table>';
+    }).join('')
+    +'<div class="fg" style="margin-top:8px"><label class="flabel">Ce que le stagiaire retient de son stage</label>'
+    +'<textarea class="finput" id="stg-auto-comm" rows="3" style="resize:vertical" placeholder="Points forts ressentis, difficultés, ce qu\'il souhaite approfondir">'+escHtml(auto.commentaire||'')+'</textarea></div>'
+    +'<div class="fg" style="max-width:200px"><label class="flabel">Auto-évaluation du</label><input class="finput" type="date" id="stg-auto-date" value="'+escHtml(auto.le||todayStr())+'"></div>'
+    +'</details>';
+}
+
 function stgRenderEval(){
   const zone=document.getElementById('stg-eval-zone');
   if(!zone)return;
@@ -156,7 +185,7 @@ function stgRenderEval(){
     +'<select class="finput" id="stg-eval-profil" onchange="stgEvalProfilChange()" style="width:auto;font-size:12px;padding:4px 8px">'
     +Object.keys(STG_EVAL_PROFILS).map(k=>'<option value="'+k+'"'+(k===profil?' selected':'')+'>'+STG_EVAL_PROFILS[k]+'</option>').join('')
     +'</select></div>'
-    +(profil==='eje_stage'?stgEvalHtmlMi(ev):'')
+    +(profil==='eje_stage'?stgEvalHtmlMi(ev)+stgEvalHtmlAuto(ev):'')
     +(stgEvalEstEje(profil)?stgEvalHtmlEje(ev,profil==='eje_stage'):stgEvalHtmlGrille(profil,ev))
     +'<div class="fg"><label class="flabel">Appréciation générale</label>'
     +'<textarea class="finput" id="stg-eval-appr" rows="3" style="resize:vertical">'+escHtml(ev.appreciation||'')+'</textarea></div>'
@@ -177,6 +206,14 @@ function stgEvalLire(){
   const copie=o=>JSON.parse(JSON.stringify(o||{}));
   let notes=copie(base.notes), eje=copie(base.eje), eje_comp=copie(base.eje_comp), eje_comm=copie(base.eje_comm);
   let eje_cibles=Array.isArray(base.eje_cibles)?base.eje_cibles.slice():[];
+  const auto=copie(base.auto);
+  if(document.getElementById('stg-auto-comm')){
+    auto.eje_comp=auto.eje_comp||{};
+    q('input[data-ka]').forEach(r=>{delete auto.eje_comp[r.dataset.ka];});
+    q('input[data-ka]:checked').forEach(r=>{auto.eje_comp[r.dataset.ka]=r.value;});
+    auto.commentaire=document.getElementById('stg-auto-comm').value.trim();
+    auto.le=(document.getElementById('stg-auto-date')||{}).value||auto.le;
+  }
   const mi=copie(base.mi), miBilan=document.getElementById('stg-mi-bilan');
   if(miBilan){
     mi.bilan=miBilan.value.trim(); mi.objectifs=((document.getElementById('stg-mi-obj')||{}).value||'').trim();
@@ -203,6 +240,7 @@ function stgEvalLire(){
   }
   const res={profil,notes,eje,eje_comp,eje_comm,eje_cibles,appreciation:((document.getElementById('stg-eval-appr')||{}).value||'').trim()};
   if(mi.bilan||mi.objectifs||mi.eje_comp)res.mi=mi;
+  if(Object.keys(auto.eje_comp||{}).length||auto.commentaire)res.auto=auto;
   return res;
 }
 
@@ -258,8 +296,9 @@ function stgEvalImprimer(){
       const liste=cles.filter(x=>x.dc===d&&(!stage||!cib.length||cib.indexOf(x.ck)>=0));
       if(!liste.length)return '';
       const miC=(ev.mi&&ev.mi.eje_comp)||{};
+      const auL=ck=>{const l=NIV.find(x=>x[0]===((ev.auto||{}).eje_comp||{})[ck]);return l?l[1]:'';};
       const miL=ck=>{const l=NIV.find(x=>x[0]===(miC[ck]||{}).n);return l?l[1]:'';};
-      const ligne=(lib,n,c,ind,ck)=>'<tr><td'+(ind?' style="padding-left:18px"':'')+'>'+escHtml(lib)+'</td>'+NIV.map(([v])=>'<td class="c">'+croix(n,v)+'</td>').join('')+'<td>'+escHtml(c||'')+'</td>'+(stage?'<td class="c">'+escHtml(ck?miL(ck):'')+'</td>':'')+'</tr>';
+      const ligne=(lib,n,c,ind,ck)=>'<tr><td'+(ind?' style="padding-left:18px"':'')+'>'+escHtml(lib)+'</td>'+NIV.map(([v])=>'<td class="c">'+croix(n,v)+'</td>').join('')+'<td>'+escHtml(c||'')+'</td>'+(stage?'<td class="c">'+escHtml(ck?miL(ck):'')+'</td><td class="c">'+escHtml(ck?auL(ck):'')+'</td>':'')+'</tr>';
       const corps=liste.map(x=>{
         if(!stage)return '<tr><th colspan="5" style="text-align:left">'+escHtml(x.comp.lib)+'</th></tr>'+x.inds.map(it=>ligne(it.lib,ev.eje[it.k],'',true)).join('');
         const cp=ev.eje_comp[x.ck]||{};
@@ -267,7 +306,7 @@ function stgEvalImprimer(){
         return ligne(x.comp.lib,cp.n,cp.c,false,x.ck)+x.inds.filter(it=>ev.eje[it.k]).map(it=>ligne(it.lib,ev.eje[it.k],'',true)).join('');
       }).join('');
       return '<h2>'+escHtml(d.titre)+'</h2><table><tr><th style="text-align:left">'+(stage?'Compétences':'Compétences / indicateurs')+'</th>'
-        +NIV.map(([,l])=>'<th>'+escHtml(l)+'</th>').join('')+'<th>Commentaire</th>'+(stage?'<th>Mi-parcours</th>':'')+'</tr>'+corps
+        +NIV.map(([,l])=>'<th>'+escHtml(l)+'</th>').join('')+'<th>Commentaire</th>'+(stage?'<th>Mi-parcours</th><th>Auto-évaluation</th>':'')+'</tr>'+corps
         +'</table><p><b>Commentaires :</b> '+escHtml((ev.eje_comm||{})[d.id]||'')+'</p>';
     }).join('');
   };
@@ -284,6 +323,7 @@ function stgEvalImprimer(){
     +'<br><b>Période d\'accueil :</b> du '+escHtml(stgDateFr(s.date_debut))+' au '+escHtml(stgDateFr(s.date_fin))
     +'<br><b>Structure :</b> '+escHtml(crecheNom)+'</p>'
     +(stage&&ev.mi&&(ev.mi.bilan||ev.mi.objectifs||ev.mi.eje_comp)?'<h2>Bilan à mi-parcours'+(ev.mi.le?' ('+escHtml(stgDateFr(ev.mi.le))+')':'')+'</h2><p><b>Bilan :</b><br>'+escHtml(ev.mi.bilan||'').replace(/\n/g,'<br>')+'</p><p><b>Objectifs d\'ici la fin du stage :</b><br>'+escHtml(ev.mi.objectifs||'').replace(/\n/g,'<br>')+'</p>':'')
+    +(stage&&ev.auto&&ev.auto.commentaire?'<p><b>Ce que le stagiaire retient de son stage'+(ev.auto.le?' ('+escHtml(stgDateFr(ev.auto.le))+')':'')+' :</b><br>'+escHtml(ev.auto.commentaire).replace(/\n/g,'<br>')+'</p>':'')
     +(stgEvalEstEje(ev.profil)?tabEje():stgEvalGrille(ev.profil).map(tab).join(''))
     +'<p><b>Appréciation générale :</b><br>'+escHtml(ev.appreciation).replace(/\n/g,'<br>')+'</p>'
     +'<p>Le '+escHtml(stgDateFr(d))+'</p><table><tr><th>Noms + signatures</th></tr><tr><td class="sig"></td></tr></table>'
