@@ -77,6 +77,8 @@ function stgEvalHtmlCibles(cibles,cles){
 /* Référentiel EJE : un domaine par bloc repliable, avec le décompte des éléments notés. */
 function stgEvalHtmlEje(ev,stage){
   const notes=ev.eje||{}, comp=ev.eje_comp||{}, comm=ev.eje_comm||{}, cibles=ev.eje_cibles||[];
+  const mi=(ev.mi&&ev.mi.eje_comp)||{};
+  const miLib=ck=>{const n=(mi[ck]||{}).n, l=STG_EVAL_EJE_NIV.find(x=>x[0]===n);return l?'<div style="font-weight:400;font-size:10.5px;color:#777">À mi-parcours : '+escHtml(l[1])+'</div>':'';};
   const cles=stgEvalEjeCles();
   const html=STG_EVAL_EJE.map(d=>{
     const liste=cles.filter(x=>x.dc===d&&(!stage||!cibles.length||cibles.indexOf(x.ck)>=0));
@@ -88,7 +90,7 @@ function stgEvalHtmlEje(ev,stage){
         const n=notes[it.k]||''; if(!stage){total++; if(n)faits++;}
         return '<tr><td style="padding:4px 6px;font-size:12px">'+escHtml(it.lib)+'</td>'+stgEvalRadios('stg-eje-'+it.k,'data-ke',it.k,n)+'</tr>';
       }).join('');
-      const entete='<tr style="background:var(--koala-light,#EEEDF8)"><th style="text-align:left;padding:5px 6px;font-size:12px">'+escHtml(x.comp.lib)+'</th>'
+      const entete='<tr style="background:var(--koala-light,#EEEDF8)"><th style="text-align:left;padding:5px 6px;font-size:12px">'+escHtml(x.comp.lib)+(stage?miLib(x.ck):'')+'</th>'
         +(stage?stgEvalRadios('stg-comp-'+x.ck,'data-kp',x.ck,(comp[x.ck]||{}).n||''):stgEvalEnteteNiv())+'</tr>';
       if(!stage)return entete+rows;
       const c=(comp[x.ck]||{}).c||'';
@@ -122,6 +124,25 @@ function stgEvalHtmlGrille(profil,ev){
     +'<th style="width:34%;text-align:left;padding:5px 4px">Commentaire</th></tr></thead><tbody>'+rows(g)+'</tbody></table>').join('');
 }
 
+/* Bilan à mi-parcours (stage EJE) : un point d'étape daté, avec les objectifs pour la seconde
+   moitié du stage. « Figer » garde une copie des notes par compétence à cet instant, pour
+   voir ensuite la progression à côté des notes finales. */
+function stgEvalHtmlMi(ev){
+  const mi=ev.mi||{}, nb=Object.keys(mi.eje_comp||{}).length;
+  return '<details style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:6px 10px"'+(mi.le||mi.bilan||mi.objectifs?' open':'')+'>'
+    +'<summary style="cursor:pointer;font-weight:700;font-size:12.5px">Bilan à mi-parcours <span style="font-weight:400;color:#777">('
+    +(mi.eje_comp?'figé le '+escHtml(stgDateFr(mi.le))+', '+nb+' compétence'+(nb>1?'s':'')+' notée'+(nb>1?'s':''):'pas encore figé')+')</span></summary>'
+    +'<div class="fg" style="margin-top:8px"><label class="flabel">Bilan de la première moitié du stage</label>'
+    +'<textarea class="finput" id="stg-mi-bilan" rows="3" style="resize:vertical" placeholder="Points forts, difficultés rencontrées">'+escHtml(mi.bilan||'')+'</textarea></div>'
+    +'<div class="fg"><label class="flabel">Objectifs d\'ici la fin du stage</label>'
+    +'<textarea class="finput" id="stg-mi-obj" rows="3" style="resize:vertical" placeholder="Sur quoi progresser, compétences à travailler">'+escHtml(mi.objectifs||'')+'</textarea></div>'
+    +'<div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">'
+    +'<div class="fg" style="max-width:200px;margin:0"><label class="flabel">Bilan du</label><input class="finput" type="date" id="stg-mi-date" value="'+escHtml(mi.le||todayStr())+'"></div>'
+    +'<button class="btn-primary" type="button" onclick="stgEvalMiFiger()"><i class="ti ti-flag"></i> '+(mi.eje_comp?'Mettre à jour':'Figer')+' le bilan à mi-parcours</button></div>'
+    +'<p style="font-size:11.5px;color:#777;margin:6px 0 0">Les notes par compétence saisies ci-dessous sont copiées à cette date ; vous pouvez ensuite continuer à les modifier pour l\'évaluation finale.</p>'
+    +'</details>';
+}
+
 function stgRenderEval(){
   const zone=document.getElementById('stg-eval-zone');
   if(!zone)return;
@@ -135,6 +156,7 @@ function stgRenderEval(){
     +'<select class="finput" id="stg-eval-profil" onchange="stgEvalProfilChange()" style="width:auto;font-size:12px;padding:4px 8px">'
     +Object.keys(STG_EVAL_PROFILS).map(k=>'<option value="'+k+'"'+(k===profil?' selected':'')+'>'+STG_EVAL_PROFILS[k]+'</option>').join('')
     +'</select></div>'
+    +(profil==='eje_stage'?stgEvalHtmlMi(ev):'')
     +(stgEvalEstEje(profil)?stgEvalHtmlEje(ev,profil==='eje_stage'):stgEvalHtmlGrille(profil,ev))
     +'<div class="fg"><label class="flabel">Appréciation générale</label>'
     +'<textarea class="finput" id="stg-eval-appr" rows="3" style="resize:vertical">'+escHtml(ev.appreciation||'')+'</textarea></div>'
@@ -155,6 +177,11 @@ function stgEvalLire(){
   const copie=o=>JSON.parse(JSON.stringify(o||{}));
   let notes=copie(base.notes), eje=copie(base.eje), eje_comp=copie(base.eje_comp), eje_comm=copie(base.eje_comm);
   let eje_cibles=Array.isArray(base.eje_cibles)?base.eje_cibles.slice():[];
+  const mi=copie(base.mi), miBilan=document.getElementById('stg-mi-bilan');
+  if(miBilan){
+    mi.bilan=miBilan.value.trim(); mi.objectifs=((document.getElementById('stg-mi-obj')||{}).value||'').trim();
+    const d=(document.getElementById('stg-mi-date')||{}).value; if(d&&mi.eje_comp)mi.le=d;
+  }
   if(stgEvalEstEje(profil)){
     q('input[data-ke]').forEach(r=>{delete eje[r.dataset.ke];});
     q('input[data-ke]:checked').forEach(r=>{eje[r.dataset.ke]=r.value;});
@@ -174,7 +201,9 @@ function stgEvalLire(){
       if(c)notes[i.dataset.kc]=Object.assign(notes[i.dataset.kc]||{},{c});
     });
   }
-  return {profil,notes,eje,eje_comp,eje_comm,eje_cibles,appreciation:((document.getElementById('stg-eval-appr')||{}).value||'').trim()};
+  const res={profil,notes,eje,eje_comp,eje_comm,eje_cibles,appreciation:((document.getElementById('stg-eval-appr')||{}).value||'').trim()};
+  if(mi.bilan||mi.objectifs||mi.eje_comp)res.mi=mi;
+  return res;
 }
 
 /* Changer de profil ajoute ou retire un critère : on garde ce qui est saisi. */
@@ -186,10 +215,10 @@ function stgEvalProfilChange(){
   stgRenderEval();
 }
 
-async function stgEvalSave(){
+async function stgEvalSave(evFixe){
   const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
   if(!s)return;
-  const ev=stgEvalLire();
+  const ev=evFixe&&evFixe.profil?evFixe:stgEvalLire();
   const le=(document.getElementById('stg-eval-date')||{}).value||null;
   const ok=await dbUpdate('stagiaires',s.id,{evaluation:ev,evaluation_le:le});
   if(!ok){
@@ -199,6 +228,20 @@ async function stgEvalSave(){
   }
   s.evaluation=ev; s.evaluation_le=le;
   showBanner('Évaluation enregistrée ✅');
+  return true;
+}
+
+async function stgEvalMiFiger(){
+  const ev=stgEvalLire();
+  const mi=ev.mi||{};
+  mi.eje_comp=JSON.parse(JSON.stringify(ev.eje_comp||{}));
+  mi.le=(document.getElementById('stg-mi-date')||{}).value||todayStr();
+  ev.mi=mi;
+  if(await stgEvalSave(ev)){
+    const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+    if(s)s.evaluation=ev;
+    stgRenderEval();
+  }
 }
 
 /* Version papier, à signer : même présentation que le document de suivi. */
@@ -214,15 +257,17 @@ function stgEvalImprimer(){
     return STG_EVAL_EJE.map(d=>{
       const liste=cles.filter(x=>x.dc===d&&(!stage||!cib.length||cib.indexOf(x.ck)>=0));
       if(!liste.length)return '';
-      const ligne=(lib,n,c,ind)=>'<tr><td'+(ind?' style="padding-left:18px"':'')+'>'+escHtml(lib)+'</td>'+NIV.map(([v])=>'<td class="c">'+croix(n,v)+'</td>').join('')+'<td>'+escHtml(c||'')+'</td></tr>';
+      const miC=(ev.mi&&ev.mi.eje_comp)||{};
+      const miL=ck=>{const l=NIV.find(x=>x[0]===(miC[ck]||{}).n);return l?l[1]:'';};
+      const ligne=(lib,n,c,ind,ck)=>'<tr><td'+(ind?' style="padding-left:18px"':'')+'>'+escHtml(lib)+'</td>'+NIV.map(([v])=>'<td class="c">'+croix(n,v)+'</td>').join('')+'<td>'+escHtml(c||'')+'</td>'+(stage?'<td class="c">'+escHtml(ck?miL(ck):'')+'</td>':'')+'</tr>';
       const corps=liste.map(x=>{
         if(!stage)return '<tr><th colspan="5" style="text-align:left">'+escHtml(x.comp.lib)+'</th></tr>'+x.inds.map(it=>ligne(it.lib,ev.eje[it.k],'',true)).join('');
         const cp=ev.eje_comp[x.ck]||{};
         /* Format stage : la compétence, puis seulement les indicateurs détaillés. */
-        return ligne(x.comp.lib,cp.n,cp.c,false)+x.inds.filter(it=>ev.eje[it.k]).map(it=>ligne(it.lib,ev.eje[it.k],'',true)).join('');
+        return ligne(x.comp.lib,cp.n,cp.c,false,x.ck)+x.inds.filter(it=>ev.eje[it.k]).map(it=>ligne(it.lib,ev.eje[it.k],'',true)).join('');
       }).join('');
       return '<h2>'+escHtml(d.titre)+'</h2><table><tr><th style="text-align:left">'+(stage?'Compétences':'Compétences / indicateurs')+'</th>'
-        +NIV.map(([,l])=>'<th>'+escHtml(l)+'</th>').join('')+'<th>Commentaire</th></tr>'+corps
+        +NIV.map(([,l])=>'<th>'+escHtml(l)+'</th>').join('')+'<th>Commentaire</th>'+(stage?'<th>Mi-parcours</th>':'')+'</tr>'+corps
         +'</table><p><b>Commentaires :</b> '+escHtml((ev.eje_comm||{})[d.id]||'')+'</p>';
     }).join('');
   };
@@ -238,6 +283,7 @@ function stgEvalImprimer(){
     +'<p><b>'+(ev.profil==='eje'?'Apprenti·e':'Stagiaire')+' :</b> '+escHtml(stgNomComplet(s))+'<br><b>Formation :</b> '+escHtml(STG_EVAL_PROFILS[ev.profil]||'')+(s.formation?' — '+escHtml(s.formation):'')
     +'<br><b>Période d\'accueil :</b> du '+escHtml(stgDateFr(s.date_debut))+' au '+escHtml(stgDateFr(s.date_fin))
     +'<br><b>Structure :</b> '+escHtml(crecheNom)+'</p>'
+    +(stage&&ev.mi&&(ev.mi.bilan||ev.mi.objectifs||ev.mi.eje_comp)?'<h2>Bilan à mi-parcours'+(ev.mi.le?' ('+escHtml(stgDateFr(ev.mi.le))+')':'')+'</h2><p><b>Bilan :</b><br>'+escHtml(ev.mi.bilan||'').replace(/\n/g,'<br>')+'</p><p><b>Objectifs d\'ici la fin du stage :</b><br>'+escHtml(ev.mi.objectifs||'').replace(/\n/g,'<br>')+'</p>':'')
     +(stgEvalEstEje(ev.profil)?tabEje():stgEvalGrille(ev.profil).map(tab).join(''))
     +'<p><b>Appréciation générale :</b><br>'+escHtml(ev.appreciation).replace(/\n/g,'<br>')+'</p>'
     +'<p>Le '+escHtml(stgDateFr(d))+'</p><table><tr><th>Noms + signatures</th></tr><tr><td class="sig"></td></tr></table>'
