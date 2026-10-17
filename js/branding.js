@@ -85,8 +85,22 @@
     return doc.addImage(pdfLogoData.data, 'PNG', lx, y, lw, lh);
   }
 
+  // Mémorise le rôle de la personne connectée dans ce navigateur, pour que
+  // l'accueil (index.html) masque les cartes inutiles à un(e) employé(e).
+  // Présentation seulement : la protection réelle est côté Supabase (RLS).
+  async function memoriserRole(sb) {
+    try {
+      const { data: s } = await sb.auth.getSession();
+      const uid = s && s.session && s.session.user && s.session.user.id;
+      if (!uid) return;
+      const { data: r } = await sb.from('referents').select('role').eq('user_id', uid).maybeSingle();
+      if (r && r.role) localStorage.setItem('kk_role', r.role);
+    } catch (e) { /* best-effort */ }
+  }
+
   async function applyBranding(sb, opts) {
     const cfg = Object.assign({}, DEFAUT, opts || {});
+    memoriserRole(sb);
     try {
       const { data: org, error } = await sb
         .from('organisations')

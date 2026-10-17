@@ -155,6 +155,7 @@ async function loadProfileAndGrant(){
     return;
   }
   COLLAB=c;COLLAB_TYPE=type;
+  try{localStorage.setItem('kk_role',type==='employe'?'employe':(c.role||'referent'));}catch(e){}
   if(window.KKBranding)KKBranding.applyBranding(sb);
   await grantAccess();
 }
