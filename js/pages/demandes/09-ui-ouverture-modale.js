@@ -411,6 +411,15 @@ function pgReunionsDuJour(dateISO,crecheId){
     return !e.creche_id||String(e.creche_id)===String(crecheId||'')||e.titre==='Réunion de coordination';
   }).sort((a,b)=>String(a.heure_debut||'').localeCompare(String(b.heure_debut||'')));
 }
+// Planning coordinateur : les réunions des directrices techniques (« Réunion DT », réunion de
+// coordination, ou toute réunion sans crèche) y figurent aussi, quelle que soit la crèche saisie.
+function pgReunionsCoordDuJour(dateISO){
+  return (typeof cacheEvenements!=='undefined'?cacheEvenements:[]).filter(e=>{
+    if(e.type!=='reunion'||!e.date_debut)return false;
+    if(dateISO<e.date_debut||dateISO>(e.date_fin||e.date_debut))return false;
+    return !e.creche_id||e.titre==='Réunion de coordination'||/\bDT\b|directrices? techniques?/i.test(e.titre||'');
+  }).sort((a,b)=>String(a.heure_debut||'').localeCompare(String(b.heure_debut||'')));
+}
 // « Les contes de Miline » (onglet Événements) : pendant ces contes, Miline (en poste sur
 // une crèche) n'est plus sur son créneau habituel. L'événement peut avoir lieu dans
 // n'importe quelle crèche : seule compte la date/heure.
@@ -501,6 +510,14 @@ function getPlanningGridSimple(events,coordId,semaine,crecheIdHint){
     const _fermD=fermetureAt(_pgsCrecheId,ipDateToLocalISO(d));
     html+='<div class="pg-hd"'+(_fermD?' style="background:var(--red-l,#FDE8E8);color:var(--red,#C62828)" title="'+escHtml(fermetureLabel(_fermD))+'"':'')+'>'+DAYS[i]+'<br><span style="font-size:10px;font-weight:400;opacity:0.7">'+fmt(d)+'</span>'+(_fermD?'<br><span style="font-size:9.5px;font-weight:800"><i class="ti ti-door-off"></i> Fermé</span>':'')+'</div>';
   });
+  // Réunions de l'onglet Événements (ex. réunion DT) : une ligne dédiée, seulement si la semaine en compte.
+  const _reusC=days5.map(d=>pgReunionsCoordDuJour(ipDateToLocalISO(d)));
+  if(_reusC.some(l=>l.length)){
+    html+='<div class="pg-time">Réunions</div>';
+    _reusC.forEach(l=>{
+      html+='<div class="pg-cell-ro">'+(l.length?l.map(r=>'<div class="pg-card reunion" title="Réunion (onglet Événements)" style="cursor:default">'+pgReunionLibelle(r)+'</div>').join(''):'<div style="text-align:center;padding:0.5rem;color:#ddd;font-size:11px">—</div>')+'</div>';
+    });
+  }
   // Valeurs de slot : 0 = Matin, 1 = Après-midi, 2 = second créneau du matin, 3 = second de l'après-midi.
   [['Matin',0],['Matin (2)',2],['Après-midi',1],['Après-midi (2)',3]].forEach(([slot,si])=>{
     html+='<div class="pg-time">'+slot+'</div>';

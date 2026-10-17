@@ -601,6 +601,7 @@ planning: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📅 Planning des intervenants</h3>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
   💡 Le planning affiche la semaine courante. Chaque directeur/trice technique peut y noter ses présences, absences, formations et réunions.
+  <br>🟣 Les réunions de l'onglet Événements destinées aux directeurs/trices techniques (ex. « Réunion DT », réunion de coordination) apparaissent aussi, en lecture seule, dans une ligne « Réunions » du planning coordinateur.
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Ajouter un événement</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
