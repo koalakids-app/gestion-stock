@@ -79,6 +79,15 @@ const EXT: Record<string, string> = {
 const profilDe = (stag: Record<string, unknown>) =>
   stag.type_contrat === 'alternant' ? 'alternant' : 'stagiaire';
 
+/** Le stage EJE ouvre l'auto-évaluation depuis le lien. Le choix du tuteur (profil
+ *  « EJE — stage » de l'évaluation) prime ; à défaut, la formation saisie. */
+const autoEvalActive = (stag: Record<string, any>) => {
+  if (profilDe(stag) !== 'stagiaire') return false;
+  const p = stag.evaluation?.profil;
+  if (p) return p === 'eje_stage';
+  return /\beje\b|[ée]ducateur.*jeunes enfants/i.test(String(stag.formation || ''));
+};
+
 /** Charge la stagiaire depuis son jeton et refuse tout ce qui n'est plus valable. */
 async function stagiaireValide(token: string) {
   if (!token || typeof token !== 'string' || token.length < 16) {
@@ -324,6 +333,14 @@ Deno.serve(async (req) => {
           ref: stag.id,
         },
         livrets,
+        // Jamais la note du tuteur : seulement les compétences visées et ce que
+        // la personne a déjà répondu.
+        auto_eval: autoEvalActive(stag) ? {
+          cibles: Array.isArray(stag.evaluation?.eje_cibles) ? stag.evaluation.eje_cibles : [],
+          eje_comp: stag.auto_evaluation?.eje_comp || {},
+          commentaire: stag.auto_evaluation?.commentaire || '',
+          le: stag.auto_evaluation?.le || null,
+        } : null,
         pieces: types.map(t => ({
           id: t.id, libelle: t.libelle, aide: t.aide, lien: t.lien,
           obligatoire: t.obligatoire,
@@ -517,6 +534,39 @@ Deno.serve(async (req) => {
       if (ue) throw ue;
       if (!maj?.length) return json({ erreur: 'Document déjà signé' }, 409);
       return json({ ok: true, signe_le: signeLe });
+    }
+
+    // ------------------------------------------------------ AUTO_EVALUER
+    // Le stagiaire EJE note lui-même les compétences visées. Il peut renvoyer sa
+    // réponse tant que son lien est valable : la dernière fait foi.
+    if (action === 'auto_evaluer') {
+      if (!autoEvalActive(stag)) return json({ erreur: 'Action inconnue' }, 403);
+      const cibles: string[] = Array.isArray(stag.evaluation?.eje_cibles) ? stag.evaluation.eje_cibles : [];
+      const recu = (body.eje_comp && typeof body.eje_comp === 'object') ? body.eje_comp as Record<string, unknown> : {};
+      const eje_comp: Record<string, string> = {};
+      for (const [k, v] of Object.entries(recu)) {
+        if (!/^dc[1-4]_c\d{1,2}$/.test(k) || !['a', 'b', 'n'].includes(String(v))) {
+          return json({ erreur: 'Réponse illisible' }, 400);
+        }
+        if (cibles.length && !cibles.includes(k)) return json({ erreur: 'Réponse illisible' }, 400);
+        eje_comp[k] = String(v);
+      }
+      const commentaire = String(body.commentaire || '').replace(/\r/g, '').trim().slice(0, 2000);
+      if (!Object.keys(eje_comp).length && !commentaire) return json({ erreur: 'Réponse illisible' }, 400);
+
+      const le = new Date().toISOString().slice(0, 10);
+      const { error: ue } = await sb.from('stagiaires')
+        .update({ auto_evaluation: { eje_comp, commentaire, le, via: 'lien' } })
+        .eq('id', stag.id);
+      if (ue) throw ue;
+      await signalerDepot(sb, {
+        source: 'stagiaire',
+        creche_id: stag.creche_id,
+        stagiaire_id: stag.id,
+        libelle: 'Auto-évaluation de stage',
+        nom: stag.prenom || 'La stagiaire',
+      });
+      return json({ ok: true, le });
     }
 
     return json({ erreur: 'Action inconnue' }, 400);

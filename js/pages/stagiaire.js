@@ -39,6 +39,7 @@ let PIECES = [];   // catalogue + fichiers déposés
 let AUTRES = [];   // pièces dont le type ne figure plus dans la liste demandée
 let RESS = [];     // ce que la crèche transmet (documents et liens)
 let LIVRETS = [];  // documents préparés par la crèche, à lire et à signer
+let AUTO = null;   // auto-évaluation du stage EJE : {cibles, eje_comp, commentaire, le}, ou null
 
 /* Le vocabulaire, et rien d'autre. */
 const MOTS = {
@@ -87,7 +88,7 @@ async function boot(){
 
 async function recharger(){
   const d=await appel('get');
-  STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];RESS=d.ressources||[];LIVRETS=d.livrets||[];
+  STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];RESS=d.ressources||[];LIVRETS=d.livrets||[];AUTO=d.auto_eval||null;
   document.getElementById('titrePage').textContent=mots().titre;
   document.title=mots().titre+' — Koala Kids';
   document.getElementById('sousTitre').textContent=
@@ -138,6 +139,8 @@ function render(){
     RESS.forEach((r,i)=>h+=htmlRessource(r,i));
     h+='<h3 class="sec"><i class="ti ti-file-upload"></i> Les documents à nous envoyer</h3>';
   }
+
+  h+=htmlAuto();
 
   h+='<div class="card"><div style="font-weight:700;font-size:14px">Votre avancement</div>'
     +'<div class="prog"><i style="width:'+pct+'%"></i></div>'
@@ -370,6 +373,53 @@ async function confirmerRessource(i,coche){
   }catch(e){
     toast('Impossible d’enregistrer. Vérifiez votre connexion.');
     await recharger();
+  }
+}
+
+/* ----------------------------------------------------- AUTO-ÉVALUATION (EJE) */
+
+/* Le référentiel (STG_EVAL_EJE) est le même que celui de la fiche côté crèche : une
+   compétence a pour clé son domaine et son rang (dc1_c0…). Seules les compétences
+   visées par le stage sont proposées ; sans choix de la crèche, toutes le sont. */
+const AUTO_NIV=[['a','Acquis'],['b','À approfondir'],['n','Pas encore vu']];
+
+function htmlAuto(){
+  if(!AUTO||typeof STG_EVAL_EJE==='undefined')return '';
+  const cib=AUTO.cibles||[], rep=AUTO.eje_comp||{};
+  let nb=0;
+  const dom=STG_EVAL_EJE.map(d=>{
+    const l=d.comps.map((c,ci)=>({ck:d.id+'_c'+ci,lib:c.lib})).filter(x=>!cib.length||cib.indexOf(x.ck)>=0);
+    if(!l.length)return '';
+    return '<div class="ae-dom">'+esc(d.titre)+'</div>'+l.map(x=>{
+      nb++;
+      return '<div class="ae-comp"><div class="ae-lib">'+esc(x.lib)+'</div><div class="ae-niv">'
+        +AUTO_NIV.map(([v,t])=>'<label><input type="radio" name="ae_'+x.ck+'" value="'+v+'" data-ae="'+x.ck+'"'+(rep[x.ck]===v?' checked':'')+'><span>'+esc(t)+'</span></label>').join('')
+        +'</div></div>';
+    }).join('');
+  }).join('');
+  return '<h3 class="sec"><i class="ti ti-clipboard-check"></i> Votre auto-évaluation</h3>'
+    +'<p class="hint">'+(AUTO.le?'Envoyée le '+esc(dfr(AUTO.le))+' — vous pouvez la modifier et la renvoyer.'
+      :'Pour chaque compétence, dites où vous en êtes. Il n’y a pas de mauvaise réponse : « Pas encore vu » est tout à fait normal.')+'</p>'
+    +'<div class="card">'+dom
+    +'<div class="ae-lib" style="margin-top:14px">Ce que vous retenez de votre stage</div>'
+    +'<textarea id="ae_comm" class="ae-txt" rows="4" maxlength="2000" placeholder="Vos points forts, vos difficultés, ce que vous aimeriez approfondir">'+esc(AUTO.commentaire||'')+'</textarea>'
+    +'<button class="btn btn-p" id="ae_btn" style="margin-top:12px" onclick="envoyerAuto()"><i class="ti ti-send"></i> '+(AUTO.le?'Renvoyer':'Envoyer')+' mon auto-évaluation</button>'
+    +'</div>';
+}
+
+async function envoyerAuto(){
+  const eje_comp={};
+  document.querySelectorAll('input[data-ae]:checked').forEach(r=>{eje_comp[r.dataset.ae]=r.value;});
+  const commentaire=(document.getElementById('ae_comm')||{}).value||'';
+  if(!Object.keys(eje_comp).length&&!commentaire.trim())return toast('Répondez à au moins une compétence.');
+  const b=document.getElementById('ae_btn');if(b)b.disabled=true;
+  try{
+    await appel('auto_evaluer',{eje_comp,commentaire});
+    await recharger();
+    toast('Merci, votre auto-évaluation est envoyée ✔');
+  }catch(e){
+    if(b)b.disabled=false;
+    toast('Impossible d’envoyer. Vérifiez votre connexion.');
   }
 }
 
