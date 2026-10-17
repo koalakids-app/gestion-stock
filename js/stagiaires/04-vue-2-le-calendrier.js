@@ -801,7 +801,8 @@ function stgRenderCollabZone(){
     :'<span class="badge" style="background:#f0f0f5;color:#888">Pas de compte</span>';
   const btnCompte=emp.user_id?'':'<button type="button" class="btn-primary" onclick="stgCreerCompteCollab()" '
     +(emp.email?'':'disabled title="Renseignez un e-mail sur la fiche collaborateur avant de créer le compte"')
-    +'><i class="ti ti-mail-forward"></i> Créer le compte de connexion</button>';
+    +'><i class="ti ti-mail-forward"></i> Créer le compte de connexion</button>'
+    +(emp.user_id||!window.PartageLien||!PartageLien.disponible()?'':'<button type="button" class="btn-cancel" onclick="stgCreerCompteCollab(true)" '+(emp.email?'':'disabled')+'><i class="ti ti-share"></i> Partager</button>');
   zone.innerHTML=div+'<div class="fg"><label class="flabel">Compte collaborateur</label>'
     +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:#f8f8fb;border-radius:10px">'
     +'<div style="flex:1;min-width:160px"><b>'+escHtml(emp.prenom||'')+' '+escHtml(emp.nom||'')+'</b>'
@@ -830,15 +831,20 @@ async function stgCreerFicheCollab(){
   showBanner('Fiche collaborateur créée et liée ✅');
   stgRenderCollabZone();
 }
-async function stgCreerCompteCollab(){
+async function stgCreerCompteCollab(partager){
   const s=stgFicheId?stgCache.find(x=>String(x.id)===String(stgFicheId)):null;
   const emp=stgEmployeLie(s);
   if(!emp||!emp.email)return;
-  if(!confirm('Envoyer à '+emp.email+' un e-mail d\'invitation pour créer son compte de connexion ?'))return;
+  if(!confirm(partager?'Créer le compte et partager le lien d\'invitation (aucun e-mail ne sera envoyé) ?'
+    :'Envoyer à '+emp.email+' un e-mail d\'invitation pour créer son compte de connexion ?'))return;
   const redirect=location.href.replace(/demandes\.html.*$/,'collaborateur.html');
-  const{ok,data}=await callFn('creer-compte-collaborateur',{employe_id:emp.id,redirect_to:redirect});
+  const{ok,data}=await callFn('creer-compte-collaborateur',{employe_id:emp.id,redirect_to:redirect,partager:partager===true});
   if(!ok)return showBanner('Échec : '+(data.error||'erreur inconnue'),'error');
-  showBanner('Invitation envoyée à '+emp.email+'.');
+  if(partager===true&&data.lien){
+    const r=await PartageLien.partager(data.lien,{titre:'Compte de connexion',
+      texte:'Bonjour '+(emp.prenom||'')+', voici le lien pour créer ton compte de connexion :'});
+    showBanner(r==='copie'?'Compte créé — partage indisponible, lien copié.':'Compte créé, lien d\'invitation partagé.');
+  }else showBanner('Invitation envoyée à '+emp.email+'.');
   /* Le vrai user_id n'est posé côté base qu'après acceptation de
      l'invitation — pas de mise à jour optimiste ici, juste un rechargement
      pour refléter l'état réel au prochain passage sur la fiche. */
