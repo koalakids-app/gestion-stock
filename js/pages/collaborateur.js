@@ -361,6 +361,12 @@ async function loadPlanning(){
   }
   if(error){grid.innerHTML='<p class="hint">Planning indisponible pour le moment.</p>';return;}
   rows=rows||[];
+  /* Garde-fou côté page : même si une règle RLS était trop large, un(e)
+     employé(e) ne voit que ses lignes (prénom de la fiche ou planning_nom). */
+  if(COLLAB_TYPE!=='referent'){
+    const cle=String(COLLAB.planning_nom||COLLAB.prenom||'').trim().toLowerCase();
+    rows=rows.filter(r=>String(r.prenom||'').trim().toLowerCase()===cle);
+  }
   grid.innerHTML=JOURS.map((nom,idx)=>{
     const evs=rows.filter(r=>r.jour===idx);
     const ferm=fermetureAt(addDays(semaineDate,idx));

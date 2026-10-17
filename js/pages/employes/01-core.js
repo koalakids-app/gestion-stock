@@ -80,6 +80,9 @@ async function loadProfileAndGrant(){
     return;
   }
   PROF=p;
+  /* Module réservé à la direction et aux directeurs/trices techniques :
+     un(e) employé(e) est renvoyé(e) vers « Mon espace ». */
+  if(PROF.role==='employe'){window.location.replace('collaborateur.html');return;}
   isDirection=PROF.role==='direction';
   if(window.KKBranding)KKBranding.applyBranding(sb);
   await grantAccess();
