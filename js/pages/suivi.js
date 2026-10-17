@@ -128,6 +128,8 @@ async function bootOrdinateur(){
   const{data:p}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
   if(!p){alert('Profil introuvable. Contactez la direction.');await sb.auth.signOut();location.reload();return;}
   PROF=p;IS_DIRECTION=(p.role==='direction');
+  /* Module réservé à la direction et aux directeurs/trices techniques. */
+  if(p.role==='employe'){window.location.replace('collaborateur.html');return;}
   if(window.KKBranding)KKBranding.applyBranding(sb);
   await mfaGateCheckAndProceed();
 }
