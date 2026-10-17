@@ -175,6 +175,15 @@ async function mfaGateCancel(){
   try{await sb.auth.signOut();}catch(e){}
   showLoginView();
 }
+function togglePwdVisibility(inputId,btn){
+  const input=document.getElementById(inputId);
+  if(!input)return;
+  const voir=input.type==='password';
+  input.type=voir?'text':'password';
+  const icon=btn.querySelector('i');
+  if(icon){icon.classList.toggle('ti-eye',!voir);icon.classList.toggle('ti-eye-off',voir);}
+  btn.setAttribute('aria-label',voir?'Masquer le mot de passe':'Afficher le mot de passe');
+}
 async function doLogin(){
   const e=document.getElementById('liMail').value.trim(),p=document.getElementById('liPwd').value;
   const {error}=await sb.auth.signInWithPassword({email:e,password:p});
