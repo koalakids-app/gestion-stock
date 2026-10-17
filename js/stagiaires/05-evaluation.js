@@ -38,7 +38,7 @@ const STG_EVAL_EXTRA={
 
 function stgEvalProfilDefaut(s){
   const f=((s&&s.formation)||'').toLowerCase();
-  if(/\beje\b|[ée]ducateur.*jeunes enfants/.test(f))return stgType(s)==='alternant'?'eje':'eje_stage';
+  if(/\beje\b|[ée]ducat(eur|rice).*jeunes enfants/.test(f))return stgType(s)==='alternant'?'eje':'eje_stage';
   if(/iepe/.test(f))return 'iepe';
   if(/aepe|accompagnant/.test(f))return 'aepe';
   return stgType(s)==='alternant'?'eje':'decouverte';
@@ -121,16 +121,28 @@ function stgEvalHtmlEje(ev,stage){
   return (stage?stgEvalHtmlCibles(cibles,cles):'')+html;
 }
 
+/* Ce que le stagiaire a répondu depuis son lien, à côté de la note du tuteur ; un écart est signalé. */
+function stgEvalAutoBadge(k,mien,auto){
+  const a=((auto&&auto.grille)||{})[k], l=STG_EVAL_NIVEAUX.find(x=>x[0]===a);
+  if(!l)return '';
+  const ecart=mien&&mien!==a;
+  return '<div style="font-weight:400;font-size:10.5px;color:'+(ecart?'#C95F0A':'#777')+'">Auto-évaluation : '+escHtml(l[1])+(ecart?' — écart avec votre note':'')+'</div>';
+}
+
 function stgEvalHtmlGrille(profil,ev){
-  const notes=ev.notes||{};
+  const notes=ev.notes||{}, auto=ev.auto||{};
   const rows=g=>g.crit.map(([k,lib])=>{
     const n=(notes[k]||{}).n||'', c=(notes[k]||{}).c||'';
-    return '<tr><td style="padding:5px 6px;font-size:12.5px">'+escHtml(lib)+'</td>'
+    return '<tr><td style="padding:5px 6px;font-size:12.5px">'+escHtml(lib)+stgEvalAutoBadge(k,n,auto)+'</td>'
       +STG_EVAL_NIVEAUX.map(([v,l])=>'<td style="text-align:center;padding:5px 2px"><label title="'+l+'" style="cursor:pointer">'
         +'<input type="radio" name="stg-ev-'+k+'" value="'+v+'" data-k="'+k+'"'+(n===v?' checked':'')+'></label></td>').join('')
       +'<td style="padding:5px 4px"><input class="finput" data-kc="'+k+'" value="'+escHtml(c)+'" style="font-size:12px;padding:4px 7px" placeholder="Commentaire"></td></tr>';
   }).join('');
-  return stgEvalGrille(profil).map(g=>'<table style="width:100%;border-collapse:collapse;margin-bottom:12px"><thead>'
+  const encart=(Object.keys(auto.grille||{}).length||auto.commentaire)
+    ?'<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:12px">'
+      +'<b>Auto-évaluation du stagiaire</b>'+(auto.via==='lien'?' <span style="color:#777">— envoyée depuis son lien'+(auto.le?' le '+escHtml(stgDateFr(auto.le)):'')+'</span>':'')
+      +(auto.commentaire?'<div style="margin-top:4px;white-space:pre-wrap">'+escHtml(auto.commentaire)+'</div>':'')+'</div>':'';
+  return encart+stgEvalGrille(profil).map(g=>'<table style="width:100%;border-collapse:collapse;margin-bottom:12px"><thead>'
     +'<tr style="background:var(--koala-light,#EEEDF8);font-size:11px;text-transform:uppercase"><th style="text-align:left;padding:5px 6px">'+escHtml(g.titre)+'</th>'
     +STG_EVAL_NIVEAUX.map(([,l])=>'<th style="width:58px;padding:5px 2px">'+l+'</th>').join('')
     +'<th style="width:34%;text-align:left;padding:5px 4px">Commentaire</th></tr></thead><tbody>'+rows(g)+'</tbody></table>').join('');
@@ -246,7 +258,7 @@ function stgEvalLire(){
   }
   const res={profil,notes,eje,eje_comp,eje_comm,eje_cibles,appreciation:((document.getElementById('stg-eval-appr')||{}).value||'').trim()};
   if(mi.bilan||mi.objectifs||mi.eje_comp)res.mi=mi;
-  if(Object.keys(auto.eje_comp||{}).length||auto.commentaire)res.auto=auto;
+  if(Object.keys(auto.eje_comp||{}).length||Object.keys(auto.grille||{}).length||auto.commentaire)res.auto=auto;
   return res;
 }
 
@@ -319,9 +331,11 @@ function stgEvalImprimer(){
         +'</table><p><b>Commentaires :</b> '+escHtml((ev.eje_comm||{})[d.id]||'')+'</p>';
     }).join('');
   };
-  const tab=g=>'<table><tr><th style="text-align:left">'+escHtml(g.titre)+'</th>'+STG_EVAL_NIVEAUX.map(([,l])=>'<th>'+l+'</th>').join('')+'<th>Commentaire</th></tr>'
+  const autoG=(ev.auto&&ev.auto.grille)||{}, avecAuto=Object.keys(autoG).length>0;
+  const autoL=k=>{const l=STG_EVAL_NIVEAUX.find(x=>x[0]===autoG[k]);return l?l[1]:'';};
+  const tab=g=>'<table><tr><th style="text-align:left">'+escHtml(g.titre)+'</th>'+STG_EVAL_NIVEAUX.map(([,l])=>'<th>'+l+'</th>').join('')+'<th>Commentaire</th>'+(avecAuto?'<th>Auto-évaluation</th>':'')+'</tr>'
     +g.crit.map(([k,lib])=>{const x=ev.notes[k]||{};
-      return '<tr><td>'+escHtml(lib)+'</td>'+STG_EVAL_NIVEAUX.map(([v])=>'<td class="c">'+croix(x.n,v)+'</td>').join('')+'<td>'+escHtml(x.c||'')+'</td></tr>';}).join('')+'</table>';
+      return '<tr><td>'+escHtml(lib)+'</td>'+STG_EVAL_NIVEAUX.map(([v])=>'<td class="c">'+croix(x.n,v)+'</td>').join('')+'<td>'+escHtml(x.c||'')+'</td>'+(avecAuto?'<td class="c">'+escHtml(autoL(k))+'</td>':'')+'</tr>';}).join('')+'</table>';
   const w=window.open('','_blank');
   if(!w)return showBanner("Autorisez l'ouverture de fenêtres pour imprimer.",'error');
   w.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Suivi du stagiaire</title><style>'
@@ -332,7 +346,7 @@ function stgEvalImprimer(){
     +'<br><b>Période d\'accueil :</b> du '+escHtml(stgDateFr(s.date_debut))+' au '+escHtml(stgDateFr(s.date_fin))
     +'<br><b>Structure :</b> '+escHtml(crecheNom)+'</p>'
     +(stage&&ev.mi&&(ev.mi.bilan||ev.mi.objectifs||ev.mi.eje_comp)?'<h2>Bilan à mi-parcours'+(ev.mi.le?' ('+escHtml(stgDateFr(ev.mi.le))+')':'')+'</h2><p><b>Bilan :</b><br>'+escHtml(ev.mi.bilan||'').replace(/\n/g,'<br>')+'</p><p><b>Objectifs d\'ici la fin du stage :</b><br>'+escHtml(ev.mi.objectifs||'').replace(/\n/g,'<br>')+'</p>':'')
-    +(stage&&ev.auto&&ev.auto.commentaire?'<p><b>Ce que le stagiaire retient de son stage'+(ev.auto.le?' ('+escHtml(stgDateFr(ev.auto.le))+')':'')+' :</b><br>'+escHtml(ev.auto.commentaire).replace(/\n/g,'<br>')+'</p>':'')
+    +(ev.auto&&ev.auto.commentaire?'<p><b>Ce que le stagiaire retient de son stage'+(ev.auto.le?' ('+escHtml(stgDateFr(ev.auto.le))+')':'')+' :</b><br>'+escHtml(ev.auto.commentaire).replace(/\n/g,'<br>')+'</p>':'')
     +(stgEvalEstEje(ev.profil)?tabEje():stgEvalGrille(ev.profil).map(tab).join(''))
     +'<p><b>Appréciation générale :</b><br>'+escHtml(ev.appreciation).replace(/\n/g,'<br>')+'</p>'
     +'<p>Le '+escHtml(stgDateFr(d))+'</p><table><tr><th>Noms + signatures</th></tr><tr><td class="sig"></td></tr></table>'
