@@ -312,10 +312,10 @@ function openFromUrl(){
     /* ?tpl=<template_key> : ouverture directe d'un modele (Acces terrain), sans
        connaitre l'id du document, qui differe d'une organisation a l'autre. */
     const tpl=q.get('tpl');
-    /* Employé(e) : seul le modele ouvert depuis l'Acces terrain est accessible. */
+    /* Employé(e) : DOCS ne contient deja que les documents coches « Ouvert aux employes ». */
     const estEmploye=!!PROF&&PROF.role==='employe';
     const docId=estEmploye
-      ?(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id)
+      ?(q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id))
       :(q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id));
     if(estEmploye&&!docId){location.replace('terrain.html');return;}
     if(!docId){if(tpl)toast('Document introuvable ou inaccessible');return;}
