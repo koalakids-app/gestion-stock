@@ -30,6 +30,8 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Archives sur disque dur
 - Export des dossiers archivés d'une crèche en un .zip (direction uniquement) : `archExporterCreche` (`js/pages/parametres-archives.js`), carte « Archives sur disque dur » dans Paramètres › Les établissements (crèche sélectionnée). Il couvre enfants archivés, employés archivés et stagiaires clos, puis supprime les fichiers de Supabase après confirmation et écrit une ligne par dossier dans `archivage_purges`. Les exports dossier par dossier sont eux aussi réservés à la direction (`isDirection`).
 
+- Coffre-fort, étape 1 : journal `acces_documents` (`sql/acces_documents.sql`, à appliquer à la main), alimenté par `kkJournaliserAcces` (`js/coffre-journal.js`) à chaque `createSignedUrl` de document sensible ; affiché dans Paramètres (`coffreChargerJournal`, `js/pages/parametres-archives.js`). `sql/storage_retirer_acces_anonyme.sql` retire des policies `anon` « allow all » sur `storage.objects` (audit du 2026) : à appliquer à la main après test des pages publiques.
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.

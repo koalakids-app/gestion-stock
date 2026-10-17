@@ -275,6 +275,7 @@ async function vacPJOpen(id){
   const p = cacheVacPJ.find(x=>String(x.id)===String(id));
   const loc = p && vacPJLoc(p);
   if(!loc){alert('Fichier introuvable.');return;}
+  if(typeof kkJournaliserAcces==='function')kkJournaliserAcces(loc.bucket,loc.path,{entite_type:'enfant',entite_id:p.enfant_id,libelle:p.filename});
   const {data,error} = await sb.storage.from(loc.bucket).createSignedUrl(loc.path, VACPJ_TTL);
   if(error||!data){alert('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'));return;}
   window.open(data.signedUrl,'_blank','noopener');

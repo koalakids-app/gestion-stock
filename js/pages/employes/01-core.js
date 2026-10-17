@@ -1042,6 +1042,7 @@ async function empHandleDocUpload(event){
 async function empDocOpen(id){
   const d=empDocsCache.find(x=>String(x.id)===String(id));
   if(!d){toast('Fichier introuvable.',true);return;}
+  if(typeof kkJournaliserAcces==='function')kkJournaliserAcces(d.bucket||EMP_DOCS_BUCKET,d.path,{entite_type:'employe',entite_id:d.employe_id,libelle:d.filename});
   const{data,error}=await sb.storage.from(d.bucket||EMP_DOCS_BUCKET).createSignedUrl(d.path,EMP_DOCS_TTL);
   if(error||!data){toast('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'),true);return;}
   window.open(data.signedUrl,'_blank','noopener');

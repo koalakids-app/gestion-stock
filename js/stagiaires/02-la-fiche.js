@@ -489,6 +489,7 @@ function stgLigneDoc(d){
 async function stgOuvrirDoc(id){
   const d=stgDocsCache.find(x=>String(x.id)===String(id));
   if(!d||!d.path)return alert('Fichier introuvable.');
+  if(typeof kkJournaliserAcces==='function')kkJournaliserAcces(d.bucket||STG_BUCKET,d.path,{entite_type:'stagiaire',entite_id:d.stagiaire_id,libelle:d.filename});
   const {data,error}=await sb.storage.from(d.bucket||STG_BUCKET).createSignedUrl(d.path,STG_URL_TTL);
   if(error||!data)return alert('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'));
   window.open(data.signedUrl,'_blank','noopener');

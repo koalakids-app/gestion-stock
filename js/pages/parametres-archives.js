@@ -169,3 +169,31 @@ async function archExporterCrecheEtapes(){
   toast(nOk+' document(s) supprimé(s) du stockage en ligne.'+(nKo?' '+nKo+' suppression(s) ont échoué.':'')+'');
 }
 window.archExporterCreche=archExporterCreche;
+
+/* ---------- COFFRE-FORT : journal des consultations (sql/acces_documents.sql) ---------- */
+const COFFRE_LIB={enfant:'Enfant',employe:'Collaborateur/trice',stagiaire:'Stagiaire'};
+async function coffreChargerJournal(){
+  const box=document.getElementById('coffreJournal');
+  if(!box||!crecheId)return;
+  box.textContent='Chargement…';
+  const{data,error}=await sb.from('acces_documents').select('*')
+    .or('creche_id.eq.'+crecheId+',creche_id.is.null')
+    .order('ouvert_le',{ascending:false}).limit(50);
+  if(error){
+    box.innerHTML='<span class="hint">Journal indisponible : '+esc(error.message)+' (le script sql/acces_documents.sql est-il appliqué ?)</span>';
+    return;
+  }
+  if(!data.length){box.innerHTML='<span class="hint">Aucune consultation enregistrée.</span>';return;}
+  const ids=[...new Set(data.map(r=>r.user_id))];
+  const{data:refs}=await sb.from('referents').select('user_id,name').in('user_id',ids);
+  const nom={};(refs||[]).forEach(r=>{nom[r.user_id]=r.name;});
+  box.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="text-align:left;color:var(--muted)">'
+    +'<th style="padding:4px 8px">Quand</th><th style="padding:4px 8px">Qui</th><th style="padding:4px 8px">Fiche</th><th style="padding:4px 8px">Document</th></tr></thead><tbody>'
+    +data.map(r=>'<tr style="border-top:1px solid var(--line,#eee)">'
+      +'<td style="padding:4px 8px;white-space:nowrap">'+esc(new Date(r.ouvert_le).toLocaleString('fr-FR'))+'</td>'
+      +'<td style="padding:4px 8px">'+esc(nom[r.user_id]||'—')+'</td>'
+      +'<td style="padding:4px 8px">'+esc(COFFRE_LIB[r.entite_type]||'—')+'</td>'
+      +'<td style="padding:4px 8px">'+esc(r.libelle||r.chemin)+' <span style="color:var(--muted)">('+esc(r.bucket)+')</span></td></tr>').join('')
+    +'</tbody></table>';
+}
+window.coffreChargerJournal=coffreChargerJournal;
