@@ -12,7 +12,10 @@ alter policy docs_read on public.documents_koala using (
     ((creche_id is not null) and creche_id in (select id from public.creches where org_id = kk_mon_org()))
     or ((creche_id is null) and org_id = kk_mon_org())
   )
-  and (coalesce(kk_mon_role(), '') <> 'employe' or acces_employe)
+  and (
+    coalesce(kk_mon_role(), '') <> 'employe'
+    or (acces_employe and (creche_id is null or kk_acces_creche(creche_id)))
+  )
 );
 
 alter policy docs_write on public.documents_koala using (
