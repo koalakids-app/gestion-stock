@@ -39,7 +39,7 @@ let PIECES = [];   // catalogue + fichiers déposés
 let AUTRES = [];   // pièces dont le type ne figure plus dans la liste demandée
 let RESS = [];     // ce que la crèche transmet (documents et liens)
 let LIVRETS = [];  // documents préparés par la crèche, à lire et à signer
-let AUTO = null;   // auto-évaluation du stage EJE : {cibles, eje_comp, commentaire, le}, ou null
+let AUTO = null;   // auto-évaluation : {type:'eje', cibles, eje_comp, …} ou {type:'grille', profil, grille, …}, ou null
 
 /* Le vocabulaire, et rien d'autre. */
 const MOTS = {
@@ -376,15 +376,37 @@ async function confirmerRessource(i,coche){
   }
 }
 
-/* ----------------------------------------------------- AUTO-ÉVALUATION (EJE) */
+/* ----------------------------------------------------- AUTO-ÉVALUATION */
 
 /* Le référentiel (STG_EVAL_EJE) est le même que celui de la fiche côté crèche : une
    compétence a pour clé son domaine et son rang (dc1_c0…). Seules les compétences
    visées par le stage sont proposées ; sans choix de la crèche, toutes le sont. */
 const AUTO_NIV=[['a','Acquis'],['b','À approfondir'],['n','Pas encore vu']];
 
+/* Hors EJE : la grille Très bien / Bien / À améliorer de la fiche de suivi (05-evaluation.js,
+   même définition que côté crèche), notée par le stagiaire lui-même. */
+const AUTO_NIV_GRILLE=[['tb','Très bien'],['b','Bien'],['a','À améliorer']];
+
+function htmlAutoGrille(){
+  const rep=AUTO.grille||{};
+  const dom=stgEvalGrille(AUTO.profil||'decouverte').map(g=>'<div class="ae-dom">'+esc(g.titre)+'</div>'
+    +g.crit.map(([k,lib])=>'<div class="ae-comp"><div class="ae-lib">'+esc(lib)+'</div><div class="ae-niv">'
+      +AUTO_NIV_GRILLE.map(([v,t])=>'<label><input type="radio" name="ag_'+k+'" value="'+v+'" data-ag="'+k+'"'+(rep[k]===v?' checked':'')+'><span>'+esc(t)+'</span></label>').join('')
+      +'</div></div>').join('')).join('');
+  return '<h3 class="sec"><i class="ti ti-clipboard-check"></i> Votre auto-évaluation</h3>'
+    +'<p class="hint">'+(AUTO.le?'Envoyée le '+esc(dfr(AUTO.le))+' — vous pouvez la modifier et la renvoyer.'
+      :'Pour chaque point, dites comment vous vous évaluez. Soyez sincère : cela sert à faire le point avec votre tuteur.')+'</p>'
+    +'<div class="card">'+dom
+    +'<div class="ae-lib" style="margin-top:14px">Ce que vous retenez de votre stage</div>'
+    +'<textarea id="ae_comm" class="ae-txt" rows="4" maxlength="2000" placeholder="Vos points forts, vos difficultés, ce que vous aimeriez approfondir">'+esc(AUTO.commentaire||'')+'</textarea>'
+    +'<button class="btn btn-p" id="ae_btn" style="margin-top:12px" onclick="envoyerAuto()"><i class="ti ti-send"></i> '+(AUTO.le?'Renvoyer':'Envoyer')+' mon auto-évaluation</button>'
+    +'</div>';
+}
+
 function htmlAuto(){
-  if(!AUTO||typeof STG_EVAL_EJE==='undefined')return '';
+  if(!AUTO)return '';
+  if(AUTO.type==='grille')return typeof stgEvalGrille==='function'?htmlAutoGrille():'';
+  if(typeof STG_EVAL_EJE==='undefined')return '';
   const cib=AUTO.cibles||[], rep=AUTO.eje_comp||{};
   let nb=0;
   const dom=STG_EVAL_EJE.map(d=>{
@@ -408,13 +430,14 @@ function htmlAuto(){
 }
 
 async function envoyerAuto(){
-  const eje_comp={};
-  document.querySelectorAll('input[data-ae]:checked').forEach(r=>{eje_comp[r.dataset.ae]=r.value;});
+  const grille=AUTO&&AUTO.type==='grille';
+  const reponses={};
+  document.querySelectorAll(grille?'input[data-ag]:checked':'input[data-ae]:checked').forEach(r=>{reponses[grille?r.dataset.ag:r.dataset.ae]=r.value;});
   const commentaire=(document.getElementById('ae_comm')||{}).value||'';
-  if(!Object.keys(eje_comp).length&&!commentaire.trim())return toast('Répondez à au moins une compétence.');
+  if(!Object.keys(reponses).length&&!commentaire.trim())return toast(grille?'Répondez à au moins un point.':'Répondez à au moins une compétence.');
   const b=document.getElementById('ae_btn');if(b)b.disabled=true;
   try{
-    await appel('auto_evaluer',{eje_comp,commentaire});
+    await appel('auto_evaluer',grille?{grille:reponses,commentaire}:{eje_comp:reponses,commentaire});
     await recharger();
     toast('Merci, votre auto-évaluation est envoyée ✔');
   }catch(e){

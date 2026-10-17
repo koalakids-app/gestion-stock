@@ -79,14 +79,47 @@ const EXT: Record<string, string> = {
 const profilDe = (stag: Record<string, unknown>) =>
   stag.type_contrat === 'alternant' ? 'alternant' : 'stagiaire';
 
-/** Le stage EJE ouvre l'auto-évaluation depuis le lien. Le choix du tuteur (profil
- *  « EJE — stage » de l'évaluation) prime ; à défaut, la formation saisie. */
-const autoEvalActive = (stag: Record<string, any>) => {
-  if (profilDe(stag) !== 'stagiaire') return false;
+/** L'auto-évaluation est proposée à chaque stagiaire (pas aux alternants), dans le
+ *  profil de l'évaluation : EJE (référentiel de compétences) ou grille « Suivi du
+ *  stagiaire » (AEPE, IEPE, stage découverte). Le choix du tuteur prime ; à défaut,
+ *  la formation saisie (même règle que la fiche, js/stagiaires/05-evaluation.js). */
+const profilEvalDe = (stag: Record<string, any>): 'eje_stage' | 'aepe' | 'iepe' | 'decouverte' | null => {
+  if (profilDe(stag) !== 'stagiaire') return null;
   const p = stag.evaluation?.profil;
-  if (p) return p === 'eje_stage';
-  return /\beje\b|[ée]ducateur.*jeunes enfants/i.test(String(stag.formation || ''));
+  if (p === 'eje' || p === 'eje_stage') return 'eje_stage';
+  if (p === 'aepe' || p === 'iepe' || p === 'decouverte') return p;
+  const f = String(stag.formation || '');
+  if (/\beje\b|[ée]ducat(eur|rice).*jeunes enfants/i.test(f)) return 'eje_stage';
+  if (/iepe/i.test(f)) return 'iepe';
+  if (/aepe|accompagnant/i.test(f)) return 'aepe';
+  return 'decouverte';
 };
+
+/** Les critères de la grille « Suivi du stagiaire » et leurs niveaux (mêmes clés que la fiche). */
+const GRILLE_CLES = new Set([
+  'presentation', 'ponctualite', 'communication', 'integration', 'execution', 'hygiene', 'fatigue', 'motivation',
+  'observation', 'organisation', 'qualite', 'rapidite', 'autonomie', 'progression', 'initiative', 'consignes',
+  'accueil', 'quotidien', 'jeu', 'locaux', 'soins', 'projet',
+]);
+const GRILLE_NIVEAUX = ['tb', 'b', 'a'];
+
+/** Ce que la page reçoit pour l'auto-évaluation. Jamais la note du tuteur : seulement
+ *  ce qui sert à afficher la grille et ce que la personne a déjà répondu. */
+function autoEval(stag: Record<string, any>) {
+  const profil = profilEvalDe(stag);
+  if (!profil) return null;
+  const a = stag.auto_evaluation || {};
+  const commun = { commentaire: a.commentaire || '', le: a.le || null };
+  if (profil === 'eje_stage') {
+    return {
+      type: 'eje',
+      cibles: Array.isArray(stag.evaluation?.eje_cibles) ? stag.evaluation.eje_cibles : [],
+      eje_comp: a.eje_comp || {},
+      ...commun,
+    };
+  }
+  return { type: 'grille', profil, grille: a.grille || {}, ...commun };
+}
 
 /** Charge la stagiaire depuis son jeton et refuse tout ce qui n'est plus valable. */
 async function stagiaireValide(token: string) {
@@ -335,12 +368,7 @@ Deno.serve(async (req) => {
         livrets,
         // Jamais la note du tuteur : seulement les compétences visées et ce que
         // la personne a déjà répondu.
-        auto_eval: autoEvalActive(stag) ? {
-          cibles: Array.isArray(stag.evaluation?.eje_cibles) ? stag.evaluation.eje_cibles : [],
-          eje_comp: stag.auto_evaluation?.eje_comp || {},
-          commentaire: stag.auto_evaluation?.commentaire || '',
-          le: stag.auto_evaluation?.le || null,
-        } : null,
+        auto_eval: autoEval(stag),
         pieces: types.map(t => ({
           id: t.id, libelle: t.libelle, aide: t.aide, lien: t.lien,
           obligatoire: t.obligatoire,
@@ -537,26 +565,40 @@ Deno.serve(async (req) => {
     }
 
     // ------------------------------------------------------ AUTO_EVALUER
-    // Le stagiaire EJE note lui-même les compétences visées. Il peut renvoyer sa
-    // réponse tant que son lien est valable : la dernière fait foi.
+    // Le stagiaire note lui-même sa grille (compétences visées en EJE, critères du
+    // suivi sinon). Il peut renvoyer sa réponse tant que son lien est valable :
+    // la dernière fait foi. Les clés et les niveaux sont contrôlés ici, pas dans la page.
     if (action === 'auto_evaluer') {
-      if (!autoEvalActive(stag)) return json({ erreur: 'Action inconnue' }, 403);
-      const cibles: string[] = Array.isArray(stag.evaluation?.eje_cibles) ? stag.evaluation.eje_cibles : [];
-      const recu = (body.eje_comp && typeof body.eje_comp === 'object') ? body.eje_comp as Record<string, unknown> : {};
-      const eje_comp: Record<string, string> = {};
-      for (const [k, v] of Object.entries(recu)) {
-        if (!/^dc[1-4]_c\d{1,2}$/.test(k) || !['a', 'b', 'n'].includes(String(v))) {
-          return json({ erreur: 'Réponse illisible' }, 400);
-        }
-        if (cibles.length && !cibles.includes(k)) return json({ erreur: 'Réponse illisible' }, 400);
-        eje_comp[k] = String(v);
-      }
+      const profilEval = profilEvalDe(stag);
+      if (!profilEval) return json({ erreur: 'Action inconnue' }, 403);
       const commentaire = String(body.commentaire || '').replace(/\r/g, '').trim().slice(0, 2000);
-      if (!Object.keys(eje_comp).length && !commentaire) return json({ erreur: 'Réponse illisible' }, 400);
+      const illisible = () => json({ erreur: 'Réponse illisible' }, 400);
+      let reponse: Record<string, unknown>;
+      if (profilEval === 'eje_stage') {
+        const cibles: string[] = Array.isArray(stag.evaluation?.eje_cibles) ? stag.evaluation.eje_cibles : [];
+        const recu = (body.eje_comp && typeof body.eje_comp === 'object') ? body.eje_comp as Record<string, unknown> : {};
+        const eje_comp: Record<string, string> = {};
+        for (const [k, v] of Object.entries(recu)) {
+          if (!/^dc[1-4]_c\d{1,2}$/.test(k) || !['a', 'b', 'n'].includes(String(v))) return illisible();
+          if (cibles.length && !cibles.includes(k)) return illisible();
+          eje_comp[k] = String(v);
+        }
+        if (!Object.keys(eje_comp).length && !commentaire) return illisible();
+        reponse = { eje_comp };
+      } else {
+        const recu = (body.grille && typeof body.grille === 'object') ? body.grille as Record<string, unknown> : {};
+        const grille: Record<string, string> = {};
+        for (const [k, v] of Object.entries(recu)) {
+          if (!GRILLE_CLES.has(k) || !GRILLE_NIVEAUX.includes(String(v))) return illisible();
+          grille[k] = String(v);
+        }
+        if (!Object.keys(grille).length && !commentaire) return illisible();
+        reponse = { grille };
+      }
 
       const le = new Date().toISOString().slice(0, 10);
       const { error: ue } = await sb.from('stagiaires')
-        .update({ auto_evaluation: { eje_comp, commentaire, le, via: 'lien' } })
+        .update({ auto_evaluation: { ...reponse, commentaire, le, via: 'lien' } })
         .eq('id', stag.id);
       if (ue) throw ue;
       await signalerDepot(sb, {
