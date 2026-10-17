@@ -23,7 +23,13 @@ let CRECHE_NOMS_COURTS=['Brunet','Cuers','Ollioules','Picot 1','Picot 2','St Jea
 function etabDe(id){return ETABS.find(x=>String(x.creche_id)===String(id))||{};}
 
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600);}
-function close_(id){document.getElementById(id).classList.remove('on');}
+function close_(id){
+  document.getElementById(id).classList.remove('on');
+  /* Un(e) employé(e) n'arrive ici que depuis l'Acces terrain, pour un seul
+     modele : en fermant le formulaire il/elle retourne a l'Acces terrain, sans
+     jamais voir le fonds documentaire. */
+  if(id==='ovFill'&&PROF&&PROF.role==='employe')location.href='terrain.html';
+}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function slug(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9.\-_]/g,'_');}
 
@@ -304,7 +310,12 @@ function openFromUrl(){
     /* ?tpl=<template_key> : ouverture directe d'un modele (Acces terrain), sans
        connaitre l'id du document, qui differe d'une organisation a l'autre. */
     const tpl=q.get('tpl');
-    const docId=q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id);
+    /* Employé(e) : seul le modele ouvert depuis l'Acces terrain est accessible. */
+    const estEmploye=!!PROF&&PROF.role==='employe';
+    const docId=estEmploye
+      ?(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id)
+      :(q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id));
+    if(estEmploye&&!docId){location.replace('terrain.html');return;}
     if(!docId){if(tpl)toast('Document introuvable ou inaccessible');return;}
     const repId=q.get('rep')||null;
     RETURN_ENFANT_ID=q.get('enf')||null;
