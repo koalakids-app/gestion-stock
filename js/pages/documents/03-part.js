@@ -86,7 +86,7 @@ function eajeMetaHtml(f,v){
     const list=(typeof CRECHES!=='undefined'&&CRECHES.length)
       ?CRECHES.map(c=>c.name)
       :CRECHE_NOMS_COURTS;
-    if(!val&&PROF&&PROF.role==='referent'&&PROF.creche_id){
+    if(!val&&PROF&&(PROF.role==='referent'||PROF.role==='employe')&&PROF.creche_id){
       const mine=(CRECHES||[]).find(c=>c.id===PROF.creche_id);
       if(mine)val=mine.name;
     }

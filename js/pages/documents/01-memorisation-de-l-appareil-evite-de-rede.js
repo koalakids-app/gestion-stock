@@ -874,7 +874,7 @@ function fillMetaOptions(selEnfant,selStatut){
   const selC=document.getElementById('fillCreche');
   const wrap=document.getElementById('fillCrecheWrap');
   const wrapE=document.getElementById('fillEnfantWrap');
-  const isRef=!!(PROF&&PROF.role==='referent'&&PROF.creche_id);
+  const isRef=!!(PROF&&(PROF.role==='referent'||PROF.role==='employe')&&PROF.creche_id);  /* crèche imposée : la sienne */
 
   if(docConcerneSalarie()){
     if(wrapE)wrapE.style.display='none';
@@ -916,7 +916,7 @@ function fillEnfantOptions(selEnfant){
   const sel=document.getElementById('fillEnfant');
   if(!sel)return;
   let list=ENFANTS.slice();
-  if(PROF&&PROF.role==='referent'&&PROF.creche_id){
+  if(PROF&&(PROF.role==='referent'||PROF.role==='employe')&&PROF.creche_id){
     list=list.filter(e=>e.creche_id===PROF.creche_id);
   }else{
     const cid=(document.getElementById('fillCreche')||{}).value||'';
