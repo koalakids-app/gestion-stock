@@ -746,7 +746,7 @@ function stgExportExcel(){
 
 window.stgInit=stgInit;window.stgShowView=stgShowView;window.stgSetFilter=stgSetFilter;
 window.stgRender=stgRender;window.stgRenderCal=stgRenderCal;window.stgOpenFiche=stgOpenFiche;
-window.stgSave=stgSave;window.stgSupprimer=stgSupprimer;window.stgStatutChange=stgStatutChange;
+window.stgSave=stgSave;window.stgSupprimer=stgSupprimer;
 window.stgCreerLien=stgCreerLien;window.stgCopierLien=stgCopierLien;
 window.stgUpload=stgUpload;window.stgOuvrirDoc=stgOuvrirDoc;window.stgStatutDoc=stgStatutDoc;
 window.stgSupprimerDoc=stgSupprimerDoc;window.stgGenererJours=stgGenererJours;

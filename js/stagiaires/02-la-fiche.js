@@ -28,7 +28,6 @@ function stgOpenFiche(id,typeDefaut){
   v('stg-f-conv',s?s.convention_statut:'a_demander');
   v('stg-f-conv-date',s&&s.convention_le);
   v('stg-f-notes',s&&s.notes);
-  v('stg-f-bilan',s&&s.bilan);         v('stg-f-bilan-date',s&&s.bilan_le);
 
   const apres=document.getElementById('stg-apres-creation');
   if(apres)apres.style.display=s?'':'none';
@@ -56,7 +55,6 @@ function stgTypeChange(){
   txt('stg-lbl-fin','Fin '+(type==='alternant'?"de l'alternance":'du stage'));
   txt('stg-lbl-conv',p.contrat);
   txt('stg-lbl-conv-date',p.contratCourt+' — date');
-  txt('stg-lbl-bilan','Bilan de fin '+(type==='alternant'?"d'alternance":'de stage'));
   txt('stg-opt-encours',type==='alternant'?'Alternance en cours':'Stage en cours');
   txt('stg-opt-termine',type==='alternant'?'Alternance terminée':'Stage terminé');
   /* Les pièces demandées ne sont pas les mêmes : on redessine le bloc si la
@@ -103,16 +101,6 @@ function stgRemplirReferents(crecheId){
   }
 }
 
-/* Passer une stagiaire en « terminé » sans bilan, c'est perdre le bilan :
-   personne ne rouvre une fiche close. On le rappelle au moment où ça se joue. */
-function stgStatutChange(){
-  const st=(document.getElementById('stg-f-statut')||{}).value;
-  const bilan=(document.getElementById('stg-f-bilan')||{}).value;
-  if(st==='termine'&&!bilan&&stgFicheId){
-    showBanner('Stage terminé : pensez au bilan, plus bas dans la fiche.','error');
-  }
-}
-
 async function stgSave(){
   const val=id=>{const e=document.getElementById(id);return e?e.value.trim():'';};
   const prenom=val('stg-f-prenom');
@@ -143,12 +131,6 @@ async function stgSave(){
     convention_le:val('stg-f-conv-date')||null,
     notes:val('stg-f-notes')||null
   };
-  /* Les champs de bilan n'existent dans le DOM qu'après création : les lire
-     sur une nouvelle fiche écraserait la valeur par une chaîne vide. */
-  if(stgFicheId){
-    row.bilan=val('stg-f-bilan')||null;
-    row.bilan_le=val('stg-f-bilan-date')||null;
-  }
   if(row.date_debut&&row.date_fin&&row.date_fin<row.date_debut)
     return showBanner('La fin du stage est avant son début.','error');
 
