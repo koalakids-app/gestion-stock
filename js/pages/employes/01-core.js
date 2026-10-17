@@ -278,11 +278,19 @@ function selectCreche(id){
   renderCrecheTabs();
   loadEmployes();
 }
+let ACCES_TERRAIN=new Set();
 async function loadEmployes(){
   if(!crecheId)return;
   const{data,error}=await sb.from('employes').select('*').eq('creche_id',crecheId).order('prenom');
   if(error){toast('Erreur de chargement : '+error.message,true);return;}
   EMPLOYES=data||[];
+  /* Accès terrain : un·e collaborateur/trice y entre via un profil referents
+     (role 'employe') relié à sa fiche par referents.employe_id. */
+  ACCES_TERRAIN=new Set();
+  if(EMPLOYES.length){
+    const{data:refs}=await sb.from('referents').select('employe_id').in('employe_id',EMPLOYES.map(x=>x.id));
+    (refs||[]).forEach(r=>ACCES_TERRAIN.add(r.employe_id));
+  }
   renderListe();
 }
 // Un dossier est « archivé » quand archive_le est renseigné — toujours à la
@@ -315,6 +323,9 @@ function renderListe(){
     const statut=estArchive(e)
       ?'<span class="badge off" style="background:var(--violet-l);color:var(--violet)">Archivé</span>'
       :(estSorti(e)?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)">Sorti</span>':'');
+    const terrain=ACCES_TERRAIN.has(e.id)
+      ?'<span class="badge on"><i class="ti ti-walk"></i> Accès terrain</span>':'';
+    const btnTerrain=ACCES_TERRAIN.has(e.id)?'':'<button class="btn btn-g btn-sm" onclick="accorderAccesTerrain(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant d\'accorder l\'accès"')+'><i class="ti ti-walk"></i> Accès terrain</button>';
     const btnCompte=e.user_id
       ?''
       :'<button class="btn btn-s btn-sm" onclick="creerCompte(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant de créer le compte"')+'><i class="ti ti-mail-forward"></i> Créer le compte</button>'
@@ -322,10 +333,10 @@ function renderListe(){
     return'<div class="crow">'
       +'<div class="cinfo"><div class="cname">'+esc(e.prenom)+' '+esc(e.nom||'')+'</div>'
       +'<div class="cmeta">'+esc(e.poste||'—')+(e.email?' · '+esc(e.email):'')+'</div></div>'
-      +statut+compte
+      +statut+compte+terrain
       +'<div class="acts">'
       +'<button class="btn btn-g btn-sm" onclick="openFiche(\''+e.id+'\')"><i class="ti ti-edit"></i></button>'
-      +btnCompte
+      +btnCompte+btnTerrain
       +'<button class="btn btn-g btn-sm" onclick="supprimerEmploye(\''+e.id+'\')" title="Supprimer"><i class="ti ti-trash" style="color:var(--red)"></i></button>'
       +'</div></div>';
   }).join('');
@@ -888,6 +899,27 @@ async function creerCompte(id,partager){
       :r==='annule'?'Compte créé, mais le lien n\'a pas été partagé (feuille de partage fermée).'
       :'Lien d\'invitation partagé.',r==='annule');
   }else toast('Invitation envoyée à '+e.email+'.');
+  await loadEmployes();
+}
+
+/* ---------- ACCÈS TERRAIN ---------- */
+/* Pose un profil referents (role 'employe') relié à la fiche. Si la personne a
+   déjà un compte de connexion (espace collaborateur), c'est le même identifiant
+   qui ouvre aussi terrain.html ; sinon une invitation part par e-mail. */
+async function accorderAccesTerrain(id){
+  const e=EMPLOYES.find(x=>x.id===id);
+  if(!e||!e.email)return;
+  const{data:deja}=await sb.from('referents').select('id').ilike('email',e.email).maybeSingle();
+  if(deja){toast('Cette adresse est déjà utilisée par un compte directeur/référent : utilisez une autre adresse sur la fiche.',true);return;}
+  if(!confirm(e.user_id?'Accorder l\'accès terrain à '+e.prenom+' ? Elle/il utilisera le même identifiant que pour Mon espace.'
+    :'Accorder l\'accès terrain à '+e.prenom+' ? Un e-mail d\'invitation sera envoyé à '+e.email+'.'))return;
+  const redirect=location.href.replace(/employes\.html.*$/,'terrain.html');
+  const nom=((e.prenom||'')+' '+(e.nom||'')).trim();
+  const{ok,data}=await callFn('create-referent',{email:e.email,name:nom,creche_id:e.creche_id,poste:e.poste||'',role:'employe',redirect_to:redirect});
+  if(!ok||!data.user_id){toast('Échec : '+((data&&(data.error))||'erreur inconnue'),true);return;}
+  const{error}=await sb.from('referents').update({employe_id:id}).eq('user_id',data.user_id);
+  if(error){toast('Accès créé, mais le lien avec la fiche a échoué : '+error.message,true);}
+  else toast(e.user_id?'Accès terrain accordé.':'Invitation envoyée à '+e.email+'.');
   await loadEmployes();
 }
 
