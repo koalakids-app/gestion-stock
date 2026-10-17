@@ -112,14 +112,30 @@ Deno.serve(async (req) => {
     let userId: string;
     let lien: string | undefined;
     if (partager) {
-      const { data: gen, error: genErr } = await supabase.auth.admin.generateLink({
+      let { data: gen, error: genErr } = await supabase.auth.admin.generateLink({
         type: "invite",
         email: employe.email,
         options: { redirectTo: redirect_to || undefined, data: meta },
       });
+      if (genErr && /already been registered|email_exists/i.test(genErr.message + (genErr as { code?: string }).code)) {
+        // Compte déjà créé (invitation précédente jamais acceptée) : on le
+        // réutilise avec un lien de définition de mot de passe, mais seulement
+        // s'il n'a jamais servi et n'appartient pas à un·e référent·e.
+        const rec = await supabase.auth.admin.generateLink({
+          type: "recovery",
+          email: employe.email,
+          options: { redirectTo: redirect_to || undefined },
+        });
+        if (rec.error) throw rec.error;
+        const { data: ref } = await supabase
+          .from("referents").select("user_id").eq("user_id", rec.data.user.id).maybeSingle();
+        if (rec.data.user.last_sign_in_at || ref) return json({ error: "compte_deja_utilise" }, 400);
+        gen = rec.data;
+        genErr = null;
+      }
       if (genErr) throw genErr;
-      userId = gen.user.id;
-      lien = gen.properties.action_link;
+      userId = gen!.user.id;
+      lien = gen!.properties.action_link;
     } else {
       const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(
         employe.email,
