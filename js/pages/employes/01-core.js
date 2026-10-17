@@ -778,6 +778,7 @@ async function loadFicheFormation(e){
     const ids=tous.filter(x=>x.kind==='module').map(x=>x.item_id);
     let mq=null;
     if(ids.length){const r=await sbQuiz.rpc('kk_modules_quiz',{p_ids:ids});if(!r.error)mq=r.data||[];}else mq=[];
+    await joindreFreres(mq);
     /* Formations conseillées pour les quiz notés : échec silencieux (fonction
        absente tant que docs/quiz-profil/formations_pour_quiz.sql n'est pas
        appliqué) — le parcours s'affiche alors sans suggestion. */
@@ -800,6 +801,18 @@ async function loadFicheFormation(e){
    kk_modules_quiz est indisponible, rien n'est validable (on ne dégrade pas
    la preuve). Logique dupliquée entre collaborateur.html et employes.html. */
 const SEUIL_QUIZ=80;
+/* Le quiz du thème porte sur toute la formation (les 3 parties) : il n'est demandé qu'une
+   fois toutes les parties du thème lues. kk_modules_freres (projet quiz, sql/modules_freres.sql)
+   renvoie les modules publiés du même thème ; si elle est absente, on garde l'ancien
+   comportement (quiz demandé dès la première lecture). */
+async function joindreFreres(mq){
+  if(!mq||!mq.length)return;
+  try{
+    const r=await sbQuiz.rpc('kk_modules_freres',{p_ids:mq.map(x=>x.module_id)});
+    if(r.error||!r.data)return;
+    mq.forEach(m=>{m.freres=r.data.filter(x=>x.module_id===m.module_id).map(x=>x.frere_id);});
+  }catch(e){}
+}
 const NIV_PROFIL={appui:{l:"Point d'appui",c:'var(--green)',bg:'var(--green-bg,#E6F4EA)'},construction:{l:'En construction',c:'var(--violet)',bg:'var(--violet-bg,#EDEAF8)'},accompagner:{l:'À accompagner',c:'var(--orange)',bg:'var(--orange-bg,#FDEBDD)'}};
 /* Profil d'un quiz « sans note » (mode profil) : une pastille par axe plutôt qu'un score. */
 function profilHtml(axes){
@@ -836,9 +849,17 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggesti
     const best=mq.quiz_id?meilleur(mq.quiz_id):-1;
     const quizOk=!mq.quiz_id||best>=SEUIL_QUIZ;
     if(quizOk&&env.valide_le)return{...base,statut:'fait',date:env.valide_le,quizPct:mq.quiz_id?best:null};
-    if(mq.quiz_id&&!quizOk)return lu||best>=0
-      ?{...base,statut:'a_faire',etape:'quiz',lien:lienQuizDe(env,mq.quiz_id),best}
-      :{...base,statut:'a_faire',etape:'lire'};
+    if(mq.quiz_id&&!quizOk){
+      const reste=(mq.freres||[]).filter(id=>id!==env.item_id&&!formationsLues.some(x=>x.module_id===id));
+      if(lu&&best<0&&reste.length){
+        let suite=env.lien;
+        try{const u=new URL(env.lien);u.searchParams.set('module',reste[0]);u.searchParams.set('parcours','1');suite=u.toString();}catch(e){}
+        return{...base,statut:'a_faire',etape:'suite',lien:suite,lues:mq.freres.length-reste.length,parties:mq.freres.length};
+      }
+      return lu||best>=0
+        ?{...base,statut:'a_faire',etape:'quiz',lien:lienQuizDe(env,mq.quiz_id),best}
+        :{...base,statut:'a_faire',etape:'lire'};
+    }
     if(!lu&&!mq.quiz_id)return{...base,statut:'a_faire',etape:'lire'};
     return{...base,statut:'a_faire',etape:'attester',quizPct:mq.quiz_id?best:null};
   }).sort((a,b)=>(a.statut==='a_faire')-(b.statut==='a_faire')||new Date(b.date)-new Date(a.date));
@@ -850,8 +871,9 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggesti
     if(r.statut==='a_faire'){
       if(r.etape==='quiz'&&r.type==='formation')info='<div style="font-size:11.5px;color:var(--muted)">Quiz à réussir ('+SEUIL_QUIZ+' % minimum)'+(r.best>=0?' — meilleur score : '+r.best+' %':'')+'</div>';
       if(r.etape==='attester')info='<div style="font-size:11.5px;color:var(--muted)">'+(r.quizPct!=null?'Quiz réussi ('+r.quizPct+' %) — ':'')+'attestation en attente</div>';
+      if(r.etape==='suite')info='<div style="font-size:11.5px;color:var(--muted)">Formation en cours : '+r.lues+' partie'+(r.lues>1?'s':'')+' lue'+(r.lues>1?'s':'')+' sur '+r.parties+' — le quiz viendra à la fin</div>';
       if(r.etape==='indispo')info='<div style="font-size:11.5px;color:var(--muted)">Vérification du quiz indisponible pour le moment</div>';
-      droite='<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" style="font-weight:700;font-size:11.5px;color:var(--orange);white-space:nowrap;text-decoration:none"><i class="ti ti-clock"></i> '+(r.etape==='attester'?'Attestation en attente':r.etape==='quiz'?'Quiz à réussir':'À faire')+'</a>';
+      droite='<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" style="font-weight:700;font-size:11.5px;color:var(--orange);white-space:nowrap;text-decoration:none"><i class="ti ti-clock"></i> '+(r.etape==='attester'?'Attestation en attente':r.etape==='quiz'?'Quiz à réussir':r.etape==='suite'?'Formation en cours':'À faire')+'</a>';
     }else if(r.type==='quiz'&&r.profil){
       info=profilHtml(r.profil);
       droite='<span style="font-weight:700;font-size:11.5px;color:var(--green);white-space:nowrap"><i class="ti ti-check"></i> Profil établi</span>';
