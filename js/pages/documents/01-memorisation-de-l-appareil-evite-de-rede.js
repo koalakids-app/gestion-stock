@@ -278,7 +278,10 @@ async function loadAll(){
     sb.from('doc_categories').select('*').order('ordre'),
     sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
     sb.from('creches').select('id,name,addr').order('name'),
-    sb.from('enfants').select('id,prenom,nom,creche_id,dob,regime_repas').order('prenom'),
+    (PROF&&PROF.role==='employe'
+      /* Un employé ne lit pas la table enfants (fiches complètes) : fonction limitée à ces 6 champs, sa crèche. */
+      ?sb.rpc('kk_enfants_pour_documents')
+      :sb.from('enfants').select('id,prenom,nom,creche_id,dob,regime_repas').order('prenom')),
     sb.from('etablissements').select('*'),
     sb.from('reseau_config').select('config').maybeSingle(),
     sb.from('doc_signataires').select('*').eq('actif',true).order('ordre')
@@ -874,7 +877,7 @@ function fillMetaOptions(selEnfant,selStatut){
   const selC=document.getElementById('fillCreche');
   const wrap=document.getElementById('fillCrecheWrap');
   const wrapE=document.getElementById('fillEnfantWrap');
-  const isRef=!!(PROF&&PROF.role==='referent'&&PROF.creche_id);
+  const isRef=!!(PROF&&(PROF.role==='referent'||PROF.role==='employe')&&PROF.creche_id);  /* crèche imposée : la sienne */
 
   if(docConcerneSalarie()){
     if(wrapE)wrapE.style.display='none';
@@ -916,7 +919,7 @@ function fillEnfantOptions(selEnfant){
   const sel=document.getElementById('fillEnfant');
   if(!sel)return;
   let list=ENFANTS.slice();
-  if(PROF&&PROF.role==='referent'&&PROF.creche_id){
+  if(PROF&&(PROF.role==='referent'||PROF.role==='employe')&&PROF.creche_id){
     list=list.filter(e=>e.creche_id===PROF.creche_id);
   }else{
     const cid=(document.getElementById('fillCreche')||{}).value||'';

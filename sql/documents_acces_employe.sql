@@ -47,3 +47,14 @@ alter policy docs_write on public.documents_koala using (
     or ((creche_id is null) and org_id = kk_mon_org() and kk_mon_role() = 'direction')
   )
 );
+
+-- Liste des enfants de SA crèche pour remplir un document (sans ouvrir la table enfants aux employés).
+create or replace function public.kk_enfants_pour_documents()
+returns table(id uuid, prenom text, nom text, creche_id uuid, dob date, regime_repas text)
+language sql stable security definer set search_path to 'public' as $$
+  select e.id, e.prenom, e.nom, e.creche_id, e.dob, e.regime_repas
+  from public.enfants e
+  where kk_mon_role() = 'employe' and e.creche_id = kk_ma_creche();
+$$;
+revoke all on function public.kk_enfants_pour_documents() from public, anon;
+grant execute on function public.kk_enfants_pour_documents() to authenticated;
