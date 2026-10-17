@@ -39,7 +39,10 @@ as $$
            where e.id::text = p_id and public.kk_acces_creche(e.creche_id))
          when 'stagiaire' then exists (
            select 1 from public.stagiaires s
-           where s.id::text = p_id and public.kk_acces_creche(s.creche_id))
+           where s.id::text = p_id
+             -- stagiaires.creche_id est de type text (pas uuid) : cast protégé
+             and s.creche_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+             and public.kk_acces_creche(s.creche_id::uuid))
          else false
        end;
 $$;
