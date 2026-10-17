@@ -67,13 +67,13 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { employe_id?: string; redirect_to?: string };
+  let body: { employe_id?: string; redirect_to?: string; partager?: boolean };
   try {
     body = await req.json();
   } catch {
     return json({ error: "corps_invalide" }, 400);
   }
-  const { employe_id, redirect_to } = body;
+  const { employe_id, redirect_to, partager } = body;
   if (!employe_id) return json({ error: "employe_id_manquant" }, 400);
 
   const supabase = createClient(
@@ -106,26 +106,36 @@ Deno.serve(async (req) => {
       return json({ error: "organisation_differente" }, 403);
     }
 
-    const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(
-      employe.email,
-      {
-        redirectTo: redirect_to || undefined,
-        data: {
-          prenom: employe.prenom,
-          nom: employe.nom,
-          role_app: "collaborateur",
-        },
-      },
-    );
-    if (inviteErr) throw inviteErr;
+    const meta = { prenom: employe.prenom, nom: employe.nom, role_app: "collaborateur" };
+    // partager : on crée le compte et on renvoie le lien d'invitation au lieu
+    // d'envoyer l'e-mail ; l'appareil de l'appelant·e le transmet (WhatsApp, SMS…).
+    let userId: string;
+    let lien: string | undefined;
+    if (partager) {
+      const { data: gen, error: genErr } = await supabase.auth.admin.generateLink({
+        type: "invite",
+        email: employe.email,
+        options: { redirectTo: redirect_to || undefined, data: meta },
+      });
+      if (genErr) throw genErr;
+      userId = gen.user.id;
+      lien = gen.properties.action_link;
+    } else {
+      const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(
+        employe.email,
+        { redirectTo: redirect_to || undefined, data: meta },
+      );
+      if (inviteErr) throw inviteErr;
+      userId = invited.user.id;
+    }
 
     const { error: updErr } = await supabase
       .from("employes")
-      .update({ user_id: invited.user.id })
+      .update({ user_id: userId })
       .eq("id", employe_id);
     if (updErr) throw updErr;
 
-    return json({ ok: true, user_id: invited.user.id });
+    return json({ ok: true, user_id: userId, lien });
   } catch (err) {
     console.error("[creer-compte-collaborateur]", err);
     return json({ error: (err as Error).message || "erreur_inconnue" }, 500);

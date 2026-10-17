@@ -317,7 +317,8 @@ function renderListe(){
       :(estSorti(e)?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)">Sorti</span>':'');
     const btnCompte=e.user_id
       ?''
-      :'<button class="btn btn-s btn-sm" onclick="creerCompte(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant de créer le compte"')+'><i class="ti ti-mail-forward"></i> Créer le compte</button>';
+      :'<button class="btn btn-s btn-sm" onclick="creerCompte(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant de créer le compte"')+'><i class="ti ti-mail-forward"></i> Créer le compte</button>'
+        +(PartageLien.disponible()?' <button class="btn btn-g btn-sm" onclick="creerCompte(\''+e.id+'\',true)" '+(e.email?'':'disabled')+'><i class="ti ti-share"></i> Partager…</button>':'');
     return'<div class="crow">'
       +'<div class="cinfo"><div class="cname">'+esc(e.prenom)+' '+esc(e.nom||'')+'</div>'
       +'<div class="cmeta">'+esc(e.poste||'—')+(e.email?' · '+esc(e.email):'')+'</div></div>'
@@ -872,14 +873,21 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggesti
 }
 
 /* ---------- COMPTE DE CONNEXION ---------- */
-async function creerCompte(id){
+async function creerCompte(id,partager){
   const e=EMPLOYES.find(x=>x.id===id);
   if(!e||!e.email)return;
-  if(!confirm('Envoyer à '+e.email+' un e-mail d\'invitation pour créer son compte de connexion ?'))return;
+  if(!confirm(partager?'Créer le compte de '+e.prenom+' et partager le lien d\'invitation (aucun e-mail ne sera envoyé) ?'
+    :'Envoyer à '+e.email+' un e-mail d\'invitation pour créer son compte de connexion ?'))return;
   const redirect=location.href.replace(/employes\.html.*$/,'collaborateur.html');
-  const{ok,data}=await callFn('creer-compte-collaborateur',{employe_id:id,redirect_to:redirect});
+  const{ok,data}=await callFn('creer-compte-collaborateur',{employe_id:id,redirect_to:redirect,partager:!!partager});
   if(!ok){toast('Échec : '+(data.error||'erreur inconnue'),true);return;}
-  toast('Invitation envoyée à '+e.email+'.');
+  if(partager&&data.lien){
+    const r=await PartageLien.partager(data.lien,{titre:'Compte de connexion',
+      texte:'Bonjour '+(e.prenom||'')+', voici le lien pour créer ton compte de connexion :'});
+    toast(r==='copie'?'Compte créé — partage indisponible, lien copié.'
+      :r==='annule'?'Compte créé, mais le lien n\'a pas été partagé (feuille de partage fermée).'
+      :'Lien d\'invitation partagé.',r==='annule');
+  }else toast('Invitation envoyée à '+e.email+'.');
   await loadEmployes();
 }
 
