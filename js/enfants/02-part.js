@@ -832,6 +832,7 @@ async function enfHandleAdminDocUpload(event){
 async function enfAdminDocOpen(id){
   const d=enfAdminDocsCache.find(x=>String(x.id)===String(id));
   if(!d){alert('Fichier introuvable.');return;}
+  if(typeof kkJournaliserAcces==='function')kkJournaliserAcces(d.bucket||ENF_ADMIN_DOCS_BUCKET,d.path,{entite_type:'enfant',entite_id:d.enfant_id,libelle:d.filename});
   const{data,error}=await sb.storage.from(d.bucket||ENF_ADMIN_DOCS_BUCKET).createSignedUrl(d.path,ENF_ADMIN_DOCS_TTL);
   if(error||!data){alert('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'));return;}
   window.open(data.signedUrl,'_blank','noopener');
@@ -1046,6 +1047,7 @@ async function enfHandlePaiUpload(event){
 async function enfPaiOpen(id){
   const d=enfPaiCache.find(x=>String(x.id)===String(id));
   if(!d){alert('Fichier introuvable.');return;}
+  if(typeof kkJournaliserAcces==='function')kkJournaliserAcces(d.bucket||ENF_PAI_BUCKET,d.path,{entite_type:'enfant',entite_id:d.enfant_id,libelle:d.filename});
   const{data,error}=await sb.storage.from(d.bucket||ENF_PAI_BUCKET).createSignedUrl(d.path,ENF_PAI_TTL);
   if(error||!data){alert('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'));return;}
   window.open(data.signedUrl,'_blank','noopener');

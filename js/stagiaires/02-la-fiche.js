@@ -489,6 +489,7 @@ function stgLigneDoc(d){
 async function stgOuvrirDoc(id){
   const d=stgDocsCache.find(x=>String(x.id)===String(id));
   if(!d||!d.path)return alert('Fichier introuvable.');
+  if(typeof kkJournaliserAcces==='function')kkJournaliserAcces(d.bucket||STG_BUCKET,d.path,{entite_type:'stagiaire',entite_id:d.stagiaire_id,libelle:d.filename});
   const {data,error}=await sb.storage.from(d.bucket||STG_BUCKET).createSignedUrl(d.path,STG_URL_TTL);
   if(error||!data)return alert('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'));
   window.open(data.signedUrl,'_blank','noopener');
@@ -684,12 +685,12 @@ function stgRenderExportZone(s){
   if(!s||!stgClos(s.statut)){zone.innerHTML='';return;}
   zone.innerHTML='<div style="background:#F1EFF7;border-left:4px solid var(--muted);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#555">'
     +'<i class="ti ti-archive"></i> Dossier clos.'
-    +'<div style="margin-top:8px"><button class="btn-sm" onclick="stgExporterDocuments(\''+s.id+'\')" title="Télécharge un .zip des documents du dossier, à conserver hors ligne (disque externe), puis les retire du stockage en ligne"><i class="ti ti-cloud-download"></i> Exporter les documents et libérer l\'espace</button></div>'
+    +(isDirection?'<div style="margin-top:8px"><button class="btn-sm" onclick="stgExporterDocuments(\''+s.id+'\')" title="Télécharge un .zip des documents du dossier, à conserver hors ligne (disque externe), puis les retire du stockage en ligne"><i class="ti ti-cloud-download"></i> Exporter les documents et libérer l\'espace</button></div>':'')
     +'</div>';
 }
 async function stgExporterDocuments(id){
   const s=stgCache.find(x=>String(x.id)===String(id));
-  if(!s||!stgClos(s.statut))return;
+  if(!isDirection||!s||!stgClos(s.statut))return;
   if(!confirm('Préparer un fichier .zip de tous les documents de '+stgNomComplet(s)+' ?\n\nUne fois le fichier téléchargé et sa sauvegarde confirmée, ces documents seront supprimés du stockage en ligne (Supabase) — à vous de les conserver ensuite hors ligne (disque externe) pour le reste du délai légal.'))return;
 
   showBanner('Préparation du fichier .zip…');

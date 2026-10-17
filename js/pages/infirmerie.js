@@ -717,6 +717,7 @@ function renderPj(){
    jamais par une URL publique. */
 async function ouvrirPj(){
   if(!pjPath)return;
+  if(typeof kkJournaliserAcces==='function')kkJournaliserAcces('sante',pjPath,{libelle:'Registre de soins'});
   const {data,error}=await sb.storage.from('sante').createSignedUrl(pjPath,300);
   if(error||!data){toast('Ouverture impossible : '+(error?error.message:'lien indisponible'),true);return;}
   window.open(data.signedUrl,'_blank','noopener');

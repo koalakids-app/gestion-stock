@@ -397,7 +397,7 @@ function enfArchivageBox(e){
       +(purge?' Conservation légale recommandée jusqu\'au '+escHtml(vacFmtDate(purge))+' (5 ans après la sortie), au-delà duquel le dossier peut être purgé/anonymisé.':'')
       +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
       +'<button class="btn-sm" onclick="enfDesarchiverDossier(\''+e.id+'\')"><i class="ti ti-archive-off"></i> Réactiver ce dossier</button>'
-      +'<button class="btn-sm" onclick="enfExporterDocuments(\''+e.id+'\')" title="Télécharge un .zip de tous les documents du dossier, à conserver hors ligne (disque externe), puis les retire du stockage en ligne"><i class="ti ti-cloud-download"></i> Exporter les documents et libérer l\'espace</button>'
+      +(isDirection?'<button class="btn-sm" onclick="enfExporterDocuments(\''+e.id+'\')" title="Télécharge un .zip de tous les documents du dossier, à conserver hors ligne (disque externe), puis les retire du stockage en ligne"><i class="ti ti-cloud-download"></i> Exporter les documents et libérer l\'espace</button>':'')
       +'</div>'
       +'</div>';
   }
@@ -448,7 +448,7 @@ window.enfDesarchiverDossier=enfDesarchiverDossier;
    confirmation à deux temps (avant le zip, puis après le téléchargement). */
 async function enfExporterDocuments(id){
   const e=cacheEnfants.find(x=>String(x.id)===String(id));
-  if(!e||!enfIsArchived(e))return;
+  if(!isDirection||!e||!enfIsArchived(e))return;
   if(!confirm('Préparer un fichier .zip de tous les documents de '+(e.prenom||'')+' '+(e.nom||'')+' ?\n\nUne fois le fichier téléchargé et sa sauvegarde confirmée, ces documents seront supprimés du stockage en ligne (Supabase) — à vous de les conserver ensuite hors ligne (disque externe) pour le reste du délai légal.'))return;
 
   showBanner('Préparation du fichier .zip…');
