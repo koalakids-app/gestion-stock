@@ -828,6 +828,8 @@ comptes: `
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Cliquez sur <strong>Mot de passe oublié ?</strong> sur l'écran de connexion. Un lien de réinitialisation sera envoyé à votre adresse email.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🏠 Navigation entre applications</div>
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:12px">Utilisez le bouton <strong>← Accueil</strong> en haut à gauche pour revenir au portail et accéder à l'application Stock pédagogique.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">👤 Accès des employés</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:12px">Un compte <strong>employé</strong> n'ouvre que <strong>Mon espace</strong> (planning personnel, pointages, formations), l'<strong>Accès terrain</strong>, les <strong>Documents</strong> ouverts aux employés, le Stock et la Ludothèque de sa crèche. S'il ouvre un module réservé (Gestion crèches, Suivi, Équipe…), un message l'en informe puis il est renvoyé vers Mon espace. Sur l'accueil, ces modules sont masqués après sa première connexion ; le lien <strong>Afficher toutes les applications</strong> (en bas de l'accueil) les réaffiche sur un poste partagé. Les données du personnel, des contrats, des enfants et du suivi sont aussi fermées côté serveur : masquer une carte n'est qu'un confort.</div>
 <div style="background:#F0FDF4;border-left:4px solid #16A34A;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#065F46">
   ✅ Votre session reste active pendant 30 jours. Vous n'avez pas besoin de vous reconnecter à chaque visite.
 </div>`
