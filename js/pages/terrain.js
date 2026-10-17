@@ -62,12 +62,18 @@ async function terrainChargerDocuments(){
   const box=document.getElementById('docsEmployes');
   if(!box)return;
   try{
-    const {data,error}=await sb.from('documents_koala').select('id,titre,description,template_key')
-      .eq('actif',true).eq('acces_employe',true).eq('type','remplissable').order('titre');
+    const {data,error}=await sb.from('documents_koala').select('id,titre,description,type,template_key,fichier_url')
+      .eq('actif',true).eq('acces_employe',true).order('titre');
     if(error)throw error;
-    box.innerHTML=(data||[]).filter(d=>d.template_key!=='medicament_ponctuel').map(d=>
-      '<a class="qbtn auto" href="documents.html?doc='+encodeURIComponent(d.id)+'"><i class="ti ti-file-text"></i>'
-      +esc(d.titre)+(d.description?'<small>'+esc(d.description)+'</small>':'')+'</a>').join('');
+    /* À remplir en ligne : ouvert dans Documents ; à télécharger : le fichier directement. */
+    box.innerHTML=(data||[]).filter(d=>d.template_key!=='medicament_ponctuel').map(d=>{
+      const enLigne=d.type==='remplissable';
+      if(!enLigne&&!d.fichier_url)return '';
+      const href=enLigne?'documents.html?doc='+encodeURIComponent(d.id):d.fichier_url;
+      return '<a class="qbtn auto" href="'+esc(href)+'"'+(enLigne?'':' target="_blank" rel="noopener"')+'>'
+        +'<i class="ti '+(enLigne?'ti-file-text':'ti-download')+'"></i>'+esc(d.titre)
+        +(d.description?'<small>'+esc(d.description)+'</small>':'')+'</a>';
+    }).join('');
   }catch(e){console.error('[terrainChargerDocuments]',e);}
 }
 async function terrainGrantAccess(){
