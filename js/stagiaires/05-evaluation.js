@@ -43,7 +43,12 @@ function stgEvalProfilDefaut(s){
   if(/aepe|accompagnant/.test(f))return 'aepe';
   return stgType(s)==='alternant'?'eje':'decouverte';
 }
-const stgEvalDe=s=>(s&&s.evaluation&&typeof s.evaluation==='object')?s.evaluation:{};
+/* L'auto-évaluation vit dans sa propre colonne (sql/stagiaires_auto_evaluation.sql) : le
+   stagiaire l'envoie depuis son lien, et enregistrer l'évaluation ne doit pas l'écraser. */
+const stgEvalDe=s=>{
+  const e=(s&&s.evaluation&&typeof s.evaluation==='object')?s.evaluation:{};
+  return (s&&s.auto_evaluation)?Object.assign({},e,{auto:s.auto_evaluation}):e;
+};
 
 function stgEvalGrille(profil){
   return STG_EVAL_GRILLE.map(g=>g.id==='activites'?Object.assign({},g,{crit:g.crit.concat(STG_EVAL_EXTRA[profil]||[])}):g);
@@ -159,7 +164,8 @@ function stgEvalHtmlAuto(ev){
   const faits=cles.filter(x=>notes[x.ck]).length;
   return '<details style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:6px 10px"'+(faits||auto.commentaire?' open':'')+'>'
     +'<summary style="cursor:pointer;font-weight:700;font-size:12.5px">Auto-évaluation du stagiaire <span style="font-weight:400;color:#777">('+faits+'/'+cles.length+' compétences)</span></summary>'
-    +'<p style="font-size:11.5px;color:#777;margin:6px 0">À remplir avec le stagiaire (entretien de mi-parcours ou de fin de stage) : ce qu\'il pense avoir acquis. Un écart avec votre note est signalé dans la grille.</p>'
+    +'<p style="font-size:11.5px;color:#777;margin:6px 0">'+(auto.via==='lien'?'<b>Envoyée par le stagiaire depuis son lien le '+escHtml(stgDateFr(auto.le))+'.</b> ':'')
+    +'Le stagiaire la remplit depuis son lien (tant qu\'il est valable) ou avec vous lors d\'un entretien. Un écart avec votre note est signalé dans la grille.</p>'
     +STG_EVAL_EJE.map(d=>{
       const l=cles.filter(x=>x.dc===d);
       if(!l.length)return '';
@@ -258,13 +264,20 @@ async function stgEvalSave(evFixe){
   if(!s)return;
   const ev=evFixe&&evFixe.profil?evFixe:stgEvalLire();
   const le=(document.getElementById('stg-eval-date')||{}).value||null;
-  const ok=await dbUpdate('stagiaires',s.id,{evaluation:ev,evaluation_le:le});
+  /* L'auto-évaluation n'est réécrite que si elle a été modifiée ici : sinon une réponse
+     envoyée par le stagiaire depuis l'ouverture de la fiche serait écrasée. */
+  const {auto,...evSans}=ev;
+  const maj={evaluation:evSans,evaluation_le:le};
+  const autoChange=JSON.stringify(auto||null)!==JSON.stringify(s.auto_evaluation||null);
+  if(autoChange)maj.auto_evaluation=auto||null;
+  const ok=await dbUpdate('stagiaires',s.id,maj);
   if(!ok){
     return showBanner(/evaluation/i.test(window._lastDbError||'')
-      ?"Enregistrement impossible : le script sql/stagiaires_evaluation.sql n'a pas encore été exécuté sur Supabase."
+      ?"Enregistrement impossible : les scripts sql/stagiaires_evaluation.sql et sql/stagiaires_auto_evaluation.sql ne sont pas tous exécutés sur Supabase."
       :'Enregistrement impossible'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');
   }
-  s.evaluation=ev; s.evaluation_le=le;
+  s.evaluation=evSans; s.evaluation_le=le;
+  if(autoChange)s.auto_evaluation=auto||null;
   showBanner('Évaluation enregistrée ✅');
   return true;
 }
@@ -275,11 +288,7 @@ async function stgEvalMiFiger(){
   mi.eje_comp=JSON.parse(JSON.stringify(ev.eje_comp||{}));
   mi.le=(document.getElementById('stg-mi-date')||{}).value||todayStr();
   ev.mi=mi;
-  if(await stgEvalSave(ev)){
-    const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
-    if(s)s.evaluation=ev;
-    stgRenderEval();
-  }
+  if(await stgEvalSave(ev))stgRenderEval();
 }
 
 /* Version papier, à signer : même présentation que le document de suivi. */
