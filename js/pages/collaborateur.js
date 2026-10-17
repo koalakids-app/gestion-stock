@@ -681,11 +681,11 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggesti
     const icone=r.type==='quiz'?'ti-clipboard-check':'ti-book-2';
     let droite,info='';
     if(r.statut==='a_faire'){
-      if(r.etape==='quiz'&&r.type==='formation')info='<div style="font-size:11.5px;color:var(--muted)">Quiz à réussir ('+SEUIL_QUIZ+' % minimum)'+(r.best>=0?' — meilleur score : '+r.best+' %':'')+'</div>';
+      if(r.etape==='quiz'&&r.type==='formation')info='<div style="font-size:11.5px;color:var(--muted)">Quiz à réussir ('+SEUIL_QUIZ+' % minimum)'+(r.best>=0?' — meilleur score : '+r.best+' %':'')+'</div>'+(r.best>=0?'<div style="font-size:11.5px;font-weight:700;color:var(--orange)"><i class="ti ti-refresh"></i> À revoir : score inférieur à '+SEUIL_QUIZ+' %, la formation est à reprendre puis le quiz à repasser</div>':'');
       if(r.etape==='attester')info='<div style="font-size:11.5px;color:var(--muted)">'+(r.quizPct!=null?'Quiz réussi ('+r.quizPct+' %) — ':'')+'attestation en attente</div>';
       if(r.etape==='suite')info='<div style="font-size:11.5px;color:var(--muted)">Formation en cours : '+r.lues+' partie'+(r.lues>1?'s':'')+' lue'+(r.lues>1?'s':'')+' sur '+r.parties+' — le quiz viendra à la fin</div>';
       if(r.etape==='indispo')info='<div style="font-size:11.5px;color:var(--muted)">Vérification du quiz indisponible pour le moment</div>';
-      const lab={lire:'Lire la formation',quiz:'Passer le quiz',suite:'Continuer la formation',indispo:'Ouvrir'}[r.etape];
+      const lab={lire:'Lire la formation',quiz:r.best>=0?'Repasser le quiz':'Passer le quiz',suite:'Continuer la formation',indispo:'Ouvrir'}[r.etape];
       droite=r.etape==='attester'
         ?'<button class="btn btn-p btn-sm" style="font-size:11.5px" onclick="validerFormation(\''+r.itemId+'\')"><i class="ti ti-check"></i> J\'ai lu et compris cette formation</button>'
         :'<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" class="btn btn-p btn-sm" style="font-size:11.5px"><i class="ti ti-player-play"></i> '+lab+'</a>';
