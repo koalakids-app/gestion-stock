@@ -325,7 +325,8 @@ function renderListe(){
       :(estSorti(e)?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)">Sorti</span>':'');
     const terrain=ACCES_TERRAIN.has(e.id)
       ?'<span class="badge on"><i class="ti ti-walk"></i> Accès terrain</span>':'';
-    const btnTerrain=ACCES_TERRAIN.has(e.id)?'':'<button class="btn btn-g btn-sm" onclick="accorderAccesTerrain(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant d\'accorder l\'accès"')+'><i class="ti ti-walk"></i> Accès terrain</button>';
+    const btnTerrain=ACCES_TERRAIN.has(e.id)?'':'<button class="btn btn-g btn-sm" onclick="accorderAccesTerrain(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant d\'accorder l\'accès"')+'><i class="ti ti-walk"></i> Accès terrain</button>'
+      +(PartageLien.disponible()?' <button class="btn btn-g btn-sm" onclick="accorderAccesTerrain(\''+e.id+'\',true)" '+(e.email?'':'disabled')+'><i class="ti ti-share"></i> Partager l\'accès terrain</button>':'');
     const btnCompte=e.user_id
       ?''
       :'<button class="btn btn-s btn-sm" onclick="creerCompte(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant de créer le compte"')+'><i class="ti ti-mail-forward"></i> Créer le compte</button>'
@@ -906,19 +907,29 @@ async function creerCompte(id,partager){
 /* Pose un profil referents (role 'employe') relié à la fiche. Si la personne a
    déjà un compte de connexion (espace collaborateur), c'est le même identifiant
    qui ouvre aussi terrain.html ; sinon une invitation part par e-mail. */
-async function accorderAccesTerrain(id){
+async function accorderAccesTerrain(id,partager){
   const e=EMPLOYES.find(x=>x.id===id);
   if(!e||!e.email)return;
   const{data:deja}=await sb.from('referents').select('id').ilike('email',e.email).maybeSingle();
   if(deja){toast('Cette adresse est déjà utilisée par un compte directeur/référent : utilisez une autre adresse sur la fiche.',true);return;}
   if(!confirm(e.user_id?'Accorder l\'accès terrain à '+e.prenom+' ? Elle/il utilisera le même identifiant que pour Mon espace.'
+    :partager?'Accorder l\'accès terrain à '+e.prenom+' et partager le lien d\'invitation (aucun e-mail ne sera envoyé) ?'
     :'Accorder l\'accès terrain à '+e.prenom+' ? Un e-mail d\'invitation sera envoyé à '+e.email+'.'))return;
   const redirect=location.href.replace(/employes\.html.*$/,'terrain.html');
   const nom=((e.prenom||'')+' '+(e.nom||'')).trim();
-  const{ok,data}=await callFn('create-referent',{email:e.email,name:nom,creche_id:e.creche_id,poste:e.poste||'',role:'employe',redirect_to:redirect});
+  const{ok,data}=await callFn('create-referent',{email:e.email,name:nom,creche_id:e.creche_id,poste:e.poste||'',role:'employe',redirect_to:redirect,partager:!!partager});
   if(!ok||!data.user_id){toast('Échec : '+((data&&(data.error))||'erreur inconnue'),true);return;}
   const{error}=await sb.from('referents').update({employe_id:id}).eq('user_id',data.user_id);
   if(error){toast('Accès créé, mais le lien avec la fiche a échoué : '+error.message,true);}
+  else if(partager){
+    const pageTerrain=redirect;
+    const r=await PartageLien.partager(data.lien||pageTerrain,{titre:'Accès terrain',
+      texte:'Bonjour '+(e.prenom||'')+(data.lien?', voici le lien pour créer ton accès terrain :'
+        :', ton accès terrain est activé, connecte-toi avec ton e-mail et ton mot de passe habituels :')});
+    toast(r==='copie'?'Accès accordé — partage indisponible, lien copié.'
+      :r==='annule'?'Accès accordé, mais le lien n\'a pas été partagé (feuille de partage fermée).'
+      :'Accès terrain accordé, lien partagé.',r==='annule');
+  }
   else toast(e.user_id?'Accès terrain accordé.':'Invitation envoyée à '+e.email+'.');
   await loadEmployes();
 }
