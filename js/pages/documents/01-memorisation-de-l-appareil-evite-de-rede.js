@@ -54,13 +54,14 @@ async function boot(){
   /* Regle d'acces, alignee sur demandes.html (postes partages) :
      - arrivee depuis demandes.html (parametres ?doc= / ?rep= / ?enf=) :
        la session en cours est conservee, pas de seconde saisie ;
+     - arrivee depuis l'Acces terrain (?terrain=1) : meme principe, l'employe vient de s'y authentifier (mot de passe + double authentification) ;
      - arrivee directe, notamment depuis le hub index.html qui n'authentifie
        personne : deconnexion systematique puis ecran de connexion obligatoire.
      Sans cette regle, ouvrir Documents depuis le hub donnait acces au fonds
      documentaire sans aucune identification, avec la session laissee par
      l'utilisateur precedent. */
   const _q=new URLSearchParams(location.search);
-  const VENANT_DE_DEMANDES=_q.has('doc')||_q.has('rep')||_q.has('enf')||_q.has('tpl');
+  const VENANT_DE_DEMANDES=_q.has('doc')||_q.has('rep')||_q.has('enf')||_q.has('tpl')||_q.has('terrain');
   if(!VENANT_DE_DEMANDES&&!JUSTE_CONNECTE){
     try{await sb.auth.signOut();}catch(e){console.warn('[boot] signOut',e);}
     showLoginView();
