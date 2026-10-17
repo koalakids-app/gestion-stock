@@ -80,7 +80,7 @@ fetch(document.getElementById('dynamic-manifest').href)
       <div class="card-arrow">›</div>
     </a>
 
-<a href="demandes.html" class="card card-dem">
+<a href="demandes.html" class="card card-dem" data-masque="employe">
       <div class="card-icon"><img src="creches-icon.jpg" alt="Gestion crèches"></div>
       <div class="card-text">
         <h2>Gestion crèches</h2>
@@ -89,7 +89,7 @@ fetch(document.getElementById('dynamic-manifest').href)
       <div class="card-arrow">›</div>
     </a>
 
-    <a href="suivi.html" class="card card-suivi">
+    <a href="suivi.html" class="card card-suivi" data-masque="employe">
       <div class="card-icon"><img src="suivi-icon.jpg" alt="Suivi de l'enfant"></div>
       <div class="card-text">
         <h2>Suivi de l'enfant</h2>
@@ -98,7 +98,7 @@ fetch(document.getElementById('dynamic-manifest').href)
       <div class="card-arrow">›</div>
     </a>
 
-    <a href="#" class="card card-fam" onclick="return openSub('sub-fam')">
+    <a href="#" class="card card-fam" onclick="return openSub('sub-fam')" data-masque="employe">
       <div class="card-icon"><img src="familles-contrats-icon.jpg" alt="Familles &amp; contrats"></div>
       <div class="card-text">
         <h2>Familles &amp; contrats</h2>
@@ -107,7 +107,7 @@ fetch(document.getElementById('dynamic-manifest').href)
       <div class="card-arrow">›</div>
     </a>
 
-<a href="https://koalakids-app.github.io/quiz-protocoles/admin.html" class="card card-quiz">
+<a href="https://koalakids-app.github.io/quiz-protocoles/admin.html" class="card card-quiz" data-masque="employe">
       <div class="card-icon"><img src="quiz-icon.jpg" alt="Quiz &amp; Formations"></div>
       <div class="card-text">
         <h2>Quiz &amp; Formations</h2>
@@ -134,7 +134,7 @@ fetch(document.getElementById('dynamic-manifest').href)
       <div class="card-arrow">›</div>
     </a>
 
-    <a href="parametres.html" class="card card-param">
+    <a href="parametres.html" class="card card-param" data-masque="employe">
       <div class="card-icon"><img src="parametres-icon.jpg" alt="Paramètres"></div>
       <div class="card-text">
         <h2>Paramètres</h2>
@@ -143,7 +143,7 @@ fetch(document.getElementById('dynamic-manifest').href)
       <div class="card-arrow">›</div>
     </a>
 
-    <a href="employes.html" class="card card-team">
+    <a href="employes.html" class="card card-team" data-masque="employe">
       <div class="card-icon"><img src="equipe-icon.jpg" alt="Équipe"></div>
       <div class="card-text">
         <h2>Équipe</h2>
@@ -301,7 +301,7 @@ fetch(document.getElementById('dynamic-manifest').href)
     </div>
   </div>
 
-  <div class="footer">Koala Kids © 2026</div>
+  <div class="footer">Koala Kids © 2026<br><a href="#" id="roleToutAfficher" onclick="return toutAfficher()" style="display:none;font-size:12px;color:inherit;opacity:.7">Afficher toutes les applications</a></div>
 
 </div>
 
@@ -333,6 +333,25 @@ function applyCreche(){
   });
 }
 applyCreche();
+
+/* Un(e) employé(e) (rôle mémorisé à sa dernière connexion dans ce navigateur)
+   ne voit que les cartes utiles. Simple confort : ces modules restent protégés
+   côté serveur. Lien de secours pour tout réafficher (poste partagé). */
+function getRole(){ try{ return localStorage.getItem('kk_role')||''; }catch(e){ return ''; } }
+function applyRole(){
+  var masque = getRole()==='employe';
+  document.querySelectorAll('[data-masque~="employe"]').forEach(function(el){
+    el.style.display = masque ? 'none' : '';
+  });
+  var lien = document.getElementById('roleToutAfficher');
+  if(lien) lien.style.display = masque ? '' : 'none';
+}
+function toutAfficher(){
+  try{ localStorage.removeItem('kk_role'); }catch(e){}
+  applyRole();
+  return false;
+}
+applyRole();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/support-chat.js?v=4"></script>
