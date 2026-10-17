@@ -39,8 +39,8 @@ function stgOpenFiche(id,typeDefaut){
   stgDocExtCache=[];
   const docExtZone=document.getElementById('stg-doc-ext-zone');
   if(docExtZone)docExtZone.innerHTML='';
-  if(s){stgRenderLien();stgRenderRessFiche();stgRenderExportZone(s);stgRenderDocs();stgRenderJours();stgRenderCollabZone();stgLoadDocExt(s.id);}
-  else{const ez=document.getElementById('stg-export-zone');if(ez)ez.innerHTML='';}
+  if(s){stgRenderLien();stgRenderRessFiche();stgRenderExportZone(s);stgRenderDocs();stgRenderJours();stgRenderCollabZone();stgRenderEval();stgLoadDocExt(s.id);}
+  else{const ez=document.getElementById('stg-export-zone');if(ez)ez.innerHTML='';const ev=document.getElementById('stg-eval-zone');if(ev)ev.innerHTML='';}
   document.getElementById('modal-stagiaire-wrap').classList.add('open');
 }
 
@@ -61,7 +61,7 @@ function stgTypeChange(){
   txt('stg-opt-termine',type==='alternant'?'Alternance terminée':'Stage terminé');
   /* Les pièces demandées ne sont pas les mêmes : on redessine le bloc si la
      fiche est déjà enregistrée. */
-  if(stgFicheId){stgRenderDocs(type);stgRenderRessFiche(type);stgRenderCollabZone();}
+  if(stgFicheId){stgRenderDocs(type);stgRenderRessFiche(type);stgRenderCollabZone();stgRenderEval();}
 }
 
 /* Les directrices techniques proposées sont celles de la crèche choisie : offrir celles des
