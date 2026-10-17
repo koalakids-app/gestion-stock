@@ -18,6 +18,7 @@ principe: `
 
 categories: `
 <h3>🗂️ Organiser les catégories</h3>
+<div class="tip">👷 <strong>Employés (Accès terrain)</strong> : cochez « Ouvert aux employés » dans la fiche d’un document, ou « Ouverte aux employés » sur une catégorie (par exemple Protocoles) pour ouvrir d’un coup tous ses documents et sous-catégories, afin qu’ils puissent les consulter dans Documents. Un document rattaché à une crèche n’est visible que par les employés de cette crèche ; « Tous sites » est visible de toutes. Ils consultent seulement : pas de réponses ni d’envoi pour signature.</div>
 <div class="tip">Les catégories structurent la bibliothèque. Elles peuvent s’emboîter sur <strong>trois niveaux</strong> : catégorie › sous-catégorie › sous-sous-catégorie (par exemple Protocoles › Santé › Fièvre).</div>
 <div class="st">➕ Créer une catégorie</div>
 <ul>

@@ -56,31 +56,10 @@ function showLoginView(msg){
   document.getElementById('mfaGateBox').style.display='none';
   if(msg)document.getElementById('liErr').textContent=msg;
 }
-/* Documents « Ouvert aux employés » (case cochée dans Documents), en plus de
-   l'autorisation de médicament déjà affichée en dur. */
-async function terrainChargerDocuments(){
-  const box=document.getElementById('docsEmployes');
-  if(!box)return;
-  try{
-    const {data,error}=await sb.from('documents_koala').select('id,titre,description,type,template_key,fichier_url')
-      .eq('actif',true).eq('acces_employe',true).order('titre');
-    if(error)throw error;
-    /* À remplir en ligne : ouvert dans Documents ; à télécharger : le fichier directement. */
-    box.innerHTML=(data||[]).filter(d=>d.template_key!=='medicament_ponctuel').map(d=>{
-      const enLigne=d.type==='remplissable';
-      if(!enLigne&&!d.fichier_url)return '';
-      const href=enLigne?'documents.html?doc='+encodeURIComponent(d.id):d.fichier_url;
-      return '<a class="qbtn auto" href="'+esc(href)+'"'+(enLigne?'':' target="_blank" rel="noopener"')+'>'
-        +'<i class="ti '+(enLigne?'ti-file-text':'ti-download')+'"></i>'+esc(d.titre)
-        +(d.description?'<small>'+esc(d.description)+'</small>':'')+'</a>';
-    }).join('');
-  }catch(e){console.error('[terrainChargerDocuments]',e);}
-}
 async function terrainGrantAccess(){
   if(typeof kkLoginAlertCheck==='function')kkLoginAlertCheck(sb);
   document.getElementById('loginView').style.display='none';
   document.getElementById('appView').style.display='block';
-  terrainChargerDocuments();
   document.getElementById('whoAmI').textContent=(PROF.name||'')+(IS_DIRECTION?' · Direction':'');
   document.getElementById('hello').innerHTML='Bonjour '+esc(PROF.name||'')+' <small>Suivi de l\'enfant, registre d\'infirmerie, incidents et autorisation de médicament, en un tap.</small>';
 }

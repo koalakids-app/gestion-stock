@@ -3,7 +3,7 @@ const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 document.getElementById('gcss').textContent=KKGuide.css;
 
-let ME=null,PROF=null,IS_ADMIN=false,IS_DIRECTION=false;
+let ME=null,PROF=null,IS_ADMIN=false,IS_DIRECTION=false,IS_EMPLOYE=false,DEPUIS_TERRAIN=false;
 let CATS=[],DOCS=[],CRECHES=[],ETABS=[],RESEAU={};
 let editDocId=null,fillDoc=null,fillRep=null,ENFANTS=[];
 
@@ -25,10 +25,9 @@ function etabDe(id){return ETABS.find(x=>String(x.creche_id)===String(id))||{};}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600);}
 function close_(id){
   document.getElementById(id).classList.remove('on');
-  /* Un(e) employé(e) n'arrive ici que depuis l'Acces terrain, pour un seul
-     modele : en fermant le formulaire il/elle retourne a l'Acces terrain, sans
-     jamais voir le fonds documentaire. */
-  if(id==='ovFill'&&PROF&&PROF.role==='employe')location.href='terrain.html';
+  /* Un(e) employé(e) venu(e) de l'Acces terrain pour un document precis y
+     retourne en fermant le formulaire ; s'il/elle navigue dans Documents, il/elle y reste. */
+  if(id==='ovFill'&&DEPUIS_TERRAIN)location.href='terrain.html';
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function slug(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9.\-_]/g,'_');}
@@ -105,6 +104,7 @@ async function boot(){
      sur le fonds documentaire). Verrouillage reel assure par les policies RLS
      restrictives cote Supabase ; ce drapeau ne fait que masquer l’interface. */
   IS_DIRECTION=!!p&&p.role==='direction';
+  IS_EMPLOYE=!!p&&p.role==='employe';
   // Même obligation MFA qu'après le login classique de demandes.html : une session
   // héritée (arrivée via ?doc=/?rep=/?enf=) ou tout juste authentifiée par mot de
   // passe ne donne pas accès à l'app tant que l'AAL2 (second facteur) n'est pas
@@ -275,9 +275,7 @@ async function doLogout(){await sb.auth.signOut();location.reload();}
 async function loadAll(){
   const[c,d,cr,en,et,rz,sg]=await Promise.all([
     sb.from('doc_categories').select('*').order('ordre'),
-    (PROF&&PROF.role==='employe'
-      ?sb.from('documents_koala').select('*').eq('actif',true).eq('acces_employe',true).order('titre')
-      :sb.from('documents_koala').select('*').eq('actif',true).order('titre')),
+    sb.from('documents_koala').select('*').eq('actif',true).order('titre'),
     sb.from('creches').select('id,name,addr').order('name'),
     sb.from('enfants').select('id,prenom,nom,creche_id,dob,regime_repas').order('prenom'),
     sb.from('etablissements').select('*'),
@@ -293,7 +291,7 @@ async function loadAll(){
   RESEAU=(rz&&rz.data&&rz.data.config)||{};
   const sel=document.getElementById('fCreche');
   sel.innerHTML='<option value="all">Toutes les crèches</option>'+CRECHES.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
-  if(PROF&&PROF.role==='referent'&&PROF.creche_id)sel.value=PROF.creche_id;
+  if(PROF&&(PROF.role==='referent'||PROF.role==='employe')&&PROF.creche_id)sel.value=PROF.creche_id;
   await sdChargerEtats();
   render();
   openFromUrl();
@@ -313,11 +311,9 @@ function openFromUrl(){
        connaitre l'id du document, qui differe d'une organisation a l'autre. */
     const tpl=q.get('tpl');
     /* Employé(e) : DOCS ne contient deja que les documents coches « Ouvert aux employes ». */
-    const estEmploye=!!PROF&&PROF.role==='employe';
-    const docId=estEmploye
-      ?(q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id))
-      :(q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id));
-    if(estEmploye&&!docId){location.replace('terrain.html');return;}
+    const docId=q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id);
+    DEPUIS_TERRAIN=IS_EMPLOYE&&!!(q.get('doc')||tpl);
+    if(DEPUIS_TERRAIN&&!docId){location.replace('terrain.html');return;}
     if(!docId){if(tpl)toast('Document introuvable ou inaccessible');return;}
     const repId=q.get('rep')||null;
     RETURN_ENFANT_ID=q.get('enf')||null;
@@ -472,11 +468,11 @@ function docRowHtml(d){
       <p>${esc(d.description||'')}${sdTag(d)}${crName?' <span class="tag">'+esc(crName)+'</span>':' <span class="tag">Tous sites</span>'}${d.pack_familiarisation?' <span class="tag" style="background:#EEEDF8;color:#3D3580;font-weight:700">👪 Familiarisation'+(d.pack_ordre?' · '+d.pack_ordre:'')+(d.pack_imprimer?' · à imprimer':'')+'</span>':''}</p></div>
     <div class="doc-a">
       ${fill?`<button class="iconbtn" title="Remplir" onclick="openFill('${d.id}')"><i class="ti ti-pencil"></i></button>
-              <button class="iconbtn" title="Réponses" onclick="openReps('${d.id}')"><i class="ti ti-list"></i></button>`
+              ${IS_EMPLOYE?'':`<button class="iconbtn" title="Réponses" onclick="openReps('${d.id}')"><i class="ti ti-list"></i></button>`}`
             :(d.fichier_url?`<button class="iconbtn" title="Aperçu" onclick="apercuFichier('${d.id}')"><i class="ti ti-eye"></i></button>
               <a class="iconbtn" title="Télécharger" href="${esc(d.fichier_url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i></a>`:'')}
       ${sdEligible(d)&&/\.docx(\?|$)/i.test(d.fichier_url)&&sdSignes(d).length?`<button class="iconbtn" title="Télécharger le Word signé" onclick="sdTelechargerDocx('${d.id}')"><i class="ti ti-file-type-doc"></i></button>`:''}
-      ${sdEligible(d)?`<button class="iconbtn" title="Envoyer pour signature" onclick="sdEnvoyer('${d.id}')"><i class="ti ti-signature"></i></button>`:''}
+      ${sdEligible(d)&&!IS_EMPLOYE?`<button class="iconbtn" title="Envoyer pour signature" onclick="sdEnvoyer('${d.id}')"><i class="ti ti-signature"></i></button>`:''}
       ${IS_DIRECTION?`<button class="iconbtn" title="Modifier" onclick="openDoc('${d.id}')"><i class="ti ti-edit"></i></button>
       <button class="iconbtn d" title="Supprimer" onclick="delDoc('${d.id}')"><i class="ti ti-trash"></i></button>`:''}
     </div></div>`;
@@ -534,6 +530,7 @@ function openCat(id){
   document.getElementById('catTitle').textContent=cur?'Modifier la catégorie':'Nouvelle catégorie';
   document.getElementById('cNom').value=cur?(cur.nom||''):'';
   document.getElementById('cCoul').value=cur?(cur.couleur||'#4A3F9F'):'#4A3F9F';
+  document.getElementById('cAccesEmploye').checked=!!(cur&&cur.acces_employe);
   /* Parents possibles : toute catégorie qui n'est ni elle-même ni un de ses descendants,
      et dont la profondeur additionnée à la hauteur du sous-arbre déplacé reste <= MAX_CAT_DEPTH. */
   const h=cur?catHeight(cur.id):1;
@@ -571,11 +568,12 @@ async function saveCat(){
       return toast('Profondeur maximale de '+MAX_CAT_DEPTH+' niveaux atteinte');
   }
   const coul=document.getElementById('cCoul').value;
+  const acc=document.getElementById('cAccesEmploye').checked;
   let error;
   if(editCatId){
-    ({error}=await sb.from('doc_categories').update({nom,parent_id:parent,couleur:coul}).eq('id',editCatId));
+    ({error}=await sb.from('doc_categories').update({nom,parent_id:parent,couleur:coul,acces_employe:acc}).eq('id',editCatId));
   }else{
-    ({error}=await sb.from('doc_categories').insert({nom,parent_id:parent,couleur:coul,ordre:CATS.length+1}));
+    ({error}=await sb.from('doc_categories').insert({nom,parent_id:parent,couleur:coul,acces_employe:acc,ordre:CATS.length+1}));
   }
   if(error)return toast('Erreur : '+error.message);
   close_('ovCat');document.getElementById('ovCat').style.zIndex='';
@@ -597,7 +595,7 @@ function renderCatMgr(){
     const dot=depth===0?'11px':(depth===1?'9px':'8px');
     return `<div class="chip" style="margin-left:${depth*18}px">
       <span class="cat-dot" style="width:${dot};height:${dot};background:${esc(c.couleur||'#4A3F9F')}"></span>
-      <span style="flex:1">${esc(c.nom)} <span style="color:var(--muted)">(${n})</span></span>
+      <span style="flex:1">${esc(c.nom)} <span style="color:var(--muted)">(${n})</span>${c.acces_employe?' <span class="tag" title="Ouverte aux employés">👷</span>':''}</span>
       <button class="iconbtn" title="Modifier" onclick="openCat('${c.id}')"><i class="ti ti-edit"></i></button>
       <button class="iconbtn d" title="Supprimer" onclick="delCat('${c.id}')"><i class="ti ti-trash"></i></button>
     </div>`;
