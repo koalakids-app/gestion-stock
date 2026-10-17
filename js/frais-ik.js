@@ -584,6 +584,33 @@ function ikReloadFromPlanning(){
   ikLoadFromPlanning();
 }
 
+// Réunions DT (onglet Événements) : elles figurent dans le planning coordinateur et comptent comme
+// déplacement vers leur lieu. Le créneau vient des heures : matin si la réunion commence avant 13 h,
+// après-midi si elle se poursuit après 13 h (les deux si elle chevauche midi). Sans heure : aucun trajet.
+function ikAjouterReunionsDT(raw,year,monthNum,userId){
+  const p=(cacheReferents||[]).find(r=>r.id===userId);
+  if(!p||p.role!=='direction'||typeof pgReunionsCoordDuJour!=='function')return;
+  const hm=t=>{const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));return m?parseInt(m[1],10)*60+parseInt(m[2],10):null;};
+  const nbJours=new Date(year,monthNum,0).getDate();
+  for(let j=1;j<=nbJours;j++){
+    const d=new Date(year,monthNum-1,j);
+    if(d.getDay()===0||d.getDay()===6)continue;
+    const date=ikLocalDate(d);
+    pgReunionsCoordDuJour(date).forEach(e=>{
+      const lieu=(e.lieu||'').trim()||((cacheCreches||[]).find(c=>String(c.id)===String(e.creche_id||''))||{}).name||'';
+      const deb=hm(e.heure_debut),fin=hm(e.heure_fin);
+      if(!lieu||deb===null)return;
+      const cren=[];
+      if(deb<780)cren.push('M');
+      if(fin!==null?fin>780:deb>=780)cren.push('A');
+      cren.forEach(c=>{
+        if(raw.some(r=>r.date===date&&r.creneau===c&&r.lieu===lieu))return;
+        raw.push({id:`${e.id}_${date}_${c}`,date,lieu,slot:c==='M'?0:1,creneau:c});
+      });
+    });
+  }
+}
+
 async function ikLoadFromPlanning(){
   const month=document.getElementById('ik-month').value;
   if(!month){alert('Sélectionnez un mois.');return;}
@@ -611,6 +638,7 @@ async function ikLoadFromPlanning(){
     });
     cursor.setDate(cursor.getDate()+7);
   }
+  ikAjouterReunionsDT(raw,year,monthNum,userId);
   ikRows=ikChainDays(raw);
   ikSaveRows();
   ikRenderTable();
