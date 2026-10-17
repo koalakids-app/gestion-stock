@@ -856,7 +856,9 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggesti
         try{const u=new URL(env.lien);u.searchParams.set('module',reste[0]);u.searchParams.set('parcours','1');suite=u.toString();}catch(e){}
         return{...base,statut:'a_faire',etape:'suite',lien:suite,lues:mq.freres.length-reste.length,parties:mq.freres.length};
       }
-      return lu||best>=0
+      /* Le quiz porte sur tout le thème : un score ancien (autre module, quiz passé avant l'envoi)
+         ne dispense pas de lire cette formation. Le quiz n'est proposé qu'une fois la lecture faite. */
+      return lu
         ?{...base,statut:'a_faire',etape:'quiz',lien:lienQuizDe(env,mq.quiz_id),best}
         :{...base,statut:'a_faire',etape:'lire'};
     }
