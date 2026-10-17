@@ -720,6 +720,9 @@ async function finishLoginAfterAuth(){
     await loadAllData();
     currentProfile=cacheReferents.find(r=>r.user_id===currentUser.id)||null;
     if(!currentProfile){const{data:pd}=await sb.from('referents').select('*').eq('user_id',currentUser.id).maybeSingle();currentProfile=pd;}
+    /* Ce module est réservé à la direction et aux directeurs/trices techniques :
+       un(e) employé(e) (role 'employe') est renvoyé(e) vers ses propres pages. */
+    if(currentProfile?.role==='employe'){window.location.replace('collaborateur.html');return;}
     isDirection=currentProfile?.role==='direction';
     if(window.KKBranding)KKBranding.applyBranding(sb);
     showApp();
