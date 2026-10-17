@@ -1,7 +1,8 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   EXPORT DES DOSSIERS ARCHIVÉS D'UNE CRÈCHE (Enfants › Exporter les archives)
+   EXPORT DES DOSSIERS ARCHIVÉS D'UNE CRÈCHE (Paramètres › Établissements ›
+   « Archives sur disque dur »)
 
-   Réservé à la direction. Pour la crèche choisie dans le sélecteur, regroupe
+   Page réservée à la direction. Pour la crèche sélectionnée (crecheId), regroupe
    dans UN seul .zip les documents de tous les dossiers archivés — enfants,
    collaborateurs/trices archivés, stagiaires dont le dossier est clos — à
    copier sur le disque dur (chiffré) de la crèche. Puis, seulement après
@@ -13,6 +14,7 @@
    Arborescence du zip : <crèche>/enfants|collaborateurs|stagiaires/<Nom>/…
    ═════════════════════════════════════════════════════════════════════════ */
 const ARCH_EMP_BUCKET='documents-employes';
+function archStatut(m){const e=document.getElementById('archStatut');if(e)e.textContent=m||'';}
 
 function archNomSur(s){
   return String(s||'sans-nom').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.-]+/g,'_').replace(/^_+|_+$/g,'')||'sans-nom';
@@ -24,10 +26,9 @@ async function archCollecter(crecheId){
   const items=[]; // { type, personne, dossier, d, table, bucketDefaut }
   const personnes=[];
 
-  const enfants=cacheEnfants.filter(e=>String(e.creche_id||'')===String(crecheId)&&enfIsArchived(e));
-  for(const e of enfants){
-    personnes.push({type:'enfant',p:e,dossierRacine:'enfants',anneeSortie:e.date_sortie});
-  }
+  const{data:enfs,error:eEnf}=await sb.from('enfants').select('*').eq('creche_id',crecheId).not('archive_le','is',null);
+  if(eEnf)throw eEnf;
+  for(const e of enfs||[])personnes.push({type:'enfant',p:e,dossierRacine:'enfants',anneeSortie:e.date_sortie});
   const{data:emps,error:eEmp}=await sb.from('employes').select('*').eq('creche_id',crecheId).not('archive_le','is',null);
   if(eEmp)throw eEmp;
   for(const e of emps||[])personnes.push({type:'employe',p:e,dossierRacine:'collaborateurs',anneeSortie:e.date_fin});
@@ -58,7 +59,7 @@ async function archCollecter(crecheId){
   ajoute(pai,'enfant','enfant_id','pai','enfants_pai',null);
   ajoute(vac,'enfant','enfant_id','vaccinations','vaccins_pj',null);
   ajoute(emd,'employe','employe_id','embauche','employes_documents',ARCH_EMP_BUCKET);
-  ajoute(std,'stagiaire','stagiaire_id','','stagiaires_documents',typeof STG_BUCKET!=='undefined'?STG_BUCKET:'stagiaires');
+  ajoute(std,'stagiaire','stagiaire_id','','stagiaires_documents','stagiaires');
   return{personnes,items};
 }
 
@@ -79,19 +80,21 @@ async function archTelecharger(it){
 }
 
 async function archExporterCreche(){
-  if(!isDirection){showBanner('Réservé à la direction.','error');return;}
-  const crecheId=(document.getElementById('enf-creche-select')||{}).value||'';
-  if(!crecheId){showBanner('Choisissez d\'abord une crèche dans le sélecteur.','error');return;}
-  const creche=cacheCreches.find(c=>String(c.id)===String(crecheId));
-  const nomCreche=creche?creche.nom:'creche';
+  try{await archExporterCrecheEtapes();}finally{archStatut('');}
+}
+async function archExporterCrecheEtapes(){
+  if(!PROF||PROF.role!=='direction'){toast('Réservé à la direction.',true);return;}
+  if(!crecheId){toast('Choisissez d\'abord une crèche.',true);return;}
+  const creche=CRECHES.find(c=>String(c.id)===String(crecheId));
+  const nomCreche=creche?creche.name||creche.nom:'creche';
 
-  showBanner('Recherche des dossiers archivés…');
+  archStatut('Recherche des dossiers archivés…');
   let col;
   try{col=await archCollecter(crecheId);}
-  catch(err){showBanner('Erreur lors de la lecture des dossiers : '+err.message,'error');return;}
+  catch(err){toast('Erreur lors de la lecture des dossiers : '+err.message,true);return;}
   const{personnes,items}=col;
-  if(!personnes.length){showBanner('Aucun dossier archivé pour cette crèche.');return;}
-  if(!items.length){showBanner(personnes.length+' dossier(s) archivé(s), mais aucun document à exporter.');return;}
+  if(!personnes.length){toast('Aucun dossier archivé pour cette crèche.');return;}
+  if(!items.length){toast(personnes.length+' dossier(s) archivé(s), mais aucun document à exporter.');return;}
 
   const nPers=new Set(items.map(i=>i.x.type+i.x.p.id)).size;
   if(!confirm('Exporter les archives de « '+nomCreche+' » ?\n\n'+items.length+' document(s) de '+nPers+' dossier(s) (enfants, collaborateurs/trices, stagiaires) seront regroupés dans un seul fichier .zip.\n\nAssurez-vous d\'avoir le disque dur (chiffré) sous la main. Les documents ne seront supprimés du stockage en ligne qu\'après votre confirmation, une fois le zip téléchargé.'))return;
@@ -101,7 +104,7 @@ async function archExporterCreche(){
   let nEchec=0;
   for(let i=0;i<items.length;i++){
     const it=items[i];
-    showBanner('Téléchargement des documents… '+(i+1)+' / '+items.length);
+    archStatut('Téléchargement des documents… '+(i+1)+' / '+items.length);
     try{
       const blob=await archTelecharger(it);
       const chemin=[archNomSur(nomCreche),it.x.dossierRacine,archNomPersonne(it.x.p)]
@@ -114,16 +117,16 @@ async function archExporterCreche(){
       nEchec++;
     }
   }
-  if(!reussis.length){showBanner('Aucun document n\'a pu être téléchargé — export annulé, rien n\'a été supprimé.','error');return;}
+  if(!reussis.length){toast('Aucun document n\'a pu être téléchargé — export annulé, rien n\'a été supprimé.',true);return;}
 
-  showBanner('Création du fichier .zip…');
+  archStatut('Création du fichier .zip…');
   const contenu=await zip.generateAsync({type:'blob',compression:'STORE'});
-  const nomZip='archives_'+archNomSur(nomCreche)+'_'+todayStr()+'.zip';
+  const nomZip='archives_'+archNomSur(nomCreche)+'_'+auj()+'.zip';
   const url=URL.createObjectURL(contenu);
   const a=document.createElement('a');a.href=url;a.download=nomZip;document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
 
-  if(nEchec)showBanner(nEchec+' document(s) n\'ont pas pu être inclus dans le zip (ignorés, non supprimés) — '+reussis.length+' inclus.','error');
+  if(nEchec)toast(nEchec+' document(s) n\'ont pas pu être inclus dans le zip (ignorés, non supprimés) — '+reussis.length+' inclus.',true);
 
   if(!confirm('Le fichier "'+nomZip+'" a été téléchargé.\n\nL\'avez-vous copié sur le disque dur de la crèche, et vérifié qu\'il s\'ouvre correctement ?\n\nEn confirmant, les '+reussis.length+' document(s) effectivement exportés seront DÉFINITIVEMENT supprimés du stockage en ligne'+(nEchec?' ('+nEchec+' document(s) en échec resteront en ligne, à retenter plus tard)':'')+'. Cette action est IRRÉVERSIBLE.'))return;
 
@@ -153,7 +156,7 @@ async function archExporterCreche(){
     creche_id:crecheId,
     annee_sortie:b.x.anneeSortie?Number(String(b.x.anneeSortie).slice(0,4)):null,
     motif:b.ok+' document(s) exportés dans '+nomZip+' (export par crèche) puis supprimés du stockage en ligne'+(b.ko?' ('+b.ko+' échec(s) de suppression)':''),
-    purge_par:currentUser?currentUser.id:null
+    purge_par:ME?ME.id:null
   }));
   if(journal.length){
     const{error:jErr}=await sb.from('archivage_purges').insert(journal);
@@ -162,6 +165,7 @@ async function archExporterCreche(){
 
   const nOk=[...parPersonne.values()].reduce((n,b)=>n+b.ok,0);
   const nKo=[...parPersonne.values()].reduce((n,b)=>n+b.ko,0);
-  showBanner(nOk+' document(s) supprimé(s) du stockage en ligne.'+(nKo?' '+nKo+' suppression(s) ont échoué.':'')+' Rechargez la page pour mettre les fiches à jour.');
+  archStatut('');
+  toast(nOk+' document(s) supprimé(s) du stockage en ligne.'+(nKo?' '+nKo+' suppression(s) ont échoué.':'')+'');
 }
 window.archExporterCreche=archExporterCreche;
