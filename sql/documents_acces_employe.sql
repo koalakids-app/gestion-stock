@@ -7,6 +7,19 @@ update public.documents_koala set acces_employe = true where template_key = 'med
 
 -- RLS : un employé ne lit que les documents cochés « Ouvert aux employés » et n'écrit jamais.
 -- (docs_write, FOR ALL, lui ouvrait aussi la lecture via kk_acces_creche : on l'exclut.)
+-- Catégories ouvertes aux employés : tous les documents de la catégorie et de ses sous-catégories.
+alter table public.doc_categories add column if not exists acces_employe boolean not null default false;
+
+create or replace function public.kk_cat_ouverte_employes(cat uuid)
+returns boolean language sql stable security definer set search_path to 'public' as $$
+  with recursive remonte as (
+    select id, parent_id, acces_employe, 1 as n from public.doc_categories where id = cat
+    union all
+    select c.id, c.parent_id, c.acces_employe, r.n + 1 from public.doc_categories c join remonte r on c.id = r.parent_id where r.n < 6
+  )
+  select coalesce(bool_or(acces_employe), false) from remonte;
+$$;
+
 alter policy docs_read on public.documents_koala using (
   (
     ((creche_id is not null) and creche_id in (select id from public.creches where org_id = kk_mon_org()))
@@ -14,9 +27,14 @@ alter policy docs_read on public.documents_koala using (
   )
   and (
     coalesce(kk_mon_role(), '') <> 'employe'
-    or (acces_employe and (creche_id is null or kk_acces_creche(creche_id)))
+    or (
+      (acces_employe or (categorie_id is not null and kk_cat_ouverte_employes(categorie_id)))
+      and (creche_id is null or kk_acces_creche(creche_id))
+    )
   )
 );
+
+update public.doc_categories set acces_employe = true where lower(translate(nom,'éÉ','eE')) like 'protocole%' and parent_id is null;
 
 alter policy docs_write on public.documents_koala using (
   coalesce(kk_mon_role(), '') <> 'employe' and (
