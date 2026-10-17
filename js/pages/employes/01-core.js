@@ -391,7 +391,7 @@ function renderArchivageBox(e){
       +(purge?' Conservation légale recommandée jusqu\'au '+esc(new Date(purge).toLocaleDateString('fr-FR'))+' (5 ans après la fin de contrat), au-delà duquel le dossier peut être purgé/anonymisé.':'')
       +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
       +'<button type="button" class="btn btn-g btn-sm" onclick="desarchiverFiche(\''+e.id+'\')"><i class="ti ti-archive-off"></i> Réactiver ce dossier</button>'
-      +'<button type="button" class="btn btn-g btn-sm" onclick="exporterDocuments(\''+e.id+'\')" title="Télécharge un .zip des documents du dossier, à conserver hors ligne (disque externe), puis les retire du stockage en ligne"><i class="ti ti-cloud-download"></i> Exporter les documents et libérer l\'espace</button>'
+      +(isDirection?'<button type="button" class="btn btn-g btn-sm" onclick="exporterDocuments(\''+e.id+'\')" title="Télécharge un .zip des documents du dossier, à conserver hors ligne (disque externe), puis les retire du stockage en ligne"><i class="ti ti-cloud-download"></i> Exporter les documents et libérer l\'espace</button>':'')
       +'</div>'
       +'</div>';
   }else if(estSorti(e)){
@@ -442,7 +442,7 @@ async function desarchiverFiche(id){
    supprimés. Irréversible : d'où la confirmation à deux temps. */
 async function exporterDocuments(id){
   const e=EMPLOYES.find(x=>String(x.id)===String(id));
-  if(!e||!estArchive(e))return;
+  if(!isDirection||!e||!estArchive(e))return;
   if(!confirm('Préparer un fichier .zip de tous les documents de '+(e.prenom||'')+' '+(e.nom||'')+' ?\n\nUne fois le fichier téléchargé et sa sauvegarde confirmée, ces documents seront supprimés du stockage en ligne (Supabase) — à vous de les conserver ensuite hors ligne (disque externe) pour le reste du délai légal.'))return;
 
   toast('Préparation du fichier .zip…');

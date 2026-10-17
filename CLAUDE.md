@@ -27,6 +27,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 
 - Recettes des goûters : tables `recettes`, `recettes_ingredients`, `gouters_creche_effectifs` (moyens/grands par jour), `gouters_creche_recettes` (`sql/recettes_gouters.sql`, à appliquer à la main). Recettes communes aux crèches (écriture direction via `kk_est_direction()`), allergènes par ingrédient. Logique et récapitulatif 2 semaines dans `js/pages/demandes/14-recettes-gouters.js` (`gcLignes` calcule les produits à commander).
 
+## Archives sur disque dur
+- Export des dossiers archivés d'une crèche en un .zip (direction uniquement) : `archExporterCreche` (`js/pages/demandes/15-export-archives-creche.js`), bouton dans Enfants. Il couvre enfants archivés, employés archivés et stagiaires clos, puis supprime les fichiers de Supabase après confirmation et écrit une ligne par dossier dans `archivage_purges`. Les exports dossier par dossier sont eux aussi réservés à la direction (`isDirection`).
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.
