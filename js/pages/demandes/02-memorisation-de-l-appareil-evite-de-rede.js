@@ -210,9 +210,23 @@ if('serviceWorker'in navigator){navigator.serviceWorker.addEventListener('messag
 });}
 /* Notifications reçues pendant la plage de silence (table notifs_retenues, rangées par notify-push) :
    livrées à la première connexion hors silence. Un seul récapitulatif, puis marquées livrées. */
+function notifFeriesFR(an){
+  const a=an%19,b=Math.floor(an/100),c=an%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mois=Math.floor((h+l-7*m+114)/31),jour=((h+l-7*m+114)%31)+1;
+  const paques=new Date(Date.UTC(an,mois-1,jour)),plus=n=>new Date(paques.getTime()+n*86400000).toISOString().slice(0,10),fixe=(mm,dd)=>an+'-'+String(mm).padStart(2,'0')+'-'+String(dd).padStart(2,'0');
+  return new Set([fixe(1,1),fixe(5,1),fixe(5,8),fixe(7,14),fixe(8,15),fixe(11,1),fixe(11,11),fixe(12,25),plus(1),plus(39),plus(50)]);
+}
+/* Même règle que supabase/functions/notify-push : plage horaire, ou journée entière
+   (samedi, dimanche, férié) tant que la case n'est pas décochée dans Paramètres. */
 function notifHorsSilence(cfg){
-  const debut=(cfg&&cfg.notif_silence_debut)||'19:00',fin=(cfg&&cfg.notif_silence_fin)||'08:00';
-  const m=new Date().toLocaleTimeString('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit',hour12:false});
+  cfg=cfg||{};
+  const debut=cfg.notif_silence_debut||'19:00',fin=cfg.notif_silence_fin||'08:00';
+  const now=new Date();
+  const m=now.toLocaleTimeString('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit',hour12:false});
+  const jourIso=now.toLocaleDateString('en-CA',{timeZone:'Europe/Paris'});
+  const sem=now.toLocaleDateString('en-US',{timeZone:'Europe/Paris',weekday:'short'});
+  if(sem==='Sat'&&cfg.notif_silence_samedi!==false)return false;
+  if(sem==='Sun'&&cfg.notif_silence_dimanche!==false)return false;
+  if(cfg.notif_silence_feries!==false&&notifFeriesFR(parseInt(jourIso.slice(0,4),10)).has(jourIso))return false;
   if(debut===fin)return true;
   return debut<fin?!(m>=debut&&m<fin):!(m>=debut||m<fin);
 }
