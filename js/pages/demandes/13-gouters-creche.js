@@ -209,12 +209,13 @@ async function gouterCrecheOuvrir(dateDebut){
     zone.innerHTML=MENU_JOURS.map(function(nom,i){
       const j=i+1,e=existants[j]||{moyen:'',grand:''},t=traiteur[j]||{moyen:'',grand:''};
       const pm=String(e.moyen||'').split('/'),l1=(pm[0]||'').trim(),l2=pm.slice(1).join(' / ').trim();
+      const vide=!l1&&!l2; // moyens : toujours yaourt + compote, préremplis tant que rien n'est saisi
       const date=new Date(y,m-1,d+i).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
       return'<div class="fg gc-bloc" data-jour="'+j+'"><label class="flabel">'+nom+' '+escHtml(date)+'</label>'
         +'<div class="gc-moyen-wrap"><span class="gc-lbl gc-lbl-moyen"></span>'
-        +'<div class="gc-m-ligne" style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><input class="finput gc-m1" maxlength="100" value="'+escHtml(l1)+'"/>'
+        +'<div class="gc-m-ligne" style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><input class="finput gc-m1" maxlength="100" value="'+escHtml(vide?'Yaourt':l1)+'"/>'
         +'<input class="finput gc-eff-m gc-me1" type="number" min="0" max="99" title="Effectif" placeholder="Eff." style="width:64px;text-align:center;flex:none"/></div>'
-        +'<div class="gc-m-ligne" style="display:flex;gap:6px;align-items:center"><input class="finput gc-m2" maxlength="100" value="'+escHtml(l2)+'"/>'
+        +'<div class="gc-m-ligne" style="display:flex;gap:6px;align-items:center"><input class="finput gc-m2" maxlength="100" value="'+escHtml(vide?'Compote':l2)+'"/>'
         +'<input class="finput gc-eff-m gc-me2" type="number" min="0" max="99" title="Effectif" placeholder="Eff." style="width:64px;text-align:center;flex:none"/></div>'
         +'<div class="gc-rec-moyen"></div></div>'
         +'<div class="gc-grand-wrap"><span class="gc-lbl">Grands</span>'
