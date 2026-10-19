@@ -82,7 +82,7 @@
     st.id = 'kk-sc-style';
     st.textContent = `
 #kk-sc-btn{position:fixed;right:24px;bottom:88px;z-index:9990;width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;background:#fff;color:#fff;font-size:24px;padding:0;filter:drop-shadow(0 4px 8px rgba(0,0,0,.28));display:flex;align-items:center;justify-content:center;font-family:inherit}
-#kk-sc-btn::after{content:'';position:absolute;right:6px;bottom:-9px;width:18px;height:18px;background:#fff;clip-path:polygon(0 0,100% 0,100% 100%);pointer-events:none}
+#kk-sc-btn::after{content:'';position:absolute;left:6px;top:-9px;width:18px;height:18px;background:#fff;clip-path:polygon(100% 100%,0 100%,0 0);pointer-events:none}
 #kk-sc-btn:hover{filter:brightness(1.08)}
 #kk-sc-btn.kk-sc-pulse{animation:kkScPulse 1.6s infinite}
 @keyframes kkScPulse{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.28),0 0 0 0 rgba(244,121,32,.55)}50%{box-shadow:0 4px 14px rgba(0,0,0,.28),0 0 0 12px rgba(244,121,32,0)}}
