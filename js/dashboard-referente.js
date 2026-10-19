@@ -119,22 +119,43 @@ function refDashSetDate(v){if(v){refDashSelectedDate=v;renderRefDashboard();}}
    demandesARelancer plus bas dans le fichier), pour ne pas réécrire le
    calcul une troisième fois. Pas de notion de réseau ici : la crèche est
    implicite, donc pas de brSuffixeCreche à reprendre. */
+/* Stages se terminant cette semaine (lundi → dimanche) dont l'évaluation n'est pas encore
+   remplie : rappel à la référente de sa crèche. Fiches rechargées au besoin (stgCache). */
+async function stagesAEvaluerSemaine(crecheId){
+  if(typeof stgLoad!=='function')return[];
+  if(!stgCache.length)await stgLoad();
+  const lundi=mondayOfISO(todayStr());
+  const d=new Date(lundi+'T12:00:00');d.setDate(d.getDate()+6);
+  const dimanche=ipDateToLocalISO(d);
+  return stgCache.filter(s=>{
+    if(!s.date_fin||!stgEnSuivi(s))return false;
+    if(crecheId&&String(s.creche_id||'')!==String(crecheId))return false;
+    const fin=String(s.date_fin).slice(0,10);
+    if(fin<lundi||fin>dimanche)return false;
+    const ev=s.evaluation;
+    const rempli=!!s.evaluation_le||(ev&&typeof ev==='object'&&Object.keys(ev).length>0);
+    return !rempli;
+  }).sort((a,b)=>String(a.date_fin).localeCompare(String(b.date_fin)));
+}
+
 async function loadRefDashAlertesExtra(crecheId,urgentesHtml){
   try{
-    const[vacc,dossiers,devis,demandes,visites,depots,pieces]=await Promise.all([
+    const[vacc,dossiers,devis,demandes,visites,depots,pieces,stages]=await Promise.all([
       vaccinationsEnRetard(crecheId).catch(e=>{console.warn('[RefDash] vaccinations',e);return[];}),
       dossiersFamilleARelancer(crecheId).catch(e=>{console.warn('[RefDash] dossiers familles',e);return[];}),
       devisARelancer(crecheId).catch(e=>{console.warn('[RefDash] devis',e);return[];}),
       demandesARelancer(crecheId).catch(e=>{console.warn('[RefDash] demandes à relancer',e);return[];}),
       visitesAVenir(crecheId).catch(e=>{console.warn('[RefDash] visites',e);return[];}),
       depotsARegarder(crecheId).catch(e=>{console.warn('[RefDash] dépôts',e);return[];}),
-      piecesARelancer(crecheId).catch(e=>{console.warn('[RefDash] pièces',e);return[];})
+      piecesARelancer(crecheId).catch(e=>{console.warn('[RefDash] pièces',e);return[];}),
+      stagesAEvaluerSemaine(crecheId).catch(e=>{console.warn('[RefDash] stages à évaluer',e);return[];})
     ]);
     const box=document.getElementById('ref-dash-alerts');if(!box)return;
     let html=urgentesHtml;
     if(depots.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="brBriefingManuel()"><i class="ti ti-file-download" style="font-size:16px;flex-shrink:0"></i> <strong>'+depots.length+' personne'+(depots.length>1?'s ont':' a')+'</strong> déposé de nouveaux documents</div>';
     if(pieces.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="brBriefingManuel()"><i class="ti ti-paperclip" style="font-size:16px;flex-shrink:0"></i> <strong>'+pieces.length+' dossier(s) de pièces</strong> à relancer</div>';
     if(vacc.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'vaccinations\')"><i class="ti ti-vaccine" style="font-size:16px;flex-shrink:0"></i> <strong>'+vacc.length+' vaccination(s) en retard</strong></div>';
+    if(stages.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'stagiaires\')"><i class="ti ti-school" style="font-size:16px;flex-shrink:0"></i> <strong>Fin de stage cette semaine</strong> : évaluation à remplir pour '+stages.map(x=>escHtml(stgNomComplet(x))).join(', ')+'</div>';
     if(typeof periodesEssaiARelancer==='function'){
       const essai=periodesEssaiARelancer(crecheId);
       if(essai.length)html+='<div class="alert-item warning" style="cursor:pointer" onclick="showMain(\'employes\')"><i class="ti ti-hourglass" style="font-size:16px;flex-shrink:0"></i> <strong>'+essai.length+' période(s) d\'essai</strong> à échéance</div>';
