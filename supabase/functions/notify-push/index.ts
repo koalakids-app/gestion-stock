@@ -36,13 +36,41 @@ async function resolveFromEmail(orgId) {
   return data?.email_expediteur || fromEmailDefaut;
 }
 
-function estEnSilence(debut, fin) {
+/** Jours fériés français : fixes + ceux qui dépendent de Pâques (même calcul que relances-devis-auto). */
+function feries(an: number): Set<string> {
+  const a = an % 19, b = Math.floor(an / 100), c = an % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mois = Math.floor((h + l - 7 * m + 114) / 31);
+  const jour = ((h + l - 7 * m + 114) % 31) + 1;
+  const paques = new Date(Date.UTC(an, mois - 1, jour));
+  const plus = (n: number) => new Date(paques.getTime() + n * 86400000);
+  const iso = (dt: Date) => dt.toISOString().slice(0, 10);
+  const fixe = (mm: number, dd: number) => `${an}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+  return new Set([
+    fixe(1, 1), fixe(5, 1), fixe(5, 8), fixe(7, 14), fixe(8, 15), fixe(11, 1), fixe(11, 11), fixe(12, 25),
+    iso(plus(1)), iso(plus(39)), iso(plus(50))
+  ]);
+}
+
+/** Silence = plage horaire du réseau, ou journée entière (samedi, dimanche, jour férié)
+ *  si la case correspondante n'est pas décochée dans Paramètres (cochée par défaut). */
+function estEnSilence(cfg) {
+  const debut = cfg.notif_silence_debut || "19:00";
+  const fin = cfg.notif_silence_fin || "08:00";
   const maintenant = new Date().toLocaleTimeString("fr-FR", {
     timeZone: "Europe/Paris",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false
   });
+  const jourIso = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
+  const semaine = new Date().toLocaleDateString("en-US", { timeZone: "Europe/Paris", weekday: "short" });
+  if (semaine === "Sat" && cfg.notif_silence_samedi !== false) return true;
+  if (semaine === "Sun" && cfg.notif_silence_dimanche !== false) return true;
+  if (cfg.notif_silence_feries !== false && feries(parseInt(jourIso.slice(0, 4), 10)).has(jourIso)) return true;
   if (debut === fin) return false;
   if (debut < fin) {
     return maintenant >= debut && maintenant < fin;
@@ -76,8 +104,6 @@ Deno.serve(async (req) => {
       ? await sb.from("reseau_config").select("config").eq("org_id", orgId).maybeSingle()
       : { data: null };
     const cfg = (cfgRow && cfgRow.config) || {};
-    const debut = cfg.notif_silence_debut || "19:00";
-    const fin = cfg.notif_silence_fin || "08:00";
 
     // Le mailto: VAPID est un contact technique pour le service de push, pas
     // une adresse visible par les familles/référents ; on le fait correspondre
@@ -88,8 +114,8 @@ Deno.serve(async (req) => {
       console.error("[notify-push] setVapidDetails", e);
     }
 
-    if (estEnSilence(debut, fin)) {
-      // Retenue plutôt qu'abandonnée : livrée à la première connexion hors silence
+    if (estEnSilence(cfg)) {
+      // Retenue plutôt qu'abandonnée : livrée à la première connexion hors silence (plage horaire, week-end, férié)
       // (livrerNotifsRetenues côté page Demandes). sql/notifs_retenues.sql
       const lignes = referent_ids.map((rid) => ({
         referent_id: rid,
