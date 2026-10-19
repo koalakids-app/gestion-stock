@@ -264,6 +264,27 @@ function soussignes(p,v){
     + champ('Date',inHtml(p+'_date',v[p+'_date']||auj(),'date'))+'</div>';
 }
 
+const ALLAIT_TXT={
+ intro:'Si vous souhaitez poursuivre l’allaitement de votre enfant tout en nous le confiant, cela est possible. Il faudra suivre la démarche énoncée ci-dessous pour que votre lait soit accepté en collectivité.',
+ sections:[
+  ['Pour recueillir votre lait :',[
+   'Il est important d’effectuer un bon lavage des mains avant le recueil, afin que le lait ne soit pas contaminé par des microbes que vous auriez portés sur vos mains.',
+   'Tirez votre lait de la façon qui vous est la plus adaptée (manuellement ou à l’aide d’un tire-lait manuel ou électrique ; pour ce dernier, votre médecin peut vous faire une ordonnance afin que vous en louiez un en pharmacie). Votre tire-lait doit être bien propre et avoir séché à l’air libre car les torchons pourraient y amener des microbes.',
+   'Vous devrez toujours tirer votre lait dans un biberon propre, lavé avec du liquide vaisselle et de l’eau chaude ou bien mis au lave-vaisselle.',
+   'Sur ce biberon vous devez indiquer obligatoirement la date et l’heure à laquelle vous avez extrait le lait ainsi que le nom et prénom de votre enfant.',
+   'Placez ce récipient immédiatement dans votre réfrigérateur, qui doit être à une température comprise entre 0 et 4 °C. Ne jamais placer le récipient dans la porte du réfrigérateur car celle-ci est plus exposée aux variations de température.',
+   'Vous devez nettoyer votre réfrigérateur une fois par mois avec un produit adapté afin que le minimum de microbes s’y trouve, et surveiller sa température.',
+   'N’utilisez pas le freezeur pour conserver le lait car sa température n’est pas assez stable.']],
+  ['Pour le transport jusqu’à la micro-crèche :',[
+   'Sortez le biberon juste avant votre départ et mettez-le dans un sac isotherme contenant un pack réfrigéré. De cette façon le lait restera à une température comprise entre 0 et 4 °C.',
+   'Dès votre arrivée à la crèche, donnez votre lait afin qu’il soit stocké pour la journée.',
+   'Vous devez nous apporter le lait uniquement pour la journée. Aucun stock ne sera accepté.']],
+  ['Rappel :',[
+   'Le lait frais peut être conservé 48 heures au réfrigérateur entre 0 et 4 °C.',
+   'Le lait congelé peut être conservé 4 mois au congélateur (et non au freezeur).',
+   'Ne jamais mélanger du lait refroidi avec du lait qui vient d’être extrait : les mélanger quand ils sont tous les deux à la même température.']]
+ ]
+};
 const TPL={
 
  fiche_renseignements:{
@@ -417,6 +438,20 @@ const TPL={
     + champ('Nombre de fois par jour (au maximum)',inHtml('dr_fois',v.dr_fois))
     + ckHtml('dr_deja','J’atteste que mon enfant a déjà utilisé ce système de désobstruction nasale (selon le protocole de la structure).',v.dr_deja)
     + champ('Fait à',inHtml('dr_lieu',v.dr_lieu))
+    + sigHtml('parent1','Signature du parent 1')
+    + sigHtml('parent2','Signature du parent 2 (facultatif)')
+ },
+
+ allaitement:{
+  fields:['al_civ1','al_parent1','al_qual1','al_civ2','al_parent2','al_qual2','al_enfant','al_proto','al_date','al_lieu'],
+  html:v=>
+      '<div class="txtbox"><p>'+esc(ALLAIT_TXT.intro)+'</p>'
+    + ALLAIT_TXT.sections.map(function(sc){return '<p style="margin:8px 0 2px"><strong>'+esc(sc[0])+'</strong></p><ul style="margin:0 0 0 18px">'
+        + sc[1].map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>';}).join('')
+    + '<p style="margin-top:8px">En signant, vous déclarez accepter les conditions du protocole d’allaitement et dégager de toute responsabilité la structure en cas de problème lié au lait fourni.</p></div>'
+    + soussignes('al',v)
+    + champ('Protocole établi le',inHtml('al_proto',v.al_proto,'date'))
+    + champ('Fait à',inHtml('al_lieu',v.al_lieu))
     + sigHtml('parent1','Signature du parent 1')
     + sigHtml('parent2','Signature du parent 2 (facultatif)')
  },
