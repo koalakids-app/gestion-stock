@@ -1239,3 +1239,17 @@ async function saveFill(silent){
   toast(SAVE_KO);
  }
 }
+
+/* Texte en filigrane : un double-clic sur un champ vide l'écrit pour de bon
+   (sans le « ex. » initial), le temps de l'adapter. */
+document.addEventListener('dblclick',e=>{
+  const el=e.target;
+  if(!el||!el.closest||!el.closest('#fillArea'))return;
+  if(!/^(INPUT|TEXTAREA)$/.test(el.tagName)||el.value||el.readOnly||el.disabled)return;
+  if(el.type&&!/^(text|textarea|search)$/.test(el.type))return;
+  const ph=(el.getAttribute('placeholder')||'').replace(/^\s*ex\s*[.:]\s*/i,'').replace(/…$/,'').trim();
+  if(!ph)return;
+  el.value=ph;
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+  el.select();
+});
