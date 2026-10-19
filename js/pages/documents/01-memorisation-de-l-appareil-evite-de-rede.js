@@ -834,6 +834,7 @@ const TPL_LABELS={
   antipyretique:'Autorisation d’administrer un antipyrétique (enfant)',
   creme_solaire:'Autorisation d’application de crème solaire (enfant)',
   medicament_ponctuel:'Autorisation famille — prise de médicament ponctuelle (enfant)',
+  drp:'Autorisation de désobstruction rhino-pharyngée — DRP (enfant)',
   reglement_medicaments:'Règlement produits d’hygiène et médicaments (enfant)',
   entretien_annuel:'Entretien annuel professionnel (salarié)',
   grille:'Grille d’évaluation (salarié)',

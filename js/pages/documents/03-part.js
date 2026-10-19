@@ -418,6 +418,7 @@ const PREFILL_ENFANT={
   antipyretique:c=>Object.assign({ap_enfant:c.enfant&&c.enfant.prenom,ap_date:c.jour},sousParents('ap',c)),
   creme_solaire:c=>Object.assign({cs_enfant:c.enfant&&c.enfant.prenom,cs_date:c.jour},sousParents('cs',c)),
   medicament_ponctuel:c=>Object.assign({mp_enfant:c.enfant&&c.enfant.prenom,mp_date:c.jour},sousParents('mp',c)),
+  drp:c=>Object.assign({dr_enfant:c.enfant&&c.enfant.prenom,dr_date:c.jour},sousParents('dr',c)),
   reglement_medicaments:c=>({rm_creche:c.creche&&c.creche.name,rm_nom:pNom(c.p1),rm_enfant:nomComplet(c.enfant),rm_date:c.jour}),
   fiche_liaison:c=>({fl_creche:c.creche&&c.creche.name,fl_enfant:nomComplet(c.enfant),
     fl_naiss:c.enfant&&c.enfant.dob,fl_date:c.jour,
@@ -1558,6 +1559,83 @@ const TPL={
     });
     y+=42;
     pdfSortie(doc,slug(fillDoc.titre)+(g('mp_enfant')?'_'+slug(g('mp_enfant')):'')+'.pdf');
+    return true;
+  }
+ },
+ drp:{
+  fields:['dr_civ1','dr_parent1','dr_qual1','dr_civ2','dr_parent2','dr_qual2','dr_enfant','dr_du','dr_au','dr_fois','dr_deja','dr_date','dr_lieu'],
+  html:v=>`<div class="tpl">
+   <h3>Autorisation d’effectuer des désobstructions rhino-pharyngées (DRP)</h3>
+   <p class="hint">Autorise le référent technique ou le personnel de la structure à effectuer des désobstructions rhino-pharyngées, sous condition que la famille fournisse du sérum physiologique et une seringue nasale adaptée.</p>
+   <div class="grid2">
+     <div class="f"><label>Parent 1 — civilité</label><select id="ff_dr_civ1">${
+       ['','Monsieur','Madame'].map(o=>`<option${v.dr_civ1===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Parent 1 — nom</label><input id="ff_dr_parent1" value="${esc(v.dr_parent1)}"></div>
+   </div>
+   <div class="f"><label>Parent 1 — en qualité de (père, mère…)</label><input id="ff_dr_qual1" value="${esc(v.dr_qual1)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Parent 2 — civilité</label><select id="ff_dr_civ2">${
+       ['','Monsieur','Madame'].map(o=>`<option${v.dr_civ2===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Parent 2 — nom</label><input id="ff_dr_parent2" value="${esc(v.dr_parent2)}"></div>
+   </div>
+   <div class="f"><label>Parent 2 — en qualité de (père, mère…)</label><input id="ff_dr_qual2" value="${esc(v.dr_qual2)}"></div>
+   <div class="f"><label>Prénom de l’enfant</label><input id="ff_dr_enfant" value="${esc(v.dr_enfant)}"></div>
+   <h3>Désobstructions autorisées</h3>
+   <div class="grid2">
+     <div class="f"><label>Du</label><input type="date" id="ff_dr_du" value="${esc(v.dr_du)}"></div>
+     <div class="f"><label>Jusqu’au</label><input type="date" id="ff_dr_au" value="${esc(v.dr_au)}"></div>
+   </div>
+   <div class="f"><label>Nombre de fois par jour (au maximum)</label><input id="ff_dr_fois" value="${esc(v.dr_fois)}" placeholder="ex. 3"></div>
+   <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin:6px 0 12px">
+     <input type="checkbox" id="ff_dr_deja" style="width:auto;margin-top:3px"${v.dr_deja?' checked':''}>
+     <span>J’atteste que mon enfant a déjà utilisé ce système de désobstruction nasale (selon le protocole de la structure).</span>
+   </label>
+   <div class="grid2">
+     <div class="f"><label>Fait à</label><input id="ff_dr_lieu" value="${esc(v.dr_lieu)}"></div>
+     <div class="f"><label>Le</label><input type="date" id="ff_dr_date" value="${esc(v.dr_date)}"></div>
+   </div>
+   <div class="grid2">
+     ${sigBoxHtml('parent1','Signature du parent 1')}
+     ${sigBoxHtml('parent2','Signature du parent 2')}
+   </div>
+  </div>`,
+  mount:()=>{['parent1','parent2'].forEach(mountSig);},
+  pdf:doc=>{
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?(e.type==='checkbox'?e.checked:e.value):'';};
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'......./......./............';
+    const W=182;let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+    doc.setFontSize(12);doc.setFont(undefined,'bold');
+    doc.setDrawColor(120);doc.rect(14,y-5,W,16);
+    doc.text(doc.splitTextToSize('AUTORISATION D’EFFECTUER DES DÉSOBSTRUCTIONS RHINO-PHARYNGÉES (DRP)',W-6),14+W/2,y+1,{align:'center'});
+    y+=24;
+    doc.setFontSize(10.5);doc.setFont(undefined,'normal');
+    const dots=n=>'.'.repeat(n);
+    const soussPhrase=(civ,nom,qual)=>{
+      const e=(civ||'').toLowerCase()==='madame'?'e':'';
+      const civTxt=(civ||'').toLowerCase();
+      return 'Je soussigné'+e+', '+(civTxt?civTxt+' ':'')+(nom||dots(55))+' en qualité de '+(qual||dots(32));};
+    const para=[
+      soussPhrase(g('dr_civ1'),g('dr_parent1'),g('dr_qual1')),
+      soussPhrase(g('dr_civ2'),g('dr_parent2'),g('dr_qual2')),
+      'parent(s) de l’enfant '+(g('dr_enfant')||dots(55)),
+      'autorise (autorisons) la référente technique ou le personnel de la structure à effectuer des désobstructions rhino-pharyngées du '
+        +dfr(g('dr_du'))+' jusqu’au '+dfr(g('dr_au'))+' tant de fois '+(g('dr_fois')||dots(25))+' par jour.',
+      'Sous condition d’apporter du sérum physiologique ainsi qu’une seringue nasale adaptée à l’intervention.',
+      'Selon le protocole de la structure, j’atteste également que mon enfant a déjà utilisé ce système de désobstruction nasale'
+        +(g('dr_deja')?'.':' (à confirmer).')
+    ];
+    para.forEach(t=>{const L=doc.splitTextToSize(t,W);need(L.length*5+4);doc.text(L,14,y);y+=L.length*5+4;});
+    y+=4;
+    doc.text('Fait le '+dfr(g('dr_date'))+' à '+(g('dr_lieu')||dots(40)),14,y);y+=12;
+    need(46);
+    [['parent1','Signature du parent 1',14],['parent2','Signature du parent 2',110]].forEach(([role,lab,px])=>{
+      doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text(lab+' :',px,y);
+      doc.setDrawColor(200);doc.rect(px,y+3,84,32);
+      if(SIGS[role]){try{doc.addImage(SIGS[role],'PNG',px+2,y+5,80,28);}catch(e){}}
+    });
+    y+=42;
+    pdfSortie(doc,slug(fillDoc.titre)+(g('dr_enfant')?'_'+slug(g('dr_enfant')):'')+'.pdf');
     return true;
   }
  },
