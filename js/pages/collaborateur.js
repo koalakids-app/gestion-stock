@@ -336,7 +336,8 @@ async function grantAccess(){
   anneeSel.innerHTML=[anneeActuelle,anneeActuelle-1].map(a=>'<option value="'+a+'">'+a+'</option>').join('');
   await loadFermetures();
   populateMoisValidation();
-  await Promise.all([loadPlanning(),loadPointages(),loadCompteur(),loadFormation(),loadValidationMois()]);
+  if(COLLAB_TYPE==='employe'){document.getElementById('msgCard').style.display='';notifsEmployeInit();}
+  await Promise.all([loadPlanning(),loadPointages(),loadCompteur(),loadFormation(),loadValidationMois(),loadMessages()]);
 }
 
 /* ---------- PLANNING ----------------------------------------------------
@@ -785,6 +786,84 @@ async function loadFormation(){
   }catch(e){
     box.innerHTML='<p class="hint">Parcours de formation indisponible pour le moment.</p>';
   }
+}
+
+/* ---------- MESSAGES (sens unique) --------------------------------------
+   Table messages_employes + messages_employes_destinataires (sql/messages_employes.sql) :
+   RLS = chaque employé(e) ne lit que ses messages. Marqué « lu » à l'ouverture. */
+async function loadMessages(){
+  const box=document.getElementById('msgBox');
+  if(COLLAB_TYPE!=='employe'||!box)return;
+  const{data,error}=await sb.from('messages_employes_destinataires')
+    .select('message_id,lu_le,messages_employes(titre,corps,auteur_nom,created_at)')
+    .eq('employe_id',COLLAB.id).limit(100);
+  if(error){box.innerHTML='<p class="hint">Messages indisponibles pour le moment.</p>';return;}
+  const rows=(data||[]).filter(r=>r.messages_employes).sort((a,b)=>String(b.messages_employes.created_at).localeCompare(String(a.messages_employes.created_at))).slice(0,30);
+  const nonLus=rows.filter(r=>!r.lu_le).length;
+  const badge=document.getElementById('msgBadge');
+  badge.style.display=nonLus?'':'none';badge.textContent=nonLus;
+  if(!rows.length){box.innerHTML='<p class="hint">Aucun message pour le moment.</p>';return;}
+  box.innerHTML=rows.map(r=>{
+    const m=r.messages_employes,nl=!r.lu_le;
+    return '<div class="msg-item" data-id="'+esc(r.message_id)+'" style="border:2px solid '+(nl?'var(--orange)':'var(--line)')+';border-radius:12px;padding:10px 12px;margin-bottom:8px;cursor:pointer" onclick="ouvrirMessage(this)">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px"><strong>'+(nl?'● ':'')+esc(m.titre)+'</strong><span style="color:var(--muted);font-size:11.5px;white-space:nowrap">'+dfr(m.created_at)+'</span></div>'
+      +'<div class="msg-corps" style="display:'+(nl?'block':'none')+';margin-top:6px;font-size:13px;line-height:1.5;white-space:pre-wrap">'+esc(m.corps)+'<div style="margin-top:6px;font-size:11.5px;color:var(--muted)">'+(m.auteur_nom?'De '+esc(m.auteur_nom):'')+'</div></div></div>';
+  }).join('');
+  /* Les messages non lus s'affichent dépliés ; ils sont marqués lus dès l'affichage. */
+  if(nonLus)rows.filter(r=>!r.lu_le).forEach(r=>sb.rpc('marquer_message_employe_lu',{p_message:r.message_id}).then(function(x){if(x.error)console.warn('[msg] lu',x.error);}));
+  if(nonLus)setTimeout(function(){badge.style.display='none';},4000);
+}
+function ouvrirMessage(el){
+  const c=el.querySelector('.msg-corps');if(c)c.style.display=c.style.display==='none'?'block':'none';
+  el.style.borderColor='var(--line)';
+}
+
+/* ---------- NOTIFICATIONS PUSH (employé·es) ------------------------------
+   Même mécanisme que Demandes : abonnement du navigateur enregistré par la RPC
+   upsert_push_subscription (qui reconnaît aussi les employé(e)s). */
+const VAPID_PUBLIC_KEY='BAYWoYbzpxn-poxeKn-7CPccnX-aGN5y8kXLVCgcgC8a025oz8HMdNj7E36VLgtiD-oV71KhgCECdQGL85kidOk';
+function urlBase64ToUint8Array(b64){const pad='='.repeat((4-b64.length%4)%4);const raw=atob((b64+pad).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));}
+function majIconeNotif(actif){
+  const b=document.getElementById('btnNotif');if(!b)return;
+  b.querySelector('i').className='ti ti-bell'+(actif?'':'-off');
+  b.style.color=actif?'var(--orange)':'';
+  b.title=actif?'Désactiver les notifications':'Activer les notifications';
+}
+function pushDispo(){return 'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;}
+async function notifsEmployeInit(){
+  if(!pushDispo())return;
+  try{
+    if(location.protocol==='https:')await navigator.serviceWorker.register('sw.js');
+    navigator.serviceWorker.addEventListener('message',function(ev){
+      if(!ev.data||ev.data.type!=='PUSH_SUB_CHANGED')return;
+      const j=ev.data.subscription;if(!j||!j.endpoint||!j.keys)return;
+      sb.rpc('upsert_push_subscription',{p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth_key:j.keys.auth,p_user_agent:navigator.userAgent});
+    });
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    majIconeNotif(!!sub);
+    if(sub){const j=sub.toJSON();if(j.endpoint&&j.keys)sb.rpc('upsert_push_subscription',{p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth_key:j.keys.auth,p_user_agent:navigator.userAgent});}
+  }catch(e){console.warn('[Notif] init',e);}
+}
+async function toggleNotifsEmploye(){
+  if(!pushDispo()){alert("Les notifications ne sont pas disponibles sur cet appareil. Sur iPhone, ajoutez d'abord cette page à l'écran d'accueil.");return;}
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const existante=await reg.pushManager.getSubscription();
+    if(existante){
+      const endpoint=existante.endpoint;
+      await existante.unsubscribe();
+      await sb.rpc('supprimer_push_subscription',{p_endpoint:endpoint});
+      majIconeNotif(false);toast('Notifications désactivées.');return;
+    }
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){alert('Notifications refusées. Vous pouvez les réactiver dans les réglages du navigateur.');return;}
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
+    const j=sub.toJSON();
+    const{error}=await sb.rpc('upsert_push_subscription',{p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth_key:j.keys.auth,p_user_agent:navigator.userAgent});
+    if(error){console.error(error);alert("Erreur lors de l'activation des notifications.");return;}
+    majIconeNotif(true);toast('Notifications activées !');
+  }catch(e){console.error(e);alert('Erreur lors du réglage des notifications.');}
 }
 
 boot();
