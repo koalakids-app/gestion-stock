@@ -404,6 +404,23 @@ const TPL={
     + sigHtml('parent2','Signature du parent 2 (facultatif)')
  },
 
+ drp:{
+  fields:['dr_civ1','dr_parent1','dr_qual1','dr_civ2','dr_parent2','dr_qual2','dr_enfant','dr_du','dr_au','dr_fois','dr_deja','dr_date','dr_lieu'],
+  html:v=>
+      '<div class="txtbox">Vous autorisez la référente technique ou le personnel de la structure à '
+    + 'effectuer des désobstructions rhino-pharyngées à votre enfant, sous condition d’apporter du '
+    + 'sérum physiologique ainsi qu’une seringue nasale adaptée à l’intervention.</div>'
+    + soussignes('dr',v)
+    + '<div class="grid2">'
+    + champ('Désobstructions du',inHtml('dr_du',v.dr_du,'date'))
+    + champ('Jusqu’au',inHtml('dr_au',v.dr_au,'date'))+'</div>'
+    + champ('Nombre de fois par jour (au maximum)',inHtml('dr_fois',v.dr_fois))
+    + ckHtml('dr_deja','J’atteste que mon enfant a déjà utilisé ce système de désobstruction nasale (selon le protocole de la structure).',v.dr_deja)
+    + champ('Fait à',inHtml('dr_lieu',v.dr_lieu))
+    + sigHtml('parent1','Signature du parent 1')
+    + sigHtml('parent2','Signature du parent 2 (facultatif)')
+ },
+
  reglement_medicaments:{
   fields:['rm_creche','rm_nom','rm_enfant','rm_date'],
   html:v=>
