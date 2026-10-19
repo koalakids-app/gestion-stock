@@ -111,10 +111,16 @@ $$;
 
 -- ---------- policies --------------------------------------------------------
 
+-- Pas de sous-requête sur la table elle-même : un INSERT ... RETURNING (utilisé par
+-- dbInsert) doit pouvoir relire la ligne qu'il vient de créer, que la fonction
+-- kk_message_employes_gere ne voit pas encore (même instruction).
 drop policy if exists messages_employes_select_gestion on public.messages_employes;
 create policy messages_employes_select_gestion on public.messages_employes
   for select to authenticated
-  using (public.kk_message_employes_gere(id));
+  using (
+    org_id = public.kk_mon_org()
+    and (public.kk_est_direction() or public.kk_acces_creche_gestion(creche_id))
+  );
 
 drop policy if exists messages_employes_select_destinataire on public.messages_employes;
 create policy messages_employes_select_destinataire on public.messages_employes
