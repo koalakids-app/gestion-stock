@@ -183,8 +183,10 @@ async function toggleNotificationsPush(){
   const existingSub=await reg.pushManager.getSubscription();
   if(existingSub){
     try{
+      const endpointLocal=existingSub.endpoint;
       await existingSub.unsubscribe();
-      if(currentProfile?.id){const{error}=await sb.from('push_subscriptions').delete().eq('referent_id',currentProfile.id);if(error)console.error(error);}
+      /* Seulement l'abonnement de CET appareil : les autres appareils du/de la référent·e restent actifs. */
+      if(currentProfile?.id){const{error}=await sb.from('push_subscriptions').delete().eq('referent_id',currentProfile.id).eq('endpoint',endpointLocal);if(error)console.error(error);}
       updateNotifIcon(false);
       if(typeof showBanner==='function')showBanner('Notifications désactivées.');else alert('Notifications désactivées.');
     }catch(e){console.error(e);alert('Erreur lors de la désactivation des notifications.');}
@@ -200,6 +202,41 @@ async function toggleNotificationsPush(){
   if(typeof showBanner==='function')showBanner('Notifications activées !');else alert('Notifications activées !');
 }
 const activerNotificationsPush=toggleNotificationsPush;
+/* Le service worker signale un abonnement renouvelé par le navigateur : on le réenregistre. */
+if('serviceWorker'in navigator){navigator.serviceWorker.addEventListener('message',function(ev){
+  if(!ev.data||ev.data.type!=='PUSH_SUB_CHANGED'||!currentProfile?.id)return;
+  const j=ev.data.subscription;if(!j||!j.endpoint||!j.keys)return;
+  sb.rpc('upsert_push_subscription',{p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth_key:j.keys.auth,p_user_agent:navigator.userAgent}).then(function(r){if(r.error)console.warn('[Notif] abonnement renouvelé',r.error);});
+});}
+/* Notifications reçues pendant la plage de silence (table notifs_retenues, rangées par notify-push) :
+   livrées à la première connexion hors silence. Un seul récapitulatif, puis marquées livrées. */
+function notifHorsSilence(cfg){
+  const debut=(cfg&&cfg.notif_silence_debut)||'19:00',fin=(cfg&&cfg.notif_silence_fin)||'08:00';
+  const m=new Date().toLocaleTimeString('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit',hour12:false});
+  if(debut===fin)return true;
+  return debut<fin?!(m>=debut&&m<fin):!(m>=debut||m<fin);
+}
+async function livrerNotifsRetenues(){
+  try{
+    if(!currentProfile?.id)return;
+    const{data:cr}=await sb.from('reseau_config').select('config').limit(1).maybeSingle();
+    if(!notifHorsSilence(cr&&cr.config))return;
+    const{data:rows,error}=await sb.from('notifs_retenues').select('id,title,body,url,tag,created_at').is('delivered_at',null).order('created_at',{ascending:true}).limit(50);
+    if(error||!rows||!rows.length)return;
+    const{error:eu}=await sb.from('notifs_retenues').update({delivered_at:new Date().toISOString()}).in('id',rows.map(r=>r.id));
+    if(eu){console.warn('[Notif] retenues',eu);return;}
+    const recentes=rows.filter(r=>Date.now()-new Date(r.created_at).getTime()<3*86400000);
+    if(!recentes.length)return;
+    const un=recentes.length===1;
+    const titre=un?recentes[0].title:recentes.length+' notifications reçues pendant la nuit';
+    const corps=un?(recentes[0].body||''):recentes.map(r=>'• '+r.title+(r.body?' — '+r.body:'')).slice(0,4).join('\n');
+    if(typeof showBanner==='function')showBanner('🔔 '+titre);
+    if(typeof Notification!=='undefined'&&Notification.permission==='granted'&&'serviceWorker'in navigator){
+      const reg=await navigator.serviceWorker.ready;
+      await reg.showNotification(titre,{body:corps,icon:'./icons/icon-192.png',tag:un?(recentes[0].tag||'koala-notif'):'koala-retenues',data:{url:un?(recentes[0].url||'./demandes.html'):'./demandes.html'}});
+    }
+  }catch(e){console.warn('[Notif] livraison retenues',e);}
+}
 function showLogin(){
   document.getElementById('loading-screen').style.display='none';
   document.getElementById('login-wrap').style.display='block';
@@ -241,7 +278,7 @@ function showApp(){
   document.querySelectorAll('.david-only').forEach(el=>el.style.display=isDavid?'':'none');
   document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
   updateBadges();renderCrecheTabs();
-  checkNotifSubscription();
+  checkNotifSubscription();livrerNotifsRetenues();
   notifBellCharger();notifBellRender();
   /* Ouverture sur l'accueil « Modules » (tuiles par theme), direction comme
      referentes. Le tableau de bord reste a un clic (tuile Pilotage) et le

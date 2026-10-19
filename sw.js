@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v32';   // v32 : lien « Menus MCM » dans MCM — Prestataire repas (à côté d'Avis des enfants)
+const CACHE_NAME = 'stocks-v33';   // v33 : pushsubscriptionchange (réabonnement push automatique)
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -62,6 +62,25 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(payload.title || 'Koala Kids', options)
   );
+});
+
+// Le navigateur a renouvelé l'abonnement push : on le réenregistre sans attendre
+// que la personne rouvre l'application (sinon la fonction reçoit des 410 et le supprime).
+self.addEventListener('pushsubscriptionchange', event => {
+  event.waitUntil((async () => {
+    try {
+      const old = event.oldSubscription;
+      const key = old && old.options && old.options.applicationServerKey;
+      const sub = event.newSubscription || await self.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: key
+      });
+      // L'identité n'est pas connue du service worker : on prévient les pages ouvertes,
+      // sinon checkNotifSubscription resynchronise à la prochaine ouverture.
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      clients.forEach(c => c.postMessage({ type: 'PUSH_SUB_CHANGED', subscription: sub && sub.toJSON() }));
+    } catch (e) { /* resynchronisé à la prochaine ouverture de Demandes */ }
+  })());
 });
 
 self.addEventListener('notificationclick', event => {
