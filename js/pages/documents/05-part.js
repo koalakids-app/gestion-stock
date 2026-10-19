@@ -91,6 +91,30 @@ function lvRetourTexteType(){
 }
 /* Changer de crèche recharge ses coordonnées ; ce qui a déjà été saisi à la
    main pour l'équipe n'est écrasé que s'il vient du texte par défaut. */
+/* Composition de l'équipe d'après les fiches collaborateurs de la crèche
+   (employes.poste, hors archivés / sortis / pas encore arrivés) et son
+   référent (directeur technique). Phrase regroupée par poste. */
+async function lvEquipeAuto(nomCourt,{ecraser}={}){
+  const c=lvCreche(nomCourt),eq=document.getElementById('ff_lv_equipe');
+  if(!c||!eq)return;
+  const defs=Object.values(LV_EQUIPE_DEFAUT);
+  if(!ecraser&&eq.value.trim()&&!defs.includes(eq.value.trim()))return;
+  const auj=new Date().toISOString().slice(0,10);
+  const[{data:emps,error},{data:refs}]=await Promise.all([
+    sb.from('employes').select('poste,date_debut,date_fin,archive_le').eq('creche_id',String(c.id)),
+    sb.from('referents').select('id').eq('creche_id',String(c.id)).eq('role','referent')]);
+  if(error){if(ecraser)toast('Équipe indisponible : '+error.message);return;}
+  const actifs=(emps||[]).filter(e=>!e.archive_le&&(!e.date_fin||e.date_fin>auj)&&(!e.date_debut||e.date_debut<=auj));
+  const parPoste={};
+  actifs.forEach(e=>{const k=(e.poste||'').trim()||'professionnel(le) de la petite enfance';parPoste[k]=(parPoste[k]||0)+1;});
+  const lignes=Object.entries(parPoste).map(([k,n])=>n>1?n+' × '+k:k);
+  if(refs&&refs.length)lignes.unshift('directeur(trice) technique');
+  if(!lignes.length){if(ecraser)toast('Aucun collaborateur actif trouvé pour cette crèche.');return;}
+  if(!eq.value.trim()||ecraser||defs.includes(eq.value.trim())){
+    eq.value='L’équipe est composée de '+lignes.join(', ')+'.';
+    lvRefresh();
+  }
+}
 function lvChangeCreche(){
   const c=lvCreche(document.getElementById('ff_lv_creche').value);
   const set=(id,v)=>{const e=document.getElementById('ff_'+id);if(e)e.value=v||'';};
@@ -99,6 +123,7 @@ function lvChangeCreche(){
   const defs=Object.values(LV_EQUIPE_DEFAUT);
   if(eq&&(!eq.value.trim()||defs.includes(eq.value.trim())))eq.value=LV_EQUIPE_DEFAUT[document.getElementById('ff_lv_creche').value]||'';
   lvRefresh();
+  lvEquipeAuto(document.getElementById('ff_lv_creche').value);
 }
 TPL.livret_stagiaire={
   fields:LV_CHAMPS.concat(['lv_stagiaire_id','lv_envoye']),
@@ -111,7 +136,7 @@ TPL.livret_stagiaire={
     if(!v.lv_gestionnaires)v.lv_gestionnaires=LV_GESTIONNAIRES;
     if(!v.lv_date)v.lv_date=new Date().toISOString().slice(0,10);
     const inp=(k,lab,ph)=>`<div class="f"><label>${lab}</label><input id="ff_${k}" value="${esc(v[k])}" placeholder="${esc(ph||'')}" oninput="lvRefresh()"></div>`;
-    setTimeout(()=>{lvRefresh();if(v.lv_texte)lvEditerTexte();},0);setTimeout(lvChargerStagiaires,0);
+    setTimeout(()=>{lvRefresh();if(v.lv_texte)lvEditerTexte();},0);setTimeout(lvChargerStagiaires,0);setTimeout(()=>lvEquipeAuto(v.lv_creche),0);
     return `<div class="tpl lv">
      <style>.lv .apercu{border:1px solid var(--line,#E3E1EF);border-radius:12px;padding:6px 16px 12px;background:#fff;max-height:340px;overflow:auto;font-size:13px;line-height:1.55}
      .lv .apercu h4{margin:14px 0 4px;color:var(--violet)}.lv .apercu p{margin:4px 0}.lv .apercu ul{margin:4px 0 4px 18px}</style>
@@ -128,7 +153,8 @@ TPL.livret_stagiaire={
        ${inp('lv_horaires','Horaires de la structure','Les horaires de la structure sont de 7h à 19h')}
        ${inp('lv_accueil','Horaires d’accueil des enfants','avec un accueil de l’enfant de 7h30 à 18h30 (selon les contrats)')}
      </div>
-     <div class="f"><label>Composition de l’équipe</label><textarea id="ff_lv_equipe" rows="3" oninput="lvRefresh()">${esc(v.lv_equipe)}</textarea></div>
+     <div class="f"><label>Composition de l’équipe</label><textarea id="ff_lv_equipe" rows="3" oninput="lvRefresh()">${esc(v.lv_equipe)}</textarea>
+       <button type="button" class="btn btn-g btn-sm" style="margin-top:6px" onclick="lvEquipeAuto(document.getElementById('ff_lv_creche').value,{ecraser:true})"><i class="ti ti-users"></i> Remplir depuis les collaborateurs</button></div>
      <h3>Stagiaire</h3>
      <div class="f"><label>Fiche stagiaire (module Stagiaires &amp; alternants)</label>
        <select id="ff_lv_stagiaire_id" onchange="lvChoisirStagiaire()"><option value="">— Choisir —</option></select></div>
