@@ -89,8 +89,19 @@ Deno.serve(async (req) => {
     }
 
     if (estEnSilence(debut, fin)) {
-      console.log("[notify-push] skipped (silence)", { referent_ids });
-      return new Response(JSON.stringify({ skipped: true, reason: "silence" }), {
+      // Retenue plutôt qu'abandonnée : livrée à la première connexion hors silence
+      // (livrerNotifsRetenues côté page Demandes). sql/notifs_retenues.sql
+      const lignes = referent_ids.map((rid) => ({
+        referent_id: rid,
+        title,
+        body: body || "",
+        url: url || "./demandes.html",
+        tag: tag || "koala-notif"
+      }));
+      const { error: errRetenue } = await sb.from("notifs_retenues").insert(lignes);
+      if (errRetenue) console.error("[notify-push] retenue", errRetenue);
+      console.log("[notify-push] retenue (silence)", { referent_ids, ok: !errRetenue });
+      return new Response(JSON.stringify({ skipped: true, reason: "silence", retenues: errRetenue ? 0 : lignes.length }), {
         status: 200,
         headers: { ...cors, "Content-Type": "application/json" }
       });
@@ -114,10 +125,17 @@ Deno.serve(async (req) => {
     const resultats = await Promise.allSettled(
       (subs || []).map(async (s) => {
         try {
-          await webpush.sendNotification(
-            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } },
-            payload
-          );
+          const cible = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } };
+          try {
+            await webpush.sendNotification(cible, payload);
+          } catch (e1) {
+            // Une seule nouvelle tentative sur erreur passagère (429 / 5xx / réseau) ;
+            // 404 et 410 = abonnement mort, inutile de réessayer.
+            const sc = e1.statusCode;
+            if (sc === 404 || sc === 410 || (sc && sc >= 400 && sc < 429)) throw e1;
+            await new Promise((r) => setTimeout(r, 1500));
+            await webpush.sendNotification(cible, payload);
+          }
           details.push({ id: s.id, ok: true });
         } catch (e) {
           details.push({
