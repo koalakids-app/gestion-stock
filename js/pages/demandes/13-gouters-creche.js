@@ -202,8 +202,8 @@ async function gouterCrecheOuvrir(dateDebut){
       (b.data||[]).forEach(function(x){effSaved[x.jour]=x;});
     }catch(e){console.warn('[Goûters crèche] recettes / effectifs',e);}
     tousEl.checked=gouterTous(crecheId);
-    // « Même goûter » coché par défaut tant que les moyens et les grands saisis (et leurs recettes) sont identiques.
-    memeEl.checked=Object.keys(existants).every(function(j){return existants[j].moyen===existants[j].grand;})
+    // « Même goûter » décoché par défaut ; coché seulement si des goûters sont saisis et que les moyens et les grands saisis (et leurs recettes) sont identiques.
+    memeEl.checked=Object.keys(existants).length>0&&Object.keys(existants).every(function(j){return existants[j].moyen===existants[j].grand;})
       &&Object.keys(rec).every(function(j){return rec[j].moyen.map(function(r){return r.id;}).join()===rec[j].grand.map(function(r){return r.id;}).join();});
     const [y,m,d]=semaine.split('-').map(Number);
     zone.innerHTML=MENU_JOURS.map(function(nom,i){
