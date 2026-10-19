@@ -418,6 +418,7 @@ const PREFILL_ENFANT={
   antipyretique:c=>Object.assign({ap_enfant:c.enfant&&c.enfant.prenom,ap_date:c.jour},sousParents('ap',c)),
   creme_solaire:c=>Object.assign({cs_enfant:c.enfant&&c.enfant.prenom,cs_date:c.jour},sousParents('cs',c)),
   medicament_ponctuel:c=>Object.assign({mp_enfant:c.enfant&&c.enfant.prenom,mp_date:c.jour},sousParents('mp',c)),
+  allaitement:c=>Object.assign({al_enfant:c.enfant&&c.enfant.prenom,al_date:c.jour},sousParents('al',c)),
   drp:c=>Object.assign({dr_enfant:c.enfant&&c.enfant.prenom,dr_date:c.jour},sousParents('dr',c)),
   reglement_medicaments:c=>({rm_creche:c.creche&&c.creche.name,rm_nom:pNom(c.p1),rm_enfant:nomComplet(c.enfant),rm_date:c.jour}),
   fiche_liaison:c=>({fl_creche:c.creche&&c.creche.name,fl_enfant:nomComplet(c.enfant),
@@ -517,6 +518,27 @@ function mpOrdRetirer(){
   mpOrdRender();
 }
 
+const ALLAIT_TXT={
+ intro:'Si vous souhaitez poursuivre l’allaitement de votre enfant tout en nous le confiant, cela est possible. Il faudra suivre la démarche énoncée ci-dessous pour que votre lait soit accepté en collectivité.',
+ sections:[
+  ['Pour recueillir votre lait :',[
+   'Il est important d’effectuer un bon lavage des mains avant le recueil, afin que le lait ne soit pas contaminé par des microbes que vous auriez portés sur vos mains.',
+   'Tirez votre lait de la façon qui vous est la plus adaptée (manuellement ou à l’aide d’un tire-lait manuel ou électrique ; pour ce dernier, votre médecin peut vous faire une ordonnance afin que vous en louiez un en pharmacie). Votre tire-lait doit être bien propre et avoir séché à l’air libre car les torchons pourraient y amener des microbes.',
+   'Vous devrez toujours tirer votre lait dans un biberon propre, lavé avec du liquide vaisselle et de l’eau chaude ou bien mis au lave-vaisselle.',
+   'Sur ce biberon vous devez indiquer obligatoirement la date et l’heure à laquelle vous avez extrait le lait ainsi que le nom et prénom de votre enfant.',
+   'Placez ce récipient immédiatement dans votre réfrigérateur, qui doit être à une température comprise entre 0 et 4 °C. Ne jamais placer le récipient dans la porte du réfrigérateur car celle-ci est plus exposée aux variations de température.',
+   'Vous devez nettoyer votre réfrigérateur une fois par mois avec un produit adapté afin que le minimum de microbes s’y trouve, et surveiller sa température.',
+   'N’utilisez pas le freezeur pour conserver le lait car sa température n’est pas assez stable.']],
+  ['Pour le transport jusqu’à la micro-crèche :',[
+   'Sortez le biberon juste avant votre départ et mettez-le dans un sac isotherme contenant un pack réfrigéré. De cette façon le lait restera à une température comprise entre 0 et 4 °C.',
+   'Dès votre arrivée à la crèche, donnez votre lait afin qu’il soit stocké pour la journée.',
+   'Vous devez nous apporter le lait uniquement pour la journée. Aucun stock ne sera accepté.']],
+  ['Rappel :',[
+   'Le lait frais peut être conservé 48 heures au réfrigérateur entre 0 et 4 °C.',
+   'Le lait congelé peut être conservé 4 mois au congélateur (et non au freezeur).',
+   'Ne jamais mélanger du lait refroidi avec du lait qui vient d’être extrait : les mélanger quand ils sont tous les deux à la même température.']]
+ ]
+};
 const TPL={
  eaje:{
   get fields(){return eajeFields();},
@@ -1636,6 +1658,69 @@ const TPL={
     });
     y+=42;
     pdfSortie(doc,slug(fillDoc.titre)+(g('dr_enfant')?'_'+slug(g('dr_enfant')):'')+'.pdf');
+    return true;
+  }
+ },
+ allaitement:{
+  fields:['al_civ1','al_parent1','al_qual1','al_civ2','al_parent2','al_qual2','al_enfant','al_proto','al_date','al_lieu'],
+  html:v=>`<div class="tpl">
+   <h3>Protocole allaitement maternel</h3>
+   <div class="hint">${esc(ALLAIT_TXT.intro)}${ALLAIT_TXT.sections.map(([t,l])=>`<p style="margin:8px 0 2px"><strong>${esc(t)}</strong></p><ul style="margin:0 0 0 18px">${l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`).join('')}</div>
+   <div class="grid2">
+     <div class="f"><label>Parent 1 — civilité</label><select id="ff_al_civ1">${
+       ['','Monsieur','Madame'].map(o=>`<option${v.al_civ1===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Parent 1 — nom</label><input id="ff_al_parent1" value="${esc(v.al_parent1)}"></div>
+   </div>
+   <div class="f"><label>Parent 1 — en qualité de (mère…)</label><input id="ff_al_qual1" value="${esc(v.al_qual1)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Parent 2 — civilité</label><select id="ff_al_civ2">${
+       ['','Monsieur','Madame'].map(o=>`<option${v.al_civ2===o?' selected':''}>${esc(o)}</option>`).join('')}</select></div>
+     <div class="f"><label>Parent 2 — nom</label><input id="ff_al_parent2" value="${esc(v.al_parent2)}"></div>
+   </div>
+   <div class="f"><label>Parent 2 — en qualité de</label><input id="ff_al_qual2" value="${esc(v.al_qual2)}"></div>
+   <div class="f"><label>Prénom de l’enfant</label><input id="ff_al_enfant" value="${esc(v.al_enfant)}"></div>
+   <div class="f"><label>Protocole établi le</label><input type="date" id="ff_al_proto" value="${esc(v.al_proto)}"></div>
+   <div class="grid2">
+     <div class="f"><label>Fait à</label><input id="ff_al_lieu" value="${esc(v.al_lieu)}"></div>
+     <div class="f"><label>Le</label><input type="date" id="ff_al_date" value="${esc(v.al_date)}"></div>
+   </div>
+   <div class="grid2">
+     ${sigBoxHtml('parent1','Signature du parent 1')}
+     ${sigBoxHtml('parent2','Signature du parent 2')}
+   </div>
+  </div>`,
+  mount:()=>{['parent1','parent2'].forEach(mountSig);},
+  pdf:doc=>{
+    const g=id=>{const e=document.getElementById('ff_'+id);return e?(e.type==='checkbox'?e.checked:e.value):'';};
+    const dfr=d=>d?new Date(d).toLocaleDateString('fr-FR'):'......./......./............';
+    const W=182;let y=pdfLogo(doc,20);
+    const need=h=>{if(y+h>278){doc.addPage();y=pdfLogo(doc,20);}};
+    const dots=n=>'.'.repeat(n);
+    const bloc=(t,bold)=>{doc.setFont(undefined,bold?'bold':'normal');
+      const L=doc.splitTextToSize(t,W);need(L.length*4.8+3);doc.text(L,14,y);y+=L.length*4.8+3;};
+    doc.setFontSize(12);doc.setFont(undefined,'bold');
+    doc.text('PROTOCOLE ALLAITEMENT MATERNEL',14,y);y+=9;
+    doc.setFontSize(10);
+    bloc(ALLAIT_TXT.intro);
+    ALLAIT_TXT.sections.forEach(([t,l])=>{bloc(t,true);l.forEach(x=>bloc('• '+x));});
+    y+=3;
+    const sous=(civ,nom,qual)=>{
+      const e=(civ||'').toLowerCase()==='madame'?'e':'';
+      return 'Je soussigné'+e+', '+((civ||'').toLowerCase()?(civ||'').toLowerCase()+' ':'')+(nom||dots(45))+', '+(qual||dots(20));};
+    bloc(sous(g('al_civ1'),g('al_parent1'),g('al_qual1')));
+    if(g('al_parent2'))bloc(sous(g('al_civ2'),g('al_parent2'),g('al_qual2')));
+    bloc('de l’enfant '+(g('al_enfant')||dots(45)));
+    bloc('Déclare accepter les conditions du protocole d’allaitement établi le : '+dfr(g('al_proto'))
+      +' et dégager de toute responsabilité la structure en cas de problème lié au lait fourni.');
+    y+=3;need(60);doc.setFont(undefined,'normal');
+    doc.text('Fait à '+(g('al_lieu')||dots(30))+', le '+dfr(g('al_date')),14,y);y+=10;
+    [['parent1','Signature du parent 1',14],['parent2','Signature du parent 2',110]].forEach(([role,lab,px])=>{
+      doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text(lab+' :',px,y);
+      doc.setDrawColor(200);doc.rect(px,y+3,84,32);
+      if(SIGS[role]){try{doc.addImage(SIGS[role],'PNG',px+2,y+5,80,28);}catch(e){}}
+    });
+    y+=42;
+    pdfSortie(doc,slug(fillDoc.titre)+(g('al_enfant')?'_'+slug(g('al_enfant')):'')+'.pdf');
     return true;
   }
  },

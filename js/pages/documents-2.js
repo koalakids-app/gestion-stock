@@ -92,6 +92,12 @@ remplir: `
   <li>Pour le rouvrir, le compléter ou le faire signer plus tard : passer par la fiche de l’enfant, bouton <strong>Ouvrir / signer</strong>.</li>
 </ul>
 <div class="tip">Les documents sans enfant rattaché — l’entretien annuel par exemple — restent, eux, repris automatiquement ici tant qu’ils ne sont pas terminés.</div>
+<div class="st">🍼 Protocole allaitement maternel</div>
+<ul>
+  <li>Catégorie <strong>Santé</strong>, à remplir et à signer en ligne. Le texte du protocole (recueil, conservation, transport du lait maternel) s’affiche en entier et n’est pas modifiable : il suffit de le signer.</li>
+  <li>À renseigner : le parent (civilité, nom, qualité), le prénom de l’enfant, la date d’établissement du protocole, le lieu et la date, puis la signature du parent. Le parent 2 est facultatif.</li>
+  <li>Choisir l’enfant en haut du formulaire : parents, prénom et date sont pré-remplis. Les parents peuvent aussi le remplir et le signer depuis leur espace famille.</li>
+</ul>
 <div class="st">👃 Autorisation de désobstruction rhino-pharyngée (DRP)</div>
 <ul>
   <li>Catégorie <strong>Santé</strong>. Les parents autorisent la référente technique ou le personnel à pratiquer des désobstructions du nez, sous condition d’apporter <strong>sérum physiologique et seringue nasale</strong>.</li>
