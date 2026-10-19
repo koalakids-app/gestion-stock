@@ -81,7 +81,7 @@
     const st = document.createElement('style');
     st.id = 'kk-sc-style';
     st.textContent = `
-#kk-sc-btn{position:fixed;right:24px;bottom:88px;z-index:9990;width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;background:var(--orange,#F47920);color:#fff;font-size:24px;box-shadow:0 4px 14px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;font-family:inherit}
+#kk-sc-btn{position:fixed;right:24px;bottom:88px;z-index:9990;width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;background:#fff;color:#fff;font-size:24px;padding:0;box-shadow:0 4px 14px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;font-family:inherit}
 #kk-sc-btn:hover{filter:brightness(1.08)}
 #kk-sc-btn.kk-sc-pulse{animation:kkScPulse 1.6s infinite}
 @keyframes kkScPulse{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.28),0 0 0 0 rgba(244,121,32,.55)}50%{box-shadow:0 4px 14px rgba(0,0,0,.28),0 0 0 12px rgba(244,121,32,0)}}
@@ -128,7 +128,7 @@
     btn.type = 'button';
     btn.title = me.direction ? 'Messages de vos équipes' : 'Un problème ? Écrivez-nous';
     btn.setAttribute('aria-label', btn.title);
-    btn.innerHTML = '💬<span id="kk-sc-badge"></span>';
+    btn.innerHTML = '<img src="koala-chat.png" alt="Messages" style="width:38px;height:38px;border-radius:50%;pointer-events:none"><span id="kk-sc-badge"></span>';
     btn.addEventListener('click', basculer);
 
     const panel = document.createElement('div');
