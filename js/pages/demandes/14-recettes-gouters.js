@@ -251,7 +251,7 @@ async function rcChoisir(cb){
 /* ── Récapitulatif de commande sur 2 semaines ─────────────────────────────── */
 async function gouterRecapOuvrir(crecheId,semaine){
   const recettes=await rcCharger();
-  const sem2=ipDateToLocalISO(new Date(new Date(semaine+'T00:00:00').getTime()+7*864e5));
+  const sem2=ipDateToLocalISO(new Date(+semaine.slice(0,4),+semaine.slice(5,7)-1,+semaine.slice(8,10)+7)); // pas +7*24 h : le changement d'heure d'octobre/mars décalerait d'un jour
   const semaines=[semaine,sem2];
   const jours=[];
   try{
