@@ -42,6 +42,7 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.
 - Bouton « ? » flottant sur toutes les pages internes : `js/notice-flottante.js` (ouvre `openNotice()` / `#btnNotice` de la page, sinon un court mode d'emploi par page dans `PAGES`). Une nouvelle page interne doit charger ce script après `support-chat.js`.
+- Dans Demandes, la notice s'ouvre sur l'onglet de la section en cours (`NOTICE_ONGLET_SECTION`, `js/pages/demandes-2.js`) : une nouvelle section doit y être associée.
 - Toute modification fonctionnelle doit mettre la notice à jour.
 
 ## Habitudes de travail
