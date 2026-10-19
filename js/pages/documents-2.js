@@ -92,6 +92,14 @@ remplir: `
   <li>Pour le rouvrir, le compléter ou le faire signer plus tard : passer par la fiche de l’enfant, bouton <strong>Ouvrir / signer</strong>.</li>
 </ul>
 <div class="tip">Les documents sans enfant rattaché — l’entretien annuel par exemple — restent, eux, repris automatiquement ici tant qu’ils ne sont pas terminés.</div>
+<div class="st">👃 Autorisation de désobstruction rhino-pharyngée (DRP)</div>
+<ul>
+  <li>Catégorie <strong>Santé</strong>. Les parents autorisent la référente technique ou le personnel à pratiquer des désobstructions du nez, sous condition d’apporter <strong>sérum physiologique et seringue nasale</strong>.</li>
+  <li>À renseigner : les parents (civilité, nom, qualité), le prénom de l’enfant, la <strong>période</strong> (du… au…), le <strong>nombre maximum de fois par jour</strong>, le lieu et la date.</li>
+  <li>La case « mon enfant a déjà utilisé ce système » atteste que le protocole de la structure a été suivi ; non cochée, le PDF indique « à confirmer ».</li>
+  <li>Choisir l’enfant en haut du formulaire : parents, prénom et date sont pré-remplis. Le parent 2 est facultatif ; les parents peuvent aussi remplir et signer l’autorisation depuis leur espace famille.</li>
+  <li>À redemander à chaque nouvelle période de rhume : l’autorisation n’est valable que pour les dates indiquées.</li>
+</ul>
 `,
 
 signature: `
