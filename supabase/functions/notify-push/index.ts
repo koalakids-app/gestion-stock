@@ -25,10 +25,20 @@ try {
 
 /** org_id déduit d'un des référents destinataires — sert à retrouver la
  *  config réseau et l'adresse d'expédition de son organisation. */
-async function resolveOrgId(referentIds) {
-  if (!referentIds || !referentIds.length) return null;
-  const { data } = await sb.from("referents").select("org_id").eq("id", referentIds[0]).maybeSingle();
-  return data?.org_id || null;
+async function resolveOrgId(referentIds, employeIds) {
+  if (referentIds && referentIds.length) {
+    const { data } = await sb.from("referents").select("org_id").eq("id", referentIds[0]).maybeSingle();
+    if (data?.org_id) return data.org_id;
+  }
+  if (employeIds && employeIds.length) {
+    // Un·e employé·e n'a pas d'org_id : on passe par sa crèche.
+    const { data: emp } = await sb.from("employes").select("creche_id").eq("id", employeIds[0]).maybeSingle();
+    if (emp?.creche_id) {
+      const { data: cr } = await sb.from("creches").select("org_id").eq("id", emp.creche_id).maybeSingle();
+      return cr?.org_id || null;
+    }
+  }
+  return null;
 }
 async function resolveFromEmail(orgId) {
   if (!orgId) return fromEmailDefaut;
@@ -90,15 +100,17 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { referent_ids, title, body, url, tag } = await req.json();
-    if (!referent_ids || !referent_ids.length || !title) {
-      return new Response(JSON.stringify({ error: "referent_ids et title requis" }), {
+    const { referent_ids: refIn, employe_ids: empIn, title, body, url, tag } = await req.json();
+    const referent_ids = Array.isArray(refIn) ? refIn : [];
+    const employe_ids = Array.isArray(empIn) ? empIn : [];
+    if ((!referent_ids.length && !employe_ids.length) || !title) {
+      return new Response(JSON.stringify({ error: "referent_ids (ou employe_ids) et title requis" }), {
         status: 400,
         headers: { ...cors, "Content-Type": "application/json" }
       });
     }
 
-    const orgId = await resolveOrgId(referent_ids);
+    const orgId = await resolveOrgId(referent_ids, employe_ids);
 
     const { data: cfgRow } = orgId
       ? await sb.from("reseau_config").select("config").eq("org_id", orgId).maybeSingle()
@@ -117,6 +129,8 @@ Deno.serve(async (req) => {
     if (estEnSilence(cfg)) {
       // Retenue plutôt qu'abandonnée : livrée à la première connexion hors silence (plage horaire, week-end, férié)
       // (livrerNotifsRetenues côté page Demandes). sql/notifs_retenues.sql
+      // Les employé·es n'ont pas de file d'attente : leur message reste dans Mon espace,
+      // signalé comme non lu (sql/messages_employes.sql).
       const lignes = referent_ids.map((rid) => ({
         referent_id: rid,
         title,
@@ -124,7 +138,9 @@ Deno.serve(async (req) => {
         url: url || "./demandes.html",
         tag: tag || "koala-notif"
       }));
-      const { error: errRetenue } = await sb.from("notifs_retenues").insert(lignes);
+      const { error: errRetenue } = lignes.length
+        ? await sb.from("notifs_retenues").insert(lignes)
+        : { error: null };
       if (errRetenue) console.error("[notify-push] retenue", errRetenue);
       console.log("[notify-push] retenue (silence)", { referent_ids, ok: !errRetenue });
       return new Response(JSON.stringify({ skipped: true, reason: "silence", retenues: errRetenue ? 0 : lignes.length }), {
@@ -133,11 +149,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: subs, error } = await sb
-      .from("push_subscriptions")
-      .select("*")
-      .in("referent_id", referent_ids);
-    if (error) throw error;
+    let subs = [];
+    if (referent_ids.length) {
+      const { data, error } = await sb.from("push_subscriptions").select("*").in("referent_id", referent_ids);
+      if (error) throw error;
+      subs = subs.concat(data || []);
+    }
+    if (employe_ids.length) {
+      const { data, error } = await sb.from("push_subscriptions").select("*").in("employe_id", employe_ids);
+      if (error) throw error;
+      subs = subs.concat(data || []);
+    }
 
     const payload = JSON.stringify({
       title,

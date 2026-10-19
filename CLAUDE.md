@@ -33,6 +33,11 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 - Coffre-fort, étape 1 : journal `acces_documents` (`sql/acces_documents.sql`, à appliquer à la main), alimenté par `kkJournaliserAcces` (`js/coffre-journal.js`) à chaque `createSignedUrl` de document sensible ; affiché dans Paramètres (`coffreChargerJournal`, `js/pages/parametres-archives.js`). `sql/storage_retirer_acces_anonyme.sql` retire des policies `anon` « allow all » sur `storage.objects` (audit du 2026) : à appliquer à la main après test des pages publiques.
 - Coffre-fort, étape 2 : `sql/storage_filtrage_par_creche.sql` (à appliquer à la main) limite la lecture/écriture des buckets `documents-admin`, `carnets`, `stagiaires` (dossier = id de la fiche) et la lecture de `sante` (via `pai.piece_jointe`) à la crèche du référent (`kk_acces_dossier`, `kk_acces_fichier_pai`, `kk_acces_creche`) ; la direction garde tout.
 
+## Messages aux employés
+- Sens unique, direction/référents → employés : `messages_employes` + `messages_employes_destinataires` (`sql/messages_employes.sql`, à appliquer à la main ; une instruction à la fois si l'éditeur expire). Écriture dans Demandes (`js/pages/demandes/15-messages-employes.js`, bouton « Message aux employés »), lecture dans Mon espace (`loadMessages`, `js/pages/collaborateur.js`). Seuls les employés avec `employes.user_id` reçoivent.
+- Push employés : `push_subscriptions.employe_id` (au lieu de `referent_id`), enregistré par la RPC `upsert_push_subscription` ; `notify-push` accepte `employe_ids`. Pendant le silence (heures, week-end, férié), rien n'est retenu pour les employés : le message reste dans Mon espace.
+- Les notifications des référents tenues pendant le silence vont dans `notifs_retenues` (`sql/notifs_retenues.sql`) et sont livrées à la première connexion hors silence (`livrerNotifsRetenues`).
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.
