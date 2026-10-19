@@ -473,9 +473,19 @@ function rmpRefreshCurrentView(){
   else rmpRenderIntervenanteSelect();
 }
 
+/* Section ouverte dans l'appli -> onglet de la notice qui la décrit */
+const NOTICE_ONGLET_SECTION = {
+  demands:'demandes', incidents:'incidents', presence:'presences', planning:'planning', evenements:'evenements',
+  enfants:'enfants', vaccinations:'vaccinations', stagiaires:'stagiaires', partenaires:'partenaires',
+  referents:'referents', dashboard:'dashboards', 'ref-dashboard':'dashboards', actions:'actions', afaire:'afaire',
+  remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches'
+};
 function openNotice() {
   document.getElementById('modal-notice').classList.add('open');
-  switchNoticeTab('demandes', document.querySelector('.notice-tab'));
+  const tab = NOTICE_ONGLET_SECTION[typeof _mainCourant !== 'undefined' ? _mainCourant : ''] || 'demandes';
+  const btn = document.querySelector(`.notice-tab[onclick*="'${tab}'"]`) || document.querySelector('.notice-tab');
+  switchNoticeTab(tab, btn);
+  if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'center' });
 }
 function switchNoticeTab(tab, btn) {
   document.querySelectorAll('.notice-tab').forEach(b => {
