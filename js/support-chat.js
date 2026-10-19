@@ -129,7 +129,7 @@
     btn.type = 'button';
     btn.title = me.direction ? 'Messages de vos équipes' : 'Un problème ? Écrivez-nous';
     btn.setAttribute('aria-label', btn.title);
-    btn.innerHTML = '<img src="koala-chat.png" alt="Messages" style="width:44px;height:44px;border-radius:50%;pointer-events:none"><span id="kk-sc-badge"></span>';
+    btn.innerHTML = '<img src="koala-chat.png" alt="Messages" style="width:54px;height:54px;border-radius:50%;pointer-events:none"><span id="kk-sc-badge"></span>';
     btn.addEventListener('click', basculer);
 
     const panel = document.createElement('div');
