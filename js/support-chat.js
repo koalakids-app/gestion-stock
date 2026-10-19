@@ -82,9 +82,9 @@
     st.id = 'kk-sc-style';
     st.textContent = `
 #kk-sc-btn{position:fixed;right:24px;bottom:88px;z-index:9990;width:70px;height:60px;border-radius:0;border:none;cursor:pointer;background:transparent;color:#fff;font-size:24px;padding:0;filter:drop-shadow(0 4px 8px rgba(0,0,0,.28));display:flex;align-items:center;justify-content:center;font-family:inherit}
-#kk-sc-btn:hover{filter:brightness(1.08)}
+#kk-sc-btn:hover{filter:drop-shadow(0 4px 8px rgba(0,0,0,.28)) brightness(1.08)}
 #kk-sc-btn.kk-sc-pulse{animation:kkScPulse 1.6s infinite}
-@keyframes kkScPulse{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.28),0 0 0 0 rgba(244,121,32,.55)}50%{box-shadow:0 4px 14px rgba(0,0,0,.28),0 0 0 12px rgba(244,121,32,0)}}
+@keyframes kkScPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
 #kk-sc-badge{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#e03e3e;color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center;border:2px solid #fff;box-sizing:border-box}
 #kk-sc-panel{position:fixed;right:24px;bottom:150px;z-index:9991;width:360px;max-width:calc(100vw - 24px);height:480px;max-height:calc(100vh - 170px);background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.28);display:none;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Nunito,sans-serif;color:#1a1a1a}
 #kk-sc-panel.kk-sc-open{display:flex}
