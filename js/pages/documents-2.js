@@ -76,6 +76,7 @@ remplir: `
 <ul>
   <li>Cliquer sur le document pour ouvrir le formulaire.</li>
   <li>Remplir les champs, puis <strong>Enregistrer</strong>.</li>
+  <li><strong>Livret d’accueil du stagiaire</strong> : la « Composition de l’équipe » se remplit seule d’après les fiches collaborateurs de la crèche choisie (poste, hors dossiers archivés ou contrats terminés) et son directeur technique. Le texte reste modifiable ; le bouton « Remplir depuis les collaborateurs » le régénère.</li>
   <li>Un texte gris en filigrane est un simple exemple : on tape par-dessus. Pour le reprendre et l’adapter, <strong>double-cliquer</strong> dans le champ vide : l’exemple s’écrit et reste modifiable.</li>
   <li>Tant que la réponse n’est pas exportée, elle reste modifiable : on peut rouvrir et compléter.</li>
 </ul>
