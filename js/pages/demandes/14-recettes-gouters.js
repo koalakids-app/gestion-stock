@@ -257,7 +257,7 @@ async function gouterRecapOuvrir(crecheId,semaine){
   try{
     const[t,e,rr]=await Promise.all([
       sb.from('menus_gouters_creche').select('date_debut,jour,gouter,gouter_grand').eq('creche_id',crecheId).in('date_debut',semaines),
-      sb.from('gouters_creche_effectifs').select('date_debut,jour,moyens,grands').eq('creche_id',crecheId).in('date_debut',semaines),
+      sb.from('gouters_creche_effectifs').select('date_debut,jour,moyens,moyens_l1,moyens_l2,grands').eq('creche_id',crecheId).in('date_debut',semaines),
       sb.from('gouters_creche_recettes').select('date_debut,jour,profil,recette_id').eq('creche_id',crecheId).in('date_debut',semaines)
     ]);
     if(t.error)throw t.error;if(e.error)throw e.error;if(rr.error)throw rr.error;
@@ -265,10 +265,14 @@ async function gouterRecapOuvrir(crecheId,semaine){
       for(let j=1;j<=5;j++){
         const tx=(t.data||[]).filter(function(x){return x.date_debut===sd&&x.jour===j;})[0]||{};
         const ef=(e.data||[]).filter(function(x){return x.date_debut===sd&&x.jour===j;})[0]||{};
-        ['moyen','grand'].forEach(function(p){
-          jours.push({sem:si,profil:p,n:(p==='moyen'?ef.moyens:ef.grands)||0,texte:(p==='moyen'?tx.gouter:tx.gouter_grand)||'',
-            recettes:(rr.data||[]).filter(function(x){return x.date_debut===sd&&x.jour===j&&x.profil===p;}).map(function(x){return recettes[x.recette_id];}).filter(Boolean)});
-        });
+        const recDe=function(p){return(rr.data||[]).filter(function(x){return x.date_debut===sd&&x.jour===j&&x.profil===p;}).map(function(x){return recettes[x.recette_id];}).filter(Boolean);};
+        // moyens : un effectif par ligne de produit (yaourt, compote…) ; anciennes données : `moyens` pour tous
+        const pm=String(tx.gouter||'').split('/'),t1=pm[0]||'',t2=pm.slice(1).join(' / ');
+        const n1=ef.moyens_l1==null?(ef.moyens||0):ef.moyens_l1,n2=ef.moyens_l2==null?(ef.moyens||0):ef.moyens_l2;
+        jours.push({sem:si,profil:'moyen',n:n1,texte:t1,recettes:[]});
+        jours.push({sem:si,profil:'moyen',n:n2,texte:t2,recettes:[]});
+        jours.push({sem:si,profil:'moyen',n:Math.max(n1,n2),texte:'',recettes:recDe('moyen')});
+        jours.push({sem:si,profil:'grand',n:ef.grands||0,texte:tx.gouter_grand||'',recettes:recDe('grand')});
       }
     });
   }catch(err){console.error('[Goûters crèche] récapitulatif',err);showBanner('Lecture du récapitulatif impossible.','error');return;}
