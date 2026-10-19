@@ -105,13 +105,23 @@ async function lvEquipeAuto(nomCourt,{ecraser}={}){
     sb.from('referents').select('id').eq('creche_id',String(c.id)).eq('role','referent')]);
   if(error){if(ecraser)toast('Équipe indisponible : '+error.message);return;}
   const actifs=(emps||[]).filter(e=>!e.archive_le&&(!e.date_fin||e.date_fin>auj)&&(!e.date_debut||e.date_debut<=auj));
+  /* postes regroupés sans tenir compte de la casse ni des espaces, direction en tête ;
+     le référent n'est ajouté que si aucune fiche collaborateur n'est déjà « directeur/directrice » */
   const parPoste={};
-  actifs.forEach(e=>{const k=(e.poste||'').trim()||'professionnel(le) de la petite enfance';parPoste[k]=(parPoste[k]||0)+1;});
-  const lignes=Object.entries(parPoste).map(([k,n])=>n>1?n+' × '+k:k);
-  if(refs&&refs.length)lignes.unshift('directeur(trice) technique');
+  actifs.forEach(e=>{
+    let k=(e.poste||'').replace(/\s*\/\s*/g,' / ').replace(/\s+/g,' ').trim()||'Professionnel(le) de la petite enfance';
+    k=k.charAt(0).toUpperCase()+k.slice(1);
+    const cle=k.toLowerCase();
+    (parPoste[cle]=parPoste[cle]||{k,n:0}).n++;
+  });
+  const estDir=x=>/direct(eur|rice)/i.test(x.k);
+  const postes=Object.values(parPoste).sort((a,b)=>estDir(b)-estDir(a));
+  const lignes=postes.map(x=>x.n>1?x.k+' (×'+x.n+')':x.k);
+  if(refs&&refs.length&&!postes.some(estDir))lignes.unshift('Directeur(trice) technique');
+  const total=postes.reduce((t,x)=>t+x.n,0)+((refs&&refs.length&&!postes.some(estDir))?1:0);
   if(!lignes.length){if(ecraser)toast('Aucun collaborateur actif trouvé pour cette crèche.');return;}
   if(!eq.value.trim()||ecraser||defs.includes(eq.value.trim())){
-    eq.value='L’équipe est composée de '+lignes.join(', ')+'.';
+    eq.value='L’équipe est composée de '+total+' professionnel'+(total>1?'s':'')+' : '+lignes.join(', ')+'.';
     lvRefresh();
   }
 }
