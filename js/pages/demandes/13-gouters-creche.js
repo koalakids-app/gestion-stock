@@ -196,7 +196,7 @@ async function gouterCrecheOuvrir(dateDebut){
     try{
       const[a,b]=await Promise.all([
         sb.from('gouters_creche_recettes').select('jour,profil,recette_id').eq('creche_id',crecheId).eq('date_debut',semaine),
-        sb.from('gouters_creche_effectifs').select('jour,moyens,grands').eq('creche_id',crecheId).eq('date_debut',semaine)
+        sb.from('gouters_creche_effectifs').select('jour,moyens,moyens_l1,moyens_l2,grands').eq('creche_id',crecheId).eq('date_debut',semaine)
       ]);
       (a.data||[]).forEach(function(x){if(recettes[x.recette_id]){rec[x.jour]=rec[x.jour]||{moyen:[],grand:[]};rec[x.jour][x.profil].push(recettes[x.recette_id]);}});
       (b.data||[]).forEach(function(x){effSaved[x.jour]=x;});
@@ -208,10 +208,14 @@ async function gouterCrecheOuvrir(dateDebut){
     const [y,m,d]=semaine.split('-').map(Number);
     zone.innerHTML=MENU_JOURS.map(function(nom,i){
       const j=i+1,e=existants[j]||{moyen:'',grand:''},t=traiteur[j]||{moyen:'',grand:''};
+      const pm=String(e.moyen||'').split('/'),l1=(pm[0]||'').trim(),l2=pm.slice(1).join(' / ').trim();
       const date=new Date(y,m-1,d+i).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
       return'<div class="fg gc-bloc" data-jour="'+j+'"><label class="flabel">'+nom+' '+escHtml(date)+'</label>'
         +'<div class="gc-moyen-wrap"><span class="gc-lbl gc-lbl-moyen"></span>'
-        +'<input class="finput gc-moyen" maxlength="200" value="'+escHtml(e.moyen)+'" data-traiteur="'+escHtml(t.moyen)+'" data-traiteur-grand="'+escHtml(t.grand)+'"/>'
+        +'<div class="gc-m-ligne" style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><input class="finput gc-m1" maxlength="100" value="'+escHtml(l1)+'"/>'
+        +'<input class="finput gc-eff-m gc-me1" type="number" min="0" max="99" title="Effectif" placeholder="Eff." style="width:64px;text-align:center;flex:none"/></div>'
+        +'<div class="gc-m-ligne" style="display:flex;gap:6px;align-items:center"><input class="finput gc-m2" maxlength="100" value="'+escHtml(l2)+'"/>'
+        +'<input class="finput gc-eff-m gc-me2" type="number" min="0" max="99" title="Effectif" placeholder="Eff." style="width:64px;text-align:center;flex:none"/></div>'
         +'<div class="gc-rec-moyen"></div></div>'
         +'<div class="gc-grand-wrap"><span class="gc-lbl">Grands</span>'
         +'<input class="finput gc-grand" maxlength="200" value="'+escHtml(e.grand)+'" data-traiteur="'+escHtml(t.grand)+'"/>'
@@ -221,10 +225,12 @@ async function gouterCrecheOuvrir(dateDebut){
     // Effectifs : valeurs enregistrées, sinon Présences › Semaine (même semaine), sinon à saisir.
     const eff=await gouterEffectifsSemaine(crecheId,semaine);
     enfantsJour=eff?eff.enfants:null;
-    const val=function(p,i){const sv=effSaved[i+1];if(sv)return sv[p==='moyen'?'moyens':'grands'];return eff?eff[p][i]:'';};
+    const val=function(p,i){const sv=effSaved[i+1];if(sv)return sv.grands;return eff?eff[p][i]:'';};
+    const valM=function(i,n){const sv=effSaved[i+1];if(sv){const v=sv['moyens_l'+n];return v==null?sv.moyens:v;}return eff?eff.moyen[i]:'';};
+    Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b,i){b.querySelector('.gc-me1').value=valM(i,1);b.querySelector('.gc-me2').value=valM(i,2);});
     document.getElementById('gc-eff').innerHTML='<label class="flabel">Enfants au goûter'+(eff?' <span style="font-weight:400;color:var(--muted)">(calculés d’après les présences, modifiables)</span>':' <span style="font-weight:400;color:var(--muted)">(à saisir)</span>')+'</label>'
-      +['moyen','grand'].map(function(p){
-        return'<div style="font-size:11px;color:var(--muted);margin-top:4px">'+(p==='moyen'?'Moyens (6-18 mois)':'Grands')+'</div>'
+      +['grand'].map(function(p){
+        return'<div style="font-size:11px;color:var(--muted);margin-top:4px">Grands</div>'
           +'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">'
           +MENU_JOURS.map(function(nom,i){return'<div style="text-align:center;font-size:11px;color:var(--muted)">'+escHtml(nom.slice(0,3))
             +'<input class="finput gc-eff-j" data-p="'+p+'" type="number" min="0" max="99" style="text-align:center;padding:6px 2px" value="'+val(p,i)+'"/></div>';}).join('')+'</div>';
@@ -232,10 +238,10 @@ async function gouterCrecheOuvrir(dateDebut){
     if(eff){
       const bt=document.createElement('button');bt.type='button';bt.className='btn-cancel';bt.style.cssText='margin-top:6px;padding:3px 9px;font-size:12px';
       bt.innerHTML='<i class="ti ti-refresh"></i> Recalculer d’après les présences';
-      bt.onclick=function(){['moyen','grand'].forEach(function(p){Array.prototype.forEach.call(document.querySelectorAll('.gc-eff-j[data-p="'+p+'"]'),function(el,i){el.value=eff[p][i];});});majProduits();};
+      bt.onclick=function(){Array.prototype.forEach.call(document.querySelectorAll('.gc-eff-j[data-p="grand"]'),function(el,i){el.value=eff.grand[i];});Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b,i){b.querySelector('.gc-me1').value=eff.moyen[i];b.querySelector('.gc-me2').value=eff.moyen[i];});majProduits();};
       document.getElementById('gc-eff').appendChild(bt);
     }
-    Array.prototype.forEach.call(document.querySelectorAll('.gc-eff-j'),function(el){el.oninput=majProduits;});
+    Array.prototype.forEach.call(document.querySelectorAll('.gc-eff-j,.gc-eff-m'),function(el){el.oninput=majProduits;});
     Array.prototype.forEach.call(zone.querySelectorAll('input'),function(el){el.addEventListener('input',majProduits);});
     Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),majRecettes);
     majMode();
@@ -272,14 +278,21 @@ async function gouterCrecheOuvrir(dateDebut){
   /* Produits à commander de la semaine affichée, recalculés à chaque frappe. */
   function jourSaisi(b,p){
     const j=+b.dataset.jour;
-    const mo=b.querySelector('.gc-moyen').value,gr=memeEl.checked?mo:b.querySelector('.gc-grand').value;
+    const mo=moyenTexte(b),gr=memeEl.checked?mo:b.querySelector('.gc-grand').value;
     return{texte:p==='moyen'?mo:gr,recettes:recDe(j,p)};
   }
+  function moyenTexte(b){return[b.querySelector('.gc-m1').value.trim(),b.querySelector('.gc-m2').value.trim()].filter(Boolean).join(' / ');}
+  function effMoyen(b,n){return parseInt(b.querySelector('.gc-me'+n).value,10)||0;}
   function effectif(p,i){const el=document.querySelectorAll('.gc-eff-j[data-p="'+p+'"]')[i];return el?(parseInt(el.value,10)||0):0;}
   function majProduits(){
     const jours=[];
     Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b,i){
-      ['moyen','grand'].forEach(function(p){const s=jourSaisi(b,p);jours.push({sem:0,profil:p,n:effectif(p,i),texte:s.texte,recettes:s.recettes});});
+      const sm=jourSaisi(b,'moyen'),n1=effMoyen(b,1),n2=effMoyen(b,2);
+      // une ligne de produit par case (chacune avec son effectif) ; les recettes comptent pour le plus grand effectif
+      jours.push({sem:0,profil:'moyen',n:n1,texte:b.querySelector('.gc-m1').value,recettes:[]});
+      jours.push({sem:0,profil:'moyen',n:n2,texte:b.querySelector('.gc-m2').value,recettes:[]});
+      jours.push({sem:0,profil:'moyen',n:Math.max(n1,n2),texte:'',recettes:sm.recettes});
+      const sg=jourSaisi(b,'grand');jours.push({sem:0,profil:'grand',n:effectif('grand',i),texte:sg.texte,recettes:sg.recettes});
     });
     const liste=gcLignes(jours);
     const box=document.getElementById('gc-produits');
@@ -296,10 +309,11 @@ async function gouterCrecheOuvrir(dateDebut){
     Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b){
       b.querySelector('.gc-grand-wrap').style.display=meme?'none':'';
       b.querySelector('.gc-lbl-moyen').textContent=meme?'':'Moyens (6-18 mois)';
-      const mo=b.querySelector('.gc-moyen'),gr=b.querySelector('.gc-grand');
-      const tm=mo.dataset.traiteur,tg=gr.dataset.traiteur;
+      const gr=b.querySelector('.gc-grand');
+      const tg=gr.dataset.traiteur;
       const ph=function(t){return tousEl.checked?'Aucun goûter ce jour':(t?'Traiteur : '+t:'Ex. yaourt / madeleine / fruit');};
-      mo.placeholder=ph(meme?(tg||tm):tm);
+      b.querySelector('.gc-m1').placeholder=tousEl.checked?'Aucun goûter ce jour':'Produit 1 (ex. yaourt)';
+      b.querySelector('.gc-m2').placeholder=tousEl.checked?'Aucun goûter ce jour':'Produit 2 (ex. compote)';
       gr.placeholder=ph(tg);
       majRecettes(b);
     });
@@ -310,7 +324,7 @@ async function gouterCrecheOuvrir(dateDebut){
     if(!memeEl.checked){ // on sépare : les grands reprennent le goûter (et les recettes) des moyens
       Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b){
         const gr=b.querySelector('.gc-grand'),j=+b.dataset.jour;
-        if(!gr.value)gr.value=b.querySelector('.gc-moyen').value;
+        if(!gr.value)gr.value=moyenTexte(b);
         rec[j]=rec[j]||{moyen:[],grand:[]};
         if(!rec[j].grand.length)rec[j].grand=rec[j].moyen.slice();
       });
@@ -329,7 +343,7 @@ async function gouterCrecheOuvrir(dateDebut){
 
   async function enregistrer(vider){
     const lignes=Array.prototype.map.call(zone.querySelectorAll('.gc-bloc'),function(b){
-      const moyen=vider?'':b.querySelector('.gc-moyen').value.trim();
+      const moyen=vider?'':moyenTexte(b);
       const grand=vider?'':(memeEl.checked?moyen:b.querySelector('.gc-grand').value.trim());
       return{jour:+b.dataset.jour,moyen:moyen,grand:grand};
     });
@@ -341,8 +355,8 @@ async function gouterCrecheOuvrir(dateDebut){
     if(!vider){
       lignes.forEach(function(l,i){
         ['moyen','grand'].forEach(function(p){recDe(l.jour,p).forEach(function(r){recettesLignes.push({creche_id:crecheId,date_debut:semaine,jour:l.jour,profil:p,recette_id:r.id});});});
-        const m=effectif('moyen',i),g=effectif('grand',i);
-        if(m||g)effLignes.push({creche_id:crecheId,date_debut:semaine,jour:l.jour,moyens:m,grands:g,updated_at:new Date().toISOString()});
+        const b=zone.querySelectorAll('.gc-bloc')[i],m1=effMoyen(b,1),m2=effMoyen(b,2),m=Math.max(m1,m2),g=effectif('grand',i);
+        if(m||g)effLignes.push({creche_id:crecheId,date_debut:semaine,jour:l.jour,moyens:m,moyens_l1:m1,moyens_l2:m2,grands:g,updated_at:new Date().toISOString()});
       });
     }
     try{
