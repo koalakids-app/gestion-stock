@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
         ? await sb.from("notifs_retenues").insert(lignes)
         : { error: null };
       if (errRetenue) console.error("[notify-push] retenue", errRetenue);
-      console.log("[notify-push] retenue (silence)", { referent_ids, ok: !errRetenue });
+      console.log("[notify-push] retenue (silence)", { referent_ids, employe_ids, ok: !errRetenue });
       return new Response(JSON.stringify({ skipped: true, reason: "silence", retenues: errRetenue ? 0 : lignes.length }), {
         status: 200,
         headers: { ...cors, "Content-Type": "application/json" }
@@ -203,7 +203,7 @@ Deno.serve(async (req) => {
 
     const envoyes = resultats.filter((r) => r.status === "fulfilled").length;
     // Log explicite pour diagnostiquer les échecs silencieux (HTTP 200 même si envoyes=0).
-    console.log("[notify-push] résultat", JSON.stringify({ referent_ids, total: (subs || []).length, envoyes, details }));
+    console.log("[notify-push] résultat", JSON.stringify({ referent_ids, employe_ids, total: (subs || []).length, envoyes, details }));
     return new Response(
       JSON.stringify({ envoyes, total: (subs || []).length, details }),
       { status: 200, headers: { ...cors, "Content-Type": "application/json" } }
