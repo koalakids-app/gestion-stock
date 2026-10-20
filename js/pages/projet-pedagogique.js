@@ -15,29 +15,27 @@
   $('btnTelecharger').href = PDF;
   const etat = $('etat'), etatTxt = $('etatTxt');
 
-  let ouvert = false;
+  let ouvert = false, etape = 'chargement des bibliothèques';
   function echec(e){
     if (ouvert) return;
     etat.hidden = false;
     etat.querySelector('.big').textContent = '📄';
     etatTxt.innerHTML = 'Le livre ne peut pas s\'afficher ici.<br><a href="'+PDF+'" target="_blank" rel="noopener">Ouvrir le document PDF</a>'
-      + (e && e.message ? '<br><small style="opacity:.6">'+String(e.message).replace(/</g,'&lt;')+'</small>' : '');
+      + '<br><small style="opacity:.6">' + String((e && e.message) || 'erreur').replace(/</g,'&lt;') + ' — étape : ' + etape + '</small>';
   }
   /* Si rien ne s'affiche au bout de 25 s, on propose le PDF plutôt que d'attendre sans fin. */
   const garde = setTimeout(() => echec(new Error('Délai dépassé')), 25000);
   if (!window.pdfjsLib || !window.St) { echec(); return; }
 
-  const WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  /* Le worker vient d'un autre site : on le récupère et on le sert depuis un blob de la page,
-     ce qui évite les refus de certains navigateurs pour un worker d'une autre origine. */
-  async function preparerWorker(){
-    try {
-      const r = await fetch(WORKER);
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([await r.text()], { type: 'text/javascript' }));
-    } catch (e) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER;
-    }
+  /* Le moteur de lecture est chargé dans la page (pas de Worker) : plus lent à l'ouverture,
+     mais il ne dépend d'aucun réglage du navigateur. */
+  function chargerMoteur(){
+    return new Promise((ok, ko) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      sc.onload = ok; sc.onerror = () => ko(new Error('moteur de lecture inaccessible'));
+      document.head.appendChild(sc);
+    });
   }
 
   let pdf, flip, total = 0, ratio = 1.414;
@@ -126,11 +124,13 @@
     $('btnPrev').hidden = $('btnNext').hidden = $('barre').hidden = false;
   }
 
-  preparerWorker().then(() => pdfjsLib.getDocument(PDF).promise).then(async doc => {
-    pdf = doc; total = doc.numPages;
+  etape = 'moteur de lecture';
+  chargerMoteur().then(() => { etape = 'ouverture du PDF'; return pdfjsLib.getDocument(PDF).promise; }).then(async doc => {
+    pdf = doc; total = doc.numPages; etape = 'première page';
     const p1 = await doc.getPage(1);
     const v = p1.getViewport({ scale: 1 });
     ratio = v.height / v.width;
+    etape = 'mise en page du livre';
     monter();
   }).catch(echec);
 })();
