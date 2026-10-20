@@ -97,9 +97,9 @@ function stgOptionsCreches(vide){
 
 async function stgInit(){
   const sel1=document.getElementById('stg-f-creche-liste');
-  if(sel1)sel1.innerHTML=stgOptionsCreches('Toutes les crèches');
+  if(sel1)sel1.innerHTML=stgOptionsCreches(isDirection?'Toutes les crèches':'');
   const sel2=document.getElementById('stg-f-creche-cal');
-  if(sel2)sel2.innerHTML=stgOptionsCreches('Toutes les crèches');
+  if(sel2)sel2.innerHTML=stgOptionsCreches(isDirection?'Toutes les crèches':'');
   /* Proposer « toutes les crèches » à une directrice technique serait lui promettre une
      écriture que la policy refusera (script 36c) : elle ne voit que la sienne,
      déjà choisie. */
