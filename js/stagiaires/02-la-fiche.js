@@ -3,6 +3,10 @@
 
 function stgOpenFiche(id,typeDefaut){
   stgFicheId=id||null;
+  /* La grille de la fiche précédente ne doit pas survivre : son sélecteur de profil
+     (AEPE, EJE…) serait relu comme celui de la nouvelle fiche. */
+  const zoneEval=document.getElementById('stg-eval-zone');
+  if(zoneEval){zoneEval.innerHTML='';delete zoneEval.dataset.fiche;}
   if(id&&typeof depotsMarquerVusPour==='function')depotsMarquerVusPour('stagiaire',id);   // documents déposés par la stagiaire : vus
   const s=id?stgCache.find(x=>String(x.id)===String(id)):null;
   const v=(el,val)=>{const e=document.getElementById(el);if(e)e.value=val==null?'':val;};

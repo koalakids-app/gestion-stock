@@ -196,7 +196,10 @@ function stgRenderEval(){
   const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
   if(!s){zone.innerHTML='';return;}
   const ev=stgEvalDe(s);
-  const profil=(document.getElementById('stg-eval-profil')||{}).value||ev.profil||stgEvalProfilDefaut(s);
+  /* Le sélecteur affiché ne vaut que s'il appartient à cette fiche. */
+  const sel=zone.dataset.fiche===String(s.id)?document.getElementById('stg-eval-profil'):null;
+  const profil=(sel&&sel.value)||ev.profil||stgEvalProfilDefaut(s);
+  zone.dataset.fiche=String(s.id);
   zone.innerHTML=
     '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px">'
     +'<div style="font-weight:700;font-size:13px"><i class="ti ti-clipboard-check" style="color:var(--koala)"></i> Évaluation '+(profil==='eje'?"de l'apprenti·e":'du stagiaire')+'</div>'
@@ -274,6 +277,8 @@ function stgEvalProfilChange(){
 async function stgEvalSave(evFixe){
   const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
   if(!s)return;
+  const zone=document.getElementById('stg-eval-zone');
+  if(!evFixe&&(!zone||zone.dataset.fiche!==String(s.id)))return true;   // grille d'une autre fiche : rien à écrire
   const ev=evFixe&&evFixe.profil?evFixe:stgEvalLire();
   const le=(document.getElementById('stg-eval-date')||{}).value||null;
   /* L'auto-évaluation n'est réécrite que si elle a été modifiée ici : sinon une réponse
