@@ -181,13 +181,9 @@ async function apercuFichier(id){
     }
     return;
   }
-  /* Images : affichées dans une page à part, ajustées à la largeur, directement depuis le bucket
-     (pas de téléchargement en mémoire ni de CORS) ; un message clair si l'image ne charge pas. */
+  /* Images : ouvertes dans un nouvel onglet (l'affichage intégré restait vide sur certains postes). */
   if(mime&&mime.indexOf('image/')===0){
-    const u=String(d.fichier_url).replace(/"/g,'%22');
-    pdfAfficherHtml('<div style="text-align:center"><img alt="" src="'+u+'" style="max-width:100%;height:auto;border-radius:6px" '
-      +'onerror="this.outerHTML=\'<p>Image introuvable ou illisible. Utiliser « Ouvrir dans un onglet ».</p>\'"></div>',
-      nom,d.fichier_url,'');
+    window.open(d.fichier_url,'_blank','noopener');
     return;
   }
   if(!mime){
