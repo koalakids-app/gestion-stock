@@ -217,7 +217,7 @@ async function saveEnfant(){
   renderPresence();
 }
 
-async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(!confirm('Supprimer définitivement '+(e?.prenom||'')+' '+(e?.nom||'')+' ?\n\nAttention : les présences liées ne seront plus rattachées.'))return;const ok=await dbDelete('enfants',editingEnfantId);if(ok){cacheEnfants=cacheEnfants.filter(x=>x.id!==editingEnfantId);closeModal('modal-enfant-wrap');closeModal('modal-enf-fiche-wrap');showBanner('Enfant supprimé.');renderPresence();if(typeof enfRender==='function')enfRender();}else showBanner('Erreur lors de la suppression'+(window._lastDbError?' : '+window._lastDbError:'.'),'error');}
+async function deleteEnfant(){if(!editingEnfantId)return;const e=cacheEnfants.find(x=>x.id===editingEnfantId);if(!confirm('Supprimer définitivement '+(e?.prenom||'')+' '+(e?.nom||'')+' ?\n\nAttention : les présences liées ne seront plus rattachées.'))return;const ok=await dbDeleteStrict('enfants',editingEnfantId);if(ok){cacheEnfants=cacheEnfants.filter(x=>x.id!==editingEnfantId);closeModal('modal-enfant-wrap');closeModal('modal-enf-fiche-wrap');showBanner('Enfant supprimé.');renderPresence();if(typeof enfRender==='function')enfRender();}else showBanner('Erreur lors de la suppression'+(window._lastDbError?' : '+window._lastDbError:'.'),'error');}
 
 // ── IMPORT PRÉSENCES DEPUIS PLANNING PDF (Gantt) ──
 const IP_MONTHS={janvier:1,février:2,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,août:8,aout:8,septembre:9,octobre:10,novembre:11,décembre:12,decembre:12};
