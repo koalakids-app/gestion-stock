@@ -43,23 +43,30 @@
   const etatPage = [];        // 0 = à faire, 1 = en cours, 2 = fait
   const urls = [];
 
+  const avec = (p, ms) => Promise.race([p, new Promise((_, ko) => setTimeout(() => ko(new Error('délai dépassé')), ms))]);
+
   async function dessiner(n){                 // n = index 0
     if (n < 0 || n >= total || etatPage[n]) return;
     etatPage[n] = 1;
     try {
-      const page = await pdf.getPage(n + 1);
+      const page = await avec(pdf.getPage(n + 1), 20000);
       const base = page.getViewport({ scale: 1 });
-      const largeur = Math.min(1100, Math.max(600, imgs[n].parentNode.clientWidth * (window.devicePixelRatio || 1) * 1.4));
+      const largeur = Math.min(1000, Math.max(600, imgs[n].parentNode.clientWidth * (window.devicePixelRatio || 1) * 1.4));
       const vp = page.getViewport({ scale: largeur / base.width });
       const c = document.createElement('canvas');
       c.width = Math.round(vp.width); c.height = Math.round(vp.height);
-      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+      await avec(page.render({ canvasContext: ctx, viewport: vp }).promise, 30000);
       const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
-      urls[n] = URL.createObjectURL(blob);
-      imgs[n].src = urls[n];
+      imgs[n].src = blob ? (urls[n] = URL.createObjectURL(blob)) : c.toDataURL('image/jpeg', 0.85);
       etatPage[n] = 2;
       page.cleanup();
-    } catch (e) { etatPage[n] = 0; }
+    } catch (e) {
+      etatPage[n] = 0;                        // sera retentée au prochain tour de page
+      console.error('page ' + (n + 1), e);
+      imgs[n].parentNode.setAttribute('data-erreur', 'Page ' + (n + 1) + ' : ' + ((e && e.message) || 'erreur'));
+    }
   }
 
   let file = Promise.resolve();
