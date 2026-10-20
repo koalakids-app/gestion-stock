@@ -70,7 +70,10 @@ Deno.serve(async (req) => {
   // PWA à part (propre start_url/scope) mais porte la même identité visuelle.
   const sousSite = new URL(req.url).searchParams.get('app') === 'reglementation';
   const nom = org?.nom || DEFAUT.nom;
-  const appUrl = (org?.app_url || DEFAUT.app_url).replace(/\/+$/, '');
+  // Origine inconnue (www., aperçu, localhost…) : on reste sur l'origine de la
+  // page, sinon start_url/shortcuts pointent ailleurs et le navigateur les
+  // ignore (« should be same origin as document »).
+  const appUrl = (org?.app_url || origine || DEFAUT.app_url).replace(/\/+$/, '');
   const themeColor = org?.couleur_secondaire || DEFAUT.couleur_secondaire;
   const logoUrl = org?.logo_url || DEFAUT.logo_url;
 
