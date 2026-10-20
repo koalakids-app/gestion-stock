@@ -9,7 +9,7 @@
   const PDF = f && /^https:\/\//i.test(f) ? f : 'projet-pedagogique-koalakids.pdf';
   /* Le projet pédagogique est fourni en images pré-calculées (projet-pedagogique-pages/p-001.jpg…) :
      aucun moteur PDF à faire tourner. Les autres PDF (Documents) passent par pdf.js. */
-  const IMAGES = PDF === 'projet-pedagogique-koalakids.pdf';
+  const IMAGES = /(^|\/)projet-pedagogique-koalakids\.pdf$/.test(PDF);
   const NB_PAGES = 121;
   const titre = params.get('t');
   if (titre) {
