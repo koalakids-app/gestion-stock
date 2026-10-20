@@ -28,6 +28,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 
 - Recettes des goûters : tables `recettes`, `recettes_ingredients`, `gouters_creche_effectifs` (moyens/grands par jour), `gouters_creche_recettes` (`sql/recettes_gouters.sql`, à appliquer à la main). Recettes communes aux crèches (écriture direction via `kk_est_direction()`), allergènes par ingrédient. Logique et récapitulatif 2 semaines dans `js/pages/demandes/14-recettes-gouters.js` (`gcLignes` calcule les produits à commander).
 
+## Projet pédagogique
+- Page publique `projet-pedagogique.html` (sans compte, lien à envoyer) : le PDF `projet-pedagogique-koalakids.pdf` (racine) se feuillette comme un livre (pdf.js + page-flip depuis un CDN, `js/pages/projet-pedagogique.js`, pages dessinées à la demande) et reste téléchargeable. Pour le mettre à jour, remplacer ce PDF. Notice : section « Projet pédagogique » de `js/pages/documents-2.js`.
+
 ## Archives sur disque dur
 - Export des dossiers archivés d'une crèche en un .zip (direction uniquement) : `archExporterCreche` (`js/pages/parametres-archives.js`), carte « Archives sur disque dur » dans Paramètres › Les établissements (crèche sélectionnée). Il couvre enfants archivés, employés archivés et stagiaires clos, puis supprime les fichiers de Supabase après confirmation et écrit une ligne par dossier dans `archivage_purges`. Les exports dossier par dossier sont eux aussi réservés à la direction (`isDirection`).
 

@@ -8,6 +8,11 @@ principe: `
   <li><strong>À télécharger</strong> — un fichier (PDF, Word…) mis à disposition. On clique, on récupère le fichier.</li>
   <li><strong>À remplir en ligne</strong> — un formulaire dont les champs ont été définis à l’avance. On le remplit à l’écran, on le signe, et on l’exporte en PDF.</li>
 </ul>
+<div class="st">📖 Projet pédagogique</div>
+<ul>
+  <li>Le projet pédagogique se feuillette comme un livre, sans compte, à l’adresse <strong>projet-pedagogique.html</strong> (même dossier que cette page) : flèches, curseur de page, clavier, plein écran, et bouton Télécharger. Ce lien s’envoie tel quel aux familles et aux partenaires.</li>
+  <li>Pour le mettre à jour, remplacer le fichier <strong>projet-pedagogique-koalakids.pdf</strong> du dépôt.</li>
+</ul>
 <div class="st">🔍 Retrouver un document</div>
 <ul>
   <li>Les catégories se déplient d’un clic sur leur titre.</li>
