@@ -282,7 +282,9 @@ async function stgEvalSave(evFixe){
   const maj={evaluation:evSans,evaluation_le:le};
   const autoChange=JSON.stringify(auto||null)!==JSON.stringify(s.auto_evaluation||null);
   if(autoChange)maj.auto_evaluation=auto||null;
-  const ok=await dbUpdate('stagiaires',s.id,maj);
+  /* Version stricte : une écriture refusée par la RLS ne lève pas d'erreur, elle ne touche
+     aucune ligne, et l'évaluation semblait enregistrée alors qu'elle disparaissait. */
+  const ok=await dbUpdateStrict('stagiaires',s.id,maj);
   if(!ok){
     return showBanner(/evaluation/i.test(window._lastDbError||'')
       ?"Enregistrement impossible : les scripts sql/stagiaires_evaluation.sql et sql/stagiaires_auto_evaluation.sql ne sont pas tous exécutés sur Supabase."
