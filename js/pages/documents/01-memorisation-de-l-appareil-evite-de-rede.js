@@ -687,11 +687,14 @@ function openDoc(id){
     document.getElementById('dType').value=d.type;
     if(d.fichier_nom)document.getElementById('dFileCur').textContent='Fichier actuel : '+d.fichier_nom;
     (d.schema_champs||[]).forEach(c=>addChamp(c.label,c.type));
+    document.getElementById('fNotif').style.display='none';
     document.getElementById('dPack').checked=!!d.pack_familiarisation;
     document.getElementById('dAccesEmploye').checked=!!d.acces_employe;
     document.getElementById('dPackOrdre').value=d.pack_ordre||0;
     document.getElementById('dPackImprimer').checked=!!d.pack_imprimer;
   }else{
+    document.getElementById('fNotif').style.display='';
+    document.getElementById('dNotif').checked=true;
     document.getElementById('dTitre').value='';
     document.getElementById('dDesc').value='';
     document.getElementById('dType').value='telechargeable';
@@ -744,9 +747,32 @@ async function saveDoc(){
     if(editDocId){({error}=await sb.from('documents_koala').update(row).eq('id',editDocId));}
     else{row.created_by=ME.id;({error}=await sb.from('documents_koala').insert(row));}
     if(error)throw error;
+    const prevenir=!editDocId&&document.getElementById('dNotif').checked;
     close_('ovDoc');toast('Document enregistré');await loadAll();
+    if(prevenir)await notifierNouveauDocument(row);
   }catch(e){toast('Erreur : '+(e.message||e));}
   btn.disabled=false;btn.textContent='Enregistrer';
+}
+/* Notification d'un nouveau document : référents de la crèche concernée (toutes si « Toutes les crèches »),
+   sauf l'auteur·e ; et employés (avec compte) quand le document leur est ouvert. Envoi par la fonction
+   notify-push : pendant le silence (heures, week-end, férié) les référents reçoivent à la première
+   connexion, les employés ne sont pas notifiés. Échec silencieux : le document est déjà enregistré. */
+async function notifierNouveauDocument(doc){
+  try{
+    let rq=sb.from('referents').select('id').not('creche_id','is',null);
+    if(doc.creche_id)rq=rq.eq('creche_id',doc.creche_id);
+    const refs=((await rq).data||[]).map(r=>r.id).filter(id=>!PROF||id!==PROF.id);
+    let emps=[];
+    if(doc.acces_employe){
+      let eq=sb.from('employes').select('id').not('user_id','is',null).is('archive_le',null);
+      if(doc.creche_id)eq=eq.eq('creche_id',doc.creche_id);
+      emps=((await eq).data||[]).map(e=>e.id);
+    }
+    if(!refs.length&&!emps.length)return;
+    const r=await callFn('notify-push',{referent_ids:refs,employe_ids:emps,
+      title:'Nouveau document',body:doc.titre,url:'./documents.html',tag:'doc-'+Date.now()});
+    if(r.ok)toast(r.data&&r.data.skipped?'Notification retenue jusqu\u2019à la fin du silence':'Équipes prévenues ('+(r.data&&r.data.envoyes||0)+' appareil(s))');
+  }catch(e){console.warn('[documents] notification',e);}
 }
 /* ---------- IMPORT EN MASSE DEPUIS UN DOSSIER ---------- */
 async function bulkImport(input){
