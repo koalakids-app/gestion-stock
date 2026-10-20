@@ -38,7 +38,7 @@ function pdfAfficher(src,nom,blobALiberer,srcTelechargement,mention){
 /* Variante HTML : utilisee pour les .docx convertis. Le contenu est injecte via
    srcdoc pour rester isole du style de l'application. Le bouton Telecharger
    pointe toujours sur le fichier Word d'origine. */
-function pdfAfficherHtml(interieur,nom,srcTelechargement){
+function pdfAfficherHtml(interieur,nom,srcTelechargement,mention){
   /* Le HTML converti est servi via un blob text/html plutot que par srcdoc :
      srcdoc peut etre neutralise par les regles de securite du navigateur. */
   const page='<!DOCTYPE html><meta charset="utf-8"><style>'
@@ -59,7 +59,7 @@ function pdfAfficherHtml(interieur,nom,srcTelechargement){
     +'table.xl tbody tr:nth-child(even):not(.entete){background:#FAF8FD}'
     +'table.xl td:empty{background:#fff}</style>'+interieur;
   const url=URL.createObjectURL(new Blob([page],{type:'text/html;charset=utf-8'}));
-  pdfAfficher(url,nom,url,srcTelechargement,' \u2014 aper\u00e7u de lecture, mise en page approch\u00e9e');
+  pdfAfficher(url,nom,url,srcTelechargement,mention==null?' \u2014 aper\u00e7u de lecture, mise en page approch\u00e9e':mention);
 }
 function pdfImprimer(){
   const f=document.getElementById('pdfFrame');
@@ -179,6 +179,15 @@ async function apercuFichier(id){
       console.error('apercuFichier tableur',e);
       toast('Aper\u00e7u impossible : '+(e&&e.message?e.message:e));
     }
+    return;
+  }
+  /* Images : affichées dans une page à part, ajustées à la largeur, directement depuis le bucket
+     (pas de téléchargement en mémoire ni de CORS) ; un message clair si l'image ne charge pas. */
+  if(mime&&mime.indexOf('image/')===0){
+    const u=String(d.fichier_url).replace(/"/g,'%22');
+    pdfAfficherHtml('<div style="text-align:center"><img alt="" src="'+u+'" style="max-width:100%;height:auto;border-radius:6px" '
+      +'onerror="this.outerHTML=\'<p>Image introuvable ou illisible. Utiliser « Ouvrir dans un onglet ».</p>\'"></div>',
+      nom,d.fichier_url,'');
     return;
   }
   if(!mime){
