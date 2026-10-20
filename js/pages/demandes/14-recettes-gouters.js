@@ -44,16 +44,20 @@ function rcAllergenesDeTexte(txt){
   return Object.keys(RC_MOTS).filter(function(k){return RC_MOTS[k].test(t);});
 }
 
+/* Direction : tout ; référent : créer, et modifier ses propres recettes. */
+function rcPeutCreer(){return isDirection||currentProfile?.role==='referent';}
+function rcPeutModifier(r){return isDirection||(currentProfile?.role==='referent'&&(!r||!r.id||(!!r.par&&r.par===currentUser?.id)));}
+
 async function rcCharger(force){
   if(rcCache&&!force)return rcCache;
   const map={};
   try{
     const[r1,r2]=await Promise.all([
-      sb.from('recettes').select('id,nom,nb_enfants_ref,etapes').order('nom'),
+      sb.from('recettes').select('id,nom,nb_enfants_ref,etapes,created_by').order('nom'),
       sb.from('recettes_ingredients').select('recette_id,ordre,nom,quantite,unite,allergenes').order('ordre')
     ]);
     if(r1.error)throw r1.error;if(r2.error)throw r2.error;
-    (r1.data||[]).forEach(function(r){map[r.id]={id:r.id,nom:r.nom,nb:r.nb_enfants_ref||10,etapes:r.etapes||'',ings:[]};});
+    (r1.data||[]).forEach(function(r){map[r.id]={id:r.id,nom:r.nom,nb:r.nb_enfants_ref||10,etapes:r.etapes||'',par:r.created_by||null,ings:[]};});
     (r2.data||[]).forEach(function(i){if(map[i.recette_id])map[i.recette_id].ings.push({nom:i.nom,q:+i.quantite||0,u:i.unite||'g',al:i.allergenes||[]});});
   }catch(err){console.warn('[Recettes] lecture',err);}
   rcCache=map;
@@ -131,13 +135,13 @@ async function rcOuvrirBibliotheque(){
   ov.innerHTML='<div class="modal" style="max-width:520px;width:100%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">'
     +'<h3 style="margin:0"><i class="ti ti-book"></i> Recettes des goûters</h3>'
     +'<button class="btn-cancel" onclick="closeModal(\'modal-recettes-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
-    +'<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Recettes communes à toutes les crèches'+(isDirection?'. Vous pouvez les créer et les modifier.':' (lecture seule : la direction les modifie).')+'</p>'
+    +'<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Recettes communes à toutes les crèches'+(isDirection?'. Vous pouvez les créer et les modifier.':'. Vous pouvez en créer et modifier celles que vous avez créées (les autres sont en lecture seule).')+'</p>'
     +(liste.length?liste.map(function(r){
       return'<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px">'
         +'<div><strong>'+escHtml(r.nom)+'</strong> <span style="font-size:11px;color:var(--muted)">pour '+r.nb+' enfants</span><div>'+rcAllergenesHtml(rcAllergenesRecette(r))+'</div></div>'
-        +'<button class="btn-cancel" data-rc="'+escHtml(r.id)+'">'+(isDirection?'Modifier':'Voir')+'</button></div>';
+        +'<button class="btn-cancel" data-rc="'+escHtml(r.id)+'">'+(rcPeutModifier(r)?'Modifier':'Voir')+'</button></div>';
     }).join(''):'<div class="empty-state"><i class="ti ti-book"></i><p>Aucune recette pour l’instant.</p></div>')
-    +(isDirection?'<div style="margin-top:10px"><button class="btn-primary" id="rc-nouvelle"><i class="ti ti-plus"></i> Nouvelle recette</button></div>':'')
+    +(rcPeutCreer()?'<div style="margin-top:10px"><button class="btn-primary" id="rc-nouvelle"><i class="ti ti-plus"></i> Nouvelle recette</button></div>':'')
     +'</div>';
   document.body.appendChild(ov);
   Array.prototype.forEach.call(ov.querySelectorAll('[data-rc]'),function(b){b.onclick=function(){rcEditer(b.dataset.rc);};});
@@ -148,7 +152,7 @@ async function rcOuvrirBibliotheque(){
 async function rcEditer(id,apres){
   const recettes=await rcCharger();
   const r=id&&recettes[id]?recettes[id]:{id:null,nom:'',nb:10,etapes:'',ings:[]};
-  const edit=isDirection;
+  const edit=rcPeutModifier(r);
   let ov=document.getElementById('modal-recette-edit-wrap');if(ov)ov.remove();
   ov=document.createElement('div');ov.className='overlay';ov.id='modal-recette-edit-wrap';
   ov.onclick=function(ev){if(ev.target===ov)closeModal('modal-recette-edit-wrap');};
@@ -238,8 +242,8 @@ async function rcChoisir(cb){
   ov.onclick=function(ev){if(ev.target===ov)closeModal('modal-recette-choix-wrap');};
   ov.innerHTML='<div class="modal" style="max-width:420px;width:100%"><h3 style="margin:0 0 8px"><i class="ti ti-book"></i> Choisir une recette</h3>'
     +(liste.length?liste.map(function(r){return'<button class="btn-cancel" data-rc="'+escHtml(r.id)+'" style="display:block;width:100%;text-align:left;margin-bottom:6px"><strong>'+escHtml(r.nom)+'</strong> '+rcAllergenesHtml(rcAllergenesRecette(r))+'</button>';}).join('')
-      :'<p style="font-size:13px;color:var(--muted)">Aucune recette. '+(isDirection?'Créez-en une ci-dessous.':'La direction doit d’abord en créer.')+'</p>')
-    +(isDirection?'<button class="btn-primary" id="rcc-new"><i class="ti ti-plus"></i> Nouvelle recette</button> ':'')
+      :'<p style="font-size:13px;color:var(--muted)">Aucune recette. '+(rcPeutCreer()?'Créez-en une ci-dessous.':'La direction doit d’abord en créer.')+'</p>')
+    +(rcPeutCreer()?'<button class="btn-primary" id="rcc-new"><i class="ti ti-plus"></i> Nouvelle recette</button> ':'')
     +'<button class="btn-cancel" onclick="closeModal(\'modal-recette-choix-wrap\')">Annuler</button></div>';
   document.body.appendChild(ov);
   Array.prototype.forEach.call(ov.querySelectorAll('[data-rc]'),function(b){b.onclick=function(){closeModal('modal-recette-choix-wrap');cb(recettes[b.dataset.rc]);};});
