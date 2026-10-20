@@ -2,8 +2,17 @@
    les pages, page-flip pour tourner). Les pages sont dessinées à la demande, autour de celle
    qui est lue. */
 (function(){
-  const PDF = 'projet-pedagogique-koalakids.pdf';
   const $ = id => document.getElementById(id);
+  /* Sans paramètre : le projet pédagogique. Depuis Documents : ?f=<url du PDF>&t=<titre>. */
+  const params = new URLSearchParams(location.search);
+  const f = params.get('f');
+  const PDF = f && /^https:\/\//i.test(f) ? f : 'projet-pedagogique-koalakids.pdf';
+  const titre = params.get('t');
+  if (titre) {
+    document.title = 'Koala Kids — ' + titre;
+    $('titre').textContent = titre;
+  }
+  $('btnTelecharger').href = PDF;
   const etat = $('etat'), etatTxt = $('etatTxt');
 
   function echec(){

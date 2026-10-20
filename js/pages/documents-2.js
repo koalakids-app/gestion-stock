@@ -12,6 +12,7 @@ principe: `
 <ul>
   <li>Le projet pédagogique se feuillette comme un livre, sans compte, à l’adresse <strong>projet-pedagogique.html</strong> (même dossier que cette page) : flèches, curseur de page, clavier, plein écran, et bouton Télécharger. Ce lien s’envoie tel quel aux familles et aux partenaires.</li>
   <li>Pour le mettre à jour, remplacer le fichier <strong>projet-pedagogique-koalakids.pdf</strong> du dépôt.</li>
+  <li>Tout document <strong>PDF</strong> de la bibliothèque (par exemple dans la catégorie Pédagogie) a un bouton <strong>📖 Lire comme un livre</strong> : il ouvre le même livre à feuilleter.</li>
 </ul>
 <div class="st">🔍 Retrouver un document</div>
 <ul>
