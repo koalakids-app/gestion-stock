@@ -37,7 +37,7 @@ if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https:/
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',activeMcmIncFilter='all',incModalCategory='enfant',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='',mcmWeekOffset=0,mcmActiveTab='incidents',mcmMenusCache=[],mcmAvisCache={},mcmSyntheseOpen=false;
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[],cacheEtablissements=[],cacheReseauFermetures=[],cacheDemandesMasquees=[],cacheDemandesTraitees=[],cacheHeuresValidations=[],cacheCommandes=[],cacheDocuments=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[],cacheEtablissements=[],cacheReseauFermetures=[],cacheReseauNotifCfg=null,cacheDemandesMasquees=[],cacheDemandesTraitees=[],cacheHeuresValidations=[],cacheCommandes=[],cacheDocuments=[];
 
 // creches.name porte la raison sociale complète ("Koalakids Toulon Brunet") ;
 // les champs "lieu" en texte libre (événements, incidents, imports de planning)
@@ -196,6 +196,7 @@ async function loadAllData(){
   try{
     const rc=await dbSelect('reseau_config');
     const cfg=(rc&&rc[0]&&rc[0].config)||{};
+    cacheReseauNotifCfg=cfg;
     cacheReseauFermetures=Array.isArray(cfg.jours_fermeture_reseau)?cfg.jours_fermeture_reseau:[];
   }catch(e){console.warn('[loadAllData] reseau_config',e);cacheReseauFermetures=[];}
   // Salariés — non bloquant (alimente aussi le sélecteur de prénom du planning équipe)
@@ -422,6 +423,12 @@ function playNotifSound(){
   }catch(e){}
 }
 function showInAppNotif(title,body,section,cible){
+  /* Règle de silence du réseau (heures, week-end, férié) : pas de son ni de carte à l'écran,
+     la notification reste consultable dans la cloche. */
+  if(cacheReseauNotifCfg&&typeof notifHorsSilence==='function'&&!notifHorsSilence(cacheReseauNotifCfg)){
+    notifBellAjouter(title,body,section,cible);
+    return;
+  }
   playNotifSound();
   let wrap=document.getElementById('inapp-notif-wrap');
   if(!wrap){
