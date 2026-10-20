@@ -2,17 +2,43 @@
    les pages, page-flip pour tourner). Les pages sont dessinées à la demande, autour de celle
    qui est lue. */
 (function(){
-  const PDF = 'projet-pedagogique-koalakids.pdf';
   const $ = id => document.getElementById(id);
+  /* Sans paramètre : le projet pédagogique. Depuis Documents : ?f=<url du PDF>&t=<titre>. */
+  const params = new URLSearchParams(location.search);
+  const f = params.get('f');
+  const PDF = f && /^https:\/\//i.test(f) ? f : 'projet-pedagogique-koalakids.pdf';
+  const titre = params.get('t');
+  if (titre) {
+    document.title = 'Koala Kids — ' + titre;
+    $('titre').textContent = titre;
+  }
+  $('btnTelecharger').href = PDF;
   const etat = $('etat'), etatTxt = $('etatTxt');
 
-  function echec(){
+  let ouvert = false;
+  function echec(e){
+    if (ouvert) return;
+    etat.hidden = false;
     etat.querySelector('.big').textContent = '📄';
-    etatTxt.innerHTML = 'Le livre ne peut pas s\'afficher ici.<br><a href="'+PDF+'" target="_blank" rel="noopener">Ouvrir le document PDF</a>';
+    etatTxt.innerHTML = 'Le livre ne peut pas s\'afficher ici.<br><a href="'+PDF+'" target="_blank" rel="noopener">Ouvrir le document PDF</a>'
+      + (e && e.message ? '<br><small style="opacity:.6">'+String(e.message).replace(/</g,'&lt;')+'</small>' : '');
   }
+  /* Si rien ne s'affiche au bout de 25 s, on propose le PDF plutôt que d'attendre sans fin. */
+  const garde = setTimeout(() => echec(new Error('Délai dépassé')), 25000);
   if (!window.pdfjsLib || !window.St) { echec(); return; }
 
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  /* Le worker vient d'un autre site : on le récupère et on le sert depuis un blob de la page,
+     ce qui évite les refus de certains navigateurs pour un worker d'une autre origine. */
+  async function preparerWorker(){
+    try {
+      const r = await fetch(WORKER);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([await r.text()], { type: 'text/javascript' }));
+    } catch (e) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER;
+    }
+  }
 
   let pdf, flip, total = 0, ratio = 1.414;
   const imgs = [];            // <img> de chaque page
@@ -95,11 +121,12 @@
     };
     if (!document.documentElement.requestFullscreen) $('btnPlein').hidden = true;
 
+    ouvert = true; clearTimeout(garde);
     etat.hidden = true;
     $('btnPrev').hidden = $('btnNext').hidden = $('barre').hidden = false;
   }
 
-  pdfjsLib.getDocument(PDF).promise.then(async doc => {
+  preparerWorker().then(() => pdfjsLib.getDocument(PDF).promise).then(async doc => {
     pdf = doc; total = doc.numPages;
     const p1 = await doc.getPage(1);
     const v = p1.getViewport({ scale: 1 });
