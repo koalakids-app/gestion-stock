@@ -141,7 +141,7 @@ function vacRenderListe(){
   el.innerHTML = enfants.map(e=>{
     const creche = cacheCreches.find(c=>c.id===e.creche_id);
     let alertCount = 0;
-    VAC_SCHEMA.forEach(v=>v.doses.forEach((d,di)=>{const s=vacDoseStatus(e,v,di);if(s.state==='retard'||s.state==='proche')alertCount++;}));
+    VAC_SCHEMA.forEach(v=>v.doses.forEach((d,di)=>{const s=vacDoseStatus(e,v,di);if(s.state==='retard')alertCount++;}));
     const ageMs = Date.now() - new Date(e.dob).getTime();
     const ageMois = Math.floor(ageMs/(1000*60*60*24*30.44));
     const ageStr = ageMois < 24 ? ageMois+' mois' : Math.floor(ageMois/12)+' ans '+(ageMois%12)+' mois';
@@ -404,7 +404,7 @@ function vacRenderAlertes(){
     VAC_SCHEMA.forEach(v=>{
       v.doses.forEach((dose,di)=>{
         const s = vacDoseStatus(e,v,di);
-        if(s.state==='retard'||s.state==='proche'){
+        if(s.state==='retard'){
           alertes.push({enfant:e, creche, vacc:v, doseIdx:di, dose, s});
         }
       });

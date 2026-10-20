@@ -744,7 +744,7 @@ vaccinations: `
   <li><strong style="color:#999">Contour gris</strong> : pas encore dû</li>
 </ul>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🔔 Alertes et calendrier</div>
-<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Les onglets <strong>Alertes</strong> et <strong>Calendrier</strong> listent les vaccins en retard ou à venir dans les 90 jours. Le bouton <strong>Marquer fait</strong> y fonctionne comme les pastilles.</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Les onglets <strong>Alertes</strong> et <strong>Calendrier</strong> : l’onglet Alertes ne liste que les vaccins en retard (plus d’alerte pour les vaccins à venir) ; le Calendrier montre toujours les échéances à venir. Le bouton <strong>Marquer fait</strong> y fonctionne comme les pastilles.</div>
 <div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A;margin-bottom:18px">
   ⚠ Un enfant n'apparaît ici que si sa <strong>date de naissance</strong> est renseignée. Ajoutez-la en cliquant sur son nom dans la feuille de présence.
 </div>
