@@ -7,6 +7,10 @@
   const params = new URLSearchParams(location.search);
   const f = params.get('f');
   const PDF = f && /^https:\/\//i.test(f) ? f : 'projet-pedagogique-koalakids.pdf';
+  /* Le projet pédagogique est fourni en images pré-calculées (projet-pedagogique-pages/p-001.jpg…) :
+     aucun moteur PDF à faire tourner. Les autres PDF (Documents) passent par pdf.js. */
+  const IMAGES = PDF === 'projet-pedagogique-koalakids.pdf';
+  const NB_PAGES = 121;
   const titre = params.get('t');
   if (titre) {
     document.title = 'Koala Kids — ' + titre;
@@ -25,7 +29,7 @@
   }
   /* Si rien ne s'affiche au bout de 25 s, on propose le PDF plutôt que d'attendre sans fin. */
   const garde = setTimeout(() => echec(new Error('Délai dépassé')), 25000);
-  if (!window.pdfjsLib || !window.St) { echec(); return; }
+  if (!window.St || (!IMAGES && !window.pdfjsLib)) { echec(); return; }
 
   /* Le moteur de lecture est chargé dans la page (pas de Worker) : plus lent à l'ouverture,
      mais il ne dépend d'aucun réglage du navigateur. */
@@ -48,6 +52,12 @@
   async function dessiner(n){                 // n = index 0
     if (n < 0 || n >= total || etatPage[n]) return;
     etatPage[n] = 1;
+    if (IMAGES) {
+      imgs[n].onerror = () => imgs[n].parentNode.setAttribute('data-erreur', 'Page ' + (n + 1) + ' : image introuvable');
+      imgs[n].src = 'projet-pedagogique-pages/p-' + String(n + 1).padStart(3, '0') + '.jpg';
+      etatPage[n] = 2;
+      return;
+    }
     try {
       const page = await avec(pdf.getPage(n + 1), 20000);
       const base = page.getViewport({ scale: 1 });
@@ -131,6 +141,12 @@
     $('btnPrev').hidden = $('btnNext').hidden = $('barre').hidden = false;
   }
 
+  if (IMAGES) {
+    total = NB_PAGES; ratio = 842 / 596;
+    etape = 'mise en page du livre';
+    try { monter(); } catch (e) { echec(e); }
+    return;
+  }
   etape = 'moteur de lecture';
   chargerMoteur().then(() => { etape = 'ouverture du PDF'; return pdfjsLib.getDocument(PDF).promise; }).then(async doc => {
     pdf = doc; total = doc.numPages; etape = 'première page';
