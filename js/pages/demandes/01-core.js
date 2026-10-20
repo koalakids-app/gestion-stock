@@ -598,7 +598,7 @@ function detecterNouveautesEtNotifier(avant){
    on rattrape les documents des 3 derniers jours. */
 let _docsVusFait=false;
 function detecterNouveauxDocuments(avant){
-  const cle='koala_docs_vus_'+(currentProfile?.id||'anon');
+  const cle='koala_docs_vus2_'+(currentProfile?.id||'anon');
   let vus=null;
   try{vus=localStorage.getItem(cle);}catch(e){}
   const premiereVisite=!vus;
