@@ -325,7 +325,7 @@ sauvegardes: `
     <span style="color:var(--ink3)">Demandes terrain, incidents, présences, planning, directeurs/trices techniques, couches du jour qui alimentent le stock de couches.</span>
   </div>
 </div>
-<div style="font-size:13px;color:var(--ink2)">Utilisez le bouton <strong>← Accueil</strong> en haut à gauche pour revenir au portail à tout moment.</div>`
+<div style="font-size:13px;color:var(--ink2)">Utilisez le bouton <strong>Portail</strong> pour revenir au portail à tout moment.</div>`
 
 };
 
