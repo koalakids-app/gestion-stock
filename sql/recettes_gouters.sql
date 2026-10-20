@@ -7,7 +7,7 @@
 --    pour `nb_enfants_ref` enfants ; chaque ingrédient porte ses allergènes
 --    (codes : gluten, crustaces, oeuf, poisson, arachide, soja, lait,
 --    fruits_coque, celeri, moutarde, sesame, sulfites, lupin, mollusques).
---    Lecture : tout référent ; écriture : direction.
+--    Lecture : tout référent ; écriture : direction, et référent pour ses propres recettes (sql/recettes_referents.sql).
 --  * gouters_creche_effectifs : nombre d'enfants au goûter par jour, séparés
 --    « moyens » (6-18 mois) et « grands » (base du calcul des quantités et du
 --    récapitulatif de commande sur 2 semaines).
