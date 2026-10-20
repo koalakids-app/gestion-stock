@@ -73,7 +73,12 @@ Deno.serve(async (req) => {
   // Origine inconnue (www., aperçu, localhost…) : on reste sur l'origine de la
   // page, sinon start_url/shortcuts pointent ailleurs et le navigateur les
   // ignore (« should be same origin as document »).
-  const appUrl = (org?.app_url || origine || DEFAUT.app_url).replace(/\/+$/, '');
+  // ?base= : dossier racine de l'app tel que la page le connaît (hébergement
+  // sous un sous-chemin, ex. github.io/gestion-stock) — accepté seulement s'il
+  // reste sur l'origine de la requête.
+  const baseDemandee = new URL(req.url).searchParams.get('base') || '';
+  const baseOk = origine && (baseDemandee === origine || baseDemandee.startsWith(origine + '/')) ? baseDemandee : null;
+  const appUrl = (org?.app_url || baseOk || origine || DEFAUT.app_url).replace(/\/+$/, '');
   const themeColor = org?.couleur_secondaire || DEFAUT.couleur_secondaire;
   const logoUrl = org?.logo_url || DEFAUT.logo_url;
 

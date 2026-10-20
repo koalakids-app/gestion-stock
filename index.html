@@ -15,7 +15,10 @@
 // via js/branding.js. Elle réutilise donc la même résolution par origine que
 // le manifest.json dynamique, en lisant ce même document une fois de plus
 // côté JS pour en tirer le nom/couleur/logo affichés sur cette page.
-fetch(document.getElementById('dynamic-manifest').href)
+const manifestLien = document.getElementById('dynamic-manifest');
+// Dossier de l'app tel que cette page le voit (utile sous un sous-chemin).
+manifestLien.href += '?base=' + encodeURIComponent(new URL('.', location.href).href.replace(/\/+$/, ''));
+fetch(manifestLien.href)
   .then(r => r.ok ? r.json() : Promise.reject())
   .then(m => {
     document.addEventListener('DOMContentLoaded', () => {

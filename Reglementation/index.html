@@ -10,7 +10,10 @@
      repli sur manifest.json si elle est injoignable, comme index.html à la racine. -->
 <link rel="manifest" href="https://juyrceadazrovlitxceb.supabase.co/functions/v1/manifest?app=reglementation" id="dynamic-manifest">
 <script>
-fetch(document.getElementById('dynamic-manifest').href)
+const manifestLien = document.getElementById('dynamic-manifest');
+// Racine de l'app (dossier parent de Reglementation/), utile sous un sous-chemin.
+manifestLien.href += '&base=' + encodeURIComponent(new URL('..', location.href).href.replace(/\/+$/, ''));
+fetch(manifestLien.href)
   .then(r => r.ok ? r.json() : Promise.reject())
   .then(m => {
     if (m._icon_192) document.querySelector('link[rel="apple-touch-icon"]').href = m._icon_192;
