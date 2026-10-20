@@ -127,6 +127,7 @@
     $('btnPrev').onclick = () => flip.flipPrev();
     $('btnNext').onclick = () => flip.flipNext();
     document.addEventListener('keydown', e => {
+      if (e.target && e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
       if (e.key === 'ArrowLeft') flip.flipPrev();
       else if (e.key === 'ArrowRight') flip.flipNext();
     });
@@ -164,6 +165,54 @@
     $('lpPlus').onclick = () => { const i = ZOOMS.indexOf(zoom); if (i < ZOOMS.length - 1) { zoom = ZOOMS[i + 1]; lpAfficher(); } };
     $('lpMoins').onclick = () => { const i = ZOOMS.indexOf(zoom); if (i > 0) { zoom = ZOOMS[i - 1]; lpAfficher(); } };
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('loupe').hidden) lpFermer(); });
+
+    /* Recherche par mot : texte de chaque page (projet-pedagogique-texte.json), chargé à la première recherche.
+       Sans accents ni majuscules ; un résultat par page, qui ouvre le livre à cette page. */
+    if (IMAGES) {
+      let textes = null, norm = null;
+      const sansAccent = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[’']/g, ' ');
+      const esc = t => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+      const charger = async () => {
+        if (textes) return;
+        $('rechInfo').textContent = 'Chargement du texte…';
+        const r = await fetch('projet-pedagogique-texte.json');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        textes = await r.json();
+        norm = textes.map(sansAccent);
+      };
+      const chercher = () => {
+        const q = sansAccent($('rechQ').value).trim();
+        const liste = $('rechListe'); liste.innerHTML = '';
+        if (q.length < 2) { $('rechInfo').textContent = 'Tapez au moins 2 lettres.'; return; }
+        const mots = q.split(/\s+/);
+        const trouvees = [];
+        norm.forEach((t, i) => { if (mots.every(m => t.includes(m))) trouvees.push(i); });
+        $('rechInfo').textContent = trouvees.length
+          ? trouvees.length + ' page' + (trouvees.length > 1 ? 's' : '') + ' trouvée' + (trouvees.length > 1 ? 's' : '') + ' — touchez une page pour l\'ouvrir'
+          : 'Aucun résultat pour « ' + $('rechQ').value.trim() + ' ».';
+        trouvees.slice(0, 80).forEach(i => {
+          const t = textes[i], tn = norm[i];
+          const pos = Math.max(0, tn.indexOf(mots[0]));
+          const deb = Math.max(0, pos - 60), fin = Math.min(t.length, pos + 110);
+          let extrait = esc(t.slice(deb, fin));
+          mots.forEach(m => { extrait = extrait.replace(new RegExp('(' + m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'), '<mark>$1</mark>'); });
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'res';
+          b.innerHTML = '<b>Page ' + (i + 1) + '</b><span>' + (deb > 0 ? '… ' : '') + extrait + (fin < t.length ? ' …' : '') + '</span>';
+          b.onclick = () => { $('rech').hidden = true; flip.turnToPage(i); majBarre(i); autour(i); };
+          liste.appendChild(b);
+        });
+      };
+      let delai;
+      $('btnRecherche').hidden = false;
+      $('btnRecherche').onclick = async () => {
+        $('rech').hidden = false; $('rechQ').focus();
+        try { await charger(); chercher(); } catch (e) { $('rechInfo').textContent = 'Recherche indisponible (' + e.message + ').'; }
+      };
+      $('rechQ').oninput = () => { clearTimeout(delai); delai = setTimeout(() => { if (textes) chercher(); }, 200); };
+      $('rechFermer').onclick = () => { $('rech').hidden = true; };
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('rech').hidden) $('rech').hidden = true; });
+    }
 
     ouvert = true; clearTimeout(garde);
     etat.hidden = true;
