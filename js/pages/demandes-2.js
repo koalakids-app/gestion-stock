@@ -523,7 +523,7 @@ demandes: `
   <li>Filtrez par <strong>crèche</strong> via les onglets en haut de la liste — les messages directs sans crèche apparaissent dans l'onglet <strong>Toutes</strong> (admins) ou dans votre propre liste (directeurs/trices techniques)</li>
 </ol>
 <div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A">
-  ⚠ Les demandes <strong>urgentes</strong> apparaissent en tête de liste avec une bordure rouge. Un badge de notification s'affiche dans la navigation.
+  ⚠ Les demandes <strong>urgentes</strong> apparaissent en tête de liste avec une bordure rouge. Un badge de notification s'affiche dans la navigation. La cloche de l'en-tête garde aussi la trace des <strong>nouveaux documents</strong> ajoutés dans Documents (y compris ceux arrivés quand l'application était fermée) : un clic ouvre Documents.
 </div>`,
 
 incidents: `

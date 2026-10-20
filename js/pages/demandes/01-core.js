@@ -37,7 +37,7 @@ if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https:/
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 let currentUser=null,currentProfile=null,isDirection=false;
 let activeCrecheId=null,activeFilter='all',activeIncFilter='all',activeMcmIncFilter='all',incModalCategory='enfant',editingRefId=null,editingCrecheId=null,editingEnfantId=null,weekOffset=0,currentPresenceSlot='gantt',searchTerm='',mcmWeekOffset=0,mcmActiveTab='incidents',mcmMenusCache=[],mcmAvisCache={},mcmSyntheseOpen=false;
-let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[],cacheEtablissements=[],cacheReseauFermetures=[],cacheDemandesMasquees=[],cacheDemandesTraitees=[],cacheHeuresValidations=[],cacheCommandes=[];
+let cacheCreches=[],cacheDemandes=[],cacheReferents=[],cacheIncidents=[],cacheEnfants=[],cacheEvenements=[],cacheMessages=[],cacheConsignesLues=[],cacheEmployes=[],cachePartenaires=[],cacheEtablissements=[],cacheReseauFermetures=[],cacheDemandesMasquees=[],cacheDemandesTraitees=[],cacheHeuresValidations=[],cacheCommandes=[],cacheDocuments=[];
 
 // creches.name porte la raison sociale complète ("Koalakids Toulon Brunet") ;
 // les champs "lieu" en texte libre (événements, incidents, imports de planning)
@@ -183,6 +183,12 @@ async function loadAllData(){
   // détecter les nouvelles commandes et notifier (cf. detecterNouveautesEtNotifier),
   // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
   try{cacheCommandes=await dbSelect('commandes');}catch(e){console.warn('[loadAllData] commandes',e);cacheCommandes=[];}
+  // Documents (page Documents) — colonnes d'affichage seulement, pour signaler les nouveaux dans la cloche
+  // (cf. detecterNouveautesEtNotifier). Non bloquant.
+  try{
+    const{data:docs}=await sb.from('documents_koala').select('id,titre,creche_id,created_by,created_at').eq('actif',true);
+    cacheDocuments=docs||[];
+  }catch(e){console.warn('[loadAllData] documents',e);cacheDocuments=[];}
   // Jours de fermeture (Paramètres/Fonctionnement) — propres à chaque crèche et
   // ceux du réseau entier. Non bloquant : sert seulement à signaler les jours
   // fermés sur le planning et la feuille de présence.
@@ -508,6 +514,7 @@ function notifBellOuvrir(id){
   notifBellMarquerLu(id);closeNotifBell();
   const c=n.cible||{};
   if(n.section==='stock'){window.location.href='stock.html';return;}
+  if(n.section==='documents'){window.location.href='documents.html';return;}
   if(!n.section)return;
   showMain(n.section);
   try{
@@ -582,6 +589,29 @@ function detecterNouveautesEtNotifier(avant){
       showInAppNotif('Nouvelle commande',(c.fourn?c.fourn+' — ':'')+(c.creche||''),'stock');
     }
   }
+  detecterNouveauxDocuments(avant);
+}
+/* Nouveaux documents (page Documents) : signalés dans la cloche comme le reste. Au premier passage de la
+   session, on rattrape aussi ceux ajoutés depuis la dernière visite (poste fermé quand le document est
+   arrivé) ; la date de dernière vérification est gardée par référent·e dans le navigateur. Un document
+   propre à une autre crèche n'est pas signalé (la direction les voit tous). */
+let _docsVusFait=false;
+function detecterNouveauxDocuments(avant){
+  const cle='koala_docs_vus_'+(currentProfile?.id||'anon');
+  let vus=null;
+  try{vus=localStorage.getItem(cle);}catch(e){}
+  const rattrape=!_docsVusFait;
+  _docsVusFait=true;
+  const nouveaux=cacheDocuments.filter(d=>
+    d.created_by!==currentUser?.id
+    &&(!d.creche_id||isDirection||d.creche_id===currentProfile?.creche_id)
+    &&(!avant.documents.has(d.id)||(rattrape&&vus&&String(d.created_at)>vus)));
+  nouveaux.slice(0,3).forEach(d=>showInAppNotif('Nouveau document',d.titre||'','documents',{type:'document',id:d.id}));
+  if(nouveaux.length>3)showInAppNotif('Nouveaux documents','+ '+(nouveaux.length-3)+' autre(s) dans Documents','documents',{type:'document'});
+  try{
+    const dernier=cacheDocuments.reduce((m,d)=>String(d.created_at)>m?String(d.created_at):m,vus||'');
+    if(dernier)localStorage.setItem(cle,dernier);
+  }catch(e){}
 }
 function capturerAvantSync(){
   return{
@@ -589,7 +619,8 @@ function capturerAvantSync(){
     statutsDemandes:new Map(cacheDemandes.map(d=>[d.id,d.status])),
     messages:new Set(cacheMessages.map(m=>m.id)),
     evenements:new Set(cacheEvenements.map(e=>e.id)),
-    commandes:new Set(cacheCommandes.map(c=>c.id))
+    commandes:new Set(cacheCommandes.map(c=>c.id)),
+    documents:new Set(cacheDocuments.map(d=>d.id))
   };
 }
 
