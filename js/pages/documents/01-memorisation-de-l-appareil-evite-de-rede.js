@@ -354,6 +354,7 @@ function installerRetourEnfant(){
     fleche.removeAttribute('href');
     fleche.style.cursor='pointer';
     fleche.title='Revenir au dossier de l\u2019enfant';
+    fleche.innerHTML='<i class="ti ti-arrow-left"></i> Dossier';
     fleche.onclick=returnToEnfant;
   }
 }
@@ -383,6 +384,7 @@ function installerRetourEmploye(){
     fleche.removeAttribute('href');
     fleche.style.cursor='pointer';
     fleche.title='Revenir à la fiche collaborateur/trice';
+    fleche.innerHTML='<i class="ti ti-arrow-left"></i> Fiche';
     fleche.onclick=returnToEmploye;
   }
 }
