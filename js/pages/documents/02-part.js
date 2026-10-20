@@ -1131,3 +1131,12 @@ const CTRL_SCHEMA = [
    {id:"co_autres", l:"Autres", t:"textarea", lignes:12},
  ]},
 ];
+
+/* Lien public du projet pédagogique (livre), à envoyer sans compte. */
+function copierLienLivre(){
+  const url=new URL('projet-pedagogique.html',location.href).href;
+  const ok=()=>toast('Lien copié : '+url);
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(ok,()=>window.prompt('Copier ce lien :',url));
+  }else window.prompt('Copier ce lien :',url);
+}
