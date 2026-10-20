@@ -3,15 +3,20 @@
    qui est lue. */
 (function(){
   const $ = id => document.getElementById(id);
-  /* Sans paramètre : le projet pédagogique. Depuis Documents : ?f=<url du PDF>&t=<titre>. */
+  /* Livres fournis en images pré-calculées + index de recherche (tools/projet-pedagogique-generer.py) :
+     aucun moteur PDF à faire tourner. Sans paramètre : le projet pédagogique ; ?livre=socle : le socle.
+     Les autres PDF (Documents) : ?f=<url du PDF>&t=<titre>, lus avec pdf.js. */
+  const LIVRES = {
+    'projet-pedagogique': { titre: 'Projet pédagogique', pdf: 'projet-pedagogique-koalakids.pdf', pages: 'projet-pedagogique-pages/p-', mots: 'projet-pedagogique-mots.json', nb: 121 },
+    'socle': { titre: 'Socle national de connaissances', pdf: 'socle-connaissances.pdf', pages: 'socle-pages/p-', mots: 'socle-mots.json', nb: 44 }
+  };
   const params = new URLSearchParams(location.search);
   const f = params.get('f');
-  const PDF = f && /^https:\/\//i.test(f) ? f : 'projet-pedagogique-koalakids.pdf';
-  /* Le projet pédagogique est fourni en images pré-calculées (projet-pedagogique-pages/p-001.jpg…) :
-     aucun moteur PDF à faire tourner. Les autres PDF (Documents) passent par pdf.js. */
-  const IMAGES = /(^|\/)projet-pedagogique-koalakids\.pdf$/.test(PDF);
-  const NB_PAGES = 121;
-  const titre = params.get('t');
+  const livre = LIVRES[params.get('livre')] || (f && /^https:\/\//i.test(f) ? null : LIVRES['projet-pedagogique']);
+  const IMAGES = !!livre;
+  const PDF = livre ? livre.pdf : f;
+  const NB_PAGES = livre ? livre.nb : 0;
+  const titre = params.get('t') || (livre && livre.titre);
   if (titre) {
     document.title = 'Koala Kids — ' + titre;
     $('titre').textContent = titre;
@@ -54,7 +59,7 @@
     etatPage[n] = 1;
     if (IMAGES) {
       imgs[n].onerror = () => imgs[n].parentNode.setAttribute('data-erreur', 'Page ' + (n + 1) + ' : image introuvable');
-      imgs[n].src = 'projet-pedagogique-pages/p-' + String(n + 1).padStart(3, '0') + '.jpg';
+      imgs[n].src = livre.pages + String(n + 1).padStart(3, '0') + '.jpg';
       etatPage[n] = 2;
       return;
     }
@@ -98,7 +103,7 @@
   }
 
   function monter(){
-    const livre = $('livre');
+    const livreEl = $('livre');
     for (let i = 0; i < total; i++) {
       const d = document.createElement('div');
       d.className = 'page';
@@ -107,16 +112,16 @@
       im.alt = 'Page ' + (i + 1);
       im.draggable = false;
       d.appendChild(im);
-      livre.appendChild(d);
+      livreEl.appendChild(d);
       imgs.push(im); etatPage.push(0);
     }
-    flip = new St.PageFlip(livre, {
+    flip = new St.PageFlip(livreEl, {
       width: 400, height: Math.round(400 * ratio),
       size: 'stretch', minWidth: 240, maxWidth: 1100, minHeight: 340, maxHeight: 1550,
       showCover: true, maxShadowOpacity: .5, mobileScrollSupport: false,
       usePortrait: true, autoSize: true, flippingTime: 700
     });
-    flip.loadFromHTML(livre.querySelectorAll('.page'));
+    flip.loadFromHTML(livreEl.querySelectorAll('.page'));
     flip.on('flip', e => { majBarre(e.data); autour(e.data); });
     flip.on('changeOrientation', () => majBarre(flip.getCurrentPageIndex()));
     autour(0);
@@ -139,26 +144,39 @@
 
     /* Page en grand (zoom), pour lire le texte sur un petit écran. */
     let lp = 0, zoom = 1;
-    const ZOOMS = [1, 1.5, 2, 3];
+    let motsPage = null, termes = [];          // index de recherche (IMAGES) et mots à surligner
+    const surlignerPage = () => {
+      const couche = $('lpMarques'); couche.innerHTML = '';
+      if (!motsPage || !termes.length) return;
+      motsPage[lp].forEach(w => {
+        const n = w[0].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        if (!termes.some(t => n.includes(t))) return;
+        const m = document.createElement('i');
+        m.style.cssText = 'left:' + (w[1] / 10 - .15) + '%;top:' + (w[2] / 10 - .1) + '%;width:' + (w[3] / 10 + .3) + '%;height:' + (w[4] / 10 + .2) + '%';
+        couche.appendChild(m);
+      });
+    };
+    const ZOOMS = [1, 1.5, 2, 3, 4];
     const lpAfficher = async () => {
       $('lpTxt').textContent = 'Page ' + (lp + 1) + ' / ' + total;
       $('lpPrev').disabled = lp <= 0; $('lpNext').disabled = lp >= total - 1;
       $('lpMoins').disabled = zoom <= ZOOMS[0]; $('lpPlus').disabled = zoom >= ZOOMS[ZOOMS.length - 1];
       const zone = $('lpZone'), im = $('lpImg');
       const largeur = Math.min(zone.clientWidth, (zone.clientHeight || 600) / ratio);
-      im.style.width = Math.round(largeur * zoom) + 'px';
+      $('lpWrap').style.width = Math.round(largeur * zoom) + 'px';
+      surlignerPage();
       dessiner(lp);
       for (let k = 0; k < 40 && !imgs[lp].src; k++) await new Promise(r => setTimeout(r, 250));
       im.src = imgs[lp].src;
       zone.scrollTop = 0;
     };
-    const lpOuvrir = () => {
-      lp = flip.getCurrentPageIndex(); zoom = 1;
+    const lpOuvrir = (page) => {
+      lp = typeof page === 'number' ? page : flip.getCurrentPageIndex(); zoom = 1;
       $('loupe').hidden = false; lpAfficher();
     };
     const lpFermer = () => { $('loupe').hidden = true; try { flip.turnToPage(lp); majBarre(lp); autour(lp); } catch (e) {} };
     $('btnLoupe').hidden = false;
-    $('btnLoupe').onclick = lpOuvrir;
+    $('btnLoupe').onclick = () => lpOuvrir();
     $('lpFermer').onclick = lpFermer;
     $('lpPrev').onclick = () => { if (lp > 0) { lp--; lpAfficher(); } };
     $('lpNext').onclick = () => { if (lp < total - 1) { lp++; lpAfficher(); } };
@@ -166,8 +184,8 @@
     $('lpMoins').onclick = () => { const i = ZOOMS.indexOf(zoom); if (i > 0) { zoom = ZOOMS[i - 1]; lpAfficher(); } };
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('loupe').hidden) lpFermer(); });
 
-    /* Recherche par mot : texte de chaque page (projet-pedagogique-texte.json), chargé à la première recherche.
-       Sans accents ni majuscules ; un résultat par page, qui ouvre le livre à cette page. */
+    /* Recherche par mot : index des mots de chaque page (projet-pedagogique-mots.json), chargé à la première
+       recherche. Sans accents ni majuscules ; un résultat par page, qui ouvre la page en grand avec le mot surligné. */
     if (IMAGES) {
       let textes = null, norm = null;
       const sansAccent = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[’']/g, ' ');
@@ -175,20 +193,22 @@
       const charger = async () => {
         if (textes) return;
         $('rechInfo').textContent = 'Chargement du texte…';
-        const r = await fetch('projet-pedagogique-texte.json');
+        const r = await fetch(livre.mots);
         if (!r.ok) throw new Error('HTTP ' + r.status);
-        textes = await r.json();
+        motsPage = await r.json();
+        textes = motsPage.map(p => p.map(w => w[0]).join(' '));
         norm = textes.map(sansAccent);
       };
       const chercher = () => {
         const q = sansAccent($('rechQ').value).trim();
         const liste = $('rechListe'); liste.innerHTML = '';
-        if (q.length < 2) { $('rechInfo').textContent = 'Tapez au moins 2 lettres.'; return; }
+        if (q.length < 2) { $('rechInfo').textContent = 'Tapez au moins 2 lettres.'; termes = []; return; }
         const mots = q.split(/\s+/);
+        termes = mots;
         const trouvees = [];
         norm.forEach((t, i) => { if (mots.every(m => t.includes(m))) trouvees.push(i); });
         $('rechInfo').textContent = trouvees.length
-          ? trouvees.length + ' page' + (trouvees.length > 1 ? 's' : '') + ' trouvée' + (trouvees.length > 1 ? 's' : '') + ' — touchez une page pour l\'ouvrir'
+          ? trouvees.length + ' page' + (trouvees.length > 1 ? 's' : '') + ' trouvée' + (trouvees.length > 1 ? 's' : '') + ' — touchez une page pour la lire en grand'
           : 'Aucun résultat pour « ' + $('rechQ').value.trim() + ' ».';
         trouvees.slice(0, 80).forEach(i => {
           const t = textes[i], tn = norm[i];
@@ -199,7 +219,7 @@
           const b = document.createElement('button');
           b.type = 'button'; b.className = 'res';
           b.innerHTML = '<b>Page ' + (i + 1) + '</b><span>' + (deb > 0 ? '… ' : '') + extrait + (fin < t.length ? ' …' : '') + '</span>';
-          b.onclick = () => { $('rech').hidden = true; flip.turnToPage(i); majBarre(i); autour(i); };
+          b.onclick = () => { $('rech').hidden = true; lpOuvrir(i); };
           liste.appendChild(b);
         });
       };

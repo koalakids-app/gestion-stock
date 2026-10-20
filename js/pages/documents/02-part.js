@@ -1132,9 +1132,17 @@ const CTRL_SCHEMA = [
  ]},
 ];
 
-/* Lien public du projet pédagogique (livre), à envoyer sans compte. */
-function copierLienLivre(){
-  const url=new URL('projet-pedagogique.html',location.href).href;
+/* Livres à feuilleter (projet-pedagogique.html?livre=…) : documents dont le PDF est reconnu à son nom.
+   Les autres PDF s'ouvrent aussi en livre, mais sans recherche. */
+function livreDocument(url){
+  const u=String(url||'');
+  if(/projet-pedagogique-koalakids\.pdf/i.test(u))return 'projet-pedagogique';
+  if(/socle-national-de-connaissances|socle-connaissances\.pdf/i.test(u))return 'socle';
+  return '';
+}
+/* Lien public d'un livre, à envoyer sans compte. */
+function copierLienLivre(livre){
+  const url=new URL('projet-pedagogique.html'+(livre&&livre!=='projet-pedagogique'?'?livre='+livre:''),location.href).href;
   const ok=()=>toast('Lien copié : '+url);
   if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(url).then(ok,()=>window.prompt('Copier ce lien :',url));
