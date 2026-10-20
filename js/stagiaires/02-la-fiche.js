@@ -159,7 +159,14 @@ async function stgSave(){
     return showBanner('Enregistrement impossible'
       +(window._lastDbError?' : '+window._lastDbError:'')+'.','error');
   }
+  /* L'évaluation se saisit dans la fiche : « Enregistrer » doit la garder aussi, sinon la
+     fermeture de la fiche la fait disparaître. Elle est écrite avant le rechargement. */
+  let evalOk=true;
+  if(!creation&&document.getElementById('stg-eval-appr')&&typeof stgEvalSave==='function'){
+    evalOk=!!(await stgEvalSave());
+  }
   await stgLoad();
+  if(!evalOk)return;
   /* À la création, la fiche reste ouverte : le lien de dépôt, les documents et
      les jours n'existent qu'une fois la personne enregistrée, et c'est là qu'on
      enchaîne. Sur une fiche déjà connue, « Enregistrer » veut dire « j'ai

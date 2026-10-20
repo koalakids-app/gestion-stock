@@ -135,7 +135,10 @@ async function stgLoad(){
     return;
   }
   if(warn)warn.style.display='none';
-  stgCache=r1.data||[];
+  /* Un référent ne voit que les stagiaires de sa crèche (la RLS le garantit déjà ;
+     on le répète ici pour que l'écran ne dépende pas d'une seule barrière). */
+  const mien=currentProfile&&currentProfile.creche_id;
+  stgCache=(r1.data||[]).filter(s=>isDirection||(mien&&String(s.creche_id||'')===String(mien)));
   stgTypes=r2.data||[];
 
   const ids=stgCache.map(s=>s.id);
