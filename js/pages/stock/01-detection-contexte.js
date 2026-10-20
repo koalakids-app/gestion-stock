@@ -157,6 +157,10 @@ const tb = document.getElementById('tableBody');
 
   if (data.length === 0) {
     tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink3)">Aucun article trouvé</td></tr>`;
+    renderPaginationBar('inv-table-materiel', 0, 1, () => {}); // retire l'ancienne barre de pages
+    renderStats();
+    updateCounts();
+    updateInvTabCounts();
     return;
   }
 
@@ -314,6 +318,7 @@ function renderTableConso() {
   if (!tb) return;
   if (data.length === 0) {
     tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink3)">Aucun consommable trouvé</td></tr>`;
+    renderPaginationBar('inv-table-consommable', 0, 1, () => {}); // retire l'ancienne barre de pages
     return;
   }
   // Pagination
