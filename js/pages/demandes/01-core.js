@@ -594,12 +594,15 @@ function detecterNouveautesEtNotifier(avant){
 /* Nouveaux documents (page Documents) : signalés dans la cloche comme le reste. Au premier passage de la
    session, on rattrape aussi ceux ajoutés depuis la dernière visite (poste fermé quand le document est
    arrivé) ; la date de dernière vérification est gardée par référent·e dans le navigateur. Un document
-   propre à une autre crèche n'est pas signalé (la direction les voit tous). */
+   propre à une autre crèche n'est pas signalé (la direction les voit tous). Première visite sur ce navigateur :
+   on rattrape les documents des 3 derniers jours. */
 let _docsVusFait=false;
 function detecterNouveauxDocuments(avant){
-  const cle='koala_docs_vus_'+(currentProfile?.id||'anon');
+  const cle='koala_docs_vus2_'+(currentProfile?.id||'anon');
   let vus=null;
   try{vus=localStorage.getItem(cle);}catch(e){}
+  const premiereVisite=!vus;
+  if(premiereVisite)vus=new Date(Date.now()-3*86400000).toISOString();   // première visite : documents des 3 derniers jours
   const rattrape=!_docsVusFait;
   _docsVusFait=true;
   const nouveaux=cacheDocuments.filter(d=>
@@ -609,7 +612,7 @@ function detecterNouveauxDocuments(avant){
   nouveaux.slice(0,3).forEach(d=>showInAppNotif('Nouveau document',d.titre||'','documents',{type:'document',id:d.id}));
   if(nouveaux.length>3)showInAppNotif('Nouveaux documents','+ '+(nouveaux.length-3)+' autre(s) dans Documents','documents',{type:'document'});
   try{
-    const dernier=cacheDocuments.reduce((m,d)=>String(d.created_at)>m?String(d.created_at):m,vus||'');
+    const dernier=cacheDocuments.reduce((m,d)=>String(d.created_at)>m?String(d.created_at):m,premiereVisite?'':vus);
     if(dernier)localStorage.setItem(cle,dernier);
   }catch(e){}
 }
