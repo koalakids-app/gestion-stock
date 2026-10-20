@@ -759,7 +759,7 @@ async function saveDoc(){
    connexion, les employés ne sont pas notifiés. Échec silencieux : le document est déjà enregistré. */
 async function notifierNouveauDocument(doc){
   try{
-    let rq=sb.from('referents').select('id').not('creche_id','is',null);
+    let rq=sb.from('referents').select('id').eq('role','referent');
     if(doc.creche_id)rq=rq.eq('creche_id',doc.creche_id);
     const refs=((await rq).data||[]).map(r=>r.id).filter(id=>!PROF||id!==PROF.id);
     let emps=[];
