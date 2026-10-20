@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v33';   // v33 : pushsubscriptionchange (réabonnement push automatique)
+const CACHE_NAME = 'stocks-v34';   // v34 : anti pull-to-refresh ; v33 : pushsubscriptionchange (réabonnement push automatique)
 
 self.addEventListener('install', event => {
   event.waitUntil(
