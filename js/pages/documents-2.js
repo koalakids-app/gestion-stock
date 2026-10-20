@@ -10,6 +10,7 @@ principe: `
 </ul>
 <div class="st">📖 Projet pédagogique</div>
 <ul>
+  <li>Le document <strong>Projet pédagogique Koala Kids</strong> est dans la catégorie <strong>Pédagogie</strong> : le bouton <strong>📖</strong> l’ouvre comme un livre, le bouton <strong>🔗</strong> copie le lien public à envoyer.</li>
   <li>Le projet pédagogique se feuillette comme un livre, sans compte, à l’adresse <strong>projet-pedagogique.html</strong> (même dossier que cette page) : flèches, curseur de page, clavier, plein écran, bouton <strong>🔍 Agrandir</strong> (page en grand avec zoom + / −, pratique sur téléphone) et bouton Télécharger. Ce lien s’envoie tel quel aux familles et aux partenaires.</li>
   <li>Pour le mettre à jour, il faut remplacer le PDF <strong>et</strong> régénérer les pages en images (à demander au support technique).</li>
   <li>Tout document <strong>PDF</strong> de la bibliothèque (par exemple dans la catégorie Pédagogie) a un bouton <strong>📖 Lire comme un livre</strong> : il ouvre le même livre à feuilleter.</li>
