@@ -10,9 +10,10 @@ body{font-family:'Nunito',system-ui,sans-serif;background:#2B2740;color:#fff;dis
 .hd img.logo{height:28px;background:#fff;border-radius:8px;padding:3px 8px}
 .hd h1{font-family:'Baloo 2',cursive;font-size:18px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .acts{display:flex;gap:8px}
+#btnPlein,#btnLoupe{background:rgba(255,255,255,.18)}
+#btnTelecharger{background:var(--orange)}
 .bt{font-family:inherit;font-size:13px;font-weight:800;text-decoration:none;color:#fff;background:var(--orange);
   border:0;border-radius:10px;padding:8px 12px;cursor:pointer;white-space:nowrap}
-.bt:last-child{background:rgba(255,255,255,.18)}
 .scene{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:12px 44px}
 .livre{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
 .page{background:#fff;overflow:hidden}
@@ -29,8 +30,21 @@ body{font-family:'Nunito',system-ui,sans-serif;background:#2B2740;color:#fff;dis
   max-width:760px;width:100%;margin:0 auto}
 .barre input{flex:1;accent-color:var(--orange)}
 .pg{font-weight:800;font-size:13px;min-width:92px;text-align:right}
-@media(max-width:560px){.hd h1{font-size:15px}.bt span{display:none}.scene{padding:8px 36px}}
+@media(max-width:560px){.hd h1{font-size:15px}.bt span{display:none}.scene{padding:4px 2px}.fl{width:26px;height:52px;font-size:26px;opacity:.7}}
 .etat[hidden],.fl[hidden],.barre[hidden]{display:none}
 .page[data-erreur]::after{content:attr(data-erreur);position:absolute;left:8px;right:8px;top:50%;transform:translateY(-50%);
   text-align:center;color:#8E8AA8;font-size:12px}
 .page img[src]{position:relative;z-index:1}
+
+/* Page en grand : défilement et zoom pour lire le texte */
+.loupe{position:fixed;inset:0;z-index:20;background:#1B1830;display:flex;flex-direction:column}
+.loupe[hidden]{display:none}
+.loupe-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;padding-top:calc(8px + env(safe-area-inset-top));background:var(--violet)}
+.loupe-bar button{font-family:inherit;font-size:20px;font-weight:800;line-height:1;width:42px;height:38px;border:0;border-radius:10px;
+  background:rgba(255,255,255,.18);color:#fff;cursor:pointer}
+.loupe-bar #lpFermer{background:var(--orange)}
+.loupe-bar button:disabled{opacity:.3}
+.loupe-bar #lpTxt{font-weight:800;font-size:13px;min-width:80px;text-align:center}
+.loupe-bar .sp{flex:1}
+.loupe-zone{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;text-align:center}
+.loupe-zone img{display:block;margin:0 auto;background:#fff;max-width:none}

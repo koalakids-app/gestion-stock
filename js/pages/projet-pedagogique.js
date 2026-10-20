@@ -112,7 +112,7 @@
     }
     flip = new St.PageFlip(livre, {
       width: 400, height: Math.round(400 * ratio),
-      size: 'stretch', minWidth: 240, maxWidth: 700, minHeight: 340, maxHeight: 990,
+      size: 'stretch', minWidth: 240, maxWidth: 1100, minHeight: 340, maxHeight: 1550,
       showCover: true, maxShadowOpacity: .5, mobileScrollSupport: false,
       usePortrait: true, autoSize: true, flippingTime: 700
     });
@@ -135,6 +135,35 @@
       else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
     };
     if (!document.documentElement.requestFullscreen) $('btnPlein').hidden = true;
+
+    /* Page en grand (zoom), pour lire le texte sur un petit écran. */
+    let lp = 0, zoom = 1;
+    const ZOOMS = [1, 1.5, 2, 3];
+    const lpAfficher = async () => {
+      $('lpTxt').textContent = 'Page ' + (lp + 1) + ' / ' + total;
+      $('lpPrev').disabled = lp <= 0; $('lpNext').disabled = lp >= total - 1;
+      $('lpMoins').disabled = zoom <= ZOOMS[0]; $('lpPlus').disabled = zoom >= ZOOMS[ZOOMS.length - 1];
+      const zone = $('lpZone'), im = $('lpImg');
+      const largeur = Math.min(zone.clientWidth, (zone.clientHeight || 600) / ratio);
+      im.style.width = Math.round(largeur * zoom) + 'px';
+      dessiner(lp);
+      for (let k = 0; k < 40 && !imgs[lp].src; k++) await new Promise(r => setTimeout(r, 250));
+      im.src = imgs[lp].src;
+      zone.scrollTop = 0;
+    };
+    const lpOuvrir = () => {
+      lp = flip.getCurrentPageIndex(); zoom = 1;
+      $('loupe').hidden = false; lpAfficher();
+    };
+    const lpFermer = () => { $('loupe').hidden = true; try { flip.turnToPage(lp); majBarre(lp); autour(lp); } catch (e) {} };
+    $('btnLoupe').hidden = false;
+    $('btnLoupe').onclick = lpOuvrir;
+    $('lpFermer').onclick = lpFermer;
+    $('lpPrev').onclick = () => { if (lp > 0) { lp--; lpAfficher(); } };
+    $('lpNext').onclick = () => { if (lp < total - 1) { lp++; lpAfficher(); } };
+    $('lpPlus').onclick = () => { const i = ZOOMS.indexOf(zoom); if (i < ZOOMS.length - 1) { zoom = ZOOMS[i + 1]; lpAfficher(); } };
+    $('lpMoins').onclick = () => { const i = ZOOMS.indexOf(zoom); if (i > 0) { zoom = ZOOMS[i - 1]; lpAfficher(); } };
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('loupe').hidden) lpFermer(); });
 
     ouvert = true; clearTimeout(garde);
     etat.hidden = true;
