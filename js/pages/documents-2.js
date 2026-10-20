@@ -10,7 +10,7 @@ principe: `
 </ul>
 <div class="st">📖 Projet pédagogique</div>
 <ul>
-  <li>Le projet pédagogique est consultable par tous, sans compte, à l’adresse <strong>projet-pedagogique.html</strong> (même dossier que cette page). Ce lien s’envoie tel quel aux familles et aux partenaires.</li>
+  <li>Le projet pédagogique se feuillette comme un livre, sans compte, à l’adresse <strong>projet-pedagogique.html</strong> (même dossier que cette page) : flèches, curseur de page, clavier, plein écran, et bouton Télécharger. Ce lien s’envoie tel quel aux familles et aux partenaires.</li>
   <li>Pour le mettre à jour, remplacer le fichier <strong>projet-pedagogique-koalakids.pdf</strong> du dépôt.</li>
 </ul>
 <div class="st">🔍 Retrouver un document</div>
