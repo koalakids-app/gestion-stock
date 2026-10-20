@@ -3,15 +3,20 @@
    qui est lue. */
 (function(){
   const $ = id => document.getElementById(id);
-  /* Sans paramètre : le projet pédagogique. Depuis Documents : ?f=<url du PDF>&t=<titre>. */
+  /* Livres fournis en images pré-calculées + index de recherche (tools/projet-pedagogique-generer.py) :
+     aucun moteur PDF à faire tourner. Sans paramètre : le projet pédagogique ; ?livre=socle : le socle.
+     Les autres PDF (Documents) : ?f=<url du PDF>&t=<titre>, lus avec pdf.js. */
+  const LIVRES = {
+    'projet-pedagogique': { titre: 'Projet pédagogique', pdf: 'projet-pedagogique-koalakids.pdf', pages: 'projet-pedagogique-pages/p-', mots: 'projet-pedagogique-mots.json', nb: 121 },
+    'socle': { titre: 'Socle national de connaissances', pdf: 'socle-connaissances.pdf', pages: 'socle-pages/p-', mots: 'socle-mots.json', nb: 44 }
+  };
   const params = new URLSearchParams(location.search);
   const f = params.get('f');
-  const PDF = f && /^https:\/\//i.test(f) ? f : 'projet-pedagogique-koalakids.pdf';
-  /* Le projet pédagogique est fourni en images pré-calculées (projet-pedagogique-pages/p-001.jpg…) :
-     aucun moteur PDF à faire tourner. Les autres PDF (Documents) passent par pdf.js. */
-  const IMAGES = /(^|\/)projet-pedagogique-koalakids\.pdf$/.test(PDF);
-  const NB_PAGES = 121;
-  const titre = params.get('t');
+  const livre = LIVRES[params.get('livre')] || (f && /^https:\/\//i.test(f) ? null : LIVRES['projet-pedagogique']);
+  const IMAGES = !!livre;
+  const PDF = livre ? livre.pdf : f;
+  const NB_PAGES = livre ? livre.nb : 0;
+  const titre = params.get('t') || (livre && livre.titre);
   if (titre) {
     document.title = 'Koala Kids — ' + titre;
     $('titre').textContent = titre;
@@ -54,7 +59,7 @@
     etatPage[n] = 1;
     if (IMAGES) {
       imgs[n].onerror = () => imgs[n].parentNode.setAttribute('data-erreur', 'Page ' + (n + 1) + ' : image introuvable');
-      imgs[n].src = 'projet-pedagogique-pages/p-' + String(n + 1).padStart(3, '0') + '.jpg';
+      imgs[n].src = livre.pages + String(n + 1).padStart(3, '0') + '.jpg';
       etatPage[n] = 2;
       return;
     }
@@ -98,7 +103,7 @@
   }
 
   function monter(){
-    const livre = $('livre');
+    const livreEl = $('livre');
     for (let i = 0; i < total; i++) {
       const d = document.createElement('div');
       d.className = 'page';
@@ -107,16 +112,16 @@
       im.alt = 'Page ' + (i + 1);
       im.draggable = false;
       d.appendChild(im);
-      livre.appendChild(d);
+      livreEl.appendChild(d);
       imgs.push(im); etatPage.push(0);
     }
-    flip = new St.PageFlip(livre, {
+    flip = new St.PageFlip(livreEl, {
       width: 400, height: Math.round(400 * ratio),
       size: 'stretch', minWidth: 240, maxWidth: 1100, minHeight: 340, maxHeight: 1550,
       showCover: true, maxShadowOpacity: .5, mobileScrollSupport: false,
       usePortrait: true, autoSize: true, flippingTime: 700
     });
-    flip.loadFromHTML(livre.querySelectorAll('.page'));
+    flip.loadFromHTML(livreEl.querySelectorAll('.page'));
     flip.on('flip', e => { majBarre(e.data); autour(e.data); });
     flip.on('changeOrientation', () => majBarre(flip.getCurrentPageIndex()));
     autour(0);
@@ -188,7 +193,7 @@
       const charger = async () => {
         if (textes) return;
         $('rechInfo').textContent = 'Chargement du texte…';
-        const r = await fetch('projet-pedagogique-mots.json');
+        const r = await fetch(livre.mots);
         if (!r.ok) throw new Error('HTTP ' + r.status);
         motsPage = await r.json();
         textes = motsPage.map(p => p.map(w => w[0]).join(' '));
