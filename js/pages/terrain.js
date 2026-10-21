@@ -38,9 +38,62 @@ function mfaMarkTrusted(){
 }
 
 /* ================= AUTH ================= */
+/* Lien d'invitation (ou de réinitialisation) : ?token_hash=…&type=invite|recovery,
+   vérifié ici au clic (verifyOtp) pour qu'un aperçu de messagerie ne le consomme
+   pas ; ancien format #access_token=…&type=invite géré aussi. Dans les deux cas,
+   la personne choisit son mot de passe avant d'entrer. */
+function parseHashParams(){
+  const p=new URLSearchParams(location.hash.replace(/^#/,''));
+  return{type:p.get('type'),access_token:p.get('access_token')};
+}
+const HASH_INFO=parseHashParams();
+async function consumeTokenHashLink(){
+  const qp=new URLSearchParams(location.search);
+  const tokenHash=qp.get('token_hash'),otpType=qp.get('type');
+  if(!tokenHash||(otpType!=='recovery'&&otpType!=='invite'))return null;
+  history.replaceState(null,'',location.pathname);
+  try{
+    const{error}=await sb.auth.verifyOtp({token_hash:tokenHash,type:otpType});
+    if(error)throw error;
+    return otpType;
+  }catch(e){
+    console.warn('[verifyOtp]',e);
+    await sb.auth.signOut();
+    showLoginView('Lien invalide ou expiré — demandez une nouvelle invitation à la direction.');
+    return'error';
+  }
+}
+function showSetPassword(){
+  document.getElementById('appView').style.display='none';
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('liFormBox').style.display='none';
+  document.getElementById('mfaGateBox').style.display='none';
+  document.getElementById('setPwdBox').style.display='block';
+}
+async function submitSetPassword(){
+  const p1=document.getElementById('spPwd').value,p2=document.getElementById('spPwd2').value;
+  const err=document.getElementById('spErr');
+  err.textContent='';
+  if(p1.length<8){err.textContent='8 caractères minimum.';return;}
+  if(p1!==p2){err.textContent='Les deux mots de passe ne correspondent pas.';return;}
+  const btn=document.getElementById('spBtn');
+  btn.disabled=true;
+  const{error}=await sb.auth.updateUser({password:p1});
+  btn.disabled=false;
+  if(error){err.textContent='Erreur : '+error.message;return;}
+  HASH_INFO.type=null;
+  document.getElementById('setPwdBox').style.display='none';
+  try{history.replaceState(null,'',location.pathname);}catch(e){}
+  toast('Mot de passe défini.');
+  await boot();
+}
 async function boot(){
+  const linkResult=await consumeTokenHashLink();
+  if(linkResult==='error')return;
+  if(linkResult==='invite'||linkResult==='recovery'){showSetPassword();return;}
   const {data:{session}}=await sb.auth.getSession();
-  if(!session){showLoginView();return;}
+  if(!session){showLoginView(/error/.test(location.hash)?'Lien invalide ou expiré — demandez une nouvelle invitation à la direction.':'');return;}
+  if(HASH_INFO.type==='invite'||HASH_INFO.type==='recovery'){showSetPassword();return;}
   ME=session.user;
   const {data:p}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
   if(!p){toast("Profil introuvable. Contactez la direction.",true);await sb.auth.signOut();location.reload();return;}
