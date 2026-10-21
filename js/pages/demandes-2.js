@@ -477,7 +477,7 @@ function rmpRefreshCurrentView(){
 const NOTICE_ONGLET_SECTION = {
   demands:'demandes', incidents:'incidents', presence:'presences', planning:'planning', evenements:'evenements',
   enfants:'enfants', vaccinations:'vaccinations', stagiaires:'stagiaires', partenaires:'partenaires',
-  referents:'referents', dashboard:'dashboards', 'ref-dashboard':'dashboards', actions:'actions', afaire:'afaire',
+  referents:'referents', dashboard:'dashboards', 'ref-dashboard':'dashboards', actions:'actions', 'reunions-equipe':'reunionsequipe', afaire:'afaire',
   remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches'
 };
 function openNotice() {
@@ -868,6 +868,27 @@ actions: `
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Ouvre une fiche par date de réunion : heure, présents, excusés et date de la prochaine réunion. C'est depuis cette vue que se pointent au fur et à mesure les actions traitées pendant l'échange.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📄 Comptes rendus</div>
 <div style="font-size:13px;color:#555;line-height:1.7">Conserve l'historique des réunions passées, consultable indépendamment de la liste des actions en cours.</div>`,
+
+reunionsequipe: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📝 Réunions d'équipe</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
+  💡 Les comptes rendus de réunion (équipe, famille, partenaire, PMI…) sont rédigés par chaque directeur/trice technique pour sa crèche. Ils sont distincts du suivi des actions et des réunions de direction.
+</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">✏️ Rédiger un compte rendu</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li><strong>Nouveau compte rendu</strong> : date, heure, type (réunion d'équipe ou autre, à préciser), participants, excusés, compte rendu, décisions et date de la prochaine réunion.</li>
+  <li><strong>Photographier mes notes</strong> : les photos servent uniquement à la transcription du texte, elles ne sont pas enregistrées. Relisez toujours le texte avant de l'insérer.</li>
+  <li><strong>Enregistrer en brouillon</strong> garde le compte rendu modifiable ; <strong>Valider</strong> le fige (il faut au moins un compte rendu ou des décisions).</li>
+</ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔒 Brouillon, validé, réouverture</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Un compte rendu validé n'est plus modifiable ni supprimable par le directeur/trice technique. Seule la <strong>direction</strong> peut le rouvrir ; la réouverture est tracée (date et personne), sans effacer la trace de la validation d'origine.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">👀 Qui voit quoi</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>Un directeur/trice technique <strong>lit les comptes rendus de toutes les crèches</strong> de l'organisation (bouton œil, lecture seule), mais ne modifie, ne valide et ne supprime que ceux de <strong>sa crèche</strong>.</li>
+  <li>La direction voit et gère toutes les crèches.</li>
+</ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Retrouver un compte rendu</div>
+<div style="font-size:13px;color:#555;line-height:1.7">Les filtres <strong>Tous / Brouillons / Validés</strong>, le sélecteur de <strong>crèche</strong>, le type, les dates (du / au) et la recherche par mot retrouvent un compte rendu. Le bouton œil ouvre la lecture et l'impression.</div>`,
 
 afaire: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">✅ À faire</h3>
