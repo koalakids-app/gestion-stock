@@ -790,6 +790,8 @@ async function loadFicheFormation(e){
     if(qids.length){try{const r=await sbQuiz.rpc('kk_formations_pour_quiz',{p_quiz_ids:qids});if(!r.error)sugg=r.data||[];}catch(err){}}
     FICHE_SUGGESTIONS=sugg;
     box.innerHTML=renderParcoursHtml(tous,qz.data||[],md.data||[],mq,sugg,true);
+    /* Planning des quiz en lecture seule (pas de lien : le lien est personnel à la personne). */
+    PlanningQuiz.charger(document.getElementById('fichePlanningQuizBox'),e.id,null,qz.data||[]);
   }catch(err){
     box.innerHTML='<p class="hint">Parcours de formation indisponible pour le moment.</p>';
   }

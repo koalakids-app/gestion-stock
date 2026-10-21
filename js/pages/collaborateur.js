@@ -337,7 +337,7 @@ async function grantAccess(){
   await loadFermetures();
   populateMoisValidation();
   if(COLLAB_TYPE==='employe'){document.getElementById('msgCard').style.display='';notifsEmployeInit();}
-  await Promise.all([loadPlanning(),loadPointages(),loadCompteur(),loadFormation(),loadValidationMois(),loadMessages()]);
+  await Promise.all([loadPlanning(),loadPointages(),loadCompteur(),loadFormation(),loadPlanningQuiz(),loadValidationMois(),loadMessages()]);
 }
 
 /* ---------- PLANNING ----------------------------------------------------
@@ -756,6 +756,13 @@ async function validerFormation(itemId){
   if(error){toast('Échec de la validation : '+error.message,true);return;}
   toast('Formation validée.');
   await loadFormation();
+}
+/* Planning des quiz (js/planning-quiz.js) : mêmes liens personnels que les envois (ref = id de la fiche). */
+async function loadPlanningQuiz(){
+  const prenom=COLLAB_TYPE==='referent'?String(COLLAB.name||'').split(/\s+/)[0]:(COLLAB.prenom||'');
+  const nom=COLLAB_TYPE==='referent'?String(COLLAB.name||'').split(/\s+/).slice(1).join(' '):(COLLAB.nom||'');
+  const lien=qid=>QUIZ_APP_URL+'?'+new URLSearchParams({ref:COLLAB.id,prenom,nom,statut:'Salarié(e) en poste',quiz:qid}).toString();
+  await PlanningQuiz.charger(document.getElementById('planningQuizBox'),COLLAB.id,lien);
 }
 async function loadFormation(){
   const box=document.getElementById('formationBox');

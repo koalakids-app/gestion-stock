@@ -45,6 +45,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 - Push employés : `push_subscriptions.employe_id` (au lieu de `referent_id`), enregistré par la RPC `upsert_push_subscription` ; `notify-push` accepte `employe_ids`. Pendant le silence (heures, week-end, férié), rien n'est retenu pour les employés : le message reste dans Mon espace.
 - Les notifications des référents tenues pendant le silence vont dans `notifs_retenues` (`sql/notifs_retenues.sql`) et sont livrées à la première connexion hors silence (`livrerNotifsRetenues`).
 
+## Planning des quiz
+- `js/planning-quiz.js` (chargé par `collaborateur.html` et `employes.html`) affiche le planning des 16 quiz « profil » du projet quiz (thèmes 1 à 8 pédagogie, 9 à 16 protocoles), deux par semaine à partir du 26 octobre 2026 puis une semaine de rattrapage. Dates et ordre en dur dans `PLANNING_QUIZ` ; les quiz sont retrouvés par leur titre « Thème N — … » et ne s'affichent « Bientôt disponible » que tant qu'ils sont en brouillon côté quiz. Mon espace : liens personnels ; fiche employé : lecture seule (le lien est personnel).
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.

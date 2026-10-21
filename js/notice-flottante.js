@@ -12,11 +12,13 @@
     },
     collaborateur: {
       titre: 'Mon espace',
-      html: '<p>Votre espace personnel. Les messages de la direction et des référents s’affichent ici : ils sont à lecture seule, vous ne pouvez pas y répondre depuis cette page.</p>'
+      html: '<p>Votre espace personnel. Les messages de la direction et des référents s’affichent ici : ils sont à lecture seule, vous ne pouvez pas y répondre depuis cette page.</p>' +
+        '<p><strong>Planning des quiz</strong> : deux quiz par semaine (un sur le projet pédagogique, un sur les protocoles), du 26 octobre au 18 décembre 2026. La semaine en cours est surlignée ; « Passer le quiz » ouvre votre lien personnel. Ces quiz sont sans note.</p>'
     },
     employes: {
       titre: 'Collaborateurs',
-      html: '<p>Les fiches des collaborateurs de la crèche et leurs documents. Ouvrez une fiche pour la consulter ou la mettre à jour.</p>'
+      html: '<p>Les fiches des collaborateurs de la crèche et leurs documents. Ouvrez une fiche pour la consulter ou la mettre à jour.</p>' +
+        '<p>Dans la fiche, « Planning des quiz » montre, semaine par semaine, les quiz faits, à faire ou en retard de la personne (lecture seule).</p>'
     },
     factures: {
       titre: 'Facturation',
