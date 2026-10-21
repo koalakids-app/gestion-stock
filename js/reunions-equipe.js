@@ -45,12 +45,8 @@ function reqFmtHoraire(iso){
 async function reqInit(){
   const selFC=document.getElementById('req-filter-creche');
   if(selFC){
-    if(isDirection){
-      selFC.style.display='';
-      selFC.innerHTML='<option value="">Toutes les crèches</option>'+(cacheCreches||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'fr')).map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
-    }else{
-      selFC.style.display='none';selFC.value='';
-    }
+    selFC.style.display='';
+    selFC.innerHTML='<option value="">Toutes les crèches</option>'+(cacheCreches||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'fr')).map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
   }
   const selC=document.getElementById('req-f-creche');
   if(selC)selC.innerHTML=(cacheCreches||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'fr')).map(c=>'<option value="'+c.id+'">'+escHtml(c.name)+'</option>').join('');
