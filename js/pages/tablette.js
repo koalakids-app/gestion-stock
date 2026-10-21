@@ -3,7 +3,16 @@ const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,
   {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 
-const TOKEN=new URLSearchParams(location.search).get('k')||'';
+/* Le jeton vient du lien ; on le garde sur la tablette pour que l'application installée
+   (qui s'ouvre sans ?k=) retrouve la crèche. */
+const TOKEN=(function(){
+  let k=new URLSearchParams(location.search).get('k')||'';
+  try{
+    if(k.length>=20)localStorage.setItem('kk_pointage_k',k);
+    else k=localStorage.getItem('kk_pointage_k')||'';
+  }catch(e){}
+  return k;
+})();
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 const main=document.getElementById('main');
