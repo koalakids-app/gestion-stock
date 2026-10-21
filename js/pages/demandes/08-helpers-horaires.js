@@ -157,10 +157,29 @@ function openEventCoordModal(){
   ecResetModal();
   document.getElementById('modal-event-coord-wrap').classList.add('open');
 }
+let editingCoordEventId=null;
 function openCoordEventAt(d,s){
+  editingCoordEventId=null;
   document.getElementById('ec-day').value=d;document.getElementById('ec-slot').value=s;
   ecResetModal();
   document.getElementById('modal-event-coord-wrap').classList.add('open');
+}
+// Modifie un événement existant du planning coordinateur (lieu, type, intitulé) sans le supprimer.
+function openCoordEventEdit(eventId,d,s){
+  openCoordEventAt(d,s);
+  const coord=getCoordRef();
+  const semaine=ipDateToLocalISO(weekStart());
+  const ev=(coord&&_planningCache[coord.id+'_'+semaine]||[]).find(e=>e.id===eventId);
+  if(!ev)return;
+  editingCoordEventId=eventId;
+  document.getElementById('ec-type').value=ev.type;
+  onEcTypeChange();
+  const sel=document.getElementById('ec-lieu');
+  const known=[...sel.options].map(o=>o.value);
+  const creche=known.includes(ev.label)?ev.label:(known.includes(ev.lieu)?ev.lieu:'');
+  sel.value=creche;
+  if(ev.type==='autre')document.getElementById('ec-type-libre').value=ev.label&&ev.label!==creche?ev.label:'';
+  document.getElementById('ec-ville').value=ev.lieu&&ev.lieu!==creche?ev.lieu:'';
 }
 
 // ════════════════════════════════════════════════════════════════════════

@@ -389,10 +389,12 @@ async function saveEventCoord(){
   const slot=parseInt(document.getElementById('ec-slot').value);
   const btn=document.querySelector('#modal-event-coord-wrap .btn-primary');
   if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Enregistrement…';}
-  let ok=await planningSave(coord.id,semaine,{day,slot,type,label,lieu});
+  const id=editingCoordEventId||undefined;
+  let ok=await planningSave(coord.id,semaine,{id,day,slot,type,label,lieu});
   // Repli si la colonne « type » de la table planning n'accepte pas encore la valeur « autre » :
   // on conserve l'intitulé libre dans label et on retombe sur « detachement ».
-  if(!ok&&type==='autre')ok=await planningSave(coord.id,semaine,{day,slot,type:'detachement',label,lieu});
+  if(!ok&&type==='autre')ok=await planningSave(coord.id,semaine,{id,day,slot,type:'detachement',label,lieu});
+  editingCoordEventId=null;
   if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Enregistrer';}
   if(!ok)alert('Enregistrement impossible — vérifiez la connexion.');
   closeModal('modal-event-coord-wrap');await renderPlanning();
@@ -526,8 +528,8 @@ function getPlanningGridSimple(events,coordId,semaine,crecheIdHint){
       if(editable){
         html+='<div class="pg-cell" data-dnd-zone="pgc" data-ref="'+coordId+'" data-sem="'+semaine+'" data-day="'+di+'" data-slot="'+si+'" onclick="openCoordEventAt('+di+','+si+')">';
         if(!evs.length)html+='<span style="font-size:10px;color:#ccc">+ ajouter</span>';
-        evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" draggable="true" data-dnd-item="pgc" data-id="'+e.id+'" onclick="event.stopPropagation();delPlanningEvent(\''+e.id+'\',\''+coordId+'\',\''+semaine+'\')">'+
-          pgEvLabel(e)+' <i class="ti ti-x" style="font-size:10px;opacity:0.8"></i>'+pgEvVille(e)+'</div>';});
+        evs.forEach(e=>{html+='<div class="pg-ev '+e.type+'" draggable="true" data-dnd-item="pgc" data-id="'+e.id+'" onclick="event.stopPropagation();openCoordEventEdit(\''+e.id+'\','+di+','+si+')" title="Cliquer pour modifier">'+
+          pgEvLabel(e)+' <i class="ti ti-x" style="font-size:10px;opacity:0.8" title="Supprimer" onclick="event.stopPropagation();delPlanningEvent(\''+e.id+'\',\''+coordId+'\',\''+semaine+'\')"></i>'+pgEvVille(e)+'</div>';});
       }else{
         html+='<div class="pg-cell-ro">';
         if(!evs.length)html+='<div style="text-align:center;padding:0.5rem;color:#ddd;font-size:11px">—</div>';
