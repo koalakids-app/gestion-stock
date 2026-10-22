@@ -206,6 +206,28 @@ urgence: `
   <li>L’export PDF reprend exactement ce qui est affiché, signatures comprises.</li>
 </ul>
 `,
+pms: `
+<h3 style="font-size:17px;font-weight:700;margin-bottom:12px">🍽️ Plan de maîtrise sanitaire (PMS)</h3>
+<div class="warn" style="background:var(--green-lt,#ecfdf5)">Modèle <strong>à remplir en ligne</strong> pour une micro-crèche dont les repas sont livrés puis réchauffés sur place, sans fabrication. Chaque crèche adapte son exemplaire, le signe et l’exporte en PDF.</div>
+<div class="st">🏠 Les informations de la crèche se remplissent seules</div>
+<ul>
+  <li>Ouvrir le document, puis choisir la <strong>crèche</strong> : l’adresse, le gestionnaire, le SIRET, le représentant, le téléphone, l’e-mail, l’agrément PMI, la capacité d’accueil et les horaires sont lus dans <strong>Paramètres › Les établissements</strong>. Un/une référent(e) ouvre le modèle directement sur sa crèche.</li>
+  <li>Changer de crèche met à jour les champs restés tels quels. Un champ <strong>corrigé à la main</strong> n’est jamais écrasé ; le bouton <strong>Recharger les informations de la crèche</strong> remplace tout après confirmation.</li>
+  <li>Si la fiche établissement d’une crèche est vide, un message l’indique : la compléter dans Paramètres suffit pour tous les documents.</li>
+  <li>À saisir à la main : la date, le N° / version, les repas servis par jour, le responsable du PMS, le/la référent(e) hygiène, le prestataire repas (MCM proposé) et la date de déclaration à la DDPP. Il y a une réponse par crèche.</li>
+</ul>
+<div class="st">✏️ Tout est modifiable</div>
+<ul>
+  <li>Sept parties : présentation, bonnes pratiques d’hygiène, flux et analyse des dangers, traçabilité, fiches d’enregistrement, non-conformités et contacts, formation.</li>
+  <li>Dans chaque tableau : <strong>Ajouter une ligne</strong>, modifier une cellule, supprimer une ligne (✕) ou <strong>Revenir au modèle</strong>. Les textes ont leur bouton <strong>Revenir au texte type</strong>.</li>
+  <li>Les mentions entre [crochets] et les températures (63 °C à cœur, +3 °C à réception…) sont des repères d’usage à confirmer avec le prestataire et la DDPP.</li>
+</ul>
+<div class="st">🖊️ Signatures et export</div>
+<ul>
+  <li>Signatures de la <strong>direction</strong> et du/de la <strong>référent(e) hygiène</strong> en bas du formulaire, à l’écran ou par QR code (voir l’onglet 🖊️ Signatures).</li>
+  <li>L’export PDF reprend ce qui est affiché, signatures comprises, et ajoute quatre <strong>fiches vierges à imprimer</strong> : réception et traçabilité, température du réfrigérateur, remise en température et service, nettoyage.</li>
+</ul>
+`,
 eaje: `
 <div class="st">📋 Support de contrôle EAJE</div>
 <p>Grille d’auto-contrôle réglementaire reprenant les points vérifiés lors d’une inspection PMI. Utile pour préparer une visite ou faire un point annuel. Elle se trouve dans les documents à remplir, sous « Support de contrôle EAJE ».</p>
