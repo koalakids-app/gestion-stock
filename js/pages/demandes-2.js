@@ -478,7 +478,7 @@ const NOTICE_ONGLET_SECTION = {
   demands:'demandes', incidents:'incidents', presence:'presences', planning:'planning', evenements:'evenements',
   enfants:'enfants', vaccinations:'vaccinations', stagiaires:'stagiaires', partenaires:'partenaires',
   referents:'referents', dashboard:'dashboards', 'ref-dashboard':'dashboards', actions:'actions', afaire:'afaire',
-  remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches'
+  remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches', 'reunions-equipe':'reunions'
 };
 function openNotice() {
   document.getElementById('modal-notice').classList.add('open');
@@ -868,6 +868,18 @@ actions: `
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Ouvre une fiche par date de réunion : heure, présents, excusés et date de la prochaine réunion. C'est depuis cette vue que se pointent au fur et à mesure les actions traitées pendant l'échange.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📄 Comptes rendus</div>
 <div style="font-size:13px;color:#555;line-height:1.7">Conserve l'historique des réunions passées, consultable indépendamment de la liste des actions en cours.</div>`,
+
+reunions: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📓 Réunions d'équipe</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
+  💡 Deux types de comptes rendus, avec une visibilité différente.
+</div>
+<ul style="font-size:13px;line-height:1.7;padding-left:20px">
+  <li><strong>Réunion d'équipe</strong> (hebdomadaire) et <strong>Autre</strong> (famille, PMI…) : rattachées à une crèche, visibles uniquement par l'équipe de cette crèche et par la direction.</li>
+  <li><strong>Réunion des directeurs techniques</strong> : sans crèche, visible par tous les référents et par la direction. Seul son auteur (ou la direction) peut la modifier tant qu'elle est en brouillon.</li>
+</ul>
+<p style="font-size:13px">Un compte rendu validé est figé ; seule la direction peut le rouvrir. Le filtre « Tous les types » permet de n'afficher qu'une famille de réunions.</p>
+`,
 
 afaire: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">✅ À faire</h3>

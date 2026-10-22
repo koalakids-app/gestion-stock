@@ -13,11 +13,16 @@
    de la validation d'origine (valide_le / valide_par).
    ═════════════════════════════════════════════════════════════════════════ */
 
-const REQ_TYPES={equipe:'Réunion d\'équipe',autre:'Autre'};
+const REQ_TYPES={equipe:'Réunion d\'équipe',directeurs:'Réunion des directeurs techniques',autre:'Autre'};
 
 let reqCache=[],reqEditId=null,reqSchemaOk=true,reqFilterStatut='toutes',reqPhotos=[],reqCrVueId=null;
 
-function reqEstMaCreche(r){return !isDirection&&currentProfile&&String(r.creche_id||'')===String(currentProfile.creche_id||'');}
+function reqEstMaCreche(r){
+  if(isDirection||!currentProfile)return false;
+  // Réunion des directeurs (sans crèche) : seul son auteur la modifie.
+  if(r.type==='directeurs')return String(r.auteur_id||'')===String(currentProfile.id||'');
+  return String(r.creche_id||'')===String(currentProfile.creche_id||'');
+}
 function reqPeutModifier(r){
   if(!r)return true; // création
   if(r.statut==='valide')return isDirection; // seule la direction peut toucher un CR validé (le rouvrir)
@@ -25,7 +30,7 @@ function reqPeutModifier(r){
 }
 function reqCrecheName(id){if(!id)return null;const c=(cacheCreches||[]).find(x=>String(x.id)===String(id));return c?c.name:null;}
 function reqReferentName(id){if(!id)return null;const r=(cacheReferents||[]).find(x=>String(x.id)===String(id));return r?r.name:null;}
-function reqTypeLabel(r){return r.type==='autre'?(r.type_autre||'Autre'):REQ_TYPES.equipe;}
+function reqTypeLabel(r){return r.type==='autre'?(r.type_autre||'Autre'):(REQ_TYPES[r.type]||REQ_TYPES.equipe);}
 function reqFmtDate(iso){if(!iso)return'';const d=new Date(iso+'T12:00:00');return isNaN(d)?'':d.toLocaleDateString('fr-FR');}
 function reqFmtDateLongue(iso){
   if(!iso)return'';
@@ -126,7 +131,9 @@ function reqCardHtml(r){
         +'<span class="dsubject">'+reqFmtDateLongue(r.date_reunion)+(r.heure?' — '+escHtml(r.heure):'')+'</span>'
         +'<span class="badge" style="background:'+(clos?'var(--green-light)':'var(--orange-light)')+';color:'+(clos?'var(--green)':'var(--orange-dark)')+'">'+(clos?'🔒 Validé':'✏️ Brouillon')+'</span>'
         +'<span class="badge b-ref">'+escHtml(reqTypeLabel(r))+'</span>'
-        +(creche?'<span class="badge b-ref"><i class="ti ti-building" style="font-size:11px"></i> '+escHtml(creche)+'</span>':'')
+        +(r.type==='directeurs'
+          ?'<span class="badge b-ref" title="Visible par tous les référents et la direction"><i class="ti ti-users-group" style="font-size:11px"></i> Tous les référents</span>'
+          :(creche?'<span class="badge b-ref" title="Visible par l\'équipe de cette crèche et la direction"><i class="ti ti-building" style="font-size:11px"></i> '+escHtml(creche)+'</span>':''))
       +'</div>'
       +(extrait?'<div class="dbody">'+escHtml(extrait)+((r.contenu||'').length>180?'…':'')+'</div>':'')
       +'<div class="dfoot">'
@@ -174,11 +181,7 @@ function reqOpenModal(id){
   document.getElementById('req-f-prochaine-heure').value=r?(r.prochaine_reunion_heure||''):'';
   reqTypeChange();
 
-  const wrapC=document.getElementById('req-f-creche-wrap');
-  if(wrapC){
-    wrapC.style.display=isDirection?'':'none';
-    if(isDirection)document.getElementById('req-f-creche').value=r&&r.creche_id?r.creche_id:(currentProfile?.creche_id||'');
-  }
+  if(isDirection)document.getElementById('req-f-creche').value=r&&r.creche_id?r.creche_id:(currentProfile?.creche_id||'');
 
   // Formulaire verrouillé : lecture seule tant qu'on n'est pas direction.
   ['req-f-date','req-f-heure','req-f-type','req-f-type-autre','req-f-creche','req-f-participants','req-f-excuses','req-f-contenu','req-f-decisions','req-f-prochaine','req-f-prochaine-heure']
@@ -197,6 +200,13 @@ function reqOpenModal(id){
 function reqTypeChange(){
   const t=document.getElementById('req-f-type').value;
   document.getElementById('req-f-type-autre-wrap').style.display=t==='autre'?'':'none';
+  // La réunion des directeurs n'est rattachée à aucune crèche.
+  const wrapC=document.getElementById('req-f-creche-wrap');
+  if(wrapC)wrapC.style.display=(isDirection&&t!=='directeurs')?'':'none';
+  const hint=document.getElementById('req-f-visibilite');
+  if(hint)hint.textContent=t==='directeurs'
+    ?'Visible par tous les référents et par la direction.'
+    :'Visible uniquement par l\'équipe de la crèche concernée et par la direction.';
 }
 
 async function reqSave(statutCible){
@@ -208,16 +218,17 @@ async function reqSave(statutCible){
     showBanner('Ajoutez au moins un compte rendu ou des décisions avant de valider.','error');
     return;
   }
-  const crecheId=isDirection?(document.getElementById('req-f-creche').value||null):(currentProfile?.creche_id||null);
-  if(!crecheId){showBanner('Crèche introuvable pour ce compte.','error');return;}
+  const type=document.getElementById('req-f-type').value||'equipe';
+  const crecheId=type==='directeurs'?null:(isDirection?(document.getElementById('req-f-creche').value||null):(currentProfile?.creche_id||null));
+  if(!crecheId&&type!=='directeurs'){showBanner('Crèche introuvable pour ce compte.','error');return;}
 
   const ancien=reqEditId?reqCache.find(x=>String(x.id)===String(reqEditId)):null;
   const row={
     creche_id:crecheId,
     date_reunion:dateR,
     heure:(document.getElementById('req-f-heure').value||'').trim()||null,
-    type:document.getElementById('req-f-type').value||'equipe',
-    type_autre:document.getElementById('req-f-type').value==='autre'?((document.getElementById('req-f-type-autre').value||'').trim()||null):null,
+    type,
+    type_autre:type==='autre'?((document.getElementById('req-f-type-autre').value||'').trim()||null):null,
     participants:(document.getElementById('req-f-participants').value||'').trim()||null,
     excuses:(document.getElementById('req-f-excuses').value||'').trim()||null,
     contenu:contenu||null,
