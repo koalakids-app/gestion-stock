@@ -214,7 +214,8 @@ pms: `
   <li>Ouvrir le document, puis choisir la <strong>crèche</strong> : l’adresse, le gestionnaire, le SIRET, le représentant, le téléphone, l’e-mail, l’agrément PMI, la capacité d’accueil et les horaires sont lus dans <strong>Paramètres › Les établissements</strong>. Un/une référent(e) ouvre le modèle directement sur sa crèche.</li>
   <li>Changer de crèche met à jour les champs restés tels quels. Un champ <strong>corrigé à la main</strong> n’est jamais écrasé ; le bouton <strong>Recharger les informations de la crèche</strong> remplace tout après confirmation.</li>
   <li>Si la fiche établissement d’une crèche est vide, un message l’indique : la compléter dans Paramètres suffit pour tous les documents.</li>
-  <li>À saisir à la main : la date, le N° / version, les repas servis par jour, le responsable du PMS, le/la référent(e) hygiène, le prestataire repas (MCM proposé) et la date de déclaration à la DDPP. Il y a une réponse par crèche.</li>
+  <li>À saisir à la main : la date, le N° / version, les repas servis par jour, le responsable du PMS, le/la référent(e) hygiène, le prestataire repas (MCM proposé) et la date de déclaration à la DDPP.</li>
+  <li><strong>Une réponse par crèche</strong> : changer de crèche dans un plan déjà enregistré n’écrase jamais celui de l’autre crèche. L’application ouvre le plan de la nouvelle crèche s’il existe, sinon elle démarre un plan vierge pour elle (après confirmation).</li>
 </ul>
 <div class="st">✏️ Tout est modifiable</div>
 <ul>
