@@ -199,6 +199,9 @@ async function pmsPrefill(force){
   const note=document.getElementById('pms-auto-note');
   if(!cr){if(note)note.textContent='Choisissez une crèche : ses informations (adresse, SIRET, agrément PMI, capacité…) se remplissent seules.';return;}
   const cap=await pmsChargerCap(cr.id);
+  /* la crèche a changé pendant la lecture : on laisse la dernière demande finir */
+  const choisie=pmsCrecheChoisie();
+  if(!choisie||String(choisie.id)!==String(cr.id))return;
   const val=pmsValeurs(cr,cap);
   let n=0;
   PMS_AUTO.forEach(id=>{
@@ -212,7 +215,34 @@ async function pmsPrefill(force){
     :'Informations lues dans Paramètres › Les établissements pour « '+cr.name+' ». Chaque champ reste modifiable ; un champ corrigé à la main n’est plus écrasé.';
   return n;
 }
-function pmsCrecheChanged(){pmsPrefill(false);}
+/* Une réponse par crèche. Si la saisie ouverte appartient déjà à une autre crèche,
+   changer de crèche ne la réécrit jamais : on ouvre le plan existant de la nouvelle
+   crèche, ou on démarre un plan vierge pour elle. Le plan de l'ancienne crèche,
+   déjà enregistré, n'est pas touché. */
+let PMS_CRECHE_FORCEE='';
+async function pmsCrecheChanged(){
+  const cr=pmsCrecheChoisie();
+  if(cr&&fillRep&&fillRep.creche_id&&String(fillRep.creche_id)!==String(cr.id)){
+    const ancienne=(CRECHES||[]).find(c=>String(c.id)===String(fillRep.creche_id));
+    const ancNom=ancienne?ancienne.name:'l’autre crèche';
+    const{data}=await sb.from('documents_reponses').select('id')
+      .eq('document_id',fillDoc.id).eq('creche_id',cr.id).is('enfant_id',null)
+      .order('updated_at',{ascending:false}).limit(1);
+    const existante=data&&data[0];
+    const msg=existante
+      ?'Un plan existe déjà pour « '+cr.name+' ». L’ouvrir ? Les modifications non enregistrées du plan de « '+ancNom+' » seront perdues ; son plan enregistré n’est pas touché.'
+      :'Démarrer un nouveau plan pour « '+cr.name+' » ? Les modifications non enregistrées du plan de « '+ancNom+' » seront perdues ; son plan enregistré n’est pas touché.';
+    if(!confirm(msg)){
+      const sel=document.getElementById('ff_creche');if(sel)sel.value=ancienne?ancienne.name:'';
+      return;
+    }
+    if(existante){await openFill(fillDoc.id,existante.id);return;}
+    PMS_CRECHE_FORCEE=cr.name;fillRep=null;
+    try{resetFillForm();}finally{PMS_CRECHE_FORCEE='';}
+    return;
+  }
+  pmsPrefill(false);
+}
 async function pmsRecharger(){
   if(!pmsCrecheChoisie())return toast('Choisissez d’abord une crèche');
   if(!confirm('Recharger les informations de la crèche ? Les champs d’identité saisis à la main seront remplacés.'))return;
@@ -233,7 +263,7 @@ TPL.pms_sanitaire={
  html:v=>{
   PMS_ST=pmsCharger(v.pms_json);
   const noms=(CRECHES||[]).map(c=>c.name);
-  let nom=v.creche||'';
+  let nom=v.creche||PMS_CRECHE_FORCEE||'';
   /* un(e) référent(e) ouvre le modèle sur sa propre crèche */
   if(!nom&&typeof PROF!=='undefined'&&PROF&&PROF.creche_id){
     const mine=(CRECHES||[]).find(c=>String(c.id)===String(PROF.creche_id));if(mine)nom=mine.name;

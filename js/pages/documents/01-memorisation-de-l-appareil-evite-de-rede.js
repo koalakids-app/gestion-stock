@@ -1192,6 +1192,11 @@ async function saveFill(silent){
     const cf=crecheIdDuFormulaire();
     if(cf)crecheId=cf;
   }
+  /* Plan de maîtrise sanitaire : une réponse par crèche. Si la crèche du formulaire
+     n'est plus celle de la réponse ouverte, on crée une nouvelle réponse au lieu de
+     réécrire celle de l'autre crèche. */
+  if(fillDoc.template_key==='pms_sanitaire'&&fillRep&&fillRep.creche_id&&crecheId
+     &&String(fillRep.creche_id)!==String(crecheId))fillRep=null;
   if(enfantId){
     const enf=ENFANTS.find(e=>e.id===enfantId);
     if(enf&&enf.creche_id)crecheId=enf.creche_id;
