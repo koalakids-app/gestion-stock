@@ -22,7 +22,7 @@ const PMS_TABLES={
    ['Lavage des mains','Avant toute manipulation des plats, après les changes, les toilettes, un mouchoir, la manipulation des déchets','Affichage au point d’eau'],
    ['Santé du personnel','Signaler toute diarrhée, vomissement, plaie infectée ou lésion cutanée ; éviction de la manipulation selon l’avis médical','Fiche de signalement'],
    ['Nettoyage et désinfection','Plan par zone : produit, dilution, fréquence, responsable (plan de travail, plats inox, ustensiles, four, frigo, sols)','Fiche de nettoyage signée'],
-   ['Matériel de remise en température','Four, bain-marie ou maintien au chaud entretenus ; thermomètre-sonde nettoyé entre chaque usage et vérifié chaque année','Fiche de vérification annuelle'],
+   ['Matériel de remise en température','Four, bain-marie ou maintien au chaud entretenus ; thermomètre-sonde nettoyé entre chaque usage et contrôlé selon la procédure du paragraphe 3','Fiche 5 – vérification de la sonde'],
    ['Lutte contre les nuisibles','Locaux fermés, contrôle visuel régulier, intervention d’un prestataire si besoin','Registre des interventions'],
    ['Déchets','Poubelles à pédale fermées, vidées chaque jour, jamais en contact avec les plats','Contrôle visuel'],
    ['Eau','Eau potable du réseau pour la préparation et le lavage','Carnet sanitaire si requis'],
@@ -37,6 +37,15 @@ const PMS_TABLES={
    ['Maintien au chaud','Reprise de la croissance microbienne','Maintien en continu jusqu’au service','63 °C minimum','Si l’écart est constaté tout de suite, réchauffer à 63 °C et remesurer ; sinon ne pas servir [à valider]'],
    ['Service','Contamination par les mains ou le matériel','Mains lavées, ustensiles propres, plats couverts','Service dans la durée définie par le site [à fixer]','Jeter ce qui a été touché ou laissé à découvert'],
    ['Restes','Réutilisation à risque','Élimination en fin de service','Aucun reste resservi','Sans objet']]},
+ so:{titre:'Contrôle de la sonde de température',
+  cols:[['Contrôle',22],['Comment',46],['Quand',32]],
+  def:[
+   ['Contrôle visuel','Sonde propre, non abîmée, affichage lisible, pile en état','Avant chaque service'],
+   ['Nettoyage','Nettoyer et désinfecter la sonde entre deux plats mesurés','Après chaque mesure'],
+   ['Vérification de justesse','Plonger la sonde dans un bain d’eau et de glace pilée : lecture attendue proche de 0 °C ; ou comparaison avec un thermomètre de référence','À l’arrivée du matériel, chaque année, après une chute ou un doute'],
+   ['Tolérance','Écart maximum de ±1 °C par rapport à la référence [à confirmer]','À chaque vérification'],
+   ['Si l’écart est trop grand','Ne plus utiliser la sonde ; la remplacer ou la faire étalonner ; signaler au responsable PMS les repas mesurés depuis le dernier contrôle conforme','Immédiatement'],
+   ['Responsable du contrôle','[nom, fonction]','Chaque année et à chaque remplacement']]},
  tr:{titre:'Documents de traçabilité',
   cols:[['Document',26],['Contenu',34],['Durée de conservation',40]],
   def:[
@@ -53,6 +62,7 @@ const PMS_TABLES={
    ['Réfrigérateur en panne ou T° hors limite','Isoler les plats, vérifier leur état','Faire intervenir la maintenance, noter sur la fiche 2'],
    ['T° à cœur non atteinte','Poursuivre le chauffage et remesurer, sinon ne pas servir','Noter sur la fiche 3, analyser la cause'],
    ['Plat tombé, touché ou laissé à découvert','Ne pas servir','Jeter, noter'],
+   ['Sonde hors tolérance, abîmée ou perdue','Ne plus l’utiliser, passer à une sonde de remplacement','Noter sur la fiche 5, faire étalonner ou remplacer la sonde'],
    ['Suspicion de TIAC (plusieurs enfants ou adultes malades après un repas)','Garder les restes éventuels et les étiquettes, noter les repas et les symptômes','Prévenir la direction, MCM, la DDPP du Var et les familles']]},
  ct:{titre:'Contacts utiles',
   cols:[['Contact',40],['Nom et téléphone',60]],
@@ -67,7 +77,7 @@ const PMS_TABLES={
    ['Formation à l’hygiène alimentaire pour tout le personnel qui manipule les repas','Responsable PMS','À l’arrivée, puis chaque année'],
    ['Rappel des règles de lavage des mains et de remise en température','Référent·e hygiène','Chaque trimestre'],
    ['Contrôle des fiches 1 à 4','Responsable PMS','Chaque mois'],
-   ['Vérification de la sonde et du réfrigérateur','Référent·e hygiène','Chaque année'],
+   ['Vérification de la sonde (fiche 5) et du réfrigérateur','Référent·e hygiène','Chaque année'],
    ['Révision complète du PMS','Responsable PMS','Chaque année, et à chaque changement de prestataire ou de matériel']]}
 };
 
@@ -82,6 +92,7 @@ const PMS_TXT_DEF={
   'Service aux enfants',
   'Élimination des restes : aucun reste n’est resservi ni conservé'].join('\n'),
  danger:'Le risque principal est la prolifération de bactéries si la chaîne du froid ou la remontée en température est mal tenue. Les températures ci-dessous sont des repères d’usage, à confirmer par le fournisseur et par la DDPP.',
+ sonde:'La sonde de température valide toutes les mesures du plan (réception, remise en température, maintien au chaud). Sans contrôle de sa justesse, ces mesures n’ont pas de valeur. Les tolérances sont des repères à confirmer avec votre DDPP.',
  trace:'La traçabilité permet de retrouver l’origine d’un plat et les enfants concernés en cas d’alerte produit ou de toxi-infection alimentaire collective (TIAC). Aucun texte ne fixe une durée unique : les durées retenues suivent les guides professionnels et prennent la plus protectrice.\n→ Au moment du transfert vers le plat inox, l’étiquette de la barquette est collée dans le registre du jour ou photographiée avant d’être jetée : le plat inox n’est plus relié à son lot.',
  retrait:['Retrait ou rappel produit :',
   '- Retrouver le lot dans le registre et identifier les repas servis',
@@ -90,14 +101,15 @@ const PMS_TXT_DEF={
   '- Informer les familles concernées, noter les actions menées',
   '* Repas témoins : leur obligation dépend du type d’établissement et n’est pas traitée ici. À valider auprès de la DDPP du Var et du contrat avec le prestataire.'].join('\n')
 };
-const PMS_TXT_LABELS={intro:'Introduction',flux:'Étapes du flux (une par ligne)',danger:'Principe de l’analyse',trace:'Principe de la traçabilité',retrait:'Retrait ou rappel de produit'};
+const PMS_TXT_LABELS={intro:'Introduction',flux:'Étapes du flux (une par ligne)',danger:'Principe de l’analyse',sonde:'Principe du contrôle de la sonde',trace:'Principe de la traçabilité',retrait:'Retrait ou rappel de produit'};
 
 /* Fiches vierges à imprimer, en annexe du PDF */
 const PMS_FICHES=[
  ['Fiche 1 – Réception et traçabilité',['Date','Plat','Lot','DLC','T° réception','Conforme','Visa'],[22,40,24,24,26,22,24]],
  ['Fiche 2 – Température du réfrigérateur',['Date','T° matin','T° soir','Conforme','Action corrective','Visa'],[22,24,24,24,64,24]],
  ['Fiche 3 – Remise en température et service',['Date','Plat','Début','T° à cœur','Fin','T° maintien','Service','Conforme','Visa'],[20,36,16,20,16,22,18,18,16]],
- ['Fiche 4 – Nettoyage et désinfection',['Date','Zone ou matériel','Produit utilisé','Fait','Visa'],[24,62,48,24,24]]
+ ['Fiche 4 – Nettoyage et désinfection',['Date','Zone ou matériel','Produit utilisé','Fait','Visa'],[24,62,48,24,24]],
+ ['Fiche 5 – Vérification de la sonde de température',['Date','Sonde (repère)','Lecture eau glacée (°C)','Écart (°C)','Conforme','Action','Visa'],[22,30,30,22,22,34,22]]
 ];
 
 const PMS_FIELDS=['creche','pms_date','pms_version','pms_adresse','pms_gest','pms_siret','pms_rep','pms_tel','pms_mail','pms_pmi',
@@ -315,6 +327,8 @@ TPL.pms_sanitaire={
   ${pmsTxtHtml('flux',8)}
   ${pmsTxtHtml('danger',3)}
   <div id="pms-t-hz">${pmsTblHtml('hz')}</div>
+  ${pmsTxtHtml('sonde',3)}
+  ${pmsTblBloc('so')}
 
   <h3>4. Traçabilité</h3>
   ${pmsTxtHtml('trace',6)}
@@ -322,7 +336,7 @@ TPL.pms_sanitaire={
   ${pmsTxtHtml('retrait',8)}
 
   <h3>5. Fiches d’enregistrement</h3>
-  <p class="hint" style="font-size:13px;font-style:normal">Quatre fiches vierges (réception et traçabilité, température du réfrigérateur, remise en température et service, nettoyage) sont ajoutées à l’export PDF, à imprimer et à classer dans le PMS.</p>
+  <p class="hint" style="font-size:13px;font-style:normal">Cinq fiches vierges (réception et traçabilité, température du réfrigérateur, remise en température et service, nettoyage, vérification de la sonde) sont ajoutées à l’export PDF, à imprimer et à classer dans le PMS.</p>
 
   ${pmsTblBloc('nc')}
   ${pmsTblBloc('ct')}
@@ -400,6 +414,9 @@ TPL.pms_sanitaire={
   String(PMS_ST.txt.flux||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean).forEach((l,i)=>P((i+1)+'. '+l,10,false,M+3));
   bloc(PMS_ST.txt.danger);
   tbl('hz');
+  P('Contrôle de la sonde de température',10.5,true);
+  bloc(PMS_ST.txt.sonde);
+  tbl('so');
 
   /* ---------- 4. Traçabilité ---------- */
   H('4. TRAÇABILITÉ');
