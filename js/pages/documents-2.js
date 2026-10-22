@@ -219,14 +219,14 @@ pms: `
 </ul>
 <div class="st">✏️ Tout est modifiable</div>
 <ul>
-  <li>Sept parties : présentation, bonnes pratiques d’hygiène, flux et analyse des dangers, traçabilité, fiches d’enregistrement, non-conformités et contacts, formation.</li>
+  <li>Sept parties : présentation, bonnes pratiques d’hygiène, flux et analyse des dangers (avec le <strong>contrôle de la sonde de température</strong> : contrôle visuel, bain d’eau glacée, tolérance, action si écart), traçabilité, fiches d’enregistrement, non-conformités et contacts, formation.</li>
   <li>Dans chaque tableau : <strong>Ajouter une ligne</strong>, modifier une cellule, supprimer une ligne (✕) ou <strong>Revenir au modèle</strong>. Les textes ont leur bouton <strong>Revenir au texte type</strong>.</li>
   <li>Les mentions entre [crochets] et les températures (63 °C à cœur, +3 °C à réception…) sont des repères d’usage à confirmer avec le prestataire et la DDPP.</li>
 </ul>
 <div class="st">🖊️ Signatures et export</div>
 <ul>
   <li>Signatures de la <strong>direction</strong> et du/de la <strong>référent(e) hygiène</strong> en bas du formulaire, à l’écran ou par QR code (voir l’onglet 🖊️ Signatures).</li>
-  <li>L’export PDF reprend ce qui est affiché, signatures comprises, et ajoute quatre <strong>fiches vierges à imprimer</strong> : réception et traçabilité, température du réfrigérateur, remise en température et service, nettoyage.</li>
+  <li>L’export PDF reprend ce qui est affiché, signatures comprises, et ajoute cinq <strong>fiches vierges à imprimer</strong> : réception et traçabilité, température du réfrigérateur, remise en température et service, nettoyage, vérification de la sonde.</li>
 </ul>
 `,
 eaje: `
