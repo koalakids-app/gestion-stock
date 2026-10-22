@@ -107,3 +107,14 @@ create policy reunions_equipe_delete_referent on public.reunions_equipe
 -- Les réunions des directeurs (sans crèche) restent lisibles par tous les
 -- référents via reunions_equipe_select ci-dessus.
 drop policy if exists reunions_equipe_lecture_organisation on public.reunions_equipe;
+
+-- Direction : kk_acces_creche_gestion(null) est faux, donc sans cette clause la
+-- direction ne pouvait ni changer le type d'une réunion existante en
+-- 'directeurs' (nouvelle ligne sans crèche) ni modifier/supprimer une réunion
+-- des directeurs. Appliqué par ALTER POLICY.
+alter policy reunions_equipe_update_direction on public.reunions_equipe
+  using (kk_acces_creche_gestion(creche_id) or (type = 'directeurs' and exists (select 1 from public.referents r where r.user_id = auth.uid() and r.creche_id is null and r.role in ('direction','referent'))))
+  with check (kk_acces_creche_gestion(creche_id) or (type = 'directeurs' and exists (select 1 from public.referents r where r.user_id = auth.uid() and r.creche_id is null and r.role in ('direction','referent'))));
+
+alter policy reunions_equipe_delete_direction on public.reunions_equipe
+  using (kk_acces_creche_gestion(creche_id) or (type = 'directeurs' and exists (select 1 from public.referents r where r.user_id = auth.uid() and r.creche_id is null and r.role in ('direction','referent'))));
