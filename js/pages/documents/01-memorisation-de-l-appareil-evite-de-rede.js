@@ -877,7 +877,7 @@ const TPL_SALARIE=['entretien_annuel','grille'];
    contrat_travail est un hybride : salarie (pas d'enfant a choisir) ET site
    choisi dans le formulaire pour pre-remplir l'employeur depuis Parametres
    — cf. crecheIdDuFormulaire(). */
-const TPL_ETABLISSEMENT=['eaje','cerfa_17580','contrat_travail','livret_stagiaire','protocole_urgence'];
+const TPL_ETABLISSEMENT=['eaje','cerfa_17580','contrat_travail','livret_stagiaire','protocole_urgence','pms_sanitaire'];
 function docConcerneSalarie(){
   const k=fillDoc&&fillDoc.template_key;
   return !!(k&&(TPL_SALARIE.indexOf(k)>=0||TPL_ETABLISSEMENT.indexOf(k)>=0));
