@@ -136,6 +136,18 @@ Deno.serve(async (req) => {
       if (genErr) throw genErr;
       userId = gen!.user.id;
       lien = gen!.properties.action_link;
+      // action_link est un lien de vérification Supabase qui se consomme au
+      // premier GET : l'aperçu de WhatsApp/SMS/messagerie le « grille » et la
+      // personne arrive sur le login sans session. On renvoie plutôt un lien
+      // direct vers la page, que collaborateur.js vérifie (verifyOtp) au clic.
+      const th = gen!.properties.hashed_token;
+      const vt = gen!.properties.verification_type;
+      if (th && redirect_to && (vt === "invite" || vt === "recovery")) {
+        const u = new URL(redirect_to);
+        u.searchParams.set("token_hash", th);
+        u.searchParams.set("type", vt);
+        lien = u.toString();
+      }
     } else {
       const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(
         employe.email,

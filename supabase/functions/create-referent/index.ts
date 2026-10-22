@@ -40,6 +40,21 @@ function json(body: unknown, status = 200) {
   });
 }
 
+/** Lien direct vers la page (?token_hash=…&type=…), vérifié au clic par la page
+ *  (verifyOtp). L'action_link de Supabase se consomme au premier GET : l'aperçu
+ *  de WhatsApp/SMS le « grille » et la personne retombe sur le login. */
+function lienDirect(
+  props: { hashed_token?: string; verification_type?: string },
+  redirectTo?: string,
+): string | undefined {
+  const vt = props.verification_type;
+  if (!props.hashed_token || !redirectTo || (vt !== "invite" && vt !== "recovery")) return undefined;
+  const u = new URL(redirectTo);
+  u.searchParams.set("token_hash", props.hashed_token);
+  u.searchParams.set("type", vt);
+  return u.toString();
+}
+
 /** Extrait le `sub` (user_id) du JWT porté par l'en-tête Authorization, sans
  *  revérifier sa signature : cette fonction a verify_jwt actif (voir
  *  supabase/config.toml ou le dashboard), donc la plateforme a déjà rejeté
@@ -116,7 +131,7 @@ Deno.serve(async (req) => {
           options: { redirectTo: redirect_to || undefined },
         });
         if (recErr) return json({ ok: false, error: recErr.message }, 400);
-        lien = rec.properties.action_link;
+        lien = lienDirect(rec.properties, redirect_to) ?? rec.properties.action_link;
       }
     } else if (partager) {
       const { data: gen, error: genErr } = await admin.auth.admin.generateLink({
@@ -126,7 +141,7 @@ Deno.serve(async (req) => {
       });
       if (genErr) return json({ ok: false, error: genErr.message }, 400);
       userId = gen.user?.id;
-      lien = gen.properties.action_link;
+      lien = lienDirect(gen.properties, redirect_to) ?? gen.properties.action_link;
     } else {
       const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
         email,

@@ -101,3 +101,9 @@ create policy reunions_equipe_delete_referent on public.reunions_equipe
         )
     )
   );
+
+-- Les réunions d'équipe ne sont visibles que par leur crèche (et la direction) :
+-- on retire la lecture inter-crèches de reunions_equipe_lecture_organisation.sql.
+-- Les réunions des directeurs (sans crèche) restent lisibles par tous les
+-- référents via reunions_equipe_select ci-dessus.
+drop policy if exists reunions_equipe_lecture_organisation on public.reunions_equipe;

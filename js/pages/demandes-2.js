@@ -477,8 +477,8 @@ function rmpRefreshCurrentView(){
 const NOTICE_ONGLET_SECTION = {
   demands:'demandes', incidents:'incidents', presence:'presences', planning:'planning', evenements:'evenements',
   enfants:'enfants', vaccinations:'vaccinations', stagiaires:'stagiaires', partenaires:'partenaires',
-  referents:'referents', dashboard:'dashboards', 'ref-dashboard':'dashboards', actions:'actions', afaire:'afaire',
-  remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches', 'reunions-equipe':'reunions'
+  referents:'referents', dashboard:'dashboards', 'ref-dashboard':'dashboards', actions:'actions', 'reunions-equipe':'reunionsequipe', afaire:'afaire',
+  remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches'
 };
 function openNotice() {
   document.getElementById('modal-notice').classList.add('open');
@@ -622,7 +622,7 @@ planning: `
   <li>Cliquez <strong>Enregistrer</strong></li>
 </ol>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🕑 Deux lieux dans la même demi-journée</div>
-<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Le choix de la demi-journée propose <strong>Matin</strong>, <strong>Matin (2)</strong>, <strong>Après-midi</strong> et <strong>Après-midi (2)</strong>. Le second créneau sert à noter un deuxième lieu dans la même demi-journée ; il n’apparaît dans le planning (et sur le tableau de bord) que lorsqu’il est renseigné. Les frais kilométriques (onglet 🚗 Frais IK) en tiennent compte : les deux lieux s’enchaînent (départ → lieu 1 → lieu 2 → départ), à raison d’un trajet par ligne.</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Le choix de la demi-journée propose <strong>Matin</strong>, <strong>Matin (2)</strong>, <strong>Après-midi</strong> et <strong>Après-midi (2)</strong>. Le second créneau sert à noter un deuxième lieu dans la même demi-journée ; il n’apparaît dans le planning (et sur le tableau de bord) que lorsqu’il est renseigné. Pour changer le lieu (ou le type) d’un événement du planning coordinateur, <strong>cliquez dessus</strong> : le formulaire s’ouvre pré-rempli, inutile de le supprimer et de le recréer (la petite croix, elle, supprime). Les frais kilométriques (onglet 🚗 Frais IK) en tiennent compte : les deux lieux s’enchaînent (départ → lieu 1 → lieu 2 → départ), à raison d’un trajet par ligne.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">✋ Déplacer un événement (glisser-déposer)</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li>Sur ordinateur : saisissez la carte d’un événement à la souris et déposez-la sur un autre jour ou une autre demi-journée.</li>
@@ -869,17 +869,27 @@ actions: `
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📄 Comptes rendus</div>
 <div style="font-size:13px;color:#555;line-height:1.7">Conserve l'historique des réunions passées, consultable indépendamment de la liste des actions en cours.</div>`,
 
-reunions: `
-<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📓 Réunions d'équipe</h3>
+reunionsequipe: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📝 Réunions d'équipe</h3>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
-  💡 Deux types de comptes rendus, avec une visibilité différente.
+  💡 Les comptes rendus de réunion (équipe, famille, partenaire, PMI…) sont rédigés par chaque directeur/trice technique pour sa crèche. Ils sont distincts du suivi des actions et des réunions de direction.
 </div>
-<ul style="font-size:13px;line-height:1.7;padding-left:20px">
-  <li><strong>Réunion d'équipe</strong> (hebdomadaire) et <strong>Autre</strong> (famille, PMI…) : rattachées à une crèche, visibles uniquement par l'équipe de cette crèche et par la direction.</li>
-  <li><strong>Réunion des directeurs techniques</strong> : sans crèche, visible par tous les référents et par la direction. Seul son auteur (ou la direction) peut la modifier tant qu'elle est en brouillon.</li>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">✏️ Rédiger un compte rendu</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li><strong>Nouveau compte rendu</strong> : date, heure, type (réunion d'équipe, réunion des directeurs techniques ou autre, à préciser), participants, excusés, compte rendu, décisions et date de la prochaine réunion.</li>
+  <li><strong>Photographier mes notes</strong> : les photos servent uniquement à la transcription du texte, elles ne sont pas enregistrées. Relisez toujours le texte avant de l'insérer.</li>
+  <li><strong>Enregistrer en brouillon</strong> garde le compte rendu modifiable ; <strong>Valider</strong> le fige (il faut au moins un compte rendu ou des décisions).</li>
 </ul>
-<p style="font-size:13px">Un compte rendu validé est figé ; seule la direction peut le rouvrir. Le filtre « Tous les types » permet de n'afficher qu'une famille de réunions.</p>
-`,
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔒 Brouillon, validé, réouverture</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Un compte rendu validé n'est plus modifiable ni supprimable par le directeur/trice technique. Seule la <strong>direction</strong> peut le rouvrir ; la réouverture est tracée (date et personne), sans effacer la trace de la validation d'origine.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">👀 Qui voit quoi</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li><strong>Réunion d'équipe</strong> (hebdomadaire) et <strong>Autre</strong> : visibles uniquement par l'équipe de la crèche concernée (son directeur/trice technique) et par la direction.</li>
+  <li><strong>Réunion des directeurs techniques</strong> : sans crèche, visible par <strong>tous les directeurs/trices techniques</strong> et par la direction. Un directeur/trice ne modifie, ne valide et ne supprime que ses propres comptes rendus.</li>
+  <li>La direction voit et gère toutes les crèches.</li>
+</ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Retrouver un compte rendu</div>
+<div style="font-size:13px;color:#555;line-height:1.7">Les filtres <strong>Tous / Brouillons / Validés</strong>, le sélecteur de <strong>crèche</strong>, le type, les dates (du / au) et la recherche par mot retrouvent un compte rendu. Le bouton œil ouvre la lecture et l'impression.</div>`,
 
 afaire: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">✅ À faire</h3>

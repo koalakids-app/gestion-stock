@@ -18,7 +18,8 @@
     employes: {
       titre: 'Collaborateurs',
       html: '<p>Les fiches des collaborateurs de la crèche et leurs documents. Ouvrez une fiche pour la consulter ou la mettre à jour.</p>' +
-        '<p>Dans la fiche, « Planning des quiz » montre, semaine par semaine, les quiz faits, à faire ou en retard de la personne (lecture seule).</p>'
+        '<p>Dans la fiche, « Planning des quiz » montre, semaine par semaine, les quiz faits, à faire ou en retard de la personne (lecture seule).</p>' +
+        '<p><strong>Compte de connexion et accès terrain</strong> : le bouton d’invitation envoie un e-mail ; « Partager le lien » donne un lien à transmettre (WhatsApp, SMS). Le collaborateur ouvre le lien, choisit son mot de passe (8 caractères minimum), configure la double authentification, puis entre. Le lien ne sert qu’une fois : s’il est expiré, repartagez-en un depuis la fiche.</p>'
     },
     factures: {
       titre: 'Facturation',
@@ -35,7 +36,8 @@
     },
     terrain: {
       titre: 'Accès terrain',
-      html: '<p>L’accès réservé aux équipes de terrain. L’accès est protégé par une <strong>double authentification</strong> : saisissez le code demandé à l’ouverture.</p>'
+      html: '<p>L’accès réservé aux équipes de terrain. L’accès est protégé par une <strong>double authentification</strong> : saisissez le code demandé à l’ouverture.</p>' +
+        '<p>Première connexion : ouvrez le lien reçu, choisissez votre mot de passe, puis configurez la double authentification. Lien expiré : demandez-en un nouveau à la direction.</p>'
     }
   };
 

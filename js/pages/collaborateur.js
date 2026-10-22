@@ -118,7 +118,7 @@ async function boot(){
   if(linkResult==='invite'||linkResult==='recovery'){showSetPassword();return;}
   if(!JUSTE_CONNECTE){
     try{await sb.auth.signOut();}catch(e){}
-    showLogin();return;
+    showLogin(/error/.test(location.hash)?'Lien invalide ou expiré — demandez une nouvelle invitation à la direction.':'');return;
   }
   let session=null;
   try{
