@@ -876,7 +876,7 @@ reunionsequipe: `
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">✏️ Rédiger un compte rendu</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
-  <li><strong>Nouveau compte rendu</strong> : date, heure, type (réunion d'équipe ou autre, à préciser), participants, excusés, compte rendu, décisions et date de la prochaine réunion.</li>
+  <li><strong>Nouveau compte rendu</strong> : date, heure, type (réunion d'équipe, réunion des directeurs techniques ou autre, à préciser), participants, excusés, compte rendu, décisions et date de la prochaine réunion.</li>
   <li><strong>Photographier mes notes</strong> : les photos servent uniquement à la transcription du texte, elles ne sont pas enregistrées. Relisez toujours le texte avant de l'insérer.</li>
   <li><strong>Enregistrer en brouillon</strong> garde le compte rendu modifiable ; <strong>Valider</strong> le fige (il faut au moins un compte rendu ou des décisions).</li>
 </ul>
@@ -884,7 +884,8 @@ reunionsequipe: `
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Un compte rendu validé n'est plus modifiable ni supprimable par le directeur/trice technique. Seule la <strong>direction</strong> peut le rouvrir ; la réouverture est tracée (date et personne), sans effacer la trace de la validation d'origine.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">👀 Qui voit quoi</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
-  <li>Un directeur/trice technique <strong>lit les comptes rendus de toutes les crèches</strong> de l'organisation (bouton œil, lecture seule), mais ne modifie, ne valide et ne supprime que ceux de <strong>sa crèche</strong>.</li>
+  <li><strong>Réunion d'équipe</strong> (hebdomadaire) et <strong>Autre</strong> : visibles uniquement par l'équipe de la crèche concernée (son directeur/trice technique) et par la direction.</li>
+  <li><strong>Réunion des directeurs techniques</strong> : sans crèche, visible par <strong>tous les directeurs/trices techniques</strong> et par la direction. Un directeur/trice ne modifie, ne valide et ne supprime que ses propres comptes rendus.</li>
   <li>La direction voit et gère toutes les crèches.</li>
 </ul>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🔎 Retrouver un compte rendu</div>
