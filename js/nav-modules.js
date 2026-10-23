@@ -1,6 +1,6 @@
 /* Barre de navigation entre modules, présente sur les pages internes.
-   Barre flottante en bas à gauche : un clic passe d'un module à l'autre sans repasser par le portail.
-   Le module en cours est surligné ; sur mobile, icônes seules.
+   Barre flottante verticale au-dessus de la bulle koala : un clic passe d'un module à l'autre sans repasser par le portail.
+   Le module en cours est surligné ; icônes seules (le nom s’affiche au survol).
    Apparaît seulement une fois connecté·e. Client Supabase : celui de la page (`sb`), sinon un client propre
    (même principe que js/support-chat.js). */
 (function () {
@@ -69,18 +69,19 @@
     var st = document.createElement('style');
     st.id = 'kk-nav-css';
     st.textContent =
-      '#kk-nav{position:fixed;left:16px;bottom:16px;z-index:9985;display:flex;align-items:center;gap:2px;max-width:calc(100vw - 100px);background:#fff;border:1px solid rgba(61,53,128,.18);border-radius:999px;padding:4px;box-shadow:0 6px 24px rgba(30,25,80,.22);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Nunito,sans-serif;overflow-x:auto;scrollbar-width:none}' +
+      '#kk-nav{position:fixed;right:36px;bottom:156px;z-index:9985;display:flex;flex-direction:column;align-items:center;gap:2px;max-height:calc(100vh - 180px);background:#fff;border:1px solid rgba(61,53,128,.18);border-radius:999px;padding:4px;box-shadow:0 6px 24px rgba(30,25,80,.22);overflow-y:auto;scrollbar-width:none}' +
       '#kk-nav::-webkit-scrollbar{display:none}' +
-      '#kk-nav a,#kk-nav button{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:none;background:transparent;color:#3D3580;font-size:12.5px;font-weight:600;line-height:1;font-family:inherit;text-decoration:none;white-space:nowrap;cursor:pointer;flex:none}' +
+      '#kk-nav a,#kk-nav button{display:flex;align-items:center;justify-content:center;width:38px;height:38px;padding:0;border-radius:50%;border:none;background:transparent;color:#3D3580;text-decoration:none;cursor:pointer;flex:none;font-family:inherit}' +
+      '#kk-nav a span{display:none}' +
       '#kk-nav a:hover,#kk-nav button:hover{background:rgba(61,53,128,.1)}' +
       '#kk-nav a.kk-cur{background:#3D3580;color:#fff}' +
-      '#kk-nav i{font-size:16px}' +
-      '#kk-nav .kk-sep{width:1px;height:20px;background:rgba(61,53,128,.2);margin:0 3px;flex:none}' +
-      '#kk-nav-menu{position:fixed;left:16px;bottom:64px;z-index:9986;display:flex;flex-direction:column;background:#fff;border:1px solid rgba(61,53,128,.18);border-radius:16px;padding:6px;box-shadow:0 8px 28px rgba(30,25,80,.25);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Nunito,sans-serif}' +
+      '#kk-nav i{font-size:19px}' +
+      '#kk-nav .kk-sep{width:20px;height:1px;background:rgba(61,53,128,.2);margin:3px 0;flex:none}' +
+      '#kk-nav-menu{position:fixed;right:92px;bottom:156px;z-index:9986;display:flex;flex-direction:column;background:#fff;border:1px solid rgba(61,53,128,.18);border-radius:16px;padding:6px;box-shadow:0 8px 28px rgba(30,25,80,.25);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Nunito,sans-serif}' +
       '#kk-nav-menu a{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:10px;color:#3D3580;font-size:13.5px;font-weight:600;text-decoration:none}' +
       '#kk-nav-menu a:hover{background:rgba(61,53,128,.1)}#kk-nav-menu a.kk-cur{background:#3D3580;color:#fff}#kk-nav-menu i{font-size:18px}' +
-      '#kk-nav.kk-ferme a:not(.kk-portail),#kk-nav.kk-ferme #kk-nav-plus,#kk-nav.kk-ferme .kk-sep,#kk-nav.kk-ferme .kk-portail span{display:none}' +
-      '@media (max-width:768px){#kk-nav{bottom:76px;left:10px}#kk-nav-menu{bottom:124px;left:10px}#kk-nav a span{display:none}#kk-nav a,#kk-nav button{padding:8px 10px}#kk-nav a.kk-cur span{display:inline}}';
+      '#kk-nav.kk-ferme a:not(.kk-portail),#kk-nav.kk-ferme #kk-nav-plus,#kk-nav.kk-ferme .kk-sep{display:none}' +
+      '@media (max-width:768px){#kk-nav{right:28px;bottom:208px}#kk-nav-menu{right:80px;bottom:208px}}';
     document.head.appendChild(st);
   }
 
@@ -121,7 +122,7 @@
     var h = '<a class="kk-portail" href="index.html" title="Retour au portail"><i class="ti ti-home"></i><span>Portail</span></a><span class="kk-sep"></span>';
     recents.forEach(function (m) { h += lien(m, cur); });
     h += '<button type="button" id="kk-nav-plus" title="Tous les modules" aria-label="Tous les modules" aria-haspopup="true"><i class="ti ti-layout-grid"></i></button>';
-    h += '<button type="button" id="kk-nav-tog" title="Replier / déplier la barre" aria-label="Replier la barre"><i class="ti ti-chevron-left"></i></button>';
+    h += '<button type="button" id="kk-nav-tog" title="Replier / déplier la barre" aria-label="Replier la barre"><i class="ti ti-chevron-down"></i></button>';
     dock = document.createElement('nav');
     dock.id = 'kk-nav';
     dock.setAttribute('aria-label', 'Navigation entre modules');
@@ -131,10 +132,10 @@
     document.getElementById('kk-nav-tog').addEventListener('click', function () {
       var f = dock.classList.toggle('kk-ferme');
       ecrire('kk_nav_ferme', f ? '1' : '0');
-      this.querySelector('i').className = 'ti ' + (f ? 'ti-chevron-right' : 'ti-chevron-left');
+      this.querySelector('i').className = 'ti ' + (f ? 'ti-chevron-up' : 'ti-chevron-down');
     });
     document.getElementById('kk-nav-plus').addEventListener('click', basculerMenu);
-    if (dock.classList.contains('kk-ferme')) document.querySelector('#kk-nav-tog i').className = 'ti ti-chevron-right';
+    if (dock.classList.contains('kk-ferme')) document.querySelector('#kk-nav-tog i').className = 'ti ti-chevron-up';
   }
 
   /* ---------- démarrage : la barre n'apparaît qu'une fois connecté·e ---------- */
