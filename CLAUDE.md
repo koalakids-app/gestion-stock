@@ -48,6 +48,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Planning des quiz
 - `js/planning-quiz.js` (chargé par `collaborateur.html` et `employes.html`) affiche le planning des 16 quiz « profil » du projet quiz (thèmes 1 à 8 pédagogie, 9 à 16 protocoles), deux par semaine à partir du 26 octobre 2026 puis une semaine de rattrapage. Dates et ordre en dur dans `PLANNING_QUIZ` ; les quiz sont retrouvés par leur titre « Thème N — … » et ne s'affichent « Bientôt disponible » que tant qu'ils sont en brouillon côté quiz. Mon espace : liens personnels ; fiche employé : lecture seule (le lien est personnel).
 
+## Double authentification : codes de secours
+- TOTP Supabase ; codes de secours (10, usage unique, empreinte SHA-256 seulement) : `sql/mfa_codes_secours.sql` + edge function `supabase/functions/mfa-codes-secours` (à appliquer / déployer à la main). Génération dans Demandes › Sécurité du compte (exige une session aal2 ; l'appareil mémorisé est ré-interrogé), utilisation depuis l'écran du code (lien « Téléphone perdu ? ») : le code retire les appareils TOTP du compte, puis la page se recharge sur l'enrôlement. Script commun : `js/mfa-secours.js` (chargé après `support-chat.js` sur les pages protégées).
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.
