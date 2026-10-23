@@ -329,6 +329,8 @@ function openFromUrl(){
     if(!doc){toast('Document introuvable ou inaccessible');return;}
     // nettoyer l'URL pour éviter une réouverture au rechargement
     history.replaceState(null,'',location.pathname);
+    // Document à télécharger (ex. depuis une notification) : aperçu du fichier plutôt qu'un formulaire.
+    if(doc.type!=='remplissable'&&doc.fichier_url){apercuFichier(docId);return;}
     openFill(docId,repId,false);
   }catch(e){console.warn('openFromUrl',e);}
 }
@@ -747,7 +749,7 @@ async function saveDoc(){
     }
     let error;
     if(editDocId){({error}=await sb.from('documents_koala').update(row).eq('id',editDocId));}
-    else{row.created_by=ME.id;({error}=await sb.from('documents_koala').insert(row));}
+    else{row.created_by=ME.id;const r=await sb.from('documents_koala').insert(row).select('id').maybeSingle();error=r.error;if(r.data)row.id=r.data.id;}
     if(error)throw error;
     const prevenir=!editDocId&&document.getElementById('dNotif').checked;
     close_('ovDoc');toast('Document enregistré');await loadAll();
@@ -772,7 +774,7 @@ async function notifierNouveauDocument(doc){
     }
     if(!refs.length&&!emps.length)return;
     const r=await callFn('notify-push',{referent_ids:refs,employe_ids:emps,
-      title:'Nouveau document',body:doc.titre,url:'./documents.html',tag:'doc-'+Date.now()});
+      title:'Nouveau document',body:doc.titre,url:'./documents.html'+(doc.id?'?doc='+encodeURIComponent(doc.id):''),tag:'doc-'+Date.now()});
     if(r.ok)toast(r.data&&r.data.skipped?'Notification retenue jusqu\u2019à la fin du silence':'Équipes prévenues ('+(r.data&&r.data.envoyes||0)+' appareil(s))');
   }catch(e){console.warn('[documents] notification',e);}
 }
