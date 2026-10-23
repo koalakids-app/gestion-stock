@@ -767,6 +767,7 @@ async function finishLoginAfterAuth(){
     isDirection=currentProfile?.role==='direction';
     if(window.KKBranding)KKBranding.applyBranding(sb);
     showApp();
+    if(window.KKMfaSecours)setTimeout(()=>KKMfaSecours.rappel(),2500);
   }catch(e){
     console.error('[Login]',e);
     err.textContent='Erreur de chargement. Réessayez.';err.style.display='block';

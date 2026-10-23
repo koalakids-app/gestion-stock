@@ -388,7 +388,7 @@ async function secMfaRefreshStatus(){
     const{data,error}=await sb.auth.mfa.listFactors();
     if(error)throw error;
     const verified=(data.totp||[]).find(f=>f.status==='verified');
-    if(verified){secMfaFactorId=verified.id;secMfaShowOnly('sec-mfa-enrolled');}
+    if(verified){secMfaFactorId=verified.id;secMfaShowOnly('sec-mfa-enrolled');if(window.KKMfaSecours)KKMfaSecours.monterPanneau(document.getElementById('sec-mfa-codes'));}
     else{secMfaShowOnly('sec-mfa-not-enrolled');}
   }catch(err){
     document.getElementById('sec-mfa-err-generic').textContent='Erreur lors de la vérification du statut MFA : '+err.message;
