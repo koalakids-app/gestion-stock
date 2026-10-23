@@ -468,6 +468,7 @@ async function syncFromCloud() {
       else if (currentPage === 'fournisseurs') renderFournisseurs();
       else if (currentPage === 'historique') renderHistorique();
       else if (currentPage === 'couches') renderCouches();
+      else if (currentPage === 'nettoyages') renderNettoyages();
     }
 
     const [artsOk, cmdsOk, fournsOk, histosOk] = [artsR, cmdsR, fournsR, histosR].map(r => r.status === 'fulfilled');
