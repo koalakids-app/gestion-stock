@@ -8,7 +8,8 @@
 //
 // Appelée UNIQUEMENT par l'edge function `liste-destinataires` du projet quiz,
 // jamais par un navigateur : le secret partagé ne quitte pas les serveurs.
-// Elle ne renvoie que prénom, nom, mail, crèche et statut — jamais de donnée
+// Elle ne renvoie que prénom, nom, mail, crèche, statut et un indicateur « référent·e »
+// — jamais de donnée
 // d'enfant ni de famille, ni aucune pièce de dossier.
 //
 // Déploiement, sans JWT (l'appelant n'a pas de session sur ce projet) :
@@ -152,6 +153,12 @@ Deno.serve(async (req) => {
         creche_id: r.creche_id, statut: STATUT_SALARIE, origine: 'referents',
       });
     }
+
+    // Marque les référent·es : tous sont rattachés à une fiche employes (donc listés sous
+    // « employes »), le quiz a besoin de savoir qui l'est pour écrire « à voir avec <référent> ».
+    const idsReferents = new Set<string>(
+      (ref.data || []).flatMap((r) => [r.id, r.employe_id]).filter(Boolean).map(String));
+    for (const d of sortie) d.referent = idsReferents.has(String(d.ref));
 
     sortie.sort((a, b) =>
       String(a.creche).localeCompare(String(b.creche), 'fr') ||
