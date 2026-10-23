@@ -111,7 +111,7 @@ fetch(manifestLien.href)
       <div class="card-arrow">›</div>
     </a>
 
-<a href="https://koalakids-app.github.io/quiz-protocoles/admin.html" class="card card-quiz" data-masque="employe">
+<a href="https://koalakids-app.github.io/quiz-protocoles/admin.html" class="card card-quiz" data-masque="employe" data-reserve="direction" style="display:none">
       <div class="card-icon"><img src="quiz-icon.jpg" alt="Quiz &amp; Formations"></div>
       <div class="card-text">
         <h2>Quiz &amp; Formations</h2>
@@ -354,6 +354,11 @@ function applyRole(){
   var masque = getRole()==='employe';
   document.querySelectorAll('[data-masque~="employe"]').forEach(function(el){
     el.style.display = masque ? 'none' : '';
+  });
+  /* Cartes réservées : cachées tant que le rôle n'est pas connu et pour un(e) employé(e). */
+  var r = getRole();
+  document.querySelectorAll('[data-reserve]').forEach(function(el){
+    el.style.display = (r && r!=='employe') ? '' : 'none';
   });
   var lien = document.getElementById('roleToutAfficher');
   if(lien) lien.style.display = masque ? '' : 'none';
