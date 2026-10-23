@@ -54,7 +54,7 @@
       ov.id = 'kk-notice-ov';
       ov.innerHTML = '<div class="kk-notice-box"><button type="button" class="kk-notice-x" aria-label="Fermer">✕</button>' +
         '<h3 id="kk-notice-t"></h3><div id="kk-notice-b"></div>' +
-        '<p class="kk-notice-pied">💬 Un problème ? Cliquez sur la bulle koala pour nous écrire.<br>La notice détaillée de la gestion des crèches se trouve dans <strong>Demandes</strong>.</p>' +
+        '<p class="kk-notice-pied"><i class="ti ti-layout-navbar"></i> La barre en bas à gauche passe d’un module à l’autre sans repasser par le portail (flèche pour la replier) ; <strong>Message</strong> écrit aux employés sans quitter la page.<br>💬 Un problème ? Cliquez sur la bulle koala pour nous écrire.<br>La notice détaillée de la gestion des crèches se trouve dans <strong>Demandes</strong>.</p>' +
         '<div style="text-align:right"><button type="button" class="kk-notice-ok">J’ai compris</button></div></div>';
       document.body.appendChild(ov);
       ov.addEventListener('click', function (e) {
