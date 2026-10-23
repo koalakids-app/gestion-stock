@@ -54,7 +54,7 @@
       ov.id = 'kk-notice-ov';
       ov.innerHTML = '<div class="kk-notice-box"><button type="button" class="kk-notice-x" aria-label="Fermer">✕</button>' +
         '<h3 id="kk-notice-t"></h3><div id="kk-notice-b"></div>' +
-        '<p class="kk-notice-pied"><i class="ti ti-layout-navbar"></i> La barre en bas à gauche garde les derniers modules consultés (le plus récent en tête) pour y revenir en un clic ; la grille ouvre tous les modules, la flèche replie la barre.<br>💬 Un problème ? Cliquez sur la bulle koala pour nous écrire.<br>La notice détaillée de la gestion des crèches se trouve dans <strong>Demandes</strong>.</p>' +
+        '<p class="kk-notice-pied"><i class="ti ti-layout-navbar"></i> La barre verticale au-dessus du koala garde les derniers modules consultés (le plus récent en tête) pour y revenir en un clic ; la grille ouvre tous les modules, la flèche replie la barre.<br>💬 Un problème ? Cliquez sur la bulle koala pour nous écrire.<br>La notice détaillée de la gestion des crèches se trouve dans <strong>Demandes</strong>.</p>' +
         '<div style="text-align:right"><button type="button" class="kk-notice-ok">J’ai compris</button></div></div>';
       document.body.appendChild(ov);
       ov.addEventListener('click', function (e) {
