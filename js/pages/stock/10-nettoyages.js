@@ -243,7 +243,7 @@ async function nettEnregistrer(p, extra) {
     const rows = await sbInsert('nettoyage_journal', {
       plan_id: p.id, creche: p.creche, type: p.type, libelle: p.libelle, frequence: p.frequence,
       fait_le: (extra && extra.date) || nettJour(),
-      fait_par: nettQui() || null,
+      fait_par: (extra && extra.par) || nettQui() || null,
       produit: (extra && extra.produit) || null,
       observation: (extra && extra.observation) || null
     });
@@ -275,6 +275,7 @@ function nettOuvrirFait(planId) {
   d.max = nettJour();
   d.min = nettJour(new Date(Date.now() - 7 * 864e5));
   d.value = nettJour();
+  document.getElementById('nf-par').value = nettQui();
   document.getElementById('nf-produit').value = '';
   document.getElementById('nf-obs').value = '';
   // Produits d'entretien du stock : proposés pour garder le lien avec l'inventaire
@@ -288,8 +289,11 @@ async function nettValiderFait() {
   if (!p) return;
   const date = document.getElementById('nf-date').value;
   if (!date || date > nettJour()) return showNotif('⚠ Choisissez une date qui n’est pas dans le futur.');
+  const par = document.getElementById('nf-par').value.trim();
+  if (!par) return showNotif('⚠ Indiquez qui a fait le nettoyage.');
   const ok = await nettEnregistrer(p, {
     date,
+    par,
     produit: document.getElementById('nf-produit').value.trim(),
     observation: document.getElementById('nf-obs').value.trim()
   });
