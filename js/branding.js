@@ -94,7 +94,9 @@
       const uid = s && s.session && s.session.user && s.session.user.id;
       if (!uid) return;
       const { data: r } = await sb.from('referents').select('role').eq('user_id', uid).maybeSingle();
-      if (r && r.role) localStorage.setItem('kk_role', r.role);
+      if (r && r.role) { localStorage.setItem('kk_role', r.role); return; }
+      const { data: e } = await sb.from('employes').select('id').eq('user_id', uid).maybeSingle();
+      if (e) localStorage.setItem('kk_role', 'employe');
     } catch (e) { /* best-effort */ }
   }
 
