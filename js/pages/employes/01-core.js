@@ -320,9 +320,11 @@ function renderListe(){
   document.getElementById('empty').style.display=visibles.length?'none':'block';
   document.getElementById('empty').textContent=showArchivedOnly?'Aucune fiche archivée pour cette crèche.':'Aucun(e) collaborateur/trice pour cette crèche.';
   box.innerHTML=visibles.map(e=>{
-    const compte=e.user_id
-      ?'<span class="badge on"><i class="ti ti-lock-open"></i> Compte actif</span>'
-      :'<span class="badge off">Pas de compte</span>';
+    const compte=!e.user_id
+      ?'<span class="badge off">Pas de compte</span>'
+      :(estArchive(e)
+        ?'<span class="badge off" style="color:var(--red)"><i class="ti ti-lock"></i> Compte bloqué</span>'
+        :'<span class="badge on"><i class="ti ti-lock-open"></i> Compte actif</span>');
     const statut=estArchive(e)
       ?'<span class="badge off" style="background:var(--violet-l);color:var(--violet)">Archivé</span>'
       :(estSorti(e)?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)">Sorti</span>':'');
