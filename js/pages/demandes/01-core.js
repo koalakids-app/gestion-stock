@@ -597,6 +597,7 @@ function detecterNouveautesEtNotifier(avant){
     }
   }
   detecterNouveauxDocuments(avant);
+  if(typeof detecterParcoursQuizTermines==='function')detecterParcoursQuizTermines();
 }
 /* Nouveaux documents (page Documents) : signalés dans la cloche comme le reste. Au premier passage de la
    session, on rattrape aussi ceux ajoutés depuis la dernière visite (poste fermé quand le document est
