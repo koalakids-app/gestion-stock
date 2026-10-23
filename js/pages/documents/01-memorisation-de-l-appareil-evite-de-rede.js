@@ -319,7 +319,9 @@ function openFromUrl(){
     /* Employé(e) : DOCS ne contient deja que les documents coches « Ouvert aux employes ». */
     const docId=q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id);
     DEPUIS_TERRAIN=IS_EMPLOYE&&!!(q.get('doc')||tpl);
-    DEPUIS_NOTIF=!IS_EMPLOYE&&q.get('retour')==='gestion';
+    /* ?doc= seul (sans rep / enf / emp, que posent les fiches) = lien d'une notification ;
+       ?retour=gestion le dit aussi explicitement. */
+    DEPUIS_NOTIF=!IS_EMPLOYE&&!tpl&&(q.get('retour')==='gestion'||(!!q.get('doc')&&!q.get('rep')&&!q.get('enf')&&!q.get('emp')&&!q.get('terrain')));
     if(DEPUIS_TERRAIN&&!docId){location.replace('terrain.html');return;}
     if(!docId){if(tpl)toast('Document introuvable ou inaccessible');return;}
     const repId=q.get('rep')||null;
