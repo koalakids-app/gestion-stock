@@ -521,7 +521,7 @@ function notifBellOuvrir(id){
   notifBellMarquerLu(id);closeNotifBell();
   const c=n.cible||{};
   if(n.section==='stock'){window.location.href='stock.html';return;}
-  if(n.section==='documents'){window.location.href='documents.html'+(c.type==='document'&&c.id?'?doc='+encodeURIComponent(c.id):'');return;}
+  if(n.section==='documents'){window.location.href='documents.html'+(c.type==='document'&&c.id?'?doc='+encodeURIComponent(c.id)+'&retour=gestion':'');return;}
   if(!n.section)return;
   showMain(n.section);
   try{
