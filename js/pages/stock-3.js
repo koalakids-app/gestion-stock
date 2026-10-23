@@ -262,7 +262,7 @@ nettoyages: `
 <ol style="font-size:13px;line-height:2;color:var(--ink2);padding-left:20px;margin-bottom:20px">
   <li>Ouvrez l'onglet <strong>Nettoyages</strong> : le plan de votre crèche est organisé en <strong>Jeux et jouets</strong> et <strong>Espaces et mobilier</strong></li>
   <li>Cliquez sur <strong>✓ Fait</strong> en face de la ligne nettoyée : la date, votre nom et l'heure sont enregistrés</li>
-  <li>Le bouton <strong>…</strong> permet d'indiquer le <strong>produit utilisé</strong> (proposé depuis les articles « Entretien » du stock), une observation, ou une date des 7 derniers jours</li>
+  <li>Le bouton <strong>…</strong> permet d'indiquer <strong>qui a fait le nettoyage</strong> (nom prérempli avec votre compte, à corriger si quelqu'un d'autre l'a fait ; le bouton ✓ Fait enregistre directement le nom de votre compte), le <strong>produit utilisé</strong> (proposé depuis les articles « Entretien » du stock), une observation, ou une date des 7 derniers jours</li>
   <li>Une pastille indique l'état de la période en cours : <strong>Fait</strong>, <strong>À faire aujourd'hui / cette semaine / ce mois-ci</strong> ou le nombre de nettoyages pour les lignes « après chaque usage »</li>
 </ol>
 
