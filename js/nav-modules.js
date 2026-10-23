@@ -76,9 +76,39 @@
       '#kk-nav a.kk-cur{background:#3D3580;color:#fff}' +
       '#kk-nav i{font-size:16px}' +
       '#kk-nav .kk-sep{width:1px;height:20px;background:rgba(61,53,128,.2);margin:0 3px;flex:none}' +
-      '#kk-nav.kk-ferme a:not(.kk-portail),#kk-nav.kk-ferme .kk-sep,#kk-nav.kk-ferme .kk-portail span{display:none}' +
-      '@media (max-width:768px){#kk-nav{bottom:76px;left:10px}#kk-nav a span{display:none}#kk-nav a,#kk-nav button{padding:8px 10px}#kk-nav a.kk-cur span{display:inline}}';
+      '#kk-nav-menu{position:fixed;left:16px;bottom:64px;z-index:9986;display:flex;flex-direction:column;background:#fff;border:1px solid rgba(61,53,128,.18);border-radius:16px;padding:6px;box-shadow:0 8px 28px rgba(30,25,80,.25);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Nunito,sans-serif}' +
+      '#kk-nav-menu a{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:10px;color:#3D3580;font-size:13.5px;font-weight:600;text-decoration:none}' +
+      '#kk-nav-menu a:hover{background:rgba(61,53,128,.1)}#kk-nav-menu a.kk-cur{background:#3D3580;color:#fff}#kk-nav-menu i{font-size:18px}' +
+      '#kk-nav.kk-ferme a:not(.kk-portail),#kk-nav.kk-ferme #kk-nav-plus,#kk-nav.kk-ferme .kk-sep,#kk-nav.kk-ferme .kk-portail span{display:none}' +
+      '@media (max-width:768px){#kk-nav{bottom:76px;left:10px}#kk-nav-menu{bottom:124px;left:10px}#kk-nav a span{display:none}#kk-nav a,#kk-nav button{padding:8px 10px}#kk-nav a.kk-cur span{display:inline}}';
     document.head.appendChild(st);
+  }
+
+  function lien(m, cur) {
+    return '<a href="' + m.f + '"' + (m.f === cur ? ' class="kk-cur" aria-current="page"' : '') + ' title="' + esc(m.t) + '"><i class="ti ' + m.ico + '"></i><span>' + esc(m.t) + '</span></a>';
+  }
+  /* Modules consultés récemment (le dernier ouvert en tête), mémorisés dans ce navigateur. */
+  var NB_RECENTS = 5, PAR_DEFAUT = ['demandes.html', 'inscriptions.html', 'contrats.html'];
+  function noterVisite(cur, permis) {
+    var liste = [];
+    try { liste = JSON.parse(lire('kk_nav_recents') || '[]'); } catch (e) { liste = []; }
+    if (!Array.isArray(liste)) liste = [];
+    if (permis.some(function (m) { return m.f === cur; })) liste = [cur].concat(liste.filter(function (f) { return f !== cur; }));
+    liste = liste.slice(0, 12);
+    ecrire('kk_nav_recents', JSON.stringify(liste));
+    PAR_DEFAUT.forEach(function (f) { if (liste.length < 3 && liste.indexOf(f) < 0) liste.push(f); });
+    return liste.map(function (f) { return permis.filter(function (m) { return m.f === f; })[0]; })
+      .filter(Boolean).slice(0, NB_RECENTS);
+  }
+  function basculerMenu() {
+    var m = document.getElementById('kk-nav-menu');
+    if (m) { m.remove(); return; }
+    var cur = pageCourante(), dir = profil && profil.role === 'direction';
+    m = document.createElement('div');
+    m.id = 'kk-nav-menu';
+    m.innerHTML = MODULES.filter(function (x) { return !x.direction || dir; }).map(function (x) { return lien(x, cur); }).join('');
+    document.body.appendChild(m);
+    setTimeout(function () { document.addEventListener('click', function f(e) { if (!m.contains(e.target) && e.target.closest && !e.target.closest('#kk-nav-plus')) { m.remove(); document.removeEventListener('click', f); } }); }, 0);
   }
 
   function construireBarre() {
@@ -86,11 +116,11 @@
     css();
     var cur = pageCourante();
     var dir = profil && profil.role === 'direction';
+    var permis = MODULES.filter(function (m) { return !m.direction || dir; });
+    var recents = noterVisite(cur, permis);
     var h = '<a class="kk-portail" href="index.html" title="Retour au portail"><i class="ti ti-home"></i><span>Portail</span></a><span class="kk-sep"></span>';
-    MODULES.forEach(function (m) {
-      if (m.direction && !dir) return;
-      h += '<a href="' + m.f + '"' + (m.f === cur ? ' class="kk-cur" aria-current="page"' : '') + ' title="' + esc(m.t) + '"><i class="ti ' + m.ico + '"></i><span>' + esc(m.t) + '</span></a>';
-    });
+    recents.forEach(function (m) { h += lien(m, cur); });
+    h += '<button type="button" id="kk-nav-plus" title="Tous les modules" aria-label="Tous les modules" aria-haspopup="true"><i class="ti ti-layout-grid"></i></button>';
     h += '<button type="button" id="kk-nav-tog" title="Replier / déplier la barre" aria-label="Replier la barre"><i class="ti ti-chevron-left"></i></button>';
     dock = document.createElement('nav');
     dock.id = 'kk-nav';
@@ -103,6 +133,7 @@
       ecrire('kk_nav_ferme', f ? '1' : '0');
       this.querySelector('i').className = 'ti ' + (f ? 'ti-chevron-right' : 'ti-chevron-left');
     });
+    document.getElementById('kk-nav-plus').addEventListener('click', basculerMenu);
     if (dock.classList.contains('kk-ferme')) document.querySelector('#kk-nav-tog i').className = 'ti ti-chevron-right';
   }
 
