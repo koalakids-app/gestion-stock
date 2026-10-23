@@ -3,7 +3,7 @@ const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 document.getElementById('gcss').textContent=KKGuide.css;
 
-let ME=null,PROF=null,IS_ADMIN=false,IS_DIRECTION=false,IS_EMPLOYE=false,DEPUIS_TERRAIN=false;
+let ME=null,PROF=null,IS_ADMIN=false,IS_DIRECTION=false,IS_EMPLOYE=false,DEPUIS_TERRAIN=false,DEPUIS_NOTIF=false;
 let CATS=[],DOCS=[],CRECHES=[],ETABS=[],RESEAU={};
 let editDocId=null,fillDoc=null,fillRep=null,ENFANTS=[];
 
@@ -28,6 +28,8 @@ function close_(id){
   /* Un(e) employé(e) venu(e) de l'Acces terrain pour un document precis y
      retourne en fermant le formulaire ; s'il/elle navigue dans Documents, il/elle y reste. */
   if(id==='ovFill'&&DEPUIS_TERRAIN)location.href='terrain.html';
+  /* Document ouvert depuis une notification : la fermeture ramène à la gestion des crèches. */
+  else if((id==='ovFill'||id==='ovPdf')&&DEPUIS_NOTIF)location.href='demandes.html';
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function slug(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9.\-_]/g,'_');}
@@ -317,6 +319,7 @@ function openFromUrl(){
     /* Employé(e) : DOCS ne contient deja que les documents coches « Ouvert aux employes ». */
     const docId=q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id);
     DEPUIS_TERRAIN=IS_EMPLOYE&&!!(q.get('doc')||tpl);
+    DEPUIS_NOTIF=!IS_EMPLOYE&&q.get('retour')==='gestion';
     if(DEPUIS_TERRAIN&&!docId){location.replace('terrain.html');return;}
     if(!docId){if(tpl)toast('Document introuvable ou inaccessible');return;}
     const repId=q.get('rep')||null;
@@ -774,7 +777,7 @@ async function notifierNouveauDocument(doc){
     }
     if(!refs.length&&!emps.length)return;
     const r=await callFn('notify-push',{referent_ids:refs,employe_ids:emps,
-      title:'Nouveau document',body:doc.titre,url:'./documents.html'+(doc.id?'?doc='+encodeURIComponent(doc.id):''),tag:'doc-'+Date.now()});
+      title:'Nouveau document',body:doc.titre,url:'./documents.html'+(doc.id?'?doc='+encodeURIComponent(doc.id)+'&retour=gestion':''),tag:'doc-'+Date.now()});
     if(r.ok)toast(r.data&&r.data.skipped?'Notification retenue jusqu\u2019à la fin du silence':'Équipes prévenues ('+(r.data&&r.data.envoyes||0)+' appareil(s))');
   }catch(e){console.warn('[documents] notification',e);}
 }
