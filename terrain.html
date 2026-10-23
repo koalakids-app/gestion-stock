@@ -77,6 +77,11 @@
         Signaler un incident
         <small>comportement, matériel, sécurité, repas...</small>
       </button>
+      <button class="qbtn nett" id="qNett">
+        <i class="ti ti-spray"></i>
+        Nettoyages
+        <small>jeux, jouets et espaces : noter qui a nettoyé</small>
+      </button>
       <a class="qbtn auto" id="qDocuments" href="documents.html?terrain=1">
         <i class="ti ti-books"></i>
         Documents et protocoles
@@ -129,10 +134,33 @@
   </div>
 </div>
 
+<div class="ov" id="ovNett" onclick="if(event.target===this)ntFermer()">
+  <div class="ovcard">
+    <h3><i class="ti ti-spray" style="color:var(--violet)"></i> Nettoyage des jeux et des espaces</h3>
+    <div id="ntContenu"></div>
+    <button class="btn btn-g" style="width:100%;justify-content:center;margin-top:14px" onclick="ntFermer()">Fermer</button>
+  </div>
+</div>
+<div class="ov" id="ovNettFait" style="z-index:310" onclick="if(event.target===this)ntFermerFait()">
+  <div class="ovcard">
+    <h3><i class="ti ti-check" style="color:var(--violet)"></i> Noter un nettoyage</h3>
+    <div style="font-weight:700;margin-bottom:14px" id="ntFaitTitre"></div>
+    <div class="f"><label>Date du nettoyage</label><input type="date" id="ntDate"></div>
+    <div class="f"><label>Nettoyage fait par</label><input type="text" id="ntPar" maxlength="80" placeholder="Prénom et nom de la personne qui a nettoyé"></div>
+    <div class="f"><label>Produit utilisé (facultatif)</label><input type="text" id="ntProduit" list="ntProduits" placeholder="Choisir dans le stock d’entretien ou saisir"><datalist id="ntProduits"></datalist></div>
+    <div class="f"><label>Observation (facultatif)</label><textarea id="ntObs" rows="2" placeholder="Ex : jouet abîmé retiré, tapis à remplacer…"></textarea></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-g" style="flex:1;justify-content:center" onclick="ntFermerFait()">Annuler</button>
+      <button class="btn btn-p" style="flex:1;justify-content:center" onclick="ntValiderFait()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="js/branding.js"></script>
 <script src="js/pages/terrain.js"></script>
+<script src="js/pages/terrain-nettoyages.js"></script>
 <script src="js/login-alert.js"></script>
 <script src="js/support-chat.js?v=11"></script>
 <script src="js/mfa-secours.js?v=1"></script>

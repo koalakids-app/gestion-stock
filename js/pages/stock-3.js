@@ -255,7 +255,7 @@ nettoyages: `
 <h3 style="font-family:'Syne',sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🧽 Nettoyage des jeux et des espaces</h3>
 
 <div style="background:var(--accent-lt);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#1E40AF">
-  💡 Chaque nettoyage noté ici est gardé dans un <strong>registre horodaté</strong>. Le <strong>plan de maîtrise sanitaire (PMS)</strong> de la crèche (Documents) reprend automatiquement le plan et le registre : rien à recopier.
+  💡 Les équipes de terrain notent aussi leurs nettoyages depuis la tuile <strong>Nettoyages</strong> de l'<strong>Accès terrain</strong> : même registre. Chaque nettoyage noté ici est gardé dans un <strong>registre horodaté</strong>. Le <strong>plan de maîtrise sanitaire (PMS)</strong> de la crèche (Documents) reprend automatiquement le plan et le registre : rien à recopier.
 </div>
 
 <div style="font-weight:700;font-size:14px;margin-bottom:12px;color:var(--ink)">✅ Noter un nettoyage (toute l'équipe)</div>

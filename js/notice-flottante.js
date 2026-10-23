@@ -38,7 +38,8 @@
     terrain: {
       titre: 'Accès terrain',
       html: '<p>L’accès réservé aux équipes de terrain. L’accès est protégé par une <strong>double authentification</strong> : saisissez le code demandé à l’ouverture.</p>' +
-        '<p>Première connexion : ouvrez le lien reçu, choisissez votre mot de passe, puis configurez la double authentification. Lien expiré : demandez-en un nouveau à la direction.</p>'
+        '<p>Première connexion : ouvrez le lien reçu, choisissez votre mot de passe, puis configurez la double authentification. Lien expiré : demandez-en un nouveau à la direction.</p>' +
+        '<p><strong>Nettoyages</strong> : la tuile affiche le plan de nettoyage des jeux et des espaces de votre crèche. « Noter » enregistre un nettoyage avec la date, <strong>qui l’a fait</strong>, le produit et une observation ; le plan de maîtrise sanitaire (Documents) reprend ce registre. Le plan se modifie dans Stock › Nettoyages (direction et référent·e·s).</p>'
     }
   };
 
