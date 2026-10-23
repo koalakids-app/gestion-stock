@@ -110,7 +110,7 @@ const PMS_FICHES=[
  ['Fiche 1 – Réception et traçabilité',['Date','Plat','Lot','DLC','T° réception','Conforme','Visa'],[22,40,24,24,26,22,24]],
  ['Fiche 2 – Température du réfrigérateur',['Date','T° matin','T° soir','Conforme','Action corrective','Visa'],[22,24,24,24,64,24]],
  ['Fiche 3 – Remise en température et service',['Date','Plat','Début','T° à cœur','Fin','T° maintien','Service','Conforme','Visa'],[20,36,16,20,16,22,18,18,16]],
- ['Fiche 4 – Nettoyage et désinfection',['Date','Zone ou matériel','Produit utilisé','Fait','Visa'],[24,62,48,24,24]],
+ ['Fiche 4 – Nettoyage et désinfection',['Date','Zone ou matériel','Produit utilisé','Fait par (nom)','Fait','Visa'],[22,46,40,34,20,20]],
  ['Fiche 5 – Vérification de la sonde de température',['Date','Sonde (repère)','Lecture eau glacée (°C)','Écart (°C)','Conforme','Action','Visa'],[22,30,30,22,22,34,22]]
 ];
 
@@ -211,7 +211,7 @@ function pmsNettSynthese(d){
     const rec=fait.filter(x=>x.fait_le>=lim);
     const der=fait[0];
     return {type:l.type,libelle:l.libelle,freq:PMS_NETT_FREQ[l.frequence]||l.frequence,methode:l.methode||'',
-      n:rec.length,der:der?new Date(der.fait_le+'T12:00:00').toLocaleDateString('fr-FR')+(der.fait_par?' ('+der.fait_par+')':''):'aucun'};
+      n:rec.length,der:der?new Date(der.fait_le+'T12:00:00').toLocaleDateString('fr-FR'):'aucun',par:der?(der.fait_par||'non renseigné'):'—'};
   });
 }
 function pmsNettHtml(){
@@ -223,8 +223,8 @@ function pmsNettHtml(){
   const lien=' <a href="stock.html" target="_blank">Ouvrir Stock › Nettoyages</a>';
   if(d.erreur)return '<p class="hint">Registre des nettoyages indisponible ('+esc(d.erreur)+').'+lien+'</p>';
   if(!d.plan.length)return '<p class="hint">Aucun plan de nettoyage défini pour cette crèche.'+lien+'</p>';
-  const lignes=pmsNettSynthese(d).map(l=>'<tr><td>'+esc(PMS_NETT_TYPE[l.type]||l.type)+'</td><td>'+esc(l.libelle)+'</td><td>'+esc(l.freq)+'</td><td>'+l.n+'</td><td>'+esc(l.der)+'</td></tr>').join('');
-  return '<table class="ft"><tr><th>Type</th><th>Jeux / espace</th><th>Fréquence</th><th>Fait (30 j)</th><th>Dernier nettoyage</th></tr>'+lignes+'</table><p class="hint">Lecture en direct du registre ; le PDF reprend cette synthèse et le détail des 14 derniers jours.'+lien+'</p>';
+  const lignes=pmsNettSynthese(d).map(l=>'<tr><td>'+esc(PMS_NETT_TYPE[l.type]||l.type)+'</td><td>'+esc(l.libelle)+'</td><td>'+esc(l.freq)+'</td><td>'+l.n+'</td><td>'+esc(l.der)+'</td><td>'+esc(l.par)+'</td></tr>').join('');
+  return '<table class="ft"><tr><th>Type</th><th>Jeux / espace</th><th>Fréquence</th><th>Fait (30 j)</th><th>Dernier nettoyage</th><th>Fait par</th></tr>'+lignes+'</table><p class="hint">Lecture en direct du registre ; le PDF reprend cette synthèse et le détail des 14 derniers jours.'+lien+'</p>';
 }
 async function pmsMajNett(){
   const cr=pmsCrecheChoisie();
@@ -474,13 +474,13 @@ TPL.pms_sanitaire={
       y+=2;
     }else{
       const syn=pmsNettSynthese(d);
-      y=pdfGrid(doc,M,y,[26,60,30,26,40],[{head:true,cells:['Type','Jeux / espace','Fréquence','Fait (30 j)','Dernier nettoyage']}]
-        .concat(syn.map(l=>({cells:[PMS_NETT_TYPE[l.type]||l.type,l.libelle,l.freq,String(l.n),l.der]}))),{fs:8,minH:7});
+      y=pdfGrid(doc,M,y,[24,46,28,20,26,38],[{head:true,cells:['Type','Jeux / espace','Fréquence','Fait (30 j)','Dernier','Fait par']}]
+        .concat(syn.map(l=>({cells:[PMS_NETT_TYPE[l.type]||l.type,l.libelle,l.freq,String(l.n),l.der,l.par]}))),{fs:8,minH:7});
       y+=3;
       const lim=pmsNettJoursAvant(14),det=d.journal.filter(x=>x.fait_le>=lim);
       P('Détail des 14 derniers jours ('+det.length+' nettoyage'+(det.length>1?'s':'')+')',9,true);
-      if(det.length)y=pdfGrid(doc,M,y,[20,56,34,30,42],[{head:true,cells:['Date','Jeux / espace','Fait par','Produit','Observation']}]
-        .concat(det.map(x=>({cells:[new Date(x.fait_le+'T12:00:00').toLocaleDateString('fr-FR'),x.libelle,x.fait_par||'',x.produit||'',x.observation||'']}))),{fs:8,minH:7});
+      if(det.length)y=pdfGrid(doc,M,y,[20,52,38,32,40],[{head:true,cells:['Date','Jeux / espace','Fait par','Produit','Observation']}]
+        .concat(det.map(x=>({cells:[new Date(x.fait_le+'T12:00:00').toLocaleDateString('fr-FR'),x.libelle,x.fait_par||'non renseigné',x.produit||'',x.observation||'']}))),{fs:8,minH:7});
       else P('Aucun nettoyage enregistré sur la période.',9);
       y+=4;
     }
