@@ -21,7 +21,8 @@ const PMS_TABLES={
    ['Hygiène du personnel','Tenue propre, cheveux attachés, ongles courts, sans bijoux ni vernis pendant la manipulation des repas','Contrôle visuel quotidien'],
    ['Lavage des mains','Avant toute manipulation des plats, après les changes, les toilettes, un mouchoir, la manipulation des déchets','Affichage au point d’eau'],
    ['Santé du personnel','Signaler toute diarrhée, vomissement, plaie infectée ou lésion cutanée ; éviction de la manipulation selon l’avis médical','Fiche de signalement'],
-   ['Nettoyage et désinfection','Plan par zone : produit, dilution, fréquence, responsable (plan de travail, plats inox, ustensiles, four, frigo, sols)','Fiche de nettoyage signée'],
+   ['Nettoyage et désinfection','Plan par zone : produit, dilution, fréquence, responsable (plan de travail, plats inox, ustensiles, four, frigo, sols)','Fiche 4 – nettoyage et désinfection'],
+   ['Nettoyage des jeux et des espaces de vie','Jouets, tapis, mobilier, sols, sanitaires et change : plan par crèche, fréquence et méthode définis ; chaque nettoyage est enregistré (qui, quand, quel produit)','Registre des nettoyages (application Stock › Nettoyages), repris ci-dessous'],
    ['Matériel de remise en température','Four, bain-marie ou maintien au chaud entretenus ; thermomètre-sonde nettoyé entre chaque usage et contrôlé selon la procédure du paragraphe 3','Fiche 5 – vérification de la sonde'],
    ['Lutte contre les nuisibles','Locaux fermés, contrôle visuel régulier, intervention d’un prestataire si besoin','Registre des interventions'],
    ['Déchets','Poubelles à pédale fermées, vidées chaque jour, jamais en contact avec les plats','Contrôle visuel'],
@@ -61,6 +62,7 @@ const PMS_TABLES={
    ['Livraison non conforme (T°, DLC, emballage)','Refuser ou isoler le plat, ne pas le servir','Prévenir MCM, noter sur la fiche 1'],
    ['Réfrigérateur en panne ou T° hors limite','Isoler les plats, vérifier leur état','Faire intervenir la maintenance, noter sur la fiche 2'],
    ['T° à cœur non atteinte','Poursuivre le chauffage et remesurer, sinon ne pas servir','Noter sur la fiche 3, analyser la cause'],
+   ['Nettoyage des jeux ou des espaces non réalisé à la fréquence prévue','Le faire dès que possible et l’enregistrer avec l’observation','Informer la référente, rappeler le plan à l’équipe'],
    ['Plat tombé, touché ou laissé à découvert','Ne pas servir','Jeter, noter'],
    ['Sonde hors tolérance, abîmée ou perdue','Ne plus l’utiliser, passer à une sonde de remplacement','Noter sur la fiche 5, faire étalonner ou remplacer la sonde'],
    ['Suspicion de TIAC (plusieurs enfants ou adultes malades après un repas)','Garder les restes éventuels et les étiquettes, noter les repas et les symptômes','Prévenir la direction, MCM, la DDPP du Var et les familles']]},
@@ -182,6 +184,57 @@ async function pmsChargerCap(id){
   if(r.error)r=await sb.from('creches').select('capacity').eq('id',id).maybeSingle();
   return PMS_CAP[id]=(r&&r.data)||{};
 }
+/* Registre des nettoyages (application Stock › Nettoyages), lu à la demande */
+const PMS_NETT={};  /* nom court de la crèche → {plan, journal, erreur} */
+const PMS_NETT_FREQ={apres_usage:'Après chaque usage',quotidien:'Chaque jour',hebdomadaire:'Chaque semaine',mensuel:'Chaque mois'};
+const PMS_NETT_TYPE={jeux:'Jeux et jouets',espace:'Espaces et mobilier'};
+function pmsNettCle(cr){return cr?shortCrecheName(cr.name):'';}
+async function pmsChargerNett(cr){
+  const cle=pmsNettCle(cr);if(!cle)return null;
+  const depuis=new Date(Date.now()-62*864e5).toISOString().slice(0,10);
+  try{
+    const [p,j]=await Promise.all([
+      sb.from('nettoyage_plan').select('id,type,libelle,frequence,methode,ordre').eq('creche',cle).eq('actif',true).order('type').order('ordre'),
+      sb.from('nettoyage_journal').select('plan_id,type,libelle,fait_le,fait_par,produit,observation,created_at').eq('creche',cle).gte('fait_le',depuis).order('fait_le',{ascending:false}).order('created_at',{ascending:false}).limit(1000)
+    ]);
+    if(p.error||j.error)PMS_NETT[cle]={plan:[],journal:[],erreur:(p.error||j.error).message||'erreur'};
+    else PMS_NETT[cle]={plan:p.data||[],journal:j.data||[],erreur:''};
+  }catch(e){PMS_NETT[cle]={plan:[],journal:[],erreur:String(e&&e.message||e)};}
+  return PMS_NETT[cle];
+}
+function pmsNettJoursAvant(n){return new Date(Date.now()-n*864e5).toISOString().slice(0,10);}
+/* une ligne de synthèse par ligne du plan : fréquence, nombre sur 30 jours, dernier passage */
+function pmsNettSynthese(d){
+  const lim=pmsNettJoursAvant(30);
+  return d.plan.map(l=>{
+    const fait=d.journal.filter(x=>x.plan_id===l.id);
+    const rec=fait.filter(x=>x.fait_le>=lim);
+    const der=fait[0];
+    return {type:l.type,libelle:l.libelle,freq:PMS_NETT_FREQ[l.frequence]||l.frequence,methode:l.methode||'',
+      n:rec.length,der:der?new Date(der.fait_le+'T12:00:00').toLocaleDateString('fr-FR')+(der.fait_par?' ('+der.fait_par+')':''):'aucun'};
+  });
+}
+function pmsNettHtml(){
+  const cr=pmsCrecheChoisie(),cle=pmsNettCle(cr);
+  if(!cr)return '<p class="hint">Choisissez une crèche pour afficher son registre des nettoyages.</p>';
+  const d=PMS_NETT[cle];
+  if(!d)return '<p class="hint">Lecture du registre des nettoyages…</p>';
+  const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const lien=' <a href="stock.html" target="_blank">Ouvrir Stock › Nettoyages</a>';
+  if(d.erreur)return '<p class="hint">Registre des nettoyages indisponible ('+esc(d.erreur)+').'+lien+'</p>';
+  if(!d.plan.length)return '<p class="hint">Aucun plan de nettoyage défini pour cette crèche.'+lien+'</p>';
+  const lignes=pmsNettSynthese(d).map(l=>'<tr><td>'+esc(PMS_NETT_TYPE[l.type]||l.type)+'</td><td>'+esc(l.libelle)+'</td><td>'+esc(l.freq)+'</td><td>'+l.n+'</td><td>'+esc(l.der)+'</td></tr>').join('');
+  return '<table class="ft"><tr><th>Type</th><th>Jeux / espace</th><th>Fréquence</th><th>Fait (30 j)</th><th>Dernier nettoyage</th></tr>'+lignes+'</table><p class="hint">Lecture en direct du registre ; le PDF reprend cette synthèse et le détail des 14 derniers jours.'+lien+'</p>';
+}
+async function pmsMajNett(){
+  const cr=pmsCrecheChoisie();
+  const el=document.getElementById('pms-nett');
+  if(!cr){if(el)el.innerHTML=pmsNettHtml();return;}
+  if(el)el.innerHTML='<p class="hint">Lecture du registre des nettoyages…</p>';
+  await pmsChargerNett(cr);
+  const c2=pmsCrecheChoisie();
+  if(c2&&String(c2.id)===String(cr.id)){const e2=document.getElementById('pms-nett');if(e2)e2.innerHTML=pmsNettHtml();}
+}
 function pmsCrecheChoisie(){
   const nom=(document.getElementById('ff_creche')||{}).value||'';
   return (CRECHES||[]).find(c=>(c.name||'').trim()===nom)||null;
@@ -209,7 +262,8 @@ function pmsValeurs(cr,cap){
 async function pmsPrefill(force){
   const cr=pmsCrecheChoisie();
   const note=document.getElementById('pms-auto-note');
-  if(!cr){if(note)note.textContent='Choisissez une crèche : ses informations (adresse, SIRET, agrément PMI, capacité…) se remplissent seules.';return;}
+  if(!cr){const nb=document.getElementById('pms-nett');if(nb)nb.innerHTML=pmsNettHtml();if(note)note.textContent='Choisissez une crèche : ses informations (adresse, SIRET, agrément PMI, capacité…) se remplissent seules.';return;}
+  pmsMajNett();
   const cap=await pmsChargerCap(cr.id);
   /* la crèche a changé pendant la lecture : on laisse la dernière demande finir */
   const choisie=pmsCrecheChoisie();
@@ -323,6 +377,10 @@ TPL.pms_sanitaire={
 
   ${pmsTblBloc('bp')}
 
+  <h3>Nettoyage des jeux et des espaces de vie</h3>
+  <p class="hint" style="font-size:13px;font-style:normal">Traçabilité tenue dans l’application Stock (onglet Nettoyages) : plan de la crèche et registre horodaté.</p>
+  <div id="pms-nett"></div>
+
   <h3>3. Flux de l’activité et analyse des dangers (HACCP)</h3>
   ${pmsTxtHtml('flux',8)}
   ${pmsTxtHtml('danger',3)}
@@ -408,6 +466,25 @@ TPL.pms_sanitaire={
   /* ---------- 2. Bonnes pratiques ---------- */
   H('2. BONNES PRATIQUES D’HYGIÈNE');
   tbl('bp');
+  {
+    const cr=pmsCrecheChoisie(),d=cr&&PMS_NETT[pmsNettCle(cr)];
+    need(24);P('Nettoyage des jeux et des espaces de vie',10,true);
+    if(!d||d.erreur||!d.plan.length){
+      P(!d?'Registre non chargé : ouvrez le document après avoir choisi la crèche.':d.erreur?'Registre des nettoyages indisponible à la génération de ce document.':'Aucun plan de nettoyage défini pour cette crèche dans l’application Stock.',9);
+      y+=2;
+    }else{
+      const syn=pmsNettSynthese(d);
+      y=pdfGrid(doc,M,y,[26,60,30,26,40],[{head:true,cells:['Type','Jeux / espace','Fréquence','Fait (30 j)','Dernier nettoyage']}]
+        .concat(syn.map(l=>({cells:[PMS_NETT_TYPE[l.type]||l.type,l.libelle,l.freq,String(l.n),l.der]}))),{fs:8,minH:7});
+      y+=3;
+      const lim=pmsNettJoursAvant(14),det=d.journal.filter(x=>x.fait_le>=lim);
+      P('Détail des 14 derniers jours ('+det.length+' nettoyage'+(det.length>1?'s':'')+')',9,true);
+      if(det.length)y=pdfGrid(doc,M,y,[20,56,34,30,42],[{head:true,cells:['Date','Jeux / espace','Fait par','Produit','Observation']}]
+        .concat(det.map(x=>({cells:[new Date(x.fait_le+'T12:00:00').toLocaleDateString('fr-FR'),x.libelle,x.fait_par||'',x.produit||'',x.observation||'']}))),{fs:8,minH:7});
+      else P('Aucun nettoyage enregistré sur la période.',9);
+      y+=4;
+    }
+  }
 
   /* ---------- 3. Flux et dangers ---------- */
   H('3. FLUX DE L’ACTIVITÉ ET ANALYSE DES DANGERS (HACCP)');

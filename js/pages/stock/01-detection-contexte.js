@@ -456,6 +456,7 @@ function filterCreche(creche, el) {
   else if (currentPage === 'commandes') renderCommandes();
   else if (currentPage === 'historique') renderHistorique();
   else if (currentPage === 'couches') renderCouches();
+  else if (currentPage === 'nettoyages') renderNettoyages();
   else renderTable();
 }
 

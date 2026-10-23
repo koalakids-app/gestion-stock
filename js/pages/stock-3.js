@@ -251,6 +251,40 @@ couches: `
 <div style="font-size:13px;color:var(--ink3)">Un enfant sans taille de couche sur sa fiche n'est pas décompté : renseignez-la dans le dossier de l'enfant.</div>
 `,
 
+nettoyages: `
+<h3 style="font-family:'Syne',sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🧽 Nettoyage des jeux et des espaces</h3>
+
+<div style="background:var(--accent-lt);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#1E40AF">
+  💡 Chaque nettoyage noté ici est gardé dans un <strong>registre horodaté</strong>. Le <strong>plan de maîtrise sanitaire (PMS)</strong> de la crèche (Documents) reprend automatiquement le plan et le registre : rien à recopier.
+</div>
+
+<div style="font-weight:700;font-size:14px;margin-bottom:12px;color:var(--ink)">✅ Noter un nettoyage (toute l'équipe)</div>
+<ol style="font-size:13px;line-height:2;color:var(--ink2);padding-left:20px;margin-bottom:20px">
+  <li>Ouvrez l'onglet <strong>Nettoyages</strong> : le plan de votre crèche est organisé en <strong>Jeux et jouets</strong> et <strong>Espaces et mobilier</strong></li>
+  <li>Cliquez sur <strong>✓ Fait</strong> en face de la ligne nettoyée : la date, votre nom et l'heure sont enregistrés</li>
+  <li>Le bouton <strong>…</strong> permet d'indiquer le <strong>produit utilisé</strong> (proposé depuis les articles « Entretien » du stock), une observation, ou une date des 7 derniers jours</li>
+  <li>Une pastille indique l'état de la période en cours : <strong>Fait</strong>, <strong>À faire aujourd'hui / cette semaine / ce mois-ci</strong> ou le nombre de nettoyages pour les lignes « après chaque usage »</li>
+</ol>
+
+<div style="font-weight:700;font-size:14px;margin-bottom:12px;color:var(--ink)">🗂️ Gérer le plan (direction et référent·e·s)</div>
+<ul style="font-size:13px;line-height:2;color:var(--ink2);padding-left:20px;margin-bottom:20px">
+  <li>Sans plan, le bouton <strong>Charger le plan type</strong> propose une base de lignes à ajuster (jouets, tapis, sols, change, sanitaires, dortoir…). Ce sont des repères d'usage à valider avec votre DDPP</li>
+  <li><strong>+ Ajouter une ligne</strong>, ✏️ pour modifier (jeu ou espace, fréquence, méthode) et 🗑 pour retirer. Une ligne retirée sort du plan, mais les nettoyages déjà notés restent dans le registre</li>
+  <li>Fréquences possibles : après chaque usage, chaque jour, chaque semaine, chaque mois</li>
+</ul>
+
+<div style="font-weight:700;font-size:14px;margin-bottom:12px;color:var(--ink)">📋 Registre et export</div>
+<ul style="font-size:13px;line-height:2;color:var(--ink2);padding-left:20px;margin-bottom:20px">
+  <li>Le registre liste les nettoyages des 7 à 62 derniers jours ; <strong>⬇ Exporter (12 mois)</strong> produit un fichier CSV</li>
+  <li>Une ligne du registre <strong>ne se modifie pas</strong>. En cas d'erreur de clic, la personne qui l'a noté peut la retirer pendant <strong>15 minutes</strong> (bouton ✕) ; au-delà, seule la direction le peut</li>
+  <li>Le bouton <strong>🍽️ Plan de maîtrise sanitaire</strong> ouvre le PMS, où la crèche choisie affiche son plan et son registre, et les exporte dans le PDF</li>
+</ul>
+
+<div style="background:var(--amber-lt);border-left:4px solid var(--amber);border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#92400E">
+  ⚠ Les lignes <strong>« chaque jour »</strong> ne passent pas à « à faire » le week-end. Le calendrier de fermeture de la crèche n'est pas pris en compte : un jour férié ou un pont peut donc afficher « à faire ».
+</div>
+`,
+
 sauvegardes: `
 <h3 style="font-family:'Syne',sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">💾 Sauvegardes & restauration</h3>
 

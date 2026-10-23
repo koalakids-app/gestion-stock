@@ -223,6 +223,12 @@ pms: `
   <li>Dans chaque tableau : <strong>Ajouter une ligne</strong>, modifier une cellule, supprimer une ligne (✕) ou <strong>Revenir au modèle</strong>. Les textes ont leur bouton <strong>Revenir au texte type</strong>.</li>
   <li>Les mentions entre [crochets] et les températures (63 °C à cœur, +3 °C à réception…) sont des repères d’usage à confirmer avec le prestataire et la DDPP.</li>
 </ul>
+<div class="st">🧽 Nettoyage des jeux et des espaces</div>
+<ul>
+  <li>Sous les bonnes pratiques, un bloc <strong>lit en direct</strong> le plan et le registre de la crèche choisie, tenus dans l’application <strong>Stock › Nettoyages</strong> : fréquence, nombre de nettoyages sur 30 jours, dernier nettoyage et qui l’a fait.</li>
+  <li>Le PDF ajoute cette synthèse et le <strong>détail des 14 derniers jours</strong>. Si le registre est illisible ou le plan vide, le PDF le signale au lieu de rester muet.</li>
+  <li>Les plans déjà enregistrés gardent leur contenu : le bouton <strong>Revenir au modèle</strong> d’un tableau ajoute les nouvelles lignes types.</li>
+</ul>
 <div class="st">🖊️ Signatures et export</div>
 <ul>
   <li>Signatures de la <strong>direction</strong> et du/de la <strong>référent(e) hygiène</strong> en bas du formulaire, à l’écran ou par QR code (voir l’onglet 🖊️ Signatures).</li>

@@ -211,7 +211,7 @@ function addHisto(type, article, qty, creche, user, note='') {
 // ─── PAGES ────────────────────────────────────────────────────────────────
 function showPage(page, btn) {
   currentPage = page;
-  ['inventaire','commandes','fournisseurs','historique','couches'].forEach(p => {
+  ['inventaire','commandes','fournisseurs','historique','couches','nettoyages'].forEach(p => {
     document.getElementById(`page-${p}`).style.display = p === page ? 'block' : 'none';
   });
   // Le contenu défile avec la fenêtre (.main n'a pas son propre scroll) : sans
@@ -226,13 +226,14 @@ function showPage(page, btn) {
   requestAnimationFrame(() => window.scrollTo(0, 0));
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const titles = { inventaire:'Inventaire', commandes:'Commandes', fournisseurs:'Fournisseurs', historique:'Historique des mouvements', couches:'Couches' };
+  const titles = { inventaire:'Inventaire', commandes:'Commandes', fournisseurs:'Fournisseurs', historique:'Historique des mouvements', couches:'Couches', nettoyages:'Nettoyages' };
   document.getElementById('pageTitle').textContent = titles[page];
   // Re-render page content when switching to ensure fresh data
   if (page === 'commandes') { renderCommandes(); }
   if (page === 'fournisseurs') { renderFournisseurs(); }
   if (page === 'historique') { renderHistorique(); }
   if (page === 'couches') { renderCouches(); }
+  if (page === 'nettoyages') { renderNettoyages(); }
   if (page === 'inventaire') {
     switchInvTab(currentInvTab); // réaffiche le bon tableau
     renderStats();
