@@ -413,7 +413,7 @@ function renderArchivageBox(e){
   }else if(estSorti(e)){
     box.innerHTML='<div style="background:var(--orange-l);border-left:4px solid var(--orange);border-radius:0 10px 10px 0;padding:10px 14px;font-size:12.5px;color:var(--orange)">'
       +'<i class="ti ti-alert-triangle"></i> Ce contrat est terminé depuis le '+esc(new Date(e.date_fin).toLocaleDateString('fr-FR'))+'. '
-      +'Une fois les documents à jour, la fiche peut être archivée pour sortir des listes actives.'
+      +'Une fois les documents à jour, la fiche peut être archivée pour sortir des listes actives'+(e.user_id?' ; son compte de connexion sera alors bloqué.':'.')
       +'<div style="margin-top:8px"><button type="button" class="btn btn-g btn-sm" onclick="archiverFiche(\''+e.id+'\')"><i class="ti ti-archive"></i> Archiver ce dossier</button></div>'
       +'</div>';
   }else{
@@ -428,21 +428,36 @@ function datePlusAns(iso,ans){
 async function archiverFiche(id){
   const e=EMPLOYES.find(x=>String(x.id)===String(id));
   if(!e)return;
-  if(!confirm('Archiver le dossier de '+(e.prenom||'')+' '+(e.nom||'')+' ?\n\nLa fiche sortira des listes actives mais reste consultable dans les archives. Cette action est réversible.'))return;
+  if(!confirm('Archiver le dossier de '+(e.prenom||'')+' '+(e.nom||'')+' ?\n\nLa fiche sortira des listes actives mais reste consultable dans les archives.'
+    +(e.user_id?' Son compte de connexion (Mon espace, accès terrain) sera bloqué.':'')
+    +' Cette action est réversible.'))return;
+  // Blocage d'abord : si le compte ne peut pas être bloqué, on n'archive pas
+  // (sinon un dossier « fermé » garderait un accès actif sans que ça se voie).
+  if(e.user_id){
+    const{ok,data}=await callFn('bloquer-compte-collaborateur',{employe_id:id,bloquer:true});
+    if(!ok){toast('Archivage annulé : le compte de connexion n\'a pas pu être bloqué ('+(data.error||'erreur inconnue')+').',true);return;}
+  }
   const row={archive_le:new Date().toISOString(),archive_par:ME?ME.id:null};
   const{error}=await sb.from('employes').update(row).eq('id',id);
-  if(error){toast('Erreur lors de l\'archivage : '+error.message,true);return;}
+  if(error){
+    if(e.user_id)await callFn('bloquer-compte-collaborateur',{employe_id:id,bloquer:false});
+    toast('Erreur lors de l\'archivage : '+error.message,true);return;
+  }
   Object.assign(e,row);
   renderArchivageBox(e);
   renderListe();
-  toast('Dossier archivé.');
+  toast(e.user_id?'Dossier archivé, compte bloqué.':'Dossier archivé.');
 }
 async function desarchiverFiche(id){
-  if(!confirm('Réactiver ce dossier et le remettre dans les fiches actives ?'))return;
+  if(!confirm('Réactiver ce dossier et le remettre dans les fiches actives ? Son compte de connexion, s\'il en a un, sera rétabli.'))return;
+  const e=EMPLOYES.find(x=>String(x.id)===String(id));
+  if(e&&e.user_id){
+    const{ok,data}=await callFn('bloquer-compte-collaborateur',{employe_id:id,bloquer:false});
+    if(!ok){toast('Réactivation annulée : le compte n\'a pas pu être rétabli ('+(data.error||'erreur inconnue')+').',true);return;}
+  }
   const row={archive_le:null,archive_par:null};
   const{error}=await sb.from('employes').update(row).eq('id',id);
   if(error){toast('Erreur : '+error.message,true);return;}
-  const e=EMPLOYES.find(x=>String(x.id)===String(id));
   if(e)Object.assign(e,row);
   if(e)renderArchivageBox(e);
   renderListe();
