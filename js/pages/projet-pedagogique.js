@@ -102,6 +102,33 @@
     $('btnNext').disabled = i >= dernier;
   }
 
+  // Bruit de page qui se tourne, synthétisé (pas de fichier son) : souffle de papier filtré
+  let ac, bruit;
+  function sonPage(){
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!ac) ac = new AC();
+      if (ac.state === 'suspended') ac.resume();
+      if (!bruit) {
+        bruit = ac.createBuffer(1, Math.round(ac.sampleRate * .6), ac.sampleRate);
+        const d = bruit.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      }
+      const t = ac.currentTime;
+      const src = ac.createBufferSource(); src.buffer = bruit;
+      const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = .8;
+      f.frequency.setValueAtTime(1200, t); f.frequency.exponentialRampToValueAtTime(5000, t + .45);
+      const g = ac.createGain();
+      g.gain.setValueAtTime(.0001, t);
+      g.gain.exponentialRampToValueAtTime(.35, t + .08);
+      g.gain.exponentialRampToValueAtTime(.12, t + .3);
+      g.gain.exponentialRampToValueAtTime(.0001, t + .55);
+      src.connect(f); f.connect(g); g.connect(ac.destination);
+      src.start(t); src.stop(t + .6);
+    } catch (e) {}
+  }
+
   function monter(){
     const livreEl = $('livre');
     for (let i = 0; i < total; i++) {
@@ -123,6 +150,7 @@
     });
     flip.loadFromHTML(livreEl.querySelectorAll('.page'));
     flip.on('flip', e => { majBarre(e.data); autour(e.data); });
+    flip.on('changeState', e => { if (e.data === 'flipping') sonPage(); });
     flip.on('changeOrientation', () => majBarre(flip.getCurrentPageIndex()));
     autour(0);
     majBarre(0);
