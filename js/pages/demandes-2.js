@@ -153,9 +153,10 @@ async function fpHandlePhoto(event){
   try{
     const ext=file.name.split('.').pop();
     const path='frais-pro-photos/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
-    const{error}=await fpStorageClient().storage.from('assets').upload(path,file);
+    // Client principal (session connectée) : les policies anon du Storage ont été retirées.
+    const{error}=await sb.storage.from('assets').upload(path,file);
     if(error)throw error;
-    const{data}=fpStorageClient().storage.from('assets').getPublicUrl(path);
+    const{data}=sb.storage.from('assets').getPublicUrl(path);
     fpPendingPhotoUrl=data.publicUrl;
     document.getElementById('fp-photo-filename').textContent='✅ '+file.name;
   }catch(e){
