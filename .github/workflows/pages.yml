@@ -1,0 +1,62 @@
+# Publie sur GitHub Pages uniquement ce dont le navigateur a besoin.
+# Les dossiers sql/, supabase/, tools/, docs/, .github/ et les fichiers de
+# documentation restent dans le dépôt mais ne sont PAS servis par le site.
+name: Déployer le site (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Préparer le dossier publié
+        run: |
+          mkdir _site
+          rsync -a \
+            --exclude='/.git' \
+            --exclude='/.github' \
+            --exclude='/.claude' \
+            --exclude='/.gitignore' \
+            --exclude='/sql' \
+            --exclude='/supabase' \
+            --exclude='/tools' \
+            --exclude='/docs' \
+            --exclude='/CLAUDE.md' \
+            --exclude='/README.md' \
+            --exclude='/verif-vapid.js' \
+            --exclude='/_site' \
+            --exclude='*.sql' \
+            --exclude='*.py' \
+            --exclude='*.ts' \
+            --exclude='*.md' \
+            ./ _site/
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
