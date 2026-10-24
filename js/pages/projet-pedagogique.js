@@ -190,6 +190,18 @@
       if (e.key === 'ArrowLeft') flip.flipPrev();
       else if (e.key === 'ArrowRight') flip.flipNext();
     });
+    // Bouton « Fermer » pour les utilisateurs venus de l'application (le lien public n'en a pas besoin)
+    try {
+      const ref = document.referrer;
+      if (ref && new URL(ref).origin === location.origin) {
+        const q = $('btnQuitter');
+        q.hidden = false;
+        q.onclick = () => {
+          window.close();
+          setTimeout(() => { location.href = ref; }, 150);   // onglet non fermable : retour à la page d'origine
+        };
+      }
+    } catch (e) {}
     $('btnPlein').onclick = () => {
       if (document.fullscreenElement) document.exitFullscreen();
       else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
