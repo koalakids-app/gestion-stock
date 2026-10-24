@@ -102,7 +102,8 @@
     $('btnNext').disabled = i >= dernier;
   }
 
-  // Bruit de page qui se tourne, synthétisé (pas de fichier son) : souffle de papier filtré
+  // Bruit de page qui se tourne, synthétisé (pas de fichier son) : froissement de papier
+  // (bruit doux + craquements) qui accélère, puis petit « poc » quand la page se pose.
   let ac, bruit;
   function sonPage(){
     try {
@@ -110,22 +111,32 @@
       if (!AC) return;
       if (!ac) ac = new AC();
       if (ac.state === 'suspended') ac.resume();
+      const sr = ac.sampleRate, dur = .62;
       if (!bruit) {
-        bruit = ac.createBuffer(1, Math.round(ac.sampleRate * .6), ac.sampleRate);
-        const d = bruit.getChannelData(0);
-        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        bruit = ac.createBuffer(1, Math.round(sr * dur), sr);
+        const d = bruit.getChannelData(0), n = d.length;
+        let doux = 0, crac = 0;
+        for (let i = 0; i < n; i++) {
+          const t = i / n, w = Math.random() * 2 - 1;
+          doux = doux * .86 + w * .14;                       // bruit adouci (papier)
+          if (Math.random() < .018 + .05 * t) crac = (Math.random() * 2 - 1) * 1.6; // craquements
+          crac *= .82;
+          const env = t < .06 ? t / .06 : Math.pow(1 - (t - .06) / .94, 1.6) * (.55 + .45 * Math.sin(t * 9) ** 2);
+          d[i] = (doux * 1.8 + crac * .9) * env;
+        }
+        // « poc » final : page qui se pose
+        const poc = Math.round(sr * .44);
+        for (let i = 0; i < sr * .09 && poc + i < n; i++) {
+          const e = Math.exp(-i / (sr * .02));
+          d[poc + i] += Math.sin(2 * Math.PI * 140 * i / sr) * e * .5 + (Math.random() * 2 - 1) * e * .25;
+        }
       }
       const t = ac.currentTime;
       const src = ac.createBufferSource(); src.buffer = bruit;
-      const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = .8;
-      f.frequency.setValueAtTime(1200, t); f.frequency.exponentialRampToValueAtTime(5000, t + .45);
-      const g = ac.createGain();
-      g.gain.setValueAtTime(.0001, t);
-      g.gain.exponentialRampToValueAtTime(.35, t + .08);
-      g.gain.exponentialRampToValueAtTime(.12, t + .3);
-      g.gain.exponentialRampToValueAtTime(.0001, t + .55);
-      src.connect(f); f.connect(g); g.connect(ac.destination);
-      src.start(t); src.stop(t + .6);
+      const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 180;
+      const g = ac.createGain(); g.gain.value = .75;
+      src.connect(hp); hp.connect(g); g.connect(ac.destination);
+      src.start(t);
     } catch (e) {}
   }
 
