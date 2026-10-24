@@ -102,10 +102,25 @@
     $('btnNext').disabled = i >= dernier;
   }
 
-  // Bruit de page qui se tourne, synthétisé (pas de fichier son) : froissement de papier
-  // (bruit doux + craquements) qui accélère, puis petit « poc » quand la page se pose.
+  // Bruit de page qui se tourne : enregistrement sons/page-tournee.mp3 ; si le fichier ne charge pas,
+  // repli sur un son synthétisé (froissement + petit « poc »).
   let ac, bruit;
+  const SON = 'sons/page-tournee.mp3';
+  let sonOk = true;
   function sonPage(){
+    if (sonOk) {
+      try {
+        const a = new Audio(SON);
+        a.volume = .8;
+        a.onerror = () => { sonOk = false; };
+        const r = a.play();
+        if (r && r.catch) r.catch(() => {});
+        return;
+      } catch (e) { sonOk = false; }
+    }
+    sonSynthese();
+  }
+  function sonSynthese(){
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
