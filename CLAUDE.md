@@ -54,6 +54,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Double authentification : codes de secours
 - TOTP Supabase ; codes de secours (10, usage unique, empreinte SHA-256 seulement) : `sql/mfa_codes_secours.sql` + edge function `supabase/functions/mfa-codes-secours` (à appliquer / déployer à la main). Génération dans Demandes › Sécurité du compte (exige une session aal2 ; l'appareil mémorisé est ré-interrogé), utilisation depuis l'écran du code (lien « Téléphone perdu ? ») : le code retire les appareils TOTP du compte, puis la page se recharge sur l'enrôlement. Script commun : `js/mfa-secours.js` (chargé après `support-chat.js` sur les pages protégées).
 
+## Remise en température (Accès terrain)
+- Tuile « Remise en température » (`js/pages/terrain-remise-temperature.js`) : fiche de contrôle 2023 des équipes, table `remise_temperature_journal` (`sql/remise_temperature.sql`, appliquée). Les plats du jour viennent de `menus_semaine` (bb6, bb18, grand, dédoublonnés ; plats froids décochés par `RT_FROID`) ; il ne reste qu'à saisir la T° de fin de réchauffe. Conformité : 63 °C, en moins d'1 h ; observation obligatoire sinon. « Imprimer / PDF » produit la fiche de la semaine (lundi → vendredi).
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.

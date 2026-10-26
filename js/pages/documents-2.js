@@ -232,7 +232,7 @@ pms: `
 <div class="st">🖊️ Signatures et export</div>
 <ul>
   <li>Signatures de la <strong>direction</strong> et du/de la <strong>référent(e) hygiène</strong> en bas du formulaire, à l’écran ou par QR code (voir l’onglet 🖊️ Signatures).</li>
-  <li>La <strong>fiche de contrôle de la remise en températures</strong> utilisée par les équipes se remplit en ligne, depuis la tuile « Remise en température » de l’<strong>Accès terrain</strong> : chaque plat est enregistré dans la crèche avec son visa, et la fiche de la semaine s’imprime (ou s’enregistre en PDF) depuis la même tuile.</li>
+  <li>La <strong>fiche de contrôle de la remise en températures</strong> utilisée par les équipes se remplit en ligne, depuis la tuile « Remise en température » de l’<strong>Accès terrain</strong> : les plats viennent du menu du traiteur (Demandes › MCM › Menus), il ne reste qu’à saisir les températures ; chaque plat est enregistré dans la crèche avec son visa, et la fiche de la semaine s’imprime (ou s’enregistre en PDF) depuis la même tuile.</li>
   <li>L’export PDF reprend ce qui est affiché, signatures comprises, et ajoute cinq <strong>fiches vierges à imprimer</strong> : réception et traçabilité, température du réfrigérateur, remise en température et service, nettoyage, vérification de la sonde.</li>
 </ul>
 `,
