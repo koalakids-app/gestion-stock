@@ -147,11 +147,13 @@ function rtRenderLignes(note){
           +'<div class="rt-temp"><button type="button" class="rt-pas" onclick="rtPas('+i+',-1,\'T\')">−</button>'
           +'<input type="text" inputmode="decimal" id="rtT'+i+'" placeholder="— °C">'
           +'<button type="button" class="rt-pas" onclick="rtPas('+i+',1,\'T\')">+</button></div>'
+          +rtPasFin(i,'T')
           +'<div class="rt-puces">'+[1,2,3,4,5].map(function(t){return'<button type="button" onclick="rtTempSet('+i+','+t+',\'T\')">'+t+'</button>';}).join('')+'</div></div>'
         +'<div class="rt-bloc"><div class="rt-lib">Température de fin de réchauffe</div>'
           +'<div class="rt-temp"><button type="button" class="rt-pas" onclick="rtPas('+i+',-1)">−</button>'
           +'<input type="text" inputmode="decimal" id="rtF'+i+'" placeholder="— °C" oninput="rtLigneMaj('+i+')">'
           +'<button type="button" class="rt-pas" onclick="rtPas('+i+',1)">+</button></div>'
+          +rtPasFin(i,'F')
           +'<div class="rt-puces">'+[65,68,70,72,75,80].map(function(t){return'<button type="button" onclick="rtTempSet('+i+','+t+')">'+t+'</button>';}).join('')+'</div></div>'
         +'<div class="rt-bloc"><div class="rt-lib">Heures</div>'
           +'<div class="rt-heures"><div><label>Début de chauffe</label><input type="time" id="rtHC'+i+'" oninput="rtLigneMaj('+i+')"></div>'
@@ -176,9 +178,13 @@ function rtCocher(i){
   if(on)document.getElementById('rtF'+i).focus();
 }
 /* saisie rapide : − / + (démarre à 63 °C), valeurs usuelles, heures en un tap */
+/* pas fin : ± 0,1 °C */
+function rtPasFin(i,k){
+  return '<div class="rt-fin"><button type="button" onclick="rtPas('+i+',-0.1,\''+k+'\')">− 0,1</button><button type="button" onclick="rtPas('+i+',0.1,\''+k+'\')">+ 0,1</button></div>';
+}
 function rtTempSet(i,v,k){
   k=k||'F';
-  document.getElementById('rt'+k+i).value=String(v);
+  document.getElementById('rt'+k+i).value=String(v).replace('.',',');
   if(k==='F')rtLigneMaj(i);
 }
 /* départ du − / + : 70 °C en fin de réchauffe, 3 °C à la mise en chauffe (usages habituels) */
