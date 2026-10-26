@@ -1,10 +1,11 @@
 -- ============================================================================
 -- Remise en température : registre saisi en ligne (Accès terrain)
 -- ============================================================================
--- Reprend la « Fiche 3 – Remise en température et service » du plan de maîtrise
--- sanitaire (Documents › outils de traçabilité) : plat, heure de début, T° à
--- cœur, heure de fin, T° de maintien, heure de service, conforme, action
--- corrective, visa (= fait_par).
+-- Reprend la « Fiche de contrôle de la remise en températures » (version 2023)
+-- utilisée par les équipes : nature du plat, T° et heure de mise en chauffe,
+-- T° et heure de fin de réchauffe, T° après mixage, observations, visa
+-- (= fait_par). Une ligne = un plat un jour donné ; la fiche papier est
+-- hebdomadaire, le registre regroupe les lignes par jour.
 --
 -- `creche` est le nom court de la crèche (« Brunet »), comme nettoyage_journal.
 -- Droits via kk_acces_creche_nom() : direction = toutes les crèches de
@@ -24,13 +25,13 @@ create table if not exists public.remise_temperature_journal (
   creche          text not null,
   fait_le         date not null default current_date,
   plat            text not null,
-  heure_debut     time,
-  temp_coeur      numeric(4,1),
+  temp_chauffe    numeric(4,1),
+  heure_chauffe   time,
+  temp_fin        numeric(4,1),
   heure_fin       time,
-  temp_maintien   numeric(4,1),
-  heure_service   time,
+  temp_mixage     numeric(4,1),
   conforme        boolean not null default true,
-  action          text,
+  observation     text,
   fait_par        text,
   fait_par_user   uuid default auth.uid(),
   created_at      timestamptz not null default now()
