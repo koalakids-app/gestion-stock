@@ -53,7 +53,7 @@ const PMS_TABLES={
    ['Étiquette de la barquette (ou photo)','Nom du plat, lot, DLC, fournisseur','Au moins jusqu’à la fin de la consommation du plat, et collée ou photographiée sur le registre du jour'],
    ['Bon de livraison et facture','Date, quantités, mode de conservation','6 mois après la DLC pour les produits frais'],
    ['Registre du jour','Date, site, plat servi, lot, T° de remise en température','6 mois après la DLC du plat'],
-   ['Fiches de températures et de nettoyage','Relevés signés','1 an minimum [à fixer par le gestionnaire]'],
+   ['Fiches de températures et de nettoyage','Relevés signés','3 ans minimum (règle HACCP) [à confirmer par le gestionnaire]'],
    ['Coordonnées des fournisseurs','Nom, adresse, téléphone, n° d’agrément','Tant que le fournisseur est actif'],
    ['Fiche allergènes du prestataire','Allergènes de chaque plat','Version en vigueur, plus l’historique de 6 mois']]},
  nc:{titre:'6. Non-conformités, TIAC et alertes',
@@ -272,6 +272,91 @@ function pmsRemiseHtml(){
     +l.map(r=>'<tr>'+r.map(c=>'<td>'+e(c)+'</td>').join('')+'</tr>').join('')+'</table>'
     +'<p class="hint">'+l.length+' plat'+(l.length>1?'s':'')+' relevé'+(l.length>1?'s':'')+' sur 14 jours, dont '+nc+' non conforme'+(nc>1?'s':'')+'. Lecture en direct du registre tenu dans Accès terrain ; le PDF reprend ce tableau.</p>';
 }
+/* ===== Archive mensuelle du registre de remise en température (direction) =====
+   La règle HACCP demande de conserver ces relevés 3 ans : la table n'est jamais purgée, et la direction en sort
+   un PDF (à classer) et un CSV (tableur) par mois, pour la crèche choisie ou pour toutes. */
+function pmsMoisDefaut(){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+function pmsMoisBornes(m){
+  const a=new Date(+m.slice(0,4),+m.slice(5,7)-1,1),b=new Date(a.getFullYear(),a.getMonth()+1,1);
+  const f=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';
+  return{de:f(a),a:f(b),label:a.toLocaleDateString('fr-FR',{month:'long',year:'numeric'})};
+}
+async function pmsMoisDonnees(cle,m){
+  const b=pmsMoisBornes(m),rows=[];
+  for(let off=0;;off+=1000){   /* pagination : un mois dépasse rarement 1000 lignes, mais on ne tronque jamais */
+    const r=await sb.from('remise_temperature_journal').select('fait_le,plat,temp_chauffe,heure_chauffe,temp_fin,heure_fin,temp_mixage,conforme,observation,fait_par,created_at')
+      .eq('creche',cle).gte('fait_le',b.de).lt('fait_le',b.a).order('fait_le').order('created_at').range(off,off+999);
+    if(r.error)throw r.error;
+    rows.push(...(r.data||[]));
+    if((r.data||[]).length<1000)break;
+  }
+  return rows;
+}
+function pmsMoisLigne(x){
+  return [new Date(x.fait_le+'T12:00:00').toLocaleDateString('fr-FR'),x.plat||'',
+    [pmsTemp(x.temp_chauffe),pmsHeureCourte(x.heure_chauffe)].filter(Boolean).join(' · '),
+    [pmsTemp(x.temp_fin),pmsHeureCourte(x.heure_fin)].filter(Boolean).join(' · '),
+    pmsTemp(x.temp_mixage),x.temp_fin==null?'—':x.conforme===false?'Non':'Oui',
+    (x.temp_fin==null?'Fin de réchauffe non saisie. ':'')+(x.observation||''),x.fait_par||'non renseigné'];
+}
+async function pmsExporterMois(format,toutes){
+  if(!IS_DIRECTION){toast('Export réservé à la direction.',true);return;}
+  const m=(document.getElementById('pmsMois')||{}).value||'';
+  if(!/^\d{4}-\d{2}$/.test(m)){toast('Choisissez un mois.',true);return;}
+  const cr=pmsCrecheChoisie();
+  const liste=toutes?(CRECHES||[]).map(c=>({nom:c.name,cle:pmsNettCle(c)})):(cr?[{nom:cr.name,cle:pmsNettCle(cr)}]:[]);
+  if(!liste.length){toast('Choisissez une crèche (ou « toutes les crèches »).',true);return;}
+  const b=pmsMoisBornes(m);
+  try{
+    const jeux=[];
+    for(const c of liste)jeux.push({nom:c.nom,rows:await pmsMoisDonnees(c.cle,m)});
+    const fichier='remise-en-temperature_'+m+(toutes?'_toutes-creches':'_'+slug(liste[0].nom));
+    if(format==='csv'){
+      const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+      const lignes=[['Crèche','Date','Plat','T° mise en chauffe','Heure mise en chauffe','T° fin de réchauffe','Heure fin de réchauffe','T° après mixage','Conforme','Observation','Visa'].map(q).join(';')];
+      jeux.forEach(j=>j.rows.forEach(x=>lignes.push([j.nom,x.fait_le,x.plat,x.temp_chauffe,pmsHeureCourte(x.heure_chauffe),x.temp_fin,pmsHeureCourte(x.heure_fin),x.temp_mixage,x.temp_fin==null?'':x.conforme===false?'Non':'Oui',x.observation,x.fait_par].map(v=>q(v==null?'':String(v).replace(/^(\d+)\.(\d)$/,'$1,$2'))).join(';'))));
+      const blob=new Blob(['﻿'+lignes.join('\r\n')],{type:'text/csv;charset=utf-8'});
+      const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fichier+'.csv';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+      toast('Export CSV prêt.');return;
+    }
+    const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape'});
+    jeux.forEach((j,idx)=>{
+      if(idx)doc.addPage();
+      let y=pdfLogo(doc,20);
+      doc.setFontSize(15);doc.setFont(undefined,'bold');doc.setTextColor(30);
+      doc.text(pdfSafe('Registre de remise en température — '+b.label),14,y+2);y+=8;
+      doc.setFontSize(10);doc.setFont(undefined,'normal');
+      const nc=j.rows.filter(x=>x.temp_fin!=null&&x.conforme===false).length,ouv=j.rows.filter(x=>x.temp_fin==null).length;
+      doc.text(pdfSafe(j.nom+' · '+j.rows.length+' plat'+(j.rows.length>1?'s':'')+' relevé'+(j.rows.length>1?'s':'')+' · '+nc+' non conforme'+(nc>1?'s':'')+(ouv?' · '+ouv+' sans fin de réchauffe saisie':'')),14,y);y+=5;
+      doc.setFontSize(8.5);doc.setTextColor(90);
+      doc.text(pdfSafe('Critère du PMS : 63 °C à cœur atteints en moins d’1 heure. Conservation du registre : 3 ans minimum (règle HACCP).'),14,y);doc.setTextColor(30);y+=5;
+      const rows=[{head:true,cells:['Date','Plat','Mise en chauffe','Fin de réchauffe','Mixage','Conforme','Observation','Visa']}];
+      if(j.rows.length)j.rows.forEach(x=>rows.push({cells:pmsMoisLigne(x)}));
+      else rows.push({cells:['','Aucun relevé ce mois-ci','','','','','','']});
+      y=pdfGrid(doc,14,y,[20,52,30,30,20,18,72,27],rows,{fs:8,minH:7});
+      if(y>255){doc.addPage();y=pdfLogo(doc,20);}
+      y+=8;doc.setFontSize(9);doc.setFont(undefined,'bold');
+      doc.text(pdfSafe('Vu par la direction le '+'.'.repeat(14)+'      Nom et signature :'),14,y);
+      doc.setDrawColor(200);doc.rect(110,y-4,90,18);
+    });
+    pdfSortie(doc,fichier+'.pdf');
+  }catch(e){
+    console.error('[pmsExporterMois]',e);
+    toast('Export impossible : '+((e&&e.message)||'erreur'),true);
+  }
+}
+function pmsArchiveHtml(){
+  if(!IS_DIRECTION)return '';
+  return `<div class="txtbox" style="margin-top:10px"><b>Archive mensuelle — direction</b><br>
+    La règle HACCP demande de garder ces relevés <b>3 ans</b> : ils restent enregistrés (aucune suppression automatique). Chaque mois, exportez le registre et classez le PDF avec le PMS.
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
+      <div><label>Mois</label><input type="month" id="pmsMois" value="${pmsMoisDefaut()}" max="${new Date().toISOString().slice(0,7)}"></div>
+      <button type="button" class="btn" onclick="pmsExporterMois('pdf',false)">PDF de la crèche choisie</button>
+      <button type="button" class="btn" onclick="pmsExporterMois('pdf',true)">PDF toutes les crèches</button>
+      <button type="button" class="btn" onclick="pmsExporterMois('csv',true)">CSV toutes les crèches</button>
+    </div></div>`;
+}
 function pmsCrecheChoisie(){
   const nom=(document.getElementById('ff_creche')||{}).value||'';
   return (CRECHES||[]).find(c=>(c.name||'').trim()===nom)||null;
@@ -425,6 +510,7 @@ TPL.pms_sanitaire={
   <h3>Remise en température : relevés des 14 derniers jours</h3>
   <p class="hint" style="font-size:13px;font-style:normal">Registre tenu en ligne dans l’Accès terrain (tuile « Remise en température »), en complément de la fiche 3 papier vierge (annexe du PDF) : plat, températures et heures, conformité, visa.</p>
   <div id="pms-remise"></div>
+  ${pmsArchiveHtml()}
   ${pmsTxtHtml('sonde',3)}
   ${pmsTblBloc('so')}
 
