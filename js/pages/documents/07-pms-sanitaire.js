@@ -61,7 +61,7 @@ const PMS_TABLES={
    ['Étiquette de la barquette (ou photo)','Nom du plat, lot, DLC, fournisseur','Au moins jusqu’à la fin de la consommation du plat, et collée ou photographiée sur le registre du jour'],
    ['Bon de livraison et facture','Date, quantités, mode de conservation','6 mois après la DLC pour les produits frais'],
    ['Registre du jour','Date, site, plat servi, lot, T° de remise en température','6 mois après la DLC du plat'],
-   ['Fiches de températures et de nettoyage','Relevés signés','3 ans minimum (règle HACCP) [à confirmer par le gestionnaire]'],
+   ['Fiches de températures et de nettoyage','Relevés signés : température du réfrigérateur (matin et soir), réception, remise en température, nettoyage','3 ans (règle HACCP), y compris les relevés du réfrigérateur'],
    ['Coordonnées des fournisseurs','Nom, adresse, téléphone, n° d’agrément','Tant que le fournisseur est actif'],
    ['Fiche allergènes du prestataire','Allergènes de chaque plat','Version en vigueur, plus l’historique de 6 mois']]},
  nc:{titre:'6. Non-conformités, TIAC et alertes',
