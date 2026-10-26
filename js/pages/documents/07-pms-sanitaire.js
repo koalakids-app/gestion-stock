@@ -229,11 +229,48 @@ function pmsNettHtml(){
 async function pmsMajNett(){
   const cr=pmsCrecheChoisie();
   const el=document.getElementById('pms-nett');
-  if(!cr){if(el)el.innerHTML=pmsNettHtml();return;}
+  if(!cr){if(el)el.innerHTML=pmsNettHtml();const rm0=document.getElementById('pms-remise');if(rm0)rm0.innerHTML=pmsRemiseHtml();return;}
   if(el)el.innerHTML='<p class="hint">Lecture du registre des nettoyages…</p>';
-  await pmsChargerNett(cr);
+  const rm=document.getElementById('pms-remise');if(rm)rm.innerHTML='<p class="hint">Lecture du registre de remise en température…</p>';
+  await Promise.all([pmsChargerNett(cr),pmsChargerRemise(cr)]);
   const c2=pmsCrecheChoisie();
-  if(c2&&String(c2.id)===String(cr.id)){const e2=document.getElementById('pms-nett');if(e2)e2.innerHTML=pmsNettHtml();}
+  if(c2&&String(c2.id)===String(cr.id)){const e2=document.getElementById('pms-nett');if(e2)e2.innerHTML=pmsNettHtml();const r2=document.getElementById('pms-remise');if(r2)r2.innerHTML=pmsRemiseHtml();}
+}
+/* Registre de remise en température (Accès terrain › Remise en température), lu à la demande */
+const PMS_REMISE={};  /* nom court de la crèche → {journal, erreur} */
+async function pmsChargerRemise(cr){
+  const cle=pmsNettCle(cr);if(!cle)return null;
+  const depuis=pmsNettJoursAvant(62);
+  try{
+    const r=await sb.from('remise_temperature_journal').select('fait_le,plat,temp_chauffe,heure_chauffe,temp_fin,heure_fin,temp_mixage,conforme,observation,fait_par,created_at')
+      .eq('creche',cle).gte('fait_le',depuis).order('fait_le',{ascending:false}).order('created_at',{ascending:false}).limit(1000);
+    PMS_REMISE[cle]=r.error?{journal:[],erreur:r.error.message||'erreur'}:{journal:r.data||[],erreur:''};
+  }catch(e){PMS_REMISE[cle]={journal:[],erreur:String(e&&e.message||e)};}
+  return PMS_REMISE[cle];
+}
+const pmsTemp=t=>t==null?'':String(t).replace('.',',')+' °C';
+const pmsHeureCourte=h=>String(h||'').slice(0,5);
+/* une ligne par plat : chauffe, fin de réchauffe, mixage, conformité, observation, visa */
+function pmsRemiseLignes(d,jours){
+  const lim=pmsNettJoursAvant(jours);
+  return d.journal.filter(x=>x.fait_le>=lim).map(x=>[
+    new Date(x.fait_le+'T12:00:00').toLocaleDateString('fr-FR'),x.plat||'',
+    [pmsTemp(x.temp_chauffe),pmsHeureCourte(x.heure_chauffe)].filter(Boolean).join(' · '),
+    [pmsTemp(x.temp_fin),pmsHeureCourte(x.heure_fin)].filter(Boolean).join(' · '),
+    pmsTemp(x.temp_mixage),x.temp_fin==null?'—':x.conforme===false?'Non':'Oui',x.temp_fin==null?'Fin non saisie. '+(x.observation||''):(x.observation||''),x.fait_par||'non renseigné']);
+}
+function pmsRemiseHtml(){
+  const cr=pmsCrecheChoisie(),cle=pmsNettCle(cr);
+  if(!cr)return '<p class="hint">Choisissez une crèche pour afficher son registre de remise en température.</p>';
+  const d=PMS_REMISE[cle];
+  if(!d)return '<p class="hint">Lecture du registre de remise en température…</p>';
+  const e=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  if(d.erreur)return '<p class="hint">Registre de remise en température indisponible ('+e(d.erreur)+').</p>';
+  const l=pmsRemiseLignes(d,14),nc=l.filter(r=>r[5]==='Non').length;
+  if(!l.length)return '<p class="hint">Aucun relevé de remise en température sur les 14 derniers jours (saisie dans Accès terrain › Remise en température).</p>';
+  return '<table class="ft"><tr><th>Date</th><th>Plat</th><th>Mise en chauffe</th><th>Fin de réchauffe</th><th>Après mixage</th><th>Conforme</th><th>Observation</th><th>Visa</th></tr>'
+    +l.map(r=>'<tr>'+r.map(c=>'<td>'+e(c)+'</td>').join('')+'</tr>').join('')+'</table>'
+    +'<p class="hint">'+l.length+' plat'+(l.length>1?'s':'')+' relevé'+(l.length>1?'s':'')+' sur 14 jours, dont '+nc+' non conforme'+(nc>1?'s':'')+'. Lecture en direct du registre tenu dans Accès terrain ; le PDF reprend ce tableau.</p>';
 }
 function pmsCrecheChoisie(){
   const nom=(document.getElementById('ff_creche')||{}).value||'';
@@ -262,7 +299,7 @@ function pmsValeurs(cr,cap){
 async function pmsPrefill(force){
   const cr=pmsCrecheChoisie();
   const note=document.getElementById('pms-auto-note');
-  if(!cr){const nb=document.getElementById('pms-nett');if(nb)nb.innerHTML=pmsNettHtml();if(note)note.textContent='Choisissez une crèche : ses informations (adresse, SIRET, agrément PMI, capacité…) se remplissent seules.';return;}
+  if(!cr){const nb=document.getElementById('pms-nett');if(nb)nb.innerHTML=pmsNettHtml();const nr=document.getElementById('pms-remise');if(nr)nr.innerHTML=pmsRemiseHtml();if(note)note.textContent='Choisissez une crèche : ses informations (adresse, SIRET, agrément PMI, capacité…) se remplissent seules.';return;}
   pmsMajNett();
   const cap=await pmsChargerCap(cr.id);
   /* la crèche a changé pendant la lecture : on laisse la dernière demande finir */
@@ -385,6 +422,9 @@ TPL.pms_sanitaire={
   ${pmsTxtHtml('flux',8)}
   ${pmsTxtHtml('danger',3)}
   <div id="pms-t-hz">${pmsTblHtml('hz')}</div>
+  <h3>Remise en température : relevés des 14 derniers jours</h3>
+  <p class="hint" style="font-size:13px;font-style:normal">Registre tenu en ligne dans l’Accès terrain (tuile « Remise en température »), à la place de la fiche 3 papier : plat, températures et heures, conformité, visa.</p>
+  <div id="pms-remise"></div>
   ${pmsTxtHtml('sonde',3)}
   ${pmsTblBloc('so')}
 
@@ -491,6 +531,21 @@ TPL.pms_sanitaire={
   String(PMS_ST.txt.flux||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean).forEach((l,i)=>P((i+1)+'. '+l,10,false,M+3));
   bloc(PMS_ST.txt.danger);
   tbl('hz');
+  {
+    const cr=pmsCrecheChoisie(),d=cr&&PMS_REMISE[pmsNettCle(cr)];
+    need(24);P('Remise en température : relevés des 14 derniers jours',10,true);
+    if(!d||d.erreur){
+      P(!d?'Registre non chargé : ouvrez le document après avoir choisi la crèche.':'Registre de remise en température indisponible à la génération de ce document.',9);
+      y+=2;
+    }else{
+      const l=pmsRemiseLignes(d,14),nc=l.filter(r=>r[5]==='Non').length;
+      P(l.length+' plat'+(l.length>1?'s':'')+' relevé'+(l.length>1?'s':'')+', dont '+nc+' non conforme'+(nc>1?'s':'')+' (critère : 63 °C à cœur en moins d’1 heure).',9);
+      if(l.length)y=pdfGrid(doc,M,y,[18,36,24,24,16,14,32,18],[{head:true,cells:['Date','Plat','Mise en chauffe','Fin de réchauffe','Mixage','Conf.','Observation','Visa']}]
+        .concat(l.map(r=>({cells:r}))),{fs:7.5,minH:7});
+      else P('Aucun relevé sur la période : saisie dans Accès terrain › Remise en température.',9);
+      y+=4;
+    }
+  }
   P('Contrôle de la sonde de température',10.5,true);
   bloc(PMS_ST.txt.sonde);
   tbl('so');
