@@ -20,7 +20,7 @@ Pas de framework, pas d'étape de build : chaque outil est un **fichier HTML aut
 | Hébergement | GitHub Pages |
 | Client cible | Chrome sur tablette / mobile Android |
 
-L'application est installable en PWA (`manifest.json` + `sw.js`).
+L'application est installable en PWA (`manifest.json` + `sw.js`). L'Accès terrain a son propre manifeste (`manifest-terrain.json`, icônes `icon-terrain-*.png`) : sur la tablette dédiée, « Installer » ouvre directement `terrain.html` en plein écran.
 
 ---
 

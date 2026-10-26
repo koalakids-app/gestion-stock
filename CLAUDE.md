@@ -57,6 +57,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Remise en température (Accès terrain)
 - Tuile « Remise en température » (`js/pages/terrain-remise-temperature.js`) : fiche de contrôle 2023 des équipes, table `remise_temperature_journal` (`sql/remise_temperature.sql`, appliquée). Les plats du jour viennent de `menus_semaine` (bb6, bb18, grand, dédoublonnés ; plats froids décochés par `RT_FROID`) ; il ne reste qu'à saisir la T° de fin de réchauffe. Conformité : 63 °C, en moins d'1 h ; observation obligatoire sinon. « Imprimer / PDF » produit la fiche de la semaine (lundi → vendredi).
 
+## Installation de l'Accès terrain (tablette)
+- `terrain.html` a son propre manifeste PWA (`manifest-terrain.json`, icônes `icon-terrain-180/192/512.png` tirées de `terrain-icon.jpg`), comme le pointage (`manifest-pointage.json`). Ouvrir `terrain.html` sur la tablette puis « Installer l'application » (Android) ou « Sur l'écran d'accueil » (iPad).
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.
