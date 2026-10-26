@@ -82,6 +82,11 @@
         Nettoyages
         <small>jeux, jouets et espaces : noter qui a nettoyé</small>
       </button>
+      <button class="qbtn remise" id="qRemise">
+        <i class="ti ti-temperature"></i>
+        Remise en température
+        <small>fiche de contrôle des plats : T° à cœur et maintien</small>
+      </button>
       <button class="qbtn couches" id="qCouches">
         <i class="ti ti-baby-carriage"></i>
         Couches
@@ -146,7 +151,37 @@
     <button class="btn btn-g" style="width:100%;justify-content:center;margin-top:14px" onclick="ntFermer()">Fermer</button>
   </div>
 </div>
-<div class="ov" id="ovCouches" onclick="if(event.target===this)tcFermer()">
+<div class="ov" id="ovRemise" onclick="if(event.target===this)rtFermer()">
+  <div class="ovcard">
+    <h3><i class="ti ti-temperature" style="color:var(--violet)"></i> Remise en température</h3>
+    <div id="rtContenu"></div>
+    <button class="btn btn-g" style="width:100%;justify-content:center;margin-top:14px" onclick="rtFermer()">Fermer</button>
+  </div>
+</div>
+<div class="ov" id="ovRemiseSaisie" style="z-index:310" onclick="if(event.target===this)rtFermerSaisie()">
+  <div class="ovcard">
+    <h3><i class="ti ti-temperature" style="color:var(--violet)"></i> Nouveau relevé</h3>
+    <div class="f"><label>Date</label><input type="date" id="rtDate"></div>
+    <div class="f"><label>Plat</label><input type="text" id="rtPlat" maxlength="120" placeholder="Ex : poulet rôti, purée"></div>
+    <div class="f" style="display:flex;gap:10px">
+      <div style="flex:1"><label>Heure de début</label><input type="time" id="rtDebut" oninput="rtVerifier()"></div>
+      <div style="flex:1"><label>T° à cœur (°C)</label><input type="text" inputmode="decimal" id="rtCoeur" placeholder="63" oninput="rtVerifier()"></div>
+    </div>
+    <div class="f" style="display:flex;gap:10px">
+      <div style="flex:1"><label>Heure de fin</label><input type="time" id="rtFin" oninput="rtVerifier()"></div>
+      <div style="flex:1"><label>T° de maintien (°C)</label><input type="text" inputmode="decimal" id="rtMaintien" placeholder="63" oninput="rtVerifier()"></div>
+    </div>
+    <div class="f"><label>Heure du service</label><input type="time" id="rtService"></div>
+    <div class="nt-resume" id="rtVerdict"></div>
+    <div class="f"><label id="rtActionLabel">Action corrective (facultatif)</label><textarea id="rtAction" rows="2" placeholder="Ex : chauffage poursuivi, nouvelle mesure à 66 °C"></textarea></div>
+    <div class="f"><label>Visa : relevé fait par</label><input type="text" id="rtPar" maxlength="80" placeholder="Prénom et nom"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-g" style="flex:1;justify-content:center" onclick="rtFermerSaisie()">Annuler</button>
+      <button class="btn btn-p" style="flex:1;justify-content:center" onclick="rtValiderSaisie()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+<div class="ov" id="ovCouches"onclick="if(event.target===this)tcFermer()">
   <div class="ovcard">
     <h3><i class="ti ti-baby-carriage" style="color:var(--violet)"></i> Décompte des couches</h3>
     <div class="f"><label>Jour</label><input type="date" id="tcJour" onchange="tcCharger()"></div>
@@ -174,6 +209,7 @@
 <script src="js/branding.js"></script>
 <script src="js/pages/terrain.js"></script>
 <script src="js/pages/terrain-nettoyages.js"></script>
+<script src="js/pages/terrain-remise-temperature.js"></script>
 <script src="js/pages/terrain-couches.js"></script>
 <script src="js/login-alert.js"></script>
 <script src="js/support-chat.js?v=11"></script>
