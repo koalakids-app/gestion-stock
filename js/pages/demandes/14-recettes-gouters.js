@@ -121,7 +121,7 @@ function rcFicheImprimer(r,n){
     +r.ings.map(function(i){const b=rcUniteBase(i.q*f,i.u);return'<tr><td>'+escHtml(i.nom)+'</td><td>'+escHtml(rcFmtQte(b.q,b.u))+'</td><td>'+(i.al||[]).map(function(k){return'<span class="al">'+escHtml(rcLibelleAllergene(k))+'</span>';}).join('')+'</td></tr>';}).join('')
     +'</table><p><b>Allergènes de la recette :</b> '+(rcAllergenesRecette(r).map(function(k){return'<span class="al">'+escHtml(rcLibelleAllergene(k))+'</span>';}).join('')||'aucun')+'</p>'
     +(r.etapes?'<h3>Préparation</h3><div style="white-space:pre-wrap">'+escHtml(r.etapes)+'</div>':'')
-    +'<script>window.onload=function(){window.print();}<\/script></body></html>');
+    +'<script>window.onload=function(){window.print();}<\/script><div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>');
   w.document.close();
 }
 
@@ -331,7 +331,7 @@ async function gouterRecapOuvrir(crecheId,semaine){
         +fmtSem(semaine)+' et du '+fmtSem(sem2)+(filtre?' ('+(filtre==='moyen'?'moyens':'grands')+')':'')+'</h2><table>'
         +tab().map(function(l,i){return'<tr>'+l.map(function(c){return'<'+(i?'td':'th')+'>'+escHtml(c)+'</'+(i?'td':'th')+'>';}).join('')+'</tr>';}).join('')
         +'</table>'+(Object.keys(alSet).length?'<p><b>Allergènes :</b> '+Object.keys(alSet).map(rcLibelleAllergene).join(', ')+'</p>':'')
-        +'<script>window.onload=function(){window.print();}<\/script></body></html>');
+        +'<script>window.onload=function(){window.print();}<\/script><div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>');
       w.document.close();
     };
   }

@@ -357,6 +357,6 @@ function stgEvalImprimer(){
     +(stgEvalEstEje(ev.profil)?tabEje():stgEvalGrille(ev.profil).map(tab).join(''))
     +'<p><b>Appréciation générale :</b><br>'+escHtml(ev.appreciation).replace(/\n/g,'<br>')+'</p>'
     +'<p>Le '+escHtml(stgDateFr(d))+'</p><table><tr><th>Noms + signatures</th></tr><tr><td class="sig"></td></tr></table>'
-    +'<script>window.onload=function(){window.print()}<\/script></body></html>');
+    +'<script>window.onload=function(){window.print()}<\/script><div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>');
   w.document.close();
 }

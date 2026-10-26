@@ -37,7 +37,7 @@ async function peBuildPdfBase64(d){
     'tr:nth-child(even) td{background:#F9F9F8}'+
     '.footer{margin-top:1.5rem;font-size:10px;color:#888;border-top:1px solid #E7E5E0;padding-top:10px}'+
     '</style></head><body><h1>Planning équipe</h1><div class="sub">'+d.subtitle+'</div>'+d.bodyHTML+
-    '<div class="footer">Document généré le '+new Date().toLocaleDateString('fr-FR')+' — '+((window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids')+'</div></body></html>';
+    '<div class="footer">Document généré le '+new Date().toLocaleDateString('fr-FR')+' — '+((window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids')+'</div><div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>';
 
   const old=document.getElementById('_pdf-frame-planning');
   if(old)old.remove();

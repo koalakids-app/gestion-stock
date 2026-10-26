@@ -480,7 +480,7 @@ function printBordereau(id) {
       '</tr></tbody></table>' +
       notesHTML +
       '<div class="footer">Bordereau généré le ' + new Date().toLocaleDateString('fr-FR') + ' — ' + getCrecheName() + '</div>' +
-      '</body></html>';
+      '<div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>';
 
     // Ouvrir le modal de prévisualisation
     const previewBody  = document.getElementById('preview-body');

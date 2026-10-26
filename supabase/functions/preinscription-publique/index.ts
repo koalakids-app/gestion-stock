@@ -413,6 +413,10 @@ async function genererPdf(d: {
   place(pied.length * 12 + 4);
   pied.forEach((l, i) => page.drawText(l, { x: M, y: y - i * 12, size: 8.5, font, color: gris }));
 
+  const signature = 'Application créée par David Bucari';
+  for (const p of doc.getPages()) {
+    p.drawText(pdfSafe(signature), { x: (W - font.widthOfTextAtSize(pdfSafe(signature), 7)) / 2, y: 14, size: 7, font, color: gris });
+  }
   return await doc.save();
 }
 

@@ -367,7 +367,7 @@ async function rtExporter(){
       +'<div class="ent"><span>SEMAINE DU '+esc(rtDateFr(rtJour(lundi)))+' AU '+esc(rtDateFr(rtJour(vendredi)))+'</span><span>SEM : '+rtNumSemaine(lundi)+'</span></div>'
       +'<div class="ent"><span>CRÈCHE : '+esc(RT_CRECHE)+'</span></div>'
       +'<table><tr><th>Jour</th><th>Nature des plats</th><th>Température mise en chauffe</th><th>Heure de mise en chauffe</th><th>Température de fin de réchauffe</th><th>Heure de fin de réchauffe</th><th>Température après mixage</th><th>Observations</th><th>Visa</th></tr>'+corps+'</table>'
-      +'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
+      +'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script><div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>');
     w.document.close();
   }catch(e){
     console.error('[rtExporter]',e);

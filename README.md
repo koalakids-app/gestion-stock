@@ -1,5 +1,7 @@
 # Koala Kids — Suite de gestion
 
+Application créée par David Bucari — © 2026 Koala Kids.
+
 Application web de gestion pour un réseau de micro-crèches : coordination des équipes,
 suivi des enfants, gestion du matériel et obligations administratives.
 
