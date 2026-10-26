@@ -115,6 +115,7 @@ async function rtOuvrirSaisie(){
   const d=document.getElementById('rtDate');
   d.max=rtJour();d.min=rtJour(new Date(Date.now()-7*864e5));d.value=rtJour();
   document.getElementById('rtPar').value=PROF.name||'';
+  rtAlerte('');
   document.getElementById('ovRemiseSaisie').classList.add('on');
   await rtChargerLignes();
 }
@@ -202,31 +203,37 @@ function rtLigneMaj(i,sansHeure){
 }
 function rtFermerSaisie(){document.getElementById('ovRemiseSaisie').classList.remove('on');}
 
+function rtAlerte(m){
+  const e=document.getElementById('rtErr');
+  if(e){e.textContent=m||'';e.style.display=m?'':'none';}
+  if(m)toast(m,true);
+}
 async function rtValiderSaisie(){
   if(RT_ENVOI)return;
+  rtAlerte('');
   const date=document.getElementById('rtDate').value,par=document.getElementById('rtPar').value.trim();
-  if(!date||date>rtJour()){toast('Choisissez une date qui n’est pas dans le futur.',true);return;}
-  if(!par){toast('Indiquez le visa (qui a fait le relevé).',true);return;}
+  if(!date||date>rtJour()){rtAlerte('Choisissez une date qui n’est pas dans le futur.');return;}
+  if(!par){rtAlerte('Indiquez le visa (qui a fait le relevé).');return;}
   const rows=[];
   for(let i=0;i<RT_LIGNES.length;i++){
     const l=RT_LIGNES[i];
     if(l.deja||!l.chauffe&&!l.libre)continue;
     const plat=(l.libre?rtV('P',i):l.plat).trim(),fintxt=rtV('F',i).trim();
     if(l.libre&&!plat&&!fintxt)continue;   /* ligne libre laissée vide */
-    if(!plat){toast('Indiquez la nature du plat.',true);return;}
+    if(!plat){rtAlerte('Indiquez la nature du plat.');return;}
     const fin=rtNum(fintxt),chauffe=rtNum(rtV('T',i)),mixage=rtNum(rtV('M',i)),obs=rtV('O',i).trim();
-    if(fin==null){toast('« '+plat+' » : indiquez la température de fin de réchauffe, ou décochez le plat.',true);return;}
-    if([fin,chauffe,mixage].some(t=>t!=null&&(t<-30||t>150))){toast('« '+plat+' » : vérifiez les températures.',true);return;}
+    if(fin==null){rtAlerte('« '+plat+' » : indiquez la température de fin de réchauffe, ou décochez le plat.');return;}
+    if([fin,chauffe,mixage].some(t=>t!=null&&(t<-30||t>150))){rtAlerte('« '+plat+' » : vérifiez les températures.');return;}
     const e=rtEvaluer(fin,rtV('HC',i),rtV('HF',i));
     if(!e.conforme&&!obs){
       document.getElementById('rtD'+i).style.display='';
       document.getElementById('rtO'+i).focus();
-      toast('« '+plat+' » est non conforme : indiquez l’observation.',true);return;
+      rtAlerte('« '+plat+' » est non conforme : indiquez l’observation.');return;
     }
     rows.push({creche:RT_CRECHE,fait_le:date,plat:plat,temp_chauffe:chauffe,heure_chauffe:rtV('HC',i)||null,
       temp_fin:fin,heure_fin:rtV('HF',i)||null,temp_mixage:mixage,conforme:e.conforme,observation:obs||null,fait_par:par});
   }
-  if(!rows.length){toast('Aucune température saisie.',true);return;}
+  if(!rows.length){rtAlerte('Aucune température saisie.');return;}
   RT_ENVOI=true;
   try{
     const{data,error}=await sb.from('remise_temperature_journal').insert(rows).select();
@@ -236,7 +243,7 @@ async function rtValiderSaisie(){
     await rtCharger();
   }catch(err){
     console.error('[rtValiderSaisie]',err);
-    toast('Enregistrement impossible : '+((err&&err.message)||'droits insuffisants'),true);
+    rtAlerte('Enregistrement impossible : '+((err&&err.message)||'droits insuffisants'));
   }finally{RT_ENVOI=false;}
 }
 
