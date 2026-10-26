@@ -71,3 +71,6 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 - Branche de développement de la session, pull request vers `main` en **squash**.
 - Après une fusion, repartir de `origin/main` (`git checkout -B <branche> origin/main`) ; le push demande `--force-with-lease`.
 - Vérifier la syntaxe des JS modifiés avec `node --check`.
+
+## Mention de l'auteur dans les PDF
+- « Application créée par David Bucari » figure au pied de chaque page des PDF jsPDF (`js/pdf-signature.js`, chargé en tête de `<head>` : une nouvelle page qui génère des PDF doit le charger), dans les fenêtres d'impression HTML (avant `</body></html>`) et dans le PDF de préinscription (edge function `preinscription-publique`, à redéployer à la main). Les formulaires officiels remplis par superposition (`documents/04-part.js`) n'en portent pas.

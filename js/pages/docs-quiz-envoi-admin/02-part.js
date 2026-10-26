@@ -334,7 +334,7 @@ function previewModule(){
       <div class="header-title"><h1>${esc(curModule.titre)}</h1><p>Micro-formation · ${esc(curTheme.nom)}</p></div>
       <div class="header-score-chip">Aperçu</div>
     </header>
-    ${moduleHTML()}</body></html>`);
+    ${moduleHTML()}<div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>`);
   w.document.close();
 }
 

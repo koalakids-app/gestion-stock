@@ -502,7 +502,7 @@ function printPlanningDoc(title, subtitle, bodyHTML, orientation){
     '<div class="sub">'+subtitle+'</div>'+
     bodyHTML+
     '<div class="footer">Document généré le '+new Date().toLocaleDateString('fr-FR')+' à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' — Koala Kids</div>'+
-    '</body></html>';
+    '<div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>';
 
   const existing=document.getElementById('_print-frame-planning');
   if(existing)existing.remove();

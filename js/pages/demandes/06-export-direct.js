@@ -833,7 +833,7 @@ function crBuildFormHtml(ctx,vals,info,opts){
         +'<div style="font-size:10.5px"><i>Nom de la Responsable : </i>'+escHtml(info.responsable)+'</div></td>'
     +'</tr></table>'
     +'<img src="'+MCM_LOGOS+'" alt="" style="display:block;width:100%;margin-top:8px">'
-    +'</body></html>';
+    +'<div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>';
 }
 
 /* Enregistre la commande (une ligne par crèche et par semaine livrée).

@@ -447,7 +447,7 @@ function reqExportCR(){
     +'<div class="sub">'+((window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids')+' · '+escHtml(reqCrecheName(r.creche_id)||'')+' · '+reqFmtDateLongue(r.date_reunion)+'</div>'
     +reqCRHtml(r)
     +'<div class="footer">Document généré le '+new Date().toLocaleDateString('fr-FR')+' à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' — '+((window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids')+'</div>'
-    +'</body></html>';
+    +'<div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>';
   const old=document.getElementById('_print-frame-req');if(old)old.remove();
   const iframe=document.createElement('iframe');
   iframe.id='_print-frame-req';

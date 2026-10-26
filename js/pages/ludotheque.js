@@ -801,7 +801,7 @@ function printProposition(id) {
     </div>` : ''}
     ${p.conseils ? `<div class="section"><h3>💡 Mise en scène</h3><div class="conseils-box">${p.conseils}</div></div>` : ''}
     <div class="footer">Fiche générée le ${new Date().toLocaleDateString('fr-FR')} — Ludothèque Koalakids</div>
-    </body></html>`;
+    <div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>`;
 
   const blob = new Blob([html], { type:'text/html;charset=utf-8' });
   const url  = URL.createObjectURL(blob);

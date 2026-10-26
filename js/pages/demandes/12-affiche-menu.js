@@ -66,7 +66,7 @@ function afficheHtml(v,qr){
     +'<div class="mid"><div class="qr">'+(qr?'<img src="'+qr+'" alt="QR code du menu">':'<div class="nqr">QR code indisponible</div>')+'</div>'
     +'<div class="msg">'+t(v.message)+'</div></div>'
     +'<div class="pied">'+t(v.pied)+'</div>'
-    +'</body></html>';
+    +'<div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>';
 }
 
 function afficheMenuOuvrir(){
