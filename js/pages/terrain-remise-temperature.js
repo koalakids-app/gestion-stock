@@ -143,11 +143,16 @@ function rtRenderLignes(note){
         ?'<input type="text" id="rtP'+i+'" maxlength="120" placeholder="Nature du plat" value="'+esc(l.plat)+'" oninput="RT_LIGNES['+i+'].plat=this.value">'
         :'<label class="rt-chk"><input type="checkbox" id="rtK'+i+'"'+(l.chauffe?' checked':'')+' onchange="rtCocher('+i+')"> <b>'+esc(l.plat)+'</b> <small>'+esc(l.tags.join(' · '))+'</small></label>')
       +'<div class="rt-champs" id="rtC'+i+'"'+(l.chauffe||l.libre?'':' style="display:none"')+'>'
+        +'<div class="rt-bloc"><div class="rt-lib">Température à la mise en chauffe</div>'
+          +'<div class="rt-temp"><button type="button" class="rt-pas" onclick="rtPas('+i+',-1,\'T\')">−</button>'
+          +'<input type="text" inputmode="decimal" id="rtT'+i+'" placeholder="— °C">'
+          +'<button type="button" class="rt-pas" onclick="rtPas('+i+',1,\'T\')">+</button></div>'
+          +'<div class="rt-puces">'+[1,2,3,4,5].map(function(t){return'<button type="button" onclick="rtTempSet('+i+','+t+',\'T\')">'+t+'</button>';}).join('')+'</div></div>'
         +'<div class="rt-bloc"><div class="rt-lib">Température de fin de réchauffe</div>'
           +'<div class="rt-temp"><button type="button" class="rt-pas" onclick="rtPas('+i+',-1)">−</button>'
           +'<input type="text" inputmode="decimal" id="rtF'+i+'" placeholder="— °C" oninput="rtLigneMaj('+i+')">'
           +'<button type="button" class="rt-pas" onclick="rtPas('+i+',1)">+</button></div>'
-          +'<div class="rt-puces">'+[60,63,65,70,75,80].map(function(t){return'<button type="button" onclick="rtTempSet('+i+','+t+')">'+t+'</button>';}).join('')+'</div></div>'
+          +'<div class="rt-puces">'+[65,68,70,72,75,80].map(function(t){return'<button type="button" onclick="rtTempSet('+i+','+t+')">'+t+'</button>';}).join('')+'</div></div>'
         +'<div class="rt-bloc"><div class="rt-lib">Heures</div>'
           +'<div class="rt-heures"><div><label>Début de chauffe</label><input type="time" id="rtHC'+i+'" oninput="rtLigneMaj('+i+')"></div>'
           +'<div><label>Fin de réchauffe</label><input type="time" id="rtHF'+i+'" oninput="rtLigneMaj('+i+')"></div></div>'
@@ -155,8 +160,7 @@ function rtRenderLignes(note){
           +'<button type="button" class="rt-now" onclick="rtMaintenant('+i+')">Fin = maintenant</button></div></div>'
         +'<button type="button" class="btn btn-g" onclick="rtDetails('+i+')">Plus de détails</button>'
         +'<div class="rt-det" id="rtD'+i+'" style="display:none">'
-          +'<div style="display:flex;gap:8px"><div style="flex:1"><label>T° mise en chauffe</label><input type="text" inputmode="decimal" id="rtT'+i+'" placeholder="Ex : 4"></div>'
-          +'<div style="flex:1"><label>T° après mixage</label><input type="text" inputmode="decimal" id="rtM'+i+'" placeholder="'+(l.mixage?'bébés':'si mixé')+'"></div></div>'
+          +'<div style="display:flex;gap:8px"><div style="flex:1"><label>T° après mixage</label><input type="text" inputmode="decimal" id="rtM'+i+'" placeholder="'+(l.mixage?'bébés':'si mixé')+'"></div></div>'
           +'<label>Observations</label><textarea id="rtO'+i+'" rows="2" placeholder="Ex : chauffage poursuivi, nouvelle mesure à 66 °C"></textarea>'
         +'</div>'
         +'<div class="rt-verdict" id="rtV'+i+'"></div>'
@@ -172,10 +176,16 @@ function rtCocher(i){
   if(on)document.getElementById('rtF'+i).focus();
 }
 /* saisie rapide : − / + (démarre à 63 °C), valeurs usuelles, heures en un tap */
-function rtTempSet(i,v){document.getElementById('rtF'+i).value=String(v);rtLigneMaj(i);}
-function rtPas(i,d){
-  const v=rtNum(rtV('F',i));
-  rtTempSet(i,v==null?RT_SEUIL:Math.round((v+d)*10)/10);
+function rtTempSet(i,v,k){
+  k=k||'F';
+  document.getElementById('rt'+k+i).value=String(v);
+  if(k==='F')rtLigneMaj(i);
+}
+/* départ du − / + : 70 °C en fin de réchauffe, 3 °C à la mise en chauffe (usages habituels) */
+function rtPas(i,d,k){
+  k=k||'F';
+  const v=rtNum(rtV(k,i));
+  rtTempSet(i,v==null?(k==='F'?70:3):Math.round((v+d)*10)/10,k);
 }
 function rtHeureStr(m){m=((m%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
 function rtMaintenant(i){
