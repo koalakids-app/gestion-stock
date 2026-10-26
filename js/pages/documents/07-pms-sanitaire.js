@@ -109,7 +109,7 @@ const PMS_TXT_LABELS={intro:'Introduction',flux:'Étapes du flux (une par ligne)
 const PMS_FICHES=[
  ['Fiche 1 – Réception et traçabilité',['Date','Plat','Lot','DLC','T° réception','Conforme','Visa'],[22,40,24,24,26,22,24]],
  ['Fiche 2 – Température du réfrigérateur',['Date','T° matin','T° soir','Conforme','Action corrective','Visa'],[22,24,24,24,64,24]],
- ['Fiche 3 – Remise en température et service',['Date','Plat','Début','T° à cœur','Fin','T° maintien','Service','Conforme','Visa'],[20,36,16,20,16,22,18,18,16]],
+ ['Fiche 3 – Contrôle de la remise en températures',['Jour','Nature des plats','T° mise en chauffe','Heure mise en chauffe','T° fin de réchauffe','Heure fin de réchauffe','T° après mixage','Observations','Visa'],[20,32,20,17,20,17,19,22,15],['Lundi','Mardi','Mercredi','Jeudi','Vendredi']],
  ['Fiche 4 – Nettoyage et désinfection',['Date','Zone ou matériel','Produit utilisé','Fait par (nom)','Fait','Visa'],[22,46,40,34,20,20]],
  ['Fiche 5 – Vérification de la sonde de température',['Date','Sonde (repère)','Lecture eau glacée (°C)','Écart (°C)','Conforme','Action','Visa'],[22,30,30,22,22,34,22]]
 ];
@@ -423,7 +423,7 @@ TPL.pms_sanitaire={
   ${pmsTxtHtml('danger',3)}
   <div id="pms-t-hz">${pmsTblHtml('hz')}</div>
   <h3>Remise en température : relevés des 14 derniers jours</h3>
-  <p class="hint" style="font-size:13px;font-style:normal">Registre tenu en ligne dans l’Accès terrain (tuile « Remise en température »), à la place de la fiche 3 papier : plat, températures et heures, conformité, visa.</p>
+  <p class="hint" style="font-size:13px;font-style:normal">Registre tenu en ligne dans l’Accès terrain (tuile « Remise en température »), en complément de la fiche 3 papier vierge (annexe du PDF) : plat, températures et heures, conformité, visa.</p>
   <div id="pms-remise"></div>
   ${pmsTxtHtml('sonde',3)}
   ${pmsTblBloc('so')}
@@ -434,7 +434,7 @@ TPL.pms_sanitaire={
   ${pmsTxtHtml('retrait',8)}
 
   <h3>5. Fiches d’enregistrement</h3>
-  <p class="hint" style="font-size:13px;font-style:normal">Cinq fiches vierges (réception et traçabilité, température du réfrigérateur, remise en température et service, nettoyage, vérification de la sonde) sont ajoutées à l’export PDF, à imprimer et à classer dans le PMS.</p>
+  <p class="hint" style="font-size:13px;font-style:normal">Cinq fiches vierges (réception et traçabilité, température du réfrigérateur, contrôle de la remise en températures, nettoyage, vérification de la sonde) sont ajoutées à l’export PDF, à imprimer et à classer dans le PMS.</p>
 
   ${pmsTblBloc('nc')}
   ${pmsTblBloc('ct')}
@@ -583,8 +583,12 @@ TPL.pms_sanitaire={
     doc.setFontSize(9);doc.setFont(undefined,'normal');doc.setTextColor(90);
     doc.text(pdfSafe((nom?nom+' · ':'')+'PMS '+(g('pms_version')||'')),M,y);doc.setTextColor(30);y+=5;
     const rows=[{head:true,cells:f[1]}];
-    for(let i=0;i<22;i++)rows.push(f[1].map(()=>''));
-    y=pdfGrid(doc,M,y,f[2],rows,{fs:8.5,minH:9});
+    if(f[3]){
+      /* fiche hebdomadaire : cinq lignes par jour (jour inscrit sur la première) */
+      doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text(pdfSafe('SEMAINE DU '+dots(14)+' AU '+dots(14)+'      SEM : '+dots(4)),M,y+1);y+=6;doc.setFont(undefined,'normal');
+      f[3].forEach(j=>{for(let i=0;i<5;i++)rows.push(f[1].map((c,k)=>k===0&&i===0?j:''));});
+    }else for(let i=0;i<22;i++)rows.push(f[1].map(()=>''));
+    y=pdfGrid(doc,M,y,f[2],rows,{fs:f[3]?7.5:8.5,minH:f[3]?8.4:9});
   });
 
   pdfSortie(doc,slug(fillDoc.titre)+(nom?'_'+slug(nom):'')+'.pdf');
