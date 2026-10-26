@@ -144,19 +144,7 @@ async function regloMfaShowEnroll(){
     regloMfaFactorId = data.id;
     const qrEl = document.getElementById('reglo-mfa-qr');
     qrEl.innerHTML = '';
-    const qr = data.totp.qr_code || '';
-    const svgMatch = qr.match(/<svg[\s\S]*<\/svg>/i);
-    if(svgMatch){
-      qrEl.innerHTML = svgMatch[0];
-      const svg = qrEl.querySelector('svg');
-      if(svg){ svg.style.width = '180px'; svg.style.height = '180px'; }
-    }else{
-      const img = document.createElement('img');
-      img.alt = 'QR code MFA';
-      img.style.cssText = 'display:block;width:180px;height:180px;object-fit:contain';
-      img.src = qr;
-      qrEl.appendChild(img);
-    }
+    await kkMfaQr(qrEl,data.totp);
     document.getElementById('reglo-mfa-secret').textContent = data.totp.secret;
     document.getElementById('reglo-mfa-enroll-code').value = '';
   }catch(e){
