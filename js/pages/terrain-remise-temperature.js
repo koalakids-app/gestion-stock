@@ -54,6 +54,9 @@ function rtRender(){
   const auj=RT_JOURNAL.filter(j=>j.fait_le===rtJour());
   let html='<div class="nt-resume '+(auj.length?'ok':'todo')+'">'+(auj.length?'✅ '+auj.length+' plat'+(auj.length>1?'s':'')+' contrôlé'+(auj.length>1?'s':'')+' aujourd’hui':'⏳ Aucun plat contrôlé aujourd’hui')+' · '+esc(RT_CRECHE)+'</div>';
   html+='<button class="btn btn-p" style="width:100%;justify-content:center" onclick="rtOuvrirSaisie()"><i class="ti ti-plus"></i> Ajouter un plat</button>';
+  html+='<div class="nt-titre">Fiche de la semaine</div>'
+    +'<div class="f" style="display:flex;gap:8px;align-items:flex-end"><div style="flex:1"><label>Semaine contenant le</label><input type="date" id="rtSemaine" max="'+rtJour()+'" value="'+rtJour()+'"></div>'
+    +'<button class="btn btn-g" onclick="rtExporter()"><i class="ti ti-printer"></i> Imprimer / PDF</button></div>';
   let jour='';
   html+='<div class="nt-titre">Derniers relevés</div>'+(RT_JOURNAL.length?RT_JOURNAL.map(j=>{
     let tete='';
@@ -136,6 +139,69 @@ async function rtValiderSaisie(){
     console.error('[rtValiderSaisie]',err);
     toast('Enregistrement impossible : '+((err&&err.message)||'droits insuffisants'),true);
   }finally{RT_ENVOI=false;}
+}
+
+/* ===== Export hebdomadaire : même présentation que la fiche papier (lundi → vendredi) ===== */
+function rtLundi(iso){
+  const d=new Date(iso+'T12:00:00');
+  d.setDate(d.getDate()-((d.getDay()+6)%7));
+  return d;
+}
+function rtNumSemaine(lundi){
+  const j=new Date(Date.UTC(lundi.getFullYear(),lundi.getMonth(),lundi.getDate()+3));
+  const d1=new Date(Date.UTC(j.getUTCFullYear(),0,4));
+  return 1+Math.round(((j-d1)/864e5-3+((d1.getUTCDay()+6)%7))/7);
+}
+function rtT(v){return v==null?'':String(v).replace('.',',')+' °C';}
+async function rtExporter(){
+  const iso=(document.getElementById('rtSemaine')||{}).value||rtJour();
+  const lundi=rtLundi(iso),dim=new Date(lundi);dim.setDate(dim.getDate()+6);
+  const vendredi=new Date(lundi);vendredi.setDate(vendredi.getDate()+4);
+  const w=window.open('','_blank');
+  if(!w){toast('Autorisez l’ouverture de fenêtres pour imprimer la fiche.',true);return;}
+  w.document.write('<p style="font-family:sans-serif">Préparation de la fiche…</p>');
+  try{
+    const{data,error}=await sb.from('remise_temperature_journal')
+      .select('fait_le,plat,temp_chauffe,heure_chauffe,temp_fin,heure_fin,temp_mixage,conforme,observation,fait_par,created_at')
+      .eq('creche',RT_CRECHE).gte('fait_le',rtJour(lundi)).lte('fait_le',rtJour(dim))
+      .order('fait_le').order('created_at').limit(500);
+    if(error)throw error;
+    const jours=[];
+    for(let i=0;i<7;i++){const d=new Date(lundi);d.setDate(d.getDate()+i);jours.push(rtJour(d));}
+    /* samedi et dimanche ne s'impriment que s'il y a des relevés */
+    const affiches=jours.filter((j,i)=>i<5||(data||[]).some(r=>r.fait_le===j));
+    let corps='';
+    affiches.forEach(j=>{
+      const l=(data||[]).filter(r=>r.fait_le===j),n=Math.max(5,l.length);
+      for(let i=0;i<n;i++){
+        const r=l[i]||{};
+        corps+='<tr>'+(i===0?'<td rowspan="'+n+'" class="jour">'+esc(rtJourNom(j))+'<br><small>'+esc(rtDateFr(j))+'</small></td>':'')
+          +'<td class="plat">'+esc(r.plat||'')+'</td>'
+          +'<td>'+esc(rtT(r.temp_chauffe))+'</td><td>'+esc(rtHeure(r.heure_chauffe))+'</td>'
+          +'<td'+(r.conforme===false?' class="nc"':'')+'>'+esc(rtT(r.temp_fin))+'</td><td>'+esc(rtHeure(r.heure_fin))+'</td>'
+          +'<td>'+esc(rtT(r.temp_mixage))+'</td>'
+          +'<td class="obs">'+esc((r.conforme===false?'Non conforme. ':'')+(r.observation||''))+'</td>'
+          +'<td>'+esc(r.fait_par||'')+'</td></tr>';
+      }
+    });
+    w.document.open();
+    w.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Remise en température — semaine du '+esc(rtDateFr(rtJour(lundi)))+'</title>'
+      +'<style>@page{size:A4 landscape;margin:10mm}body{font-family:Arial,sans-serif;font-size:11px;color:#000}h1{text-align:center;font-size:16px;margin:0 0 8px}'
+      +'.ent{display:flex;justify-content:space-between;margin:4px 0;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:8px}'
+      +'th,td{border:1px solid #000;padding:4px;text-align:center;vertical-align:middle;height:22px}th{background:#eee;font-size:10.5px}'
+      +'td.jour{font-weight:bold;background:#f6f6f6;width:70px}td.plat,td.obs{text-align:left}td.nc{font-weight:bold;color:#b00}small{font-weight:normal}'
+      +'tr{page-break-inside:avoid}</style></head><body>'
+      +'<h1>FICHE DE CONTRÔLE DE LA REMISE EN TEMPÉRATURES</h1>'
+      +'<div class="ent"><span>SEMAINE DU '+esc(rtDateFr(rtJour(lundi)))+' AU '+esc(rtDateFr(rtJour(vendredi)))+'</span><span>SEM : '+rtNumSemaine(lundi)+'</span></div>'
+      +'<div class="ent"><span>CRÈCHE : '+esc(RT_CRECHE)+'</span></div>'
+      +'<table><tr><th>Jour</th><th>Nature des plats</th><th>Température mise en chauffe</th><th>Heure de mise en chauffe</th><th>Température de fin de réchauffe</th><th>Heure de fin de réchauffe</th><th>Température après mixage</th><th>Observations</th><th>Visa</th></tr>'+corps+'</table>'
+      +'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
+    w.document.close();
+  }catch(e){
+    console.error('[rtExporter]',e);
+    try{w.close();}catch(_e){}
+    toast('Export impossible : '+((e&&e.message)||'erreur'),true);
+  }
 }
 
 document.getElementById('qRemise').onclick=rtOuvrir;
