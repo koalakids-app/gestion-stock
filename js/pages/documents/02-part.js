@@ -629,23 +629,38 @@ function pdfSafe(v){
 function pdfGrid(doc,x,y,widths,rows,opt){
   opt=opt||{};
   const fs=opt.fs||9, lh=4.2;
-  rows.forEach(r=>{
+  const mesure=r=>{
     const cells=r.cells||r, head=!!r.head;
     doc.setFontSize(fs);
     doc.setFont(undefined,head?'bold':'normal');
     const wrapped=cells.map((c,i)=>doc.splitTextToSize(pdfSafe(c),widths[i]-4));
-    const h=Math.max(opt.minH||8, Math.max.apply(null,wrapped.map(w=>w.length))*lh+4);
-    if(y+h>280){doc.addPage();y=pdfLogo(doc,20);}
+    return {cells:cells,head:head,wrapped:wrapped,h:Math.max(opt.minH||8, Math.max.apply(null,wrapped.map(w=>w.length))*lh+4)};
+  };
+  const dessine=m=>{
+    doc.setFontSize(fs);
     let cx=x;
-    cells.forEach((c,i)=>{
-      if(head){doc.setFillColor(238,237,248);doc.rect(cx,y,widths[i],h,'F');}
-      doc.setDrawColor(150);doc.rect(cx,y,widths[i],h);
-      doc.setFont(undefined,head?'bold':'normal');
-      if(head)doc.text(wrapped[i],cx+widths[i]/2,y+5.5,{align:'center'});
-      else doc.text(wrapped[i],cx+2,y+5.5);
+    m.cells.forEach((c,i)=>{
+      if(m.head){doc.setFillColor(238,237,248);doc.rect(cx,y,widths[i],m.h,'F');}
+      doc.setDrawColor(150);doc.rect(cx,y,widths[i],m.h);
+      doc.setFont(undefined,m.head?'bold':'normal');
+      if(m.head)doc.text(m.wrapped[i],cx+widths[i]/2,y+5.5,{align:'center'});
+      else doc.text(m.wrapped[i],cx+2,y+5.5);
       cx+=widths[i];
     });
-    y+=h;
+    y+=m.h;
+  };
+  const lignes=rows.map(mesure);
+  let entete=null;
+  lignes.forEach((m,k)=>{
+    if(m.head)entete=m;
+    /* un en-tête ne reste jamais seul en bas de page : il suit la ligne suivante */
+    const suite=(m.head&&lignes[k+1]&&!lignes[k+1].head)?lignes[k+1].h:0;
+    if(y+m.h+suite>280){
+      doc.addPage();y=pdfLogo(doc,20);
+      /* tableau coupé : l'en-tête est répété sur la nouvelle page */
+      if(!m.head&&entete)dessine(entete);
+    }
+    dessine(m);
   });
   return y;
 }
