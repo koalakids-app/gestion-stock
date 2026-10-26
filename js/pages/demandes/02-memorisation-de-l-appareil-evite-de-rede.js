@@ -76,14 +76,7 @@ async function mfaGateShowEnroll(){
     mfaGateFactorId=data.id;
     const qrEl=document.getElementById('mfa-gate-qr');
     qrEl.innerHTML='';
-    // data.totp.qr_code est une data-URL directement utilisable comme src
-    // d'<img> (c'est ce que fait l'exemple officiel Supabase) : on évite
-    // toute extraction/réinjection du SVG, qui peut le corrompre.
-    const img=document.createElement('img');
-    img.alt='QR code MFA';
-    img.style.cssText='display:block;width:232px;height:232px;object-fit:contain';
-    img.src=data.totp.qr_code||'';
-    qrEl.appendChild(img);
+    await kkMfaQr(qrEl,data.totp);
     document.getElementById('mfa-gate-secret').textContent=data.totp.secret;
     document.getElementById('mfa-gate-enroll-code').value='';
   }catch(e){
@@ -416,14 +409,7 @@ async function secMfaStartEnroll(){
     secMfaFactorId=data.id;
     const qrEl=document.getElementById('sec-mfa-qr');
     qrEl.innerHTML='';
-    // data.totp.qr_code est une data-URL directement utilisable comme src
-    // d'<img> (c'est ce que fait l'exemple officiel Supabase) : on évite
-    // toute extraction/réinjection du SVG, qui peut le corrompre.
-    const img=document.createElement('img');
-    img.alt='QR code MFA';
-    img.style.cssText='display:block;width:232px;height:232px;object-fit:contain';
-    img.src=data.totp.qr_code||'';
-    qrEl.appendChild(img);
+    await kkMfaQr(qrEl,data.totp);
     document.getElementById('sec-mfa-secret').textContent=data.totp.secret;
     document.getElementById('sec-mfa-code').value='';
     secMfaShowOnly('sec-mfa-enroll-step');

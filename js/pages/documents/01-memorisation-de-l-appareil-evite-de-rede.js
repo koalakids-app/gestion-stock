@@ -184,23 +184,7 @@ async function mfaGateShowEnroll(){
     mfaGateFactorId=data.id;
     const qrEl=document.getElementById('mfaGateQr');
     qrEl.innerHTML='';
-    const qr=data.totp.qr_code||'';
-    // qr_code peut être du SVG brut ou une data-URI dont le payload SVG n'est pas
-    // encodé : concaténer dans une chaîne HTML casserait l'attribut src="" au
-    // premier guillemet. On extrait le SVG s'il y en a un, sinon on assigne l'URL
-    // via la propriété DOM .src (jamais interprétée comme du HTML).
-    const svgMatch=qr.match(/<svg[\s\S]*<\/svg>/i);
-    if(svgMatch){
-      qrEl.innerHTML=svgMatch[0];
-      const svg=qrEl.querySelector('svg');
-      if(svg){svg.style.width='180px';svg.style.height='180px';}
-    }else{
-      const img=document.createElement('img');
-      img.alt='QR code MFA';
-      img.style.cssText='display:block;width:180px;height:180px;object-fit:contain';
-      img.src=qr;
-      qrEl.appendChild(img);
-    }
+    await kkMfaQr(qrEl,data.totp);
     document.getElementById('mfaGateSecret').textContent=data.totp.secret;
     document.getElementById('mfaGateEnrollCode').value='';
   }catch(e){
