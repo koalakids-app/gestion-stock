@@ -10,7 +10,7 @@
 -- `creche` est le nom court de la crèche (« Brunet »), comme nettoyage_journal.
 -- Droits via kk_acces_creche_nom() : direction = toutes les crèches de
 -- l'organisation, référent(e) / employé(e) = la leur.
--- Registre de traçabilité : aucune modification ; suppression par la direction,
+-- Registre de traçabilité : une ligne ne se complète qu'une fois (fin de réchauffe) ; suppression par la direction,
 -- ou par l'auteur dans les 15 minutes (erreur de clic).
 --
 -- À exécuter dans le SQL Editor Supabase, UNE PARTIE À LA FOIS. Idempotent.
@@ -67,9 +67,49 @@ create policy remise_temperature_delete on public.remise_temperature_journal
 
 
 -- ============================================================================
+-- PARTIE 2 bis — Saisie en deux temps (mise en chauffe, puis fin de réchauffe)
+-- ============================================================================
+-- Une ligne ouverte (temp_fin vide) peut être complétée UNE fois, par l'équipe
+-- de la crèche ; dès que temp_fin est renseignée, la ligne est figée. Le
+-- déclencheur interdit de modifier autre chose que la fin de réchauffe
+-- (plat, date, mise en chauffe, auteur restent tels que saisis).
+drop policy if exists remise_temperature_update on public.remise_temperature_journal;
+create policy remise_temperature_update on public.remise_temperature_journal
+  for update to authenticated
+  using (public.kk_acces_creche_nom(creche) and temp_fin is null)
+  with check (public.kk_acces_creche_nom(creche));
+
+create or replace function public.remise_temperature_fige()
+ returns trigger
+ language plpgsql
+ set search_path to 'public'
+as $function$
+begin
+  if old.temp_fin is not null then
+    raise exception 'Relevé terminé : modification impossible';
+  end if;
+  if new.creche is distinct from old.creche
+     or new.fait_le is distinct from old.fait_le
+     or new.plat is distinct from old.plat
+     or new.temp_chauffe is distinct from old.temp_chauffe
+     or new.heure_chauffe is distinct from old.heure_chauffe
+     or new.fait_par_user is distinct from old.fait_par_user
+     or new.created_at is distinct from old.created_at then
+    raise exception 'Seule la fin de réchauffe peut être complétée';
+  end if;
+  return new;
+end;
+$function$;
+
+drop trigger if exists remise_temperature_fige on public.remise_temperature_journal;
+create trigger remise_temperature_fige before update on public.remise_temperature_journal
+  for each row execute function public.remise_temperature_fige();
+
+
+-- ============================================================================
 -- PARTIE 3 / 3 — Vérification (lecture seule)
 -- ============================================================================
--- Doit renvoyer rowsecurity = true, puis 3 policies (select, insert, delete).
+-- Doit renvoyer rowsecurity = true, puis 4 policies (select, insert, update, delete).
 select tablename, rowsecurity from pg_tables
  where schemaname = 'public' and tablename = 'remise_temperature_journal';
 

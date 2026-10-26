@@ -257,7 +257,7 @@ function pmsRemiseLignes(d,jours){
     new Date(x.fait_le+'T12:00:00').toLocaleDateString('fr-FR'),x.plat||'',
     [pmsTemp(x.temp_chauffe),pmsHeureCourte(x.heure_chauffe)].filter(Boolean).join(' · '),
     [pmsTemp(x.temp_fin),pmsHeureCourte(x.heure_fin)].filter(Boolean).join(' · '),
-    pmsTemp(x.temp_mixage),x.conforme===false?'Non':'Oui',x.observation||'',x.fait_par||'non renseigné']);
+    pmsTemp(x.temp_mixage),x.temp_fin==null?'—':x.conforme===false?'Non':'Oui',x.temp_fin==null?'Fin non saisie. '+(x.observation||''):(x.observation||''),x.fait_par||'non renseigné']);
 }
 function pmsRemiseHtml(){
   const cr=pmsCrecheChoisie(),cle=pmsNettCle(cr);

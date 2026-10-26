@@ -52,7 +52,8 @@ async function rtCharger(){
 function rtRender(){
   const box=document.getElementById('rtContenu');
   const auj=RT_JOURNAL.filter(j=>j.fait_le===rtJour());
-  let html='<div class="nt-resume '+(auj.length?'ok':'todo')+'">'+(auj.length?'✅ '+auj.length+' plat'+(auj.length>1?'s':'')+' contrôlé'+(auj.length>1?'s':'')+' aujourd’hui':'⏳ Aucun plat contrôlé aujourd’hui')+' · '+esc(RT_CRECHE)+'</div>';
+  let en=auj.filter(j=>j.temp_fin==null).length,
+    html='<div class="nt-resume '+(auj.length&&!en?'ok':'todo')+'">'+(en?'⏳ '+en+' plat'+(en>1?'s':'')+' en chauffe : fin de réchauffe à saisir':auj.length?'✅ '+auj.length+' plat'+(auj.length>1?'s':'')+' contrôlé'+(auj.length>1?'s':'')+' aujourd’hui':'⏳ Aucun plat contrôlé aujourd’hui')+' · '+esc(RT_CRECHE)+'</div>';
   html+='<button class="btn btn-p" style="width:100%;justify-content:center" onclick="rtOuvrirSaisie()"><i class="ti ti-list-check"></i> Saisir le service du jour</button>';
   html+='<div class="nt-titre">Fiche de la semaine</div>'
     +'<div class="f" style="display:flex;gap:8px;align-items:flex-end"><div style="flex:1"><label>Semaine contenant le</label><input type="date" id="rtSemaine" max="'+rtJour()+'" value="'+rtJour()+'"></div>'
@@ -66,7 +67,7 @@ function rtRender(){
     if(j.temp_fin!=null||j.heure_fin)det.push('fin '+(j.temp_fin!=null?j.temp_fin+' °C':'')+(j.heure_fin?' à '+rtHeure(j.heure_fin):''));
     if(j.temp_mixage!=null)det.push('après mixage '+j.temp_mixage+' °C');
     return tete+'<div class="nt-hist"><b>'+esc(j.plat)+'</b> '
-      +'<span class="nt-b '+(j.conforme?'ok':'todo')+'">'+(j.conforme?'✓ Conforme':'⚠ Non conforme')+'</span>'
+      +(j.temp_fin==null?'<span class="nt-b todo">⏳ En chauffe</span>':'<span class="nt-b '+(j.conforme?'ok':'todo')+'">'+(j.conforme?'✓ Conforme':'⚠ Non conforme')+'</span>')
       +'<small>'+esc(det.join(' · '))+'</small>'
       +'<small>visa : '+esc(j.fait_par||'non renseigné')+(j.observation?' · '+esc(j.observation):'')+'</small></div>';
   }).join(''):'<div class="nt-hist"><small>Aucun relevé enregistré pour le moment.</small></div>');
@@ -84,8 +85,9 @@ async function rtOuvrir(){
 function rtFermer(){document.getElementById('ovRemise').classList.remove('on');}
 
 /* ===== Saisie du service : les plats viennent du menu du traiteur (menus_semaine, Demandes › MCM › Menus) =====
-   La personne ne tape que la température de fin de réchauffe ; le reste (T° de chauffe, heures,
-   mixage, observation) est dans « Détails ». L'heure de fin se remplit seule à la saisie. */
+   La saisie se fait en DEUX TEMPS : à la mise en chauffe (T° + heure, enregistrées tout de suite), puis
+   à la fin de réchauffe (T° + heure, qui complètent la même ligne). L'heure se met seule dès qu'une
+   température est saisie. Un plat « en chauffe » réapparaît au second temps avec sa mise en chauffe. */
 let RT_LIGNES=[];
 const RT_FROID=/fruit|compote|yaourt|yogourt|fromage|laitage|crudit|salade|petit.?suisse|banane|pomme|poire|orange|clémentine|clementine|biscuit|gâteau|gateau|pain\b|lait\b|entr[ée]e/i;
 const RT_PROFILS=[['bb6','− 6 mois'],['bb18','6-18 mois'],['grand','Grands']];
@@ -125,59 +127,70 @@ async function rtChargerLignes(){
   box.innerHTML='<div class="msg">Chargement du menu…</div>';
   let menu=null,note='';
   try{menu=await rtMenuDuJour(iso);}catch(e){console.error('[rtMenuDuJour]',e);note='Menu indisponible : ajoutez les plats à la main.';}
-  const faits=RT_JOURNAL.filter(j=>j.fait_le===iso).map(j=>String(j.plat||'').trim().toLowerCase());
-  RT_LIGNES=rtPlatsDuMenu(menu).map(function(x){
-    return{plat:x.plat,tags:x.tags,mixage:x.mixage,libre:false,deja:faits.indexOf(x.plat.toLowerCase())>=0,chauffe:!RT_FROID.test(x.plat)};
+  const duJour=RT_JOURNAL.filter(j=>j.fait_le===iso);
+  const lignes=[],vus={};
+  rtPlatsDuMenu(menu).forEach(function(x){
+    const k=x.plat.toLowerCase(),rows=duJour.filter(j=>String(j.plat||'').trim().toLowerCase()===k);
+    vus[k]=1;
+    const ouvert=rows.find(j=>j.temp_fin==null),complet=rows.some(j=>j.temp_fin!=null);
+    lignes.push({plat:x.plat,tags:x.tags,mixage:x.mixage,libre:false,chauffe:!RT_FROID.test(x.plat),
+      deja:!ouvert&&complet,ouvert:ouvert||null});
   });
+  /* plats en chauffe hors menu (saisie libre faite plus tôt) */
+  duJour.filter(j=>j.temp_fin==null&&!vus[String(j.plat||'').trim().toLowerCase()]).forEach(function(j){
+    lignes.push({plat:j.plat,tags:[],mixage:false,libre:false,chauffe:true,deja:false,ouvert:j});
+  });
+  RT_LIGNES=lignes;
   if(!note&&!RT_LIGNES.length)note=new Date(iso+'T12:00:00').getDay()%6===0?'Pas de menu le week-end.':'Menu du traiteur pas encore importé pour ce jour : ajoutez les plats à la main.';
   rtRenderLignes(note+(menu&&menu.theme?' Thème : '+menu.theme+'.':''));
+}
+function rtBlocTemp(i,k,titre,puces,aff){
+  const nom=k==='T'?'T':'F',hid=k==='T'?'HC':'HF';
+  return '<div class="rt-bloc"><div class="rt-lib">'+titre+'</div>'
+    +'<div class="rt-temp"><button type="button" class="rt-pas" onclick="rtPas('+i+',-1,\''+k+'\')">−</button>'
+    +'<input type="text" inputmode="decimal" id="rt'+nom+i+'" placeholder="— °C" oninput="rtLigneMaj('+i+',\''+k+'\')">'
+    +'<button type="button" class="rt-pas" onclick="rtPas('+i+',1,\''+k+'\')">+</button></div>'
+    +rtPasFin(i,k)
+    +'<div class="rt-puces">'+puces.map(function(t){return'<button type="button" onclick="rtTempSet('+i+','+t+',\''+k+'\')">'+t+'</button>';}).join('')+'</div>'
+    +'<div class="rt-heure"><label>'+aff+'</label><input type="time" id="rt'+hid+i+'" oninput="rtLigneMaj('+i+',\''+k+'\',true)">'
+    +'<button type="button" class="rt-now" onclick="rtMaintenant('+i+',\''+k+'\')">Maintenant</button></div></div>';
 }
 function rtRenderLignes(note){
   const box=document.getElementById('rtLignes');
   let html=note?'<div class="hint" style="font-size:12.5px;color:var(--muted);margin-bottom:8px">'+esc(note)+'</div>':'';
-  if(RT_LIGNES.some(l=>!l.libre&&!l.deja))html+='<div class="hint" style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Gardez cochés les plats réchauffés et saisissez leur température de fin de réchauffe.</div>';
+  if(RT_LIGNES.some(l=>!l.deja))html+='<div class="hint" style="font-size:12.5px;color:var(--muted);margin-bottom:8px">En deux temps : saisissez la température à la <b>mise en chauffe</b> (l’heure se met seule) et enregistrez ; plus tard, revenez saisir la <b>fin de réchauffe</b> des plats « en chauffe ».</div>';
   html+=RT_LIGNES.map(function(l,i){
-    if(l.deja)return '<div class="rt-lig rt-deja"><b>'+esc(l.plat)+'</b> <span class="nt-b ok">✓ déjà relevé</span></div>';
-    return '<div class="rt-lig" id="rtL'+i+'">'
-      +(l.libre
+    if(l.deja)return '<div class="rt-lig rt-deja"><b>'+esc(l.plat)+'</b> <span class="nt-b ok">✓ terminé</span></div>';
+    const fin=!!l.ouvert,o=l.ouvert||{};
+    const tete=fin
+      ?'<div><b>'+esc(l.plat)+'</b> <span class="nt-b todo">⏳ en chauffe</span><small class="rt-recap">mise en chauffe : '+esc((o.temp_chauffe!=null?String(o.temp_chauffe).replace('.',',')+' °C':'—')+(o.heure_chauffe?' à '+rtHeure(o.heure_chauffe):''))+'</small></div>'
+      :(l.libre
         ?'<input type="text" id="rtP'+i+'" maxlength="120" placeholder="Nature du plat" value="'+esc(l.plat)+'" oninput="RT_LIGNES['+i+'].plat=this.value">'
-        :'<label class="rt-chk"><input type="checkbox" id="rtK'+i+'"'+(l.chauffe?' checked':'')+' onchange="rtCocher('+i+')"> <b>'+esc(l.plat)+'</b> <small>'+esc(l.tags.join(' · '))+'</small></label>')
-      +'<div class="rt-champs" id="rtC'+i+'"'+(l.chauffe||l.libre?'':' style="display:none"')+'>'
-        +'<div class="rt-bloc"><div class="rt-lib">Température à la mise en chauffe</div>'
-          +'<div class="rt-temp"><button type="button" class="rt-pas" onclick="rtPas('+i+',-1,\'T\')">−</button>'
-          +'<input type="text" inputmode="decimal" id="rtT'+i+'" placeholder="— °C">'
-          +'<button type="button" class="rt-pas" onclick="rtPas('+i+',1,\'T\')">+</button></div>'
-          +rtPasFin(i,'T')
-          +'<div class="rt-puces">'+[1,2,3,4,5].map(function(t){return'<button type="button" onclick="rtTempSet('+i+','+t+',\'T\')">'+t+'</button>';}).join('')+'</div></div>'
-        +'<div class="rt-bloc"><div class="rt-lib">Température de fin de réchauffe</div>'
-          +'<div class="rt-temp"><button type="button" class="rt-pas" onclick="rtPas('+i+',-1)">−</button>'
-          +'<input type="text" inputmode="decimal" id="rtF'+i+'" placeholder="— °C" oninput="rtLigneMaj('+i+')">'
-          +'<button type="button" class="rt-pas" onclick="rtPas('+i+',1)">+</button></div>'
-          +rtPasFin(i,'F')
-          +'<div class="rt-puces">'+[65,68,70,72,75,80].map(function(t){return'<button type="button" onclick="rtTempSet('+i+','+t+')">'+t+'</button>';}).join('')+'</div></div>'
-        +'<div class="rt-bloc"><div class="rt-lib">Heures</div>'
-          +'<div class="rt-heures"><div><label>Début de chauffe</label><input type="time" id="rtHC'+i+'" oninput="rtLigneMaj('+i+')"></div>'
-          +'<div><label>Fin de réchauffe</label><input type="time" id="rtHF'+i+'" oninput="rtLigneMaj('+i+')"></div></div>'
-          +'<div class="rt-puces"><span>Début :</span>'+[15,30,45,60].map(function(m){return'<button type="button" onclick="rtDepuis('+i+','+m+')">il y a '+m+' min</button>';}).join('')
-          +'<button type="button" class="rt-now" onclick="rtMaintenant('+i+')">Fin = maintenant</button></div></div>'
-        +'<button type="button" class="btn btn-g" onclick="rtDetails('+i+')">Plus de détails</button>'
-        +'<div class="rt-det" id="rtD'+i+'" style="display:none">'
-          +'<div style="display:flex;gap:8px"><div style="flex:1"><label>T° après mixage</label><input type="text" inputmode="decimal" id="rtM'+i+'" placeholder="'+(l.mixage?'bébés':'si mixé')+'"></div></div>'
-          +'<label>Observations</label><textarea id="rtO'+i+'" rows="2" placeholder="Ex : chauffage poursuivi, nouvelle mesure à 66 °C"></textarea>'
-        +'</div>'
-        +'<div class="rt-verdict" id="rtV'+i+'"></div>'
+        :'<label class="rt-chk"><input type="checkbox" id="rtK'+i+'"'+(l.chauffe?' checked':'')+' onchange="rtCocher('+i+')"> <b>'+esc(l.plat)+'</b> <small>'+esc(l.tags.join(' · '))+'</small></label>');
+    const visible=fin||l.chauffe||l.libre;
+    return '<div class="rt-lig" id="rtL'+i+'">'+tete
+      +'<div class="rt-champs" id="rtC'+i+'"'+(visible?'':' style="display:none"')+'>'
+        +(fin
+          ?'<input type="hidden" id="rtT'+i+'" value="'+esc(o.temp_chauffe!=null?String(o.temp_chauffe).replace('.',','):'')+'"><input type="hidden" id="rtHC'+i+'" value="'+esc(rtHeure(o.heure_chauffe))+'">'
+          :rtBlocTemp(i,'T','1 · Mise en chauffe',[1,2,3,4,5],'Heure de mise en chauffe')
+            +'<button type="button" class="btn btn-g" onclick="rtMontrerFin('+i+')">Fin de réchauffe déjà faite ?</button>')
+        +'<div class="rt-bloc rt-finb" id="rtFB'+i+'"'+(fin?'':' style="display:none"')+'>'+rtBlocTemp(i,'F','2 · Fin de réchauffe',[65,68,70,72,75,80],'Heure de fin de réchauffe')
+          +'<button type="button" class="btn btn-g" onclick="rtDetails('+i+')">Plus de détails</button>'
+          +'<div class="rt-det" id="rtD'+i+'" style="display:none">'
+            +'<label>T° après mixage</label><input type="text" inputmode="decimal" id="rtM'+i+'" placeholder="'+(l.mixage?'bébés':'si mixé')+'">'
+            +'<label>Observations</label><textarea id="rtO'+i+'" rows="2" placeholder="Ex : chauffage poursuivi, nouvelle mesure à 66 °C"></textarea>'
+          +'</div><div class="rt-verdict" id="rtV'+i+'"></div></div>'
       +'</div></div>';
   }).join('');
   html+='<button type="button" class="btn btn-g" style="width:100%;justify-content:center;margin:6px 0 12px" onclick="rtAjouterLibre()"><i class="ti ti-plus"></i> Autre plat</button>';
   box.innerHTML=html;
 }
+function rtMontrerFin(i){const b=document.getElementById('rtFB'+i);b.style.display=b.style.display==='none'?'':'none';}
 function rtCocher(i){
   const on=document.getElementById('rtK'+i).checked;
   RT_LIGNES[i].chauffe=on;
   document.getElementById('rtC'+i).style.display=on?'':'none';
-  if(on)document.getElementById('rtF'+i).focus();
 }
-/* saisie rapide : − / + (démarre à 63 °C), valeurs usuelles, heures en un tap */
 /* pas fin : ± 0,1 °C */
 function rtPasFin(i,k){
   return '<div class="rt-fin"><button type="button" onclick="rtPas('+i+',-0.1,\''+k+'\')">− 0,1</button><button type="button" onclick="rtPas('+i+',0.1,\''+k+'\')">+ 0,1</button></div>';
@@ -185,7 +198,7 @@ function rtPasFin(i,k){
 function rtTempSet(i,v,k){
   k=k||'F';
   document.getElementById('rt'+k+i).value=String(v).replace('.',',');
-  if(k==='F')rtLigneMaj(i);
+  rtLigneMaj(i,k);
 }
 /* départ du − / + : 70 °C en fin de réchauffe, 3 °C à la mise en chauffe (usages habituels) */
 function rtPas(i,d,k){
@@ -194,21 +207,15 @@ function rtPas(i,d,k){
   rtTempSet(i,v==null?(k==='F'?70:3):Math.round((v+d)*10)/10,k);
 }
 function rtHeureStr(m){m=((m%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
-function rtMaintenant(i){
+function rtMaintenant(i,k){
   const n=new Date();
-  document.getElementById('rtHF'+i).value=rtHeureStr(n.getHours()*60+n.getMinutes());
-  rtLigneMaj(i,true);
-}
-/* début de chauffe = fin (ou maintenant) moins X minutes */
-function rtDepuis(i,min){
-  if(!rtV('HF',i))rtMaintenant(i);
-  document.getElementById('rtHC'+i).value=rtHeureStr(rtMin(rtV('HF',i))-min);
-  rtLigneMaj(i,true);
+  document.getElementById('rt'+(k==='T'?'HC':'HF')+i).value=rtHeureStr(n.getHours()*60+n.getMinutes());
+  rtLigneMaj(i,k,true);
 }
 function rtDetails(i){const d=document.getElementById('rtD'+i);d.style.display=d.style.display==='none'?'':'none';}
 function rtAjouterLibre(){
   rtSauverSaisies();
-  RT_LIGNES.push({plat:'',tags:[],mixage:false,libre:true,deja:false,chauffe:true});
+  RT_LIGNES.push({plat:'',tags:[],mixage:false,libre:true,deja:false,chauffe:true,ouvert:null});
   rtRenderLignes('');rtRestaurerSaisies();
   const i=RT_LIGNES.length-1,el=document.getElementById('rtP'+i);if(el)el.focus();
 }
@@ -220,7 +227,7 @@ function rtSauverSaisies(){
   RT_LIGNES.forEach(function(l,i){if(l.deja)return;RT_SAISIES[i]={};RT_IDS.forEach(function(k){const e=document.getElementById('rt'+k+i);if(e)RT_SAISIES[i][k]=e.value;});});
 }
 function rtRestaurerSaisies(){
-  Object.keys(RT_SAISIES).forEach(function(i){RT_IDS.forEach(function(k){const e=document.getElementById('rt'+k+i);if(e&&RT_SAISIES[i][k]!=null)e.value=RT_SAISIES[i][k];});rtLigneMaj(+i,true);});
+  Object.keys(RT_SAISIES).forEach(function(i){RT_IDS.forEach(function(k){const e=document.getElementById('rt'+k+i);if(e&&RT_SAISIES[i][k]!=null)e.value=RT_SAISIES[i][k];});rtLigneMaj(+i,'F',true);});
 }
 const rtV=(k,i)=>(document.getElementById('rt'+k+i)||{}).value||'';
 function rtEvaluer(fin,hc,hf){
@@ -229,57 +236,75 @@ function rtEvaluer(fin,hc,hf){
   if(d!=null&&f!=null&&f>=d&&f-d>RT_DUREE_MAX)pb.push('réchauffe de plus d’1 heure');
   return{pb:pb,conforme:!pb.length};
 }
-function rtLigneMaj(i,sansHeure){
-  const hf=document.getElementById('rtHF'+i);
-  /* l'heure de fin se remplit seule dès qu'une température est saisie (jour même) */
-  if(!sansHeure&&hf&&!hf.value&&rtV('F',i).trim()&&document.getElementById('rtDate').value===rtJour()){
-    const n=new Date();hf.value=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+/* k = température qui vient d'être saisie : l'heure correspondante se remplit seule (jour même) */
+function rtLigneMaj(i,k,sansHeure){
+  const T=document.getElementById('rt'+(k==='T'?'T':'F')+i);
+  const h=document.getElementById('rt'+(k==='T'?'HC':'HF')+i);
+  if(!sansHeure&&h&&T&&!h.value&&T.value.trim()&&document.getElementById('rtDate').value===rtJour()){
+    const n=new Date();h.value=rtHeureStr(n.getHours()*60+n.getMinutes());
   }
   const fin=rtNum(rtV('F',i)),box=document.getElementById('rtV'+i);
   if(!box)return;
   if(fin==null){box.textContent='';box.className='rt-verdict';return;}
   const e=rtEvaluer(fin,rtV('HC',i),rtV('HF',i));
   box.className='rt-verdict '+(e.conforme?'ok':'nc');
-  box.textContent=e.conforme?'✓ Conforme':'⚠ Non conforme : '+e.pb.join(', ')+' — indiquez l’observation (Détails)';
+  box.textContent=e.conforme?'✓ Conforme':'⚠ Non conforme : '+e.pb.join(', ')+' — indiquez l’observation (Plus de détails)';
 }
 function rtFermerSaisie(){document.getElementById('ovRemiseSaisie').classList.remove('on');}
-
 function rtAlerte(m){
   const e=document.getElementById('rtErr');
   if(e){e.textContent=m||'';e.style.display=m?'':'none';}
   if(m)toast(m,true);
 }
+
 async function rtValiderSaisie(){
   if(RT_ENVOI)return;
   rtAlerte('');
   const date=document.getElementById('rtDate').value,par=document.getElementById('rtPar').value.trim();
   if(!date||date>rtJour()){rtAlerte('Choisissez une date qui n’est pas dans le futur.');return;}
   if(!par){rtAlerte('Indiquez le visa (qui a fait le relevé).');return;}
-  const rows=[];
+  const ajouts=[],majs=[];
   for(let i=0;i<RT_LIGNES.length;i++){
     const l=RT_LIGNES[i];
-    if(l.deja||!l.chauffe&&!l.libre)continue;
-    const plat=(l.libre?rtV('P',i):l.plat).trim(),fintxt=rtV('F',i).trim();
-    if(l.libre&&!plat&&!fintxt)continue;   /* ligne libre laissée vide */
-    if(!plat){rtAlerte('Indiquez la nature du plat.');return;}
-    const fin=rtNum(fintxt),chauffe=rtNum(rtV('T',i)),mixage=rtNum(rtV('M',i)),obs=rtV('O',i).trim();
-    if(fin==null){rtAlerte('« '+plat+' » : indiquez la température de fin de réchauffe, ou décochez le plat.');return;}
-    if([fin,chauffe,mixage].some(t=>t!=null&&(t<-30||t>150))){rtAlerte('« '+plat+' » : vérifiez les températures.');return;}
-    const e=rtEvaluer(fin,rtV('HC',i),rtV('HF',i));
-    if(!e.conforme&&!obs){
-      document.getElementById('rtD'+i).style.display='';
-      document.getElementById('rtO'+i).focus();
-      rtAlerte('« '+plat+' » est non conforme : indiquez l’observation.');return;
+    if(l.deja)continue;
+    if(!l.ouvert&&!l.chauffe&&!l.libre)continue;
+    const plat=(l.libre?rtV('P',i):l.plat).trim();
+    const chauffe=rtNum(rtV('T',i)),fintxt=rtV('F',i).trim(),fin=rtNum(fintxt),mixage=rtNum(rtV('M',i)),obs=rtV('O',i).trim();
+    if(chauffe==null&&fin==null){
+      if(l.libre&&plat){rtAlerte('« '+plat+' » : saisissez au moins une température.');return;}
+      continue;   /* rien de saisi pour ce plat */
     }
-    rows.push({creche:RT_CRECHE,fait_le:date,plat:plat,temp_chauffe:chauffe,heure_chauffe:rtV('HC',i)||null,
-      temp_fin:fin,heure_fin:rtV('HF',i)||null,temp_mixage:mixage,conforme:e.conforme,observation:obs||null,fait_par:par});
+    if(!plat){rtAlerte('Indiquez la nature du plat.');return;}
+    if([fin,chauffe,mixage].some(t=>t!=null&&(t<-30||t>150))){rtAlerte('« '+plat+' » : vérifiez les températures.');return;}
+    if(l.ouvert&&fin==null)continue;   /* plat encore en chauffe */
+    let conforme=true;
+    if(fin!=null){
+      const e=rtEvaluer(fin,rtV('HC',i),rtV('HF',i));
+      conforme=e.conforme;
+      if(!e.conforme&&!obs){
+        const fb=document.getElementById('rtFB'+i);if(fb)fb.style.display='';
+        document.getElementById('rtD'+i).style.display='';
+        document.getElementById('rtO'+i).focus();
+        rtAlerte('« '+plat+' » est non conforme : indiquez l’observation.');return;
+      }
+    }
+    const champs={temp_fin:fin,heure_fin:fin!=null?(rtV('HF',i)||null):null,temp_mixage:mixage,conforme:conforme,observation:obs||null,fait_par:par};
+    if(l.ouvert)majs.push({id:l.ouvert.id,plat:plat,champs:champs});
+    else ajouts.push(Object.assign({creche:RT_CRECHE,fait_le:date,plat:plat,temp_chauffe:chauffe,heure_chauffe:rtV('HC',i)||null},champs));
   }
-  if(!rows.length){rtAlerte('Aucune température saisie.');return;}
+  if(!ajouts.length&&!majs.length){rtAlerte('Aucune température saisie.');return;}
   RT_ENVOI=true;
   try{
-    const{data,error}=await sb.from('remise_temperature_journal').insert(rows).select();
-    if(error||!data||data.length!==rows.length)throw error||new Error('refusé');
-    toast(rows.length+' plat'+(rows.length>1?'s':'')+' enregistré'+(rows.length>1?'s':'')+'.');
+    if(ajouts.length){
+      const{data,error}=await sb.from('remise_temperature_journal').insert(ajouts).select();
+      if(error||!data||data.length!==ajouts.length)throw error||new Error('refusé');
+    }
+    for(const m of majs){
+      const{data,error}=await sb.from('remise_temperature_journal').update(m.champs).eq('id',m.id).is('temp_fin',null).select();
+      if(error||!data||!data.length)throw error||new Error('« '+m.plat+' » : mise à jour refusée');
+    }
+    const n=ajouts.length+majs.length;
+    toast(n+' plat'+(n>1?'s':'')+' enregistré'+(n>1?'s':'')+'.');
     rtFermerSaisie();
     await rtCharger();
   }catch(err){
@@ -327,7 +352,7 @@ async function rtExporter(){
           +'<td>'+esc(rtT(r.temp_chauffe))+'</td><td>'+esc(rtHeure(r.heure_chauffe))+'</td>'
           +'<td'+(r.conforme===false?' class="nc"':'')+'>'+esc(rtT(r.temp_fin))+'</td><td>'+esc(rtHeure(r.heure_fin))+'</td>'
           +'<td>'+esc(rtT(r.temp_mixage))+'</td>'
-          +'<td class="obs">'+esc((r.conforme===false?'Non conforme. ':'')+(r.observation||''))+'</td>'
+          +'<td class="obs">'+esc((r.temp_fin==null?'En chauffe, fin non saisie. ':'')+(r.conforme===false?'Non conforme. ':'')+(r.observation||''))+'</td>'
           +'<td>'+esc(r.fait_par||'')+'</td></tr>';
       }
     });
