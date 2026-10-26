@@ -61,7 +61,7 @@ const PMS_TABLES={
   def:[
    ['Livraison non conforme (T°, DLC, emballage)','Refuser ou isoler le plat, ne pas le servir','Prévenir MCM, noter sur la fiche 1'],
    ['Réfrigérateur en panne ou T° hors limite','Isoler les plats, vérifier leur état','Faire intervenir la maintenance, noter sur la fiche 2'],
-   ['T° à cœur non atteinte','Poursuivre le chauffage et remesurer, sinon ne pas servir','Noter dans le registre de remise en température (Accès terrain), analyser la cause'],
+   ['T° à cœur non atteinte','Poursuivre le chauffage et remesurer, sinon ne pas servir','Noter sur la fiche 3, analyser la cause'],
    ['Nettoyage des jeux ou des espaces non réalisé à la fréquence prévue','Le faire dès que possible et l’enregistrer avec l’observation','Informer la référente, rappeler le plan à l’équipe'],
    ['Plat tombé, touché ou laissé à découvert','Ne pas servir','Jeter, noter'],
    ['Sonde hors tolérance, abîmée ou perdue','Ne plus l’utiliser, passer à une sonde de remplacement','Noter sur la fiche 5, faire étalonner ou remplacer la sonde'],
@@ -78,7 +78,7 @@ const PMS_TABLES={
   def:[
    ['Formation à l’hygiène alimentaire pour tout le personnel qui manipule les repas','Responsable PMS','À l’arrivée, puis chaque année'],
    ['Rappel des règles de lavage des mains et de remise en température','Référent·e hygiène','Chaque trimestre'],
-   ['Contrôle des fiches 1, 2 et 4 et du registre de remise en température','Responsable PMS','Chaque mois'],
+   ['Contrôle des fiches 1 à 4','Responsable PMS','Chaque mois'],
    ['Vérification de la sonde (fiche 5) et du réfrigérateur','Référent·e hygiène','Chaque année'],
    ['Révision complète du PMS','Responsable PMS','Chaque année, et à chaque changement de prestataire ou de matériel']]}
 };
@@ -109,6 +109,7 @@ const PMS_TXT_LABELS={intro:'Introduction',flux:'Étapes du flux (une par ligne)
 const PMS_FICHES=[
  ['Fiche 1 – Réception et traçabilité',['Date','Plat','Lot','DLC','T° réception','Conforme','Visa'],[22,40,24,24,26,22,24]],
  ['Fiche 2 – Température du réfrigérateur',['Date','T° matin','T° soir','Conforme','Action corrective','Visa'],[22,24,24,24,64,24]],
+ ['Fiche 3 – Remise en température et service',['Date','Plat','Début','T° à cœur','Fin','T° maintien','Service','Conforme','Visa'],[20,36,16,20,16,22,18,18,16]],
  ['Fiche 4 – Nettoyage et désinfection',['Date','Zone ou matériel','Produit utilisé','Fait par (nom)','Fait','Visa'],[22,46,40,34,20,20]],
  ['Fiche 5 – Vérification de la sonde de température',['Date','Sonde (repère)','Lecture eau glacée (°C)','Écart (°C)','Conforme','Action','Visa'],[22,30,30,22,22,34,22]]
 ];
@@ -422,7 +423,7 @@ TPL.pms_sanitaire={
   ${pmsTxtHtml('danger',3)}
   <div id="pms-t-hz">${pmsTblHtml('hz')}</div>
   <h3>Remise en température : relevés des 14 derniers jours</h3>
-  <p class="hint" style="font-size:13px;font-style:normal">Registre tenu en ligne dans l’Accès terrain (tuile « Remise en température »), à la place de l’ancienne fiche 3 papier : plat, températures et heures, conformité, visa.</p>
+  <p class="hint" style="font-size:13px;font-style:normal">Registre tenu en ligne dans l’Accès terrain (tuile « Remise en température »), à la place de la fiche 3 papier : plat, températures et heures, conformité, visa.</p>
   <div id="pms-remise"></div>
   ${pmsTxtHtml('sonde',3)}
   ${pmsTblBloc('so')}
@@ -433,7 +434,7 @@ TPL.pms_sanitaire={
   ${pmsTxtHtml('retrait',8)}
 
   <h3>5. Fiches d’enregistrement</h3>
-  <p class="hint" style="font-size:13px;font-style:normal">Quatre fiches vierges (fiche 1 réception et traçabilité, fiche 2 température du réfrigérateur, fiche 4 nettoyage, fiche 5 vérification de la sonde) sont ajoutées à l’export PDF, à imprimer et à classer dans le PMS. La remise en température n’a plus de fiche papier : elle est tenue en ligne dans l’Accès terrain et reprise ci-dessus.</p>
+  <p class="hint" style="font-size:13px;font-style:normal">Cinq fiches vierges (réception et traçabilité, température du réfrigérateur, remise en température et service, nettoyage, vérification de la sonde) sont ajoutées à l’export PDF, à imprimer et à classer dans le PMS.</p>
 
   ${pmsTblBloc('nc')}
   ${pmsTblBloc('ct')}
