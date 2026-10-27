@@ -1,0 +1,32 @@
+name: Rappel des liens stagiaires à envoyer
+
+on:
+  schedule:
+    # Du lundi au vendredi à 9h00 (hiver) / 10h00 (été) heure de Paris.
+    - cron: '0 8 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Essai à blanc : liste les fiches concernées, sans notifier"
+        type: boolean
+        default: true
+
+jobs:
+  rappel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prévenir des liens stagiaires à envoyer
+        run: |
+          dry='${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}'
+          status=$(curl -s -o /tmp/reponse.json -w "%{http_code}" \
+            -X POST "https://juyrceadazrovlitxceb.supabase.co/functions/v1/rappel-stagiaires-lien" \
+            -H "x-relance-secret: ${{ secrets.RELANCE_TRIGGER_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"dry_run\": ${dry}}")
+          echo "Réponse (HTTP $status) :"
+          cat /tmp/reponse.json
+          echo
+          if [ "$status" -ne 200 ]; then
+            echo "::error::Rappel des liens stagiaires en échec (HTTP $status)"
+            exit 1
+          fi

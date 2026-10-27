@@ -328,6 +328,13 @@ function stgRenderLienMode(s,m){
       +'(pièces en ligne et livret d\'accueil) — sans changer d\'adresse.</p>';
   }
 
+  if(m==='entretien'&&stgLienAEnvoyer(s)){
+    h+='<div style="background:var(--orange-light);border-left:4px solid var(--orange-dark);border-radius:0 8px 8px 0;'
+      +'padding:9px 12px;font-size:12.5px;color:#8a4b00;margin-bottom:10px">'
+      +'<i class="ti ti-send"></i> <strong>Les documents ne sont pas encore ouverts</strong> — '
+      +(stgType(s)==='alternant'?"l'alternance commence":'le stage commence')+' le '
+      +escHtml(stgDateFr(s.date_debut))+'. Cliquez sur « Ouvrir les documents » pour qu\'elle puisse les déposer.</div>';
+  }
   if(!jeton){
     {
       const rappel=stgLienDateRappel(s);
@@ -515,7 +522,7 @@ const STG_ERR_ETAPE='Impossible : le script sql/stagiaires_lien_etape.sql n\'a p
 async function stgCreerLien(m,renouveler){
   if(!stgFicheId||!STG_LIENS[m])return;
   if(renouveler&&!confirm('Créer un nouveau lien ?\n\nL\'ancien cessera immédiatement de fonctionner.'))return;
-  const maj={token:stgToken(),token_expire_le:stgLienExpiration(),lien_envoye_le:new Date().toISOString(),lien_etape:m};
+  const maj={token:stgToken(),token_expire_le:stgLienExpiration(),lien_envoye_le:new Date().toISOString(),lien_etape:m,lien_rappel_le:null};
   const ok=await dbUpdate('stagiaires',stgFicheId,maj);
   if(!ok)return showBanner(/lien_etape/i.test(window._lastDbError||'')?STG_ERR_ETAPE:'Création du lien impossible.','error');
   await stgLoad();
