@@ -831,6 +831,35 @@ function profilHtml(axes){
     return'<span title="'+esc(v.l)+'" style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:'+v.bg+';color:'+v.c+'">'+esc(a.libelle||a.code||'')+' : '+v.l+'</span>';
   }).join('')+'</div>';
 }
+/* Réponses question par question d'un quiz profil (fonction kk_reponses_par_ref,
+   docs/quiz-profil/reponses_par_ref.sql, à appliquer à la main côté quiz). */
+async function ficheReponsesProfil(resultId){
+  const e=FICHE_FORMATION_EMPLOYE;
+  if(!e)return;
+  const{data,error}=await sbQuiz.rpc('kk_reponses_par_ref',{p_ref:e.id,p_resultat:resultId});
+  if(error||!data||!data.length){toast('Réponses indisponibles pour ce résultat.',true);return;}
+  const r=data[0],axes=r.axes||[],reps=r.reponses||[];
+  const libAxe=code=>(axes.find(a=>a.code===code)||{}).libelle||code||'';
+  const puce=n=>{const v=NIV_PROFIL[n];return v?'<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:'+v.bg+';color:'+v.c+';white-space:nowrap">'+v.l+'</span>':'';};
+  const lignes=reps.length?reps.map((q,i)=>'<div style="padding:9px 0;border-bottom:1px solid var(--line)">'
+    +'<div style="font-size:11.5px;color:var(--muted)">Q'+(i+1)+(q.axe?' · '+esc(libAxe(q.axe)):'')+'</div>'
+    +'<div style="font-weight:700;font-size:13px;margin:2px 0 5px">'+esc(q.enonce)+'</div>'
+    +'<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><span style="font-size:13px">'
+    +(q.reponse==null?'<em style="color:var(--muted)">Sans réponse</em>':esc(q.reponse))+'</span>'+puce(q.lecture)+'</div></div>').join('')
+    :'<p class="hint">Les réponses question par question ne sont pas enregistrées pour ce résultat.</p>';
+  const old=document.getElementById('reponsesProfilOv');if(old)old.remove();
+  const o=document.createElement('div');
+  o.id='reponsesProfilOv';
+  o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto';
+  o.onclick=ev=>{if(ev.target===o)o.remove();};
+  o.innerHTML='<div style="background:#fff;border-radius:14px;max-width:720px;width:100%;padding:20px 22px">'
+    +'<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px"><div>'
+    +'<div style="font-weight:800;font-size:16px">'+esc((e.prenom||'')+' '+(e.nom||''))+'</div>'
+    +'<div style="font-size:12px;color:var(--muted)">'+esc(r.quiz_titre)+' · '+new Date(r.passe_le).toLocaleDateString('fr-FR')+'</div></div>'
+    +'<button type="button" class="btn btn-s btn-sm" onclick="document.getElementById(\'reponsesProfilOv\').remove()">Fermer</button></div>'
+    +lignes+'</div>';
+  document.body.appendChild(o);
+}
 function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggestions,peutProposer){
   const meilleur=qid=>resultats.filter(x=>x.quiz_id===qid).reduce((m,x)=>Math.max(m,x.pourcentage),-1);
   const lienQuizDe=(env,qid)=>{
@@ -849,7 +878,7 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggesti
     if(env.kind==='quiz'){
       const tent=resultats.filter(x=>x.quiz_id===env.item_id);
       const r=tent[0]; /* la plus récente (liste triée par date décroissante) */
-      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',itemId:env.item_id,tentatives:tent.length,meilleur:tent.reduce((m,x)=>Math.max(m,x.pourcentage),0),profil:r.mode==='profil'?(r.axes||[]):null,score:r.score,total:r.total,pourcentage:r.pourcentage,par:env.envoye_par_nom}
+      return r?{type:'quiz',titre:env.item_titre,date:r.passe_le,statut:'fait',itemId:env.item_id,tentatives:tent.length,meilleur:tent.reduce((m,x)=>Math.max(m,x.pourcentage),0),profil:r.mode==='profil'?(r.axes||[]):null,resultId:r.id,score:r.score,total:r.total,pourcentage:r.pourcentage,par:env.envoye_par_nom}
               :{type:'quiz',titre:env.item_titre,date:env.envoye_le,statut:'a_faire',etape:'quiz',lien:env.lien,par:env.envoye_par_nom};
     }
     const lu=formationsLues.find(x=>x.module_id===env.item_id);
@@ -887,7 +916,7 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggesti
       if(r.etape==='indispo')info='<div style="font-size:11.5px;color:var(--muted)">Vérification du quiz indisponible pour le moment</div>';
       droite='<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" style="font-weight:700;font-size:11.5px;color:var(--orange);white-space:nowrap;text-decoration:none"><i class="ti ti-clock"></i> '+(r.etape==='attester'?'Attestation en attente':r.etape==='quiz'?(r.best>=0?'À revoir':'Quiz à réussir'):r.etape==='suite'?'Formation en cours':'À faire')+'</a>';
     }else if(r.type==='quiz'&&r.profil){
-      info=profilHtml(r.profil);
+      info=profilHtml(r.profil)+'<div style="margin-top:6px"><button type="button" class="btn btn-s btn-sm" style="font-size:11px;padding:2px 8px" onclick="ficheReponsesProfil(\''+esc(r.resultId)+'\')"><i class="ti ti-list-details"></i> Voir les réponses</button></div>';
       droite='<span style="font-weight:700;font-size:11.5px;color:var(--green);white-space:nowrap"><i class="ti ti-check"></i> Profil établi</span>';
     }else if(r.type==='quiz'){
       const col=r.pourcentage>=80?'var(--green)':r.pourcentage>=60?'var(--violet)':'var(--red)';
