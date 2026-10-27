@@ -777,7 +777,7 @@ stagiaires: `
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📎 Les documents</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
-  <li>Dans la fiche, deux blocs : <strong>Lien de l'entretien</strong> (avant l'acceptation : projet pédagogique et questionnaire) et <strong>Lien des documents</strong> (après l'acceptation : pièces en ligne et livret d'accueil). Bouton <strong>Créer le lien</strong> : un lien valable <strong>14 jours</strong> est généré, chacun a le sien</li>
+  <li>Dans la fiche, un bloc <strong>Lien à envoyer</strong>. <strong>Créer le lien d'entretien</strong> génère un lien valable <strong>14 jours</strong> ; <strong>Créer directement le lien des documents</strong> sert si le stage est déjà accepté. Le bouton <strong>Ouvrir les documents</strong> n'apparaît qu'à l'étape entretien, et propose aussitôt d'envoyer le message à la stagiaire</li>
   <li><strong>Envoyer le lien…</strong> ouvre WhatsApp, la feuille de partage ou la copie, comme pour les devis et les familles (mail, SMS et QR code restent disponibles) — la stagiaire n'a besoin d'aucun compte</li>
   <li>Elle photographie ses pièces ; elles apparaissent dans la fiche au fur et à mesure</li>
   <li>Vous <strong>validez</strong> ✓ ou <strong>refusez</strong> ✗ chaque pièce (un refus la remet en « à envoyer » chez elle, avec votre motif)</li>
@@ -806,7 +806,7 @@ stagiaires: `
 </div>
 <div style="font-weight:700;font-size:14px;margin:20px 0 10px">📤 Documents à transmettre (direction)</div>
 <p style="font-size:13px;color:#555;line-height:1.7;margin-bottom:12px">
-  Les <strong>Documents à transmettre</strong> sont ce que la personne trouve sur son <strong>lien d'entretien</strong> (le lien des documents, lui, ne porte que les pièces à envoyer et le livret à signer). L'onglet décide de ce qui y figure : un <strong>document</strong> (le projet pédagogique, un livret d'accueil) ou un <strong>lien</strong> (questionnaire en ligne, vidéo).
+  Les <strong>Documents à transmettre</strong> sont ce que la personne trouve à l'étape <strong>entretien</strong> de son lien (à l'étape documents, le lien ne porte plus que les pièces à envoyer et le livret à signer). L'onglet décide de ce qui y figure : un <strong>document</strong> (le projet pédagogique, un livret d'accueil) ou un <strong>lien</strong> (questionnaire en ligne, vidéo).
   <br><br>Le document n'est pas joint au mail : il vit sur le lien. Deux conséquences — la personne a toujours la <strong>dernière version</strong> (le bouton ↻ la remplace sans rien perdre du suivi), et le PDF ne circule pas ensuite hors de la crèche, puisque son lien de lecture est signé pour 5 minutes.
   <br><br><strong>Demander une confirmation</strong> ajoute une case « j'ai lu ce document » ou « j'ai répondu au questionnaire ». La fiche affiche alors, personne par personne, qui a ouvert et qui a confirmé — c'est déclaratif, cela dit que la case a été cochée, pas que tout a été lu.
   <br><br>Comme pour les pièces, <strong>Destinataires</strong> sépare stagiaires et alternants, et <strong>Crèche concernée</strong> reste sur « toutes » dans le cas courant — le projet pédagogique est celui du réseau.
