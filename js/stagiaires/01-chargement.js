@@ -284,7 +284,8 @@ function stgLienExpiration(){
 }
 
 /* « Il est temps » : le stage commence dans moins de 14 jours (ou a commencé),
-   et il n'y a pas de lien utilisable. Une fiche refusée, annulée ou terminée
+   et il n'y a pas de lien des documents utilisable (aucun lien, lien expiré, ou lien
+   resté à l'étape entretien). Même règle dans rappel-stagiaires-lien (notification). Une fiche refusée, annulée ou terminée
    ne réclame rien. */
 function stgLienAEnvoyer(s){
   if(!s||stgClos(s.statut)||s.statut==='demande')return false;
@@ -292,7 +293,9 @@ function stgLienAEnvoyer(s){
   const debut=new Date(String(s.date_debut).slice(0,10)+'T12:00:00').getTime();
   if(debut-Date.now()>STG_LIEN_AVANT*86400000)return false;
   if(!s.token)return true;
-  return !s.token_expire_le||new Date(s.token_expire_le).getTime()<Date.now();
+  if(!s.token_expire_le||new Date(s.token_expire_le).getTime()<Date.now())return true;
+  /* Lien encore à l'étape « entretien » : les documents n'ont pas été ouverts. */
+  return s.lien_etape==='entretien';
 }
 
 /* La date à partir de laquelle le rappel s'allumera. */
