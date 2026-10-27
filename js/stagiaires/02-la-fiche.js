@@ -28,6 +28,7 @@ function stgOpenFiche(id,typeDefaut){
   v('stg-f-statut',s?s.statut:'demande');
   v('stg-f-demande',s?s.demande_le:todayStr());
   v('stg-f-padlet',s&&s.padlet_url);
+  v('stg-f-entretien',s&&s.entretien_date);  v('stg-f-entretien-h',s&&s.entretien_heure);
   v('stg-f-debut',s&&s.date_debut);    v('stg-f-fin',s&&s.date_fin);
   v('stg-f-conv',s?s.convention_statut:'a_demander');
   v('stg-f-conv-date',s&&s.convention_le);
@@ -129,6 +130,8 @@ async function stgSave(){
     statut:val('stg-f-statut')||'demande',
     demande_le:val('stg-f-demande')||null,
     padlet_url:val('stg-f-padlet')||null,
+    entretien_date:val('stg-f-entretien')||null,
+    entretien_heure:val('stg-f-entretien-h')||null,
     date_debut:val('stg-f-debut')||null,
     date_fin:val('stg-f-fin')||null,
     convention_statut:val('stg-f-conv')||'a_demander',
@@ -158,6 +161,16 @@ async function stgSave(){
                  :!!(await dbInsert('stagiaires',row).then(r=>{if(r)stgFicheId=r.id;return r;}));
     if(ok)showBanner('Fiche enregistrée, mais le type (stagiaire / alternant) n\'a pas pu l\'être : le script 31 n\'a pas encore été exécuté sur Supabase.','error');
   }
+  /* Colonnes d'entretien absentes (sql/stagiaires_entretien.sql pas encore appliqué) :
+     on enregistre le reste plutôt que de perdre la saisie. */
+  let entretienOk=true;
+  if(!ok&&/entretien_/i.test(window._lastDbError||'')){
+    const rdv=row.entretien_date;
+    delete row.entretien_date;delete row.entretien_heure;
+    ok=stgFicheId?await dbUpdate('stagiaires',stgFicheId,row)
+                 :!!(await dbInsert('stagiaires',row).then(r=>{if(r)stgFicheId=r.id;return r;}));
+    if(ok&&rdv){entretienOk=false;showBanner('Fiche enregistrée, mais l\'entretien n\'a pas pu l\'être : le script sql/stagiaires_entretien.sql n\'a pas encore été exécuté sur Supabase.','error');}
+  }
   if(btn)btn.disabled=false;
   if(!ok){
     return showBanner('Enregistrement impossible'
@@ -169,6 +182,7 @@ async function stgSave(){
   if(!creation&&document.getElementById('stg-eval-appr')&&typeof stgEvalSave==='function'){
     evalOk=!!(await stgEvalSave());
   }
+  if(entretienOk)await stgSyncEvenementEntretien(stgFicheId,row);
   await stgLoad();
   if(!evalOk)return;
   /* À la création, la fiche reste ouverte : le lien de dépôt, les documents et
@@ -181,6 +195,57 @@ async function stgSave(){
   }else{
     closeModal('modal-stagiaire-wrap');
     showBanner('Fiche enregistrée ✅');
+  }
+}
+
+/* ENTRETIEN → ÉVÉNEMENTS : le rendez-vous est reporté dans le calendrier, en type
+   « Entretien ». evenements.stagiaire_id relie les deux : un entretien déplacé met
+   à jour son événement au lieu d'en créer un second, un entretien retiré le supprime.
+   Best-effort : la fiche est déjà enregistrée. */
+async function stgSyncEvenementEntretien(ficheId,row){
+  if(!ficheId)return;
+  try{
+    const{data:ex,error:eEx}=await sb.from('evenements').select('id').eq('stagiaire_id',ficheId).maybeSingle();
+    if(eEx)throw eEx;
+    if(!row.entretien_date){
+      if(ex){
+        const{error}=await sb.from('evenements').delete().eq('id',ex.id);if(error)throw error;
+        if(typeof cacheEvenements!=='undefined')cacheEvenements=cacheEvenements.filter(e=>e.id!==ex.id);
+        if(typeof renderCalendar==='function')renderCalendar();
+      }
+      return;
+    }
+    const cr=(typeof cacheCreches!=='undefined')?cacheCreches.find(c=>String(c.id)===String(row.creche_id)):null;
+    const nom=((row.prenom||'')+' '+(row.nom||'')).trim();
+    const ev={
+      titre:'Entretien — '+(nom||(row.type_contrat==='alternant'?'alternant':'stagiaire')),
+      type:'entretien',
+      creche_id:row.creche_id||null,
+      date_debut:row.entretien_date,
+      date_fin:null,
+      heure_debut:row.entretien_heure||null,
+      heure_fin:null,
+      lieu:(cr&&(cr.addr||cr.adresse))||'',
+      description:'Entretien '+(row.type_contrat==='alternant'?'d\'alternance':'de stage')+' (fiche stagiaire).',
+      auteur:(currentProfile&&currentProfile.name)||'',
+      stagiaire_id:ficheId
+    };
+    let saved=null;
+    if(ex){
+      const{data,error}=await sb.from('evenements').update(ev).eq('id',ex.id).select().single();
+      if(error)throw error;saved=data;
+    }else{
+      ev.created_by=(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null;
+      const{data,error}=await sb.from('evenements').insert(ev).select().single();
+      if(error)throw error;saved=data;
+    }
+    if(saved&&typeof cacheEvenements!=='undefined'){
+      cacheEvenements=cacheEvenements.filter(e=>e.id!==saved.id);cacheEvenements.push(saved);
+      if(typeof renderCalendar==='function')renderCalendar();
+    }
+  }catch(e){
+    console.warn('[stgSyncEvenementEntretien]',e);
+    showBanner('L\'entretien n\'a pas pu être reporté dans les événements'+(/stagiaire_id/i.test(e.message||'')?' : le script sql/stagiaires_entretien.sql n\'est pas appliqué.':'.'),'error');
   }
 }
 
