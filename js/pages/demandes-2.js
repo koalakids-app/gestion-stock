@@ -793,6 +793,7 @@ stagiaires: `
   <li><strong>Importer un calendrier (PDF)</strong> reprend le calendrier envoyé par le centre de formation : l'application lit les douze colonnes de mois et vous demande ce que signifie chaque lettre (présence à la crèche, centre de formation, ou rien). Les jours déjà saisis ne sont jamais écrasés, et rien n'est enregistré avant votre validation. Un calendrier scanné (image) n'est pas lisible : il ne contient pas de texte</li>
   <li><strong>Ajouter une semaine</strong> remplit une semaine type (lundi au vendredi par défaut, jours à cocher, horaires libres) et sait la <strong>répéter</strong> jusqu'à 12 semaines — la semaine est toujours calée sur le lundi</li>
   <li>Cliquez sur un jour pour changer ses <strong>horaires</strong>, le marquer <strong>absent</strong> ou le retirer</li>
+  <li><strong>Entretien</strong> : fixez la date et l'heure du rendez-vous dans la fiche ; il apparaît automatiquement dans <strong>Événements</strong> (type Entretien, crèche de la fiche). Le déplacer dans la fiche met l'événement à jour, vider la date le retire. Nécessite le script <code>sql/stagiaires_entretien.sql</code>.</li>
   <li>L'onglet <strong>Calendrier</strong> affiche le mois entier, une ligne par stagiaire, filtrable par crèche</li>
 </ol>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">⚙️ Pièces demandées (direction)</div>
