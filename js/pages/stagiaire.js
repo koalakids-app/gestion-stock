@@ -43,9 +43,9 @@ let AUTO = null;   // auto-évaluation : {type:'eje', cibles, eje_comp, …} ou 
 
 /* Le vocabulaire, et rien d'autre. */
 const MOTS = {
-  stagiaire:{titre:'Mes documents de stage',  nom:'stage',      art:'votre stage',
+  stagiaire:{titre:'Mes documents de stage',  titreEntretien:'Mon entretien de stage', nom:'stage',      art:'votre stage',
              prevu:'Votre stage est prévu'},
-  alternant:{titre:"Mes documents d'alternance", nom:'alternance', art:'votre alternance',
+  alternant:{titre:"Mes documents d'alternance", titreEntretien:"Mon entretien d'alternance", nom:'alternance', art:'votre alternance',
              prevu:'Votre alternance est prévue'}
 };
 const mots = () => MOTS[(STAG&&STAG.type_contrat==='alternant')?'alternant':'stagiaire'];
@@ -89,8 +89,9 @@ async function boot(){
 async function recharger(){
   const d=await appel('get');
   STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];RESS=d.ressources||[];LIVRETS=d.livrets||[];AUTO=d.auto_eval||null;
-  document.getElementById('titrePage').textContent=mots().titre;
-  document.title=mots().titre+' — Koala Kids';
+  const titre=STAG.mode==='entretien'?mots().titreEntretien:mots().titre;
+  document.getElementById('titrePage').textContent=titre;
+  document.title=titre+' — Koala Kids';
   document.getElementById('sousTitre').textContent=
     (STAG.prenom||'')+(STAG.creche_nom?' · '+STAG.creche_nom:'');
   render();
@@ -101,7 +102,31 @@ async function recharger(){
    de dire « recommencez celle-là » sans passer un coup de fil. */
 const fournie = p => (p.fichiers||[]).some(f=>f.statut!=='refuse');
 
+/* Lien d'ENTRETIEN (avant l'acceptation) : le projet pédagogique à lire et le
+   questionnaire à remplir, rien d'autre. Le dépôt des pièces et le livret
+   d'accueil arrivent avec le lien de documents, une fois le stage accepté. */
+function renderEntretien(){
+  const M=mots();
+  const reste=RESS.filter(r=>!ressFaite(r)).length;
+  let h='<div class="intro">Bonjour '+esc(STAG.prenom||'')+' ! Merci pour votre demande de '+M.nom
+    +'. Avant notre entretien, prenez le temps de lire notre projet pédagogique et de répondre au questionnaire ci-dessous.'
+    +'<br><br>Si votre candidature est retenue, nous vous enverrons un second lien pour déposer vos documents.'
+    +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(STAG.expire_le))+'</b>.</div>';
+  if(RESS.length){
+    h+='<h3 class="sec"><i class="ti ti-mail-opened"></i> À lire et à faire</h3>'
+      +'<p class="hint">'+(reste
+        ? 'Il vous reste '+reste+' chose'+(reste>1?'s':'')+' à faire.'
+        : 'Merci, vous avez tout fait ✔')+'</p>';
+    RESS.forEach((r,i)=>h+=htmlRessource(r,i));
+  }else{
+    h+='<p class="hint">Rien à lire pour le moment : nous vous donnons rendez-vous pour l’entretien.</p>';
+  }
+  wrap.innerHTML=h;
+  window.scrollTo(0,0);
+}
+
 function render(){
+  if(STAG.mode==='entretien')return renderEntretien();
   const M=mots();
   const oblig=PIECES.filter(p=>p.obligatoire);
   const faits=oblig.filter(fournie).length;

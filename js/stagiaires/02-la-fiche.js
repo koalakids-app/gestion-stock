@@ -282,100 +282,136 @@ function stgLienUrl(token){
   return location.origin+location.pathname.replace(/[^/]*$/,'')+'stagiaire.html?t='+token;
 }
 
+/* Deux liens, deux moments (sql/stagiaires_lien_entretien.sql) :
+   - « entretien », AVANT l'acceptation : le projet pédagogique à lire et le
+     questionnaire à remplir, rien d'autre ;
+   - « documents », APRÈS l'acceptation : dépôt des pièces en ligne et livret
+     d'accueil à signer.
+   Chacun a son jeton : le lien d'entretien ne donne jamais accès aux pièces. */
+const STG_LIENS={
+  entretien:{token:'token_entretien',expire:'token_entretien_expire_le',envoye:'lien_entretien_envoye_le',
+    titre:"Lien de l'entretien",quand:"avant l'acceptation",ic:'messages',
+    aide:'Pour la candidature : la personne lit le projet pédagogique et remplit le questionnaire avant l\'entretien. Elle ne peut pas déposer de document avec ce lien.'},
+  documents:{token:'token',expire:'token_expire_le',envoye:'lien_envoye_le',
+    titre:'Lien des documents',quand:"après l'acceptation",ic:'file-upload',
+    aide:'Une fois le stage accepté : la personne téléverse ses pièces en ligne depuis son téléphone et signe le livret d\'accueil, sans compte ni application.'}
+};
+const stgJeton=(s,m)=>s&&s[STG_LIENS[m].token];
+const stgJetonExpire=(s,m)=>s&&s[STG_LIENS[m].expire];
+const stgJetonActif=(s,m)=>!!(stgJeton(s,m)&&stgJetonExpire(s,m)&&new Date(stgJetonExpire(s,m)).getTime()>Date.now());
+const stgFicheCourante=()=>stgCache.find(x=>String(x.id)===String(stgFicheId));
+
 function stgRenderLien(){
   const zone=document.getElementById('stg-lien-zone');
   if(!zone)return;
-  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  const s=stgFicheCourante();
   if(!s){zone.innerHTML='';return;}
-  const actif=s.token&&s.token_expire_le&&new Date(s.token_expire_le).getTime()>Date.now();
+  zone.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:8px">'
+    +'<i class="ti ti-link" style="color:var(--koala)"></i> Liens à envoyer</div>'
+    +stgRenderLienMode(s,'entretien')+stgRenderLienMode(s,'documents');
+}
 
-  let h='<div style="font-weight:700;font-size:13px;margin-bottom:8px">'
-    +'<i class="ti ti-link" style="color:var(--koala)"></i> Lien de dépôt des documents</div>';
+function stgRenderLienMode(s,m){
+  const c=STG_LIENS[m];
+  const jeton=stgJeton(s,m);
+  const actif=stgJetonActif(s,m);
+  let h='<div style="border:1.5px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:10px">'
+    +'<div style="font-weight:700;font-size:13px"><i class="ti ti-'+c.ic+'" style="color:var(--koala)"></i> '
+    +escHtml(c.titre)+' <span style="font-weight:500;color:var(--muted)">· '+escHtml(c.quand)+'</span></div>'
+    +'<p style="font-size:12.5px;color:var(--muted);margin:5px 0 9px;line-height:1.5">'+escHtml(c.aide)+'</p>';
 
-  if(!s.token){
-    const rappel=stgLienDateRappel(s);
-    const tard=stgLienAEnvoyer(s);
-    h+='<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.5">'
-      +'La personne dépose ses pièces elle-même depuis son téléphone, sans compte ni application. '
-      +'Le lien restera valable jusqu\'au <b>'+escHtml(stgDateFr(stgLienExpiration()))+'</b>'
-      +' ('+STG_LIEN_JOURS+' jours à compter de sa création).</p>';
-    /* Une demande arrivée six mois à l'avance n'a pas besoin de son lien tout
-       de suite : il se perdrait, et la personne aurait tout oublié le jour du
-       stage. On dit quand ce sera le moment, sans l'empêcher de le créer. */
-    if(tard){
-      h+='<div style="background:var(--orange-light);border-left:4px solid var(--orange-dark);border-radius:0 8px 8px 0;'
-        +'padding:9px 12px;font-size:12.5px;color:#8a4b00;margin-bottom:10px">'
-        +'<i class="ti ti-send"></i> <strong>C\'est le moment de lui envoyer son lien</strong> — '
-        +(stgType(s)==='alternant'?"l'alternance commence":'le stage commence')+' le '
-        +escHtml(stgDateFr(s.date_debut))+'.</div>';
-    }else if(rappel){
-      h+='<div style="background:var(--koala-light);border-left:4px solid var(--koala);border-radius:0 8px 8px 0;'
-        +'padding:9px 12px;font-size:12.5px;color:var(--koala-dark);margin-bottom:10px">'
-        +'<i class="ti ti-clock"></i> Rien ne presse : '
-        +(stgType(s)==='alternant'?"l'alternance commence":'le stage commence')+' le <b>'
-        +escHtml(stgDateFr(s.date_debut))+'</b>. La fiche passera en '
-        +'<strong>« lien à envoyer »</strong> le <b>'+escHtml(stgDateFr(rappel))+'</b>'
-        +' — vous pouvez aussi le créer dès maintenant si elle le demande.</div>';
+  if(!jeton){
+    if(m==='documents'){
+      const rappel=stgLienDateRappel(s);
+      /* Une demande arrivée six mois à l'avance n'a pas besoin de ce lien tout
+         de suite : il se perdrait, et la personne aurait tout oublié le jour du
+         stage. On dit quand ce sera le moment, sans l'empêcher de le créer. */
+      if(stgLienAEnvoyer(s)){
+        h+='<div style="background:var(--orange-light);border-left:4px solid var(--orange-dark);border-radius:0 8px 8px 0;'
+          +'padding:9px 12px;font-size:12.5px;color:#8a4b00;margin-bottom:10px">'
+          +'<i class="ti ti-send"></i> <strong>C\'est le moment de lui envoyer ce lien</strong> — '
+          +(stgType(s)==='alternant'?"l'alternance commence":'le stage commence')+' le '
+          +escHtml(stgDateFr(s.date_debut))+'.</div>';
+      }else if(rappel){
+        h+='<div style="background:var(--koala-light);border-left:4px solid var(--koala);border-radius:0 8px 8px 0;'
+          +'padding:9px 12px;font-size:12.5px;color:var(--koala-dark);margin-bottom:10px">'
+          +'<i class="ti ti-clock"></i> Rien ne presse : '
+          +(stgType(s)==='alternant'?"l'alternance commence":'le stage commence')+' le <b>'
+          +escHtml(stgDateFr(s.date_debut))+'</b>. La fiche passera en '
+          +'<strong>« lien à envoyer »</strong> le <b>'+escHtml(stgDateFr(rappel))+'</b>.</div>';
+      }
     }
-    h+='<button class="btn-primary" onclick="stgCreerLien()"><i class="ti ti-link-plus"></i> Créer le lien</button>';
+    h+='<button class="btn-primary" onclick="stgCreerLien(\''+m+'\')"><i class="ti ti-link-plus"></i> Créer le lien</button>';
   }else{
     h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:9px">'
-      +'<input class="finput" id="stg-lien-url" readonly value="'+escHtml(stgLienUrl(s.token))+'" style="flex:1;min-width:220px;font-size:12px">'
-      +'<button class="btn-sm" onclick="stgCopierLien()"><i class="ti ti-copy"></i> Copier</button>'
-      +(s.email?'<a class="btn-sm" style="text-decoration:none" href="'+stgMailto(s)+'"><i class="ti ti-mail"></i> Envoyer par mail</a>':'')
-      +(stgTelIntl(s.telephone)?'<a class="btn-sm" style="text-decoration:none" href="'+stgSmsUrl(s)+'"><i class="ti ti-message"></i> SMS</a>'
-        +'<a class="btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="'+stgWhatsAppUrl(s)+'"><i class="ti ti-brand-whatsapp"></i> WhatsApp</a>':'')
-      +(navigator.share?'<button class="btn-sm" onclick="stgPartagerLien()"><i class="ti ti-share"></i> Partager…</button>':'')
-      +'<button class="btn-sm" onclick="stgAfficherQr()"><i class="ti ti-qrcode"></i> QR code</button>'
-      +'<button class="btn-sm" onclick="stgCreerLien(true)"><i class="ti ti-refresh"></i> Renouveler</button>'
+      +'<input class="finput" id="stg-lien-url-'+m+'" readonly value="'+escHtml(stgLienUrl(jeton))+'" style="flex:1;min-width:220px;font-size:12px">'
+      +'<button class="btn-sm" onclick="stgCopierLien(\''+m+'\')"><i class="ti ti-copy"></i> Copier</button>'
+      +'<button class="btn-primary btn-sm" onclick="stgPartagerLien(\''+m+'\')"><i class="ti ti-share"></i> Envoyer le lien…</button>'
+      +(s.email?'<a class="btn-sm" style="text-decoration:none" href="'+stgMailto(s,m)+'"><i class="ti ti-mail"></i> Par mail</a>':'')
+      +(stgTelIntl(s.telephone)?'<a class="btn-sm" style="text-decoration:none" href="'+stgSmsUrl(s,m)+'"><i class="ti ti-message"></i> SMS</a>'
+        +'<a class="btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="'+stgWhatsAppUrl(s,m)+'"><i class="ti ti-brand-whatsapp"></i> WhatsApp</a>':'')
+      +'<button class="btn-sm" onclick="stgAfficherQr(\''+m+'\')"><i class="ti ti-qrcode"></i> QR code</button>'
+      +'<button class="btn-sm" onclick="stgCreerLien(\''+m+'\',true)"><i class="ti ti-refresh"></i> Renouveler</button>'
       +'</div>'
       +'<div style="font-size:12px;color:'+(actif?'var(--muted)':'var(--red)')+'">'
-      +(actif?'<i class="ti ti-clock"></i> Valable jusqu\'au '+escHtml(stgDateFr(s.token_expire_le))
-             :'<i class="ti ti-clock-off"></i> Lien expiré le '+escHtml(stgDateFr(s.token_expire_le))
+      +(actif?'<i class="ti ti-clock"></i> Valable jusqu\'au '+escHtml(stgDateFr(stgJetonExpire(s,m)))
+             :'<i class="ti ti-clock-off"></i> Lien expiré le '+escHtml(stgDateFr(stgJetonExpire(s,m)))
               +' — « Renouveler » en crée un nouveau')
       +'</div>';
   }
-  zone.innerHTML=h;
+  return h+'</div>';
 }
 
-/* Ce que la personne trouvera EN PLUS sur son lien. La phrase n'est écrite
-   que s'il y a effectivement quelque chose à lire ou à remplir : annoncer un
-   projet pédagogique qui n'est pas en ligne ferait plus de mal que de bien.
-   Le PDF n'est pas joint au mail — il vit sur le lien, où il reste à jour et
-   où l'on sait qui l'a ouvert. */
+/* Ce que la personne trouvera sur son lien. La phrase n'est écrite que s'il y a
+   effectivement quelque chose à lire ou à remplir : annoncer un projet
+   pédagogique qui n'est pas en ligne ferait plus de mal que de bien. Le PDF
+   n'est pas joint au mail — il vit sur le lien, où il reste à jour et où l'on
+   sait qui l'a ouvert. */
 function stgMailtoRess(s){
   const liste=stgRessPour(s);
   if(!liste.length)return '';
   const docs=liste.filter(r=>stgRessNature(r)!=='lien').map(r=>r.libelle);
   const liens=liste.filter(r=>stgRessNature(r)==='lien').map(r=>r.libelle);
-  let t='Vous y trouverez aussi, en haut de la page :\n';
+  let t='Vous y trouverez :\n';
   docs.forEach(l=>{t+='  · '+l+' (à lire)\n';});
   liens.forEach(l=>{t+='  · '+l+' (à remplir en ligne)\n';});
   return t+'\n';
 }
 
 /* Le message qui accompagne le lien, quel que soit le canal (mail, SMS,
-   WhatsApp, partage) : un seul texte, donc un seul endroit à corriger. */
-function stgMessageLien(s){
+   WhatsApp, partage) : un seul texte par lien, donc un seul endroit à corriger. */
+function stgMessageLien(s,m){
   const p=stgProfil(s);
   const orgNom=(window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids';
+  const crNom=s.creche_id?' à la crèche '+stgCrecheName(s.creche_id):'';
+  const url=stgLienUrl(stgJeton(s,m));
+  const valable='Ce lien est valable jusqu\'au '+stgDateFr(stgJetonExpire(s,m))+'.\n\n';
+  if(m==='entretien'){
+    return 'Bonjour '+(s.prenom||'')+',\n\n'
+      +'Suite à votre demande de '+p.periode.replace(/^votre /,'')+crNom+', voici le lien à ouvrir avant notre entretien :\n\n'
+      +url+'\n\n'
+      +stgMailtoRess(s)
+      +valable
+      +'À bientôt,\nL\'équipe '+orgNom;
+  }
   return 'Bonjour '+(s.prenom||'')+',\n\n'
-    +'Voici le lien pour nous transmettre les documents nécessaires à votre '+p.periode
-    +(s.creche_id?' à la crèche '+stgCrecheName(s.creche_id):'')+' :\n\n'
-    +stgLienUrl(s.token)+'\n\n'
-    +stgMailtoRess(s)
+    +'Votre '+p.periode.replace(/^votre /,'')+crNom+' est accepté, bienvenue ! Voici le lien pour nous transmettre vos documents en ligne et signer le livret d\'accueil :\n\n'
+    +url+'\n\n'
     +'Vous pouvez photographier vos pièces directement avec votre téléphone, en plusieurs fois.\n'
-    +'Ce lien est valable jusqu\'au '+stgDateFr(s.token_expire_le)+'.\n\n'
+    +valable
     +'À bientôt,\nL\'équipe '+orgNom;
 }
 
 /* Le mail est composé dans le client de messagerie du poste : rien ne part
    d'ici, et il n'y a donc pas d'adresse d'expédition à configurer. */
-function stgMailto(s){
+function stgMailto(s,m){
   const orgNom=(window.KK_ORG&&window.KK_ORG.nom)||'Koala Kids';
-  const sujet='Vos documents '+(stgType(s)==='alternant'?"d'alternance":'de stage')+' — '+orgNom;
+  const alt=stgType(s)==='alternant';
+  const sujet=(m==='entretien'
+    ? 'Votre entretien '+(alt?"d'alternance":'de stage')
+    : 'Vos documents '+(alt?"d'alternance":'de stage'))+' — '+orgNom;
   return 'mailto:'+encodeURIComponent(s.email||'')
-    +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(stgMessageLien(s));
+    +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(stgMessageLien(s,m));
 }
 
 /* Numéro au format international sans « + » (06 12 34 56 78 -> 33612345678),
@@ -392,29 +428,32 @@ function stgTelIntl(tel){
 }
 /* SMS et WhatsApp s'ouvrent sur le téléphone / l'application de la personne qui
    envoie : rien ne transite par nos serveurs, et aucun compte n'est à configurer. */
-function stgSmsUrl(s){
-  return 'sms:+'+stgTelIntl(s.telephone)+'?&body='+encodeURIComponent(stgMessageLien(s));
+function stgSmsUrl(s,m){
+  return 'sms:+'+stgTelIntl(s.telephone)+'?&body='+encodeURIComponent(stgMessageLien(s,m));
 }
-function stgWhatsAppUrl(s){
-  return 'https://wa.me/'+stgTelIntl(s.telephone)+'?text='+encodeURIComponent(stgMessageLien(s));
+function stgWhatsAppUrl(s,m){
+  return 'https://wa.me/'+stgTelIntl(s.telephone)+'?text='+encodeURIComponent(stgMessageLien(s,m));
 }
-/* Feuille de partage du téléphone ou de l'ordinateur (Messenger, Signal, AirDrop…). */
-function stgPartagerLien(){
-  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
-  if(!s||!s.token||!navigator.share)return;
-  navigator.share({title:'Vos documents de '+(stgType(s)==='alternant'?'alternance':'stage'),text:stgMessageLien(s)})
-    .catch(()=>{});   // fermeture de la feuille par l'utilisateur : pas une erreur
+/* Même partage que les devis et les dossiers de famille (PartageLien) : feuille
+   de partage du téléphone, ou choix WhatsApp / copie sur ordinateur. */
+function stgPartagerLien(m){
+  const s=stgFicheCourante();
+  if(!s||!stgJeton(s,m))return;
+  PartageLien.partager(stgLienUrl(stgJeton(s,m)),{
+    titre:m==='entretien'?'Votre entretien':'Vos documents',
+    texte:stgMessageLien(s,m).split('\n\n').slice(0,2).join('\n\n').replace(/\n\n$/,'')})
+    .then(r=>{if(r==='copie')showBanner('Partage indisponible — lien copié.');});
 }
 /* QR code à scanner avec le téléphone de la personne, quand elle est là en face
    (visite, entretien) : aucune saisie de numéro ni d'adresse. Généré dans le
    navigateur, le lien ne part vers aucun service tiers. */
-function stgAfficherQr(){
-  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
-  if(!s||!s.token)return;
+function stgAfficherQr(m){
+  const s=stgFicheCourante();
+  if(!s||!stgJeton(s,m))return;
   const box=document.getElementById('stg-qr-box');
   box.innerHTML='';
   if(typeof QRCode==='function'){
-    new QRCode(box,{text:stgLienUrl(s.token),width:240,height:240,correctLevel:QRCode.CorrectLevel.M});
+    new QRCode(box,{text:stgLienUrl(stgJeton(s,m)),width:240,height:240,correctLevel:QRCode.CorrectLevel.M});
   }else{
     return showBanner('QR code indisponible — copiez le lien à la place.','error');
   }
@@ -460,23 +499,25 @@ function stgEnvoyerInfos(){
     type:v('stg-i-type'),creche_id:v('stg-i-creche')});
 }
 
-async function stgCreerLien(renouveler){
-  if(!stgFicheId)return;
+async function stgCreerLien(m,renouveler){
+  if(!stgFicheId||!STG_LIENS[m])return;
   if(renouveler&&!confirm('Créer un nouveau lien ?\n\nL\'ancien cessera immédiatement de fonctionner.'))return;
-  const token=stgToken();
-  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
-  const expire=stgLienExpiration();
-  const ok=await dbUpdate('stagiaires',stgFicheId,{
-    token:token,token_expire_le:expire,lien_envoye_le:new Date().toISOString()
-  });
-  if(!ok)return showBanner('Création du lien impossible.','error');
+  const c=STG_LIENS[m];
+  const maj={};
+  maj[c.token]=stgToken();
+  maj[c.expire]=stgLienExpiration();
+  maj[c.envoye]=new Date().toISOString();
+  const ok=await dbUpdate('stagiaires',stgFicheId,maj);
+  if(!ok)return showBanner(m==='entretien'&&/token_entretien|lien_entretien/i.test(window._lastDbError||'')
+    ?'Création impossible : le script sql/stagiaires_lien_entretien.sql n\'a pas encore été exécuté sur Supabase.'
+    :'Création du lien impossible.','error');
   await stgLoad();
   stgRenderLien();
   showBanner(renouveler?'Nouveau lien créé — l\'ancien ne fonctionne plus.':'Lien créé ✅');
 }
 
-function stgCopierLien(){
-  const el=document.getElementById('stg-lien-url');
+function stgCopierLien(m){
+  const el=document.getElementById('stg-lien-url-'+m);
   if(!el)return;
   el.select();
   navigator.clipboard.writeText(el.value)

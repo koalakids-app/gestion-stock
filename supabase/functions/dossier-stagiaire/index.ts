@@ -121,23 +121,37 @@ function autoEval(stag: Record<string, any>) {
   return { type: 'grille', profil, grille: a.grille || {}, ...commun };
 }
 
-/** Charge la stagiaire depuis son jeton et refuse tout ce qui n'est plus valable. */
+/** Charge la stagiaire depuis son jeton et refuse tout ce qui n'est plus valable.
+ *
+ *  Deux liens existent (sql/stagiaires_lien_entretien.sql) :
+ *   - `token` : lien de DOCUMENTS (pièces à déposer, livret d'accueil à signer) ;
+ *   - `token_entretien` : lien d'ENTRETIEN, avant l'acceptation (projet
+ *     pédagogique et questionnaire seulement).
+ *  `mode` dit lequel a ouvert la session : c'est lui, et non la page, qui décide
+ *  de ce qui sort et de ce qui peut être déposé. */
 async function stagiaireValide(token: string) {
   if (!token || typeof token !== 'string' || token.length < 16) {
     throw new Error('Jeton introuvable');
   }
-  const { data, error } = await sb
+  let mode: 'documents' | 'entretien' = 'documents';
+  let { data, error } = await sb
     .from('stagiaires')
     .select('*')
     .eq('token', token)
     .maybeSingle();
   if (error) throw new Error('Lecture impossible');
+  if (!data) {
+    // Colonne absente (script non appliqué) : l'erreur est ignorée, le jeton est inconnu.
+    const r = await sb.from('stagiaires').select('*').eq('token_entretien', token).maybeSingle();
+    if (r.data) { data = r.data; mode = 'entretien'; }
+  }
   if (!data) throw new Error('Jeton introuvable');
   if (data.statut === 'annule' || data.statut === 'refuse') throw new Error('Lien expiré');
-  if (!data.token_expire_le || new Date(data.token_expire_le).getTime() < Date.now()) {
+  const expire = mode === 'entretien' ? data.token_entretien_expire_le : data.token_expire_le;
+  if (!expire || new Date(expire).getTime() < Date.now()) {
     throw new Error('Lien expiré');
   }
-  return data;
+  return { ...data, mode, lien_expire_le: expire };
 }
 
 /** Le catalogue des pièces demandées à CE profil, dans l'ordre d'affichage.
@@ -308,6 +322,12 @@ Deno.serve(async (req) => {
     if ('reponse' in sess) return sess.reponse;
     const stag = await stagiaireValide(sess.token);
     const profil = profilDe(stag);
+    const entretien = stag.mode === 'entretien';
+    // Le lien d'entretien ne sert qu'à lire et à marquer ce qui a été lu : tout
+    // dépôt, toute suppression et toute signature lui restent fermés.
+    if (entretien && !['get', 'ressource_url', 'ressource_marque'].includes(action)) {
+      return json({ erreur: 'Action inconnue' }, 403);
+    }
 
     const { data: creche } = stag.creche_id
       ? await sb.from('creches').select('name').eq('id', stag.creche_id).maybeSingle()
@@ -315,8 +335,8 @@ Deno.serve(async (req) => {
 
     // ---------------------------------------------------------------- GET
     if (action === 'get') {
-      const types = await catalogue(profil);
-      const docs = await deposes(stag.id);
+      const types = entretien ? [] : await catalogue(profil);
+      const docs = entretien ? [] : await deposes(stag.id);
       const parType = new Map<string, any[]>();
       docs.forEach(d => {
         const k = String(d.type_id || 'autre');
@@ -331,9 +351,11 @@ Deno.serve(async (req) => {
       const autres: any[] = [];
       parType.forEach((liste, k) => { if (!connus.has(k)) autres.push(...liste); });
 
-      const ress = await ressourcesDe(profil, stag.creche_id);
-      const vues = await vuesDe(stag.id);
-      const livrets = (await livretsDe(stag.id)).map(r => {
+      // Le projet pédagogique et le questionnaire appartiennent au lien
+      // d'entretien ; le lien de documents n'en porte plus.
+      const ress = entretien ? await ressourcesDe(profil, stag.creche_id) : [];
+      const vues = entretien ? await vuesDe(stag.id) : new Map();
+      const livrets = (entretien ? [] : await livretsDe(stag.id)).map(r => {
         const d = (r.donnees || {}) as Record<string, any>;
         const champs: Record<string, unknown> = {};
         LV_CHAMPS_PUBLICS.forEach(k => { champs[k] = d[k] ?? ''; });
@@ -357,7 +379,8 @@ Deno.serve(async (req) => {
           creche_nom: creche?.name || '',
           date_debut: stag.date_debut,
           date_fin: stag.date_fin,
-          expire_le: stag.token_expire_le,
+          expire_le: stag.lien_expire_le,
+          mode: stag.mode,
           // Sert uniquement au vocabulaire de la page (stage / alternance).
           type_contrat: profil,
           // L'identifiant du dossier. Il n'ouvre rien par lui-même — seul le
@@ -368,7 +391,7 @@ Deno.serve(async (req) => {
         livrets,
         // Jamais la note du tuteur : seulement les compétences visées et ce que
         // la personne a déjà répondu.
-        auto_eval: autoEval(stag),
+        auto_eval: entretien ? null : autoEval(stag),
         pieces: types.map(t => ({
           id: t.id, libelle: t.libelle, aide: t.aide, lien: t.lien,
           obligatoire: t.obligatoire,
@@ -491,7 +514,7 @@ Deno.serve(async (req) => {
     // envoyer le PDF en pièce jointe d'un mail.
     if (action === 'ressource_url') {
       const id = String(body.ressource_id || '');
-      const ress = await ressourcesDe(profil, stag.creche_id);
+      const ress = entretien ? await ressourcesDe(profil, stag.creche_id) : [];
       const r = ress.find(x => String(x.id) === id);
       if (!r) return json({ erreur: 'Document introuvable' }, 404);
       if (r.nature !== 'fichier' || !r.path) {
@@ -511,7 +534,7 @@ Deno.serve(async (req) => {
     // signature — et la case peut se décocher.
     if (action === 'ressource_marque') {
       const id = String(body.ressource_id || '');
-      const ress = await ressourcesDe(profil, stag.creche_id);
+      const ress = entretien ? await ressourcesDe(profil, stag.creche_id) : [];
       const r = ress.find(x => String(x.id) === id);
       if (!r) return json({ erreur: 'Document introuvable' }, 404);
 
