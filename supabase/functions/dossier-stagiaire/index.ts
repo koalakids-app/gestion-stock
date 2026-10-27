@@ -123,35 +123,28 @@ function autoEval(stag: Record<string, any>) {
 
 /** Charge la stagiaire depuis son jeton et refuse tout ce qui n'est plus valable.
  *
- *  Deux liens existent (sql/stagiaires_lien_entretien.sql) :
- *   - `token` : lien de DOCUMENTS (pièces à déposer, livret d'accueil à signer) ;
- *   - `token_entretien` : lien d'ENTRETIEN, avant l'acceptation (projet
- *     pédagogique et questionnaire seulement).
- *  `mode` dit lequel a ouvert la session : c'est lui, et non la page, qui décide
- *  de ce qui sort et de ce qui peut être déposé. */
+ *  Un seul lien par fiche, deux étapes (sql/stagiaires_lien_etape.sql) :
+ *   - `entretien` (avant l'acceptation) : projet pédagogique et questionnaire ;
+ *   - `documents` (après) : pièces à déposer et livret d'accueil à signer.
+ *  `mode` est l'étape en base : c'est lui, et non la page, qui décide de ce qui
+ *  sort et de ce qui peut être déposé. Colonne absente : `documents`, comme avant. */
 async function stagiaireValide(token: string) {
   if (!token || typeof token !== 'string' || token.length < 16) {
     throw new Error('Jeton introuvable');
   }
-  let mode: 'documents' | 'entretien' = 'documents';
-  let { data, error } = await sb
+  const { data, error } = await sb
     .from('stagiaires')
     .select('*')
     .eq('token', token)
     .maybeSingle();
   if (error) throw new Error('Lecture impossible');
-  if (!data) {
-    // Colonne absente (script non appliqué) : l'erreur est ignorée, le jeton est inconnu.
-    const r = await sb.from('stagiaires').select('*').eq('token_entretien', token).maybeSingle();
-    if (r.data) { data = r.data; mode = 'entretien'; }
-  }
   if (!data) throw new Error('Jeton introuvable');
   if (data.statut === 'annule' || data.statut === 'refuse') throw new Error('Lien expiré');
-  const expire = mode === 'entretien' ? data.token_entretien_expire_le : data.token_expire_le;
-  if (!expire || new Date(expire).getTime() < Date.now()) {
+  if (!data.token_expire_le || new Date(data.token_expire_le).getTime() < Date.now()) {
     throw new Error('Lien expiré');
   }
-  return { ...data, mode, lien_expire_le: expire };
+  const mode: 'documents' | 'entretien' = data.lien_etape === 'entretien' ? 'entretien' : 'documents';
+  return { ...data, mode, lien_expire_le: data.token_expire_le };
 }
 
 /** Le catalogue des pièces demandées à CE profil, dans l'ordre d'affichage.

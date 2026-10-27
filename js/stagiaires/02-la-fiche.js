@@ -282,23 +282,24 @@ function stgLienUrl(token){
   return location.origin+location.pathname.replace(/[^/]*$/,'')+'stagiaire.html?t='+token;
 }
 
-/* Deux liens, deux moments (sql/stagiaires_lien_entretien.sql) :
+/* Un seul lien par fiche, deux étapes (sql/stagiaires_lien_etape.sql) :
    - « entretien », AVANT l'acceptation : le projet pédagogique à lire et le
      questionnaire à remplir, rien d'autre ;
    - « documents », APRÈS l'acceptation : dépôt des pièces en ligne et livret
      d'accueil à signer.
-   Chacun a son jeton : le lien d'entretien ne donne jamais accès aux pièces. */
+   Le bouton « Ouvrir les documents » fait passer le MÊME lien de l'une à l'autre :
+   la personne n'a rien à ré-enregistrer. C'est le serveur qui filtre selon l'étape. */
 const STG_LIENS={
-  entretien:{token:'token_entretien',expire:'token_entretien_expire_le',envoye:'lien_entretien_envoye_le',
-    titre:"Lien de l'entretien",quand:"avant l'acceptation",ic:'messages',
-    aide:'Pour la candidature : la personne lit le projet pédagogique et remplit le questionnaire avant l\'entretien. Elle ne peut pas déposer de document avec ce lien.'},
-  documents:{token:'token',expire:'token_expire_le',envoye:'lien_envoye_le',
-    titre:'Lien des documents',quand:"après l'acceptation",ic:'file-upload',
-    aide:'Une fois le stage accepté : la personne téléverse ses pièces en ligne depuis son téléphone et signe le livret d\'accueil, sans compte ni application.'}
+  entretien:{titre:"Lien de l'entretien",ic:'messages',
+    aide:'Étape actuelle : la personne lit le projet pédagogique et remplit le questionnaire avant l\'entretien. Elle ne peut pas encore déposer de document.'},
+  documents:{titre:'Lien des documents',ic:'file-upload',
+    aide:'Étape actuelle : la personne téléverse ses pièces en ligne depuis son téléphone et signe le livret d\'accueil, sans compte ni application.'}
 };
-const stgJeton=(s,m)=>s&&s[STG_LIENS[m].token];
-const stgJetonExpire=(s,m)=>s&&s[STG_LIENS[m].expire];
-const stgJetonActif=(s,m)=>!!(stgJeton(s,m)&&stgJetonExpire(s,m)&&new Date(stgJetonExpire(s,m)).getTime()>Date.now());
+/* Une fiche dont le lien existait avant ce changement est à l'étape « documents ». */
+const stgEtape=s=>(s&&s.lien_etape==='entretien')?'entretien':'documents';
+const stgJeton=(s,m)=>s&&s.token;
+const stgJetonExpire=(s,m)=>s&&s.token_expire_le;
+const stgJetonActif=(s,m)=>!!(stgJeton(s)&&stgJetonExpire(s)&&new Date(stgJetonExpire(s)).getTime()>Date.now());
 const stgFicheCourante=()=>stgCache.find(x=>String(x.id)===String(stgFicheId));
 
 function stgRenderLien(){
@@ -307,21 +308,28 @@ function stgRenderLien(){
   const s=stgFicheCourante();
   if(!s){zone.innerHTML='';return;}
   zone.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:8px">'
-    +'<i class="ti ti-link" style="color:var(--koala)"></i> Liens à envoyer</div>'
-    +stgRenderLienMode(s,'entretien')+stgRenderLienMode(s,'documents');
+    +'<i class="ti ti-link" style="color:var(--koala)"></i> Lien à envoyer</div>'
+    +stgRenderLienMode(s,s.token?stgEtape(s):null);
 }
 
 function stgRenderLienMode(s,m){
-  const c=STG_LIENS[m];
-  const jeton=stgJeton(s,m);
-  const actif=stgJetonActif(s,m);
-  let h='<div style="border:1.5px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:10px">'
-    +'<div style="font-weight:700;font-size:13px"><i class="ti ti-'+c.ic+'" style="color:var(--koala)"></i> '
-    +escHtml(c.titre)+' <span style="font-weight:500;color:var(--muted)">· '+escHtml(c.quand)+'</span></div>'
-    +'<p style="font-size:12.5px;color:var(--muted);margin:5px 0 9px;line-height:1.5">'+escHtml(c.aide)+'</p>';
+  const jeton=m&&stgJeton(s,m);
+  const actif=m&&stgJetonActif(s,m);
+  let h='<div style="border:1.5px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:10px">';
+  if(m){
+    const c=STG_LIENS[m];
+    h+='<div style="font-weight:700;font-size:13px"><i class="ti ti-'+c.ic+'" style="color:var(--koala)"></i> '
+      +escHtml(c.titre)+'</div>'
+      +'<p style="font-size:12.5px;color:var(--muted);margin:5px 0 9px;line-height:1.5">'+escHtml(c.aide)+'</p>';
+  }else{
+    h+='<p style="font-size:12.5px;color:var(--muted);margin:0 0 9px;line-height:1.5">'
+      +'Un seul lien par personne. Il commence à l\'étape <b>entretien</b> (projet pédagogique et questionnaire) ; '
+      +'une fois le stage accepté, « Ouvrir les documents » le fait passer à l\'étape <b>documents</b> '
+      +'(pièces en ligne et livret d\'accueil) — sans changer d\'adresse.</p>';
+  }
 
   if(!jeton){
-    if(m==='documents'){
+    {
       const rappel=stgLienDateRappel(s);
       /* Une demande arrivée six mois à l'avance n'a pas besoin de ce lien tout
          de suite : il se perdrait, et la personne aurait tout oublié le jour du
@@ -341,7 +349,8 @@ function stgRenderLienMode(s,m){
           +'<strong>« lien à envoyer »</strong> le <b>'+escHtml(stgDateFr(rappel))+'</b>.</div>';
       }
     }
-    h+='<button class="btn-primary" onclick="stgCreerLien(\''+m+'\')"><i class="ti ti-link-plus"></i> Créer le lien</button>';
+    h+='<button class="btn-primary" onclick="stgCreerLien(\'entretien\')"><i class="ti ti-link-plus"></i> Créer le lien d\'entretien</button>'
+      +' <button class="btn-sm" onclick="stgCreerLien(\'documents\')" title="Si le stage est déjà accepté"><i class="ti ti-file-upload"></i> Créer directement le lien des documents</button>';
   }else{
     h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:9px">'
       +'<input class="finput" id="stg-lien-url-'+m+'" readonly value="'+escHtml(stgLienUrl(jeton))+'" style="flex:1;min-width:220px;font-size:12px">'
@@ -351,6 +360,7 @@ function stgRenderLienMode(s,m){
       +(stgTelIntl(s.telephone)?'<a class="btn-sm" style="text-decoration:none" href="'+stgSmsUrl(s,m)+'"><i class="ti ti-message"></i> SMS</a>'
         +'<a class="btn-sm" style="text-decoration:none" target="_blank" rel="noopener" href="'+stgWhatsAppUrl(s,m)+'"><i class="ti ti-brand-whatsapp"></i> WhatsApp</a>':'')
       +'<button class="btn-sm" onclick="stgAfficherQr(\''+m+'\')"><i class="ti ti-qrcode"></i> QR code</button>'
+      +(m==='entretien'?'<button class="btn-primary btn-sm" onclick="stgOuvrirDocuments()"><i class="ti ti-lock-open"></i> Ouvrir les documents</button>':'')
       +'<button class="btn-sm" onclick="stgCreerLien(\''+m+'\',true)"><i class="ti ti-refresh"></i> Renouveler</button>'
       +'</div>'
       +'<div style="font-size:12px;color:'+(actif?'var(--muted)':'var(--red)')+'">'
@@ -397,6 +407,7 @@ function stgMessageLien(s,m){
   return 'Bonjour '+(s.prenom||'')+',\n\n'
     +'Votre '+p.periode.replace(/^votre /,'')+crNom+' est accepté, bienvenue ! Voici le lien pour nous transmettre vos documents en ligne et signer le livret d\'accueil :\n\n'
     +url+'\n\n'
+    +'C\'est le même lien que celui de l\'entretien : si vous l\'avez déjà, rouvrez-le simplement.\n'
     +'Vous pouvez photographier vos pièces directement avec votre téléphone, en plusieurs fois.\n'
     +valable
     +'À bientôt,\nL\'équipe '+orgNom;
@@ -499,21 +510,33 @@ function stgEnvoyerInfos(){
     type:v('stg-i-type'),creche_id:v('stg-i-creche')});
 }
 
+const STG_ERR_ETAPE='Impossible : le script sql/stagiaires_lien_etape.sql n\'a pas encore été exécuté sur Supabase.';
+
 async function stgCreerLien(m,renouveler){
   if(!stgFicheId||!STG_LIENS[m])return;
   if(renouveler&&!confirm('Créer un nouveau lien ?\n\nL\'ancien cessera immédiatement de fonctionner.'))return;
-  const c=STG_LIENS[m];
-  const maj={};
-  maj[c.token]=stgToken();
-  maj[c.expire]=stgLienExpiration();
-  maj[c.envoye]=new Date().toISOString();
+  const maj={token:stgToken(),token_expire_le:stgLienExpiration(),lien_envoye_le:new Date().toISOString(),lien_etape:m};
   const ok=await dbUpdate('stagiaires',stgFicheId,maj);
-  if(!ok)return showBanner(m==='entretien'&&/token_entretien|lien_entretien/i.test(window._lastDbError||'')
-    ?'Création impossible : le script sql/stagiaires_lien_entretien.sql n\'a pas encore été exécuté sur Supabase.'
-    :'Création du lien impossible.','error');
+  if(!ok)return showBanner(/lien_etape/i.test(window._lastDbError||'')?STG_ERR_ETAPE:'Création du lien impossible.','error');
   await stgLoad();
   stgRenderLien();
   showBanner(renouveler?'Nouveau lien créé — l\'ancien ne fonctionne plus.':'Lien créé ✅');
+}
+
+/* Le stage est accepté : le MÊME lien donne maintenant accès au dépôt des pièces et
+   au livret d'accueil. Sa durée repart de zéro, pour ne pas expirer avant l'envoi
+   des pièces d'identité. */
+async function stgOuvrirDocuments(){
+  const s=stgFicheCourante();
+  if(!s||!s.token)return;
+  if(!confirm('Ouvrir les documents ?\n\nLe lien déjà envoyé donnera désormais accès au dépôt des pièces et au livret d\'accueil. '
+    +'Il sera valable '+STG_LIEN_JOURS+' jours à partir de maintenant.'))return;
+  const ok=await dbUpdate('stagiaires',stgFicheId,{lien_etape:'documents',token_expire_le:stgLienExpiration()});
+  if(!ok)return showBanner(/lien_etape/i.test(window._lastDbError||'')?STG_ERR_ETAPE:'Ouverture impossible.','error');
+  await stgLoad();
+  stgRenderLien();
+  showBanner('Documents ouverts ✅ — envoyez-lui un message pour la prévenir.');
+  stgPartagerLien('documents');
 }
 
 function stgCopierLien(m){

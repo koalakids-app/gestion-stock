@@ -102,15 +102,15 @@ async function recharger(){
    de dire « recommencez celle-là » sans passer un coup de fil. */
 const fournie = p => (p.fichiers||[]).some(f=>f.statut!=='refuse');
 
-/* Lien d'ENTRETIEN (avant l'acceptation) : le projet pédagogique à lire et le
+/* Étape ENTRETIEN du lien (avant l'acceptation) : le projet pédagogique à lire et le
    questionnaire à remplir, rien d'autre. Le dépôt des pièces et le livret
-   d'accueil arrivent avec le lien de documents, une fois le stage accepté. */
+   d'accueil arrivent sur ce même lien, une fois le stage accepté (étape « documents »). */
 function renderEntretien(){
   const M=mots();
   const reste=RESS.filter(r=>!ressFaite(r)).length;
   let h='<div class="intro">Bonjour '+esc(STAG.prenom||'')+' ! Merci pour votre demande de '+M.nom
     +'. Avant notre entretien, prenez le temps de lire notre projet pédagogique et de répondre au questionnaire ci-dessous.'
-    +'<br><br>Si votre candidature est retenue, nous vous enverrons un second lien pour déposer vos documents.'
+    +'<br><br>Si votre candidature est retenue, ce même lien vous permettra ensuite de déposer vos documents.'
     +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(STAG.expire_le))+'</b>.</div>';
   if(RESS.length){
     h+='<h3 class="sec"><i class="ti ti-mail-opened"></i> À lire et à faire</h3>'
