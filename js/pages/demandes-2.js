@@ -883,6 +883,7 @@ reunionsequipe: `
   <li><strong>Nouveau compte rendu</strong> : date, heure, type (réunion d'équipe, réunion des directeurs techniques ou autre, à préciser), participants, excusés, compte rendu, décisions et date de la prochaine réunion.</li>
   <li><strong>Photographier mes notes</strong> : les photos servent uniquement à la transcription du texte, elles ne sont pas enregistrées. Relisez toujours le texte avant de l'insérer.</li>
   <li><strong>Enregistrer en brouillon</strong> garde le compte rendu modifiable ; <strong>Valider</strong> le fige (il faut au moins un compte rendu ou des décisions).</li>
+  <li>À la validation, le coordinateur (et lui seul) reçoit une notification « Nouveau compte rendu de réunion ». Les brouillons ne notifient personne.</li>
 </ul>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🔒 Brouillon, validé, réouverture</div>
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Un compte rendu validé n'est plus modifiable ni supprimable par le directeur/trice technique. Seule la <strong>direction</strong> peut le rouvrir ; la réouverture est tracée (date et personne), sans effacer la trace de la validation d'origine.</div>

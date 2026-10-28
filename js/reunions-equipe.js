@@ -257,6 +257,14 @@ async function reqSave(statutCible){
       reqCache.unshift(data);
       showBanner(statutCible==='valide'?'Compte rendu validé et archivé ✅':'Brouillon enregistré ✅');
     }
+    // Notification au coordinateur seul (pas aux autres référents) quand un compte rendu est validé.
+    // Elle ne bloque jamais l'enregistrement.
+    if(statutCible==='valide'&&!(ancien&&ancien.statut==='valide')&&currentProfile?.id!==COORD_REF_ID){
+      try{
+        const lieu=type==='directeurs'?'Directeurs techniques':(reqCrecheName(crecheId)||'');
+        await callFn('notify-push',{referent_ids:[COORD_REF_ID],title:'Nouveau compte rendu de réunion',body:(lieu?lieu+' — ':'')+'réunion du '+reqFmtDate(dateR),url:'./demandes.html',tag:'cr-reunion-'+(reqEditId||'new')+'-'+dateR});
+      }catch(e){console.warn('[reqSave] notification',e);}
+    }
     closeModal('modal-req-wrap');
     reqEditId=null;
     reqRender();
