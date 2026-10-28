@@ -908,6 +908,8 @@ async function renderPresenceGantt(){
     // Matin: 7h\u201313h = cols 0\u201311, Apr\u00e8s-midi: 13h\u201319h = cols 12\u201323
     // Horaires du contrat si renseign\u00e9s, sinon retour au d\u00e9coupage matin / apr\u00e8s-midi
     const ct=ctMap[String(e.id)];
+    // Horaires du contrat pour CE jour de la semaine (horaires_jours), sinon horaires par défaut
+    const ctH=ct?(typeof ctHorairesJour==='function'?ctHorairesJour(ct,jourSem):{debut:ct.heure_debut,fin:ct.heure_fin}):{debut:null,fin:null};
     const _col=function(t,fin){
       const m=/^(\d{1,2}):(\d{2})/.exec(String(t||''));
       if(!m) return null;
@@ -917,8 +919,8 @@ async function renderPresenceGantt(){
     };
     // L'horaire réellement pointé ce jour-là (lu sur le planning PDF, colonnes presences.heure_*)
     // prime sur le contrat pour le repli « ancien style » (une seule barre).
-    const srcDeb=p.hd||(ct?ct.heure_debut:null);
-    const srcFin=p.hf||(ct?ct.heure_fin:null);
+    const srcDeb=p.hd||ctH.debut;
+    const srcFin=p.hf||ctH.fin;
     const cA=_col(srcDeb,false);
     const cB=_col(srcFin,true);
     // Vert = pointé réellement (tablette/kiosque), violet = présence cochée à la main.
@@ -942,8 +944,8 @@ async function renderPresenceGantt(){
     const pointeReel=pointe&&!!(pt&&pt.debut);
     const bgCtSegments=[];
     if(pointeReel){
-      const ctA=_col(ct?ct.heure_debut:null,false);
-      const ctB=_col(ct?ct.heure_fin:null,true);
+      const ctA=_col(ctH.debut,false);
+      const ctB=_col(ctH.fin,true);
       if(ctA!==null&&ctB!==null&&ctB>ctA)bgCtSegments.push({start:ctA,end:ctB});
       const ptA=_col(pt.debut,false);
       const enCours=!pt.fin;
@@ -992,7 +994,7 @@ async function renderPresenceGantt(){
       // Arrière-plan : horaire de contrat, seulement quand une barre de pointage réel est affichée par-dessus.
       bgCtSegments.forEach(seg=>{
         const left=seg.start*COL_W;const width=(seg.end-seg.start)*COL_W-2;
-        rowsHtml+='<div title="Horaire de contrat : '+escHtml((ct&&ct.heure_debut)||'')+'–'+escHtml((ct&&ct.heure_fin)||'')+'" style="position:absolute;left:'+left+'px;width:'+width+'px;top:12px;height:20px;background:#e8e6ef;border:1px solid #d3d0e0;border-radius:7px"></div>';
+        rowsHtml+='<div title="Horaire de contrat : '+escHtml(ctH.debut||'')+'–'+escHtml(ctH.fin||'')+'" style="position:absolute;left:'+left+'px;width:'+width+'px;top:12px;height:20px;background:#e8e6ef;border:1px solid #d3d0e0;border-radius:7px"></div>';
       });
       segments.forEach(seg=>{
         const left=seg.start*COL_W;const width=(seg.end-seg.start)*COL_W-2;

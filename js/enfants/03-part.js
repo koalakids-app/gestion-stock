@@ -452,7 +452,7 @@ function enfRenderContrat(){
       + (c.notes?'<div style="font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap">'+escHtml(c.notes)+'</div>':'')
       + '</div>';
   }).join('')
-  + '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">Le bouton « Appliquer les contrats » du module Présences marque présents tous les enfants sur toute la durée de leurs contrats (de la date de début à la date de fin). Un contrat sans date de fin est ignoré. « Mettre fin » arrête un contrat en cours ou à venir avant son terme (date de fin et motif conservés dans la note) ; relancez ensuite « Appliquer les contrats » pour retirer les présences à venir.</p>';
+  + '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">Le bouton « Appliquer les contrats » du module Présences marque présents tous les enfants sur toute la durée de leurs contrats (de la date de début à la date de fin). Un contrat sans date de fin est ignoré. Modifier les horaires d’un contrat met aussi à jour le Gantt des jours à venir (les journées pointées ou issues d’un planning importé ne changent pas). « Mettre fin » arrête un contrat en cours ou à venir avant son terme (date de fin et motif conservés dans la note) ; relancez ensuite « Appliquer les contrats » pour retirer les présences à venir.</p>';
 }
 
 /* Horaires propres à un jour : {"1":{"debut":"08:00","fin":"17:00"}}. Absent = horaires par défaut du contrat. */
@@ -536,6 +536,30 @@ function ctHorairesJoursSaisis(){
   return Object.keys(r).length?r:null;
 }
 
+/* Modification d'un contrat : les présences à venir qui portent encore l'ANCIEN horaire
+   du contrat (copié sur presences.heure_debut / heure_fin) sont remises sans horaire, pour
+   que le Gantt reprenne celui du contrat à jour. Un pointage tablette, une date passée ou
+   un horaire différent (planning importé) ne sont jamais touchés. */
+async function ctLibererHorairesPresences(ancien){
+  try{
+    const hh=function(t){return t?String(t).slice(0,5):'';};
+    const{data,error}=await sb.from('presences').select('presence_date,heure_debut,heure_fin,source')
+      .eq('enfant_id',ancien.enfant_id).gte('presence_date',todayStr()).not('heure_debut','is',null);
+    if(error) throw error;
+    const dates=new Set();
+    (data||[]).forEach(function(p){
+      if(p.source==='pointage') return;
+      const wd=new Date(p.presence_date+'T00:00:00').getDay()||7;
+      const h=ctHorairesJour(ancien,wd);
+      if(hh(h.debut)===hh(p.heure_debut)&&hh(h.fin)===hh(p.heure_fin)) dates.add(p.presence_date);
+    });
+    if(!dates.size) return;
+    const{error:e2}=await sb.from('presences').update({heure_debut:null,heure_fin:null})
+      .eq('enfant_id',ancien.enfant_id).in('presence_date',[...dates]);
+    if(e2) throw e2;
+  }catch(err){ console.warn('ctLibererHorairesPresences',err); }
+}
+
 async function ctSave(){
   if(!enfFicheId) return;
   const debut=document.getElementById('ct-debut').value;
@@ -553,6 +577,7 @@ async function ctSave(){
     notes:(document.getElementById('ct-notes').value||'').trim()||null
   };
   let ok;
+  const ancien=editingContratId?enfContratsCache.find(x=>String(x.id)===String(editingContratId)):null;
   if(editingContratId){
     row.updated_at=new Date().toISOString();
     ok=await dbUpdate('enfants_contrats',editingContratId,row);
@@ -560,6 +585,7 @@ async function ctSave(){
     ok=!!(await dbInsert('enfants_contrats',row));
   }
   if(!ok){ showBanner('Enregistrement impossible : '+((window._lastDbError)||'droits insuffisants'),'error'); return; }
+  if(ancien) await ctLibererHorairesPresences(ancien);
   closeModal('modal-contrat-wrap');
   showBanner(editingContratId?'Contrat modifi\u00e9 \u2705':'Contrat ajout\u00e9 \u2705');
   await enfLoadContrats(enfFicheId);
