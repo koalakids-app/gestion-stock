@@ -292,7 +292,7 @@ async function brRender(){
   try{
     if(typeof adEnsureCharge==='function')await adEnsureCharge();
     const ouvertes=isDirection
-      ?adCache.filter(a=>!adEstClos(a.statut))
+      ?adOuvertes()
       :(typeof adMesActions==='function'?adMesActions():[]);
     actEch=ouvertes.filter(a=>a.echeance&&a.echeance<=t).sort(adTriEcheance);
   }catch(e){console.warn('[briefing] actions',e);}

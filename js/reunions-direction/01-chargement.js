@@ -33,7 +33,7 @@ const AD_THEMES=['Recrutement','Ressources humaines','Pédagogie','Formation','T
 
 let adCache=[],adReunions=[],adFilter='ouvertes',adEditId=null,
     adReunionDate=null,adReunionCourante=null,adRevueIdx=0,adRevueTout=false,
-    adProjection=false,adSchemaOk=true,_adCrVue=null,_adDirty=false,_adPointsCreches={};
+    adProjection=false,adSchemaOk=true,adMasquees=new Map(),_adCrVue=null,_adDirty=false,_adPointsCreches={};
 
 function adEstClos(s){return AD_CLOS.indexOf(s)>=0;}
 function adStatutMeta(s){return AD_STATUTS[s]||AD_STATUTS.a_faire;}
@@ -143,7 +143,40 @@ async function adLoad(){
   }else if(warn){warn.style.display='none';}
   adCache=r1.data||[];
   adReunions=r2.data||[];
+  await adChargerMasquees();
   adRenderTout();
+}
+
+/* « Masquer pour moi » : l'action reste en base et chez les autres, seule la vue
+   de la personne change. adCache garde TOUTES les actions (les comptes rendus
+   figés en ont besoin) ; ce sont les listes affichées qui écartent les masquées. */
+async function adChargerMasquees(){
+  adMasquees=new Map();
+  const{data,error}=await sb.from('actions_direction_masquees').select('id,action_id');
+  if(error)return;   // table pas encore créée : rien n'est masqué
+  (data||[]).forEach(r=>adMasquees.set(String(r.action_id),r.id));
+}
+function adEstMasquee(a){return adMasquees.has(String(a.id));}
+
+async function adMasquer(id){
+  const a=adCache.find(x=>String(x.id)===String(id));if(!a)return;
+  const{data:{user}}=await sb.auth.getUser();
+  if(!user){showBanner('Session expirée, reconnectez-vous.','error');return;}
+  const{data,error}=await sb.from('actions_direction_masquees').insert({action_id:a.id,masque_par:user.id}).select('id').single();
+  if(error){showBanner('Masquage impossible : '+error.message,'error');return;}
+  adMasquees.set(String(a.id),data.id);
+  adRenderTout();
+  showBanner('Action n°'+(a.numero||'')+' masquée pour vous — elle reste visible des autres. Filtre « Masquées » pour la retrouver.');
+}
+
+async function adReafficher(id){
+  const a=adCache.find(x=>String(x.id)===String(id));if(!a)return;
+  const ligne=adMasquees.get(String(id));if(!ligne)return;
+  const{error}=await sb.from('actions_direction_masquees').delete().eq('id',ligne);
+  if(error){showBanner('Réaffichage impossible : '+error.message,'error');return;}
+  adMasquees.delete(String(id));
+  adRenderTout();
+  showBanner('Action n°'+(a.numero||'')+' de nouveau affichée.');
 }
 
 function adRenderTout(){
@@ -172,7 +205,7 @@ function adShowView(v,btn){
 
 function adSetFilter(f){
   adFilter=f;
-  ['ouvertes','retard','closes','toutes'].forEach(x=>{
+  ['ouvertes','retard','closes','toutes','masquees'].forEach(x=>{
     const c=document.getElementById('ad-chip-'+x);
     if(c)c.classList.toggle('active',x===f);
   });
@@ -255,7 +288,7 @@ function adRespVersFormulaire(prefixe,a){
 
 /* Par échéance : c'est l'ordre de l'urgence, celui du miroir « À faire ». */
 function adOuvertes(){
-  return adCache.filter(a=>!adEstClos(a.statut)).sort(adTriEcheance);
+  return adCache.filter(a=>!adEstClos(a.statut)&&!adEstMasquee(a)).sort(adTriEcheance);
 }
 function adTriEcheance(a,b){
   if(!a.echeance&&!b.echeance)return (a.numero||0)-(b.numero||0);
@@ -268,7 +301,7 @@ function adTriEcheance(a,b){
    revue et du compte rendu. On ne saute pas d'un site à l'autre pour revenir
    au premier trois lignes plus loin. */
 function adOuvertesReunion(){
-  return adCache.filter(a=>!adEstClos(a.statut)).sort((a,b)=>{
+  return adCache.filter(a=>!adEstClos(a.statut)&&!adEstMasquee(a)).sort((a,b)=>{
     const ra=adRangCreche(a.creche_id),rb=adRangCreche(b.creche_id);
     if(ra!==rb)return ra-rb;
     return adTriEcheance(a,b);
@@ -276,7 +309,8 @@ function adOuvertesReunion(){
 }
 
 function adFiltered(){
-  let l=adCache.slice();
+  // Les actions masquées n'apparaissent que dans leur filtre.
+  let l=adFilter==='masquees'?adCache.filter(adEstMasquee):adCache.filter(a=>!adEstMasquee(a));
   if(adFilter==='ouvertes')l=l.filter(a=>!adEstClos(a.statut));
   else if(adFilter==='retard')l=l.filter(a=>adRetard(a)>0);
   else if(adFilter==='closes')l=l.filter(a=>adEstClos(a.statut));
@@ -307,7 +341,7 @@ function adRender(){
   const enRetard=ouvertes.filter(a=>adRetard(a)>0);
   const semaine=ouvertes.filter(a=>{const r=adRestant(a);return r!==null&&r>=0&&r<=7;});
   const moisIso=todayStr().slice(0,7);
-  const closesMois=adCache.filter(a=>adEstClos(a.statut)&&(a.cloture_le||'').slice(0,7)===moisIso);
+  const closesMois=adCache.filter(a=>!adEstMasquee(a)&&adEstClos(a.statut)&&(a.cloture_le||'').slice(0,7)===moisIso);
 
   const stats=document.getElementById('ad-stats');
   if(stats)stats.innerHTML=
@@ -322,7 +356,7 @@ function adRender(){
   const l=adFiltered();
   if(!l.length){
     box.innerHTML='<div class="empty-state"><i class="ti ti-target-arrow"></i><p>'
-      +(adCache.length?'Aucune action ne correspond à ce filtre.':'Aucune action pour l\'instant. Cliquez sur « Nouvelle action », ou passez par le mode réunion.')
+      +(adFilter==='masquees'?'Aucune action masquée.':adCache.length?'Aucune action ne correspond à ce filtre.':'Aucune action pour l\'instant. Cliquez sur « Nouvelle action », ou passez par le mode réunion.')
       +'</p></div>';
     return;
   }
@@ -375,6 +409,9 @@ function adCardHtml(a){
         ? '<button class="ibtn" title="Rouvrir" onclick="adSetStatut(\''+a.id+'\',\'en_cours\')"><i class="ti ti-rotate-clockwise"></i></button>'
         : '<button class="ibtn" title="Marquer faite" onclick="adSetStatut(\''+a.id+'\',\'fait\')"><i class="ti ti-check"></i></button>')
       +'<button class="ibtn" title="Modifier" onclick="adOpenActionModal(\''+a.id+'\')"><i class="ti ti-edit"></i></button>'
+      +(adEstMasquee(a)
+        ? '<button class="ibtn" title="Réafficher" onclick="adReafficher(\''+a.id+'\')"><i class="ti ti-eye"></i></button>'
+        : '<button class="ibtn" title="Masquer pour moi (reste visible des autres)" onclick="adMasquer(\''+a.id+'\')"><i class="ti ti-eye-off"></i></button>')
       +'<button class="ibtn del" title="Supprimer" onclick="adDelete(\''+a.id+'\')"><i class="ti ti-trash"></i></button>'
     +'</div></div>';
 }
