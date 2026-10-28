@@ -554,6 +554,7 @@ async function saveEntry(){
     }
   }
 
+  const rectifSourceId=rectifSource?rectifSource.id:null;
   btn.disabled=true;
   const {data,error}=await sb.from('registre_infirmerie').insert(row).select().single();
   btn.disabled=false;
@@ -568,10 +569,18 @@ async function saveEntry(){
   /* Alerte immediate : secours ou eviction uniquement.
      Aucun detail medical ni nom d'enfant n'est transmis (cf. notify-infirmerie). */
   const motif=data.appel_secours?'secours':(data.eviction?'eviction':null);
+  /* Secours ou eviction sur un soin : l'incident est cree d'office dans
+     Demandes > Incidents (les autres soins restent a signaler a la main). */
+  let incidentCree=false;
+  if(motif&&soin&&!rectifSourceId){
+    const r=await creerIncident(data);
+    incidentCree=!r.error;
+    if(r.error)console.warn('[creerIncident]',r.error);
+  }
   if(motif){
     callFn('notify-infirmerie',{creche_id:data.creche_id,motif:motif,
       date:frDate(data.date_acte),heure:hm(data.heure_acte),source:'registre'});
-    toast('Entr\u00e9e enregistr\u00e9e. Direction et r\u00e9f\u00e9rente alert\u00e9es.');
+    toast(incidentCree?'Entr\u00e9e enregistr\u00e9e et incident signal\u00e9. Direction et r\u00e9f\u00e9rente alert\u00e9es.':'Entr\u00e9e enregistr\u00e9e. Direction et r\u00e9f\u00e9rente alert\u00e9es.');
   }else{
     toast('Entr\u00e9e enregistr\u00e9e.');
   }
@@ -619,8 +628,7 @@ function openDetail(id){
 }
 
 /* Passerelle vers le module Incidents de demandes.html */
-async function toIncident(){
-  const e=ENTRIES.find(x=>x.id===detailId); if(!e)return;
+async function creerIncident(e){
   /* Le module Incidents attend des valeurs techniques precises :
      type    -> chute | morsure | malaise | allergie | comportement | materiel | autre
      severity-> info | leger | grave                                              */
@@ -635,9 +643,15 @@ async function toIncident(){
     description:[e.circonstances,e.observations].filter(Boolean).join('\n'),
     actions:e.soins_realises||'', reporter:e.auteur_nom, treated:false};
   const {data,error}=await sb.from('incidents').insert(row).select().single();
-  if(error){toast('Erreur : '+error.message,true);return;}
+  if(error)return{error};
   await sb.from('registre_infirmerie').update({incident_id:data.id},{returning:'minimal'}).eq('id',e.id);
   e.incident_id=data.id;
+  return{data};
+}
+async function toIncident(){
+  const e=ENTRIES.find(x=>x.id===detailId); if(!e)return;
+  const r=await creerIncident(e);
+  if(r.error){toast('Erreur : '+r.error.message,true);return;}
   closeOv('ovDetail');
   toast('Signal\u00e9 \u00e0 la direction.');
 }
@@ -898,7 +912,8 @@ l\u2019enfant est exclu de la commande repas au traiteur et sa fiche enfant l\u2
 <p style="margin-top:12px"><b>Signaler \u00e0 la direction</b><br>
 Depuis le d\u00e9tail d\u2019un soin, le bouton \u00ab Signaler \u00e0 la direction \u00bb cr\u00e9e un
 incident dans l\u2019application Demandes. Le registre reste la trace de l\u2019acte,
-l\u2019incident sert au suivi. Pas de double saisie.</p>
+l\u2019incident sert au suivi. Pas de double saisie.<br>
+Quand un soin comporte un <b>appel de secours</b> ou une <b>\u00e9viction</b>, l\u2019incident est cr\u00e9\u00e9 automatiquement\u00a0: rien \u00e0 faire. Pour les autres soins, utilisez le bouton.</p>
 
 <p style="margin-top:12px"><b>Export</b><br>
 Le bouton Export g\u00e9n\u00e8re le registre du mois affich\u00e9 en PDF, chronologique,
