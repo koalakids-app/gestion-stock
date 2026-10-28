@@ -668,6 +668,10 @@ async function togglePresence(enfantId,dateStr){
   if(isPresent){
     // Actuellement présent -> marquer absent : supprimer tous les créneaux du jour
     if((rows||[]).length)await sb.from('presences').delete().eq('enfant_id',enfantId).eq('presence_date',dateStr);
+    // Enfant attendu mais absent : on propose aussitôt de saisir le motif (js/presences-reel.js)
+    renderPresence();
+    if(typeof prOuvrirAbsence==='function')prOuvrirAbsence(enfantId,dateStr);
+    return;
   }else{
     // Actuellement absent -> marquer présent sur toute la journée (créneaux M et A)
     const ids=(rows||[]).map(r=>r.id);
