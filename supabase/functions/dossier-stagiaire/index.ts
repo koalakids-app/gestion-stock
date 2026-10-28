@@ -286,6 +286,20 @@ async function livretsDe(stagiaireId: string) {
   return data.filter(r => ok.has(r.document_id)).map(r => ({ ...r, titre: ok.get(r.document_id)!.titre }));
 }
 
+// ---------------------------------------------------------------------------
+// Documents envoyés par la crèche à CETTE personne (sql/stagiaires_envois.sql)
+// ---------------------------------------------------------------------------
+
+/** Table absente (script non exécuté) : liste vide, la page se comporte comme avant. */
+async function envoisDe(stagiaireId: string) {
+  const { data, error } = await sb
+    .from('stagiaires_envois')
+    .select('id,libelle,message,filename,created_at,ouvert_le')
+    .eq('stagiaire_id', stagiaireId)
+    .order('created_at', { ascending: false });
+  return error ? [] : data || [];
+}
+
 async function empreinte(txt: string) {
   const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt));
   return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -318,7 +332,7 @@ Deno.serve(async (req) => {
     const entretien = stag.mode === 'entretien';
     // Le lien d'entretien ne sert qu'à lire et à marquer ce qui a été lu : tout
     // dépôt, toute suppression et toute signature lui restent fermés.
-    if (entretien && !['get', 'ressource_url', 'ressource_marque'].includes(action)) {
+    if (entretien && !['get', 'ressource_url', 'ressource_marque', 'envoi_url'].includes(action)) {
       return json({ erreur: 'Action inconnue' }, 403);
     }
 
@@ -382,6 +396,9 @@ Deno.serve(async (req) => {
           ref: stag.id,
         },
         livrets,
+        // Les documents envoyés à cette personne : jamais leur chemin, la page
+        // demande une URL signée au clic (action `envoi_url`).
+        envois: await envoisDe(stag.id),
         // Jamais la note du tuteur : seulement les compétences visées et ce que
         // la personne a déjà répondu.
         auto_eval: entretien ? null : autoEval(stag),
@@ -519,6 +536,25 @@ Deno.serve(async (req) => {
       if (error || !data) throw error || new Error('Signature impossible');
       await marquer(stag.id, String(r.id), { ouvert: true });
       return json({ url: data.signedUrl, filename: r.filename || null });
+    }
+
+    // ----------------------------------------------------------- ENVOI_URL
+    // Ouvrir un document que la crèche a envoyé à cette personne. Le lien est
+    // signé maintenant et vaut 5 minutes ; la première ouverture est datée.
+    if (action === 'envoi_url') {
+      const id = String(body.envoi_id || '');
+      const { data: e } = await sb.from('stagiaires_envois')
+        .select('id,stagiaire_id,bucket,path,filename,ouvert_le')
+        .eq('id', id).maybeSingle();
+      if (!e || String(e.stagiaire_id) !== String(stag.id)) {
+        return json({ erreur: 'Document introuvable' }, 404);
+      }
+      const { data, error } = await sb.storage.from(e.bucket || BUCKET).createSignedUrl(e.path, URL_TTL);
+      if (error || !data) throw error || new Error('Signature impossible');
+      if (!e.ouvert_le) {
+        await sb.from('stagiaires_envois').update({ ouvert_le: new Date().toISOString() }).eq('id', e.id);
+      }
+      return json({ url: data.signedUrl, filename: e.filename || null });
     }
 
     // ---------------------------------------------------- RESSOURCE_MARQUE

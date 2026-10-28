@@ -38,6 +38,7 @@ let STAG = null;   // {prenom, nom, creche_nom, date_debut, date_fin, expire_le,
 let PIECES = [];   // catalogue + fichiers déposés
 let AUTRES = [];   // pièces dont le type ne figure plus dans la liste demandée
 let RESS = [];     // ce que la crèche transmet (documents et liens)
+let ENVOIS = [];   // fichiers envoyés par la crèche à cette personne seulement
 let LIVRETS = [];  // documents préparés par la crèche, à lire et à signer
 let AUTO = null;   // auto-évaluation : {type:'eje', cibles, eje_comp, …} ou {type:'grille', profil, grille, …}, ou null
 
@@ -88,7 +89,7 @@ async function boot(){
 
 async function recharger(){
   const d=await appel('get');
-  STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];RESS=d.ressources||[];LIVRETS=d.livrets||[];AUTO=d.auto_eval||null;
+  STAG=d.stagiaire;PIECES=d.pieces||[];AUTRES=d.autres||[];RESS=d.ressources||[];LIVRETS=d.livrets||[];ENVOIS=d.envois||[];AUTO=d.auto_eval||null;
   const titre=STAG.mode==='entretien'?mots().titreEntretien:mots().titre;
   document.getElementById('titrePage').textContent=titre;
   document.title=titre+' — Koala Kids';
@@ -105,6 +106,30 @@ const fournie = p => (p.fichiers||[]).some(f=>f.statut!=='refuse');
 /* Étape ENTRETIEN du lien (avant l'acceptation) : le projet pédagogique à lire et le
    questionnaire à remplir, rien d'autre. Le dépôt des pièces et le livret
    d'accueil arrivent sur ce même lien, une fois le stage accepté (étape « documents »). */
+/* Documents que la crèche a envoyés à cette personne seulement (hors pièces
+   demandées). Le fichier s'ouvre par une URL signée demandée au clic. */
+function htmlEnvois(){
+  if(!ENVOIS.length)return '';
+  return '<h3 class="sec"><i class="ti ti-send"></i> Documents de la crèche</h3>'
+    +'<div class="card">'+ENVOIS.map((e,i)=>
+      '<div class="file"><i class="ti ti-file-text" style="color:var(--violet-l)"></i>'
+      +'<span class="nm"><b>'+esc(e.libelle||e.filename||'Document')+'</b>'
+      +(e.message?'<span class="aide" style="display:block;font-weight:400">'+esc(e.message)+'</span>':'')+'</span>'
+      +'<button title="Ouvrir" onclick="ouvrirEnvoi('+i+')"><i class="ti ti-external-link"></i></button></div>').join('')
+    +'</div>';
+}
+async function ouvrirEnvoi(i){
+  const e=ENVOIS[i];
+  if(!e)return;
+  try{
+    const d=await appel('envoi_url',{envoi_id:e.id});
+    window.open(d.url,'_blank','noopener');
+  }catch(err){
+    const m=(err.message||'').toLowerCase();
+    toast(m.includes('expir')?'Ce lien a expiré. Contactez la crèche.':'Ouverture impossible. Réessayez dans un instant.');
+  }
+}
+
 function renderEntretien(){
   const M=mots();
   const reste=RESS.filter(r=>!ressFaite(r)).length;
@@ -121,6 +146,7 @@ function renderEntretien(){
   }else{
     h+='<p class="hint">Rien à lire pour le moment : nous vous donnons rendez-vous pour l’entretien.</p>';
   }
+  h+=htmlEnvois();
   wrap.innerHTML=h;
   window.scrollTo(0,0);
 }
@@ -142,6 +168,8 @@ function render(){
     +'<br><br>Photographiez-les avec votre téléphone ou envoyez le PDF : '
     +'vous pouvez le faire en plusieurs fois, tout ce qui est envoyé est conservé.'
     +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(STAG.expire_le))+'</b>.</div>';
+
+  h+=htmlEnvois();
 
   /* Les documents à signer passent avant tout : ils engagent la personne. */
   if(LIVRETS.length){

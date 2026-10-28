@@ -43,7 +43,7 @@ function stgOpenFiche(id,typeDefaut){
   stgDocExtCache=[];
   const docExtZone=document.getElementById('stg-doc-ext-zone');
   if(docExtZone)docExtZone.innerHTML='';
-  if(s){stgRenderLien();stgRenderRessFiche();stgRenderExportZone(s);stgRenderDocs();stgRenderJours();stgRenderCollabZone();stgRenderEval();stgLoadDocExt(s.id);}
+  if(s){stgRenderLien();stgRenderRessFiche();stgRenderExportZone(s);stgRenderDocs();stgRenderEnvois();stgRenderJours();stgRenderCollabZone();stgRenderEval();stgLoadDocExt(s.id);}
   else{const ez=document.getElementById('stg-export-zone');if(ez)ez.innerHTML='';const ev=document.getElementById('stg-eval-zone');if(ev)ev.innerHTML='';}
   document.getElementById('modal-stagiaire-wrap').classList.add('open');
 }
@@ -259,6 +259,8 @@ async function stgSupprimer(){
   /* Les fichiers d'abord : la ligne supprimée, on n'aurait plus leur chemin et
      ils resteraient dans le bucket pour toujours. */
   const chemins=docs.map(d=>d.path).filter(Boolean);
+  /* Les envois partent en cascade avec la fiche : leurs fichiers aussi. */
+  stgEnvoisDe(stgFicheId).forEach(e=>{if(e.path)chemins.push(e.path);});
   if(chemins.length){
     const {error}=await sb.storage.from(STG_BUCKET).remove(chemins);
     if(error)console.warn('[Stagiaires] fichiers non supprimés',error.message);
