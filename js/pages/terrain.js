@@ -372,7 +372,7 @@ async function saveIncidentTerrain(){
     creche_id:PROF.creche_id,
     child_name:document.getElementById('incChild').value.trim(),
     incident_date:document.getElementById('incDate').value,
-    incident_time:document.getElementById('incTime').value,
+    incident_time:document.getElementById('incTime').value||null,
     type:type,
     severity:activeIncCategoryT==='repas'?'info':document.getElementById('incSeverity').value,
     description:desc,
