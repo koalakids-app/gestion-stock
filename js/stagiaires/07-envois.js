@@ -38,6 +38,7 @@ async function stgRenderEnvois(){
     +'<span style="font-size:10.5px;color:'+(e.ouvert_le?'var(--green)':'var(--muted)')+'">'
     +(e.ouvert_le?'ouvert le '+escHtml(new Date(e.ouvert_le).toLocaleDateString('fr-FR')):'pas encore ouvert')+'</span>'
     +'<button class="ibtn" style="width:26px;height:26px;font-size:13px;color:var(--red)" title="Retirer" onclick="stgSupprimerEnvoi(\''+e.id+'\')"><i class="ti ti-trash"></i></button>'
+    +(e.prevenu_le?'<span style="font-size:10.5px;color:var(--green)" title="E-mail envoyé"><i class="ti ti-mail-check"></i></span>':'')
     +(e.message?'<div style="flex:0 0 100%;font-size:11px;color:var(--muted)">'+escHtml(e.message)+'</div>':'')
     +'</div>').join('');
   h+='<div style="display:grid;gap:6px;margin-top:6px">'
@@ -71,7 +72,10 @@ async function stgEnvoiUpload(ev){
     if(ie){await sb.storage.from(STG_BUCKET).remove([path]);throw ie;}
     stgEnvoisCache.push(data);
     stgRenderEnvois();
-    showBanner('Document ajouté au lien de la personne ✅');
+    const fiche=stgCache.find(x=>String(x.id)===String(stgFicheId));
+    const prevenu=await stgPrevenirEnvoi(data,fiche);
+    showBanner(prevenu===true?'Document ajouté, e-mail envoyé ✅'
+      :'Document ajouté au lien de la personne ✅'+(prevenu?' — '+prevenu:''));
   }catch(e){
     console.error('[Stagiaires] envoi',e.message);
     if(st)st.textContent='⚠ Erreur : '+e.message;
@@ -97,4 +101,22 @@ async function stgSupprimerEnvoi(id){
   stgEnvoisCache=stgEnvoisCache.filter(x=>String(x.id)!==String(id));
   stgRenderEnvois();
   showBanner('Document retiré.');
+}
+
+/* E-mail automatique « un document vous attend ». Ne bloque jamais l'ajout :
+   renvoie true si parti, sinon la raison à afficher. */
+async function stgPrevenirEnvoi(envoi,fiche){
+  if(!fiche||!fiche.email)return 'pas d\'e-mail sur la fiche : la personne n\'est pas prévenue.';
+  if(!fiche.token||(fiche.token_expire_le&&new Date(fiche.token_expire_le)<new Date()))
+    return 'lien absent ou expiré : créez-le avant d\'espérer une réponse.';
+  try{
+    const {data,error}=await sb.functions.invoke('envoyer-envoi-stagiaire',{body:{envoi_id:envoi.id,expediteur:currentProfile&&currentProfile.name}});
+    if(error||!data||!data.ok)throw new Error((data&&data.error)||(error&&error.message)||'erreur');
+    envoi.prevenu_le=new Date().toISOString();
+    stgRenderEnvois();
+    return true;
+  }catch(e){
+    console.warn('[Stagiaires] e-mail envoi',e.message);
+    return 'e-mail non parti ('+e.message+').';
+  }
 }

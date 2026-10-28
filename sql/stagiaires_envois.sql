@@ -53,3 +53,7 @@ create policy stagiaires_envois_all on public.stagiaires_envois
         and r.creche_id::text = st.creche_id
     )
   );
+
+-- Date du dernier e-mail « un document vous attend » (edge function
+-- envoyer-envoi-stagiaire, à déployer avec la vérification JWT activée).
+alter table public.stagiaires_envois add column if not exists prevenu_le timestamptz;
