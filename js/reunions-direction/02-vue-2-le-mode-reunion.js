@@ -89,7 +89,7 @@ function adRenderPointsCreches(reprendreSaisie){
   if(reprendreSaisie!==false)adCapturePointsCreches();
   const creches=adCrechesOrdonnees();
   if(!creches.length){box.innerHTML='<div class="meta-txt" style="font-style:italic">Aucune crèche enregistrée.</div>';return;}
-  const ouvertes=adCache.filter(a=>!adEstClos(a.statut));
+  const ouvertes=adCache.filter(a=>!adEstClos(a.statut)&&!adEstMasquee(a));
   box.innerHTML=creches.map((c,i)=>{
     const ouv=ouvertes.filter(a=>String(a.creche_id||'')===String(c.id));
     const enRetard=ouv.filter(a=>adRetard(a)>0).length;
@@ -660,6 +660,7 @@ async function adEnsureCharge(){
   const{data,error}=await sb.from('actions_direction').select('*').order('numero',{ascending:true});
   if(error){adSchemaOk=false;return;}
   adCache=data||[];
+  await adChargerMasquees();
 }
 
 function adMesActions(){

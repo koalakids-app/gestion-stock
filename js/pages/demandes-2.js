@@ -865,6 +865,7 @@ actions: `
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li><strong>Nouvelle action</strong> crée une ligne avec responsable, thème, crèche concernée et échéance.</li>
   <li>Les filtres <strong>Non closes</strong>, <strong>En retard</strong>, <strong>Closes</strong> et <strong>Toutes</strong>, combinés aux sélecteurs responsable/thème/crèche et à la recherche, retrouvent une action rapidement.</li>
+  <li>Le bouton <strong>œil barré</strong> masque une action <em>pour vous seul·e</em> : elle disparaît de votre liste, de vos compteurs et de la revue, mais reste intacte chez les autres et dans les comptes rendus. Le filtre <strong>Masquées</strong> la retrouve, l'œil la réaffiche. À ne pas confondre avec la corbeille, qui supprime l'action pour tout le monde.</li>
   <li><strong>Export Excel</strong> télécharge la liste affichée.</li>
 </ul>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🎙️ Mode réunion</div>
