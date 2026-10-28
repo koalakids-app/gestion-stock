@@ -173,7 +173,9 @@ async function prCharger(enfants,d1,d2){
       }else if(prEstFerie(date)||prEstFerme(e.creche_id,date)){
         r.statut='ferie';
       }else{
-        const ab=(absEnf[e.id]||[]).find(a=>a.date_debut<=date&&a.date_fin>=date&&a.justifiee!==false);
+        const abAny=(absEnf[e.id]||[]).find(a=>a.date_debut<=date&&a.date_fin>=date);
+        if(abAny)r.absence=abAny; // sert à afficher / modifier le motif
+        const ab=abAny&&abAny.justifiee!==false?abAny:null;
         if(ab){
           if(prDiffJours(date,ab.date_debut)>=PR_CARENCE_JOURS)r.statut='absence_deduite';
           else{r.statut='absence_carence';r.forfait=true;}
@@ -198,16 +200,18 @@ function prCelluleGantt(r,enfantId,dateStr){
   const fo=prForfait();
   const pillO=function(t){return '<span style="display:inline-block;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:999px;background:#fbd9bd;color:#7a3d0c;white-space:nowrap">'+t+'</span>';};
   const lienDep='<a href="#" onclick="prOuvrirDepart(\''+enfantId+'\',\''+dateStr+'\');return false;" style="font-size:10.5px;color:var(--koala);font-weight:600">Corriger</a>';
-  const lien='<a href="#" onclick="prOuvrirAbsence(\''+enfantId+'\',\''+dateStr+'\');return false;" style="font-size:10.5px;color:var(--koala)">Absence</a>';
   if(!r)return '';
+  const ab=r.absence||null;
+  const lien='<a href="#" onclick="prOuvrirAbsence(\''+enfantId+'\',\''+dateStr+'\''+(ab?',\''+ab.id+'\'':'')+');return false;" style="font-size:10.5px;color:var(--koala);font-weight:600">'+(ab?'Modifier le motif':'Motif d’absence')+'</a>';
   const sub=function(t){return '<div style="font-size:10.5px;color:var(--muted);font-weight:400">'+t+'</div>';};
+  const motif=ab&&ab.motif?'<div title="'+escHtml(ab.motif)+'" style="font-size:10.5px;color:#7a3d0c;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">'+escHtml(ab.motif)+'</div>':'';
   if(r.statut==='pointe')return '<b>'+prFmtDuree(r.minutes)+'</b>'+(r.correctionId?sub('départ corrigé · '+prLienSuppr(r.correctionId)):(r.contratMin!=null?sub('contrat '+prFmtDuree(r.contratMin)):''));
   if(r.statut==='en_cours')return '<b>'+prFmtDuree(r.minutes)+'</b>'+sub('en cours');
   if(r.statut==='attente')return sub('en attente');
   if(r.statut==='ferie')return sub('férié ou fermé');
-  if(r.statut==='absence_deduite')return '<b style="font-weight:600;color:#0f6e56">Absence</b>'+sub('justifiée, non facturée');
-  const lib=r.statut==='depart_manquant'?'départ oublié':(r.statut==='absence_carence'?'carence':'non pointé');
-  return pillO('forfait'+(fo>0?' '+prEuro(fo):''))+sub(lib+(r.statut==='absence_carence'?'':' · '+(r.statut==='depart_manquant'?lienDep:lien)));
+  if(r.statut==='absence_deduite')return '<b style="font-weight:600;color:#0f6e56">Absence</b>'+motif+sub('justifiée, non facturée · '+lien);
+  const lib=r.statut==='depart_manquant'?'départ oublié':(r.statut==='absence_carence'?'carence':(ab?'absent':'non pointé'));
+  return pillO('forfait'+(fo>0?' '+prEuro(fo):''))+(r.statut==='depart_manquant'?'':motif)+sub(lib+' · '+(r.statut==='depart_manquant'?lienDep:lien));
 }
 
 /* ─────────────────────────── Vue semaine ─────────────────────────── */
@@ -371,7 +375,7 @@ function prExportMois(){
 }
 
 /* ─────────────────────────── Absences ─────────────────────────── */
-function prOuvrirAbsence(enfantId,dateStr){
+function prOuvrirAbsence(enfantId,dateStr,absId){
   let ov=document.getElementById('modal-abs-wrap');
   if(!ov){
     ov=document.createElement('div');
@@ -387,7 +391,7 @@ function prOuvrirAbsence(enfantId,dateStr){
       +'<div style="font-size:11.5px;color:var(--muted);margin-top:4px">Les 3 premiers jours restent facturés au forfait (délai de carence), les suivants ne le sont plus.</div></div>'
       +'<div class="fg"><label class="flabel">Signalée le (optionnel)</label><input type="date" class="finput" id="abs-signalee">'
       +'<div style="font-size:11.5px;color:var(--muted);margin-top:4px">Date à laquelle la famille a prévenu. Signalée au moins 15 jours avant le premier jour d\'absence, elle dispense de facturer le frais d\'entretien (repas et couches compris) sur les jours concernés.</div></div>'
-      +'<div class="fg"><label class="flabel">Motif (optionnel)</label><input class="finput" id="abs-motif" placeholder="Maladie, hospitalisation…"></div>'
+      +'<div class="fg"><label class="flabel">Motif (optionnel)</label><input class="finput" id="abs-motif" list="abs-motifs" placeholder="Maladie, hospitalisation…"><datalist id="abs-motifs"><option value="Maladie"><option value="Fièvre"><option value="Hospitalisation"><option value="Vacances de la famille"><option value="Convenance familiale"><option value="Enfant gardé par la famille"><option value="Non justifiée / non prévenue"></datalist></div>'
       +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn-cancel" onclick="closeModal(\'modal-abs-wrap\')">Annuler</button>'
       +'<button class="btn-primary" onclick="prEnregistrerAbsence()"><i class="ti ti-check"></i> Enregistrer</button></div></div>';
     document.body.appendChild(ov);
@@ -401,6 +405,15 @@ function prOuvrirAbsence(enfantId,dateStr){
   document.getElementById('abs-debut').value=d;document.getElementById('abs-fin').value=d;
   document.getElementById('abs-justifiee').checked=true;document.getElementById('abs-motif').value='';
   document.getElementById('abs-signalee').value='';
+  ov.dataset.absId='';
+  const exist=absId&&enfantId?(_prCache.get(enfantId+'|'+d)||{}).absence:null;
+  if(exist&&String(exist.id)===String(absId)){
+    ov.dataset.absId=exist.id;
+    document.getElementById('abs-debut').value=exist.date_debut;document.getElementById('abs-fin').value=exist.date_fin;
+    document.getElementById('abs-justifiee').checked=exist.justifiee!==false;
+    document.getElementById('abs-motif').value=exist.motif||'';
+    document.getElementById('abs-signalee').value=exist.signalee_le||'';
+  }
   ov.classList.add('open');
 }
 async function prEnregistrerAbsence(){
@@ -409,9 +422,13 @@ async function prEnregistrerAbsence(){
   if(!enfant_id||!date_debut||!date_fin){showBanner('Renseignez l’enfant et les dates.','error');return;}
   if(date_fin<date_debut){showBanner('La date de fin précède celle de début.','error');return;}
   const signalee_le=document.getElementById('abs-signalee').value||null;
-  const{error}=await sb.from('enfants_absences').insert({enfant_id:enfant_id,date_debut:date_debut,date_fin:date_fin,
+  const absId=document.getElementById('modal-abs-wrap').dataset.absId;
+  const champs={enfant_id:enfant_id,date_debut:date_debut,date_fin:date_fin,
     justifiee:document.getElementById('abs-justifiee').checked,motif:document.getElementById('abs-motif').value.trim()||null,
-    signalee_le:signalee_le,created_by:(currentUser&&currentUser.id)||null});
+    signalee_le:signalee_le};
+  const{error}=absId
+    ?await sb.from('enfants_absences').update(champs).eq('id',absId)
+    :await sb.from('enfants_absences').insert(Object.assign(champs,{created_by:(currentUser&&currentUser.id)||null}));
   if(error){console.warn('[PR] absence',error);showBanner('Absence non enregistrée : '+(error.message||'erreur')+'. La table enfants_absences existe-t-elle ?','error');return;}
   closeModal('modal-abs-wrap');
   showBanner('Absence enregistrée');
