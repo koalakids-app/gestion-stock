@@ -444,6 +444,7 @@ function enfRenderContrat(){
       + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
       + '<div style="font-weight:700;color:var(--koala-dark);font-size:13.5px">'+escHtml(periode)+'</div>'
       + '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'+ctBadge(st)
+      + (st!=='termine'?'<button type="button" class="btn-sm" style="color:var(--red)" onclick="ctFinOpen(\''+c.id+'\')"><i class="ti ti-calendar-off"></i> Mettre fin</button>':'')
       + '<button type="button" class="btn-sm" onclick="ctOpen(\''+c.id+'\')"><i class="ti ti-edit"></i> Modifier</button>'
       + '</div></div>'
       + '<div style="font-size:12px;color:var(--muted);margin-top:6px"><i class="ti ti-clock"></i> '+escHtml(horaires)+'</div>'
@@ -451,7 +452,7 @@ function enfRenderContrat(){
       + (c.notes?'<div style="font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap">'+escHtml(c.notes)+'</div>':'')
       + '</div>';
   }).join('')
-  + '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">Le bouton « Appliquer les contrats » du module Présences marque présents tous les enfants sur toute la durée de leurs contrats (de la date de début à la date de fin). Un contrat sans date de fin est ignoré.</p>';
+  + '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">Le bouton « Appliquer les contrats » du module Présences marque présents tous les enfants sur toute la durée de leurs contrats (de la date de début à la date de fin). Un contrat sans date de fin est ignoré. « Mettre fin » arrête un contrat en cours ou à venir avant son terme (date de fin et motif conservés dans la note) ; relancez ensuite « Appliquer les contrats » pour retirer les présences à venir.</p>';
 }
 
 /* Horaires propres à un jour : {"1":{"debut":"08:00","fin":"17:00"}}. Absent = horaires par défaut du contrat. */
@@ -573,6 +574,47 @@ async function ctDelete(){
   showBanner('Contrat supprim\u00e9.');
   await enfLoadContrats(enfFicheId);
 }
+
+/* Fin anticipée : ramène la date de fin du contrat à la date choisie (jamais
+   avant le début, jamais après l'échéance prévue) et trace la décision dans la
+   note du contrat. « Appliquer les contrats » retire ensuite les présences à
+   venir au-delà de cette date. */
+let ctFinId=null;
+function ctFinOpen(id){
+  const c=enfContratsCache.find(x=>String(x.id)===String(id));
+  if(!c) return;
+  ctFinId=c.id;
+  document.getElementById('ctfin-periode').textContent=ctFmtDate(c.date_debut)+' → '+(c.date_fin?ctFmtDate(c.date_fin):'sans terme');
+  const d=document.getElementById('ctfin-date');
+  d.value=(c.date_debut&&c.date_debut>todayStr())?c.date_debut:todayStr();
+  d.min=c.date_debut||'';
+  d.max=c.date_fin||'';
+  if(c.date_fin&&d.value>c.date_fin) d.value=c.date_fin;
+  document.getElementById('ctfin-motif').value='';
+  document.getElementById('modal-contrat-fin-wrap').classList.add('open');
+}
+async function ctFinSave(){
+  const c=enfContratsCache.find(x=>String(x.id)===String(ctFinId));
+  if(!c) return;
+  const fin=document.getElementById('ctfin-date').value;
+  if(!fin){ showBanner('Indiquez la date de fin du contrat.','error'); return; }
+  if(c.date_debut&&fin<c.date_debut){ showBanner('La fin ne peut pas précéder le début du contrat.','error'); return; }
+  if(c.date_fin&&fin>=c.date_fin){ showBanner('Cette date n’est pas antérieure à la fin prévue ('+ctFmtDate(c.date_fin)+').','error'); return; }
+  const motif=(document.getElementById('ctfin-motif').value||'').trim();
+  if(!confirm('Mettre fin au contrat le '+ctFmtDate(fin)+' ?')) return;
+  const trace='Fin anticipée décidée le '+ctFmtDate(todayStr())+(c.date_fin?' (fin prévue le '+ctFmtDate(c.date_fin)+')':'')+(motif?' — '+motif:'');
+  const ok=await dbUpdate('enfants_contrats',c.id,{
+    date_fin:fin,
+    notes:(c.notes?c.notes+'\n':'')+trace,
+    updated_at:new Date().toISOString()
+  });
+  if(!ok){ showBanner('Enregistrement impossible : '+((window._lastDbError)||'droits insuffisants'),'error'); return; }
+  closeModal('modal-contrat-fin-wrap');
+  showBanner('Contrat terminé le '+ctFmtDate(fin)+' ✅ — relancez « Appliquer les contrats » (Présences) pour retirer les présences à venir.');
+  await enfLoadContrats(enfFicheId);
+}
+window.ctFinOpen=ctFinOpen;
+window.ctFinSave=ctFinSave;
 
 window.enfLoadContrats=enfLoadContrats;
 window.enfRenderContrat=enfRenderContrat;
