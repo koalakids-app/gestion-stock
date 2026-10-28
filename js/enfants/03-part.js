@@ -452,7 +452,7 @@ function enfRenderContrat(){
       + (c.notes?'<div style="font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap">'+escHtml(c.notes)+'</div>':'')
       + '</div>';
   }).join('')
-  + '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">Le bouton « Appliquer les contrats » du module Présences marque présents tous les enfants sur toute la durée de leurs contrats (de la date de début à la date de fin). Un contrat sans date de fin est ignoré. Modifier les horaires d’un contrat met aussi à jour le Gantt des jours à venir (les journées pointées ou issues d’un planning importé ne changent pas). « Mettre fin » arrête un contrat en cours ou à venir avant son terme (date de fin et motif conservés dans la note) ; relancez ensuite « Appliquer les contrats » pour retirer les présences à venir.</p>';
+  + '<p style="font-size:11.5px;color:var(--muted);margin-top:6px">Le bouton « Appliquer les contrats » du module Présences marque présents tous les enfants sur toute la durée de leurs contrats (de la date de début à la date de fin). Un contrat sans date de fin est ignoré. Modifier les horaires d’un contrat met aussi à jour le Gantt des jours à venir (les journées pointées ne changent pas). Pour des horaires déjà modifiés auparavant, « Appliquer les contrats » remplace les horaires à venir qui diffèrent du contrat (il les liste avant de demander confirmation). « Mettre fin » arrête un contrat en cours ou à venir avant son terme (date de fin et motif conservés dans la note) ; relancez ensuite « Appliquer les contrats » pour retirer les présences à venir.</p>';
 }
 
 /* Horaires propres à un jour : {"1":{"debut":"08:00","fin":"17:00"}}. Absent = horaires par défaut du contrat. */
@@ -791,7 +791,23 @@ async function presApplyContrats(){
       return c.enfant_id===p.enfant_id&&c.date_fin<p.presence_date
         &&hh(c.heure_debut)===hh(p.heure_debut)&&hh(c.heure_fin)===hh(p.heure_fin);
     });
-    if(!perime) return;
+    /* Horaire resté sur une présence à venir alors que le contrat actuel (jour et date couverts)
+       en porte un autre : modifié depuis la génération, il est remplacé par celui du contrat. */
+    let decale=false;
+    if(!perime){
+      const wd=new Date(p.presence_date+'T00:00:00').getDay()||7;
+      let cur=null;
+      avecTerme.forEach(function(c){
+        if(c.enfant_id!==p.enfant_id||c.date_debut>p.presence_date||c.date_fin<p.presence_date) return;
+        if(ctParseJours(c.jours).indexOf(wd)<0) return;
+        if(!cur||(c.date_debut||'')>(cur.date_debut||'')) cur=c;
+      });
+      if(cur){
+        const h=ctHorairesJour(cur,wd);
+        decale=!!(h.debut&&h.fin)&&(hh(h.debut)!==hh(p.heure_debut)||hh(h.fin)!==hh(p.heure_fin));
+      }
+    }
+    if(!perime&&!decale) return;
     dejaVus.add(cle);
     if((datesParEnfant.get(p.enfant_id)||new Set()).has(p.presence_date)){
       const s=aliberer.get(p.enfant_id)||new Set();
@@ -812,7 +828,7 @@ async function presApplyContrats(){
   const nbJours=rows.length/2;
   const msgAjout=nbJours?('• '+nbEnfants+' enfant(s), '+nbJours+' jour(s) marqué(s) présent(s)\n'):'';
   const msgSuppr=nbSuppr?('• '+nbSuppr+' jour(s) retiré(s) (plus dans le contrat)\n'):'';
-  const msgReset=nbReset?('• '+nbReset+' jour(s) : ancien horaire d’un contrat terminé remplacé par celui du contrat actuel\n'):'';
+  const msgReset=nbReset?('• '+nbReset+' jour(s) : horaire de présence différent du contrat actuel, remplacé par celui du contrat\n'):'';
   if(!confirm('Appliquer les contrats :\n\n'+msgAjout+msgSuppr+msgReset+avertSansTerme+'\n\nContinuer ?')) return;
   // Insertion par lots : un contrat de plusieurs mois peut représenter des
   // centaines de lignes, mieux vaut ne pas tout envoyer en un seul appel.
