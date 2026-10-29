@@ -159,7 +159,7 @@ async function gouterCrecheOuvrir(dateDebut){
   ov.innerHTML='<div class="modal" style="max-width:520px;width:100%">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem"><h3 style="margin:0"><i class="ti ti-cookie"></i> Goûters de la crèche</h3>'
     +'<button class="btn-cancel" onclick="closeModal(\'modal-gouters-creche-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
-    +'<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Le goûter saisi remplace celui du traiteur pour votre crèche. Il y a un goûter pour les moyens (bébés 6-18 mois) et un pour les grands. Laissez une case vide pour garder le goûter du traiteur, sauf si vous cochez ci-dessous. Écrivez chaque goûter en séparant les produits par « / » (ex. <em>yaourt / madeleine / fruit</em>) ou ajoutez une recette : la liste des produits à commander se calcule à partir des effectifs.</p>'
+    +'<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Le goûter saisi remplace celui du traiteur pour votre crèche. Il y a un goûter pour les moyens (bébés 6-18 mois) et un pour les grands. Laissez une case vide pour garder le goûter du traiteur, sauf si vous cochez ci-dessous. Pour les moyens, une case par produit ; pour les grands, ajoutez autant de cases que nécessaire avec « + produit » (jusqu’à 6) ou ajoutez une recette : la liste des produits à commander se calcule à partir des effectifs.</p>'
     +selCreche
     +'<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 10px;cursor:pointer"><input type="checkbox" id="gc-tous" style="margin-top:3px"/><span><strong>Cette crèche fait tous ses goûters</strong><br><span style="color:var(--muted);font-size:12px">Un jour sans goûter saisi n\'affiche aucun goûter (pas celui du traiteur), et le bon de commande ne compte aucun goûter pour cette crèche.</span></span></label>'
     +'<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:0 0 10px;cursor:pointer"><input type="checkbox" id="gc-meme"/><span>Même goûter pour les moyens et les grands</span></label>'
@@ -219,10 +219,12 @@ async function gouterCrecheOuvrir(dateDebut){
         +'<input class="finput gc-eff-m gc-me2" type="number" min="0" max="99" title="Effectif" placeholder="Eff." style="width:64px;text-align:center;flex:none"/></div>'
         +'<div class="gc-rec-moyen"></div></div>'
         +'<div class="gc-grand-wrap"><span class="gc-lbl">Grands</span>'
-        +'<input class="finput gc-grand" maxlength="200" value="'+escHtml(e.grand)+'" data-traiteur="'+escHtml(t.grand)+'"/>'
+        +'<div class="gc-grand-items" data-traiteur="'+escHtml(t.grand)+'"></div>'
+        +'<button type="button" class="btn-cancel gc-grand-add" style="padding:3px 9px;font-size:12px;margin-top:4px"><i class="ti ti-plus"></i> produit</button>'
         +'<div class="gc-rec-grand"></div></div>'
         +'<div class="gc-alertes"></div></div>';
     }).join('');
+    Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b,i){grandInit(b,(existants[i+1]||{}).grand);});
     // Effectifs : valeurs enregistrées, sinon Présences › Semaine (même semaine), sinon à saisir.
     const eff=await gouterEffectifsSemaine(crecheId,semaine);
     enfantsJour=eff?eff.enfants:null;
@@ -246,6 +248,40 @@ async function gouterCrecheOuvrir(dateDebut){
     Array.prototype.forEach.call(zone.querySelectorAll('input'),function(el){el.addEventListener('input',majProduits);});
     Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),majRecettes);
     majMode();
+  }
+  /* Goûter des grands : une case par produit (3 ou 4 en général), enregistrées « a / b / c ». */
+  const GRAND_MAX=6;
+  function grandCases(b){return b.querySelectorAll('.gc-grand');}
+  function grandTexte(b){return Array.prototype.map.call(grandCases(b),function(el){return el.value.trim();}).filter(Boolean).join(' / ');}
+  function grandInit(b,texte){
+    const zoneG=b.querySelector('.gc-grand-items');zoneG.innerHTML='';
+    // « + » accepté aussi comme séparateur (anciennes saisies : pain + miel + pomme)
+    const parts=String(texte||'').split(/\s\+\s|\//).map(function(x){return x.trim();}).filter(Boolean);
+    (parts.length?parts:['']).forEach(function(v){grandAjouter(b,v,false);});
+    b.querySelector('.gc-grand-add').onclick=function(){grandAjouter(b,'',true);};
+    grandMaj(b);
+  }
+  function grandAjouter(b,v,focus){
+    const zoneG=b.querySelector('.gc-grand-items');
+    if(zoneG.children.length>=GRAND_MAX)return;
+    const d=document.createElement('div');d.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:4px';
+    d.innerHTML='<input class="finput gc-grand" maxlength="100" value="'+escHtml(v)+'"/><button type="button" class="btn-cancel gc-grand-x" title="Retirer" style="padding:4px 8px;flex:none"><i class="ti ti-x"></i></button>';
+    const inp=d.querySelector('input');
+    if(focus)inp.addEventListener('input',majProduits); // les cases du premier affichage sont écoutées avec les autres
+    d.querySelector('.gc-grand-x').onclick=function(){
+      if(zoneG.children.length>1)d.remove();else inp.value='';
+      grandMaj(b);majProduits();
+    };
+    zoneG.appendChild(d);
+    if(focus){grandMaj(b);inp.focus();}
+  }
+  function grandMaj(b){
+    const zoneG=b.querySelector('.gc-grand-items'),n=zoneG.children.length,tg=zoneG.dataset.traiteur;
+    Array.prototype.forEach.call(grandCases(b),function(el,i){
+      el.placeholder=tousEl.checked?'Aucun goûter ce jour':(i===0&&tg?'Traiteur : '+tg:'Produit '+(i+1)+(i===0?' (ex. pain complet)':''));
+      el.parentNode.querySelector('.gc-grand-x').style.visibility=n>1?'':'hidden';
+    });
+    b.querySelector('.gc-grand-add').style.display=n>=GRAND_MAX?'none':'';
   }
   /* Pastilles des recettes d'un jour, allergènes et alerte enfants concernés. */
   function majRecettes(b){
@@ -279,7 +315,7 @@ async function gouterCrecheOuvrir(dateDebut){
   /* Produits à commander de la semaine affichée, recalculés à chaque frappe. */
   function jourSaisi(b,p){
     const j=+b.dataset.jour;
-    const mo=moyenTexte(b),gr=memeEl.checked?mo:b.querySelector('.gc-grand').value;
+    const mo=moyenTexte(b),gr=memeEl.checked?mo:grandTexte(b);
     return{texte:p==='moyen'?mo:gr,recettes:recDe(j,p)};
   }
   function moyenTexte(b){return[b.querySelector('.gc-m1').value.trim(),b.querySelector('.gc-m2').value.trim()].filter(Boolean).join(' / ');}
@@ -310,12 +346,9 @@ async function gouterCrecheOuvrir(dateDebut){
     Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b){
       b.querySelector('.gc-grand-wrap').style.display=meme?'none':'';
       b.querySelector('.gc-lbl-moyen').textContent=meme?'':'Moyens (6-18 mois)';
-      const gr=b.querySelector('.gc-grand');
-      const tg=gr.dataset.traiteur;
-      const ph=function(t){return tousEl.checked?'Aucun goûter ce jour':(t?'Traiteur : '+t:'Ex. yaourt / madeleine / fruit');};
       b.querySelector('.gc-m1').placeholder=tousEl.checked?'Aucun goûter ce jour':'Produit 1 (ex. yaourt)';
       b.querySelector('.gc-m2').placeholder=tousEl.checked?'Aucun goûter ce jour':'Produit 2 (ex. compote)';
-      gr.placeholder=ph(tg);
+      grandMaj(b);
       majRecettes(b);
     });
     majProduits();
@@ -324,8 +357,8 @@ async function gouterCrecheOuvrir(dateDebut){
   memeEl.onchange=function(){
     if(!memeEl.checked){ // on sépare : les grands reprennent le goûter (et les recettes) des moyens
       Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b){
-        const gr=b.querySelector('.gc-grand'),j=+b.dataset.jour;
-        if(!gr.value)gr.value=moyenTexte(b);
+        const j=+b.dataset.jour;
+        if(!grandTexte(b))grandInit(b,moyenTexte(b));
         rec[j]=rec[j]||{moyen:[],grand:[]};
         if(!rec[j].grand.length)rec[j].grand=rec[j].moyen.slice();
       });
@@ -345,7 +378,7 @@ async function gouterCrecheOuvrir(dateDebut){
   async function enregistrer(vider){
     const lignes=Array.prototype.map.call(zone.querySelectorAll('.gc-bloc'),function(b){
       const moyen=vider?'':moyenTexte(b);
-      const grand=vider?'':(memeEl.checked?moyen:b.querySelector('.gc-grand').value.trim());
+      const grand=vider?'':(memeEl.checked?moyen:grandTexte(b));
       return{jour:+b.dataset.jour,moyen:moyen,grand:grand};
     });
     const aEcrire=lignes.filter(function(l){return l.moyen||l.grand;}).map(function(l){
