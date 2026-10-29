@@ -324,12 +324,12 @@ async function gouterCrecheOuvrir(dateDebut){
   function majProduits(){
     const jours=[];
     Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b,i){
-      const sm=jourSaisi(b,'moyen'),n1=effMoyen(b,1),n2=effMoyen(b,2);
+      const sm=jourSaisi(b,'moyen'),sg=jourSaisi(b,'grand'),tout=sm.recettes.concat(sg.recettes),n1=effMoyen(b,1),n2=effMoyen(b,2);
       // une ligne de produit par case (chacune avec son effectif) ; les recettes comptent pour le plus grand effectif
-      jours.push({sem:0,profil:'moyen',n:n1,texte:b.querySelector('.gc-m1').value,recettes:[],exclure:sm.recettes});
-      jours.push({sem:0,profil:'moyen',n:n2,texte:b.querySelector('.gc-m2').value,recettes:[],exclure:sm.recettes});
+      jours.push({sem:0,profil:'moyen',n:n1,texte:b.querySelector('.gc-m1').value,recettes:[],exclure:tout});
+      jours.push({sem:0,profil:'moyen',n:n2,texte:b.querySelector('.gc-m2').value,recettes:[],exclure:tout});
       jours.push({sem:0,profil:'moyen',n:Math.max(n1,n2),texte:'',recettes:sm.recettes});
-      const sg=jourSaisi(b,'grand');jours.push({sem:0,profil:'grand',n:effectif('grand',i),texte:sg.texte,recettes:sg.recettes});
+      jours.push({sem:0,profil:'grand',n:effectif('grand',i),texte:sg.texte,recettes:sg.recettes,exclure:tout});
     });
     const liste=gcLignes(jours);
     const box=document.getElementById('gc-produits');
