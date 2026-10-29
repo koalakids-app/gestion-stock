@@ -102,6 +102,24 @@ function gcLignes(jours){
   });
   return Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return a.nom.localeCompare(b.nom,'fr');});
 }
+/* Groupes de la commande : déduits du nom (texte libre), dans l'ordre d'affichage ; le premier qui correspond l'emporte. */
+const GC_GROUPES=[
+  ['Produits céréaliers',/biscuit|gateau|madeleine|cake|pain|brioche|cereale|farine|semoule|riz\b|pate|sable|galette|crepe|gaufre|vermicelle|flocon|avoine|boudoir|palet|quatre-quart|tartine|petit-beurre|petit beurre|biscotte|maizena|fecule|muesli|corn|bretzel/],
+  ['Produits laitiers',/lait|yaourt|yogourt|yaourth|fromage|petit.?suisse|creme|skyr|faisselle|kefir|dessert lacte|flan|danonino|liegeois|semoule au lait/],
+  ['Fruits',/fruit|pomme|poire|banane|compote|orange|clementine|mandarine|raisin|fraise|abricot|peche|kiwi|framboise|ananas|melon|cerise|prune|mangue|citron|myrtille|puree/],
+  ['Œufs, matières grasses et sucres',/oeuf|beurre|huile|margarine|sucre|miel|confiture|chocolat|vanille|levure|cacao|pepite|sirop|caramel|pate a tartiner/]
+];
+function gcGroupe(nom){
+  const n=rcNorm(nom);
+  for(let i=0;i<GC_GROUPES.length;i++)if(GC_GROUPES[i][1].test(n))return GC_GROUPES[i][0];
+  return'Autres produits';
+}
+/* [{e,…}] → [[groupe, lignes]] dans l'ordre des groupes, lignes déjà triées par nom. */
+function gcParGroupe(lignes){
+  const ordre=GC_GROUPES.map(function(g){return g[0];}).concat('Autres produits'),m={};
+  lignes.forEach(function(x){const g=gcGroupe(x.e.nom);(m[g]=m[g]||[]).push(x);});
+  return ordre.filter(function(g){return m[g];}).map(function(g){return[g,m[g]];});
+}
 function gcFmtLigne(e,q){return q?(e.ing?rcFmtQte(q,e.unite):String(Math.round(q))):'—';}
 function gcTotalLigne(e,filtre){
   let t=0;['moyen','grand'].forEach(function(p){if(!filtre||filtre===p)t+=e.v[p][0]+e.v[p][1];});
@@ -299,15 +317,16 @@ async function gouterRecapOuvrir(crecheId,semaine){
   function rendre(){
     const d=donnees(),prod=d.filter(function(x){return!x.e.ing;}),ing=d.filter(function(x){return x.e.ing;});
     const row=function(x){return'<tr><td>'+escHtml(x.e.nom)+'</td><td>'+gcFmtLigne(x.e,x.m)+'</td><td>'+gcFmtLigne(x.e,x.g)+'</td><td>'+gcFmtLigne(x.e,x.s1)+'</td><td>'+gcFmtLigne(x.e,x.s2)+'</td><td><strong>'+gcFmtLigne(x.e,x.t)+'</strong></td></tr>';};
-    const bloc=function(titre,l){return l.length?'<tr><td colspan="6" style="font-size:11px;font-weight:700;color:var(--koala);text-transform:uppercase;padding-top:10px">'+titre+'</td></tr>'+l.map(row).join(''):'';};
+    const SEC=[['Goûters standards (produits prêts à servir)',prod],['Éléments des recettes de goûter',ing]].filter(function(x){return x[1].length;});
+    const entete='<thead><tr style="font-size:11px;color:var(--muted);text-align:left"><th>Produit</th><th>Moyens</th><th>Grands</th><th>Sem. 1</th><th>Sem. 2</th><th>Total</th></tr></thead>';
+    const bloc=function(x){return'<div style="font-size:12px;font-weight:700;color:var(--koala);text-transform:uppercase;margin:12px 0 4px">'+x[0]+'</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+entete.replace('<th>Produit</th>','<th>'+(x[1]===ing?'Ingrédient':'Produit')+'</th>')+'<tbody>'+gcParGroupe(x[1]).map(function(g){return'<tr><td colspan="6" style="font-size:11px;font-weight:700;padding-top:8px;border-bottom:1px solid var(--border)">'+escHtml(g[0])+'</td></tr>'+g[1].map(row).join('');}).join('')+'</tbody></table></div>';};
     ov.innerHTML='<div class="modal" style="max-width:640px;width:100%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">'
       +'<h3 style="margin:0"><i class="ti ti-receipt"></i> Récapitulatif de commande — 2 semaines</h3>'
       +'<button class="btn-cancel" onclick="closeModal(\'modal-recap-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
       +'<p style="font-size:12px;color:var(--muted);margin:0 0 8px">Semaines du '+fmtSem(semaine)+' et du '+fmtSem(sem2)+' · goûters moyens (6-18 mois) et grands, à commander en une fois.</p>'
       +'<div style="display:flex;gap:6px;margin-bottom:8px">'+[['','Tous'],['moyen','Moyens'],['grand','Grands']].map(function(f){
         return'<button class="'+(f[0]===filtre?'btn-primary':'btn-cancel')+'" data-f="'+f[0]+'" style="padding:4px 12px;font-size:12px">'+f[1]+'</button>';}).join('')+'</div>'
-      +(d.length?'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="font-size:11px;color:var(--muted);text-align:left"><th>Produit</th><th>Moyens</th><th>Grands</th><th>Sem. 1</th><th>Sem. 2</th><th>Total</th></tr></thead><tbody>'
-        +bloc('Produits',prod)+bloc('Ingrédients des recettes',ing)+'</tbody></table></div>'
+      +(d.length?SEC.map(bloc).join('')
         :'<div class="empty-state"><i class="ti ti-shopping-cart-off"></i><p>Rien à commander : saisissez des goûters et les effectifs de ces deux semaines.</p></div>')
       +(Object.keys(alSet).length?'<div style="margin-top:10px;font-size:12px"><strong>Allergènes sur les 2 semaines :</strong> '+rcAllergenesHtml(Object.keys(alSet))+'</div>':'')
       +'<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px">'
@@ -315,7 +334,19 @@ async function gouterRecapOuvrir(crecheId,semaine){
       +'<button class="btn-cancel" id="rcp-print"><i class="ti ti-printer"></i> Imprimer</button>'
       +'<button class="btn-cancel" id="rcp-csv"><i class="ti ti-download"></i> Excel (CSV)</button></div></div>';
     Array.prototype.forEach.call(ov.querySelectorAll('[data-f]'),function(b){b.onclick=function(){filtre=b.dataset.f;rendre();};});
-    const tab=function(){return[['Produit','Moyens','Grands','Sem. 1','Sem. 2','Total']].concat(d.map(function(x){return[x.e.nom,gcFmtLigne(x.e,x.m),gcFmtLigne(x.e,x.g),gcFmtLigne(x.e,x.s1),gcFmtLigne(x.e,x.s2),gcFmtLigne(x.e,x.t)];}));};
+    const tab=function(){
+      const out=[];
+      SEC.forEach(function(x){
+        out.push([x[0]]);
+        out.push([x[1]===ing?'Ingrédient':'Produit','Moyens','Grands','Sem. 1','Sem. 2','Total']);
+        gcParGroupe(x[1]).forEach(function(g){
+          out.push(Object.assign(['› '+g[0]],{grp:1}));
+          g[1].forEach(function(y){out.push([y.e.nom,gcFmtLigne(y.e,y.m),gcFmtLigne(y.e,y.g),gcFmtLigne(y.e,y.s1),gcFmtLigne(y.e,y.s2),gcFmtLigne(y.e,y.t)]);});
+        });
+        out.push([]);
+      });
+      return out;
+    };
     document.getElementById('rcp-copy').onclick=function(){
       const txt=tab().map(function(l){return l.join('\t');}).join('\n');
       (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(function(){showBanner('Récapitulatif copié ✅');},function(){showBanner('Copie impossible.','error');});
@@ -329,7 +360,12 @@ async function gouterRecapOuvrir(crecheId,semaine){
       const w=window.open('','_blank');if(!w){showBanner('Autorisez les fenêtres pop-up pour imprimer.','error');return;}
       w.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Commande goûters</title><style>body{font-family:system-ui,sans-serif;margin:24px}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:5px;text-align:left}</style></head><body><h2>Commande de goûters — semaines du '
         +fmtSem(semaine)+' et du '+fmtSem(sem2)+(filtre?' ('+(filtre==='moyen'?'moyens':'grands')+')':'')+'</h2><table>'
-        +tab().map(function(l,i){return'<tr>'+l.map(function(c){return'<'+(i?'td':'th')+'>'+escHtml(c)+'</'+(i?'td':'th')+'>';}).join('')+'</tr>';}).join('')
+        +tab().map(function(l){
+          if(!l.length)return'<tr><td colspan="6">&nbsp;</td></tr>';
+          if(l.grp)return'<tr><td colspan="6" style="padding-top:6px"><i>'+escHtml(l[0])+'</i></td></tr>';
+          if(l.length===1)return'<tr><td colspan="6" style="padding-top:10px"><b>'+escHtml(l[0])+'</b></td></tr>';
+          const th=l[1]==='Moyens';
+          return'<tr>'+l.map(function(c){return'<'+(th?'th':'td')+'>'+escHtml(c)+'</'+(th?'th':'td')+'>';}).join('')+'</tr>';}).join('')
         +'</table>'+(Object.keys(alSet).length?'<p><b>Allergènes :</b> '+Object.keys(alSet).map(rcLibelleAllergene).join(', ')+'</p>':'')
         +'<script>window.onload=function(){window.print();}<\/script><div style="text-align:center;font-size:9px;color:#999;margin-top:14px">Application créée par David Bucari</div></body></html>');
       w.document.close();
