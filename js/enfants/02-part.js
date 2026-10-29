@@ -247,6 +247,10 @@ function packEnLigne(e){
   return (cachePack||[]).filter(d=>d.type==='remplissable'&&!d.pack_imprimer
     &&(!d.creche_id||String(d.creche_id)===String(e&&e.creche_id)));
 }
+function packConsulter(e){
+  return (cachePack||[]).filter(d=>d.type!=='remplissable'&&!d.pack_imprimer
+    &&(!d.creche_id||String(d.creche_id)===String(e&&e.creche_id)));
+}
 function packPapier(e){
   return (cachePack||[]).filter(d=>d.pack_imprimer
     &&(!d.creche_id||String(d.creche_id)===String(e&&e.creche_id)));
@@ -341,13 +345,19 @@ function enfEnLigneDocRowHtml(d){
 
 function enfEnLigneHtml(e){
   const docs=packEnLigne(e);
-  if(!docs.length)return '';
+  const aLire=packConsulter(e);
+  const lire=aLire.length?'<div style="border-top:1px solid var(--border);margin:10px 0 9px;padding-top:9px">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--koala-dark);margin-bottom:2px">Documents à consulter (joints au lien)</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:6px">La famille les télécharge depuis son lien ; rien à rendre.</div>'
+    +aLire.map(d=>'<div style="padding:3px 0;font-size:12.5px"><i class="ti ti-file-download" style="color:var(--koala);margin-right:6px"></i>'+escHtml(d.titre)+'</div>').join('')
+    +'</div>':'';
+  if(!docs.length)return lire;
   return '<div style="border-top:1px solid var(--border);margin:10px 0 9px;padding-top:9px">'
     +'<div style="font-size:12px;font-weight:700;color:var(--koala-dark);margin-bottom:2px">'
     +'Documents à remplir en ligne</div>'
     +'<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Si une famille n\'utilise pas encore l\'appli, importez ici la version papier du document une fois rempli.</div>'
     + docs.map(enfEnLigneDocRowHtml).join('')
-    +'</div>';
+    +'</div>'+lire;
 }
 
 /* Documents sanitaires hors liste : tout ce que le médecin fournit sans que
