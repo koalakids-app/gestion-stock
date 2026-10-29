@@ -23,7 +23,7 @@ function showPresenceTab(tab,btn){document.querySelectorAll('#main-presence .mod
    ═════════════════════════════════════════════════════════════════════════ */
 function mcmInit(){
   renderMcmIncidents();
-  if(!mcmMenusCache.length)mcmLoadMenusList();else mcmRenderMenusList();
+  mcmLoadMenusList();
   mcmRenderAvis();
 }
 function showMcmTab(tab,btn){
@@ -33,7 +33,7 @@ function showMcmTab(tab,btn){
   document.getElementById('mcm-'+tab).classList.add('active');
   mcmActiveTab=tab;
   if(tab==='incidents')renderMcmIncidents();
-  if(tab==='menus'){if(!mcmMenusCache.length)mcmLoadMenusList();else mcmRenderMenusList();}
+  if(tab==='menus')mcmLoadMenusList(); // relit aussi les goûters de la crèche
   if(tab==='avis')mcmRenderAvis();
   if(tab==='commande')mcmCmdRender();
 }
@@ -183,7 +183,13 @@ function mcmRenderMenusList(){
   mcmMenusCache.forEach(function(m){(weeks[m.date_debut]=weeks[m.date_debut]||[]).push(m);});
   const dates=Object.keys(weeks).sort();
   if(!dates.length){zone.innerHTML='<div class="empty-state"><i class="ti ti-tools-kitchen-2"></i><p>Aucun menu importé pour le moment.</p></div>';return;}
-  zone.innerHTML=dates.map(function(d){
+  // direction : choix de la crèche dont les goûters remplacent ceux du traiteur
+  const cid=gouterCrecheCourante();
+  const selCr=isDirection&&cacheCreches.length>1
+    ?'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px"><span style="color:var(--muted)">Goûters de la crèche :</span><select class="finput" style="width:auto" onchange="gcCrecheChoisie=this.value||null;mcmLoadMenusList()"><option value="">— traiteur seul —</option>'
+      +cacheCreches.map(function(c){return'<option value="'+escHtml(c.id)+'"'+(c.id===cid?' selected':'')+'>'+escHtml(c.name)+'</option>';}).join('')+'</select></div>'
+    :'';
+  zone.innerHTML=selCr+dates.map(function(d){
     const jours=weeks[d].sort(function(a,b){return a.jour-b.jour;});
     const parJour={};jours.forEach(function(j){parJour[j.jour]=j;});
     const semaineNum=jours[0].semaine_num;
