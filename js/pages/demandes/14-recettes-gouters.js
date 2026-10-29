@@ -291,10 +291,10 @@ async function gouterRecapOuvrir(crecheId,semaine){
         // moyens : un effectif par ligne de produit (yaourt, compote…) ; anciennes données : `moyens` pour tous
         const pm=String(tx.gouter||'').split('/'),t1=pm[0]||'',t2=pm.slice(1).join(' / ');
         const n1=ef.moyens_l1==null?(ef.moyens||0):ef.moyens_l1,n2=ef.moyens_l2==null?(ef.moyens||0):ef.moyens_l2;
-        const rm=recDe('moyen').concat(recDe('grand'));
+        const rmo=recDe('moyen'),rm=rmo.concat(recDe('grand'));
         jours.push({sem:si,profil:'moyen',n:n1,texte:t1,recettes:[],exclure:rm});
         jours.push({sem:si,profil:'moyen',n:n2,texte:t2,recettes:[],exclure:rm});
-        jours.push({sem:si,profil:'moyen',n:Math.max(n1,n2),texte:'',recettes:rm});
+        jours.push({sem:si,profil:'moyen',n:Math.max(n1,n2),texte:'',recettes:rmo});
         jours.push({sem:si,profil:'grand',n:ef.grands||0,texte:tx.gouter_grand||'',recettes:recDe('grand'),exclure:rm});
       }
     });
