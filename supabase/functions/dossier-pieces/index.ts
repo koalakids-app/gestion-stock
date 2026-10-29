@@ -100,7 +100,8 @@ Deno.serve(async (req) => {
     return erreur("erreur_lecture", 500);
   }
   if (!dossier) return erreur("introuvable", 404);
-  if (dossier.statut === "annule" || dossier.statut === "complet") return erreur("annule", 410);
+  if (dossier.statut === "complet") return erreur("complet", 410);
+  if (dossier.statut === "annule") return erreur("annule", 410);
   if (new Date(dossier.expire_le).getTime() < Date.now()) return erreur("expire", 410);
 
   if (action === "get") {
@@ -203,7 +204,9 @@ Deno.serve(async (req) => {
       .not("piece_key", "is", null);
     const clesRecues = new Set((recues || []).map((r) => r.piece_key));
     const complet = REQUIRED_PIECE_KEYS.every((k) => clesRecues.has(k));
-    if (complet) {
+    // `dernier:false` : la page envoie plusieurs fichiers d'un coup (ex. un bulletin
+    // par parent) et ne ferme le lien qu'après le dernier.
+    if (complet && body.dernier !== false) {
       await supabase.from("dossiers_pieces")
         .update({ statut: "complet" })
         .eq("id", dossier.id);
