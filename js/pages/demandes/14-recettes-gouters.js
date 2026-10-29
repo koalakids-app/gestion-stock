@@ -102,6 +102,24 @@ function gcLignes(jours){
   });
   return Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return a.nom.localeCompare(b.nom,'fr');});
 }
+/* Groupes de la commande : déduits du nom (texte libre), dans l'ordre d'affichage ; le premier qui correspond l'emporte. */
+const GC_GROUPES=[
+  ['Produits céréaliers',/biscuit|gateau|madeleine|cake|pain|brioche|cereale|farine|semoule|riz\b|pate|sable|galette|crepe|gaufre|vermicelle|flocon|avoine|boudoir|palet|quatre-quart|tartine|petit-beurre|petit beurre|biscotte|maizena|fecule|muesli|corn|bretzel/],
+  ['Produits laitiers',/lait|yaourt|yogourt|yaourth|fromage|petit.?suisse|creme|skyr|faisselle|kefir|dessert lacte|flan|danonino|liegeois|semoule au lait/],
+  ['Fruits',/fruit|pomme|poire|banane|compote|orange|clementine|mandarine|raisin|fraise|abricot|peche|kiwi|framboise|ananas|melon|cerise|prune|mangue|citron|myrtille|puree/],
+  ['Œufs, matières grasses et sucres',/oeuf|beurre|huile|margarine|sucre|miel|confiture|chocolat|vanille|levure|cacao|pepite|sirop|caramel|pate a tartiner/]
+];
+function gcGroupe(nom){
+  const n=rcNorm(nom);
+  for(let i=0;i<GC_GROUPES.length;i++)if(GC_GROUPES[i][1].test(n))return GC_GROUPES[i][0];
+  return'Autres produits';
+}
+/* [{e,…}] → [[groupe, lignes]] dans l'ordre des groupes, lignes déjà triées par nom. */
+function gcParGroupe(lignes){
+  const ordre=GC_GROUPES.map(function(g){return g[0];}).concat('Autres produits'),m={};
+  lignes.forEach(function(x){const g=gcGroupe(x.e.nom);(m[g]=m[g]||[]).push(x);});
+  return ordre.filter(function(g){return m[g];}).map(function(g){return[g,m[g]];});
+}
 function gcFmtLigne(e,q){return q?(e.ing?rcFmtQte(q,e.unite):String(Math.round(q))):'—';}
 function gcTotalLigne(e,filtre){
   let t=0;['moyen','grand'].forEach(function(p){if(!filtre||filtre===p)t+=e.v[p][0]+e.v[p][1];});
@@ -301,7 +319,7 @@ async function gouterRecapOuvrir(crecheId,semaine){
     const row=function(x){return'<tr><td>'+escHtml(x.e.nom)+'</td><td>'+gcFmtLigne(x.e,x.m)+'</td><td>'+gcFmtLigne(x.e,x.g)+'</td><td>'+gcFmtLigne(x.e,x.s1)+'</td><td>'+gcFmtLigne(x.e,x.s2)+'</td><td><strong>'+gcFmtLigne(x.e,x.t)+'</strong></td></tr>';};
     const SEC=[['Goûters standards (produits prêts à servir)',prod],['Éléments des recettes de goûter',ing]].filter(function(x){return x[1].length;});
     const entete='<thead><tr style="font-size:11px;color:var(--muted);text-align:left"><th>Produit</th><th>Moyens</th><th>Grands</th><th>Sem. 1</th><th>Sem. 2</th><th>Total</th></tr></thead>';
-    const bloc=function(x){return'<div style="font-size:12px;font-weight:700;color:var(--koala);text-transform:uppercase;margin:12px 0 4px">'+x[0]+'</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+entete.replace('<th>Produit</th>','<th>'+(x[1]===ing?'Ingrédient':'Produit')+'</th>')+'<tbody>'+x[1].map(row).join('')+'</tbody></table></div>';};
+    const bloc=function(x){return'<div style="font-size:12px;font-weight:700;color:var(--koala);text-transform:uppercase;margin:12px 0 4px">'+x[0]+'</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+entete.replace('<th>Produit</th>','<th>'+(x[1]===ing?'Ingrédient':'Produit')+'</th>')+'<tbody>'+gcParGroupe(x[1]).map(function(g){return'<tr><td colspan="6" style="font-size:11px;font-weight:700;padding-top:8px;border-bottom:1px solid var(--border)">'+escHtml(g[0])+'</td></tr>'+g[1].map(row).join('');}).join('')+'</tbody></table></div>';};
     ov.innerHTML='<div class="modal" style="max-width:640px;width:100%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">'
       +'<h3 style="margin:0"><i class="ti ti-receipt"></i> Récapitulatif de commande — 2 semaines</h3>'
       +'<button class="btn-cancel" onclick="closeModal(\'modal-recap-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
@@ -321,7 +339,10 @@ async function gouterRecapOuvrir(crecheId,semaine){
       SEC.forEach(function(x){
         out.push([x[0]]);
         out.push([x[1]===ing?'Ingrédient':'Produit','Moyens','Grands','Sem. 1','Sem. 2','Total']);
-        x[1].forEach(function(y){out.push([y.e.nom,gcFmtLigne(y.e,y.m),gcFmtLigne(y.e,y.g),gcFmtLigne(y.e,y.s1),gcFmtLigne(y.e,y.s2),gcFmtLigne(y.e,y.t)]);});
+        gcParGroupe(x[1]).forEach(function(g){
+          out.push(Object.assign(['› '+g[0]],{grp:1}));
+          g[1].forEach(function(y){out.push([y.e.nom,gcFmtLigne(y.e,y.m),gcFmtLigne(y.e,y.g),gcFmtLigne(y.e,y.s1),gcFmtLigne(y.e,y.s2),gcFmtLigne(y.e,y.t)]);});
+        });
         out.push([]);
       });
       return out;
@@ -341,6 +362,7 @@ async function gouterRecapOuvrir(crecheId,semaine){
         +fmtSem(semaine)+' et du '+fmtSem(sem2)+(filtre?' ('+(filtre==='moyen'?'moyens':'grands')+')':'')+'</h2><table>'
         +tab().map(function(l){
           if(!l.length)return'<tr><td colspan="6">&nbsp;</td></tr>';
+          if(l.grp)return'<tr><td colspan="6" style="padding-top:6px"><i>'+escHtml(l[0])+'</i></td></tr>';
           if(l.length===1)return'<tr><td colspan="6" style="padding-top:10px"><b>'+escHtml(l[0])+'</b></td></tr>';
           const th=l[1]==='Moyens';
           return'<tr>'+l.map(function(c){return'<'+(th?'th':'td')+'>'+escHtml(c)+'</'+(th?'th':'td')+'>';}).join('')+'</tr>';}).join('')
