@@ -17,8 +17,10 @@ const gcTousCache={}; // crecheId -> boolean
 
 /* Crèche dont on affiche les goûters : celle du référent ; pour la direction,
    la crèche sélectionnée dans Présences (sinon aucune : goûters du traiteur). */
+let gcCrecheChoisie=null; // direction : crèche choisie dans la liste des menus (MCM › Menus)
 function gouterCrecheCourante(){
   if(!isDirection)return currentProfile?.creche_id||null;
+  if(gcCrecheChoisie)return gcCrecheChoisie;
   try{return(typeof getPresenceCrecheId==='function'&&getPresenceCrecheId())||null;}catch(e){return null;}
 }
 function gouterCrechePeutEditer(){
