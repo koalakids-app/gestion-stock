@@ -76,6 +76,8 @@ async function boot(){
     const m=(e.message||'').toLowerCase();
     if(m.includes('expir'))
       etat('err','Lien expiré','Ce lien n’est plus valable. Contactez la crèche, elle vous en enverra un nouveau.','clock-off');
+    else if(m.includes('complet'))
+      etat('ok','Dossier complet','Merci, tous les documents demandés ont bien été reçus. Si vous avez oublié un document (par exemple le bulletin de salaire de l’autre parent), contactez la crèche : elle vous renverra un lien.','circle-check');
     else if(m.includes('introuvable')||m.includes('annule'))
       etat('err','Lien invalide','Ce lien ne correspond à aucun dossier actif. Vérifiez que vous l’avez copié en entier.','link-off');
     else
@@ -95,7 +97,9 @@ function render(){
   let h='<div class="intro">Merci de déposer ici les documents administratifs demandés pour le dossier de '
     +esc(ENFANT.prenom||'votre enfant')+'. Vous pouvez les envoyer en plusieurs fois, depuis votre téléphone : '
     +'une photo lisible suffit.'
-    +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(DOSSIER.expire_le))+'</b>.</div>';
+    +'<br><br>Ce lien est valable jusqu’au <b>'+esc(dfr(DOSSIER.expire_le))+'</b>.'
+    +'<br><br><b>Important :</b> vous pouvez ajouter plusieurs fichiers pour un même document (par exemple un bulletin de salaire par parent). '
+    +'Dès que tous les documents demandés sont reçus, le lien se ferme automatiquement : vérifiez donc que vous avez tout mis avant d’envoyer le dernier.</div>';
 
   h+='<div class="card"><div style="font-weight:700;font-size:14px">Votre avancement</div>'
     +'<div class="prog"><i style="width:'+pct+'%"></i></div>'
@@ -124,7 +128,7 @@ function render(){
       +'<button class="btn '+(dernier?'btn-g':'btn-p')+'" onclick="document.getElementById(\''+inputId+'\').click()">'
       +'<i class="ti ti-upload"></i> '+(dernier?'Ajouter':'Déposer')+'</button>'
       +'</div>'
-      +'<input type="file" id="'+inputId+'" accept="image/*,application/pdf" style="display:none" '
+      +'<input type="file" multiple id="'+inputId+'" accept="image/*,application/pdf" style="display:none" '
       +'onchange="deposer(\''+p.key+'\',this)">'
       +'<span id="st-'+p.key+'" style="display:block;margin-top:8px;font-size:12px;color:var(--muted)"></span>'
       +'</div>';
@@ -176,6 +180,7 @@ async function reduireImage(file,type){
 
 function messageErreur(e){
   const m=(e&&e.message||'').toLowerCase();
+  if(m.includes('complet'))return 'Le dossier est complet : le lien est maintenant fermé. Contactez la crèche si un document manque.';
   if(m.includes('expir'))return 'Ce lien a expiré. Contactez la crèche.';
   if(m.includes('fichier_trop_volumineux'))return 'Fichier trop volumineux (8 Mo max). Reprenez la photo.';
   if(m.includes('format'))return 'Format non accepté : envoyez une photo (JPG, PNG) ou un PDF.';
@@ -186,26 +191,42 @@ function messageErreur(e){
 }
 
 async function deposer(key,input){
-  const file=input.files&&input.files[0];
-  if(!file)return;
+  const fichiers=[...(input.files||[])];
+  if(!fichiers.length)return;
+  const erreurStatut=t=>{const st=document.getElementById('st-'+key);if(st){st.textContent=t;st.style.color='var(--red)';}};
   const status=document.getElementById('st-'+key);
-  if(file.size>MAX_BYTES*3){
-    if(status){status.textContent='⚠ Fichier trop volumineux (8 Mo max). Compressez-le ou reprenez la photo.';status.style.color='var(--red)';}
+  if(fichiers.some(f=>f.size>MAX_BYTES*3)){
+    erreurStatut('⚠ Fichier trop volumineux (8 Mo max). Compressez-le ou reprenez la photo.');
     input.value='';
     return;
   }
-  if(status){status.textContent='⏳ Envoi en cours…';status.style.color='var(--muted)';}
+  /* Ce dépôt va-t-il compléter le dossier ? Alors le lien se fermera : on demande confirmation. */
+  const manquants=PIECES.filter(p=>!p.optionnel&&!piecesPour(p.key).length).map(p=>p.key);
+  if(manquants.length===1&&manquants[0]===key&&!confirm(
+    'Avez-vous bien mis tous les documents nécessaires en ligne ?\n\n'
+    +'Ce dépôt est le dernier document demandé : une fois envoyé, ce lien sera fermé et vous ne pourrez plus rien ajouter.\n\n'
+    +'Pensez aux documents des deux parents (bulletins de salaire, pièces d’identité…). '
+    +'Vous pouvez sélectionner plusieurs fichiers à la fois.\n\nOK : envoyer et terminer — Annuler : revenir en arrière')){
+    input.value='';
+    return;
+  }
+  const avant=PIECES_DEPOSEES.length;
   try{
-    const r=await reduireImage(file,typeFichier(file));
-    if(!Object.values(TYPES_EXT).includes(r.type))throw new Error('format');
-    if(r.blob.size>MAX_BYTES)throw new Error('fichier_trop_volumineux');
-    const b64=await fileToBase64(r.blob);
-    await appel('upload',{piece_key:key,filename:file.name,content_type:r.type,content_base64:b64});
-    PIECES_DEPOSEES.unshift({piece_key:key,filename:file.name,created_at:new Date().toISOString()});
-    toast('Document envoyé ✅');
+    for(let i=0;i<fichiers.length;i++){
+      const file=fichiers[i];
+      if(status){status.textContent='⏳ Envoi en cours… ('+(i+1)+'/'+fichiers.length+')';status.style.color='var(--muted)';}
+      const r=await reduireImage(file,typeFichier(file));
+      if(!Object.values(TYPES_EXT).includes(r.type))throw new Error('format');
+      if(r.blob.size>MAX_BYTES)throw new Error('fichier_trop_volumineux');
+      const b64=await fileToBase64(r.blob);
+      await appel('upload',{piece_key:key,filename:file.name,content_type:r.type,content_base64:b64,dernier:i===fichiers.length-1});
+      PIECES_DEPOSEES.unshift({piece_key:key,filename:file.name,created_at:new Date().toISOString()});
+    }
+    toast(fichiers.length>1?'Documents envoyés ✅':'Document envoyé ✅');
     render();
   }catch(e){
-    if(status){status.textContent='⚠ '+messageErreur(e);status.style.color='var(--red)';}
+    if(PIECES_DEPOSEES.length!==avant)render();
+    erreurStatut('⚠ '+messageErreur(e));
   }
   input.value='';
 }
