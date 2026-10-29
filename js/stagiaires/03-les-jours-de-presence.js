@@ -9,6 +9,7 @@ function stgRenderJours(){
   const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
   const jours=stgJoursDe(stgFicheId);
   const presents=jours.filter(j=>!j.absent).length;
+  const horsPer=stgJoursHorsPeriode(s,jours);
 
   let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px">'
     +'<div style="font-weight:700;font-size:13px"><i class="ti ti-calendar-week" style="color:var(--koala)"></i> Jours de présence</div>'
@@ -23,6 +24,10 @@ function stgRenderJours(){
     +'style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden" onchange="stgImportPdf(event)">'
     +'<button class="btn-sm" onclick="stgOuvrirSemaine()"><i class="ti ti-calendar-plus"></i> Ajouter une semaine</button>'
     +'<button class="btn-sm" onclick="stgAjouterJour()"><i class="ti ti-plus"></i> Ajouter un jour</button>'
+    +(horsPer.length
+      ?'<button class="btn-sm" onclick="stgRetirerHorsPeriode()" style="border-color:var(--red);color:var(--red);background:var(--red-light)">'
+        +'<i class="ti ti-calendar-off"></i> Retirer les '+horsPer.length+' jour'+(horsPer.length>1?'s':'')+' hors période</button>'
+      :'')
     +'</div></div>';
 
   if(!jours.length){
@@ -52,6 +57,41 @@ function stgRenderJours(){
   zone.innerHTML=h;
 }
 
+/* Les jours situés avant la date de début ou après la date de fin ENREGISTRÉES
+   de la fiche : typiquement une année mal saisie (2027 au lieu de 2026) suivie
+   d'un « Générer les jours ouvrés ». Sans dates sur la fiche, rien n'est hors période. */
+function stgJoursHorsPeriode(s,jours){
+  if(!s||(!s.date_debut&&!s.date_fin))return [];
+  return jours.filter(j=>{
+    const iso=String(j.jour).slice(0,10);
+    return (s.date_debut&&iso<s.date_debut)||(s.date_fin&&iso>s.date_fin);
+  });
+}
+
+async function stgRetirerHorsPeriode(){
+  const s=stgCache.find(x=>String(x.id)===String(stgFicheId));
+  if(!s)return;
+  const hors=stgJoursHorsPeriode(s,stgJoursDe(stgFicheId));
+  if(!hors.length)return showBanner('Aucun jour hors période.');
+  const isos=hors.map(j=>String(j.jour).slice(0,10)).sort();
+  if(!confirm(hors.length+' jour'+(hors.length>1?'s':'')+' vont être retirés du calendrier de cette stagiaire '
+    +'(du '+stgDateFr(isos[0])+' au '+stgDateFr(isos[isos.length-1])+'), car ils sont en dehors de la période '
+    +stgDateFr(s.date_debut)+' → '+stgDateFr(s.date_fin)+'.\n\n'
+    +'Les dates de la fiche doivent être justes et enregistrées. Cette action est définitive.'))return;
+  const ids=hors.map(j=>j.id);
+  for(let i=0;i<ids.length;i+=100){
+    const paquet=ids.slice(i,i+100);
+    const {error}=await sb.from('stagiaires_jours').delete().in('id',paquet);
+    if(error){
+      stgRenderJours();stgRender();stgRenderCal();
+      return showBanner('Retrait interrompu : '+error.message,'error');
+    }
+    stgJoursCache=stgJoursCache.filter(j=>!paquet.includes(j.id));
+  }
+  stgRenderJours();stgRender();stgRenderCal();
+  showBanner(hors.length+' jour'+(hors.length>1?'s':'')+' retiré'+(hors.length>1?'s':'')+' ✅');
+}
+
 /* Les jours ouvrés de la période, sans écraser ce qui existe déjà : régénérer
    après avoir retiré un mercredi ne doit pas le faire revenir. */
 async function stgGenererJours(){
@@ -60,6 +100,11 @@ async function stgGenererJours(){
   if(!s.date_debut||!s.date_fin)
     return showBanner('Renseignez les dates de début et de fin, puis enregistrez.','error');
 
+  if(s.date_fin<s.date_debut)
+    return showBanner('La date de fin est avant la date de début : vérifiez l\'année.','error');
+  const duree=(new Date(s.date_fin+'T12:00:00')-new Date(s.date_debut+'T12:00:00'))/864e5;
+  if(duree>366&&!confirm('La période dure plus d\'un an ('+stgDateFr(s.date_debut)+' → '+stgDateFr(s.date_fin)
+    +'). Vérifiez l\'année de la date de fin.\n\nGénérer quand même ?'))return;
   const existants=new Set(stgJoursDe(stgFicheId).map(j=>String(j.jour)));
   const d=new Date(s.date_debut+'T12:00:00');
   const fin=new Date(s.date_fin+'T12:00:00');

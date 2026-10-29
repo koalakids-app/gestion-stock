@@ -790,7 +790,7 @@ stagiaires: `
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📅 Le calendrier</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
-  <li>Dans la fiche, <strong>Générer les jours ouvrés</strong> remplit la période du lundi au vendredi</li>
+  <li>Dans la fiche, <strong>Générer les jours ouvrés</strong> remplit la période du lundi au vendredi (un message prévient si la période dépasse un an : vérifiez l'année de la date de fin). Si des jours ont été générés par erreur, corrigez d'abord les dates de la fiche et <strong>enregistrez</strong> : le bouton rouge <strong>Retirer les N jours hors période</strong> apparaît alors et supprime d'un coup tout ce qui est avant la date de début ou après la date de fin</li>
   <li><strong>Importer un calendrier (PDF)</strong> reprend le calendrier envoyé par le centre de formation : l'application lit les douze colonnes de mois et vous demande ce que signifie chaque lettre (présence à la crèche, centre de formation, ou rien). Les jours déjà saisis ne sont jamais écrasés, et rien n'est enregistré avant votre validation. Un calendrier scanné (image) n'est pas lisible : il ne contient pas de texte</li>
   <li><strong>Ajouter une semaine</strong> remplit une semaine type (lundi au vendredi par défaut, jours à cocher, horaires libres) et sait la <strong>répéter</strong> jusqu'à 12 semaines — la semaine est toujours calée sur le lundi</li>
   <li>Cliquez sur un jour pour changer ses <strong>horaires</strong>, le marquer <strong>absent</strong> ou le retirer</li>
