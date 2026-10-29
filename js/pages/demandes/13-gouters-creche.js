@@ -32,7 +32,16 @@ async function gouterCrecheMap(crecheId,force){
   try{
     const{data,error}=await sb.from('menus_gouters_creche').select('date_debut,jour,gouter,gouter_grand').eq('creche_id',crecheId);
     if(error)throw error;
-    (data||[]).forEach(function(r){(map[r.date_debut]=map[r.date_debut]||{})[r.jour]={moyen:r.gouter||'',grand:r.gouter_grand||''};});
+    (data||[]).forEach(function(r){(map[r.date_debut]=map[r.date_debut]||{})[r.jour]={moyen:r.gouter||'',grand:r.gouter_grand||'',rm:[],rg:[]};});
+    // le titre des recettes choisies s'affiche avec le goûter du jour (gouterAffiche)
+    const{data:rr,error:errRec}=await sb.from('gouters_creche_recettes').select('date_debut,jour,profil,recettes(nom)').eq('creche_id',crecheId);
+    if(errRec)console.warn('[Goûters crèche] recettes',errRec);
+    (rr||[]).forEach(function(r){
+      if(!r.recettes)return;
+      const sem=map[r.date_debut]=map[r.date_debut]||{};
+      const j=sem[r.jour]=sem[r.jour]||{moyen:'',grand:'',rm:[],rg:[]};
+      (r.profil==='moyen'?j.rm:j.rg).push(r.recettes.nom);
+    });
     const{data:opt,error:errOpt}=await sb.from('gouters_creche_options').select('tous_gouters').eq('creche_id',crecheId).maybeSingle();
     if(errOpt)throw errOpt;
     gcTousCache[crecheId]=!!(opt&&opt.tous_gouters);
@@ -47,7 +56,7 @@ function gouterProfil(champ){return champ==='bb18_gouter'?'moyen':'grand';}
    sinon celui du traiteur. `creche` vaut true quand il vient de la crèche. */
 function gouterAffiche(gcSemaine,jour,gouterTraiteur,tous,profil){
   const g=gcSemaine&&gcSemaine[jour];
-  const t=g&&g[profil];
+  const t=g&&[].concat((profil==='moyen'?g.rm:g.rg)||[],g[profil]||[]).filter(Boolean).join(' / ');
   if(t)return{texte:t,creche:true};
   return{texte:tous?'':(gouterTraiteur||''),creche:false}; // « fait tous ses goûters » : jamais celui du traiteur
 }
@@ -324,12 +333,12 @@ async function gouterCrecheOuvrir(dateDebut){
   function majProduits(){
     const jours=[];
     Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b,i){
-      const sm=jourSaisi(b,'moyen'),n1=effMoyen(b,1),n2=effMoyen(b,2);
+      const sm=jourSaisi(b,'moyen'),sg=jourSaisi(b,'grand'),tout=sm.recettes.concat(sg.recettes),n1=effMoyen(b,1),n2=effMoyen(b,2);
       // une ligne de produit par case (chacune avec son effectif) ; les recettes comptent pour le plus grand effectif
-      jours.push({sem:0,profil:'moyen',n:n1,texte:b.querySelector('.gc-m1').value,recettes:[]});
-      jours.push({sem:0,profil:'moyen',n:n2,texte:b.querySelector('.gc-m2').value,recettes:[]});
+      jours.push({sem:0,profil:'moyen',n:n1,texte:b.querySelector('.gc-m1').value,recettes:[],exclure:tout});
+      jours.push({sem:0,profil:'moyen',n:n2,texte:b.querySelector('.gc-m2').value,recettes:[],exclure:tout});
       jours.push({sem:0,profil:'moyen',n:Math.max(n1,n2),texte:'',recettes:sm.recettes});
-      const sg=jourSaisi(b,'grand');jours.push({sem:0,profil:'grand',n:effectif('grand',i),texte:sg.texte,recettes:sg.recettes});
+      jours.push({sem:0,profil:'grand',n:effectif('grand',i),texte:sg.texte,recettes:sg.recettes,exclure:tout});
     });
     const liste=gcLignes(jours);
     const box=document.getElementById('gc-produits');
