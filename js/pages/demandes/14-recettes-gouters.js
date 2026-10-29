@@ -75,7 +75,7 @@ function rcFmtQte(q,u){
 function rcUniteBase(q,u){return u==='kg'?{q:q*1000,u:'g'}:u==='l'?{q:q*100,u:'cl'}:{q:q,u:u};}
 
 /* ── Calcul des produits à commander ─────────────────────────────────────────
-   jours : [{sem:0|1, profil:'moyen'|'grand', n, texte, recettes:[recette]}]
+   jours : [{sem:0|1, profil:'moyen'|'grand', n, texte, recettes:[recette], exclure?:[recette]}] (exclure : recettes dont le nom, présent dans le texte, n'est pas un produit à acheter)
    Retourne [{nom,unite,ing,v:{moyen:[s1,s2],grand:[s1,s2]}}] trié par nom. */
 function gcLignes(jours){
   const map={};
@@ -85,7 +85,7 @@ function gcLignes(jours){
   }
   jours.forEach(function(j){
     if(!j.n)return;
-    const noms={};(j.recettes||[]).forEach(function(r){noms[rcNorm(r.nom)]=1;});
+    const noms={};(j.exclure||j.recettes||[]).forEach(function(r){noms[rcNorm(r.nom)]=1;});
     if(!/f[ée]ri[ée]/i.test(j.texte||'')){
       String(j.texte||'').split('/').forEach(function(p){
         const nom=p.trim().replace(/\s+/g,' '),cle=rcNorm(nom);
@@ -291,9 +291,10 @@ async function gouterRecapOuvrir(crecheId,semaine){
         // moyens : un effectif par ligne de produit (yaourt, compote…) ; anciennes données : `moyens` pour tous
         const pm=String(tx.gouter||'').split('/'),t1=pm[0]||'',t2=pm.slice(1).join(' / ');
         const n1=ef.moyens_l1==null?(ef.moyens||0):ef.moyens_l1,n2=ef.moyens_l2==null?(ef.moyens||0):ef.moyens_l2;
-        jours.push({sem:si,profil:'moyen',n:n1,texte:t1,recettes:[]});
-        jours.push({sem:si,profil:'moyen',n:n2,texte:t2,recettes:[]});
-        jours.push({sem:si,profil:'moyen',n:Math.max(n1,n2),texte:'',recettes:recDe('moyen')});
+        const rm=recDe('moyen');
+        jours.push({sem:si,profil:'moyen',n:n1,texte:t1,recettes:[],exclure:rm});
+        jours.push({sem:si,profil:'moyen',n:n2,texte:t2,recettes:[],exclure:rm});
+        jours.push({sem:si,profil:'moyen',n:Math.max(n1,n2),texte:'',recettes:rm});
         jours.push({sem:si,profil:'grand',n:ef.grands||0,texte:tx.gouter_grand||'',recettes:recDe('grand')});
       }
     });
