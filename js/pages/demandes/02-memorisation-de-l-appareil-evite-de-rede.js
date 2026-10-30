@@ -699,7 +699,10 @@ function renderDemandsOnly(){
       const msgCount=cacheMessages.filter(m=>m.demande_id===d.id).length;
       const peutTous=isDirection||d.referent_id===currentProfile?.id;
       const bloc=(x,nom)=>{const n=cacheMessages.filter(m=>m.demande_id===x.id).length;const bd=cacheMessageBrouillons.some(b=>b.demande_id===x.id);return '<div class="tblock" onclick="openThread(\''+x.id+'\')" title="Ouvrir le fil de discussion"><div class="tb-name"><i class="ti ti-message-2" style="font-size:12px"></i> '+escHtml(nom)+'</div><div class="tb-sub">'+(x.status==='traite'?'✅ Traitée':'⏳ En attente')+' · '+(n>0?n+' réponse'+(n>1?'s':''):'Discuter')+(bd?' · 📝 Brouillon':'')+'</div></div>';};
-      const blocs='<div class="tblocks">'+(grouped?g.map(x=>bloc(x,x.referent_name||'—')).join(''):bloc(d,'Discussion'))+(grouped&&peutTous?'<button class="tball" onclick="openThread(\''+d.id+'\',true)" title="Répondre à tous les destinataires"><i class="ti ti-messages"></i> Répondre à tous</button>':'')+'</div>';
+      // Destinataire d'un envoi groupé : bouton direct pour répondre à l'expéditeur (dans son propre fil).
+      const maLigne=grouped&&d.referent_id!==myId?g.find(x=>x.to_referent_id===myId):null;
+      const repondreExp=maLigne?'<button class="tball tbrep" onclick="openThread(\''+maLigne.id+'\')" title="Répondre à '+escHtml(demandeDeNom(d))+' (seul)"><i class="ti ti-arrow-back-up"></i> Répondre à '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'</button>':'';
+      const blocs='<div class="tblocks">'+repondreExp+(grouped?g.map(x=>bloc(x,(x.referent_name||'—')+(maLigne&&x.id===maLigne.id?' (vous)':''))).join(''):bloc(d,'Discussion'))+(grouped&&peutTous?'<button class="tball" onclick="openThread(\''+d.id+'\',true)" title="Répondre à tous les destinataires"><i class="ti ti-messages"></i> Répondre à tous</button>':'')+'</div>';
       const deNom=demandeDeNom(d)||'—';
       const aNom=grouped?g.map(x=>x.referent_name).filter(Boolean).join(', '):demandeANom(d);
       const ligneDeA='<div class="dline"><span class="dl-lbl">De</span><b>'+hl(deNom)+'</b><span class="dl-arrow">→</span><span class="dl-lbl">À</span><b>'+hl(aNom||'—')+'</b><span class="dl-date">'+dateLabel+'</span></div>';
