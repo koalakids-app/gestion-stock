@@ -143,6 +143,8 @@ function mfaGateSwitchView(id){
 }
 async function mfaGateCheckAndProceed(){
   try{
+    // Session ouverte par code image sur la tablette de la crèche (cf. js/terrain-code-image.js).
+    if(await kkTciSessionActive(sb)){kkTciVerrouillageAuto(sb);await infirmerieGrantAccess();return;}
     const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
     if(error)throw error;
     if(data.currentLevel==='aal2'){await infirmerieGrantAccess();return;}
@@ -933,7 +935,7 @@ ne pr\u00eatez pas votre session.</p>
 /* ================= EVENEMENTS ================= */
 document.getElementById('btnLogin').onclick=doLogin;
 document.getElementById('liPwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-document.getElementById('btnLogout').onclick=async()=>{await sb.auth.signOut();location.reload();};
+document.getElementById('btnLogout').onclick=()=>kkTciDeconnecter(sb);
 document.getElementById('btnNotice').onclick=()=>{document.getElementById('noticeBody').innerHTML=NOTICE;openOv('ovNotice');};
 document.getElementById('qSoin').onclick=()=>openEntry('soin');
 document.getElementById('qTrait').onclick=()=>openEntry('traitement');
