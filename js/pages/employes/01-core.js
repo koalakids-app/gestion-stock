@@ -270,6 +270,9 @@ function selectCreche(id){
   loadEmployes();
 }
 let ACCES_TERRAIN=new Set();
+/* user_id des comptes réellement activés (au moins une connexion). null tant
+   que la fonction n'a pas répondu : on n'affiche alors pas de statut trompeur. */
+let COMPTES_ACTIFS=null;
 async function loadEmployes(){
   if(!crecheId)return;
   const{data,error}=await sb.from('employes').select('*').eq('creche_id',crecheId).order('prenom');
@@ -283,6 +286,13 @@ async function loadEmployes(){
     (refs||[]).forEach(r=>ACCES_TERRAIN.add(r.employe_id));
   }
   renderListe();
+  /* employes.user_id est posé dès l'invitation : seule une connexion prouve que
+     l'espace a été créé. Échec silencieux : la liste reste affichée sans statut. */
+  COMPTES_ACTIFS=null;
+  if(EMPLOYES.some(x=>x.user_id)){
+    const{ok,data}=await callFn('statut-comptes-collaborateurs',{creche_id:crecheId});
+    if(ok&&Array.isArray(data.actifs)){COMPTES_ACTIFS=new Set(data.actifs);renderListe();}
+  }
 }
 // Un dossier est « archivé » quand archive_le est renseigné — toujours à la
 // main, depuis la fiche, jamais automatiquement (voir sql/archivage_dossiers.sql).
@@ -312,7 +322,9 @@ function renderListe(){
       ?'<span class="badge off">Pas de compte</span>'
       :(estArchive(e)
         ?'<span class="badge off" style="color:var(--red)"><i class="ti ti-lock"></i> Compte bloqué</span>'
-        :'<span class="badge on"><i class="ti ti-lock-open"></i> Compte actif</span>');
+        :(COMPTES_ACTIFS&&!COMPTES_ACTIFS.has(e.user_id)
+          ?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)"><i class="ti ti-mail"></i> Invitation envoyée</span>'
+          :'<span class="badge on"><i class="ti ti-lock-open"></i> Compte actif</span>'));
     const statut=estArchive(e)
       ?'<span class="badge off" style="background:var(--violet-l);color:var(--violet)">Archivé</span>'
       :(estSorti(e)?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)">Sorti</span>':'');
