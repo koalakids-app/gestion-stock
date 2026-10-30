@@ -258,7 +258,9 @@ async function loadAll(){
     sb.from('pai').select('*').order('enfant_nom'),
     sb.from('reseau_config').select('config').maybeSingle()
   ]);
-  CRECHES=cr.data||[]; ENFANTS=en.data||[]; PAIS=pa.data||[];
+  CRECHES=cr.data||[]; ENFANTS=en.data||[];
+  /* Employé : `enfants` est illisible (RLS), liste des noms via kk_enfants_noms(). */
+  if(IS_EMPLOYE&&!ENFANTS.length){const r=await sb.rpc('kk_enfants_noms');if(!r.error)ENFANTS=r.data||[];} PAIS=pa.data||[];
   RESEAU=(rz&&rz.data&&rz.data.config)||{};
   ['fCreche','pCreche','eCreche','iCreche'].forEach(id=>{
     const s=document.getElementById(id);
