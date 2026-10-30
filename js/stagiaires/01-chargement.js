@@ -164,6 +164,7 @@ async function stgLoad(){
     stgRessVues=[];
   }
 
+  if(typeof stgTerminerLesFinis==='function')await stgTerminerLesFinis();
   stgRenderTout();
 }
 
