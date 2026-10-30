@@ -15,6 +15,10 @@
 alter table public.creches
   add column if not exists terrain_code_image boolean not null default false;
 
+-- Compteur d'essais propre à l'Accès terrain : les erreurs de pointage (parents,
+-- enfants) sur la même tablette ne bloquent pas la connexion du personnel.
+alter table public.kiosk_login_attempts add column if not exists contexte text;
+
 -- ----------------------------------------------------------------------------
 -- 1. Mode de la tablette (lisible sans compte : n'expose ni nom ni code)
 -- ----------------------------------------------------------------------------
@@ -69,14 +73,14 @@ begin
   end if;
 
   select count(*) into v_fails from public.kiosk_login_attempts
-   where device_id = v_device.id and success = false
+   where device_id = v_device.id and success = false and contexte = 'terrain'
      and attempted_at > now() - interval '10 minutes';
   if v_fails >= 5 then
     return query select false, 'trop_de_tentatives', null::uuid, null::text; return;
   end if;
 
   if p_code is null or not public.kk_valid_code_pictos(p_code) then
-    insert into public.kiosk_login_attempts(device_id, success) values (v_device.id, false);
+    insert into public.kiosk_login_attempts(device_id, success, contexte) values (v_device.id, false, 'terrain');
     return query select false, 'code_invalide', null::uuid, null::text; return;
   end if;
 
@@ -90,11 +94,11 @@ begin
                                where e.creche_id = v_device.creche_id and e.code_pictos = p_code));
 
   if v_ids is null then
-    insert into public.kiosk_login_attempts(device_id, success) values (v_device.id, false);
+    insert into public.kiosk_login_attempts(device_id, success, contexte) values (v_device.id, false, 'terrain');
     return query select false, 'code_inconnu', null::uuid, null::text; return;
   end if;
   if array_length(v_ids, 1) > 1 then
-    insert into public.kiosk_login_attempts(device_id, success) values (v_device.id, false);
+    insert into public.kiosk_login_attempts(device_id, success, contexte) values (v_device.id, false, 'terrain');
     return query select false, 'code_ambigu', null::uuid, null::text; return;
   end if;
 
@@ -106,7 +110,7 @@ begin
     return query select false, 'sans_compte', null::uuid, null::text; return;
   end if;
 
-  insert into public.kiosk_login_attempts(device_id, success) values (v_device.id, true);
+  insert into public.kiosk_login_attempts(device_id, success, contexte) values (v_device.id, true, 'terrain');
   return query select true, null::text, v_ref.user_id, v_ref.name;
 end;
 $$;
