@@ -76,8 +76,10 @@ const PlanningQuiz=(function(){
     return'<div style="font-size:12.5px;color:var(--muted);margin-bottom:6px"><strong>'+nbFaits+' quiz sur '+nb+'</strong> passés · deux par semaine, environ 10 minutes chacun, sans note</div>'+lignes;
   }
   /* Charge les quiz publiés et les résultats du `ref` puis remplit `box`.
-     resultats : déjà chargés par la page (sinon on les demande). */
-  async function charger(box,ref,lien,resultats){
+     resultats : déjà chargés par la page (sinon on les demande).
+     identite : {prenom,nom} — le lien envoyé au groupe n'a pas de ref : on ajoute les résultats
+     sans ref au même prénom/nom (docs/quiz-profil/resultats_sans_ref_par_nom.sql, échec silencieux). */
+  async function charger(box,ref,lien,resultats,identite){
     if(!box)return;
     box.innerHTML='<p class="hint">Chargement…</p>';
     try{
@@ -87,7 +89,14 @@ const PlanningQuiz=(function(){
       ]);
       if(qz.error)throw qz.error;
       if(rs.error)throw rs.error;
-      box.innerHTML=html(qz.data||[],rs.data||[],lien);
+      let res=rs.data||[];
+      if(identite&&identite.prenom&&identite.nom){
+        try{
+          const r=await sbQuiz.rpc('kk_resultats_sans_ref_par_nom',{p_prenom:identite.prenom,p_nom:identite.nom});
+          if(!r.error&&r.data)res=res.concat(r.data);
+        }catch(e){}
+      }
+      box.innerHTML=html(qz.data||[],res,lien);
     }catch(e){
       box.innerHTML='<p class="hint">Planning des quiz indisponible pour le moment.</p>';
     }
