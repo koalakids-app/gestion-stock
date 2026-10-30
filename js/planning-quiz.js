@@ -42,12 +42,15 @@ const PlanningQuiz=(function(){
   function html(quizzes,resultats,lien){
     const parTheme=quizParTheme(quizzes);
     const faits=new Set((resultats||[]).map(r=>r.quiz_id));
+    /* Un quiz republié ou remplacé change d'identifiant : on reconnaît aussi un résultat à son titre « Thème N — … ». */
+    const themesFaits=new Set();
+    (resultats||[]).forEach(r=>{const m=/^Th[èe]me\s+(\d+)\b/i.exec(r.quiz_titre||'');if(m)themesFaits.add(+m[1]);});
     const auj=iso(new Date());
     let nb=0,nbFaits=0;
     const ligneQuiz=(n,famille)=>{
       const q=parTheme[n],titre='Thème '+n+' · '+PLANNING_QUIZ.titres[n];
       const pastille='<span style="font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:20px;white-space:nowrap;background:'+(famille==='proto'?'var(--orange-bg,#FDEBDD)':'var(--violet-bg,#EDEAF8)')+';color:'+(famille==='proto'?'var(--orange)':'var(--violet)')+'">'+(famille==='proto'?'Protocoles':'Pédagogie')+'</span>';
-      return{n,titre,q,pastille,fait:!!(q&&faits.has(q.id))};
+      return{n,titre,q,pastille,fait:!!((q&&faits.has(q.id))||themesFaits.has(n))};
     };
     const lignes=PLANNING_QUIZ.semaines.map((s,i)=>{
       const j=jours(i),courante=auj>=j.debut&&auj<=j.fin,passee=auj>j.fin;
