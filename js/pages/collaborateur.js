@@ -326,6 +326,7 @@ async function grantAccess(){
   populateMoisValidation();
   if(COLLAB_TYPE==='employe'){document.getElementById('msgCard').style.display='';notifsEmployeInit();}
   await Promise.all([loadPlanning(),loadPointages(),loadCompteur(),loadFormation(),loadPlanningQuiz(),loadValidationMois(),loadMessages()]);
+  loadCodeImage();
 }
 
 /* ---------- PLANNING ----------------------------------------------------
@@ -786,6 +787,18 @@ async function loadFormation(){
 /* ---------- MESSAGES (sens unique) --------------------------------------
    Table messages_employes + messages_employes_destinataires (sql/messages_employes.sql) :
    RLS = chaque employé(e) ne lit que ses messages. Marqué « lu » à l'ouverture. */
+function loadCodeImage(){
+  const card=document.getElementById('codeImgCard'),box=document.getElementById('codeImgBox');
+  if(COLLAB_TYPE!=='employe'||!card||!box)return;
+  const c=COLLAB.code_pictos;
+  card.style.display='';
+  if(!Array.isArray(c)||c.length!==4){box.innerHTML='<p class="hint">Pas encore de code image : demandez-le à votre direction.</p>';return;}
+  const base='https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/';
+  box.innerHTML='<div style="display:flex;gap:10px;flex-wrap:wrap">'
+    +c.map((id,i)=>'<div style="text-align:center"><img src="'+base+esc(id)+'.png" alt="'+esc(id)+'" style="width:64px;height:64px;border-radius:12px;object-fit:cover"><div class="hint" style="margin:2px 0 0">'+(i+1)+'</div></div>').join('')
+    +'</div>';
+}
+
 async function loadMessages(){
   const box=document.getElementById('msgBox');
   if(COLLAB_TYPE!=='employe'||!box)return;
