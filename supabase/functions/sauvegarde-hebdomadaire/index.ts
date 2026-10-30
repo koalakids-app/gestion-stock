@@ -42,8 +42,11 @@ import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 
 // Toutes les tables de données métier de la suite Koala Kids, dans le
 // projet Supabase principal. Hors périmètre volontairement :
-//   - tables purement techniques (push_subscriptions, kiosk_devices,
-//     signatures_pending) : rien à restaurer.
+//   - tables purement techniques ou éphémères (push_subscriptions, kiosk_*,
+//     signatures_pending, login_events, mfa_codes_secours*, notifs_retenues,
+//     *_brouillons, *_masquees, consignes_lues, replies, support_messages,
+//     suivi_consultations, demandes_traitees, depots_externes) : rien à restaurer.
+//   - "sante" : bucket de Storage (fichiers des PAI), pas une table.
 //   - "assets" : c'est un bucket de Storage (fichiers), pas une table.
 //   - "module" / "quiz" (employes.html, collaborateur.html) : vivent dans
 //     un second projet Supabase séparé (QUIZ_SUPABASE_URL), pas celui-ci —
@@ -59,10 +62,10 @@ import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 // soit accepter que le dump reste global mais le documenter clairement.
 const TABLES = [
   'creches', 'etablissements', 'reseau_config',
-  'demandes', 'referents', 'referents_lien_employe', 'referents_espace',
+  'demandes', 'referents',
   'incidents', 'messages', 'actions_direction', 'reunions_direction', 'taches_afaire',
   'enfants', 'enfants_parents', 'enfants_contrats', 'enfants_documents_admin',
-  'enfants_pai', 'pai', 'sante', 'vaccinations', 'vaccins_pj', 'registre_infirmerie',
+  'enfants_pai', 'pai', 'vaccinations', 'vaccins_pj', 'registre_infirmerie',
   'preinscriptions', 'preinscriptions_parents', 'tarifs', 'tarifs_repas_config',
   'cmg_bareme', 'cmg_config',
   'contrats', 'contrats_lignes', 'devis', 'devis_lignes',
@@ -70,7 +73,7 @@ const TABLES = [
   'dossiers_familles', 'dossiers_pieces', 'documents_koala', 'documents_reponses',
   'doc_categories',
   'employes', 'planning', 'planning_alias', 'planning_equipe',
-  'pointages', 'presences', 'lien_pointage_presence', 'remplacantes',
+  'pointages', 'presences', 'remplacantes',
   'stagiaires', 'stagiaires_docs_types', 'stagiaires_documents', 'stagiaires_jours',
   'stagiaires_ressources', 'stagiaires_ressources_vues',
   'formations_envois',
@@ -80,6 +83,23 @@ const TABLES = [
   'commandes_repas', 'padlets',
   'reglementation_fiches', 'reglementation_veille',
   'rs_etablissement', 'rs_journal', 'rs_types_controle',
+  'rs_controles', 'rs_exercices', 'rs_formations', 'rs_reserves', 'rs_travaux', 'rs_liens_saisie',
+  // Stock
+  'articles', 'categories', 'souscats', 'fournisseurs', 'commandes', 'historique', 'univers',
+  'stock_config', 'stock_couches', 'stock_couches_mouvements', 'stock_couches_prix', 'couches_jour',
+  // Repas, menus et goûters
+  'menus_semaine', 'menus_gouters_creche', 'recettes', 'recettes_ingredients',
+  'gouters_creche_effectifs', 'gouters_creche_recettes', 'gouters_creche_options', 'mcm_avis_repas',
+  // Hygiène et sécurité (remise en température : conservation 3 ans)
+  'nettoyage_plan', 'nettoyage_journal', 'remise_temperature_journal', 'registre_medicaments',
+  'controles_eaje',
+  // Documents, RH et divers
+  'documents', 'documents_externes', 'documents_reponses_preuves', 'contrats_preuves',
+  'doc_signataires', 'employes_documents', 'dossiers_pieces_employe',
+  'heures_validations_mensuelles', 'enfants_absences', 'stagiaires_envois', 'frais_pro_pdf',
+  'factures_series', 'evenements', 'reunions_equipe', 'notes_libres', 'guides_parents',
+  'guides_parents_blocs', 'messages_employes', 'messages_employes_destinataires', 'partenaires',
+  'organisations', 'pmi_config', 'support_responsables', 'acces_documents', 'archivage_purges',
 ];
 
 const json = (body: unknown, status = 200) =>
