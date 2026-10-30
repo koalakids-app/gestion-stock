@@ -339,6 +339,7 @@ function renderListe(){
     return'<div class="crow">'
       +'<div class="cinfo"><div class="cname">'+esc(e.prenom)+' '+esc(e.nom||'')+'</div>'
       +'<div class="cmeta">'+esc(e.poste||'—')+(e.email?' · '+esc(e.email):'')+'</div></div>'
+      +codeImageHtml(e.code_pictos)
       +statut+compte+terrain
       +'<div class="acts">'
       +'<button class="btn btn-g btn-sm" onclick="openFiche(\''+e.id+'\')"><i class="ti ti-edit"></i></button>'
@@ -346,6 +347,15 @@ function renderListe(){
       +'<button class="btn btn-g btn-sm" onclick="supprimerEmploye(\''+e.id+'\')" title="Supprimer"><i class="ti ti-trash" style="color:var(--red)"></i></button>'
       +'</div></div>';
   }).join('');
+}
+
+/* Code image (4 pictos) de connexion par tablette : lecture seule, la génération
+   se fait dans Demandes › Collaborateurs. */
+const PICTOS_URL='https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/';
+function codeImageHtml(c){
+  if(!Array.isArray(c)||c.length!==4)return'<span class="cmeta" title="Code image non généré"><i class="ti ti-photo-off"></i> Pas de code image</span>';
+  return'<span style="display:inline-flex;gap:3px;align-items:center" title="Code image de connexion">'
+    +c.map(id=>'<img src="'+PICTOS_URL+esc(id)+'.png" alt="'+esc(id)+'" title="'+esc(id)+'" style="width:24px;height:24px;border-radius:6px;object-fit:cover">').join('')+'</span>';
 }
 
 /* ---------- FICHE ---------- */
