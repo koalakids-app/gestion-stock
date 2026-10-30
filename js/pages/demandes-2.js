@@ -508,7 +508,7 @@ demandes: `
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📝 Créer une demande</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Cliquez sur <strong>+ Nouveau message</strong></li>
-  <li>Cochez <strong>un ou plusieurs destinataires</strong> dans la liste à cases à cocher : elle mélange les directeurs/trices techniques et les admins (repérables avec 🔑). La demande apparaît comme <strong>une seule carte</strong> listant tous les destinataires, avec un fil de discussion et un statut propres à chacun</li>
+  <li>Cochez <strong>un ou plusieurs destinataires</strong> dans la liste à cases à cocher : elle mélange les directeurs/trices techniques et les admins (repérables avec 🔑). La demande apparaît comme <strong>une seule carte</strong> listant tous les destinataires, avec un fil de discussion et un statut propres à chacun. Si vous êtes l'un des destinataires, le bouton <strong>Répondre à [expéditeur]</strong> en haut des cases vous ouvre votre fil pour lui répondre (les autres destinataires ne le voient pas) ; l'expéditeur, lui, dispose de « Répondre à tous »</li>
   <li>Si <strong>au moins un</strong> destinataire coché est admin, la <strong>crèche</strong> devient facultative — laissez-la vide pour un message direct</li>
   <li>Un seul destinataire coché : le champ <strong>E-mail destinataire</strong> apparaît et se pré-remplit, modifiable si besoin. Il disparaît dès que plusieurs cases sont cochées</li>
   <li>Renseignez le <strong>sujet</strong> et la <strong>description</strong> précise</li>
