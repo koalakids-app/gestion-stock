@@ -260,7 +260,8 @@ async function loadAll(){
   ]);
   CRECHES=cr.data||[]; ENFANTS=en.data||[];
   /* Employé : `enfants` est illisible (RLS), liste des noms via kk_enfants_noms(). */
-  if(IS_EMPLOYE&&!ENFANTS.length){const r=await sb.rpc('kk_enfants_noms');if(!r.error)ENFANTS=r.data||[];} PAIS=pa.data||[];
+  if(IS_EMPLOYE){const r=await sb.rpc('kk_enfants_noms');if(r.error)console.error('[kk_enfants_noms]',r.error);else ENFANTS=r.data||[];}
+  PAIS=pa.data||[];
   RESEAU=(rz&&rz.data&&rz.data.config)||{};
   ['fCreche','pCreche','eCreche','iCreche'].forEach(id=>{
     const s=document.getElementById(id);
@@ -423,7 +424,7 @@ function setupEnfantPicker(searchId,idFieldId,listId,crecheId){
   };
 }
 /* Fermeture au clic exterieur, sans casser le clic sur un resultat */
-document.addEventListener('mousedown',ev=>{
+document.addEventListener('pointerdown',ev=>{
   if(!ev.target.closest('.cbx'))document.querySelectorAll('.cbx-list.on').forEach(b=>b.classList.remove('on'));
 });
 /* Renseigne le picker a partir d'une entree existante */
