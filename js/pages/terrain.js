@@ -325,8 +325,42 @@ async function openIncidentPanel(){
   document.getElementById('incSeverity').value='info';
   document.getElementById('ovIncident').classList.add('on');
   setIncCategoryT('enfant',document.getElementById('incCatEnfantBtn'));
+  setupEnfantPickerT();
+  chargerEnfantsIncidentT();
   loadIncidentsTerrain();
 }
+/* Liste des enfants de la crèche pour la fiche incident : recherche à la
+   frappe ; un nom sans correspondance reste valide (saisie libre). */
+let ENFANTS_INC_T=[];
+function normT(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();}
+async function chargerEnfantsIncidentT(){
+  ENFANTS_INC_T=[];
+  const{data,error}=await sb.from('enfants').select('id,prenom,nom,archive_le').eq('creche_id',PROF.creche_id).order('prenom');
+  if(error){console.error('[chargerEnfantsIncidentT]',error);return;}
+  ENFANTS_INC_T=(data||[]).filter(function(e){return !e.archive_le;});
+}
+function setupEnfantPickerT(){
+  const inp=document.getElementById('incChild'),box=document.getElementById('incChildList');
+  box.classList.remove('on');
+  const dessine=function(){
+    const q=normT(inp.value);
+    const list=ENFANTS_INC_T.filter(function(e){return !q||normT(((e.prenom||'')+' '+(e.nom||''))).includes(q);}).slice(0,8);
+    let html=list.map(function(e){return '<div data-nom="'+esc(((e.prenom||'')+' '+(e.nom||'')).trim())+'">'+esc(((e.prenom||'')+' '+(e.nom||'')).trim())+'</div>';}).join('');
+    if(!list.length){
+      html=inp.value.trim()?'<div class="libre" data-nom="'+esc(inp.value.trim())+'">Utiliser « '+esc(inp.value.trim())+' » (enfant hors liste)</div>'
+        :'<div class="vide">Aucun enfant enregistré pour cette crèche.</div>';
+    }
+    box.innerHTML=html;box.classList.add('on');
+  };
+  inp.oninput=dessine;inp.onfocus=dessine;
+  box.onclick=function(ev){
+    const d=ev.target.closest('[data-nom]');if(!d)return;
+    inp.value=d.dataset.nom;box.classList.remove('on');
+  };
+}
+document.addEventListener('pointerdown',function(ev){
+  if(!ev.target.closest('.cbx'))document.querySelectorAll('.cbx-list.on').forEach(function(b){b.classList.remove('on');});
+});
 function closeIncidentPanel(){document.getElementById('ovIncident').classList.remove('on');}
 function isIncRepasT(i){return /^repas/i.test(i.type||'')||/^Repas MCM/i.test(i.type||'');}
 async function loadIncidentsTerrain(){
