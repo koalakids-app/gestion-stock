@@ -818,7 +818,7 @@ async function loadFicheFormation(e){
     FICHE_SUGGESTIONS=sugg;
     box.innerHTML=renderParcoursHtml(tous,qz.data||[],md.data||[],mq,sugg,true);
     /* Planning des quiz en lecture seule (pas de lien : le lien est personnel à la personne). */
-    PlanningQuiz.charger(document.getElementById('fichePlanningQuizBox'),e.id,null,qz.data||[]);
+    PlanningQuiz.charger(document.getElementById('fichePlanningQuizBox'),e.id,null,qz.data||[],{prenom:e.prenom,nom:e.nom});
   }catch(err){
     box.innerHTML='<p class="hint">Parcours de formation indisponible pour le moment.</p>';
   }

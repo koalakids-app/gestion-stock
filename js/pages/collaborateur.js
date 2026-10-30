@@ -751,7 +751,7 @@ async function loadPlanningQuiz(){
   const prenom=COLLAB_TYPE==='referent'?String(COLLAB.name||'').split(/\s+/)[0]:(COLLAB.prenom||'');
   const nom=COLLAB_TYPE==='referent'?String(COLLAB.name||'').split(/\s+/).slice(1).join(' '):(COLLAB.nom||'');
   const lien=qid=>QUIZ_APP_URL+'?'+new URLSearchParams({ref:COLLAB.id,prenom,nom,statut:'Salarié(e) en poste',quiz:qid}).toString();
-  await PlanningQuiz.charger(document.getElementById('planningQuizBox'),COLLAB.id,lien);
+  await PlanningQuiz.charger(document.getElementById('planningQuizBox'),COLLAB.id,lien,null,{prenom,nom});
 }
 async function loadFormation(){
   const box=document.getElementById('formationBox');
