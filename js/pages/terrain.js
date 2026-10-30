@@ -108,6 +108,8 @@ function showLoginView(msg){
   document.getElementById('liFormBox').style.display='block';
   document.getElementById('mfaGateBox').style.display='none';
   if(msg)document.getElementById('liErr').textContent=msg;
+  // Tablette d'une crèche qui a activé l'accès par code image : écran des images à la place du formulaire.
+  kkTciAfficher(sb,SUPABASE_URL,SUPABASE_ANON_KEY);
 }
 async function terrainGrantAccess(){
   if(typeof kkLoginAlertCheck==='function')kkLoginAlertCheck(sb);
@@ -128,6 +130,8 @@ function mfaGateSwitchView(id){
 }
 async function mfaGateCheckAndProceed(){
   try{
+    // Session ouverte par code image sur la tablette de la crèche : pas de code à 6 chiffres.
+    if(await kkTciSessionActive(sb)){kkTciVerrouillageAuto(sb);await terrainGrantAccess();return;}
     const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
     if(error)throw error;
     if(data.currentLevel==='aal2'){await terrainGrantAccess();return;}
@@ -229,6 +233,7 @@ async function doLogin(){
   const e=document.getElementById('liMail').value.trim(),p=document.getElementById('liPwd').value;
   const {error}=await sb.auth.signInWithPassword({email:e,password:p});
   if(error){document.getElementById('liErr').textContent='Identifiants incorrects';return;}
+  try{localStorage.removeItem(KK_TCI_FLAG);}catch(_e){}
   location.reload();
 }
 
@@ -396,7 +401,7 @@ async function saveIncidentTerrain(){
 /* ================= EVENEMENTS ================= */
 document.getElementById('btnLogin').onclick=doLogin;
 document.getElementById('liPwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-document.getElementById('btnLogout').onclick=async()=>{await sb.auth.signOut();location.reload();};
+document.getElementById('btnLogout').onclick=()=>kkTciDeconnecter(sb);
 document.getElementById('qSuivi').onclick=openSuivi;
 document.getElementById('qIncident').onclick=openIncidentPanel;
 
