@@ -297,8 +297,31 @@ async function stgEvalSave(evFixe){
   }
   s.evaluation=evSans; s.evaluation_le=le;
   if(autoChange)s.auto_evaluation=auto||null;
-  showBanner('Évaluation enregistrée ✅');
+  const clos=await stgTerminerSiFini(s);
+  showBanner(clos?'Évaluation enregistrée — le statut passe à « '+(s.type_contrat==='alternant'?'Alternance terminée':'Stage terminé')+' » ✅':'Évaluation enregistrée ✅');
   return true;
+}
+
+/* Fin de stage atteinte + appréciation finale remplie : le dossier passe en « terminé »
+   sans action manuelle. Ne touche qu'aux dossiers acceptés ou en cours. */
+async function stgTerminerSiFini(s){
+  if(!s||(s.statut!=='accepte'&&s.statut!=='en_cours'))return false;
+  if(!s.date_fin||s.date_fin>todayStr())return false;
+  const ev=(s.evaluation&&typeof s.evaluation==='object')?s.evaluation:{};
+  if(!String(ev.appreciation||'').trim())return false;
+  if(!(await dbUpdateStrict('stagiaires',s.id,{statut:'termine'})))return false;
+  s.statut='termine';
+  const sel=document.getElementById('stg-f-statut');
+  if(sel&&String(stgFicheId)===String(s.id))sel.value='termine';
+  return true;
+}
+
+/* À l'ouverture du module : les évaluations remplies avant la fin du stage sont closes
+   dès que la date de fin est passée. */
+async function stgTerminerLesFinis(){
+  let n=0;
+  for(const s of stgCache)if(await stgTerminerSiFini(s))n++;
+  return n;
 }
 
 async function stgEvalMiFiger(){
