@@ -335,9 +335,10 @@ let ENFANTS_INC_T=[];
 function normT(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();}
 async function chargerEnfantsIncidentT(){
   ENFANTS_INC_T=[];
-  const{data,error}=await sb.from('enfants').select('id,prenom,nom,archive_le').eq('creche_id',PROF.creche_id).order('prenom');
+  /* Un employé ne lit pas `enfants` (RLS) : on passe par kk_enfants_noms(). */
+  const{data,error}=await sb.rpc('kk_enfants_noms');
   if(error){console.error('[chargerEnfantsIncidentT]',error);return;}
-  ENFANTS_INC_T=(data||[]).filter(function(e){return !e.archive_le;});
+  ENFANTS_INC_T=data||[];
 }
 function setupEnfantPickerT(){
   const inp=document.getElementById('incChild'),box=document.getElementById('incChildList');
