@@ -73,6 +73,11 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Installation de l'Accès terrain (tablette)
 - `terrain.html` a son propre manifeste PWA (`manifest-terrain.json`, icônes `icon-terrain-180/192/512.png` tirées de `terrain-icon.jpg`), comme le pointage (`manifest-pointage.json`). Ouvrir `terrain.html` sur la tablette puis « Installer l'application » (Android) ou « Sur l'écran d'accueil » (iPad).
 
+## Jeu de société « Le Sentier du Koala »
+- Page publique `jeu-societe.html` (sans compte, lien à envoyer ou à ouvrir sur une tablette pour une formation d'équipe ou un atelier parents). Une seule tablette passe de main en main : 2 à 6 équipes, plateau de 42 cases (`css/pages/jeu-societe.css`, `js/pages/jeu-societe.js`), partie gardée en `localStorage` (`kk_jeu_partie`).
+- Contenu dans `js/pages/jeu-societe-cartes.js` : `Q(thème, public, question, bonne réponse, 2 mauvaises, « à retenir »)` et `D(public, sujet, pistes)` pour les cases Partage ; public `e` équipe, `p` parents, `x` les deux. Ajouter une carte = une ligne. Les « à retenir » sont des repères généraux à relire avec la direction et à confronter aux protocoles de chaque établissement.
+- Pas de base de données : rien n'est enregistré côté serveur.
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.

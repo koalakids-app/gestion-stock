@@ -55,6 +55,8 @@ Pour activer une nouvelle organisation cliente, suivre
 
 ### Outils annexes
 
+Le jeu de société pédagogique `jeu-societe.html` (« Le Sentier du Koala », public, sans compte) accompagne les équipes et les parents sur le développement de l'enfant, la pédagogie, les protocoles et la relation aux familles.
+
 Pages de dépôt/signature à usage ponctuel, ouvertes par des personnes externes au réseau
 via un lien à durée limitée (`signature.html`, `famille.html`, `pieces.html`,
 `stagiaire.html`), le formulaire public `preinscription.html` (voir ci-dessous), et configuration PWA (`manifest.json`, `sw.js`).
