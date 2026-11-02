@@ -21,6 +21,7 @@
       html: '<p>Les fiches des collaborateurs de la crèche et leurs documents. Ouvrez une fiche pour la consulter ou la mettre à jour.</p>' +
         '<p>Dans la fiche, « Planning des quiz » montre, semaine par semaine, les quiz faits, à faire ou en retard de la personne (lecture seule).</p>' +
         '<p><strong>Compte de connexion et accès terrain</strong> : le bouton d’invitation envoie un e-mail ; « Partager le lien » donne un lien à transmettre (WhatsApp, SMS). Le collaborateur ouvre le lien, choisit son mot de passe (8 caractères minimum), configure la double authentification, puis entre. Le lien ne sert qu’une fois : s’il est expiré, repartagez-en un depuis la fiche.</p>' +
+        '<p><strong>Directrice ou référente aussi collaboratrice</strong> : si son adresse a déjà un compte de direction ou de référente de votre organisation, « Créer le compte » relie simplement la fiche à ce compte (aucun e-mail, aucun nouveau mot de passe) ; elle se connecte avec son identifiant habituel et Mon espace s’ouvre alors en vue collaborateur (planning, heures supplémentaires).</p>' +
         '<p><strong>Départ d’un collaborateur</strong> : renseignez la « Date de fin » dans la fiche ; une fois cette date passée, « Archiver ce dossier » sort la fiche des listes actives (« Voir les archives » pour la retrouver) et <strong>bloque son compte de connexion</strong> (Mon espace et accès terrain). « Réactiver ce dossier » rétablit les deux.</p>'
     },
     factures: {
