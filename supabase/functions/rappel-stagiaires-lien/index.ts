@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     // Direction de l'organisation (ou de toutes si la crèche est inconnue) + référentes de la crèche.
     const ids = (refs ?? []).filter(r =>
       (r.role === 'direction' && (!cr || r.org_id === cr.org_id)) ||
-      (s.creche_id && String(r.creche_id) === String(s.creche_id))
+      (s.creche_id && r.role === 'referent' && String(r.creche_id) === String(s.creche_id))
     ).map(r => r.id);
     if (!ids.length) { bilan.sans_destinataire++; continue; }
 
