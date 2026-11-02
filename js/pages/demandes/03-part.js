@@ -14,8 +14,9 @@ async function sendThreadMessage(){
   if((!body&&!msgPending.thread.length)||!currentThreadId)return;
   const btn=document.getElementById('btn-send-msg');btn.disabled=true;
   const d0=cacheDemandes.find(x=>x.id===currentThreadId);
-  const toutes=document.getElementById('thread-all-wrap').style.display!=='none'&&document.getElementById('thread-all').checked;
-  const cibles=toutes?demandesDuGroupe(d0):[d0];
+  const choix=document.getElementById('thread-all-wrap').style.display!=='none';
+  const cibles=choix?demandesDuGroupe(d0).filter(x=>threadDest.has(x.id)):[d0];
+  if(!cibles.length){btn.disabled=false;showBanner('Cochez au moins un destinataire de la réponse.','error');return;}
   let savedCourant=null,nbErr=0;
   for(const d of cibles){
     const row={demande_id:d.id,author_id:currentProfile?.id||null,author_name:currentProfile?.name||'Moi',body:body,...msgAttCols(msgPending.thread)};
