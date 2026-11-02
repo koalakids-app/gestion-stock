@@ -792,7 +792,7 @@ async function openDemandModal(draft){
   // Destinataires : tous les directeurs techniques ET tous les admins (direction), tout le monde mélangé dans la même liste,
   // sélectionnables un ou plusieurs à la fois (voir saveDemand() qui enregistre une demande par destinataire coché).
   const myId=currentProfile?.id;
-  const dests=cacheReferents.filter(r=>r.id!==myId);
+  const dests=cacheReferents.filter(r=>r.id!==myId&&(r.role==='referent'||r.role==='direction'));
   const dList=document.getElementById('d-ref-list');
   if(dList)dList.innerHTML=dests.map(r=>{
     const isAdmin=r.role==='direction';
