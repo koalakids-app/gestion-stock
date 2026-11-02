@@ -137,12 +137,12 @@ async function rtChargerLignes(){
     const{data,error}=await sb.from('pai').select('enfant_nom').eq('actif',true).eq('panier_repas',true).eq('creche_id',PROF.creche_id).order('enfant_nom');
     if(!error)pais=data||[];
   }catch(e){console.error('[rtPai]',e);}
-  const platsPai=pais.filter(p=>p.enfant_nom).map(p=>({plat:'Panier repas PAI — '+p.enfant_nom,tags:['apporté par la famille'],mixage:false}));
+  const platsPai=pais.filter(p=>p.enfant_nom).map(p=>({plat:'Panier repas PAI — '+p.enfant_nom,tags:['apporté par la famille'],mixage:false,pai:true}));
   rtPlatsDuMenu(menu).concat(platsPai).forEach(function(x){
-    const k=x.plat.toLowerCase(),rows=duJour.filter(j=>String(j.plat||'').trim().toLowerCase()===k);
-    vus[k]=1;
+    const k=x.plat.toLowerCase(),rows=duJour.filter(j=>{const n=String(j.plat||'').trim().toLowerCase();return x.pai?(n===k||n.indexOf(k+' : ')===0):n===k;});
+    vus[k]=1;rows.forEach(j=>{vus[String(j.plat||'').trim().toLowerCase()]=1;});
     const ouvert=rows.find(j=>j.temp_fin==null),complet=rows.some(j=>j.temp_fin!=null);
-    lignes.push({plat:x.plat,tags:x.tags,mixage:x.mixage,libre:false,chauffe:!RT_FROID.test(x.plat),
+    lignes.push({plat:x.plat,tags:x.tags,mixage:x.mixage,pai:!!x.pai,libre:false,chauffe:!RT_FROID.test(x.plat),
       deja:!ouvert&&complet,ouvert:ouvert||null});
   });
   /* plats en chauffe hors menu (saisie libre faite plus tôt) */
@@ -172,13 +172,14 @@ function rtRenderLignes(note){
     if(l.deja)return '<div class="rt-lig rt-deja"><b>'+esc(l.plat)+'</b> <span class="nt-b ok">✓ terminé</span></div>';
     const fin=!!l.ouvert,o=l.ouvert||{};
     const tete=fin
-      ?'<div><b>'+esc(l.plat)+'</b> <span class="nt-b todo">⏳ en chauffe</span><small class="rt-recap">mise en chauffe : '+esc((o.temp_chauffe!=null?String(o.temp_chauffe).replace('.',',')+' °C':'—')+(o.heure_chauffe?' à '+rtHeure(o.heure_chauffe):''))+'</small></div>'
+      ?'<div><b>'+esc(o.plat||l.plat)+'</b> <span class="nt-b todo">⏳ en chauffe</span><small class="rt-recap">mise en chauffe : '+esc((o.temp_chauffe!=null?String(o.temp_chauffe).replace('.',',')+' °C':'—')+(o.heure_chauffe?' à '+rtHeure(o.heure_chauffe):''))+'</small></div>'
       :(l.libre
         ?'<input type="text" id="rtP'+i+'" maxlength="120" placeholder="Nature du plat" value="'+esc(l.plat)+'" oninput="RT_LIGNES['+i+'].plat=this.value">'
         :'<label class="rt-chk"><input type="checkbox" id="rtK'+i+'"'+(l.chauffe?' checked':'')+' onchange="rtCocher('+i+')"> <b>'+esc(l.plat)+'</b> <small>'+esc(l.tags.join(' · '))+'</small></label>');
+    const nomPai=(l.pai&&!fin)?'<input type="text" id="rtN'+i+'" maxlength="80" placeholder="Nom du plat apporté (facultatif) : ex. lasagnes sans arachide" style="flex-basis:100%">':'';
     const visible=fin||l.chauffe||l.libre;
     return '<div class="rt-lig" id="rtL'+i+'">'+tete
-      +'<div class="rt-champs" id="rtC'+i+'"'+(visible?'':' style="display:none"')+'>'
+      +'<div class="rt-champs" id="rtC'+i+'"'+(visible?'':' style="display:none"')+'>'+nomPai
         +(fin
           ?'<input type="hidden" id="rtT'+i+'" value="'+esc(o.temp_chauffe!=null?String(o.temp_chauffe).replace('.',','):'')+'"><input type="hidden" id="rtHC'+i+'" value="'+esc(rtHeure(o.heure_chauffe))+'">'
           :rtBlocTemp(i,'T','1 · Mise en chauffe',[1,2,3,4,5],'Heure de mise en chauffe')
@@ -230,7 +231,7 @@ function rtAjouterLibre(){
 }
 /* conserver les valeurs tapées quand la liste est redessinée */
 let RT_SAISIES={};
-const RT_IDS=['F','T','HC','M','HF','O'];
+const RT_IDS=['F','T','HC','M','HF','O','N'];
 function rtSauverSaisies(){
   RT_SAISIES={};
   RT_LIGNES.forEach(function(l,i){if(l.deja)return;RT_SAISIES[i]={};RT_IDS.forEach(function(k){const e=document.getElementById('rt'+k+i);if(e)RT_SAISIES[i][k]=e.value;});});
@@ -277,7 +278,7 @@ async function rtValiderSaisie(){
     const l=RT_LIGNES[i];
     if(l.deja)continue;
     if(!l.ouvert&&!l.chauffe&&!l.libre)continue;
-    const plat=(l.libre?rtV('P',i):l.plat).trim();
+    const plat=((l.libre?rtV('P',i):l.plat)+(l.pai&&!l.ouvert&&rtV('N',i).trim()?' : '+rtV('N',i).trim():'')).trim();
     const chauffe=rtNum(rtV('T',i)),fintxt=rtV('F',i).trim(),fin=rtNum(fintxt),mixage=rtNum(rtV('M',i)),obs=rtV('O',i).trim();
     if(chauffe==null&&fin==null){
       if(l.libre&&plat){rtAlerte('« '+plat+' » : saisissez au moins une température.');return;}
