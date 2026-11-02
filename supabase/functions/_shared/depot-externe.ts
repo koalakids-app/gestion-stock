@@ -25,7 +25,7 @@ export async function signalerDepot(sb: any, d: {
     });
     if (error) { console.error('[depot-externe] insertion', error); return; }
 
-    const { data: refs } = await sb.from('referents').select('id').eq('creche_id', d.creche_id);
+    const { data: refs } = await sb.from('referents').select('id').eq('creche_id', d.creche_id).in('role', ['referent', 'direction']);
     const ids = (refs ?? []).map((r: any) => r.id);
     if (!ids.length) return;
     const url = Deno.env.get('SUPABASE_URL')!;
