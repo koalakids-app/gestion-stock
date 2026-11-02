@@ -276,7 +276,7 @@ function pmsRemiseLignes(d,jours){
 }
 /* une ligne par jour : relevé du matin, avant le four, fin de journée (dernier relevé de chaque moment), conformité, observations, visa */
 function pmsFrigoLignes(d,jours){
-  const lim=pmsNettJoursAvant(jours),liste=(d.frigo||[]).filter(x=>x.fait_le>=lim),res=[];
+  const lim=jours==null?'':pmsNettJoursAvant(jours),liste=(d.frigo||[]).filter(x=>x.fait_le>=lim),res=[];
   [...new Set(liste.map(x=>x.fait_le))].forEach(j=>{
     const par=m=>liste.find(x=>x.fait_le===j&&x.moment===m);
     const ms=['matin','avant_four','soir'].map(par),vus=ms.filter(Boolean);
@@ -329,6 +329,18 @@ async function pmsMoisDonnees(cle,m){
   }
   return rows;
 }
+/* relevés du réfrigérateur du mois (plus récent d'abord, comme le registre du PMS) */
+async function pmsMoisFrigo(cle,m){
+  const b=pmsMoisBornes(m),rows=[];
+  for(let off=0;;off+=1000){
+    const r=await sb.from('frigo_temperature_journal').select('fait_le,moment,temperature,heure,conforme,observation,fait_par,created_at')
+      .eq('creche',cle).gte('fait_le',b.de).lt('fait_le',b.a).order('fait_le',{ascending:false}).order('created_at',{ascending:false}).range(off,off+999);
+    if(r.error)throw r.error;
+    rows.push(...(r.data||[]));
+    if((r.data||[]).length<1000)break;
+  }
+  return rows;
+}
 function pmsMoisLigne(x){
   return [new Date(x.fait_le+'T12:00:00').toLocaleDateString('fr-FR'),x.plat||'',
     [pmsTemp(x.temp_chauffe),pmsHeureCourte(x.heure_chauffe)].filter(Boolean).join(' · '),
@@ -346,12 +358,16 @@ async function pmsExporterMois(format,toutes){
   const b=pmsMoisBornes(m);
   try{
     const jeux=[];
-    for(const c of liste)jeux.push({nom:c.nom,rows:await pmsMoisDonnees(c.cle,m)});
+    for(const c of liste)jeux.push({nom:c.nom,rows:await pmsMoisDonnees(c.cle,m),frigo:await pmsMoisFrigo(c.cle,m)});
     const fichier='remise-en-temperature_'+m+(toutes?'_toutes-creches':'_'+slug(liste[0].nom));
     if(format==='csv'){
       const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
       const lignes=[['Crèche','Date','Plat','T° mise en chauffe','Heure mise en chauffe','T° fin de réchauffe','Heure fin de réchauffe','T° après mixage','Conforme','Observation','Visa'].map(q).join(';')];
       jeux.forEach(j=>j.rows.forEach(x=>lignes.push([j.nom,x.fait_le,x.plat,x.temp_chauffe,pmsHeureCourte(x.heure_chauffe),x.temp_fin,pmsHeureCourte(x.heure_fin),x.temp_mixage,x.temp_fin==null?'':x.conforme===false?'Non':'Oui',x.observation,x.fait_par].map(v=>q(v==null?'':String(v).replace(/^(\d+)\.(\d)$/,'$1,$2'))).join(';'))));
+      /* second tableau, séparé par une ligne vide : températures du réfrigérateur */
+      lignes.push('',['Crèche','Date','Moment (réfrigérateur)','Température','Heure','Conforme','Observation','Visa'].map(q).join(';'));
+      const mom={matin:'Matin',avant_four:'Avant la mise au four',soir:'Fin de journée'};
+      jeux.forEach(j=>j.frigo.slice().reverse().forEach(x=>lignes.push([j.nom,x.fait_le,mom[x.moment]||x.moment,String(x.temperature).replace('.',','),pmsHeureCourte(x.heure),x.conforme===false?'Non':'Oui',x.observation,x.fait_par].map(v=>q(v==null?'':v)).join(';'))));
       const blob=new Blob(['﻿'+lignes.join('\r\n')],{type:'text/csv;charset=utf-8'});
       const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fichier+'.csv';document.body.appendChild(a);a.click();a.remove();
       setTimeout(()=>URL.revokeObjectURL(a.href),2000);
@@ -372,6 +388,17 @@ async function pmsExporterMois(format,toutes){
       if(j.rows.length)j.rows.forEach(x=>rows.push({cells:pmsMoisLigne(x)}));
       else rows.push({cells:['','Aucun relevé ce mois-ci','','','','','','']});
       y=pdfGrid(doc,14,y,[20,52,30,30,20,18,72,27],rows,{fs:8,minH:7});
+      /* températures du réfrigérateur : une ligne par jour */
+      if(y>235){doc.addPage();y=pdfLogo(doc,20);}
+      const fl=pmsFrigoLignes({frigo:j.frigo},null).reverse(),fnc=fl.filter(r=>r[4]==='Non').length;
+      y+=8;doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(30);
+      doc.text(pdfSafe('Température du réfrigérateur — '+b.label),14,y);y+=6;
+      doc.setFontSize(9);doc.setFont(undefined,'normal');
+      doc.text(pdfSafe(fl.length+' jour'+(fl.length>1?'s':'')+' relevé'+(fl.length>1?'s':'')+' · '+fnc+' non conforme'+(fnc>1?'s':'')+' (critère : 4 °C maximum ; matin, avant la mise au four, fin de journée)'),14,y);y+=5;
+      const frows=[{head:true,cells:['Date','Matin','Avant le four','Fin de journée','Conforme','Observation','Visa']}];
+      if(fl.length)fl.forEach(r=>frows.push({cells:r}));
+      else frows.push({cells:['','Aucun relevé ce mois-ci','','','','','']});
+      y=pdfGrid(doc,14,y,[20,36,36,36,20,95,26],frows,{fs:8,minH:7});
       if(y>255){doc.addPage();y=pdfLogo(doc,20);}
       y+=8;doc.setFontSize(9);doc.setFont(undefined,'bold');
       doc.text(pdfSafe('Vu par la direction le '+'.'.repeat(14)+'      Nom et signature :'),14,y);
@@ -386,7 +413,7 @@ async function pmsExporterMois(format,toutes){
 function pmsArchiveHtml(){
   if(!IS_DIRECTION)return '';
   return `<div class="txtbox" style="margin-top:10px"><b>Archive mensuelle — direction</b><br>
-    La règle HACCP demande de garder ces relevés <b>3 ans</b> : ils restent enregistrés (aucune suppression automatique). Chaque mois, exportez le registre et classez le PDF avec le PMS.
+    La règle HACCP demande de garder ces relevés (remise en température et réfrigérateur) <b>3 ans</b> : ils restent enregistrés (aucune suppression automatique). Chaque mois, exportez le registre et classez le PDF avec le PMS.
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
       <div><label>Mois</label><input type="month" id="pmsMois" value="${pmsMoisDefaut()}" max="${new Date().toISOString().slice(0,7)}"></div>
       <button type="button" class="btn" onclick="pmsExporterMois('pdf',false)">PDF de la crèche choisie</button>
