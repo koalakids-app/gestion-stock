@@ -239,6 +239,7 @@
       await animerDe(valeur);
       dessinerPanneau('Résultat : ' + valeur, valeur);
       document.getElementById('btnDe').disabled = true;
+      j.origine = j.pos;                 // case de départ du tour : retour après une mauvaise réponse
       await deplacer(j, valeur);
       await resoudre(j);
     } finally {
@@ -274,6 +275,10 @@
       if (ok) {
         j.feuilles++;
         if (j.pos < FIN) { toast('Bonne réponse : +1 🌿 et 1 case de bonus'); await deplacer(j, 1); }
+      } else if (j.origine < j.pos) {
+        toast('Mauvaise réponse : retour ' + (j.origine === 0 ? 'au départ' : 'à la case ' + j.origine));
+        await pause(600);
+        await deplacer(j, j.origine - j.pos);
       }
     }
     if (j.pos >= FIN) { terminer(j); return; }
@@ -440,7 +445,7 @@
       '<ol class="regles">' +
       '<li><b>But du jeu :</b> atteindre le grand eucalyptus 🌳 (case ' + FIN + ') en premier, en récoltant un maximum de feuilles 🌿.</li>' +
       '<li><b>À son tour</b>, l\'équipe lance le dé et avance de ce nombre de cases.</li>' +
-      '<li><b>Cases thèmes</b> (🧠 développement, 🎨 pédagogie, 🧼 protocoles, 👨‍👩‍👧 familles) : une question à 3 réponses. Concertez-vous avant de répondre. Bonne réponse : +1 🌿 et une case de bonus.</li>' +
+      '<li><b>Cases thèmes</b> (🧠 développement, 🎨 pédagogie, 🧼 protocoles, 👨‍👩‍👧 familles) : une question à 3 réponses. Concertez-vous avant de répondre. Bonne réponse : +1 🌿 et une case de bonus. Mauvaise réponse : retour à la case de départ du tour.</li>' +
       '<li><b>Case Partage</b> 💬 : un sujet à discuter, sans bonne ou mauvaise réponse. Toute l\'équipe qui en parle gagne 1 🌿.</li>' +
       '<li><b>Case Chance</b> 🍀 : une carte surprise, bonne ou moins bonne.</li>' +
       '<li><b>Après chaque question</b>, lisez le « à retenir » : c\'est là que se passe l\'apprentissage.</li>' +
