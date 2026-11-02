@@ -41,7 +41,7 @@
   var btnFin = document.getElementById('btnFin');
   var etat = null;                    // partie en cours
   var occupe = false;
-  var config = { public: 'equipe', nb: 3, noms: [] };
+  var config = { public: 'equipe', chrono: 60, nb: 3, noms: [] };
 
   /* ───────── Outils ───────── */
   function esc(s) {
@@ -116,7 +116,12 @@
         '<span class="ic" aria-hidden="true">' + p.ico + '</span><span><b>' + esc(p.nom) + '</b><small>' + esc(p.desc) + '</small></span></button>';
     });
     h += '</div></div>';
-    h += '<div class="bloc"><h3>2. Combien d\'équipes ?</h3><div class="nb-equipes">' +
+    h += '<div class="bloc"><h3>2. ⏱ Temps pour répondre</h3><div class="chrono-choix" role="group" aria-label="Temps pour répondre">';
+    [[0, 'Sans limite'], [30, '30 s'], [60, '1 min'], [90, '1 min 30']].forEach(function (o) {
+      h += '<button class="choix" type="button" data-chrono="' + o[0] + '" aria-pressed="' + (config.chrono === o[0]) + '">' + o[1] + '</button>';
+    });
+    h += '</div><p style="font-size:13px;color:var(--muted);margin-top:8px">Quand le temps est écoulé, la question compte comme une mauvaise réponse.</p></div>';
+    h += '<div class="bloc"><h3>3. Combien d\'équipes ?</h3><div class="nb-equipes">' +
       '<button type="button" id="moins" aria-label="Une équipe de moins">−</button>' +
       '<output id="nb" aria-live="polite">' + config.nb + '</output>' +
       '<button type="button" id="plus" aria-label="Une équipe de plus">+</button></div><div class="noms" id="noms"></div></div>';
@@ -134,6 +139,12 @@
       b.addEventListener('click', function () {
         config.public = b.getAttribute('data-public');
         app.querySelectorAll('[data-public]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      });
+    });
+    app.querySelectorAll('[data-chrono]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        config.chrono = +b.getAttribute('data-chrono');
+        app.querySelectorAll('[data-chrono]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
       });
     });
     document.getElementById('moins').addEventListener('click', function () { changerNb(-1); });
@@ -316,30 +327,47 @@
     var h = '<span class="chip t-' + cat + '"><span aria-hidden="true">' + th.ico + '</span> ' + th.nom + '</span>' +
       '<h2 id="modaleTitre">' + esc(c.q) + '</h2>' +
       '<p class="aide">' + j.pion + ' ' + esc(j.nom) + ' : concertez-vous, puis choisissez une réponse.</p>' +
+      (config.chrono ? '<div class="chrono" id="chrono" role="timer" aria-label="Temps restant"><span class="chrono-n" id="chronoN">' + config.chrono + '</span><span class="chrono-barre"><i id="chronoB"></i></span></div>' : '') +
       '<div class="opts">' + options.map(function (o, i) {
         return '<button class="opt" type="button" data-i="' + i + '"><span class="l" aria-hidden="true">' + lettres[i] + '</span><span>' + esc(o.t) + '</span></button>';
       }).join('') + '</div><div id="retour"></div>';
     ouvrirModale(h);
     var ok = await new Promise(function (resolve) {
-      modale.addEventListener('click', function choisir(ev) {
-        var b = ev.target.closest('.opt');
-        if (!b) return;
+      var debut = Date.now(), tempsEcoule = false, tic = null, fini = false;
+      function arreter() { clearInterval(tic); }
+      /* Révèle la réponse : b = bouton choisi, ou null si le temps est écoulé */
+      function reveler(b) {
+        if (fini) return;
+        fini = true; arreter();
         modale.removeEventListener('click', choisir);
-        var rep = options[+b.getAttribute('data-i')];
+        var bon = !!(b && options[+b.getAttribute('data-i')].bon);
         modale.querySelectorAll('.opt').forEach(function (x, i) {
           x.disabled = true;
           if (options[i].bon) { x.classList.add('bon'); x.insertAdjacentHTML('beforeend', '<span class="verdict" aria-hidden="true">✓</span>'); x.setAttribute('aria-label', 'Bonne réponse : ' + options[i].t); }
           else if (x === b) { x.classList.add('faux'); x.insertAdjacentHTML('beforeend', '<span class="verdict" aria-hidden="true">✗</span>'); }
         });
-        var bon = !!rep.bon;
+        var zc = document.getElementById('chrono'); if (zc) zc.remove();
         document.getElementById('retour').innerHTML =
-          '<div class="resultat ' + (bon ? 'ok' : 'ko') + '" role="status">' + (bon ? 'Bravo ! +1 🌿' : 'Pas tout à fait…') + '</div>' +
+          '<div class="resultat ' + (bon ? 'ok' : 'ko') + '" role="status">' + (bon ? 'Bravo ! +1 🌿' : (b ? 'Pas tout à fait…' : 'Temps écoulé ⏱')) + '</div>' +
           '<div class="retenir"><b>À retenir.</b> ' + esc(c.retenir) + '</div>' +
           '<div class="pied"><button class="bt" type="button" id="cont">Continuer</button></div>';
         var cont = document.getElementById('cont');
         cont.focus();
         cont.addEventListener('click', function () { resolve(bon); });
-      });
+      }
+      function choisir(ev) {
+        var b = ev.target.closest('.opt');
+        if (b) reveler(b);
+      }
+      modale.addEventListener('click', choisir);
+      if (config.chrono) {                                   // compte à rebours : temps écoulé = mauvaise réponse
+        tic = setInterval(function () {
+          var reste = Math.max(0, config.chrono - (Date.now() - debut) / 1000);
+          var n = document.getElementById('chronoN'), bar = document.getElementById('chronoB'), z = document.getElementById('chrono');
+          if (n) { n.textContent = Math.ceil(reste); bar.style.width = (100 * reste / config.chrono) + '%'; z.classList.toggle('urgent', reste <= 10); }
+          if (reste <= 0) reveler(null);
+        }, 200);
+      }
     });
     fermerModale();
     var s = etat.stats[cat] || (etat.stats[cat] = { ok: 0, total: 0 });
@@ -445,7 +473,7 @@
       '<ol class="regles">' +
       '<li><b>But du jeu :</b> atteindre le grand eucalyptus 🌳 (case ' + FIN + ') en premier, en récoltant un maximum de feuilles 🌿.</li>' +
       '<li><b>À son tour</b>, l\'équipe lance le dé et avance de ce nombre de cases.</li>' +
-      '<li><b>Cases thèmes</b> (🧠 développement, 🎨 pédagogie, 🧼 protocoles, 👨‍👩‍👧 familles) : une question à 3 réponses. Concertez-vous avant de répondre. Bonne réponse : +1 🌿 et une case de bonus. Mauvaise réponse : retour à la case de départ du tour.</li>' +
+      '<li><b>Cases thèmes</b> (🧠 développement, 🎨 pédagogie, 🧼 protocoles, 👨‍👩‍👧 familles) : une question à 3 réponses. Concertez-vous avant de répondre, sans dépasser le temps affiché (si le chronomètre est activé : temps écoulé = mauvaise réponse). Bonne réponse : +1 🌿 et une case de bonus. Mauvaise réponse : retour à la case de départ du tour.</li>' +
       '<li><b>Case Partage</b> 💬 : un sujet à discuter, sans bonne ou mauvaise réponse. Toute l\'équipe qui en parle gagne 1 🌿.</li>' +
       '<li><b>Case Chance</b> 🍀 : une carte surprise, bonne ou moins bonne.</li>' +
       '<li><b>Après chaque question</b>, lisez le « à retenir » : c\'est là que se passe l\'apprentissage.</li>' +

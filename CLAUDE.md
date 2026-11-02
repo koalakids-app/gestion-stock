@@ -76,6 +76,7 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Jeu de société « Le Sentier du Koala »
 - Page publique `jeu-societe.html` (sans compte, lien à envoyer ou à ouvrir sur une tablette pour une formation d'équipe ou un atelier parents). Une seule tablette passe de main en main : 2 à 6 équipes, plateau de 42 cases (`css/pages/jeu-societe.css`, `js/pages/jeu-societe.js`), partie gardée en `localStorage` (`kk_jeu_partie`).
 - Contenu dans `js/pages/jeu-societe-cartes.js` : `Q(thème, public, question, bonne réponse, 2 mauvaises, « à retenir »)` et `D(public, sujet, pistes)` pour les cases Partage ; public `e` équipe, `p` parents, `x` les deux. Ajouter une carte = une ligne. Les « à retenir » sont des repères généraux à relire avec la direction et à confronter aux protocoles de chaque établissement.
+- Chronomètre de réponse (réglé à l'accueil : sans limite, 30 s, 1 min ou 1 min 30, `config.chrono`, 1 min par défaut) : temps écoulé = mauvaise réponse, donc retour à la case de départ du tour. Les cartes Partage et Chance n'ont pas de chronomètre.
 - Pas de base de données : rien n'est enregistré côté serveur.
 
 ## Notice de l'application
