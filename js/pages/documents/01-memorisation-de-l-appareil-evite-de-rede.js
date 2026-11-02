@@ -445,13 +445,13 @@ function catNodeHtml(cat,docs,depth,qActive){
     html=`<div class="cat${open?'':' closed'}"><div class="cat-h" onclick="toggleCat(this,'${key}')">
       <span class="cat-dot" style="background:${esc(cat.couleur||'#4A3F9F')}"></span>
       <h2>${esc(cat.nom)}</h2><span class="cat-n">${total}</span>
-      <i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="cat-b">${body}</div></div>`;
+      ${catZipBtn(cat.id)}<i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="cat-b">${body}</div></div>`;
   }else{
     const dot=depth===2?'9px':'8px';
     html=`<div class="sub${depth>=3?' sub3':''}${open?'':' closed'}"><div class="sub-h" onclick="event.stopPropagation();toggleSub(this,'${key}')">
       <span class="cat-dot" style="width:${dot};height:${dot};background:${esc(cat.couleur||'#8E8AA8')}"></span>
       <h3>${esc(cat.nom)}</h3><span class="cat-n">${total}</span>
-      <i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="sub-b">${body}</div></div>`;
+      ${catZipBtn(cat.id)}<i class="ti ti-chevron-down" style="color:var(--muted)"></i></div><div class="sub-b">${body}</div></div>`;
   }
   return{html,total};
 }

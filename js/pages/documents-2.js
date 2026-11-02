@@ -20,6 +20,7 @@ principe: `
 <div class="st">🔍 Retrouver un document</div>
 <ul>
   <li>Les catégories se déplient d’un clic sur leur titre.</li>
+  <li>Le bouton <strong>zip</strong> (<i class="ti ti-file-zip"></i>) de l’en-tête d’une catégorie ou d’une sous-catégorie <strong>télécharge d’un coup tous ses fichiers</strong>, y compris ceux des sous-catégories, dans un seul fichier .zip rangé en dossiers. Les documents à remplir en ligne n’ont pas de fichier et n’y figurent pas ; un fichier qui ne peut pas être récupéré est signalé dans le zip (<em>fichiers-manquants.txt</em>).</li>
   <li>La barre de recherche en haut filtre sur le titre du document.</li>
   <li>Un document peut être rattaché à une crèche précise, ou rester commun à tout le réseau.</li>
 </ul>
