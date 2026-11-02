@@ -702,7 +702,15 @@ function renderDemandsOnly(){
       // Destinataire d'un envoi groupé : bouton direct pour répondre à l'expéditeur (dans son propre fil).
       const maLigne=grouped&&d.referent_id!==myId?g.find(x=>x.to_referent_id===myId):null;
       const repondreExp=maLigne?'<button class="tball tbrep" onclick="openThread(\''+maLigne.id+'\')" title="Répondre à '+escHtml(demandeDeNom(d))+' (seul)"><i class="ti ti-arrow-back-up"></i> Répondre à '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'</button>':'';
-      const blocs='<div class="tblocks">'+repondreExp+(grouped?g.map(x=>bloc(x,(x.referent_name||'—')+(maLigne&&x.id===maLigne.id?' (vous)':''))).join(''):bloc(d,'Discussion'))+(grouped&&peutTous?'<button class="tball" onclick="openThread(\''+d.id+'\',true)" title="Répondre à tous les destinataires"><i class="ti ti-messages"></i> Répondre à tous</button>':'')+'</div>';
+      let blocs;
+      if(grouped){
+        // Envoi groupé : deux actions claires (répondre à l'expéditeur / à tous), puis les destinataires en pastilles compactes.
+        const pastille=x=>{const n=cacheMessages.filter(m=>m.demande_id===x.id).length;const bd=cacheMessageBrouillons.some(b=>b.demande_id===x.id);const moi=maLigne&&x.id===maLigne.id;const tr=x.status==='traite';return '<button class="tchip'+(tr?' ok':'')+'" onclick="openThread(\''+x.id+'\')" title="'+escHtml((x.referent_name||'—')+' — '+(tr?'traitée':'en attente')+(n?' · '+n+' réponse'+(n>1?'s':''):'')+' — ouvrir la discussion individuelle')+'"><span class="tc-av">'+escHtml(initiales(x.referent_name))+'<i class="tc-dot"></i></span>'+escHtml(x.referent_name||'—')+(moi?' <em>(vous)</em>':'')+(n>0?'<span class="tc-n">'+n+'</span>':'')+(bd?'<span title="Brouillon">📝</span>':'')+'</button>';};
+        const btnExp=maLigne?'<button class="tbtn prim" onclick="openThread(\''+maLigne.id+'\')" title="Votre réponse ne sera vue que par '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'"><i class="ti ti-arrow-back-up"></i> Répondre à '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'</button>':'';
+        const btnTous=peutTous?'<button class="tbtn'+(maLigne?'':' prim')+'" onclick="openThread(\''+d.id+'\',true)" title="Même message envoyé à tous les destinataires"><i class="ti ti-messages"></i> Répondre à tous</button>':'';
+        const lib=peutTous?'Ou répondre à une seule personne':'Destinataires';
+        blocs='<div class="tgroup"><div class="tactions">'+btnExp+btnTous+'</div><div class="tlist"><span class="tlist-lbl">'+lib+' ('+g.length+')</span>'+g.map(pastille).join('')+'</div></div>';
+      }else blocs='<div class="tblocks">'+bloc(d,'Discussion')+'</div>';
       const deNom=demandeDeNom(d)||'—';
       const aNom=grouped?g.map(x=>x.referent_name).filter(Boolean).join(', '):demandeANom(d);
       const ligneDeA='<div class="dline"><span class="dl-lbl">De</span><b>'+hl(deNom)+'</b><span class="dl-arrow">→</span><span class="dl-lbl">À</span><b>'+hl(aNom||'—')+'</b><span class="dl-date">'+dateLabel+'</span></div>';
@@ -1085,15 +1093,34 @@ function messageANom(m,d){
 function deAHtml(de,a){return '<div class="tdea" style="font-size:11px;font-weight:400;color:#777;margin-bottom:2px"><b>De :</b> '+escHtml(de||'—')+' &nbsp; <b>À :</b> '+escHtml(a||'—')+'</div>';}
 // Autres lignes issues du même envoi multi-destinataires (une ligne par destinataire).
 function demandesDuGroupe(d){return d&&d.groupe_envoi?cacheDemandes.filter(x=>x.groupe_envoi===d.groupe_envoi):(d?[d]:[]);}
+function initiales(n){return String(n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';}
+// Réponse à une partie des destinataires : menu déroulant à cases à cocher (émetteur / direction).
+let threadDest=new Set();
 function majRepondreATous(d,coche){
   const grp=demandesDuGroupe(d);
   const wrap=document.getElementById('thread-all-wrap');
   // Proposé à l'émetteur (ou à la direction) d'un envoi à plusieurs destinataires.
   const ok=grp.length>1&&(d.referent_id===currentProfile?.id||isDirection);
-  wrap.style.display=ok?'flex':'none';
-  document.getElementById('thread-all').checked=!!(ok&&coche);
-  if(ok)document.getElementById('thread-all-label').textContent='Répondre à tous ('+grp.map(x=>x.referent_name).filter(Boolean).join(', ')+')';
+  wrap.style.display=ok?'block':'none';
+  document.getElementById('thread-dest-panel').style.display='none';
+  threadDest=new Set(ok?(coche?grp.map(x=>x.id):[d.id]):[]);
+  if(ok)renderThreadDest(d);
 }
+function renderThreadDest(d){
+  const grp=demandesDuGroupe(d||cacheDemandes.find(x=>x.id===currentThreadId));
+  const noms=grp.filter(x=>threadDest.has(x.id)).map(x=>x.referent_name||'—');
+  document.getElementById('thread-dest-label').textContent='Répondre à : '+(noms.length===grp.length?'tous ('+grp.length+')':noms.length?noms.join(', '):'personne (cochez au moins un)');
+  const tous=threadDest.size===grp.length;
+  document.getElementById('thread-dest-panel').innerHTML='<label class="tdest-row tdest-all"><input type="checkbox" '+(tous?'checked':'')+' onchange="threadDestTous(this.checked)"/> <b>Tous les destinataires</b></label>'
+    +grp.map(x=>'<label class="tdest-row"><input type="checkbox" '+(threadDest.has(x.id)?'checked':'')+' onchange="threadDestCoche(\''+x.id+'\',this.checked)"/><span class="tc-av">'+escHtml(initiales(x.referent_name))+'</span><span class="tdest-nm">'+escHtml(x.referent_name||'—')+'</span><span class="tdest-st">'+(x.status==='traite'?'✅ traitée':'⏳ en attente')+'</span></label>').join('');
+}
+function threadDestCoche(id,on){if(on)threadDest.add(id);else threadDest.delete(id);renderThreadDest();}
+function threadDestTous(on){const d=cacheDemandes.find(x=>x.id===currentThreadId);threadDest=new Set(on?demandesDuGroupe(d).map(x=>x.id):[]);renderThreadDest(d);}
+function toggleThreadDest(e){
+  if(e)e.stopPropagation();
+  const p=document.getElementById('thread-dest-panel');p.style.display=p.style.display==='none'?'block':'none';
+}
+document.addEventListener('click',e=>{const w=document.getElementById('thread-all-wrap');const p=document.getElementById('thread-dest-panel');if(w&&p&&!w.contains(e.target))p.style.display='none';});
 // FIL DE DISCUSSION
 let currentThreadId=null;
 function openThread(demandId,repondreATous){
