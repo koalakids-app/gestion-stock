@@ -54,7 +54,8 @@ function rtRender(){
   const auj=RT_JOURNAL.filter(j=>j.fait_le===rtJour());
   let en=auj.filter(j=>j.temp_fin==null).length,
     html='<div class="nt-resume '+(auj.length&&!en?'ok':'todo')+'">'+(en?'⏳ '+en+' plat'+(en>1?'s':'')+' en chauffe : fin de réchauffe à saisir':auj.length?'✅ '+auj.length+' plat'+(auj.length>1?'s':'')+' contrôlé'+(auj.length>1?'s':'')+' aujourd’hui':'⏳ Aucun plat contrôlé aujourd’hui')+' · '+esc(RT_CRECHE)+'</div>';
-  html+='<button class="btn btn-p" style="width:100%;justify-content:center" onclick="rtOuvrirSaisie()"><i class="ti ti-list-check"></i> Saisir le service du jour</button>';
+  html+='<button class="btn btn-p" style="width:100%;justify-content:center" onclick="rtOuvrirSaisie()"><i class="ti ti-list-check"></i> Saisir le service du jour</button>'
+    +'<div id="frBloc"></div>';
   html+='<div class="nt-titre">Fiche de la semaine</div>'
     +'<div class="f" style="display:flex;gap:8px;align-items:flex-end"><div style="flex:1"><label>Semaine contenant le</label><input type="date" id="rtSemaine" max="'+rtJour()+'" value="'+rtJour()+'"></div>'
     +'<button class="btn btn-g" onclick="rtExporter()"><i class="ti ti-printer"></i> Imprimer / PDF</button></div>';
@@ -72,6 +73,7 @@ function rtRender(){
       +'<small>visa : '+esc(j.fait_par||'non renseigné')+(j.observation?' · '+esc(j.observation):'')+'</small></div>';
   }).join(''):'<div class="nt-hist"><small>Aucun relevé enregistré pour le moment.</small></div>');
   box.innerHTML=html;
+  if(typeof frCharger==='function')frCharger();   /* températures du réfrigérateur (terrain-frigo.js) */
 }
 
 async function rtOuvrir(){
