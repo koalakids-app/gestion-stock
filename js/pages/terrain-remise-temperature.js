@@ -131,7 +131,14 @@ async function rtChargerLignes(){
   try{menu=await rtMenuDuJour(iso);}catch(e){console.error('[rtMenuDuJour]',e);note='Menu indisponible : ajoutez les plats à la main.';}
   const duJour=RT_JOURNAL.filter(j=>j.fait_le===iso);
   const lignes=[],vus={};
-  rtPlatsDuMenu(menu).forEach(function(x){
+  /* paniers repas apportés par les familles (PAI actif avec « Panier repas ») : un plat par enfant */
+  let pais=[];
+  try{
+    const{data,error}=await sb.from('pai').select('enfant_nom').eq('actif',true).eq('panier_repas',true).eq('creche_id',PROF.creche_id).order('enfant_nom');
+    if(!error)pais=data||[];
+  }catch(e){console.error('[rtPai]',e);}
+  const platsPai=pais.filter(p=>p.enfant_nom).map(p=>({plat:'Panier repas PAI — '+p.enfant_nom,tags:['apporté par la famille'],mixage:false}));
+  rtPlatsDuMenu(menu).concat(platsPai).forEach(function(x){
     const k=x.plat.toLowerCase(),rows=duJour.filter(j=>String(j.plat||'').trim().toLowerCase()===k);
     vus[k]=1;
     const ouvert=rows.find(j=>j.temp_fin==null),complet=rows.some(j=>j.temp_fin!=null);
