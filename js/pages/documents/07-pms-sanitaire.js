@@ -255,6 +255,12 @@ async function pmsChargerRemise(cr){
       .eq('creche',cle).gte('fait_le',depuis).order('fait_le',{ascending:false}).order('created_at',{ascending:false}).limit(1000);
     PMS_REMISE[cle]=r.error?{journal:[],erreur:r.error.message||'erreur'}:{journal:r.data||[],erreur:''};
   }catch(e){PMS_REMISE[cle]={journal:[],erreur:String(e&&e.message||e)};}
+  /* températures du réfrigérateur (Accès terrain, même tuile) */
+  try{
+    const f=await sb.from('frigo_temperature_journal').select('fait_le,moment,temperature,heure,conforme,observation,fait_par,created_at')
+      .eq('creche',cle).gte('fait_le',depuis).order('fait_le',{ascending:false}).order('created_at',{ascending:false}).limit(1000);
+    PMS_REMISE[cle].frigo=f.error?[]:(f.data||[]);PMS_REMISE[cle].frigoErreur=f.error?(f.error.message||'erreur'):'';
+  }catch(e){PMS_REMISE[cle].frigo=[];PMS_REMISE[cle].frigoErreur=String(e&&e.message||e);}
   return PMS_REMISE[cle];
 }
 const pmsTemp=t=>t==null?'':String(t).replace('.',',')+' °C';
@@ -268,6 +274,27 @@ function pmsRemiseLignes(d,jours){
     [pmsTemp(x.temp_fin),pmsHeureCourte(x.heure_fin)].filter(Boolean).join(' · '),
     pmsTemp(x.temp_mixage),x.temp_fin==null?'—':x.conforme===false?'Non':'Oui',x.temp_fin==null?'Fin non saisie. '+(x.observation||''):(x.observation||''),x.fait_par||'non renseigné']);
 }
+/* une ligne par jour : relevé du matin, avant le four, fin de journée (dernier relevé de chaque moment), conformité, observations, visa */
+function pmsFrigoLignes(d,jours){
+  const lim=pmsNettJoursAvant(jours),liste=(d.frigo||[]).filter(x=>x.fait_le>=lim),res=[];
+  [...new Set(liste.map(x=>x.fait_le))].forEach(j=>{
+    const par=m=>liste.find(x=>x.fait_le===j&&x.moment===m);
+    const ms=['matin','avant_four','soir'].map(par),vus=ms.filter(Boolean);
+    const cel=r=>r?pmsTemp(r.temperature)+(r.heure?' · '+pmsHeureCourte(r.heure):''):'—';
+    res.push([new Date(j+'T12:00:00').toLocaleDateString('fr-FR'),cel(ms[0]),cel(ms[1]),cel(ms[2]),
+      vus.some(x=>x.conforme===false)?'Non':'Oui',vus.map(x=>x.observation).filter(Boolean).join(' / '),[...new Set(vus.map(x=>x.fait_par).filter(Boolean))].join(', ')||'non renseigné']);
+  });
+  return res;
+}
+function pmsFrigoHtml(d){
+  const e=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  if(d.frigoErreur)return '<p class="hint">Registre des températures du réfrigérateur indisponible ('+e(d.frigoErreur)+').</p>';
+  const l=pmsFrigoLignes(d,14),nc=l.filter(r=>r[4]==='Non').length;
+  if(!l.length)return '<p class="hint">Aucun relevé de température du réfrigérateur sur les 14 derniers jours (saisie dans Accès terrain › Remise en température).</p>';
+  return '<table class="ft"><tr><th>Date</th><th>Matin</th><th>Avant le four</th><th>Fin de journée</th><th>Conforme</th><th>Observation</th><th>Visa</th></tr>'
+    +l.map(r=>'<tr>'+r.map(c=>'<td>'+e(c)+'</td>').join('')+'</tr>').join('')+'</table>'
+    +'<p class="hint">'+l.length+' jour'+(l.length>1?'s':'')+' relevé'+(l.length>1?'s':'')+' sur 14 jours, dont '+nc+' non conforme'+(nc>1?'s':'')+' (critère : 4 °C maximum).</p>';
+}
 function pmsRemiseHtml(){
   const cr=pmsCrecheChoisie(),cle=pmsNettCle(cr);
   if(!cr)return '<p class="hint">Choisissez une crèche pour afficher son registre de remise en température.</p>';
@@ -279,7 +306,8 @@ function pmsRemiseHtml(){
   if(!l.length)return '<p class="hint">Aucun relevé de remise en température sur les 14 derniers jours (saisie dans Accès terrain › Remise en température).</p>';
   return '<table class="ft"><tr><th>Date</th><th>Plat</th><th>Mise en chauffe</th><th>Fin de réchauffe</th><th>Après mixage</th><th>Conforme</th><th>Observation</th><th>Visa</th></tr>'
     +l.map(r=>'<tr>'+r.map(c=>'<td>'+e(c)+'</td>').join('')+'</tr>').join('')+'</table>'
-    +'<p class="hint">'+l.length+' plat'+(l.length>1?'s':'')+' relevé'+(l.length>1?'s':'')+' sur 14 jours, dont '+nc+' non conforme'+(nc>1?'s':'')+'. Lecture en direct du registre tenu dans Accès terrain ; le PDF reprend ce tableau.</p>';
+    +'<p class="hint">'+l.length+' plat'+(l.length>1?'s':'')+' relevé'+(l.length>1?'s':'')+' sur 14 jours, dont '+nc+' non conforme'+(nc>1?'s':'')+'. Lecture en direct du registre tenu dans Accès terrain ; le PDF reprend ce tableau.</p>'
+    +'<h4 style="margin:14px 0 4px">Température du réfrigérateur : 14 derniers jours</h4>'+pmsFrigoHtml(d);
 }
 /* ===== Archive mensuelle du registre de remise en température (direction) =====
    La règle HACCP demande de conserver ces relevés 3 ans : la table n'est jamais purgée, et la direction en sort
@@ -639,6 +667,16 @@ TPL.pms_sanitaire={
         .concat(l.map(r=>({cells:r}))),{fs:7.5,minH:7});
       else P('Aucun relevé sur la période : saisie dans Accès terrain › Remise en température.',9);
       y+=4;
+      need(24);P('Température du réfrigérateur : relevés des 14 derniers jours',10,true);
+      if(d.frigoErreur)P('Registre des températures du réfrigérateur indisponible à la génération de ce document.',9);
+      else{
+        const f=pmsFrigoLignes(d,14),fnc=f.filter(r=>r[4]==='Non').length;
+        P(f.length+' jour'+(f.length>1?'s':'')+' relevé'+(f.length>1?'s':'')+', dont '+fnc+' non conforme'+(fnc>1?'s':'')+' (critère : 4 °C maximum ; matin, avant la mise au four, fin de journée).',9);
+        if(f.length)y=pdfGrid(doc,M,y,[18,26,26,26,14,48,24],[{head:true,cells:['Date','Matin','Avant le four','Fin de journée','Conf.','Observation','Visa']}]
+          .concat(f.map(r=>({cells:r}))),{fs:7.5,minH:7});
+        else P('Aucun relevé sur la période : saisie dans Accès terrain › Remise en température.',9);
+        y+=4;
+      }
     }
   }
   P('Contrôle de la sonde de température',10.5,true);
