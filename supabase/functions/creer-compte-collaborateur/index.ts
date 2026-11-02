@@ -107,54 +107,88 @@ Deno.serve(async (req) => {
     }
 
     const meta = { prenom: employe.prenom, nom: employe.nom, role_app: "collaborateur" };
+    const dejaEnregistre = (e: unknown) =>
+      !!e && /already been registered|email_exists/i.test(
+        ((e as Error).message || "") + ((e as { code?: string }).code || ""));
+
+    // L'adresse porte déjà un compte de connexion (invitation jamais acceptée,
+    // ou compte de direction/référent·e qui est aussi employé·e). generateLink
+    // « recovery » renvoie ce compte sans envoyer d'e-mail.
+    type Gen = { user: { id: string; last_sign_in_at?: string }; properties: { action_link: string; hashed_token?: string; verification_type?: string } };
+    const repriseCompteExistant = async (): Promise<{ erreur?: string; lie?: string; gen?: Gen }> => {
+      const rec = await supabase.auth.admin.generateLink({
+        type: "recovery",
+        email: employe.email!,
+        options: { redirectTo: redirect_to || undefined },
+      });
+      if (rec.error) throw rec.error;
+      const existantId = rec.data.user.id;
+      // Compte de direction/référent·e de la MÊME organisation : on relie la
+      // fiche à ce compte, qui garde son mot de passe et sa double authentification.
+      const { data: ref } = await supabase
+        .from("referents").select("org_id").eq("user_id", existantId).maybeSingle();
+      if (ref) {
+        if (ref.org_id !== caller.org_id) return { erreur: "compte_deja_utilise" };
+        const { data: autre } = await supabase
+          .from("employes").select("id").eq("user_id", existantId).neq("id", employe_id).maybeSingle();
+        if (autre) return { erreur: "compte_deja_utilise" };
+        return { lie: existantId };
+      }
+      if (rec.data.user.last_sign_in_at) return { erreur: "compte_deja_utilise" };
+      return { gen: rec.data };
+    };
+
     // partager : on crée le compte et on renvoie le lien d'invitation au lieu
     // d'envoyer l'e-mail ; l'appareil de l'appelant·e le transmet (WhatsApp, SMS…).
     let userId: string;
     let lien: string | undefined;
+    let compteLie = false;
+    let gen: Gen | null = null;
+
     if (partager) {
-      let { data: gen, error: genErr } = await supabase.auth.admin.generateLink({
+      const r = await supabase.auth.admin.generateLink({
         type: "invite",
         email: employe.email,
         options: { redirectTo: redirect_to || undefined, data: meta },
       });
-      if (genErr && /already been registered|email_exists/i.test(genErr.message + (genErr as { code?: string }).code)) {
-        // Compte déjà créé (invitation précédente jamais acceptée) : on le
-        // réutilise avec un lien de définition de mot de passe, mais seulement
-        // s'il n'a jamais servi et n'appartient pas à un·e référent·e.
-        const rec = await supabase.auth.admin.generateLink({
-          type: "recovery",
-          email: employe.email,
-          options: { redirectTo: redirect_to || undefined },
-        });
-        if (rec.error) throw rec.error;
-        const { data: ref } = await supabase
-          .from("referents").select("user_id").eq("user_id", rec.data.user.id).maybeSingle();
-        if (rec.data.user.last_sign_in_at || ref) return json({ error: "compte_deja_utilise" }, 400);
-        gen = rec.data;
-        genErr = null;
-      }
-      if (genErr) throw genErr;
-      userId = gen!.user.id;
-      lien = gen!.properties.action_link;
-      // action_link est un lien de vérification Supabase qui se consomme au
-      // premier GET : l'aperçu de WhatsApp/SMS/messagerie le « grille » et la
-      // personne arrive sur le login sans session. On renvoie plutôt un lien
-      // direct vers la page, que collaborateur.js vérifie (verifyOtp) au clic.
-      const th = gen!.properties.hashed_token;
-      const vt = gen!.properties.verification_type;
-      if (th && redirect_to && (vt === "invite" || vt === "recovery")) {
-        const u = new URL(redirect_to);
-        u.searchParams.set("token_hash", th);
-        u.searchParams.set("type", vt);
-        lien = u.toString();
+      if (r.error && !dejaEnregistre(r.error)) throw r.error;
+      if (r.error) {
+        const rep = await repriseCompteExistant();
+        if (rep.erreur) return json({ error: rep.erreur }, 400);
+        if (rep.lie) { userId = rep.lie; compteLie = true; } else { gen = rep.gen!; userId = gen.user.id; }
+      } else {
+        gen = r.data; userId = gen.user.id;
       }
     } else {
       const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(
         employe.email,
         { redirectTo: redirect_to || undefined, data: meta },
       );
-      if (inviteErr) throw inviteErr;
-      userId = invited.user.id;
+      if (inviteErr && !dejaEnregistre(inviteErr)) throw inviteErr;
+      if (inviteErr) {
+        const rep = await repriseCompteExistant();
+        if (rep.erreur) return json({ error: rep.erreur }, 400);
+        if (!rep.lie) return json({ error: "compte_deja_utilise" }, 400);
+        userId = rep.lie; compteLie = true;
+      } else {
+        userId = invited.user.id;
+      }
+    }
+
+    if (gen) {
+      lien = gen.properties.action_link;
+      // action_link est un lien de vérification Supabase qui se consomme au
+      // premier GET : l'aperçu de WhatsApp/SMS/messagerie le « grille » et la
+      // personne arrive sur le login sans session. On renvoie plutôt un lien
+      // direct vers la page, que collaborateur.js vérifie (verifyOtp) au clic.
+      const th = gen.properties.hashed_token;
+      const vt = gen.properties.verification_type;
+      if (th && redirect_to && (vt === "invite" || vt === "recovery")) {
+        const u = new URL(redirect_to);
+        u.searchParams.set("token_hash", th);
+        u.searchParams.set("type", vt);
+        lien = u.toString();
+      }
     }
 
     const { error: updErr } = await supabase
@@ -163,7 +197,7 @@ Deno.serve(async (req) => {
       .eq("id", employe_id);
     if (updErr) throw updErr;
 
-    return json({ ok: true, user_id: userId, lien });
+    return json({ ok: true, user_id: userId, lien, compte_lie: compteLie });
   } catch (err) {
     console.error("[creer-compte-collaborateur]", err);
     return json({ error: (err as Error).message || "erreur_inconnue" }, 500);
