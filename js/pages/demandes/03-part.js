@@ -1068,7 +1068,7 @@ async function saveEvenement(){
     else{showBanner(window._lastDbError||'Erreur lors de la modification.','error');return;}
   }else{
     const saved=await dbInsert('evenements',{...row,created_by:currentUser?.id||null});
-    if(saved){cacheEvenements.push(saved);showBanner('Événement créé !');const pushDest=cacheReferents.filter(r=>r.id!==currentProfile?.id&&(!row.creche_id||r.creche_id===row.creche_id)).map(r=>r.id);if(pushDest.length)await callFn('notify-push',{referent_ids:pushDest,title:'Nouvel événement',body:titre,url:'./demandes.html',tag:'evenement-'+saved.id});}
+    if(saved){cacheEvenements.push(saved);showBanner('Événement créé !');const pushDest=cacheReferents.filter(r=>r.id!==currentProfile?.id&&(r.role==='referent'||r.role==='direction')&&(!row.creche_id||r.creche_id===row.creche_id)).map(r=>r.id);if(pushDest.length)await callFn('notify-push',{referent_ids:pushDest,title:'Nouvel événement',body:titre,url:'./demandes.html',tag:'evenement-'+saved.id});}
     else{showBanner(window._lastDbError||'Erreur lors de la création.','error');return;}
   }
   closeModal('modal-evenement-wrap');
@@ -1089,7 +1089,7 @@ async function deleteEvenement(){
     closeModal('modal-evenement-wrap');
     renderCalendar();
     showBanner('Événement supprimé.');
-const pushDest=cacheReferents.filter(r=>r.id!==currentProfile?.id&&(!ex?.creche_id||r.creche_id===ex.creche_id)).map(r=>r.id);if(pushDest.length)await callFn('notify-push',{referent_ids:pushDest,title:'Événement annulé',body:ex?.titre||'',url:'./demandes.html',tag:'evenement-annule-'+editingEvtId});
+const pushDest=cacheReferents.filter(r=>r.id!==currentProfile?.id&&(r.role==='referent'||r.role==='direction')&&(!ex?.creche_id||r.creche_id===ex.creche_id)).map(r=>r.id);if(pushDest.length)await callFn('notify-push',{referent_ids:pushDest,title:'Événement annulé',body:ex?.titre||'',url:'./demandes.html',tag:'evenement-annule-'+editingEvtId});
   }else showBanner(window._lastDbError||'Erreur lors de la suppression.','error');
 }
 
