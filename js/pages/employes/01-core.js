@@ -949,7 +949,9 @@ async function creerCompte(id,partager){
   const redirect=location.href.replace(/employes\.html.*$/,'collaborateur.html');
   const{ok,data}=await callFn('creer-compte-collaborateur',{employe_id:id,redirect_to:redirect,partager:!!partager});
   if(!ok){toast('Échec : '+(data.error||'erreur inconnue'),true);return;}
-  if(partager&&data.lien){
+  if(data.compte_lie){
+    toast('Fiche reliée au compte existant de '+e.prenom+' : elle/il se connecte avec son identifiant habituel.');
+  }else if(partager&&data.lien){
     const r=await PartageLien.partager(data.lien,{titre:'Compte de connexion',
       texte:'Bonjour '+(e.prenom||'')+', voici le lien pour créer ton compte de connexion :'});
     toast(r==='copie'?'Compte créé — partage indisponible, lien copié.'
