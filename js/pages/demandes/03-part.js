@@ -14,21 +14,23 @@ async function sendThreadMessage(){
   if((!body&&!msgPending.thread.length)||!currentThreadId)return;
   const btn=document.getElementById('btn-send-msg');btn.disabled=true;
   const d0=cacheDemandes.find(x=>x.id===currentThreadId);
-  const choix=document.getElementById('thread-all-wrap').style.display!=='none';
-  const cibles=choix?demandesDuGroupe(d0).filter(x=>threadDest.has(x.id)):[d0];
-  if(!cibles.length){btn.disabled=false;showBanner('Cochez au moins un destinataire de la réponse.','error');return;}
-  let savedCourant=null,nbErr=0;
+  const grp=demandesDuGroupe(d0);
+  let savedCourant=null,nbErr=0,cibles=[d0];
+  if(grp.length>1){
+    // Fil partagé : une seule fonction SQL copie le message chez chaque participant.
+    const{data,error}=await sb.rpc('kk_message_groupe',{p_demande:d0.id,p_body:body,p_attachments:msgAttCols(msgPending.thread).attachments||[]});
+    if(error||!data){console.warn('kk_message_groupe',error);window._lastDbError=error?.message||'';btn.disabled=false;showBanner('Envoi impossible'+(error?' : '+error.message:'')+' (le script sql/messages_fil_partage.sql est-il appliqué ?).','error');return;}
+    data.forEach(m=>{cacheMessages.push(m);if(m.demande_id===currentThreadId)savedCourant=m;});
+    const dest=groupeParticipantsIds(d0).filter(id=>id!==currentProfile?.id);
+    if(dest.length)callFn('notify-push',{referent_ids:dest,title:'Message de '+(currentProfile?.name||'groupe')+' — '+(d0.subject||''),body:body,url:'./demandes.html',tag:'groupe-'+(data[0]?.groupe_msg||data[0]?.id)});
+    cibles=[d0];
+  }else
   for(const d of cibles){
     const row={demande_id:d.id,author_id:currentProfile?.id||null,author_name:currentProfile?.name||'Moi',body:body,...msgAttCols(msgPending.thread)};
     const saved=await dbInsert('messages',row);
     if(!saved){nbErr++;continue;}
     cacheMessages.push(saved);
     if(d.id===currentThreadId)savedCourant=saved;
-    // Destinataire de la notif (push) : l'autre partie de la demande.
-    // Si l'auteur du message est le destinataire de la demande, on notifie l'émetteur
-    // (d.referent_id, renseigné à la création — cf. sendNewDemand) et inversement.
-    // Pour les demandes créées avant l'ajout de cette colonne, on retombe sur
-    // l'ancienne heuristique : le dernier message du fil posté par quelqu'un d'autre.
     let pushDestId=null;
     if(currentProfile?.id!==d.to_referent_id){
       pushDestId=d.to_referent_id||null;
@@ -38,7 +40,6 @@ async function sendThreadMessage(){
       const precedents=cacheMessages.filter(m=>m.demande_id===d.id&&m.id!==saved.id&&m.author_id&&m.author_id!==currentProfile?.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
       pushDestId=precedents[0]?.author_id||null;
     }
-    // Notification par push uniquement (plus d'e-mail pour les demandes).
     if(pushDestId){await callFn('notify-push',{referent_ids:[pushDestId],title:'Nouveau message',body:body,url:'./demandes.html',tag:'message-'+saved.id});}
   }
   if(savedCourant||cibles.length>nbErr){

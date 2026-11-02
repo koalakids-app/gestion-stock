@@ -697,19 +697,15 @@ function renderDemandsOnly(){
       const nbTraite=g.filter(x=>mesTraitees.has(x.id)).length;
       const idsJs=g.map(x=>"'"+x.id+"'").join(',');
       const msgCount=cacheMessages.filter(m=>m.demande_id===d.id).length;
-      const peutTous=isDirection||d.referent_id===currentProfile?.id;
       const bloc=(x,nom)=>{const n=cacheMessages.filter(m=>m.demande_id===x.id).length;const bd=cacheMessageBrouillons.some(b=>b.demande_id===x.id);return '<div class="tblock" onclick="openThread(\''+x.id+'\')" title="Ouvrir le fil de discussion"><div class="tb-name"><i class="ti ti-message-2" style="font-size:12px"></i> '+escHtml(nom)+'</div><div class="tb-sub">'+(x.status==='traite'?'✅ Traitée':'⏳ En attente')+' · '+(n>0?n+' réponse'+(n>1?'s':''):'Discuter')+(bd?' · 📝 Brouillon':'')+'</div></div>';};
-      // Destinataire d'un envoi groupé : bouton direct pour répondre à l'expéditeur (dans son propre fil).
-      const maLigne=grouped&&d.referent_id!==myId?g.find(x=>x.to_referent_id===myId):null;
-      const repondreExp=maLigne?'<button class="tball tbrep" onclick="openThread(\''+maLigne.id+'\')" title="Répondre à '+escHtml(demandeDeNom(d))+' (seul)"><i class="ti ti-arrow-back-up"></i> Répondre à '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'</button>':'';
       let blocs;
       if(grouped){
-        // Envoi groupé : deux actions claires (répondre à l'expéditeur / à tous), puis les destinataires en pastilles compactes.
-        const pastille=x=>{const n=cacheMessages.filter(m=>m.demande_id===x.id).length;const bd=cacheMessageBrouillons.some(b=>b.demande_id===x.id);const moi=maLigne&&x.id===maLigne.id;const tr=x.status==='traite';return '<button class="tchip'+(tr?' ok':'')+'" onclick="openThread(\''+x.id+'\')" title="'+escHtml((x.referent_name||'—')+' — '+(tr?'traitée':'en attente')+(n?' · '+n+' réponse'+(n>1?'s':''):'')+' — ouvrir la discussion individuelle')+'"><span class="tc-av">'+escHtml(initiales(x.referent_name))+'<i class="tc-dot"></i></span>'+escHtml(x.referent_name||'—')+(moi?' <em>(vous)</em>':'')+(n>0?'<span class="tc-n">'+n+'</span>':'')+(bd?'<span title="Brouillon">📝</span>':'')+'</button>';};
-        const btnExp=maLigne?'<button class="tbtn prim" onclick="openThread(\''+maLigne.id+'\')" title="Votre réponse ne sera vue que par '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'"><i class="ti ti-arrow-back-up"></i> Répondre à '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'</button>':'';
-        const btnTous=peutTous?'<button class="tbtn'+(maLigne?'':' prim')+'" onclick="openThread(\''+d.id+'\',true)" title="Même message envoyé à tous les destinataires"><i class="ti ti-messages"></i> Répondre à tous</button>':'';
-        const lib=peutTous?'Ou répondre à une seule personne':'Destinataires';
-        blocs='<div class="tgroup"><div class="tactions">'+btnExp+btnTous+'</div><div class="tlist"><span class="tlist-lbl">'+lib+' ('+g.length+')</span>'+g.map(pastille).join('')+'</div></div>';
+        // Envoi groupé = un seul fil de discussion partagé (comme un groupe de messagerie).
+        const msgsG=groupeMessages(d),dern=msgsG[msgsG.length-1];
+        const mienne=g.find(x=>x.to_referent_id===myId)||g.find(x=>x.referent_id===myId)||d;
+        const bdG=g.some(x=>cacheMessageBrouillons.some(b=>b.demande_id===x.id));
+        blocs='<div class="tgroup">'+(dern?'<div class="tlast"><b>'+escHtml(dern.author_id===myId?'Vous':(dern.author_name||'—'))+'</b> : '+escHtml(String(dern.body||'📎 pièce jointe').slice(0,140))+'<small>'+new Date(dern.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</small></div>':'')
+          +'<div class="tactions"><button class="tbtn prim" onclick="openThread(\''+mienne.id+'\')" title="Fil de discussion partagé par les '+g.length+' personnes"><i class="ti ti-messages"></i> '+(msgsG.length?'Ouvrir la discussion':'Répondre')+'</button>'+(msgsG.length?'<span class="tcount">'+msgsG.length+' message'+(msgsG.length>1?'s':'')+'</span>':'')+(bdG?'<span class="tcount">📝 Brouillon</span>':'')+'</div></div>';
       }else blocs='<div class="tblocks">'+bloc(d,'Discussion')+'</div>';
       const deNom=demandeDeNom(d)||'—';
       const aNom=grouped?g.map(x=>x.referent_name).filter(Boolean).join(', '):demandeANom(d);
@@ -1093,34 +1089,25 @@ function messageANom(m,d){
 function deAHtml(de,a){return '<div class="tdea" style="font-size:11px;font-weight:400;color:#777;margin-bottom:2px"><b>De :</b> '+escHtml(de||'—')+' &nbsp; <b>À :</b> '+escHtml(a||'—')+'</div>';}
 // Autres lignes issues du même envoi multi-destinataires (une ligne par destinataire).
 function demandesDuGroupe(d){return d&&d.groupe_envoi?cacheDemandes.filter(x=>x.groupe_envoi===d.groupe_envoi):(d?[d]:[]);}
-function initiales(n){return String(n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';}
-// Réponse à une partie des destinataires : menu déroulant à cases à cocher (émetteur / direction).
-let threadDest=new Set();
-function majRepondreATous(d,coche){
-  const grp=demandesDuGroupe(d);
-  const wrap=document.getElementById('thread-all-wrap');
-  // Proposé à l'émetteur (ou à la direction) d'un envoi à plusieurs destinataires.
-  const ok=grp.length>1&&(d.referent_id===currentProfile?.id||isDirection);
-  wrap.style.display=ok?'block':'none';
-  document.getElementById('thread-dest-panel').style.display='none';
-  threadDest=new Set(ok?(coche?grp.map(x=>x.id):[d.id]):[]);
-  if(ok)renderThreadDest(d);
+// Envoi groupé = un fil partagé : un message écrit par l'un est copié dans la ligne de chaque
+// participant (fonction SQL kk_message_groupe, groupe_msg commun) ; ici on les fusionne.
+function groupeMessages(d){
+  const grp=demandesDuGroupe(d),ids=new Set(grp.map(x=>x.id)),me=currentProfile?.id;
+  const tous=cacheMessages.filter(m=>ids.has(m.demande_id)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  if(grp.length<2)return tous;
+  const vus=new Set(),out=[];
+  tous.forEach(m=>{
+    if(m.groupe_msg){if(vus.has(m.groupe_msg))return;vus.add(m.groupe_msg);out.push(m);return;}
+    // Anciennes réponses privées (avant le fil partagé) : visibles de l'expéditeur, du destinataire concerné et de la direction.
+    const ligne=grp.find(x=>x.id===m.demande_id)||{};
+    if(!(isDirection||ligne.to_referent_id===me||ligne.referent_id===me))return;
+    const t=new Date(m.created_at).getTime();
+    if(out.some(o=>!o.groupe_msg&&o.author_id===m.author_id&&(o.body||'')===(m.body||'')&&Math.abs(new Date(o.created_at).getTime()-t)<60000))return;
+    out.push({...m,_prive:ligne.referent_name||ligne.destinataires_noms||''});
+  });
+  return out;
 }
-function renderThreadDest(d){
-  const grp=demandesDuGroupe(d||cacheDemandes.find(x=>x.id===currentThreadId));
-  const noms=grp.filter(x=>threadDest.has(x.id)).map(x=>x.referent_name||'—');
-  document.getElementById('thread-dest-label').textContent='Répondre à : '+(noms.length===grp.length?'tous ('+grp.length+')':noms.length?noms.join(', '):'personne (cochez au moins un)');
-  const tous=threadDest.size===grp.length;
-  document.getElementById('thread-dest-panel').innerHTML='<label class="tdest-row tdest-all"><input type="checkbox" '+(tous?'checked':'')+' onchange="threadDestTous(this.checked)"/> <b>Tous les destinataires</b></label>'
-    +grp.map(x=>'<label class="tdest-row"><input type="checkbox" '+(threadDest.has(x.id)?'checked':'')+' onchange="threadDestCoche(\''+x.id+'\',this.checked)"/><span class="tc-av">'+escHtml(initiales(x.referent_name))+'</span><span class="tdest-nm">'+escHtml(x.referent_name||'—')+'</span><span class="tdest-st">'+(x.status==='traite'?'✅ traitée':'⏳ en attente')+'</span></label>').join('');
-}
-function threadDestCoche(id,on){if(on)threadDest.add(id);else threadDest.delete(id);renderThreadDest();}
-function threadDestTous(on){const d=cacheDemandes.find(x=>x.id===currentThreadId);threadDest=new Set(on?demandesDuGroupe(d).map(x=>x.id):[]);renderThreadDest(d);}
-function toggleThreadDest(e){
-  if(e)e.stopPropagation();
-  const p=document.getElementById('thread-dest-panel');p.style.display=p.style.display==='none'?'block':'none';
-}
-document.addEventListener('click',e=>{const w=document.getElementById('thread-all-wrap');const p=document.getElementById('thread-dest-panel');if(w&&p&&!w.contains(e.target))p.style.display='none';});
+function groupeParticipantsIds(d){const s=new Set();demandesDuGroupe(d).forEach(x=>{if(x.referent_id)s.add(x.referent_id);if(x.to_referent_id)s.add(x.to_referent_id);});return[...s];}
 // FIL DE DISCUSSION
 let currentThreadId=null;
 function openThread(demandId,repondreATous){
@@ -1128,10 +1115,10 @@ function openThread(demandId,repondreATous){
   currentThreadId=demandId;
   document.getElementById('thread-subject').textContent=d.subject||'Discussion';
   const crecheLabel=cacheCreches.find(c=>c.id===d.creche_id)?.name||'';
-  const ctx=[crecheLabel,d.referent_name?'À '+d.referent_name:''].filter(Boolean).join(' · ');
+  const ctx=[crecheLabel,demandesDuGroupe(d).length>1?demandesDuGroupe(d).length+' participants':(d.referent_name?'À '+d.referent_name:'')].filter(Boolean).join(' · ');
   document.getElementById('thread-context').textContent=ctx;
   const origAuthor=d.referent_name||'Demande initiale';
-  document.getElementById('thread-orig').innerHTML='<div class="torig"><div style="font-weight:700;font-size:11px;color:#B08900;margin-bottom:4px">📌 '+escHtml(d.subject)+'</div>'+deAHtml(demandeDeNom(d),demandeANom(d))+escHtml(d.description||'—')+'<div style="font-size:10.5px;color:#aaa;margin-top:6px">'+new Date(d.created_at).toLocaleString('fr-FR')+'</div></div>';
+  document.getElementById('thread-orig').innerHTML='<div class="torig"><div style="font-weight:700;font-size:11px;color:#B08900;margin-bottom:4px">📌 '+escHtml(d.subject)+'</div>'+deAHtml(demandeDeNom(d),demandesDuGroupe(d).length>1?demandesDuGroupe(d).map(x=>x.referent_name).filter(Boolean).join(', '):demandeANom(d))+escHtml(d.description||'—')+'<div style="font-size:10.5px;color:#aaa;margin-top:6px">'+new Date(d.created_at).toLocaleString('fr-FR')+'</div></div>';
   document.getElementById('thread-input').value='';
   msgSetPending('thread',[]);
   // Réponse préparée plus tôt pour ce fil : on la remet dans la zone de saisie.
@@ -1141,20 +1128,23 @@ function openThread(demandId,repondreATous){
     document.getElementById('thread-input').value=bd.body||'';
     msgSetPending('thread',msgAttList(bd));
   }
-  majRepondreATous(d,repondreATous);
+  const grpT=demandesDuGroupe(d);
+  document.getElementById('thread-input').placeholder=grpT.length>1?'Écrire à tout le monde ('+grpT.length+' personnes)…':'Écrire une réponse…';
   renderThread();
   document.getElementById('modal-thread-wrap').classList.add('open');
   setTimeout(()=>document.getElementById('thread-input').focus(),100);
 }
 function renderThread(){
   const box=document.getElementById('thread-messages');
-  const msgs=cacheMessages.filter(m=>m.demande_id===currentThreadId).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const dd=cacheDemandes.find(x=>x.id===currentThreadId)||{};
+  const groupe=demandesDuGroupe(dd).length>1;
+  const msgs=groupe?groupeMessages(dd):cacheMessages.filter(m=>m.demande_id===currentThreadId).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   if(!msgs.length){box.innerHTML='<div style="text-align:center;color:#bbb;font-size:12.5px;padding:14px 0">Aucune réponse pour l\'instant. Lancez la discussion 👇</div>';return;}
   const myId=currentProfile?.id;
-  const dd=cacheDemandes.find(x=>x.id===currentThreadId)||{};
   box.innerHTML=msgs.map(m=>{
     const mine=m.author_id===myId;
-    return '<div class="tmsg'+(mine?' mine':'')+'"><div class="tauthor">'+deAHtml(m.author_name,messageANom(m,dd))+'</div><div class="tbubble">'+linkify(escHtml(m.body||''))+msgAttachmentHtml(msgAttList(m))+'</div><div class="ttime">'+new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>';
+    const entete=groupe?'<div class="tauthor">'+escHtml(mine?'Vous':(m.author_name||'—'))+(m._prive?' <span style="font-weight:400;color:#999">· 🔒 échange privé avec '+escHtml(m._prive)+'</span>':'')+'</div>':'<div class="tauthor">'+deAHtml(m.author_name,messageANom(m,dd))+'</div>';
+    return '<div class="tmsg'+(mine?' mine':'')+'">'+entete+'<div class="tbubble">'+linkify(escHtml(m.body||''))+msgAttachmentHtml(msgAttList(m))+'</div><div class="ttime">'+new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>';
   }).join('');
   box.scrollTop=box.scrollHeight;
 }
