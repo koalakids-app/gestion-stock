@@ -705,7 +705,7 @@ function renderDemandsOnly(){
       let blocs;
       if(grouped){
         // Envoi groupé : deux actions claires (répondre à l'expéditeur / à tous), puis les destinataires en pastilles compactes.
-        const pastille=x=>{const n=cacheMessages.filter(m=>m.demande_id===x.id).length;const bd=cacheMessageBrouillons.some(b=>b.demande_id===x.id);const moi=maLigne&&x.id===maLigne.id;const tr=x.status==='traite';return '<button class="tchip'+(tr?' ok':'')+'" onclick="openThread(\''+x.id+'\')" title="'+escHtml((x.referent_name||'—')+' — '+(tr?'traitée':'en attente')+(n?' · '+n+' réponse'+(n>1?'s':''):'')+' — ouvrir la discussion individuelle')+'"><span class="tc-dot"></span>'+escHtml(x.referent_name||'—')+(moi?' <em>(vous)</em>':'')+(n>0?'<span class="tc-n">'+n+'</span>':'')+(bd?'<span title="Brouillon">📝</span>':'')+'</button>';};
+        const pastille=x=>{const n=cacheMessages.filter(m=>m.demande_id===x.id).length;const bd=cacheMessageBrouillons.some(b=>b.demande_id===x.id);const moi=maLigne&&x.id===maLigne.id;const tr=x.status==='traite';return '<button class="tchip'+(tr?' ok':'')+'" onclick="openThread(\''+x.id+'\')" title="'+escHtml((x.referent_name||'—')+' — '+(tr?'traitée':'en attente')+(n?' · '+n+' réponse'+(n>1?'s':''):'')+' — ouvrir la discussion individuelle')+'"><span class="tc-av">'+escHtml(initiales(x.referent_name))+'<i class="tc-dot"></i></span>'+escHtml(x.referent_name||'—')+(moi?' <em>(vous)</em>':'')+(n>0?'<span class="tc-n">'+n+'</span>':'')+(bd?'<span title="Brouillon">📝</span>':'')+'</button>';};
         const btnExp=maLigne?'<button class="tbtn prim" onclick="openThread(\''+maLigne.id+'\')" title="Votre réponse ne sera vue que par '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'"><i class="ti ti-arrow-back-up"></i> Répondre à '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'</button>':'';
         const btnTous=peutTous?'<button class="tbtn'+(maLigne?'':' prim')+'" onclick="openThread(\''+d.id+'\',true)" title="Même message envoyé à tous les destinataires"><i class="ti ti-messages"></i> Répondre à tous</button>':'';
         const lib=peutTous?'Ou répondre à une seule personne':'Destinataires';
@@ -1093,6 +1093,7 @@ function messageANom(m,d){
 function deAHtml(de,a){return '<div class="tdea" style="font-size:11px;font-weight:400;color:#777;margin-bottom:2px"><b>De :</b> '+escHtml(de||'—')+' &nbsp; <b>À :</b> '+escHtml(a||'—')+'</div>';}
 // Autres lignes issues du même envoi multi-destinataires (une ligne par destinataire).
 function demandesDuGroupe(d){return d&&d.groupe_envoi?cacheDemandes.filter(x=>x.groupe_envoi===d.groupe_envoi):(d?[d]:[]);}
+function initiales(n){return String(n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';}
 // Réponse à une partie des destinataires : menu déroulant à cases à cocher (émetteur / direction).
 let threadDest=new Set();
 function majRepondreATous(d,coche){
@@ -1111,7 +1112,7 @@ function renderThreadDest(d){
   document.getElementById('thread-dest-label').textContent='Répondre à : '+(noms.length===grp.length?'tous ('+grp.length+')':noms.length?noms.join(', '):'personne (cochez au moins un)');
   const tous=threadDest.size===grp.length;
   document.getElementById('thread-dest-panel').innerHTML='<label class="tdest-row tdest-all"><input type="checkbox" '+(tous?'checked':'')+' onchange="threadDestTous(this.checked)"/> <b>Tous les destinataires</b></label>'
-    +grp.map(x=>'<label class="tdest-row"><input type="checkbox" '+(threadDest.has(x.id)?'checked':'')+' onchange="threadDestCoche(\''+x.id+'\',this.checked)"/> '+escHtml(x.referent_name||'—')+'<span class="tdest-st">'+(x.status==='traite'?'✅ traitée':'⏳ en attente')+'</span></label>').join('');
+    +grp.map(x=>'<label class="tdest-row"><input type="checkbox" '+(threadDest.has(x.id)?'checked':'')+' onchange="threadDestCoche(\''+x.id+'\',this.checked)"/><span class="tc-av">'+escHtml(initiales(x.referent_name))+'</span><span class="tdest-nm">'+escHtml(x.referent_name||'—')+'</span><span class="tdest-st">'+(x.status==='traite'?'✅ traitée':'⏳ en attente')+'</span></label>').join('');
 }
 function threadDestCoche(id,on){if(on)threadDest.add(id);else threadDest.delete(id);renderThreadDest();}
 function threadDestTous(on){const d=cacheDemandes.find(x=>x.id===currentThreadId);threadDest=new Set(on?demandesDuGroupe(d).map(x=>x.id):[]);renderThreadDest(d);}
