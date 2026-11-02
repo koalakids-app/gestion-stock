@@ -702,7 +702,15 @@ function renderDemandsOnly(){
       // Destinataire d'un envoi groupé : bouton direct pour répondre à l'expéditeur (dans son propre fil).
       const maLigne=grouped&&d.referent_id!==myId?g.find(x=>x.to_referent_id===myId):null;
       const repondreExp=maLigne?'<button class="tball tbrep" onclick="openThread(\''+maLigne.id+'\')" title="Répondre à '+escHtml(demandeDeNom(d))+' (seul)"><i class="ti ti-arrow-back-up"></i> Répondre à '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'</button>':'';
-      const blocs='<div class="tblocks">'+repondreExp+(grouped?g.map(x=>bloc(x,(x.referent_name||'—')+(maLigne&&x.id===maLigne.id?' (vous)':''))).join(''):bloc(d,'Discussion'))+(grouped&&peutTous?'<button class="tball" onclick="openThread(\''+d.id+'\',true)" title="Répondre à tous les destinataires"><i class="ti ti-messages"></i> Répondre à tous</button>':'')+'</div>';
+      let blocs;
+      if(grouped){
+        // Envoi groupé : deux actions claires (répondre à l'expéditeur / à tous), puis les destinataires en pastilles compactes.
+        const pastille=x=>{const n=cacheMessages.filter(m=>m.demande_id===x.id).length;const bd=cacheMessageBrouillons.some(b=>b.demande_id===x.id);const moi=maLigne&&x.id===maLigne.id;const tr=x.status==='traite';return '<button class="tchip'+(tr?' ok':'')+'" onclick="openThread(\''+x.id+'\')" title="'+escHtml((x.referent_name||'—')+' — '+(tr?'traitée':'en attente')+(n?' · '+n+' réponse'+(n>1?'s':''):'')+' — ouvrir la discussion individuelle')+'"><span class="tc-dot"></span>'+escHtml(x.referent_name||'—')+(moi?' <em>(vous)</em>':'')+(n>0?'<span class="tc-n">'+n+'</span>':'')+(bd?'<span title="Brouillon">📝</span>':'')+'</button>';};
+        const btnExp=maLigne?'<button class="tbtn prim" onclick="openThread(\''+maLigne.id+'\')" title="Votre réponse ne sera vue que par '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'"><i class="ti ti-arrow-back-up"></i> Répondre à '+escHtml(demandeDeNom(d)||'l\'expéditeur')+'</button>':'';
+        const btnTous=peutTous?'<button class="tbtn'+(maLigne?'':' prim')+'" onclick="openThread(\''+d.id+'\',true)" title="Même message envoyé à tous les destinataires"><i class="ti ti-messages"></i> Répondre à tous</button>':'';
+        const lib=peutTous?'Ou répondre à une seule personne':'Destinataires';
+        blocs='<div class="tgroup"><div class="tactions">'+btnExp+btnTous+'</div><div class="tlist"><span class="tlist-lbl">'+lib+' ('+g.length+')</span>'+g.map(pastille).join('')+'</div></div>';
+      }else blocs='<div class="tblocks">'+bloc(d,'Discussion')+'</div>';
       const deNom=demandeDeNom(d)||'—';
       const aNom=grouped?g.map(x=>x.referent_name).filter(Boolean).join(', '):demandeANom(d);
       const ligneDeA='<div class="dline"><span class="dl-lbl">De</span><b>'+hl(deNom)+'</b><span class="dl-arrow">→</span><span class="dl-lbl">À</span><b>'+hl(aNom||'—')+'</b><span class="dl-date">'+dateLabel+'</span></div>';
