@@ -286,6 +286,7 @@ async function loadEmployes(){
     (refs||[]).forEach(r=>ACCES_TERRAIN.add(r.employe_id));
   }
   renderListe();
+  vmChargerListe();
   /* employes.user_id est posé dès l'invitation : seule une connexion prouve que
      l'espace a été créé. Échec silencieux : la liste reste affichée sans statut. */
   COMPTES_ACTIFS=null;
@@ -340,7 +341,7 @@ function renderListe(){
       +'<div class="cinfo"><div class="cname">'+esc(e.prenom)+' '+esc(e.nom||'')+'</div>'
       +'<div class="cmeta">'+esc(e.poste||'—')+(e.email?' · '+esc(e.email):'')+'</div></div>'
       +codeImageHtml(e.code_pictos)
-      +statut+compte+terrain
+      +statut+vmBadgeListe(e)+compte+terrain
       +'<div class="acts">'
       +'<button class="btn btn-g btn-sm" onclick="openFiche(\''+e.id+'\')"><i class="ti ti-edit"></i></button>'
       +btnCompte+btnTerrain
@@ -390,6 +391,9 @@ function openFiche(id){
     empLoadContrats(e.id);
     archWrap.style.display='';
     renderArchivageBox(e);
+    document.getElementById('ficheVisitesWrap').style.display='';
+    document.getElementById('ficheVisitesZone').innerHTML='';
+    empFicheId=e.id;vmCharger(e.id);
     docExtWrap.style.display='';
     empDocExtCache=[];
     document.getElementById('ficheDocExtZone').innerHTML='';
@@ -401,6 +405,7 @@ function openFiche(id){
     document.getElementById('ficheContratsWrap').style.display='none';
     archWrap.style.display='none';
     docExtWrap.style.display='none';
+    document.getElementById('ficheVisitesWrap').style.display='none';
   }
   document.getElementById('modalFiche').classList.add('on');
 }
