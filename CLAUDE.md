@@ -39,6 +39,8 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 
 - Documents envoyés à UNE personne (hors catalogue de pièces et hors ressources communes) : table `stagiaires_envois` (`sql/stagiaires_envois.sql`, à appliquer à la main), fichiers sous `<id fiche>/envois/` du bucket `stagiaires`, gérés par `js/stagiaires/07-envois.js` ; l'edge function `dossier-stagiaire` les renvoie (`envois`) et signe l'ouverture (`envoi_url`, datée), y compris à l'étape entretien. Ajout d'un envoi = e-mail automatique « un document vous attend » (edge function `envoyer-envoi-stagiaire`, JWT activé, SMTP Gmail, colonne `prevenu_le`), appelé par `stgPrevenirEnvoi` ; ne bloque jamais l'ajout.
 
+- Sacs urgence / confinement : colonne « DLC / DLU » par article dans les annexes du protocole (Documents, `pu_json`, `js/pages/documents/06-protocole-urgence.js`, seuil `PU_SEUIL` = 30 j) ; section de Ma journée (`protocoleUrgenceARenouveler`, `demandes-3.js`) ; push hebdomadaire par crèche (lundi) via l'edge function `rappel-sacs-urgence` (à déployer, `--no-verify-jwt`, cron GitHub Actions `rappel-sacs-urgence.yml`, secret `RELANCE_TRIGGER_SECRET`), sans colonne d'état.
+
 ## Archives sur disque dur
 - Export des dossiers archivés d'une crèche en un .zip (direction uniquement) : `archExporterCreche` (`js/pages/parametres-archives.js`), carte « Archives sur disque dur » dans Paramètres › Les établissements (crèche sélectionnée). Il couvre enfants archivés, employés archivés et stagiaires clos, puis supprime les fichiers de Supabase après confirmation et écrit une ligne par dossier dans `archivage_purges`. Les exports dossier par dossier sont eux aussi réservés à la direction (`isDirection`).
 
