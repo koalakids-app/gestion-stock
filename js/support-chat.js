@@ -30,6 +30,16 @@
   let profilAbsent = null;    // { id, t } : profil introuvable ; on réessaie après DELAI_RETENTE_MS
   const DELAI_RETENTE_MS = 60000;
   let els = null;
+  // Présence (onglet « Équipe ») : réservée aux comptes référent·e / direction.
+  const PRES_PING_MS = 60000;
+  const PRES_LISTE_OUVERT_MS = 15000;
+  const PRES_VU_MAX_MS = 150000;      // signal plus vieux = hors ligne
+  const PRES_ACTIF_MAX_MS = 300000;   // pas d'activité depuis 5 min = inactif
+  let onglet = 'assistance';          // 'assistance' | 'equipe'
+  let presence = [];                  // lignes de kk_presence_liste
+  let timerPres = null;
+  let dernierPing = 0;
+  let derniereActivite = Date.now();
   const titreOrigine = document.title;
 
   // Client Supabase : celui de la page (`sb`) ; sur l'accueil (index.html), qui n'en a
@@ -111,6 +121,20 @@
 .kk-sc-conv .l2{font-size:12.5px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kk-sc-conv .l3{font-size:10.5px;color:#999}
 .kk-sc-pastille{background:#e03e3e;color:#fff;border-radius:10px;font-size:11px;font-weight:800;padding:0 6px;min-width:18px;text-align:center;align-self:center}
+#kk-sc-online{position:absolute;bottom:2px;right:-2px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#2e9e5b;color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center;border:2px solid #fff;box-sizing:border-box}
+.kk-sc-tabs{display:flex;background:#fff;border-bottom:1px solid #e0dff0}
+.kk-sc-tabs button{flex:1;border:none;background:transparent;padding:9px 6px;font:inherit;font-size:13px;font-weight:700;color:#888;cursor:pointer;border-bottom:3px solid transparent}
+.kk-sc-tabs button.on{color:var(--koala,#3D3580);border-bottom-color:var(--koala,#3D3580)}
+.kk-sc-pers{background:#fff;border:1px solid #e0dff0;border-radius:12px;padding:9px 12px;display:flex;align-items:center;gap:10px}
+.kk-sc-pers .pt{width:11px;height:11px;border-radius:50%;flex:none;background:#c9c9d3}
+.kk-sc-pers.en_ligne .pt{background:#2e9e5b;box-shadow:0 0 0 3px rgba(46,158,91,.2)}
+.kk-sc-pers.inactif .pt{background:#f0a400}
+.kk-sc-pers .pi{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.kk-sc-pers .pi b{font-size:13.5px}
+.kk-sc-pers .pi span{font-size:11.5px;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kk-sc-pers .ps{font-size:11px;color:#888;text-align:right;flex:none}
+.kk-sc-pers.hors{opacity:.75}
+.kk-sc-grp{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#888;margin:6px 2px 0}
 #kk-sc-toast{position:fixed;right:24px;bottom:150px;z-index:9989;max-width:300px;background:#2A2460;color:#fff;padding:10px 14px;border-radius:12px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.3);display:none;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Nunito,sans-serif}
 @media (max-width:768px){
   #kk-sc-btn{bottom:140px;right:16px}
@@ -128,7 +152,7 @@
     btn.type = 'button';
     btn.title = me.direction ? 'Messages de vos équipes' : 'Un problème ? Écrivez-nous';
     btn.setAttribute('aria-label', btn.title);
-    btn.innerHTML = '<img src="koala-chat.png" alt="Messages" style="width:70px;height:auto;pointer-events:none"><span id="kk-sc-badge"></span>';
+    btn.innerHTML = '<img src="koala-chat.png" alt="Messages" style="width:70px;height:auto;pointer-events:none"><span id="kk-sc-badge"></span><span id="kk-sc-online" title="Personnes en ligne"></span>';
     btn.addEventListener('click', basculer);
 
     const panel = document.createElement('div');
@@ -138,6 +162,8 @@
     panel.innerHTML =
       '<div class="kk-sc-head"><button type="button" id="kk-sc-back" style="display:none" aria-label="Retour">←</button>' +
       '<b id="kk-sc-titre"></b><button type="button" id="kk-sc-close" aria-label="Fermer">✕</button></div>' +
+      '<div class="kk-sc-tabs" id="kk-sc-tabs" style="display:none"><button type="button" data-onglet="assistance" class="on">💬 Assistance</button>' +
+      '<button type="button" data-onglet="equipe" id="kk-sc-tab-equipe">🟢 Équipe</button></div>' +
       '<div class="kk-sc-body" id="kk-sc-body"></div>' +
       '<div class="kk-sc-foot" id="kk-sc-foot"><textarea id="kk-sc-input" rows="1" maxlength="' + MAX_CAR + '"></textarea>' +
       '<button type="button" id="kk-sc-send">Envoyer</button></div>';
@@ -152,6 +178,8 @@
     els = {
       btn, panel, toast,
       badge: btn.querySelector('#kk-sc-badge'),
+      online: btn.querySelector('#kk-sc-online'),
+      tabs: panel.querySelector('#kk-sc-tabs'),
       titre: panel.querySelector('#kk-sc-titre'),
       body: panel.querySelector('#kk-sc-body'),
       foot: panel.querySelector('#kk-sc-foot'),
@@ -160,6 +188,16 @@
       back: panel.querySelector('#kk-sc-back')
     };
     panel.querySelector('#kk-sc-close').addEventListener('click', fermer);
+    if (me.presence) {
+      els.tabs.style.display = 'flex';
+      els.tabs.querySelectorAll('[data-onglet]').forEach(b => b.addEventListener('click', () => {
+        onglet = b.getAttribute('data-onglet');
+        majOnglets();
+        rendre();
+        if (onglet === 'equipe') chargerPresence(); else marquerLu();
+        planifierPresence();
+      }));
+    }
     els.back.addEventListener('click', () => { convActive = null; rendre(); });
     els.send.addEventListener('click', envoyer);
     els.input.addEventListener('keydown', e => {
@@ -174,6 +212,7 @@
   function detruireUI() {
     if (canal) { try { getSb().removeChannel(canal); } catch (e) {} canal = null; }
     clearTimeout(timer); timer = null;
+    clearTimeout(timerPres); timerPres = null; presence = []; onglet = 'assistance';
     ['kk-sc-btn', 'kk-sc-panel', 'kk-sc-toast'].forEach(id => { const n = document.getElementById(id); if (n) n.remove(); });
     els = null; msgs = []; me = null; uid = null; ouvert = false; convActive = null; nonLusPrec = 0;
     document.title = titreOrigine;
@@ -189,7 +228,11 @@
     // `direction` = « côté support » (voit la liste, répond) dans tout ce fichier.
     try {
       const { data: r } = await client.from('referents').select('*').eq('user_id', userId).maybeSingle();
-      if (r) return { nom: r.name || r.nom || 'Référent·e', direction: estSupport };
+      if (r) return {
+        nom: r.name || r.nom || 'Référent·e', direction: estSupport,
+        presence: r.role === 'referent' || r.role === 'direction',
+        estDirection: r.role === 'direction'
+      };
     } catch (e) { /* on tente la fiche collaborateur */ }
     try {
       const { data: e } = await client.from('employes').select('*').eq('user_id', userId).maybeSingle();
@@ -284,6 +327,8 @@
     const proche = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
     const saisie = els.input.value;
 
+    if (me.presence && onglet === 'equipe') { rendreEquipe(); return; }
+
     if (me.direction && !convActive) {
       els.titre.innerHTML = 'Messages de vos équipes<small>Cliquez sur une conversation pour répondre</small>';
       els.back.style.display = 'none';
@@ -341,6 +386,116 @@
     els.input.value = saisie;
     if (!depuisSondage || proche) body.scrollTop = body.scrollHeight;
   }
+
+  // ───────── Présence : qui est connecté ? ─────────
+  const NOMS_PAGES = {
+    index: 'Accueil', demandes: 'Demandes', inscriptions: 'Devis', contrats: 'Contrats', factures: 'Factures',
+    stock: 'Stock', infirmerie: 'Soins', documents: 'Documents', employes: 'Équipe', parametres: 'Paramètres',
+    collaborateur: 'Mon espace', suivi: 'Suivi', ludotheque: 'Ludothèque', terrain: 'Accès terrain', devis: 'Devis'
+  };
+  function statutPres(p) {
+    if (!p.vu_le) return 'hors';
+    const maintenant = Date.now();
+    if (maintenant - new Date(p.vu_le).getTime() > PRES_VU_MAX_MS) return 'hors';
+    const actif = p.actif_le ? maintenant - new Date(p.actif_le).getTime() : Infinity;
+    return actif > PRES_ACTIF_MAX_MS ? 'inactif' : 'en_ligne';
+  }
+  function depuis(iso) {
+    if (!iso) return 'jamais vu·e';
+    const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (min < 1) return 'à l’instant';
+    if (min < 60) return 'il y a ' + min + ' min';
+    const d = new Date(iso);
+    const h = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    return d.toDateString() === new Date().toDateString()
+      ? 'aujourd’hui ' + h
+      : 'le ' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + h;
+  }
+
+  async function pingPresence(force) {
+    const client = getSb();
+    if (!client || !uid || !me || !me.presence) return;
+    if (!force && Date.now() - dernierPing < PRES_PING_MS - 5000) return;
+    dernierPing = Date.now();
+    try {
+      await client.rpc('kk_presence_ping', {
+        p_page: NOMS_PAGES[nomPage()] || nomPage(),
+        p_actif: Date.now() - derniereActivite < PRES_ACTIF_MAX_MS && !document.hidden
+      });
+    } catch (e) { /* table non créée ou réseau : sans conséquence pour le reste de la bulle */ }
+  }
+
+  async function chargerPresence() {
+    const client = getSb();
+    if (!client || !uid || !me || !me.presence) return;
+    try {
+      const { data, error } = await client.rpc('kk_presence_liste');
+      if (error) { console.warn('[Présence]', error.message); return; }
+      presence = data || [];
+      majPresenceBulle();
+      if (ouvert && onglet === 'equipe') rendre(true);
+    } catch (e) { console.warn('[Présence]', e); }
+  }
+
+  function majPresenceBulle() {
+    if (!els || !me.presence) return;
+    const n = presence.filter(p => p.user_id !== uid && statutPres(p) === 'en_ligne').length;
+    els.online.style.display = n ? 'flex' : 'none';
+    els.online.textContent = String(n);
+    els.btn.title = (me.direction ? 'Messages de vos équipes' : 'Un problème ? Écrivez-nous') +
+      ' — ' + n + ' autre' + (n > 1 ? 's' : '') + ' personne' + (n > 1 ? 's' : '') + ' en ligne';
+    const t = els.tabs.querySelector('#kk-sc-tab-equipe');
+    if (t) t.textContent = '🟢 Équipe' + (n ? ' (' + n + ')' : '');
+  }
+
+  function majOnglets() {
+    if (!els) return;
+    els.tabs.querySelectorAll('[data-onglet]').forEach(b => b.classList.toggle('on', b.getAttribute('data-onglet') === onglet));
+  }
+
+  function rendreEquipe() {
+    els.titre.innerHTML = 'Qui est connecté·e ?<small>Direction et référent·es · mis à jour toutes les minutes</small>';
+    els.back.style.display = 'none';
+    els.foot.style.display = 'none';
+    const lignes = presence.map(p => ({ p, st: statutPres(p) }));
+    const ordre = { en_ligne: 0, inactif: 1, hors: 2 };
+    lignes.sort((a, b) => ordre[a.st] - ordre[b.st] ||
+      (new Date(b.p.vu_le || 0) - new Date(a.p.vu_le || 0)) || String(a.p.nom).localeCompare(String(b.p.nom), 'fr'));
+    if (!lignes.length) {
+      els.body.innerHTML = '<div class="kk-sc-vide">Chargement de l’équipe…</div>';
+      return;
+    }
+    const libelle = { en_ligne: 'En ligne', inactif: 'Inactif·ve', hors: 'Hors ligne' };
+    let html = '', groupe = null;
+    lignes.forEach(({ p, st }) => {
+      if (st !== groupe) {
+        groupe = st;
+        html += '<div class="kk-sc-grp">' + libelle[st] + ' · ' + lignes.filter(l => l.st === st).length + '</div>';
+      }
+      const sous = [p.role === 'direction' ? 'Direction' : 'Référent·e', p.creche_nom].filter(Boolean).join(' · ') +
+        (st !== 'hors' && p.page ? ' · 📍 ' + p.page : '');
+      const droite = st === 'en_ligne' ? 'en ligne' : st === 'inactif' ? 'actif·ve ' + depuis(p.actif_le) : 'vu·e ' + depuis(p.vu_le);
+      html += '<div class="kk-sc-pers ' + (st === 'hors' ? 'hors' : st) + '"><span class="pt"></span>' +
+        '<span class="pi"><b>' + esc(p.nom || 'Sans nom') + (p.user_id === uid ? ' (vous)' : '') + '</b><span>' + esc(sous) + '</span></span>' +
+        '<span class="ps">' + esc(droite) + '</span></div>';
+    });
+    els.body.innerHTML = html;
+  }
+
+  function planifierPresence() {
+    clearTimeout(timerPres);
+    if (!els || !me || !me.presence) return;
+    const delai = ouvert && onglet === 'equipe' ? PRES_LISTE_OUVERT_MS : PRES_PING_MS;
+    timerPres = setTimeout(async () => {
+      if (!els) return;
+      await pingPresence(false);
+      await chargerPresence();
+      planifierPresence();
+    }, delai);
+  }
+
+  ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach(ev =>
+    window.addEventListener(ev, () => { derniereActivite = Date.now(); }, { passive: true, capture: true }));
 
   // ───────── Envoi ─────────
   async function envoyer() {
@@ -412,6 +567,7 @@
     rendre();
     marquerLu();
     planifier();
+    if (me.presence && onglet === 'equipe') { chargerPresence(); planifierPresence(); }
     if (!me.direction || convActive) setTimeout(() => { if (els) els.input.focus(); }, 50);
   }
   function fermer() {
@@ -468,9 +624,18 @@
     ecouterTempsReel(client);
     await charger();
     planifier();
+    if (me.presence) {
+      await pingPresence(true);
+      await chargerPresence();
+      planifierPresence();
+    }
   }
 
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && els) charger(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !els) return;
+    charger();
+    if (me && me.presence) { derniereActivite = Date.now(); pingPresence(false).then(chargerPresence); }
+  });
 
   function demarrer() {
     verifierSession();
