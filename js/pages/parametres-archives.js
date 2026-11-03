@@ -43,12 +43,14 @@ async function archCollecter(crecheId){
     return data||[];
   };
   const idsDe=t=>personnes.filter(x=>x.type===t).map(x=>x.p.id);
-  const [adm,pai,vac,emd,std]=await Promise.all([
+  const [adm,pai,vac,emd,std,vmd]=await Promise.all([
     lire('enfants_documents_admin','enfant_id',idsDe('enfant')),
     lire('enfants_pai','enfant_id',idsDe('enfant')),
     lire('vaccins_pj','enfant_id',idsDe('enfant')),
     lire('employes_documents','employe_id',idsDe('employe')),
-    lire('stagiaires_documents','stagiaire_id',idsDe('stagiaire'))
+    lire('stagiaires_documents','stagiaire_id',idsDe('stagiaire')),
+    // comptes rendus de visite médicale (Odalia) : seules les lignes avec fichier
+    lire('employes_visites_medicales','employe_id',idsDe('employe')).catch(()=>[])
   ]);
   const pers=(type,id)=>personnes.find(x=>x.type===type&&String(x.p.id)===String(id));
   const ajoute=(liste,type,col,dossier,table,bucketDefaut)=>liste.forEach(d=>{
@@ -59,6 +61,8 @@ async function archCollecter(crecheId){
   ajoute(pai,'enfant','enfant_id','pai','enfants_pai',null);
   ajoute(vac,'enfant','enfant_id','vaccinations','vaccins_pj',null);
   ajoute(emd,'employe','employe_id','embauche','employes_documents',ARCH_EMP_BUCKET);
+  ajoute(vmd.filter(v=>v.piece_path).map(v=>Object.assign({},v,{bucket:v.piece_bucket,path:v.piece_path,filename:v.piece_nom||'compte-rendu'})),
+    'employe','employe_id','visites-medicales','employes_visites_medicales',ARCH_EMP_BUCKET);
   ajoute(std,'stagiaire','stagiaire_id','','stagiaires_documents','stagiaires');
   return{personnes,items};
 }
@@ -141,7 +145,10 @@ async function archExporterCrecheEtapes(){
         const{error:rmErr}=await sb.storage.from(bucket).remove([it.d.path]);
         if(rmErr)console.warn('[archExporterCreche] fichier non supprimé du stockage',it.d.id,rmErr.message);
       }
-      const{error:delErr}=await sb.from(it.table).delete().eq('id',it.d.id);
+      // une visite garde sa date et son avis : on ne retire que le fichier joint
+      const{error:delErr}=it.table==='employes_visites_medicales'
+        ?await sb.from(it.table).update({piece_bucket:null,piece_path:null,piece_nom:null}).eq('id',it.d.id)
+        :await sb.from(it.table).delete().eq('id',it.d.id);
       if(delErr)throw delErr;
       bilan.ok++;
     }catch(err){
