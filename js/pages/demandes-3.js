@@ -273,6 +273,31 @@ function periodesEssaiARelancer(crecheId){
     .sort((a,b)=>a._essaiFin.localeCompare(b._essaiFin));
 }
 
+/* Protocole urgence et confinement (Documents) : produits des sacs rouge et bleu
+   périmés ou à moins de 30 jours de leur DLC / DLU. Les dates sont dans
+   documents_reponses.donnees.pu_json (une réponse par crèche) ; la RLS ne
+   montre à une référente que sa crèche, le filtre ne fait que le redire. */
+async function protocoleUrgenceARenouveler(crecheId){
+  const{data:docs,error:e1}=await sb.from('documents_koala').select('id').eq('template_key','protocole_urgence');
+  if(e1)throw e1;
+  const ids=(docs||[]).map(d=>d.id);
+  if(!ids.length)return[];
+  let q=sb.from('documents_reponses').select('id,document_id,creche_id,donnees').in('document_id',ids);
+  if(crecheId)q=q.eq('creche_id',crecheId);
+  const{data,error}=await q;
+  if(error)throw error;
+  const jour=d=>Math.round((new Date(d+'T00:00:00')-new Date(todayStr()+'T00:00:00'))/86400000);
+  return(data||[]).map(r=>{
+    let st=null;try{st=JSON.parse((r.donnees&&r.donnees.pu_json)||'');}catch(e){}
+    const items=[];
+    if(st)[['r','Sac rouge'],['b','Sac bleu']].forEach(([k,nom])=>(st[k]||[]).forEach(sec=>(sec.items||[]).forEach(it=>{
+      if(it&&it.d&&String(it.m||'').trim()){const j=jour(it.d);if(!isNaN(j)&&j<=30)items.push({m:it.m,sac:nom,j:j});}
+    })));
+    items.sort((a,b)=>a.j-b.j);
+    return{rep:r,items:items};
+  }).filter(x=>x.items.length);
+}
+
 async function brRender(){
   const box=document.getElementById('br-body');if(!box)return;
   box.innerHTML=brVide('Chargement…');
@@ -359,19 +384,21 @@ async function brRender(){
   // Les quatre requêtes sont indépendantes : parallélisées pour ne pas
   // allonger le temps d'ouverture perçu de la modale.
   const criblage=isDirection?null:maCreche;
-  const[vaccRetard,dossiersRelance,devisRelance,demandesRelance,piecesRelance,depots]=await Promise.all([
+  const[vaccRetard,dossiersRelance,devisRelance,demandesRelance,piecesRelance,depots,sacsPeremption]=await Promise.all([
     vaccinationsEnRetard(criblage).catch(e=>{console.warn('[briefing] vaccinations',e);return[];}),
     dossiersFamilleARelancer(criblage).catch(e=>{console.warn('[briefing] dossiers familles',e);return[];}),
     devisARelancer(criblage).catch(e=>{console.warn('[briefing] devis',e);return[];}),
     demandesARelancer(criblage).catch(e=>{console.warn('[briefing] demandes à relancer',e);return[];}),
     piecesARelancer(criblage).catch(e=>{console.warn('[briefing] pièces à relancer',e);return[];}),
-    depotsARegarder(criblage).catch(e=>{console.warn('[briefing] dépôts',e);return[];})
+    depotsARegarder(criblage).catch(e=>{console.warn('[briefing] dépôts',e);return[];}),
+    protocoleUrgenceARenouveler(criblage).catch(e=>{console.warn('[briefing] sacs urgence',e);return[];})
   ]);
+  const nSacs=sacsPeremption.reduce((n,x)=>n+x.items.length,0);
 
   // ── En-tête : le compte de ce qui demande une action ───────────────────
   const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length
     +stgRefuses.length+stgManquants.length+vaccRetard.length+dossiersRelance.length+devisRelance.length
-    +demandesRelance.length+piecesRelance.length+depots.length;
+    +demandesRelance.length+piecesRelance.length+depots.length+nSacs;
   const res=document.getElementById('br-resume');
   if(res){
     res.className='br-resume'+(nAction?' br-chaud':'');
@@ -530,6 +557,21 @@ async function brRender(){
         }).join('')+(demandesRelance.length>8?'<div class="br-plus">+ '+(demandesRelance.length-8)+' autres</div>':'')
       :brVide('✅ Aucune préinscription à relancer'),
     demandesRelance.length?'accent':'');
+
+  // 5septies. Sacs urgence / confinement : produits périmés ou bientôt périmés
+  {
+    const lignes=[];
+    sacsPeremption.forEach(x=>x.items.forEach(i=>lignes.push({x:x,i:i})));
+    lignes.sort((a,b)=>a.i.j-b.i.j);
+    h+=brSection('first-aid-kit','Sacs urgence / confinement — produits à renouveler',nSacs,
+      lignes.slice(0,8).map(({x,i})=>
+        brLigneClic('🎒 '+escHtml(i.m)+' <span class="br-cr">('+i.sac+')</span>'+brSuffixeCreche(x.rep.creche_id),
+          i.j<0?'périmé depuis '+(-i.j)+' j':(i.j===0?'périme aujourd\'hui':'dans '+i.j+' j'),
+          'window.location.href=\'documents.html?doc='+encodeURIComponent(x.rep.document_id)+'&rep='+encodeURIComponent(x.rep.id)+'\'',
+          i.j<=7)
+      ).join('')+(nSacs>8?'<div class="br-plus">+ '+(nSacs-8)+' autres</div>':''),
+      lignes.some(l=>l.i.j<=7)?'accent':'');
+  }
 
   // 6. Événements du jour
   h+=brSection('calendar-event','Événements du jour',evts.length,
