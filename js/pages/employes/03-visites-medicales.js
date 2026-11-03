@@ -44,7 +44,7 @@ function vmRendre(erreurTable){
     return'<div style="border-bottom:1px solid var(--line);padding:8px 2px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">'
       +'<div style="font-size:12.5px"><strong>'+esc(VISMED_TYPES[v.type]||v.type)+'</strong> · '+esc(v.organisme||VISMED_ORGANISME)
       +'<div style="font-size:11.5px;color:var(--muted)">'
-      +(fait?'Effectuée le '+vismedDateFr(v.date_visite):'RDV le '+vismedDateFr(v.rdv_le))
+      +(fait?'Effectuée le '+vismedDateFr(v.date_visite):'RDV le '+vismedDateFr(v.rdv_le)+(v.rdv_heure?' à '+String(v.rdv_heure).slice(0,5).replace(':','h'):''))
       +(v.avis?' · '+esc(VISMED_AVIS[v.avis]):'')
       +(fait&&v.prochaine_le?' · prochaine avant le '+vismedDateFr(v.prochaine_le):'')
       +(v.observations?' · '+esc(v.observations):'')+'</div></div>'
@@ -66,6 +66,7 @@ function vmRendre(erreurTable){
     +'<label style="flex:1;min-width:140px;font-size:11px;color:var(--muted)">Avis<select id="vmAvis" style="width:100%;'+st+'"><option value="">—</option>'+Object.keys(VISMED_AVIS).map(k=>'<option value="'+k+'"'+(edit.avis===k?' selected':'')+'>'+esc(VISMED_AVIS[k])+'</option>').join('')+'</select></label>'
     +'<input id="vmObs" placeholder="Observation (facultatif, sans donnée médicale)" value="'+esc(edit.observations||'')+'" style="flex:3;min-width:180px;'+st+'">'
     +'<label style="flex:3;min-width:200px;font-size:11px;color:var(--muted)">Compte rendu d\'Odalia (PDF ou photo)'+(edit.piece_path?' — déjà joint : '+esc(edit.piece_nom||'fichier')+', un nouveau fichier le remplace':'')+'<input id="vmFichier" type="file" accept=".pdf,image/*" style="width:100%;'+st+'"></label>'
+    +'<div id="vmErr" style="flex-basis:100%;color:var(--red);font-size:12px;font-weight:600"></div>'
     +'<button type="button" class="btn btn-s btn-sm" onclick="vmEnregistrer()"><i class="ti ti-'+(vmEditId?'device-floppy':'plus')+'"></i> '+(vmEditId?'Enregistrer':'Ajouter')+'</button>'
     +(vmEditId?'<button type="button" class="btn btn-g btn-sm" onclick="vmEditId=\'\';vmRendre()">Annuler</button>':'')
     +'</div>';
@@ -75,13 +76,19 @@ function vmProposerProchaine(){
   if(d&&p&&!p.value)p.value=vismedAjout(d,VISMED_PERIODE_ANS);
 }
 function vmModifier(id){vmEditId=id;vmRendre();const el=document.getElementById('vmDate');if(el)el.focus();}
+function vmErreur(m){
+  const el=document.getElementById('vmErr');if(el)el.textContent=m||'';
+  if(m)toast(m,true);
+}
+/* Renvoie true si la visite est enregistrée (appelée aussi par saveFiche). */
 async function vmEnregistrer(){
+  vmErreur('');
   const eid=empFicheId;
   const date=val('vmDate')||null,rdv=val('vmRdv')||null;
-  if(!date&&!rdv){toast('Renseignez la date de la visite ou la date du RDV.',true);return;}
+  if(!date&&!rdv){vmErreur('Renseignez la date de la visite ou la date du RDV.');return false;}
   const row={
     employe_id:eid,type:val('vmType')||'periodique',organisme:VISMED_ORGANISME,
-    date_visite:date,rdv_le:date?null:rdv,
+    date_visite:date,rdv_le:date?null:rdv,rdv_heure:date?null:(rdv&&val('vmHeure')||null),
     prochaine_le:date?(val('vmProchaine')||vismedAjout(date,VISMED_PERIODE_ANS)):null,
     avis:date?(val('vmAvis')||null):null,observations:val('vmObs')||null
   };
@@ -92,7 +99,7 @@ async function vmEnregistrer(){
     const ext=(fichier.name.split('.').pop()||'bin').toLowerCase();
     nouveauChemin=eid+'/visites-medicales/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
     const{error:upErr}=await sb.storage.from(EMP_DOCS_BUCKET).upload(nouveauChemin,fichier);
-    if(upErr){toast('Envoi du fichier impossible : '+upErr.message,true);return;}
+    if(upErr){vmErreur('Envoi du fichier impossible : '+upErr.message);return false;}
     row.piece_bucket=EMP_DOCS_BUCKET;row.piece_path=nouveauChemin;row.piece_nom=fichier.name;
   }
   const{error}=vmEditId
@@ -100,12 +107,13 @@ async function vmEnregistrer(){
     :await sb.from('employes_visites_medicales').insert(row);
   if(error){
     if(nouveauChemin)sb.storage.from(EMP_DOCS_BUCKET).remove([nouveauChemin]);
-    toast('Enregistrement impossible : '+error.message,true);return;
+    vmErreur('Enregistrement impossible : '+error.message);return false;
   }
   if(nouveauChemin&&ancien&&ancien.piece_path)sb.storage.from(ancien.piece_bucket||EMP_DOCS_BUCKET).remove([ancien.piece_path]);
   toast('Visite médicale enregistrée.');
   await vmCharger(eid);
   VISITES_PAR_EMP[eid]=vmCache;renderListe();
+  return true;
 }
 async function vmSupprimer(id){
   if(!confirm('Supprimer cette visite du suivi (et son compte rendu joint) ?'))return;

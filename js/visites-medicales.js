@@ -30,6 +30,7 @@ function vismedEtat(emp,visites,auj){
   var rdvs=(visites||[]).filter(function(v){return !v.date_visite&&v.rdv_le&&v.rdv_le>=auj;})
     .sort(function(a,b){return a.rdv_le.localeCompare(b.rdv_le);});
   var rdv=rdvs[0]?rdvs[0].rdv_le:null;
+  var rdvHeure=rdvs[0]&&rdvs[0].rdv_heure?String(rdvs[0].rdv_heure).slice(0,5):'';
   var echeance=null;
   if(derniere)echeance=derniere.prochaine_le||vismedAjout(derniere.date_visite,VISMED_PERIODE_ANS);
   else if(emp&&emp.date_debut)echeance=vismedAjout(String(emp.date_debut).slice(0,10),0,3);
@@ -38,7 +39,7 @@ function vismedEtat(emp,visites,auj){
   var niveau=j<0?'retard':(j<=VISMED_SEUIL_JOURS?'bientot':'ok');
   var label;
   if(rdv&&niveau!=='ok')niveau='rdv';
-  if(niveau==='rdv')label='RDV le '+vismedDateFr(rdv);
+  if(niveau==='rdv')label='RDV le '+vismedDateFr(rdv)+(rdvHeure?' à '+rdvHeure.replace(':','h'):'');
   else if(niveau==='retard')label=(derniere?'En retard de ':'Jamais passée — en retard de ')+(-j)+' j';
   else if(niveau==='bientot')label='À planifier avant le '+vismedDateFr(echeance)+' ('+j+' j)';
   else label='À jour — prochaine avant le '+vismedDateFr(echeance);

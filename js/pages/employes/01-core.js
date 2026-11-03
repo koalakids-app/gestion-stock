@@ -677,6 +677,12 @@ async function saveFiche(){
     ({error}=await sb.from('employes').insert(row));
   }
   if(error){document.getElementById('ficheErr').textContent=error.message;return;}
+  /* Une visite médicale saisie mais pas encore ajoutée part avec la fiche,
+     sinon elle serait perdue en fermant la fenêtre. */
+  if(id&&typeof vmEnregistrer==='function'&&(val('vmDate')||val('vmRdv'))){
+    const ok=await vmEnregistrer();
+    if(!ok){document.getElementById('ficheErr').textContent='Fiche enregistrée, mais la visite médicale n\'a pas pu l\'être (voir le message dans la section).';await loadEmployes();return;}
+  }
   closeFiche();
   toast('Fiche enregistrée.');
   await loadEmployes();
