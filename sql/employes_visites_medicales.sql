@@ -22,6 +22,9 @@ create table if not exists public.employes_visites_medicales (
   prochaine_le date,
   avis         text check (avis in ('apte','apte_amenagements','inapte')),
   observations text,
+  piece_bucket text,
+  piece_path   text,
+  piece_nom    text,
   created_at   timestamptz not null default now()
 );
 
@@ -66,3 +69,12 @@ create policy visites_medicales_delete on public.employes_visites_medicales
     join public.employes e on e.id = employes_visites_medicales.employe_id
     where r.user_id = auth.uid()
       and (r.creche_id is null or r.creche_id = e.creche_id)));
+
+-- Compte rendu (PDF/photo) envoyé par Odalia : fichier dans le bucket privé
+-- `documents-employes` sous <id fiche>/visites-medicales/ (donc couvert par les
+-- policies existantes de ce bucket). Si la table existe déjà, ces 3 colonnes
+-- sont ajoutées ici.
+alter table public.employes_visites_medicales
+  add column if not exists piece_bucket text,
+  add column if not exists piece_path   text,
+  add column if not exists piece_nom    text;

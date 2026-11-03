@@ -49,6 +49,7 @@ function vmRendre(erreurTable){
       +(fait&&v.prochaine_le?' · prochaine avant le '+vismedDateFr(v.prochaine_le):'')
       +(v.observations?' · '+esc(v.observations):'')+'</div></div>'
       +'<span style="display:flex;gap:6px">'
+      +(v.piece_path?'<button type="button" class="btn btn-g btn-sm" onclick="vmOuvrirPiece(\''+v.id+'\')" title="'+esc(v.piece_nom||'Compte rendu')+'"><i class="ti ti-file-text"></i> Compte rendu</button>':'')
       +'<button type="button" class="btn btn-g btn-sm" onclick="vmModifier(\''+v.id+'\')">'+(fait?'<i class="ti ti-edit"></i>':'<i class="ti ti-check"></i> Renseigner la visite')+'</button>'
       +'<button type="button" onclick="vmSupprimer(\''+v.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:14px"><i class="ti ti-trash"></i></button>'
       +'</span></div>';
@@ -64,6 +65,7 @@ function vmRendre(erreurTable){
     +'<label style="flex:1;min-width:120px;font-size:11px;color:var(--muted)">Prochaine avant le<input id="vmProchaine" type="date" value="'+esc(edit.prochaine_le||'')+'" style="width:100%;'+st+'"></label>'
     +'<label style="flex:1;min-width:140px;font-size:11px;color:var(--muted)">Avis<select id="vmAvis" style="width:100%;'+st+'"><option value="">—</option>'+Object.keys(VISMED_AVIS).map(k=>'<option value="'+k+'"'+(edit.avis===k?' selected':'')+'>'+esc(VISMED_AVIS[k])+'</option>').join('')+'</select></label>'
     +'<input id="vmObs" placeholder="Observation (facultatif, sans donnée médicale)" value="'+esc(edit.observations||'')+'" style="flex:3;min-width:180px;'+st+'">'
+    +'<label style="flex:3;min-width:200px;font-size:11px;color:var(--muted)">Compte rendu d\'Odalia (PDF ou photo)'+(edit.piece_path?' — déjà joint : '+esc(edit.piece_nom||'fichier')+', un nouveau fichier le remplace':'')+'<input id="vmFichier" type="file" accept=".pdf,image/*" style="width:100%;'+st+'"></label>'
     +'<button type="button" class="btn btn-s btn-sm" onclick="vmEnregistrer()"><i class="ti ti-'+(vmEditId?'device-floppy':'plus')+'"></i> '+(vmEditId?'Enregistrer':'Ajouter')+'</button>'
     +(vmEditId?'<button type="button" class="btn btn-g btn-sm" onclick="vmEditId=\'\';vmRendre()">Annuler</button>':'')
     +'</div>';
@@ -83,18 +85,42 @@ async function vmEnregistrer(){
     prochaine_le:date?(val('vmProchaine')||vismedAjout(date,VISMED_PERIODE_ANS)):null,
     avis:date?(val('vmAvis')||null):null,observations:val('vmObs')||null
   };
+  const fichier=(document.getElementById('vmFichier')||{}).files&&document.getElementById('vmFichier').files[0];
+  const ancien=vmEditId?vmCache.find(v=>v.id===vmEditId):null;
+  let nouveauChemin=null;
+  if(fichier){
+    const ext=(fichier.name.split('.').pop()||'bin').toLowerCase();
+    nouveauChemin=eid+'/visites-medicales/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+    const{error:upErr}=await sb.storage.from(EMP_DOCS_BUCKET).upload(nouveauChemin,fichier);
+    if(upErr){toast('Envoi du fichier impossible : '+upErr.message,true);return;}
+    row.piece_bucket=EMP_DOCS_BUCKET;row.piece_path=nouveauChemin;row.piece_nom=fichier.name;
+  }
   const{error}=vmEditId
     ?await sb.from('employes_visites_medicales').update(row).eq('id',vmEditId)
     :await sb.from('employes_visites_medicales').insert(row);
-  if(error){toast('Enregistrement impossible : '+error.message,true);return;}
+  if(error){
+    if(nouveauChemin)sb.storage.from(EMP_DOCS_BUCKET).remove([nouveauChemin]);
+    toast('Enregistrement impossible : '+error.message,true);return;
+  }
+  if(nouveauChemin&&ancien&&ancien.piece_path)sb.storage.from(ancien.piece_bucket||EMP_DOCS_BUCKET).remove([ancien.piece_path]);
   toast('Visite médicale enregistrée.');
   await vmCharger(eid);
   VISITES_PAR_EMP[eid]=vmCache;renderListe();
 }
 async function vmSupprimer(id){
-  if(!confirm('Supprimer cette visite du suivi ?'))return;
+  if(!confirm('Supprimer cette visite du suivi (et son compte rendu joint) ?'))return;
+  const v=vmCache.find(x=>x.id===id);
   const{error}=await sb.from('employes_visites_medicales').delete().eq('id',id);
   if(error){toast('Suppression impossible : '+error.message,true);return;}
+  if(v&&v.piece_path)sb.storage.from(v.piece_bucket||EMP_DOCS_BUCKET).remove([v.piece_path]);
   await vmCharger(empFicheId);
   VISITES_PAR_EMP[empFicheId]=vmCache;renderListe();
+}
+async function vmOuvrirPiece(id){
+  const v=vmCache.find(x=>x.id===id);
+  if(!v||!v.piece_path){toast('Fichier introuvable.',true);return;}
+  if(typeof kkJournaliserAcces==='function')kkJournaliserAcces(v.piece_bucket||EMP_DOCS_BUCKET,v.piece_path,{entite_type:'employe',entite_id:v.employe_id,libelle:v.piece_nom||'Compte rendu de visite médicale'});
+  const{data,error}=await sb.storage.from(v.piece_bucket||EMP_DOCS_BUCKET).createSignedUrl(v.piece_path,EMP_DOCS_TTL);
+  if(error||!data){toast('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'),true);return;}
+  window.open(data.signedUrl,'_blank','noopener');
 }
