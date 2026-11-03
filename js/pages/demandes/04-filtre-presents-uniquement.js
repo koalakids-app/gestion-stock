@@ -165,7 +165,7 @@ window.mcmCmdRender=mcmCmdRender;
 /* --- Menus des semaines à venir (import + liste) --- */
 async function mcmLoadMenusList(){
   const zone=document.getElementById('mcm-menus-list');
-  if(zone)zone.innerHTML='<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
+  if(zone&&!zone.querySelector('details[data-sem]'))zone.innerHTML='<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
   try{
     const{data,error}=await sb.from('menus_semaine').select('*').order('date_debut',{ascending:true}).order('jour');
     if(error)throw error;
@@ -182,6 +182,11 @@ function mcmRenderMenusList(){
   const weeks={};
   mcmMenusCache.forEach(function(m){(weeks[m.date_debut]=weeks[m.date_debut]||[]).push(m);});
   const dates=Object.keys(weeks).sort();
+  // Repliées à l'ouverture de l'onglet : seule la semaine en cours est ouverte. Un nouveau rendu
+  // (changement de crèche) garde l'état ouvert/fermé choisi par l'utilisateur.
+  const dejaAffiche=zone.querySelector('details[data-sem]');
+  const ouvertes={};
+  zone.querySelectorAll('details[data-sem]').forEach(function(x){ouvertes[x.dataset.sem]=x.open;});
   if(!dates.length){zone.innerHTML='<div class="empty-state"><i class="ti ti-tools-kitchen-2"></i><p>Aucun menu importé pour le moment.</p></div>';return;}
   // direction : choix de la crèche dont les goûters remplacent ceux du traiteur
   const cid=gouterCrecheCourante();
@@ -208,7 +213,8 @@ function mcmRenderMenusList(){
       html+='</div></div>';
       return html;
     }
-    return'<details'+(isPast?'':' open')+' style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;background:'+(isPast?'#fafafa':'var(--koala-lightest,#F7F6FC)')+'">'
+    const ouvert=dejaAffiche?!!ouvertes[d]:d===todayMonday;
+    return'<details data-sem="'+d+'"'+(ouvert?' open':'')+' style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;background:'+(isPast?'#fafafa':'var(--koala-lightest,#F7F6FC)')+'">'
       +'<summary class="menus-summary" style="cursor:pointer;font-weight:800;color:var(--koala-dark);font-size:13px">'
       +'<span class="menus-summary-titre">'+(isPast?'':'🟢 ')+'Semaine du '+escHtml(d)+(semaineNum?' (S'+semaineNum+')':'')+(isPast?' — passée':'')+'</span>'
       +'<button class="ibtn" onclick="event.preventDefault();event.stopPropagation();mcmMenuPdf(\''+d+'\')" title="Générer le PDF du menu puis l\'imprimer"><i class="ti ti-printer"></i></button>'
