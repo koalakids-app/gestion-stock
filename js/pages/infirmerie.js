@@ -557,7 +557,10 @@ async function saveEntry(){
     row.circonstances=document.getElementById('eCirconstances2').value.trim()||null;
     if(!row.medicament){toast('Le nom du m\u00e9dicament est obligatoire.',true);return;}
     if(!row.autorisation_parentale && !row.pai_id){
-      if(!confirm("Aucune autorisation parentale coch\u00e9e et aucun PAI s\u00e9lectionn\u00e9.\n\nEnregistrer quand m\u00eame ?"))return;
+      const sansDoc=(autSignee(enfantId)===false)?"\n\nAucune autorisation de m\u00e9dicament sign\u00e9e non plus dans l\u2019onglet Autorisations.":"";
+      if(!confirm("Aucune autorisation parentale coch\u00e9e et aucun PAI s\u00e9lectionn\u00e9."+sansDoc+"\n\nEnregistrer quand m\u00eame ?"))return;
+    }else if(row.autorisation_parentale && !row.pai_id && autSignee(enfantId)===false){
+      if(!confirm("L\u2019autorisation parentale est coch\u00e9e, mais aucune autorisation de m\u00e9dicament sign\u00e9e n\u2019existe pour cet enfant dans l\u2019onglet Autorisations.\n\nEnregistrer quand m\u00eame ?"))return;
     }
   }
 
@@ -914,6 +917,13 @@ async function loadAut(){
   }
   renderAut();
 }
+/* true = autorisation de medicament signee (ou remise en main propre) ;
+   false = aucune ; null = inconnu (employe, modele absent, enfant non choisi). */
+function autSignee(enfantId){
+  const d=AUT_DOCS.medicament_ponctuel;
+  if(IS_EMPLOYE||!enfantId||!d)return null;
+  return AUT_REPS.some(r=>r.document_id===d.id&&r.enfant_id===enfantId&&(r.statut==='signe'||r.statut==='remis'));
+}
 function autBadge(st){
   if(st==='signe')return '<span style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap;background:var(--green-light,#E3F5EA);color:var(--green,#1e8e4e)">✅ Signée</span>';
   if(st==='remis')return '<span style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap;background:var(--green-light,#E3F5EA);color:var(--green,#1e8e4e)">\u{1F4E5} Reçue en main propre</span>';
@@ -994,7 +1004,7 @@ Cochez <b>Panier repas</b> si la famille fournit le repas et le go\u00fbter de l
 l\u2019enfant est exclu de la commande repas au traiteur et sa fiche enfant l\u2019indique. Cl\u00f4turer le PAI le remet dans la commande.</p>
 
 <p style="margin-top:12px"><b>Les autorisations</b><br>
-L\u2019onglet Autorisations rassemble les documents que les parents doivent signer : <b>autorisation de m\u00e9dicament ponctuelle</b>, <b>DRP</b> (d\u00e9sobstruction rhino-pharyng\u00e9e) et <b>protocole lait maternel</b>. Chaque enfant montre l\u2019\u00e9tat de chaque document (sign\u00e9e, \u00e0 faire signer, re\u00e7ue en main propre) ; \u00ab Ouvrir \u00bb ou \u00ab Faire signer \u00bb m\u00e8ne au document dans Documents. Cochez \u00ab Afficher aussi les enfants sans autorisation \u00bb pour rep\u00e9rer ceux qui n\u2019en ont aucune. Onglet r\u00e9serv\u00e9 aux r\u00e9f\u00e9rentes et \u00e0 la direction.</p>
+L\u2019onglet Autorisations rassemble les documents que les parents doivent signer : <b>autorisation de m\u00e9dicament ponctuelle</b>, <b>DRP</b> (d\u00e9sobstruction rhino-pharyng\u00e9e) et <b>protocole lait maternel</b>. Chaque enfant montre l\u2019\u00e9tat de chaque document (sign\u00e9e, \u00e0 faire signer, re\u00e7ue en main propre) ; \u00ab Ouvrir \u00bb ou \u00ab Faire signer \u00bb m\u00e8ne au document dans Documents. Lors de la saisie d\u2019un m\u00e9dicament, le registre pr\u00e9vient s\u2019il n\u2019y a pas d\u2019autorisation de m\u00e9dicament sign\u00e9e pour l\u2019enfant (sans PAI). Cochez \u00ab Afficher aussi les enfants sans autorisation \u00bb pour rep\u00e9rer ceux qui n\u2019en ont aucune. Onglet r\u00e9serv\u00e9 aux r\u00e9f\u00e9rentes et \u00e0 la direction.</p>
 
 <p style="margin-top:12px"><b>Signaler \u00e0 la direction</b><br>
 Depuis le d\u00e9tail d\u2019un soin, le bouton \u00ab Signaler \u00e0 la direction \u00bb cr\u00e9e un
