@@ -97,7 +97,7 @@ async function renderPresenceHebdo(){
       +' au '+days5[4].toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})
       +' (S'+hebdoNumSemaine(days5[0])+')';
   }
-  const allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
+  const allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId&&!e.archive_le):cacheEnfants.filter(e=>!e.archive_le)).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistré.</p></div>';_hebdoExportCtx=null;return;}
   if(!_syncSilencieuse)view.innerHTML='<div style="font-size:12px;color:var(--muted);padding:0.5rem 0">Chargement…</div>';
   let presData=[];

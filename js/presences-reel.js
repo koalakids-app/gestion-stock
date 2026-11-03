@@ -220,7 +220,7 @@ async function prRenderSemaine(){
   if(!box)return;
   const crecheId=getPresenceCrecheId();
   if(isDirection&&!crecheId){box.innerHTML='';return;}
-  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants])
+  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId&&!e.archive_le):cacheEnfants.filter(e=>!e.archive_le))
     .sort((a,b)=>(a.prenom||'').localeCompare(b.prenom||'','fr',{sensitivity:'base'})||(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'}));
   if(!enfants.length){box.innerHTML='';return;}
   const ws=weekStart(),jours=Array.from({length:5},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return prIso(d);});
@@ -283,7 +283,7 @@ async function renderPresenceMois(){
     +'<div style="margin-left:auto;display:flex;gap:8px"><button class="btn-sm" onclick="prOuvrirAbsence()"><i class="ti ti-calendar-off"></i> Déclarer une absence</button>'
     +'<button class="btn-green" onclick="prExportMois()"><i class="ti ti-download"></i> Exporter CSV</button></div></div>';
   if(isDirection&&!crecheId){box.innerHTML=nav+'<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
-  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants])
+  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId&&!e.archive_le):cacheEnfants.filter(e=>!e.archive_le))
     .sort((a,b)=>(a.prenom||'').localeCompare(b.prenom||'','fr',{sensitivity:'base'})||(a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'}));
   box.innerHTML=nav+'<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Calcul du mois…</div>';
   const res=await prCharger(enfants,d1,d2);
@@ -397,7 +397,7 @@ function prOuvrirAbsence(enfantId,dateStr,absId){
     document.body.appendChild(ov);
   }
   const crecheId=getPresenceCrecheId();
-  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants])
+  const enfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId&&!e.archive_le):cacheEnfants.filter(e=>!e.archive_le))
     .sort((a,b)=>(a.prenom||'').localeCompare(b.prenom||'','fr',{sensitivity:'base'}));
   document.getElementById('abs-enfant').innerHTML=enfants.map(e=>'<option value="'+e.id+'">'+escHtml(e.prenom+' '+e.nom)+'</option>').join('');
   if(enfantId)document.getElementById('abs-enfant').value=enfantId;
