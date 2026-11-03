@@ -352,6 +352,7 @@ async function brRender(){
   }).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
   const md=t.slice(5);
   const bdays=cacheEnfants.filter(e=>e.dob&&e.dob.slice(5)===md&&aMoi(e.creche_id));
+  const bdaysEmp=(typeof cacheEmployes!=='undefined'?cacheEmployes:[]).filter(e=>e.date_naissance&&e.date_naissance.slice(5)===md&&aMoi(e.creche_id));
 
   // ── Stagiaires : les liens de dépôt qu'il est temps d'envoyer ──────────
   //
@@ -608,14 +609,19 @@ async function brRender(){
       :brVide('Aucun événement'));
 
   // 7. Anniversaires
-  h+=brSection('cake','Anniversaires',bdays.length,
-    bdays.length
+  h+=brSection('cake','Anniversaires',bdays.length+bdaysEmp.length,
+    (bdays.length||bdaysEmp.length)
       ?bdays.map(e=>{
           const age=Number(t.slice(0,4))-Number(e.dob.slice(0,4));
           return brLigne('🎂 '+escHtml(((e.prenom||'')+' '+(e.nom||'')).trim())+brSuffixeCreche(e.creche_id),
             age+' an'+(age>1?'s':''),'enfants');
         }).join('')
-      :brVide('Aucun anniversaire'));
+        +bdaysEmp.map(e=>{
+          const age=Number(t.slice(0,4))-Number(e.date_naissance.slice(0,4));
+          return brLigne('🎂 '+escHtml(((e.prenom||'')+' '+(e.nom||'')).trim())+' (équipe)'+brSuffixeCreche(e.creche_id),
+            age+' an'+(age>1?'s':''),'employes');
+        }).join('')
+      :brVide('Aucun anniversaire'),null,true);
 
   if(brSectionsVides.filter(t=>t!=='Événements du jour'&&t!=='Anniversaires').length){
     h+='<div class="br-vide" style="text-align:left;padding:6px 2px">✅ Rien à signaler : '+brSectionsVides.filter(t=>t!=='Événements du jour'&&t!=='Anniversaires').join(' · ')+'</div>';
