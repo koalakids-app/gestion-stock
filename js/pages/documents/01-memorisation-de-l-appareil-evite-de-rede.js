@@ -888,7 +888,9 @@ function crecheIdDuFormulaire(){
     const el=document.getElementById(ids[i]);
     const nom=el&&el.value?String(el.value).trim():'';
     if(!nom)continue;
-    const c=(typeof CRECHES!=='undefined'?CRECHES:[]).find(x=>(x.name||'').trim()===nom);
+    /* Le protocole urgence propose des noms COURTS (« Brunet »), les autres le nom complet. */
+    const liste=(typeof CRECHES!=='undefined'?CRECHES:[]);
+    const c=liste.find(x=>(x.name||'').trim()===nom)||liste.find(x=>shortCrecheName(x.name)===nom);
     if(c)return c.id;
   }
   return null;

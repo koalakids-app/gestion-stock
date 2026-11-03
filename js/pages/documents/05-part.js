@@ -693,7 +693,9 @@ async function openReps(id){
       // même compte se ressemblent et on ne peut plus les distinguer.
       const salarieNom=(d.template_key==='contrat_travail'&&r.donnees&&r.donnees.salarie_nom)?r.donnees.salarie_nom
         :(d.template_key==='livret_stagiaire'&&r.donnees&&r.donnees.sal_nom)?(r.donnees.sal_nom+(r.donnees.lv_creche?' — '+r.donnees.lv_creche:'')):null;
-      const crNom=r.creche_id?(CRECHES.find(c=>String(c.id)===String(r.creche_id))||{}).name:null;
+      let crNom=r.creche_id?(CRECHES.find(c=>String(c.id)===String(r.creche_id))||{}).name:null;
+      /* Réponse enregistrée sans crèche rattachée (ancien enregistrement) : on reprend le nom saisi dans la fiche. */
+      if(!crNom&&r.donnees){const n=r.donnees.creche||r.donnees.site_nom||r.donnees.ctrl_creche;if(n)crNom=String(n);}
       return `<div class="rep">
       <b>${esc(salarieNom||r.rempli_par_nom||'—')}</b>
       ${crNom?`<span class="tag"><i class="ti ti-building"></i> ${esc(crNom)}</span>`:''}
