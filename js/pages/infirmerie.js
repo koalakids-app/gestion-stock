@@ -124,6 +124,7 @@ async function infirmerieGrantAccess(){
   if(IS_DIRECTION){
     document.getElementById('fCreche').style.display='';
     document.getElementById('pCreche').style.display='';
+    document.getElementById('aCreche').style.display='';
     document.getElementById('fCrecheWrap').style.display='';
     document.getElementById('paiCrecheWrap').style.display='';
   }
@@ -263,9 +264,9 @@ async function loadAll(){
   if(IS_EMPLOYE){const r=await sb.rpc('kk_enfants_noms');if(r.error)console.error('[kk_enfants_noms]',r.error);else ENFANTS=r.data||[];}
   PAIS=pa.data||[];
   RESEAU=(rz&&rz.data&&rz.data.config)||{};
-  ['fCreche','pCreche','eCreche','iCreche'].forEach(id=>{
+  ['fCreche','pCreche','aCreche','eCreche','iCreche'].forEach(id=>{
     const s=document.getElementById(id);
-    const all=(id==='fCreche'||id==='pCreche');
+    const all=(id==='fCreche'||id==='pCreche'||id==='aCreche');
     s.innerHTML=(all?'<option value="all">Toutes les cr\u00e8ches</option>':'')
       +CRECHES.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
     if(!IS_DIRECTION&&PROF.creche_id)s.value=PROF.creche_id;
@@ -273,6 +274,7 @@ async function loadAll(){
   await loadEntries();
   await autoLock();
   renderPai();
+  if(!IS_EMPLOYE)loadAut();
 }
 
 async function loadEntries(){
@@ -883,6 +885,83 @@ async function exportPdf(){
   doc.save('registre-infirmerie-'+mois+'.pdf');
 }
 
+/* ================= AUTORISATIONS (documents signes par les parents) =================
+   Lit documents_reponses pour les modeles de la categorie Sante : l'autorisation
+   de medicament ponctuelle, la DRP et le protocole lait maternel. Le RLS limite
+   la lecture a la creche du referent. Ouverture / signature dans documents.html. */
+const AUT_TYPES=[
+  {key:'medicament_ponctuel',label:'Médicament ponctuel',icon:'ti-pill'},
+  {key:'drp',label:'DRP',icon:'ti-droplet'},
+  {key:'allaitement',label:'Lait maternel',icon:'ti-baby-bottle'}
+];
+let AUT_DOCS={},AUT_REPS=[];
+async function loadAut(){
+  const el=document.getElementById('autList');
+  const dq=await sb.from('documents_koala').select('id,titre,template_key')
+    .in('template_key',AUT_TYPES.map(t=>t.key)).neq('actif',false);
+  if(dq.error){el.innerHTML='<div class="empty">Impossible de charger les modèles.</div>';return;}
+  AUT_DOCS={};
+  (dq.data||[]).forEach(d=>{if(!AUT_DOCS[d.template_key])AUT_DOCS[d.template_key]=d;});
+  const ids=Object.values(AUT_DOCS).map(d=>d.id);
+  AUT_REPS=[];
+  if(ids.length){
+    const rq=await sb.from('documents_reponses')
+      .select('id,document_id,enfant_id,statut,updated_at,created_at')
+      .in('document_id',ids).not('enfant_id','is',null)
+      .order('updated_at',{ascending:false});
+    if(rq.error){el.innerHTML='<div class="empty">Impossible de charger les autorisations.</div>';return;}
+    AUT_REPS=rq.data||[];
+  }
+  renderAut();
+}
+function autBadge(st){
+  if(st==='signe')return '<span style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap;background:var(--green-light,#E3F5EA);color:var(--green,#1e8e4e)">✅ Signée</span>';
+  if(st==='remis')return '<span style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap;background:var(--green-light,#E3F5EA);color:var(--green,#1e8e4e)">\u{1F4E5} Reçue en main propre</span>';
+  if(st==='prepare')return '<span style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap;background:#FDEBD8;color:#B85C00">\u{1F553} À faire signer</span>';
+  return '<span style="border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap;background:#eee;color:#666">Aucune</span>';
+}
+function renderAut(){
+  const el=document.getElementById('autList');
+  if(!el)return;
+  const cf=document.getElementById('aCreche').value;
+  const type=document.getElementById('aType').value;
+  const q=normalise(document.getElementById('aSearch').value||'');
+  const tous=document.getElementById('aTous').checked;
+  const types=AUT_TYPES.filter(t=>type==='all'||t.key===type);
+  let enfants=ENFANTS.slice();
+  if(IS_DIRECTION&&cf&&cf!=='all')enfants=enfants.filter(e=>e.creche_id===cf);
+  else if(!IS_DIRECTION&&PROF.creche_id)enfants=enfants.filter(e=>e.creche_id===PROF.creche_id);
+  if(q)enfants=enfants.filter(e=>normalise(nomEnfant(e)).includes(q));
+  const lignes=[];
+  enfants.forEach(e=>{
+    const par=types.map(t=>{
+      const d=AUT_DOCS[t.key];
+      const reps=d?AUT_REPS.filter(r=>r.document_id===d.id&&r.enfant_id===e.id):[];
+      return {t,d,reps};
+    });
+    if(tous||par.some(x=>x.reps.length))lignes.push({e,par});
+  });
+  if(!Object.keys(AUT_DOCS).length){
+    el.innerHTML='<div class="empty">Aucun modèle d’autorisation n’est installé dans Documents (catégorie Santé).</div>';return;}
+  if(!lignes.length){
+    el.innerHTML='<div class="empty">Aucune autorisation enregistrée'+(tous?'':' — cochez « Afficher aussi les enfants sans autorisation » pour voir qui reste à faire signer')+'.</div>';return;}
+  el.innerHTML=lignes.map(({e,par})=>`<div class="paicard">
+    <h4>${esc(nomEnfant(e))}</h4>
+    <div class="m">${esc(crecheName(e.creche_id))}</div>
+    ${par.map(({t,d,reps})=>{
+      const rows=reps.length?reps:[null];
+      return rows.map(r=>{
+        const href=d?('documents.html?doc='+encodeURIComponent(d.id)+(r?'&rep='+encodeURIComponent(r.id):'')+'&enf='+encodeURIComponent(e.id)):'';
+        const dt=r?frDate((r.updated_at||r.created_at||'').slice(0,10)):'';
+        return `<div class="m" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+          <i class="ti ${t.icon}"></i> <b>${esc(t.label)}</b> ${autBadge(r?r.statut:null)}
+          ${dt?`<span>${dt}</span>`:''}
+          ${href?`<a href="${href}" style="color:var(--violet);font-weight:700;text-decoration:underline">${r?'Ouvrir':'Faire signer'}</a>`:''}
+        </div>`;}).join('');
+    }).join('')}
+  </div>`).join('');
+}
+
 /* ================= NOTICE ================= */
 const NOTICE=`
 <p><b>\u00c0 quoi sert cette page ?</b><br>
@@ -913,6 +992,9 @@ les r\u00e9f\u00e9rentes et la direction. Un PAI \u00e9tant valable un an \u00e0
 signature, la date de r\u00e9vision se calcule seule.<br>
 Cochez <b>Panier repas</b> si la famille fournit le repas et le go\u00fbter de l\u2019enfant : tant que le PAI est actif,
 l\u2019enfant est exclu de la commande repas au traiteur et sa fiche enfant l\u2019indique. Cl\u00f4turer le PAI le remet dans la commande.</p>
+
+<p style="margin-top:12px"><b>Les autorisations</b><br>
+L\u2019onglet Autorisations rassemble les documents que les parents doivent signer : <b>autorisation de m\u00e9dicament ponctuelle</b>, <b>DRP</b> (d\u00e9sobstruction rhino-pharyng\u00e9e) et <b>protocole lait maternel</b>. Chaque enfant montre l\u2019\u00e9tat de chaque document (sign\u00e9e, \u00e0 faire signer, re\u00e7ue en main propre) ; \u00ab Ouvrir \u00bb ou \u00ab Faire signer \u00bb m\u00e8ne au document dans Documents. Cochez \u00ab Afficher aussi les enfants sans autorisation \u00bb pour rep\u00e9rer ceux qui n\u2019en ont aucune. Onglet r\u00e9serv\u00e9 aux r\u00e9f\u00e9rentes et \u00e0 la direction.</p>
 
 <p style="margin-top:12px"><b>Signaler \u00e0 la direction</b><br>
 Depuis le d\u00e9tail d\u2019un soin, le bouton \u00ab Signaler \u00e0 la direction \u00bb cr\u00e9e un
@@ -952,6 +1034,10 @@ document.getElementById('fSearch').oninput=renderRegistre;
 document.getElementById('fMois').onchange=loadEntries;
 document.getElementById('fCreche').onchange=loadEntries;
 document.getElementById('pCreche').onchange=renderPai;
+document.getElementById('aCreche').onchange=renderAut;
+document.getElementById('aType').onchange=renderAut;
+document.getElementById('aSearch').oninput=renderAut;
+document.getElementById('aTous').onchange=renderAut;
 document.getElementById('pInactifs').onchange=renderPai;
 document.getElementById('eCreche').onchange=()=>{
   const cid=document.getElementById('eCreche').value;
