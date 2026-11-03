@@ -436,7 +436,7 @@ async function gouterCrecheOuvrir(dateDebut){
     }catch(err){console.error('[Goûters crèche] enregistrement',err);showBanner('Erreur lors de l\'enregistrement des goûters.','error');return;}
     await gouterCrecheMap(crecheId,true);
     showBanner(vider?(tousEl.checked?'Goûters effacés : aucun goûter affiché.':'Goûters effacés : retour au goûter du traiteur.'):'Goûters enregistrés ✅');
-    closeModal('modal-gouters-creche-wrap');
+    if(vider)await charger();
     if(typeof mcmLoadMenusList==='function')mcmLoadMenusList();
     if(typeof renderMenuSemaine==='function')renderMenuSemaine();
     if(typeof renderMenuJour==='function')renderMenuJour();
