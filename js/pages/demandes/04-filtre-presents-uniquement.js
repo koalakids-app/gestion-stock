@@ -424,7 +424,7 @@ function menuCrecheSelectHtml(id,crecheId){
   return'<select class="finput" id="'+id+'" style="margin:6px 0"><option value="">Toutes crèches (goûters du traiteur)</option>'
     +cacheCreches.map(function(c){return'<option value="'+escHtml(c.id)+'"'+(c.id===crecheId?' selected':'')+'>'+escHtml(c.name)+'</option>';}).join('')+'</select>';
 }
-function menuCrecheQr(){return isDirection?null:(currentProfile?.creche_id||null);}
+function menuCrecheQr(){return isDirection?(gouterCrecheCourante()||null):(currentProfile?.creche_id||null);}
 function mcmMenuQr(dateDebut,permanent,crecheSel){
   const m=mcmMenusCache.find(function(x){return x.date_debut===dateDebut;});
   if(!m){showBanner('Menu introuvable pour cette semaine.','error');return;}
