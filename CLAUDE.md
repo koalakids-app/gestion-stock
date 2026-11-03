@@ -77,7 +77,7 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 - `terrain.html` a son propre manifeste PWA (`manifest-terrain.json`, icônes `icon-terrain-180/192/512.png` tirées de `terrain-icon.jpg`), comme le pointage (`manifest-pointage.json`). Ouvrir `terrain.html` sur la tablette puis « Installer l'application » (Android) ou « Sur l'écran d'accueil » (iPad).
 
 ## Présence (qui est connecté)
-- Onglet « Équipe » de la bulle koala (`js/support-chat.js`, réservé aux `referents.role` `referent`/`direction`) : signal de vie toutes les 60 s (RPC `kk_presence_ping`), liste via `kk_presence_liste` (`sql/presence_utilisateurs.sql`, à appliquer à la main). Table sans policy, une ligne par personne, pas d'historique. Statuts : en ligne (signal < 2,5 min et activité < 5 min), inactif, hors ligne. La page consultée n'est renvoyée qu'à la direction ; les employés ne sont pas suivis.
+- Onglet « Équipe » de la bulle koala (`js/support-chat.js`, réservé aux `referents.role` `referent`/`direction`) : signal de vie toutes les 60 s (RPC `kk_presence_ping`), liste via `kk_presence_liste` (`sql/presence_utilisateurs.sql`, à appliquer à la main). Table sans policy, une ligne par personne, pas d'historique. Statuts : en ligne (signal < 2,5 min et activité < 5 min), inactif, hors ligne. La page consultée n'est renvoyée qu'à la direction ; les employés ne sont pas suivis. Signal de départ : `pagehide` → `fetch` keepalive vers `kk_presence_depart(p_vu)` (colonne `parti_le`, ignoré si un signal plus récent est arrivé ; seconde partie de `sql/presence_utilisateurs.sql`, à appliquer à la main).
 
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).

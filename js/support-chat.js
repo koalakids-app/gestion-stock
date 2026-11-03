@@ -40,6 +40,8 @@
   let timerPres = null;
   let dernierPing = 0;
   let derniereActivite = Date.now();
+  let dernierVu = null;               // heure serveur du dernier signal (ISO), pour le signal de départ
+  let jetonPresence = null;           // jeton d'accès gardé à jour pour l'envoi à la fermeture
   const titreOrigine = document.title;
 
   // Client Supabase : celui de la page (`sb`) ; sur l'accueil (index.html), qui n'en a
@@ -395,6 +397,7 @@
   };
   function statutPres(p) {
     if (!p.vu_le) return 'hors';
+    if (p.parti_le && new Date(p.parti_le) >= new Date(p.vu_le)) return 'hors';
     const maintenant = Date.now();
     if (maintenant - new Date(p.vu_le).getTime() > PRES_VU_MAX_MS) return 'hors';
     const actif = p.actif_le ? maintenant - new Date(p.actif_le).getTime() : Infinity;
@@ -418,12 +421,30 @@
     if (!force && Date.now() - dernierPing < PRES_PING_MS - 5000) return;
     dernierPing = Date.now();
     try {
-      await client.rpc('kk_presence_ping', {
+      const { data } = await client.rpc('kk_presence_ping', {
         p_page: NOMS_PAGES[nomPage()] || nomPage(),
         p_actif: Date.now() - derniereActivite < PRES_ACTIF_MAX_MS && !document.hidden
       });
+      if (data) dernierVu = data;
+      const s = sessionPage() || (client.auth ? (await client.auth.getSession()).data.session : null);
+      if (s && s.access_token) jetonPresence = s.access_token;
     } catch (e) { /* table non créée ou réseau : sans conséquence pour le reste de la bulle */ }
   }
+
+  // Signal de départ : envoyé à la fermeture de la page (fetch keepalive, qui survit à la page).
+  // Ignoré côté serveur si un signal plus récent est arrivé (autre page de l'appli, autre onglet).
+  function departPresence() {
+    if (!me || !me.presence || !dernierVu || !jetonPresence) return;
+    try {
+      fetch(SB_URL + '/rest/v1/rpc/kk_presence_depart', {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', apikey: SB_ANON_KEY, Authorization: 'Bearer ' + jetonPresence },
+        body: JSON.stringify({ p_vu: dernierVu })
+      }).catch(() => {});
+    } catch (e) { /* sans conséquence : le statut tombera tout seul après 2 min 30 */ }
+  }
+  window.addEventListener('pagehide', departPresence);
 
   async function chargerPresence() {
     const client = getSb();
@@ -474,7 +495,7 @@
       }
       const sous = [p.role === 'direction' ? 'Direction' : 'Référent·e', p.creche_nom].filter(Boolean).join(' · ') +
         (st !== 'hors' && p.page ? ' · 📍 ' + p.page : '');
-      const droite = st === 'en_ligne' ? 'en ligne' : st === 'inactif' ? 'actif·ve ' + depuis(p.actif_le) : 'vu·e ' + depuis(p.vu_le);
+      const droite = st === 'en_ligne' ? 'en ligne' : st === 'inactif' ? 'actif·ve ' + depuis(p.actif_le) : 'vu·e ' + depuis(p.parti_le && new Date(p.parti_le) >= new Date(p.vu_le) ? p.parti_le : p.vu_le);
       html += '<div class="kk-sc-pers ' + (st === 'hors' ? 'hors' : st) + '"><span class="pt"></span>' +
         '<span class="pi"><b>' + esc(p.nom || 'Sans nom') + (p.user_id === uid ? ' (vous)' : '') + '</b><span>' + esc(sous) + '</span></span>' +
         '<span class="ps">' + esc(droite) + '</span></div>';
