@@ -428,7 +428,8 @@ function menuCrecheQr(){return isDirection?null:(currentProfile?.creche_id||null
 function mcmMenuQr(dateDebut,permanent,crecheSel){
   const m=mcmMenusCache.find(function(x){return x.date_debut===dateDebut;});
   if(!m){showBanner('Menu introuvable pour cette semaine.','error');return;}
-  const crecheId=isDirection?(crecheSel||null):menuCrecheQr();
+  /* Direction : par défaut la crèche dont les goûters s'affichent dans la liste / l'impression (gouterCrecheCourante) ; '' = choix explicite « toutes crèches ». */
+  const crecheId=isDirection?(crecheSel===undefined?(gouterCrecheCourante()||null):(crecheSel||null)):menuCrecheQr();
   const url=menuPublicUrl(permanent?null:dateDebut,crecheId);
   const titre='Menus des 2 semaines à partir du '+dateDebut+(m.semaine_num?' (S'+m.semaine_num+')':'');
   let ov=document.getElementById('modal-menu-qr-wrap');
