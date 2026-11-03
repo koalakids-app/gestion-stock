@@ -394,6 +394,7 @@ function renderKiosk(){
           +'<button class="btn btn-g btn-sm" onclick="kioskCopyLink(\''+esc(suiviLinkFor(d.token))+'\')"><i class="ti ti-heart-handshake"></i> Copier le lien suivi</button>'
           +'<button class="btn btn-s btn-sm" onclick="window.open(\''+esc(suiviLinkFor(d.token))+'\',\'_blank\')"><i class="ti ti-external-link"></i> Ouvrir le suivi</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskCopyLink(\''+esc(terrainLinkFor(d.token))+'\')"><i class="ti ti-id-badge-2"></i> Copier le lien Accès terrain</button>'
+          +'<button class="btn btn-s btn-sm" onclick="kioskShowQr(\''+esc(terrainLinkFor(d.token))+'\',\''+esc((d.label||'Tablette')+' — Accès terrain')+'\')"><i class="ti ti-qrcode"></i> QR code Accès terrain</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskToggleActive(\''+d.id+'\','+(!d.active)+')"><i class="ti ti-power"></i> '+(d.active?'Désactiver':'Réactiver')+'</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskRegen(\''+d.id+'\')"><i class="ti ti-refresh"></i> Régénérer le lien</button>'
         +'</div>'
