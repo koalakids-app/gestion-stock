@@ -286,6 +286,7 @@ async function loadEmployes(){
     (refs||[]).forEach(r=>ACCES_TERRAIN.add(r.employe_id));
   }
   renderListe();
+  vmChargerListe();
   /* employes.user_id est posé dès l'invitation : seule une connexion prouve que
      l'espace a été créé. Échec silencieux : la liste reste affichée sans statut. */
   COMPTES_ACTIFS=null;
@@ -340,7 +341,7 @@ function renderListe(){
       +'<div class="cinfo"><div class="cname">'+esc(e.prenom)+' '+esc(e.nom||'')+'</div>'
       +'<div class="cmeta">'+esc(e.poste||'—')+(e.email?' · '+esc(e.email):'')+'</div></div>'
       +codeImageHtml(e.code_pictos)
-      +statut+compte+terrain
+      +statut+vmBadgeListe(e)+compte+terrain
       +'<div class="acts">'
       +'<button class="btn btn-g btn-sm" onclick="openFiche(\''+e.id+'\')"><i class="ti ti-edit"></i></button>'
       +btnCompte+btnTerrain
@@ -390,6 +391,9 @@ function openFiche(id){
     empLoadContrats(e.id);
     archWrap.style.display='';
     renderArchivageBox(e);
+    document.getElementById('ficheVisitesWrap').style.display='';
+    document.getElementById('ficheVisitesZone').innerHTML='';
+    empFicheId=e.id;vmCharger(e.id);
     docExtWrap.style.display='';
     empDocExtCache=[];
     document.getElementById('ficheDocExtZone').innerHTML='';
@@ -401,6 +405,7 @@ function openFiche(id){
     document.getElementById('ficheContratsWrap').style.display='none';
     archWrap.style.display='none';
     docExtWrap.style.display='none';
+    document.getElementById('ficheVisitesWrap').style.display='none';
   }
   document.getElementById('modalFiche').classList.add('on');
 }
@@ -498,10 +503,24 @@ async function exporterDocuments(id){
     toast('Erreur lors de la lecture des documents : '+err.message,true);
     return;
   }
-  if(!docs.length){toast('Aucun document à exporter pour ce dossier.');return;}
+  let comptesRendus=[];
+  try{
+    const{data}=await sb.from('employes_visites_medicales').select('*').eq('employe_id',id).not('piece_path','is',null);
+    comptesRendus=data||[];
+  }catch(err){console.warn('[exporterDocuments] comptes rendus de visite',err);}
+  if(!docs.length&&!comptesRendus.length){toast('Aucun document à exporter pour ce dossier.');return;}
 
   const zip=new JSZip();
   const reussis=[];
+  const reussisVm=[];
+  for(const v of comptesRendus){
+    try{
+      const{data,error}=await sb.storage.from(v.piece_bucket||EMP_DOCS_BUCKET).download(v.piece_path);
+      if(error)throw error;
+      zip.file('visites-medicales/'+String(v.id).slice(0,8)+'_'+(v.piece_nom||'compte-rendu'),data);
+      reussisVm.push(v);
+    }catch(err){console.warn('[exporterDocuments] échec compte rendu',v.id,err);}
+  }
   let nEchec=0;
   for(const d of docs){
     try{
@@ -514,7 +533,7 @@ async function exporterDocuments(id){
       nEchec++;
     }
   }
-  if(!reussis.length){toast('Aucun document n\'a pu être téléchargé — export annulé, rien n\'a été supprimé.',true);return;}
+  if(!reussis.length&&!reussisVm.length){toast('Aucun document n\'a pu être téléchargé — export annulé, rien n\'a été supprimé.',true);return;}
 
   const contenu=await zip.generateAsync({type:'blob'});
   const nomZip='documents_'+(e.prenom||'')+'_'+(e.nom||'')+'_'+todayISO()+'.zip';
@@ -538,6 +557,14 @@ async function exporterDocuments(id){
       console.warn('[exporterDocuments] suppression échouée',d.id,err);
       suppKo++;
     }
+  }
+
+  // comptes rendus de visite : on retire le fichier, la visite (date, avis) reste
+  for(const v of reussisVm){
+    const{error:rmErr}=await sb.storage.from(v.piece_bucket||EMP_DOCS_BUCKET).remove([v.piece_path]);
+    if(rmErr){console.warn('[exporterDocuments] compte rendu non supprimé',v.id,rmErr.message);continue;}
+    await sb.from('employes_visites_medicales').update({piece_bucket:null,piece_path:null,piece_nom:null}).eq('id',v.id);
+    suppOk++;
   }
 
   await sb.from('archivage_purges').insert({

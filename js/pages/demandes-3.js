@@ -273,6 +273,20 @@ function periodesEssaiARelancer(crecheId){
     .sort((a,b)=>a._essaiFin.localeCompare(b._essaiFin));
 }
 
+/* Visites médicales obligatoires (Odalia) : collaborateurs en retard ou à moins
+   de 60 jours de l'échéance, sans RDV pris. Calcul dans js/visites-medicales.js. */
+async function visitesMedicalesARenouveler(crecheId){
+  const emps=cacheEmployes.filter(e=>!e.archive_le&&!(e.date_fin&&e.date_fin<=todayStr())
+    &&(!crecheId||String(e.creche_id)===String(crecheId)));
+  if(!emps.length)return[];
+  const{data,error}=await sb.from('employes_visites_medicales').select('*').in('employe_id',emps.map(e=>e.id));
+  if(error)throw error;
+  const par={};(data||[]).forEach(v=>{(par[v.employe_id]=par[v.employe_id]||[]).push(v);});
+  return emps.map(e=>({e:e,s:vismedEtat(e,par[e.id]||[],todayStr())}))
+    .filter(x=>x.s.niveau==='retard'||x.s.niveau==='bientot')
+    .sort((a,b)=>a.s.j-b.s.j);
+}
+
 /* Protocole urgence et confinement (Documents) : produits des sacs rouge et bleu
    périmés ou à moins de 30 jours de leur DLC / DLU. Les dates sont dans
    documents_reponses.donnees.pu_json (une réponse par crèche) ; la RLS ne
@@ -384,21 +398,22 @@ async function brRender(){
   // Les quatre requêtes sont indépendantes : parallélisées pour ne pas
   // allonger le temps d'ouverture perçu de la modale.
   const criblage=isDirection?null:maCreche;
-  const[vaccRetard,dossiersRelance,devisRelance,demandesRelance,piecesRelance,depots,sacsPeremption]=await Promise.all([
+  const[vaccRetard,dossiersRelance,devisRelance,demandesRelance,piecesRelance,depots,sacsPeremption,visitesMed]=await Promise.all([
     vaccinationsEnRetard(criblage).catch(e=>{console.warn('[briefing] vaccinations',e);return[];}),
     dossiersFamilleARelancer(criblage).catch(e=>{console.warn('[briefing] dossiers familles',e);return[];}),
     devisARelancer(criblage).catch(e=>{console.warn('[briefing] devis',e);return[];}),
     demandesARelancer(criblage).catch(e=>{console.warn('[briefing] demandes à relancer',e);return[];}),
     piecesARelancer(criblage).catch(e=>{console.warn('[briefing] pièces à relancer',e);return[];}),
     depotsARegarder(criblage).catch(e=>{console.warn('[briefing] dépôts',e);return[];}),
-    protocoleUrgenceARenouveler(criblage).catch(e=>{console.warn('[briefing] sacs urgence',e);return[];})
+    protocoleUrgenceARenouveler(criblage).catch(e=>{console.warn('[briefing] sacs urgence',e);return[];}),
+    visitesMedicalesARenouveler(criblage).catch(e=>{console.warn('[briefing] visites médicales',e);return[];})
   ]);
   const nSacs=sacsPeremption.reduce((n,x)=>n+x.items.length,0);
 
   // ── En-tête : le compte de ce qui demande une action ───────────────────
   const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length
     +stgRefuses.length+stgManquants.length+vaccRetard.length+dossiersRelance.length+devisRelance.length
-    +demandesRelance.length+piecesRelance.length+depots.length+nSacs;
+    +demandesRelance.length+piecesRelance.length+depots.length+nSacs+visitesMed.length;
   const res=document.getElementById('br-resume');
   if(res){
     res.className='br-resume'+(nAction?' br-chaud':'');
@@ -572,6 +587,15 @@ async function brRender(){
       ).join('')+(nSacs>8?'<div class="br-plus">+ '+(nSacs-8)+' autres</div>':''),
       lignes.some(l=>l.i.j<=7)?'accent':'');
   }
+
+  // 5octies. Visites médicales obligatoires (Odalia)
+  h+=brSection('stethoscope','Visites médicales (Odalia) — à planifier',visitesMed.length,
+    visitesMed.slice(0,8).map(({e,s})=>
+      brLigneClic('🩺 '+escHtml(((e.prenom||'')+' '+(e.nom||'')).trim())+brSuffixeCreche(e.creche_id),
+        s.j<0?'en retard de '+(-s.j)+' j':'avant le '+vismedDateFr(s.echeance)+' ('+s.j+' j)',
+        'window.location.href=\'employes.html\'',s.j<0)
+    ).join('')+(visitesMed.length>8?'<div class="br-plus">+ '+(visitesMed.length-8)+' autres</div>':''),
+    visitesMed.some(x=>x.s.j<0)?'accent':'');
 
   // 6. Événements du jour
   h+=brSection('calendar-event','Événements du jour',evts.length,
