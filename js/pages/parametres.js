@@ -350,7 +350,7 @@ function renderTerrainCode(){
     +'<input type="checkbox" id="terrainCodeOn" style="width:auto;margin-top:3px"'+(on?' checked':'')+' onchange="terrainCodeToggle(this.checked)">'
     +'<span><b>Accès terrain par code image</b><br><span class="hint" style="margin:0">'
     +'Sur la tablette de cette crèche, l\'Accès terrain (suivi, nettoyages, remise en température, couches, infirmerie) s\'ouvre avec les 4 images de la personne, sans e-mail ni mot de passe. '
-    +'Ouvrez une fois le « lien Accès terrain » de la tablette ci-dessus. La direction garde sa connexion habituelle. Désactivé : le formulaire e-mail et mot de passe.</span></span></label>';
+    +'Ouvrez une fois le « lien Accès terrain » de la tablette ci-dessus (une tablette déjà ouverte en pointage dans le même navigateur est reconnue d\'elle-même). La direction garde sa connexion habituelle. Désactivé : le formulaire e-mail et mot de passe.</span></span></label>';
 }
 async function terrainCodeToggle(on){
   const c=CRECHES.find(x=>String(x.id)===String(crecheId));
