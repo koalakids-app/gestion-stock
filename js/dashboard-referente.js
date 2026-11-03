@@ -231,11 +231,12 @@ function renderRefDashboard(){
     const age=Number(t.slice(0,4))-Number(e.date_naissance.slice(0,4));
     return'<div class="dash-list-item"><span>🎂 '+escHtml((e.prenom||'')+' '+(e.nom||'').trim())+' <span style="color:var(--muted);font-size:11px">(équipe)</span></span><span style="font-weight:700;color:var(--koala);font-size:11px">'+age+' an'+(age>1?'s':'')+'</span></div>';
   }).join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun anniversaire</div>';
+  const bdaysProchains=dashProchainsHtml(t,crecheId,false);
 
   document.getElementById('ref-dash-grid').innerHTML=
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-calendar-event"></i> Événements du jour</div>'+evtsHtml+'</div>'+
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-message-circle"></i> Demandes en attente <span style="background:#eee;color:#555;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700">'+demandesAttenteRaw.length+'</span></div>'+demandesHtml+'</div>'+
-    '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-cake"></i> Anniversaires</div>'+bdaysHtml+'</div>';
+    '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-cake"></i> Anniversaires</div>'+bdaysHtml+bdaysProchains+'</div>';
 
   // Cartes async (présences enfants, planning équipe, remplaçantes) chargées après
   document.getElementById('ref-dash-async-grid').innerHTML=
@@ -420,6 +421,32 @@ function dashTodayEvents(t){
     return start&&t>=start&&t<=end;
   }).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
 }
+// Anniversaires des 7 jours suivant la date t (enfants + équipe), du plus proche au plus lointain.
+// crecheId optionnel (vide = toutes les crèches). Retourne {nom,creche_id,jour,age,equipe}.
+function dashAnniversairesProchains(t,crecheId,jours){
+  jours=jours||7;
+  const out=[];
+  const base=new Date(t+'T00:00:00');
+  const emp=typeof cacheEmployes!=='undefined'?cacheEmployes:[];
+  for(let i=1;i<=jours;i++){
+    const d=new Date(base);d.setDate(d.getDate()+i);
+    const iso=ipDateToLocalISO(d),md=iso.slice(5),an=Number(iso.slice(0,4));
+    cacheEnfants.filter(e=>e.dob&&e.dob.slice(5)===md&&(!crecheId||e.creche_id===crecheId)).forEach(e=>
+      out.push({nom:((e.prenom||'')+' '+(e.nom||'')).trim(),creche_id:e.creche_id,jour:iso,age:an-Number(e.dob.slice(0,4)),equipe:false}));
+    emp.filter(e=>e.date_naissance&&e.date_naissance.slice(5)===md&&(!crecheId||e.creche_id===crecheId)).forEach(e=>
+      out.push({nom:((e.prenom||'')+' '+(e.nom||'')).trim(),creche_id:e.creche_id,jour:iso,age:an-Number(e.date_naissance.slice(0,4)),equipe:true}));
+  }
+  return out;
+}
+function dashJourCourt(iso){return new Date(iso+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'});}
+function dashProchainsHtml(t,crecheId,avecCreche){
+  const l=dashAnniversairesProchains(t,crecheId);
+  if(!l.length)return '<div style="font-size:11px;color:var(--muted);padding:6px 0 0;border-top:1px dashed var(--border);margin-top:6px">Aucun autre anniversaire dans les 7 prochains jours</div>';
+  return '<div style="font-size:11px;font-weight:700;color:var(--muted);padding:6px 0 2px;border-top:1px dashed var(--border);margin-top:6px">Dans les 7 prochains jours</div>'+l.map(a=>{
+    const creche=avecCreche?cacheCreches.find(c=>c.id===a.creche_id):null;
+    return '<div class="dash-list-item"><span>🎂 '+escHtml(a.nom)+(a.equipe?' <span style="color:var(--muted);font-size:11px">(équipe)</span>':'')+(creche?' <span style="color:var(--muted);font-size:11px">· '+escHtml(creche.name)+'</span>':'')+'</span><span style="font-weight:700;color:var(--koala);font-size:11px;white-space:nowrap">'+escHtml(dashJourCourt(a.jour))+' · '+a.age+' an'+(a.age>1?'s':'')+'</span></div>';
+  }).join('');
+}
 function dashTodayBirthdays(t){
   const md=t.slice(5);
   return cacheEnfants.filter(e=>e.dob&&e.dob.slice(5)===md);
@@ -461,6 +488,7 @@ function renderDashboardToday(){
     const age=Number(t.slice(0,4))-Number(e.date_naissance.slice(0,4));
     return'<div class="dash-list-item"><span>🎂 '+escHtml((e.prenom||'')+' '+(e.nom||''))+' <span style="color:var(--muted);font-size:11px">(équipe)</span></span><span style="font-weight:700;color:var(--koala);font-size:11px;white-space:nowrap">'+age+' an'+(age>1?'s':'')+(creche?' · '+escHtml(creche.name):'')+'</span></div>';
   }).join(''):'<div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Aucun anniversaire aujourd\'hui</div>';
+  const bdaysProchains=dashProchainsHtml(t,null,true);
 
   const mesTraiteesA=demandesTraiteesIds();
   const demT=demandesVisibles().filter(d=>(d.created_at||'').slice(0,10)===t);
@@ -481,7 +509,7 @@ function renderDashboardToday(){
 
   document.getElementById('dash-today-grid').innerHTML=
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-calendar-event"></i> Événements du jour</div>'+evtsHtml+'</div>'+
-    '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-cake"></i> Anniversaires</div>'+bdaysHtml+'</div>'+
+    '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-cake"></i> Anniversaires</div>'+bdaysHtml+bdaysProchains+'</div>'+
     '<div class="dash-card"><div class="dash-card-title"><i class="ti ti-bolt"></i> Activité du jour</div>'+actHtml+'</div>'+
     '<div class="dash-card" id="dash-today-presence"><div class="dash-card-title"><i class="ti ti-users"></i> Présences du jour</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Chargement…</div></div>'+
     '<div class="dash-card" id="dash-today-planning"><div class="dash-card-title" style="display:flex;align-items:center;justify-content:space-between"><span><i class="ti ti-calendar-week"></i> Planning équipe du jour</span><select id="dash-planning-creche-select" class="finput" style="font-size:11px;padding:2px 6px;height:auto;width:auto" onchange="loadDashboardPlanning()"><option value="">-- Crèche --</option></select></div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0.75rem">Sélectionnez une crèche</div></div>'+

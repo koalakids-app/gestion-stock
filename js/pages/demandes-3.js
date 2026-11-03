@@ -609,8 +609,9 @@ async function brRender(){
       :brVide('Aucun événement'));
 
   // 7. Anniversaires
+  const bdaysProchains=dashAnniversairesProchains(t,isDirection?null:maCreche).filter(a=>aMoi(a.creche_id));
   h+=brSection('cake','Anniversaires',bdays.length+bdaysEmp.length,
-    (bdays.length||bdaysEmp.length)
+    ((bdays.length||bdaysEmp.length)
       ?bdays.map(e=>{
           const age=Number(t.slice(0,4))-Number(e.dob.slice(0,4));
           return brLigne('🎂 '+escHtml(((e.prenom||'')+' '+(e.nom||'')).trim())+brSuffixeCreche(e.creche_id),
@@ -621,7 +622,12 @@ async function brRender(){
           return brLigne('🎂 '+escHtml(((e.prenom||'')+' '+(e.nom||'')).trim())+' (équipe)'+brSuffixeCreche(e.creche_id),
             age+' an'+(age>1?'s':''),'employes');
         }).join('')
-      :brVide('Aucun anniversaire'),null,true);
+      :brVide('Aucun anniversaire'))
+      +(bdaysProchains.length
+        ?'<div class="br-vide" style="text-align:left;padding:6px 2px 2px">Dans les 7 prochains jours</div>'
+          +bdaysProchains.map(a=>brLigne('🎂 '+escHtml(a.nom)+(a.equipe?' (équipe)':'')+brSuffixeCreche(a.creche_id),
+            escHtml(dashJourCourt(a.jour))+' · '+a.age+' an'+(a.age>1?'s':''),a.equipe?'employes':'enfants')).join('')
+        :''),null,true);
 
   if(brSectionsVides.filter(t=>t!=='Événements du jour'&&t!=='Anniversaires').length){
     h+='<div class="br-vide" style="text-align:left;padding:6px 2px">✅ Rien à signaler : '+brSectionsVides.filter(t=>t!=='Événements du jour'&&t!=='Anniversaires').join(' · ')+'</div>';
