@@ -15,8 +15,15 @@
 //    pris tels quels du navigateur ; seul le quiz/module publié est envoyable ;
 //  - une personne déjà contactée pour ce quiz n'est pas ré-écrite, sauf en
 //    mode `relance` (compteur et date de relance mis à jour, même lien) ;
+//  - un seul mail peut porter DEUX quiz (parcours quiz, une semaine = 2 quiz) : l'appelant
+//    passe `item_id_2` ; le message contient alors {lien} (1er quiz) et {lien2} (2e quiz),
+//    même `ref` pour la personne. Chaque quiz a sa ligne dans `envois_quiz`. Un appel
+//    avec `sonde: true` répond {ok:true, deux_liens:true} sans rien envoyer : admin.html
+//    s'en sert pour savoir si cette version est déployée.
 //  - 40 destinataires au plus par appel (limite de durée de la fonction) :
 //    admin.html découpe les envois plus longs.
+//  - pause de 1 s entre deux mails (2 s vers les adresses Microsoft) pour éviter les refus
+//    5.7.1 des serveurs qui rejettent les envois en rafale.
 //
 // DÉPLOIEMENT : nom « envoyer-quiz », « Verify JWT » : ACTIVÉ.
 // SECRETS dans le projet quiz :
@@ -53,6 +60,14 @@ const esc = (s: unknown) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const propre = (s: unknown, max = 200) => String(s ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, max);
 const mailValide = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+
+// Pause entre deux mails : les envois en rafale depuis un compte Gmail sont refusés (5.7.1)
+// par certains serveurs, surtout Microsoft (hotmail, outlook, live, msn). 40 destinataires
+// au plus par appel : 40 x 2 s = 80 s au pire, sous la limite de durée de la fonction.
+const attendre = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const PAUSE_MS = 1000;
+const PAUSE_MICROSOFT_MS = 2000;
+const estMicrosoft = (email: string) => /@(hotmail|outlook|live|msn)\./i.test(email);
 
 // Jamais un retour à la ligne ni de chevron dans le nom affiché : injection SMTP.
 const nomExpediteur = (s: unknown) => {
@@ -100,7 +115,7 @@ function construireLien(base: string, kind: string, itemId: string, d: Dest, ref
   return u.toString();
 }
 
-function remplacer(modele: string, d: Dest, lien: string | null, html: boolean) {
+function remplacer(modele: string, d: Dest, lien: string | null, html: boolean, lien2: string | null = null) {
   const v = (s: string) => (html ? esc(s) : s);
   let t = html ? esc(modele) : modele;
   t = t.replace(/\{prenom\}/gi, () => v(d.prenom))
@@ -109,6 +124,10 @@ function remplacer(modele: string, d: Dest, lien: string | null, html: boolean) 
   if (lien) {
     t = t.replace(/\{lien\}/gi, () =>
       html ? `<a href="${esc(lien)}" style="color:#4A3F9F;font-weight:700">${esc(lien)}</a>` : lien);
+  }
+  if (lien2) {
+    t = t.replace(/\{lien2\}/gi, () =>
+      html ? `<a href="${esc(lien2)}" style="color:#4A3F9F;font-weight:700">${esc(lien2)}</a>` : lien2);
   }
   return html ? t.replace(/\r?\n/g, '<br>') : t;
 }
@@ -141,9 +160,10 @@ Deno.serve(async (req) => {
   const moi = await envoyeur(req);
   if (!moi) return json({ erreur: "Vous n'avez pas le droit d'envoyer des quiz." }, 403);
 
-  let corps: { kind?: string; item_id?: string; objet?: string; message?: string;
-               expediteur?: string; relance?: boolean; destinataires?: Dest[] };
+  let corps: { kind?: string; item_id?: string; item_id_2?: string; sonde?: boolean; objet?: string;
+               message?: string; expediteur?: string; relance?: boolean; destinataires?: Dest[] };
   try { corps = await req.json(); } catch { return json({ erreur: 'Corps invalide' }, 400); }
+  if (corps.sonde) return json({ ok: true, deux_liens: true });
 
   const kind = corps.kind === 'module' ? 'module' : corps.kind === 'quiz' ? 'quiz' : '';
   if (!kind || !corps.item_id) return json({ erreur: 'Quiz ou module manquant' }, 400);
@@ -166,6 +186,19 @@ Deno.serve(async (req) => {
   if (!item) return json({ erreur: kind === 'quiz' ? 'Quiz introuvable' : 'Module introuvable' }, 404);
   if (!item.publie) return json({ erreur: 'Publiez-le avant de l\'envoyer : le lien ne fonctionnerait pas.' }, 409);
 
+  // Deuxième quiz du même mail (quiz seulement), relu et vérifié comme le premier.
+  let item2: { id: string; titre: string; publie: boolean } | null = null;
+  if (corps.item_id_2) {
+    if (kind !== 'quiz') return json({ erreur: 'Un deuxième lien n\'existe que pour les quiz' }, 400);
+    if (corps.item_id_2 === item.id) return json({ erreur: 'Les deux quiz sont identiques' }, 400);
+    if (!/\{lien2\}/i.test(message)) return json({ erreur: 'Le message doit contenir {lien2}' }, 400);
+    const { data, error } = await sb.from('quiz').select('id,titre,publie').eq('id', corps.item_id_2).maybeSingle();
+    if (error) return json({ erreur: 'Lecture du 2e quiz impossible : ' + error.message }, 500);
+    if (!data) return json({ erreur: '2e quiz introuvable' }, 404);
+    if (!data.publie) return json({ erreur: 'Publiez le 2e quiz avant de l\'envoyer : le lien ne fonctionnerait pas.' }, 409);
+    item2 = data;
+  }
+
   const base = (Deno.env.get('APP_URL') || 'https://koalakids-app.github.io/quiz-protocoles/')
     .replace(/[^/]*\.html?(\?.*)?$/i, '').replace(/\/*$/, '/');
   const objet = propre(corps.objet, 150) ||
@@ -178,6 +211,7 @@ Deno.serve(async (req) => {
     connection: { hostname: 'smtp.gmail.com', port: 465, tls: true, auth: { username: user, password: pass } },
   });
   let client = nouveauClient();
+  let dejaEnvoye = false; // un mail est déjà parti dans cet appel : on espace le suivant
 
   const vus = new Set<string>();
   const resultats: { email: string; prenom: string; nom: string; etat: string; erreur?: string }[] = [];
@@ -209,15 +243,18 @@ Deno.serve(async (req) => {
       // Candidat saisi à la volée : son `ref` est l'id de sa ligne d'historique.
       const ref = avant?.ref || (d.source === 'manuel' ? idLigne : d.ref!);
       const lien = construireLien(base, kind, item.id, d, ref);
+      const lien2 = item2 ? construireLien(base, kind, item2.id, d, ref) : null;
 
       let erreur: string | null = null;
+      if (dejaEnvoye) await attendre(estMicrosoft(d.email) ? PAUSE_MICROSOFT_MS : PAUSE_MS);
+      dejaEnvoye = true;
       try {
         await client.send({
           from: `${nomAffiche} de Koalakids <${user}>`,
           to: [d.email],
-          subject: encodeSubject(remplacer(objet, d, lien, false)),
-          content: remplacer(message, d, lien, false) + (aBouton ? '\r\n\r\n' + lien : ''),
-          html: corpsHtml(remplacer(message, d, lien, true), lien, aBouton, d.creche || ''),
+          subject: encodeSubject(remplacer(objet, d, lien, false, lien2)),
+          content: remplacer(message, d, lien, false, lien2) + (aBouton ? '\r\n\r\n' + lien : ''),
+          html: corpsHtml(remplacer(message, d, lien, true, lien2), lien, aBouton, d.creche || ''),
         });
       } catch (e) {
         erreur = String((e as Error).message || e).slice(0, 300);
@@ -227,21 +264,30 @@ Deno.serve(async (req) => {
       }
 
       const maintenant = new Date().toISOString();
-      if (avant) {
-        await sb.from('envois_quiz').update(erreur
-          ? { etat: avant.etat === 'envoye' ? 'envoye' : 'echec', erreur }
-          : { etat: 'envoye', erreur: null,
-              nb_relances: (avant.nb_relances || 0) + (avant.etat === 'envoye' ? 1 : 0),
-              relance_le: avant.etat === 'envoye' ? maintenant : null,
-              ...(avant.etat === 'envoye' ? {} : { envoye_le: maintenant }) },
-        ).eq('id', avant.id);
-      } else {
-        await sb.from('envois_quiz').insert({
-          id: idLigne, kind, item_id: item.id, item_titre: item.titre,
-          civilite: d.civilite || null, prenom: d.prenom, nom: d.nom || null, email: d.email,
-          creche: d.creche || null, statut: d.statut || null, source: d.source, ref,
-          envoye_par: moi.id, etat: erreur ? 'echec' : 'envoye', erreur,
-        });
+      const noter = async (it: { id: string; titre: string }, av: typeof avant, id: string) => {
+        if (av) {
+          await sb.from('envois_quiz').update(erreur
+            ? { etat: av.etat === 'envoye' ? 'envoye' : 'echec', erreur }
+            : { etat: 'envoye', erreur: null,
+                nb_relances: (av.nb_relances || 0) + (av.etat === 'envoye' ? 1 : 0),
+                relance_le: av.etat === 'envoye' ? maintenant : null,
+                ...(av.etat === 'envoye' ? {} : { envoye_le: maintenant }) },
+          ).eq('id', av.id);
+        } else {
+          await sb.from('envois_quiz').insert({
+            id, kind, item_id: it.id, item_titre: it.titre,
+            civilite: d.civilite || null, prenom: d.prenom, nom: d.nom || null, email: d.email,
+            creche: d.creche || null, statut: d.statut || null, source: d.source, ref,
+            envoye_par: moi.id, etat: erreur ? 'echec' : 'envoye', erreur,
+          });
+        }
+      };
+      await noter(item, avant, idLigne);
+      if (item2) {
+        const { data: avant2 } = await sb.from('envois_quiz').select('id,ref,etat,nb_relances')
+          .eq('kind', kind).eq('item_id', item2.id).ilike('email', d.email)
+          .order('envoye_le', { ascending: false }).limit(1).maybeSingle();
+        await noter(item2, avant2, avant2?.id || crypto.randomUUID());
       }
       res(erreur ? 'echec' : 'envoye', erreur || undefined);
     }
