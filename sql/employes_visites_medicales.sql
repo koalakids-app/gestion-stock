@@ -78,3 +78,7 @@ alter table public.employes_visites_medicales
   add column if not exists piece_bucket text,
   add column if not exists piece_path   text,
   add column if not exists piece_nom    text;
+
+-- Heure du rendez-vous (avec rdv_le). À appliquer si la table existe déjà.
+alter table public.employes_visites_medicales
+  add column if not exists rdv_heure time;

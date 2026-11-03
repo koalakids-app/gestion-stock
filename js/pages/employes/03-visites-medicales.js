@@ -44,7 +44,7 @@ function vmRendre(erreurTable){
     return'<div style="border-bottom:1px solid var(--line);padding:8px 2px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">'
       +'<div style="font-size:12.5px"><strong>'+esc(VISMED_TYPES[v.type]||v.type)+'</strong> · '+esc(v.organisme||VISMED_ORGANISME)
       +'<div style="font-size:11.5px;color:var(--muted)">'
-      +(fait?'Effectuée le '+vismedDateFr(v.date_visite):'RDV le '+vismedDateFr(v.rdv_le))
+      +(fait?'Effectuée le '+vismedDateFr(v.date_visite):'RDV le '+vismedDateFr(v.rdv_le)+(v.rdv_heure?' à '+String(v.rdv_heure).slice(0,5).replace(':','h'):''))
       +(v.avis?' · '+esc(VISMED_AVIS[v.avis]):'')
       +(fait&&v.prochaine_le?' · prochaine avant le '+vismedDateFr(v.prochaine_le):'')
       +(v.observations?' · '+esc(v.observations):'')+'</div></div>'
@@ -88,7 +88,7 @@ async function vmEnregistrer(){
   if(!date&&!rdv){vmErreur('Renseignez la date de la visite ou la date du RDV.');return false;}
   const row={
     employe_id:eid,type:val('vmType')||'periodique',organisme:VISMED_ORGANISME,
-    date_visite:date,rdv_le:date?null:rdv,
+    date_visite:date,rdv_le:date?null:rdv,rdv_heure:date?null:(rdv&&val('vmHeure')||null),
     prochaine_le:date?(val('vmProchaine')||vismedAjout(date,VISMED_PERIODE_ANS)):null,
     avis:date?(val('vmAvis')||null):null,observations:val('vmObs')||null
   };
