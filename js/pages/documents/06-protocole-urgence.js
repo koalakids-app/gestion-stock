@@ -97,7 +97,7 @@ const PU_FIELDS=['creche','pu_date','pu_version','pu_nb_enf','pu_nb_pro','pu_r_l
 /* ---------- état modifiable ---------- */
 let PU_ST=null;
 function puAnnexeDef(S){
-  return S.map(s=>({t:s.t,items:s.items.map(i=>({m:i[0],p:i[1],q:i[2],c:false}))}));
+  return S.map(s=>({t:s.t,items:s.items.map(i=>({m:i[0],p:i[1],q:i[2],c:false,d:''}))}));
 }
 function puDefaut(){
   const k=[];for(let i=1;i<=PU_NB_CTRL;i++)k.push({id:i,date:'',sac:'',prod:'',par:''});
@@ -123,21 +123,67 @@ function puSync(){
 }
 const puAn=p=>PU_ST[p];
 
+/* ---------- suivi des dates limites (DLC / DLU) ---------- */
+const PU_SEUIL=30; /* jours : « bientôt » avant la date limite */
+function puJours(d){
+  if(!d)return null;
+  const a=new Date(d+'T00:00:00'),t=new Date();t.setHours(0,0,0,0);
+  return isNaN(a)?null:Math.round((a-t)/86400000);
+}
+function puEtat(d){
+  const j=puJours(d);if(j===null)return null;
+  if(j<0)return {cls:'exp',niv:0,j:j,txt:'Périmé depuis '+(-j)+' j'};
+  if(j===0)return {cls:'exp',niv:0,j:j,txt:'Périme aujourd’hui'};
+  if(j<=PU_SEUIL)return {cls:'bt',niv:1,j:j,txt:'Dans '+j+' j'};
+  return {cls:'ok',niv:2,j:j,txt:'OK'};
+}
+/* Articles périmés ou proches de la date limite, des deux sacs, du plus urgent au moins urgent. */
+function puAlertes(){
+  const L=[];
+  [['r','Sac rouge'],['b','Sac bleu']].forEach(([p,nom])=>{
+    (PU_ST[p]||[]).forEach(s=>(s.items||[]).forEach(it=>{
+      const e=it.d?puEtat(it.d):null;
+      if(e&&e.niv<2&&String(it.m||'').trim())L.push({sac:nom,m:it.m,d:it.d,e:e});
+    }));
+  });
+  return L.sort((a,b)=>a.e.j-b.e.j);
+}
+function puSuiviCount(){
+  let n=0;['r','b'].forEach(p=>(PU_ST[p]||[]).forEach(s=>(s.items||[]).forEach(it=>{if(it.d)n++;})));
+  return n;
+}
+function puAlertesHtml(){
+  const L=puAlertes(),n=puSuiviCount();
+  const dfr=d=>new Date(d+'T00:00:00').toLocaleDateString('fr-FR');
+  if(!n)return `<div class="pu-alert none">Aucune date limite saisie. Renseignez la colonne « DLC / DLU » des produits périssables (eau, lait, collations, piles, trousse…) pour suivre leur péremption.</div>`;
+  if(!L.length)return `<div class="pu-alert ok"><i class="ti ti-circle-check"></i> ${n} date${n>1?'s':''} limite${n>1?'s':''} suivie${n>1?'s':''} : rien à renouveler dans les ${PU_SEUIL} jours.</div>`;
+  return `<div class="pu-alert warn"><b><i class="ti ti-alert-triangle"></i> ${L.length} produit${L.length>1?'s':''} à renouveler</b> (périmés ou à moins de ${PU_SEUIL} jours)
+   <ul>${L.map(a=>`<li><span class="pu-dl ${a.e.cls}">${esc(a.e.txt)}</span> ${esc(a.m)} <small>· ${esc(a.sac)} · ${dfr(a.d)}</small></li>`).join('')}</ul></div>`;
+}
+function puMajAlertes(){const e=document.getElementById('pu-alertes');if(e)e.innerHTML=puAlertesHtml();}
+function puSetDate(p,si,ii,v){
+  puAn(p)[si].items[ii].d=v;puSync();
+  const e=document.getElementById('pu-dl-'+p+'-'+si+'-'+ii),st=puEtat(v);
+  if(e){e.className='pu-dl'+(st?' '+st.cls:'');e.textContent=st?st.txt:'';}
+  puMajAlertes();
+}
+
 /* ---------- annexes ---------- */
 function puAnnexeHtml(p){
   const S=puAn(p);
-  let h=`<div class="ftw"><table class="ft"><tr><th>Matériel</th><th>Précisions</th><th>Quantité</th><th>Présent</th><th></th></tr>`;
+  let h=`<div class="ftw"><table class="ft"><tr><th>Matériel</th><th>Précisions</th><th>Quantité</th><th>DLC / DLU</th><th>Présent</th><th></th></tr>`;
   S.forEach((s,si)=>{
-    h+=`<tr><td class="cat" colspan="4"><input class="pu-sec" value="${esc(s.t)}" placeholder="Nom de la rubrique" oninput="puSetSec('${p}',${si},this.value)"></td>`
+    h+=`<tr><td class="cat" colspan="5"><input class="pu-sec" value="${esc(s.t)}" placeholder="Nom de la rubrique" oninput="puSetSec('${p}',${si},this.value)"></td>`
       +`<td class="cat x"><button type="button" class="pu-b" title="Supprimer la rubrique" onclick="puDelSec('${p}',${si})"><i class="ti ti-trash"></i></button></td></tr>`;
     s.items.forEach((it,ii)=>{
       h+=`<tr><td><input value="${esc(it.m)}" placeholder="Article" oninput="puSetItem('${p}',${si},${ii},'m',this.value)"></td>`
         +`<td><input value="${esc(it.p)}" oninput="puSetItem('${p}',${si},${ii},'p',this.value)"></td>`
         +`<td class="q"><input value="${esc(it.q)}" oninput="puSetItem('${p}',${si},${ii},'q',this.value)"></td>`
+        +`<td class="d"><input type="date" value="${esc(it.d||'')}" title="Date limite de consommation / d’utilisation" onchange="puSetDate('${p}',${si},${ii},this.value)"><span id="pu-dl-${p}-${si}-${ii}" class="pu-dl${puEtat(it.d)?' '+puEtat(it.d).cls:''}">${puEtat(it.d)?puEtat(it.d).txt:''}</span></td>`
         +`<td class="c"><input type="checkbox"${it.c?' checked':''} onchange="puSetItem('${p}',${si},${ii},'c',this.checked)"></td>`
         +`<td class="x"><button type="button" class="pu-b" title="Supprimer l’article" onclick="puDelItem('${p}',${si},${ii})"><i class="ti ti-x"></i></button></td></tr>`;
     });
-    h+=`<tr><td colspan="5"><button type="button" class="btn btn-g" onclick="puAddItem('${p}',${si})"><i class="ti ti-plus"></i> Ajouter un article</button></td></tr>`;
+    h+=`<tr><td colspan="6"><button type="button" class="btn btn-g" onclick="puAddItem('${p}',${si})"><i class="ti ti-plus"></i> Ajouter un article</button></td></tr>`;
   });
   return h+`</table></div>
    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px">
@@ -147,13 +193,13 @@ function puAnnexeHtml(p){
 }
 function puRenderAnnexe(p){
   const e=document.getElementById('pu-an-'+p);if(e)e.innerHTML=puAnnexeHtml(p);
-  puSync();
+  puSync();puMajAlertes();
 }
 function puSetSec(p,si,v){puAn(p)[si].t=v;puSync();}
 function puSetItem(p,si,ii,k,v){puAn(p)[si].items[ii][k]=v;puSync();}
-function puAddItem(p,si){puAn(p)[si].items.push({m:'',p:'',q:'',c:false});puRenderAnnexe(p);}
+function puAddItem(p,si){puAn(p)[si].items.push({m:'',p:'',q:'',c:false,d:''});puRenderAnnexe(p);}
 function puDelItem(p,si,ii){puAn(p)[si].items.splice(ii,1);puRenderAnnexe(p);}
-function puAddSec(p){puAn(p).push({t:'',items:[{m:'',p:'',q:'',c:false}]});puRenderAnnexe(p);}
+function puAddSec(p){puAn(p).push({t:'',items:[{m:'',p:'',q:'',c:false,d:''}]});puRenderAnnexe(p);}
 function puDelSec(p,si){
   if(!confirm('Supprimer cette rubrique et ses articles ?'))return;
   puAn(p).splice(si,1);puRenderAnnexe(p);
@@ -217,6 +263,15 @@ const PU_CSS=`<style>
 .tpl.pu table.ft td.cat{background:#EEEDF8;color:var(--violet);font-weight:700;font-size:12px}
 .tpl.pu table.ft td.q{width:92px}.tpl.pu table.ft td.c{width:64px;text-align:center}
 .tpl.pu table.ft td.x{width:40px;text-align:center}
+.tpl.pu table.ft td.d{width:140px}.tpl.pu table.ft td.d input{width:100%}
+.tpl.pu .pu-dl{display:block;font-size:11px;font-weight:700;margin-top:2px}
+.tpl.pu .pu-dl.exp{color:#C0392B}.tpl.pu .pu-dl.bt{color:#C77700}.tpl.pu .pu-dl.ok{color:#2E8B57}
+.tpl.pu .pu-alert{border-radius:10px;padding:10px 14px;margin:10px 0;font-size:13px}
+.tpl.pu .pu-alert.none{background:#F4F4F8;color:#555}
+.tpl.pu .pu-alert.ok{background:#EAF6EF;color:#2E8B57;font-weight:600}
+.tpl.pu .pu-alert.warn{background:#FDEEEC;color:#7A2A20}
+.tpl.pu .pu-alert ul{margin:6px 0 0 18px;padding:0}.tpl.pu .pu-alert li{margin:2px 0}
+.tpl.pu .pu-alert li .pu-dl{display:inline-block;margin:0 4px 0 0}
 .tpl.pu table.ft td.c input{width:20px;height:20px;margin:0}
 .tpl.pu table.ft td.q input,.tpl.pu table.ft input.pu-sec{width:100%}
 .tpl.pu table.ft input.pu-sec{font-weight:700;background:transparent}
@@ -250,6 +305,10 @@ TPL.protocole_urgence={
   ${puTxtHtml('c',11)}
   <h3>${esc(PU_TXT_LABELS.f)}</h3>
   ${puTxtHtml('f',8)}
+
+  <h3>Suivi des dates limites (DLC / DLU)</h3>
+  <p class="hint" style="font-size:13px;font-style:normal">Saisissez, dans les annexes ci-dessous, la date limite des produits périssables de chaque sac. Les produits périmés ou à moins de ${PU_SEUIL} jours sont listés ici et dans le PDF.</p>
+  <div id="pu-alertes">${puAlertesHtml()}</div>
 
   <div class="pu-bar r">Annexe 1 – Sac URGENCE<small>Contenant ROUGE · Sortie immédiate</small></div>
   <div class="txtbox" style="border-radius:0 0 10px 10px">
@@ -342,32 +401,32 @@ TPL.protocole_urgence={
     doc.setDrawColor(60);doc.setLineWidth(0.25);doc.rect(x,yy-3.2,3.6,3.6);
     if(on){doc.setLineWidth(0.5);doc.line(x+0.7,yy-2.5,x+2.9,yy-0.3);doc.line(x+2.9,yy-2.5,x+0.7,yy-0.3);doc.setLineWidth(0.25);}
   };
-  const ligne=(cells,opt)=>{ /* cells: [mat,prec,qte,present(bool)] */
-    const w=[58,68,28,28];
+  const ligne=(cells,opt)=>{ /* cells: [mat,prec,qte,dlc,present(bool)] */
+    const w=[48,50,22,34,28];
     doc.setFontSize(9);doc.setFont(undefined,opt&&opt.head?'bold':'normal');
-    const wr=[0,1,2].map(i=>doc.splitTextToSize(pdfSafe(cells[i]||''),w[i]-4));
-    const h=Math.max(8,Math.max(wr[0].length,wr[1].length,wr[2].length)*4.1+3.6);
+    const wr=[0,1,2,3].map(i=>doc.splitTextToSize(pdfSafe(cells[i]||''),w[i]-4));
+    const h=Math.max(8,Math.max(wr[0].length,wr[1].length,wr[2].length,wr[3].length)*4.1+3.6);
     need(h);
     let x=M;
-    for(let i=0;i<4;i++){
+    for(let i=0;i<5;i++){
       if(opt&&opt.head){doc.setFillColor(238,237,248);doc.rect(x,y,w[i],h,'FD');}
       else{doc.setDrawColor(150);doc.rect(x,y,w[i],h);}
-      if(i<3)doc.text(wr[i],x+2,y+5.2);
+      if(i<4)doc.text(wr[i],x+2,y+5.2);
       x+=w[i];
     }
     if(opt&&opt.head)doc.text('Présent',M+W-14,y+5.2,{align:'center'});
-    else box(M+W-14-1.8,y+h/2+1.6,!!cells[3]);
+    else box(M+W-14-1.8,y+h/2+1.6,!!cells[4]);
     y+=h;
   };
   const annexe=S=>{
-    ligne(['Matériel','Précisions','Quantité'],{head:true});
+    ligne(['Matériel','Précisions','Quantité','DLC / DLU'],{head:true});
     S.forEach(s=>{
       const items=s.items.filter(it=>String(it.m||'').trim());
       if(!items.length&&!String(s.t||'').trim())return;
       need(18);
       doc.setFillColor(246,246,251);doc.setDrawColor(150);doc.rect(M,y,W,7,'FD');
       doc.setFont(undefined,'bold');doc.setFontSize(9);doc.setTextColor(74,63,159);doc.text(pdfSafe(s.t||''),M+2,y+4.8);doc.setTextColor(30);y+=7;
-      items.forEach(it=>ligne([it.m,it.p,it.q,it.c]));
+      items.forEach(it=>ligne([it.m,it.p,it.q,it.d?dfr(it.d):'',it.c]));
     });
   };
 
@@ -410,6 +469,12 @@ TPL.protocole_urgence={
   P('Direction : '+val(g('pu_tel_dir'),20));
   P('Mairie / gestionnaire : '+val(g('pu_tel_mairie'),20));
   P('PMI / référent santé : '+val(g('pu_tel_pmi'),20));
+  H('PRODUITS À RENOUVELER (DLC / DLU)');
+  {
+    const A=puAlertes();
+    if(!A.length)P(puSuiviCount()?'Aucun produit périmé ou à moins de '+PU_SEUIL+' jours à la date d’édition.':'Aucune date limite saisie.',9.5);
+    else A.forEach(a=>P('• '+a.m+' ('+a.sac+') : '+dfr(a.d)+' – '+a.e.txt,9.5,false,M,a.e.niv===0?[192,57,43]:[199,119,0]));
+  }
   H('FICHE DE CONTRÔLE');
   P('Fréquence de contrôle : '+val(g('pu_freq'),20)+'. Vérifier la présence du sac à son emplacement, sa contenance, les DLC et DLU.',9.5);
   y+=1;
