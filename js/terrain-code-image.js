@@ -15,12 +15,13 @@ const KK_TCI_IDLE_MS=5*60*1000;
 const KK_TCI_PICTOS=['ours','arc_en_ciel','zebre','hochet','baleine','cubes_alphabet','camionnette_rouge','pingouin'];
 const KK_TCI_BASE='https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/';
 
-/* Le jeton vient du lien ; gardé sur la tablette pour l'application installée (qui s'ouvre sans ?k=). */
+/* Le jeton vient du lien ; gardé sur la tablette pour l'application installée (qui s'ouvre sans ?k=).
+   À défaut, on reprend le jeton du pointage (même tablette, même navigateur : même jeton kiosk_devices). */
 function kkTciToken(){
   let k=new URLSearchParams(location.search).get('k')||'';
   try{
     if(k.length>=20){localStorage.setItem(KK_TCI_TOKEN,k);}
-    else k=localStorage.getItem(KK_TCI_TOKEN)||'';
+    else k=localStorage.getItem(KK_TCI_TOKEN)||localStorage.getItem('kk_pointage_k')||'';
   }catch(e){}
   return k.length>=20?k:'';
 }

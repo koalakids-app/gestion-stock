@@ -350,7 +350,7 @@ function renderTerrainCode(){
     +'<input type="checkbox" id="terrainCodeOn" style="width:auto;margin-top:3px"'+(on?' checked':'')+' onchange="terrainCodeToggle(this.checked)">'
     +'<span><b>Accès terrain par code image</b><br><span class="hint" style="margin:0">'
     +'Sur la tablette de cette crèche, l\'Accès terrain (suivi, nettoyages, remise en température, couches, infirmerie) s\'ouvre avec les 4 images de la personne, sans e-mail ni mot de passe. '
-    +'Ouvrez une fois le « lien Accès terrain » de la tablette ci-dessus. La direction garde sa connexion habituelle. Désactivé : le formulaire e-mail et mot de passe.</span></span></label>';
+    +'Ouvrez une fois le « lien Accès terrain » de la tablette ci-dessus (une tablette déjà ouverte en pointage dans le même navigateur est reconnue d\'elle-même). La direction garde sa connexion habituelle. Désactivé : le formulaire e-mail et mot de passe.</span></span></label>';
 }
 async function terrainCodeToggle(on){
   const c=CRECHES.find(x=>String(x.id)===String(crecheId));
@@ -394,6 +394,7 @@ function renderKiosk(){
           +'<button class="btn btn-g btn-sm" onclick="kioskCopyLink(\''+esc(suiviLinkFor(d.token))+'\')"><i class="ti ti-heart-handshake"></i> Copier le lien suivi</button>'
           +'<button class="btn btn-s btn-sm" onclick="window.open(\''+esc(suiviLinkFor(d.token))+'\',\'_blank\')"><i class="ti ti-external-link"></i> Ouvrir le suivi</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskCopyLink(\''+esc(terrainLinkFor(d.token))+'\')"><i class="ti ti-id-badge-2"></i> Copier le lien Accès terrain</button>'
+          +'<button class="btn btn-s btn-sm" onclick="kioskShowQr(\''+esc(terrainLinkFor(d.token))+'\',\''+esc((d.label||'Tablette')+' — Accès terrain')+'\')"><i class="ti ti-qrcode"></i> QR code Accès terrain</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskToggleActive(\''+d.id+'\','+(!d.active)+')"><i class="ti ti-power"></i> '+(d.active?'Désactiver':'Réactiver')+'</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskRegen(\''+d.id+'\')"><i class="ti ti-refresh"></i> Régénérer le lien</button>'
         +'</div>'
