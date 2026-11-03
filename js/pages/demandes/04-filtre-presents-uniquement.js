@@ -737,7 +737,7 @@ window.presToggleHorsContrat=presToggleHorsContrat;
 async function presAfficherDatesProches(crecheId,dateStr){
   const box=document.getElementById('pres-dates-proches');
   if(!box)return;
-  const ids=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants).map(e=>e.id);
+  const ids=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId&&!e.archive_le):cacheEnfants.filter(e=>!e.archive_le)).map(e=>e.id);
   if(!ids.length)return;
   const d0=new Date(dateStr+'T00:00:00'),d1=new Date(dateStr+'T00:00:00');
   d0.setDate(d0.getDate()-120);d1.setDate(d1.getDate()+120);
@@ -770,7 +770,7 @@ async function renderPresenceGantt(){
   const crecheId=getPresenceCrecheId();
   if(isDirection&&!crecheId){view.innerHTML='<div class="empty-state"><i class="ti ti-building"></i><p>Sélectionnez une crèche.</p></div>';return;}
   presSyncFilterChip();
-  let allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):[...cacheEnfants]).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
+  let allEnfants=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId&&!e.archive_le):cacheEnfants.filter(e=>!e.archive_le)).sort((a,b)=>(a.prenom||'').localeCompare((b.prenom||''),'fr',{sensitivity:'base'})||((a.nom||'').localeCompare((b.nom||''),'fr',{sensitivity:'base'})));
   if(!allEnfants.length){view.innerHTML='<div class="empty-state"><i class="ti ti-users"></i><p>Aucun enfant enregistr\u00e9.</p></div>';return;}
   // Synchro silencieuse : on garde l'ancien affichage jusqu'à ce que le nouveau soit prêt
   // (sinon la page se vide et se redessine toutes les 20 s, avec saut de défilement).
@@ -881,7 +881,7 @@ async function renderPresenceGantt(){
        l'effectif de la creche, les enfants masques, et les dates proches reellement
        pointees (cliquables) plutot qu'un simple "aucun enfant present". */
     const _crecheLbl0=(cacheCreches.find(c=>c.id===crecheId)||{}).name||'';
-    const _tousCreche=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId):cacheEnfants);
+    const _tousCreche=(crecheId?cacheEnfants.filter(e=>e.creche_id===crecheId&&!e.archive_le):cacheEnfants.filter(e=>!e.archive_le));
     let _aide='';
     if(presOnlyPresents&&_tousCreche.length)
       _aide+='<div style="font-size:12px;margin-top:8px">'+_tousCreche.length+' enfant(s) inscrit(s) dans cette cr\u00e8che, aucun point\u00e9 ce jour. <a href="#" onclick="presToggleFilterPresents();return false;" style="color:var(--koala);font-weight:600">Afficher la liste compl\u00e8te</a></div>';
