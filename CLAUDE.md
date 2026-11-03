@@ -76,6 +76,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Installation de l'Accès terrain (tablette)
 - `terrain.html` a son propre manifeste PWA (`manifest-terrain.json`, icônes `icon-terrain-180/192/512.png` tirées de `terrain-icon.jpg`), comme le pointage (`manifest-pointage.json`). Ouvrir `terrain.html` sur la tablette puis « Installer l'application » (Android) ou « Sur l'écran d'accueil » (iPad).
 
+## Présence (qui est connecté)
+- Onglet « Équipe » de la bulle koala (`js/support-chat.js`, réservé aux `referents.role` `referent`/`direction`) : signal de vie toutes les 60 s (RPC `kk_presence_ping`), liste via `kk_presence_liste` (`sql/presence_utilisateurs.sql`, à appliquer à la main). Table sans policy, une ligne par personne, pas d'historique. Statuts : en ligne (signal < 2,5 min et activité < 5 min), inactif, hors ligne. La page consultée n'est renvoyée qu'à la direction ; les employés ne sont pas suivis.
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.
