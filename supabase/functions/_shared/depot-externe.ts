@@ -1,6 +1,6 @@
 // Signale à l'équipe qu'une famille ou une stagiaire vient de déposer un
 // document : une ligne dans depots_externes (visible dans « Ma journée ») et
-// une notification push aux référentes de la crèche. Ne doit JAMAIS faire
+// une notification push aux référentes de la crèche et à la direction. Ne doit JAMAIS faire
 // échouer le dépôt lui-même : tout est avalé et journalisé.
 // deno-lint-ignore-file no-explicit-any
 
@@ -25,7 +25,12 @@ export async function signalerDepot(sb: any, d: {
     });
     if (error) { console.error('[depot-externe] insertion', error); return; }
 
-    const { data: refs } = await sb.from('referents').select('id').eq('creche_id', d.creche_id).in('role', ['referent', 'direction']);
+    // Référentes de la crèche ET direction de l'organisation : les comptes direction n'ont pas de
+    // creche_id (null), un simple filtre sur la crèche les excluait de la notification.
+    const filtre = creche?.org_id
+      ? `creche_id.eq.${d.creche_id},and(creche_id.is.null,org_id.eq.${creche.org_id})`
+      : `creche_id.eq.${d.creche_id}`;
+    const { data: refs } = await sb.from('referents').select('id').in('role', ['referent', 'direction']).or(filtre);
     const ids = (refs ?? []).map((r: any) => r.id);
     if (!ids.length) return;
     const url = Deno.env.get('SUPABASE_URL')!;
