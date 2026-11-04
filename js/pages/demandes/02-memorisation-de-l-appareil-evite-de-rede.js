@@ -553,7 +553,7 @@ else accObserveBadges();
 
 function showMain(tab){
   _mainCourant=tab;
-  ['accueil','demands','incidents','mcm','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','vaccinations','couches','enfants','afaire','notes','actions','reunions-equipe','stagiaires','partenaires'].forEach(t=>{
+  ['accueil','demands','incidents','mcm','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','insc-suivi','vaccinations','couches','enfants','afaire','notes','actions','reunions-equipe','stagiaires','partenaires'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -575,6 +575,7 @@ function showMain(tab){
     // retour serveur : on dessine d'abord, on complète ensuite.
     if(typeof adEnsureCharge==='function')adEnsureCharge().then(()=>{try{adRenderRefDashBloc();}catch(e){}});
   }
+  if(tab==='insc-suivi'){if(isDirection)showMain('ref-dashboard');else siInit();}
   if(tab==='fraisik'){if(isDirection)ikInit();else showMain('ref-dashboard');}
   if(tab==='fraispro')fpInit();
   if(tab==='remplacantes')rmpInit();
