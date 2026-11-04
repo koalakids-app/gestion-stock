@@ -191,7 +191,35 @@ Deno.serve(async (req) => {
       ? `Votre avenant signé${prenom ? ` — ${prenom}` : ''}`
       : `Votre contrat d'accueil signé${prenom ? ` — ${prenom}` : ''}`;
 
-    const html = `<!doctype html><html lang="fr"><body style="margin:0;padding:0;background:#FDF8F2;font-family:Helvetica,Arial,sans-serif;color:#2B2740">
+    // Espace famille : créé à la signature (sql/espace_famille_creation_auto.sql). Chaque parent
+    // reçoit SON code, retrouvé par son adresse e-mail ; une adresse sans parent connu n'en reçoit pas.
+    const base = (Deno.env.get('APP_URL') || 'https://koalakids-app.github.io/gestion-stock/').replace(/\/?$/, '/');
+    const codes = new Map<string, string>();
+    if (c.enfant_id) {
+      try {
+        const { data: acces } = await sb.from('famille_acces')
+          .select('code, parent_id').eq('enfant_id', c.enfant_id).eq('actif', true);
+        const ids = (acces || []).map((a: { parent_id: string }) => a.parent_id);
+        if (ids.length) {
+          const { data: pars } = await sb.from('enfants_parents').select('id, email').in('id', ids);
+          for (const p of pars || []) {
+            const a = (acces || []).find((x: { parent_id: string }) => x.parent_id === p.id);
+            if (a && p.email) codes.set(String(p.email).trim().toLowerCase(), a.code);
+          }
+        }
+      } catch (e) {
+        console.error('[envoyer-contrat-signe] espace famille', e);   // ne bloque jamais l'envoi du contrat
+      }
+    }
+    const blocEspace = (code?: string) => !code ? '' : `
+    <div style="margin:0 0 16px;padding:14px 16px;background:#F4F2FB;border-radius:12px;font-size:14.5px;line-height:1.6">
+      <strong>Votre espace famille</strong><br>
+      Retrouvez les informations de la crèche et déposez vos documents en ligne.<br>
+      Votre code personnel : <strong style="font-size:18px;letter-spacing:.15em">${esc(code)}</strong><br>
+      <a href="${esc(base)}espace-famille.html?t=${esc(code)}" style="color:#4A3F9F;font-weight:700">Ouvrir mon espace famille</a>
+    </div>`;
+
+    const html = (code?: string) => `<!doctype html><html lang="fr"><body style="margin:0;padding:0;background:#FDF8F2;font-family:Helvetica,Arial,sans-serif;color:#2B2740">
 <div style="max-width:560px;margin:0 auto;padding:24px 18px">
   <div style="background:#fff;border-radius:16px 16px 0 0;padding:18px 20px;text-align:center">
     <img src="${esc(logoUrl)}" alt="${esc(enseigne)}"
@@ -204,6 +232,7 @@ Deno.serve(async (req) => {
   <div style="background:#fff;border:2px solid #EFE9F5;border-top:none;border-radius:0 0 16px 16px;padding:22px 20px">
     <p style="margin:0 0 14px;font-size:15px;line-height:1.6">Bonjour,</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.6">${avenant ? 'Votre avenant' : 'Votre contrat d\'accueil'}${prenom ? `, pour ${esc(prenom)},` : ''} est désormais signé des deux côtés. Vous en trouverez une copie complète en pièce jointe.</p>
+    ${blocEspace(code)}
     <p style="margin:0;font-size:14.5px;line-height:1.6">À très bientôt,<br>L'équipe ${esc(enseigne)}</p>
   </div>
   <p style="text-align:center;font-size:12px;color:#8E8AA8;margin:16px 0 0;line-height:1.7">
@@ -213,7 +242,11 @@ Deno.serve(async (req) => {
 </body></html>`;
 
     try {
-      await sendEmail(adresses, objet, html, { filename: nomFichier, content: pdfBase64 }, expediteur, enseigne);
+      // Un message par adresse : chaque parent ne reçoit que son propre code.
+      for (const adresse of adresses) {
+        await sendEmail([adresse], objet, html(codes.get(adresse.toLowerCase())),
+          { filename: nomFichier, content: pdfBase64 }, expediteur, enseigne);
+      }
     } catch (mailErr) {
       // Le message d'erreur (identifiants Gmail refusés, quota dépassé…) part
       // dans les logs : il doit dire quoi faire, pas seulement que ça a
