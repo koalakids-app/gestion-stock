@@ -267,6 +267,7 @@ async function confirmerEnvoiDevis(){
       const{data:lg,error:eLg}=await sb.from('devis_lignes').select('*').eq('devis_id',d.id).order('ordre');
       if(eLg)throw eLg;
       pdf=dessineDevis(d,lg||[],true);
+      publierPdfDevis(d,pdf.base64);   // copie dans l'Espace famille, sans bloquer l'envoi
     }catch(ePdf){console.warn('[devis pdf joint]',ePdf);toast('PDF non joint : le mail part avec le lien seul.',true);}
 
     const{error:eFn}=await sb.functions.invoke('envoyer-devis',
@@ -483,6 +484,38 @@ function echeanceDevis(d){
   if(isNaN(dt))return '';
   dt.setDate(dt.getDate()+Number(RESEAU.devis_validite_jours||30));
   return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+}
+
+/* Dépose le PDF du devis dans l'Espace famille (voir js/famille-documents.js) : il y apparaît dès que
+   l'enfant a un contrat issu de ce devis (contrats.devis_id). Jamais bloquant. */
+async function publierPdfDevis(d,base64,avecMessage){
+  if(!d.creche_id||!window.KkFamilleDocs)return false;
+  try{
+    await KkFamilleDocs.publier({type:'devis',sourceId:d.id,crecheId:d.creche_id,base64:base64,
+      titre:'Devis'+(d.numero?' — '+d.numero:'')+(d.signature_png?' (signé)':'')});
+    if(avecMessage)toast('Devis disponible dans l\'Espace famille ✅');
+    return true;
+  }catch(e){
+    console.warn('[publierPdfDevis]',e);
+    if(avecMessage)toast('Publication impossible : '+(e.message||'erreur inconnue'),true);
+    return false;
+  }
+}
+
+/* Bouton « Espace famille » d'un devis : republie une copie à jour (signature comprise). */
+async function publierDevisFamille(id){
+  const d=DEVIS.find(x=>String(x.id)===String(id));
+  if(!d){toast('Devis introuvable.',true);return;}
+  toast('Préparation du PDF…');
+  try{
+    await Promise.all([chargeJsPdf(),loadEtabs(),loadReseau()]);
+    const{data,error}=await sb.from('devis_lignes').select('*').eq('devis_id',d.id).order('ordre');
+    if(error)throw error;
+    await publierPdfDevis(d,dessineDevis(d,data||[],true).base64,true);
+  }catch(e){
+    console.error('[publierDevisFamille]',e);
+    toast('Publication impossible : '+(e.message||'erreur inconnue'),true);
+  }
 }
 
 async function pdfDevis(id){

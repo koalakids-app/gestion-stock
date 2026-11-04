@@ -1001,6 +1001,8 @@ async function openContrat(id,type){
   // l'envoi automatique, ou simplement si la famille redemande une copie.
   document.getElementById('btnMailCt').style.display=
     (CCUR&&CCUR.statut==='contresigne'&&!reprise)?'':'none';
+  document.getElementById('btnFamCt').style.display=
+    (CCUR&&CCUR.statut==='contresigne'&&!reprise&&CCUR.enfant_id)?'':'none';
 
   const lock=document.getElementById('cLock');
   lock.style.display=brouillon?'none':'';
