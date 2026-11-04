@@ -79,6 +79,39 @@ async function fermeturesAVenir(sb: any, crecheId: string) {
   }).sort((a: any, b: any) => a.debut.localeCompare(b.debut));
 }
 
+const ORDRE_ROLES = ["directeur", "coordinateur", "gestionnaire", "autre"];
+const texteCourt = (v: unknown, max = 120) => String(v ?? "").trim().slice(0, max);
+
+/** Coordonnées de la crèche + personnes à contacter (directeur de la crèche, coordinateur et
+ *  gestionnaire du réseau), saisies par la direction dans Paramètres. Rien n'est déduit des comptes. */
+async function contactsDeLaCreche(sb: any, crecheId: string) {
+  const { data: creche } = await sb.from("creches").select("name, addr, org_id").eq("id", crecheId).maybeSingle();
+  const [{ data: etab }, { data: res }] = await Promise.all([
+    sb.from("etablissements").select("telephone, email, contacts_famille, heure_ouverture, heure_fermeture")
+      .eq("creche_id", crecheId).maybeSingle(),
+    creche?.org_id
+      ? sb.from("reseau_config").select("config").eq("org_id", creche.org_id).maybeSingle()
+      : sb.from("reseau_config").select("config").eq("id", RESEAU_CFG_ID).maybeSingle(),
+  ]);
+  const brut = [
+    ...(Array.isArray(etab?.contacts_famille) ? etab.contacts_famille : []),
+    ...(Array.isArray(res?.config?.contacts_famille_reseau) ? res.config.contacts_famille_reseau : []),
+  ];
+  const personnes = brut.filter((c: any) => c && c.nom && (c.telephone || c.email)).map((c: any) => ({
+    role: ORDRE_ROLES.includes(c.role) ? c.role : "autre",
+    nom: texteCourt(c.nom), fonction: texteCourt(c.fonction),
+    telephone: texteCourt(c.telephone, 30), email: texteCourt(c.email),
+  })).sort((a: any, b: any) => ORDRE_ROLES.indexOf(a.role) - ORDRE_ROLES.indexOf(b.role));
+  return {
+    creche: {
+      nom: creche?.name || "", adresse: creche?.addr || "",
+      telephone: etab?.telephone || "", email: etab?.email || "",
+      ouverture: etab?.heure_ouverture || "", fermeture: etab?.heure_fermeture || "",
+    },
+    personnes,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return erreur("method_not_allowed", 405);
@@ -145,10 +178,12 @@ Deno.serve(async (req) => {
     const documents = (await documentsDeLEnfant(sb, acces.enfant_id))
       .map((d: any) => ({ id: d.id, type: d.type, titre: d.titre, date: d.publie_le }));
     const fermetures = await fermeturesAVenir(sb, acces.creche_id);
+    const contacts = await contactsDeLaCreche(sb, acces.creche_id);
 
     return json({
       documents,
       fermetures,
+      contacts,
       creche_id: acces.creche_id,
       // Code image du pointage sur la tablette (4 pictogrammes, dans l'ordre). Seules les images
       // sont renvoyées, jamais le code numérique interne (enfants.code_pointage).
