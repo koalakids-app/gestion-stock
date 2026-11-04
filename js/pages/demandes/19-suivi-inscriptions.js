@@ -24,13 +24,15 @@ function siAccesPermis() {
   return ((currentUser && currentUser.email) || '').toLowerCase() === SI_COMPTE_DIRECTION;
 }
 
+function siEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
 function siDate(d) {
   if (!d) return '—';
   var p = String(d).slice(0, 10).split('-');
   return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : '—';
 }
 function siBadge(t) {
-  return '<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:700;background:' + t.bg + ';color:' + t.fg + '">' + esc(t.l) + '</span>';
+  return '<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:700;background:' + t.bg + ';color:' + t.fg + '">' + siEsc(t.l) + '</span>';
 }
 function siNom(p) { return ((p.prenom || '') + ' ' + (p.nom || '')).trim() || 'Sans nom'; }
 
@@ -49,7 +51,10 @@ async function siInit() {
     z.innerHTML = '<div style="padding:24px;color:var(--red)">Chargement impossible. Vérifiez votre connexion (ou que le script SQL a été appliqué).</div>';
     return;
   }
-  siRender();
+  try { siRender(); } catch (e) {
+    console.warn('[siRender]', e);
+    z.innerHTML = '<div style="padding:24px;color:var(--red)">Affichage impossible : ' + siEsc(e.message || e) + '</div>';
+  }
 }
 
 function siOnglet(o) { SI.onglet = o; SI.sel = null; siRender(); }
@@ -80,13 +85,13 @@ function siRender() {
       c3 = 'entrée souhaitée : ' + siDate(x.date_entree_souhaitee);
     } else {
       t = SI_DEVIS[x.statut] || { l: x.statut, bg: '#EEE', fg: '#333' };
-      c2 = esc(x.numero || 'Sans numéro');
+      c2 = siEsc(x.numero || 'Sans numéro');
       c3 = x.envoye_le ? 'envoyé le ' + siDate(x.envoye_le) : 'pas encore envoyé';
     }
     h += '<button type="button" onclick="siChoisir(\'' + id.replace(/'/g, '') + '\')" style="text-align:left;width:100%;border:1px solid var(--border,#e3e1d8);border-radius:10px;background:' + (ouvert ? '#EAF4F2' : '#fff') + ';padding:12px 14px;cursor:pointer;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font:inherit">'
-      + '<b style="flex:1 1 160px">' + esc(siNom(x)) + '</b>'
-      + '<span style="flex:1 1 150px;color:var(--muted);font-size:12.5px">' + (insc ? esc(c2) : c2) + '</span>'
-      + '<span style="flex:1 1 170px;color:var(--muted);font-size:12.5px">' + esc(c3) + '</span>'
+      + '<b style="flex:1 1 160px">' + siEsc(siNom(x)) + '</b>'
+      + '<span style="flex:1 1 150px;color:var(--muted);font-size:12.5px">' + (insc ? siEsc(c2) : c2) + '</span>'
+      + '<span style="flex:1 1 170px;color:var(--muted);font-size:12.5px">' + siEsc(c3) + '</span>'
       + siBadge(t) + '</button>';
     if (ouvert) h += siDetail(x, insc);
   });
@@ -107,12 +112,12 @@ function siDetail(x, insc) {
     var ok = i < fait;
     return '<li style="display:flex;align-items:center;gap:8px;font-size:13px;color:' + (ok ? 'inherit' : 'var(--muted)') + '">'
       + '<span style="width:18px;height:18px;border-radius:50%;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;'
-      + (ok ? 'background:#1F6F6B;color:#fff' : 'border:2px solid #B9B6A9') + '">' + (ok ? '✓' : '') + '</span>' + esc(l) + '</li>';
+      + (ok ? 'background:#1F6F6B;color:#fff' : 'border:2px solid #B9B6A9') + '">' + (ok ? '✓' : '') + '</span>' + siEsc(l) + '</li>';
   }).join('');
   var infos = insc
     ? 'Demande reçue le ' + siDate(x.created_at)
     : (x.expire_le ? 'Valable jusqu\'au ' + siDate(x.expire_le) : '') + (x.repondu_le ? ' · Réponse le ' + siDate(x.repondu_le) : '');
   return '<div style="border:1px solid var(--border,#e3e1d8);border-radius:10px;background:#fff;padding:14px 16px;margin:-2px 0 6px">'
-    + (infos ? '<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">' + esc(infos) + '</div>' : '')
+    + (infos ? '<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">' + siEsc(infos) + '</div>' : '')
     + '<ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px">' + li + '</ol></div>';
 }
