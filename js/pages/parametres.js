@@ -321,6 +321,7 @@ function renderEtab(){
   FERMETURES=toArr(e.jours_fermeture).slice();
   renderFermetures();
   CONTACTS=toArr(e.contacts_famille).slice();
+  CTC_EDIT=null;ctcMajBoutons();
   renderContacts();
 
   syncSiret();syncCap();syncPmi();syncSem();syncIdentite();
@@ -861,21 +862,56 @@ function renderContacts(){
     +'<div class="ferm-info"><div class="ferm-dates">'+esc(c.nom||'')+(c.fonction?' · '+esc(c.fonction):'')+'</div>'
     +(scope==='reseau'?'<div class="ferm-scope"><i class="ti ti-network"></i> Toutes les crèches</div>':'')
     +'<div class="ferm-label">'+esc([c.telephone,c.email].filter(Boolean).join(' · '))+'</div></div>'
-    +'<button type="button" class="btn btn-g btn-sm" onclick="ctcRemove(\''+scope+'\','+i+')"><i class="ti ti-trash"></i></button></div>').join('');
+    +'<button type="button" class="btn btn-g btn-sm" title="Modifier" onclick="ctcEdit(\''+scope+'\','+i+')"><i class="ti ti-pencil"></i></button>'
+    +'<button type="button" class="btn btn-g btn-sm" title="Retirer" onclick="ctcRemove(\''+scope+'\','+i+')"><i class="ti ti-trash"></i></button></div>').join('');
 }
+/* Contact en cours de modification : {scope,i}. Il reste dans la liste jusqu'à « Mettre à jour ». */
+let CTC_EDIT=null;
+function ctcMajBoutons(){
+  const enCours=!!CTC_EDIT;
+  const lib=document.getElementById('ctcBtnLib'),ann=document.getElementById('ctcBtnCancel');
+  if(lib)lib.textContent=enCours?'Mettre à jour ce contact':'Ajouter ce contact';
+  if(ann)ann.style.display=enCours?'':'none';
+}
+function ctcReset(){
+  CTC_EDIT=null;
+  ['ctcNom','ctcFonction','ctcTel','ctcMail'].forEach(id=>setVal(id,''));
+  setVal('ctcRole','directeur');
+  document.getElementById('ctcReseau').checked=false;
+  ctcMajBoutons();
+}
+function ctcEdit(scope,i){
+  const c=(scope==='reseau'?CONTACTS_RESEAU:CONTACTS)[i];
+  if(!c)return;
+  setVal('ctcRole',c.role||'autre');setVal('ctcNom',c.nom||'');setVal('ctcFonction',c.fonction||'');
+  setVal('ctcTel',c.telephone||'');setVal('ctcMail',c.email||'');
+  document.getElementById('ctcReseau').checked=scope==='reseau';
+  CTC_EDIT={scope,i};
+  ctcMajBoutons();
+  document.getElementById('ctcNom').focus();
+}
+function ctcCancel(){ctcReset();renderContacts();}
+/* Renvoie true quand le contact a été ajouté ou mis à jour, false si la saisie est refusée. */
 function ctcAdd(){
   const nom=val('ctcNom').trim();
-  if(!nom){toast('Indiquez le nom de la personne.',true);return;}
+  if(!nom){toast('Indiquez le nom de la personne.',true);return false;}
   const tel=val('ctcTel').trim(),mail=val('ctcMail').trim();
-  if(!tel&&!mail){toast('Indiquez au moins un téléphone ou un e-mail.',true);return;}
-  if(mail&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)){toast('Cet e-mail ne paraît pas valide.',true);return;}
+  if(!tel&&!mail){toast('Indiquez au moins un téléphone ou un e-mail.',true);return false;}
+  if(mail&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)){toast('Cet e-mail ne paraît pas valide.',true);return false;}
   const entry={role:val('ctcRole')||'autre',nom,fonction:val('ctcFonction').trim(),telephone:tel,email:mail};
-  if(document.getElementById('ctcReseau').checked)CONTACTS_RESEAU.push(entry);else CONTACTS.push(entry);
-  ['ctcNom','ctcFonction','ctcTel','ctcMail'].forEach(id=>setVal(id,''));
-  document.getElementById('ctcReseau').checked=false;
+  const versReseau=document.getElementById('ctcReseau').checked;
+  if(CTC_EDIT){
+    const src=CTC_EDIT.scope==='reseau'?CONTACTS_RESEAU:CONTACTS;
+    const dst=versReseau?CONTACTS_RESEAU:CONTACTS;
+    if(src===dst)src[CTC_EDIT.i]=entry;          // même liste : on remplace à la même place
+    else{src.splice(CTC_EDIT.i,1);dst.push(entry);}   // la portée a changé (crèche <-> réseau)
+  }else(versReseau?CONTACTS_RESEAU:CONTACTS).push(entry);
+  ctcReset();
   renderContacts();
+  return true;
 }
 function ctcRemove(scope,i){
+  if(CTC_EDIT)ctcReset();
   (scope==='reseau'?CONTACTS_RESEAU:CONTACTS).splice(i,1);
   renderContacts();
 }
@@ -887,9 +923,7 @@ async function save(){
   /* Un contact saisi dans le formulaire mais pas encore ajouté à la liste serait perdu en silence :
      on l'ajoute ici, ou on s'arrête si la saisie est incomplète (ctcAdd affiche la raison). */
   if(val('ctcNom').trim()||val('ctcTel').trim()||val('ctcMail').trim()){
-    const avant=CONTACTS.length+CONTACTS_RESEAU.length;
-    ctcAdd();
-    if(CONTACTS.length+CONTACTS_RESEAU.length===avant)return;
+    if(!ctcAdd())return;
   }
   const s=val('eSiret').replace(/\s/g,'');
   if(s&&(s.length!==14||!/^\d+$/.test(s)||!luhnOk(s))
