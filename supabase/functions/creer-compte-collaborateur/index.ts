@@ -67,13 +67,13 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { employe_id?: string; redirect_to?: string; partager?: boolean };
+  let body: { employe_id?: string; redirect_to?: string; partager?: boolean; renvoyer?: boolean };
   try {
     body = await req.json();
   } catch {
     return json({ error: "corps_invalide" }, 400);
   }
-  const { employe_id, redirect_to, partager } = body;
+  const { employe_id, redirect_to, partager, renvoyer } = body;
   if (!employe_id) return json({ error: "employe_id_manquant" }, 400);
 
   const supabase = createClient(
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (eErr) throw eErr;
     if (!employe) return json({ error: "collaborateur_introuvable" }, 404);
-    if (employe.user_id) return json({ error: "compte_deja_existant" }, 400);
+    if (employe.user_id && !renvoyer) return json({ error: "compte_deja_existant" }, 400);
     if (!employe.email) return json({ error: "aucun_email" }, 400);
 
     const { data: creche } = employe.creche_id
@@ -104,6 +104,29 @@ Deno.serve(async (req) => {
       : { data: null };
     if (creche?.org_id !== caller.org_id) {
       return json({ error: "organisation_differente" }, 403);
+    }
+
+    // Renvoi du lien à une fiche dont l'invitation n'a pas abouti : nouveau
+    // lien « recovery » (choix du mot de passe), à partager, sans e-mail.
+    if (renvoyer) {
+      if (!employe.user_id) return json({ error: "aucun_compte" }, 400);
+      const rec = await supabase.auth.admin.generateLink({
+        type: "recovery",
+        email: employe.email,
+        options: { redirectTo: redirect_to || undefined },
+      });
+      if (rec.error) throw rec.error;
+      if (rec.data.user.id !== employe.user_id) return json({ error: "compte_different" }, 400);
+      if (rec.data.user.last_sign_in_at) return json({ error: "compte_deja_actif" }, 400);
+      let lienR = rec.data.properties.action_link;
+      const th = rec.data.properties.hashed_token;
+      if (th && redirect_to) {
+        const u = new URL(redirect_to);
+        u.searchParams.set("token_hash", th);
+        u.searchParams.set("type", "recovery");
+        lienR = u.toString();
+      }
+      return json({ ok: true, user_id: employe.user_id, lien: lienR });
     }
 
     const meta = { prenom: employe.prenom, nom: employe.nom, role_app: "collaborateur" };
