@@ -737,6 +737,7 @@ function enfRenderAdminDocs(){
     '<div style="display:flex;align-items:center;gap:8px;padding:5px 0">'
     +'<i class="ti ti-paperclip" style="color:var(--koala);flex-shrink:0"></i>'
     +'<button type="button" onclick="enfAdminDocOpen(\''+d.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;color:var(--koala-dark);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(d.filename||'Document')+'</button>'
+    +(String(d.piece_key||'').startsWith('espace_famille:')?'<span title="Déposé par la famille depuis son Espace famille" style="background:var(--koala-light);color:var(--koala);border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap">Famille</span>':'')
     +'<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+new Date(d.created_at).toLocaleDateString('fr-FR')+'</span>'
     +'<button onclick="enfAdminDocDelete(\''+d.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:14px;flex-shrink:0"><i class="ti ti-trash"></i></button>'
     +'</div>';
@@ -764,7 +765,9 @@ function enfRenderAdminDocs(){
       +'</div>';
   }).join('');
 
-  const autres=enfAdminDocsCache.filter(d=>!d.piece_key);
+  /* Hors liste : fichiers sans clé de pièce, et dépôts faits par la famille dans son Espace famille
+     (clé « espace_famille:<libellé> », voir l'edge function espace-famille). */
+  const autres=enfAdminDocsCache.filter(d=>!d.piece_key||String(d.piece_key).startsWith('espace_famille:'));
   const autresHtml='<div style="margin-top:14px">'
     +'<div style="font-size:12px;font-weight:700;color:var(--koala-dark);margin-bottom:6px">Autres documents importés</div>'
     +(autres.length?autres.map(ligneFichier).join(''):'<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Aucun autre document.</div>')
