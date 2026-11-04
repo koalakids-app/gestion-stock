@@ -44,6 +44,7 @@ function enfEspaceRender(){
       +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'
       +'<span style="font-size:13px">'+nom+' <small style="color:var(--muted)">· '+vu+'</small></span>'
       +'<span style="font-family:monospace;font-weight:700;letter-spacing:.15em;background:var(--koala-light);color:var(--koala-dark);border-radius:8px;padding:3px 10px">'+escHtml(a.code)+'</span></div>'
+      +'<div style="font-size:11.5px;margin-top:6px;word-break:break-all"><a href="'+escHtml(espaceLien(a))+'" target="_blank" rel="noopener" style="color:var(--koala)">'+escHtml(espaceLien(a))+'</a></div>'
       +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px">'
       +'<button class="btn-sm" onclick="enfEspaceCopier(\''+a.id+'\')"><i class="ti ti-link"></i> Copier le lien</button>'
       +(PartageLien.disponible()?'<button class="btn-sm" onclick="enfEspacePartager(\''+a.id+'\')"><i class="ti ti-share"></i> Partager…</button>':'')
@@ -68,7 +69,7 @@ async function enfEspaceCreer(parentId){
 function enfEspaceCopier(id){
   const a=enfEspaceCache.find(x=>x.id===id); if(!a) return;
   const url=espaceLien(a);
-  navigator.clipboard.writeText(url).then(()=>showBanner('Lien copié — à transmettre à la famille.'),()=>prompt('Copiez ce lien :',url));
+  navigator.clipboard.writeText(url).then(()=>{showBanner('Lien copié — à transmettre à la famille.');alert('Lien copié :\n'+url);},()=>prompt('Copiez ce lien :',url));
 }
 
 function enfEspacePartager(id){
