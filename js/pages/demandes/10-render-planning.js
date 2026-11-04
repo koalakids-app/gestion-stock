@@ -25,7 +25,7 @@ async function renderPlanning(){
     if(refLabel)refLabel.style.display='none';
     if(refSelect){refSelect.style.display='';
       if(refSelect.options.length<=1){
-        const refs=cacheReferents.filter(r=>r.role!=='direction');
+        const refs=cacheReferents.filter(r=>r.role==='referent');
         refSelect.innerHTML='<option value="">-- Choisir un/une directeur/trice technique --</option>'+refs.map(r=>'<option value="'+r.id+'">'+r.name+'</option>').join('');
       }
     }
@@ -245,7 +245,7 @@ async function peOpenCellEdit(eventId,creneauLabel,jourStr,crecheId,semaine){
   try{
     const connus=(typeof spPrenomsConnus==='function')?await spPrenomsConnus(crecheId):[];
     const refs=(cacheReferents||[])
-      .filter(r=>r.creche_id===crecheId&&r.name)
+      .filter(r=>r.creche_id===crecheId&&r.name&&r.role!=='employe')
       .map(r=>String(r.name).trim().split(/\s+/)[0]);
     // La modale a pu être refermée pendant la requête.
     if(!_peEditCtx||_peEditCtx.crecheId!==crecheId||_peEditCtx.semaine!==semaine)return;
