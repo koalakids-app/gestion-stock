@@ -77,7 +77,7 @@ section Multi-tenant ci-dessus).
 
 ## Pages publiques ouvertes par un lien
 
-Les pages sans compte (`pieces.html`, `pieces-employe.html`, `famille.html`, `famille-suivi.html`, `stagiaire.html`, `devis.html`, `signature-contrat.html`) fonctionnent avec une **session courte** :
+Les pages sans compte (`pieces.html`, `pieces-employe.html`, `famille.html`, `famille-suivi.html`, `espace-famille.html`, `stagiaire.html`, `devis.html`, `signature-contrat.html`) fonctionnent avec une **session courte** :
 
 - le lien (`?t=jeton`) n'ouvre qu'une session et le jeton est retiré de l'adresse ;
 - la session se ferme après **15 minutes d'inactivité**, ou au plus tard **2 heures** après l'ouverture ; un avertissement avec compte à rebours s'affiche 2 minutes avant (« Rester connecté(e) ») ;
