@@ -884,6 +884,13 @@ function ctcRemove(scope,i){
 async function save(){
   const btn=document.getElementById('btnSave');
   const st=document.getElementById('statut');
+  /* Un contact saisi dans le formulaire mais pas encore ajouté à la liste serait perdu en silence :
+     on l'ajoute ici, ou on s'arrête si la saisie est incomplète (ctcAdd affiche la raison). */
+  if(val('ctcNom').trim()||val('ctcTel').trim()||val('ctcMail').trim()){
+    const avant=CONTACTS.length+CONTACTS_RESEAU.length;
+    ctcAdd();
+    if(CONTACTS.length+CONTACTS_RESEAU.length===avant)return;
+  }
   const s=val('eSiret').replace(/\s/g,'');
   if(s&&(s.length!==14||!/^\d+$/.test(s)||!luhnOk(s))
      &&!confirm('Le SIRET saisi ne paraît pas valide. L\'enregistrer quand même ?'))return;
