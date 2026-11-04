@@ -527,6 +527,11 @@ function notifBellOuvrir(id){
   try{
     if(c.type==='demande'&&cacheDemandes.some(d=>d.id===c.id))openThread(c.id);
     else if(c.type==='evenement'&&cacheEvenements.some(e=>e.id===c.id))openEvenementModal(null,c.id);
+    else if(c.type==='depot'&&c.id){
+      depotsMarquerVus(c.ids);
+      if(c.source==='enfant'){if(typeof enfOpenFiche==='function')enfOpenFiche(c.id);}
+      else if(typeof stgOpenFiche==='function')stgOpenFiche(c.id);
+    }
   }catch(e){console.warn('[Notif] ouverture',e);}
 }
 function notifBellToutMarquerLu(){
@@ -597,7 +602,36 @@ function detecterNouveautesEtNotifier(avant){
     }
   }
   detecterNouveauxDocuments(avant);
+  detecterNouveauxDepots().catch(e=>console.warn('[Notif] dépôts',e));
   if(typeof detecterParcoursQuizTermines==='function')detecterParcoursQuizTermines();
+}
+/* Documents déposés par une famille ou une stagiaire via leur lien (table depots_externes, alimentée par les
+   edge functions dossier-pieces / dossier-stagiaire / espace-famille) : même cloche que le push. Regroupés par
+   personne, non vus seulement ; la RLS limite chaque référent·e à sa crèche. Rattrapage des dépôts arrivés poste
+   fermé grâce à la date du dernier dépôt signalé (par référent·e, dans le navigateur ; 3 jours à la première visite). */
+async function detecterNouveauxDepots(){
+  if(!currentProfile||typeof depotNomPersonne!=='function')return;
+  const cle='koala_depots_vus_'+currentProfile.id;
+  let vus=null;
+  try{vus=localStorage.getItem(cle);}catch(e){}
+  if(!vus)vus=new Date(Date.now()-3*86400000).toISOString();
+  const{data,error}=await sb.from('depots_externes').select('*').is('vu_le',null).gt('depose_le',vus).order('depose_le',{ascending:true});
+  if(error)throw error;
+  if(!data||!data.length)return;
+  const groupes=new Map();
+  data.forEach(d=>{
+    const k=d.source+':'+(d.enfant_id||d.stagiaire_id);
+    if(!groupes.has(k))groupes.set(k,{source:d.source,enfant_id:d.enfant_id,stagiaire_id:d.stagiaire_id,ids:[],libelles:[]});
+    const g=groupes.get(k);g.ids.push(d.id);g.libelles.push(d.libelle);
+  });
+  const liste=[...groupes.values()];
+  liste.slice(0,3).forEach(g=>{
+    showInAppNotif(g.source==='enfant'?'Document déposé par une famille':'Document déposé par une stagiaire',
+      depotNomPersonne(g)+' : '+depotResume(g),g.source==='enfant'?'enfants':'stagiaires',
+      {type:'depot',source:g.source,id:g.source==='enfant'?g.enfant_id:g.stagiaire_id,ids:g.ids});
+  });
+  if(liste.length>3)showInAppNotif('Documents déposés','+ '+(liste.length-3)+' autre(s) dans Ma journée','accueil',null);
+  try{localStorage.setItem(cle,data.reduce((m,d)=>String(d.depose_le)>m?String(d.depose_le):m,vus));}catch(e){}
 }
 /* Nouveaux documents (page Documents) : signalés dans la cloche comme le reste. Au premier passage de la
    session, on rattrape aussi ceux ajoutés depuis la dernière visite (poste fermé quand le document est
