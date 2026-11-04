@@ -238,6 +238,10 @@ async function stgSyncEvenementEntretien(ficheId,row){
       ev.created_by=(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null;
       const{data,error}=await sb.from('evenements').insert(ev).select().single();
       if(error)throw error;saved=data;
+      if(saved){
+        const dest=cacheReferents.filter(r=>r.id!==currentProfile?.id&&(r.role==='referent'||r.role==='direction')&&(!saved.creche_id||r.creche_id===saved.creche_id)).map(r=>r.id);
+        if(dest.length)await callFn('notify-push',{referent_ids:dest,title:'Nouvel événement',body:ev.titre,url:'./demandes.html',tag:'evenement-'+saved.id});
+      }
     }
     if(saved&&typeof cacheEvenements!=='undefined'){
       cacheEvenements=cacheEvenements.filter(e=>e.id!==saved.id);cacheEvenements.push(saved);

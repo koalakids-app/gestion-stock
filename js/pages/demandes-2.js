@@ -705,6 +705,7 @@ evenements: `
   <li>Indiquez les <strong>dates</strong> (et heures si besoin) — un événement peut s'étaler sur plusieurs jours</li>
   <li>Cliquez <strong>Enregistrer</strong></li>
 </ol>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">🔔 À la création, la direction et les référent(e)s de la crèche concernée (tous si « événement réseau ») reçoivent une <strong>notification « Nouvel événement »</strong>, sauf la personne qui l\'a créé. C\'est aussi le cas des <strong>visites</strong> reportées depuis Inscriptions et des <strong>entretiens</strong> reportés depuis une fiche stagiaire (à la création seulement, pas à un déplacement de date).</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Filtrer et consulter</div>
 <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Utilisez les <strong>filtres par type</strong> en haut du calendrier. Cliquez sur un jour pour voir le détail des événements et les modifier ou les supprimer. Le <strong>filtre par crèche</strong> affiche les événements de la crèche choisie <em>ainsi que</em> ceux marqués « toutes crèches » ; le choix « Réseau » ne montre que ces derniers.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🎨 Légende des types</div>

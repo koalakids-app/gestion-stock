@@ -307,6 +307,18 @@ async function confirmerEnvoiDevis(){
    en type « Visite ». evenements.preinscription_id relie les deux : une visite
    déplacée met à jour son événement au lieu d'en créer un second, une visite
    retirée le supprime. Best-effort : la fiche est déjà enregistrée. */
+/* Même règle que « Nouvel événement » dans Demandes (saveEvenement) : référents et direction
+   de la crèche (tous si l'événement n'a pas de crèche), sauf l'auteur. Ne bloque jamais. */
+async function notifierNouvelEvenement(evtId,titre,crecheId){
+  try{
+    const{data:refs,error}=await sb.from('referents').select('id,role,creche_id');
+    if(error)throw error;
+    const ids=(refs||[]).filter(r=>(!PROF||r.id!==PROF.id)&&(r.role==='referent'||r.role==='direction')&&(!crecheId||r.creche_id===crecheId)).map(r=>r.id);
+    if(!ids.length)return;
+    await sb.functions.invoke('notify-push',{body:{referent_ids:ids,title:'Nouvel événement',body:titre,url:'./demandes.html',tag:'evenement-'+evtId}});
+  }catch(e){console.warn('[notifierNouvelEvenement]',e);}
+}
+
 async function syncEvenementVisite(preId,row){
   try{
     const{data:ex,error:eEx}=await sb.from('evenements').select('id').eq('preinscription_id',preId).maybeSingle();
@@ -335,8 +347,9 @@ async function syncEvenementVisite(preId,row){
       if(error)throw error;
     }else{
       ev.created_by=ME?ME.id:null;
-      const{error}=await sb.from('evenements').insert(ev);
+      const{data:saved,error}=await sb.from('evenements').insert(ev).select('id').single();
       if(error)throw error;
+      await notifierNouvelEvenement(saved&&saved.id,ev.titre,ev.creche_id);
     }
   }catch(e){
     console.warn('[syncEvenementVisite]',e);
