@@ -21,6 +21,21 @@ const TYPES_EXT={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/
 const MAX_BYTES=8*1024*1024;
 let DONNEES=null;
 
+/* Règlement « produits d'hygiène et médicaments » : même texte que le modèle de Documents
+   (reglement_medicaments, js/pages/documents/03-part.js) et que le dossier de familiarisation
+   (js/pages/famille.js). Garder les trois en phase si le règlement change. */
+const RM_TABLE=[
+ ['Savon liquide','Sirop antibiotique'],
+ ['Crème pour le change','Collyre'],
+ ['Liniment oléo-calcaire','Médicaments pour les reflux (gaviscon…)'],
+ ['Huile d’amande douce','Médicaments pour le transit (smecta, débridat, tiorfan…)'],
+ ['Les produits anti-moustiques : lotions, crèmes, sprays et bracelets… Si besoin, les parents en mettent à leur enfant AVANT de le déposer à la crèche, ou dans un contexte médical particulier, avec l’accord de l’équipe.','Les boîtes de lait'],
+ ['Les crèmes solaires : les parents apportent la crème solaire pour leur(s) enfant(s) ET signent l’autorisation','Gouttes et pipettes pour les poussées dentaires…']
+];
+const TYPE_FERM={vacances:'Vacances',ferie:'Jour férié',pedagogique:'Journée pédagogique'};
+function dateCourte(d){return new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'long',year:'numeric'});}
+function periodeFermeture(f){return f.fin&&f.fin!==f.debut?'du '+dateCourte(f.debut)+' au '+dateCourte(f.fin):dateCourte(f.debut);}
+
 /* Pictogrammes du code de pointage (mêmes images que la tablette et l'e-mail « code image »). */
 const PICTOS_URL='https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/';
 const PICTOS_NOM={ours:'Ours',arc_en_ciel:'Arc-en-ciel',zebre:'Zèbre',hochet:'Hochet',baleine:'Baleine',cubes_alphabet:'Cubes alphabet',camionnette_rouge:'Camionnette rouge',pingouin:'Pingouin'};
@@ -74,6 +89,63 @@ async function boot(){
   }
 }
 
+function carteDocuments(d){
+  const docs=d.documents||[];
+  if(!docs.length)return '';
+  const ICO={devis:'file-euro',contrat:'file-certificate'};
+  return '<div class="card"><h2><i class="ti ti-files"></i> Vos documents</h2>'
+    +docs.map(x=>'<div class="dep"><span><i class="ti ti-'+(ICO[x.type]||'file')+'"></i> '+esc(x.titre)
+      +'<br><small style="color:var(--muted)">au '+esc(fmtDate(x.date))+'</small></span>'
+      +'<button class="btn btn-g" data-doc="'+esc(x.id)+'"><i class="ti ti-download"></i> Ouvrir</button></div>').join('')
+    +'<div id="docStatut"></div></div>';
+}
+
+function carteFermetures(d){
+  const f=d.fermetures||[];
+  return '<div class="card"><h2><i class="ti ti-calendar-off"></i> Fermetures de la crèche</h2>'
+    +(f.length?f.map(x=>'<div class="dep"><span><b>'+esc(x.label||TYPE_FERM[x.type]||'Fermeture')+'</b>'
+      +(x.label&&TYPE_FERM[x.type]?' <small style="color:var(--muted)">· '+esc(TYPE_FERM[x.type])+'</small>':'')
+      +'<br><small>'+esc(periodeFermeture(x))+'</small></span></div>').join('')
+      :'<p class="vide" style="margin:0">Aucune fermeture annoncée pour le moment.</p>')+'</div>';
+}
+
+function carteMenu(d){
+  if(!d.creche_id)return '';
+  return '<div class="card"><h2><i class="ti ti-tools-kitchen-2"></i> Menu de la semaine</h2>'
+    +'<p class="vide" style="margin-top:0">Les repas et goûters préparés pour les enfants.</p>'
+    +'<a class="btn btn-g" href="menu.html?c='+encodeURIComponent(d.creche_id)+'" target="_blank" rel="noopener"><i class="ti ti-external-link"></i> Voir le menu</a></div>';
+}
+
+function carteReglement(){
+  return '<div class="card"><h2><i class="ti ti-gavel"></i> Règlement intérieur</h2>'
+    +'<p class="vide" style="margin-top:0">Produits d’hygiène, médicaments et appareillages.</p>'
+    +'<details><summary class="btn btn-g" style="list-style:none">Lire le règlement</summary>'
+    +'<div class="reglement"><b>Réglementation concernant les ordonnances</b>'
+    +'<ul><li>Les parents sont responsables de la surveillance médicale de leur enfant et de l’administration des médicaments prescrits par le médecin.</li>'
+    +'<li>L’administration des médicaments en crèche est faite par le personnel, sur délégation écrite du (des) parent(s) et sous condition de fournir l’ordonnance en lien avec le traitement.</li></ul>'
+    +'L’ordonnance doit comporter de manière précise et lisible : nom ET prénom de l’enfant, date de prescription, nom complet du médicament (mention et nom lisible du générique le cas échéant), posologie précise (quantité, nombre de prises…), durée du traitement.<br><br>'
+    +'<b>Réglementation concernant les appareillages</b><br>Dans l’intérêt de l’enfant, tout appareillage médical ou paramédical (attelle, casque, plâtre…) doit faire l’objet d’une prescription médicale précise et détaillée, réévaluée par le médecin si besoin.<br><br>'
+    +'<b>Les bijoux sont INTERDITS (collier d’ambre inclus).</b>'
+    +'<table><tr><th>Produits d’hygiène — produits neufs et fermés, avec date limite d’utilisation optimale</th><th>Médicaments avec ordonnance — même ceux obtenus sans prescription médicale, et autorisation parentale d’administrer</th></tr>'
+    +RM_TABLE.map(r=>'<tr><td>'+esc(r[0])+'</td><td>'+esc(r[1])+'</td></tr>').join('')+'</table></div></details></div>';
+}
+
+/* Ouvre un PDF (devis, contrat) : la fenêtre est ouverte tout de suite, pour que le navigateur du
+   téléphone ne la bloque pas, puis dirigée vers le lien signé (valable 2 minutes). */
+async function ouvrirDocument(id,btn){
+  const st=document.getElementById('docStatut');
+  const w=window.open('','_blank');
+  btn.disabled=true;
+  try{
+    const r=await appel('document',{doc_id:id});
+    if(w)w.location.href=r.url;else location.href=r.url;
+    if(st){st.className='';st.textContent='';}
+  }catch(e){
+    if(w)w.close();
+    if(st){st.className='err';st.textContent='Ce document n’a pas pu être ouvert. Réessayez dans un instant.';}
+  }finally{btn.disabled=false;}
+}
+
 function rendre(){
   const d=DONNEES;
   const msgs=d.messages.length
@@ -92,6 +164,10 @@ function rendre(){
   wrap.innerHTML=
     pictos
     +'<div class="card"><h2><i class="ti ti-bell"></i> Informations de la crèche</h2>'+msgs+'</div>'
+    +carteDocuments(d)
+    +carteFermetures(d)
+    +carteMenu(d)
+    +carteReglement()
     +(d.suivi_token?'<div class="card"><h2><i class="ti ti-heart-handshake"></i> Suivi de '+esc(d.enfant.prenom||'votre enfant')+'</h2>'
       +'<p class="vide" style="margin-top:0">Les synthèses publiées par l\'équipe.</p>'
       +'<a class="btn btn-g" href="famille-suivi.html?t='+encodeURIComponent(d.suivi_token)+'"><i class="ti ti-external-link"></i> Ouvrir le suivi</a></div>':'')
@@ -104,6 +180,7 @@ function rendre(){
     +'<div style="margin-top:14px"><button class="btn" id="btnEnvoi"><i class="ti ti-send"></i> Envoyer</button></div>'
     +'<div id="statut"></div>'+deps+'</div>';
   document.getElementById('btnEnvoi').addEventListener('click',envoyer);
+  wrap.querySelectorAll('[data-doc]').forEach(b=>b.addEventListener('click',()=>ouvrirDocument(b.dataset.doc,b)));
 }
 
 function lireBase64(blob){

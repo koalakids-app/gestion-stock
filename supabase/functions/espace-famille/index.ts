@@ -11,6 +11,7 @@
 // Actions (POST, JSON) :
 //   {action:'get'}    -> {enfant:{prenom, code_pictos}, creche_nom, parent:{prenom}, messages:[...],
 //                         depots:[...], suivi_token}
+//   {action:'document', doc_id} -> {url} (PDF devis / contrat, lien signé de 2 min)
 //   {action:'upload', libelle, filename, content_type, content_base64}
 //
 // Déploiement : supabase functions deploy espace-famille --no-verify-jwt
@@ -39,6 +40,44 @@ const TYPES: Record<string, string> = {
   jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
   heic: "image/heic", heif: "image/heif", pdf: "application/pdf",
 };
+
+const RESEAU_CFG_ID = "00000000-0000-0000-0000-000000000003";
+
+/** Documents PDF mis à disposition de CET enfant : contrats signés de l'enfant et devis de ses contrats. */
+async function documentsDeLEnfant(sb: any, enfantId: string) {
+  const { data: contrats } = await sb.from("contrats").select("id, devis_id, statut").eq("enfant_id", enfantId);
+  const sources = [
+    ...(contrats || []).filter((c: any) => ["signe", "contresigne"].includes(c.statut)).map((c: any) => c.id),
+    ...(contrats || []).map((c: any) => c.devis_id).filter(Boolean),
+  ];
+  if (!sources.length) return [];
+  const { data } = await sb.from("famille_documents")
+    .select("id, type, titre, path, publie_le").in("source_id", sources).order("publie_le", { ascending: false });
+  return data || [];
+}
+
+/** Fermetures à venir : celles de la crèche + celles communes au réseau, sans doublon. */
+async function fermeturesAVenir(sb: any, crecheId: string) {
+  const { data: creche } = await sb.from("creches").select("org_id").eq("id", crecheId).maybeSingle();
+  // reseau_config est propre à chaque organisation ; ligne historique Koala Kids en secours.
+  const [{ data: etab }, { data: res }] = await Promise.all([
+    sb.from("etablissements").select("jours_fermeture").eq("creche_id", crecheId).maybeSingle(),
+    creche?.org_id
+      ? sb.from("reseau_config").select("config").eq("org_id", creche.org_id).maybeSingle()
+      : sb.from("reseau_config").select("config").eq("id", RESEAU_CFG_ID).maybeSingle(),
+  ]);
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const liste = [
+    ...(Array.isArray(etab?.jours_fermeture) ? etab.jours_fermeture : []),
+    ...(Array.isArray(res?.config?.jours_fermeture_reseau) ? res.config.jours_fermeture_reseau : []),
+  ].filter((f: any) => f && f.debut && (f.fin || f.debut) >= aujourdhui)
+    .map((f: any) => ({ debut: f.debut, fin: f.fin || f.debut, type: f.type || "", label: f.label || "" }));
+  const vus = new Set<string>();
+  return liste.filter((f: any) => {
+    const k = `${f.debut}|${f.fin}|${f.label}`;
+    return vus.has(k) ? false : (vus.add(k), true);
+  }).sort((a: any, b: any) => a.debut.localeCompare(b.debut));
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -103,7 +142,14 @@ Deno.serve(async (req) => {
     const { data: suivi } = await sb.from("suivi_acces_famille").select("token")
       .eq("enfant_id", acces.enfant_id).eq("parent_id", acces.parent_id).eq("actif", true).maybeSingle();
 
+    const documents = (await documentsDeLEnfant(sb, acces.enfant_id))
+      .map((d: any) => ({ id: d.id, type: d.type, titre: d.titre, date: d.publie_le }));
+    const fermetures = await fermeturesAVenir(sb, acces.creche_id);
+
     return json({
+      documents,
+      fermetures,
+      creche_id: acces.creche_id,
       // Code image du pointage sur la tablette (4 pictogrammes, dans l'ordre). Seules les images
       // sont renvoyées, jamais le code numérique interne (enfants.code_pointage).
       enfant: {
@@ -117,6 +163,15 @@ Deno.serve(async (req) => {
       depots: (depots || []).map((d: any) => ({ nom: d.filename, date: d.created_at })),
       suivi_token: suivi?.token || null,
     });
+  }
+
+  if (action === "document") {
+    const docId = String(body.doc_id || "");
+    const doc = (await documentsDeLEnfant(sb, acces.enfant_id)).find((d: any) => d.id === docId);
+    if (!doc) return erreur("introuvable", 404);
+    const { data: signe, error: sErr } = await sb.storage.from("famille-docs").createSignedUrl(doc.path, 120);
+    if (sErr || !signe?.signedUrl) { console.error("[espace-famille] url signée", sErr); return erreur("erreur_lecture", 500); }
+    return json({ url: signe.signedUrl, titre: doc.titre });
   }
 
   if (action === "upload") {

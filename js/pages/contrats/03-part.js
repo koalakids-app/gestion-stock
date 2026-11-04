@@ -499,6 +499,9 @@ async function envoyerContratSigneParMail(c){
     const{doc,nomFichier}=dessineContrat(c,data||[],false);
     const pdfBase64=doc.output('datauristring').split(',')[1];
 
+    /* Copie dans l'Espace famille : ne bloque jamais l'envoi du mail. */
+    await publierPdfContrat(c,pdfBase64);
+
     const{error:eFn}=await sb.functions.invoke('envoyer-contrat-signe',
       {body:{contrat_id:c.id,pdf_base64:pdfBase64,nom_fichier:nomFichier,expediteur:(PROF&&PROF.name)||undefined}});
     if(eFn)throw new Error(await detailFn(eFn));
@@ -508,6 +511,44 @@ async function envoyerContratSigneParMail(c){
     toast('L\'envoi du mail a échoué : '
       +(e.message||'erreur inconnue')+' — le PDF reste disponible via « Le PDF ».',true);
   }
+}
+
+/* Dépose le PDF du contrat signé dans l'Espace famille de l'enfant (voir js/famille-documents.js). */
+async function publierPdfContrat(c,pdfBase64){
+  if(!c.enfant_id||!c.creche_id||!window.KkFamilleDocs)return false;
+  try{
+    await KkFamilleDocs.publier({type:'contrat',sourceId:c.id,crecheId:c.creche_id,base64:pdfBase64,
+      titre:(c.type==='avenant'?'Avenant signé':'Contrat d\'accueil signé')+(c.numero?' — '+c.numero:'')});
+    return true;
+  }catch(e){
+    console.warn('[publierPdfContrat]',e);
+    toast('Le contrat n\'a pas pu être mis dans l\'Espace famille : '+(e.message||'erreur inconnue'),true);
+    return false;
+  }
+}
+
+/* Bouton « Espace famille » : couvre les contrats signés avant cette fonction, et republie une copie à jour. */
+async function publierContratFamille(){
+  const c=CONTRATS.find(x=>String(x.id)===String(contratId));
+  if(!c){toast('Contrat introuvable.',true);return;}
+  if(c.statut!=='contresigne'){toast('Le contrat doit être signé des deux côtés.',true);return;}
+  if(!c.enfant_id){toast('Ce contrat n\'est pas encore rattaché à une fiche enfant.',true);return;}
+  const b=document.getElementById('btnFamCt');
+  b.disabled=true;
+  try{
+    await Promise.all([chargeJsPdf(),loadReseau()]);
+    if(!CSUJ||String(CSUJ.id)!==String(c.enfant_id)){
+      CSUJ=normaliser('enfant',c.enfant_id);
+      if(CSUJ)await loadContexte();
+    }
+    const{data,error}=await sb.from('contrats_lignes').select('*').eq('contrat_id',c.id).order('ordre');
+    if(error)throw error;
+    const{doc}=dessineContrat(c,data||[],false);
+    if(await publierPdfContrat(c,doc.output('datauristring').split(',')[1]))toast('Contrat disponible dans l\'Espace famille ✅');
+  }catch(e){
+    console.error('[publierContratFamille]',e);
+    toast('Publication impossible : '+(e.message||'erreur inconnue'),true);
+  }finally{b.disabled=false;}
 }
 
 /* Renvoi manuel depuis la fiche du contrat : couvre les contrats déjà

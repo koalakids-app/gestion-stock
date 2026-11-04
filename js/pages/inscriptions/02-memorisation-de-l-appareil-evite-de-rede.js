@@ -1038,6 +1038,8 @@ function renderDevisList(){
           +'<i class="ti ti-x"></i> Refuser</button>'
           +'<button class="pdf" style="color:var(--green)" onclick="event.stopPropagation();repondreDevis(\''+d.id+'\',\'accepte\')" title="Marquer ce devis comme accepté">'
           +'<i class="ti ti-check"></i> Accepter</button>':'')
+      +'<button class="pdf" onclick="event.stopPropagation();publierDevisFamille(\''+d.id+'\')" title="Mettre ce devis à disposition de la famille dans son Espace famille">'
+      +'<i class="ti ti-home-heart"></i> Espace famille</button>'
       +'<button class="pdf" onclick="event.stopPropagation();pdfDevis(\''+d.id+'\')" title="Télécharger le PDF">'
       +'<i class="ti ti-file-type-pdf"></i> PDF</button></div>'
       +'<div class="li" style="color:var(--muted)">'+euro(d.total_mensuel)+' par mois'
