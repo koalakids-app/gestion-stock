@@ -333,8 +333,10 @@ function renderListe(){
       ?'<span class="badge on"><i class="ti ti-walk"></i> Accès terrain</span>':'';
     const btnTerrain=ACCES_TERRAIN.has(e.id)?'':'<button class="btn btn-g btn-sm" onclick="accorderAccesTerrain(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant d\'accorder l\'accès"')+'><i class="ti ti-walk"></i> Accès terrain</button>'
       +(PartageLien.disponible()?' <button class="btn btn-g btn-sm" onclick="accorderAccesTerrain(\''+e.id+'\',true)" '+(e.email?'':'disabled')+'><i class="ti ti-share"></i> Partager l\'accès terrain</button>':'');
+    const invitationEnAttente=e.user_id&&!estArchive(e)&&COMPTES_ACTIFS&&!COMPTES_ACTIFS.has(e.user_id);
     const btnCompte=e.user_id
-      ?''
+      ?(invitationEnAttente&&PartageLien.disponible()
+        ?'<button class="btn btn-g btn-sm" onclick="renvoyerInvitation(\''+e.id+'\')" title="Générer un nouveau lien de connexion à partager"><i class="ti ti-share"></i> Renvoyer le lien</button>':'')
       :'<button class="btn btn-s btn-sm" onclick="creerCompte(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant de créer le compte"')+'><i class="ti ti-mail-forward"></i> Créer le compte</button>'
         +(PartageLien.disponible()?' <button class="btn btn-g btn-sm" onclick="creerCompte(\''+e.id+'\',true)" '+(e.email?'':'disabled')+'><i class="ti ti-share"></i> Partager…</button>':'');
     return'<div class="crow">'
@@ -992,6 +994,25 @@ async function creerCompte(id,partager){
       :'Lien d\'invitation partagé.',r==='annule');
   }else toast('Invitation envoyée à '+e.email+'.');
   await loadEmployes();
+}
+
+/* Renvoie un nouveau lien de connexion (à partager) à une personne dont
+   l'invitation n'a pas abouti : aucun e-mail, le compte existant est conservé. */
+async function renvoyerInvitation(id){
+  const e=EMPLOYES.find(x=>x.id===id);
+  if(!e||!e.user_id)return;
+  if(!confirm('Générer un nouveau lien de connexion pour '+e.prenom+' et le partager (aucun e-mail ne sera envoyé) ?'))return;
+  const redirect=location.href.replace(/employes\.html.*$/,'collaborateur.html');
+  const{ok,data}=await callFn('creer-compte-collaborateur',{employe_id:id,redirect_to:redirect,renvoyer:true});
+  if(!ok||!data.lien){
+    toast(data&&data.error==='compte_deja_actif'?e.prenom+' s\'est déjà connecté(e) : elle/il peut utiliser « Mot de passe oublié ? ».'
+      :'Échec : '+((data&&data.error)||'erreur inconnue'),true);return;
+  }
+  const r=await PartageLien.partager(data.lien,{titre:'Lien de connexion',
+    texte:'Bonjour '+(e.prenom||'')+', voici ton nouveau lien pour te connecter :'});
+  toast(r==='copie'?'Partage indisponible, lien copié.'
+    :r==='annule'?'Le lien n\'a pas été partagé (feuille de partage fermée).'
+    :'Lien de connexion partagé.',r==='annule');
 }
 
 /* ---------- ACCÈS TERRAIN ---------- */
