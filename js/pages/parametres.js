@@ -8,6 +8,7 @@ let crecheId=null;
 const JOURS=[[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi'],[6,'Samedi']];
 const FERM_TYPES={vacances:'Vacances',ferie:'Jour férié',pedagogique:'Journée pédagogique'};
 let FERMETURES=[],FERMETURES_RESEAU=[];
+let CONTACTS=[],CONTACTS_RESEAU=[];   // contacts affichés aux familles (crèche / réseau)
 
 function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -217,6 +218,7 @@ async function loadAll(){
     RCFG=(r&&r.data&&r.data.config)||{};
     RCFG_ID=(r&&r.data&&r.data.id)||null;
     FERMETURES_RESEAU=toArr(RCFG.jours_fermeture_reseau).slice();
+    CONTACTS_RESEAU=toArr(RCFG.contacts_famille_reseau).slice();
     loadOrgLogo().catch(x=>console.warn('[logo]',x));
   }catch(err){
     console.error('[loadAll]',err);
@@ -288,7 +290,8 @@ function snapshot(){
     'eTel','eMail','ePmiNum','ePmiDate','ePmiEch','eAgeMin','eAgeMax','eHo','eHf',
     'eSemFerm','eSemFact','eObs'].map(val).join('|')
     +'|'+[...document.querySelectorAll('.ckJour:checked')].map(x=>x.value).join(',')
-    +'|'+JSON.stringify(FERMETURES)+'|'+JSON.stringify(FERMETURES_RESEAU);
+    +'|'+JSON.stringify(FERMETURES)+'|'+JSON.stringify(FERMETURES_RESEAU)
+    +'|'+JSON.stringify(CONTACTS)+'|'+JSON.stringify(CONTACTS_RESEAU);
 }
 function dirty(){return SNAP!==''&&SNAP!==snapshot();}
 
@@ -317,6 +320,8 @@ function renderEtab(){
 
   FERMETURES=toArr(e.jours_fermeture).slice();
   renderFermetures();
+  CONTACTS=toArr(e.contacts_famille).slice();
+  renderContacts();
 
   syncSiret();syncCap();syncPmi();syncSem();syncIdentite();
   document.getElementById('statut').textContent=etabDe(crecheId)
@@ -841,6 +846,40 @@ function fermRemove(scope,i){
   renderFermetures();
 }
 
+/* ---------- CONTACTS AFFICHÉS AUX FAMILLES ---------- */
+/* Même principe que les fermetures : un contact réseau (coordinateur, gestionnaire) vit dans
+   reseau_config.config.contacts_famille_reseau ; un contact propre à la crèche (directeur) dans
+   etablissements.contacts_famille. Lus par l'edge function espace-famille. */
+const CTC_ROLES={directeur:'Directeur / directrice',coordinateur:'Coordinateur',gestionnaire:'Gestionnaire',autre:'Autre'};
+function renderContacts(){
+  const box=document.getElementById('ctcList');
+  if(!box)return;
+  const tous=CONTACTS.map((c,i)=>({c,i,scope:'creche'})).concat(CONTACTS_RESEAU.map((c,i)=>({c,i,scope:'reseau'})));
+  if(!tous.length){box.innerHTML='<p class="ferm-empty">Aucun contact enregistré : les familles ne verront que les coordonnées de la crèche.</p>';return;}
+  box.innerHTML=tous.map(({c,i,scope})=>
+    '<div class="ferm-row"><span class="ferm-badge vacances">'+esc(CTC_ROLES[c.role]||c.role||'')+'</span>'
+    +'<div class="ferm-info"><div class="ferm-dates">'+esc(c.nom||'')+(c.fonction?' · '+esc(c.fonction):'')+'</div>'
+    +(scope==='reseau'?'<div class="ferm-scope"><i class="ti ti-network"></i> Toutes les crèches</div>':'')
+    +'<div class="ferm-label">'+esc([c.telephone,c.email].filter(Boolean).join(' · '))+'</div></div>'
+    +'<button type="button" class="btn btn-g btn-sm" onclick="ctcRemove(\''+scope+'\','+i+')"><i class="ti ti-trash"></i></button></div>').join('');
+}
+function ctcAdd(){
+  const nom=val('ctcNom').trim();
+  if(!nom){toast('Indiquez le nom de la personne.',true);return;}
+  const tel=val('ctcTel').trim(),mail=val('ctcMail').trim();
+  if(!tel&&!mail){toast('Indiquez au moins un téléphone ou un e-mail.',true);return;}
+  if(mail&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)){toast('Cet e-mail ne paraît pas valide.',true);return;}
+  const entry={role:val('ctcRole')||'autre',nom,fonction:val('ctcFonction').trim(),telephone:tel,email:mail};
+  if(document.getElementById('ctcReseau').checked)CONTACTS_RESEAU.push(entry);else CONTACTS.push(entry);
+  ['ctcNom','ctcFonction','ctcTel','ctcMail'].forEach(id=>setVal(id,''));
+  document.getElementById('ctcReseau').checked=false;
+  renderContacts();
+}
+function ctcRemove(scope,i){
+  (scope==='reseau'?CONTACTS_RESEAU:CONTACTS).splice(i,1);
+  renderContacts();
+}
+
 /* ---------- ENREGISTREMENT ---------- */
 async function save(){
   const btn=document.getElementById('btnSave');
@@ -908,6 +947,7 @@ async function save(){
       semaines_fermeture:semFerm!=null?semFerm:5,
       semaines_facturees:semFact!=null?semFact:47,
       jours_fermeture:FERMETURES,
+      contacts_famille:CONTACTS,
       observations:val('eObs'),
       updated_at:new Date().toISOString()
     };
@@ -948,7 +988,8 @@ async function save(){
       notif_silence_samedi:document.getElementById('rNotifSamedi').checked,
       notif_silence_dimanche:document.getElementById('rNotifDimanche').checked,
       notif_silence_feries:document.getElementById('rNotifFeries').checked,
-      jours_fermeture_reseau:FERMETURES_RESEAU});
+      jours_fermeture_reseau:FERMETURES_RESEAU,
+      contacts_famille_reseau:CONTACTS_RESEAU});
     /* La base refuse un UPDATE sans WHERE : on cible la ligne chargée. */
     if(!RCFG_ID)throw new Error('Configuration réseau introuvable : rechargez la page.');
     const{error:er}=await sb.from('reseau_config')

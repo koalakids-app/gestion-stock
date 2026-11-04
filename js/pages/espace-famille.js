@@ -146,31 +146,94 @@ async function ouvrirDocument(id,btn){
   }finally{btn.disabled=false;}
 }
 
-function rendre(){
-  const d=DONNEES;
-  const msgs=d.messages.length
-    ?d.messages.map(m=>'<div class="msg"><h3>'+esc(m.titre)+(m.nouveau?' <span class="nouveau">Nouveau</span>':'')
-      +'</h3><div class="date">'+esc(fmtDate(m.created_at))+(m.auteur_nom?' · '+esc(m.auteur_nom):'')+'</div><p>'+esc(m.corps)+'</p></div>').join('')
-    :'<p class="vide">Aucune information pour le moment.</p>';
-  const deps=d.depots.length
-    ?'<div style="margin-top:14px"><strong style="font-size:13px">Déjà envoyés</strong>'
-      +d.depots.map(x=>'<div class="dep"><span>'+esc(x.nom)+'</span><span style="color:var(--muted)">'+esc(fmtDate(x.date))+'</span></div>').join('')+'</div>':'';
-  const pictos=d.enfant.code_pictos
-    ?'<div class="card"><h2><i class="ti ti-photo"></i> Code de pointage de '+esc(d.enfant.prenom||'votre enfant')+'</h2>'
+/* ------------------------------------------------------------------ navigation par onglets
+   Accueil (le dernier message, le code de pointage, la prochaine fermeture), Infos (tous les
+   messages, repliés sauf le plus récent), Documents (PDF + dépôt), Crèche (contacts, fermetures,
+   menu, règlement). Plus besoin de tout dérouler pour trouver la dernière information. */
+const ONGLETS=[['accueil','home','Accueil'],['infos','bell','Infos'],['docs','files','Documents'],['creche','building-community','Crèche']];
+let ONGLET='accueil',MSG_OUVERT=null;
+
+function allerA(onglet,msgId){
+  ONGLET=onglet;MSG_OUVERT=msgId||null;
+  rendre();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+const ROLES_CONTACT={directeur:'Directeur / directrice',coordinateur:'Coordinateur',gestionnaire:'Gestionnaire',autre:'Contact'};
+const heureCourte=h=>String(h||'').slice(0,5).replace(':','h');
+const tel=t=>String(t||'').replace(/[^\d+]/g,'');
+
+function extrait(t,n){t=String(t||'').replace(/\s+/g,' ').trim();return t.length>n?t.slice(0,n).trimEnd()+'…':t;}
+
+function carteMessage(m,ouvert){
+  return '<details class="msg-d"'+(ouvert?' open':'')+'><summary><span class="msg-t">'+esc(m.titre)
+    +(m.nouveau?' <span class="nouveau">Nouveau</span>':'')+'</span>'
+    +'<span class="date">'+esc(fmtDate(m.created_at))+'</span></summary>'
+    +'<p>'+esc(m.corps)+'</p>'+(m.auteur_nom?'<div class="date">'+esc(m.auteur_nom)+'</div>':'')+'</details>';
+}
+
+function carteContacts(d){
+  const c=d.contacts||{creche:{},personnes:[]},cr=c.creche||{};
+  const horaires=cr.ouverture&&cr.fermeture?'Ouvert de '+heureCourte(cr.ouverture)+' à '+heureCourte(cr.fermeture):'';
+  const lignes=(t,m)=>(t?'<a class="btn btn-g" href="tel:'+esc(tel(t))+'"><i class="ti ti-phone"></i> '+esc(t)+'</a> ':'')
+    +(m?'<a class="btn btn-g" href="mailto:'+esc(m)+'"><i class="ti ti-mail"></i> Écrire</a>':'');
+  let h='<div class="card"><h2><i class="ti ti-address-book"></i> Nous contacter</h2>'
+    +'<div class="ctc"><b>'+esc(cr.nom||d.creche_nom||'La crèche')+'</b>'
+    +(cr.adresse?'<div class="vide"><a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(cr.adresse)+'" target="_blank" rel="noopener" style="color:inherit"><i class="ti ti-map-pin"></i> '+esc(cr.adresse)+'</a></div>':'')
+    +(horaires?'<div class="vide"><i class="ti ti-clock"></i> '+esc(horaires)+'</div>':'')
+    +'<div class="ctc-btn">'+(lignes(cr.telephone,cr.email)||'<span class="vide">Coordonnées non renseignées.</span>')+'</div></div>';
+  (c.personnes||[]).forEach(p=>{
+    h+='<div class="ctc"><b>'+esc(p.nom)+'</b> <span class="role">'+esc(ROLES_CONTACT[p.role]||'Contact')+'</span>'
+      +(p.fonction?'<div class="vide">'+esc(p.fonction)+'</div>':'')
+      +'<div class="ctc-btn">'+lignes(p.telephone,p.email)+'</div></div>';
+  });
+  return h+'</div>';
+}
+
+function cartePointage(d){
+  const pr=esc(d.enfant.prenom||'votre enfant');
+  return d.enfant.code_pictos
+    ?'<div class="card"><h2><i class="ti ti-photo"></i> Code de pointage de '+pr+'</h2>'
       +'<p class="vide" style="margin-top:0">À l\'arrivée et au départ, touchez ces 4 images <strong>dans cet ordre</strong> sur la tablette de la crèche.</p>'
       +'<div class="pictos">'+d.enfant.code_pictos.map((id,i)=>'<div class="picto"><span class="rang">'+(i+1)+'</span><img src="'+esc(PICTOS_URL+encodeURIComponent(id)+'.png')+'" alt="'+esc(PICTOS_NOM[id]||id)+'" width="72" height="72"><small>'+esc(PICTOS_NOM[id]||id)+'</small></div>').join('')+'</div>'
       +'<p class="vide" style="margin-bottom:0">Ce code est personnel : ne le partagez qu\'avec les personnes qui déposent ou récupèrent votre enfant.</p></div>'
-    :'<div class="card"><h2><i class="ti ti-photo"></i> Code de pointage</h2><p class="vide" style="margin:0">Le code image de '+esc(d.enfant.prenom||'votre enfant')+' n\'est pas encore attribué. Demandez-le à la crèche.</p></div>';
-  wrap.innerHTML=
-    pictos
-    +'<div class="card"><h2><i class="ti ti-bell"></i> Informations de la crèche</h2>'+msgs+'</div>'
-    +carteDocuments(d)
-    +carteFermetures(d)
-    +carteMenu(d)
-    +carteReglement()
-    +(d.suivi_token?'<div class="card"><h2><i class="ti ti-heart-handshake"></i> Suivi de '+esc(d.enfant.prenom||'votre enfant')+'</h2>'
-      +'<p class="vide" style="margin-top:0">Les synthèses publiées par l\'équipe.</p>'
-      +'<a class="btn btn-g" href="famille-suivi.html?t='+encodeURIComponent(d.suivi_token)+'"><i class="ti ti-external-link"></i> Ouvrir le suivi</a></div>':'')
+    :'<div class="card"><h2><i class="ti ti-photo"></i> Code de pointage</h2><p class="vide" style="margin:0">Le code image de '+pr+' n\'est pas encore attribué. Demandez-le à la crèche.</p></div>';
+}
+
+function vueAccueil(d){
+  const dernier=d.messages[0];
+  const une=dernier
+    ?'<div class="card une"><h2><i class="ti ti-bell-ringing"></i> À la une'+(dernier.nouveau?' <span class="nouveau">Nouveau</span>':'')+'</h2>'
+      +'<h3 class="une-t">'+esc(dernier.titre)+'</h3><div class="date">'+esc(fmtDate(dernier.created_at))+'</div>'
+      +'<p class="une-p">'+esc(extrait(dernier.corps,180))+'</p>'
+      +'<button class="btn btn-g" data-aller="infos" data-msg="'+esc(dernier.id)+'"><i class="ti ti-book-2"></i> Lire la suite</button></div>'
+    :'<div class="card"><h2><i class="ti ti-bell"></i> À la une</h2><p class="vide" style="margin:0">Aucune information pour le moment.</p></div>';
+  const f=(d.fermetures||[])[0];
+  const prochaine=f?'<div class="card"><h2><i class="ti ti-calendar-off"></i> Prochaine fermeture</h2><div class="dep"><span><b>'
+    +esc(f.label||TYPE_FERM[f.type]||'Fermeture')+'</b><br><small>'+esc(periodeFermeture(f))+'</small></span>'
+    +'<button class="btn btn-g" data-aller="creche">Tout voir</button></div></div>':'';
+  const nbDocs=(d.documents||[]).length;
+  const tuiles='<div class="tuiles">'
+    +'<button class="tuile" data-aller="docs"><i class="ti ti-files"></i><b>Documents</b><small>'+(nbDocs?nbDocs+' à consulter':'Envoyer un document')+'</small></button>'
+    +(d.creche_id?'<a class="tuile" href="menu.html?c='+encodeURIComponent(d.creche_id)+'" target="_blank" rel="noopener"><i class="ti ti-tools-kitchen-2"></i><b>Menu</b><small>de la semaine</small></a>':'')
+    +'<button class="tuile" data-aller="creche"><i class="ti ti-address-book"></i><b>Contacts</b><small>et règlement</small></button>'
+    +(d.suivi_token?'<a class="tuile" href="famille-suivi.html?t='+encodeURIComponent(d.suivi_token)+'"><i class="ti ti-heart-handshake"></i><b>Suivi</b><small>de '+esc(d.enfant.prenom||'l\'enfant')+'</small></a>':'')
+    +'</div>';
+  return une+cartePointage(d)+prochaine+tuiles;
+}
+
+function vueInfos(d){
+  if(!d.messages.length)return '<div class="card"><p class="vide" style="margin:0">Aucune information pour le moment.</p></div>';
+  const cible=MSG_OUVERT||d.messages[0].id;
+  return '<div class="card"><h2><i class="ti ti-bell"></i> Informations de la crèche</h2>'
+    +d.messages.map(m=>carteMessage(m,String(m.id)===String(cible))).join('')+'</div>';
+}
+
+function vueDocs(d){
+  const deps=d.depots.length
+    ?'<div style="margin-top:14px"><strong style="font-size:13px">Déjà envoyés</strong>'
+      +d.depots.map(x=>'<div class="dep"><span>'+esc(x.nom)+'</span><span style="color:var(--muted)">'+esc(fmtDate(x.date))+'</span></div>').join('')+'</div>':'';
+  return (carteDocuments(d)||'<div class="card"><h2><i class="ti ti-files"></i> Vos documents</h2><p class="vide" style="margin:0">Le devis et le contrat signé apparaîtront ici.</p></div>')
     +'<div class="card"><h2><i class="ti ti-cloud-upload"></i> Envoyer un document</h2>'
     +'<p class="vide" style="margin-top:0">Certificat, attestation, ordonnance… (photo ou PDF, 8 Mo max). La crèche est prévenue.</p>'
     +'<label for="libelle">De quel document s\'agit-il ?</label>'
@@ -179,7 +242,27 @@ function rendre(){
     +'<input type="file" id="fichier" accept="image/*,application/pdf"/>'
     +'<div style="margin-top:14px"><button class="btn" id="btnEnvoi"><i class="ti ti-send"></i> Envoyer</button></div>'
     +'<div id="statut"></div>'+deps+'</div>';
-  document.getElementById('btnEnvoi').addEventListener('click',envoyer);
+}
+
+function vueCreche(d){
+  return carteContacts(d)+carteFermetures(d)+carteMenu(d)+carteReglement()
+    +(d.suivi_token?'<div class="card"><h2><i class="ti ti-heart-handshake"></i> Suivi de '+esc(d.enfant.prenom||'votre enfant')+'</h2>'
+      +'<p class="vide" style="margin-top:0">Les synthèses publiées par l\'équipe.</p>'
+      +'<a class="btn btn-g" href="famille-suivi.html?t='+encodeURIComponent(d.suivi_token)+'"><i class="ti ti-external-link"></i> Ouvrir le suivi</a></div>':'');
+}
+
+function rendre(){
+  const d=DONNEES;
+  const nonLus=d.messages.filter(m=>m.nouveau).length;
+  const barre='<nav class="onglets" role="tablist">'+ONGLETS.map(o=>
+    '<button role="tab" class="onglet'+(o[0]===ONGLET?' actif':'')+'" aria-selected="'+(o[0]===ONGLET)+'" data-aller="'+o[0]+'">'
+    +'<i class="ti ti-'+o[1]+'"></i><span>'+o[2]+'</span>'
+    +(o[0]==='infos'&&nonLus?'<em class="pastille">'+nonLus+'</em>':'')+'</button>').join('')+'</nav>';
+  const vues={accueil:vueAccueil,infos:vueInfos,docs:vueDocs,creche:vueCreche};
+  wrap.innerHTML=barre+'<div class="vue">'+(vues[ONGLET]||vueAccueil)(d)+'</div>';
+  wrap.querySelectorAll('[data-aller]').forEach(b=>b.addEventListener('click',()=>allerA(b.dataset.aller,b.dataset.msg)));
+  const envoi=document.getElementById('btnEnvoi');
+  if(envoi)envoi.addEventListener('click',envoyer);
   wrap.querySelectorAll('[data-doc]').forEach(b=>b.addEventListener('click',()=>ouvrirDocument(b.dataset.doc,b)));
 }
 
