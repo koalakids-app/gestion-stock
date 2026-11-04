@@ -282,6 +282,7 @@ function showApp(){
   document.querySelectorAll('.direction-only').forEach(el=>el.style.display=isDirection?'':'none');
   document.querySelectorAll('.referent-only').forEach(el=>el.style.display=(!isDirection)?'':'none');
   const isDavid=currentProfile?.role==='direction'||currentProfile?.role==='referent'||(currentUser?.email||'').toLowerCase()==='cp1.koalakids@outlook.fr';
+  document.querySelectorAll('.si-acces').forEach(el=>el.style.display=siAccesPermis()?'':'none');
   document.querySelectorAll('.david-only').forEach(el=>el.style.display=isDavid?'':'none');
   document.getElementById('user-name').textContent=currentProfile?.name||currentUser?.email||'';
   updateBadges();renderCrecheTabs();
@@ -575,7 +576,7 @@ function showMain(tab){
     // retour serveur : on dessine d'abord, on complète ensuite.
     if(typeof adEnsureCharge==='function')adEnsureCharge().then(()=>{try{adRenderRefDashBloc();}catch(e){}});
   }
-  if(tab==='insc-suivi'){if(isDirection)showMain('ref-dashboard');else siInit();}
+  if(tab==='insc-suivi'){if(!siAccesPermis())showMain('ref-dashboard');else siInit();}
   if(tab==='fraisik'){if(isDirection)ikInit();else showMain('ref-dashboard');}
   if(tab==='fraispro')fpInit();
   if(tab==='remplacantes')rmpInit();

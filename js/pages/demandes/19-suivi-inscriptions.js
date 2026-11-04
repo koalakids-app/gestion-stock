@@ -17,6 +17,13 @@ var SI_DEVIS = {
   accepte:   { l: 'Accepté',    bg: '#E6F5EE', fg: '#1B6B47' }
 };
 
+/* Référents : oui. Direction : un seul compte (pas toute la direction). */
+var SI_COMPTE_DIRECTION = 'cp1.koalakids@outlook.fr';
+function siAccesPermis() {
+  if (!isDirection) return true;
+  return ((currentUser && currentUser.email) || '').toLowerCase() === SI_COMPTE_DIRECTION;
+}
+
 function siDate(d) {
   if (!d) return '—';
   var p = String(d).slice(0, 10).split('-');
