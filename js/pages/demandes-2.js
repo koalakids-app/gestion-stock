@@ -967,7 +967,7 @@ inscsuivi: `
   <li>Ouvrez <strong>Pilotage</strong> › <strong>Inscriptions en cours</strong>.</li>
   <li>L’onglet <strong>Inscriptions</strong> liste les demandes de votre crèche (nouvelle, en contact, devis envoyé, devis accepté) avec la date d’entrée souhaitée.</li>
   <li>L’onglet <strong>Devis en cours</strong> montre l’état de chaque devis (à envoyer, en attente, accepté) et sa date de validité. <strong>Aucun montant</strong> n’est affiché.</li>
-  <li>Touchez une ligne pour voir l’avancement du dossier.</li>
+  <li>Touchez une ligne pour voir l’avancement du dossier. La liste se trie par date, nom ou statut ; le compte direction autorisé choisit aussi la <strong>crèche</strong> (ou toutes).</li>
 </ol>
 <div style="font-size:12px;color:#888">Les coordonnées des parents, les informations de santé et les montants ne sont pas visibles ici.</div>
 `,

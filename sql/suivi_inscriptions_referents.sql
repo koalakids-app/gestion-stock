@@ -22,7 +22,7 @@ set search_path = public
 as $$
   with p as (
     select id, prenom, nom, dob, ne_ou_a_naitre, date_entree_souhaitee,
-           statut, created_at, creche_id
+           statut, created_at, creche_id, creches_souhaitees
     from public.preinscriptions
     where statut in ('nouvelle','en_contact','devis_envoye','accepte')
       and (
@@ -43,6 +43,7 @@ as $$
           'envoye_le', d.envoye_le, 'expire_le', d.expire_le,
           'repondu_le', d.repondu_le,
           'preinscription_id', d.preinscription_id,
+          'creche_id', p.creche_id, 'creches_souhaitees', p.creches_souhaitees,
           'prenom', p.prenom, 'nom', p.nom)
           order by d.envoye_le desc nulls last)
       from public.devis d

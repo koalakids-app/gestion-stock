@@ -3,7 +3,7 @@
    fonction SQL suivi_inscriptions_referent (sql/suivi_inscriptions_referents.sql) :
    crèche du référent uniquement, aucun montant, aucun contact. Aucun bouton
    d'écriture ici ; le module Inscriptions reste réservé à la direction. */
-var SI = { onglet: 'insc', insc: [], devis: [], sel: null, charge: false };
+var SI = { onglet: 'insc', insc: [], devis: [], sel: null, charge: false, creche: '', tri: 'date' };
 
 var SI_STATUTS = {
   nouvelle:     { l: 'Nouvelle',       bg: '#EEECFA', fg: '#4A3F9F', etape: 1 },
@@ -57,6 +57,35 @@ async function siInit() {
   }
 }
 
+/* Crèches d'une ligne : la crèche retenue, sinon les crèches souhaitées. */
+function siCreches(x) {
+  if (x.creche_id) return [String(x.creche_id)];
+  var c = x.creches_souhaitees;
+  return Array.isArray(c) ? c.map(String) : [];
+}
+function siNomCreche(id) {
+  var c = (typeof cacheCreches !== 'undefined' ? cacheCreches : []).find(function (k) { return String(k.id) === String(id); });
+  return c ? c.name : '';
+}
+function siNomsCreches(x) { return siCreches(x).map(siNomCreche).filter(Boolean).join(' · '); }
+function siChangerCreche(v) { SI.creche = v; SI.sel = null; siRender(); }
+function siChangerTri(v) { SI.tri = v; siRender(); }
+function siFiltrer(l) {
+  if (!SI.creche) return l;
+  return l.filter(function (x) { return siCreches(x).indexOf(SI.creche) >= 0; });
+}
+function siTrier(l, insc) {
+  var c = {
+    date: insc ? function (a, b) { return String(a.date_entree_souhaitee || '9999').localeCompare(String(b.date_entree_souhaitee || '9999')); }
+              : function (a, b) { return String(b.envoye_le || '').localeCompare(String(a.envoye_le || '')); },
+    recent: function (a, b) { return String(b.created_at || b.envoye_le || '').localeCompare(String(a.created_at || a.envoye_le || '')); },
+    nom: function (a, b) { return siNom(a).localeCompare(siNom(b), 'fr'); },
+    statut: function (a, b) { return String(a.statut).localeCompare(String(b.statut)) || siNom(a).localeCompare(siNom(b), 'fr'); },
+    creche: function (a, b) { return siNomsCreches(a).localeCompare(siNomsCreches(b), 'fr') || siNom(a).localeCompare(siNom(b), 'fr'); }
+  }[SI.tri] || null;
+  return c ? l.slice().sort(c) : l;
+}
+
 function siOnglet(o) { SI.onglet = o; SI.sel = null; siRender(); }
 function siChoisir(id) { SI.sel = (SI.sel === id) ? null : id; siRender(); }
 
@@ -64,13 +93,27 @@ function siRender() {
   var z = document.getElementById('si-contenu');
   if (!z) return;
   var insc = SI.onglet === 'insc';
-  var nbAttente = SI.devis.filter(function (d) { return d.statut === 'envoye'; }).length;
+  var lInsc = siFiltrer(SI.insc), lDevis = siFiltrer(SI.devis);
+  var nbAttente = lDevis.filter(function (d) { return d.statut === 'envoye'; }).length;
+  var multi = !!isDirection;  // la direction choisit la crèche ; un référent n'a que la sienne
+  var barre = '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">';
+  if (multi) {
+    barre += '<select class="finput" aria-label="Crèche" onchange="siChangerCreche(this.value)" style="width:auto;min-width:160px;font-size:12px;padding:4px 8px"><option value="">Toutes les crèches</option>'
+      + (typeof cacheCreches !== 'undefined' ? cacheCreches : []).map(function (k) {
+        return '<option value="' + siEsc(k.id) + '"' + (SI.creche === String(k.id) ? ' selected' : '') + '>' + siEsc(k.name) + '</option>';
+      }).join('') + '</select>';
+  }
+  var optsTri = [['date', insc ? 'Date d\'entrée souhaitée' : 'Date d\'envoi'], ['recent', 'Plus récent'], ['nom', 'Nom'], ['statut', 'Statut']];
+  if (multi) optsTri.push(['creche', 'Crèche']);
+  barre += '<label style="font-size:12px;color:var(--muted)">Trier par <select class="finput" onchange="siChangerTri(this.value)" style="width:auto;font-size:12px;padding:4px 8px">'
+    + optsTri.map(function (o) { return '<option value="' + o[0] + '"' + (SI.tri === o[0] ? ' selected' : '') + '>' + siEsc(o[1]) + '</option>'; }).join('')
+    + '</select></label></div>';
   var h = '<div class="filters" style="margin-bottom:12px">'
-    + '<button class="fchip' + (insc ? ' active' : '') + '" onclick="siOnglet(\'insc\')">Inscriptions (' + SI.insc.length + ')</button>'
-    + '<button class="fchip' + (!insc ? ' active' : '') + '" onclick="siOnglet(\'devis\')">Devis en cours (' + SI.devis.length + ')</button>'
-    + '</div>';
+    + '<button class="fchip' + (insc ? ' active' : '') + '" onclick="siOnglet(\'insc\')">Inscriptions (' + lInsc.length + ')</button>'
+    + '<button class="fchip' + (!insc ? ' active' : '') + '" onclick="siOnglet(\'devis\')">Devis en cours (' + lDevis.length + ')</button>'
+    + '</div>' + barre;
   if (!insc && nbAttente) h += '<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">' + nbAttente + ' devis en attente de réponse de la famille.</div>';
-  var lignes = insc ? SI.insc : SI.devis;
+  var lignes = siTrier(insc ? lInsc : lDevis, insc);
   if (!lignes.length) {
     z.innerHTML = h + '<div style="padding:24px;color:var(--muted)">' + (insc ? 'Aucune inscription en cours pour votre crèche.' : 'Aucun devis en cours pour votre crèche.') + '</div>';
     return;
@@ -89,7 +132,7 @@ function siRender() {
       c3 = x.envoye_le ? 'envoyé le ' + siDate(x.envoye_le) : 'pas encore envoyé';
     }
     h += '<button type="button" onclick="siChoisir(\'' + id.replace(/'/g, '') + '\')" style="text-align:left;width:100%;border:1px solid var(--border,#e3e1d8);border-radius:10px;background:' + (ouvert ? '#EAF4F2' : '#fff') + ';padding:12px 14px;cursor:pointer;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font:inherit">'
-      + '<b style="flex:1 1 160px">' + siEsc(siNom(x)) + '</b>'
+      + '<b style="flex:1 1 160px">' + siEsc(siNom(x)) + (multi && siNomsCreches(x) ? '<span style="display:block;font-weight:400;font-size:11.5px;color:var(--muted)">' + siEsc(siNomsCreches(x)) + '</span>' : '') + '</b>'
       + '<span style="flex:1 1 150px;color:var(--muted);font-size:12.5px">' + (insc ? siEsc(c2) : c2) + '</span>'
       + '<span style="flex:1 1 170px;color:var(--muted);font-size:12.5px">' + siEsc(c3) + '</span>'
       + siBadge(t) + '</button>';
