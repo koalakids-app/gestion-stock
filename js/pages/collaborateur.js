@@ -318,16 +318,42 @@ async function grantAccess(){
   ['loginView','mfaGateView','setPwdView'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   document.getElementById('appView').style.display='block';
   document.getElementById('whoAmI').textContent=COLLAB_TYPE==='referent'?(COLLAB.name||''):((COLLAB.prenom||'')+' '+(COLLAB.nom||''));
+  document.getElementById('todayDate').textContent=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  ONGLET='accueil';dessinerOnglets();
   semaineDate=mondayOfISO(todayStr());
   const anneeSel=document.getElementById('anneeSelect');
   const anneeActuelle=new Date().getFullYear();
   anneeSel.innerHTML=[anneeActuelle,anneeActuelle-1].map(a=>'<option value="'+a+'">'+a+'</option>').join('');
   await loadFermetures();
   populateMoisValidation();
-  if(COLLAB_TYPE==='employe'){document.getElementById('msgCard').style.display='';notifsEmployeInit();}
+  if(COLLAB_TYPE==='employe'){document.getElementById('tuileMsg').style.display='';notifsEmployeInit();}
   await Promise.all([loadPlanning(),loadPointages(),loadCompteur(),loadFormation(),loadPlanningQuiz(),loadValidationMois(),loadMessages()]);
   loadCodeImage();
 }
+
+/* ---------- ONGLETS (même navigation que l'espace famille) ---------------
+   Accueil (message à la une, journée, code image, raccourcis), Infos (messages, employé·es
+   seulement), Planning, Heures, Formation. Les chargements restent ceux de chaque carte. */
+const ONGLETS=[['accueil','home','Accueil'],['infos','bell','Infos'],['planning','calendar-week','Planning'],['heures','clock-hour-4','Heures'],['formation','school','Formation']];
+let ONGLET='accueil',MSG_NONLUS=[];
+function dessinerOnglets(){
+  const nav=document.getElementById('onglets');
+  const liste=ONGLETS.filter(o=>o[0]!=='infos'||COLLAB_TYPE==='employe');
+  nav.innerHTML=liste.map(o=>'<button role="tab" class="onglet'+(o[0]===ONGLET?' actif':'')+'" aria-selected="'+(o[0]===ONGLET)+'" data-go="'+o[0]+'">'
+    +'<i class="ti ti-'+o[1]+'"></i><span>'+o[2]+'</span>'
+    +(o[0]==='infos'&&MSG_NONLUS.length?'<em class="pastille">'+MSG_NONLUS.length+'</em>':'')+'</button>').join('');
+  document.querySelectorAll('#appView .vue').forEach(v=>{v.hidden=v.dataset.v!==ONGLET;});
+}
+function allerA(onglet){
+  ONGLET=onglet;
+  dessinerOnglets();
+  window.scrollTo({top:0,behavior:'smooth'});
+  if(onglet==='infos')marquerMessagesLus();
+}
+document.addEventListener('click',function(ev){
+  const b=ev.target.closest('[data-go]');
+  if(b)allerA(b.dataset.go);
+});
 
 /* ---------- PLANNING ----------------------------------------------------
    Employé(e) : planning_equipe (import Excel, rapproché par prénom, cf.
@@ -358,23 +384,34 @@ async function loadPlanning(){
     const cle=String(COLLAB.planning_nom||COLLAB.prenom||'').trim().toLowerCase();
     rows=rows.filter(r=>String(r.prenom||'').trim().toLowerCase()===cle);
   }
-  grid.innerHTML=JOURS.map((nom,idx)=>{
+  const auj=jourIndexAujourdhui();
+  const htmlJour=idx=>{
     const evs=rows.filter(r=>r.jour===idx);
     const ferm=fermetureAt(addDays(semaineDate,idx));
-    let inner;
-    if(ferm){
-      inner='<div class="pempty" style="color:var(--red,#C62828);font-weight:700"><i class="ti ti-door-off"></i> '+esc(fermetureLabel(ferm))+'</div>';
-    }else if(!evs.length){
-      inner='<div class="pempty">Rien de prévu</div>';
-    }else{
-      inner=evs.map(r=>{
-        const horaire=(r.hdebut&&r.hfin)?r.hdebut+'–'+r.hfin:'';
-        const label=r.label||PLANNING_LABELS[r.type]||r.type||'';
-        return'<div class="pslot">'+esc(label)+(horaire?'<span class="h">'+esc(horaire)+'</span>':'')+'</div>';
-      }).join('');
-    }
-    return'<div class="pday"'+(ferm?' style="background:var(--red-l,#FDE8E8)"':'')+'><div class="dname">'+nom+'</div>'+inner+'</div>';
+    if(ferm)return'<div class="pempty" style="color:var(--red);font-weight:700"><i class="ti ti-door-off"></i> '+esc(fermetureLabel(ferm))+'</div>';
+    if(!evs.length)return'<div class="pempty">Rien de prévu</div>';
+    return evs.map(r=>{
+      const horaire=(r.hdebut&&r.hfin)?r.hdebut+' – '+r.hfin:'';
+      const label=r.label||PLANNING_LABELS[r.type]||r.type||'';
+      return'<div class="pslot">'+esc(label)+(horaire?'<span class="h">'+esc(horaire)+'</span>':'')+'</div>';
+    }).join('');
+  };
+  grid.innerHTML=JOURS.map((nom,idx)=>{
+    const ferm=fermetureAt(addDays(semaineDate,idx));
+    return'<div class="pday'+(ferm?' ferme':'')+'"><div class="dname'+(idx===auj?' auj':'')+'">'+nom+'</div><div class="dc">'+htmlJour(idx)+'</div></div>';
   }).join('');
+  /* Carte « Aujourd'hui » de l'accueil : seulement quand la semaine affichée est la semaine en cours. */
+  if(auj!==null){
+    document.getElementById('todayPlan').innerHTML=htmlJour(auj);
+  }else if(semaineDate===mondayOfISO(todayStr())){
+    document.getElementById('todayPlan').textContent='Week-end';
+  }
+}
+/* Index (0 = lundi … 4 = vendredi) du jour d'aujourd'hui, null le week-end. */
+function jourIndexAujourdhui(){
+  if(semaineDate!==mondayOfISO(todayStr()))return null;
+  const i=(new Date().getDay()+6)%7;
+  return i<5?i:null;
 }
 
 /* ---------- MES POINTAGES (détail journalier) ----------------------------
@@ -390,7 +427,6 @@ function dureeStr(mins){const h=Math.floor(mins/60),m=Math.round(mins%60);return
 
 async function loadPointages(){
   const grid=document.getElementById('pointagesGrid');
-  document.getElementById('semaineLabelPt').textContent='Semaine du '+dfr(semaineDate)+' (S'+numSemaine(semaineDate)+')';
   const finExclusive=addDays(semaineDate,7);
   const{data,error}=await sb.from('pointages').select('action,horodatage')
     .eq(pointageCol(),COLLAB.id)
@@ -400,6 +436,7 @@ async function loadPointages(){
   if(error){grid.innerHTML='<p class="hint">Pointages indisponibles pour le moment.</p>';return;}
   const rows=data||[];
   const jours=Array.from({length:5},(_,i)=>addDays(semaineDate,i));
+  const auj=jourIndexAujourdhui();
   grid.innerHTML=JOURS.map((nom,idx)=>{
     const dayRows=rows.filter(r=>isoLocalDate(r.horodatage)===jours[idx]);
     let inner,totalMin=0;
@@ -423,8 +460,10 @@ async function loadPointages(){
       if(totalMin>0)segs.push('<div class="pslot" style="color:var(--green)">Total '+dureeStr(totalMin)+'</div>');
       inner=segs.join('')||'<div class="pempty">Aucun pointage</div>';
     }
-    return'<div class="pday"><div class="dname">'+nom+'</div>'+inner+'</div>';
+    if(idx===auj)document.getElementById('todayPoint').innerHTML=inner;
+    return'<div class="pday"><div class="dname'+(idx===auj?' auj':'')+'">'+nom+'</div><div class="dc">'+inner+'</div></div>';
   }).join('');
+  if(auj===null&&semaineDate===mondayOfISO(todayStr()))document.getElementById('todayPoint').textContent='Week-end';
 }
 
 /* Export CSV du mois contenant la semaine actuellement affichée. */
@@ -487,6 +526,7 @@ async function loadCompteur(){
     '<div class="stat"><div class="n">'+Number(r.heures_realisees||0).toFixed(1)+'h</div><div class="l">Heures réalisées</div></div>'
     +'<div class="stat"><div class="n">'+Number(r.heures_dues||0).toFixed(1)+'h</div><div class="l">Heures dues (1607h proraté)</div></div>'
     +'<div class="stat'+(solde>0?' pos':'')+'"><div class="n">'+(solde>0?'+':'')+solde.toFixed(1)+'h</div><div class="l">'+(solde>0?'Heures supplémentaires':'Solde')+'</div></div>';
+  if(annee===new Date().getFullYear()){const t=document.getElementById('tuileHeures');if(t)t.textContent='solde : '+(solde>0?'+':'')+solde.toFixed(1)+' h';}
 }
 
 /* ---------- VALIDATION MENSUELLE DES HEURES (signature électronique) -----
@@ -519,9 +559,9 @@ async function loadValidationMois(){
     .maybeSingle();
   if(errSig){box.innerHTML='<p class="hint">Validation indisponible pour le moment.</p>';return;}
   if(sig){
-    box.innerHTML='<div style="display:flex;align-items:center;gap:10px;background:var(--green-l);border-radius:14px;padding:14px 16px">'
+    box.innerHTML='<div style="display:flex;align-items:center;gap:10px;background:var(--green-bg);border-radius:14px;padding:14px 16px">'
       +'<i class="ti ti-rosette-discount-check" style="font-size:26px;color:var(--green)"></i>'
-      +'<div><div style="font-weight:800;color:#1B6B47">'+Number(sig.heures_realisees).toFixed(1)+'h validées</div>'
+      +'<div><div style="font-weight:800;color:var(--green)">'+Number(sig.heures_realisees).toFixed(1)+'h validées</div>'
       +'<div style="font-size:12.5px;color:var(--muted)">Signé par '+esc(sig.signe_par)+' le '+dfr(sig.signe_le)+'</div></div></div>';
     return;
   }
@@ -794,11 +834,12 @@ function loadCodeImage(){
   card.style.display='';
   if(!Array.isArray(c)||c.length!==4){box.innerHTML='<p class="hint">Pas encore de code image : demandez-le à votre direction.</p>';return;}
   const base='https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/';
-  box.innerHTML='<div style="display:flex;gap:10px;flex-wrap:wrap">'
-    +c.map((id,i)=>'<div style="text-align:center"><img src="'+base+esc(id)+'.png" alt="'+esc(id)+'" style="width:64px;height:64px;border-radius:12px;object-fit:cover"><div class="hint" style="margin:2px 0 0">'+(i+1)+'</div></div>').join('')
+  box.innerHTML='<div class="pictos">'
+    +c.map((id,i)=>'<div class="picto"><span class="rang">'+(i+1)+'</span><img src="'+base+encodeURIComponent(id)+'.png" alt="'+esc(id)+'" width="64" height="64"></div>').join('')
     +'</div>';
 }
 
+const extrait=(t,n)=>{t=String(t||'').replace(/\s+/g,' ').trim();return t.length>n?t.slice(0,n).trimEnd()+'…':t;};
 async function loadMessages(){
   const box=document.getElementById('msgBox');
   if(COLLAB_TYPE!=='employe'||!box)return;
@@ -807,23 +848,39 @@ async function loadMessages(){
     .eq('employe_id',COLLAB.id).limit(100);
   if(error){box.innerHTML='<p class="hint">Messages indisponibles pour le moment.</p>';return;}
   const rows=(data||[]).filter(r=>r.messages_employes).sort((a,b)=>String(b.messages_employes.created_at).localeCompare(String(a.messages_employes.created_at))).slice(0,30);
-  const nonLus=rows.filter(r=>!r.lu_le).length;
-  const badge=document.getElementById('msgBadge');
-  badge.style.display=nonLus?'':'none';badge.textContent=nonLus;
-  if(!rows.length){box.innerHTML='<p class="hint">Aucun message pour le moment.</p>';return;}
-  box.innerHTML=rows.map(r=>{
-    const m=r.messages_employes,nl=!r.lu_le;
-    return '<div class="msg-item" data-id="'+esc(r.message_id)+'" style="border:2px solid '+(nl?'var(--orange)':'var(--line)')+';border-radius:12px;padding:10px 12px;margin-bottom:8px;cursor:pointer" onclick="ouvrirMessage(this)">'
-      +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px"><strong>'+(nl?'● ':'')+esc(m.titre)+'</strong><span style="color:var(--muted);font-size:11.5px;white-space:nowrap">'+dfr(m.created_at)+'</span></div>'
-      +'<div class="msg-corps" style="display:'+(nl?'block':'none')+';margin-top:6px;font-size:13px;line-height:1.5;white-space:pre-wrap">'+esc(m.corps)+'<div style="margin-top:6px;font-size:11.5px;color:var(--muted)">'+(m.auteur_nom?'De '+esc(m.auteur_nom):'')+'</div></div></div>';
+  MSG_NONLUS=rows.filter(r=>!r.lu_le).map(r=>r.message_id);
+  dessinerOnglets();
+  /* Accueil : dernier message et raccourci. */
+  const une=document.getElementById('uneBox'),dernier=rows[0];
+  document.getElementById('uneCard').style.display='';
+  document.getElementById('uneNouveau').style.display=dernier&&!dernier.lu_le?'':'none';
+  document.getElementById('tuileMsgTxt').textContent=MSG_NONLUS.length?MSG_NONLUS.length+' non lu'+(MSG_NONLUS.length>1?'s':''):'de la direction';
+  if(dernier){
+    const m=dernier.messages_employes;
+    une.innerHTML='<h3 class="une-t">'+esc(m.titre)+'</h3><div class="date">'+esc(dfr(m.created_at))+'</div>'
+      +'<p class="une-p">'+esc(extrait(m.corps,180))+'</p>'
+      +'<button class="btn btn-g" data-go="infos"><i class="ti ti-book-2"></i> Lire la suite</button>';
+  }else{
+    une.innerHTML='<p class="vide" style="margin:0">Aucun message pour le moment.</p>';
+  }
+  /* Infos : tous les messages, le plus récent déplié. */
+  if(!rows.length){box.innerHTML='<p class="vide">Aucun message pour le moment.</p>';return;}
+  box.innerHTML=rows.map((r,i)=>{
+    const m=r.messages_employes;
+    return '<details class="msg-d"'+(i===0?' open':'')+'><summary><span class="msg-t">'+esc(m.titre)
+      +(r.lu_le?'':' <span class="nouveau">Nouveau</span>')+'</span><span class="date">'+esc(dfr(m.created_at))+'</span></summary>'
+      +'<p>'+esc(m.corps)+'</p>'+(m.auteur_nom?'<div class="date">De '+esc(m.auteur_nom)+'</div>':'')+'</details>';
   }).join('');
-  /* Les messages non lus s'affichent dépliés ; ils sont marqués lus dès l'affichage. */
-  if(nonLus)rows.filter(r=>!r.lu_le).forEach(r=>sb.rpc('marquer_message_employe_lu',{p_message:r.message_id}).then(function(x){if(x.error)console.warn('[msg] lu',x.error);}));
-  if(nonLus)setTimeout(function(){badge.style.display='none';},4000);
+  if(ONGLET==='infos')marquerMessagesLus();
 }
-function ouvrirMessage(el){
-  const c=el.querySelector('.msg-corps');if(c)c.style.display=c.style.display==='none'?'block':'none';
-  el.style.borderColor='var(--line)';
+/* Les messages sont marqués lus à l'ouverture de l'onglet Infos (la pastille disparaît alors). */
+function marquerMessagesLus(){
+  if(!MSG_NONLUS.length)return;
+  const ids=MSG_NONLUS;MSG_NONLUS=[];
+  ids.forEach(id=>sb.rpc('marquer_message_employe_lu',{p_message:id}).then(function(x){if(x.error)console.warn('[msg] lu',x.error);}));
+  dessinerOnglets();
+  const t=document.getElementById('tuileMsgTxt');if(t)t.textContent='de la direction';
+  const n=document.getElementById('uneNouveau');if(n)n.style.display='none';
 }
 
 /* ---------- NOTIFICATIONS PUSH (employé·es) ------------------------------

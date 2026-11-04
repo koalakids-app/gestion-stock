@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="css/pages/collaborateur.css">
+<link rel="stylesheet" href="css/pages/collaborateur.css?v=2">
 </head>
 <body>
 
@@ -71,101 +71,121 @@
 </div>
 
 <div id="appView" style="display:none">
-  <div class="topbar">
-    <a class="btn btn-g btn-sm" href="index.html" title="Retour au portail Koala Kids"><i class="ti ti-home"></i> Portail</a>
-    <i class="ti ti-user-circle" style="font-size:22px;color:var(--orange)"></i>
-    <h1>Mon espace</h1>
-    <span class="who" id="whoAmI"></span>
-    <button class="btn btn-g btn-sm" onclick="doLogout()" title="Se déconnecter"><i class="ti ti-logout"></i></button>
-  </div>
+  <header class="top"><div class="top-in">
+    <div class="txt">
+      <h1><i class="ti ti-user-circle"></i> Mon espace</h1>
+      <p id="whoAmI"></p>
+    </div>
+    <a class="ib" href="index.html" title="Retour au portail Koala Kids" aria-label="Portail"><i class="ti ti-home"></i></a>
+    <button class="ib" onclick="doLogout()" title="Se déconnecter" aria-label="Se déconnecter"><i class="ti ti-logout"></i></button>
+  </div></header>
 
   <div class="wrap">
-    <div class="card" id="msgCard" style="display:none">
-      <div class="sec">
-        <span><i class="ti ti-message-2"></i> Mes messages <span id="msgBadge" style="display:none;background:var(--orange);color:#fff;border-radius:10px;font-size:11px;padding:1px 7px;font-family:Nunito,sans-serif"></span></span>
-        <button class="btn btn-g btn-sm" id="btnNotif" onclick="toggleNotifsEmploye()" title="Activer les notifications"><i class="ti ti-bell-off"></i></button>
+    <nav class="onglets" id="onglets" role="tablist"></nav>
+
+    <!-- Accueil : le dernier message, la journée, le code image, les raccourcis -->
+    <section class="vue" data-v="accueil">
+      <div class="card une" id="uneCard" style="display:none">
+        <div class="sec"><span><i class="ti ti-bell-ringing"></i> À la une <span id="uneNouveau" class="nouveau" style="display:none">Nouveau</span></span></div>
+        <div id="uneBox"></div>
       </div>
-      <div id="msgBox"><p class="hint">Chargement…</p></div>
-      <p class="hint">Messages envoyés par la direction ou votre directeur/trice technique, sans réponse possible.
-        Activez la cloche pour être prévenu(e) sur cet appareil (sur iPhone, ajoutez d'abord cette page à l'écran d'accueil).</p>
-    </div>
 
-    <div class="card" id="codeImgCard" style="display:none">
-      <div class="sec"><span><i class="ti ti-photo"></i> Mon code image</span></div>
-      <div id="codeImgBox"></div>
-      <p class="hint">Les 4 images, dans cet ordre, à toucher sur la tablette pour vous connecter ou pointer. Ne le communiquez à personne.</p>
-    </div>
+      <div class="card">
+        <div class="sec"><span><i class="ti ti-sun"></i> Aujourd'hui</span><span class="date" id="todayDate"></span></div>
+        <div class="row"><span><b>Planning</b></span><span class="v" id="todayPlan">Chargement…</span></div>
+        <div class="row"><span><b>Pointage</b></span><span class="v" id="todayPoint">Chargement…</span></div>
+      </div>
 
-    <div class="card">
-      <div class="sec">
-        <span><i class="ti ti-calendar-week"></i> Mon planning</span>
+      <div class="card" id="codeImgCard" style="display:none">
+        <div class="sec"><span><i class="ti ti-photo"></i> Mon code image</span></div>
+        <div id="codeImgBox"></div>
+        <p class="hint">Touchez ces 4 images <strong>dans cet ordre</strong> sur la tablette pour vous connecter ou pointer. Ce code est personnel : ne le communiquez à personne.</p>
+      </div>
+
+      <div class="tuiles">
+        <button class="tuile" data-go="planning"><i class="ti ti-calendar-week"></i><b>Planning</b><small>et pointages</small></button>
+        <button class="tuile" data-go="heures"><i class="ti ti-clock-hour-4"></i><b>Heures</b><small id="tuileHeures">compteur et validation</small></button>
+        <button class="tuile" data-go="formation"><i class="ti ti-school"></i><b>Formation</b><small>quiz et parcours</small></button>
+        <button class="tuile" data-go="infos" id="tuileMsg" style="display:none"><i class="ti ti-bell"></i><b>Messages</b><small id="tuileMsgTxt">de la direction</small></button>
+      </div>
+    </section>
+
+    <!-- Infos : tous les messages, repliés sauf le plus récent -->
+    <section class="vue" data-v="infos" hidden>
+      <div class="card" id="msgCard">
+        <div class="sec">
+          <span><i class="ti ti-message-2"></i> Mes messages</span>
+          <button class="btn btn-g btn-sm" id="btnNotif" onclick="toggleNotifsEmploye()" title="Activer les notifications"><i class="ti ti-bell-off"></i> Notifications</button>
+        </div>
+        <div id="msgBox"><p class="hint">Chargement…</p></div>
+        <p class="hint">Messages envoyés par la direction ou votre directeur/trice technique, sans réponse possible.
+          Activez les notifications pour être prévenu(e) sur cet appareil (sur iPhone, ajoutez d'abord cette page à l'écran d'accueil).</p>
+      </div>
+    </section>
+
+    <!-- Planning : semaine affichée pour le planning et les pointages -->
+    <section class="vue" data-v="planning" hidden>
+      <div class="card">
         <div class="weeknav">
-          <button class="btn btn-g btn-sm" onclick="changeSemaine(-1)"><i class="ti ti-chevron-left"></i></button>
-          <span id="semaineLabel" style="font-size:12.5px;font-weight:700;color:var(--muted)"></span>
-          <button class="btn btn-g btn-sm" onclick="changeSemaine(1)"><i class="ti ti-chevron-right"></i></button>
+          <button class="btn btn-g btn-sm" onclick="changeSemaine(-1)" aria-label="Semaine précédente"><i class="ti ti-chevron-left"></i></button>
+          <span id="semaineLabel"></span>
+          <button class="btn btn-g btn-sm" onclick="changeSemaine(1)" aria-label="Semaine suivante"><i class="ti ti-chevron-right"></i></button>
         </div>
       </div>
-      <div class="pgrid" id="planningGrid"></div>
-      <p class="hint">Planning saisi par la direction (import de l'équipe). Pour toute correction,
-        contactez la direction.</p>
-    </div>
-
-    <div class="card">
-      <div class="sec">
-        <span><i class="ti ti-fingerprint"></i> Mes pointages</span>
-        <div class="weeknav">
-          <button class="btn btn-g btn-sm" onclick="changeSemaine(-1)"><i class="ti ti-chevron-left"></i></button>
-          <span id="semaineLabelPt" style="font-size:12.5px;font-weight:700;color:var(--muted)"></span>
-          <button class="btn btn-g btn-sm" onclick="changeSemaine(1)"><i class="ti ti-chevron-right"></i></button>
+      <div class="card">
+        <div class="sec"><span><i class="ti ti-calendar-week"></i> Mon planning</span></div>
+        <div class="pgrid" id="planningGrid"></div>
+        <p class="hint">Planning saisi par la direction (import de l'équipe). Pour toute correction, contactez la direction.</p>
+      </div>
+      <div class="card">
+        <div class="sec"><span><i class="ti ti-fingerprint"></i> Mes pointages</span></div>
+        <div class="pgrid" id="pointagesGrid"></div>
+        <div style="margin-top:12px">
+          <button class="btn btn-g" onclick="exportPointagesMois()"><i class="ti ti-file-download"></i> Exporter le mois (CSV)</button>
         </div>
+        <p class="hint">Arrivées/départs pointés au kiosque. L'export couvre le mois entier de la semaine affichée.</p>
       </div>
-      <div class="pgrid" id="pointagesGrid"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:12px">
-        <button class="btn btn-g btn-sm" onclick="exportPointagesMois()"><i class="ti ti-file-download"></i> Exporter le mois (CSV)</button>
-      </div>
-      <p class="hint">Arrivées/départs pointés au kiosque. L'export couvre le mois entier de la
-        semaine affichée ci-dessus.</p>
-    </div>
+    </section>
 
-    <div class="card">
-      <div class="sec">
-        <span><i class="ti ti-clock-hour-4"></i> Mon compteur d'heures supplémentaires</span>
-        <select id="anneeSelect" onchange="loadCompteur()" style="width:auto;padding:5px 9px;font-size:12.5px;border:2px solid var(--line);border-radius:10px"></select>
+    <!-- Heures : compteur annuel et validation mensuelle -->
+    <section class="vue" data-v="heures" hidden>
+      <div class="card">
+        <div class="sec">
+          <span><i class="ti ti-clock-hour-4"></i> Heures supplémentaires</span>
+          <select id="anneeSelect" onchange="loadCompteur()" aria-label="Année"></select>
+        </div>
+        <div class="counter" id="counterBox"></div>
+        <p class="hint">Calcul annualisé : 1607h temps plein par an, proraté selon vos heures
+          hebdomadaires contractuelles et la période couverte par votre contrat sur l'année. Un solde
+          positif correspond à des heures supplémentaires.</p>
       </div>
-      <div class="counter" id="counterBox"></div>
-      <p class="hint">Calcul annualisé : 1607h temps plein par an, proraté selon vos heures
-        hebdomadaires contractuelles et la période couverte par votre contrat sur l'année. Un solde
-        positif correspond à des heures supplémentaires.</p>
-    </div>
+      <div class="card">
+        <div class="sec">
+          <span><i class="ti ti-file-signature"></i> Validation de mes heures</span>
+          <select id="valMoisSelect" onchange="loadValidationMois()" aria-label="Mois"></select>
+        </div>
+        <div id="valBox"><p class="hint">Chargement…</p></div>
+      </div>
+    </section>
 
-    <div class="card">
-      <div class="sec">
-        <span><i class="ti ti-file-signature"></i> Validation mensuelle de mes heures</span>
-        <select id="valMoisSelect" onchange="loadValidationMois()" style="width:auto;padding:5px 9px;font-size:12.5px;border:2px solid var(--line);border-radius:10px"></select>
+    <!-- Formation : planning des quiz et parcours -->
+    <section class="vue" data-v="formation" hidden>
+      <div class="card">
+        <div class="sec"><span><i class="ti ti-calendar-event"></i> Planning des quiz</span></div>
+        <div id="planningQuizBox"></div>
+        <p class="hint">Deux quiz par semaine, du 26 octobre au 18 décembre 2026. Ils sont sans note : ils
+          donnent un repère par axe, dont on parle ensuite en équipe. <strong>Ces liens sont personnels</strong> :
+          ne les transférez pas, le résultat serait enregistré à votre nom.</p>
       </div>
-      <div id="valBox"><p class="hint">Chargement…</p></div>
-    </div>
-
-    <div class="card">
-      <div class="sec">
-        <span><i class="ti ti-calendar-event"></i> Planning des quiz</span>
+      <div class="card">
+        <div class="sec"><span><i class="ti ti-school"></i> Mon parcours de formation</span></div>
+        <div id="formationBox"></div>
+        <p class="hint">Quiz et micro-formations envoyés par la direction. Cliquez sur « À faire » pour
+          ouvrir un quiz ou une formation en attente : une fois terminé(e), il/elle apparaît ici comme réalisé(e).
+          <strong>Ces liens sont personnels</strong> : ne les transférez pas à une collègue, le résultat serait
+          enregistré à votre nom. Pour elle, envoyez depuis sa fiche (Collaborateurs).</p>
       </div>
-      <div id="planningQuizBox"></div>
-      <p class="hint">Deux quiz par semaine, du 26 octobre au 18 décembre 2026. Ils sont sans note : ils
-        donnent un repère par axe, dont on parle ensuite en équipe. <strong>Ces liens sont personnels</strong> :
-        ne les transférez pas, le résultat serait enregistré à votre nom.</p>
-    </div>
-
-    <div class="card">
-      <div class="sec">
-        <span><i class="ti ti-school"></i> Mon parcours de formation</span>
-      </div>
-      <div id="formationBox"></div>
-      <p class="hint">Quiz et micro-formations envoyés par la direction. Cliquez sur « À faire » pour
-        ouvrir un quiz ou une formation en attente : une fois terminé(e), il/elle apparaît ici comme réalisé(e).
-        <strong>Ces liens sont personnels</strong> : ne les transférez pas à une collègue, le résultat serait
-        enregistré à votre nom. Pour elle, envoyez depuis sa fiche (Collaborateurs).</p>
-    </div>
+    </section>
   </div>
 </div>
 
@@ -173,12 +193,12 @@
 
 <script src="js/branding.js"></script>
 <script src="js/planning-quiz.js?v=1"></script>
-<script src="js/pages/collaborateur.js"></script>
+<script src="js/pages/collaborateur.js?v=2"></script>
 <script src="js/login-alert.js"></script>
 <script src="js/support-chat.js?v=13"></script>
 <script src="js/mfa-qr.js?v=1"></script>
 <script src="js/mfa-secours.js?v=1"></script>
-<script src="js/notice-flottante.js?v=2"></script>
+<script src="js/notice-flottante.js?v=3"></script>
 <script src="js/portail-bouton.js?v=1"></script>
 </body>
 </html>
