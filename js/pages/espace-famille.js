@@ -109,13 +109,6 @@ function carteFermetures(d){
       :'<p class="vide" style="margin:0">Aucune fermeture annoncée pour le moment.</p>')+'</div>';
 }
 
-function carteMenu(d){
-  if(!d.creche_id)return '';
-  return '<div class="card"><h2><i class="ti ti-tools-kitchen-2"></i> Menu de la semaine</h2>'
-    +'<p class="vide" style="margin-top:0">Les repas et goûters préparés pour les enfants.</p>'
-    +'<a class="btn btn-g" href="menu.html?c='+encodeURIComponent(d.creche_id)+'" target="_blank" rel="noopener"><i class="ti ti-external-link"></i> Voir le menu</a></div>';
-}
-
 function carteReglement(){
   return '<div class="card"><h2><i class="ti ti-gavel"></i> Règlement intérieur</h2>'
     +'<p class="vide" style="margin-top:0">Produits d’hygiène, médicaments et appareillages.</p>'
@@ -216,7 +209,7 @@ function vueAccueil(d){
   const tuiles='<div class="tuiles">'
     +'<button class="tuile" data-aller="docs"><i class="ti ti-files"></i><b>Documents</b><small>'+(nbDocs?nbDocs+' à consulter':'Envoyer un document')+'</small></button>'
     +(d.creche_id?'<a class="tuile" href="menu.html?c='+encodeURIComponent(d.creche_id)+'" target="_blank" rel="noopener"><i class="ti ti-tools-kitchen-2"></i><b>Menu</b><small>de la semaine</small></a>':'')
-    +'<button class="tuile" data-aller="creche"><i class="ti ti-address-book"></i><b>Contacts</b><small>et règlement</small></button>'
+    +'<button class="tuile" data-aller="creche"><i class="ti ti-address-book"></i><b>Contacts</b><small>et fermetures</small></button>'
     +(d.suivi_token?'<a class="tuile" href="famille-suivi.html?t='+encodeURIComponent(d.suivi_token)+'"><i class="ti ti-heart-handshake"></i><b>Suivi</b><small>de '+esc(d.enfant.prenom||'l\'enfant')+'</small></a>':'')
     +'</div>';
   return une+cartePointage(d)+prochaine+tuiles;
@@ -234,6 +227,7 @@ function vueDocs(d){
     ?'<div style="margin-top:14px"><strong style="font-size:13px">Déjà envoyés</strong>'
       +d.depots.map(x=>'<div class="dep"><span>'+esc(x.nom)+'</span><span style="color:var(--muted)">'+esc(fmtDate(x.date))+'</span></div>').join('')+'</div>':'';
   return (carteDocuments(d)||'<div class="card"><h2><i class="ti ti-files"></i> Vos documents</h2><p class="vide" style="margin:0">Le devis et le contrat signé apparaîtront ici.</p></div>')
+    +carteReglement()
     +'<div class="card"><h2><i class="ti ti-cloud-upload"></i> Envoyer un document</h2>'
     +'<p class="vide" style="margin-top:0">Certificat, attestation, ordonnance… (photo ou PDF, 8 Mo max). La crèche est prévenue.</p>'
     +'<label for="libelle">De quel document s\'agit-il ?</label>'
@@ -245,7 +239,7 @@ function vueDocs(d){
 }
 
 function vueCreche(d){
-  return carteContacts(d)+carteFermetures(d)+carteMenu(d)+carteReglement()
+  return carteContacts(d)+carteFermetures(d)
     +(d.suivi_token?'<div class="card"><h2><i class="ti ti-heart-handshake"></i> Suivi de '+esc(d.enfant.prenom||'votre enfant')+'</h2>'
       +'<p class="vide" style="margin-top:0">Les synthèses publiées par l\'équipe.</p>'
       +'<a class="btn btn-g" href="famille-suivi.html?t='+encodeURIComponent(d.suivi_token)+'"><i class="ti ti-external-link"></i> Ouvrir le suivi</a></div>':'');
