@@ -255,13 +255,11 @@ async function mcmMenuPdf(dateDebut){
   try{mcmMenuPdfAfficher(dateDebut,await mcmLogoTraiteurCharger(),afficheQrDataUrl(menuPublicUrl(dateDebut,menuCrecheQr())));}
   catch(e){console.error('[MCM menu PDF]',e);showBanner('Génération du PDF impossible : '+(e.message||e),'error');}
 }
-/* Une page A4 par semaine : la semaine choisie, et la suivante quand son menu est publié
-   (le QR ouvre de toute façon les deux semaines). */
+/* Impression : une seule page A4, la semaine choisie (semaine 1). Le QR, lui, ouvre les deux semaines. */
 function mcmMenuPdfAfficher(dateDebut0,logo,qr){
   if(!window.jspdf){showBanner('Librairie PDF non chargée.','error');return;}
   if(!mcmMenusCache.some(function(x){return x.date_debut===dateDebut0;})){showBanner('Menu introuvable pour cette semaine.','error');return;}
-  const suivante=ipDateToLocalISO(new Date(new Date(dateDebut0+'T00:00:00').getTime()+7*864e5));
-  const debuts=mcmMenusCache.some(function(x){return x.date_debut===suivante;})?[dateDebut0,suivante]:[dateDebut0];
+  const debuts=[dateDebut0];
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   debuts.forEach(function(dateDebut,page){
