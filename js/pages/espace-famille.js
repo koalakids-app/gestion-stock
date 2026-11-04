@@ -21,6 +21,10 @@ const TYPES_EXT={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/
 const MAX_BYTES=8*1024*1024;
 let DONNEES=null;
 
+/* Pictogrammes du code de pointage (mêmes images que la tablette et l'e-mail « code image »). */
+const PICTOS_URL='https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/';
+const PICTOS_NOM={ours:'Ours',arc_en_ciel:'Arc-en-ciel',zebre:'Zèbre',hochet:'Hochet',baleine:'Baleine',cubes_alphabet:'Cubes alphabet',camionnette_rouge:'Camionnette rouge',pingouin:'Pingouin'};
+
 function etat(titre,msg,icone){
   wrap.innerHTML='<div class="state"><i class="ti ti-'+(icone||'alert-circle')+'"></i><h2>'+esc(titre)+'</h2><p>'+esc(msg)+'</p></div>';
 }
@@ -79,8 +83,15 @@ function rendre(){
   const deps=d.depots.length
     ?'<div style="margin-top:14px"><strong style="font-size:13px">Déjà envoyés</strong>'
       +d.depots.map(x=>'<div class="dep"><span>'+esc(x.nom)+'</span><span style="color:var(--muted)">'+esc(fmtDate(x.date))+'</span></div>').join('')+'</div>':'';
+  const pictos=d.enfant.code_pictos
+    ?'<div class="card"><h2><i class="ti ti-photo"></i> Code de pointage de '+esc(d.enfant.prenom||'votre enfant')+'</h2>'
+      +'<p class="vide" style="margin-top:0">À l\'arrivée et au départ, touchez ces 4 images <strong>dans cet ordre</strong> sur la tablette de la crèche.</p>'
+      +'<div class="pictos">'+d.enfant.code_pictos.map((id,i)=>'<div class="picto"><span class="rang">'+(i+1)+'</span><img src="'+esc(PICTOS_URL+encodeURIComponent(id)+'.png')+'" alt="'+esc(PICTOS_NOM[id]||id)+'" width="72" height="72"><small>'+esc(PICTOS_NOM[id]||id)+'</small></div>').join('')+'</div>'
+      +'<p class="vide" style="margin-bottom:0">Ce code est personnel : ne le partagez qu\'avec les personnes qui déposent ou récupèrent votre enfant.</p></div>'
+    :'<div class="card"><h2><i class="ti ti-photo"></i> Code de pointage</h2><p class="vide" style="margin:0">Le code image de '+esc(d.enfant.prenom||'votre enfant')+' n\'est pas encore attribué. Demandez-le à la crèche.</p></div>';
   wrap.innerHTML=
-    '<div class="card"><h2><i class="ti ti-bell"></i> Informations de la crèche</h2>'+msgs+'</div>'
+    pictos
+    +'<div class="card"><h2><i class="ti ti-bell"></i> Informations de la crèche</h2>'+msgs+'</div>'
     +(d.suivi_token?'<div class="card"><h2><i class="ti ti-heart-handshake"></i> Suivi de '+esc(d.enfant.prenom||'votre enfant')+'</h2>'
       +'<p class="vide" style="margin-top:0">Les synthèses publiées par l\'équipe.</p>'
       +'<a class="btn btn-g" href="famille-suivi.html?t='+encodeURIComponent(d.suivi_token)+'"><i class="ti ti-external-link"></i> Ouvrir le suivi</a></div>':'')

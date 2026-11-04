@@ -9,7 +9,7 @@
 // comptés par adresse IP (famille_essais) : 10 échecs / 15 min => 429.
 //
 // Actions (POST, JSON) :
-//   {action:'get'}    -> {enfant:{prenom}, creche_nom, parent:{prenom}, messages:[...],
+//   {action:'get'}    -> {enfant:{prenom, code_pictos}, creche_nom, parent:{prenom}, messages:[...],
 //                         depots:[...], suivi_token}
 //   {action:'upload', libelle, filename, content_type, content_base64}
 //
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
   if (!acces.actif) return erreur("revoque", 410);
 
   const [{ data: enfant }, { data: parent }] = await Promise.all([
-    sb.from("enfants").select("prenom").eq("id", acces.enfant_id).maybeSingle(),
+    sb.from("enfants").select("prenom, code_pictos").eq("id", acces.enfant_id).maybeSingle(),
     sb.from("enfants_parents").select("prenom").eq("id", acces.parent_id).maybeSingle(),
   ]);
 
@@ -104,7 +104,13 @@ Deno.serve(async (req) => {
       .eq("enfant_id", acces.enfant_id).eq("parent_id", acces.parent_id).eq("actif", true).maybeSingle();
 
     return json({
-      enfant: { prenom: enfant?.prenom || "" },
+      // Code image du pointage sur la tablette (4 pictogrammes, dans l'ordre). Seules les images
+      // sont renvoyées, jamais le code numérique interne (enfants.code_pointage).
+      enfant: {
+        prenom: enfant?.prenom || "",
+        code_pictos: Array.isArray(enfant?.code_pictos) && enfant.code_pictos.length === 4
+          ? enfant.code_pictos : null,
+      },
       creche_nom: creche?.name || "",
       parent: { prenom: parent?.prenom || "" },
       messages: (msgs || []).map((m: any) => ({ ...m, nouveau: !dejaLus.has(m.id) })),
