@@ -17,11 +17,9 @@ var SI_DEVIS = {
   accepte:   { l: 'Accepté',    bg: '#E6F5EE', fg: '#1B6B47' }
 };
 
-/* Référents : oui. Direction : un seul compte (pas toute la direction). */
-var SI_COMPTE_DIRECTION = 'cp1.koalakids@outlook.fr';
+/* Référents et direction : oui (la direction garde aussi le module Inscriptions complet). */
 function siAccesPermis() {
-  if (!isDirection) return true;
-  return ((currentUser && currentUser.email) || '').toLowerCase() === SI_COMPTE_DIRECTION;
+  return true;
 }
 
 function siEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
