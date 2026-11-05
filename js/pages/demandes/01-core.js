@@ -125,7 +125,7 @@ window.addEventListener('DOMContentLoaded', async function() {
   // vie < 8 s dans localStorage), on garde la session au lieu de la détruire, sinon le
   // premier onglet passerait en « Session expirée ». Une fois tous les onglets fermés, les
   // signaux disparaissent et la déconnexion à l'ouverture reste de rigueur (postes partagés).
-  if(urlParams.get('enfant')||autreOngletConnecte()){
+  if(urlParams.get('enfant')||kkOnglets.autre()){
     try{
       const{data:{session}}=await sb.auth.getSession();
       if(session&&session.user){
@@ -143,29 +143,7 @@ window.addEventListener('DOMContentLoaded', async function() {
   showLogin();
 });
 
-// Signal de vie par onglet connecté (clé propre à l'onglet, retirée à la fermeture).
-const _ONGLET_PREFIXE='kk_onglet_demandes_';
-const _ONGLET_ID=Math.random().toString(36).slice(2);
-function autreOngletConnecte(){
-  try{
-    const now=Date.now();
-    for(let i=0;i<localStorage.length;i++){
-      const k=localStorage.key(i);
-      if(!k||k.indexOf(_ONGLET_PREFIXE)!==0||k===_ONGLET_PREFIXE+_ONGLET_ID)continue;
-      const t=parseInt(localStorage.getItem(k),10);
-      if(t&&now-t<8000)return true;
-    }
-  }catch(e){}
-  return false;
-}
-function _ongletSignal(){
-  try{
-    if(currentUser)localStorage.setItem(_ONGLET_PREFIXE+_ONGLET_ID,String(Date.now()));
-    else localStorage.removeItem(_ONGLET_PREFIXE+_ONGLET_ID);
-  }catch(e){}
-}
-setInterval(_ongletSignal,3000);
-window.addEventListener('pagehide',function(){try{localStorage.removeItem(_ONGLET_PREFIXE+_ONGLET_ID);}catch(e){}});
+kkOnglets.suivre(function(){return !!currentUser;});
 
 let _groupesDejaRecalcules=false;
 async function loadAllData(){

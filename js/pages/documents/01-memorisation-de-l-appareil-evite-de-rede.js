@@ -64,7 +64,8 @@ async function boot(){
      l'utilisateur precedent. */
   const _q=new URLSearchParams(location.search);
   const VENANT_DE_DEMANDES=_q.has('doc')||_q.has('rep')||_q.has('enf')||_q.has('tpl')||_q.has('terrain');
-  if(!VENANT_DE_DEMANDES&&!JUSTE_CONNECTE){
+  kkOnglets.suivre(function(){return typeof ME!=='undefined'&&!!ME;});
+  if(!VENANT_DE_DEMANDES&&!JUSTE_CONNECTE&&!kkOnglets.autre()){
     try{await sb.auth.signOut();}catch(e){console.warn('[boot] signOut',e);}
     showLoginView();
     return;

@@ -105,6 +105,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 - Dans Demandes, la notice s'ouvre sur l'onglet de la section en cours (`NOTICE_ONGLET_SECTION`, `js/pages/demandes-2.js`) : une nouvelle section doit y être associée.
 - Toute modification fonctionnelle doit mettre la notice à jour.
 
+## Plusieurs onglets
+- Chaque module (Demandes, Paramètres, Documents, Contrats, Factures, Inscriptions, Employés, Mon espace) déconnecte à l'ouverture (postes partagés). `js/onglets-session.js` (`kkOnglets`, chargé après supabase-js) garde la session si un autre onglet connecté a émis un signal de vie (`localStorage` `kk_onglet_<id>`, < 8 s) ; un nouveau module qui déconnecte à l'ouverture doit l'utiliser (`kkOnglets.suivre(...)` + `!kkOnglets.autre()` dans `boot`).
+
 ## Habitudes de travail
 - Branche de développement de la session, pull request vers `main` en **squash**.
 - Après une fusion, repartir de `origin/main` (`git checkout -B <branche> origin/main`) ; le push demande `--force-with-lease`.
