@@ -997,9 +997,10 @@ album: `
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🔍 Tri par visage (option par crèche)</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>La <strong>direction</strong> active « Tri par visage » pour la crèche, après validation du DPO et inscription au registre RGPD.</li>
-  <li>Onglet <strong>Références</strong> : pour chaque enfant, cochez l’<strong>accord des parents</strong> (distinct du droit à l’image), puis ajoutez 1 à 5 photos de référence (« Depuis l’album » ou « Prendre / importer »). Seule l’<strong>empreinte</strong> du visage est enregistrée, pas la photo.</li>
+  <li>Onglet <strong>Références</strong> : l’<strong>accord des parents</strong> (distinct du droit à l’image) se signe <strong>en ligne</strong> dans leur Espace famille. Touchez <strong>Demander l’accord aux familles</strong> : un document à signer apparaît en haut de leur Accueil (avec une notification). Chaque ligne indique « Signé en ligne par … le … », « Refusé en ligne » ou « Pas encore de réponse ». Un accord signé sur papier se coche à la main. Les familles sans accès Espace famille ne peuvent signer que sur papier.</li>
+  <li>Une fois l’accord donné, ajoutez 1 à 5 photos de référence (« Depuis l’album » ou « Prendre / importer »). Seule l’<strong>empreinte</strong> du visage est enregistrée, pas la photo.</li>
   <li>Onglet <strong>Tri par visage</strong> : « Analyser les nouvelles photos ». Au-dessus du seuil réglé par la direction, la photo est classée seule ; en dessous, la proposition attend votre validation. Un visage inconnu n’est jamais classé.</li>
-  <li>Retirer l’accord d’un enfant efface ses références. Au départ de l’enfant, elles sont effacées avec ses photos.</li>
+  <li>Si les parents changent d’avis dans l’Espace famille (« Modifier ma réponse »), ses références sont effacées aussitôt. Retirer l’accord à la main fait de même. Au départ de l’enfant, elles sont effacées avec ses photos.</li>
 </ol>
 <div style="font-size:12px;color:#888">Le calcul se fait dans votre navigateur : aucune photo n’est envoyée à un service extérieur. Les visages des autres enfants ne sont pas enregistrés.</div>
 `,

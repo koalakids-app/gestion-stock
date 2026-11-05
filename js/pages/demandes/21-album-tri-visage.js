@@ -9,7 +9,7 @@
    - Au-dessus du seuil, la photo est classée seule ; en dessous, une personne valide.
    Tables et droits : sql/album_tri_visage.sql (à appliquer à la main).
    Dépend de 20-album-photos.js (ALB, albRender, albUrls, albJournal…). */
-var ALBV = { actif: false, seuil: 90, accords: {}, refs: [], props: [], lib: null, calc: false, annule: false, msg: '' };
+var ALBV = { actif: false, seuil: 90, accords: {}, signatures: {}, acces: {}, refs: [], props: [], lib: null, calc: false, annule: false, msg: '' };
 var ALBV_DOSSIER = 'vendor/face-api/';
 var ALBV_MAX_REFS = 5;
 var ALBV_DIST_OK = 0.52;     // au-delà (≈ 50 % de confiance), aucun enfant n'est proposé
@@ -17,7 +17,7 @@ var ALBV_ECART = 0.04;       // écart minimal avec le deuxième enfant le plus 
 
 /* ---------- Réglage par crèche (direction) et chargement ---------- */
 async function albvCharger() {
-  ALBV.actif = false; ALBV.accords = {}; ALBV.refs = []; ALBV.props = [];
+  ALBV.actif = false; ALBV.accords = {}; ALBV.signatures = {}; ALBV.acces = {}; ALBV.refs = []; ALBV.props = [];
   try {
     var c = await sb.from('creches').select('tri_visage,tri_visage_seuil').eq('id', ALB.creche).maybeSingle();
     if (c.error || !c.data) { albvMajOnglets(); return; }
@@ -27,6 +27,15 @@ async function albvCharger() {
       var r = await sb.from('album_references').select('id,enfant_id,descripteur').eq('creche_id', ALB.creche);
       if (a.error) throw a.error; if (r.error) throw r.error;
       (a.data || []).forEach(function (x) { ALBV.accords[x.enfant_id] = x; });
+      // Signatures en ligne (dernière réponse par enfant) et enfants qui ont un accès Espace famille.
+      // Facultatif : si le script sql/album_accord_en_ligne.sql n'est pas appliqué, on continue sans.
+      try {
+        var sg = await sb.from('album_accords_signatures').select('enfant_id,decision,signataire_nom,signe_le')
+          .eq('creche_id', ALB.creche).order('signe_le', { ascending: false });
+        (sg.data || []).forEach(function (x) { if (!ALBV.signatures[x.enfant_id]) ALBV.signatures[x.enfant_id] = x; });
+        var fa = await sb.from('famille_acces').select('enfant_id').eq('creche_id', ALB.creche).eq('actif', true);
+        (fa.data || []).forEach(function (x) { ALBV.acces[x.enfant_id] = true; });
+      } catch (e2) { console.warn('[albvCharger] signatures', e2); }
       ALBV.refs = r.data || [];
       var ids = ALB.photos.map(function (p) { return p.id; }), props = [];
       for (var i = 0; i < ids.length; i += 150) {
@@ -253,15 +262,45 @@ async function albvIgnorer(photoId) {
 
 /* ---------- Écran « Références » ---------- */
 function albvRefsDe(id) { return ALBV.refs.filter(function (r) { return String(r.enfant_id) === String(id); }); }
+function albvReponseLigne(e) {
+  var sg = ALBV.signatures[e.id], ac = ALBV.accords[e.id];
+  if (ac && ac.source === 'famille' && sg) return '<span class="alb-ct">Signé en ligne par ' + albEsc(sg.signataire_nom) + ' le ' + albDateFr(sg.signe_le) + '</span>';
+  if (ac) return '<span class="alb-ct">Accord enregistré par la crèche le ' + albDateFr(ac.accord_le) + '</span>';
+  if (sg && sg.decision === 'refuse') return '<span class="alb-ct" style="color:var(--red)">Refusé en ligne par ' + albEsc(sg.signataire_nom) + ' le ' + albDateFr(sg.signe_le) + '</span>';
+  return ALBV.acces[e.id] ? '<span class="alb-ct">Pas encore de réponse en ligne</span>' : '<span class="alb-ct">Pas d’accès Espace famille : accord sur papier uniquement</span>';
+}
+function albvSansReponse() {
+  return albEnfants().filter(function (e) { return !ALBV.accords[e.id] && !(ALBV.signatures[e.id] && ALBV.signatures[e.id].decision === 'refuse') && ALBV.acces[e.id]; });
+}
+async function albvDemanderAccord() {
+  var cibles = albvSansReponse();
+  if (!cibles.length) { showBanner('Toutes les familles ayant un accès Espace famille ont déjà répondu.'); return; }
+  if (!confirm('Envoyer la demande d’accord à ' + cibles.length + ' famille' + (cibles.length > 1 ? 's' : '') + ' (Espace famille + notification) ?\n\nLe document à signer apparaît en haut de leur Accueil. Les familles qui ont déjà répondu ne sont pas relancées.')) return;
+  var titre = 'Document à signer : photos de votre enfant';
+  var corps = 'Un document est à lire et à signer dans l’onglet Accueil de votre Espace famille : votre accord (facultatif) pour que la crèche classe automatiquement les photos de votre enfant grâce à la reconnaissance du visage. Sans votre accord, ses photos sont classées à la main.';
+  var rows = cibles.map(function (e) { return { creche_id: ALB.creche, enfant_id: e.id, auteur_id: currentProfile && currentProfile.id, auteur_nom: (currentProfile && currentProfile.name) || '', titre: titre, corps: corps }; });
+  var r = await sb.from('famille_messages').insert(rows);
+  if (r.error) { showBanner('Envoi impossible : ' + r.error.message, 'error'); return; }
+  var nb = 0;
+  if (typeof mfPrevenir === 'function') for (var i = 0; i < cibles.length; i++) { var n = await mfPrevenir(ALB.creche, cibles[i].id, titre); if (n) nb += n; }
+  albJournal('accord', null, 'Demande d’accord envoyée à ' + cibles.length + ' famille(s)', cibles.length);
+  showBanner('Demande envoyée à ' + cibles.length + ' famille' + (cibles.length > 1 ? 's' : '') + (nb ? ' (' + nb + ' notification' + (nb > 1 ? 's' : '') + ')' : '') + '.');
+}
 function albvRenderRefs(z) {
   var enfants = albEnfants();
-  var h = '<div class="alb-aide"><i class="ti ti-info-circle"></i> Une photo de référence suffit, 3 à 5 (de face, de profil, avec ou sans bonnet) donnent un tri plus fiable. Seule l’empreinte du visage est conservée, pas la photo. Le droit à l’image est signé à l’entrée ; l’accord ci-dessous est un second accord, propre au tri par visage.</div><div class="alb-refs">';
+  var nbOui = enfants.filter(function (e) { return ALBV.accords[e.id]; }).length;
+  var nbNon = enfants.filter(function (e) { return !ALBV.accords[e.id] && ALBV.signatures[e.id] && ALBV.signatures[e.id].decision === 'refuse'; }).length;
+  var nbAtt = albvSansReponse().length;
+  var h = '<div class="alb-stats"><span class="alb-stat"><b>' + nbOui + '</b> accord' + (nbOui > 1 ? 's' : '') + '</span><span class="alb-stat"><b>' + nbNon + '</b> refus</span>' +
+    '<span class="alb-stat"><b>' + nbAtt + '</b> sans réponse (Espace famille)</span>' +
+    '<button class="btn-sm" style="margin-left:auto" ' + (nbAtt ? '' : 'disabled') + ' onclick="albvDemanderAccord()"><i class="ti ti-send"></i> Demander l’accord aux familles</button></div>';
+  h += '<div class="alb-aide"><i class="ti ti-info-circle"></i> Une photo de référence suffit, 3 à 5 (de face, de profil, avec ou sans bonnet) donnent un tri plus fiable. Seule l’empreinte du visage est conservée, pas la photo. Le droit à l’image est signé à l’entrée ; l’accord ci-dessous est un second accord, propre au tri par visage : les parents le signent en ligne dans leur Espace famille, ou vous le saisissez ici s’il a été signé sur papier.</div><div class="alb-refs">';
   h += enfants.map(function (e) {
     var ac = ALBV.accords[e.id], n = albvRefsDe(e.id).length;
     var etat = !ac ? '<span class="alb-pill warn">Sans accord : tri manuel</span>' : n === 0 ? '<span class="alb-pill warn">Aucune référence</span>' : n < 3 ? '<span class="alb-pill">Fiabilité moyenne</span>' : '<span class="alb-pill ok">Bonne fiabilité</span>';
     var peut = ac && n < ALBV_MAX_REFS;
     return '<div class="alb-ref"><div class="alb-barre" style="margin:0"><b class="grow" style="font-size:15px">' + albEsc(albNom(e)) + '</b>' + etat + '</div>' +
-      '<label class="alb-etape" style="margin:0"><input type="checkbox" ' + (ac ? 'checked' : '') + ' onchange="albvAccord(\'' + e.id + '\',this.checked,this)"><span><b>Accord des parents pour le tri par visage</b>' + (ac ? ' <span class="alb-ct">(enregistré le ' + albDateFr(ac.accord_le) + ')</span>' : '') + '</span></label>' +
+      '<label class="alb-etape" style="margin:0"><input type="checkbox" ' + (ac ? 'checked' : '') + ' onchange="albvAccord(\'' + e.id + '\',this.checked,this)"><span><b>Accord des parents pour le tri par visage</b><br>' + albvReponseLigne(e) + '</span></label>' +
       '<div class="alb-barre" style="margin:0"><span class="alb-ct">' + n + ' référence' + (n > 1 ? 's' : '') + (n ? '' : '') + '</span>' +
       '<button class="btn-sm" ' + (peut ? '' : 'disabled') + ' onclick="albvRefAlbum(\'' + e.id + '\')"><i class="ti ti-photo"></i> Depuis l’album</button>' +
       '<button class="btn-sm" ' + (peut ? '' : 'disabled') + ' onclick="albvRefFichier(\'' + e.id + '\')"><i class="ti ti-camera"></i> Prendre / importer</button>' +
@@ -272,7 +311,8 @@ function albvRenderRefs(z) {
 async function albvAccord(enfantId, oui, cb) {
   var nom = albvNomEnfant(enfantId);
   if (oui) {
-    if (!confirm('Les parents de ' + nom + ' ont-ils signé l’accord spécifique pour le tri par visage ?\n\nSans cet accord, ne cochez pas.')) { cb.checked = false; return; }
+    var refus = ALBV.signatures[enfantId] && ALBV.signatures[enfantId].decision === 'refuse' ? '\n\nATTENTION : les parents ont REFUSÉ en ligne le ' + albDateFr(ALBV.signatures[enfantId].signe_le) + '. Ne cochez que s’ils ont depuis signé un accord sur papier.' : '';
+    if (!confirm('Les parents de ' + nom + ' ont-ils signé l’accord spécifique pour le tri par visage (sur papier) ?\n\nSans cet accord, ne cochez pas.' + refus)) { cb.checked = false; return; }
     var r = await sb.from('album_visages_accord').upsert({ enfant_id: enfantId, creche_id: ALB.creche }, { onConflict: 'enfant_id' }).select().single();
     if (r.error) { cb.checked = false; showBanner('Enregistrement impossible : ' + r.error.message, 'error'); return; }
     ALBV.accords[enfantId] = r.data; albJournal('accord', enfantId, nom, null);
