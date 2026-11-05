@@ -479,7 +479,7 @@ const NOTICE_ONGLET_SECTION = {
   demands:'demandes', incidents:'incidents', presence:'presences', planning:'planning', evenements:'evenements',
   enfants:'enfants', vaccinations:'vaccinations', stagiaires:'stagiaires', partenaires:'partenaires',
   referents:'referents', dashboard:'dashboards', 'ref-dashboard':'dashboards', actions:'actions', 'reunions-equipe':'reunionsequipe', afaire:'afaire',
-  remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches', 'insc-suivi':'inscsuivi'
+  remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches', album:'album', 'insc-suivi':'inscsuivi'
 };
 function openNotice() {
   document.getElementById('modal-notice').classList.add('open');
@@ -970,6 +970,30 @@ inscsuivi: `
   <li>Touchez une ligne pour voir l’avancement du dossier. La liste se trie par date, nom ou statut ; le compte direction autorisé choisit aussi la <strong>crèche</strong> (ou toutes).</li>
 </ol>
 <div style="font-size:12px;color:#888">Les coordonnées des parents, les informations de santé et les montants ne sont pas visibles ici.</div>
+`,
+
+album: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📷 Album photos</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Cette tuile, dans <strong>Enfants &amp; suivi</strong>, rassemble les photos de la crèche et les classe dans l’album de chaque enfant. La direction choisit la <strong>crèche</strong> ; les référent·e·s voient la leur.</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">📥 Ajouter et classer</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Touchez <strong>Ajouter des photos</strong> et choisissez une ou plusieurs photos (elles sont réduites avant l’envoi).</li>
+  <li>Elles arrivent dans <strong>À classer</strong>. Touchez les photos concernées (une ou plusieurs), puis le nom du ou des enfants. Une photo de groupe se classe dans plusieurs albums à la fois.</li>
+  <li>Les derniers enfants choisis passent en tête ; la zone de recherche aide à retrouver un prénom.</li>
+  <li>Dans <strong>Par enfant</strong>, ouvrez un album, agrandissez une photo, retirez-la de l’album ou supprimez-la.</li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🎁 Départ définitif de l’enfant</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Dans l’album de l’enfant, touchez <strong>Départ : remise aux parents</strong>.</li>
+  <li><strong>Préparer le .zip</strong> : téléchargez toutes les photos de l’enfant, à copier sur une clé USB ou un disque chiffré.</li>
+  <li>Cochez <strong>Remise confirmée</strong> quand les parents ont reçu les photos, puis <strong>Supprimer</strong>. Les photos où l’enfant est seul sont effacées ; les photos de groupe restent dans l’album des autres enfants. Rien n’est archivé.</li>
+</ol>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔒 Ce qu’il faut savoir</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>Les photos sont stockées dans un espace privé, limité à la crèche. Les ajouts, classements, suppressions et remises sont inscrits dans un journal.</li>
+  <li>Ne prenez en photo que les enfants dont les parents ont signé le <strong>droit à l’image</strong> à l’inscription.</li>
+  <li>Le classement est manuel : il n’y a pas de reconnaissance de visage.</li>
+</ul>
 `,
 
 couches: `
