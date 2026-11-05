@@ -112,6 +112,7 @@ function vacRender(){
 function vacGetEnfantsFiltres(){
   const crecheId = document.getElementById('vac-creche-select')?.value || '';
   return (crecheId ? cacheEnfants.filter(e=>e.creche_id===crecheId) : [...cacheEnfants])
+    .filter(e=>!e.archive_le) // enfants archivés exclus du suivi
     .filter(e=>e.dob) // only enfants with DOB
     .sort((a,b)=>(a.prenom||'').localeCompare(b.prenom||'','fr'));
 }
