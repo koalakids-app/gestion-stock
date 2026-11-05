@@ -10,6 +10,7 @@
 const SUPABASE_URL = "https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const FN_URL = SUPABASE_URL + '/functions/v1/espace-famille';
+const FN_RENVOI = SUPABASE_URL + '/functions/v1/renvoyer-lien-famille';
 
 /* Code mémorisé sur l'appareil (accord explicite de la famille : case à cocher ou bouton « Garder l'accès »).
    Le code n'est jamais stocké sans ce choix ; il est effacé si l'accès est révoqué ou si la famille l'oublie.
@@ -66,7 +67,12 @@ function formulaireCode(message){
     +'<input type="text" id="code" class="code" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="ABCD2345"/>'
     +(message?'<div class="err">'+esc(message)+'</div>':'')
     +'<label class="souvenir"><input type="checkbox" id="souvenir" checked/> <span>Garder mon accès sur cet appareil (à ne pas cocher sur un appareil partagé)</span></label>'
-    +'<div style="margin-top:14px"><button class="btn" id="btnCode"><i class="ti ti-login"></i> Entrer</button></div></div>';
+    +'<div style="margin-top:14px"><button class="btn" id="btnCode"><i class="ti ti-login"></i> Entrer</button></div></div>'
+    +'<div class="card" id="carteRenvoi"><h2><i class="ti ti-mail"></i> Code ou lien perdu ?</h2>'
+    +'<p class="vide" style="margin-top:0">Saisissez l\'adresse e-mail que vous avez donnée à la crèche : nous vous renvoyons votre lien.</p>'
+    +'<input type="email" id="mailRenvoi" autocomplete="email" inputmode="email" placeholder="prenom.nom@exemple.fr" style="font:inherit;width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 13px"/>'
+    +'<div id="retourRenvoi" class="vide" role="status" style="margin-top:8px"></div>'
+    +'<div style="margin-top:10px"><button class="btn btn-g" id="btnRenvoi"><i class="ti ti-send"></i> Recevoir mon lien par e-mail</button></div></div>';
   const champ=document.getElementById('code');
   const aller=()=>{
     const c=champ.value.trim();
@@ -77,6 +83,22 @@ function formulaireCode(message){
   document.getElementById('btnCode').addEventListener('click',aller);
   champ.addEventListener('keydown',e=>{if(e.key==='Enter')aller();});
   champ.focus();
+  document.getElementById('btnRenvoi').addEventListener('click',renvoyerLien);
+}
+
+/* Renvoi du lien par e-mail : la réponse est toujours neutre (adresse connue ou non). */
+async function renvoyerLien(){
+  const champ=document.getElementById('mailRenvoi'),ret=document.getElementById('retourRenvoi'),btn=document.getElementById('btnRenvoi');
+  const mail=champ.value.trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)){ret.textContent='Saisissez une adresse e-mail valide.';champ.focus();return;}
+  btn.disabled=true;ret.textContent='Envoi…';
+  try{
+    const r=await fetch(FN_RENVOI,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY},body:JSON.stringify({email:mail})});
+    if(r.status===429)ret.textContent='Trop de demandes. Réessayez dans une heure.';
+    else if(!r.ok)ret.textContent='Envoi impossible. Vérifiez l\'adresse et réessayez.';
+    else{ret.textContent='Si cette adresse est connue de la crèche, un e-mail avec votre lien vient de vous être envoyé. Pensez à regarder vos courriers indésirables.';return;}
+  }catch(e){ret.textContent='Envoi impossible. Vérifiez votre connexion et réessayez.';}
+  btn.disabled=false;
 }
 
 function messageErreur(e){
