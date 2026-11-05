@@ -1,11 +1,11 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v34';   // v34 : anti pull-to-refresh ; v33 : pushsubscriptionchange (réabonnement push automatique)
+const CACHE_NAME = 'stocks-v35';   // v35 : mode kiosque connecté retiré ; v34 : anti pull-to-refresh ; v33 : pushsubscriptionchange (réabonnement push automatique)
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(['./index.html', './manifest.json', './js/kiosque.js', './js/vaccinations.js']))
+      .then(cache => cache.addAll(['./index.html', './manifest.json', './js/vaccinations.js']))
       .then(() => self.skipWaiting())
   );
 });
