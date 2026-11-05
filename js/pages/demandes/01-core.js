@@ -527,7 +527,7 @@ function notifBellOuvrir(id){
   notifBellMarquerLu(id);closeNotifBell();
   const c=n.cible||{};
   if(n.section==='stock'){window.location.href='stock.html';return;}
-  if(n.section==='documents'){window.location.href='documents.html'+(c.type==='document'&&c.id?'?doc='+encodeURIComponent(c.id)+'&retour=gestion':'');return;}
+  if(n.section==='documents'){window.location.href='documents.html'+(c.type==='document'&&c.id?'?doc='+encodeURIComponent(c.id)+'&retour=gestion':c.type==='dossier'&&c.id?'?cat='+encodeURIComponent(c.id):'');return;}
   if(!n.section)return;
   showMain(n.section);
   try{
@@ -658,7 +658,12 @@ function detecterNouveauxDocuments(avant){
     &&(!d.creche_id||isDirection||d.creche_id===currentProfile?.creche_id)
     &&(!avant.documents.has(d.id)||(rattrape&&vus&&String(d.created_at)>vus)));
   nouveaux.slice(0,3).forEach(d=>showInAppNotif('Nouveau document',d.titre||'','documents',{type:'document',id:d.id}));
-  if(nouveaux.length>3)showInAppNotif('Nouveaux documents','+ '+(nouveaux.length-3)+' autre(s) dans Documents','documents',{type:'document'});
+  if(nouveaux.length>3){
+    /* Dépôt groupé : renvoie vers le dossier (catégorie) qui contient les documents, s'il est commun. */
+    const cats=[...new Set(nouveaux.map(d=>d.categorie_id||''))];
+    showInAppNotif('Nouveaux documents','+ '+(nouveaux.length-3)+' autre(s) dans Documents','documents',
+      cats.length===1&&cats[0]?{type:'dossier',id:cats[0]}:{type:'document'});
+  }
   try{
     const dernier=cacheDocuments.reduce((m,d)=>String(d.created_at)>m?String(d.created_at):m,premiereVisite?'':vus);
     if(dernier)localStorage.setItem(cle,dernier);
