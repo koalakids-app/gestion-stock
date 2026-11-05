@@ -13,6 +13,8 @@
 //                         depots:[...], suivi_token}
 //   {action:'document', doc_id} -> {url} (PDF devis / contrat, lien signé de 2 min)
 //   {action:'upload', libelle, filename, content_type, content_base64}
+//   {action:'push_abonner', endpoint, p256dh, auth} / {action:'push_desabonner', endpoint}
+//                     -> abonnement aux notifications de CET accès (table famille_push)
 //
 // Déploiement : supabase functions deploy espace-famille --no-verify-jwt
 // ============================================================================
@@ -40,6 +42,18 @@ const TYPES: Record<string, string> = {
   jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
   heic: "image/heic", heif: "image/heif", pdf: "application/pdf",
 };
+
+// Services de push connus : l'adresse d'abonnement vient du navigateur de la famille, on refuse
+// toute autre destination (le serveur y enverrait des requêtes).
+const HOTES_PUSH = ["googleapis.com", "mozilla.com", "apple.com", "windows.com"];
+const MAX_APPAREILS = 5;
+function endpointValide(e: string) {
+  try {
+    const u = new URL(e);
+    return u.protocol === "https:" && e.length <= 800 &&
+      HOTES_PUSH.some((h) => u.hostname === h || u.hostname.endsWith("." + h));
+  } catch { return false; }
+}
 
 const RESEAU_CFG_ID = "00000000-0000-0000-0000-000000000003";
 
@@ -245,6 +259,31 @@ Deno.serve(async (req) => {
       source: "enfant", creche_id: acces.creche_id, enfant_id: acces.enfant_id,
       libelle: `${libelle} (espace famille)`, nom: enfant?.prenom || "Un enfant",
     });
+    return json({ ok: true });
+  }
+
+  if (action === "push_abonner") {
+    const endpoint = String(body.endpoint || "");
+    const p256dh = String(body.p256dh || "");
+    const authKey = String(body.auth || "");
+    if (!endpointValide(endpoint) || !p256dh || !authKey || p256dh.length > 200 || authKey.length > 100) {
+      return erreur("abonnement_invalide");
+    }
+    const { error: pErr } = await sb.from("famille_push").upsert(
+      { acces_id: acces.id, endpoint, p256dh, auth_key: authKey,
+        user_agent: String(req.headers.get("user-agent") || "").slice(0, 200) },
+      { onConflict: "endpoint" });
+    if (pErr) { console.error("[espace-famille] push", pErr); return erreur("enregistrement_impossible", 500); }
+    // Au plus MAX_APPAREILS appareils par accès : les plus anciens sont retirés.
+    const { data: liste } = await sb.from("famille_push").select("id").eq("acces_id", acces.id)
+      .order("created_at", { ascending: false });
+    const trop = (liste || []).slice(MAX_APPAREILS).map((x: any) => x.id);
+    if (trop.length) await sb.from("famille_push").delete().in("id", trop);
+    return json({ ok: true });
+  }
+
+  if (action === "push_desabonner") {
+    await sb.from("famille_push").delete().eq("acces_id", acces.id).eq("endpoint", String(body.endpoint || ""));
     return json({ ok: true });
   }
 

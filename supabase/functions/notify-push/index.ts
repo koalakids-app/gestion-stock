@@ -25,7 +25,7 @@ try {
 
 /** org_id déduit d'un des référents destinataires — sert à retrouver la
  *  config réseau et l'adresse d'expédition de son organisation. */
-async function resolveOrgId(referentIds, employeIds) {
+async function resolveOrgId(referentIds, employeIds, accesIds = []) {
   if (referentIds && referentIds.length) {
     const { data } = await sb.from("referents").select("org_id").eq("id", referentIds[0]).maybeSingle();
     if (data?.org_id) return data.org_id;
@@ -35,6 +35,14 @@ async function resolveOrgId(referentIds, employeIds) {
     const { data: emp } = await sb.from("employes").select("creche_id").eq("id", employeIds[0]).maybeSingle();
     if (emp?.creche_id) {
       const { data: cr } = await sb.from("creches").select("org_id").eq("id", emp.creche_id).maybeSingle();
+      return cr?.org_id || null;
+    }
+  }
+  if (accesIds && accesIds.length) {
+    // Une famille : on passe par la crèche de son accès.
+    const { data: ac } = await sb.from("famille_acces").select("creche_id").eq("id", accesIds[0]).maybeSingle();
+    if (ac?.creche_id) {
+      const { data: cr } = await sb.from("creches").select("org_id").eq("id", ac.creche_id).maybeSingle();
       return cr?.org_id || null;
     }
   }
@@ -100,17 +108,20 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { referent_ids: refIn, employe_ids: empIn, title, body, url, tag } = await req.json();
+    const { referent_ids: refIn, employe_ids: empIn, acces_ids: accIn, title, body, url, tag } = await req.json();
     const referent_ids = Array.isArray(refIn) ? refIn : [];
     const employe_ids = Array.isArray(empIn) ? empIn : [];
-    if ((!referent_ids.length && !employe_ids.length) || !title) {
-      return new Response(JSON.stringify({ error: "referent_ids (ou employe_ids) et title requis" }), {
+    // Familles (Espace famille) : identifiants d'accès famille_acces. Sans compte ni file d'attente :
+    // pendant le silence rien n'est retenu, l'information reste lisible dans l'onglet Infos.
+    const acces_ids = Array.isArray(accIn) ? accIn : [];
+    if ((!referent_ids.length && !employe_ids.length && !acces_ids.length) || !title) {
+      return new Response(JSON.stringify({ error: "referent_ids (ou employe_ids, acces_ids) et title requis" }), {
         status: 400,
         headers: { ...cors, "Content-Type": "application/json" }
       });
     }
 
-    const orgId = await resolveOrgId(referent_ids, employe_ids);
+    const orgId = await resolveOrgId(referent_ids, employe_ids, acces_ids);
 
     const { data: cfgRow } = orgId
       ? await sb.from("reseau_config").select("config").eq("org_id", orgId).maybeSingle()
@@ -142,7 +153,7 @@ Deno.serve(async (req) => {
         ? await sb.from("notifs_retenues").insert(lignes)
         : { error: null };
       if (errRetenue) console.error("[notify-push] retenue", errRetenue);
-      console.log("[notify-push] retenue (silence)", { referent_ids, employe_ids, ok: !errRetenue });
+      console.log("[notify-push] retenue (silence)", { referent_ids, employe_ids, acces_ids: acces_ids.length, ok: !errRetenue });
       return new Response(JSON.stringify({ skipped: true, reason: "silence", retenues: errRetenue ? 0 : lignes.length }), {
         status: 200,
         headers: { ...cors, "Content-Type": "application/json" }
@@ -159,6 +170,18 @@ Deno.serve(async (req) => {
       const { data, error } = await sb.from("push_subscriptions").select("*").in("employe_id", employe_ids);
       if (error) throw error;
       subs = subs.concat(data || []);
+    }
+
+    if (acces_ids.length) {
+      // Seuls les accès encore actifs (un accès révoqué ne reçoit plus rien).
+      const { data: actifs, error: eAct } = await sb.from("famille_acces").select("id").in("id", acces_ids).eq("actif", true);
+      if (eAct) throw eAct;
+      const ids = (actifs || []).map((a) => a.id);
+      if (ids.length) {
+        const { data, error } = await sb.from("famille_push").select("*").in("acces_id", ids);
+        if (error) throw error;
+        subs = subs.concat((data || []).map((d) => ({ ...d, _table: "famille_push" })));
+      }
     }
 
     const payload = JSON.stringify({
@@ -194,7 +217,7 @@ Deno.serve(async (req) => {
             body: e.body || null
           });
           if (e.statusCode === 404 || e.statusCode === 410) {
-            await sb.from("push_subscriptions").delete().eq("id", s.id);
+            await sb.from(s._table || "push_subscriptions").delete().eq("id", s.id);
           }
           throw e;
         }
@@ -203,7 +226,7 @@ Deno.serve(async (req) => {
 
     const envoyes = resultats.filter((r) => r.status === "fulfilled").length;
     // Log explicite pour diagnostiquer les échecs silencieux (HTTP 200 même si envoyes=0).
-    console.log("[notify-push] résultat", JSON.stringify({ referent_ids, employe_ids, total: (subs || []).length, envoyes, details }));
+    console.log("[notify-push] résultat", JSON.stringify({ referent_ids, employe_ids, acces_ids: acces_ids.length, total: (subs || []).length, envoyes, details }));
     return new Response(
       JSON.stringify({ envoyes, total: (subs || []).length, details }),
       { status: 200, headers: { ...cors, "Content-Type": "application/json" } }

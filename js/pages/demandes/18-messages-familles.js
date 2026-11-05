@@ -31,6 +31,23 @@ function mfMajEnfants(){
   document.getElementById('mf-info').innerHTML='<i class="ti ti-users"></i> Visible par les parents ayant un code d\'accès Espace famille.';
 }
 
+/* Prévient par notification push les familles abonnées (une seule par accès actif). Ne bloque jamais la
+   publication : l'information reste lisible dans l'Espace famille. Silence (soir, week-end, férié) :
+   rien n'est envoyé ni retenu. Renvoie le nombre de notifications envoyées, ou null en cas d'erreur. */
+async function mfPrevenir(creche,enfant,titre){
+  try{
+    let q=sb.from('famille_acces').select('id').eq('creche_id',creche).eq('actif',true);
+    if(enfant)q=q.eq('enfant_id',enfant);
+    const{data}=await q;
+    const ids=(data||[]).map(a=>a.id);
+    if(!ids.length)return 0;
+    const c=cacheCreches.find(x=>x.id===creche);
+    const{data:r,error}=await sb.functions.invoke('notify-push',{body:{acces_ids:ids,title:'Nouvelle information'+(c&&c.name?' — '+c.name:''),body:titre,url:'./espace-famille.html',tag:'famille-info'}});
+    if(error)throw error;
+    return (r&&r.envoyes)||0;
+  }catch(e){console.warn('[Info familles] push',e);return null;}
+}
+
 async function saveMsgFamilles(){
   if(mfPending)return;
   const titre=document.getElementById('mf-titre').value.trim(),corps=document.getElementById('mf-corps').value.trim();
@@ -42,7 +59,8 @@ async function saveMsgFamilles(){
   try{
     const saved=await dbInsert('famille_messages',{creche_id:creche,enfant_id:enfant,auteur_id:currentProfile.id,auteur_nom:currentProfile.name||'',titre:titre,corps:corps});
     if(!saved){showBanner('Erreur'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
-    showBanner('Information publiée dans l\'Espace famille !');
+    const nb=await mfPrevenir(creche,enfant,titre);
+    showBanner('Information publiée dans l\'Espace famille !'+(nb==null?'':nb>0?' '+nb+' notification'+(nb>1?'s':'')+' envoyée'+(nb>1?'s':'')+'.':' Aucune notification envoyée (familles non abonnées, ou plage de silence).'));
     closeModal('modal-msg-familles-wrap');
   }finally{mfPending=false;btn.disabled=false;}
 }

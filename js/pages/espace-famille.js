@@ -117,6 +117,7 @@ async function boot(){
     DONNEES=await appel('get');
     document.getElementById('sousTitre').textContent=
       (DONNEES.enfant.prenom?DONNEES.enfant.prenom+' · ':'')+(DONNEES.creche_nom||'Koala Kids');
+    PUSH_ETAT=await pushEtat();
     rendre();
   }catch(e){
     const m=(e.message||'').toLowerCase();
@@ -233,6 +234,54 @@ function cartePointage(d){
     :'<div class="card"><h2><i class="ti ti-photo"></i> Code de pointage</h2><p class="vide" style="margin:0">Le code image de '+pr+' n\'est pas encore attribué. Demandez-le à la crèche.</p></div>';
 }
 
+/* Notifications push : abonnement du navigateur rattaché à l'accès (edge function, table famille_push).
+   Activer les notifications garde aussi l'accès sur l'appareil : un clic sur la notification ouvre
+   l'espace sans lien (jamais de code dans la notification). */
+const VAPID_PUBLIC_KEY='BAYWoYbzpxn-poxeKn-7CPccnX-aGN5y8kXLVCgcgC8a025oz8HMdNj7E36VLgtiD-oV71KhgCECdQGL85kidOk';
+const PUSH_OK=()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+let PUSH_ETAT='inconnu';   // inconnu | actif | inactif | refuse | indisponible
+/* serviceWorker.ready ne se résout jamais si l'enregistrement a échoué : on n'attend pas plus de 3 s. */
+const swPret=()=>Promise.race([navigator.serviceWorker.ready,new Promise((_,r)=>setTimeout(()=>r(new Error('sw')),3000))]);
+function cleVapid(b64){const pad='='.repeat((4-b64.length%4)%4);const raw=atob((b64+pad).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));}
+async function pushEnvoyerAbonnement(sub){
+  const j=sub.toJSON();
+  await appel('push_abonner',{endpoint:j.endpoint,p256dh:j.keys&&j.keys.p256dh,auth:j.keys&&j.keys.auth});
+}
+async function pushEtat(){
+  if(!PUSH_OK())return 'indisponible';
+  if(Notification.permission==='denied')return 'refuse';
+  try{
+    const reg=await swPret();
+    const sub=await reg.pushManager.getSubscription();
+    if(sub){pushEnvoyerAbonnement(sub).catch(()=>{});return 'actif';}   // resynchronise (accès recréé, ligne supprimée)
+  }catch(e){}
+  return 'inactif';
+}
+async function pushActiver(){
+  const perm=await Notification.requestPermission();
+  if(perm!=='granted'){PUSH_ETAT=perm==='denied'?'refuse':'inactif';return;}
+  const reg=await swPret();
+  const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:cleVapid(VAPID_PUBLIC_KEY)});
+  await pushEnvoyerAbonnement(sub);
+  if(CODE)garderCode(CODE);
+  PUSH_ETAT='actif';
+}
+async function pushDesactiver(){
+  try{
+    const reg=await swPret();
+    const sub=await reg.pushManager.getSubscription();
+    if(sub){const ep=sub.endpoint;await sub.unsubscribe();await appel('push_desabonner',{endpoint:ep}).catch(()=>{});}
+  }catch(e){}
+  PUSH_ETAT='inactif';
+}
+/* Le navigateur a renouvelé l'abonnement (sw.js prévient les pages ouvertes). */
+if(PUSH_OK())navigator.serviceWorker.addEventListener('message',e=>{
+  if(e.data&&e.data.type==='PUSH_SUB_CHANGED'&&e.data.subscription&&e.data.subscription.endpoint){
+    const k=e.data.subscription.keys||{};
+    appel('push_abonner',{endpoint:e.data.subscription.endpoint,p256dh:k.p256dh,auth:k.auth}).catch(()=>{});
+  }
+});
+
 /* Carte « Garder l'accès » : installation sur l'écran d'accueil + code gardé sur l'appareil. */
 const EN_APPLI=()=>(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
 const EST_IOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
@@ -257,6 +306,22 @@ function carteAppareil(){
     :'<p style="margin-top:12px">Pas besoin de ressaisir votre code à chaque visite sur cet appareil.</p>'
       +'<button class="btn btn-g" id="btnGarder"><i class="ti ti-lock-open"></i> Garder mon accès sur cet appareil</button>'
       +'<p class="vide" style="margin:6px 0 0">À éviter sur un appareil partagé.</p>';
+  h+='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">';
+  if(PUSH_ETAT==='actif'){
+    h+='<div class="ok"><i class="ti ti-bell-ringing"></i> Notifications activées sur cet appareil.</div>'
+      +'<p style="margin:4px 0 0"><button class="lien" id="btnPushOff">Désactiver les notifications</button></p>';
+  }else if(PUSH_ETAT==='refuse'){
+    h+='<p><i class="ti ti-bell-off"></i> Les notifications sont bloquées dans les réglages de ce navigateur. Autorisez-les pour ce site si vous souhaitez les activer.</p>';
+  }else if(PUSH_ETAT==='indisponible'){
+    h+=EST_IOS()&&!EN_APPLI()
+      ?'<p><i class="ti ti-bell"></i> Pour être prévenu(e) par notification sur iPhone / iPad, ajoutez d\'abord l\'espace à l\'écran d\'accueil (étapes ci-dessus), puis ouvrez l\'icône.</p>'
+      :'<p class="vide"><i class="ti ti-bell-off"></i> Les notifications ne sont pas disponibles sur ce navigateur.</p>';
+  }else if(PUSH_ETAT==='inactif'){
+    h+='<p>Soyez prévenu(e) quand la crèche publie une information (le contenu se lit ensuite dans l\'espace).</p>'
+      +'<button class="btn btn-g" id="btnPushOn"><i class="ti ti-bell"></i> Activer les notifications</button>'
+      +'<p class="vide" style="margin:6px 0 0">Active aussi « garder mon accès » sur cet appareil. Pas de notification le soir, le week-end et les jours fériés.</p>';
+  }
+  h+='</div>';
   return h+'</div>';
 }
 window.kkRendreInstall=()=>{const c=document.getElementById('carteAppareil');if(c){c.outerHTML=carteAppareil();liaisonsAppareil();}};
@@ -265,6 +330,10 @@ function liaisonsAppareil(){
   if(i)i.addEventListener('click',async()=>{const e=window.kkInstall;if(!e)return;e.prompt();try{await e.userChoice;}catch(x){}window.kkInstall=null;window.kkRendreInstall();});
   const g=document.getElementById('btnGarder');
   if(g)g.addEventListener('click',()=>{if(CODE)garderCode(CODE);window.kkRendreInstall();});
+  const pOn=document.getElementById('btnPushOn');
+  if(pOn)pOn.addEventListener('click',async()=>{pOn.disabled=true;try{await pushActiver();}catch(e){PUSH_ETAT='inactif';alert('Activation impossible. Réessayez dans un instant.');}window.kkRendreInstall();});
+  const pOff=document.getElementById('btnPushOff');
+  if(pOff)pOff.addEventListener('click',async()=>{pOff.disabled=true;await pushDesactiver();window.kkRendreInstall();});
   const o=document.getElementById('btnOublier');
   if(o)o.addEventListener('click',()=>{oublierCode();window.kkRendreInstall();});
 }
