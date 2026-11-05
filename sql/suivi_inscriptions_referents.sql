@@ -10,6 +10,8 @@
 --   - seulement les dossiers en cours (nouvelle, en_contact, devis_envoye, accepte).
 -- Aucune écriture possible : c'est une fonction de lecture, sans policy d'UPDATE.
 --
+-- Réservée aux rôles referent et direction (un compte employe obtient une liste vide).
+--
 -- Annulation : drop function if exists public.suivi_inscriptions_referent();
 -- ============================================================================
 
@@ -25,6 +27,8 @@ as $$
            statut, created_at, creche_id, creches_souhaitees
     from public.preinscriptions
     where statut in ('nouvelle','en_contact','devis_envoye','accepte')
+      and exists (select 1 from public.referents r
+                  where r.user_id = auth.uid() and r.role in ('referent','direction'))
       and (
         (creche_id is not null and public.kk_acces_creche(creche_id))
         or (creche_id is null and exists (
