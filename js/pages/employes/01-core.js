@@ -347,6 +347,7 @@ function renderListe(){
       +statut+vmBadgeListe(e)+compte+terrain
       +'<div class="acts">'
       +'<button class="btn btn-g btn-sm" onclick="openFiche(\''+e.id+'\')"><i class="ti ti-edit"></i></button>'
+      +'<a class="btn btn-g btn-sm" href="demandes.html?employe='+encodeURIComponent(e.id)+'" target="_blank" rel="noopener" title="Ouvre la fiche détaillée (identité, contrat, période d\'essai…) dans Demandes, dans un nouvel onglet"><i class="ti ti-id-badge-2"></i> Fiche complète</a>'
       +btnCompte+btnTerrain
       +'<button class="btn btn-g btn-sm" onclick="supprimerEmploye(\''+e.id+'\')" title="Supprimer"><i class="ti ti-trash" style="color:var(--red)"></i></button>'
       +'</div></div>';
