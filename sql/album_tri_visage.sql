@@ -150,6 +150,7 @@ begin
 end;
 $$;
 revoke all on function public.kk_album_reglage_visage(uuid, boolean, smallint) from public;
+revoke execute on function public.kk_album_reglage_visage(uuid, boolean, smallint) from anon;
 grant execute on function public.kk_album_reglage_visage(uuid, boolean, smallint) to authenticated;
 
 
