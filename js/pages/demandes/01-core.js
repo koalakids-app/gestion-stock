@@ -156,7 +156,7 @@ async function loadAllData(){
   if(typeof ikInitSites==='function')ikInitSites(cacheCreches.map(c=>shortCrecheName(c.name)));
   // PAI actifs du registre de soins (panier repas) — non bloquant.
   if(typeof enfPaiCharger==='function')await enfPaiCharger();
-  // Employés (personnel sans compte) — table posée par sql/module_employes.sql,
+  // Employés (fiches du personnel) — table posée par sql/module_employes.sql,
   // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
   try{cacheEmployes=await dbSelect('employes');}catch(e){console.warn('[loadAllData] employes',e);cacheEmployes=[];}
   // Validations mensuelles des heures par signature électronique (table posée par
