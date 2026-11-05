@@ -390,8 +390,8 @@ function renderKiosk(){
       const created=d.created_at?new Date(d.created_at).toLocaleDateString('fr-FR'):'';
       return '<div class="kiosk-row">'
         +'<div class="kiosk-info">'
-          +'<div class="kiosk-label">'+esc(d.label||'Tablette sans nom')+'</div>'
-          +'<div class="kiosk-meta">Créée le '+esc(created)+'</div>'
+          +'<div class="kiosk-label">'+esc(d.label||'Tablette sans nom')+(d.type==='reunion'?' <span class="kiosk-badge on">Réunion référents</span>':'')+'</div>'
+          +'<div class="kiosk-meta">Créée le '+esc(created)+' · '+(d.appareil_id?'liée à un appareil depuis le '+esc(d.appareil_lie_le?new Date(d.appareil_lie_le).toLocaleDateString('fr-FR'):'?'):'<b>pas encore liée : ouvrez le lien sur la tablette</b>')+'</div>'
           +'<div class="kiosk-link">'+esc(link)+'</div>'
         +'</div>'
         +'<span class="kiosk-badge '+(d.active?'on':'off')+'">'+(d.active?'Active':'Désactivée')+'</span>'
@@ -403,6 +403,7 @@ function renderKiosk(){
           +'<button class="btn btn-g btn-sm" onclick="kioskCopyLink(\''+esc(terrainLinkFor(d.token))+'\')"><i class="ti ti-id-badge-2"></i> Copier le lien Accès terrain</button>'
           +'<button class="btn btn-s btn-sm" onclick="kioskShowQr(\''+esc(terrainLinkFor(d.token))+'\',\''+esc((d.label||'Tablette')+' — Accès terrain')+'\')"><i class="ti ti-qrcode"></i> QR code Accès terrain</button>'
           +'<button class="btn btn-g btn-sm" onclick="kioskToggleActive(\''+d.id+'\','+(!d.active)+')"><i class="ti ti-power"></i> '+(d.active?'Désactiver':'Réactiver')+'</button>'
+          +(d.appareil_id?'<button class="btn btn-g btn-sm" onclick="kioskDissocier(\''+d.id+'\')"><i class="ti ti-unlink"></i> Dissocier l\'appareil</button>':'')
           +'<button class="btn btn-g btn-sm" onclick="kioskRegen(\''+d.id+'\')"><i class="ti ti-refresh"></i> Régénérer le lien</button>'
         +'</div>'
       +'</div>';
@@ -411,12 +412,13 @@ function renderKiosk(){
   if(h)h.textContent='Le lien ouvre '+location.origin.replace(/^https?:\/\//,'')+'… — scannez le QR code avec l\'appareil photo de la tablette (ou ouvrez le lien copié), une seule fois, puis ajoutez la page à l\'écran d\'accueil.';
 }
 
-async function kioskNewDevice(){
-  const label=prompt('Nom de cette tablette (ex. "Accueil", "Salle bleue")');
+async function kioskNewDevice(type){
+  const reunion=type==='reunion';
+  const label=prompt(reunion?'Nom de la tablette de réunion (ex. "Réunion référents")':'Nom de cette tablette (ex. "Accueil", "Salle bleue")');
   if(label===null)return;
   try{
     const{data,error}=await sb.from('kiosk_devices')
-      .insert({creche_id:crecheId,label:label.trim()||null})
+      .insert({creche_id:crecheId,label:label.trim()||null,type:reunion?'reunion':'creche'})
       .select().single();
     if(error)throw error;
     KIOSK_DEVICES.push(data);
@@ -430,6 +432,23 @@ async function kioskNewDevice(){
   }
 }
 window.kioskNewDevice=kioskNewDevice;
+
+/* Détache la tablette de son appareil (changement ou panne) : le prochain appareil qui ouvre le lien s'y lie. */
+async function kioskDissocier(id){
+  if(!confirm('Dissocier l\'appareil ? Le prochain appareil qui ouvrira le lien de pointage deviendra la tablette. Ouvrez-le tout de suite sur la bonne tablette.'))return;
+  try{
+    const{error}=await sb.from('kiosk_devices').update({appareil_id:null,appareil_lie_le:null}).eq('id',id);
+    if(error)throw error;
+    const d=KIOSK_DEVICES.find(x=>String(x.id)===String(id));
+    if(d){d.appareil_id=null;d.appareil_lie_le=null;}
+    renderKiosk();
+    toast('Appareil dissocié — ouvrez le lien sur la tablette.');
+  }catch(e){
+    console.error('[kioskDissocier]',e);
+    toast('Modification impossible : '+(e.message||'erreur inconnue'),true);
+  }
+}
+window.kioskDissocier=kioskDissocier;
 
 async function kioskToggleActive(id,active){
   try{

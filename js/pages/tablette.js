@@ -13,6 +13,24 @@ const TOKEN=(function(){
   }catch(e){}
   return k;
 })();
+/* Identifiant propre à cette tablette (sql/kiosque_appareil_lie.sql) : le jeton n'est accepté
+   que de l'appareil qui l'a ouvert en premier. Copié sur un téléphone, le lien est refusé. */
+const APPAREIL=(function(){
+  let a='';
+  try{
+    a=localStorage.getItem('kk_pointage_appareil')||'';
+    if(a.length<16){
+      a=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2))+'-'+Math.random().toString(36).slice(2);
+      localStorage.setItem('kk_pointage_appareil',a);
+    }
+  }catch(e){a=a||'';}
+  return a;
+})();
+const MSG_APPAREIL={
+  autre_appareil:['Pointage impossible ici','Le pointage se fait uniquement sur la tablette de la crèche.',0],
+  appareil_inconnu:['Tablette non liée','Ouvrez le lien de pointage sur la tablette pour la lier, ou contactez la direction.',0],
+  reunion_referents_seulement:['Réservé aux référents','Cette tablette est réservée aux référents en réunion.',3000]
+};
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 const main=document.getElementById('main');
@@ -105,7 +123,7 @@ async function submitPictoCode(){
     showErrorPictosThenReset('Tablette non configurée','Contactez la direction pour reconfigurer cet appareil.',0);
     return;
   }
-  const{data,error}=await sb.rpc('kk_kiosk_pointer_enfant_pictos',{p_token:TOKEN,p_code:pictoCode});
+  const{data,error}=await sb.rpc('kk_kiosk_pointer_enfant_pictos',{p_token:TOKEN,p_code:pictoCode,p_appareil:APPAREIL});
   busy=false;
   const row=Array.isArray(data)?data[0]:data;
   if(error||!row){
@@ -134,7 +152,9 @@ function handlePictoError(err){
     token_invalide:['Tablette non configurée','Contactez la direction pour reconfigurer cet appareil.',0],
     trop_de_tentatives:['Trop de tentatives','Merci de patienter quelques minutes avant de réessayer.',4000],
     code_invalide:['Code invalide','Choisissez 4 images distinctes.',2000],
-    code_inconnu:['Code inconnu','Vérifiez les images et réessayez.',2000]
+    code_inconnu:['Code inconnu','Vérifiez les images et réessayez.',2000],
+    code_ambigu:['Code ambigu','Contactez la direction pour changer votre code.',3000],
+    ...MSG_APPAREIL
   };
   const[title,msg,delay]=messages[err]||['Erreur','Une erreur inattendue est survenue.',3000];
   showErrorPictosThenReset(title,msg,delay);
@@ -202,7 +222,7 @@ async function submitPictoCodePerso(){
   if(busy)return;
   busy=true;
   showState(`<div class="state busy"><i>⏳</i><h2>Vérification…</h2></div>`);
-  const{data,error}=await sb.rpc('kk_kiosk_pointer_pictos',{p_token:TOKEN,p_code:pictoCodePerso});
+  const{data,error}=await sb.rpc('kk_kiosk_pointer_pictos',{p_token:TOKEN,p_code:pictoCodePerso,p_appareil:APPAREIL});
   busy=false;
   const row=Array.isArray(data)?data[0]:data;
   if(error||!row){
@@ -231,7 +251,9 @@ function handleErrorPerso(err){
     token_invalide:['Tablette non configurée','Contactez la direction pour reconfigurer cet appareil.',0],
     trop_de_tentatives:['Trop de tentatives','Merci de patienter quelques minutes avant de réessayer.',4000],
     code_invalide:['Code invalide','Choisissez 4 images distinctes.',2000],
-    code_inconnu:['Code inconnu','Vérifiez les images et réessayez.',2000]
+    code_inconnu:['Code inconnu','Vérifiez les images et réessayez.',2000],
+    code_ambigu:['Code ambigu','Contactez la direction pour changer votre code.',3000],
+    ...MSG_APPAREIL
   };
   const[title,msg,delay]=messages[err]||['Erreur','Une erreur inattendue est survenue.',3000];
   showErrorPictosPersoThenReset(title,msg,delay);
@@ -260,4 +282,11 @@ renderPictoGrid();
 
 if(!TOKEN||TOKEN.length<20){
   showState('<div class="state err"><i>✕</i><h2>Lien invalide</h2><p>Cette tablette n’a pas de jeton de configuration valide dans son URL.</p></div>');
+}else{
+  /* Lie cet appareil au jeton (premier appareil gagnant) ; un autre appareil est bloqué dès l'ouverture. */
+  sb.rpc('kk_kiosk_lier',{p_token:TOKEN,p_appareil:APPAREIL}).then(({data,error})=>{
+    if(error){console.warn('kk_kiosk_lier',error);return;}
+    const m=data&&data!=='ok'?MSG_APPAREIL[data]||(data==='token_invalide'?['Tablette non configurée','Contactez la direction pour reconfigurer cet appareil.',0]:null):null;
+    if(m)showState('<div class="state err"><i>✕</i><h2>'+esc(m[0])+'</h2><p>'+esc(m[1])+'</p></div>');
+  });
 }
