@@ -992,26 +992,20 @@ couches: `
 `,
 
 kiosque: `
-<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📱 Mode kiosque</h3>
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📱 Pointage</h3>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
-  💡 Un écran plein format pour pointer les arrivées et départs depuis une tablette posée à l'accueil, sans avoir à ouvrir de fiche individuelle.
+  💡 Le pointage des arrivées et départs se fait <strong>uniquement sur la tablette de la crèche</strong> (code à 4 images). L’ancien « Mode kiosque » connecté a été retiré : il permettait de pointer depuis n’importe quel appareil.
 </div>
-<div style="font-weight:700;font-size:14px;margin-bottom:10px">🚀 Ouvrir le mode kiosque</div>
-<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Menu <strong>Plus → Mode kiosque</strong>. L'écran passe en plein écran ; sortir du plein écran (touche Échap) referme automatiquement le mode.</div>
-<div style="font-weight:700;font-size:14px;margin-bottom:10px">👶 Deux onglets</div>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🔗 Mettre en place une tablette</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
-  <li><strong>Enfants</strong> : une tuile par enfant présent dans la crèche sélectionnée.</li>
-  <li><strong>Personnel</strong> : directeurs/trices techniques, direction et collaborateurs/trices de la crèche.</li>
+  <li><strong>Paramètres › tablette de pointage</strong> : créer la tablette, ouvrir son lien <strong>sur la tablette elle-même</strong> en premier. Elle se lie alors à cet appareil ; copié ailleurs (téléphone), le lien est refusé.</li>
+  <li><strong>Dissocier l’appareil</strong> pour changer de tablette ou en cas de panne, puis rouvrir le lien sur la nouvelle.</li>
+  <li><strong>Tablette de réunion (référents)</strong> : pour les réunions hors crèche. Seuls les référents y pointent, sur leur propre crèche, avec la mention « Réunion ».</li>
 </ul>
-<div style="font-weight:700;font-size:14px;margin-bottom:10px">👆 Pointer</div>
-<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
-  <li>Un clic sur une tuile enregistre une <strong>arrivée</strong> ; un second clic enregistre le <strong>départ</strong>. La tuile indique l'heure du dernier pointage.</li>
-  <li>Un bouton <strong>Annuler</strong> reste affiché 8 secondes après chaque pointage, en cas d'erreur.</li>
-  <li>La barre de recherche filtre les tuiles par prénom.</li>
-  <li>Le compteur en haut affiche le nombre de présents sur le total.</li>
-</ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🩹 Oubli de pointage</div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px">Le départ oublié d’un enfant s’ajoute par <strong>Correction</strong> dans le module <strong>Présences</strong> ; il est marqué « correction ». Pour un enfant, une arrivée pointée marque sa présence du jour ; les horaires de la feuille de présence restent ceux du contrat.</div>
 <div style="background:#FEF0E6;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#C95F0A">
-  ⚠ Pour un enfant, une arrivée pointée ici marque automatiquement sa présence du jour dans le module <strong>Présences</strong> — les horaires de la feuille de présence restent ceux du contrat d'accueil, le pointage ne les modifie pas.
+  ⚠ Nécessite <code>sql/kiosque_appareil_lie.sql</code> (appliqué).
 </div>`,
 
 annexes: `
