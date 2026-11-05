@@ -121,7 +121,11 @@ window.addEventListener('DOMContentLoaded', async function() {
   // Retour depuis l'outil Documents (?enfant=<id>) : si une session valide existe déjà,
   // on la conserve pour éviter de repasser par l'écran de connexion. Partout ailleurs,
   // la déconnexion systématique à l'ouverture reste inchangée (postes partagés).
-  if(urlParams.get('enfant')){
+  // Deuxième onglet : si un autre onglet de l'application est déjà connecté (signal de
+  // vie < 8 s dans localStorage), on garde la session au lieu de la détruire, sinon le
+  // premier onglet passerait en « Session expirée ». Une fois tous les onglets fermés, les
+  // signaux disparaissent et la déconnexion à l'ouverture reste de rigueur (postes partagés).
+  if(urlParams.get('enfant')||autreOngletConnecte()){
     try{
       const{data:{session}}=await sb.auth.getSession();
       if(session&&session.user){
@@ -138,6 +142,30 @@ window.addEventListener('DOMContentLoaded', async function() {
   await sb.auth.signOut();
   showLogin();
 });
+
+// Signal de vie par onglet connecté (clé propre à l'onglet, retirée à la fermeture).
+const _ONGLET_PREFIXE='kk_onglet_demandes_';
+const _ONGLET_ID=Math.random().toString(36).slice(2);
+function autreOngletConnecte(){
+  try{
+    const now=Date.now();
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(!k||k.indexOf(_ONGLET_PREFIXE)!==0||k===_ONGLET_PREFIXE+_ONGLET_ID)continue;
+      const t=parseInt(localStorage.getItem(k),10);
+      if(t&&now-t<8000)return true;
+    }
+  }catch(e){}
+  return false;
+}
+function _ongletSignal(){
+  try{
+    if(currentUser)localStorage.setItem(_ONGLET_PREFIXE+_ONGLET_ID,String(Date.now()));
+    else localStorage.removeItem(_ONGLET_PREFIXE+_ONGLET_ID);
+  }catch(e){}
+}
+setInterval(_ongletSignal,3000);
+window.addEventListener('pagehide',function(){try{localStorage.removeItem(_ONGLET_PREFIXE+_ONGLET_ID);}catch(e){}});
 
 let _groupesDejaRecalcules=false;
 async function loadAllData(){
