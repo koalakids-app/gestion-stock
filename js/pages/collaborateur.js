@@ -116,7 +116,8 @@ async function boot(){
   const linkResult=await consumeTokenHashLink();
   if(linkResult==='error')return;
   if(linkResult==='invite'||linkResult==='recovery'){showSetPassword();return;}
-  if(!JUSTE_CONNECTE){
+  kkOnglets.suivre(function(){return typeof ME!=='undefined'&&!!ME;});
+  if(!JUSTE_CONNECTE&&!kkOnglets.autre()){
     try{await sb.auth.signOut();}catch(e){}
     showLogin(/error/.test(location.hash)?'Lien invalide ou expiré — demandez une nouvelle invitation à la direction.':'');return;
   }

@@ -121,7 +121,11 @@ window.addEventListener('DOMContentLoaded', async function() {
   // Retour depuis l'outil Documents (?enfant=<id>) : si une session valide existe déjà,
   // on la conserve pour éviter de repasser par l'écran de connexion. Partout ailleurs,
   // la déconnexion systématique à l'ouverture reste inchangée (postes partagés).
-  if(urlParams.get('enfant')){
+  // Deuxième onglet : si un autre onglet de l'application est déjà connecté (signal de
+  // vie < 8 s dans localStorage), on garde la session au lieu de la détruire, sinon le
+  // premier onglet passerait en « Session expirée ». Une fois tous les onglets fermés, les
+  // signaux disparaissent et la déconnexion à l'ouverture reste de rigueur (postes partagés).
+  if(urlParams.get('enfant')||kkOnglets.autre()){
     try{
       const{data:{session}}=await sb.auth.getSession();
       if(session&&session.user){
@@ -138,6 +142,8 @@ window.addEventListener('DOMContentLoaded', async function() {
   await sb.auth.signOut();
   showLogin();
 });
+
+kkOnglets.suivre(function(){return !!currentUser;});
 
 let _groupesDejaRecalcules=false;
 async function loadAllData(){

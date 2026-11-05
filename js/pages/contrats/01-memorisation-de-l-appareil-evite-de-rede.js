@@ -94,7 +94,8 @@ function showLogin(msg){
   document.getElementById('liErr').textContent=msg||'';
 }
 async function boot(){
-  if(!JUSTE_CONNECTE){
+  kkOnglets.suivre(function(){return typeof ME!=='undefined'&&!!ME;});
+  if(!JUSTE_CONNECTE&&!kkOnglets.autre()){
     try{await sb.auth.signOut();}catch(e){console.warn('[boot] signOut',e);}
     showLogin();return;
   }
