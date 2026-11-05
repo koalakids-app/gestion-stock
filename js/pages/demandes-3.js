@@ -102,7 +102,7 @@ function brSuffixeCreche(id){
 async function vaccinationsEnRetard(crecheId){
   if(typeof vacLoadData==='function'&&!cacheVaccinations.length)await vacLoadData();
   if(typeof vacAlertesRetard!=='function')return[];
-  const enfants=crecheId?cacheEnfants.filter(e=>String(e.creche_id)===String(crecheId)):cacheEnfants;
+  const enfants=(crecheId?cacheEnfants.filter(e=>String(e.creche_id)===String(crecheId)):cacheEnfants).filter(e=>!e.archive_le);
   return vacAlertesRetard(enfants);
 }
 
