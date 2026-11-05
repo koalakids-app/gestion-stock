@@ -362,10 +362,11 @@ function applyRole(){
     el.style.display = (r && r!=='employe') ? '' : 'none';
   });
   var lien = document.getElementById('roleToutAfficher');
-  if(lien) lien.style.display = masque ? '' : 'none';
+  if(lien) lien.style.display = (masque || !r) ? '' : 'none';
 }
 function toutAfficher(){
-  try{ localStorage.removeItem('kk_role'); }catch(e){}
+  /* 'tout' : réaffiche toutes les cartes (rôle réel remis à la prochaine connexion) */
+  try{ localStorage.setItem('kk_role','tout'); }catch(e){}
   applyRole();
   return false;
 }
