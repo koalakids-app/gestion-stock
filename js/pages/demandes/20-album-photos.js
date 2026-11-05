@@ -86,6 +86,7 @@ async function albCharger() {
     z.innerHTML = '<div style="padding:24px;color:var(--red)">Chargement impossible. Vérifiez votre connexion (ou que le script sql/album_photos.sql a été appliqué).</div>';
     return;
   }
+  if (typeof albvCharger === 'function') await albvCharger();
   albRender();
 }
 
@@ -121,9 +122,14 @@ function albRender() {
   var bt = albById('alb-badge-aclasser');
   if (bt) { bt.textContent = nb; bt.style.display = nb ? '' : 'none'; }
   var tabE = albById('alb-tab-enfants'), tabC = albById('alb-tab-aclasser');
-  if (tabE) tabE.classList.toggle('active', ALB.vue !== 'aclasser');
+  if (tabE) tabE.classList.toggle('active', ALB.vue !== 'aclasser' && ALB.vue !== 'visage' && ALB.vue !== 'refs');
   if (tabC) tabC.classList.toggle('active', ALB.vue === 'aclasser');
-  if (ALB.vue === 'aclasser') albRenderAClasser(z);
+  var tabV = albById('alb-tab-visage'), tabR = albById('alb-tab-refs');
+  if (tabV) tabV.classList.toggle('active', ALB.vue === 'visage');
+  if (tabR) tabR.classList.toggle('active', ALB.vue === 'refs');
+  if (ALB.vue === 'visage' && typeof albvRenderTri === 'function') albvRenderTri(z);
+  else if (ALB.vue === 'refs' && typeof albvRenderRefs === 'function') albvRenderRefs(z);
+  else if (ALB.vue === 'aclasser') albRenderAClasser(z);
   else if (ALB.vue === 'enfant') albRenderEnfant(z);
   else albRenderEnfants(z);
 }
@@ -171,7 +177,7 @@ async function albRenderAClasser(z) {
       return '<div class="alb-ph alb-pick' + s + '" onclick="albBasculer(\'' + p.id + '\')" role="button" tabindex="0" aria-pressed="' + (!!ALB.sel[p.id]) + '">' + albImg(p, true) +
         '<span class="alb-coche"><i class="ti ti-check"></i></span>' +
         '<button class="alb-zoom" title="Agrandir" onclick="event.stopPropagation();albLightbox(\'aclasser\',\'' + p.id + '\')"><i class="ti ti-zoom-in"></i></button>' +
-        '<span class="alb-tag">' + albDateFr(p.prise_le) + '</span></div>';
+        (typeof albvBadge === 'function' ? albvBadge(p) : '') + '<span class="alb-tag">' + albDateFr(p.prise_le) + '</span></div>';
     }).join('') + '</div>' +
     '<div class="alb-chips-wrap"><div class="alb-chips-top"><b>' + (nbSel ? 'Classer les ' + nbSel + ' photo' + (nbSel > 1 ? 's' : '') + ' dans :' : 'Sélectionnez des photos') + '</b>' +
     '<input class="finput" id="alb-filtre" placeholder="Chercher un enfant…" value="' + albEsc(ALB.filtre) + '" oninput="albFiltrer(this.value)" style="width:170px;font-size:12px;padding:4px 8px"></div>' +
@@ -311,6 +317,7 @@ async function albSupprimerEnfant() {
   if (l.error) { ALB.occupe = false; showBanner('Suppression impossible : ' + l.error.message, 'error'); return; }
   ALB.liens = ALB.liens.filter(function (x) { return String(x.enfant_id) !== String(e.id); });
   var ok = await albSupprimerPhotos(seules);
+  if (typeof albvPurgerEnfant === 'function') await albvPurgerEnfant(e.id);
   albJournal('remise', e.id, albNom(e), ph.length);
   ALB.occupe = false;
   if (ok) showBanner('Photos de ' + albEsc(albNom(e)) + ' supprimées après remise aux parents.');
