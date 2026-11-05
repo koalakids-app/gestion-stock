@@ -339,6 +339,75 @@ function liaisonsAppareil(){
 }
 window.addEventListener('appinstalled',()=>{window.kkInstall=null;window.kkRendreInstall();});
 
+/* ---------- Accord « tri par visage » (album photos) : lecture du texte et signature en ligne ---------- */
+let ACC={ouvert:false,choix:'',nom:'',autorite:false,envoi:false,err:'',fait:''};
+const ERR_ACC={nom_invalide:'Indiquez votre prénom et votre nom.',autorite_requise:'Cochez la case pour confirmer.',
+  texte_modifie:'Le texte a été mis à jour. La page va se recharger pour que vous le relisiez.',
+  trop_de_signatures:'Trop de réponses en peu de temps. Réessayez dans une heure.',non_active:'Cette demande n\'est plus disponible.'};
+function carteAccordVisage(d){
+  const a=d.accord_visage;
+  if(!a||!a.actif)return '';
+  const prenom=esc(d.enfant.prenom||'votre enfant');
+  const texte='<p style="margin:0 0 8px">'+esc(a.intro)+'</p><ul style="margin:0 0 8px;padding-left:20px">'
+    +a.points.map(p=>'<li style="margin-bottom:4px">'+esc(p)+'</li>').join('')+'</ul>'
+    +'<p class="vide" style="margin:0">'+esc(a.mentions)+'</p>';
+  let tete,corps='';
+  if(a.decision&&!ACC.ouvert){
+    const oui=a.decision==='autorise';
+    tete='<h2><i class="ti ti-'+(oui?'circle-check':'circle-x')+'"></i> Reconnaissance du visage</h2>'
+      +'<p style="margin:0 0 6px"><b>'+(oui?'Vous avez autorisé':'Vous n\'avez pas autorisé')+'</b> le classement automatique des photos de '+prenom+' par reconnaissance du visage.</p>'
+      +'<p class="vide" style="margin:0 0 10px">'+(a.source==='famille'?'Signé par '+esc(a.signataire)+' le '+esc(fmtDate(a.signe_le))+'.':'Accord enregistré par la crèche le '+esc(fmtDate(a.signe_le))+'.')+'</p>'
+      +'<button class="btn btn-g" data-acc="ouvrir"><i class="ti ti-pencil"></i> Modifier ma réponse</button>';
+    return '<div class="card" id="accVisage">'+tete+(ACC.fait?'<div class="ok-acc">'+esc(ACC.fait)+'</div>':'')+'</div>';
+  }
+  if(!ACC.ouvert){
+    return '<div class="card acc-a-signer" id="accVisage"><h2><i class="ti ti-signature"></i> Un document à signer'+' <span class="nouveau">À faire</span></h2>'
+      +'<p style="margin:0 0 10px"><b>Classement des photos de '+prenom+' par reconnaissance du visage.</b> Votre accord est facultatif : lisez le texte, puis choisissez.</p>'
+      +'<button class="btn" data-acc="ouvrir"><i class="ti ti-file-text"></i> Lire et répondre</button></div>';
+  }
+  const ok=ACC.choix&&ACC.nom.trim().length>=3&&/\s/.test(ACC.nom.trim())&&ACC.autorite&&!ACC.envoi;
+  return '<div class="card acc-a-signer" id="accVisage"><h2><i class="ti ti-signature"></i> '+esc(a.titre)+'</h2>'
+    +'<div class="acc-texte">'+texte+'</div>'
+    +'<fieldset class="acc-choix"><legend>Votre réponse pour '+prenom+'</legend>'
+    +'<label class="acc-radio"><input type="radio" name="accChoix" value="autorise"'+(ACC.choix==='autorise'?' checked':'')+'> <span><b>J\'autorise</b> la crèche à utiliser la reconnaissance du visage de mon enfant pour classer ses photos.</span></label>'
+    +'<label class="acc-radio"><input type="radio" name="accChoix" value="refuse"'+(ACC.choix==='refuse'?' checked':'')+'> <span><b>Je n\'autorise pas</b> cette reconnaissance (classement manuel).</span></label></fieldset>'
+    +'<label for="accNom">Prénom et nom du parent qui signe</label>'
+    +'<input type="text" id="accNom" maxlength="120" autocomplete="name" value="'+esc(ACC.nom)+'" placeholder="Ex. : Marie Dupont"/>'
+    +'<label class="acc-radio" style="margin-top:10px"><input type="checkbox" id="accAut"'+(ACC.autorite?' checked':'')+'> <span>Je confirme être titulaire de l\'autorité parentale sur '+prenom+' et que mon nom saisi ci-dessus vaut signature.</span></label>'
+    +(ACC.err?'<div class="err" style="margin-top:10px">'+esc(ACC.err)+'</div>':'')
+    +'<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="accSigner" data-acc="signer"'+(ok?'':' disabled')+'><i class="ti ti-signature"></i> '+(ACC.envoi?'Envoi…':'Signer ma réponse')+'</button>'
+    +'<button class="btn btn-g" data-acc="annuler">Annuler</button></div></div>';
+}
+function accordLier(){
+  const c=document.getElementById('accVisage');
+  if(!c)return;
+  const maj=()=>{const b=document.getElementById('accSigner');if(b)b.disabled=!(ACC.choix&&ACC.nom.trim().length>=3&&/\s/.test(ACC.nom.trim())&&ACC.autorite&&!ACC.envoi);};
+  c.querySelectorAll('input[name=accChoix]').forEach(r=>r.addEventListener('change',()=>{ACC.choix=r.value;maj();}));
+  const nom=document.getElementById('accNom');if(nom)nom.addEventListener('input',()=>{ACC.nom=nom.value;maj();});
+  const aut=document.getElementById('accAut');if(aut)aut.addEventListener('change',()=>{ACC.autorite=aut.checked;maj();});
+  c.querySelectorAll('[data-acc]').forEach(b=>b.addEventListener('click',()=>{
+    const a=b.dataset.acc;
+    if(a==='ouvrir'){ACC.ouvert=true;ACC.err='';ACC.fait='';ACC.choix=DONNEES.accord_visage.decision==='autorise'?'refuse':(DONNEES.accord_visage.decision==='refuse'?'autorise':'');rendre();}
+    else if(a==='annuler'){ACC.ouvert=false;ACC.err='';rendre();}
+    else if(a==='signer')accordSigner();
+  }));
+}
+async function accordSigner(){
+  if(ACC.envoi)return;
+  ACC.envoi=true;ACC.err='';rendre();
+  try{
+    const r=await appel('accord_visage',{decision:ACC.choix,nom:ACC.nom.trim(),autorite:ACC.autorite,version:DONNEES.accord_visage.version});
+    DONNEES.accord_visage=r.accord_visage;
+    ACC={ouvert:false,choix:'',nom:'',autorite:false,envoi:false,err:'',fait:'Merci, votre réponse est enregistrée.'};
+  }catch(e){
+    const m=String(e.message||'');
+    const cle=Object.keys(ERR_ACC).find(k=>m.includes(k));
+    ACC.envoi=false;ACC.err=cle?ERR_ACC[cle]:'L\'enregistrement a échoué. Réessayez dans un instant.';
+    if(cle==='texte_modifie'){setTimeout(()=>location.reload(),2500);}
+  }
+  rendre();
+}
+
 function vueAccueil(d){
   const dernier=d.messages[0];
   const une=dernier
@@ -358,7 +427,7 @@ function vueAccueil(d){
     +'<button class="tuile" data-aller="creche"><i class="ti ti-address-book"></i><b>Contacts</b><small>et fermetures</small></button>'
     +(d.suivi_token?'<a class="tuile" href="famille-suivi.html?t='+encodeURIComponent(d.suivi_token)+'"><i class="ti ti-heart-handshake"></i><b>Suivi</b><small>de '+esc(d.enfant.prenom||'l\'enfant')+'</small></a>':'')
     +'</div>';
-  return une+cartePointage(d)+prochaine+tuiles+carteAppareil();
+  return carteAccordVisage(d)+une+cartePointage(d)+prochaine+tuiles+carteAppareil();
 }
 
 function vueInfos(d){
@@ -372,7 +441,7 @@ function vueDocs(d){
   const deps=d.depots.length
     ?'<div style="margin-top:14px"><strong style="font-size:13px">Déjà envoyés</strong>'
       +d.depots.map(x=>'<div class="dep"><span>'+esc(x.nom)+'</span><span style="color:var(--muted)">'+esc(fmtDate(x.date))+'</span></div>').join('')+'</div>':'';
-  return (carteDocuments(d)||'<div class="card"><h2><i class="ti ti-files"></i> Vos documents</h2><p class="vide" style="margin:0">Le devis et le contrat signé apparaîtront ici.</p></div>')
+  return carteAccordVisage(d)+(carteDocuments(d)||'<div class="card"><h2><i class="ti ti-files"></i> Vos documents</h2><p class="vide" style="margin:0">Le devis et le contrat signé apparaîtront ici.</p></div>')
     +carteReglement()
     +'<div class="card"><h2><i class="ti ti-cloud-upload"></i> Envoyer un document</h2>'
     +'<p class="vide" style="margin-top:0">Certificat, attestation, ordonnance… (photo ou PDF, 8 Mo max). La crèche est prévenue.</p>'
@@ -402,6 +471,7 @@ function rendre(){
   wrap.innerHTML=barre+'<div class="vue">'+(vues[ONGLET]||vueAccueil)(d)+'</div>';
   wrap.querySelectorAll('[data-aller]').forEach(b=>b.addEventListener('click',()=>allerA(b.dataset.aller,b.dataset.msg)));
   liaisonsAppareil();
+  accordLier();
   const envoi=document.getElementById('btnEnvoi');
   if(envoi)envoi.addEventListener('click',envoyer);
   wrap.querySelectorAll('[data-doc]').forEach(b=>b.addEventListener('click',()=>ouvrirDocument(b.dataset.doc,b)));

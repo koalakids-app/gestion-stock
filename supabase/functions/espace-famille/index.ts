@@ -13,6 +13,9 @@
 //                         depots:[...], suivi_token}
 //   {action:'document', doc_id} -> {url} (PDF devis / contrat, lien signé de 2 min)
 //   {action:'upload', libelle, filename, content_type, content_base64}
+//   {action:'accord_visage', decision:'autorise'|'refuse', nom, autorite:true, version}
+//                     -> signature en ligne de l'accord « tri par visage » de l'album photos (voir
+//                        sql/album_accord_en_ligne.sql). `get` renvoie aussi {accord_visage:{...}}.
 //   {action:'push_abonner', endpoint, p256dh, auth} / {action:'push_desabonner', endpoint}
 //                     -> abonnement aux notifications de CET accès (table famille_push)
 //
@@ -23,6 +26,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resoudreJeton } from "../_shared/session-lien.ts";
 import { signalerDepot } from "../_shared/depot-externe.ts";
+import { ACCORD_VISAGE, hashTexteAccord, sha256 } from "../_shared/accord-visage.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -126,6 +130,32 @@ async function contactsDeLaCreche(sb: any, crecheId: string) {
   };
 }
 
+/** État de l'accord « tri par visage » pour CET enfant : texte à signer et réponse déjà donnée.
+ *  Rien n'est renvoyé tant que la direction n'a pas activé l'option pour la crèche. */
+async function accordVisage(sb: any, acces: any) {
+  const { data: opt } = await sb.from("creches").select("tri_visage").eq("id", acces.creche_id).maybeSingle();
+  if (!opt?.tri_visage) return { actif: false };
+  const [{ data: sig }, { data: ac }] = await Promise.all([
+    sb.from("album_accords_signatures").select("decision, signataire_nom, signe_le")
+      .eq("enfant_id", acces.enfant_id).order("signe_le", { ascending: false }).limit(1).maybeSingle(),
+    sb.from("album_visages_accord").select("accord_le, source").eq("enfant_id", acces.enfant_id).maybeSingle(),
+  ]);
+  // L'accord en vigueur fait foi : s'il existe, la réponse est « autorise » (signé en ligne ou saisi par la crèche) ;
+  // sinon un refus signé reste affiché ; une autorisation retirée par la crèche redevient « à signer ».
+  let decision: string | null = null, par = "", le = "", source = "";
+  if (ac) {
+    decision = "autorise"; source = sig?.decision === "autorise" ? "famille" : "creche";
+    par = source === "famille" ? sig.signataire_nom : ""; le = source === "famille" ? sig.signe_le : ac.accord_le;
+  } else if (sig?.decision === "refuse") {
+    decision = "refuse"; source = "famille"; par = sig.signataire_nom; le = sig.signe_le;
+  }
+  return {
+    actif: true, version: ACCORD_VISAGE.version, titre: ACCORD_VISAGE.titre, intro: ACCORD_VISAGE.intro,
+    points: ACCORD_VISAGE.points, mentions: ACCORD_VISAGE.mentions,
+    decision, signataire: par, signe_le: le, source,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return erreur("method_not_allowed", 405);
@@ -194,9 +224,12 @@ Deno.serve(async (req) => {
     const fermetures = await fermeturesAVenir(sb, acces.creche_id);
     const contacts = await contactsDeLaCreche(sb, acces.creche_id);
 
+    const accord_visage = await accordVisage(sb, acces);
+
     return json({
       documents,
       fermetures,
+      accord_visage,
       contacts,
       creche_id: acces.creche_id,
       // Code image du pointage sur la tablette (4 pictogrammes, dans l'ordre). Seules les images
@@ -260,6 +293,52 @@ Deno.serve(async (req) => {
       libelle: `${libelle} (espace famille)`, nom: enfant?.prenom || "Un enfant",
     });
     return json({ ok: true });
+  }
+
+  if (action === "accord_visage") {
+    const { data: opt } = await sb.from("creches").select("tri_visage").eq("id", acces.creche_id).maybeSingle();
+    if (!opt?.tri_visage) return erreur("non_active", 403);
+    const decision = String(body.decision || "");
+    if (!["autorise", "refuse"].includes(decision)) return erreur("decision_invalide");
+    const nom = texteCourt(body.nom, 120);
+    if (nom.length < 3 || !/\s/.test(nom)) return erreur("nom_invalide");          // prénom et nom
+    if (body.autorite !== true) return erreur("autorite_requise");
+    if (String(body.version || "") !== ACCORD_VISAGE.version) return erreur("texte_modifie", 409);
+
+    // Au plus 5 signatures par heure et par accès (évite les envois en rafale).
+    const { count: recents } = await sb.from("album_accords_signatures")
+      .select("id", { count: "exact", head: true }).eq("acces_id", acces.id)
+      .gte("signe_le", new Date(Date.now() - 3600000).toISOString());
+    if ((recents ?? 0) >= 5) return erreur("trop_de_signatures", 429);
+
+    const { data: sig, error: sgErr } = await sb.from("album_accords_signatures").insert({
+      enfant_id: acces.enfant_id, creche_id: acces.creche_id, acces_id: acces.id, parent_id: acces.parent_id,
+      decision, signataire_nom: nom, texte_version: ACCORD_VISAGE.version, texte_hash: await hashTexteAccord(),
+      ip_hash: await sha256(ip), user_agent: String(req.headers.get("user-agent") || "").slice(0, 200),
+    }).select("id").single();
+    if (sgErr || !sig) { console.error("[espace-famille] signature accord", sgErr); return erreur("enregistrement_impossible", 500); }
+
+    if (decision === "autorise") {
+      const { error: aErr2 } = await sb.from("album_visages_accord").upsert(
+        { enfant_id: acces.enfant_id, creche_id: acces.creche_id, accord_par: null, accord_le: new Date().toISOString(),
+          source: "famille", signature_id: sig.id },
+        { onConflict: "enfant_id" });
+      if (aErr2) { console.error("[espace-famille] accord", aErr2); return erreur("enregistrement_impossible", 500); }
+    } else {
+      // Refus ou retrait : l'accord disparaît ; le déclencheur efface références et propositions.
+      const { error: dErr } = await sb.from("album_visages_accord").delete().eq("enfant_id", acces.enfant_id);
+      if (dErr) { console.error("[espace-famille] retrait accord", dErr); return erreur("enregistrement_impossible", 500); }
+    }
+    await sb.from("album_journal").insert({
+      creche_id: acces.creche_id, action: decision === "autorise" ? "accord" : "accord_retire",
+      enfant_id: acces.enfant_id, libelle: `Signature en ligne : ${nom}`,
+    }).then((r: any) => { if (r?.error) console.error("[espace-famille] journal", r.error); });
+    await signalerDepot(sb, {
+      source: "enfant", creche_id: acces.creche_id, enfant_id: acces.enfant_id,
+      libelle: `Accord reconnaissance du visage ${decision === "autorise" ? "signé" : "refusé"} (espace famille)`,
+      nom: enfant?.prenom || "Un enfant",
+    });
+    return json({ ok: true, accord_visage: await accordVisage(sb, acces) });
   }
 
   if (action === "push_abonner") {
