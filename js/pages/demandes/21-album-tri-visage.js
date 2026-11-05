@@ -66,24 +66,40 @@ function albvScript(src) {
 }
 async function albvLib() {
   if (ALBV.lib) return ALBV.lib;
-  if (typeof faceapi === 'undefined') await albvScript(ALBV_DOSSIER + 'face-api.js');
-  await faceapi.tf.ready();
-  await faceapi.nets.tinyFaceDetector.loadFromUri(ALBV_DOSSIER + 'models');
-  await faceapi.nets.faceLandmark68TinyNet.loadFromUri(ALBV_DOSSIER + 'models');
-  await faceapi.nets.faceRecognitionNet.loadFromUri(ALBV_DOSSIER + 'models');
+  await albvDelai((async function () {
+    if (typeof faceapi === 'undefined') await albvScript(ALBV_DOSSIER + 'face-api.js');
+    try { await faceapi.tf.ready(); } catch (e) { console.warn('[albv] WebGL indisponible, repli processeur', e); }
+    if (!faceapi.tf.getBackend()) { await faceapi.tf.setBackend('cpu'); await faceapi.tf.ready(); }
+    await faceapi.nets.tinyFaceDetector.loadFromUri(ALBV_DOSSIER + 'models');
+    await faceapi.nets.faceLandmark68TinyNet.loadFromUri(ALBV_DOSSIER + 'models');
+    await faceapi.nets.faceRecognitionNet.loadFromUri(ALBV_DOSSIER + 'models');
+  })(), 120000, 'le moteur de reconnaissance ne s’est pas chargé (connexion ?)');
   ALBV.lib = faceapi;
   return faceapi;
 }
 async function albvImage(blobOuUrl) {
   var url = typeof blobOuUrl === 'string' ? blobOuUrl : URL.createObjectURL(blobOuUrl);
   return await new Promise(function (ok, ko) {
-    var im = new Image(); im.onload = function () { ok(im); }; im.onerror = function () { ko(new Error('image illisible')); };
+    var im = new Image();
+    // Les photos viennent de Supabase (autre domaine) : sans ce mode, le navigateur
+    // interdit la lecture des pixels et la détection échoue ou reste bloquée.
+    if (typeof blobOuUrl === 'string') im.crossOrigin = 'anonymous';
+    var t = setTimeout(function () { ko(new Error('chargement de la photo trop long')); }, 30000);
+    im.onload = function () { clearTimeout(t); ok(im); };
+    im.onerror = function () { clearTimeout(t); ko(new Error('image illisible')); };
     im.src = url;
+  });
+}
+function albvDelai(promesse, ms, message) {
+  return new Promise(function (ok, ko) {
+    var t = setTimeout(function () { ko(new Error(message)); }, ms);
+    promesse.then(function (v) { clearTimeout(t); ok(v); }, function (e) { clearTimeout(t); ko(e); });
   });
 }
 async function albvVisages(img) {
   var f = await albvLib();
-  return await f.detectAllFaces(img, new f.TinyFaceDetectorOptions({ inputSize: 608, scoreThreshold: 0.4 })).withFaceLandmarks(true).withFaceDescriptors();
+  return await albvDelai(f.detectAllFaces(img, new f.TinyFaceDetectorOptions({ inputSize: 608, scoreThreshold: 0.4 })).withFaceLandmarks(true).withFaceDescriptors(),
+    90000, 'l’analyse du visage est trop longue sur cet appareil');
 }
 
 /* ---------- Comparaison ---------- */
@@ -118,7 +134,7 @@ async function albvAnalyser(tout) {
   var liste = albAClasser().filter(function (p) { return tout || !p.tri_le; });
   if (!liste.length) { showBanner('Aucune nouvelle photo à analyser.'); return; }
   ALBV.calc = true; ALBV.annule = false; albRender();
-  var auto = 0, propo = 0, rien = 0, faits = 0;
+  var auto = 0, propo = 0, rien = 0, faits = 0, echecs = 0, derniere = '';
   try {
     ALBV.msg = 'Chargement du moteur de reconnaissance…'; albvMajProgres();
     await albvLib();
@@ -154,7 +170,7 @@ async function albvAnalyser(tout) {
         var t = new Date().toISOString();
         await sb.from('album_photos').update({ tri_le: t, tri_visages: visages.length }).eq('id', p.id);
         p.tri_le = t; p.tri_visages = visages.length; faits++;
-      } catch (e) { console.warn('[albvAnalyser]', p.id, e); }
+      } catch (e) { console.warn('[albvAnalyser]', p.id, e); echecs++; derniere = (e && e.message) || String(e); }
       await new Promise(function (r) { setTimeout(r, 0); });
     }
   } catch (e) {
@@ -162,6 +178,7 @@ async function albvAnalyser(tout) {
   }
   ALBV.calc = false; ALBV.msg = '';
   if (faits) albJournal('tri_visage', null, auto + ' classées seules, ' + propo + ' à valider, ' + rien + ' sans correspondance', faits);
+  if (echecs) showBanner(echecs + ' photo' + (echecs > 1 ? 's' : '') + ' n’ont pas pu être analysée' + (echecs > 1 ? 's' : '') + ' (' + derniere + ').', 'error');
   showBanner(faits + ' photo' + (faits > 1 ? 's' : '') + ' analysée' + (faits > 1 ? 's' : '') + ' : ' + auto + ' classée' + (auto > 1 ? 's' : '') + ' seule' + (auto > 1 ? 's' : '') + ', ' + propo + ' à valider, ' + rien + ' sans correspondance.');
   albRender();
 }
