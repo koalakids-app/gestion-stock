@@ -301,6 +301,21 @@ function openFromUrl(){
     /* ?tpl=<template_key> : ouverture directe d'un modele (Acces terrain), sans
        connaitre l'id du document, qui differe d'une organisation a l'autre. */
     const tpl=q.get('tpl');
+    /* ?cat=<id> : ouvre le dossier (catégorie) et ses parents, puis y fait défiler. */
+    const catId=q.get('cat');
+    if(catId&&!q.get('doc')){
+      history.replaceState(null,'',location.pathname);
+      let c=CATS.find(x=>x.id===catId),prof=0;
+      if(c){
+        while(c&&prof++<10){
+          OPEN_CATS.add((c.parent_id?'sub_':'')+c.id);
+          c=c.parent_id?CATS.find(x=>x.id===c.parent_id):null;
+        }
+        render();
+        setTimeout(()=>{const o=document.querySelector('#list .cat:not(.closed)');if(o)o.scrollIntoView({block:'start'});},50);
+      }
+      return;
+    }
     /* Employé(e) : DOCS ne contient deja que les documents coches « Ouvert aux employes ». */
     const docId=q.get('doc')||(tpl&&(DOCS.find(d=>d.template_key===tpl)||{}).id);
     DEPUIS_TERRAIN=IS_EMPLOYE&&!!(q.get('doc')||tpl);
