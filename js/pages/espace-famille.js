@@ -11,6 +11,21 @@ const SUPABASE_URL = "https://juyrceadazrovlitxceb.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
 const FN_URL = SUPABASE_URL + '/functions/v1/espace-famille';
 
+/* Code mémorisé sur l'appareil (accord explicite de la famille : case à cocher ou bouton « Garder l'accès »).
+   Le code n'est jamais stocké sans ce choix ; il est effacé si l'accès est révoqué ou si la famille l'oublie.
+   Il sert à rouvrir une session courte (SessionLien) quand la page est ouverte sans ?t=. */
+const CLE_CODE='kk_famille_code';
+const lireCode=()=>{try{return localStorage.getItem(CLE_CODE)||'';}catch(e){return '';}};
+const garderCode=c=>{try{localStorage.setItem(CLE_CODE,c);}catch(e){}};
+const oublierCode=()=>{try{localStorage.removeItem(CLE_CODE);}catch(e){}};
+const CODE_LIEN=(new URLSearchParams(location.search).get('t')||'').trim();
+const CODE_MEMO=lireCode();
+const CODE=CODE_LIEN||CODE_MEMO;
+if(!CODE_LIEN&&CODE_MEMO){
+  /* ouverture sans lien (icône de l'écran d'accueil, favori) : on rouvre avec le code mémorisé */
+  try{history.replaceState(null,'',location.pathname+'?t='+encodeURIComponent(CODE_MEMO));}catch(e){}
+}
+if(CODE_LIEN&&CODE_MEMO&&CODE_LIEN!==CODE_MEMO)garderCode(CODE_LIEN);   // nouveau code reçu : on met à jour le code gardé
 const TOKEN = SessionLien.init({url:FN_URL,anonKey:SUPABASE_ANON_KEY});
 const wrap = document.getElementById('wrap');
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -50,11 +65,13 @@ function formulaireCode(message){
     +'<p class="vide" style="margin-top:0">Saisissez le code à 8 caractères que la crèche vous a remis.</p>'
     +'<input type="text" id="code" class="code" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="ABCD2345"/>'
     +(message?'<div class="err">'+esc(message)+'</div>':'')
+    +'<label class="souvenir"><input type="checkbox" id="souvenir" checked/> <span>Garder mon accès sur cet appareil (à ne pas cocher sur un appareil partagé)</span></label>'
     +'<div style="margin-top:14px"><button class="btn" id="btnCode"><i class="ti ti-login"></i> Entrer</button></div></div>';
   const champ=document.getElementById('code');
   const aller=()=>{
     const c=champ.value.trim();
     if(c.length<6){champ.focus();return;}
+    if(document.getElementById('souvenir').checked)garderCode(c);else oublierCode();
     location.href=location.pathname+'?t='+encodeURIComponent(c);
   };
   document.getElementById('btnCode').addEventListener('click',aller);
@@ -81,6 +98,7 @@ async function boot(){
     rendre();
   }catch(e){
     const m=(e.message||'').toLowerCase();
+    if(m.includes('revoque')||m.includes('introuvable'))oublierCode();   // code mémorisé devenu inutile
     if(m.includes('revoque'))etat('Accès désactivé','Cet accès n\'est plus valable. Contactez la crèche pour en obtenir un nouveau.','link-off');
     else if(m.includes('introuvable'))formulaireCode('Ce code ne correspond à aucun accès. Vérifiez-le (8 caractères, sans O ni 0).');
     else if(m.includes('trop_d_essais')||m.includes('429'))etat('Trop d\'essais','Patientez un quart d\'heure puis réessayez.','clock');
@@ -193,6 +211,43 @@ function cartePointage(d){
     :'<div class="card"><h2><i class="ti ti-photo"></i> Code de pointage</h2><p class="vide" style="margin:0">Le code image de '+pr+' n\'est pas encore attribué. Demandez-le à la crèche.</p></div>';
 }
 
+/* Carte « Garder l'accès » : installation sur l'écran d'accueil + code gardé sur l'appareil. */
+const EN_APPLI=()=>(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+const EST_IOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+function carteAppareil(){
+  const garde=!!lireCode();
+  let h='<div class="card appareil" id="carteAppareil"><h2><i class="ti ti-device-mobile"></i> Retrouver cet espace facilement</h2>';
+  if(!EN_APPLI()){
+    if(window.kkInstall){
+      h+='<p>Ajoutez l\'espace famille à l\'écran d\'accueil de votre téléphone : une icône, un seul geste pour l\'ouvrir.</p>'
+        +'<button class="btn" id="btnInstall"><i class="ti ti-download"></i> Installer l\'application</button>';
+    }else if(EST_IOS()){
+      h+='<p>Pour avoir une icône sur votre iPhone / iPad :</p><ol><li>Ouvrez cette page dans <b>Safari</b></li>'
+        +'<li>Touchez <b>Partager</b> <i class="ti ti-share-2"></i></li><li>Choisissez <b>Sur l\'écran d\'accueil</b></li></ol>'
+        +'<p>À la première ouverture de l\'icône, saisissez votre code'+(CODE?' : <b style="letter-spacing:.15em">'+esc(CODE.toUpperCase())+'</b>':'')+' (une seule fois).</p>';
+    }else{
+      h+='<p>Pour avoir une icône sur votre téléphone : ouvrez le menu du navigateur (<b>⋮</b>) puis <b>Installer l\'application</b> ou <b>Ajouter à l\'écran d\'accueil</b>.</p>';
+    }
+  }
+  h+=garde
+    ?'<div class="ok" style="margin-top:10px"><i class="ti ti-circle-check"></i> Votre accès est gardé sur cet appareil.</div>'
+      +'<p style="margin:4px 0 0"><button class="lien" id="btnOublier">Ne plus garder l\'accès sur cet appareil</button></p>'
+    :'<p style="margin-top:12px">Pas besoin de ressaisir votre code à chaque visite sur cet appareil.</p>'
+      +'<button class="btn btn-g" id="btnGarder"><i class="ti ti-lock-open"></i> Garder mon accès sur cet appareil</button>'
+      +'<p class="vide" style="margin:6px 0 0">À éviter sur un appareil partagé.</p>';
+  return h+'</div>';
+}
+window.kkRendreInstall=()=>{const c=document.getElementById('carteAppareil');if(c){c.outerHTML=carteAppareil();liaisonsAppareil();}};
+function liaisonsAppareil(){
+  const i=document.getElementById('btnInstall');
+  if(i)i.addEventListener('click',async()=>{const e=window.kkInstall;if(!e)return;e.prompt();try{await e.userChoice;}catch(x){}window.kkInstall=null;window.kkRendreInstall();});
+  const g=document.getElementById('btnGarder');
+  if(g)g.addEventListener('click',()=>{if(CODE)garderCode(CODE);window.kkRendreInstall();});
+  const o=document.getElementById('btnOublier');
+  if(o)o.addEventListener('click',()=>{oublierCode();window.kkRendreInstall();});
+}
+window.addEventListener('appinstalled',()=>{window.kkInstall=null;window.kkRendreInstall();});
+
 function vueAccueil(d){
   const dernier=d.messages[0];
   const une=dernier
@@ -212,7 +267,7 @@ function vueAccueil(d){
     +'<button class="tuile" data-aller="creche"><i class="ti ti-address-book"></i><b>Contacts</b><small>et fermetures</small></button>'
     +(d.suivi_token?'<a class="tuile" href="famille-suivi.html?t='+encodeURIComponent(d.suivi_token)+'"><i class="ti ti-heart-handshake"></i><b>Suivi</b><small>de '+esc(d.enfant.prenom||'l\'enfant')+'</small></a>':'')
     +'</div>';
-  return une+cartePointage(d)+prochaine+tuiles;
+  return une+cartePointage(d)+prochaine+tuiles+carteAppareil();
 }
 
 function vueInfos(d){
@@ -255,6 +310,7 @@ function rendre(){
   const vues={accueil:vueAccueil,infos:vueInfos,docs:vueDocs,creche:vueCreche};
   wrap.innerHTML=barre+'<div class="vue">'+(vues[ONGLET]||vueAccueil)(d)+'</div>';
   wrap.querySelectorAll('[data-aller]').forEach(b=>b.addEventListener('click',()=>allerA(b.dataset.aller,b.dataset.msg)));
+  liaisonsAppareil();
   const envoi=document.getElementById('btnEnvoi');
   if(envoi)envoi.addEventListener('click',envoyer);
   wrap.querySelectorAll('[data-doc]').forEach(b=>b.addEventListener('click',()=>ouvrirDocument(b.dataset.doc,b)));
