@@ -60,10 +60,10 @@ function vmRendre(erreurTable){
     +(vmCache.length?vmCache.map(ligne).join(''):'<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Aucune visite enregistrée.</div>')
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:flex-end">'
     +'<label style="flex:2;min-width:160px;font-size:11px;color:var(--muted)">Type<select id="vmType" style="width:100%;'+st+'">'+Object.keys(VISMED_TYPES).map(k=>'<option value="'+k+'"'+((edit.type||(vmCache.some(v=>v.date_visite)?'periodique':'embauche'))===k?' selected':'')+'>'+esc(VISMED_TYPES[k])+'</option>').join('')+'</select></label>'
-    +'<label style="flex:1;min-width:120px;font-size:11px;color:var(--muted)">Date de la visite<input id="vmDate" type="date" value="'+esc(edit.date_visite||'')+'" onchange="vmProposerProchaine()" style="width:100%;'+st+'"></label>'
+    +'<label style="flex:1;min-width:120px;font-size:11px;color:var(--muted)">Date de la visite<input id="vmDate" type="date" min="2000-01-01" max="2100-12-31" value="'+esc(edit.date_visite||'')+'" onchange="vmProposerProchaine()" style="width:100%;'+st+'"></label>'
     +'<label style="flex:1;min-width:120px;font-size:11px;color:var(--muted)">RDV prévu le<input id="vmRdv" type="date" value="'+esc(edit.rdv_le||'')+'" style="width:100%;'+st+'"></label>'
     +'<label style="flex:0 0 100px;font-size:11px;color:var(--muted)">Heure du RDV<input id="vmHeure" type="time" value="'+esc(edit.rdv_heure?String(edit.rdv_heure).slice(0,5):'')+'" style="width:100%;'+st+'"></label>'
-    +'<label style="flex:1;min-width:120px;font-size:11px;color:var(--muted)">Prochaine avant le<input id="vmProchaine" type="date" value="'+esc(edit.prochaine_le||'')+'" style="width:100%;'+st+'"></label>'
+    +'<label style="flex:1;min-width:120px;font-size:11px;color:var(--muted)">Prochaine avant le<input id="vmProchaine" type="date" min="2000-01-01" max="2100-12-31" oninput="this.dataset.auto=\'\'" value="'+esc(edit.prochaine_le||'')+'" style="width:100%;'+st+'"></label>'
     +'<label style="flex:1;min-width:140px;font-size:11px;color:var(--muted)">Avis<select id="vmAvis" style="width:100%;'+st+'"><option value="">—</option>'+Object.keys(VISMED_AVIS).map(k=>'<option value="'+k+'"'+(edit.avis===k?' selected':'')+'>'+esc(VISMED_AVIS[k])+'</option>').join('')+'</select></label>'
     +'<input id="vmObs" placeholder="Observation (facultatif, sans donnée médicale)" value="'+esc(edit.observations||'')+'" style="flex:3;min-width:180px;'+st+'">'
     +'<label style="flex:3;min-width:200px;font-size:11px;color:var(--muted)">Compte rendu d\'Odalia (PDF ou photo)'+(edit.piece_path?' — déjà joint : '+esc(edit.piece_nom||'fichier')+', un nouveau fichier le remplace':'')+'<input id="vmFichier" type="file" accept=".pdf,image/*" style="width:100%;'+st+'"></label>'
@@ -72,9 +72,14 @@ function vmRendre(erreurTable){
     +(vmEditId?'<button type="button" class="btn btn-g btn-sm" onclick="vmEditId=\'\';vmRendre()">Annuler</button>':'')
     +'</div>';
 }
+function vmAnneeOk(iso){const a=parseInt(String(iso||'').slice(0,4),10);return a>=2000&&a<=2100;}
+/* La date de prochaine visite est proposée (+5 ans) tant que la personne ne l'a pas
+   saisie elle-même ; ignorée tant que l'année tapée au clavier n'est pas plausible
+   (sinon « 0002 » donnait « 0007 » et la valeur restait ensuite figée). */
 function vmProposerProchaine(){
   const d=val('vmDate'),p=document.getElementById('vmProchaine');
-  if(d&&p&&!p.value)p.value=vismedAjout(d,VISMED_PERIODE_ANS);
+  if(!d||!p||!vmAnneeOk(d))return;
+  if(!p.value||p.dataset.auto==='1'){p.value=vismedAjout(d,VISMED_PERIODE_ANS);p.dataset.auto='1';}
 }
 function vmModifier(id){vmEditId=id;vmRendre();const el=document.getElementById('vmDate');if(el)el.focus();}
 function vmErreur(m){
@@ -87,10 +92,12 @@ async function vmEnregistrer(){
   const eid=empFicheId;
   const date=val('vmDate')||null,rdv=val('vmRdv')||null;
   if(!date&&!rdv){vmErreur('Renseignez la date de la visite ou la date du RDV.');return false;}
+  const proch=val('vmProchaine')||null;
+  if([date,rdv,proch].some(x=>x&&!vmAnneeOk(x))){vmErreur('Une date a une année incorrecte (vérifiez les 4 chiffres de l\'année).');return false;}
   const row={
     employe_id:eid,type:val('vmType')||'periodique',organisme:VISMED_ORGANISME,
     date_visite:date,rdv_le:date?null:rdv,rdv_heure:date?null:(rdv&&val('vmHeure')||null),
-    prochaine_le:date?(val('vmProchaine')||vismedAjout(date,VISMED_PERIODE_ANS)):null,
+    prochaine_le:date?(proch||vismedAjout(date,VISMED_PERIODE_ANS)):null,
     avis:date?(val('vmAvis')||null):null,observations:val('vmObs')||null
   };
   const fichier=(document.getElementById('vmFichier')||{}).files&&document.getElementById('vmFichier').files[0];
