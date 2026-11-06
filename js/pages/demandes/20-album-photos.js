@@ -388,13 +388,35 @@ async function albRedimensionner(fichier, max) {
   if (bmp.close) bmp.close();
   return await new Promise(function (ok, ko) { c.toBlob(function (b) { b ? ok(b) : ko(new Error('conversion impossible')); }, 'image/jpeg', 0.82); });
 }
+async function albEmpreinte(fichier) {
+  try {
+    if (!(window.crypto && crypto.subtle)) return null;
+    var buf = await fichier.arrayBuffer();
+    var h = new Uint8Array(await crypto.subtle.digest('SHA-256', buf));
+    return Array.prototype.map.call(h, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  } catch (e) { return null; }
+}
 async function albAjouter(input) {
   var fichiers = Array.prototype.slice.call(input.files || []).filter(function (f) { return /^image\//.test(f.type); });
   input.value = '';
   if (!fichiers.length || ALB.occupe || !ALB.creche) return;
   ALB.occupe = true;
-  var ok = 0, echec = 0;
+  var ok = 0, echec = 0, ignores = 0;
+  /* Doublons : empreinte SHA-256 du fichier d'origine, comparée aux photos de la crèche et au lot en cours. */
+  var empreintes = [], connues = {};
+  ALB.photos.forEach(function (p) { if (p.empreinte) connues[p.empreinte] = 1; });
+  showBanner('Recherche des doublons…');
+  for (var h = 0; h < fichiers.length; h++) empreintes.push(await albEmpreinte(fichiers[h]));
+  var vus = {}, doublons = 0;
+  empreintes.forEach(function (e) { if (e && (connues[e] || vus[e])) doublons++; if (e) vus[e] = 1; });
+  var garderDoublons = false;
+  if (doublons) {
+    garderDoublons = !confirm(doublons + ' photo' + (doublons > 1 ? 's' : '') + ' sur ' + fichiers.length + (doublons > 1 ? ' sont déjà dans l’album (ou en double dans votre sélection)' : ' est déjà dans l’album (ou en double dans votre sélection)') + '.\n\nOK : ignorer les doublons.\nAnnuler : les ajouter quand même.');
+  }
+  var dejaAjoutes = {};
   for (var i = 0; i < fichiers.length; i++) {
+    var emp = empreintes[i];
+    if (!garderDoublons && emp && (connues[emp] || dejaAjoutes[emp])) { ignores++; continue; }
     showBanner('Ajout des photos : ' + (i + 1) + ' / ' + fichiers.length + '…');
     var f = fichiers[i], id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : null;
     try {
@@ -407,14 +429,20 @@ async function albAjouter(input) {
       if (u2.error) { await sb.storage.from(ALB_BUCKET).remove([chemin]); throw u2.error; }
       var d = new Date(f.lastModified || Date.now());
       var jour = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      var r = await sb.from('album_photos').insert({ id: id, creche_id: ALB.creche, chemin: chemin, chemin_mini: cmini, prise_le: jour }).select().single();
+      var ligne = { id: id, creche_id: ALB.creche, chemin: chemin, chemin_mini: cmini, prise_le: jour, empreinte: emp };
+      var r = await sb.from('album_photos').insert(ligne).select().single();
+      if (r.error && /empreinte/.test(r.error.message || '')) { /* script SQL pas encore appliqué : on ajoute sans empreinte */
+        delete ligne.empreinte; emp = null;
+        r = await sb.from('album_photos').insert(ligne).select().single();
+      }
       if (r.error) { await sb.storage.from(ALB_BUCKET).remove([chemin, cmini]); throw r.error; }
       ALB.photos.unshift(r.data); ok++;
+      if (emp) dejaAjoutes[emp] = 1;
     } catch (err) { echec++; console.warn('[albAjouter]', f.name, err); }
   }
   ALB.occupe = false;
   if (ok) albJournal('ajout', null, null, ok);
-  showBanner(ok + ' photo' + (ok > 1 ? 's' : '') + ' ajoutée' + (ok > 1 ? 's' : '') + (echec ? ' · ' + echec + ' en échec (format non pris en charge ?)' : '') + '.', echec && !ok ? 'error' : 'success');
+  showBanner(ok + ' photo' + (ok > 1 ? 's' : '') + ' ajoutée' + (ok > 1 ? 's' : '') + (ignores ? ' · ' + ignores + ' doublon' + (ignores > 1 ? 's' : '') + ' ignoré' + (ignores > 1 ? 's' : '') : '') + (echec ? ' · ' + echec + ' en échec (format non pris en charge ?)' : '') + '.', echec && !ok ? 'error' : 'success');
   if (ok) { ALB.vue = 'aclasser'; ALB.sel = {}; }
   albRender();
 }

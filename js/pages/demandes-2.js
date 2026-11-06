@@ -981,7 +981,7 @@ album: `
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Cette tuile, dans <strong>Enfants &amp; suivi</strong>, rassemble les photos de la crèche et les classe dans l’album de chaque enfant. La direction choisit la <strong>crèche</strong> ; les référent·e·s voient la leur.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📥 Ajouter et classer</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
-  <li>Touchez <strong>Ajouter des photos</strong> et choisissez une ou plusieurs photos (elles sont réduites avant l’envoi).</li>
+  <li>Touchez <strong>Ajouter des photos</strong> et choisissez une ou plusieurs photos (elles sont réduites avant l’envoi). Si une photo est déjà dans l’album (même fichier), l’application le signale : OK ignore les doublons, Annuler les ajoute quand même. Seules les photos ajoutées depuis cette détection sont comparées.</li>
   <li>Elles arrivent dans <strong>À classer</strong>. Touchez les photos concernées (une ou plusieurs), puis le nom du ou des enfants. Une photo de groupe se classe dans plusieurs albums à la fois.</li>
   <li>Les derniers enfants choisis passent en tête ; la zone de recherche aide à retrouver un prénom.</li>
   <li>Dans <strong>Par enfant</strong>, ouvrez un album, agrandissez une photo, retirez-la de l’album ou supprimez-la.</li>
