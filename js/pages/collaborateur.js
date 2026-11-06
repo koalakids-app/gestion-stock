@@ -830,8 +830,12 @@ async function loadFormation(){
    RLS = chaque employé(e) ne lit que ses messages. Marqué « lu » à l'ouverture. */
 function loadCodeImage(){
   const card=document.getElementById('codeImgCard'),box=document.getElementById('codeImgBox');
-  if(COLLAB_TYPE!=='employe'||!card||!box)return;
+  if(!card||!box)return;
   const c=COLLAB.code_pictos;
+  /* Direction / référent·e (compte referents, y compris lié à une fiche
+     employé : même code sur les deux, cf. sql/kiosque_code_pictos_lien_employe.sql) :
+     la carte n'apparaît que si un code existe. */
+  if(COLLAB_TYPE!=='employe'&&(!Array.isArray(c)||c.length!==4))return;
   card.style.display='';
   if(!Array.isArray(c)||c.length!==4){box.innerHTML='<p class="hint">Pas encore de code image : demandez-le à votre direction.</p>';return;}
   const base='https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/';
