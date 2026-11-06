@@ -44,7 +44,7 @@ L'application est conçue et maintenue par David Bucari, qui agit comme sous-tra
 | Pour quoi faire | Données | Fondement légal |
 |---|---|---|
 | **Sécuriser les comptes** | Identifiant, journal des connexions et appareils, double authentification, ouverture des documents sensibles, présence en ligne (pour le personnel de direction et les référent·e·s) | Intérêt légitime et obligation de sécurité |
-| **Hygiène et sécurité** (relevés de température, nettoyages, registre de sécurité, passage d'un intervenant extérieur) | Relevés, nom et signature de l'intervenant, nom de l'enfant pour un panier repas PAI | Obligation légale |
+| **Hygiène et sécurité** (relevés de température, nettoyages, registre de sécurité, passage d'un intervenant extérieur) | Relevés, nom et signature de l'intervenant, prénom et initiale du nom de l'enfant pour un panier repas PAI | Obligation légale |
 
 Nous n'utilisons **aucune donnée à des fins publicitaires ou commerciales** et ne revendons aucune donnée.
 
@@ -80,7 +80,7 @@ Nous faisons appel à des prestataires techniques, liés par un contrat ou des g
 | Google (Gmail) | Envoi des e-mails (contrat, codes d'accès, alertes) | Adresse et contenu des e-mails |
 | Anthropic | Transcription de photos de notes de réunion et proposition de planning | Photos de notes (non conservées) ; prénoms et horaires du planning |
 | Services de notifications des navigateurs et d'Apple | Acheminer les notifications | Identifiant technique de l'appareil, sans donnée de santé |
-| jsDelivr, cdnjs, Google Fonts | Bibliothèques et polices des pages | Adresse IP du visiteur |
+| jsDelivr, cdnjs (et Google Fonts sur quelques pages internes) | Bibliothèques et polices des pages | Adresse IP du visiteur |
 
 Certains de ces prestataires sont établis aux États-Unis : les transferts reposent sur les clauses contractuelles types de la Commission européenne ou sur le cadre de protection des données UE–États-Unis. Une **sauvegarde hebdomadaire** de la base est envoyée par e-mail à l'organisation, qui en est seule destinataire.
 
