@@ -192,7 +192,7 @@ async function gouterCrecheOuvrir(dateDebut){
   let enfantsJour=null; // enfants présents par jour (alerte allergènes), si Présences affiche cette semaine
   const recDe=function(j,p){rec[j]=rec[j]||{moyen:[],grand:[]};return memeEl.checked?rec[j].moyen:rec[j][p];};
 
-  async function charger(){
+  async function charger(vierge){
     inputSem.value=semaine;
     zone.innerHTML='<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
     let traiteur={};
@@ -220,7 +220,7 @@ async function gouterCrecheOuvrir(dateDebut){
     zone.innerHTML=MENU_JOURS.map(function(nom,i){
       const j=i+1,e=existants[j]||{moyen:'',grand:''},t=traiteur[j]||{moyen:'',grand:''};
       const pm=String(e.moyen||'').split('/'),l1=(pm[0]||'').trim(),l2=pm.slice(1).join(' / ').trim();
-      const vide=!l1&&!l2; // moyens : toujours yaourt + compote, préremplis tant que rien n'est saisi
+      const vide=!l1&&!l2&&!vierge; // moyens : yaourt + compote préremplis tant que rien n'est saisi (sauf juste après « Effacer »)
       const date=new Date(y,m-1,d+i).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
       return'<div class="fg gc-bloc" data-jour="'+j+'"><label class="flabel">'+nom+' '+escHtml(date)+'</label>'
         +'<div class="gc-moyen-wrap"><span class="gc-lbl gc-lbl-moyen"></span>'
@@ -239,8 +239,8 @@ async function gouterCrecheOuvrir(dateDebut){
     // Effectifs : valeurs enregistrées, sinon Présences › Semaine (même semaine), sinon à saisir.
     const eff=await gouterEffectifsSemaine(crecheId,semaine);
     enfantsJour=eff?eff.enfants:null;
-    const val=function(p,i){const sv=effSaved[i+1];if(sv)return sv.grands;return eff?eff[p][i]:'';};
-    const valM=function(i,n){const sv=effSaved[i+1];if(sv){const v=sv['moyens_l'+n];return v==null?sv.moyens:v;}return eff?eff.moyen[i]:'';};
+    const val=function(p,i){const sv=effSaved[i+1];if(sv)return sv.grands;return(eff&&!vierge)?eff[p][i]:'';};
+    const valM=function(i,n){const sv=effSaved[i+1];if(sv){const v=sv['moyens_l'+n];return v==null?sv.moyens:v;}return(eff&&!vierge)?eff.moyen[i]:'';};
     Array.prototype.forEach.call(zone.querySelectorAll('.gc-bloc'),function(b,i){b.querySelector('.gc-me1').value=valM(i,1);b.querySelector('.gc-me2').value=valM(i,2);});
     document.getElementById('gc-eff').innerHTML='<label class="flabel">Enfants au goûter'+(eff?' <span style="font-weight:400;color:var(--muted)">(calculés d’après les présences, modifiables)</span>':' <span style="font-weight:400;color:var(--muted)">(à saisir)</span>')+'</label>'
       +['grand'].map(function(p){
@@ -401,7 +401,7 @@ async function gouterCrecheOuvrir(dateDebut){
       lignes.forEach(function(l,i){
         ['moyen','grand'].forEach(function(p){recDe(l.jour,p).forEach(function(r){recettesLignes.push({creche_id:crecheId,date_debut:semaine,jour:l.jour,profil:p,recette_id:r.id});});});
         const b=zone.querySelectorAll('.gc-bloc')[i],m1=effMoyen(b,1),m2=effMoyen(b,2),m=Math.max(m1,m2),g=effectif('grand',i);
-        if(m||g)effLignes.push({creche_id:crecheId,date_debut:semaine,jour:l.jour,moyens:m,moyens_l1:m1,moyens_l2:m2,grands:g,updated_at:new Date().toISOString()});
+        if((m||g)&&(lignes[i].moyen||lignes[i].grand||recDe(l.jour,'moyen').length||recDe(l.jour,'grand').length))effLignes.push({creche_id:crecheId,date_debut:semaine,jour:l.jour,moyens:m,moyens_l1:m1,moyens_l2:m2,grands:g,updated_at:new Date().toISOString()});
       });
     }
     try{
@@ -436,7 +436,7 @@ async function gouterCrecheOuvrir(dateDebut){
     }catch(err){console.error('[Goûters crèche] enregistrement',err);showBanner('Erreur lors de l\'enregistrement des goûters.','error');return;}
     await gouterCrecheMap(crecheId,true);
     showBanner(vider?(tousEl.checked?'Goûters effacés : aucun goûter affiché.':'Goûters effacés : retour au goûter du traiteur.'):'Goûters enregistrés ✅');
-    if(vider)await charger();
+    if(vider)await charger(true);
     if(typeof mcmLoadMenusList==='function')mcmLoadMenusList();
     if(typeof renderMenuSemaine==='function')renderMenuSemaine();
     if(typeof renderMenuJour==='function')renderMenuJour();
