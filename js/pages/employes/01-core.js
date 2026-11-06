@@ -341,6 +341,7 @@ function renderListe(){
       :'<button class="btn btn-s btn-sm" onclick="creerCompte(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant de créer le compte"')+'><i class="ti ti-mail-forward"></i> Créer le compte</button>'
         +(PartageLien.disponible()?' <button class="btn btn-g btn-sm" onclick="creerCompte(\''+e.id+'\',true)" '+(e.email?'':'disabled')+'><i class="ti ti-share"></i> Partager…</button>':'');
     return'<div class="crow">'
+      +'<div class="cav">'+esc(initialesEmp(e))+'</div>'
       +'<div class="cinfo"><div class="cname">'+esc(e.prenom)+' '+esc(e.nom||'')+'</div>'
       +'<div class="cmeta">'+esc(e.poste||'—')+(e.email?' · '+esc(e.email):'')+'</div></div>'
       +codeImageHtml(e.code_pictos)
@@ -364,9 +365,31 @@ function codeImageHtml(c){
 }
 
 /* ---------- FICHE ---------- */
+function initialesEmp(e){return((e&&e.prenom||'').charAt(0)+(e&&e.nom||'').charAt(0)).toUpperCase()||'?';}
+function ficheOnglet(nom){
+  document.querySelectorAll('#ficheOnglets .fonglet').forEach(b=>b.classList.toggle('actif',b.dataset.pane===nom));
+  document.querySelectorAll('#modalFiche .fpane').forEach(p=>p.classList.toggle('on',p.id==='fpane-'+nom));
+  const m=document.querySelector('#modalFiche .modal');if(m)m.scrollTop=0;
+}
+/* En-tête : avatar, nom, poste et statuts (se met à jour à la saisie). */
+function ficheEntete(e){
+  const prenom=val('fPrenom'),nom=val('fNom'),poste=val('fPoste');
+  const av=document.getElementById('ficheAvatar');
+  const ini=((prenom.charAt(0)+nom.charAt(0)).toUpperCase());
+  av.innerHTML=ini?esc(ini):'<i class="ti ti-user-plus"></i>';
+  document.getElementById('ficheTitre').textContent=(prenom||nom)?(prenom+' '+nom).trim():'Nouveau/nouvelle collaborateur/trice';
+  let st='';
+  if(e){
+    st=(poste?'<span>'+esc(poste)+'</span>':'')
+      +(estArchive(e)?'<span class="badge off" style="background:var(--violet-l);color:var(--violet)">Archivé</span>'
+        :(estSorti(e)?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)">Sorti</span>':''))
+      +(!e.user_id?'<span class="badge off">Pas de compte</span>'
+        :((COMPTES_ACTIFS&&!COMPTES_ACTIFS.has(e.user_id))?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)">Invitation envoyée</span>':'<span class="badge on">Compte actif</span>'));
+  }else st=poste?'<span>'+esc(poste)+'</span>':'<span>Renseignez l\'identité, puis enregistrez : les autres onglets s\'ouvrent ensuite.</span>';
+  document.getElementById('ficheSous').innerHTML=st;
+}
 function openFiche(id){
   const e=id?EMPLOYES.find(x=>x.id===id):null;
-  document.getElementById('ficheTitre').textContent=e?'Fiche collaborateur/trice':'Nouveau/nouvelle collaborateur/trice';
   document.getElementById('ficheErr').textContent='';
   setVal('fId',e?e.id:'');
   setVal('fPrenom',e?e.prenom:'');
@@ -378,6 +401,11 @@ function openFiche(id){
   setVal('fDateDebut',e?e.date_debut:'');
   setVal('fDateFin',e?e.date_fin:'');
   setVal('fPlanningNom',e?e.planning_nom:'');
+  ficheEntete(e);
+  ['fPrenom','fNom','fPoste'].forEach(i=>{const el=document.getElementById(i);if(el)el.oninput=()=>ficheEntete(e);});
+  document.querySelectorAll('#ficheOnglets .fonglet').forEach(b=>{b.hidden=!e&&b.dataset.pane!=='infos';});
+  document.getElementById('ficheOnglets').style.display=e?'':'none';
+  ficheOnglet('infos');
   const formWrap=document.getElementById('ficheFormationWrap');
   const docsWrap=document.getElementById('ficheDocsWrap');
   const archWrap=document.getElementById('ficheArchivageWrap');

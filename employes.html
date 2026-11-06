@@ -95,8 +95,23 @@
 <!-- MODALE FICHE -->
 <div class="overlay" id="modalFiche">
   <div class="modal">
-    <h3><i class="ti ti-id-badge-2"></i> <span id="ficheTitre">Fiche collaborateur/trice</span></h3>
+    <div class="fhead">
+      <div class="favatar" id="ficheAvatar"><i class="ti ti-user"></i></div>
+      <div class="ftxt">
+        <h3 id="ficheTitre">Fiche collaborateur/trice</h3>
+        <div class="fsub" id="ficheSous"></div>
+      </div>
+      <button type="button" class="fclose" onclick="closeFiche()" title="Fermer" aria-label="Fermer"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="fonglets" id="ficheOnglets" role="tablist">
+      <button type="button" class="fonglet actif" data-pane="infos" role="tab" onclick="ficheOnglet('infos')"><i class="ti ti-user-circle"></i>Infos</button>
+      <button type="button" class="fonglet" data-pane="docs" role="tab" onclick="ficheOnglet('docs')"><i class="ti ti-folder"></i>Documents</button>
+      <button type="button" class="fonglet" data-pane="form" role="tab" onclick="ficheOnglet('form')"><i class="ti ti-school"></i>Formation</button>
+      <button type="button" class="fonglet" data-pane="suivi" role="tab" onclick="ficheOnglet('suivi')"><i class="ti ti-heartbeat"></i>Suivi</button>
+    </div>
     <input type="hidden" id="fId">
+    <div class="fpane on" id="fpane-infos">
+    <div class="fcard"><div class="fsec"><i class="ti ti-id"></i> Identité</div>
     <div class="g2">
       <div class="f"><label class="lb">Prénom</label><input id="fPrenom"></div>
       <div class="f"><label class="lb">Nom</label><input id="fNom"></div>
@@ -105,6 +120,8 @@
       <div class="f"><label class="lb">Poste</label><input id="fPoste" placeholder="Auxiliaire, agent d'entretien…"></div>
       <div class="f"><label class="lb">E-mail</label><input id="fEmail" type="email"></div>
     </div>
+    </div>
+    <div class="fcard"><div class="fsec"><i class="ti ti-file-text"></i> Contrat et horaires</div>
     <div class="g2">
       <div class="f"><label class="lb">Type de contrat</label>
         <select id="fTypeContrat"><option value="">—</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select>
@@ -117,13 +134,18 @@
     </div>
     <p class="hint">Les heures hebdomadaires et les dates de contrat servent de référence au calcul du
       compteur d'heures supplémentaires annualisées (1607h temps plein, proraté).</p>
+    </div>
     <div class="f" id="ficheArchivageWrap" style="display:none"></div>
+    <div class="fcard"><div class="fsec"><i class="ti ti-calendar-user"></i> Planning</div>
     <div class="f"><label class="lb">Nom utilisé dans le planning équipe (si différent)</label><input id="fPlanningNom" placeholder="Laisser vide si le prénom suffit"></div>
     <p class="hint">À remplir seulement en cas d'homonymie : le planning équipe (import Excel) rapproche
       les créneaux par prénom, ce qui peut se tromper si deux personnes de la crèche portent le même
       prénom. Ce champ prend alors le pas sur le prénom pour le "Mon espace" de ce/cette collaborateur/trice.</p>
-    <div class="f" id="ficheFormationWrap" style="display:none">
-      <label class="lb">Envoyer un quiz ou une formation</label>
+    </div>
+    </div>
+    <div class="fpane" id="fpane-form">
+    <div class="fcard" id="ficheFormationWrap" style="display:none">
+      <div class="fsec"><i class="ti ti-send"></i> Envoyer un quiz ou une formation</div>
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <select id="ficheFormationSelect" style="flex:1"><option value="">Chargement…</option></select>
         <button type="button" class="btn btn-s btn-sm" onclick="envoyerFormation()"><i class="ti ti-send"></i> Envoyer</button>
@@ -134,42 +156,47 @@
         « Partager… » fait de même sans e-mail : le lien part par l'application de votre choix (WhatsApp, SMS…).
         <strong>Envoyez toujours depuis la fiche de la personne concernée</strong> : le lien est personnel, le
         résultat est enregistré au nom de la fiche d'où il a été généré.</p>
-      <label class="lb" style="margin-top:10px">Planning des quiz (26 octobre – 24 décembre 2026)</label>
+      <div class="fsec" style="margin-top:14px"><i class="ti ti-calendar-event"></i> Planning des quiz (26 octobre – 24 décembre 2026)</div>
       <div id="fichePlanningQuizBox"></div>
-      <label class="lb" style="margin-top:10px">Parcours de formation</label>
+      <div class="fsec" style="margin-top:14px"><i class="ti ti-route"></i> Parcours de formation</div>
       <div id="ficheFormationBox"></div>
     </div>
-    <div class="f" id="ficheDocsWrap" style="display:none">
-      <label class="lb">Documents d'embauche</label>
+    </div>
+    <div class="fpane" id="fpane-docs">
+    <div class="fcard" id="ficheDocsWrap" style="display:none">
+      <div class="fsec"><i class="ti ti-folder"></i> Documents d'embauche</div>
       <div id="fiche-docs-dossier-box"></div>
       <div id="ficheDocsZone"></div>
     </div>
     <!-- Registre des pièces conservées hors appli (papier, coffre-fort,
          classeur RH...) : trace leur existence et leur lieu de conservation
          sans les scanner — voir sql/documents_externes.sql. -->
-    <div class="f" id="ficheVisitesWrap" style="display:none">
-      <label class="lb">Visite médicale obligatoire (Odalia)</label>
+    <div class="fcard" id="ficheContratsWrap" style="display:none">
+      <div class="fsec"><i class="ti ti-file-certificate"></i> Contrat de travail</div>
+      <div id="ficheContratsBox"></div>
+      <p class="hint">Généré et signé depuis le module Documents (modèle « Contrat de travail (salarié) »),
+        une fois cette fiche liée au contrat via le sélecteur « Fiche collaborateur/trice ».</p>
+    </div>
+    <div class="fcard" id="ficheDocExtWrap" style="display:none">
+      <div class="fsec"><i class="ti ti-archive"></i> Documents sur support externe</div>
+      <div id="ficheDocExtZone"></div>
+    </div>
+    </div>
+    <div class="fpane" id="fpane-suivi">
+    <div class="fcard" id="ficheVisitesWrap" style="display:none">
+      <div class="fsec"><i class="ti ti-stethoscope"></i> Visite médicale obligatoire (Odalia)</div>
       <div id="ficheVisitesZone"></div>
       <p class="hint">Médecine du travail : visite d'information et de prévention dans les 3 mois suivant
         l'embauche, puis au plus tard tous les 5 ans. Indiquez le RDV dès qu'il est pris, puis « Renseigner la
         visite » une fois passée. L'alerte apparaît dans « Ma journée » 60 jours avant l'échéance. Aucune donnée
         médicale ici : seulement la date et l'avis.</p>
     </div>
-    <div class="f" id="ficheDocExtWrap" style="display:none">
-      <label class="lb">Documents sur support externe</label>
-      <div id="ficheDocExtZone"></div>
-    </div>
-    <div class="f" id="ficheContratsWrap" style="display:none">
-      <label class="lb">Contrat de travail</label>
-      <div id="ficheContratsBox"></div>
-      <p class="hint">Généré et signé depuis le module Documents (modèle « Contrat de travail (salarié) »),
-        une fois cette fiche liée au contrat via le sélecteur « Fiche collaborateur/trice ».</p>
-    </div>
-    <div class="f" id="ficheHeuresWrap" style="display:none">
-      <label class="lb">Validation mensuelle des heures</label>
+    <div class="fcard" id="ficheHeuresWrap" style="display:none">
+      <div class="fsec"><i class="ti ti-clock-check"></i> Validation mensuelle des heures</div>
       <div id="ficheHeuresBox"></div>
       <p class="hint">Signatures électroniques déposées par le/la collaborateur/trice depuis "Mon espace",
         mois par mois. Lecture seule : ces validations ne peuvent pas être modifiées ici.</p>
+    </div>
     </div>
     <div id="ficheErr" style="color:var(--red);font-size:12.5px;font-weight:600;min-height:18px"></div>
     <div class="foot">
