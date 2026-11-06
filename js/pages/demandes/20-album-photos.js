@@ -244,13 +244,87 @@ async function albRenderEnfant(z) {
     '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">' +
     '<button class="btn-sm" ' + (ph.length ? '' : 'disabled') + ' onclick="albZip(false)"><i class="ti ti-file-zip"></i> Télécharger (.zip)</button>' +
     '<button class="btn-sm" onclick="albPanneauRemise()"><i class="ti ti-gift"></i> Départ : remise aux parents</button></span></div>' +
-    '<div id="alb-remise"></div>';
+    '<div id="alb-remise"></div><div id="alb-droit"></div>';
   h += ph.length ? '<div class="alb-gal">' + ph.map(function (p) {
     return '<div class="alb-ph" onclick="albLightbox(\'enfant\',\'' + p.id + '\')" role="button" tabindex="0">' + albImg(p, true) +
       (albEnfantsDe(p.id).length > 1 ? '<span class="alb-groupe" title="Photo de groupe"><i class="ti ti-users"></i></span>' : '') +
       '<span class="alb-tag">' + albDateFr(p.prise_le) + '</span></div>';
   }).join('') + '</div>' : '<div class="alb-vide-msg"><i class="ti ti-photo-off"></i><p>Aucune photo dans cet album.</p></div>';
   z.innerHTML = h;
+  albDroitCharger(e.id);
+}
+
+/* --- Droit à l'image : import du document papier rempli par les parents ---
+   Même table et même bucket que le dossier administratif de la fiche enfant
+   (enfants_documents_admin, bucket documents-admin), clé de pièce 'droit_image'. */
+var ALB_DROIT_KEY = 'droit_image', ALB_DROIT_BUCKET = 'documents-admin';
+async function albDroitCharger(enfantId) {
+  var z = albById('alb-droit');
+  if (!z) return;
+  z.innerHTML = '<div class="alb-ct" style="margin:8px 0">Droit à l’image : chargement…</div>';
+  var r = await sb.from('enfants_documents_admin').select('*').eq('enfant_id', enfantId).eq('piece_key', ALB_DROIT_KEY).order('created_at', { ascending: false });
+  if (String(ALB.enfant) !== String(enfantId)) return;
+  if (r.error) { z.innerHTML = '<div class="alb-ct" style="margin:8px 0;color:var(--red)">Droit à l’image : lecture impossible.</div>'; return; }
+  ALB.droits = r.data || [];
+  albDroitRender();
+}
+function albDroitRender() {
+  var z = albById('alb-droit');
+  if (!z) return;
+  var d = ALB.droits || [];
+  var h = '<div class="alb-remise" style="margin:10px 0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b>Droit à l’image</b>' +
+    (d.length ? '<span style="color:var(--green);font-weight:700;font-size:12px">✅ Reçu le ' + albDateFr(d[0].created_at) + '</span>'
+              : '<span style="color:var(--orange);font-weight:700;font-size:12px">⚠ Document non importé</span>') +
+    '<button class="btn-sm" style="margin-left:auto" onclick="albDroitChoisir()"><i class="ti ti-upload"></i> Importer le document signé</button></div>' +
+    d.map(function (f) {
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><i class="ti ti-paperclip" style="color:var(--koala)"></i>' +
+        '<button type="button" onclick="albDroitOuvrir(\'' + f.id + '\')" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;color:var(--koala-dark);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + albEsc(f.filename || 'Document') + '</button>' +
+        '<span class="alb-ct">' + albDateFr(f.created_at) + '</span>' +
+        '<button onclick="albDroitSupprimer(\'' + f.id + '\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer"><i class="ti ti-trash"></i></button></div>';
+    }).join('') +
+    '<input type="file" id="alb-droit-fichier" accept="image/*,application/pdf" multiple style="display:none" onchange="albDroitAjouter(this)"></div>';
+  z.innerHTML = h;
+}
+function albDroitChoisir() { var i = albById('alb-droit-fichier'); if (i) i.click(); }
+async function albDroitAjouter(input) {
+  var fichiers = Array.prototype.slice.call(input.files || []);
+  input.value = '';
+  var eid = ALB.enfant;
+  if (!fichiers.length || !eid) return;
+  var ok = 0;
+  for (var i = 0; i < fichiers.length; i++) {
+    var f = fichiers[i];
+    showBanner('Import du document : ' + (i + 1) + ' / ' + fichiers.length + '…');
+    try {
+      var ext = (f.name.split('.').pop() || 'bin').replace(/[^A-Za-z0-9]/g, '').slice(0, 8) || 'bin';
+      var path = eid + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
+      var u = await sb.storage.from(ALB_DROIT_BUCKET).upload(path, f);
+      if (u.error) throw u.error;
+      var r = await sb.from('enfants_documents_admin').insert({ enfant_id: eid, bucket: ALB_DROIT_BUCKET, path: path, filename: f.name, piece_key: ALB_DROIT_KEY }).select().single();
+      if (r.error) { await sb.storage.from(ALB_DROIT_BUCKET).remove([path]); throw r.error; }
+      ALB.droits = [r.data].concat(ALB.droits || []); ok++;
+    } catch (err) { console.warn('[albDroitAjouter]', f.name, err); showBanner('Import impossible : ' + (err.message || err), 'error'); return albDroitRender(); }
+  }
+  albDroitRender();
+  showBanner(ok + ' document' + (ok > 1 ? 's' : '') + ' importé' + (ok > 1 ? 's' : '') + ' ✅', 'success');
+}
+async function albDroitOuvrir(id) {
+  var d = (ALB.droits || []).find(function (x) { return String(x.id) === String(id); });
+  if (!d) return;
+  if (typeof kkJournaliserAcces === 'function') kkJournaliserAcces(d.bucket || ALB_DROIT_BUCKET, d.path, { entite_type: 'enfant', entite_id: d.enfant_id, libelle: d.filename });
+  var r = await sb.storage.from(d.bucket || ALB_DROIT_BUCKET).createSignedUrl(d.path, 300);
+  if (r.error || !r.data) { alert('Ouverture impossible : ' + ((r.error && r.error.message) || 'erreur inconnue')); return; }
+  window.open(r.data.signedUrl, '_blank', 'noopener');
+}
+async function albDroitSupprimer(id) {
+  if (!confirm('Supprimer ce document ?')) return;
+  var d = (ALB.droits || []).find(function (x) { return String(x.id) === String(id); });
+  if (!d) return;
+  var r = await sb.from('enfants_documents_admin').delete().eq('id', id);
+  if (r.error) { alert('Erreur : ' + r.error.message); return; }
+  await sb.storage.from(d.bucket || ALB_DROIT_BUCKET).remove([d.path]);
+  ALB.droits = ALB.droits.filter(function (x) { return String(x.id) !== String(id); });
+  albDroitRender();
 }
 
 /* --- Remise aux parents (départ définitif) --- */
@@ -388,13 +462,35 @@ async function albRedimensionner(fichier, max) {
   if (bmp.close) bmp.close();
   return await new Promise(function (ok, ko) { c.toBlob(function (b) { b ? ok(b) : ko(new Error('conversion impossible')); }, 'image/jpeg', 0.82); });
 }
+async function albEmpreinte(fichier) {
+  try {
+    if (!(window.crypto && crypto.subtle)) return null;
+    var buf = await fichier.arrayBuffer();
+    var h = new Uint8Array(await crypto.subtle.digest('SHA-256', buf));
+    return Array.prototype.map.call(h, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  } catch (e) { return null; }
+}
 async function albAjouter(input) {
   var fichiers = Array.prototype.slice.call(input.files || []).filter(function (f) { return /^image\//.test(f.type); });
   input.value = '';
   if (!fichiers.length || ALB.occupe || !ALB.creche) return;
   ALB.occupe = true;
-  var ok = 0, echec = 0;
+  var ok = 0, echec = 0, ignores = 0;
+  /* Doublons : empreinte SHA-256 du fichier d'origine, comparée aux photos de la crèche et au lot en cours. */
+  var empreintes = [], connues = {};
+  ALB.photos.forEach(function (p) { if (p.empreinte) connues[p.empreinte] = 1; });
+  showBanner('Recherche des doublons…');
+  for (var h = 0; h < fichiers.length; h++) empreintes.push(await albEmpreinte(fichiers[h]));
+  var vus = {}, doublons = 0;
+  empreintes.forEach(function (e) { if (e && (connues[e] || vus[e])) doublons++; if (e) vus[e] = 1; });
+  var garderDoublons = false;
+  if (doublons) {
+    garderDoublons = !confirm(doublons + ' photo' + (doublons > 1 ? 's' : '') + ' sur ' + fichiers.length + (doublons > 1 ? ' sont déjà dans l’album (ou en double dans votre sélection)' : ' est déjà dans l’album (ou en double dans votre sélection)') + '.\n\nOK : ignorer les doublons.\nAnnuler : les ajouter quand même.');
+  }
+  var dejaAjoutes = {};
   for (var i = 0; i < fichiers.length; i++) {
+    var emp = empreintes[i];
+    if (!garderDoublons && emp && (connues[emp] || dejaAjoutes[emp])) { ignores++; continue; }
     showBanner('Ajout des photos : ' + (i + 1) + ' / ' + fichiers.length + '…');
     var f = fichiers[i], id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : null;
     try {
@@ -407,14 +503,20 @@ async function albAjouter(input) {
       if (u2.error) { await sb.storage.from(ALB_BUCKET).remove([chemin]); throw u2.error; }
       var d = new Date(f.lastModified || Date.now());
       var jour = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      var r = await sb.from('album_photos').insert({ id: id, creche_id: ALB.creche, chemin: chemin, chemin_mini: cmini, prise_le: jour }).select().single();
+      var ligne = { id: id, creche_id: ALB.creche, chemin: chemin, chemin_mini: cmini, prise_le: jour, empreinte: emp };
+      var r = await sb.from('album_photos').insert(ligne).select().single();
+      if (r.error && /empreinte/.test(r.error.message || '')) { /* script SQL pas encore appliqué : on ajoute sans empreinte */
+        delete ligne.empreinte; emp = null;
+        r = await sb.from('album_photos').insert(ligne).select().single();
+      }
       if (r.error) { await sb.storage.from(ALB_BUCKET).remove([chemin, cmini]); throw r.error; }
       ALB.photos.unshift(r.data); ok++;
+      if (emp) dejaAjoutes[emp] = 1;
     } catch (err) { echec++; console.warn('[albAjouter]', f.name, err); }
   }
   ALB.occupe = false;
   if (ok) albJournal('ajout', null, null, ok);
-  showBanner(ok + ' photo' + (ok > 1 ? 's' : '') + ' ajoutée' + (ok > 1 ? 's' : '') + (echec ? ' · ' + echec + ' en échec (format non pris en charge ?)' : '') + '.', echec && !ok ? 'error' : 'success');
+  showBanner(ok + ' photo' + (ok > 1 ? 's' : '') + ' ajoutée' + (ok > 1 ? 's' : '') + (ignores ? ' · ' + ignores + ' doublon' + (ignores > 1 ? 's' : '') + ' ignoré' + (ignores > 1 ? 's' : '') : '') + (echec ? ' · ' + echec + ' en échec (format non pris en charge ?)' : '') + '.', echec && !ok ? 'error' : 'success');
   if (ok) { ALB.vue = 'aclasser'; ALB.sel = {}; }
   albRender();
 }
