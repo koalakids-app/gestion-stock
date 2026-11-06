@@ -339,8 +339,7 @@ function syncRedessine(){
     if(fiche&&fiche.classList.contains('open')&&typeof enfRenderIdentite==='function'){
       const e=cacheEnfants.find(function(x){return String(x.id)===String(enfFicheId);});
       if(e){
-        const titre=document.getElementById('enf-fiche-title');
-        if(titre)titre.innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((e.prenom||'')+' '+(e.nom||''));
+        if(typeof enfEntete==='function')enfEntete(e);
         enfRenderIdentite();
       }
     }

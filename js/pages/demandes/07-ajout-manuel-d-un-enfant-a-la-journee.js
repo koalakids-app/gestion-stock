@@ -201,7 +201,7 @@ async function saveEnfant(){
     showBanner(prenom+' modifié(e) ✅');
     renderPresence();
     if(document.getElementById('modal-enf-fiche-wrap')?.classList.contains('open')){
-      document.getElementById('enf-fiche-title').innerHTML='<i class="ti ti-mood-kid"></i> '+escHtml((row.prenom||'')+' '+(row.nom||''));
+      {const ee=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));if(ee)enfEntete(ee);}
       enfRenderIdentite();
     }
     if(typeof enfRender==='function')enfRender();
