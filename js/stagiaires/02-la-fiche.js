@@ -1,6 +1,37 @@
 
 // ── La fiche ──────────────────────────────────────────────────────────────
 
+/* Onglets de la fiche (Profil, Stage, Documents, Suivi), même présentation que les fiches
+   collaborateur et enfant. Documents et Suivi attendent que la fiche soit enregistrée. */
+function stgOnglet(nom){
+  document.querySelectorAll('#stg-onglets .fonglet').forEach(b=>b.classList.toggle('actif',b.dataset.stgtab===nom));
+  ['profil','stage','docs','suivi'].forEach(t=>{const el=document.getElementById('stg-pane-'+t);if(el)el.classList.toggle('active',t===nom);});
+  const corps=document.querySelector('#modal-stagiaire-wrap .fbody');if(corps)corps.scrollTop=0;
+}
+/* En-tête : avatar à initiales, nom, type de profil, formation, crèche, statut. */
+function stgEntete(s){
+  const g=id=>((document.getElementById(id)||{}).value||'').trim();
+  const prenom=s?s.prenom:g('stg-f-prenom'),nom=s?s.nom:g('stg-f-nom');
+  const ini=((prenom||'').charAt(0)+(nom||'').charAt(0)).toUpperCase();
+  const av=document.getElementById('stg-avatar');
+  if(av)av.innerHTML=ini?escHtml(ini):'<i class="ti ti-school"></i>';
+  document.getElementById('stg-modal-title').textContent=((prenom||'')+' '+(nom||'')).trim()||'Nouvelle fiche';
+  const type=(document.getElementById('stg-f-type')||{}).value==='alternant'?'alternant':'stagiaire';
+  const cr=cacheCreches.find(c=>String(c.id)===String(g('stg-f-creche')));
+  const st=stgMeta(g('stg-f-statut')||'demande');
+  const bits=[escHtml(STG_PROFILS[type].lib)];
+  if(g('stg-f-formation'))bits.push(escHtml(g('stg-f-formation')));
+  if(cr)bits.push(escHtml(cr.name));
+  const sous=document.getElementById('stg-sous');
+  if(sous)sous.innerHTML=bits.map(t=>'<span>'+t+'</span>').join(' · ')
+    +' <span class="badge-fiche" style="background:var(--koala-light);color:'+st.cls+'">'+escHtml(st.lib)+'</span>';
+}
+function stgEnteteBrancher(){
+  ['stg-f-prenom','stg-f-nom','stg-f-formation','stg-f-type','stg-f-creche','stg-f-statut'].forEach(id=>{
+    const el=document.getElementById(id);if(!el||el.dataset.entete)return;el.dataset.entete='1';
+    el.addEventListener('input',()=>stgEntete(null));el.addEventListener('change',()=>stgEntete(null));
+  });
+}
 function stgOpenFiche(id,typeDefaut){
   stgFicheId=id||null;
   /* La grille de la fiche précédente ne doit pas survivre : son sélecteur de profil
@@ -12,8 +43,6 @@ function stgOpenFiche(id,typeDefaut){
   const v=(el,val)=>{const e=document.getElementById(el);if(e)e.value=val==null?'':val;};
   const type=s?stgType(s):(typeDefaut==='alternant'?'alternant':'stagiaire');
 
-  document.getElementById('stg-modal-title').textContent=
-    s?stgNomComplet(s):'Nouvelle fiche';
   v('stg-f-type',type);
 
   const selC=document.getElementById('stg-f-creche');
@@ -36,10 +65,14 @@ function stgOpenFiche(id,typeDefaut){
 
   const apres=document.getElementById('stg-apres-creation');
   if(apres)apres.style.display=s?'':'none';
+  stgEnteteBrancher();
+  document.querySelectorAll('#stg-onglets .fonglet').forEach(b=>{b.hidden=!s&&(b.dataset.stgtab==='docs'||b.dataset.stgtab==='suivi');});
+  stgOnglet('profil');
   const del=document.getElementById('stg-f-del');
   if(del)del.style.display=s?'':'none';
 
   stgTypeChange();
+  stgEntete(null);
   stgDocExtCache=[];
   const docExtZone=document.getElementById('stg-doc-ext-zone');
   if(docExtZone)docExtZone.innerHTML='';

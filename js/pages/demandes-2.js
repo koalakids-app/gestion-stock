@@ -760,6 +760,7 @@ stagiaires: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🎓 Stagiaires et alternants</h3>
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580;line-height:1.6">
   💡 Une fiche par stagiaire <strong>ou par alternant</strong>, de la demande déposée sur le Padlet jusqu'à l'évaluation de fin de stage ou d'alternance. Les documents demandés sont déposés par la personne elle-même, depuis son téléphone, via un lien à durée limitée.
+  <p style="font-size:13px;color:#555;line-height:1.7;margin:8px 0">La fiche s'organise en 4 onglets (comme les fiches collaborateur et enfant) : <strong>Profil</strong> (identité, formation, notes), <strong>Stage</strong> (crèche, statut, entretien, dates, convention), <strong>Documents</strong> et <strong>Suivi</strong> (jours de présence, évaluation). Documents et Suivi s'ouvrent une fois la fiche enregistrée.</p>
   <br><br>Le <strong>type de profil</strong> se choisit en haut de la fiche : il change le vocabulaire (convention de stage ou contrat d'alternance, début du stage ou de l'alternance) et surtout la <strong>liste des pièces demandées</strong>. Les deux profils partagent le même calendrier, le même lien de dépôt et le même export.
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Le chemin d'une fiche</div>
