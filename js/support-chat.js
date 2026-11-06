@@ -43,6 +43,16 @@
   let dernierVu = null;               // heure serveur du dernier signal (ISO), pour le signal de départ
   let jetonPresence = null;           // jeton d'accès gardé à jour pour l'envoi à la fermeture
   const titreOrigine = document.title;
+  // Échange direct entre personnes connectées : jamais écrit en base (diffusion Realtime
+  // « broadcast » sur un canal privé de l'organisation), gardé en mémoire seulement.
+  const EQ_MAX_MSG = 100;             // messages gardés par échange
+  const EQ_ACCUSE_MS = 6000;          // sans accusé de réception après ce délai = « non reçu »
+  let canalEq = null;
+  let eqPret = false;                 // canal abonné
+  let eqErreur = false;               // canal refusé (script SQL non appliqué) ou en erreur
+  let echanges = {};                  // { idPersonne: [{ id, moi, texte, t, lu, recu, echec }] }
+  let convEq = null;                  // échange affiché dans l'onglet Équipe (null = liste)
+  let toastCibleEq = null;            // personne à ouvrir quand on clique sur l'alerte
 
   // Client Supabase : celui de la page (`sb`) ; sur l'accueil (index.html), qui n'en a
   // pas, on en crée un avec la même clé publique : la session ouverte sur une autre
@@ -136,6 +146,8 @@
 .kk-sc-pers .pi span{font-size:11.5px;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kk-sc-pers .ps{font-size:11px;color:#888;text-align:right;flex:none}
 .kk-sc-pers.hors{opacity:.75}
+.kk-sc-pers.clic{cursor:pointer}
+.kk-sc-pers.clic:hover{border-color:var(--koala,#3D3580)}
 .kk-sc-grp{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#888;margin:6px 2px 0}
 #kk-sc-toast{position:fixed;right:24px;bottom:150px;z-index:9989;max-width:300px;background:#2A2460;color:#fff;padding:10px 14px;border-radius:12px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.3);display:none;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Nunito,sans-serif}
 @media (max-width:768px){
@@ -172,7 +184,12 @@
 
     const toast = document.createElement('div');
     toast.id = 'kk-sc-toast';
-    toast.addEventListener('click', () => { toast.style.display = 'none'; ouvrir(); });
+    toast.addEventListener('click', () => {
+      toast.style.display = 'none';
+      if (toastCibleEq && me && me.presence) { onglet = 'equipe'; convEq = toastCibleEq; majOnglets(); }
+      toastCibleEq = null;
+      ouvrir();
+    });
 
     document.body.appendChild(btn);
     document.body.appendChild(panel);
@@ -194,13 +211,17 @@
       els.tabs.style.display = 'flex';
       els.tabs.querySelectorAll('[data-onglet]').forEach(b => b.addEventListener('click', () => {
         onglet = b.getAttribute('data-onglet');
+        convEq = null;
         majOnglets();
         rendre();
         if (onglet === 'equipe') chargerPresence(); else marquerLu();
         planifierPresence();
       }));
     }
-    els.back.addEventListener('click', () => { convActive = null; rendre(); });
+    els.back.addEventListener('click', () => {
+      if (me.presence && onglet === 'equipe') { convEq = null; rendre(); return; }
+      convActive = null; rendre();
+    });
     els.send.addEventListener('click', envoyer);
     els.input.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyer(); }
@@ -215,6 +236,8 @@
     if (canal) { try { getSb().removeChannel(canal); } catch (e) {} canal = null; }
     clearTimeout(timer); timer = null;
     clearTimeout(timerPres); timerPres = null; presence = []; onglet = 'assistance';
+    if (canalEq) { try { getSb().removeChannel(canalEq); } catch (e) {} canalEq = null; }
+    eqPret = false; eqErreur = false; echanges = {}; convEq = null; toastCibleEq = null;
     ['kk-sc-btn', 'kk-sc-panel', 'kk-sc-toast'].forEach(id => { const n = document.getElementById(id); if (n) n.remove(); });
     els = null; msgs = []; me = null; uid = null; ouvert = false; convActive = null; nonLusPrec = 0;
     document.title = titreOrigine;
@@ -233,7 +256,8 @@
       if (r) return {
         nom: r.name || r.nom || 'Référent·e', direction: estSupport,
         presence: r.role === 'referent' || r.role === 'direction',
-        estDirection: r.role === 'direction'
+        estDirection: r.role === 'direction',
+        org: r.org_id || null
       };
     } catch (e) { /* on tente la fiche collaborateur */ }
     try {
@@ -271,12 +295,14 @@
   function majPastille() {
     if (!els) return;
     const n = nonLus().length;
-    els.badge.style.display = n ? 'flex' : 'none';
-    els.badge.textContent = n > 99 ? '99+' : String(n);
-    els.btn.classList.toggle('kk-sc-pulse', n > 0);
-    document.title = n ? '(' + n + ') ' + titreOrigine : titreOrigine;
+    const total = n + nonLusEq();
+    els.badge.style.display = total ? 'flex' : 'none';
+    els.badge.textContent = total > 99 ? '99+' : String(total);
+    els.btn.classList.toggle('kk-sc-pulse', total > 0);
+    document.title = total ? '(' + total + ') ' + titreOrigine : titreOrigine;
     if (n > nonLusPrec && !ouvert) {
       const dernier = nonLus().slice(-1)[0];
+      toastCibleEq = null;
       afficherToast(me.direction
         ? '💬 ' + (dernier.auteur_nom || 'Un membre de l’équipe') + ' : ' + dernier.contenu
         : '💬 Réponse du support : ' + dernier.contenu);
@@ -475,6 +501,8 @@
   }
 
   function rendreEquipe() {
+    if (convEq) { rendreEchangeEq(); return; }
+    els.foot.style.display = 'none';
     els.titre.innerHTML = 'Qui est connecté·e ?<small>Direction et référent·es · mis à jour toutes les minutes</small>';
     els.back.style.display = 'none';
     els.foot.style.display = 'none';
@@ -496,11 +524,112 @@
       const sous = [p.role === 'direction' ? 'Direction' : 'Référent·e', p.creche_nom].filter(Boolean).join(' · ') +
         (st !== 'hors' && p.page ? ' · 📍 ' + p.page : '');
       const droite = st === 'en_ligne' ? 'en ligne' : st === 'inactif' ? 'actif·ve ' + depuis(p.actif_le) : 'vu·e ' + depuis(p.parti_le && new Date(p.parti_le) >= new Date(p.vu_le) ? p.parti_le : p.vu_le);
-      html += '<div class="kk-sc-pers ' + (st === 'hors' ? 'hors' : st) + '"><span class="pt"></span>' +
+      const ecrivable = p.user_id !== uid && st !== 'hors' && canalEq;
+      const nl = (echanges[p.user_id] || []).filter(m => !m.moi && !m.lu).length;
+      html += '<div class="kk-sc-pers ' + (st === 'hors' ? 'hors' : st) + (ecrivable ? ' clic' : '') + '"' +
+        (ecrivable ? ' data-pair="' + esc(p.user_id) + '" role="button" tabindex="0"' : '') + '><span class="pt"></span>' +
         '<span class="pi"><b>' + esc(p.nom || 'Sans nom') + (p.user_id === uid ? ' (vous)' : '') + '</b><span>' + esc(sous) + '</span></span>' +
-        '<span class="ps">' + esc(droite) + '</span></div>';
+        (nl ? '<span class="kk-sc-pastille">' + nl + '</span>' : '') +
+        '<span class="ps">' + (ecrivable ? '💬 ' : '') + esc(droite) + '</span></div>';
     });
-    els.body.innerHTML = html;
+    els.body.innerHTML = '<div class="kk-sc-vide" style="padding:2px 6px;font-size:11.5px">Cliquez sur une personne en ligne pour échanger avec elle. Les échanges ne sont pas conservés.</div>' + html;
+    els.body.querySelectorAll('[data-pair]').forEach(b => {
+      const ouvrirPair = () => { convEq = b.getAttribute('data-pair'); rendre(); marquerLuEq(); els.input.focus(); };
+      b.addEventListener('click', ouvrirPair);
+      b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrirPair(); } });
+    });
+  }
+
+  // ───────── Échange direct (éphémère) ─────────
+  function nomPers(id, repli) {
+    const p = presence.find(x => x.user_id === id);
+    return (p && p.nom) || repli || 'Collègue';
+  }
+  function nonLusEq() {
+    let n = 0;
+    Object.keys(echanges).forEach(k => echanges[k].forEach(m => { if (!m.moi && !m.lu) n++; }));
+    return n;
+  }
+  function marquerLuEq() {
+    if (!convEq || !echanges[convEq]) return;
+    echanges[convEq].forEach(m => { m.lu = true; });
+    majPastille();
+  }
+  function ajouterEq(id, m) {
+    const l = echanges[id] || (echanges[id] = []);
+    l.push(m);
+    if (l.length > EQ_MAX_MSG) l.splice(0, l.length - EQ_MAX_MSG);
+  }
+  function rendreEchangeEq() {
+    const p = presence.find(x => x.user_id === convEq);
+    const st = p ? statutPres(p) : 'hors';
+    els.titre.innerHTML = esc(nomPers(convEq)) + '<small>' +
+      (st === 'hors' ? 'Hors ligne · votre message ne sera pas reçu' : st === 'inactif' ? 'Inactif·ve · peut tarder à répondre' : 'En ligne') +
+      ' · échange non conservé</small>';
+    els.back.style.display = '';
+    els.foot.style.display = 'flex';
+    els.input.placeholder = 'Votre message…';
+    const body = els.body;
+    const proche = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+    const fil = echanges[convEq] || [];
+    body.innerHTML = fil.length
+      ? fil.map(m => '<div class="kk-sc-msg ' + (m.moi ? 'moi' : 'autre') + '">' + esc(m.texte) +
+          '<span class="kk-sc-meta">' + esc(hhmm(m.t)) + (m.moi ? (m.recu ? ' · ✓ reçu' : m.echec ? ' · ⚠ non reçu' : ' · …') : '') + '</span></div>').join('')
+      : '<div class="kk-sc-vide">💬 Échange direct avec ' + esc(nomPers(convEq)) + '.<br>Il disparaît dès que vous fermez la bulle : rien n’est enregistré.</div>';
+    if (!eqPret) body.insertAdjacentHTML('afterbegin', '<div class="kk-sc-ctx">' + (eqErreur ? '⚠ Échange direct indisponible' : 'Connexion en cours…') + '</div>');
+    if (proche) body.scrollTop = body.scrollHeight;
+  }
+
+  function ouvrirCanalEq(client) {
+    if (canalEq || !me || !me.presence || !me.org || typeof client.channel !== 'function') return;
+    try {
+      const c = client.channel('kk-equipe-' + me.org, { config: { private: true, broadcast: { self: false } } });
+      c.on('broadcast', { event: 'msg' }, ({ payload }) => recevoirEq(payload))
+       .on('broadcast', { event: 'recu' }, ({ payload }) => {
+         if (!payload || payload.a !== uid) return;
+         Object.keys(echanges).forEach(k => echanges[k].forEach(m => { if (m.id === payload.id) { m.recu = true; m.echec = false; } }));
+         if (ouvert && onglet === 'equipe' && convEq) rendre(true);
+       })
+       .subscribe(status => {
+         eqPret = status === 'SUBSCRIBED';
+         eqErreur = status === 'CHANNEL_ERROR' || status === 'TIMED_OUT';
+         if (eqErreur) console.warn('[Équipe] canal d’échange refusé (appliquer sql/equipe_echange_direct.sql ?)');
+         if (ouvert && onglet === 'equipe') rendre(true);
+       });
+      canalEq = c;
+    } catch (e) { /* l'échange direct est facultatif */ }
+  }
+
+  function recevoirEq(pl) {
+    if (!pl || pl.a !== uid || !pl.de || pl.de === uid || typeof pl.texte !== 'string' || !pl.id) return;
+    const texte = pl.texte.slice(0, MAX_CAR);
+    const visible = ouvert && onglet === 'equipe' && convEq === pl.de;
+    ajouterEq(pl.de, { id: pl.id, moi: false, texte, t: new Date().toISOString(), lu: visible });
+    try { canalEq.send({ type: 'broadcast', event: 'recu', payload: { a: pl.de, id: pl.id } }); } catch (e) { /* ignoré */ }
+    if (visible) { rendre(true); majPastille(); return; }
+    majPastille();
+    if (ouvert && onglet === 'equipe' && !convEq) rendre(true);
+    if (!ouvert || !(onglet === 'equipe' && convEq === pl.de)) {
+      if (!ouvert) {
+        afficherToast('💬 ' + nomPers(pl.de, pl.nom) + ' : ' + texte);
+        toastCibleEq = pl.de;
+      }
+    }
+  }
+
+  async function envoyerEq() {
+    const texte = (els.input.value || '').trim();
+    if (!texte || !convEq || !canalEq || !eqPret) return;
+    const m = { id: (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()), moi: true, texte: texte.slice(0, MAX_CAR), t: new Date().toISOString(), lu: true };
+    ajouterEq(convEq, m);
+    els.input.value = '';
+    els.input.style.height = 'auto';
+    rendre();
+    els.body.scrollTop = els.body.scrollHeight;
+    try {
+      await canalEq.send({ type: 'broadcast', event: 'msg', payload: { id: m.id, de: uid, a: convEq, nom: me.nom, texte: m.texte } });
+    } catch (e) { m.echec = true; rendre(true); return; }
+    setTimeout(() => { if (!m.recu) { m.echec = true; if (ouvert && onglet === 'equipe' && convEq) rendre(true); } }, EQ_ACCUSE_MS);
   }
 
   function planifierPresence() {
@@ -520,6 +649,7 @@
 
   // ───────── Envoi ─────────
   async function envoyer() {
+    if (me && me.presence && onglet === 'equipe') { envoyerEq(); return; }
     const client = getSb();
     if (!client || !els) return;
     const texte = (els.input.value || '').trim();
@@ -587,12 +717,19 @@
     els.toast.style.display = 'none';
     rendre();
     marquerLu();
+    marquerLuEq();
     planifier();
     if (me.presence && onglet === 'equipe') { chargerPresence(); planifierPresence(); }
     if (!me.direction || convActive) setTimeout(() => { if (els) els.input.focus(); }, 50);
   }
   function fermer() {
     ouvert = false;
+    // Échanges directs : ce qui a été vu disparaît à la fermeture (seuls les messages non lus restent).
+    Object.keys(echanges).forEach(k => {
+      echanges[k] = echanges[k].filter(m => !m.moi && !m.lu);
+      if (!echanges[k].length) delete echanges[k];
+    });
+    convEq = null;
     if (els) els.panel.classList.remove('kk-sc-open');
     planifier();
   }
@@ -643,6 +780,7 @@
     uid = userId; me = profil;
     creerUI();
     ecouterTempsReel(client);
+    ouvrirCanalEq(client);
     await charger();
     planifier();
     if (me.presence) {
