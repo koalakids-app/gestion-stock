@@ -9,6 +9,13 @@
    Chargé après terrain.js (utilise sb, PROF, esc, toast).
    ================================================================ */
 const RT_SEUIL=63,RT_DUREE_MAX=60;
+/* Minimisation (RGPD) : le registre, conservé 3 ans, porte le prénom et l'initiale du nom (« Léa D. »),
+   jamais le nom complet de l'enfant. */
+function rtEnfantAbrege(nom){
+  const t=String(nom||'').trim().split(/\s+/).filter(Boolean);
+  if(t.length<2)return t[0]||'';
+  return t[0]+' '+t.slice(1).map(x=>x.charAt(0).toUpperCase()+'.').join(' ');
+}
 const RT_JOURS=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
 let RT_CRECHE='',RT_JOURNAL=[],RT_ENVOI=false,RT_REQ=0;
 
@@ -137,7 +144,7 @@ async function rtChargerLignes(){
     const{data,error}=await sb.from('pai').select('enfant_nom').eq('actif',true).eq('panier_repas',true).eq('creche_id',PROF.creche_id).order('enfant_nom');
     if(!error)pais=data||[];
   }catch(e){console.error('[rtPai]',e);}
-  const platsPai=pais.filter(p=>p.enfant_nom).map(p=>({plat:'Panier repas PAI — '+p.enfant_nom,tags:['apporté par la famille'],mixage:false,pai:true}));
+  const platsPai=pais.filter(p=>p.enfant_nom).map(p=>({plat:'Panier repas PAI — '+rtEnfantAbrege(p.enfant_nom),tags:['apporté par la famille'],mixage:false,pai:true}));
   rtPlatsDuMenu(menu).concat(platsPai).forEach(function(x){
     const k=x.plat.toLowerCase(),rows=duJour.filter(j=>{const n=String(j.plat||'').trim().toLowerCase();return x.pai?(n===k||n.indexOf(k+' : ')===0):n===k;});
     vus[k]=1;rows.forEach(j=>{vus[String(j.plat||'').trim().toLowerCase()]=1;});
