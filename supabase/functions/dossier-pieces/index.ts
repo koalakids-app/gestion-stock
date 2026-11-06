@@ -53,7 +53,7 @@ const MAX_BYTES = 8 * 1024 * 1024;
 // liste ailleurs dans l'appli).
 const REQUIRED_PIECE_KEYS = [
   "livret_famille", "piece_identite_parents", "justificatif_domicile",
-  "acte_naissance", "attestation_vitale", "attestation_rc",
+  "acte_naissance", "attestation_vitale", "carnet_vaccinations", "attestation_rc",
   "avis_imposition", "bulletin_salaire", "rib",
 ];
 
