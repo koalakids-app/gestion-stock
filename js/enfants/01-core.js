@@ -203,6 +203,25 @@ async function enfRelire(id){
   }catch(err){console.warn('[Enfants] relecture',err);return null;}
 }
 
+/* En-tête de la fiche : avatar à initiales, nom, groupe / âge, crèche, statut. */
+function enfEntete(e){
+  const ini=((e.prenom||'').charAt(0)+(e.nom||'').charAt(0)).toUpperCase();
+  const av=document.getElementById('enf-fiche-avatar');
+  if(av) av.innerHTML = ini ? escHtml(ini) : '<i class="ti ti-mood-kid"></i>';
+  const t=document.getElementById('enf-fiche-title');
+  if(t) t.textContent = ((e.prenom||'')+' '+(e.nom||'')).trim();
+  const creche = cacheCreches.find(c=>c.id===e.creche_id);
+  const grp = e.dob ? groupeFromDob(e.dob) : (e.groupe||'');
+  const bits=[];
+  if(grp) bits.push('<span>'+escHtml(grp)+'</span>');
+  if(creche) bits.push('<span>'+escHtml(creche.name||creche.nom||'')+'</span>');
+  if(enfIsArchived(e)) bits.push('<span class="badge-fiche" style="background:var(--koala-light);color:var(--koala)">Archivé</span>');
+  else if(enfIsSorti(e)) bits.push('<span class="badge-fiche" style="background:var(--orange-light);color:var(--orange)">Sorti</span>');
+  const sous=document.getElementById('enf-fiche-sous');
+  if(sous) sous.innerHTML = bits.join(' · ');
+}
+window.enfEntete = enfEntete;
+
 async function enfOpenFiche(id){
   await enfRelire(id);
   const e = cacheEnfants.find(x=>String(x.id)===String(id));
@@ -218,12 +237,9 @@ async function enfOpenFiche(id){
   enfPiecesPret = false;
   enfContratsCache = [];
   enfAbsencesCache = []; enfAbsencesPret = false;
-  document.getElementById('enf-fiche-title').innerHTML = '<i class="ti ti-mood-kid"></i> '+escHtml((e.prenom||'')+' '+(e.nom||''));
+  enfEntete(e);
   // onglet identité par défaut
-  document.querySelectorAll('#modal-enf-fiche-wrap .module-tab').forEach((b,i)=>b.classList.toggle('active',i===0));
-  document.getElementById('enf-fiche-identite').classList.add('active');
-  document.getElementById('enf-fiche-contrat').classList.remove('active');
-  document.getElementById('enf-fiche-documents').classList.remove('active');
+  enfFicheTab('identite');
   enfRenderIdentite();
   document.getElementById('enf-fiche-parents').innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Chargement…</p></div>';
   enfLoadParents(e.id);
@@ -253,14 +269,15 @@ async function enfOpenFiche(id){
   enfLoadDocExt(e.id);
 }
 
-const ENF_FICHE_TABS = ['identite','parents','contrat','documents'];
+const ENF_FICHE_TABS = ['identite','parents','contrat','documents','suivi'];
 
 /* btn est facultatif : sans lui, on retrouve l'onglet par son data-enftab.
    Se reperer a l'index dans la liste des boutons casse des qu'on en ajoute un. */
 function enfFicheTab(tab, btn){
-  document.querySelectorAll('#modal-enf-fiche-wrap .module-tab').forEach(b=>b.classList.remove('active'));
-  const cible = btn || document.querySelector('#modal-enf-fiche-wrap .module-tab[data-enftab="'+tab+'"]');
-  if(cible) cible.classList.add('active');
+  document.querySelectorAll('#enf-fiche-onglets .fonglet').forEach(b=>b.classList.remove('actif'));
+  const cible = btn || document.querySelector('#enf-fiche-onglets .fonglet[data-enftab="'+tab+'"]');
+  if(cible) cible.classList.add('actif');
+  const corps = document.querySelector('#modal-enf-fiche-wrap .fbody'); if(corps) corps.scrollTop = 0;
   ENF_FICHE_TABS.forEach(t=>{
     const el=document.getElementById('enf-fiche-'+t);
     if(el) el.classList.toggle('active',t===tab);
