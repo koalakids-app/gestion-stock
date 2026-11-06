@@ -233,6 +233,10 @@ async function albvRenderTri(z) {
         '<div class="alb-chips">' + pr.map(function (x) {
           return '<button class="alb-chip" onclick="albvValider(\'' + p.id + '\',[\'' + x.enfant_id + '\'])">' + albEsc(albvNomEnfant(x.enfant_id)) + ' · ' + x.score + ' %</button>';
         }).join('') + (pr.length > 1 ? '<button class="alb-chip" onclick="albvValider(\'' + p.id + '\',[' + pr.map(function (x) { return '\'' + x.enfant_id + '\''; }).join(',') + '])">Tous (' + pr.length + ')</button>' : '') +
+        '<select class="alb-autre" title="Classer cette photo dans l’album d’un autre enfant" onchange="albvAutreEnfant(\'' + p.id + '\',this)">' +
+        '<option value="">Un autre enfant…</option>' + albEnfants().map(function (e) {
+          return '<option value="' + e.id + '">' + albEsc(albNom(e)) + '</option>';
+        }).join('') + '</select>' +
         '<button class="btn-sm" onclick="albvIgnorer(\'' + p.id + '\')">Ignorer</button></div></div></div>';
     }).join('') + '</div>' : '';
   }
@@ -253,6 +257,12 @@ async function albvValider(photoId, enfantIds) {
   ALBV.props = ALBV.props.filter(function (x) { return x.photo_id !== photoId; });
   albJournal('classement', enfantIds.length === 1 ? enfantIds[0] : null, 'Proposition du tri par visage validée', enfantIds.length);
   albRender();
+}
+/* Corriger la proposition : choisir un autre enfant dans la liste déroulante. */
+function albvAutreEnfant(photoId, sel) {
+  var id = sel.value;
+  if (!id) return;
+  albvValider(photoId, [id]);
 }
 async function albvIgnorer(photoId) {
   await sb.from('album_propositions').delete().eq('photo_id', photoId);
