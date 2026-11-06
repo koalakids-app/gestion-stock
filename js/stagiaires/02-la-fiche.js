@@ -380,9 +380,53 @@ function stgRenderLienMode(s,m){
       +(actif?'<i class="ti ti-clock"></i> Valable jusqu\'au '+escHtml(stgDateFr(stgJetonExpire(s,m)))
              :'<i class="ti ti-clock-off"></i> Lien expiré le '+escHtml(stgDateFr(stgJetonExpire(s,m)))
               +' — « Renouveler » en crée un nouveau')
-      +'</div>';
+      +'</div>'
+      +(m==='documents'?stgRelanceHtml(s,actif):'');
   }
   return h+'</div>';
+}
+
+/* Relance par e-mail des pièces obligatoires manquantes (edge function
+   relancer-stagiaire : les pièces manquantes y sont recalculées). Le bouton n'est
+   proposé que si le lien des documents est valable ; il se désactive sans e-mail
+   ou quand tout est reçu. */
+function stgRelanceHtml(s,actif){
+  const av=stgAvancement(s.id);
+  const manque=av.total-av.faits;
+  let raison='';
+  if(!actif)raison='Le lien a expiré : renouvelez-le d\'abord.';
+  else if(!s.email)raison='Aucune adresse e-mail sur la fiche.';
+  else if(!manque)raison=av.total?'Toutes les pièces obligatoires sont reçues.':'';
+  let h='<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<button class="btn-primary btn-sm" id="stg-btn-relance" onclick="stgRelancer()"'+(raison?' disabled':'')+'><i class="ti ti-bell-ringing"></i> Relancer</button>'
+    +'<span style="font-size:12px;color:var(--muted)">';
+  if(raison)h+=escHtml(raison);
+  else h+='Envoie un e-mail listant les '+manque+' pièce'+(manque>1?'s':'')+' obligatoire'+(manque>1?'s':'')+' manquante'+(manque>1?'s':'')+', avec le lien.';
+  if(s.relance_le)h+=' Dernière relance : <b>'+escHtml(stgDateFr(String(s.relance_le).slice(0,10)))+'</b>.';
+  return h+'</span></div>';
+}
+async function stgRelancer(){
+  const s=stgFicheCourante();
+  if(!s)return;
+  const av=stgAvancement(s.id);
+  if(!confirm('Relancer '+(s.prenom||'cette personne')+' ?\n\nUn e-mail partira à '+(s.email||'?')+' avec la liste des '+(av.total-av.faits)
+    +' pièce(s) obligatoire(s) manquante(s) et le lien pour les déposer.'))return;
+  const btn=document.getElementById('stg-btn-relance');
+  if(btn)btn.disabled=true;
+  try{
+    const {data,error}=await sb.functions.invoke('relancer-stagiaire',{body:{stagiaire_id:s.id,expediteur:currentProfile&&currentProfile.name}});
+    let code=data&&data.error;
+    if(!code&&error&&error.context&&typeof error.context.json==='function'){try{code=(await error.context.json()).error;}catch(e){}}
+    if(error||!data||!data.ok)throw new Error(code||(error&&error.message)||'erreur');
+    s.relance_le=data.relance_le||new Date().toISOString();
+    showBanner('Relance envoyée à '+s.email+' ✅');
+  }catch(e){
+    const M={aucun_email:'Aucune adresse e-mail sur la fiche.',lien_expire:'Le lien a expiré : renouvelez-le.',
+      documents_non_ouverts:'Les documents ne sont pas ouverts : cliquez d\'abord sur « Ouvrir les documents ».',
+      rien_a_relancer:'Toutes les pièces obligatoires sont déjà reçues.',fiche_close:'Cette fiche est close.'};
+    showBanner(M[e.message]||('Relance impossible ('+e.message+').'),'error');
+  }
+  stgRenderLien();
 }
 
 /* Ce que la personne trouvera sur son lien. La phrase n'est écrite que s'il y a
