@@ -411,6 +411,24 @@ function empUpdateEssaiFin(){
 }
 window.empUpdateEssaiFin=empUpdateEssaiFin;
 
+function empOnglet(nom){
+  document.querySelectorAll('#emp-onglets .fonglet').forEach(b=>b.classList.toggle('actif',b.dataset.pane===nom));
+  document.querySelectorAll('#modal-employe-wrap .fpane').forEach(p=>p.classList.toggle('on',p.id==='emp-pane-'+nom));
+  const m=document.querySelector('#modal-employe-wrap .modal');if(m)m.scrollTop=0;
+}
+window.empOnglet=empOnglet;
+/* En-tête de la fiche : avatar, nom, poste, crèche ; mis à jour à la saisie. */
+function empEntete(){
+  const g=id=>(document.getElementById(id)||{value:''}).value.trim();
+  const prenom=g('emp-prenom'),nom=g('emp-nom'),poste=g('emp-poste');
+  const ini=(prenom.charAt(0)+nom.charAt(0)).toUpperCase();
+  document.getElementById('emp-avatar').innerHTML=ini?escHtml(ini):'<i class="ti ti-user-plus"></i>';
+  if(editingEmployeId)document.getElementById('modal-employe-title').textContent=((prenom+' '+nom).trim())||'Collaborateur/trice';
+  const sel=document.getElementById('emp-creche');
+  const cr=sel&&sel.selectedIndex>0?sel.options[sel.selectedIndex].text:'';
+  document.getElementById('emp-sous').innerHTML=[poste,cr].filter(Boolean).map(t=>'<span>'+escHtml(t)+'</span>').join(' · ')||(editingEmployeId?'':'<span>Renseignez l\'identité, puis enregistrez : le contrat signé s\'ouvre ensuite.</span>');
+}
+['emp-prenom','emp-nom','emp-poste','emp-creche'].forEach(id=>{const el=document.getElementById(id);if(el){el.addEventListener('input',empEntete);el.addEventListener('change',empEntete);}});
 function openEmployeModal(){
   editingEmployeId=null;
   document.getElementById('modal-employe-title').textContent='Ajouter un(e) collaborateur/trice';
@@ -428,6 +446,8 @@ function openEmployeModal(){
   // (le sélecteur du formulaire de contrat a besoin d'un id) : rien à
   // afficher tant que celle-ci n'existe pas encore.
   document.getElementById('emp-contrat-wrap').style.display='none';
+  document.querySelector('#emp-onglets [data-pane="signe"]').hidden=true;
+  empOnglet('id');empEntete();
   document.getElementById('modal-employe-wrap').classList.add('open');
 }
 window.openEmployeModal=openEmployeModal;
@@ -451,6 +471,8 @@ function editEmploye(id){
   empFillCreches(e.creche_id);
   document.getElementById('emp-contrat-wrap').style.display='';
   empLoadContratTravail(e.id);
+  document.querySelector('#emp-onglets [data-pane="signe"]').hidden=false;
+  empOnglet('id');empEntete();
   document.getElementById('modal-employe-wrap').classList.add('open');
 }
 window.editEmploye=editEmploye;

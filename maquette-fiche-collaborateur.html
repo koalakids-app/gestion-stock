@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Maquette — Fiche collaborateur en onglets</title>
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+:root{--violet:#4A3F9F;--orange:#F47920;--orange-l:#FFF1E3;--violet-l:#EEECFA;--bg:#FDF8F2;--muted:#8E8AA8;--line:#EFE9F5;--green:#2E9E6B;--green-l:#E6F5EE;--ink:#2B2740}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--ink)}
+.proto{background:var(--ink);color:#fff;text-align:center;font-size:12px;font-weight:700;padding:7px 10px}
+.wrap{max-width:760px;margin:0 auto;padding:16px 14px 60px}
+.choix{display:flex;gap:8px;margin-bottom:14px}
+.choix button{flex:1;font:inherit;font-weight:700;font-size:13px;border:2px solid var(--line);background:#fff;color:var(--muted);border-radius:14px;padding:10px;cursor:pointer}
+.choix button.on{border-color:var(--orange);background:var(--orange-l);color:var(--orange)}
+.note{font-size:12.5px;color:var(--muted);margin:0 0 12px;line-height:1.5}
+.modal{background:#fff;border-radius:20px;border:1px solid var(--line);overflow:hidden;box-shadow:0 8px 30px rgba(43,39,64,.12)}
+.fhead{display:flex;align-items:center;gap:12px;margin:18px 18px 6px}
+.favatar{width:46px;height:46px;border-radius:50%;background:var(--violet-l);color:var(--violet);font-family:'Baloo 2',cursive;font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center;flex:none}
+.ftxt{flex:1;min-width:0}
+.fhead h3{font-family:'Baloo 2',cursive;font-size:18px;color:var(--violet)}
+.fsub{font-size:12.5px;color:var(--muted);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.fclose{border:0;background:#F1EFF7;color:var(--muted);border-radius:10px;width:36px;height:36px;font-size:18px;cursor:pointer}
+.badge{font-size:11px;font-weight:800;border-radius:20px;padding:3px 9px;white-space:nowrap}
+.badge.on{background:var(--green-l);color:var(--green)}
+.fonglets{position:sticky;top:0;display:flex;gap:4px;background:#fff;padding:8px 18px 10px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.fonglet{flex:1;font:inherit;font-size:11.5px;font-weight:700;background:#fff;color:var(--muted);border:1px solid var(--line);border-radius:12px;padding:8px 2px 7px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.fonglet i{font-size:20px}
+.fonglet.actif{background:var(--violet);color:#fff;border-color:var(--violet)}
+.fpane{display:none;margin:0 18px}.fpane.on{display:block}
+.fcard{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.fsec{font-family:'Baloo 2',cursive;font-size:15px;font-weight:600;color:var(--violet);margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:560px){.g2{grid-template-columns:1fr}}
+.f{margin-bottom:10px}
+label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 4px 3px}
+input,select{font:inherit;font-size:15px;padding:9px 11px;border:2px solid var(--line);border-radius:12px;width:100%;background:#fff;color:var(--ink)}
+.hint{font-size:12px;color:var(--muted);line-height:1.55;margin-top:4px}
+.ligne{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:13px;flex-wrap:wrap}
+.ligne:last-child{border-bottom:0}.ligne small{color:var(--muted);display:block;font-size:11.5px}
+.btn{border:0;border-radius:12px;padding:7px 11px;font:inherit;font-weight:700;font-size:12.5px;cursor:pointer;background:#F1EFF7;color:var(--muted);display:inline-flex;gap:5px;align-items:center}
+.btn.p{background:var(--orange);color:#fff;padding:10px 16px;font-size:13.5px}
+.foot{position:sticky;bottom:0;background:#fff;display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line);margin-top:14px}
+.alerte{background:var(--orange-l);border-left:4px solid var(--orange);border-radius:0 10px 10px 0;padding:10px 14px;font-size:12.5px;color:var(--orange);margin-bottom:12px}
+.ok{color:var(--green);font-weight:800}
+.vue{display:none}.vue.on{display:block}
+</style>
+</head>
+<body>
+<div class="proto">MAQUETTE · données de démonstration · fiche collaborateur en onglets (Collaborateurs et Demandes)</div>
+<div class="wrap">
+  <div class="choix">
+    <button class="on" data-v="a">Collaborateurs (équipe)</button>
+    <button data-v="b">Fiche complète (Demandes)</button>
+  </div>
+
+  <!-- ===== A : employes.html ===== -->
+  <div class="vue on" id="vue-a">
+    <p class="note">Page <b>Collaborateurs</b> : gestion du compte, de la formation, des documents et du suivi. 4 onglets ; sur une nouvelle fiche, seul « Infos » est ouvert.</p>
+    <div class="modal" data-modal>
+      <div class="fhead"><div class="favatar">LM</div><div class="ftxt"><h3>Léa Martin</h3><div class="fsub"><span>Auxiliaire de puériculture</span><span class="badge on">Compte actif</span></div></div><button class="fclose"><i class="ti ti-x"></i></button></div>
+      <div class="fonglets">
+        <button class="fonglet actif" data-p="a1"><i class="ti ti-user-circle"></i>Infos</button>
+        <button class="fonglet" data-p="a2"><i class="ti ti-folder"></i>Documents</button>
+        <button class="fonglet" data-p="a3"><i class="ti ti-school"></i>Formation</button>
+        <button class="fonglet" data-p="a4"><i class="ti ti-heartbeat"></i>Suivi</button>
+      </div>
+      <div class="fpane on" id="a1">
+        <div class="fcard"><div class="fsec"><i class="ti ti-id"></i> Identité</div>
+          <div class="g2"><div class="f"><label>Prénom</label><input value="Léa"></div><div class="f"><label>Nom</label><input value="Martin"></div></div>
+          <div class="g2"><div class="f"><label>Poste</label><input value="Auxiliaire de puériculture"></div><div class="f"><label>E-mail</label><input value="lea.martin@exemple.fr"></div></div></div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-file-text"></i> Contrat et horaires</div>
+          <div class="g2"><div class="f"><label>Type de contrat</label><select><option>CDI</option></select></div><div class="f"><label>Heures hebdomadaires</label><input value="35"></div></div>
+          <div class="g2"><div class="f"><label>Date de début</label><input value="02/09/2024"></div><div class="f"><label>Date de fin</label><input placeholder="—"></div></div></div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-calendar-user"></i> Planning</div><div class="f"><label>Nom utilisé dans le planning équipe (si différent)</label><input placeholder="Laisser vide si le prénom suffit"></div></div>
+      </div>
+      <div class="fpane" id="a2">
+        <div class="fcard"><div class="fsec"><i class="ti ti-folder"></i> Documents d'embauche</div>
+          <div class="ligne"><span>Pièce d'identité<small>Déposée le 03/09/2024</small></span><span class="ok">✓ Reçue</span></div>
+          <div class="ligne"><span>Diplôme<small>Déposé le 03/09/2024</small></span><span class="ok">✓ Reçu</span></div>
+          <div class="ligne"><span>Casier judiciaire (bulletin n°3)</span><button class="btn"><i class="ti ti-bell"></i> Relancer</button></div></div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-file-certificate"></i> Contrat de travail</div><div class="ligne"><span>Contrat de travail (salarié)<small>Mis à jour le 02/09/2024</small></span><span class="badge on">✅ Signé</span></div></div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-archive"></i> Documents sur support externe</div><p class="hint">Aucune pièce enregistrée sur support externe.</p></div>
+      </div>
+      <div class="fpane" id="a3">
+        <div class="fcard"><div class="fsec"><i class="ti ti-send"></i> Envoyer un quiz ou une formation</div><div style="display:flex;gap:8px"><select><option>Thème 3 — Les temps de repas</option></select><button class="btn p" style="padding:8px 12px">Envoyer</button></div></div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-calendar-event"></i> Planning des quiz</div><div class="ligne"><span>Thème 1 — L'accueil<small>Semaine du 26 octobre</small></span><span class="ok">✓ 92 %</span></div><div class="ligne"><span>Thème 2 — Le sommeil<small>Semaine du 26 octobre</small></span><span class="ok">✓ 88 %</span></div></div>
+      </div>
+      <div class="fpane" id="a4">
+        <div class="fcard"><div class="fsec"><i class="ti ti-stethoscope"></i> Visite médicale obligatoire (Odalia)</div><div class="alerte">Prochaine visite à planifier avant le 02/12/2026.</div><div class="ligne"><span>Visite d'embauche<small>Avis : apte</small></span><span class="ok">✓ 14/10/2024</span></div></div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-clock-check"></i> Validation mensuelle des heures</div><div class="ligne"><span>Octobre 2026</span><span class="ok">✓ Signé</span></div><div class="ligne"><span>Septembre 2026</span><span class="ok">✓ Signé</span></div></div>
+      </div>
+      <div class="foot"><button class="btn">Annuler</button><button class="btn p"><i class="ti ti-check"></i> Enregistrer</button></div>
+    </div>
+  </div>
+
+  <!-- ===== B : demandes.html ===== -->
+  <div class="vue" id="vue-b">
+    <p class="note"><b>Fiche complète</b> (Demandes › Collaborateurs/trices) : état civil, contrat, période d'essai, contrat signé. 4 onglets ; « Contrat signé » n'apparaît qu'une fois la fiche créée.</p>
+    <div class="modal" data-modal>
+      <div class="fhead"><div class="favatar">LM</div><div class="ftxt"><h3>Léa Martin</h3><div class="fsub"><span>Auxiliaire de puériculture</span> · <span>Crèche Les Lucioles</span></div></div><button class="fclose"><i class="ti ti-x"></i></button></div>
+      <div class="fonglets">
+        <button class="fonglet actif" data-p="b1"><i class="ti ti-user-circle"></i>Identité</button>
+        <button class="fonglet" data-p="b2"><i class="ti ti-file-text"></i>Contrat</button>
+        <button class="fonglet" data-p="b3"><i class="ti ti-hourglass"></i>Essai</button>
+        <button class="fonglet" data-p="b4"><i class="ti ti-file-certificate"></i>Contrat signé</button>
+      </div>
+      <div class="fpane on" id="b1">
+        <div class="fcard"><div class="fsec"><i class="ti ti-id"></i> Identité</div>
+          <div class="g2"><div class="f"><label>Prénom</label><input value="Léa"></div><div class="f"><label>Nom</label><input value="Martin"></div></div>
+          <div class="f"><label>Crèche</label><select><option>Les Lucioles</option></select></div>
+          <div class="g2"><div class="f"><label>Poste</label><input value="Auxiliaire de puériculture"></div><div class="f"><label>E-mail</label><input value="lea.martin@exemple.fr"></div></div></div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-cake"></i> État civil</div>
+          <div class="g2"><div class="f"><label>Date de naissance</label><input value="12/05/1996"></div><div class="f"><label>Lieu de naissance</label><input value="Toulon"></div></div>
+          <div class="g2"><div class="f"><label>Nationalité</label><input value="Française"></div><div class="f"><label>N° de sécurité sociale</label><input value="2 96 05 83 …"></div></div>
+          <div class="g2"><div class="f"><label>Adresse</label><input value="12 rue des Pins, 83000 Toulon"></div><div class="f"><label>Téléphone</label><input value="06 12 34 56 78"></div></div></div>
+      </div>
+      <div class="fpane" id="b2">
+        <div class="fcard"><div class="fsec"><i class="ti ti-file-text"></i> Contrat de travail</div>
+          <div class="g2"><div class="f"><label>Type de contrat</label><select><option>CDI</option></select></div><div class="f"><label>Qualification</label><input value="Auxiliaire de puériculture"></div></div>
+          <div class="g2"><div class="f"><label>Date de début</label><input value="02/09/2024"></div><div class="f"><label>Date de fin (si CDD)</label><input placeholder="—"></div></div></div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-coin-euro"></i> Temps de travail et rémunération</div>
+          <div class="g2"><div class="f"><label>Heures hebdomadaires</label><input value="35"></div><div class="f"><label>Salaire brut mensuel (€)</label><input value="2 050,00"></div></div>
+          <div class="g2"><div class="f"><label>Convention collective</label><input value="SNAECSO"></div><div class="f"><label>Coefficient / échelon</label><input value="300"></div></div></div>
+      </div>
+      <div class="fpane" id="b3">
+        <div class="fcard"><div class="fsec"><i class="ti ti-hourglass"></i> Période d'essai</div>
+          <div class="g2"><div class="f"><label>Période d'essai</label><input value="2 mois renouvelable une fois"></div><div class="f"><label>Fin calculée</label><input value="2 novembre 2024" readonly></div></div>
+          <p class="hint">Une alerte apparaît sur les tableaux de bord à l'approche de cette date.</p></div>
+      </div>
+      <div class="fpane" id="b4">
+        <div class="fcard"><div class="fsec"><i class="ti ti-file-certificate"></i> Contrat de travail signé</div><div class="ligne"><span>Contrat de travail (salarié)<small>02/09/2024</small></span><span class="badge on">✅ Signé</span><button class="btn"><i class="ti ti-eye"></i> Ouvrir</button></div>
+          <p class="hint">Généré et signé depuis le module Documents.</p></div>
+      </div>
+      <div class="foot"><button class="btn" style="color:#C62828;margin-right:auto"><i class="ti ti-trash"></i> Supprimer</button><button class="btn">Annuler</button><button class="btn p"><i class="ti ti-check"></i> Enregistrer</button></div>
+    </div>
+  </div>
+</div>
+<script>
+document.querySelectorAll('.choix button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.choix button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.vue').forEach(v=>v.classList.toggle('on',v.id==='vue-'+b.dataset.v));
+});
+document.querySelectorAll('[data-modal]').forEach(m=>m.querySelectorAll('.fonglet').forEach(b=>b.onclick=()=>{
+  m.querySelectorAll('.fonglet').forEach(x=>x.classList.toggle('actif',x===b));
+  m.querySelectorAll('.fpane').forEach(p=>p.classList.toggle('on',p.id===b.dataset.p));
+}));
+</script>
+</body>
+</html>
