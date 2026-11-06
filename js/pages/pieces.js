@@ -31,7 +31,6 @@ const PIECES = [
   {key:'justificatif_domicile', label:'Justificatif de domicile de moins de trois mois'},
   {key:'acte_naissance',        label:"Copie intégrale de l'acte de naissance de l'enfant"},
   {key:'attestation_vitale',    label:'Attestation de la carte vitale'},
-  {key:'carnet_vaccinations',   label:'Copie du carnet de vaccinations (pages des vaccins)'},
   {key:'attestation_rc',        label:'Attestation de responsabilité civile pour l’année en cours',renouveler:true},
   {key:'autorite_parentale',    label:"Justificatif de l'autorité parentale (couples séparés/divorcés)",optionnel:true},
   {key:'avis_imposition',       label:"Copie du dernier avis d'imposition"},
