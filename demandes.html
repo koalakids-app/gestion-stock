@@ -1600,40 +1600,59 @@
 
 <!-- Modal fiche stagiaire (création / suivi complet) -->
 <div class="overlay" id="modal-stagiaire-wrap" onclick="if(event.target===this)closeModal('modal-stagiaire-wrap')">
-  <div class="modal" style="max-width:880px;width:100%;max-height:90vh;display:flex;flex-direction:column">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-      <h3 id="stg-modal-title" style="margin:0">Nouvelle fiche</h3>
-      <button class="ibtn" onclick="closeModal('modal-stagiaire-wrap')"><i class="ti ti-x"></i></button>
+  <div class="modal fiche" style="max-width:880px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+    <div class="fhead">
+      <div class="favatar" id="stg-avatar"><i class="ti ti-school"></i></div>
+      <div class="ftxt"><h3 id="stg-modal-title">Nouvelle fiche</h3><div class="fsub" id="stg-sous"></div></div>
+      <button type="button" class="fclose" onclick="closeModal('modal-stagiaire-wrap')" title="Fermer" aria-label="Fermer"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="fonglets" id="stg-onglets" role="tablist">
+      <button type="button" class="fonglet actif" data-stgtab="profil" role="tab" onclick="stgOnglet('profil')"><i class="ti ti-user-circle"></i>Profil</button>
+      <button type="button" class="fonglet" data-stgtab="stage" role="tab" onclick="stgOnglet('stage')"><i class="ti ti-calendar-event"></i>Stage</button>
+      <button type="button" class="fonglet" data-stgtab="docs" role="tab" onclick="stgOnglet('docs')"><i class="ti ti-folder"></i>Documents</button>
+      <button type="button" class="fonglet" data-stgtab="suivi" role="tab" onclick="stgOnglet('suivi')"><i class="ti ti-clipboard-check"></i>Suivi</button>
     </div>
 
-    <div style="flex:1;overflow-y:auto;margin-top:12px;padding-right:4px">
+    <div class="fbody">
 
-      <!-- Le type de profil commande le vocabulaire de la fiche (stage ou
-           alternance) et la liste des pièces demandées : il est donc en tête. -->
-      <div class="fg" style="max-width:280px"><label class="flabel">Type de profil</label>
+      <div class="module-tab-content active" id="stg-pane-profil">
+        <div class="fcard"><div class="fsec"><i class="ti ti-id"></i> Identité</div>
+          <!-- Le type de profil commande le vocabulaire de la fiche (stage ou
+               alternance) et la liste des pièces demandées : il est donc en tête. -->
+          <div class="fg" style="max-width:280px"><label class="flabel">Type de profil</label>
         <select class="finput" id="stg-f-type" onchange="stgTypeChange()">
           <option value="stagiaire">Stagiaire</option>
           <option value="alternant">Alternant / apprenti</option>
         </select></div>
-      <div class="frow">
-        <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="stg-f-prenom"></div>
-        <div class="fg"><label class="flabel">Nom</label><input class="finput" id="stg-f-nom"></div>
+          <div class="frow">
+            <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="stg-f-prenom"></div>
+            <div class="fg"><label class="flabel">Nom</label><input class="finput" id="stg-f-nom"></div>
+          </div>
+          <div class="frow">
+            <div class="fg"><label class="flabel">E-mail</label><input class="finput" type="email" id="stg-f-email" placeholder="pour lui envoyer son lien"></div>
+            <div class="fg"><label class="flabel">Téléphone</label><input class="finput" type="tel" id="stg-f-tel"></div>
+          </div>
+        </div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-school"></i> Formation</div>
+          <div class="frow">
+            <div class="fg"><label class="flabel">École / organisme</label><input class="finput" id="stg-f-ecole"></div>
+            <div class="fg"><label class="flabel">Formation</label><input class="finput" id="stg-f-formation" placeholder="CAP AEPE, BAC ASSP, EJE…"></div>
+          </div>
+          <div class="fg" style="max-width:340px"><label class="flabel">Niveau / année</label><input class="finput" id="stg-f-niveau" placeholder="1re année…"></div>
+        </div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-notes"></i> Notes</div>
+          <div class="fg"><label class="flabel">Notes internes</label><textarea class="finput" id="stg-f-notes" rows="2" style="resize:vertical" placeholder="Ce qui n'a pas sa place ailleurs — non visible par la stagiaire"></textarea></div>
+        </div>
       </div>
-      <div class="frow">
-        <div class="fg"><label class="flabel">E-mail</label><input class="finput" type="email" id="stg-f-email" placeholder="pour lui envoyer son lien"></div>
-        <div class="fg"><label class="flabel">Téléphone</label><input class="finput" type="tel" id="stg-f-tel"></div>
-      </div>
-      <div class="frow">
-        <div class="fg"><label class="flabel">École / organisme</label><input class="finput" id="stg-f-ecole"></div>
-        <div class="fg"><label class="flabel">Formation</label><input class="finput" id="stg-f-formation" placeholder="CAP AEPE, BAC ASSP, EJE…"></div>
-      </div>
-      <div class="frow">
-        <div class="fg"><label class="flabel">Niveau / année</label><input class="finput" id="stg-f-niveau" placeholder="1re année…"></div>
-        <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="stg-f-creche" onchange="stgRemplirReferents()"></select></div>
-      </div>
-      <div class="frow">
-        <div class="fg"><label class="flabel">Qui l'accompagne</label><select class="finput" id="stg-f-referent"></select></div>
-        <div class="fg"><label class="flabel">Statut</label><select class="finput" id="stg-f-statut" >
+
+      <div class="module-tab-content" id="stg-pane-stage">
+        <div class="fcard"><div class="fsec"><i class="ti ti-building-community"></i> Accueil et statut</div>
+          <div class="frow">
+            <div class="fg"><label class="flabel">Crèche</label><select class="finput" id="stg-f-creche" onchange="stgRemplirReferents()"></select></div>
+            <div class="fg"><label class="flabel">Qui l'accompagne</label><select class="finput" id="stg-f-referent"></select></div>
+          </div>
+          <div class="frow">
+            <div class="fg"><label class="flabel">Statut</label><select class="finput" id="stg-f-statut" >
           <option value="demande">Demande reçue (Padlet)</option>
           <option value="contact">Contact pris par le/la directeur/trice technique</option>
           <option value="accepte">Accepté — dates posées</option>
@@ -1642,20 +1661,22 @@
           <option value="refuse">Refusé</option>
           <option value="annule">Annulé</option>
         </select></div>
-      </div>
-      <div class="frow">
-        <div class="fg"><label class="flabel">Demande reçue le</label><input class="finput" type="date" id="stg-f-demande"></div>
-        <div class="fg"><label class="flabel">Lien du post Padlet</label><input class="finput" id="stg-f-padlet" placeholder="https://padlet.com/…"></div>
-      </div>
-      <div class="frow">
-        <div class="fg"><label class="flabel">Entretien — date</label><input class="finput" type="date" id="stg-f-entretien"></div>
-        <div class="fg"><label class="flabel">Entretien — heure</label><input class="finput" type="time" id="stg-f-entretien-h"></div>
-      </div>
-      <div class="frow">
-        <div class="fg"><label class="flabel" id="stg-lbl-debut">Début du stage</label><input class="finput" type="date" id="stg-f-debut"></div>
-        <div class="fg"><label class="flabel" id="stg-lbl-fin">Fin du stage</label><input class="finput" type="date" id="stg-f-fin"></div>
-      </div>
-      <div class="frow">
+            <div class="fg"><label class="flabel">Demande reçue le</label><input class="finput" type="date" id="stg-f-demande"></div>
+          </div>
+          <div class="fg"><label class="flabel">Lien du post Padlet</label><input class="finput" id="stg-f-padlet" placeholder="https://padlet.com/…"></div>
+        </div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-message-circle"></i> Entretien</div>
+          <div class="frow">
+            <div class="fg"><label class="flabel">Entretien — date</label><input class="finput" type="date" id="stg-f-entretien"></div>
+            <div class="fg"><label class="flabel">Entretien — heure</label><input class="finput" type="time" id="stg-f-entretien-h"></div>
+          </div>
+        </div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-calendar-event"></i> Période et convention</div>
+          <div class="frow">
+            <div class="fg"><label class="flabel" id="stg-lbl-debut">Début du stage</label><input class="finput" type="date" id="stg-f-debut"></div>
+            <div class="fg"><label class="flabel" id="stg-lbl-fin">Fin du stage</label><input class="finput" type="date" id="stg-f-fin"></div>
+          </div>
+          <div class="frow">
         <div class="fg"><label class="flabel" id="stg-lbl-conv">Convention de stage</label><select class="finput" id="stg-f-conv">
           <option value="a_demander">À demander</option>
           <option value="demandee">Demandée à l'école</option>
@@ -1664,40 +1685,30 @@
         </select></div>
         <div class="fg"><label class="flabel" id="stg-lbl-conv-date">Convention — date</label><input class="finput" type="date" id="stg-f-conv-date"></div>
       </div>
-      <div class="fg"><label class="flabel">Notes internes</label><textarea class="finput" id="stg-f-notes" rows="2" style="resize:vertical" placeholder="Ce qui n'a pas sa place ailleurs — non visible par la stagiaire"></textarea></div>
+        </div>
+        <!-- N'existe qu'une fois la fiche enregistrée. -->
+        <div id="stg-apres-creation" style="display:none"><div id="stg-collab-zone" class="fcard"></div></div>
+      </div>
 
-      <!-- Ces trois blocs n'existent qu'une fois la fiche enregistrée :
-           un document ou un jour ont besoin d'une stagiaire à qui se rattacher. -->
-      <div id="stg-apres-creation" style="display:none">
-
-        <div id="stg-collab-zone"></div>
-
-        <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
-        <div id="stg-lien-zone"></div>
-
-        <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
-        <div id="stg-ressources-zone"></div>
-
-        <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
-        <div id="stg-export-zone"></div>
-        <div id="stg-docs-zone"></div>
-        <div id="stg-envois-zone" style="margin-top:14px"></div>
-
+      <div class="module-tab-content" id="stg-pane-docs">
+        <div id="stg-lien-zone" class="fcard"></div>
+        <div id="stg-ressources-zone" class="fcard"></div>
+        <div id="stg-export-zone" class="fcard"></div>
+        <div id="stg-docs-zone" class="fcard"></div>
+        <div id="stg-envois-zone" class="fcard"></div>
         <!-- Registre des pièces conservées hors appli (papier, coffre-fort,
              classeur...) : trace leur existence sans les scanner — voir
              sql/documents_externes_stagiaires.sql. -->
-        <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
-        <div style="font-weight:700;font-size:13px;margin-bottom:9px"><i class="ti ti-archive" style="color:var(--koala)"></i> Documents sur support externe</div>
-        <div id="stg-doc-ext-zone"></div>
-
-        <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
-        <div id="stg-jours-zone"></div>
-
-        <!-- Grille « Suivi du stagiaire » (AEPE, IEPE, stage découverte) — js/stagiaires/05-evaluation.js -->
-        <div style="border-top:1.5px solid var(--border);margin:16px 0 14px"></div>
-        <div id="stg-eval-zone"></div>
-
+        <div class="fcard"><div class="fsec"><i class="ti ti-archive"></i> Documents sur support externe</div>
+          <div id="stg-doc-ext-zone"></div></div>
       </div>
+
+      <div class="module-tab-content" id="stg-pane-suivi">
+        <div id="stg-jours-zone" class="fcard"></div>
+        <!-- Grille « Suivi du stagiaire » (AEPE, IEPE, stage découverte) — js/stagiaires/05-evaluation.js -->
+        <div id="stg-eval-zone" class="fcard"></div>
+      </div>
+
     </div>
 
     <div class="mactions">
