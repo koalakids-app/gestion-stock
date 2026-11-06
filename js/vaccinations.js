@@ -320,7 +320,9 @@ function vacRenderPJ(){ vacPJRenderZone('vac-pj-zone', vacFicheEnfantId, 'vac-pj
 /* Appele a l'ouverture de la fiche enfant : le cache peut ne jamais avoir
    ete charge si le module Vaccinations n'a pas ete ouvert. */
 async function enfLoadCarnet(enfantId){
-  if(!vacPJLoaded) await vacLoadPJ();
+  /* Toujours relu à l'ouverture de la fiche : la famille peut avoir déposé une copie
+     depuis le lien du dossier de familiarisation depuis le dernier chargement. */
+  await vacLoadPJ();
   if(String(enfFicheId)!==String(enfantId)) return;   // fiche deja refermee ou changee
   vacPJRenderZone('enf-carnet-zone', enfantId, 'enf-carnet-input');
 }
