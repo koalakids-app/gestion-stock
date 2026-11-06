@@ -105,9 +105,10 @@ Deno.serve(async (req) => {
     <p style="margin:0 0 14px;font-size:15px;line-height:1.6">Bonjour,</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.6">Vous avez demandé à retrouver votre lien. Le voici :</p>
     ${blocs}
+    <p style="margin:14px 0 0;padding:12px 14px;background:#FFF4E5;border-radius:10px;font-size:14px;line-height:1.6"><strong>Pour nous transmettre un document</strong>, ne répondez pas à cet e-mail : déposez-le dans votre espace famille, onglet « Documents ». Les pièces envoyées par e-mail ne sont pas prises en compte.</p>
     <p style="margin:12px 0 0;font-size:13px;color:#78748C;line-height:1.6">Si vous n'êtes pas à l'origine de cette demande, ignorez simplement ce message.</p>
   </div>
-  <p style="text-align:center;font-size:12px;color:#8E8AA8;margin:16px 0 0">${esc(enseigne)} · ${REPONSE_FAMILLE}</p>
+  <p style="text-align:center;font-size:12px;color:#8E8AA8;margin:16px 0 0">${esc(enseigne)} · Questions (sans pièce jointe) : ${REPONSE_FAMILLE}</p>
 </div></body></html>`;
 
     const user = Deno.env.get("GMAIL_USER"), pass = Deno.env.get("GMAIL_APP_PASSWORD");
