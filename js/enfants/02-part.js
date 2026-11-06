@@ -767,7 +767,7 @@ function enfRenderAdminDocs(){
 
   /* Hors liste : fichiers sans clé de pièce, et dépôts faits par la famille dans son Espace famille
      (clé « espace_famille:<libellé> », voir l'edge function espace-famille). */
-  const autres=enfAdminDocsCache.filter(d=>!d.piece_key||String(d.piece_key).startsWith('espace_famille:'));
+  const autres=enfAdminDocsCache.filter(d=>!d.piece_key||d.piece_key==='droit_image'||String(d.piece_key).startsWith('espace_famille:'));
   const autresHtml='<div style="margin-top:14px">'
     +'<div style="font-size:12px;font-weight:700;color:var(--koala-dark);margin-bottom:6px">Autres documents importés</div>'
     +(autres.length?autres.map(ligneFichier).join(''):'<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Aucun autre document.</div>')
