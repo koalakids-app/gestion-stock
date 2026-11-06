@@ -76,7 +76,7 @@ function encodeSubject(subject: string): string {
   return s || "Notification";
 }
 
-const NOTICE_NE_PAS_REPONDRE = `<div style="max-width:560px;margin:12px auto 0;padding:0 18px 24px;font-family:Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.6;color:#78748C;text-align:center">Cet e-mail a été envoyé automatiquement : <strong>merci de ne pas y répondre et de ne pas nous envoyer de documents par e-mail</strong>, ils ne seraient pas traités. Pour transmettre un document, utilisez le lien de dépôt qui vous a été envoyé ou votre espace famille (onglet « Documents »). Une question ? Écrivez à a.janin@koalakids.fr.</div>`;
+const NOTICE_NE_PAS_REPONDRE = `<div style="max-width:560px;margin:12px auto 0;padding:0 18px 24px;font-family:Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.6;color:#78748C;text-align:center">Cet e-mail a été envoyé automatiquement : <strong>merci de ne pas y répondre et de ne pas nous envoyer de documents par e-mail</strong>, ils ne seraient pas traités. Pour transmettre un document, utilisez le lien de dépôt qui vous a été envoyé ou votre espace famille (onglet « Documents »).</div>`;
 
 async function sendEmail(to: string[], subject: string, html: string, expediteur?: string, orgNom?: string) {
   const user = Deno.env.get("GMAIL_USER");
