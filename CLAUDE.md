@@ -126,3 +126,6 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 
 ## Mention de l'auteur dans les PDF
 - « Application créée par David Bucari » figure au pied de chaque page des PDF jsPDF (`js/pdf-signature.js`, chargé en tête de `<head>` : une nouvelle page qui génère des PDF doit le charger), dans les fenêtres d'impression HTML (avant `</body></html>`) et dans le PDF de préinscription (edge function `preinscription-publique`, à redéployer à la main). Les formulaires officiels remplis par superposition (`documents/04-part.js`) n'en portent pas.
+
+## RGPD
+- Registre des traitements : `docs/registre-rgpd.md` (+ `.docx`). Politique de confidentialité : source `docs/politique-confidentialite.md`, page publique `confidentialite.html` (liée depuis `preinscription.html` et `espace-famille.html`), version Word `docs/politique-confidentialite.docx`. Les passages entre crochets (responsable, DPO, contact) sont à compléter. Toute modification touchant des données personnelles met à jour ces documents.
