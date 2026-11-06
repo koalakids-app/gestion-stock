@@ -110,6 +110,7 @@ async function sendEmail(to: string[], subject: string, html: string, expediteur
   try {
     await client.send({
       from: `${nomExpediteur(expediteur)} de ${orgNom || 'Koalakids'} <${user}>`,
+      replyTo: 'a.janin@koalakids.fr',
       to,
       subject: encodeSubject(subject),
       content: 'Ce message nécessite un client de messagerie compatible HTML.',

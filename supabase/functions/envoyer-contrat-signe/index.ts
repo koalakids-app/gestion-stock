@@ -215,6 +215,7 @@ Deno.serve(async (req) => {
     <div style="margin:0 0 16px;padding:14px 16px;background:#F4F2FB;border-radius:12px;font-size:14.5px;line-height:1.6">
       <strong>Votre espace famille</strong><br>
       Retrouvez les informations de la crèche et déposez vos documents en ligne.<br>
+      <strong>Merci de ne pas nous envoyer de documents par e-mail</strong> : déposez-les dans l'espace famille, onglet « Documents » (les pièces reçues par e-mail ne sont pas prises en compte).<br>
       Votre code personnel : <strong style="font-size:18px;letter-spacing:.15em">${esc(code)}</strong><br>
       <a href="${esc(base)}espace-famille.html?t=${esc(code)}" style="color:#4A3F9F;font-weight:700">Ouvrir mon espace famille</a>
     </div>`;
@@ -236,7 +237,7 @@ Deno.serve(async (req) => {
     <p style="margin:0;font-size:14.5px;line-height:1.6">À très bientôt,<br>L'équipe ${esc(enseigne)}</p>
   </div>
   <p style="text-align:center;font-size:12px;color:#8E8AA8;margin:16px 0 0;line-height:1.7">
-    ${esc(enseigne)}${etab.telephone ? ' · ' + esc(etab.telephone) : ''} · ${REPONSE_FAMILLE}
+    ${esc(enseigne)}${etab.telephone ? ' · ' + esc(etab.telephone) : ''} · Questions (sans pièce jointe) : ${REPONSE_FAMILLE}
   </p>
 </div>
 </body></html>`;

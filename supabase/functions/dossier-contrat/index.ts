@@ -291,7 +291,7 @@ async function sendEmail(to: string[], subject: string, html: string) {
     },
   });
   try {
-    await client.send({ from: user, to, subject: encodeSubject(subject), content: 'Ce message nécessite un client de messagerie compatible HTML.', html });
+    await client.send({ from: user, replyTo: 'a.janin@koalakids.fr', to, subject: encodeSubject(subject), content: 'Ce message nécessite un client de messagerie compatible HTML.', html });
   } finally {
     await client.close();
   }
