@@ -21,6 +21,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { resoudreJeton } from '../_shared/session-lien.ts';
+import { signalerDepot } from '../_shared/depot-externe.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -145,8 +146,14 @@ Deno.serve(async (req) => {
         creches = (rows || []).map(r => nomCourt(r.name));
       }
 
+      // Copies du carnet de vaccinations déjà déposées (dossier santé) : nom et date seulement.
+      const { data: carnet } = await sb
+        .from('vaccins_pj').select('filename,created_at')
+        .eq('enfant_id', enfant.id).order('created_at', { ascending: false });
+
       return json({
         dossier: { expire_le: dossier.expire_le, statut: dossier.statut },
+        carnet: carnet || [],
         enfant: {
           prenom: enfant.prenom, nom: enfant.nom, dob: enfant.dob,
           creche_nom: nomCourt(creche?.name) || '',
@@ -220,6 +227,49 @@ Deno.serve(async (req) => {
 
       const statut = await majStatut(dossier, pack);
       return json({ reponse, statut_dossier: statut });
+    }
+
+    // ------------------------------------------------------ CARNET_UPLOAD
+    // Copie du carnet de vaccinations : va dans le dossier SANTÉ (table
+    // vaccins_pj, bucket privé `carnets`), pas dans le dossier administratif.
+    if (action === 'carnet_upload') {
+      const filename = String(body.filename || 'carnet').trim().slice(0, 200);
+      const ext0 = (filename.split('.').pop() || '').toLowerCase();
+      const TYPES: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+        heic: 'image/heic', heif: 'image/heif', pdf: 'application/pdf',
+      };
+      const fourni = String(body.content_type || '').toLowerCase().replace('image/jpg', 'image/jpeg');
+      const contentType = Object.values(TYPES).includes(fourni) ? fourni : (TYPES[ext0] || fourni);
+      if (!Object.values(TYPES).includes(contentType)) return json({ erreur: 'format_non_accepte' }, 400);
+      const b64 = String(body.content_base64 || '');
+      if (!b64) return json({ erreur: 'fichier_manquant' }, 400);
+      let bytes: Uint8Array;
+      try {
+        const bin = atob(b64);
+        bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      } catch {
+        return json({ erreur: 'fichier_invalide' }, 400);
+      }
+      if (bytes.byteLength > 8 * 1024 * 1024) return json({ erreur: 'fichier_trop_volumineux' }, 400);
+
+      const ext = (TYPES[ext0] ? ext0 : 'bin');
+      const path = `${enfant.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await sb.storage.from('carnets').upload(path, bytes, { contentType });
+      if (upErr) { console.error('[dossier-famille] carnet storage', upErr); return json({ erreur: 'upload_impossible' }, 500); }
+      const { error: insErr } = await sb.from('vaccins_pj')
+        .insert({ enfant_id: enfant.id, bucket: 'carnets', path, filename });
+      if (insErr) {
+        console.error('[dossier-famille] carnet insertion', insErr);
+        await sb.storage.from('carnets').remove([path]).catch(() => {});
+        return json({ erreur: 'enregistrement_impossible' }, 500);
+      }
+      await signalerDepot(sb, {
+        source: 'enfant', creche_id: enfant.creche_id ?? null, enfant_id: enfant.id,
+        libelle: 'Carnet de vaccinations — ' + filename, nom: enfant.prenom || 'Un enfant',
+      });
+      return json({ ok: true });
     }
 
     return json({ erreur: 'Action inconnue' }, 400);

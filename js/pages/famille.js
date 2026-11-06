@@ -22,6 +22,7 @@ const wrap  = document.getElementById('wrap');
 
 let DOSSIER = null;   // {expire_le, statut}
 let ENFANT  = null;   // {prenom, nom, creche_nom}
+let CARNET  = [];     // copies du carnet de vaccinations déjà déposées
 let DOCS    = [];     // documents du pack + leur réponse éventuelle
 let COURANT = null;   // document ouvert
 let SIGS    = {};     // signatures tracées sur le document ouvert
@@ -51,7 +52,7 @@ async function boot(){
   if(!TOKEN)return etat('err','Lien incomplet','Ce lien ne contient pas de jeton. Utilisez celui reçu par e-mail.','link-off');
   try{
     const d=await appel('get');
-    DOSSIER=d.dossier;ENFANT=d.enfant;DOCS=d.documents||[];
+    DOSSIER=d.dossier;ENFANT=d.enfant;DOCS=d.documents||[];CARNET=d.carnet||[];
     if(Array.isArray(d.creches)&&d.creches.length)KK_CRECHES=['',...d.creches];
     document.getElementById('sousTitre').textContent=
       (ENFANT.prenom||'')+(ENFANT.creche_nom?' · '+ENFANT.creche_nom:'');
@@ -118,6 +119,19 @@ function renderListe(){
     });
   }
 
+  /* Carnet de vaccinations : déposé ici, il rejoint le dossier santé de l'enfant. */
+  h+='<h3 class="sec">Carnet de vaccinations</h3>'
+    +'<p class="hint">Photographiez ou scannez les pages des vaccins du carnet de santé de '
+    +esc(ENFANT.prenom||'votre enfant')+'. Plusieurs fichiers possibles.</p>'
+    +'<button class="doc" onclick="document.getElementById(\'f-carnet\').click()">'
+    +'<span class="ic'+(CARNET.length?' ok':'')+'"><i class="ti ti-'+(CARNET.length?'circle-check':'vaccine')+'"></i></span>'
+    +'<span class="tx"><b>Copie du carnet de vaccinations</b><span>'
+    +(CARNET.length?'<span class="badge b-ok">✓ Déposé</span> '+CARNET.length+' fichier'+(CARNET.length>1?'s':'')
+                   :'<span class="badge b-att">À déposer</span>')+'</span></span>'
+    +'<span class="go"><i class="ti ti-upload"></i></span></button>'
+    +'<input type="file" multiple id="f-carnet" accept="image/*,application/pdf" style="display:none" onchange="deposerCarnet(this)">'
+    +'<span id="st-carnet" class="hint" style="display:block"></span>';
+
   if(aImprimer.length){
     h+='<h3 class="sec">À imprimer et rapporter</h3>'
       +'<p class="hint">Ces documents ne se remplissent pas en ligne : ils doivent être complétés '
@@ -148,6 +162,68 @@ function renderListe(){
   wrap.innerHTML=h;
   window.scrollTo(0,0);
 }
+
+/* ------------------------------------------------- CARNET DE VACCINATIONS */
+
+const MAX_BYTES=8*1024*1024;
+const TYPES_EXT={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',
+  heic:'image/heic',heif:'image/heif',pdf:'application/pdf'};
+function typeFichier(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(TYPES_EXT[ext])return TYPES_EXT[ext];
+  const t=(file.type||'').toLowerCase();
+  return t==='image/jpg'?'image/jpeg':t;
+}
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(String(r.result).split(',')[1]||'');
+    r.onerror=()=>reject(new Error('lecture'));
+    r.readAsDataURL(file);
+  });
+}
+/* Réduit les grosses photos avant l'envoi (même principe que pieces.js). */
+async function reduireImage(file,type){
+  if(!/^image\/(jpeg|png|webp)$/.test(type)||file.size<600*1024)return {blob:file,type};
+  try{
+    const bmp=await createImageBitmap(file);
+    const k=Math.min(1,2200/Math.max(bmp.width,bmp.height));
+    const c=document.createElement('canvas');
+    c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+    c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.85));
+    if(blob&&blob.size<file.size)return {blob,type:'image/jpeg'};
+  }catch(e){}
+  return {blob:file,type};
+}
+
+async function deposerCarnet(input){
+  const fichiers=[...(input.files||[])];
+  if(!fichiers.length)return;
+  const st=document.getElementById('st-carnet');
+  const msg=(t,err)=>{if(st){st.textContent=t;st.style.color=err?'var(--red)':'var(--muted)';}};
+  try{
+    for(let i=0;i<fichiers.length;i++){
+      const file=fichiers[i];
+      msg('⏳ Envoi en cours… ('+(i+1)+'/'+fichiers.length+')');
+      const r=await reduireImage(file,typeFichier(file));
+      if(!Object.values(TYPES_EXT).includes(r.type))throw new Error('format');
+      if(r.blob.size>MAX_BYTES)throw new Error('volumineux');
+      await appel('carnet_upload',{filename:file.name,content_type:r.type,content_base64:await fileToBase64(r.blob)});
+      CARNET.unshift({filename:file.name,created_at:new Date().toISOString()});
+    }
+    toast(fichiers.length>1?'Fichiers envoyés ✅':'Fichier envoyé ✅');
+    renderListe();
+  }catch(e){
+    const m=(e.message||'').toLowerCase();
+    msg('⚠ '+(m.includes('format')?'Format non accepté : envoyez une photo (JPG, PNG) ou un PDF.'
+      :m.includes('volumineux')?'Fichier trop volumineux (8 Mo max). Reprenez la photo.'
+      :m.includes('session')?'Session terminée : rouvrez le lien reçu.'
+      :'Envoi impossible. Vérifiez votre connexion et réessayez.'),true);
+  }
+  input.value='';
+}
+window.deposerCarnet=deposerCarnet;
 
 /* -------------------------------------------------------------- UN DOCUMENT */
 
