@@ -1994,8 +1994,19 @@
 </div>
 
 <div class="overlay" id="modal-employe-wrap">
-  <div class="modal" style="max-width:640px;width:100%;max-height:88vh;overflow-y:auto">
-    <h3 id="modal-employe-title">Ajouter un(e) collaborateur/trice</h3>
+  <div class="modal fiche" style="max-width:700px;width:100%;max-height:92vh;overflow-y:auto">
+    <div class="fhead">
+      <div class="favatar" id="emp-avatar"><i class="ti ti-user-plus"></i></div>
+      <div class="ftxt"><h3 id="modal-employe-title">Ajouter un(e) collaborateur/trice</h3><div class="fsub" id="emp-sous"></div></div>
+      <button type="button" class="fclose" onclick="closeModal('modal-employe-wrap')" title="Fermer" aria-label="Fermer"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="fonglets" id="emp-onglets" role="tablist">
+      <button type="button" class="fonglet actif" data-pane="id" role="tab" onclick="empOnglet('id')"><i class="ti ti-user-circle"></i>Identité</button>
+      <button type="button" class="fonglet" data-pane="contrat" role="tab" onclick="empOnglet('contrat')"><i class="ti ti-file-text"></i>Contrat</button>
+      <button type="button" class="fonglet" data-pane="essai" role="tab" onclick="empOnglet('essai')"><i class="ti ti-hourglass"></i>Essai</button>
+      <button type="button" class="fonglet" data-pane="signe" role="tab" onclick="empOnglet('signe')"><i class="ti ti-file-certificate"></i>Contrat signé</button>
+    </div>
+    <div class="fpane on" id="emp-pane-id"><div class="fcard"><div class="fsec"><i class="ti ti-id"></i> Identité</div>
 
     <div class="frow">
       <div class="fg"><label class="flabel">Prénom</label><input class="finput" id="emp-prenom" placeholder="Julie"/></div>
@@ -2007,7 +2018,7 @@
       <div class="fg"><label class="flabel">E-mail (optionnel)</label><input class="finput" id="emp-email" type="email" placeholder="Pour l'envoi du code de pointage"/></div>
     </div>
 
-    <div style="font-size:12.5px;font-weight:800;color:var(--koala);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 10px">État civil</div>
+    </div><div class="fcard"><div class="fsec"><i class="ti ti-cake"></i> État civil</div>
     <div class="frow">
       <div class="fg"><label class="flabel">Date de naissance</label><input class="finput" id="emp-date-naissance" type="date"/></div>
       <div class="fg"><label class="flabel">Lieu de naissance</label><input class="finput" id="emp-lieu-naissance" placeholder="Ville"/></div>
@@ -2021,7 +2032,8 @@
       <div class="fg"><label class="flabel">Téléphone</label><input class="finput" id="emp-telephone" type="tel"/></div>
     </div>
 
-    <div style="font-size:12.5px;font-weight:800;color:var(--koala);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 10px">Contrat de travail</div>
+    </div></div>
+    <div class="fpane" id="emp-pane-contrat"><div class="fcard"><div class="fsec"><i class="ti ti-file-text"></i> Contrat de travail</div>
     <div class="frow">
       <div class="fg"><label class="flabel">Type de contrat</label><select class="finput" id="emp-type-contrat" onchange="empUpdateEssaiFin()"><option value="">-- Non défini --</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select></div>
       <div class="fg"><label class="flabel">Qualification</label><input class="finput" id="emp-qualification" placeholder="Ex. : Auxiliaire de puériculture"/></div>
@@ -2034,9 +2046,27 @@
       <div class="fg"><label class="flabel">Date de fin (si CDD)</label><input class="finput" id="emp-date-fin" type="date" onchange="empUpdateEssaiFin()"/></div>
     </div>
     <div class="fg"><label class="flabel">Motif du CDD (si applicable)</label><input class="finput" id="emp-motif-cdd" placeholder="Ex. : remplacement d'une salariée absente"/></div>
+    </div>
+    <div class="fcard"><div class="fsec"><i class="ti ti-coin-euro"></i> Temps de travail et rémunération</div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Heures hebdomadaires</label><input class="finput" id="emp-heures-hebdo" type="number" step="0.5" min="0"/></div>
+      <div class="fg"><label class="flabel">Salaire brut mensuel (€)</label><input class="finput" id="emp-salaire-brut" type="number" step="0.01" min="0"/></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Temps de travail</label><select class="finput" id="emp-temps-travail"><option value="">-- Non défini --</option><option value="temps_plein">Temps plein</option><option value="temps_partiel">Temps partiel</option></select></div>
+    <div class="fg"></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flabel">Convention collective</label><input class="finput" id="emp-convention" placeholder="Ex. : SNAECSO"/></div>
+      <div class="fg"><label class="flabel">Coefficient / échelon</label><input class="finput" id="emp-coefficient"/></div>
+    </div>
+    <div class="fg"><label class="flabel">Lieu de travail</label><input class="finput" id="emp-lieu-travail" placeholder="Par défaut, l'adresse de la crèche"/></div>
+
+    
+    </div></div>
+    <div class="fpane" id="emp-pane-essai"><div class="fcard"><div class="fsec"><i class="ti ti-hourglass"></i> Période d'essai</div>
     <div class="frow">
       <div class="fg"><label class="flabel">Période d'essai</label><input class="finput" id="emp-periode-essai" placeholder="Ex. : 2 mois renouvelable une fois"/></div>
-      <div class="fg"><label class="flabel">Temps de travail</label><select class="finput" id="emp-temps-travail"><option value="">-- Non défini --</option><option value="temps_plein">Temps plein</option><option value="temps_partiel">Temps partiel</option></select></div>
     </div>
     <div class="frow">
       <div class="fg">
@@ -2058,23 +2088,15 @@
         </label>
       </div>
     </div>
-    <div class="frow">
-      <div class="fg"><label class="flabel">Heures hebdomadaires</label><input class="finput" id="emp-heures-hebdo" type="number" step="0.5" min="0"/></div>
-      <div class="fg"><label class="flabel">Salaire brut mensuel (€)</label><input class="finput" id="emp-salaire-brut" type="number" step="0.01" min="0"/></div>
-    </div>
-    <div class="frow">
-      <div class="fg"><label class="flabel">Convention collective</label><input class="finput" id="emp-convention" placeholder="Ex. : SNAECSO"/></div>
-      <div class="fg"><label class="flabel">Coefficient / échelon</label><input class="finput" id="emp-coefficient"/></div>
-    </div>
-    <div class="fg"><label class="flabel">Lieu de travail</label><input class="finput" id="emp-lieu-travail" placeholder="Par défaut, l'adresse de la crèche"/></div>
-
-    <div class="fg" id="emp-contrat-wrap" style="display:none">
-      <div style="font-size:12.5px;font-weight:800;color:var(--koala);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--border);padding-bottom:6px;margin:18px 0 10px">Contrat de travail signé</div>
+    </div></div>
+    <div class="fpane" id="emp-pane-signe"><div class="fcard" id="emp-contrat-wrap" style="display:none">
+      <div class="fsec"><i class="ti ti-file-certificate"></i> Contrat de travail signé</div>
       <div id="emp-contrat-box"></div>
       <p class="hint" style="margin-top:4px">Généré et signé depuis le module Documents (modèle « Contrat de travail (salarié) »),
         en sélectionnant cette fiche dans le champ « Fiche collaborateur/trice » du formulaire.</p>
     </div>
 
+    </div>
     <div class="info-box"><i class="ti ti-info-circle" style="font-size:15px"></i> Pas de compte de connexion créé — seulement une fiche, ces informations et un code de pointage.</div>
     <div class="mactions"><button class="btn-cancel" id="emp-btn-delete" style="display:none;color:var(--red)" onclick="deleteEmploye()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-employe-wrap')">Annuler</button><button class="btn-primary" id="emp-btn-save" onclick="saveEmploye()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
