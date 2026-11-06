@@ -659,12 +659,35 @@ function partenaireFillCrecheChecks(selectedIds){
 function partenaireGetCrecheChecks(){
   return [...document.querySelectorAll('#part-creches-checks input[type=checkbox]:checked')].map(i=>i.value);
 }
+function partOnglet(nom){
+  document.querySelectorAll('#part-onglets .fonglet').forEach(b=>b.classList.toggle('actif',b.dataset.parttab===nom));
+  ['organisme','contact','notes'].forEach(t=>{const el=document.getElementById('part-pane-'+t);if(el)el.classList.toggle('active',t===nom);});
+  const c=document.querySelector('#modal-partenaire-wrap .fbody');if(c)c.scrollTop=0;
+}
+window.partOnglet=partOnglet;
+/* En-tête : avatar à initiales, nom, catégorie et crèches concernées. */
+function partEntete(){
+  const nom=document.getElementById('part-nom').value.trim();
+  const cat=document.getElementById('part-categorie').value.trim();
+  const mots=nom.split(/\s+/).filter(Boolean);
+  const ini=((mots[0]||'').charAt(0)+(mots.length>1?mots[mots.length-1].charAt(0):'')).toUpperCase();
+  document.getElementById('part-avatar').innerHTML=ini?escHtml(ini):'<i class="ti ti-building-community"></i>';
+  document.getElementById('modal-partenaire-title').textContent=nom||(editingPartenaireId?'Partenaire':'Ajouter un partenaire');
+  const n=partenaireGetCrecheChecks().length;
+  const bits=[];
+  if(cat)bits.push(escHtml(cat));
+  bits.push(n?(n+' crèche'+(n>1?'s':'')):'Tout le réseau');
+  document.getElementById('part-sous').innerHTML=bits.map(t=>'<span>'+t+'</span>').join(' · ');
+}
+['part-nom','part-categorie'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',partEntete);});
+{const w=document.getElementById('part-creches-checks');if(w)w.addEventListener('change',partEntete);}
 function openPartenaireModal(){
   editingPartenaireId=null;
   document.getElementById('modal-partenaire-title').textContent='Ajouter un partenaire';
   ['part-nom','part-categorie','part-contact-nom','part-telephone','part-email','part-adresse','part-notes'].forEach(id=>{document.getElementById(id).value='';});
   partenaireFillCrecheChecks([]);
   document.getElementById('part-btn-delete').style.display='none';
+  partOnglet('organisme');partEntete();
   document.getElementById('modal-partenaire-wrap').classList.add('open');
 }
 window.openPartenaireModal=openPartenaireModal;
@@ -681,6 +704,7 @@ function editPartenaire(id){
   document.getElementById('part-notes').value=p.notes||'';
   partenaireFillCrecheChecks(p.creche_ids||[]);
   document.getElementById('part-btn-delete').style.display='';
+  partOnglet('organisme');partEntete();
   document.getElementById('modal-partenaire-wrap').classList.add('open');
 }
 window.editPartenaire=editPartenaire;

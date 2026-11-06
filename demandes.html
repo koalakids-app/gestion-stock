@@ -2118,25 +2118,50 @@
 </div>
 
 <div class="overlay" id="modal-partenaire-wrap">
-  <div class="modal">
-    <h3 id="modal-partenaire-title">Ajouter un partenaire</h3>
-    <div class="frow">
-      <div class="fg"><label class="flabel">Nom</label><input class="finput" id="part-nom" placeholder="CAF du Var"/></div>
-      <div class="fg"><label class="flabel">Catégorie</label><input class="finput" id="part-categorie" list="part-categories" placeholder="CAF, PMI, Prestataire repas…"/>
+  <div class="modal fiche" style="max-width:640px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+    <div class="fhead">
+      <div class="favatar" id="part-avatar"><i class="ti ti-building-community"></i></div>
+      <div class="ftxt"><h3 id="modal-partenaire-title">Ajouter un partenaire</h3><div class="fsub" id="part-sous"></div></div>
+      <button type="button" class="fclose" onclick="closeModal('modal-partenaire-wrap')" title="Fermer" aria-label="Fermer"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="fonglets" id="part-onglets" role="tablist">
+      <button type="button" class="fonglet actif" data-parttab="organisme" role="tab" onclick="partOnglet('organisme')"><i class="ti ti-building"></i>Organisme</button>
+      <button type="button" class="fonglet" data-parttab="contact" role="tab" onclick="partOnglet('contact')"><i class="ti ti-address-book"></i>Contact</button>
+      <button type="button" class="fonglet" data-parttab="notes" role="tab" onclick="partOnglet('notes')"><i class="ti ti-notes"></i>Notes</button>
+    </div>
+    <div class="fbody">
+      <div class="module-tab-content active" id="part-pane-organisme">
+        <div class="fcard"><div class="fsec"><i class="ti ti-building"></i> Organisme</div>
+          <div class="fg"><label class="flabel">Nom</label><input class="finput" id="part-nom" placeholder="CAF du Var"/></div>
+          <div class="fg"><label class="flabel">Catégorie</label><input class="finput" id="part-categorie" list="part-categories" placeholder="CAF, PMI, Prestataire repas…"/>
         <datalist id="part-categories"><option value="CAF"><option value="PMI"><option value="Prestataire repas"><option value="Mairie"><option value="Assurance"><option value="Autre"></datalist>
       </div>
-    </div>
-    <div class="fg"><label class="flabel">Crèches concernées</label>
+        </div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-building-community"></i> Crèches concernées</div>
+          <div class="fg">
       <div id="part-creches-checks" style="display:flex;gap:12px;flex-wrap:wrap;padding:8px 0"></div>
       <p class="hint" style="font-size:12px;color:var(--muted);margin:2px 0 0">Aucune case cochée = concerne tout le réseau.</p>
     </div>
-    <div class="frow">
-      <div class="fg"><label class="flabel">Contact (nom)</label><input class="finput" id="part-contact-nom" placeholder="Nom de l'interlocuteur"/></div>
-      <div class="fg"><label class="flabel">Téléphone</label><input class="finput" id="part-telephone" type="tel"/></div>
+        </div>
+      </div>
+      <div class="module-tab-content" id="part-pane-contact">
+        <div class="fcard"><div class="fsec"><i class="ti ti-user"></i> Interlocuteur</div>
+          <div class="frow">
+            <div class="fg"><label class="flabel">Contact (nom)</label><input class="finput" id="part-contact-nom" placeholder="Nom de l'interlocuteur"/></div>
+            <div class="fg"><label class="flabel">Téléphone</label><input class="finput" id="part-telephone" type="tel"/></div>
+          </div>
+          <div class="fg"><label class="flabel">E-mail</label><input class="finput" id="part-email" type="email"/></div>
+        </div>
+        <div class="fcard"><div class="fsec"><i class="ti ti-map-pin"></i> Adresse</div>
+          <div class="fg"><label class="flabel">Adresse</label><input class="finput" id="part-adresse" placeholder="Adresse postale"/></div>
+        </div>
+      </div>
+      <div class="module-tab-content" id="part-pane-notes">
+        <div class="fcard"><div class="fsec"><i class="ti ti-notes"></i> Notes</div>
+          <div class="fg"><label class="flabel">Notes</label><textarea class="finput" id="part-notes" rows="3" style="resize:vertical" placeholder="Numéro de dossier, horaires d'ouverture, particularités…"></textarea></div>
+        </div>
+      </div>
     </div>
-    <div class="fg"><label class="flabel">E-mail</label><input class="finput" id="part-email" type="email"/></div>
-    <div class="fg"><label class="flabel">Adresse</label><input class="finput" id="part-adresse" placeholder="Adresse postale"/></div>
-    <div class="fg"><label class="flabel">Notes</label><textarea class="finput" id="part-notes" rows="3" style="resize:vertical" placeholder="Numéro de dossier, horaires d'ouverture, particularités…"></textarea></div>
     <div class="mactions"><button class="btn-cancel" id="part-btn-delete" style="display:none;color:var(--red)" onclick="deletePartenaire()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-partenaire-wrap')">Annuler</button><button class="btn-primary" onclick="savePartenaire()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
 </div>

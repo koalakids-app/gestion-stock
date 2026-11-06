@@ -824,6 +824,7 @@ partenaires: `
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">
   💡 Le carnet d'adresses des organismes avec lesquels le réseau travaille : CAF, PMI, prestataire repas, mairie, et autres contacts institutionnels.
 </div>
+<div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:12px">La fiche partenaire s'organise en 3 onglets (comme les autres fiches) : <strong>Organisme</strong> (nom, catégorie, crèches concernées), <strong>Contact</strong> (interlocuteur, téléphone, e-mail, adresse) et <strong>Notes</strong>. L'en-tête rappelle la catégorie et le nombre de crèches concernées.</div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">➕ Ajouter un partenaire</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Cliquez sur <strong>Ajouter un partenaire</strong></li>
