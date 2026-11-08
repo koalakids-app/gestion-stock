@@ -31,6 +31,58 @@ function irfPlatsSemaine(lignes){
   return out;
 }
 
+/* ── Import d'une recette depuis un site (edge function `importer-recette`) ────────────────
+   Le site doit publier ses données structurées schema.org « Recipe » (cas de la plupart des sites de
+   recettes). Le résultat pré-remplit le formulaire de recette : le référent relit et corrige avant d'enregistrer.
+   La source est conservée en bas de la préparation. */
+const IRF_ERREURS={
+  adresse_invalide:'Adresse invalide.',adresse_refusee:'Cette adresse ne peut pas être lue (https public uniquement).',
+  recette_introuvable:'Aucune recette lisible sur cette page : saisissez-la à la main.',page_inaccessible:'Le site n’a pas répondu.',
+  page_illisible:'Cette page ne peut pas être lue.',trop_de_redirections:'Trop de redirections.',non_autorise:'Action réservée aux référents et à la direction.'
+};
+/* Gluten / lait ne sont pas repérés par les mots du champ « allergies » des fiches enfants : compléments pour les ingrédients. */
+const IRF_MOTS_AL={gluten:/farine|pain\b|chapelure|semoule|pate|biscuit|boudoir|flocons? d.avoine|couscous|biscotte/,lait:/beurre|creme|fromage|yaourt|yogourt|mascarpone|gruyere|emmental|parmesan|mozzarella|ricotta|petit.?suisse/,oeuf:/mayonnaise|meringue/};
+function irfAllergenesIngredient(nom){
+  const n=rcNorm(nom),s={};
+  rcAllergenesDeTexte(nom).forEach(function(k){s[k]=1;});
+  Object.keys(IRF_MOTS_AL).forEach(function(k){if(IRF_MOTS_AL[k].test(n))s[k]=1;});
+  return Object.keys(s);
+}
+/* « 200 g de farine » → {nom:'farine',q:200,u:'g'} ; « 2 œufs » → pièces ; cuillères et textes sans quantité :
+   quantité vide, le texte d'origine reste dans le nom (à ajuster à la main). */
+function irfParseIngredient(txt){
+  const t=String(txt||'').replace(/\s+/g,' ').trim();
+  const brut=function(){return{nom:t,q:0,u:'g',al:irfAllergenesIngredient(t)};};
+  const m=/^(\d+(?:[.,]\d+)?(?:\s*\/\s*\d+)?|½|¼|¾)\s*(kg|g|cl|ml|litres?|l|sachets?|pincées?|c\.|cuill?[eè]res?|càs|càc|cas|cac)?(?![a-zà-ÿ])\s*(?:\.|à soupe|à café|à s\.|à c\.)*\s*(?:de |d'|d’|du |des |de la |de l')?(.*)$/i.exec(t);
+  if(!m||!m[3])return brut();
+  let q;
+  const n=m[1];
+  if(n==='½')q=0.5;else if(n==='¼')q=0.25;else if(n==='¾')q=0.75;
+  else if(n.indexOf('/')>0){const f=n.split('/');q=(+f[0].replace(',','.'))/(+f[1]||1);}
+  else q=+n.replace(',','.');
+  const u=(m[2]||'').toLowerCase(),reste=m[3].trim();
+  if(/^(c\.|cuill|cas|cac|càs|càc|pinc)/.test(u)||/^(à soupe|à café)/i.test(reste))return brut();
+  const nom=reste.replace(/^[,;:\-–\s]+/,'')||t;
+  if(u==='kg'||u==='g'||u==='cl'||u==='l')return{nom:nom,q:q,u:u,al:irfAllergenesIngredient(nom)};
+  if(u==='ml')return{nom:nom,q:q/10,u:'cl',al:irfAllergenesIngredient(nom)};
+  if(/^litre/.test(u))return{nom:nom,q:q,u:'l',al:irfAllergenesIngredient(nom)};
+  if(/^sachet/.test(u))return{nom:nom,q:q,u:'sachet',al:irfAllergenesIngredient(nom)};
+  return{nom:nom,q:q,u:'pièce',al:irfAllergenesIngredient(nom)};
+}
+/* Appelle la fonction ; renvoie {nom,nb,etapes,ings} ou lève une Error au message lisible. */
+async function irfImporterRecette(url){
+  const{data,error}=await sb.functions.invoke('importer-recette',{body:{url:url}});
+  let code=data&&data.error;
+  if(error&&!code){try{const b=await error.context.json();code=b&&b.error;}catch(e){}}
+  if(error||code)throw new Error(IRF_ERREURS[code]||'Import impossible pour le moment.');
+  return{
+    nom:data.nom||'',nb:data.portions||4,
+    etapes:((data.etapes||'')+(data.source?'\n\nSource : '+data.source:'')).trim(),
+    ings:(data.ingredients||[]).map(irfParseIngredient)
+  };
+}
+window.irfImporterRecette=irfImporterRecette;
+
 /* Texte brut (Espace famille, copier-coller). */
 function irfTexte(recettes,portions,intro,plats){
   const bloc=recettes.map(function(r){
@@ -100,6 +152,7 @@ async function irfOuvrir(){
       ?'<div style="max-height:200px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:8px">'
         +liste.map(function(r){return'<label style="display:flex;gap:8px;align-items:center;padding:3px 0;cursor:pointer"><input type="checkbox" class="irf-r" value="'+escHtml(r.id)+'"/> <span><strong>'+escHtml(r.nom)+'</strong> '+rcAllergenesHtml(rcAllergenesRecette(r))+'</span></label>';}).join('')+'</div>'
       :'<div class="empty-state"><i class="ti ti-book"></i><p>Aucune recette dans la bibliothèque : créez-en depuis « Goûters de la crèche ».</p></div>')
+    +(rcPeutCreer()?'<div style="margin:-2px 0 8px"><button class="btn-cancel" id="irf-import"><i class="ti ti-world-download"></i> Importer une recette depuis un site</button></div>':'')
     +(dates.length?'<div class="fg"><label class="flabel">Plats proposés par le traiteur (MCM) — à proposer aux parents avec un lien de recherche de recette</label>'
       +'<select class="finput" id="irf-sem" style="margin-bottom:6px">'+dates.map(function(d){return'<option value="'+d+'">Semaine du '+new Date(d+'T00:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</option>';}).join('')+'</select>'
       +'<div id="irf-plats" style="max-height:150px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px"></div></div>':'')
@@ -154,6 +207,8 @@ async function irfOuvrir(){
       closeModal('modal-idees-recettes-wrap');
     }finally{enCours=false;const b=q('irf-pub');if(b)b.disabled=false;}
   };
+  const bi=q('irf-import');
+  if(bi)bi.onclick=function(){closeModal('modal-idees-recettes-wrap');rcEditer(null,irfOuvrir);};
   maj();
   ov.classList.add('open');
 }
