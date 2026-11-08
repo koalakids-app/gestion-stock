@@ -29,7 +29,7 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 
 - Recettes des goûters : tables `recettes`, `recettes_ingredients`, `gouters_creche_effectifs` (moyens/grands par jour), `gouters_creche_recettes` (`sql/recettes_gouters.sql`, à appliquer à la main). Recettes communes aux crèches (écriture direction via `kk_est_direction()`), allergènes par ingrédient. Logique et récapitulatif 2 semaines dans `js/pages/demandes/14-recettes-gouters.js` (`gcLignes` calcule les produits à commander).
 
-- Idées recettes pour les parents : bouton « Idées recettes » de MCM › Menus (`irfOuvrir`, `js/pages/demandes/22-idees-recettes-familles.js`) ; recettes de la bibliothèque mises à l'échelle (portions), fiche A4 imprimable, texte à copier, ou publication dans `famille_messages` + push (`mfPrevenir`). Pas de SQL.
+- Idées recettes pour les parents : bouton « Idées recettes » de MCM › Menus (`irfOuvrir`, `js/pages/demandes/22-idees-recettes-familles.js`) ; recettes de la bibliothèque mises à l'échelle (portions), fiche A4 imprimable, texte à copier, ou publication dans `famille_messages` + push (`mfPrevenir`). Pas de SQL. Plats du menu MCM (`menus_semaine`, `irfPlatsSemaine`) cochables : lien de recherche Marmiton (`irfLienRecette`) sans recopier de contenu externe ; pas de recherche automatique sur internet (aucun service côté serveur).
 
 - Guide de la diversification : synthèse en dur du guide de Santé publique France dans `js/pages/demandes/17-guide-diversification.js` (`GD_TRANCHES`, `GD_CRECHE`), bouton « Guide diversification » de MCM › Menus.
 
