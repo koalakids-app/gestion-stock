@@ -178,6 +178,9 @@ async function rcEditer(id,apres){
   ov.innerHTML='<div class="modal" style="max-width:560px;width:100%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">'
     +'<h3 style="margin:0"><i class="ti ti-chef-hat"></i> '+(r.id?'Recette':'Nouvelle recette')+'</h3>'
     +'<button class="btn-cancel" onclick="closeModal(\'modal-recette-edit-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
+    +(edit&&!r.id&&typeof irfImporterRecette==='function'?'<div class="fg" style="background:var(--koala-lightest,#F7F6FC);border-radius:8px;padding:8px"><label class="flabel"><i class="ti ti-world-download"></i> Importer depuis un site de recettes</label>'
+      +'<div style="display:flex;gap:6px"><input class="finput" id="rce-url" type="url" placeholder="https://www.marmiton.org/recettes/…"/><button class="btn-cancel" id="rce-import" style="white-space:nowrap">Importer</button></div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-top:4px">Relisez toujours : quantités, allergènes et nombre de portions sont déduits automatiquement. La source est notée dans la préparation.</div></div>':'')
     +'<div class="fg"><label class="flabel">Nom</label><input class="finput" id="rce-nom" maxlength="120" value="'+escHtml(r.nom)+'"'+dis+'/></div>'
     +'<div class="fg"><label class="flabel">Écrite pour (nombre d’enfants)</label><input class="finput" type="number" min="1" max="200" id="rce-nb" value="'+r.nb+'"'+dis+'/></div>'
     +'<div class="flabel">Ingrédients</div><div id="rce-ings"></div>'
@@ -211,6 +214,22 @@ async function rcEditer(id,apres){
   function majAl(){document.getElementById('rce-al').innerHTML='<span style="font-size:12px;font-weight:700">Allergènes de la recette :</span> '+(rcAllergenesHtml(rcAllergenesRecette({ings:lire()}))||'<span style="font-size:12px;color:var(--muted)">aucun</span>');}
   (r.ings.length?r.ings:(edit?[{nom:'',q:0,u:'g',al:[]}]:[])).forEach(ligne);
   majAl();
+  const imp=document.getElementById('rce-import');
+  if(imp)imp.onclick=async function(){
+    const url=document.getElementById('rce-url').value.trim();
+    if(!url){showBanner('Collez l’adresse de la recette.','error');return;}
+    imp.disabled=true;imp.textContent='Import…';
+    try{
+      const x=await irfImporterRecette(url);
+      if(document.getElementById('rce-nom').value.trim()&&!confirm('Remplacer le contenu du formulaire par la recette importée ?'))return;
+      document.getElementById('rce-nom').value=x.nom;
+      document.getElementById('rce-nb').value=x.nb;
+      document.getElementById('rce-etapes').value=x.etapes;
+      zone.innerHTML='';x.ings.forEach(ligne);majAl();
+      showBanner('Recette importée : relisez les quantités et les allergènes avant d’enregistrer.');
+    }catch(err){showBanner(err.message,'error');}
+    finally{imp.disabled=false;imp.textContent='Importer';}
+  };
   const add=document.getElementById('rce-add');if(add)add.onclick=function(){ligne({nom:'',q:0,u:'g',al:[]});};
   const fiche=document.getElementById('rce-fiche');
   if(fiche)fiche.onclick=function(){

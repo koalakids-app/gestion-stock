@@ -18,8 +18,73 @@ function irfIngredients(r,portions){
 }
 function irfAllergenes(r){return rcAllergenesRecette(r).map(rcLibelleAllergene);}
 
+/* Plats du menu MCM (table `menus_semaine`) : lien de recherche de recette sur Marmiton. Aucun contenu
+   n'est recopié depuis internet : le parent suit le lien vers la recette de son choix. */
+function irfLienRecette(plat){return'https://www.marmiton.org/recettes/recherche.aspx?aqt='+encodeURIComponent(String(plat||'')+' enfant');}
+/* Plats d'une semaine : liste dédoublonnée des plats « grands » (sans entrées ni laitages évidents ignorés : le référent coche). */
+function irfPlatsSemaine(lignes){
+  const vus={},out=[];
+  (lignes||[]).forEach(function(m){(m.grand||[]).concat(m.bb18||[]).forEach(function(t){
+    const nom=String(t||'').trim(),k=rcNorm(nom);
+    if(nom&&!vus[k]){vus[k]=1;out.push(nom);}
+  });});
+  return out;
+}
+
+/* ── Import d'une recette depuis un site (edge function `importer-recette`) ────────────────
+   Le site doit publier ses données structurées schema.org « Recipe » (cas de la plupart des sites de
+   recettes). Le résultat pré-remplit le formulaire de recette : le référent relit et corrige avant d'enregistrer.
+   La source est conservée en bas de la préparation. */
+const IRF_ERREURS={
+  adresse_invalide:'Adresse invalide.',adresse_refusee:'Cette adresse ne peut pas être lue (https public uniquement).',
+  recette_introuvable:'Aucune recette lisible sur cette page : saisissez-la à la main.',page_inaccessible:'Le site n’a pas répondu.',
+  page_illisible:'Cette page ne peut pas être lue.',trop_de_redirections:'Trop de redirections.',non_autorise:'Action réservée aux référents et à la direction.'
+};
+/* Gluten / lait ne sont pas repérés par les mots du champ « allergies » des fiches enfants : compléments pour les ingrédients. */
+const IRF_MOTS_AL={gluten:/farine|pain\b|chapelure|semoule|pate|biscuit|boudoir|flocons? d.avoine|couscous|biscotte/,lait:/beurre|creme|fromage|yaourt|yogourt|mascarpone|gruyere|emmental|parmesan|mozzarella|ricotta|petit.?suisse/,oeuf:/mayonnaise|meringue/};
+function irfAllergenesIngredient(nom){
+  const n=rcNorm(nom),s={};
+  rcAllergenesDeTexte(nom).forEach(function(k){s[k]=1;});
+  Object.keys(IRF_MOTS_AL).forEach(function(k){if(IRF_MOTS_AL[k].test(n))s[k]=1;});
+  return Object.keys(s);
+}
+/* « 200 g de farine » → {nom:'farine',q:200,u:'g'} ; « 2 œufs » → pièces ; cuillères et textes sans quantité :
+   quantité vide, le texte d'origine reste dans le nom (à ajuster à la main). */
+function irfParseIngredient(txt){
+  const t=String(txt||'').replace(/\s+/g,' ').trim();
+  const brut=function(){return{nom:t,q:0,u:'g',al:irfAllergenesIngredient(t)};};
+  const m=/^(\d+(?:[.,]\d+)?(?:\s*\/\s*\d+)?|½|¼|¾)\s*(kg|g|cl|ml|litres?|l|sachets?|pincées?|c\.|cuill?[eè]res?|càs|càc|cas|cac)?(?![a-zà-ÿ])\s*(?:\.|à soupe|à café|à s\.|à c\.)*\s*(?:de |d'|d’|du |des |de la |de l')?(.*)$/i.exec(t);
+  if(!m||!m[3])return brut();
+  let q;
+  const n=m[1];
+  if(n==='½')q=0.5;else if(n==='¼')q=0.25;else if(n==='¾')q=0.75;
+  else if(n.indexOf('/')>0){const f=n.split('/');q=(+f[0].replace(',','.'))/(+f[1]||1);}
+  else q=+n.replace(',','.');
+  const u=(m[2]||'').toLowerCase(),reste=m[3].trim();
+  if(/^(c\.|cuill|cas|cac|càs|càc|pinc)/.test(u)||/^(à soupe|à café)/i.test(reste))return brut();
+  const nom=reste.replace(/^[,;:\-–\s]+/,'')||t;
+  if(u==='kg'||u==='g'||u==='cl'||u==='l')return{nom:nom,q:q,u:u,al:irfAllergenesIngredient(nom)};
+  if(u==='ml')return{nom:nom,q:q/10,u:'cl',al:irfAllergenesIngredient(nom)};
+  if(/^litre/.test(u))return{nom:nom,q:q,u:'l',al:irfAllergenesIngredient(nom)};
+  if(/^sachet/.test(u))return{nom:nom,q:q,u:'sachet',al:irfAllergenesIngredient(nom)};
+  return{nom:nom,q:q,u:'pièce',al:irfAllergenesIngredient(nom)};
+}
+/* Appelle la fonction ; renvoie {nom,nb,etapes,ings} ou lève une Error au message lisible. */
+async function irfImporterRecette(url){
+  const{data,error}=await sb.functions.invoke('importer-recette',{body:{url:url}});
+  let code=data&&data.error;
+  if(error&&!code){try{const b=await error.context.json();code=b&&b.error;}catch(e){}}
+  if(error||code)throw new Error(IRF_ERREURS[code]||'Import impossible pour le moment.');
+  return{
+    nom:data.nom||'',nb:data.portions||4,
+    etapes:((data.etapes||'')+(data.source?'\n\nSource : '+data.source:'')).trim(),
+    ings:(data.ingredients||[]).map(irfParseIngredient)
+  };
+}
+window.irfImporterRecette=irfImporterRecette;
+
 /* Texte brut (Espace famille, copier-coller). */
-function irfTexte(recettes,portions,intro){
+function irfTexte(recettes,portions,intro,plats){
   const bloc=recettes.map(function(r){
     const al=irfAllergenes(r);
     return'🍽️ '+r.nom+' (pour '+portions+' portion'+(portions>1?'s':'')+')\n\n'
@@ -27,11 +92,15 @@ function irfTexte(recettes,portions,intro){
       +(r.etapes?'\n\nPréparation :\n'+r.etapes:'')
       +'\n\nAllergènes : '+(al.length?al.join(', '):'aucun déclaré');
   }).join('\n\n────────────\n\n');
-  return(intro?intro.trim()+'\n\n':'')+bloc;
+  const pl=(plats||[]).length
+    ?(recettes.length?'\n\n────────────\n\n':'')+'🔎 Les plats de la semaine à refaire à la maison (recettes à retrouver en ligne) :\n'
+      +plats.map(function(n){return'• '+n+'\n   '+irfLienRecette(n);}).join('\n')
+    :'';
+  return(intro?intro.trim()+'\n\n':'')+bloc+pl;
 }
 
 /* Fiche A4 imprimable. Tout ce qui est saisi est échappé. */
-function irfFicheHtml(recettes,portions,intro,creche){
+function irfFicheHtml(recettes,portions,intro,creche,plats){
   const base=location.origin+location.pathname.replace(/[^/]*$/,'');
   const e=escHtml;
   const bloc=recettes.map(function(r){
@@ -54,11 +123,20 @@ function irfFicheHtml(recettes,portions,intro,creche){
     +'.pied{text-align:center;font-size:9px;color:#999;margin-top:14px}</style></head><body>'
     +'<div class="hd"><img src="'+base+'logo-koalakids.png" alt="Koala Kids"><div><h1>Idées recettes pour les petits</h1>'+(creche?'<small>'+e(creche)+'</small>':'')+'</div></div>'
     +(intro?'<div class="intro">'+e(intro)+'</div>':'')+bloc
+    +((plats||[]).length?'<section><h2>Les plats de la semaine, à refaire à la maison</h2><div class="p">Recettes à retrouver en ligne</div><ul>'
+      +plats.map(function(n){return'<li>'+e(n)+' — <a href="'+e(irfLienRecette(n))+'">chercher une recette</a></li>';}).join('')+'</ul></section>':'')
     +'<div class="pied">Application créée par David Bucari</div></body></html>';
 }
 
 async function irfOuvrir(){
   const recettes=await rcCharger(true);
+  let semaines={};
+  try{
+    const lundi=menusMondayOf(ipDateToLocalISO(new Date()));
+    const{data}=await sb.from('menus_semaine').select('date_debut,jour,bb18,grand').gte('date_debut',lundi).order('date_debut').order('jour').limit(15);
+    (data||[]).forEach(function(m){(semaines[m.date_debut]=semaines[m.date_debut]||[]).push(m);});
+  }catch(err){console.warn('[Idées recettes] menus',err);}
+  const dates=Object.keys(semaines).slice(0,2);
   const liste=Object.keys(recettes).map(function(k){return recettes[k];}).sort(function(a,b){return a.nom.localeCompare(b.nom,'fr');});
   let ov=document.getElementById('modal-idees-recettes-wrap');if(ov)ov.remove();
   ov=document.createElement('div');ov.className='overlay';ov.id='modal-idees-recettes-wrap';
@@ -74,6 +152,10 @@ async function irfOuvrir(){
       ?'<div style="max-height:200px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:8px">'
         +liste.map(function(r){return'<label style="display:flex;gap:8px;align-items:center;padding:3px 0;cursor:pointer"><input type="checkbox" class="irf-r" value="'+escHtml(r.id)+'"/> <span><strong>'+escHtml(r.nom)+'</strong> '+rcAllergenesHtml(rcAllergenesRecette(r))+'</span></label>';}).join('')+'</div>'
       :'<div class="empty-state"><i class="ti ti-book"></i><p>Aucune recette dans la bibliothèque : créez-en depuis « Goûters de la crèche ».</p></div>')
+    +(rcPeutCreer()?'<div style="margin:-2px 0 8px"><button class="btn-cancel" id="irf-import"><i class="ti ti-world-download"></i> Importer une recette depuis un site</button></div>':'')
+    +(dates.length?'<div class="fg"><label class="flabel">Plats proposés par le traiteur (MCM) — à proposer aux parents avec un lien de recherche de recette</label>'
+      +'<select class="finput" id="irf-sem" style="margin-bottom:6px">'+dates.map(function(d){return'<option value="'+d+'">Semaine du '+new Date(d+'T00:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</option>';}).join('')+'</select>'
+      +'<div id="irf-plats" style="max-height:150px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px"></div></div>':'')
     +'<div style="display:flex;gap:10px;flex-wrap:wrap">'
     +'<div class="fg" style="flex:0 0 120px"><label class="flabel">Portions</label><input class="finput" type="number" id="irf-portions" min="1" max="20" value="2"/></div>'
     +'<div class="fg" style="flex:1;min-width:180px"><label class="flabel">Crèche</label><select class="finput" id="irf-creche"'+(isDirection?'':' disabled')+'>'+crOpts+'</select></div></div>'
@@ -87,37 +169,46 @@ async function irfOuvrir(){
   const q=function(id){return document.getElementById(id);};
   function choix(){return Array.prototype.filter.call(ov.querySelectorAll('.irf-r:checked'),function(c){return recettes[c.value];}).map(function(c){return recettes[c.value];});}
   function portions(){return Math.max(1,Math.min(20,parseInt(q('irf-portions').value,10)||2));}
-  function maj(){const c=choix();q('irf-apercu').value=c.length?irfTexte(c,portions(),q('irf-intro').value):'Cochez au moins une recette.';}
+  function plats(){return Array.prototype.map.call(ov.querySelectorAll('.irf-p:checked'),function(c){return c.value;});}
+  function rendrePlats(){
+    const z=q('irf-plats'),sel=q('irf-sem');if(!z||!sel)return;
+    const ps=irfPlatsSemaine(semaines[sel.value]);
+    z.innerHTML=ps.length?ps.map(function(n){return'<label style="display:flex;gap:8px;align-items:center;padding:2px 0;cursor:pointer"><input type="checkbox" class="irf-p" value="'+escHtml(n)+'"/> '+escHtml(n)+'</label>';}).join(''):'<span style="font-size:12px;color:var(--muted)">Aucun plat cette semaine.</span>';
+  }
+  function maj(){const c=choix(),p=plats();q('irf-apercu').value=(c.length||p.length)?irfTexte(c,portions(),q('irf-intro').value,p):'Cochez au moins une recette ou un plat.';}
   function nomCreche(){const c=cacheCreches.find(function(x){return x.id===q('irf-creche').value;});return c?c.name:'';}
-  ov.addEventListener('input',maj);ov.addEventListener('change',maj);
+  ov.addEventListener('input',maj);ov.addEventListener('change',function(ev){if(ev.target.id==='irf-sem')rendrePlats();maj();});
+  rendrePlats();
   q('irf-copy').onclick=function(){
-    const c=choix();if(!c.length){showBanner('Cochez au moins une recette.','error');return;}
-    (navigator.clipboard?navigator.clipboard.writeText(irfTexte(c,portions(),q('irf-intro').value)):Promise.reject()).then(function(){showBanner('Texte copié ✅');},function(){showBanner('Copie impossible.','error');});
+    const c=choix(),p=plats();if(!c.length&&!p.length){showBanner('Cochez au moins une recette ou un plat.','error');return;}
+    (navigator.clipboard?navigator.clipboard.writeText(irfTexte(c,portions(),q('irf-intro').value,p)):Promise.reject()).then(function(){showBanner('Texte copié ✅');},function(){showBanner('Copie impossible.','error');});
   };
   q('irf-print').onclick=function(){
-    const c=choix();if(!c.length){showBanner('Cochez au moins une recette.','error');return;}
+    const c=choix(),p=plats();if(!c.length&&!p.length){showBanner('Cochez au moins une recette ou un plat.','error');return;}
     const w=window.open('','_blank');if(!w){showBanner('Autorisez les fenêtres pop-up pour imprimer.','error');return;}
-    w.document.write(irfFicheHtml(c,portions(),q('irf-intro').value,nomCreche()).replace('</body>','<script>window.onload=function(){window.print();}<\/script></body>'));
+    w.document.write(irfFicheHtml(c,portions(),q('irf-intro').value,nomCreche(),p).replace('</body>','<script>window.onload=function(){window.print();}<\/script></body>'));
     w.document.close();
   };
   let enCours=false;
   q('irf-pub').onclick=async function(){
     if(enCours)return;
-    const c=choix(),creche=q('irf-creche').value;
-    if(!c.length){showBanner('Cochez au moins une recette.','error');return;}
+    const c=choix(),p=plats(),creche=q('irf-creche').value;
+    if(!c.length&&!p.length){showBanner('Cochez au moins une recette ou un plat.','error');return;}
     if(!creche){showBanner('Choisissez une crèche.','error');return;}
     if(!currentProfile?.id){showBanner('Profil introuvable, reconnectez-vous.','error');return;}
     if(!confirm('Publier cette idée recette dans l’Espace famille de '+(nomCreche()||'la crèche')+' ?'))return;
     enCours=true;q('irf-pub').disabled=true;
     try{
-      const titre='Idée recette : '+c.map(function(r){return r.nom;}).join(', ');
-      const saved=await dbInsert('famille_messages',{creche_id:creche,enfant_id:null,auteur_id:currentProfile.id,auteur_nom:currentProfile.name||'',titre:titre.slice(0,150),corps:irfTexte(c,portions(),q('irf-intro').value)});
+      const titre='Idée recette : '+c.concat(c.length?[]:p.map(function(n){return{nom:n};})).map(function(r){return r.nom;}).join(', ');
+      const saved=await dbInsert('famille_messages',{creche_id:creche,enfant_id:null,auteur_id:currentProfile.id,auteur_nom:currentProfile.name||'',titre:titre.slice(0,150),corps:irfTexte(c,portions(),q('irf-intro').value,p)});
       if(!saved){showBanner('Erreur'+(window._lastDbError?' : '+window._lastDbError:'')+'.','error');return;}
       const nb=await mfPrevenir(creche,null,titre.slice(0,150));
       showBanner('Idée recette publiée dans l’Espace famille !'+(nb>0?' '+nb+' notification'+(nb>1?'s':'')+' envoyée'+(nb>1?'s':'')+'.':''));
       closeModal('modal-idees-recettes-wrap');
     }finally{enCours=false;const b=q('irf-pub');if(b)b.disabled=false;}
   };
+  const bi=q('irf-import');
+  if(bi)bi.onclick=function(){closeModal('modal-idees-recettes-wrap');rcEditer(null,irfOuvrir);};
   maj();
   ov.classList.add('open');
 }
