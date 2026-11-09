@@ -257,6 +257,7 @@ async function albvValider(photoId, enfantIds) {
   ALBV.props = ALBV.props.filter(function (x) { return x.photo_id !== photoId; });
   albJournal('classement', enfantIds.length === 1 ? enfantIds[0] : null, 'Proposition du tri par visage validée', enfantIds.length);
   albRender();
+  if (enfantIds.length === 1) albvProposerRef(enfantIds[0], [photoId]);
 }
 /* Corriger la proposition : choisir un autre enfant dans la liste déroulante. */
 function albvAutreEnfant(photoId, sel) {
@@ -366,6 +367,21 @@ async function albvRefAlbum(enfantId) {
   if (!ph.length) { showBanner('Aucune photo dans l’album de cet enfant. Importez une photo à la place.', 'error'); return; }
   await albUrls(ph.map(function (p) { return p.chemin_mini; }));
   albvModale('<div class="alb-barre"><b>Choisissez une photo où ' + albEsc(albvNomEnfant(enfantId)) + ' est bien visible</b><button class="btn-sm" style="margin-left:auto" onclick="albvFermerModale()">Fermer</button></div>' +
+    '<div class="alb-gal">' + ph.map(function (p) { return '<div class="alb-ph" onclick="albvRefDepuisPhoto(\'' + p.id + '\')">' + albImg(p, true) + (albEnfantsDe(p.id).length > 1 ? '<span class="alb-groupe"><i class="ti ti-users"></i></span>' : '') + '</div>'; }).join('') + '</div>');
+}
+/* Après un classement (manuel ou validation d'une proposition) : proposer d'enrichir les références de l'enfant
+   avec une des photos qu'on vient de lui attribuer. Seulement si l'accord est enregistré et s'il reste de la place. */
+async function albvProposerRef(enfantId, photoIds) {
+  if (!enfantId || !photoIds || !photoIds.length) return;
+  if (!ALBV.accords[enfantId] || albvRefsDe(enfantId).length >= ALBV_MAX_REFS) return;
+  var ph = photoIds.map(function (id) { return ALB.photos.find(function (x) { return x.id === id; }); }).filter(Boolean).slice(0, 12);
+  if (!ph.length) return;
+  ALBV_CIBLE = enfantId;
+  try { await albUrls(ph.map(function (p) { return p.chemin_mini; })); } catch (e) { return; }
+  var n = albvRefsDe(enfantId).length;
+  albvModale('<div class="alb-barre"><b>Ajouter une référence pour ' + albEsc(albvNomEnfant(enfantId)) + ' ?</b><button class="btn-sm" style="margin-left:auto" onclick="albvFermerModale()">Non merci</button></div>' +
+    '<div class="alb-ct" style="margin-bottom:8px">' + n + ' référence' + (n > 1 ? 's' : '') + ' actuellement (3 à 5 donnent un tri plus fiable). ' +
+    (ph.length > 1 ? 'Touchez une photo où l’enfant est bien visible, de face ou de profil.' : 'Touchez la photo pour l’utiliser. Seule l’empreinte du visage est conservée, pas la photo.') + '</div>' +
     '<div class="alb-gal">' + ph.map(function (p) { return '<div class="alb-ph" onclick="albvRefDepuisPhoto(\'' + p.id + '\')">' + albImg(p, true) + (albEnfantsDe(p.id).length > 1 ? '<span class="alb-groupe"><i class="ti ti-users"></i></span>' : '') + '</div>'; }).join('') + '</div>');
 }
 async function albvRefDepuisPhoto(photoId) {
