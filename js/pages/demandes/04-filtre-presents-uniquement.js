@@ -194,7 +194,7 @@ function mcmRenderMenusList(){
     ?'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px"><span style="color:var(--muted)">Goûters de la crèche :</span><select class="finput" style="width:auto" onchange="gcCrecheChoisie=this.value||null;mcmLoadMenusList()"><option value="">— traiteur seul —</option>'
       +cacheCreches.map(function(c){return'<option value="'+escHtml(c.id)+'"'+(c.id===cid?' selected':'')+'>'+escHtml(c.name)+'</option>';}).join('')+'</select></div>'
     :'';
-  zone.innerHTML=selCr+dates.map(function(d){
+  const semaineHtml=function(d){
     const jours=weeks[d].sort(function(a,b){return a.jour-b.jour;});
     const parJour={};jours.forEach(function(j){parJour[j.jour]=j;});
     const semaineNum=jours[0].semaine_num;
@@ -227,7 +227,19 @@ function mcmRenderMenusList(){
       +carte('Bébés 6-18 mois','bb18','bb18_gouter')
       +carte('Grands 18 mois-3 ans','grand','grand_gouter')
       +'</div></details>';
-  }).join('');
+  };
+  /* Semaines en cours et à venir en haut ; les semaines passées sont rangées dans un bloc replié
+     « Menus passés » (la plus récente d'abord). Rien n'est supprimé : elles restent consultables. */
+  const avenir=dates.filter(function(d){return d>=todayMonday;});
+  const passees=dates.filter(function(d){return d<todayMonday;}).reverse();
+  let htmlPassees='';
+  if(passees.length){
+    const ouvertPass=dejaAffiche?!!zone.querySelector('details[data-passes]:not([data-sem])[open]'):false;
+    htmlPassees='<details data-passes="1"'+(ouvertPass?' open':'')+' style="margin-top:14px">'
+      +'<summary style="cursor:pointer;font-weight:800;color:var(--muted);font-size:13px;margin-bottom:10px"><i class="ti ti-archive"></i> Menus passés ('+passees.length+' semaine'+(passees.length>1?'s':'')+')</summary>'
+      +passees.map(semaineHtml).join('')+'</details>';
+  }
+  zone.innerHTML=selCr+avenir.map(semaineHtml).join('')+htmlPassees;
 }
 /* Impression du menu : on génère d'abord un PDF (A4 paysage, jsPDF) à partir des
    données de la semaine — 3 profils × 5 jours, goûters compris (ceux de la
