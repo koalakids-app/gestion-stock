@@ -67,5 +67,27 @@ function noteRender(){
     list.innerHTML='<div style="text-align:center;color:var(--muted);padding:30px;font-size:13px"><i class="ti ti-notes" style="font-size:28px;display:block;margin-bottom:6px;opacity:0.5"></i>Aucune note pour le moment.</div>';
     return;
   }
+  /* La synchro automatique (syncRedessine) redessine la liste depuis le cache :
+     sans précaution, ce qui est tapé et pas encore enregistré serait effacé.
+     On relève donc les champs modifiés avant de redessiner, puis on les remet. */
+  const brouillons={};
+  let focus=null;
+  const actif=document.activeElement;
+  noteCache.forEach(function(n){
+    const t=document.getElementById('note-titre-'+n.id),c=document.getElementById('note-contenu-'+n.id);
+    if(!t||!c)return;
+    const modifie=(t.value!==(n.titre||''))||(c.value!==n.contenu);
+    if(modifie)brouillons[n.id]={titre:t.value,contenu:c.value};
+    if(actif===t||actif===c)focus={id:actif.id,debut:actif.selectionStart,fin:actif.selectionEnd};
+  });
   list.innerHTML=noteCache.map(noteCard).join('');
+  Object.keys(brouillons).forEach(function(id){
+    const t=document.getElementById('note-titre-'+id),c=document.getElementById('note-contenu-'+id);
+    if(t)t.value=brouillons[id].titre;
+    if(c)c.value=brouillons[id].contenu;
+  });
+  if(focus){
+    const el=document.getElementById(focus.id);
+    if(el){try{el.focus({preventScroll:true});el.setSelectionRange(focus.debut,focus.fin);}catch(e){}}
+  }
 }
