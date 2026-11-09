@@ -228,18 +228,17 @@ function mcmRenderMenusList(){
       +carte('Grands 18 mois-3 ans','grand','grand_gouter')
       +'</div></details>';
   };
-  /* Semaines en cours et à venir en haut ; les semaines passées sont rangées dans un bloc replié
-     « Menus passés » (la plus récente d'abord). Rien n'est supprimé : elles restent consultables. */
+  /* Bloc replié « Menus passés » (la plus récente d'abord) en haut de la liste, puis la semaine en cours et les semaines à venir. Rien n'est supprimé : elles restent consultables. */
   const avenir=dates.filter(function(d){return d>=todayMonday;});
   const passees=dates.filter(function(d){return d<todayMonday;}).reverse();
   let htmlPassees='';
   if(passees.length){
     const ouvertPass=dejaAffiche?!!zone.querySelector('details[data-passes]:not([data-sem])[open]'):false;
-    htmlPassees='<details data-passes="1"'+(ouvertPass?' open':'')+' style="margin-top:14px">'
+    htmlPassees='<details data-passes="1"'+(ouvertPass?' open':'')+' style="margin-bottom:14px">'
       +'<summary style="cursor:pointer;font-weight:800;color:var(--muted);font-size:13px;margin-bottom:10px"><i class="ti ti-archive"></i> Menus passés ('+passees.length+' semaine'+(passees.length>1?'s':'')+')</summary>'
       +passees.map(semaineHtml).join('')+'</details>';
   }
-  zone.innerHTML=selCr+avenir.map(semaineHtml).join('')+htmlPassees;
+  zone.innerHTML=selCr+htmlPassees+avenir.map(semaineHtml).join('');
 }
 /* Impression du menu : on génère d'abord un PDF (A4 paysage, jsPDF) à partir des
    données de la semaine — 3 profils × 5 jours, goûters compris (ceux de la
