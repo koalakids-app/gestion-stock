@@ -41,6 +41,12 @@ function brAllerEnfant(id){
   showMain('enfants');
   if(typeof enfOpenFiche==='function')enfOpenFiche(id);
 }
+/* Ouvre directement la fiche vaccinations d'un enfant (liste des doses). */
+function brAllerVaccins(id){
+  brBriefingFermer();
+  showMain('vaccinations');
+  if(typeof vacOpenFiche==='function')vacOpenFiche(id);
+}
 /* Les devis vivent dans inscriptions.html, une autre page : pas d'onglet à
    activer ici, on quitte carrément demandes.html. */
 function brAllerInscriptions(){
@@ -524,11 +530,9 @@ async function brRender(){
     vaccGroupes.length
       ?vaccGroupes.slice(0,8).map(({enfant,items})=>{
           const nom=((enfant.prenom||'')+' '+(enfant.nom||'')).trim();
-          const retard=Math.max(...items.map(x=>-x.s.daysLeft));
-          const detail=items.map(x=>escHtml(x.vacc.label)+' ('+escHtml(x.dose.label)+')').join(', ');
-          return brLigne('💉 '+escHtml(nom)+brSuffixeCreche(enfant.creche_id)
-              +'<div style="font-size:12px;opacity:.8">'+detail+'</div>',
-            'retard de '+retard+' j','vaccinations',true);
+          const n=items.length;
+          return brLigneClic('💉 '+escHtml(nom)+brSuffixeCreche(enfant.creche_id),
+            n+' vaccin'+(n>1?'s':'')+' en retard',"brAllerVaccins('"+enfant.id+"')",true);
         }).join('')+(vaccGroupes.length>8?'<div class="br-plus">+ '+(vaccGroupes.length-8)+' autres</div>':'')
       :brVide('✅ Aucune vaccination en retard'),
     vaccGroupes.length?'accent':'');
