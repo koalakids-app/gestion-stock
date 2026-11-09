@@ -419,17 +419,27 @@ function vacRenderAlertes(){
   }
   if(!alertes.length){el.innerHTML='<div class="empty-state"><i class="ti ti-circle-check" style="color:var(--green)"></i><p>Aucune alerte ! Toutes les vaccinations sont à jour.</p></div>';return;}
   alertes.sort((a,b)=>a.s.daysLeft-b.s.daysLeft);
-  el.innerHTML = alertes.map(({enfant,creche,vacc,doseIdx,dose,s})=>{
-    const urgency = s.state==='retard' ? {bg:'var(--red-light)',col:'var(--red)',icon:'⚠️',label:'En retard'} : {bg:'var(--orange-light)',col:'var(--orange-dark)',icon:'⏰',label:'Dans '+s.daysLeft+' jour(s)'};
-    return `<div style="background:${urgency.bg};border-left:4px solid ${urgency.col};border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div>
-        <div style="font-weight:700;color:${urgency.col}">${urgency.icon} ${escHtml(enfant.prenom+' '+enfant.nom)} ${creche?'— '+escHtml(creche.name):''}</div>
-        <div style="font-size:12px;margin-top:2px;color:var(--text)">${escHtml(vacc.label)} · ${dose.label} · Prévu le ${vacFmtDate(vacLocalISO(s.due))}</div>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:12px;font-weight:700;color:${urgency.col}">${urgency.label}</span>
-        <button onclick="vacToggleDose('${enfant.id}','${vacc.id}',${doseIdx})" style="padding:5px 12px;border:2px solid ${urgency.col};border-radius:7px;background:#fff;cursor:pointer;font-weight:600;color:${urgency.col};font-size:12px">✔ Marquer fait</button>
-      </div>
+  // Regroupement par enfant : un seul encadré par enfant, ses rappels dessous.
+  const parEnfant = new Map();
+  alertes.forEach(al=>{
+    if(!parEnfant.has(al.enfant.id)) parEnfant.set(al.enfant.id,{enfant:al.enfant,creche:al.creche,items:[]});
+    parEnfant.get(al.enfant.id).items.push(al);
+  });
+  if(badge){
+    badge.textContent = parEnfant.size;
+  }
+  const col='var(--red)';
+  el.innerHTML = [...parEnfant.values()].map(({enfant,creche,items})=>{
+    const lignes = items.map(({vacc,doseIdx,dose,s})=>`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:6px 0;border-top:1px solid rgba(0,0,0,.08)">
+        <div style="font-size:12px;color:var(--text)">${escHtml(vacc.label)} · ${dose.label} · Prévu le ${vacFmtDate(vacLocalISO(s.due))}</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span style="font-size:12px;font-weight:700;color:${col}">En retard</span>
+          <button onclick="vacToggleDose('${enfant.id}','${vacc.id}',${doseIdx})" style="padding:5px 12px;border:2px solid ${col};border-radius:7px;background:#fff;cursor:pointer;font-weight:600;color:${col};font-size:12px">✔ Marquer fait</button>
+        </div>
+      </div>`).join('');
+    return `<div style="background:var(--red-light);border-left:4px solid ${col};border-radius:8px;padding:12px 14px">
+      <div style="font-weight:700;color:${col};margin-bottom:4px">⚠️ ${escHtml(enfant.prenom+' '+enfant.nom)} ${creche?'— '+escHtml(creche.name):''}</div>
+      ${lignes}
     </div>`;
   }).join('');
 }

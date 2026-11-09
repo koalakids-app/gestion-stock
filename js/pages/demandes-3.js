@@ -413,7 +413,7 @@ async function brRender(){
 
   // ── En-tête : le compte de ce qui demande une action ───────────────────
   const nAction=urg.length+inc.length+actEch.length+taches.length+stgLiens.length
-    +stgRefuses.length+stgManquants.length+vaccRetard.length+dossiersRelance.length+devisRelance.length
+    +stgRefuses.length+stgManquants.length+new Set(vaccRetard.map(x=>x.enfant.id)).size+dossiersRelance.length+devisRelance.length
     +demandesRelance.length+piecesRelance.length+depots.length+nSacs+visitesMed.length;
   const res=document.getElementById('br-resume');
   if(res){
@@ -514,15 +514,24 @@ async function brRender(){
     stgDocsIssues.length?'accent':'');
 
   // 5ter. Vaccinations en retard
-  h+=brSection('vaccine','Vaccinations en retard',vaccRetard.length,
-    vaccRetard.length
-      ?vaccRetard.slice(0,8).map(({enfant,vacc,dose,s})=>{
+  const vaccParEnfant=new Map();
+  vaccRetard.forEach(x=>{
+    if(!vaccParEnfant.has(x.enfant.id))vaccParEnfant.set(x.enfant.id,{enfant:x.enfant,items:[]});
+    vaccParEnfant.get(x.enfant.id).items.push(x);
+  });
+  const vaccGroupes=[...vaccParEnfant.values()];
+  h+=brSection('vaccine','Vaccinations en retard',vaccGroupes.length,
+    vaccGroupes.length
+      ?vaccGroupes.slice(0,8).map(({enfant,items})=>{
           const nom=((enfant.prenom||'')+' '+(enfant.nom||'')).trim();
-          return brLigne('💉 '+escHtml(nom)+' — '+escHtml(vacc.label)+' ('+dose.label+')'+brSuffixeCreche(enfant.creche_id),
-            'retard de '+(-s.daysLeft)+' j','vaccinations',true);
-        }).join('')+(vaccRetard.length>8?'<div class="br-plus">+ '+(vaccRetard.length-8)+' autres</div>':'')
+          const retard=Math.max(...items.map(x=>-x.s.daysLeft));
+          const detail=items.map(x=>escHtml(x.vacc.label)+' ('+escHtml(x.dose.label)+')').join(', ');
+          return brLigne('💉 '+escHtml(nom)+brSuffixeCreche(enfant.creche_id)
+              +'<div style="font-size:12px;opacity:.8">'+detail+'</div>',
+            'retard de '+retard+' j','vaccinations',true);
+        }).join('')+(vaccGroupes.length>8?'<div class="br-plus">+ '+(vaccGroupes.length-8)+' autres</div>':'')
       :brVide('✅ Aucune vaccination en retard'),
-    vaccRetard.length?'accent':'');
+    vaccGroupes.length?'accent':'');
 
   // 5quater. Dossiers de familiarisation à relancer
   h+=brSection('mail-forward','Dossiers familles à relancer',dossiersRelance.length,
