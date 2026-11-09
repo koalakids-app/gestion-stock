@@ -4,7 +4,7 @@
    code d'accès (famille_acces actif) la lisent. */
 let mfPending=false;
 
-function openMsgFamilles(){
+function openMsgFamilles(enfantId){
   document.getElementById('mf-titre').value='';
   document.getElementById('mf-corps').value='';
   const sel=document.getElementById('mf-creche');
@@ -18,7 +18,14 @@ function openMsgFamilles(){
     sel.innerHTML='<option value="'+(currentProfile?.creche_id||'')+'">'+escHtml(c?c.name:'Ma crèche')+'</option>';
     sel.disabled=true;
   }
+  if(enfantId){
+    // Depuis la fiche enfant › Parents : crèche de l'enfant, message destiné à sa famille seulement.
+    const e=(cacheEnfants||[]).find(x=>String(x.id)===String(enfantId));
+    if(e&&!sel.querySelector('option[value="'+e.creche_id+'"]'))sel.innerHTML+='<option value="'+e.creche_id+'"></option>';
+    if(e)sel.value=e.creche_id;
+  }
   mfMajEnfants();
+  if(enfantId)document.getElementById('mf-enfant').value=enfantId;
   document.getElementById('modal-msg-familles-wrap').classList.add('open');
 }
 
