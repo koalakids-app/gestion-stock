@@ -54,7 +54,8 @@ function enfEspaceRender(){
     +'<div style="font-weight:700;font-size:13.5px;color:var(--koala-dark);margin-bottom:4px"><i class="ti ti-home-heart"></i> Espace famille</div>'
     +'<p style="font-size:12.5px;color:var(--muted);margin:0 0 6px;line-height:1.6">Chaque parent a son code personnel : il lit vos informations et peut déposer des documents sur <strong>espace-famille.html</strong>. Le lien contient déjà le code.</p>'
     +lignes
-    +'<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px"><button class="btn-sm" onclick="openMsgFamilles(\''+enfEspaceEnfant+'\')"><i class="ti ti-message-2"></i> Envoyer un message aux parents</button>'
+    +'<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px"><button class="btn-sm" onclick="openMsgFamilles(\''+enfEspaceEnfant+'\')"><i class="ti ti-message-2"></i> Envoyer un message aux parents</button> '
+    +'<button class="btn-sm" onclick="enfMailParents()"><i class="ti ti-mail"></i> Envoyer un mail aux parents</button>'
     +'<div style="font-size:11.5px;color:var(--muted);margin-top:5px">Lu dans l\'Espace famille (onglet Infos) avec une notification ; reçu par les parents de cet enfant qui ont un accès actif.</div></div></div>';
 }
 
@@ -102,6 +103,15 @@ async function enfEspaceRevoquer(id){
   };
 })();
 
+/* Provisoire : ouvre la messagerie de l'utilisateur (mailto) avec les parents en copie cachée. */
+function enfMailParents(){
+  const mails=[...new Set(enfParentsCache.map(p=>(p.email||'').trim()).filter(Boolean))];
+  if(!mails.length) return showBanner('Aucun parent de cette fiche n\'a d\'adresse e-mail.','error');
+  const e=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
+  const sujet='Koala Kids'+(e&&e.prenom?' — '+e.prenom:'');
+  location.href='mailto:?bcc='+encodeURIComponent(mails.join(','))+'&subject='+encodeURIComponent(sujet);
+}
+window.enfMailParents=enfMailParents;
 window.enfEspaceCreer=enfEspaceCreer;
 window.enfEspaceCopier=enfEspaceCopier;
 window.enfEspacePartager=enfEspacePartager;
