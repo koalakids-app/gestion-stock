@@ -204,8 +204,10 @@ async function albClasserSel(enfantId) {
   var e = cacheEnfants.find(function (x) { return String(x.id) === String(enfantId); });
   albJournal('classement', enfantId, e ? albNom(e) : null, ids.length);
   ALB.sel = {};
+  var idsClasses = ids.slice();
   showBanner(ids.length + ' photo' + (ids.length > 1 ? 's' : '') + ' classée' + (ids.length > 1 ? 's' : '') + (e ? ' dans l’album de ' + albEsc(e.prenom || albNom(e)) : '') + '.');
   albRender();
+  if (typeof albvProposerRef === 'function') albvProposerRef(enfantId, idsClasses);
 }
 
 async function albSupprimerSel() {
