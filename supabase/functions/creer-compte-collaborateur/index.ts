@@ -7,7 +7,7 @@
 // collaborateur/trice consulte son planning et son compteur d'heures
 // supplémentaires.
 //
-// Appelée depuis employes.html (module de gestion, réservé direction/
+// Appelée depuis Demandes › Collaborateurs (module de gestion, réservé direction/
 // référente) avec le jeton de la session en cours (callFn envoie
 // sb.auth.getSession().access_token, pas la clé anon statique).
 //

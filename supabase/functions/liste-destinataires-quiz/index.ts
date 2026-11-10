@@ -53,7 +53,7 @@ const sb = createClient(
 );
 
 // Libellés identiques à ceux que les liens de l'appli posent déjà dans
-// l'adresse du quiz (employes.html, stagiaire.html) : le filtre par statut du
+// l'adresse du quiz (Demandes › Collaborateurs, stagiaire.html) : le filtre par statut du
 // côté quiz porte sur les mêmes valeurs que la colonne `statut` des résultats.
 const STATUT_SALARIE = 'Salarié(e) en poste';
 const STATUT_ALTERNANT = 'Alternant(e)';

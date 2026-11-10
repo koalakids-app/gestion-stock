@@ -637,13 +637,13 @@ async function signerHeuresMois(y,m){
 
 /* ---------- MON PARCOURS DE FORMATION ---------- */
 /* L'initiative revient à la direction/directrice technique, depuis la fiche
-   collaborateur (employes.html, bouton "Envoyer") : "Mon espace" n'affiche
+   collaborateur (Demandes › Collaborateurs, bouton "Envoyer") : "Mon espace" n'affiche
    ici que ce qui a été envoyé, à faire ou déjà réalisé — jamais de libre
    choix. Le rattachement du résultat, lui, passe par le `ref` opaque déjà
    présent dans le lien envoyé (l'id de la fiche) : une faute de frappe sur
    le nom côté quiz n'empêche donc jamais l'affichage ici. */
 function envoisCol(){return COLLAB_TYPE==='referent'?'referent_id':'employe_id';}
-/* Même logique que renderParcoursHtml (employes.html) : dupliquée faute de
+/* Même logique que renderParcoursHtml (js/pages/demandes/23-collaborateurs-equipe.js) : dupliquée faute de
    module JS partagé entre les deux pages. */
 /* Une micro-formation n'est « faite » qu'après : lecture (ou quiz réussi),
    quiz du thème réussi à SEUIL_QUIZ % minimum (s'il y en a un), puis

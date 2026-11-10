@@ -406,9 +406,12 @@
   <div id="main-employes" class="tab-content">
     <div class="section-header">
       <span class="section-title">Collaborateurs/trices</span>
-      <button class="btn-primary" onclick="openEmployeModal()"><i class="ti ti-plus"></i> Ajouter un(e) collaborateur/trice</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn-sm" id="emp-archives-toggle" onclick="eqBasculerArchives()" title="Basculer entre les fiches actives et les fiches archivées (fin de contrat)"><i class="ti ti-archive"></i> Voir les archives<span id="emp-archives-count" style="display:none;background:var(--muted);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:700;margin-left:4px"></span></button>
+        <button class="btn-primary" onclick="openEmployeModal()"><i class="ti ti-plus"></i> Ajouter un(e) collaborateur/trice</button>
+      </div>
     </div>
-    <p class="hint" style="font-size:12.5px;color:var(--muted);margin:-4px 0 12px">Fiches détaillées du personnel (identité, contrat, période d'essai, code de pointage). Les comptes de connexion « Mon espace », les invitations, l'accès terrain et les archives se gèrent dans <a href="employes.html" target="_blank" rel="noopener">Équipe</a>.</p>
+    <p class="hint" style="font-size:12.5px;color:var(--muted);margin:-4px 0 12px">Une seule fiche par personne : identité, contrat, période d'essai, documents, formations, visites médicales, compte « Mon espace », accès terrain et archivage (fin de contrat). Cliquez sur le crayon pour l'ouvrir ; les badges des cartes indiquent l'état du compte.</p>
     <div id="employe-creche-tabs-bar" class="creche-tabs-bar"></div>
     <div class="ref-grid" id="employe-grid"></div>
   </div>
@@ -2020,7 +2023,10 @@
       <button type="button" class="fonglet actif" data-pane="id" role="tab" onclick="empOnglet('id')"><i class="ti ti-user-circle"></i>Identité</button>
       <button type="button" class="fonglet" data-pane="contrat" role="tab" onclick="empOnglet('contrat')"><i class="ti ti-file-text"></i>Contrat</button>
       <button type="button" class="fonglet" data-pane="essai" role="tab" onclick="empOnglet('essai')"><i class="ti ti-hourglass"></i>Essai</button>
-      <button type="button" class="fonglet" data-pane="signe" role="tab" onclick="empOnglet('signe')"><i class="ti ti-file-certificate"></i>Contrat signé</button>
+      <button type="button" class="fonglet" data-pane="docs" role="tab" onclick="empOnglet('docs')"><i class="ti ti-folder"></i>Documents</button>
+      <button type="button" class="fonglet" data-pane="form" role="tab" onclick="empOnglet('form')"><i class="ti ti-school"></i>Formation</button>
+      <button type="button" class="fonglet" data-pane="suivi" role="tab" onclick="empOnglet('suivi')"><i class="ti ti-heartbeat"></i>Suivi</button>
+      <button type="button" class="fonglet" data-pane="compte" role="tab" onclick="empOnglet('compte')"><i class="ti ti-lock-open"></i>Compte</button>
     </div>
     <div class="fpane on" id="emp-pane-id"><div class="fcard"><div class="fsec"><i class="ti ti-id"></i> Identité</div>
 
@@ -2033,6 +2039,8 @@
       <div class="fg"><label class="flabel">Poste</label><input class="finput" id="emp-poste" placeholder="Agent d'entretien"/></div>
       <div class="fg"><label class="flabel">E-mail (optionnel)</label><input class="finput" id="emp-email" type="email" placeholder="Pour l'envoi du code de pointage"/></div>
     </div>
+    <div class="fg"><label class="flabel">Nom utilisé dans le planning équipe (si différent)</label><input class="finput" id="emp-planning-nom" placeholder="Laisser vide si le prénom suffit"/>
+      <p class="hint" style="margin-top:3px">À remplir seulement en cas d'homonymie : le planning équipe (import Excel) rapproche les créneaux par prénom, ce qui peut se tromper si deux personnes de la crèche portent le même prénom.</p></div>
 
     </div><div class="fcard"><div class="fsec"><i class="ti ti-cake"></i> État civil</div>
     <div class="frow">
@@ -2105,15 +2113,60 @@
       </div>
     </div>
     </div></div>
-    <div class="fpane" id="emp-pane-signe"><div class="fcard" id="emp-contrat-wrap" style="display:none">
+    <div class="fpane" id="emp-pane-docs"><div class="fcard" id="emp-contrat-wrap" style="display:none">
       <div class="fsec"><i class="ti ti-file-certificate"></i> Contrat de travail signé</div>
       <div id="emp-contrat-box"></div>
       <p class="hint" style="margin-top:4px">Généré et signé depuis le module Documents (modèle « Contrat de travail (salarié) »),
         en sélectionnant cette fiche dans le champ « Fiche collaborateur/trice » du formulaire.</p>
     </div>
 
+    <div class="fcard" id="ficheDocsWrap">
+      <div class="fsec"><i class="ti ti-folder"></i> Documents d'embauche</div>
+      <div id="fiche-docs-dossier-box"></div>
+      <div id="ficheDocsZone"></div>
     </div>
-    <div class="info-box"><i class="ti ti-info-circle" style="font-size:15px"></i> Pas de compte de connexion créé — seulement une fiche, ces informations et un code de pointage.</div>
+    <div class="fcard" id="ficheDocExtWrap">
+      <div class="fsec"><i class="ti ti-archive"></i> Documents sur support externe</div>
+      <div id="ficheDocExtZone"></div>
+    </div>
+    </div>
+    <div class="fpane" id="emp-pane-form">
+    <div class="fcard" id="ficheFormationWrap">
+      <div class="fsec"><i class="ti ti-send"></i> Envoyer un quiz ou une formation</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <select id="ficheFormationSelect" class="finput" style="flex:1"><option value="">Chargement…</option></select>
+        <button type="button" class="btn btn-s btn-sm" onclick="envoyerFormation()"><i class="ti ti-send"></i> Envoyer</button>
+        <button type="button" class="btn btn-g btn-sm" id="btnPartagerFormation" style="display:none" onclick="envoyerFormation(true)"><i class="ti ti-share"></i> Partager…</button>
+      </div>
+      <p class="hint">L'envoi transmet le lien par e-mail à l'adresse de la fiche (ou vous prévient s'il n'y en a pas de renseignée) et l'ajoute au parcours de ce/cette collaborateur/trice, dans "À faire". « Partager… » fait de même sans e-mail : le lien part par l'application de votre choix (WhatsApp, SMS…). <strong>Envoyez toujours depuis la fiche de la personne concernée</strong> : le lien est personnel, le résultat est enregistré au nom de la fiche d'où il a été généré.</p>
+      <div class="fsec" style="margin-top:14px"><i class="ti ti-calendar-event"></i> Planning des quiz (26 octobre – 24 décembre 2026)</div>
+      <div id="fichePlanningQuizBox"></div>
+      <div class="fsec" style="margin-top:14px"><i class="ti ti-route"></i> Parcours de formation</div>
+      <div id="ficheFormationBox"></div>
+    </div>
+    </div>
+    <div class="fpane" id="emp-pane-suivi">
+    <div class="fcard" id="ficheVisitesWrap">
+      <div class="fsec"><i class="ti ti-stethoscope"></i> Visite médicale obligatoire (Odalia)</div>
+      <div id="ficheVisitesZone"></div>
+      <p class="hint">Médecine du travail : visite d'information et de prévention dans les 3 mois suivant l'embauche, puis au plus tard tous les 5 ans. Indiquez le RDV dès qu'il est pris, puis « Renseigner la visite » une fois passée. L'alerte apparaît dans « Ma journée » 60 jours avant l'échéance. Aucune donnée médicale ici : seulement la date et l'avis.</p>
+    </div>
+    <div class="fcard" id="ficheHeuresWrap">
+      <div class="fsec"><i class="ti ti-clock-check"></i> Validation mensuelle des heures</div>
+      <div id="ficheHeuresBox"></div>
+      <p class="hint">Signatures électroniques déposées par le/la collaborateur/trice depuis "Mon espace", mois par mois. Lecture seule : ces validations ne peuvent pas être modifiées ici.</p>
+    </div>
+    </div>
+    <div class="fpane" id="emp-pane-compte">
+    <div class="fcard">
+      <div class="fsec"><i class="ti ti-lock-open"></i> Compte de connexion et accès</div>
+      <div id="emp-compte-box"></div>
+      <p class="hint" style="margin-top:10px">Le compte « Mon espace » permet de consulter son planning et son compteur d'heures (lecture seule : la fiche, le planning et les pointages restent gérés ici). <b>Partager…</b> crée le compte et envoie le lien d'invitation par WhatsApp, SMS… au lieu d'un e-mail. <b>Accès terrain</b> ouvre en plus le suivi et le registre d'infirmerie avec le même identifiant. Le badge <b>Invitation envoyée</b> reste affiché tant que la personne ne s'est pas connectée.</p>
+    </div>
+    <div class="fcard" id="ficheArchivageWrap"></div>
+    </div>
+    </div>
+    <div class="info-box"><i class="ti ti-info-circle" style="font-size:15px"></i> La fiche regroupe l'identité, le contrat, les documents, les formations, le suivi médical et le compte de connexion (onglets ouverts une fois la fiche enregistrée).</div>
     <div class="mactions"><button class="btn-cancel" id="emp-btn-delete" style="display:none;color:var(--red)" onclick="deleteEmploye()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn-cancel" onclick="closeModal('modal-employe-wrap')">Annuler</button><button class="btn-primary" id="emp-btn-save" onclick="saveEmploye()"><i class="ti ti-check"></i> Enregistrer</button></div>
   </div>
 </div>
@@ -2848,6 +2901,8 @@
 <script src="js/pages/demandes/20-album-photos.js"></script>
 <script src="js/pages/demandes/21-album-tri-visage.js"></script>
 <script src="js/pages/demandes/22-idees-recettes-familles.js"></script>
+<script src="js/pages/demandes/23-collaborateurs-equipe.js"></script>
+<script src="js/pages/demandes/24-collaborateurs-fiche.js"></script>
 <script src="js/pmi/01-export-planning-pmi-excel-planning-equip.js"></script>
 <script src="js/pmi/02-structure-du-modele-pmi-officiel-feuille.js"></script>
 <script src="js/login-alert.js"></script>
@@ -3014,6 +3069,7 @@
 <script src="js/stagiaires/04-vue-2-le-calendrier.js"></script>
 <script src="js/stagiaires/06-evaluation-eje-data.js"></script>
 <script src="js/stagiaires/05-evaluation.js"></script>
+<script src="js/planning-quiz.js?v=1"></script>
 <script src="js/visites-medicales.js?v=3"></script>
 <script src="js/pages/demandes-3.js"></script>
 

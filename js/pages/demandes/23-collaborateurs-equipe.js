@@ -1,7 +1,25 @@
-const SUPABASE_URL="https://juyrceadazrovlitxceb.supabase.co";
-const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eXJjZWFkYXpyb3ZsaXR4Y2ViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjcyMDIsImV4cCI6MjA5NTQwMzIwMn0.yTEoRjhJFm3qj5oY2tLIcCXOWHHbU3rxWoIn47QKmug";
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-
+/* Collaborateurs/trices — fonctions reprises de l'ancien module « Équipe » (employes.html),
+   désormais intégrées à la fiche de Demandes › Collaborateurs/trices : compte « Mon espace »,
+   accès terrain, archivage, documents, formations/quiz, visites médicales (Odalia).
+   Ce fichier (et 24-collaborateurs-fiche.js) fait foi ; l'ancienne page employes.html n'est plus qu'une redirection. */
+function eqToast(m,err){showBanner(m,err?'error':'success');}
+function eqVal(id){const e=document.getElementById(id);return e?e.value.trim():'';}
+function eqNum(id){const v=eqVal(id);return v===''?null:Number(String(v).replace(',','.'));}
+async function eqCallFn(fn,body){
+  try{
+    const{data:{session}}=await sb.auth.getSession();
+    const jeton=session?.access_token||SUPABASE_ANON_KEY;
+    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jeton},body:JSON.stringify(body)});
+    const data=await r.json().catch(()=>({}));
+    return{ok:r.ok,data};
+  }catch(err){
+    return{ok:false,data:{error:(err&&err.message)||'réseau injoignable'}};
+  }
+}
+/* Crèche de la fiche ouverte (les fonctions reprises d'Équipe travaillaient sur « la crèche affichée »). */
+let EQ_CRECHE_FICHE=null;
+function eqCrecheCourante(){return EQ_CRECHE_FICHE||(currentProfile&&currentProfile.creche_id)||null;}
+function eqRecharger(){return eqChargerStatuts().then(()=>{renderEmployes();if(editingEmployeId){const e=cacheEmployes.find(x=>String(x.id)===String(editingEmployeId));if(e)eqRenderCompte(e);}});}
 /* Le module Formation et quiz (koalakids-app/quiz-protocoles) vit sur un
    projet Supabase distinct, sans lien de compte avec celui-ci : on ne peut
    donc pas s'y authentifier, seulement l'interroger avec sa clé anonyme via
@@ -13,447 +31,17 @@ const sbQuiz=supabase.createClient(QUIZ_SUPABASE_URL,QUIZ_SUPABASE_ANON_KEY);
 const QUIZ_APP_URL="https://koalakids-app.github.io/quiz-protocoles/index.html";
 const FORMATIONS_APP_URL="https://koalakids-app.github.io/quiz-protocoles/formations.html";
 
-let ME=null,PROF=null,crecheId=null,CRECHES=[],EMPLOYES=[],isDirection=false;
-
-function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='toast on'+(err?' err':'');setTimeout(()=>t.className='toast',2800);}
-function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
-function setVal(id,v){const e=document.getElementById(id);if(e)e.value=(v==null?'':v);}
-function num(id){const v=val(id);return v===''?null:Number(String(v).replace(',','.'));}
-
-async function callFn(fn,body){
-  try{
-    // Jeton de la session en cours, pas la clé anon statique : les fonctions
-    // creer/supprimer-compte-collaborateur lisent le `sub` du JWT pour
-    // identifier l'appelant·e (sinon « authentification_manquante »).
-    const{data:{session}}=await sb.auth.getSession();
-    const jeton=session?.access_token||SUPABASE_ANON_KEY;
-    const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jeton},body:JSON.stringify(body)});
-    const data=await r.json().catch(()=>({}));
-    return{ok:r.ok,data};
-  }catch(err){
-    return{ok:false,data:{error:(err&&err.message)||'réseau injoignable'}};
-  }
-}
-
-/* ---------- AUTH ---------- */
-/* Arrivée depuis le hub index.html, qui n'authentifie personne : déconnexion
-   systématique et saisie obligatoire, même règle que parametres.html.
-   MFA (TOTP) obligatoire, comme dans demandes.html : même portail
-   mfaGateCheckAndProceed, imposé après le mot de passe (AAL1) et avant
-   l'accès à l'espace. */
-let JUSTE_CONNECTE=false;
-function showLogin(msg){
-  document.getElementById('appView').style.display='none';
-  document.getElementById('mfaGateView').style.display='none';
-  document.getElementById('loginView').style.display='block';
-  document.getElementById('liErr').textContent=msg||'';
-}
-async function boot(){
-  kkOnglets.suivre(function(){return typeof ME!=='undefined'&&!!ME;});
-  if(!JUSTE_CONNECTE&&!kkOnglets.autre()){
-    try{await sb.auth.signOut();}catch(e){}
-    showLogin();return;
-  }
-  let session=null;
-  try{
-    const r=await sb.auth.getSession();
-    session=(r&&r.data&&r.data.session)||null;
-  }catch(e){session=null;}
-  if(!session||!session.user){showLogin();return;}
-  ME=session.user;
-  await mfaGateCheckAndProceed();
-}
-async function loadProfileAndGrant(){
-  if(typeof kkLoginAlertCheck==='function')kkLoginAlertCheck(sb);
-  let p=null;
-  try{
-    const{data,error}=await sb.from('referents').select('*').eq('user_id',ME.id).maybeSingle();
-    if(error)throw error;
-    p=data;
-  }catch(e){
-    showLogin('Session expirée ou profil inaccessible — merci de vous reconnecter.');
-    return;
-  }
-  if(!p){
-    try{await sb.auth.signOut();}catch(e){}
-    showLogin('Compte non reconnu — contactez la direction.');
-    return;
-  }
-  PROF=p;
-  /* Module réservé à la direction et aux directeurs/trices techniques :
-     un(e) employé(e) est renvoyé(e) vers « Mon espace ». */
-  if(PROF.role==='employe'){kkRenvoiEmploye();return;}
-  isDirection=PROF.role==='direction';
-  if(window.KKBranding)KKBranding.applyBranding(sb);
-  await grantAccess();
-}
-async function doLogin(){
-  const e=val('liMail'),p=val('liPwd');
-  if(!e||!p){document.getElementById('liErr').textContent='E-mail et mot de passe requis.';return;}
-  document.getElementById('liErr').textContent='';
-  const{data,error}=await sb.auth.signInWithPassword({email:e,password:p});
-  if(error){document.getElementById('liErr').textContent='Identifiants incorrects.';return;}
-  JUSTE_CONNECTE=true;
-  ME=data.user;
-  await mfaGateCheckAndProceed();
-}
-async function doLogout(){
-  try{await sb.auth.signOut();}catch(e){}
-  JUSTE_CONNECTE=false;
-  showLogin();
-}
-
-/* Mémorisation de l'appareil : évite de redemander le code à chaque reconnexion
-   (déconnexion systématique à chaque ouverture, cf. plus haut) sur le même
-   navigateur, en le limitant à 24h glissantes. Stocké en localStorage (propre à
-   ce navigateur/appareil), pas en base : ne dispense donc jamais du mot de
-   passe, seulement du code à 6 chiffres. */
-const MFA_TRUST_MS=24*60*60*1000;
-function mfaTrustKey(){return 'kk_mfa_trust_'+(ME&&ME.id||'');}
-function mfaIsTrusted(){
-  try{
-    const t=Number(localStorage.getItem(mfaTrustKey())||0);
-    return t>0&&(Date.now()-t)<MFA_TRUST_MS;
-  }catch(e){return false;}
-}
-function mfaMarkTrusted(){
-  try{localStorage.setItem(mfaTrustKey(),String(Date.now()));}catch(e){}
-}
-
-/* ---------- Portail MFA obligatoire (aal2), même mécanique que demandes.html ---------- */
-async function mfaGateCheckAndProceed(){
-  try{
-    const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
-    if(error)throw error;
-    if(data.currentLevel==='aal2'){await loadProfileAndGrant();return;}
-    if(data.nextLevel==='aal2'){
-      if(mfaIsTrusted()){await loadProfileAndGrant();return;}
-      mfaShowChallenge();return;
-    }
-    await mfaShowEnroll();
-  }catch(e){
-    console.error('[MFA Gate]',e);
-    try{await sb.auth.signOut();}catch(e2){}
-    showLogin('Erreur de vérification de la double authentification. Réessayez.');
-  }
-}
-function mfaSwitchView(id){
-  document.getElementById('appView').style.display='none';
-  document.getElementById('loginView').style.display='none';
-  document.getElementById('mfaGateView').style.display='block';
-  ['mfaChallengeView','mfaEnrollView'].forEach(v=>{
-    document.getElementById(v).style.display=(v===id?'block':'none');
-  });
-}
-function mfaShowChallenge(){
-  document.getElementById('mfaCode').value='';
-  document.getElementById('mfaChallengeErr').textContent='';
-  mfaSwitchView('mfaChallengeView');
-  setTimeout(()=>{const el=document.getElementById('mfaCode');if(el)el.focus();},100);
-}
-let MFA_FACTOR_ID=null;
-async function mfaShowEnroll(){
-  mfaSwitchView('mfaEnrollView');
-  const err=document.getElementById('mfaEnrollErr');
-  err.textContent='';
-  try{
-    const{data:existing,error:listError}=await sb.auth.mfa.listFactors();
-    if(listError)throw listError;
-    const stale=(existing.all||[]).filter(f=>f.factor_type==='totp'&&f.status!=='verified');
-    for(const f of stale){
-      try{await sb.auth.mfa.unenroll({factorId:f.id});}catch(e){console.warn('Nettoyage facteur MFA périmé échoué :',e.message);}
-    }
-    const{data,error}=await sb.auth.mfa.enroll({factorType:'totp'});
-    if(error)throw error;
-    MFA_FACTOR_ID=data.id;
-    const qrEl=document.getElementById('mfaQr');
-    qrEl.innerHTML='';
-    await kkMfaQr(qrEl,data.totp);
-    document.getElementById('mfaSecret').textContent=data.totp.secret;
-    document.getElementById('mfaEnrollCode').value='';
-  }catch(e){
-    console.error('[MFA enroll]',e);
-    err.textContent="Erreur lors de la préparation de l'enrôlement : "+e.message;
-  }
-}
-async function mfaVerifyChallenge(){
-  const code=val('mfaCode');
-  const err=document.getElementById('mfaChallengeErr');
-  err.textContent='';
-  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';return;}
-  try{
-    const{data:factors,error:listError}=await sb.auth.mfa.listFactors();
-    if(listError)throw listError;
-    const verified=(factors.totp||[])[0];
-    if(!verified)throw new Error('Aucun facteur MFA vérifié trouvé sur ce compte.');
-    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:verified.id});
-    if(chErr)throw chErr;
-    const{error:vErr}=await sb.auth.mfa.verify({factorId:verified.id,challengeId:ch.id,code});
-    if(vErr)throw vErr;
-    mfaMarkTrusted();
-    await loadProfileAndGrant();
-  }catch(e){
-    err.textContent='Code invalide ou expiré : '+e.message;
-  }
-}
-async function mfaConfirmEnroll(){
-  const code=val('mfaEnrollCode');
-  const err=document.getElementById('mfaEnrollErr');
-  err.textContent='';
-  if(!/^\d{6}$/.test(code)){err.textContent='Le code doit contenir 6 chiffres.';return;}
-  if(!MFA_FACTOR_ID){err.textContent='Session d\'enrôlement expirée, réessayez.';return;}
-  try{
-    const{data:ch,error:chErr}=await sb.auth.mfa.challenge({factorId:MFA_FACTOR_ID});
-    if(chErr)throw chErr;
-    const{error:vErr}=await sb.auth.mfa.verify({factorId:MFA_FACTOR_ID,challengeId:ch.id,code});
-    if(vErr)throw vErr;
-    MFA_FACTOR_ID=null;
-    mfaMarkTrusted();
-    await loadProfileAndGrant();
-  }catch(e){
-    err.textContent='Code invalide ou expiré : '+e.message;
-  }
-}
-async function mfaCancel(){
-  if(MFA_FACTOR_ID){try{await sb.auth.mfa.unenroll({factorId:MFA_FACTOR_ID});}catch(e){console.warn('Nettoyage annulation MFA échoué :',e.message);}}
-  MFA_FACTOR_ID=null;
-  try{await sb.auth.signOut();}catch(e){}
-  JUSTE_CONNECTE=false;
-  showLogin();
-}
-async function grantAccess(){
-  document.getElementById('loginView').style.display='none';
-  document.getElementById('appView').style.display='block';
-  document.getElementById('whoAmI').textContent=PROF.name||PROF.email||'';
-  await loadCreches();
-  // Retour depuis le contrat de travail ouvert dans documents.html (bouton
-  // « Revenir à la fiche collaborateur/trice », ?employe=<id>&empSrc=employes) :
-  // cette page déconnecte systématiquement à l'ouverture (cf. boot()), donc le
-  // retour repasse par un nouveau login — cette fiche s'ouvre juste ensuite.
-  const empId=new URLSearchParams(location.search).get('employe');
-  if(empId){
-    history.replaceState(null,'',location.pathname);
-    try{
-      const{data:emp}=await sb.from('employes').select('creche_id').eq('id',empId).maybeSingle();
-      if(emp&&emp.creche_id&&isDirection)crecheId=emp.creche_id;
-    }catch(e){console.warn('grantAccess employe',e);}
-    renderCrecheTabs();
-    await loadEmployes();
-    openFiche(empId);
-    return;
-  }
-  await loadEmployes();
-}
-
-/* ---------- DONNÉES ---------- */
-async function loadCreches(){
-  const{data,error}=await sb.from('creches').select('id,name').order('name');
-  if(error){toast('Erreur de chargement des crèches',true);return;}
-  // Une directrice technique (non-direction) ne gère que sa propre crèche : lui montrer
-  // les autres onglets l'exposerait à choisir une creche_id qui ne correspond
-  // pas à la sienne, ce que la policy RLS d'insertion sur `employes` refuse.
-  CRECHES=isDirection?(data||[]):(data||[]).filter(c=>c.id===PROF.creche_id);
-  if(CRECHES.length)crecheId=isDirection?CRECHES[0].id:PROF.creche_id;
-  renderCrecheTabs();
-}
-function renderCrecheTabs(){
-  const bar=document.getElementById('crecheTabs');
-  if(!isDirection){bar.style.display='none';return;}
-  bar.style.display='';
-  bar.innerHTML=CRECHES.map(c=>
-    '<button class="tab'+(c.id===crecheId?' on':'')+'" onclick="selectCreche(\''+c.id+'\')">'+esc(c.name)+'</button>'
-  ).join('');
-}
-function selectCreche(id){
-  crecheId=id;
-  renderCrecheTabs();
-  loadEmployes();
-}
-let ACCES_TERRAIN=new Set();
-/* user_id des comptes réellement activés (au moins une connexion). null tant
-   que la fonction n'a pas répondu : on n'affiche alors pas de statut trompeur. */
-let COMPTES_ACTIFS=null;
-async function loadEmployes(){
-  if(!crecheId)return;
-  const{data,error}=await sb.from('employes').select('*').eq('creche_id',crecheId).order('prenom');
-  if(error){toast('Erreur de chargement : '+error.message,true);return;}
-  EMPLOYES=data||[];
-  /* Accès terrain : un·e collaborateur/trice y entre via un profil referents
-     (role 'employe') relié à sa fiche par referents.employe_id. */
-  ACCES_TERRAIN=new Set();
-  if(EMPLOYES.length){
-    const{data:refs}=await sb.from('referents').select('employe_id').in('employe_id',EMPLOYES.map(x=>x.id));
-    (refs||[]).forEach(r=>ACCES_TERRAIN.add(r.employe_id));
-  }
-  renderListe();
-  vmChargerListe();
-  /* employes.user_id est posé dès l'invitation : seule une connexion prouve que
-     l'espace a été créé. Échec silencieux : la liste reste affichée sans statut. */
-  COMPTES_ACTIFS=null;
-  if(EMPLOYES.some(x=>x.user_id)){
-    const{ok,data}=await callFn('statut-comptes-collaborateurs',{creche_id:crecheId});
-    if(ok&&Array.isArray(data.actifs)){COMPTES_ACTIFS=new Set(data.actifs);renderListe();}
-  }
-}
-// Un dossier est « archivé » quand archive_le est renseigné — toujours à la
-// main, depuis la fiche, jamais automatiquement (voir sql/archivage_dossiers.sql).
 function estArchive(e){return !!e.archive_le;}
 function estSorti(e){return !estArchive(e)&&!!e.date_fin&&e.date_fin<=todayISO();}
 function todayISO(){return new Date().toISOString().slice(0,10);}
-let showArchivedOnly=false;
-function toggleArchived(){
-  showArchivedOnly=!showArchivedOnly;
-  const btn=document.getElementById('archivedToggle');
-  if(btn){btn.style.borderColor=showArchivedOnly?'var(--orange)':'';btn.style.color=showArchivedOnly?'var(--orange)':'';}
-  renderListe();
-}
-function renderListe(){
-  const box=document.getElementById('listeEmployes');
-  const archivedCount=document.getElementById('archivedCount');
-  if(archivedCount){
-    const n=EMPLOYES.filter(estArchive).length;
-    archivedCount.textContent=n;
-    archivedCount.style.display=n>0?'':'none';
-  }
-  const visibles=EMPLOYES.filter(e=>estArchive(e)===showArchivedOnly);
-  document.getElementById('empty').style.display=visibles.length?'none':'block';
-  document.getElementById('empty').textContent=showArchivedOnly?'Aucune fiche archivée pour cette crèche.':'Aucun(e) collaborateur/trice pour cette crèche.';
-  box.innerHTML=visibles.map(e=>{
-    const compte=!e.user_id
-      ?'<span class="badge off">Pas de compte</span>'
-      :(estArchive(e)
-        ?'<span class="badge off" style="color:var(--red)"><i class="ti ti-lock"></i> Compte bloqué</span>'
-        :(COMPTES_ACTIFS&&!COMPTES_ACTIFS.has(e.user_id)
-          ?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)"><i class="ti ti-mail"></i> Invitation envoyée</span>'
-          :'<span class="badge on"><i class="ti ti-lock-open"></i> Compte actif</span>'));
-    const statut=estArchive(e)
-      ?'<span class="badge off" style="background:var(--violet-l);color:var(--violet)">Archivé</span>'
-      :(estSorti(e)?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)">Sorti</span>':'');
-    const terrain=ACCES_TERRAIN.has(e.id)
-      ?'<span class="badge on"><i class="ti ti-walk"></i> Accès terrain</span>':'';
-    const btnTerrain=ACCES_TERRAIN.has(e.id)?'':'<button class="btn btn-g btn-sm" onclick="accorderAccesTerrain(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant d\'accorder l\'accès"')+'><i class="ti ti-walk"></i> Accès terrain</button>'
-      +(PartageLien.disponible()?' <button class="btn btn-g btn-sm" onclick="accorderAccesTerrain(\''+e.id+'\',true)" '+(e.email?'':'disabled')+'><i class="ti ti-share"></i> Partager l\'accès terrain</button>':'');
-    const invitationEnAttente=e.user_id&&!estArchive(e)&&COMPTES_ACTIFS&&!COMPTES_ACTIFS.has(e.user_id);
-    const btnCompte=e.user_id
-      ?(invitationEnAttente&&PartageLien.disponible()
-        ?'<button class="btn btn-g btn-sm" onclick="renvoyerInvitation(\''+e.id+'\')" title="Générer un nouveau lien de connexion à partager"><i class="ti ti-share"></i> Renvoyer le lien</button>':'')
-      :'<button class="btn btn-s btn-sm" onclick="creerCompte(\''+e.id+'\')" '+(e.email?'':'disabled title="Renseignez un e-mail avant de créer le compte"')+'><i class="ti ti-mail-forward"></i> Créer le compte</button>'
-        +(PartageLien.disponible()?' <button class="btn btn-g btn-sm" onclick="creerCompte(\''+e.id+'\',true)" '+(e.email?'':'disabled')+'><i class="ti ti-share"></i> Partager…</button>':'');
-    return'<div class="crow">'
-      +'<div class="cav">'+esc(initialesEmp(e))+'</div>'
-      +'<div class="cinfo"><div class="cname">'+esc(e.prenom)+' '+esc(e.nom||'')+'</div>'
-      +'<div class="cmeta">'+esc(e.poste||'—')+(e.email?' · '+esc(e.email):'')+'</div></div>'
-      +codeImageHtml(e.code_pictos)
-      +statut+vmBadgeListe(e)+compte+terrain
-      +'<div class="acts">'
-      +'<button class="btn btn-g btn-sm" onclick="openFiche(\''+e.id+'\')"><i class="ti ti-edit"></i></button>'
-      +'<a class="btn btn-g btn-sm" href="demandes.html?employe='+encodeURIComponent(e.id)+'" target="_blank" rel="noopener" title="Ouvre la fiche détaillée (identité, contrat, période d\'essai…) dans Demandes, dans un nouvel onglet"><i class="ti ti-id-badge-2"></i> Fiche complète</a>'
-      +btnCompte+btnTerrain
-      +'<button class="btn btn-g btn-sm" onclick="supprimerEmploye(\''+e.id+'\')" title="Supprimer"><i class="ti ti-trash" style="color:var(--red)"></i></button>'
-      +'</div></div>';
-  }).join('');
-}
-
-/* Code image (4 pictos) de connexion par tablette : lecture seule, la génération
-   se fait dans Demandes › Collaborateurs. */
-const PICTOS_URL='https://juyrceadazrovlitxceb.supabase.co/storage/v1/object/public/assets/pictos-kiosque/';
-function codeImageHtml(c){
-  if(!Array.isArray(c)||c.length!==4)return'<span class="cmeta" title="Code image non généré"><i class="ti ti-photo-off"></i> Pas de code image</span>';
-  return'<span style="display:inline-flex;gap:3px;align-items:center" title="Code image de connexion">'
-    +c.map(id=>'<img src="'+PICTOS_URL+esc(id)+'.png" alt="'+esc(id)+'" title="'+esc(id)+'" style="width:24px;height:24px;border-radius:6px;object-fit:cover">').join('')+'</span>';
-}
-
-/* ---------- FICHE ---------- */
-function initialesEmp(e){return((e&&e.prenom||'').charAt(0)+(e&&e.nom||'').charAt(0)).toUpperCase()||'?';}
-function ficheOnglet(nom){
-  document.querySelectorAll('#ficheOnglets .fonglet').forEach(b=>b.classList.toggle('actif',b.dataset.pane===nom));
-  document.querySelectorAll('#modalFiche .fpane').forEach(p=>p.classList.toggle('on',p.id==='fpane-'+nom));
-  const m=document.querySelector('#modalFiche .modal');if(m)m.scrollTop=0;
-}
-/* En-tête : avatar, nom, poste et statuts (se met à jour à la saisie). */
-function ficheEntete(e){
-  const prenom=val('fPrenom'),nom=val('fNom'),poste=val('fPoste');
-  const av=document.getElementById('ficheAvatar');
-  const ini=((prenom.charAt(0)+nom.charAt(0)).toUpperCase());
-  av.innerHTML=ini?esc(ini):'<i class="ti ti-user-plus"></i>';
-  document.getElementById('ficheTitre').textContent=(prenom||nom)?(prenom+' '+nom).trim():'Nouveau/nouvelle collaborateur/trice';
-  let st='';
-  if(e){
-    st=(poste?'<span>'+esc(poste)+'</span>':'')
-      +(estArchive(e)?'<span class="badge off" style="background:var(--violet-l);color:var(--violet)">Archivé</span>'
-        :(estSorti(e)?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)">Sorti</span>':''))
-      +(!e.user_id?'<span class="badge off">Pas de compte</span>'
-        :((COMPTES_ACTIFS&&!COMPTES_ACTIFS.has(e.user_id))?'<span class="badge off" style="background:var(--orange-l);color:var(--orange)">Invitation envoyée</span>':'<span class="badge on">Compte actif</span>'));
-  }else st=poste?'<span>'+esc(poste)+'</span>':'<span>Renseignez l\'identité, puis enregistrez : les autres onglets s\'ouvrent ensuite.</span>';
-  document.getElementById('ficheSous').innerHTML=st;
-}
-function openFiche(id){
-  const e=id?EMPLOYES.find(x=>x.id===id):null;
-  document.getElementById('ficheErr').textContent='';
-  setVal('fId',e?e.id:'');
-  setVal('fPrenom',e?e.prenom:'');
-  setVal('fNom',e?e.nom:'');
-  setVal('fPoste',e?e.poste:'');
-  setVal('fEmail',e?e.email:'');
-  setVal('fTypeContrat',e?e.type_contrat:'');
-  setVal('fHeuresHebdo',e?e.heures_hebdo:'');
-  setVal('fDateDebut',e?e.date_debut:'');
-  setVal('fDateFin',e?e.date_fin:'');
-  setVal('fPlanningNom',e?e.planning_nom:'');
-  ficheEntete(e);
-  ['fPrenom','fNom','fPoste'].forEach(i=>{const el=document.getElementById(i);if(el)el.oninput=()=>ficheEntete(e);});
-  document.querySelectorAll('#ficheOnglets .fonglet').forEach(b=>{b.hidden=!e&&b.dataset.pane!=='infos';});
-  document.getElementById('ficheOnglets').style.display=e?'':'none';
-  ficheOnglet('infos');
-  const formWrap=document.getElementById('ficheFormationWrap');
-  const docsWrap=document.getElementById('ficheDocsWrap');
-  const archWrap=document.getElementById('ficheArchivageWrap');
-  const docExtWrap=document.getElementById('ficheDocExtWrap');
-  if(e){
-    formWrap.style.display='';loadFicheFormation(e);
-    docsWrap.style.display='';
-    empDocsCache=[];empPiecesCache=[];empPiecesPret=false;
-    document.getElementById('fiche-docs-dossier-box').innerHTML='';
-    empLoadDocs(e.id);
-    empLoadPieces(e.id);
-    document.getElementById('ficheHeuresWrap').style.display='';
-    loadFicheHeures(e);
-    document.getElementById('ficheContratsWrap').style.display='';
-    empLoadContrats(e.id);
-    archWrap.style.display='';
-    renderArchivageBox(e);
-    document.getElementById('ficheVisitesWrap').style.display='';
-    document.getElementById('ficheVisitesZone').innerHTML='';
-    empFicheId=e.id;vmCharger(e.id);
-    docExtWrap.style.display='';
-    empDocExtCache=[];
-    document.getElementById('ficheDocExtZone').innerHTML='';
-    empLoadDocExt(e.id);
-  }else{
-    formWrap.style.display='none';
-    docsWrap.style.display='none';
-    document.getElementById('ficheHeuresWrap').style.display='none';
-    document.getElementById('ficheContratsWrap').style.display='none';
-    archWrap.style.display='none';
-    docExtWrap.style.display='none';
-    document.getElementById('ficheVisitesWrap').style.display='none';
-  }
-  document.getElementById('modalFiche').classList.add('on');
-}
-
-/* ---------- ARCHIVAGE (fin de contrat) ----------
-   archive_le/archive_par (voir sql/archivage_dossiers.sql) : toujours posés
-   à la main depuis ce bouton, jamais automatiquement. Le statut affiché se
-   déduit de date_fin + archive_le, sans colonne "statut" à garder synchronisée. */
 function renderArchivageBox(e){
   const box=document.getElementById('ficheArchivageWrap');
   if(!box)return;
   if(estArchive(e)){
     const purge=e.date_fin?datePlusAns(e.date_fin,5):null;
     box.innerHTML='<div style="background:var(--violet-l);border-left:4px solid var(--violet);border-radius:0 10px 10px 0;padding:10px 14px;font-size:12.5px;color:var(--violet)">'
-      +'<i class="ti ti-archive"></i> Dossier archivé le '+esc(new Date(e.archive_le).toLocaleDateString('fr-FR'))+'.'
-      +(purge?' Conservation légale recommandée jusqu\'au '+esc(new Date(purge).toLocaleDateString('fr-FR'))+' (5 ans après la fin de contrat), au-delà duquel le dossier peut être purgé/anonymisé.':'')
+      +'<i class="ti ti-archive"></i> Dossier archivé le '+escHtml(new Date(e.archive_le).toLocaleDateString('fr-FR'))+'.'
+      +(purge?' Conservation légale recommandée jusqu\'au '+escHtml(new Date(purge).toLocaleDateString('fr-FR'))+' (5 ans après la fin de contrat), au-delà duquel le dossier peut être purgé/anonymisé.':'')
       +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
       +'<button type="button" class="btn btn-g btn-sm" onclick="desarchiverFiche(\''+e.id+'\')"><i class="ti ti-archive-off"></i> Réactiver ce dossier</button>'
       +(isDirection?'<button type="button" class="btn btn-g btn-sm" onclick="exporterDocuments(\''+e.id+'\')" title="Télécharge un .zip des documents du dossier, à conserver hors ligne (disque externe), puis les retire du stockage en ligne"><i class="ti ti-cloud-download"></i> Exporter les documents et libérer l\'espace</button>':'')
@@ -461,7 +49,7 @@ function renderArchivageBox(e){
       +'</div>';
   }else if(estSorti(e)){
     box.innerHTML='<div style="background:var(--orange-l);border-left:4px solid var(--orange);border-radius:0 10px 10px 0;padding:10px 14px;font-size:12.5px;color:var(--orange)">'
-      +'<i class="ti ti-alert-triangle"></i> Ce contrat est terminé depuis le '+esc(new Date(e.date_fin).toLocaleDateString('fr-FR'))+'. '
+      +'<i class="ti ti-alert-triangle"></i> Ce contrat est terminé depuis le '+escHtml(new Date(e.date_fin).toLocaleDateString('fr-FR'))+'. '
       +'Une fois les documents à jour, la fiche peut être archivée pour sortir des listes actives'+(e.user_id?' ; son compte de connexion sera alors bloqué.':'.')
       +'<div style="margin-top:8px"><button type="button" class="btn btn-g btn-sm" onclick="archiverFiche(\''+e.id+'\')"><i class="ti ti-archive"></i> Archiver ce dossier</button></div>'
       +'</div>';
@@ -475,7 +63,7 @@ function datePlusAns(iso,ans){
   return d.toISOString().slice(0,10);
 }
 async function archiverFiche(id){
-  const e=EMPLOYES.find(x=>String(x.id)===String(id));
+  const e=cacheEmployes.find(x=>String(x.id)===String(id));
   if(!e)return;
   if(!confirm('Archiver le dossier de '+(e.prenom||'')+' '+(e.nom||'')+' ?\n\nLa fiche sortira des listes actives mais reste consultable dans les archives.'
     +(e.user_id?' Son compte de connexion (Mon espace, accès terrain) sera bloqué.':'')
@@ -483,34 +71,34 @@ async function archiverFiche(id){
   // Blocage d'abord : si le compte ne peut pas être bloqué, on n'archive pas
   // (sinon un dossier « fermé » garderait un accès actif sans que ça se voie).
   if(e.user_id){
-    const{ok,data}=await callFn('bloquer-compte-collaborateur',{employe_id:id,bloquer:true});
-    if(!ok){toast('Archivage annulé : le compte de connexion n\'a pas pu être bloqué ('+(data.error||'erreur inconnue')+').',true);return;}
+    const{ok,data}=await eqCallFn('bloquer-compte-collaborateur',{employe_id:id,bloquer:true});
+    if(!ok){eqToast('Archivage annulé : le compte de connexion n\'a pas pu être bloqué ('+(data.error||'erreur inconnue')+').',true);return;}
   }
-  const row={archive_le:new Date().toISOString(),archive_par:ME?ME.id:null};
+  const row={archive_le:new Date().toISOString(),archive_par:currentUser?currentUser.id:null};
   const{error}=await sb.from('employes').update(row).eq('id',id);
   if(error){
-    if(e.user_id)await callFn('bloquer-compte-collaborateur',{employe_id:id,bloquer:false});
-    toast('Erreur lors de l\'archivage : '+error.message,true);return;
+    if(e.user_id)await eqCallFn('bloquer-compte-collaborateur',{employe_id:id,bloquer:false});
+    eqToast('Erreur lors de l\'archivage : '+error.message,true);return;
   }
   Object.assign(e,row);
   renderArchivageBox(e);
-  renderListe();
-  toast(e.user_id?'Dossier archivé, compte bloqué.':'Dossier archivé.');
+  renderEmployes();
+  eqToast(e.user_id?'Dossier archivé, compte bloqué.':'Dossier archivé.');
 }
 async function desarchiverFiche(id){
   if(!confirm('Réactiver ce dossier et le remettre dans les fiches actives ? Son compte de connexion, s\'il en a un, sera rétabli.'))return;
-  const e=EMPLOYES.find(x=>String(x.id)===String(id));
+  const e=cacheEmployes.find(x=>String(x.id)===String(id));
   if(e&&e.user_id){
-    const{ok,data}=await callFn('bloquer-compte-collaborateur',{employe_id:id,bloquer:false});
-    if(!ok){toast('Réactivation annulée : le compte n\'a pas pu être rétabli ('+(data.error||'erreur inconnue')+').',true);return;}
+    const{ok,data}=await eqCallFn('bloquer-compte-collaborateur',{employe_id:id,bloquer:false});
+    if(!ok){eqToast('Réactivation annulée : le compte n\'a pas pu être rétabli ('+(data.error||'erreur inconnue')+').',true);return;}
   }
   const row={archive_le:null,archive_par:null};
   const{error}=await sb.from('employes').update(row).eq('id',id);
-  if(error){toast('Erreur : '+error.message,true);return;}
+  if(error){eqToast('Erreur : '+error.message,true);return;}
   if(e)Object.assign(e,row);
   if(e)renderArchivageBox(e);
-  renderListe();
-  toast('Dossier réactivé.');
+  renderEmployes();
+  eqToast('Dossier réactivé.');
 }
 
 /* ---------- EXPORT DES DOCUMENTS PUIS PURGE DU STOCKAGE ----------
@@ -521,18 +109,18 @@ async function desarchiverFiche(id){
    permanente dans archivage_purges, qui survit même une fois les documents
    supprimés. Irréversible : d'où la confirmation à deux temps. */
 async function exporterDocuments(id){
-  const e=EMPLOYES.find(x=>String(x.id)===String(id));
+  const e=cacheEmployes.find(x=>String(x.id)===String(id));
   if(!isDirection||!e||!estArchive(e))return;
   if(!confirm('Préparer un fichier .zip de tous les documents de '+(e.prenom||'')+' '+(e.nom||'')+' ?\n\nUne fois le fichier téléchargé et sa sauvegarde confirmée, ces documents seront supprimés du stockage en ligne (Supabase) — à vous de les conserver ensuite hors ligne (disque externe) pour le reste du délai légal.'))return;
 
-  toast('Préparation du fichier .zip…');
+  eqToast('Préparation du fichier .zip…');
   let docs=[];
   try{
     const{data,error}=await sb.from('employes_documents').select('*').eq('employe_id',id);
     if(error)throw error;
     docs=data||[];
   }catch(err){
-    toast('Erreur lors de la lecture des documents : '+err.message,true);
+    eqToast('Erreur lors de la lecture des documents : '+err.message,true);
     return;
   }
   let comptesRendus=[];
@@ -540,7 +128,7 @@ async function exporterDocuments(id){
     const{data}=await sb.from('employes_visites_medicales').select('*').eq('employe_id',id).not('piece_path','is',null);
     comptesRendus=data||[];
   }catch(err){console.warn('[exporterDocuments] comptes rendus de visite',err);}
-  if(!docs.length&&!comptesRendus.length){toast('Aucun document à exporter pour ce dossier.');return;}
+  if(!docs.length&&!comptesRendus.length){eqToast('Aucun document à exporter pour ce dossier.');return;}
 
   const zip=new JSZip();
   const reussis=[];
@@ -565,7 +153,7 @@ async function exporterDocuments(id){
       nEchec++;
     }
   }
-  if(!reussis.length&&!reussisVm.length){toast('Aucun document n\'a pu être téléchargé — export annulé, rien n\'a été supprimé.',true);return;}
+  if(!reussis.length&&!reussisVm.length){eqToast('Aucun document n\'a pu être téléchargé — export annulé, rien n\'a été supprimé.',true);return;}
 
   const contenu=await zip.generateAsync({type:'blob'});
   const nomZip='documents_'+(e.prenom||'')+'_'+(e.nom||'')+'_'+todayISO()+'.zip';
@@ -573,7 +161,7 @@ async function exporterDocuments(id){
   const a=document.createElement('a');a.href=url;a.download=nomZip;document.body.appendChild(a);a.click();a.remove();
   URL.revokeObjectURL(url);
 
-  if(nEchec)toast(nEchec+' document(s) n\'ont pas pu être inclus dans le zip (ignorés, non supprimés) — '+reussis.length+' inclus.',true);
+  if(nEchec)eqToast(nEchec+' document(s) n\'ont pas pu être inclus dans le zip (ignorés, non supprimés) — '+reussis.length+' inclus.',true);
 
   if(!confirm('Le fichier "'+nomZip+'" a été téléchargé.\n\nAvez-vous bien enregistré ce fichier sur un support externe (disque dur, coffre-fort numérique) ?\n\nEn confirmant, les '+reussis.length+' document(s) effectivement exportés seront DÉFINITIVEMENT supprimés du stockage en ligne'+(nEchec?' ('+nEchec+' document(s) en échec resteront en ligne, à retenter plus tard)':'')+'. Cette action est IRRÉVERSIBLE.'))return;
 
@@ -605,62 +193,15 @@ async function exporterDocuments(id){
     creche_id:e.creche_id||null,
     annee_sortie:e.date_fin?Number(String(e.date_fin).slice(0,4)):null,
     motif:suppOk+' document(s) exportés en .zip puis supprimés du stockage en ligne'+(suppKo?' ('+suppKo+' échec(s) de suppression)':''),
-    purge_par:ME?ME.id:null
+    purge_par:currentUser?currentUser.id:null
   });
 
   empDocsCache=[];
   document.getElementById('ficheDocsZone').innerHTML='';
   if(String(empFicheId)===String(id))empLoadDocs(id);
-  toast(suppOk+' document(s) supprimé(s) du stockage en ligne.'+(suppKo?' '+suppKo+' suppression(s) ont échoué.':''));
+  eqToast(suppOk+' document(s) supprimé(s) du stockage en ligne.'+(suppKo?' '+suppKo+' suppression(s) ont échoué.':''));
 }
 
-/* ---------- CONTRAT DE TRAVAIL (module Documents) ----------
-   Le contrat n'est pas stocké ici : il vit dans documents_reponses (modèle
-   contrat_travail de documents.html), rattaché à cette fiche via le
-   sélecteur « Fiche collaborateur/trice » du formulaire (donnees.
-   salarie_employe_id). On ne fait ici qu'y donner un accès direct, en
-   lecture, depuis la fiche collaborateur/trice — pas de duplication des
-   données ni de génération de PDF ici. */
-async function empLoadContrats(employeId){
-  const box=document.getElementById('ficheContratsBox');
-  if(box)box.innerHTML='<p class="hint">Chargement…</p>';
-  try{
-    const{data:docs,error:eDocs}=await sb.from('documents_koala').select('id,titre').eq('template_key','contrat_travail');
-    if(eDocs)throw eDocs;
-    const docIds=(docs||[]).map(d=>d.id);
-    if(!docIds.length){if(box)box.innerHTML='<p class="hint">Aucun modèle « Contrat de travail » configuré dans Documents.</p>';return;}
-    const{data:reps,error:eReps}=await sb.from('documents_reponses')
-      .select('id,document_id,statut,updated_at,created_at,donnees')
-      .in('document_id',docIds).eq('creche_id',crecheId)
-      .order('updated_at',{ascending:false});
-    if(eReps)throw eReps;
-    const mine=(reps||[]).filter(r=>r.donnees&&r.donnees.salarie_employe_id===employeId);
-    if(!mine.length){
-      if(box)box.innerHTML='<p class="hint">Aucun contrat de travail rattaché à cette fiche pour l’instant — '
-        +'à générer depuis le module Documents, en sélectionnant cette fiche dans le formulaire.</p>';
-      return;
-    }
-    if(box)box.innerHTML=mine.map(r=>{
-      const doc=(docs||[]).find(d=>d.id===r.document_id)||{};
-      // Sans target="_blank" : le même onglet navigue vers documents.html, et
-      // la bannière « Revenir à la fiche collaborateur/trice » (paramètres
-      // emp=/empSrc=employes) ramène ici à la fermeture du contrat.
-      const url='documents.html?doc='+encodeURIComponent(r.document_id)+'&rep='+encodeURIComponent(r.id)+'&emp='+encodeURIComponent(employeId)+'&empSrc=employes';
-      const badge=r.statut==='signe'
-        ?'<span style="background:var(--green-l);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">✅ Signé</span>'
-        :'<span style="background:var(--orange-l);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⏳ En préparation</span>';
-      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)">'
-        +'<div><div style="font-size:12.5px;font-weight:600">'+esc(doc.titre||'Contrat de travail')+'</div>'
-        +'<div style="font-size:11px;color:var(--muted)">'+new Date(r.updated_at||r.created_at).toLocaleDateString('fr-FR')+'</div></div>'
-        +badge
-        +'<a href="'+esc(url)+'" class="btn btn-g btn-sm"><i class="ti ti-eye"></i> Ouvrir</a>'
-        +'</div>';
-    }).join('');
-  }catch(err){
-    console.warn('empLoadContrats',err);
-    if(box)box.innerHTML='<p class="hint">Contrat indisponible pour le moment.</p>';
-  }
-}
 /* ---------- VALIDATION MENSUELLE DES HEURES (lecture seule, vue direction) ----------
    Les signatures sont déposées depuis collaborateur.html ("Mon espace") et ne
    peuvent être ni créées ni modifiées ici — cf. sql/validation_heures_mensuelle.sql
@@ -678,58 +219,13 @@ async function loadFicheHeures(e){
     const mois=capitalize(new Date(r.annee,r.mois-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'}));
     const d=new Date(r.signe_le).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
     return'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">'
-      +'<div><div style="font-weight:700;font-size:13px">'+esc(mois)+'</div>'
-      +'<div style="font-size:11.5px;color:var(--muted)">Signé par '+esc(r.signe_par)+' le '+d+'</div></div>'
+      +'<div><div style="font-weight:700;font-size:13px">'+escHtml(mois)+'</div>'
+      +'<div style="font-size:11.5px;color:var(--muted)">Signé par '+escHtml(r.signe_par)+' le '+d+'</div></div>'
       +'<span style="font-weight:800;font-size:14px;color:var(--violet);white-space:nowrap">'
       +Number(r.heures_realisees).toFixed(1)+'h</span></div>';
   }).join('');
 }
 function capitalize(s){return s.charAt(0).toUpperCase()+s.slice(1);}
-function closeFiche(){document.getElementById('modalFiche').classList.remove('on');}
-async function saveFiche(){
-  const id=val('fId');
-  const prenom=val('fPrenom');
-  if(!prenom){document.getElementById('ficheErr').textContent='Le prénom est obligatoire.';return;}
-  const row={
-    prenom,
-    nom:val('fNom')||null,
-    poste:val('fPoste')||null,
-    email:val('fEmail')||null,
-    type_contrat:val('fTypeContrat')||null,
-    heures_hebdo:num('fHeuresHebdo'),
-    date_debut:val('fDateDebut')||null,
-    date_fin:val('fDateFin')||null,
-    planning_nom:val('fPlanningNom')||null,
-  };
-  let error;
-  if(id){
-    ({error}=await sb.from('employes').update(row).eq('id',id));
-  }else{
-    row.creche_id=crecheId;
-    ({error}=await sb.from('employes').insert(row));
-  }
-  if(error){document.getElementById('ficheErr').textContent=error.message;return;}
-  /* Une visite médicale saisie mais pas encore ajoutée part avec la fiche,
-     sinon elle serait perdue en fermant la fenêtre. */
-  if(id&&typeof vmEnregistrer==='function'&&(val('vmDate')||val('vmRdv'))){
-    const ok=await vmEnregistrer();
-    if(!ok){document.getElementById('ficheErr').textContent='Fiche enregistrée, mais la visite médicale n\'a pas pu l\'être (voir le message dans la section).';await loadEmployes();return;}
-  }
-  closeFiche();
-  toast('Fiche enregistrée.');
-  await loadEmployes();
-}
-
-/* ---------- PARCOURS DE FORMATION (envoi + lecture, vue direction/directrice) ----------
-   L'initiative revient à la direction/directrice technique : on choisit un
-   quiz ou une micro-formation publié(e) et on l'envoie explicitement (bouton
-   "Envoyer"), ce qui enregistre l'envoi dans gestion-stock (table
-   formations_envois, cf. sql/formations_envois.sql) — jamais un libre choix
-   côté collaborateur/trice, qui ne fait qu'afficher ce qu'on lui a envoyé.
-   Le lien porte un `ref` opaque (l'id de la fiche) qui rattache le résultat
-   côté quiz-protocoles (base Supabase distincte) sans dépendre du nom saisi
-   là-bas. */
-let FICHE_FORMATION_OPTIONS=[],FICHE_FORMATION_EMPLOYE=null;
 async function loadFicheFormationOptions(){
   const sel=document.getElementById('ficheFormationSelect');
   try{
@@ -743,8 +239,8 @@ async function loadFicheFormationOptions(){
     ];
     if(!FICHE_FORMATION_OPTIONS.length){sel.innerHTML='<option value="">Aucun quiz ni formation publié</option>';return;}
     sel.innerHTML='<option value="">— Choisir —</option>'
-      +'<optgroup label="Quiz">'+FICHE_FORMATION_OPTIONS.filter(o=>o.kind==='quiz').map(o=>'<option value="'+o.value+'">'+esc(o.titre)+'</option>').join('')+'</optgroup>'
-      +'<optgroup label="Micro-formations">'+FICHE_FORMATION_OPTIONS.filter(o=>o.kind==='module').map(o=>'<option value="'+o.value+'">'+esc(o.titre)+'</option>').join('')+'</optgroup>';
+      +'<optgroup label="Quiz">'+FICHE_FORMATION_OPTIONS.filter(o=>o.kind==='quiz').map(o=>'<option value="'+o.value+'">'+escHtml(o.titre)+'</option>').join('')+'</optgroup>'
+      +'<optgroup label="Micro-formations">'+FICHE_FORMATION_OPTIONS.filter(o=>o.kind==='module').map(o=>'<option value="'+o.value+'">'+escHtml(o.titre)+'</option>').join('')+'</optgroup>';
   }catch(e){sel.innerHTML='<option value="">Liste indisponible</option>';}
 }
 document.addEventListener('DOMContentLoaded',()=>{
@@ -777,8 +273,8 @@ async function envoyerFormationInner(partager,optForce){
   if(!e)return;
   const sel=document.getElementById('ficheFormationSelect');
   const opt=optForce||FICHE_FORMATION_OPTIONS.find(o=>o.value===sel.value);
-  if(!opt){toast('Choisissez un quiz ou une formation.',true);return;}
-  const crecheNom=(CRECHES.find(c=>c.id===crecheId)||{}).name||'';
+  if(!opt){eqToast('Choisissez un quiz ou une formation.',true);return;}
+  const crecheNom=(cacheCreches.find(c=>c.id===eqCrecheCourante())||{}).name||'';
   const params=new URLSearchParams({ref:e.id,prenom:e.prenom||'',nom:e.nom||'',statut:'Salarié(e) en poste'});
   if(crecheNom)params.set('creche',crecheNom);
   const base=opt.kind==='quiz'?QUIZ_APP_URL:FORMATIONS_APP_URL;
@@ -793,10 +289,10 @@ async function envoyerFormationInner(partager,optForce){
   if(!ex.error&&ex.data&&ex.data.length){saved=ex.data[0];dejaLa=true;}
   else{
     ({data:saved,error}=await sb.from('formations_envois').insert({
-      employe_id:e.id,kind:opt.kind,item_id:opt.id,item_titre:opt.titre,lien,envoye_par:ME.id
+      employe_id:e.id,kind:opt.kind,item_id:opt.id,item_titre:opt.titre,lien,envoye_par:currentUser.id
     }).select().single());
   }
-  if(error){toast('Échec de l\'envoi : '+error.message,true);return;}
+  if(error){eqToast('Échec de l\'envoi : '+error.message,true);return;}
   /* Le presse-papiers du navigateur échoue silencieusement dans de nombreux
      contextes (permission refusée, page non sécurisée...) : la personne
      copiait alors un lien vide sans le savoir. On envoie désormais un vrai
@@ -809,7 +305,7 @@ async function envoyerFormationInner(partager,optForce){
     const r=await PartageLien.partager(lien,{titre:opt.titre,
       texte:'Bonjour '+(e.prenom||'')+', voici le lien pour réaliser '
         +(opt.kind==='quiz'?'le quiz':'la formation')+' « '+opt.titre+' » :'});
-    toast(r==='copie'?'Enregistré — partage indisponible, lien copié.'
+    eqToast(r==='copie'?'Enregistré — partage indisponible, lien copié.'
       :r==='annule'?'Ajouté au parcours, mais le lien n\'a pas été partagé (feuille de partage fermée).'
       :'Enregistré dans le parcours de '+(e.prenom||'la personne')+'.',r==='annule');
     sel.value='';
@@ -817,11 +313,11 @@ async function envoyerFormationInner(partager,optForce){
     return;
   }
   if(e.email){
-    const{ok,data}=await callFn('envoyer-formation',{envoi_id:saved.id,expediteur:PROF?.name});
-    if(ok)toast((dejaLa?'Déjà dans le parcours — e-mail renvoyé à ':'E-mail envoyé à ')+e.email+'.');
-    else toast('Enregistré, mais l\'e-mail n\'a pas pu être envoyé : '+(data.error||'erreur inconnue')+'. Copiez le lien manuellement : '+lien,true);
+    const{ok,data}=await eqCallFn('envoyer-formation',{envoi_id:saved.id,expediteur:currentProfile?.name});
+    if(ok)eqToast((dejaLa?'Déjà dans le parcours — e-mail renvoyé à ':'E-mail envoyé à ')+e.email+'.');
+    else eqToast('Enregistré, mais l\'e-mail n\'a pas pu être envoyé : '+(data.error||'erreur inconnue')+'. Copiez le lien manuellement : '+lien,true);
   }else{
-    toast('Envoyé — mais aucun e-mail sur cette fiche : copiez le lien manuellement : '+lien,true);
+    eqToast('Envoyé — mais aucun e-mail sur cette fiche : copiez le lien manuellement : '+lien,true);
   }
   try{await navigator.clipboard.writeText(lien);}catch(err){}
   sel.value='';
@@ -915,7 +411,7 @@ const NIV_PROFIL={appui:{l:"Point d'appui",c:'var(--green)',bg:'var(--green-bg,#
 function profilHtml(axes){
   return'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">'+(axes||[]).map(a=>{
     const v=NIV_PROFIL[a.niveau];if(!v)return'';
-    return'<span title="'+esc(v.l)+'" style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:'+v.bg+';color:'+v.c+'">'+esc(a.libelle||a.code||'')+' : '+v.l+'</span>';
+    return'<span title="'+escHtml(v.l)+'" style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:'+v.bg+';color:'+v.c+'">'+escHtml(a.libelle||a.code||'')+' : '+v.l+'</span>';
   }).join('')+'</div>';
 }
 function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggestions,peutProposer){
@@ -972,7 +468,7 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggesti
       if(r.etape==='attester')info='<div style="font-size:11.5px;color:var(--muted)">'+(r.quizPct!=null?'Quiz réussi ('+r.quizPct+' %) — ':'')+'attestation en attente</div>';
       if(r.etape==='suite')info='<div style="font-size:11.5px;color:var(--muted)">Formation en cours : '+r.lues+' partie'+(r.lues>1?'s':'')+' lue'+(r.lues>1?'s':'')+' sur '+r.parties+' — le quiz viendra à la fin</div>';
       if(r.etape==='indispo')info='<div style="font-size:11.5px;color:var(--muted)">Vérification du quiz indisponible pour le moment</div>';
-      droite='<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" style="font-weight:700;font-size:11.5px;color:var(--orange);white-space:nowrap;text-decoration:none"><i class="ti ti-clock"></i> '+(r.etape==='attester'?'Attestation en attente':r.etape==='quiz'?(r.best>=0?'À revoir':'Quiz à réussir'):r.etape==='suite'?'Formation en cours':'À faire')+'</a>';
+      droite='<a href="'+escHtml(r.lien)+'" target="_blank" rel="noopener" style="font-weight:700;font-size:11.5px;color:var(--orange);white-space:nowrap;text-decoration:none"><i class="ti ti-clock"></i> '+(r.etape==='attester'?'Attestation en attente':r.etape==='quiz'?(r.best>=0?'À revoir':'Quiz à réussir'):r.etape==='suite'?'Formation en cours':'À faire')+'</a>';
     }else if(r.type==='quiz'&&r.profil){
       info=profilHtml(r.profil);
       droite='<span style="font-weight:700;font-size:11.5px;color:var(--green);white-space:nowrap"><i class="ti ti-check"></i> Profil établi</span>';
@@ -986,8 +482,8 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggesti
       if(!acquis){
         const dejaEnvoyes=new Set(envois.filter(x=>x.kind==='module').map(x=>x.item_id));
         const sg=(suggestions||[]).filter(x=>x.quiz_id===r.itemId&&!dejaEnvoyes.has(x.module_id))[0];
-        if(sg)info+='<div style="font-size:11.5px;color:var(--orange);margin-top:2px"><i class="ti ti-bulb"></i> Formation conseillée : '+esc(sg.module_titre)
-          +(peutProposer?' <button type="button" class="btn btn-s btn-sm" style="font-size:11px;padding:2px 8px;margin-left:4px" onclick="proposerFormation(\''+esc(sg.module_id)+'\')">Proposer</button>':'')+'</div>';
+        if(sg)info+='<div style="font-size:11.5px;color:var(--orange);margin-top:2px"><i class="ti ti-bulb"></i> Formation conseillée : '+escHtml(sg.module_titre)
+          +(peutProposer?' <button type="button" class="btn btn-s btn-sm" style="font-size:11px;padding:2px 8px;margin-left:4px" onclick="proposerFormation(\''+escHtml(sg.module_id)+'\')">Proposer</button>':'')+'</div>';
       }
       droite='<div style="text-align:right"><div style="font-weight:800;font-size:13px;color:'+col+';white-space:nowrap">'+r.score+'/'+r.total+' · '+r.pourcentage+'%</div>'
         +'<div style="font-weight:700;font-size:11.5px;white-space:nowrap;color:'+(acquis?'var(--green)':'var(--orange)')+'"><i class="ti '+(acquis?'ti-check':'ti-refresh')+'"></i> '+(acquis?'Acquis':'À revoir')+'</div></div>';
@@ -997,50 +493,50 @@ function renderParcoursHtml(envois,resultats,formationsLues,modulesQuiz,suggesti
     }
     return'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">'
       +'<div style="display:flex;align-items:center;gap:8px"><i class="ti '+icone+'" style="color:var(--orange);font-size:16px"></i>'
-      +'<div><div style="font-weight:700;font-size:13px">'+esc(r.titre)+'</div>'
+      +'<div><div style="font-weight:700;font-size:13px">'+escHtml(r.titre)+'</div>'
       +(r.statut==='fait'&&r.type==='formation'?'':'<div style="font-size:11.5px;color:var(--muted)">'+(r.statut==='a_faire'?'Envoyé le ':'')+d+'</div>')
       +info
-      +(r.par?'<div style="font-size:11.5px;color:var(--muted)">Envoyé par '+esc(r.par)+'</div>':'')
+      +(r.par?'<div style="font-size:11.5px;color:var(--muted)">Envoyé par '+escHtml(r.par)+'</div>':'')
       +'</div></div>'+droite+'</div>';
   }).join('');
 }
 
 /* ---------- COMPTE DE CONNEXION ---------- */
 async function creerCompte(id,partager){
-  const e=EMPLOYES.find(x=>x.id===id);
+  const e=cacheEmployes.find(x=>x.id===id);
   if(!e||!e.email)return;
   if(!confirm(partager?'Créer le compte de '+e.prenom+' et partager le lien d\'invitation (aucun e-mail ne sera envoyé) ?'
     :'Envoyer à '+e.email+' un e-mail d\'invitation pour créer son compte de connexion ?'))return;
-  const redirect=location.href.replace(/employes\.html.*$/,'collaborateur.html');
-  const{ok,data}=await callFn('creer-compte-collaborateur',{employe_id:id,redirect_to:redirect,partager:!!partager});
-  if(!ok){toast('Échec : '+(data.error||'erreur inconnue'),true);return;}
+  const redirect=new URL('collaborateur.html',location.href).href;
+  const{ok,data}=await eqCallFn('creer-compte-collaborateur',{employe_id:id,redirect_to:redirect,partager:!!partager});
+  if(!ok){eqToast('Échec : '+(data.error||'erreur inconnue'),true);return;}
   if(data.compte_lie){
-    toast('Fiche reliée au compte existant de '+e.prenom+' : elle/il se connecte avec son identifiant habituel.');
+    eqToast('Fiche reliée au compte existant de '+e.prenom+' : elle/il se connecte avec son identifiant habituel.');
   }else if(partager&&data.lien){
     const r=await PartageLien.partager(data.lien,{titre:'Compte de connexion',
       texte:'Bonjour '+(e.prenom||'')+', voici le lien pour créer ton compte de connexion :'});
-    toast(r==='copie'?'Compte créé — partage indisponible, lien copié.'
+    eqToast(r==='copie'?'Compte créé — partage indisponible, lien copié.'
       :r==='annule'?'Compte créé, mais le lien n\'a pas été partagé (feuille de partage fermée).'
       :'Lien d\'invitation partagé.',r==='annule');
-  }else toast('Invitation envoyée à '+e.email+'.');
-  await loadEmployes();
+  }else eqToast('Invitation envoyée à '+e.email+'.');
+  await eqRecharger();
 }
 
 /* Renvoie un nouveau lien de connexion (à partager) à une personne dont
    l'invitation n'a pas abouti : aucun e-mail, le compte existant est conservé. */
 async function renvoyerInvitation(id){
-  const e=EMPLOYES.find(x=>x.id===id);
+  const e=cacheEmployes.find(x=>x.id===id);
   if(!e||!e.user_id)return;
   if(!confirm('Générer un nouveau lien de connexion pour '+e.prenom+' et le partager (aucun e-mail ne sera envoyé) ?'))return;
-  const redirect=location.href.replace(/employes\.html.*$/,'collaborateur.html');
-  const{ok,data}=await callFn('creer-compte-collaborateur',{employe_id:id,redirect_to:redirect,renvoyer:true});
+  const redirect=new URL('collaborateur.html',location.href).href;
+  const{ok,data}=await eqCallFn('creer-compte-collaborateur',{employe_id:id,redirect_to:redirect,renvoyer:true});
   if(!ok||!data.lien){
-    toast(data&&data.error==='compte_deja_actif'?e.prenom+' s\'est déjà connecté(e) : elle/il peut utiliser « Mot de passe oublié ? ».'
+    eqToast(data&&data.error==='compte_deja_actif'?e.prenom+' s\'est déjà connecté(e) : elle/il peut utiliser « Mot de passe oublié ? ».'
       :'Échec : '+((data&&data.error)||'erreur inconnue'),true);return;
   }
   const r=await PartageLien.partager(data.lien,{titre:'Lien de connexion',
     texte:'Bonjour '+(e.prenom||'')+', voici ton nouveau lien pour te connecter :'});
-  toast(r==='copie'?'Partage indisponible, lien copié.'
+  eqToast(r==='copie'?'Partage indisponible, lien copié.'
     :r==='annule'?'Le lien n\'a pas été partagé (feuille de partage fermée).'
     :'Lien de connexion partagé.',r==='annule');
 }
@@ -1050,30 +546,30 @@ async function renvoyerInvitation(id){
    déjà un compte de connexion (espace collaborateur), c'est le même identifiant
    qui ouvre aussi terrain.html ; sinon une invitation part par e-mail. */
 async function accorderAccesTerrain(id,partager){
-  const e=EMPLOYES.find(x=>x.id===id);
+  const e=cacheEmployes.find(x=>x.id===id);
   if(!e||!e.email)return;
   const{data:deja}=await sb.from('referents').select('id').ilike('email',e.email).maybeSingle();
-  if(deja){toast('Cette adresse est déjà utilisée par un compte directeur/référent : utilisez une autre adresse sur la fiche.',true);return;}
+  if(deja){eqToast('Cette adresse est déjà utilisée par un compte directeur/référent : utilisez une autre adresse sur la fiche.',true);return;}
   if(!confirm(e.user_id?'Accorder l\'accès terrain à '+e.prenom+' ? Elle/il utilisera le même identifiant que pour Mon espace.'
     :partager?'Accorder l\'accès terrain à '+e.prenom+' et partager le lien d\'invitation (aucun e-mail ne sera envoyé) ?'
     :'Accorder l\'accès terrain à '+e.prenom+' ? Un e-mail d\'invitation sera envoyé à '+e.email+'.'))return;
-  const redirect=location.href.replace(/employes\.html.*$/,'terrain.html');
+  const redirect=new URL('terrain.html',location.href).href;
   const nom=((e.prenom||'')+' '+(e.nom||'')).trim();
-  const{ok,data}=await callFn('create-referent',{email:e.email,name:nom,creche_id:e.creche_id,poste:e.poste||'',role:'employe',redirect_to:redirect,partager:!!partager});
-  if(!ok||!data.user_id){toast('Échec : '+((data&&(data.error))||'erreur inconnue'),true);return;}
+  const{ok,data}=await eqCallFn('create-referent',{email:e.email,name:nom,creche_id:e.creche_id,poste:e.poste||'',role:'employe',redirect_to:redirect,partager:!!partager});
+  if(!ok||!data.user_id){eqToast('Échec : '+((data&&(data.error))||'erreur inconnue'),true);return;}
   const{error}=await sb.from('referents').update({employe_id:id}).eq('user_id',data.user_id);
-  if(error){toast('Accès créé, mais le lien avec la fiche a échoué : '+error.message,true);}
+  if(error){eqToast('Accès créé, mais le lien avec la fiche a échoué : '+error.message,true);}
   else if(partager){
     const pageTerrain=redirect;
     const r=await PartageLien.partager(data.lien||pageTerrain,{titre:'Accès terrain',
       texte:'Bonjour '+(e.prenom||'')+(data.lien?', voici le lien pour créer ton accès terrain :'
         :', ton accès terrain est activé, connecte-toi avec ton e-mail et ton mot de passe habituels :')});
-    toast(r==='copie'?'Accès accordé — partage indisponible, lien copié.'
+    eqToast(r==='copie'?'Accès accordé — partage indisponible, lien copié.'
       :r==='annule'?'Accès accordé, mais le lien n\'a pas été partagé (feuille de partage fermée).'
       :'Accès terrain accordé, lien partagé.',r==='annule');
   }
-  else toast(e.user_id?'Accès terrain accordé.':'Invitation envoyée à '+e.email+'.');
-  await loadEmployes();
+  else eqToast(e.user_id?'Accès terrain accordé.':'Invitation envoyée à '+e.email+'.');
+  await eqRecharger();
 }
 
 /* ---------- SUPPRESSION ---------- */
@@ -1081,21 +577,6 @@ async function accorderAccesTerrain(id,partager){
    cascade côté base, cf. sql/module_employes.sql). Le compte de connexion
    auth.users éventuellement créé est supprimé juste après, via la fonction
    Edge supprimer-compte-collaborateur (service role requis, inaccessible à
-   l'anon key) — sans ça, l'e-mail restait bloqué pour toute réinvitation. */
-async function supprimerEmploye(id){
-  const e=EMPLOYES.find(x=>x.id===id);
-  if(!e)return;
-  const nom=(e.prenom||'')+' '+(e.nom||'');
-  if(!confirm('Supprimer définitivement la fiche de '+nom.trim()+' ?\n\nSon historique de pointages sera aussi supprimé. Cette action est irréversible.'))return;
-  const{error}=await sb.from('employes').delete().eq('id',id);
-  if(error){toast('Échec de la suppression : '+error.message,true);return;}
-  if(e.user_id){
-    const{ok,data}=await callFn('supprimer-compte-collaborateur',{user_id:e.user_id});
-    if(!ok){toast('Fiche supprimée, mais le compte de connexion n\'a pas pu être retiré : '+(data.error||'erreur inconnue'),true);await loadEmployes();return;}
-  }
-  toast('Fiche supprimée.');
-  await loadEmployes();
-}
 
 /* ---------- DOCUMENTS D'EMBAUCHE (fiche collaborateur/trice) ----------
    Pièces liées à l'embauche, distinctes des champs texte ajoutés par
@@ -1156,7 +637,7 @@ function empRenderDocs(){
   const ligneFichier=d=>
     '<div style="display:flex;align-items:center;gap:8px;padding:5px 0">'
     +'<i class="ti ti-paperclip" style="color:var(--orange);flex-shrink:0"></i>'
-    +'<button type="button" onclick="empDocOpen(\''+d.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;color:var(--violet);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(d.filename||'Document')+'</button>'
+    +'<button type="button" onclick="empDocOpen(\''+d.id+'\')" title="Ouvrir" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;color:var(--violet);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(d.filename||'Document')+'</button>'
     +'<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+new Date(d.created_at).toLocaleDateString('fr-FR')+'</span>'
     +'<button onclick="empDocDelete(\''+d.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:14px;flex-shrink:0"><i class="ti ti-trash"></i></button>'
     +'</div>';
@@ -1174,7 +655,7 @@ function empRenderDocs(){
     }
     return '<div style="border-bottom:1px solid var(--line);padding:9px 2px">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
-      +'<span style="font-size:12.5px;font-weight:600;color:#2B2740">'+esc(p.label)+'</span>'
+      +'<span style="font-size:12.5px;font-weight:600;color:#2B2740">'+escHtml(p.label)+'</span>'
       +'<span style="display:flex;align-items:center;gap:6px;flex-shrink:0">'+badge
       +'<button type="button" onclick="empOpenPieceUpload(\''+p.key+'\')" title="Importer" class="btn btn-g btn-sm"><i class="ti ti-upload"></i> Importer</button>'
       +'</span></div>'
@@ -1230,21 +711,21 @@ async function empHandleDocUpload(event){
   }
   if(status)status.textContent='✅ Ajouté';
   input.value='';
-  toast('Document(s) importé(s) ✅');
+  eqToast('Document(s) importé(s) ✅');
 }
 async function empDocOpen(id){
   const d=empDocsCache.find(x=>String(x.id)===String(id));
-  if(!d){toast('Fichier introuvable.',true);return;}
+  if(!d){eqToast('Fichier introuvable.',true);return;}
   if(typeof kkJournaliserAcces==='function')kkJournaliserAcces(d.bucket||EMP_DOCS_BUCKET,d.path,{entite_type:'employe',entite_id:d.employe_id,libelle:d.filename});
   const{data,error}=await sb.storage.from(d.bucket||EMP_DOCS_BUCKET).createSignedUrl(d.path,EMP_DOCS_TTL);
-  if(error||!data){toast('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'),true);return;}
+  if(error||!data){eqToast('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'),true);return;}
   window.open(data.signedUrl,'_blank','noopener');
 }
 async function empDocDelete(id){
   if(!confirm('Supprimer ce document ?'))return;
   const d=empDocsCache.find(x=>String(x.id)===String(id));
   const{error}=await sb.from('employes_documents').delete().eq('id',id);
-  if(error){toast('Erreur : '+error.message,true);return;}
+  if(error){eqToast('Erreur : '+error.message,true);return;}
   /* Le fichier lui-même est retiré du stockage : sans cela il resterait
      indéfiniment dans le bucket, hors de toute fiche. */
   if(d){
@@ -1259,10 +740,10 @@ async function empDocDelete(id){
 /* ---------- DOSSIER DE PIÈCES (envoi d'un lien au/à la salarié(e)) ----------
    Même principe que le dossier de pièces famille (dossiers_pieces /
    pieces.html, cf. js/enfants.js) : un envoi = un jeton = un lien public
-   (pieces-employe.html), valable PIECES_JOURS jours. Simplifié par rapport à
+   (pieces-employe.html), valable EMP_PIECES_JOURS jours. Simplifié par rapport à
    la version famille : une fiche employé n'a qu'une seule adresse e-mail,
    pas de choix de destinataires. */
-const PIECES_JOURS=5;
+const EMP_PIECES_JOURS=5;
 function piecesEmployeLien(token){
   return location.origin+location.pathname.replace(/[^/]*$/,'')+'pieces-employe.html?t='+token;
 }
@@ -1297,7 +778,7 @@ function empRenderPiecesDossier(){
      non plus : on propose d'envoyer un nouveau lien si besoin, sans reprendre
      l'ancien qui ne fonctionne plus. */
   const actif=empPiecesCache.find(d=>d.statut!=='annule'&&d.statut!=='complet'&&new Date(d.expire_le)>new Date());
-  const e=EMPLOYES.find(x=>String(x.id)===String(empFicheId));
+  const e=cacheEmployes.find(x=>String(x.id)===String(empFicheId));
   const email=e&&e.email;
 
   const cadre=contenu=>'<div style="background:#F7F6FC;border:1px solid var(--line);border-radius:14px;padding:13px 15px;margin-bottom:12px">'
@@ -1311,8 +792,8 @@ function empRenderPiecesDossier(){
       return;
     }
     box.innerHTML=cadre(
-      '<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">Envoie à '+esc(email)
-      +' un lien personnel pour déposer en ligne les pièces ci-dessous. Valable '+PIECES_JOURS+' jours.</p>'
+      '<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">Envoie à '+escHtml(email)
+      +' un lien personnel pour déposer en ligne les pièces ci-dessous. Valable '+EMP_PIECES_JOURS+' jours.</p>'
       +'<button type="button" class="btn btn-s btn-sm" onclick="empConfirmerEnvoiPieces()"><i class="ti ti-send"></i> Envoyer le lien de dépôt</button>'
     );
     return;
@@ -1329,7 +810,7 @@ function empRenderPiecesDossier(){
     +'<span style="font-size:12px;color:var(--muted)">envoyé le '+new Date(actif.envoye_le).toLocaleDateString('fr-FR')
     +' · expire le '+new Date(actif.expire_le).toLocaleDateString('fr-FR')
     +(actif.relances?' · '+actif.relances+' relance'+(actif.relances>1?'s':''):'')+'</span></div>'
-    +'<div style="font-size:12px;color:var(--muted);margin-bottom:9px"><i class="ti ti-mail"></i> '+esc(actif.email||'')+'</div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:9px"><i class="ti ti-mail"></i> '+escHtml(actif.email||'')+'</div>'
     +'<div style="font-size:12.5px;color:var(--muted);margin-bottom:9px">'+recus+' pièce'+(recus>1?'s':'')+' reçue'+(recus>1?'s':'')
     +' sur '+requis.length+' demandées (hors pièces non concernées)</div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
@@ -1341,36 +822,36 @@ function empRenderPiecesDossier(){
   );
 }
 async function empConfirmerEnvoiPieces(){
-  const e=EMPLOYES.find(x=>String(x.id)===String(empFicheId));
-  if(!e||!e.email){toast('Aucune adresse e-mail sur cette fiche.',true);return;}
+  const e=cacheEmployes.find(x=>String(x.id)===String(empFicheId));
+  if(!e||!e.email){eqToast('Aucune adresse e-mail sur cette fiche.',true);return;}
   const token=dossierTokenEmploye();
-  const expire=new Date(Date.now()+PIECES_JOURS*86400000).toISOString();
+  const expire=new Date(Date.now()+EMP_PIECES_JOURS*86400000).toISOString();
   const{data:saved,error}=await sb.from('dossiers_pieces_employe').insert({
-    employe_id:e.id,token,email:e.email,statut:'envoye',expire_le:expire,created_by:ME?ME.id:null
+    employe_id:e.id,token,email:e.email,statut:'envoye',expire_le:expire,created_by:currentUser?currentUser.id:null
   }).select().single();
-  if(error){toast('Impossible de créer le dossier : '+error.message,true);return;}
-  const{ok,data}=await callFn('envoyer-dossier-pieces-employe',{dossier_id:saved.id,relance:false,lien:piecesEmployeLien(token),expediteur:PROF?.name});
+  if(error){eqToast('Impossible de créer le dossier : '+error.message,true);return;}
+  const{ok,data}=await eqCallFn('envoyer-dossier-pieces-employe',{dossier_id:saved.id,relance:false,lien:piecesEmployeLien(token),expediteur:currentProfile?.name});
   empPiecesCache.unshift(saved);
   empRenderPiecesDossier();
-  if(ok)toast('Lien envoyé à '+e.email+' ✅');
-  else toast('Dossier créé, mais l\'e-mail n\'est pas parti — utilisez « Copier le lien ».'+(data&&data.error?' ('+data.error+')':''),true);
+  if(ok)eqToast('Lien envoyé à '+e.email+' ✅');
+  else eqToast('Dossier créé, mais l\'e-mail n\'est pas parti — utilisez « Copier le lien ».'+(data&&data.error?' ('+data.error+')':''),true);
 }
 async function empRelancerPieces(id){
   const d=empPiecesCache.find(x=>String(x.id)===String(id));
   if(!d)return;
   if(!confirm('Renvoyer le lien à '+d.email+' ?'))return;
-  const{ok,data}=await callFn('envoyer-dossier-pieces-employe',{dossier_id:d.id,relance:true,lien:piecesEmployeLien(d.token),expediteur:PROF?.name});
-  if(!ok){toast('La relance n\'est pas partie.'+(data&&data.error?' ('+data.error+')':''),true);return;}
+  const{ok,data}=await eqCallFn('envoyer-dossier-pieces-employe',{dossier_id:d.id,relance:true,lien:piecesEmployeLien(d.token),expediteur:currentProfile?.name});
+  if(!ok){eqToast('La relance n\'est pas partie.'+(data&&data.error?' ('+data.error+')':''),true);return;}
   d.relances=(d.relances||0)+1;
   empRenderPiecesDossier();
-  toast('Relance envoyée ✅');
+  eqToast('Relance envoyée ✅');
 }
 function empCopierLienPieces(id){
   const d=empPiecesCache.find(x=>String(x.id)===String(id));
   if(!d)return;
   const url=piecesEmployeLien(d.token);
   navigator.clipboard.writeText(url).then(
-    ()=>toast('Lien copié — à transmettre par SMS si besoin.'),
+    ()=>eqToast('Lien copié — à transmettre par SMS si besoin.'),
     ()=>prompt('Copiez ce lien :',url)
   );
 }
@@ -1379,5 +860,260 @@ function empPartagerLienPieces(id){
   if(!d)return;
   PartageLien.partager(piecesEmployeLien(d.token),{titre:'Pièces à fournir',
     texte:'Bonjour, voici le lien pour déposer vos pièces :'})
-    .then(r=>{if(r==='copie')toast('Partage indisponible — lien copié.');});
+    .then(r=>{if(r==='copie')eqToast('Partage indisponible — lien copié.');});
+}
+
+async function empAnnulerPieces(id){
+  const d=empPiecesCache.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  if(!confirm('Annuler ce dossier ?\n\nLe lien déjà envoyé cessera immédiatement de fonctionner. Les pièces déjà déposées sont conservées.'))return;
+  const{error}=await sb.from('dossiers_pieces_employe').update({statut:'annule'}).eq('id',id);
+  if(error){eqToast('Annulation impossible : '+error.message,true);return;}
+  d.statut='annule';
+  empRenderPiecesDossier();
+  eqToast('Dossier annulé — le lien ne fonctionne plus.');
+}
+
+/* ---------- DOCUMENTS SUR SUPPORT EXTERNE (registre papier/coffre-fort) ----------
+   Table documents_externes (voir sql/documents_externes.sql) : ne stocke
+   aucun fichier, juste la trace qu'une pièce existe et où elle est
+   physiquement conservée — utile pour les pièces qu'on ne numérise pas (ex.
+   extrait de casier judiciaire, à ne pas conserver après vérification). Le
+   délai de conservation est calculé côté base, selon la catégorie choisie.
+   Même module que côté enfant (js/enfants.js), adapté au style de cette page. */
+const DOC_EXT_SUPPORTS={papier:'Papier','coffre-fort':'Coffre-fort',classeur:'Classeur',autre:'Autre'};
+const DOC_EXT_CATEGORIES={identite:'Identité',sante:'Santé',comptable:'Comptable',rh:'RH',autre:'Autre'};
+
+let empDocExtCache=[];
+async function empLoadDocExt(employeId){
+  try{
+    const{data,error}=await sb.from('documents_externes')
+      .select('*')
+      .eq('entite_type','employe')
+      .eq('entite_id',employeId)
+      .order('created_at',{ascending:false});
+    if(error)throw error;
+    empDocExtCache=data||[];
+  }catch(err){
+    console.warn('empLoadDocExt',err);
+    empDocExtCache=[];
+  }
+  if(String(empFicheId)!==String(employeId))return;
+  empRenderDocExt();
+}
+function empRenderDocExt(){
+  const zone=document.getElementById('ficheDocExtZone');
+  if(!zone)return;
+  const ligne=d=>{
+    const detruit=d.detruit_le
+      ?'<span style="background:var(--violet-l);color:var(--violet);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">Détruit le '+new Date(d.detruit_le).toLocaleDateString('fr-FR')+'</span>'
+      :'<button type="button" class="btn btn-g btn-sm" onclick="empDocExtDetruire(\''+d.id+'\')" title="Marquer cette pièce comme détruite/restituée"><i class="ti ti-flame"></i> Marquer détruit</button>';
+    return '<div style="border-bottom:1px solid var(--line);padding:9px 2px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      +'<div>'
+      +'<span style="font-size:12.5px;font-weight:600;color:#2B2740">'+escHtml(d.libelle)+'</span> '
+      +'<span style="font-size:11px;color:var(--muted)">'+(DOC_EXT_SUPPORTS[d.support]||d.support)+' · '+(DOC_EXT_CATEGORIES[d.categorie]||d.categorie)+(d.lieu_conservation?' · '+escHtml(d.lieu_conservation):'')+'</span>'
+      +(d.date_destruction_prevue&&!d.detruit_le?'<div style="font-size:11px;color:var(--muted)">Conservation jusqu\'au '+new Date(d.date_destruction_prevue).toLocaleDateString('fr-FR')+'</div>':'')
+      +'</div>'
+      +'<span style="display:flex;align-items:center;gap:6px;flex-shrink:0">'+detruit
+      +'<button onclick="empDocExtDelete(\''+d.id+'\')" title="Supprimer cette entrée du registre" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:14px"><i class="ti ti-trash"></i></button>'
+      +'</span></div></div>';
+  };
+  zone.innerHTML=
+      (empDocExtCache.length
+        ? empDocExtCache.map(ligne).join('')
+        : '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Aucune pièce enregistrée sur support externe.</div>')
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">'
+      + '<input id="docExtLibelle" placeholder="Libellé (ex. extrait de casier judiciaire)" style="flex:2;min-width:180px;font-size:12px;padding:6px 8px">'
+      + '<select id="docExtSupport" style="flex:1;min-width:110px;font-size:12px;padding:6px 8px">'
+        + Object.keys(DOC_EXT_SUPPORTS).map(k=>'<option value="'+k+'">'+DOC_EXT_SUPPORTS[k]+'</option>').join('')
+      + '</select>'
+      + '<select id="docExtCategorie" style="flex:1;min-width:110px;font-size:12px;padding:6px 8px">'
+        + Object.keys(DOC_EXT_CATEGORIES).map(k=>'<option value="'+k+'">'+DOC_EXT_CATEGORIES[k]+'</option>').join('')
+      + '</select>'
+      + '<input id="docExtLieu" placeholder="Lieu de conservation (ex. classeur RH, tiroir 2)" style="flex:2;min-width:180px;font-size:12px;padding:6px 8px">'
+      + '<button type="button" class="btn btn-s btn-sm" onclick="empDocExtAdd()"><i class="ti ti-plus"></i> Ajouter</button>'
+    + '</div>';
+}
+async function empDocExtAdd(){
+  const eid=empFicheId;
+  const libelle=(document.getElementById('docExtLibelle').value||'').trim();
+  if(!libelle){document.getElementById('docExtLibelle').focus();return;}
+  const row={
+    entite_type:'employe',
+    entite_id:eid,
+    libelle,
+    support:document.getElementById('docExtSupport').value||'papier',
+    categorie:document.getElementById('docExtCategorie').value||'autre',
+    lieu_conservation:(document.getElementById('docExtLieu').value||'').trim()||null,
+    created_by:currentUser?currentUser.id:null
+  };
+  const{data,error}=await sb.from('documents_externes').insert(row).select().single();
+  if(error){eqToast('Erreur lors de l\'ajout : '+error.message,true);return;}
+  empDocExtCache.unshift(data);
+  empRenderDocExt();
+  eqToast('Pièce ajoutée au registre.');
+}
+async function empDocExtDetruire(id){
+  if(!confirm('Marquer cette pièce comme détruite / restituée aujourd\'hui ?'))return;
+  const row={detruit_le:todayISO(),detruit_par:currentUser?currentUser.id:null};
+  const{error}=await sb.from('documents_externes').update(row).eq('id',id);
+  if(error){eqToast('Erreur : '+error.message,true);return;}
+  const d=empDocExtCache.find(x=>String(x.id)===String(id));
+  if(d)Object.assign(d,row);
+  empRenderDocExt();
+  eqToast('Pièce marquée détruite.');
+}
+async function empDocExtDelete(id){
+  if(!confirm('Supprimer cette entrée du registre ? (la pièce physique elle-même n\'est pas concernée, seule la trace ici disparaît)'))return;
+  const{error}=await sb.from('documents_externes').delete().eq('id',id);
+  if(error){eqToast('Erreur : '+error.message,true);return;}
+  empDocExtCache=empDocExtCache.filter(x=>String(x.id)!==String(id));
+  empRenderDocExt();
+  eqToast('Entrée supprimée.');
+}
+
+boot();
+
+/* ---------- VISITES MÉDICALES OBLIGATOIRES (médecine du travail — Odalia) ----------
+   Table employes_visites_medicales (sql/employes_visites_medicales.sql), calcul
+   d'échéance dans js/visites-medicales.js. On ne garde que la date, l'avis et
+   la prochaine échéance, jamais d'information médicale. */
+let VISITES_PAR_EMP={},VISITES_CHARGEES=false;   // employe_id -> visites (pour les badges de la liste)
+let vmCache=[],vmEditId='';
+
+async function vmChargerListe(){
+  VISITES_PAR_EMP={};VISITES_CHARGEES=false;
+  if(!cacheEmployes.length)return;
+  const{data,error}=await sb.from('employes_visites_medicales').select('*').in('employe_id',cacheEmployes.map(x=>x.id));
+  if(error){console.warn('vmChargerListe',error);return;}   // table pas encore créée : pas de badge
+  VISITES_CHARGEES=true;
+  (data||[]).forEach(v=>{(VISITES_PAR_EMP[v.employe_id]=VISITES_PAR_EMP[v.employe_id]||[]).push(v);});
+  renderEmployes();
+}
+const VM_COULEURS={retard:['var(--red)','#FDECEC'],bientot:['var(--orange)','var(--orange-l)'],rdv:['var(--violet)','var(--violet-l)'],ok:['var(--green)','var(--green-bg,#E6F4EA)'],inconnu:['var(--muted)','#F1F0F5']};
+function vmBadgeListe(e){
+  if(estArchive(e)||estSorti(e)||!VISITES_CHARGEES)return'';
+  const s=vismedEtat(e,VISITES_PAR_EMP[e.id]||[]);
+  if(s.niveau==='ok'||s.niveau==='inconnu')return'';
+  const c=VM_COULEURS[s.niveau];
+  return'<span class="badge off" style="background:'+c[1]+';color:'+c[0]+'" title="'+escHtml(s.label)+'"><i class="ti ti-stethoscope"></i> Visite médicale'+(s.niveau==='retard'?' en retard':(s.niveau==='rdv'?' : RDV':' à planifier'))+'</span>';
+}
+
+async function vmCharger(employeId){
+  vmEditId='';
+  const{data,error}=await sb.from('employes_visites_medicales').select('*').eq('employe_id',employeId)
+    .order('date_visite',{ascending:false,nullsFirst:true});
+  vmCache=error?[]:(data||[]);
+  if(error)console.warn('vmCharger',error);
+  if(String(empFicheId)!==String(employeId)){return;}
+  vmRendre(error);
+}
+function vmRendre(erreurTable){
+  const zone=document.getElementById('ficheVisitesZone');
+  if(!zone)return;
+  const e=cacheEmployes.find(x=>String(x.id)===String(empFicheId));
+  const s=vismedEtat(e,vmCache);
+  const c=VM_COULEURS[s.niveau];
+  const bandeau='<div style="background:'+c[1]+';border-left:4px solid '+c[0]+';border-radius:0 10px 10px 0;padding:9px 13px;font-size:12.5px;color:'+c[0]+';font-weight:600;margin-bottom:8px"><i class="ti ti-stethoscope"></i> '+escHtml(s.label)+'</div>';
+  const ligne=v=>{
+    const fait=!!v.date_visite;
+    return'<div style="border-bottom:1px solid var(--line);padding:8px 2px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">'
+      +'<div style="font-size:12.5px"><strong>'+escHtml(VISMED_TYPES[v.type]||v.type)+'</strong> · '+escHtml(v.organisme||VISMED_ORGANISME)
+      +'<div style="font-size:11.5px;color:var(--muted)">'
+      +(fait?'Effectuée le '+vismedDateFr(v.date_visite):'RDV le '+vismedDateFr(v.rdv_le)+(v.rdv_heure?' à '+String(v.rdv_heure).slice(0,5).replace(':','h'):''))
+      +(v.avis?' · '+escHtml(VISMED_AVIS[v.avis]):'')
+      +(fait&&v.prochaine_le?' · prochaine avant le '+vismedDateFr(v.prochaine_le):'')
+      +(v.observations?' · '+escHtml(v.observations):'')+'</div></div>'
+      +'<span style="display:flex;gap:6px">'
+      +(v.piece_path?'<button type="button" class="btn btn-g btn-sm" onclick="vmOuvrirPiece(\''+v.id+'\')" title="'+escHtml(v.piece_nom||'Compte rendu')+'"><i class="ti ti-file-text"></i> Compte rendu</button>':'')
+      +'<button type="button" class="btn btn-g btn-sm" onclick="vmModifier(\''+v.id+'\')">'+(fait?'<i class="ti ti-edit"></i>':'<i class="ti ti-check"></i> Renseigner la visite')+'</button>'
+      +'<button type="button" onclick="vmSupprimer(\''+v.id+'\')" title="Supprimer" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:14px"><i class="ti ti-trash"></i></button>'
+      +'</span></div>';
+  };
+  const st='font-size:12px;padding:6px 8px';
+  const edit=vmCache.find(v=>v.id===vmEditId)||{};
+  zone.innerHTML=(erreurTable?'<div style="color:var(--red);font-size:12px">Table non disponible : appliquer sql/employes_visites_medicales.sql sur Supabase.</div>':bandeau)
+    +(vmCache.length?vmCache.map(ligne).join(''):'<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Aucune visite enregistrée.</div>')
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:flex-end">'
+    +'<label style="flex:2;min-width:160px;font-size:11px;color:var(--muted)">Type<select id="vmType" style="width:100%;'+st+'">'+Object.keys(VISMED_TYPES).map(k=>'<option value="'+k+'"'+((edit.type||(vmCache.some(v=>v.date_visite)?'periodique':'embauche'))===k?' selected':'')+'>'+escHtml(VISMED_TYPES[k])+'</option>').join('')+'</select></label>'
+    +'<label style="flex:1;min-width:120px;font-size:11px;color:var(--muted)">Date de la visite<input id="vmDate" type="date" min="2000-01-01" max="2100-12-31" value="'+escHtml(edit.date_visite||'')+'" onchange="vmProposerProchaine()" style="width:100%;'+st+'"></label>'
+    +'<label style="flex:1;min-width:120px;font-size:11px;color:var(--muted)">RDV prévu le<input id="vmRdv" type="date" value="'+escHtml(edit.rdv_le||'')+'" style="width:100%;'+st+'"></label>'
+    +'<label style="flex:0 0 100px;font-size:11px;color:var(--muted)">Heure du RDV<input id="vmHeure" type="time" value="'+escHtml(edit.rdv_heure?String(edit.rdv_heure).slice(0,5):'')+'" style="width:100%;'+st+'"></label>'
+    +'<label style="flex:1;min-width:120px;font-size:11px;color:var(--muted)">Prochaine avant le<input id="vmProchaine" type="date" min="2000-01-01" max="2100-12-31" oninput="this.dataset.auto=\'\'" value="'+escHtml(edit.prochaine_le||'')+'" style="width:100%;'+st+'"></label>'
+    +'<label style="flex:1;min-width:140px;font-size:11px;color:var(--muted)">Avis<select id="vmAvis" style="width:100%;'+st+'"><option value="">—</option>'+Object.keys(VISMED_AVIS).map(k=>'<option value="'+k+'"'+(edit.avis===k?' selected':'')+'>'+escHtml(VISMED_AVIS[k])+'</option>').join('')+'</select></label>'
+    +'<input id="vmObs" placeholder="Observation (facultatif, sans donnée médicale)" value="'+escHtml(edit.observations||'')+'" style="flex:3;min-width:180px;'+st+'">'
+    +'<label style="flex:3;min-width:200px;font-size:11px;color:var(--muted)">Compte rendu d\'Odalia (PDF ou photo)'+(edit.piece_path?' — déjà joint : '+escHtml(edit.piece_nom||'fichier')+', un nouveau fichier le remplace':'')+'<input id="vmFichier" type="file" accept=".pdf,image/*" style="width:100%;'+st+'"></label>'
+    +'<div id="vmErr" style="flex-basis:100%;color:var(--red);font-size:12px;font-weight:600"></div>'
+    +'<button type="button" class="btn btn-s btn-sm" onclick="vmEnregistrer()"><i class="ti ti-'+(vmEditId?'device-floppy':'plus')+'"></i> '+(vmEditId?'Enregistrer':'Ajouter')+'</button>'
+    +(vmEditId?'<button type="button" class="btn btn-g btn-sm" onclick="vmEditId=\'\';vmRendre()">Annuler</button>':'')
+    +'</div>';
+}
+function vmAnneeOk(iso){const a=parseInt(String(iso||'').slice(0,4),10);return a>=2000&&a<=2100;}
+/* La date de prochaine visite est proposée (+5 ans) tant que la personne ne l'a pas
+   saisie elle-même ; ignorée tant que l'année tapée au clavier n'est pas plausible
+   (sinon « 0002 » donnait « 0007 » et la valeur restait ensuite figée). */
+function vmProposerProchaine(){
+  const d=eqVal('vmDate'),p=document.getElementById('vmProchaine');
+  if(!d||!p||!vmAnneeOk(d))return;
+  if(!p.value||p.dataset.auto==='1'){p.value=vismedAjout(d,VISMED_PERIODE_ANS);p.dataset.auto='1';}
+}
+function vmModifier(id){vmEditId=id;vmRendre();const el=document.getElementById('vmDate');if(el)el.focus();}
+function vmErreur(m){
+  const el=document.getElementById('vmErr');if(el)el.textContent=m||'';
+  if(m)eqToast(m,true);
+}
+/* Renvoie true si la visite est enregistrée (appelée aussi par saveFiche). */
+async function vmEnregistrer(){
+  vmErreur('');
+  const eid=empFicheId;
+  const date=eqVal('vmDate')||null,rdv=eqVal('vmRdv')||null;
+  if(!date&&!rdv){vmErreur('Renseignez la date de la visite ou la date du RDV.');return false;}
+  const proch=eqVal('vmProchaine')||null;
+  if([date,rdv,proch].some(x=>x&&!vmAnneeOk(x))){vmErreur('Une date a une année incorrecte (vérifiez les 4 chiffres de l\'année).');return false;}
+  const row={
+    employe_id:eid,type:eqVal('vmType')||'periodique',organisme:VISMED_ORGANISME,
+    date_visite:date,rdv_le:date?null:rdv,rdv_heure:date?null:(rdv&&eqVal('vmHeure')||null),
+    prochaine_le:date?(proch||vismedAjout(date,VISMED_PERIODE_ANS)):null,
+    avis:date?(eqVal('vmAvis')||null):null,observations:eqVal('vmObs')||null
+  };
+  const fichier=(document.getElementById('vmFichier')||{}).files&&document.getElementById('vmFichier').files[0];
+  const ancien=vmEditId?vmCache.find(v=>v.id===vmEditId):null;
+  let nouveauChemin=null;
+  if(fichier){
+    const ext=(fichier.name.split('.').pop()||'bin').toLowerCase();
+    nouveauChemin=eid+'/visites-medicales/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+    const{error:upErr}=await sb.storage.from(EMP_DOCS_BUCKET).upload(nouveauChemin,fichier);
+    if(upErr){vmErreur('Envoi du fichier impossible : '+upErr.message);return false;}
+    row.piece_bucket=EMP_DOCS_BUCKET;row.piece_path=nouveauChemin;row.piece_nom=fichier.name;
+  }
+  const{error}=vmEditId
+    ?await sb.from('employes_visites_medicales').update(row).eq('id',vmEditId)
+    :await sb.from('employes_visites_medicales').insert(row);
+  if(error){
+    if(nouveauChemin)sb.storage.from(EMP_DOCS_BUCKET).remove([nouveauChemin]);
+    vmErreur('Enregistrement impossible : '+error.message);return false;
+  }
+  if(nouveauChemin&&ancien&&ancien.piece_path)sb.storage.from(ancien.piece_bucket||EMP_DOCS_BUCKET).remove([ancien.piece_path]);
+  eqToast('Visite médicale enregistrée.');
+  await vmCharger(eid);
+  VISITES_PAR_EMP[eid]=vmCache;renderEmployes();
+  return true;
+}
+async function vmSupprimer(id){
+  if(!confirm('Supprimer cette visite du suivi (et son compte rendu joint) ?'))return;
+  const v=vmCache.find(x=>x.id===id);
+  const{error}=await sb.from('employes_visites_medicales').delete().eq('id',id);
+  if(error){eqToast('Suppression impossible : '+error.message,true);return;}
+  if(v&&v.piece_path)sb.storage.from(v.piece_bucket||EMP_DOCS_BUCKET).remove([v.piece_path]);
+  await vmCharger(empFicheId);
+  VISITES_PAR_EMP[empFicheId]=vmCache;renderEmployes();
+}
+async function vmOuvrirPiece(id){
+  const v=vmCache.find(x=>x.id===id);
+  if(!v||!v.piece_path){eqToast('Fichier introuvable.',true);return;}
+  if(typeof kkJournaliserAcces==='function')kkJournaliserAcces(v.piece_bucket||EMP_DOCS_BUCKET,v.piece_path,{entite_type:'employe',entite_id:v.employe_id,libelle:v.piece_nom||'Compte rendu de visite médicale'});
+  const{data,error}=await sb.storage.from(v.piece_bucket||EMP_DOCS_BUCKET).createSignedUrl(v.piece_path,EMP_DOCS_TTL);
+  if(error||!data){eqToast('Ouverture impossible : '+((error&&error.message)||'erreur inconnue'),true);return;}
+  window.open(data.signedUrl,'_blank','noopener');
 }

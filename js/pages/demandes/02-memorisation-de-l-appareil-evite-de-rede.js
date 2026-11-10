@@ -348,6 +348,7 @@ function empMaybeOpenFromUrl(){
   try{
     const q=new URLSearchParams(location.search);
     const empId=q.get('employe');
+    if(q.get('section')==='employes'&&!empId){history.replaceState(null,'',location.pathname);showMain('employes');return;}
     if(!empId)return;
     history.replaceState(null,'',location.pathname);
     showMain('employes');
@@ -564,7 +565,7 @@ function showMain(tab){
   if(tab==='planning')renderPlanning();
   if(tab==='demands'){renderCrecheTabs();setTimeout(markConsignesRead,600);notifBellMarquerSectionLue('demands');}
   if(tab==='referents')renderReferents();
-  if(tab==='employes'){renderEmployes();empChargerHeuresSemaine();}
+  if(tab==='employes'){renderEmployes();empChargerHeuresSemaine();eqInitOnglet();}
   if(tab==='incidents')renderIncidents();
   if(tab==='mcm')mcmInit();
   if(tab==='presence'){initPresenceDate();presMajBarre();renderPresence();}

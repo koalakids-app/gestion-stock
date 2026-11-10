@@ -1,6 +1,6 @@
 /* Planning du parcours quiz : 16 quiz « profil » (8 sur le projet pédagogique, thèmes 1 à 8,
    8 sur les protocoles, thèmes 9 à 16), deux par semaine à partir du 26 octobre 2026, puis une
-   semaine de rattrapage. Partagé par collaborateur.html (Mon espace) et employes.html (fiche,
+   semaine de rattrapage. Partagé par collaborateur.html (Mon espace) et demandes.html (fiche,
    lecture seule pour la direction).
    Les quiz vivent dans le projet Supabase « quiz » (sbQuiz, défini par chaque page) : on les
    retrouve par leur titre « Thème N — … ». Un quiz non publié s'affiche « Bientôt disponible ».

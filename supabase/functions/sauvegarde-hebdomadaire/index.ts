@@ -48,7 +48,7 @@ import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 //     suivi_consultations, demandes_traitees, depots_externes) : rien à restaurer.
 //   - "sante" : bucket de Storage (fichiers des PAI), pas une table.
 //   - "assets" : c'est un bucket de Storage (fichiers), pas une table.
-//   - "module" / "quiz" (employes.html, collaborateur.html) : vivent dans
+//   - "module" / "quiz" (Demandes › Collaborateurs, collaborateur.html) : vivent dans
 //     un second projet Supabase séparé (QUIZ_SUPABASE_URL), pas celui-ci —
 //     à sauvegarder par une fonction dédiée si besoin un jour.
 //

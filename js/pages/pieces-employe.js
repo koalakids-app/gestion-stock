@@ -10,7 +10,7 @@
    Même principe que pieces.html côté famille (jeton, lien à durée limitée),
    pipeline entièrement distincte.
 
-   La liste des pièces (PIECES) est RECOPIÉE de employes.html (constante
+   La liste des pièces (PIECES) est RECOPIÉE de js/pages/demandes/23-collaborateurs-equipe.js (constante
    PIECES_EMBAUCHE) : si vous la modifiez là-bas, reportez-la ici — les deux
    versions ne se synchronisent pas (même choix assumé que pour pieces.html /
    demandes.html).
