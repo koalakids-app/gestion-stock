@@ -323,6 +323,10 @@ TPL.protocole_urgence={
     <div class="f"><label>Lieu</label>${inHtml('pu_b_lieu',v.pu_b_lieu)}</div>
   </div>
   <div id="pu-an-b">${puAnnexeHtml('b')}</div>
+  <div class="txtbox" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <a class="btn btn-s" href="documents-pack/malle-confinement-liste-achats.xlsx" download><i class="ti ti-file-spreadsheet"></i> Liste d’achats de la malle (Excel)</a>
+    <span class="hint" style="font-size:13px;font-style:normal;flex:1;min-width:220px">Document Excel joint à l’annexe 2 : quantités calculées pour 24 h d’autonomie à partir de la capacité d’accueil (onglet Paramètres à adapter), prix, DLC / DLU et suivi des achats.</span>
+  </div>
 
   <h3>Localisation et contrôle des sacs</h3>
   <div class="ftw"><table class="ft">
