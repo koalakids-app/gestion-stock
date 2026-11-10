@@ -103,14 +103,47 @@ async function enfEspaceRevoquer(id){
   };
 })();
 
-/* Provisoire : ouvre la messagerie de l'utilisateur (mailto) avec les parents en copie cachée. */
+/* Provisoire : le mail part de la messagerie de l'utilisateur, qui choisit laquelle ouvrir
+   (application par défaut de l'appareil, Gmail, Outlook, Yahoo ou simple copie des adresses).
+   Les parents sont en copie cachée. Rien n'est envoyé ni enregistré par l'application. */
+let enfMailAdresses=[], enfMailSujet='';
 function enfMailParents(){
   const mails=[...new Set(enfParentsCache.map(p=>(p.email||'').trim()).filter(Boolean))];
   if(!mails.length) return showBanner('Aucun parent de cette fiche n\'a d\'adresse e-mail.','error');
   const e=cacheEnfants.find(x=>String(x.id)===String(enfFicheId));
-  const sujet='Koala Kids'+(e&&e.prenom?' — '+e.prenom:'');
-  location.href='mailto:?bcc='+encodeURIComponent(mails.join(','))+'&subject='+encodeURIComponent(sujet);
+  enfMailAdresses=mails;
+  enfMailSujet='Koala Kids'+(e&&e.prenom?' — '+e.prenom:'');
+  let w=document.getElementById('modal-mail-parents-wrap');
+  if(!w){ w=document.createElement('div'); w.className='overlay'; w.id='modal-mail-parents-wrap'; w.style.zIndex='1300';
+    w.onclick=function(ev){ if(ev.target===w) w.classList.remove('open'); }; document.body.appendChild(w); }
+  const b=(id,icone,lib)=>'<button class="btn-sm" style="display:block;width:100%;text-align:left;margin-bottom:8px;padding:10px 12px;font-size:13px" onclick="enfMailOuvrir(\''+id+'\')"><i class="ti '+icone+'"></i> '+lib+'</button>';
+  w.innerHTML='<div class="modal"><h3>Envoyer un mail aux parents</h3>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.6">Avec quelle messagerie voulez-vous écrire ? '+mails.length+' adresse'+(mails.length>1?'s':'')+' (en copie cachée) : '+escHtml(mails.join(', '))+'.</div>'
+    +b('defaut','ti-device-desktop','Application de messagerie de cet appareil')
+    +b('gmail','ti-brand-google','Gmail (dans le navigateur)')
+    +b('outlook','ti-brand-windows','Outlook / Hotmail (dans le navigateur)')
+    +b('yahoo','ti-brand-yahoo','Yahoo Mail (dans le navigateur)')
+    +b('copier','ti-copy','Copier les adresses')
+    +'<div class="mactions"><button class="btn-cancel" onclick="document.getElementById(\'modal-mail-parents-wrap\').classList.remove(\'open\')">Annuler</button></div></div>';
+  w.classList.add('open');
 }
+function enfMailOuvrir(app){
+  const bcc=enfMailAdresses.join(','), su=enfMailSujet, enc=encodeURIComponent;
+  const ferme=()=>document.getElementById('modal-mail-parents-wrap').classList.remove('open');
+  if(app==='copier'){
+    navigator.clipboard.writeText(bcc).then(()=>{showBanner('Adresses copiées — à coller dans « Cci » de votre messagerie.');ferme();},()=>prompt('Copiez ces adresses :',bcc));
+    return;
+  }
+  const url={
+    defaut:'mailto:?bcc='+enc(bcc)+'&subject='+enc(su),
+    gmail:'https://mail.google.com/mail/?view=cm&fs=1&bcc='+enc(bcc)+'&su='+enc(su),
+    outlook:'https://outlook.live.com/mail/0/deeplink/compose?bcc='+enc(bcc)+'&subject='+enc(su),
+    yahoo:'https://compose.mail.yahoo.com/?bcc='+enc(bcc)+'&subject='+enc(su)
+  }[app];
+  if(app==='defaut') location.href=url; else window.open(url,'_blank','noopener');
+  ferme();
+}
+window.enfMailOuvrir=enfMailOuvrir;
 window.enfMailParents=enfMailParents;
 window.enfEspaceCreer=enfEspaceCreer;
 window.enfEspaceCopier=enfEspaceCopier;
