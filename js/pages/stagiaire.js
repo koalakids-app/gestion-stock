@@ -522,7 +522,7 @@ function htmlPiece(p,i){
     +(fs.length?'<div class="files">'+fs.map(f=>htmlFichier(f)).join('')+'</div>':'')
     +'<div style="margin-top:10px">'
     +'<button class="btn btn-g btn-s" onclick="choisir('+i+')">'
-    +'<i class="ti ti-camera"></i> '+(fs.length?'Ajouter une autre page':'Envoyer')+'</button>'
+    +'<i class="ti ti-paperclip"></i> '+(fs.length?'Ajouter une autre page':'Envoyer')+'</button>'
     +'<span id="st_'+i+'" style="margin-left:10px;font-size:12.5px;color:var(--muted)"></span>'
     +'</div>'
     +'<input type="file" id="inp_'+i+'" accept="image/*,application/pdf" '
