@@ -525,7 +525,7 @@ function htmlPiece(p,i){
     +'<i class="ti ti-camera"></i> '+(fs.length?'Ajouter une autre page':'Envoyer')+'</button>'
     +'<span id="st_'+i+'" style="margin-left:10px;font-size:12.5px;color:var(--muted)"></span>'
     +'</div>'
-    +'<input type="file" id="inp_'+i+'" accept="image/*,application/pdf" capture="environment" '
+    +'<input type="file" id="inp_'+i+'" accept="image/*,application/pdf" '
     +'style="display:none" onchange="envoyer(event,'+i+')">'
     +'</div>';
 }
