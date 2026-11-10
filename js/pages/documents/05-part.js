@@ -695,7 +695,7 @@ async function openReps(id){
         :(d.template_key==='livret_stagiaire'&&r.donnees&&r.donnees.sal_nom)?(r.donnees.sal_nom+(r.donnees.lv_creche?' — '+r.donnees.lv_creche:'')):null;
       let crNom=r.creche_id?(CRECHES.find(c=>String(c.id)===String(r.creche_id))||{}).name:null;
       /* Réponse enregistrée sans crèche rattachée (ancien enregistrement) : on reprend le nom saisi dans la fiche. */
-      if(!crNom&&r.donnees){const n=r.donnees.creche||r.donnees.site_nom||r.donnees.ctrl_creche;if(n)crNom=String(n);}
+      if(!crNom&&r.donnees){const n=r.donnees.creche||r.donnees.site_nom||r.donnees.ctrl_creche||r.donnees.c17_creche;if(n)crNom=String(n);}
       return `<div class="rep">
       <b>${esc(salarieNom||r.rempli_par_nom||'—')}</b>
       ${crNom?`<span class="tag"><i class="ti ti-building"></i> ${esc(crNom)}</span>`:''}

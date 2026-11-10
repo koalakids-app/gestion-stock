@@ -899,7 +899,7 @@ function docEstEtablissement(){
    Sans cette resolution, la reponse part avec la creche du PROFIL — donc null
    pour un compte direction, et la fiche devient invisible aux referentes. */
 function crecheIdDuFormulaire(){
-  const ids=['ff_ctrl_creche','ff_site_nom','ff_creche'];
+  const ids=['ff_ctrl_creche','ff_site_nom','ff_creche','ff_c17_creche'];
   for(let i=0;i<ids.length;i++){
     const el=document.getElementById(ids[i]);
     const nom=el&&el.value?String(el.value).trim():'';
