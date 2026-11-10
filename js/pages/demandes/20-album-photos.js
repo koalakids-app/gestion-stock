@@ -6,7 +6,7 @@
    Tables et bucket : sql/album_photos.sql (à appliquer à la main).
    Droits : direction = toutes les crèches ; référent·e = sa crèche. */
 var ALB = { creche: '', photos: [], liens: [], urls: {}, vue: 'enfants', enfant: null,
-            sel: {}, recents: [], filtre: '', occupe: false, charge: false, lb: null, zipPret: false, remis: false };
+            sel: {}, cibles: {}, recents: [], filtre: '', occupe: false, charge: false, lb: null, zipPret: false, remis: false };
 var ALB_BUCKET = 'album';
 var ALB_MAX = 1600, ALB_MINI = 360;
 
@@ -48,13 +48,13 @@ async function albInit() {
     ALB.creche = (currentProfile && currentProfile.creche_id) || '';
     if (sel) sel.style.display = 'none';
   }
-  ALB.vue = 'enfants'; ALB.enfant = null; ALB.sel = {}; ALB.filtre = '';
+  ALB.vue = 'enfants'; ALB.enfant = null; ALB.sel = {}; ALB.cibles = {}; ALB.filtre = '';
   await albCharger();
 }
 function albChangerCreche() {
   var sel = albById('alb-creche');
   ALB.creche = sel ? sel.value : ALB.creche;
-  ALB.vue = 'enfants'; ALB.enfant = null; ALB.sel = {};
+  ALB.vue = 'enfants'; ALB.enfant = null; ALB.sel = {}; ALB.cibles = {};
   albCharger();
 }
 
@@ -133,7 +133,7 @@ function albRender() {
   else if (ALB.vue === 'enfant') albRenderEnfant(z);
   else albRenderEnfants(z);
 }
-function albVue(v) { ALB.vue = v; ALB.enfant = null; ALB.sel = {}; ALB.filtre = ''; albRender(); }
+function albVue(v) { ALB.vue = v; ALB.enfant = null; ALB.sel = {}; ALB.cibles = {}; ALB.filtre = ''; albRender(); }
 
 async function albRenderEnfants(z) {
   var enfants = albEnfants();
@@ -160,6 +160,7 @@ async function albRenderAClasser(z) {
   if (!liste.length) { z.innerHTML = '<div class="alb-vide-msg"><i class="ti ti-circle-check"></i><p>Toutes les photos sont classées.</p></div>'; return; }
   await albUrls(liste.map(function (p) { return p.chemin_mini; }));
   var nbSel = liste.filter(function (p) { return ALB.sel[p.id]; }).length;
+  var nbCib = Object.keys(ALB.cibles).length;
   var f = (ALB.filtre || '').toLowerCase();
   var enfants = albEnfants();
   enfants.sort(function (a, b) {
@@ -168,7 +169,7 @@ async function albRenderAClasser(z) {
     if (ra < 0) return 1; if (rb < 0) return -1; return ra - rb;
   });
   if (f) enfants = enfants.filter(function (e) { return albNom(e).toLowerCase().indexOf(f) >= 0; });
-  var h = '<div class="alb-aide"><i class="ti ti-hand-click"></i> Touchez les photos à classer (une ou plusieurs), puis touchez le ou les enfants. Les derniers enfants choisis passent en tête.</div>' +
+  var h = '<div class="alb-aide"><i class="ti ti-hand-click"></i> Touchez les photos à classer, puis touchez <b>tous les enfants</b> qui y figurent (une photo de groupe peut aller dans plusieurs albums) et validez avec « Classer ». Les derniers enfants choisis passent en tête.</div>' +
     '<div class="alb-barre"><button class="btn-sm" onclick="albToutSel(' + (nbSel === liste.length ? 'false' : 'true') + ')">' + (nbSel === liste.length ? 'Tout désélectionner' : 'Tout sélectionner') + '</button>' +
     '<span class="alb-ct">' + nbSel + ' sélectionnée' + (nbSel > 1 ? 's' : '') + ' sur ' + liste.length + '</span>' +
     '<button class="btn-sm" style="margin-left:auto;color:var(--red);border-color:var(--red)" ' + (nbSel ? '' : 'disabled') + ' onclick="albSupprimerSel()"><i class="ti ti-trash"></i> Supprimer</button></div>' +
@@ -180,9 +181,11 @@ async function albRenderAClasser(z) {
         (typeof albvBadge === 'function' ? albvBadge(p) : '') + '<span class="alb-tag">' + albDateFr(p.prise_le) + '</span></div>';
     }).join('') + '</div>' +
     '<div class="alb-chips-wrap"><div class="alb-chips-top"><b>' + (nbSel ? 'Classer les ' + nbSel + ' photo' + (nbSel > 1 ? 's' : '') + ' dans :' : 'Sélectionnez des photos') + '</b>' +
+    '<button class="btn-sm" style="background:var(--koala);color:#fff;border-color:var(--koala)" ' + (nbSel && nbCib ? '' : 'disabled') + ' onclick="albClasserSel()"><i class="ti ti-check"></i> Classer' + (nbCib ? ' dans ' + nbCib + ' album' + (nbCib > 1 ? 's' : '') : '') + '</button>' +
     '<input class="finput" id="alb-filtre" placeholder="Chercher un enfant…" value="' + albEsc(ALB.filtre) + '" oninput="albFiltrer(this.value)" style="width:170px;font-size:12px;padding:4px 8px"></div>' +
     '<div class="alb-chips">' + (enfants.map(function (e) {
-      return '<button class="alb-chip" ' + (nbSel ? '' : 'disabled') + ' onclick="albClasserSel(\'' + e.id + '\')">' + albEsc(albNom(e)) + '</button>';
+      var on = ALB.cibles[e.id];
+      return '<button class="alb-chip' + (on ? ' on' : '') + '" aria-pressed="' + (!!on) + '" ' + (nbSel ? '' : 'disabled') + ' onclick="albBasculerCible(\'' + e.id + '\')">' + (on ? '✓ ' : '') + albEsc(albNom(e)) + '</button>';
     }).join('') || '<span class="alb-ct">Aucun enfant trouvé.</span>') + '</div></div>';
   z.innerHTML = h;
   if (f) { var inp = albById('alb-filtre'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } }
@@ -191,23 +194,31 @@ function albFiltrer(v) { ALB.filtre = v; albRender(); }
 function albBasculer(id) { if (ALB.sel[id]) delete ALB.sel[id]; else ALB.sel[id] = 1; albRender(); }
 function albToutSel(oui) { ALB.sel = {}; if (oui) albAClasser().forEach(function (p) { ALB.sel[p.id] = 1; }); albRender(); }
 
-async function albClasserSel(enfantId) {
-  var ids = Object.keys(ALB.sel);
-  if (!ids.length || ALB.occupe) return;
+function albBasculerCible(id) { if (ALB.cibles[id]) delete ALB.cibles[id]; else ALB.cibles[id] = 1; albRender(); }
+
+/* Une photo peut aller dans plusieurs albums : un lien (photo, enfant) par enfant coché. */
+async function albClasserSel() {
+  var ids = Object.keys(ALB.sel), enfantIds = Object.keys(ALB.cibles);
+  if (!ids.length || !enfantIds.length || ALB.occupe) return;
   ALB.occupe = true;
-  var rows = ids.map(function (id) { return { photo_id: id, enfant_id: enfantId }; });
+  var rows = [];
+  enfantIds.forEach(function (eid) { ids.forEach(function (id) { rows.push({ photo_id: id, enfant_id: eid }); }); });
   var r = await sb.from('album_photos_enfants').upsert(rows, { onConflict: 'photo_id,enfant_id', ignoreDuplicates: true });
   ALB.occupe = false;
   if (r.error) { showBanner('Classement impossible : ' + r.error.message, 'error'); return; }
   rows.forEach(function (x) { ALB.liens.push(x); });
-  ALB.recents = [enfantId].concat(ALB.recents.filter(function (x) { return x !== enfantId; })).slice(0, 8);
-  var e = cacheEnfants.find(function (x) { return String(x.id) === String(enfantId); });
-  albJournal('classement', enfantId, e ? albNom(e) : null, ids.length);
-  ALB.sel = {};
+  var noms = [];
+  enfantIds.forEach(function (eid) {
+    ALB.recents = [eid].concat(ALB.recents.filter(function (x) { return x !== eid; })).slice(0, 8);
+    var e = cacheEnfants.find(function (x) { return String(x.id) === String(eid); });
+    if (e) noms.push(e.prenom || albNom(e));
+    albJournal('classement', eid, e ? albNom(e) : null, ids.length);
+  });
   var idsClasses = ids.slice();
-  showBanner(ids.length + ' photo' + (ids.length > 1 ? 's' : '') + ' classée' + (ids.length > 1 ? 's' : '') + (e ? ' dans l’album de ' + albEsc(e.prenom || albNom(e)) : '') + '.');
+  ALB.sel = {}; ALB.cibles = {};
+  showBanner(ids.length + ' photo' + (ids.length > 1 ? 's' : '') + ' classée' + (ids.length > 1 ? 's' : '') + ' dans ' + (enfantIds.length > 1 ? enfantIds.length + ' albums (' : 'l’album de ') + albEsc(noms.join(', ')) + (enfantIds.length > 1 ? ')' : '') + '.');
   albRender();
-  if (typeof albvProposerRef === 'function') albvProposerRef(enfantId, idsClasses);
+  if (enfantIds.length === 1 && typeof albvProposerRef === 'function') albvProposerRef(enfantIds[0], idsClasses);
 }
 
 async function albSupprimerSel() {
