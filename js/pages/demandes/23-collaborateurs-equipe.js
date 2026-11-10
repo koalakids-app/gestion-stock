@@ -973,7 +973,6 @@ async function empDocExtDelete(id){
   eqToast('Entrée supprimée.');
 }
 
-boot();
 
 /* ---------- VISITES MÉDICALES OBLIGATOIRES (médecine du travail — Odalia) ----------
    Table employes_visites_medicales (sql/employes_visites_medicales.sql), calcul
