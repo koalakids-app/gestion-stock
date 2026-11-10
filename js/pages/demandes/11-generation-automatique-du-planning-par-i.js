@@ -430,7 +430,7 @@ function peEstRemplacante(prenom,crecheId,semaine){
   if(!t)return false;
   const noms=_peRemplCache[crecheId+'_'+semaine];
   if(noms&&[...noms].some(n=>n===t||n.split(/\s+/)[0]===t))return true;
-  return (cacheEmployes||[]).some(e=>ipNormStr(e.prenom)===t
+  return (cacheEmployes||[]).some(e=>!e.archive_le&&ipNormStr(e.prenom)===t
     &&(!e.creche_id||e.creche_id===crecheId)
     &&ipNormStr((e.poste||'')+' '+(e.type_contrat||'')).includes('remplac'));
 }

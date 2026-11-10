@@ -273,7 +273,7 @@ async function devisARelancer(crecheId){
 function periodesEssaiARelancer(crecheId){
   const seuil=ipDateToLocalISO(new Date(Date.now()+15*86400000));
   return cacheEmployes
-    .filter(e=>e.date_debut&&!e.periode_essai_actee&&(!crecheId||String(e.creche_id)===String(crecheId)))
+    .filter(e=>!e.archive_le&&e.date_debut&&!e.periode_essai_actee&&(!crecheId||String(e.creche_id)===String(crecheId)))
     .map(e=>Object.assign({},e,{_essaiFin:empPeriodeEssaiFin(e.date_debut,e.periode_essai_renouvelee,e.creche_id,e.type_contrat,e.date_fin)}))
     .filter(e=>e._essaiFin&&e._essaiFin<=seuil)
     .sort((a,b)=>a._essaiFin.localeCompare(b._essaiFin));
@@ -358,7 +358,7 @@ async function brRender(){
   }).sort((a,b)=>(a.heure_debut||'').localeCompare(b.heure_debut||''));
   const md=t.slice(5);
   const bdays=cacheEnfants.filter(e=>e.dob&&e.dob.slice(5)===md&&aMoi(e.creche_id));
-  const bdaysEmp=(typeof cacheEmployes!=='undefined'?cacheEmployes:[]).filter(e=>e.date_naissance&&e.date_naissance.slice(5)===md&&aMoi(e.creche_id));
+  const bdaysEmp=(typeof cacheEmployes!=='undefined'?cacheEmployes:[]).filter(e=>!e.archive_le&&e.date_naissance&&e.date_naissance.slice(5)===md&&aMoi(e.creche_id));
 
   // ── Stagiaires : les liens de dépôt qu'il est temps d'envoyer ──────────
   //
