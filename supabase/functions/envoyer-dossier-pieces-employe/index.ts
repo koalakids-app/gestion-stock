@@ -6,11 +6,11 @@
 // famille (envoyer-dossier-pieces / pieces.html), en parallèle : pipeline
 // entièrement distincte pour ne pas toucher à celle qui tourne.
 //
-// Le lien complet est fourni par l'appelant (employes.html connaît sa propre
+// Le lien complet est fourni par l'appelant (Demandes › Collaborateurs connaît sa propre
 // origine — GitHub Pages, domaine perso...) : cette fonction n'a donc pas
 // besoin de connaître l'URL de l'app, aucun secret supplémentaire à poser.
 //
-// Appelée depuis employes.html (empConfirmerEnvoiPieces / empRelancerPieces
+// Appelée depuis Demandes › Collaborateurs (empConfirmerEnvoiPieces / empRelancerPieces
 // → callFn) avec l'anon key : le filtrage par droits est déjà fait côté
 // client (module visible aux comptes direction/référente seulement), et
 // cette fonction ne lit que le dossier demandé, via son id.

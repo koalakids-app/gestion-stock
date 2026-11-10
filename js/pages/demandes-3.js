@@ -607,7 +607,7 @@ async function brRender(){
     visitesMed.slice(0,8).map(({e,s})=>
       brLigneClic('🩺 '+escHtml(((e.prenom||'')+' '+(e.nom||'')).trim())+brSuffixeCreche(e.creche_id),
         s.j<0?'en retard de '+(-s.j)+' j':'avant le '+vismedDateFr(s.echeance)+' ('+s.j+' j)',
-        'window.location.href=\'employes.html\'',s.j<0)
+        'showMain(\'employes\')',s.j<0)
     ).join('')+(visitesMed.length>8?'<div class="br-plus">+ '+(visitesMed.length-8)+' autres</div>':''),
     visitesMed.some(x=>x.s.j<0)?'accent':'');
 

@@ -246,12 +246,17 @@ function renderEmployes(){
   const list=isDirection
     ?(activeEmployeCrecheId==='all'?cacheEmployes:cacheEmployes.filter(e=>e.creche_id===activeEmployeCrecheId))
     :cacheEmployes.filter(e=>e.creche_id===currentProfile?.creche_id);
-  if(!list.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-id-badge-2"></i><p>Aucun(e) collaborateur/trice.</p></div>';return;}
-  grid.innerHTML=list.map(e=>{
+  /* Dossiers archivés (fin de contrat) : masqués par défaut, bouton « Voir les archives ». */
+  const nbArch=list.filter(estArchive).length;
+  const bArch=document.getElementById('emp-archives-count');
+  if(bArch){bArch.textContent=nbArch;bArch.style.display=nbArch?'':'none';}
+  const liste=list.filter(e=>estArchive(e)===EQ_VOIR_ARCHIVES);
+  if(!liste.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-id-badge-2"></i><p>'+(EQ_VOIR_ARCHIVES?'Aucune fiche archivée.':'Aucun(e) collaborateur/trice.')+'</p></div>';return;}
+  grid.innerHTML=liste.map(e=>{
     const creche=cacheCreches.find(c=>c.id===e.creche_id);
     const initials=((e.prenom||'')+' '+(e.nom||'')).trim().split(' ').filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?';
     const contratTxt=[e.type_contrat,e.temps_travail==='temps_partiel'?'Temps partiel':e.temps_travail==='temps_plein'?'Temps plein':''].filter(Boolean).join(' · ');
-    return '<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:var(--muted)">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+escHtml(e.poste||'Collaborateur/trice')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div>'+(e.user_id?'<div class="ref-detail" style="color:var(--green,#2E7D32)"><i class="ti ti-lock-open" style="font-size:11px"></i> Compte de connexion lié</div>':'')+(e.email?'<div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+escHtml(e.email)+'</div>':'')+(contratTxt?'<div class="ref-detail"><i class="ti ti-file-certificate" style="font-size:11px"></i> '+escHtml(contratTxt)+'</div>':'<div class="ref-detail" style="color:var(--red)"><i class="ti ti-alert-triangle" style="font-size:11px"></i> Contrat non renseigné</div>')+'<div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkPictosLigne(e.code_pictos)+'</div>'+empHeuresLigne(e)+heuresValideesLigne(e.id,'employe')+'</div></div><div class="ref-actions"><button class="ibtn" onclick="editEmploye(\''+e.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteEmploye(\''+e.id+'\')"><i class="ti ti-trash"></i></button></div>'+(e.creche_id?'<div style="margin:0 14px 12px;padding-top:10px;border-top:1px dashed var(--border)"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-bottom:6px"><i class="ti ti-device-tablet" style="font-size:12px"></i> Code image (tablette)</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+kkPictosActions(e.id,e.creche_id,e.code_pictos,'employe')+'</div></div>':'')+'</div>';
+    return '<div class="ref-card"><div class="ref-card-top"><div class="ref-avatar" style="background:var(--muted)">'+initials+'</div><div style="flex:1;min-width:0"><div class="ref-name">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</div><div class="ref-detail"><i class="ti ti-briefcase" style="font-size:11px"></i> '+escHtml(e.poste||'Collaborateur/trice')+'</div><div class="ref-detail"><i class="ti ti-building" style="font-size:11px"></i> '+(creche?.name||'—')+'</div>'+(e.user_id?'<div class="ref-detail" style="color:var(--green,#2E7D32)"><i class="ti ti-lock-open" style="font-size:11px"></i> Compte de connexion lié</div>':'')+(e.email?'<div class="ref-detail"><i class="ti ti-mail" style="font-size:11px"></i> '+escHtml(e.email)+'</div>':'')+(contratTxt?'<div class="ref-detail"><i class="ti ti-file-certificate" style="font-size:11px"></i> '+escHtml(contratTxt)+'</div>':'<div class="ref-detail" style="color:var(--red)"><i class="ti ti-alert-triangle" style="font-size:11px"></i> Contrat non renseigné</div>')+'<div class="ref-detail"><i class="ti ti-device-tablet" style="font-size:11px"></i> Pointage : '+kkPictosLigne(e.code_pictos)+'</div>'+empHeuresLigne(e)+heuresValideesLigne(e.id,'employe')+eqBadgesCarte(e)+'</div></div><div class="ref-actions"><button class="ibtn" onclick="editEmploye(\''+e.id+'\')"><i class="ti ti-edit"></i></button><button class="ibtn del" onclick="deleteEmploye(\''+e.id+'\')"><i class="ti ti-trash"></i></button></div>'+(e.creche_id?'<div style="margin:0 14px 12px;padding-top:10px;border-top:1px dashed var(--border)"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-bottom:6px"><i class="ti ti-device-tablet" style="font-size:12px"></i> Code image (tablette)</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+kkPictosActions(e.id,e.creche_id,e.code_pictos,'employe')+'</div></div>':'')+'</div>';
   }).join('');
 }
 
@@ -343,7 +348,7 @@ const EMP_TEXT_FIELDS=[
   ['emp-type-contrat','type_contrat'],['emp-qualification','qualification'],
   ['emp-date-debut','date_debut'],['emp-date-fin','date_fin'],
   ['emp-motif-cdd','motif_cdd'],['emp-periode-essai','periode_essai'],
-  ['emp-temps-travail','temps_travail'],
+  ['emp-temps-travail','temps_travail'],['emp-planning-nom','planning_nom'],
   ['emp-convention','convention_collective'],['emp-coefficient','coefficient'],
   ['emp-lieu-travail','lieu_travail']
 ];
@@ -446,7 +451,7 @@ function openEmployeModal(){
   // (le sélecteur du formulaire de contrat a besoin d'un id) : rien à
   // afficher tant que celle-ci n'existe pas encore.
   document.getElementById('emp-contrat-wrap').style.display='none';
-  document.querySelector('#emp-onglets [data-pane="signe"]').hidden=true;
+  eqNouvelleFiche();
   empOnglet('id');empEntete();
   document.getElementById('modal-employe-wrap').classList.add('open');
 }
@@ -471,7 +476,7 @@ function editEmploye(id){
   empFillCreches(e.creche_id);
   document.getElementById('emp-contrat-wrap').style.display='';
   empLoadContratTravail(e.id);
-  document.querySelector('#emp-onglets [data-pane="signe"]').hidden=false;
+  eqOuvrirFiche(e);
   empOnglet('id');empEntete();
   document.getElementById('modal-employe-wrap').classList.add('open');
 }
@@ -567,6 +572,11 @@ async function saveEmploye(){
       if(!ok)throw new Error(window._lastDbError||'échec');
       const e=cacheEmployes.find(x=>String(x.id)===String(editingEmployeId));
       if(e)Object.assign(e,row);
+      /* Une visite médicale saisie mais pas encore ajoutée part avec la fiche, sinon elle serait perdue. */
+      if(typeof vmEnregistrer==='function'&&(eqVal('vmDate')||eqVal('vmRdv'))){
+        const okVm=await vmEnregistrer();
+        if(!okVm){renderEmployes();showBanner('Fiche enregistrée, mais la visite médicale n\'a pas pu l\'être (voir l\'onglet Suivi).','error');return;}
+      }
       showBanner('Collaborateur/trice modifié(e) ✅');
     }else{
       const saved=await dbInsert('employes',row);
@@ -586,9 +596,15 @@ window.saveEmploye=saveEmploye;
 async function deleteEmploye(id){
   const targetId=id||editingEmployeId;
   if(!targetId)return;
-  if(!confirm('Supprimer cette fiche collaborateur/trice ?'))return;
+  const emp=cacheEmployes.find(x=>String(x.id)===String(targetId));
+  if(!confirm('Supprimer définitivement cette fiche collaborateur/trice ?\n\nSon historique de pointages sera aussi supprimé'+(emp&&emp.user_id?', ainsi que son compte de connexion':'')+'. Cette action est irréversible.'))return;
   const ok=await dbDelete('employes',targetId);
   if(ok){
+    /* Le compte de connexion (auth.users) est retiré juste après : sans cela l'e-mail restait bloqué pour toute réinvitation. */
+    if(emp&&emp.user_id){
+      const r=await eqCallFn('supprimer-compte-collaborateur',{user_id:emp.user_id});
+      if(!r.ok)showBanner('Fiche supprimée, mais le compte de connexion n\'a pas pu être retiré : '+(r.data.error||'erreur inconnue'),'error');
+    }
     cacheEmployes=cacheEmployes.filter(e=>e.id!==targetId);
     closeModal('modal-employe-wrap');
     renderEmployes();

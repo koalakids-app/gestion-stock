@@ -1,7 +1,7 @@
 // Edge function "supprimer-compte-collaborateur"
 // ============================================================================
 // Supprime le compte de connexion (auth.users) d'un(e) collaborateur/trice.
-// Appelée depuis employes.html juste après la suppression de la fiche
+// Appelée depuis Demandes › Collaborateurs juste après la suppression de la fiche
 // `employes` elle-même (RLS-scopée, faite côté client avec l'anon key) :
 // supprimer la ligne `employes` ne supprime pas le compte auth.users associé
 // (ça demande le service role), ce qui laissait jusqu'ici un compte orphelin

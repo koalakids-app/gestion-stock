@@ -3,7 +3,7 @@
 // Envoie par e-mail (SMTP Gmail) le lien d'un quiz ou d'une micro-formation
 // (module Formation et quiz, koalakids-app/quiz-protocoles) à un(e)
 // collaborateur/trice, au moment où la direction (ou une directrice
-// technique) clique sur "Envoyer" depuis sa fiche (employes.html).
+// technique) clique sur "Envoyer" depuis sa fiche (Demandes › Collaborateurs).
 //
 // Jusqu'ici, cet envoi se contentait de copier le lien dans le
 // presse-papiers côté navigateur (navigator.clipboard.writeText) : silencieux

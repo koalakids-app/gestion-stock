@@ -3,7 +3,7 @@
 // Indique, pour les fiches d'une crèche, quels comptes de connexion ont
 // réellement été activés par le/la collaborateur/trice (au moins une connexion).
 // employes.user_id est posé dès l'invitation : il ne prouve donc pas que
-// l'espace a été créé. employes.html s'en sert pour distinguer « Compte actif »
+// l'espace a été créé. Demandes › Collaborateurs s'en sert pour distinguer « Compte actif »
 // de « Invitation envoyée ». auth.users n'étant pas lisible depuis le
 // navigateur, la lecture de last_sign_in_at passe par cette fonction.
 //

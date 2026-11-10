@@ -397,7 +397,7 @@ function installerRetourEmploye(){
 }
 function returnToEmploye(){
   if(!RETURN_EMPLOYE_ID)return;
-  const page=RETURN_EMPLOYE_SRC==='employes'?'employes.html':'demandes.html';
+  const page='demandes.html';
   location.href=page+'?employe='+encodeURIComponent(RETURN_EMPLOYE_ID);
 }
 

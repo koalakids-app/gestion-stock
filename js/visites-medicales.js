@@ -1,5 +1,5 @@
 /* Suivi des visites médicales obligatoires (médecine du travail — Odalia).
-   Calcul partagé par la fiche collaborateur (employes.html), sa liste et
+   Calcul partagé par la fiche collaborateur (Demandes), sa liste et
    « Ma journée » (demandes.html). Table : sql/employes_visites_medicales.sql.
    Règles : visite d'information et de prévention dans les 3 mois après
    l'embauche, puis au plus tard tous les 5 ans (prochaine_le, modifiable). */

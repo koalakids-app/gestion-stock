@@ -43,7 +43,7 @@ const CORS_HEADERS = {
 const BUCKET = "documents-employes";
 const MAX_BYTES = 8 * 1024 * 1024;
 
-// Pièces obligatoires (hors "le cas échéant") — RECOPIÉ de employes.html
+// Pièces obligatoires (hors "le cas échéant") — RECOPIÉ de Demandes › Collaborateurs
 // (constante PIECES_EMBAUCHE, entrées sans `optionnel:true`) : si vous
 // modifiez la liste là-bas, reportez-la ici — sert uniquement à détecter
 // quand un dossier est complet pour l'auto-clôturer (voir plus bas), les

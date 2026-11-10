@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
         body: `${cr ? cr.name + ' : ' : ''}${items.length} collaborateur${items.length > 1 ? 's' : ''}`
           + (retard ? ` dont ${retard} en retard` : '')
           + ` — ${items.slice(0, 3).map(quoi).join(', ')}${items.length > 3 ? '…' : ''}`,
-        url: './employes.html',
+        url: './demandes.html?section=employes',
         tag: `visites-medicales-${crecheId}`,
       }),
     });

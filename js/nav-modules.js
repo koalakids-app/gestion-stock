@@ -17,7 +17,6 @@
     { f: 'stock.html', ico: 'ti-package', t: 'Stock' },
     { f: 'infirmerie.html', ico: 'ti-first-aid-kit', t: 'Soins' },
     { f: 'documents.html', ico: 'ti-files', t: 'Documents' },
-    { f: 'employes.html', ico: 'ti-users', t: 'Équipe', direction: true },
     { f: 'parametres.html', ico: 'ti-settings', t: 'Paramètres', direction: true }
   ];
 

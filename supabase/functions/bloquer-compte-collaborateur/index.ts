@@ -1,7 +1,7 @@
 // Edge function "bloquer-compte-collaborateur"
 // ============================================================================
 // Bloque (ou rétablit) la connexion du compte auth.users d'un(e) collaborateur/
-// trice dont le dossier est archivé (fin de contrat) : employes.html l'appelle
+// trice dont le dossier est archivé (fin de contrat) : Demandes › Collaborateurs l'appelle
 // à l'archivage (bloquer: true) et à la réactivation (bloquer: false).
 // Le compte n'est pas supprimé : l'historique et la fiche restent intacts, et
 // un dossier réactivé retrouve son accès. Le blocage est un « ban » Supabase
