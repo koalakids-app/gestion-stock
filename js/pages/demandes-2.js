@@ -982,7 +982,7 @@ album: `
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">📥 Ajouter et classer</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Touchez <strong>Ajouter des photos</strong> et choisissez une ou plusieurs photos (elles sont réduites avant l’envoi). Si une photo est déjà dans l’album (même fichier), l’application le signale : OK ignore les doublons, Annuler les ajoute quand même. Seules les photos ajoutées depuis cette détection sont comparées.</li>
-  <li>Elles arrivent dans <strong>À classer</strong>. Touchez les photos concernées (une ou plusieurs), puis le nom du ou des enfants. Une photo de groupe se classe dans plusieurs albums à la fois.</li>
+  <li>Elles arrivent dans <strong>À classer</strong>. Touchez les photos concernées (une ou plusieurs), puis <strong>cochez tous les enfants</strong> qui y figurent et touchez <strong>Classer</strong>. Une photo de groupe se classe ainsi dans plusieurs albums à la fois.</li>
   <li>Les derniers enfants choisis passent en tête ; la zone de recherche aide à retrouver un prénom.</li>
   <li>Dans l’album d’un enfant, l’encadré <strong>Droit à l’image</strong> permet d’<strong>importer le document signé</strong> par les parents (scan, photo ou PDF). Il est aussi visible dans la fiche de l’enfant, parmi les documents importés.</li>
   <li>Dans <strong>Par enfant</strong>, ouvrez un album, agrandissez une photo, retirez-la de l’album ou supprimez-la.</li>
