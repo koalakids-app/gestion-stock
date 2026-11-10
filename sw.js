@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v35';   // v35 : mode kiosque connecté retiré ; v34 : anti pull-to-refresh ; v33 : pushsubscriptionchange (réabonnement push automatique)
+const CACHE_NAME = 'stocks-v36';   // v36 : module Équipe regroupé dans Demandes (renouvelle le cache) ; v35 : mode kiosque connecté retiré ; v34 : anti pull-to-refresh ; v33 : pushsubscriptionchange (réabonnement push automatique)
 
 self.addEventListener('install', event => {
   event.waitUntil(
