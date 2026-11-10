@@ -74,7 +74,8 @@ async function archiverFiche(id){
     const{ok,data}=await eqCallFn('bloquer-compte-collaborateur',{employe_id:id,bloquer:true});
     if(!ok){eqToast('Archivage annulé : le compte de connexion n\'a pas pu être bloqué ('+(data.error||'erreur inconnue')+').',true);return;}
   }
-  const row={archive_le:new Date().toISOString(),archive_par:currentUser?currentUser.id:null};
+  /* Codes de pointage retirés : la tablette ne reconnaît plus la personne (le code image sera à régénérer à la réactivation). */
+  const row={archive_le:new Date().toISOString(),archive_par:currentUser?currentUser.id:null,code_pictos:null,code_pointage:null};
   const{error}=await sb.from('employes').update(row).eq('id',id);
   if(error){
     if(e.user_id)await eqCallFn('bloquer-compte-collaborateur',{employe_id:id,bloquer:false});
@@ -83,7 +84,7 @@ async function archiverFiche(id){
   Object.assign(e,row);
   renderArchivageBox(e);
   renderEmployes();
-  eqToast(e.user_id?'Dossier archivé, compte bloqué.':'Dossier archivé.');
+  eqToast((e.user_id?'Dossier archivé, compte bloqué':'Dossier archivé')+', retiré du planning et du pointage.');
 }
 async function desarchiverFiche(id){
   if(!confirm('Réactiver ce dossier et le remettre dans les fiches actives ? Son compte de connexion, s\'il en a un, sera rétabli.'))return;
@@ -98,7 +99,7 @@ async function desarchiverFiche(id){
   if(e)Object.assign(e,row);
   if(e)renderArchivageBox(e);
   renderEmployes();
-  eqToast('Dossier réactivé.');
+  eqToast('Dossier réactivé. Pensez à régénérer son code image de pointage (carte du collaborateur).');
 }
 
 /* ---------- EXPORT DES DOCUMENTS PUIS PURGE DU STOCKAGE ----------

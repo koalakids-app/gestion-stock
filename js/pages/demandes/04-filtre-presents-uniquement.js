@@ -1046,7 +1046,7 @@ async function renderPresenceGantt(){
     const proSeule=new Array(COLS*2).fill(false); // true si la seule pro présente peut rester seule avec 3 enfants
     const _isQualif=function(prenom){
       const t=ipNormStr(prenom);
-      let emp=(cacheEmployes||[]).find(function(x){return x.creche_id===crecheId&&ipNormStr(x.planning_nom||x.prenom)===t;});
+      let emp=(cacheEmployes||[]).find(function(x){return !x.archive_le&&x.creche_id===crecheId&&ipNormStr(x.planning_nom||x.prenom)===t;});
       if(!emp){const rid=peFindReferentIdForPrenom(crecheId,prenom,true);const rf=rid?(cacheReferents||[]).find(function(x){return x.id===rid;}):null;if(rf&&rf.employe_id)emp=(cacheEmployes||[]).find(function(x){return x.id===rf.employe_id;});}
       if(!emp)return false;
       const q=ipNormStr((emp.qualification||'')+' '+(emp.poste||''));

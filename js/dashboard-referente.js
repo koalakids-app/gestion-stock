@@ -427,7 +427,7 @@ function dashAnniversairesProchains(t,crecheId,jours){
   jours=jours||7;
   const out=[];
   const base=new Date(t+'T00:00:00');
-  const emp=typeof cacheEmployes!=='undefined'?cacheEmployes:[];
+  const emp=(typeof cacheEmployes!=='undefined'?cacheEmployes:[]).filter(e=>!e.archive_le);
   for(let i=1;i<=jours;i++){
     const d=new Date(base);d.setDate(d.getDate()+i);
     const iso=ipDateToLocalISO(d),md=iso.slice(5),an=Number(iso.slice(0,4));
@@ -454,7 +454,7 @@ function dashTodayBirthdays(t){
 // Salarié·es dont c'est l'anniversaire (fiches employes) ; crecheId optionnel.
 function dashBirthdaysEmployes(t,crecheId){
   const md=t.slice(5);
-  return (typeof cacheEmployes!=='undefined'?cacheEmployes:[]).filter(e=>e.date_naissance&&e.date_naissance.slice(5)===md&&(!crecheId||e.creche_id===crecheId));
+  return (typeof cacheEmployes!=='undefined'?cacheEmployes:[]).filter(e=>!e.archive_le&&e.date_naissance&&e.date_naissance.slice(5)===md&&(!crecheId||e.creche_id===crecheId));
 }
 function renderDashboardToday(){
   // Capturé avant la réécriture de #dash-today-grid : une fois le innerHTML

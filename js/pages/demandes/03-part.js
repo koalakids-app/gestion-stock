@@ -298,7 +298,7 @@ function empHeuresLigne(e){
    de l'onglet — pas à chaque rendu, pour ne pas interroger `pointages` en
    boucle. Semaine en cours, lundi 00:00 → dimanche 24:00. */
 async function empChargerHeuresSemaine(){
-  const list=isDirection?cacheEmployes:cacheEmployes.filter(e=>e.creche_id===currentProfile?.creche_id);
+  const list=(isDirection?cacheEmployes:cacheEmployes.filter(e=>e.creche_id===currentProfile?.creche_id)).filter(e=>!e.archive_le);   // dossiers archivés : hors heures et pointages
   const crecheIds=[...new Set(list.map(e=>e.creche_id).filter(Boolean))];
   if(!crecheIds.length)return;
   const debut=mondayOfISO(todayStr());
