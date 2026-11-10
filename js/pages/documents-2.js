@@ -193,6 +193,7 @@ urgence: `
   <li>Ouvrir le document, puis choisir la <strong>crèche</strong>, la <strong>date</strong>, le N° / version et la capacité d’accueil (enfants / professionnels). Il y a une réponse par crèche.</li>
   <li>Trois textes à adapter : <strong>Qu’est-ce que l’urgence ?</strong>, <strong>Qu’est-ce que le confinement ?</strong> et la <strong>conclusion</strong>.</li>
   <li><strong>Annexe 1 – Sac URGENCE</strong> (contenant rouge, sortie immédiate) et <strong>Annexe 2 – Sac CONFINEMENT</strong> (contenant bleu) : lieu de rangement et liste du matériel par rubrique.</li>
+  <li>Sous l’annexe 2, le bouton <strong>Liste d’achats de la malle (Excel)</strong> télécharge le tableur joint : quantités calculées selon la capacité d’accueil (onglet Paramètres à adapter à la structure), prix, DLC / DLU et suivi des achats.</li>
   <li>Les numéros utiles sont préremplis (15, 18, 17, 112, 114).</li>
 </ul>
 <div class="st">✏️ Tout est modifiable</div>
