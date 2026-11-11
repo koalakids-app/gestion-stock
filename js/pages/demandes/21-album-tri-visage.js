@@ -9,7 +9,7 @@
    - Au-dessus du seuil, la photo est classée seule ; en dessous, une personne valide.
    Tables et droits : sql/album_tri_visage.sql (à appliquer à la main).
    Dépend de 20-album-photos.js (ALB, albRender, albUrls, albJournal…). */
-var ALBV = { actif: false, seuil: 90, accords: {}, signatures: {}, acces: {}, refs: [], props: [], lib: null, calc: false, annule: false, msg: '' };
+var ALBV = { actif: false, seuil: 90, accords: {}, signatures: {}, acces: {}, refs: [], fiches: {}, props: [], lib: null, calc: false, annule: false, msg: '' };
 var ALBV_DOSSIER = 'vendor/face-api/';
 var ALBV_MAX_REFS = 5;
 var ALBV_DIST_OK = 0.52;     // au-delà (≈ 50 % de confiance), aucun enfant n'est proposé
@@ -17,7 +17,7 @@ var ALBV_ECART = 0.04;       // écart minimal avec le deuxième enfant le plus 
 
 /* ---------- Réglage par crèche (direction) et chargement ---------- */
 async function albvCharger() {
-  ALBV.actif = false; ALBV.accords = {}; ALBV.signatures = {}; ALBV.acces = {}; ALBV.refs = []; ALBV.props = [];
+  ALBV.actif = false; ALBV.accords = {}; ALBV.signatures = {}; ALBV.acces = {}; ALBV.refs = []; ALBV.fiches = {}; ALBV.props = [];
   try {
     var c = await sb.from('creches').select('tri_visage,tri_visage_seuil').eq('id', ALB.creche).maybeSingle();
     if (c.error || !c.data) { albvMajOnglets(); return; }
@@ -37,6 +37,11 @@ async function albvCharger() {
         (fa.data || []).forEach(function (x) { ALBV.acces[x.enfant_id] = true; });
       } catch (e2) { console.warn('[albvCharger] signatures', e2); }
       ALBV.refs = r.data || [];
+      // Photos de profil des fiches enfants (facultatif) : proposées comme référence.
+      try {
+        var fp = await sb.from('enfants_documents_admin').select('enfant_id,bucket,path,created_at').eq('piece_key', 'photo_enfant').order('created_at', { ascending: false });
+        (fp.data || []).forEach(function (x) { if (!ALBV.fiches[x.enfant_id]) ALBV.fiches[x.enfant_id] = x; });
+      } catch (e3) { console.warn('[albvCharger] photos fiches', e3); }
       var ids = ALB.photos.map(function (p) { return p.id; }), props = [];
       for (var i = 0; i < ids.length; i += 150) {
         var p = await sb.from('album_propositions').select('photo_id,enfant_id,score').in('photo_id', ids.slice(i, i + 150));
@@ -314,6 +319,7 @@ function albvRenderRefs(z) {
       '<label class="alb-etape" style="margin:0"><input type="checkbox" ' + (ac ? 'checked' : '') + ' onchange="albvAccord(\'' + e.id + '\',this.checked,this)"><span><b>Accord des parents pour le tri par visage</b><br>' + albvReponseLigne(e) + '</span></label>' +
       '<div class="alb-barre" style="margin:0"><span class="alb-ct">' + n + ' référence' + (n > 1 ? 's' : '') + (n ? '' : '') + '</span>' +
       '<button class="btn-sm" ' + (peut ? '' : 'disabled') + ' onclick="albvRefAlbum(\'' + e.id + '\')"><i class="ti ti-photo"></i> Depuis l’album</button>' +
+      (ALBV.fiches[e.id] ? '<button class="btn-sm" ' + (peut ? '' : 'disabled') + ' onclick="albvRefDepuisFiche(\'' + e.id + '\')"><i class="ti ti-user-circle"></i> Photo de la fiche</button>' : '') +
       '<button class="btn-sm" ' + (peut ? '' : 'disabled') + ' onclick="albvRefFichier(\'' + e.id + '\')"><i class="ti ti-camera"></i> Prendre / importer</button>' +
       (n ? '<button class="btn-sm" style="color:var(--red);border-color:var(--red)" onclick="albvRefsEffacer(\'' + e.id + '\')"><i class="ti ti-trash"></i></button>' : '') + '</div></div>';
   }).join('') + '</div><input type="file" id="albv-fichier" accept="image/*" hidden onchange="albvRefDepuisFichier(this)">';
@@ -360,6 +366,15 @@ async function albvRefDepuisFichier(input) {
   var f = input.files && input.files[0]; input.value = '';
   if (!f || !ALBV_CIBLE) return;
   try { await albvRefDepuisImage(ALBV_CIBLE, await albvImage(f)); } catch (e) { showBanner('Image illisible : ' + (e.message || e), 'error'); }
+}
+async function albvRefDepuisFiche(enfantId) {
+  var f = ALBV.fiches[enfantId]; if (!f) return;
+  ALBV_CIBLE = enfantId;
+  try {
+    var u = await sb.storage.from(f.bucket || 'documents-admin').createSignedUrl(f.path, 300);
+    if (u.error) throw u.error;
+    await albvRefDepuisImage(enfantId, await albvImage(u.data.signedUrl));
+  } catch (e) { showBanner('Photo de la fiche inutilisable : ' + (e.message || e), 'error'); }
 }
 async function albvRefAlbum(enfantId) {
   ALBV_CIBLE = enfantId;
