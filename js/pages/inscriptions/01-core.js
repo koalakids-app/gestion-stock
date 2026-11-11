@@ -912,11 +912,11 @@ async function chargerEntrees(){
 
 function tuileEntrees(cre){
   if(!ENTREES_CHARGEES)return '';
-  const n=ENTREES.length;
-  const ici=cre?ENTREES.filter(x=>String(x.e.creche_id)===String(cre)).length:0;
-  return '<div class="stat av" onclick="openEntrees()" title="Enfants déjà inscrits (fiche et ligne d\'accueil) dont l\'accueil n\'a pas encore commencé — toutes crèches. Ce ne sont pas des préinscriptions.">'
+  // Le compteur suit la crèche choisie dans le filtre (toutes les crèches si aucune).
+  const n=cre?ENTREES.filter(x=>String(x.e.creche_id)===String(cre)).length:ENTREES.length;
+  return '<div class="stat av" onclick="openEntrees()" title="Enfants déjà inscrits (fiche et ligne d\'accueil) dont l\'accueil n\'a pas encore commencé — '+(cre?'crèche choisie':'toutes crèches')+'. Ce ne sont pas des préinscriptions.">'
     +'<div class="n">'+n+'</div><div class="l">Entrées à venir</div>'
-    +'<div class="d">déjà inscrits, pas encore arrivés</div>'+(cre?'<div class="s">dont '+ici+' ici</div>':'')+'</div>';
+    +'<div class="d">déjà inscrits, pas encore arrivés</div></div>';
 }
 
 function openEntrees(){

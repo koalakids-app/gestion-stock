@@ -242,7 +242,7 @@ function render(){
   const sousLigne=n=>cre?'<div class="s">dont '+n+' ici</div>':'';
   const nomCre=cre?(nomCreche(cre)||'cette crèche'):'';
   document.getElementById('statsCap').innerHTML='<b>Nombre de demandes par statut, toutes crèches confondues.</b> '
-    +'Cliquez sur un statut pour filtrer la liste. La tuile en pointillés « Entrées à venir » compte des enfants déjà inscrits, pas des préinscriptions.'
+    +'Cliquez sur un statut pour filtrer la liste. La tuile en pointillés « Entrées à venir » compte des enfants déjà inscrits (de la crèche choisie), pas des préinscriptions.'
     +(cre?' <span style="color:var(--orange);font-weight:700">« dont N ici » = '+esc(nomCre)+', la crèche choisie dans le filtre.</span>':'');
   box.innerHTML=
     '<div class="stat'+(filtreStatut==='__tous__'?' on':'')+'" onclick="setStatut(\'__tous__\')" title="Toutes les demandes, tous statuts et toutes crèches">'
