@@ -31,7 +31,7 @@ function enfPhotoAfficher(url) {
   } else {
     av.style.cssText = '';
     var e = cacheEnfants.find(function (x) { return String(x.id) === String(enfFicheId); });
-    if (e) enfEntete(e);
+    if (e) av.innerHTML = ((e.prenom || '').charAt(0) + (e.nom || '').charAt(0)).toUpperCase() || '<i class="ti ti-mood-kid"></i>';
   }
 }
 
@@ -43,10 +43,12 @@ async function enfPhotoCharger(enfantId) {
     if (r.error) throw r.error;
     if (String(enfFicheId) !== String(enfantId)) return;
     enfPhotoLigne = (r.data || [])[0] || null;
-    if (!enfPhotoLigne) return enfPhotoAfficher(null);
-    var u = await sb.storage.from(enfPhotoLigne.bucket || ENF_PHOTO_BUCKET).createSignedUrl(enfPhotoLigne.path, ENF_PHOTO_TTL);
-    if (String(enfFicheId) !== String(enfantId)) return;
-    enfPhotoAfficher(u.data && u.data.signedUrl);
+    if (!enfPhotoLigne) enfPhotoAfficher(null);
+    else {
+      var u = await sb.storage.from(enfPhotoLigne.bucket || ENF_PHOTO_BUCKET).createSignedUrl(enfPhotoLigne.path, ENF_PHOTO_TTL);
+      if (String(enfFicheId) !== String(enfantId)) return;
+      enfPhotoAfficher(u.data && u.data.signedUrl);
+    }
   } catch (err) { console.warn('[enfPhoto]', err); }
   enfPhotoActions();
 }
