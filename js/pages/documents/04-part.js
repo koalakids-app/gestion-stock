@@ -349,8 +349,10 @@ let CT_EMPLOYES=[];
 
 async function callFn(fn,body){
   try{
+    /* Jeton de la session quand il y en a une (notify-push identifie la personne) ; clé anon sinon (signature-otp, pages sans compte). */
+    const{data:{session}}=await sb.auth.getSession();
     const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+((session&&session.access_token)||SUPABASE_ANON_KEY)},
       body:JSON.stringify(body)});
     const data=await r.json().catch(()=>({}));
     return{ok:r.ok,data};

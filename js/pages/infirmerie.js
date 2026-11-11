@@ -28,8 +28,10 @@ const L_MOYEN =['Téléphone','SMS','À la récupération'];
    empecher l'enregistrement d'une entree de registre. */
 async function callFn(fn,body){
   try{
+    /* Jeton de la session : la fonction identifie la personne (la clé anon seule est refusée). */
+    const{data:{session}}=await sb.auth.getSession();
     const r=await fetch(SUPABASE_URL+'/functions/v1/'+fn,{method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+((session&&session.access_token)||SUPABASE_ANON_KEY)},
       body:JSON.stringify(body)});
     return r.ok;
   }catch(e){return false;}

@@ -28,6 +28,8 @@
 // ============================================================================
 
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk?target=deno";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { estGestionnaire, identifierAppelant } from "../_shared/appelant.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -94,7 +96,21 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Appelant identifié (direction ou référent·e) : la clé anon seule consommerait le crédit de l'API Anthropic.
+    const sb = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false } },
+    );
+    const appelant = await identifierAppelant(sb, req);
+    if (!appelant) return json({ error: "Authentification manquante." }, 401);
+    if (!estGestionnaire(appelant)) return json({ error: "Droits insuffisants." }, 403);
+
     const { crecheName, nbSemainesSource, nbSemainesAGenerer, sourceRows } = await req.json();
+    // Plafond de taille : le planning source est envoyé tel quel au modèle.
+    if (Array.isArray(sourceRows) && JSON.stringify(sourceRows).length > 400_000) {
+      return json({ error: "Planning source trop volumineux." }, 413);
+    }
 
     if (!Array.isArray(sourceRows) || !sourceRows.length) {
       return json({ error: "Aucune donnée source : sélectionnez des semaines déjà remplies." }, 400);

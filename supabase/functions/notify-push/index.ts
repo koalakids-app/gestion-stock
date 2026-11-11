@@ -1,5 +1,6 @@
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { estGestionnaire, estServiceRole, identifierAppelant } from "../_shared/appelant.ts";
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -108,17 +109,63 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { referent_ids: refIn, employe_ids: empIn, acces_ids: accIn, title, body, url, tag } = await req.json();
-    const referent_ids = Array.isArray(refIn) ? refIn : [];
-    const employe_ids = Array.isArray(empIn) ? empIn : [];
+    let { referent_ids: refIn, employe_ids: empIn, acces_ids: accIn, title, body, url, tag } = await req.json();
+    let referent_ids = Array.isArray(refIn) ? refIn.slice(0, 200) : [];
+    let employe_ids = Array.isArray(empIn) ? empIn.slice(0, 200) : [];
     // Familles (Espace famille) : identifiants d'accès famille_acces. Sans compte ni file d'attente :
     // pendant le silence rien n'est retenu, l'information reste lisible dans l'onglet Infos.
-    const acces_ids = Array.isArray(accIn) ? accIn : [];
+    let acces_ids = Array.isArray(accIn) ? accIn.slice(0, 200) : [];
     if ((!referent_ids.length && !employe_ids.length && !acces_ids.length) || !title) {
       return new Response(JSON.stringify({ error: "referent_ids (ou employe_ids, acces_ids) et title requis" }), {
         status: 400,
         headers: { ...cors, "Content-Type": "application/json" }
       });
+    }
+
+    // Appelant identifié (sinon n'importe qui avec la clé anon pouvait envoyer une notification
+    // de son choix à n'importe quel appareil). Les appels internes (cron, relances) passent par la clé service.
+    if (!estServiceRole(req)) {
+      const appelant = await identifierAppelant(sb, req);
+      if (!appelant) {
+        return new Response(JSON.stringify({ error: "authentification_manquante" }), {
+          status: 401, headers: { ...cors, "Content-Type": "application/json" }
+        });
+      }
+      // Contenu court ; lien interne seulement (page .html du site), sinon page par défaut.
+      title = String(title).slice(0, 120);
+      body = body ? String(body).slice(0, 300) : body;
+      tag = tag ? String(tag).slice(0, 80) : tag;
+      if (!url || !/^(\.\/)?[A-Za-z0-9_-]+\.html([?#][^\s]*)?$/.test(String(url))) url = "./demandes.html";
+
+      // Destinataires limités à l'organisation de l'appelant·e ; familles et employé·es : direction/référent·es seulement.
+      const org = appelant.orgId;
+      if (referent_ids.length) {
+        const { data } = await sb.from("referents").select("id").in("id", referent_ids).eq("org_id", org);
+        referent_ids = (data || []).map((r) => r.id);
+      }
+      if (!estGestionnaire(appelant)) {
+        employe_ids = [];
+        acces_ids = [];
+      } else {
+        if (employe_ids.length) {
+          const { data: emps } = await sb.from("employes").select("id, creche_id").in("id", employe_ids);
+          const crIds = [...new Set((emps || []).map((e) => e.creche_id).filter(Boolean))];
+          const { data: crs } = crIds.length
+            ? await sb.from("creches").select("id").in("id", crIds).eq("org_id", org)
+            : { data: [] };
+          const okCr = new Set((crs || []).map((c) => c.id));
+          employe_ids = (emps || []).filter((e) => okCr.has(e.creche_id)).map((e) => e.id);
+        }
+        if (acces_ids.length) {
+          const { data } = await sb.from("famille_acces").select("id").in("id", acces_ids).eq("org_id", org);
+          acces_ids = (data || []).map((a) => a.id);
+        }
+      }
+      if (!referent_ids.length && !employe_ids.length && !acces_ids.length) {
+        return new Response(JSON.stringify({ error: "destinataires_non_autorises" }), {
+          status: 403, headers: { ...cors, "Content-Type": "application/json" }
+        });
+      }
     }
 
     const orgId = await resolveOrgId(referent_ids, employe_ids, acces_ids);

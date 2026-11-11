@@ -23,6 +23,7 @@
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { crecheParId, estServiceRole, identifierAppelant, peutGererCreche } from '../_shared/appelant.ts';
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 
 const cors = {
@@ -134,6 +135,10 @@ Deno.serve(async (req) => {
     if (!user) return json({ erreur: "GMAIL_USER n'est pas renseignée dans les variables de la fonction." }, 500);
     if (!pass) return json({ erreur: "GMAIL_APP_PASSWORD n'est pas renseignée dans les variables de la fonction." }, 500);
 
+    // Appelant identifié (direction/référent de la crèche du contrat) ; appel interne autorisé.
+    const appelant = estServiceRole(req) ? null : await identifierAppelant(sb, req);
+    if (!appelant && !estServiceRole(req)) return json({ erreur: 'Authentification manquante.' }, 401);
+
     const body = await req.json();
     const id = String(body.contrat_id || '');
     const pdfBase64 = String(body.pdf_base64 || '');
@@ -141,10 +146,14 @@ Deno.serve(async (req) => {
     const expediteur = body.expediteur;
     if (!id) return json({ erreur: 'Identifiant de contrat manquant.' }, 400);
     if (!pdfBase64) return json({ erreur: 'PDF du contrat manquant.' }, 400);
+    if (pdfBase64.length > 14 * 1024 * 1024) return json({ erreur: 'PDF trop volumineux.' }, 413);
 
     const { data: c, error } = await sb.from('contrats').select('*').eq('id', id).maybeSingle();
     if (error) throw error;
     if (!c) return json({ erreur: 'Contrat introuvable.' }, 404);
+    if (appelant && !peutGererCreche(appelant, await crecheParId(sb, c.creche_id))) {
+      return json({ erreur: 'Crèche non autorisée.' }, 403);
+    }
     if (c.statut !== 'contresigne') {
       return json({ erreur: "Ce contrat n'est pas encore signé des deux côtés." }, 409);
     }

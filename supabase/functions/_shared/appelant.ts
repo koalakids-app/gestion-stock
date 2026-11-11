@@ -55,3 +55,40 @@ export function peutGererCreche(
   if (a.role !== 'referent') return false;
   return a.crecheId === null || a.crecheId === creche.id;
 }
+
+// ----------------------------------------------------------------------------
+// Appels de serveur à serveur (cron GitHub Actions → fonctions → autres fonctions)
+// ----------------------------------------------------------------------------
+/** Vrai si l'appel porte la clé service_role (fonctions internes, ex. relances-devis-auto → notify-push). */
+export function estServiceRole(req: Request): boolean {
+  const cle = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  const jwt = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  return cle.length > 20 && jwt === cle;
+}
+
+/**
+ * Comme peutGererCreche, mais ouvert aussi aux comptes « employe » (accès terrain)
+ * sur LEUR crèche : saisie d'un incident, d'un registre de soins…
+ */
+export function appartientACreche(
+  a: Appelant,
+  creche: { id: string; org_id: string | null } | null | undefined,
+): boolean {
+  if (!creche || creche.org_id !== a.orgId) return false;
+  if (a.role === 'direction') return true;
+  return a.crecheId === null || a.crecheId === creche.id;
+}
+
+/** Crèche d'un enfant ({ id, org_id }) ou null. */
+export async function crecheDeEnfant(sb: Client, enfantId: string | null | undefined) {
+  if (!enfantId) return null;
+  const { data: e } = await sb.from('enfants').select('creche_id').eq('id', enfantId).maybeSingle();
+  return await crecheParId(sb, e?.creche_id);
+}
+
+/** Crèche par identifiant ({ id, org_id }) ou null. */
+export async function crecheParId(sb: Client, crecheId: string | null | undefined) {
+  if (!crecheId) return null;
+  const { data: c } = await sb.from('creches').select('id, org_id').eq('id', crecheId).maybeSingle();
+  return c ?? null;
+}
