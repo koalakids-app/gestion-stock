@@ -90,14 +90,17 @@ function lcFicheHtml(d,base){
     +'body{font-family:system-ui,Segoe UI,Arial,sans-serif;color:#2B2740;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
     +'.hd{background:#4A3F9F;color:#fff;padding:12px 16px;border-radius:10px;display:flex;align-items:center;gap:14px}'
     +'.hd img{height:42px;background:#fff;border-radius:8px;padding:4px 10px}.hd h1{margin:0;font-size:22px}.hd small{opacity:.85}'
-    +'.tot{margin:12px 0;font-size:14px;font-weight:700}'
+    +'.rec{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}.rec th,.rec td{border:1px solid #D9D5EE;padding:6px 10px;text-align:left}'
+    +'.rec th{background:#EEEDF8;color:#4A3F9F}.rec th:last-child,.rec td:last-child{text-align:right;width:140px}.rec tfoot td{font-weight:800;background:#FDE8D6}'
     +'section{border:2px solid #F47920;border-radius:12px;padding:10px 16px;margin:10px 0;break-inside:avoid}'
     +'h2{margin:0 0 4px;color:#4A3F9F;font-size:17px}.n{float:right;color:#F47920}'
     +'ul{margin:0;padding-left:20px;font-size:14px;columns:2}li{margin:2px 0}.a{font-size:12px;color:#777}'
     +'.sv{font-size:12px;background:#FFF3DC;color:#6B4300;border-radius:8px;padding:6px 10px;margin-top:10px}'
     +'.pied{text-align:center;font-size:9px;color:#999;margin-top:14px}</style></head><body>'
     +'<div class="hd"><img src="'+base+'logo-koalakids.png" alt="Koala Kids"><div><h1>Livres cadeaux</h1><small>'+lcEsc(d.creche)+' · âges au '+lcDateFr(d.ref)+'</small></div></div>'
-    +'<div class="tot">'+total+' livre'+(total>1?'s':'')+' à prévoir</div>'+bloc
+    +'<table class="rec"><thead><tr><th>Tranche d’âge</th><th>Livres à prévoir</th></tr></thead><tbody>'
+      +LC_TRANCHES.map(t=>'<tr><td>'+t.lib+'</td><td>'+g[t.k].length+'</td></tr>').join('')
+      +'</tbody><tfoot><tr><td>Total</td><td>'+total+'</td></tr></tfoot></table>'+bloc
     +(g.sans.length?'<div class="sv"><b>À vérifier :</b> '+g.sans.map(x=>lcEsc(lcPrenomInitiale(x.e))).join(', ')+' (date de naissance manquante)</div>':'')
     +'<div class="pied">Application créée par David Bucari</div></body></html>';
 }
