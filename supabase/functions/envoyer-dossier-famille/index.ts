@@ -41,6 +41,7 @@
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { crecheParId, estServiceRole, identifierAppelant, peutGererCreche } from '../_shared/appelant.ts';
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 
 const cors = {
@@ -234,6 +235,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const appelant = estServiceRole(req) ? null : await identifierAppelant(sb, req);
+    if (!appelant && !estServiceRole(req)) return json({ erreur: 'Authentification manquante.' }, 401);
+
     const { dossier_id, relance, expediteur } = await req.json();
     if (!dossier_id) return json({ erreur: 'Dossier manquant' }, 400);
 
@@ -252,6 +256,9 @@ Deno.serve(async (req) => {
 
     const { data: enfant } = await sb
       .from('enfants').select('prenom,nom,creche_id,code_pointage').eq('id', dossier.enfant_id).maybeSingle();
+    if (appelant && !peutGererCreche(appelant, await crecheParId(sb, enfant?.creche_id))) {
+      return json({ erreur: 'Crèche non autorisée.' }, 403);
+    }
     const { data: creche } = enfant?.creche_id
       ? await sb.from('creches').select('name,org_id').eq('id', enfant.creche_id).maybeSingle()
       : { data: null };

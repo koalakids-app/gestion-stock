@@ -28,6 +28,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { estServiceRole, identifierAppelant } from "../_shared/appelant.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const CORS_HEADERS = {
@@ -140,14 +141,25 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // Appelant identifié (personne connectée) ; appel interne autorisé.
+  let appelant = null;
+  if (!estServiceRole(req)) {
+    appelant = await identifierAppelant(supabase, req);
+    if (!appelant) return json({ error: "authentification_manquante" }, 401);
+  }
+
   try {
     const { data: referent, error: rErr } = await supabase
       .from("referents")
-      .select("id, name, email, code_pictos, creche_id")
+      .select("id, name, email, code_pictos, creche_id, org_id")
       .eq("id", referent_id)
       .maybeSingle();
     if (rErr) throw rErr;
     if (!referent) return json({ error: "referent_introuvable" }, 404);
+    // Le code d'un compte direction/référent n'est envoyé que par la direction de la même organisation.
+    if (appelant && !(appelant.role === "direction" && referent.org_id === appelant.orgId)) {
+      return json({ error: "droits_insuffisants" }, 403);
+    }
     if (!Array.isArray(referent.code_pictos) || referent.code_pictos.length !== 4) {
       return json({ error: "code_absent" }, 400);
     }
