@@ -33,6 +33,7 @@
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { crecheParId, estServiceRole, identifierAppelant, peutGererCreche } from '../_shared/appelant.ts';
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 
 const cors = {
@@ -245,6 +246,10 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Appelant identifié (direction/référent de la crèche du devis) ; relances-devis-auto passe par la clé service.
+    const appelant = estServiceRole(req) ? null : await identifierAppelant(sb, req);
+    if (!appelant && !estServiceRole(req)) return json({ erreur: 'Authentification manquante.' }, 401);
+
     const { devis_id, relance, objet, message, expediteur, pdf, origine } = await req.json();
     const pj = pieceJointe(pdf);
     if (!devis_id) return json({ erreur: 'Devis manquant' }, 400);
@@ -256,6 +261,9 @@ Deno.serve(async (req) => {
     const { data: devis } = await sb
       .from('devis').select('*').eq('id', devis_id).maybeSingle();
     if (!devis) return json({ erreur: 'Devis introuvable' }, 404);
+    if (appelant && !peutGererCreche(appelant, await crecheParId(sb, devis.creche_id))) {
+      return json({ erreur: 'Crèche non autorisée' }, 403);
+    }
     if (devis.statut === 'annule') return json({ erreur: 'Devis annulé' }, 409);
     if (devis.repondu_le) return json({ erreur: 'Devis déjà répondu' }, 409);
     if (!devis.token) return json({ erreur: 'Ce devis n\'a pas de lien actif' }, 409);

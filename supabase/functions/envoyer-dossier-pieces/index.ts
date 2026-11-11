@@ -33,6 +33,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { crecheDeEnfant, estServiceRole, identifierAppelant, peutGererCreche } from "../_shared/appelant.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const CORS_HEADERS = {
@@ -166,6 +167,13 @@ Deno.serve(async (req) => {
   );
 
   try {
+    // Appelant identifié, droits sur la crèche de l'enfant ; lien http(s) uniquement.
+    let appelant = null;
+    if (!estServiceRole(req)) {
+      appelant = await identifierAppelant(supabase, req);
+      if (!appelant) return json({ error: "authentification_manquante" }, 401);
+    }
+    if (!/^https:\/\/[^\s<>"']+$/i.test(String(lien))) return json({ error: "lien_invalide" }, 400);
     const { data: dossier, error: dErr } = await supabase
       .from("dossiers_pieces")
       .select("id, enfant_id, email, expire_le, relances")
@@ -173,6 +181,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (dErr) throw dErr;
     if (!dossier) return json({ error: "dossier_introuvable" }, 404);
+    if (appelant && !peutGererCreche(appelant, await crecheDeEnfant(supabase, dossier.enfant_id))) {
+      return json({ error: "creche_non_autorisee" }, 403);
+    }
 
     const emails = (dossier.email || "").split(",").map((s: string) => s.trim()).filter(Boolean);
     if (!emails.length) return json({ error: "aucun_email" }, 400);

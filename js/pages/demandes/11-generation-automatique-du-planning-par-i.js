@@ -71,9 +71,11 @@ async function peRunIA(){
       return{decalage:i,semaine:ipDateToLocalISO(d)};
     });
 
+    /* Jeton de la session : la fonction identifie la personne (la clé anon seule est refusée). */
+    const{data:{session:_sessIA}}=await sb.auth.getSession();
     const r=await fetch(SUPABASE_URL+'/functions/v1/generer-planning-ia',{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+((_sessIA&&_sessIA.access_token)||SUPABASE_ANON_KEY)},
       body:JSON.stringify({crecheName:_peCurCrecheName,nbSemainesSource:nbSource,nbSemainesAGenerer:nbTarget,sourceRows})
     });
     const data=await r.json().catch(()=>null);

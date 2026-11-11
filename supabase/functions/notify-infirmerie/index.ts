@@ -18,6 +18,7 @@
 // =====================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { appartientACreche, crecheParId, estServiceRole, identifierAppelant } from "../_shared/appelant.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const CORS = {
@@ -93,6 +94,20 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    // Appelant identifié (tout compte de la crèche, y compris l'accès terrain « employe »)
+    // ou appel interne ; la crèche doit être la sienne (ou de son organisation pour la direction).
+    if (!estServiceRole(req)) {
+      const appelant = await identifierAppelant(sb, req);
+      if (!appelant) {
+        return new Response(JSON.stringify({ error: "authentification_manquante" }),
+          { status: 401, headers: { ...CORS, "Content-Type": "application/json" } });
+      }
+      if (!appartientACreche(appelant, await crecheParId(sb, creche_id))) {
+        return new Response(JSON.stringify({ error: "creche_non_autorisee" }),
+          { status: 403, headers: { ...CORS, "Content-Type": "application/json" } });
+      }
+    }
 
     // Nom de la creche (jamais fourni par le client : on le relit en base)
     const { data: creche } = await sb

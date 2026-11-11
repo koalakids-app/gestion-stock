@@ -25,6 +25,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { estServiceRole, identifierAppelant, peutGererCreche } from "../_shared/appelant.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const CORS_HEADERS = {
@@ -158,6 +159,11 @@ Deno.serve(async (req) => {
   );
 
   try {
+    let appelant = null;
+    if (!estServiceRole(req)) {
+      appelant = await identifierAppelant(supabase, req);
+      if (!appelant) return json({ error: "authentification_manquante" }, 401);
+    }
     const { data: envoi, error: envErr } = await supabase
       .from("formations_envois")
       .select("id, employe_id, referent_id, kind, item_titre, lien")
@@ -198,6 +204,14 @@ Deno.serve(async (req) => {
     // Un compte direction n'a pas de creche_id : org_id vient alors directement
     // du référent (déjà lu ci-dessus), pas de la crèche.
     org_id = org_id || creche?.org_id || null;
+    // Droits : crèche du/de la destinataire dans l'organisation de l'appelant·e (compte direction sans crèche : même organisation).
+    if (appelant) {
+      const cible = creche_id ? { id: creche_id, org_id: creche?.org_id ?? org_id } : null;
+      const autorise = cible
+        ? peutGererCreche(appelant, cible)
+        : appelant.role === "direction" && org_id === appelant.orgId;
+      if (!autorise) return json({ error: "creche_non_autorisee" }, 403);
+    }
     let orgNom: string | undefined, logoUrl: string | undefined;
     if (org_id) {
       const { data: org } = await supabase.from("organisations")

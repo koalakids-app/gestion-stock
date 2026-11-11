@@ -28,6 +28,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { crecheParId, estServiceRole, identifierAppelant, peutGererCreche } from "../_shared/appelant.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const CORS_HEADERS = {
@@ -146,6 +147,15 @@ Deno.serve(async (req) => {
   );
 
   try {
+    // Appelant identifié (direction/référent de la crèche de l'enfant) ; appel interne autorisé.
+    if (!estServiceRole(req)) {
+      const appelant = await identifierAppelant(supabase, req);
+      if (!appelant) return json({ error: "authentification_manquante" }, 401);
+      const { data: cible } = await supabase.from("enfants").select("creche_id").eq("id", enfant_id).maybeSingle();
+      if (!peutGererCreche(appelant, await crecheParId(supabase, cible?.creche_id))) {
+        return json({ error: "creche_non_autorisee" }, 403);
+      }
+    }
     const { data: enfant, error: eErr } = await supabase
       .from("enfants")
       .select("id, prenom, nom, code_pictos, creche_id")
