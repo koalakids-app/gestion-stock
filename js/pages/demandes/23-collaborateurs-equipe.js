@@ -576,7 +576,7 @@ async function accorderAccesTerrain(id,partager){
 /* ---------- SUPPRESSION ---------- */
 /* La fiche disparaît, ainsi que l'historique de ses pointages (suppression en
    cascade côté base, cf. sql/module_employes.sql). Le compte de connexion
-   auth.users éventuellement créé est supprimé juste après, via la fonction
+   auth.users éventuellement créé est supprimé juste avant, via la fonction
    Edge supprimer-compte-collaborateur (service role requis, inaccessible à
 
 /* ---------- DOCUMENTS D'EMBAUCHE (fiche collaborateur/trice) ----------

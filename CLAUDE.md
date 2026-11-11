@@ -141,6 +141,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Plusieurs onglets
 - Chaque module (Demandes, Paramètres, Documents, Contrats, Factures, Inscriptions, Employés, Mon espace) déconnecte à l'ouverture (postes partagés). `js/onglets-session.js` (`kkOnglets`, chargé après supabase-js) garde la session si un autre onglet connecté a émis un signal de vie (`localStorage` `kk_onglet_<id>`, < 8 s) ; un nouveau module qui déconnecte à l'ouverture doit l'utiliser (`kkOnglets.suivre(...)` + `!kkOnglets.autre()` dans `boot`).
 
+## Edge functions : identifier l'appelant
+- « Verify JWT » ne suffit pas (la clé anon publique est un JWT valide). Une fonction qui agit en service_role pour le compte d'une personne connectée doit appeler `identifierAppelant` (`supabase/functions/_shared/appelant.ts`, jeton vérifié par `auth.getUser` + fiche `referents`) puis contrôler le rôle et la crèche (`peutGererCreche`, même règle que `kk_acces_creche_gestion`). Fait pour `create-referent` (rôle demandé en liste fermée ; un référent ne crée que l'accès terrain `employe` de sa crèche), `supprimer-compte-collaborateur` (reçoit `employe_id` + `user_id`, appelée AVANT la suppression de la fiche) et `send-planning` (direction/référent, 10 destinataires, 10 Mo). À étendre aux autres fonctions d'envoi (`notify-push`, `envoyer-*`, `generer-planning-ia`…).
+
 ## Habitudes de travail
 - Branche de développement de la session, pull request vers `main` en **squash**.
 - Après une fusion, repartir de `origin/main` (`git checkout -B <branche> origin/main`) ; le push demande `--force-with-lease`.
