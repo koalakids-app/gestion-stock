@@ -983,6 +983,7 @@ livres: `
   <li>Chaque enfant apparaît avec son <strong>prénom et l’initiale du nom</strong> ; le chiffre de chaque tranche donne le nombre de livres à commander.</li>
   <li>Les enfants inscrits qui ne sont pas encore entrés sont comptés ; les dossiers archivés ne le sont pas.</li>
   <li>Un enfant sans date de naissance (ou né après la date choisie) n’est pas compté : il apparaît dans <strong>À vérifier</strong>.</li>
+  <li>La direction voit aussi, sous les tranches, un <strong>tableau de toutes les crèches</strong> (une ligne par crèche, un total général) ; le bouton <strong>Récap. toutes crèches (PDF)</strong> l’imprime.</li>
   <li><strong>Imprimer / PDF</strong> sort la fiche pour la commande, <strong>CSV</strong> l’exporte pour un tableur.</li>
 </ol>
 `,

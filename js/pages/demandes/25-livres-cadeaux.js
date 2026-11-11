@@ -47,9 +47,9 @@ function lcPrenomInitiale(e){
   const p=String(e.prenom||'').trim(),n=String(e.nom||'').trim();
   return p+(n?' '+n.charAt(0).toUpperCase()+'.':'');
 }
-function lcCalculer(){
+function lcCalculer(crecheId){
   const ref=document.getElementById('lc-date').value||lcDateParDefaut();
-  const creche=lcCrecheId();
+  const creche=crecheId||lcCrecheId();
   const g={t0:[],t1:[],t2:[],t3:[],sans:[]};
   cacheEnfants.filter(e=>String(e.creche_id)===String(creche)&&!enfIsArchived(e)).forEach(e=>{
     if(!e.dob){g.sans.push({e,m:null});return;}
@@ -80,6 +80,9 @@ function lcRender(){
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;max-width:1000px">${LC_TRANCHES.map(carte).join('')}</div>`
     +(g.sans.length?`<div style="margin-top:14px;max-width:1000px;background:#FFF3DC;border-radius:10px;padding:10px 14px;font-size:13px;color:#6B4300">
       <b>À vérifier (${g.sans.length})</b> : date de naissance manquante ou postérieure à la date choisie, enfant non compté.<br>${g.sans.map(x=>lcEsc(lcPrenomInitiale(x.e))).join(', ')}</div>`:'');
+  if(isDirection&&cacheCreches.length>1){
+    z.insertAdjacentHTML('beforeend','<div style="margin-top:22px;max-width:1000px"><div style="font-weight:700;color:var(--koala);margin-bottom:6px">Toutes les crèches</div><style>#lc-contenu .rec{width:100%;border-collapse:collapse;font-size:13px}#lc-contenu .rec th,#lc-contenu .rec td{border:1px solid #E6E3F3;padding:6px 10px;text-align:right}#lc-contenu .rec th:first-child,#lc-contenu .rec td:first-child{text-align:left}#lc-contenu .rec th{background:#EEEDF8;color:var(--koala)}#lc-contenu .rec tfoot td{font-weight:800;background:#FDE8D6}#lc-contenu .sv{margin-top:8px;font-size:12px;color:#6B4300}</style>'+lcRecapTableau(lcRecap())+'</div>');
+  }
 }
 function lcFicheHtml(d,base){
   const g=d.g,total=LC_TRANCHES.reduce((a,t)=>a+g[t.k].length,0);
@@ -123,4 +126,41 @@ function lcCsv(){
   a.download='livres-cadeaux-'+lcDonnees.ref+'.csv';
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* Récapitulatif toutes crèches (direction) : une ligne par crèche, une colonne par tranche. */
+function lcRecap(){
+  const lignes=cacheCreches.map(c=>{
+    const d=lcCalculer(c.id),n=LC_TRANCHES.map(t=>d.g[t.k].length);
+    return{nom:c.name,n,sans:d.g.sans.length,total:n.reduce((a,b)=>a+b,0)};
+  });
+  const tot=LC_TRANCHES.map((t,i)=>lignes.reduce((a,l)=>a+l.n[i],0));
+  return{ref:document.getElementById('lc-date').value||lcDateParDefaut(),lignes,tot,
+    sans:lignes.reduce((a,l)=>a+l.sans,0),total:tot.reduce((a,b)=>a+b,0)};
+}
+function lcRecapTableau(r){
+  const th=LC_TRANCHES.map(t=>'<th>'+t.lib+'</th>').join('');
+  return'<table class="rec"><thead><tr><th>Crèche</th>'+th+'<th>Total</th></tr></thead><tbody>'
+    +r.lignes.map(l=>'<tr><td>'+lcEsc(l.nom)+'</td>'+l.n.map(x=>'<td>'+x+'</td>').join('')+'<td><b>'+l.total+'</b></td></tr>').join('')
+    +'</tbody><tfoot><tr><td>Toutes les crèches</td>'+r.tot.map(x=>'<td>'+x+'</td>').join('')+'<td>'+r.total+'</td></tr></tfoot></table>'
+    +(r.sans?'<div class="sv">'+r.sans+' enfant'+(r.sans>1?'s':'')+' non compté'+(r.sans>1?'s':'')+' (date de naissance manquante ou postérieure à la date choisie).</div>':'');
+}
+function lcRecapHtml(r,base){
+  return'<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Livres cadeaux — toutes les crèches</title>'
+    +'<style>@page{size:A4 landscape;margin:14mm}*{box-sizing:border-box}'
+    +'body{font-family:system-ui,Segoe UI,Arial,sans-serif;color:#2B2740;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'.hd{background:#4A3F9F;color:#fff;padding:12px 16px;border-radius:10px;display:flex;align-items:center;gap:14px}'
+    +'.hd img{height:42px;background:#fff;border-radius:8px;padding:4px 10px}.hd h1{margin:0;font-size:22px}.hd small{opacity:.85}'
+    +'.rec{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}.rec th,.rec td{border:1px solid #D9D5EE;padding:7px 10px;text-align:right}'
+    +'.rec th:first-child,.rec td:first-child{text-align:left}.rec th{background:#EEEDF8;color:#4A3F9F}.rec tfoot td{font-weight:800;background:#FDE8D6}'
+    +'.sv{font-size:12px;background:#FFF3DC;color:#6B4300;border-radius:8px;padding:6px 10px}'
+    +'.pied{text-align:center;font-size:9px;color:#999;margin-top:14px}</style></head><body>'
+    +'<div class="hd"><img src="'+base+'logo-koalakids.png" alt="Koala Kids"><div><h1>Livres cadeaux — toutes les crèches</h1><small>Âges au '+lcDateFr(r.ref)+' · '+r.total+' livres à prévoir</small></div></div>'
+    +lcRecapTableau(r)+'<div class="pied">Application créée par David Bucari</div></body></html>';
+}
+function lcImprimerRecap(){
+  const w=window.open('','_blank');if(!w){showBanner('Autorisez les fenêtres pop-up pour imprimer.','error');return;}
+  const base=location.href.replace(/[^/]*([?#].*)?$/,'');
+  w.document.write(lcRecapHtml(lcRecap(),base).replace('</body>','<script>window.onload=function(){window.print();}<\/script></body>'));
+  w.document.close();
 }
