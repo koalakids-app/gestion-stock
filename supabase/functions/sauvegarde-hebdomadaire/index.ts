@@ -28,6 +28,10 @@
 //   BACKUP_TRIGGER_SECRET                     jeton partagé avec le workflow
 //                                              GitHub Actions (à générer,
 //                                              ex. `openssl rand -hex 32`).
+//   BACKUP_ENCRYPTION_KEY                     (recommandé) phrase secrète longue : l'archive est alors
+//                                              chiffrée (AES-256-GCM) avant l'envoi et ne se lit qu'avec
+//                                              tools/dechiffrer-sauvegarde.mjs. Sans elle, l'archive part
+//                                              en clair (comme avant) et la réponse l'indique.
 //   BACKUP_EMAIL_TO                           destinataire(s) de la sauvegarde,
 //                                              séparés par des virgules.
 //                                              Défaut : GMAIL_USER lui-même.
@@ -46,6 +50,10 @@ import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 //     signatures_pending, login_events, mfa_codes_secours*, notifs_retenues,
 //     *_brouillons, *_masquees, consignes_lues, replies, support_messages,
 //     suivi_consultations, demandes_traitees, depots_externes) : rien à restaurer.
+//   - `album_references` / `album_propositions` : empreintes de visages (biométrie) et propositions
+//     du tri par visage, recalculables ; elles ne partent pas par e-mail.
+//   - FICHIERS du Storage (photos, documents, pièces) : NON inclus (plusieurs Go) ; voir
+//     docs/sauvegarde-fichiers.md pour la copie des buckets.
 //   - "sante" : bucket de Storage (fichiers des PAI), pas une table.
 //   - "assets" : c'est un bucket de Storage (fichiers), pas une table.
 //   - "module" / "quiz" (Demandes › Collaborateurs, collaborateur.html) : vivent dans
@@ -100,6 +108,11 @@ const TABLES = [
   'factures_series', 'evenements', 'reunions_equipe', 'notes_libres', 'guides_parents',
   'guides_parents_blocs', 'messages_employes', 'messages_employes_destinataires', 'partenaires',
   'organisations', 'pmi_config', 'support_responsables', 'acces_documents', 'archivage_purges',
+  // Ajoutées après l'audit de sécurité (novembre 2026) : tables métier créées depuis la liste d'origine.
+  // `album_references` (empreintes de visages = données biométriques) n'est volontairement PAS sauvegardée par e-mail.
+  'album_accords_signatures', 'album_journal', 'album_photos', 'album_photos_enfants', 'album_visages_accord',
+  'devis_relances_log', 'employes_visites_medicales', 'famille_acces', 'famille_documents',
+  'famille_messages', 'famille_messages_lus', 'frigo_temperature_journal', 'replies',
 ];
 
 const json = (body: unknown, status = 200) =>
@@ -123,6 +136,33 @@ async function dumpTable(table: string): Promise<unknown[]> {
     if (!data || data.length < page) break;
   }
   return rows;
+}
+
+// Chiffrement AES-256-GCM, clé dérivée de la phrase secrète (PBKDF2-SHA256, 250 000 tours).
+// Format : "KKB1" (4 octets) + sel (16) + IV (12) + données chiffrées. Voir tools/dechiffrer-sauvegarde.mjs.
+async function chiffrer(donnees: Uint8Array, phrase: string): Promise<Uint8Array> {
+  const enc = new TextEncoder();
+  const sel = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const base = await crypto.subtle.importKey('raw', enc.encode(phrase), 'PBKDF2', false, ['deriveKey']);
+  const cle = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: sel, iterations: 250000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt'],
+  );
+  const chiffre = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cle, donnees));
+  const sortie = new Uint8Array(4 + 16 + 12 + chiffre.length);
+  sortie.set(enc.encode('KKB1'), 0);
+  sortie.set(sel, 4);
+  sortie.set(iv, 20);
+  sortie.set(chiffre, 32);
+  return sortie;
+}
+
+function enBase64(octets: Uint8Array): string {
+  let binaire = '';
+  const chunk = 8192;
+  for (let i = 0; i < octets.length; i += chunk) binaire += String.fromCharCode(...octets.subarray(i, i + chunk));
+  return btoa(binaire);
 }
 
 async function gzipBase64(text: string): Promise<string> {
@@ -169,10 +209,16 @@ Deno.serve(async (req) => {
   const payload = { version: '1.0', exportedAt: new Date().toISOString(), erreurs, tables: dump };
 
   let attachmentB64: string;
+  const phrase = Deno.env.get('BACKUP_ENCRYPTION_KEY') || '';
+  const chiffree = phrase.length >= 16;
   try {
     attachmentB64 = await gzipBase64(JSON.stringify(payload));
+    if (chiffree) {
+      const brut = Uint8Array.from(atob(attachmentB64), (c) => c.charCodeAt(0));
+      attachmentB64 = enBase64(await chiffrer(brut, phrase));
+    }
   } catch (e) {
-    return json({ erreur: `Échec de compression : ${e}` }, 500);
+    return json({ erreur: `Échec de compression ou de chiffrement : ${e}` }, 500);
   }
 
   const user = Deno.env.get('GMAIL_USER');
@@ -187,7 +233,8 @@ Deno.serve(async (req) => {
   const nbLignes = Object.values(dump).reduce((n, rows) => n + rows.length, 0);
   const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6">
     Sauvegarde hebdomadaire automatique de la base Koala Kids.<br>
-    ${nbTables} tables, ${nbLignes} lignes au total.
+    ${nbTables} tables, ${nbLignes} lignes au total.<br>
+    ${chiffree ? 'Archive <b>chiffrée</b> (à ouvrir avec tools/dechiffrer-sauvegarde.mjs).' : '<b style="color:#b00">Archive NON chiffrée</b> : définir BACKUP_ENCRYPTION_KEY dans les secrets de la fonction.'}
     ${erreurs.length ? `<br><b style="color:#b00">${erreurs.length} table(s) en erreur (voir pièce jointe, champ "erreurs").</b>` : ''}
     <hr style="border:none;border-top:1px solid #E7E5E0;margin:20px 0">
     <div style="font-size:11px;color:#888">Envoyé automatiquement chaque semaine depuis l'application Koala Kids.</div>
@@ -204,7 +251,7 @@ Deno.serve(async (req) => {
       content: 'Ce message necessite un client de messagerie compatible HTML.',
       html,
       attachments: [
-        { filename: `sauvegarde-koalakids-${date}.json.gz`, content: attachmentB64, encoding: 'base64' },
+        { filename: `sauvegarde-koalakids-${date}.json.gz${chiffree ? '.enc' : ''}`, content: attachmentB64, encoding: 'base64' },
       ],
     });
   } catch (mailErr) {
@@ -217,5 +264,5 @@ Deno.serve(async (req) => {
     try { await client.close(); } catch { /* connexion jamais ouverte */ }
   }
 
-  return json({ ok: true, tables: nbTables, lignes: nbLignes, erreurs }, 200);
+  return json({ ok: true, tables: nbTables, lignes: nbLignes, chiffree, taille_ko: Math.round(attachmentB64.length * 0.75 / 1024), erreurs }, 200);
 });
