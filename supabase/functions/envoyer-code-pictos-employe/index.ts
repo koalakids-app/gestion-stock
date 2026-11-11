@@ -27,6 +27,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { crecheParId, estServiceRole, identifierAppelant, peutGererCreche } from "../_shared/appelant.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const CORS_HEADERS = {
@@ -139,6 +140,13 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // Appelant identifié (personne connectée) ; appel interne autorisé.
+  let appelant = null;
+  if (!estServiceRole(req)) {
+    appelant = await identifierAppelant(supabase, req);
+    if (!appelant) return json({ error: "authentification_manquante" }, 401);
+  }
+
   try {
     const { data: employe, error: eErr } = await supabase
       .from("employes")
@@ -147,6 +155,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (eErr) throw eErr;
     if (!employe) return json({ error: "employe_introuvable" }, 404);
+    if (appelant && !peutGererCreche(appelant, await crecheParId(supabase, employe.creche_id))) {
+      return json({ error: "creche_non_autorisee" }, 403);
+    }
     if (!Array.isArray(employe.code_pictos) || employe.code_pictos.length !== 4) {
       return json({ error: "code_absent" }, 400);
     }

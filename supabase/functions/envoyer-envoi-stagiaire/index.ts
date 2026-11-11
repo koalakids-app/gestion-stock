@@ -11,6 +11,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { crecheParId, estGestionnaire, identifierAppelant, peutGererCreche } from "../_shared/appelant.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const CORS = {
@@ -41,11 +42,9 @@ Deno.serve(async (req) => {
 
   try {
     // L'appelant doit être un compte de l'appli (référent ou direction).
-    const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-    const { data: u } = await sb.auth.getUser(jwt);
-    if (!u?.user) return json({ error: "non_autorise" }, 401);
-    const { data: ref } = await sb.from("referents").select("id").eq("user_id", u.user.id).maybeSingle();
-    if (!ref) return json({ error: "non_autorise" }, 403);
+    const appelant = await identifierAppelant(sb, req);
+    if (!appelant) return json({ error: "non_autorise" }, 401);
+    if (!estGestionnaire(appelant)) return json({ error: "non_autorise" }, 403);
 
     const { data: envoi } = await sb.from("stagiaires_envois")
       .select("id, stagiaire_id, libelle, message").eq("id", body.envoi_id).maybeSingle();
@@ -54,6 +53,12 @@ Deno.serve(async (req) => {
     const { data: stag } = await sb.from("stagiaires")
       .select("prenom, email, token, token_expire_le, creche_id, statut").eq("id", envoi.stagiaire_id).maybeSingle();
     if (!stag) return json({ error: "stagiaire_introuvable" }, 404);
+    // Droits sur la crèche du stagiaire (sans crèche : organisation invérifiable, direction seulement).
+    {
+      const cr0 = await crecheParId(sb, stag.creche_id);
+      const ok = cr0 ? peutGererCreche(appelant, cr0) : appelant.role === "direction";
+      if (!ok) return json({ error: "creche_non_autorisee" }, 403);
+    }
     if (!stag.email) return json({ error: "aucun_email" }, 400);
     if (!stag.token || !stag.token_expire_le || new Date(stag.token_expire_le).getTime() < Date.now()
         || stag.statut === "annule" || stag.statut === "refuse") {

@@ -28,6 +28,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { crecheParId, estServiceRole, identifierAppelant, peutGererCreche } from "../_shared/appelant.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const CORS_HEADERS = {
@@ -157,6 +158,13 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  let appelant = null;
+  if (!estServiceRole(req)) {
+    appelant = await identifierAppelant(supabase, req);
+    if (!appelant) return json({ error: "authentification_manquante" }, 401);
+  }
+  if (!/^https:\/\/[^\s<>"']+$/i.test(String(lien))) return json({ error: "lien_invalide" }, 400);
+
   try {
     const { data: dossier, error: dErr } = await supabase
       .from("dossiers_pieces_employe")
@@ -171,6 +179,9 @@ Deno.serve(async (req) => {
 
     const { data: employe } = await supabase
       .from("employes").select("prenom, nom, creche_id").eq("id", dossier.employe_id).maybeSingle();
+    if (appelant && !peutGererCreche(appelant, await crecheParId(supabase, employe?.creche_id))) {
+      return json({ error: "creche_non_autorisee" }, 403);
+    }
     const { data: creche } = employe
       ? await supabase.from("creches").select("name, org_id").eq("id", employe.creche_id).maybeSingle()
       : { data: null };

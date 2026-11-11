@@ -30,6 +30,7 @@
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { crecheParId, estServiceRole, identifierAppelant, peutGererCreche } from '../_shared/appelant.ts';
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 
 const cors = {
@@ -188,6 +189,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const appelant = estServiceRole(req) ? null : await identifierAppelant(sb, req);
+    if (!appelant && !estServiceRole(req)) return json({ erreur: 'Authentification manquante.' }, 401);
+
     const { preinscription_id, expediteur, objet, message } = await req.json();
     // Vide = texte par défaut, jamais un mail à l'objet blanc.
     const objetPerso = typeof objet === 'string' && objet.trim() ? objet.trim() : null;
@@ -198,6 +202,12 @@ Deno.serve(async (req) => {
       .select('prenom,nom,date_visite,heure_visite,creche_id')
       .eq('id', preinscription_id).maybeSingle();
     if (!pre) return json({ erreur: 'Préinscription introuvable' }, 404);
+    if (appelant) {
+      // Fiche sans crèche : organisation invérifiable, réservée à la direction.
+      const cr0 = await crecheParId(sb, pre.creche_id);
+      const ok = cr0 ? peutGererCreche(appelant, cr0) : appelant.role === 'direction';
+      if (!ok) return json({ erreur: 'Crèche non autorisée' }, 403);
+    }
     if (!pre.date_visite) return json({ erreur: 'Aucune visite programmée sur cette fiche' }, 409);
 
     const { data: parents } = await sb.from('preinscriptions_parents')

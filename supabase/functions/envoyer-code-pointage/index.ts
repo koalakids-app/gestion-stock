@@ -30,6 +30,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { crecheParId, estServiceRole, identifierAppelant, peutGererCreche } from "../_shared/appelant.ts";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const CORS_HEADERS = {
@@ -128,6 +129,13 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // Appelant identifié (personne connectée) ; appel interne autorisé.
+  let appelant = null;
+  if (!estServiceRole(req)) {
+    appelant = await identifierAppelant(supabase, req);
+    if (!appelant) return json({ error: "authentification_manquante" }, 401);
+  }
+
   try {
     if (type === "enfant") {
       const { data: enfant, error: eErr } = await supabase
@@ -137,6 +145,9 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (eErr) throw eErr;
       if (!enfant) return json({ error: "enfant_introuvable" }, 404);
+      if (appelant && !peutGererCreche(appelant, await crecheParId(supabase, enfant.creche_id))) {
+        return json({ error: "creche_non_autorisee" }, 403);
+      }
       if (!enfant.code_pointage) return json({ error: "code_absent" }, 400);
 
       const { data: creche } = await supabase
@@ -168,11 +179,15 @@ Deno.serve(async (req) => {
     if (type === "salarie") {
       const { data: referent, error: rErr } = await supabase
         .from("referents")
-        .select("id, name, email, code_pointage, creche_id")
+        .select("id, name, email, code_pointage, creche_id, org_id")
         .eq("id", id)
         .maybeSingle();
       if (rErr) throw rErr;
       if (!referent) return json({ error: "referent_introuvable" }, 404);
+      // Compte direction/référent : réservé à la direction de la même organisation.
+      if (appelant && !(appelant.role === "direction" && referent.org_id === appelant.orgId)) {
+        return json({ error: "droits_insuffisants" }, 403);
+      }
       if (!referent.code_pointage) return json({ error: "code_absent" }, 400);
       if (!referent.email) return json({ error: "aucun_email" }, 400);
 
@@ -200,6 +215,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (emErr) throw emErr;
     if (!employe) return json({ error: "employe_introuvable" }, 404);
+    if (appelant && !peutGererCreche(appelant, await crecheParId(supabase, employe.creche_id))) {
+      return json({ error: "creche_non_autorisee" }, 403);
+    }
     if (!employe.code_pointage) return json({ error: "code_absent" }, 400);
     if (!employe.email) return json({ error: "aucun_email" }, 400);
 
