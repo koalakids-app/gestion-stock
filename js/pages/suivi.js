@@ -64,6 +64,22 @@ let enfantJalons=null;
 let lastBatch=null; // {table, ids:[...]}
 let toastTimer=null;
 
+/* Identifiant propre à cette tablette (même clé que le pointage, tablette.js) : un jeton déjà lié à une
+   tablette n'est accepté que de celle-ci (sql/securite_priorite2_codes_et_kiosques.sql). */
+const APPAREIL=(function(){
+  let a='';
+  try{
+    a=localStorage.getItem('kk_pointage_appareil')||'';
+    if(a.length<16){
+      a=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2))+'-'+Math.random().toString(36).slice(2);
+      localStorage.setItem('kk_pointage_appareil',a);
+    }
+  }catch(e){a=a||'';}
+  return a;
+})();
+/* Appel d'une fonction de kiosque avec l'identifiant de la tablette (aussi pour la file hors-ligne : ajouté au rejeu). */
+function rpcK(fn,args){return sb.rpc(fn,Object.assign({},args,{p_appareil:APPAREIL}));}
+
 /* File d'attente hors-ligne : un item par action qui a échoué faute de
    réseau. Rejouée dès que le navigateur repasse en ligne. */
 const QUEUE_KEY='suivi_queue_'+TOKEN;
@@ -75,7 +91,7 @@ async function queueRejouer(){
   if(!q.length)return;
   const restants=[];
   for(const item of q){
-    const{error}=await sb.rpc(item.fn,item.args);
+    const{error}=await rpcK(item.fn,item.args);
     if(error)restants.push(item);
   }
   queueEcrire(restants);
@@ -103,6 +119,12 @@ tickClock();setInterval(tickClock,1000);
       const detail=error?(error.message||JSON.stringify(error)):'crecheId vide (token introuvable ou inactif)';
       app.innerHTML='<i class="ti ti-alert-triangle"></i><h2>Tablette non configurée</h2><p style="color:var(--muted);font-size:13px">Contactez la direction pour reconfigurer cet appareil.</p>'
         +'<p style="color:var(--err);font-size:11px;margin-top:10px;word-break:break-all;max-width:320px">'+esc(detail)+'</p>';
+      return;
+    }
+    /* Lie cette tablette au jeton (la première à l'ouvrir) ; une autre tablette ou un téléphone est refusé. */
+    const{data:lien}=await sb.rpc('kk_kiosk_lier',{p_token:TOKEN,p_appareil:APPAREIL});
+    if(lien==='autre_appareil'){
+      app.innerHTML='<i class="ti ti-alert-triangle"></i><h2>Tablette non autorisée</h2><p style="color:var(--muted);font-size:13px">Ce lien est réservé à la tablette de la crèche. Contactez la direction (Paramètres › Dissocier l\'appareil) pour le changer.</p>';
       return;
     }
     afficherIdentification();
@@ -1094,7 +1116,7 @@ async function afficherIdentification(){
   AUTEUR_TYPE=null;AUTEUR_ID=null;AUTEUR_LABEL='';btnAuteur.classList.add('hidden');
   app.className='state';
   app.innerHTML='<i class="ti ti-loader-2"></i><h2>Chargement…</h2>';
-  const{data,error}=await sb.rpc('kk_suivi_kiosk_personnel_present',{p_token:TOKEN});
+  const{data,error}=await rpcK('kk_suivi_kiosk_personnel_present',{p_token:TOKEN});
   if(error){
     app.innerHTML='<i class="ti ti-wifi-off"></i><h2>Connexion impossible</h2><p style="color:var(--muted);font-size:13px">Vérifiez le Wi-Fi et réessayez.</p><button class="chip orange" style="margin-top:14px" onclick="afficherIdentification()">Réessayer</button>';
     return;
@@ -1137,7 +1159,7 @@ async function chargerJalonsRef(){
 
 async function chargerEnfants(){
   ecran='grille';selection.clear();
-  const{data,error}=await sb.rpc('kk_suivi_kiosk_enfants_presents',{p_token:TOKEN});
+  const{data,error}=await rpcK('kk_suivi_kiosk_enfants_presents',{p_token:TOKEN});
   chargerJalonsRef();
   if(error){
     app.innerHTML='<i class="ti ti-wifi-off"></i><h2>Connexion impossible</h2><p style="color:var(--muted);font-size:13px">Vérifiez le Wi-Fi et réessayez.</p><button class="chip orange" style="margin-top:14px" onclick="chargerEnfants()">Réessayer</button>';
@@ -1199,7 +1221,7 @@ let COUCHES=[];
 async function ouvrirCouches(){
   retirerBarre();selection.clear();ecran='couches';
   app.innerHTML='<i class="ti ti-loader-2"></i><h2>Chargement…</h2>';
-  const{data,error}=await sb.rpc('kk_couches_kiosk_enfants',{p_token:TOKEN});
+  const{data,error}=await rpcK('kk_couches_kiosk_enfants',{p_token:TOKEN});
   if(error){
     app.innerHTML='<i class="ti ti-wifi-off"></i><h2>Connexion impossible</h2><button class="chip orange" style="margin-top:14px" onclick="ouvrirCouches()">Réessayer</button>';
     return;
@@ -1228,7 +1250,7 @@ async function majCouches(id,d){
   const c=COUCHES.find(x=>x.id===id);if(!c)return;
   const nb=Math.max(0,Math.min(30,c.nb+d));
   if(nb===c.nb)return;
-  const{data,error}=await sb.rpc('kk_couches_kiosk_saisir',{p_token:TOKEN,p_auteur_type:AUTEUR_TYPE,p_auteur_id:AUTEUR_ID,p_enfant_id:id,p_nb:nb});
+  const{data,error}=await rpcK('kk_couches_kiosk_saisir',{p_token:TOKEN,p_auteur_type:AUTEUR_TYPE,p_auteur_id:AUTEUR_ID,p_enfant_id:id,p_nb:nb});
   const r=data&&data[0];
   if(error||!r||!r.ok){
     if(r&&r.error==='auteur_absent'){afficherIdentification();alert('Identification perdue. Merci de vous identifier à nouveau.');return;}
@@ -1355,7 +1377,7 @@ async function envoyerSaisie(type,valeur){
     toast('Enregistré (hors ligne, sera envoyé au retour du réseau).',null);
     return;
   }
-  const{data,error}=await sb.rpc('kk_suivi_kiosk_saisir',args);
+  const{data,error}=await rpcK('kk_suivi_kiosk_saisir',args);
   if(error){
     queueAjouter({fn:'kk_suivi_kiosk_saisir',args});
     toast('Réseau indisponible : mis en attente.',null);
@@ -1391,7 +1413,7 @@ async function annulerDernier(){
   const{table,ids}=lastBatch;
   lastBatch=null;
   for(const id of ids){
-    await sb.rpc('kk_suivi_kiosk_annuler',{p_token:TOKEN,p_auteur_type:AUTEUR_TYPE,p_auteur_id:AUTEUR_ID,p_id:id,p_table:table});
+    await rpcK('kk_suivi_kiosk_annuler',{p_token:TOKEN,p_auteur_type:AUTEUR_TYPE,p_auteur_id:AUTEUR_ID,p_id:id,p_table:table});
   }
   chargerEnfants();
 }
@@ -1485,7 +1507,7 @@ async function marquerJalon(enfantId,jalonId,statut,row,btn){
   const args={p_token:TOKEN,p_auteur_type:AUTEUR_TYPE,p_auteur_id:AUTEUR_ID,p_enfant_id:enfantId,p_jalon_id:jalonId,
     p_statut:statut,p_note:null,p_posture:null,p_partage:'interne'};
   if(!navigator.onLine){queueAjouter({fn:'kk_suivi_kiosk_observer',args});return;}
-  const{data,error}=await sb.rpc('kk_suivi_kiosk_observer',args);
+  const{data,error}=await rpcK('kk_suivi_kiosk_observer',args);
   if(error){queueAjouter({fn:'kk_suivi_kiosk_observer',args});return;}
   const row0=Array.isArray(data)?data[0]:data;
   if(row0&&!row0.ok&&row0.error==='auteur_absent'){
