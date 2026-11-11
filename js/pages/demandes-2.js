@@ -479,7 +479,7 @@ const NOTICE_ONGLET_SECTION = {
   demands:'demandes', incidents:'incidents', presence:'presences', planning:'planning', evenements:'evenements',
   enfants:'enfants', vaccinations:'vaccinations', stagiaires:'stagiaires', partenaires:'partenaires',
   referents:'referents', dashboard:'dashboards', 'ref-dashboard':'dashboards', actions:'actions', 'reunions-equipe':'reunionsequipe', afaire:'afaire',
-  remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches', album:'album', 'insc-suivi':'inscsuivi'
+  remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches', album:'album', livres:'livres', 'insc-suivi':'inscsuivi'
 };
 function openNotice() {
   document.getElementById('modal-notice').classList.add('open');
@@ -973,6 +973,18 @@ inscsuivi: `
   <li>Elle se trie par date d’entrée ou par nom ; la direction choisit aussi la <strong>crèche</strong> (ou toutes).</li>
 </ol>
 <div style="font-size:12px;color:#888">Les informations de santé, les devis et les montants ne sont pas visibles ici.</div>
+`,
+
+livres: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">📚 Livres cadeaux</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Cette tuile, dans <strong>Enfants &amp; suivi</strong>, liste les enfants de la crèche par tranche d’âge (<strong>0-12, 12-24, 24-36 mois, plus de 36 mois</strong>) pour prévoir un livre cadeau par enfant.</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li>Les âges sont calculés <strong>à la date choisie</strong> (par défaut le 25 décembre) : modifiez « Âges au » pour une autre date. La direction choisit la crèche, un référent voit la sienne.</li>
+  <li>Chaque enfant apparaît avec son <strong>prénom et l’initiale du nom</strong> ; le chiffre de chaque tranche donne le nombre de livres à commander.</li>
+  <li>Les enfants inscrits qui ne sont pas encore entrés sont comptés ; les dossiers archivés ne le sont pas.</li>
+  <li>Un enfant sans date de naissance (ou né après la date choisie) n’est pas compté : il apparaît dans <strong>À vérifier</strong>.</li>
+  <li><strong>Imprimer / PDF</strong> sort la fiche pour la commande, <strong>CSV</strong> l’exporte pour un tableur.</li>
+</ol>
 `,
 
 album: `
