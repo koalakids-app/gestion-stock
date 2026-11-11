@@ -486,14 +486,15 @@ function echeanceDevis(d){
   return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
 }
 
-/* Dépose le PDF du devis dans l'Espace famille (voir js/famille-documents.js) : il y apparaît dès que
-   l'enfant a un contrat issu de ce devis (contrats.devis_id). Jamais bloquant. */
+/* Dépose le PDF du devis dans l'Espace famille (voir js/famille-documents.js) : il n'apparaît
+   qu'une fois l'accès famille créé, donc après la signature du contrat issu de ce devis
+   (contrats.devis_id ; voir sql/espace_famille_creation_auto.sql). Jamais bloquant. */
 async function publierPdfDevis(d,base64,avecMessage){
   if(!d.creche_id||!window.KkFamilleDocs)return false;
   try{
     await KkFamilleDocs.publier({type:'devis',sourceId:d.id,crecheId:d.creche_id,base64:base64,
       titre:'Devis'+(d.numero?' — '+d.numero:'')+(d.signature_png?' (signé)':'')});
-    if(avecMessage)toast('Devis disponible dans l\'Espace famille ✅');
+    if(avecMessage)toast('Devis mis de côté ✅ La famille le verra dans son Espace famille une fois le contrat signé (l\'accès est créé à ce moment-là).');
     return true;
   }catch(e){
     console.warn('[publierPdfDevis]',e);
