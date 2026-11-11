@@ -1,7 +1,8 @@
 /* Livres cadeaux — Demandes › Enfants & suivi › « Livres cadeaux » (préfixe lc).
    Liste par crèche et par tranche d'âge (0-12, 12-24, 24-36, plus de 36 mois), âge calculé à une
    date de référence (par défaut le 25 décembre). Prénom + initiale du nom seulement (minimisation RGPD).
-   Enfants non archivés, y compris ceux qui ne sont pas encore entrés. Lecture seule, pas de SQL. */
+   Enfants non archivés, y compris ceux qui ne sont pas encore entrés ; sont écartés ceux dont le contrat a pris fin
+   avant la date de référence (`lcContratFini`). Lecture seule, pas de SQL. */
 const LC_TRANCHES=[
   {k:'t0',lib:'0-12 mois',min:0,max:12},
   {k:'t1',lib:'12-24 mois',min:12,max:24},
@@ -10,6 +11,30 @@ const LC_TRANCHES=[
 ];
 const lcEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 let lcDonnees=null;
+let lcFins={};
+// Date de fin la plus tardive connue (anciens contrats + contrats signés), comme enfChargerContratsFin.
+async function lcChargerFins(){
+  try{
+    const[{data:ec},{data:c}]=await Promise.all([
+      sb.from('enfants_contrats').select('enfant_id,date_fin'),
+      sb.from('contrats').select('enfant_id,date_fin').in('statut',['signe','contresigne'])
+    ]);
+    const f={};
+    (ec||[]).concat(c||[]).forEach(r=>{
+      if(!r.enfant_id||!r.date_fin)return;
+      if(!f[r.enfant_id]||r.date_fin>f[r.enfant_id])f[r.enfant_id]=r.date_fin;
+    });
+    lcFins=f;
+  }catch(err){console.warn('lcChargerFins',err);}
+  lcRender();
+}
+// Contrat terminé avant la date de référence : date de sortie ou fin de contrat la plus tardive.
+function lcContratFini(e,ref){
+  let fin=e.date_sortie||'';
+  const c=lcFins[e.id];
+  if(c&&c>fin)fin=c;
+  return !!fin&&fin<ref;
+}
 
 function lcDateParDefaut(){
   const n=new Date();let a=n.getFullYear();
@@ -29,6 +54,7 @@ function lcInit(){
   const d=document.getElementById('lc-date');
   if(d&&!d.value)d.value=lcDateParDefaut();
   lcRender();
+  lcChargerFins();
 }
 // Mois complets entre la naissance et la date de référence (négatif = pas encore né).
 function lcAgeMois(dob,ref){
@@ -51,7 +77,7 @@ function lcCalculer(crecheId){
   const ref=document.getElementById('lc-date').value||lcDateParDefaut();
   const creche=crecheId||lcCrecheId();
   const g={t0:[],t1:[],t2:[],t3:[],sans:[]};
-  cacheEnfants.filter(e=>String(e.creche_id)===String(creche)&&!enfIsArchived(e)).forEach(e=>{
+  cacheEnfants.filter(e=>String(e.creche_id)===String(creche)&&!enfIsArchived(e)&&!lcContratFini(e,ref)).forEach(e=>{
     if(!e.dob){g.sans.push({e,m:null});return;}
     const m=lcAgeMois(e.dob,ref);
     if(m===null||m<0){g.sans.push({e,m:null,anaitre:m!==null});return;}

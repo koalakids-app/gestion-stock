@@ -981,7 +981,7 @@ livres: `
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Les âges sont calculés <strong>à la date choisie</strong> (par défaut le 25 décembre) : modifiez « Âges au » pour une autre date. La direction choisit la crèche, un référent voit la sienne.</li>
   <li>Chaque enfant apparaît avec son <strong>prénom et l’initiale du nom</strong> ; le chiffre de chaque tranche donne le nombre de livres à commander.</li>
-  <li>Les enfants inscrits qui ne sont pas encore entrés sont comptés ; les dossiers archivés ne le sont pas.</li>
+  <li>Les enfants inscrits qui ne sont pas encore entrés sont comptés ; les dossiers archivés ne le sont pas, ni les enfants dont le <strong>contrat a pris fin</strong> avant la date choisie (date de sortie ou fin du dernier contrat).</li>
   <li>Un enfant sans date de naissance (ou né après la date choisie) n’est pas compté : il apparaît dans <strong>À vérifier</strong>.</li>
   <li>La direction voit aussi, sous les tranches, un <strong>tableau de toutes les crèches</strong> (une ligne par crèche, un total général) ; le bouton <strong>Récap. toutes crèches (PDF)</strong> l’imprime.</li>
   <li><strong>Imprimer / PDF</strong> sort la fiche pour la commande, <strong>CSV</strong> l’exporte pour un tableur.</li>
