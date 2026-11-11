@@ -125,6 +125,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Pointage : tablette liée à un appareil
 - `kiosk_devices.appareil_id` : le jeton n'est accepté que de l'appareil qui l'a ouvert en premier (`kk_kiosk_lier`, identifiant dans `localStorage` `kk_pointage_appareil`, `js/pages/tablette.js`) ; `kk_kiosk_pointer_pictos` / `kk_kiosk_pointer_enfant_pictos` prennent `p_appareil`. Direction : « Dissocier l'appareil » dans Paramètres. Type `reunion` = tablette de réunion des référents (jamais d'enfants ; pointage sur la crèche du référent, source `kiosque_reunion`). `sql/kiosque_appareil_lie.sql` (appliqué) : ouvrir le lien sur chaque tablette pour la lier. L'ancien « Mode kiosque » connecté de Demandes (`js/kiosque.js`) est retiré : on ne pointe que sur une tablette liée (corrections d'oubli : Présences › Correction).
 
+## Photo de l'enfant
+- En-tête de la fiche enfant (`js/enfants/05-photo.js`, `enfPhotoCharger`) : `enfants_documents_admin` avec `piece_key = 'photo_enfant'`, bucket `documents-admin`, une seule photo (remplacer = supprimer l'ancienne), réduite à 600 px, URL signée à l'affichage. Pas de SQL ; non listée dans « Autres documents importés ».
+
 ## Notice de l'application
 - Notice Demandes : `js/pages/demandes-2.js` (sections `enfants`, `mcm`, etc.).
 - Notice du registre de soins : bloc « Les PAI » dans `js/pages/infirmerie.js`.
