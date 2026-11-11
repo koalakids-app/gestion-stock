@@ -3,7 +3,7 @@
    Les données viennent de la fonction SQL entrees_a_venir_referent
    (sql/entrees_a_venir_referents.sql) : enfants déjà inscrits dont l'accueil n'a pas
    encore commencé, crèche du référent uniquement (la direction voit toutes les
-   crèches), aucun contact, aucun montant. Aucun bouton d'écriture ici ; le module
+   crèches), coordonnées des parents comprises, aucun montant. Aucun bouton d'écriture ici ; le module
    Inscriptions reste réservé à la direction. */
 var SI = { entrees: [], charge: false, creche: '', tri: 'date' };
 
@@ -81,10 +81,19 @@ function siRender() {
   }
   h += '<div style="display:flex;flex-direction:column;gap:6px">';
   siTrier(liste).forEach(function (x) {
+    var parents = (x.parents || []).map(function (p) {
+      var nom = ((p.prenom || '') + ' ' + (p.nom || '')).trim();
+      var tel = String(p.telephone || '').trim(), mail = String(p.email || '').trim();
+      var bouts = [];
+      if (tel) bouts.push('<a href="tel:' + siEsc(tel.replace(/[^\d+]/g, '')) + '">' + siEsc(tel) + '</a>');
+      if (mail) bouts.push('<a href="mailto:' + siEsc(mail) + '">' + siEsc(mail) + '</a>');
+      return (nom || bouts.length) ? '<div>' + (nom ? '<b style="font-weight:600">' + siEsc(nom) + '</b>' + (bouts.length ? ' · ' : '') : '') + bouts.join(' · ') + '</div>' : '';
+    }).join('');
     h += '<div style="border:1px solid var(--border,#e3e1d8);border-radius:10px;background:#fff;padding:12px 14px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center">'
       + '<b style="flex:1 1 160px">' + siEsc(siNom(x)) + (multi && siNomCreche(x.creche_id) ? '<span style="display:block;font-weight:400;font-size:11.5px;color:var(--muted)">' + siEsc(siNomCreche(x.creche_id)) + '</span>' : '') + '</b>'
       + '<span style="flex:1 1 150px;color:var(--muted);font-size:12.5px">' + (x.dob ? 'né(e) le ' + siDate(x.dob) : 'naissance non renseignée') + '</span>'
       + '<span style="flex:1 1 170px;font-size:12.5px"><b>entrée le ' + siDate(x.entree) + '</b></span>'
+      + '<div style="flex:1 1 100%;font-size:12.5px;color:var(--muted)">' + (parents || 'Coordonnées des parents non renseignées') + '</div>'
       + '</div>';
   });
   h += '</div>';

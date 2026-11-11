@@ -11,8 +11,9 @@
 --   - date d'entrée = première ligne d'accueil future, sinon enfants.date_entree
 --     si elle est dans le futur ;
 --   - dossiers archivés exclus.
--- Champs d'affichage seulement : jamais de contact des parents, de montant ni de
--- donnée de santé. Aucune écriture possible.
+-- Champs d'affichage seulement : nom, naissance, crèche, date d'entrée et
+-- coordonnées des parents (prénom, nom, téléphone, e-mail, table enfants_parents) ;
+-- jamais de montant ni de donnée de santé. Aucune écriture possible.
 --
 -- Annulation : drop function if exists public.entrees_a_venir_referent();
 -- ============================================================================
@@ -43,7 +44,12 @@ as $$
   )
   select coalesce(json_agg(json_build_object(
       'id', e.id, 'prenom', e.prenom, 'nom', e.nom, 'dob', e.dob,
-      'creche_id', e.creche_id, 'entree', e.entree) order by e.entree, e.nom), '[]'::json)
+      'creche_id', e.creche_id, 'entree', e.entree,
+      'parents', coalesce((
+        select json_agg(json_build_object(
+            'prenom', ep.prenom, 'nom', ep.nom, 'telephone', ep.telephone, 'email', ep.email)
+          order by ep.nom, ep.prenom)
+        from public.enfants_parents ep where ep.enfant_id = e.id), '[]'::json)) order by e.entree, e.nom), '[]'::json)
   from e
   where e.entree is not null;
 $$;

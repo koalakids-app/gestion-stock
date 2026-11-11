@@ -969,10 +969,10 @@ inscsuivi: `
 <div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Cette tuile, dans <strong>Pilotage</strong>, permet aux directeurs/trices techniques de <strong>consulter</strong> les enfants déjà inscrits dans leur crèche dont l’accueil n’a pas encore commencé. C’est en <strong>lecture seule</strong> : rien ne se modifie ici.</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
   <li>Ouvrez <strong>Pilotage</strong> › <strong>Entrées à venir</strong>.</li>
-  <li>La liste montre chaque enfant de <strong>votre crèche</strong> avec sa date de naissance et sa <strong>date d’entrée</strong> (première ligne d’accueil à venir, sinon la date de la fiche).</li>
+  <li>La liste montre chaque enfant de <strong>votre crèche</strong> avec sa date de naissance, sa <strong>date d’entrée</strong> (première ligne d’accueil à venir, sinon la date de la fiche) et les <strong>coordonnées des parents</strong> (téléphone et e-mail, cliquables).</li>
   <li>Elle se trie par date d’entrée ou par nom ; la direction choisit aussi la <strong>crèche</strong> (ou toutes).</li>
 </ol>
-<div style="font-size:12px;color:#888">Les coordonnées des parents, les informations de santé, les devis et les montants ne sont pas visibles ici.</div>
+<div style="font-size:12px;color:#888">Les informations de santé, les devis et les montants ne sont pas visibles ici.</div>
 `,
 
 album: `
