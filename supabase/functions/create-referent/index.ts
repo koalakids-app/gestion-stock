@@ -12,9 +12,12 @@
 // n'étaient jamais lues côté client (aucun écran ne forçait le changement) —
 // elles ne sont plus posées ici.
 //
-// Appelée depuis demandes.html (saveRef → callFn) avec l'anon key : le
-// filtrage par droits est déjà fait côté client (module visible aux comptes
-// direction uniquement).
+// Appelée depuis demandes.html (saveRef, accorderAccesTerrain) avec le jeton
+// de la session. Les droits sont contrôlés ICI (_shared/appelant.ts), pas
+// seulement à l'écran : la direction crée tous les profils ; un·e référent·e
+// ne crée que l'accès terrain (rôle « employe ») de sa crèche ; la crèche
+// visée doit être de l'organisation de l'appelant·e ; un profil existant ne
+// se réécrit que dans la même organisation.
 //
 // Déploiement :
 //   supabase functions deploy create-referent
@@ -27,6 +30,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { identifierAppelant, peutGererCreche } from "../_shared/appelant.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,28 +59,6 @@ function lienDirect(
   return u.toString();
 }
 
-/** Extrait le `sub` (user_id) du JWT porté par l'en-tête Authorization, sans
- *  revérifier sa signature : cette fonction a verify_jwt actif (voir
- *  supabase/config.toml ou le dashboard), donc la plateforme a déjà rejeté
- *  toute requête dont le jeton serait invalide ou expiré avant même que ce
- *  code ne s'exécute. Décoder le payload suffit donc pour connaître
- *  l'identité de l'appelant. (Évite de dépendre d'un deuxième client
- *  Supabase avec la clé anon, dont l'injection automatique en variable
- *  d'environnement s'est révélée peu fiable en pratique.) */
-function subDuJeton(authHeader: string | null): string | null {
-  const token = (authHeader || "").replace(/^Bearer\s+/i, "").trim();
-  const partiePayload = token.split(".")[1];
-  if (!partiePayload) return null;
-  try {
-    let b64 = partiePayload.replace(/-/g, "+").replace(/_/g, "/");
-    while (b64.length % 4) b64 += "=";
-    const payload = JSON.parse(atob(b64));
-    return typeof payload.sub === "string" ? payload.sub : null;
-  } catch {
-    return null;
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -98,22 +80,52 @@ Deno.serve(async (req) => {
     // partir de sa propre fiche referents (même principe que kk_mon_org(),
     // utilisée par les policies RLS, mais en lecture directe via le rôle
     // service pour ne pas dépendre d'un deuxième client anon).
-    const callerId = subDuJeton(req.headers.get("Authorization"));
-    if (!callerId) {
+    const appelant = await identifierAppelant(admin, req);
+    if (!appelant) {
       return json({ ok: false, error: "Authentification manquante." }, 401);
     }
-    const { data: callerRef, error: callerErr } = await admin
-      .from("referents").select("org_id").eq("user_id", callerId).maybeSingle();
-    if (callerErr || !callerRef?.org_id) {
-      return json({ ok: false, error: "Organisation introuvable pour ce compte." }, 403);
+    const orgId = appelant.orgId;
+
+    // Rôle demandé : liste fermée. Sans cela, n'importe quel compte connecté
+    // pouvait se donner (ou donner) le rôle « direction ».
+    const roleDemande = role || "referent";
+    if (!["direction", "referent", "employe"].includes(roleDemande)) {
+      return json({ ok: false, error: "Rôle invalide." }, 400);
     }
-    const orgId = callerRef.org_id;
+    // Direction : crée tous les profils. Référent·e : seulement l'accès terrain
+    // (rôle « employe ») de sa propre crèche. Les comptes « employe » : rien.
+    if (appelant.role === "direction") {
+      // ok
+    } else if (appelant.role === "referent") {
+      if (roleDemande !== "employe") {
+        return json({ ok: false, error: "Réservé aux comptes direction." }, 403);
+      }
+    } else {
+      return json({ ok: false, error: "Droits insuffisants." }, 403);
+    }
+    // La crèche visée doit appartenir à l'organisation de l'appelant·e (et, pour
+    // un·e référent·e, être la sienne). Une crèche vide n'est admise que pour la direction.
+    if (creche_id) {
+      const { data: crecheCible } = await admin
+        .from("creches").select("id, org_id").eq("id", creche_id).maybeSingle();
+      if (!peutGererCreche(appelant, crecheCible)) {
+        return json({ ok: false, error: "Crèche non autorisée." }, 403);
+      }
+    } else if (appelant.role !== "direction") {
+      return json({ ok: false, error: "Crèche requise." }, 400);
+    }
 
     // Vérifier si l'email existe déjà dans Auth (ex. compte collaborateur/trice
     // ou référent(e) déjà invité(e)) — on ne réinvite pas un compte existant,
     // on se contente de relier sa fiche referents à ce compte.
-    const { data: existingUsers } = await admin.auth.admin.listUsers();
-    const existingUser = existingUsers?.users?.find((u) => u.email === email);
+    // listUsers() est paginé (50 par page par défaut) : on parcourt toutes les pages.
+    let existingUser: { id: string; email?: string; last_sign_in_at?: string | null } | undefined;
+    for (let page = 1; page <= 50 && !existingUser; page++) {
+      const { data: lot } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+      const users = lot?.users ?? [];
+      existingUser = users.find((u) => (u.email || "").toLowerCase() === String(email).toLowerCase());
+      if (users.length < 200) break;
+    }
 
     let userId: string | undefined;
     // partager : pas d'e-mail ; on renvoie le lien d'invitation (ou de
@@ -154,13 +166,24 @@ Deno.serve(async (req) => {
     }
 
     // Vérifier si une ligne referents existe déjà pour ce user_id
-    const { data: existingRef } = await admin.from("referents").select("id").eq("user_id", userId).maybeSingle();
+    const { data: existingRef } = await admin
+      .from("referents").select("id, org_id, role, creche_id").eq("user_id", userId).maybeSingle();
+    // Un profil existant ne se réécrit que dans la même organisation, et un·e
+    // référent·e ne peut pas modifier un profil de direction ou de référent·e.
+    if (existingRef) {
+      if (existingRef.org_id !== orgId) {
+        return json({ ok: false, error: "Ce compte appartient à une autre organisation." }, 403);
+      }
+      if (appelant.role !== "direction" && existingRef.role !== "employe") {
+        return json({ ok: false, error: "Ce compte a déjà un profil : réservé à la direction." }, 403);
+      }
+    }
 
     const row = {
       name, email,
       poste: poste || "",
       creche_id: creche_id || null,
-      role: role || "referent",
+      role: roleDemande,
       org_id: orgId,
     };
 

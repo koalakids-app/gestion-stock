@@ -598,13 +598,15 @@ async function deleteEmploye(id){
   if(!targetId)return;
   const emp=cacheEmployes.find(x=>String(x.id)===String(targetId));
   if(!confirm('Supprimer définitivement cette fiche collaborateur/trice ?\n\nSon historique de pointages sera aussi supprimé'+(emp&&emp.user_id?', ainsi que son compte de connexion':'')+'. Cette action est irréversible.'))return;
+  /* Le compte de connexion (auth.users) est retiré AVANT la fiche : la fonction vérifie que la fiche existe encore,
+     qu'elle porte ce compte et que la crèche relève de l'appelant·e (sans quoi n'importe qui pouvait supprimer un compte).
+     Sans cela l'e-mail restait bloqué pour toute réinvitation. */
+  if(emp&&emp.user_id){
+    const r=await eqCallFn('supprimer-compte-collaborateur',{user_id:emp.user_id,employe_id:targetId});
+    if(!r.ok){showBanner('Suppression annulée : le compte de connexion n\'a pas pu être retiré ('+(r.data.error||'erreur inconnue')+').','error');return;}
+  }
   const ok=await dbDelete('employes',targetId);
   if(ok){
-    /* Le compte de connexion (auth.users) est retiré juste après : sans cela l'e-mail restait bloqué pour toute réinvitation. */
-    if(emp&&emp.user_id){
-      const r=await eqCallFn('supprimer-compte-collaborateur',{user_id:emp.user_id});
-      if(!r.ok)showBanner('Fiche supprimée, mais le compte de connexion n\'a pas pu être retiré : '+(r.data.error||'erreur inconnue'),'error');
-    }
     cacheEmployes=cacheEmployes.filter(e=>e.id!==targetId);
     closeModal('modal-employe-wrap');
     renderEmployes();
