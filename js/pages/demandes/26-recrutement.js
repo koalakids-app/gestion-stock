@@ -91,6 +91,7 @@ function rcSuiviHtml(c){
   const lus=env.filter(e=>e.ouvert_le).length;
   let h='';
   if(!c.token)return rcPuce(false,'Lien pas encore créé','link-off');
+  if(c.entretien_date)h+=rcPuce(!!c.rdv_confirme_le,c.rdv_confirme_le?'Rendez-vous confirmé le '+rcDate(c.rdv_confirme_le):'Rendez-vous pas encore confirmé','calendar-event');
   h+=rcPuce(!!c.lien_ouvert_le,c.lien_ouvert_le?'Lien ouvert le '+rcDate(c.lien_ouvert_le):(c.lien_envoye_le?'Lien envoyé le '+rcDate(c.lien_envoye_le)+', pas encore ouvert':'Lien créé, pas encore ouvert'),'link');
   if(c.avec_projet)h+=rcPuce(!!c.projet_ouvert_le,c.projet_ouvert_le?'Projet ouvert':'Projet pas encore ouvert','book');
   if(env.length)h+=rcPuce(lus===env.length,lus+'/'+env.length+' pièce'+(env.length>1?'s':'')+' ouverte'+(lus>1?'s':''),'paperclip');
@@ -159,6 +160,8 @@ function rcFicheHtml(){
   let h='<button class="btn-sm" onclick="rcAller(\'liste\')"><i class="ti ti-arrow-left"></i> Retour à la liste</button>';
   h+=rcBloc(neuf?'Nouvelle candidature':rcEsc(c.prenom+' '+(c.nom||''))+' '+rcBadge(c),'user-search',
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">'
+    +rcChamp('Civilité','<select class="finput" id="rc-civilite" style="width:100%;margin-top:3px">'
+      +[['Mme','Mme'],['M.','M.'],['','Aucune (prénom et nom)']].map(o=>'<option value="'+o[0]+'"'+((c.civilite==null?'Mme':c.civilite)===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>')
     +rcChamp('Prénom *',rcInput('rc-prenom',c.prenom,'text','maxlength="80"'))
     +rcChamp('Nom',rcInput('rc-nom',c.nom,'text','maxlength="80"'))
     +rcChamp('E-mail',rcInput('rc-email',c.email,'email','maxlength="160"'))
@@ -166,6 +169,8 @@ function rcFicheHtml(){
     +rcChamp('Crèche *','<select class="finput" id="rc-creche-f" style="width:100%;margin-top:3px"'+(isDirection?'':' disabled')+'>'
       +(isDirection?'<option value="">-- Choisir --</option>':'')
       +cacheCreches.filter(x=>isDirection||String(x.id)===String(c.creche_id)).map(x=>'<option value="'+x.id+'"'+(String(x.id)===String(c.creche_id)?' selected':'')+'>'+rcEsc(x.name)+'</option>').join('')+'</select>')
+    +rcChamp('Type de candidature',rcInput('rc-type',c.type_candidature,'text','maxlength="120" list="rc-types" placeholder="candidature spontanée"')
+      +'<datalist id="rc-types"><option value="candidature spontanée"><option value="candidature à notre annonce"><option value="candidature transmise par France Travail"><option value="candidature recommandée"></datalist>')
     +rcChamp('Poste proposé',rcInput('rc-poste',c.poste,'text','maxlength="120" placeholder="ex. Auxiliaire de puériculture"'))
     +rcChamp('Personne remplacée / motif',rcInput('rc-remplace',c.remplace,'text','maxlength="160" placeholder="ex. Julie M. (congé maternité)"'))
     +rcChamp('Statut','<select class="finput" id="rc-statut" style="width:100%;margin-top:3px">'
@@ -198,12 +203,15 @@ async function rcEnregistrer(){
   const email=rcVal('rc-email');
   if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return showBanner('Adresse e-mail incorrecte.','error');
   const row={
+    civilite:rcVal('rc-civilite'),type_candidature:rcVal('rc-type')||null,
     prenom,nom:rcVal('rc-nom')||null,email:email||null,telephone:rcVal('rc-tel')||null,creche_id:creche,
     poste:rcVal('rc-poste')||null,remplace:rcVal('rc-remplace')||null,statut:rcVal('rc-statut')||'candidature',
     date_debut:rcVal('rc-debut')||null,date_fin:rcVal('rc-fin')||null,
     entretien_date:rcVal('rc-ent-date')||null,entretien_heure:rcVal('rc-ent-heure')||null,
     notes:rcVal('rc-notes')||null,updated_at:new Date().toISOString()
   };
+  // Un rendez-vous déplacé n'est plus confirmé.
+  if(c&&(String(c.entretien_date||'')!==String(row.entretien_date||'')||String(c.entretien_heure||'')!==String(row.entretien_heure||'')))row.rdv_confirme_le=null;
   if(c){
     const {data,error}=await sb.from('recrutement_candidats').update(row).eq('id',c.id).select().single();
     if(error)return showBanner('Enregistrement impossible : '+rcEsc(error.message),'error');
@@ -366,7 +374,7 @@ function rcLienHtml(c){
     +(c.lien_ouvert_le?' Ouvert le '+rcDate(c.lien_ouvert_le)+'.':' Pas encore ouvert.')
     +' <a href="#" onclick="rcProlongerLien();return false">Prolonger de '+RC_LIEN_JOURS+' jours</a> · '
     +'<a href="#" onclick="rcCreerLien(true);return false">Créer un nouveau lien</a></p>'
-    +'<p style="font-size:11.5px;color:var(--muted);margin:6px 0 0">L’e-mail ne contient aucun fichier : seulement le lien et la liste de ce qu’il contient. Les pièces ajoutées ensuite apparaissent sur le même lien.</p>';
+    +'<p style="font-size:11.5px;color:var(--muted);margin:6px 0 0">L’e-mail reprend votre message habituel (rendez-vous, adresse de la crèche, contenu du lien) et s’affiche en aperçu avant l’envoi. Il ne contient aucun fichier ; la personne confirme le rendez-vous par un bouton sur la page du lien (vous êtes prévenu·e) et ses réponses éventuelles arrivent sur recrutement.toulon@koalakids.fr. Les pièces ajoutées ensuite apparaissent sur le même lien.</p>';
   return h;
 }
 async function rcCreerLien(renouveler){
@@ -402,21 +410,68 @@ function rcPartagerLien(){
   PartageLien.partager(rcLienUrl(c.token),{titre:'Votre candidature — Koala Kids',
     texte:'Bonjour '+c.prenom+', voici le lien pour préparer notre entretien (projet pédagogique, fiche de poste, questionnaire) :'});
 }
+/* L'e-mail est rédigé côté serveur (edge function envoyer-lien-candidat) : on demande d'abord son
+   aperçu, affiché tel qu'il partira, puis on envoie. */
+async function rcAppelMail(id,apercu){
+  const {data,error}=await sb.functions.invoke('envoyer-lien-candidat',{body:{candidat_id:id,apercu:!!apercu}});
+  if(error||!data||!data.ok){
+    let code=(data&&data.error)||'';
+    if(!code&&error&&error.context&&typeof error.context.json==='function'){try{code=((await error.context.json())||{}).error||'';}catch(e){}}
+    throw new Error({aucun_email:'pas d’e-mail sur la fiche',lien_expire:'lien expiré',creche_non_autorisee:'crèche non autorisée',non_autorise:'compte non autorisé'}[code]||code||(error&&error.message)||'erreur');
+  }
+  return data;
+}
 async function rcEnvoyerMail(){
   const c=rcFiche();
   if(!c)return;
   if(!c.email)return showBanner('Pas d’e-mail sur la fiche : enregistrez-le, ou utilisez « Partager… ».','error');
   if(!rcLienValide(c))return showBanner('Lien expiré : prolongez-le d’abord.','error');
-  if(!confirm('Envoyer le lien à '+c.email+' ?'))return;
   const b=document.getElementById('rc-btn-mail');
   if(b)b.disabled=true;
   try{
-    const {data,error}=await sb.functions.invoke('envoyer-lien-candidat',{body:{candidat_id:c.id,expediteur:currentProfile&&currentProfile.name}});
-    if(error||!data||!data.ok)throw new Error((data&&data.error)||(error&&error.message)||'erreur');
-    c.lien_envoye_le=data.le||new Date().toISOString();
+    rcApercuOuvrir(c.id,await rcAppelMail(c.id,true));
+  }catch(e){
+    console.warn('[Recrutement] aperçu e-mail',e.message);
+    showBanner('Aperçu de l’e-mail impossible ('+rcEsc(e.message)+'). Utilisez « Copier » ou « Partager… ».','error');
+  }
+  if(b)b.disabled=false;
+}
+function rcApercuFermer(){const f=document.getElementById('rc-apercu');if(f)f.remove();}
+function rcApercuOuvrir(id,a){
+  rcApercuFermer();
+  const p=t=>'<p style="margin:0 0 11px">'+rcEsc(t)+'</p>';
+  const f=document.createElement('div');
+  f.id='rc-apercu';
+  f.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:14px';
+  f.innerHTML='<div role="dialog" aria-label="Aperçu de l’e-mail" style="background:#fff;border-radius:14px;max-width:600px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px;box-shadow:0 10px 40px rgba(0,0,0,.25)">'
+    +'<div style="font-weight:700;font-size:15px;margin-bottom:8px"><i class="ti ti-mail" style="color:var(--koala)"></i> Aperçu de l’e-mail</div>'
+    +'<div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:10px">À : <b>'+rcEsc(a.destinataire)+'</b><br>Objet : '+rcEsc(a.objet)+'<br>Réponse envoyée à : '+rcEsc(a.repondre_a)+'</div>'
+    +'<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:13.5px;line-height:1.6;background:#FAFAFD">'
+    +(a.avant||[]).map(p).join('')
+    +'<p style="margin:14px 0 4px;text-align:center"><span style="display:inline-block;background:#F47920;color:#fff;font-weight:700;padding:9px 22px;border-radius:9px">Ouvrir le lien</span></p>'
+    +'<p style="margin:0 0 14px;text-align:center;font-size:11.5px;color:var(--muted)">'+rcEsc(a.valable||'')+'</p>'
+    +(a.apres||[]).map(p).join('')
+    +'<p style="margin:0">'+(a.signature||[]).map(rcEsc).join('<br>')+'</p></div>'
+    +'<p style="font-size:11.5px;color:var(--muted);margin:10px 0 0">Pour changer la civilité, le type de candidature, le rendez-vous ou les pièces : fermez, modifiez la fiche, enregistrez. L’adresse de la crèche se règle dans Paramètres.</p>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">'
+    +'<button class="btn-sm" onclick="rcApercuFermer()">Fermer</button>'
+    +'<button class="btn-primary" id="rc-apercu-envoi" onclick="rcConfirmerMail(\''+id+'\')"><i class="ti ti-send"></i> Envoyer l’e-mail</button></div></div>';
+  f.addEventListener('click',e=>{if(e.target===f)rcApercuFermer();});
+  document.body.appendChild(f);
+}
+async function rcConfirmerMail(id){
+  const c=rcCands.find(x=>String(x.id)===String(id));
+  if(!c)return rcApercuFermer();
+  const b=document.getElementById('rc-apercu-envoi');
+  if(b){b.disabled=true;b.innerHTML='<i class="ti ti-loader"></i> Envoi…';}
+  try{
+    const d=await rcAppelMail(id,false);
+    c.lien_envoye_le=d.le||new Date().toISOString();
+    rcApercuFermer();
     showBanner('E-mail envoyé à '+rcEsc(c.email)+' ✅');
   }catch(e){
     console.warn('[Recrutement] e-mail',e.message);
+    rcApercuFermer();
     showBanner('E-mail non parti ('+rcEsc(e.message)+'). Utilisez « Copier » ou « Partager… ».','error');
   }
   rcRender();
