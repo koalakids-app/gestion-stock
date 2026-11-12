@@ -20,7 +20,7 @@ const PMI_LIBELLE_ENFANTS="Nombre d'enfants accueillis";
 // ces temps sont marqués d'une lettre dans les cases de la personne concernée.
 const PMI_LETTRE_DIRECTION='D';
 const PMI_LETTRE_ENTRETIEN='E/R';
-const PMI_LEGENDE_HORS='D = direction · E/R = entretien/restauration';
+const PMI_LEGENDE_HORS='D = direction\nE/R = entretien / restauration';
 const PMI_TPL_COL_FIRST=4;      // D = 07h00-07h15
 const PMI_TPL_COL_LAST=51;      // AY = 18h45-19h00
 const PMI_TPL_COL_DIPLOME=52;   // AZ « Nbre heures personnel diplômé * »
@@ -35,13 +35,21 @@ const PMI_TPL_MAX_STAFF=PMI_TPL_DAYS.reduce((n,d)=>Math.min(n,d.staffLast-d.staf
 function pmiPeindre(cell,argb){
   cell.style=Object.assign({},cell.style,{fill:{type:'pattern',pattern:'solid',fgColor:{argb:argb}}});
 }
-// Lettre « D » ou « E/R » dans une case d'un quart d'heure : la case reste sans couleur (ce
-// n'est pas de l'encadrement), la lettre est centrée et réduite pour tenir dans la colonne.
-function pmiLettre(cell,texte){
-  cell.value=texte;
-  cell.style=Object.assign({},cell.style,{
-    font:{name:'Arial',size:texte.length>1?6:9,bold:true,color:{argb:'FF000000'}},
-    alignment:{horizontal:'center',vertical:'middle',shrinkToFit:true}});
+// Lettre « D » ou « E/R » : les quarts d'heure consécutifs sont fusionnés en un seul bloc
+// qui porte la lettre une fois, en grand — une lettre par case de 15 minutes était illisible.
+// Le bloc reste sans couleur (ce n'est pas de l'encadrement). Un quart d'heure isolé garde
+// une lettre réduite, faute de place.
+function pmiBlocsLettre(ws,ligne,cols,texte){
+  pmiSegmentsContigus(cols).forEach(seg=>{
+    const n=seg.length;
+    if(n>1){try{ws.mergeCells(ligne,seg[0],ligne,seg[n-1]);}catch(e){}}
+    const cell=ws.getCell(ligne,seg[0]);
+    const taille=n>=2?(texte.length>1&&n<3?9:12):(texte.length>1?6:9);
+    cell.value=texte;
+    cell.style=Object.assign({},cell.style,{
+      font:{name:'Arial',size:taille,bold:true,color:{argb:'FF000000'}},
+      alignment:{horizontal:'center',vertical:'middle',shrinkToFit:n<2}});
+  });
 }
 function pmiEffacerFond(cell){
   const f=cell.fill;
@@ -537,8 +545,8 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       const besoin=lignes*PMI_LIGNE_PT;
       if(besoin>(ligne.height||0))ligne.height=besoin;
       // Temps hors encadrement : une lettre dans la case, sans couleur.
-      x.colsD.forEach(c=>pmiLettre(ws.getCell(r,c),PMI_LETTRE_DIRECTION));
-      x.colsER.forEach(c=>pmiLettre(ws.getCell(r,c),PMI_LETTRE_ENTRETIEN));
+      pmiBlocsLettre(ws,r,x.colsD,PMI_LETTRE_DIRECTION);
+      pmiBlocsLettre(ws,r,x.colsER,PMI_LETTRE_ENTRETIEN);
       if(!x.cols.length)return;
       const argb=colorMap[p]||'FF3D3580';
       x.cols.forEach(c=>pmiPeindre(ws.getCell(r,c),argb));
@@ -570,7 +578,10 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
     });
     const cLeg=ws.getCell(day.total,2);
     cLeg.value=PMI_LEGENDE_HORS;
-    cLeg.style=Object.assign({},cLeg.style,{alignment:Object.assign({},cLeg.alignment,{shrinkToFit:true,wrapText:false})});
+    cLeg.style=Object.assign({},cLeg.style,{
+      font:{name:'Arial',size:10,bold:true,color:{argb:'FF000000'}},
+      alignment:{horizontal:'left',vertical:'middle',wrapText:true}});
+    if((ws.getRow(day.total).height||0)<27)ws.getRow(day.total).height=27;
 
     if(colsBureau.length){
       const segs=pmiSegmentsContigus(colsBureau)
