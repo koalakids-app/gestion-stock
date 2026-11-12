@@ -427,7 +427,7 @@ function pmiPlacerEntretien(presences,nbQuarts,staffParQuart,comptesEnfants,colO
   return choix;
 }
 
-/* Préparation du goûter : un quart d'heure à heure fixe (15h15 par défaut), en plus du volume
+/* Préparation du goûter : un quart d'heure à heure fixe (14h45 par défaut), en plus du volume
    quotidien de repas / entretien. Confié à la personne encadrante présente qui a le moins de
    temps E/R ce jour-là. Si l'heure prévue créerait un sous-effectif, on essaie le quart
    d'heure voisin (avant, après, jusqu'à 30 minutes) ; sinon rien n'est placé et le jour est

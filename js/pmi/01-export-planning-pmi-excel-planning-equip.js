@@ -61,7 +61,7 @@ function pmiQualifEstDiplome(q,experience){
 // Volume quotidien de repas/entretien et horaires d'accueil des enfants, par crèche.
 const PMI_OUVERTURE_DEFAUT='07:30',PMI_FERMETURE_DEFAUT='18:30',PMI_ENTRETIEN_DEFAUT=3.5;
 // Préparation du goûter : 15 minutes, en plus du volume quotidien. Heure vide = non comptée.
-const PMI_GOUTER_DEFAUT='15:15';
+const PMI_GOUTER_DEFAUT='14:45';
 
 // ── Configuration PMI : une ligne par crèche dans Supabase ───────────────
 // Ces réglages (noms de famille, qualifications, ancienneté, temps de bureau, horaires
