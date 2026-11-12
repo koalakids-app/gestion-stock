@@ -291,7 +291,7 @@ function pmiInjecterModale(){
         <span style="font-size:12px;color:var(--muted)">h par semaine</span>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:6px">
-        Ces heures sont marquées <strong>D</strong> dans les cases de la personne et retirées du taux d'encadrement.
+        Ces heures sont marquées <strong>D</strong> (cases jaunes) dans les cases de la personne et retirées du taux d'encadrement.
         Elles sont placées automatiquement, dans les heures de travail de la personne, au moment
         où son retrait pèse le moins sur l'accueil.</div>
     </div>
@@ -306,7 +306,7 @@ function pmiInjecterModale(){
         <input class="finput" id="pmi-fermeture" type="time" style="flex:0 0 110px;font-size:12px">
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:6px">
-        Marquées <strong>E/R</strong> dans les cases, réparties sur toute l'équipe, en priorité avant l'ouverture et après la fermeture aux
+        Marquées <strong>E/R</strong> (cases bleu clair), réparties sur toute l'équipe, en priorité avant l'ouverture et après la fermeture aux
         enfants — les professionnels sont là, les enfants non : ces créneaux ne coûtent rien à
         l'encadrement.</div>
     </div>

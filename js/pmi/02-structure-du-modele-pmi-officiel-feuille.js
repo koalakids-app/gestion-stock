@@ -20,6 +20,10 @@ const PMI_LIBELLE_ENFANTS="Nombre d'enfants accueillis";
 // ces temps sont marqués d'une lettre dans les cases de la personne concernée.
 const PMI_LETTRE_DIRECTION='D';
 const PMI_LETTRE_ENTRETIEN='E/R';
+// Teintes claires, pour ne pas les confondre avec les couleurs soutenues des salarié·e·s
+// (encadrement) et garder la lettre noire lisible, y compris en impression noir et blanc.
+const PMI_COULEUR_DIRECTION='FFFFD966';   // jaune
+const PMI_COULEUR_ENTRETIEN='FF9DC3E6';   // bleu clair
 const PMI_LEGENDE_HORS='D = direction\nE/R = entretien / restauration';
 const PMI_TPL_COL_FIRST=4;      // D = 07h00-07h15
 const PMI_TPL_COL_LAST=51;      // AY = 18h45-19h00
@@ -37,9 +41,9 @@ function pmiPeindre(cell,argb){
 }
 // Lettre « D » ou « E/R » : les quarts d'heure consécutifs sont fusionnés en un seul bloc
 // qui porte la lettre une fois, en grand — une lettre par case de 15 minutes était illisible.
-// Le bloc reste sans couleur (ce n'est pas de l'encadrement). Un quart d'heure isolé garde
+// Le bloc reçoit une teinte claire propre à chaque lettre. Un quart d'heure isolé garde
 // une lettre réduite, faute de place.
-function pmiBlocsLettre(ws,ligne,cols,texte){
+function pmiBlocsLettre(ws,ligne,cols,texte,argb){
   pmiSegmentsContigus(cols).forEach(seg=>{
     const n=seg.length;
     if(n>1){try{ws.mergeCells(ligne,seg[0],ligne,seg[n-1]);}catch(e){}}
@@ -48,7 +52,8 @@ function pmiBlocsLettre(ws,ligne,cols,texte){
     cell.value=texte;
     cell.style=Object.assign({},cell.style,{
       font:{name:'Arial',size:taille,bold:true,color:{argb:'FF000000'}},
-      alignment:{horizontal:'center',vertical:'middle',shrinkToFit:n<2}});
+      alignment:{horizontal:'center',vertical:'middle',shrinkToFit:n<2},
+      fill:{type:'pattern',pattern:'solid',fgColor:{argb:argb}}});
   });
 }
 function pmiEffacerFond(cell){
@@ -602,9 +607,9 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       const ligne=ws.getRow(r);
       const besoin=lignes*PMI_LIGNE_PT;
       if(besoin>(ligne.height||0))ligne.height=besoin;
-      // Temps hors encadrement : une lettre dans la case, sans couleur.
-      pmiBlocsLettre(ws,r,x.colsD,PMI_LETTRE_DIRECTION);
-      pmiBlocsLettre(ws,r,x.colsER,PMI_LETTRE_ENTRETIEN);
+      // Temps hors encadrement : une lettre dans la case, sur une teinte claire.
+      pmiBlocsLettre(ws,r,x.colsD,PMI_LETTRE_DIRECTION,PMI_COULEUR_DIRECTION);
+      pmiBlocsLettre(ws,r,x.colsER,PMI_LETTRE_ENTRETIEN,PMI_COULEUR_ENTRETIEN);
       if(!x.cols.length)return;
       const argb=colorMap[p]||'FF3D3580';
       x.cols.forEach(c=>pmiPeindre(ws.getCell(r,c),argb));
