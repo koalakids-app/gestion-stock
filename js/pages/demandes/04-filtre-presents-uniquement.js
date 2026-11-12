@@ -822,6 +822,8 @@ async function renderPresenceGantt(){
     // Un seul créneau pointé via tablette suffit à considérer la journée « pointée ».
     if(p.source==='pointage')presMap[p.enfant_id].pointe=true;
     if(p.attente_place)presMap[p.enfant_id].attente=true;
+    // Heure d'ajout : départage les enfants non prévus quand la capacité est dépassée.
+    if(p.created_at&&(!presMap[p.enfant_id].cree||p.created_at<presMap[p.enfant_id].cree))presMap[p.enfant_id].cree=p.created_at;
   });
   /* Horaire RÉELLEMENT pointé (tablette/kiosque) ce jour-là, lu directement sur
      `pointages.horodatage` — la table `presences` ne porte volontairement pas ces
@@ -941,6 +943,15 @@ async function renderPresenceGantt(){
   // Lignes enfants
   let rowsHtml='';
   const occ=new Array(COLS*2).fill(0); // enfants présents par quart d'heure
+  /* Barre hachurée = enfant sans place pour l'instant. Deux cas :
+     - case « Pas de place pour l'instant » cochée à l'ajout (presences.attente_place) ;
+     - automatique : enfant NON PRÉVU ce jour (aucun contrat ce jour de la semaine) alors que
+       la capacité de la crèche est déjà atteinte sur une partie de son créneau. Les enfants
+       prévus prennent d'abord les places, puis les non prévus dans l'ordre de leur ajout.
+     La décision dépend de toutes les lignes : les barres portent un repère (\u0001…\u0001)
+     remplacé une fois la boucle terminée. */
+  const _capacite=Number((cacheCreches.find(function(c){return c.id===crecheId;})||{}).capacity)||0;
+  const _lignes=[];
 
   enfants.forEach((e,idx)=>{
     const p=presMap[e.id]||{};
@@ -949,6 +960,7 @@ async function renderPresenceGantt(){
     const absent=!hasM&&!hasA;
     // Ajouté « en attente de place » : barre hachurée, clic sur la barre pour confirmer la place.
     const attente=!absent&&!!p.attente;
+    const _quarts=[];
     // Calcul segments (en demi-heures depuis H_START)
     // Matin: 7h\u201313h = cols 0\u201311, Apr\u00e8s-midi: 13h\u201319h = cols 12\u201323
     // Horaires du contrat si renseign\u00e9s, sinon retour au d\u00e9coupage matin / apr\u00e8s-midi
@@ -1011,9 +1023,11 @@ async function renderPresenceGantt(){
     }
     if(!absent)segments.forEach(function(sg){
       const a0=(sg.m0!=null)?sg.m0:sg.start*30,a1=(sg.m1!=null)?sg.m1:sg.end*30;
-      for(let q=0;q<occ.length;q++){if(a0<(q+1)*15&&a1>q*15)occ[q]++;}
+      for(let q=0;q<occ.length;q++){if(a0<(q+1)*15&&a1>q*15){occ[q]++;_quarts[q]=true;}}
     });
     const horsJour=!ctMap[String(e.id)];
+    const _tips=[];
+    _lignes.push({id:e.id,absent:absent,horsJour:horsJour,manuel:attente,cree:p.cree||'',quarts:_quarts,tips:_tips});
     // Une ligne « hors contrat » se voit sans avoir à chercher : fond teinté,
     // pas juste un petit repère à côté du prénom (trop discret dans un groupe).
     const bg=horsJour?'var(--orange-light)':(idx%2===0?'#fff':'#f7f6fb');
@@ -1023,7 +1037,7 @@ async function renderPresenceGantt(){
     // heures, mais on ne doit jamais perdre de vue à quel enfant correspond la ligne.
     rowsHtml+='<div style="position:sticky;left:0;z-index:2;display:flex;align-items:center;background:'+bg+'">';
     rowsHtml+='<button onclick="togglePresence(\''+e.id+'\',\''+dateStr+'\')" title="'+(absent?'Marquer présent':'Marquer absent')+'" style="flex-shrink:0;width:24px;height:24px;margin-right:6px;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;background:'+(absent?'#f0eef8':barColor)+';color:'+(absent?'var(--muted)':'#fff')+'"><i class="ti ti-'+(absent?'user-x':pointe?'device-tablet':'user-check')+'"></i></button>';
-    rowsHtml+='<div onclick="enfOpenFiche(\''+e.id+'\')" style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--koala)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="Ouvrir le dossier de '+escHtml(e.prenom+' '+e.nom)+(e.dob?'':' (date de naissance manquante)')+'">'+escHtml(e.prenom+' '+e.nom)+(horsJour?' <span style="display:inline-flex;align-items:center;gap:2px;background:var(--orange);color:#fff;font-size:9.5px;font-weight:800;border-radius:8px;padding:1.5px 6px;margin-left:4px;vertical-align:middle" title="Aucun contrat ce jour de la semaine"><i class="ti ti-alert-triangle" style="font-size:10px"></i> Hors contrat</span>':'')+(attente?' <i class="ti ti-hourglass" style="color:var(--orange-dark,#b85c00);font-size:12px;vertical-align:middle" title="En attente de place"></i>':'')+(e.dob?'':' <span style=\"color:var(--red);font-size:10px\">⚠</span>')+'</div>';
+    rowsHtml+='<div onclick="enfOpenFiche(\''+e.id+'\')" style="width:'+NAME_W+'px;flex-shrink:0;font-size:12px;font-weight:'+(absent?'400':'600')+';color:'+(absent?'var(--muted)':'var(--koala)')+';padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="Ouvrir le dossier de '+escHtml(e.prenom+' '+e.nom)+(e.dob?'':' (date de naissance manquante)')+'">'+escHtml(e.prenom+' '+e.nom)+(horsJour?' <span style="display:inline-flex;align-items:center;gap:2px;background:var(--orange);color:#fff;font-size:9.5px;font-weight:800;border-radius:8px;padding:1.5px 6px;margin-left:4px;vertical-align:middle" title="Aucun contrat ce jour de la semaine"><i class="ti ti-alert-triangle" style="font-size:10px"></i> Hors contrat</span>':'')+'\u0001I'+e.id+'\u0001'+(e.dob?'':' <span style=\"color:var(--red);font-size:10px\">⚠</span>')+'</div>';
     rowsHtml+='</div>';
     // Barre Gantt
     rowsHtml+='<div style="position:relative;width:'+(COLS*COL_W)+'px;flex-shrink:0;height:44px;border-left:1px solid #e0dff0">';
@@ -1046,15 +1060,44 @@ async function renderPresenceGantt(){
         // Horaires écrits dans la barre seulement si elle est assez large (sinon ils se chevauchent).
         const _lbl=(seg.lbl&&width>=110)?'<span>'+seg.lbl[0]+'</span><span style="font-weight:400;opacity:.85">'+seg.lbl[1]+'</span>':(pointe?'<i class="ti ti-device-tablet" style="font-size:13px"></i>':'');
         const _tip=pointeReel?'Pointé : '+escHtml(pt.debut||'')+(pt.fin?'–'+escHtml(pt.fin):' (en cours)'):(seg.lbl?escHtml(seg.lbl[0]+' – '+seg.lbl[1]):'');
-        // Hachures : enfant ajouté sans place disponible pour l'instant.
-        const _hach=attente?';background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.8) 0 5px,transparent 5px 10px);border-style:dashed;border-color:'+seg.soft.tx+';cursor:pointer':'';
-        rowsHtml+='<div title="'+(attente?'En attente de place'+(_tip?' ('+_tip+')':'')+' — cliquer pour confirmer la place':_tip)+'"'+(attente?' onclick="presConfirmerPlace(\''+e.id+'\',\''+dateStr+'\')"':'')+' style="position:absolute;left:'+left+'px;width:'+width+'px;top:6px;height:32px;box-sizing:border-box;background-color:'+seg.soft.bg+';border:1px solid '+seg.soft.bd+_hach+';color:'+seg.soft.tx+';border-radius:9px;display:flex;align-items:center;justify-content:space-between;padding:0 9px;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden'+(seg.ouvert?';border-right:2px dashed '+seg.soft.tx:'')+'">'+_lbl+'</div>';
+        _tips.push(_tip);
+        rowsHtml+='<div \u0001T'+e.id+'|'+(_tips.length-1)+'\u0001 style="position:absolute;left:'+left+'px;width:'+width+'px;top:6px;height:32px;box-sizing:border-box;background-color:'+seg.soft.bg+';border:1px solid '+seg.soft.bd+';border-color:'+seg.soft.bd+'\u0001S'+e.id+'|'+seg.soft.tx+'\u0001;color:'+seg.soft.tx+';border-radius:9px;display:flex;align-items:center;justify-content:space-between;padding:0 9px;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden'+(seg.ouvert?';border-right:2px dashed '+seg.soft.tx:'')+'">'+_lbl+'</div>';
       });
     }
     rowsHtml+='</div>';
     rowsHtml+='<div style="width:'+DUR_W+'px;flex-shrink:0;text-align:right;padding-right:8px;font-size:12px;font-variant-numeric:tabular-nums;line-height:1.25">'+prCelluleGantt(rr,e.id,dateStr)+'</div>';
     rowsHtml+='</div>';
   });
+  // Qui est sans place ? Les prévus d'abord, puis les non prévus dans l'ordre de leur ajout.
+  const _surnombre=new Set();
+  if(_capacite){
+    const occPlan=new Array(occ.length).fill(0);
+    const _prendre=function(l){l.quarts.forEach(function(v,q){if(v)occPlan[q]++;});};
+    _lignes.filter(function(l){return !l.absent&&!l.horsJour;}).forEach(_prendre);
+    _lignes.filter(function(l){return !l.absent&&l.horsJour;})
+      .sort(function(a,b){return String(a.cree).localeCompare(String(b.cree));})
+      .forEach(function(l){
+        if(l.quarts.some(function(v,q){return v&&occPlan[q]>=_capacite;}))_surnombre.add(String(l.id));
+        else _prendre(l);
+      });
+  }
+  const _parId={};_lignes.forEach(function(l){_parId[String(l.id)]=l;});
+  const _sansPlace=function(id){const l=_parId[id];return !!l&&!l.absent&&(l.manuel||_surnombre.has(id));};
+  const _motif=function(id){return _parId[id].manuel?'En attente de place':'En surnombre : pas de place pour l\u2019instant (capacit\u00e9 '+_capacite+')';};
+  rowsHtml=rowsHtml
+    .replace(/\u0001I([^\u0001|]+)\u0001/g,function(_,id){
+      return _sansPlace(id)?' <i class="ti ti-hourglass" style="color:var(--orange-dark,#b85c00);font-size:12px;vertical-align:middle" title="'+_motif(id)+'"></i>':'';
+    })
+    .replace(/\u0001T([^\u0001|]+)\|(\d+)\u0001/g,function(_,id,n){
+      const l=_parId[id],tip=(l&&l.tips[Number(n)])||'';
+      if(!_sansPlace(id))return 'title="'+tip+'"';
+      return 'title="'+_motif(id)+(tip?' ('+tip+')':'')+(l.manuel?' \u2014 cliquer pour confirmer la place':' \u2014 les hachures disparaissent d\u00e8s qu\u2019une place se lib\u00e8re')+'"'
+        +(l.manuel?' onclick="presConfirmerPlace(\''+id+'\',\''+dateStr+'\')"':'');
+    })
+    .replace(/\u0001S([^\u0001|]+)\|([^\u0001]+)\u0001/g,function(_,id,tx){
+      if(!_sansPlace(id))return '';
+      return ';background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.8) 0 5px,transparent 5px 10px);border-style:dashed;border-color:'+tx+(_parId[id].manuel?';cursor:pointer':'');
+    });
   // Effectif présent par demi-heure, sous le Gantt (lecture des arrivées / départs échelonnés)
   const _occMax=Math.max.apply(null,occ.concat([1]));
   rowsHtml+='<div style="display:flex;align-items:center;padding:4px 0;border-top:2px solid var(--koala);margin-top:4px">';
@@ -1142,8 +1185,8 @@ async function renderPresenceGantt(){
   legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:10px;height:10px;background:#c5ead6;border:1px solid #9fd6bb;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Point\u00e9 sur tablette <span style="display:inline-block;width:10px;height:10px;background:#d6d2f5;border:1px solid #b9b3ec;border-radius:3px;vertical-align:middle;margin:0 4px 0 8px"></span>Pr\u00e9sence coch\u00e9e manuellement</span>';
   legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:10px;height:8px;background:#e8e6ef;border:1px solid #d3d0e0;border-radius:3px;vertical-align:middle;margin-right:3px"></span>Horaire de contrat (fond) sous l\u2019horaire r\u00e9ellement point\u00e9</span>';
   legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:8px;height:8px;background:var(--orange);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Hors jour de contrat</span>';
-  const _nbAttente=enfants.filter(function(e){const p=presMap[e.id]||{};return p.attente&&(p.M==='present'||p.A==='present'||p.M==='partial'||p.A==='partial');}).length;
-  legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px'+(_nbAttente?';color:var(--orange-dark,#b85c00);font-weight:600':'')+'"><span style="display:inline-block;width:14px;height:10px;background-color:#d6d2f5;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.8) 0 3px,transparent 3px 6px);border:1px dashed #3a3380;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Barre hachur\u00e9e = en attente de place'+(_nbAttente?' ('+_nbAttente+' ce jour, compt\u00e9'+(_nbAttente>1?'s':'')+' dans l\u2019effectif) \u2014 cliquer la barre pour confirmer':'')+'</span>';
+  const _nbAttente=_lignes.filter(function(l){return _sansPlace(String(l.id));}).length;
+  legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px'+(_nbAttente?';color:var(--orange-dark,#b85c00);font-weight:600':'')+'"><span style="display:inline-block;width:14px;height:10px;background-color:#d6d2f5;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.8) 0 3px,transparent 3px 6px);border:1px dashed #3a3380;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Barre hachur\u00e9e = enfant non pr\u00e9vu sans place pour l\u2019instant'+(_capacite?' (capacit\u00e9 '+_capacite+')':'')+(_nbAttente?' : '+_nbAttente+' ce jour, compt\u00e9'+(_nbAttente>1?'s':'')+' dans l\u2019effectif':'')+'</span>';
   legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px"><span style="display:inline-block;width:10px;height:10px;background:#fbd9bd;border:1px solid #f3bb8f;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Encadrement insuffisant : 6 enfants max par pro, 2 pros d\u00e8s le 1er enfant avant 9h et apr\u00e8s 17h (sauf EJE, psychomotricien(ne), ou aux. de pu\u00e9riculture avec 3 ans d\u2019exp\u00e9rience : seul(e) avec 3 enfants max)</span>';
   legendHtml+='<span style="border-left:1px dashed #b0a8d8;padding-left:8px">Trait pointill\u00e9 = 13h (pause m\u00e9ridienne)</span>';
   if(_nbPeriode) legendHtml+='<span style="border-left:1px solid var(--border);padding-left:8px">'+_nbSousContrat+' enfant(s) sous contrat le '+((CT_JOURS.find(x=>x[0]===jourSem)||[jourSem,'ce jour'])[1].toLowerCase())+' \u00b7 '+_nbPeriode+' inscrit(s) en cours de contrat</span>';
