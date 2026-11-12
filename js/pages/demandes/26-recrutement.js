@@ -1,8 +1,9 @@
 /* Recrutement d'un·e salarié·e en remplacement — Demandes › Équipe › Remplaçants/tes › onglet
    « Recrutement » (préfixe rc). Une fiche par candidat·e et un lien personnel (candidat.html?t=<jeton>)
    qui lui transmet : le projet pédagogique (page publique projet-pedagogique.html), des pièces jointes
-   (fiche de poste… tirées de la bibliothèque ou propres à la fiche) et le questionnaire sur le projet,
-   dont les réponses reviennent dans la fiche. Tables recrutement_* et bucket privé `recrutement`
+   (fiche de poste… tirées de la bibliothèque ou propres à la fiche) et le questionnaire sur le projet :
+   un quiz du projet quiz-protocoles (RC_QUESTIONNAIRE_URL), ouvert avec `ref` = id de la fiche ; son
+   résultat est relu ici par `sbQuiz.rpc('kk_resultats_par_ref')`. Tables recrutement_* et bucket privé `recrutement`
    (sql/recrutement.sql, à appliquer à la main) ; page publique servie par l'edge function
    `dossier-candidat` ; e-mail du lien par `envoyer-lien-candidat`.
    Direction = toutes les crèches, référent·e = la sienne. Conservation : 2 ans après le dernier contact. */
@@ -17,18 +18,12 @@ const RC_STATUTS={
   refuse:{lib:'Non retenu·e',bg:'#FDECEC',fg:'#C62828'},
   desiste:{lib:'S’est désisté·e',bg:'#EFEEF6',fg:'#78748C'}
 };
-/* À garder en phase avec QUESTIONS_DEFAUT de supabase/functions/_shared/recrutement-questions.ts. */
-const RC_QUESTIONS_DEFAUT=[
-  "Qu'avez-vous retenu de notre projet pédagogique ?",
-  "Quelles valeurs du projet vous parlent le plus, et pourquoi ?",
-  "Un enfant pleure au moment de la séparation du matin : comment l'accompagnez-vous, lui et son parent ?",
-  "Comment trouvez-vous votre place dans une équipe que vous rejoignez pour un remplacement ?",
-  "Qu'aimeriez-vous apporter aux enfants pendant ce remplacement ?",
-  "Avez-vous des questions sur le projet ou sur le poste ?"
-];
-const RC_QUESTIONS_MAX=12;
+/* À garder en phase avec QUESTIONNAIRE_URL de supabase/functions/_shared/recrutement-questionnaire.ts. */
+const RC_QUESTIONNAIRE_URL='https://koalakids-app.github.io/quiz-protocoles/index.html?quiz=a1137575-4960-44a6-b11f-afa245f26687';
+const RC_QUIZ_ADMIN_URL='https://koalakids-app.github.io/quiz-protocoles/admin.html';
 
-let rcCands=[],rcDocs=[],rcEnvois=[],rcQuestions=null;
+let rcCands=[],rcDocs=[],rcEnvois=[];
+let rcQuiz={};   // résultats du quiz par fiche : {<id>: [lignes de kk_resultats_par_ref] | 'erreur'}
 let rcVue='liste',rcFicheId=null,rcOk=true,rcFiltre='cours';
 
 const rcEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -44,7 +39,6 @@ function rcToken(){
   return [...a].map(b=>b.toString(36).padStart(2,'0')).join('').slice(0,32);
 }
 function rcExpiration(){const d=new Date();d.setDate(d.getDate()+RC_LIEN_JOURS);d.setHours(23,59,0,0);return d.toISOString();}
-function rcQuestionsEnVigueur(){return (rcQuestions&&rcQuestions.length)?rcQuestions:RC_QUESTIONS_DEFAUT;}
 // Fiche close (non retenu·e, désisté·e) sans changement depuis 2 ans : à supprimer.
 function rcASupprimer(c){
   if(c.statut!=='refuse'&&c.statut!=='desiste')return false;
@@ -60,16 +54,14 @@ async function rcInit(){
 }
 
 async function rcCharger(){
-  const [c,d,e,q]=await Promise.all([
+  const [c,d,e]=await Promise.all([
     sb.from('recrutement_candidats').select('*').order('created_at',{ascending:false}),
     sb.from('recrutement_documents').select('*').order('libelle'),
-    sb.from('recrutement_envois').select('*').order('created_at'),
-    sb.from('recrutement_reglages').select('questions').maybeSingle()
+    sb.from('recrutement_envois').select('*').order('created_at')
   ]);
   rcOk=!c.error;
   if(c.error)console.warn('[Recrutement]',c.error.message);
   rcCands=c.data||[];rcDocs=d.data||[];rcEnvois=e.data||[];
-  rcQuestions=(q.data&&Array.isArray(q.data.questions))?q.data.questions.filter(Boolean):null;
 }
 
 function rcRender(){
@@ -81,10 +73,9 @@ function rcRender(){
   }
   if(rcVue==='fiche')z.innerHTML=rcFicheHtml();
   else if(rcVue==='biblio')z.innerHTML=rcBiblioHtml();
-  else if(rcVue==='questions')z.innerHTML=rcQuestionsHtml();
   else z.innerHTML=rcListeHtml();
 }
-// Bibliothèque et questionnaire s'ouvrent aussi depuis une fiche : on la garde pour le retour.
+// La bibliothèque s'ouvre aussi depuis une fiche : on la garde pour le retour.
 function rcAller(vue,id){rcVue=vue;if(vue==='fiche'||vue==='liste')rcFicheId=id||null;rcRender();const z=document.getElementById('rc-contenu');if(z&&z.scrollIntoView)z.scrollIntoView({block:'start'});}
 
 /* ------------------------------------------------------------------ LISTE */
@@ -103,7 +94,10 @@ function rcSuiviHtml(c){
   h+=rcPuce(!!c.lien_ouvert_le,c.lien_ouvert_le?'Lien ouvert le '+rcDate(c.lien_ouvert_le):(c.lien_envoye_le?'Lien envoyé le '+rcDate(c.lien_envoye_le)+', pas encore ouvert':'Lien créé, pas encore ouvert'),'link');
   if(c.avec_projet)h+=rcPuce(!!c.projet_ouvert_le,c.projet_ouvert_le?'Projet ouvert':'Projet pas encore ouvert','book');
   if(env.length)h+=rcPuce(lus===env.length,lus+'/'+env.length+' pièce'+(env.length>1?'s':'')+' ouverte'+(lus>1?'s':''),'paperclip');
-  if(c.avec_questionnaire)h+=rcPuce(!!c.reponses_le,c.reponses_le?'Questionnaire rempli le '+rcDate(c.reponses_le):'Questionnaire en attente','pencil');
+  if(c.avec_questionnaire){
+    const o=rcQuizSuivi(c).ouvert_le;
+    h+=rcPuce(!!c.reponses_le,c.reponses_le?'Questionnaire rempli le '+rcDate(c.reponses_le):(o?'Questionnaire ouvert, pas encore confirmé':'Questionnaire en attente'),'pencil');
+  }
   return h;
 }
 function rcListeHtml(){
@@ -119,7 +113,7 @@ function rcListeHtml(){
     +'<option value="cours"'+(rcFiltre==='cours'?' selected':'')+'>Candidatures en cours</option>'
     +'<option value="tout"'+(rcFiltre==='tout'?' selected':'')+'>Toutes ('+nbClos+' close'+(nbClos>1?'s':'')+')</option></select>'
     +'<span style="flex:1"></span>'
-    +'<button class="btn-sm" onclick="rcAller(\'questions\')"><i class="ti ti-pencil"></i> Questionnaire</button>'
+    +'<a class="btn-sm" style="text-decoration:none" href="'+RC_QUESTIONNAIRE_URL+'" target="_blank" rel="noopener"><i class="ti ti-pencil"></i> Voir le questionnaire</a>'
     +'<button class="btn-sm" onclick="rcAller(\'biblio\')"><i class="ti ti-folder"></i> Documents à joindre ('+rcDocs.length+')</button>'
     +'<button class="btn-primary" onclick="rcNouveau()"><i class="ti ti-plus"></i> Nouvelle candidature</button>'
     +'</div>';
@@ -192,7 +186,7 @@ function rcFicheHtml(){
   if(neuf)return h;
   h+=rcBloc('Ce que contient le lien','paperclip',rcContenuHtml(c));
   h+=rcBloc('Lien à envoyer','link',rcLienHtml(c));
-  if(c.avec_questionnaire||c.reponses_le)h+=rcBloc('Réponses au questionnaire','message-2',rcReponsesHtml(c));
+  if(c.avec_questionnaire||c.reponses_le)h+=rcBloc('Questionnaire sur le projet','message-2','<div id="rc-quiz">'+rcQuizHtml(c)+'</div>');
   return h;
 }
 
@@ -250,7 +244,7 @@ function rcContenuHtml(c){
     +'<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+etat+'</span></label>';
   let h=ligne(c.avec_projet,'avec_projet','Projet pédagogique','Le livre à feuilleter de l’application (toujours la dernière version), ouvert depuis le lien.',
       c.avec_projet?(c.projet_ouvert_le?'ouvert le '+rcDate(c.projet_ouvert_le):'pas encore ouvert'):'')
-    +ligne(c.avec_questionnaire,'avec_questionnaire','Questionnaire sur le projet',rcQuestionsEnVigueur().length+' questions, à remplir en ligne ; les réponses arrivent dans cette fiche.',
+    +ligne(c.avec_questionnaire,'avec_questionnaire','Questionnaire sur le projet','Le quiz en ligne, ouvert au nom de la personne ; son résultat s’affiche dans cette fiche.',
       c.avec_questionnaire?(c.reponses_le?'rempli le '+rcDate(c.reponses_le):'en attente'):'');
   h+='<div style="font-size:12px;font-weight:700;margin:12px 0 6px">Pièces jointes (fiche de poste, organigramme, planning type…)</div>';
   h+=env.length?env.map(e=>
@@ -428,32 +422,38 @@ async function rcEnvoyerMail(){
   rcRender();
 }
 
-/* --------------------------------------------------------------- RÉPONSES */
-function rcReponsesHtml(c){
-  const rep=Array.isArray(c.reponses)?c.reponses:[];
-  if(!c.reponses_le||!rep.length)
-    return '<p style="font-size:12.5px;color:var(--muted);margin:0">Pas encore de réponse. Vous recevrez une notification dès que le questionnaire sera rempli.</p>';
-  return '<p style="font-size:11.5px;color:var(--muted);margin:0 0 8px">Reçu le '+rcDate(c.reponses_le)+'. '
-    +'<a href="#" onclick="rcImprimerReponses();return false">Imprimer</a></p>'
-    +rep.map((x,i)=>'<div style="border-top:1px solid var(--border);padding:8px 0">'
-      +'<div style="font-size:12.5px;font-weight:700">'+(i+1)+'. '+rcEsc(x.q)+'</div>'
-      +'<div style="font-size:13px;white-space:pre-wrap;margin-top:3px;color:'+(x.r?'inherit':'var(--muted)')+'">'+(x.r?rcEsc(x.r):'(sans réponse)')+'</div></div>').join('');
+/* ---------------------------------------------------------- QUESTIONNAIRE */
+/* recrutement_candidats.reponses = { ouvert_le } (suivi du clic) ; reponses_le = case « J'ai répondu ».
+   Le résultat lui-même vit dans le projet quiz (resultats.ref = id de la fiche). */
+function rcQuizSuivi(c){return (c.reponses&&typeof c.reponses==='object'&&!Array.isArray(c.reponses))?c.reponses:{};}
+function rcQuizHtml(c){
+  const o=rcQuizSuivi(c).ouvert_le,res=rcQuiz[c.id];
+  let h='<p style="font-size:12.5px;margin:0 0 8px;color:var(--muted)">'
+    +(c.reponses_le?'<span style="color:var(--green)"><i class="ti ti-circle-check"></i> La personne indique avoir répondu le '+rcDate(c.reponses_le)+'.</span>'
+      :o?'Questionnaire ouvert le '+rcDate(o)+', pas encore confirmé.'
+      :'Pas encore ouvert. Vous recevrez une notification quand la personne aura coché « J’ai répondu ».')+'</p>';
+  if(res===undefined){rcQuizCharger(c.id);return h+'<p style="font-size:12px;color:var(--muted);margin:0">Recherche du résultat…</p>';}
+  if(res==='erreur')return h+'<p style="font-size:12px;color:var(--red);margin:0">Résultat du quiz indisponible pour l’instant. <a href="#" onclick="rcQuizCharger(\''+c.id+'\',true);return false">Réessayer</a></p>';
+  if(!res.length)return h+'<p style="font-size:12px;color:var(--muted);margin:0">Aucun résultat enregistré côté quiz pour cette fiche. <a href="#" onclick="rcQuizCharger(\''+c.id+'\',true);return false">Actualiser</a></p>';
+  h+=res.map(r=>'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#FAFAFD;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:5px;font-size:12.5px">'
+    +'<i class="ti ti-list-check" style="color:var(--koala)"></i><b style="flex:1;min-width:140px">'+rcEsc(r.quiz_titre||'Questionnaire')+'</b>'
+    +'<span style="color:var(--muted)">passé le '+rcDate(r.passe_le)+'</span>'
+    +(r.mode==='profil'?'':'<span style="font-weight:700;color:var(--koala-dark)">'+r.score+' / '+r.total+(r.pourcentage!=null?' ('+r.pourcentage+' %)':'')+'</span>')
+    +'</div>').join('');
+  return h+'<p style="font-size:11.5px;color:var(--muted);margin:6px 0 0">Le détail des réponses se lit dans <a href="'+RC_QUIZ_ADMIN_URL+'" target="_blank" rel="noopener">l’administration des quiz</a> (résultats au nom de la personne). '
+    +'<a href="#" onclick="rcQuizCharger(\''+c.id+'\',true);return false">Actualiser</a></p>';
 }
-function rcImprimerReponses(){
-  const c=rcFiche();
-  if(!c||!Array.isArray(c.reponses))return;
-  const w=window.open('','_blank');
-  if(!w)return showBanner('Fenêtre bloquée par le navigateur.','error');
-  w.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Questionnaire — '+rcEsc(c.prenom+' '+(c.nom||''))+'</title>'
-    +'<style>body{font-family:Arial,sans-serif;font-size:13px;color:#222;margin:28px;line-height:1.5}h1{font-size:18px;color:#3D3580;margin:0 0 4px}'
-    +'.q{font-weight:700;margin:16px 0 4px}.r{white-space:pre-wrap;border-left:3px solid #ddd;padding-left:10px}.s{color:#777;font-size:12px}'
-    +'.pied{margin-top:30px;font-size:10px;color:#999;text-align:center}</style></head><body>'
-    +'<h1>Questionnaire sur le projet pédagogique</h1>'
-    +'<div class="s">'+rcEsc(c.prenom+' '+(c.nom||''))+(c.poste?' · '+rcEsc(c.poste):'')+' · '+rcEsc(rcCrecheNom(c.creche_id))+' · reçu le '+rcDate(c.reponses_le)+'</div>'
-    +c.reponses.map((x,i)=>'<div class="q">'+(i+1)+'. '+rcEsc(x.q)+'</div><div class="r">'+(x.r?rcEsc(x.r):'(sans réponse)')+'</div>').join('')
-    +'<div class="pied">Application créée par David Bucari</div>'
-    +'<script>window.onload=function(){window.print();}<\/script></body></html>');
-  w.document.close();
+async function rcQuizCharger(id,forcer){
+  if(!forcer&&rcQuiz[id]!==undefined)return;
+  rcQuiz[id]='erreur';
+  try{
+    if(typeof sbQuiz==='undefined')throw new Error('client quiz absent');
+    const {data,error}=await sbQuiz.rpc('kk_resultats_par_ref',{p_ref:String(id)});
+    if(error)throw error;
+    rcQuiz[id]=data||[];
+  }catch(e){console.warn('[Recrutement] quiz',e.message);}
+  const z=document.getElementById('rc-quiz'),c=rcFiche();
+  if(z&&c&&String(c.id)===String(id))z.innerHTML=rcQuizHtml(c);
 }
 
 /* ----------------------------------------------------------- BIBLIOTHÈQUE */
@@ -523,33 +523,4 @@ async function rcSupprimerDoc(id){
   rcEnvois=rcEnvois.filter(e=>String(e.document_id)!==String(d.id));
   rcRender();
   showBanner('Document supprimé.');
-}
-
-/* ---------------------------------------------------------- QUESTIONNAIRE */
-function rcQuestionsHtml(){
-  const q=rcQuestionsEnVigueur();
-  let h='<button class="btn-sm" onclick="rcAller(\''+(rcFicheId?'fiche':'liste')+'\',rcFicheId)"><i class="ti ti-arrow-left"></i> Retour</button>';
-  let corps='<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Ces questions sont posées à chaque candidat·e dont le lien porte le questionnaire, après la lecture du projet pédagogique. '
-    +(isDirection?'Une question par ligne ('+RC_QUESTIONS_MAX+' au plus). Une modification vaut pour les réponses à venir : celles déjà reçues gardent leur question d’origine.'
-      :'Seule la direction peut les modifier.')+'</p>';
-  if(isDirection){
-    corps+='<textarea class="finput" id="rc-questions" rows="'+Math.max(8,q.length+2)+'" style="width:100%;resize:vertical;font-size:13px;line-height:1.7">'+rcEsc(q.join('\n'))+'</textarea>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
-      +'<button class="btn-primary" onclick="rcEnregistrerQuestions()"><i class="ti ti-device-floppy"></i> Enregistrer les questions</button>'
-      +'<button class="btn-sm" onclick="document.getElementById(\'rc-questions\').value=RC_QUESTIONS_DEFAUT.join(\'\\n\')"><i class="ti ti-restore"></i> Remettre les questions proposées</button></div>';
-  }else{
-    corps+='<ol style="font-size:13px;line-height:1.9;padding-left:20px;margin:0">'+q.map(x=>'<li>'+rcEsc(x)+'</li>').join('')+'</ol>';
-  }
-  return h+rcBloc('Questionnaire sur le projet pédagogique','pencil',corps);
-}
-async function rcEnregistrerQuestions(){
-  const q=rcVal('rc-questions').split('\n').map(x=>x.trim()).filter(Boolean).map(x=>x.slice(0,300));
-  if(!q.length)return showBanner('Écrivez au moins une question.','error');
-  if(q.length>RC_QUESTIONS_MAX)return showBanner(RC_QUESTIONS_MAX+' questions au plus ('+q.length+' saisies).','error');
-  const org=currentProfile&&currentProfile.org_id;
-  if(!org)return showBanner('Organisation introuvable sur votre compte.','error');
-  const {error}=await sb.from('recrutement_reglages').upsert({org_id:org,questions:q,updated_at:new Date().toISOString()});
-  if(error)return showBanner('Enregistrement impossible : '+rcEsc(error.message),'error');
-  rcQuestions=q;rcRender();
-  showBanner('Questionnaire enregistré ✅');
 }

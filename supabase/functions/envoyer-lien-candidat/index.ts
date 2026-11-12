@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
         </div>
         ${rdv}
         <p style="margin:0 0 22px;text-align:center"><a href="${esc(lien)}" style="display:inline-block;background:#F47920;color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:14px 30px;border-radius:11px">Ouvrir mon dossier</a></p>
-        <p style="margin:0 0 14px;font-size:13px;color:#5F5B78">Ce lien est personnel et valable jusqu'au ${esc(new Date(cand.token_expire_le).toLocaleDateString("fr-FR"))}. Merci de répondre au questionnaire directement sur le lien ; pour toute question, vous pouvez répondre à cet e-mail.</p>
+        <p style="margin:0 0 14px;font-size:13px;color:#5F5B78">Ce lien est personnel et valable jusqu'au ${esc(new Date(cand.token_expire_le).toLocaleDateString("fr-FR"))}. Le questionnaire se remplit en ligne, depuis ce lien ; pour toute question, vous pouvez répondre à cet e-mail.</p>
         <p style="margin:0;font-size:12px;color:#8E8AA8">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br><a href="${esc(lien)}" style="color:#8E8AA8">${esc(lien)}</a></p>
       </div>
     </div></body></html>`;

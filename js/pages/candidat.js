@@ -9,7 +9,10 @@
    La page ne fait que recevoir : le projet pédagogique à lire (page publique
    projet-pedagogique.html), les pièces jointes choisies par la crèche (fiche
    de poste… ouvertes par URL signée de 5 minutes) et le questionnaire sur le
-   projet, dont les questions viennent du serveur. Aucun dépôt de fichier.
+   projet : un quiz du projet quiz-protocoles, ouvert avec l'identité de la
+   personne et la référence de sa fiche (comme pour les stagiaires). Les
+   réponses sont enregistrées côté quiz ; ici, seule la case « J'ai répondu »
+   est suivie. Aucun dépôt de fichier.
    =========================================================================== */
 
 const SUPABASE_URL = "https://juyrceadazrovlitxceb.supabase.co";
@@ -19,11 +22,10 @@ const FN_URL = SUPABASE_URL + '/functions/v1/dossier-candidat';
 const TOKEN = SessionLien.init({url:FN_URL,anonKey:SUPABASE_ANON_KEY});
 const wrap  = document.getElementById('wrap');
 
-let CAND = null;   // {prenom, creche_nom, poste, date_debut, date_fin, entretien_date, entretien_heure, expire_le}
+let CAND = null;   // {prenom, nom, ref, creche_nom, poste, date_debut, date_fin, entretien_date, entretien_heure, expire_le}
 let PROJET = null; // {ouvert_le} ou null
 let DOCS = [];     // pièces jointes
-let QUEST = null;  // {questions:[{q,r}], le} ou null
-let brouillon = null; // réponses en cours de saisie (gardées si la page se redessine)
+let QUEST = null;  // {url, statut, ouvert_le, confirme_le} ou null
 
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dfr = d => d ? new Date(String(d).length===10?d+'T12:00:00':d).toLocaleDateString('fr-FR') : '';
@@ -65,12 +67,6 @@ async function recharger(){
   render();
 }
 
-function lireBrouillon(){
-  if(!QUEST)return;
-  const zones=document.querySelectorAll('.qz textarea');
-  if(zones.length)brouillon=[...zones].map(z=>z.value);
-}
-
 function render(){
   const periode=CAND.date_debut
     ? ' du <b>'+esc(dfr(CAND.date_debut))+'</b>'+(CAND.date_fin?' au <b>'+esc(dfr(CAND.date_fin))+'</b>':'')
@@ -108,24 +104,26 @@ function render(){
     });
   }
 
-  if(QUEST&&QUEST.questions.length){
-    h+='<h3 class="sec"><i class="ti ti-pencil"></i> Questionnaire sur le projet</h3>'
-      +'<p class="hint">'+(QUEST.le
-        ? 'Merci, vos réponses ont été envoyées le '+esc(dfr(QUEST.le))+' ✔ Vous pouvez encore les modifier et les renvoyer.'
-        : 'Quelques lignes par question suffisent. Il n’y a pas de bonne ou de mauvaise réponse : c’est une base pour notre échange.')+'</p>'
-      +'<div class="card">'
-      +QUEST.questions.map((x,i)=>
-        '<div class="qz"><label for="q'+i+'">'+(i+1)+'. '+esc(x.q)+'</label>'
-        +'<textarea id="q'+i+'" maxlength="3000" placeholder="Votre réponse">'+esc(brouillon&&brouillon[i]!=null?brouillon[i]:x.r)+'</textarea></div>').join('')
-      +'<button class="btn btn-p" id="btnEnvoi" style="width:100%;margin-top:6px" onclick="envoyerReponses()">'
-      +'<i class="ti ti-send"></i> '+(QUEST.le?'Renvoyer mes réponses':'Envoyer mes réponses')+'</button>'
+  if(QUEST){
+    const fait=!!QUEST.confirme_le;
+    h+='<h3 class="sec"><i class="ti ti-pencil"></i> À faire</h3>'
+      +'<div class="ress'+(fait?' fait':'')+'"><div class="rtop">'
+      +'<span class="ic"><i class="ti ti-'+(fait?'check':'list-check')+'"></i></span>'
+      +'<span class="tx"><b>Questionnaire sur le projet</b>'
+      +'<span class="desc">À remplir après la lecture du projet pédagogique, une dizaine de minutes. Il n’y a pas de piège : c’est une base pour notre échange.</span>'
+      +'<span style="display:block;margin-top:6px"><span class="badge '
+      +(fait?'b-ok">Répondu le '+esc(dfr(QUEST.confirme_le)):(QUEST.ouvert_le?'b-att">Ouvert le '+esc(dfr(QUEST.ouvert_le)):'b-att">À faire'))+'</span></span>'
+      +'</span></div><div style="margin-top:10px">'
+      +'<button class="btn btn-'+(fait?'g':'p')+' btn-s" onclick="ouvrirQuestionnaire()"><i class="ti ti-external-link"></i> Ouvrir le questionnaire</button>'
+      +'</div>'
+      +'<label class="accuse"><input type="checkbox" '+(fait?'checked':'')+' onchange="confirmerQuestionnaire(this.checked)"> J’ai répondu au questionnaire</label>'
       +'</div>';
   }
 
   if(!PROJET&&!DOCS.length&&!QUEST)
     h+='<p class="hint">Rien à lire pour le moment : nous vous donnons rendez-vous pour l’entretien.</p>';
 
-  h+='<p class="pied">Vos réponses ne sont lues que par la direction de la crèche. '
+  h+='<p class="pied">Vos réponses ne sont lues que par la direction et les responsables de la crèche. '
     +'<a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a></p>';
   wrap.innerHTML=h;
 }
@@ -136,7 +134,6 @@ async function ouvrirProjet(){
   window.open('projet-pedagogique.html','_blank','noopener');
   try{
     await appel('projet_ouvert');
-    lireBrouillon();
     await recharger();
   }catch(e){/* le projet est ouvert, le suivi peut attendre */}
 }
@@ -149,7 +146,6 @@ async function ouvrirDoc(i){
   try{
     const d=await appel('document_url',{document_id:e.id});
     if(w)w.location.href=d.url;else location.href=d.url;
-    lireBrouillon();
     await recharger();
   }catch(err){
     if(w)w.close();
@@ -158,23 +154,40 @@ async function ouvrirDoc(i){
   }
 }
 
-async function envoyerReponses(){
-  lireBrouillon();
-  const rep=(brouillon||[]).map(x=>String(x||'').trim());
-  if(!rep.some(Boolean))return toast('Écrivez au moins une réponse avant d’envoyer.');
-  const vides=rep.filter(x=>!x).length;
-  if(vides&&!confirm(vides+' question'+(vides>1?'s':'')+' sans réponse. Envoyer quand même ?'))return;
-  const b=document.getElementById('btnEnvoi');
-  if(b){b.disabled=true;b.innerHTML='<i class="ti ti-loader"></i> Envoi…';}
+/* L'adresse du quiz, complétée de ce que la crèche sait déjà : la personne n'a
+   rien à ressaisir et son résultat est rattaché à sa fiche (`ref`, qui n'ouvre
+   rien : le jeton, lui, ne quitte jamais cette page). */
+function urlQuestionnaire(){
   try{
-    await appel('questionnaire',{reponses:rep});
-    brouillon=null;
+    const u=new URL(QUEST.url,location.href);
+    const mettre=(k,v)=>{ if(v)u.searchParams.set(k,v); };
+    mettre('prenom',CAND.prenom);
+    mettre('nom',CAND.nom);
+    mettre('statut',QUEST.statut);
+    mettre('creche',CAND.creche_nom);
+    mettre('ref',CAND.ref);
+    return u.toString();
+  }catch(e){return QUEST.url;}
+}
+
+async function ouvrirQuestionnaire(){
+  if(!QUEST||!QUEST.url)return toast('Ce questionnaire n’est pas encore disponible.');
+  window.open(urlQuestionnaire(),'_blank','noopener');
+  try{
+    await appel('questionnaire_ouvert');
     await recharger();
-    toast('Merci, vos réponses sont bien envoyées ✔');
+  }catch(e){/* le questionnaire est ouvert, le suivi peut attendre */}
+}
+
+async function confirmerQuestionnaire(fait){
+  try{
+    await appel('questionnaire_confirme',{fait:!!fait});
+    await recharger();
+    if(fait)toast('Merci, c’est noté ✔');
   }catch(err){
-    if(b){b.disabled=false;b.innerHTML='<i class="ti ti-send"></i> Envoyer mes réponses';}
     const m=(err.message||'').toLowerCase();
-    toast(m.includes('expir')?'Ce lien a expiré. Contactez la crèche.':'Envoi impossible. Réessayez dans un instant.');
+    toast(m.includes('expir')?'Ce lien a expiré. Contactez la crèche.':'Enregistrement impossible. Réessayez dans un instant.');
+    render();
   }
 }
 

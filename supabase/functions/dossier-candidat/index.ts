@@ -13,7 +13,11 @@
 //
 // Le lien n'ouvre qu'une SESSION COURTE (voir _shared/session-lien.ts).
 //
-// Actions : get · document_url · projet_ouvert · questionnaire
+// Le questionnaire est un quiz du projet quiz-protocoles (_shared/recrutement-
+// questionnaire.ts) : cette fonction ne reçoit pas les réponses, elle date
+// seulement l'ouverture et la confirmation « j'ai répondu ».
+//
+// Actions : get · document_url · projet_ouvert · questionnaire_ouvert · questionnaire_confirme
 //
 // DÉPLOIEMENT — la personne n'a pas de compte, donc pas de JWT :
 //   supabase functions deploy dossier-candidat --no-verify-jwt
@@ -21,7 +25,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { resoudreJeton } from '../_shared/session-lien.ts';
-import { questionsDe, REPONSE_MAX } from '../_shared/recrutement-questions.ts';
+import { QUESTIONNAIRE_STATUT, QUESTIONNAIRE_URL } from '../_shared/recrutement-questionnaire.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -104,13 +108,16 @@ Deno.serve(async (req) => {
       const { data: envois } = await sb.from('recrutement_envois')
         .select('id,libelle,message,filename,ouvert_le,created_at')
         .eq('candidat_id', cand.id).order('created_at');
-      const questions = cand.avec_questionnaire ? await questionsDe(sb, orgId) : [];
-      const deja: { q: string; r: string }[] = Array.isArray(cand.reponses) ? cand.reponses : [];
+      const suivi = (cand.reponses && typeof cand.reponses === 'object' && !Array.isArray(cand.reponses)) ? cand.reponses : {};
       return json({
         // Uniquement ce dont la page a besoin : ni notes de la crèche, ni statut,
         // ni nom de la personne remplacée.
         candidat: {
           prenom: cand.prenom,
+          nom: cand.nom || '',
+          // Identifiant de la fiche : il n'ouvre rien (seul le jeton donne accès),
+          // il rattache le résultat du quiz à la bonne fiche.
+          ref: cand.id,
           creche_nom: creche?.name || '',
           poste: cand.poste || '',
           date_debut: cand.date_debut,
@@ -123,11 +130,7 @@ Deno.serve(async (req) => {
         // Jamais le chemin d'un fichier : la page demande une URL signée au clic.
         documents: envois || [],
         questionnaire: cand.avec_questionnaire
-          ? {
-            // Réponse déjà envoyée : on la réaffiche en face de la question d'origine.
-            questions: questions.map((q) => ({ q, r: deja.find((d) => d.q === q)?.r || '' })),
-            le: cand.reponses_le,
-          }
+          ? { url: QUESTIONNAIRE_URL, statut: QUESTIONNAIRE_STATUT, ouvert_le: suivi.ouvert_le || null, confirme_le: cand.reponses_le }
           : null,
       });
     }
@@ -157,25 +160,33 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
-    // ------------------------------------------------------- QUESTIONNAIRE
-    // La personne peut renvoyer ses réponses tant que le lien est valable : la
-    // dernière version fait foi. Les questions viennent du serveur, jamais de la page.
-    if (action === 'questionnaire') {
+    // ------------------------------------------------ QUESTIONNAIRE_OUVERT
+    // Clic sur « Ouvrir le questionnaire » : la première ouverture est datée
+    // (recrutement_candidats.reponses = { ouvert_le }).
+    if (action === 'questionnaire_ouvert') {
       if (!cand.avec_questionnaire) return json({ erreur: 'Action inconnue' }, 403);
-      const questions = await questionsDe(sb, orgId);
-      const recu: unknown[] = Array.isArray(body.reponses) ? body.reponses : [];
-      if (recu.length !== questions.length) return json({ erreur: 'Réponse illisible' }, 400);
-      const reponses = questions.map((q, i) => ({
-        q,
-        r: String(recu[i] ?? '').replace(/\r/g, '').trim().slice(0, REPONSE_MAX),
-      }));
-      if (!reponses.some((x) => x.r)) return json({ erreur: 'Réponse illisible' }, 400);
-      const le = new Date().toISOString();
+      const suivi = (cand.reponses && typeof cand.reponses === 'object' && !Array.isArray(cand.reponses)) ? cand.reponses : {};
+      if (!suivi.ouvert_le) {
+        await sb.from('recrutement_candidats')
+          .update({ reponses: { ...suivi, ouvert_le: new Date().toISOString() } }).eq('id', cand.id);
+      }
+      return json({ ok: true });
+    }
+
+    // ---------------------------------------------- QUESTIONNAIRE_CONFIRME
+    // La case « J'ai répondu au questionnaire ». Ce n'est qu'un suivi : elle
+    // peut se décocher, et le résultat réel est lu côté quiz par la crèche.
+    if (action === 'questionnaire_confirme') {
+      if (!cand.avec_questionnaire) return json({ erreur: 'Action inconnue' }, 403);
+      const fait = body.fait === true;
+      const le = fait ? (cand.reponses_le || new Date().toISOString()) : null;
       const { error } = await sb.from('recrutement_candidats')
-        .update({ reponses, reponses_le: le, updated_at: le }).eq('id', cand.id);
+        .update({ reponses_le: le, updated_at: new Date().toISOString() }).eq('id', cand.id);
       if (error) throw error;
-      await prevenirEquipe(cand, orgId, 'Recrutement : questionnaire rempli',
-        `${cand.prenom || 'Un·e candidat·e'} a répondu au questionnaire sur le projet.`);
+      if (fait && !cand.reponses_le) {
+        await prevenirEquipe(cand, orgId, 'Recrutement : questionnaire rempli',
+          `${cand.prenom || 'Un·e candidat·e'} indique avoir répondu au questionnaire sur le projet.`);
+      }
       return json({ ok: true, le });
     }
 
