@@ -43,7 +43,17 @@ const PMI_QUALIF_SANS_SUBSTITUTION=['Alternant·e EJE','Alternant·e CAP AEPE'];
 function pmiQualifEligibleSubstitution(q){
   return !!q && !PMI_QUALIF_DIPLOME.includes(q) && !PMI_QUALIF_SANS_SUBSTITUTION.includes(q);
 }
+// Un·e alternant·e est en formation : il ou elle ne compte pas dans le taux d'encadrement
+// (ni heures diplômé / qualifié, ni effectif présent auprès des enfants) et ne peut pas
+// assurer la continuité de direction. Reconnu·e par la qualification choisie dans la liste,
+// ou par une saisie libre contenant « alternant » / « apprenti ».
+function pmiEstAlternant(q){
+  if(!q)return false;
+  if(PMI_QUALIF_SANS_SUBSTITUTION.includes(q))return true;
+  return /alternan|apprenti/i.test(String(q).normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+}
 function pmiQualifEstDiplome(q,experience){
+  if(pmiEstAlternant(q))return false;
   if(PMI_QUALIF_DIPLOME.includes(q))return true;
   return !!experience&&pmiQualifEligibleSubstitution(q);
 }
@@ -151,6 +161,7 @@ async function pmiCfgPull(crecheId){
       if(champs.nom)p.nom=champs.nom;
       if(champs.qualif)p.qualif=champs.qualif;
       if(champs.exp!==undefined)p.exp=!!champs.exp;
+      if(champs.hebdo)p.hebdo=champs.hebdo;
     });
     pmiCfgSave(crecheId); // les deux versions convergent
     return true;
@@ -162,6 +173,21 @@ function pmiQualifSet(crecheId,prenom,val){pmiPersonne(crecheId,prenom).qualif=v
 
 function pmiExpGet(crecheId,prenom){return !!pmiPersonne(crecheId,prenom).exp;}
 function pmiExpSet(crecheId,prenom,val){pmiPersonne(crecheId,prenom).exp=!!val;pmiCfgSave(crecheId);}
+
+// Temps de travail hebdomadaire (heures du contrat), affiché sous la qualification.
+// Pré-rempli depuis la fiche collaborateur (employes.heures_hebdo) quand le prénom correspond.
+function pmiHebdoGet(crecheId,prenom){return parseFloat(pmiPersonne(crecheId,prenom).hebdo)||0;}
+function pmiHebdoSet(crecheId,prenom,val){pmiPersonne(crecheId,prenom).hebdo=parseFloat(val)||0;pmiCfgSave(crecheId);}
+function pmiHebdoDepuisFiche(crecheId,prenom){
+  const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  const cible=norm(prenom);
+  const l=(typeof cacheEmployes!=='undefined'?cacheEmployes:[]).filter(e=>!e.archive_le&&e.heures_hebdo
+    &&norm(e.prenom)===cible&&(!e.creche_id||e.creche_id===crecheId));
+  return l.length===1?(parseFloat(l[0].heures_hebdo)||0):0;   // homonymes : on ne devine pas
+}
+function pmiHebdoTexte(h){
+  return h>0?String(Math.round(h*100)/100).replace('.',',')+' h/sem':'';
+}
 
 // Noms de famille : planning_equipe ne stocke que le prénom (c'est la clé de l'import
 // Gertrude). La PMI attend pourtant un nom complet, saisi une fois dans la modale d'export.
@@ -244,11 +270,13 @@ function pmiInjecterModale(){
          seul enfant (un unique élément flex), l'icône restant le second. -->
     <div class="info-box" style="margin-bottom:14px;align-items:flex-start"><i class="ti ti-info-circle" style="font-size:15px;flex:0 0 auto;margin-top:1px"></i>
       <div style="flex:1;min-width:0;line-height:1.5">
-        Vérifiez le nom et la qualification de chaque salarié·e (mémorisés pour les prochains exports de
+        Vérifiez le nom, la qualification et le temps de travail hebdomadaire de chaque salarié·e (mémorisés pour les prochains exports de
         cette crèche), puis générez le fichier Excel au format PMI.<br>
         En micro-crèche, une certification de niveau V petite enfance (CAP AEPE) compte dans le
         <strong>1°</strong> — le personnel diplômé des 40 % — dès <strong>2 ans d'expérience</strong>
-        (3 ans pour un·e assistant·e maternel·le agréé·e) : cochez la case correspondante.
+        (3 ans pour un·e assistant·e maternel·le agréé·e) : cochez la case correspondante.<br>
+        Un·e <strong>alternant·e</strong> figure au planning mais ne compte pas dans le taux
+        d'encadrement et n'assure pas la continuité de direction.
       </div></div>
     <div id="pmi-export-subtitle" style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:600"></div>
     <!-- min-height : un élément flex en overflow:auto a min-height:0, il peut donc être
@@ -263,7 +291,7 @@ function pmiInjecterModale(){
         <span style="font-size:12px;color:var(--muted)">h par semaine</span>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:6px">
-        Ces heures sont reportées sur la ligne « Direction » et retirées du taux d'encadrement.
+        Ces heures sont marquées <strong>D</strong> dans les cases de la personne et retirées du taux d'encadrement.
         Elles sont placées automatiquement, dans les heures de travail de la personne, au moment
         où son retrait pèse le moins sur l'accueil.</div>
     </div>
@@ -278,7 +306,7 @@ function pmiInjecterModale(){
         <input class="finput" id="pmi-fermeture" type="time" style="flex:0 0 110px;font-size:12px">
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:6px">
-        Réparties sur toute l'équipe, en priorité avant l'ouverture et après la fermeture aux
+        Marquées <strong>E/R</strong> dans les cases, réparties sur toute l'équipe, en priorité avant l'ouverture et après la fermeture aux
         enfants — les professionnels sont là, les enfants non : ces créneaux ne coûtent rien à
         l'encadrement.</div>
     </div>
@@ -352,12 +380,14 @@ async function pmiOpenExportModal(){
     const autreVal=(saved&&!PMI_QUALIF_OPTIONS.includes(saved))?saved:'';
     const nom=pmiNomGet(crecheId,p)||pmiNomDepuisAnnuaire(crecheId,p);
     const exp=pmiExpGet(crecheId,p);
+    const hebdo=pmiHebdoGet(crecheId,p)||pmiHebdoDepuisFiche(crecheId,p);
     const qualifCourante=(saved&&!PMI_QUALIF_OPTIONS.includes(saved))?saved:saved;
     return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
       +'<div style="flex:0 0 90px;font-size:13px;font-weight:600">'+escHtml(p)+'</div>'
       +'<input class="finput pmi-nom" data-prenom="'+escHtml(p)+'" placeholder="Nom de famille" value="'+escHtml(nom)+'" style="flex:0 0 130px;font-size:12px">'
       +'<select class="finput pmi-qualif-sel" data-prenom="'+escHtml(p)+'" style="flex:1;min-width:140px;font-size:12px" onchange="pmiOnQualifChange(this)">'+opts+'</select>'
       +'<input class="finput pmi-qualif-autre" data-prenom="'+escHtml(p)+'" placeholder="Qualification…" value="'+escHtml(autreVal)+'" style="flex:1;min-width:140px;font-size:12px;display:'+(autreVal?'':'none')+'">'
+      +'<input class="finput pmi-hebdo" data-prenom="'+escHtml(p)+'" type="number" min="0" max="48" step="0.25" placeholder="h/sem" title="Temps de travail hebdomadaire (heures du contrat)" value="'+(hebdo||'')+'" style="flex:0 0 74px;font-size:12px">'
       +'<label class="pmi-exp-wrap" data-prenom="'+escHtml(p)+'" style="flex:0 0 100%;font-size:12px;color:var(--muted);display:'
         +(pmiQualifEligibleSubstitution(qualifCourante)?'flex':'none')+';align-items:center;gap:6px;margin-left:98px" '
         +'title="R2324-42 : en micro-crèche, une certification de niveau V petite enfance vaut personnel du 1° à partir de 2 ans d’expérience (3 ans pour un·e assistant·e maternel·le agréé·e).">'
@@ -409,6 +439,18 @@ function pmiCollectExperience(){
     const val=!!(c&&c.checked);
     map[p]=val;
     pmiExpSet(ctx.crecheId,p,val);
+  });
+  return map;
+}
+
+function pmiCollectHebdo(){
+  const ctx=_pmiExportCtx;
+  const map={};
+  ctx.staffList.forEach(p=>{
+    const inp=document.querySelector('.pmi-hebdo[data-prenom="'+p.replace(/"/g,'\\"')+'"]');
+    const val=inp?(parseFloat(inp.value)||0):0;
+    map[p]=val;
+    pmiHebdoSet(ctx.crecheId,p,val);
   });
   return map;
 }
