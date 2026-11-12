@@ -302,6 +302,54 @@ function pmiChoisirCreneauBureau(colsTravaillees,nbQuarts,staffParQuart,comptesE
   return[];
 }
 
+/* Plusieurs blocs dans la même journée : quand la durée visée ne tient pas d'un seul tenant
+   (pause, moment où l'équipe est trop juste), on prend la plus longue plage sûre, puis on
+   recommence sur ce qui reste. Le temps de bureau est ainsi morcelé plutôt que perdu. */
+function pmiChoisirCreneauxBureau(colsTravaillees,nbQuarts,staffParQuart,comptesEnfants){
+  let dispo=colsTravaillees.slice(),restant=nbQuarts;
+  const choisis=[];
+  while(restant>0&&dispo.length){
+    const bloc=pmiChoisirCreneauBureau(dispo,restant,staffParQuart,comptesEnfants);
+    if(!bloc.length)break;
+    const pris=new Set(bloc);
+    bloc.forEach(c=>choisis.push(c));
+    dispo=dispo.filter(c=>!pris.has(c));
+    restant-=bloc.length;
+  }
+  return choisis.sort((a,b)=>a-b);
+}
+
+/* Répartition sur la SEMAINE : le volume hebdomadaire (17,5 h par exemple) est dû en entier.
+   Si une journée ne peut pas absorber sa part sans créer de sous-effectif, ce qui manque est
+   reporté sur les autres jours de la semaine, dans la limite de ce que chacun peut accueillir
+   sans infraction. `etats` = équipe et enfants de chaque jour, calculés au préalable. */
+function pmiPlacerBureauSemaine(direction,etats){
+  const parJour={};
+  if(!direction||!direction.prenom)return parJour;
+  const jours=[];
+  let total=0;
+  PMI_TPL_DAYS.forEach(day=>{
+    const e=etats[day.jour];
+    const voulu=direction.quartsParJour[day.jour]||0;
+    total+=voulu;
+    const cible=e&&e.presences.find(x=>x.prenom===direction.prenom);
+    if(!cible||!cible.cols.length)return;
+    const surs=cible.cols.filter(c=>!pmiRetraitInterdit(c,e.staffParQuart,e.comptes));
+    jours.push({jour:day.jour,e:e,cible:cible,capacite:surs.length,n:Math.min(voulu,surs.length)});
+  });
+  if(direction.quartsTotal>0)total=direction.quartsTotal;
+  let reste=total-jours.reduce((n,j)=>n+j.n,0);
+  while(reste>0){
+    const libres=jours.filter(j=>j.n<j.capacite).sort((a,b)=>(a.n-b.n)||(a.jour-b.jour));
+    if(!libres.length)break;
+    libres[0].n++;reste--;
+  }
+  jours.forEach(j=>{
+    if(j.n>0)parJour[j.jour]=pmiChoisirCreneauxBureau(j.cible.cols,j.n,j.e.staffParQuart,j.e.comptes);
+  });
+  return parJour;
+}
+
 /* ── Temps de repas et d'entretien ─────────────────────────────────────────
    Ces heures sont travaillées mais ne relèvent pas non plus de l'encadrement : elles sont
    marquées « E/R » dans les cases de la personne qui les assure. Contrairement au temps de bureau, elles peuvent
@@ -459,23 +507,10 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
   // Continuité de direction de chaque jour (même règle que le planning équipe à l'écran).
   const continuite=peContinuiteDirection(weekInfo.rows.filter(x=>x.creneau_label),weekInfo.crecheId,weekInfo.semaine);
 
+  // Équipe et enfants de chaque jour, calculés AVANT toute écriture : le temps de bureau se
+  // répartit sur la semaine entière, il faut donc connaître les cinq journées d'abord.
+  const etats={};
   PMI_TPL_DAYS.forEach(day=>{
-    // 1) remise à zéro : le modèle fourni contient encore quelques valeurs d'un remplissage
-    //    manuel antérieur (des totaux en AZ notamment) qu'il ne faut pas laisser passer.
-    for(let r=day.staffFirst;r<=day.staffLast;r++){
-      ws.getCell(r,2).value=null;
-      ws.getCell(r,3).value=null;
-      ws.getCell(r,PMI_TPL_COL_DIPLOME).value=null;
-      ws.getCell(r,PMI_TPL_COL_QUALIFIE).value=null;
-      for(let c=PMI_TPL_COL_FIRST;c<=PMI_TPL_COL_LAST;c++){
-        const cell=ws.getCell(r,c);
-        cell.value=null;
-        pmiEffacerFond(cell);
-      }
-    }
-    ws.getCell(day.total,PMI_TPL_COL_DIPLOME).value=null;
-    ws.getCell(day.total,PMI_TPL_COL_QUALIFIE).value=null;
-
     // 2) créneaux de chacun, AVANT toute écriture : le placement du temps de bureau a
     //    besoin de connaître l'équipe présente et l'effectif enfants de la journée.
     const dayRows=weekInfo.rows.filter(x=>x.jour===day.jour);
@@ -500,13 +535,36 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
 
     const dateISO=(weekInfo.dates||[])[day.jour];
     const comptes=pmiComptesParQuart(enfantsParDate&&dateISO?enfantsParDate[dateISO]:null);
+    etats[day.jour]={presences,staffParQuart,comptes,colMin,colMax};
+  });
+
+  const bureauSemaine=pmiPlacerBureauSemaine(direction,etats);
+
+  PMI_TPL_DAYS.forEach(day=>{
+    // 1) remise à zéro : le modèle fourni contient encore quelques valeurs d'un remplissage
+    //    manuel antérieur (des totaux en AZ notamment) qu'il ne faut pas laisser passer.
+    for(let r=day.staffFirst;r<=day.staffLast;r++){
+      ws.getCell(r,2).value=null;
+      ws.getCell(r,3).value=null;
+      ws.getCell(r,PMI_TPL_COL_DIPLOME).value=null;
+      ws.getCell(r,PMI_TPL_COL_QUALIFIE).value=null;
+      for(let c=PMI_TPL_COL_FIRST;c<=PMI_TPL_COL_LAST;c++){
+        const cell=ws.getCell(r,c);
+        cell.value=null;
+        pmiEffacerFond(cell);
+      }
+    }
+    ws.getCell(day.total,PMI_TPL_COL_DIPLOME).value=null;
+    ws.getCell(day.total,PMI_TPL_COL_QUALIFIE).value=null;
+
+    const{presences,staffParQuart,comptes,colMin,colMax}=etats[day.jour];
 
     // 3) temps de bureau de la direction : retiré de l'encadrement, marqué « D » dans ses cases
     let colsBureau=[];
-    if(direction&&direction.quartsParJour[day.jour]>0){
+    if(direction&&(bureauSemaine[day.jour]||[]).length){
       const cible=presences.find(x=>x.prenom===direction.prenom);
       if(cible&&cible.cols.length){
-        colsBureau=pmiChoisirCreneauBureau(cible.cols,direction.quartsParJour[day.jour],staffParQuart,comptes);
+        colsBureau=bureauSemaine[day.jour];
         const retire=new Set(colsBureau);
         cible.cols=cible.cols.filter(c=>!retire.has(c));
         cible.colsD=colsBureau.slice();
@@ -787,7 +845,7 @@ async function pmiGenerateExcel(){
     const controles=withData.map((w,i)=>({
       semaine:w.dateDebut,
       stats:pmiFillSheet(feuilles[i],w,ctx.crecheName,ctx.staffList,qualifMap,nomMap,colorMap,ctx.enfantsParDate,capacite,expMap,
-        (dirPrenom&&dirHeures>0)?{prenom:dirPrenom,quartsParJour:pmiRepartirBureau(w,dirPrenom,dirHeures)}:null,
+        (dirPrenom&&dirHeures>0)?{prenom:dirPrenom,quartsTotal:Math.round(dirHeures*4),quartsParJour:pmiRepartirBureau(w,dirPrenom,dirHeures)}:null,
         entretien,hebdoMap)
     }));
 
