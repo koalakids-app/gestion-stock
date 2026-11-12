@@ -315,8 +315,8 @@ function pmiInjecterModale(){
         <span style="font-size:12px;color:var(--muted)">(vide = non comptée)</span>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:6px">
-        Marquées <strong>E/R</strong> (cases bleu clair), réparties sur l'équipe encadrante (l'alternant·e
-        prend le relais quand elle ne peut pas se libérer sans sous-effectif), en priorité avant l'ouverture et après la fermeture aux
+        Marquées <strong>E/R</strong> (cases bleu clair), réparties sur toute l'équipe, alternant·e compris·e (qui prend
+        aussi ce que les autres ne peuvent pas absorber sans sous-effectif), en priorité avant l'ouverture et après la fermeture aux
         enfants — les professionnels sont là, les enfants non : ces créneaux ne coûtent rien à
         l'encadrement.</div>
     </div>

@@ -451,9 +451,10 @@ function pmiPlacerGouter(presences,colGouter,staffParQuart,comptesEnfants){
   return null;
 }
 
-/* Renfort de l'alternant·e sur le temps de repas / entretien : quand l'équipe encadrante ne
-   peut pas absorber tout le volume du jour sans sous-effectif, ce qui reste est confié à
-   l'alternant·e, dans ses heures de présence. D'abord hors accueil des enfants, puis au plus
+/* Part de l'alternant·e dans le temps de repas / entretien. Chaque jour où il ou elle est
+   présent·e, l'alternant·e en prend une part égale à celle des autres (volume du jour divisé
+   par le nombre de personnes présentes) ; s'y ajoute ce que l'équipe encadrante ne peut pas
+   absorber sans sous-effectif. Placé dans ses heures de présence. D'abord hors accueil des enfants, puis au plus
    près du repas de midi. */
 const PMI_COL_REPAS=PMI_TPL_COL_FIRST+22;   // 12h30
 function pmiRenfortAlternant(presences,nbQuarts,colOuverture,colFermeture){
@@ -648,13 +649,18 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
     // (la préparation du goûter a déjà été placée, avant le temps de bureau)
     const choixGouter=etats[day.jour].choixGouter;
     if(entretien&&entretien.quarts>0){
-      // Les alternant·e·s n'entrent pas dans cette répartition automatique : elle se raisonne
-      // sur l'effectif encadrant, dont ils ne font pas partie.
-      choixEntretien=pmiPlacerEntretien(presences.filter(x=>!x.alternant),entretien.quarts,staffParQuart,comptes,
+      // L'alternant·e prend d'abord sa part (elle ne coûte rien à l'encadrement) ; le reste se
+      // répartit sur l'équipe encadrante, sans jamais créer de sous-effectif.
+      const nbPresents=presences.filter(x=>x.cols.length).length;
+      const partAlt=presences.some(x=>x.alternant&&x.cols.length)?Math.round(entretien.quarts/nbPresents):0;
+      const partAlternant=pmiRenfortAlternant(presences,partAlt,entretien.colOuverture,entretien.colFermeture);
+      partAlternant.forEach(appliquerER);
+      choixEntretien=pmiPlacerEntretien(presences.filter(x=>!x.alternant),entretien.quarts-partAlternant.length,staffParQuart,comptes,
         entretien.colOuverture,entretien.colFermeture);
       choixEntretien.forEach(appliquerER);
+      choixEntretien=choixEntretien.concat(partAlternant);
       // Volume que l'équipe encadrante n'a pas pu absorber : confié à l'alternant·e.
-      const manque=entretien.quarts-choixEntretien.length;
+      const manque=entretien.quarts-choixEntretien.length;   // part de l'alternant·e déjà comptée
       if(manque>0){
         const renfort=pmiRenfortAlternant(presences,manque,entretien.colOuverture,entretien.colFermeture);
         renfort.forEach(appliquerER);
