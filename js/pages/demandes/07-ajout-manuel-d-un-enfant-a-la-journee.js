@@ -12,6 +12,7 @@ function presOpenAddDay(){
   }else{
     sel.innerHTML='<option value="">-- Choisir un enfant --</option>'+_presAbsentsDuJour.map(e=>'<option value="'+e.id+'">'+escHtml((e.prenom||'')+' '+(e.nom||''))+'</option>').join('');
   }
+  const att=document.getElementById('pres-add-day-attente');if(att)att.checked=false;
   document.getElementById('modal-pres-add-day-wrap').classList.add('open');
 }
 async function presAddDayConfirm(){
@@ -20,8 +21,9 @@ async function presAddDayConfirm(){
   if(!id){showBanner('S\u00e9lectionnez un enfant.','error');return;}
   const dateStr=document.getElementById('presence-date')?.value||todayStr();
   closeModal('modal-pres-add-day-wrap');
-  await togglePresence(id,dateStr);
-  showBanner('Enfant ajout\u00e9 \u00e0 la journ\u00e9e.');
+  const attente=!!(document.getElementById('pres-add-day-attente')||{}).checked;
+  const ok=await togglePresence(id,dateStr,{attente:attente});
+  if(ok)showBanner(attente?'Enfant ajout\u00e9 en attente de place (barre hachur\u00e9e).':'Enfant ajout\u00e9 \u00e0 la journ\u00e9e.');
 }
 function presAddDayCreate(){closeModal('modal-pres-add-day-wrap');openEnfantModal();}
 window.presAddDayCreate=presAddDayCreate;
