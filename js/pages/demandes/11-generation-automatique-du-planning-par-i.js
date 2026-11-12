@@ -437,6 +437,24 @@ function peEstRemplacante(prenom,crecheId,semaine){
     &&ipNormStr((e.poste||'')+' '+(e.type_contrat||'')).includes('remplac'));
 }
 
+// Un·e alternant·e ne peut pas non plus être en continuité de direction (il ou elle ne compte
+// pas dans le taux d'encadrement). Repéré·e par la qualification saisie dans l'export PMI
+// (« Alternant·e … »), ou par une fiche collaborateur de même prénom dont le poste, la
+// qualification ou le type de contrat mentionne l'alternance / l'apprentissage.
+function peEstAlternant(prenom,crecheId){
+  const t=ipNormStr(prenom);
+  if(!t)return false;
+  if(typeof pmiCfg==='function'&&typeof pmiEstAlternant==='function'){
+    try{
+      const pers=pmiCfg(crecheId).personnes||{};
+      if(Object.keys(pers).some(k=>ipNormStr(k)===t&&pmiEstAlternant(pers[k]&&pers[k].qualif)))return true;
+    }catch(e){}
+  }
+  return (typeof cacheEmployes!=='undefined'?cacheEmployes||[]:[]).some(e=>!e.archive_le&&ipNormStr(e.prenom)===t
+    &&(!e.creche_id||e.creche_id===crecheId)
+    &&/alternan|apprenti/.test(ipNormStr((e.poste||'')+' '+(e.qualification||'')+' '+(e.type_contrat||''))));
+}
+
 // Pour chaque jour (0-4), liste de lignes de texte de la continuité de direction.
 // - Directrice présente, du matin (début avant 9h30) → la pro qui termine à 18h30.
 // - Directrice présente, du soir → la pro qui commence à 7h30.
@@ -452,9 +470,9 @@ function peContinuiteDirection(rows,crecheId,semaine){
     const noms=l=>[...new Set(l.map(x=>x.r.prenom))].join(', ');
     const dir=jour.filter(x=>peFindReferentIdForPrenom(crecheId,x.r.prenom,true));
     const dirNoms=new Set(dir.map(x=>ipNormStr(x.r.prenom)));
-    const autres=jour.filter(x=>!dirNoms.has(ipNormStr(x.r.prenom))&&!peEstRemplacante(x.r.prenom,crecheId,semaine));
+    const autres=jour.filter(x=>!dirNoms.has(ipNormStr(x.r.prenom))&&!peEstRemplacante(x.r.prenom,crecheId,semaine)&&!peEstAlternant(x.r.prenom,crecheId));
     // Ouverture = celle qui commence le plus tôt, fermeture = celle qui termine le plus tard
-    // (hors directrice et remplaçantes) : les horaires ne tombent pas toujours pile à 7h30 / 18h30.
+    // (hors directrice, remplaçantes et alternant·e·s) : les horaires ne tombent pas toujours pile à 7h30 / 18h30.
     const debutMin=autres.length?Math.min(...autres.map(x=>x.segs[0][0])):null;
     const finMax=autres.length?Math.max(...autres.map(x=>x.segs[x.segs.length-1][1])):null;
     let ouv=autres.filter(x=>x.segs[0][0]===debutMin);

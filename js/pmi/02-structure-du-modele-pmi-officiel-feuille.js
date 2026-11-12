@@ -16,8 +16,11 @@ const PMI_TPL_DAYS=[
   {jour:4, nom:73, staffFirst:74, staffLast:79, enfants:80, total:81}
 ];
 const PMI_LIBELLE_ENFANTS="Nombre d'enfants accueillis";
-const PMI_LIBELLE_DIRECTION='Direction';
-const PMI_LIBELLE_ENTRETIEN='Entretien/restauration';
+// Les lignes « Direction » et « Entretien/restauration » du modèle ne sont plus utilisées :
+// ces temps sont marqués d'une lettre dans les cases de la personne concernée.
+const PMI_LETTRE_DIRECTION='D';
+const PMI_LETTRE_ENTRETIEN='E/R';
+const PMI_LEGENDE_HORS='D = direction · E/R = entretien/restauration';
 const PMI_TPL_COL_FIRST=4;      // D = 07h00-07h15
 const PMI_TPL_COL_LAST=51;      // AY = 18h45-19h00
 const PMI_TPL_COL_DIPLOME=52;   // AZ « Nbre heures personnel diplômé * »
@@ -31,6 +34,14 @@ const PMI_TPL_MAX_STAFF=PMI_TPL_DAYS.reduce((n,d)=>Math.min(n,d.staffLast-d.staf
 // grille (mêmes bordures = même style). On réaffecte donc toujours un style neuf.
 function pmiPeindre(cell,argb){
   cell.style=Object.assign({},cell.style,{fill:{type:'pattern',pattern:'solid',fgColor:{argb:argb}}});
+}
+// Lettre « D » ou « E/R » dans une case d'un quart d'heure : la case reste sans couleur (ce
+// n'est pas de l'encadrement), la lettre est centrée et réduite pour tenir dans la colonne.
+function pmiLettre(cell,texte){
+  cell.value=texte;
+  cell.style=Object.assign({},cell.style,{
+    font:{name:'Arial',size:texte.length>1?6:9,bold:true,color:{argb:'FF000000'}},
+    alignment:{horizontal:'center',vertical:'middle',shrinkToFit:true}});
 }
 function pmiEffacerFond(cell){
   const f=cell.fill;
@@ -193,8 +204,8 @@ function pmiControlerJournee(nomJour,comptesEnfants,staffParQuart,capacite,anoma
 }
 
 /* ── Temps de bureau de la direction / du directeur technique ───────────────
-   Ces heures sont travaillées mais ne relèvent pas de l'encadrement : le modèle leur
-   réserve la ligne « Direction », sous l'intitulé « Hors encadrement des enfants ». Elles
+   Ces heures sont travaillées mais ne relèvent pas de l'encadrement : elles sont marquées
+   de la lettre « D » dans les cases de la personne (sans couleur). Elles
    sont donc retirées des heures d'encadrement de la personne, du total du jour et du
    décompte servant aux contrôles de taux.
 
@@ -284,8 +295,8 @@ function pmiChoisirCreneauBureau(colsTravaillees,nbQuarts,staffParQuart,comptesE
 }
 
 /* ── Temps de repas et d'entretien ─────────────────────────────────────────
-   Ces heures sont travaillées mais ne relèvent pas non plus de l'encadrement : elles vont
-   sur la ligne « Entretien/restauration ». Contrairement au temps de bureau, elles peuvent
+   Ces heures sont travaillées mais ne relèvent pas non plus de l'encadrement : elles sont
+   marquées « E/R » dans les cases de la personne qui les assure. Contrairement au temps de bureau, elles peuvent
    être réparties sur toute l'équipe, et par petits bouts (préparation du repas, service,
    remise en état, ménage du soir).
 
@@ -423,7 +434,7 @@ function pmiTexteAvecRenvoi(cell,valeur){
     cell.style=Object.assign({},cell.style,{alignment:Object.assign({},cell.alignment,{wrapText:true})});
 }
 
-function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap,enfantsParDate,capacite,expMap,direction,entretien){
+function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap,enfantsParDate,capacite,expMap,direction,entretien,hebdoMap){
   ws.getCell('B2').value=crecheName;
   ws.getCell('AZ1').value=weekInfo.dateDebut+' - '+weekInfo.dateFin;
 
@@ -433,7 +444,7 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
   // heures déjà planifiées, jamais ajoutés — ce récapitulatif permet de le vérifier et de
   // comparer le total hebdomadaire de chacun à son contrat.
   const compter=(prenom,champ,heures)=>{
-    const o=stats.parPersonne[prenom]||(stats.parPersonne[prenom]={planifie:0,encadrement:0,direction:0,entretien:0});
+    const o=stats.parPersonne[prenom]||(stats.parPersonne[prenom]={planifie:0,encadrement:0,direction:0,entretien:0,horsTaux:0});
     o[champ]+=heures;
   };
 
@@ -467,20 +478,22 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       const res=src?pmiSlotsForRow(src):{cols:[],minutes:0};
       const cols=(res.cols||[]).filter(c=>c>=PMI_TPL_COL_FIRST&&c<=PMI_TPL_COL_LAST);
       compter(p,'planifie',cols.length*0.25);
+      // Alternant·e : présent·e au planning, mais jamais compté·e dans l'effectif encadrant.
+      const alternant=pmiEstAlternant(qualifMap[p]);
       cols.forEach(c=>{
         // Un créneau travaillé = un professionnel présent auprès des enfants
         // (la pause, absente de res.cols, ne compte donc pas dans l'encadrement).
-        staffParQuart[c-PMI_TPL_COL_FIRST]++;
+        if(!alternant)staffParQuart[c-PMI_TPL_COL_FIRST]++;
         if(colMin===null||c<colMin)colMin=c;
         if(colMax===null||c>colMax)colMax=c;
       });
-      return{prenom:p,ligne:day.staffFirst+i,cols:cols};
+      return{prenom:p,ligne:day.staffFirst+i,cols:cols,alternant:alternant,colsD:[],colsER:[]};
     });
 
     const dateISO=(weekInfo.dates||[])[day.jour];
     const comptes=pmiComptesParQuart(enfantsParDate&&dateISO?enfantsParDate[dateISO]:null);
 
-    // 3) temps de bureau de la direction : retiré de l'encadrement, reporté ligne « Direction »
+    // 3) temps de bureau de la direction : retiré de l'encadrement, marqué « D » dans ses cases
     let colsBureau=[];
     if(direction&&direction.quartsParJour[day.jour]>0){
       const cible=presences.find(x=>x.prenom===direction.prenom);
@@ -488,7 +501,8 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
         colsBureau=pmiChoisirCreneauBureau(cible.cols,direction.quartsParJour[day.jour],staffParQuart,comptes);
         const retire=new Set(colsBureau);
         cible.cols=cible.cols.filter(c=>!retire.has(c));
-        colsBureau.forEach(c=>{staffParQuart[c-PMI_TPL_COL_FIRST]--;});
+        cible.colsD=colsBureau.slice();
+        if(!cible.alternant)colsBureau.forEach(c=>{staffParQuart[c-PMI_TPL_COL_FIRST]--;});
         compter(direction.prenom,'direction',colsBureau.length*0.25);
       }
     }
@@ -496,11 +510,13 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
     // 3 bis) repas et entretien : répartis sur toute l'équipe, hors encadrement
     let choixEntretien=[];
     if(entretien&&entretien.quarts>0){
-      choixEntretien=pmiPlacerEntretien(presences,entretien.quarts,staffParQuart,comptes,
+      // Les alternant·e·s n'entrent pas dans cette répartition automatique : elle se raisonne
+      // sur l'effectif encadrant, dont ils ne font pas partie.
+      choixEntretien=pmiPlacerEntretien(presences.filter(x=>!x.alternant),entretien.quarts,staffParQuart,comptes,
         entretien.colOuverture,entretien.colFermeture);
       choixEntretien.forEach(ch=>{
         const cible=presences.find(x=>x.prenom===ch.prenom);
-        if(cible)cible.cols=cible.cols.filter(c=>c!==ch.col);
+        if(cible){cible.cols=cible.cols.filter(c=>c!==ch.col);cible.colsER.push(ch.col);}
         staffParQuart[ch.col-PMI_TPL_COL_FIRST]--;
         compter(ch.prenom,'entretien',0.25);
       });
@@ -513,15 +529,22 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       const nomAffiche=pmiNomComplet(p,nomMap&&nomMap[p]);
       const qualif=qualifMap[p]||'';
       pmiTexteAvecRenvoi(ws.getCell(r,2),nomAffiche);
-      pmiTexteAvecRenvoi(ws.getCell(r,3),qualif);
-      const lignes=Math.max(pmiNbLignes(nomAffiche,2),pmiNbLignes(qualif,3));
+      // Colonne « Qualification » : la qualification, puis le temps de travail hebdomadaire.
+      const hebdoTxt=pmiHebdoTexte(hebdoMap&&hebdoMap[p]);
+      pmiTexteAvecRenvoi(ws.getCell(r,3),[qualif,hebdoTxt].filter(Boolean).join('\n'));
+      const lignes=Math.max(pmiNbLignes(nomAffiche,2),(qualif?pmiNbLignes(qualif,3):0)+(hebdoTxt?1:0));
       const ligne=ws.getRow(r);
       const besoin=lignes*PMI_LIGNE_PT;
       if(besoin>(ligne.height||0))ligne.height=besoin;
+      // Temps hors encadrement : une lettre dans la case, sans couleur.
+      x.colsD.forEach(c=>pmiLettre(ws.getCell(r,c),PMI_LETTRE_DIRECTION));
+      x.colsER.forEach(c=>pmiLettre(ws.getCell(r,c),PMI_LETTRE_ENTRETIEN));
       if(!x.cols.length)return;
       const argb=colorMap[p]||'FF3D3580';
       x.cols.forEach(c=>pmiPeindre(ws.getCell(r,c),argb));
       const h=Math.round(x.cols.length*0.25*100)/100;
+      // Alternant·e : horaires visibles, mais aucune heure portée au taux d'encadrement.
+      if(x.alternant){compter(p,'horsTaux',h);return;}
       compter(p,'encadrement',h);
       const diplome=pmiQualifEstDiplome(qualif,expMap&&expMap[p]);
       ws.getCell(r,diplome?PMI_TPL_COL_DIPLOME:PMI_TPL_COL_QUALIFIE).value=h;
@@ -532,61 +555,56 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
     if(totalDiplome)ws.getCell(day.total,PMI_TPL_COL_DIPLOME).value=Math.round(totalDiplome*100)/100;
     if(totalQualifie)ws.getCell(day.total,PMI_TPL_COL_QUALIFIE).value=Math.round(totalQualifie*100)/100;
 
-    // 6) lignes « Direction » et « Entretien/restauration » : le modèle n'en porte le
-    //    libellé que le lundi, on le rétablit comme pour la ligne des enfants.
+    // 6) les lignes « Direction » et « Entretien/restauration » du modèle sont supprimées :
+    //    vidées puis masquées (les retirer pour de bon décalerait toutes les fusions du
+    //    gabarit). Le libellé « Hors encadrement des enfants » devient la légende des lettres.
     const rDirection=day.total+1,rEntretien=day.total+2;
-    if(!ws.getCell(rDirection,2).value)ws.getCell(rDirection,2).value=PMI_LIBELLE_DIRECTION;
-    if(!ws.getCell(rEntretien,2).value)ws.getCell(rEntretien,2).value=PMI_LIBELLE_ENTRETIEN;
-    for(let c=PMI_TPL_COL_FIRST;c<=PMI_TPL_COL_LAST;c++){
-      pmiEffacerFond(ws.getCell(rDirection,c));
-      pmiEffacerFond(ws.getCell(rEntretien,c));
-    }
-    // Bout de ligne : le volume horaire hors encadrement de la journée. Il est écrit dans la
-    // seule colonne AZ — la colonne BA reste vide — pour qu'il se lise comme un total de
-    // ligne et non comme des heures d'encadrement ventilées diplômé / qualifié.
-    ws.getCell(rDirection,PMI_TPL_COL_DIPLOME).value=null;
-    ws.getCell(rDirection,PMI_TPL_COL_QUALIFIE).value=null;
-    ws.getCell(rEntretien,PMI_TPL_COL_DIPLOME).value=null;
-    ws.getCell(rEntretien,PMI_TPL_COL_QUALIFIE).value=null;
+    [rDirection,rEntretien].forEach(r=>{
+      ws.getCell(r,2).value=null;
+      for(let c=PMI_TPL_COL_FIRST;c<=PMI_TPL_COL_QUALIFIE;c++){
+        const cell=ws.getCell(r,c);
+        cell.value=null;
+        if(c<=PMI_TPL_COL_LAST)pmiEffacerFond(cell);
+      }
+      ws.getRow(r).hidden=true;
+    });
+    const cLeg=ws.getCell(day.total,2);
+    cLeg.value=PMI_LEGENDE_HORS;
+    cLeg.style=Object.assign({},cLeg.style,{alignment:Object.assign({},cLeg.alignment,{shrinkToFit:true,wrapText:false})});
 
     if(colsBureau.length){
-      const argb=(direction&&colorMap[direction.prenom])||'FF3D3580';
-      colsBureau.forEach(c=>pmiPeindre(ws.getCell(rDirection,c),argb));
       const segs=pmiSegmentsContigus(colsBureau)
         .map(s=>pmiHeureDeQuart(s[0]-PMI_TPL_COL_FIRST)+'–'+pmiHeureDeQuart(s[s.length-1]-PMI_TPL_COL_FIRST+1));
       const hBureau=Math.round(colsBureau.length*0.25*100)/100;
-      ws.getCell(rDirection,PMI_TPL_COL_DIPLOME).value=hBureau;
       stats.bureau.push(PMI_NOMS_JOURS[day.jour]+' '+segs.join(' et ')
         +' ('+hBureau+' h)');
       stats.heuresBureau+=colsBureau.length*0.25;
     }
 
     if(choixEntretien.length){
-      choixEntretien.forEach(ch=>pmiPeindre(ws.getCell(rEntretien,ch.col),colorMap[ch.prenom]||'FF3D3580'));
       const segs=pmiSegmentsContigus(choixEntretien.map(ch=>ch.col))
         .map(sg=>pmiHeureDeQuart(sg[0]-PMI_TPL_COL_FIRST)+'–'+pmiHeureDeQuart(sg[sg.length-1]-PMI_TPL_COL_FIRST+1));
       const hEntretien=Math.round(choixEntretien.length*0.25*100)/100;
-      ws.getCell(rEntretien,PMI_TPL_COL_DIPLOME).value=hEntretien;
       stats.entretien.push(PMI_NOMS_JOURS[day.jour]+' '+segs.join(', ')
         +' ('+hEntretien+' h)');
       stats.heuresEntretien+=choixEntretien.length*0.25;
     }
 
-    // 6 bis) continuité de direction : écrite sur la ligne « Direction » du document, dans
-    //    des cases libres (le texte déborde sur les cases vides à droite). Placée avant le
-    //    temps de bureau s'il tient avant, sinon juste après, pour ne pas le recouvrir.
+    // 6 bis) continuité de direction : sur la première ligne libre sous le bloc du jour
+    //    (l'ancienne ligne « Direction » qui la portait n'existe plus).
+    const rCont=day.total+3;
+    ws.getCell(rCont,2).value=null;
+    ws.getCell(rCont,PMI_TPL_COL_FIRST).value=null;
     const contTxt=(continuite[day.jour]||[]).join(' — ');
     if(contTxt){
-      const largeur=Math.ceil(contTxt.length/2)+1;   // cases d'un quart d'heure nécessaires, environ
-      let colTxt=PMI_TPL_COL_FIRST;
-      if(colsBureau.length){
-        const cMin=Math.min(...colsBureau),cMax=Math.max(...colsBureau);
-        colTxt=(cMin-PMI_TPL_COL_FIRST>=largeur)?PMI_TPL_COL_FIRST:Math.min(cMax+1,PMI_TPL_COL_LAST);
-      }
-      const cell=ws.getCell(rDirection,colTxt);
-      cell.value='Continuité : '+contTxt;
-      cell.font={bold:true,name:'Calibri',size:10,color:{argb:'FF000000'}};
-      cell.alignment={horizontal:'left',vertical:'middle',wrapText:false};
+      // Écrite sur la grille horaire, dans une plage fusionnée pour que le quadrillage ne
+      // barre pas le texte (la colonne B:C, trop étroite, le tronquerait).
+      try{ws.mergeCells(rCont,PMI_TPL_COL_FIRST,rCont,PMI_TPL_COL_FIRST+35);}catch(e){}
+      const cell=ws.getCell(rCont,PMI_TPL_COL_FIRST);
+      cell.value='Continuité de direction : '+contTxt;
+      cell.style=Object.assign({},cell.style,{
+        font:{bold:true,name:'Calibri',size:10,color:{argb:'FF000000'}},
+        alignment:{horizontal:'left',vertical:'middle',wrapText:false}});
     }
 
     // 7) nombre d'enfants accueillis, quart d'heure par quart d'heure
@@ -676,10 +694,10 @@ function pmiAfficherControles(controles,reserves,capacite){
       gens.forEach(k=>{
         const o=s.parPersonne[k];
         // Contrôle : rien n'est ajouté aux heures planifiées, la somme doit retomber dessus.
-        const ecart=Math.abs(o.planifie-(o.encadrement+o.direction+o.entretien))>0.01;
+        const ecart=Math.abs(o.planifie-(o.encadrement+o.direction+o.entretien+(o.horsTaux||0)))>0.01;
         html+='<tr><td>'+escHtml(k)+'</td>'
           +'<td style="text-align:right'+(ecart?';color:var(--red);font-weight:700':'')+'">'+r2(o.planifie)+' h</td>'
-          +'<td style="text-align:right">'+r2(o.encadrement)+' h</td>'
+          +'<td style="text-align:right">'+(o.horsTaux?'hors taux (alternant·e)':r2(o.encadrement)+' h')+'</td>'
           +'<td style="text-align:right">'+(o.direction?r2(o.direction)+' h':'—')+'</td>'
           +'<td style="text-align:right">'+(o.entretien?r2(o.entretien)+' h':'—')+'</td></tr>';
       });
@@ -720,6 +738,7 @@ async function pmiGenerateExcel(){
     const qualifMap=pmiCollectQualifs();
     const expMap=pmiCollectExperience();
     const nomMap=pmiCollectNoms();
+    const hebdoMap=pmiCollectHebdo();
     const colorMap=pmiBuildColorMap(ctx.staffList);
     const withData=ctx.weeks.filter(w=>w.rows.length);
 
@@ -758,7 +777,7 @@ async function pmiGenerateExcel(){
       semaine:w.dateDebut,
       stats:pmiFillSheet(feuilles[i],w,ctx.crecheName,ctx.staffList,qualifMap,nomMap,colorMap,ctx.enfantsParDate,capacite,expMap,
         (dirPrenom&&dirHeures>0)?{prenom:dirPrenom,quartsParJour:pmiRepartirBureau(w,dirPrenom,dirHeures)}:null,
-        entretien)
+        entretien,hebdoMap)
     }));
 
     const buf=await pmiRestaurerPoliceParDefaut(await wb.xlsx.writeBuffer());

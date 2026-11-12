@@ -665,6 +665,8 @@ pmi: `
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li><strong>Nom de famille</strong> de chaque salariée : le planning ne contient que les prénoms. Pré-rempli pour les directeurs/trices techniques depuis l’annuaire, et mémorisé ensuite — à saisir une seule fois par crèche.</li>
   <li><strong>Qualification</strong>, à choisir dans la liste ou à saisir librement. Mémorisée également.</li>
+  <li><strong>Temps de travail hebdomadaire</strong> (case « h/sem ») : pré-rempli depuis la fiche collaborateur quand elle porte les heures du contrat, modifiable et mémorisé. Il s’affiche dans la colonne « Qualification » du fichier, sous la qualification.</li>
+  <li><strong>Alternant·e</strong> : avec la qualification « Alternant·e EJE » ou « Alternant·e CAP AEPE » (ou une saisie libre contenant « alternant » / « apprenti »), la personne figure au planning mais <strong>ne compte pas dans le taux d’encadrement</strong> — ni heures, ni effectif présent — et <strong>ne peut pas être en continuité de direction</strong>, à l’écran comme dans l’export.</li>
   <li><strong>Ancienneté requise atteinte</strong> : en micro-crèche, une certification de niveau V petite enfance (CAP AEPE) compte dans le <strong>1°</strong> — le personnel diplômé des 40 % — dès <strong>2 ans d’expérience</strong>, 3 ans pour une assistante maternelle agréée. La case n’apparaît que là où elle a un sens ; elle est exclue pour les alternantes, dont le diplôme n’est pas acquis.</li>
   <li><strong>Temps de bureau</strong> : la personne assurant la direction ou la référence technique, et son volume hebdomadaire.</li>
   <li><strong>Repas et entretien</strong> : le volume quotidien, et les horaires d’accueil des enfants (7h30 – 18h30 par défaut).</li>
@@ -673,8 +675,9 @@ pmi: `
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li>Les <strong>horaires de chaque salariée</strong>, en couleur, pauses déduites, et ses heures d’encadrement ventilées en personnel diplômé (1°) ou qualifié (2°).</li>
   <li>Le <strong>nombre d’enfants accueillis</strong> quart d’heure par quart d’heure, à partir des présences enregistrées — horaires réels de l’import en priorité, contrat d’accueil à défaut.</li>
-  <li>La ligne <strong>Direction</strong> : le temps de bureau est placé automatiquement dans les heures de travail de la personne, au moment où son retrait pèse le moins sur l’accueil — en pratique le milieu de journée, quand les équipes du matin et de l’après-midi se chevauchent.</li>
-  <li>La ligne <strong>Entretien/restauration</strong> : répartie sur toute l’équipe, en priorité avant l’ouverture et après la fermeture aux enfants, puis autour du repas.</li>
+  <li>La lettre <strong>D</strong> (temps de direction), dans les cases de la personne : le temps de bureau est placé automatiquement dans les heures de travail de la personne, au moment où son retrait pèse le moins sur l’accueil — en pratique le milieu de journée, quand les équipes du matin et de l’après-midi se chevauchent.</li>
+  <li>Les lettres <strong>E/R</strong> (entretien / restauration), dans les cases des personnes concernées : réparties sur toute l’équipe (hors alternant·e·s), en priorité avant l’ouverture et après la fermeture aux enfants, puis autour du repas.</li>
+  <li>Les cases marquées D ou E/R restent <strong>sans couleur</strong> : seules les cases colorées sont de l’encadrement. Les anciennes lignes « Direction » et « Entretien/restauration » n’existent plus ; la <strong>continuité de direction</strong> s’inscrit sous le bloc de chaque jour.</li>
   <li>Le <strong>récapitulatif hebdomadaire</strong> : heures d’ouverture, capacité d’accueil, heures et pourcentages diplômé / qualifié / total.</li>
 </ul>
 <div style="background:#FFF8E1;border-left:4px solid #FFC107;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:18px;font-size:13px;color:#7a5c00">

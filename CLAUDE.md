@@ -150,6 +150,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 - Sauvegarde hebdomadaire : tables métier ajoutées (album, famille, visites médicales, frigo…), archive chiffrée AES-256-GCM si `BACKUP_ENCRYPTION_KEY` est définie (`tools/dechiffrer-sauvegarde.mjs`), fichiers du Storage non inclus (`docs/sauvegarde-fichiers.md`). Les empreintes de visages (`album_references`) ne partent jamais par e-mail.
 - Reste ouvert : le bucket `assets` est public (lecture par adresse exacte) et contient des pièces de messagerie, de frais pro, `salaries-pj/` (37 fichiers orphelins, sans référence en base) et `vaccins-pj/` ; les migrer vers un bucket privé demande de passer les liens enregistrés (`demandes.attachments`, `messages.attachments`, `frais_pro.receipt_url`, `vaccins_pj.url`) en liens signés.
 
+## Export planning PMI
+- `js/pmi/` (modèle Excel officiel embarqué, `pmiFillSheet`). Alternant·e (`pmiEstAlternant` : qualification « Alternant·e … » ou saisie libre « alternant / apprenti ») : horaires affichés mais hors taux d'encadrement (ni heures, ni effectif) et hors continuité de direction (`peEstAlternant`, appliqué aussi au planning à l'écran). Temps de direction = lettre « D », entretien/restauration = « E/R », dans les cases de la personne, sans couleur ; les lignes « Direction » et « Entretien/restauration » du modèle sont vidées et masquées (ne pas les retirer : fusions du gabarit). Colonne Qualification = qualification + temps hebdomadaire (`pmi_config.personnes[prénom].hebdo`, pré-rempli par `employes.heures_hebdo`).
+
 ## Habitudes de travail
 - Branche de développement de la session, pull request vers `main` en **squash**.
 - Après une fusion, repartir de `origin/main` (`git checkout -B <branche> origin/main`) ; le push demande `--force-with-lease`.
