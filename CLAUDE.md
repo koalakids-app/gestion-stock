@@ -128,6 +128,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 ## Pointage : tablette liée à un appareil
 - `kiosk_devices.appareil_id` : le jeton n'est accepté que de l'appareil qui l'a ouvert en premier (`kk_kiosk_lier`, identifiant dans `localStorage` `kk_pointage_appareil`, `js/pages/tablette.js`) ; `kk_kiosk_pointer_pictos` / `kk_kiosk_pointer_enfant_pictos` prennent `p_appareil`. Direction : « Dissocier l'appareil » dans Paramètres. Type `reunion` = tablette de réunion des référents (jamais d'enfants ; pointage sur la crèche du référent, source `kiosque_reunion`). `sql/kiosque_appareil_lie.sql` (appliqué) : ouvrir le lien sur chaque tablette pour la lier. L'ancien « Mode kiosque » connecté de Demandes (`js/kiosque.js`) est retiré : on ne pointe que sur une tablette liée (corrections d'oubli : Présences › Correction).
 
+## Présences : enfant en attente de place
+- Fenêtre « Ajouter à la journée » (Présences › Jour) : case « Pas de place pour l'instant » → `presences.attente_place` (`sql/presences_attente_place.sql`, appliqué). La barre du Gantt est hachurée (`renderPresenceGantt`, `04-filtre-presents-uniquement.js`) ; clic sur la barre = place confirmée (`presConfirmerPlace`). Affichage seulement : l'enfant reste compté (effectif, encadrement, commande repas).
+
 ## Photo de l'enfant
 - En-tête de la fiche enfant (`js/enfants/05-photo.js`, `enfPhotoCharger`) : `enfants_documents_admin` avec `piece_key = 'photo_enfant'`, bucket `documents-admin`, une seule photo (remplacer = supprimer l'ancienne), réduite à 600 px, URL signée à l'affichage. Pas de SQL ; non listée dans « Autres documents importés ». Elle peut servir de référence du tri par visage (bouton « Photo de la fiche », `albvRefDepuisFiche`, onglet Références de l'album) : mêmes règles que les autres références (accord signé requis, 5 max, seule l'empreinte est gardée).
 
