@@ -15,8 +15,6 @@
 --   recrutement_documents   bibliothèque de pièces jointes réutilisables
 --                           (creche_id vide = toutes les crèches, direction)
 --   recrutement_envois      les pièces jointes au lien d'UN·E candidat·e
---   recrutement_reglages    inutilisée (premier questionnaire intégré, abandonné) :
---                           à supprimer quand possible
 --   bucket privé `recrutement` :
 --     <id candidat>/…                    fichier propre à une fiche
 --     bibliotheque/<id organisation>/…   fichier de la bibliothèque
@@ -26,7 +24,8 @@
 -- Conservation : 2 ans au plus après le dernier contact (recommandation CNIL),
 -- la fiche se supprime depuis l'application (fichiers compris).
 --
--- Appliqué sur Supabase le 12 novembre 2026.
+-- Appliqué sur Supabase le 12 novembre 2026 (la table recrutement_reglages d'un premier
+-- questionnaire intégré, abandonné, a été supprimée le jour même : sql/recrutement_nettoyage.sql).
 -- ============================================================================
 
 -- ---- Partie 1 : tables -----------------------------------------------------
@@ -93,17 +92,10 @@ create table if not exists public.recrutement_envois (
 );
 create index if not exists recrutement_envois_candidat_idx on public.recrutement_envois(candidat_id);
 
-create table if not exists public.recrutement_reglages (
-  org_id      uuid primary key default public.kk_mon_org(),
-  questions   jsonb not null default '[]'::jsonb,
-  updated_at  timestamptz not null default now()
-);
-
 -- ---- Partie 2 : droits (RLS) -----------------------------------------------
 alter table public.recrutement_candidats enable row level security;
 alter table public.recrutement_documents enable row level security;
 alter table public.recrutement_envois    enable row level security;
-alter table public.recrutement_reglages  enable row level security;
 
 drop policy if exists recrutement_candidats_gestion on public.recrutement_candidats;
 create policy recrutement_candidats_gestion on public.recrutement_candidats
@@ -140,17 +132,6 @@ create policy recrutement_documents_ecriture on public.recrutement_documents
   with check (org_id = public.kk_mon_org()
          and (public.kk_est_direction()
               or (creche_id is not null and public.kk_acces_creche_gestion(creche_id))));
-
-drop policy if exists recrutement_reglages_lecture on public.recrutement_reglages;
-create policy recrutement_reglages_lecture on public.recrutement_reglages
-  for select to authenticated
-  using (org_id = public.kk_mon_org() and public.kk_mon_role() in ('direction','referent'));
-
-drop policy if exists recrutement_reglages_ecriture on public.recrutement_reglages;
-create policy recrutement_reglages_ecriture on public.recrutement_reglages
-  for all to authenticated
-  using (org_id = public.kk_mon_org() and public.kk_est_direction())
-  with check (org_id = public.kk_mon_org() and public.kk_est_direction());
 
 -- ---- Partie 3 : bucket privé et accès aux fichiers --------------------------
 insert into storage.buckets (id, name, public)

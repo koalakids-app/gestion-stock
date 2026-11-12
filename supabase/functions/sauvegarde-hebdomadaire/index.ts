@@ -114,7 +114,7 @@ const TABLES = [
   'devis_relances_log', 'employes_visites_medicales', 'famille_acces', 'famille_documents',
   'famille_messages', 'famille_messages_lus', 'frigo_temperature_journal', 'replies',
   // Recrutement (candidatures : conservation 2 ans)
-  'recrutement_candidats', 'recrutement_documents', 'recrutement_envois', 'recrutement_reglages',
+  'recrutement_candidats', 'recrutement_documents', 'recrutement_envois',
 ];
 
 const json = (body: unknown, status = 200) =>
