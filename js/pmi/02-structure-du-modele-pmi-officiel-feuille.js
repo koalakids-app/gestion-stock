@@ -427,6 +427,23 @@ function pmiPlacerEntretien(presences,nbQuarts,staffParQuart,comptesEnfants,colO
   return choix;
 }
 
+/* Préparation du goûter : un quart d'heure à heure fixe (15h15 par défaut), en plus du volume
+   quotidien de repas / entretien. Confié à la personne encadrante présente qui a le moins de
+   temps E/R ce jour-là. Si l'heure prévue créerait un sous-effectif, on essaie le quart
+   d'heure voisin (avant, après, jusqu'à 30 minutes) ; sinon rien n'est placé et le jour est
+   signalé dans les points de vigilance. */
+function pmiPlacerGouter(presences,colGouter,staffParQuart,comptesEnfants){
+  for(const delta of [0,-1,1,-2,2]){
+    const c=colGouter+delta;
+    if(c<PMI_TPL_COL_FIRST||c>PMI_TPL_COL_LAST)continue;
+    if(pmiRetraitInterdit(c,staffParQuart,comptesEnfants))continue;
+    const dispo=presences.filter(x=>!x.alternant&&x.cols.indexOf(c)>=0)
+      .sort((a,b)=>(a.colsER.length-b.colsER.length)||(b.cols.length-a.cols.length));
+    if(dispo.length)return{col:c,prenom:dispo[0].prenom};
+  }
+  return null;
+}
+
 function pmiEcrireRecap(ws,stats,capacite){
   const arrondi=x=>Math.round(x*100)/100;
   const total=stats.heuresDiplome+stats.heuresQualifie;
@@ -500,7 +517,7 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
   ws.getCell('AZ1').value=weekInfo.dateDebut+' - '+weekInfo.dateFin;
 
   const stats={heuresDiplome:0,heuresQualifie:0,heuresOuverture:0,heuresBureau:0,bureau:[],
-                heuresEntretien:0,entretien:[],parPersonne:{},anomalies:[]};
+                heuresEntretien:0,entretien:[],heuresGouter:0,gouterManque:[],parPersonne:{},anomalies:[]};
   // Suivi des heures de chacun : le temps de bureau et l'entretien sont PRÉLEVÉS sur les
   // heures déjà planifiées, jamais ajoutés — ce récapitulatif permet de le vérifier et de
   // comparer le total hebdomadaire de chacun à son contrat.
@@ -540,7 +557,21 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
 
     const dateISO=(weekInfo.dates||[])[day.jour];
     const comptes=pmiComptesParQuart(enfantsParDate&&dateISO?enfantsParDate[dateISO]:null);
-    etats[day.jour]={presences,staffParQuart,comptes,colMin,colMax};
+    // Préparation du goûter : placée en tout premier, à son heure. Le temps de bureau et le
+    // reste du temps E/R, plus souples, se répartissent ensuite autour.
+    let choixGouter=null;
+    if(entretien&&entretien.colGouter&&presences.some(x=>!x.alternant&&x.cols.length)){
+      choixGouter=pmiPlacerGouter(presences,entretien.colGouter,staffParQuart,comptes);
+      if(choixGouter){
+        const cible=presences.find(x=>x.prenom===choixGouter.prenom);
+        cible.cols=cible.cols.filter(c=>c!==choixGouter.col);
+        cible.colsER.push(choixGouter.col);
+        staffParQuart[choixGouter.col-PMI_TPL_COL_FIRST]--;
+        compter(choixGouter.prenom,'entretien',0.25);
+        stats.heuresGouter+=0.25;
+      }else stats.gouterManque.push(PMI_NOMS_JOURS[day.jour]);
+    }
+    etats[day.jour]={presences,staffParQuart,comptes,colMin,colMax,choixGouter};
   });
 
   const bureauSemaine=pmiPlacerBureauSemaine(direction,etats);
@@ -580,18 +611,22 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
 
     // 3 bis) repas et entretien : répartis sur toute l'équipe, hors encadrement
     let choixEntretien=[];
+    const appliquerER=ch=>{
+      const cible=presences.find(x=>x.prenom===ch.prenom);
+      if(cible){cible.cols=cible.cols.filter(c=>c!==ch.col);cible.colsER.push(ch.col);}
+      staffParQuart[ch.col-PMI_TPL_COL_FIRST]--;
+      compter(ch.prenom,'entretien',0.25);
+    };
+    // (la préparation du goûter a déjà été placée, avant le temps de bureau)
+    const choixGouter=etats[day.jour].choixGouter;
     if(entretien&&entretien.quarts>0){
       // Les alternant·e·s n'entrent pas dans cette répartition automatique : elle se raisonne
       // sur l'effectif encadrant, dont ils ne font pas partie.
       choixEntretien=pmiPlacerEntretien(presences.filter(x=>!x.alternant),entretien.quarts,staffParQuart,comptes,
         entretien.colOuverture,entretien.colFermeture);
-      choixEntretien.forEach(ch=>{
-        const cible=presences.find(x=>x.prenom===ch.prenom);
-        if(cible){cible.cols=cible.cols.filter(c=>c!==ch.col);cible.colsER.push(ch.col);}
-        staffParQuart[ch.col-PMI_TPL_COL_FIRST]--;
-        compter(ch.prenom,'entretien',0.25);
-      });
+      choixEntretien.forEach(appliquerER);
     }
+    if(choixGouter)choixEntretien.push(choixGouter);
 
     // 4) écriture des lignes salarié·e·s
     let totalDiplome=0,totalQualifie=0;
@@ -841,9 +876,11 @@ async function pmiGenerateExcel(){
     const entHeures=parseFloat((document.getElementById('pmi-entretien-heures')||{}).value)||0;
     const entOuv=(document.getElementById('pmi-ouverture')||{}).value||PMI_OUVERTURE_DEFAUT;
     const entFerm=(document.getElementById('pmi-fermeture')||{}).value||PMI_FERMETURE_DEFAUT;
-    pmiEntretienSet(ctx.crecheId,entHeures,entOuv,entFerm);
-    const entretien=entHeures>0?{
+    const entGouter=(document.getElementById('pmi-gouter')||{}).value||'';
+    pmiEntretienSet(ctx.crecheId,entHeures,entOuv,entFerm,entGouter);
+    const entretien=(entHeures>0||entGouter)?{
       quarts:Math.round(entHeures*4),
+      colGouter:entGouter?pmiColonneDeHeure(entGouter,0):0,
       colOuverture:pmiColonneDeHeure(entOuv,PMI_TPL_COL_FIRST),
       colFermeture:pmiColonneDeHeure(entFerm,PMI_TPL_COL_LAST+1)
     }:null;
@@ -868,7 +905,12 @@ async function pmiGenerateExcel(){
     if(ctx.enfantsSansHoraire)reserves.push(ctx.enfantsSansHoraire+' présence(s) enfant sans horaire ni contrat n\'ont pas pu être comptées dans la ligne « Nombre d\'enfants accueillis ».');
     if(!capacite)reserves.push('Aucune capacité d\'accueil n\'est renseignée sur la fiche de la crèche : la case correspondante reste vide et le dépassement de capacité n\'a pas pu être vérifié.');
     if(entretien){
-      const place=controles.reduce((n,c)=>n+c.stats.heuresEntretien,0);
+      const manque=controles.filter(c=>c.stats.gouterManque.length)
+        .map(c=>'semaine du '+c.semaine+' : '+c.stats.gouterManque.join(', '));
+      if(manque.length)
+        reserves.push('Préparation du goûter non placée ('+manque.join(' ; ')
+          +') : personne ne peut quitter l\'encadrement autour de '+entGouter.replace(':','h')+' sans sous-effectif.');
+      const place=controles.reduce((n,c)=>n+c.stats.heuresEntretien-c.stats.heuresGouter,0);
       const attendu=entHeures*5*controles.length;
       if(attendu-place>0.25)
         reserves.push('Repas et entretien : '+(Math.round(place*100)/100)+' h ont pu être placées sur '

@@ -60,6 +60,8 @@ function pmiQualifEstDiplome(q,experience){
 
 // Volume quotidien de repas/entretien et horaires d'accueil des enfants, par crèche.
 const PMI_OUVERTURE_DEFAUT='07:30',PMI_FERMETURE_DEFAUT='18:30',PMI_ENTRETIEN_DEFAUT=3.5;
+// Préparation du goûter : 15 minutes, en plus du volume quotidien. Heure vide = non comptée.
+const PMI_GOUTER_DEFAUT='15:15';
 
 // ── Configuration PMI : une ligne par crèche dans Supabase ───────────────
 // Ces réglages (noms de famille, qualifications, ancienneté, temps de bureau, horaires
@@ -209,11 +211,13 @@ function pmiEntretienGet(crecheId){
   const e=pmiCfg(crecheId).entretien;
   return{heures:e.heures===undefined?PMI_ENTRETIEN_DEFAUT:(parseFloat(e.heures)||0),
          ouverture:e.ouverture||PMI_OUVERTURE_DEFAUT,
-         fermeture:e.fermeture||PMI_FERMETURE_DEFAUT};
+         fermeture:e.fermeture||PMI_FERMETURE_DEFAUT,
+         gouter:e.gouter===undefined?PMI_GOUTER_DEFAUT:(e.gouter||'')};
 }
-function pmiEntretienSet(crecheId,heures,ouverture,fermeture){
+function pmiEntretienSet(crecheId,heures,ouverture,fermeture,gouter){
   pmiCfg(crecheId).entretien={heures:parseFloat(heures)||0,
-    ouverture:ouverture||PMI_OUVERTURE_DEFAUT,fermeture:fermeture||PMI_FERMETURE_DEFAUT};
+    ouverture:ouverture||PMI_OUVERTURE_DEFAUT,fermeture:fermeture||PMI_FERMETURE_DEFAUT,
+    gouter:gouter||''};
   pmiCfgSave(crecheId);
 }
 
@@ -305,6 +309,11 @@ function pmiInjecterModale(){
         <span style="font-size:12px;color:var(--muted)">à</span>
         <input class="finput" id="pmi-fermeture" type="time" style="flex:0 0 110px;font-size:12px">
       </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <span style="font-size:12px;color:var(--muted)">+ préparation du goûter : 15 min à</span>
+        <input class="finput" id="pmi-gouter" type="time" step="900" style="flex:0 0 110px;font-size:12px">
+        <span style="font-size:12px;color:var(--muted)">(vide = non comptée)</span>
+      </div>
       <div style="font-size:11px;color:var(--muted);margin-top:6px">
         Marquées <strong>E/R</strong> (cases bleu clair), réparties sur toute l'équipe, en priorité avant l'ouverture et après la fermeture aux
         enfants — les professionnels sont là, les enfants non : ces créneaux ne coûtent rien à
@@ -368,6 +377,7 @@ async function pmiOpenExportModal(){
   document.getElementById('pmi-entretien-heures').value=entEnregistre.heures||'';
   document.getElementById('pmi-ouverture').value=entEnregistre.ouverture;
   document.getElementById('pmi-fermeture').value=entEnregistre.fermeture;
+  document.getElementById('pmi-gouter').value=entEnregistre.gouter;
 
   document.getElementById('pmi-export-subtitle').textContent=
     crecheName+' — '+(nbWeeks>1?nbWeeks+' semaines à partir du ':'semaine du ')+weeks[0].dateDebut;

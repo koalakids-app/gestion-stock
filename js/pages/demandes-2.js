@@ -669,7 +669,7 @@ pmi: `
   <li><strong>Alternant·e</strong> : avec la qualification « Alternant·e EJE » ou « Alternant·e CAP AEPE » (ou une saisie libre contenant « alternant » / « apprenti »), la personne figure au planning mais <strong>ne compte pas dans le taux d’encadrement</strong> — ni heures, ni effectif présent — et <strong>ne peut pas être en continuité de direction</strong>, à l’écran comme dans l’export.</li>
   <li><strong>Ancienneté requise atteinte</strong> : en micro-crèche, une certification de niveau V petite enfance (CAP AEPE) compte dans le <strong>1°</strong> — le personnel diplômé des 40 % — dès <strong>2 ans d’expérience</strong>, 3 ans pour une assistante maternelle agréée. La case n’apparaît que là où elle a un sens ; elle est exclue pour les alternantes, dont le diplôme n’est pas acquis.</li>
   <li><strong>Temps de bureau</strong> : la personne assurant la direction ou la référence technique, et son volume hebdomadaire.</li>
-  <li><strong>Repas et entretien</strong> : le volume quotidien, et les horaires d’accueil des enfants (7h30 – 18h30 par défaut).</li>
+  <li><strong>Repas et entretien</strong> : le volume quotidien, et les horaires d’accueil des enfants (7h30 – 18h30 par défaut). S’y ajoute la <strong>préparation du goûter</strong> : 15 minutes à l’heure indiquée (15h15 par défaut, case vide = non comptée), marquées E/R chez une personne présente ; si l’heure prévue créerait un sous-effectif, le quart d’heure voisin est essayé, sinon le jour est signalé dans les points de vigilance.</li>
 </ul>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🤖 Ce que le fichier calcule tout seul</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
