@@ -22,7 +22,7 @@
 -- Conservation : 2 ans au plus après le dernier contact (recommandation CNIL),
 -- la fiche se supprime depuis l'application (fichiers compris).
 --
--- À appliquer à la main sur Supabase, une partie à la fois si l'éditeur expire.
+-- Appliqué sur Supabase le 12 novembre 2026.
 -- ============================================================================
 
 -- ---- Partie 1 : tables -----------------------------------------------------
