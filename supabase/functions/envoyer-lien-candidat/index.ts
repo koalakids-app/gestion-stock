@@ -7,10 +7,10 @@
 // pièces et le jeton sont relus en base. Aucun fichier n'est joint à l'e-mail :
 // tout reste derrière le lien (URL signées de 5 minutes).
 // Le texte est le message habituel de la direction (civilité + nom, type de
-// candidature, crèche, rendez-vous et adresse, contenu du lien, confirmation
-// par retour de mail). `apercu: true` renvoie ce texte sans rien envoyer : la
-// fiche l'affiche avant l'envoi. Les réponses arrivent à la personne qui envoie
-// (referents.email), à défaut a.janin@koalakids.fr.
+// candidature, crèche, rendez-vous et adresse, contenu du lien). Le rendez-vous
+// se confirme par un bouton sur la page du lien, pas par e-mail ; les réponses
+// éventuelles arrivent sur la boîte du recrutement (REPONDRE_A). `apercu: true`
+// renvoie ce texte sans rien envoyer : la fiche l'affiche avant l'envoi.
 // Secrets : GMAIL_USER, GMAIL_APP_PASSWORD (comme envoyer-formation).
 // Déploiement : vérification JWT activée (deploy-functions.yml, cas général).
 // ============================================================================
@@ -34,6 +34,9 @@ const esc = (s: unknown) =>
 const sujet = (s: string) =>
   s.normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[—–]/g, "-")
     .replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, " ").trim() || "Notification";
+
+// Boîte qui reçoit les réponses des candidates (replyTo).
+const REPONDRE_A = "recrutement.toulon@koalakids.fr";
 
 const dateLongue = (d: string | null) =>
   d ? new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "";
@@ -85,11 +88,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // La personne qui envoie : elle signe le message et reçoit la confirmation.
-    const { data: moi } = await sb.from("referents").select("name, poste, email").eq("user_id", appelant.userId).maybeSingle();
+    // La personne qui envoie signe le message.
+    const { data: moi } = await sb.from("referents").select("name, poste").eq("user_id", appelant.userId).maybeSingle();
     const signNom = String(moi?.name || "").replace(/[\r\n<>]/g, "").trim().slice(0, 80);
     const signPoste = String(moi?.poste || "").replace(/[\r\n<>]/g, "").trim().slice(0, 80);
-    const repondreA = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(String(moi?.email || "")) ? String(moi!.email) : "a.janin@koalakids.fr";
 
     // Ce que le lien contient, dans les mots du message habituel.
     const { data: envois } = await sb.from("recrutement_envois").select("libelle").eq("candidat_id", cand.id).order("created_at");
@@ -123,14 +125,17 @@ Deno.serve(async (req) => {
         ? `Afin de préparer cet entretien, vous trouverez ci-dessous un lien regroupant ${liste(contenu)}. Merci de bien vouloir en prendre connaissance${cand.avec_questionnaire ? " et de répondre au questionnaire, qui servira de support pour notre entretien" : ""}.`
         : "Afin de préparer cet entretien, vous trouverez ci-dessous un lien personnel.",
     ];
-    const apres = ["Veuillez me confirmer par retour de mail.", "Cordialement,"];
+    const apres = [
+      ...(cand.entretien_date ? ["Merci de confirmer le rendez-vous directement sur la page du lien, avec le bouton « Confirmer le rendez-vous »."] : []),
+      "Cordialement,",
+    ];
     const signature = [signNom, signPoste, orgNom].filter(Boolean);
     const valable = `Ce lien est personnel et valable jusqu'au ${new Date(cand.token_expire_le).toLocaleDateString("fr-FR")}.`;
     const objet = `Votre candidature - ${orgNom}`;
 
     if (body.apercu === true) {
       return json({
-        ok: true, apercu: true, objet, destinataire: cand.email, repondre_a: repondreA,
+        ok: true, apercu: true, objet, destinataire: cand.email, repondre_a: REPONDRE_A,
         avant, apres, signature, valable,
       });
     }
@@ -158,7 +163,7 @@ Deno.serve(async (req) => {
       await client.send({
         from: `${exp} de ${orgNom} <${user}>`,
         to: [cand.email],
-        replyTo: repondreA,
+        replyTo: REPONDRE_A,
         subject: sujet(objet),
         content: texte,
         html,

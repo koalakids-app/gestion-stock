@@ -17,7 +17,7 @@
 // questionnaire.ts) : cette fonction ne reçoit pas les réponses, elle date
 // seulement l'ouverture et la confirmation « j'ai répondu ».
 //
-// Actions : get · document_url · projet_ouvert · questionnaire_ouvert · questionnaire_confirme
+// Actions : get · document_url · projet_ouvert · questionnaire_ouvert · questionnaire_confirme · rdv_confirme
 //
 // DÉPLOIEMENT — la personne n'a pas de compte, donc pas de JWT :
 //   supabase functions deploy dossier-candidat --no-verify-jwt
@@ -124,6 +124,7 @@ Deno.serve(async (req) => {
           date_fin: cand.date_fin,
           entretien_date: cand.entretien_date,
           entretien_heure: cand.entretien_heure,
+          rdv_confirme_le: cand.rdv_confirme_le || null,
           expire_le: cand.token_expire_le,
         },
         projet: cand.avec_projet ? { ouvert_le: cand.projet_ouvert_le } : null,
@@ -187,6 +188,26 @@ Deno.serve(async (req) => {
         await prevenirEquipe(cand, orgId, 'Recrutement : questionnaire rempli',
           `${cand.prenom || 'Un·e candidat·e'} indique avoir répondu au questionnaire sur le projet.`);
       }
+      return json({ ok: true, le });
+    }
+
+    // ---------------------------------------------------------- RDV_CONFIRME
+    // Le bouton « Confirmer le rendez-vous » (et son retrait). La date de
+    // confirmation est effacée côté crèche si le rendez-vous est modifié.
+    if (action === 'rdv_confirme') {
+      if (!cand.entretien_date) return json({ erreur: 'Action inconnue' }, 403);
+      const confirme = body.confirme === true;
+      if (confirme === !!cand.rdv_confirme_le) return json({ ok: true, le: cand.rdv_confirme_le || null });
+      const le = confirme ? new Date().toISOString() : null;
+      const { error } = await sb.from('recrutement_candidats')
+        .update({ rdv_confirme_le: le, updated_at: new Date().toISOString() }).eq('id', cand.id);
+      if (error) throw error;
+      const quand = new Date(cand.entretien_date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+        + (cand.entretien_heure ? ' à ' + String(cand.entretien_heure).replace(':', 'h') : '');
+      await prevenirEquipe(cand, orgId,
+        confirme ? 'Recrutement : rendez-vous confirmé' : 'Recrutement : confirmation retirée',
+        confirme ? `${cand.prenom || 'Un·e candidat·e'} confirme le rendez-vous du ${quand}.`
+                 : `${cand.prenom || 'Un·e candidat·e'} a retiré sa confirmation du rendez-vous du ${quand}.`);
       return json({ ok: true, le });
     }
 

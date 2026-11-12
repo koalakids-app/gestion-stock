@@ -91,6 +91,7 @@ function rcSuiviHtml(c){
   const lus=env.filter(e=>e.ouvert_le).length;
   let h='';
   if(!c.token)return rcPuce(false,'Lien pas encore créé','link-off');
+  if(c.entretien_date)h+=rcPuce(!!c.rdv_confirme_le,c.rdv_confirme_le?'Rendez-vous confirmé le '+rcDate(c.rdv_confirme_le):'Rendez-vous pas encore confirmé','calendar-event');
   h+=rcPuce(!!c.lien_ouvert_le,c.lien_ouvert_le?'Lien ouvert le '+rcDate(c.lien_ouvert_le):(c.lien_envoye_le?'Lien envoyé le '+rcDate(c.lien_envoye_le)+', pas encore ouvert':'Lien créé, pas encore ouvert'),'link');
   if(c.avec_projet)h+=rcPuce(!!c.projet_ouvert_le,c.projet_ouvert_le?'Projet ouvert':'Projet pas encore ouvert','book');
   if(env.length)h+=rcPuce(lus===env.length,lus+'/'+env.length+' pièce'+(env.length>1?'s':'')+' ouverte'+(lus>1?'s':''),'paperclip');
@@ -209,6 +210,8 @@ async function rcEnregistrer(){
     entretien_date:rcVal('rc-ent-date')||null,entretien_heure:rcVal('rc-ent-heure')||null,
     notes:rcVal('rc-notes')||null,updated_at:new Date().toISOString()
   };
+  // Un rendez-vous déplacé n'est plus confirmé.
+  if(c&&(String(c.entretien_date||'')!==String(row.entretien_date||'')||String(c.entretien_heure||'')!==String(row.entretien_heure||'')))row.rdv_confirme_le=null;
   if(c){
     const {data,error}=await sb.from('recrutement_candidats').update(row).eq('id',c.id).select().single();
     if(error)return showBanner('Enregistrement impossible : '+rcEsc(error.message),'error');
@@ -371,7 +374,7 @@ function rcLienHtml(c){
     +(c.lien_ouvert_le?' Ouvert le '+rcDate(c.lien_ouvert_le)+'.':' Pas encore ouvert.')
     +' <a href="#" onclick="rcProlongerLien();return false">Prolonger de '+RC_LIEN_JOURS+' jours</a> · '
     +'<a href="#" onclick="rcCreerLien(true);return false">Créer un nouveau lien</a></p>'
-    +'<p style="font-size:11.5px;color:var(--muted);margin:6px 0 0">L’e-mail reprend votre message habituel (rendez-vous, adresse de la crèche, contenu du lien) et s’affiche en aperçu avant l’envoi. Il ne contient aucun fichier ; la confirmation de la personne arrive sur votre adresse. Les pièces ajoutées ensuite apparaissent sur le même lien.</p>';
+    +'<p style="font-size:11.5px;color:var(--muted);margin:6px 0 0">L’e-mail reprend votre message habituel (rendez-vous, adresse de la crèche, contenu du lien) et s’affiche en aperçu avant l’envoi. Il ne contient aucun fichier ; la personne confirme le rendez-vous par un bouton sur la page du lien (vous êtes prévenu·e) et ses réponses éventuelles arrivent sur recrutement.toulon@koalakids.fr. Les pièces ajoutées ensuite apparaissent sur le même lien.</p>';
   return h;
 }
 async function rcCreerLien(renouveler){

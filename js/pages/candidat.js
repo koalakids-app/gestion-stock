@@ -22,7 +22,7 @@ const FN_URL = SUPABASE_URL + '/functions/v1/dossier-candidat';
 const TOKEN = SessionLien.init({url:FN_URL,anonKey:SUPABASE_ANON_KEY});
 const wrap  = document.getElementById('wrap');
 
-let CAND = null;   // {prenom, nom, ref, creche_nom, poste, date_debut, date_fin, entretien_date, entretien_heure, expire_le}
+let CAND = null;   // {prenom, nom, ref, rdv_confirme_le, creche_nom, poste, date_debut, date_fin, entretien_date, entretien_heure, expire_le}
 let PROJET = null; // {ouvert_le} ou null
 let DOCS = [];     // pièces jointes
 let QUEST = null;  // {url, statut, ouvert_le, confirme_le} ou null
@@ -75,10 +75,10 @@ function render(){
     +(CAND.poste?' au poste de <b>'+esc(CAND.poste)+'</b>':'')
     +(CAND.creche_nom?' à la crèche <b>'+esc(CAND.creche_nom)+'</b>':'')
     +(periode?' (remplacement'+periode+')':'')+'.'
-    +(CAND.entretien_date?'<br><br><i class="ti ti-calendar-event"></i> Notre entretien est prévu le <b>'+esc(dfr(CAND.entretien_date))+'</b>'
-      +(CAND.entretien_heure?' à <b>'+esc(CAND.entretien_heure)+'</b>':'')+'.':'')
     +'<br><br>Pour préparer notre échange, voici ce que nous vous transmettons.'
     +'<br><br>Ce lien est personnel et valable jusqu’au <b>'+esc(dfr(CAND.expire_le))+'</b>.</div>';
+
+  h+=htmlRdv();
 
   if(PROJET||DOCS.length){
     h+='<h3 class="sec"><i class="ti ti-mail-opened"></i> À lire</h3>';
@@ -126,6 +126,38 @@ function render(){
   h+='<p class="pied">Vos réponses ne sont lues que par la direction et les responsables de la crèche. '
     +'<a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a></p>';
   wrap.innerHTML=h;
+}
+
+/* Le rendez-vous : un bouton le confirme (la crèche est prévenue), un autre retire la
+   confirmation. Une fois la date passée, plus de bouton. */
+function htmlRdv(){
+  if(!CAND.entretien_date)return '';
+  const n=new Date(),auj=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+  const passe=String(CAND.entretien_date)<auj;
+  const ok=!!CAND.rdv_confirme_le;
+  return '<h3 class="sec"><i class="ti ti-calendar-event"></i> Rendez-vous</h3>'
+    +'<div class="ress'+(ok?' fait':'')+'"><div class="rtop">'
+    +'<span class="ic"><i class="ti ti-'+(ok?'check':'calendar-event')+'"></i></span>'
+    +'<span class="tx"><b>Entretien le '+esc(dfr(CAND.entretien_date))+(CAND.entretien_heure?' à '+esc(String(CAND.entretien_heure).replace(':','h')):'')+'</b>'
+    +(CAND.creche_nom?'<span class="desc">'+esc(CAND.creche_nom)+'</span>':'')
+    +(passe?'':'<span style="display:block;margin-top:6px"><span class="badge '+(ok?'b-ok">Confirmé le '+esc(dfr(CAND.rdv_confirme_le)):'b-att">À confirmer')+'</span></span>')
+    +'</span></div>'
+    +(passe?'':'<div style="margin-top:10px">'
+      +(ok?'<button class="btn btn-g btn-s" onclick="confirmerRdv(false)"><i class="ti ti-calendar-off"></i> Retirer ma confirmation</button>'
+          :'<button class="btn btn-p btn-s" onclick="confirmerRdv(true)"><i class="ti ti-calendar-check"></i> Confirmer le rendez-vous</button>')
+      +'</div>')
+    +'</div>';
+}
+async function confirmerRdv(confirme){
+  if(!confirme&&!confirm('Retirer votre confirmation ? La crèche en sera informée.'))return;
+  try{
+    await appel('rdv_confirme',{confirme:!!confirme});
+    await recharger();
+    toast(confirme?'Merci, votre présence est confirmée ✔':'Confirmation retirée.');
+  }catch(err){
+    const m=(err.message||'').toLowerCase();
+    toast(m.includes('expir')?'Ce lien a expiré. Contactez la crèche.':'Enregistrement impossible. Réessayez dans un instant.');
+  }
 }
 
 /* La fenêtre s'ouvre AVANT l'appel réseau : ouverte depuis le retour d'une
