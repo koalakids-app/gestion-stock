@@ -441,7 +441,35 @@ function pmiPlacerGouter(presences,colGouter,staffParQuart,comptesEnfants){
       .sort((a,b)=>(a.colsER.length-b.colsER.length)||(b.cols.length-a.cols.length));
     if(dispo.length)return{col:c,prenom:dispo[0].prenom};
   }
+  // Aucun·e encadrant·e ne peut se libérer : l'alternant·e présent·e s'en charge. Hors taux
+  // d'encadrement, son retrait ne crée aucun sous-effectif.
+  for(const delta of [0,-1,1,-2,2]){
+    const c=colGouter+delta;
+    const alt=presences.find(x=>x.alternant&&x.cols.indexOf(c)>=0);
+    if(alt)return{col:c,prenom:alt.prenom};
+  }
   return null;
+}
+
+/* Renfort de l'alternant·e sur le temps de repas / entretien : quand l'équipe encadrante ne
+   peut pas absorber tout le volume du jour sans sous-effectif, ce qui reste est confié à
+   l'alternant·e, dans ses heures de présence. D'abord hors accueil des enfants, puis au plus
+   près du repas de midi. */
+const PMI_COL_REPAS=PMI_TPL_COL_FIRST+22;   // 12h30
+function pmiRenfortAlternant(presences,nbQuarts,colOuverture,colFermeture){
+  const choix=[];
+  const candidats=[];
+  presences.filter(x=>x.alternant).forEach(x=>x.cols.forEach(c=>candidats.push({col:c,prenom:x.prenom})));
+  const hors=c=>(c<colOuverture||c>=colFermeture)?1:0;
+  candidats.sort((a,b)=>(hors(b.col)-hors(a.col))
+    ||(Math.abs(a.col-PMI_COL_REPAS)-Math.abs(b.col-PMI_COL_REPAS))||(a.col-b.col));
+  const pris=new Set();
+  candidats.forEach(c=>{
+    const cle=c.prenom+'|'+c.col;
+    if(choix.length>=nbQuarts||pris.has(cle))return;
+    pris.add(cle);choix.push(c);
+  });
+  return choix;
 }
 
 function pmiEcrireRecap(ws,stats,capacite){
@@ -566,7 +594,7 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
         const cible=presences.find(x=>x.prenom===choixGouter.prenom);
         cible.cols=cible.cols.filter(c=>c!==choixGouter.col);
         cible.colsER.push(choixGouter.col);
-        staffParQuart[choixGouter.col-PMI_TPL_COL_FIRST]--;
+        if(!cible.alternant)staffParQuart[choixGouter.col-PMI_TPL_COL_FIRST]--;
         compter(choixGouter.prenom,'entretien',0.25);
         stats.heuresGouter+=0.25;
       }else stats.gouterManque.push(PMI_NOMS_JOURS[day.jour]);
@@ -614,7 +642,7 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
     const appliquerER=ch=>{
       const cible=presences.find(x=>x.prenom===ch.prenom);
       if(cible){cible.cols=cible.cols.filter(c=>c!==ch.col);cible.colsER.push(ch.col);}
-      staffParQuart[ch.col-PMI_TPL_COL_FIRST]--;
+      if(!cible||!cible.alternant)staffParQuart[ch.col-PMI_TPL_COL_FIRST]--;
       compter(ch.prenom,'entretien',0.25);
     };
     // (la préparation du goûter a déjà été placée, avant le temps de bureau)
@@ -625,6 +653,13 @@ function pmiFillSheet(ws,weekInfo,crecheName,staffList,qualifMap,nomMap,colorMap
       choixEntretien=pmiPlacerEntretien(presences.filter(x=>!x.alternant),entretien.quarts,staffParQuart,comptes,
         entretien.colOuverture,entretien.colFermeture);
       choixEntretien.forEach(appliquerER);
+      // Volume que l'équipe encadrante n'a pas pu absorber : confié à l'alternant·e.
+      const manque=entretien.quarts-choixEntretien.length;
+      if(manque>0){
+        const renfort=pmiRenfortAlternant(presences,manque,entretien.colOuverture,entretien.colFermeture);
+        renfort.forEach(appliquerER);
+        choixEntretien=choixEntretien.concat(renfort);
+      }
     }
     if(choixGouter)choixEntretien.push(choixGouter);
 
