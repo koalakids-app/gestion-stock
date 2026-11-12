@@ -1,0 +1,555 @@
+/* Recrutement d'un·e salarié·e en remplacement — Demandes › Équipe › Remplaçants/tes › onglet
+   « Recrutement » (préfixe rc). Une fiche par candidat·e et un lien personnel (candidat.html?t=<jeton>)
+   qui lui transmet : le projet pédagogique (page publique projet-pedagogique.html), des pièces jointes
+   (fiche de poste… tirées de la bibliothèque ou propres à la fiche) et le questionnaire sur le projet,
+   dont les réponses reviennent dans la fiche. Tables recrutement_* et bucket privé `recrutement`
+   (sql/recrutement.sql, à appliquer à la main) ; page publique servie par l'edge function
+   `dossier-candidat` ; e-mail du lien par `envoyer-lien-candidat`.
+   Direction = toutes les crèches, référent·e = la sienne. Conservation : 2 ans après le dernier contact. */
+const RC_BUCKET='recrutement';
+const RC_LIEN_JOURS=21;
+const RC_TAILLE_MAX=12*1024*1024;
+const RC_CONSERVATION_JOURS=730;
+const RC_STATUTS={
+  candidature:{lib:'Candidature reçue',bg:'#EEEDF8',fg:'#3D3580'},
+  entretien:{lib:'Entretien prévu',bg:'#FDF0E3',fg:'#B25F00'},
+  retenu:{lib:'Retenu·e',bg:'#E8F5EC',fg:'#1B7A3E'},
+  refuse:{lib:'Non retenu·e',bg:'#FDECEC',fg:'#C62828'},
+  desiste:{lib:'S’est désisté·e',bg:'#EFEEF6',fg:'#78748C'}
+};
+/* À garder en phase avec QUESTIONS_DEFAUT de supabase/functions/_shared/recrutement-questions.ts. */
+const RC_QUESTIONS_DEFAUT=[
+  "Qu'avez-vous retenu de notre projet pédagogique ?",
+  "Quelles valeurs du projet vous parlent le plus, et pourquoi ?",
+  "Un enfant pleure au moment de la séparation du matin : comment l'accompagnez-vous, lui et son parent ?",
+  "Comment trouvez-vous votre place dans une équipe que vous rejoignez pour un remplacement ?",
+  "Qu'aimeriez-vous apporter aux enfants pendant ce remplacement ?",
+  "Avez-vous des questions sur le projet ou sur le poste ?"
+];
+const RC_QUESTIONS_MAX=12;
+
+let rcCands=[],rcDocs=[],rcEnvois=[],rcQuestions=null;
+let rcVue='liste',rcFicheId=null,rcOk=true,rcFiltre='cours';
+
+const rcEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const rcDate=d=>d?new Date(String(d).length===10?d+'T12:00:00':d).toLocaleDateString('fr-FR'):'';
+const rcVal=id=>((document.getElementById(id)||{}).value||'').trim();
+const rcCrecheNom=id=>((cacheCreches.find(c=>String(c.id)===String(id))||{}).name)||'';
+const rcFiche=()=>rcCands.find(c=>String(c.id)===String(rcFicheId))||null;
+const rcLienValide=c=>!!(c&&c.token&&c.token_expire_le&&new Date(c.token_expire_le)>new Date()&&c.statut!=='refuse'&&c.statut!=='desiste');
+const rcLienUrl=t=>location.origin+location.pathname.replace(/[^/]*$/,'')+'candidat.html?t='+t;
+function rcToken(){
+  const a=new Uint8Array(24);
+  crypto.getRandomValues(a);
+  return [...a].map(b=>b.toString(36).padStart(2,'0')).join('').slice(0,32);
+}
+function rcExpiration(){const d=new Date();d.setDate(d.getDate()+RC_LIEN_JOURS);d.setHours(23,59,0,0);return d.toISOString();}
+function rcQuestionsEnVigueur(){return (rcQuestions&&rcQuestions.length)?rcQuestions:RC_QUESTIONS_DEFAUT;}
+// Fiche close (non retenu·e, désisté·e) sans changement depuis 2 ans : à supprimer.
+function rcASupprimer(c){
+  if(c.statut!=='refuse'&&c.statut!=='desiste')return false;
+  return (Date.now()-new Date(c.updated_at||c.created_at).getTime())/86400000>RC_CONSERVATION_JOURS;
+}
+
+async function rcInit(){
+  rcVue='liste';rcFicheId=null;
+  const z=document.getElementById('rc-contenu');
+  if(z&&!rcCands.length)z.innerHTML='<p style="color:var(--muted);font-size:13px">Chargement…</p>';
+  await rcCharger();
+  rcRender();
+}
+
+async function rcCharger(){
+  const [c,d,e,q]=await Promise.all([
+    sb.from('recrutement_candidats').select('*').order('created_at',{ascending:false}),
+    sb.from('recrutement_documents').select('*').order('libelle'),
+    sb.from('recrutement_envois').select('*').order('created_at'),
+    sb.from('recrutement_reglages').select('questions').maybeSingle()
+  ]);
+  rcOk=!c.error;
+  if(c.error)console.warn('[Recrutement]',c.error.message);
+  rcCands=c.data||[];rcDocs=d.data||[];rcEnvois=e.data||[];
+  rcQuestions=(q.data&&Array.isArray(q.data.questions))?q.data.questions.filter(Boolean):null;
+}
+
+function rcRender(){
+  const z=document.getElementById('rc-contenu');
+  if(!z)return;
+  if(!rcOk){
+    z.innerHTML='<p style="font-size:13px;color:var(--red)">Indisponible : le script <code>sql/recrutement.sql</code> n\'a pas encore été appliqué sur Supabase.</p>';
+    return;
+  }
+  if(rcVue==='fiche')z.innerHTML=rcFicheHtml();
+  else if(rcVue==='biblio')z.innerHTML=rcBiblioHtml();
+  else if(rcVue==='questions')z.innerHTML=rcQuestionsHtml();
+  else z.innerHTML=rcListeHtml();
+}
+// Bibliothèque et questionnaire s'ouvrent aussi depuis une fiche : on la garde pour le retour.
+function rcAller(vue,id){rcVue=vue;if(vue==='fiche'||vue==='liste')rcFicheId=id||null;rcRender();const z=document.getElementById('rc-contenu');if(z&&z.scrollIntoView)z.scrollIntoView({block:'start'});}
+
+/* ------------------------------------------------------------------ LISTE */
+function rcBadge(c){
+  const s=RC_STATUTS[c.statut]||RC_STATUTS.candidature;
+  return '<span style="background:'+s.bg+';color:'+s.fg+';border-radius:99px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">'+s.lib+'</span>';
+}
+function rcPuce(ok,txt,icone){
+  return '<span style="font-size:11px;color:'+(ok?'var(--green)':'var(--muted)')+';white-space:nowrap"><i class="ti ti-'+(ok?'circle-check':icone)+'"></i> '+txt+'</span>';
+}
+function rcSuiviHtml(c){
+  const env=rcEnvois.filter(e=>String(e.candidat_id)===String(c.id));
+  const lus=env.filter(e=>e.ouvert_le).length;
+  let h='';
+  if(!c.token)return rcPuce(false,'Lien pas encore créé','link-off');
+  h+=rcPuce(!!c.lien_ouvert_le,c.lien_ouvert_le?'Lien ouvert le '+rcDate(c.lien_ouvert_le):(c.lien_envoye_le?'Lien envoyé le '+rcDate(c.lien_envoye_le)+', pas encore ouvert':'Lien créé, pas encore ouvert'),'link');
+  if(c.avec_projet)h+=rcPuce(!!c.projet_ouvert_le,c.projet_ouvert_le?'Projet ouvert':'Projet pas encore ouvert','book');
+  if(env.length)h+=rcPuce(lus===env.length,lus+'/'+env.length+' pièce'+(env.length>1?'s':'')+' ouverte'+(lus>1?'s':''),'paperclip');
+  if(c.avec_questionnaire)h+=rcPuce(!!c.reponses_le,c.reponses_le?'Questionnaire rempli le '+rcDate(c.reponses_le):'Questionnaire en attente','pencil');
+  return h;
+}
+function rcListeHtml(){
+  const sel=rcVal('rc-creche');
+  let liste=rcCands.filter(c=>!sel||String(c.creche_id)===sel);
+  const nbClos=liste.filter(c=>c.statut==='refuse'||c.statut==='desiste').length;
+  if(rcFiltre==='cours')liste=liste.filter(c=>c.statut!=='refuse'&&c.statut!=='desiste');
+  const perimes=rcCands.filter(rcASupprimer);
+  let h='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'
+    +(isDirection?'<select class="finput" id="rc-creche" style="width:auto;min-width:160px;font-size:12px;padding:4px 8px" onchange="rcRender()">'
+      +'<option value="">Toutes les crèches</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(String(c.id)===sel?' selected':'')+'>'+rcEsc(c.name)+'</option>').join('')+'</select>':'')
+    +'<select class="finput" style="width:auto;font-size:12px;padding:4px 8px" onchange="rcFiltre=this.value;rcRender()">'
+    +'<option value="cours"'+(rcFiltre==='cours'?' selected':'')+'>Candidatures en cours</option>'
+    +'<option value="tout"'+(rcFiltre==='tout'?' selected':'')+'>Toutes ('+nbClos+' close'+(nbClos>1?'s':'')+')</option></select>'
+    +'<span style="flex:1"></span>'
+    +'<button class="btn-sm" onclick="rcAller(\'questions\')"><i class="ti ti-pencil"></i> Questionnaire</button>'
+    +'<button class="btn-sm" onclick="rcAller(\'biblio\')"><i class="ti ti-folder"></i> Documents à joindre ('+rcDocs.length+')</button>'
+    +'<button class="btn-primary" onclick="rcNouveau()"><i class="ti ti-plus"></i> Nouvelle candidature</button>'
+    +'</div>';
+  if(perimes.length){
+    h+='<div style="background:#FDF0E3;border-left:4px solid #F47920;border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#7A4300">'
+      +'<i class="ti ti-clock-exclamation"></i> '+perimes.length+' candidature'+(perimes.length>1?'s closes':' close')+' depuis plus de 2 ans : '
+      +perimes.map(c=>'<a href="#" onclick="rcAller(\'fiche\',\''+c.id+'\');return false" style="color:inherit;font-weight:700">'+rcEsc(c.prenom+' '+(c.nom||''))+'</a>').join(', ')
+      +'. À supprimer (durée de conservation dépassée).</div>';
+  }
+  if(!liste.length){
+    return h+'<div style="text-align:center;padding:34px 12px;color:var(--muted);font-size:13px"><i class="ti ti-user-search" style="font-size:34px;display:block;margin-bottom:8px"></i>'
+      +'Aucune candidature'+(rcFiltre==='cours'?' en cours':'')+'.<br>Créez une fiche, joignez le projet pédagogique, la fiche de poste et le questionnaire, puis envoyez le lien.</div>';
+  }
+  h+='<div style="display:flex;flex-direction:column;gap:8px">'+liste.map(c=>
+    '<div onclick="rcAller(\'fiche\',\''+c.id+'\')" style="cursor:pointer;background:#fff;border:1px solid var(--border);border-radius:10px;padding:11px 14px">'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<b style="font-size:14px">'+rcEsc(c.prenom+' '+(c.nom||''))+'</b>'+rcBadge(c)
+    +'<span style="font-size:12px;color:var(--muted)">'+rcEsc([c.poste,rcCrecheNom(c.creche_id)].filter(Boolean).join(' · '))+'</span>'
+    +(c.entretien_date?'<span style="font-size:12px;color:var(--koala-dark)"><i class="ti ti-calendar-event"></i> Entretien le '+rcDate(c.entretien_date)+(c.entretien_heure?' à '+rcEsc(c.entretien_heure):'')+'</span>':'')
+    +'</div>'
+    +(c.remplace||c.date_debut?'<div style="font-size:12px;color:var(--muted);margin-top:3px">Remplacement'+(c.remplace?' de '+rcEsc(c.remplace):'')
+      +(c.date_debut?' du '+rcDate(c.date_debut)+(c.date_fin?' au '+rcDate(c.date_fin):''):'')+'</div>':'')
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px">'+rcSuiviHtml(c)+'</div>'
+    +'</div>').join('')+'</div>';
+  return h;
+}
+
+/* ------------------------------------------------------------------ FICHE */
+function rcNouveau(){rcAller('fiche',null);}
+function rcChamp(lib,html,large){
+  return '<label style="display:block;font-size:11.5px;font-weight:700;color:var(--muted)'+(large?';grid-column:1/-1':'')+'">'+lib+html+'</label>';
+}
+function rcInput(id,val,type,extra){
+  return '<input class="finput" id="'+id+'" type="'+(type||'text')+'" value="'+rcEsc(val||'')+'" style="width:100%;margin-top:3px" '+(extra||'')+'>';
+}
+function rcBloc(titre,icone,contenu){
+  return '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-top:12px">'
+    +'<div style="font-weight:700;font-size:13.5px;margin-bottom:8px"><i class="ti ti-'+icone+'" style="color:var(--koala)"></i> '+titre+'</div>'+contenu+'</div>';
+}
+function rcFicheHtml(){
+  const c=rcFiche()||{statut:'candidature',creche_id:(currentProfile&&currentProfile.creche_id)||''};
+  const neuf=!c.id;
+  let h='<button class="btn-sm" onclick="rcAller(\'liste\')"><i class="ti ti-arrow-left"></i> Retour à la liste</button>';
+  h+=rcBloc(neuf?'Nouvelle candidature':rcEsc(c.prenom+' '+(c.nom||''))+' '+rcBadge(c),'user-search',
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">'
+    +rcChamp('Prénom *',rcInput('rc-prenom',c.prenom,'text','maxlength="80"'))
+    +rcChamp('Nom',rcInput('rc-nom',c.nom,'text','maxlength="80"'))
+    +rcChamp('E-mail',rcInput('rc-email',c.email,'email','maxlength="160"'))
+    +rcChamp('Téléphone',rcInput('rc-tel',c.telephone,'tel','maxlength="30"'))
+    +rcChamp('Crèche *','<select class="finput" id="rc-creche-f" style="width:100%;margin-top:3px"'+(isDirection?'':' disabled')+'>'
+      +(isDirection?'<option value="">-- Choisir --</option>':'')
+      +cacheCreches.filter(x=>isDirection||String(x.id)===String(c.creche_id)).map(x=>'<option value="'+x.id+'"'+(String(x.id)===String(c.creche_id)?' selected':'')+'>'+rcEsc(x.name)+'</option>').join('')+'</select>')
+    +rcChamp('Poste proposé',rcInput('rc-poste',c.poste,'text','maxlength="120" placeholder="ex. Auxiliaire de puériculture"'))
+    +rcChamp('Personne remplacée / motif',rcInput('rc-remplace',c.remplace,'text','maxlength="160" placeholder="ex. Julie M. (congé maternité)"'))
+    +rcChamp('Statut','<select class="finput" id="rc-statut" style="width:100%;margin-top:3px">'
+      +Object.keys(RC_STATUTS).map(k=>'<option value="'+k+'"'+(k===c.statut?' selected':'')+'>'+RC_STATUTS[k].lib+'</option>').join('')+'</select>')
+    +rcChamp('Début du remplacement',rcInput('rc-debut',c.date_debut,'date'))
+    +rcChamp('Fin prévue',rcInput('rc-fin',c.date_fin,'date'))
+    +rcChamp('Entretien le',rcInput('rc-ent-date',c.entretien_date,'date'))
+    +rcChamp('à',rcInput('rc-ent-heure',c.entretien_heure,'time'))
+    +rcChamp('Notes internes (jamais visibles par la personne)','<textarea class="finput" id="rc-notes" rows="3" maxlength="4000" style="width:100%;margin-top:3px;resize:vertical">'+rcEsc(c.notes||'')+'</textarea>',true)
+    +'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">'
+    +'<button class="btn-primary" onclick="rcEnregistrer()"><i class="ti ti-device-floppy"></i> '+(neuf?'Créer la fiche':'Enregistrer')+'</button>'
+    +(neuf?'<span style="font-size:11.5px;color:var(--muted)">Le lien et les pièces jointes se préparent une fois la fiche créée.</span>'
+      :'<span style="flex:1"></span><button class="btn-sm" style="color:var(--red)" onclick="rcSupprimer()"><i class="ti ti-trash"></i> Supprimer la fiche</button>')
+    +'</div>'
+    +(c.statut==='retenu'?'<p style="font-size:12px;color:var(--green);margin:10px 0 0"><i class="ti ti-circle-check"></i> Candidature retenue : créez sa fiche dans <b>Collaborateurs/trices</b>, puis ses créneaux dans le planning des remplaçants/tes.</p>':'')
+    +(!neuf&&rcASupprimer(c)?'<p style="font-size:12px;color:#B25F00;margin:10px 0 0"><i class="ti ti-clock-exclamation"></i> Fiche close depuis plus de 2 ans : à supprimer.</p>':''));
+  if(neuf)return h;
+  h+=rcBloc('Ce que contient le lien','paperclip',rcContenuHtml(c));
+  h+=rcBloc('Lien à envoyer','link',rcLienHtml(c));
+  if(c.avec_questionnaire||c.reponses_le)h+=rcBloc('Réponses au questionnaire','message-2',rcReponsesHtml(c));
+  return h;
+}
+
+async function rcEnregistrer(){
+  const c=rcFiche();
+  const prenom=rcVal('rc-prenom'),creche=rcVal('rc-creche-f')||(c&&c.creche_id)||'';
+  if(!prenom)return showBanner('Le prénom est obligatoire.','error');
+  if(!creche)return showBanner('Choisissez la crèche.','error');
+  const email=rcVal('rc-email');
+  if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return showBanner('Adresse e-mail incorrecte.','error');
+  const row={
+    prenom,nom:rcVal('rc-nom')||null,email:email||null,telephone:rcVal('rc-tel')||null,creche_id:creche,
+    poste:rcVal('rc-poste')||null,remplace:rcVal('rc-remplace')||null,statut:rcVal('rc-statut')||'candidature',
+    date_debut:rcVal('rc-debut')||null,date_fin:rcVal('rc-fin')||null,
+    entretien_date:rcVal('rc-ent-date')||null,entretien_heure:rcVal('rc-ent-heure')||null,
+    notes:rcVal('rc-notes')||null,updated_at:new Date().toISOString()
+  };
+  if(c){
+    const {data,error}=await sb.from('recrutement_candidats').update(row).eq('id',c.id).select().single();
+    if(error)return showBanner('Enregistrement impossible : '+rcEsc(error.message),'error');
+    Object.assign(c,data);
+    showBanner('Fiche enregistrée ✅');
+  }else{
+    row.created_by=(currentProfile&&currentProfile.name)||null;
+    const {data,error}=await sb.from('recrutement_candidats').insert(row).select().single();
+    if(error)return showBanner('Création impossible : '+rcEsc(error.message),'error');
+    rcCands.unshift(data);rcFicheId=data.id;
+    showBanner('Fiche créée ✅ — préparez maintenant le lien.');
+  }
+  rcRender();
+}
+
+async function rcSupprimer(){
+  const c=rcFiche();
+  if(!c)return;
+  if(!confirm('Supprimer la candidature de '+c.prenom+' '+(c.nom||'')+' ?\n\nLa fiche, ses réponses au questionnaire et ses pièces jointes propres sont effacées. Son lien cesse de fonctionner. Action définitive.'))return;
+  const propres=rcEnvois.filter(e=>String(e.candidat_id)===String(c.id)&&!e.document_id).map(e=>e.path);
+  const {error}=await sb.from('recrutement_candidats').delete().eq('id',c.id);
+  if(error)return showBanner('Suppression impossible : '+rcEsc(error.message),'error');
+  if(propres.length)await sb.storage.from(RC_BUCKET).remove(propres);
+  rcCands=rcCands.filter(x=>x.id!==c.id);
+  rcEnvois=rcEnvois.filter(e=>String(e.candidat_id)!==String(c.id));
+  showBanner('Candidature supprimée.');
+  rcAller('liste');
+}
+
+/* ----------------------------------------------- CONTENU DU LIEN (pièces) */
+function rcContenuHtml(c){
+  const env=rcEnvois.filter(e=>String(e.candidat_id)===String(c.id));
+  const dispo=rcDocs.filter(d=>(!d.creche_id||String(d.creche_id)===String(c.creche_id))&&!env.some(e=>String(e.document_id)===String(d.id)));
+  const ligne=(coche,id,titre,detail,etat)=>
+    '<label style="display:flex;align-items:flex-start;gap:9px;background:#FAFAFD;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer">'
+    +'<input type="checkbox" '+(coche?'checked':'')+' onchange="rcBasculer(\''+id+'\',this.checked)" style="width:17px;height:17px;margin-top:2px">'
+    +'<span style="flex:1;font-size:12.5px"><b>'+titre+'</b><br><span style="color:var(--muted);font-size:11.5px">'+detail+'</span></span>'
+    +'<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+etat+'</span></label>';
+  let h=ligne(c.avec_projet,'avec_projet','Projet pédagogique','Le livre à feuilleter de l’application (toujours la dernière version), ouvert depuis le lien.',
+      c.avec_projet?(c.projet_ouvert_le?'ouvert le '+rcDate(c.projet_ouvert_le):'pas encore ouvert'):'')
+    +ligne(c.avec_questionnaire,'avec_questionnaire','Questionnaire sur le projet',rcQuestionsEnVigueur().length+' questions, à remplir en ligne ; les réponses arrivent dans cette fiche.',
+      c.avec_questionnaire?(c.reponses_le?'rempli le '+rcDate(c.reponses_le):'en attente'):'');
+  h+='<div style="font-size:12px;font-weight:700;margin:12px 0 6px">Pièces jointes (fiche de poste, organigramme, planning type…)</div>';
+  h+=env.length?env.map(e=>
+    '<div style="display:flex;align-items:center;gap:7px;background:#FAFAFD;border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:5px;flex-wrap:wrap">'
+    +'<i class="ti ti-file-text" style="color:var(--koala)"></i>'
+    +'<button type="button" onclick="rcOuvrirFichier(\''+rcEsc(e.path)+'\',\''+c.id+'\')" style="flex:1;min-width:120px;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12.5px;color:var(--koala-dark);text-decoration:underline">'+rcEsc(e.libelle)+'</button>'
+    +'<span style="font-size:11px;color:'+(e.ouvert_le?'var(--green)':'var(--muted)')+'">'+(e.ouvert_le?'ouvert le '+rcDate(e.ouvert_le):'pas encore ouvert')+'</span>'
+    +'<button class="ibtn" style="width:26px;height:26px;font-size:13px;color:var(--red)" title="Retirer du lien" onclick="rcRetirerEnvoi(\''+e.id+'\')"><i class="ti ti-x"></i></button>'
+    +'</div>').join(''):'<p style="font-size:12px;color:var(--muted);margin:0 0 6px">Aucune pièce jointe pour l’instant.</p>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">'
+    +(dispo.length?'<select class="finput" id="rc-doc-choix" style="width:auto;max-width:260px;font-size:12px;padding:4px 8px">'
+      +dispo.map(d=>'<option value="'+d.id+'">'+rcEsc(d.libelle)+'</option>').join('')+'</select>'
+      +'<button class="btn-sm" onclick="rcJoindreDoc()"><i class="ti ti-plus"></i> Joindre</button>'
+      :'<span style="font-size:11.5px;color:var(--muted)">'+(rcDocs.length?'Tous les documents de la bibliothèque sont déjà joints.':'Bibliothèque vide : ajoutez-y la fiche de poste pour la réutiliser.')+'</span>')
+    +'<button class="btn-sm" onclick="rcAller(\'biblio\')"><i class="ti ti-folder"></i> Bibliothèque</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">'
+    +'<input id="rc-envoi-titre" class="finput" placeholder="Ou un fichier pour cette personne seulement : son titre" maxlength="120" style="flex:1;min-width:200px;font-size:12px">'
+    +'<button class="btn-sm" onclick="document.getElementById(\'rc-envoi-fichier\').click()"><i class="ti ti-upload"></i> Choisir un fichier</button>'
+    +'<input type="file" id="rc-envoi-fichier" accept="image/*,application/pdf" style="display:none" onchange="rcEnvoiUpload(event)">'
+    +'<span id="rc-envoi-st" style="font-size:11.5px;color:var(--muted)"></span></div>';
+  return h;
+}
+
+async function rcBasculer(champ,val){
+  const c=rcFiche();
+  if(!c||(champ!=='avec_projet'&&champ!=='avec_questionnaire'))return;
+  const {error}=await sb.from('recrutement_candidats').update({[champ]:!!val}).eq('id',c.id);
+  if(error){showBanner('Modification impossible.','error');}else c[champ]=!!val;
+  rcRender();
+}
+
+async function rcJoindreDoc(){
+  const c=rcFiche(),d=rcDocs.find(x=>String(x.id)===rcVal('rc-doc-choix'));
+  if(!c||!d)return;
+  const {data,error}=await sb.from('recrutement_envois').insert({
+    candidat_id:c.id,document_id:d.id,libelle:d.libelle,bucket:d.bucket||RC_BUCKET,path:d.path,
+    filename:d.filename,mime:d.mime,taille:d.taille,envoye_par:(currentProfile&&currentProfile.name)||null
+  }).select().single();
+  if(error)return showBanner('Ajout impossible : '+rcEsc(error.message),'error');
+  rcEnvois.push(data);rcRender();
+  showBanner('« '+rcEsc(d.libelle)+' » joint au lien ✅');
+}
+
+function rcCheminFichier(dossier,file){
+  const ext=(file.name.split('.').pop()||'bin').replace(/[^a-z0-9]/gi,'').slice(0,5).toLowerCase()||'bin';
+  return dossier+'/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+}
+function rcFichierOk(file,st){
+  if(file.size>RC_TAILLE_MAX){if(st)st.textContent='⚠ Fichier trop lourd (12 Mo maximum).';return false;}
+  if(!/^image\/|^application\/pdf$/.test(file.type||'')){if(st)st.textContent='⚠ Photo ou PDF uniquement.';return false;}
+  return true;
+}
+
+async function rcEnvoiUpload(ev){
+  const input=ev.target,file=(input.files||[])[0];
+  input.value='';
+  const c=rcFiche();
+  if(!file||!c)return;
+  const st=document.getElementById('rc-envoi-st');
+  if(!rcFichierOk(file,st))return;
+  const titre=rcVal('rc-envoi-titre')||file.name.replace(/\.[^.]+$/,'');
+  if(st)st.textContent='⏳ Envoi de '+file.name+'…';
+  const path=rcCheminFichier(c.id,file);
+  try{
+    const {error}=await sb.storage.from(RC_BUCKET).upload(path,file,{contentType:file.type});
+    if(error)throw error;
+    const {data,error:ie}=await sb.from('recrutement_envois').insert({
+      candidat_id:c.id,libelle:titre,bucket:RC_BUCKET,path,filename:file.name,mime:file.type||null,taille:file.size,
+      envoye_par:(currentProfile&&currentProfile.name)||null
+    }).select().single();
+    if(ie){await sb.storage.from(RC_BUCKET).remove([path]);throw ie;}
+    rcEnvois.push(data);rcRender();
+    showBanner('Pièce jointe ajoutée au lien ✅');
+  }catch(e){
+    console.error('[Recrutement] pièce jointe',e.message);
+    if(st)st.textContent='⚠ Erreur : '+e.message;
+  }
+}
+
+async function rcRetirerEnvoi(id){
+  const e=rcEnvois.find(x=>String(x.id)===String(id));
+  if(!e)return;
+  if(!confirm('Retirer « '+e.libelle+' » du lien ?\n\nLa personne ne le verra plus.'))return;
+  const {error}=await sb.from('recrutement_envois').delete().eq('id',e.id);
+  if(error)return showBanner('Retrait impossible.','error');
+  // Un fichier de la bibliothèque est partagé : on ne supprime que les fichiers propres à la fiche.
+  if(!e.document_id)await sb.storage.from(e.bucket||RC_BUCKET).remove([e.path]);
+  rcEnvois=rcEnvois.filter(x=>x.id!==e.id);
+  rcRender();
+  showBanner('Pièce retirée du lien.');
+}
+
+async function rcOuvrirFichier(path,candidatId){
+  if(typeof kkJournaliserAcces==='function'&&candidatId)kkJournaliserAcces(RC_BUCKET,path,{entite_type:'candidat',entite_id:candidatId});
+  const w=window.open('about:blank','_blank');
+  const {data,error}=await sb.storage.from(RC_BUCKET).createSignedUrl(path,300);
+  if(error||!data){if(w)w.close();return showBanner('Ouverture impossible : '+rcEsc((error&&error.message)||'erreur inconnue'),'error');}
+  if(w)w.location.href=data.signedUrl;else window.open(data.signedUrl,'_blank','noopener');
+}
+
+/* ------------------------------------------------------------------- LIEN */
+function rcLienHtml(c){
+  if(c.statut==='refuse'||c.statut==='desiste')
+    return '<p style="font-size:12.5px;color:var(--muted);margin:0">Candidature close : le lien ne fonctionne plus. Repassez le statut à « Candidature reçue » pour le rouvrir.</p>';
+  if(!c.token)
+    return '<p style="font-size:12.5px;color:var(--muted);margin:0 0 9px">Cochez ci-dessus ce que la personne doit recevoir, puis créez son lien personnel (valable '+RC_LIEN_JOURS+' jours).</p>'
+      +'<button class="btn-primary" onclick="rcCreerLien(false)"><i class="ti ti-link-plus"></i> Créer le lien</button>';
+  const expire=!rcLienValide(c);
+  let h='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+    +'<input class="finput" id="rc-lien-url" readonly value="'+rcEsc(rcLienUrl(c.token))+'" style="flex:1;min-width:220px;font-size:12px" onclick="this.select()">'
+    +'<button class="btn-sm" onclick="rcCopierLien()"><i class="ti ti-copy"></i> Copier</button>'
+    +(typeof PartageLien!=='undefined'?'<button class="btn-sm" onclick="rcPartagerLien()"><i class="ti ti-share"></i> Partager…</button>':'')
+    +'<button class="btn-primary" onclick="rcEnvoyerMail()" id="rc-btn-mail"'+(expire?' disabled':'')+'><i class="ti ti-mail"></i> Envoyer par e-mail</button>'
+    +'</div>'
+    +'<p style="font-size:11.5px;margin:8px 0 0;color:'+(expire?'var(--red)':'var(--muted)')+'">'
+    +(expire?'Lien expiré le '+rcDate(c.token_expire_le)+'.':'Valable jusqu’au '+rcDate(c.token_expire_le)+'.')
+    +(c.lien_envoye_le?' Envoyé par e-mail le '+rcDate(c.lien_envoye_le)+'.':'')
+    +(c.lien_ouvert_le?' Ouvert le '+rcDate(c.lien_ouvert_le)+'.':' Pas encore ouvert.')
+    +' <a href="#" onclick="rcProlongerLien();return false">Prolonger de '+RC_LIEN_JOURS+' jours</a> · '
+    +'<a href="#" onclick="rcCreerLien(true);return false">Créer un nouveau lien</a></p>'
+    +'<p style="font-size:11.5px;color:var(--muted);margin:6px 0 0">L’e-mail ne contient aucun fichier : seulement le lien et la liste de ce qu’il contient. Les pièces ajoutées ensuite apparaissent sur le même lien.</p>';
+  return h;
+}
+async function rcCreerLien(renouveler){
+  const c=rcFiche();
+  if(!c)return;
+  if(renouveler&&!confirm('Créer un nouveau lien ?\n\nL\'ancien cessera immédiatement de fonctionner.'))return;
+  const maj={token:rcToken(),token_expire_le:rcExpiration(),lien_envoye_le:null,lien_ouvert_le:null};
+  const {error}=await sb.from('recrutement_candidats').update(maj).eq('id',c.id);
+  if(error)return showBanner('Création du lien impossible.','error');
+  Object.assign(c,maj);rcRender();
+  showBanner(renouveler?'Nouveau lien créé — l\'ancien ne fonctionne plus.':'Lien créé ✅ — envoyez-le par e-mail ou partagez-le.');
+}
+async function rcProlongerLien(){
+  const c=rcFiche();
+  if(!c||!c.token)return;
+  const maj={token_expire_le:rcExpiration()};
+  const {error}=await sb.from('recrutement_candidats').update(maj).eq('id',c.id);
+  if(error)return showBanner('Prolongation impossible.','error');
+  Object.assign(c,maj);rcRender();
+  showBanner('Lien valable jusqu’au '+rcDate(c.token_expire_le)+' ✅');
+}
+function rcCopierLien(){
+  const el=document.getElementById('rc-lien-url');
+  if(!el)return;
+  el.select();
+  navigator.clipboard.writeText(el.value)
+    .then(()=>showBanner('Lien copié — collez-le dans un SMS ou un mail ✅'))
+    .catch(()=>{try{document.execCommand('copy');showBanner('Lien copié ✅');}catch(e){showBanner('Copie impossible — sélectionnez le lien à la main.','error');}});
+}
+function rcPartagerLien(){
+  const c=rcFiche();
+  if(!c||!c.token)return;
+  PartageLien.partager(rcLienUrl(c.token),{titre:'Votre candidature — Koala Kids',
+    texte:'Bonjour '+c.prenom+', voici le lien pour préparer notre entretien (projet pédagogique, fiche de poste, questionnaire) :'});
+}
+async function rcEnvoyerMail(){
+  const c=rcFiche();
+  if(!c)return;
+  if(!c.email)return showBanner('Pas d’e-mail sur la fiche : enregistrez-le, ou utilisez « Partager… ».','error');
+  if(!rcLienValide(c))return showBanner('Lien expiré : prolongez-le d’abord.','error');
+  if(!confirm('Envoyer le lien à '+c.email+' ?'))return;
+  const b=document.getElementById('rc-btn-mail');
+  if(b)b.disabled=true;
+  try{
+    const {data,error}=await sb.functions.invoke('envoyer-lien-candidat',{body:{candidat_id:c.id,expediteur:currentProfile&&currentProfile.name}});
+    if(error||!data||!data.ok)throw new Error((data&&data.error)||(error&&error.message)||'erreur');
+    c.lien_envoye_le=data.le||new Date().toISOString();
+    showBanner('E-mail envoyé à '+rcEsc(c.email)+' ✅');
+  }catch(e){
+    console.warn('[Recrutement] e-mail',e.message);
+    showBanner('E-mail non parti ('+rcEsc(e.message)+'). Utilisez « Copier » ou « Partager… ».','error');
+  }
+  rcRender();
+}
+
+/* --------------------------------------------------------------- RÉPONSES */
+function rcReponsesHtml(c){
+  const rep=Array.isArray(c.reponses)?c.reponses:[];
+  if(!c.reponses_le||!rep.length)
+    return '<p style="font-size:12.5px;color:var(--muted);margin:0">Pas encore de réponse. Vous recevrez une notification dès que le questionnaire sera rempli.</p>';
+  return '<p style="font-size:11.5px;color:var(--muted);margin:0 0 8px">Reçu le '+rcDate(c.reponses_le)+'. '
+    +'<a href="#" onclick="rcImprimerReponses();return false">Imprimer</a></p>'
+    +rep.map((x,i)=>'<div style="border-top:1px solid var(--border);padding:8px 0">'
+      +'<div style="font-size:12.5px;font-weight:700">'+(i+1)+'. '+rcEsc(x.q)+'</div>'
+      +'<div style="font-size:13px;white-space:pre-wrap;margin-top:3px;color:'+(x.r?'inherit':'var(--muted)')+'">'+(x.r?rcEsc(x.r):'(sans réponse)')+'</div></div>').join('');
+}
+function rcImprimerReponses(){
+  const c=rcFiche();
+  if(!c||!Array.isArray(c.reponses))return;
+  const w=window.open('','_blank');
+  if(!w)return showBanner('Fenêtre bloquée par le navigateur.','error');
+  w.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Questionnaire — '+rcEsc(c.prenom+' '+(c.nom||''))+'</title>'
+    +'<style>body{font-family:Arial,sans-serif;font-size:13px;color:#222;margin:28px;line-height:1.5}h1{font-size:18px;color:#3D3580;margin:0 0 4px}'
+    +'.q{font-weight:700;margin:16px 0 4px}.r{white-space:pre-wrap;border-left:3px solid #ddd;padding-left:10px}.s{color:#777;font-size:12px}'
+    +'.pied{margin-top:30px;font-size:10px;color:#999;text-align:center}</style></head><body>'
+    +'<h1>Questionnaire sur le projet pédagogique</h1>'
+    +'<div class="s">'+rcEsc(c.prenom+' '+(c.nom||''))+(c.poste?' · '+rcEsc(c.poste):'')+' · '+rcEsc(rcCrecheNom(c.creche_id))+' · reçu le '+rcDate(c.reponses_le)+'</div>'
+    +c.reponses.map((x,i)=>'<div class="q">'+(i+1)+'. '+rcEsc(x.q)+'</div><div class="r">'+(x.r?rcEsc(x.r):'(sans réponse)')+'</div>').join('')
+    +'<div class="pied">Application créée par David Bucari</div>'
+    +'<script>window.onload=function(){window.print();}<\/script></body></html>');
+  w.document.close();
+}
+
+/* ----------------------------------------------------------- BIBLIOTHÈQUE */
+function rcBiblioHtml(){
+  const maCreche=(currentProfile&&currentProfile.creche_id)||'';
+  let h='<button class="btn-sm" onclick="rcAller(\''+(rcFicheId?'fiche':'liste')+'\',rcFicheId)"><i class="ti ti-arrow-left"></i> Retour</button>';
+  let corps='<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Les documents que vous joignez souvent : <b>fiche de poste</b> par métier, organigramme, planning type, règlement de fonctionnement… '
+    +'Déposez-les une fois ici, puis joignez-les à chaque candidature d’un clic. Le projet pédagogique n’a pas besoin d’y figurer : il est proposé d’office.</p>';
+  corps+=rcDocs.length?rcDocs.map(d=>{
+    const nb=rcEnvois.filter(e=>String(e.document_id)===String(d.id)).length;
+    const peut=isDirection||(d.creche_id&&String(d.creche_id)===String(maCreche));
+    return '<div style="display:flex;align-items:center;gap:8px;background:#FAFAFD;border:1px solid var(--border);border-radius:8px;padding:7px 10px;margin-bottom:5px;flex-wrap:wrap">'
+      +'<i class="ti ti-file-text" style="color:var(--koala)"></i>'
+      +'<button type="button" onclick="rcOuvrirFichier(\''+rcEsc(d.path)+'\')" style="flex:1;min-width:120px;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12.5px;color:var(--koala-dark);text-decoration:underline">'+rcEsc(d.libelle)+'</button>'
+      +'<span style="font-size:11px;color:var(--muted)">'+(d.creche_id?rcEsc(rcCrecheNom(d.creche_id)):'Toutes les crèches')+' · joint à '+nb+' candidature'+(nb>1?'s':'')+'</span>'
+      +(peut?'<button class="ibtn" style="width:26px;height:26px;font-size:13px;color:var(--red)" title="Supprimer" onclick="rcSupprimerDoc(\''+d.id+'\')"><i class="ti ti-trash"></i></button>':'')
+      +'</div>';
+  }).join(''):'<p style="font-size:12.5px;color:var(--muted)">Aucun document pour l’instant.</p>';
+  corps+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">'
+    +'<input id="rc-doc-titre" class="finput" placeholder="Titre vu par la personne (ex. Fiche de poste — Auxiliaire de puériculture)" maxlength="120" style="flex:1;min-width:220px;font-size:12px">'
+    +(isDirection?'<select class="finput" id="rc-doc-creche" style="width:auto;font-size:12px;padding:4px 8px"><option value="">Toutes les crèches</option>'
+      +cacheCreches.map(c=>'<option value="'+c.id+'">'+rcEsc(c.name)+'</option>').join('')+'</select>':'')
+    +'<button class="btn-primary" onclick="document.getElementById(\'rc-doc-fichier\').click()"><i class="ti ti-upload"></i> Ajouter un document</button>'
+    +'<input type="file" id="rc-doc-fichier" accept="image/*,application/pdf" style="display:none" onchange="rcDocUpload(event)">'
+    +'<span id="rc-doc-st" style="font-size:11.5px;color:var(--muted);flex-basis:100%"></span></div>';
+  return h+rcBloc('Documents à joindre aux candidatures','folder',corps);
+}
+
+async function rcDocUpload(ev){
+  const input=ev.target,file=(input.files||[])[0];
+  input.value='';
+  if(!file)return;
+  const st=document.getElementById('rc-doc-st');
+  if(!rcFichierOk(file,st))return;
+  const org=currentProfile&&currentProfile.org_id;
+  if(!org){if(st)st.textContent='⚠ Organisation introuvable sur votre compte.';return;}
+  const creche=isDirection?(rcVal('rc-doc-creche')||null):((currentProfile&&currentProfile.creche_id)||null);
+  if(!isDirection&&!creche){if(st)st.textContent='⚠ Votre compte n’est rattaché à aucune crèche.';return;}
+  const titre=rcVal('rc-doc-titre')||file.name.replace(/\.[^.]+$/,'');
+  if(st)st.textContent='⏳ Envoi de '+file.name+'…';
+  const path=rcCheminFichier('bibliotheque/'+org,file);
+  try{
+    const {error}=await sb.storage.from(RC_BUCKET).upload(path,file,{contentType:file.type});
+    if(error)throw error;
+    const {data,error:ie}=await sb.from('recrutement_documents').insert({
+      org_id:org,creche_id:creche,libelle:titre,bucket:RC_BUCKET,path,filename:file.name,mime:file.type||null,taille:file.size
+    }).select().single();
+    if(ie){await sb.storage.from(RC_BUCKET).remove([path]);throw ie;}
+    rcDocs.push(data);rcDocs.sort((a,b)=>String(a.libelle).localeCompare(String(b.libelle),'fr'));
+    rcRender();
+    showBanner('Document ajouté à la bibliothèque ✅');
+  }catch(e){
+    console.error('[Recrutement] bibliothèque',e.message);
+    if(st)st.textContent='⚠ Erreur : '+e.message;
+  }
+}
+
+async function rcSupprimerDoc(id){
+  const d=rcDocs.find(x=>String(x.id)===String(id));
+  if(!d)return;
+  const nb=rcEnvois.filter(e=>String(e.document_id)===String(d.id)).length;
+  if(!confirm('Supprimer « '+d.libelle+' » de la bibliothèque ?'+(nb?'\n\nIl est joint à '+nb+' candidature'+(nb>1?'s':'')+' : il disparaîtra aussi de ces liens.':'')))return;
+  const {error}=await sb.from('recrutement_documents').delete().eq('id',d.id);
+  if(error)return showBanner('Suppression impossible : '+rcEsc(error.message),'error');
+  await sb.storage.from(d.bucket||RC_BUCKET).remove([d.path]);
+  rcDocs=rcDocs.filter(x=>x.id!==d.id);
+  rcEnvois=rcEnvois.filter(e=>String(e.document_id)!==String(d.id));
+  rcRender();
+  showBanner('Document supprimé.');
+}
+
+/* ---------------------------------------------------------- QUESTIONNAIRE */
+function rcQuestionsHtml(){
+  const q=rcQuestionsEnVigueur();
+  let h='<button class="btn-sm" onclick="rcAller(\''+(rcFicheId?'fiche':'liste')+'\',rcFicheId)"><i class="ti ti-arrow-left"></i> Retour</button>';
+  let corps='<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Ces questions sont posées à chaque candidat·e dont le lien porte le questionnaire, après la lecture du projet pédagogique. '
+    +(isDirection?'Une question par ligne ('+RC_QUESTIONS_MAX+' au plus). Une modification vaut pour les réponses à venir : celles déjà reçues gardent leur question d’origine.'
+      :'Seule la direction peut les modifier.')+'</p>';
+  if(isDirection){
+    corps+='<textarea class="finput" id="rc-questions" rows="'+Math.max(8,q.length+2)+'" style="width:100%;resize:vertical;font-size:13px;line-height:1.7">'+rcEsc(q.join('\n'))+'</textarea>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
+      +'<button class="btn-primary" onclick="rcEnregistrerQuestions()"><i class="ti ti-device-floppy"></i> Enregistrer les questions</button>'
+      +'<button class="btn-sm" onclick="document.getElementById(\'rc-questions\').value=RC_QUESTIONS_DEFAUT.join(\'\\n\')"><i class="ti ti-restore"></i> Remettre les questions proposées</button></div>';
+  }else{
+    corps+='<ol style="font-size:13px;line-height:1.9;padding-left:20px;margin:0">'+q.map(x=>'<li>'+rcEsc(x)+'</li>').join('')+'</ol>';
+  }
+  return h+rcBloc('Questionnaire sur le projet pédagogique','pencil',corps);
+}
+async function rcEnregistrerQuestions(){
+  const q=rcVal('rc-questions').split('\n').map(x=>x.trim()).filter(Boolean).map(x=>x.slice(0,300));
+  if(!q.length)return showBanner('Écrivez au moins une question.','error');
+  if(q.length>RC_QUESTIONS_MAX)return showBanner(RC_QUESTIONS_MAX+' questions au plus ('+q.length+' saisies).','error');
+  const org=currentProfile&&currentProfile.org_id;
+  if(!org)return showBanner('Organisation introuvable sur votre compte.','error');
+  const {error}=await sb.from('recrutement_reglages').upsert({org_id:org,questions:q,updated_at:new Date().toISOString()});
+  if(error)return showBanner('Enregistrement impossible : '+rcEsc(error.message),'error');
+  rcQuestions=q;rcRender();
+  showBanner('Questionnaire enregistré ✅');
+}

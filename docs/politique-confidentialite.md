@@ -1,8 +1,8 @@
 # Politique de confidentialité
 
-Dernière mise à jour : 6 novembre 2026
+Dernière mise à jour : 12 novembre 2026
 
-Cette politique explique quelles informations personnelles Koala Kids recueille dans son application et sur ses pages en ligne (préinscription, espace famille, lien de signature, dépôt de documents), pourquoi, combien de temps, et comment exercer vos droits. Elle s'adresse aux **familles**, au **personnel**, aux **stagiaires** et aux **intervenants extérieurs**.
+Cette politique explique quelles informations personnelles Koala Kids recueille dans son application et sur ses pages en ligne (préinscription, espace famille, lien de signature, dépôt de documents, lien de candidature), pourquoi, combien de temps, et comment exercer vos droits. Elle s'adresse aux **familles**, au **personnel**, aux **candidats à un emploi**, aux **stagiaires** et aux **intervenants extérieurs**.
 
 ## 1. Qui est responsable de vos données ?
 
@@ -37,6 +37,7 @@ L'application est conçue et maintenue par David Bucari, qui agit comme sous-tra
 | **Visites médicales** (médecine du travail) | Dates de visite et avis d'aptitude ; aucune donnée médicale détaillée n'est saisie | Obligation légale |
 | **Signature électronique** du contrat de travail | Signature, adresse IP, appareil, empreinte du document | Exécution du contrat ; preuve |
 | Accueil des **stagiaires** | Identité, coordonnées, établissement, convention, pièces, évaluation | Exécution de la convention de stage |
+| **Recrutement** (candidature à un remplacement) | Identité, coordonnées, poste visé, réponses au questionnaire sur le projet pédagogique, date d'ouverture des documents transmis | Mesures précontractuelles prises à votre demande ; intérêt légitime |
 | **Messagerie interne, notifications, assistance** | Contenu des messages, abonnement aux notifications, page et appareil joints à une demande d'assistance | Intérêt légitime ; notifications : consentement |
 
 ### Pour tous les utilisateurs de l'application
@@ -95,6 +96,7 @@ Certains de ces prestataires sont établis aux États-Unis : les transferts repo
 | Registre de remise en température et de sécurité alimentaire | 3 ans minimum |
 | Dossier du personnel | 5 ans après la fin du contrat |
 | Dossier de stage | 5 ans après la fin du stage |
+| Candidature à un emploi non retenue | 2 ans au plus après le dernier contact, puis suppression |
 | Photos de l'enfant | Jusqu'au départ, puis suppression après remise aux parents |
 | Accès à l'espace famille | Tant que l'enfant est accueilli ; accès révoqué ensuite |
 | Journaux de connexion et d'ouverture de documents | 1 an |

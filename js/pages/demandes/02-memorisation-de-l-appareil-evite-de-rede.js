@@ -348,6 +348,8 @@ function empMaybeOpenFromUrl(){
   try{
     const q=new URLSearchParams(location.search);
     const empId=q.get('employe');
+    // Notification « questionnaire rempli » du recrutement (edge function dossier-candidat).
+    if(q.get('section')==='recrutement'){history.replaceState(null,'',location.pathname);showMain('remplacantes');rmpShowView('recrutement',document.getElementById('rmp-tab-recrutement'));return;}
     if(q.get('section')==='employes'&&!empId){history.replaceState(null,'',location.pathname);showMain('employes');return;}
     if(!empId)return;
     history.replaceState(null,'',location.pathname);

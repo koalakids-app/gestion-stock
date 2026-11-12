@@ -113,6 +113,8 @@ const TABLES = [
   'album_accords_signatures', 'album_journal', 'album_photos', 'album_photos_enfants', 'album_visages_accord',
   'devis_relances_log', 'employes_visites_medicales', 'famille_acces', 'famille_documents',
   'famille_messages', 'famille_messages_lus', 'frigo_temperature_journal', 'replies',
+  // Recrutement (candidatures : conservation 2 ans)
+  'recrutement_candidats', 'recrutement_documents', 'recrutement_envois', 'recrutement_reglages',
 ];
 
 const json = (body: unknown, status = 200) =>
