@@ -26,7 +26,7 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          for fn in dossier-contrat dossier-devis dossier-famille dossier-pieces dossier-pieces-employe dossier-stagiaire envoyer-confirmation-visite envoyer-devis envoyer-dossier-famille liste-destinataires-quiz preinscription-publique suivi-famille espace-famille renvoyer-lien-famille sauvegarde-hebdomadaire relances-devis-auto rappel-stagiaires-lien rappel-sacs-urgence rappel-visites-medicales manifest; do
+          for fn in dossier-contrat dossier-devis dossier-famille dossier-pieces dossier-pieces-employe dossier-stagiaire dossier-candidat envoyer-confirmation-visite envoyer-devis envoyer-dossier-famille liste-destinataires-quiz preinscription-publique suivi-famille espace-famille renvoyer-lien-famille sauvegarde-hebdomadaire relances-devis-auto rappel-stagiaires-lien rappel-sacs-urgence rappel-visites-medicales manifest; do
             echo "::group::$fn (--no-verify-jwt)"
             supabase functions deploy "$fn" --project-ref juyrceadazrovlitxceb --no-verify-jwt --yes
             echo "::endgroup::"
@@ -38,7 +38,7 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          publiques="dossier-contrat dossier-devis dossier-famille dossier-pieces dossier-pieces-employe dossier-stagiaire envoyer-confirmation-visite envoyer-devis envoyer-dossier-famille liste-destinataires-quiz preinscription-publique suivi-famille espace-famille renvoyer-lien-famille sauvegarde-hebdomadaire relances-devis-auto rappel-stagiaires-lien rappel-sacs-urgence rappel-visites-medicales manifest"
+          publiques="dossier-contrat dossier-devis dossier-famille dossier-pieces dossier-pieces-employe dossier-stagiaire dossier-candidat envoyer-confirmation-visite envoyer-devis envoyer-dossier-famille liste-destinataires-quiz preinscription-publique suivi-famille espace-famille renvoyer-lien-famille sauvegarde-hebdomadaire relances-devis-auto rappel-stagiaires-lien rappel-sacs-urgence rappel-visites-medicales manifest"
           for dir in supabase/functions/*/; do
             fn=$(basename "$dir")
             # _shared : code importé par plusieurs fonctions, pas une fonction.
