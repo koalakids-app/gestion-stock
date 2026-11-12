@@ -8,11 +8,15 @@
 -- aucun accès aux tables ni au bucket : tout passe par l'edge function
 -- `dossier-candidat` (service_role, --no-verify-jwt).
 --
---   recrutement_candidats   la fiche, le lien, les réponses au questionnaire
+--   recrutement_candidats   la fiche, le lien, le suivi du questionnaire
+--                           (reponses = { ouvert_le }, reponses_le = « j'ai répondu » ;
+--                           le questionnaire est un quiz du projet quiz-protocoles,
+--                           son résultat y est enregistré avec ref = id de la fiche)
 --   recrutement_documents   bibliothèque de pièces jointes réutilisables
 --                           (creche_id vide = toutes les crèches, direction)
 --   recrutement_envois      les pièces jointes au lien d'UN·E candidat·e
---   recrutement_reglages    questions du questionnaire (une ligne par organisation)
+--   recrutement_reglages    inutilisée (premier questionnaire intégré, abandonné) :
+--                           à supprimer quand possible
 --   bucket privé `recrutement` :
 --     <id candidat>/…                    fichier propre à une fiche
 --     bibliotheque/<id organisation>/…   fichier de la bibliothèque
