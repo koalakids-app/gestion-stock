@@ -582,6 +582,24 @@ function stgMailtoInfos(s){
     +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);
 }
 
+/* Le « Padlet » interne : page publique où la personne dépose elle-même sa demande
+   (candidature-stage.html → edge function candidature-stagiaire → fiche « Demande reçue »). */
+function stgCandidatureUrl(){
+  return location.origin+location.pathname.replace(/[^/]*$/,'')+'candidature-stage.html';
+}
+function stgLienCandidature(){
+  const url=stgCandidatureUrl();
+  if(window.PartageLien&&PartageLien.disponible()){
+    PartageLien.partager(url,{titre:'Demande de stage ou d\'alternance',
+      texte:'Pour déposer votre demande de stage ou d\'alternance :'});
+    return;
+  }
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(()=>showBanner('Lien de candidature copié.','success'),
+      ()=>prompt('Copiez ce lien :',url));
+  }else prompt('Copiez ce lien :',url);
+}
+
 function stgOuvrirInfos(){
   const sel=document.getElementById('stg-i-creche');
   sel.innerHTML=stgOptionsCreches('— Choisir la crèche —');
