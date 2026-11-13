@@ -589,15 +589,40 @@ function stgCandidatureUrl(){
 }
 function stgLienCandidature(){
   const url=stgCandidatureUrl();
-  if(window.PartageLien&&PartageLien.disponible()){
-    PartageLien.partager(url,{titre:'Demande de stage ou d\'alternance',
-      texte:'Pour déposer votre demande de stage ou d\'alternance :'});
-    return;
+  let ov=document.getElementById('modal-stg-candidature-wrap');
+  if(ov)ov.remove();
+  ov=document.createElement('div');
+  ov.className='overlay';ov.id='modal-stg-candidature-wrap';
+  ov.onclick=function(ev){if(ev.target===ov)closeModal('modal-stg-candidature-wrap');};
+  ov.innerHTML='<div class="modal" style="max-width:380px;width:100%;text-align:center">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem"><h3 style="margin:0"><i class="ti ti-qrcode"></i> Demande de stage en ligne</h3>'
+    +'<button class="btn-cancel" onclick="closeModal(\'modal-stg-candidature-wrap\')" style="padding:4px 8px"><i class="ti ti-x"></i></button></div>'
+    +'<p style="font-size:12px;color:var(--muted);margin:4px 0">À imprimer, afficher ou envoyer : la personne scanne le code et dépose sa demande de stage ou d\'alternance.</p>'
+    +'<div id="stg-cand-qr" style="display:flex;align-items:center;justify-content:center;margin:14px 0;min-height:220px"></div>'
+    +'<p style="font-size:11px;color:var(--muted);word-break:break-all;margin-bottom:10px">'+escHtml(url)+'</p>'
+    +'<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
+    +'<button class="btn-cancel" id="stg-cand-copier"><i class="ti ti-copy"></i> Copier le lien</button>'
+    +'<a class="btn-cancel" href="'+escHtml(url)+'" target="_blank" rel="noopener" style="text-decoration:none"><i class="ti ti-eye"></i> Voir la page</a>'
+    +(window.PartageLien&&PartageLien.disponible()?'<button class="btn-cancel" id="stg-cand-partager"><i class="ti ti-share"></i> Partager</button>':'')
+    +'</div></div>';
+  document.body.appendChild(ov);
+  const box=document.getElementById('stg-cand-qr');
+  let ok=false;
+  if(typeof QRCode==='function'){
+    try{new QRCode(box,{text:url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});ok=true;}
+    catch(e){console.warn('QRCode lib KO',e);}
   }
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(url).then(()=>showBanner('Lien de candidature copié.','success'),
-      ()=>prompt('Copiez ce lien :',url));
-  }else prompt('Copiez ce lien :',url);
+  /* Pas de service tiers en secours : le lien ne doit pas quitter l'appli. */
+  if(!ok)box.innerHTML='<p style="font-size:12px;color:var(--muted)">QR code indisponible (bibliothèque non chargée). Rechargez la page, ou utilisez le lien ci-dessous.</p>';
+  document.getElementById('stg-cand-copier').onclick=function(){
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(function(){showBanner('Lien de candidature copié.','success');},
+        function(){prompt('Copiez ce lien :',url);});
+    }else prompt('Copiez ce lien :',url);
+  };
+  const sh=document.getElementById('stg-cand-partager');
+  if(sh)sh.onclick=function(){PartageLien.partager(url,{titre:'Demande de stage ou d\'alternance',texte:'Pour déposer votre demande de stage ou d\'alternance :'});};
+  ov.classList.add('open');
 }
 
 function stgOuvrirInfos(){
