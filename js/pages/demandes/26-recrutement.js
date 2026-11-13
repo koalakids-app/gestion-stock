@@ -128,7 +128,8 @@ function rcSuiviHtml(c){
   const env=rcEnvois.filter(e=>String(e.candidat_id)===String(c.id));
   const lus=env.filter(e=>e.ouvert_le).length;
   let h='';
-  if(!c.token)return rcPuce(false,'Lien pas encore créé','link-off');
+  h+=rcPuce(!!c.cv_path,c.cv_path?'CV':'CV manquant','id')+rcPuce(!!c.lettre_path,c.lettre_path?'Lettre':'Lettre manquante','mail-opened');
+  if(!c.token)return h+rcPuce(false,'Lien pas encore créé','link-off');
   if(c.entretien_date)h+=rcPuce(!!c.rdv_confirme_le,c.rdv_confirme_le?'Rendez-vous confirmé le '+rcDate(c.rdv_confirme_le):'Rendez-vous pas encore confirmé','calendar-event');
   h+=rcPuce(!!c.lien_ouvert_le,c.lien_ouvert_le?'Lien ouvert le '+rcDate(c.lien_ouvert_le):(c.lien_envoye_le?'Lien envoyé le '+rcDate(c.lien_envoye_le)+', pas encore ouvert':'Lien créé, pas encore ouvert'),'link');
   if(c.avec_projet)h+=rcPuce(!!c.projet_ouvert_le,c.projet_ouvert_le?'Projet ouvert':'Projet pas encore ouvert','book');
@@ -227,6 +228,7 @@ async function rcPlanifierAuto(id){
   const {data,error}=await sb.from('recrutement_candidats').update(maj).eq('id',c.id).select().single();
   if(error)return showBanner('Planification impossible : '+rcEsc(error.message),'error');
   Object.assign(c,data);
+  await rcSyncEvenement(c);
   showBanner('Entretien de '+rcEsc(c.prenom)+' placé le '+rcDate(r.date)+' à '+r.heure.replace(':','h')+' ✅ — envoyez-lui le lien pour qu’il le confirme.');
   rcRender();
 }
@@ -329,6 +331,7 @@ function rcFicheHtml(){
     +(c.statut==='retenu'?'<p style="font-size:12px;color:var(--green);margin:10px 0 0"><i class="ti ti-circle-check"></i> Candidature retenue : créez sa fiche dans <b>Collaborateurs/trices</b>, puis ses créneaux dans le planning des remplaçants/tes.</p>':'')
     +(!neuf&&rcASupprimer(c)?'<p style="font-size:12px;color:#B25F00;margin:10px 0 0"><i class="ti ti-clock-exclamation"></i> Fiche close depuis plus de 2 ans : à supprimer.</p>':''));
   if(neuf)return h;
+  h+=rcBloc('CV et lettre de motivation','file-description',rcCandidatureHtml(c));
   h+=rcBloc('Ce que contient le lien','paperclip',rcContenuHtml(c));
   h+=rcBloc('Lien à envoyer','link',rcLienHtml(c));
   if(c.avec_questionnaire||c.reponses_le)h+=rcBloc('Questionnaire sur le projet','message-2','<div id="rc-quiz">'+rcQuizHtml(c)+'</div>');
@@ -360,12 +363,14 @@ async function rcEnregistrer(){
     const {data,error}=await sb.from('recrutement_candidats').update(row).eq('id',c.id).select().single();
     if(error)return showBanner('Enregistrement impossible : '+rcEsc(error.message),'error');
     Object.assign(c,data);
+    await rcSyncEvenement(c);
     showBanner('Fiche enregistrée ✅');
   }else{
     row.created_by=(currentProfile&&currentProfile.name)||null;
     const {data,error}=await sb.from('recrutement_candidats').insert(row).select().single();
     if(error)return showBanner('Création impossible : '+rcEsc(error.message),'error');
     rcCands.unshift(data);rcFicheId=data.id;
+    await rcSyncEvenement(data);
     showBanner('Fiche créée ✅ — préparez maintenant le lien.');
   }
   rcRender();
@@ -379,10 +384,123 @@ async function rcSupprimer(){
   const {error}=await sb.from('recrutement_candidats').delete().eq('id',c.id);
   if(error)return showBanner('Suppression impossible : '+rcEsc(error.message),'error');
   if(propres.length)await sb.storage.from(RC_BUCKET).remove(propres);
+  const pj=[c.cv_path,c.lettre_path].filter(Boolean);
+  if(pj.length)await sb.storage.from(RC_BUCKET).remove(pj);
+  if(typeof cacheEvenements!=='undefined'){cacheEvenements=cacheEvenements.filter(e=>String(e.candidat_id)!==String(c.id));if(typeof renderCalendar==='function')renderCalendar();}
   rcCands=rcCands.filter(x=>x.id!==c.id);
   rcEnvois=rcEnvois.filter(e=>String(e.candidat_id)!==String(c.id));
   showBanner('Candidature supprimée.');
   rcAller('liste');
+}
+
+/* ------------------------------------------- ENTRETIEN → CALENDRIER / PLANNING */
+/* L'entretien est reporté dans `evenements` (type « recrutement », evenements.candidat_id) : il apparaît dans
+   le calendrier du réseau et dans la ligne « Entretiens de recrutement » du planning du coordinateur
+   (pgEntretiensRecrutDuJour). Titre « ✅ » une fois confirmé par la personne (aussi mis à jour par l'edge function
+   dossier-candidat). Best-effort : la fiche est déjà enregistrée. sql/recrutement_planning_cv.sql. */
+async function rcSyncEvenement(c){
+  if(!c||!c.id)return;
+  try{
+    const {data:ex,error:eEx}=await sb.from('evenements').select('id').eq('candidat_id',c.id).maybeSingle();
+    if(eEx)throw eEx;
+    if(!c.entretien_date||!rcActif(c)){
+      if(ex){
+        const {error}=await sb.from('evenements').delete().eq('id',ex.id);if(error)throw error;
+        if(typeof cacheEvenements!=='undefined')cacheEvenements=cacheEvenements.filter(e=>e.id!==ex.id);
+        rcRafraichirAgendas();
+      }
+      return;
+    }
+    const m=rcMin(c.entretien_heure);
+    const cr=cacheCreches.find(x=>String(x.id)===String(c.creche_id));
+    const ev={
+      titre:(c.rdv_confirme_le?'✅ ':'')+'Entretien recrutement — '+((c.prenom||'')+' '+(c.nom||'')).trim(),
+      type:'recrutement',creche_id:c.creche_id,date_debut:c.entretien_date,date_fin:null,
+      heure_debut:m!=null?rcHeure(m):null,heure_fin:m!=null?rcHeure(m+RC_RDV_DUREE):null,
+      lieu:(cr&&(cr.addr||cr.adresse))||'',
+      description:'Entretien de recrutement'+(c.poste?' — '+c.poste:'')+(c.rdv_confirme_le?' (confirmé par la personne le '+rcDate(c.rdv_confirme_le)+')':' (pas encore confirmé)')+'. Fiche : Demandes › Remplaçants/tes › Recrutement.',
+      auteur:(currentProfile&&currentProfile.name)||'',candidat_id:c.id
+    };
+    let saved;
+    if(ex){
+      const {data,error}=await sb.from('evenements').update(ev).eq('id',ex.id).select().single();
+      if(error)throw error;saved=data;
+    }else{
+      ev.created_by=(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null;
+      const {data,error}=await sb.from('evenements').insert(ev).select().single();
+      if(error)throw error;saved=data;
+      const dest=cacheReferents.filter(r=>r.id!==(currentProfile&&currentProfile.id)&&(r.role==='referent'||r.role==='direction')&&(!saved.creche_id||r.creche_id===saved.creche_id)).map(r=>r.id);
+      if(dest.length&&typeof callFn==='function')callFn('notify-push',{referent_ids:dest,title:'Entretien de recrutement',body:ev.titre+' — '+rcQuand(c),url:'./demandes.html?section=recrutement',tag:'evenement-'+saved.id});
+    }
+    if(saved&&typeof cacheEvenements!=='undefined'){cacheEvenements=cacheEvenements.filter(e=>e.id!==saved.id);cacheEvenements.push(saved);}
+    rcRafraichirAgendas();
+  }catch(e){
+    console.warn('[Recrutement] calendrier',e);
+    showBanner('Entretien non reporté dans le calendrier'+(/candidat_id/i.test(e.message||'')?' : le script sql/recrutement_planning_cv.sql n’est pas appliqué.':'.'),'error');
+  }
+}
+function rcRafraichirAgendas(){
+  try{if(typeof renderCalendar==='function')renderCalendar();}catch(e){}
+  try{if(typeof renderPlanning==='function')renderPlanning();}catch(e){}
+}
+
+/* ----------------------------------------------- CV ET LETTRE DE MOTIVATION */
+/* Importés par l'équipe sur la fiche (la personne ne dépose rien). Fichiers : bucket privé `recrutement`,
+   <id fiche>/candidature/…, ouverture par URL signée journalisée. Supprimés avec la fiche. */
+const RC_PJ={cv:{lib:'CV',icone:'id'},lettre:{lib:'Lettre de motivation',icone:'mail-opened'}};
+function rcCandidatureHtml(c){
+  return '<p style="font-size:12px;color:var(--muted);margin:0 0 8px">Pièces reçues de la personne (PDF ou photo, 12 Mo maximum). Elles restent en interne : elles ne figurent pas dans son lien. Conservées avec la fiche (2 ans après le dernier contact).</p>'
+    +['cv','lettre'].map(k=>{
+      const path=c[k+'_path'];
+      return '<div style="display:flex;align-items:center;gap:8px;background:#FAFAFD;border:1px solid var(--border);border-radius:8px;padding:7px 10px;margin-bottom:5px;flex-wrap:wrap">'
+        +'<i class="ti ti-'+RC_PJ[k].icone+'" style="color:var(--koala)"></i><b style="font-size:12.5px;min-width:130px">'+RC_PJ[k].lib+'</b>'
+        +(path?'<button type="button" onclick="rcPjOuvrir(\''+k+'\')" style="flex:1;min-width:120px;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12.5px;color:var(--koala-dark);text-decoration:underline">'+rcEsc(c[k+'_filename']||'Ouvrir')+'</button>'
+            +'<span style="font-size:11px;color:var(--muted)">ajouté le '+rcDate(c[k+'_ajoute_le'])+'</span>'
+          :'<span style="flex:1;font-size:12px;color:var(--muted)">Pas encore importé</span>')
+        +'<button class="btn-sm" onclick="document.getElementById(\'rc-pj-'+k+'\').click()"><i class="ti ti-upload"></i> '+(path?'Remplacer':'Importer')+'</button>'
+        +'<input type="file" id="rc-pj-'+k+'" accept="image/*,application/pdf" style="display:none" onchange="rcPjUpload(event,\''+k+'\')">'
+        +(path?'<button class="ibtn" style="width:26px;height:26px;font-size:13px;color:var(--red)" title="Supprimer" onclick="rcPjSupprimer(\''+k+'\')"><i class="ti ti-trash"></i></button>':'')
+        +'</div>';
+    }).join('')+'<span id="rc-pj-st" style="font-size:11.5px;color:var(--muted)"></span>';
+}
+async function rcPjUpload(ev,k){
+  const input=ev.target,file=(input.files||[])[0];
+  input.value='';
+  const c=rcFiche();
+  if(!file||!c||!RC_PJ[k])return;
+  const st=document.getElementById('rc-pj-st');
+  if(!rcFichierOk(file,st))return;
+  if(st)st.textContent='⏳ Envoi de '+file.name+'…';
+  const path=rcCheminFichier(c.id+'/candidature',file);
+  try{
+    const {error}=await sb.storage.from(RC_BUCKET).upload(path,file,{contentType:file.type});
+    if(error)throw error;
+    const maj={[k+'_path']:path,[k+'_filename']:file.name,[k+'_ajoute_le']:new Date().toISOString()};
+    const {data,error:ie}=await sb.from('recrutement_candidats').update(maj).eq('id',c.id).select().single();
+    if(ie){await sb.storage.from(RC_BUCKET).remove([path]);throw ie;}
+    const ancien=c[k+'_path'];
+    if(ancien)await sb.storage.from(RC_BUCKET).remove([ancien]);
+    Object.assign(c,data);rcRender();
+    showBanner(RC_PJ[k].lib+' importé ✅');
+  }catch(e){
+    console.error('[Recrutement] CV/lettre',e.message);
+    if(st)st.textContent='⚠ Erreur : '+e.message+(/cv_path|lettre_path/.test(e.message||'')?' (script sql/recrutement_planning_cv.sql à appliquer)':'');
+  }
+}
+function rcPjOuvrir(k){
+  const c=rcFiche();
+  if(c&&c[k+'_path'])rcOuvrirFichier(c[k+'_path'],c.id);
+}
+async function rcPjSupprimer(k){
+  const c=rcFiche();
+  if(!c||!c[k+'_path']||!confirm('Supprimer '+RC_PJ[k].lib.toLowerCase()+' de '+c.prenom+' ?\n\nLe fichier est effacé définitivement.'))return;
+  const path=c[k+'_path'];
+  const maj={[k+'_path']:null,[k+'_filename']:null,[k+'_ajoute_le']:null};
+  const {error}=await sb.from('recrutement_candidats').update(maj).eq('id',c.id);
+  if(error)return showBanner('Suppression impossible.','error');
+  await sb.storage.from(RC_BUCKET).remove([path]);
+  Object.assign(c,maj);rcRender();
+  showBanner(RC_PJ[k].lib+' supprimé.');
 }
 
 /* ----------------------------------------------- CONTENU DU LIEN (pièces) */

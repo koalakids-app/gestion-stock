@@ -422,6 +422,12 @@ function pgReunionsCoordDuJour(dateISO){
     return !e.creche_id||e.titre==='Réunion de coordination'||/\bDT\b|directrices? techniques?/i.test(e.titre||'');
   }).sort((a,b)=>String(a.heure_debut||'').localeCompare(String(b.heure_debut||'')));
 }
+// Entretiens de recrutement (Demandes › Remplaçants › Recrutement, evenements.type = 'recrutement') : ligne dédiée
+// du planning coordinateur, lecture seule — la source reste l'événement, rien n'est copié dans planning.
+function pgEntretiensRecrutDuJour(dateISO){
+  return (typeof cacheEvenements!=='undefined'?cacheEvenements:[]).filter(e=>e.type==='recrutement'&&e.date_debut===dateISO)
+    .sort((a,b)=>String(a.heure_debut||'').localeCompare(String(b.heure_debut||'')));
+}
 // « Les contes de Miline » (onglet Événements) : pendant ces contes, Miline (en poste sur
 // une crèche) n'est plus sur son créneau habituel. L'événement peut avoir lieu dans
 // n'importe quelle crèche : seule compte la date/heure.
@@ -518,6 +524,13 @@ function getPlanningGridSimple(events,coordId,semaine,crecheIdHint){
     html+='<div class="pg-time">Réunions</div>';
     _reusC.forEach(l=>{
       html+='<div class="pg-cell-ro">'+(l.length?l.map(r=>'<div class="pg-card reunion" title="Réunion (onglet Événements)" style="cursor:default">'+pgReunionLibelle(r)+'</div>').join(''):'<div style="text-align:center;padding:0.5rem;color:#ddd;font-size:11px">—</div>')+'</div>';
+    });
+  }
+  const _recC=days5.map(d=>pgEntretiensRecrutDuJour(ipDateToLocalISO(d)));
+  if(_recC.some(l=>l.length)){
+    html+='<div class="pg-time">Entretiens recrutement</div>';
+    _recC.forEach(l=>{
+      html+='<div class="pg-cell-ro">'+(l.length?l.map(r=>'<div class="pg-card reunion" title="Entretien de recrutement (onglet Recrutement)" style="cursor:pointer;background:#378ADD" onclick="showMain(\'remplacantes\');rmpShowView(\'recrutement\',document.getElementById(\'rmp-tab-recrutement\'))">'+pgReunionLibelle(r)+'</div>').join(''):'<div style="text-align:center;padding:0.5rem;color:#ddd;font-size:11px">—</div>')+'</div>';
     });
   }
   // Valeurs de slot : 0 = Matin, 1 = Après-midi, 2 = second créneau du matin, 3 = second de l'après-midi.

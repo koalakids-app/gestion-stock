@@ -204,6 +204,16 @@ Deno.serve(async (req) => {
       if (error) throw error;
       const quand = new Date(cand.entretien_date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
         + (cand.entretien_heure ? ' à ' + String(cand.entretien_heure).replace(':', 'h') : '');
+      // Le calendrier / planning coordinateur : titre « ✅ » quand la personne a confirmé (evenements.candidat_id).
+      try {
+        const nom = `${cand.prenom || ''} ${cand.nom || ''}`.trim();
+        await sb.from('evenements').update({
+          titre: (confirme ? '✅ ' : '') + 'Entretien recrutement — ' + nom,
+          description: 'Entretien de recrutement' + (cand.poste ? ' — ' + cand.poste : '')
+            + (confirme ? ' (confirmé par la personne le ' + new Date(le!).toLocaleDateString('fr-FR') + ')' : ' (pas encore confirmé)')
+            + '. Fiche : Demandes › Remplaçants/tes › Recrutement.',
+        }).eq('candidat_id', cand.id);
+      } catch (e) { console.error('[dossier-candidat] evenement', e); }
       await prevenirEquipe(cand, orgId,
         confirme ? 'Recrutement : rendez-vous confirmé' : 'Recrutement : confirmation retirée',
         confirme ? `${cand.prenom || 'Un·e candidat·e'} confirme le rendez-vous du ${quand}.`
