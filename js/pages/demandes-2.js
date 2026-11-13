@@ -774,7 +774,7 @@ stagiaires: `
 </div>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🗂 Le chemin d'une fiche</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
-  <li>La demande arrive sur le <strong>Padlet</strong> ou par le <strong>formulaire en ligne</strong> (bouton « Lien de candidature » : à publier sur le site, à envoyer ou en QR code ; la fiche est alors créée toute seule en <strong>Demande reçue</strong>, avec une notification à la direction) — sinon vous créez la fiche : prénom, école, formation, et le lien du post. Statut <strong>Demande reçue</strong></li>
+  <li>La demande arrive sur le <strong>Padlet</strong> ou par le <strong>formulaire en ligne</strong> (bouton « Lien de candidature » : QR code à imprimer ou afficher, lien à copier ou à envoyer ; la fiche est alors créée toute seule en <strong>Demande reçue</strong>, avec une notification à la direction) — sinon vous créez la fiche : prénom, école, formation, et le lien du post. Statut <strong>Demande reçue</strong></li>
   <li>Vous l'orientez vers une <strong>crèche</strong> : à partir de là, le/la directeur/trice technique de cette crèche la voit et peut la suivre</li>
   <li>Le/la directeur/trice technique prend contact → statut <strong>Contact pris</strong></li>
   <li>C'est d'accord : vous posez les <strong>dates</strong> → statut <strong>Accepté</strong></li>
