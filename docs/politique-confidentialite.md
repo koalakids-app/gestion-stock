@@ -37,6 +37,7 @@ L'application est conçue et maintenue par David Bucari, qui agit comme sous-tra
 | **Visites médicales** (médecine du travail) | Dates de visite et avis d'aptitude ; aucune donnée médicale détaillée n'est saisie | Obligation légale |
 | **Signature électronique** du contrat de travail | Signature, adresse IP, appareil, empreinte du document | Exécution du contrat ; preuve |
 | Accueil des **stagiaires** | Identité, coordonnées, établissement, convention, pièces, évaluation | Exécution de la convention de stage |
+| **Demande de stage ou d'alternance** (formulaire en ligne ou transmise par e-mail) | Identité, coordonnées, établissement, formation, période souhaitée, message, CV et lettre de motivation ; partagés avec les référent·e·s des crèches, qui peuvent se positionner pour vous contacter | Mesures précontractuelles prises à votre demande ; intérêt légitime |
 | **Recrutement** (candidature à un remplacement) | Identité, coordonnées, poste visé, CV et lettre de motivation, réponses au questionnaire sur le projet pédagogique, date d'ouverture des documents transmis, date et heure d'entretien | Mesures précontractuelles prises à votre demande ; intérêt légitime |
 | **Messagerie interne, notifications, assistance** | Contenu des messages, abonnement aux notifications, page et appareil joints à une demande d'assistance | Intérêt légitime ; notifications : consentement |
 
@@ -97,6 +98,7 @@ Certains de ces prestataires sont établis aux États-Unis : les transferts repo
 | Dossier du personnel | 5 ans après la fin du contrat |
 | Dossier de stage | 5 ans après la fin du stage |
 | Candidature à un emploi non retenue | 2 ans au plus après le dernier contact, puis suppression |
+| Demande de stage ou d'alternance non retenue (CV et lettre compris) | Supprimée une fois la demande traitée, 2 ans au plus après le dernier contact |
 | Photos de l'enfant | Jusqu'au départ, puis suppression après remise aux parents |
 | Accès à l'espace famille | Tant que l'enfant est accueilli ; accès révoqué ensuite |
 | Journaux de connexion et d'ouverture de documents | 1 an |

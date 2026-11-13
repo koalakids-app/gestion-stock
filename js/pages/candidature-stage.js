@@ -1,11 +1,11 @@
 /* ===========================================================================
    CANDIDATURE-STAGE.HTML — page publique de demande de stage / d'alternance
    ---------------------------------------------------------------------------
-   Le « Padlet » interne : la personne dépose sa demande sans compte, la fiche
-   arrive dans Demandes › Stagiaires (statut « Demande reçue »). Tout passe par
-   l'edge function `candidature-stagiaire`, qui revalide chaque champ. Aucun
-   fichier n'est demandé ici : les pièces se déposent plus tard, par le lien
-   personnel de stagiaire.html, une fois la demande acceptée.
+   Le « Padlet » interne : la personne dépose sa demande sans compte, avec son CV
+   et sa lettre (5 Mo chacun, envoyés en base64). Elle arrive dans Demandes ›
+   Stagiaires › Candidatures, le mur où les référent·e·s se positionnent. Tout
+   passe par l'edge function `candidature-stagiaire`, qui revalide chaque champ ;
+   les autres pièces se déposent plus tard par le lien personnel de stagiaire.html.
    =========================================================================== */
 
 const SUPABASE_URL = "https://juyrceadazrovlitxceb.supabase.co";
@@ -34,8 +34,8 @@ function formulaire(cfg){
     + cfg.creches.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.nom)+'</option>').join('');
   wrap.innerHTML =
     '<div class="intro">Vous cherchez un stage ou une alternance dans l’une de nos micro-crèches ? '
-    +'Déposez votre demande ici : la direction vous répond par e-mail. Les documents (convention, pièce d’identité…) '
-    +'vous seront demandés plus tard, une fois la demande acceptée.</div>'
+    +'Déposez votre demande ici : la direction vous répond par e-mail. Joignez votre CV et votre lettre de motivation ; '
+    +'les autres documents (convention, pièce d’identité…) vous seront demandés plus tard, une fois la demande acceptée.</div>'
     +'<form id="form" novalidate onsubmit="return false">'
     +'<div class="msg" id="err" style="display:none"></div>'
     +'<div class="pot" aria-hidden="true"><label>Site web <input id="site_web" tabindex="-1" autocomplete="off"></label></div>'
@@ -57,11 +57,26 @@ function formulaire(cfg){
     +'<div class="f"><label class="lb" for="fin">Fin souhaitée</label><input id="fin" type="date"></div></div>'
     +'<div class="f"><label class="lb" for="message">Un mot pour présenter votre demande</label>'
     +'<textarea id="message" rows="4" maxlength="1500" placeholder="Votre projet, vos disponibilités…"></textarea></div>'
+    +'<div class="f"><label class="lb" for="cv">Votre CV</label><input id="cv" type="file" accept="application/pdf,image/*,.doc,.docx"></div>'
+    +'<div class="f"><label class="lb" for="lettre">Votre lettre de motivation</label><input id="lettre" type="file" accept="application/pdf,image/*,.doc,.docx">'
+    +'<div style="font-size:12px;color:var(--muted);margin-top:4px">PDF, photo ou Word, 5 Mo maximum chacun.</div></div>'
     +'</div>'
     +'<label class="accord"><input type="checkbox" id="accord"><span>J’accepte que ces informations soient utilisées pour traiter ma demande '
-    +'et conservées par la crèche pendant le traitement de celle-ci. <a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a></span></label>'
+    +'et transmises, avec mon CV et ma lettre, aux équipes des crèches pendant le traitement de celle-ci. <a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a></span></label>'
     +'<button type="button" class="btn btn-p" id="envoyer" style="width:100%">Envoyer ma demande</button></form>';
   document.getElementById('envoyer').onclick = envoyer;
+}
+
+function lireFichier(id){
+  const f=(document.getElementById(id).files||[])[0];
+  if(!f)return Promise.resolve(null);
+  if(f.size>5*1024*1024)return Promise.reject(new Error('Le fichier « '+f.name+' » dépasse 5 Mo.'));
+  return new Promise((ok,ko)=>{
+    const r=new FileReader();
+    r.onload=()=>ok({nom:f.name,mime:f.type,base64:String(r.result).split(',')[1]||''});
+    r.onerror=()=>ko(new Error('Fichier illisible : '+f.name));
+    r.readAsDataURL(f);
+  });
 }
 
 async function envoyer(){
@@ -71,7 +86,8 @@ async function envoyer(){
   err.style.display='none';
   btn.disabled=true;
   try{
-    await appel('envoyer',{
+    const cv=await lireFichier('cv'),lettre=await lireFichier('lettre');
+    await appel('envoyer',{cv:cv,lettre:lettre,
       type: document.querySelector('input[name=type]:checked').value,
       prenom:v('prenom'),nom:v('nom'),email:v('email'),telephone:v('tel'),
       ecole:v('ecole'),formation:v('formation'),niveau:v('niveau'),

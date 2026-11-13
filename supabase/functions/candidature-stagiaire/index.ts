@@ -4,18 +4,21 @@
 //
 // La porte d'entrée de candidature-stage.html : le « Padlet » interne où une
 // personne qui cherche un stage ou une alternance dépose sa demande, sans
-// compte. Elle remplace le post Padlet : la demande arrive directement dans
-// Demandes › Stagiaires, statut « Demande reçue ».
+// compte. La demande est publiée dans le MUR DES CANDIDATURES (Demandes ›
+// Stagiaires › Candidatures, table `stagiaires_candidatures`) avec son CV et sa
+// lettre : les référent·e·s se positionnent, la direction attribue.
 //
 // Deux actions, en POST { action, ... } :
 //   - "config"  : marque de l'organisation et liste des crèches ;
-//   - "envoyer" : crée la fiche `stagiaires` (statut demande) et prévient la
-//                 direction et les référentes de la crèche par notification.
+//   - "envoyer" : crée la candidature (statut ouverte), dépose CV et lettre dans
+//                 le bucket privé `stagiaires-vivier` (base64, 5 Mo max chacun) et
+//                 prévient direction et référent·e·s par notification.
 //
 // Rien n'est lu en base côté public : la page ne reçoit que la liste des
 // crèches. Écriture en service_role, donc tout est revalidé ici :
 //   - champs bornés, e-mail valide, type en liste fermée, dates cohérentes ;
-//   - crèche facultative (sans crèche, seule la direction voit la demande) ;
+//   - crèche souhaitée facultative : simple indication dans la note ;
+//   - fichiers : PDF, image ou Word, taille et type contrôlés ;
 //   - champ piège « site_web » et plafonds (même adresse / jour, total / heure).
 //
 // DÉPLOIEMENT — pas de JWT :
@@ -52,7 +55,6 @@ const TEL = /^[0-9 +().-]{6,20}$/;
 
 const txt = (v: unknown, max = 200) =>
   typeof v === 'string' ? v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, max) : '';
-const fr = (d: string) => d.split('-').reverse().join('/');
 
 async function orgParDefaut(): Promise<string | null> {
   const { data } = await sb.from('organisations').select('id').order('created_at').limit(1).maybeSingle();
@@ -72,17 +74,11 @@ async function action_config() {
   };
 }
 
-async function prevenir(orgId: string | null, crecheId: string | null, prenom: string, nom: string, profil: string) {
+async function prevenir(orgId: string | null, prenom: string, nom: string, profil: string) {
   try {
-    const filtre = [
-      crecheId ? `creche_id.eq.${crecheId}` : '',
-      orgId ? `and(creche_id.is.null,org_id.eq.${orgId})` : '',
-    ].filter(Boolean).join(',');
-    if (!filtre) return;
-    const { data: refs } = await sb.from('referents').select('id,role')
-      .in('role', crecheId ? ['referent', 'direction'] : ['direction']).or(filtre);
-    // Sans crèche, la demande n'est visible que de la direction.
-    const ids = (refs ?? []).filter((r: any) => crecheId || r.role === 'direction').map((r: any) => r.id);
+    if (!orgId) return;
+    const { data: refs } = await sb.from('referents').select('id').in('role', ['referent', 'direction']).eq('org_id', orgId);
+    const ids = (refs ?? []).map((r: any) => r.id);
     if (!ids.length) return;
     const url = Deno.env.get('SUPABASE_URL')!;
     const cle = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -91,7 +87,7 @@ async function prevenir(orgId: string | null, crecheId: string | null, prenom: s
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cle}`, apikey: cle },
       body: JSON.stringify({
         referent_ids: ids,
-        title: profil === 'alternant' ? 'Nouvelle demande d\'alternance' : 'Nouvelle demande de stage',
+        title: profil === 'alternant' ? 'Nouvelle candidature d\'alternance' : 'Nouvelle candidature de stage',
         body: `${prenom} ${nom}`.trim(),
         url: './demandes.html',
         tag: 'candidature-stagiaire',
@@ -100,6 +96,28 @@ async function prevenir(orgId: string | null, crecheId: string | null, prenom: s
   } catch (e) {
     console.error('[candidature-stagiaire] notification', e);
   }
+}
+
+// Fichiers acceptés : 5 Mo chacun (envoyés en base64 dans la requête).
+const TAILLE_MAX = 5 * 1024 * 1024;
+const TYPES: Record<string, string> = {
+  'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+};
+type Fichier = { nom: string; mime: string; octets: Uint8Array };
+
+function lireFichier(f: any, libelle: string): Fichier | null {
+  if (!f || !f.base64) return null;
+  const mime = txt(f.mime, 100);
+  if (!TYPES[mime]) throw new Refus(`${libelle} : format non accepté (PDF, image ou Word).`);
+  let octets: Uint8Array;
+  try {
+    octets = Uint8Array.from(atob(String(f.base64)), (c) => c.charCodeAt(0));
+  } catch { throw new Refus(`${libelle} : fichier illisible.`); }
+  if (!octets.length) return null;
+  if (octets.length > TAILLE_MAX) throw new Refus(`${libelle} : fichier trop lourd (5 Mo maximum).`);
+  return { nom: txt(f.nom, 150) || libelle, mime, octets };
 }
 
 async function action_envoyer(p: any) {
@@ -121,55 +139,70 @@ async function action_envoyer(p: any) {
   if (fin && !DATE.test(fin)) throw new Refus('Date de fin incorrecte.');
   if (debut && fin && fin < debut) throw new Refus('La fin souhaitée est avant le début.');
   const message = txt(p.message, 1500);
+  const cv = lireFichier(p.cv, 'CV');
+  const lettre = lireFichier(p.lettre, 'Lettre de motivation');
 
-  let crecheId: string | null = null;
+  let crecheNom = '';
   let orgId: string | null = null;
   if (p.creche_id) {
     if (!UUID.test(p.creche_id)) throw new Refus('Crèche inconnue.');
-    const { data: c } = await sb.from('creches').select('id,org_id').eq('id', p.creche_id).maybeSingle();
+    const { data: c } = await sb.from('creches').select('name,org_id').eq('id', p.creche_id).maybeSingle();
     if (!c) throw new Refus('Crèche inconnue.');
-    crecheId = c.id; orgId = c.org_id ?? null;
+    crecheNom = c.name || ''; orgId = c.org_id ?? null;
   }
   if (!orgId) orgId = await orgParDefaut();
+  if (!orgId) throw new Refus('Organisation introuvable', 404);
 
   // Plafonds anti-spam : même adresse sur 24 h, total sur 1 h.
   const il24 = new Date(Date.now() - 24 * 3600e3).toISOString();
   const il1 = new Date(Date.now() - 3600e3).toISOString();
   const [{ count: memeMail }, { count: total }] = await Promise.all([
-    sb.from('stagiaires').select('id', { count: 'exact', head: true }).ilike('email', email).gte('created_at', il24),
-    sb.from('stagiaires').select('id', { count: 'exact', head: true }).gte('created_at', il1),
+    sb.from('stagiaires_candidatures').select('id', { count: 'exact', head: true }).ilike('email', email).gte('created_at', il24),
+    sb.from('stagiaires_candidatures').select('id', { count: 'exact', head: true }).gte('created_at', il1),
   ]);
   if ((memeMail ?? 0) >= MAX_PAR_ADRESSE_ET_JOUR) {
     throw new Refus('Votre demande a déjà été reçue : la crèche vous répondra par e-mail.', 429);
   }
   if ((total ?? 0) >= MAX_PAR_HEURE) throw new Refus('Trop de demandes en ce moment, réessayez plus tard.', 429);
 
-  const lignes = [
-    'Demande reçue par le formulaire en ligne.',
-    debut || fin ? `Période souhaitée : ${debut ? 'du ' + fr(debut) : ''}${fin ? ' au ' + fr(fin) : ''}.` : '',
+  const notes = [
+    crecheNom ? `Crèche souhaitée : ${crecheNom}.` : '',
     message ? `Message : ${message}` : '',
-  ].filter(Boolean);
+    'Reçue par le formulaire en ligne.',
+  ].filter(Boolean).join('\n');
 
-  const row: Record<string, unknown> = {
-    type_contrat: type, prenom, nom, email, telephone: tel || null,
+  const { data: cand, error } = await sb.from('stagiaires_candidatures').insert({
+    org_id: orgId, type_contrat: type, prenom, nom, email, telephone: tel || null,
     ecole, formation, niveau: niveau || null,
-    creche_id: crecheId, statut: 'demande',
-    demande_le: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' }),
-    date_debut: debut || null, date_fin: fin || null,
-    notes: lignes.join('\n'),
-    org_id: orgId,
-  };
-  let { error } = await sb.from('stagiaires').insert(row);
-  // Base d'avant les colonnes optionnelles : on réessaie sans elles plutôt que de perdre la demande.
-  for (const col of ['org_id', 'type_contrat']) {
-    if (error && new RegExp(col, 'i').test(error.message)) {
-      delete row[col];
-      ({ error } = await sb.from('stagiaires').insert(row));
-    }
-  }
-  if (error) { console.error('[candidature-stagiaire] insertion', error); throw new Error('insertion'); }
+    date_debut: debut || null, date_fin: fin || null, notes,
+    created_by: 'Formulaire en ligne',
+  }).select('id').single();
+  if (error || !cand) { console.error('[candidature-stagiaire] insertion', error); throw new Error('insertion'); }
 
-  await prevenir(orgId, crecheId, prenom, nom, type);
+  // Les fichiers : si un dépôt échoue, la candidature est retirée (rien d'à moitié publié).
+  const maj: Record<string, unknown> = {};
+  const deposes: string[] = [];
+  try {
+    for (const [cle, f] of [['cv', cv], ['lettre', lettre]] as [string, Fichier | null][]) {
+      if (!f) continue;
+      const chemin = `${cand.id}/${cle}-${Date.now()}.${TYPES[f.mime]}`;
+      const { error: ue } = await sb.storage.from('stagiaires-vivier').upload(chemin, f.octets, { contentType: f.mime });
+      if (ue) throw ue;
+      deposes.push(chemin);
+      maj[`${cle}_path`] = chemin; maj[`${cle}_nom`] = f.nom; maj[`${cle}_mime`] = f.mime;
+    }
+    if (Object.keys(maj).length) {
+      const { error: me } = await sb.from('stagiaires_candidatures').update(maj).eq('id', cand.id);
+      if (me) throw me;
+    }
+  } catch (e) {
+    console.error('[candidature-stagiaire] fichiers', e);
+    if (deposes.length) await sb.storage.from('stagiaires-vivier').remove(deposes);
+    await sb.from('stagiaires_candidatures').delete().eq('id', cand.id);
+    throw new Error('fichiers');
+  }
+
+  await prevenir(orgId, prenom, nom, type);
   return { ok: true };
 }
 
