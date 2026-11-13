@@ -37,7 +37,7 @@ L'application est conçue et maintenue par David Bucari, qui agit comme sous-tra
 | **Visites médicales** (médecine du travail) | Dates de visite et avis d'aptitude ; aucune donnée médicale détaillée n'est saisie | Obligation légale |
 | **Signature électronique** du contrat de travail | Signature, adresse IP, appareil, empreinte du document | Exécution du contrat ; preuve |
 | Accueil des **stagiaires** | Identité, coordonnées, établissement, convention, pièces, évaluation | Exécution de la convention de stage |
-| **Recrutement** (candidature à un remplacement) | Identité, coordonnées, poste visé, réponses au questionnaire sur le projet pédagogique, date d'ouverture des documents transmis | Mesures précontractuelles prises à votre demande ; intérêt légitime |
+| **Recrutement** (candidature à un remplacement) | Identité, coordonnées, poste visé, CV et lettre de motivation, réponses au questionnaire sur le projet pédagogique, date d'ouverture des documents transmis, date et heure d'entretien | Mesures précontractuelles prises à votre demande ; intérêt légitime |
 | **Messagerie interne, notifications, assistance** | Contenu des messages, abonnement aux notifications, page et appareil joints à une demande d'assistance | Intérêt légitime ; notifications : consentement |
 
 ### Pour tous les utilisateurs de l'application

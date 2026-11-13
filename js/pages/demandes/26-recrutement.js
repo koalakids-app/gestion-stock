@@ -24,7 +24,11 @@ const RC_QUIZ_ADMIN_URL='https://koalakids-app.github.io/quiz-protocoles/admin.h
 
 let rcCands=[],rcDocs=[],rcEnvois=[];
 let rcQuiz={};   // résultats du quiz par fiche : {<id>: [lignes de kk_resultats_par_ref] | 'erreur'}
-let rcVue='liste',rcFicheId=null,rcOk=true,rcFiltre='cours';
+let rcVue='liste',rcFicheId=null,rcOk=true,rcFiltre='cours',rcRetour='liste';
+/* Planning des entretiens : remplissage automatique à partir des fiches (entretien_date / entretien_heure),
+   créneaux de RC_RDV_DUREE min entre RC_RDV_DEBUT et RC_RDV_FIN, hors pause de midi. */
+const RC_RDV_DUREE=45,RC_RDV_PAS=15,RC_RDV_PLAGES=[[9*60,12*60],[14*60,17*60]];
+let rcSemaine=null,rcMinuteur=null;
 
 const rcEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const rcDate=d=>d?new Date(String(d).length===10?d+'T12:00:00':d).toLocaleDateString('fr-FR'):'';
@@ -51,6 +55,7 @@ async function rcInit(){
   if(z&&!rcCands.length)z.innerHTML='<p style="color:var(--muted);font-size:13px">Chargement…</p>';
   await rcCharger();
   rcRender();
+  rcSurveiller();
 }
 
 async function rcCharger(){
@@ -62,6 +67,38 @@ async function rcCharger(){
   rcOk=!c.error;
   if(c.error)console.warn('[Recrutement]',c.error.message);
   rcCands=c.data||[];rcDocs=d.data||[];rcEnvois=e.data||[];
+  rcNotifierConfirmations(false);
+}
+
+/* ------------------------------------------- NOTIFICATIONS DE CONFIRMATION */
+/* Le push part déjà de l'edge function au moment de la confirmation (dossier-candidat). Ici : la bannière à
+   l'écran — à l'ouverture (confirmations depuis la dernière visite) et pendant que l'onglet reste ouvert
+   (relecture toutes les 60 s). Mémoire des confirmations déjà signalées : localStorage kk_rc_rdv_vus. */
+function rcVus(){try{return JSON.parse(localStorage.getItem('kk_rc_rdv_vus')||'null');}catch(e){return null;}}
+function rcVusEcrire(o){try{localStorage.setItem('kk_rc_rdv_vus',JSON.stringify(o));}catch(e){}}
+function rcQuand(c){return rcDate(c.entretien_date)+(c.entretien_heure?' à '+String(c.entretien_heure).slice(0,5).replace(':','h'):'');}
+function rcNotifierConfirmations(){
+  const vus=rcVus(),maintenant={};
+  const conf=rcCands.filter(c=>c.entretien_date&&c.rdv_confirme_le&&c.statut!=='refuse'&&c.statut!=='desiste');
+  conf.forEach(c=>{maintenant[c.id]=c.rdv_confirme_le;});
+  if(vus){
+    const neufs=conf.filter(c=>vus[c.id]!==c.rdv_confirme_le);
+    if(neufs.length)showBanner('✅ Rendez-vous confirmé : '+neufs.map(c=>rcEsc(c.prenom+' '+(c.nom||'')).trim()+' ('+rcQuand(c)+')').join(', '));
+  }
+  rcVusEcrire(maintenant);
+}
+function rcSurveiller(){
+  if(rcMinuteur)return;
+  rcMinuteur=setInterval(async()=>{
+    const z=document.getElementById('rc-contenu');
+    if(!z||z.offsetParent===null||document.hidden)return;
+    const {data,error}=await sb.from('recrutement_candidats').select('*').order('created_at',{ascending:false});
+    if(error||!data)return;
+    const avant=JSON.stringify(rcCands.map(c=>[c.id,c.entretien_date,c.entretien_heure,c.rdv_confirme_le,c.statut]));
+    rcCands=data;
+    rcNotifierConfirmations();
+    if(avant!==JSON.stringify(rcCands.map(c=>[c.id,c.entretien_date,c.entretien_heure,c.rdv_confirme_le,c.statut]))&&rcVue!=='fiche')rcRender();
+  },60000);
 }
 
 function rcRender(){
@@ -72,11 +109,12 @@ function rcRender(){
     return;
   }
   if(rcVue==='fiche')z.innerHTML=rcFicheHtml();
+  else if(rcVue==='planning')z.innerHTML=rcPlanningHtml();
   else if(rcVue==='biblio')z.innerHTML=rcBiblioHtml();
   else z.innerHTML=rcListeHtml();
 }
 // La bibliothèque s'ouvre aussi depuis une fiche : on la garde pour le retour.
-function rcAller(vue,id){rcVue=vue;if(vue==='fiche'||vue==='liste')rcFicheId=id||null;rcRender();const z=document.getElementById('rc-contenu');if(z&&z.scrollIntoView)z.scrollIntoView({block:'start'});}
+function rcAller(vue,id){if(vue==='fiche'&&(rcVue==='liste'||rcVue==='planning'))rcRetour=rcVue;rcVue=vue;if(vue==='fiche'||vue==='liste')rcFicheId=id||null;rcRender();const z=document.getElementById('rc-contenu');if(z&&z.scrollIntoView)z.scrollIntoView({block:'start'});}
 
 /* ------------------------------------------------------------------ LISTE */
 function rcBadge(c){
@@ -90,7 +128,8 @@ function rcSuiviHtml(c){
   const env=rcEnvois.filter(e=>String(e.candidat_id)===String(c.id));
   const lus=env.filter(e=>e.ouvert_le).length;
   let h='';
-  if(!c.token)return rcPuce(false,'Lien pas encore créé','link-off');
+  h+=rcPuce(!!c.cv_path,c.cv_path?'CV':'CV manquant','id')+rcPuce(!!c.lettre_path,c.lettre_path?'Lettre':'Lettre manquante','mail-opened');
+  if(!c.token)return h+rcPuce(false,'Lien pas encore créé','link-off');
   if(c.entretien_date)h+=rcPuce(!!c.rdv_confirme_le,c.rdv_confirme_le?'Rendez-vous confirmé le '+rcDate(c.rdv_confirme_le):'Rendez-vous pas encore confirmé','calendar-event');
   h+=rcPuce(!!c.lien_ouvert_le,c.lien_ouvert_le?'Lien ouvert le '+rcDate(c.lien_ouvert_le):(c.lien_envoye_le?'Lien envoyé le '+rcDate(c.lien_envoye_le)+', pas encore ouvert':'Lien créé, pas encore ouvert'),'link');
   if(c.avec_projet)h+=rcPuce(!!c.projet_ouvert_le,c.projet_ouvert_le?'Projet ouvert':'Projet pas encore ouvert','book');
@@ -114,6 +153,7 @@ function rcListeHtml(){
     +'<option value="cours"'+(rcFiltre==='cours'?' selected':'')+'>Candidatures en cours</option>'
     +'<option value="tout"'+(rcFiltre==='tout'?' selected':'')+'>Toutes ('+nbClos+' close'+(nbClos>1?'s':'')+')</option></select>'
     +'<span style="flex:1"></span>'
+    +'<button class="btn-sm" onclick="rcAller(\'planning\')"><i class="ti ti-calendar-week"></i> Planning des entretiens</button>'
     +'<a class="btn-sm" style="text-decoration:none" href="'+RC_QUESTIONNAIRE_URL+'" target="_blank" rel="noopener"><i class="ti ti-pencil"></i> Voir le questionnaire</a>'
     +'<button class="btn-sm" onclick="rcAller(\'biblio\')"><i class="ti ti-folder"></i> Documents à joindre ('+rcDocs.length+')</button>'
     +'<button class="btn-primary" onclick="rcNouveau()"><i class="ti ti-plus"></i> Nouvelle candidature</button>'
@@ -142,6 +182,107 @@ function rcListeHtml(){
   return h;
 }
 
+/* --------------------------------------------------------------- PLANNING */
+const rcMin=h=>{const m=/^(\d{1,2}):(\d{2})/.exec(String(h||''));return m?+m[1]*60+ +m[2]:null;};
+const rcHeure=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+const rcIso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+function rcLundi(d){const x=new Date(d);x.setHours(12,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return x;}
+const rcActif=c=>c.statut!=='refuse'&&c.statut!=='desiste';
+// Entretien déjà prévu sur la même crèche, qui chevauche [heure, heure + durée[.
+function rcConflit(idExclu,creche,date,heure){
+  const m=rcMin(heure);
+  if(m==null)return null;
+  return rcCands.find(x=>x.id!==idExclu&&rcActif(x)&&String(x.creche_id)===String(creche)&&x.entretien_date===date
+    &&rcMin(x.entretien_heure)!=null&&Math.abs(rcMin(x.entretien_heure)-m)<RC_RDV_DUREE)||null;
+}
+// Premier créneau libre (jours ouvrés à partir de demain) de la crèche, sans chevaucher un autre entretien.
+function rcCreneauLibre(idExclu,creche){
+  const d=new Date();d.setHours(12,0,0,0);
+  for(let j=0;j<90;j++){
+    d.setDate(d.getDate()+1);
+    if(d.getDay()===0||d.getDay()===6)continue;
+    const iso=rcIso(d);
+    for(const pl of RC_RDV_PLAGES)for(let m=pl[0];m+RC_RDV_DUREE<=pl[1];m+=RC_RDV_PAS){
+      if(!rcConflit(idExclu,creche,iso,rcHeure(m)))return {date:iso,heure:rcHeure(m)};
+    }
+  }
+  return null;
+}
+function rcRemplirCreneau(){
+  const c=rcFiche(),creche=rcVal('rc-creche-f')||(c&&c.creche_id)||'';
+  if(!creche)return showBanner('Choisissez d’abord la crèche.','error');
+  const r=rcCreneauLibre(c&&c.id,creche);
+  if(!r)return showBanner('Aucun créneau libre dans les 3 prochains mois.','error');
+  document.getElementById('rc-ent-date').value=r.date;
+  document.getElementById('rc-ent-heure').value=r.heure;
+  showBanner('Créneau proposé : '+rcDate(r.date)+' à '+r.heure.replace(':','h')+' — pensez à enregistrer.');
+}
+// Planifie sans passer par la fiche : le statut passe à « Entretien prévu ».
+async function rcPlanifierAuto(id){
+  const c=rcCands.find(x=>String(x.id)===String(id));
+  if(!c)return;
+  const r=rcCreneauLibre(c.id,c.creche_id);
+  if(!r)return showBanner('Aucun créneau libre dans les 3 prochains mois.','error');
+  const maj={entretien_date:r.date,entretien_heure:r.heure,rdv_confirme_le:null,updated_at:new Date().toISOString()};
+  if(c.statut==='candidature')maj.statut='entretien';
+  const {data,error}=await sb.from('recrutement_candidats').update(maj).eq('id',c.id).select().single();
+  if(error)return showBanner('Planification impossible : '+rcEsc(error.message),'error');
+  Object.assign(c,data);
+  await rcSyncEvenement(c);
+  showBanner('Entretien de '+rcEsc(c.prenom)+' placé le '+rcDate(r.date)+' à '+r.heure.replace(':','h')+' ✅ — envoyez-lui le lien pour qu’il le confirme.');
+  rcRender();
+}
+function rcSemaineAller(n){
+  if(n===0)rcSemaine=rcLundi(new Date());
+  else{rcSemaine=new Date(rcSemaine||rcLundi(new Date()));rcSemaine.setDate(rcSemaine.getDate()+7*n);}
+  rcRender();
+}
+function rcPlanningHtml(){
+  const lundi=rcSemaine||(rcSemaine=rcLundi(new Date()));
+  const sel=rcVal('rc-creche');
+  const liste=rcCands.filter(c=>rcActif(c)&&(!sel||String(c.creche_id)===sel));
+  const jours=[0,1,2,3,4].map(i=>{const d=new Date(lundi);d.setDate(d.getDate()+i);return d;});
+  const fin=new Date(lundi);fin.setDate(fin.getDate()+4);
+  const aujourdhui=rcIso(new Date());
+  const suivants=liste.filter(c=>c.entretien_date&&c.entretien_date>=aujourdhui);
+  const nbConf=suivants.filter(c=>c.rdv_confirme_le).length;
+  const aPlanifier=liste.filter(c=>!c.entretien_date&&c.statut!=='retenu');
+  let h='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'
+    +'<button class="btn-sm" onclick="rcAller(\'liste\')"><i class="ti ti-arrow-left"></i> Candidatures</button>'
+    +(isDirection?'<select class="finput" id="rc-creche" style="width:auto;min-width:160px;font-size:12px;padding:4px 8px" onchange="rcRender()">'
+      +'<option value="">Toutes les crèches</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(String(c.id)===sel?' selected':'')+'>'+rcEsc(c.name)+'</option>').join('')+'</select>':'')
+    +'<span style="flex:1"></span>'
+    +'<button class="btn-sm" onclick="rcSemaineAller(-1)" aria-label="Semaine précédente"><i class="ti ti-chevron-left"></i></button>'
+    +'<b style="font-size:13px">'+jours[0].toLocaleDateString('fr-FR',{day:'numeric',month:'short'})+' – '+fin.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})+'</b>'
+    +'<button class="btn-sm" onclick="rcSemaineAller(1)" aria-label="Semaine suivante"><i class="ti ti-chevron-right"></i></button>'
+    +'<button class="btn-sm" onclick="rcSemaineAller(0)">Cette semaine</button></div>';
+  h+='<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Rempli automatiquement à partir des fiches : '+suivants.length+' entretien'+(suivants.length>1?'s':'')+' à venir, dont '
+    +nbConf+' confirmé'+(nbConf>1?'s':'')+' par la personne. Vous êtes prévenu·e (notification et bannière) dès qu’un rendez-vous est confirmé.</p>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px">'+jours.map(d=>{
+    const iso=rcIso(d);
+    const rdvs=liste.filter(c=>c.entretien_date===iso).sort((a,b)=>String(a.entretien_heure||'99').localeCompare(String(b.entretien_heure||'99')));
+    return '<div style="background:'+(iso===aujourdhui?'#FFF8F0':'#fff')+';border:1px solid '+(iso===aujourdhui?'var(--koala)':'var(--border)')+';border-radius:10px;padding:8px;min-height:90px">'
+      +'<div style="font-size:12px;font-weight:700;margin-bottom:6px;text-transform:capitalize">'+d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})+'</div>'
+      +(rdvs.length?rdvs.map(c=>{
+        const ok=!!c.rdv_confirme_le;
+        return '<div onclick="rcAller(\'fiche\',\''+c.id+'\')" style="cursor:pointer;border-left:4px solid '+(ok?'var(--green)':'#F47920')+';background:'+(ok?'#E8F5EC':'#FDF0E3')+';border-radius:6px;padding:5px 7px;margin-bottom:5px;font-size:12px">'
+          +'<b>'+(c.entretien_heure?rcEsc(String(c.entretien_heure).slice(0,5).replace(':','h')):'heure ?')+'</b> '+rcEsc(c.prenom+' '+(c.nom||'').slice(0,1)+(c.nom?'.':''))
+          +'<div style="font-size:11px;color:var(--muted)">'+rcEsc([c.poste,sel?'':rcCrecheNom(c.creche_id)].filter(Boolean).join(' · '))+'</div>'
+          +'<div style="font-size:11px;font-weight:700;color:'+(ok?'var(--green)':'#B25F00')+'"><i class="ti ti-'+(ok?'circle-check':'clock')+'"></i> '+(ok?'Confirmé':'À confirmer')+'</div></div>';
+      }).join(''):'<div style="font-size:11.5px;color:var(--muted)">Libre</div>')+'</div>';
+  }).join('')+'</div>';
+  const horsSemaine=suivants.filter(c=>c.entretien_date>rcIso(fin));
+  if(horsSemaine.length)h+=rcBloc('Entretiens des semaines suivantes','calendar-event',horsSemaine.sort((a,b)=>(a.entretien_date+(a.entretien_heure||'')).localeCompare(b.entretien_date+(b.entretien_heure||''))).slice(0,15).map(c=>
+    '<div onclick="rcAller(\'fiche\',\''+c.id+'\')" style="cursor:pointer;font-size:12.5px;padding:3px 0"><b>'+rcEsc(rcQuand(c))+'</b> · '+rcEsc(c.prenom+' '+(c.nom||''))+' '
+    +'<span style="color:'+(c.rdv_confirme_le?'var(--green)':'#B25F00')+';font-size:11.5px">'+(c.rdv_confirme_le?'confirmé':'à confirmer')+'</span></div>').join(''));
+  h+=rcBloc('Candidatures à planifier','wand',aPlanifier.length?'<p style="font-size:12px;color:var(--muted);margin:0 0 8px">« Planifier » place l’entretien au premier créneau libre de la crèche ('+RC_RDV_DUREE+' min, du lundi au vendredi, 9h–12h et 14h–17h) ; vous pouvez ensuite le déplacer dans la fiche.</p>'
+    +aPlanifier.map(c=>'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0"><b style="font-size:13px">'+rcEsc(c.prenom+' '+(c.nom||''))+'</b>'
+      +'<span style="font-size:12px;color:var(--muted);flex:1">'+rcEsc([c.poste,rcCrecheNom(c.creche_id)].filter(Boolean).join(' · '))+'</span>'
+      +'<button class="btn-sm" onclick="rcPlanifierAuto(\''+c.id+'\')"><i class="ti ti-wand"></i> Planifier</button></div>').join('')
+    :'<p style="font-size:12.5px;color:var(--muted);margin:0">Toutes les candidatures en cours ont un entretien.</p>');
+  return h;
+}
+
 /* ------------------------------------------------------------------ FICHE */
 function rcNouveau(){rcAller('fiche',null);}
 function rcChamp(lib,html,large){
@@ -157,7 +298,7 @@ function rcBloc(titre,icone,contenu){
 function rcFicheHtml(){
   const c=rcFiche()||{statut:'candidature',creche_id:(currentProfile&&currentProfile.creche_id)||''};
   const neuf=!c.id;
-  let h='<button class="btn-sm" onclick="rcAller(\'liste\')"><i class="ti ti-arrow-left"></i> Retour à la liste</button>';
+  let h='<button class="btn-sm" onclick="rcAller(rcRetour)"><i class="ti ti-arrow-left"></i> Retour '+(rcRetour==='planning'?'au planning':'à la liste')+'</button>';
   h+=rcBloc(neuf?'Nouvelle candidature':rcEsc(c.prenom+' '+(c.nom||''))+' '+rcBadge(c),'user-search',
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">'
     +rcChamp('Civilité','<select class="finput" id="rc-civilite" style="width:100%;margin-top:3px">'
@@ -179,6 +320,7 @@ function rcFicheHtml(){
     +rcChamp('Fin prévue',rcInput('rc-fin',c.date_fin,'date'))
     +rcChamp('Entretien le',rcInput('rc-ent-date',c.entretien_date,'date'))
     +rcChamp('à',rcInput('rc-ent-heure',c.entretien_heure,'time'))
+    +'<div style="display:flex;align-items:flex-end"><button type="button" class="btn-sm" onclick="rcRemplirCreneau()" title="Choisit le premier créneau libre du planning de la crèche"><i class="ti ti-wand"></i> Premier créneau libre</button></div>'
     +rcChamp('Notes internes (jamais visibles par la personne)','<textarea class="finput" id="rc-notes" rows="3" maxlength="4000" style="width:100%;margin-top:3px;resize:vertical">'+rcEsc(c.notes||'')+'</textarea>',true)
     +'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">'
@@ -189,6 +331,7 @@ function rcFicheHtml(){
     +(c.statut==='retenu'?'<p style="font-size:12px;color:var(--green);margin:10px 0 0"><i class="ti ti-circle-check"></i> Candidature retenue : créez sa fiche dans <b>Collaborateurs/trices</b>, puis ses créneaux dans le planning des remplaçants/tes.</p>':'')
     +(!neuf&&rcASupprimer(c)?'<p style="font-size:12px;color:#B25F00;margin:10px 0 0"><i class="ti ti-clock-exclamation"></i> Fiche close depuis plus de 2 ans : à supprimer.</p>':''));
   if(neuf)return h;
+  h+=rcBloc('CV et lettre de motivation','file-description',rcCandidatureHtml(c));
   h+=rcBloc('Ce que contient le lien','paperclip',rcContenuHtml(c));
   h+=rcBloc('Lien à envoyer','link',rcLienHtml(c));
   if(c.avec_questionnaire||c.reponses_le)h+=rcBloc('Questionnaire sur le projet','message-2','<div id="rc-quiz">'+rcQuizHtml(c)+'</div>');
@@ -210,18 +353,24 @@ async function rcEnregistrer(){
     entretien_date:rcVal('rc-ent-date')||null,entretien_heure:rcVal('rc-ent-heure')||null,
     notes:rcVal('rc-notes')||null,updated_at:new Date().toISOString()
   };
+  if(row.entretien_date&&row.entretien_heure&&row.statut!=='refuse'&&row.statut!=='desiste'){
+    const pris=rcConflit(c&&c.id,creche,row.entretien_date,row.entretien_heure);
+    if(pris&&!confirm('Ce créneau chevauche l\'entretien de '+pris.prenom+' '+(pris.nom||'')+' ('+rcQuand(pris)+').\n\nEnregistrer quand même ?'))return;
+  }
   // Un rendez-vous déplacé n'est plus confirmé.
   if(c&&(String(c.entretien_date||'')!==String(row.entretien_date||'')||String(c.entretien_heure||'')!==String(row.entretien_heure||'')))row.rdv_confirme_le=null;
   if(c){
     const {data,error}=await sb.from('recrutement_candidats').update(row).eq('id',c.id).select().single();
     if(error)return showBanner('Enregistrement impossible : '+rcEsc(error.message),'error');
     Object.assign(c,data);
+    await rcSyncEvenement(c);
     showBanner('Fiche enregistrée ✅');
   }else{
     row.created_by=(currentProfile&&currentProfile.name)||null;
     const {data,error}=await sb.from('recrutement_candidats').insert(row).select().single();
     if(error)return showBanner('Création impossible : '+rcEsc(error.message),'error');
     rcCands.unshift(data);rcFicheId=data.id;
+    await rcSyncEvenement(data);
     showBanner('Fiche créée ✅ — préparez maintenant le lien.');
   }
   rcRender();
@@ -235,10 +384,123 @@ async function rcSupprimer(){
   const {error}=await sb.from('recrutement_candidats').delete().eq('id',c.id);
   if(error)return showBanner('Suppression impossible : '+rcEsc(error.message),'error');
   if(propres.length)await sb.storage.from(RC_BUCKET).remove(propres);
+  const pj=[c.cv_path,c.lettre_path].filter(Boolean);
+  if(pj.length)await sb.storage.from(RC_BUCKET).remove(pj);
+  if(typeof cacheEvenements!=='undefined'){cacheEvenements=cacheEvenements.filter(e=>String(e.candidat_id)!==String(c.id));if(typeof renderCalendar==='function')renderCalendar();}
   rcCands=rcCands.filter(x=>x.id!==c.id);
   rcEnvois=rcEnvois.filter(e=>String(e.candidat_id)!==String(c.id));
   showBanner('Candidature supprimée.');
   rcAller('liste');
+}
+
+/* ------------------------------------------- ENTRETIEN → CALENDRIER / PLANNING */
+/* L'entretien est reporté dans `evenements` (type « recrutement », evenements.candidat_id) : il apparaît dans
+   le calendrier du réseau et dans la ligne « Entretiens de recrutement » du planning du coordinateur
+   (pgEntretiensRecrutDuJour). Titre « ✅ » une fois confirmé par la personne (aussi mis à jour par l'edge function
+   dossier-candidat). Best-effort : la fiche est déjà enregistrée. sql/recrutement_planning_cv.sql. */
+async function rcSyncEvenement(c){
+  if(!c||!c.id)return;
+  try{
+    const {data:ex,error:eEx}=await sb.from('evenements').select('id').eq('candidat_id',c.id).maybeSingle();
+    if(eEx)throw eEx;
+    if(!c.entretien_date||!rcActif(c)){
+      if(ex){
+        const {error}=await sb.from('evenements').delete().eq('id',ex.id);if(error)throw error;
+        if(typeof cacheEvenements!=='undefined')cacheEvenements=cacheEvenements.filter(e=>e.id!==ex.id);
+        rcRafraichirAgendas();
+      }
+      return;
+    }
+    const m=rcMin(c.entretien_heure);
+    const cr=cacheCreches.find(x=>String(x.id)===String(c.creche_id));
+    const ev={
+      titre:(c.rdv_confirme_le?'✅ ':'')+'Entretien recrutement — '+((c.prenom||'')+' '+(c.nom||'')).trim(),
+      type:'recrutement',creche_id:c.creche_id,date_debut:c.entretien_date,date_fin:null,
+      heure_debut:m!=null?rcHeure(m):null,heure_fin:m!=null?rcHeure(m+RC_RDV_DUREE):null,
+      lieu:(cr&&(cr.addr||cr.adresse))||'',
+      description:'Entretien de recrutement'+(c.poste?' — '+c.poste:'')+(c.rdv_confirme_le?' (confirmé par la personne le '+rcDate(c.rdv_confirme_le)+')':' (pas encore confirmé)')+'. Fiche : Demandes › Remplaçants/tes › Recrutement.',
+      auteur:(currentProfile&&currentProfile.name)||'',candidat_id:c.id
+    };
+    let saved;
+    if(ex){
+      const {data,error}=await sb.from('evenements').update(ev).eq('id',ex.id).select().single();
+      if(error)throw error;saved=data;
+    }else{
+      ev.created_by=(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null;
+      const {data,error}=await sb.from('evenements').insert(ev).select().single();
+      if(error)throw error;saved=data;
+      const dest=cacheReferents.filter(r=>r.id!==(currentProfile&&currentProfile.id)&&(r.role==='referent'||r.role==='direction')&&(!saved.creche_id||r.creche_id===saved.creche_id)).map(r=>r.id);
+      if(dest.length&&typeof callFn==='function')callFn('notify-push',{referent_ids:dest,title:'Entretien de recrutement',body:ev.titre+' — '+rcQuand(c),url:'./demandes.html?section=recrutement',tag:'evenement-'+saved.id});
+    }
+    if(saved&&typeof cacheEvenements!=='undefined'){cacheEvenements=cacheEvenements.filter(e=>e.id!==saved.id);cacheEvenements.push(saved);}
+    rcRafraichirAgendas();
+  }catch(e){
+    console.warn('[Recrutement] calendrier',e);
+    showBanner('Entretien non reporté dans le calendrier'+(/candidat_id/i.test(e.message||'')?' : le script sql/recrutement_planning_cv.sql n’est pas appliqué.':'.'),'error');
+  }
+}
+function rcRafraichirAgendas(){
+  try{if(typeof renderCalendar==='function')renderCalendar();}catch(e){}
+  try{if(typeof renderPlanning==='function')renderPlanning();}catch(e){}
+}
+
+/* ----------------------------------------------- CV ET LETTRE DE MOTIVATION */
+/* Importés par l'équipe sur la fiche (la personne ne dépose rien). Fichiers : bucket privé `recrutement`,
+   <id fiche>/candidature/…, ouverture par URL signée journalisée. Supprimés avec la fiche. */
+const RC_PJ={cv:{lib:'CV',icone:'id'},lettre:{lib:'Lettre de motivation',icone:'mail-opened'}};
+function rcCandidatureHtml(c){
+  return '<p style="font-size:12px;color:var(--muted);margin:0 0 8px">Pièces reçues de la personne (PDF ou photo, 12 Mo maximum). Elles restent en interne : elles ne figurent pas dans son lien. Conservées avec la fiche (2 ans après le dernier contact).</p>'
+    +['cv','lettre'].map(k=>{
+      const path=c[k+'_path'];
+      return '<div style="display:flex;align-items:center;gap:8px;background:#FAFAFD;border:1px solid var(--border);border-radius:8px;padding:7px 10px;margin-bottom:5px;flex-wrap:wrap">'
+        +'<i class="ti ti-'+RC_PJ[k].icone+'" style="color:var(--koala)"></i><b style="font-size:12.5px;min-width:130px">'+RC_PJ[k].lib+'</b>'
+        +(path?'<button type="button" onclick="rcPjOuvrir(\''+k+'\')" style="flex:1;min-width:120px;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;font-size:12.5px;color:var(--koala-dark);text-decoration:underline">'+rcEsc(c[k+'_filename']||'Ouvrir')+'</button>'
+            +'<span style="font-size:11px;color:var(--muted)">ajouté le '+rcDate(c[k+'_ajoute_le'])+'</span>'
+          :'<span style="flex:1;font-size:12px;color:var(--muted)">Pas encore importé</span>')
+        +'<button class="btn-sm" onclick="document.getElementById(\'rc-pj-'+k+'\').click()"><i class="ti ti-upload"></i> '+(path?'Remplacer':'Importer')+'</button>'
+        +'<input type="file" id="rc-pj-'+k+'" accept="image/*,application/pdf" style="display:none" onchange="rcPjUpload(event,\''+k+'\')">'
+        +(path?'<button class="ibtn" style="width:26px;height:26px;font-size:13px;color:var(--red)" title="Supprimer" onclick="rcPjSupprimer(\''+k+'\')"><i class="ti ti-trash"></i></button>':'')
+        +'</div>';
+    }).join('')+'<span id="rc-pj-st" style="font-size:11.5px;color:var(--muted)"></span>';
+}
+async function rcPjUpload(ev,k){
+  const input=ev.target,file=(input.files||[])[0];
+  input.value='';
+  const c=rcFiche();
+  if(!file||!c||!RC_PJ[k])return;
+  const st=document.getElementById('rc-pj-st');
+  if(!rcFichierOk(file,st))return;
+  if(st)st.textContent='⏳ Envoi de '+file.name+'…';
+  const path=rcCheminFichier(c.id+'/candidature',file);
+  try{
+    const {error}=await sb.storage.from(RC_BUCKET).upload(path,file,{contentType:file.type});
+    if(error)throw error;
+    const maj={[k+'_path']:path,[k+'_filename']:file.name,[k+'_ajoute_le']:new Date().toISOString()};
+    const {data,error:ie}=await sb.from('recrutement_candidats').update(maj).eq('id',c.id).select().single();
+    if(ie){await sb.storage.from(RC_BUCKET).remove([path]);throw ie;}
+    const ancien=c[k+'_path'];
+    if(ancien)await sb.storage.from(RC_BUCKET).remove([ancien]);
+    Object.assign(c,data);rcRender();
+    showBanner(RC_PJ[k].lib+' importé ✅');
+  }catch(e){
+    console.error('[Recrutement] CV/lettre',e.message);
+    if(st)st.textContent='⚠ Erreur : '+e.message+(/cv_path|lettre_path/.test(e.message||'')?' (script sql/recrutement_planning_cv.sql à appliquer)':'');
+  }
+}
+function rcPjOuvrir(k){
+  const c=rcFiche();
+  if(c&&c[k+'_path'])rcOuvrirFichier(c[k+'_path'],c.id);
+}
+async function rcPjSupprimer(k){
+  const c=rcFiche();
+  if(!c||!c[k+'_path']||!confirm('Supprimer '+RC_PJ[k].lib.toLowerCase()+' de '+c.prenom+' ?\n\nLe fichier est effacé définitivement.'))return;
+  const path=c[k+'_path'];
+  const maj={[k+'_path']:null,[k+'_filename']:null,[k+'_ajoute_le']:null};
+  const {error}=await sb.from('recrutement_candidats').update(maj).eq('id',c.id);
+  if(error)return showBanner('Suppression impossible.','error');
+  await sb.storage.from(RC_BUCKET).remove([path]);
+  Object.assign(c,maj);rcRender();
+  showBanner(RC_PJ[k].lib+' supprimé.');
 }
 
 /* ----------------------------------------------- CONTENU DU LIEN (pièces) */
