@@ -24,7 +24,11 @@ const RC_QUIZ_ADMIN_URL='https://koalakids-app.github.io/quiz-protocoles/admin.h
 
 let rcCands=[],rcDocs=[],rcEnvois=[];
 let rcQuiz={};   // résultats du quiz par fiche : {<id>: [lignes de kk_resultats_par_ref] | 'erreur'}
-let rcVue='liste',rcFicheId=null,rcOk=true,rcFiltre='cours';
+let rcVue='liste',rcFicheId=null,rcOk=true,rcFiltre='cours',rcRetour='liste';
+/* Planning des entretiens : remplissage automatique à partir des fiches (entretien_date / entretien_heure),
+   créneaux de RC_RDV_DUREE min entre RC_RDV_DEBUT et RC_RDV_FIN, hors pause de midi. */
+const RC_RDV_DUREE=45,RC_RDV_PAS=15,RC_RDV_PLAGES=[[9*60,12*60],[14*60,17*60]];
+let rcSemaine=null,rcMinuteur=null;
 
 const rcEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const rcDate=d=>d?new Date(String(d).length===10?d+'T12:00:00':d).toLocaleDateString('fr-FR'):'';
@@ -51,6 +55,7 @@ async function rcInit(){
   if(z&&!rcCands.length)z.innerHTML='<p style="color:var(--muted);font-size:13px">Chargement…</p>';
   await rcCharger();
   rcRender();
+  rcSurveiller();
 }
 
 async function rcCharger(){
@@ -62,6 +67,38 @@ async function rcCharger(){
   rcOk=!c.error;
   if(c.error)console.warn('[Recrutement]',c.error.message);
   rcCands=c.data||[];rcDocs=d.data||[];rcEnvois=e.data||[];
+  rcNotifierConfirmations(false);
+}
+
+/* ------------------------------------------- NOTIFICATIONS DE CONFIRMATION */
+/* Le push part déjà de l'edge function au moment de la confirmation (dossier-candidat). Ici : la bannière à
+   l'écran — à l'ouverture (confirmations depuis la dernière visite) et pendant que l'onglet reste ouvert
+   (relecture toutes les 60 s). Mémoire des confirmations déjà signalées : localStorage kk_rc_rdv_vus. */
+function rcVus(){try{return JSON.parse(localStorage.getItem('kk_rc_rdv_vus')||'null');}catch(e){return null;}}
+function rcVusEcrire(o){try{localStorage.setItem('kk_rc_rdv_vus',JSON.stringify(o));}catch(e){}}
+function rcQuand(c){return rcDate(c.entretien_date)+(c.entretien_heure?' à '+String(c.entretien_heure).slice(0,5).replace(':','h'):'');}
+function rcNotifierConfirmations(){
+  const vus=rcVus(),maintenant={};
+  const conf=rcCands.filter(c=>c.entretien_date&&c.rdv_confirme_le&&c.statut!=='refuse'&&c.statut!=='desiste');
+  conf.forEach(c=>{maintenant[c.id]=c.rdv_confirme_le;});
+  if(vus){
+    const neufs=conf.filter(c=>vus[c.id]!==c.rdv_confirme_le);
+    if(neufs.length)showBanner('✅ Rendez-vous confirmé : '+neufs.map(c=>rcEsc(c.prenom+' '+(c.nom||'')).trim()+' ('+rcQuand(c)+')').join(', '));
+  }
+  rcVusEcrire(maintenant);
+}
+function rcSurveiller(){
+  if(rcMinuteur)return;
+  rcMinuteur=setInterval(async()=>{
+    const z=document.getElementById('rc-contenu');
+    if(!z||z.offsetParent===null||document.hidden)return;
+    const {data,error}=await sb.from('recrutement_candidats').select('*').order('created_at',{ascending:false});
+    if(error||!data)return;
+    const avant=JSON.stringify(rcCands.map(c=>[c.id,c.entretien_date,c.entretien_heure,c.rdv_confirme_le,c.statut]));
+    rcCands=data;
+    rcNotifierConfirmations();
+    if(avant!==JSON.stringify(rcCands.map(c=>[c.id,c.entretien_date,c.entretien_heure,c.rdv_confirme_le,c.statut]))&&rcVue!=='fiche')rcRender();
+  },60000);
 }
 
 function rcRender(){
@@ -72,11 +109,12 @@ function rcRender(){
     return;
   }
   if(rcVue==='fiche')z.innerHTML=rcFicheHtml();
+  else if(rcVue==='planning')z.innerHTML=rcPlanningHtml();
   else if(rcVue==='biblio')z.innerHTML=rcBiblioHtml();
   else z.innerHTML=rcListeHtml();
 }
 // La bibliothèque s'ouvre aussi depuis une fiche : on la garde pour le retour.
-function rcAller(vue,id){rcVue=vue;if(vue==='fiche'||vue==='liste')rcFicheId=id||null;rcRender();const z=document.getElementById('rc-contenu');if(z&&z.scrollIntoView)z.scrollIntoView({block:'start'});}
+function rcAller(vue,id){if(vue==='fiche'&&(rcVue==='liste'||rcVue==='planning'))rcRetour=rcVue;rcVue=vue;if(vue==='fiche'||vue==='liste')rcFicheId=id||null;rcRender();const z=document.getElementById('rc-contenu');if(z&&z.scrollIntoView)z.scrollIntoView({block:'start'});}
 
 /* ------------------------------------------------------------------ LISTE */
 function rcBadge(c){
@@ -114,6 +152,7 @@ function rcListeHtml(){
     +'<option value="cours"'+(rcFiltre==='cours'?' selected':'')+'>Candidatures en cours</option>'
     +'<option value="tout"'+(rcFiltre==='tout'?' selected':'')+'>Toutes ('+nbClos+' close'+(nbClos>1?'s':'')+')</option></select>'
     +'<span style="flex:1"></span>'
+    +'<button class="btn-sm" onclick="rcAller(\'planning\')"><i class="ti ti-calendar-week"></i> Planning des entretiens</button>'
     +'<a class="btn-sm" style="text-decoration:none" href="'+RC_QUESTIONNAIRE_URL+'" target="_blank" rel="noopener"><i class="ti ti-pencil"></i> Voir le questionnaire</a>'
     +'<button class="btn-sm" onclick="rcAller(\'biblio\')"><i class="ti ti-folder"></i> Documents à joindre ('+rcDocs.length+')</button>'
     +'<button class="btn-primary" onclick="rcNouveau()"><i class="ti ti-plus"></i> Nouvelle candidature</button>'
@@ -142,6 +181,106 @@ function rcListeHtml(){
   return h;
 }
 
+/* --------------------------------------------------------------- PLANNING */
+const rcMin=h=>{const m=/^(\d{1,2}):(\d{2})/.exec(String(h||''));return m?+m[1]*60+ +m[2]:null;};
+const rcHeure=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+const rcIso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+function rcLundi(d){const x=new Date(d);x.setHours(12,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return x;}
+const rcActif=c=>c.statut!=='refuse'&&c.statut!=='desiste';
+// Entretien déjà prévu sur la même crèche, qui chevauche [heure, heure + durée[.
+function rcConflit(idExclu,creche,date,heure){
+  const m=rcMin(heure);
+  if(m==null)return null;
+  return rcCands.find(x=>x.id!==idExclu&&rcActif(x)&&String(x.creche_id)===String(creche)&&x.entretien_date===date
+    &&rcMin(x.entretien_heure)!=null&&Math.abs(rcMin(x.entretien_heure)-m)<RC_RDV_DUREE)||null;
+}
+// Premier créneau libre (jours ouvrés à partir de demain) de la crèche, sans chevaucher un autre entretien.
+function rcCreneauLibre(idExclu,creche){
+  const d=new Date();d.setHours(12,0,0,0);
+  for(let j=0;j<90;j++){
+    d.setDate(d.getDate()+1);
+    if(d.getDay()===0||d.getDay()===6)continue;
+    const iso=rcIso(d);
+    for(const pl of RC_RDV_PLAGES)for(let m=pl[0];m+RC_RDV_DUREE<=pl[1];m+=RC_RDV_PAS){
+      if(!rcConflit(idExclu,creche,iso,rcHeure(m)))return {date:iso,heure:rcHeure(m)};
+    }
+  }
+  return null;
+}
+function rcRemplirCreneau(){
+  const c=rcFiche(),creche=rcVal('rc-creche-f')||(c&&c.creche_id)||'';
+  if(!creche)return showBanner('Choisissez d’abord la crèche.','error');
+  const r=rcCreneauLibre(c&&c.id,creche);
+  if(!r)return showBanner('Aucun créneau libre dans les 3 prochains mois.','error');
+  document.getElementById('rc-ent-date').value=r.date;
+  document.getElementById('rc-ent-heure').value=r.heure;
+  showBanner('Créneau proposé : '+rcDate(r.date)+' à '+r.heure.replace(':','h')+' — pensez à enregistrer.');
+}
+// Planifie sans passer par la fiche : le statut passe à « Entretien prévu ».
+async function rcPlanifierAuto(id){
+  const c=rcCands.find(x=>String(x.id)===String(id));
+  if(!c)return;
+  const r=rcCreneauLibre(c.id,c.creche_id);
+  if(!r)return showBanner('Aucun créneau libre dans les 3 prochains mois.','error');
+  const maj={entretien_date:r.date,entretien_heure:r.heure,rdv_confirme_le:null,updated_at:new Date().toISOString()};
+  if(c.statut==='candidature')maj.statut='entretien';
+  const {data,error}=await sb.from('recrutement_candidats').update(maj).eq('id',c.id).select().single();
+  if(error)return showBanner('Planification impossible : '+rcEsc(error.message),'error');
+  Object.assign(c,data);
+  showBanner('Entretien de '+rcEsc(c.prenom)+' placé le '+rcDate(r.date)+' à '+r.heure.replace(':','h')+' ✅ — envoyez-lui le lien pour qu’il le confirme.');
+  rcRender();
+}
+function rcSemaineAller(n){
+  if(n===0)rcSemaine=rcLundi(new Date());
+  else{rcSemaine=new Date(rcSemaine||rcLundi(new Date()));rcSemaine.setDate(rcSemaine.getDate()+7*n);}
+  rcRender();
+}
+function rcPlanningHtml(){
+  const lundi=rcSemaine||(rcSemaine=rcLundi(new Date()));
+  const sel=rcVal('rc-creche');
+  const liste=rcCands.filter(c=>rcActif(c)&&(!sel||String(c.creche_id)===sel));
+  const jours=[0,1,2,3,4].map(i=>{const d=new Date(lundi);d.setDate(d.getDate()+i);return d;});
+  const fin=new Date(lundi);fin.setDate(fin.getDate()+4);
+  const aujourdhui=rcIso(new Date());
+  const suivants=liste.filter(c=>c.entretien_date&&c.entretien_date>=aujourdhui);
+  const nbConf=suivants.filter(c=>c.rdv_confirme_le).length;
+  const aPlanifier=liste.filter(c=>!c.entretien_date&&c.statut!=='retenu');
+  let h='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'
+    +'<button class="btn-sm" onclick="rcAller(\'liste\')"><i class="ti ti-arrow-left"></i> Candidatures</button>'
+    +(isDirection?'<select class="finput" id="rc-creche" style="width:auto;min-width:160px;font-size:12px;padding:4px 8px" onchange="rcRender()">'
+      +'<option value="">Toutes les crèches</option>'+cacheCreches.map(c=>'<option value="'+c.id+'"'+(String(c.id)===sel?' selected':'')+'>'+rcEsc(c.name)+'</option>').join('')+'</select>':'')
+    +'<span style="flex:1"></span>'
+    +'<button class="btn-sm" onclick="rcSemaineAller(-1)" aria-label="Semaine précédente"><i class="ti ti-chevron-left"></i></button>'
+    +'<b style="font-size:13px">'+jours[0].toLocaleDateString('fr-FR',{day:'numeric',month:'short'})+' – '+fin.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})+'</b>'
+    +'<button class="btn-sm" onclick="rcSemaineAller(1)" aria-label="Semaine suivante"><i class="ti ti-chevron-right"></i></button>'
+    +'<button class="btn-sm" onclick="rcSemaineAller(0)">Cette semaine</button></div>';
+  h+='<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Rempli automatiquement à partir des fiches : '+suivants.length+' entretien'+(suivants.length>1?'s':'')+' à venir, dont '
+    +nbConf+' confirmé'+(nbConf>1?'s':'')+' par la personne. Vous êtes prévenu·e (notification et bannière) dès qu’un rendez-vous est confirmé.</p>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px">'+jours.map(d=>{
+    const iso=rcIso(d);
+    const rdvs=liste.filter(c=>c.entretien_date===iso).sort((a,b)=>String(a.entretien_heure||'99').localeCompare(String(b.entretien_heure||'99')));
+    return '<div style="background:'+(iso===aujourdhui?'#FFF8F0':'#fff')+';border:1px solid '+(iso===aujourdhui?'var(--koala)':'var(--border)')+';border-radius:10px;padding:8px;min-height:90px">'
+      +'<div style="font-size:12px;font-weight:700;margin-bottom:6px;text-transform:capitalize">'+d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})+'</div>'
+      +(rdvs.length?rdvs.map(c=>{
+        const ok=!!c.rdv_confirme_le;
+        return '<div onclick="rcAller(\'fiche\',\''+c.id+'\')" style="cursor:pointer;border-left:4px solid '+(ok?'var(--green)':'#F47920')+';background:'+(ok?'#E8F5EC':'#FDF0E3')+';border-radius:6px;padding:5px 7px;margin-bottom:5px;font-size:12px">'
+          +'<b>'+(c.entretien_heure?rcEsc(String(c.entretien_heure).slice(0,5).replace(':','h')):'heure ?')+'</b> '+rcEsc(c.prenom+' '+(c.nom||'').slice(0,1)+(c.nom?'.':''))
+          +'<div style="font-size:11px;color:var(--muted)">'+rcEsc([c.poste,sel?'':rcCrecheNom(c.creche_id)].filter(Boolean).join(' · '))+'</div>'
+          +'<div style="font-size:11px;font-weight:700;color:'+(ok?'var(--green)':'#B25F00')+'"><i class="ti ti-'+(ok?'circle-check':'clock')+'"></i> '+(ok?'Confirmé':'À confirmer')+'</div></div>';
+      }).join(''):'<div style="font-size:11.5px;color:var(--muted)">Libre</div>')+'</div>';
+  }).join('')+'</div>';
+  const horsSemaine=suivants.filter(c=>c.entretien_date>rcIso(fin));
+  if(horsSemaine.length)h+=rcBloc('Entretiens des semaines suivantes','calendar-event',horsSemaine.sort((a,b)=>(a.entretien_date+(a.entretien_heure||'')).localeCompare(b.entretien_date+(b.entretien_heure||''))).slice(0,15).map(c=>
+    '<div onclick="rcAller(\'fiche\',\''+c.id+'\')" style="cursor:pointer;font-size:12.5px;padding:3px 0"><b>'+rcEsc(rcQuand(c))+'</b> · '+rcEsc(c.prenom+' '+(c.nom||''))+' '
+    +'<span style="color:'+(c.rdv_confirme_le?'var(--green)':'#B25F00')+';font-size:11.5px">'+(c.rdv_confirme_le?'confirmé':'à confirmer')+'</span></div>').join(''));
+  h+=rcBloc('Candidatures à planifier','wand',aPlanifier.length?'<p style="font-size:12px;color:var(--muted);margin:0 0 8px">« Planifier » place l’entretien au premier créneau libre de la crèche ('+RC_RDV_DUREE+' min, du lundi au vendredi, 9h–12h et 14h–17h) ; vous pouvez ensuite le déplacer dans la fiche.</p>'
+    +aPlanifier.map(c=>'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0"><b style="font-size:13px">'+rcEsc(c.prenom+' '+(c.nom||''))+'</b>'
+      +'<span style="font-size:12px;color:var(--muted);flex:1">'+rcEsc([c.poste,rcCrecheNom(c.creche_id)].filter(Boolean).join(' · '))+'</span>'
+      +'<button class="btn-sm" onclick="rcPlanifierAuto(\''+c.id+'\')"><i class="ti ti-wand"></i> Planifier</button></div>').join('')
+    :'<p style="font-size:12.5px;color:var(--muted);margin:0">Toutes les candidatures en cours ont un entretien.</p>');
+  return h;
+}
+
 /* ------------------------------------------------------------------ FICHE */
 function rcNouveau(){rcAller('fiche',null);}
 function rcChamp(lib,html,large){
@@ -157,7 +296,7 @@ function rcBloc(titre,icone,contenu){
 function rcFicheHtml(){
   const c=rcFiche()||{statut:'candidature',creche_id:(currentProfile&&currentProfile.creche_id)||''};
   const neuf=!c.id;
-  let h='<button class="btn-sm" onclick="rcAller(\'liste\')"><i class="ti ti-arrow-left"></i> Retour à la liste</button>';
+  let h='<button class="btn-sm" onclick="rcAller(rcRetour)"><i class="ti ti-arrow-left"></i> Retour '+(rcRetour==='planning'?'au planning':'à la liste')+'</button>';
   h+=rcBloc(neuf?'Nouvelle candidature':rcEsc(c.prenom+' '+(c.nom||''))+' '+rcBadge(c),'user-search',
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">'
     +rcChamp('Civilité','<select class="finput" id="rc-civilite" style="width:100%;margin-top:3px">'
@@ -179,6 +318,7 @@ function rcFicheHtml(){
     +rcChamp('Fin prévue',rcInput('rc-fin',c.date_fin,'date'))
     +rcChamp('Entretien le',rcInput('rc-ent-date',c.entretien_date,'date'))
     +rcChamp('à',rcInput('rc-ent-heure',c.entretien_heure,'time'))
+    +'<div style="display:flex;align-items:flex-end"><button type="button" class="btn-sm" onclick="rcRemplirCreneau()" title="Choisit le premier créneau libre du planning de la crèche"><i class="ti ti-wand"></i> Premier créneau libre</button></div>'
     +rcChamp('Notes internes (jamais visibles par la personne)','<textarea class="finput" id="rc-notes" rows="3" maxlength="4000" style="width:100%;margin-top:3px;resize:vertical">'+rcEsc(c.notes||'')+'</textarea>',true)
     +'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">'
@@ -210,6 +350,10 @@ async function rcEnregistrer(){
     entretien_date:rcVal('rc-ent-date')||null,entretien_heure:rcVal('rc-ent-heure')||null,
     notes:rcVal('rc-notes')||null,updated_at:new Date().toISOString()
   };
+  if(row.entretien_date&&row.entretien_heure&&row.statut!=='refuse'&&row.statut!=='desiste'){
+    const pris=rcConflit(c&&c.id,creche,row.entretien_date,row.entretien_heure);
+    if(pris&&!confirm('Ce créneau chevauche l\'entretien de '+pris.prenom+' '+(pris.nom||'')+' ('+rcQuand(pris)+').\n\nEnregistrer quand même ?'))return;
+  }
   // Un rendez-vous déplacé n'est plus confirmé.
   if(c&&(String(c.entretien_date||'')!==String(row.entretien_date||'')||String(c.entretien_heure||'')!==String(row.entretien_heure||'')))row.rdv_confirme_le=null;
   if(c){
