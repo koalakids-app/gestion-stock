@@ -241,7 +241,7 @@ const tb = document.getElementById('tableBody');
   tfoot.id = 'tableFooter';
   tfoot.innerHTML = `
     <tr style="background:var(--bg);border-top:2px solid var(--border)">
-      <td colspan="6" style="padding:14px 16px">
+      <td colspan="10" style="padding:14px 16px">
         <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
           <span style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink3)">Coût par structure</span>
           ${totauxParStructure.map(({c, total, count}) => `
@@ -251,13 +251,12 @@ const tb = document.getElementById('tableBody');
               <span style="font-family:'Syne',sans-serif;font-weight:800;color:${CRECHE_COLORS[c]}">${total.toFixed(2)} €</span>
               <span style="color:var(--ink3);font-weight:400;font-size:11px">(${count})</span>
             </span>`).join('')}
+          <span style="margin-left:auto;display:inline-flex;align-items:baseline;gap:10px;white-space:nowrap">
+            <span style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink3)">Total général</span>
+            <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:var(--accent)">${totalGlobal.toFixed(2)} €</span>
+          </span>
         </div>
       </td>
-      <td style="padding:14px 8px;text-align:left">
-        <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink3);margin-bottom:4px">Total général</div>
-        <div style="white-space:nowrap;font-family:'Syne',sans-serif;font-weight:800;font-size:16px;color:var(--accent)">${totalGlobal.toFixed(2)} €</div>
-      </td>
-      <td colspan="3" style="padding:14px 8px"></td>
     </tr>`;
   tb.parentNode.appendChild(tfoot);
 
