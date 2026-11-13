@@ -98,7 +98,8 @@ function stgcRender(){
   }
   const colonnes=[{id:'',nom:'Demandes de stage reçues',cartes:stgcListe.filter(c=>c.statut==='ouverte')}]
     .concat(stgcCreches.map(cr=>({id:String(cr.id),nom:cr.name,cartes:stgcListe.filter(c=>c.statut==='attribuee'&&String(c.attribuee_creche)===String(cr.id))})));
-  if(isDirection&&stgcVoirClassees)colonnes.push({id:'classee',nom:'Classées',cartes:stgcListe.filter(c=>c.statut==='classee')});
+  /* Les classées juste après « Demandes reçues » : tout à droite elles seraient hors de vue derrière les colonnes de crèches. */
+  if(isDirection&&stgcVoirClassees)colonnes.splice(1,0,{id:'classee',nom:'Classées (archivées)',cartes:stgcListe.filter(c=>c.statut==='classee')});
   const nbClassees=stgcListe.filter(c=>c.statut==='classee').length;
   let h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
     +'<p style="margin:0;font-size:12.5px;color:var(--muted);flex:1;min-width:220px">'
@@ -111,7 +112,7 @@ function stgcRender(){
     +'</div></div>'
     +'<div style="display:flex;gap:14px;overflow-x:auto;align-items:flex-start;padding-bottom:12px">'
     +colonnes.map(col=>
-      '<div style="flex:0 0 330px;max-width:90vw">'
+      '<div'+(col.id==='classee'?' id="stgc-col-classee"':'')+' style="flex:0 0 330px;max-width:90vw">'
       +'<div style="background:#4B3FC0;color:#fff;border-radius:10px;padding:10px 14px;font-weight:700;font-size:15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
       +'<span>'+escHtml(col.nom)+'</span><span style="font-size:12px;background:rgba(255,255,255,.22);border-radius:99px;padding:1px 9px">'+col.cartes.length+'</span></div>'
       +'<div style="display:flex;flex-direction:column;gap:12px;max-height:72vh;overflow-y:auto;padding-right:2px">'
@@ -128,7 +129,13 @@ function stgcRender(){
 }
 
 function stgcBasculerTexte(id){stgcTexteOuvert[id]=!stgcTexteOuvert[id];stgcRender();}
-function stgcBasculerClassees(){stgcVoirClassees=!stgcVoirClassees;stgcRender();}
+function stgcBasculerClassees(){
+  stgcVoirClassees=!stgcVoirClassees;stgcRender();
+  if(stgcVoirClassees){
+    const col=document.getElementById('stgc-col-classee');
+    if(col)col.scrollIntoView({behavior:'smooth',inline:'start',block:'nearest'});
+  }
+}
 
 function stgcVignette(c,type){
   const path=c[type+'_path'],mime=c[type+'_mime']||'';
@@ -176,7 +183,7 @@ function stgcCarte(c){
       :'<button class="btn-primary" style="padding:6px 12px;font-size:12.5px" onclick="stgcCreerFiche(\''+c.id+'\')"><i class="ti ti-user-plus"></i> Créer la fiche</button>';
     h+='<button class="btn-sm" onclick="stgcDeplacer(\''+c.id+'\',null)"><i class="ti ti-arrow-back-up"></i> Remettre dans les demandes</button>';
   }
-  if(isDirection&&c.statut!=='classee'){
+  if(isDirection){
     h+='<select class="finput" style="width:auto;font-size:12px;padding:4px 8px" onchange="if(this.value!==\'-\'){stgcDeplacer(\''+c.id+'\',this.value||null)}this.value=\'-\'">'
       +'<option value="-">Déplacer vers…</option><option value="">Demandes reçues</option>'
       +stgcCreches.map(cr=>'<option value="'+escHtml(String(cr.id))+'">'+escHtml(cr.name)+'</option>').join('')+'</select>';
