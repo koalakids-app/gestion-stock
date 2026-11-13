@@ -202,7 +202,7 @@ function rcConflit(idExclu,creche,date,heure){
    exclus : fermeture de la crèche et réunions / formations / RSAI / PMI de l'agenda qui recoupent l'heure. */
 const RC_OCCUPE=['absent','conge','formation','reunion','detachement','ferie','vacances','autre'];
 const RC_EVT_BLOQUANTS=['reunion','formation','app','rsai','pmi'];
-const rcNorm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/koala\s*kids/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+const rcNormaliser=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/koala\s*kids/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 const rcCoordId=()=>{const r=typeof getCoordRef==='function'?getCoordRef():null;return r?r.id:null;};
 const rcLundiISO=iso=>rcIso(rcLundi(new Date(iso+'T12:00:00')));
 async function rcChargerPlanning(dates){
@@ -223,11 +223,11 @@ function rcIndispo(creche,iso,heure){
   const m=rcMin(heure);
   if(m==null)return null;
   if(typeof calFermeturesAll==='function'&&calFermeturesAll(iso).some(x=>!x.crecheId||String(x.crecheId)===String(creche)))return 'la crèche est fermée ce jour-là';
-  const crNom=rcNorm(rcCrecheNom(creche));
+  const crNom=rcNormaliser(rcCrecheNom(creche));
   for(const p of rcPlanDemiJournee(iso,m<720)){
     if(RC_OCCUPE.includes(p.type))return 'votre planning indique « '+(p.label||p.type)+' »';
     if(p.type==='presence'){
-      const lieu=rcNorm(p.label||p.lieu);
+      const lieu=rcNormaliser(p.label||p.lieu);
       if(crNom&&lieu&&!lieu.includes(crNom)&&!crNom.includes(lieu))return 'vous êtes à '+(p.label||p.lieu)+' sur votre planning';
     }
   }
