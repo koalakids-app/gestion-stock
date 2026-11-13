@@ -253,9 +253,9 @@ const tb = document.getElementById('tableBody');
             </span>`).join('')}
         </div>
       </td>
-      <td style="padding:14px 8px;text-align:right;white-space:nowrap">
+      <td style="padding:14px 8px;text-align:left">
         <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink3);margin-bottom:4px">Total général</div>
-        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:16px;color:var(--accent)">${totalGlobal.toFixed(2)} €</div>
+        <div style="white-space:nowrap;font-family:'Syne',sans-serif;font-weight:800;font-size:16px;color:var(--accent)">${totalGlobal.toFixed(2)} €</div>
       </td>
       <td colspan="3" style="padding:14px 8px"></td>
     </tr>`;
