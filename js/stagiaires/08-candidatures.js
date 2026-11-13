@@ -12,7 +12,7 @@
 const STGC_BUCKET='stagiaires-vivier';
 const STGC_SIGN_TTL=600;
 let stgcListe=[], stgcComms=[], stgcCreches=[], stgcOk=true, stgcCommsOk=true;
-let stgcUrls={}, stgcUrlsLe=0, stgcThumbs={}, stgcOuverts={}, stgcVoirClassees=false;
+let stgcUrls={}, stgcUrlsLe=0, stgcThumbs={}, stgcOuverts={}, stgcTexteOuvert={}, stgcVoirClassees=false;
 
 function stgcMaCreche(){return currentProfile&&currentProfile.creche_id?String(currentProfile.creche_id):'';}
 function stgcCrecheNom(id){
@@ -127,12 +127,13 @@ function stgcRender(){
   });
 }
 
+function stgcBasculerTexte(id){stgcTexteOuvert[id]=!stgcTexteOuvert[id];stgcRender();}
 function stgcBasculerClassees(){stgcVoirClassees=!stgcVoirClassees;stgcRender();}
 
 function stgcVignette(c,type){
   const path=c[type+'_path'],mime=c[type+'_mime']||'';
   const lib=type==='cv'?'CV':'Lettre de motivation';
-  if(!path)return '<div style="flex:1;min-width:0;border:1.5px dashed var(--border);border-radius:8px;padding:22px 6px;text-align:center;font-size:11.5px;color:var(--muted)">'+lib+'<br>non jointe</div>';
+  if(!path)return '';
   const badge=mime==='application/pdf'?'PDF':mime.indexOf('image/')===0?'IMG':'DOC';
   return '<div style="flex:1;min-width:0;cursor:pointer" onclick="stgcApercu(\''+c.id+'\',\''+type+'\')" title="Agrandir : '+escHtml(c[type+'_nom']||lib)+'">'
     +'<div style="position:relative;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fafafa;height:170px">'
@@ -152,9 +153,17 @@ function stgcCarte(c){
     +'<div><div style="font-weight:700;font-size:15px">'+escHtml(c.prenom)+' '+escHtml(c.nom||'')+'</div>'
     +'<div style="font-size:12px;color:var(--muted)">'+(c.type_contrat==='alternant'?'Alternance':'Stage')
     +(c.formation?' · '+escHtml(c.formation):'')+(c.niveau?' ('+escHtml(c.niveau)+')':'')+(c.ecole?' · '+escHtml(c.ecole):'')+'</div></div>'
-    +'<div style="display:flex;gap:8px">'+stgcVignette(c,'cv')+stgcVignette(c,'lettre')+'</div>';
+    +(c.cv_path||c.lettre_path?'<div style="display:flex;gap:8px">'+stgcVignette(c,'cv')+stgcVignette(c,'lettre')+'</div>':'');
   if(periode)h+='<div style="font-size:12.5px"><i class="ti ti-calendar" style="color:var(--koala)"></i> Souhaité : '+periode+'</div>';
-  if(c.notes)h+='<div style="font-size:12.5px;color:#444;line-height:1.5;white-space:pre-line">'+escHtml(c.notes)+'</div>';
+  /* Le texte de la demande : le corps du mail quand il n'y a pas de lettre de motivation jointe.
+     Replié au-delà de 6 lignes pour ne pas allonger la colonne. */
+  if(c.notes){
+    const long=c.notes.length>320,plie=long&&!stgcTexteOuvert[c.id];
+    h+='<div style="background:#F6F5FB;border-left:3px solid #4B3FC0;border-radius:0 8px 8px 0;padding:8px 10px;font-size:12.5px;color:#333;line-height:1.5">'
+      +'<div style="white-space:pre-line;'+(plie?'display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden':'')+'">'+escHtml(c.notes)+'</div>'
+      +(long?'<button class="btn-sm" style="margin-top:5px;font-size:11.5px" onclick="stgcBasculerTexte(\''+c.id+'\')">'+(plie?'Lire la suite':'Réduire')+'</button>':'')
+      +'</div>';
+  }
   if(c.email||c.telephone)h+='<div style="font-size:12px;color:var(--muted)">'
     +(c.email?'<i class="ti ti-mail"></i> '+escHtml(c.email)+' ':'')+(c.telephone?'<i class="ti ti-phone"></i> '+escHtml(c.telephone):'')+'</div>';
 
@@ -351,7 +360,7 @@ function stgcOuvrirForm(id){
     +'<div class="fg"><label class="flabel">Formation</label><input class="finput" id="stgc-f-formation" value="'+v('formation')+'" placeholder="CAP AEPE, EJE…"></div></div>'
     +'<div class="frow"><div class="fg"><label class="flabel">Début souhaité</label><input class="finput" type="date" id="stgc-f-debut" value="'+v('date_debut')+'"></div>'
     +'<div class="fg"><label class="flabel">Fin souhaitée</label><input class="finput" type="date" id="stgc-f-fin" value="'+v('date_fin')+'"></div></div>'
-    +'<div class="fg"><label class="flabel">Note pour les référent·e·s</label><textarea class="finput" id="stgc-f-notes" rows="2" style="resize:vertical" placeholder="Secteur géographique, disponibilités…">'+v('notes')+'</textarea></div>'
+    +'<div class="fg"><label class="flabel">Texte de la demande</label><textarea class="finput" id="stgc-f-notes" rows="6" style="resize:vertical" placeholder="Collez ici le corps du mail quand il n\'y a pas de lettre de motivation jointe, ou ajoutez une note pour les référent·e·s (secteur, disponibilités…)">'+v('notes')+'</textarea></div>'
     +fich('cv','CV')+fich('lettre','Lettre de motivation')
     +'<p style="font-size:11.5px;color:var(--muted);margin:0 0 8px">PDF, image ou Word, 12 Mo maximum. Visibles de toutes les crèches : supprimez la candidature une fois traitée.</p>'
     +'<div class="mactions"><span id="stgc-f-st" style="font-size:12px;color:var(--muted);margin-right:auto"></span>'
