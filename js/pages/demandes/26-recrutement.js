@@ -195,23 +195,70 @@ function rcConflit(idExclu,creche,date,heure){
   return rcCands.find(x=>x.id!==idExclu&&rcActif(x)&&String(x.creche_id)===String(creche)&&x.entretien_date===date
     &&rcMin(x.entretien_heure)!=null&&Math.abs(rcMin(x.entretien_heure)-m)<RC_RDV_DUREE)||null;
 }
-// Premier créneau libre (jours ouvrés à partir de demain) de la crèche, sans chevaucher un autre entretien.
-function rcCreneauLibre(idExclu,creche){
+/* DISPONIBILITÉ : les entretiens s'appuient sur le planning du coordinateur (table `planning`, grille « Planning
+   direction » : getCoordRef()). Un demi-journée (matin = créneaux 0 et 2, après-midi = 1 et 3) est proposable si
+   le coordinateur y est libre ou présent dans la crèche du candidat (l'entretien s'y tient) ; il ne l'est pas s'il
+   est absent, en congé, formation, réunion, détachement, férié, vacances, ou à la crèche d'un·e autre. Aussi
+   exclus : fermeture de la crèche et réunions / formations / RSAI / PMI de l'agenda qui recoupent l'heure. */
+const RC_OCCUPE=['absent','conge','formation','reunion','detachement','ferie','vacances','autre'];
+const RC_EVT_BLOQUANTS=['reunion','formation','app','rsai','pmi'];
+const rcNorm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/koala\s*kids/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+const rcCoordId=()=>{const r=typeof getCoordRef==='function'?getCoordRef():null;return r?r.id:null;};
+const rcLundiISO=iso=>rcIso(rcLundi(new Date(iso+'T12:00:00')));
+async function rcChargerPlanning(dates){
+  const id=rcCoordId();
+  if(!id||typeof planningLoad!=='function')return;
+  await Promise.all([...new Set(dates.map(rcLundiISO))].map(s=>planningLoad(id,s)));
+}
+function rcPlanSemaine(iso){
+  const id=rcCoordId();
+  return (id&&typeof _planningCache!=='undefined'&&_planningCache[id+'_'+rcLundiISO(iso)])||[];
+}
+function rcPlanDemiJournee(iso,matin){
+  const jour=(new Date(iso+'T12:00:00').getDay()+6)%7,slots=matin?[0,2]:[1,3];
+  return rcPlanSemaine(iso).filter(p=>p.jour===jour&&(p.slot==null||slots.includes(p.slot)));
+}
+// Raison pour laquelle le coordinateur ne peut pas faire l'entretien à ce créneau, sinon null.
+function rcIndispo(creche,iso,heure){
+  const m=rcMin(heure);
+  if(m==null)return null;
+  if(typeof calFermeturesAll==='function'&&calFermeturesAll(iso).some(x=>!x.crecheId||String(x.crecheId)===String(creche)))return 'la crèche est fermée ce jour-là';
+  const crNom=rcNorm(rcCrecheNom(creche));
+  for(const p of rcPlanDemiJournee(iso,m<720)){
+    if(RC_OCCUPE.includes(p.type))return 'votre planning indique « '+(p.label||p.type)+' »';
+    if(p.type==='presence'){
+      const lieu=rcNorm(p.label||p.lieu);
+      if(crNom&&lieu&&!lieu.includes(crNom)&&!crNom.includes(lieu))return 'vous êtes à '+(p.label||p.lieu)+' sur votre planning';
+    }
+  }
+  const fin=m+RC_RDV_DUREE;
+  for(const e of (typeof cacheEvenements!=='undefined'?cacheEvenements:[])){
+    if(!RC_EVT_BLOQUANTS.includes(e.type)||!e.date_debut||iso<e.date_debut||iso>(e.date_fin||e.date_debut))continue;
+    const a=rcMin(e.heure_debut);
+    if(a==null)continue;
+    const b=rcMin(e.heure_fin);
+    if(m<(b==null?a+60:b)&&fin>a)return 'l’agenda indique « '+e.titre+' »';
+  }
+  return null;
+}
+// Premier créneau libre (jours ouvrés à partir de demain) : sans autre entretien de la crèche et compatible avec le planning.
+async function rcCreneauLibre(idExclu,creche){
   const d=new Date();d.setHours(12,0,0,0);
-  for(let j=0;j<90;j++){
-    d.setDate(d.getDate()+1);
-    if(d.getDay()===0||d.getDay()===6)continue;
-    const iso=rcIso(d);
+  const jours=[];
+  for(let j=0;j<90;j++){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)jours.push(rcIso(d));}
+  await rcChargerPlanning(jours);
+  for(const iso of jours){
     for(const pl of RC_RDV_PLAGES)for(let m=pl[0];m+RC_RDV_DUREE<=pl[1];m+=RC_RDV_PAS){
-      if(!rcConflit(idExclu,creche,iso,rcHeure(m)))return {date:iso,heure:rcHeure(m)};
+      const h=rcHeure(m);
+      if(!rcConflit(idExclu,creche,iso,h)&&!rcIndispo(creche,iso,h))return {date:iso,heure:h};
     }
   }
   return null;
 }
-function rcRemplirCreneau(){
+async function rcRemplirCreneau(){
   const c=rcFiche(),creche=rcVal('rc-creche-f')||(c&&c.creche_id)||'';
   if(!creche)return showBanner('Choisissez d’abord la crèche.','error');
-  const r=rcCreneauLibre(c&&c.id,creche);
+  const r=await rcCreneauLibre(c&&c.id,creche);
   if(!r)return showBanner('Aucun créneau libre dans les 3 prochains mois.','error');
   document.getElementById('rc-ent-date').value=r.date;
   document.getElementById('rc-ent-heure').value=r.heure;
@@ -221,7 +268,7 @@ function rcRemplirCreneau(){
 async function rcPlanifierAuto(id){
   const c=rcCands.find(x=>String(x.id)===String(id));
   if(!c)return;
-  const r=rcCreneauLibre(c.id,c.creche_id);
+  const r=await rcCreneauLibre(c.id,c.creche_id);
   if(!r)return showBanner('Aucun créneau libre dans les 3 prochains mois.','error');
   const maj={entretien_date:r.date,entretien_heure:r.heure,rdv_confirme_le:null,updated_at:new Date().toISOString()};
   if(c.statut==='candidature')maj.statut='entretien';
@@ -237,8 +284,17 @@ function rcSemaineAller(n){
   else{rcSemaine=new Date(rcSemaine||rcLundi(new Date()));rcSemaine.setDate(rcSemaine.getDate()+7*n);}
   rcRender();
 }
+let rcSemPlan={};
+function rcLieuxDemi(iso,matin){
+  const ps=rcPlanDemiJournee(iso,matin);
+  if(!ps.length)return '<span style="color:var(--green)">libre</span>';
+  const occ=ps.some(p=>RC_OCCUPE.includes(p.type));
+  return '<span style="color:'+(occ?'var(--red)':'var(--muted)')+'">'+ps.map(p=>rcEsc(p.label||p.lieu||p.type)).join(', ')+'</span>';
+}
 function rcPlanningHtml(){
   const lundi=rcSemaine||(rcSemaine=rcLundi(new Date()));
+  const cle=rcIso(lundi);
+  if(!rcSemPlan[cle]){rcSemPlan[cle]=1;rcChargerPlanning([cle]).then(()=>{if(rcVue==='planning')rcRender();});}
   const sel=rcVal('rc-creche');
   const liste=rcCands.filter(c=>rcActif(c)&&(!sel||String(c.creche_id)===sel));
   const jours=[0,1,2,3,4].map(i=>{const d=new Date(lundi);d.setDate(d.getDate()+i);return d;});
@@ -262,7 +318,8 @@ function rcPlanningHtml(){
     const iso=rcIso(d);
     const rdvs=liste.filter(c=>c.entretien_date===iso).sort((a,b)=>String(a.entretien_heure||'99').localeCompare(String(b.entretien_heure||'99')));
     return '<div style="background:'+(iso===aujourdhui?'#FFF8F0':'#fff')+';border:1px solid '+(iso===aujourdhui?'var(--koala)':'var(--border)')+';border-radius:10px;padding:8px;min-height:90px">'
-      +'<div style="font-size:12px;font-weight:700;margin-bottom:6px;text-transform:capitalize">'+d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})+'</div>'
+      +'<div style="font-size:12px;font-weight:700;margin-bottom:2px;text-transform:capitalize">'+d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})+'</div>'
+      +'<div style="font-size:10.5px;color:var(--muted);margin-bottom:6px;line-height:1.5" title="Votre planning (Planning direction)">Matin : '+rcLieuxDemi(iso,true)+'<br>Après-midi : '+rcLieuxDemi(iso,false)+'</div>'
       +(rdvs.length?rdvs.map(c=>{
         const ok=!!c.rdv_confirme_le;
         return '<div onclick="rcAller(\'fiche\',\''+c.id+'\')" style="cursor:pointer;border-left:4px solid '+(ok?'var(--green)':'#F47920')+';background:'+(ok?'#E8F5EC':'#FDF0E3')+';border-radius:6px;padding:5px 7px;margin-bottom:5px;font-size:12px">'
@@ -275,7 +332,7 @@ function rcPlanningHtml(){
   if(horsSemaine.length)h+=rcBloc('Entretiens des semaines suivantes','calendar-event',horsSemaine.sort((a,b)=>(a.entretien_date+(a.entretien_heure||'')).localeCompare(b.entretien_date+(b.entretien_heure||''))).slice(0,15).map(c=>
     '<div onclick="rcAller(\'fiche\',\''+c.id+'\')" style="cursor:pointer;font-size:12.5px;padding:3px 0"><b>'+rcEsc(rcQuand(c))+'</b> · '+rcEsc(c.prenom+' '+(c.nom||''))+' '
     +'<span style="color:'+(c.rdv_confirme_le?'var(--green)':'#B25F00')+';font-size:11.5px">'+(c.rdv_confirme_le?'confirmé':'à confirmer')+'</span></div>').join(''));
-  h+=rcBloc('Candidatures à planifier','wand',aPlanifier.length?'<p style="font-size:12px;color:var(--muted);margin:0 0 8px">« Planifier » place l’entretien au premier créneau libre de la crèche ('+RC_RDV_DUREE+' min, du lundi au vendredi, 9h–12h et 14h–17h) ; vous pouvez ensuite le déplacer dans la fiche.</p>'
+  h+=rcBloc('Candidatures à planifier','wand',aPlanifier.length?'<p style="font-size:12px;color:var(--muted);margin:0 0 8px">« Planifier » place l’entretien au premier créneau où <b>vous êtes disponible selon votre planning</b> (libre, ou présent·e dans la crèche du candidat ; ni congé, ni réunion, ni crèche fermée) : '+RC_RDV_DUREE+' min, du lundi au vendredi, 9h–12h et 14h–17h. Vous pouvez ensuite le déplacer dans la fiche.</p>'
     +aPlanifier.map(c=>'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0"><b style="font-size:13px">'+rcEsc(c.prenom+' '+(c.nom||''))+'</b>'
       +'<span style="font-size:12px;color:var(--muted);flex:1">'+rcEsc([c.poste,rcCrecheNom(c.creche_id)].filter(Boolean).join(' · '))+'</span>'
       +'<button class="btn-sm" onclick="rcPlanifierAuto(\''+c.id+'\')"><i class="ti ti-wand"></i> Planifier</button></div>').join('')
@@ -356,6 +413,11 @@ async function rcEnregistrer(){
   if(row.entretien_date&&row.entretien_heure&&row.statut!=='refuse'&&row.statut!=='desiste'){
     const pris=rcConflit(c&&c.id,creche,row.entretien_date,row.entretien_heure);
     if(pris&&!confirm('Ce créneau chevauche l\'entretien de '+pris.prenom+' '+(pris.nom||'')+' ('+rcQuand(pris)+').\n\nEnregistrer quand même ?'))return;
+  }
+  if(row.entretien_date&&row.entretien_heure&&rcActif(row)&&(!c||String(c.entretien_date||'')!==row.entretien_date||String(c.entretien_heure||'')!==row.entretien_heure)){
+    await rcChargerPlanning([row.entretien_date]);
+    const raison=rcIndispo(creche,row.entretien_date,row.entretien_heure);
+    if(raison&&!confirm('Ce créneau ne convient pas à votre planning : '+raison+'.\n\nEnregistrer quand même ?'))return;
   }
   // Un rendez-vous déplacé n'est plus confirmé.
   if(c&&(String(c.entretien_date||'')!==String(row.entretien_date||'')||String(c.entretien_heure||'')!==String(row.entretien_heure||'')))row.rdv_confirme_le=null;
