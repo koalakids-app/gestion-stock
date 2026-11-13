@@ -29,6 +29,7 @@ let rcVue='liste',rcFicheId=null,rcOk=true,rcFiltre='cours',rcRetour='liste';
    créneaux de RC_RDV_DUREE min entre RC_RDV_DEBUT et RC_RDV_FIN, hors pause de midi. */
 const RC_RDV_DUREE=45,RC_RDV_PAS=15,RC_RDV_PLAGES=[[9*60,12*60],[14*60,17*60]];
 let rcSemaine=null,rcMinuteur=null;
+let rcCvEnAttente=null;   // CV PDF lu avant la création de la fiche : importé avec elle
 
 const rcEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const rcDate=d=>d?new Date(String(d).length===10?d+'T12:00:00':d).toLocaleDateString('fr-FR'):'';
@@ -114,7 +115,7 @@ function rcRender(){
   else z.innerHTML=rcListeHtml();
 }
 // La bibliothèque s'ouvre aussi depuis une fiche : on la garde pour le retour.
-function rcAller(vue,id){if(vue==='fiche'&&(rcVue==='liste'||rcVue==='planning'))rcRetour=rcVue;rcVue=vue;if(vue==='fiche'||vue==='liste')rcFicheId=id||null;rcRender();const z=document.getElementById('rc-contenu');if(z&&z.scrollIntoView)z.scrollIntoView({block:'start'});}
+function rcAller(vue,id){rcCvEnAttente=null;if(vue==='fiche'&&(rcVue==='liste'||rcVue==='planning'))rcRetour=rcVue;rcVue=vue;if(vue==='fiche'||vue==='liste')rcFicheId=id||null;rcRender();const z=document.getElementById('rc-contenu');if(z&&z.scrollIntoView)z.scrollIntoView({block:'start'});}
 
 /* ------------------------------------------------------------------ LISTE */
 function rcBadge(c){
@@ -357,7 +358,8 @@ function rcFicheHtml(){
   const neuf=!c.id;
   let h='<button class="btn-sm" onclick="rcAller(rcRetour)"><i class="ti ti-arrow-left"></i> Retour '+(rcRetour==='planning'?'au planning':'à la liste')+'</button>';
   h+=rcBloc(neuf?'Nouvelle candidature':rcEsc(c.prenom+' '+(c.nom||''))+' '+rcBadge(c),'user-search',
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">'
+    rcCvLireHtml(c)
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">'
     +rcChamp('Civilité','<select class="finput" id="rc-civilite" style="width:100%;margin-top:3px">'
       +[['Mme','Mme'],['M.','M.'],['','Aucune (prénom et nom)']].map(o=>'<option value="'+o[0]+'"'+((c.civilite==null?'Mme':c.civilite)===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>')
     +rcChamp('Prénom *',rcInput('rc-prenom',c.prenom,'text','maxlength="80"'))
@@ -433,6 +435,7 @@ async function rcEnregistrer(){
     if(error)return showBanner('Création impossible : '+rcEsc(error.message),'error');
     rcCands.unshift(data);rcFicheId=data.id;
     await rcSyncEvenement(data);
+    if(rcCvEnAttente){const f=rcCvEnAttente;rcCvEnAttente=null;await rcPjEnvoyer(data,'cv',f);}
     showBanner('Fiche créée ✅ — préparez maintenant le lien.');
   }
   rcRender();
@@ -530,8 +533,13 @@ async function rcPjUpload(ev,k){
   input.value='';
   const c=rcFiche();
   if(!file||!c||!RC_PJ[k])return;
+  if(!await rcPjEnvoyer(c,k,file))return;
+  /* Un CV en PDF pré-remplit les champs vides de la fiche (à relire puis enregistrer). */
+  if(k==='cv'&&rcEstPdf(file))rcCvLire(file);
+}
+async function rcPjEnvoyer(c,k,file){
   const st=document.getElementById('rc-pj-st');
-  if(!rcFichierOk(file,st))return;
+  if(!rcFichierOk(file,st))return false;
   if(st)st.textContent='⏳ Envoi de '+file.name+'…';
   const path=rcCheminFichier(c.id+'/candidature',file);
   try{
@@ -544,9 +552,126 @@ async function rcPjUpload(ev,k){
     if(ancien)await sb.storage.from(RC_BUCKET).remove([ancien]);
     Object.assign(c,data);rcRender();
     showBanner(RC_PJ[k].lib+' importé ✅');
+    return true;
   }catch(e){
     console.error('[Recrutement] CV/lettre',e.message);
     if(st)st.textContent='⚠ Erreur : '+e.message+(/cv_path|lettre_path/.test(e.message||'')?' (script sql/recrutement_planning_cv.sql à appliquer)':'');
+    return false;
+  }
+}
+
+/* ------------------------------------------- LECTURE D'UN CV (PDF) → FICHE
+   Lecture 100 % dans le navigateur (pdf.js, déjà chargé par Demandes) : le CV n'est envoyé à aucun service
+   extérieur. Seuls les champs encore VIDES sont remplis ; la personne relit puis enregistre. */
+const rcEstPdf=f=>!!f&&(f.type==='application/pdf'||/\.pdf$/i.test(f.name||''));
+const RC_POSTES_CV=[
+  [/accompagn\w*\s+[ée]ducati\w*\s+petite\s+enfance|\bAEPE\b/i,'Accompagnant·e éducatif·ve petite enfance'],
+  [/auxiliaire\s+de\s+pu[ée]riculture/i,'Auxiliaire de puériculture'],
+  [/[ée]ducat(?:eur|rice)s?\s+de\s+jeunes\s+enfants|\bEJE\b/i,'Éducateur·trice de jeunes enfants'],
+  [/infirmi[eè]re?\s+pu[ée]ricultrice?|pu[ée]ricultrice?/i,'Puéricultrice'],
+  [/agent\s+(?:social|polyvalent|d['’]entretien)/i,'Agent·e polyvalent·e'],
+  [/\bassistante?\s+maternelle/i,'Assistant·e maternel·le']
+];
+function rcCvLireHtml(c){
+  const dispo=!!c.cv_path&&/\.pdf$/i.test(c.cv_filename||'');
+  return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#F4F3FB;border:1px dashed #B9B4E3;border-radius:10px;padding:8px 10px;margin-bottom:10px">'
+    +'<i class="ti ti-file-search" style="color:var(--koala)"></i><span style="font-size:12.5px;flex:1;min-width:180px"><b>Remplir depuis un CV</b> (PDF) : prénom, nom, e-mail, téléphone et poste sont lus dans le navigateur, sans envoi à un service extérieur. Les champs déjà remplis ne sont pas modifiés.</span>'
+    +'<button type="button" class="btn-sm" onclick="document.getElementById(\'rc-cv-lire\').click()"><i class="ti ti-upload"></i> Choisir un CV</button>'
+    +(dispo?'<button type="button" class="btn-sm" onclick="rcCvLireImporte()"><i class="ti ti-file-text"></i> Lire le CV importé</button>':'')
+    +'<input type="file" id="rc-cv-lire" accept="application/pdf,.pdf" style="display:none" onchange="rcCvChoisi(event)">'
+    +'<span id="rc-cv-st" style="flex-basis:100%;font-size:11.5px;color:var(--muted)"></span></div>';
+}
+async function rcCvChoisi(ev){
+  const input=ev.target,file=(input.files||[])[0];
+  input.value='';
+  if(!file)return;
+  if(!rcEstPdf(file))return rcCvStatut('Ce fichier n\'est pas un PDF.',true);
+  if(file.size>RC_TAILLE_MAX)return rcCvStatut('Fichier trop lourd (12 Mo maximum).',true);
+  const c=rcFiche();
+  if(!c)rcCvEnAttente=file;   // fiche pas encore créée : le CV sera importé avec elle
+  if(c&&!c.cv_path&&confirm('Importer aussi ce CV dans la fiche de '+(c.prenom||'la personne')+' ?')){
+    if(!await rcPjEnvoyer(c,'cv',file))return;   // l'import réaffiche la fiche : lire ensuite
+  }
+  await rcCvLire(file);
+}
+async function rcCvLireImporte(){
+  const c=rcFiche();
+  if(!c||!c.cv_path)return;
+  rcCvStatut('⏳ Ouverture du CV…');
+  const {data,error}=await sb.storage.from(RC_BUCKET).download(c.cv_path);
+  if(error||!data)return rcCvStatut('Impossible d\'ouvrir le CV.',true);
+  await rcCvLire(new File([data],c.cv_filename||'cv.pdf',{type:'application/pdf'}));
+}
+function rcCvStatut(txt,erreur){
+  const el=document.getElementById('rc-cv-st')||document.getElementById('rc-pj-st');
+  if(el){el.textContent=txt;el.style.color=erreur?'var(--red)':'var(--muted)';}
+  if(erreur)showBanner(txt,'error');
+}
+async function rcCvTexte(file){
+  if(typeof pdfjsLib==='undefined')throw new Error('Bibliothèque PDF non chargée.');
+  const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+  const lignes=[];
+  for(let n=1;n<=Math.min(pdf.numPages,3);n++){
+    const tc=await (await pdf.getPage(n)).getTextContent();
+    const items=tc.items.filter(i=>i.str&&i.str.trim()).map(i=>({t:i.str,x:i.transform[4],y:i.transform[5]}));
+    items.sort((a,b)=>(b.y-a.y)||(a.x-b.x));
+    let cur=null;
+    items.forEach(i=>{
+      if(cur&&Math.abs(cur.y-i.y)<=3)cur.t+=' '+i.t;
+      else{cur={y:i.y,t:i.t};lignes.push(cur);}
+    });
+  }
+  return lignes.map(l=>l.t.replace(/\s+/g,' ').trim()).filter(Boolean);
+}
+const rcMajPrenom=s=>s.toLowerCase().replace(/(^|[\s-])(\p{L})/gu,(m,a,b)=>a+b.toUpperCase());
+function rcCvAnalyser(lignes){
+  const texte=lignes.join('\n'),r={};
+  const mail=texte.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/);
+  if(mail)r.email=mail[0].toLowerCase();
+  const tel=texte.match(/(?:(?:\+|00)\s?33\s?\(?0?\)?|0)\s?[1-9](?:[\s.\-]?\d{2}){4}/);
+  if(tel){
+    let d=tel[0].replace(/\D/g,'');
+    if(/^(33|0033)/.test(d))d='0'+d.replace(/^(0033|33)0?/,'');
+    if(d.length===10)r.telephone=d.replace(/(\d{2})(?=\d)/g,'$1 ').trim();
+  }
+  /* Nom : première ligne du haut qui ressemble à « Prénom NOM » (2 à 4 mots, lettres seulement). */
+  const exclus=/curriculum|\bcv\b|vitae|profil|exp[ée]rience|formation|comp[ée]tence|contact|candidat|dipl[oô]me|auxiliaire|puéricult|éducat|educat|petite enfance|cr[eè]che|enfant|garde|assistante?|stage|objectif|[àa] propos|permis|langue/i;
+  for(const l of lignes.slice(0,12)){
+    const mots=l.replace(/^(mme|madame|m\.|monsieur|mlle)\s+/i,'').split(' ');
+    if(mots.length<2||mots.length>4||exclus.test(l)||/[\d@:\/]/.test(l))continue;
+    if(!mots.every(m=>/^[\p{L}'’\-.]+$/u.test(m)))continue;
+    const maj=mots.filter(m=>m.length>1&&m===m.toUpperCase());
+    const min=mots.filter(m=>!maj.includes(m));
+    if(maj.length&&min.length){r.nom=rcMajPrenom(maj.join(' '));r.prenom=min.join(' ');}   // « Prénom NOM » ou « NOM Prénom »
+    else{r.prenom=rcMajPrenom(mots[0]);r.nom=rcMajPrenom(mots.slice(1).join(' '));}
+    break;
+  }
+  /* Poste : intitulé reconnu dans les lignes du haut (titre du CV), sinon dans tout le texte. */
+  const haut=lignes.slice(0,15).join('\n');
+  for(const zone of [haut,texte]){
+    const p=RC_POSTES_CV.find(x=>x[0].test(zone));
+    if(p){r.poste=p[1];break;}
+  }
+  return r;
+}
+async function rcCvLire(file){
+  rcCvStatut('⏳ Lecture du CV…');
+  try{
+    const lignes=await rcCvTexte(file);
+    if(!lignes.length)return rcCvStatut('Aucun texte lisible dans ce PDF (CV scanné ?). Saisissez les informations à la main.',true);
+    const r=rcCvAnalyser(lignes),champs={prenom:'rc-prenom',nom:'rc-nom',email:'rc-email',telephone:'rc-tel',poste:'rc-poste'};
+    const libs={prenom:'prénom',nom:'nom',email:'e-mail',telephone:'téléphone',poste:'poste'};
+    const remplis=[];
+    Object.keys(champs).forEach(k=>{
+      const el=document.getElementById(champs[k]);
+      if(r[k]&&el&&!el.value.trim()){el.value=r[k];remplis.push(libs[k]);}
+    });
+    rcCvStatut(remplis.length
+      ?'✅ Rempli : '+remplis.join(', ')+'. À relire, puis '+(rcFiche()?'enregistrer la fiche.':'créer la fiche.')
+      :(Object.keys(r).length?'Rien à ajouter : les champs reconnus sont déjà remplis.':'Aucune information reconnue dans ce CV : saisissez-les à la main.'));
+  }catch(e){
+    console.error('[Recrutement] lecture CV',e.message);
+    rcCvStatut('Lecture impossible : '+e.message,true);
   }
 }
 function rcPjOuvrir(k){
