@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
         .in('creche_id', ids).is('archive_le', null),
       sb.from('stagiaires').select('id,prenom,nom,email,creche_id,type_contrat,employe_id,date_fin')
         .in('creche_id', ids),
-      sb.from('referents').select('id,name,email,creche_id,employe_id')
+      sb.from('referents').select('id,name,email,creche_id,employe_id,role')
         .in('creche_id', ids),
     ]);
     if (emp.error) throw emp.error;
@@ -156,8 +156,10 @@ Deno.serve(async (req) => {
 
     // Marque les référent·es : tous sont rattachés à une fiche employes (donc listés sous
     // « employes »), le quiz a besoin de savoir qui l'est pour écrire « à voir avec <référent> ».
+    // Seul le rôle « referent » compte : les comptes « employe » (accès terrain, continuité de
+    // direction, compte de test…) ont aussi une fiche referents mais ne sont pas le référent.
     const idsReferents = new Set<string>(
-      (ref.data || []).flatMap((r) => [r.id, r.employe_id]).filter(Boolean).map(String));
+      (ref.data || []).filter((r) => r.role === 'referent').flatMap((r) => [r.id, r.employe_id]).filter(Boolean).map(String));
     for (const d of sortie) d.referent = idsReferents.has(String(d.ref));
 
     sortie.sort((a, b) =>
