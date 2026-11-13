@@ -240,6 +240,7 @@
     eqPret = false; eqErreur = false; echanges = {}; convEq = null; toastCibleEq = null;
     ['kk-sc-btn', 'kk-sc-panel', 'kk-sc-toast'].forEach(id => { const n = document.getElementById(id); if (n) n.remove(); });
     els = null; msgs = []; me = null; uid = null; ouvert = false; convActive = null; nonLusPrec = 0;
+    try { sessionStorage.removeItem(CLE_ETAT); } catch (e) { /* ignoré */ }
     document.title = titreOrigine;
   }
 
@@ -709,8 +710,37 @@
     } catch (e) { console.warn('[SupportChat] push', e); }
   }
 
+  // ───────── État conservé d'une page à l'autre ─────────
+  // La bulle reste telle quelle (ouverte, onglet, conversation, brouillon) quand on change de
+  // page de l'appli, jusqu'à ce que la personne la ferme. Stockage de l'onglet seulement
+  // (sessionStorage) : effacé à la fermeture de l'onglet et à la déconnexion.
+  const CLE_ETAT = 'kk_sc_etat';
+  function sauverEtat() {
+    try {
+      if (!uid || !els) return;
+      if (!ouvert) { sessionStorage.removeItem(CLE_ETAT); return; }
+      sessionStorage.setItem(CLE_ETAT, JSON.stringify({
+        u: uid, ouvert: true, onglet, convActive, convEq,
+        brouillon: els.input.value || '', echanges
+      }));
+    } catch (e) { /* stockage indisponible : la bulle repart simplement fermée */ }
+  }
+  function restaurerEtat() {
+    let e = null;
+    try { e = JSON.parse(sessionStorage.getItem(CLE_ETAT) || 'null'); } catch (x) { e = null; }
+    if (!e || e.u !== uid || !e.ouvert) return;
+    if (e.echanges && typeof e.echanges === 'object') echanges = e.echanges;
+    if (me.presence && e.onglet === 'equipe') { onglet = 'equipe'; convEq = e.convEq || null; }
+    if (me.direction && e.convActive) convActive = e.convActive;
+    if (typeof majOnglets === 'function') majOnglets();
+    ouvrir(true);
+    if (e.brouillon) { els.input.value = e.brouillon; els.input.dispatchEvent(new Event('input')); }
+  }
+  window.addEventListener('pagehide', sauverEtat);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) sauverEtat(); });
+
   // ───────── Ouverture / fermeture / actualisation ─────────
-  function ouvrir() {
+  function ouvrir(restauration) {
     if (!els) return;
     ouvert = true;
     els.panel.classList.add('kk-sc-open');
@@ -720,7 +750,8 @@
     marquerLuEq();
     planifier();
     if (me.presence && onglet === 'equipe') { chargerPresence(); planifierPresence(); }
-    if (!me.direction || convActive) setTimeout(() => { if (els) els.input.focus(); }, 50);
+    if (!restauration && (!me.direction || convActive)) setTimeout(() => { if (els) els.input.focus(); }, 50);
+    sauverEtat();
   }
   function fermer() {
     ouvert = false;
@@ -731,6 +762,7 @@
     });
     convEq = null;
     if (els) els.panel.classList.remove('kk-sc-open');
+    try { sessionStorage.removeItem(CLE_ETAT); } catch (e) { /* ignoré */ }
     planifier();
   }
   function basculer() { ouvert ? fermer() : ouvrir(); }
@@ -782,6 +814,7 @@
     ecouterTempsReel(client);
     ouvrirCanalEq(client);
     await charger();
+    restaurerEtat();
     planifier();
     if (me.presence) {
       await pingPresence(true);
