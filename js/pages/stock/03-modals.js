@@ -153,6 +153,7 @@ async function saveArticle() {
     depreciable: document.getElementById('f-depreciable')?.checked !== false,
     photo: photoUrl,
     photoName: currentPhotoName || null,
+    createdAt: (editingId && (ARTICLES.find(x => x.id === editingId)||{}).createdAt) || new Date().toISOString(),
   };
 
   // ── Optimistic update : UI immédiate, Supabase en arrière-plan ────────────

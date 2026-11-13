@@ -156,7 +156,7 @@ const tb = document.getElementById('tableBody');
   if (oldFootEarly && oldFootEarly.parentNode) oldFootEarly.parentNode.removeChild(oldFootEarly);
 
   if (data.length === 0) {
-    tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink3)">Aucun article trouvé</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--ink3)">Aucun article trouvé</td></tr>`;
     renderPaginationBar('inv-table-materiel', 0, 1, () => {}); // retire l'ancienne barre de pages
     renderStats();
     updateCounts();
@@ -209,6 +209,7 @@ const tb = document.getElementById('tableBody');
 })()}
       </td>
       <td style="color:var(--ink2);font-size:12px">${a.fourn || '—'}</td>
+      <td style="color:var(--ink2);font-size:12px;white-space:nowrap">${a.createdAt ? new Date(a.createdAt).toLocaleDateString('fr-FR') : '—'}</td>
       <td onclick="event.stopPropagation()">
         <div class="action-btns">
           <button class="btn btn-secondary btn-sm" onclick="editArticle(${a.id})">✏️</button>
@@ -317,7 +318,7 @@ function renderTableConso() {
   const tb = document.getElementById('tableBodyConso');
   if (!tb) return;
   if (data.length === 0) {
-    tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink3)">Aucun consommable trouvé</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--ink3)">Aucun consommable trouvé</td></tr>`;
     renderPaginationBar('inv-table-consommable', 0, 1, () => {}); // retire l'ancienne barre de pages
     return;
   }
@@ -351,6 +352,7 @@ function renderTableConso() {
       <td style="font-weight:500">${a.prix > 0 ? a.prix.toFixed(2)+' €' : '—'}</td>
       <td style="font-size:12px">${a.expiry ? `<span style="color:${expiryColor(a.expiry)};font-weight:600">${formatExpiry(a.expiry)}</span>` : '—'}</td>
       <td style="color:var(--ink2);font-size:12px">${a.fourn || '—'}</td>
+      <td style="color:var(--ink2);font-size:12px;white-space:nowrap">${a.createdAt ? new Date(a.createdAt).toLocaleDateString('fr-FR') : '—'}</td>
       <td onclick="event.stopPropagation()">
         <div class="action-btns">
           <button class="btn btn-secondary btn-sm" onclick="editArticle(${a.id})">✏️</button>
@@ -492,7 +494,7 @@ function toggleSort(col) {
     window._sortDir = window._sortDir === 'asc' ? 'desc' : 'asc';
   } else {
     window._sortCol = col;
-    window._sortDir = 'asc';
+    window._sortDir = col === 'createdAt' ? 'desc' : 'asc'; // dates : plus récent d'abord
   }
   renderActiveInvTable();
 }
