@@ -90,7 +90,8 @@ function rowToArticle(r) {
            photo: r.photo||null, photoName: r.photo_name||null,
            url: r.url||null, date_achat: r.date_achat||null,
            etat: r.etat||'Neuf', depreciable: r.depreciable !== false,
-           etat_override: r.etat_override||null };
+           etat_override: r.etat_override||null,
+           createdAt: r.created_at||null };
 }function commandeToRow(c) {
   const row = {
     fourn:    c.fourn || '—',
