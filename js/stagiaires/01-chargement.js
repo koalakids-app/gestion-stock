@@ -113,6 +113,7 @@ async function stgInit(){
   if(typeof stgRessNatureChange==='function')stgRessNatureChange();
   if(!stgCalRef){const n=new Date();stgCalRef=new Date(n.getFullYear(),n.getMonth(),1);}
   await stgLoad();
+  if(typeof stgcCharger==='function')stgcCharger();
 }
 
 async function stgLoad(){
@@ -178,12 +179,13 @@ function stgRenderTout(){
 }
 
 function stgShowView(v,btn){
-  ['fiches','cal','dispo','types','ress'].forEach(x=>{
+  ['fiches','cand','cal','dispo','types','ress'].forEach(x=>{
     const el=document.getElementById('stg-view-'+x);
     if(el)el.classList.toggle('active',x===v);
   });
   document.querySelectorAll('#main-stagiaires .module-tab').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
+  if(v==='cand'&&typeof stgcRender==='function')stgcRender();
   if(v==='cal')stgRenderCal();
   if(v==='dispo')stgRenderDispo();
   if(v==='types')stgRenderTypes();
