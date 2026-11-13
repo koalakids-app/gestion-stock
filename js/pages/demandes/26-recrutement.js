@@ -53,12 +53,12 @@ async function rcInit(){
   rcVue='liste';rcFicheId=null;
   const z=document.getElementById('rc-contenu');
   if(z&&!rcCands.length)z.innerHTML='<p style="color:var(--muted);font-size:13px">Chargement…</p>';
-  await rcCharger();
+  await rcChargerCandidats();
   rcRender();
   rcSurveiller();
 }
 
-async function rcCharger(){
+async function rcChargerCandidats(){
   const [c,d,e]=await Promise.all([
     sb.from('recrutement_candidats').select('*').order('created_at',{ascending:false}),
     sb.from('recrutement_documents').select('*').order('libelle'),
