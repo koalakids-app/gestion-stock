@@ -255,6 +255,7 @@ async function albRenderEnfant(z) {
   var h = '<div class="alb-barre"><button class="btn-sm" onclick="albVue(\'enfants\')"><i class="ti ti-arrow-left"></i> Tous les enfants</button>' +
     '<b style="font-size:16px;color:var(--koala)">Album de ' + albEsc(albNom(e)) + '</b><span class="alb-ct">' + ph.length + ' photo' + (ph.length > 1 ? 's' : '') + '</span>' +
     '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">' +
+    '<button class="btn-sm" style="background:var(--koala);color:#fff;border-color:var(--koala)" onclick="albChoisir()"><i class="ti ti-photo-plus"></i> Ajouter des photos</button>' +
     '<button class="btn-sm" ' + (ph.length ? '' : 'disabled') + ' onclick="albZip(false)"><i class="ti ti-file-zip"></i> Télécharger (.zip)</button>' +
     '<button class="btn-sm" onclick="albPanneauRemise()"><i class="ti ti-gift"></i> Départ : remise aux parents</button></span></div>' +
     '<div id="alb-remise"></div><div id="alb-droit"></div>';
@@ -488,6 +489,8 @@ async function albAjouter(input) {
   input.value = '';
   if (!fichiers.length || ALB.occupe || !ALB.creche) return;
   ALB.occupe = true;
+  /* Import depuis l'album d'un enfant : les photos y sont classées directement, sans passer par « À classer ». */
+  var cible = (ALB.vue === 'enfant' && ALB.enfant) ? ALB.enfant : null, nouveaux = [];
   var ok = 0, echec = 0, ignores = 0;
   /* Doublons : empreinte SHA-256 du fichier d'origine, comparée aux photos de la crèche et au lot en cours. */
   var empreintes = [], connues = {};
@@ -523,13 +526,24 @@ async function albAjouter(input) {
         r = await sb.from('album_photos').insert(ligne).select().single();
       }
       if (r.error) { await sb.storage.from(ALB_BUCKET).remove([chemin, cmini]); throw r.error; }
-      ALB.photos.unshift(r.data); ok++;
+      ALB.photos.unshift(r.data); ok++; nouveaux.push(id);
+      if (cible) {
+        var lk = await sb.from('album_photos_enfants').insert({ photo_id: id, enfant_id: cible });
+        if (lk.error) console.warn('[albAjouter] classement', lk.error.message); else ALB.liens.push({ photo_id: id, enfant_id: cible });
+      }
       if (emp) dejaAjoutes[emp] = 1;
     } catch (err) { echec++; console.warn('[albAjouter]', f.name, err); }
   }
   ALB.occupe = false;
   if (ok) albJournal('ajout', null, null, ok);
   showBanner(ok + ' photo' + (ok > 1 ? 's' : '') + ' ajoutée' + (ok > 1 ? 's' : '') + (ignores ? ' · ' + ignores + ' doublon' + (ignores > 1 ? 's' : '') + ' ignoré' + (ignores > 1 ? 's' : '') : '') + (echec ? ' · ' + echec + ' en échec (format non pris en charge ?)' : '') + '.', echec && !ok ? 'error' : 'success');
+  if (cible) {
+    var ec = cacheEnfants.find(function (x) { return String(x.id) === String(cible); });
+    if (ok) albJournal('classement', cible, ec ? albNom(ec) : null, ok);
+    albRender();
+    if (ok && typeof albvProposerRef === 'function') albvProposerRef(cible, nouveaux);
+    return;
+  }
   if (ok) { ALB.vue = 'aclasser'; ALB.sel = {}; }
   albRender();
 }
