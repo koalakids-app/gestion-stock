@@ -145,6 +145,7 @@ function spChargerPdfJs(){
 function spExtension(s){return String(s.fichier_nom||s.fichier_path||'').split('.').pop().toLowerCase();}
 /* Type de lecteur selon le fichier : 'pdf', 'docx' ou '' (téléchargement seul). */
 function spLiseuse(s){
+  if(s.apercu_path)return 'pdf';
   if(!s.fichier_path)return '';
   const e=spExtension(s);
   if(s.type==='pdf'||e==='pdf')return 'pdf';
@@ -179,7 +180,7 @@ async function spLecteurPdf(zone,s,jeton,urlVue,urlDl){
   zone.innerHTML='<div class="vbarre"><span class="vtitre" id="v-page">Page 1 / '+total+'</span>'+
     '<button class="vbtn" id="v-moins" aria-label="Zoom arrière">−</button><button class="vbtn" id="v-plus" aria-label="Zoom avant">＋</button>'+
     '<a class="vbtn" href="'+esc(urlVue)+'" target="_blank" rel="noopener noreferrer">Ouvrir</a>'+
-    '<a class="vbtn" href="'+esc(urlDl)+'">⬇ Télécharger</a></div><div class="vpages" id="v-pages"></div>';
+    '<a class="vbtn" href="'+esc(urlDl)+'">⬇ Télécharger'+(s.apercu_path?' l\'original':'')+'</a></div><div class="vpages" id="v-pages"></div>';
   const cont=zone.querySelector('#v-pages');
   const p1=await pdf.getPage(1),base=p1.getViewport({scale:1}),ratio=base.height/base.width;
   const pages=[];
@@ -235,7 +236,7 @@ async function spOuvrirLiseuse(s,type,zone){
   let urlDl='';
   try{
     urlDl=await spUrlFichier(s,true);
-    if(type==='pdf')await spLecteurPdf(zone,s,jeton,await spUrlFichier(s),urlDl);
+    if(type==='pdf')await spLecteurPdf(zone,s,jeton,await spUrlFichier(s,false,s.apercu_path||undefined),urlDl);
     else await spLecteurWord(zone,s,jeton,urlDl);
   }catch(e){
     console.error('[supports] lecteur',e);
@@ -245,8 +246,8 @@ async function spOuvrirLiseuse(s,type,zone){
 }
 
 /* ---------- Fiche d'un support ---------- */
-async function spUrlFichier(s,telecharger){
-  const {data,error}=await sb.storage.from(SP_BUCKET).createSignedUrl(s.fichier_path,3600,telecharger?{download:s.fichier_nom||true}:undefined);
+async function spUrlFichier(s,telecharger,chemin){
+  const {data,error}=await sb.storage.from(SP_BUCKET).createSignedUrl(chemin||s.fichier_path,3600,telecharger?{download:s.fichier_nom||true}:undefined);
   if(error)throw error;
   return data.signedUrl;
 }
@@ -357,7 +358,7 @@ function spThemeForm(id){
     $('t-sup').onclick=async()=>{
       const n=SP.supports.filter(s=>s.theme_id===t.id).length;
       if(!confirm('Supprimer la thématique « '+t.nom+' » et ses '+n+' support'+(n>1?'s':'')+' ? Les fichiers copiés seront aussi effacés.'))return;
-      const chemins=SP.supports.filter(s=>s.theme_id===t.id&&s.fichier_path).map(s=>s.fichier_path);
+      const chemins=SP.supports.filter(s=>s.theme_id===t.id).flatMap(s=>[s.fichier_path,s.apercu_path]).filter(Boolean);
       if(chemins.length)await sb.storage.from(SP_BUCKET).remove(chemins);
       const {error}=await sb.from('supports_themes').delete().eq('id',t.id);
       if(error){$('t-msg').textContent='Erreur : '+error.message;$('t-msg').className='msg ko';return;}
@@ -377,16 +378,18 @@ function spSupportForm(id){
     '<div><label for="s-th">Thématique</label><select class="champ" id="s-th">'+SP.themes.map(t=>'<option value="'+esc(t.id)+'"'+((s?s.theme_id:spTheme)===t.id?' selected':'')+'>'+esc(t.icone+' '+t.nom)+'</option>').join('')+'</select></div>'+
     '<div><label for="s-url">Lien (YouTube, article, podcast…)</label><input class="champ" id="s-url" type="url" placeholder="https://…" value="'+esc(s&&s.url?s.url:'')+'"></div>'+
     '<div><label for="s-file">…ou un fichier (PDF, Word, PowerPoint, image, 50 Mo max)'+(s&&s.fichier_nom?' — actuel : '+esc(s.fichier_nom):'')+'</label><input class="champ" id="s-file" type="file"></div>'+
+    '<div><label for="s-apercu">Aperçu PDF d\'un Word / PowerPoint (facultatif : mise en page fidèle dans le lecteur)'+(s&&s.apercu_path?' — un aperçu existe déjà':'')+'</label><input class="champ" id="s-apercu" type="file" accept="application/pdf,.pdf"></div>'+
     '<label class="check"><input type="checkbox" id="s-prio"'+(s&&s.a_voir?' checked':'')+'> À voir en priorité (parcours de formation)</label>'+
     '<div class="msg" id="s-msg"></div>'+
     '<div class="rangee"><button class="btn" id="s-ok">Enregistrer</button>'+(s?'<button class="btn btn-danger" id="s-sup">Supprimer</button>':'')+'</div>');
   $('s-x').onclick=spFermer;
   $('s-ok').onclick=async()=>{
-    const msg=$('s-msg'),titre=$('s-titre').value.trim(),url=$('s-url').value.trim(),f=$('s-file').files[0];
+    const msg=$('s-msg'),titre=$('s-titre').value.trim(),url=$('s-url').value.trim(),f=$('s-file').files[0],ap=$('s-apercu').files[0];
     msg.className='msg';
     if(!titre){msg.textContent='Le titre est obligatoire.';msg.className='msg ko';return;}
     if(url&&!/^https:\/\//i.test(url)){msg.textContent='Le lien doit commencer par https://';msg.className='msg ko';return;}
     if(!url&&!f&&!(s&&s.fichier_path)){msg.textContent='Indiquez un lien ou choisissez un fichier.';msg.className='msg ko';return;}
+    if(ap&&ap.size>52428800){msg.textContent='Aperçu trop lourd (50 Mo maximum).';msg.className='msg ko';return;}
     if(f&&f.size>52428800){msg.textContent='Fichier trop lourd (50 Mo maximum). Pour une vidéo, déposez-la sur YouTube et collez le lien.';msg.className='msg ko';return;}
     $('s-ok').disabled=true;msg.textContent='Enregistrement…';
     try{
@@ -395,11 +398,18 @@ function spSupportForm(id){
         const chemin=crypto.randomUUID()+'/'+spNomSur(f.name);
         const up=await sb.storage.from(SP_BUCKET).upload(chemin,f,{contentType:f.type||'application/octet-stream'});
         if(up.error)throw up.error;
-        if(s&&s.fichier_path)await sb.storage.from(SP_BUCKET).remove([s.fichier_path]);
-        Object.assign(row,{fichier_path:chemin,fichier_nom:f.name,mime:f.type||null,taille:f.size,url:null,type:spTypeDepuisFichier(f)});
+        if(s)await sb.storage.from(SP_BUCKET).remove([s.fichier_path,s.apercu_path].filter(Boolean));
+        Object.assign(row,{fichier_path:chemin,fichier_nom:f.name,mime:f.type||null,taille:f.size,url:null,type:spTypeDepuisFichier(f),apercu_path:null});
       }else if(url){
-        if(s&&s.fichier_path)await sb.storage.from(SP_BUCKET).remove([s.fichier_path]);
-        Object.assign(row,{url,fichier_path:null,fichier_nom:null,mime:null,taille:null,type:spYoutubeId(url)?'video':'lien'});
+        if(s)await sb.storage.from(SP_BUCKET).remove([s.fichier_path,s.apercu_path].filter(Boolean));
+        Object.assign(row,{url,fichier_path:null,fichier_nom:null,mime:null,taille:null,type:spYoutubeId(url)?'video':'lien',apercu_path:null});
+      }
+      if(ap){
+        const cheminAp=crypto.randomUUID()+'/'+spNomSur(ap.name);
+        const upAp=await sb.storage.from(SP_BUCKET).upload(cheminAp,ap,{contentType:'application/pdf'});
+        if(upAp.error)throw upAp.error;
+        if(s&&s.apercu_path&&row.apercu_path!==null)await sb.storage.from(SP_BUCKET).remove([s.apercu_path]);
+        row.apercu_path=cheminAp;
       }
       const r=s?await sb.from('supports_pedagogiques').update(row).eq('id',s.id):await sb.from('supports_pedagogiques').insert({...row,ordre:SP.supports.reduce((m,x)=>Math.max(m,x.ordre),0)+1,date_source:null});
       if(r.error)throw r.error;
@@ -408,7 +418,8 @@ function spSupportForm(id){
   };
   if(s)$('s-sup').onclick=async()=>{
     if(!confirm('Supprimer « '+s.titre+' » ?'))return;
-    if(s.fichier_path)await sb.storage.from(SP_BUCKET).remove([s.fichier_path]);
+    const aSupprimer=[s.fichier_path,s.apercu_path].filter(Boolean);
+    if(aSupprimer.length)await sb.storage.from(SP_BUCKET).remove(aSupprimer);
     const {error}=await sb.from('supports_pedagogiques').delete().eq('id',s.id);
     if(error){$('s-msg').textContent='Erreur : '+error.message;$('s-msg').className='msg ko';return;}
     await spCharger();spFermer();spDessiner();
@@ -478,6 +489,41 @@ async function spImportForm(){
   };
 }
 
+/* ---------- Direction : import des aperçus PDF (Word / PowerPoint) ---------- */
+function spImportApercusForm(){
+  const avecFichier=SP.supports.filter(s=>s.fichier_path&&spLiseuse(Object.assign({},s,{apercu_path:null}))!=='pdf');
+  const sans=avecFichier.filter(s=>!s.apercu_path).length;
+  spModaleSimple('<div class="ligne"><h3>Importer les aperçus PDF</h3><button class="x" id="a-x" aria-label="Fermer">✕</button></div>'+
+    '<p style="margin:0;font-size:14px;line-height:1.5">Chaque PDF est rattaché au support dont le <strong>fichier d\'origine porte le même nom</strong> (par exemple <code>Doudous_et_t_tines.docx.pdf</code> pour <code>Doudous_et_t_tines.docx</code>). Il s\'affiche alors dans le lecteur avec la mise en page d\'origine ; l\'original reste téléchargeable. '+sans+' document'+(sans>1?'s':'')+' Word / PowerPoint sans aperçu PDF.</p>'+
+    '<div><label for="a-files">Aperçus PDF (sélectionnez-les tous)</label><input class="champ" id="a-files" type="file" accept="application/pdf,.pdf" multiple></div>'+
+    '<div class="msg" id="a-msg"></div><div class="rangee"><button class="btn" id="a-ok">Lancer l\'import</button></div>');
+  $('a-x').onclick=spFermer;
+  $('a-ok').onclick=async()=>{
+    const msg=$('a-msg');$('a-ok').disabled=true;
+    const fichiers=[...$('a-files').files];
+    if(!fichiers.length){msg.textContent='Sélectionnez au moins un PDF.';msg.className='msg ko';$('a-ok').disabled=false;return;}
+    const sansMatch=[];let ok=0,n=0;
+    try{
+      for(const f of fichiers){
+        n++;msg.className='msg';msg.textContent='Import '+n+' / '+fichiers.length+'…';
+        const nom=f.name.replace(/\.pdf$/i,'');
+        const cible=SP.supports.find(x=>x.fichier_nom&&(x.fichier_nom===nom||x.fichier_nom.replace(/\.[^.]+$/,'')===nom));
+        if(!cible){sansMatch.push(f.name);continue;}
+        const chemin=crypto.randomUUID()+'/'+spNomSur(f.name);
+        const up=await sb.storage.from(SP_BUCKET).upload(chemin,f,{contentType:'application/pdf'});
+        if(up.error)throw up.error;
+        const r=await sb.from('supports_pedagogiques').update({apercu_path:chemin}).eq('id',cible.id);
+        if(r.error){await sb.storage.from(SP_BUCKET).remove([chemin]);throw r.error;}
+        if(cible.apercu_path)await sb.storage.from(SP_BUCKET).remove([cible.apercu_path]);
+        cible.apercu_path=chemin;ok++;
+      }
+      await spCharger();spDessiner();
+      msg.innerHTML='Terminé : <strong>'+ok+'</strong> aperçu'+(ok>1?'s':'')+' rattaché'+(ok>1?'s':'')+'.'+(sansMatch.length?'<br>Sans support correspondant : '+sansMatch.map(esc).join(', '):'');
+    }catch(e){console.error('[supports]',e);msg.textContent='Erreur : '+(e.message||e)+' — l\'import peut être relancé.';msg.className='msg ko';}
+    $('a-ok').disabled=false;
+  };
+}
+
 /* ---------- Démarrage ---------- */
 window.addEventListener('DOMContentLoaded',async function(){
   $('modal').onclick=e=>{if(e.target.id==='modal')spFermer();};
@@ -493,6 +539,7 @@ window.addEventListener('DOMContentLoaded',async function(){
     $('actions-dir').hidden=!SP.direction;
     $('btn-ajout').onclick=()=>spSupportForm(null);
     $('btn-import').onclick=spImportForm;
+    $('btn-apercus').onclick=spImportApercusForm;
     spEtat('');$('wrap').hidden=false;
     if(!SP.themes.length&&!SP.direction)spEtat('Aucun support disponible pour le moment.');
     spDessiner();
