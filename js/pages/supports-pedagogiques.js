@@ -125,28 +125,153 @@ function spDessiner(){
   });
 }
 
+/* ---------- Lecteurs intégrés (PDF et Word, sans téléchargement) ---------- */
+const SP_PDFJS='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+const SP_MAMMOTH='https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js';
+let spLecteurId=0,spPdfCourant=null,spPdfPret=null;
+function spScript(src){
+  return new Promise((ok,ko)=>{
+    const sc=document.createElement('script');
+    sc.src=src;sc.onload=ok;sc.onerror=()=>ko(new Error('bibliothèque de lecture inaccessible'));
+    document.head.appendChild(sc);
+  });
+}
+/* Le moteur PDF et son worker sont chargés dans la page (pas de Worker séparé), comme le projet pédagogique. */
+function spChargerPdfJs(){
+  if(window.pdfjsLib&&window.pdfjsWorker)return Promise.resolve();
+  if(!spPdfPret)spPdfPret=spScript(SP_PDFJS+'pdf.min.js').then(()=>spScript(SP_PDFJS+'pdf.worker.min.js')).catch(e=>{spPdfPret=null;throw e;});
+  return spPdfPret;
+}
+function spExtension(s){return String(s.fichier_nom||s.fichier_path||'').split('.').pop().toLowerCase();}
+/* Type de lecteur selon le fichier : 'pdf', 'docx' ou '' (téléchargement seul). */
+function spLiseuse(s){
+  if(!s.fichier_path)return '';
+  const e=spExtension(s);
+  if(s.type==='pdf'||e==='pdf')return 'pdf';
+  if(e==='docx')return 'docx';
+  return '';
+}
+/* Le HTML produit par mammoth est nettoyé : pas de script, pas de gestionnaire d'événement, liens dans un nouvel onglet. */
+function spNettoyerHtml(html){
+  const doc=new DOMParser().parseFromString('<div>'+html+'</div>','text/html');
+  doc.querySelectorAll('script,style,iframe,object,embed,link,meta,form,base').forEach(n=>n.remove());
+  doc.querySelectorAll('*').forEach(n=>{
+    [...n.attributes].forEach(a=>{
+      const nom=a.name.toLowerCase(),val=String(a.value).trim().toLowerCase();
+      if(nom.startsWith('on')||((nom==='href'||nom==='src'||nom==='xlink:href')&&val.startsWith('javascript:')))n.removeAttribute(a.name);
+    });
+    if(n.tagName==='A'){n.setAttribute('target','_blank');n.setAttribute('rel','noopener noreferrer');}
+  });
+  return doc.body.firstChild?doc.body.firstChild.innerHTML:'';
+}
+function spBarreLecteur(s,gauche,urlOuvrir,urlTelecharger){
+  return '<div class="vbarre"><span class="vtitre">'+gauche+'</span>'+
+    '<a class="vbtn" href="'+esc(urlOuvrir||urlTelecharger)+'" target="_blank" rel="noopener noreferrer">Ouvrir</a>'+
+    '<a class="vbtn" href="'+esc(urlTelecharger)+'">⬇ Télécharger</a></div>';
+}
+async function spLecteurPdf(zone,s,jeton,urlVue,urlDl){
+  await spChargerPdfJs();
+  const pdf=await window.pdfjsLib.getDocument({url:urlVue}).promise;
+  if(jeton!==spLecteurId){pdf.destroy();return;}
+  spPdfCourant=pdf;
+  const total=pdf.numPages;
+  let zoom=1;
+  zone.innerHTML='<div class="vbarre"><span class="vtitre" id="v-page">Page 1 / '+total+'</span>'+
+    '<button class="vbtn" id="v-moins" aria-label="Zoom arrière">−</button><button class="vbtn" id="v-plus" aria-label="Zoom avant">＋</button>'+
+    '<a class="vbtn" href="'+esc(urlVue)+'" target="_blank" rel="noopener noreferrer">Ouvrir</a>'+
+    '<a class="vbtn" href="'+esc(urlDl)+'">⬇ Télécharger</a></div><div class="vpages" id="v-pages"></div>';
+  const cont=zone.querySelector('#v-pages');
+  const p1=await pdf.getPage(1),base=p1.getViewport({scale:1}),ratio=base.height/base.width;
+  const pages=[];
+  for(let i=0;i<total;i++){
+    const d=document.createElement('div');d.className='vp';d.dataset.n=i+1;
+    d.style.aspectRatio=(1/ratio).toFixed(4);
+    const c=document.createElement('canvas');d.appendChild(c);cont.appendChild(d);
+    pages.push({d,c,etat:0});
+  }
+  async function dessiner(n){
+    const P=pages[n-1];
+    if(P.etat===1||P.etat===2||jeton!==spLecteurId)return;
+    P.etat=1;
+    try{
+      const page=await pdf.getPage(n);
+      const px=Math.min(2200,Math.max(500,P.d.clientWidth*Math.min(window.devicePixelRatio||1,2)));
+      const vp=page.getViewport({scale:px/page.getViewport({scale:1}).width});
+      P.c.width=Math.floor(vp.width);P.c.height=Math.floor(vp.height);
+      await page.render({canvasContext:P.c.getContext('2d'),viewport:vp}).promise;
+      P.etat=2;
+    }catch(e){P.etat=0;console.warn('[supports] page '+n,e);}
+  }
+  const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)dessiner(+e.target.dataset.n);});},{root:cont,rootMargin:'700px 0px'});
+  pages.forEach(P=>obs.observe(P.d));
+  function majZoom(){
+    pages.forEach(P=>{P.d.style.width=(zoom*100)+'%';P.etat=0;});
+    pages.forEach(P=>{const r=P.d.getBoundingClientRect(),c=cont.getBoundingClientRect();if(r.bottom>c.top-700&&r.top<c.bottom+700)dessiner(+P.d.dataset.n);});
+  }
+  zone.querySelector('#v-moins').onclick=()=>{zoom=Math.max(.6,+(zoom-.2).toFixed(2));majZoom();};
+  zone.querySelector('#v-plus').onclick=()=>{zoom=Math.min(3,+(zoom+.2).toFixed(2));majZoom();};
+  cont.addEventListener('scroll',()=>{
+    const top=cont.getBoundingClientRect().top+cont.clientHeight/3;
+    let n=1;
+    for(const P of pages){if(P.d.getBoundingClientRect().top<=top)n=+P.d.dataset.n;else break;}
+    const e=zone.querySelector('#v-page');if(e)e.textContent='Page '+n+' / '+total;
+  },{passive:true});
+  dessiner(1);
+}
+async function spLecteurWord(zone,s,jeton,urlDl){
+  if(!window.mammoth)await spScript(SP_MAMMOTH);
+  const r=await fetch(urlDl);
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const res=await window.mammoth.convertToHtml({arrayBuffer:await r.arrayBuffer()});
+  if(jeton!==spLecteurId)return;
+  const html=spNettoyerHtml(res.value||'');
+  zone.innerHTML=spBarreLecteur(s,'Aperçu du document Word',null,urlDl)+
+    '<div class="vscroll"><div class="vdoc">'+(html||'<p><em>Document vide.</em></p>')+
+    '<p class="vnote">Aperçu simplifié : la mise en page d\'origine (colonnes, encadrés) peut différer. Utilisez « Télécharger » pour l\'original.</p></div></div>';
+}
+/* Ouvre le lecteur intégré ; en cas d'échec, repli sur le téléchargement. */
+async function spOuvrirLiseuse(s,type,zone){
+  const jeton=++spLecteurId;
+  let urlDl='';
+  try{
+    urlDl=await spUrlFichier(s,true);
+    if(type==='pdf')await spLecteurPdf(zone,s,jeton,await spUrlFichier(s),urlDl);
+    else await spLecteurWord(zone,s,jeton,urlDl);
+  }catch(e){
+    console.error('[supports] lecteur',e);
+    if(jeton!==spLecteurId)return;
+    zone.innerHTML='<div class="att">'+SP_ICONES[s.type]+'<br><br>L\'aperçu n\'a pas pu s\'afficher.<br><br>'+(urlDl?'<a class="btn" href="'+esc(urlDl)+'">⬇ Télécharger</a>':'')+'</div>';
+  }
+}
+
 /* ---------- Fiche d'un support ---------- */
 async function spUrlFichier(s,telecharger){
   const {data,error}=await sb.storage.from(SP_BUCKET).createSignedUrl(s.fichier_path,3600,telecharger?{download:s.fichier_nom||true}:undefined);
   if(error)throw error;
   return data.signedUrl;
 }
-function spFermer(){$('modal').classList.remove('on');$('fiche').innerHTML='';}
+function spFermer(){
+  spLecteurId++;
+  if(spPdfCourant){try{spPdfCourant.destroy();}catch(e){}spPdfCourant=null;}
+  $('modal').classList.remove('on');$('fiche').innerHTML='';
+}
 async function spOuvrir(id){
   const s=SP.supports.find(x=>x.id===id);if(!s)return;
+  spLecteurId++;
+  if(spPdfCourant){try{spPdfCourant.destroy();}catch(e){}spPdfCourant=null;}
   const t=spThemeDe(s),vu=!!SP.vus[id];
   const yt=spYoutubeId(s.url);
-  let lecteur='';
+  let lecteur='',liseuse='';
   try{
     if(yt)lecteur='<iframe src="https://www.youtube-nocookie.com/embed/'+yt+'" title="'+esc(s.titre)+'" allow="accelerometer; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>';
-    else if(s.fichier_path&&s.type==='pdf')lecteur='<iframe src="'+esc(await spUrlFichier(s))+'" title="'+esc(s.titre)+'"></iframe>';
+    else if(spLiseuse(s)){liseuse=spLiseuse(s);lecteur='<div class="att">Chargement du document…</div>';}
     else if(s.fichier_path&&s.type==='image')lecteur='<img src="'+esc(await spUrlFichier(s))+'" alt="'+esc(s.titre)+'">';
-    else if(s.fichier_path)lecteur='<div class="att">'+SP_ICONES[s.type]+'<br><br>Ce document s\'ouvre dans votre application (Word, PowerPoint…).<br><br><a class="btn" href="'+esc(await spUrlFichier(s,true))+'">⬇ Télécharger</a></div>';
+    else if(s.fichier_path)lecteur='<div class="att">'+SP_ICONES[s.type]+'<br><br>Ce document s\'ouvre dans votre application (Word, PowerPoint…) : l\'aperçu intégré n\'est pas disponible pour ce format.<br><br><a class="btn" href="'+esc(await spUrlFichier(s,true))+'">⬇ Télécharger</a></div>';
     else if(s.url)lecteur='<div class="att">🔗<br><br>Ce contenu s\'ouvre sur un site extérieur.<br><br><a class="btn" href="'+esc(s.url)+'" target="_blank" rel="noopener noreferrer">Ouvrir le lien</a></div>';
     else lecteur='<div class="att">▶<br><br>Cette vidéo sera disponible prochainement.</div>';
   }catch(e){console.error('[supports]',e);lecteur='<div class="att">Impossible d\'ouvrir ce fichier pour le moment.</div>';}
   $('fiche').className='fiche';
-  $('fiche').innerHTML='<div class="lect">'+lecteur+'</div>'+
+  $('fiche').innerHTML='<div class="lect'+(liseuse?' liseuse':'')+'" id="f-lect">'+lecteur+'</div>'+
     '<div class="inf"><div class="ligne"><span class="tag">'+esc(t.icone)+' '+esc(t.nom)+'</span><button class="x" id="f-x" aria-label="Fermer">✕</button></div>'+
     '<h3>'+esc(s.titre)+'</h3>'+(s.description?'<p style="color:#666;margin:0;font-size:14px;line-height:1.45">'+esc(s.description)+'</p>':'')+
     (s.url&&!yt?'':'')+
@@ -155,6 +280,7 @@ async function spOuvrir(id){
     '<div class="msg" id="f-msg"></div>'+
     (SP.direction?'<div class="rangee"><button class="btn btn-sec" id="f-edit">Modifier</button><button class="btn btn-sec" id="f-prio">'+(s.a_voir?'Retirer du parcours':'Ajouter au parcours')+'</button></div>':'')+'</div>';
   $('modal').classList.add('on');
+  if(liseuse)spOuvrirLiseuse(s,liseuse,$('f-lect'));
   $('f-x').onclick=spFermer;
   $('f-vu').onclick=()=>spMarquerVu(id,!SP.vus[id]);
   $('f-notes').onblur=()=>spEnregistrerNotes(id);
