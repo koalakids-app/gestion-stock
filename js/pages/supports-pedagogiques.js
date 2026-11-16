@@ -166,7 +166,7 @@ function spNettoyerHtml(html){
 }
 function spBarreLecteur(s,gauche,urlOuvrir,urlTelecharger){
   return '<div class="vbarre"><span class="vtitre">'+gauche+'</span>'+
-    '<a class="vbtn" href="'+esc(urlOuvrir||urlTelecharger)+'" target="_blank" rel="noopener noreferrer">Ouvrir</a>'+
+    (urlOuvrir?'<a class="vbtn" href="'+esc(urlOuvrir)+'" target="_blank" rel="noopener noreferrer">Ouvrir</a>':'')+
     '<a class="vbtn" href="'+esc(urlTelecharger)+'">⬇ Télécharger</a></div>';
 }
 async function spLecteurPdf(zone,s,jeton,urlVue,urlDl){
