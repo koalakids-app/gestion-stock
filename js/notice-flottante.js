@@ -10,6 +10,13 @@
       html: '<p>Chaque tuile ouvre un module : <strong>Gestion des stocks</strong>, <strong>Ludothèque</strong>, <strong>Gestion crèches</strong> (Demandes), <strong>Suivi de l’enfant</strong>, <strong>Familles &amp; contrats</strong> (Devis, Contrats d’accueil, Facturation), <strong>Base documentaire</strong> (Documents, Base réglementaire), <strong>Équipe</strong> (Mon espace, Accès terrain) et <strong>Paramètres</strong>.</p>' +
         '<p>Les liens annexes (Padlets, Genially, site internet…) ouvrent des outils extérieurs.</p>'
     },
+    'supports-pedagogiques': {
+      titre: 'Supports pédagogiques',
+      html: '<p>La bibliothèque de formation des équipes (elle remplace le Padlet « Supports pédagogiques Koalakids »). Les supports sont classés par <strong>thématique</strong> (menu de gauche) : vidéos YouTube, PDF, documents Word / PowerPoint, images et liens vers des articles ou podcasts.</p>' +
+        '<p><strong>Chercher</strong> : champ de recherche en haut, filtres par type (Vidéo, PDF…). <strong>Ouvrir</strong> un support : la vidéo ou le PDF se lit sur place ; les documents Word / PowerPoint se téléchargent ; les liens s’ouvrent sur le site d’origine.</p>' +
+        '<p><strong>Mon suivi</strong> : « Marquer comme vu » et vos notes ne sont visibles que par vous ; « Déjà vus » liste ce que vous avez terminé. Le bandeau <strong>Parcours de formation</strong> propose les supports à voir en priorité, dans l’ordre.</p>' +
+        '<p><strong>Direction</strong> : « ＋ Ajouter un support » (lien ou fichier jusqu’à 50 Mo ; une vidéo plus lourde se dépose sur YouTube, on colle le lien), « ＋ Nouvelle thématique » et ⋮ pour renommer, réordonner ou supprimer une thématique, « Ajouter au parcours » dans la fiche d’un support. « Importer du Padlet » copie une seule fois le contenu du Padlet (sélectionner les fichiers téléchargés).</p>'
+    },
     collaborateur: {
       titre: 'Mon espace',
       html: '<p>Votre espace personnel, organisé en onglets comme l’espace famille : <strong>Accueil</strong> (dernier message, votre journée, code image, raccourcis), <strong>Infos</strong> (messages de la direction, à lecture seule ; la pastille orange compte les non lus), <strong>Planning</strong> (semaine et pointages, flèches pour changer de semaine), <strong>Heures</strong> (compteur et validation mensuelle signée) et <strong>Formation</strong> (planning des quiz et parcours). L’onglet Infos n’existe que pour les collaborateurs.</p>' +
