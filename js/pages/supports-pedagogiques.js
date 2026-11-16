@@ -10,6 +10,7 @@ const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
 const SP_BUCKET='supports-pedagogiques';
+const SP_MANIFESTES=['supports-pedagogiques-import.json','supports-pedagogiques-import-2.json'];
 const SP_TYPES={video:'Vidéo',pdf:'PDF',document:'Document',image:'Image',lien:'Lien'};
 const SP_ICONES={video:'▶',pdf:'📄',document:'📝',image:'🖼️',lien:'🔗'};
 const SP_COULEURS=['#ffe3d6','#e0efff','#ffe0ee','#e3f6e8','#eadfff','#fff3c9','#ffe9cf','#dff5f0'];
@@ -63,12 +64,20 @@ function spFiltres(){
     (!q||(s.titre+' '+(s.description||'')).toLowerCase().includes(q))
   ).sort((a,b)=>(ordreTh[a.theme_id]-ordreTh[b.theme_id])||(a.ordre-b.ordre));
 }
+function spLigneTheme(x){
+  return '<div class="th '+(spTheme===x.id?'on':'')+'" data-t="'+esc(x.id)+'"><span class="ic" style="background:'+esc(x.couleur)+'">'+esc(x.icone)+'</span><span>'+esc(x.nom)+'</span><span class="n">'+SP.supports.filter(s=>s.theme_id===x.id).length+'</span>'+
+    (SP.direction?'<button class="menu" data-m="'+esc(x.id)+'" title="Modifier la thématique" aria-label="Modifier la thématique">⋮</button>':'')+'</div>';
+}
 function spDessinerThemes(){
-  const th=SP.themes;
-  $('themes').innerHTML='<h3>Thématiques</h3>'+
+  let corps='',dernier=null;
+  SP.themes.forEach(x=>{
+    const g=x.groupe||'Thématiques';
+    if(g!==dernier){corps+='<h3>'+esc(g)+'</h3>';dernier=g;}
+    corps+=spLigneTheme(x);
+  });
+  $('themes').innerHTML=
     '<div class="th '+(spTheme===''?'on':'')+'" data-t=""><span class="ic" style="background:#eee">📚</span>Tous les supports<span class="n">'+SP.supports.length+'</span></div>'+
-    th.map(x=>'<div class="th '+(spTheme===x.id?'on':'')+'" data-t="'+esc(x.id)+'"><span class="ic" style="background:'+esc(x.couleur)+'">'+esc(x.icone)+'</span><span>'+esc(x.nom)+'</span><span class="n">'+SP.supports.filter(s=>s.theme_id===x.id).length+'</span>'+
-      (SP.direction?'<button class="menu" data-m="'+esc(x.id)+'" title="Modifier la thématique" aria-label="Modifier la thématique">⋮</button>':'')+'</div>').join('')+
+    corps+
     (SP.direction?'<div class="th th-new" id="th-nouv">＋ Nouvelle thématique</div>':'')+
     '<h3>Mon suivi</h3><div class="th '+(spTheme==='__vu'?'on':'')+'" data-t="__vu"><span class="ic" style="background:#dff5e6">✅</span>Déjà vus<span class="n">'+Object.keys(SP.vus).filter(id=>SP.supports.some(s=>s.id===id)).length+'</span></div>';
   $('themes').querySelectorAll('.th[data-t]').forEach(e=>e.onclick=ev=>{
@@ -192,6 +201,7 @@ function spThemeForm(id){
   const t=id?SP.themes.find(x=>x.id===id):null;
   spModaleSimple('<div class="ligne"><h3>'+(t?'Modifier la thématique':'Nouvelle thématique')+'</h3><button class="x" id="t-x" aria-label="Fermer">✕</button></div>'+
     '<div><label for="t-nom">Nom</label><input class="champ" id="t-nom" maxlength="120" value="'+esc(t?t.nom:'')+'"></div>'+
+    '<div><label for="t-gr">Groupe (facultatif : regroupe des thématiques dans le menu)</label><input class="champ" id="t-gr" list="t-grl" maxlength="120" value="'+esc(t&&t.groupe?t.groupe:'')+'"><datalist id="t-grl">'+[...new Set(SP.themes.map(x=>x.groupe).filter(Boolean))].map(g=>'<option value="'+esc(g)+'">').join('')+'</datalist></div>'+
     '<div><label for="t-ic">Icône (un emoji)</label><input class="champ" id="t-ic" maxlength="4" value="'+esc(t?t.icone:'📚')+'"></div>'+
     '<div><label for="t-co">Couleur de l\'icône</label><div class="rangee" id="t-co">'+SP_COULEURS.map(c=>'<button type="button" class="chip" data-c="'+c+'" style="background:'+c+';'+((t?t.couleur:SP_COULEURS[0])===c?'outline:2px solid #1d1d1f':'')+'">&nbsp;&nbsp;&nbsp;</button>').join('')+'</div></div>'+
     '<div class="msg" id="t-msg"></div>'+
@@ -203,7 +213,7 @@ function spThemeForm(id){
   $('t-ok').onclick=async()=>{
     const nom=$('t-nom').value.trim(),msg=$('t-msg');
     if(!nom){msg.textContent='Donnez un nom à la thématique.';msg.className='msg ko';return;}
-    const row={nom,icone:$('t-ic').value.trim()||'📚',couleur};
+    const row={nom,icone:$('t-ic').value.trim()||'📚',couleur,groupe:$('t-gr').value.trim()||null};
     const r=t?await sb.from('supports_themes').update(row).eq('id',t.id):await sb.from('supports_themes').insert({...row,ordre:(SP.themes.reduce((m,x)=>Math.max(m,x.ordre),0)+1)});
     if(r.error){msg.textContent='Erreur : '+r.error.message;msg.className='msg ko';return;}
     await spCharger();spFermer();spDessiner();
@@ -281,16 +291,20 @@ function spSupportForm(id){
 
 /* ---------- Direction : import unique depuis le Padlet ---------- */
 async function spImportForm(){
-  let man;
+  const man={themes:[],supports:[]};
   try{
-    const r=await fetch('supports-pedagogiques-import.json',{cache:'no-store'});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    man=await r.json();
+    for(const f of SP_MANIFESTES){
+      const r=await fetch(f,{cache:'no-store'});
+      if(!r.ok)throw new Error(f+' : HTTP '+r.status);
+      const j=await r.json();
+      j.themes.forEach(t=>{if(!man.themes.some(x=>x.nom===t.nom))man.themes.push(t);});
+      man.supports.push(...j.supports);
+    }
   }catch(e){alert('Fichier d\'import introuvable : '+e.message);return;}
   const avecFichier=man.supports.filter(x=>x.fichier).length;
-  spModaleSimple('<div class="ligne"><h3>Importer le Padlet</h3><button class="x" id="i-x" aria-label="Fermer">✕</button></div>'+
+  spModaleSimple('<div class="ligne"><h3>Importer les Padlets</h3><button class="x" id="i-x" aria-label="Fermer">✕</button></div>'+
     '<p style="margin:0;font-size:14px;line-height:1.5">Crée <strong>'+man.themes.length+' thématiques</strong> et <strong>'+man.supports.length+' supports</strong> ('+avecFichier+' fichiers à copier, le reste en liens). Ce qui existe déjà (même thématique et même titre) est ignoré : vous pouvez relancer sans risque.</p>'+
-    '<div><label for="i-files">Fichiers du Padlet (sélectionnez-les tous : PDF, Word, PowerPoint, images)</label><input class="champ" id="i-files" type="file" multiple></div>'+
+    '<div><label for="i-files">Fichiers des Padlets (sélectionnez-les tous : PDF, Word, PowerPoint, images ; vous pouvez en choisir plusieurs lots)</label><input class="champ" id="i-files" type="file" multiple></div>'+
     '<div class="msg" id="i-msg"></div><div class="rangee"><button class="btn" id="i-ok">Lancer l\'import</button></div>');
   $('i-x').onclick=spFermer;
   $('i-ok').onclick=async()=>{
@@ -303,8 +317,11 @@ async function spImportForm(){
       for(const t of man.themes){
         let ex=SP.themes.find(x=>x.nom===t.nom);
         if(!ex){
-          const r=await sb.from('supports_themes').insert({nom:t.nom,icone:t.icone,couleur:t.couleur,ordre:t.ordre}).select().single();
+          const r=await sb.from('supports_themes').insert({nom:t.nom,icone:t.icone,couleur:t.couleur,ordre:t.ordre,groupe:t.groupe||null}).select().single();
           if(r.error)throw r.error;ex=r.data;
+        }else if(t.groupe&&!ex.groupe){
+          const r=await sb.from('supports_themes').update({groupe:t.groupe}).eq('id',ex.id);
+          if(r.error)throw r.error;
         }
         idTh[t.nom]=ex.id;
       }
