@@ -262,6 +262,7 @@ etp: `
 <ul>
   <li>Les saisies sont enregistrées avec la réponse, <strong>une par crèche</strong> : changer de crèche n’écrase jamais l’exemplaire d’une autre.</li>
   <li>L’export PDF reprend le même calcul que l’écran.</li>
+  <li><strong>CERFA 17580*01</strong> : dans la section G, le bouton « Remplir depuis le calcul des ETP » reprend la dernière saisie de la crèche choisie : direction (qualification, ETP), encadrement (diplômés du 1° de l’article R. 2324-42 en sous-total 1, autres en sous-total 2, avec la répartition par qualification), restauration / entretien (ETP), règle d’encadrement et nombre de places. Le temps de repas et d’entretien est retiré de l’encadrement pour ne pas être compté deux fois. Rien n’est écrasé sans confirmation ; les champs restent modifiables.</li>
   <li>Hypothèses prudentes à corriger : repas et entretien (2 h par jour par défaut) et 2 adultes pendant toute l’amplitude. Pauses, réunions et congés ne sont pas déduits.</li>
 </ul>
 `,
