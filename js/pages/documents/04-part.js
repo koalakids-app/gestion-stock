@@ -641,6 +641,7 @@ TPL.cerfa_17580={
   /* G */
   S.push({t:'G — Composition de l’équipe pluridisciplinaire envisagée',i:'users',h:
     '<div class="c17-aide">Correspond au contenu du projet d’accueil mentionné à l’article R. 2324-29 du CSP : description des compétences professionnelles mobilisées, exprimées par qualification, fonction et en équivalents temps plein.</div>'
+    +c17EtpHtml()
     +'<div class="c17-sep">Fonction de direction (article R. 2324-34 du CSP)</div>'
     +'<div class="c17-grid2">'+c17F('Qualification',c17In('g_dir_qualif',g('g_dir_qualif')))+c17F('Nombre d’ETP envisagé',c17In('g_dir_etp',g('g_dir_etp'),'number'))+'</div>'
     +'<div class="c17-sep">Fonction de direction adjointe — obligatoire au-delà de 59 places (article R. 2324-35 du CSP)</div>'
