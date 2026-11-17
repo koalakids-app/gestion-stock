@@ -241,6 +241,30 @@ pms: `
   <li><strong>Archive mensuelle (direction)</strong> : sous le registre de remise en température, choisissez un mois puis « PDF de la crèche choisie », « PDF toutes les crèches » ou « CSV toutes les crèches ». Le PDF (paysage) liste tous les plats du mois, puis les <strong>températures du réfrigérateur</strong> (une ligne par jour), avec un encadré « Vu par la direction » ; le CSV s’ouvre dans un tableur (plats, puis relevés du réfrigérateur sous un second en-tête). La règle HACCP impose de <strong>conserver ces relevés 3 ans</strong> : ils restent enregistrés sans suppression automatique, et le PDF mensuel est à classer avec le PMS.</li>
 </ul>
 `,
+etp: `
+<h3 style="font-size:17px;font-weight:700;margin-bottom:12px">👥 Calcul des ETP et de l’encadrement</h3>
+<div class="warn" style="background:var(--green-lt,#ecfdf5)">Modèle <strong>à remplir en ligne</strong>, une réponse par crèche : il compare, en direct, les heures de l’équipe aux heures à couvrir auprès des enfants, puis vérifie le minimum d’ETP de catégorie 1. <strong>Outil indicatif</strong> : à valider auprès de la PMI avant toute décision.</div>
+<div class="st">🧮 Ce qu’il faut saisir</div>
+<ul>
+  <li>La <strong>crèche</strong> (la capacité est reprise de sa fiche, modifiable), puis le <strong>nombre de professionnel·les, directrice comprise</strong> : 4 = la directrice et 3 autres, 5 = la directrice et 4 autres (jusqu’à 9).</li>
+  <li>Pour chaque personne : la <strong>qualification</strong> et les <strong>heures par semaine</strong> (la directrice à 80 % = 28 h, à temps plein = 35 h). La case <strong>VAE engagée</strong> fait compter la personne en catégorie 1 après le 01/09/2027.</li>
+  <li>Le fonctionnement : amplitude d’ouverture (7h30 à 18h30 = 11 h), jours d’ouverture, heures avec 2 adultes nécessaires, enfants par adulte (1 pour 6), <strong>repas + entretien</strong> par jour (qui ne comptent pas dans l’encadrement) et <strong>jours de présence de la directrice</strong>.</li>
+</ul>
+<div class="st">📊 Ce qui se calcule</div>
+<ul>
+  <li><strong>Direction</strong> : 0,5 ETP = 17 h 30 par semaine, prises sur le temps de la directrice, hors enfants.</li>
+  <li><strong>Par semaine</strong> : heures de l’équipe − direction − repas et entretien = heures disponibles auprès des enfants, comparées aux heures à couvrir. L’écart est donné en heures.</li>
+  <li><strong>Jour par jour</strong> : le même calcul pour chaque jour, qui montre le jour où la directrice est absente.</li>
+  <li><strong>Catégorie 1</strong> : minimum = places ÷ 10, arrondi au demi-ETP, comparé aux ETP de diplômés (EJE, auxiliaire de puériculture, IDE, et CAP AEPE de plus de 2 ans d’expérience avant le 01/09/2027 ; ensuite diplômés d’État ou VAE engagée).</li>
+  <li>Le <strong>soutien de l’EJE</strong> à une directrice sans le diplôme requis (appui d’au moins 20 h par an) est noté pour information : il n’est compté ni en direction ni en encadrement.</li>
+</ul>
+<div class="st">🖨️ Enregistrer et exporter</div>
+<ul>
+  <li>Les saisies sont enregistrées avec la réponse, <strong>une par crèche</strong> : changer de crèche n’écrase jamais l’exemplaire d’une autre.</li>
+  <li>L’export PDF reprend le même calcul que l’écran.</li>
+  <li>Hypothèses prudentes à corriger : repas et entretien (2 h par jour par défaut) et 2 adultes pendant toute l’amplitude. Pauses, réunions et congés ne sont pas déduits.</li>
+</ul>
+`,
 eaje: `
 <div class="st">📋 Support de contrôle EAJE</div>
 <p>Grille d’auto-contrôle réglementaire reprenant les points vérifiés lors d’une inspection PMI. Utile pour préparer une visite ou faire un point annuel. Elle se trouve dans les documents à remplir, sous « Support de contrôle EAJE ».</p>
