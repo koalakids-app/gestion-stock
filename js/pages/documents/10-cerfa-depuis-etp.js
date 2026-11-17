@@ -29,12 +29,13 @@ function c17EtpValeurs(s){
   const gr={p1:{},p2:{}};
   let e1=0,e2=0;
   r.rows.forEach((x,i)=>{
-    const q=ETP_QUAL.find(y=>y.l===x.qual)||{k:'autre'};
-    const cat1=(q.k==='eje'||q.k==='ap'||q.k==='ide');
+    /* catégorie 1 : règle en vigueur à ce jour (CAP AEPE > 2 ans comptés jusqu'au 31/08/2027, VAE engagée comprise après) */
+    const avant=new Date()<new Date('2027-09-01T00:00:00');
+    const cat1=!!(avant?x.av:x.ap);
     const g=cat1?gr.p1:gr.p2;
     const h=x.enf*f;
     if(cat1)e1+=h;else e2+=h;
-    const lib=x.qual+(i===0?' (directrice, temps hors direction)':'');
+    const lib=x.qual+(i===0?' (directrice, temps hors direction)':'')+(avant&&x.av&&x.qual.indexOf('CAP')===0?' — catégorie 1 jusqu’au 31/08/2027':'');
     g[lib]=(g[lib]||0)+1;
   });
   const txt=g=>Object.keys(g).map(k=>g[k]+' × '+k).join('\n');
