@@ -94,9 +94,14 @@ function ogCarte(c){
     +ogRepartition(c)
     +'</div>';
 }
+// Une carte RSAI rattachée à une autre se place à CÔTÉ de celle-ci (même ligne), pas en dessous.
 function ogBranche(c,enfants){
   const fils=enfants[c.id]||[];
-  return '<li>'+ogCarte(c)+(fils.length?'<ul>'+fils.map(f=>ogBranche(f,enfants)).join('')+'</ul>':'')+'</li>';
+  const lat=fils.filter(f=>f.rsai),bas=fils.filter(f=>!f.rsai);
+  const ligne=lat.length
+    ?'<div class="og-ligne og-avec-lat">'+ogCarte(c)+'<div class="og-lat">'+lat.map(ogCarte).join('')+'</div></div>'
+    :ogCarte(c);
+  return '<li>'+ligne+(bas.length?'<ul>'+bas.map(f=>ogBranche(f,enfants)).join('')+'</ul>':'')+'</li>';
 }
 function ogArbre(crecheId){
   const reseau=ogCartes.filter(c=>!c.creche_id);
@@ -401,7 +406,7 @@ const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:
   +'.og-t li::before,.og-t li::after{content:"";position:absolute;top:0;right:50%;border-top:2px solid #b9b5d6;width:50%;height:18px}.og-t li::after{right:auto;left:50%;border-left:2px solid #b9b5d6}'
   +'.og-t li:only-child::before,.og-t li:only-child::after{display:none}.og-t li:only-child{padding-top:0}.og-t li:first-child::before,.og-t li:last-child::after{border:0}.og-t li:last-child::before{border-right:2px solid #b9b5d6;border-radius:0 6px 0 0}.og-t li:first-child::after{border-radius:6px 0 0 0}'
   +'.og-t ul::before{content:"";position:absolute;top:0;left:50%;border-left:2px solid #b9b5d6;height:18px}.og-t>li{padding-top:0}.og-t>li::before,.og-t>li::after{display:none}'
-  +'.og-groupe{display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:wrap;row-gap:10px}.og-groupe .og-node+.og-node{margin-left:44px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #3D3580}'
+  +'.og-groupe{display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-ligne{position:relative}.og-avec-lat{padding:0 244px}.og-lat{position:absolute;right:0;top:0;width:200px;display:flex;flex-direction:column;gap:8px}.og-lat .og-node{width:200px;max-width:200px}.og-lat .og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #0E9F6E}.og-groupe .og-node+.og-node{margin-left:44px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #3D3580}'
   +'.og-node{position:relative;min-width:150px;max-width:200px;border:1.5px solid #3D3580;border-radius:10px;padding:8px 10px;background:#fff;break-inside:avoid}.og-rsai{border-color:#0E9F6E;background:#ECFDF5}'
   +'.og-badge{position:absolute;top:-9px;right:8px;background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
   +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}'
