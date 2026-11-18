@@ -86,7 +86,10 @@ function ogRepartition(c){
   const{tot,dir,ent,enf,alt}=ogParts(c);
   if(!(dir>0||ent>0||alt>0)||!(tot>0))return'';
   const l=(lib,v)=>'<div class="og-part"><span>'+lib+'</span><span>'+ogFmtEtp(v)+'</span></div>';
-  return '<div class="og-parts">'+(dir>0?l('Direction',dir):'')+(ent>0?l('Entretien / repas',ent):'')+(alt>0?l('Alternant·e : hors taux d’encadrement',alt):l('Encadrement enfants',enf))+'</div>';
+  const hh=v=>ogFmtHeures(Math.round(v*OG_HEURES_ETP*100)/100).replace('/SEM','');
+  const j=Number(c.jours_semaine)||0;
+  const sousDir=dir>0?'<div class="og-part og-sub"><span>'+hh(dir)+(j?' sur '+j+' jour'+(j>1?'s':'')+' · '+ogFmtHeures(Math.round(dir*OG_HEURES_ETP/j*100)/100).replace('/SEM','')+' / jour':'')+'</span></div>':'';
+  return '<div class="og-parts">'+(dir>0?l('Direction',dir)+sousDir:'')+(ent>0?l('Entretien / repas',ent):'')+(alt>0?l('Alternant·e : hors taux d’encadrement',alt):l('Encadrement enfants',enf))+'</div>';
 }
 const ogFmtEtp=v=>v==null?'':(Math.round(v*100)/100).toLocaleString('fr-FR')+' ETP';
 
@@ -311,6 +314,7 @@ function ogEditer(id,reseauInit){
     +'<div><label class="flabel">ETP (auto si vide)</label><input class="finput" id="og-f-etp" value="'+ogEsc(c?.etp!=null?String(c.etp).replace('.',','):'')+'" placeholder="= heures / 35"></div></div>'
     +'<div class="og-2c"><div><label class="flabel">dont ETP direction</label><input class="finput" id="og-f-etpdir" value="'+ogEsc(c?.etp_direction!=null?String(c.etp_direction).replace('.',','):'')+'" placeholder="Ex. : 0,5"></div>'
     +'<div><label class="flabel">dont ETP entretien / repas</label><input class="finput" id="og-f-etpent" value="'+ogEsc(c?.etp_entretien!=null?String(c.etp_entretien).replace('.',','):'')+'" placeholder="Ex. : 0,29"></div></div>'
+    +'<div class="og-2c"><div><label class="flabel">Jours travaillés / semaine</label><input class="finput" id="og-f-jours" value="'+ogEsc(c?.jours_semaine!=null?String(c.jours_semaine):'')+'" placeholder="Ex. : 4"></div><div></div></div>'
     +'<label class="flabel">Note (expérience, alternance…)</label><textarea class="finput" id="og-f-note" rows="2" placeholder="Ex. : + 2 ans d’expérience">'+ogEsc(c?.note||'')+'</textarea>'
     +'<label class="og-chk"><input type="checkbox" id="og-f-rsai"'+(c?.rsai?' checked':'')+'> Référent·e Santé et Accueil Inclusif (RSAI)</label>'
     +(reseau?'':'<label class="og-chk"><input type="checkbox" id="og-f-arret"'+(c?.en_arret?' checked':'')+'> Absent·e de cette crèche (carte grisée, hors totaux)</label>'
@@ -339,13 +343,15 @@ async function ogEnregistrer(id){
   const nbOuNull=(id,lib)=>{const t=v(id).replace(',','.');if(t==='')return null;const x=parseFloat(t);return(isFinite(x)&&x>=0&&x<=2)?x:NaN;};
   const etpDir=nbOuNull('og-f-etpdir'),etpEnt=nbOuNull('og-f-etpent');
   if(Number.isNaN(etpDir)||Number.isNaN(etpEnt)){alert('ETP direction / entretien : indiquez un nombre entre 0 et 2 (ex. 0,5).');return;}
+  const joursTxt=v('og-f-jours'),jours=joursTxt===''?null:parseInt(joursTxt,10);
+  if(jours!=null&&!(jours>=1&&jours<=7)){alert('Jours travaillés : indiquez un nombre entre 1 et 7.');return;}
   const pers=v('og-f-pers');
   const reseau=!!document.getElementById('og-f-reseau')&&(document.getElementById('og-f-reseau').type==='hidden'||document.getElementById('og-f-reseau').checked);
   const existante=id?ogCartes.find(x=>x.id===id):null;
   const creche_id=reseau?null:(existante?existante.creche_id:ogCrecheCourante())||null;
   if(!reseau&&!creche_id){alert('Choisissez d’abord une crèche.');return;}
   const row={
-    nom,poste:v('og-f-poste')||null,diplome:v('og-f-diplome')||null,heures_hebdo:heures,etp,etp_direction:etpDir,etp_entretien:etpEnt,note:v('og-f-note')||null,
+    nom,poste:v('og-f-poste')||null,diplome:v('og-f-diplome')||null,heures_hebdo:heures,etp,etp_direction:etpDir,etp_entretien:etpEnt,jours_semaine:jours,note:v('og-f-note')||null,
     rsai:!!document.getElementById('og-f-rsai')?.checked,creche_id,
     parent_id:reseau?null:(v('og-f-parent')||null),
     en_arret:!reseau&&!!document.getElementById('og-f-arret')?.checked,
@@ -537,7 +543,7 @@ const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:
   +'.og-groupe{position:relative;display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-groupe .og-node{width:158px;max-width:158px;min-width:158px;box-sizing:border-box;z-index:1}.og-groupe .og-node+.og-node{margin-left:26px}.og-groupe::after{content:"";position:absolute;left:50%;top:50%;bottom:0;border-left:2px solid #3D3580;margin-left:-1px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-26px;top:50%;width:26px;border-top:2px solid #3D3580}'
   +'.og-node{position:relative;min-width:128px;max-width:176px;border:1.5px solid #3D3580;border-radius:9px;padding:6px 7px;background:#fff;break-inside:avoid}.og-rsai{border-color:#0E9F6E;background:#ECFDF5}'
   +'.og-badges{position:absolute;top:-9px;right:8px;display:flex;gap:4px;max-width:96%;justify-content:flex-end}.og-badge{background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}.og-b-arret{background:#B45309}.og-b-mutation{background:#7C3AED}.og-b-conge{background:#0E7490}.og-b-remp{background:#2563EB}.og-absente{border-style:dashed;border-color:#9a98b5;background:#f1f0f6;color:#777}.og-absente .og-poste{color:#888}.og-remp{position:relative;display:flex;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-remp .og-node{width:158px;max-width:158px;min-width:158px;box-sizing:border-box;z-index:1}.og-remp .og-node+.og-node{margin-left:26px}.og-remp .og-node+.og-node::before{content:"";position:absolute;left:-26px;top:50%;width:26px;border-top:2px dashed #B45309}.og-remp::after{content:"";position:absolute;left:50%;top:50%;bottom:0;border-left:2px dashed #B45309;margin-left:-1px}'
-  +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-synth{margin:14px auto 0;border-collapse:collapse;font-size:12px;min-width:340px}.og-synth caption{font-weight:800;color:#3D3580;text-align:left;padding-bottom:4px;font-size:13px}.og-synth th{font-size:11px;color:#666;text-align:right;padding:3px 10px;border-bottom:2px solid #3D3580}.og-synth td{padding:4px 10px;border-bottom:1px solid #e3e1f0;text-align:right}.og-synth td:first-child{text-align:left;font-weight:600}.og-synth .og-tot td{font-weight:800;border-top:2px solid #3D3580;border-bottom:0}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}'
+  +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-synth{margin:14px auto 0;border-collapse:collapse;font-size:12px;min-width:340px}.og-synth caption{font-weight:800;color:#3D3580;text-align:left;padding-bottom:4px;font-size:13px}.og-synth th{font-size:11px;color:#666;text-align:right;padding:3px 10px;border-bottom:2px solid #3D3580}.og-synth td{padding:4px 10px;border-bottom:1px solid #e3e1f0;text-align:right}.og-synth td:first-child{text-align:left;font-weight:600}.og-synth .og-tot td{font-weight:800;border-top:2px solid #3D3580;border-bottom:0}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}.og-sub span{font-weight:400!important;color:#7a5b00;font-size:9.5px}'
   +'.og-pied{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:12px;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px}';
 // Largeur naturelle d'un arbre (hors écran), pour l'ajuster à la largeur d'une page A4 paysage.
 function ogLargeur(html){
