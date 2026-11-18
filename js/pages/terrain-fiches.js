@@ -75,7 +75,47 @@ function feRender(){
     +feFichiers('Autres documents (droit à l\'image, ordonnances…)',(f.documents||[]).filter(d=>d.piece_key!=='photo_enfant'));
 }
 let FE_BLOB=null;
+let FE_DOC_ID=0;   // identifie l'ouverture en cours : un PDF dessiné après la fermeture de la fenêtre est abandonné
+/* PDF : dessiné avec pdf.js (cdnjs, comme les supports pédagogiques). Les tablettes Android n'ont pas de lecteur PDF
+   dans une <iframe> : Chrome y affiche une page avec un bouton « Ouvrir » qui ne fait rien pour une adresse blob:. */
+const FE_PDFJS='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+let fePdfPret=null;
+function feScript(src){
+  return new Promise((ok,ko)=>{
+    const sc=document.createElement('script');
+    sc.src=src;sc.onload=ok;sc.onerror=()=>ko(new Error('lecteur PDF inaccessible'));
+    document.head.appendChild(sc);
+  });
+}
+function feChargerPdfJs(){
+  if(window.pdfjsLib&&window.pdfjsWorker)return Promise.resolve();
+  if(!fePdfPret)fePdfPret=feScript(FE_PDFJS+'pdf.min.js').then(()=>feScript(FE_PDFJS+'pdf.worker.min.js')).catch(e=>{fePdfPret=null;throw e;});
+  return fePdfPret;
+}
+async function feRendrePdf(corps,blob,jeton){
+  await feChargerPdfJs();
+  const buf=new Uint8Array(await blob.arrayBuffer());
+  const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+  if(jeton!==FE_DOC_ID){pdf.destroy();return;}
+  const total=pdf.numPages,max=Math.min(total,40);
+  corps.innerHTML='<div id="fePdfPages" style="max-height:70vh;overflow:auto;-webkit-overflow-scrolling:touch;background:#e9e7f2;border-radius:10px;padding:8px"></div>';
+  const zone=corps.querySelector('#fePdfPages');
+  for(let n=1;n<=max;n++){
+    if(jeton!==FE_DOC_ID){pdf.destroy();return;}
+    const page=await pdf.getPage(n);
+    const largeur=Math.max(300,zone.clientWidth-16);
+    const base=page.getViewport({scale:1});
+    const vp=page.getViewport({scale:Math.min(2200,largeur*Math.min(window.devicePixelRatio||1,2))/base.width});
+    const c=document.createElement('canvas');
+    c.width=Math.floor(vp.width);c.height=Math.floor(vp.height);
+    c.style.cssText='width:100%;height:auto;display:block;margin:0 auto 8px;background:#fff;border-radius:6px';
+    zone.appendChild(c);
+    await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+  }
+  if(total>max)zone.insertAdjacentHTML('beforeend','<div class="msg">'+(total-max)+' page(s) non affichée(s) : utilisez « Télécharger ».</div>');
+}
 function feFermerDoc(){
+  FE_DOC_ID++;
   document.getElementById('ovFicheDoc').classList.remove('on');
   document.getElementById('feDocCorps').innerHTML='';
   if(FE_BLOB){URL.revokeObjectURL(FE_BLOB);FE_BLOB=null;}
@@ -85,6 +125,7 @@ function feFermerDoc(){
    après un appel réseau). */
 async function feOuvrirFichier(bucket,path,nom){
   const ov=document.getElementById('ovFicheDoc'),corps=document.getElementById('feDocCorps');
+  const jeton=++FE_DOC_ID;
   ov.classList.add('on');
   corps.innerHTML='<div class="msg">Chargement du document…</div>';
   document.getElementById('feDocLien').style.display='none';
@@ -100,7 +141,13 @@ async function feOuvrirFichier(bucket,path,nom){
   const lien=document.getElementById('feDocLien');
   lien.href=FE_BLOB;lien.download=nom||path.split('/').pop();lien.style.display='';
   if(type.indexOf('image/')===0)corps.innerHTML='<img src="'+FE_BLOB+'" style="max-width:100%;border-radius:10px">';
-  else if(type==='application/pdf')corps.innerHTML='<iframe src="'+FE_BLOB+'" style="width:100%;height:70vh;border:1px solid var(--line);border-radius:10px"></iframe>';
+  else if(type==='application/pdf'){
+    corps.innerHTML='<div class="msg">Préparation du document…</div>';
+    feRendrePdf(corps,blob,jeton).catch(function(e){
+      console.warn('[fiches] PDF',e);
+      if(jeton===FE_DOC_ID)corps.innerHTML='<div class="msg warn"><i class="ti ti-alert-triangle"></i> Le document ne peut pas s’afficher ici : utilisez « Télécharger ».</div>';
+    });
+  }
   else corps.innerHTML='<div class="msg">Ce type de fichier ne s’affiche pas ici : utilisez « Télécharger ».</div>';
 }
 document.getElementById('qFiches').onclick=feOuvrir;
