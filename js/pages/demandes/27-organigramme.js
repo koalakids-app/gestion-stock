@@ -90,13 +90,14 @@ const ogFmtEtp=v=>v==null?'':(Math.round(v*100)/100).toLocaleString('fr-FR')+' E
 
 // ---------- dessin ----------
 // Arrêts et remplacements : `ogAbsentes` (ids des personnes en arrêt ou remplacées) est recalculé par ogArbre().
+const OG_MOTIFS={arret:'EN ARRÊT',mutation:'MUTÉ·E',conge:'EN CONGÉ'};
 let ogAbsentes=new Set();
 const ogAbsente=c=>!!c&&(!!c.en_arret||ogAbsentes.has(c.id));
 function ogCarte(c){
   const etp=ogEtpDe(c),h=ogFmtHeures(c.heures_hebdo);
   const peut=ogPeutEditer(c);
   const abs=ogAbsente(c),cible=c.remplace_id?ogCartes.find(x=>x.id===c.remplace_id):null;
-  const badges=(c.rsai?'<span class="og-badge">RSAI</span>':'')+(abs?'<span class="og-badge og-b-arret">EN ARRÊT</span>':'')
+  const badges=(c.rsai?'<span class="og-badge">RSAI</span>':'')+(abs?'<span class="og-badge og-b-'+(OG_MOTIFS[c.absence_motif]?c.absence_motif:'arret')+'">'+OG_MOTIFS[OG_MOTIFS[c.absence_motif]?c.absence_motif:'arret']+'</span>':'')
     +(cible?'<span class="og-badge og-b-remp">Remplace '+ogEsc(cible.nom)+'</span>':'');
   return '<div class="og-node'+(c.rsai?' og-rsai':'')+(abs?' og-absente':'')+(peut?' og-edit':'')+'"'+(peut?' onclick="ogEditer(\''+c.id+'\')" title="Modifier"':'')+'>'
     +(badges?'<span class="og-badges">'+badges+'</span>':'')
@@ -178,7 +179,7 @@ function ogRender(){
   zone.innerHTML='<div class="og-page"><div class="og-entete"><img src="logo-koalakids.png" alt="" class="og-logo"><div><div class="og-titre">'+ogEsc(creche.name)+'</div>'
     +'<div class="og-sous">Organigramme'+(majTxt?' (maj : '+majTxt+')':'')+'</div></div></div>'
     +'<div class="og-arbre">'+arbre+'</div>'
-    +'<div class="og-pied"><span><strong>'+actives.length+'</strong> personne'+(actives.length>1?'s':'')+(nbArret?' (+ '+nbArret+' en arrêt)':'')+'</span>'
+    +'<div class="og-pied"><span><strong>'+actives.length+'</strong> personne'+(actives.length>1?'s':'')+(nbArret?' (+ '+nbArret+' absent'+(nbArret>1?'·e·s':'·e')+')':'')+'</span>'
     +'<span>Total : <strong>'+(Math.round(heures*100)/100).toLocaleString('fr-FR')+' h/sem</strong> · <strong>'+(Math.round(etp*100)/100).toLocaleString('fr-FR')+' ETP</strong></span>'
     +'<span>RSAI : <strong>'+(rsai.length?ogEsc(rsai.join(', ')):'à désigner')+'</strong></span></div>'
     +ogSynthese(etp,etpDir,etpEnt,etpEnf)+'</div>';
@@ -303,7 +304,9 @@ function ogEditer(id,reseauInit){
     +'<div><label class="flabel">dont ETP entretien / repas</label><input class="finput" id="og-f-etpent" value="'+ogEsc(c?.etp_entretien!=null?String(c.etp_entretien).replace('.',','):'')+'" placeholder="Ex. : 0,29"></div></div>'
     +'<label class="flabel">Note (expérience, alternance…)</label><textarea class="finput" id="og-f-note" rows="2" placeholder="Ex. : + 2 ans d’expérience">'+ogEsc(c?.note||'')+'</textarea>'
     +'<label class="og-chk"><input type="checkbox" id="og-f-rsai"'+(c?.rsai?' checked':'')+'> Référent·e Santé et Accueil Inclusif (RSAI)</label>'
-    +(reseau?'':'<label class="og-chk"><input type="checkbox" id="og-f-arret"'+(c?.en_arret?' checked':'')+'> En arrêt (absent·e : carte grisée, hors totaux)</label>'
+    +(reseau?'':'<label class="og-chk"><input type="checkbox" id="og-f-arret"'+(c?.en_arret?' checked':'')+'> Absent·e de cette crèche (carte grisée, hors totaux)</label>'
+      +'<label class="flabel">Motif de l’absence</label><select class="finput" id="og-f-motif">'
+      +[['arret','En arrêt'],['mutation','Mutation : affecté·e dans une autre crèche'],['conge','Congé']].map(([k,l])=>`<option value="${k}"${((c?.absence_motif)||'arret')===k?' selected':''}>${l}</option>`).join('')+'</select>'
       +'<label class="flabel">Remplace <span style="font-weight:400;color:var(--muted)">(la personne remplacée passe en arrêt ; la remplaçante prend sa place dans l’organigramme)</span></label><select class="finput" id="og-f-remplace" onchange="ogRemplaceChange()">'+ogOptionsRemplace(crecheId,c)+'</select><input class="finput" id="og-f-remplace-libre" placeholder="Nom de la personne remplacée" style="display:none;margin-top:6px">')
     +(reseau?'':'<label class="flabel">Rattaché à <span style="font-weight:400;color:var(--muted)">(vide = sur la même ligne que la directrice technique, sous les gestionnaires)</span></label><select class="finput" id="og-f-parent"><option value="">— Aucun (en haut de l’organigramme) —</option>'
       +autres.map(x=>`<option value="${x.id}"${c?.parent_id===x.id?' selected':''}>${ogEsc(x.nom)}${x.poste?' — '+ogEsc(x.poste):''}</option>`).join('')+'</select>')
@@ -336,7 +339,8 @@ async function ogEnregistrer(id){
     nom,poste:v('og-f-poste')||null,diplome:v('og-f-diplome')||null,heures_hebdo:heures,etp,etp_direction:etpDir,etp_entretien:etpEnt,note:v('og-f-note')||null,
     rsai:!!document.getElementById('og-f-rsai')?.checked,creche_id,
     parent_id:reseau?null:(v('og-f-parent')||null),
-    en_arret:!reseau&&!!document.getElementById('og-f-arret')?.checked,remplace_id:reseau?null:(v('og-f-remplace')||null),
+    en_arret:!reseau&&!!document.getElementById('og-f-arret')?.checked,
+    absence_motif:(!reseau&&document.getElementById('og-f-arret')?.checked)?(v('og-f-motif')||'arret'):null,remplace_id:reseau?null:(v('og-f-remplace')||null),
     employe_id:pers.startsWith('e:')?pers.slice(2):null,referent_id:pers.startsWith('r:')?pers.slice(2):null
   };
   if(row.remplace_id==='__libre'){
@@ -523,7 +527,7 @@ const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:
   +'.og-t ul::before{content:"";position:absolute;top:0;left:50%;border-left:2px solid #b9b5d6;height:14px}.og-t>li{padding-top:0}.og-t>li::before,.og-t>li::after{display:none}'
   +'.og-groupe{position:relative;display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-groupe .og-node{width:158px;max-width:158px;min-width:158px;box-sizing:border-box;z-index:1}.og-groupe .og-node+.og-node{margin-left:26px}.og-groupe::after{content:"";position:absolute;left:50%;top:50%;bottom:0;border-left:2px solid #3D3580;margin-left:-1px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-26px;top:50%;width:26px;border-top:2px solid #3D3580}'
   +'.og-node{position:relative;min-width:128px;max-width:176px;border:1.5px solid #3D3580;border-radius:9px;padding:6px 7px;background:#fff;break-inside:avoid}.og-rsai{border-color:#0E9F6E;background:#ECFDF5}'
-  +'.og-badges{position:absolute;top:-9px;right:8px;display:flex;gap:4px;max-width:96%;justify-content:flex-end}.og-badge{background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}.og-b-arret{background:#B45309}.og-b-remp{background:#2563EB}.og-absente{border-style:dashed;border-color:#9a98b5;background:#f1f0f6;color:#777}.og-absente .og-poste{color:#888}.og-remp{position:relative;display:flex;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-remp .og-node{width:158px;max-width:158px;min-width:158px;box-sizing:border-box;z-index:1}.og-remp .og-node+.og-node{margin-left:26px}.og-remp .og-node+.og-node::before{content:"";position:absolute;left:-26px;top:50%;width:26px;border-top:2px dashed #B45309}.og-remp::after{content:"";position:absolute;left:50%;top:50%;bottom:0;border-left:2px dashed #B45309;margin-left:-1px}'
+  +'.og-badges{position:absolute;top:-9px;right:8px;display:flex;gap:4px;max-width:96%;justify-content:flex-end}.og-badge{background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}.og-b-arret{background:#B45309}.og-b-mutation{background:#7C3AED}.og-b-conge{background:#0E7490}.og-b-remp{background:#2563EB}.og-absente{border-style:dashed;border-color:#9a98b5;background:#f1f0f6;color:#777}.og-absente .og-poste{color:#888}.og-remp{position:relative;display:flex;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-remp .og-node{width:158px;max-width:158px;min-width:158px;box-sizing:border-box;z-index:1}.og-remp .og-node+.og-node{margin-left:26px}.og-remp .og-node+.og-node::before{content:"";position:absolute;left:-26px;top:50%;width:26px;border-top:2px dashed #B45309}.og-remp::after{content:"";position:absolute;left:50%;top:50%;bottom:0;border-left:2px dashed #B45309;margin-left:-1px}'
   +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-synth{margin:14px auto 0;border-collapse:collapse;font-size:12px;min-width:340px}.og-synth caption{font-weight:800;color:#3D3580;text-align:left;padding-bottom:4px;font-size:13px}.og-synth th{font-size:11px;color:#666;text-align:right;padding:3px 10px;border-bottom:2px solid #3D3580}.og-synth td{padding:4px 10px;border-bottom:1px solid #e3e1f0;text-align:right}.og-synth td:first-child{text-align:left;font-weight:600}.og-synth .og-tot td{font-weight:800;border-top:2px solid #3D3580;border-bottom:0}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}'
   +'.og-pied{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:12px;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px}';
 function ogImprimer(){
