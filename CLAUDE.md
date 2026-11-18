@@ -188,6 +188,9 @@ chargés tels quels par les pages (ex. `demandes.html` charge `js/pages/demandes
 - Liens de signature : tous les devis et contrats ont une expiration (`expire_le`) contrôlée par `dossier-devis` / `dossier-contrat` ; les jetons expirés restent stockés, sans effet.
 - Laissé volontairement : 246 politiques permissives multiples, 123 clés étrangères sans index, 38 index inutilisés (base de 58 Mo, aucun effet mesurable ; à reprendre si le volume grossit) ; photos d'articles du bucket `assets` non réduites (~1 Go) ; `mfa-codes-secours` (voir plus haut).
 
+## Affichage des PDF (tablettes Android)
+- Chrome / Samsung Internet sur Android n'ont **pas de lecteur PDF dans une `<iframe>`** : l'iframe montre un bouton « Ouvrir » inactif pour une adresse `blob:`. `js/pdf-lecteur.js` (`KkPdfLecteur`, pdf.js de cdnjs chargé à la demande, pages dessinées au défilement) est utilisé quand `navigator.pdfViewerEnabled === false` (ou absent sur un User-Agent Android) ; les autres navigateurs gardent l'iframe (zoom et impression natifs). En place : visionneuse de Documents (`pdfAfficher`, `genre` `'html'`/`'autre'` = toujours l'iframe ; Imprimer ouvre alors l'onglet) et page de signature (`afficherDocument`). La fiche enfant du terrain (`feRendrePdf`) dessine toujours avec pdf.js. Tout nouvel aperçu PDF en iframe doit passer par `KkPdfLecteur`. Reste en iframe : l'aperçu du menu PDF de Demandes (`mpdf-frame`, usage ordinateur).
+
 ## Habitudes de travail
 - Branche de développement de la session, pull request vers `main` en **squash**.
 - Après une fusion, repartir de `origin/main` (`git checkout -B <branche> origin/main`) ; le push demande `--force-with-lease`.

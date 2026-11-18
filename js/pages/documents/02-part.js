@@ -24,16 +24,27 @@ function pdfLogo(doc,y){
 let PDF_APERCU=false,PDF_BLOB_URL=null,PDF_SRC=null,PDF_NOM=null;
 /* Affiche une source dans la visionneuse. blobALiberer vaut l'URL blob a
    revoquer a la fermeture, ou null pour un fichier deja heberge (bucket assets). */
-function pdfAfficher(src,nom,blobALiberer,srcTelechargement,mention){
+/* genre : 'html' (docx converti) ou 'autre' = toujours l'<iframe> ; sinon c'est un PDF, dessiné par pdf.js
+   (js/pdf-lecteur.js) sur les navigateurs sans visionneuse PDF intégrée (Chrome Android : bouton « Ouvrir » inactif). */
+function pdfAfficher(src,nom,blobALiberer,srcTelechargement,mention,genre){
   pdfLibererBlob();
   PDF_BLOB_URL=blobALiberer||null;
   PDF_SRC=srcTelechargement||src;
   PDF_NOM=nom;
   document.getElementById('pdfNom').textContent=(nom||'')+(mention||'');
-  const f=document.getElementById('pdfFrame');
+  const f=document.getElementById('pdfFrame'),z=document.getElementById('pdfPages');
   f.removeAttribute('srcdoc');
-  f.src=src;
+  const viaJs=genre!=='html'&&genre!=='autre'&&z&&window.KkPdfLecteur&&KkPdfLecteur.utile();
   document.getElementById('ovPdf').classList.add('on');
+  if(viaJs){
+    f.style.display='none';f.src='about:blank';
+    z.style.display='block';
+    KkPdfLecteur.rendre(z,src);
+  }else{
+    if(z){z.style.display='none';z.innerHTML='';}
+    if(window.KkPdfLecteur)KkPdfLecteur.annuler();
+    f.style.display='';f.src=src;
+  }
 }
 /* Variante HTML : utilisee pour les .docx convertis. Le contenu est injecte via
    srcdoc pour rester isole du style de l'application. Le bouton Telecharger
@@ -59,10 +70,14 @@ function pdfAfficherHtml(interieur,nom,srcTelechargement,mention){
     +'table.xl tbody tr:nth-child(even):not(.entete){background:#FAF8FD}'
     +'table.xl td:empty{background:#fff}</style>'+interieur;
   const url=URL.createObjectURL(new Blob([page],{type:'text/html;charset=utf-8'}));
-  pdfAfficher(url,nom,url,srcTelechargement,mention==null?' \u2014 aper\u00e7u de lecture, mise en page approch\u00e9e':mention);
+  pdfAfficher(url,nom,url,srcTelechargement,mention==null?' \u2014 aper\u00e7u de lecture, mise en page approch\u00e9e':mention,'html');
 }
 function pdfImprimer(){
   const f=document.getElementById('pdfFrame');
+  if(f&&f.style.display==='none'){   // aperçu dessiné par pdf.js : pas d'impression depuis la page
+    pdfOnglet();toast('Imprimez depuis l\u2019onglet ouvert (menu du navigateur)');
+    return;
+  }
   try{f.contentWindow.focus();f.contentWindow.print();}
   catch(e){toast('Impression impossible ici — utiliser « Ouvrir dans un onglet »');}
 }
@@ -201,7 +216,7 @@ async function apercuFichier(id){
     let b=await r.blob();
     if(b.type!==mime)b=new Blob([b],{type:mime});
     const url=URL.createObjectURL(b);
-    pdfAfficher(url,nom,url);
+    pdfAfficher(url,nom,url,undefined,undefined,mime==='application/pdf'?'pdf':'autre');
   }catch(e){
     console.error('apercuFichier',e);
     window.open(d.fichier_url,'_blank','noopener');
@@ -239,8 +254,10 @@ function pdfOnglet(){
 }
 function pdfFermer(){
   close_('ovPdf');
-  const f=document.getElementById('pdfFrame');
+  const f=document.getElementById('pdfFrame'),z=document.getElementById('pdfPages');
   if(f){f.removeAttribute('srcdoc');f.src='about:blank';}
+  if(z){z.innerHTML='';}
+  if(window.KkPdfLecteur)KkPdfLecteur.annuler();
   pdfLibererBlob();
   PDF_SRC=null;PDF_NOM=null;
 }

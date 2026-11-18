@@ -96,6 +96,12 @@ function afficherDocument(){
   let src=null;
   if(ext==='docx'||ext==='doc')src='https://view.officeapps.live.com/op/embed.aspx?src='+encodeURIComponent(DOC.fichier_url);
   else if(ext==='pdf')src=DOC.fichier_url;
+  /* Chrome Android n'a pas de lecteur PDF dans une <iframe> (bouton « Ouvrir » inactif) : pdf.js dessine le document. */
+  if(ext==='pdf'&&window.KkPdfLecteur&&KkPdfLecteur.utile()){
+    box.style.maxHeight='62vh';box.style.overflow='auto';box.style.padding='8px';box.style.background='#e9e7f2';
+    KkPdfLecteur.rendre(box,DOC.fichier_url,{messageErreur:'Aperçu indisponible : utilisez le lien « Ouvrir le document d’origine en plein écran » ci-dessus.'});
+    return;
+  }
   if(!src){
     box.textContent='Aperçu indisponible pour ce format : utilisez le lien « Ouvrir le document d’origine en plein écran » ci-dessus.';
     return;
