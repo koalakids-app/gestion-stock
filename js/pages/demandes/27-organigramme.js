@@ -89,11 +89,17 @@ function ogRepartition(c){
 const ogFmtEtp=v=>v==null?'':(Math.round(v*100)/100).toLocaleString('fr-FR')+' ETP';
 
 // ---------- dessin ----------
+// Arrêts et remplacements : `ogAbsentes` (ids des personnes en arrêt ou remplacées) est recalculé par ogArbre().
+let ogAbsentes=new Set();
+const ogAbsente=c=>!!c&&(!!c.en_arret||ogAbsentes.has(c.id));
 function ogCarte(c){
   const etp=ogEtpDe(c),h=ogFmtHeures(c.heures_hebdo);
   const peut=ogPeutEditer(c);
-  return '<div class="og-node'+(c.rsai?' og-rsai':'')+(peut?' og-edit':'')+'"'+(peut?' onclick="ogEditer(\''+c.id+'\')" title="Modifier"':'')+'>'
-    +(c.rsai?'<span class="og-badge">RSAI</span>':'')
+  const abs=ogAbsente(c),cible=c.remplace_id?ogCartes.find(x=>x.id===c.remplace_id):null;
+  const badges=(c.rsai?'<span class="og-badge">RSAI</span>':'')+(abs?'<span class="og-badge og-b-arret">EN ARRÊT</span>':'')
+    +(cible?'<span class="og-badge og-b-remp">Remplace '+ogEsc(cible.nom)+'</span>':'');
+  return '<div class="og-node'+(c.rsai?' og-rsai':'')+(abs?' og-absente':'')+(peut?' og-edit':'')+'"'+(peut?' onclick="ogEditer(\''+c.id+'\')" title="Modifier"':'')+'>'
+    +(badges?'<span class="og-badges">'+badges+'</span>':'')
     +'<div class="og-nom">'+ogEsc(c.nom)+'</div>'
     +(c.poste?'<div class="og-poste">'+ogEsc(c.poste)+'</div>':'')
     +(c.diplome?'<div class="og-dip">Dip : '+ogEsc(c.diplome)+'</div>':'')
@@ -102,18 +108,31 @@ function ogCarte(c){
     +ogRepartition(c)
     +'</div>';
 }
-function ogBranche(c,enfants){
-  const fils=enfants[c.id]||[];
-  return '<li>'+ogCarte(c)+(fils.length?'<ul>'+fils.map(f=>ogBranche(f,enfants)).join('')+'</ul>':'')+'</li>';
+// Une remplaçante s'affiche dans le même bloc que la personne remplacée (même poste, mêmes liens).
+function ogBranche(c,enfants,remps){
+  const fils=enfants[c.id]||[],rem=remps[c.id]||[];
+  const tete=rem.length?'<div class="og-remp">'+ogCarte(c)+rem.map(ogCarte).join('')+'</div>':ogCarte(c);
+  return '<li>'+tete+(fils.length?'<ul>'+fils.map(f=>ogBranche(f,enfants,remps)).join('')+'</ul>':'')+'</li>';
 }
 function ogArbre(crecheId){
   const reseau=ogCartes.filter(c=>!c.creche_id);
   const cartes=ogCartes.filter(c=>c.creche_id===crecheId);
-  const ids=new Set(cartes.map(c=>c.id));
+  const par={};cartes.forEach(c=>{par[c.id]=c;});
+  // cible effective d'un remplacement (suit les remplacements en chaîne, sans boucle)
+  const poste=c=>{let x=c,n=0;while(x&&x.remplace_id&&par[x.remplace_id]&&x.remplace_id!==x.id&&n++<10)x=par[x.remplace_id];return x;};
+  const remps={},estRemp=new Set();ogAbsentes=new Set();
+  cartes.forEach(c=>{
+    if(!c.remplace_id||!par[c.remplace_id]||c.remplace_id===c.id)return;
+    const t=poste(c);if(!t||t.id===c.id)return;
+    (remps[t.id]=remps[t.id]||[]).push(c);estRemp.add(c.id);ogAbsentes.add(c.remplace_id);
+  });
   const enfants={};
-  cartes.forEach(c=>{if(c.parent_id&&ids.has(c.parent_id))(enfants[c.parent_id]=enfants[c.parent_id]||[]).push(c);});
-  const racines=cartes.filter(c=>!c.parent_id||!ids.has(c.parent_id));
-  const racinesHtml=racines.map(r=>ogBranche(r,enfants)).join('');
+  cartes.forEach(c=>{
+    if(estRemp.has(c.id)||!c.parent_id||!par[c.parent_id])return;
+    const k=poste(par[c.parent_id]).id;(enfants[k]=enfants[k]||[]).push(c);
+  });
+  const racines=cartes.filter(c=>!estRemp.has(c.id)&&(!c.parent_id||!par[c.parent_id]));
+  const racinesHtml=racines.map(r=>ogBranche(r,enfants,remps)).join('');
   if(reseau.length){
     return '<ul class="og-t"><li><div class="og-groupe">'+reseau.map(ogCarte).join('')+'</div>'
       +(racines.length?'<ul>'+racinesHtml+'</ul>':'')+'</li></ul>';
@@ -138,15 +157,16 @@ function ogRender(){
   }
   const maj=ogCartes.filter(c=>c.creche_id===crecheId||!c.creche_id).map(c=>c.maj_le||c.created_at).sort().pop();
   const majTxt=maj?new Date(maj).toLocaleDateString('fr-FR'):'';
-  const heures=cartes.reduce((s,c)=>s+(Number(c.heures_hebdo)||0),0);
-  const etp=cartes.reduce((s,c)=>s+(ogEtpDe(c)||0),0);
-  const etpDir=cartes.reduce((a,c)=>a+(Number(c.etp_direction)||0),0),etpEnt=cartes.reduce((a,c)=>a+(Number(c.etp_entretien)||0),0);
-  const etpEnf=cartes.reduce((a,c)=>a+ogParts(c).enf,0);
+  const actives=cartes.filter(c=>!ogAbsente(c)),nbArret=cartes.length-actives.length;
+  const heures=actives.reduce((s,c)=>s+(Number(c.heures_hebdo)||0),0);
+  const etp=actives.reduce((s,c)=>s+(ogEtpDe(c)||0),0);
+  const etpDir=actives.reduce((a,c)=>a+(Number(c.etp_direction)||0),0),etpEnt=actives.reduce((a,c)=>a+(Number(c.etp_entretien)||0),0);
+  const etpEnf=actives.reduce((a,c)=>a+ogParts(c).enf,0);
   const rsai=cartes.concat(ogCartes.filter(c=>!c.creche_id)).filter(c=>c.rsai).map(c=>c.nom);
   zone.innerHTML='<div class="og-page"><div class="og-entete"><img src="logo-koalakids.png" alt="" class="og-logo"><div><div class="og-titre">'+ogEsc(creche.name)+'</div>'
     +'<div class="og-sous">Organigramme'+(majTxt?' (maj : '+majTxt+')':'')+'</div></div></div>'
     +'<div class="og-arbre">'+arbre+'</div>'
-    +'<div class="og-pied"><span><strong>'+cartes.length+'</strong> personne'+(cartes.length>1?'s':'')+'</span>'
+    +'<div class="og-pied"><span><strong>'+actives.length+'</strong> personne'+(actives.length>1?'s':'')+(nbArret?' (+ '+nbArret+' en arrêt)':'')+'</span>'
     +'<span>Total : <strong>'+(Math.round(heures*100)/100).toLocaleString('fr-FR')+' h/sem</strong> · <strong>'+(Math.round(etp*100)/100).toLocaleString('fr-FR')+' ETP</strong></span>'
     +'<span>RSAI : <strong>'+(rsai.length?ogEsc(rsai.join(', ')):'à désigner')+'</strong></span></div>'
     +ogSynthese(etp,etpDir,etpEnt,etpEnf)+'</div>';
@@ -222,6 +242,9 @@ function ogEditer(id,reseauInit){
     +'<div><label class="flabel">dont ETP entretien / repas</label><input class="finput" id="og-f-etpent" value="'+ogEsc(c?.etp_entretien!=null?String(c.etp_entretien).replace('.',','):'')+'" placeholder="Ex. : 0,29"></div></div>'
     +'<label class="flabel">Note (expérience, alternance…)</label><textarea class="finput" id="og-f-note" rows="2" placeholder="Ex. : + 2 ans d’expérience">'+ogEsc(c?.note||'')+'</textarea>'
     +'<label class="og-chk"><input type="checkbox" id="og-f-rsai"'+(c?.rsai?' checked':'')+'> Référent·e Santé et Accueil Inclusif (RSAI)</label>'
+    +(reseau?'':'<label class="og-chk"><input type="checkbox" id="og-f-arret"'+(c?.en_arret?' checked':'')+'> En arrêt (absent·e : carte grisée, hors totaux)</label>'
+      +'<label class="flabel">Remplace <span style="font-weight:400;color:var(--muted)">(la personne remplacée passe en arrêt ; la remplaçante prend sa place dans l’organigramme)</span></label><select class="finput" id="og-f-remplace"><option value="">— Ne remplace personne —</option>'
+      +ogCartes.filter(x=>x.creche_id===(crecheId||null)&&(!c||x.id!==c.id)).map(x=>`<option value="${x.id}"${c?.remplace_id===x.id?' selected':''}>${ogEsc(x.nom)}${x.poste?' — '+ogEsc(x.poste):''}</option>`).join('')+'</select>')
     +(reseau?'':'<label class="flabel">Rattaché à <span style="font-weight:400;color:var(--muted)">(vide = sur la même ligne que la directrice technique, sous les gestionnaires)</span></label><select class="finput" id="og-f-parent"><option value="">— Aucun (en haut de l’organigramme) —</option>'
       +autres.map(x=>`<option value="${x.id}"${c?.parent_id===x.id?' selected':''}>${ogEsc(x.nom)}${x.poste?' — '+ogEsc(x.poste):''}</option>`).join('')+'</select>')
     +(isDirection&&!reseau?'<label class="og-chk"><input type="checkbox" id="og-f-reseau" onchange="this.dataset.touche=1"'+(nouveauReseau?' checked':'')+(c?' data-touche="1"':'')+'> Niveau réseau : en haut, au-dessus de toutes les crèches (gestionnaires…)</label>':'')
@@ -253,8 +276,13 @@ async function ogEnregistrer(id){
     nom,poste:v('og-f-poste')||null,diplome:v('og-f-diplome')||null,heures_hebdo:heures,etp,etp_direction:etpDir,etp_entretien:etpEnt,note:v('og-f-note')||null,
     rsai:!!document.getElementById('og-f-rsai')?.checked,creche_id,
     parent_id:reseau?null:(v('og-f-parent')||null),
+    en_arret:!reseau&&!!document.getElementById('og-f-arret')?.checked,remplace_id:reseau?null:(v('og-f-remplace')||null),
     employe_id:pers.startsWith('e:')?pers.slice(2):null,referent_id:pers.startsWith('r:')?pers.slice(2):null
   };
+  if(row.remplace_id){
+    const cible=ogCartes.find(x=>x.id===row.remplace_id);
+    if(id&&(row.remplace_id===id||cible?.remplace_id===id)){alert('Une personne ne peut pas se remplacer elle-même (ni remplacer quelqu’un qui la remplace).');return;}
+  }
   if(!id){
     const freres=ogCartes.filter(x=>x.creche_id===creche_id&&x.parent_id===row.parent_id);
     row.ordre=freres.reduce((m,x)=>Math.max(m,x.ordre||0),0)+1;
@@ -416,9 +444,9 @@ const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:
   +'.og-t li::before,.og-t li::after{content:"";position:absolute;top:0;right:50%;border-top:2px solid #b9b5d6;width:50%;height:18px}.og-t li::after{right:auto;left:50%;border-left:2px solid #b9b5d6}'
   +'.og-t li:only-child::before,.og-t li:only-child::after{display:none}.og-t li:only-child{padding-top:0}.og-t li:first-child::before,.og-t li:last-child::after{border:0}.og-t li:last-child::before{border-right:2px solid #b9b5d6;border-radius:0 6px 0 0}.og-t li:first-child::after{border-radius:6px 0 0 0}'
   +'.og-t ul::before{content:"";position:absolute;top:0;left:50%;border-left:2px solid #b9b5d6;height:18px}.og-t>li{padding-top:0}.og-t>li::before,.og-t>li::after{display:none}'
-  +'.og-groupe{display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-groupe .og-node+.og-node{margin-left:44px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #3D3580}'
+  +'.og-groupe{position:relative;display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-groupe .og-node{width:190px;max-width:190px;min-width:190px;box-sizing:border-box;z-index:1}.og-groupe .og-node+.og-node{margin-left:44px}.og-groupe::after{content:"";position:absolute;left:50%;top:50%;bottom:0;border-left:2px solid #3D3580;margin-left:-1px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #3D3580}'
   +'.og-node{position:relative;min-width:150px;max-width:200px;border:1.5px solid #3D3580;border-radius:10px;padding:8px 10px;background:#fff;break-inside:avoid}.og-rsai{border-color:#0E9F6E;background:#ECFDF5}'
-  +'.og-badge{position:absolute;top:-9px;right:8px;background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+  +'.og-badges{position:absolute;top:-9px;right:8px;display:flex;gap:4px;max-width:96%;justify-content:flex-end}.og-badge{background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}.og-b-arret{background:#B45309}.og-b-remp{background:#2563EB}.og-absente{border-style:dashed;border-color:#9a98b5;background:#f1f0f6;color:#777}.og-absente .og-poste{color:#888}.og-remp{position:relative;display:flex;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-remp .og-node{width:190px;max-width:190px;min-width:190px;box-sizing:border-box;z-index:1}.og-remp .og-node+.og-node{margin-left:44px}.og-remp .og-node+.og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px dashed #B45309}.og-remp::after{content:"";position:absolute;left:50%;top:50%;bottom:0;border-left:2px dashed #B45309;margin-left:-1px}'
   +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-synth{margin:14px auto 0;border-collapse:collapse;font-size:12px;min-width:340px}.og-synth caption{font-weight:800;color:#3D3580;text-align:left;padding-bottom:4px;font-size:13px}.og-synth th{font-size:11px;color:#666;text-align:right;padding:3px 10px;border-bottom:2px solid #3D3580}.og-synth td{padding:4px 10px;border-bottom:1px solid #e3e1f0;text-align:right}.og-synth td:first-child{text-align:left;font-weight:600}.og-synth .og-tot td{font-weight:800;border-top:2px solid #3D3580;border-bottom:0}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}'
   +'.og-pied{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:18px;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px}';
 function ogImprimer(){
