@@ -154,6 +154,28 @@ function ogAjuster(){
 }
 let ogResizeT=null;
 if(typeof window!=='undefined')window.addEventListener('resize',()=>{clearTimeout(ogResizeT);ogResizeT=setTimeout(ogAjuster,150);});
+// HTML d'une page d'organigramme (entête + arbre + pied + synthèse) pour une crèche ; null si la crèche n'a aucune carte.
+function ogPageHtml(crecheId){
+  const creche=cacheCreches.find(c=>c.id===crecheId);if(!creche)return null;
+  const cartes=ogCartes.filter(c=>c.creche_id===crecheId);
+  const arbre=ogArbre(crecheId);
+  if(!cartes.length&&!ogCartes.some(c=>!c.creche_id))return null;
+  const maj=ogCartes.filter(c=>c.creche_id===crecheId||!c.creche_id).map(c=>c.maj_le||c.created_at).sort().pop();
+  const majTxt=maj?new Date(maj).toLocaleDateString('fr-FR'):'';
+  const actives=cartes.filter(c=>!ogAbsente(c)),nbArret=cartes.length-actives.length;
+  const heures=actives.reduce((s,c)=>s+(Number(c.heures_hebdo)||0),0);
+  const etp=actives.reduce((s,c)=>s+(ogEtpDe(c)||0),0);
+  const etpDir=actives.reduce((a,c)=>a+(Number(c.etp_direction)||0),0),etpEnt=actives.reduce((a,c)=>a+(Number(c.etp_entretien)||0),0);
+  const etpEnf=actives.reduce((a,c)=>a+ogParts(c).enf,0),etpAlt=actives.reduce((a,c)=>a+ogParts(c).alt,0);
+  const rsai=cartes.concat(ogCartes.filter(c=>!c.creche_id)).filter(c=>c.rsai).map(c=>c.nom);
+  return '<div class="og-page"><div class="og-entete"><img src="logo-koalakids.png" alt="" class="og-logo"><div><div class="og-titre">'+ogEsc(creche.name)+'</div>'
+    +'<div class="og-sous">Organigramme'+(majTxt?' (maj : '+majTxt+')':'')+'</div></div></div>'
+    +'<div class="og-arbre">'+arbre+'</div>'
+    +'<div class="og-pied"><span><strong>'+actives.length+'</strong> personne'+(actives.length>1?'s':'')+(nbArret?' (+ '+nbArret+' absent'+(nbArret>1?'·e·s':'·e')+')':'')+'</span>'
+    +'<span>Total : <strong>'+(Math.round(heures*100)/100).toLocaleString('fr-FR')+' h/sem</strong> · <strong>'+(Math.round(etp*100)/100).toLocaleString('fr-FR')+' ETP</strong></span>'
+    +'<span>RSAI : <strong>'+(rsai.length?ogEsc(rsai.join(', ')):'à désigner')+'</strong></span></div>'
+    +ogSynthese(etp,etpDir,etpEnt,etpEnf,etpAlt)+'</div>';
+}
 function ogRender(){
   const zone=document.getElementById('og-contenu');if(!zone)return;
   const barre=document.getElementById('og-actions');
@@ -163,28 +185,13 @@ function ogRender(){
   if(barre)barre.style.display=peutCreche?'':'none';
   if(ogErreur){zone.innerHTML='<div class="empty-state"><i class="ti ti-alert-triangle"></i><p>'+ogEsc(ogErreur)+'</p></div>';return;}
   if(!creche){zone.innerHTML='<div class="empty-state"><i class="ti ti-sitemap"></i><p>Choisissez une crèche.</p></div>';return;}
-  const cartes=ogCartes.filter(c=>c.creche_id===crecheId);
-  const arbre=ogArbre(crecheId);
-  if(!cartes.length&&!ogCartes.some(c=>!c.creche_id)){
+  const html=ogPageHtml(crecheId);
+  if(html==null){
     zone.innerHTML='<div class="empty-state"><i class="ti ti-sitemap"></i><p>Aucun organigramme pour cette crèche.</p>'
       +(peutCreche?'<p style="font-size:12.5px">Cliquez sur <strong>Ajouter une personne</strong>, ou sur <strong>Pré-remplir depuis les fiches</strong> pour partir de l’équipe existante.</p>':'')+'</div>';
     return;
   }
-  const maj=ogCartes.filter(c=>c.creche_id===crecheId||!c.creche_id).map(c=>c.maj_le||c.created_at).sort().pop();
-  const majTxt=maj?new Date(maj).toLocaleDateString('fr-FR'):'';
-  const actives=cartes.filter(c=>!ogAbsente(c)),nbArret=cartes.length-actives.length;
-  const heures=actives.reduce((s,c)=>s+(Number(c.heures_hebdo)||0),0);
-  const etp=actives.reduce((s,c)=>s+(ogEtpDe(c)||0),0);
-  const etpDir=actives.reduce((a,c)=>a+(Number(c.etp_direction)||0),0),etpEnt=actives.reduce((a,c)=>a+(Number(c.etp_entretien)||0),0);
-  const etpEnf=actives.reduce((a,c)=>a+ogParts(c).enf,0),etpAlt=actives.reduce((a,c)=>a+ogParts(c).alt,0);
-  const rsai=cartes.concat(ogCartes.filter(c=>!c.creche_id)).filter(c=>c.rsai).map(c=>c.nom);
-  zone.innerHTML='<div class="og-page"><div class="og-entete"><img src="logo-koalakids.png" alt="" class="og-logo"><div><div class="og-titre">'+ogEsc(creche.name)+'</div>'
-    +'<div class="og-sous">Organigramme'+(majTxt?' (maj : '+majTxt+')':'')+'</div></div></div>'
-    +'<div class="og-arbre">'+arbre+'</div>'
-    +'<div class="og-pied"><span><strong>'+actives.length+'</strong> personne'+(actives.length>1?'s':'')+(nbArret?' (+ '+nbArret+' absent'+(nbArret>1?'·e·s':'·e')+')':'')+'</span>'
-    +'<span>Total : <strong>'+(Math.round(heures*100)/100).toLocaleString('fr-FR')+' h/sem</strong> · <strong>'+(Math.round(etp*100)/100).toLocaleString('fr-FR')+' ETP</strong></span>'
-    +'<span>RSAI : <strong>'+(rsai.length?ogEsc(rsai.join(', ')):'à désigner')+'</strong></span></div>'
-    +ogSynthese(etp,etpDir,etpEnt,etpEnf,etpAlt)+'</div>';
+  zone.innerHTML=html;
   ogAjuster();
 }
 
@@ -532,13 +539,33 @@ const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:
   +'.og-badges{position:absolute;top:-9px;right:8px;display:flex;gap:4px;max-width:96%;justify-content:flex-end}.og-badge{background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}.og-b-arret{background:#B45309}.og-b-mutation{background:#7C3AED}.og-b-conge{background:#0E7490}.og-b-remp{background:#2563EB}.og-absente{border-style:dashed;border-color:#9a98b5;background:#f1f0f6;color:#777}.og-absente .og-poste{color:#888}.og-remp{position:relative;display:flex;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-remp .og-node{width:158px;max-width:158px;min-width:158px;box-sizing:border-box;z-index:1}.og-remp .og-node+.og-node{margin-left:26px}.og-remp .og-node+.og-node::before{content:"";position:absolute;left:-26px;top:50%;width:26px;border-top:2px dashed #B45309}.og-remp::after{content:"";position:absolute;left:50%;top:50%;bottom:0;border-left:2px dashed #B45309;margin-left:-1px}'
   +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-synth{margin:14px auto 0;border-collapse:collapse;font-size:12px;min-width:340px}.og-synth caption{font-weight:800;color:#3D3580;text-align:left;padding-bottom:4px;font-size:13px}.og-synth th{font-size:11px;color:#666;text-align:right;padding:3px 10px;border-bottom:2px solid #3D3580}.og-synth td{padding:4px 10px;border-bottom:1px solid #e3e1f0;text-align:right}.og-synth td:first-child{text-align:left;font-weight:600}.og-synth .og-tot td{font-weight:800;border-top:2px solid #3D3580;border-bottom:0}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}'
   +'.og-pied{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:12px;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px}';
-function ogImprimer(){
-  const zone=document.getElementById('og-contenu');if(!zone)return;
-  const w=window.open('','_blank');if(!w){alert('Autorisez les fenêtres pop-up pour imprimer.');return;}
-  const need=parseInt(zone.querySelector('.og-arbre')?.dataset.largeur||'0',10);
-  const z=need>1000?Math.max(0.4,1000/need):1;
-  w.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Organigramme Koala Kids</title><style>@page{size:A4 landscape;margin:10mm}body{font-family:Arial,sans-serif;margin:16px;color:#222}'+OG_CSS+'.og-arbre{zoom:'+z+'}</style></head><body>'
-    +zone.innerHTML.replace(/ style="zoom:[^"]*"/g,'').replace(/ onclick="[^"]*"/g,'').replace(/ title="Modifier"/g,'')
-    +'<div style="margin-top:14px;font-size:10px;color:#888;text-align:center">Application créée par David Bucari</div></body></html>');
-  w.document.close();w.focus();setTimeout(()=>w.print(),400);
+// Largeur naturelle d'un arbre (hors écran), pour l'ajuster à la largeur d'une page A4 paysage.
+function ogLargeur(html){
+  const t=document.createElement('div');
+  t.style.cssText='position:absolute;left:-99999px;top:0;width:max-content';
+  t.innerHTML=html;document.body.appendChild(t);
+  const a=t.querySelector('.og-arbre');if(a)a.style.width='max-content';
+  const w=a?a.getBoundingClientRect().width:0;
+  t.remove();return w;
 }
+// Une page par crèche (A4 paysage). ids = crèches à imprimer ; celles sans organigramme sont ignorées.
+function ogImprimerPages(ids){
+  const pages=[],sans=[];
+  ids.forEach(id=>{
+    const h=ogCartes.some(c=>c.creche_id===id)?ogPageHtml(id):null;   // sans carte propre (gestionnaires seuls) : rien à imprimer
+    if(h==null){sans.push(cacheCreches.find(c=>c.id===id)?.name||id);return;}
+    const need=ogLargeur(h),z=need>1000?Math.max(0.4,1000/need):1;
+    pages.push('<section class="og-pdf">'+h.replace('<div class="og-arbre">','<div class="og-arbre" style="zoom:'+z+'">')
+      .replace(/ onclick="[^"]*"/g,'').replace(/ title="Modifier"/g,'')
+      +'<div style="margin-top:12px;font-size:10px;color:#888;text-align:center">Application créée par David Bucari</div></section>');
+  });
+  if(!pages.length){alert('Aucun organigramme à imprimer.');return;}
+  const w=window.open('','_blank');if(!w){alert('Autorisez les fenêtres pop-up pour imprimer.');return;}
+  w.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Organigramme Koala Kids</title><style>@page{size:A4 landscape;margin:10mm}body{font-family:Arial,sans-serif;margin:16px;color:#222}'+OG_CSS
+    +'.og-page{border:0;padding:0}.og-pdf{break-after:page;page-break-after:always}.og-pdf:last-child{break-after:auto;page-break-after:auto}</style></head><body>'+pages.join('')+'</body></html>');
+  w.document.close();w.focus();setTimeout(()=>w.print(),400);
+  if(sans.length)setTimeout(()=>alert('Crèches sans organigramme (non imprimées) : '+sans.join(', ')),600);
+}
+function ogImprimer(){ogImprimerPages([ogCrecheCourante()]);}
+// Direction : toutes les crèches en un seul PDF, une page par crèche.
+function ogImprimerTout(){if(isDirection)ogImprimerPages(cacheCreches.map(c=>c.id));}
