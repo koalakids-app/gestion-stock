@@ -67,6 +67,14 @@ function ogEtpDe(c){
   return null;
 }
 const ogNbFr=v=>(Math.round(v*100)/100).toLocaleString('fr-FR');
+// Tableau de synthèse des ETP de la crèche (écran et PDF) : direction, entretien / repas, encadrement des enfants.
+function ogSynthese(tot,dir,ent,enf){
+  if(!(tot>0))return'';
+  const h=v=>ogFmtHeures(Math.round(v*OG_HEURES_ETP*100)/100).replace('/SEM','');
+  const l=(lib,v,cls)=>'<tr'+(cls?' class="'+cls+'"':'')+'><td>'+lib+'</td><td>'+ogNbFr(v)+' ETP</td><td>'+h(v)+' / sem</td></tr>';
+  return '<table class="og-synth"><caption>Synthèse des ETP</caption><thead><tr><th></th><th>ETP</th><th>Heures</th></tr></thead><tbody>'
+    +(dir>0?l('ETP direction',dir):'')+(ent>0?l('ETP entretien / repas',ent):'')+l('ETP encadrement enfants',enf)+l('Total',tot,'og-tot')+'</tbody></table>';
+}
 // Répartition de l'ETP d'une carte : direction, entretien / repas, encadrement des enfants (= le reste).
 function ogParts(c){
   const tot=ogEtpDe(c)||0,dir=Number(c.etp_direction)||0,ent=Number(c.etp_entretien)||0;
@@ -145,8 +153,8 @@ function ogRender(){
     +'<div class="og-arbre">'+arbre+'</div>'
     +'<div class="og-pied"><span><strong>'+cartes.length+'</strong> personne'+(cartes.length>1?'s':'')+'</span>'
     +'<span>Total : <strong>'+(Math.round(heures*100)/100).toLocaleString('fr-FR')+' h/sem</strong> · <strong>'+(Math.round(etp*100)/100).toLocaleString('fr-FR')+' ETP</strong></span>'
-    +((etpDir>0||etpEnt>0)?'<span>dont direction : <strong>'+ogNbFr(etpDir)+'</strong> · entretien / repas : <strong>'+ogNbFr(etpEnt)+'</strong> · encadrement enfants : <strong>'+ogNbFr(etpEnf)+' ETP</strong></span>':'')
-    +'<span>RSAI : <strong>'+(rsai.length?ogEsc(rsai.join(', ')):'à désigner')+'</strong></span></div></div>';
+    +'<span>RSAI : <strong>'+(rsai.length?ogEsc(rsai.join(', ')):'à désigner')+'</strong></span></div>'
+    +ogSynthese(etp,etpDir,etpEnt,etpEnf)+'</div>';
 }
 
 // ---------- édition d'une carte ----------
@@ -409,7 +417,7 @@ const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:
   +'.og-groupe{display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-ligne{position:relative}.og-avec-lat{padding:0 244px}.og-lat{position:absolute;right:0;top:0;width:200px;display:flex;flex-direction:column;gap:8px}.og-lat .og-node{width:200px;max-width:200px}.og-lat .og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #0E9F6E}.og-groupe .og-node+.og-node{margin-left:44px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #3D3580}'
   +'.og-node{position:relative;min-width:150px;max-width:200px;border:1.5px solid #3D3580;border-radius:10px;padding:8px 10px;background:#fff;break-inside:avoid}.og-rsai{border-color:#0E9F6E;background:#ECFDF5}'
   +'.og-badge{position:absolute;top:-9px;right:8px;background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-  +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}'
+  +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-synth{margin:14px auto 0;border-collapse:collapse;font-size:12px;min-width:340px}.og-synth caption{font-weight:800;color:#3D3580;text-align:left;padding-bottom:4px;font-size:13px}.og-synth th{font-size:11px;color:#666;text-align:right;padding:3px 10px;border-bottom:2px solid #3D3580}.og-synth td{padding:4px 10px;border-bottom:1px solid #e3e1f0;text-align:right}.og-synth td:first-child{text-align:left;font-weight:600}.og-synth .og-tot td{font-weight:800;border-top:2px solid #3D3580;border-bottom:0}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}'
   +'.og-pied{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:18px;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px}';
 function ogImprimer(){
   const zone=document.getElementById('og-contenu');if(!zone)return;
