@@ -523,9 +523,10 @@ function renderCouchesCommande() {
       <span style="width:9px;height:9px;border-radius:50%;background:${CRECHE_COLORS[creche]||'#888'}"></span>${creche}</div>`;
     if (!lignes.length) { html += `<div style="font-size:12px;color:var(--ink3)">Aucun enfant avec une taille de couche renseignée.</div>`; return; }
     let tot = 0, totCout = 0;
-    html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+    html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed">
+      <colgroup><col style="width:28%"><col style="width:18%"><col style="width:18%"><col style="width:20%"><col style="width:16%"></colgroup>
       <thead><tr style="text-align:right;color:var(--ink3);font-size:11px">
-        <th style="text-align:left;padding:4px 6px">Taille</th><th style="padding:4px 6px">Besoin</th><th style="padding:4px 6px">Stock</th><th style="padding:4px 6px">À commander</th><th style="padding:4px 6px">Coût</th></tr></thead><tbody>`;
+        <th style="text-align:left;padding:4px 6px">Taille</th><th style="text-align:right;padding:4px 6px">Besoin</th><th style="text-align:right;padding:4px 6px">Stock</th><th style="text-align:right;padding:4px 6px">À commander</th><th style="text-align:right;padding:4px 6px">Coût</th></tr></thead><tbody>`;
     lignes.forEach(l => {
       tot += l.aCommander;
       if (l.cout !== null) totCout += l.cout; else if (l.aCommander > 0) sansPrix = true;
