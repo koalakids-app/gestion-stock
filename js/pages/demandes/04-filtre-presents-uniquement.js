@@ -867,7 +867,7 @@ async function renderPresenceGantt(){
      Un enfant point\u00e9 ce jour-l\u00e0 est toujours affich\u00e9, contrat ou pas. */
   const _dj=new Date(dateStr+'T00:00:00').getDay();
   const jourSem=(_dj===0)?7:_dj;
-  const ctMap={}, ctPeriode={}, ctTout={};
+  const ctMap={}, ctPeriode={}, ctTout={}, ctFin={};
   let ctLus=0;
   try{
     const{data:ctData,error:ctErr}=await sb.from('enfants_contrats').select('*').in('enfant_id',allEnfants.map(e=>e.id));
@@ -876,6 +876,7 @@ async function renderPresenceGantt(){
     (ctData||[]).forEach(function(c){
       const k=String(c.enfant_id);
       ctTout[k]=true;
+      if(c.date_fin&&(!ctFin[k]||c.date_fin>ctFin[k]))ctFin[k]=c.date_fin;
       if(c.date_debut&&c.date_debut>dateStr) return;
       if(c.date_fin&&c.date_fin<dateStr) return;
       // en cas de contrats qui se chevauchent, on garde le plus r\u00e9cent
@@ -889,7 +890,13 @@ async function renderPresenceGantt(){
   // Masquables = contrat(s) existants mais aucun ne couvre la date, et enfant non pointé.
   const _estMasquable=e=>{
     const k=String(e.id);
-    return ctTout[k]&&!ctPeriode[k]&&!presMap[e.id];
+    if(!ctTout[k]||ctPeriode[k])return false;
+    const p=presMap[e.id];
+    if(!p)return true;
+    /* Ligne de présence périmée : générée depuis le contrat avant sa fin (créée à
+       une date <= fin de contrat), jamais pointée → l'enfant ne doit plus figurer.
+       Un ajout manuel fait après la fin du contrat (dépannage) reste affiché. */
+    return !p.pointe&&!ptMap[k]&&!!ctFin[k]&&!!p.cree&&p.cree.slice(0,10)<=ctFin[k];
   };
   let _nbHorsContrat=allEnfants.filter(_estMasquable).length;
   if(_nbHorsContrat&&!presShowHorsContrat){
