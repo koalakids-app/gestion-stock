@@ -483,7 +483,7 @@ const NOTICE_ONGLET_SECTION = {
   demands:'demandes', incidents:'incidents', presence:'presences', planning:'planning', evenements:'evenements',
   enfants:'enfants', vaccinations:'vaccinations', stagiaires:'stagiaires', partenaires:'partenaires',
   referents:'referents', dashboard:'dashboards', 'ref-dashboard':'dashboards', actions:'actions', 'reunions-equipe':'reunionsequipe', afaire:'afaire',
-  remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches', album:'album', livres:'livres', 'insc-suivi':'inscsuivi'
+  remplacantes:'remplacantes', fraisik:'fraisik', fraispro:'fraispro', mcm:'mcm', couches:'couches', album:'album', livres:'livres', organigramme:'organigramme', 'insc-suivi':'inscsuivi'
 };
 function openNotice() {
   document.getElementById('modal-notice').classList.add('open');
@@ -997,6 +997,17 @@ inscsuivi: `
   <li>Elle se trie par date d’entrée ou par nom ; la direction choisit aussi la <strong>crèche</strong> (ou toutes).</li>
 </ol>
 <div style="font-size:12px;color:#888">Les informations de santé, les devis et les montants ne sont pas visibles ici.</div>
+`,
+
+organigramme: `
+<h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🗂️ Organigramme</h3>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Cette tuile, dans <strong>Équipe</strong>, dessine l’organigramme à partir des fiches existantes : rien à saisir ici.</div>
+<ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
+  <li><strong>Par crèche</strong> : la direction en haut, puis chaque crèche avec son/sa référent·e et son équipe. <strong>Par fonction</strong> : les personnes regroupées selon leur poste.</li>
+  <li>Les données viennent de <strong>Directeurs/trices techniques</strong> et de <strong>Collaborateurs/trices</strong> ; pour changer un poste ou une crèche, modifiez la fiche de la personne.</li>
+  <li>Les fiches archivées et les comptes d’accès terrain ne sont pas affichés. La direction choisit la crèche, un·e référent·e voit la sienne.</li>
+  <li><strong>Imprimer / PDF</strong> sort l’organigramme tel qu’affiché.</li>
+</ol>
 `,
 
 livres: `
