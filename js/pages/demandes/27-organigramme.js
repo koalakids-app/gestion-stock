@@ -199,6 +199,23 @@ function ogChoisirPersonne(){
   set('og-f-nom',nom);set('og-f-poste',poste);set('og-f-diplome',diplome);
   if(heures!=null)set('og-f-heures',String(heures).replace('.',','));
 }
+// Aides du formulaire : « Gestionnaire » => niveau réseau (en haut, sur la même ligne que les autres gestionnaires) ;
+// RSAI => rattachée à la directrice technique, donc affichée à côté d'elle.
+function ogPosteChange(){
+  const r=document.getElementById('og-f-reseau');
+  if(!r||r.type==='hidden'||r.dataset.touche)return;
+  r.checked=/gestionnaire/i.test(document.getElementById('og-f-poste')?.value||'');
+}
+function ogDirectriceTechnique(){
+  const crecheId=ogCrecheCourante();
+  return ogCartes.find(c=>c.creche_id===crecheId&&/directric|référent(e)? technique|referent(e)? technique/i.test(c.poste||''));
+}
+function ogRsaiChange(){
+  const sel=document.getElementById('og-f-parent');
+  if(!document.getElementById('og-f-rsai')?.checked||!sel||sel.value)return;
+  const d=ogDirectriceTechnique();
+  if(d&&[...sel.options].some(o=>o.value===d.id))sel.value=d.id;
+}
 function ogAjouterGestionnaire(){ogEditer(null,true);}
 function ogEditer(id,reseauInit){
   const c=id?ogCartes.find(x=>x.id===id):null;
@@ -212,17 +229,17 @@ function ogEditer(id,reseauInit){
   m.innerHTML='<div class="og-dlg" role="dialog" aria-modal="true"><h3>'+(c?'Modifier la carte':(nouveauReseau?'Ajouter un gestionnaire':'Ajouter une personne'))+'</h3>'
     +'<label class="flabel">Personne (fiche existante)</label><select class="finput" id="og-f-pers" onchange="ogChoisirPersonne()">'+ogOptionsPersonnes(crecheId,lie)+'</select>'
     +'<label class="flabel">Nom *</label><input class="finput" id="og-f-nom" value="'+ogEsc(c?.nom||'')+'" placeholder="Ex. : Sophie CHANCEY">'
-    +'<label class="flabel">Fonction</label><input class="finput" id="og-f-poste" value="'+ogEsc(c?.poste||(nouveauReseau?'Gestionnaire':''))+'" placeholder="Ex. : Gestionnaire, Référent technique, Auxiliaire de puériculture">'
+    +'<label class="flabel">Fonction</label><input class="finput" id="og-f-poste" oninput="ogPosteChange()" value="'+ogEsc(c?.poste||(nouveauReseau?'Gestionnaire':''))+'" placeholder="Ex. : Gestionnaire, Référent technique, Auxiliaire de puériculture">'
     +'<label class="flabel">Diplôme</label><input class="finput" id="og-f-diplome" value="'+ogEsc(c?.diplome||'')+'" placeholder="Ex. : D.E. AP, CAP AEPE, Infirmière puéricultrice">'
     +'<div class="og-2c"><div><label class="flabel">Temps de travail (h / semaine)</label><input class="finput" id="og-f-heures" value="'+ogEsc(c?.heures_hebdo!=null?String(c.heures_hebdo).replace('.',','):'')+'" placeholder="35 ou 8h45"></div>'
     +'<div><label class="flabel">ETP (auto si vide)</label><input class="finput" id="og-f-etp" value="'+ogEsc(c?.etp!=null?String(c.etp).replace('.',','):'')+'" placeholder="= heures / 35"></div></div>'
     +'<div class="og-2c"><div><label class="flabel">dont ETP direction</label><input class="finput" id="og-f-etpdir" value="'+ogEsc(c?.etp_direction!=null?String(c.etp_direction).replace('.',','):'')+'" placeholder="Ex. : 0,5"></div>'
     +'<div><label class="flabel">dont ETP entretien / repas</label><input class="finput" id="og-f-etpent" value="'+ogEsc(c?.etp_entretien!=null?String(c.etp_entretien).replace('.',','):'')+'" placeholder="Ex. : 0,29"></div></div>'
     +'<label class="flabel">Note (expérience, alternance…)</label><textarea class="finput" id="og-f-note" rows="2" placeholder="Ex. : + 2 ans d’expérience">'+ogEsc(c?.note||'')+'</textarea>'
-    +'<label class="og-chk"><input type="checkbox" id="og-f-rsai"'+(c?.rsai?' checked':'')+'> Référent·e Santé et Accueil Inclusif (RSAI)</label>'
-    +(reseau?'':'<label class="flabel">Rattaché à</label><select class="finput" id="og-f-parent"><option value="">— Aucun (en haut de l’organigramme) —</option>'
+    +'<label class="og-chk"><input type="checkbox" id="og-f-rsai" onchange="ogRsaiChange()"'+(c?.rsai?' checked':'')+'> Référent·e Santé et Accueil Inclusif (RSAI)</label>'
+    +(reseau?'':'<label class="flabel">Rattaché à <span style="font-weight:400;color:var(--muted)">(une carte RSAI s’affiche à côté de la carte choisie)</span></label><select class="finput" id="og-f-parent"><option value="">— Aucun (en haut de l’organigramme) —</option>'
       +autres.map(x=>`<option value="${x.id}"${c?.parent_id===x.id?' selected':''}>${ogEsc(x.nom)}${x.poste?' — '+ogEsc(x.poste):''}</option>`).join('')+'</select>')
-    +(isDirection&&!reseau?'<label class="og-chk"><input type="checkbox" id="og-f-reseau"'+(nouveauReseau?' checked':'')+'> Niveau réseau : en haut, au-dessus de toutes les crèches (gestionnaires…)</label>':'')
+    +(isDirection&&!reseau?'<label class="og-chk"><input type="checkbox" id="og-f-reseau" onchange="this.dataset.touche=1"'+(nouveauReseau?' checked':'')+(c?' data-touche="1"':'')+'> Niveau réseau : en haut, au-dessus de toutes les crèches (gestionnaires…)</label>':'')
     +(isDirection&&reseau?'<input type="hidden" id="og-f-reseau" value="1">':'')
     +'<div class="og-btns">'
     +(c?'<button type="button" class="btn-sm" onclick="ogDeplacer(\''+c.id+'\',-1)" title="Avant ses voisines"><i class="ti ti-arrow-left"></i></button><button type="button" class="btn-sm" onclick="ogDeplacer(\''+c.id+'\',1)" title="Après ses voisines"><i class="ti ti-arrow-right"></i></button><button type="button" class="btn-sm" style="color:var(--red)" onclick="ogSupprimer(\''+c.id+'\')"><i class="ti ti-trash"></i> Supprimer</button>':'')
