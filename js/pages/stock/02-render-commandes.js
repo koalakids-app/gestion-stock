@@ -472,11 +472,98 @@ function coucheEvaluer(creche, type, taille) {
   return { stock, seuil, delaiLivraison, joursRestants, estimSource, estimTexte, enAlerte, enCritique };
 }
 
+// ── Besoins pour la commande ────────────────────────────────────────────
+// Par crèche × taille : besoin du mois (4 couches/j × jours de présence),
+// stock actuel et quantité à commander (besoin − stock, jamais négative).
+// Mois en cours ou mois suivant (cas habituel : on commande avant le mois).
+function coucheCommandeMois(decalage) {
+  COUCHES_COMMANDE_MOIS = decalage;
+  renderCouchesCommande();
+}
+function coucheCommandeBesoins(decalage) {
+  if (!decalage || !COUCHES_SOURCE_BESOIN) return COUCHES_BESOIN;
+  return rowsToCouchesBesoin(COUCHES_SOURCE_BESOIN.rows, COUCHES_SOURCE_BESOIN.fermetures, decalage);
+}
+function coucheCommandeLignes(creche, besoins) {
+  const lignes = [];
+  COUCHES_PRODUITS.forEach(produit => produit.tailles.forEach(taille => {
+    const b = besoins.find(x => x.creche === creche && x.typeCouche === produit.type && x.taille === taille);
+    const besoin = b ? b.besoinMensuel : 0;
+    const c = coucheFind(creche, produit.type, taille);
+    const stock = c ? c.stock : 0;
+    if (!besoin && !stock) return;
+    const aCommander = Math.max(0, besoin - stock);
+    const prix = couchePrixUnitaire(produit.type, taille);
+    lignes.push({ produit, taille, besoin, stock, aCommander, cout: prix !== null ? aCommander * prix : null });
+  }));
+  return lignes;
+}
+function renderCouchesCommande() {
+  const box = document.getElementById('couches-commande');
+  if (!box) return;
+  const decalage = COUCHES_COMMANDE_MOIS;
+  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + decalage);
+  const nomMois = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  const besoins = coucheCommandeBesoins(decalage);
+  const fmt = n => n.toLocaleString('fr-FR');
+  const eur = n => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  const bouton = (v, t) => `<button class="btn btn-sm ${decalage === v ? 'btn-primary' : 'btn-secondary'}" onclick="coucheCommandeMois(${v})">${t}</button>`;
+  let html = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <span style="font-size:12.5px;color:var(--ink3);font-weight:700">🛒 Besoins pour la commande — ${nomMois}</span>
+      <span style="flex:1"></span>
+      ${bouton(0, 'Mois en cours')}${bouton(1, 'Mois suivant')}
+      <button class="btn btn-sm btn-secondary" onclick="coucheCommandeCopier()">📋 Copier</button>
+    </div>`;
+  let totalGeneral = 0, sansPrix = false;
+  const crechesAffichees = couchesCrechesVisibles();
+  crechesAffichees.forEach(creche => {
+    const lignes = coucheCommandeLignes(creche, besoins);
+    html += `<div style="font-weight:800;font-size:13.5px;margin:12px 0 4px;display:flex;align-items:center;gap:8px">
+      <span style="width:9px;height:9px;border-radius:50%;background:${CRECHE_COLORS[creche]||'#888'}"></span>${creche}</div>`;
+    if (!lignes.length) { html += `<div style="font-size:12px;color:var(--ink3)">Aucun enfant avec une taille de couche renseignée.</div>`; return; }
+    let tot = 0, totCout = 0;
+    html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <thead><tr style="text-align:right;color:var(--ink3);font-size:11px">
+        <th style="text-align:left;padding:4px 6px">Taille</th><th style="padding:4px 6px">Besoin</th><th style="padding:4px 6px">Stock</th><th style="padding:4px 6px">À commander</th><th style="padding:4px 6px">Coût</th></tr></thead><tbody>`;
+    lignes.forEach(l => {
+      tot += l.aCommander;
+      if (l.cout !== null) totCout += l.cout; else if (l.aCommander > 0) sansPrix = true;
+      html += `<tr style="border-top:1px solid var(--border);text-align:right">
+        <td style="text-align:left;padding:5px 6px">${l.produit.type === 'culotte' ? 'Culotte' : 'Couche'} T${l.taille}</td>
+        <td style="padding:5px 6px">${fmt(l.besoin)}</td><td style="padding:5px 6px">${fmt(l.stock)}</td>
+        <td style="padding:5px 6px;font-weight:800;${l.aCommander ? 'color:var(--accent)' : 'color:var(--ink3)'}">${fmt(l.aCommander)}</td>
+        <td style="padding:5px 6px;color:var(--ink3)">${l.cout !== null ? eur(l.cout) : '—'}</td></tr>`;
+    });
+    totalGeneral += totCout;
+    html += `<tr style="border-top:2px solid var(--border);text-align:right;font-weight:800"><td style="text-align:left;padding:5px 6px">Total</td><td></td><td></td>
+      <td style="padding:5px 6px">${fmt(tot)}</td><td style="padding:5px 6px">${eur(totCout)}</td></tr></tbody></table></div>`;
+  });
+  if (crechesAffichees.length > 1) html += `<div style="margin-top:12px;font-size:13px;font-weight:800">Total à commander, toutes crèches : ${eur(totalGeneral)}</div>`;
+  if (sansPrix) html += `<div style="font-size:11.5px;color:var(--amber);margin-top:4px">Certains prix ne sont pas renseignés : leur coût est exclu du total.</div>`;
+  html += `<div style="font-size:11px;color:var(--ink3);margin-top:8px">Besoin = 4 couches/jour × jours de présence prévus (contrats, hors fériés, fermetures et absences programmées). À commander = besoin − stock actuel.</div></div>`;
+  box.innerHTML = html;
+}
+function coucheCommandeCopier() {
+  const besoins = coucheCommandeBesoins(COUCHES_COMMANDE_MOIS);
+  const lignes = [];
+  couchesCrechesVisibles().forEach(creche => {
+    const l = coucheCommandeLignes(creche, besoins).filter(x => x.aCommander > 0);
+    if (!l.length) return;
+    lignes.push(creche + ' :');
+    l.forEach(x => lignes.push('  ' + (x.produit.type === 'culotte' ? 'Couches-culottes' : 'Couches') + ' taille ' + x.taille + ' : ' + x.aCommander));
+  });
+  const texte = lignes.length ? lignes.join('\n') : 'Rien à commander.';
+  const ok = () => showNotif('📋 Besoins copiés');
+  if (navigator.clipboard) navigator.clipboard.writeText(texte).then(ok, () => showNotif(texte)); else showNotif(texte);
+}
+
 function renderCouches() {
   const box = document.getElementById('couches-grid');
   const alertBox = document.getElementById('couches-alertes');
   if (!box) return;
   renderCouchesValorisation();
+  renderCouchesCommande();
   const crechesAffichees = couchesCrechesVisibles();
   const alertes = [];
   let html = '';

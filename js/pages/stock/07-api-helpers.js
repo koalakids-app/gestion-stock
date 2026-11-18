@@ -257,9 +257,11 @@ function coucheJoursPresenceMois(contrats, absences, fermetures, crecheId, an, m
 // Agrège les enfants (avec leurs contrats et absences imbriqués via
 // enfants_contrats / enfants_absences) en besoin mensuel par crèche×type×
 // taille : 4 couches/jour × jours de présence réels du mois en cours.
-function rowsToCouchesBesoin(rows, fermetures) {
+function rowsToCouchesBesoin(rows, fermetures, decalageMois) {
   const total = {};
   const now = new Date();
+  now.setDate(1);
+  now.setMonth(now.getMonth() + (decalageMois || 0));
   const an = now.getFullYear(), moisIndex = now.getMonth();
   (rows || []).forEach(r => {
     if (!r.taille_couche) return;
@@ -350,6 +352,8 @@ async function loadData() {
       const reseauConfigRow = (reseauCfg && reseauCfg[0] && reseauCfg[0].config) || {};
       fermetures.reseau = Array.isArray(reseauConfigRow.jours_fermeture_reseau) ? reseauConfigRow.jours_fermeture_reseau : [];
       COUCHES_BESOIN.splice(0, COUCHES_BESOIN.length, ...rowsToCouchesBesoin(enfantsCouches, fermetures));
+      // Gardés pour le tableau « Besoins pour la commande » (mois suivant).
+      COUCHES_SOURCE_BESOIN = { rows: enfantsCouches, fermetures };
     }
 
     const now = new Date();

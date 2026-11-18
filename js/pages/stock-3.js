@@ -236,6 +236,11 @@ couches: `
   <li>Le cadre est <strong>rouge</strong> sous le seuil d'alerte, et rouge foncé en <strong>rupture imminente</strong> : le délai de livraison dépasse le stock restant, il faut commander aujourd'hui. Un récapitulatif des alertes s'affiche en haut de page.</li>
   <li>La <strong>valeur du stock</strong> est calculée avec les prix d'achat unitaires ; les tailles sans prix sont signalées et exclues du total. La direction renseigne les prix avec « Modifier les prix d'achat ».</li>
 </ul>
+<div style="font-weight:700;font-size:14px;margin-bottom:10px">🛒 Besoins pour la commande</div>
+<ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
+  <li>En haut de la page, un tableau par <strong>crèche</strong> et par <strong>taille</strong> : <strong>besoin</strong> du mois (4 couches par jour × jours de présence prévus, hors fériés, fermetures et absences programmées), <strong>stock</strong> actuel et quantité <strong>à commander</strong> (besoin − stock) avec son coût.</li>
+  <li>Boutons <strong>Mois en cours / Mois suivant</strong> (le mois suivant sert à commander à l'avance) et <strong>📋 Copier</strong> pour coller la liste dans un mail ou un bon de commande.</li>
+</ul>
 <div style="font-weight:700;font-size:14px;margin-bottom:10px">🛠 Les boutons de chaque carte</div>
 <ul style="font-size:13px;line-height:1.9;margin:0 0 18px 18px;padding:0">
   <li><strong>+ Réception</strong> : enregistre une livraison reçue (ajoute au stock).</li>

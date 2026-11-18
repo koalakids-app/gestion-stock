@@ -88,6 +88,8 @@ let COUCHES_EFFECTIF = []; // { creche, typeCouche, taille, count }
 // ne pèse pas comme un enfant à temps plein, alors qu'ils comptent pareil
 // dans l'effectif brut.
 let COUCHES_BESOIN = []; // { creche, typeCouche, taille, besoinMensuel }
+let COUCHES_SOURCE_BESOIN = null; // { rows, fermetures } : recalcul du besoin pour un autre mois
+let COUCHES_COMMANDE_MOIS = 0; // 0 = mois en cours, 1 = mois suivant (tableau « Besoins pour la commande »)
 
 // ─── STATE ─────────────────────────────────────────────────────────────
 // ─── PAGINATION ──────────────────────────────────────────────────────────
