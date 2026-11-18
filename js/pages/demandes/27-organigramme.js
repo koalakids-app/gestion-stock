@@ -67,6 +67,17 @@ function ogEtpDe(c){
   return null;
 }
 const ogNbFr=v=>(Math.round(v*100)/100).toLocaleString('fr-FR');
+// Répartition de l'ETP d'une carte : direction, entretien / repas, encadrement des enfants (= le reste).
+function ogParts(c){
+  const tot=ogEtpDe(c)||0,dir=Number(c.etp_direction)||0,ent=Number(c.etp_entretien)||0;
+  return{tot,dir,ent,enf:Math.max(0,tot-dir-ent)};
+}
+function ogRepartition(c){
+  const{tot,dir,ent,enf}=ogParts(c);
+  if(!(dir>0||ent>0)||!(tot>0))return'';
+  const l=(lib,v)=>'<div class="og-part"><span>'+lib+'</span><span>'+ogFmtEtp(v)+'</span></div>';
+  return '<div class="og-parts">'+(dir>0?l('Direction',dir):'')+(ent>0?l('Entretien / repas',ent):'')+l('Encadrement enfants',enf)+'</div>';
+}
 const ogFmtEtp=v=>v==null?'':(Math.round(v*100)/100).toLocaleString('fr-FR')+' ETP';
 
 // ---------- dessin ----------
@@ -80,8 +91,7 @@ function ogCarte(c){
     +(c.diplome?'<div class="og-dip">Dip : '+ogEsc(c.diplome)+'</div>':'')
     +(c.note?'<div class="og-note">'+ogEsc(c.note).replace(/\n/g,'<br>')+'</div>':'')
     +((h||etp!=null)?'<div class="og-temps">'+[h,ogFmtEtp(etp)].filter(Boolean).join(' · ')+'</div>':'')
-    +(Number(c.etp_direction)>0?'<div class="og-dont">dont direction : '+ogFmtEtp(Number(c.etp_direction))+'</div>':'')
-    +(Number(c.etp_entretien)>0?'<div class="og-dont">dont entretien / repas : '+ogFmtEtp(Number(c.etp_entretien))+'</div>':'')
+    +ogRepartition(c)
     +'</div>';
 }
 function ogBranche(c,enfants){
@@ -123,14 +133,14 @@ function ogRender(){
   const heures=cartes.reduce((s,c)=>s+(Number(c.heures_hebdo)||0),0);
   const etp=cartes.reduce((s,c)=>s+(ogEtpDe(c)||0),0);
   const etpDir=cartes.reduce((a,c)=>a+(Number(c.etp_direction)||0),0),etpEnt=cartes.reduce((a,c)=>a+(Number(c.etp_entretien)||0),0);
+  const etpEnf=cartes.reduce((a,c)=>a+ogParts(c).enf,0);
   const rsai=cartes.concat(ogCartes.filter(c=>!c.creche_id)).filter(c=>c.rsai).map(c=>c.nom);
   zone.innerHTML='<div class="og-page"><div class="og-entete"><img src="logo-koalakids.png" alt="" class="og-logo"><div><div class="og-titre">'+ogEsc(creche.name)+'</div>'
     +'<div class="og-sous">Organigramme'+(majTxt?' (maj : '+majTxt+')':'')+'</div></div></div>'
     +'<div class="og-arbre">'+arbre+'</div>'
     +'<div class="og-pied"><span><strong>'+cartes.length+'</strong> personne'+(cartes.length>1?'s':'')+'</span>'
     +'<span>Total : <strong>'+(Math.round(heures*100)/100).toLocaleString('fr-FR')+' h/sem</strong> · <strong>'+(Math.round(etp*100)/100).toLocaleString('fr-FR')+' ETP</strong></span>'
-    +(etpDir>0?'<span>ETP direction : <strong>'+ogNbFr(etpDir)+'</strong></span>':'')
-    +(etpEnt>0?'<span>ETP entretien / repas : <strong>'+ogNbFr(etpEnt)+'</strong></span>':'')
+    +((etpDir>0||etpEnt>0)?'<span>dont direction : <strong>'+ogNbFr(etpDir)+'</strong> · entretien / repas : <strong>'+ogNbFr(etpEnt)+'</strong> · encadrement enfants : <strong>'+ogNbFr(etpEnf)+' ETP</strong></span>':'')
     +'<span>RSAI : <strong>'+(rsai.length?ogEsc(rsai.join(', ')):'à désigner')+'</strong></span></div></div>';
 }
 
@@ -394,7 +404,7 @@ const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:
   +'.og-groupe{display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:wrap;row-gap:10px}.og-groupe .og-node+.og-node{margin-left:44px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #3D3580}'
   +'.og-node{position:relative;min-width:150px;max-width:200px;border:1.5px solid #3D3580;border-radius:10px;padding:8px 10px;background:#fff;break-inside:avoid}.og-rsai{border-color:#0E9F6E;background:#ECFDF5}'
   +'.og-badge{position:absolute;top:-9px;right:8px;background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-  +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-dont{font-size:10.5px;color:#7a5b00}'
+  +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}'
   +'.og-pied{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:18px;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px}';
 function ogImprimer(){
   const zone=document.getElementById('og-contenu');if(!zone)return;
