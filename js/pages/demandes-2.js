@@ -1001,12 +1001,14 @@ inscsuivi: `
 
 organigramme: `
 <h3 style="font-family:sans-serif;font-size:17px;font-weight:700;margin-bottom:16px">🗂️ Organigramme</h3>
-<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Cette tuile, dans <strong>Équipe</strong>, dessine l’organigramme à partir des fiches existantes : rien à saisir ici.</div>
+<div style="background:#EEEDF8;border-left:4px solid #3D3580;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#3D3580">💡 Cette tuile, dans <strong>Équipe</strong>, permet de <strong>composer l’organigramme de chaque crèche</strong> : vous choisissez qui en fait partie et qui dépend de qui.</div>
 <ol style="font-size:13px;line-height:2;color:#555;padding-left:20px;margin-bottom:18px">
-  <li><strong>Par crèche</strong> : la direction en haut, puis chaque crèche avec son/sa référent·e et son équipe. <strong>Par fonction</strong> : les personnes regroupées selon leur poste.</li>
-  <li>Les données viennent de <strong>Directeurs/trices techniques</strong> et de <strong>Collaborateurs/trices</strong> ; pour changer un poste ou une crèche, modifiez la fiche de la personne.</li>
-  <li>Les fiches archivées et les comptes d’accès terrain ne sont pas affichés. La direction choisit la crèche, un·e référent·e voit la sienne.</li>
-  <li><strong>Imprimer / PDF</strong> sort l’organigramme tel qu’affiché.</li>
+  <li><strong>Ajouter une personne</strong> : choisissez une fiche existante (nom, fonction, diplôme et heures se pré-remplissent) ou saisissez librement (gestionnaire, alternant·e, poste à pourvoir). Tout reste modifiable.</li>
+  <li>Chaque carte indique la <strong>fonction</strong>, le <strong>diplôme</strong>, le <strong>temps de travail</strong> (« 35 » ou « 8h45 »), l’<strong>ETP</strong> (heures ÷ 35, ou saisi à la main), une <strong>note</strong> libre (expérience, alternance…) et le badge vert <strong>RSAI</strong> (référent·e santé et accueil inclusif).</li>
+  <li><strong>Rattaché à</strong> place la carte sous une autre : c’est ce qui dessine la hiérarchie. Les flèches changent l’ordre entre cartes voisines.</li>
+  <li><strong>Niveau réseau</strong> (direction) : cartes affichées au-dessus de toutes les crèches, comme les gestionnaires.</li>
+  <li><strong>Pré-remplir depuis les fiches</strong> crée d’un coup les cartes de l’équipe de la crèche, à ajuster ensuite. Le pied de page donne le total d’heures et d’ETP et la personne RSAI.</li>
+  <li>Cliquez sur une carte pour la modifier ou la retirer (la fiche de la personne n’est pas supprimée). <strong>Imprimer / PDF</strong> sort l’organigramme en paysage avec la date de mise à jour.</li>
 </ol>
 `,
 
