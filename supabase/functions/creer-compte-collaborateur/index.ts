@@ -32,6 +32,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { estGestionnaire, identifierAppelant, peutGererCreche } from "../_shared/appelant.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -44,23 +45,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });
-}
-
-/** Extrait le `sub` (user_id) du JWT porté par l'en-tête Authorization, sans
- *  revérifier sa signature : cette fonction a verify_jwt actif, donc la
- *  plateforme a déjà validé le jeton avant l'exécution de ce code. */
-function subDuJeton(authHeader: string | null): string | null {
-  const token = (authHeader || "").replace(/^Bearer\s+/i, "").trim();
-  const partiePayload = token.split(".")[1];
-  if (!partiePayload) return null;
-  try {
-    let b64 = partiePayload.replace(/-/g, "+").replace(/_/g, "/");
-    while (b64.length % 4) b64 += "=";
-    const payload = JSON.parse(atob(b64));
-    return typeof payload.sub === "string" ? payload.sub : null;
-  } catch {
-    return null;
-  }
 }
 
 Deno.serve(async (req) => {
@@ -82,12 +66,11 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const callerId = subDuJeton(req.headers.get("Authorization"));
-    if (!callerId) return json({ error: "authentification_manquante" }, 401);
-
-    const { data: caller } = await supabase
-      .from("referents").select("org_id").eq("user_id", callerId).maybeSingle();
-    if (!caller?.org_id) return json({ error: "organisation_introuvable" }, 403);
+    // Appelant vérifié auprès de Supabase Auth (plus de décodage du jeton sans contrôle) ; direction ou référent·e seulement :
+    // un compte d'accès terrain (rôle « employe ») ne gère pas les comptes des collaborateurs.
+    const caller = await identifierAppelant(supabase, req);
+    if (!caller) return json({ error: "authentification_manquante" }, 401);
+    if (!estGestionnaire(caller)) return json({ error: "droits_insuffisants" }, 403);
 
     const { data: employe, error: eErr } = await supabase
       .from("employes")
@@ -102,8 +85,8 @@ Deno.serve(async (req) => {
     const { data: creche } = employe.creche_id
       ? await supabase.from("creches").select("org_id").eq("id", employe.creche_id).maybeSingle()
       : { data: null };
-    if (creche?.org_id !== caller.org_id) {
-      return json({ error: "organisation_differente" }, 403);
+    if (!peutGererCreche(caller, creche ? { id: employe.creche_id, org_id: creche.org_id } : null)) {
+      return json({ error: "creche_non_autorisee" }, 403);
     }
 
     // Renvoi du lien à une fiche dont l'invitation n'a pas abouti : nouveau
@@ -151,7 +134,7 @@ Deno.serve(async (req) => {
       const { data: ref } = await supabase
         .from("referents").select("org_id").eq("user_id", existantId).maybeSingle();
       if (ref) {
-        if (ref.org_id !== caller.org_id) return { erreur: "compte_deja_utilise" };
+        if (ref.org_id !== caller.orgId) return { erreur: "compte_deja_utilise" };
         const { data: autre } = await supabase
           .from("employes").select("id").eq("user_id", existantId).neq("id", employe_id).maybeSingle();
         if (autre) return { erreur: "compte_deja_utilise" };

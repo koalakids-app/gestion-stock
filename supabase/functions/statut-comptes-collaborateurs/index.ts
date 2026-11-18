@@ -16,6 +16,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { estGestionnaire, identifierAppelant, peutGererCreche } from "../_shared/appelant.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -28,21 +29,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });
-}
-
-/** `sub` du JWT (verify_jwt actif : la plateforme a déjà validé le jeton). */
-function subDuJeton(authHeader: string | null): string | null {
-  const token = (authHeader || "").replace(/^Bearer\s+/i, "").trim();
-  const partiePayload = token.split(".")[1];
-  if (!partiePayload) return null;
-  try {
-    let b64 = partiePayload.replace(/-/g, "+").replace(/_/g, "/");
-    while (b64.length % 4) b64 += "=";
-    const payload = JSON.parse(atob(b64));
-    return typeof payload.sub === "string" ? payload.sub : null;
-  } catch {
-    return null;
-  }
 }
 
 Deno.serve(async (req) => {
@@ -64,16 +50,17 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const callerId = subDuJeton(req.headers.get("Authorization"));
-    if (!callerId) return json({ error: "authentification_manquante" }, 401);
-
-    const { data: caller } = await supabase
-      .from("referents").select("org_id").eq("user_id", callerId).maybeSingle();
-    if (!caller?.org_id) return json({ error: "organisation_introuvable" }, 403);
+    // Appelant vérifié auprès de Supabase Auth (plus de décodage du jeton sans contrôle) ; direction ou référent·e seulement :
+    // un compte d'accès terrain (rôle « employe ») ne gère pas les comptes des collaborateurs.
+    const caller = await identifierAppelant(supabase, req);
+    if (!caller) return json({ error: "authentification_manquante" }, 401);
+    if (!estGestionnaire(caller)) return json({ error: "droits_insuffisants" }, 403);
 
     const { data: creche } = await supabase
       .from("creches").select("org_id").eq("id", creche_id).maybeSingle();
-    if (creche?.org_id !== caller.org_id) return json({ error: "organisation_differente" }, 403);
+    if (!peutGererCreche(caller, creche ? { id: creche_id, org_id: creche.org_id } : null)) {
+      return json({ error: "creche_non_autorisee" }, 403);
+    }
 
     const { data: employes, error } = await supabase
       .from("employes").select("user_id").eq("creche_id", creche_id).not("user_id", "is", null);

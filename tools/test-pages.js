@@ -64,8 +64,8 @@ function serve() {
     page.on('response', r => { if (r.url().startsWith(base) && r.status() >= 400) problems.add('404   ' + r.url().slice(base.length)); });
     await page.route('**/*', r => {
       const u = r.request().url();
+      if (/supabase-js/.test(u)) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });  // supabase-js hébergé (vendor/) : remplacé par le faux client
       if (u.startsWith(base)) return r.continue();
-      if (/supabase-js/.test(u)) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
       if (/supabase\.(co|in)/.test(u)) return r.abort();   // jamais de vraies données
       return r.continue();                                  // bibliothèques CDN (xlsx, jspdf...)
     });

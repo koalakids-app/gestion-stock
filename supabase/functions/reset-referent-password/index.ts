@@ -28,6 +28,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { identifierAppelant } from "../_shared/appelant.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,23 +40,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-/** Extrait le `sub` (user_id) du JWT porté par l'en-tête Authorization, sans
- *  revérifier sa signature : cette fonction a verify_jwt actif, donc la
- *  plateforme a déjà validé le jeton avant l'exécution de ce code. */
-function subDuJeton(authHeader: string | null): string | null {
-  const token = (authHeader || "").replace(/^Bearer\s+/i, "").trim();
-  const partiePayload = token.split(".")[1];
-  if (!partiePayload) return null;
-  try {
-    let b64 = partiePayload.replace(/-/g, "+").replace(/_/g, "/");
-    while (b64.length % 4) b64 += "=";
-    const payload = JSON.parse(atob(b64));
-    return typeof payload.sub === "string" ? payload.sub : null;
-  } catch {
-    return null;
-  }
 }
 
 Deno.serve(async (req) => {
@@ -76,19 +60,17 @@ Deno.serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
-    const callerId = subDuJeton(req.headers.get("Authorization"));
-    if (!callerId) return json({ ok: false, error: "Authentification manquante." }, 401);
-
-    const { data: caller } = await admin
-      .from("referents").select("role, org_id").eq("user_id", callerId).maybeSingle();
-    if (!caller || caller.role !== "direction") {
+    // Appelant vérifié auprès de Supabase Auth (plus de décodage du jeton sans contrôle).
+    const caller = await identifierAppelant(admin, req);
+    if (!caller) return json({ ok: false, error: "Authentification manquante." }, 401);
+    if (caller.role !== "direction") {
       return json({ ok: false, error: "Réservé aux comptes direction." }, 403);
     }
 
     const { data: cible } = await admin
       .from("referents").select("user_id, org_id").eq("id", referent_id).maybeSingle();
     if (!cible) return json({ ok: false, error: "Fiche introuvable." }, 404);
-    if (cible.org_id !== caller.org_id) {
+    if (cible.org_id !== caller.orgId) {
       return json({ ok: false, error: "Cette fiche n'appartient pas à votre organisation." }, 403);
     }
     if (!cible.user_id) {
