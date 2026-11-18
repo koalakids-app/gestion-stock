@@ -146,6 +146,8 @@ function mfaGateSwitchView(id){
 }
 async function mfaGateCheckAndProceed(){
   try{
+    // Session ouverte par code image sur la tablette de la crèche (cf. js/terrain-code-image.js).
+    if(typeof kkTciSessionActive==='function'&&await kkTciSessionActive(sb)){kkTciVerrouillageAuto(sb);await documentsGrantAccess();return;}
     const{data,error}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();
     if(error)throw error;
     if(data.currentLevel==='aal2'){await documentsGrantAccess();return;}
@@ -257,7 +259,10 @@ async function doLogin(){
   document.getElementById('liPwd').value='';
   boot().catch(err=>{console.error('[boot]',err);showLoginView('Connexion impossible — réessayez.');});
 }
-async function doLogout(){await sb.auth.signOut();location.reload();}
+async function doLogout(){
+  if(typeof kkTciDeconnecter==='function'){await kkTciDeconnecter(sb);return;}
+  await sb.auth.signOut();location.reload();
+}
 
 /* ---------- LOAD ---------- */
 async function loadAll(){
