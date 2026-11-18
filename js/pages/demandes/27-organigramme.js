@@ -122,6 +122,10 @@ function ogBranche(c,enfants,remps){
 }
 function ogArbre(crecheId){
   const reseau=ogCartes.filter(c=>!c.creche_id);
+  // niveau réseau sur deux rangées : gestionnaires (sans parent) puis, en dessous, les cartes rattachées à l'une d'elles
+  // (ex. coordinateur pédagogique), avant les directrices techniques des crèches
+  const rIds=new Set(reseau.map(c=>c.id));
+  const reseauHaut=reseau.filter(c=>!c.parent_id||!rIds.has(c.parent_id)),reseauBas=reseau.filter(c=>c.parent_id&&rIds.has(c.parent_id));
   const cartes=ogCartes.filter(c=>c.creche_id===crecheId);
   const par={};cartes.forEach(c=>{par[c.id]=c;});
   // cible effective d'un remplacement (suit les remplacements en chaîne, sans boucle)
@@ -140,8 +144,9 @@ function ogArbre(crecheId){
   const racines=cartes.filter(c=>!estRemp.has(c.id)&&(!c.parent_id||!par[c.parent_id]));
   const racinesHtml=racines.map(r=>ogBranche(r,enfants,remps)).join('');
   if(reseau.length){
-    return '<ul class="og-t"><li><div class="og-groupe">'+reseau.map(ogCarte).join('')+'</div>'
-      +(racines.length?'<ul>'+racinesHtml+'</ul>':'')+'</li></ul>';
+    const sous=racines.length?'<ul>'+racinesHtml+'</ul>':'';
+    const milieu=reseauBas.length?'<ul><li><div class="og-groupe">'+reseauBas.map(ogCarte).join('')+'</div>'+sous+'</li></ul>':sous;
+    return '<ul class="og-t"><li><div class="og-groupe">'+reseauHaut.map(ogCarte).join('')+'</div>'+milieu+'</li></ul>';
   }
   return racines.length?'<ul class="og-t">'+racinesHtml+'</ul>':'';
 }
@@ -290,10 +295,15 @@ function ogChoisirPersonne(){
 }
 // Aide du formulaire : « Gestionnaire » => niveau réseau (en haut, sur la même ligne que les autres gestionnaires).
 // Une carte RSAI sans « Rattaché à » se place sur la même ligne que la directrice technique (cartes de tête sous les gestionnaires).
+function ogReseauChange(){
+  const r=document.getElementById('og-f-reseau'),w=document.getElementById('og-f-pr-wrap');
+  if(w)w.style.display=(r&&(r.type==='hidden'||r.checked))?'block':'none';
+}
 function ogPosteChange(){
   const r=document.getElementById('og-f-reseau');
   if(!r||r.type==='hidden'||r.dataset.touche)return;
   r.checked=/gestionnaire/i.test(document.getElementById('og-f-poste')?.value||'');
+  ogReseauChange();
 }
 function ogAjouterGestionnaire(){ogEditer(null,true);}
 function ogEditer(id,reseauInit){
@@ -323,7 +333,9 @@ function ogEditer(id,reseauInit){
       +'<label class="flabel">Remplace <span style="font-weight:400;color:var(--muted)">(la personne remplacée passe en arrêt ; la remplaçante prend sa place dans l’organigramme)</span></label><select class="finput" id="og-f-remplace" onchange="ogRemplaceChange()">'+ogOptionsRemplace(crecheId,c)+'</select><input class="finput" id="og-f-remplace-libre" placeholder="Nom de la personne remplacée" style="display:none;margin-top:6px">')
     +(reseau?'':'<label class="flabel">Rattaché à <span style="font-weight:400;color:var(--muted)">(vide = sur la même ligne que la directrice technique, sous les gestionnaires)</span></label><select class="finput" id="og-f-parent"><option value="">— Aucun (en haut de l’organigramme) —</option>'
       +autres.map(x=>`<option value="${x.id}"${c?.parent_id===x.id?' selected':''}>${ogEsc(x.nom)}${x.poste?' — '+ogEsc(x.poste):''}</option>`).join('')+'</select>')
-    +(isDirection&&!reseau?'<label class="og-chk"><input type="checkbox" id="og-f-reseau" onchange="this.dataset.touche=1"'+(nouveauReseau?' checked':'')+(c?' data-touche="1"':'')+'> Niveau réseau : en haut, au-dessus de toutes les crèches (gestionnaires…)</label>':'')
+    +(isDirection?'<div id="og-f-pr-wrap" style="display:'+((reseau||nouveauReseau)?'block':'none')+'"><label class="flabel">Rattaché à (niveau réseau) <span style="font-weight:400;color:var(--muted)">(vide = en haut, comme les gestionnaires ; choisir un gestionnaire = rangée du dessous, ex. coordinateur pédagogique)</span></label><select class="finput" id="og-f-parent-reseau"><option value="">— Aucun (en haut) —</option>'
+      +ogCartes.filter(x=>!x.creche_id&&(!c||x.id!==c.id)).map(x=>`<option value="${x.id}"${c?.parent_id===x.id?' selected':''}>${ogEsc(x.nom)}${x.poste?' — '+ogEsc(x.poste):''}</option>`).join('')+'</select></div>':'')
+    +(isDirection&&!reseau?'<label class="og-chk"><input type="checkbox" id="og-f-reseau" onchange="this.dataset.touche=1;ogReseauChange()"'+(nouveauReseau?' checked':'')+(c?' data-touche="1"':'')+'> Niveau réseau : en haut, au-dessus de toutes les crèches (gestionnaires…)</label>':'')
     +(isDirection&&reseau?'<input type="hidden" id="og-f-reseau" value="1">':'')
     +'<div class="og-btns">'
     +(c?'<button type="button" class="btn-sm" onclick="ogDeplacer(\''+c.id+'\',-1)" title="Avant ses voisines"><i class="ti ti-arrow-left"></i></button><button type="button" class="btn-sm" onclick="ogDeplacer(\''+c.id+'\',1)" title="Après ses voisines"><i class="ti ti-arrow-right"></i></button><button type="button" class="btn-sm" style="color:var(--red)" onclick="ogSupprimer(\''+c.id+'\')"><i class="ti ti-trash"></i> Supprimer</button>':'')
@@ -353,7 +365,7 @@ async function ogEnregistrer(id){
   const row={
     nom,poste:v('og-f-poste')||null,diplome:v('og-f-diplome')||null,heures_hebdo:heures,etp,etp_direction:etpDir,etp_entretien:etpEnt,jours_semaine:jours,note:v('og-f-note')||null,
     rsai:!!document.getElementById('og-f-rsai')?.checked,creche_id,
-    parent_id:reseau?null:(v('og-f-parent')||null),
+    parent_id:reseau?(v('og-f-parent-reseau')||null):(v('og-f-parent')||null),
     en_arret:!reseau&&!!document.getElementById('og-f-arret')?.checked,
     absence_motif:(!reseau&&document.getElementById('og-f-arret')?.checked)?(v('og-f-motif')||'arret'):null,remplace_id:reseau?null:(v('og-f-remplace')||null),
     employe_id:pers.startsWith('e:')?pers.slice(2):null,referent_id:pers.startsWith('r:')?pers.slice(2):null
