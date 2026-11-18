@@ -56,16 +56,10 @@ function enfIsArchived(e){
 }
 // « Sorti » : date de sortie passée, mais pas encore archivé — c'est ce qui
 // déclenche l'affichage du bouton « Archiver ce dossier » sur la fiche.
-// date_sortie n'est pas toujours remise à jour à chaque renouvellement de
-// contrat (elle peut dater d'une année scolaire précédente) : avant de
-// conclure qu'un enfant est sorti, on vérifie qu'aucun contrat (ancien
-// enfants_contrats ou nouveau contrats signé/contresigné) ne couvre encore
-// une date future — voir enfChargerContratsFin().
+// Une date de sortie passée suffit : c'est la date saisie sur la fiche qui fait foi,
+// même si un contrat se termine un peu après (ex. sortie le 28/10, contrat jusqu'au 30/10).
 function enfIsSorti(e){
-  if(enfIsArchived(e) || !e.date_sortie || e.date_sortie > todayStr()) return false;
-  const finContrat = enfContratsFinCache[e.id];
-  if(finContrat && finContrat > e.date_sortie) return false;
-  return true;
+  return !(enfIsArchived(e) || !e.date_sortie || e.date_sortie > todayStr());
 }
 
 // Date de fin la plus tardive connue, tous contrats confondus (les deux
