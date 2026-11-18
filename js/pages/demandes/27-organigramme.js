@@ -66,6 +66,18 @@ function ogEtpDe(c){
   if(c.heures_hebdo!=null&&c.heures_hebdo!=='')return Number(c.heures_hebdo)/OG_HEURES_ETP;
   return null;
 }
+const ogNbFr=v=>(Math.round(v*100)/100).toLocaleString('fr-FR');
+// Répartition de l'ETP d'une carte : direction, entretien / repas, encadrement des enfants (= le reste).
+function ogParts(c){
+  const tot=ogEtpDe(c)||0,dir=Number(c.etp_direction)||0,ent=Number(c.etp_entretien)||0;
+  return{tot,dir,ent,enf:Math.max(0,tot-dir-ent)};
+}
+function ogRepartition(c){
+  const{tot,dir,ent,enf}=ogParts(c);
+  if(!(dir>0||ent>0)||!(tot>0))return'';
+  const l=(lib,v)=>'<div class="og-part"><span>'+lib+'</span><span>'+ogFmtEtp(v)+'</span></div>';
+  return '<div class="og-parts">'+(dir>0?l('Direction',dir):'')+(ent>0?l('Entretien / repas',ent):'')+l('Encadrement enfants',enf)+'</div>';
+}
 const ogFmtEtp=v=>v==null?'':(Math.round(v*100)/100).toLocaleString('fr-FR')+' ETP';
 
 // ---------- dessin ----------
@@ -79,6 +91,7 @@ function ogCarte(c){
     +(c.diplome?'<div class="og-dip">Dip : '+ogEsc(c.diplome)+'</div>':'')
     +(c.note?'<div class="og-note">'+ogEsc(c.note).replace(/\n/g,'<br>')+'</div>':'')
     +((h||etp!=null)?'<div class="og-temps">'+[h,ogFmtEtp(etp)].filter(Boolean).join(' · ')+'</div>':'')
+    +ogRepartition(c)
     +'</div>';
 }
 function ogBranche(c,enfants){
@@ -110,7 +123,7 @@ function ogRender(){
   if(!creche){zone.innerHTML='<div class="empty-state"><i class="ti ti-sitemap"></i><p>Choisissez une crèche.</p></div>';return;}
   const cartes=ogCartes.filter(c=>c.creche_id===crecheId);
   const arbre=ogArbre(crecheId);
-  if(!cartes.length){
+  if(!cartes.length&&!ogCartes.some(c=>!c.creche_id)){
     zone.innerHTML='<div class="empty-state"><i class="ti ti-sitemap"></i><p>Aucun organigramme pour cette crèche.</p>'
       +(peutCreche?'<p style="font-size:12.5px">Cliquez sur <strong>Ajouter une personne</strong>, ou sur <strong>Pré-remplir depuis les fiches</strong> pour partir de l’équipe existante.</p>':'')+'</div>';
     return;
@@ -119,12 +132,15 @@ function ogRender(){
   const majTxt=maj?new Date(maj).toLocaleDateString('fr-FR'):'';
   const heures=cartes.reduce((s,c)=>s+(Number(c.heures_hebdo)||0),0);
   const etp=cartes.reduce((s,c)=>s+(ogEtpDe(c)||0),0);
+  const etpDir=cartes.reduce((a,c)=>a+(Number(c.etp_direction)||0),0),etpEnt=cartes.reduce((a,c)=>a+(Number(c.etp_entretien)||0),0);
+  const etpEnf=cartes.reduce((a,c)=>a+ogParts(c).enf,0);
   const rsai=cartes.concat(ogCartes.filter(c=>!c.creche_id)).filter(c=>c.rsai).map(c=>c.nom);
   zone.innerHTML='<div class="og-page"><div class="og-entete"><img src="logo-koalakids.png" alt="" class="og-logo"><div><div class="og-titre">'+ogEsc(creche.name)+'</div>'
     +'<div class="og-sous">Organigramme'+(majTxt?' (maj : '+majTxt+')':'')+'</div></div></div>'
     +'<div class="og-arbre">'+arbre+'</div>'
     +'<div class="og-pied"><span><strong>'+cartes.length+'</strong> personne'+(cartes.length>1?'s':'')+'</span>'
     +'<span>Total : <strong>'+(Math.round(heures*100)/100).toLocaleString('fr-FR')+' h/sem</strong> · <strong>'+(Math.round(etp*100)/100).toLocaleString('fr-FR')+' ETP</strong></span>'
+    +((etpDir>0||etpEnt>0)?'<span>dont direction : <strong>'+ogNbFr(etpDir)+'</strong> · entretien / repas : <strong>'+ogNbFr(etpEnt)+'</strong> · encadrement enfants : <strong>'+ogNbFr(etpEnf)+' ETP</strong></span>':'')
     +'<span>RSAI : <strong>'+(rsai.length?ogEsc(rsai.join(', ')):'à désigner')+'</strong></span></div></div>';
 }
 
@@ -140,6 +156,9 @@ function ogOptionsPersonnes(crecheId,courant){
   const emps=cacheEmployes.filter(e=>!e.archive_le&&(!crecheId||e.creche_id===crecheId));
   let h='<option value="">— Saisie libre —</option>';
   if(refs.length)h+='<optgroup label="Direction / référent·e·s">'+refs.map(r=>`<option value="r:${r.id}"${courant===('r:'+r.id)?' selected':''}>${ogEsc(r.name)}</option>`).join('')+'</optgroup>';
+  const parts=(typeof cachePartenaires!=='undefined'?cachePartenaires:[]).filter(p=>!p.creche_ids?.length||!crecheId||p.creche_ids.includes(crecheId))
+    .sort((a,b)=>(/rsai/i.test(b.categorie||'')-/rsai/i.test(a.categorie||''))||String(a.nom).localeCompare(String(b.nom),'fr'));
+  if(parts.length)h+='<optgroup label="Partenaires (RSAI, intervenants…)">'+parts.map(p=>`<option value="p:${p.id}"${courant===('p:'+p.id)?' selected':''}>${ogEsc((p.contact_nom||p.nom)+(p.categorie?' — '+p.categorie:''))}</option>`).join('')+'</optgroup>';
   if(emps.length)h+='<optgroup label="Collaborateurs / trices">'+emps.map(e=>`<option value="e:${e.id}"${courant===('e:'+e.id)?' selected':''}>${ogEsc(((e.prenom||'')+' '+(e.nom||'')).trim())}</option>`).join('')+'</optgroup>';
   return h;
 }
@@ -147,7 +166,14 @@ function ogChoisirPersonne(){
   const v=document.getElementById('og-f-pers').value;if(!v)return;
   const[type,id]=v.split(':');
   let nom='',poste='',diplome='',heures=null;
-  if(type==='e'){
+  if(type==='p'){
+    const p=cachePartenaires.find(x=>x.id===id);if(!p)return;
+    const rsai=/rsai/i.test(p.categorie||'');
+    nom=p.contact_nom||p.nom;poste=rsai?'RSAI':(p.categorie||'');
+    const n=document.getElementById('og-f-note');
+    if(n&&!n.value&&p.contact_nom&&p.nom&&p.nom!==p.contact_nom)n.value=p.nom;
+    if(rsai){const c=document.getElementById('og-f-rsai');if(c)c.checked=true;}
+  }else if(type==='e'){
     const e=cacheEmployes.find(x=>x.id===id);if(!e)return;
     nom=((e.prenom||'')+' '+(e.nom||'')).trim();poste=e.poste||e.qualification||'';diplome=e.qualification||'';heures=e.heures_hebdo;
   }else{
@@ -160,26 +186,30 @@ function ogChoisirPersonne(){
   set('og-f-nom',nom);set('og-f-poste',poste);set('og-f-diplome',diplome);
   if(heures!=null)set('og-f-heures',String(heures).replace('.',','));
 }
-function ogEditer(id){
+function ogAjouterGestionnaire(){ogEditer(null,true);}
+function ogEditer(id,reseauInit){
   const c=id?ogCartes.find(x=>x.id===id):null;
   const crecheId=c?c.creche_id:ogCrecheCourante();
   const reseau=c?!c.creche_id:false;
+  const nouveauReseau=!c&&!!reseauInit;
   const exclus=c?ogDescendants(c.id):new Set();
   const autres=ogCartes.filter(x=>!exclus.has(x.id)&&x.creche_id===(crecheId||null)&&!reseau);
   const lie=c?(c.employe_id?'e:'+c.employe_id:c.referent_id?'r:'+c.referent_id:''):'';
   const m=document.createElement('div');m.id='og-modal';m.className='og-overlay';
-  m.innerHTML='<div class="og-dlg" role="dialog" aria-modal="true"><h3>'+(c?'Modifier la carte':'Ajouter une personne')+'</h3>'
+  m.innerHTML='<div class="og-dlg" role="dialog" aria-modal="true"><h3>'+(c?'Modifier la carte':(nouveauReseau?'Ajouter un gestionnaire':'Ajouter une personne'))+'</h3>'
     +'<label class="flabel">Personne (fiche existante)</label><select class="finput" id="og-f-pers" onchange="ogChoisirPersonne()">'+ogOptionsPersonnes(crecheId,lie)+'</select>'
     +'<label class="flabel">Nom *</label><input class="finput" id="og-f-nom" value="'+ogEsc(c?.nom||'')+'" placeholder="Ex. : Sophie CHANCEY">'
-    +'<label class="flabel">Fonction</label><input class="finput" id="og-f-poste" value="'+ogEsc(c?.poste||'')+'" placeholder="Ex. : Référent technique, Auxiliaire de puériculture">'
+    +'<label class="flabel">Fonction</label><input class="finput" id="og-f-poste" value="'+ogEsc(c?.poste||(nouveauReseau?'Gestionnaire':''))+'" placeholder="Ex. : Gestionnaire, Référent technique, Auxiliaire de puériculture">'
     +'<label class="flabel">Diplôme</label><input class="finput" id="og-f-diplome" value="'+ogEsc(c?.diplome||'')+'" placeholder="Ex. : D.E. AP, CAP AEPE, Infirmière puéricultrice">'
     +'<div class="og-2c"><div><label class="flabel">Temps de travail (h / semaine)</label><input class="finput" id="og-f-heures" value="'+ogEsc(c?.heures_hebdo!=null?String(c.heures_hebdo).replace('.',','):'')+'" placeholder="35 ou 8h45"></div>'
     +'<div><label class="flabel">ETP (auto si vide)</label><input class="finput" id="og-f-etp" value="'+ogEsc(c?.etp!=null?String(c.etp).replace('.',','):'')+'" placeholder="= heures / 35"></div></div>'
+    +'<div class="og-2c"><div><label class="flabel">dont ETP direction</label><input class="finput" id="og-f-etpdir" value="'+ogEsc(c?.etp_direction!=null?String(c.etp_direction).replace('.',','):'')+'" placeholder="Ex. : 0,5"></div>'
+    +'<div><label class="flabel">dont ETP entretien / repas</label><input class="finput" id="og-f-etpent" value="'+ogEsc(c?.etp_entretien!=null?String(c.etp_entretien).replace('.',','):'')+'" placeholder="Ex. : 0,29"></div></div>'
     +'<label class="flabel">Note (expérience, alternance…)</label><textarea class="finput" id="og-f-note" rows="2" placeholder="Ex. : + 2 ans d’expérience">'+ogEsc(c?.note||'')+'</textarea>'
     +'<label class="og-chk"><input type="checkbox" id="og-f-rsai"'+(c?.rsai?' checked':'')+'> Référent·e Santé et Accueil Inclusif (RSAI)</label>'
     +(reseau?'':'<label class="flabel">Rattaché à</label><select class="finput" id="og-f-parent"><option value="">— Aucun (en haut de l’organigramme) —</option>'
       +autres.map(x=>`<option value="${x.id}"${c?.parent_id===x.id?' selected':''}>${ogEsc(x.nom)}${x.poste?' — '+ogEsc(x.poste):''}</option>`).join('')+'</select>')
-    +(isDirection&&!reseau?'<label class="og-chk"><input type="checkbox" id="og-f-reseau"> Niveau réseau (affiché au-dessus de toutes les crèches : gestionnaires…)</label>':'')
+    +(isDirection&&!reseau?'<label class="og-chk"><input type="checkbox" id="og-f-reseau"'+(nouveauReseau?' checked':'')+'> Niveau réseau : en haut, au-dessus de toutes les crèches (gestionnaires…)</label>':'')
     +(isDirection&&reseau?'<input type="hidden" id="og-f-reseau" value="1">':'')
     +'<div class="og-btns">'
     +(c?'<button type="button" class="btn-sm" onclick="ogDeplacer(\''+c.id+'\',-1)" title="Avant ses voisines"><i class="ti ti-arrow-left"></i></button><button type="button" class="btn-sm" onclick="ogDeplacer(\''+c.id+'\',1)" title="Après ses voisines"><i class="ti ti-arrow-right"></i></button><button type="button" class="btn-sm" style="color:var(--red)" onclick="ogSupprimer(\''+c.id+'\')"><i class="ti ti-trash"></i> Supprimer</button>':'')
@@ -196,13 +226,16 @@ async function ogEnregistrer(id){
   const etpTxt=v('og-f-etp').replace(',','.');
   const etp=etpTxt===''?null:parseFloat(etpTxt);
   if(etp!=null&&(!isFinite(etp)||etp<0||etp>2)){alert('ETP : indiquez un nombre entre 0 et 2.');return;}
+  const nbOuNull=(id,lib)=>{const t=v(id).replace(',','.');if(t==='')return null;const x=parseFloat(t);return(isFinite(x)&&x>=0&&x<=2)?x:NaN;};
+  const etpDir=nbOuNull('og-f-etpdir'),etpEnt=nbOuNull('og-f-etpent');
+  if(Number.isNaN(etpDir)||Number.isNaN(etpEnt)){alert('ETP direction / entretien : indiquez un nombre entre 0 et 2 (ex. 0,5).');return;}
   const pers=v('og-f-pers');
   const reseau=!!document.getElementById('og-f-reseau')&&(document.getElementById('og-f-reseau').type==='hidden'||document.getElementById('og-f-reseau').checked);
   const existante=id?ogCartes.find(x=>x.id===id):null;
   const creche_id=reseau?null:(existante?existante.creche_id:ogCrecheCourante())||null;
   if(!reseau&&!creche_id){alert('Choisissez d’abord une crèche.');return;}
   const row={
-    nom,poste:v('og-f-poste')||null,diplome:v('og-f-diplome')||null,heures_hebdo:heures,etp,note:v('og-f-note')||null,
+    nom,poste:v('og-f-poste')||null,diplome:v('og-f-diplome')||null,heures_hebdo:heures,etp,etp_direction:etpDir,etp_entretien:etpEnt,note:v('og-f-note')||null,
     rsai:!!document.getElementById('og-f-rsai')?.checked,creche_id,
     parent_id:reseau?null:(v('og-f-parent')||null),
     employe_id:pers.startsWith('e:')?pers.slice(2):null,referent_id:pers.startsWith('r:')?pers.slice(2):null
@@ -305,7 +338,10 @@ async function ogEtpReprendre(){
     if(!c)c=cartes.find(x=>!pris.has(x.id)&&!x.rsai&&x!==premier);
     if(c){pris.add(c.id);choix[po.i]=c.id;}
   });
-  ogEtpDoc={postes,ft,choix,date:rep.updated_at,cartes};
+  // Mêmes règles que etpCalc (documents/09-calcul-etp.js) : direction prise sur la directrice, repas = h/jour × jours.
+  const h0=postes[0]?postes[0].h:0,dirH=Math.min(h0,Math.max(0,(+st.dir||0)*ft));
+  const repasH=Math.max(0,+st.repas||0)*(+st.jours>0?+st.jours:5);
+  ogEtpDoc={postes,ft,choix,date:rep.updated_at,cartes,dirH,repasH,repasChoix:repasH>0?'*':''};
   ogEtpAfficher();
 }
 function ogEtpAfficher(){
@@ -317,6 +353,9 @@ function ogEtpAfficher(){
     +'<p style="font-size:12.5px;color:var(--muted);margin:0 0 6px">Calcul du '+ogEsc(dateTxt)+' (base '+ogEsc(String(d.ft).replace('.',','))+' h = 1 ETP). Les postes y sont anonymes : indiquez à quelle carte correspond chacun. Les heures et l’ETP de la carte sont remplacés ; le diplôme n’est complété que s’il est vide.</p>'
     +d.postes.map(po=>'<div class="og-2c" style="align-items:center"><div style="font-size:12.5px"><strong>'+ogEsc(po.label)+'</strong><br>'+ogEsc(OG_QUAL[po.q]?.dip||'Autre qualification')+(po.q==='cap2'?' (+ 2 ans)':'')+' · '+ogEsc(ogFmtHeures(po.h))+' · '+ogEsc(ogFmtEtp(po.h/d.ft))+'</div>'
       +'<select class="finput" id="og-ep-'+po.i+'"><option value="">— Ne pas reprendre —</option>'+d.cartes.map(c=>`<option value="${c.id}"${d.choix[po.i]===c.id?' selected':''}>${ogEsc(c.nom)}</option>`).join('')+'</select></div>').join('')
+    +(d.dirH>0?'<div class="og-2c" style="align-items:center"><div style="font-size:12.5px"><strong>ETP direction</strong><br>'+ogEsc(ogFmtEtp(d.dirH/d.ft))+' ('+ogEsc(ogFmtHeures(d.dirH).replace('/SEM',''))+' par semaine)</div><div style="font-size:12px;color:var(--muted)">Inscrit sur la carte reliée à « Directrice ».</div></div>':'')
+    +(d.repasH>0?'<div class="og-2c" style="align-items:center"><div style="font-size:12.5px"><strong>ETP entretien / repas</strong><br>'+ogEsc(ogFmtEtp(d.repasH/d.ft))+' ('+ogEsc(ogFmtHeures(d.repasH).replace('/SEM',''))+' par semaine)</div>'
+      +'<select class="finput" id="og-ep-repas"><option value="">— Ne pas reprendre —</option><option value="*" selected>Répartir entre les professionnel·les reliés</option>'+d.cartes.map(c=>`<option value="${c.id}">${ogEsc(c.nom)} uniquement</option>`).join('')+'</select></div>':'')
     +'<div class="og-btns"><span style="flex:1"></span><button type="button" class="btn-sm" onclick="ogFermer()">Annuler</button><button type="button" class="btn-primary" onclick="ogEtpAppliquer()">Appliquer</button></div></div>';
   m.addEventListener('click',e=>{if(e.target===m)ogFermer();});
   document.body.appendChild(m);
@@ -329,13 +368,26 @@ async function ogEtpAppliquer(){
     if(vus[id]){alert('La carte « '+d.cartes.find(c=>c.id===id)?.nom+' » est choisie pour deux postes.');return;}
     vus[id]=1;lignes.push({po,c:d.cartes.find(c=>c.id===id)});
   }
-  if(!lignes.length){ogFermer();return;}
+  const repasSel=document.getElementById('og-ep-repas')?.value||'';
+  if(!lignes.length&&!repasSel){ogFermer();return;}
+  // Entretien / repas : réparti à parts égales entre les professionnel·les reliés (hors directrice), ou une seule carte.
+  const repasPar={};
+  if(repasSel&&d.repasH>0){
+    const cibles=repasSel==='*'?(lignes.filter(l=>l.po.i!==0).length?lignes.filter(l=>l.po.i!==0):lignes).map(l=>l.c.id):[repasSel];
+    cibles.forEach(id=>{repasPar[id]=Math.round(d.repasH/d.ft/cibles.length*1000)/1000;});
+  }
+  d.cartes.forEach(c=>{if(repasPar[c.id]!=null&&!lignes.some(l=>l.c.id===c.id))lignes.push({po:null,c});});
   try{
     for(const{po,c}of lignes){
-      const q=OG_QUAL[po.q]||OG_QUAL.autre;
-      const maj={heures_hebdo:po.h,etp:d.ft===OG_HEURES_ETP?null:Math.round(po.h/d.ft*1000)/1000};
-      if(!c.diplome&&q.dip)maj.diplome=q.dip;
-      if(!c.note&&q.note)maj.note=q.note;
+      const maj={};
+      if(po){
+        const q=OG_QUAL[po.q]||OG_QUAL.autre;
+        maj.heures_hebdo=po.h;maj.etp=d.ft===OG_HEURES_ETP?null:Math.round(po.h/d.ft*1000)/1000;
+        if(!c.diplome&&q.dip)maj.diplome=q.dip;
+        if(!c.note&&q.note)maj.note=q.note;
+        if(po.i===0)maj.etp_direction=d.dirH>0?Math.round(d.dirH/d.ft*1000)/1000:null;
+      }
+      if(repasPar[c.id]!=null)maj.etp_entretien=repasPar[c.id];
       const{error}=await sb.from('organigramme_cartes').update(maj).eq('id',c.id);
       if(error)throw error;
     }
@@ -349,10 +401,10 @@ const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:
   +'.og-t li::before,.og-t li::after{content:"";position:absolute;top:0;right:50%;border-top:2px solid #b9b5d6;width:50%;height:18px}.og-t li::after{right:auto;left:50%;border-left:2px solid #b9b5d6}'
   +'.og-t li:only-child::before,.og-t li:only-child::after{display:none}.og-t li:only-child{padding-top:0}.og-t li:first-child::before,.og-t li:last-child::after{border:0}.og-t li:last-child::before{border-right:2px solid #b9b5d6;border-radius:0 6px 0 0}.og-t li:first-child::after{border-radius:6px 0 0 0}'
   +'.og-t ul::before{content:"";position:absolute;top:0;left:50%;border-left:2px solid #b9b5d6;height:18px}.og-t>li{padding-top:0}.og-t>li::before,.og-t>li::after{display:none}'
-  +'.og-groupe{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}'
+  +'.og-groupe{display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:wrap;row-gap:10px}.og-groupe .og-node+.og-node{margin-left:44px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #3D3580}'
   +'.og-node{position:relative;min-width:150px;max-width:200px;border:1.5px solid #3D3580;border-radius:10px;padding:8px 10px;background:#fff;break-inside:avoid}.og-rsai{border-color:#0E9F6E;background:#ECFDF5}'
   +'.og-badge{position:absolute;top:-9px;right:8px;background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-  +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}'
+  +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}'
   +'.og-pied{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:18px;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px}';
 function ogImprimer(){
   const zone=document.getElementById('og-contenu');if(!zone)return;
