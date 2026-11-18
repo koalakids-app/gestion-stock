@@ -46,7 +46,7 @@ async function feFiche(id){
 function feLigne(lab,val){return val?'<div class="fe-row"><span>'+lab+'</span><b>'+val+'</b></div>':'';}
 function feFichiers(lib,rows,aff){
   if(!rows||!rows.length)return '';
-  return '<div class="nt-titre">'+lib+'</div>'+rows.map(r=>'<button type="button" class="fe-doc" onclick="feOuvrirFichier(\''+esc(r.bucket)+'\',\''+esc(r.path).replace(/\\/g,'\\\\')+'\')"><i class="ti ti-file"></i> '+esc(r.filename||r.path.split('/').pop())+'<small>'+FE_JOURS_VUS(r.created_at)+'</small></button>').join('');
+  return '<div class="nt-titre">'+lib+'</div>'+rows.map(r=>'<button type="button" class="fe-doc" data-b="'+esc(r.bucket)+'" data-p="'+esc(r.path)+'" data-n="'+esc(r.filename||'')+'"><i class="ti ti-file"></i> '+esc(r.filename||r.path.split('/').pop())+'<small>'+FE_JOURS_VUS(r.created_at)+'</small></button>').join('');
 }
 function feRender(){
   const f=FE_FICHE,e=f.enfant,box=document.getElementById('feContenu');
@@ -74,12 +74,37 @@ function feRender(){
     +feFichiers('Carnet de santé et vaccins',f.carnet)
     +feFichiers('Autres documents (droit à l\'image, ordonnances…)',(f.documents||[]).filter(d=>d.piece_key!=='photo_enfant'));
 }
-async function feOuvrirFichier(bucket,path){
-  /* fenêtre ouverte tout de suite (anti-bloqueur de popups), adresse renseignée après */
-  const w=window.open('','_blank');
-  const{data,error}=await sb.storage.from(bucket).createSignedUrl(path,300);
-  if(error||!data){if(w)w.close();toast('Ouverture impossible.',true);return;}
+let FE_BLOB=null;
+function feFermerDoc(){
+  document.getElementById('ovFicheDoc').classList.remove('on');
+  document.getElementById('feDocCorps').innerHTML='';
+  if(FE_BLOB){URL.revokeObjectURL(FE_BLOB);FE_BLOB=null;}
+}
+/* Le fichier est téléchargé puis affiché dans la page (pas d'onglet à ouvrir :
+   les tablettes et l'application installée bloquent souvent les fenêtres ouvertes
+   après un appel réseau). */
+async function feOuvrirFichier(bucket,path,nom){
+  const ov=document.getElementById('ovFicheDoc'),corps=document.getElementById('feDocCorps');
+  ov.classList.add('on');
+  corps.innerHTML='<div class="msg">Chargement du document…</div>';
+  document.getElementById('feDocLien').style.display='none';
+  const{data,error}=await sb.storage.from(bucket).download(path);
+  if(error||!data){corps.innerHTML='<div class="msg warn"><i class="ti ti-alert-triangle"></i> Ouverture impossible'+(error&&error.message?' : '+esc(error.message):'')+'</div>';return;}
   if(typeof kkJournaliserAcces==='function')kkJournaliserAcces(bucket,path,{entite_type:'enfant',entite_id:FE_FICHE&&FE_FICHE.enfant.id,libelle:'Fiche enfant (accès terrain)'});
-  if(w)w.location.href=data.signedUrl;else location.href=data.signedUrl;
+  const ext=(path.split('.').pop()||'').toLowerCase();
+  const types={pdf:'application/pdf',jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',gif:'image/gif',heic:'image/heic'};
+  const type=data.type&&data.type!=='application/octet-stream'?data.type:(types[ext]||'application/octet-stream');
+  const blob=new Blob([data],{type:type});
+  if(FE_BLOB)URL.revokeObjectURL(FE_BLOB);
+  FE_BLOB=URL.createObjectURL(blob);
+  const lien=document.getElementById('feDocLien');
+  lien.href=FE_BLOB;lien.download=nom||path.split('/').pop();lien.style.display='';
+  if(type.indexOf('image/')===0)corps.innerHTML='<img src="'+FE_BLOB+'" style="max-width:100%;border-radius:10px">';
+  else if(type==='application/pdf')corps.innerHTML='<iframe src="'+FE_BLOB+'" style="width:100%;height:70vh;border:1px solid var(--line);border-radius:10px"></iframe>';
+  else corps.innerHTML='<div class="msg">Ce type de fichier ne s’affiche pas ici : utilisez « Télécharger ».</div>';
 }
 document.getElementById('qFiches').onclick=feOuvrir;
+
+document.getElementById('feContenu').addEventListener('click',function(ev){
+  const b=ev.target.closest('.fe-doc');if(b)feOuvrirFichier(b.dataset.b,b.dataset.p,b.dataset.n);
+});
