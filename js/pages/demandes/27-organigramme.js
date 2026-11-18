@@ -1,92 +1,290 @@
 /* Organigramme — Demandes › Équipe › « Organigramme » (préfixe og).
-   Lecture seule, pas de SQL : construit à partir de `cacheReferents` (direction, référent·e·s) et de
-   `cacheEmployes` (fiches non archivées). Deux présentations :
-   - « Par crèche » : direction → crèches → référent·e → équipe ;
-   - « Par fonction » : direction → fonctions (poste) → personnes, avec la crèche de chacun·e.
-   Les comptes d'accès terrain (rôle `employe`) ne sont pas listés (ce sont des collègues déjà présents
-   via leur fiche) ; une fiche liée à un·e référent·e n'est pas comptée deux fois. Direction = toutes les
-   crèches, référent·e = la sienne. Impression / PDF par la fenêtre d'impression du navigateur. */
-let ogMode='creche';
+   Organigramme composé à la main, un par crèche : cartes (`organigramme_cartes`, sql/organigramme.sql, à appliquer
+   à la main) reliées en arbre par `parent_id`. Chaque carte : nom, fonction, diplôme, temps de travail (heures/semaine),
+   ETP (calculé heures / 35, ou saisi), note libre (expérience, alternance…) et badge RSAI. Une carte peut être liée à une
+   fiche (collaborateur·trice ou référent·e) pour pré-remplir, sinon saisie libre (gestionnaire, alternant·e…).
+   Cartes sans crèche = niveau « réseau » (gestionnaires…) affiché au-dessus. Écriture : direction et référent·e·s de la
+   crèche (réseau : direction seule). Impression / PDF par la fenêtre d'impression. */
+let ogCartes=[],ogErreur='';
 const ogEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const OG_HEURES_ETP=35;
 
-function ogInit(){
+function ogCrecheCourante(){
+  if(!isDirection)return currentProfile?.creche_id||'';
+  return document.getElementById('og-creche')?.value||'';
+}
+function ogPeutEditer(c){
+  if(isDirection)return true;
+  return !!c&&currentProfile?.role==='referent'&&currentProfile.creche_id===c.creche_id;
+}
+function ogStyle(){
+  if(document.getElementById('og-style'))return;
+  const st=document.createElement('style');st.id='og-style';st.textContent=OG_CSS;document.head.appendChild(st);
+}
+async function ogInit(){
+  ogStyle();
   const sel=document.getElementById('og-creche');
   if(sel){
     const v=sel.value;
-    sel.innerHTML='<option value="all">Toutes les crèches</option>'+cacheCreches.map(c=>`<option value="${c.id}">${ogEsc(c.name)}</option>`).join('');
-    sel.value=isDirection?(v||'all'):(currentProfile?.creche_id||'all');
+    sel.innerHTML=cacheCreches.map(c=>`<option value="${c.id}">${ogEsc(c.name)}</option>`).join('');
+    sel.value=(v&&cacheCreches.some(c=>c.id===v))?v:(currentProfile?.creche_id||cacheCreches[0]?.id||'');
   }
-  ogMajBoutons();
+  await ogCharger();
+}
+async function ogCharger(){
+  ogErreur='';
+  try{
+    const{data,error}=await sb.from('organigramme_cartes').select('*').order('ordre',{ascending:true}).order('created_at',{ascending:true});
+    if(error)throw error;
+    ogCartes=data||[];
+  }catch(err){
+    ogCartes=[];
+    ogErreur=/organigramme_cartes/.test(String(err?.message||err))
+      ?'La table de l’organigramme n’existe pas encore : appliquer sql/organigramme.sql sur Supabase.'
+      :'Chargement impossible : '+(err?.message||err);
+  }
   ogRender();
 }
-function ogMode_(m){ogMode=m;ogMajBoutons();ogRender();}
-function ogMajBoutons(){
-  [['creche','og-b-creche'],['fonction','og-b-fonction']].forEach(([m,id])=>{
-    const b=document.getElementById(id);if(b)b.classList.toggle('active',ogMode===m);
-  });
+
+// ---------- temps de travail et ETP ----------
+// « 35 », « 8,75 », « 8h45 », « 8H45 » → nombre d'heures ; vide → null.
+function ogParseHeures(t){
+  const s=String(t==null?'':t).trim().toLowerCase().replace(',','.');
+  if(!s)return null;
+  const m=s.match(/^(\d+(?:\.\d+)?)\s*h\s*(\d{1,2})?$/);
+  if(m)return Math.round((parseFloat(m[1])+(m[2]?parseInt(m[2],10)/60:0))*100)/100;
+  const n=parseFloat(s);
+  return isFinite(n)?n:NaN;
 }
-function ogInitiales(nom){
-  return String(nom||'').trim().split(/\s+/).filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?';
+function ogFmtHeures(v){
+  if(v==null||v==='')return'';
+  const h=Math.floor(Number(v)),m=Math.round((Number(v)-h)*60);
+  return h+'H'+(m?String(m).padStart(2,'0'):'')+'/SEM';
 }
-function ogCarte(p,cls){
-  return '<div class="og-node '+(cls||'')+'"><div class="og-av">'+ogEsc(ogInitiales(p.nom))+'</div>'
-    +'<div class="og-nom">'+ogEsc(p.nom)+'</div><div class="og-poste">'+ogEsc(p.poste)+'</div>'
-    +(p.creche?'<div class="og-creche"><i class="ti ti-building" style="font-size:11px"></i> '+ogEsc(p.creche)+'</div>':'')+'</div>';
+function ogEtpDe(c){
+  if(c.etp!=null&&c.etp!=='')return Number(c.etp);
+  if(c.heures_hebdo!=null&&c.heures_hebdo!=='')return Number(c.heures_hebdo)/OG_HEURES_ETP;
+  return null;
 }
-// Personnes du réseau, déjà normalisées (nom, poste, rôle, crèche).
-function ogPersonnes(crecheId){
-  const nomCreche=id=>cacheCreches.find(c=>c.id===id)?.name||'';
-  const refs=cacheReferents.filter(r=>r.role==='direction'||r.role==='referent');
-  const liees=new Set(refs.map(r=>r.employe_id).filter(Boolean));
-  const dir=refs.filter(r=>r.role==='direction').map(r=>({id:r.id,nom:r.name,poste:r.poste||'Direction',creche_id:r.creche_id,creche:nomCreche(r.creche_id)}));
-  const ref=refs.filter(r=>r.role==='referent').map(r=>({id:r.id,nom:r.name,poste:r.poste||'Référent·e',creche_id:r.creche_id,creche:nomCreche(r.creche_id)}));
-  const emp=cacheEmployes.filter(e=>!e.archive_le&&!liees.has(e.id)).map(e=>({
-    id:e.id,nom:((e.prenom||'')+' '+(e.nom||'')).trim()||'—',poste:e.poste||'Collaborateur·trice',creche_id:e.creche_id,creche:nomCreche(e.creche_id)
-  }));
-  const filtre=l=>crecheId==='all'?l:l.filter(p=>p.creche_id===crecheId);
-  return{dir,ref:filtre(ref),emp:filtre(emp)};
+const ogFmtEtp=v=>v==null?'':(Math.round(v*100)/100).toLocaleString('fr-FR')+' ETP';
+
+// ---------- dessin ----------
+function ogCarte(c){
+  const etp=ogEtpDe(c),h=ogFmtHeures(c.heures_hebdo);
+  const peut=ogPeutEditer(c);
+  return '<div class="og-node'+(c.rsai?' og-rsai':'')+(peut?' og-edit':'')+'"'+(peut?' onclick="ogEditer(\''+c.id+'\')" title="Modifier"':'')+'>'
+    +(c.rsai?'<span class="og-badge">RSAI</span>':'')
+    +'<div class="og-nom">'+ogEsc(c.nom)+'</div>'
+    +(c.poste?'<div class="og-poste">'+ogEsc(c.poste)+'</div>':'')
+    +(c.diplome?'<div class="og-dip">Dip : '+ogEsc(c.diplome)+'</div>':'')
+    +(c.note?'<div class="og-note">'+ogEsc(c.note).replace(/\n/g,'<br>')+'</div>':'')
+    +((h||etp!=null)?'<div class="og-temps">'+[h,ogFmtEtp(etp)].filter(Boolean).join(' · ')+'</div>':'')
+    +'</div>';
+}
+function ogBranche(c,enfants){
+  const fils=enfants[c.id]||[];
+  return '<li>'+ogCarte(c)+(fils.length?'<ul>'+fils.map(f=>ogBranche(f,enfants)).join('')+'</ul>':'')+'</li>';
+}
+function ogArbre(crecheId){
+  const reseau=ogCartes.filter(c=>!c.creche_id);
+  const cartes=ogCartes.filter(c=>c.creche_id===crecheId);
+  const ids=new Set(cartes.map(c=>c.id));
+  const enfants={};
+  cartes.forEach(c=>{if(c.parent_id&&ids.has(c.parent_id))(enfants[c.parent_id]=enfants[c.parent_id]||[]).push(c);});
+  const racines=cartes.filter(c=>!c.parent_id||!ids.has(c.parent_id));
+  const racinesHtml=racines.map(r=>ogBranche(r,enfants)).join('');
+  if(reseau.length){
+    return '<ul class="og-t"><li><div class="og-groupe">'+reseau.map(ogCarte).join('')+'</div>'
+      +(racines.length?'<ul>'+racinesHtml+'</ul>':'')+'</li></ul>';
+  }
+  return racines.length?'<ul class="og-t">'+racinesHtml+'</ul>':'';
 }
 function ogRender(){
   const zone=document.getElementById('og-contenu');if(!zone)return;
-  let crecheId=document.getElementById('og-creche')?.value||'all';
-  if(!isDirection)crecheId=currentProfile?.creche_id||'all';
-  const{dir,ref,emp}=ogPersonnes(crecheId);
-  const haut=dir.length
-    ?'<div class="og-row">'+dir.map(p=>ogCarte(p,'og-dir')).join('')+'</div>'
-    :'<div class="og-row"><div class="og-node og-vide">Direction à renseigner</div></div>';
-  let corps='';
-  if(ogMode==='creche'){
-    const creches=cacheCreches.filter(c=>crecheId==='all'||c.id===crecheId);
-    corps='<div class="og-branches">'+creches.map(c=>{
-      const r=ref.filter(p=>p.creche_id===c.id),e=emp.filter(p=>p.creche_id===c.id);
-      return '<div class="og-branche"><div class="og-titre"><i class="ti ti-building"></i> '+ogEsc(c.name)+' <span class="og-nb">'+(r.length+e.length)+'</span></div>'
-        +'<div class="og-liste">'+(r.map(p=>ogCarte(p,'og-ref')).join('')||'<div class="og-node og-vide">Référent·e à renseigner</div>')+'</div>'
-        +'<div class="og-liste og-equipe">'+(e.map(p=>ogCarte(Object.assign({},p,{creche:''}),'')).join('')||'<div class="og-vide-txt">Aucun·e collaborateur·trice</div>')+'</div></div>';
-    }).join('')+'</div>';
-  }else{
-    const groupes={};
-    ref.concat(emp).forEach(p=>{const k=p.poste.trim()||'Autre';(groupes[k]=groupes[k]||[]).push(p);});
-    const cles=Object.keys(groupes).sort((a,b)=>a.localeCompare(b,'fr'));
-    corps='<div class="og-branches">'+cles.map(k=>
-      '<div class="og-branche"><div class="og-titre"><i class="ti ti-briefcase"></i> '+ogEsc(k)+' <span class="og-nb">'+groupes[k].length+'</span></div>'
-      +'<div class="og-liste og-equipe">'+groupes[k].sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(p=>ogCarte(p,'')).join('')+'</div></div>'
-    ).join('')+'</div>';
-    if(!cles.length)corps='<div class="empty-state"><i class="ti ti-sitemap"></i><p>Aucune personne à afficher.</p></div>';
+  const barre=document.getElementById('og-actions');
+  const crecheId=ogCrecheCourante();
+  const creche=cacheCreches.find(c=>c.id===crecheId);
+  const peutCreche=ogPeutEditer({creche_id:crecheId});
+  if(barre)barre.style.display=peutCreche?'':'none';
+  if(ogErreur){zone.innerHTML='<div class="empty-state"><i class="ti ti-alert-triangle"></i><p>'+ogEsc(ogErreur)+'</p></div>';return;}
+  if(!creche){zone.innerHTML='<div class="empty-state"><i class="ti ti-sitemap"></i><p>Choisissez une crèche.</p></div>';return;}
+  const cartes=ogCartes.filter(c=>c.creche_id===crecheId);
+  const arbre=ogArbre(crecheId);
+  if(!cartes.length){
+    zone.innerHTML='<div class="empty-state"><i class="ti ti-sitemap"></i><p>Aucun organigramme pour cette crèche.</p>'
+      +(peutCreche?'<p style="font-size:12.5px">Cliquez sur <strong>Ajouter une personne</strong>, ou sur <strong>Pré-remplir depuis les fiches</strong> pour partir de l’équipe existante.</p>':'')+'</div>';
+    return;
   }
-  zone.innerHTML='<div class="og-arbre">'+haut+'<div class="og-trait"></div>'+corps+'</div>';
+  const maj=ogCartes.filter(c=>c.creche_id===crecheId||!c.creche_id).map(c=>c.maj_le||c.created_at).sort().pop();
+  const majTxt=maj?new Date(maj).toLocaleDateString('fr-FR'):'';
+  const heures=cartes.reduce((s,c)=>s+(Number(c.heures_hebdo)||0),0);
+  const etp=cartes.reduce((s,c)=>s+(ogEtpDe(c)||0),0);
+  const rsai=cartes.concat(ogCartes.filter(c=>!c.creche_id)).filter(c=>c.rsai).map(c=>c.nom);
+  zone.innerHTML='<div class="og-page"><div class="og-entete"><img src="logo-koalakids.png" alt="" class="og-logo"><div><div class="og-titre">'+ogEsc(creche.name)+'</div>'
+    +'<div class="og-sous">Organigramme'+(majTxt?' (maj : '+majTxt+')':'')+'</div></div></div>'
+    +'<div class="og-arbre">'+arbre+'</div>'
+    +'<div class="og-pied"><span><strong>'+cartes.length+'</strong> personne'+(cartes.length>1?'s':'')+'</span>'
+    +'<span>Total : <strong>'+(Math.round(heures*100)/100).toLocaleString('fr-FR')+' h/sem</strong> · <strong>'+(Math.round(etp*100)/100).toLocaleString('fr-FR')+' ETP</strong></span>'
+    +'<span>RSAI : <strong>'+(rsai.length?ogEsc(rsai.join(', ')):'à désigner')+'</strong></span></div></div>';
 }
-const OG_CSS_PRINT='.og-arbre{display:flex;flex-direction:column;align-items:center}.og-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}.og-trait{width:2px;height:18px;background:#bbb}'
-  +'.og-branches{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;align-items:flex-start;border-top:2px solid #bbb;padding-top:14px}.og-branche{width:190px;display:flex;flex-direction:column;gap:6px}'
-  +'.og-titre{background:#3D3580;color:#fff;border-radius:8px;padding:6px 10px;font-weight:700;font-size:12px;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact}.og-nb{margin-left:4px;font-size:10px}'
-  +'.og-liste{display:flex;flex-direction:column;gap:6px}.og-equipe{border-left:2px solid #bbb;padding-left:8px;margin-left:10px}'
-  +'.og-node{border:1px solid #bbb;border-radius:8px;padding:6px 8px;text-align:center;break-inside:avoid}.og-dir{border-color:#F59E0B;background:#FFF4E0}.og-ref{border-color:#3D3580}'
-  +'.og-av{display:none}.og-nom{font-weight:700;font-size:12px}.og-poste,.og-creche{font-size:10.5px;color:#666}.og-vide,.og-vide-txt{color:#999;font-size:11px}.og-vide{border-style:dashed}';
+
+// ---------- édition d'une carte ----------
+function ogFermer(){document.getElementById('og-modal')?.remove();}
+function ogDescendants(id){
+  const r=new Set([id]);let ajout=true;
+  while(ajout){ajout=false;ogCartes.forEach(c=>{if(c.parent_id&&r.has(c.parent_id)&&!r.has(c.id)){r.add(c.id);ajout=true;}});}
+  return r;
+}
+function ogOptionsPersonnes(crecheId,courant){
+  const refs=cacheReferents.filter(r=>(r.role==='referent'||r.role==='direction')&&(!crecheId||r.creche_id===crecheId||!r.creche_id));
+  const emps=cacheEmployes.filter(e=>!e.archive_le&&(!crecheId||e.creche_id===crecheId));
+  let h='<option value="">— Saisie libre —</option>';
+  if(refs.length)h+='<optgroup label="Direction / référent·e·s">'+refs.map(r=>`<option value="r:${r.id}"${courant===('r:'+r.id)?' selected':''}>${ogEsc(r.name)}</option>`).join('')+'</optgroup>';
+  if(emps.length)h+='<optgroup label="Collaborateurs / trices">'+emps.map(e=>`<option value="e:${e.id}"${courant===('e:'+e.id)?' selected':''}>${ogEsc(((e.prenom||'')+' '+(e.nom||'')).trim())}</option>`).join('')+'</optgroup>';
+  return h;
+}
+function ogChoisirPersonne(){
+  const v=document.getElementById('og-f-pers').value;if(!v)return;
+  const[type,id]=v.split(':');
+  let nom='',poste='',diplome='',heures=null;
+  if(type==='e'){
+    const e=cacheEmployes.find(x=>x.id===id);if(!e)return;
+    nom=((e.prenom||'')+' '+(e.nom||'')).trim();poste=e.poste||e.qualification||'';diplome=e.qualification||'';heures=e.heures_hebdo;
+  }else{
+    const r=cacheReferents.find(x=>x.id===id);if(!r)return;
+    nom=r.name||'';poste=r.poste||'';
+    const e=r.employe_id?cacheEmployes.find(x=>x.id===r.employe_id):null;
+    if(e){diplome=e.qualification||'';heures=e.heures_hebdo;if(!poste)poste=e.poste||'';}
+  }
+  const set=(i,val)=>{const el=document.getElementById(i);if(el&&val!==''&&val!=null)el.value=val;};
+  set('og-f-nom',nom);set('og-f-poste',poste);set('og-f-diplome',diplome);
+  if(heures!=null)set('og-f-heures',String(heures).replace('.',','));
+}
+function ogEditer(id){
+  const c=id?ogCartes.find(x=>x.id===id):null;
+  const crecheId=c?c.creche_id:ogCrecheCourante();
+  const reseau=c?!c.creche_id:false;
+  const exclus=c?ogDescendants(c.id):new Set();
+  const autres=ogCartes.filter(x=>!exclus.has(x.id)&&x.creche_id===(crecheId||null)&&!reseau);
+  const lie=c?(c.employe_id?'e:'+c.employe_id:c.referent_id?'r:'+c.referent_id:''):'';
+  const m=document.createElement('div');m.id='og-modal';m.className='og-overlay';
+  m.innerHTML='<div class="og-dlg" role="dialog" aria-modal="true"><h3>'+(c?'Modifier la carte':'Ajouter une personne')+'</h3>'
+    +'<label class="flabel">Personne (fiche existante)</label><select class="finput" id="og-f-pers" onchange="ogChoisirPersonne()">'+ogOptionsPersonnes(crecheId,lie)+'</select>'
+    +'<label class="flabel">Nom *</label><input class="finput" id="og-f-nom" value="'+ogEsc(c?.nom||'')+'" placeholder="Ex. : Sophie CHANCEY">'
+    +'<label class="flabel">Fonction</label><input class="finput" id="og-f-poste" value="'+ogEsc(c?.poste||'')+'" placeholder="Ex. : Référent technique, Auxiliaire de puériculture">'
+    +'<label class="flabel">Diplôme</label><input class="finput" id="og-f-diplome" value="'+ogEsc(c?.diplome||'')+'" placeholder="Ex. : D.E. AP, CAP AEPE, Infirmière puéricultrice">'
+    +'<div class="og-2c"><div><label class="flabel">Temps de travail (h / semaine)</label><input class="finput" id="og-f-heures" value="'+ogEsc(c?.heures_hebdo!=null?String(c.heures_hebdo).replace('.',','):'')+'" placeholder="35 ou 8h45"></div>'
+    +'<div><label class="flabel">ETP (auto si vide)</label><input class="finput" id="og-f-etp" value="'+ogEsc(c?.etp!=null?String(c.etp).replace('.',','):'')+'" placeholder="= heures / 35"></div></div>'
+    +'<label class="flabel">Note (expérience, alternance…)</label><textarea class="finput" id="og-f-note" rows="2" placeholder="Ex. : + 2 ans d’expérience">'+ogEsc(c?.note||'')+'</textarea>'
+    +'<label class="og-chk"><input type="checkbox" id="og-f-rsai"'+(c?.rsai?' checked':'')+'> Référent·e Santé et Accueil Inclusif (RSAI)</label>'
+    +(reseau?'':'<label class="flabel">Rattaché à</label><select class="finput" id="og-f-parent"><option value="">— Aucun (en haut de l’organigramme) —</option>'
+      +autres.map(x=>`<option value="${x.id}"${c?.parent_id===x.id?' selected':''}>${ogEsc(x.nom)}${x.poste?' — '+ogEsc(x.poste):''}</option>`).join('')+'</select>')
+    +(isDirection&&!reseau?'<label class="og-chk"><input type="checkbox" id="og-f-reseau"> Niveau réseau (affiché au-dessus de toutes les crèches : gestionnaires…)</label>':'')
+    +(isDirection&&reseau?'<input type="hidden" id="og-f-reseau" value="1">':'')
+    +'<div class="og-btns">'
+    +(c?'<button type="button" class="btn-sm" onclick="ogDeplacer(\''+c.id+'\',-1)" title="Avant ses voisines"><i class="ti ti-arrow-left"></i></button><button type="button" class="btn-sm" onclick="ogDeplacer(\''+c.id+'\',1)" title="Après ses voisines"><i class="ti ti-arrow-right"></i></button><button type="button" class="btn-sm" style="color:var(--red)" onclick="ogSupprimer(\''+c.id+'\')"><i class="ti ti-trash"></i> Supprimer</button>':'')
+    +'<span style="flex:1"></span><button type="button" class="btn-sm" onclick="ogFermer()">Annuler</button><button type="button" class="btn-primary" onclick="ogEnregistrer('+(c?'\''+c.id+'\'':'null')+')">Enregistrer</button></div></div>';
+  m.addEventListener('click',e=>{if(e.target===m)ogFermer();});
+  document.body.appendChild(m);
+  document.getElementById('og-f-nom').focus();
+}
+async function ogEnregistrer(id){
+  const v=i=>(document.getElementById(i)?.value||'').trim();
+  const nom=v('og-f-nom');if(!nom){alert('Le nom est obligatoire.');return;}
+  const heures=ogParseHeures(v('og-f-heures'));
+  if(Number.isNaN(heures)||(heures!=null&&(heures<0||heures>60))){alert('Temps de travail : indiquez un nombre d’heures (ex. 35 ou 8h45).');return;}
+  const etpTxt=v('og-f-etp').replace(',','.');
+  const etp=etpTxt===''?null:parseFloat(etpTxt);
+  if(etp!=null&&(!isFinite(etp)||etp<0||etp>2)){alert('ETP : indiquez un nombre entre 0 et 2.');return;}
+  const pers=v('og-f-pers');
+  const reseau=!!document.getElementById('og-f-reseau')&&(document.getElementById('og-f-reseau').type==='hidden'||document.getElementById('og-f-reseau').checked);
+  const existante=id?ogCartes.find(x=>x.id===id):null;
+  const creche_id=reseau?null:(existante?existante.creche_id:ogCrecheCourante())||null;
+  if(!reseau&&!creche_id){alert('Choisissez d’abord une crèche.');return;}
+  const row={
+    nom,poste:v('og-f-poste')||null,diplome:v('og-f-diplome')||null,heures_hebdo:heures,etp,note:v('og-f-note')||null,
+    rsai:!!document.getElementById('og-f-rsai')?.checked,creche_id,
+    parent_id:reseau?null:(v('og-f-parent')||null),
+    employe_id:pers.startsWith('e:')?pers.slice(2):null,referent_id:pers.startsWith('r:')?pers.slice(2):null
+  };
+  if(!id){
+    const freres=ogCartes.filter(x=>x.creche_id===creche_id&&x.parent_id===row.parent_id);
+    row.ordre=freres.reduce((m,x)=>Math.max(m,x.ordre||0),0)+1;
+  }
+  try{
+    const r=id?await sb.from('organigramme_cartes').update(row).eq('id',id):await sb.from('organigramme_cartes').insert(row);
+    if(r.error)throw r.error;
+  }catch(err){alert('Enregistrement impossible : '+(err?.message||err));return;}
+  ogFermer();await ogCharger();
+}
+async function ogSupprimer(id){
+  const c=ogCartes.find(x=>x.id===id);if(!c)return;
+  const nb=ogCartes.filter(x=>x.parent_id===id).length;
+  if(!confirm('Retirer « '+c.nom+' » de l’organigramme ?'+(nb?'\n\nLes '+nb+' carte(s) rattachée(s) passeront en haut de l’organigramme (à rattacher de nouveau). La fiche de la personne n’est pas supprimée.':'\n\nLa fiche de la personne n’est pas supprimée.')))return;
+  const{error}=await sb.from('organigramme_cartes').delete().eq('id',id);
+  if(error){alert('Suppression impossible : '+error.message);return;}
+  ogFermer();await ogCharger();
+}
+// Décale une carte avant / après ses voisines (même parent, même crèche).
+async function ogDeplacer(id,sens){
+  const c=ogCartes.find(x=>x.id===id);if(!c)return;
+  const freres=ogCartes.filter(x=>x.creche_id===c.creche_id&&(x.parent_id||null)===(c.parent_id||null))
+    .sort((a,b)=>(a.ordre-b.ordre)||String(a.created_at).localeCompare(String(b.created_at)));
+  const i=freres.findIndex(x=>x.id===id),j=i+sens;
+  if(j<0||j>=freres.length)return;
+  [freres[i],freres[j]]=[freres[j],freres[i]];
+  try{
+    await Promise.all(freres.map((x,k)=>x.ordre===k+1?null:sb.from('organigramme_cartes').update({ordre:k+1}).eq('id',x.id)));
+  }catch(err){alert('Déplacement impossible : '+(err?.message||err));return;}
+  ogFermer();await ogCharger();ogEditer(id);
+}
+// Part de l'équipe existante : référent·e·s en haut, collaborateur·trice·s rattaché·e·s au premier référent.
+async function ogPrerempli(){
+  const crecheId=ogCrecheCourante();if(!crecheId)return;
+  if(ogCartes.some(c=>c.creche_id===crecheId)&&!confirm('Cette crèche a déjà un organigramme : ajouter quand même les personnes manquantes ?'))return;
+  const deja=new Set(ogCartes.filter(c=>c.creche_id===crecheId).flatMap(c=>[c.employe_id,c.referent_id]).filter(Boolean));
+  const refs=cacheReferents.filter(r=>r.role==='referent'&&r.creche_id===crecheId&&!deja.has(r.id));
+  const liees=new Set(cacheReferents.filter(r=>r.creche_id===crecheId).map(r=>r.employe_id).filter(Boolean));
+  const emps=cacheEmployes.filter(e=>!e.archive_le&&e.creche_id===crecheId&&!deja.has(e.id)&&!liees.has(e.id));
+  if(!refs.length&&!emps.length){alert('Rien à ajouter : toutes les personnes de la crèche sont déjà dans l’organigramme.');return;}
+  let ordre=ogCartes.filter(c=>c.creche_id===crecheId).reduce((m,c)=>Math.max(m,c.ordre||0),0);
+  const base=(nom,poste,diplome,h)=>({creche_id:crecheId,nom,poste:poste||null,diplome:diplome||null,heures_hebdo:h!=null?h:null,ordre:++ordre});
+  try{
+    const lignes=refs.map(r=>{
+      const e=r.employe_id?cacheEmployes.find(x=>x.id===r.employe_id):null;
+      return Object.assign(base(r.name,r.poste||e?.poste,e?.qualification,e?.heures_hebdo),{referent_id:r.id,employe_id:null});
+    });
+    let ids=[];
+    if(lignes.length){
+      const{data,error}=await sb.from('organigramme_cartes').insert(lignes).select('id');
+      if(error)throw error;ids=(data||[]).map(x=>x.id);
+    }
+    const parent=ids[0]||ogCartes.find(c=>c.creche_id===crecheId&&!c.parent_id)?.id||null;
+    if(emps.length){
+      const{error}=await sb.from('organigramme_cartes').insert(emps.map(e=>Object.assign(
+        base(((e.prenom||'')+' '+(e.nom||'')).trim()||'—',e.poste||e.qualification,e.qualification,e.heures_hebdo),{employe_id:e.id,parent_id:parent})));
+      if(error)throw error;
+    }
+  }catch(err){alert('Pré-remplissage impossible : '+(err?.message||err));return;}
+  await ogCharger();
+}
+
+// ---------- impression ----------
+const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:14px}.og-logo{height:46px}.og-titre{font-size:20px;font-weight:800;color:#3D3580}.og-sous{font-size:12px;color:#666}'
+  +'.og-arbre{overflow:visible}.og-t,.og-t ul{padding-top:18px;position:relative;display:flex;justify-content:center;margin:0;padding-left:0;list-style:none}.og-t li{position:relative;padding:18px 6px 0;text-align:center;list-style:none;display:flex;flex-direction:column;align-items:center}'
+  +'.og-t li::before,.og-t li::after{content:"";position:absolute;top:0;right:50%;border-top:2px solid #b9b5d6;width:50%;height:18px}.og-t li::after{right:auto;left:50%;border-left:2px solid #b9b5d6}'
+  +'.og-t li:only-child::before,.og-t li:only-child::after{display:none}.og-t li:only-child{padding-top:0}.og-t li:first-child::before,.og-t li:last-child::after{border:0}.og-t li:last-child::before{border-right:2px solid #b9b5d6;border-radius:0 6px 0 0}.og-t li:first-child::after{border-radius:6px 0 0 0}'
+  +'.og-t ul::before{content:"";position:absolute;top:0;left:50%;border-left:2px solid #b9b5d6;height:18px}.og-t>li{padding-top:0}.og-t>li::before,.og-t>li::after{display:none}'
+  +'.og-groupe{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}'
+  +'.og-node{position:relative;min-width:150px;max-width:200px;border:1.5px solid #3D3580;border-radius:10px;padding:8px 10px;background:#fff;break-inside:avoid}.og-rsai{border-color:#0E9F6E;background:#ECFDF5}'
+  +'.og-badge{position:absolute;top:-9px;right:8px;background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+  +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}'
+  +'.og-pied{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:18px;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px}';
 function ogImprimer(){
   const zone=document.getElementById('og-contenu');if(!zone)return;
   const w=window.open('','_blank');if(!w){alert('Autorisez les fenêtres pop-up pour imprimer.');return;}
-  const css=OG_CSS_PRINT;
-  w.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Organigramme Koala Kids</title><style>'
-    +'body{font-family:Arial,sans-serif;margin:18px;color:#222}h1{font-size:18px}'+css+'</style></head><body><h1>Organigramme — Koala Kids</h1>'
-    +zone.innerHTML+'<div style="margin-top:18px;font-size:10px;color:#888;text-align:center">Application créée par David Bucari</div></body></html>');
-  w.document.close();w.focus();setTimeout(()=>w.print(),300);
+  w.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Organigramme Koala Kids</title><style>@page{size:A4 landscape;margin:10mm}body{font-family:Arial,sans-serif;margin:16px;color:#222}'+OG_CSS+'</style></head><body>'
+    +zone.innerHTML.replace(/ onclick="[^"]*"/g,'').replace(/ title="Modifier"/g,'')
+    +'<div style="margin-top:14px;font-size:10px;color:#888;text-align:center">Application créée par David Bucari</div></body></html>');
+  w.document.close();w.focus();setTimeout(()=>w.print(),400);
 }
