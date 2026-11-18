@@ -1,0 +1,38 @@
+name: Vérification du code
+
+# Contrôles automatiques sur chaque pull request (et sur main) : syntaxe de tous les JS et TypeScript,
+# puis chargement de toutes les pages dans un navigateur (tools/test-pages.js : aucune donnée réelle lue).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Syntaxe JavaScript
+        run: |
+          git ls-files '*.js' '*.mjs' | grep -v '^vendor/' | while read -r f; do
+            node --check "$f" || { echo "::error file=$f::erreur de syntaxe"; exit 1; }
+          done
+
+      - name: Syntaxe TypeScript (edge functions)
+        run: |
+          npm i --no-save typescript@5
+          node tools/verif-ts.js
+
+      - name: Chargement des pages (navigateur)
+        run: |
+          npm i --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+          node tools/test-pages.js

@@ -1,6 +1,6 @@
 // Service Worker — Stocks Pédagogiques
 // Stratégie ultra-simple : cache minimal, réseau prioritaire
-const CACHE_NAME = 'stocks-v36';   // v36 : module Équipe regroupé dans Demandes (renouvelle le cache) ; v35 : mode kiosque connecté retiré ; v34 : anti pull-to-refresh ; v33 : pushsubscriptionchange (réabonnement push automatique)
+const CACHE_NAME = 'stocks-v37';   // v37 : supabase-js hébergé (vendor/), politique de sécurité de contenu, icône des notifications corrigée ; v36 : module Équipe regroupé dans Demandes (renouvelle le cache) ; v35 : mode kiosque connecté retiré ; v34 : anti pull-to-refresh ; v33 : pushsubscriptionchange (réabonnement push automatique)
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -53,7 +53,7 @@ self.addEventListener('push', event => {
 
   const options = {
     body: payload.body || '',
-    icon: './icons/icon-192.png',
+    icon: './icon-192.png',
     data: { url: payload.url || './demandes.html' },
     tag: payload.tag || 'koala-notif',
     renotify: true
