@@ -557,7 +557,7 @@ else accObserveBadges();
 
 function showMain(tab){
   _mainCourant=tab;
-  ['accueil','demands','incidents','mcm','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','insc-suivi','vaccinations','couches','album','livres','enfants','afaire','notes','actions','reunions-equipe','stagiaires','partenaires'].forEach(t=>{
+  ['accueil','demands','incidents','mcm','presence','referents','employes','planning','evenements','dashboard','fraisik','fraispro','remplacantes','ref-dashboard','insc-suivi','vaccinations','couches','album','livres','organigramme','enfants','afaire','notes','actions','reunions-equipe','stagiaires','partenaires'].forEach(t=>{
     const cont=document.getElementById('main-'+t),btn=document.getElementById('mnav-'+t);
     if(cont)cont.classList.toggle('active',t===tab);
     if(btn)btn.classList.toggle('active',t===tab);
@@ -587,6 +587,7 @@ function showMain(tab){
   if(tab==='couches')coucheInit();
   if(tab==='album')albInit();
   if(tab==='livres')lcInit();
+  if(tab==='organigramme')ogInit();
   if(tab==='enfants')enfInit();
   if(tab==='afaire')afInit();
   if(tab==='notes')noteInit();

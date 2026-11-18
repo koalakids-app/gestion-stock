@@ -131,6 +131,7 @@
             <button class="mnav-hub-item" onclick="showMain('employes');closeHub()" id="mnav-employes"><i class="ti ti-id-badge-2"></i> Collaborateurs/trices</button>
             <button class="mnav-hub-item direction-only" onclick="showMain('referents');closeHub()" id="mnav-referents"><i class="ti ti-address-book"></i> Directeurs/trices techniques</button>
             <button class="mnav-hub-item" onclick="showMain('remplacantes');closeHub()" id="mnav-remplacantes"><i class="ti ti-user-plus"></i> Remplaçants/tes</button>
+            <button class="mnav-hub-item" onclick="showMain('organigramme');closeHub()" id="mnav-organigramme"><i class="ti ti-sitemap"></i> Organigramme</button>
             <button class="mnav-hub-item" onclick="showMain('stagiaires');closeHub()" id="mnav-stagiaires"><i class="ti ti-school"></i> Stagiaires &amp; alternants <span class="mnav-badge" id="badge-stagiaires" style="display:none">0</span></button>
           </div>
           <div class="mnav-hub-col">
@@ -185,12 +186,13 @@
     <div class="acc-page">
       <section class="acc-sec " data-t="equipe">
         <h2 class="acc-h">Équipe</h2>
-        <div class="acc-tiles" style="--n:6">
+        <div class="acc-tiles" style="--n:7">
           <button type="button" class="acc-tile" onclick="showMain('planning')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-calendar-event" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Planning</span></button>
           <button type="button" class="acc-tile" onclick="showMain('employes')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-id-badge-2" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Collaborateurs/trices</span></button>
           <button type="button" class="acc-tile direction-only" onclick="showMain('referents')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-address-book" aria-hidden="true"></i></span><span><span class="acc-chip">Direction</span></span></span><span class="acc-lbl">Directeurs/trices techniques</span></button>
           <button type="button" class="acc-tile" onclick="showMain('remplacantes')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-user-plus" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Remplaçants/tes</span></button>
           <button type="button" class="acc-tile" onclick="showMain('stagiaires')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-school" aria-hidden="true"></i></span><span><span class="mnav-badge" id="acc-badge-stagiaires" style="display:none">0</span></span></span><span class="acc-lbl">Stagiaires &amp; alternants</span></button>
+          <button type="button" class="acc-tile" onclick="showMain('organigramme')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-sitemap" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Organigramme</span></button>
           <button type="button" class="acc-tile" onclick="showMain('reunions-equipe')"><span class="acc-top"><span class="acc-ic"><i class="ti ti-notebook" aria-hidden="true"></i></span><span></span></span><span class="acc-lbl">Réunions d'équipe</span></button>
         </div>
       </section>
@@ -828,6 +830,21 @@
       </div>
     </div>
     <div id="alb-contenu"></div>
+  </div>
+
+  <!-- ORGANIGRAMME -->
+  <div id="main-organigramme" class="tab-content">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-title"><i class="ti ti-sitemap" style="color:var(--koala)"></i> Organigramme</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span class="og-seg"><button type="button" id="og-b-creche" class="active" onclick="ogMode_('creche')">Par crèche</button><button type="button" id="og-b-fonction" onclick="ogMode_('fonction')">Par fonction</button></span>
+        <select class="finput direction-only" id="og-creche" style="width:auto;min-width:160px;font-size:12px;padding:4px 8px" onchange="ogRender()"></select>
+        <button class="btn-primary" onclick="ogImprimer()"><i class="ti ti-printer"></i> Imprimer / PDF</button>
+      </div>
+    </div>
+    <div id="og-contenu"></div>
   </div>
 
   <!-- LIVRES CADEAUX -->
@@ -1917,6 +1934,7 @@
         <button class="notice-tab" onclick="switchNoticeTab('couches',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🍼 Couches</button>
         <button class="notice-tab" onclick="switchNoticeTab('album',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📷 Album photos</button>
         <button class="notice-tab" onclick="switchNoticeTab('livres',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">📚 Livres cadeaux</button>
+        <button class="notice-tab" onclick="switchNoticeTab('organigramme',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🗂️ Organigramme</button>
         <button class="notice-tab" onclick="switchNoticeTab('inscsuivi',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🧒 Entrées enfants à venir</button>
         <button class="notice-tab" onclick="switchNoticeTab('annexes',this)" style="padding:9px 14px;border:none;background:none;font-size:12.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:#aaa;white-space:nowrap">🔗 Autres outils</button>
       </div>
@@ -2935,6 +2953,7 @@
 <script src="js/pages/demandes/23-collaborateurs-equipe.js?v=2"></script>
 <script src="js/pages/demandes/24-collaborateurs-fiche.js?v=2"></script>
 <script src="js/pages/demandes/25-livres-cadeaux.js"></script>
+<script src="js/pages/demandes/27-organigramme.js"></script>
 <script src="js/pages/demandes/26-recrutement.js"></script>
 <script src="js/pmi/01-export-planning-pmi-excel-planning-equip.js"></script>
 <script src="js/pmi/02-structure-du-modele-pmi-officiel-feuille.js"></script>
