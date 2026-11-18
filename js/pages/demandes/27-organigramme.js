@@ -102,14 +102,9 @@ function ogCarte(c){
     +ogRepartition(c)
     +'</div>';
 }
-// Une carte RSAI rattachée à une autre se place à CÔTÉ de celle-ci (même ligne), pas en dessous.
 function ogBranche(c,enfants){
   const fils=enfants[c.id]||[];
-  const lat=fils.filter(f=>f.rsai),bas=fils.filter(f=>!f.rsai);
-  const ligne=lat.length
-    ?'<div class="og-ligne og-avec-lat">'+ogCarte(c)+'<div class="og-lat">'+lat.map(ogCarte).join('')+'</div></div>'
-    :ogCarte(c);
-  return '<li>'+ligne+(bas.length?'<ul>'+bas.map(f=>ogBranche(f,enfants)).join('')+'</ul>':'')+'</li>';
+  return '<li>'+ogCarte(c)+(fils.length?'<ul>'+fils.map(f=>ogBranche(f,enfants)).join('')+'</ul>':'')+'</li>';
 }
 function ogArbre(crecheId){
   const reseau=ogCartes.filter(c=>!c.creche_id);
@@ -199,6 +194,13 @@ function ogChoisirPersonne(){
   set('og-f-nom',nom);set('og-f-poste',poste);set('og-f-diplome',diplome);
   if(heures!=null)set('og-f-heures',String(heures).replace('.',','));
 }
+// Aide du formulaire : « Gestionnaire » => niveau réseau (en haut, sur la même ligne que les autres gestionnaires).
+// Une carte RSAI sans « Rattaché à » se place sur la même ligne que la directrice technique (cartes de tête sous les gestionnaires).
+function ogPosteChange(){
+  const r=document.getElementById('og-f-reseau');
+  if(!r||r.type==='hidden'||r.dataset.touche)return;
+  r.checked=/gestionnaire/i.test(document.getElementById('og-f-poste')?.value||'');
+}
 function ogAjouterGestionnaire(){ogEditer(null,true);}
 function ogEditer(id,reseauInit){
   const c=id?ogCartes.find(x=>x.id===id):null;
@@ -212,7 +214,7 @@ function ogEditer(id,reseauInit){
   m.innerHTML='<div class="og-dlg" role="dialog" aria-modal="true"><h3>'+(c?'Modifier la carte':(nouveauReseau?'Ajouter un gestionnaire':'Ajouter une personne'))+'</h3>'
     +'<label class="flabel">Personne (fiche existante)</label><select class="finput" id="og-f-pers" onchange="ogChoisirPersonne()">'+ogOptionsPersonnes(crecheId,lie)+'</select>'
     +'<label class="flabel">Nom *</label><input class="finput" id="og-f-nom" value="'+ogEsc(c?.nom||'')+'" placeholder="Ex. : Sophie CHANCEY">'
-    +'<label class="flabel">Fonction</label><input class="finput" id="og-f-poste" value="'+ogEsc(c?.poste||(nouveauReseau?'Gestionnaire':''))+'" placeholder="Ex. : Gestionnaire, Référent technique, Auxiliaire de puériculture">'
+    +'<label class="flabel">Fonction</label><input class="finput" id="og-f-poste" oninput="ogPosteChange()" value="'+ogEsc(c?.poste||(nouveauReseau?'Gestionnaire':''))+'" placeholder="Ex. : Gestionnaire, Référent technique, Auxiliaire de puériculture">'
     +'<label class="flabel">Diplôme</label><input class="finput" id="og-f-diplome" value="'+ogEsc(c?.diplome||'')+'" placeholder="Ex. : D.E. AP, CAP AEPE, Infirmière puéricultrice">'
     +'<div class="og-2c"><div><label class="flabel">Temps de travail (h / semaine)</label><input class="finput" id="og-f-heures" value="'+ogEsc(c?.heures_hebdo!=null?String(c.heures_hebdo).replace('.',','):'')+'" placeholder="35 ou 8h45"></div>'
     +'<div><label class="flabel">ETP (auto si vide)</label><input class="finput" id="og-f-etp" value="'+ogEsc(c?.etp!=null?String(c.etp).replace('.',','):'')+'" placeholder="= heures / 35"></div></div>'
@@ -220,9 +222,9 @@ function ogEditer(id,reseauInit){
     +'<div><label class="flabel">dont ETP entretien / repas</label><input class="finput" id="og-f-etpent" value="'+ogEsc(c?.etp_entretien!=null?String(c.etp_entretien).replace('.',','):'')+'" placeholder="Ex. : 0,29"></div></div>'
     +'<label class="flabel">Note (expérience, alternance…)</label><textarea class="finput" id="og-f-note" rows="2" placeholder="Ex. : + 2 ans d’expérience">'+ogEsc(c?.note||'')+'</textarea>'
     +'<label class="og-chk"><input type="checkbox" id="og-f-rsai"'+(c?.rsai?' checked':'')+'> Référent·e Santé et Accueil Inclusif (RSAI)</label>'
-    +(reseau?'':'<label class="flabel">Rattaché à</label><select class="finput" id="og-f-parent"><option value="">— Aucun (en haut de l’organigramme) —</option>'
+    +(reseau?'':'<label class="flabel">Rattaché à <span style="font-weight:400;color:var(--muted)">(vide = sur la même ligne que la directrice technique, sous les gestionnaires)</span></label><select class="finput" id="og-f-parent"><option value="">— Aucun (en haut de l’organigramme) —</option>'
       +autres.map(x=>`<option value="${x.id}"${c?.parent_id===x.id?' selected':''}>${ogEsc(x.nom)}${x.poste?' — '+ogEsc(x.poste):''}</option>`).join('')+'</select>')
-    +(isDirection&&!reseau?'<label class="og-chk"><input type="checkbox" id="og-f-reseau"'+(nouveauReseau?' checked':'')+'> Niveau réseau : en haut, au-dessus de toutes les crèches (gestionnaires…)</label>':'')
+    +(isDirection&&!reseau?'<label class="og-chk"><input type="checkbox" id="og-f-reseau" onchange="this.dataset.touche=1"'+(nouveauReseau?' checked':'')+(c?' data-touche="1"':'')+'> Niveau réseau : en haut, au-dessus de toutes les crèches (gestionnaires…)</label>':'')
     +(isDirection&&reseau?'<input type="hidden" id="og-f-reseau" value="1">':'')
     +'<div class="og-btns">'
     +(c?'<button type="button" class="btn-sm" onclick="ogDeplacer(\''+c.id+'\',-1)" title="Avant ses voisines"><i class="ti ti-arrow-left"></i></button><button type="button" class="btn-sm" onclick="ogDeplacer(\''+c.id+'\',1)" title="Après ses voisines"><i class="ti ti-arrow-right"></i></button><button type="button" class="btn-sm" style="color:var(--red)" onclick="ogSupprimer(\''+c.id+'\')"><i class="ti ti-trash"></i> Supprimer</button>':'')
@@ -414,7 +416,7 @@ const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:
   +'.og-t li::before,.og-t li::after{content:"";position:absolute;top:0;right:50%;border-top:2px solid #b9b5d6;width:50%;height:18px}.og-t li::after{right:auto;left:50%;border-left:2px solid #b9b5d6}'
   +'.og-t li:only-child::before,.og-t li:only-child::after{display:none}.og-t li:only-child{padding-top:0}.og-t li:first-child::before,.og-t li:last-child::after{border:0}.og-t li:last-child::before{border-right:2px solid #b9b5d6;border-radius:0 6px 0 0}.og-t li:first-child::after{border-radius:6px 0 0 0}'
   +'.og-t ul::before{content:"";position:absolute;top:0;left:50%;border-left:2px solid #b9b5d6;height:18px}.og-t>li{padding-top:0}.og-t>li::before,.og-t>li::after{display:none}'
-  +'.og-groupe{display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-ligne{position:relative}.og-avec-lat{padding:0 244px}.og-lat{position:absolute;right:0;top:0;width:200px;display:flex;flex-direction:column;gap:8px}.og-lat .og-node{width:200px;max-width:200px}.og-lat .og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #0E9F6E}.og-groupe .og-node+.og-node{margin-left:44px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #3D3580}'
+  +'.og-groupe{display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-groupe .og-node+.og-node{margin-left:44px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-44px;top:50%;width:44px;border-top:2px solid #3D3580}'
   +'.og-node{position:relative;min-width:150px;max-width:200px;border:1.5px solid #3D3580;border-radius:10px;padding:8px 10px;background:#fff;break-inside:avoid}.og-rsai{border-color:#0E9F6E;background:#ECFDF5}'
   +'.og-badge{position:absolute;top:-9px;right:8px;background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
   +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-synth{margin:14px auto 0;border-collapse:collapse;font-size:12px;min-width:340px}.og-synth caption{font-weight:800;color:#3D3580;text-align:left;padding-bottom:4px;font-size:13px}.og-synth th{font-size:11px;color:#666;text-align:right;padding:3px 10px;border-bottom:2px solid #3D3580}.og-synth td{padding:4px 10px;border-bottom:1px solid #e3e1f0;text-align:right}.og-synth td:first-child{text-align:left;font-weight:600}.og-synth .og-tot td{font-weight:800;border-top:2px solid #3D3580;border-bottom:0}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}'
