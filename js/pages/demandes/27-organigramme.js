@@ -205,6 +205,10 @@ function ogSansCarte(crecheId,c){
     &&!noms.has(ogNorm(((e.prenom||'')+' '+(e.nom||'')).trim())));
   return{refs,emps};
 }
+function ogRemplaceChange(){
+  const l=document.getElementById('og-f-remplace-libre');
+  if(l)l.style.display=document.getElementById('og-f-remplace')?.value==='__libre'?'':'none';
+}
 function ogOptionsRemplace(crecheId,c){
   const cartes=ogCartes.filter(x=>x.creche_id===(crecheId||null)&&(!c||x.id!==c.id));
   const{refs,emps}=ogSansCarte(crecheId,c);
@@ -213,13 +217,16 @@ function ogOptionsRemplace(crecheId,c){
   const autres=refs.map(r=>`<option value="r:${r.id}">${ogEsc(r.name)}${r.poste?' — '+ogEsc(r.poste):''}</option>`)
     .concat(emps.map(e=>`<option value="e:${e.id}">${ogEsc(((e.prenom||'')+' '+(e.nom||'')).trim())}${(e.poste||e.qualification)?' — '+ogEsc(e.poste||e.qualification):''}</option>`));
   if(autres.length)h+='<optgroup label="Autres personnes de la crèche (ajoutées à l’organigramme, en arrêt)">'+autres.join('')+'</optgroup>';
+  h+='<option value="__libre">— Autre personne (saisir son nom)… —</option>';
   return h;
 }
 // Crée la carte (en arrêt) d'une personne qui n'était pas encore dans l'organigramme, et renvoie son id.
 async function ogCreerCarteArret(val,creche_id,parent_id){
-  const[type,pid]=val.split(':');
+  const[type,...reste]=val.split(':'),pid=reste.join(':');
   let nom='',poste='',diplome='',heures=null,employe_id=null,referent_id=null;
-  if(type==='e'){
+  if(type==='l'){
+    nom=pid;
+  }else if(type==='e'){
     const e=cacheEmployes.find(x=>x.id===pid);if(!e)throw new Error('collaborateur introuvable');
     nom=((e.prenom||'')+' '+(e.nom||'')).trim();poste=e.poste||e.qualification||'';diplome=e.qualification||'';heures=e.heures_hebdo;employe_id=e.id;
   }else{
@@ -297,7 +304,7 @@ function ogEditer(id,reseauInit){
     +'<label class="flabel">Note (expérience, alternance…)</label><textarea class="finput" id="og-f-note" rows="2" placeholder="Ex. : + 2 ans d’expérience">'+ogEsc(c?.note||'')+'</textarea>'
     +'<label class="og-chk"><input type="checkbox" id="og-f-rsai"'+(c?.rsai?' checked':'')+'> Référent·e Santé et Accueil Inclusif (RSAI)</label>'
     +(reseau?'':'<label class="og-chk"><input type="checkbox" id="og-f-arret"'+(c?.en_arret?' checked':'')+'> En arrêt (absent·e : carte grisée, hors totaux)</label>'
-      +'<label class="flabel">Remplace <span style="font-weight:400;color:var(--muted)">(la personne remplacée passe en arrêt ; la remplaçante prend sa place dans l’organigramme)</span></label><select class="finput" id="og-f-remplace">'+ogOptionsRemplace(crecheId,c)+'</select>')
+      +'<label class="flabel">Remplace <span style="font-weight:400;color:var(--muted)">(la personne remplacée passe en arrêt ; la remplaçante prend sa place dans l’organigramme)</span></label><select class="finput" id="og-f-remplace" onchange="ogRemplaceChange()">'+ogOptionsRemplace(crecheId,c)+'</select><input class="finput" id="og-f-remplace-libre" placeholder="Nom de la personne remplacée" style="display:none;margin-top:6px">')
     +(reseau?'':'<label class="flabel">Rattaché à <span style="font-weight:400;color:var(--muted)">(vide = sur la même ligne que la directrice technique, sous les gestionnaires)</span></label><select class="finput" id="og-f-parent"><option value="">— Aucun (en haut de l’organigramme) —</option>'
       +autres.map(x=>`<option value="${x.id}"${c?.parent_id===x.id?' selected':''}>${ogEsc(x.nom)}${x.poste?' — '+ogEsc(x.poste):''}</option>`).join('')+'</select>')
     +(isDirection&&!reseau?'<label class="og-chk"><input type="checkbox" id="og-f-reseau" onchange="this.dataset.touche=1"'+(nouveauReseau?' checked':'')+(c?' data-touche="1"':'')+'> Niveau réseau : en haut, au-dessus de toutes les crèches (gestionnaires…)</label>':'')
@@ -332,12 +339,25 @@ async function ogEnregistrer(id){
     en_arret:!reseau&&!!document.getElementById('og-f-arret')?.checked,remplace_id:reseau?null:(v('og-f-remplace')||null),
     employe_id:pers.startsWith('e:')?pers.slice(2):null,referent_id:pers.startsWith('r:')?pers.slice(2):null
   };
-  if(row.remplace_id&&/^[er]:/.test(row.remplace_id)){
+  if(row.remplace_id==='__libre'){
+    const n=v('og-f-remplace-libre');
+    if(!n){alert('Saisissez le nom de la personne remplacée.');return;}
+    row.remplace_id='l:'+n;
+  }
+  if(row.remplace_id&&/^[erl]:/.test(row.remplace_id)){
+    // une personne ne peut pas se remplacer elle-même (même fiche ou même nom)
+    const[t,...r]=row.remplace_id.split(':'),k=r.join(':');
+    const memeFiche=(t==='e'&&row.employe_id===k)||(t==='r'&&row.referent_id===k);
+    const nomCible=t==='l'?k:(t==='e'?(()=>{const e=cacheEmployes.find(x=>x.id===k);return e?((e.prenom||'')+' '+(e.nom||'')).trim():'';})():(cacheReferents.find(x=>x.id===k)?.name||''));
+    if(memeFiche||ogNorm(nomCible)===ogNorm(nom)){alert('Une personne ne peut pas se remplacer elle-même.');return;}
+  }
+  if(row.remplace_id&&/^[erl]:/.test(row.remplace_id)){
     try{row.remplace_id=await ogCreerCarteArret(row.remplace_id,creche_id,row.parent_id);}
     catch(err){alert('Impossible d’ajouter la personne remplacée : '+(err?.message||err));return;}
   }
   if(row.remplace_id){
     const cible=ogCartes.find(x=>x.id===row.remplace_id);
+    if(cible&&(ogNorm(cible.nom)===ogNorm(nom)||(row.employe_id&&cible.employe_id===row.employe_id))){alert('Une personne ne peut pas se remplacer elle-même.');return;}
     if(id&&(row.remplace_id===id||cible?.remplace_id===id)){alert('Une personne ne peut pas se remplacer elle-même (ni remplacer quelqu’un qui la remplace).');return;}
   }
   if(!id){
