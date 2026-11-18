@@ -1007,6 +1007,7 @@ organigramme: `
   <li>Chaque carte indique la <strong>fonction</strong>, le <strong>diplôme</strong>, le <strong>temps de travail</strong> (« 35 » ou « 8h45 »), l’<strong>ETP</strong> (heures ÷ 35, ou saisi à la main), une <strong>note</strong> libre (expérience, alternance…) et le badge vert <strong>RSAI</strong> (référent·e santé et accueil inclusif).</li>
   <li><strong>Rattaché à</strong> place la carte sous une autre : c’est ce qui dessine la hiérarchie. Les flèches changent l’ordre entre cartes voisines.</li>
   <li><strong>Niveau réseau</strong> (direction) : cartes affichées au-dessus de toutes les crèches, comme les gestionnaires.</li>
+  <li><strong>ETP de Documents</strong> reprend les heures et l’ETP du <strong>Calcul des ETP et de l’encadrement</strong> enregistré pour la crèche (Documents › Administratifs). Ses postes n’ont pas de nom : une fenêtre propose de relier chacun à une carte (à vérifier), puis remplace les heures et l’ETP de la carte et complète le diplôme s’il est vide.</li>
   <li><strong>Pré-remplir depuis les fiches</strong> crée d’un coup les cartes de l’équipe de la crèche, à ajuster ensuite. Le pied de page donne le total d’heures et d’ETP et la personne RSAI.</li>
   <li>Cliquez sur une carte pour la modifier ou la retirer (la fiche de la personne n’est pas supprimée). <strong>Imprimer / PDF</strong> sort l’organigramme en paysage avec la date de mise à jour.</li>
 </ol>

@@ -269,6 +269,80 @@ async function ogPrerempli(){
   await ogCharger();
 }
 
+
+// ---------- reprise du calcul des ETP (Documents › Calcul des ETP et de l'encadrement) ----------
+/* Le calcul de Documents (`09-calcul-etp.js`, réponse `documents_reponses.donnees.etp_json`, une par crèche) donne pour
+   chaque poste (« Directrice », « Professionnel·le 1 »…, sans nom) une qualification `q` et des heures `h` ; base `ft`
+   (35 h). Les postes sont anonymes : l'écran propose de les relier aux cartes avant d'écrire. Libellés ci-dessous = ETP_QUAL
+   de documents/09-calcul-etp.js (à garder en phase). */
+const OG_QUAL={cap2:{dip:'CAP AEPE',note:'+ 2 ans d’expérience',mot:/cap|aepe/i},cap:{dip:'CAP AEPE',mot:/cap|aepe/i},eje:{dip:'EJE',mot:/eje|éducat/i},
+  ap:{dip:'Auxiliaire de puériculture',mot:/aux|\bap\b/i},ide:{dip:'Infirmier·ère / puériculteur·trice',mot:/infirm|puéricult|ide/i},autre:{dip:'',mot:/^$/}};
+let ogEtpDoc=null;
+async function ogEtpReprendre(){
+  const crecheId=ogCrecheCourante();if(!crecheId)return;
+  const cartes=ogCartes.filter(c=>c.creche_id===crecheId);
+  if(!cartes.length){alert('Ajoutez d’abord les personnes à l’organigramme (ou « Pré-remplir depuis les fiches »).');return;}
+  let rep;
+  try{
+    const{data:doc,error:e1}=await sb.from('documents_koala').select('id').eq('template_key','calcul_etp').eq('actif',true).limit(1);
+    if(e1)throw e1;
+    if(!doc||!doc.length){alert('Le modèle « Calcul des ETP et de l’encadrement » n’existe pas dans Documents › Administratifs.');return;}
+    const{data,error}=await sb.from('documents_reponses').select('donnees,updated_at').eq('document_id',doc[0].id).eq('creche_id',crecheId).order('updated_at',{ascending:false}).limit(1);
+    if(error)throw error;
+    rep=data&&data[0];
+  }catch(err){alert('Lecture impossible : '+(err?.message||err));return;}
+  let st=null;
+  try{st=rep?.donnees?.etp_json?JSON.parse(rep.donnees.etp_json):null;}catch(e){st=null;}
+  if(!st||!Array.isArray(st.pros)){alert('Aucun calcul des ETP enregistré pour cette crèche : ouvrez Documents › « Calcul des ETP et de l’encadrement », renseignez l’équipe, puis revenez ici.');return;}
+  const nb=Math.max(2,Math.min(st.pros.length,Math.round(+st.nb||4)));
+  const ft=+st.ft>0?+st.ft:OG_HEURES_ETP;
+  const postes=st.pros.slice(0,nb).map((p,i)=>({i,label:i===0?'Directrice':'Professionnel·le '+i,q:p.q||'autre',h:Math.max(0,+p.h||0)}));
+  // Proposition : poste 0 → référent·e / direction ; ensuite même qualification, sinon ordre.
+  const pris=new Set(),choix={};
+  const premier=cartes.find(c=>/direct|référent|referent/i.test(c.poste||'')&&!c.rsai)||cartes.find(c=>!c.parent_id&&!c.rsai);
+  postes.forEach(po=>{
+    let c=po.i===0?premier:cartes.find(x=>!pris.has(x.id)&&!x.rsai&&(OG_QUAL[po.q]?.mot.test((x.diplome||'')+' '+(x.poste||''))));
+    if(!c)c=cartes.find(x=>!pris.has(x.id)&&!x.rsai&&x!==premier);
+    if(c){pris.add(c.id);choix[po.i]=c.id;}
+  });
+  ogEtpDoc={postes,ft,choix,date:rep.updated_at,cartes};
+  ogEtpAfficher();
+}
+function ogEtpAfficher(){
+  ogFermer();
+  const d=ogEtpDoc;
+  const m=document.createElement('div');m.id='og-modal';m.className='og-overlay';
+  const dateTxt=d.date?new Date(d.date).toLocaleDateString('fr-FR'):'';
+  m.innerHTML='<div class="og-dlg" role="dialog" aria-modal="true"><h3>Reprendre les ETP de Documents</h3>'
+    +'<p style="font-size:12.5px;color:var(--muted);margin:0 0 6px">Calcul du '+ogEsc(dateTxt)+' (base '+ogEsc(String(d.ft).replace('.',','))+' h = 1 ETP). Les postes y sont anonymes : indiquez à quelle carte correspond chacun. Les heures et l’ETP de la carte sont remplacés ; le diplôme n’est complété que s’il est vide.</p>'
+    +d.postes.map(po=>'<div class="og-2c" style="align-items:center"><div style="font-size:12.5px"><strong>'+ogEsc(po.label)+'</strong><br>'+ogEsc(OG_QUAL[po.q]?.dip||'Autre qualification')+(po.q==='cap2'?' (+ 2 ans)':'')+' · '+ogEsc(ogFmtHeures(po.h))+' · '+ogEsc(ogFmtEtp(po.h/d.ft))+'</div>'
+      +'<select class="finput" id="og-ep-'+po.i+'"><option value="">— Ne pas reprendre —</option>'+d.cartes.map(c=>`<option value="${c.id}"${d.choix[po.i]===c.id?' selected':''}>${ogEsc(c.nom)}</option>`).join('')+'</select></div>').join('')
+    +'<div class="og-btns"><span style="flex:1"></span><button type="button" class="btn-sm" onclick="ogFermer()">Annuler</button><button type="button" class="btn-primary" onclick="ogEtpAppliquer()">Appliquer</button></div></div>';
+  m.addEventListener('click',e=>{if(e.target===m)ogFermer();});
+  document.body.appendChild(m);
+}
+async function ogEtpAppliquer(){
+  const d=ogEtpDoc;if(!d)return;
+  const vus={},lignes=[];
+  for(const po of d.postes){
+    const id=document.getElementById('og-ep-'+po.i)?.value;if(!id)continue;
+    if(vus[id]){alert('La carte « '+d.cartes.find(c=>c.id===id)?.nom+' » est choisie pour deux postes.');return;}
+    vus[id]=1;lignes.push({po,c:d.cartes.find(c=>c.id===id)});
+  }
+  if(!lignes.length){ogFermer();return;}
+  try{
+    for(const{po,c}of lignes){
+      const q=OG_QUAL[po.q]||OG_QUAL.autre;
+      const maj={heures_hebdo:po.h,etp:d.ft===OG_HEURES_ETP?null:Math.round(po.h/d.ft*1000)/1000};
+      if(!c.diplome&&q.dip)maj.diplome=q.dip;
+      if(!c.note&&q.note)maj.note=q.note;
+      const{error}=await sb.from('organigramme_cartes').update(maj).eq('id',c.id);
+      if(error)throw error;
+    }
+  }catch(err){alert('Mise à jour impossible : '+(err?.message||err));return;}
+  ogEtpDoc=null;ogFermer();await ogCharger();
+}
+
 // ---------- impression ----------
 const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:14px}.og-logo{height:46px}.og-titre{font-size:20px;font-weight:800;color:#3D3580}.og-sous{font-size:12px;color:#666}'
   +'.og-arbre{overflow:visible}.og-t,.og-t ul{padding-top:18px;position:relative;display:flex;justify-content:center;margin:0;padding-left:0;list-style:none}.og-t li{position:relative;padding:18px 6px 0;text-align:center;list-style:none;display:flex;flex-direction:column;align-items:center}'
