@@ -68,28 +68,32 @@ function ogEtpDe(c){
 }
 const ogNbFr=v=>(Math.round(v*100)/100).toLocaleString('fr-FR');
 // Tableau de synthèse des ETP de la crèche (écran et PDF) : direction, entretien / repas, encadrement des enfants.
-function ogSynthese(tot,dir,ent,enf,alt){
+function ogSynthese(tot,dir,ent,enf,alt,coord){
   if(!(tot>0))return'';
   const h=v=>ogFmtHeures(Math.round(v*OG_HEURES_ETP*100)/100).replace('/SEM','');
   const l=(lib,v,cls)=>'<tr'+(cls?' class="'+cls+'"':'')+'><td>'+lib+'</td><td>'+ogNbFr(v)+' ETP</td><td>'+h(v)+' / sem</td></tr>';
   return '<table class="og-synth"><caption>Synthèse des ETP</caption><thead><tr><th></th><th>ETP</th><th>Heures</th></tr></thead><tbody>'
-    +(dir>0?l('ETP direction',dir):'')+(ent>0?l('ETP entretien / repas',ent):'')+l('ETP encadrement enfants',enf)+(alt>0?l('Alternant·e (hors taux d’encadrement)',alt):'')+l('Total',tot,'og-tot')+'</tbody></table>';
+    +(dir>0?l('ETP direction',dir):'')+(ent>0?l('ETP entretien / repas',ent):'')+l('ETP encadrement enfants',enf)+(alt>0?l('Alternant·e (hors taux d’encadrement)',alt):'')+(coord>0?l('Coordination pédagogique (hors encadrement)',coord):'')+l('Total',tot,'og-tot')+'</tbody></table>';
 }
 // Répartition de l'ETP d'une carte : direction, entretien / repas, encadrement des enfants (= le reste).
 // Alternant·e / apprenti·e : hors taux d'encadrement (même règle que l'export PMI, `pmiEstAlternant`).
 const ogEstAlternant=c=>/alternan|apprenti/i.test(ogNorm([c.poste,c.diplome,c.note].filter(Boolean).join(' ')));
+// Coordinateur·trice pédagogique : temps de coordination, hors encadrement des enfants.
+const ogEstCoordinateur=c=>/coordinat/i.test(ogNorm(c.poste||''));
 function ogParts(c){
   const tot=ogEtpDe(c)||0,dir=Number(c.etp_direction)||0,ent=Number(c.etp_entretien)||0,reste=Math.max(0,tot-dir-ent);
-  return ogEstAlternant(c)?{tot,dir,ent,enf:0,alt:reste}:{tot,dir,ent,enf:reste,alt:0};
+  if(ogEstAlternant(c))return{tot,dir,ent,enf:0,alt:reste,coord:0};
+  if(ogEstCoordinateur(c))return{tot,dir,ent,enf:0,alt:0,coord:reste};
+  return{tot,dir,ent,enf:reste,alt:0,coord:0};
 }
 function ogRepartition(c){
-  const{tot,dir,ent,enf,alt}=ogParts(c);
-  if(!(dir>0||ent>0||alt>0)||!(tot>0))return'';
+  const{tot,dir,ent,enf,alt,coord}=ogParts(c);
+  if(!(dir>0||ent>0||alt>0||coord>0)||!(tot>0))return'';
   const l=(lib,v)=>'<div class="og-part"><span>'+lib+'</span><span>'+ogFmtEtp(v)+'</span></div>';
   const hh=v=>ogFmtHeures(Math.round(v*OG_HEURES_ETP*100)/100).replace('/SEM','');
   const j=Number(c.jours_semaine)||0;
   const sousDir=dir>0?'<div class="og-part og-sub"><span>'+hh(dir)+(j?' sur '+j+' jour'+(j>1?'s':'')+' · '+ogFmtHeures(Math.round(dir*OG_HEURES_ETP/j*100)/100).replace('/SEM','')+' / jour':'')+'</span></div>':'';
-  return '<div class="og-parts">'+(dir>0?l('Direction',dir)+sousDir:'')+(ent>0?l('Entretien / repas',ent):'')+(alt>0?l('Alternant·e : hors taux d’encadrement',alt):l('Encadrement enfants',enf))+'</div>';
+  return '<div class="og-parts">'+(dir>0?l('Direction',dir)+sousDir:'')+(ent>0?l('Entretien / repas',ent):'')+(alt>0?l('Alternant·e : hors taux d’encadrement',alt):coord>0?l('Coordination : hors encadrement enfants',coord):l('Encadrement enfants',enf))+'</div>';
 }
 const ogFmtEtp=v=>v==null?'':(Math.round(v*100)/100).toLocaleString('fr-FR')+' ETP';
 
@@ -174,7 +178,7 @@ function ogPageHtml(crecheId){
   const heures=actives.reduce((s,c)=>s+(Number(c.heures_hebdo)||0),0);
   const etp=actives.reduce((s,c)=>s+(ogEtpDe(c)||0),0);
   const etpDir=actives.reduce((a,c)=>a+(Number(c.etp_direction)||0),0),etpEnt=actives.reduce((a,c)=>a+(Number(c.etp_entretien)||0),0);
-  const etpEnf=actives.reduce((a,c)=>a+ogParts(c).enf,0),etpAlt=actives.reduce((a,c)=>a+ogParts(c).alt,0);
+  const etpEnf=actives.reduce((a,c)=>a+ogParts(c).enf,0),etpAlt=actives.reduce((a,c)=>a+ogParts(c).alt,0),etpCoord=actives.reduce((a,c)=>a+ogParts(c).coord,0);
   const rsai=cartes.concat(ogCartes.filter(c=>!c.creche_id)).filter(c=>c.rsai).map(c=>c.nom);
   return '<div class="og-page"><div class="og-entete"><img src="logo-koalakids.png" alt="" class="og-logo"><div><div class="og-titre">'+ogEsc(creche.name)+'</div>'
     +'<div class="og-sous">Organigramme'+(majTxt?' (maj : '+majTxt+')':'')+'</div></div></div>'
@@ -182,7 +186,7 @@ function ogPageHtml(crecheId){
     +'<div class="og-pied"><span><strong>'+actives.length+'</strong> personne'+(actives.length>1?'s':'')+(nbArret?' (+ '+nbArret+' absent'+(nbArret>1?'·e·s':'·e')+')':'')+'</span>'
     +'<span>Total : <strong>'+(Math.round(heures*100)/100).toLocaleString('fr-FR')+' h/sem</strong> · <strong>'+(Math.round(etp*100)/100).toLocaleString('fr-FR')+' ETP</strong></span>'
     +'<span>RSAI : <strong>'+(rsai.length?ogEsc(rsai.join(', ')):'à désigner')+'</strong></span></div>'
-    +ogSynthese(etp,etpDir,etpEnt,etpEnf,etpAlt)+'</div>';
+    +ogSynthese(etp,etpDir,etpEnt,etpEnf,etpAlt,etpCoord)+'</div>';
 }
 function ogRender(){
   const zone=document.getElementById('og-contenu');if(!zone)return;
