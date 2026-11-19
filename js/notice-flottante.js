@@ -19,7 +19,7 @@
     },
     collaborateur: {
       titre: 'Mon espace',
-      html: '<p>Votre espace personnel, organisé en onglets comme l’espace famille : <strong>Accueil</strong> (dernier message, votre journée, code image, raccourcis), <strong>Infos</strong> (messages de la direction, à lecture seule ; la pastille orange compte les non lus), <strong>Planning</strong> (semaine et pointages, flèches pour changer de semaine), <strong>Heures</strong> (compteur et validation mensuelle signée) et <strong>Formation</strong> (planning des quiz et parcours). L’onglet Infos n’existe que pour les collaborateurs.</p>' +
+      html: '<p>Votre espace personnel, organisé en onglets comme l’espace famille : <strong>Accueil</strong> (dernier message, votre journée, code image, raccourcis), <strong>Infos</strong> (messages de la direction, à lecture seule ; la pastille orange compte les non lus), <strong>Planning</strong> (semaine et pointages, flèches pour changer de semaine), <strong>Heures</strong> (compteur et validation mensuelle signée) et <strong>Formation</strong> (planning des quiz et parcours). La tuile <strong>Supports pédagogiques</strong> de l’accueil ouvre la bibliothèque de formation (lecture, suivi personnel). L’onglet Infos n’existe que pour les collaborateurs.</p>' +
         '<p><strong>Mon code image</strong> : les 4 images à toucher, dans l’ordre, sur la tablette. Absent ? Demandez à la direction de le générer.</p>' +
         '<p><strong>Planning des quiz</strong> : deux quiz par semaine (un sur le projet pédagogique, un sur les protocoles), du 26 octobre au 18 décembre 2026. La semaine en cours est surlignée ; « Passer le quiz » ouvre votre lien personnel. Ces quiz sont sans note.</p>'
     },
