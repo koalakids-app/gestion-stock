@@ -121,6 +121,13 @@ function ogCarte(c){
 // Une remplaçante s'affiche dans le même bloc que la personne remplacée (même poste, mêmes liens).
 // Remplacement : la personne EN POSTE est dans l'axe (sous le parent, au-dessus de l'équipe), la personne absente
 // est sur le côté, reliée par un trait en pointillés.
+/* Parmi des cartes sœurs, une RSAI sans équipe ni remplaçant est posée à côté de la première autre carte
+   (au lieu d'une colonne seule à l'extrémité d'un arbre large). Renvoie le HTML des <li>. */
+function ogListe(liste,enfants,remps){
+  const solo=c=>c.rsai&&!(enfants[c.id]||[]).length&&!(remps[c.id]||[]).length;
+  const hote=liste.find(r=>!solo(r)),vois=hote?liste.filter(r=>r!==hote&&solo(r)):[];
+  return liste.filter(r=>!vois.includes(r)).map(r=>ogBranche(r,enfants,remps,r===hote?vois:null)).join('');
+}
 function ogBranche(c,enfants,remps,voisines){
   const fils=enfants[c.id]||[],rem=remps[c.id]||[];
   let tete=ogCarte(c);
@@ -132,7 +139,7 @@ function ogBranche(c,enfants,remps,voisines){
     const enPoste=groupe.find(x=>!ogAbsente(x))||groupe[groupe.length-1];
     tete='<div class="og-ligne og-avec-lat'+(vois?' og-avec-v':'')+'">'+ogCarte(enPoste)+'<div class="og-lat">'+groupe.filter(x=>x!==enPoste).map(ogCarte).join('')+'</div>'+vois+'</div>';
   }
-  return '<li>'+tete+(fils.length?'<ul>'+fils.map(f=>ogBranche(f,enfants,remps)).join('')+'</ul>':'')+'</li>';
+  return '<li>'+tete+(fils.length?'<ul>'+ogListe(fils,enfants,remps)+'</ul>':'')+'</li>';
 }
 function ogArbre(crecheId){
   const reseau=ogCartes.filter(c=>!c.creche_id);
@@ -156,10 +163,7 @@ function ogArbre(crecheId){
     const k=poste(par[c.parent_id]).id;(enfants[k]=enfants[k]||[]).push(c);
   });
   const racines=cartes.filter(c=>!estRemp.has(c.id)&&(!c.parent_id||!par[c.parent_id]));
-  // RSAI sans équipe ni remplaçant : rattachée visuellement à la première autre carte de tête
-  const solo=c=>c.rsai&&!(enfants[c.id]||[]).length&&!(remps[c.id]||[]).length;
-  const hote=racines.find(r=>!solo(r)),voisines=hote?racines.filter(r=>r!==hote&&solo(r)):[];
-  const racinesHtml=racines.filter(r=>!voisines.includes(r)).map(r=>ogBranche(r,enfants,remps,r===hote?voisines:null)).join('');
+  const racinesHtml=ogListe(racines,enfants,remps);
   if(reseau.length){
     const sous=racines.length?'<ul>'+racinesHtml+'</ul>':'';
     const milieu=reseauBas.length?'<ul><li><div class="og-groupe">'+reseauBas.map(ogCarte).join('')+'</div>'+sous+'</li></ul>':sous;
