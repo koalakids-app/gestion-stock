@@ -133,7 +133,9 @@ function ogBranche(c,enfants,remps,voisines){
   let tete=ogCarte(c);
   /* cartes de tête sans équipe (RSAI) posées à côté de la directrice technique, même ligne, au lieu d'une colonne à l'extrémité */
   const vois=(voisines&&voisines.length)?'<div class="og-lat-v'+(rem.length?' og-g':'')+'">'+voisines.map(ogCarte).join('')+'</div>':'';
-  if(vois&&!rem.length)tete='<div class="og-ligne og-avec-lat og-avec-v">'+ogCarte(c)+vois+'</div>';
+  /* sans remplaçant : la carte et la RSAI forment un groupe relié par un trait, le tronc part du groupe vers l'équipe
+     (ex. coordinateur et RSAI tous deux en lien direct avec la directrice technique) */
+  if(vois&&!rem.length)tete='<div class="og-groupe">'+ogCarte(c)+voisines.map(ogCarte).join('')+'</div>';
   if(rem.length){
     const groupe=[c].concat(rem);
     const enPoste=groupe.find(x=>!ogAbsente(x))||groupe[groupe.length-1];
