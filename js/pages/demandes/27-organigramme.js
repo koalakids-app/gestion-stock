@@ -121,13 +121,16 @@ function ogCarte(c){
 // Une remplaçante s'affiche dans le même bloc que la personne remplacée (même poste, mêmes liens).
 // Remplacement : la personne EN POSTE est dans l'axe (sous le parent, au-dessus de l'équipe), la personne absente
 // est sur le côté, reliée par un trait en pointillés.
-function ogBranche(c,enfants,remps){
+function ogBranche(c,enfants,remps,voisines){
   const fils=enfants[c.id]||[],rem=remps[c.id]||[];
   let tete=ogCarte(c);
+  /* cartes de tête sans équipe (RSAI) posées à côté de la directrice technique, même ligne, au lieu d'une colonne à l'extrémité */
+  const vois=(voisines&&voisines.length)?'<div class="og-lat-v'+(rem.length?' og-g':'')+'">'+voisines.map(ogCarte).join('')+'</div>':'';
+  if(vois&&!rem.length)tete='<div class="og-ligne og-avec-lat og-avec-v">'+ogCarte(c)+vois+'</div>';
   if(rem.length){
     const groupe=[c].concat(rem);
     const enPoste=groupe.find(x=>!ogAbsente(x))||groupe[groupe.length-1];
-    tete='<div class="og-ligne og-avec-lat">'+ogCarte(enPoste)+'<div class="og-lat">'+groupe.filter(x=>x!==enPoste).map(ogCarte).join('')+'</div></div>';
+    tete='<div class="og-ligne og-avec-lat'+(vois?' og-avec-v':'')+'">'+ogCarte(enPoste)+'<div class="og-lat">'+groupe.filter(x=>x!==enPoste).map(ogCarte).join('')+'</div>'+vois+'</div>';
   }
   return '<li>'+tete+(fils.length?'<ul>'+fils.map(f=>ogBranche(f,enfants,remps)).join('')+'</ul>':'')+'</li>';
 }
@@ -153,7 +156,10 @@ function ogArbre(crecheId){
     const k=poste(par[c.parent_id]).id;(enfants[k]=enfants[k]||[]).push(c);
   });
   const racines=cartes.filter(c=>!estRemp.has(c.id)&&(!c.parent_id||!par[c.parent_id]));
-  const racinesHtml=racines.map(r=>ogBranche(r,enfants,remps)).join('');
+  // RSAI sans équipe ni remplaçant : rattachée visuellement à la première autre carte de tête
+  const solo=c=>c.rsai&&!(enfants[c.id]||[]).length&&!(remps[c.id]||[]).length;
+  const hote=racines.find(r=>!solo(r)),voisines=hote?racines.filter(r=>r!==hote&&solo(r)):[];
+  const racinesHtml=racines.filter(r=>!voisines.includes(r)).map(r=>ogBranche(r,enfants,remps,r===hote?voisines:null)).join('');
   if(reseau.length){
     const sous=racines.length?'<ul>'+racinesHtml+'</ul>':'';
     const milieu=reseauBas.length?'<ul><li><div class="og-groupe">'+reseauBas.map(ogCarte).join('')+'</div>'+sous+'</li></ul>':sous;
@@ -569,6 +575,7 @@ const OG_CSS='.og-entete{display:flex;align-items:center;gap:12px;margin-bottom:
   +'.og-groupe{position:relative;display:flex;gap:0;justify-content:center;align-items:stretch;flex-wrap:nowrap}.og-groupe .og-node{width:158px;max-width:158px;min-width:158px;box-sizing:border-box;z-index:1}.og-groupe .og-node+.og-node{margin-left:26px}.og-groupe::after{content:"";position:absolute;left:50%;top:50%;bottom:0;border-left:2px solid #3D3580;margin-left:-1px}.og-groupe .og-node+.og-node::before{content:"";position:absolute;left:-26px;top:50%;width:26px;border-top:2px solid #3D3580}'
   +'.og-node{position:relative;min-width:128px;max-width:176px;border:1.5px solid #3D3580;border-radius:9px;padding:6px 7px;background:#fff;break-inside:avoid}.og-rsai{border-color:#0E9F6E;background:#ECFDF5}'
   +'.og-badges{position:absolute;top:-9px;right:8px;display:flex;gap:4px;max-width:96%;justify-content:flex-end}.og-badge{background:#0E9F6E;color:#fff;font-size:10px;font-weight:800;border-radius:8px;padding:1px 7px;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}.og-b-arret{background:#B45309}.og-b-mutation{background:#7C3AED}.og-b-conge{background:#0E7490}.og-b-remp{background:#2563EB}.og-absente{border-style:dashed;border-color:#9a98b5;background:#f1f0f6;color:#777}.og-absente .og-poste{color:#888}.og-ligne{position:relative}.og-avec-lat{padding:0 150px}.og-avec-lat>.og-node{width:158px;min-width:158px;max-width:158px;box-sizing:border-box;margin:0 auto}.og-lat{position:absolute;right:0;top:0;width:132px;display:flex;flex-direction:column;gap:8px}.og-lat .og-node{width:132px;min-width:132px;max-width:132px;box-sizing:border-box}.og-lat .og-node::before{content:"";position:absolute;left:-18px;top:50%;width:18px;border-top:2px dashed #B45309}'
+  +'.og-avec-v{padding:0 180px}.og-lat-v{position:absolute;right:0;top:0;width:158px;display:flex;flex-direction:column;gap:8px}.og-lat-v.og-g{right:auto;left:0}.og-lat-v .og-node{width:158px;min-width:158px;max-width:158px;box-sizing:border-box}.og-lat-v .og-node::before{content:"";position:absolute;left:-22px;top:50%;width:22px;border-top:2px solid #0E9F6E}.og-lat-v.og-g .og-node::before{left:auto;right:-22px}'
   +'.og-nom{font-weight:800;font-size:12px}.og-poste{font-size:11px;font-weight:700;color:#3D3580}.og-dip,.og-note{font-size:10.5px;color:#555}.og-temps{font-size:10.5px;font-weight:700;margin-top:3px}.og-synth{margin:14px auto 0;border-collapse:collapse;font-size:12px;min-width:340px}.og-synth caption{font-weight:800;color:#3D3580;text-align:left;padding-bottom:4px;font-size:13px}.og-synth th{font-size:11px;color:#666;text-align:right;padding:3px 10px;border-bottom:2px solid #3D3580}.og-synth td{padding:4px 10px;border-bottom:1px solid #e3e1f0;text-align:right}.og-synth td:first-child{text-align:left;font-weight:600}.og-synth .og-hors td{font-style:italic;color:#666;border-bottom:0}.og-synth .og-tot td{font-weight:800;border-top:2px solid #3D3580;border-bottom:0}.og-parts{margin-top:5px;border-top:1px dashed #cfcce6;padding-top:4px;text-align:left}.og-part{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#444}.og-part span:last-child{font-weight:700;white-space:nowrap}.og-sub span{font-weight:400!important;color:#7a5b00;font-size:9.5px}'
   +'.og-pied{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:12px;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:8px}';
 // Largeur naturelle d'un arbre (hors écran), pour l'ajuster à la largeur d'une page A4 paysage.
