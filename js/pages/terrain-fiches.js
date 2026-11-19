@@ -44,9 +44,29 @@ async function feFiche(id){
   FE_FICHE=data;feRender();
 }
 function feLigne(lab,val){return val?'<div class="fe-row"><span>'+lab+'</span><b>'+val+'</b></div>':'';}
+/* Intitulé de la pièce : les parents nomment mal leurs fichiers, on affiche donc le type de pièce
+   (recopié de PIECES_ADMIN, js/enfants/02-part.js : à garder en phase) au-dessus du nom du fichier. */
+const FE_PIECES={livret_famille:'Copie du livret de famille',piece_identite_parents:"Pièce d'identité des parents",
+  justificatif_domicile:'Justificatif de domicile',acte_naissance:"Acte de naissance de l'enfant",
+  attestation_vitale:'Attestation de la carte vitale',caf_allocataire:'Attestation CAF (n° allocataire)',
+  attestation_rc:'Attestation de responsabilité civile',autorite_parentale:"Justificatif de l'autorité parentale",
+  avis_imposition:"Avis d'imposition",bulletin_salaire:'Bulletin de salaire / attestation Pôle Emploi',
+  rib:"Relevé d'identité bancaire",droit_image:"Droit à l'image",sante_autre:'Document de santé'};
+function feIntitule(r){
+  const k=String(r.piece_key||'');
+  if(FE_PIECES[k])return FE_PIECES[k];
+  if(k.startsWith('espace_famille:'))return k.slice(15).trim()||'Dépôt de la famille';
+  if(k.startsWith('papier_')||k.startsWith('enligne_'))return 'Document rempli par la famille';
+  return r.intitule||'';
+}
 function feFichiers(lib,rows,aff){
   if(!rows||!rows.length)return '';
-  return '<div class="nt-titre">'+lib+'</div>'+rows.map(r=>'<button type="button" class="fe-doc" data-b="'+esc(r.bucket)+'" data-p="'+esc(r.path)+'" data-n="'+esc(r.filename||'')+'"><i class="ti ti-file"></i> '+esc(r.filename||r.path.split('/').pop())+'<small>'+FE_JOURS_VUS(r.created_at)+'</small></button>').join('');
+  return '<div class="nt-titre">'+lib+'</div>'+rows.map(r=>{
+    const nomF=r.filename||r.path.split('/').pop(),int=feIntitule(r);
+    return '<button type="button" class="fe-doc" data-b="'+esc(r.bucket)+'" data-p="'+esc(r.path)+'" data-n="'+esc(r.filename||'')+'"><i class="ti ti-file"></i> '
+      +(int?'<b>'+esc(int)+'</b><small style="display:block;word-break:break-all">'+esc(nomF)+'</small>':esc(nomF))
+      +'<small>'+FE_JOURS_VUS(r.created_at)+'</small></button>';
+  }).join('');
 }
 function feRender(){
   const f=FE_FICHE,e=f.enfant,box=document.getElementById('feContenu');
@@ -72,7 +92,7 @@ function feRender(){
     +(parents?'<div class="nt-titre">Parents</div>'+parents:'')
     +feFichiers('PAI et projets d\'accueil',(f.pai_pieces||[]).concat(paiPj))
     +feFichiers('Carnet de santé et vaccins',f.carnet)
-    +feFichiers('Autres documents (droit à l\'image, ordonnances…)',(f.documents||[]).filter(d=>d.piece_key!=='photo_enfant'));
+    +feFichiers('Documents du dossier (pièces déposées, droit à l\'image, ordonnances…)',(f.documents||[]).filter(d=>d.piece_key!=='photo_enfant'));
 }
 let FE_BLOB=null;
 let FE_DOC_ID=0;   // identifie l'ouverture en cours : un PDF dessiné après la fermeture de la fenêtre est abandonné
