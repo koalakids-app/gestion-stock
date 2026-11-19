@@ -56,7 +56,10 @@ function feIntitule(r){
   const k=String(r.piece_key||'');
   if(FE_PIECES[k])return FE_PIECES[k];
   if(k.startsWith('espace_famille:'))return k.slice(15).trim()||'Dépôt de la famille';
-  if(k.startsWith('papier_')||k.startsWith('enligne_'))return 'Document rempli par la famille';
+  if(k.startsWith('papier_')||k.startsWith('enligne_')){
+    const t=FE_FICHE&&FE_FICHE.titres_documents&&FE_FICHE.titres_documents[k.replace(/^(papier|enligne)_/,'')];
+    return t||'Document rempli par la famille';
+  }
   return r.intitule||'';
 }
 function feFichiers(lib,rows,aff){
@@ -64,8 +67,8 @@ function feFichiers(lib,rows,aff){
   return '<div class="nt-titre">'+lib+'</div>'+rows.map(r=>{
     const nomF=r.filename||r.path.split('/').pop(),int=feIntitule(r);
     return '<button type="button" class="fe-doc" data-b="'+esc(r.bucket)+'" data-p="'+esc(r.path)+'" data-n="'+esc(r.filename||'')+'"><i class="ti ti-file"></i> '
-      +(int?'<b>'+esc(int)+'</b><small style="display:block;word-break:break-all">'+esc(nomF)+'</small>':esc(nomF))
-      +'<small>'+FE_JOURS_VUS(r.created_at)+'</small></button>';
+      +'<span style="flex:1;min-width:0">'+(int?'<b>'+esc(int)+'</b><small style="display:block;margin:2px 0 0;font-weight:400;word-break:break-all">'+esc(nomF)+'</small>':esc(nomF))
+      +'<small style="display:block;margin:2px 0 0;font-weight:400">'+FE_JOURS_VUS(r.created_at)+'</small></span></button>';
   }).join('');
 }
 function feRender(){
