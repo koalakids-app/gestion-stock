@@ -73,7 +73,7 @@ function ogSynthese(tot,dir,ent,enf,alt,coord){
   const h=v=>ogFmtHeures(Math.round(v*OG_HEURES_ETP*100)/100).replace('/SEM','');
   const l=(lib,v,cls)=>'<tr'+(cls?' class="'+cls+'"':'')+'><td>'+lib+'</td><td>'+ogNbFr(v)+' ETP</td><td>'+h(v)+' / sem</td></tr>';
   return '<table class="og-synth"><caption>Synthèse des ETP</caption><thead><tr><th></th><th>ETP</th><th>Heures</th></tr></thead><tbody>'
-    +(dir>0?l('ETP direction',dir):'')+(ent>0?l('ETP entretien / repas',ent):'')+l('ETP encadrement enfants',enf)+(alt>0?l('Alternant·e (hors taux d’encadrement)',alt):'')+l('Total',tot,'og-tot')+(coord>0?l('Coordination pédagogique (hors total)',coord,'og-hors'):'')+'</tbody></table>';
+    +(dir>0?l('ETP direction',dir):'')+(ent>0?l('ETP entretien / repas',ent):'')+l('ETP encadrement enfants',enf)+l('Total',tot,'og-tot')+(alt>0?l('Alternant·e (hors total et taux d’encadrement)',alt,'og-hors'):'')+(coord>0?l('Coordination pédagogique (hors total)',coord,'og-hors'):'')+'</tbody></table>';
 }
 // Répartition de l'ETP d'une carte : direction, entretien / repas, encadrement des enfants (= le reste).
 // Alternant·e / apprenti·e : hors taux d'encadrement (même règle que l'export PMI, `pmiEstAlternant`).
@@ -194,8 +194,9 @@ function ogPageHtml(crecheId){
   const actives=cartes.filter(c=>!ogAbsente(c)),nbArret=cartes.length-actives.length;
   // Totaux de l'équipe : le temps de coordination (coordinateur·trice pédagogique) n'y figure pas, il est indiqué à part.
   const equipe=actives.filter(c=>!ogEstCoordinateur(c));
-  const heures=equipe.reduce((s,c)=>s+(Number(c.heures_hebdo)||0),0);
-  const etp=equipe.reduce((s,c)=>s+(ogEtpDe(c)||0),0);
+  // Le temps d'un·e alternant·e (hors direction et entretien) n'entre ni dans les heures ni dans les ETP du total.
+  const heures=equipe.reduce((s,c)=>s+Math.max(0,(Number(c.heures_hebdo)||0)-ogParts(c).alt*OG_HEURES_ETP),0);
+  const etp=equipe.reduce((s,c)=>s+(ogEtpDe(c)||0)-ogParts(c).alt,0);
   const etpDir=equipe.reduce((a,c)=>a+(Number(c.etp_direction)||0),0),etpEnt=equipe.reduce((a,c)=>a+(Number(c.etp_entretien)||0),0);
   const etpEnf=equipe.reduce((a,c)=>a+ogParts(c).enf,0),etpAlt=equipe.reduce((a,c)=>a+ogParts(c).alt,0);
   const etpCoord=actives.filter(ogEstCoordinateur).reduce((a,c)=>a+(ogEtpDe(c)||0),0);
