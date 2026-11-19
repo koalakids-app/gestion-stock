@@ -55,7 +55,14 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
 
   let org = null as null | { id: string; nom: string; app_url: string; couleur_secondaire: string | null; logo_url: string | null };
-  const origine = origineDe(req);
+  // Safari iPhone relit le manifeste au moment de « Sur l'écran d'accueil » sans
+  // envoyer Origin ni Referer : l'origine est alors déduite de ?base= (le dossier
+  // de l'app tel que la page le voit), sinon l'icône installée pointait vers
+  // https://koalakids.fr/index.html (erreur 404).
+  const baseDemandee = new URL(req.url).searchParams.get('base') || '';
+  let origineBase: string | null = null;
+  try { const u = new URL(baseDemandee); if (u.protocol === 'https:') origineBase = u.origin; } catch { /* absent */ }
+  const origine = origineDe(req) ?? origineBase;
   if (origine) {
     // app_url est stockée sans slash final ; on compare origine à origine,
     // jamais de préfixe partiel (éviterait une confusion entre deux domaines
@@ -76,9 +83,8 @@ Deno.serve(async (req) => {
   // ?base= : dossier racine de l'app tel que la page le connaît (hébergement
   // sous un sous-chemin, ex. github.io/gestion-stock) — accepté seulement s'il
   // reste sur l'origine de la requête.
-  const baseDemandee = new URL(req.url).searchParams.get('base') || '';
   const baseOk = origine && (baseDemandee === origine || baseDemandee.startsWith(origine + '/')) ? baseDemandee : null;
-  const appUrl = (org?.app_url || baseOk || origine || DEFAUT.app_url).replace(/\/+$/, '');
+  const appUrl = (baseOk || org?.app_url || origine || DEFAUT.app_url).replace(/\/+$/, '');
   const themeColor = org?.couleur_secondaire || DEFAUT.couleur_secondaire;
   const logoUrl = org?.logo_url || DEFAUT.logo_url;
 
