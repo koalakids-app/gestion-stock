@@ -172,7 +172,7 @@ function spBarreLecteur(s,gauche,urlOuvrir,urlTelecharger){
 }
 async function spLecteurPdf(zone,s,jeton,urlVue,urlDl){
   await spChargerPdfJs();
-  const pdf=await window.pdfjsLib.getDocument({url:urlVue}).promise;
+  const pdf=await window.pdfjsLib.getDocument({url:urlVue,disableStream:true,isOffscreenCanvasSupported:false}).promise;
   if(jeton!==spLecteurId){pdf.destroy();return;}
   spPdfCourant=pdf;
   const total=pdf.numPages;
@@ -186,7 +186,7 @@ async function spLecteurPdf(zone,s,jeton,urlVue,urlDl){
   const pages=[];
   for(let i=0;i<total;i++){
     const d=document.createElement('div');d.className='vp';d.dataset.n=i+1;
-    d.style.aspectRatio=(1/ratio).toFixed(4);
+    d.style.height='0';d.style.paddingBottom=(ratio*100).toFixed(3)+'%';
     const c=document.createElement('canvas');d.appendChild(c);cont.appendChild(d);
     pages.push({d,c,etat:0});
   }
@@ -196,17 +196,31 @@ async function spLecteurPdf(zone,s,jeton,urlVue,urlDl){
     P.etat=1;
     try{
       const page=await pdf.getPage(n);
-      const px=Math.min(2200,Math.max(500,P.d.clientWidth*Math.min(window.devicePixelRatio||1,2)));
-      const vp=page.getViewport({scale:px/page.getViewport({scale:1}).width});
-      P.c.width=Math.floor(vp.width);P.c.height=Math.floor(vp.height);
-      await page.render({canvasContext:P.c.getContext('2d'),viewport:vp}).promise;
+      const w1=page.getViewport({scale:1}).width;
+      /* Safari iOS limite la mémoire des canvas : définition réduite, et nouvel essai plus léger en cas d'échec. */
+      const ios=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+      const base=P.d.clientWidth*Math.min(window.devicePixelRatio||1,2);
+      let ok=false,err=null;
+      for(const px of [Math.min(ios?1400:2200,Math.max(500,base)),700]){
+        try{
+          const vp=page.getViewport({scale:px/w1});
+          P.c.width=Math.floor(vp.width);P.c.height=Math.floor(vp.height);
+          await page.render({canvasContext:P.c.getContext('2d'),viewport:vp}).promise;
+          ok=true;break;
+        }catch(e){err=e;}
+      }
+      if(!ok)throw err||new Error('dessin impossible');
+      P.d.querySelector('.vp-err')?.remove();
       P.etat=2;
-    }catch(e){P.etat=0;console.warn('[supports] page '+n,e);}
+    }catch(e){
+      P.etat=0;console.warn('[supports] page '+n,e);
+      if(!P.d.querySelector('.vp-err')){const m=document.createElement('div');m.className='vp-err';m.textContent='Cette page n\'a pas pu s\'afficher. Utilisez « Ouvrir » ou « Télécharger ».';P.d.appendChild(m);}
+    }
   }
   const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)dessiner(+e.target.dataset.n);});},{root:cont,rootMargin:'700px 0px'});
   pages.forEach(P=>obs.observe(P.d));
   function majZoom(){
-    pages.forEach(P=>{P.d.style.width=(zoom*100)+'%';P.etat=0;});
+    pages.forEach(P=>{P.d.style.width=(zoom*100)+'%';P.d.style.paddingBottom=(ratio*zoom*100).toFixed(3)+'%';P.etat=0;});
     pages.forEach(P=>{const r=P.d.getBoundingClientRect(),c=cont.getBoundingClientRect();if(r.bottom>c.top-700&&r.top<c.bottom+700)dessiner(+P.d.dataset.n);});
   }
   zone.querySelector('#v-moins').onclick=()=>{zoom=Math.max(.6,+(zoom-.2).toFixed(2));majZoom();};
