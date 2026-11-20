@@ -154,57 +154,33 @@ async function loadAllData(){
   ]);
   populateLieuSelects();
   if(typeof ikInitSites==='function')ikInitSites(cacheCreches.map(c=>shortCrecheName(c.name)));
-  // PAI actifs du registre de soins (panier repas) — non bloquant.
-  if(typeof enfPaiCharger==='function')await enfPaiCharger();
-  // Employés (fiches du personnel) — table posée par sql/module_employes.sql,
-  // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
-  try{cacheEmployes=await dbSelect('employes');}catch(e){console.warn('[loadAllData] employes',e);cacheEmployes=[];}
-  // Validations mensuelles des heures par signature électronique (table posée par
-  // sql/validation_heures_mensuelle.sql) — non bloquant. Utilisé ici pour afficher, sur
-  // la fiche d'un(e) directeur/trice technique, le dernier mois qu'il/elle a validé
-  // (les collaborateurs/trices sans compte de connexion ont la leur dans editEmploye).
-  try{cacheHeuresValidations=await dbSelect('heures_validations_mensuelles');}catch(e){console.warn('[loadAllData] heures_validations_mensuelles',e);cacheHeuresValidations=[];}
-  // Consignes lues (notifications in-app) — non bloquant
-  try{cacheConsignesLues=await dbSelect('consignes_lues');}catch(e){cacheConsignesLues=[];}
-  // Demandes masquées (corbeille personnelle, table sql/demandes_masquees.sql) — non
-  // bloquant, la RLS ne renvoie que les miennes : « supprimer » une demande ne fait que
-  // la retirer de la liste de la personne qui l'a supprimée, elle reste visible des autres.
-  try{cacheDemandesMasquees=await dbSelect('demandes_masquees');}catch(e){cacheDemandesMasquees=[];}
-  // Demandes que j'ai traitées (table sql/demandes_traitees.sql) — non bloquant, la RLS ne
-  // renvoie que les miennes : « traitée » ne fait quitter la liste « En cours » que de la
-  // personne qui l'a marquée, les autres la voient toujours.
-  try{cacheDemandesTraitees=await dbSelect('demandes_traitees');}catch(e){cacheDemandesTraitees=[];}
-  // Brouillons de consignes (table sql/consignes_brouillons.sql) — non bloquant. Pas de test sur
-  // isDirection : à la connexion il n'est posé qu'APRÈS loadAllData(), et la RLS ne renvoie de
-  // toute façon que les brouillons de l'auteur connecté (direction).
-  try{cacheConsigneBrouillons=await dbSelect('consignes_brouillons');}catch(e){cacheConsigneBrouillons=[];}
-  // Brouillons de demandes (table sql/demandes_brouillons.sql) — non bloquant, la RLS ne renvoie que les miens
-  try{cacheDemandeBrouillons=await dbSelect('demandes_brouillons');}catch(e){cacheDemandeBrouillons=[];}
-  // Brouillons de messages d'un fil (table sql/messages_brouillons.sql) — non bloquant, la RLS ne renvoie que les miens
-  try{cacheMessageBrouillons=await dbSelect('messages_brouillons');}catch(e){cacheMessageBrouillons=[];}
-  // Annuaire des partenaires/institutions — table posée par sql/partenaires.sql,
-  // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
-  try{cachePartenaires=await dbSelect('partenaires');}catch(e){console.warn('[loadAllData] partenaires',e);cachePartenaires=[];}
-  // Commandes du Stock pédagogique (module stock.html) — chargées ici uniquement pour
-  // détecter les nouvelles commandes et notifier (cf. detecterNouveautesEtNotifier),
-  // non bloquant : une base pas encore migrée ne doit pas empêcher le reste de charger.
-  try{cacheCommandes=await dbSelect('commandes');}catch(e){console.warn('[loadAllData] commandes',e);cacheCommandes=[];}
-  // Documents (page Documents) — colonnes d'affichage seulement, pour signaler les nouveaux dans la cloche
-  // (cf. detecterNouveautesEtNotifier). Non bloquant.
-  try{
-    const{data:docs}=await sb.from('documents_koala').select('id,titre,creche_id,created_by,created_at').eq('actif',true);
-    cacheDocuments=docs||[];
-  }catch(e){console.warn('[loadAllData] documents',e);cacheDocuments=[];}
-  // Jours de fermeture (Paramètres/Fonctionnement) — propres à chaque crèche et
-  // ceux du réseau entier. Non bloquant : sert seulement à signaler les jours
-  // fermés sur le planning et la feuille de présence.
-  try{cacheEtablissements=await dbSelect('etablissements');}catch(e){console.warn('[loadAllData] etablissements',e);cacheEtablissements=[];}
-  try{
-    const rc=await dbSelect('reseau_config');
-    const cfg=(rc&&rc[0]&&rc[0].config)||{};
-    cacheReseauNotifCfg=cfg;
-    cacheReseauFermetures=Array.isArray(cfg.jours_fermeture_reseau)?cfg.jours_fermeture_reseau:[];
-  }catch(e){console.warn('[loadAllData] reseau_config',e);cacheReseauFermetures=[];}
+  /* Données secondaires : lancées TOUTES EN MÊME TEMPS (elles étaient lues l'une après l'autre,
+     ce qui allongeait la connexion d'autant d'allers-retours réseau). Chacune garde son repli :
+     une table absente ou refusée ne bloque pas le reste. */
+  const sur=(p,def,nom)=>Promise.resolve().then(()=>p()).catch(e=>{console.warn('[loadAllData] '+nom,e);return def;});
+  const [emp,heures,lues,masq,traitees,brCons,brDem,brMsg,parts,cmds,docs,etabs,rc,]=await Promise.all([
+    sur(()=>dbSelect('employes'),[],'employes'),
+    sur(()=>dbSelect('heures_validations_mensuelles'),[],'heures_validations_mensuelles'),
+    sur(()=>dbSelect('consignes_lues'),[],'consignes_lues'),
+    sur(()=>dbSelect('demandes_masquees'),[],'demandes_masquees'),
+    sur(()=>dbSelect('demandes_traitees'),[],'demandes_traitees'),
+    sur(()=>dbSelect('consignes_brouillons'),[],'consignes_brouillons'),
+    sur(()=>dbSelect('demandes_brouillons'),[],'demandes_brouillons'),
+    sur(()=>dbSelect('messages_brouillons'),[],'messages_brouillons'),
+    sur(()=>dbSelect('partenaires'),[],'partenaires'),
+    sur(()=>dbSelect('commandes'),[],'commandes'),
+    sur(async()=>{const{data}=await sb.from('documents_koala').select('id,titre,creche_id,created_by,created_at').eq('actif',true);return data||[];},[],'documents'),
+    sur(()=>dbSelect('etablissements'),[],'etablissements'),
+    sur(()=>dbSelect('reseau_config'),null,'reseau_config'),
+    typeof enfPaiCharger==='function'?sur(()=>enfPaiCharger(),null,'pai'):null
+  ]);
+  cacheEmployes=emp;cacheHeuresValidations=heures;cacheConsignesLues=lues;
+  cacheDemandesMasquees=masq;cacheDemandesTraitees=traitees;
+  cacheConsigneBrouillons=brCons;cacheDemandeBrouillons=brDem;cacheMessageBrouillons=brMsg;
+  cachePartenaires=parts;cacheCommandes=cmds;cacheDocuments=docs;cacheEtablissements=etabs;
+  const cfg=(rc&&rc[0]&&rc[0].config)||{};
+  cacheReseauNotifCfg=cfg;
+  cacheReseauFermetures=Array.isArray(cfg.jours_fermeture_reseau)?cfg.jours_fermeture_reseau:[];
   // Salariés — non bloquant (alimente aussi le sélecteur de prénom du planning équipe)
   // Recalcul silencieux du groupe selon l'âge : corrige en base les enfants dont le groupe stocké est périmé.
   // Une seule fois par session : loadAllData() est aussi rappelée par la synchronisation
