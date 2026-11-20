@@ -12,6 +12,7 @@ const LC_TRANCHES=[
 const lcEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 let lcDonnees=null;
 let lcFins={};
+let lcAVenir={};
 // Date de fin la plus tardive connue (anciens contrats + contrats signés), comme enfChargerContratsFin.
 async function lcChargerFins(){
   try{
@@ -26,10 +27,18 @@ async function lcChargerFins(){
     });
     lcFins=f;
   }catch(err){console.warn('lcChargerFins',err);}
+  // Entrées à venir (même source que la tuile du même nom) : jamais écartées, même si un ancien contrat est terminé.
+  try{
+    const r=await sb.rpc('entrees_a_venir_referent');
+    const a={};
+    (Array.isArray(r.data)?r.data:[]).forEach(x=>{if(x&&x.id)a[x.id]=String(x.entree||'').slice(0,10);});
+    lcAVenir=a;
+  }catch(err){console.warn('lcChargerFins avenir',err);}
   lcRender();
 }
 // Contrat terminé avant la date de référence : date de sortie ou fin de contrat la plus tardive.
 function lcContratFini(e,ref){
+  if(lcAVenir[e.id])return false; // inscrit, accueil à venir : à compter
   let fin=e.date_sortie||'';
   const c=lcFins[e.id];
   if(c&&c>fin)fin=c;
@@ -100,7 +109,7 @@ function lcRender(){
   const carte=t=>`<div style="background:#fff;border:1.5px solid #E6E3F3;border-radius:12px;padding:12px 14px">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
       <b style="color:var(--koala)">${t.lib}</b><span style="font-size:20px;font-weight:800;color:var(--orange,#F47920)">${g[t.k].length}</span></div>
-    ${g[t.k].length?g[t.k].map(x=>`<div style="font-size:13px;padding:3px 0;border-top:1px solid #F1EFF7;display:flex;justify-content:space-between;gap:8px"><span>${lcEsc(lcPrenomInitiale(x.e))}${x.e.date_entree&&x.e.date_entree>lcDonnees.ref?' <span style="font-size:11px;color:var(--muted)">(pas encore entré·e)</span>':''}</span><span style="color:var(--muted)">${lcAgeTexte(x.m)}</span></div>`).join(''):'<div style="font-size:12px;color:var(--muted)">Aucun enfant</div>'}
+    ${g[t.k].length?g[t.k].map(x=>`<div style="font-size:13px;padding:3px 0;border-top:1px solid #F1EFF7;display:flex;justify-content:space-between;gap:8px"><span>${lcEsc(lcPrenomInitiale(x.e))}${(lcAVenir[x.e.id]||x.e.date_entree||'')>lcDonnees.ref?' <span style="font-size:11px;color:var(--muted)">(entrée le '+lcEsc(lcDateFr(lcAVenir[x.e.id]||x.e.date_entree))+')</span>':''}</span><span style="color:var(--muted)">${lcAgeTexte(x.m)}</span></div>`).join(''):'<div style="font-size:12px;color:var(--muted)">Aucun enfant</div>'}
   </div>`;
   z.innerHTML=`<div style="font-weight:700;color:var(--koala);margin-bottom:10px">${total} livre${total>1?'s':''} à prévoir · âges au ${lcDateFr(lcDonnees.ref)}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;max-width:1000px">${LC_TRANCHES.map(carte).join('')}</div>`
