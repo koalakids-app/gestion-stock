@@ -1027,6 +1027,8 @@ livres: `
   <li>Un enfant sans date de naissance (ou né après la date choisie) n’est pas compté : il apparaît dans <strong>À vérifier</strong>.</li>
   <li>La direction voit aussi, sous les tranches, un <strong>tableau de toutes les crèches</strong> (une ligne par crèche, un total général) ; le bouton <strong>Récap. toutes crèches (PDF)</strong> l’imprime.</li>
   <li><strong>Imprimer / PDF</strong> sort la fiche pour la commande, <strong>CSV</strong> l’exporte pour un tableur.</li>
+  <li>En haut, la <strong>direction</strong> choisit pour chaque tranche le <strong>livre</strong> : image de couverture à importer, titre et <strong>prix</strong> (communs à toutes les crèches). Les référents les voient en lecture seule. Le <strong>budget</strong> (prix × nombre d’enfants) s’affiche par tranche et au total.</li>
+  <li><strong>Budget (PDF)</strong> exporte le récapitulatif de la crèche affichée ; la direction a aussi <strong>Budget toutes crèches</strong> (synthèse, puis une page par crèche).</li>
 </ol>
 `,
 
