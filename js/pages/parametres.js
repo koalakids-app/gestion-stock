@@ -206,16 +206,19 @@ async function doLogin(){
 async function doLogout(){await sb.auth.signOut();location.href='index.html';}
 
 /* ---------- CHARGEMENT ---------- */
+let KIOSK_PRE=null;
 async function loadAll(){
   try{
-    const[c,e,r]=await Promise.all([
+    const[c,e,r,kd]=await Promise.all([
       sb.from('creches').select('*').order('name'),
       sb.from('etablissements').select('*'),
-      sb.from('reseau_config').select('id,config').maybeSingle()
+      sb.from('reseau_config').select('id,config').maybeSingle(),
+      /* Tablettes de pointage : lues en même temps, sans bloquer si la table est absente. */
+      Promise.resolve(sb.from('kiosk_devices').select('*').order('created_at')).catch(x=>({data:null,error:x}))
     ]);
     if(c.error)throw c.error;
     if(e.error)throw e.error;
-    CRECHES=c.data||[];ETABS=e.data||[];
+    CRECHES=c.data||[];ETABS=e.data||[];KIOSK_PRE=kd;
     RCFG=(r&&r.data&&r.data.config)||{};
     RCFG_ID=(r&&r.data&&r.data.id)||null;
     FERMETURES_RESEAU=toArr(RCFG.jours_fermeture_reseau).slice();
@@ -230,17 +233,10 @@ async function loadAll(){
   }
   if(!CRECHES.length){toast('Aucune crèche enregistrée.',true);return;}
   crecheId=CRECHES[0].id;
-  // Table posée par le script kiosque_code_pointage.sql : peut ne pas encore
-  // exister sur une base où l'étape 1 n'a pas été exécutée. Ne doit jamais
-  // bloquer le reste de l'écran.
-  try{
-    const{data,error}=await sb.from('kiosk_devices').select('*').order('created_at');
-    if(error)throw error;
-    KIOSK_DEVICES=data||[];
-  }catch(err){
-    console.warn('[loadAll] kiosk_devices',err);
-    KIOSK_DEVICES=[];
-  }
+  // Table posée par le script kiosque_code_pointage.sql : peut ne pas encore exister
+  // (lue plus haut, en parallèle) ; ne doit jamais bloquer le reste de l'écran.
+  if(KIOSK_PRE&&KIOSK_PRE.error){console.warn('[loadAll] kiosk_devices',KIOSK_PRE.error);KIOSK_DEVICES=[];}
+  else KIOSK_DEVICES=(KIOSK_PRE&&KIOSK_PRE.data)||[];
   renderChips();renderEtab();renderReseau();
 }
 
