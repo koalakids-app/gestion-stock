@@ -315,7 +315,8 @@ function lcDevisHtml(){
   const l=lcDevis.filter(d=>String(d.creche_id)===String(creche));
   const lignes=l.map(d=>`<div style="display:flex;gap:10px;align-items:center;padding:4px 0;border-top:1px solid #F1EFF7;font-size:13px">
       <a href="#" onclick="lcDevisOuvrir('${d.id}');return false" style="flex:1;color:var(--koala);word-break:break-all"><i class="ti ti-paperclip"></i> ${lcEsc(d.fichier_nom)}</a>
-      <span style="color:var(--muted)">${d.montant!=null?lcEuro(Number(d.montant)):'montant non saisi'}</span>
+      ${ed?`<label style="font-size:12px;color:var(--muted);white-space:nowrap">Montant <input class="finput" inputmode="decimal" placeholder="non saisi" value="${d.montant==null?'':lcEsc(d.montant)}" onchange="lcDevisMontantSauver('${d.id}',this.value)" style="width:90px;font-size:12px;padding:4px 8px"> €</label>`
+        :`<span style="color:var(--muted)">${d.montant!=null?lcEuro(Number(d.montant)):'montant non saisi'}</span>`}
       ${ed?`<button class="btn-sm" onclick="lcDevisSupprimer('${d.id}')" title="Supprimer"><i class="ti ti-trash"></i></button>`:''}</div>`).join('');
   const dv=lcDevisMontant(creche);
   return`<div style="max-width:1000px;margin:0 0 16px;background:#fff;border:1.5px solid #E6E3F3;border-radius:12px;padding:10px 14px">
@@ -341,6 +342,15 @@ async function lcDevisAjouter(input){
   if(r.error){await sb.storage.from('livres-devis').remove([chemin]);showBanner('Enregistrement impossible.','error');return;}
   showBanner('Devis joint ✅');
   lcChargerDevis();
+}
+async function lcDevisMontantSauver(id,val){
+  const t=String(val).trim().replace(',','.');
+  let m=t===''?null:parseFloat(t);
+  if(m!==null&&(isNaN(m)||m<0)){showBanner('Montant invalide.','error');lcRender();return;}
+  const r=await sb.from('livres_cadeaux_devis').update({montant:m}).eq('id',id);
+  if(r.error){showBanner('Enregistrement impossible.','error');return;}
+  const d=lcDevis.find(x=>x.id===id);if(d)d.montant=m;
+  lcRender();
 }
 async function lcDevisOuvrir(id){
   const d=lcDevis.find(x=>x.id===id);if(!d)return;

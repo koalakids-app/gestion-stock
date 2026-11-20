@@ -1030,7 +1030,7 @@ livres: `
   <li>En haut, la <strong>direction</strong> choisit pour chaque tranche le <strong>livre</strong> : image de couverture à importer, titre et <strong>prix</strong> (communs à toutes les crèches). Les référents les voient en lecture seule. Le <strong>budget</strong> (prix × nombre d’enfants) s’affiche par tranche et au total.</li>
   <li><strong>Budget (PDF)</strong> exporte le récapitulatif de la crèche affichée ; la direction a aussi <strong>Budget toutes crèches</strong> (synthèse, puis une page par crèche).</li>
   <li><strong>Budget Excel</strong> exporte le même budget en .xlsx (une feuille par crèche ; la direction a aussi <strong>Budget Excel toutes crèches</strong>, avec une feuille de synthèse).</li>
-  <li><strong>Devis du libraire</strong> : la direction joint un ou plusieurs devis (PDF, image, Word, Excel, 10 Mo max) à chaque crèche, avec leur montant (facultatif). Le référent de la crèche peut les ouvrir. Le total des devis et l’écart avec le budget figurent dans l’export Excel.</li>
+  <li><strong>Devis du libraire</strong> : la direction joint un ou plusieurs devis (PDF, image, Word, Excel, 10 Mo max) à chaque crèche, avec leur montant (facultatif, modifiable ensuite dans la ligne du devis). Le référent de la crèche peut les ouvrir. Le total des devis et l’écart avec le budget figurent dans l’export Excel.</li>
 </ol>
 `,
 
