@@ -11,7 +11,7 @@ const LC_TRANCHES=[
 ];
 const lcEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 let lcDonnees=null;
-let lcFins={};
+let lcFins={},lcFinsErreur=false;
 let lcAVenir={};
 let lcChoix={};
 const lcEuro=n=>(Math.round(n*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
@@ -54,18 +54,23 @@ function lcChoixImage(k,input){
 }
 // Date de fin la plus tardive connue (anciens contrats + contrats signés), comme enfChargerContratsFin.
 async function lcChargerFins(){
+  lcFinsErreur=false;
   try{
-    const[{data:ec},{data:c}]=await Promise.all([
+    const[r1,r2]=await Promise.all([
       sb.from('enfants_contrats').select('enfant_id,date_fin'),
-      sb.from('contrats').select('enfant_id,date_fin').in('statut',['signe','contresigne'])
+      // 'resilie' compris : la fin réelle est resilie_fin_preavis (date_fin garde la fin prévue).
+      sb.from('contrats').select('enfant_id,statut,date_fin,resilie_fin_preavis').in('statut',['signe','contresigne','resilie'])
     ]);
+    if(r1.error)throw r1.error;
+    if(r2.error)throw r2.error;
     const f={};
-    (ec||[]).concat(c||[]).forEach(r=>{
-      if(!r.enfant_id||!r.date_fin)return;
-      if(!f[r.enfant_id]||r.date_fin>f[r.enfant_id])f[r.enfant_id]=r.date_fin;
+    (r1.data||[]).concat(r2.data||[]).forEach(r=>{
+      const fin=String((r.statut==='resilie'&&r.resilie_fin_preavis)||r.date_fin||'').slice(0,10);
+      if(!r.enfant_id||!fin)return;
+      if(!f[r.enfant_id]||fin>f[r.enfant_id])f[r.enfant_id]=fin;
     });
     lcFins=f;
-  }catch(err){console.warn('lcChargerFins',err);}
+  }catch(err){console.warn('lcChargerFins',err);lcFinsErreur=true;}
   // Entrées à venir (même source que la tuile du même nom) : jamais écartées, même si un ancien contrat est terminé.
   try{
     const r=await sb.rpc('entrees_a_venir_referent');
@@ -168,7 +173,7 @@ function lcRender(){
     ${g[t.k].length?g[t.k].map(x=>`<div style="font-size:13px;padding:3px 0;border-top:1px solid #F1EFF7;display:flex;justify-content:space-between;gap:8px"><span>${lcEsc(lcPrenomInitiale(x.e))}${(lcAVenir[x.e.id]||x.e.date_entree||'')>lcDonnees.ref?' <span style="font-size:11px;color:var(--muted)">(entrée le '+lcEsc(lcDateFr(lcAVenir[x.e.id]||x.e.date_entree))+')</span>':''}</span><span style="color:var(--muted)">${lcAgeTexte(x.m)}</span></div>`).join(''):'<div style="font-size:12px;color:var(--muted)">Aucun enfant</div>'}
   </div>`;
   const budget=LC_TRANCHES.reduce((a,t)=>a+g[t.k].length*lcPrix(t.k),0);
-  z.innerHTML=lcChoixHtml()+`<div style="font-weight:700;color:var(--koala);margin-bottom:10px">${total} livre${total>1?'s':''} à prévoir${budget?' · budget '+lcEuro(budget):''} · âges au ${lcDateFr(lcDonnees.ref)}</div>
+  z.innerHTML=lcChoixHtml()+(lcFinsErreur?'<div style="margin-bottom:10px;max-width:1000px;background:#FDE8E8;border-radius:10px;padding:10px 14px;font-size:13px;color:#8A1C1C"><b>Fins de contrat non chargées</b> : les enfants dont le contrat est terminé ne sont pas écartés. Rechargez la page ; si le message revient, vérifiez les droits de lecture sur les contrats.</div>':'')+`<div style="font-weight:700;color:var(--koala);margin-bottom:10px">${total} livre${total>1?'s':''} à prévoir${budget?' · budget '+lcEuro(budget):''} · âges au ${lcDateFr(lcDonnees.ref)}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;max-width:1000px">${LC_TRANCHES.map(carte).join('')}</div>`
     +(g.sans.length?`<div style="margin-top:14px;max-width:1000px;background:#FFF3DC;border-radius:10px;padding:10px 14px;font-size:13px;color:#6B4300">
       <b>À vérifier (${g.sans.length})</b> : date de naissance manquante ou postérieure à la date choisie, enfant non compté.<br>${g.sans.map(x=>lcEsc(lcPrenomInitiale(x.e))).join(', ')}</div>`:'');

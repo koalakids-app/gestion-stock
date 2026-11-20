@@ -68,23 +68,39 @@ function enfIsSorti(e){
 // suffisant pour un indicateur — pas besoin de le retenir à jour à la
 // seconde près.
 let enfContratsFinCache = {};
+let enfContratsOuverts = {}; // enfants ayant un contrat en cours sans date de fin
 async function enfChargerContratsFin(){
   try{
-    const[{data:ec},{data:c}]=await Promise.all([
-      sb.from('enfants_contrats').select('enfant_id,date_fin'),
-      sb.from('contrats').select('enfant_id,date_fin').in('statut',['signe','contresigne'])
+    const[r1,r2]=await Promise.all([
+      sb.from('enfants_contrats').select('enfant_id,date_debut,date_fin'),
+      // 'resilie' compris : la fin réelle est resilie_fin_preavis (date_fin garde la fin prévue).
+      sb.from('contrats').select('enfant_id,statut,date_debut,date_fin,resilie_fin_preavis').in('statut',['signe','contresigne','resilie'])
     ]);
-    const cache={};
-    (ec||[]).concat(c||[]).forEach(row=>{
-      if(!row.enfant_id||!row.date_fin)return;
-      if(!cache[row.enfant_id]||row.date_fin>cache[row.enfant_id])cache[row.enfant_id]=row.date_fin;
+    if(r1.error)throw r1.error;
+    if(r2.error)throw r2.error;
+    const cache={},ouverts={},auj=todayStr();
+    (r1.data||[]).concat(r2.data||[]).forEach(row=>{
+      if(!row.enfant_id)return;
+      const fin=String((row.statut==='resilie'&&row.resilie_fin_preavis)||row.date_fin||'').slice(0,10);
+      if(!fin){
+        if(row.statut!=='resilie'&&(!row.date_debut||String(row.date_debut).slice(0,10)<=auj))ouverts[row.enfant_id]=true;
+        return;
+      }
+      if(!cache[row.enfant_id]||fin>cache[row.enfant_id])cache[row.enfant_id]=fin;
     });
     enfContratsFinCache=cache;
+    enfContratsOuverts=ouverts;
   }catch(err){
     console.warn('enfChargerContratsFin',err);
   }
   enfRender();
   if(enfFicheId)enfRenderIdentite();
+}
+// Contrat terminé (dernière date de fin passée, aucun contrat en cours sans terme) alors que le dossier n'est pas archivé.
+function enfContratTermine(e){
+  if(enfIsArchived(e)||enfIsSorti(e)||enfContratsOuverts[e.id])return false;
+  const f=enfContratsFinCache[e.id];
+  return !!f&&f<todayStr();
 }
 function enfToggleArchived(){
   enfShowArchivedOnly = !enfShowArchivedOnly;
@@ -167,6 +183,7 @@ function enfRender(){
     let warn = incomplete ? '<span title="Fiche incomplète : date de naissance ou allergies non renseignées" style="color:#e8a33d;font-size:15px;flex-shrink:0"><i class="ti ti-alert-triangle"></i></span>' : '';
     if(enfIsArchived(e)) warn = '<span style="background:var(--koala-light);color:var(--koala);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">Archivé</span>';
     else if(enfIsSorti(e)) warn += '<span style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">Sorti</span>';
+    else if(enfContratTermine(e)) warn += '<span title="Le dernier contrat est terminé et le dossier n\'est pas archivé" style="background:var(--orange-light,#FDEBD8);color:var(--orange);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">Contrat terminé · à archiver</span>';
     return '<button onclick="enfOpenFiche(\''+e.id+'\')" style="width:100%;text-align:left;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;box-shadow:0 1px 4px rgba(61,53,128,0.07)">'
       + '<div style="display:flex;align-items:center;gap:12px;min-width:0">'
       + '<span style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:var(--koala-light);color:var(--koala);display:inline-flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-mood-kid"></i></span>'
